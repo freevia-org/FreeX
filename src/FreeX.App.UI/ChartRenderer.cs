@@ -7,6 +7,7 @@ using OxyPlot.Axes;
 using OxyPlot.Legends;
 using OxyPlot.Series;
 using OxyPlot.Wpf;
+using FreeX.App.Presentation.Charts;
 using FreeX.Core.Model;
 
 namespace FreeX.App.UI;
@@ -15,9 +16,6 @@ namespace FreeX.App.UI;
 public static partial class ChartRenderer
 {
     private const string SecondaryYAxisKey = "SecondaryY";
-
-    // Accent tint schedule: round 0 = base, round 1 = +0.4, round 2 = -0.25, round 3 = +0.6, round 4 = -0.5
-    private static readonly double[] AccentTintSchedule = [0.0, 0.4, -0.25, 0.6, -0.5];
 
     public static ImageSource? Render(ChartModel chart, ViewportModel viewport) =>
         Render(chart, viewport, WorkbookTheme.Office);
@@ -341,7 +339,7 @@ public static partial class ChartRenderer
                         trendPoints?.Add(new DataPoint(i, v));
                         barCategoryValues.Add(v);
                         if (ShouldUseAnnotationLabels(chart))
-                            AddDataLabelAnnotation(model, chart, theme, pointDataLabelFormats, seriesName, seriesIndex, i, ChartDataLabelFormatter.GetCategory(categories, i), i, v, v);
+                            AddDataLabelAnnotation(model, chart, theme, pointDataLabelFormats, seriesName, seriesIndex, i, ChartDataLabelTextPlanner.GetCategory(categories, i), i, v, v);
                     }
                     else if (chart.BlankDisplayMode == ChartBlankDisplayMode.Zero
                         && cellLookup.TryGetValue((r, col), out cell)
@@ -351,7 +349,7 @@ public static partial class ChartRenderer
                         trendPoints?.Add(new DataPoint(i, 0));
                         barCategoryValues.Add(0);
                         if (ShouldUseAnnotationLabels(chart))
-                            AddDataLabelAnnotation(model, chart, theme, pointDataLabelFormats, seriesName, seriesIndex, i, ChartDataLabelFormatter.GetCategory(categories, i), i, 0, 0);
+                            AddDataLabelAnnotation(model, chart, theme, pointDataLabelFormats, seriesName, seriesIndex, i, ChartDataLabelTextPlanner.GetCategory(categories, i), i, 0, 0);
                     }
                     else
                     {
@@ -389,7 +387,7 @@ public static partial class ChartRenderer
                         series.Items.Add(new BarItem { Value = v });
                         trendPoints?.Add(new DataPoint(i, v));
                         if (ShouldUseAnnotationLabels(chart))
-                            AddDataLabelAnnotation(model, chart, theme, pointDataLabelFormats, seriesName, seriesIndex, i, ChartDataLabelFormatter.GetCategory(categories, i), v, i, v);
+                            AddDataLabelAnnotation(model, chart, theme, pointDataLabelFormats, seriesName, seriesIndex, i, ChartDataLabelTextPlanner.GetCategory(categories, i), v, i, v);
                     }
                     else if (chart.BlankDisplayMode == ChartBlankDisplayMode.Zero
                         && cellLookup.TryGetValue((r, col), out cell)
@@ -398,7 +396,7 @@ public static partial class ChartRenderer
                         series.Items.Add(new BarItem { Value = 0 });
                         trendPoints?.Add(new DataPoint(i, 0));
                         if (ShouldUseAnnotationLabels(chart))
-                            AddDataLabelAnnotation(model, chart, theme, pointDataLabelFormats, seriesName, seriesIndex, i, ChartDataLabelFormatter.GetCategory(categories, i), 0, i, 0);
+                            AddDataLabelAnnotation(model, chart, theme, pointDataLabelFormats, seriesName, seriesIndex, i, ChartDataLabelTextPlanner.GetCategory(categories, i), 0, i, 0);
                     }
                 }
                 if (firstSeriesPoints is null)
@@ -442,7 +440,7 @@ public static partial class ChartRenderer
                         series.Points.Add(new DataPoint(i, v));
                         trendPoints?.Add(new DataPoint(i, v));
                         if (ShouldUseAnnotationLabels(chart))
-                            AddDataLabelAnnotation(model, chart, theme, pointDataLabelFormats, seriesName, seriesIndex, i, ChartDataLabelFormatter.GetCategory(categories, i), i, v, v);
+                            AddDataLabelAnnotation(model, chart, theme, pointDataLabelFormats, seriesName, seriesIndex, i, ChartDataLabelTextPlanner.GetCategory(categories, i), i, v, v);
                     }
                     else if (cellLookup.TryGetValue((r, col), out cell) && IsChartBlank(cell))
                     {
@@ -451,7 +449,7 @@ public static partial class ChartRenderer
                             series.Points.Add(new DataPoint(i, 0));
                             trendPoints?.Add(new DataPoint(i, 0));
                             if (ShouldUseAnnotationLabels(chart))
-                                AddDataLabelAnnotation(model, chart, theme, pointDataLabelFormats, seriesName, seriesIndex, i, ChartDataLabelFormatter.GetCategory(categories, i), i, 0, 0);
+                                AddDataLabelAnnotation(model, chart, theme, pointDataLabelFormats, seriesName, seriesIndex, i, ChartDataLabelTextPlanner.GetCategory(categories, i), i, 0, 0);
                         }
                         else if (chart.BlankDisplayMode == ChartBlankDisplayMode.Gap)
                         {
@@ -496,7 +494,7 @@ public static partial class ChartRenderer
                         series.Points.Add(new ScatterPoint(x, y));
                         trendPoints?.Add(new DataPoint(x, y));
                         if (ShouldUseAnnotationLabels(chart))
-                            AddDataLabelAnnotation(model, chart, theme, pointDataLabelFormats, seriesName, seriesIndex, (int)(r - dataStartRow), ChartDataLabelFormatter.GetCategory(categories, (int)(r - dataStartRow)), x, y, y);
+                            AddDataLabelAnnotation(model, chart, theme, pointDataLabelFormats, seriesName, seriesIndex, (int)(r - dataStartRow), ChartDataLabelTextPlanner.GetCategory(categories, (int)(r - dataStartRow)), x, y, y);
                     }
                 }
                 if (firstSeriesPoints is null)
@@ -612,7 +610,7 @@ public static partial class ChartRenderer
                     {
                         series.Items.Add(new RectangleBarItem(i - colHalfWidth, Math.Min(0, v.Value), i + colHalfWidth, Math.Max(0, v.Value)));
                         if (ShouldUseAnnotationLabels(chart))
-                            AddDataLabelAnnotation(model, chart, theme, pointDataLabelFormats, seriesName, seriesData.SeriesIndex, i, ChartDataLabelFormatter.GetCategory(categories, i), i, v.Value, v.Value);
+                            AddDataLabelAnnotation(model, chart, theme, pointDataLabelFormats, seriesName, seriesData.SeriesIndex, i, ChartDataLabelTextPlanner.GetCategory(categories, i), i, v.Value, v.Value);
                     }
                 }
                 model.Series.Add(series);
@@ -641,7 +639,7 @@ public static partial class ChartRenderer
                     {
                         series.Items.Add(new BarItem { Value = v.Value });
                         if (ShouldUseAnnotationLabels(chart))
-                            AddDataLabelAnnotation(model, chart, theme, pointDataLabelFormats, seriesName, seriesData.SeriesIndex, i, ChartDataLabelFormatter.GetCategory(categories, i), v.Value, i, v.Value);
+                            AddDataLabelAnnotation(model, chart, theme, pointDataLabelFormats, seriesName, seriesData.SeriesIndex, i, ChartDataLabelTextPlanner.GetCategory(categories, i), v.Value, i, v.Value);
                     }
                 }
                 model.Series.Add(series);
@@ -811,24 +809,11 @@ public static partial class ChartRenderer
     /// </summary>
     private static IList<OxyColor> BuildExcelSeriesPalette(WorkbookTheme theme)
     {
-        var accentSlots = new[]
+        var colors = ChartStylePlanner.BuildExcelSeriesPalette(theme);
+        var palette = new List<OxyColor>(colors.Length);
+        foreach (var color in colors)
         {
-            WorkbookThemeColorSlot.Accent1,
-            WorkbookThemeColorSlot.Accent2,
-            WorkbookThemeColorSlot.Accent3,
-            WorkbookThemeColorSlot.Accent4,
-            WorkbookThemeColorSlot.Accent5,
-            WorkbookThemeColorSlot.Accent6
-        };
-
-        var palette = new List<OxyColor>(accentSlots.Length * AccentTintSchedule.Length);
-        foreach (var tint in AccentTintSchedule)
-        {
-            foreach (var slot in accentSlots)
-            {
-                var color = theme.ResolveColor(slot, tint);
-                palette.Add(OxyColor.FromRgb(color.R, color.G, color.B));
-            }
+            palette.Add(OxyColor.FromRgb(color.R, color.G, color.B));
         }
 
         return palette;

@@ -1,6 +1,8 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using FreeX.App.Presentation.ConditionalFormatting;
+using FreeX.App.Presentation.Dialogs;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -9,226 +11,154 @@ public partial class ConditionalFormatDialog
 {
     private void Ok_Click(object sender, RoutedEventArgs e)
     {
-        var cf = _existingRule is not null
-            ? ConditionalFormatDialogPlanner.CloneRule(_existingRule)
-            : new ConditionalFormat { Id = _existingId, AppliesTo = _range };
-        cf.AppliesTo = _range;
-        var selectedFormat = SelectedColorPreset();
-        var fillColor = selectedFormat.FillColor;
-
-        bool isFormula = _ruleType is "Formula" or "Use a Formula";
-
-        if (isFormula)
+        var input = CreateRuleInputFromControls();
+        var validation = ConditionalFormatRuleSchema.ForRuleType(input.RuleType).Validate(input);
+        if (!validation.IsValid)
         {
-            cf.RuleType = CfRuleType.Formula;
-            var raw = _formulaBox?.Text.Trim() ?? "";
-            if (raw is "" or "=")
-            {
-                ShowInvalidInputWarning(UiText.Get("ConditionalFormatDialog_InvalidFormulaMessage"), _formulaBox);
-                return;
-            }
-
-            cf.FormulaText = raw.StartsWith('=') ? raw[1..] : raw;
-        }
-        else
-        {
-            cf.RuleType = _ruleType switch
-            {
-                "Data Bar"    => CfRuleType.DataBar,
-                "Color Scale" => CfRuleType.ColorScale,
-                "Icon Set"    => CfRuleType.IconSet,
-                "Text Contains" => CfRuleType.ContainsText,
-                "Text Does Not Contain" => CfRuleType.NotContainsText,
-                "Text Begins With" => CfRuleType.BeginsWith,
-                "Text Ends With" => CfRuleType.EndsWith,
-                "Date Occurring" => CfRuleType.DateOccurring,
-                "Duplicate Values" => DuplicateValuesRuleType(_duplicateValuesKindBox.SelectedItem as string),
-                "Blanks" => CfRuleType.Blanks,
-                "No Blanks" => CfRuleType.NoBlanks,
-                "Errors" => CfRuleType.Errors,
-                "No Errors" => CfRuleType.NoErrors,
-                "Above Average" or "Below Average" => CfRuleType.AboveAverage,
-                "Top 10 Items" or "Bottom 10 Items" or "Top 10%" or "Bottom 10%" => CfRuleType.Top10,
-                _ => CfRuleType.CellValue
-            };
-
-            if (cf.RuleType == CfRuleType.CellValue)
-            {
-                cf.Operator = _ruleType switch
-                {
-                    "Greater Than" => CfOperator.GreaterThan,
-                    "Less Than"    => CfOperator.LessThan,
-                    "Equal To"     => CfOperator.Equal,
-                    "Between"      => CfOperator.Between,
-                    "Greater Than Or Equal To" => CfOperator.GreaterThanOrEqual,
-                    "Less Than Or Equal To" => CfOperator.LessThanOrEqual,
-                    "Not Between" => CfOperator.NotBetween,
-                    _              => CfOperator.NotEqual
-                };
-                var value1 = _value1Box.Text.Trim();
-                var value2 = _value2Box.Text.Trim();
-                if (string.IsNullOrWhiteSpace(value1))
-                {
-                    ShowInvalidInputWarning(UiText.Get("ConditionalFormatDialog_InvalidValueMessage"), _value1Box);
-                    return;
-                }
-
-                if (cf.Operator is CfOperator.Between or CfOperator.NotBetween && string.IsNullOrWhiteSpace(value2))
-                {
-                    ShowInvalidInputWarning(UiText.Get("ConditionalFormatDialog_InvalidMaximumValueMessage"), _value2Box);
-                    return;
-                }
-
-                cf.Value1 = value1;
-                cf.Value2 = value2;
-            }
-            else if (cf.RuleType == CfRuleType.IconSet)
-            {
-                cf.IconSetStyle = _iconSetStyleBox.SelectedItem as string ?? IconSetStyles[0];
-                cf.IconSetShowValue = _iconSetShowValueBox.IsChecked == true;
-                cf.IconSetReverse = _iconSetReverseBox.IsChecked == true;
-                cf.IconSetThresholds.Clear();
-                cf.IconOverrides.Clear();
-                if (_iconSetThresholdRows.Count > 0)
-                {
-                    var hasAnyOverride = false;
-                    foreach (var (typeBox, valueBox, overrideBox) in _iconSetThresholdRows)
-                    {
-                        var type = typeBox.SelectedItem is CfThresholdType t ? t : CfThresholdType.Percent;
-                        cf.IconSetThresholds.Add(new CfThresholdModel(type, BlankToNull(valueBox.Text)));
-                        var ovr = ChoiceToIconOverride(overrideBox?.SelectedItem as string);
-                        if (ovr is not null) hasAnyOverride = true;
-                        cf.IconOverrides.Add(ovr ?? new CfIconOverride(
-                            string.IsNullOrWhiteSpace(cf.IconSetStyle) ? "3TrafficLights1" : cf.IconSetStyle!,
-                            cf.IconOverrides.Count));
-                    }
-
-                    if (!hasAnyOverride)
-                        cf.IconOverrides.Clear();
-                }
-                else
-                {
-                    cf.IconSetThresholds.AddRange(ConditionalFormatIconSetPlanner.CreateThresholds(cf.IconSetStyle));
-                }
-            }
-            else if (cf.RuleType == CfRuleType.DataBar)
-            {
-                var barColor = SelectedDataBarColor(fillColor);
-                cf.DataBarColor = new RgbColor(barColor.R, barColor.G, barColor.B);
-                cf.DataBarMinThresholdType = SelectedThresholdType(_dataBarMinTypeBox, CfThresholdType.Min);
-                cf.DataBarMinThresholdValue = BlankToNull(_dataBarMinValueBox.Text);
-                cf.DataBarMaxThresholdType = SelectedThresholdType(_dataBarMaxTypeBox, CfThresholdType.Max);
-                cf.DataBarMaxThresholdValue = BlankToNull(_dataBarMaxValueBox.Text);
-                cf.DataBarShowValue = _dataBarShowValueBox.IsChecked != true;
-                cf.DataBarGradient = _dataBarGradientBox.IsChecked == true;
-                if (!TryParseOptionalPercent(_dataBarMinLengthBox.Text, out var minLength))
-                {
-                    ShowInvalidInputWarning(UiText.Get("ConditionalFormatDialog_InvalidMinimumBarLengthMessage"), _dataBarMinLengthBox);
-                    return;
-                }
-
-                if (!TryParseOptionalPercent(_dataBarMaxLengthBox.Text, out var maxLength))
-                {
-                    ShowInvalidInputWarning(UiText.Get("ConditionalFormatDialog_InvalidMaximumBarLengthMessage"), _dataBarMaxLengthBox);
-                    return;
-                }
-
-                cf.DataBarMinLength = minLength;
-                cf.DataBarMaxLength = maxLength;
-                cf.DataBarBorder = _dataBarBorderBox.IsChecked == true;
-                cf.DataBarAxisPosition = AxisPositionToXmlValue(_dataBarAxisPositionBox.SelectedItem as string);
-                cf.DataBarAxisColor = ParseOptionalRgbColor(_dataBarAxisColorBox.Text);
-                cf.DataBarNegativeFillColor = ParseOptionalRgbColor(_dataBarNegativeFillColorBox.Text);
-                cf.DataBarNegativeBorderColor = ParseOptionalRgbColor(_dataBarNegativeBorderColorBox.Text);
-            }
-            else if (cf.RuleType == CfRuleType.ColorScale)
-            {
-                cf.MinThresholdType = SelectedThresholdType(_colorScaleMinTypeBox, CfThresholdType.Min);
-                cf.MinThresholdValue = BlankToNull(_colorScaleMinValueBox.Text);
-                if (!TryParseRgbColor(_colorScaleMinColorBox.Text, out var minColor))
-                {
-                    ShowInvalidInputWarning(UiText.Get("ConditionalFormatDialog_InvalidMinimumColorMessage"), _colorScaleMinColorBox);
-                    return;
-                }
-
-                cf.MinColor = minColor;
-                cf.UseThreeColorScale = _colorScaleUseThreeColorBox.IsChecked == true;
-                cf.MidThresholdType = SelectedThresholdType(_colorScaleMidTypeBox, CfThresholdType.Percentile);
-                cf.MidThresholdValue = BlankToNull(_colorScaleMidValueBox.Text);
-                if (cf.UseThreeColorScale)
-                {
-                    if (!TryParseRgbColor(_colorScaleMidColorBox.Text, out var midColor))
-                    {
-                        ShowInvalidInputWarning(UiText.Get("ConditionalFormatDialog_InvalidMidpointColorMessage"), _colorScaleMidColorBox);
-                        return;
-                    }
-
-                    cf.MidColor = midColor;
-                }
-                cf.MaxThresholdType = SelectedThresholdType(_colorScaleMaxTypeBox, CfThresholdType.Max);
-                cf.MaxThresholdValue = BlankToNull(_colorScaleMaxValueBox.Text);
-                if (!TryParseRgbColor(_colorScaleMaxColorBox.Text, out var maxColor))
-                {
-                    ShowInvalidInputWarning(UiText.Get("ConditionalFormatDialog_InvalidMaximumColorMessage"), _colorScaleMaxColorBox);
-                    return;
-                }
-
-                cf.MaxColor = maxColor;
-            }
-            else if (cf.RuleType is CfRuleType.ContainsText or CfRuleType.NotContainsText or CfRuleType.BeginsWith or CfRuleType.EndsWith)
-            {
-                var text = _value1Box.Text.Trim();
-                if (string.IsNullOrWhiteSpace(text))
-                {
-                    ShowInvalidInputWarning(UiText.Get("ConditionalFormatDialog_InvalidTextMessage"), _value1Box);
-                    return;
-                }
-
-                cf.TextRuleText = text;
-            }
-            else if (cf.RuleType == CfRuleType.DateOccurring)
-            {
-                cf.DateOccurringPeriod = DatePeriodValue(_dateOccurringPeriodBox.SelectedItem as string);
-            }
-
-            cf.AboveAverage = _ruleType is not ("Below Average" or "Bottom 10 Items" or "Bottom 10%");
-            cf.TopBottomPercent = _ruleType is "Top 10%" or "Bottom 10%";
-            if (cf.RuleType == CfRuleType.Top10)
-            {
-                if (!TryParseTopBottomRank(_topBottomRankBox.Text, out var topBottomRank))
-                {
-                    ShowInvalidInputWarning(UiText.Get("ConditionalFormatDialog_InvalidRankOrPercentMessage"), _topBottomRankBox);
-                    return;
-                }
-
-                cf.TopBottomRank = topBottomRank;
-            }
+            ShowValidationWarning(validation);
+            return;
         }
 
-        if (cf.RuleType is not (CfRuleType.IconSet or CfRuleType.DataBar or CfRuleType.ColorScale))
-        {
-            cf.FormatIfTrue = BuildSelectedCellStyle();
-        }
-        else
-        {
-            cf.FormatIfTrue = null;
-        }
-
-        if (_existingRule is not null && cf.RuleType != _existingRule.RuleType)
-            ClearNativeConditionalFormatMetadata(cf);
-
-        ResultRule = cf;
+        ResultRule = ConditionalFormatRuleBuilder.Build(
+            input,
+            _range,
+            id: _existingId,
+            customFormat: ConditionalFormatDialogCatalog.IsVisualRuleType(_ruleType) ? null : BuildSelectedCellStyle(),
+            existingRule: _existingRule);
         DialogResult = true;
     }
 
-    private static void ClearNativeConditionalFormatMetadata(ConditionalFormat cf)
+    private CfRuleInput CreateRuleInputFromControls()
     {
-        cf.NativeAttributes = null;
-        cf.NativeChildXmls = null;
-        cf.NativePayloadAttributes = null;
-        cf.NativePayloadChildXmls = null;
-        cf.NativeContainerAttributes = null;
-        cf.NativeContainerChildXmls = null;
+        var ruleType = ConditionalFormatDialogPlanner.ModelRuleTypeForDialogRuleType(
+            _ruleType,
+            DuplicateValuesRuleType(_duplicateValuesKindBox.SelectedItem as string) == CfRuleType.UniqueValues);
+
+        var input = new CfRuleInput
+        {
+            RuleType = ruleType,
+            Operator = ConditionalFormatDialogPlanner.OperatorForDialogRuleType(_ruleType),
+            IsTop = ConditionalFormatDialogCatalog.IsTopRuleType(_ruleType),
+            IsPercent = ConditionalFormatDialogCatalog.IsTopBottomPercentRuleType(_ruleType)
+        };
+
+        return ruleType switch
+        {
+            CfRuleType.Formula => input with
+            {
+                Formula = _formulaBox?.Text
+            },
+
+            CfRuleType.CellValue => input with
+            {
+                Value1 = _value1Box.Text,
+                Value2 = _value2Box.Text
+            },
+
+            CfRuleType.IconSet => input with
+            {
+                IconSetStyle = _iconSetStyleBox.SelectedItem as string ?? ConditionalFormatIconSetCatalog.DefaultStyle,
+                IconSetShowValue = _iconSetShowValueBox.IsChecked == true,
+                IconSetReverse = _iconSetReverseBox.IsChecked == true,
+                IconSetThresholds = BuildIconSetThresholdInputs(),
+                IconOverrides = BuildIconOverrideInputs()
+            },
+
+            CfRuleType.DataBar => input with
+            {
+                DataBarColor = RgbColor.FromCellColor(SelectedDataBarColor(SelectedColorPreset().FillColor)),
+                DataBarMinType = SelectedThresholdType(_dataBarMinTypeBox, CfThresholdType.Min),
+                DataBarMinValue = _dataBarMinValueBox.Text,
+                DataBarMaxType = SelectedThresholdType(_dataBarMaxTypeBox, CfThresholdType.Max),
+                DataBarMaxValue = _dataBarMaxValueBox.Text,
+                DataBarShowValue = _dataBarShowValueBox.IsChecked != true,
+                DataBarGradient = _dataBarGradientBox.IsChecked == true,
+                DataBarMinLength = _dataBarMinLengthBox.Text,
+                DataBarMaxLength = _dataBarMaxLengthBox.Text,
+                DataBarBorder = _dataBarBorderBox.IsChecked == true,
+                DataBarAxisPosition = AxisPositionToXmlValue(_dataBarAxisPositionBox.SelectedItem as string),
+                DataBarAxisColor = ParseOptionalRgbColor(_dataBarAxisColorBox.Text),
+                DataBarNegativeFillColor = ParseOptionalRgbColor(_dataBarNegativeFillColorBox.Text),
+                DataBarNegativeBorderColor = ParseOptionalRgbColor(_dataBarNegativeBorderColorBox.Text)
+            },
+
+            CfRuleType.ColorScale => input with
+            {
+                ColorScaleMinType = SelectedThresholdType(_colorScaleMinTypeBox, CfThresholdType.Min),
+                ColorScaleMinValue = _colorScaleMinValueBox.Text,
+                MinColor = _colorScaleMinColorBox.Text,
+                UseThreeColorScale = _colorScaleUseThreeColorBox.IsChecked == true,
+                ColorScaleMidType = SelectedThresholdType(_colorScaleMidTypeBox, CfThresholdType.Percentile),
+                ColorScaleMidValue = _colorScaleMidValueBox.Text,
+                MidColor = _colorScaleMidColorBox.Text,
+                ColorScaleMaxType = SelectedThresholdType(_colorScaleMaxTypeBox, CfThresholdType.Max),
+                ColorScaleMaxValue = _colorScaleMaxValueBox.Text,
+                MaxColor = _colorScaleMaxColorBox.Text
+            },
+
+            CfRuleType.ContainsText or CfRuleType.NotContainsText or CfRuleType.BeginsWith or CfRuleType.EndsWith => input with
+            {
+                Text = _value1Box.Text
+            },
+
+            CfRuleType.DateOccurring => input with
+            {
+                DatePeriod = DatePeriodValue(_dateOccurringPeriodBox.SelectedItem as string)
+            },
+
+            CfRuleType.Top10 => input with
+            {
+                Rank = _topBottomRankBox.Text
+            },
+
+            _ => input
+        };
+    }
+
+    private IReadOnlyList<CfThresholdModel>? BuildIconSetThresholdInputs()
+    {
+        if (_iconSetThresholdRows.Count == 0)
+            return null;
+
+        var thresholds = new List<CfThresholdModel>(_iconSetThresholdRows.Count);
+        foreach (var (typeBox, valueBox, _) in _iconSetThresholdRows)
+        {
+            var type = typeBox.SelectedItem is CfThresholdType selected ? selected : CfThresholdType.Percent;
+            thresholds.Add(new CfThresholdModel(type, BlankToNull(valueBox.Text)));
+        }
+
+        return thresholds;
+    }
+
+    private IReadOnlyList<CfIconOverride?>? BuildIconOverrideInputs()
+    {
+        if (_iconSetThresholdRows.Count == 0)
+            return null;
+
+        var overrides = new List<CfIconOverride?>(_iconSetThresholdRows.Count);
+        foreach (var (_, _, overrideBox) in _iconSetThresholdRows)
+            overrides.Add(ChoiceToIconOverride(overrideBox?.SelectedItem as string));
+
+        return overrides;
+    }
+
+    private bool ShowValidationWarning(CfValidationResult validation)
+    {
+        var error = validation.Errors[0];
+        return error.Field switch
+        {
+            CfInputField.Formula => ShowInvalidInputWarning(UiText.Get("ConditionalFormatDialog_InvalidFormulaMessage"), _formulaBox),
+            CfInputField.Value1 => ShowInvalidInputWarning(UiText.Get("ConditionalFormatDialog_InvalidValueMessage"), _value1Box),
+            CfInputField.Value2 => ShowInvalidInputWarning(UiText.Get("ConditionalFormatDialog_InvalidMaximumValueMessage"), _value2Box),
+            CfInputField.Text => ShowInvalidInputWarning(UiText.Get("ConditionalFormatDialog_InvalidTextMessage"), _value1Box),
+            CfInputField.Rank => ShowInvalidInputWarning(UiText.Get("ConditionalFormatDialog_InvalidRankOrPercentMessage"), _topBottomRankBox),
+            CfInputField.DataBarMinLength => ShowInvalidInputWarning(UiText.Get("ConditionalFormatDialog_InvalidMinimumBarLengthMessage"), _dataBarMinLengthBox),
+            CfInputField.DataBarMaxLength => ShowInvalidInputWarning(UiText.Get("ConditionalFormatDialog_InvalidMaximumBarLengthMessage"), _dataBarMaxLengthBox),
+            CfInputField.ColorScaleMinColor => ShowInvalidInputWarning(UiText.Get("ConditionalFormatDialog_InvalidMinimumColorMessage"), _colorScaleMinColorBox),
+            CfInputField.ColorScaleMidColor => ShowInvalidInputWarning(UiText.Get("ConditionalFormatDialog_InvalidMidpointColorMessage"), _colorScaleMidColorBox),
+            CfInputField.ColorScaleMaxColor => ShowInvalidInputWarning(UiText.Get("ConditionalFormatDialog_InvalidMaximumColorMessage"), _colorScaleMaxColorBox),
+            _ => ShowInvalidInputWarning(UiText.Get("ConditionalFormatDialog_InvalidValueMessage"), null)
+        };
     }
 
     private static CfThresholdType SelectedThresholdType(ComboBox comboBox, CfThresholdType fallback) =>
@@ -236,14 +166,11 @@ public partial class ConditionalFormatDialog
 
     private bool ShowInvalidInputWarning(string message, TextBox? target)
     {
-        DialogMessageHelper.ShowWarning(this, message, Title);
-        if (target is null)
-            return false;
+        if (target is not null)
+            DialogFocus.ShowWarningAndFocus(this, message, Title, target);
+        else
+            DialogMessageHelper.ShowWarning(this, message, Title);
 
-        target.Focus();
-        target.SelectAll();
-        Keyboard.Focus(target);
         return false;
     }
-
 }

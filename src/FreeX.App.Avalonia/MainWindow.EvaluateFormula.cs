@@ -4,6 +4,7 @@ using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Free.Shared.Shell.Avalonia;
 using FreeX.App.Services;
 using FreeX.Core.Commands;
 
@@ -14,6 +15,8 @@ namespace FreeX.App.Avalonia;
 
 public sealed partial class MainWindow
 {
+    private static AvaloniaCompactDialogChromeStyle EvaluateFormulaDialogChromeStyle => new(FormulaBarFontFamily);
+
     private async Task ShowEvaluateFormulaDialogAsync()
     {
         var summary = EvaluateFormulaDialogPlanner.CreateSummary(_session.Workbook, _session.ActiveCell);
@@ -103,21 +106,9 @@ public sealed partial class MainWindow
         closeButton.Click += (_, _) => dialog.Close();
         helpButton.Click += (_, _) => ShowEditIssue(UiText.Get(EvaluateFormulaDialogPlanner.HelpBodyKey));
 
-        var buttons = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Margin = new Thickness(0, 10, 0, 0),
-            Children =
-            {
-                evaluateButton,
-                stepInButton,
-                stepOutButton,
-                restartButton,
-                closeButton,
-                helpButton,
-            },
-        };
+        var buttons = AvaloniaCompactDialogChrome.CreateActionRow(
+            [evaluateButton, stepInButton, stepOutButton, restartButton, closeButton, helpButton],
+            new Thickness(0, 10, 0, 0));
 
         var stack = new StackPanel
         {
@@ -194,30 +185,14 @@ public sealed partial class MainWindow
         await dialog.ShowDialog(this);
     }
 
-    /// <summary>
-    /// Applies standard button chrome to an Evaluate Formula dialog button: Height=24, Padding=(4,1),
-    /// white background, Brush(112,112,112) border (Brush(0,120,215) for default), FontSize=12,
-    /// FontFamily=FormulaBarFontFamily.
-    /// </summary>
     private static Button CreateEvaluateFormulaButton(string contentKey, double width, bool isDefault = false)
     {
         var button = new Button
         {
             Content = UiText.Get(contentKey),
             Width = width,
-            Height = 24,
-            MinHeight = 24,
-            MaxHeight = 24,
-            Padding = new Thickness(4, 1),
-            Background = Brushes.White,
-            BorderBrush = isDefault ? Brush(0, 120, 215) : Brush(112, 112, 112),
-            BorderThickness = new Thickness(1),
-            FontSize = 12,
-            FontFamily = FormulaBarFontFamily,
-            HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center,
-            VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
-            Margin = new Thickness(4, 0, 0, 0),
         };
+        AvaloniaCompactDialogChrome.ApplyButton(button, EvaluateFormulaDialogChromeStyle, width, isDefault);
         return button;
     }
 }

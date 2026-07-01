@@ -1,6 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Media;
+using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -9,10 +9,9 @@ public partial class ConditionalFormatDialog
 {
     private void SelectColor(CellColor color)
     {
-        var wc = Color.FromRgb(color.R, color.G, color.B);
-        for (var i = 0; i < ColorOptions.Length; i++)
+        for (var i = 0; i < ColorOptions.Count; i++)
         {
-            if (ColorOptions[i].FillColor == wc)
+            if (ColorOptions[i].FillColor == color)
             {
                 _colorBox.SelectedIndex = i;
                 _customFormatStyle = null;
@@ -20,7 +19,7 @@ public partial class ConditionalFormatDialog
             }
         }
 
-        if (_colorBox.SelectedIndex < 0 || ColorOptions[_colorBox.SelectedIndex].FillColor != wc)
+        if (_colorBox.SelectedIndex < 0 || ColorOptions[_colorBox.SelectedIndex].FillColor != color)
         {
             _customFormatStyle = new CellStyle { FillColor = color };
             _colorBox.SelectedItem = UiText.Get("ConditionalFormatDialog_FormatPreset_CustomFormat");
@@ -40,32 +39,23 @@ public partial class ConditionalFormatDialog
         _colorBox.SelectedItem = UiText.Get("ConditionalFormatDialog_FormatPreset_CustomFormat");
     }
 
-    private (string Label, Color FillColor, Color? FontColor, bool Bold) SelectedColorPreset()
+    private ConditionalFormatDialogColorPreset SelectedColorPreset()
     {
         var index = _colorBox.SelectedIndex < 0 ? 0 : _colorBox.SelectedIndex;
         return ColorOptions[index];
     }
 
-    private CellColor SelectedDataBarColor(Color fallback) =>
+    private CellColor SelectedDataBarColor(CellColor fallback) =>
         _colorBox.SelectedItem as string == UiText.Get("ConditionalFormatDialog_FormatPreset_CustomFormat") && _customFormatStyle?.FillColor is { } custom
             ? custom
-            : new CellColor(fallback.R, fallback.G, fallback.B);
+            : fallback;
 
     private CellStyle BuildSelectedCellStyle()
     {
         if (_colorBox.SelectedItem as string == UiText.Get("ConditionalFormatDialog_FormatPreset_CustomFormat") && _customFormatStyle is not null)
             return _customFormatStyle.Clone();
 
-        var selected = SelectedColorPreset();
-        var style = new CellStyle
-        {
-            FillColor = new CellColor(selected.FillColor.R, selected.FillColor.G, selected.FillColor.B),
-            Bold = selected.Bold
-        };
-        if (selected.FontColor is { } fontColor)
-            style.FontColor = new CellColor(fontColor.R, fontColor.G, fontColor.B);
-
-        return style;
+        return SelectedColorPreset().ToCellStyle();
     }
 
     private Button CreateDataBarColorButton()

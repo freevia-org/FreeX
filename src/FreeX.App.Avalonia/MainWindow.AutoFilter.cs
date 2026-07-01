@@ -6,6 +6,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Immutable;
 
+using Free.Shared.Shell.Avalonia;
 using FreeX.App.Presentation.Filtering;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -19,6 +20,8 @@ namespace FreeX.App.Avalonia;
 
 public sealed partial class MainWindow
 {
+    private static AvaloniaCompactDialogChromeStyle AutoFilterDialogChromeStyle => new(FormulaBarFontFamily);
+
     // AutoFilter button visuals — match WPF GridView.Rendering.AutoFilter.cs constants.
     private static readonly IBrush AutoFilterBorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(142, 153, 166));
     private static readonly IBrush AutoFilterGlyphBrush = new ImmutableSolidColorBrush(Color.FromRgb(45, 55, 65));
@@ -31,7 +34,7 @@ public sealed partial class MainWindow
     /// </summary>
     private Border DecorateAutoFilterHeaderCell(Border cellBorder, CellAddress address)
     {
-        if (!AutoFilterHeaderPlanner.IsFilterButtonCell(_session.ActiveSheet, address.Row, address.Col))
+        if (!AutoFilterHeaderButtonPlanner.IsFilterButtonCell(_session.ActiveSheet, address.Row, address.Col))
             return cellBorder;
 
         var content = cellBorder.Child;
@@ -40,7 +43,7 @@ public sealed partial class MainWindow
         // Determine per-column active-filter state (mirrors WPF ActiveAutoFilterColumns logic).
         var sheet = _session.ActiveSheet;
         var isActive = false;
-        if (AutoFilterHeaderPlanner.TryGetAutoFilterRange(sheet) is { } range)
+        if (AutoFilterHeaderButtonPlanner.TryGetAutoFilterRange(sheet) is { } range)
         {
             var colOffset = (int)(address.Col - range.Start.Col);
             isActive = sheet.AutoFilter?.FilterColumns.Any(fc => fc.ColumnId == colOffset) == true;
@@ -121,21 +124,19 @@ public sealed partial class MainWindow
     private void OpenAutoFilterFlyout(Control anchor, CellAddress headerCell)
     {
         var sheet = _session.ActiveSheet;
-        if (AutoFilterHeaderPlanner.TryGetAutoFilterRange(sheet) is not { } range)
+        if (AutoFilterHeaderButtonPlanner.TryGetAutoFilterRange(sheet) is not { } range)
             return;
 
-        var columnOffset = headerCell.Col - range.Start.Col;
-        var headerText = AutoFilterChecklistPlanner.ToFilterText(sheet.GetValue(headerCell.Row, headerCell.Col));
-        if (string.IsNullOrWhiteSpace(headerText))
-            headerText = CellAddress.NumberToColumnName(headerCell.Col);
+        if (!AutoFilterDropdownMenuPlanner.TryPlan(range, headerCell, out var dropdownPlan))
+            return;
 
-        var checklistItems = AutoFilterChecklistPlanner.CreateItems(
+        var columnOffset = dropdownPlan.FilterColumnOffset;
+        var menuPlan = AutoFilterDropdownMenuPlanner.CreateMenuPlan(
             sheet,
-            range,
-            columnOffset,
-            AutoFilterMenuPlanner.BlankDisplayText);
-        var hasActiveFilter = RangeHasActiveFilter(sheet, range);
-        var model = AutoFilterMenuPlanner.Build(headerText, checklistItems, hasActiveFilter);
+            dropdownPlan,
+            InvariantAutoFilterMenuTextProvider.Instance,
+            InvariantAutoFilterMenuTextProvider.BlankDisplayText);
+        var model = AutoFilterMenuPlanner.Build(menuPlan);
 
         var panel = new StackPanel { Spacing = 2, MinWidth = 200 };
         var checkBoxes = new List<CheckBox>();
@@ -170,7 +171,8 @@ public sealed partial class MainWindow
                     var selectAll = new CheckBox
                     {
                         Content = item.Label,
-                        IsChecked = true,
+                        IsThreeState = true,
+                        IsChecked = item.IsChecked ?? true,
                         FontSize = 12,
                         FontFamily = FormulaBarFontFamily,
                     };
@@ -185,7 +187,7 @@ public sealed partial class MainWindow
                     var box = new CheckBox
                     {
                         Content = item.Label,
-                        IsChecked = true,
+                        IsChecked = item.IsChecked ?? true,
                         Tag = item.Value,
                         FontSize = 12,
                         FontFamily = FormulaBarFontFamily,
@@ -213,18 +215,8 @@ public sealed partial class MainWindow
             Content = "OK",
             IsDefault = true,
             MinWidth = 72,
-            Height = 24,
-            MinHeight = 24,
-            MaxHeight = 24,
-            Padding = new Thickness(4, 1),
-            Background = Brushes.White,
-            BorderBrush = Brush(0, 120, 215),
-            BorderThickness = new Thickness(1),
-            FontSize = 12,
-            FontFamily = FormulaBarFontFamily,
-            HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center,
-            VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
         };
+        AvaloniaCompactDialogChrome.ApplyButton(okButton, AutoFilterDialogChromeStyle, 72, isDefault: true);
         okButton.Click += (_, _) =>
         {
             flyout.Hide();
@@ -234,13 +226,7 @@ public sealed partial class MainWindow
                 .ToList();
             RunAutoFilter(range, columnOffset, allowed);
         };
-        panel.Children.Add(new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Margin = new Thickness(0, 6, 0, 0),
-            Children = { okButton },
-        });
+        panel.Children.Add(AvaloniaCompactDialogChrome.CreateActionRow([okButton], new Thickness(0, 6, 0, 0)));
 
         flyout.Content = new Border { Padding = new Thickness(8), Child = panel };
         flyout.ShowAt(anchor);
@@ -268,7 +254,7 @@ public sealed partial class MainWindow
     private void ClearActiveSheetFilters()
     {
         var sheet = _session.ActiveSheet;
-        if (AutoFilterHeaderPlanner.TryGetAutoFilterRange(sheet) is not { } range)
+        if (AutoFilterHeaderButtonPlanner.TryGetAutoFilterRange(sheet) is not { } range)
         {
             RefreshShell(UiText.Get("WTA_ContextFilter_NoFilter"));
             return;
@@ -309,17 +295,4 @@ public sealed partial class MainWindow
         RefreshShell(ascending ? UiText.Get("ShellLoc_SortedAToZ") : UiText.Get("ShellLoc_SortedZToA"));
     }
 
-    private static bool RangeHasActiveFilter(Sheet sheet, GridRange range)
-    {
-        if (sheet.FilterHiddenRows.Count == 0)
-            return false;
-
-        for (var row = range.Start.Row + 1; row <= range.End.Row; row++)
-        {
-            if (sheet.FilterHiddenRows.Contains(row))
-                return true;
-        }
-
-        return false;
-    }
 }

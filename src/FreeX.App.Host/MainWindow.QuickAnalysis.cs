@@ -18,27 +18,19 @@ public partial class MainWindow
 
     private void ShowQuickAnalysisMenu()
     {
-        if (SheetGrid.SelectedRange is not { } range)
-        {
-            ShowQuickAnalysisUnsupportedSelectionStatus();
-            return;
-        }
-
         var sheet = _workbook.GetSheet(_currentSheetId);
-        if (sheet is null)
+        var request = QuickAnalysisShellRequestPlanner.Build(
+            sheet,
+            SheetGrid.SelectedRange,
+            QuickAnalysisShellCapabilities.DialogBacked);
+        var openPlan = QuickAnalysisShellOpenPlanner.Plan(request);
+        if (!openPlan.CanOpen || openPlan.Selection is not { } range)
         {
-            ShowQuickAnalysisUnsupportedSelectionStatus();
+            ShowQuickAnalysisUnavailableStatus(openPlan);
             return;
         }
 
-        var description = QuickAnalysisSelectionReader.Describe(sheet, range);
-        var displayModel = QuickAnalysisModelBuilder.Build(description).ToDisplayModel();
-        if (displayModel.IsEmpty)
-        {
-            ShowQuickAnalysisUnsupportedSelectionStatus();
-            return;
-        }
-
+        var shellPlan = openPlan.ShellPlan;
         _preserveQuickAnalysisUnsupportedStatus = false;
         CloseQuickAnalysisMenu();
         var menu = new ContextMenu
@@ -67,14 +59,14 @@ public partial class MainWindow
             _suppressNextQuickAnalysisClosedStatusReset = false;
         };
 
-        foreach (var group in displayModel.Groups)
+        foreach (var group in shellPlan.Groups)
         {
             if (menu.Items.Count > 0)
                 menu.Items.Add(new Separator());
 
             menu.Items.Add(new MenuItem
             {
-                Header = QuickAnalysisShellPlanner.GroupTitleFallback(group.Group),
+                Header = UiText.Get(group.TitleResourceKey),
                 IsEnabled = false
             });
 
@@ -84,7 +76,7 @@ public partial class MainWindow
                 {
                     Header = item.Label,
                     Tag = item,
-                    ToolTip = item.PreviewText,
+                    ToolTip = item.ToolTip,
                     Icon = QuickAnalysisPreviewIconFactory.Create(item.PreviewVisual)
                 };
                 menuItem.MouseEnter += QuickAnalysisMenuItem_MouseEnter;
@@ -107,13 +99,18 @@ public partial class MainWindow
         _quickAnalysisMenu = null;
     }
 
-    private void ShowQuickAnalysisUnsupportedSelectionStatus()
+    private void ShowQuickAnalysisUnavailableStatus(QuickAnalysisShellOpenPlan openPlan)
     {
         _preserveQuickAnalysisUnsupportedStatus = true;
         _suppressNextQuickAnalysisClosedStatusReset = true;
         CloseQuickAnalysisMenu();
         ClearQuickAnalysisPreview(resetStatus: false);
-        StatusReadyText.Text = UiText.Get("QuickAnalysis_SelectRangeStatus");
+        StatusReadyText.Text = QuickAnalysisShellOpenPlanner.FormatIssueText(
+            openPlan,
+            QuickAnalysisShellOpenIssueTextTarget.Status,
+            UiText.Get,
+            (resourceKey, rangeReference) => UiText.Format(resourceKey, rangeReference),
+            range => FormatRangeReference(range.Start, range.End));
     }
 
     private static void QuickAnalysisMenu_Opened(object sender, RoutedEventArgs e)
@@ -140,47 +137,40 @@ public partial class MainWindow
 
     private void QuickAnalysisMenuItem_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is not MenuItem { Tag: QuickAnalysisDisplayItem item })
+        if (sender is not MenuItem { Tag: QuickAnalysisShellItemPlan item })
             return;
 
-        var action = QuickAnalysisShellActionPlanner.Plan(item, QuickAnalysisShellCapabilities.DialogBacked);
-        switch (action.Kind)
+        var operation = QuickAnalysisHostOperationPlanner.Plan(item);
+        switch (operation.Kind)
         {
-            case QuickAnalysisShellActionKind.OpenConditionalFormatDialog
-                when action.ConditionalFormatDialogTitle is { } title:
+            case QuickAnalysisHostOperationKind.OpenConditionalFormatDialog
+                when operation.ConditionalFormatDialogTitle is { } title:
                 ShowCfDialog(title);
                 break;
-            case QuickAnalysisShellActionKind.ClearConditionalFormatting:
+            case QuickAnalysisHostOperationKind.ClearConditionalFormatting:
                 CfClearRulesMenuItem_Click(sender, e);
                 break;
-            case QuickAnalysisShellActionKind.InsertChart when action.ChartType is { } chartType:
+            case QuickAnalysisHostOperationKind.InsertChart when operation.ChartType is { } chartType:
                 InsertChartOfType(chartType);
                 break;
-            case QuickAnalysisShellActionKind.OpenChartPicker:
+            case QuickAnalysisHostOperationKind.OpenChartPicker:
                 InsertChartPickerBtn_Click(sender, e);
                 break;
-            case QuickAnalysisShellActionKind.InsertAggregateTotalFormula
-                when !string.IsNullOrWhiteSpace(action.TotalFunction):
-                InsertQuickAnalysisTotalFormulas(
-                    range => QuickAnalysisTotalsPlanner.BuildAggregateEdits(range, action.TotalFunction),
-                    $"Quick Analysis {item.Label}");
+            case QuickAnalysisHostOperationKind.InsertAggregateTotalFormula:
+            case QuickAnalysisHostOperationKind.InsertPercentTotalFormula:
+            case QuickAnalysisHostOperationKind.InsertRunningTotalFormula:
+                InsertQuickAnalysisTotalFormulas(operation);
                 break;
-            case QuickAnalysisShellActionKind.InsertPercentTotalFormula:
-                InsertQuickAnalysisTotalFormulas(QuickAnalysisTotalsPlanner.BuildPercentTotalEdits, "Quick Analysis % Total");
-                break;
-            case QuickAnalysisShellActionKind.InsertRunningTotalFormula:
-                InsertQuickAnalysisTotalFormulas(QuickAnalysisTotalsPlanner.BuildRunningTotalEdits, "Quick Analysis Running Total");
-                break;
-            case QuickAnalysisShellActionKind.CreateTable:
+            case QuickAnalysisHostOperationKind.CreateTable:
                 TableBtn_Click(sender, e);
                 break;
-            case QuickAnalysisShellActionKind.CreatePivotTable:
+            case QuickAnalysisHostOperationKind.CreatePivotTable:
                 PivotTableBtn_Click(sender, e);
                 break;
-            case QuickAnalysisShellActionKind.InsertSparkline when action.SparklineDialogKind is { } sparklineDialogKind:
+            case QuickAnalysisHostOperationKind.InsertSparkline when operation.SparklineDialogKind is { } sparklineDialogKind:
                 InsertQuickAnalysisSparkline(sparklineDialogKind);
                 break;
-            case QuickAnalysisShellActionKind.Deferred when action.DeferredNote is { } note:
+            case QuickAnalysisHostOperationKind.Deferred when operation.DeferredNote is { } note:
                 StatusReadyText.Text = note;
                 break;
         }
@@ -191,14 +181,15 @@ public partial class MainWindow
         InsertSparkline(dialogKind);
     }
 
-    private void InsertQuickAnalysisTotalFormulas(
-        Func<GridRange, IReadOnlyList<(CellAddress Address, Cell NewCell)>> buildEdits,
-        string title)
+    private void InsertQuickAnalysisTotalFormulas(QuickAnalysisHostOperation operation)
     {
         if (SheetGrid.SelectedRange is not { } range)
             return;
 
-        var edits = buildEdits(range);
+        if (!QuickAnalysisHostOperationPlanner.TryBuildTotalFormulaEdits(operation, range, out var edits))
+            return;
+
+        var title = operation.TotalCommandTitle ?? "Quick Analysis Total";
         var outcome = _commandBus.ExecuteRepeatable(
             _workbook.Id,
             () => new EditCellsCommand(_currentSheetId, edits));
@@ -235,13 +226,13 @@ public partial class MainWindow
 
     private void ShowQuickAnalysisPreview(object sender)
     {
-        if (sender is not MenuItem { Tag: QuickAnalysisDisplayItem item } ||
-            SheetGrid.SelectedRange is not { } range)
+        if (sender is not MenuItem { Tag: QuickAnalysisShellItemPlan item } ||
+            SheetGrid.SelectedRange is null)
         {
             return;
         }
 
-        var preview = QuickAnalysisPlanner.BuildHoverPreview(range, item);
+        var preview = item.HoverPreview;
         _preserveQuickAnalysisUnsupportedStatus = false;
         ApplyQuickAnalysisPreview(
             preview.Range,

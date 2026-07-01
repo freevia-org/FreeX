@@ -7,16 +7,19 @@ public static class BackstageExportFileTypePlanner
 {
     public static BackstageActionGroup BuildChangeFileTypeGroup(
         IEnumerable<FileFormatDescriptor> formats,
-        Action<string> saveAsExtension)
+        Action<string> saveAsExtension) =>
+        BuildChangeFileTypeGroup(formats, (extension, _) => saveAsExtension(extension));
+
+    public static BackstageActionGroup BuildChangeFileTypeGroup(
+        IEnumerable<FileFormatDescriptor> formats,
+        Action<string, int> saveAsFormat)
     {
         ArgumentNullException.ThrowIfNull(formats);
-        ArgumentNullException.ThrowIfNull(saveAsExtension);
+        ArgumentNullException.ThrowIfNull(saveAsFormat);
 
-        var rows = BackstageSaveAsFileTypePlanner
-            .Build(formats, saveAsExtension)
-            .SelectMany(group => group.Actions)
-            .ToArray();
-
-        return new BackstageActionGroup("Change File Type", rows);
+        return BackstageFileTypeActionPlanner.BuildGroup(
+            "Change File Type",
+            BackstageSaveAsFileTypePlanner.BuildRows(formats),
+            saveAsFormat);
     }
 }

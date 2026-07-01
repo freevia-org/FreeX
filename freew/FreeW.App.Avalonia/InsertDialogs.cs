@@ -4,6 +4,8 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Free.Shared.Shell.Avalonia;
+using FreeW.App.Presentation.Dialogs;
 
 namespace FreeW.App.Avalonia;
 
@@ -19,14 +21,14 @@ public sealed class HyperlinkDialog : Window
     private readonly TextBox _displayBox = new()
     {
         MinWidth = 280,
-        PlaceholderText = "Text to display",
+        PlaceholderText = InsertDialogTextResources.Hyperlink.DisplayPlaceholder,
         Margin = new Thickness(0, 6, 0, 0),
     };
 
     private readonly TextBox _addressBox = new()
     {
         MinWidth = 280,
-        PlaceholderText = "https://…  or  #BookmarkName for an internal link",
+        PlaceholderText = InsertDialogTextResources.Hyperlink.AddressPlaceholder,
         Margin = new Thickness(0, 6, 0, 0),
     };
 
@@ -41,7 +43,7 @@ public sealed class HyperlinkDialog : Window
 
     public HyperlinkDialog(string? initialDisplay = null, string? initialAddress = null)
     {
-        Title = "Insert Hyperlink";
+        Title = InsertDialogTextResources.Hyperlink.Title;
         Width = 420;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -50,12 +52,14 @@ public sealed class HyperlinkDialog : Window
 
         _displayBox.Text = initialDisplay ?? string.Empty;
         _addressBox.Text = initialAddress ?? string.Empty;
+        AvaloniaCompactDialogChrome.ApplyTextBox(_displayBox, InsertDialogLayout.ChromeStyle);
+        AvaloniaCompactDialogChrome.ApplyTextBox(_addressBox, InsertDialogLayout.ChromeStyle);
 
         var grid = new Grid { Margin = new Thickness(14, 12, 14, 0) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        InsertDialogLayout.AddLabeledRow(grid, 0, "Display:", _displayBox);
-        InsertDialogLayout.AddLabeledRow(grid, 1, "Address:", _addressBox);
+        InsertDialogLayout.AddLabeledRow(grid, 0, InsertDialogTextResources.Hyperlink.DisplayLabel, _displayBox);
+        InsertDialogLayout.AddLabeledRow(grid, 1, InsertDialogTextResources.Hyperlink.AddressLabel, _addressBox);
 
         var buttons = InsertDialogLayout.OkCancelRow(
             ok: () =>
@@ -89,7 +93,7 @@ public sealed class BookmarkDialog : Window
     private readonly TextBox _nameBox = new()
     {
         MinWidth = 240,
-        PlaceholderText = "Bookmark name",
+        PlaceholderText = InsertDialogTextResources.Bookmark.NamePlaceholder,
         Margin = new Thickness(0, 6, 0, 0),
     };
 
@@ -109,7 +113,7 @@ public sealed class BookmarkDialog : Window
     {
         ArgumentNullException.ThrowIfNull(existingNames);
 
-        Title = "Bookmark";
+        Title = InsertDialogTextResources.Bookmark.Title;
         Width = 380;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -120,37 +124,34 @@ public sealed class BookmarkDialog : Window
         if (existingNames.Count > 0)
             _existing.SelectedIndex = 0;
         _existing.IsEnabled = existingNames.Count > 0;
+        AvaloniaCompactDialogChrome.ApplyTextBox(_nameBox, InsertDialogLayout.ChromeStyle);
+        AvaloniaCompactDialogChrome.ApplyComboBox(_existing, InsertDialogLayout.ChromeStyle);
 
         var grid = new Grid { Margin = new Thickness(14, 12, 14, 0) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        InsertDialogLayout.AddLabeledRow(grid, 0, "Name:", _nameBox);
-        InsertDialogLayout.AddLabeledRow(grid, 1, "Go to:", _existing);
+        InsertDialogLayout.AddLabeledRow(grid, 0, InsertDialogTextResources.Bookmark.NameLabel, _nameBox);
+        InsertDialogLayout.AddLabeledRow(grid, 1, InsertDialogTextResources.Bookmark.GoToLabel, _existing);
 
         // Add (creates the bookmark), Go To (navigates), Close.
-        var btnRow = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(14, 12, 14, 12),
-        };
-        btnRow.Children.Add(InsertDialogLayout.MakeButton("Add", (_, _) =>
+        var addButton = InsertDialogLayout.MakeButton(InsertDialogTextResources.Bookmark.AddButton, (_, _) =>
         {
             var name = _nameBox.Text?.Trim();
             if (string.IsNullOrEmpty(name))
                 return;
             BookmarkName = name;
             Close();
-        }));
-        btnRow.Children.Add(InsertDialogLayout.MakeButton("Go To", (_, _) =>
+        });
+        var goToButton = InsertDialogLayout.MakeButton(InsertDialogTextResources.Bookmark.GoToButton, (_, _) =>
         {
             if (_existing.SelectedItem is string s && !string.IsNullOrEmpty(s))
             {
                 GoToName = s;
                 Close();
             }
-        }));
-        btnRow.Children.Add(InsertDialogLayout.MakeButton("Close", (_, _) => Close()));
+        });
+        var closeButton = InsertDialogLayout.MakeButton(InsertDialogTextResources.Bookmark.CloseButton, (_, _) => Close());
+        var btnRow = AvaloniaCompactDialogChrome.CreateActionRow([addButton, goToButton, closeButton], new Thickness(14, 12, 14, 12));
 
         var outer = new StackPanel();
         outer.Children.Add(grid);
@@ -177,7 +178,7 @@ public sealed class QuickPartDialog : Window
         MinHeight = 90,
         AcceptsReturn = true,
         TextWrapping = TextWrapping.Wrap,
-        PlaceholderText = "Snippet text (one paragraph per line)",
+        PlaceholderText = InsertDialogTextResources.QuickPart.SnippetPlaceholder,
         Margin = new Thickness(0, 6, 0, 0),
     };
 
@@ -186,7 +187,7 @@ public sealed class QuickPartDialog : Window
 
     public QuickPartDialog(string? initialText = null)
     {
-        Title = "Insert Quick Part";
+        Title = InsertDialogTextResources.QuickPart.Title;
         Width = 420;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -194,10 +195,11 @@ public sealed class QuickPartDialog : Window
         ShowInTaskbar = false;
 
         _textBox.Text = initialText ?? string.Empty;
+        AvaloniaCompactDialogChrome.ApplyTextBox(_textBox, InsertDialogLayout.ChromeStyle, fixedHeight: false);
 
         var label = new TextBlock
         {
-            Text = "Text:",
+            Text = InsertDialogTextResources.QuickPart.TextLabel,
             Margin = new Thickness(14, 12, 14, 0),
         };
 
@@ -225,6 +227,8 @@ public sealed class QuickPartDialog : Window
 /// <summary>Shared layout helpers for the AV-INSERT2 input dialogs (label rows, OK/Cancel, key handling).</summary>
 internal static class InsertDialogLayout
 {
+    public static readonly AvaloniaCompactDialogChromeStyle ChromeStyle = new(FontFamily.Default);
+
     public static void AddLabeledRow(Grid grid, int row, string label, Control field)
     {
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -249,25 +253,17 @@ internal static class InsertDialogLayout
         var btn = new Button
         {
             Content = content,
-            MinWidth = 84,
-            Margin = new Thickness(6, 0, 0, 0),
-            Padding = new Thickness(6, 3, 6, 3),
         };
+        AvaloniaCompactDialogChrome.ApplyButton(btn, ChromeStyle, minWidth: 84);
         btn.Click += onClick;
         return btn;
     }
 
     public static StackPanel OkCancelRow(Action ok, Action cancel)
     {
-        var row = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(14, 12, 14, 12),
-        };
-        row.Children.Add(MakeButton("OK", (_, _) => ok()));
-        row.Children.Add(MakeButton("Cancel", (_, _) => cancel()));
-        return row;
+        var okButton = MakeButton(InsertDialogTextResources.OkButton, (_, _) => ok());
+        var cancelButton = MakeButton(InsertDialogTextResources.CancelButton, (_, _) => cancel());
+        return AvaloniaCompactDialogChrome.CreateActionRow([okButton, cancelButton], new Thickness(14, 12, 14, 12));
     }
 
     /// <summary>Enter invokes the OK (first) button; Escape invokes Cancel (second). Used on input boxes.</summary>

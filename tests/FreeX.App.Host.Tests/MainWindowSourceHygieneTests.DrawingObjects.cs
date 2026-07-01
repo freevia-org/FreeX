@@ -5,6 +5,34 @@ namespace FreeX.App.Host.Tests;
 public sealed partial class MainWindowSourceHygieneTests
 {
     [Fact]
+    public void TextBoxInlineEditing_RoutesKeyCommitAndLostFocusPolicyThroughSharedPlanner()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.TextBoxInlineEditing.cs");
+
+        source.Should().Contain("TextBoxInlineEditPlanner.PlanKeyDown(");
+        source.Should().Contain("TextBoxInlineEditPlanner.CreateCommitPlan(");
+        source.Should().Contain("TextBoxInlineEditPlanner.ShouldCommitLostFocus(");
+        source.Should().Contain("TextBoxInlineEditPlanner.CommitCommandTitle");
+        source.Should().NotContain("e.Key == Key.Escape && Keyboard.Modifiers == ModifierKeys.None");
+        source.Should().NotContain("e.Key is Key.Enter or Key.Return && Keyboard.Modifiers == ModifierKeys.None");
+        source.Should().NotContain("string.Equals(_textBoxInlineOriginalText, newText, StringComparison.Ordinal)");
+    }
+
+    [Fact]
+    public void SelectionPaneDialog_RoutesKeyboardPolicyThroughSharedPlanner()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("SelectionPaneDialog.State.cs");
+
+        source.Should().Contain("SelectionPanePlanner.PlanKeyboardAction(");
+        source.Should().Contain("SelectionPaneKeyboardAction.MoveUp");
+        source.Should().Contain("SelectionPaneKeyboardAction.FocusRename");
+        source.Should().Contain("SelectionPaneKeyboardAction.ToggleVisibility");
+        source.Should().NotContain("if (e.Key == Key.F2)");
+        source.Should().NotContain("if (e.Key == Key.Space)");
+        source.Should().NotContain("if (e.Key == Key.Up)");
+    }
+
+    [Fact]
     public void DrawShapeArrowheads_PassesNoFlipToLineEndpoints_BecauseDrawingContextAlreadyFlips()
     {
         // Regression guard for the double-flip arrowhead bug:

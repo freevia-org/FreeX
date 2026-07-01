@@ -158,4 +158,15 @@ public sealed class SharedShapeGeometryBuilderTests
         kind.Should().Be(DrawingShapeKind.Cylinder,
             "Cylinder prst→kind→prst→kind round-trip must be stable");
     }
+
+    [Fact]
+    public void PptxShapeKindMap_DelegatesPresetMappingToSharedDrawing()
+    {
+        var source = TestWorkspaceFileLocator.ReadAllText("freep", "FreeP.Core.IO", "PptxShapeKindMap.cs");
+
+        source.Should().Contain("DrawingMlPresetGeometryMap.GetShapeKindOrDefault");
+        source.Should().Contain("DrawingMlPresetGeometryMap.GetPreset");
+        source.Should().NotContain("prst?.ToLowerInvariant() switch");
+        source.Should().NotContain("DrawingShapeKind.Cylinder => \"can\"");
+    }
 }

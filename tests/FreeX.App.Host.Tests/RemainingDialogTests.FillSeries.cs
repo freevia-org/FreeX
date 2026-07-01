@@ -1,4 +1,5 @@
 using FluentAssertions;
+using FreeX.App.Presentation.FillSeries;
 
 namespace FreeX.App.Host.Tests;
 
@@ -9,7 +10,7 @@ public sealed partial class RemainingDialogTests
     {
         FillSeriesStepDialog.TryCreateResult("-2", out var result, out _).Should().BeTrue();
 
-        result.Should().Be(new FillSeriesStepDialogResult(-2));
+        result.Should().Be(new FillSeriesOptions(-2));
     }
 
     [Fact]
@@ -17,13 +18,18 @@ public sealed partial class RemainingDialogTests
     {
         var source = ReadRemainingDialogSources();
 
-        source.Should().Contain("enum FillSeriesDirection");
-        source.Should().Contain("enum FillSeriesType");
-        source.Should().Contain("enum FillSeriesDateUnit");
+        source.Should().Contain("using FreeX.App.Presentation.FillSeries;");
+        source.Should().Contain("FillSeriesOptions");
         source.Should().Contain("FillSeriesDirection.Rows");
         source.Should().Contain("FillSeriesType.Date");
         source.Should().Contain("FillSeriesDateUnit.Month");
         source.Should().Contain("StopValue");
+        source.Should().Contain("FillSeriesPlanner.DefaultOptions");
+        source.Should().Contain("FillSeriesPlanner.CreateDefaultOptions");
+        source.Should().NotContain("enum FillSeriesDirection");
+        source.Should().NotContain("enum FillSeriesType");
+        source.Should().NotContain("enum FillSeriesDateUnit");
+        source.Should().NotContain("FillSeriesStepDialogResult");
     }
 
     [Fact]
@@ -101,11 +107,10 @@ public sealed partial class RemainingDialogTests
     {
         var source = ReadClassSource("FillSeriesStepDialog.cs", "public sealed class FillSeriesStepDialog", "public sealed record __NoNextFillSeriesStepDialog");
 
-        source.Should().Contain("DialogMessageHelper.ShowWarning(this,");
+        source.Should().Contain("DialogFocus.ShowWarningAndFocus(this,");
         source.Should().Contain("error ?? UiText.Get(\"FillSeriesStep_InvalidStepMessage\")");
-        source.Should().Contain("FocusInvalidStepInput();");
-        source.Should().Contain("private void FocusInvalidStepInput()");
-        source.Should().Contain("DialogFocus.FocusAndSelect(_stepBox);");
+        source.Should().Contain("ResolveInvalidInput(inputError)");
+        source.Should().Contain("private TextBox ResolveInvalidInput(FillSeriesInputError inputError)");
     }
 
     [Fact]
@@ -130,10 +135,9 @@ public sealed partial class RemainingDialogTests
     {
         var source = ReadClassSource("FillSeriesStepDialog.cs", "public sealed class FillSeriesStepDialog", "public sealed record __NoNextFillSeriesStepDialog");
 
-        source.Should().Contain("FocusInvalidStopInput();");
-        source.Should().Contain("private void FocusInvalidStopInput()");
-        source.Should().Contain("DialogFocus.FocusAndSelect(_stopBox);");
         source.Should().Contain("UiText.Get(\"FillSeriesStep_InvalidStopMessage\")");
+        source.Should().Contain("FillSeriesPlanner.FocusTargetFor(inputError) == FillSeriesInputFocusTarget.StopValue");
+        source.Should().NotContain("string.Equals(error, UiText.Get(\"FillSeriesStep_InvalidStopMessage\")");
     }
 
     [Fact]
@@ -146,7 +150,7 @@ public sealed partial class RemainingDialogTests
         source.Should().Contain("_dateButton.Checked += (_, _) => UpdateDateUnitAvailability();");
         source.Should().Contain("_autoFillButton.Checked += (_, _) => UpdateDateUnitAvailability();");
         source.Should().Contain("private void UpdateDateUnitAvailability()");
-        source.Should().Contain("var isDateSeries = _dateButton.IsChecked == true;");
+        source.Should().Contain("var isDateSeries = FillSeriesPlanner.IsDateUnitEnabled(SelectedSeriesType());");
         foreach (var button in new[] { "_dayButton", "_weekdayButton", "_monthButton", "_yearButton" })
             source.Should().Contain($"{button}.IsEnabled = isDateSeries;");
     }

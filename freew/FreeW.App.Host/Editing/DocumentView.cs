@@ -6,6 +6,8 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Effects;
 using System.Windows.Media.Imaging;
+using FreeW.App.Presentation.Dialogs;
+using FreeW.App.Presentation.DocumentView;
 using FreeW.Core.Model;
 using FreeW.App.Host;
 using System.Diagnostics;
@@ -1487,24 +1489,8 @@ public sealed class DocumentView : RichTextBox
         if (blockIndex < 0 || blockIndex >= _model.Blocks.Count
             || _model.Blocks[blockIndex] is not ModelTable table)
             return;
-        if (rowIndex <= 0)
-            return; // nothing above — already the first row
-
-        // Top table: rows [0, rowIndex-1]
-        var top = new ModelTable { Formatting = table.Formatting };
-        top.ColumnWidthsPt.AddRange(table.ColumnWidthsPt);
-        for (var i = 0; i < rowIndex; i++)
-            top.Rows.Add(table.Rows[i]);
-
-        // Bottom table: rows [rowIndex, end]
-        var bottom = new ModelTable { Formatting = table.Formatting };
-        bottom.ColumnWidthsPt.AddRange(table.ColumnWidthsPt);
-        for (var i = rowIndex; i < table.Rows.Count; i++)
-            bottom.Rows.Add(table.Rows[i]);
-
-        // Replace the single table block with: top table + blank paragraph + bottom table
-        var separator = new ModelParagraph(string.Empty);
-        _commands.Execute(new ReplaceBlocksCommand(blockIndex, 1, [top, separator, bottom]));
+        if (TableLayoutOperations.TryBuildSplitReplacement(table, rowIndex, out var replacement))
+            _commands.Execute(new ReplaceBlocksCommand(blockIndex, 1, replacement));
     }
 
     /// <summary>
@@ -1602,23 +1588,8 @@ public sealed class DocumentView : RichTextBox
         if (blockIndex < 0 || blockIndex >= _model.Blocks.Count
             || _model.Blocks[blockIndex] is not ModelTable table)
             return;
-        if (table.Rows.Count == 0)
-            return;
-
-        var explicitHeights = table.Rows
-            .Where(r => r.HeightPt.HasValue)
-            .Select(r => r.HeightPt!.Value)
-            .ToList();
-        var targetHeight = explicitHeights.Count > 0
-            ? explicitHeights.Average()
-            : (double?)null;
-
-        foreach (var row in table.Rows)
-        {
-            row.HeightPt = targetHeight;
-            row.HeightRule = targetHeight.HasValue ? TableRowHeightRule.Exact : TableRowHeightRule.Auto;
-        }
-        Render();
+        if (TableLayoutOperations.DistributeRows(table))
+            Render();
     }
 
     /// <summary>
@@ -1633,24 +1604,8 @@ public sealed class DocumentView : RichTextBox
         if (blockIndex < 0 || blockIndex >= _model.Blocks.Count
             || _model.Blocks[blockIndex] is not ModelTable table)
             return;
-        var colCount = table.ColumnCount;
-        if (colCount == 0)
-            return;
-
-        double totalWidth = table.ColumnWidthsPt.Count == colCount
-            ? table.ColumnWidthsPt.Sum()
-            : table.PreferredWidthPt ?? 468.0;
-        var colWidth = totalWidth / colCount;
-
-        table.ColumnWidthsPt.Clear();
-        for (var i = 0; i < colCount; i++)
-            table.ColumnWidthsPt.Add(colWidth);
-
-        foreach (var row in table.Rows)
-            foreach (var cell in row.Cells)
-                cell.WidthPt = colWidth;
-
-        Render();
+        if (TableLayoutOperations.DistributeColumns(table))
+            Render();
     }
 
     /// <summary>
@@ -1664,20 +1619,8 @@ public sealed class DocumentView : RichTextBox
         if (blockIndex < 0 || blockIndex >= _model.Blocks.Count
             || _model.Blocks[blockIndex] is not ModelTable table)
             return;
-
-        table.AutoFit = mode;
-        if (mode == AutoFitMode.Contents)
-        {
-            table.ColumnWidthsPt.Clear();
-            foreach (var row in table.Rows)
-                foreach (var cell in row.Cells)
-                    cell.WidthPt = null;
-        }
-        else if (mode == AutoFitMode.Window)
-        {
-            table.PreferredWidthPt = 468.0;
-        }
-        Render();
+        if (TableLayoutOperations.SetAutoFit(table, mode))
+            Render();
     }
 
     /// <summary>
@@ -1777,13 +1720,8 @@ public sealed class DocumentView : RichTextBox
         var (blockIndex, rowIndex, columnIndex) = CaretTableLocation();
         if (blockIndex < 0 || _model.Blocks[blockIndex] is not ModelTable table)
             return;
-        if (rowIndex < 0 || rowIndex >= table.Rows.Count)
-            return;
-        var cells = table.Rows[rowIndex].Cells;
-        if (columnIndex < 0 || columnIndex >= cells.Count)
-            return;
-        cells[columnIndex].TextDirection = direction;
-        Render();
+        if (TableLayoutOperations.SetCellTextDirection(table, rowIndex, columnIndex, direction))
+            Render();
     }
 
     /// <summary>
@@ -1841,8 +1779,8 @@ public sealed class DocumentView : RichTextBox
         var (blockIndex, _, _) = CaretTableLocation();
         if (blockIndex < 0 || _model.Blocks[blockIndex] is not ModelTable table)
             return;
-        table.Formatting = update(table.Formatting);
-        Render();
+        if (TableLayoutOperations.UpdateFormatting(table, update))
+            Render();
     }
 
     /// <summary>
@@ -3135,7 +3073,7 @@ public sealed class DocumentView : RichTextBox
         if (Document is not { } doc)
             return (1, 1);
 
-        var (_, contentHeight) = PageLayout.ContentAreaDip(_model.Page);
+        var contentHeight = DocumentViewLayoutPlanner.BuildPageMetrics(_model.Page).ContentHeightDip;
         if (contentHeight <= 0)
             return (1, 1);
 
@@ -4451,11 +4389,14 @@ public sealed class DocumentView : RichTextBox
             // so the text column sits inside the same printable area the print path uses. The host paints
             // the grey workspace; centring the page lets that grey show on either side. The drop shadow
             // lifts the sheet off the workspace.
-            var (pageWidthDip, _) = PageLayout.PageSizeDip(_model.Page);
-            var (left, top, right, bottom) = PageLayout.MarginsDip(_model.Page);
-            Width = pageWidthDip;
+            var pageMetrics = DocumentViewLayoutPlanner.BuildPageMetrics(_model.Page);
+            Width = pageMetrics.PageWidthDip;
             HorizontalAlignment = HorizontalAlignment.Center;
-            Padding = new Thickness(left, top, right, bottom);
+            Padding = new Thickness(
+                pageMetrics.MarginLeftDip,
+                pageMetrics.MarginTopDip,
+                pageMetrics.MarginRightDip,
+                pageMetrics.MarginBottomDip);
             Effect = PageShadow;
         }
         else
@@ -4693,9 +4634,8 @@ public sealed class DocumentView : RichTextBox
     /// <summary>
     /// Rebuild the floating-image overlay canvas to match the current model state. Called at the end
     /// of <see cref="Render"/> and when layout changes. Clears and repopulates the canvas children
-    /// from every floating <see cref="InlineImage"/> in the model, sorted by <see cref="InlineImage.ZOrderIndex"/>.
-    /// Each child element's position is computed from the image's anchor and offset in points (converted
-    /// to DIP via <see cref="PageLayout.DipPerPoint"/>). Inline images are never placed here.
+    /// from the shared floating-object layout snapshots so WPF and Avalonia honor the same placement
+    /// and z-order rules. Inline images are never placed here.
     /// </summary>
     internal void SyncFloatingObjectsCanvas()
     {
@@ -4704,101 +4644,63 @@ public sealed class DocumentView : RichTextBox
 
         canvas.Children.Clear();
 
-        // Gather all floating objects (images + shapes + charts + smartArt + wordArt + groups) sorted by z-order.
-        var floating = new List<(int ZOrder, double HOffPt, double VOffPt, HorizontalAnchor HAnchor, VerticalAnchor VAnchor, Func<FrameworkElement> BuildVisual)>();
-        foreach (var block in _model.Blocks)
+        var surface = DocumentViewLayoutPlanner.BuildFloatingOverlaySurfacePlan(
+            _model.Page,
+            PrintLayoutEnabled,
+            PlainPadding.Left);
+
+        var snapshots = DocumentViewLayoutPlanner.BuildFloatingObjectSnapshots(
+            _model,
+            surface,
+            columnCount: 1);
+        var drawOrder = DocumentViewLayoutPlanner.BuildFloatingObjectDrawOrder(snapshots, behindText: true)
+            .Concat(DocumentViewLayoutPlanner.BuildFloatingObjectDrawOrder(snapshots, behindText: false));
+
+        foreach (var snapshot in drawOrder)
         {
-            if (block is not ModelParagraph para) continue;
-            foreach (var run in para.Runs)
-            {
-                if (run.Image is { IsFloating: true } img)
-                {
-                    floating.Add((img.ZOrderIndex, img.HorizontalOffsetPt, img.VerticalOffsetPt,
-                        img.HorizontalAnchor, img.VerticalAnchor,
-                        () => BuildFloatingImageVisual(img)));
-                }
-                else if (run.Shape is { IsFloating: true } shape && shape.Placement is { } sp)
-                {
-                    floating.Add((sp.ZOrderIndex, sp.HorizontalOffsetPt, sp.VerticalOffsetPt,
-                        sp.HorizontalAnchor, sp.VerticalAnchor,
-                        () => BuildFloatingObjectVisual(shape, shape.WidthPt, shape.HeightPt, sp)));
-                }
-                else if (run.Chart is { IsFloating: true } chart && chart.Placement is { } cp)
-                {
-                    floating.Add((cp.ZOrderIndex, cp.HorizontalOffsetPt, cp.VerticalOffsetPt,
-                        cp.HorizontalAnchor, cp.VerticalAnchor,
-                        () => BuildFloatingObjectVisual(chart, chart.WidthPt, chart.HeightPt, cp)));
-                }
-                else if (run.SmartArt is { IsFloating: true } smartArt && smartArt.Placement is { } sap)
-                {
-                    floating.Add((sap.ZOrderIndex, sap.HorizontalOffsetPt, sap.VerticalOffsetPt,
-                        sap.HorizontalAnchor, sap.VerticalAnchor,
-                        () => BuildFloatingObjectVisual(smartArt, smartArt.WidthPt, smartArt.HeightPt, sap)));
-                }
-                else if (run.WordArt is { IsFloating: true } wordArt && wordArt.Placement is { } wap)
-                {
-                    floating.Add((wap.ZOrderIndex, wap.HorizontalOffsetPt, wap.VerticalOffsetPt,
-                        wap.HorizontalAnchor, wap.VerticalAnchor,
-                        () => BuildFloatingObjectVisual(wordArt, EstimateWordArtWidth(wordArt), EstimateWordArtHeight(wordArt), wap)));
-                }
-                else if (run.DrawingGroup is { } grp)
-                {
-                    floating.Add((grp.Placement.ZOrderIndex,
-                        grp.Placement.HorizontalOffsetPt, grp.Placement.VerticalOffsetPt,
-                        grp.Placement.HorizontalAnchor, grp.Placement.VerticalAnchor,
-                        () => BuildFloatingGroupVisual(grp)));
-                }
-            }
-        }
-        floating.Sort((a, b) => a.ZOrder.CompareTo(b.ZOrder));
+            if (!TryBuildFloatingObjectVisual(snapshot, out var visual))
+                continue;
 
-        // Page geometry for anchor-relative positioning.
-        var page = _model.Page;
-        var (marginLeft, marginTop, _, _) = PageLayout.MarginsDip(page);
-        var (pageW, _) = PageLayout.PageSizeDip(page);
-        var (contentW, _) = PageLayout.ContentAreaDip(page);
-
-        // In Print Layout the editor padding equals the page margins (set by ApplyPageChrome).
-        // In plain/continuous mode the editor uses a uniform padding (PlainPadding = 48 dip).
-        // We use the same margin values for both modes as a reasonable approximation; exact
-        // positioning in continuous mode is less critical (floating images are rare there).
-        var padLeft = PrintLayoutEnabled ? marginLeft : 48;
-        var padTop = PrintLayoutEnabled ? marginTop : 48;
-
-        foreach (var (_, hOffPt, vOffPt, hAnchor, vAnchor, buildVisual) in floating)
-        {
-            var visual = buildVisual();
-            var hOffDip = hOffPt * PageLayout.DipPerPoint;
-            var vOffDip = vOffPt * PageLayout.DipPerPoint;
-            double left, top;
-            switch (hAnchor)
-            {
-                case HorizontalAnchor.Page:
-                    left = hOffDip;
-                    break;
-                case HorizontalAnchor.Margin:
-                    left = padLeft + hOffDip;
-                    break;
-                default: // Column
-                    left = padLeft + hOffDip;
-                    break;
-            }
-            switch (vAnchor)
-            {
-                case VerticalAnchor.Page:
-                    top = vOffDip;
-                    break;
-                case VerticalAnchor.Margin:
-                    top = padTop + vOffDip;
-                    break;
-                default: // Paragraph
-                    top = padTop + vOffDip;
-                    break;
-            }
-            Canvas.SetLeft(visual, left);
-            Canvas.SetTop(visual, top);
+            Canvas.SetLeft(visual, snapshot.Rect.XDip);
+            Canvas.SetTop(visual, snapshot.Rect.YDip);
             canvas.Children.Add(visual);
         }
+    }
+
+    private bool TryBuildFloatingObjectVisual(
+        DocumentFloatingObjectSnapshot snapshot,
+        out FrameworkElement visual)
+    {
+        visual = null!;
+
+        if (snapshot.BlockIndex < 0
+            || snapshot.BlockIndex >= _model.Blocks.Count
+            || _model.Blocks[snapshot.BlockIndex] is not ModelParagraph paragraph
+            || snapshot.RunIndex < 0
+            || snapshot.RunIndex >= paragraph.Runs.Count)
+        {
+            return false;
+        }
+
+        var run = paragraph.Runs[snapshot.RunIndex];
+        visual = snapshot.Kind switch
+        {
+            DocumentFloatingObjectKind.Image when run.Image is { IsFloating: true } image =>
+                BuildFloatingImageVisual(image, snapshot.Rect),
+            DocumentFloatingObjectKind.Shape when run.Shape is { IsFloating: true } shape =>
+                BuildFloatingObjectVisual(shape, snapshot.Rect),
+            DocumentFloatingObjectKind.Chart when run.Chart is { IsFloating: true } chart =>
+                BuildFloatingObjectVisual(chart, snapshot.Rect),
+            DocumentFloatingObjectKind.SmartArt when run.SmartArt is { IsFloating: true } smartArt =>
+                BuildFloatingObjectVisual(smartArt, snapshot.Rect),
+            DocumentFloatingObjectKind.WordArt when run.WordArt is { IsFloating: true } wordArt =>
+                BuildFloatingObjectVisual(wordArt, snapshot.Rect),
+            DocumentFloatingObjectKind.Group when run.DrawingGroup is { } group =>
+                BuildFloatingGroupVisual(group, snapshot.Rect),
+            _ => null!,
+        };
+
+        return visual is not null;
     }
 
     /// <summary>
@@ -4807,10 +4709,10 @@ public sealed class DocumentView : RichTextBox
     /// to inline images rendered in the FlowDocument. The root element is tagged with the model image
     /// so click-selection can recover it.
     /// </summary>
-    private FrameworkElement BuildFloatingImageVisual(InlineImage image)
+    private FrameworkElement BuildFloatingImageVisual(InlineImage image, DocumentFloatRect rect)
     {
-        var widthPx = image.WidthPt * PxPerPoint;
-        var heightPx = image.HeightPt * PxPerPoint;
+        var widthPx = rect.WidthDip;
+        var heightPx = rect.HeightDip;
         // DecodeImage returns ImageSource?; placeholder is always BitmapSource. Cast for pixel-adjust.
         var decodedBitmap = (DecodeImage(image) as BitmapSource) ?? BuildImagePlaceholder(image, widthPx, heightPx);
         // Apply non-destructive pixel adjustments (brightness/contrast/saturation/transparency/recolor).
@@ -4894,10 +4796,10 @@ public sealed class DocumentView : RichTextBox
     /// Builds a simple placeholder visual for a floating non-image object (Shape, Chart, SmartArt,
     /// WordArt) on the overlay canvas. Tagged with the model object for click-selection.
     /// </summary>
-    private FrameworkElement BuildFloatingObjectVisual(object modelObject, double widthPt, double heightPt, FloatingPlacement placement)
+    private FrameworkElement BuildFloatingObjectVisual(object modelObject, DocumentFloatRect rect)
     {
-        var widthPx = widthPt * PxPerPoint;
-        var heightPx = heightPt * PxPerPoint;
+        var widthPx = rect.WidthDip;
+        var heightPx = rect.HeightDip;
 
         var label = modelObject switch
         {
@@ -4965,10 +4867,10 @@ public sealed class DocumentView : RichTextBox
     /// as a sub-Border inside a Canvas at its local offset. The group is tagged with the FreeW.Core.Model.DrawingGroup
     /// model object for click-selection.
     /// </summary>
-    private FrameworkElement BuildFloatingGroupVisual(FreeW.Core.Model.DrawingGroup group)
+    private FrameworkElement BuildFloatingGroupVisual(FreeW.Core.Model.DrawingGroup group, DocumentFloatRect rect)
     {
-        var widthPx = group.WidthPt * PxPerPoint;
-        var heightPx = group.HeightPt * PxPerPoint;
+        var widthPx = rect.WidthDip;
+        var heightPx = rect.HeightDip;
 
         var isSelected = _selectedFloatingObjects.Contains(group);
         var borderColor = isSelected
@@ -5398,28 +5300,19 @@ public sealed class DocumentView : RichTextBox
             return;
         }
 
-        var (contentWidthDip, _) = PageLayout.ContentAreaDip(page);
-        var gapDip = PageLayout.PointsToDip(page.ColumnSpacingPt);
-
-        double columnWidthDip;
-        if (page.ColumnWidthsPt is { Count: > 1 } widths && widths.Count == columns)
-        {
-            // Unequal layout: WPF lays out equal flexible columns, so use the narrowest requested width to
-            // guarantee all N columns fit the content area (a faithful approximation of Left/Right).
-            columnWidthDip = PageLayout.PointsToDip(widths.Min());
-        }
-        else
-        {
-            columnWidthDip = (contentWidthDip - (columns - 1) * gapDip) / columns;
-        }
+        var pageMetrics = DocumentViewLayoutPlanner.BuildPageMetrics(page);
+        var columnPlan = DocumentViewLayoutPlanner.BuildColumnPlan(
+            page,
+            pageMetrics.ContentWidthDip,
+            usePageColumns: true);
 
         // Guard degenerate geometry (narrow page / wide gaps) so the width stays usable and positive.
-        flow.ColumnWidth = Math.Max(1, columnWidthDip);
+        flow.ColumnWidth = columnPlan.WidthDip;
         flow.IsColumnWidthFlexible = true; // let WPF expand columns to fill the content area
-        flow.ColumnGap = Math.Max(0, gapDip);
+        flow.ColumnGap = columnPlan.GapDip;
 
         // "Line between" (w:cols/@w:sep) → a thin rule centred in the gap.
-        if (page.ColumnsLineBetween)
+        if (columnPlan.LineBetween)
         {
             flow.ColumnRuleWidth = 1;
             flow.ColumnRuleBrush = System.Windows.Media.Brushes.Gray;
@@ -7502,8 +7395,7 @@ public sealed class DocumentView : RichTextBox
         if (blockIndex < 0 || _model.Blocks[blockIndex] is not ModelTable table)
             return;
 
-        var result = TableFormulaEvaluator.Evaluate(table, rowIndex, columnIndex, formula);
-        var run = ModelRun.TableFormulaFieldRun(formula, result);
+        var run = TableLayoutOperations.BuildFormulaRun(table, rowIndex, columnIndex, formula);
         InsertInlineAtCaret(BuildTableFormulaRun(run, _model));
     }
 
@@ -7543,50 +7435,11 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     public void ApplyTableProperties(TablePropertiesValues values)
     {
-        CommitToModel();
-        var (blockIndex, rowIndex, columnIndex) = CaretTableLocation();
-        if (blockIndex < 0 || _model.Blocks[blockIndex] is not ModelTable table)
+        var context = CaretTableContext();
+        if (context is null)
             return;
 
-        // Table tab.
-        table.PreferredWidthPt = values.PreferredWidthPt;
-        table.Alignment = values.Alignment;
-        table.IndentFromLeftPt = values.IndentFromLeftPt;
-        table.TextWrapping = values.TextWrapping;
-        table.DefaultCellMargins = values.DefaultCellMargins;
-        table.CellSpacingPt = values.CellSpacingPt;
-        // "Repeat as header row" lives on the Row tab in Word but is a table-level flag in the model.
-        table.Formatting = table.Formatting with { RepeatHeaderRow = values.RepeatHeaderRow };
-
-        // Row tab → caret's row.
-        if (rowIndex >= 0 && rowIndex < table.Rows.Count)
-        {
-            var row = table.Rows[rowIndex];
-            row.HeightPt = values.RowHeightPt;
-            row.HeightRule = values.RowHeightRule;
-            row.AllowBreakAcrossPages = values.AllowRowBreak;
-        }
-
-        // Column tab → preferred width of every cell in the caret's column.
-        if (values.ColumnWidthPt is { } columnWidthPt && columnIndex >= 0)
-            foreach (var r in table.Rows)
-                if (columnIndex < r.Cells.Count)
-                    r.Cells[columnIndex].WidthPt = columnWidthPt;
-
-        // Cell tab → caret's cell.
-        if (rowIndex >= 0 && rowIndex < table.Rows.Count)
-        {
-            var cells = table.Rows[rowIndex].Cells;
-            if (columnIndex >= 0 && columnIndex < cells.Count)
-            {
-                var cell = cells[columnIndex];
-                if (values.CellPreferredWidthPt is { } cellWidthPt)
-                    cell.WidthPt = cellWidthPt;
-                cell.VerticalAlignment = values.CellVerticalAlignment;
-                cell.Margins = values.CellMargins;
-            }
-        }
-
+        TablePropertiesDialogPlanner.ApplyValues(context, values);
         Render();
     }
 

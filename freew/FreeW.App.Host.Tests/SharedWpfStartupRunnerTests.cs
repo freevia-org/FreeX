@@ -21,10 +21,13 @@ public sealed class SharedWpfStartupRunnerTests : IDisposable
     public void Run_InstallsIdentityLoadsOptionsAndRecordsLifecycleAroundWindowRun()
     {
         var optionsPath = Path.Combine(_tempDir, "settings.json");
-        File.WriteAllText(optionsPath, """{"Marker":" loaded ","RecentFilesLimit":999}""");
+        File.WriteAllText(optionsPath, """{"Marker":" loaded ","RecentFilesLimit":999,"UiLanguage":" qps-ploc "}""");
         var originalProduct = AppProduct.Current;
         var events = new List<string>();
         var order = new List<string>();
+        string? activeTheme = null;
+        string? appliedTheme = null;
+        string? appliedCulture = null;
         var dispatcherCrashHookRegistered = false;
         var windowWasRun = false;
         var seamsInstalledAfterIdentity = false;
@@ -49,6 +52,7 @@ public sealed class SharedWpfStartupRunnerTests : IDisposable
                 return createdApplication;
             },
             ResolveVersion = () => "test-version",
+            GetEnvironmentVariable = name => name == "DUMMY_THEME" ? "midnight" : null,
             CreateDiagnostics = (_, _) => new CapturingDiagnostics(events, () => dispatcherCrashHookRegistered = true),
             RunApplication = (app, window) =>
             {
@@ -69,6 +73,7 @@ public sealed class SharedWpfStartupRunnerTests : IDisposable
                         order.Add("window");
                         options.Marker.Should().Be("loaded");
                         options.RecentFilesLimit.Should().Be(ApplicationOptionsNormalizer.MaxRecentFilesCap);
+                        options.UiLanguage.Should().Be("qps-ploc");
                         store.StorePath.Should().Be(optionsPath);
                         return new Window();
                     })
@@ -79,7 +84,32 @@ public sealed class SharedWpfStartupRunnerTests : IDisposable
                         order.Add("seams");
                         seamsInstalledAfterIdentity =
                             AppProduct.Current.ProductDirectoryName == "FreeW";
-                    }
+                    },
+                    Theme = new WpfApplicationThemeStartupSpec<string>(
+                        EnvironmentVariableName: "DUMMY_THEME",
+                        AlternateThemeValue: "midnight",
+                        DefaultTheme: "default",
+                        AlternateTheme: "alternate",
+                        ResourceKeyPrefix: "Dummy",
+                        ApplyTheme: (app, theme, prefix) =>
+                        {
+                            order.Add("theme");
+                            app.Should().BeSameAs(createdApplication);
+                            theme.Should().Be("alternate");
+                            prefix.Should().Be("Dummy");
+                            appliedTheme = theme;
+                        })
+                    {
+                        SetActiveTheme = theme => activeTheme = theme
+                    },
+                    Localization = new WpfApplicationLocalizationStartupSpec<DummyOptions>(
+                        SelectUiLanguage: options => options.UiLanguage,
+                        ApplyUiLanguage: culture =>
+                        {
+                            order.Add("language");
+                            appliedCulture = culture;
+                        },
+                        ApplyCurrentCultureToWpf: () => order.Add("wpf-culture"))
                 },
                 runtime);
         }
@@ -93,13 +123,15 @@ public sealed class SharedWpfStartupRunnerTests : IDisposable
         }
 
         seamsInstalledAfterIdentity.Should().BeTrue();
+        activeTheme.Should().Be("alternate");
+        appliedTheme.Should().Be("alternate");
+        appliedCulture.Should().Be("qps-ploc");
         dispatcherCrashHookRegistered.Should().BeTrue();
         windowWasRun.Should().BeTrue();
         events.Should().Equal(
             WpfApplicationStartupRunner.StartupEventName,
             WpfApplicationStartupRunner.ExitEventName);
-        order.Should().Equal("seams", "application", "window", "run");
-
+        order.Should().Equal("seams", "application", "theme", "language", "wpf-culture", "window", "run");
     }
 
     [Fact]
@@ -110,8 +142,20 @@ public sealed class SharedWpfStartupRunnerTests : IDisposable
 
         freeWProgram.Should().Contain("WpfApplicationStartupRunner.Run");
         freePProgram.Should().Contain("WpfApplicationStartupRunner.Run");
+        freeWProgram.Should().Contain("Theme = new WpfApplicationThemeStartupSpec<Theme>");
+        freePProgram.Should().Contain("Theme = new WpfApplicationThemeStartupSpec<Theme>");
+        freeWProgram.Should().Contain("Localization = new WpfApplicationLocalizationStartupSpec<FreeWOptions>");
+        freePProgram.Should().Contain("Localization = new WpfApplicationLocalizationStartupSpec<FreePOptions>");
         freeWProgram.Should().NotContain("new Application");
         freePProgram.Should().NotContain("new Application");
+        freeWProgram.Should().NotContain("System.Environment.GetEnvironmentVariable");
+        freePProgram.Should().NotContain("System.Environment.GetEnvironmentVariable");
+        freeWProgram.Should().NotContain("Application.Current");
+        freePProgram.Should().NotContain("Application.Current");
+        freeWProgram.Should().NotContain("AppLocalization.ApplyAppLanguage(options.UiLanguage)");
+        freePProgram.Should().NotContain("AppLocalization.ApplyAppLanguage(options.UiLanguage)");
+        freeWProgram.Should().NotContain("AppLocalization.ApplyCurrentCultureToWpf();");
+        freePProgram.Should().NotContain("AppLocalization.ApplyCurrentCultureToWpf();");
         freeWProgram.Should().NotContain("RegisterCrashHandlers");
         freePProgram.Should().NotContain("RegisterCrashHandlers");
         freeWProgram.Should().NotContain("RecordEvent(\"app_start\")");
@@ -152,11 +196,14 @@ public sealed class SharedWpfStartupRunnerTests : IDisposable
     {
         public string Marker { get; set; } = "";
 
+        public string UiLanguage { get; set; } = "";
+
         public int RecentFilesLimit { get; set; } = ApplicationOptionsNormalizer.DefaultRecentFilesCap;
 
         public void Normalize()
         {
             Marker = Marker.Trim();
+            UiLanguage = UiLanguage.Trim();
             RecentFilesLimit = ApplicationOptionsNormalizer.NormalizeRecentFilesCap(RecentFilesLimit);
         }
     }

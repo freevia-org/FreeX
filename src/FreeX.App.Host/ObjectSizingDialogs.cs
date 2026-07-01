@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using FreeX.App.Presentation.DrawingUI;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -13,25 +14,28 @@ public sealed class ObjectSizeDialog : Window
     private readonly TextBox _widthBox = new();
     private readonly TextBox _heightBox = new();
     private readonly CheckBox _lockAspectRatioBox = new() { Content = UiText.Get("ObjectSizing_LockAspectRatio"), IsChecked = true };
-    private readonly double _originalWidth;
-    private readonly double _originalHeight;
+    private readonly ObjectSizeDialogState _sizeState;
     private bool _updatingSize;
 
     public ObjectSizeDialogResult Result { get; private set; }
 
     public ObjectSizeDialog(double width, double height, string? title = null)
     {
-        Result = new ObjectSizeDialogResult(width, height);
-        _originalWidth = Math.Max(1, width);
-        _originalHeight = Math.Max(1, height);
+        _sizeState = ObjectSizeDialogPlanner.CreateState(
+            width,
+            height,
+            ObjectSizeDialogField.Height,
+            ObjectSizeDialogField.Height,
+            CultureInfo.CurrentCulture);
+        Result = new ObjectSizeDialogResult(_sizeState.OriginalSize.Width, _sizeState.OriginalSize.Height);
         Title = title ?? UiText.Get("ObjectSizing_ObjectSize");
         Width = 360;
         Height = 250;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
-        _widthBox.Text = width.ToString(CultureInfo.CurrentCulture);
-        _heightBox.Text = height.ToString(CultureInfo.CurrentCulture);
+        _widthBox.Text = _sizeState.WidthText;
+        _heightBox.Text = _sizeState.HeightText;
         AutomationProperties.SetName(_heightBox, UiText.Get("ObjectSizing_ObjectHeight"));
         AutomationProperties.SetAutomationId(_heightBox, "ObjectSizeHeightBox");
         AutomationProperties.SetHelpText(_heightBox, UiText.Get("ObjectSizing_EnterTheObjectSHeight"));
@@ -50,22 +54,20 @@ public sealed class ObjectSizeDialog : Window
     public static bool TryParseSize(string input, out ObjectSizeDialogResult result)
     {
         result = new ObjectSizeDialogResult(0, 0);
-        if (!DrawingInputParser.TryParseSize(input, out var width, out var height) ||
-            width <= 0 ||
-            height <= 0)
+        if (!ObjectSizeDialogPlanner.TryCreateDelimitedSize(input, out var size, out _))
         {
             return false;
         }
 
-        result = new ObjectSizeDialogResult(width, height);
+        result = new ObjectSizeDialogResult(size.Width, size.Height);
         return true;
     }
 
     internal static double CalculateLockedAspectHeight(double width, double originalWidth, double originalHeight) =>
-        originalWidth <= 0 || originalHeight <= 0 ? width : width * originalHeight / originalWidth;
+        ObjectSizeDialogPlanner.CalculateLockedAspectHeight(width, originalWidth, originalHeight);
 
     internal static double CalculateLockedAspectWidth(double height, double originalWidth, double originalHeight) =>
-        originalWidth <= 0 || originalHeight <= 0 ? height : height * originalWidth / originalHeight;
+        ObjectSizeDialogPlanner.CalculateLockedAspectWidth(height, originalWidth, originalHeight);
 
     internal static StackPanel CreateSingleInputContent(string label, TextBox box, Action accept, string? acceptContent = null)
     {
@@ -79,14 +81,17 @@ public sealed class ObjectSizeDialog : Window
 
     private void Accept()
     {
-        if (!TryParseSize($"{_widthBox.Text}x{_heightBox.Text}", out var result))
+        if (!ObjectSizeDialogPlanner.TryCreateSize(
+                new ObjectSizeDialogSubmission(_widthBox.Text, _heightBox.Text, _sizeState.FirstInvalidField),
+                out var size,
+                out var invalidField))
         {
             DialogMessageHelper.ShowWarning(this, UiText.Get("ObjectSizing_EnterPositiveWidthAndHeightValues"), Title);
-            FocusInvalidSizeInput(ResolveInvalidSizeInput());
+            FocusInvalidSizeInput(invalidField == ObjectSizeDialogField.Height ? _heightBox : _widthBox);
             return;
         }
 
-        Result = result;
+        Result = new ObjectSizeDialogResult(size.Width, size.Height);
         DialogResult = true;
     }
 
@@ -94,21 +99,6 @@ public sealed class ObjectSizeDialog : Window
     {
         DialogFocus.FocusAndSelect(_heightBox);
     }
-
-    private TextBox ResolveInvalidSizeInput()
-    {
-        if (!TryParsePositiveSize(_heightBox.Text))
-            return _heightBox;
-
-        if (!TryParsePositiveSize(_widthBox.Text))
-            return _widthBox;
-
-        return _heightBox;
-    }
-
-    private static bool TryParsePositiveSize(string text) =>
-        DrawingInputParser.TryParseSize($"{text}x{text}", out var value, out _)
-        && value > 0;
 
     private static void FocusInvalidSizeInput(TextBox textBox)
     {
@@ -120,10 +110,10 @@ public sealed class ObjectSizeDialog : Window
         if (_updatingSize || _lockAspectRatioBox.IsChecked != true)
             return;
 
-        if (!NumericInputParser.TryParseFiniteDouble(_widthBox.Text, CultureInfo.CurrentCulture, CultureInfo.InvariantCulture, out var width) || width <= 0)
+        if (ObjectSizeDialogPlanner.SyncHeightFromWidth(_widthBox.Text, _sizeState.OriginalSize) is not { } height)
             return;
 
-        SetHeight(CalculateLockedAspectHeight(width, _originalWidth, _originalHeight));
+        SetHeight(height);
     }
 
     private void HeightBox_TextChanged(object sender, TextChangedEventArgs e)
@@ -131,10 +121,10 @@ public sealed class ObjectSizeDialog : Window
         if (_updatingSize || _lockAspectRatioBox.IsChecked != true)
             return;
 
-        if (!NumericInputParser.TryParseFiniteDouble(_heightBox.Text, CultureInfo.CurrentCulture, CultureInfo.InvariantCulture, out var height) || height <= 0)
+        if (ObjectSizeDialogPlanner.SyncWidthFromHeight(_heightBox.Text, _sizeState.OriginalSize) is not { } width)
             return;
 
-        SetWidth(CalculateLockedAspectWidth(height, _originalWidth, _originalHeight));
+        SetWidth(width);
     }
 
     private void SetWidth(double width)
@@ -164,7 +154,7 @@ public sealed class ObjectSizeDialog : Window
     }
 
     private static string FormatSize(double value) =>
-        Math.Round(value, 2).ToString("0.##", CultureInfo.CurrentCulture);
+        ObjectSizeDialogPlanner.FormatSize(value, CultureInfo.CurrentCulture);
 
     private StackPanel CreateSizeContent(Action accept)
     {
@@ -212,18 +202,15 @@ public sealed class RotationDialog : Window
     public static bool TryParseRotation(string input, out RotationDialogResult result)
     {
         result = new RotationDialogResult(0);
-        if (!DrawingInputParser.TryParseRotationDegrees(input, out var value))
+        if (!FormatPicturePlanner.TryCreateRotationResult(input, out var rotation) || rotation is null)
             return false;
 
-        result = new RotationDialogResult(NormalizeRotationDegrees(value));
+        result = new RotationDialogResult(rotation.Degrees);
         return true;
     }
 
-    internal static double NormalizeRotationDegrees(double value)
-    {
-        var normalized = value % 360;
-        return normalized < 0 ? normalized + 360 : normalized;
-    }
+    internal static double NormalizeRotationDegrees(double value) =>
+        FormatPicturePlanner.NormalizeRotationDegrees(value);
 
     private void Accept()
     {
@@ -269,10 +256,10 @@ public sealed class PictureCropDialog : Window
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
-        _cropLeftBox.Text = DrawingInputParser.FormatCropPercent(picture.CropLeft);
-        _cropTopBox.Text = DrawingInputParser.FormatCropPercent(picture.CropTop);
-        _cropRightBox.Text = DrawingInputParser.FormatCropPercent(picture.CropRight);
-        _cropBottomBox.Text = DrawingInputParser.FormatCropPercent(picture.CropBottom);
+        _cropLeftBox.Text = PictureCropDialogPlanner.FormatPercent(picture.CropLeft);
+        _cropTopBox.Text = PictureCropDialogPlanner.FormatPercent(picture.CropTop);
+        _cropRightBox.Text = PictureCropDialogPlanner.FormatPercent(picture.CropRight);
+        _cropBottomBox.Text = PictureCropDialogPlanner.FormatPercent(picture.CropBottom);
         AutomationProperties.SetName(_cropLeftBox, UiText.Get("ObjectSizing_CropLeft"));
         AutomationProperties.SetAutomationId(_cropLeftBox, "PictureCropLeftBox");
         AutomationProperties.SetHelpText(_cropLeftBox, UiText.Get("ObjectSizing_EnterTheLeftCropPercentage"));
@@ -293,13 +280,13 @@ public sealed class PictureCropDialog : Window
     {
         result = new PictureCropDialogResult(0, 0, 0, 0);
         error = null;
-        if (!DrawingInputParser.TryParseCropPercents(input, out var left, out var top, out var right, out var bottom))
+        if (!PictureCropDialogPlanner.TryCreateResult(input, out var crop, out _) || crop is null)
         {
             error = UiText.Get("ObjectSizing_EnterFourCropPercentages");
             return false;
         }
 
-        result = new PictureCropDialogResult(left, top, right, bottom);
+        result = new PictureCropDialogResult(crop.Left, crop.Top, crop.Right, crop.Bottom);
         return true;
     }
 
@@ -326,13 +313,13 @@ public sealed class PictureCropDialog : Window
     {
         if (string.Equals(error, UiText.Get("ObjectSizing_EnterFourCropPercentages"), StringComparison.Ordinal))
         {
-            if (!DrawingInputParser.TryParseCropPercent(_cropLeftBox.Text, out _))
+            if (!PictureCropDialogPlanner.TryParsePercent(_cropLeftBox.Text, out _))
                 return _cropLeftBox;
-            if (!DrawingInputParser.TryParseCropPercent(_cropTopBox.Text, out _))
+            if (!PictureCropDialogPlanner.TryParsePercent(_cropTopBox.Text, out _))
                 return _cropTopBox;
-            if (!DrawingInputParser.TryParseCropPercent(_cropRightBox.Text, out _))
+            if (!PictureCropDialogPlanner.TryParsePercent(_cropRightBox.Text, out _))
                 return _cropRightBox;
-            if (!DrawingInputParser.TryParseCropPercent(_cropBottomBox.Text, out _))
+            if (!PictureCropDialogPlanner.TryParsePercent(_cropBottomBox.Text, out _))
                 return _cropBottomBox;
         }
 

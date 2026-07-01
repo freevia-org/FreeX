@@ -1,4 +1,5 @@
 using Free.Shared.Commands;
+using Free.Shared.Drawing;
 
 namespace FreeP.Core.Model;
 
@@ -21,163 +22,7 @@ namespace FreeP.Core.Model;
 //     summing its GridSpan columns and RowSpan rows.
 // ════════════════════════════════════════════════════════════════════════════════
 
-// ── shared file-local helpers ────────────────────────────────────────────────
-
-file static class TableGridHelper
-{
-    /// <summary>
-    /// Maps a target GRID-column index to the Cells list index for <paramref name="row"/>,
-    /// accounting for each preceding cell's GridSpan.  Returns the cell-list index of the
-    /// first cell whose cumulative span covers <paramref name="targetGridCol"/>, or -1 if the
-    /// target is beyond the row's total grid width.
-    /// </summary>
-    internal static int GridColumnToCellIndex(TableRow row, int targetGridCol)
-    {
-        int gridPos = 0;
-        for (int i = 0; i < row.Cells.Count; i++)
-        {
-            int span = Math.Max(1, row.Cells[i].GridSpan);
-            if (targetGridCol < gridPos + span)
-                return i;
-            gridPos += span;
-        }
-        return -1;
-    }
-
-    /// <summary>
-    /// Returns the grid-column start position of the cell at cell-list index
-    /// <paramref name="cellIdx"/> within <paramref name="row"/>.
-    /// </summary>
-    internal static int CellGridStart(TableRow row, int cellIdx)
-    {
-        int gridPos = 0;
-        for (int i = 0; i < cellIdx && i < row.Cells.Count; i++)
-            gridPos += Math.Max(1, row.Cells[i].GridSpan);
-        return gridPos;
-    }
-
-    /// <summary>
-    /// Total grid-column count for a row (sum of all cell GridSpans).
-    /// </summary>
-    internal static int RowGridWidth(TableRow row) =>
-        row.Cells.Sum(c => Math.Max(1, c.GridSpan));
-}
-
-file static class TableCommandHelper
-{
-    internal static TableShape? FindTable(Presentation p, int slideIndex, uint shapeId)
-    {
-        if (slideIndex < 0 || slideIndex >= p.Slides.Count) return null;
-        var shape = p.Slides[slideIndex].Shapes.FirstOrDefault(s => s.Id == shapeId);
-        return shape?.Table;
-    }
-
-    // Deep-clone a TableShape so undo can restore exact prior state.
-    internal static TableShape CloneTable(TableShape src)
-    {
-        var copy = new TableShape
-        {
-            Flags        = CloneFlags(src.Flags),
-            TableStyleId = src.TableStyleId,
-            StyleData    = src.StyleData, // read-only from XML – share
-        };
-        foreach (var w in src.ColumnWidthsEmu)
-            copy.ColumnWidthsEmu.Add(w);
-        foreach (var row in src.Rows)
-            copy.Rows.Add(CloneRow(row));
-        return copy;
-    }
-
-    internal static TableStyleFlags CloneFlags(TableStyleFlags f) => new()
-    {
-        FirstRow = f.FirstRow, LastRow = f.LastRow,
-        FirstCol = f.FirstCol, LastCol = f.LastCol,
-        BandRow  = f.BandRow,  BandCol = f.BandCol,
-    };
-
-    internal static TableRow CloneRow(TableRow row)
-    {
-        var r = new TableRow { HeightEmu = row.HeightEmu };
-        foreach (var cell in row.Cells)
-            r.Cells.Add(CloneCell(cell));
-        return r;
-    }
-
-    internal static TableCell CloneCell(TableCell src) => new()
-    {
-        TextBody      = src.TextBody is null ? null : CloneTextBody(src.TextBody),
-        Fill          = src.Fill,
-        Borders       = src.Borders,
-        GridSpan      = src.GridSpan,
-        RowSpan       = src.RowSpan,
-        HMerge        = src.HMerge,
-        VMerge        = src.VMerge,
-        InsetLeftPt   = src.InsetLeftPt,
-        InsetRightPt  = src.InsetRightPt,
-        InsetTopPt    = src.InsetTopPt,
-        InsetBottomPt = src.InsetBottomPt,
-        Anchor        = src.Anchor,
-    };
-
-    internal static TextBody CloneTextBody(TextBody tb)
-    {
-        var copy = new TextBody
-        {
-            Anchor           = tb.Anchor,
-            DefaultParaAlign = tb.DefaultParaAlign,
-            InsetLeftPt      = tb.InsetLeftPt,
-            InsetRightPt     = tb.InsetRightPt,
-            InsetTopPt       = tb.InsetTopPt,
-            InsetBottomPt    = tb.InsetBottomPt,
-            Wrap             = tb.Wrap,
-            AutoFit          = tb.AutoFit,
-        };
-        foreach (var para in tb.Paragraphs)
-        {
-            var cp = new Paragraph
-            {
-                Align         = para.Align,
-                Level         = para.Level,
-                BulletKind    = para.BulletKind,
-                BulletChar    = para.BulletChar,
-                SpaceBeforePt = para.SpaceBeforePt,
-                SpaceAfterPt  = para.SpaceAfterPt,
-            };
-            foreach (var run in para.Runs)
-                cp.Runs.Add(new Run
-                {
-                    Text          = run.Text,
-                    FontFamily    = run.FontFamily,
-                    FontSizePt    = run.FontSizePt,
-                    Bold          = run.Bold,
-                    BoldSet       = run.BoldSet,
-                    Italic        = run.Italic,
-                    ItalicSet     = run.ItalicSet,
-                    Underline     = run.Underline,
-                    Strikethrough = run.Strikethrough,
-                    Color         = run.Color,
-                });
-            copy.Paragraphs.Add(cp);
-        }
-        return copy;
-    }
-
-    /// <summary>Replace the whole table's rows/widths from a clone snapshot (for revert).</summary>
-    internal static void RestoreTableState(TableShape table, TableShape snapshot)
-    {
-        table.ColumnWidthsEmu.Clear();
-        foreach (var w in snapshot.ColumnWidthsEmu)
-            table.ColumnWidthsEmu.Add(w);
-
-        table.Rows.Clear();
-        foreach (var row in snapshot.Rows)
-            table.Rows.Add(CloneRow(row)); // clone again so the snapshot remains pristine
-
-        table.Flags     = CloneFlags(snapshot.Flags);
-        table.TableStyleId = snapshot.TableStyleId;
-        // StyleData stays — it is read-only XML data
-    }
-}
+// Shared table clone/grid helpers live in PresentationModelCloneHelper.
 
 // ════════════════════════════════════════════════════════════════════════════════
 // 1. SetTableCellTextCommand
@@ -202,7 +47,7 @@ public sealed class SetTableCellTextCommand : IPresentationCommand
         _shapeId    = shapeId;
         _row        = row;
         _col        = col;
-        _newBody    = newBody is null ? null : TableCommandHelper.CloneTextBody(newBody);
+        _newBody    = newBody is null ? null : PresentationModelCloneHelper.CloneTextBody(newBody);
     }
 
     public string Label => "Edit Cell Text";
@@ -211,20 +56,20 @@ public sealed class SetTableCellTextCommand : IPresentationCommand
     {
         var cell = GetCell(p);
         if (cell is null) return;
-        _oldBody     = cell.TextBody is null ? null : TableCommandHelper.CloneTextBody(cell.TextBody);
-        cell.TextBody = _newBody is null ? null : TableCommandHelper.CloneTextBody(_newBody);
+        _oldBody     = cell.TextBody is null ? null : PresentationModelCloneHelper.CloneTextBody(cell.TextBody);
+        cell.TextBody = _newBody is null ? null : PresentationModelCloneHelper.CloneTextBody(_newBody);
     }
 
     public void Revert(Presentation p)
     {
         var cell = GetCell(p);
         if (cell is null) return;
-        cell.TextBody = _oldBody is null ? null : TableCommandHelper.CloneTextBody(_oldBody);
+        cell.TextBody = _oldBody is null ? null : PresentationModelCloneHelper.CloneTextBody(_oldBody);
     }
 
     private TableCell? GetCell(Presentation p)
     {
-        var table = TableCommandHelper.FindTable(p, _slideIndex, _shapeId);
+        var table = PresentationModelCloneHelper.FindTable(p, _slideIndex, _shapeId);
         if (table is null) return null;
         if (_row < 0 || _row >= table.Rows.Count) return null;
         var row = table.Rows[_row];
@@ -261,11 +106,11 @@ public sealed class InsertTableRowCommand : IPresentationCommand
 
     public void Apply(Presentation p)
     {
-        var table = TableCommandHelper.FindTable(p, _slideIndex, _shapeId);
+        var table = PresentationModelCloneHelper.FindTable(p, _slideIndex, _shapeId);
         if (table is null) return;
 
         // Snapshot before mutation.
-        _snapshot = TableCommandHelper.CloneTable(table);
+        _snapshot = PresentationModelCloneHelper.CloneTable(table);
 
         int cols = table.ColumnWidthsEmu.Count;
         // Default height: match previous row if available, else next row, else 457200 EMU (~0.5 inch).
@@ -311,9 +156,9 @@ public sealed class InsertTableRowCommand : IPresentationCommand
 
     public void Revert(Presentation p)
     {
-        var table = TableCommandHelper.FindTable(p, _slideIndex, _shapeId);
+        var table = PresentationModelCloneHelper.FindTable(p, _slideIndex, _shapeId);
         if (table is null || _snapshot is null) return;
-        TableCommandHelper.RestoreTableState(table, _snapshot);
+        PresentationModelCloneHelper.RestoreTableState(table, _snapshot);
     }
 }
 
@@ -343,12 +188,12 @@ public sealed class DeleteTableRowCommand : IPresentationCommand
 
     public void Apply(Presentation p)
     {
-        var table = TableCommandHelper.FindTable(p, _slideIndex, _shapeId);
+        var table = PresentationModelCloneHelper.FindTable(p, _slideIndex, _shapeId);
         if (table is null) return;
         if (table.Rows.Count <= 1) return; // keep at least one row
         if (_atRow < 0 || _atRow >= table.Rows.Count) return;
 
-        _snapshot = TableCommandHelper.CloneTable(table);
+        _snapshot = PresentationModelCloneHelper.CloneTable(table);
 
         int gridCols = table.ColumnWidthsEmu.Count;
         var deletedRow = table.Rows[_atRow];
@@ -377,7 +222,7 @@ public sealed class DeleteTableRowCommand : IPresentationCommand
                         nextCell.RowSpan  = cell.RowSpan - 1;
                         nextCell.GridSpan = cell.GridSpan;
                         if (nextCell.TextBody is null && cell.TextBody is not null)
-                            nextCell.TextBody = TableCommandHelper.CloneTextBody(cell.TextBody);
+                            nextCell.TextBody = PresentationModelCloneHelper.CloneTextBody(cell.TextBody);
 
                         // X1 (2D merge fix): if the promoted anchor has a horizontal span
                         // (GridSpan > 1), the cells at columns c+1..c+GridSpan-1 in the next
@@ -423,9 +268,9 @@ public sealed class DeleteTableRowCommand : IPresentationCommand
 
     public void Revert(Presentation p)
     {
-        var table = TableCommandHelper.FindTable(p, _slideIndex, _shapeId);
+        var table = PresentationModelCloneHelper.FindTable(p, _slideIndex, _shapeId);
         if (table is null || _snapshot is null) return;
-        TableCommandHelper.RestoreTableState(table, _snapshot);
+        PresentationModelCloneHelper.RestoreTableState(table, _snapshot);
     }
 }
 
@@ -456,16 +301,16 @@ public sealed class InsertTableColumnCommand : IPresentationCommand
 
     public void Apply(Presentation p)
     {
-        var table = TableCommandHelper.FindTable(p, _slideIndex, _shapeId);
+        var table = PresentationModelCloneHelper.FindTable(p, _slideIndex, _shapeId);
         if (table is null) return;
 
-        _snapshot = TableCommandHelper.CloneTable(table);
+        _snapshot = PresentationModelCloneHelper.CloneTable(table);
 
         int idx = Math.Clamp(_atCol, 0, table.ColumnWidthsEmu.Count);
-        // Default width: match adjacent column or 914400 EMU (1 inch).
+        // Default width: match adjacent column or one inch.
         long width = idx > 0
             ? table.ColumnWidthsEmu[idx - 1]
-            : (table.ColumnWidthsEmu.Count > 0 ? table.ColumnWidthsEmu[0] : 914400L);
+            : (table.ColumnWidthsEmu.Count > 0 ? table.ColumnWidthsEmu[0] : DrawingMlCoordinateUnits.EmuPerInch);
 
         table.ColumnWidthsEmu.Insert(idx, width);
 
@@ -508,9 +353,9 @@ public sealed class InsertTableColumnCommand : IPresentationCommand
 
     public void Revert(Presentation p)
     {
-        var table = TableCommandHelper.FindTable(p, _slideIndex, _shapeId);
+        var table = PresentationModelCloneHelper.FindTable(p, _slideIndex, _shapeId);
         if (table is null || _snapshot is null) return;
-        TableCommandHelper.RestoreTableState(table, _snapshot);
+        PresentationModelCloneHelper.RestoreTableState(table, _snapshot);
     }
 }
 
@@ -540,12 +385,12 @@ public sealed class DeleteTableColumnCommand : IPresentationCommand
 
     public void Apply(Presentation p)
     {
-        var table = TableCommandHelper.FindTable(p, _slideIndex, _shapeId);
+        var table = PresentationModelCloneHelper.FindTable(p, _slideIndex, _shapeId);
         if (table is null) return;
         if (table.ColumnWidthsEmu.Count <= 1) return; // keep at least one column
         if (_atCol < 0 || _atCol >= table.ColumnWidthsEmu.Count) return;
 
-        _snapshot = TableCommandHelper.CloneTable(table);
+        _snapshot = PresentationModelCloneHelper.CloneTable(table);
         table.ColumnWidthsEmu.RemoveAt(_atCol);
 
         // W2: In FreeP, row.Cells[_atCol] is always the cell for grid column _atCol.
@@ -584,7 +429,7 @@ public sealed class DeleteTableColumnCommand : IPresentationCommand
                 nextCell.GridSpan = cell.GridSpan - 1;
                 nextCell.RowSpan  = cell.RowSpan;
                 if (nextCell.TextBody is null && cell.TextBody is not null)
-                    nextCell.TextBody = TableCommandHelper.CloneTextBody(cell.TextBody);
+                    nextCell.TextBody = PresentationModelCloneHelper.CloneTextBody(cell.TextBody);
                 row.Cells.RemoveAt(_atCol); // remove the old anchor
             }
             else
@@ -597,9 +442,9 @@ public sealed class DeleteTableColumnCommand : IPresentationCommand
 
     public void Revert(Presentation p)
     {
-        var table = TableCommandHelper.FindTable(p, _slideIndex, _shapeId);
+        var table = PresentationModelCloneHelper.FindTable(p, _slideIndex, _shapeId);
         if (table is null || _snapshot is null) return;
-        TableCommandHelper.RestoreTableState(table, _snapshot);
+        PresentationModelCloneHelper.RestoreTableState(table, _snapshot);
     }
 }
 
@@ -640,12 +485,12 @@ public sealed class MergeTableCellsCommand : IPresentationCommand
 
     public void Apply(Presentation p)
     {
-        var table = TableCommandHelper.FindTable(p, _slideIndex, _shapeId);
+        var table = PresentationModelCloneHelper.FindTable(p, _slideIndex, _shapeId);
         if (table is null) return;
         if (_r2 >= table.Rows.Count || _c2 >= table.ColumnWidthsEmu.Count) return;
         if (_r1 == _r2 && _c1 == _c2) return; // nothing to merge
 
-        _snapshot = TableCommandHelper.CloneTable(table);
+        _snapshot = PresentationModelCloneHelper.CloneTable(table);
 
         int gridSpan = _c2 - _c1 + 1;
         int rowSpan  = _r2 - _r1 + 1;
@@ -694,9 +539,9 @@ public sealed class MergeTableCellsCommand : IPresentationCommand
 
     public void Revert(Presentation p)
     {
-        var table = TableCommandHelper.FindTable(p, _slideIndex, _shapeId);
+        var table = PresentationModelCloneHelper.FindTable(p, _slideIndex, _shapeId);
         if (table is null || _snapshot is null) return;
-        TableCommandHelper.RestoreTableState(table, _snapshot);
+        PresentationModelCloneHelper.RestoreTableState(table, _snapshot);
     }
 
     private static string GetPlainText(TextBody? body)
@@ -749,7 +594,7 @@ public sealed class SplitTableCellCommand : IPresentationCommand
     /// <summary>No effect unless the target cell exists and is actually merged.</summary>
     public bool HasEffect(Presentation p)
     {
-        var table = TableCommandHelper.FindTable(p, _slideIndex, _shapeId);
+        var table = PresentationModelCloneHelper.FindTable(p, _slideIndex, _shapeId);
         if (table is null || _row < 0 || _row >= table.Rows.Count) return false;
         var anchor = table.Rows[_row].Cells.ElementAtOrDefault(_col);
         return anchor is not null && (anchor.GridSpan > 1 || anchor.RowSpan > 1);
@@ -757,7 +602,7 @@ public sealed class SplitTableCellCommand : IPresentationCommand
 
     public void Apply(Presentation p)
     {
-        var table = TableCommandHelper.FindTable(p, _slideIndex, _shapeId);
+        var table = PresentationModelCloneHelper.FindTable(p, _slideIndex, _shapeId);
         if (table is null) return;
         if (_row < 0 || _row >= table.Rows.Count) return;
         var anchor = table.Rows[_row].Cells.ElementAtOrDefault(_col);
@@ -766,7 +611,7 @@ public sealed class SplitTableCellCommand : IPresentationCommand
         bool isMerged = anchor.GridSpan > 1 || anchor.RowSpan > 1;
         if (!isMerged) return;
 
-        _snapshot = TableCommandHelper.CloneTable(table);
+        _snapshot = PresentationModelCloneHelper.CloneTable(table);
 
         int gridSpan = anchor.GridSpan;
         int rowSpan  = anchor.RowSpan;
@@ -794,8 +639,8 @@ public sealed class SplitTableCellCommand : IPresentationCommand
 
     public void Revert(Presentation p)
     {
-        var table = TableCommandHelper.FindTable(p, _slideIndex, _shapeId);
+        var table = PresentationModelCloneHelper.FindTable(p, _slideIndex, _shapeId);
         if (table is null || _snapshot is null) return;
-        TableCommandHelper.RestoreTableState(table, _snapshot);
+        PresentationModelCloneHelper.RestoreTableState(table, _snapshot);
     }
 }

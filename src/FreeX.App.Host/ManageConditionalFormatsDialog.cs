@@ -9,13 +9,9 @@ using System.Windows.Media;
 using System.Windows.Shapes;
 using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.Core.Model;
+using ManageConditionalFormatsPlanner = FreeX.App.Presentation.ConditionalFormatting.ManageConditionalFormatsPlanner;
 
 namespace FreeX.App.Host;
-
-public sealed record ConditionalFormatAppliesToRangeSelectionRequest(
-    Guid RuleId,
-    string CurrentText,
-    bool CollapseDialog = true);
 
 /// <summary>
 /// "Manage Conditional Formatting Rules" dialog - lists all rules on a sheet,
@@ -23,18 +19,11 @@ public sealed record ConditionalFormatAppliesToRangeSelectionRequest(
 /// </summary>
 public sealed partial class ManageConditionalFormatsDialog : Window
 {
-    private enum ConditionalFormatScope
-    {
-        Sheet,
-        Selection,
-        Table
-    }
-
     /// <summary>Set after OK or Apply is clicked. Priorities are re-assigned 1...N in list order.</summary>
     public IReadOnlyList<ConditionalFormat>? ResultRules { get; private set; }
 
     private readonly Sheet _sheet;
-    private readonly GridRange? _selection;
+    private readonly ManageConditionalFormatsDialogPlan _dialogPlan;
     private readonly Action<ConditionalFormatAppliesToRangeSelectionRequest>? _requestAppliesToRangeSelection;
     private readonly Action<IReadOnlyList<ConditionalFormat>>? _applyRules;
 
@@ -61,7 +50,7 @@ public sealed partial class ManageConditionalFormatsDialog : Window
         Action<IReadOnlyList<ConditionalFormat>>? applyRules = null)
     {
         _sheet     = sheet;
-        _selection = selection;
+        _dialogPlan = ManageConditionalFormatsPlanner.CreateDialogPlan(sheet, selection);
         _requestAppliesToRangeSelection = requestAppliesToRangeSelection;
         _applyRules = applyRules;
 
@@ -91,15 +80,16 @@ public sealed partial class ManageConditionalFormatsDialog : Window
             Padding = new Thickness(0, 0, 6, 0)
         });
 
-        var sheetScope = CreateScopeItem(ConditionalFormatScope.Sheet, UiText.Get("ManageConditionalFormats_ScopeThisWorksheet"));
-        var tableScope = CreateScopeItem(ConditionalFormatScope.Table, UiText.Get("ManageConditionalFormats_ScopeThisTable"));
-        var selectionScope = CreateScopeItem(ConditionalFormatScope.Selection, UiText.Get("ManageConditionalFormats_ScopeCurrentSelection"));
+        ComboBoxItem? defaultScopeItem = null;
+        foreach (var option in _dialogPlan.ScopeOptions)
+        {
+            var item = CreateScopeItem(option);
+            _scopeBox.Items.Add(item);
+            if (option.Scope == _dialogPlan.DefaultScope)
+                defaultScopeItem = item;
+        }
 
-        _scopeBox.Items.Add(sheetScope);
-        if (FindSelectionTableRange() is not null)
-            _scopeBox.Items.Add(tableScope);
-        if (selection.HasValue) _scopeBox.Items.Add(selectionScope);
-        _scopeBox.SelectedItem = selection.HasValue ? selectionScope : sheetScope;
+        _scopeBox.SelectedItem = defaultScopeItem;
         _scopeBox.SelectionChanged += ScopeBox_SelectionChanged;
         topBar.Children.Add(_scopeBox);
 
@@ -186,12 +176,23 @@ public sealed partial class ManageConditionalFormatsDialog : Window
 
     private void FocusInitialKeyboardTarget()
     {
-        _scopeBox.Focus();
-        Keyboard.Focus(_scopeBox);
+        FocusTarget(ManageConditionalFormatsPlanner.InitialFocusTarget);
     }
 
     private void FocusRulesList()
     {
+        FocusTarget(ManageConditionalFormatsPlanner.MissingSelectionFocusTarget);
+    }
+
+    private void FocusTarget(ManageConditionalFormatsFocusTarget target)
+    {
+        if (target == ManageConditionalFormatsFocusTarget.ScopeSelector)
+        {
+            _scopeBox.Focus();
+            Keyboard.Focus(_scopeBox);
+            return;
+        }
+
         _listView.Focus();
         Keyboard.Focus(_listView);
     }
@@ -383,29 +384,12 @@ public sealed partial class ManageConditionalFormatsDialog : Window
     private bool IsFilteringToRange() => CurrentScopeRange() is not null;
 
     private GridRange? CurrentScopeRange() =>
-        _scopeBox.SelectedItem is ComboBoxItem { Tag: ConditionalFormatScope selectedScope }
-            ? selectedScope switch
-            {
-                ConditionalFormatScope.Selection => _selection,
-                ConditionalFormatScope.Table => FindSelectionTableRange(),
-                _ => null
-            }
+        _scopeBox.SelectedItem is ComboBoxItem { Tag: ManageConditionalFormatScopeOption selectedScope }
+            ? selectedScope.Range
             : null;
 
-    private static ComboBoxItem CreateScopeItem(ConditionalFormatScope scope, string label) =>
-        new() { Content = label, Tag = scope };
-
-    private GridRange? FindSelectionTableRange()
-    {
-        if (_selection is not { } selection)
-            return null;
-
-        foreach (var table in _sheet.StructuredTables)
-            if (RangesOverlap(table.Range, selection))
-                return table.Range;
-
-        return null;
-    }
+    private static ComboBoxItem CreateScopeItem(ManageConditionalFormatScopeOption option) =>
+        new() { Content = UiText.Get(option.LabelKey), Tag = option };
 
     private void RangePickerButton_Click(object sender, RoutedEventArgs e)
     {
@@ -436,18 +420,7 @@ public sealed partial class ManageConditionalFormatsDialog : Window
         }
     }
 
-    private GridRange GetDefaultNewRuleRange()
-    {
-        if (_selection is { } selection)
-            return selection;
-
-        foreach (var rule in _sheet.ConditionalFormats)
-            return rule.AppliesTo;
-
-        return new GridRange(
-            new CellAddress(_sheet.Id, 1, 1),
-            new CellAddress(_sheet.Id, 1, 1));
-    }
+    private GridRange GetDefaultNewRuleRange() => _dialogPlan.DefaultNewRuleRange;
 
     private ConditionalFormat? FindWorkingRuleById(Guid ruleId)
     {

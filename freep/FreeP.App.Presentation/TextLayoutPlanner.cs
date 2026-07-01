@@ -1,0 +1,454 @@
+using Free.Shared.Drawing;
+using FreeP.Core.Model;
+
+namespace FreeP.App.Compositor;
+
+public readonly record struct TextLayoutArea(
+    double X,
+    double Y,
+    double Width,
+    double Height);
+
+public readonly record struct TextParagraphMeasure(
+    int ParagraphIndex,
+    double HeightDip,
+    double SpaceBeforeDip,
+    double SpaceAfterDip)
+{
+    public double TotalHeightDip => HeightDip + SpaceBeforeDip + SpaceAfterDip;
+}
+
+public readonly record struct TextParagraphPlacement(
+    int ParagraphIndex,
+    int ColumnIndex,
+    double X,
+    double Y,
+    double MaxWidthDip,
+    TextBulletPlacement? Bullet)
+{
+    public TextParagraphPlacement(
+        int paragraphIndex,
+        int columnIndex,
+        double x,
+        double y,
+        double maxWidthDip)
+        : this(paragraphIndex, columnIndex, x, y, maxWidthDip, null)
+    {
+    }
+}
+
+public readonly record struct TextBulletPlacement(
+    string Text,
+    string FontFamily,
+    double FontSizePt,
+    SrgbColor Color,
+    double X,
+    double Y);
+
+public readonly record struct TextTabSegmentPlacement(
+    int RunIndex,
+    string Text,
+    double X);
+
+public readonly record struct TextColumnLayout(
+    TextLayoutArea Area,
+    int ColumnCount,
+    double ColumnSpacingDip,
+    double ColumnWidthDip,
+    double LineSpacingScale);
+
+public enum TextParagraphRenderRoute
+{
+    Plain,
+    Tabs,
+    Effects
+}
+
+public sealed record TextBlockLayoutPlan(
+    TextLayoutArea Area,
+    IReadOnlyList<TextParagraphPlacement> Paragraphs);
+
+public sealed record TextTabLayoutPlan(
+    IReadOnlyList<TextTabSegmentPlacement> Segments);
+
+public static class TextLayoutPlanner
+{
+    public const double DipPerPoint = 96.0 / 72.0;
+    public const double DefaultColumnSpacingDip = 48.5;
+    public const double DefaultTabStopDip = 96.0;
+
+    public static double PointsToDip(double points) => points * DipPerPoint;
+
+    public static TextLayoutArea GetTextArea(ResolvedTextLayout text, LayoutRect bounds)
+    {
+        double width = Math.Max(0, bounds.Width - text.InsetLeftDip - text.InsetRightDip);
+        double height = Math.Max(0, bounds.Height - text.InsetTopDip - text.InsetBottomDip);
+
+        return new TextLayoutArea(
+            bounds.X + text.InsetLeftDip,
+            bounds.Y + text.InsetTopDip,
+            width,
+            height);
+    }
+
+    public static double GetLineSpacingScale(ResolvedTextLayout text) =>
+        1.0 - text.LnSpcReduction;
+
+    public static TextParagraphRenderRoute PlanParagraphRenderRoute(
+        ResolvedParagraph paragraph,
+        ResolvedTextLayout text)
+    {
+        if (text.WarpPreset is not null || HasTextEffects(paragraph))
+            return TextParagraphRenderRoute.Effects;
+
+        return HasTabCharacters(paragraph)
+            ? TextParagraphRenderRoute.Tabs
+            : TextParagraphRenderRoute.Plain;
+    }
+
+    public static TextParagraphMeasure CreateParagraphMeasure(
+        int paragraphIndex,
+        double heightDip,
+        double spaceBeforePt,
+        double spaceAfterPt,
+        double lineSpacingScale = 1.0) =>
+        new(
+            paragraphIndex,
+            heightDip * lineSpacingScale,
+            PointsToDip(spaceBeforePt) * lineSpacingScale,
+            PointsToDip(spaceAfterPt) * lineSpacingScale);
+
+    public static TextBlockLayoutPlan PlanTableCellText(
+        ResolvedTextLayout text,
+        LayoutRect bounds,
+        TableCellAnchor anchor,
+        IReadOnlyList<TextParagraphMeasure> paragraphs)
+    {
+        var area = GetTextArea(text, bounds);
+        double totalHeight = paragraphs.Sum(p => p.TotalHeightDip);
+        double currentY = ComputeStartY(area, totalHeight, anchor);
+
+        var placements = new List<TextParagraphPlacement>(paragraphs.Count);
+        foreach (var paragraph in paragraphs)
+        {
+            currentY += paragraph.SpaceBeforeDip;
+            placements.Add(new TextParagraphPlacement(
+                paragraph.ParagraphIndex,
+                0,
+                area.X,
+                currentY,
+                area.Width));
+            currentY += paragraph.HeightDip + paragraph.SpaceAfterDip;
+        }
+
+        return new TextBlockLayoutPlan(area, placements);
+    }
+
+    public static TextBlockLayoutPlan PlanBodyText(
+        ResolvedTextLayout text,
+        LayoutRect bounds,
+        IReadOnlyList<TextParagraphMeasure> paragraphs)
+    {
+        var area = GetTextArea(text, bounds);
+        double totalHeight = paragraphs.Sum(p => p.TotalHeightDip);
+        double currentY = ComputeStartY(area, totalHeight, text.Anchor);
+        double lineSpacingScale = GetLineSpacingScale(text);
+
+        var placements = new List<TextParagraphPlacement>(paragraphs.Count);
+        foreach (var paragraph in paragraphs)
+        {
+            if ((uint)paragraph.ParagraphIndex >= (uint)text.Paragraphs.Count)
+                continue;
+
+            var resolvedParagraph = text.Paragraphs[paragraph.ParagraphIndex];
+            currentY += paragraph.SpaceBeforeDip * lineSpacingScale;
+            double paragraphX = area.X + resolvedParagraph.IndentDip;
+            placements.Add(new TextParagraphPlacement(
+                paragraph.ParagraphIndex,
+                0,
+                paragraphX,
+                currentY,
+                Math.Max(1, area.Width - resolvedParagraph.IndentDip),
+                PlanBulletPlacement(resolvedParagraph, paragraphX, currentY)));
+            currentY += (paragraph.HeightDip + paragraph.SpaceAfterDip) * lineSpacingScale;
+        }
+
+        return new TextBlockLayoutPlan(area, placements);
+    }
+
+    public static TextColumnLayout GetColumnLayout(ResolvedTextLayout text, LayoutRect bounds)
+    {
+        var area = GetTextArea(text, bounds);
+        int columnCount = Math.Max(1, text.ColumnCount);
+        double spacingDip = text.ColumnSpacingDip > 0
+            ? text.ColumnSpacingDip
+            : DefaultColumnSpacingDip;
+        double columnWidth = Math.Max(
+            1,
+            (area.Width - (columnCount - 1) * spacingDip) / columnCount);
+
+        return new TextColumnLayout(
+            area,
+            columnCount,
+            spacingDip,
+            columnWidth,
+            GetLineSpacingScale(text));
+    }
+
+    public static TextBlockLayoutPlan PlanColumns(
+        ResolvedTextLayout text,
+        TextColumnLayout layout,
+        IReadOnlyList<TextParagraphMeasure> paragraphs)
+    {
+        int column = 0;
+        double currentY = layout.Area.Y;
+        double columnX = layout.Area.X;
+        double columnBottom = layout.Area.Y + layout.Area.Height;
+
+        var placements = new List<TextParagraphPlacement>(paragraphs.Count);
+        foreach (var paragraph in paragraphs)
+        {
+            if ((uint)paragraph.ParagraphIndex >= (uint)text.Paragraphs.Count)
+                continue;
+
+            if (currentY + paragraph.TotalHeightDip > columnBottom &&
+                column < layout.ColumnCount - 1)
+            {
+                column++;
+                columnX = layout.Area.X + column * (layout.ColumnWidthDip + layout.ColumnSpacingDip);
+                currentY = layout.Area.Y;
+            }
+
+            currentY += paragraph.SpaceBeforeDip;
+            var resolvedParagraph = text.Paragraphs[paragraph.ParagraphIndex];
+            double paragraphX = columnX + resolvedParagraph.IndentDip;
+            placements.Add(new TextParagraphPlacement(
+                paragraph.ParagraphIndex,
+                column,
+                paragraphX,
+                currentY,
+                Math.Max(1, layout.ColumnWidthDip - resolvedParagraph.IndentDip),
+                PlanBulletPlacement(resolvedParagraph, paragraphX, currentY)));
+            currentY += paragraph.HeightDip + paragraph.SpaceAfterDip;
+        }
+
+        return new TextBlockLayoutPlan(layout.Area, placements);
+    }
+
+    public static TextTabLayoutPlan PlanTabStops(
+        ResolvedParagraph paragraph,
+        double startX,
+        Func<ResolvedRun, string, double> measureText)
+    {
+        ArgumentNullException.ThrowIfNull(paragraph);
+        ArgumentNullException.ThrowIfNull(measureText);
+
+        return PlanTabStops(paragraph, startX, paragraph.TabStops, measureText);
+    }
+
+    public static TextTabLayoutPlan PlanTabStops(
+        ResolvedParagraph paragraph,
+        double startX,
+        IReadOnlyList<ResolvedTabStop> tabStops,
+        Func<ResolvedRun, string, double> measureText)
+    {
+        ArgumentNullException.ThrowIfNull(paragraph);
+        ArgumentNullException.ThrowIfNull(tabStops);
+        ArgumentNullException.ThrowIfNull(measureText);
+
+        var tokens = CreateTabTokens(paragraph);
+        double currentX = startX;
+        var placements = new List<TextTabSegmentPlacement>(tokens.Count);
+
+        for (int tokenIndex = 0; tokenIndex < tokens.Count; tokenIndex++)
+        {
+            var token = tokens[tokenIndex];
+            var run = paragraph.Runs[token.RunIndex];
+
+            if (token.IsTab)
+                currentX = AdvanceToTabStop(
+                    paragraph,
+                    tokens,
+                    tokenIndex,
+                    currentX,
+                    startX,
+                    tabStops,
+                    measureText);
+
+            if (token.Text.Length == 0)
+                continue;
+
+            placements.Add(new TextTabSegmentPlacement(
+                token.RunIndex,
+                token.Text,
+                currentX));
+            currentX += measureText(run, token.Text);
+        }
+
+        return new TextTabLayoutPlan(placements);
+    }
+
+    private static double ComputeStartY(
+        TextLayoutArea area,
+        double totalHeight,
+        TableCellAnchor anchor) =>
+        anchor switch
+        {
+            TableCellAnchor.Middle => area.Y + Math.Max(0, (area.Height - totalHeight) / 2),
+            TableCellAnchor.Bottom => area.Y + Math.Max(0, area.Height - totalHeight),
+            _ => area.Y
+        };
+
+    private static double ComputeStartY(
+        TextLayoutArea area,
+        double totalHeight,
+        VerticalAnchor anchor) =>
+        anchor switch
+        {
+            VerticalAnchor.Middle => area.Y + Math.Max(0, (area.Height - totalHeight) / 2),
+            VerticalAnchor.Bottom => area.Y + Math.Max(0, area.Height - totalHeight),
+            _ => area.Y
+        };
+
+    private static bool HasTextEffects(ResolvedParagraph paragraph) =>
+        paragraph.Runs.Any(run =>
+            run.TextFill is not null ||
+            run.TextOutline is not null ||
+            run.TextShadow is not null);
+
+    private static bool HasTabCharacters(ResolvedParagraph paragraph) =>
+        paragraph.Runs.Any(run => run.Text.Contains('\t'));
+
+    private static TextBulletPlacement? PlanBulletPlacement(
+        ResolvedParagraph paragraph,
+        double paragraphX,
+        double paragraphY)
+    {
+        if (string.IsNullOrEmpty(paragraph.BulletText))
+            return null;
+
+        return new TextBulletPlacement(
+            paragraph.BulletText,
+            paragraph.BulletFontFamily,
+            paragraph.BulletFontSizePt,
+            paragraph.BulletColor,
+            paragraphX - paragraph.HangingDip,
+            paragraphY);
+    }
+
+    private static double AdvanceToTabStop(
+        ResolvedParagraph paragraph,
+        IReadOnlyList<TextTabToken> tokens,
+        int tokenIndex,
+        double currentX,
+        double startX,
+        IReadOnlyList<ResolvedTabStop> tabStops,
+        Func<ResolvedRun, string, double> measureText)
+    {
+        double relativeX = currentX - startX;
+        var matchedStop = FindNextTabStop(tabStops, relativeX);
+        double stopDip = matchedStop?.PositionDip
+            ?? Math.Floor(relativeX / DefaultTabStopDip + 1.0) * DefaultTabStopDip;
+
+        double alignOffset = GetTabAlignmentOffset(
+            paragraph,
+            tokens,
+            tokenIndex,
+            matchedStop?.Alignment ?? TabStopAlignment.Left,
+            measureText);
+
+        return Math.Max(currentX, startX + stopDip + alignOffset);
+    }
+
+    private static ResolvedTabStop? FindNextTabStop(
+        IReadOnlyList<ResolvedTabStop> tabStops,
+        double relativeX)
+    {
+        foreach (var tabStop in tabStops)
+        {
+            if (tabStop.PositionDip > relativeX + 0.5)
+                return tabStop;
+        }
+
+        return null;
+    }
+
+    private static double GetTabAlignmentOffset(
+        ResolvedParagraph paragraph,
+        IReadOnlyList<TextTabToken> tokens,
+        int tokenIndex,
+        TabStopAlignment alignment,
+        Func<ResolvedRun, string, double> measureText)
+    {
+        if (alignment == TabStopAlignment.Left)
+            return 0;
+
+        double segmentWidth = 0;
+        double decimalPrefixWidth = 0;
+        bool foundDecimal = false;
+        for (int scanIndex = tokenIndex; scanIndex < tokens.Count; scanIndex++)
+        {
+            var token = tokens[scanIndex];
+            if (scanIndex > tokenIndex && token.IsTab)
+                break;
+
+            if (token.Text.Length == 0)
+                continue;
+
+            var tokenRun = paragraph.Runs[token.RunIndex];
+            if (!foundDecimal)
+            {
+                int decimalIndex = token.Text.IndexOf('.');
+                if (decimalIndex >= 0)
+                {
+                    decimalPrefixWidth += measureText(tokenRun, token.Text[..(decimalIndex + 1)]);
+                    foundDecimal = true;
+                }
+                else
+                {
+                    decimalPrefixWidth += measureText(tokenRun, token.Text);
+                }
+            }
+
+            segmentWidth += measureText(tokenRun, token.Text);
+        }
+
+        if (segmentWidth <= 0)
+            return 0;
+
+        return alignment switch
+        {
+            TabStopAlignment.Right => -segmentWidth,
+            TabStopAlignment.Center => -segmentWidth / 2.0,
+            TabStopAlignment.Decimal => foundDecimal ? -decimalPrefixWidth : -segmentWidth,
+            _ => 0
+        };
+    }
+
+    private static List<TextTabToken> CreateTabTokens(ResolvedParagraph paragraph)
+    {
+        var tokens = new List<TextTabToken>();
+        for (int runIndex = 0; runIndex < paragraph.Runs.Count; runIndex++)
+        {
+            var run = paragraph.Runs[runIndex];
+            if (run.Text.Length == 0)
+                continue;
+
+            var segments = run.Text.Split('\t');
+            for (int segmentIndex = 0; segmentIndex < segments.Length; segmentIndex++)
+            {
+                tokens.Add(new TextTabToken(
+                    runIndex,
+                    segments[segmentIndex],
+                    segmentIndex > 0));
+            }
+        }
+
+        return tokens;
+    }
+
+    private readonly record struct TextTabToken(
+        int RunIndex,
+        string Text,
+        bool IsTab);
+}

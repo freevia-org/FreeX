@@ -4,26 +4,8 @@ using System.Windows.Controls;
 
 namespace FreeX.App.Host.Tests;
 
-public sealed class WatchWindowMessageFormatterTests
+public sealed class WatchWindowDialogTests
 {
-    [Theory]
-    [InlineData(1, "A1", "1 cell added to Watch Window.")]
-    [InlineData(2, "A1:B1", "2 cells added to Watch Window.")]
-    [InlineData(0, "A1:B1", "A1:B1 is already watched.")]
-    public void FormatAddResult_HandlesSingularPluralAndNoOp(int added, string rangeText, string expected)
-    {
-        WatchWindowMessageFormatter.FormatAddResult(added, rangeText).Should().Be(expected);
-    }
-
-    [Theory]
-    [InlineData(1, "A1", "1 cell removed from Watch Window.")]
-    [InlineData(2, "A1:B1", "2 cells removed from Watch Window.")]
-    [InlineData(0, "A1:B1", "A1:B1 is not watched.")]
-    public void FormatRemoveResult_HandlesSingularPluralAndNoOp(int removed, string rangeText, string expected)
-    {
-        WatchWindowMessageFormatter.FormatRemoveResult(removed, rangeText).Should().Be(expected);
-    }
-
     [Fact]
     public void WatchWindowDialog_ExposesKeyboardAccessKeysForCommandButtons()
     {
@@ -105,7 +87,8 @@ public sealed class WatchWindowMessageFormatterTests
         source.Should().Contain("AutomationProperties.SetName(add, UiText.Get(\"AddWatch_AddAutomationName\"));");
         source.Should().Contain("AutomationProperties.SetAutomationId(add, \"AddWatchAddButton\");");
         source.Should().Contain("AutomationProperties.SetHelpText(add, UiText.Get(\"AddWatch_AddHelpText\"));");
-        source.Should().Contain("var cancel = new Button { Content = UiText.Cancel, Width = 76, IsCancel = true };");
+        source.Should().Contain("var cancel = new Button { Content = UiText.Cancel, Width = 76 };");
+        source.Should().Contain("DialogButtonRowFactory.Create(add, cancel, new Thickness(0, 12, 0, 0));");
         source.Should().Contain("AutomationProperties.SetName(cancel, UiText.Get(\"AddWatch_CancelAutomationName\"));");
         source.Should().Contain("AutomationProperties.SetAutomationId(cancel, \"AddWatchCancelButton\");");
         source.Should().Contain("AutomationProperties.SetHelpText(cancel, UiText.Get(\"AddWatch_CancelHelpText\"));");

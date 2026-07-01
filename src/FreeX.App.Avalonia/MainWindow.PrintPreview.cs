@@ -17,6 +17,7 @@ using AvaloniaControlShapesLine = Avalonia.Controls.Shapes.Line;
 using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
 using AvaloniaRectangle = Avalonia.Controls.Shapes.Rectangle;
 using AvaloniaVerticalAlignment = Avalonia.Layout.VerticalAlignment;
+using Free.Shared.Shell.Avalonia;
 
 namespace FreeX.App.Avalonia;
 
@@ -39,10 +40,17 @@ namespace FreeX.App.Avalonia;
 /// </summary>
 public sealed partial class MainWindow
 {
+    private const string PrintPreviewDefaultPrinterName = "Windows print dialog";
+
     private static readonly ITextMeasurer PrintPreviewTextMeasurer = new AvaloniaTextMeasurer();
     private static readonly IBrush PrintPreviewSurfaceBackground = Brush(82, 86, 92);
+    private static AvaloniaCompactDialogChromeStyle PrintPreviewChromeStyle =>
+        new(FormulaBarFontFamily) { ButtonPadding = new Thickness(6, 1) };
+    private static readonly PrintSettingsTextResolver PrintPreviewSettingsTextResolver = new(
+        UiText.Get,
+        (key, args) => UiText.Format(key, args));
 
-    private async Task ShowPrintPreviewDialogAsync()
+    private async Task ShowPrintPreviewDialogAsync(string? fixturePrinterName = null)
     {
         if (_isOpening || _isSaving)
             return;
@@ -59,7 +67,7 @@ public sealed partial class MainWindow
             return;
         }
 
-        await ShowPrintPreviewWindowCoreAsync(context);
+        await ShowPrintPreviewWindowCoreAsync(context, fixturePrinterName);
     }
 
     /// <summary>
@@ -126,9 +134,17 @@ public sealed partial class MainWindow
         sheet.SetCell(new CellAddress(sheet.Id, row, col), cell);
     }
 
-    private async Task ShowPrintPreviewWindowCoreAsync(PrintPreviewPaginationContext context)
+    private async Task ShowPrintPreviewWindowCoreAsync(PrintPreviewPaginationContext context, string? fixturePrinterName = null)
     {
+        var printerName = fixturePrinterName ?? PrintPreviewDefaultPrinterName;
         var navigator = PrintPreviewPageNavigator.Create(context.PageCount);
+        var documentToolbarPlan = PrintPreviewSurfacePlanner.CreateDocumentToolbarPlan(
+            context.PageCount,
+            PrintPreviewSettingsTextResolver);
+        var topToolbarPlan = PrintPreviewSurfacePlanner.CreateTopToolbarPlan(
+            context.PageCount,
+            printerName,
+            PrintPreviewSettingsTextResolver);
 
         var dialog = new Window
         {
@@ -154,7 +170,7 @@ public sealed partial class MainWindow
 
         var pageNumberBox = new TextBox
         {
-            Text = "1",
+            Text = documentToolbarPlan.PageNumberText,
             Width = 44,
             Height = 24,
             MinHeight = 24,
@@ -170,7 +186,7 @@ public sealed partial class MainWindow
 
         var pageStatusText = new TextBlock
         {
-            Text = PrintPreviewNavigationState.Create(1, context.PageCount).StatusText,
+            Text = documentToolbarPlan.PageStatusText,
             FontSize = 12,
             FontFamily = FormulaBarFontFamily,
             VerticalAlignment = AvaloniaVerticalAlignment.Center,
@@ -178,16 +194,14 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetAutomationId(pageStatusText, PrintPreviewDialogPlanner.PageLabelAutomationId);
 
-        var firstButton = CreatePreviewToolbarButton("|<");
-        var prevButton = CreatePreviewToolbarButton("<");
-        var nextButton = CreatePreviewToolbarButton(">");
-        var lastButton = CreatePreviewToolbarButton(">|");
-        AutomationProperties.SetAutomationId(prevButton, PrintPreviewDialogPlanner.PreviousButtonAutomationId);
-        AutomationProperties.SetAutomationId(nextButton, PrintPreviewDialogPlanner.NextButtonAutomationId);
+        var firstButton = CreatePreviewToolbarButton(documentToolbarPlan.NavigationButtons[0]);
+        var prevButton = CreatePreviewToolbarButton(documentToolbarPlan.NavigationButtons[1]);
+        var nextButton = CreatePreviewToolbarButton(documentToolbarPlan.NavigationButtons[2]);
+        var lastButton = CreatePreviewToolbarButton(documentToolbarPlan.NavigationButtons[3]);
 
         var exportButton = new Button
         {
-            Content = PrintPreviewText("PrintPreview_PrintButton", "Print..."),
+            Content = topToolbarPlan.PrintButtonText,
             MinWidth = 68,
             Height = 24,
             MinHeight = 24,
@@ -206,7 +220,7 @@ public sealed partial class MainWindow
 
         var closeButton = new Button
         {
-            Content = PrintPreviewText("PrintPreview_CloseButton", "Close"),
+            Content = topToolbarPlan.CloseButtonText,
             MinWidth = 68,
             Height = 24,
             MinHeight = 24,
@@ -296,15 +310,30 @@ public sealed partial class MainWindow
         };
 
         var documentToolbar = CreatePreviewDocumentToolbar(
+            documentToolbarPlan,
             firstButton,
             prevButton,
             nextButton,
             lastButton,
             pageNumberBox,
             pageStatusText);
-        var previewPane = CreatePrintPreviewPane(documentToolbar, pageHost);
-        var settingsRail = CreatePrintPreviewSettingsRail(context.PageCount);
-        var topToolbar = CreatePrintPreviewTopToolbar(context.PageCount, exportButton, closeButton);
+        var previewPane = CreatePrintPreviewPane(
+            documentToolbar,
+            pageHost,
+            PrintPreviewSurfacePlanner.CreateFindBarPlan(PrintPreviewSettingsTextResolver));
+        var settingsRail = CreatePrintPreviewSettingsRail(
+            PrintPreviewSurfacePlanner.CreateSettingsRailPlan(
+                _session.ActiveSheet,
+                context.PageCount,
+                printerName,
+                new PrintPreviewSettings(),
+                hasSelection: false,
+                canUpdatePrintPreviewSettings: false,
+                PrintPreviewSettingsTextResolver));
+        var topToolbar = CreatePrintPreviewTopToolbar(
+            topToolbarPlan,
+            exportButton,
+            closeButton);
 
         var layout = new Grid
         {
@@ -331,7 +360,10 @@ public sealed partial class MainWindow
         await dialog.ShowDialog(this);
     }
 
-    private static Border CreatePrintPreviewTopToolbar(int totalPages, Button printButton, Button closeButton)
+    private static Border CreatePrintPreviewTopToolbar(
+        PrintPreviewTopToolbarPlan plan,
+        Button printButton,
+        Button closeButton)
     {
         var toolbar = new StackPanel
         {
@@ -342,13 +374,13 @@ public sealed partial class MainWindow
             Children =
             {
                 printButton,
-                new TextBlock { Text = PrintPreviewText("PrintPreview_PrinterLabel", "Printer:"), FontSize = 12, FontFamily = FormulaBarFontFamily, VerticalAlignment = AvaloniaVerticalAlignment.Center },
-                CreatePreviewComboBox(190, "HP30138B4D655D(HP Color Laser MFP 178 179)"),
-                new TextBlock { Text = PrintPreviewText("PrintPreview_CopiesLabel", "Copies:"), FontSize = 12, FontFamily = FormulaBarFontFamily, VerticalAlignment = AvaloniaVerticalAlignment.Center },
+                new TextBlock { Text = plan.PrinterLabelText, FontSize = 12, FontFamily = FormulaBarFontFamily, VerticalAlignment = AvaloniaVerticalAlignment.Center },
+                CreatePreviewComboBox(plan.PrinterComboWidth, plan.PrinterName),
+                new TextBlock { Text = plan.CopiesLabelText, FontSize = 12, FontFamily = FormulaBarFontFamily, VerticalAlignment = AvaloniaVerticalAlignment.Center },
                 new TextBox
                 {
-                    Text = "1",
-                    Width = 44,
+                    Text = plan.CopiesText,
+                    Width = plan.CopiesBoxWidth,
                     Height = 24,
                     MinHeight = 24,
                     MaxHeight = 24,
@@ -361,7 +393,7 @@ public sealed partial class MainWindow
                 },
                 new CheckBox
                 {
-                    Content = PrintPreviewText("PrintPreview_CollatedLabel", "Collated"),
+                    Content = plan.CollatedText,
                     IsChecked = true,
                     MinHeight = 20,
                     MaxHeight = 20,
@@ -369,19 +401,19 @@ public sealed partial class MainWindow
                     FontFamily = FormulaBarFontFamily,
                     VerticalAlignment = AvaloniaVerticalAlignment.Center,
                 },
-                new TextBlock { Text = PrintPreviewText("PrintPreview_SidesLabel", "Sides:"), FontSize = 12, FontFamily = FormulaBarFontFamily, VerticalAlignment = AvaloniaVerticalAlignment.Center },
-                CreatePreviewComboBox(178, PrintPreviewText("PrintPreview_SidesOneSided", "Print One Sided")),
+                new TextBlock { Text = plan.SidesLabelText, FontSize = 12, FontFamily = FormulaBarFontFamily, VerticalAlignment = AvaloniaVerticalAlignment.Center },
+                CreatePreviewChoiceComboBox(
+                    plan.SidesComboWidth,
+                    plan.SidesOptions,
+                    plan.SidesSelectedIndex),
                 new TextBlock
                 {
-                    Text = PrintPreviewToolbarStatePlanner.CreateStatusText(
-                        "HP30138B4D655D(HP Color Laser MFP 178 179)",
-                        1,
-                        totalPages),
+                    Text = plan.StatusText,
                     MaxWidth = 280,
                     TextWrapping = TextWrapping.Wrap,
                     VerticalAlignment = AvaloniaVerticalAlignment.Center,
                 },
-                CreatePreviewComboBox(96, PrintPreviewText("PrintPreview_AllPagesLabel", "All pages")),
+                CreatePreviewComboBox(plan.PageRangeComboWidth, plan.PageRangeText),
                 closeButton,
             },
         };
@@ -395,7 +427,7 @@ public sealed partial class MainWindow
         };
     }
 
-    private static ScrollViewer CreatePrintPreviewSettingsRail(int totalPages)
+    private static ScrollViewer CreatePrintPreviewSettingsRail(PrintPreviewSettingsRailPlan plan)
     {
         var panel = new StackPanel
         {
@@ -403,11 +435,11 @@ public sealed partial class MainWindow
             Margin = new Thickness(10),
             Children =
             {
-                CreateSettingsSection(PrintPreviewText("PrintPreview_CopiesSectionLabel", "Copies:")),
+                CreateSettingsSection(plan.CopiesSectionText),
                 new TextBox
                 {
-                    Text = "1",
-                    Width = 60,
+                    Text = plan.CopiesText,
+                    Width = plan.CopiesBoxWidth,
                     Height = 24,
                     MinHeight = 24,
                     MaxHeight = 24,
@@ -419,11 +451,11 @@ public sealed partial class MainWindow
                     VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
                     HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
                 },
-                CreateSettingsSection(PrintPreviewText("PrintPreview_PrinterSectionLabel", "Printer:")),
-                CreatePreviewComboBox(183, "HP30138B4D655D(HP Color Laser MFP 178 179)"),
+                CreateSettingsSection(plan.PrinterSectionText),
+                CreatePreviewComboBox(plan.PrinterComboWidth, plan.PrinterName),
                 new Button
                 {
-                    Content = PrintPreviewText("PrintPreview_PrinterPropertiesButton", "Printer Properties"),
+                    Content = plan.PrinterPropertiesButtonText,
                     Height = 24,
                     MinHeight = 24,
                     MaxHeight = 24,
@@ -435,25 +467,26 @@ public sealed partial class MainWindow
                     FontFamily = FormulaBarFontFamily,
                     HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
                 },
-                CreateSettingsSection(PrintPreviewText("PrintPreview_PrintWhatLabel", "Print What:")),
-                CreatePreviewComboBox(183, PrintPreviewText("PrintPreview_PrintWhatActiveSheets", "Print Active Sheets")),
-                CreateSettingsSection(PrintPreviewText("PrintPreview_PagesLabel", "Pages:")),
-                CreatePageRangeRow(totalPages),
-                CreateSettingsSection(PrintPreviewText("PrintPreview_SidesSectionLabel", "Print Sides:")),
-                CreatePreviewComboBox(183, PrintPreviewText("PrintPreview_SidesOneSided", "Print One Sided")),
-                CreateSettingsSection(PrintPreviewText("PrintPreview_CollatedSectionLabel", "Collation:")),
-                CreatePreviewComboBox(183, PrintPreviewText("PrintPreview_CollatedOption", "Collated")),
-                CreateSettingsSection(PrintPreviewText("PrintPreview_OrientationLabel", "Orientation:")),
-                CreatePreviewComboBox(183, "Portrait"),
-                CreateSettingsSection(PrintPreviewText("PageSetup_PaperSize", "Paper size:")),
-                CreatePreviewComboBox(183, "A4"),
-                CreateSettingsSection(PrintPreviewText("PrintPreview_MarginsButton", "Margins")),
-                CreatePreviewComboBox(183, "Narrow"),
-                CreateSettingsSection(PrintPreviewText("PrintPreview_ScalingLabel", "Scaling:")),
-                CreatePreviewComboBox(183, PrintPreviewText("PrintPreview_ScaleNoScaling", "No Scaling")),
-                new CheckBox { Content = StripDisplayMnemonic(PrintPreviewText("PrintPreview_IgnorePrintArea", "Ignore print area")), IsChecked = false, MinHeight = 20, MaxHeight = 20, FontSize = 12, FontFamily = FormulaBarFontFamily },
-                CreateSettingsSection(PrintPreviewText("PrintPreview_PrintOptionsSection", "Print Options")),
-                new CheckBox { Content = StripDisplayMnemonic(PrintPreviewText("PageSetup_PrintGridlines", "Print gridlines")), IsChecked = false, MinHeight = 20, MaxHeight = 20, FontSize = 12, FontFamily = FormulaBarFontFamily },
+                CreateSettingsSection(plan.PrintWhatLabelText),
+                CreatePreviewChoiceComboBox(plan.ChoiceComboWidth, plan.Settings.PrintWhatOptions, plan.Settings.PrintWhatSelectedIndex),
+                CreateSettingsSection(plan.PagesLabelText),
+                CreatePageRangeRow(plan.PageRange),
+                CreateSettingsSection(plan.SidesSectionText),
+                CreatePreviewChoiceComboBox(plan.ChoiceComboWidth, plan.Settings.SidesOptions, plan.Settings.SidesSelectedIndex),
+                CreateSettingsSection(plan.CollationSectionText),
+                CreatePreviewChoiceComboBox(plan.ChoiceComboWidth, plan.Settings.CollationOptions, plan.Settings.CollationSelectedIndex),
+                CreateSettingsSection(plan.OrientationLabelText),
+                CreatePreviewChoiceComboBox(plan.ChoiceComboWidth, plan.Settings.OrientationOptions, plan.Settings.OrientationSelectedIndex),
+                CreateSettingsSection(plan.PaperSizeLabelText),
+                CreatePreviewChoiceComboBox(plan.ChoiceComboWidth, plan.Settings.PaperSizeOptions, plan.Settings.PaperSizeSelectedIndex),
+                CreateSettingsSection(plan.MarginsLabelText),
+                CreatePreviewChoiceComboBox(plan.ChoiceComboWidth, plan.Settings.MarginOptions, plan.Settings.MarginsSelectedIndex),
+                CreateSettingsSection(plan.ScalingLabelText),
+                CreatePreviewChoiceComboBox(plan.ChoiceComboWidth, plan.Settings.ScalingOptions, plan.Settings.ScalingSelectedIndex),
+                new CheckBox { Content = plan.IgnorePrintAreaText, IsChecked = plan.Settings.IgnorePrintAreaChecked, IsEnabled = plan.Settings.IgnorePrintAreaEnabled, MinHeight = 20, MaxHeight = 20, FontSize = 12, FontFamily = FormulaBarFontFamily },
+                CreateSettingsSection(plan.PrintOptionsSectionText),
+                new CheckBox { Content = plan.PrintGridlinesText, IsChecked = plan.Settings.PrintGridlines, MinHeight = 20, MaxHeight = 20, FontSize = 12, FontFamily = FormulaBarFontFamily },
+                new CheckBox { Content = plan.PrintHeadingsText, IsChecked = plan.Settings.PrintHeadings, MinHeight = 20, MaxHeight = 20, FontSize = 12, FontFamily = FormulaBarFontFamily },
             },
         };
 
@@ -466,7 +499,7 @@ public sealed partial class MainWindow
         };
     }
 
-    private static Grid CreatePageRangeRow(int totalPages)
+    private static Grid CreatePageRangeRow(PrintPreviewPageRangeFieldsPlan plan)
     {
         var row = new Grid
         {
@@ -474,8 +507,8 @@ public sealed partial class MainWindow
         };
         var fromBox = new TextBox
         {
-            Text = "1",
-            Width = 44,
+            Text = plan.FromPageText,
+            Width = plan.PageBoxWidth,
             Height = 24,
             MinHeight = 24,
             MaxHeight = 24,
@@ -486,11 +519,11 @@ public sealed partial class MainWindow
             BorderThickness = new Thickness(1),
             VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
         };
-        var toLabel = new TextBlock { Text = PrintPreviewText("PrintPreview_PageRangeToText", "To:"), FontSize = 12, FontFamily = FormulaBarFontFamily, Margin = new Thickness(6, 0), VerticalAlignment = AvaloniaVerticalAlignment.Center };
+        var toLabel = new TextBlock { Text = plan.ToSeparatorText, FontSize = 12, FontFamily = FormulaBarFontFamily, Margin = new Thickness(6, 0), VerticalAlignment = AvaloniaVerticalAlignment.Center };
         var toBox = new TextBox
         {
-            Text = totalPages.ToString(CultureInfo.InvariantCulture),
-            Width = 44,
+            Text = plan.ToPageText,
+            Width = plan.PageBoxWidth,
             Height = 24,
             MinHeight = 24,
             MaxHeight = 24,
@@ -522,7 +555,10 @@ public sealed partial class MainWindow
             Margin = new Thickness(0, 4, 0, -4),
         };
 
-    private static Border CreatePrintPreviewPane(Control documentToolbar, Border pageHost)
+    private static Border CreatePrintPreviewPane(
+        Control documentToolbar,
+        Border pageHost,
+        PrintPreviewFindBarPlan plan)
     {
         var findBar = new Grid
         {
@@ -532,7 +568,7 @@ public sealed partial class MainWindow
         };
         var findBox = new TextBox
         {
-            PlaceholderText = "Type text to find...",
+            PlaceholderText = plan.PlaceholderText,
             Margin = new Thickness(4, 2),
             Height = 22,
             FontSize = 12,
@@ -541,8 +577,8 @@ public sealed partial class MainWindow
             BorderBrush = Brush(130, 130, 130),
             BorderThickness = new Thickness(1),
         };
-        var previous = CreatePreviewToolbarButton("<");
-        var next = CreatePreviewToolbarButton(">");
+        var previous = CreatePreviewToolbarButton(plan.PreviousButtonText);
+        var next = CreatePreviewToolbarButton(plan.NextButtonText);
         Grid.SetColumn(findBox, 0);
         Grid.SetColumn(previous, 1);
         Grid.SetColumn(next, 2);
@@ -565,6 +601,7 @@ public sealed partial class MainWindow
     }
 
     private static Border CreatePreviewDocumentToolbar(
+        PrintPreviewDocumentToolbarPlan plan,
         Button firstButton,
         Button prevButton,
         Button nextButton,
@@ -584,15 +621,15 @@ public sealed partial class MainWindow
                 nextButton,
                 lastButton,
                 CreatePreviewToolbarSeparator(),
-                new TextBlock { Text = PrintPreviewText("PrintPreview_PageLabel", "Page:"), FontSize = 12, FontFamily = FormulaBarFontFamily, VerticalAlignment = AvaloniaVerticalAlignment.Center },
+                new TextBlock { Text = plan.PageLabelText, FontSize = 12, FontFamily = FormulaBarFontFamily, VerticalAlignment = AvaloniaVerticalAlignment.Center },
                 pageNumberBox,
                 pageStatusText,
                 CreatePreviewToolbarSeparator(),
-                new TextBlock { Text = PrintPreviewText("PrintPreview_ZoomLabel", "Zoom:"), FontSize = 12, FontFamily = FormulaBarFontFamily, VerticalAlignment = AvaloniaVerticalAlignment.Center },
-                CreatePreviewComboBox(82, "100%"),
+                new TextBlock { Text = plan.ZoomLabelText, FontSize = 12, FontFamily = FormulaBarFontFamily, VerticalAlignment = AvaloniaVerticalAlignment.Center },
+                CreatePreviewZoomComboBox(plan),
                 CreatePreviewToolbarSeparator(),
-                CreatePreviewToolbarButton(PrintPreviewText("PrintPreview_MarginsButton", "Margins")),
-                CreatePreviewToolbarButton(PrintPreviewText("PrintPreview_PageSetupButton", "Page Setup")),
+                CreatePreviewToolbarButton(plan.MarginsButtonText),
+                CreatePreviewToolbarButton(plan.PageSetupButtonText),
             },
         };
 
@@ -614,22 +651,20 @@ public sealed partial class MainWindow
         };
 
     private static Button CreatePreviewToolbarButton(string text) =>
-        new()
-        {
-            Content = text,
-            MinWidth = 26,
-            Height = 24,
-            MinHeight = 24,
-            MaxHeight = 24,
-            Padding = new Thickness(6, 1),
-            Background = Brushes.White,
-            BorderBrush = Brush(112, 112, 112),
-            BorderThickness = new Thickness(1),
-            FontSize = 12,
-            FontFamily = FormulaBarFontFamily,
-            HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center,
-            VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
-        };
+        ApplyPreviewToolbarButtonChrome(new Button { Content = text }, 26);
+
+    private static Button CreatePreviewToolbarButton(PrintPreviewNavigationGlyphPlan plan)
+    {
+        var button = CreatePreviewToolbarButton(plan.Text);
+        AutomationProperties.SetAutomationId(button, plan.AutomationId);
+        return button;
+    }
+
+    private static Button ApplyPreviewToolbarButtonChrome(Button button, double minWidth)
+    {
+        AvaloniaCompactDialogChrome.ApplyButton(button, PrintPreviewChromeStyle, minWidth);
+        return button;
+    }
 
     private static ComboBox CreatePreviewComboBox(double width, string selectedText) =>
         new()
@@ -646,16 +681,45 @@ public sealed partial class MainWindow
             SelectedIndex = 0,
         };
 
-    private static string PrintPreviewText(string key, string fallback)
+    private static ComboBox CreatePreviewChoiceComboBox<TValue>(
+        double width,
+        IReadOnlyList<PrintPreviewChoice<TValue>> choices,
+        int selectedIndex)
     {
-        var text = UiText.Get(key);
-        var resolved = text.StartsWith("[[", StringComparison.Ordinal) && text.EndsWith("]]", StringComparison.Ordinal)
-            ? fallback
-            : text;
-        // Strip mnemonic markers ("_Print...", "C_ollated", "_All pages") so the print-preview
-        // toolbar/labels never render a literal underscore — Windows doesn't show them here either.
-        return StripDisplayMnemonic(resolved);
+        var selected = choices.Count == 0
+            ? -1
+            : Math.Clamp(selectedIndex, 0, choices.Count - 1);
+
+        return CreatePreviewComboBox(
+            width,
+            choices.Select(choice => new ComboBoxItem
+            {
+                Content = choice.Text,
+                IsEnabled = choice.IsEnabled,
+            }).ToArray(),
+            selected);
     }
+
+    private static ComboBox CreatePreviewZoomComboBox(PrintPreviewDocumentToolbarPlan plan) =>
+        CreatePreviewComboBox(
+            plan.ZoomComboWidth,
+            plan.ZoomOptions.Select(option => option.Text).ToArray(),
+            plan.ZoomSelectedIndex);
+
+    private static ComboBox CreatePreviewComboBox(double width, IReadOnlyList<object> items, int selectedIndex) =>
+        new()
+        {
+            Width = width,
+            Height = 24,
+            MinHeight = 24,
+            MaxHeight = 24,
+            Padding = new Thickness(5, 0, 4, 0),
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+            VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
+            ItemsSource = items,
+            SelectedIndex = selectedIndex,
+        };
 
     private static Control BuildPreviewDocumentViewerSurface(PrintPreviewPaginationContext context, int pageIndex)
     {
@@ -697,7 +761,7 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetAutomationId(canvas, PrintPreviewDialogPlanner.PageCanvasAutomationId);
 
-        RenderPreviewInstructions(canvas, AlignCellTextLeft(layout, painting.Instructions));
+        RenderPreviewInstructions(canvas, painting.Instructions);
 
         var pageBorder = new Border
         {
@@ -719,46 +783,6 @@ public sealed partial class MainWindow
         };
 
         return pageBorder;
-    }
-
-    /// <summary>
-    /// Forces every printed cell's text to be left-aligned at the cell's text origin, matching the
-    /// Windows WPF print renderer (<c>PrintRenderer.GridCells</c>), which draws all cell text from
-    /// <c>x + 2</c> with no horizontal alignment. The shared render model right-aligns numeric/currency
-    /// cells (Excel's general alignment), which made the Units/Revenue data values drift right of their
-    /// left-aligned column headers in the Avalonia preview. Heading and header/footer-band runs keep the
-    /// builder's alignment; only cell-text runs (identified by their cell's text + origin) are rewritten.
-    /// </summary>
-    private static IReadOnlyList<PrintPreviewPaintInstruction> AlignCellTextLeft(
-        PageContentLayout layout,
-        IReadOnlyList<PrintPreviewPaintInstruction> instructions)
-    {
-        var cellTextOrigins = new HashSet<(string Text, double Left, double Top)>();
-        foreach (var cell in layout.Cells)
-        {
-            if (!string.IsNullOrEmpty(cell.Text) && cell.Alignment != PageTextAlignment.Left)
-                cellTextOrigins.Add((cell.Text, cell.TextOrigin.X, cell.TextOrigin.Y));
-        }
-
-        if (cellTextOrigins.Count == 0)
-            return instructions;
-
-        var rewritten = new List<PrintPreviewPaintInstruction>(instructions.Count);
-        foreach (var instruction in instructions)
-        {
-            if (instruction.Kind == PrintPreviewPaintKind.Text
-                && instruction.Alignment != PageTextAlignment.Left
-                && cellTextOrigins.Contains((instruction.Text, instruction.Left, instruction.Top)))
-            {
-                rewritten.Add(instruction with { Alignment = PageTextAlignment.Left });
-            }
-            else
-            {
-                rewritten.Add(instruction);
-            }
-        }
-
-        return rewritten;
     }
 
     private static void RenderPreviewInstructions(

@@ -1,4 +1,5 @@
 using FreeX.Core.Model;
+using FreeX.App.Presentation.CustomViews;
 
 namespace FreeX.App.Host;
 
@@ -13,17 +14,19 @@ internal sealed class CustomViewViewModel(string name, int sheetCount, string pr
 internal static class CustomViewsDialogPlanner
 {
     public static IReadOnlyList<CustomViewViewModel> BuildItems(Workbook workbook) =>
-        workbook.CustomViews
-            .Select(view => new CustomViewViewModel(
-                view.Name,
-                view.Sheets.Count,
-                GetIncludedIndicator(view.IncludePrintSettings),
-                GetIncludedIndicator(view.IncludeHiddenRowsColumnsAndFilterSettings)))
+        CustomViewsPlanner.BuildDialogRows(
+                workbook,
+                UiText.Get("CustomViews_Included"),
+                UiText.Get("CustomViews_NotIncluded"))
+            .Select(row => new CustomViewViewModel(
+                row.Name,
+                row.SheetCount,
+                row.PrintSettingsIndicator,
+                row.FilterSettingsIndicator))
             .ToArray();
 
     public static string CreateDefaultViewName(int customViewCount) =>
-        UiText.Format("CustomViews_DefaultName", customViewCount + 1);
-
-    private static string GetIncludedIndicator(bool isIncluded) =>
-        isIncluded ? UiText.Get("CustomViews_Included") : UiText.Get("CustomViews_NotIncluded");
+        CustomViewsPlanner.SuggestDefaultName(
+            customViewCount,
+            UiText.Get("CustomViews_DefaultName"));
 }

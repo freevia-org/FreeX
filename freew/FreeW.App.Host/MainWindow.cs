@@ -10,10 +10,14 @@ using System.Windows.Media;
 using System.Windows.Media.Effects;
 using System.Windows.Media.Imaging;
 using System.Windows.Shell;
+using Free.Shared.AppServices;
 using Free.Shared.Ribbon;
 using Free.Shared.Ribbon.Wpf;
+using Free.Shared.Shell.Wpf;
 using FreeW.App.Host.Backstage;
 using FreeW.App.Host.Editing;
+using FreeW.App.Presentation.Options;
+using FreeW.App.Presentation.Shell;
 using FreeW.Core.Model;
 using TextSearch = FreeW.Core.Model.TextSearch;
 
@@ -34,7 +38,7 @@ public sealed class MainWindow : Window
     private Ruler _vRuler = null!;
     private Button _rulerTabSelector = null!;
     private bool _rulersVisible = true;
-    private TextBlock _titleText = null!;
+    private SisterWpfWindowTitleBinder _titleBinder = null!;
     private TextBlock _pageText = null!;
     private TextBlock _sectionText = null!;
     private TextBlock _countsText = null!;
@@ -240,14 +244,19 @@ public sealed class MainWindow : Window
     // so settings read live by FileCommands (e.g. the recent-files cap) take effect without a restart.
     private readonly FreeWOptions _options;
     private readonly ApplicationOptionsStore<FreeWOptions> _optionsStore;
+    private readonly IUserMessageService? _messageService;
 
     public MainWindow() : this(new FreeWOptions())
     {
     }
 
-    public MainWindow(FreeWOptions options, ApplicationOptionsStore<FreeWOptions>? optionsStore = null)
+    public MainWindow(
+        FreeWOptions options,
+        ApplicationOptionsStore<FreeWOptions>? optionsStore = null,
+        IUserMessageService? messageService = null)
     {
         _options = options ?? new FreeWOptions();
+        _messageService = messageService;
         // No store supplied (e.g. constructed in isolation / tests) → a no-op in-memory store so editing
         // still round-trips through the dialog and applies live, just without touching the real profile.
         _optionsStore = optionsStore ?? ApplicationOptionsStore<FreeWOptions>.ForPath(
@@ -326,7 +335,7 @@ public sealed class MainWindow : Window
             onArrangeAll: ArrangeAllWindows,
             onToggleThesaurus: ToggleThesaurusPane,
             onToggleBalloons: ToggleBalloons);
-        _file = new FileCommands(this, editor, UpdateTitle, _options);
+        _file = new FileCommands(this, editor, UpdateTitle, _options, messageService: _messageService);
         editor.TextChanged += (_, _) =>
         {
             _file.MarkDirty();
@@ -366,7 +375,7 @@ public sealed class MainWindow : Window
         // the chrome stack here.
         var titleBar = ShellChrome.BuildTitleBar(this, chromeOptions);
         _titleBar = titleBar.Root;
-        _titleText = titleBar.TitleText;
+        _titleBinder = new SisterWpfWindowTitleBinder(this, titleBar.TitleText);
         AddQuickAccessButtons(titleBar.QatHost);
 
         var (ribbon, ribbonTabs) = BuildRibbon(FreeWRibbon.Build(), commands, stateStore);
@@ -376,7 +385,10 @@ public sealed class MainWindow : Window
 
         var status = BuildStatusBar();
         var clientFrame = SisterAppClientFrameBuilder.Build(
-            new SisterAppClientFrameSpec(chromeStack, body, status));
+            new SisterAppClientFrameSpec(
+                Chrome: chromeStack,
+                WorkArea: body,
+                StatusBar: status));
         var root = clientFrame.Root;
 
         var navPane = BuildNavPane();
@@ -565,6 +577,7 @@ public sealed class MainWindow : Window
         _backstage = new BackstageView(_editor, _file, new BackstageActions(
             New: () => _file.New(),
             Open: () => _file.Open(),
+            ImportPdfText: () => _file.ImportPdfText(),
             OpenPath: path => _file.OpenRecentPath(path),
             OpenFolder: folder => _file.OpenFromFolder(folder),
             Save: () => _file.Save(),
@@ -717,14 +730,12 @@ public sealed class MainWindow : Window
 
     private void UpdateTitle()
     {
-        var title = WindowTitlePlanner.Compose(
-            displayName: _file.DisplayName,
-            applicationName: "FreeW",
-            isDirty: _file.IsDirty,
-            dirtyMarker: " *",
-            separator: " — ");
-        Title = title;
-        _titleText.Text = title;
+        _titleBinder.Update(new SisterWpfWindowTitleSpec(
+            DisplayName: _file.DisplayName,
+            ApplicationName: "FreeW",
+            IsDirty: _file.IsDirty,
+            DirtyMarker: " *",
+            Separator: " \u2014 "));
     }
 
     // Recompute the live status-bar counts. When there is a non-empty selection, show that selection's
@@ -733,34 +744,48 @@ public sealed class MainWindow : Window
     // (TextChanged), on selection change, and on document load.
     private void UpdateCounts()
     {
-        UpdatePageStatus();
-
         var selectionText = _editor.Selection.Text;
         if (!string.IsNullOrEmpty(selectionText))
         {
-            var words = WordCount.Words(selectionText);
-            var characters = WordCount.Characters(selectionText, includeSpaces: true);
-            _countsText.Text = $"Selection: {words} words, {characters} characters";
+            ApplyStatusPlan(BuildStatusPlan(selectionText, words: 0, charactersWithSpaces: 0, paragraphs: 0));
             return;
         }
 
         _editor.CommitToModel();
         var stats = WordCount.Of(_editor.Model);
-        _countsText.Text = $"Words: {stats.Words}   Characters: {stats.CharactersWithSpaces}   Paragraphs: {stats.Paragraphs}";
+        ApplyStatusPlan(BuildStatusPlan(
+            selectionText: null,
+            stats.Words,
+            stats.CharactersWithSpaces,
+            stats.Paragraphs));
     }
 
-    // Refresh the Word-style "Page X of Y" status: an approximate page position derived from the editor's
-    // single continuous flow against the page's printable height (see DocumentView.PageInfo). It tracks the
-    // on-screen page-break markers, which can differ by a page from the fully paginated Print Preview.
-    private void UpdatePageStatus()
+    private FreeWEditorStatusPlan BuildStatusPlan(
+        string? selectionText,
+        int words,
+        int charactersWithSpaces,
+        int paragraphs)
     {
         var (current, total) = _editor.PageInfo();
-        _pageText.Text = $"Page {current} of {total}";
-
-        // Word-style current-section indicator next to the page count. Best-effort: which section the
-        // caret's block falls in, out of TextDocument.Sections (see DocumentView.SectionInfo).
         var (section, sections) = _editor.SectionInfo();
-        _sectionText.Text = $"Section {section} of {sections}";
+        return FreeWEditorStatusPlanner.Build(new FreeWEditorStatusSnapshot(
+            words,
+            charactersWithSpaces,
+            paragraphs,
+            current,
+            total,
+            section,
+            sections,
+            selectionText));
+    }
+
+    // Refresh the Word-style "Page X of Y", section, and count status. Page position is an approximate
+    // continuous-flow location from DocumentView.PageInfo; section is best-effort from SectionInfo.
+    private void ApplyStatusPlan(FreeWEditorStatusPlan plan)
+    {
+        _pageText.Text = plan.PageStatus;
+        _sectionText.Text = plan.SectionStatus;
+        _countsText.Text = plan.CountsStatus;
     }
 
     // Build the footer (status bar) as a single full-width row that sits BELOW the ruler + document region
@@ -834,7 +859,7 @@ public sealed class MainWindow : Window
         var dataFolderPanel = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
         dataFolderPanel.Children.Add(SisterAppStatusBarChrome.CreateSeparator());
         _dataFolderText = SisterAppStatusBarChrome.CreateInfoText();
-        _dataFolderText.Text = $"Data folder: {ResolveDataFolderLabel()}";
+        _dataFolderText.Text = SisterAppStatusBarTextPlanner.FormatDataFolderStatus(ResolveDataFolderLabel());
         _dataFolderText.ToolTip = _dataFolderText.Text;
         dataFolderPanel.Children.Add(_dataFolderText);
         _dataFolderItem = dataFolderPanel;
@@ -2007,7 +2032,7 @@ public sealed class MainWindow : Window
     // If the document is new/unsaved, just open a new blank window. The note in the title makes it clear.
     private void OpenNewWindow()
     {
-        var newWindow = new MainWindow(_options);
+        var newWindow = new MainWindow(_options, messageService: _messageService);
         var path = _file.CurrentPath;
         if (path is not null && System.IO.File.Exists(path))
         {

@@ -55,8 +55,28 @@ public enum DvValidationTarget
     Formula2
 }
 
+/// <summary>The stable reason code behind a data-validation editor failure.</summary>
+public enum DvValidationErrorKind
+{
+    None,
+    SourceRequired,
+    FormulaRequired,
+    ValueRequired,
+    MaximumRequired,
+    InvalidWholeNumberCriteria,
+    InvalidDecimalCriteria,
+    InvalidDateCriteria,
+    InvalidTimeCriteria,
+    InvalidTextLengthCriteria,
+    InvalidListCriteria,
+    InvalidCustomCriteria
+}
+
 /// <summary>A single validation failure produced by <see cref="DataValidationDialogModel.Validate"/>.</summary>
-public sealed record DvValidationError(DvValidationTarget Target, string Message);
+public sealed record DvValidationError(DvValidationTarget Target, string Message)
+{
+    public DvValidationErrorKind Kind { get; init; } = DvValidationErrorKind.None;
+}
 
 /// <summary>The outcome of validating candidate criteria against a schema.</summary>
 public sealed record DvValidationResult(IReadOnlyList<DvValidationError> Errors)
@@ -129,6 +149,8 @@ public sealed record DataValidationDialogModel(
     bool AllowBlankDefault,
     bool ShowDropdownDefault)
 {
+    public const int MaximumListSourceItems = 10_000;
+
     /// <summary>The full operator set, in the order the desktop dialog lists them.</summary>
     public static readonly IReadOnlyList<DvOperator> AllOperators =
     [
@@ -228,32 +250,44 @@ public sealed record DataValidationDialogModel(
         var first = input.Formula1?.Trim() ?? "";
         if (first.Length == 0)
         {
-            var message = Type switch
+            var (kind, message) = Type switch
             {
-                DvType.List => "A list source is required.",
-                DvType.Custom => "A formula is required.",
-                _ => "A value is required."
+                DvType.List => (DvValidationErrorKind.SourceRequired, "A list source is required."),
+                DvType.Custom => (DvValidationErrorKind.FormulaRequired, "A formula is required."),
+                _ => (DvValidationErrorKind.ValueRequired, "A value is required.")
             };
-            return Fail(DvValidationTarget.Formula1, message);
+            return Fail(DvValidationTarget.Formula1, kind, message);
         }
 
         if (!TryValidateSingleCriteria(first, out var firstError))
-            return Fail(DvValidationTarget.Formula1, firstError!);
+            return Fail(DvValidationTarget.Formula1, InvalidCriteriaKindForType(Type), firstError!);
 
         if (!ShowsFormula2(input.Operator))
             return DvValidationResult.Valid;
 
         var second = input.Formula2?.Trim() ?? "";
         if (second.Length == 0)
-            return Fail(DvValidationTarget.Formula2, "A maximum value is required.");
+            return Fail(DvValidationTarget.Formula2, DvValidationErrorKind.MaximumRequired, "A maximum value is required.");
 
         return TryValidateSingleCriteria(second, out var secondError)
             ? DvValidationResult.Valid
-            : Fail(DvValidationTarget.Formula2, secondError!);
+            : Fail(DvValidationTarget.Formula2, InvalidCriteriaKindForType(Type), secondError!);
     }
 
-    private static DvValidationResult Fail(DvValidationTarget target, string message) =>
-        new([new DvValidationError(target, message)]);
+    private static DvValidationResult Fail(DvValidationTarget target, DvValidationErrorKind kind, string message) =>
+        new([new DvValidationError(target, message) { Kind = kind }]);
+
+    private static DvValidationErrorKind InvalidCriteriaKindForType(DvType type) => type switch
+    {
+        DvType.WholeNumber => DvValidationErrorKind.InvalidWholeNumberCriteria,
+        DvType.Decimal => DvValidationErrorKind.InvalidDecimalCriteria,
+        DvType.Date => DvValidationErrorKind.InvalidDateCriteria,
+        DvType.Time => DvValidationErrorKind.InvalidTimeCriteria,
+        DvType.TextLength => DvValidationErrorKind.InvalidTextLengthCriteria,
+        DvType.List => DvValidationErrorKind.InvalidListCriteria,
+        DvType.Custom => DvValidationErrorKind.InvalidCustomCriteria,
+        _ => DvValidationErrorKind.None
+    };
 
     private bool TryValidateSingleCriteria(string text, out string? error)
     {
@@ -313,8 +347,14 @@ public sealed record DataValidationDialogModel(
         IsFormulaCriteria(text) ||
         (TryParseNumber(text, out var value) && IsWholeNumber(value) && value >= 0);
 
-    private static bool IsListCriteria(string text) =>
-        IsFormulaCriteria(text) || HasInlineListItem(text);
+    private static bool IsListCriteria(string text)
+    {
+        if (!IsFormulaCriteria(text))
+            return HasInlineListItem(text);
+
+        return !TryGetSimpleFormulaRangeCellCount(text, out var cellCount) ||
+               cellCount <= MaximumListSourceItems;
+    }
 
     private static bool IsCustomCriteria(string text) =>
         TryParseFormula(text, allowImplicitFormula: true);
@@ -380,6 +420,53 @@ public sealed record DataValidationDialogModel(
         }
 
         return !inQuotes && (hasItemText || currentHasText);
+    }
+
+    private static bool TryGetSimpleFormulaRangeCellCount(string text, out long cellCount)
+    {
+        cellCount = 0;
+        var formulaBody = text.AsSpan().Trim();
+        if (formulaBody.IsEmpty || formulaBody[0] != '=')
+            return false;
+
+        formulaBody = formulaBody[1..].Trim();
+        var sheetSeparator = formulaBody.LastIndexOf('!');
+        if (sheetSeparator >= 0)
+            formulaBody = formulaBody[(sheetSeparator + 1)..].Trim();
+
+        var colon = formulaBody.IndexOf(':');
+        if (colon < 0)
+        {
+            if (!TryParseA1Address(formulaBody, out _, out _))
+                return false;
+
+            cellCount = 1;
+            return true;
+        }
+
+        if (!TryParseA1Address(formulaBody[..colon], out var startRow, out var startCol) ||
+            !TryParseA1Address(formulaBody[(colon + 1)..], out var endRow, out var endCol))
+        {
+            return false;
+        }
+
+        var rowCount = Math.Abs((long)endRow - startRow) + 1;
+        var colCount = Math.Abs((long)endCol - startCol) + 1;
+        cellCount = rowCount * colCount;
+        return true;
+    }
+
+    private static bool TryParseA1Address(ReadOnlySpan<char> text, out uint row, out uint col)
+    {
+        row = 0;
+        col = 0;
+        var normalized = text.Trim().ToString().Replace("$", "", StringComparison.Ordinal);
+        if (!CellAddress.TryParse(normalized, default, out var address))
+            return false;
+
+        row = address.Row;
+        col = address.Col;
+        return true;
     }
 
     private static bool TryParseNumber(string text, out double value) =>

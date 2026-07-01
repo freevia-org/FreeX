@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using FreeX.App.Presentation.PivotUI;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -164,7 +165,7 @@ public sealed partial class PivotTableOptionsDialog : Window
     {
         var stack = CreateTabPanel();
         var stylePanel = PivotDialogLayout.CreateGroupPanel();
-        AddLabeledControl(stylePanel, UiText.Get("PivotTableOptions_PivotTableStyleLabel"), _styleBox, PivotStyleCatalog.BuiltInStyleNames);
+        AddLabeledControl(stylePanel, UiText.Get("PivotTableOptions_PivotTableStyleLabel"), _styleBox, PivotStyleGalleryPlanner.BuiltInStyleNames);
         AddCheckBox(stylePanel, _rowHeadersBox);
         AddCheckBox(stylePanel, _columnHeadersBox);
         AddCheckBox(stylePanel, _fieldHeadersBox);
@@ -258,13 +259,13 @@ public sealed partial class PivotTableOptionsDialog : Window
         _repeatItemLabelsBox.IsChecked = result.RepeatItemLabels;
         _blankLineBox.IsChecked = result.BlankLineAfterItems;
         _reportLayoutBox.SelectedItem = result.ReportLayout;
-        _compactIndentBox.Text = result.CompactRowLabelIndent.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        _compactIndentBox.Text = PivotOptionsPlanner.CompactRowLabelIndentText(result.CompactRowLabelIndent);
         _pageFieldLayoutBox.SelectedItem = result.PageOverThenDown ? PageFieldLayoutOverThenDown : PageFieldLayoutDownThenOver;
-        _pageWrapBox.Text = result.PageWrap.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        _pageWrapBox.Text = PivotOptionsPlanner.PageWrapText(result.PageWrap);
         _mergeLabelsBox.IsChecked = result.MergeAndCenterLabels;
-        var styleNames = PivotStyleCatalog.GetStyleNames(result.StyleName);
+        var styleNames = PivotStyleGalleryPlanner.GetStyleNames(result.StyleName);
         _styleBox.ItemsSource = styleNames;
-        _styleBox.SelectedItem = FindStyleName(styleNames, result.StyleName) ?? styleNames[0];
+        _styleBox.SelectedIndex = PivotStyleGalleryPlanner.FindStyleIndex(styleNames, result.StyleName);
         _rowHeadersBox.IsChecked = result.ShowRowHeaders;
         _columnHeadersBox.IsChecked = result.ShowColumnHeaders;
         _fieldHeadersBox.IsChecked = result.ShowFieldHeaders;
@@ -297,6 +298,9 @@ public sealed partial class PivotTableOptionsDialog : Window
         if (!ValidateInputs())
             return;
 
+        PivotOptionsPlanner.TryParseCompactRowLabelIndent(_compactIndentBox.Text, out var compactIndent, out _);
+        PivotOptionsPlanner.TryParsePageWrap(_pageWrapBox.Text, out var pageWrap, out _);
+
         Result = CreateResult(
             _rowGrandTotalsBox.IsChecked == true,
             _columnGrandTotalsBox.IsChecked == true,
@@ -306,7 +310,7 @@ public sealed partial class PivotTableOptionsDialog : Window
                 : PivotSubtotalPlacement.Bottom,
             _repeatItemLabelsBox.IsChecked == true,
             _blankLineBox.IsChecked == true,
-            PivotStyleCatalog.NormalizeStyleName(_styleBox.SelectedItem?.ToString()),
+            _styleBox.SelectedItem?.ToString() ?? string.Empty,
             _rowHeadersBox.IsChecked == true,
             _columnHeadersBox.IsChecked == true,
             _rowStripesBox.IsChecked == true,
@@ -324,7 +328,7 @@ public sealed partial class PivotTableOptionsDialog : Window
             printExpandCollapseButtons: _printExpandCollapseBox.IsChecked == true,
             altTextTitle: _altTextTitleBox.Text,
             altTextDescription: _altTextDescriptionBox.Text,
-            compactRowLabelIndent: ParseCompactRowLabelIndent(_compactIndentBox.Text),
+            compactRowLabelIndent: compactIndent,
             showExpandCollapseButtons: _showExpandCollapseBox.IsChecked == true,
             autofitColumnsOnUpdate: _autofitColumnsBox.IsChecked == true,
             preserveFormattingOnUpdate: _preserveFormattingBox.IsChecked == true,
@@ -336,35 +340,21 @@ public sealed partial class PivotTableOptionsDialog : Window
             showItemsWithNoDataOnRows: _showItemsWithNoDataRowsBox.IsChecked == true,
             showItemsWithNoDataOnColumns: _showItemsWithNoDataColumnsBox.IsChecked == true,
             pageOverThenDown: PageFieldLayoutForLabel(_pageFieldLayoutBox.SelectedItem?.ToString()),
-            pageWrap: ParsePageWrap(_pageWrapBox.Text),
+            pageWrap: pageWrap,
             errorValueText: _errorValuesBox.Text,
             enableDrill: _enableShowDetailsBox.IsChecked == true);
         DialogResult = true;
     }
 
-    private static string? FindStyleName(IReadOnlyList<string> styleNames, string styleName)
-    {
-        for (var index = 0; index < styleNames.Count; index++)
-        {
-            var item = styleNames[index];
-            if (string.Equals(item, styleName, StringComparison.OrdinalIgnoreCase))
-                return item;
-        }
-
-        return null;
-    }
-
     private bool ValidateInputs()
     {
-        if (!int.TryParse(_compactIndentBox.Text.Trim(), System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var compactIndent)
-            || compactIndent is < 0 or > 15)
+        if (!PivotOptionsPlanner.TryParseCompactRowLabelIndent(_compactIndentBox.Text, out _, out _))
         {
             ShowInvalidInputWarning(UiText.Get("PivotTableOptions_EnterCompactIndent"), _compactIndentBox);
             return false;
         }
 
-        if (!int.TryParse(_pageWrapBox.Text.Trim(), System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var pageWrap)
-            || pageWrap is < 0 or > 255)
+        if (!PivotOptionsPlanner.TryParsePageWrap(_pageWrapBox.Text, out _, out _))
         {
             ShowInvalidInputWarning(UiText.Get("PivotTableOptions_EnterPageFieldsPerColumn"), _pageWrapBox);
             return false;
@@ -376,10 +366,7 @@ public sealed partial class PivotTableOptionsDialog : Window
     private bool ShowInvalidInputWarning(string message, TextBox target)
     {
         _tabs.SelectedItem = _layoutTab;
-        DialogMessageHelper.ShowWarning(this, message, Title);
-        target.Focus();
-        target.SelectAll();
-        Keyboard.Focus(target);
+        DialogFocus.ShowWarningAndFocus(this, message, Title, target);
         return false;
     }
 

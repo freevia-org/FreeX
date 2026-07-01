@@ -16,8 +16,7 @@ namespace FreeP.App.Host;
 /// Wave 5B: clipboard (copy/cut/paste) wired; font-family ComboBox wired; Design tab (themes +
 ///           slide-size) wired; Insert tables + charts wired; Format Painter wired.
 ///
-/// Still stubbed (noted below): freep.layout, freep.anim.trigger / .duration / .delay combo-box
-///   live-change, freep.anim.pane toggle.
+/// Still stubbed (noted below): freep.anim.trigger / .duration / .delay combo-box live-change.
 /// </summary>
 internal static class FreePRibbonCommands
 {
@@ -43,6 +42,10 @@ internal static class FreePRibbonCommands
     /// <param name="onCustomSlideSize">
     ///   Callback that opens the custom slide-size dialog (Wave 10B).
     ///   Wired to <c>MainWindow.OpenSlideSizeDialog()</c>.  When null the button is a no-op.
+    /// </param>
+    /// <param name="onLayoutPicker">
+    ///   Callback that opens or announces the slide-layout picker.  The shared planner exposes this
+    ///   as an explicit host intent so the command is no longer a silent stub.
     /// </param>
     /// <param name="osClipboard">
     ///   Optional OS-clipboard service (Wave 10B). When provided, ribbon Copy/Cut also
@@ -70,64 +73,30 @@ internal static class FreePRibbonCommands
         // Wave 12B: Find & Replace dialog launchers.
         Action?             onFind             = null,
         Action?             onFindReplace      = null,
+        Action?             onReviewCommentsPane = null,
+        Action?             onReviewAccessibility = null,
+        Action?             onReviewAltText = null,
+        Action?             onReviewProofing = null,
         // Wave 16B: Animation pane toggle.
-        Action?             onAnimPane         = null)
+        Action?             onAnimPane         = null,
+        Action?             onLayoutPicker     = null)
     {
         var registry = new RibbonCommandRegistry();
 
         // ── Slide management ─────────────────────────────────────────────────────
 
         registry.Register("freep.new-slide",
-            new ActionCommand(() => editor.InsertSlide()));
+            new ActionRibbonCommand(() => editor.InsertSlide()));
 
         registry.Register("freep.duplicate-slide",
-            new ActionCommand(() => editor.DuplicateCurrentSlide()));
+            new ActionRibbonCommand(() => editor.DuplicateCurrentSlide()));
 
         registry.Register("freep.delete-slide",
-            new ActionCommand(() => editor.DeleteCurrentSlide()));
+            new ActionRibbonCommand(() => editor.DeleteCurrentSlide()));
 
         // ── Insert shapes ────────────────────────────────────────────────────────
 
-        registry.Register("freep.text-box",
-            new ActionCommand(() => editor.InsertDefaultTextBox()));
-
-        registry.Register("freep.shape-rectangle",
-            new ActionCommand(() => editor.InsertDefaultRectangle()));
-
-        registry.Register("freep.shape-ellipse",
-            new ActionCommand(() => editor.InsertDefaultEllipse()));
-
-        // Picture: open a file-open dialog and insert.
-        registry.Register("freep.picture", new ActionCommand(() =>
-        {
-            // TODO(3C): replace with a proper picture-insert dialog with preview.
-            var dlg = new Microsoft.Win32.OpenFileDialog
-            {
-                Title  = "Insert Picture",
-                Filter = "Image files|*.png;*.jpg;*.jpeg;*.gif;*.bmp;*.svg|All files|*.*"
-            };
-            if (dlg.ShowDialog() == true)
-            {
-                try
-                {
-                    var bytes = System.IO.File.ReadAllBytes(dlg.FileName);
-                    var ext   = System.IO.Path.GetExtension(dlg.FileName).ToLowerInvariant();
-                    var mime  = ext switch
-                    {
-                        ".jpg" or ".jpeg" => "image/jpeg",
-                        ".gif"  => "image/gif",
-                        ".bmp"  => "image/bmp",
-                        ".svg"  => "image/svg+xml",
-                        _       => "image/png"
-                    };
-                    editor.InsertPicture(bytes, mime);
-                }
-                catch
-                {
-                    // Ignore IO errors silently (e.g. access denied).
-                }
-            }
-        }));
+        RegisterSlideObjectInsertionCommands(registry, editor, includePictureCommand: true);
 
         // ── Format toggles (stateful) ────────────────────────────────────────────
         //
@@ -159,21 +128,21 @@ internal static class FreePRibbonCommands
         // content to the OS clipboard (PNG image + plain text); Paste checks OS first.
 
         registry.Register("freep.copy",
-            new ActionCommand(() =>
+            new ActionRibbonCommand(() =>
             {
                 editor.CopySelectedShapes();
                 osClipboard?.PlaceSelectionOnOsClipboard(editor);
             }));
 
         registry.Register("freep.cut",
-            new ActionCommand(() =>
+            new ActionRibbonCommand(() =>
             {
                 editor.CutSelectedShapes();
                 osClipboard?.PlaceSelectionOnOsClipboard(editor);
             }));
 
         registry.Register("freep.paste",
-            new ActionCommand(() =>
+            new ActionRibbonCommand(() =>
             {
                 if (osClipboard is not null)
                     osClipboard.Paste(editor, preferOsClipboard: true);
@@ -187,20 +156,22 @@ internal static class FreePRibbonCommands
         // NOTE: full "click source → click target" canvas mode is deferred (requires a
         // modal interaction state in the gesture handler).
         registry.Register("freep.format-painter",
-            new ActionCommand(() =>
+            new ActionRibbonCommand(() =>
             {
                 editor.CopyFormatting();
                 editor.ApplyFormattingToSelection();
             }));
 
-        // ── Layout — STUBBED (no layout model yet) ────────────────────────────────
-        registry.Register("freep.layout", new ActionCommand(() => { /* STUB: layout picker deferred */ }));
+        registry.Register(
+            PresentationDesignCommandPlanner.LayoutCommandId,
+            new ActionRibbonCommand(() =>
+                ApplyDesignCommand(editor, PresentationDesignCommandPlanner.LayoutPlan, onCustomSlideSize, onLayoutPicker)));
 
         // ── Font family — Wave 5B / 10A ───────────────────────────────────────────
         // When the in-canvas editor is active, apply to the RichTextBox selection;
         // otherwise apply to the whole-shape selection.
         registry.Register("freep.font-family",
-            new ContextAwareCommand(ctx =>
+            new ContextRibbonCommand(ctx =>
             {
                 var family = ctx.SelectedValue;
                 if (string.IsNullOrEmpty(family)) return;
@@ -214,205 +185,41 @@ internal static class FreePRibbonCommands
 
         // ── Wave 4C: Transitions tab ─────────────────────────────────────────────
 
-        // Transition gallery — set Kind on current slide, preserve other transition properties.
-        RegisterTransitionKind(registry, editor, "freep.transition.none",     TransitionKind.None);
-        RegisterTransitionKind(registry, editor, "freep.transition.fade",     TransitionKind.Fade);
-        RegisterTransitionKind(registry, editor, "freep.transition.push",     TransitionKind.Push);
-        RegisterTransitionKind(registry, editor, "freep.transition.wipe",     TransitionKind.Wipe);
-        RegisterTransitionKind(registry, editor, "freep.transition.split",    TransitionKind.Split);
-        RegisterTransitionKind(registry, editor, "freep.transition.cut",      TransitionKind.Cut);
-        RegisterTransitionKind(registry, editor, "freep.transition.cover",    TransitionKind.Cover);
-        RegisterTransitionKind(registry, editor, "freep.transition.uncover",  TransitionKind.Uncover);
-        RegisterTransitionKind(registry, editor, "freep.transition.blinds",   TransitionKind.Blinds);
-        RegisterTransitionKind(registry, editor, "freep.transition.dissolve", TransitionKind.Dissolve);
-        RegisterTransitionKind(registry, editor, "freep.transition.zoom",     TransitionKind.Zoom);
-        RegisterTransitionKind(registry, editor, "freep.transition.wheel",    TransitionKind.Wheel);
-
-        // Transition timing — Duration combo: 0=500ms, 1=750ms, 2=1000ms, 3=1500ms, 4=2000ms.
-        registry.Register("freep.transition.duration", new ActionCommand(() =>
-        {
-            // ComboBox selection is not yet fed back via context in Wave 4C; stub.
-            /* STUB: Wave 5 will feed the selected index through RibbonCommandContext */
-        }));
-
-        // Advance on click toggle.
-        registry.Register("freep.transition.advance-on-click",
-            new EditorToggleCommand(stateStore, "freep.transition.advance-on-click", () =>
-            {
-                var t = GetOrCreateTransition(editor);
-                t.AdvanceOnClick = !t.AdvanceOnClick;
-                editor.SetTransition(t);
-            }));
-
-        // Advance after time combo.
-        registry.Register("freep.transition.advance-after", new ActionCommand(() =>
-        {
-            /* STUB: Wave 5 will wire the selected time value */
-        }));
-
-        // Apply To All — copies the current slide's transition to every slide.
-        registry.Register("freep.transition.apply-all", new ActionCommand(() =>
-        {
-            var currentTransition = editor.CurrentSlideTransition;
-            var pres = editor.Presentation;
-            for (int i = 0; i < pres.Slides.Count; i++)
-            {
-                // Clone so each slide owns its own object; null clears any existing transition.
-                SlideTransition? copy = currentTransition is null ? null : new SlideTransition
-                {
-                    Kind           = currentTransition.Kind,
-                    Direction      = currentTransition.Direction,
-                    DurationMs     = currentTransition.DurationMs,
-                    AdvanceOnClick = currentTransition.AdvanceOnClick,
-                    AdvanceAfterMs = currentTransition.AdvanceAfterMs,
-                };
-                pres.Slides[i].Transition = copy;
-            }
-        }));
+        RegisterTransitionCommands(registry, stateStore, editor);
 
         // ── Wave 4C: Slide Show buttons ──────────────────────────────────────────
 
         // From Beginning — delegates to MainWindow.StartSlideShow(true) via onStartFromStart.
         registry.Register("freep.slideshow.from-beginning",
-            new ActionCommand(() => onStartFromStart?.Invoke()));
+            new ActionRibbonCommand(() => onStartFromStart?.Invoke()));
 
         // From Current Slide — delegates to MainWindow.StartSlideShow(false) via onStartFromCurrent.
         registry.Register("freep.slideshow.from-current-slide",
-            new ActionCommand(() => onStartFromCurrent?.Invoke()));
+            new ActionRibbonCommand(() => onStartFromCurrent?.Invoke()));
 
         // ── Wave 4C: Animations tab ──────────────────────────────────────────────
 
-        // Entrance effects — AddAnimation with Kind=Entrance + appropriate Preset.
-        RegisterEntranceAnim(registry, editor, "freep.anim.entrance.appear", AnimationPreset.Appear);
-        RegisterEntranceAnim(registry, editor, "freep.anim.entrance.fade",   AnimationPreset.Fade);
-        RegisterEntranceAnim(registry, editor, "freep.anim.entrance.fly-in", AnimationPreset.FlyIn);
-        RegisterEntranceAnim(registry, editor, "freep.anim.entrance.wipe",   AnimationPreset.Wipe);
-        RegisterEntranceAnim(registry, editor, "freep.anim.entrance.zoom",   AnimationPreset.Zoom);
-        RegisterEntranceAnim(registry, editor, "freep.anim.entrance.split",  AnimationPreset.Split);
-
-        // Emphasis effects.
-        RegisterEmphasisAnim(registry, editor, "freep.anim.emphasis.pulse",       AnimationPreset.Pulse);
-        RegisterEmphasisAnim(registry, editor, "freep.anim.emphasis.spin",        AnimationPreset.Spin);
-        RegisterEmphasisAnim(registry, editor, "freep.anim.emphasis.grow-shrink", AnimationPreset.Grow);
-
-        // Exit effects.
-        RegisterExitAnim(registry, editor, "freep.anim.exit.disappear", AnimationPreset.Appear);
-        RegisterExitAnim(registry, editor, "freep.anim.exit.fade-out",  AnimationPreset.Fade);
-        RegisterExitAnim(registry, editor, "freep.anim.exit.fly-out",   AnimationPreset.FlyIn);
-
-        // No animation — removes the first animation that targets the selected shape.
-        registry.Register("freep.anim.none", new ActionCommand(() =>
-        {
-            var animations = editor.CurrentSlideAnimations;
-            var selectedIds = editor.SelectedShapeIds;
-            if (selectedIds.Count == 0) return;
-            var targetId = selectedIds[0];
-            // Walk backwards to keep indices valid after removal.
-            for (int i = animations.Count - 1; i >= 0; i--)
-            {
-                if (animations[i].ShapeId == targetId)
-                    editor.RemoveAnimation(i);
-            }
-        }));
-
-        // Timing: trigger combo (STUB — full implementation deferred to Wave 5).
-        registry.Register("freep.anim.trigger", new ActionCommand(() =>
-        {
-            /* STUB: Wave 5 will read the selected item and call editor.SetAnimation() */
-        }));
-
-        // Timing: duration + delay combos (STUBs).
-        registry.Register("freep.anim.duration", new ActionCommand(() => { /* STUB */ }));
-        registry.Register("freep.anim.delay",    new ActionCommand(() => { /* STUB */ }));
-
-        // Reorder animations — Move Earlier / Move Later.
-        registry.Register("freep.anim.move-earlier", new ActionCommand(() =>
-        {
-            var animations  = editor.CurrentSlideAnimations;
-            var selectedIds = editor.SelectedShapeIds;
-            if (selectedIds.Count == 0 || animations.Count == 0) return;
-            var targetId = selectedIds[0];
-            var idx = FindLastAnimationIndex(animations, targetId);
-            if (idx > 0)
-                editor.MoveAnimation(idx, idx - 1);
-        }));
-
-        registry.Register("freep.anim.move-later", new ActionCommand(() =>
-        {
-            var animations  = editor.CurrentSlideAnimations;
-            var selectedIds = editor.SelectedShapeIds;
-            if (selectedIds.Count == 0 || animations.Count == 0) return;
-            var targetId = selectedIds[0];
-            var idx = FindLastAnimationIndex(animations, targetId);
-            if (idx >= 0 && idx < animations.Count - 1)
-                editor.MoveAnimation(idx, idx + 1);
-        }));
-
-        // Animation Pane toggle — Wave 16B: wired to MainWindow.ToggleAnimationPane().
-        registry.Register("freep.anim.pane",
-            new EditorToggleCommand(stateStore, "freep.anim.pane", () =>
-            {
-                onAnimPane?.Invoke();
-            }));
+        // Animation effects/timing/order/pane route through the shared planner.
+        RegisterAnimationCommands(registry, stateStore, editor, onAnimPane);
 
         // ── Wave 5B: Insert — Tables ─────────────────────────────────────────────
 
-        registry.Register("freep.insert-table-3x3",
-            new ActionCommand(() => editor.InsertTable(3, 3)));
-
-        registry.Register("freep.insert-table-2x2",
-            new ActionCommand(() => editor.InsertTable(2, 2)));
-
-        registry.Register("freep.insert-table-4x4",
-            new ActionCommand(() => editor.InsertTable(4, 4)));
-
         // ── Wave 5B: Insert — Charts ─────────────────────────────────────────────
-
-        registry.Register("freep.insert-chart-column",
-            new ActionCommand(() => editor.InsertChart(ChartType.ColumnClustered)));
-
-        registry.Register("freep.insert-chart-bar",
-            new ActionCommand(() => editor.InsertChart(ChartType.BarClustered)));
-
-        registry.Register("freep.insert-chart-line",
-            new ActionCommand(() => editor.InsertChart(ChartType.Line)));
-
-        registry.Register("freep.insert-chart-pie",
-            new ActionCommand(() => editor.InsertChart(ChartType.Pie)));
 
         // ── Wave 5B: Design tab — Themes ─────────────────────────────────────────
 
-        registry.Register("freep.theme.office",
-            new ActionCommand(() => editor.SetTheme(BuiltInThemes.Id.Office)));
-
-        registry.Register("freep.theme.berlin",
-            new ActionCommand(() => editor.SetTheme(BuiltInThemes.Id.Berlin)));
-
-        registry.Register("freep.theme.facet",
-            new ActionCommand(() => editor.SetTheme(BuiltInThemes.Id.Facet)));
-
-        registry.Register("freep.theme.ion",
-            new ActionCommand(() => editor.SetTheme(BuiltInThemes.Id.Ion)));
-
-        registry.Register("freep.theme.slice",
-            new ActionCommand(() => editor.SetTheme(BuiltInThemes.Id.Slice)));
+        RegisterDesignCommands(registry, editor, onCustomSlideSize, onLayoutPicker);
 
         // ── Wave 5B: Design tab — Slide Size ─────────────────────────────────────
 
-        registry.Register("freep.slide-size-16x9",
-            new ActionCommand(() => editor.SetSlideSize16x9()));
 
-        registry.Register("freep.slide-size-4x3",
-            new ActionCommand(() => editor.SetSlideSize4x3()));
 
         // ── Wave 10B: Design tab — Custom Slide Size dialog ───────────────────────
-        registry.Register("freep.slide-size-custom",
-            new ActionCommand(() => onCustomSlideSize?.Invoke()));
 
         // ── Wave 9B: Chart data editing ───────────────────────────────────────────
         // Enabled only when a chart shape is selected; otherwise silently a no-op.
         registry.Register("freep.chart.edit-data",
-            new ActionCommand(() =>
+            new ActionRibbonCommand(() =>
             {
                 // If caller supplied a dedicated open-dialog callback (e.g. MainWindow),
                 // use it; otherwise fall back to the no-op.
@@ -424,154 +231,236 @@ internal static class FreePRibbonCommands
 
         // Insert/edit hyperlink — opens HyperlinkDialog (supplied by MainWindow).
         registry.Register("freep.insert-link",
-            new ActionCommand(() => onInsertLink?.Invoke()));
+            new ActionRibbonCommand(() => onInsertLink?.Invoke()));
 
         // Remove hyperlink — clears the shape-level hyperlink on all selected shapes.
         registry.Register("freep.remove-link",
-            new ActionCommand(() => editor.RemoveShapeHyperlink()));
+            new ActionRibbonCommand(() => editor.RemoveShapeHyperlink()));
 
         // ── Wave 12A: Arrange — Group / Ungroup / Z-order / Align / Distribute ────
 
         registry.Register("freep.arrange.group",
-            new ActionCommand(() => editor.GroupSelectedShapes()));
+            new ActionRibbonCommand(() => editor.GroupSelectedShapes()));
 
         registry.Register("freep.arrange.ungroup",
-            new ActionCommand(() => editor.UngroupSelected()));
+            new ActionRibbonCommand(() => editor.UngroupSelected()));
 
         registry.Register("freep.arrange.bring-to-front",
-            new ActionCommand(() => editor.BringToFront()));
+            new ActionRibbonCommand(() => editor.BringToFront()));
 
         registry.Register("freep.arrange.bring-forward",
-            new ActionCommand(() => editor.BringForward()));
+            new ActionRibbonCommand(() => editor.BringForward()));
 
         registry.Register("freep.arrange.send-backward",
-            new ActionCommand(() => editor.SendBackward()));
+            new ActionRibbonCommand(() => editor.SendBackward()));
 
         registry.Register("freep.arrange.send-to-back",
-            new ActionCommand(() => editor.SendToBack()));
+            new ActionRibbonCommand(() => editor.SendToBack()));
 
         registry.Register("freep.arrange.align-left",
-            new ActionCommand(() => editor.AlignLeft()));
+            new ActionRibbonCommand(() => editor.AlignLeft()));
 
         registry.Register("freep.arrange.align-center-h",
-            new ActionCommand(() => editor.AlignCenterH()));
+            new ActionRibbonCommand(() => editor.AlignCenterH()));
 
         registry.Register("freep.arrange.align-right",
-            new ActionCommand(() => editor.AlignRight()));
+            new ActionRibbonCommand(() => editor.AlignRight()));
 
         registry.Register("freep.arrange.align-top",
-            new ActionCommand(() => editor.AlignTop()));
+            new ActionRibbonCommand(() => editor.AlignTop()));
 
         registry.Register("freep.arrange.align-middle",
-            new ActionCommand(() => editor.AlignMiddle()));
+            new ActionRibbonCommand(() => editor.AlignMiddle()));
 
         registry.Register("freep.arrange.align-bottom",
-            new ActionCommand(() => editor.AlignBottom()));
+            new ActionRibbonCommand(() => editor.AlignBottom()));
 
         registry.Register("freep.arrange.distribute-h",
-            new ActionCommand(() => editor.DistributeHorizontally()));
+            new ActionRibbonCommand(() => editor.DistributeHorizontally()));
 
         registry.Register("freep.arrange.distribute-v",
-            new ActionCommand(() => editor.DistributeVertically()));
+            new ActionRibbonCommand(() => editor.DistributeVertically()));
 
         // ── Wave 12B: Find & Replace ──────────────────────────────────────────────
 
         registry.Register("freep.find",
-            new ActionCommand(() => onFind?.Invoke()));
+            new ActionRibbonCommand(() => onFind?.Invoke()));
 
         registry.Register("freep.replace",
-            new ActionCommand(() => onFindReplace?.Invoke()));
+            new ActionRibbonCommand(() => onFindReplace?.Invoke()));
+
+        RegisterReviewWorkflowCommands(
+            registry,
+            onReviewCommentsPane,
+            onReviewAccessibility,
+            onReviewAltText,
+            onReviewProofing);
 
         return registry;
     }
 
+    internal static void RegisterSlideObjectInsertionCommands(
+        RibbonCommandRegistry registry,
+        EditingSession editor,
+        bool includePictureCommand)
+    {
+        foreach (var plan in SlideObjectInsertionPlanner.BuiltInPlans)
+        {
+            if (plan.RequiresPicturePayload)
+            {
+                if (!includePictureCommand)
+                {
+                    continue;
+                }
+
+                registry.Register(plan.CommandId, new ActionRibbonCommand(() =>
+                {
+                    var payload = TryPickPicturePayload();
+                    if (payload is not null)
+                    {
+                        SlideObjectInsertionPlanner.Apply(editor, plan, payload);
+                    }
+                }));
+                continue;
+            }
+
+            registry.Register(plan.CommandId, new ActionRibbonCommand(() =>
+                SlideObjectInsertionPlanner.Apply(editor, plan)));
+        }
+    }
+
+    private static SlideObjectPicturePayload? TryPickPicturePayload()
+    {
+        var result = WpfFileDialogService.ShowOpenDialog(
+            owner: null,
+            filter: "Image files|*.png;*.jpg;*.jpeg;*.gif;*.bmp;*.svg|All files|*.*",
+            title: "Insert Picture");
+
+        if (!result.Chosen || string.IsNullOrWhiteSpace(result.FileName))
+        {
+            return null;
+        }
+
+        try
+        {
+            var bytes = System.IO.File.ReadAllBytes(result.FileName);
+            return SlideObjectInsertionPlanner.CreatePicturePayload(bytes, result.FileName);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     // ── Transition helpers ────────────────────────────────────────────────────────
 
-    /// <summary>
-    /// Returns the current slide's transition if it exists, or a new default one.
-    /// Does NOT call SetTransition — the caller must do so after mutating.
-    /// </summary>
-    private static SlideTransition GetOrCreateTransition(EditingSession editor)
-        => editor.CurrentSlideTransition is not null
-            ? new SlideTransition
-              {
-                  Kind           = editor.CurrentSlideTransition.Kind,
-                  Direction      = editor.CurrentSlideTransition.Direction,
-                  DurationMs     = editor.CurrentSlideTransition.DurationMs,
-                  AdvanceOnClick = editor.CurrentSlideTransition.AdvanceOnClick,
-                  AdvanceAfterMs = editor.CurrentSlideTransition.AdvanceAfterMs,
-              }
-            : new SlideTransition();
-
-    private static void RegisterTransitionKind(
+    private static void RegisterTransitionCommands(
         RibbonCommandRegistry registry,
-        EditingSession        editor,
-        string                id,
-        TransitionKind        kind)
+        RibbonStateStore stateStore,
+        EditingSession editor)
     {
-        registry.Register(id, new ActionCommand(() =>
+        foreach (var plan in PresentationTransitionCommandPlanner.BuiltInPlans)
         {
-            if (kind == TransitionKind.None)
-            {
-                editor.SetTransition(null);
-            }
-            else
-            {
-                var t = GetOrCreateTransition(editor);
-                t.Kind = kind;
-                editor.SetTransition(t);
-            }
-        }));
+            registry.Register(
+                plan.CommandId,
+                plan.Intent == PresentationTransitionCommandIntentKind.ToggleAdvanceOnClick
+                    ? new TransitionToggleCommand(stateStore, editor, plan)
+                    : new ContextRibbonCommand(ctx =>
+                        PresentationTransitionCommandPlanner.TryApply(editor, plan, ctx.SelectedValue)));
+        }
     }
 
     // ── Animation helpers ─────────────────────────────────────────────────────────
 
-    private static void RegisterEntranceAnim(
+    private static void RegisterDesignCommands(
         RibbonCommandRegistry registry,
-        EditingSession        editor,
-        string                id,
-        AnimationPreset       preset)
-        => registry.Register(id, new ActionCommand(() =>
-            editor.AddAnimation(0, new ShapeAnimation
-            {
-                Kind       = AnimationKind.Entrance,
-                Preset     = preset,
-                Trigger    = AnimationTrigger.OnClick,
-                DurationMs = 500,
-            })));
+        EditingSession editor,
+        Action? onCustomSlideSize,
+        Action? onLayoutPicker)
+    {
+        foreach (var plan in PresentationDesignCommandPlanner.BuiltInPlans)
+        {
+            registry.Register(
+                plan.CommandId,
+                new ActionRibbonCommand(() =>
+                    PresentationDesignCommandPlanner.TryApply(
+                        editor,
+                        plan,
+                        CreateDesignHostCallback(plan, onCustomSlideSize, onLayoutPicker))));
+        }
+    }
 
-    private static void RegisterEmphasisAnim(
-        RibbonCommandRegistry registry,
-        EditingSession        editor,
-        string                id,
-        AnimationPreset       preset)
-        => registry.Register(id, new ActionCommand(() =>
-            editor.AddAnimation(0, new ShapeAnimation
-            {
-                Kind       = AnimationKind.Emphasis,
-                Preset     = preset,
-                Trigger    = AnimationTrigger.OnClick,
-                DurationMs = 500,
-            })));
+    private static bool ApplyDesignCommand(
+        EditingSession editor,
+        PresentationDesignCommandPlan plan,
+        Action? onCustomSlideSize,
+        Action? onLayoutPicker) =>
+        PresentationDesignCommandPlanner.TryApply(
+            editor,
+            plan,
+            CreateDesignHostCallback(plan, onCustomSlideSize, onLayoutPicker));
 
-    private static void RegisterExitAnim(
+    private static Action<PresentationDesignCommandPlan>? CreateDesignHostCallback(
+        PresentationDesignCommandPlan plan,
+        Action? onCustomSlideSize,
+        Action? onLayoutPicker) =>
+        plan.Intent switch
+        {
+            PresentationDesignCommandIntentKind.RequestCustomSlideSize when onCustomSlideSize is not null =>
+                _ => onCustomSlideSize(),
+            PresentationDesignCommandIntentKind.RequestLayoutPicker when onLayoutPicker is not null =>
+                _ => onLayoutPicker(),
+            _ => null,
+        };
+
+    private static void RegisterAnimationCommands(
         RibbonCommandRegistry registry,
-        EditingSession        editor,
-        string                id,
-        AnimationPreset       preset)
-        => registry.Register(id, new ActionCommand(() =>
-            editor.AddAnimation(0, new ShapeAnimation
-            {
-                Kind       = AnimationKind.Exit,
-                Preset     = preset,
-                Trigger    = AnimationTrigger.OnClick,
-                DurationMs = 500,
-            })));
+        RibbonStateStore stateStore,
+        EditingSession editor,
+        Action? onAnimPane)
+    {
+        foreach (var plan in PresentationAnimationCommandPlanner.BuiltInPlans)
+        {
+            registry.Register(
+                plan.CommandId,
+                plan.Intent == PresentationAnimationCommandIntentKind.TogglePane
+                    ? new AnimationPaneToggleCommand(stateStore, editor, plan, onAnimPane)
+                    : new ContextRibbonCommand(ctx =>
+                        PresentationAnimationCommandPlanner.TryApply(editor, plan, ctx.SelectedValue)));
+        }
+    }
 
     // ── Wave 10A: active-editor routing ──────────────────────────────────────────
     //
     // This region is the ONLY place in this file that references SlideCanvas for 10A.
     // 10B must not add slideCanvas references outside this region.
+
+    private static void RegisterReviewWorkflowCommands(
+        RibbonCommandRegistry registry,
+        Action? onCommentsPane,
+        Action? onAccessibility,
+        Action? onAltText,
+        Action? onProofing)
+    {
+        registry.Register(
+            PresentationReviewWorkflowPlanner.CommentsPaneCommandId,
+            new ActionRibbonCommand(() => onCommentsPane?.Invoke()));
+        registry.Register(
+            PresentationReviewWorkflowPlanner.AccessibilityCommandId,
+            new ActionRibbonCommand(() => onAccessibility?.Invoke()));
+        registry.Register(
+            PresentationReviewWorkflowPlanner.AltTextCommandId,
+            new ActionRibbonCommand(() => onAltText?.Invoke()));
+        registry.Register(
+            PresentationReviewWorkflowPlanner.ProofingCommandId,
+            new ActionRibbonCommand(() => onProofing?.Invoke()));
+        registry.Register(PresentationReviewWorkflowPlanner.AddCommentCommandId, EmptyRibbonCommand.Instance);
+        registry.Register(PresentationReviewWorkflowPlanner.EditCommentCommandId, EmptyRibbonCommand.Instance);
+        registry.Register(PresentationReviewWorkflowPlanner.DeleteCommentCommandId, EmptyRibbonCommand.Instance);
+        registry.Register(PresentationReviewWorkflowPlanner.PreviousCommentCommandId, EmptyRibbonCommand.Instance);
+        registry.Register(PresentationReviewWorkflowPlanner.NextCommentCommandId, EmptyRibbonCommand.Instance);
+        registry.Register(PresentationReviewWorkflowPlanner.ResolveCommentCommandId, EmptyRibbonCommand.Instance);
+    }
 
     /// <summary>
     /// Routes a format action to the active in-canvas RichTextBox editor (shape or table-cell),
@@ -602,36 +491,7 @@ internal static class FreePRibbonCommands
         return false;
     }
 
-    /// <summary>Finds the last animation index targeting <paramref name="shapeId"/>; -1 if not found.</summary>
-    private static int FindLastAnimationIndex(
-        IReadOnlyList<ShapeAnimation> animations,
-        uint shapeId)
-    {
-        for (int i = animations.Count - 1; i >= 0; i--)
-            if (animations[i].ShapeId == shapeId) return i;
-        return -1;
-    }
-
     // ── Inner helpers ─────────────────────────────────────────────────────────────
-
-    /// <summary>A fire-and-forget command over a plain delegate.</summary>
-    private sealed class ActionCommand : IRibbonCommand
-    {
-        private readonly Action _action;
-        public ActionCommand(Action action) => _action = action;
-        public void Execute(RibbonCommandContext context) => _action();
-    }
-
-    /// <summary>
-    /// A command that receives the full <see cref="RibbonCommandContext"/> so it can inspect
-    /// e.g. <see cref="RibbonCommandContext.SelectedValue"/> from a ComboBox.
-    /// </summary>
-    private sealed class ContextAwareCommand : IRibbonCommand
-    {
-        private readonly Action<RibbonCommandContext> _action;
-        public ContextAwareCommand(Action<RibbonCommandContext> action) => _action = action;
-        public void Execute(RibbonCommandContext context) => _action(context);
-    }
 
     /// <summary>
     /// Stateful toggle that routes through the editor and updates the ribbon state store.
@@ -655,6 +515,79 @@ internal static class FreePRibbonCommands
         public void Execute(RibbonCommandContext context)
         {
             _toggle();
+            _checked = !_checked;
+            _stateStore.SetChecked(_id, _checked);
+        }
+
+        public RibbonCommandState GetState() => new(IsEnabled: true, IsChecked: _checked);
+    }
+
+    private sealed class TransitionToggleCommand : IRibbonStatefulCommand
+    {
+        private readonly RibbonStateStore _stateStore;
+        private readonly EditingSession _editor;
+        private readonly PresentationTransitionCommandPlan _plan;
+        private readonly RibbonCommandId _id;
+        private bool _checked;
+
+        public TransitionToggleCommand(
+            RibbonStateStore stateStore,
+            EditingSession editor,
+            PresentationTransitionCommandPlan plan)
+        {
+            _stateStore = stateStore;
+            _editor = editor;
+            _plan = plan;
+            _id = plan.CommandId;
+        }
+
+        public void Execute(RibbonCommandContext context)
+        {
+            if (!PresentationTransitionCommandPlanner.TryApply(_editor, _plan, context.SelectedValue))
+            {
+                return;
+            }
+
+            _checked = !_checked;
+            _stateStore.SetChecked(_id, _checked);
+        }
+
+        public RibbonCommandState GetState() => new(IsEnabled: true, IsChecked: _checked);
+    }
+
+    private sealed class AnimationPaneToggleCommand : IRibbonStatefulCommand
+    {
+        private readonly RibbonStateStore _stateStore;
+        private readonly EditingSession _editor;
+        private readonly PresentationAnimationCommandPlan _plan;
+        private readonly Action? _onAnimPane;
+        private readonly RibbonCommandId _id;
+        private bool _checked;
+
+        public AnimationPaneToggleCommand(
+            RibbonStateStore stateStore,
+            EditingSession editor,
+            PresentationAnimationCommandPlan plan,
+            Action? onAnimPane)
+        {
+            _stateStore = stateStore;
+            _editor = editor;
+            _plan = plan;
+            _onAnimPane = onAnimPane;
+            _id = plan.CommandId;
+        }
+
+        public void Execute(RibbonCommandContext context)
+        {
+            if (!PresentationAnimationCommandPlanner.TryApply(
+                    _editor,
+                    _plan,
+                    context.SelectedValue,
+                    _onAnimPane is null ? null : _ => _onAnimPane()))
+            {
+                return;
+            }
+
             _checked = !_checked;
             _stateStore.SetChecked(_id, _checked);
         }

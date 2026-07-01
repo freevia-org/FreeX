@@ -188,8 +188,7 @@ public sealed partial class PivotWorkflowDialogTests
         source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"PivotTable_EnterDestinationCellOnActiveWorksheet\"), _destinationRangeBox);");
         source.Should().Contain("WorkbookRangeTextCodec.TryParse(_sourceSheetId, _sourceRangeBox.Text, ResolveSheetIdByName, out _)");
         source.Should().Contain("destinationRange.Start.Sheet != _sourceSheetId");
-        source.Should().Contain("DialogMessageHelper.ShowWarning(this, message, Title)");
-        source.Should().Contain("DialogFocus.FocusAndSelect(target);");
+        source.Should().Contain("DialogFocus.ShowWarningAndFocus(this, message, Title, target);");
     }
 
     [Fact]

@@ -3,7 +3,9 @@ using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
+using Free.Shared.AppServices;
 using Free.Shared.Ribbon.Wpf;
+using Free.Shared.Shell.Wpf;
 using FreeP.App.Compositor;
 using FreeP.App.Host.Backstage;
 using FreeP.App.Rendering.Wpf;
@@ -58,6 +60,7 @@ public sealed class MainWindow : Window
 
     private readonly FreePOptions _options;
     private readonly ApplicationOptionsStore<FreePOptions> _optionsStore;
+    private readonly IUserMessageService? _messageService;
 
     // ── Wave 10B: OS-clipboard service ────────────────────────────────────────────
     // Created once; the renderer is injected so tests can replace it without real Clipboard.
@@ -81,7 +84,7 @@ public sealed class MainWindow : Window
     private FileCommands _file = null!;
     private BackstageView _backstage = null!;
     private Border _titleBar = null!;
-    private TextBlock _titleText = null!;
+    private SisterWpfWindowTitleBinder _titleBinder = null!;
     private TabControl _ribbonTabs = null!;
     private TabItem _fileTab = null!;
     private RibbonFileTabRouter? _fileTabRouter;
@@ -116,6 +119,14 @@ public sealed class MainWindow : Window
     private StackPanel _commentListPanel = null!; // shows comment text list below canvas
     private Border  _commentListHost = null!; // collapsible container for _commentListPanel
 
+    internal PresentationCommentPanePlan? LastCommentPanePlan { get; private set; }
+    internal PresentationAccessibilitySummaryPlan? LastAccessibilitySummaryPlan { get; private set; }
+    internal PresentationAltTextRequestPlan? LastAltTextRequestPlan { get; private set; }
+    internal PresentationProofingRequestPlan? LastProofingRequestPlan { get; private set; }
+    internal PresentationDesignCommandPlan? LastLayoutRequestPlan { get; private set; }
+    internal PresentationLayoutPickerPlan? LastLayoutPickerPlan { get; private set; }
+    internal PresentationLayoutChoice? LastAppliedLayoutChoice { get; private set; }
+
     // ── Wave 16B: Animation pane (right-side collapsible panel) ──────────────────
     // 16B SEAM START — do not restructure this region (16A/16C may conflict nearby).
     private AnimationPane? _animPane;
@@ -132,9 +143,13 @@ public sealed class MainWindow : Window
 
     public MainWindow() : this(new FreePOptions()) { }
 
-    public MainWindow(FreePOptions options, ApplicationOptionsStore<FreePOptions>? optionsStore = null)
+    public MainWindow(
+        FreePOptions options,
+        ApplicationOptionsStore<FreePOptions>? optionsStore = null,
+        IUserMessageService? messageService = null)
     {
         _options = options ?? new FreePOptions();
+        _messageService = messageService;
         _optionsStore = optionsStore ?? ApplicationOptionsStore<FreePOptions>.ForPath(
             System.IO.Path.Combine(System.IO.Path.GetTempPath(), "FreeP", "settings.transient.json"));
 
@@ -152,12 +167,19 @@ public sealed class MainWindow : Window
         RebuildEditor();
 
         // File commands.
-        _file = new FileCommands(this, () => _presentation, LoadModel, UpdateTitle, _options);
+        _file = new FileCommands(
+            this,
+            () => _presentation,
+            LoadModel,
+            UpdateTitle,
+            _options,
+            messageService: _messageService,
+            getImageExportRange: BuildCurrentSlideImageExportRange);
 
         // Title bar.
         var titleBar = ShellChrome.BuildTitleBar(this, chromeOptions);
         _titleBar = titleBar.Root;
-        _titleText = titleBar.TitleText;
+        _titleBinder = new SisterWpfWindowTitleBinder(this, titleBar.TitleText);
         AddQuickAccessButtons(titleBar.QatHost);
 
         // Ribbon. Wave 4C passes the slideshow launch Actions into the command registry;
@@ -176,6 +198,7 @@ public sealed class MainWindow : Window
             getSlideCanvas:     () => SlideCanvas,
             // Wave 10B: open custom slide-size dialog from Design tab ribbon button.
             onCustomSlideSize:  () => OpenSlideSizeDialog(),
+            onLayoutPicker:     () => OpenLayoutPicker(),
             // Wave 10B: OS-clipboard service for ribbon Copy/Cut/Paste buttons.
             osClipboard:        _osClipboard,
             // Wave 11A: Insert Hyperlink dialog.
@@ -183,6 +206,10 @@ public sealed class MainWindow : Window
             // Wave 12B: Find & Replace dialogs.
             onFind:             () => OpenFindDialog(),
             onFindReplace:      () => OpenFindReplaceDialog(),
+            onReviewCommentsPane: () => ShowReviewCommentsPane(),
+            onReviewAccessibility: () => RefreshAccessibilitySummaryPlan(),
+            onReviewAltText: () => RefreshAltTextRequestPlan(),
+            onReviewProofing: () => RefreshProofingRequestPlan(),
             // Wave 16B: Animation pane toggle.
             onAnimPane:         () => ToggleAnimationPane());
         var ribbon = BuildRibbon(FreePRibbon.Build(), commands, stateStore);
@@ -192,7 +219,10 @@ public sealed class MainWindow : Window
 
         // Status bar.
         var status = BuildStatusBar();
-        var clientFrame = SisterAppClientFrameBuilder.Build(new SisterAppClientFrameSpec(ribbon, body, status));
+        var clientFrame = SisterAppClientFrameBuilder.Build(new SisterAppClientFrameSpec(
+            Chrome: ribbon,
+            WorkArea: body,
+            StatusBar: status));
         var root = clientFrame.Root;
 
         // File keyboard shortcuts.
@@ -218,6 +248,7 @@ public sealed class MainWindow : Window
             Save: () => _file.Save(),
             SaveAs: () => _file.SaveAs(),
             ExportPdf: () => _file.ExportPdf(),
+            ExportImages: () => _file.ExportImages(),
             CurrentOptions: () => _options,
             OnClosed: () => { },
             DataFolder: ResolveDataFolderLabel));
@@ -229,6 +260,7 @@ public sealed class MainWindow : Window
         RefreshCanvas();
         RefreshNotesPane();
         RefreshCommentPane();
+        RefreshReviewWorkflowPlans();
         UpdateSlideCount();
     }
 
@@ -239,9 +271,9 @@ public sealed class MainWindow : Window
         var bus = new PresentationCommandBus(_presentation);
         Editor  = new EditingSession(_presentation, bus);
 
-        Editor.Changed           += () => { _file.MarkDirty(); RefreshCanvas(); UpdateSlideCount(); UpdateTitle(); };
-        Editor.CurrentSlideChanged += (_, _) => { RefreshCanvas(); RefreshNotesPane(); RefreshCommentPane(); };
-        // SelectionChanged: 3C subscribes directly to Editor.SelectionChanged.
+        Editor.Changed           += () => { _file.MarkDirty(); RefreshCanvas(); UpdateSlideCount(); UpdateTitle(); RefreshReviewWorkflowPlans(); };
+        Editor.CurrentSlideChanged += (_, _) => { RefreshCanvas(); RefreshNotesPane(); RefreshCommentPane(); RefreshReviewWorkflowPlans(); };
+        Editor.SelectionChanged += (_, _) => RefreshAltTextRequestPlan();
 
         // Re-attach editing layer whenever the editor is rebuilt (file open/new).
         // Guard: SlideCanvas is null during initial construction; BuildBody calls
@@ -279,6 +311,7 @@ public sealed class MainWindow : Window
         UpdateSlideCount();
         RefreshNotesPane();
         RefreshCommentPane();
+        RefreshReviewWorkflowPlans();
         // 16B: rebuild animation pane for new editor (only if the pane is currently shown).
         RebuildAnimationPaneIfVisible();
     }
@@ -471,8 +504,11 @@ public sealed class MainWindow : Window
     {
         if (_commentOverlay is null || _commentListHost is null || _commentListPanel is null) return;
 
-        var slide    = Editor.CurrentSlide;
-        var comments = slide?.Comments ?? new List<FreeP.Core.Model.SlideComment>();
+        var plan = PresentationReviewWorkflowPlanner.BuildCommentPanePlan(
+            _presentation.Slides,
+            Editor.CurrentSlideIndex);
+        LastCommentPanePlan = plan;
+        var comments = plan.Comments;
 
         // ── Overlay: rebuild speech-bubble markers ──────────────────────────────
         _commentOverlay.Children.Clear();
@@ -533,7 +569,7 @@ public sealed class MainWindow : Window
                 // Comment body text
                 var bodyText = new TextBlock
                 {
-                    Text         = cm.Text,
+                    Text         = cm.TextPreview,
                     FontSize     = 11,
                     TextWrapping = TextWrapping.Wrap,
                     Foreground   = new SolidColorBrush(Color.FromRgb(0x44, 0x44, 0x44)),
@@ -554,8 +590,7 @@ public sealed class MainWindow : Window
     private void OnCommentOverlayLoaded(object sender, RoutedEventArgs e)
     {
         _commentOverlay.Loaded -= OnCommentOverlayLoaded;
-        var slide    = Editor.CurrentSlide;
-        var comments = slide?.Comments ?? new List<FreeP.Core.Model.SlideComment>();
+        var comments = LastCommentPanePlan?.Comments ?? [];
         DrawCommentDots(comments);
     }
 
@@ -564,7 +599,7 @@ public sealed class MainWindow : Window
     /// Positions are derived from the comment's EMU coordinates mapped into the overlay bounds,
     /// accounting for SlideCanvas's 40 px margin on each side.
     /// </summary>
-    private void DrawCommentDots(IReadOnlyList<FreeP.Core.Model.SlideComment> comments)
+    private void DrawCommentDots(IReadOnlyList<PresentationCommentDescriptor> comments)
     {
         _commentOverlay.Children.Clear();
         if (comments.Count == 0) return;
@@ -607,13 +642,81 @@ public sealed class MainWindow : Window
                 Background      = new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A)),
                 BorderBrush     = System.Windows.Media.Brushes.White,
                 BorderThickness = new Thickness(1.5),
-                ToolTip         = $"{cm.Author}: {cm.Text}",
+                ToolTip         = $"{cm.Author}: {cm.TextPreview}",
             };
 
             Canvas.SetLeft(dot, cx - 7);
             Canvas.SetTop(dot,  cy - 7);
             _commentOverlay.Children.Add(dot);
         }
+    }
+
+    internal void RefreshReviewWorkflowPlans()
+    {
+        LastCommentPanePlan = PresentationReviewWorkflowPlanner.BuildCommentPanePlan(
+            _presentation.Slides,
+            Editor.CurrentSlideIndex);
+        RefreshAccessibilitySummaryPlan();
+        RefreshAltTextRequestPlan();
+        RefreshProofingRequestPlan();
+    }
+
+    private void ShowReviewCommentsPane()
+    {
+        RefreshCommentPane();
+    }
+
+    private void RefreshAccessibilitySummaryPlan()
+    {
+        LastAccessibilitySummaryPlan =
+            PresentationReviewWorkflowPlanner.BuildAccessibilitySummaryPlan(_presentation);
+    }
+
+    private void RefreshAltTextRequestPlan()
+    {
+        uint? selectedShapeId = Editor.SelectedShapeIds.Count == 1
+            ? Editor.SelectedShapeIds[0]
+            : null;
+        LastAltTextRequestPlan = PresentationReviewWorkflowPlanner.BuildAltTextRequestPlan(
+            Editor.CurrentSlide,
+            selectedShapeId,
+            proposedDescription: null);
+    }
+
+    internal PresentationAltTextMutationPlan ApplySelectedShapeAlternativeText(
+        string? description,
+        string? title = null,
+        bool isDecorative = false)
+    {
+        uint? selectedShapeId = Editor.SelectedShapeIds.Count == 1
+            ? Editor.SelectedShapeIds[0]
+            : null;
+        var plan = PresentationReviewWorkflowPlanner.BuildAltTextMutationPlan(
+            Editor.CurrentSlide,
+            Editor.CurrentSlideIndex,
+            selectedShapeId,
+            description,
+            title,
+            isDecorative);
+        if (plan.ShouldApply)
+        {
+            Editor.SetSelectedShapeAlternativeText(plan.Description, plan.Title, plan.IsDecorative);
+            LastAltTextRequestPlan = PresentationReviewWorkflowPlanner.BuildAltTextRequestPlan(
+                Editor.CurrentSlide,
+                plan.ShapeId,
+                plan.Description,
+                plan.Title,
+                plan.IsDecorative);
+            RefreshAccessibilitySummaryPlan();
+        }
+
+        return plan;
+    }
+
+    private void RefreshProofingRequestPlan()
+    {
+        LastProofingRequestPlan =
+            PresentationReviewWorkflowPlanner.BuildProofingRequestPlan(_presentation);
     }
 
     // ── Wave 16B: Animation pane show/hide ───────────────────────────────────────
@@ -675,7 +778,10 @@ public sealed class MainWindow : Window
     }
 
     private void UpdateSlideCount() =>
-        _slideCountText.Text = $"Slide {Editor.CurrentSlideIndex + 1} / {_presentation.Slides.Count}   {ResolveDataFolderLabel()}";
+        _slideCountText.Text = SisterAppStatusBarTextPlanner.FormatPresentationSlideStatus(
+            Editor.CurrentSlideIndex,
+            _presentation.Slides.Count,
+            ResolveDataFolderLabel());
 
     // ── Quick-access + title ──────────────────────────────────────────────────────
 
@@ -690,14 +796,12 @@ public sealed class MainWindow : Window
 
     private void UpdateTitle()
     {
-        var title = WindowTitlePlanner.Compose(
-            displayName:    _file.DisplayName,
-            applicationName: "FreeP",
-            isDirty:         _file.IsDirty,
-            dirtyMarker:     " *",
-            separator:       " — ");
-        Title           = title;
-        _titleText.Text = title;
+        _titleBinder.Update(new SisterWpfWindowTitleSpec(
+            DisplayName: _file.DisplayName,
+            ApplicationName: "FreeP",
+            IsDirty: _file.IsDirty,
+            DirtyMarker: " *",
+            Separator: " \u2014 "));
     }
 
     // ── Keyboard bindings ─────────────────────────────────────────────────────────
@@ -827,6 +931,30 @@ public sealed class MainWindow : Window
         dialog.ShowDialog();
     }
 
+    internal void OpenLayoutPicker()
+    {
+        LastLayoutRequestPlan = PresentationDesignCommandPlanner.LayoutPlan;
+        LastLayoutPickerPlan = PresentationDesignCommandPlanner.BuildLayoutPickerPlan(
+            _presentation,
+            Editor.CurrentSlideIndex);
+    }
+
+    internal bool ApplyLayoutChoice(string layoutId)
+    {
+        var applied = PresentationDesignCommandPlanner.TryApplyLayoutChoice(
+            Editor,
+            layoutId,
+            out var choice);
+        if (applied)
+        {
+            LastAppliedLayoutChoice = choice;
+            RefreshCanvas();
+            UpdateSlideCount();
+        }
+
+        return applied;
+    }
+
     /// <summary>
     /// Opens the <see cref="HyperlinkDialog"/> for the currently selected shape(s).
     /// Wave 11A: pre-fills the dialog with the existing hyperlink if exactly one shape is selected.
@@ -834,12 +962,16 @@ public sealed class MainWindow : Window
     /// </summary>
     internal void OpenHyperlinkDialog()
     {
-        var slides   = (IReadOnlyList<Slide>)Editor.Presentation.Slides;
-        var current  = Editor.SelectedShapeHyperlink;
-        var dialog   = new HyperlinkDialog(slides, current);
+        var request = HyperlinkDialogPlanner.BuildDialogRequest(
+            Editor.Presentation.Slides,
+            Editor.SelectedShapeHyperlink);
+        var dialog = new HyperlinkDialog(request);
         if (IsVisible) dialog.Owner = this;
-        if (dialog.ShowDialog() == true && dialog.Result is not null)
-            Editor.SetShapeHyperlink(dialog.Result.Url, dialog.Result.TargetSlideId, dialog.Result.Tooltip);
+        var applyPlan = dialog.ShowDialog() == true
+            ? HyperlinkDialogPlanner.BuildApplyPlan(dialog.Result)
+            : HyperlinkDialogPlanner.BuildApplyPlan(null);
+        if (applyPlan.ShouldApply)
+            Editor.SetShapeHyperlink(applyPlan.Url, applyPlan.TargetSlideId, applyPlan.Tooltip);
     }
 
     // ── Find & Replace dialog (Wave 12B) ──────────────────────────────────────────
@@ -888,6 +1020,11 @@ public sealed class MainWindow : Window
     // ── Backstage ─────────────────────────────────────────────────────────────────
 
     private void ShowBackstage() => _backstage.Show();
+
+    private PresentationSlideRangeRequest BuildCurrentSlideImageExportRange() =>
+        new(
+            PresentationSlideRangeKind.CurrentSlide,
+            CurrentSlideNumber: Editor.CurrentSlideIndex + 1);
 
     // ── Ribbon ────────────────────────────────────────────────────────────────────
 

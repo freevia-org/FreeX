@@ -3,6 +3,7 @@ using System.IO;
 using FluentAssertions;
 using Free.Shared.AppServices;
 using FreeW.App.Host;
+using FreeW.App.Presentation.Options;
 using FreeW.Core.Model;
 using Xunit;
 
@@ -96,6 +97,19 @@ public sealed class FreeWOptionsTests : IDisposable
         options.RecentFilesCap.Should().Be(FreeWOptions.MaxRecentFilesCap);
         options.DefaultSaveFormat.Should().Be(FreeWOptions.DocxDefaultFormat);
         options.UiLanguage.Should().Be("en-GB");
+    }
+
+    [Theory]
+    [InlineData("  en-us  ", "en-US")]
+    [InlineData(" QPS-PLOC ", "qps-ploc")]
+    [InlineData("not-a-culture", "")]
+    public void Normalize_CanonicalizesUiLanguage(string input, string expected)
+    {
+        var options = new FreeWOptions { UiLanguage = input };
+
+        options.Normalize();
+
+        options.UiLanguage.Should().Be(expected);
     }
 
     [Theory]
@@ -193,8 +207,36 @@ public sealed class FreeWOptionsTests : IDisposable
         store.StorePath.Should().Be(Path.Combine(_tempDir, "FreeW", ApplicationOptionsStore<FreeWOptions>.DefaultFileName));
     }
 
+    [Fact]
+    public void WpfOptionsDialog_UsesPresentationOptionsPolicy()
+    {
+        var repoRoot = FindRepoRoot();
+        var dialogSource = File.ReadAllText(Path.Combine(repoRoot, "freew", "FreeW.App.Host", "OptionsDialog.cs"));
+
+        dialogSource.Should().Contain("using FreeW.App.Presentation.Options;");
+        dialogSource.Should().Contain("OptionsDialogPlanner.TryParseRecentFilesCap(");
+        dialogSource.Should().Contain("OptionsDialogPlanner.BuildResult(");
+        File.Exists(Path.Combine(repoRoot, "freew", "FreeW.App.Host", "OptionsDialogPlanner.cs"))
+            .Should().BeFalse();
+        File.Exists(Path.Combine(repoRoot, "freew", "FreeW.App.Host", "FreeWOptions.cs"))
+            .Should().BeFalse();
+    }
+
     private sealed class TestApplicationDataPathProvider(string path) : IApplicationDataPathProvider
     {
         public string GetApplicationDataDirectory() => path;
+    }
+
+    private static string FindRepoRoot()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "FreeW.slnx")))
+                return directory.FullName;
+            directory = directory.Parent;
+        }
+
+        throw new DirectoryNotFoundException("Could not locate repository root.");
     }
 }

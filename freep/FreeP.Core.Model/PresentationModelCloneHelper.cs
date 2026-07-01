@@ -1,0 +1,310 @@
+namespace FreeP.Core.Model;
+
+internal static class PresentationModelCloneHelper
+{
+    internal static TableShape? FindTable(Presentation presentation, int slideIndex, uint shapeId)
+    {
+        if (slideIndex < 0 || slideIndex >= presentation.Slides.Count)
+            return null;
+
+        var shape = presentation.Slides[slideIndex].Shapes.FirstOrDefault(s => s.Id == shapeId);
+        return shape?.Table;
+    }
+
+    internal static int GridColumnToCellIndex(TableRow row, int targetGridCol)
+    {
+        int gridPos = 0;
+        for (int i = 0; i < row.Cells.Count; i++)
+        {
+            int span = Math.Max(1, row.Cells[i].GridSpan);
+            if (targetGridCol < gridPos + span)
+                return i;
+
+            gridPos += span;
+        }
+
+        return -1;
+    }
+
+    internal static int CellGridStart(TableRow row, int cellIdx)
+    {
+        int gridPos = 0;
+        for (int i = 0; i < cellIdx && i < row.Cells.Count; i++)
+            gridPos += Math.Max(1, row.Cells[i].GridSpan);
+
+        return gridPos;
+    }
+
+    internal static int RowGridWidth(TableRow row) =>
+        row.Cells.Sum(c => Math.Max(1, c.GridSpan));
+
+    internal static TableShape CloneTable(TableShape source)
+    {
+        var copy = new TableShape
+        {
+            Flags = CloneTableStyleFlags(source.Flags),
+            TableStyleId = source.TableStyleId,
+            StyleData = CloneTableStyleData(source.StyleData),
+        };
+
+        foreach (var width in source.ColumnWidthsEmu)
+            copy.ColumnWidthsEmu.Add(width);
+
+        foreach (var row in source.Rows)
+            copy.Rows.Add(CloneTableRow(row));
+
+        return copy;
+    }
+
+    internal static TableRow CloneTableRow(TableRow source)
+    {
+        var copy = new TableRow { HeightEmu = source.HeightEmu };
+        foreach (var cell in source.Cells)
+            copy.Cells.Add(CloneTableCell(cell));
+
+        return copy;
+    }
+
+    internal static TableCell CloneTableCell(TableCell source) => new()
+    {
+        TextBody = CloneTextBody(source.TextBody),
+        Fill = source.Fill,
+        Borders = CloneTableCellBorders(source.Borders),
+        GridSpan = source.GridSpan,
+        RowSpan = source.RowSpan,
+        HMerge = source.HMerge,
+        VMerge = source.VMerge,
+        InsetLeftPt = source.InsetLeftPt,
+        InsetRightPt = source.InsetRightPt,
+        InsetTopPt = source.InsetTopPt,
+        InsetBottomPt = source.InsetBottomPt,
+        Anchor = source.Anchor,
+    };
+
+    internal static TextBody? CloneTextBody(TextBody? source)
+    {
+        if (source is null)
+            return null;
+
+        var copy = new TextBody
+        {
+            Anchor = source.Anchor,
+            DefaultParaAlign = source.DefaultParaAlign,
+            InsetLeftPt = source.InsetLeftPt,
+            InsetRightPt = source.InsetRightPt,
+            InsetTopPt = source.InsetTopPt,
+            InsetBottomPt = source.InsetBottomPt,
+            Wrap = source.Wrap,
+            AutoFit = source.AutoFit,
+            FontScalePPT = source.FontScalePPT,
+            LnSpcReductionPPT = source.LnSpcReductionPPT,
+            LstStyle = CloneTextStyleLevels(source.LstStyle),
+            VerticalType = source.VerticalType,
+            WarpPreset = source.WarpPreset,
+            ColumnCount = source.ColumnCount,
+            ColumnSpacingEmu = source.ColumnSpacingEmu,
+        };
+
+        foreach (var adjust in source.WarpAdjusts)
+            copy.WarpAdjusts.Add(adjust);
+
+        foreach (var paragraph in source.Paragraphs)
+            copy.Paragraphs.Add(CloneParagraph(paragraph));
+
+        return copy;
+    }
+
+    internal static Hyperlink? CloneHyperlink(Hyperlink? source) =>
+        source is null
+            ? null
+            : new Hyperlink
+            {
+                Url = source.Url,
+                TargetSlideId = source.TargetSlideId,
+                Tooltip = source.Tooltip,
+            };
+
+    internal static void RestoreTableState(TableShape table, TableShape snapshot)
+    {
+        table.ColumnWidthsEmu.Clear();
+        foreach (var width in snapshot.ColumnWidthsEmu)
+            table.ColumnWidthsEmu.Add(width);
+
+        table.Rows.Clear();
+        foreach (var row in snapshot.Rows)
+            table.Rows.Add(CloneTableRow(row));
+
+        table.Flags = CloneTableStyleFlags(snapshot.Flags);
+        table.TableStyleId = snapshot.TableStyleId;
+        table.StyleData = CloneTableStyleData(snapshot.StyleData);
+    }
+
+    private static Paragraph CloneParagraph(Paragraph source)
+    {
+        var copy = new Paragraph
+        {
+            Align = source.Align,
+            Level = source.Level,
+            BulletKind = source.BulletKind,
+            BulletSuppressed = source.BulletSuppressed,
+            BulletChar = source.BulletChar,
+            AutoNumType = source.AutoNumType,
+            AutoNumStartAt = source.AutoNumStartAt,
+            MarginLeftEmu = source.MarginLeftEmu,
+            IndentEmu = source.IndentEmu,
+            BulletColor = source.BulletColor,
+            BulletSizePct = source.BulletSizePct,
+            BulletFontFamily = source.BulletFontFamily,
+            SpaceBeforePt = source.SpaceBeforePt,
+            SpaceAfterPt = source.SpaceAfterPt,
+        };
+
+        foreach (var tabStop in source.TabStops)
+            copy.TabStops.Add(new TabStop
+            {
+                PositionEmu = tabStop.PositionEmu,
+                Alignment = tabStop.Alignment,
+            });
+
+        foreach (var run in source.Runs)
+            copy.Runs.Add(CloneRun(run));
+
+        return copy;
+    }
+
+    private static Run CloneRun(Run source) => new()
+    {
+        Text = source.Text,
+        FontFamily = source.FontFamily,
+        FontSizePt = source.FontSizePt,
+        Bold = source.Bold,
+        BoldSet = source.BoldSet,
+        Italic = source.Italic,
+        ItalicSet = source.ItalicSet,
+        Underline = source.Underline,
+        Strikethrough = source.Strikethrough,
+        Color = source.Color,
+        Hyperlink = CloneHyperlink(source.Hyperlink),
+        Field = CloneField(source.Field),
+        TextFill = source.TextFill,
+        TextOutline = source.TextOutline,
+        TextShadow = CloneRunShadow(source.TextShadow),
+        Math = CloneMath(source.Math),
+    };
+
+    private static FieldRun? CloneField(FieldRun? source) =>
+        source is null
+            ? null
+            : new FieldRun
+            {
+                FieldType = source.FieldType,
+                CachedText = source.CachedText,
+                FontFamily = source.FontFamily,
+                FontSizePt = source.FontSizePt,
+                Bold = source.Bold,
+                Italic = source.Italic,
+                Color = source.Color,
+            };
+
+    private static MathRunInfo? CloneMath(MathRunInfo? source) =>
+        source is null
+            ? null
+            : new MathRunInfo
+            {
+                RawXml = source.RawXml,
+                IsAlternateContent = source.IsAlternateContent,
+            };
+
+    private static RunTextShadow? CloneRunShadow(RunTextShadow? source) =>
+        source is null
+            ? null
+            : new RunTextShadow
+            {
+                Color = source.Color,
+                Alpha = source.Alpha,
+                BlurPt = source.BlurPt,
+                DistPt = source.DistPt,
+                DirDeg = source.DirDeg,
+            };
+
+    private static TableCellBorders? CloneTableCellBorders(TableCellBorders? source) =>
+        source is null
+            ? null
+            : new TableCellBorders
+            {
+                Left = source.Left,
+                Right = source.Right,
+                Top = source.Top,
+                Bottom = source.Bottom,
+            };
+
+    private static TableStyleFlags CloneTableStyleFlags(TableStyleFlags source) => new()
+    {
+        FirstRow = source.FirstRow,
+        LastRow = source.LastRow,
+        FirstCol = source.FirstCol,
+        LastCol = source.LastCol,
+        BandRow = source.BandRow,
+        BandCol = source.BandCol,
+    };
+
+    private static TableStyleData? CloneTableStyleData(TableStyleData? source) =>
+        source is null
+            ? null
+            : new TableStyleData
+            {
+                StyleId = source.StyleId,
+                WholeTbl = CloneTableStyleEntry(source.WholeTbl),
+                FirstRow = CloneTableStyleEntry(source.FirstRow),
+                LastRow = CloneTableStyleEntry(source.LastRow),
+                FirstCol = CloneTableStyleEntry(source.FirstCol),
+                LastCol = CloneTableStyleEntry(source.LastCol),
+                Band1H = CloneTableStyleEntry(source.Band1H),
+                Band2H = CloneTableStyleEntry(source.Band2H),
+                Band1V = CloneTableStyleEntry(source.Band1V),
+                Band2V = CloneTableStyleEntry(source.Band2V),
+            };
+
+    private static TableStyleEntry? CloneTableStyleEntry(TableStyleEntry? source) =>
+        source is null
+            ? null
+            : new TableStyleEntry
+            {
+                Fill = source.Fill,
+                BorderOutline = source.BorderOutline,
+                TextColor = source.TextColor,
+            };
+
+    private static TextStyleLevels? CloneTextStyleLevels(TextStyleLevels? source)
+    {
+        if (source is null)
+            return null;
+
+        var copy = new TextStyleLevels();
+        for (int level = 0; level < 9; level++)
+            copy[level] = CloneTextStyleLevel(source[level]);
+
+        return copy;
+    }
+
+    private static TextStyleLevel? CloneTextStyleLevel(TextStyleLevel? source) =>
+        source is null
+            ? null
+            : new TextStyleLevel
+            {
+                Align = source.Align,
+                MarginLeftEmu = source.MarginLeftEmu,
+                IndentEmu = source.IndentEmu,
+                FontSizePt = source.FontSizePt,
+                Bold = source.Bold,
+                Italic = source.Italic,
+                Color = source.Color,
+                LatinFont = source.LatinFont,
+                BulletKind = source.BulletKind,
+                BulletChar = source.BulletChar,
+                AutoNumType = source.AutoNumType,
+                BulletColor = source.BulletColor,
+                BulletSizePct = source.BulletSizePct,
+                BulletFontFamily = source.BulletFontFamily,
+            };
+}

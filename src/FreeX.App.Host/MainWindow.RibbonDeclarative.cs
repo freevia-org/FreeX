@@ -9,8 +9,10 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using Free.Shared.Ribbon;
+using Free.Shared.Ribbon.Wpf;
 
 using FreeX.App.Presentation.PageLayout;
+using FreeX.App.Services;
 
 namespace FreeX.App.Host;
 
@@ -40,7 +42,7 @@ public partial class MainWindow
             foreach (var (name, control) in originals)
             {
                 if (!registry.TryGet(name, out _))
-                    registry.Register(name, new RibbonHandlerCommand(control));
+                    registry.Register(name, new WpfControlRibbonCommand(control));
             }
 
             var definition = FreeXRibbon.Build();
@@ -205,7 +207,7 @@ public partial class MainWindow
                 types: new[] { typeof(object), typeof(RoutedEventArgs) }, modifiers: null)
                 ?? type.GetMethod(methodName, flags, binder: null, types: System.Type.EmptyTypes, modifiers: null);
             if (method is not null)
-                registry.Register(name, new ReflectiveHandlerCommand(this, method,
+                registry.Register(name, new WpfReflectiveRibbonCommand(this, method,
                     RibbonBackplaneControls.GetValueOrDefault(name)));
         }
 
@@ -239,51 +241,8 @@ public partial class MainWindow
                     types: new[] { typeof(object), typeof(RoutedEventArgs) }, modifiers: null)
                 ?? type.GetMethod(methodName, flags, binder: null, types: System.Type.EmptyTypes, modifiers: null);
             if (method is not null)
-                registry.Register(id, new ReflectiveHandlerCommand(this, method,
+                registry.Register(id, new WpfReflectiveRibbonCommand(this, method,
                     RibbonBackplaneControls.GetValueOrDefault(id)));
-        }
-    }
-
-    /// <summary>Invokes a MainWindow handler method (object,RoutedEventArgs) or parameterless.</summary>
-    private sealed class ReflectiveHandlerCommand : IRibbonCommand
-    {
-        private readonly MainWindow _window;
-        private readonly System.Reflection.MethodInfo _method;
-        private readonly object? _sender;
-
-        public ReflectiveHandlerCommand(MainWindow window, System.Reflection.MethodInfo method, object? sender)
-        {
-            _window = window;
-            _method = method;
-            _sender = sender;
-        }
-
-        public void Execute(RibbonCommandContext context)
-        {
-            // Toggle checked-state now lives in the neutral RibbonStateStore: the renderer's click
-            // handler pushes the (already-flipped) rendered toggle state into the store before this
-            // runs, and toggle handlers read the store (BoldButton_Click) or their rendered sender
-            // (ViewGridlinesChk_Changed reads the CheckBox the renderer supplies as sender). No hidden
-            // backplane toggle is flipped here anymore.
-
-            // For sender-reading handlers (MenuItem.Tag/Header, CheckBox.IsChecked), prefer the actual
-            // clicked WPF element the renderer supplies; otherwise use the legacy control, then the window.
-            var sender = (context.Parameters.TryGetValue(RibbonWpfRenderer.SenderKey, out var wpfSender)
-                    ? wpfSender
-                    : null)
-                ?? _sender ?? _window;
-
-            var args = _method.GetParameters().Length == 0
-                ? System.Array.Empty<object?>()
-                : new object?[] { sender, new RoutedEventArgs() };
-            try
-            {
-                _method.Invoke(_window, args);
-            }
-            catch (System.Reflection.TargetInvocationException ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"Ribbon command '{_method.Name}' threw: {ex.InnerException}");
-            }
         }
     }
 
@@ -584,24 +543,4 @@ public partial class MainWindow
         }
     }
 
-    /// <summary>Bridges a declarative command id to an existing ribbon control's Click handler.</summary>
-    private sealed class RibbonHandlerCommand : IRibbonCommand
-    {
-        private readonly Control _source;
-
-        public RibbonHandlerCommand(Control source) => _source = source;
-
-        public void Execute(RibbonCommandContext context)
-        {
-            switch (_source)
-            {
-                case MenuItem menuItem:
-                    menuItem.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
-                    break;
-                case ButtonBase button:
-                    button.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
-                    break;
-            }
-        }
-    }
 }

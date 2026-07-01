@@ -40,6 +40,24 @@ public sealed class TableDesignCommandSourceTests
     }
 
     [Fact]
+    public void TableDesignStyleGallery_ConsumesSharedSurfaceDescriptor()
+    {
+        var source = ReadHostSourceFile("MainWindow.TableDesignCommands.cs");
+
+        source.Should().Contain("TableStyleGalleryPlanner.GetSurface(_workbook.Theme)");
+        source.Should().Contain("foreach (var group in surface.Groups)");
+        source.Should().Contain("foreach (var item in group.Items)");
+        source.Should().Contain("Header = CreateFormatTableGalleryHeader(item)");
+        source.Should().Contain("Tag = item");
+        source.Should().Contain("RibbonTooltip.SetKeyTip(menuItem, item.KeyTip);");
+        source.Should().Contain("ApplyStructuredTableStyle(item.Option);");
+        source.Should().NotContain("TableStyleGalleryPlanner.GetOptions(_workbook.Theme)");
+        source.Should().NotContain("option.Label.Split");
+        source.Should().NotContain("CultureInfo.InvariantCulture");
+        source.Should().NotContain("option.Label[(family.Length + 1)..]");
+    }
+
+    [Fact]
     public void TableDesignDeferredSliceHandlers_RouteThroughModelCommandsAndPivotCreationApis()
     {
         var source = ReadHostSourceFile("MainWindow.TableDesignCommands.cs");
@@ -51,10 +69,11 @@ public sealed class TableDesignCommandSourceTests
         source.Should().Contain("TableResizePlanner.Capture(table)");
         source.Should().Contain("TableResizePlanner.TryCreateResize(");
         source.Should().Contain("TableDesignCommandPlanner.BuildResizeCommand(");
-        source.Should().Contain("new AddPivotTableToNewWorksheetCommand(");
+        source.Should().Contain("PivotCreatePlanner.BuildNewWorksheetCommand(");
         source.Should().Contain("ActivateNewWorksheetAtA1(createdSheetId)");
-        source.Should().Contain("new AddPivotTableCommand(");
-        source.Should().Contain("TableDesignCommandPlanner.BuildConvertToRangeCommand(");
+        source.Should().Contain("PivotCreatePlanner.BuildInPlaceCommand(");
+        source.Should().Contain("TableDesignCommandPlanner.BuildConvertToRangePlan(");
+        source.Should().Contain("plan.Command");
         source.Should().Contain("_messageService.AskYesNo(");
     }
 

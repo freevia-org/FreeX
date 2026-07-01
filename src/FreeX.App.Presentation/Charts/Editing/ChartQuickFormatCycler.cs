@@ -1,3 +1,4 @@
+using FreeX.App.Presentation.Charts;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Presentation.Charts.Editing;
@@ -92,11 +93,7 @@ public static class ChartQuickFormatCycler
     public static double NextMarkerSize(double? current) => current is null or >= 12 ? 5 : current.Value + 2;
 
     /// <summary>Chart-style quick step: advance by one gallery row (4), wrapping the 1..48 style range.</summary>
-    public static int NextChartStyleId(int? current)
-    {
-        var style = current ?? 0;
-        return style >= 45 ? 1 : style + 4;
-    }
+    public static int NextChartStyleId(int? current) => ChartStylePlanner.NextStyleId(current);
 
     /// <summary>
     /// Reads the first data series' (index 0) current format, or a fresh empty format if none is stored.

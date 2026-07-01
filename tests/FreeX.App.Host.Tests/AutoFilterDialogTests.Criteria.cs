@@ -70,6 +70,17 @@ public sealed partial class AutoFilterDialogTests
     }
 
     [Fact]
+    public void CriteriaLabels_UseSharedPresentationCriteriaCatalog()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("AutoFilterCriteriaLabels.cs");
+
+        source.Should().Contain("AutoFilterMenuCatalog.GetFilterFamilyDescriptor");
+        source.Should().Contain("AutoFilterMenuCatalog.GetCriteriaDescriptors");
+        source.Should().NotContain("\"AutoFilter_Criteria_");
+        source.Should().NotContain("switch");
+    }
+
+    [Fact]
     public void BuildBetweenCriteriaText_UsesSeparateMinimumAndMaximumValues()
     {
         var option = AutoFilterDialog.GetCriteriaOptions(AutoFilterMenuFilterKind.Number)

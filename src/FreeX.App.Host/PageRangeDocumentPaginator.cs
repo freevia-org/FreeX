@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Documents;
+using FreeX.App.Services;
 
 namespace FreeX.App.Host;
 

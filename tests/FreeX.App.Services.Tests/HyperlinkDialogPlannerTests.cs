@@ -133,4 +133,20 @@ public sealed class HyperlinkDialogPlannerTests
             "",
             ""));
     }
+
+    [Fact]
+    public void Prefill_FromCellUsesExistingCellTextAsDisplayText()
+    {
+        var sheetId = SheetId.New();
+        var address = new CellAddress(sheetId, 4, 2);
+        var sheet = new Sheet(sheetId, "Sheet1");
+        sheet.SetCell(address, new TextValue("Quarterly report"));
+
+        HyperlinkDialogPrefill.FromCell(sheet, address).Should().Be(new HyperlinkDialogPrefill(
+            HyperlinkTargetKind.ExistingFileOrWebPage,
+            "https://",
+            "Quarterly report",
+            "",
+            ""));
+    }
 }

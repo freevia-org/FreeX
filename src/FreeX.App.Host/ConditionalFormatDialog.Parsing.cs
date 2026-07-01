@@ -24,20 +24,10 @@ public partial class ConditionalFormatDialog
         ConditionalFormatInputParser.ParseOptionalRgbColor(text);
 
     private static string? AxisPositionToXmlValue(string? label) =>
-        label switch
-        {
-            var value when value == UiText.Get("ConditionalFormatDialog_AxisPosition_Middle") => "middle",
-            var value when value == UiText.Get("ConditionalFormatDialog_AxisPosition_None") => "none",
-            _        => null
-        };
+        ConditionalFormatDialogCatalog.AxisPositionValueForKey(AxisPositionKeyForLabel(label));
 
     private static string AxisPositionToLabel(string? xmlValue) =>
-        xmlValue switch
-        {
-            "middle" => UiText.Get("ConditionalFormatDialog_AxisPosition_Middle"),
-            "none"   => UiText.Get("ConditionalFormatDialog_AxisPosition_None"),
-            _        => UiText.Get("ConditionalFormatDialog_AxisPosition_Automatic")
-        };
+        UiText.Get(ConditionalFormatDialogCatalog.AxisPositionKeyForValue(xmlValue));
 
     private static CfRuleType DuplicateValuesRuleType(string? label) =>
         string.Equals(label, UiText.Get("ConditionalFormatDialog_DuplicateKind_Unique"), StringComparison.OrdinalIgnoreCase)
@@ -45,35 +35,35 @@ public partial class ConditionalFormatDialog
             : CfRuleType.DuplicateValues;
 
     private static string DatePeriodValue(string? label)
-    {
-        foreach (var period in DateOccurringPeriods)
-        {
-            if (period.Label == label)
-            {
-                return period.Value;
-            }
-        }
-
-        return "today";
-    }
+        => ConditionalFormatDialogCatalog.DatePeriodValueForKey(DatePeriodKeyForLabel(label));
 
     private static string DatePeriodLabel(string? value)
-    {
-        foreach (var period in DateOccurringPeriods)
-        {
-            if (period.Value == value)
-            {
-                return period.Label;
-            }
-        }
-
-        return UiText.Get("ConditionalFormatDialog_DatePeriod_Today");
-    }
+        => UiText.Get(ConditionalFormatDialogCatalog.DatePeriodKeyForValue(value));
 
     private static string[] DataBarAxisPositionLabels() =>
-        [
-            UiText.Get("ConditionalFormatDialog_AxisPosition_Automatic"),
-            UiText.Get("ConditionalFormatDialog_AxisPosition_Middle"),
-            UiText.Get("ConditionalFormatDialog_AxisPosition_None")
-        ];
+        ConditionalFormatDialogCatalog.AxisPositionOptions
+            .Select(option => UiText.Get(option.LabelKey))
+            .ToArray();
+
+    private static string? DatePeriodKeyForLabel(string? label)
+    {
+        foreach (var option in ConditionalFormatDialogCatalog.DatePeriodOptions)
+        {
+            if (label == UiText.Get(option.LabelKey))
+                return option.LabelKey;
+        }
+
+        return null;
+    }
+
+    private static string? AxisPositionKeyForLabel(string? label)
+    {
+        foreach (var option in ConditionalFormatDialogCatalog.AxisPositionOptions)
+        {
+            if (label == UiText.Get(option.LabelKey))
+                return option.LabelKey;
+        }
+
+        return null;
+    }
 }

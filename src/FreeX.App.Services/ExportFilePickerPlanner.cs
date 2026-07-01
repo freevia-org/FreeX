@@ -1,5 +1,5 @@
-using FreeX.Core.IO;
 using FreeX.Core.Model;
+using FileDialogPickerTypeDescriptor = Free.Shared.IO.FileDialogPickerTypeDescriptor;
 
 namespace FreeX.App.Services;
 
@@ -9,9 +9,11 @@ public sealed record ExportSaveDialogPlan(
     int DefaultFilterIndex);
 
 public sealed record ExportSavePickerPlan(
-    IReadOnlyList<FilePickerTypeDescriptor> FileTypes,
+    IReadOnlyList<FileDialogPickerTypeDescriptor> FileTypes,
     string SuggestedFileName,
     string DefaultExtensionWithoutDot);
+
+public sealed record PortablePdfSaveTargetPlan(string Path, bool ShouldConfirmNormalizedOverwrite);
 
 /// <summary>
 /// UI-free file picker metadata for PDF/XPS export. Renderers still own native dialog construction and
@@ -48,13 +50,26 @@ public static class ExportFilePickerPlanner
             ? ExportFileFormat.Xps
             : ExportFileFormat.Pdf;
 
+    public static PortablePdfSaveTargetPlan BuildPortablePdfSaveTargetPlan(
+        string requestedPath,
+        Func<string, bool> pathExists)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(requestedPath);
+        ArgumentNullException.ThrowIfNull(pathExists);
+
+        var pathPlan = ExportPathPlanner.Plan(requestedPath, ExportFileFormat.Pdf);
+        return new PortablePdfSaveTargetPlan(
+            pathPlan.Path,
+            ExportPathPlanner.ShouldPromptForNormalizedOverwrite(requestedPath, pathPlan, pathExists));
+    }
+
     public static string BuildSuggestedExportFileName(
         string? sourceName,
         string fallbackDisplayName,
         ExportFileFormat format) =>
         BuildSuggestedExportBaseName(sourceName, fallbackDisplayName) + ExtensionFor(format);
 
-    public static FilePickerTypeDescriptor BuildPickerType(ExportFileFormat format) =>
+    public static FileDialogPickerTypeDescriptor BuildPickerType(ExportFileFormat format) =>
         new(DisplayNameFor(format), ["*" + ExtensionFor(format)]);
 
     private static string BuildSuggestedExportBaseName(string? sourceName, string fallbackDisplayName)

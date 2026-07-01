@@ -1,4 +1,5 @@
 using FluentAssertions;
+using FreeX.App.Presentation.SheetUI;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Threading;
@@ -49,8 +50,8 @@ public sealed partial class RemainingDialogTests
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
-        source.Should().Contain("_sheetBox.Focus();");
-        source.Should().Contain("Keyboard.Focus(_sheetBox);");
+        source.Should().Contain("DialogFocus.Focus(_sheetBox);");
+        source.Should().NotContain("Keyboard.Focus(_sheetBox);");
     }
 
     [Fact]

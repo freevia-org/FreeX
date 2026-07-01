@@ -39,37 +39,46 @@ public readonly record struct ChartTypeChangePlan(ChartType? AppliedType, string
 /// </summary>
 public static class ChartTypeChangePlanner
 {
-    // English display labels for every renderer-authorable family, in a stable gallery-style order.
-    private static readonly (ChartType Type, string DisplayName)[] Catalog =
+    // English display labels and shell-localization keys for every renderer-authorable family, in a stable gallery-style order.
+    private static readonly (ChartType Type, string DisplayName, string DisplayNameKey)[] Catalog =
     [
-        (ChartType.Column, "Clustered Column"),
-        (ChartType.StackedColumn, "Stacked Column"),
-        (ChartType.PercentStackedColumn, "100% Stacked Column"),
-        (ChartType.ThreeDColumn, "3-D Column"),
-        (ChartType.Bar, "Clustered Bar"),
-        (ChartType.StackedBar, "Stacked Bar"),
-        (ChartType.PercentStackedBar, "100% Stacked Bar"),
-        (ChartType.ThreeDBar, "3-D Bar"),
-        (ChartType.Line, "Line"),
-        (ChartType.ThreeDLine, "3-D Line"),
-        (ChartType.Area, "Area"),
-        (ChartType.ThreeDArea, "3-D Area"),
-        (ChartType.Scatter, "Scatter"),
-        (ChartType.Bubble, "Bubble"),
-        (ChartType.Pie, "Pie"),
-        (ChartType.ThreeDPie, "3-D Pie"),
-        (ChartType.Doughnut, "Doughnut"),
-        (ChartType.Radar, "Radar"),
-        (ChartType.Stock, "Stock"),
-        (ChartType.Surface, "Surface"),
-        (ChartType.ThreeDSurface, "3-D Surface"),
-        (ChartType.Treemap, "Treemap"),
-        (ChartType.Sunburst, "Sunburst"),
-        (ChartType.Histogram, "Histogram"),
-        (ChartType.Pareto, "Pareto"),
-        (ChartType.BoxAndWhisker, "Box & Whisker"),
-        (ChartType.Waterfall, "Waterfall"),
-        (ChartType.Funnel, "Funnel"),
+        (ChartType.Column, "Clustered Column", "ChartType_ClusteredColumn"),
+        (ChartType.StackedColumn, "Stacked Column", "ChartType_StackedColumn"),
+        (ChartType.PercentStackedColumn, "100% Stacked Column", "ChartType_PercentStackedColumn"),
+        (ChartType.ThreeDColumn, "3-D Column", "ChartType_ThreeDColumn"),
+        (ChartType.Line, "Line", "ChartType_Line"),
+        (ChartType.ThreeDLine, "3-D Line", "ChartType_ThreeDLine"),
+        (ChartType.Pie, "Pie", "ChartType_Pie"),
+        (ChartType.ThreeDPie, "3-D Pie", "ChartType_ThreeDPie"),
+        (ChartType.Doughnut, "Doughnut", "ChartType_Doughnut"),
+        (ChartType.Bar, "Clustered Bar", "ChartType_ClusteredBar"),
+        (ChartType.StackedBar, "Stacked Bar", "ChartType_StackedBar"),
+        (ChartType.PercentStackedBar, "100% Stacked Bar", "ChartType_PercentStackedBar"),
+        (ChartType.ThreeDBar, "3-D Bar", "ChartType_ThreeDBar"),
+        (ChartType.Scatter, "Scatter", "ChartType_Scatter"),
+        (ChartType.Bubble, "Bubble", "ChartType_Bubble"),
+        (ChartType.Area, "Area", "ChartType_Area"),
+        (ChartType.ThreeDArea, "3-D Area", "ChartType_ThreeDArea"),
+        (ChartType.Radar, "Radar", "ChartType_Radar"),
+        (ChartType.Stock, "Stock", "ChartType_Stock"),
+        (ChartType.Surface, "Surface", "ChartType_Surface"),
+        (ChartType.ThreeDSurface, "3-D Surface", "ChartType_ThreeDSurface"),
+        (ChartType.Treemap, "Treemap", "MainWindow_Content_Treemap"),
+        (ChartType.Sunburst, "Sunburst", "MainWindow_Content_Sunburst"),
+        (ChartType.Histogram, "Histogram", "MainWindow_Content_Histogram"),
+        (ChartType.Pareto, "Pareto", "MainWindow_Content_Pareto"),
+        (ChartType.BoxAndWhisker, "Box & Whisker", "MainWindow_TooltipTitle_BoxAndWhiskerChart"),
+        (ChartType.Waterfall, "Waterfall", "MainWindow_Content_Waterfall"),
+        (ChartType.Funnel, "Funnel", "MainWindow_Content_Funnel"),
+    ];
+
+    private static readonly ChartType[] RecommendedTypes =
+    [
+        ChartType.Column,
+        ChartType.Line,
+        ChartType.Bar,
+        ChartType.Pie,
+        ChartType.Scatter,
     ];
 
     /// <summary>
@@ -80,7 +89,7 @@ public static class ChartTypeChangePlanner
     public static IReadOnlyList<ChartTypeChoice> GetSupportedChoices()
     {
         var choices = new List<ChartTypeChoice>(Catalog.Length);
-        foreach (var (type, displayName) in Catalog)
+        foreach (var (type, displayName, _) in Catalog)
         {
             if (ChartTypeSupport.IsAuthorable(type))
                 choices.Add(new ChartTypeChoice(type, displayName));
@@ -88,6 +97,12 @@ public static class ChartTypeChangePlanner
 
         return choices;
     }
+
+    /// <summary>The recommended chart types the insert picker should surface first, in Excel-like order.</summary>
+    public static IReadOnlyList<ChartType> GetRecommendedTypes() =>
+        RecommendedTypes
+            .Where(ChartTypeSupport.IsAuthorable)
+            .ToList();
 
     // The WPF "All Charts" category grouping (ChartTypePickerPlanner.GetCategories), keyed by the same
     // ChartTypeCategory_* / MainWindow_Content_* localization keys the Windows dialog uses so the
@@ -140,10 +155,22 @@ public static class ChartTypeChangePlanner
     /// <summary>The English display label for <paramref name="type"/> (falls back to the enum name).</summary>
     public static string DisplayName(ChartType type)
     {
-        foreach (var (catalogType, displayName) in Catalog)
+        foreach (var (catalogType, displayName, _) in Catalog)
         {
             if (catalogType == type)
                 return displayName;
+        }
+
+        return type.ToString();
+    }
+
+    /// <summary>The shell localization key for <paramref name="type"/> (falls back to the enum name).</summary>
+    public static string DisplayNameKey(ChartType type)
+    {
+        foreach (var (catalogType, _, displayNameKey) in Catalog)
+        {
+            if (catalogType == type)
+                return displayNameKey;
         }
 
         return type.ToString();

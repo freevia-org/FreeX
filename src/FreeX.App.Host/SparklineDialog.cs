@@ -2,29 +2,10 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using FreeX.App.Presentation.SparklineUI;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
-
-public enum SparklineKindChoice
-{
-    Line,
-    Column,
-    WinLoss
-}
-
-public enum SparklineRangeSelectionTarget
-{
-    DataRange,
-    Location
-}
-
-public sealed record SparklineDialogResult(string DataRangeText, string LocationText, SparklineKindChoice Kind);
-
-public sealed record SparklineRangeSelectionRequest(
-    SparklineRangeSelectionTarget Target,
-    string CurrentText,
-    bool CollapseDialog);
 
 public sealed class SparklineDialog : Window
 {
@@ -42,7 +23,7 @@ public sealed class SparklineDialog : Window
     public SparklineDialog(
         string dataRangeText,
         string locationText,
-        SparklineKindChoice kind,
+        SparklineKind kind,
         Action<SparklineRangeSelectionRequest>? requestRangeSelection = null,
         SheetId sheetId = default)
     {
@@ -83,13 +64,13 @@ public sealed class SparklineDialog : Window
         AutomationProperties.SetName(_kindBox, UiText.Get("Sparkline_SparklineTypeAutomationName"));
         AutomationProperties.SetAutomationId(_kindBox, "SparklineTypeBox");
         AutomationProperties.SetHelpText(_kindBox, UiText.Get("Sparkline_ChooseWhetherTheSparklineIsLineColumnOrWinLoss"));
-        _kindBox.ItemsSource = Enum.GetValues<SparklineKindChoice>()
+        _kindBox.ItemsSource = SparklinePlanner.Kinds
             .Select(choice => new ComboBoxItem
             {
                 Content = GetKindLabel(choice),
                 Tag = choice
             });
-        _kindBox.SelectedIndex = Math.Max(0, Array.IndexOf(Enum.GetValues<SparklineKindChoice>(), kind));
+        _kindBox.SelectedIndex = GetKindIndex(kind);
         _kindBox.Margin = new Thickness(0, 0, 0, 16);
         stack.Children.Add(_kindBox);
         stack.Children.Add(DialogButtonRowFactory.Create(Accept, 72));
@@ -97,13 +78,13 @@ public sealed class SparklineDialog : Window
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
-    public static SparklineDialogResult CreateResult(string dataRangeText, string locationText, SparklineKindChoice kind) =>
-        SparklineDialogPlanner.CreateResult(dataRangeText, locationText, kind);
+    public static SparklineDialogResult CreateResult(string dataRangeText, string locationText, SparklineKind kind) =>
+        SparklinePlanner.CreateDialogResult(dataRangeText, locationText, kind);
 
     public static SparklineRangeSelectionRequest CreateRangeSelectionRequest(
         SparklineRangeSelectionTarget target,
         string currentText) =>
-        SparklineDialogPlanner.CreateRangeSelectionRequest(target, currentText);
+        SparklinePlanner.CreateRangeSelectionRequest(target, currentText);
 
     private void Accept()
     {
@@ -113,17 +94,17 @@ public sealed class SparklineDialog : Window
         Result = CreateResult(
             _dataRangeBox.Text,
             _locationBox.Text,
-            _kindBox.SelectedItem is ComboBoxItem { Tag: SparklineKindChoice kind } ? kind : SparklineKindChoice.Line);
+            _kindBox.SelectedItem is ComboBoxItem { Tag: SparklineKind kind } ? kind : SparklineKind.Line);
         CompleteAcceptedDialog();
     }
 
     private bool ValidateInputs()
     {
-        return SparklineDialogPlanner.ValidateInputs(_dataRangeBox.Text, _locationBox.Text, _sheetId) switch
+        return SparklinePlanner.ValidateDialogInputs(_dataRangeBox.Text, _locationBox.Text, _sheetId) switch
         {
-            SparklineDialogValidationResult.InvalidDataRange =>
+            SparklineInputValidation.InvalidDataRange =>
                 ShowInvalidInputWarning(UiText.Get("Sparkline_InvalidDataRange"), _dataRangeBox),
-            SparklineDialogValidationResult.InvalidLocation =>
+            SparklineInputValidation.InvalidLocation =>
                 ShowInvalidInputWarning(UiText.Get("Sparkline_InvalidLocationCell"), _locationBox),
             _ => true
         };
@@ -131,13 +112,23 @@ public sealed class SparklineDialog : Window
 
     private bool ShowInvalidInputWarning(string message, TextBox textBox)
     {
-        DialogMessageHelper.ShowWarning(this, message, Title);
-        FocusRangeSelectionInput(textBox);
+        DialogFocus.ShowWarningAndFocus(this, message, Title, textBox);
         return false;
     }
 
-    public static string GetKindLabel(SparklineKindChoice kind) =>
-        SparklineDialogPlanner.GetKindLabel(kind);
+    public static string GetKindLabel(SparklineKind kind) =>
+        kind == SparklineKind.WinLoss ? UiText.Get("Sparkline_KindWinLoss") : SparklinePlanner.KindKey(kind);
+
+    private static int GetKindIndex(SparklineKind kind)
+    {
+        for (var i = 0; i < SparklinePlanner.Kinds.Count; i++)
+        {
+            if (SparklinePlanner.Kinds[i] == kind)
+                return i;
+        }
+
+        return 0;
+    }
 
     private void FocusInitialKeyboardTarget()
     {

@@ -343,4 +343,228 @@ public sealed class DataValidationDialogModelTests
 
         result.IsValid.Should().BeTrue("\"3.5\" is always a valid decimal via InvariantCulture fallback");
     }
+
+    [Fact]
+    public void Validate_ListFormulaRangeOverDropdownLimit_FailsOnFormula1()
+    {
+        var model = DataValidationDialogModel.ForType(DvType.List);
+
+        var result = model.Validate(new DvCriteriaInput
+        {
+            Type = DvType.List,
+            Formula1 = "=$A$1:$A$10001"
+        });
+
+        result.IsValid.Should().BeFalse();
+        result.FirstError!.Target.Should().Be(DvValidationTarget.Formula1);
+        result.FirstError!.Kind.Should().Be(DvValidationErrorKind.InvalidListCriteria);
+    }
+
+    [Theory]
+    [InlineData("Any", DvType.Any)]
+    [InlineData("WholeNumber", DvType.WholeNumber)]
+    [InlineData("Decimal", DvType.Decimal)]
+    [InlineData("List", DvType.List)]
+    [InlineData("Date", DvType.Date)]
+    [InlineData("Time", DvType.Time)]
+    [InlineData("TextLength", DvType.TextLength)]
+    [InlineData("Custom", DvType.Custom)]
+    public void Planner_MapsTypeTagsRoundTrip(string tag, DvType type)
+    {
+        DataValidationDialogPlanner.TypeFromTag(tag).Should().Be(type);
+        DataValidationDialogPlanner.TypeTag(type).Should().Be(tag);
+    }
+
+    [Theory]
+    [InlineData("Between", DvOperator.Between)]
+    [InlineData("NotBetween", DvOperator.NotBetween)]
+    [InlineData("Equal", DvOperator.Equal)]
+    [InlineData("NotEqual", DvOperator.NotEqual)]
+    [InlineData("GreaterThan", DvOperator.GreaterThan)]
+    [InlineData("LessThan", DvOperator.LessThan)]
+    [InlineData("GreaterThanOrEqual", DvOperator.GreaterThanOrEqual)]
+    [InlineData("LessThanOrEqual", DvOperator.LessThanOrEqual)]
+    public void Planner_MapsOperatorTagsRoundTrip(string tag, DvOperator op)
+    {
+        DataValidationDialogPlanner.OperatorFromTag(tag).Should().Be(op);
+        DataValidationDialogPlanner.OperatorTag(op).Should().Be(tag);
+    }
+
+    [Fact]
+    public void Planner_MapsAlertStyleTagsRoundTrip()
+    {
+        DataValidationDialogPlanner.AlertStyleFromTag("Stop").Should().Be(DvAlertStyle.Stop);
+        DataValidationDialogPlanner.AlertStyleFromTag("Warning").Should().Be(DvAlertStyle.Warning);
+        DataValidationDialogPlanner.AlertStyleFromTag("Information").Should().Be(DvAlertStyle.Information);
+        DataValidationDialogPlanner.AlertStyleTag(DvAlertStyle.Warning).Should().Be("Warning");
+        DataValidationDialogPlanner.AlertStyleTag(DvAlertStyle.Information).Should().Be("Information");
+        DataValidationDialogPlanner.AlertStyleTag(DvAlertStyle.Stop).Should().Be("Stop");
+    }
+
+    [Fact]
+    public void Planner_CreateVisibilityPlan_TracksRuleTypeOperatorAndSelection()
+    {
+        var between = DataValidationDialogPlanner.CreateVisibilityPlan(
+            DvType.WholeNumber,
+            DvOperator.Between,
+            hasSelectionSource: true);
+
+        between.ShowOperator.Should().BeTrue();
+        between.Formula1Label.Should().Be(DvFormula1Label.Minimum);
+        between.ShowFormula1.Should().BeTrue();
+        between.ShowFormula2.Should().BeTrue();
+        between.ShowFormula1UseSelection.Should().BeTrue();
+        between.ShowFormula2UseSelection.Should().BeTrue();
+        between.ShowDropdown.Should().BeFalse();
+
+        var equal = DataValidationDialogPlanner.CreateVisibilityPlan(
+            DvType.WholeNumber,
+            DvOperator.Equal,
+            hasSelectionSource: true);
+
+        equal.Formula1Label.Should().Be(DvFormula1Label.Value);
+        equal.ShowFormula2.Should().BeFalse();
+        equal.ShowFormula2RangePicker.Should().BeFalse();
+
+        var any = DataValidationDialogPlanner.CreateVisibilityPlan(
+            DvType.Any,
+            DvOperator.Between,
+            hasSelectionSource: true);
+
+        any.ShowFormula1.Should().BeFalse();
+        any.ShowFormula1RangePicker.Should().BeFalse();
+        any.ShowFormula1UseSelection.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Planner_CreateRule_NormalizesHiddenFieldsAndTrimsMessages()
+    {
+        var id = Guid.NewGuid();
+
+        var rule = DataValidationDialogPlanner.CreateRule(new DataValidationRuleEditorInput
+        {
+            Id = id,
+            Type = DvType.List,
+            Operator = DvOperator.Between,
+            AlertStyle = DvAlertStyle.Warning,
+            Formula1 = "  Red,Blue  ",
+            Formula2 = "  hidden  ",
+            AllowBlank = false,
+            ShowDropdown = true,
+            ShowInputMessage = false,
+            ShowErrorMessage = true,
+            PromptTitle = "  Pick  ",
+            PromptMessage = "  Choose one  ",
+            ErrorTitle = "  Bad  ",
+            ErrorMessage = "  Not allowed  "
+        });
+
+        rule.Id.Should().Be(id);
+        rule.Type.Should().Be(DvType.List);
+        rule.Formula1.Should().Be("Red,Blue");
+        rule.Formula2.Should().BeEmpty();
+        rule.ShowDropdown.Should().BeTrue();
+        rule.AlertStyle.Should().Be(DvAlertStyle.Warning);
+        rule.PromptTitle.Should().Be("Pick");
+        rule.ErrorMessage.Should().Be("Not allowed");
+
+        var any = DataValidationDialogPlanner.CreateRule(new DataValidationRuleEditorInput
+        {
+            Type = DvType.Any,
+            Formula1 = "A1",
+            Formula2 = "B1",
+            ShowDropdown = true
+        });
+
+        any.Formula1.Should().BeEmpty();
+        any.Formula2.Should().BeEmpty();
+        any.ShowDropdown.Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData(DvType.WholeNumber, DvOperator.Between, "1", "100", false)]
+    [InlineData(DvType.Decimal, DvOperator.Between, "0", "100", false)]
+    [InlineData(DvType.List, DvOperator.Between, "Yes,No", "", true)]
+    [InlineData(DvType.Date, DvOperator.Between, "2024-01-01", "2024-12-31", false)]
+    [InlineData(DvType.Time, DvOperator.Between, "09:00", "17:00", false)]
+    [InlineData(DvType.TextLength, DvOperator.LessThanOrEqual, "50", "", false)]
+    [InlineData(DvType.Custom, DvOperator.Between, "=A1>0", "", false)]
+    [InlineData(DvType.Any, DvOperator.Between, "", "", false)]
+    public void Planner_CreateDefaultRule_SeedsRuleEditorDefaults(
+        DvType type,
+        DvOperator expectedOperator,
+        string expectedFormula1,
+        string expectedFormula2,
+        bool expectedDropdown)
+    {
+        var sheetId = new SheetId(Guid.NewGuid());
+        var range = new GridRange(
+            new CellAddress(sheetId, 1, 1),
+            new CellAddress(sheetId, 2, 2));
+
+        var rule = DataValidationDialogPlanner.CreateDefaultRule(type, range);
+
+        rule.AppliesTo.Should().Be(range);
+        rule.Type.Should().Be(type);
+        rule.Operator.Should().Be(expectedOperator);
+        rule.Formula1.Should().Be(expectedFormula1);
+        rule.Formula2.Should().Be(expectedFormula2);
+        rule.AllowBlank.Should().BeTrue();
+        rule.ShowDropdown.Should().Be(expectedDropdown);
+        rule.AlertStyle.Should().Be(DvAlertStyle.Stop);
+        rule.ShowInputMessage.Should().BeTrue();
+        rule.ShowErrorMessage.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Planner_FocusTargetForInvalidCriteria_PrefersSecondWhenFirstIsValid()
+    {
+        DataValidationDialogPlanner.FocusTargetForInvalidCriteria(
+                DvType.WholeNumber,
+                DvOperator.Between,
+                "1",
+                "two")
+            .Should()
+            .Be(DvRuleEditorFocusTarget.Formula2);
+
+        DataValidationDialogPlanner.FocusTargetForInvalidCriteria(
+                DvType.WholeNumber,
+                DvOperator.Between,
+                "one",
+                "two")
+            .Should()
+            .Be(DvRuleEditorFocusTarget.Formula1);
+    }
+
+    [Fact]
+    public void Planner_CreateRangeSelectionRequest_TrimsTextAndKeepsDialogOpenByDefault()
+    {
+        DataValidationDialogPlanner.CreateRangeSelectionRequest(
+                DataValidationRangeSelectionTarget.Formula2,
+                "  =Sheet1!$C$2:$C$8  ")
+            .Should()
+            .Be(new DataValidationRangeSelectionRequest(
+                DataValidationRangeSelectionTarget.Formula2,
+                "=Sheet1!$C$2:$C$8",
+                CollapseDialog: false));
+    }
+
+    [Fact]
+    public void Planner_IsClearAllState_RequiresDefaultRawEditorState()
+    {
+        var clearState = new DataValidationRuleEditorInput
+        {
+            Type = DvType.Any,
+            Operator = DvOperator.Between,
+            AlertStyle = DvAlertStyle.Stop,
+            AllowBlank = true,
+            ShowDropdown = true,
+            ShowInputMessage = true,
+            ShowErrorMessage = true
+        };
+
+        DataValidationDialogPlanner.IsClearAllState(clearState).Should().BeTrue();
+        DataValidationDialogPlanner.IsClearAllState(clearState with { ApplyToSameSettings = true }).Should().BeFalse();
+        DataValidationDialogPlanner.IsClearAllState(clearState with { Formula1 = "A1" }).Should().BeFalse();
+    }
 }

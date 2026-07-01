@@ -16,12 +16,41 @@ function Resolve-RepoPath {
     return Join-Path $repoRoot $Path
 }
 
+function Test-IsExcludedPath {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    $relativePath = Get-RepositoryRelativePath $Path
+    $segments = $relativePath -split '[\\/]'
+    return $segments -contains "bin" -or
+        $segments -contains "obj" -or
+        $segments -contains ".worktrees" -or
+        $segments -contains ".claude"
+}
+
+function Get-RepositoryRelativePath {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    if (-not [System.IO.Path]::IsPathRooted($Path)) {
+        return $Path
+    }
+
+    $root = [System.IO.Path]::GetFullPath($repoRoot).TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
+    $fullPath = [System.IO.Path]::GetFullPath($Path)
+    if ($fullPath.StartsWith($root, [System.StringComparison]::OrdinalIgnoreCase)) {
+        return $fullPath.Substring($root.Length).TrimStart([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
+    }
+
+    return $Path
+}
+
 $resolvedScriptDirectory = Resolve-RepoPath $ScriptDirectory
 if (-not (Test-Path -LiteralPath $resolvedScriptDirectory -PathType Container)) {
     throw "Tool script directory was not found: $resolvedScriptDirectory"
 }
 
-$scripts = @(Get-ChildItem -LiteralPath $resolvedScriptDirectory -Filter "*.ps1" -File | Sort-Object Name)
+$scripts = @(Get-ChildItem -LiteralPath $resolvedScriptDirectory -Filter "*.ps1" -File -Recurse |
+    Where-Object { -not (Test-IsExcludedPath $_.FullName) } |
+    Sort-Object FullName)
 if ($scripts.Count -eq 0) {
     throw "No PowerShell tool scripts were found in $resolvedScriptDirectory"
 }

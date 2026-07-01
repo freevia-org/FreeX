@@ -14,6 +14,19 @@ public enum SparklineInputValidation
     InvalidLocation,
 }
 
+public enum SparklineRangeSelectionTarget
+{
+    DataRange,
+    Location,
+}
+
+public sealed record SparklineDialogResult(string DataRangeText, string LocationText, SparklineKind Kind);
+
+public sealed record SparklineRangeSelectionRequest(
+    SparklineRangeSelectionTarget Target,
+    string CurrentText,
+    bool CollapseDialog);
+
 /// <summary>
 /// The marker / point-emphasis flags a Sparkline edit can toggle, surfaced as a catalog so the shell
 /// can render one checkbox per entry without hard-coding the list.
@@ -70,6 +83,23 @@ public static class SparklinePlanner
     /// <summary>The neutral display label for a point toggle (used as a localization-key suffix too).</summary>
     public static string ToggleKey(SparklinePointToggle toggle) => toggle.ToString();
 
+    public static SparklineDialogResult CreateDialogResult(
+        string? dataRangeText,
+        string? locationText,
+        SparklineKind kind) =>
+        new((dataRangeText ?? string.Empty).Trim(), (locationText ?? string.Empty).Trim(), kind);
+
+    public static SparklineRangeSelectionRequest CreateRangeSelectionRequest(
+        SparklineRangeSelectionTarget target,
+        string? currentText) =>
+        new(target, (currentText ?? string.Empty).Trim(), CollapseDialog: true);
+
+    public static SparklineInputValidation ValidateDialogInputs(
+        string? dataRangeText,
+        string? locationText,
+        SheetId sheetId) =>
+        ValidateInsert(dataRangeText ?? string.Empty, locationText ?? string.Empty, sheetId, out _, out _);
+
     /// <summary>
     /// Markers apply only to line sparklines; negative-point emphasis applies only to column / win-loss
     /// sparklines. Used to grey out toggles that do not affect the selected kind.
@@ -98,7 +128,8 @@ public static class SparklinePlanner
     /// <summary>
     /// Validates the Insert Sparkline inputs, returning the resolved data range + anchor cell when both
     /// parse. The data range must be a real range within the supported cell cap; the location must be a
-    /// single cell. Mirrors the Windows host's <c>SparklineInputParser</c> rules.
+    /// single cell. Uses the shared cell-reference parser so absolute A1 and R1C1 inputs behave
+    /// consistently across shells.
     /// </summary>
     public static SparklineInputValidation ValidateInsert(
         string dataRangeText,
@@ -113,10 +144,19 @@ public static class SparklinePlanner
         if (!TryParseDataRange(dataRangeText, sheetId, out dataRange))
             return SparklineInputValidation.InvalidDataRange;
 
-        return CellAddress.TryParse((locationText ?? string.Empty).Trim(), sheetId, out location)
+        return CellReferenceInputParser.TryParseCell((locationText ?? string.Empty).Trim(), sheetId, out location)
             ? SparklineInputValidation.Valid
             : SparklineInputValidation.InvalidLocation;
     }
+
+    /// <summary>Maps toolbar / command identifiers to the core sparkline kind.</summary>
+    public static SparklineKind ParseKind(string? type) =>
+        (type ?? string.Empty).Trim().ToLowerInvariant() switch
+        {
+            "column" => SparklineKind.Column,
+            "winloss" => SparklineKind.WinLoss,
+            _ => SparklineKind.Line,
+        };
 
     /// <summary>Parses a sparkline data range, rejecting ranges over the supported cell cap.</summary>
     public static bool TryParseDataRange(string? input, SheetId sheetId, out GridRange range)

@@ -187,6 +187,21 @@ public sealed class SharedBackstagePaneComposerTests
             new SummaryOptions(RecentFilesCap: 9, DefaultSaveFormat: ".docx", UiLanguage: ""),
             @"C:\Users\Ada\AppData\Local\FreeW",
             edit: () => edited = true);
+        var account = planner.BuildAccountPaneSpec(
+            new SisterBackstageAccountPaneContext(
+                "FreeW",
+                "1.2.3",
+                "Ada",
+                "WORD-BOX",
+                @"C:\Users\Ada\AppData\Local\FreeW"),
+            openOptions: () => edited = true);
+        var export = planner.BuildExportPaneSpec(
+            exportPdf: () => { },
+            exportXps: () => { },
+            additionalGroups:
+            [
+                new("Change File Type", []),
+            ]);
 
         recent.EmptyText.Should().Be("No recent documents.");
         recent.Paths.Should().Equal("C:/Docs/Budget.docx");
@@ -195,10 +210,76 @@ public sealed class SharedBackstagePaneComposerTests
         template.FooterText.Should().Be("More templates are not available in this build.");
         options.Description.Should().Be("FreeW application settings. These persist between sessions and apply immediately.");
         options.EditText.Should().Be("Edit options\u2026");
+        account.Heading.Should().Be("Account");
+        account.OptionsText.Should().Be("FreeW Options...");
+        account.Groups.SelectMany(group => group.Fields)
+            .Should().Contain(new BackstageFieldRow("Connected services", "Local desktop app"));
+        export.Heading.Should().Be("Export");
+        export.Description.Should().Be("Create a fixed-layout copy or choose an editable document format.");
+        export.Groups.Should().HaveCount(2);
+        export.Groups[0].Heading.Should().Be("Create PDF/XPS Document");
+        export.Groups[0].Actions.Select(action => action.Label)
+            .Should().Equal("Create PDF or XPS", "Export to XPS");
+        export.Groups[1].Heading.Should().Be("Change File Type");
 
         options.Edit.Should().NotBeNull();
         options.Edit!.Invoke();
         edited.Should().BeTrue();
+    }
+
+    [Fact]
+    public void SisterBackstagePaneTextDescriptorPlanner_ExposesResourceKeysAndFallbackText()
+    {
+        var freeW = SisterBackstagePaneTextDescriptorPlanner.Build(SisterBackstageAppKind.FreeW);
+        var freeP = SisterBackstagePaneTextDescriptorPlanner.Build(SisterBackstageAppKind.FreeP);
+
+        freeW.RecentEmptyText.Should().Be(new ResourceTextDescriptor(
+            SisterBackstagePaneResourceKeys.FreeWRecentEmptyText,
+            "No recent documents."));
+        freeW.Export.XpsActionLabel.Should().Be(new ResourceTextDescriptor(
+            SisterBackstagePaneResourceKeys.FreeWExportXpsActionLabel,
+            "Export to XPS"));
+        freeP.TemplateTileCaption.Should().Be(new ResourceTextDescriptor(
+            SisterBackstagePaneResourceKeys.FreePTemplateTileCaption,
+            "Blank presentation"));
+        freeP.Export.XpsActionLabel.Should().BeNull();
+
+        SisterBackstagePaneTextDescriptorPlanner.RequiredResourceKeys(SisterBackstageAppKind.FreeW)
+            .Should().OnlyHaveUniqueItems()
+            .And.Contain(SisterBackstagePaneResourceKeys.FreeWOptionsEditText);
+        SisterBackstagePaneTextDescriptorPlanner.RequiredResourceKeys(SisterBackstageAppKind.FreeP)
+            .Should().OnlyHaveUniqueItems()
+            .And.NotContain(SisterBackstagePaneResourceKeys.FreeWOptionsEditText);
+    }
+
+    [Fact]
+    public void SisterBackstagePaneTextSpec_ResolvesDescriptorKeysWithFallbacks()
+    {
+        static string? Resolve(string key) =>
+            key == SisterBackstagePaneResourceKeys.FreeWTemplateTileCaption
+                ? "Localized blank document"
+                : key == SisterBackstagePaneResourceKeys.FreeWExportPdfActionLabel
+                    ? "[[" + key + "]]"
+                : null;
+
+        var text = SisterBackstagePaneTextSpec.FromDescriptor(
+            SisterBackstagePaneTextDescriptorPlanner.Build(SisterBackstageAppKind.FreeW),
+            Resolve);
+
+        text.RecentEmptyText.Should().Be("No recent documents.");
+        text.TemplateTileCaption.Should().Be("Localized blank document");
+        text.Export.PdfActionLabel.Should().Be("Create PDF or XPS");
+    }
+
+    [Fact]
+    public void SisterBackstagePaneTextSpec_TreatsEchoedResourceKeysAsMissing()
+    {
+        var text = SisterBackstagePaneTextSpec.FromDescriptor(
+            SisterBackstagePaneTextDescriptorPlanner.Build(SisterBackstageAppKind.FreeP),
+            key => key);
+
+        text.RecentEmptyText.Should().Be("No recent presentations.");
+        text.Export.PdfActionLabel.Should().Be("Export to PDF...");
     }
 
     [Fact]
@@ -211,12 +292,108 @@ public sealed class SharedBackstagePaneComposerTests
         var options = planner.BuildOptionsPaneSpec(
             new SummaryOptions(RecentFilesCap: 5, DefaultSaveFormat: ".freep", UiLanguage: "en-US"),
             @"C:\Users\Ada\AppData\Local\FreeP");
+        var export = planner.BuildExportPaneSpec(exportPdf: () => { });
 
         recent.EmptyText.Should().Be("No recent presentations.");
         template.TileCaption.Should().Be("Blank presentation");
         options.Description.Should().Be("FreeP application settings. These persist between sessions.");
         options.EditText.Should().BeNull();
         options.Edit.Should().BeNull();
+        export.Heading.Should().Be("Export");
+        export.Description.Should().Be("Create a PDF copy of this presentation - one page per slide, with selectable text.");
+        export.Groups.Should().ContainSingle();
+        export.Groups[0].Heading.Should().Be("Create PDF Copy");
+        export.Groups[0].Actions.Should().ContainSingle();
+        export.Groups[0].Actions[0].Label.Should().Be("Export to PDF...");
+    }
+
+    [Fact]
+    public void SisterBackstageAccountPanePlanner_UsesSuppliedTextSpecForLabelsAndFallbacks()
+    {
+        var text = SisterBackstageAccountPaneTextSpec.NeutralEnglish with
+        {
+            Heading = "Account Test",
+            DescriptionFormat = "Inspect {0}.",
+            ProductInformationHeading = "Product Block",
+            ProductLabel = "Product Name",
+            VersionLabel = "Build",
+            UserInformationHeading = "User Block",
+            ConnectedServicesValue = "Offline mode",
+            OptionsTextFormat = "Configure {0}",
+            MissingValueText = "(missing)"
+        };
+
+        var plan = SisterBackstageAccountPanePlanner.Build(
+            new SisterBackstageAccountPaneContext(
+                " FreeP ",
+                "",
+                "Ada",
+                "PRES-BOX",
+                " "),
+            text);
+
+        plan.Heading.Should().Be("Account Test");
+        plan.Description.Should().Be("Inspect FreeP.");
+        plan.OptionsText.Should().Be("Configure FreeP");
+        plan.Groups[0].Heading.Should().Be("Product Block");
+        plan.Groups[0].Fields.Should().Contain([
+            new BackstageFieldRow("Product Name", "FreeP"),
+            new BackstageFieldRow("Build", "(missing)"),
+        ]);
+        plan.Groups[1].Heading.Should().Be("User Block");
+        plan.Groups[1].Fields.Should().Contain([
+            new BackstageFieldRow("Connected services", "Offline mode"),
+            new BackstageFieldRow("Data folder", "(missing)"),
+        ]);
+    }
+
+    [Fact]
+    public void SisterBackstagePaneResources_ComposesKitComposerAndSpecPlanner()
+    {
+        var resources = SisterBackstagePaneResources.ForApp(
+            SisterBackstageAppKind.FreeW,
+            Color.FromRgb(0x0F, 0x6D, 0x8C),
+            tileWidth: 150,
+            tileHeight: 190);
+
+        resources.Kit.Should().NotBeNull();
+        resources.Panes.Should().NotBeNull();
+
+        var template = resources.PaneSpecs.BuildNewPaneSpec(() => { });
+        template.TileCaption.Should().Be("Blank document");
+    }
+
+    [Fact]
+    public void SisterBackstageInfoPanePlanner_BuildsCommonInfoSpec()
+    {
+        var spec = SisterBackstageInfoPanePlanner.Build(new SisterBackstageInfoPaneContext(
+            DocumentKindLabel: "Presentation",
+            DisplayName: "Quarterly Review",
+            IsDirty: true,
+            Location: @"C:\Decks\Review.pptx",
+            CoreProperties: new BackstageCoreProperties(
+                Title: "Review",
+                Author: "Ada",
+                Subject: "",
+                Keywords: null),
+            Statistics:
+            [
+                new("Slides", "12"),
+            ],
+            EditPropertiesText: "Edit properties...",
+            EditProperties: () => { }));
+
+        spec.DocumentKindLabel.Should().Be("Presentation");
+        spec.DisplayName.Should().Be("Quarterly Review");
+        spec.IsDirty.Should().BeTrue();
+        spec.Properties.Should().Equal(
+            new BackstageFieldRow(BackstageCorePropertiesPlanner.TitleLabel, "Review"),
+            new BackstageFieldRow(BackstageCorePropertiesPlanner.AuthorLabel, "Ada"),
+            new BackstageFieldRow(BackstageCorePropertiesPlanner.SubjectLabel, BackstageVisualKit.Or(null)),
+            new BackstageFieldRow(BackstageCorePropertiesPlanner.KeywordsLabel, BackstageVisualKit.Or(null)));
+        spec.Statistics.Should().Equal(new BackstageFieldRow("Slides", "12"));
+        spec.EditPropertiesText.Should().Be("Edit properties...");
+        spec.EditProperties.Should().NotBeNull();
     }
 
     [Fact]
@@ -310,6 +487,43 @@ public sealed class SharedBackstagePaneComposerTests
         action.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
 
         invoked.Should().BeTrue();
+    }
+
+    [StaFact]
+    public void BuildAccountPane_RendersSharedAccountPlanAndRoutesOptions()
+    {
+        var openedOptions = false;
+        var plan = SisterBackstageAccountPanePlanner.Build(
+            new SisterBackstageAccountPaneContext(
+                "FreeW",
+                "1.2.3",
+                "Ada",
+                "WORD-BOX",
+                @"C:\Users\Ada\AppData\Local\FreeW"));
+
+        var pane = _composer.BuildAccountPane(new BackstageAccountPaneSpec(
+            plan.Heading,
+            plan.Description,
+            plan.Groups,
+            plan.OptionsText,
+            () => openedOptions = true));
+
+        Texts(pane).Should().Contain([
+            "Account",
+            "Product Information",
+            "Product",
+            "FreeW",
+            "User Information",
+            "Windows user",
+            "Ada",
+            "FreeW Options...",
+        ]);
+
+        var options = Descendants<Button>(pane)
+            .Single(button => button.Content as string == "FreeW Options...");
+        options.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+        openedOptions.Should().BeTrue();
     }
 
     private static IReadOnlyList<string> Texts(DependencyObject root)

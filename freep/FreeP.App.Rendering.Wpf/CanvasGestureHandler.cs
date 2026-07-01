@@ -37,16 +37,15 @@ public sealed class CanvasGestureHandler
 
     private GestureKind                     _gesture = GestureKind.None;
     private Point                           _dragStartScreen;          // screen px at start
-    private Point                           _dragStartSlide;           // slide DIP at start
 
     // ── Move ──────────────────────────────────────────────────────────────────────────────────
-    private Dictionary<uint, (long ox, long oy)>? _moveStartPositions; // shape id → original EMU pos
+    private IReadOnlyList<CanvasMoveShapeState>? _moveStartShapes;
 
     // ── Resize ────────────────────────────────────────────────────────────────────────────────
     private uint                    _resizeShapeId;
     private long                    _resizeOrigX, _resizeOrigY, _resizeOrigCx, _resizeOrigCy;
     private double                  _resizeOrigRotationDeg;
-    private SelectionAdorner.HandleKind _resizeHandle;
+    private CanvasGestureHandleKind     _resizeHandle;
 
     // ── Rotate ────────────────────────────────────────────────────────────────────────────────
     private uint   _rotateShapeId;
@@ -117,20 +116,20 @@ public sealed class CanvasGestureHandler
                 if (selRect.HasValue)
                 {
                     var hitHandle = _adorner.HitTestHandle(selRect.Value, pt);
-                    if (hitHandle == SelectionAdorner.HandleKind.Rotate)
+                    if (hitHandle == CanvasGestureHandleKind.Rotate)
                     {
                         StartRotate(selId, slide, xf, pt);
                         e.Handled = true;
                         return;
                     }
-                    if (hitHandle != SelectionAdorner.HandleKind.None &&
-                        hitHandle != SelectionAdorner.HandleKind.Body)
+                    if (hitHandle != CanvasGestureHandleKind.None &&
+                        hitHandle != CanvasGestureHandleKind.Body)
                     {
                         StartResize(selId, slide, hitHandle, pt);
                         e.Handled = true;
                         return;
                     }
-                    if (hitHandle == SelectionAdorner.HandleKind.Body)
+                    if (hitHandle == CanvasGestureHandleKind.Body)
                     {
                         // Body of already-selected shape: start move
                         StartMove(slide, xf, pt);
@@ -257,154 +256,56 @@ public sealed class CanvasGestureHandler
     {
         _gesture          = GestureKind.Move;
         _dragStartScreen  = screenPt;
-        _dragStartSlide   = xf.ScreenToSlide(screenPt.X, screenPt.Y);
-        _moveStartPositions = new Dictionary<uint, (long, long)>();
-        foreach (var id in _editor.SelectedShapeIds)
-        {
-            var s = slide.Shapes.FirstOrDefault(sh => sh.Id == id);
-            if (s is not null)
-                _moveStartPositions[id] = (s.OffsetXEmu, s.OffsetYEmu);
-        }
+        _moveStartShapes = CanvasGesturePlanner.CaptureMoveState(slide, _editor.SelectedShapeIds);
         _canvas.CaptureMouse();
     }
 
     private void PreviewMove(Point screenPt, SlideTransform xf, Slide slide)
     {
-        double ddxPx = screenPt.X - _dragStartScreen.X;
-        double ddyPx = screenPt.Y - _dragStartScreen.Y;
+        if (_moveStartShapes is null)
+            return;
 
-        // Convert drag delta from screen pixels to DIP (slide coordinate space).
-        double ddxDip = xf.ScaleScreenToDip(ddxPx);
-        double ddyDip = xf.ScaleScreenToDip(ddyPx);
+        var plan = CanvasGesturePlanner.PlanMove(new CanvasMoveRequest(
+            StartScreen: ToGesturePoint(_dragStartScreen),
+            CurrentScreen: ToGesturePoint(screenPt),
+            Transform: ToCoreTransform(xf),
+            Shapes: _moveStartShapes,
+            CurrentSlide: slide,
+            SnapToGrid: SnapToGrid,
+            SnapToShapes: SnapToShapes,
+            BypassSnap: (Keyboard.Modifiers & ModifierKeys.Alt) != 0));
 
-        // Wave 12B: compute snapping.
-        // Alt key disables snapping (PowerPoint convention).
-        bool altHeld = (Keyboard.Modifiers & ModifierKeys.Alt) != 0;
-        bool snapEnabled = (SnapToGrid || SnapToShapes) && !altHeld;
-
-        SnapResult snap = SnapResult.None;
-        if (snapEnabled && _moveStartPositions is not null && _editor.SelectedShapeIds.Count > 0)
-        {
-            // Take the first selected shape as the "anchor" for snap probe.
-            var firstId = _editor.SelectedShapeIds[0];
-            if (_moveStartPositions.TryGetValue(firstId, out var firstOrig))
-            {
-                var firstShape = slide.Shapes.FirstOrDefault(s => s.Id == firstId);
-                if (firstShape is not null)
-                {
-                    double newLeftDip  = SlideTransform.EmuToDip(firstOrig.ox) + ddxDip;
-                    double newTopDip   = SlideTransform.EmuToDip(firstOrig.oy) + ddyDip;
-                    double newRightDip = newLeftDip + SlideTransform.EmuToDip(firstShape.ExtentCxEmu);
-                    double newBotDip   = newTopDip  + SlideTransform.EmuToDip(firstShape.ExtentCyEmu);
-
-                    var candidates = SnapToShapes
-                        ? SnapEngine.BuildShapeCandidates(slide, _editor.SelectedShapeIds)
-                        : null;
-
-                    double slideW = xf.SlideWidthDip;
-                    double slideH = xf.SlideHeightDip;
-
-                    snap = SnapEngine.Snap(
-                        (newLeftDip, newTopDip, newRightDip, newBotDip),
-                        candidates,
-                        slideW, slideH,
-                        snapEnabled: true,
-                        gridPitchDip: SnapToGrid ? SnapEngine.DefaultGridPitchDip : 0);
-                }
-            }
-        }
-
-        // Apply snap delta (DIP) to the screen drag delta.
-        double snapDxPx = snap.SnapDx * xf.Scale;
-        double snapDyPx = snap.SnapDy * xf.Scale;
-
-        // Build preview rects based on start positions + delta + snap correction.
-        var rects = new List<(uint, Rect)>();
-        foreach (var id in _editor.SelectedShapeIds)
-        {
-            if (_moveStartPositions is null || !_moveStartPositions.TryGetValue(id, out var orig))
-                continue;
-            var s = slide.Shapes.FirstOrDefault(sh => sh.Id == id);
-            if (s is null) continue;
-            double origXDip = SlideTransform.EmuToDip(orig.ox);
-            double origYDip = SlideTransform.EmuToDip(orig.oy);
-            double cxDip    = SlideTransform.EmuToDip(s.ExtentCxEmu);
-            double cyDip    = SlideTransform.EmuToDip(s.ExtentCyEmu);
-            double newXScr  = origXDip * xf.Scale + xf.OffsetX + ddxPx + snapDxPx;
-            double newYScr  = origYDip * xf.Scale + xf.OffsetY + ddyPx + snapDyPx;
-            rects.Add((id, new Rect(newXScr, newYScr, cxDip * xf.Scale, cyDip * xf.Scale)));
-        }
-
-        // Show preview as adorner overlay (single first rect or union for multi-select).
-        if (rects.Count == 1)
-            _adorner.UpdatePreview(rects[0].Item2);
-        else if (rects.Count > 1)
-        {
-            double l  = rects.Min(r => r.Item2.Left);
-            double t  = rects.Min(r => r.Item2.Top);
-            double rt = rects.Max(r => r.Item2.Right);
-            double bt = rects.Max(r => r.Item2.Bottom);
-            _adorner.UpdatePreview(new Rect(l, t, rt - l, bt - t));
-        }
-
-        // Update guide lines.
-        _adorner.UpdateSnapGuides(snap.Guides.Count > 0 ? snap.Guides : null, xf);
+        _adorner.UpdatePreview(plan.PreviewBounds is { } bounds ? ToWpfRect(bounds) : null);
+        _adorner.UpdateSnapGuides(plan.SnapGuides.Count > 0 ? plan.SnapGuides : null, xf);
     }
 
     private void CommitMove(Point screenPt, SlideTransform xf)
     {
-        if (_moveStartPositions is null) return;
-        double ddxPx = screenPt.X - _dragStartScreen.X;
-        double ddyPx = screenPt.Y - _dragStartScreen.Y;
-        if (Math.Abs(ddxPx) < 1 && Math.Abs(ddyPx) < 1) return; // no meaningful move
+        if (_moveStartShapes is null) return;
+        var drag = CanvasGesturePlanner.ReduceDrag(new CanvasDragReducerRequest(
+            StartScreen: ToGesturePoint(_dragStartScreen),
+            CurrentScreen: ToGesturePoint(screenPt),
+            DragStarted: true,
+            StartThresholdPx: 0,
+            CommitThresholdPx: CanvasGesturePlanner.MeaningfulDragCommitThresholdPx));
+        if (!drag.ShouldCommit) return;
 
-        // Wave 12B: recompute snap for the final commit position so the committed
-        // position is snapped even if the user stopped moving.
-        bool altHeld    = (Keyboard.Modifiers & ModifierKeys.Alt) != 0;
-        bool snapEnabled = (SnapToGrid || SnapToShapes) && !altHeld;
-        double snapDxPx = 0, snapDyPx = 0;
+        var plan = CanvasGesturePlanner.PlanMove(new CanvasMoveRequest(
+            StartScreen: ToGesturePoint(_dragStartScreen),
+            CurrentScreen: ToGesturePoint(screenPt),
+            Transform: ToCoreTransform(xf),
+            Shapes: _moveStartShapes,
+            CurrentSlide: _editor.CurrentSlide,
+            SnapToGrid: SnapToGrid,
+            SnapToShapes: SnapToShapes,
+            BypassSnap: (Keyboard.Modifiers & ModifierKeys.Alt) != 0));
 
-        var slide = _editor.CurrentSlide;
-        if (snapEnabled && slide is not null && _editor.SelectedShapeIds.Count > 0)
-        {
-            double ddxDip = xf.ScaleScreenToDip(ddxPx);
-            double ddyDip = xf.ScaleScreenToDip(ddyPx);
-            var firstId   = _editor.SelectedShapeIds[0];
-            if (_moveStartPositions.TryGetValue(firstId, out var firstOrig))
-            {
-                var firstShape = slide.Shapes.FirstOrDefault(s => s.Id == firstId);
-                if (firstShape is not null)
-                {
-                    double newL = SlideTransform.EmuToDip(firstOrig.ox) + ddxDip;
-                    double newT = SlideTransform.EmuToDip(firstOrig.oy) + ddyDip;
-                    double newR = newL + SlideTransform.EmuToDip(firstShape.ExtentCxEmu);
-                    double newB = newT + SlideTransform.EmuToDip(firstShape.ExtentCyEmu);
-
-                    var candidates = SnapToShapes
-                        ? SnapEngine.BuildShapeCandidates(slide, _editor.SelectedShapeIds)
-                        : null;
-
-                    var snap = SnapEngine.Snap(
-                        (newL, newT, newR, newB),
-                        candidates,
-                        xf.SlideWidthDip, xf.SlideHeightDip,
-                        snapEnabled: true,
-                        gridPitchDip: SnapToGrid ? SnapEngine.DefaultGridPitchDip : 0);
-
-                    snapDxPx = snap.SnapDx * xf.Scale;
-                    snapDyPx = snap.SnapDy * xf.Scale;
-                }
-            }
-        }
-
-        long dxEmu = xf.ScreenDeltaToEmu(ddxPx + snapDxPx);
-        long dyEmu = xf.ScreenDeltaToEmu(ddyPx + snapDyPx);
-        _editor.MoveSelected(dxEmu, dyEmu);
+        _editor.MoveSelected(plan.DeltaXEmu, plan.DeltaYEmu);
     }
 
     // ── Resize gesture ────────────────────────────────────────────────────────────────────────
 
-    private void StartResize(uint shapeId, Slide slide, SelectionAdorner.HandleKind handle, Point screenPt)
+    private void StartResize(uint shapeId, Slide slide, CanvasGestureHandleKind handle, Point screenPt)
     {
         var s = slide.Shapes.FirstOrDefault(sh => sh.Id == shapeId);
         if (s is null) return;
@@ -424,8 +325,8 @@ public sealed class CanvasGestureHandler
     private void PreviewResize(Point screenPt, SlideTransform xf)
     {
         var (nx, ny, ncx, ncy) = ComputeResizeBounds(screenPt, xf);
-        var r = BoundsToScreenRect(nx, ny, ncx, ncy, xf);
-        _adorner.UpdatePreview(r);
+        var r = SlideCanvasGeometryPlanner.EmuBoundsToScreen(nx, ny, ncx, ncy, ToCoreTransform(xf));
+        _adorner.UpdatePreview(ToWpfRect(r));
     }
 
     private void CommitResize(Point screenPt, SlideTransform xf)
@@ -445,272 +346,24 @@ public sealed class CanvasGestureHandler
     public (long newX, long newY, long newCx, long newCy) ComputeResizeBounds(
         Point screenPt, SlideTransform xf)
     {
-        double dxPx = screenPt.X - _dragStartScreen.X;
-        double dyPx = screenPt.Y - _dragStartScreen.Y;
+        var result = CanvasGesturePlanner.ComputeResizeBounds(new CanvasResizeRequest(
+            StartScreen: ToGesturePoint(_dragStartScreen),
+            CurrentScreen: ToGesturePoint(screenPt),
+            Transform: ToCoreTransform(xf),
+            State: new CanvasResizeState(
+                _resizeShapeId,
+                _resizeOrigX,
+                _resizeOrigY,
+                _resizeOrigCx,
+                _resizeOrigCy,
+                _resizeOrigRotationDeg,
+                _resizeHandle),
+            CurrentSlide: _editor.CurrentSlide,
+            SnapToGrid: SnapToGrid,
+            SnapToShapes: SnapToShapes,
+            BypassSnap: (Keyboard.Modifiers & ModifierKeys.Alt) != 0));
 
-        // Work in DIP so we can apply snap before the final EMU conversion.
-        double origXDip  = SlideTransform.EmuToDip(_resizeOrigX);
-        double origYDip  = SlideTransform.EmuToDip(_resizeOrigY);
-        double origCxDip = SlideTransform.EmuToDip(_resizeOrigCx);
-        double origCyDip = SlideTransform.EmuToDip(_resizeOrigCy);
-        double dxDip     = xf.ScaleScreenToDip(dxPx);
-        double dyDip     = xf.ScaleScreenToDip(dyPx);
-
-        // AD3: Un-rotate the drag delta from world (screen-aligned) space into the shape's
-        // local frame so that dragging a handle moves the correct local edge regardless of
-        // rotation.  For a 0° shape this is an exact no-op.
-        double rot = _resizeOrigRotationDeg;
-        if (rot != 0)
-            (dxDip, dyDip) = SlideTransformCore.UnRotateDelta(dxDip, dyDip, rot);
-
-        // Wave 12B: snap the dragged edge if snap is enabled.
-        // Alt disables snapping (PowerPoint convention), same as move.
-        bool altHeld     = (Keyboard.Modifiers & ModifierKeys.Alt) != 0;
-        bool snapEnabled = (SnapToGrid || SnapToShapes) && !altHeld;
-
-        // Snapping is applied in the UN-ROTATED (local) frame — the dragged local edge position.
-        if (snapEnabled && _editor.CurrentSlide is not null)
-        {
-            var slide      = _editor.CurrentSlide;
-            var candidates = SnapToShapes
-                ? SnapEngine.BuildShapeCandidates(slide, new[] { _resizeShapeId })
-                : null;
-            double slideW  = xf.SlideWidthDip;
-            double slideH  = xf.SlideHeightDip;
-            double pitch   = SnapToGrid ? SnapEngine.DefaultGridPitchDip : 0;
-
-            // Snap only the dragged edge(s).  Pass a degenerate rect whose left=right
-            // (or top=bottom) equals the dragged edge so all three probes collapse to
-            // that single value, giving the cleanest snap delta for that edge alone.
-            switch (_resizeHandle)
-            {
-                // ── horizontal (Y) dragged edges ─────────────────────────────────
-                case SelectionAdorner.HandleKind.ResizeN:
-                {
-                    double draggedY = origYDip + dyDip;
-                    var snap = SnapEngine.Snap(
-                        (origXDip, draggedY, origXDip + origCxDip, draggedY),
-                        candidates, slideW, slideH, true, pitch);
-                    dyDip += snap.SnapDy;
-                    break;
-                }
-                case SelectionAdorner.HandleKind.ResizeS:
-                {
-                    double draggedY = origYDip + origCyDip + dyDip;
-                    var snap = SnapEngine.Snap(
-                        (origXDip, draggedY, origXDip + origCxDip, draggedY),
-                        candidates, slideW, slideH, true, pitch);
-                    dyDip += snap.SnapDy;
-                    break;
-                }
-                // ── vertical (X) dragged edges ────────────────────────────────────
-                case SelectionAdorner.HandleKind.ResizeW:
-                {
-                    double draggedX = origXDip + dxDip;
-                    var snap = SnapEngine.Snap(
-                        (draggedX, origYDip, draggedX, origYDip + origCyDip),
-                        candidates, slideW, slideH, true, pitch);
-                    dxDip += snap.SnapDx;
-                    break;
-                }
-                case SelectionAdorner.HandleKind.ResizeE:
-                {
-                    double draggedX = origXDip + origCxDip + dxDip;
-                    var snap = SnapEngine.Snap(
-                        (draggedX, origYDip, draggedX, origYDip + origCyDip),
-                        candidates, slideW, slideH, true, pitch);
-                    dxDip += snap.SnapDx;
-                    break;
-                }
-                // ── corner handles: snap both dragged edges ───────────────────────
-                case SelectionAdorner.HandleKind.ResizeNE:
-                {
-                    double draggedX = origXDip + origCxDip + dxDip;
-                    double draggedY = origYDip + dyDip;
-                    var snap = SnapEngine.Snap(
-                        (draggedX, draggedY, draggedX, draggedY),
-                        candidates, slideW, slideH, true, pitch);
-                    dxDip += snap.SnapDx;
-                    dyDip += snap.SnapDy;
-                    break;
-                }
-                case SelectionAdorner.HandleKind.ResizeNW:
-                {
-                    double draggedX = origXDip + dxDip;
-                    double draggedY = origYDip + dyDip;
-                    var snap = SnapEngine.Snap(
-                        (draggedX, draggedY, draggedX, draggedY),
-                        candidates, slideW, slideH, true, pitch);
-                    dxDip += snap.SnapDx;
-                    dyDip += snap.SnapDy;
-                    break;
-                }
-                case SelectionAdorner.HandleKind.ResizeSE:
-                {
-                    double draggedX = origXDip + origCxDip + dxDip;
-                    double draggedY = origYDip + origCyDip + dyDip;
-                    var snap = SnapEngine.Snap(
-                        (draggedX, draggedY, draggedX, draggedY),
-                        candidates, slideW, slideH, true, pitch);
-                    dxDip += snap.SnapDx;
-                    dyDip += snap.SnapDy;
-                    break;
-                }
-                case SelectionAdorner.HandleKind.ResizeSW:
-                {
-                    double draggedX = origXDip + dxDip;
-                    double draggedY = origYDip + origCyDip + dyDip;
-                    var snap = SnapEngine.Snap(
-                        (draggedX, draggedY, draggedX, draggedY),
-                        candidates, slideW, slideH, true, pitch);
-                    dxDip += snap.SnapDx;
-                    dyDip += snap.SnapDy;
-                    break;
-                }
-            }
-        }
-
-        // Convert snapped DIP deltas to EMU.
-        long dx = xf.ScreenDeltaToEmu(dxDip * xf.Scale);
-        long dy = xf.ScreenDeltaToEmu(dyDip * xf.Scale);
-
-        long x  = _resizeOrigX;
-        long y  = _resizeOrigY;
-        long cx = _resizeOrigCx;
-        long cy = _resizeOrigCy;
-
-        const long MinEmu = 91440L; // 0.1 inch minimum size
-
-        switch (_resizeHandle)
-        {
-            case SelectionAdorner.HandleKind.ResizeN:
-                y  = _resizeOrigY  + dy;
-                cy = Math.Max(MinEmu, _resizeOrigCy - dy);
-                break;
-            case SelectionAdorner.HandleKind.ResizeS:
-                cy = Math.Max(MinEmu, _resizeOrigCy + dy);
-                break;
-            case SelectionAdorner.HandleKind.ResizeW:
-                x  = _resizeOrigX  + dx;
-                cx = Math.Max(MinEmu, _resizeOrigCx - dx);
-                break;
-            case SelectionAdorner.HandleKind.ResizeE:
-                cx = Math.Max(MinEmu, _resizeOrigCx + dx);
-                break;
-            case SelectionAdorner.HandleKind.ResizeNE:
-                y  = _resizeOrigY  + dy;
-                cy = Math.Max(MinEmu, _resizeOrigCy - dy);
-                cx = Math.Max(MinEmu, _resizeOrigCx + dx);
-                break;
-            case SelectionAdorner.HandleKind.ResizeNW:
-                x  = _resizeOrigX  + dx;
-                y  = _resizeOrigY  + dy;
-                cx = Math.Max(MinEmu, _resizeOrigCx - dx);
-                cy = Math.Max(MinEmu, _resizeOrigCy - dy);
-                break;
-            case SelectionAdorner.HandleKind.ResizeSE:
-                cx = Math.Max(MinEmu, _resizeOrigCx + dx);
-                cy = Math.Max(MinEmu, _resizeOrigCy + dy);
-                break;
-            case SelectionAdorner.HandleKind.ResizeSW:
-                x  = _resizeOrigX  + dx;
-                cx = Math.Max(MinEmu, _resizeOrigCx - dx);
-                cy = Math.Max(MinEmu, _resizeOrigCy + dy);
-                break;
-        }
-
-        // AD3: Anchor-fixed correction for rotated shapes.
-        // The bounds x,y,cx,cy are computed in the shape's LOCAL (un-rotated) frame.
-        // After rotation, the anchor corner (opposite to the dragged handle) must stay at
-        // the same WORLD position it occupied before the drag began.
-        if (rot != 0)
-        {
-            // Anchor corner in original LOCAL frame (the corner that must NOT move).
-            (double anchorLocalX, double anchorLocalY) = _resizeHandle switch
-            {
-                SelectionAdorner.HandleKind.ResizeSE =>
-                    (SlideTransform.EmuToDip(_resizeOrigX),
-                     SlideTransform.EmuToDip(_resizeOrigY)),
-                SelectionAdorner.HandleKind.ResizeNW =>
-                    (SlideTransform.EmuToDip(_resizeOrigX + _resizeOrigCx),
-                     SlideTransform.EmuToDip(_resizeOrigY + _resizeOrigCy)),
-                SelectionAdorner.HandleKind.ResizeNE =>
-                    (SlideTransform.EmuToDip(_resizeOrigX),
-                     SlideTransform.EmuToDip(_resizeOrigY + _resizeOrigCy)),
-                SelectionAdorner.HandleKind.ResizeSW =>
-                    (SlideTransform.EmuToDip(_resizeOrigX + _resizeOrigCx),
-                     SlideTransform.EmuToDip(_resizeOrigY)),
-                SelectionAdorner.HandleKind.ResizeN =>
-                    (SlideTransform.EmuToDip(_resizeOrigX + _resizeOrigCx / 2),
-                     SlideTransform.EmuToDip(_resizeOrigY + _resizeOrigCy)),
-                SelectionAdorner.HandleKind.ResizeS =>
-                    (SlideTransform.EmuToDip(_resizeOrigX + _resizeOrigCx / 2),
-                     SlideTransform.EmuToDip(_resizeOrigY)),
-                SelectionAdorner.HandleKind.ResizeW =>
-                    (SlideTransform.EmuToDip(_resizeOrigX + _resizeOrigCx),
-                     SlideTransform.EmuToDip(_resizeOrigY + _resizeOrigCy / 2)),
-                SelectionAdorner.HandleKind.ResizeE =>
-                    (SlideTransform.EmuToDip(_resizeOrigX),
-                     SlideTransform.EmuToDip(_resizeOrigY + _resizeOrigCy / 2)),
-                _ => (SlideTransform.EmuToDip(_resizeOrigX),
-                      SlideTransform.EmuToDip(_resizeOrigY))
-            };
-
-            // Original shape centre in DIP.
-            double origCx = SlideTransform.EmuToDip(_resizeOrigX) + SlideTransform.EmuToDip(_resizeOrigCx) / 2.0;
-            double origCy = SlideTransform.EmuToDip(_resizeOrigY) + SlideTransform.EmuToDip(_resizeOrigCy) / 2.0;
-
-            // World position of the anchor corner BEFORE resize (rotate local → world).
-            var (anchorWorldX, anchorWorldY) =
-                SlideTransformCore.RotatePoint(anchorLocalX, anchorLocalY, origCx, origCy, rot);
-
-            // New bounds in local frame (in DIP).
-            double newXDip  = SlideTransform.EmuToDip(x);
-            double newYDip  = SlideTransform.EmuToDip(y);
-            double newCxDip = SlideTransform.EmuToDip(cx);
-            double newCyDip = SlideTransform.EmuToDip(cy);
-
-            // New local anchor corner position (in the resized local bounding box).
-            (double newAnchorLocalX, double newAnchorLocalY) = _resizeHandle switch
-            {
-                SelectionAdorner.HandleKind.ResizeSE =>
-                    (newXDip, newYDip),
-                SelectionAdorner.HandleKind.ResizeNW =>
-                    (newXDip + newCxDip, newYDip + newCyDip),
-                SelectionAdorner.HandleKind.ResizeNE =>
-                    (newXDip, newYDip + newCyDip),
-                SelectionAdorner.HandleKind.ResizeSW =>
-                    (newXDip + newCxDip, newYDip),
-                SelectionAdorner.HandleKind.ResizeN =>
-                    (newXDip + newCxDip / 2, newYDip + newCyDip),
-                SelectionAdorner.HandleKind.ResizeS =>
-                    (newXDip + newCxDip / 2, newYDip),
-                SelectionAdorner.HandleKind.ResizeW =>
-                    (newXDip + newCxDip, newYDip + newCyDip / 2),
-                SelectionAdorner.HandleKind.ResizeE =>
-                    (newXDip, newYDip + newCyDip / 2),
-                _ => (newXDip, newYDip)
-            };
-
-            // New shape centre in local frame.
-            double newCenLocalX = newXDip + newCxDip / 2.0;
-            double newCenLocalY = newYDip + newCyDip / 2.0;
-
-            // Where does the anchor corner end up in world space after rotating around the
-            // new (local-frame) centre?
-            var (newAnchorWorldX, newAnchorWorldY) =
-                SlideTransformCore.RotatePoint(newAnchorLocalX, newAnchorLocalY,
-                                               newCenLocalX, newCenLocalY, rot);
-
-            // Shift the bounding-box origin so the anchor returns to its pre-drag world position.
-            double shiftX = anchorWorldX - newAnchorWorldX;
-            double shiftY = anchorWorldY - newAnchorWorldY;
-
-            x = SlideTransform.DipToEmu(newXDip + shiftX);
-            y = SlideTransform.DipToEmu(newYDip + shiftY);
-        }
-
-        return (x, y, cx, cy);
+        return (result.XEmu, result.YEmu, result.CxEmu, result.CyEmu);
     }
 
     // ── Rotate gesture ────────────────────────────────────────────────────────────────────────
@@ -761,18 +414,12 @@ public sealed class CanvasGestureHandler
     /// </summary>
     public double ComputeRotationAngle(Point screenPt, SlideTransform xf)
     {
-        // Center in screen space
-        double cx = _rotateCenterSlide.X * xf.Scale + xf.OffsetX;
-        double cy = _rotateCenterSlide.Y * xf.Scale + xf.OffsetY;
-
-        double angle = Math.Atan2(screenPt.Y - cy, screenPt.X - cx) * (180.0 / Math.PI) + 90.0;
-        angle = ((angle % 360) + 360) % 360; // normalize to [0,360)
-        angle = _rotateOrigDeg + (angle - _rotateOrigDeg); // keep relative
-
-        if ((Keyboard.Modifiers & ModifierKeys.Shift) != 0)
-            angle = Math.Round(angle / 15.0) * 15.0;
-
-        return angle;
+        return CanvasGesturePlanner.ComputeRotationAngle(new CanvasRotationRequest(
+            CurrentScreen: ToGesturePoint(screenPt),
+            CenterSlide: ToGesturePoint(_rotateCenterSlide),
+            Transform: ToCoreTransform(xf),
+            OriginalRotationDeg: _rotateOrigDeg,
+            SnapToFifteenDegrees: (Keyboard.Modifiers & ModifierKeys.Shift) != 0));
     }
 
     // ── Marquee gesture ───────────────────────────────────────────────────────────────────────
@@ -787,8 +434,10 @@ public sealed class CanvasGestureHandler
 
     private void PreviewMarquee(Point screenPt, SlideTransform xf)
     {
-        var r = new Rect(_dragStartScreen, screenPt);
-        _adorner.UpdateMarquee(r);
+        var r = SlideCanvasGeometryPlanner.ScreenRectBetween(
+            ToGesturePoint(_dragStartScreen),
+            ToGesturePoint(screenPt));
+        _adorner.UpdateMarquee(ToWpfRect(r));
     }
 
     private void CommitMarquee(Point screenPt, SlideTransform xf)
@@ -867,16 +516,16 @@ public sealed class CanvasGestureHandler
                 var handle = _adorner.HitTestHandle(selRect.Value, screenPt);
                 _canvas.Cursor = handle switch
                 {
-                    SelectionAdorner.HandleKind.Rotate              => Cursors.Cross,
-                    SelectionAdorner.HandleKind.ResizeN or
-                    SelectionAdorner.HandleKind.ResizeS             => Cursors.SizeNS,
-                    SelectionAdorner.HandleKind.ResizeE or
-                    SelectionAdorner.HandleKind.ResizeW             => Cursors.SizeWE,
-                    SelectionAdorner.HandleKind.ResizeNE or
-                    SelectionAdorner.HandleKind.ResizeSW            => Cursors.SizeNESW,
-                    SelectionAdorner.HandleKind.ResizeNW or
-                    SelectionAdorner.HandleKind.ResizeSE            => Cursors.SizeNWSE,
-                    SelectionAdorner.HandleKind.Body                => Cursors.SizeAll,
+                    CanvasGestureHandleKind.Rotate              => Cursors.Cross,
+                    CanvasGestureHandleKind.ResizeN or
+                    CanvasGestureHandleKind.ResizeS             => Cursors.SizeNS,
+                    CanvasGestureHandleKind.ResizeE or
+                    CanvasGestureHandleKind.ResizeW             => Cursors.SizeWE,
+                    CanvasGestureHandleKind.ResizeNE or
+                    CanvasGestureHandleKind.ResizeSW            => Cursors.SizeNESW,
+                    CanvasGestureHandleKind.ResizeNW or
+                    CanvasGestureHandleKind.ResizeSE            => Cursors.SizeNWSE,
+                    CanvasGestureHandleKind.Body                => Cursors.SizeAll,
                     _                                               => Cursors.Arrow
                 };
                 return;
@@ -927,22 +576,23 @@ public sealed class CanvasGestureHandler
 
     // ── Helpers ───────────────────────────────────────────────────────────────────────────────
 
+    private static CanvasGesturePoint ToGesturePoint(Point point)
+        => new(point.X, point.Y);
+
+    private static SlideTransformCore ToCoreTransform(SlideTransform xf)
+        => xf.Core;
+
     private Rect? GetSelectionScreenRect(uint shapeId, Slide slide, SlideTransform xf)
     {
-        var s = slide.Shapes.FirstOrDefault(sh => sh.Id == shapeId);
-        if (s is null || _editor.Presentation is null) return null;
-        var b = ShapeHitTester.GetShapeBoundsDip(s, _editor.Presentation);
-        return BoundsToScreenRect(
-            SlideTransform.DipToEmu(b.Left), SlideTransform.DipToEmu(b.Top),
-            SlideTransform.DipToEmu(b.Width), SlideTransform.DipToEmu(b.Height), xf);
+        if (_editor.Presentation is null) return null;
+        var rect = SlideCanvasGeometryPlanner.ShapeBoundsToScreen(
+            slide,
+            _editor.Presentation,
+            shapeId,
+            ToCoreTransform(xf));
+        return rect is { } screenRect ? ToWpfRect(screenRect) : null;
     }
 
-    private static Rect BoundsToScreenRect(long offX, long offY, long cx, long cy, SlideTransform xf)
-    {
-        double x = SlideTransform.EmuToDip(offX) * xf.Scale + xf.OffsetX;
-        double y = SlideTransform.EmuToDip(offY) * xf.Scale + xf.OffsetY;
-        double w = SlideTransform.EmuToDip(cx) * xf.Scale;
-        double h = SlideTransform.EmuToDip(cy) * xf.Scale;
-        return new Rect(x, y, Math.Max(0, w), Math.Max(0, h));
-    }
+    private static Rect ToWpfRect(SlideScreenRect rect)
+        => new(rect.Left, rect.Top, rect.Width, rect.Height);
 }

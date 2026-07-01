@@ -32,17 +32,18 @@ public sealed partial class SelectionPanePlannerTests
 
         source.Should().Contain("_list.KeyDown += List_KeyDown;");
         source.Should().Contain("private void List_KeyDown(object sender, KeyEventArgs e)");
-        source.Should().Contain("TryHandleListReorderShortcut(e)");
-        source.Should().Contain("private bool TryHandleListReorderShortcut(KeyEventArgs e)");
+        source.Should().Contain("SelectionPanePlanner.PlanKeyboardAction(");
+        source.Should().Contain("ToSelectionPaneKeyboardKey(e.Key)");
         source.Should().Contain("ModifierKeys.Control");
-        source.Should().Contain("e.Key == Key.Up");
         source.Should().Contain("AcceptMove(SelectionPaneDialogAction.MoveUp)");
-        source.Should().Contain("e.Key == Key.Down");
         source.Should().Contain("AcceptMove(SelectionPaneDialogAction.MoveDown)");
-        source.Should().Contain("if (e.Key == Key.F2)");
+        source.Should().Contain("SelectionPaneKeyboardAction.FocusRename");
         source.Should().Contain("FocusRenameBox();");
-        source.Should().Contain("if (e.Key == Key.Space)");
+        source.Should().Contain("SelectionPaneKeyboardAction.ToggleVisibility");
         source.Should().Contain("ToggleSelectedVisibility();");
+        source.Should().NotContain("TryHandleListReorderShortcut");
+        source.Should().NotContain("if (e.Key == Key.F2)");
+        source.Should().NotContain("if (e.Key == Key.Space)");
         source.Should().Contain("private void FocusRenameBox()");
         source.Should().Contain("DialogFocus.FocusAndSelect(_renameBox);");
     }
@@ -54,7 +55,7 @@ public sealed partial class SelectionPanePlannerTests
         var hostSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Drawing.cs");
 
         source.Should().Contain("private readonly List<SelectionPaneMoveChange> _moveChanges = [];");
-        source.Should().Contain("SelectionPaneDialogStatePlanner.PlanMove");
+        source.Should().Contain("SelectionPanePlanner.PlanMove");
         source.Should().Contain("_moveChanges.AddRange(plan.MoveChanges)");
         source.Should().Contain("ApplySearchAndFilter(selected.Source.Id)");
         var acceptMoveBody = source.Substring(
@@ -77,7 +78,7 @@ public sealed partial class SelectionPanePlannerTests
         source.Should().Contain("_list.DragOver");
         source.Should().Contain("_list.Drop");
         source.Should().Contain("DragDrop.DoDragDrop");
-        source.Should().Contain("SelectionPaneDialogStatePlanner.PlanDragReorder");
+        source.Should().Contain("SelectionPanePlanner.PlanDragReorder");
         source.Should().Contain("GetDropPlacement");
         source.Should().Contain("SelectionPaneDropPlacement.After");
         source.Should().Contain("CreateDragMoveChanges");

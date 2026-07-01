@@ -8,6 +8,7 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
+using Free.Shared.Shell.Avalonia;
 using FreeX.App.Services;
 using FreeX.Core.Model;
 
@@ -38,63 +39,27 @@ public sealed partial class MainWindow
     // Print dialog chrome helpers
     // -------------------------------------------------------------------------------------------------------
 
+    private static AvaloniaCompactDialogChromeStyle PrintDialogChromeStyle => new(FormulaBarFontFamily);
+
     private static void ApplyPrintButtonChrome(Button button, double minWidth = 80, bool isDefault = false)
-    {
-        button.MinWidth = minWidth;
-        button.Height = 24;
-        button.MinHeight = 24;
-        button.MaxHeight = 24;
-        button.Padding = new Thickness(4, 1);
-        button.Background = Brushes.White;
-        button.BorderBrush = isDefault ? Brush(0, 120, 215) : Brush(112, 112, 112);
-        button.BorderThickness = new Thickness(1);
-        button.FontSize = 12;
-        button.FontFamily = FormulaBarFontFamily;
-        button.HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center;
-        button.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
-    }
+        => AvaloniaCompactDialogChrome.ApplyButton(button, PrintDialogChromeStyle, minWidth, isDefault);
 
     private static void ApplyPrintTextBoxChrome(TextBox tb)
-    {
-        tb.Height = 24;
-        tb.MinHeight = 24;
-        tb.MaxHeight = 24;
-        tb.Padding = new Thickness(4, 1);
-        tb.FontSize = 12;
-        tb.FontFamily = FormulaBarFontFamily;
-        tb.BorderBrush = Brush(130, 130, 130);
-        tb.BorderThickness = new Thickness(1);
-        tb.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
-    }
+        => AvaloniaCompactDialogChrome.ApplyTextBox(tb, PrintDialogChromeStyle);
 
     private static void ApplyPrintComboBoxChrome(ComboBox cb)
-    {
-        cb.Height = 24;
-        cb.MinHeight = 24;
-        cb.MaxHeight = 24;
-        cb.Padding = new Thickness(5, 0, 4, 0);
-        cb.FontSize = 12;
-        cb.FontFamily = FormulaBarFontFamily;
-        cb.BorderBrush = Brush(130, 130, 130);
-        cb.BorderThickness = new Thickness(1);
-    }
+        => AvaloniaCompactDialogChrome.ApplyComboBox(cb, PrintDialogChromeStyle);
 
     private static void ApplyPrintRadioButtonChrome(RadioButton rb)
     {
         StripContentMnemonic(rb);
-        rb.MinHeight = 20;
-        rb.MaxHeight = 20;
-        rb.FontSize = 12;
-        rb.FontFamily = FormulaBarFontFamily;
+        AvaloniaCompactDialogChrome.ApplyRadioButton(rb, PrintDialogChromeStyle);
     }
 
     private static void ApplyPrintCheckBoxChrome(CheckBox cb)
     {
         StripContentMnemonic(cb);
-        cb.MinHeight = 20;
-        cb.MaxHeight = 20;
-        cb.FontSize = 12;
-        cb.FontFamily = FormulaBarFontFamily;
+        AvaloniaCompactDialogChrome.ApplyCheckBox(cb, PrintDialogChromeStyle);
     }
 
     private async Task ShowPrintDialogAsync()
@@ -342,13 +307,7 @@ public sealed partial class MainWindow
             await ExecutePrintJobAsync(request, printerId, canSpool);
         };
 
-        var buttonRow = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 8,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Children = { cancelButton, printButton },
-        };
+        var buttonRow = AvaloniaCompactDialogChrome.CreateActionRow([cancelButton, printButton]);
 
         var root = new DockPanel { Margin = new Thickness(18) };
         DockPanel.SetDock(buttonRow, Dock.Bottom);
@@ -502,23 +461,22 @@ public sealed partial class MainWindow
 
             using (storageFile)
             {
-                var path = storageFile.TryGetLocalPath();
+                var path = storageFile.LocalPath;
                 if (string.IsNullOrWhiteSpace(path))
                 {
                     ShowExportIssue(UiText.Get("Print_RequiresLocalPath"));
                     return;
                 }
 
-                var requestedPath = path;
-                var exportPathPlan = ExportPathPlanner.Plan(requestedPath, ExportFileFormat.Pdf);
-                if (ExportPathPlanner.ShouldPromptForNormalizedOverwrite(requestedPath, exportPathPlan, File.Exists) &&
-                    !await ConfirmNormalizedPdfOverwriteAsync(exportPathPlan.Path))
+                var exportTargetPlan = ExportFilePickerPlanner.BuildPortablePdfSaveTargetPlan(path, File.Exists);
+                if (exportTargetPlan.ShouldConfirmNormalizedOverwrite &&
+                    !await ConfirmNormalizedPdfOverwriteAsync(exportTargetPlan.Path))
                 {
                     ShowExportIssue(UiText.Get("Print_SaveCanceled"));
                     return;
                 }
 
-                path = exportPathPlan.Path;
+                path = exportTargetPlan.Path;
 
                 try
                 {

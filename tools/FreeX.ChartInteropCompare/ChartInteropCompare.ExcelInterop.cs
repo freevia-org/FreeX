@@ -1,49 +1,32 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Globalization;
 using System.IO;
-using System.Linq;
 using System.Runtime.InteropServices;
-using System.Threading;
 using FreeX.Core.IO;
+using FreeX.ToolsShared.Wpf;
+using static FreeX.ToolsShared.Wpf.ExcelComAutomation;
 
 internal static partial class ChartInteropCompare
 {
     private const int XlOpenXmlWorkbook = 51;
     private const double ExcelPointsPerPixel = 72.0 / 96.0;
-    private const string ExcelProcessName = "EXCEL";
 
     private static object CreateExcelApplication()
     {
-        var excelType = Type.GetTypeFromProgID("Excel.Application")
-            ?? throw new InvalidOperationException("Excel.Application COM registration was not found.");
-        Exception? lastException = null;
-        for (var attempt = 1; attempt <= 3; attempt++)
-        {
-            try
+        return ExcelComAutomation.CreateExcelApplicationWithRetry(
+            "Excel.Application COM registration was not found.",
+            "Excel.Application COM activation returned null.",
+            maxAttempts: 3,
+            retryDelayMilliseconds: 2000,
+            failureMessagePrefix: "Excel.Application COM activation failed after retries",
+            configure: app =>
             {
-                var excel = Activator.CreateInstance(excelType)
-                    ?? throw new InvalidOperationException("Excel.Application COM activation returned null.");
-                dynamic app = excel;
                 app.Visible = false;
                 app.DisplayAlerts = false;
-                TrySetExcelProperty(app, "EnableEvents", false);
-                TrySetExcelProperty(app, "AutomationSecurity", 3);
-                return excel;
-            }
-            catch (Exception ex) when (attempt < 3)
-            {
-                lastException = ex;
-                Thread.Sleep(2000);
-            }
-            catch (Exception ex)
-            {
-                lastException = ex;
-            }
-        }
-
-        throw new InvalidOperationException($"Excel.Application COM activation failed after retries: {lastException?.Message}", lastException);
+                TrySetProperty(app, "EnableEvents", false);
+                TrySetProperty(app, "AutomationSecurity", 3);
+            });
     }
 
     private static void ExportFreeXWorkbookThroughExcel(
@@ -230,8 +213,8 @@ internal static partial class ChartInteropCompare
                     }
                     finally
                     {
-                        try { if (chartRcw is not null && Marshal.IsComObject(chartRcw)) Marshal.FinalReleaseComObject(chartRcw); } catch { }
-                        try { if (chartObjectItemRcw is not null && Marshal.IsComObject(chartObjectItemRcw)) Marshal.FinalReleaseComObject(chartObjectItemRcw); } catch { }
+                        ReleaseComObject(chartRcw);
+                        ReleaseComObject(chartObjectItemRcw);
                     }
                 }
 
@@ -267,16 +250,16 @@ internal static partial class ChartInteropCompare
                     }
                     finally
                     {
-                        try { if (shapeChartRcw is not null && Marshal.IsComObject(shapeChartRcw)) Marshal.FinalReleaseComObject(shapeChartRcw); } catch { }
-                        try { if (shapeRcw is not null && Marshal.IsComObject(shapeRcw)) Marshal.FinalReleaseComObject(shapeRcw); } catch { }
+                        ReleaseComObject(shapeChartRcw);
+                        ReleaseComObject(shapeRcw);
                     }
                 }
             }
             finally
             {
-                try { if (shapesRcw is not null && Marshal.IsComObject(shapesRcw)) Marshal.FinalReleaseComObject(shapesRcw); } catch { }
-                try { if (chartObjectsRcw is not null && Marshal.IsComObject(chartObjectsRcw)) Marshal.FinalReleaseComObject(chartObjectsRcw); } catch { }
-                try { if (worksheetRcw is not null && Marshal.IsComObject(worksheetRcw)) Marshal.FinalReleaseComObject(worksheetRcw); } catch { }
+                ReleaseComObject(shapesRcw);
+                ReleaseComObject(chartObjectsRcw);
+                ReleaseComObject(worksheetRcw);
             }
         }
 
@@ -294,7 +277,7 @@ internal static partial class ChartInteropCompare
             }
             finally
             {
-                try { if (chartSheetRcw is not null && Marshal.IsComObject(chartSheetRcw)) Marshal.FinalReleaseComObject(chartSheetRcw); } catch { }
+                ReleaseComObject(chartSheetRcw);
             }
         }
 
@@ -324,93 +307,4 @@ internal static partial class ChartInteropCompare
         }
     }
 
-    private static void TrySetExcelProperty(dynamic excel, string propertyName, object value)
-    {
-        try
-        {
-            var property = excel.GetType().InvokeMember(
-                propertyName,
-                System.Reflection.BindingFlags.SetProperty,
-                null,
-                excel,
-                new[] { value },
-                CultureInfo.InvariantCulture);
-            _ = property;
-        }
-        catch (Exception)
-        {
-            // Some Excel builds block optional automation flags; the comparison can continue.
-        }
-    }
-
-    private static void TryCloseWorkbook(object? workbook)
-    {
-        if (workbook is null)
-            return;
-
-        try
-        {
-            ((dynamic)workbook).Close(false);
-        }
-        catch (Exception)
-        {
-            // Best effort during error cleanup.
-        }
-    }
-
-    private static HashSet<int> GetExcelProcessIds() =>
-        Process.GetProcessesByName(ExcelProcessName).Select(process => process.Id).ToHashSet();
-
-    private static void WaitForExcelProcessesToExit(HashSet<int> excelPids, int timeoutMilliseconds)
-    {
-        if (excelPids.Count == 0)
-            return;
-
-        var deadline = Environment.TickCount64 + timeoutMilliseconds;
-        while (Environment.TickCount64 < deadline)
-        {
-            var running = Process.GetProcessesByName(ExcelProcessName)
-                .Any(process => excelPids.Contains(process.Id));
-            if (!running)
-                return;
-
-            Thread.Sleep(250);
-        }
-    }
-
-    private static void KillExcelProcesses(HashSet<int> excelPids)
-    {
-        if (excelPids.Count == 0)
-            return;
-
-        foreach (var process in Process.GetProcessesByName(ExcelProcessName))
-        {
-            if (!excelPids.Contains(process.Id))
-                continue;
-
-            try
-            {
-                process.Kill(entireProcessTree: true);
-                process.WaitForExit(5000);
-                Console.WriteLine($"Killed owned EXCEL PID {process.Id}.");
-            }
-            catch (Exception ex)
-            {
-                Console.Error.WriteLine($"Failed to kill owned EXCEL PID {process.Id}: {ex.Message}");
-            }
-        }
-    }
-
-    private static void ReleaseComObject(object value)
-    {
-        try
-        {
-            if (Marshal.IsComObject(value))
-                Marshal.FinalReleaseComObject(value);
-        }
-        catch (Exception)
-        {
-            // Best effort only; orphan cleanup handles leaked Excel processes.
-        }
-    }
 }

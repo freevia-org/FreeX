@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using Free.Shared.Ribbon.Wpf;
+using Free.Shared.Shell.Wpf;
 using Xunit;
 
 namespace FreeW.App.Host.Tests;
@@ -41,11 +42,22 @@ public sealed class SisterAppFrameHelperTests
             "MainWindow.cs"));
 
         source.Should().Contain("RibbonShellBuilder.Build(");
+        source.Should().Contain("using Free.Shared.Shell.Wpf;");
         source.Should().Contain("SisterAppClientFrameBuilder.Build(");
+        source.Should().Contain("WorkArea:");
+        source.Should().Contain("StatusBar:");
         source.Should().Contain("SisterAppWindowFrameBuilder.Build(");
+        source.Should().Contain("_titleBinder = new SisterWpfWindowTitleBinder(this, titleBar.TitleText);");
+        source.Should().Contain("new SisterAppWindowFrameSpec(_titleBar, root, _backstage)");
+        source.Should().Contain("Content = frame.Root;");
         source.Should().Contain("SisterAppStatusBarChrome.Build(");
         source.Should().Contain("SisterQuickAccessToolbarBuilder.Render(");
         source.Should().Contain("AppStoragePathPlanner.GetOptionsFilePathLabelOrFallback(");
+        AssertBefore(source, "_titleBinder = new SisterWpfWindowTitleBinder(this, titleBar.TitleText);", "SisterAppClientFrameBuilder.Build(");
+        AssertBefore(source, "SisterAppClientFrameBuilder.Build(", "SisterAppWindowFrameBuilder.Build(");
+        AssertBefore(source, "SisterAppWindowFrameBuilder.Build(", "Content = frame.Root;");
+        source.Should().NotContain("WindowTitlePlanner.Compose(");
+        source.Should().NotContain("_titleText.Text = title;");
         source.Should().NotContain("RibbonTabControlFactory.Create(");
         source.Should().NotContain("RibbonFileTabRouter.Attach(");
         source.Should().NotContain("RibbonWpfRenderer.BuildTabContent(");
@@ -59,6 +71,36 @@ public sealed class SisterAppFrameHelperTests
         source.Should().NotContain("Content = outer;");
     }
 
+    [Fact]
+    public void SisterAppFrameHelpers_LiveInSharedShellWpfInsteadOfRibbonWpf()
+    {
+        var root = FindRepositoryRoot();
+        var shellProject = Path.Combine(root, "shared", "Free.Shared.Shell.Wpf");
+        var ribbonProject = Path.Combine(root, "shared", "Free.Shared.Ribbon.Wpf");
+
+        foreach (var fileName in new[]
+        {
+            "SisterAppClientFrameBuilder.cs",
+            "SisterAppWindowFrameBuilder.cs",
+            "SisterWpfWindowTitleBinder.cs",
+            "SisterAppStatusBarChrome.cs",
+            "BackstageFrame.cs",
+            "BackstageFrameComposer.cs",
+            "BackstageViewShell.cs",
+            "SisterBackstageEntryBuilder.cs",
+            "SisterBackstageHostController.cs",
+            "SisterBackstageTheme.cs"
+        })
+        {
+            var source = File.ReadAllText(Path.Combine(shellProject, fileName));
+            source.Should().Contain("namespace Free.Shared.Shell.Wpf;");
+            File.Exists(Path.Combine(ribbonProject, fileName)).Should().BeFalse();
+        }
+
+        File.ReadAllText(Path.Combine(ribbonProject, "Free.Shared.Ribbon.Wpf.csproj"))
+            .Should().NotContain("Free.Shared.AppServices");
+    }
+
     private static string FindRepositoryRoot()
     {
         for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
@@ -70,5 +112,12 @@ public sealed class SisterAppFrameHelperTests
         }
 
         throw new DirectoryNotFoundException("Could not locate repository root from test output directory.");
+    }
+
+    private static void AssertBefore(string source, string first, string second)
+    {
+        source.IndexOf(first, StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(source.IndexOf(second, StringComparison.Ordinal), $"{first} should appear before {second}");
     }
 }

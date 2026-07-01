@@ -12,32 +12,24 @@ public sealed class PresentationPortabilityGuardTests
 {
     private const RegexOptions Options = RegexOptions.Compiled | RegexOptions.CultureInvariant;
 
-    private static readonly HashSet<string> SourceExtensions = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ".cs",
-        ".csproj",
-        ".props",
-        ".targets"
-    };
-
-    private static readonly (string Description, Regex Pattern)[] ForbiddenPatterns =
+    private static readonly PortableBoundaryPattern[] ForbiddenPatterns =
     [
-        ("System.Windows namespace", new(@"(?<![\w.])System\.Windows(?:\.[A-Za-z_]\w*)?(?![\w.])", Options)),
-        ("System.Printing namespace", new(@"(?<![\w.])System\.Printing(?:\.[A-Za-z_]\w*)?(?![\w.])", Options)),
-        ("Microsoft.Win32 namespace", new(@"(?<![\w.])Microsoft\.Win32(?:\.[A-Za-z_]\w*)?(?![\w.])", Options)),
-        ("WinRT Windows namespace", new(@"(?<![\w.])Windows\.[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*(?![\w.])", Options)),
-        ("Avalonia dependency", new(@"(?<![\w.])Avalonia(?:\.[A-Za-z_]\w*)?(?![\w.])", Options)),
-        ("AppKit namespace", new(@"(?<![\w.])AppKit(?:\.[A-Za-z_]\w*)?(?![\w.])", Options)),
-        ("Foundation namespace", new(@"(?<![\w.])Foundation(?:\.[A-Za-z_]\w*)?(?![\w.])", Options)),
-        ("FreeX.App.Host dependency", new(@"(?<![\w.])FreeX\.App\.Host(?![\w.])", Options)),
-        ("FreeX.App.UI dependency", new(@"(?<![\w.])FreeX\.App\.UI(?![\w.])", Options)),
-        ("FreeX.App.Avalonia dependency", new(@"(?<![\w.])FreeX\.App\.Avalonia(?![\w.])", Options)),
-        ("UseWPF marker", new(@"(?<![\w])UseWPF(?![\w])", Options | RegexOptions.IgnoreCase)),
-        ("UseWindowsForms marker", new(@"(?<![\w])UseWindowsForms(?![\w])", Options | RegexOptions.IgnoreCase)),
-        ("Windows-targeted framework", new(@"(?<![\w.-])net\d+(?:\.\d+)?-windows(?:\d+(?:\.\d+)*)?(?![\w.-])", Options | RegexOptions.IgnoreCase)),
-        ("WPF assembly reference", new(@"(?<![\w.])(?:PresentationCore|PresentationFramework|System\.Xaml|WindowsBase)(?![\w.])", Options)),
-        ("ReachFramework assembly reference", new(@"(?<![\w.])ReachFramework(?![\w.])", Options)),
-        ("System.Drawing dependency", new(@"(?<![\w.])System\.Drawing(?:\.[A-Za-z_]\w*)?(?![\w.])", Options))
+        new("System.Windows namespace", new(@"(?<![\w.])System\.Windows(?:\.[A-Za-z_]\w*)?(?![\w.])", Options)),
+        new("System.Printing namespace", new(@"(?<![\w.])System\.Printing(?:\.[A-Za-z_]\w*)?(?![\w.])", Options)),
+        new("Microsoft.Win32 namespace", new(@"(?<![\w.])Microsoft\.Win32(?:\.[A-Za-z_]\w*)?(?![\w.])", Options)),
+        new("WinRT Windows namespace", new(@"(?<![\w.])Windows\.[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*(?![\w.])", Options)),
+        new("Avalonia dependency", new(@"(?<![\w.])Avalonia(?:\.[A-Za-z_]\w*)?(?![\w.])", Options)),
+        new("AppKit namespace", new(@"(?<![\w.])AppKit(?:\.[A-Za-z_]\w*)?(?![\w.])", Options)),
+        new("Foundation namespace", new(@"(?<![\w.])Foundation(?:\.[A-Za-z_]\w*)?(?![\w.])", Options)),
+        new("FreeX.App.Host dependency", new(@"(?<![\w.])FreeX\.App\.Host(?![\w.])", Options)),
+        new("FreeX.App.UI dependency", new(@"(?<![\w.])FreeX\.App\.UI(?![\w.])", Options)),
+        new("FreeX.App.Avalonia dependency", new(@"(?<![\w.])FreeX\.App\.Avalonia(?![\w.])", Options)),
+        new("UseWPF marker", new(@"(?<![\w])UseWPF(?![\w])", Options | RegexOptions.IgnoreCase)),
+        new("UseWindowsForms marker", new(@"(?<![\w])UseWindowsForms(?![\w])", Options | RegexOptions.IgnoreCase)),
+        new("Windows-targeted framework", new(@"(?<![\w.-])net\d+(?:\.\d+)?-windows(?:\d+(?:\.\d+)*)?(?![\w.-])", Options | RegexOptions.IgnoreCase)),
+        new("WPF assembly reference", new(@"(?<![\w.])(?:PresentationCore|PresentationFramework|System\.Xaml|WindowsBase)(?![\w.])", Options)),
+        new("ReachFramework assembly reference", new(@"(?<![\w.])ReachFramework(?![\w.])", Options)),
+        new("System.Drawing dependency", new(@"(?<![\w.])System\.Drawing(?:\.[A-Za-z_]\w*)?(?![\w.])", Options))
     ];
 
     [Fact]
@@ -45,11 +37,7 @@ public sealed class PresentationPortabilityGuardTests
     {
         var presentationRoot = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Presentation");
 
-        var violations = Directory.EnumerateFiles(presentationRoot, "*", SearchOption.AllDirectories)
-            .Where(IsPortableSourceFile)
-            .SelectMany(FindViolations)
-            .OrderBy(v => v.RelativePath, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(v => v.LineNumber)
+        var violations = PortableBoundaryGuard.FindSourceViolations(presentationRoot, presentationRoot, ForbiddenPatterns)
             .Select(v => v.ToString())
             .ToArray();
 
@@ -107,6 +95,21 @@ public sealed class PresentationPortabilityGuardTests
     }
 
     [Fact]
+    public void ChartOptionCycler_IsSingleSharedPresentationImplementation()
+    {
+        var presentationRoot = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Presentation");
+        var repoRoot = Directory.GetParent(presentationRoot)?.Parent?.FullName
+            ?? throw new DirectoryNotFoundException("Could not resolve repository root.");
+
+        File.Exists(Path.Combine(presentationRoot, "Charts", "Editing", "ChartOptionCycler.cs"))
+            .Should()
+            .BeTrue("chart command cycling should be shared by WPF and portable chart flows");
+        File.Exists(Path.Combine(repoRoot, "src", "FreeX.App.Host", "ChartOptionCycler.cs"))
+            .Should()
+            .BeFalse("WPF host should use the shared chart command cycler instead of carrying a renderer-local copy");
+    }
+
+    [Fact]
     public void WorkbookRangeTextCodec_IsSingleSharedPresentationImplementation()
     {
         var presentationRoot = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Presentation");
@@ -119,6 +122,54 @@ public sealed class PresentationPortabilityGuardTests
         File.Exists(Path.Combine(repoRoot, "src", "FreeX.App.Host", "WorkbookRangeTextCodec.cs"))
             .Should()
             .BeFalse("WPF host should use the shared workbook range codec instead of carrying a renderer-local copy");
+    }
+
+    [Fact]
+    public void ShellWindowPlanners_AreSingleSharedPresentationImplementations()
+    {
+        var presentationRoot = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Presentation");
+        var repoRoot = Directory.GetParent(presentationRoot)?.Parent?.FullName
+            ?? throw new DirectoryNotFoundException("Could not resolve repository root.");
+
+        var sharedShellFiles = new[]
+        {
+            "ArrangeAllMenuPlanner.cs",
+            "ShellFocusCyclePlanner.cs",
+            "WorkbookTitleFormatter.cs",
+            "WorkbookWindowOrdering.cs",
+            "WorkbookWindowSelectionPlanner.cs"
+        };
+
+        foreach (var fileName in sharedShellFiles)
+        {
+            File.Exists(Path.Combine(presentationRoot, "Shell", fileName))
+                .Should()
+                .BeTrue($"{fileName} should live in the shared Presentation shell layer");
+            File.Exists(Path.Combine(repoRoot, "src", "FreeX.App.Host", fileName))
+                .Should()
+                .BeFalse($"WPF host should use the shared {fileName} instead of carrying a renderer-local copy");
+        }
+    }
+
+    [Fact]
+    public void SlicerTimelineAndSparklineRenderPlanners_AreSingleSharedPresentationImplementations()
+    {
+        var presentationRoot = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Presentation");
+        var repoRoot = Directory.GetParent(presentationRoot)?.Parent?.FullName
+            ?? throw new DirectoryNotFoundException("Could not resolve repository root.");
+
+        File.Exists(Path.Combine(presentationRoot, "SlicerTimeline", "SlicerTimelineInteractionPlanner.cs"))
+            .Should()
+            .BeTrue("slicer/timeline hit-to-command planning is shared by renderers");
+        File.Exists(Path.Combine(presentationRoot, "SparklineUI", "SparklineRenderPlanner.cs"))
+            .Should()
+            .BeTrue("sparkline render instruction planning is shared by renderers");
+        File.Exists(Path.Combine(repoRoot, "src", "FreeX.App.Avalonia", "SlicerTimelineInteractionPlanner.cs"))
+            .Should()
+            .BeFalse("Avalonia should use the shared slicer/timeline interaction planner instead of carrying a renderer-local copy");
+        File.Exists(Path.Combine(repoRoot, "src", "FreeX.App.Avalonia", "SparklineRenderPlanner.cs"))
+            .Should()
+            .BeFalse("Avalonia should use the shared sparkline render planner instead of carrying a renderer-local copy");
     }
 
     [Fact]
@@ -139,33 +190,72 @@ public sealed class PresentationPortabilityGuardTests
             .NotContain("public sealed record PageBreakDialogResult");
     }
 
-    private static bool IsPortableSourceFile(string path)
+    [Fact]
+    public void NamedRangeDialogPlanning_IsSingleSharedPresentationImplementation()
     {
-        if (!SourceExtensions.Contains(Path.GetExtension(path)))
-            return false;
+        var presentationRoot = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Presentation");
+        var repoRoot = Directory.GetParent(presentationRoot)?.Parent?.FullName
+            ?? throw new DirectoryNotFoundException("Could not resolve repository root.");
 
-        var segments = path.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-        return !segments.Contains("bin", StringComparer.OrdinalIgnoreCase)
-            && !segments.Contains("obj", StringComparer.OrdinalIgnoreCase);
+        File.Exists(Path.Combine(presentationRoot, "NamedRanges", "NamedRangeInputParser.cs"))
+            .Should()
+            .BeTrue("named-range reference parsing should be shared by renderers");
+        File.Exists(Path.Combine(presentationRoot, "NamedRanges", "NamedRangeDialogPlanner.cs"))
+            .Should()
+            .BeTrue("named-range filtering and row models should be shared by renderers");
+        File.Exists(Path.Combine(repoRoot, "src", "FreeX.App.Host", "NamedRangeInputParser.cs"))
+            .Should()
+            .BeFalse("WPF host should use the shared named-range parser instead of carrying a renderer-local copy");
+        File.Exists(Path.Combine(repoRoot, "src", "FreeX.App.Host", "NamedRangeDialogPlanner.cs"))
+            .Should()
+            .BeFalse("WPF host should use the shared named-range planner instead of carrying a renderer-local copy");
     }
 
-    private static IEnumerable<Violation> FindViolations(string path)
+    [Fact]
+    public void PasteNamesPlanner_IsSingleSharedPresentationImplementation()
     {
-        var relativePath = Path.GetFileName(path);
-        var lineNumber = 0;
-        foreach (var line in File.ReadLines(path))
-        {
-            lineNumber++;
-            foreach (var (description, pattern) in ForbiddenPatterns)
-            {
-                if (pattern.IsMatch(line))
-                    yield return new Violation(relativePath, lineNumber, description, line.Trim());
-            }
-        }
+        var presentationRoot = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Presentation");
+        var repoRoot = Directory.GetParent(presentationRoot)?.Parent?.FullName
+            ?? throw new DirectoryNotFoundException("Could not resolve repository root.");
+
+        File.Exists(Path.Combine(presentationRoot, "DefinedNames", "PasteNamesPlanner.cs"))
+            .Should()
+            .BeTrue("Paste Names projection and edit planning should live in the shared Presentation layer");
+        File.Exists(Path.Combine(repoRoot, "src", "FreeX.App.Host", "PasteNamesPlanner.cs"))
+            .Should()
+            .BeFalse("WPF host should use the shared Paste Names planner instead of carrying a renderer-local facade");
     }
 
-    private readonly record struct Violation(string RelativePath, int LineNumber, string Description, string Source)
+    [Fact]
+    public void ProtectionDialogParsingAndResults_AreSharedPresentationImplementations()
     {
-        public override string ToString() => $"{RelativePath}:{LineNumber}: {Description}: {Source}";
+        var presentationRoot = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Presentation");
+        var repoRoot = Directory.GetParent(presentationRoot)?.Parent?.FullName
+            ?? throw new DirectoryNotFoundException("Could not resolve repository root.");
+        var hostProtectionDialogsPath = Path.Combine(repoRoot, "src", "FreeX.App.Host", "ProtectionDialogs.cs");
+
+        File.Exists(Path.Combine(presentationRoot, "Protection", "ProtectionInputParser.cs"))
+            .Should()
+            .BeTrue("allow-edit-range parsing should be shared by renderers");
+        File.Exists(Path.Combine(presentationRoot, "Protection", "ProtectionDialogPlanner.cs"))
+            .Should()
+            .BeTrue("protect/unprotect result creation should be shared by renderers");
+        File.Exists(Path.Combine(presentationRoot, "Protection", "ProtectionWorkflowPlanner.cs"))
+            .Should()
+            .BeTrue("protect/unprotect command intents and message resource keys should be shared by renderers");
+        File.Exists(Path.Combine(repoRoot, "src", "FreeX.App.Host", "ProtectionInputParser.cs"))
+            .Should()
+            .BeFalse("WPF host should use the shared protection parser instead of carrying a renderer-local copy");
+        File.Exists(Path.Combine(repoRoot, "src", "FreeX.App.Host", "ProtectionDialogPlanner.cs"))
+            .Should()
+            .BeFalse("WPF host should call the shared protection dialog planner directly");
+        File.Exists(Path.Combine(repoRoot, "src", "FreeX.App.Host", "AllowEditRangeDialogPlanner.cs"))
+            .Should()
+            .BeFalse("WPF host should use the shared allow-edit-range planner instead of carrying a renderer-local copy");
+        File.ReadAllText(hostProtectionDialogsPath)
+            .Should()
+            .NotContain("public enum ProtectionDialogMode")
+            .And
+            .NotContain("public sealed record ProtectionDialogResult");
     }
 }

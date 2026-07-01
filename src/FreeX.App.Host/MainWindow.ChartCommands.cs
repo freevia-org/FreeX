@@ -1,6 +1,4 @@
 using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Windows;
 using FreeX.App.Presentation.Charts;
 using FreeX.App.Presentation.Charts.Editing;
@@ -114,14 +112,15 @@ public partial class MainWindow
 
     private void ChangeChartTypeBtn_Click(object sender, RoutedEventArgs e)
     {
-        if (!TryGetActiveNormalChart("Change Chart Type", out var chart))
+        var command = ChartWorkflowCommandCatalog.ChangeChartType;
+        if (!TryGetActiveNormalChart(command, out var chart))
             return;
 
         var dialog = new ChangeChartTypeDialog(chart.Type) { Owner = this };
         if (dialog.ShowDialog() != true)
             return;
 
-        if (!TryExecuteCommand(new ChangeChartTypeCommand(_currentSheetId, chart.Id, dialog.Result.ChartType), "Change Chart Type"))
+        if (!TryExecuteCommand(new ChangeChartTypeCommand(_currentSheetId, chart.Id, dialog.Result.ChartType), command.Label))
             return;
 
         UpdateViewport();
@@ -129,7 +128,8 @@ public partial class MainWindow
 
     private void SelectChartDataSourceBtn_Click(object sender, RoutedEventArgs e)
     {
-        if (!TryGetActiveNormalChart("Select Data Source", out var chart))
+        var command = ChartWorkflowCommandCatalog.SelectDataSource;
+        if (!TryGetActiveNormalChart(command, out var chart))
             return;
 
         SelectDataSourceDialog? dialog = null;
@@ -160,7 +160,7 @@ public partial class MainWindow
                     dataRange,
                     firstRowIsHeader: chart.FirstRowIsHeader,
                     firstColIsCategories: dialog.Result.FirstColumnIsCategories),
-                "Select Data Source"))
+                command.Label))
             return;
 
         UpdateViewport();
@@ -181,7 +181,8 @@ public partial class MainWindow
 
     private void MoveChartBtn_Click(object sender, RoutedEventArgs e)
     {
-        if (!TryGetActiveNormalChart("Move Chart", out var chart))
+        var command = ChartWorkflowCommandCatalog.MoveChart;
+        if (!TryGetActiveNormalChart(command, out var chart))
             return;
 
         var currentSheet = _workbook.GetSheet(_currentSheetId);
@@ -194,7 +195,7 @@ public partial class MainWindow
 
         if (dialog.Result.TargetKind == MoveChartTargetKind.NewChartSheet)
         {
-            if (!TryExecuteCommand(new MoveChartToNewSheetCommand(_currentSheetId, chart.Id, dialog.Result.TargetName), "Move Chart"))
+            if (!TryExecuteCommand(new MoveChartToNewSheetCommand(_currentSheetId, chart.Id, dialog.Result.TargetName), command.Label))
                 return;
 
             var createdSheet = _workbook.GetSheet(dialog.Result.TargetName);
@@ -212,7 +213,7 @@ public partial class MainWindow
                 return;
             }
 
-            if (!TryExecuteCommand(new MoveChartCommand(_currentSheetId, chart.Id, targetSheet.Id), "Move Chart"))
+            if (!TryExecuteCommand(new MoveChartCommand(_currentSheetId, chart.Id, targetSheet.Id), command.Label))
                 return;
 
             _currentSheetId = targetSheet.Id;
@@ -267,17 +268,35 @@ public partial class MainWindow
 
     private void FormatChartAreaBtn_Click(object sender, RoutedEventArgs e)
     {
-        if (!TryGetFirstChartForDialog("Format Chart Area", "Insert or select a chart before formatting the chart area.", out var chart))
+        var command = ChartWorkflowCommandCatalog.FormatChartArea;
+        if (!TryGetFirstChartForDialog(command, out var chart))
             return;
 
         var dialog = new ChartAreaLegendDialog(chart) { Owner = this };
         if (dialog.ShowDialog() != true)
             return;
 
-        if (!ApplyChartLayoutDialogResult("Format Chart Area", chart, dialog.Result.ToOptions()))
+        if (!ApplyChartLayoutDialogResult(ChartWorkflowCaption(command), chart, dialog.Result.ToOptions()))
             return;
 
         UpdateViewport();
+    }
+
+    private bool TryGetActiveNormalChart(ChartWorkflowCommandDescriptor command, out ChartModel chart) =>
+        TryGetActiveNormalChart(ChartWorkflowCaption(command), out chart);
+
+    private bool TryGetFirstChartForDialog(ChartWorkflowCommandDescriptor command, out ChartModel chart) =>
+        TryGetFirstChartForDialog(ChartWorkflowCaption(command), UiText.Get(command.HostMissingSelectionMessageResourceKey), out chart);
+
+    private static string ChartWorkflowCaption(ChartWorkflowCommandDescriptor command) =>
+        command.TitleResourceKey is { } resourceKey ? UiText.Get(resourceKey) : command.Label;
+
+    private void ShowUnsupportedChartWorkflow(ChartWorkflowCommandDescriptor command)
+    {
+        var message = command.HostUnsupportedMessageResourceKey is { } resourceKey
+            ? UiText.Get(resourceKey)
+            : UiText.Get(ChartWorkflowCommandCatalog.DefaultHostMissingSelectionMessageResourceKey);
+        ShowCommandError(new CommandOutcome(false, message), ChartWorkflowCaption(command));
     }
 
     private bool TryGetActiveNormalChart(string caption, out ChartModel chart)
@@ -355,72 +374,29 @@ public partial class MainWindow
 
     private void ChartFirstSliceAngleBtn_Click(object sender, RoutedEventArgs e)
     {
-        if (!TryExecuteRepeatableChartLayout(
-                "First Slice Angle",
-                UiText.Get("MainWindowMessage_ChartSelectPieDoughnutForFirstSliceAngle"),
-                chart => chart.Type is ChartType.Pie or ChartType.ThreeDPie or ChartType.Doughnut,
-                UiText.Get("MainWindowMessage_ChartFirstSliceAngleUnsupported"),
-                chart => new ChartLayoutOptions(FirstSliceAngle: chart.FirstSliceAngle >= 270 ? 0 : chart.FirstSliceAngle + 90)))
-            return;
-
-        UpdateViewport();
+        ExecuteChartQuickCommand(ChartQuickCommandCatalog.FirstSliceAngle);
     }
 
     private void ChartDoughnutHoleSizeBtn_Click(object sender, RoutedEventArgs e)
     {
-        if (!TryExecuteRepeatableChartLayout(
-                "Doughnut Hole Size",
-                UiText.Get("MainWindowMessage_ChartSelectDoughnutForHoleSize"),
-                chart => chart.Type == ChartType.Doughnut,
-                UiText.Get("MainWindowMessage_ChartDoughnutHoleSizeUnsupported"),
-                chart => new ChartLayoutOptions(
-                    DoughnutHoleSize: chart.DoughnutHoleSize switch
-                    {
-                        < 0.45 => 0.55,
-                        < 0.7 => 0.75,
-                        _ => 0.35
-                    })))
-            return;
-
-        UpdateViewport();
+        ExecuteChartQuickCommand(ChartQuickCommandCatalog.DoughnutHoleSize);
     }
 
     private void ChartExplodedSliceBtn_Click(object sender, RoutedEventArgs e)
     {
-        if (!TryExecuteRepeatableChartLayout(
-                "Explode Slice",
-                UiText.Get("MainWindowMessage_ChartSelectPieDoughnutForExplode"),
-                chart => chart.Type is (ChartType.Pie or ChartType.ThreeDPie or ChartType.Doughnut) && ChartTypeSupport.GetDataPointCount(chart) > 0,
-                UiText.Get("MainWindowMessage_ChartExplodedSliceUnsupported"),
-                chart =>
-                {
-                    var sliceCount = ChartTypeSupport.GetDataPointCount(chart);
-                    var nextIndex = chart.ExplodedSliceIndex < 0
-                        ? 0
-                        : chart.ExplodedSliceIndex + 1 >= sliceCount ? -1 : chart.ExplodedSliceIndex + 1;
-                    var nextDistance = nextIndex < 0
-                        ? 0.1
-                        : chart.ExplodedSliceDistance >= 0.22 ? 0.1 : chart.ExplodedSliceDistance + 0.06;
-                    return new ChartLayoutOptions(ExplodedSliceIndex: nextIndex, ExplodedSliceDistance: nextDistance);
-                }))
-            return;
-
-        UpdateViewport();
+        ExecuteChartQuickCommand(ChartQuickCommandCatalog.ExplodedSlice);
     }
 
     private void ChartBarFormatBtn_Click(object sender, RoutedEventArgs e)
     {
-        if (!TryGetFirstChartForDialog(
-                "Format Bar/Column",
-                UiText.Get("MainWindowMessage_ChartSelectBarColumnForGapWidth"),
-                out var chart))
+        var command = ChartWorkflowCommandCatalog.FormatBarColumn;
+        var caption = ChartWorkflowCaption(command);
+        if (!TryGetFirstChartForDialog(command, out var chart))
             return;
 
-        if (!ChartTypeSupport.SupportsBarGapWidth(chart.Type))
+        if (!ChartWorkflowCommandCatalog.CanOpenDialog(chart, command))
         {
-            _messageService.ShowInfo(
-                UiText.Get("MainWindowMessage_ChartGapWidthUnsupported"),
-                UiText.Get("MainWindowMessage_FormatBarColumnTitle"));
+            ShowUnsupportedChartWorkflow(command);
             return;
         }
 
@@ -428,22 +404,19 @@ public partial class MainWindow
         if (dialog.ShowDialog() != true)
             return;
 
-        ApplyChartLayoutDialogResult("Format Bar/Column", chart, dialog.Result.ToOptions());
+        ApplyChartLayoutDialogResult(caption, chart, dialog.Result.ToOptions());
     }
 
     private void ChartBubbleFormatBtn_Click(object sender, RoutedEventArgs e)
     {
-        if (!TryGetFirstChartForDialog(
-                "Format Bubble Chart",
-                UiText.Get("MainWindowMessage_ChartSelectBubbleForOptions"),
-                out var chart))
+        var command = ChartWorkflowCommandCatalog.FormatBubbleChart;
+        var caption = ChartWorkflowCaption(command);
+        if (!TryGetFirstChartForDialog(command, out var chart))
             return;
 
-        if (chart.Type != ChartType.Bubble)
+        if (!ChartWorkflowCommandCatalog.CanOpenDialog(chart, command))
         {
-            _messageService.ShowInfo(
-                UiText.Get("MainWindowMessage_ChartBubbleOptionsUnsupported"),
-                UiText.Get("MainWindowMessage_FormatBubbleChartTitle"));
+            ShowUnsupportedChartWorkflow(command);
             return;
         }
 
@@ -451,22 +424,19 @@ public partial class MainWindow
         if (dialog.ShowDialog() != true)
             return;
 
-        ApplyChartLayoutDialogResult("Format Bubble Chart", chart, dialog.Result.ToOptions());
+        ApplyChartLayoutDialogResult(caption, chart, dialog.Result.ToOptions());
     }
 
     private void ChartPieFormatBtn_Click(object sender, RoutedEventArgs e)
     {
-        if (!TryGetFirstChartForDialog(
-                "Format Pie/Doughnut",
-                UiText.Get("MainWindowMessage_ChartSelectPieDoughnutForOptions"),
-                out var chart))
+        var command = ChartWorkflowCommandCatalog.FormatPieDoughnut;
+        var caption = ChartWorkflowCaption(command);
+        if (!TryGetFirstChartForDialog(command, out var chart))
             return;
 
-        if (!ChartTypeSupport.SupportsFirstSliceAngle(chart.Type))
+        if (!ChartWorkflowCommandCatalog.CanOpenDialog(chart, command))
         {
-            _messageService.ShowInfo(
-                UiText.Get("MainWindowMessage_ChartPieOptionsUnsupported"),
-                UiText.Get("MainWindowMessage_FormatPieDoughnutTitle"));
+            ShowUnsupportedChartWorkflow(command);
             return;
         }
 
@@ -474,22 +444,19 @@ public partial class MainWindow
         if (dialog.ShowDialog() != true)
             return;
 
-        ApplyChartLayoutDialogResult("Format Pie/Doughnut", chart, dialog.Result.ToOptions());
+        ApplyChartLayoutDialogResult(caption, chart, dialog.Result.ToOptions());
     }
 
     private void ChartStockFormatBtn_Click(object sender, RoutedEventArgs e)
     {
-        if (!TryGetFirstChartForDialog(
-                "Format Stock Chart",
-                UiText.Get("MainWindowMessage_ChartSelectStockForOptions"),
-                out var chart))
+        var command = ChartWorkflowCommandCatalog.FormatStockChart;
+        var caption = ChartWorkflowCaption(command);
+        if (!TryGetFirstChartForDialog(command, out var chart))
             return;
 
-        if (chart.Type != ChartType.Stock)
+        if (!ChartWorkflowCommandCatalog.CanOpenDialog(chart, command))
         {
-            _messageService.ShowInfo(
-                UiText.Get("MainWindowMessage_ChartStockOptionsUnsupported"),
-                UiText.Get("MainWindowMessage_FormatStockChartTitle"));
+            ShowUnsupportedChartWorkflow(command);
             return;
         }
 
@@ -497,7 +464,7 @@ public partial class MainWindow
         if (dialog.ShowDialog() != true)
             return;
 
-        ApplyChartLayoutDialogResult("Format Stock Chart", chart, dialog.Result.ToOptions());
+        ApplyChartLayoutDialogResult(caption, chart, dialog.Result.ToOptions());
     }
 
     private void ChartDataLabelsBtn_Click(object sender, RoutedEventArgs e)
@@ -507,14 +474,16 @@ public partial class MainWindow
 
     private void ShowChartDataLabelsDialog()
     {
-        if (!TryGetFirstChartForDialog("Format Data Labels", UiText.Get("MainWindowMessage_ChartSelectForDataLabels"), out var chart))
+        var command = ChartWorkflowCommandCatalog.FormatDataLabels;
+        var caption = ChartWorkflowCaption(command);
+        if (!TryGetFirstChartForDialog(command, out var chart))
             return;
 
         var dialog = new ChartDataLabelsDialog(chart) { Owner = this };
         if (dialog.ShowDialog() != true)
             return;
 
-        ApplyChartLayoutDialogResult("Format Data Labels", chart, dialog.Result.ToOptions());
+        ApplyChartLayoutDialogResult(caption, chart, dialog.Result.ToOptions());
     }
 
     private void ChartDataLabelPositionBtn_Click(object sender, RoutedEventArgs e)
@@ -524,168 +493,79 @@ public partial class MainWindow
 
     private void ChartDataLabelCategoryBtn_Click(object sender, RoutedEventArgs e)
     {
-        ToggleDataLabelOption(
-            "Category Name",
-            chart => new ChartLayoutOptions(
-                ShowDataLabels: true,
-                ShowDataLabelCategoryName: !chart.ShowDataLabelCategoryName));
+        ExecuteChartQuickCommand(ChartQuickCommandCatalog.DataLabelCategoryName);
     }
 
     private void ChartDataLabelSeriesBtn_Click(object sender, RoutedEventArgs e)
     {
-        ToggleDataLabelOption(
-            "Series Name",
-            chart => new ChartLayoutOptions(
-                ShowDataLabels: true,
-                ShowDataLabelSeriesName: !chart.ShowDataLabelSeriesName));
+        ExecuteChartQuickCommand(ChartQuickCommandCatalog.DataLabelSeriesName);
     }
 
     private void ChartDataLabelPercentageBtn_Click(object sender, RoutedEventArgs e)
     {
-        ToggleDataLabelOption(
-            "Percentage",
-            chart => new ChartLayoutOptions(
-                ShowDataLabels: true,
-                ShowDataLabelPercentage: !chart.ShowDataLabelPercentage));
+        ExecuteChartQuickCommand(ChartQuickCommandCatalog.DataLabelPercentage);
     }
 
     private void ChartDataLabelSeparatorBtn_Click(object sender, RoutedEventArgs e)
     {
-        ToggleDataLabelOption(
-            "Label Separator",
-            chart => new ChartLayoutOptions(
-                ShowDataLabels: true,
-                DataLabelSeparator: ChartOptionCycler.NextDataLabelSeparator(chart.DataLabelSeparator)));
+        ExecuteChartQuickCommand(ChartQuickCommandCatalog.DataLabelSeparator);
     }
 
     private void ChartDataLabelNumberFormatBtn_Click(object sender, RoutedEventArgs e)
     {
-        ToggleDataLabelOption(
-            "Label Number Format",
-            chart => new ChartLayoutOptions(
-                ShowDataLabels: true,
-                DataLabelNumberFormat: ChartOptionCycler.NextDataLabelNumberFormat(chart.DataLabelNumberFormat)));
+        ExecuteChartQuickCommand(ChartQuickCommandCatalog.DataLabelNumberFormat);
     }
 
     private void ChartDataLabelCalloutBtn_Click(object sender, RoutedEventArgs e)
     {
-        ToggleDataLabelOption(
-            "Data Callout",
-            chart => new ChartLayoutOptions(
-                ShowDataLabels: true,
-                ShowDataLabelCallouts: !chart.ShowDataLabelCallouts));
+        ExecuteChartQuickCommand(ChartQuickCommandCatalog.DataLabelCallout);
     }
 
     private void ChartDataLabelFillBtn_Click(object sender, RoutedEventArgs e)
     {
-        ToggleDataLabelOption(
-            "Data Label Fill",
-            chart => new ChartLayoutOptions(
-                ShowDataLabels: true,
-                DataLabelFillColor: ChartQuickFormatCycler.NextSeriesColor(chart.DataLabelFillColor)));
+        ExecuteChartQuickCommand(ChartQuickCommandCatalog.DataLabelFill);
     }
 
     private void ChartDataLabelTextBtn_Click(object sender, RoutedEventArgs e)
     {
-        ToggleDataLabelOption(
-            "Data Label Text",
-            chart => new ChartLayoutOptions(
-                ShowDataLabels: true,
-                DataLabelTextColor: ChartQuickFormatCycler.NextSeriesColor(chart.DataLabelTextColor)));
+        ExecuteChartQuickCommand(ChartQuickCommandCatalog.DataLabelTextColor);
     }
 
     private void ChartDataLabelBorderBtn_Click(object sender, RoutedEventArgs e)
     {
-        ToggleDataLabelOption(
-            "Data Label Border",
-            chart => new ChartLayoutOptions(
-                ShowDataLabels: true,
-                DataLabelBorderColor: ChartQuickFormatCycler.NextSeriesColor(chart.DataLabelBorderColor),
-                DataLabelBorderThickness: ChartQuickFormatCycler.NextDataLabelBorderThickness(chart.DataLabelBorderThickness)));
+        ExecuteChartQuickCommand(ChartQuickCommandCatalog.DataLabelBorder);
     }
 
     private void ChartDataLabelSizeBtn_Click(object sender, RoutedEventArgs e)
     {
-        ToggleDataLabelOption(
-            "Data Label Size",
-            chart => new ChartLayoutOptions(
-                ShowDataLabels: true,
-                DataLabelFontSize: chart.DataLabelFontSize >= 16 ? 9 : chart.DataLabelFontSize + 1));
+        ExecuteChartQuickCommand(ChartQuickCommandCatalog.DataLabelFontSize);
     }
 
     private void ChartDataLabelAngleBtn_Click(object sender, RoutedEventArgs e)
     {
-        ToggleDataLabelOption(
-            "Data Label Angle",
-            chart => new ChartLayoutOptions(
-                ShowDataLabels: true,
-                DataLabelAngle: ChartOptionCycler.NextAxisLabelAngle(chart.DataLabelAngle)));
+        ExecuteChartQuickCommand(ChartQuickCommandCatalog.DataLabelAngle);
     }
 
     private void ChartPointDataLabelBtn_Click(object sender, RoutedEventArgs e)
     {
-        const string caption = "Format Data Point Label";
-        if (!TryExecuteRepeatableChartLayout(
-                caption,
-                UiText.Get("MainWindowMessage_ChartSelectForPointDataLabel"),
-                chart => ChartOptionCycler.GetSeriesCount(chart) > 0 && ChartTypeSupport.GetDataPointCount(chart) > 0,
-                UiText.Get("MainWindowMessage_ChartPointDataLabelNeedsDataPoints"),
-                chart =>
-                {
-                    var formats = chart.PointDataLabelFormats.ToList();
-                    var existingIndex = IndexOfPointDataLabelFormat(formats, 0, 0);
-                    var current = existingIndex >= 0 ? formats[existingIndex] : new ChartPointDataLabelFormat(0, 0);
-                    var updated = current with
-                    {
-                        FillColor = ChartQuickFormatCycler.NextSeriesColor(current.FillColor),
-                        BorderColor = ChartQuickFormatCycler.NextSeriesColor(current.BorderColor ?? current.FillColor),
-                        BorderThickness = ChartQuickFormatCycler.NextPointDataLabelBorderThickness(current.BorderThickness),
-                        TextColor = ChartQuickFormatCycler.NextSeriesColor(current.TextColor),
-                        FontSize = current.FontSize is null or >= 16 ? 9 : current.FontSize.Value + 1
-                    };
-                    if (existingIndex >= 0)
-                        formats[existingIndex] = updated;
-                    else
-                        formats.Add(updated);
-                    return new ChartLayoutOptions(
-                        ShowDataLabels: true,
-                        PointDataLabelFormats: formats);
-                }))
-            return;
-
-        UpdateViewport();
-    }
-
-    private static int IndexOfPointDataLabelFormat(IReadOnlyList<ChartPointDataLabelFormat> formats, int seriesIndex, int pointIndex)
-    {
-        for (var index = 0; index < formats.Count; index++)
-        {
-            var format = formats[index];
-            if (format.SeriesIndex == seriesIndex && format.PointIndex == pointIndex)
-                return index;
-        }
-
-        return -1;
+        ExecuteChartQuickCommand(ChartQuickCommandCatalog.PointDataLabel);
     }
 
     private void ChartAreaFillBtn_Click(object sender, RoutedEventArgs e)
     {
-        ToggleChartAreaOption(
-            "Chart Area Fill",
-            chart => new ChartLayoutOptions(ChartAreaFillColor: ChartQuickFormatCycler.NextSeriesColor(chart.ChartAreaFillColor)));
+        ExecuteChartQuickCommand(ChartQuickCommandCatalog.ChartAreaFill);
     }
 
     private void ChartTitleColorBtn_Click(object sender, RoutedEventArgs e)
     {
-        ToggleChartAreaOption(
-            "Chart Title Color",
-            chart => new ChartLayoutOptions(ChartTitleTextColor: ChartQuickFormatCycler.NextSeriesColor(chart.ChartTitleTextColor)));
+        ExecuteChartQuickCommand(ChartQuickCommandCatalog.ChartTitleColor);
     }
 
     private void ChartTitlesBtn_Click(object sender, RoutedEventArgs e)
     {
-        const string caption = "Chart Titles";
-        if (!TryGetFirstChartForDialog(caption, UiText.Get("MainWindowMessage_ChartSelectForTitles"), out var chart))
+        var command = ChartWorkflowCommandCatalog.ChartTitles;
+        var caption = ChartWorkflowCaption(command);
+        if (!TryGetFirstChartForDialog(command, out var chart))
             return;
 
         var dialog = new ChartTitlesDialog(chart.Title, chart.XAxisTitle, chart.YAxisTitle) { Owner = this };
@@ -697,102 +577,52 @@ public partial class MainWindow
 
     private void ChartTitleSizeBtn_Click(object sender, RoutedEventArgs e)
     {
-        ToggleChartAreaOption(
-            "Chart Title Size",
-            chart => new ChartLayoutOptions(ChartTitleFontSize: ChartQuickFormatCycler.NextChartTitleFontSize(chart.ChartTitleFontSize)));
+        ExecuteChartQuickCommand(ChartQuickCommandCatalog.ChartTitleFontSize);
     }
 
     private void ChartAxisTitleColorBtn_Click(object sender, RoutedEventArgs e)
     {
-        ToggleChartAreaOption(
-            "Axis Title Color",
-            chart => new ChartLayoutOptions(AxisTitleTextColor: ChartQuickFormatCycler.NextSeriesColor(chart.AxisTitleTextColor)));
+        ExecuteChartQuickCommand(ChartQuickCommandCatalog.AxisTitleColor);
     }
 
     private void ChartAxisTitleSizeBtn_Click(object sender, RoutedEventArgs e)
     {
-        ToggleChartAreaOption(
-            "Axis Title Size",
-            chart => new ChartLayoutOptions(AxisTitleFontSize: ChartQuickFormatCycler.NextAxisTitleFontSize(chart.AxisTitleFontSize)));
+        ExecuteChartQuickCommand(ChartQuickCommandCatalog.AxisTitleFontSize);
     }
 
     private void ChartPlotAreaFillBtn_Click(object sender, RoutedEventArgs e)
     {
-        ToggleChartAreaOption(
-            "Plot Area Fill",
-            chart => new ChartLayoutOptions(PlotAreaFillColor: ChartQuickFormatCycler.NextSeriesColor(chart.PlotAreaFillColor)));
+        ExecuteChartQuickCommand(ChartQuickCommandCatalog.PlotAreaFill);
     }
 
     private void ChartPlotAreaBorderBtn_Click(object sender, RoutedEventArgs e)
     {
-        ToggleChartAreaOption(
-            "Plot Area Border",
-            chart => new ChartLayoutOptions(
-                PlotAreaBorderColor: ChartQuickFormatCycler.NextSeriesColor(chart.PlotAreaBorderColor),
-                PlotAreaBorderThickness: ChartQuickFormatCycler.NextPlotAreaBorderThickness(chart.PlotAreaBorderThickness)));
+        ExecuteChartQuickCommand(ChartQuickCommandCatalog.PlotAreaBorder);
     }
 
     private void ChartLegendTextBtn_Click(object sender, RoutedEventArgs e)
     {
-        ToggleChartAreaOption(
-            "Legend Text",
-            chart => new ChartLayoutOptions(LegendTextColor: ChartQuickFormatCycler.NextSeriesColor(chart.LegendTextColor)));
+        ExecuteChartQuickCommand(ChartQuickCommandCatalog.LegendTextColor);
     }
 
     private void ChartLegendFillBtn_Click(object sender, RoutedEventArgs e)
     {
-        ToggleChartAreaOption(
-            "Legend Fill",
-            chart => new ChartLayoutOptions(LegendFillColor: ChartQuickFormatCycler.NextSeriesColor(chart.LegendFillColor)));
+        ExecuteChartQuickCommand(ChartQuickCommandCatalog.LegendFill);
     }
 
     private void ChartLegendBorderBtn_Click(object sender, RoutedEventArgs e)
     {
-        ToggleChartAreaOption(
-            "Legend Border",
-            chart => new ChartLayoutOptions(
-                LegendBorderColor: ChartQuickFormatCycler.NextSeriesColor(chart.LegendBorderColor),
-                LegendBorderThickness: ChartQuickFormatCycler.NextLegendBorderThickness(chart.LegendBorderThickness)));
+        ExecuteChartQuickCommand(ChartQuickCommandCatalog.LegendBorder);
     }
 
     private void ChartLegendSizeBtn_Click(object sender, RoutedEventArgs e)
     {
-        ToggleChartAreaOption(
-            "Legend Font Size",
-            chart => new ChartLayoutOptions(LegendFontSize: ChartQuickFormatCycler.NextLegendFontSize(chart.LegendFontSize)));
+        ExecuteChartQuickCommand(ChartQuickCommandCatalog.LegendFontSize);
     }
 
     private void ChartLegendOverlayBtn_Click(object sender, RoutedEventArgs e)
     {
-        ToggleChartAreaOption(
-            "Legend Overlay",
-            chart => new ChartLayoutOptions(ShowLegend: true, LegendOverlay: !chart.LegendOverlay));
-    }
-
-    private void ToggleDataLabelOption(string caption, Func<ChartModel, ChartLayoutOptions> optionsFactory)
-    {
-        if (!TryExecuteRepeatableChartLayout(
-                caption,
-                UiText.Get("MainWindowMessage_ChartSelectForDataLabelOptions"),
-                null,
-                null,
-                optionsFactory))
-            return;
-
-        UpdateViewport();
-    }
-
-    private void ToggleChartAreaOption(string caption, Func<ChartModel, ChartLayoutOptions> optionsFactory)
-    {
-        if (!TryExecuteRepeatableChartLayout(
-                caption,
-                UiText.Get("MainWindowMessage_ChartSelectForChartAreaFormatting"),
-                null,
-                null,
-                optionsFactory))
-            return;
-
-        UpdateViewport();
+        ExecuteChartQuickCommand(ChartQuickCommandCatalog.LegendOverlay);
     }
 
     private void ChartTrendlineBtn_Click(object sender, RoutedEventArgs e)
@@ -802,12 +632,14 @@ public partial class MainWindow
 
     private void ShowChartTrendlineDialog()
     {
-        if (!TryGetFirstChartForDialog("Format Trendline", UiText.Get("MainWindowMessage_ChartSelectForTrendlines"), out var chart))
+        var command = ChartWorkflowCommandCatalog.FormatTrendline;
+        var caption = ChartWorkflowCaption(command);
+        if (!TryGetFirstChartForDialog(command, out var chart))
             return;
 
-        if (!ChartTypeSupport.SupportsTrendlines(chart.Type))
+        if (!ChartWorkflowCommandCatalog.CanOpenDialog(chart, command))
         {
-            ShowCommandError(new CommandOutcome(false, UiText.Get("MainWindowMessage_ChartTrendlinesSupportedTypes")), "Format Trendline");
+            ShowUnsupportedChartWorkflow(command);
             return;
         }
 
@@ -815,7 +647,7 @@ public partial class MainWindow
         if (dialog.ShowDialog() != true)
             return;
 
-        ApplyChartLayoutDialogResult("Format Trendline", chart, dialog.Result.ToOptions());
+        ApplyChartLayoutDialogResult(caption, chart, dialog.Result.ToOptions());
     }
 
     private void ChartTrendlineTypeBtn_Click(object sender, RoutedEventArgs e)
@@ -825,109 +657,57 @@ public partial class MainWindow
 
     private void ChartTrendlinePeriodBtn_Click(object sender, RoutedEventArgs e)
     {
-        if (!TryExecuteRepeatableChartLayout(
-                "Moving Average Period",
-                UiText.Get("MainWindowMessage_ChartSelectForMovingAveragePeriod"),
-                chart => ChartTypeSupport.SupportsTrendlines(chart.Type),
-                UiText.Get("MainWindowMessage_ChartTrendlinesSupportedTypes"),
-                chart => new ChartLayoutOptions(
-                    ShowLinearTrendline: true,
-                    TrendlineType: ChartTrendlineType.MovingAverage,
-                    TrendlinePeriod: chart.TrendlinePeriod >= 6 ? 2 : chart.TrendlinePeriod + 1)))
-            return;
-
-        UpdateViewport();
+        ExecuteChartQuickCommand(ChartQuickCommandCatalog.TrendlineMovingAveragePeriod);
     }
 
     private void ChartTrendlineOrderBtn_Click(object sender, RoutedEventArgs e)
     {
-        if (!TryExecuteRepeatableChartLayout(
-                "Polynomial Order",
-                UiText.Get("MainWindowMessage_ChartSelectForPolynomialOrder"),
-                chart => ChartTypeSupport.SupportsTrendlines(chart.Type),
-                UiText.Get("MainWindowMessage_ChartTrendlinesSupportedTypes"),
-                chart => new ChartLayoutOptions(
-                    ShowLinearTrendline: true,
-                    TrendlineType: ChartTrendlineType.Polynomial,
-                    TrendlineOrder: chart.TrendlineOrder >= 6 ? 2 : chart.TrendlineOrder + 1)))
-            return;
-
-        UpdateViewport();
+        ExecuteChartQuickCommand(ChartQuickCommandCatalog.TrendlinePolynomialOrder);
     }
 
     private void ChartTrendlineEquationBtn_Click(object sender, RoutedEventArgs e)
     {
-        ToggleTrendlineInfo(
-            "Trendline Equation",
-            chart => new ChartLayoutOptions(
-                ShowLinearTrendline: true,
-                ShowTrendlineEquation: !chart.ShowTrendlineEquation));
+        ExecuteChartQuickCommand(ChartQuickCommandCatalog.TrendlineEquation);
     }
 
     private void ChartTrendlineRSquaredBtn_Click(object sender, RoutedEventArgs e)
     {
-        ToggleTrendlineInfo(
-            "R-squared",
-            chart => new ChartLayoutOptions(
-                ShowLinearTrendline: true,
-                ShowTrendlineRSquared: !chart.ShowTrendlineRSquared));
+        ExecuteChartQuickCommand(ChartQuickCommandCatalog.TrendlineRSquared);
     }
 
     private void ChartTrendlineColorBtn_Click(object sender, RoutedEventArgs e)
     {
-        ToggleTrendlineInfo(
-            "Trendline Color",
-            chart => new ChartLayoutOptions(
-                ShowLinearTrendline: true,
-                TrendlineColor: ChartOptionCycler.NextTrendlineColor(chart.TrendlineColor)));
+        ExecuteChartQuickCommand(ChartQuickCommandCatalog.TrendlineColor);
     }
 
     private void ChartTrendlineDashBtn_Click(object sender, RoutedEventArgs e)
     {
-        ToggleTrendlineInfo(
-            "Trendline Dash",
-            chart => new ChartLayoutOptions(
-                ShowLinearTrendline: true,
-                TrendlineDashStyle: chart.TrendlineDashStyle switch
-                {
-                    ChartLineDashStyle.Dash => ChartLineDashStyle.Dot,
-                    ChartLineDashStyle.Dot => ChartLineDashStyle.Solid,
-                    _ => ChartLineDashStyle.Dash
-                }));
+        ExecuteChartQuickCommand(ChartQuickCommandCatalog.TrendlineDash);
     }
 
     private void ChartTrendlineWidthBtn_Click(object sender, RoutedEventArgs e)
     {
-        ToggleTrendlineInfo(
-            "Trendline Width",
-            chart => new ChartLayoutOptions(
-                ShowLinearTrendline: true,
-                TrendlineThickness: ChartQuickFormatCycler.NextTrendlineThickness(chart.TrendlineThickness)));
+        ExecuteChartQuickCommand(ChartQuickCommandCatalog.TrendlineThickness);
     }
 
     private void ChartErrorBarsBtn_Click(object sender, RoutedEventArgs e)
     {
-        if (!TryGetFirstChartForDialog("Format Error Bars", UiText.Get("MainWindowMessage_ChartSelectForErrorBars"), out var chart))
+        var command = ChartWorkflowCommandCatalog.FormatErrorBars;
+        var caption = ChartWorkflowCaption(command);
+        if (!TryGetFirstChartForDialog(command, out var chart))
             return;
+
+        if (!ChartWorkflowCommandCatalog.CanOpenDialog(chart, command))
+        {
+            ShowUnsupportedChartWorkflow(command);
+            return;
+        }
 
         var dialog = new ChartErrorBarsDialog(chart) { Owner = this };
         if (dialog.ShowDialog() != true)
             return;
 
-        if (!ApplyChartLayoutDialogResult("Format Error Bars", chart, dialog.Result.ToOptions()))
-            return;
-
-        UpdateViewport();
-    }
-
-    private void ToggleTrendlineInfo(string caption, Func<ChartModel, ChartLayoutOptions> optionsFactory)
-    {
-        if (!TryExecuteRepeatableChartLayout(
-                caption,
-                UiText.Get("MainWindowMessage_ChartSelectForTrendlineInformation"),
-                chart => ChartTypeSupport.SupportsTrendlines(chart.Type),
-                UiText.Get("MainWindowMessage_ChartTrendlineInformationSupportedTypes"),
-                optionsFactory))
+        if (!ApplyChartLayoutDialogResult(caption, chart, dialog.Result.ToOptions()))
             return;
 
         UpdateViewport();
@@ -935,56 +715,17 @@ public partial class MainWindow
 
     private void ChartSecondaryAxisSeriesBtn_Click(object sender, RoutedEventArgs e)
     {
-        if (!TryExecuteRepeatableChartLayout(
-                "Secondary Axis Series",
-                UiText.Get("MainWindowMessage_ChartSelectForSecondaryAxisSeries"),
-                chart => ChartTypeSupport.SupportsSecondaryAxis(chart.Type) && ChartOptionCycler.GetSeriesCount(chart) >= 2,
-                UiText.Get("MainWindowMessage_ChartSecondaryAxisUnsupported"),
-                chart =>
-                {
-                    var next = ChartOptionCycler.GetNextSecondaryAxisSeries(chart, ChartOptionCycler.GetSeriesCount(chart));
-                    return new ChartLayoutOptions(
-                        ShowSecondaryAxis: next.ShowSecondaryAxis,
-                        SecondaryAxisSeriesIndexes: next.SeriesIndexes);
-                }))
-            return;
-
-        UpdateViewport();
+        ExecuteChartQuickCommand(ChartQuickCommandCatalog.SecondaryAxisSeries);
     }
 
     private void ChartComboBtn_Click(object sender, RoutedEventArgs e)
     {
-        if (!TryExecuteRepeatableChartLayout(
-                "Combo Chart",
-                UiText.Get("MainWindowMessage_ChartSelectForComboOptions"),
-                chart => ChartTypeSupport.SupportsComboLineOverlay(chart.Type) &&
-                         (chart.UseComboLineForSecondarySeries || ChartTypeSupport.SupportsComboLineOverlay(chart)),
-                UiText.Get("MainWindowMessage_ChartComboUnsupported"),
-                chart => new ChartLayoutOptions(
-                    UseComboLineForSecondarySeries: !chart.UseComboLineForSecondarySeries,
-                    ComboLineSeriesIndexes: !chart.UseComboLineForSecondarySeries ? chart.ComboLineSeriesIndexes : [])))
-            return;
-
-        UpdateViewport();
+        ExecuteChartQuickCommand(ChartQuickCommandCatalog.ComboToggle);
     }
 
     private void ChartComboSeriesBtn_Click(object sender, RoutedEventArgs e)
     {
-        if (!TryExecuteRepeatableChartLayout(
-                "Combo Chart Series",
-                UiText.Get("MainWindowMessage_ChartSelectForComboSeries"),
-                chart => ChartTypeSupport.SupportsComboLineOverlay(chart.Type) && ChartTypeSupport.SupportsComboLineOverlay(chart),
-                UiText.Get("MainWindowMessage_ChartComboUnsupported"),
-                chart =>
-                {
-                    var nextIndexes = ChartQuickFormatCycler.NextComboLineSeries(chart);
-                    return new ChartLayoutOptions(
-                        UseComboLineForSecondarySeries: nextIndexes.Count > 0,
-                        ComboLineSeriesIndexes: nextIndexes);
-                }))
-            return;
-
-        UpdateViewport();
+        ExecuteChartQuickCommand(ChartQuickCommandCatalog.ComboSeries);
     }
 
     private void ChartSeriesColorBtn_Click(object sender, RoutedEventArgs e)
@@ -994,22 +735,12 @@ public partial class MainWindow
 
     private void ChartSeriesWidthBtn_Click(object sender, RoutedEventArgs e)
     {
-        ToggleSeriesFormat(
-            "Series Width",
-            format => format with
-            {
-                StrokeThickness = format.StrokeThickness is null or >= 4 ? 1.5 : format.StrokeThickness.Value + 0.75
-            });
+        ExecuteChartQuickCommand(ChartQuickCommandCatalog.SeriesWidth);
     }
 
     private void ChartSeriesDashBtn_Click(object sender, RoutedEventArgs e)
     {
-        ToggleSeriesFormat(
-            "Series Dash",
-            format => format with
-            {
-                DashStyle = ChartQuickFormatCycler.NextSeriesDash(format.DashStyle)
-            });
+        ExecuteChartQuickCommand(ChartQuickCommandCatalog.SeriesDash);
     }
 
     private void ChartSeriesMarkerBtn_Click(object sender, RoutedEventArgs e)
@@ -1019,52 +750,41 @@ public partial class MainWindow
 
     private void ShowChartSeriesFormatDialog()
     {
-        if (!TryGetFirstChartForDialog("Format Data Series", UiText.Get("MainWindowMessage_ChartSelectForSeriesFormatting"), out var chart))
+        var command = ChartWorkflowCommandCatalog.FormatDataSeries;
+        var caption = ChartWorkflowCaption(command);
+        if (!TryGetFirstChartForDialog(command, out var chart))
             return;
 
-        var seriesCount = ChartOptionCycler.GetSeriesCount(chart);
-        if (seriesCount <= 0)
+        if (!ChartWorkflowCommandCatalog.CanOpenDialog(chart, command))
         {
-            ShowCommandError(new CommandOutcome(false, UiText.Get("MainWindowMessage_ChartSeriesFormattingNeedsDataSeries")), "Format Data Series");
+            ShowUnsupportedChartWorkflow(command);
             return;
         }
 
-        var dialog = new ChartSeriesFormatDialog(chart, ChartOptionCycler.GetSeriesCount(chart)) { Owner = this };
+        var seriesCount = ChartSeriesFormatPlanner.GetSeriesCount(chart);
+        var dialog = new ChartSeriesFormatDialog(chart, seriesCount) { Owner = this };
         if (dialog.ShowDialog() != true)
             return;
 
-        ApplyChartLayoutDialogResult("Format Data Series", chart, dialog.Result.ToOptions(chart.SeriesFormats));
+        ApplyChartLayoutDialogResult(caption, chart, dialog.Result.ToOptions(chart));
     }
 
     private void ChartSeriesMarkerSizeBtn_Click(object sender, RoutedEventArgs e)
     {
-        ToggleSeriesFormat(
-            "Marker Size",
-            format => format with
-            {
-                MarkerSize = ChartQuickFormatCycler.NextMarkerSize(format.MarkerSize)
-            },
-            chart => ChartTypeSupport.SupportsSeriesMarkers(chart.Type),
-            UiText.Get("MainWindowMessage_ChartSeriesMarkersSupportedTypes"));
+        ExecuteChartQuickCommand(ChartQuickCommandCatalog.SeriesMarkerSize);
     }
 
-    private void ToggleSeriesFormat(
-        string caption,
-        Func<ChartSeriesFormat, ChartSeriesFormat> update,
-        Func<ChartModel, bool>? canApply = null,
-        string? unsupportedMessage = null)
+    private void ExecuteChartQuickCommand(ChartQuickCommandDescriptor command)
     {
+        var unsupportedMessage = command.HostUnsupportedMessageResourceKey is null
+            ? null
+            : UiText.Get(command.HostUnsupportedMessageResourceKey);
         if (!TryExecuteRepeatableChartLayout(
-                caption,
-                UiText.Get("MainWindowMessage_ChartSelectForSeriesFormatting"),
-                chart => ChartOptionCycler.GetSeriesCount(chart) > 0 && (canApply?.Invoke(chart) ?? true),
-                unsupportedMessage ?? UiText.Get("MainWindowMessage_ChartSeriesFormattingNeedsDataSeries"),
-                chart =>
-                {
-                    var current = ChartQuickFormatCycler.ReadFirstSeriesFormat(chart);
-                    var updated = update(current);
-                    return new ChartLayoutOptions(SeriesFormats: ChartQuickFormatCycler.MergeFirstSeriesFormat(chart, updated));
-                }))
+                command.Label,
+                UiText.Get(command.HostMissingSelectionMessageResourceKey),
+                chart => ChartQuickCommandPlanner.CanApply(chart, command.Command),
+                unsupportedMessage,
+                chart => ChartQuickCommandPlanner.Plan(chart, command.Command)))
             return;
 
         UpdateViewport();

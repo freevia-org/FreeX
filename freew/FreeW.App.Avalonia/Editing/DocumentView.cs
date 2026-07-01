@@ -5,6 +5,9 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
+using FreeW.App.Presentation.Dialogs;
+using FreeW.App.Presentation.DocumentView;
+using FreeW.App.Presentation.Ribbon;
 using FreeW.Core.Model;
 using TextAlignment = FreeW.Core.Model.TextAlignment;
 
@@ -72,8 +75,6 @@ public sealed class DocumentView : Control
     private const double RulerThicknessDip = 14.0;
     // Gap between consecutive page rectangles (grey desk visible between them).
     private const double PageGap = 20;
-    // Minimum horizontal gap between the control edge and the page left/right edge.
-    private const double MinHorzGutter = 24;
     private const double DefaultFontSizePt = 11;
     private const double FallbackWidth = 816; // 8.5in * 96dpi
     private const double ListIndentStep = 24;
@@ -88,20 +89,13 @@ public sealed class DocumentView : Control
     // instead of overflowing into the next line.  Matches Word's subscript baseline offset.
     private const double SubYLowerFraction = 0.33;
 
-    // Web/Draft layout constants.
-    // Web: content column capped at this width (responsive up to this limit).
-    private const double WebMaxContentWidth = 1000;
-    // Web: small fixed left/right inset (no page chrome).
-    private const double WebInset = 24;
-    // Draft: even smaller left margin, no right constraint.
-    private const double DraftInset = 16;
-
     private DocumentViewMode _viewMode = DocumentViewMode.PrintLayout;
     private bool _showParagraphMarks;
     // AV-VIEW: layout-gridlines overlay (faint grid behind text) + ruler strip (top horizontal +
     // left vertical with tick marks and margin markers). Both are view-only chrome — they never
     // affect layout, only the Render pass — so toggling them just invalidates the visual.
     private bool _showGridlines;
+    private bool _showTableGridlines;
     private bool _showRuler;
 
     // Standard Word font-size ladder (pt).
@@ -130,10 +124,11 @@ public sealed class DocumentView : Control
     private readonly List<FloatingWordArtData>  _floatingWordArts  = new();
     private readonly List<FloatingSmartArtData> _floatingSmartArts = new();
     private readonly List<FloatingGroupData>    _floatingGroups    = new();
+    private readonly List<DocumentFloatingObjectSnapshot> _floatingSnapshots = new();
     // AV-WRAP: unified list of wrap-exclusion zones (Square/Tight/TopAndBottom only).
     // Populated during Collect* calls; consulted by EmitLinePaged and LayoutParagraphPaged.
     // Each entry is a page-space rect + the wrapping mode (Behind/InFront entries are never added).
-    private readonly List<(Rect Rect, ImageWrapping Wrapping)> _wrapExclusions = new();
+    private readonly List<DocumentFloatingWrapExclusionZone> _wrapExclusions = new();
     // HF: pre-computed header/footer render items (rebuilt in Relayout when PrintLayout).
     private readonly List<HfRenderItem> _headerFooterItems = new();
     // AV-NOTERENDER: pre-computed footnote/endnote text render items (rebuilt in Relayout when PrintLayout).
@@ -208,6 +203,8 @@ public sealed class DocumentView : Control
     private double _pageHeightPx;
     // Number of discrete pages after the last layout pass.
     private int _pageCount = 1;
+    private DocumentViewSurfacePlan _surfacePlan =
+        DocumentViewLayoutPlanner.BuildSurfacePlan(new PageSettings(), DocumentViewLayoutKind.PrintLayout, FallbackWidth);
 
     // ── AV-COL: multi-column body text layout fields ────────────────────────────────────────────────
     // Number of body-text columns for the current layout (1 = single-column, the default).
@@ -335,12 +332,37 @@ public sealed class DocumentView : Control
         return string.Empty;
     }
 
-    public void SetCellText(int block, int row, int col, string text) =>
+    public void SetCellText(int block, int row, int col, string text)
+    {
+        if (IsEditingLocked)
+            return;
+
         _bus.Execute(new CellTextCommand(block, row, col, text));
+    }
 
     public TextDocument Document => _doc;
     public bool CanUndo => _bus.CanUndo;
     public bool CanRedo => _bus.CanRedo;
+
+    /// <summary>Raised whenever document protection or Mark-as-Final state changes.</summary>
+    public event EventHandler? ProtectionStateChanged;
+
+    /// <summary>True when restrict-editing protection is enforced.</summary>
+    public bool IsProtected => _doc.Protection.IsProtected;
+
+    /// <summary>The current restrict-editing mode stored in the document model.</summary>
+    public ProtectionMode ProtectionMode => _doc.Protection.Mode;
+
+    /// <summary>The full document protection settings stored in the document model.</summary>
+    public ProtectionSettings Protection => _doc.Protection;
+
+    /// <summary>True when the document is marked final, Word's advisory read-only state.</summary>
+    public bool IsMarkedAsFinal => _doc.MarkedAsFinal;
+
+    /// <summary>True when free typing/editing should be blocked by final/protection state.</summary>
+    public bool IsEditingLocked =>
+        _doc.MarkedAsFinal ||
+        _doc.Protection.Mode is ProtectionMode.ReadOnly or ProtectionMode.CommentsOnly or ProtectionMode.FillingForms;
 
     public void LoadDocument(TextDocument document)
     {
@@ -356,6 +378,8 @@ public sealed class DocumentView : Control
         _hfCaret = null; // AV-HFEDIT: clear header/footer caret on document load
         _selectedFloating = null; // AV-PICTAB: clear float selection on document load
         _floatDragState   = null;
+        if (_doc.Protection.Mode == ProtectionMode.TrackChangesOnly)
+            TrackChangesEnabled = true;
         RaiseFloatingSelectionChangedIfIdentityChanged();
         InvalidateLayoutAndVisual();
         DocumentChanged?.Invoke();
@@ -371,6 +395,50 @@ public sealed class DocumentView : Control
     {
         if (_bus.Redo())
             ClampCaret();
+    }
+
+    /// <summary>Set the document's Word-style Mark as Final advisory read-only state.</summary>
+    public void SetMarkedAsFinal(bool markedAsFinal)
+    {
+        if (_doc.MarkedAsFinal == markedAsFinal)
+            return;
+
+        _doc.MarkedAsFinal = markedAsFinal;
+        OnProtectionStateChanged();
+    }
+
+    /// <summary>Apply restrict-editing protection settings stored on the document model.</summary>
+    public void SetProtection(ProtectionSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+
+        if (_doc.Protection == settings)
+            return;
+
+        _doc.Protection = settings;
+        if (_doc.Protection.Mode == ProtectionMode.TrackChangesOnly)
+            TrackChangesEnabled = true;
+        OnProtectionStateChanged();
+    }
+
+    /// <summary>Apply a restrict-editing mode without a password.</summary>
+    public void SetProtection(ProtectionMode mode) => SetProtection(new ProtectionSettings(mode));
+
+    /// <summary>Toggle the common no-changes/read-only protection mode.</summary>
+    public ProtectionMode ToggleReadOnlyProtection()
+    {
+        var next = _doc.Protection.Mode == ProtectionMode.None
+            ? ProtectionMode.ReadOnly
+            : ProtectionMode.None;
+        SetProtection(next);
+        return next;
+    }
+
+    private void OnProtectionStateChanged()
+    {
+        InvalidateLayoutAndVisual();
+        ProtectionStateChanged?.Invoke(this, EventArgs.Empty);
+        DocumentChanged?.Invoke();
     }
 
     /// <summary>Select the next occurrence of <paramref name="query"/> after the caret (wraps around).</summary>
@@ -1108,6 +1176,9 @@ public sealed class DocumentView : Control
     /// </summary>
     private void MutateCaretTable(Func<int, int, int, IDocumentCommand> build)
     {
+        if (IsEditingLocked)
+            return;
+
         if (_cellCaret is not { } cc)
             return;
         var blockIdx = cc.TableBlock;
@@ -1136,6 +1207,9 @@ public sealed class DocumentView : Control
     /// </summary>
     public void MergeSelectedCells()
     {
+        if (IsEditingLocked)
+            return;
+
         if (SelectedCellRange is not { } sel)
             return;
         var blockIdx = sel.TableBlock;
@@ -1190,6 +1264,9 @@ public sealed class DocumentView : Control
     /// <param name="cols">Reserved for future subdivision; currently ignored.</param>
     public void SplitCurrentCell(int rows = 1, int cols = 1)
     {
+        if (IsEditingLocked)
+            return;
+
         if (_cellCaret is not { } cc)
             return;
         var blockIdx = cc.TableBlock;
@@ -1220,6 +1297,9 @@ public sealed class DocumentView : Control
     /// </summary>
     public void SetCellShading(string? hexColor)
     {
+        if (IsEditingLocked)
+            return;
+
         if (SelectedCellRange is { } sel)
         {
             // Block selection: apply to every cell in the rectangle.
@@ -1285,6 +1365,9 @@ public sealed class DocumentView : Control
         BorderLineStyle style = BorderLineStyle.Single,
         bool clearEdges = false)
     {
+        if (IsEditingLocked)
+            return;
+
         int blockIdx;
         int minRow, maxRow, minCol, maxCol;
 
@@ -1384,6 +1467,9 @@ public sealed class DocumentView : Control
     /// </summary>
     public void SetCaretCellAlignment(TableCellVerticalAlignment verticalAlignment, TextAlignment horizontalAlignment)
     {
+        if (IsEditingLocked)
+            return;
+
         if (SelectedCellRange is { } sel)
         {
             if (sel.TableBlock < 0 || sel.TableBlock >= _doc.Blocks.Count
@@ -1557,28 +1643,167 @@ public sealed class DocumentView : Control
     /// Toggles the <see cref="TableFormatting.HeaderRow"/> flag on the table containing the caret.
     /// No-op outside a table. Undoable via the document command bus.
     /// </summary>
-    public void ToggleTableHeaderRow()
-    {
-        if (_cellCaret is not { } cc) return;
-        if (cc.TableBlock < 0 || cc.TableBlock >= _doc.Blocks.Count
-            || _doc.Blocks[cc.TableBlock] is not Table tbl) return;
-        var newFmt = tbl.Formatting with { HeaderRow = !tbl.Formatting.HeaderRow };
-        _bus.Execute(new SetTableFormattingCommand(cc.TableBlock, newFmt));
-        InvalidateLayoutAndVisual();
-    }
+    public void ToggleTableHeaderRow() =>
+        UpdateCaretTableFormatting(formatting => formatting with { HeaderRow = !formatting.HeaderRow });
 
     /// <summary>
     /// Toggles the <see cref="TableFormatting.BandedRows"/> flag on the table containing the caret.
     /// No-op outside a table. Undoable via the document command bus.
     /// </summary>
-    public void ToggleBandedRows()
+    public void ToggleBandedRows() =>
+        UpdateCaretTableFormatting(formatting => formatting with { BandedRows = !formatting.BandedRows });
+
+    public void ToggleTableRepeatHeaderRow() =>
+        UpdateCaretTableFormatting(formatting => formatting with { RepeatHeaderRow = !formatting.RepeatHeaderRow });
+
+    public void ToggleTableLastRow() =>
+        UpdateCaretTableFormatting(formatting => formatting with { LastRow = !formatting.LastRow });
+
+    public void ToggleTableFirstColumn() =>
+        UpdateCaretTableFormatting(formatting => formatting with { FirstColumn = !formatting.FirstColumn });
+
+    public void ToggleTableLastColumn() =>
+        UpdateCaretTableFormatting(formatting => formatting with { LastColumn = !formatting.LastColumn });
+
+    public void ToggleTableBandedColumns() =>
+        UpdateCaretTableFormatting(formatting => formatting with { BandedColumns = !formatting.BandedColumns });
+
+    private void UpdateCaretTableFormatting(Func<TableFormatting, TableFormatting> update)
     {
-        if (_cellCaret is not { } cc) return;
+        if (IsEditingLocked || _cellCaret is not { } cc)
+            return;
         if (cc.TableBlock < 0 || cc.TableBlock >= _doc.Blocks.Count
-            || _doc.Blocks[cc.TableBlock] is not Table tbl) return;
-        var newFmt = tbl.Formatting with { BandedRows = !tbl.Formatting.BandedRows };
+            || _doc.Blocks[cc.TableBlock] is not Table tbl)
+            return;
+
+        var newFmt = update(tbl.Formatting);
         _bus.Execute(new SetTableFormattingCommand(cc.TableBlock, newFmt));
         InvalidateLayoutAndVisual();
+    }
+
+    public void SplitTable()
+    {
+        if (IsEditingLocked || _cellCaret is not { } cc)
+            return;
+        if (cc.TableBlock < 0 || cc.TableBlock >= _doc.Blocks.Count
+            || _doc.Blocks[cc.TableBlock] is not Table table)
+            return;
+
+        if (TableLayoutOperations.TryBuildSplitReplacement(table, cc.Row, out var replacement))
+        {
+            _bus.Execute(new ReplaceBlocksCommand(cc.TableBlock, 1, replacement));
+            _cellCaret = null;
+            _cellAnchor = null;
+            _cellBlockAnchor = null;
+            _cellBlockFocus = null;
+            ClampCaret();
+            InvalidateLayoutAndVisual();
+        }
+    }
+
+    public void DistributeTableRows()
+    {
+        if (IsEditingLocked || CaretTable() is not { } table)
+            return;
+        if (TableLayoutOperations.DistributeRows(table))
+            InvalidateLayoutAndVisual();
+    }
+
+    public void DistributeTableColumns()
+    {
+        if (IsEditingLocked || CaretTable() is not { } table)
+            return;
+        if (TableLayoutOperations.DistributeColumns(table))
+            InvalidateLayoutAndVisual();
+    }
+
+    public void SetTableAutoFit(AutoFitMode mode)
+    {
+        if (IsEditingLocked || CaretTable() is not { } table)
+            return;
+        if (TableLayoutOperations.SetAutoFit(table, mode))
+            InvalidateLayoutAndVisual();
+    }
+
+    public void SetCaretCellTextDirection(CellTextDirection direction)
+    {
+        if (IsEditingLocked || _cellCaret is not { } cc)
+            return;
+        if (cc.TableBlock < 0 || cc.TableBlock >= _doc.Blocks.Count
+            || _doc.Blocks[cc.TableBlock] is not Table table)
+            return;
+
+        var cellIndex = GridColumnToCellIndex(table.Rows[cc.Row], cc.Col);
+        if (TableLayoutOperations.SetCellTextDirection(table, cc.Row, cellIndex, direction))
+            InvalidateLayoutAndVisual();
+    }
+
+    public (Table Table, int RowIndex, int ColumnIndex)? CaretTableCell()
+    {
+        if (_cellCaret is not { } cc)
+            return null;
+        if (cc.TableBlock < 0 || cc.TableBlock >= _doc.Blocks.Count
+            || _doc.Blocks[cc.TableBlock] is not Table table)
+            return null;
+
+        var cellIndex = GridColumnToCellIndex(table.Rows[cc.Row], cc.Col);
+        return cellIndex < 0 ? null : (table, cc.Row, cellIndex);
+    }
+
+    public ModelTableContext? CaretTableContext()
+    {
+        if (CaretTableCell() is not { } caret)
+            return null;
+
+        var row = caret.RowIndex >= 0 && caret.RowIndex < caret.Table.Rows.Count
+            ? caret.Table.Rows[caret.RowIndex]
+            : null;
+        var cell = row is not null && caret.ColumnIndex >= 0 && caret.ColumnIndex < row.Cells.Count
+            ? row.Cells[caret.ColumnIndex]
+            : null;
+        return new ModelTableContext(caret.Table, row, cell);
+    }
+
+    public void ApplyTableProperties(TablePropertiesValues values)
+    {
+        if (IsEditingLocked || CaretTableContext() is not { } context)
+            return;
+
+        TablePropertiesDialogPlanner.ApplyValues(context, values);
+        InvalidateLayoutAndVisual();
+    }
+
+    public void InsertTableFormula(TableFormulaField formula)
+    {
+        if (IsEditingLocked || _cellCaret is not { } cc)
+            return;
+        if (cc.TableBlock < 0 || cc.TableBlock >= _doc.Blocks.Count
+            || _doc.Blocks[cc.TableBlock] is not Table table)
+            return;
+
+        var cellIndex = GridColumnToCellIndex(table.Rows[cc.Row], cc.Col);
+        if (cellIndex < 0)
+            return;
+
+        var run = TableLayoutOperations.BuildFormulaRun(table, cc.Row, cellIndex, formula);
+        var targetOffset = cc.Offset;
+        _bus.Execute(new ReplaceCellParagraphRunsCommand(cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx, paragraph =>
+            InsertRunAtOffset(paragraph, targetOffset, run)));
+        var newOffset = targetOffset + run.Text.Length;
+        _cellCaret = cc with { Offset = newOffset };
+        _cellAnchor = _cellCaret;
+        _caret = new DocPosition(cc.TableBlock, FindCellGlyphOffset(cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx, newOffset));
+        _selectionAnchor = _caret;
+        InvalidateLayoutAndVisual();
+    }
+
+    private Table? CaretTable()
+    {
+        if (_cellCaret is not { } cc)
+            return null;
+        if (cc.TableBlock < 0 || cc.TableBlock >= _doc.Blocks.Count)
+            return null;
+        return _doc.Blocks[cc.TableBlock] as Table;
     }
 
     // ── AV-TBL2: cross-cell rectangular selection ────────────────────────────────────────────────
@@ -2134,7 +2359,9 @@ public sealed class DocumentView : Control
         get
         {
             if (_laidOutWidth < 0) Relayout(FallbackWidth);
-            return _wrapExclusions.ToList();
+            return _wrapExclusions
+                .Select(zone => (ToAvaloniaRect(zone.Rect), zone.Wrapping))
+                .ToList();
         }
     }
 
@@ -2168,14 +2395,10 @@ public sealed class DocumentView : Control
         get
         {
             if (_laidOutWidth < 0) Relayout(FallbackWidth);
-            var list = new List<(int, string)>();
-            foreach (var fi in _floatingImages.Where(fi => fi.BehindText)) list.Add((fi.ZOrder, "Image"));
-            foreach (var sd in _floatingShapes.Where(sd => sd.BehindText)) list.Add((sd.ZOrder, "Shape"));
-            foreach (var cd in _floatingCharts.Where(c => c.BehindText)) list.Add((cd.ZOrder, "Chart"));
-            foreach (var wd in _floatingWordArts.Where(w => w.BehindText)) list.Add((wd.ZOrder, "WordArt"));
-            foreach (var sa in _floatingSmartArts.Where(s => s.BehindText)) list.Add((sa.ZOrder, "SmartArt"));
-            foreach (var gd in _floatingGroups.Where(g => g.BehindText)) list.Add((gd.ZOrder, "Group"));
-            return list.OrderBy(d => d.Item1).ToList();
+            return DocumentViewLayoutPlanner
+                .BuildFloatingObjectDrawOrder(_floatingSnapshots, behindText: true)
+                .Select(snapshot => (snapshot.ZOrderIndex, snapshot.TypeTag))
+                .ToList();
         }
     }
 
@@ -2185,14 +2408,10 @@ public sealed class DocumentView : Control
         get
         {
             if (_laidOutWidth < 0) Relayout(FallbackWidth);
-            var list = new List<(int, string)>();
-            foreach (var fi in _floatingImages.Where(fi => !fi.BehindText)) list.Add((fi.ZOrder, "Image"));
-            foreach (var sd in _floatingShapes.Where(sd => !sd.BehindText)) list.Add((sd.ZOrder, "Shape"));
-            foreach (var cd in _floatingCharts.Where(c => !c.BehindText)) list.Add((cd.ZOrder, "Chart"));
-            foreach (var wd in _floatingWordArts.Where(w => !w.BehindText)) list.Add((wd.ZOrder, "WordArt"));
-            foreach (var sa in _floatingSmartArts.Where(s => !s.BehindText)) list.Add((sa.ZOrder, "SmartArt"));
-            foreach (var gd in _floatingGroups.Where(g => !g.BehindText)) list.Add((gd.ZOrder, "Group"));
-            return list.OrderBy(d => d.Item1).ToList();
+            return DocumentViewLayoutPlanner
+                .BuildFloatingObjectDrawOrder(_floatingSnapshots, behindText: false)
+                .Select(snapshot => (snapshot.ZOrderIndex, snapshot.TypeTag))
+                .ToList();
         }
     }
 
@@ -2360,7 +2579,7 @@ public sealed class DocumentView : Control
             // Offset within this page's page-space rectangle:
             //   pageTop(pageSpace) = DeskPadding + pageIndex*(pageHeightPx+PageGap)
             //   yWithinPagePx = runY - pageTop(pageSpace) = runY - DeskPadding - pageIndex*(pageHeightPx+PageGap)
-            var yWithinPagePx = runY - DeskPadding - runPageIndex * (_pageHeightPx + PageGap);
+            var yWithinPagePx = runY - _surfacePlan.PageTopDip(runPageIndex);
             var baselineFromTopPt = yWithinPagePx / PxPerPoint + fontSizePt;
             var yPt = pageHeightPt - baselineFromTopPt;
 
@@ -2373,12 +2592,12 @@ public sealed class DocumentView : Control
 
         // Glyphs are now in page-space Y (discrete multi-page layout).
         // Derive page index and within-page Y directly from the page-space Y.
-        var pageStride = _pageHeightPx + PageGap; // distance between page tops in page space
+        var pageStride = _surfacePlan.PageStrideDip; // distance between page tops in page space
         foreach (var g in glyphs)
         {
             // Invert ContentYToPageSpaceY:
             //   pageSpaceY = DeskPadding + pageIndex*(pageHeightPx+PageGap) + marginTopDip + offsetWithinPage
-            var rel = g.Y - DeskPadding;
+            var rel = g.Y - _surfacePlan.DeskPaddingDip;
             var pageIndex = Math.Max(0, (int)(rel / pageStride));
             var sameRun = runFmt is not null
                 && runPageIndex == pageIndex
@@ -2435,6 +2654,14 @@ public sealed class DocumentView : Control
 
     // ---- Layout ---------------------------------------------------------------------------------
 
+    private static DocumentViewLayoutKind ToLayoutKind(DocumentViewMode mode) => mode switch
+    {
+        DocumentViewMode.PrintLayout => DocumentViewLayoutKind.PrintLayout,
+        DocumentViewMode.WebLayout => DocumentViewLayoutKind.WebLayout,
+        DocumentViewMode.Draft => DocumentViewLayoutKind.Draft,
+        _ => DocumentViewLayoutKind.PrintLayout
+    };
+
     protected override Size MeasureOverride(Size availableSize)
     {
         var width = double.IsFinite(availableSize.Width) && availableSize.Width > 0
@@ -2456,6 +2683,7 @@ public sealed class DocumentView : Control
         _floatingWordArts.Clear();
         _floatingSmartArts.Clear();
         _floatingGroups.Clear();
+        _floatingSnapshots.Clear();
         _wrapExclusions.Clear();
         _inlineCharts.Clear();
         _inlineWordArts.Clear();
@@ -2468,88 +2696,66 @@ public sealed class DocumentView : Control
         _footnoteBandHeightByPage.Clear(); // DB1/DB2
         _tabLeaderSpans.Clear(); // AV-TAB
 
+        _surfacePlan = DocumentViewLayoutPlanner.BuildSurfacePlan(
+            _doc.Page,
+            ToLayoutKind(_viewMode),
+            width);
+
         if (_viewMode == DocumentViewMode.PrintLayout)
         {
             // ---- Print Layout: paginated white pages on a grey desk ----
             // Page geometry from the document's PageSettings: a centred page with its own margins.
-            _pageWidth = Math.Max(320, _doc.Page.WidthPt * PxPerPoint);
-            _pageHeightPx = Math.Max(400, _doc.Page.HeightPt * PxPerPoint);
-            var marginLeft  = Math.Max(0, _doc.Page.MarginLeftPt)   * PxPerPoint;
-            var marginRight = Math.Max(0, _doc.Page.MarginRightPt)  * PxPerPoint;
-            _marginTopDip    = Math.Max(0, _doc.Page.MarginTopPt)    * PxPerPoint;
-            _marginBottomDip = Math.Max(0, _doc.Page.MarginBottomPt) * PxPerPoint;
-            // Centre the page in the available width, never closer than MinHorzGutter to the edge.
-            _pageLeft = Math.Max(MinHorzGutter, (width - _pageWidth) / 2);
-            _contentLeft = _pageLeft + marginLeft;
-            _contentWidth = Math.Max(120, _pageWidth - marginLeft - marginRight);
+            _pageWidth = _surfacePlan.PageWidthDip;
+            _pageHeightPx = _surfacePlan.PageHeightDip;
+            _marginTopDip    = _surfacePlan.MarginTopDip;
+            _marginBottomDip = _surfacePlan.MarginBottomDip;
+            // Centre the page in the available width, never closer than the planner's minimum gutter.
+            _pageLeft = _surfacePlan.PageLeftDip;
+            _contentLeft = _surfacePlan.ContentLeftDip;
+            _contentWidth = _surfacePlan.ContentWidthDip;
         }
         else if (_viewMode == DocumentViewMode.WebLayout)
         {
             // ---- Web Layout: continuous column, capped width, no page chrome ----
-            // Responsive up to WebMaxContentWidth; small fixed inset on each side.
-            var colWidth = Math.Min(width - 2 * WebInset, WebMaxContentWidth);
-            _pageWidth = Math.Max(320, colWidth);
-            _pageHeightPx = double.MaxValue / 2; // effectively infinite — no pagination
-            _marginTopDip    = WebInset;
-            _marginBottomDip = WebInset;
-            _pageLeft = WebInset;
-            _contentLeft = WebInset;
-            _contentWidth = Math.Max(120, colWidth);
+            // Responsive up to the planner's Web Layout cap; small fixed inset on each side.
+            _pageWidth = _surfacePlan.PageWidthDip;
+            _pageHeightPx = _surfacePlan.PageHeightDip; // effectively infinite — no pagination
+            _marginTopDip    = _surfacePlan.MarginTopDip;
+            _marginBottomDip = _surfacePlan.MarginBottomDip;
+            _pageLeft = _surfacePlan.PageLeftDip;
+            _contentLeft = _surfacePlan.ContentLeftDip;
+            _contentWidth = _surfacePlan.ContentWidthDip;
         }
         else // Draft
         {
             // ---- Draft: plain left-margin continuous flow ----
-            _pageWidth = Math.Max(320, width - DraftInset);
-            _pageHeightPx = double.MaxValue / 2;
-            _marginTopDip    = DraftInset;
-            _marginBottomDip = DraftInset;
-            _pageLeft = DraftInset;
-            _contentLeft = DraftInset;
-            _contentWidth = Math.Max(120, width - DraftInset * 2);
+            _pageWidth = _surfacePlan.PageWidthDip;
+            _pageHeightPx = _surfacePlan.PageHeightDip;
+            _marginTopDip    = _surfacePlan.MarginTopDip;
+            _marginBottomDip = _surfacePlan.MarginBottomDip;
+            _pageLeft = _surfacePlan.PageLeftDip;
+            _contentLeft = _surfacePlan.ContentLeftDip;
+            _contentWidth = _surfacePlan.ContentWidthDip;
         }
 
         // AV-COL: compute multi-column geometry from PageSettings.
         // Only active in PrintLayout mode — Web/Draft always use a single column.
         {
-            var pageColCount = _viewMode == DocumentViewMode.PrintLayout
-                ? Math.Max(1, _doc.Page.ColumnCount)
-                : 1;
-            if (pageColCount > 1)
-            {
-                var gapDip = Math.Max(0, _doc.Page.ColumnSpacingPt * PxPerPoint);
-                double colWidthDip;
-                if (_doc.Page.ColumnWidthsPt is { Count: > 1 } explicitWidths
-                    && explicitWidths.Count == pageColCount)
-                {
-                    // Unequal layout: use the narrowest column to guarantee all N columns fit.
-                    colWidthDip = explicitWidths.Min() * PxPerPoint;
-                }
-                else
-                {
-                    colWidthDip = (_contentWidth - (pageColCount - 1) * gapDip) / pageColCount;
-                }
-                colWidthDip = Math.Max(1, colWidthDip);
-                _colCount       = pageColCount;
-                _colWidth       = colWidthDip;
-                _colGap         = gapDip;
-                _colLineBetween = _doc.Page.ColumnsLineBetween;
-            }
-            else
-            {
-                _colCount       = 1;
-                _colWidth       = _contentWidth;
-                _colGap         = 0;
-                _colLineBetween = false;
-            }
+            var columnPlan = DocumentViewLayoutPlanner.BuildColumnPlan(
+                _doc.Page,
+                _contentWidth,
+                usePageColumns: _surfacePlan.IsPrintLayout);
+            _colCount       = columnPlan.Count;
+            _colWidth       = columnPlan.WidthDip;
+            _colGap         = columnPlan.GapDip;
+            _colLineBetween = columnPlan.LineBetween;
         }
 
         // Body text layout uses _colWidth as the per-column wrap width.
         var textWidth = _colWidth;
         // Available text-area height per page (between top and bottom margin).
         // For Web/Draft this is effectively infinite so ReserveContentY never paginates.
-        var textAreaHeight = _viewMode == DocumentViewMode.PrintLayout
-            ? Math.Max(40, _pageHeightPx - _marginTopDip - _marginBottomDip)
-            : double.MaxValue / 2;
+        var textAreaHeight = _surfacePlan.TextAreaHeightDip;
 
         // _layoutContentY tracks the "content Y" — the offset within the flowing text area
         // (0 = start of the first text area). This gets converted to page-space Y via
@@ -2570,7 +2776,7 @@ public sealed class DocumentView : Control
             var lastSlot = _layoutContentY > 0 ? (int)(_layoutContentY / _layoutTextAreaHeight) : 0;
             var totalSlots = lastSlot + 1;
             _pageCount = Math.Max(1, (int)Math.Ceiling((double)totalSlots / _colCount));
-            _contentHeight = _pageCount * (_pageHeightPx + PageGap) + DeskPadding + _marginBottomDip;
+            _contentHeight = _surfacePlan.ScrollableHeightForPages(_pageCount);
 
             // DB1: measure true footnote band heights (needs first-pass placed positions to resolve pages).
             if (_doc.Footnotes.Count > 0)
@@ -2589,6 +2795,7 @@ public sealed class DocumentView : Control
                 _floatingWordArts.Clear();
                 _floatingSmartArts.Clear();
                 _floatingGroups.Clear();
+                _floatingSnapshots.Clear();
                 _wrapExclusions.Clear();
                 _inlineCharts.Clear();
                 _inlineWordArts.Clear();
@@ -2602,7 +2809,7 @@ public sealed class DocumentView : Control
                 lastSlot = _layoutContentY > 0 ? (int)(_layoutContentY / _layoutTextAreaHeight) : 0;
                 totalSlots = lastSlot + 1;
                 _pageCount = Math.Max(1, (int)Math.Ceiling((double)totalSlots / _colCount));
-                _contentHeight = _pageCount * (_pageHeightPx + PageGap) + DeskPadding + _marginBottomDip;
+                _contentHeight = _surfacePlan.ScrollableHeightForPages(_pageCount);
             }
         }
         else
@@ -2650,7 +2857,7 @@ public sealed class DocumentView : Control
                 // Route to the image-paragraph path only when the paragraph contains inline images.
                 // Paragraphs whose images are ALL floating (anchored) are laid out as normal text
                 // paragraphs so that the anchor content-Y is tracked; their images are collected
-                // into _floatingImages by CollectFloatingImages() called from within each layout method.
+                // into _floatingImages by CollectFloatingObjects() called from within each layout method.
                 var hasInlineImage   = paragraph.Runs.Any(r => r.Image    is { IsFloating: false });
                 var hasInlineChart   = paragraph.Runs.Any(r => r.Chart    is { IsFloating: false });
                 var hasInlineWordArt = paragraph.Runs.Any(r => r.WordArt  is { IsFloating: false });
@@ -2662,14 +2869,14 @@ public sealed class DocumentView : Control
                     if (hasInlineImage)
                     {
                         // Mixed paragraph: inline image(s) present — use the image layout path which
-                        // also calls CollectFloatingImages internally.
+                        // also calls CollectFloatingObjects internally.
                         // Non-list paragraph: reset all counters (list run ended).
                         Array.Clear(levelCounters, 0, MaxListDepth);
                         LayoutImageParagraphPaged(blockIndex, paragraph, textWidth);
                         continue;
                     }
                     // Floating-only: fall through to normal paragraph layout below,
-                    // which calls CollectFloatingImages at the start of EmitLinePaged.
+                    // which calls CollectFloatingObjects at the start of EmitLinePaged.
                 }
 
                 // FO4: route paragraphs with inline charts / SmartArt / WordArt to the dedicated path.
@@ -2754,136 +2961,38 @@ public sealed class DocumentView : Control
     /// Fallback: when a section's HeadersFooters is entirely empty, substitutes
     /// <see cref="TextDocument.FinalSectionHeadersFooters"/> (AE3 fix).
     /// </summary>
-    private (SectionHeadersFooters Hf, int SectionRelPageNumber, PageSettings Page)[]
-        ComputePageSectionMap(IReadOnlyList<Section> sections, int pageCount)
+    private IReadOnlyList<HeaderFooterPageSectionPlan> ComputePageSectionMap(int pageCount)
     {
-        var result = new (SectionHeadersFooters Hf, int SectionRelPageNumber, PageSettings Page)[pageCount];
-
-        // Map each model-block index to a section index (0-based).
-        // A block belongs to section[k] if it comes before the k-th SectionBreak paragraph.
         var blocks = _doc.Blocks;
-        int[] blockSection = new int[blocks.Count];
-        {
-            int secIdx = 0;
-            for (int b = 0; b < blocks.Count; b++)
-            {
-                blockSection[b] = secIdx;
-                // A paragraph carrying a SectionBreak ends secIdx and starts secIdx+1.
-                if (blocks[b] is Paragraph { SectionBreak: { } } && secIdx < sections.Count - 1)
-                    secIdx++;
-            }
-        }
+        var blockPageAssignments = Enumerable
+            .Repeat(HeaderFooterPagePlanner.UnassignedBlockPageIndex, blocks.Count)
+            .ToArray();
 
-        // Determine the owning section index for each page.
-        // We use _placed: for each block, find the first PlacedChar on it and read its page.
-        // The first block placed on a page sets that page's section.
-        int[] pageSectionIdx = new int[pageCount];
-        // Track whether a page already has an assignment so first-placed-block wins.
-        bool[] pageAssigned = new bool[pageCount];
-
-        // Walk _placed in order (they are added in layout order, so earlier blocks come first).
         foreach (var pc in _placed)
         {
             if (pc.Sentinel) continue;
             var b = pc.Block;
             if (b < 0 || b >= blocks.Count) continue;
+            if (blockPageAssignments[b] >= 0) continue;
+
             var pg = PageIndexFromPageSpaceY(pc.Y);
-            pg = Math.Clamp(pg, 0, pageCount - 1);
-            if (!pageAssigned[pg])
-            {
-                pageSectionIdx[pg] = blockSection[b];
-                pageAssigned[pg] = true;
-            }
+            blockPageAssignments[b] = Math.Clamp(pg, 0, pageCount - 1);
         }
 
-        // Fill any pages that got no placed content (e.g. blank trailing pages) by
-        // propagating the previous page's section forward.
-        for (int pg = 1; pg < pageCount; pg++)
-        {
-            if (!pageAssigned[pg])
-            {
-                pageSectionIdx[pg] = pageSectionIdx[pg - 1];
-                pageAssigned[pg] = true;
-            }
-        }
-
-        // Compute sectionFirstPage[k] = first 0-based page belonging to section k.
-        var sectionFirstPage = new int[Math.Max(1, sections.Count)];
-        for (int pg = 0; pg < pageCount; pg++)
-        {
-            int sec = Math.Clamp(pageSectionIdx[pg], 0, sections.Count - 1);
-            if (pg == 0 || pageSectionIdx[pg - 1] != sec)
-                sectionFirstPage[sec] = pg;
-        }
-
-        // Build the result.
-        for (int pg = 0; pg < pageCount; pg++)
-        {
-            int sec = Math.Clamp(pageSectionIdx[pg], 0, sections.Count - 1);
-            var sectionHf = sections[sec].HeadersFooters;
-
-            // AE3 fix: fall back to document-level headers when the section has no own slots.
-            if (sectionHf.IsEmpty)
-                sectionHf = _doc.FinalSectionHeadersFooters;
-
-            var sectionPage = sections[sec].Page;
-            int sectionRelPage = pg - sectionFirstPage[sec] + 1;
-            result[pg] = (sectionHf, sectionRelPage, sectionPage);
-        }
-
-        return result;
+        return HeaderFooterPagePlanner.MapPagesToSections(_doc, blockPageAssignments, pageCount);
     }
 
-    /// <summary>
-    /// Selects the correct header/footer slot pair for the given page within a section.
-    /// Mirrors WPF's PaginatedEditorPanel.ResolveHfSlots: gates first-page variant on
-    /// <paramref name="sectionRelativePageNumber"/> == 1 (AE2 fix), not document-page 0.
-    /// </summary>
-    private static (HeaderFooter? Header, HeaderFooter? Footer) ResolveHfSlotsAvalonia(
-        SectionHeadersFooters sectionHf,
-        int sectionRelativePageNumber,
-        PageSettings pageSettings,
-        bool diffOddEvenDoc)
+    /// <summary>Maps the shared planner slot kind to Avalonia's edit-target slot enum.</summary>
+    private static HfSlot ToHfSlot(HeaderFooterSlotKind slot) => slot switch
     {
-        var diffFirst = pageSettings.DifferentFirstPage;
-
-        if (diffFirst && sectionRelativePageNumber == 1)
-        {
-            return (sectionHf.FirstHeader, sectionHf.FirstFooter);
-        }
-
-        if (diffOddEvenDoc && sectionRelativePageNumber % 2 == 0)
-        {
-            return (sectionHf.EvenHeader ?? sectionHf.Header,
-                    sectionHf.EvenFooter ?? sectionHf.Footer);
-        }
-
-        return (sectionHf.Header, sectionHf.Footer);
-    }
-
-    /// <summary>
-    /// AV-HFEDIT: companion to <see cref="ResolveHfSlotsAvalonia"/> that reports WHICH slot enums were
-    /// chosen for the page (so the editable render items can address the right model paragraph). Uses the
-    /// identical selection rules (first-page → odd/even → default).
-    /// </summary>
-    private static (HfSlot HeaderSlot, HfSlot FooterSlot) ResolveHfSlotEnums(
-        SectionHeadersFooters sectionHf,
-        int sectionRelativePageNumber,
-        PageSettings pageSettings,
-        bool diffOddEvenDoc)
-    {
-        var diffFirst = pageSettings.DifferentFirstPage;
-        if (diffFirst && sectionRelativePageNumber == 1)
-            return (HfSlot.FirstHeader, HfSlot.FirstFooter);
-        if (diffOddEvenDoc && sectionRelativePageNumber % 2 == 0)
-        {
-            // EvenHeader/EvenFooter fall back to the default slot when unset (matches ResolveHfSlotsAvalonia).
-            var hSlot = sectionHf.EvenHeader is not null ? HfSlot.EvenHeader : HfSlot.Header;
-            var fSlot = sectionHf.EvenFooter is not null ? HfSlot.EvenFooter : HfSlot.Footer;
-            return (hSlot, fSlot);
-        }
-        return (HfSlot.Header, HfSlot.Footer);
-    }
+        HeaderFooterSlotKind.Header => HfSlot.Header,
+        HeaderFooterSlotKind.Footer => HfSlot.Footer,
+        HeaderFooterSlotKind.FirstHeader => HfSlot.FirstHeader,
+        HeaderFooterSlotKind.FirstFooter => HfSlot.FirstFooter,
+        HeaderFooterSlotKind.EvenHeader => HfSlot.EvenHeader,
+        HeaderFooterSlotKind.EvenFooter => HfSlot.EvenFooter,
+        _ => throw new ArgumentOutOfRangeException(nameof(slot), slot, null)
+    };
 
     /// <summary>
     /// AV-HFEDIT: builds a stable <see cref="HfTarget"/> for a resolved HF store + slot. Identifies the
@@ -2926,34 +3035,34 @@ public sealed class DocumentView : Control
         // Default fallback header/footer distance: Word default 0.5 in = 36 pt.
         const double DefaultHfDistancePt = 36.0;
 
-        // Gather sections for per-page section mapping.
-        var sections = _doc.Sections;
+        var diffOddEven = HeaderFooterPagePlanner.UsesDifferentOddEvenPages(_doc);
 
-        // Document-level odd/even flag lives on _doc.Page.
-        var diffOddEven = _doc.Page.DifferentOddEvenPages;
-
-        // AE1 fix: build a true page→section map via section-break markers on model blocks,
-        // mirroring WPF's PaginatedEditorPanel.ComputePageSectionMap.
-        var pageToSection = ComputePageSectionMap(sections, _pageCount);
+        // Build a true page-to-section map from Avalonia's placed block positions.
+        var pageToSection = ComputePageSectionMap(_pageCount);
 
         for (var pi = 0; pi < _pageCount; pi++)
         {
             // Page-space top of this page.
-            var pageTop = DeskPadding + pi * (_pageHeightPx + PageGap);
+            var pageTop = _surfacePlan.PageTopDip(pi);
 
             // AE1: use the true owning section for this page (not an even distribution).
-            var (sectionHf, sectionRelPage, sectionPage) = pageToSection[pi];
+            var pageSection = pageToSection[pi];
+            var sectionHf = pageSection.HeadersFooters;
+            var sectionPage = pageSection.PageSettings;
 
             // 1-based page number for this page (pi is 0-based).
             var pageNumber = pi + 1;
 
-            // AE2 fix: resolve HF slots using section-relative page number, mirroring
-            // WPF's PaginatedEditorPanel.ResolveHfSlots.
-            HeaderFooter? header;
-            HeaderFooter? footer;
-            (header, footer) = ResolveHfSlotsAvalonia(sectionHf, sectionRelPage, sectionPage, diffOddEven);
-            // AV-HFEDIT: which slot enums these resolved to, so emitted items can address the model.
-            var (headerSlot, footerSlot) = ResolveHfSlotEnums(sectionHf, sectionRelPage, sectionPage, diffOddEven);
+            // Resolve header/footer slots through the shared Presentation planner.
+            var slots = HeaderFooterPagePlanner.ResolveSlots(
+                sectionHf,
+                pageSection.SectionRelativePageNumber,
+                sectionPage,
+                diffOddEven);
+            var header = slots.Header;
+            var footer = slots.Footer;
+            var headerSlot = ToHfSlot(slots.HeaderSlot);
+            var footerSlot = ToHfSlot(slots.FooterSlot);
 
             // Header distance from page top (in DIP).
             var headerDistPt = sectionPage.HeaderDistancePt > 0
@@ -3529,7 +3638,7 @@ public sealed class DocumentView : Control
 
         foreach (var (pg, ids) in byPage.OrderBy(kv => kv.Key))
         {
-            var pageTop    = DeskPadding + pg * (_pageHeightPx + PageGap);
+            var pageTop    = _surfacePlan.PageTopDip(pg);
             var pageBottom = pageTop + _pageHeightPx;
             // Body text area bottom on this page (page-space), using the reserved effective height.
             var bandReservation = _footnoteBandHeightByPage.TryGetValue(pg, out var bh) ? bh : 0.0;
@@ -3601,7 +3710,7 @@ public sealed class DocumentView : Control
         if (_doc.Endnotes.Count == 0) return;
 
         // Start just below the last body page (in page-space). The last page's bottom edge:
-        var lastPageBottom = DeskPadding + (_pageCount - 1) * (_pageHeightPx + PageGap) + _pageHeightPx;
+        var lastPageBottom = _surfacePlan.PageTopDip(_pageCount - 1) + _pageHeightPx;
         var startY = lastPageBottom + PageGap + _marginTopDip * 0.25;
 
         var headingFmt = RunFormatting.Default with { FontSizePt = NoteFontSizePt + 2, Bold = true };
@@ -3652,17 +3761,7 @@ public sealed class DocumentView : Control
     /// </summary>
     private double ContentYToPageSpaceY(double contentY)
     {
-        if (_viewMode != DocumentViewMode.PrintLayout)
-            return _marginTopDip + contentY;
-
-        // AV-COL: with multi-column layout each "slot" is one column's worth of content.
-        // slot = the index of the column being filled (0 = page0/col0, 1 = page0/col1, ...).
-        // pageIndex = slot / _colCount  (multiple columns fill the same page).
-        // offsetWithinPage = contentY mod textAreaHeight  (within the column's vertical span).
-        var slot      = (int)(contentY / _layoutTextAreaHeight);
-        var pageIndex = slot / _colCount;
-        var offsetWithinPage = contentY - slot * _layoutTextAreaHeight;
-        return DeskPadding + pageIndex * (_pageHeightPx + PageGap) + _marginTopDip + offsetWithinPage;
+        return _surfacePlan.ContentYToPageSpaceY(contentY, _colCount);
     }
 
     /// <summary>
@@ -3672,13 +3771,7 @@ public sealed class DocumentView : Control
     /// </summary>
     private int PageIndexFromPageSpaceY(double pageSpaceY)
     {
-        if (_viewMode != DocumentViewMode.PrintLayout)
-            return 0;
-
-        // Each page occupies (pageHeightPx + PageGap) in page space, starting at DeskPadding.
-        var rel = pageSpaceY - DeskPadding;
-        if (rel < 0) return 0;
-        return Math.Max(0, (int)(rel / (_pageHeightPx + PageGap)));
+        return _surfacePlan.PageIndexFromPageSpaceY(pageSpaceY);
     }
 
     /// <summary>
@@ -3736,143 +3829,6 @@ public sealed class DocumentView : Control
     // ── AV-WRAP: wrap-exclusion helpers ───────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Small horizontal gap (DIP) added between text and the edge of a Square/Tight-wrapped float.
-    /// Matches Word's default wrap distance (approximately 9pt = 12 DIP).
-    /// </summary>
-    private const double WrapGap = 9.0;
-
-    /// <summary>
-    /// Registers a page-space rect as a text-wrap exclusion zone for the given wrapping mode.
-    /// Behind and InFront objects are silently ignored (they never push text aside).
-    /// </summary>
-    private void AddWrapExclusion(Rect pageSpaceRect, ImageWrapping wrapping)
-    {
-        if (wrapping is ImageWrapping.Square or ImageWrapping.Tight or ImageWrapping.TopAndBottom)
-            _wrapExclusions.Add((pageSpaceRect, wrapping));
-    }
-
-    /// <summary>
-    /// For a line whose top is at <paramref name="lineTopY"/> (page-space) and whose height is
-    /// <paramref name="lineHeight"/>, computes the adjusted left offset and available width
-    /// after applying all registered exclusion zones for the column band
-    /// [<paramref name="colLeft"/>, <paramref name="colLeft"/> + <paramref name="colW"/>).
-    /// </summary>
-    /// <remarks>
-    /// Square/Tight floats narrowing the line: the float is classified as left or right of the
-    /// line's centre point.  A float on the left pushes the left start inward; a float on the
-    /// right narrows the right edge.  If two floats are present (left + right simultaneously)
-    /// both adjustments are applied.  If a float spans the full column width it is treated as
-    /// TopAndBottom (handled separately in <see cref="LayoutParagraphPaged"/>).
-    /// </remarks>
-    /// <returns>
-    /// <c>leftDelta</c>: amount to ADD to the line's left start (≥ 0).<br/>
-    /// <c>rightShrink</c>: amount to SUBTRACT from the line's available width (≥ 0).<br/>
-    /// Neither value will make the line degenerate (minimum 20 DIP usable width is guaranteed).
-    /// </returns>
-    private (double LeftDelta, double RightShrink) ComputeSquareTightExclusion(
-        double lineTopY, double lineHeight, double colLeft, double colW)
-    {
-        var lineBottomY = lineTopY + lineHeight;
-        var colRight    = colLeft + colW;
-
-        var maxLeftDelta  = 0.0;
-        var maxRightShrink = 0.0;
-
-        foreach (var (rect, wrapping) in _wrapExclusions)
-        {
-            // Only Square/Tight in this helper; TopAndBottom is handled in the paragraph loop.
-            if (wrapping == ImageWrapping.TopAndBottom)
-                continue;
-
-            // Vertical overlap check.
-            if (rect.Bottom <= lineTopY || rect.Top >= lineBottomY)
-                continue;
-
-            // Horizontal overlap with the column band?
-            if (rect.Right <= colLeft || rect.Left >= colRight)
-                continue;
-
-            // BB1: Classify by which side of the column has MORE free room, not by float centre.
-            // A wide left-anchored float (>50% col width) had its centre past colCentre and was
-            // incorrectly classified as a RIGHT float, squeezing text into the float's own area.
-            var freeLeft  = rect.Left  - colLeft;   // gap on the left  side of the float
-            var freeRight = colRight   - rect.Right; // gap on the right side of the float
-
-            // If neither side has enough room (< 20 DIP each), this float is handled as
-            // TopAndBottom by TopAndBottomExclusionBottom + AdvancePastTopAndBottomExclusions.
-            // Skip it here so we do not apply a lateral exclusion (which would leave text over the float).
-            if (freeLeft < 20 && freeRight < 20)
-                continue;
-
-            if (freeLeft >= freeRight)
-            {
-                // Float is on the RIGHT side (more free space on the left) — reduce the available width.
-                var shrinkTo = colRight - Math.Max(rect.Left - WrapGap, colLeft + 20);
-                if (shrinkTo > maxRightShrink) maxRightShrink = shrinkTo;
-            }
-            else
-            {
-                // Float is on the LEFT side (more free space on the right) — push the line start rightward.
-                var pushTo = Math.Min(rect.Right + WrapGap, colRight - 20) - colLeft;
-                if (pushTo > maxLeftDelta) maxLeftDelta = pushTo;
-            }
-        }
-
-        // Ensure the combined adjustment doesn't make width < 20 DIP.
-        var totalShrink = maxLeftDelta + maxRightShrink;
-        if (totalShrink > colW - 20)
-        {
-            // Scale back proportionally so at least 20 DIP remain.
-            var scale = (colW - 20) / totalShrink;
-            maxLeftDelta   *= scale;
-            maxRightShrink *= scale;
-        }
-
-        return (maxLeftDelta, maxRightShrink);
-    }
-
-    /// <summary>
-    /// Returns the page-space Y of the bottom edge of the lowest TopAndBottom exclusion zone that
-    /// intersects the vertical band [<paramref name="lineTopY"/>, <paramref name="lineTopY"/> +
-    /// <paramref name="lineHeight"/>), or −1 if none does.  The caller should advance
-    /// <c>_layoutContentY</c> past this bottom so the line lands below the float.
-    /// Also includes wide Square/Tight floats (BB1) that leave < 20 DIP free on BOTH sides,
-    /// as those behave like TopAndBottom — text must go below them rather than beside them.
-    /// </summary>
-    private double TopAndBottomExclusionBottom(double lineTopY, double lineHeight)
-    {
-        var lineBottomY = lineTopY + lineHeight;
-        var colW = _colCount > 1 ? _colWidth : _contentWidth;
-        var maxBottom   = -1.0;
-        foreach (var (rect, wrapping) in _wrapExclusions)
-        {
-            if (rect.Bottom <= lineTopY || rect.Top >= lineBottomY) continue;
-            if (wrapping == ImageWrapping.TopAndBottom)
-            {
-                if (rect.Bottom > maxBottom) maxBottom = rect.Bottom;
-            }
-            else
-            {
-                // BB1 / BD1: wide Square/Tight float with < 20 DIP free on both sides → treat as TopAndBottom.
-                // BD1: derive the float's own column so freeLeft/freeRight are measured against that
-                // column's band, not always column 0 (_contentLeft). A float in column 2+ would
-                // otherwise show inflated freeLeft (> 20) and never be promoted to push text below.
-                var colIndex = _colCount > 1
-                    ? Math.Clamp((int)Math.Round((rect.Left - _contentLeft) / (_colWidth + _colGap)), 0, _colCount - 1)
-                    : 0;
-                var colLeft  = _contentLeft + colIndex * (_colWidth + _colGap);
-                var freeLeft  = rect.Left  - colLeft;
-                var freeRight = (colLeft + colW) - rect.Right;
-                if (freeLeft < 20 && freeRight < 20)
-                {
-                    if (rect.Bottom > maxBottom) maxBottom = rect.Bottom;
-                }
-            }
-        }
-        return maxBottom;
-    }
-
-    /// <summary>
     /// Advances <c>_layoutContentY</c> past any TopAndBottom exclusion zones that would overlap
     /// a line of <paramref name="estimatedLineHeight"/> at the current position.
     /// Loops until no TopAndBottom zone overlaps, capping at 200 iterations to prevent infinite loops
@@ -3888,28 +3844,23 @@ public sealed class DocumentView : Control
         {
             var peekContentY  = PeekFirstLineContentY(estimatedLineHeight);
             var peekPageSpaceY = ContentYToPageSpaceY(peekContentY);
-            var exclusionBottom = TopAndBottomExclusionBottom(peekPageSpaceY, estimatedLineHeight);
-            if (exclusionBottom < 0) break; // no overlap → done
+            var wrapColumnWidth = _colCount > 1 ? _colWidth : _contentWidth;
+            var exclusionBottom = DocumentViewLayoutPlanner.BuildTopAndBottomWrapExclusionBottom(
+                _wrapExclusions,
+                peekPageSpaceY,
+                estimatedLineHeight,
+                _contentLeft,
+                _colCount,
+                wrapColumnWidth,
+                _colGap);
+            if (exclusionBottom is null) break; // no overlap: done
 
-            // Convert the exclusion bottom (page-space) back to content-space and advance past it.
-            // Content Y = slot * textAreaHeight + offsetWithinPage.
-            // PageSpaceY = DeskPadding + pageIndex*(pageHeight+gap) + marginTopDip + offsetWithinPage
-            // We read the page index from the current slot, then:
-            // offsetWithinPage = exclusionBottom - DeskPadding - pageIndex*(pageHeight+gap) - marginTopDip
-            var slot          = (int)(peekContentY / _layoutTextAreaHeight);
-            var pageIndex     = _colCount > 1 ? slot / _colCount : slot;
-            var pageTop       = _viewMode == DocumentViewMode.PrintLayout
-                                    ? DeskPadding + pageIndex * (_pageHeightPx + PageGap)
-                                    : 0;
-            var offsetInPage  = exclusionBottom - pageTop - _marginTopDip;
-            // Clamp offsetInPage so we never jump past this page's text area (wrong-page placement).
-            var clampedOffset = Math.Clamp(offsetInPage, 0, _layoutTextAreaHeight);
-
-            // BB2: A TopAndBottom float blocks ALL columns on this page. Advance to the last column
-            // slot of this page so that content does not flow into earlier sibling columns that share
-            // the same Y-band. lastSlotOnPage is the index of the rightmost column on pageIndex.
-            var lastSlotOnPage   = (pageIndex + 1) * _colCount - 1;
-            var targetContentY   = lastSlotOnPage * _layoutTextAreaHeight + clampedOffset;
+            var targetContentY = DocumentViewLayoutPlanner.BuildContentYAfterTopAndBottomWrapExclusion(
+                _surfacePlan,
+                _layoutContentY,
+                peekContentY,
+                exclusionBottom.Value,
+                _colCount);
 
             if (targetContentY <= _layoutContentY)
                 break; // safety: do not regress
@@ -3969,13 +3920,7 @@ public sealed class DocumentView : Control
         }
         var firstLineHeight = ApplyLineSpacing(firstLineNaturalH, pf);
         var anchorContentY = PeekFirstLineContentY(firstLineHeight);
-        CollectFloatingImages(blockIndex, paragraph, anchorContentY);
-        CollectFloatingShapes(blockIndex, paragraph, anchorContentY);
-        // FO3: collect charts, WordArt, SmartArt, and drawing groups at the same accurate anchor Y.
-        CollectFloatingCharts(blockIndex, paragraph, anchorContentY);
-        CollectFloatingWordArts(blockIndex, paragraph, anchorContentY);
-        CollectFloatingSmartArts(blockIndex, paragraph, anchorContentY);
-        CollectFloatingGroups(blockIndex, paragraph, anchorContentY);
+        CollectFloatingObjects(blockIndex, paragraph, anchorContentY);
 
         if (marker is not null)
         {
@@ -4036,8 +3981,13 @@ public sealed class DocumentView : Control
             var slot       = _layoutTextAreaHeight > 0 ? (int)(peekContentY / _layoutTextAreaHeight) : 0;
             var colIdx     = slot % _colCount;
             var cLeft      = _contentLeft + colIdx * (_colWidth + _colGap);
-            var (ld, rs)   = ComputeSquareTightExclusion(peekPageSpaceY, estimatedH, cLeft, wrapColW);
-            return Math.Max(20, baseAlignWidth - ld - rs);
+            var exclusion  = DocumentViewLayoutPlanner.BuildSquareTightWrapExclusion(
+                _wrapExclusions,
+                peekPageSpaceY,
+                estimatedH,
+                cLeft,
+                wrapColW);
+            return Math.Max(20, baseAlignWidth - exclusion.LeftDeltaDip - exclusion.RightShrinkDip);
         }
 
         while (i < cells.Count)
@@ -4198,9 +4148,16 @@ public sealed class DocumentView : Control
 
         // AV-WRAP: apply Square/Tight exclusion zones for this line.
         // TopAndBottom is handled in LayoutParagraphPaged (advances _layoutContentY before we arrive here).
-        var (wrapLeftDelta, wrapRightShrink) = _wrapExclusions.Count > 0
-            ? ComputeSquareTightExclusion(pageSpaceY, lineHeight, colLeft, colW)
-            : (0.0, 0.0);
+        var lineExclusion = _wrapExclusions.Count > 0
+            ? DocumentViewLayoutPlanner.BuildSquareTightWrapExclusion(
+                _wrapExclusions,
+                pageSpaceY,
+                lineHeight,
+                colLeft,
+                colW)
+            : new DocumentFloatingLineExclusionPlan(0, 0);
+        var wrapLeftDelta = lineExclusion.LeftDeltaDip;
+        var wrapRightShrink = lineExclusion.RightShrinkDip;
         var effectiveLeftInset = leftInset + wrapLeftDelta;
         var effectiveWidth     = availableWidth - wrapLeftDelta - wrapRightShrink;
         if (effectiveWidth < 20) effectiveWidth = 20; // safety floor
@@ -4451,7 +4408,7 @@ public sealed class DocumentView : Control
         colOffsets[cols] = running;
 
         const double pad = 5;
-        var borders = table.Formatting.Borders;
+        var borders = table.Formatting.Borders || _showTableGridlines;
         var headerOffset = table.Formatting.HeaderRow ? 1 : 0;
         // AV-TBL: glyphOffset is unique within this table block and is used as PlacedChar.Offset so
         // TryGetCaretRect can match (Block == tableBlockIndex && Offset == glyphOffset).
@@ -4607,18 +4564,12 @@ public sealed class DocumentView : Control
             break;
         }
         var anchorContentY = PeekFirstLineContentY(firstImgLineH);
-        CollectFloatingImages(blockIndex, paragraph, anchorContentY);
-        CollectFloatingShapes(blockIndex, paragraph, anchorContentY);
-        // FO3: collect charts, WordArt, SmartArt, and drawing groups at the same accurate anchor Y.
-        CollectFloatingCharts(blockIndex, paragraph, anchorContentY);
-        CollectFloatingWordArts(blockIndex, paragraph, anchorContentY);
-        CollectFloatingSmartArts(blockIndex, paragraph, anchorContentY);
-        CollectFloatingGroups(blockIndex, paragraph, anchorContentY);
+        CollectFloatingObjects(blockIndex, paragraph, anchorContentY);
 
         foreach (var run in paragraph.Runs)
         {
             if (run.Image is not { IsFloating: false } image)
-                continue; // Skip floating images — they are handled by CollectFloatingImages.
+                continue; // Skip floating images — they are handled by CollectFloatingObjects.
 
             var width = image.WidthPt > 0 ? image.WidthPt * PxPerPoint : 120;
             var height = image.HeightPt > 0 ? image.HeightPt * PxPerPoint : 80;
@@ -4700,12 +4651,7 @@ public sealed class DocumentView : Control
         }
         // Collect floating objects anchored to this paragraph (mirrors LayoutImageParagraphPaged).
         var anchorContentY = PeekFirstLineContentY(firstObjHeight);
-        CollectFloatingImages(blockIndex, paragraph, anchorContentY);
-        CollectFloatingShapes(blockIndex, paragraph, anchorContentY);
-        CollectFloatingCharts(blockIndex, paragraph, anchorContentY);
-        CollectFloatingWordArts(blockIndex, paragraph, anchorContentY);
-        CollectFloatingSmartArts(blockIndex, paragraph, anchorContentY);
-        CollectFloatingGroups(blockIndex, paragraph, anchorContentY);
+        CollectFloatingObjects(blockIndex, paragraph, anchorContentY);
 
         // Track a virtual glyph offset so the caret can step over inline objects.
         var glyphOffset = _placed.Count > 0
@@ -4789,7 +4735,7 @@ public sealed class DocumentView : Control
                 var x          = ColumnLeftFor(contentY) + AlignmentOffset(alignment, textWidth, width);
                 var rect       = new Rect(x, pageSpaceY, width, height);
 
-                // Flatten nodes depth-first (mirrors CollectFloatingSmartArts).
+                // Flatten nodes depth-first for render.
                 var texts = new List<string>();
                 static void FlattenNodes(IEnumerable<SmartArtNode> nodes, List<string> into)
                 {
@@ -4870,180 +4816,147 @@ public sealed class DocumentView : Control
         return bitmap;
     }
 
-    /// <summary>
-    /// Scans <paramref name="paragraph"/> for floating images and appends each one to
-    /// <c>_floatingImages</c> with its page-space rect computed from <see cref="FloatingPlacement"/>.
-    /// <paramref name="anchorContentY"/> is the content-space Y at which the paragraph starts —
-    /// used as the vertical reference when <see cref="VerticalAnchor.Paragraph"/> is set.
-    /// </summary>
-    private void CollectFloatingImages(int blockIndex, Paragraph paragraph, double anchorContentY)
+    private void CollectFloatingObjects(int blockIndex, Paragraph paragraph, double anchorContentY)
     {
-        // Page index for the anchor paragraph.
-        var anchorPageIndex = _viewMode == DocumentViewMode.PrintLayout
-            ? (int)(anchorContentY / _layoutTextAreaHeight)
-            : 0;
+        var snapshots = DocumentViewLayoutPlanner.BuildFloatingObjectSnapshots(
+            paragraph,
+            blockIndex,
+            anchorContentY,
+            _surfacePlan,
+            _colCount);
 
-        // Page top in page-space (DeskPadding + pageIndex*(pageHeight+gap)).
-        double PageTop(int pi) =>
-            _viewMode == DocumentViewMode.PrintLayout
-                ? DeskPadding + pi * (_pageHeightPx + PageGap)
-                : 0;
+        if (snapshots.Count == 0)
+            return;
 
-        for (var runIdx = 0; runIdx < paragraph.Runs.Count; runIdx++)
+        _floatingSnapshots.AddRange(snapshots);
+        _wrapExclusions.AddRange(DocumentViewLayoutPlanner.BuildFloatingWrapExclusionZones(snapshots));
+
+        foreach (var snapshot in snapshots)
         {
-            var run = paragraph.Runs[runIdx];
-            if (run.Image is not { IsFloating: true } img)
+            if (snapshot.RunIndex < 0 || snapshot.RunIndex >= paragraph.Runs.Count)
                 continue;
 
-            var imgW = img.WidthPt  > 0 ? img.WidthPt  * PxPerPoint : 120;
-            var imgH = img.HeightPt > 0 ? img.HeightPt * PxPerPoint :  80;
+            var run = paragraph.Runs[snapshot.RunIndex];
+            var rect = ToAvaloniaRect(snapshot.Rect);
 
-            // ── Horizontal position ──────────────────────────────────────────────────
-            double x = img.HorizontalAnchor switch
+            switch (snapshot.Kind)
             {
-                HorizontalAnchor.Page   => _pageLeft  + img.HorizontalOffsetPt * PxPerPoint,
-                HorizontalAnchor.Margin => _contentLeft + img.HorizontalOffsetPt * PxPerPoint,
-                _                       => _contentLeft + img.HorizontalOffsetPt * PxPerPoint, // Column (default)
-            };
+                case DocumentFloatingObjectKind.Image when run.Image is { IsFloating: true } img:
+                    _floatingImages.Add((
+                        rect,
+                        DecodeBitmap(img),
+                        snapshot.BehindText,
+                        snapshot.ZOrderIndex,
+                        snapshot.BlockIndex,
+                        snapshot.RunIndex));
+                    break;
 
-            // ── Vertical position ────────────────────────────────────────────────────
-            double y = img.VerticalAnchor switch
-            {
-                // Paragraph anchor: offset from the page-space Y of the anchor paragraph.
-                VerticalAnchor.Paragraph =>
-                    ContentYToPageSpaceY(anchorContentY) + img.VerticalOffsetPt * PxPerPoint,
+                case DocumentFloatingObjectKind.Shape when run.Shape is { IsFloating: true } shape:
+                    _floatingShapes.Add(BuildFloatingShapeData(
+                        shape,
+                        rect,
+                        snapshot.BehindText,
+                        snapshot.ZOrderIndex,
+                        snapshot.BlockIndex,
+                        snapshot.RunIndex));
+                    break;
 
-                // Margin anchor: offset from the top-margin edge on the anchor's page.
-                VerticalAnchor.Margin =>
-                    PageTop(anchorPageIndex) + _marginTopDip + img.VerticalOffsetPt * PxPerPoint,
+                case DocumentFloatingObjectKind.Chart when run.Chart is { IsFloating: true } chart:
+                    var chartData = BuildChartData(
+                        chart,
+                        rect,
+                        snapshot.BehindText,
+                        snapshot.ZOrderIndex,
+                        chart.Series.Select(s => (s.Name, new List<double>(s.Values))).ToList());
+                    chartData.BlockIndex = snapshot.BlockIndex;
+                    chartData.RunIndex = snapshot.RunIndex;
+                    _floatingCharts.Add(chartData);
+                    break;
 
-                // Page anchor: offset from the physical page top on the anchor's page.
-                VerticalAnchor.Page =>
-                    PageTop(anchorPageIndex) + img.VerticalOffsetPt * PxPerPoint,
+                case DocumentFloatingObjectKind.WordArt when run.WordArt is { IsFloating: true } wordArt:
+                    _floatingWordArts.Add(BuildFloatingWordArtData(
+                        wordArt,
+                        rect,
+                        snapshot.BehindText,
+                        snapshot.ZOrderIndex,
+                        snapshot.BlockIndex,
+                        snapshot.RunIndex));
+                    break;
 
-                _ => ContentYToPageSpaceY(anchorContentY) + img.VerticalOffsetPt * PxPerPoint,
-            };
+                case DocumentFloatingObjectKind.SmartArt when run.SmartArt is { IsFloating: true } smartArt:
+                    _floatingSmartArts.Add(BuildFloatingSmartArtData(
+                        smartArt,
+                        rect,
+                        snapshot.BehindText,
+                        snapshot.ZOrderIndex,
+                        snapshot.BlockIndex,
+                        snapshot.RunIndex));
+                    break;
 
-            var rect = new Rect(x, y, imgW, imgH);
-            var behindText = img.Wrapping == ImageWrapping.Behind;
-            // AV-FLSEL: BlockIndex/RunIndex stored for hit-test.
-            _floatingImages.Add((rect, DecodeBitmap(img), behindText, img.ZOrderIndex, blockIndex, runIdx));
-            // AV-WRAP: register exclusion zone for text-flow wrapping (Square/Tight/TopAndBottom only).
-            AddWrapExclusion(rect, img.Wrapping);
+                case DocumentFloatingObjectKind.Group when run.DrawingGroup is { } group:
+                    _floatingGroups.Add(BuildFloatingGroupData(group, snapshot));
+                    break;
+            }
         }
     }
 
-    /// <summary>
-    /// Scans <paramref name="paragraph"/> for floating shapes and appends each to <c>_floatingShapes</c>
-    /// with its page-space rect and pre-built brushes/pens. Mirrors <see cref="CollectFloatingImages"/>.
-    /// <paramref name="anchorContentY"/> is the content-space Y of the paragraph start.
-    /// </summary>
-    private void CollectFloatingShapes(int blockIndex, Paragraph paragraph, double anchorContentY)
+    private FloatingShapeData BuildFloatingShapeData(
+        Shape shape,
+        Rect rect,
+        bool behindText,
+        int zOrder,
+        int blockIndex = -1,
+        int runIndex = -1)
     {
-        var anchorPageIndex = _viewMode == DocumentViewMode.PrintLayout
-            ? (int)(anchorContentY / _layoutTextAreaHeight)
-            : 0;
-
-        double PageTop(int pi) =>
-            _viewMode == DocumentViewMode.PrintLayout
-                ? DeskPadding + pi * (_pageHeightPx + PageGap)
-                : 0;
-
-        for (var runIdx = 0; runIdx < paragraph.Runs.Count; runIdx++)
+        IBrush? fillBrush = null;
+        if (shape.ExtendedFill is { } extFill)
         {
-            var run = paragraph.Runs[runIdx];
-            if (run.Shape is not { IsFloating: true } shape)
-                continue;
-
-            var pl = shape.Placement!; // guaranteed non-null when IsFloating
-
-            var shapeW = shape.WidthPt  > 0 ? shape.WidthPt  * PxPerPoint : 120;
-            var shapeH = shape.HeightPt > 0 ? shape.HeightPt * PxPerPoint :  80;
-
-            // ── Horizontal position ──────────────────────────────────────────────────
-            double x = pl.HorizontalAnchor switch
+            fillBrush = extFill.Kind switch
             {
-                HorizontalAnchor.Page   => _pageLeft    + pl.HorizontalOffsetPt * PxPerPoint,
-                HorizontalAnchor.Margin => _contentLeft + pl.HorizontalOffsetPt * PxPerPoint,
-                _                       => _contentLeft + pl.HorizontalOffsetPt * PxPerPoint, // Column
+                ShapeFillKind.NoFill => null,
+                ShapeFillKind.Gradient => BuildAvaloniaGradientBrush(extFill, rect),
+                ShapeFillKind.Pattern => BuildAvaloniaPatternBrush(extFill),
+                _ => ParseSolidBrush(shape.FillColorHex),
             };
-
-            // ── Vertical position ────────────────────────────────────────────────────
-            double y = pl.VerticalAnchor switch
-            {
-                VerticalAnchor.Paragraph =>
-                    ContentYToPageSpaceY(anchorContentY) + pl.VerticalOffsetPt * PxPerPoint,
-
-                VerticalAnchor.Margin =>
-                    PageTop(anchorPageIndex) + _marginTopDip + pl.VerticalOffsetPt * PxPerPoint,
-
-                VerticalAnchor.Page =>
-                    PageTop(anchorPageIndex) + pl.VerticalOffsetPt * PxPerPoint,
-
-                _ => ContentYToPageSpaceY(anchorContentY) + pl.VerticalOffsetPt * PxPerPoint,
-            };
-
-            var rect = new Rect(x, y, shapeW, shapeH);
-            var behindText = pl.Wrapping == ImageWrapping.Behind;
-
-            // ── Fill brush ───────────────────────────────────────────────────────────
-            IBrush? fillBrush = null;
-            if (shape.ExtendedFill is { } extFill)
-            {
-                fillBrush = extFill.Kind switch
-                {
-                    ShapeFillKind.NoFill   => null,
-                    ShapeFillKind.Gradient => BuildAvaloniaGradientBrush(extFill, rect),
-                    ShapeFillKind.Pattern  => BuildAvaloniaPatternBrush(extFill),
-                    _                      => ParseSolidBrush(shape.FillColorHex),
-                };
-            }
-            else if (!string.IsNullOrEmpty(shape.FillColorHex))
-            {
-                fillBrush = ParseSolidBrush(shape.FillColorHex);
-            }
-
-            // ── Outline pen ──────────────────────────────────────────────────────────
-            Pen? outlinePen = null;
-            if (!string.IsNullOrEmpty(shape.OutlineColorHex))
-            {
-                var strokeBrush = ParseSolidBrush(shape.OutlineColorHex);
-                var strokeW = shape.OutlineWidthPt > 0 ? shape.OutlineWidthPt * PxPerPoint : 1.0;
-                DashStyle? dashStyle = shape.OutlineDash?.ToLowerInvariant() switch
-                {
-                    "dash"        => new DashStyle([4, 3], 0),
-                    "sysdot"      => new DashStyle([1, 2], 0),
-                    "dashDot"
-                    or "dashdot"  => new DashStyle([4, 2, 1, 2], 0),
-                    _             => null,
-                };
-                outlinePen = dashStyle is not null
-                    ? new Pen(strokeBrush, strokeW, dashStyle)
-                    : new Pen(strokeBrush, strokeW);
-            }
-
-            // ── Text ─────────────────────────────────────────────────────────────────
-            var text = shape.HasText ? shape.PlainText : null;
-
-            _floatingShapes.Add(new FloatingShapeData
-            {
-                Rect          = rect,
-                BehindText    = behindText,
-                ZOrder        = pl.ZOrderIndex,
-                BlockIndex    = blockIndex,
-                RunIndex      = runIdx,
-                Kind          = shape.Kind,
-                CustomGeo     = shape.HasCustomGeometry ? shape.CustomGeometry : null,
-                FillBrush     = fillBrush,
-                OutlinePen    = outlinePen,
-                Text          = text,
-                RotationAngle = shape.RotationAngle,
-                FlipH         = shape.FlipH,
-                FlipV         = shape.FlipV,
-            });
-            // AV-WRAP: register exclusion zone.
-            AddWrapExclusion(rect, pl.Wrapping);
         }
+        else if (!string.IsNullOrEmpty(shape.FillColorHex))
+        {
+            fillBrush = ParseSolidBrush(shape.FillColorHex);
+        }
+
+        Pen? outlinePen = null;
+        if (!string.IsNullOrEmpty(shape.OutlineColorHex))
+        {
+            var strokeBrush = ParseSolidBrush(shape.OutlineColorHex);
+            var strokeW = shape.OutlineWidthPt > 0 ? shape.OutlineWidthPt * PxPerPoint : 1.0;
+            DashStyle? dashStyle = shape.OutlineDash?.ToLowerInvariant() switch
+            {
+                "dash" => new DashStyle([4, 3], 0),
+                "sysdot" => new DashStyle([1, 2], 0),
+                "dashDot" or "dashdot" => new DashStyle([4, 2, 1, 2], 0),
+                _ => null,
+            };
+            outlinePen = dashStyle is not null
+                ? new Pen(strokeBrush, strokeW, dashStyle)
+                : new Pen(strokeBrush, strokeW);
+        }
+
+        return new FloatingShapeData
+        {
+            Rect = rect,
+            BehindText = behindText,
+            ZOrder = zOrder,
+            BlockIndex = blockIndex,
+            RunIndex = runIndex,
+            Kind = shape.Kind,
+            CustomGeo = shape.HasCustomGeometry ? shape.CustomGeometry : null,
+            FillBrush = fillBrush,
+            OutlinePen = outlinePen,
+            Text = shape.HasText ? shape.PlainText : null,
+            RotationAngle = shape.RotationAngle,
+            FlipH = shape.FlipH,
+            FlipV = shape.FlipV,
+        };
     }
 
     /// <summary>Builds an Avalonia <see cref="LinearGradientBrush"/> from a <see cref="ShapeFill"/> gradient.</summary>
@@ -5301,7 +5214,7 @@ public sealed class DocumentView : Control
     private void DrawRuler(DrawingContext context)
     {
         const double inchDip = 72.0;
-        var pageTop = DeskPadding; // first page only
+        var pageTop = _surfacePlan.PageTopDip(0); // first page only
         // ── Horizontal ruler: sits just above the page's top edge. ──
         var hRect = new Rect(_pageLeft, pageTop - RulerThicknessDip, _pageWidth, RulerThicknessDip);
         context.FillRectangle(RulerFill, hRect);
@@ -5310,7 +5223,8 @@ public sealed class DocumentView : Control
         var bodyRight = _contentLeft + _contentWidth;
         context.FillRectangle(RulerMarginFill, new Rect(bodyRight, hRect.Y, _pageLeft + _pageWidth - bodyRight, RulerThicknessDip));
         context.DrawRectangle(null, RulerBorderPen, hRect);
-        for (var x = _pageLeft; x <= _pageLeft + _pageWidth + 0.01; x += inchDip)
+        var rulerTicks = DocumentViewLayoutPlanner.BuildRulerTicks(_surfacePlan, inchDip);
+        foreach (var x in rulerTicks)
             context.DrawLine(RulerTickPen, new Point(x, hRect.Y + RulerThicknessDip - 4), new Point(x, hRect.Y + RulerThicknessDip));
 
         // ── Vertical ruler: sits just left of the page's left edge. ──
@@ -5321,7 +5235,7 @@ public sealed class DocumentView : Control
         context.FillRectangle(RulerMarginFill, new Rect(vRect.X, pageTop, RulerThicknessDip, _marginTopDip));
         context.FillRectangle(RulerMarginFill, new Rect(vRect.X, bodyBottom, RulerThicknessDip, pageTop + _pageHeightPx - bodyBottom));
         context.DrawRectangle(null, RulerBorderPen, vRect);
-        for (var y = pageTop; y <= pageTop + _pageHeightPx + 0.01; y += inchDip)
+        foreach (var y in rulerTicks.Select(tick => pageTop + tick - _pageLeft))
             context.DrawLine(RulerTickPen, new Point(vRect.X + RulerThicknessDip - 4, y), new Point(vRect.X + RulerThicknessDip, y));
     }
 
@@ -5425,7 +5339,7 @@ public sealed class DocumentView : Control
             // Draw each discrete page rectangle: page-coloured sheet with drop-shadow + chrome border.
             for (var pi = 0; pi < _pageCount; pi++)
             {
-                var pageTop = DeskPadding + pi * (_pageHeightPx + PageGap);
+                var pageTop = _surfacePlan.PageTopDip(pi);
                 var pageRect   = new Rect(_pageLeft, pageTop, _pageWidth, _pageHeightPx);
                 var shadowRect = new Rect(_pageLeft + 3, pageTop + 3, _pageWidth, _pageHeightPx);
                 context.FillRectangle(PageShadowBrush, shadowRect);
@@ -5473,7 +5387,7 @@ public sealed class DocumentView : Control
         {
             for (var pi = 0; pi < _pageCount; pi++)
             {
-                var pageTop = DeskPadding + pi * (_pageHeightPx + PageGap);
+                var pageTop = _surfacePlan.PageTopDip(pi);
                 var ruleTop    = pageTop + _marginTopDip;
                 var ruleBottom = pageTop + _pageHeightPx - _marginBottomDip;
                 for (var ci = 0; ci < _colCount - 1; ci++)
@@ -5485,48 +5399,9 @@ public sealed class DocumentView : Control
             }
         }
 
-        // Behind-text pass: merge ALL six floating types into ONE list sorted by ZOrderIndex.
-        // UU1 fix: previously images and shapes were drawn in two separate OrderBy loops so any
-        // shape always painted over any image regardless of ZOrder.
-        // XX1 fix: the FO3 wave (charts/WordArt/SmartArt/groups) was added as FOUR SEPARATE
-        // post-pass loops, re-introducing the same UU1 bug.  The WPF reference
-        // (SyncFloatingObjectsCanvas) adds ALL types to ONE list and sorts by ZOrder — we do the
-        // same here so all six types interleave correctly within each band.
-        {
-            var behindDraws = new List<(int ZOrder, Action Draw)>();
-            foreach (var fi in _floatingImages.Where(fi => fi.BehindText))
-            {
-                var (rect, bitmap, _, _, _, _) = fi;
-                behindDraws.Add((fi.ZOrder, () => DrawFloatingImage(context, rect, bitmap)));
-            }
-            foreach (var sd in _floatingShapes.Where(sd => sd.BehindText))
-            {
-                var captured = sd;
-                behindDraws.Add((sd.ZOrder, () => DrawFloatingShape(context, captured)));
-            }
-            foreach (var cd in _floatingCharts.Where(c => c.BehindText))
-            {
-                var captured = cd;
-                behindDraws.Add((cd.ZOrder, () => DrawFloatingChart(context, captured)));
-            }
-            foreach (var wd in _floatingWordArts.Where(w => w.BehindText))
-            {
-                var captured = wd;
-                behindDraws.Add((wd.ZOrder, () => DrawFloatingWordArt(context, captured)));
-            }
-            foreach (var sd in _floatingSmartArts.Where(s => s.BehindText))
-            {
-                var captured = sd;
-                behindDraws.Add((sd.ZOrder, () => DrawFloatingSmartArt(context, captured)));
-            }
-            foreach (var gd in _floatingGroups.Where(g => g.BehindText))
-            {
-                var captured = gd;
-                behindDraws.Add((gd.ZOrder, () => DrawFloatingGroup(context, captured)));
-            }
-            foreach (var (_, draw) in behindDraws.OrderBy(d => d.ZOrder))
-                draw();
-        }
+        // Behind-text pass: planner snapshots merge all floating kinds into one z-ordered band.
+        foreach (var snapshot in DocumentViewLayoutPlanner.BuildFloatingObjectDrawOrder(_floatingSnapshots, behindText: true))
+            DrawFloatingObjectSnapshot(context, snapshot);
 
         // Inline images (non-floating).
         foreach (var (rect, bitmap) in _images)
@@ -5679,44 +5554,11 @@ public sealed class DocumentView : Control
         }
 
         // In-front pass: same merged ZOrder logic for all six types (UU1 + XX1 fix).
-        {
-            var frontDraws = new List<(int ZOrder, Action Draw)>();
-            foreach (var fi in _floatingImages.Where(fi => !fi.BehindText))
-            {
-                var (rect, bitmap, _, _, _, _) = fi;
-                frontDraws.Add((fi.ZOrder, () => DrawFloatingImage(context, rect, bitmap)));
-            }
-            foreach (var sd in _floatingShapes.Where(sd => !sd.BehindText))
-            {
-                var captured = sd;
-                frontDraws.Add((sd.ZOrder, () => DrawFloatingShape(context, captured)));
-            }
-            foreach (var cd in _floatingCharts.Where(c => !c.BehindText))
-            {
-                var captured = cd;
-                frontDraws.Add((cd.ZOrder, () => DrawFloatingChart(context, captured)));
-            }
-            foreach (var wd in _floatingWordArts.Where(w => !w.BehindText))
-            {
-                var captured = wd;
-                frontDraws.Add((wd.ZOrder, () => DrawFloatingWordArt(context, captured)));
-            }
-            foreach (var sd in _floatingSmartArts.Where(s => !s.BehindText))
-            {
-                var captured = sd;
-                frontDraws.Add((sd.ZOrder, () => DrawFloatingSmartArt(context, captured)));
-            }
-            foreach (var gd in _floatingGroups.Where(g => !g.BehindText))
-            {
-                var captured = gd;
-                frontDraws.Add((gd.ZOrder, () => DrawFloatingGroup(context, captured)));
-            }
-            foreach (var (_, draw) in frontDraws.OrderBy(d => d.ZOrder))
-                draw();
-        }
+        foreach (var snapshot in DocumentViewLayoutPlanner.BuildFloatingObjectDrawOrder(_floatingSnapshots, behindText: false))
+            DrawFloatingObjectSnapshot(context, snapshot);
 
         // HF: draw header/footer items (pre-computed in BuildHeaderFooterItems). The in-front floating
-        // objects are already drawn by the unified z-ordered frontDraws pass above.
+        // objects are already drawn by the planner-ordered front pass above.
         if (_viewMode == DocumentViewMode.PrintLayout)
         {
             foreach (var item in _headerFooterItems)
@@ -5859,6 +5701,53 @@ public sealed class DocumentView : Control
     /// Renders a single floating image (or a placeholder rect if the bitmap could not be decoded).
     /// Shared by the behind-text and in-front passes in <see cref="Render"/>.
     /// </summary>
+    private void DrawFloatingObjectSnapshot(DrawingContext context, DocumentFloatingObjectSnapshot snapshot)
+    {
+        switch (snapshot.Kind)
+        {
+            case DocumentFloatingObjectKind.Image:
+                foreach (var image in _floatingImages)
+                {
+                    if (image.BlockIndex == snapshot.BlockIndex && image.RunIndex == snapshot.RunIndex)
+                    {
+                        DrawFloatingImage(context, image.Rect, image.Image);
+                        return;
+                    }
+                }
+                break;
+
+            case DocumentFloatingObjectKind.Shape:
+                if (_floatingShapes.FirstOrDefault(shape =>
+                        shape.BlockIndex == snapshot.BlockIndex && shape.RunIndex == snapshot.RunIndex) is { } shape)
+                    DrawFloatingShape(context, shape);
+                break;
+
+            case DocumentFloatingObjectKind.Chart:
+                if (_floatingCharts.FirstOrDefault(chart =>
+                        chart.BlockIndex == snapshot.BlockIndex && chart.RunIndex == snapshot.RunIndex) is { } chart)
+                    DrawFloatingChart(context, chart);
+                break;
+
+            case DocumentFloatingObjectKind.WordArt:
+                if (_floatingWordArts.FirstOrDefault(wordArt =>
+                        wordArt.BlockIndex == snapshot.BlockIndex && wordArt.RunIndex == snapshot.RunIndex) is { } wordArt)
+                    DrawFloatingWordArt(context, wordArt);
+                break;
+
+            case DocumentFloatingObjectKind.SmartArt:
+                if (_floatingSmartArts.FirstOrDefault(smartArt =>
+                        smartArt.BlockIndex == snapshot.BlockIndex && smartArt.RunIndex == snapshot.RunIndex) is { } smartArt)
+                    DrawFloatingSmartArt(context, smartArt);
+                break;
+
+            case DocumentFloatingObjectKind.Group:
+                if (_floatingGroups.FirstOrDefault(group =>
+                        group.BlockIndex == snapshot.BlockIndex && group.RunIndex == snapshot.RunIndex) is { } group)
+                    DrawFloatingGroup(context, group);
+                break;
+        }
+    }
+
     private void DrawFloatingImage(DrawingContext context, Rect rect, Bitmap? bitmap)
     {
         if (bitmap is not null)
@@ -6046,6 +5935,43 @@ public sealed class DocumentView : Control
         new Pen(new SolidColorBrush(Color.FromRgb(0x00, 0x78, 0xD4)), 1.0);
     private const double FloatHandleSize = 7; // handle square side length in px
 
+    private static DocumentFloatRect ToPlannerRect(Rect rect) =>
+        new(rect.X, rect.Y, rect.Width, rect.Height);
+
+    private static Rect ToAvaloniaRect(DocumentFloatRect rect) =>
+        new(rect.XDip, rect.YDip, rect.WidthDip, rect.HeightDip);
+
+    private static DocumentFloatPoint ToPlannerPoint(Point point) =>
+        new(point.X, point.Y);
+
+    private static DocumentFloatingHandle ToPlannerHandle(FloatHandle handle) => handle switch
+    {
+        FloatHandle.Body => DocumentFloatingHandle.Body,
+        FloatHandle.TopLeft => DocumentFloatingHandle.TopLeft,
+        FloatHandle.Top => DocumentFloatingHandle.Top,
+        FloatHandle.TopRight => DocumentFloatingHandle.TopRight,
+        FloatHandle.Left => DocumentFloatingHandle.Left,
+        FloatHandle.Right => DocumentFloatingHandle.Right,
+        FloatHandle.BottomLeft => DocumentFloatingHandle.BottomLeft,
+        FloatHandle.Bottom => DocumentFloatingHandle.Bottom,
+        FloatHandle.BottomRight => DocumentFloatingHandle.BottomRight,
+        _ => DocumentFloatingHandle.None,
+    };
+
+    private static FloatHandle FromPlannerHandle(DocumentFloatingHandle handle) => handle switch
+    {
+        DocumentFloatingHandle.Body => FloatHandle.Body,
+        DocumentFloatingHandle.TopLeft => FloatHandle.TopLeft,
+        DocumentFloatingHandle.Top => FloatHandle.Top,
+        DocumentFloatingHandle.TopRight => FloatHandle.TopRight,
+        DocumentFloatingHandle.Left => FloatHandle.Left,
+        DocumentFloatingHandle.Right => FloatHandle.Right,
+        DocumentFloatingHandle.BottomLeft => FloatHandle.BottomLeft,
+        DocumentFloatingHandle.Bottom => FloatHandle.Bottom,
+        DocumentFloatingHandle.BottomRight => FloatHandle.BottomRight,
+        _ => FloatHandle.None,
+    };
+
     /// <summary>
     /// Draws the selection outline (dashed blue rectangle) and 8 resize handles around
     /// the selected floating object's page-space bounding rect.
@@ -6074,23 +6000,10 @@ public sealed class DocumentView : Control
     /// </summary>
     private static IEnumerable<(FloatHandle Handle, Rect Rect)> HandleRects(Rect rect)
     {
-        var hx = new[] { rect.X, rect.X + rect.Width / 2, rect.Right };
-        var hy = new[] { rect.Y, rect.Y + rect.Height / 2, rect.Bottom };
-        var half = FloatHandleSize / 2;
-        // Row/col → handle map (centre is skipped).
-        var map = new[,]
-        {
-            { FloatHandle.TopLeft,    FloatHandle.Top,    FloatHandle.TopRight    },
-            { FloatHandle.Left,       FloatHandle.None,   FloatHandle.Right       },
-            { FloatHandle.BottomLeft, FloatHandle.Bottom, FloatHandle.BottomRight },
-        };
-        for (var row = 0; row < 3; row++)
-        for (var col = 0; col < 3; col++)
-        {
-            if (row == 1 && col == 1) continue; // centre is not a handle
-            yield return (map[row, col],
-                new Rect(hx[col] - half, hy[row] - half, FloatHandleSize, FloatHandleSize));
-        }
+        foreach (var handle in DocumentViewLayoutPlanner.BuildFloatingHandleRects(
+                     ToPlannerRect(rect),
+                     FloatHandleSize))
+            yield return (FromPlannerHandle(handle.Handle), ToAvaloniaRect(handle.Rect));
     }
 
     /// <summary>
@@ -6116,10 +6029,11 @@ public sealed class DocumentView : Control
     private FloatHandle HitTestHandle(Point point)
     {
         if (_selectedFloating is not { } sel) return FloatHandle.None;
-        const double pad = 2; // grab tolerance around each handle square
-        foreach (var (h, r) in HandleRects(sel.Rect))
-            if (r.Inflate(pad).Contains(point)) return h;
-        return sel.Rect.Contains(point) ? FloatHandle.Body : FloatHandle.None;
+        return FromPlannerHandle(DocumentViewLayoutPlanner.HitTestFloatingHandle(
+            ToPlannerRect(sel.Rect),
+            ToPlannerPoint(point),
+            FloatHandleSize,
+            hitPaddingDip: 2));
     }
 
     /// <summary>The mouse cursor appropriate for hovering a given handle (or moving the body).</summary>
@@ -6142,41 +6056,12 @@ public sealed class DocumentView : Control
     /// </summary>
     private static Rect ResizeRect(Rect baseRect, FloatHandle handle, Point pointer, bool aspect)
     {
-        var minPx = MinFloatSizePt * PxPerPoint;
-        double left = baseRect.Left, top = baseRect.Top, right = baseRect.Right, bottom = baseRect.Bottom;
-
-        bool movesLeft   = handle is FloatHandle.TopLeft or FloatHandle.Left or FloatHandle.BottomLeft;
-        bool movesRight  = handle is FloatHandle.TopRight or FloatHandle.Right or FloatHandle.BottomRight;
-        bool movesTop    = handle is FloatHandle.TopLeft or FloatHandle.Top or FloatHandle.TopRight;
-        bool movesBottom = handle is FloatHandle.BottomLeft or FloatHandle.Bottom or FloatHandle.BottomRight;
-
-        if (movesLeft)   left   = Math.Min(pointer.X, right  - minPx);
-        if (movesRight)  right  = Math.Max(pointer.X, left   + minPx);
-        if (movesTop)    top    = Math.Min(pointer.Y, bottom - minPx);
-        if (movesBottom) bottom = Math.Max(pointer.Y, top    + minPx);
-
-        var newW = right - left;
-        var newH = bottom - top;
-
-        // Aspect lock (corners only — an edge handle changes a single dimension by definition).
-        bool isCorner = handle is FloatHandle.TopLeft or FloatHandle.TopRight
-                                or FloatHandle.BottomLeft or FloatHandle.BottomRight;
-        if (aspect && isCorner && baseRect.Width > 0 && baseRect.Height > 0)
-        {
-            var ratio = baseRect.Width / baseRect.Height;
-            // Drive the larger relative change so the box tracks the pointer along its dominant axis.
-            if (newW / baseRect.Width >= newH / baseRect.Height)
-                newH = newW / ratio;
-            else
-                newW = newH * ratio;
-            newW = Math.Max(minPx, newW);
-            newH = Math.Max(minPx, newH);
-            // Re-anchor the moved corner so the OPPOSITE corner stays fixed.
-            if (movesLeft) left = right - newW; else right = left + newW;
-            if (movesTop)  top  = bottom - newH; else bottom = top + newH;
-        }
-
-        return new Rect(left, top, Math.Max(minPx, right - left), Math.Max(minPx, bottom - top));
+        return ToAvaloniaRect(DocumentViewLayoutPlanner.BuildFloatingResizeRect(
+            ToPlannerRect(baseRect),
+            ToPlannerHandle(handle),
+            ToPlannerPoint(pointer),
+            preserveAspect: aspect,
+            minimumSizeDip: MinFloatSizePt * PxPerPoint));
     }
 
     /// <summary>
@@ -6292,10 +6177,10 @@ public sealed class DocumentView : Control
         Rect newRect;
         if (drag.Handle == FloatHandle.Body)
         {
-            var dx = point.X - drag.PointerDown.X;
-            var dy = point.Y - drag.PointerDown.Y;
-            newRect = new Rect(drag.FloatRect.X + dx, drag.FloatRect.Y + dy,
-                               drag.FloatRect.Width, drag.FloatRect.Height);
+            newRect = ToAvaloniaRect(DocumentViewLayoutPlanner.BuildFloatingMoveRect(
+                ToPlannerRect(drag.FloatRect),
+                ToPlannerPoint(drag.PointerDown),
+                ToPlannerPoint(point)));
         }
         else
         {
@@ -6432,44 +6317,13 @@ public sealed class DocumentView : Control
         hit = default;
         if (_laidOutWidth < 0) Relayout(FallbackWidth);
 
-        // Gather all candidates into one list sorted by: BehindText ascending (in-front first),
-        // then ZOrder descending (highest z-order first). This mirrors the Word rule that in-front
-        // objects always beat behind-text objects; within each band the topmost z-order wins.
-        var candidates = new List<(bool BehindText, int ZOrder, int BlockIndex, int RunIndex, string Kind, Rect Rect)>();
+        var winner = DocumentViewLayoutPlanner.HitTestFloatingObject(
+            _floatingSnapshots,
+            ToPlannerPoint(point));
+        if (winner is null)
+            return false;
 
-        foreach (var fi in _floatingImages)
-            if (fi.Rect.Contains(point))
-                candidates.Add((fi.BehindText, fi.ZOrder, fi.BlockIndex, fi.RunIndex, "Image", fi.Rect));
-
-        foreach (var sd in _floatingShapes)
-            if (sd.Rect.Contains(point))
-                candidates.Add((sd.BehindText, sd.ZOrder, sd.BlockIndex, sd.RunIndex, "Shape", sd.Rect));
-
-        foreach (var cd in _floatingCharts)
-            if (cd.Rect.Contains(point))
-                candidates.Add((cd.BehindText, cd.ZOrder, cd.BlockIndex, cd.RunIndex, "Chart", cd.Rect));
-
-        foreach (var wd in _floatingWordArts)
-            if (wd.Rect.Contains(point))
-                candidates.Add((wd.BehindText, wd.ZOrder, wd.BlockIndex, wd.RunIndex, "WordArt", wd.Rect));
-
-        foreach (var sa in _floatingSmartArts)
-            if (sa.Rect.Contains(point))
-                candidates.Add((sa.BehindText, sa.ZOrder, sa.BlockIndex, sa.RunIndex, "SmartArt", sa.Rect));
-
-        foreach (var gd in _floatingGroups)
-            if (gd.Rect.Contains(point))
-                candidates.Add((gd.BehindText, gd.ZOrder, gd.BlockIndex, gd.RunIndex, "Group", gd.Rect));
-
-        if (candidates.Count == 0) return false;
-
-        // In-front (BehindText=false) wins over behind-text; within each band highest ZOrder wins.
-        var winner = candidates
-            .OrderBy(c => c.BehindText ? 1 : 0)   // false (in-front) first
-            .ThenByDescending(c => c.ZOrder)
-            .First();
-
-        hit = (winner.BlockIndex, winner.RunIndex, winner.Kind, winner.Rect);
+        hit = (winner.BlockIndex, winner.RunIndex, winner.TypeTag, ToAvaloniaRect(winner.Rect));
         return true;
     }
 
@@ -6523,36 +6377,12 @@ public sealed class DocumentView : Control
     /// </summary>
     private void RefreshSelectedFloatingRect(int blockIndex, int runIndex, string kind)
     {
-        Rect? found = null;
-        switch (kind)
-        {
-            case "Image":
-                foreach (var fi in _floatingImages)
-                    if (fi.BlockIndex == blockIndex && fi.RunIndex == runIndex) { found = fi.Rect; break; }
-                break;
-            case "Shape":
-                foreach (var sd in _floatingShapes)
-                    if (sd.BlockIndex == blockIndex && sd.RunIndex == runIndex) { found = sd.Rect; break; }
-                break;
-            case "Chart":
-                foreach (var cd in _floatingCharts)
-                    if (cd.BlockIndex == blockIndex && cd.RunIndex == runIndex) { found = cd.Rect; break; }
-                break;
-            case "WordArt":
-                foreach (var wd in _floatingWordArts)
-                    if (wd.BlockIndex == blockIndex && wd.RunIndex == runIndex) { found = wd.Rect; break; }
-                break;
-            case "SmartArt":
-                foreach (var sa in _floatingSmartArts)
-                    if (sa.BlockIndex == blockIndex && sa.RunIndex == runIndex) { found = sa.Rect; break; }
-                break;
-            case "Group":
-                foreach (var gd in _floatingGroups)
-                    if (gd.BlockIndex == blockIndex && gd.RunIndex == runIndex) { found = gd.Rect; break; }
-                break;
-        }
-        if (found.HasValue)
-            _selectedFloating = (blockIndex, runIndex, kind, found.Value);
+        var found = _floatingSnapshots.FirstOrDefault(snapshot =>
+            snapshot.BlockIndex == blockIndex
+            && snapshot.RunIndex == runIndex
+            && snapshot.TypeTag == kind);
+        if (found is not null)
+            _selectedFloating = (blockIndex, runIndex, kind, ToAvaloniaRect(found.Rect));
         else
             _selectedFloating = null; // object was deleted / moved out of view
         RaiseFloatingSelectionChangedIfIdentityChanged();
@@ -6568,6 +6398,13 @@ public sealed class DocumentView : Control
     /// </summary>
     public (int BlockIndex, int RunIndex, string Kind, Rect Rect)? SelectedFloatingInfo
         => _selectedFloating;
+
+    /// <summary>
+    /// Returns the selected floating shape or text box, or null when the current drawing selection is
+    /// a non-shape object such as WordArt or a group.
+    /// </summary>
+    public Shape? SelectedFloatingShape() =>
+        SelectedFloatingShapeLocation()?.Shape;
 
     /// <summary>Deselect any selected floating object. No-op when nothing is selected.</summary>
     public void DeselectFloating()
@@ -6603,6 +6440,15 @@ public sealed class DocumentView : Control
         // Dummy rect; RefreshSelectedFloatingRect will update.
         _selectedFloating = (blockIndex, runIndex, kind, default);
         RefreshSelectedFloatingRect(blockIndex, runIndex, kind);
+    }
+
+    private (int BlockIndex, int RunIndex, Shape Shape, string Kind)? SelectedFloatingShapeLocation()
+    {
+        if (_selectedFloating is not { Kind: "Shape" } sel) return null;
+        if (_doc.Blocks[sel.BlockIndex] is not Paragraph para) return null;
+        if (sel.RunIndex < 0 || sel.RunIndex >= para.Runs.Count) return null;
+        if (para.Runs[sel.RunIndex].Shape is not { } shape) return null;
+        return (sel.BlockIndex, sel.RunIndex, shape, sel.Kind);
     }
 
     /// <summary>
@@ -6702,6 +6548,42 @@ public sealed class DocumentView : Control
     {
         if (GetSelectedFloatingSize() is not { } size || heightPt <= 0) return;
         SetFloatingSize(size.WidthPt, heightPt);
+    }
+
+    /// <summary>
+    /// Set the solid fill color of the selected floating shape/text box. Pass null to remove fill.
+    /// Undoable. No-op when the selected drawing object is not a shape.
+    /// </summary>
+    public void SetSelectedShapeFill(string? colorHex)
+    {
+        if (SelectedFloatingShapeLocation() is not { } sel) return;
+        _bus.Execute(new SetShapeFillCommand(sel.BlockIndex, sel.RunIndex, colorHex));
+        InvalidateLayoutAndVisual();
+        RefreshSelectedFloatingRect(sel.BlockIndex, sel.RunIndex, sel.Kind);
+    }
+
+    /// <summary>
+    /// Set an extended fill (gradient/pattern/no-fill) on the selected floating shape/text box.
+    /// Undoable. No-op when the selected drawing object is not a shape.
+    /// </summary>
+    public void SetSelectedShapeExtendedFill(ShapeFill? fill)
+    {
+        if (SelectedFloatingShapeLocation() is not { } sel) return;
+        _bus.Execute(new SetShapeExtendedFillCommand(sel.BlockIndex, sel.RunIndex, fill));
+        InvalidateLayoutAndVisual();
+        RefreshSelectedFloatingRect(sel.BlockIndex, sel.RunIndex, sel.Kind);
+    }
+
+    /// <summary>
+    /// Set the outline of the selected floating shape/text box. Pass null colorHex to remove outline.
+    /// Undoable. No-op when the selected drawing object is not a shape.
+    /// </summary>
+    public void SetSelectedShapeOutline(string? colorHex, double widthPt, string? dash = null)
+    {
+        if (SelectedFloatingShapeLocation() is not { } sel) return;
+        _bus.Execute(new SetShapeOutlineCommand(sel.BlockIndex, sel.RunIndex, colorHex, widthPt, dash));
+        InvalidateLayoutAndVisual();
+        RefreshSelectedFloatingRect(sel.BlockIndex, sel.RunIndex, sel.Kind);
     }
 
     /// <summary>
@@ -7172,6 +7054,12 @@ public sealed class DocumentView : Control
     protected override void OnTextInput(TextInputEventArgs e)
     {
         base.OnTextInput(e);
+        if (IsEditingLocked)
+        {
+            e.Handled = true;
+            return;
+        }
+
         if (string.IsNullOrEmpty(e.Text) || e.Text == "\r" || e.Text == "\n")
             return;
         InsertText(e.Text);
@@ -7183,6 +7071,12 @@ public sealed class DocumentView : Control
         base.OnKeyDown(e);
         var shift = (e.KeyModifiers & KeyModifiers.Shift) != 0;
         var ctrl = (e.KeyModifiers & (KeyModifiers.Control | KeyModifiers.Meta)) != 0;
+
+        if (IsEditingLocked && IsEditingKey(e.Key, ctrl))
+        {
+            e.Handled = true;
+            return;
+        }
 
         // AV-FLSEL: when a float is selected, intercept navigation/delete keys before body text.
         if (_selectedFloating is { } selFloat)
@@ -7316,10 +7210,17 @@ public sealed class DocumentView : Control
         }
     }
 
+    private static bool IsEditingKey(Key key, bool ctrl) =>
+        key is Key.Back or Key.Delete or Key.Enter or Key.Tab ||
+        (ctrl && key is (Key.B or Key.I or Key.U or Key.Z or Key.Y));
+
     // ---- Editing operations (all via the command bus) -------------------------------------------
 
     public void InsertText(string text)
     {
+        if (IsEditingLocked)
+            return;
+
         // AV-HFEDIT: route into a header/footer region when the caret is inside one.
         if (_hfCaret is not null)
         {
@@ -7396,6 +7297,9 @@ public sealed class DocumentView : Control
 
     private void Backspace()
     {
+        if (IsEditingLocked)
+            return;
+
         // AV-HFEDIT: route into a header/footer region.
         if (_hfCaret is not null)
         {
@@ -7477,6 +7381,9 @@ public sealed class DocumentView : Control
 
     private void DeleteForward()
     {
+        if (IsEditingLocked)
+            return;
+
         // AV-HFEDIT: route into a header/footer region.
         if (_hfCaret is not null)
         {
@@ -7592,6 +7499,9 @@ public sealed class DocumentView : Control
 
     private void InsertParagraphBreak()
     {
+        if (IsEditingLocked)
+            return;
+
         // AV-HFEDIT: route into a header/footer region.
         if (_hfCaret is not null)
         {
@@ -7743,6 +7653,9 @@ public sealed class DocumentView : Control
 
     private void DeleteSelection()
     {
+        if (IsEditingLocked)
+            return;
+
         if (NormalizedSelection() is not { } sel)
             return;
 
@@ -7802,6 +7715,8 @@ public sealed class DocumentView : Control
     public void ToggleItalic() => ToggleRunFlag(f => f.Italic, (f, v) => f with { Italic = v });
     public void ToggleUnderline() => ToggleRunFlag(f => f.Underline, (f, v) => f with { Underline = v });
     public void ToggleStrikethrough() => ToggleRunFlag(f => f.Strikethrough, (f, v) => f with { Strikethrough = v });
+    public void ToggleSmallCaps() => ToggleRunFlag(f => f.SmallCaps, (f, v) => f with { SmallCaps = v });
+    public void ToggleAllCaps() => ToggleRunFlag(f => f.AllCaps, (f, v) => f with { AllCaps = v });
 
     /// <summary>
     /// Toggle superscript on the selection (clears subscript if set; clears superscript if already set).
@@ -7829,6 +7744,16 @@ public sealed class DocumentView : Control
     /// </summary>
     public void SetHighlightColor(string? colorHex) =>
         ApplyRunFormatting(f => f with { HighlightColorHex = string.IsNullOrWhiteSpace(colorHex) ? null : colorHex });
+
+    public void SetCharacterBorder(ParagraphBorder? border) =>
+        ApplyRunFormatting(f => f with { CharacterBorder = border });
+
+    public void SetCharacterShading(string? colorHex, ShadingPattern pattern = ShadingPattern.Clear) =>
+        ApplyRunFormatting(f => f with
+        {
+            CharacterShadingHex = string.IsNullOrWhiteSpace(colorHex) ? null : colorHex,
+            CharacterShadingPattern = string.IsNullOrWhiteSpace(colorHex) ? ShadingPattern.Clear : pattern,
+        });
 
     // ── AV-COMMENT: review-comment insert / delete / resolve + introspection ──────────────────────
     // Model-backed (comments already round-trip through Core.IO). All mutations ride the shared
@@ -8373,6 +8298,22 @@ public sealed class DocumentView : Control
     }
 
     /// <summary>
+    /// Display-only Table Layout > View Gridlines toggle. Draws table cell outlines for borderless
+    /// tables without changing the document model.
+    /// </summary>
+    public bool ViewTableGridlines
+    {
+        get => _showTableGridlines;
+        set
+        {
+            if (_showTableGridlines == value)
+                return;
+            _showTableGridlines = value;
+            InvalidateVisual();
+        }
+    }
+
+    /// <summary>
     /// AV-VIEW: Toggle a horizontal (top) + vertical (left) ruler strip with tick marks and margin
     /// markers, drawn on the first page in <see cref="DocumentViewMode.PrintLayout"/> (View → Show →
     /// Ruler in Word). View-only chrome; does not affect layout.
@@ -8397,26 +8338,13 @@ public sealed class DocumentView : Control
     /// </summary>
     internal IReadOnlyList<(double X1, double Y1, double X2, double Y2)> ComputeGridlines()
     {
-        var lines = new List<(double, double, double, double)>();
         if (!_showGridlines || _viewMode != DocumentViewMode.PrintLayout)
-            return lines;
+            return [];
 
-        var areaLeft   = _contentLeft;
-        var areaRight  = _contentLeft + _contentWidth;
-        for (var pi = 0; pi < _pageCount; pi++)
-        {
-            var pageTop    = DeskPadding + pi * (_pageHeightPx + PageGap);
-            var areaTop    = pageTop + _marginTopDip;
-            var areaBottom = pageTop + _pageHeightPx - _marginBottomDip;
-
-            // Horizontal lines.
-            for (var y = areaTop; y <= areaBottom + 0.01; y += GridlineStepDip)
-                lines.Add((areaLeft, y, areaRight, y));
-            // Vertical lines.
-            for (var x = areaLeft; x <= areaRight + 0.01; x += GridlineStepDip)
-                lines.Add((x, areaTop, x, areaBottom));
-        }
-        return lines;
+        return DocumentViewLayoutPlanner
+            .BuildGridlines(_surfacePlan, _pageCount, GridlineStepDip)
+            .Select(line => (line.X1, line.Y1, line.X2, line.Y2))
+            .ToList();
     }
 
     /// <summary>
@@ -8427,13 +8355,10 @@ public sealed class DocumentView : Control
     /// </summary>
     internal IReadOnlyList<double> ComputeRulerTicks()
     {
-        var ticks = new List<double>();
         if (!_showRuler || _viewMode != DocumentViewMode.PrintLayout)
-            return ticks;
+            return [];
         const double inchDip = 72.0; // 1in = 72pt = 72 DIP at 96 DPI base
-        for (var x = _pageLeft; x <= _pageLeft + _pageWidth + 0.01; x += inchDip)
-            ticks.Add(x);
-        return ticks;
+        return DocumentViewLayoutPlanner.BuildRulerTicks(_surfacePlan, inchDip);
     }
 
     public void SetAlignment(TextAlignment alignment)
@@ -8503,6 +8428,24 @@ public sealed class DocumentView : Control
         _bus.CommitUndoGroup("Paragraph Formatting");
     }
 
+    public void ToggleKeepWithNext()
+    {
+        var indices = SelectedParagraphIndices();
+        var enable = indices
+            .Select(i => (Paragraph)_doc.Blocks[i])
+            .Any(p => !p.Formatting.KeepWithNext);
+        FormatSelectedParagraphs(f => f with { KeepWithNext = enable });
+    }
+
+    public void ToggleKeepLinesTogether()
+    {
+        var indices = SelectedParagraphIndices();
+        var enable = indices
+            .Select(i => (Paragraph)_doc.Blocks[i])
+            .Any(p => !p.Formatting.KeepLinesTogether);
+        FormatSelectedParagraphs(f => f with { KeepLinesTogether = enable });
+    }
+
     /// <summary>
     /// Apply the complete set of paragraph-dialog fields (alignment, indents, spacing, line spacing)
     /// to every paragraph spanned by the current selection. All changes are issued as one undoable
@@ -8548,9 +8491,25 @@ public sealed class DocumentView : Control
         _bus.Execute(new SetPageSettingsCommand(settings));
     }
 
+    /// <summary>
+    /// Clone the current page settings, apply a layout mutation, then commit it as one undoable page
+    /// setup command. Used by Layout ribbon commands such as Columns.
+    /// </summary>
+    public void ApplyPageSettings(Action<PageSettings> apply)
+    {
+        ArgumentNullException.ThrowIfNull(apply);
+
+        var settings = _doc.Page.Clone();
+        apply(settings);
+        SetPageSettings(settings);
+    }
+
     /// <summary>Insert a bordered table (with a header row) after the current block. Cells edit on double-click.</summary>
     public void InsertTable(int rows, int columns)
     {
+        if (IsEditingLocked)
+            return;
+
         var table = Table.Create(Math.Max(1, rows), Math.Max(1, columns));
         table.Formatting = TableFormatting.Default with { Borders = true, HeaderRow = true };
         var insertAt = Math.Clamp(_caret.Block + 1, 0, _doc.Blocks.Count);
@@ -8566,8 +8525,63 @@ public sealed class DocumentView : Control
     /// </summary>
     public void InsertPageBreak()
     {
+        if (IsEditingLocked)
+            return;
+
         var insertAt = Math.Clamp(_caret.Block + 1, 0, _doc.Blocks.Count);
         _bus.Execute(new InsertBlockCommand(insertAt, DocumentOps.CreatePageBreak()));
+    }
+
+    /// <summary>
+    /// Insert a whole blank page after the caret block using the shared Word-compatible page-break pair.
+    /// </summary>
+    public void InsertBlankPage()
+    {
+        if (IsEditingLocked)
+            return;
+
+        var insertAt = Math.Clamp(_caret.Block + 1, 0, _doc.Blocks.Count);
+        var blocks = DocumentOps.BuildBlankPage();
+        _bus.BeginUndoGroup();
+        for (var i = 0; i < blocks.Count; i++)
+            _bus.Execute(new InsertBlockCommand(insertAt + i, blocks[i]));
+        _bus.CommitUndoGroup("Insert Blank Page");
+    }
+
+    /// <summary>
+    /// Insert a horizontal-rule paragraph after the caret block.
+    /// </summary>
+    public void InsertHorizontalRule()
+    {
+        if (IsEditingLocked)
+            return;
+
+        var insertAt = Math.Clamp(_caret.Block + 1, 0, _doc.Blocks.Count);
+        _bus.Execute(new InsertBlockCommand(insertAt, DocumentOps.CreateHorizontalRule()));
+    }
+
+    /// <summary>
+    /// Insert a column break after the caret block using the shared model command path.
+    /// </summary>
+    public void InsertColumnBreak()
+    {
+        if (IsEditingLocked)
+            return;
+
+        var insertAt = Math.Clamp(_caret.Block + 1, 0, _doc.Blocks.Count);
+        _bus.Execute(new InsertBlockCommand(insertAt, DocumentOps.CreateColumnBreak()));
+    }
+
+    /// <summary>
+    /// Insert a section break after the caret block, inheriting the current page settings.
+    /// </summary>
+    public void InsertSectionBreak(SectionBreakKind breakKind)
+    {
+        if (IsEditingLocked)
+            return;
+
+        var insertAt = Math.Clamp(_caret.Block + 1, 0, _doc.Blocks.Count);
+        _bus.Execute(new InsertBlockCommand(insertAt, DocumentOps.CreateSectionBreak(breakKind, _doc.Page)));
     }
 
     /// <summary>
@@ -9084,6 +9098,118 @@ public sealed class DocumentView : Control
         _bus.CommitUndoGroup("Insert Bibliography");
     }
 
+    public void ReplaceSources(IReadOnlyList<Source> sources)
+    {
+        ArgumentNullException.ThrowIfNull(sources);
+        _bus.Execute(new ReplaceSourcesCommand(sources));
+        Focus();
+    }
+
+    public void MarkIndexEntry(string? term = null)
+    {
+        var resolved = string.IsNullOrWhiteSpace(term)
+            ? SelectedText.Trim()
+            : term.Trim();
+        if (string.IsNullOrWhiteSpace(resolved))
+            resolved = CurrentParagraph()?.PlainText.Trim() ?? string.Empty;
+        if (resolved.Length == 0)
+            return;
+
+        _bus.Execute(new AddIndexEntryCommand(resolved));
+        Focus();
+    }
+
+    public void InsertIndex()
+    {
+        DocumentIndex.EnsureStyles(_doc);
+        InsertGeneratedReferenceBlocks(DocumentIndex.Build(_doc), "Insert Index", Math.Clamp(_caret.Block, 0, _doc.Blocks.Count));
+    }
+
+    public void RefreshIndex()
+    {
+        DocumentIndex.EnsureStyles(_doc);
+        RefreshGeneratedReferenceBlocks(DocumentIndex.IsIndexParagraph, () => DocumentIndex.Build(_doc), "Update Index");
+    }
+
+    public void InsertTableOfFigures(CaptionLabel label = CaptionLabel.Figure)
+    {
+        TableOfFigures.EnsureStyles(_doc);
+        InsertGeneratedReferenceBlocks(TableOfFigures.Build(_doc, label), "Insert Table of Figures", Math.Clamp(_caret.Block, 0, _doc.Blocks.Count));
+    }
+
+    public void RefreshTableOfFigures(CaptionLabel label = CaptionLabel.Figure)
+    {
+        TableOfFigures.EnsureStyles(_doc);
+        RefreshGeneratedReferenceBlocks(TableOfFigures.IsTableOfFiguresParagraph, () => TableOfFigures.Build(_doc, label), "Update Table of Figures");
+    }
+
+    public void MarkCitation(string? longCitation = null)
+    {
+        var resolved = string.IsNullOrWhiteSpace(longCitation)
+            ? SelectedText.Trim()
+            : longCitation.Trim();
+        if (string.IsNullOrWhiteSpace(resolved))
+            resolved = CurrentParagraph()?.PlainText.Trim() ?? string.Empty;
+        if (resolved.Length == 0)
+            return;
+
+        _bus.Execute(new AddCitationCommand(new Citation(resolved)));
+        Focus();
+    }
+
+    public void InsertTableOfAuthorities()
+    {
+        TableOfAuthorities.EnsureStyles(_doc);
+        InsertGeneratedReferenceBlocks(TableOfAuthorities.Build(_doc), "Insert Table of Authorities", Math.Clamp(_caret.Block, 0, _doc.Blocks.Count));
+    }
+
+    public void RefreshTableOfAuthorities()
+    {
+        TableOfAuthorities.EnsureStyles(_doc);
+        RefreshGeneratedReferenceBlocks(TableOfAuthorities.IsTableOfAuthoritiesParagraph, () => TableOfAuthorities.Build(_doc), "Update Table of Authorities");
+    }
+
+    public void ShowNotes()
+    {
+        Focus();
+        InvalidateVisual();
+    }
+
+    public void ApplyDefaultFootnoteEndnoteOptions()
+    {
+        Focus();
+        InvalidateVisual();
+    }
+
+    private void InsertGeneratedReferenceBlocks(IReadOnlyList<Paragraph> paragraphs, string label, int insertAt)
+    {
+        ArgumentNullException.ThrowIfNull(paragraphs);
+
+        _bus.BeginUndoGroup();
+        var index = Math.Clamp(insertAt, 0, _doc.Blocks.Count);
+        foreach (var paragraph in paragraphs)
+            _bus.Execute(new InsertParagraphCommand(index++, paragraph));
+        _bus.CommitUndoGroup(label);
+    }
+
+    private void RefreshGeneratedReferenceBlocks(Func<Block, bool> isGeneratedBlock, Func<IReadOnlyList<Paragraph>> build, string label)
+    {
+        var indices = new List<int>();
+        for (var i = 0; i < _doc.Blocks.Count; i++)
+            if (isGeneratedBlock(_doc.Blocks[i]))
+                indices.Add(i);
+
+        var insertAt = indices.Count > 0 ? indices[0] : 0;
+
+        _bus.BeginUndoGroup();
+        for (var i = indices.Count - 1; i >= 0; i--)
+            _bus.Execute(new DeleteParagraphCommand(indices[i]));
+        var index = Math.Clamp(insertAt, 0, _doc.Blocks.Count);
+        foreach (var paragraph in build())
+            _bus.Execute(new InsertParagraphCommand(index++, paragraph));
+        _bus.CommitUndoGroup(label);
+    }
+
     // ── AV-INSERT2: Insert depth 2 (cover page / drop cap / document-property field / equation / quick part) ──
 
     /// <summary>
@@ -9257,6 +9383,9 @@ public sealed class DocumentView : Control
     /// </summary>
     private void InsertObjectRun(Run run)
     {
+        if (IsEditingLocked)
+            return;
+
         // Resolve a body paragraph to host the object. Prefer the caret's block; otherwise the first
         // editable body paragraph; otherwise append a fresh empty paragraph and target that.
         var index = _caret.Block;
@@ -9763,6 +9892,9 @@ public sealed class DocumentView : Control
 
     public bool TryDeleteSelection()
     {
+        if (IsEditingLocked)
+            return false;
+
         if (NormalizedSelection() is null)
             return false;
         DeleteSelection();
@@ -10466,6 +10598,24 @@ public sealed class DocumentView : Control
         DocumentChanged?.Invoke();
     }
 
+    /// <summary>
+    /// Apply the Document Inspector's selected removal operations to the model and re-render.
+    /// Direct mutations bypass undo/redo, matching the existing accept/reject review semantics.
+    /// </summary>
+    public void ApplyInspectorRemovals(bool comments, bool revisions, bool properties, bool bookmarks)
+    {
+        if (comments)
+            DocumentInspector.RemoveComments(_doc);
+        if (revisions)
+            DocumentInspector.RemoveRevisions(_doc);
+        if (properties)
+            DocumentInspector.RemoveProperties(_doc);
+        if (bookmarks)
+            DocumentInspector.RemoveBookmarks(_doc);
+
+        InvalidateAfterExternalMutation();
+    }
+
     private void OnModelChanged()
     {
         InvalidateLayoutAndVisual();
@@ -10529,7 +10679,10 @@ public sealed class DocumentView : Control
     }
 
     /// <summary>Char-level editing only on paragraphs whose runs are all plain text (no images/fields/controls).</summary>
-    private static bool IsEditable(Paragraph paragraph) =>
+    private bool IsEditable(Paragraph paragraph) =>
+        !IsEditingLocked && IsPlainTextEditable(paragraph);
+
+    private static bool IsPlainTextEditable(Paragraph paragraph) =>
         // AV-COMMENT: a CommentId is a soft run mark (like a hyperlink) — it must NOT make the paragraph
         // non-editable, or its glyphs would fall back to FallbackCells (which drops the comment id and the
         // anchor render). Word keeps commented text fully editable. The textless comment-reference run has
@@ -10564,6 +10717,75 @@ public sealed class DocumentView : Control
             cells.Add(new Cell(ch, RunFormatting.Default));
         return cells;
     }
+
+    private static void InsertRunAtOffset(Paragraph paragraph, int offset, Run insertedRun)
+    {
+        var targetOffset = Math.Clamp(offset, 0, paragraph.PlainText.Length);
+        var consumed = 0;
+        for (var i = 0; i < paragraph.Runs.Count; i++)
+        {
+            var run = paragraph.Runs[i];
+            var runLength = run.Text.Length;
+            if (targetOffset > consumed + runLength)
+            {
+                consumed += runLength;
+                continue;
+            }
+
+            var local = targetOffset - consumed;
+            if (local <= 0)
+            {
+                paragraph.Runs.Insert(i, insertedRun);
+            }
+            else if (local >= runLength)
+            {
+                paragraph.Runs.Insert(i + 1, insertedRun);
+            }
+            else
+            {
+                var before = CloneRunWithText(run, run.Text[..local]);
+                var after = CloneRunWithText(run, run.Text[local..]);
+                paragraph.Runs.RemoveAt(i);
+                paragraph.Runs.Insert(i, before);
+                paragraph.Runs.Insert(i + 1, insertedRun);
+                paragraph.Runs.Insert(i + 2, after);
+            }
+            return;
+        }
+
+        paragraph.Runs.Add(insertedRun);
+    }
+
+    private static Run CloneRunWithText(Run source, string text) => new(text, source.Formatting)
+    {
+        Image = source.Image,
+        Equation = source.Equation,
+        Shape = source.Shape,
+        WordArt = source.WordArt,
+        Chart = source.Chart,
+        EmbeddedObject = source.EmbeddedObject,
+        SmartArt = source.SmartArt,
+        PreservedDrawing = source.PreservedDrawing,
+        DrawingGroup = source.DrawingGroup,
+        HyperlinkUrl = source.HyperlinkUrl,
+        HyperlinkAnchor = source.HyperlinkAnchor,
+        HyperlinkTooltip = source.HyperlinkTooltip,
+        FieldKind = source.FieldKind,
+        TableFormula = source.TableFormula,
+        Citation = source.Citation,
+        CrossReference = source.CrossReference,
+        ComplexField = source.ComplexField,
+        FootnoteId = source.FootnoteId,
+        EndnoteId = source.EndnoteId,
+        CommentId = source.CommentId,
+        IsCommentReference = source.IsCommentReference,
+        IsPageBreak = source.IsPageBreak,
+        Revision = source.Revision,
+        Control = source.Control,
+        RevisionAuthor = source.RevisionAuthor,
+        RevisionDateXml = source.RevisionDateXml,
+        FormatRevision = source.FormatRevision
+    };
 
     private static void SetRuns(Paragraph paragraph, IReadOnlyList<Cell> cells)
     {
@@ -11107,276 +11329,121 @@ public sealed class DocumentView : Control
 
     // ── FO3 collection helpers ────────────────────────────────────────────────────────────────────
 
-    /// <summary>Resolves floating-placement page-space position. Mirrors CollectFloatingShapes anchor logic.</summary>
-    private (double X, double Y) ResolveFloatingPos(FloatingPlacement pl, double anchorContentY)
-    {
-        var anchorPageIndex = _viewMode == DocumentViewMode.PrintLayout
-            ? (int)(anchorContentY / _layoutTextAreaHeight)
-            : 0;
-
-        double PageTop(int pi) =>
-            _viewMode == DocumentViewMode.PrintLayout
-                ? DeskPadding + pi * (_pageHeightPx + PageGap)
-                : 0;
-
-        double x = pl.HorizontalAnchor switch
+    private static FloatingWordArtData BuildFloatingWordArtData(
+        WordArt wordArt,
+        Rect rect,
+        bool behindText,
+        int zOrder,
+        int blockIndex = -1,
+        int runIndex = -1) =>
+        new()
         {
-            HorizontalAnchor.Page   => _pageLeft    + pl.HorizontalOffsetPt * PxPerPoint,
-            HorizontalAnchor.Margin => _contentLeft + pl.HorizontalOffsetPt * PxPerPoint,
-            _                       => _contentLeft + pl.HorizontalOffsetPt * PxPerPoint,
+            Rect = rect,
+            BehindText = behindText,
+            ZOrder = zOrder,
+            BlockIndex = blockIndex,
+            RunIndex = runIndex,
+            Text = wordArt.Text,
+            Style = wordArt.Style,
+            FontSizePt = wordArt.FontSizePt,
+            Warp = wordArt.Warp,
         };
 
-        double y = pl.VerticalAnchor switch
+    private static FloatingSmartArtData BuildFloatingSmartArtData(
+        SmartArt smartArt,
+        Rect rect,
+        bool behindText,
+        int zOrder,
+        int blockIndex = -1,
+        int runIndex = -1)
+    {
+        var texts = new List<string>();
+        FlattenNodes(smartArt.Nodes, texts);
+
+        return new FloatingSmartArtData
         {
-            VerticalAnchor.Paragraph =>
-                ContentYToPageSpaceY(anchorContentY) + pl.VerticalOffsetPt * PxPerPoint,
-            VerticalAnchor.Margin =>
-                PageTop(anchorPageIndex) + _marginTopDip + pl.VerticalOffsetPt * PxPerPoint,
-            VerticalAnchor.Page =>
-                PageTop(anchorPageIndex) + pl.VerticalOffsetPt * PxPerPoint,
-            _ => ContentYToPageSpaceY(anchorContentY) + pl.VerticalOffsetPt * PxPerPoint,
+            Rect = rect,
+            BehindText = behindText,
+            ZOrder = zOrder,
+            BlockIndex = blockIndex,
+            RunIndex = runIndex,
+            Kind = smartArt.Kind,
+            NodeTexts = texts,
         };
 
-        return (x, y);
-    }
-
-    /// <summary>Collects floating charts anchored to <paramref name="paragraph"/>.</summary>
-    private void CollectFloatingCharts(int blockIndex, Paragraph paragraph, double anchorContentY)
-    {
-        for (var runIdx = 0; runIdx < paragraph.Runs.Count; runIdx++)
+        static void FlattenNodes(IEnumerable<SmartArtNode> nodes, List<string> into)
         {
-            var run = paragraph.Runs[runIdx];
-            if (run.Chart is not { IsFloating: true } chart)
-                continue;
-
-            var pl = chart.Placement!;
-            var w  = chart.WidthPt  > 0 ? chart.WidthPt  * PxPerPoint : 360 * PxPerPoint;
-            var h  = chart.HeightPt > 0 ? chart.HeightPt * PxPerPoint : 216 * PxPerPoint;
-            var (x, y) = ResolveFloatingPos(pl, anchorContentY);
-
-            var series = chart.Series.Select(s => (s.Name, new List<double>(s.Values))).ToList();
-            var chartRect = new Rect(x, y, w, h);
-            var cd = BuildChartData(chart, chartRect, pl.Wrapping == ImageWrapping.Behind, pl.ZOrderIndex, series);
-            cd.BlockIndex = blockIndex;
-            cd.RunIndex   = runIdx;
-            _floatingCharts.Add(cd);
-            // AV-WRAP: register exclusion zone.
-            AddWrapExclusion(chartRect, pl.Wrapping);
-        }
-    }
-
-    /// <summary>Collects floating WordArt anchored to <paramref name="paragraph"/>.</summary>
-    private void CollectFloatingWordArts(int blockIndex, Paragraph paragraph, double anchorContentY)
-    {
-        for (var runIdx = 0; runIdx < paragraph.Runs.Count; runIdx++)
-        {
-            var run = paragraph.Runs[runIdx];
-            if (run.WordArt is not { IsFloating: true } wa)
-                continue;
-
-            var pl = wa.Placement!;
-            // WordArt width: estimate from text length × font size × scaling factor (no explicit WidthPt on model).
-            var w = Math.Max(72, wa.FontSizePt * Math.Max(1, wa.Text.Length) * 0.62) * PxPerPoint;
-            var h = Math.Max(40, wa.FontSizePt * 1.6) * PxPerPoint;
-            var (x, y) = ResolveFloatingPos(pl, anchorContentY);
-
-            var waRect = new Rect(x, y, w, h);
-            _floatingWordArts.Add(new FloatingWordArtData
+            foreach (var node in nodes)
             {
-                Rect       = waRect,
-                BehindText = pl.Wrapping == ImageWrapping.Behind,
-                ZOrder     = pl.ZOrderIndex,
-                BlockIndex = blockIndex,
-                RunIndex   = runIdx,
-                Text       = wa.Text,
-                Style      = wa.Style,
-                FontSizePt = wa.FontSizePt,
-                Warp       = wa.Warp,
-            });
-            // AV-WRAP: register exclusion zone.
-            AddWrapExclusion(waRect, pl.Wrapping);
-        }
-    }
-
-    /// <summary>Collects floating SmartArt diagrams anchored to <paramref name="paragraph"/>.</summary>
-    private void CollectFloatingSmartArts(int blockIndex, Paragraph paragraph, double anchorContentY)
-    {
-        for (var runIdx = 0; runIdx < paragraph.Runs.Count; runIdx++)
-        {
-            var run = paragraph.Runs[runIdx];
-            if (run.SmartArt is not { IsFloating: true } sa)
-                continue;
-
-            var pl = sa.Placement!;
-            var w  = sa.WidthPt  > 0 ? sa.WidthPt  * PxPerPoint : 468 * PxPerPoint;
-            var h  = sa.HeightPt > 0 ? sa.HeightPt * PxPerPoint : 216 * PxPerPoint;
-            var (x, y) = ResolveFloatingPos(pl, anchorContentY);
-
-            // Flatten node texts depth-first for render.
-            var texts = new List<string>();
-            static void FlattenNodes(IEnumerable<SmartArtNode> nodes, List<string> into)
-            {
-                foreach (var n in nodes)
-                {
-                    into.Add(n.Text);
-                    FlattenNodes(n.Children, into);
-                }
+                into.Add(node.Text);
+                FlattenNodes(node.Children, into);
             }
-            FlattenNodes(sa.Nodes, texts);
-
-            var saRect = new Rect(x, y, w, h);
-            _floatingSmartArts.Add(new FloatingSmartArtData
-            {
-                Rect       = saRect,
-                BehindText = pl.Wrapping == ImageWrapping.Behind,
-                ZOrder     = pl.ZOrderIndex,
-                BlockIndex = blockIndex,
-                RunIndex   = runIdx,
-                Kind       = sa.Kind,
-                NodeTexts  = texts,
-            });
-            // AV-WRAP: register exclusion zone.
-            AddWrapExclusion(saRect, pl.Wrapping);
         }
     }
 
-    /// <summary>Collects floating drawing groups anchored to <paramref name="paragraph"/>.</summary>
-    private void CollectFloatingGroups(int blockIndex, Paragraph paragraph, double anchorContentY)
+    private FloatingGroupData BuildFloatingGroupData(
+        FreeW.Core.Model.DrawingGroup group,
+        DocumentFloatingObjectSnapshot snapshot)
     {
-        for (var runIdx = 0; runIdx < paragraph.Runs.Count; runIdx++)
+        var children = new List<FloatingGroupChildData>();
+        foreach (var childSnapshot in DocumentViewLayoutPlanner.BuildFloatingGroupChildSnapshots(group, snapshot.Rect))
         {
-            var run = paragraph.Runs[runIdx];
-            if (run.DrawingGroup is not { } grp)
+            if (childSnapshot.ChildIndex < 0 || childSnapshot.ChildIndex >= group.Children.Count)
                 continue;
 
-            var pl = grp.Placement;
-            var gw = grp.WidthPt  > 0 ? grp.WidthPt  * PxPerPoint : 144 * PxPerPoint;
-            var gh = grp.HeightPt > 0 ? grp.HeightPt * PxPerPoint :  72 * PxPerPoint;
-            var (gx, gy) = ResolveFloatingPos(pl, anchorContentY);
-            var groupRect = new Rect(gx, gy, gw, gh);
+            var child = group.Children[childSnapshot.ChildIndex];
+            var childRect = ToAvaloniaRect(childSnapshot.Rect);
+            var childData = new FloatingGroupChildData { Rect = childRect };
 
-            var behindText = pl.Wrapping == ImageWrapping.Behind;
-            var children   = new List<FloatingGroupChildData>();
-
-            for (var i = 0; i < grp.Children.Count; i++)
+            switch (childSnapshot.Kind)
             {
-                var child = grp.Children[i];
-                var offX  = i < grp.ChildOffsets.Count ? grp.ChildOffsets[i].X * PxPerPoint : 0;
-                var offY  = i < grp.ChildOffsets.Count ? grp.ChildOffsets[i].Y * PxPerPoint : 0;
-                var cw    = grp.ChildWidthPt(i)  * PxPerPoint;
-                var ch    = grp.ChildHeightPt(i) * PxPerPoint;
-                var childRect = new Rect(gx + offX, gy + offY, cw, ch);
+                case DocumentFloatingObjectKind.Image when child is InlineImage img:
+                    childData.Kind = FloatingGroupChildData.ChildKind.Image;
+                    childData.Bitmap = DecodeBitmap(img);
+                    break;
 
-                var cd = new FloatingGroupChildData { Rect = childRect };
-                switch (child)
-                {
-                    case InlineImage img:
-                        cd.Kind   = FloatingGroupChildData.ChildKind.Image;
-                        cd.Bitmap = DecodeBitmap(img);
-                        break;
+                case DocumentFloatingObjectKind.Shape when child is Shape shape:
+                    childData.Kind = FloatingGroupChildData.ChildKind.Shape;
+                    childData.Shape = BuildFloatingShapeData(shape, childRect, snapshot.BehindText, snapshot.ZOrderIndex);
+                    break;
 
-                    case Shape s:
-                    {
-                        cd.Kind = FloatingGroupChildData.ChildKind.Shape;
-                        IBrush? fb = null;
-                        if (s.ExtendedFill is { } ef)
-                        {
-                            fb = ef.Kind switch
-                            {
-                                ShapeFillKind.NoFill   => null,
-                                ShapeFillKind.Gradient => BuildAvaloniaGradientBrush(ef, childRect),
-                                ShapeFillKind.Pattern  => BuildAvaloniaPatternBrush(ef),
-                                _                      => ParseSolidBrush(s.FillColorHex),
-                            };
-                        }
-                        else if (!string.IsNullOrEmpty(s.FillColorHex))
-                        {
-                            fb = ParseSolidBrush(s.FillColorHex);
-                        }
+                case DocumentFloatingObjectKind.Chart when child is Chart chart:
+                    childData.Kind = FloatingGroupChildData.ChildKind.Chart;
+                    childData.Chart = BuildChartData(
+                        chart,
+                        childRect,
+                        snapshot.BehindText,
+                        snapshot.ZOrderIndex,
+                        chart.Series.Select(s => (s.Name, new List<double>(s.Values))).ToList());
+                    break;
 
-                        Pen? op = null;
-                        if (!string.IsNullOrEmpty(s.OutlineColorHex))
-                        {
-                            var sw = s.OutlineWidthPt > 0 ? s.OutlineWidthPt * PxPerPoint : 1.0;
-                            op = new Pen(ParseSolidBrush(s.OutlineColorHex) ?? Brushes.Black, sw);
-                        }
+                case DocumentFloatingObjectKind.WordArt when child is WordArt wordArt:
+                    childData.Kind = FloatingGroupChildData.ChildKind.WordArt;
+                    childData.WordArt = BuildFloatingWordArtData(wordArt, childRect, snapshot.BehindText, snapshot.ZOrderIndex);
+                    break;
 
-                        cd.Shape = new FloatingShapeData
-                        {
-                            Rect          = childRect,
-                            BehindText    = behindText,
-                            ZOrder        = pl.ZOrderIndex,
-                            Kind          = s.Kind,
-                            CustomGeo     = s.HasCustomGeometry ? s.CustomGeometry : null,
-                            FillBrush     = fb,
-                            OutlinePen    = op,
-                            Text          = s.HasText ? s.PlainText : null,
-                            RotationAngle = s.RotationAngle,
-                            FlipH         = s.FlipH,
-                            FlipV         = s.FlipV,
-                        };
-                        break;
-                    }
+                case DocumentFloatingObjectKind.SmartArt when child is SmartArt smartArt:
+                    childData.Kind = FloatingGroupChildData.ChildKind.SmartArt;
+                    childData.SmartArt = BuildFloatingSmartArtData(smartArt, childRect, snapshot.BehindText, snapshot.ZOrderIndex);
+                    break;
 
-                    case Chart c:
-                        cd.Kind = FloatingGroupChildData.ChildKind.Chart;
-                        cd.Chart = BuildChartData(c, childRect, behindText, pl.ZOrderIndex,
-                            c.Series.Select(s => (s.Name, new List<double>(s.Values))).ToList());
-                        break;
-
-                    case WordArt wa:
-                        cd.Kind = FloatingGroupChildData.ChildKind.WordArt;
-                        cd.WordArt = new FloatingWordArtData
-                        {
-                            Rect       = childRect,
-                            BehindText = behindText,
-                            ZOrder     = pl.ZOrderIndex,
-                            Text       = wa.Text,
-                            Style      = wa.Style,
-                            FontSizePt = wa.FontSizePt,
-                            Warp       = wa.Warp,
-                        };
-                        break;
-
-                    case SmartArt sa:
-                    {
-                        var texts = new List<string>();
-                        static void FlattenNodes(IEnumerable<SmartArtNode> nodes, List<string> into)
-                        {
-                            foreach (var n in nodes) { into.Add(n.Text); FlattenNodes(n.Children, into); }
-                        }
-                        FlattenNodes(sa.Nodes, texts);
-                        cd.Kind = FloatingGroupChildData.ChildKind.SmartArt;
-                        cd.SmartArt = new FloatingSmartArtData
-                        {
-                            Rect       = childRect,
-                            BehindText = behindText,
-                            ZOrder     = pl.ZOrderIndex,
-                            Kind       = sa.Kind,
-                            NodeTexts  = texts,
-                        };
-                        break;
-                    }
-                }
-
-                children.Add(cd);
+                default:
+                    continue;
             }
 
-            _floatingGroups.Add(new FloatingGroupData
-            {
-                Rect       = groupRect,
-                BehindText = behindText,
-                ZOrder     = pl.ZOrderIndex,
-                BlockIndex = blockIndex,
-                RunIndex   = runIdx,
-                Children   = children,
-            });
-            // AV-WRAP: register exclusion zone using the group's overall bounding rect.
-            AddWrapExclusion(groupRect, pl.Wrapping);
+            children.Add(childData);
         }
-    }
 
-    // ── FO3 draw helpers ──────────────────────────────────────────────────────────────────────────
+        return new FloatingGroupData
+        {
+            Rect = ToAvaloniaRect(snapshot.Rect),
+            BehindText = snapshot.BehindText,
+            ZOrder = snapshot.ZOrderIndex,
+            BlockIndex = snapshot.BlockIndex,
+            RunIndex = snapshot.RunIndex,
+            Children = children,
+        };
+    }
 
     // Colour palette for chart series — matches Word's default colorful1 scheme.
     private static readonly Color[] ChartSeriesColors =

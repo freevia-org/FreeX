@@ -17,7 +17,7 @@ public sealed partial class MainWindowSourceHygieneTests
         xaml.Should().Contain("Drop=\"MainWindow_Drop\"");
         source.Should().Contain("WorkbookOpenIngressPlanner.SelectOpenableFile(paths, _fileAdapters)");
         source.Should().Contain("await OpenFileAsync(path)");
-        planner.Should().Contain("FileFormatResolver.FindOpenAdapter(adapters, extension, out _)");
+        planner.Should().Contain("WorkbookOpenTargetPlanner.TryCreateOpenTarget(adapters, path");
     }
 
     [Fact]
@@ -41,30 +41,50 @@ public sealed partial class MainWindowSourceHygieneTests
     }
 
     [Fact]
-    public void FreeXBackstageRailEntries_UsePresentationNavigationPlanner()
+    public void FreeXBackstageRailEntries_UsePresentationFramePlanner()
     {
+        var backstageSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Backstage.cs");
         var frameSource = DialogSourceTestSupport.ReadHostSources("MainWindow.BackstageFrame.cs");
-        var plannerSource = DialogSourceTestSupport.ReadPresentationSources("Backstage", "FreeXBackstageNavigationPlanner.cs");
+        var plannerSource = DialogSourceTestSupport.ReadPresentationSources("Backstage", "FreeXBackstageFramePlanner.cs");
         var buildMethod = ExtractMethodSource(frameSource, "private IEnumerable<BackstageEntry> BuildBackstageEntries()");
 
         frameSource.Should().Contain("BackstageFrameComposer.Build(");
         frameSource.Should().Contain("new BackstageFrameComposerSpec(");
         frameSource.Should().Contain("DecorateNavButtons = DecorateBackstageNavButton");
         frameSource.Should().Contain("Closed = OnBackstageFrameClosed");
+        frameSource.Should().Contain("private static readonly FreeXBackstageFramePlan BackstageFramePlan = FreeXBackstageFramePlanner.Build();");
         frameSource.Should().NotContain("new BackstageFrame()");
         frameSource.Should().NotContain("frame.SetEntries(");
-        buildMethod.Should().Contain("FreeXBackstageNavigationPlanner.Build().Select(MapBackstageNavigationEntry)");
+        buildMethod.Should().Contain("BackstageFramePlan.Entries.Select(MapBackstageFrameEntry)");
         buildMethod.Should().NotContain("UiText.Get(\"MainWindow_Text_Home\")");
         buildMethod.Should().NotContain("UiText.Get(\"MainWindow_Text_SaveAs\")");
         buildMethod.Should().NotContain("BackstageSaveAsButton");
         buildMethod.Should().NotContain("BackstageAccountButton");
 
-        frameSource.Should().Contain("ResolveBackstageCommand(FreeXBackstageCommandId command)");
-        frameSource.Should().Contain("ResolveBackstagePane(FreeXBackstagePaneId pane)");
+        frameSource.Should().Contain("RequirePaneFlow(entry)");
+        frameSource.Should().Contain("RequireCommandWorkflow(entry)");
+        frameSource.Should().Contain("BuildBackstagePane(FreeXBackstagePaneFlowPlan plan)");
+        frameSource.Should().Contain("FreeXBackstageCommandWorkflowExecutor.ExecuteAsync(");
+        frameSource.Should().Contain("CreateBackstageCommandHandlers()");
+        frameSource.Should().NotContain("ResolveBackstageCommand(FreeXBackstageCommandId command)");
+        frameSource.Should().NotContain("FreeXBackstageFlowPlanner.BuildCommandWorkflow(");
+        frameSource.Should().NotContain("FreeXBackstageCommandWorkflowKind.NewWorkbook");
+        frameSource.Should().NotContain("FreeXBackstageCommandWorkflowKind.ExportWorkbook");
+        frameSource.Should().NotContain("ResolveBackstagePane(FreeXBackstagePaneId pane)");
+        frameSource.Should().NotContain("FreeXBackstageFlowPlanner.BuildPaneFlow(");
+        frameSource.Should().NotContain("private const string BackstageHomePaneId");
 
-        plannerSource.Should().Contain("BackstageSaveAsButton");
-        plannerSource.Should().Contain("BackstageAccountButton");
-        plannerSource.Should().Contain("MainWindow_TooltipDescription_SaveSheetsTheCurrentSelectionOrTheWorkbookAsAPDFFileOrAnXPSPackage");
+        backstageSource.Should().Contain("BackstageFramePlan.Selection.DefaultPaneAutomationId");
+        backstageSource.Should().Contain("ShowBackstagePane(FreeXBackstagePaneId.Info)");
+        backstageSource.Should().Contain("BackstageFramePlan.Selection.For(pane)");
+        backstageSource.Should().NotContain("BackstageHomePaneId");
+        backstageSource.Should().NotContain("BackstageInfoPaneId");
+        backstageSource.Should().NotContain("BackstagePrintPaneId");
+
+        plannerSource.Should().Contain("FreeXBackstageNavigationPlanner.Build()");
+        plannerSource.Should().Contain("FreeXBackstageFlowPlanner.BuildPaneFlow(pane)");
+        plannerSource.Should().Contain("FreeXBackstageFlowPlanner.BuildCommandWorkflow(command)");
+        plannerSource.Should().Contain("FreeXBackstagePaneSelectionPlan");
     }
 
     [Fact]
@@ -104,8 +124,10 @@ public sealed partial class MainWindowSourceHygieneTests
         backstageSource.Should().Contain("WorkbookFilePickerPlanner.BuildSaveDialogPlan(");
         pickerPlannerSource.Should().Contain("FileDialogRequestPlanner.BuildOpenDialogPlan(");
         pickerPlannerSource.Should().Contain("FileDialogRequestPlanner.BuildSaveDialogPlan(");
-        backstageSource.Should().Contain("FileDialogFilterBuilder.FindOpenAdapter(_fileAdapters, ext, out var format)");
-        backstageSource.Should().Contain("_currentFilePath = result.OpenedAsTemplate ? null : path;");
+        backstageSource.Should().Contain("WorkbookOpenTargetPlanner.TryCreateOpenTarget(_fileAdapters, path");
+        backstageSource.Should().Contain("WorkbookFileCompletionPlanner.PlanOpen(");
+        backstageSource.Should().Contain("new FreeX.App.Services.WorkbookOpenResult(");
+        backstageSource.Should().Contain("_currentFilePath = plan.CurrentFilePath;");
     }
 
     [Fact]
@@ -125,7 +147,7 @@ public sealed partial class MainWindowSourceHygieneTests
         backstageSource.Should().Contain("plan.SuggestedFileName");
         backstageSource.Should().Contain("plan.DefaultExtensionWithDot");
         backstageSource.Should().Contain("plan.FilterIndex");
-        backstageSource.Should().Contain("WorkbookFilePickerPlanner.TryResolveSaveDialogTarget(_fileAdapters, result.FileName!, out var target)");
+        backstageSource.Should().Contain("WorkbookFilePickerPlanner.TryResolveSaveDialogTarget(_fileAdapters, result.FileName!, result.FilterIndex, out var target)");
         backstageSource.Should().Contain("return await SaveWorkbookToTargetAsync(target);");
         backstageSource.Should().NotContain("new Microsoft.Win32.OpenFileDialog");
         backstageSource.Should().NotContain("new Microsoft.Win32.SaveFileDialog");
@@ -139,8 +161,7 @@ public sealed partial class MainWindowSourceHygieneTests
         var keyboardSource = DialogSourceTestSupport.ReadHostSources("MainWindow.KeyboardCommands.cs");
 
         var newMethod = ExtractMethodSource(backstageSource, "private async Task RequestNewWorkbookAsync()");
-        newMethod.Should().Contain("ConfirmSaveBeforeDestructiveActionAsync(UiText.Get(\"MainWindowMessage_SaveChangesBeforeCreatingWorkbook\"))");
-        newMethod.Should().Contain("== SaveChangesConfirmation.Cancel");
+        newMethod.Should().Contain("CanProceedAfterSaveBeforeDestructiveActionAsync(UiText.Get(\"MainWindowMessage_SaveChangesBeforeCreatingWorkbook\"))");
         // File > New advances the session name sequence (Book2, Book3, …) via InitializeNewWorkbook
         // rather than re-creating Book1 through CreateNewWorkbook() (Issue 121). (Also de-brittled for P2b:
         // the dirty-gate now routes through PlanDirtyGate/ResolveDirtyGate — asserted below.)
@@ -148,14 +169,13 @@ public sealed partial class MainWindowSourceHygieneTests
         newMethod.Should().Contain("HideStartScreen();");
 
         var openMethod = ExtractMethodSource(backstageSource, "private async Task OpenFileAsync(");
-        openMethod.Should().Contain("ConfirmSaveBeforeDestructiveActionAsync(UiText.Get(\"MainWindowMessage_SaveChangesBeforeOpeningWorkbook\"))");
-        openMethod.Should().Contain("== SaveChangesConfirmation.Cancel");
-        openMethod.IndexOf("ConfirmSaveBeforeDestructiveActionAsync", StringComparison.Ordinal)
+        openMethod.Should().Contain("CanProceedAfterSaveBeforeDestructiveActionAsync(UiText.Get(\"MainWindowMessage_SaveChangesBeforeOpeningWorkbook\"))");
+        openMethod.IndexOf("CanProceedAfterSaveBeforeDestructiveActionAsync", StringComparison.Ordinal)
             .Should()
             .BeLessThan(openMethod.IndexOf("var loader = new OpenWorkbookLoader", StringComparison.Ordinal));
-        openMethod.IndexOf("ConfirmSaveBeforeDestructiveActionAsync", StringComparison.Ordinal)
+        openMethod.IndexOf("CanProceedAfterSaveBeforeDestructiveActionAsync", StringComparison.Ordinal)
             .Should()
-            .BeLessThan(openMethod.IndexOf("_workbook = result.Workbook;", StringComparison.Ordinal));
+            .BeLessThan(openMethod.IndexOf("_workbook = plan.Workbook;", StringComparison.Ordinal));
 
         // P2b: SaveButton_Click defers the Save-vs-Save-As resolution to the shared SaveResolvedAsync
         // helper (asserted below against MainWindow.WorkbookLifecycle.cs) — the same single resolution path
@@ -170,8 +190,10 @@ public sealed partial class MainWindowSourceHygieneTests
         saveAsMethod.Should().Contain("HideStartScreen();");
 
         var saveTargetMethod = ExtractMethodSource(backstageSource, "private async Task<bool> SaveWorkbookToTargetAsync(");
-        saveTargetMethod.Should().Contain("FileSavePlanner.CanSkipCleanSave(_workbookDirty, _currentFilePath, target)");
-        saveTargetMethod.IndexOf("FileSavePlanner.CanSkipCleanSave", StringComparison.Ordinal)
+        saveTargetMethod.Should().Contain("WorkbookFileLifecycleCoordinator.PlanSaveTargetWrite(_workbookDirty, _currentFilePath, target)");
+        saveTargetMethod.Should().Contain("WorkbookSaveTargetIntent.SkipCleanCurrentPath");
+        saveTargetMethod.Should().NotContain("FileSavePlanner.CanSkipCleanSave(");
+        saveTargetMethod.IndexOf("WorkbookFileLifecycleCoordinator.PlanSaveTargetWrite", StringComparison.Ordinal)
             .Should()
             .BeLessThan(saveTargetMethod.IndexOf("ConfirmUnsupportedXlsxFeatureSave()", StringComparison.Ordinal));
         saveTargetMethod.Should().Contain("ShowSaveProgress(CreateSaveProgress(\"preparing\", TimeSpan.Zero, 1));");
@@ -182,6 +204,10 @@ public sealed partial class MainWindowSourceHygieneTests
         saveTargetMethod.Should().Contain("catch (OperationCanceledException) when (operationCancellation.IsCancellationRequested)");
         saveTargetMethod.Should().Contain("SetFileOperationInputEnabled(true);");
         saveTargetMethod.Should().Contain("MarkWorkbookSaved();");
+        saveTargetMethod.Should().Contain("SaveCompletionPlanner.Plan(");
+        saveTargetMethod.Should().Contain("plan.FileContext is { } fileContext");
+        saveTargetMethod.Should().Contain("_currentFilePath = fileContext.Path;");
+        saveTargetMethod.Should().Contain("_workbook.Name = fileContext.DisplayName;");
         saveTargetMethod.Should().Contain("UiText.Format(\"MainWindowMessage_SaveFileFailed\", ex.Message)");
         saveTargetMethod.Should().Contain("UiText.Get(\"MainWindowMessage_SaveErrorTitle\")");
         saveTargetMethod.Should().Contain("finally");
@@ -194,6 +220,13 @@ public sealed partial class MainWindowSourceHygieneTests
         confirmMethod.Should().Contain("_workbookDirty");
         confirmMethod.Should().Contain("PromptSaveChangesBeforeDestructiveAction(message)");
         confirmMethod.Should().Contain("SaveResolvedAsync");
+
+        var canProceedMethod = ExtractMethodSource(lifecycleSource, "private Task<bool> CanProceedAfterSaveBeforeDestructiveActionAsync(");
+        canProceedMethod.Should().Contain("WorkbookFileLifecycleCoordinator.CanProceedAfterDirtyGateWithCleanSaveAsync(");
+        canProceedMethod.Should().Contain("_workbookDirty");
+        canProceedMethod.Should().Contain("PromptSaveChangesBeforeDestructiveAction(message)");
+        canProceedMethod.Should().Contain("SaveResolvedAsync");
+        canProceedMethod.Should().Contain("() => _workbookDirty");
 
         var promptMethod = ExtractMethodSource(lifecycleSource, "private SaveChangesPrompt PromptSaveChangesBeforeDestructiveAction(");
         promptMethod.Should().Contain("ShowOwnedMessage(");
@@ -259,6 +292,25 @@ public sealed partial class MainWindowSourceHygieneTests
             harness.IsBackstageVisible.Should().BeTrue();
             harness.ContentHostShows("SsHomeView").Should().BeTrue("Home is the default landing pane");
             harness.IsRailButtonFocused("BackstageHomeButton").Should().BeTrue("keyboard focus starts on Home");
+        });
+    }
+
+    [Fact]
+    public void BackstagePaneEntryPoints_SelectPlannedPaneTargets()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = BackstageRailHarness.Create();
+            harness.OpenBackstage();
+
+            harness.Invoke("ShowInfoView");
+            harness.ContentHostShows("SsInfoView").Should().BeTrue("Info is selected by the planned pane target");
+
+            harness.Invoke("ShowPrintView");
+            harness.ContentHostShows("SsPrintView").Should().BeTrue("Print is selected by the planned pane target");
+
+            harness.Invoke("ShowHomeView");
+            harness.ContentHostShows("SsHomeView").Should().BeTrue("Home is selected by the planned pane target");
         });
     }
 
@@ -367,8 +419,14 @@ public sealed partial class MainWindowSourceHygieneTests
     public void GetData_IncludesDelimitedTextAndSpreadsheetMlAdapters()
     {
         var dataCommandsSource = DialogSourceTestSupport.ReadHostSources("MainWindow.DataCommands.cs");
+        var plannerSource = DialogSourceTestSupport.ReadAppServicesSource("ImportDataFilePickerPlanner.cs");
 
-        dataCommandsSource.Should().Contain("\".csv\", \".txt\", \".tsv\", \".tab\", \".xml\"");
+        dataCommandsSource.Should().Contain("ImportDataFilePickerPlanner.BuildAdapterOpenDialogPlan(_fileAdapters)");
+        plannerSource.Should().Contain("\".csv\",");
+        plannerSource.Should().Contain("\".txt\",");
+        plannerSource.Should().Contain("\".tsv\",");
+        plannerSource.Should().Contain("\".tab\",");
+        plannerSource.Should().Contain("\".xml\"");
     }
 
     [Fact]
@@ -376,11 +434,11 @@ public sealed partial class MainWindowSourceHygieneTests
     {
         var dataCommandsSource = DialogSourceTestSupport.ReadHostSources("MainWindow.DataCommands.cs");
 
-        dataCommandsSource.Should().Contain("FileDialogFilterBuilder.BuildOpenFilter(adapters)");
+        dataCommandsSource.Should().Contain("ImportDataFilePickerPlanner.BuildAdapterOpenDialogPlan(_fileAdapters)");
         dataCommandsSource.Should().Contain("WpfFileDialogService.ShowOpenDialog(");
-        dataCommandsSource.Should().Contain("filter,");
-        dataCommandsSource.Should().Contain("checkFileExists: true");
-        dataCommandsSource.Should().Contain("multiselect: false");
+        dataCommandsSource.Should().Contain("plan.Filter,");
+        dataCommandsSource.Should().Contain("checkFileExists: plan.CheckFileExists");
+        dataCommandsSource.Should().Contain("multiselect: plan.Multiselect");
         dataCommandsSource.Should().Contain("if (!result.Chosen) return;");
         dataCommandsSource.Should().Contain("FileDialogFilterBuilder.FindOpenAdapter(adapters, ext, out var format)");
         dataCommandsSource.Should().Contain("private async void GetDataBtn_Click(object sender, RoutedEventArgs e)");
@@ -442,10 +500,10 @@ public sealed partial class MainWindowSourceHygieneTests
 
         reviewSource.Should().Contain("private async void ShareWorkbookBtn_Click(object sender, RoutedEventArgs e) => await ShareWorkbookAsync();");
 
-        // The backstage Share rail entry now lives on the shared frame and routes to ShareWorkbookAsync from
-        // the FreeX frame wrapper instead of a SsShareBtn_Click forwarder.
+        // The backstage Share rail entry now lives on the shared frame and routes through the shared
+        // workflow executor to the FreeX frame wrapper's ShareWorkbookAsync handler.
         var frameSource = DialogSourceTestSupport.ReadHostSources("MainWindow.BackstageFrame.cs");
-        frameSource.Should().Contain("await ShareWorkbookAsync()");
+        frameSource.Should().Contain("ShareWorkbookAsync: ShareWorkbookAsync");
     }
 
     [Fact]
@@ -458,7 +516,10 @@ public sealed partial class MainWindowSourceHygieneTests
 
         openMethod.Should().Contain("ShowOpenProgress(CreateOpenProgress(\"preparing\", TimeSpan.Zero, 1));");
         openMethod.Should().Contain("using var operationCancellation = BeginFileOperationCancellation();");
-        openMethod.Should().Contain("loader.LoadAsync(path, adapter, ext, format!, progress, operationCancellation.Token)");
+        openMethod.Should().Contain("loader.LoadAsync(");
+        openMethod.Should().Contain("target.Path,");
+        openMethod.Should().Contain("target.Adapter,");
+        openMethod.Should().Contain("target.Format,");
         openMethod.Should().Contain("ShowOpenProgress(update.Title, update.Detail, update.Percent)");
         openMethod.Should().Contain("ShowOpenProgress(CreateOpenProgress(\"preparing view\", TimeSpan.Zero, null));");
         openMethod.Should().Contain("catch (OperationCanceledException) when (operationCancellation.IsCancellationRequested)");
@@ -523,11 +584,11 @@ public sealed partial class MainWindowSourceHygieneTests
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.PrintExport.cs");
 
-        source.Should().Contain("ExportAsPdf(request.Path, ExportPlanner.DescribeRequest(request), request.Options)");
-        source.Should().Contain("ExportAsXps(request.Path, ExportPlanner.DescribeRequest(request), request.Options)");
+        source.Should().Contain("ExportAsPdf(request.Path, WpfExportDescriptionPlanner.DescribeRequest(request), request.Options)");
+        source.Should().Contain("ExportAsXps(request.Path, WpfExportDescriptionPlanner.DescribeRequest(request), request.Options)");
         source.Should().Contain("var document = RenderExportDocument(effectiveOptions)");
         source.Should().Contain("var paginator = RenderExportPaginator(effectiveOptions)");
-        source.Should().Contain("ExportPlanner.DescribeRequest(request)");
+        source.Should().Contain("WpfExportDescriptionPlanner.DescribeRequest(request)");
         source.Should().Contain("OpenExportedFile(request.ActualPath)");
         source.Should().NotContain("ExportPdfFallbackAsXps");
     }
@@ -551,7 +612,7 @@ public sealed partial class MainWindowSourceHygieneTests
         exportMethod.Should().Contain("var selectedExportFileFormat = ExportFilePickerPlanner.FormatFromPdfXpsFilterIndex(saveResult.FilterIndex)");
         exportMethod.Should().Contain("var selectedFormat = selectedExportFileFormat == ExportFileFormat.Xps");
         exportMethod.Should().Contain("ExportPlanner.PlanExport(saveResult.FileName!, selectedFormat, optionsDialog.Result)");
-        exportMethod.Should().Contain("ExportPlanner.TryValidatePublishOptions(request.Options, request.Format, out var publishOptionsError)");
+        exportMethod.Should().Contain("ExportPlanner.TryValidatePublishOptions(request.Options, request.Format, out var publishOptionsError, WpfExportPlannerTextResolver.Instance)");
         exportMethod.Should().Contain("publishOptionsError ?? UiText.Get(\"MainWindowMessage_ExportUnsupportedOptions\")");
         exportMethod.Should().Contain("UiText.Get(\"MainWindowMessage_ExportOptionsTitle\")");
         exportMethod.Should().Contain("ShowOwnedMessage(");

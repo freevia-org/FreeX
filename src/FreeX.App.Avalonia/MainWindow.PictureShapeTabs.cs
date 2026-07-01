@@ -4,6 +4,8 @@ using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Free.Shared.Ribbon;
+using Free.Shared.Shell.Avalonia;
 using FreeX.App.Presentation.DrawingUI;
 using FreeX.App.Services;
 using FreeX.Core.Commands;
@@ -25,6 +27,8 @@ namespace FreeX.App.Avalonia;
 /// </summary>
 public sealed partial class MainWindow
 {
+    private static AvaloniaCompactDialogChromeStyle PictureShapeDialogChromeStyle => new(FormulaBarFontFamily);
+
     /// <summary>
     /// Picture/Shape Format command id -> handler entries. Merge these into
     /// <see cref="BuildContextualTabCommands"/> (they replace the four Phase-1 picture/shape shells and add
@@ -32,60 +36,35 @@ public sealed partial class MainWindow
     /// </summary>
     private IEnumerable<KeyValuePair<string, Action>> BuildPictureShapeTabCommands()
     {
-        return new Dictionary<string, Action>(StringComparer.Ordinal)
-        {
-            // --- Picture Format (picture.selected). ---
-            // Format Picture dialog — size (W/H + lock aspect), rotation, and alt text via FormatPicturePlanner,
-            // applied through ResizePictureCommand / SetPictureLockAspectRatioCommand /
-            // SetDrawingObjectRotationCommand / SetPictureAltTextCommand.
-            ["pictureFormat.formatPicture"] = () => RunGuarded(OpenFormatPictureDialogAsync),
-            // Crop Picture is a dropdown: its "Crop..." menu item opens the per-edge crop-percentage dialog
-            // (PictureCropDialogPlanner + SetPictureCropCommand, image pictures only); "Reset Crop" clears the
-            // crop. The dropdown PARENT only opens the menu (the renderer never invokes a dropdown's own
-            // command), so it stays a registered, enabled no-op-style hint.
-            ["pictureFormat.crop"] = () => RefreshShell(UiText.Get("PictureCrop_Title")),
-            ["Crop"] = () => RunGuarded(OpenPictureCropDialogAsync),
-            ["Reset Crop"] = () => ResetSelectedPictureCrop(),
-            // Picture z-order: real, via the cross-kind MoveSelectionPaneObjectCommand (same Core path the
-            // Selection Pane uses for one-step z-order moves), preserving undo/redo.
-            ["pictureFormat.bringForward"] = () => BringSelectedPictureForward(),
-            ["pictureFormat.sendBackward"] = () => SendSelectedPictureBackward(),
-            ["pictureFormat.selectionPane"] = () => RunGuarded(OpenSelectionPaneDialogAsync),
-            ["pictureFormat.rotate"] = () => RunGuarded(RotateSelectedDrawingObjectAsync),
-            ["pictureFormat.size"] = () => RunGuarded(ResizeSelectedDrawingObjectAsync),
-            ["pictureFormat.altText"] = () => RunGuarded(EditSelectedDrawingObjectAltTextAsync),
+        var commands = new Dictionary<string, Action>(StringComparer.Ordinal);
+        foreach (var spec in DrawingObjectContextualRibbonPlanner.CreatePictureShapeCommandSpecs())
+            commands[spec.CommandId] = CreatePictureShapeTabCommand(spec);
 
-            // --- Shape Format (shape.selected). ---
-            ["shapeFormat.shapeFill"] = () => RunGuarded(SetSelectedShapeFillColorAsync),
-            ["shapeFormat.shapeOutline"] = () => RunGuarded(SetSelectedShapeOutlineColorAsync),
-            // Shape Gradient dialog — start/end stop colors + direction via ShapeGradientPlanner, applied through
-            // SetDrawingShapeGradientCommand.
-            ["shapeFormat.shapeGradient"] = () => RunGuarded(OpenShapeGradientDialogAsync),
-            // Shape Effects is a dropdown whose eight menu items (No Effect / Shadow / Inner Shadow / Reflection
-            // / Glow / Soft Edges / Bevel / 3-D Rotation) are now all wired to apply the matching preset through
-            // SetDrawingShapeEffectCommand. The preset catalog (presets + labels) is single-sourced in the
-            // portable ShapeEffectsPlanner. The dropdown PARENT only opens the menu (the renderer never invokes
-            // a dropdown's own command), so it stays a registered, enabled menu hint. The two legacy
-            // shapeEffectNone/shapeEffectShadow aliases are preserved for backward compatibility.
-            ["shapeFormat.shapeEffectNone"] = () => ApplySelectedShapeEffect(DrawingShapeEffectPreset.None),
-            ["shapeFormat.shapeEffectShadow"] = () => ApplySelectedShapeEffect(DrawingShapeEffectPreset.Shadow),
-            ["shapeFormat.shapeEffects"] = () => RunGuarded(OpenShapeEffectsDialogAsync),
-            ["No Effect"] = () => ApplySelectedShapeEffect(DrawingShapeEffectPreset.None),
-            ["Shadow"] = () => ApplySelectedShapeEffect(DrawingShapeEffectPreset.Shadow),
-            ["Inner Shadow"] = () => ApplySelectedShapeEffect(DrawingShapeEffectPreset.InnerShadow),
-            ["Reflection"] = () => ApplySelectedShapeEffect(DrawingShapeEffectPreset.Reflection),
-            ["Glow"] = () => ApplySelectedShapeEffect(DrawingShapeEffectPreset.Glow),
-            ["Soft Edges"] = () => ApplySelectedShapeEffect(DrawingShapeEffectPreset.SoftEdges),
-            ["Bevel"] = () => ApplySelectedShapeEffect(DrawingShapeEffectPreset.Bevel),
-            ["3-D Rotation"] = () => ApplySelectedShapeEffect(DrawingShapeEffectPreset.ThreeDRotation),
-            ["shapeFormat.bringForward"] = () => BringSelectedShapeForward(),
-            ["shapeFormat.sendBackward"] = () => SendSelectedShapeBackward(),
-            ["shapeFormat.selectionPane"] = () => RunGuarded(OpenSelectionPaneDialogAsync),
-            ["shapeFormat.rotate"] = () => RunGuarded(RotateSelectedDrawingObjectAsync),
-            ["shapeFormat.size"] = () => RunGuarded(ResizeSelectedDrawingObjectAsync),
-            ["shapeFormat.altText"] = () => RunGuarded(EditSelectedDrawingObjectAltTextAsync),
-        };
+        return commands;
     }
+
+    private Action CreatePictureShapeTabCommand(DrawingObjectContextualCommandSpec spec) =>
+        spec.Action switch
+        {
+            DrawingObjectContextualCommandAction.FormatPicture => () => RunGuarded(OpenFormatPictureDialogAsync),
+            DrawingObjectContextualCommandAction.PictureCropMenuHint => () => RefreshShell(UiText.Get("PictureCrop_Title")),
+            DrawingObjectContextualCommandAction.CropPicture => () => RunGuarded(OpenPictureCropDialogAsync),
+            DrawingObjectContextualCommandAction.ResetPictureCrop => ResetSelectedPictureCrop,
+            DrawingObjectContextualCommandAction.BringPictureForward => BringSelectedPictureForward,
+            DrawingObjectContextualCommandAction.SendPictureBackward => SendSelectedPictureBackward,
+            DrawingObjectContextualCommandAction.SelectionPane => () => RunGuarded(OpenSelectionPaneDialogAsync),
+            DrawingObjectContextualCommandAction.RotateObject => () => RunGuarded(RotateSelectedDrawingObjectAsync),
+            DrawingObjectContextualCommandAction.ResizeObject => () => RunGuarded(ResizeSelectedDrawingObjectAsync),
+            DrawingObjectContextualCommandAction.EditAltText => () => RunGuarded(EditSelectedDrawingObjectAltTextAsync),
+            DrawingObjectContextualCommandAction.ShapeFill => () => RunGuarded(SetSelectedShapeFillColorAsync),
+            DrawingObjectContextualCommandAction.ShapeOutline => () => RunGuarded(SetSelectedShapeOutlineColorAsync),
+            DrawingObjectContextualCommandAction.ShapeGradient => () => RunGuarded(OpenShapeGradientDialogAsync),
+            DrawingObjectContextualCommandAction.ShapeEffectsDialog => () => RunGuarded(OpenShapeEffectsDialogAsync),
+            DrawingObjectContextualCommandAction.ShapeEffectPreset => () => ApplySelectedShapeEffect(spec.EffectPreset ?? DrawingShapeEffectPreset.None),
+            DrawingObjectContextualCommandAction.BringShapeForward => BringSelectedShapeForward,
+            DrawingObjectContextualCommandAction.SendShapeBackward => SendSelectedShapeBackward,
+            _ => throw new NotSupportedException($"Unsupported picture/shape contextual action: {spec.Action}")
+        };
 
     // -------------------------------------------------------------------------------------------------------
     // Selected-object resolution
@@ -94,12 +73,15 @@ public sealed partial class MainWindow
     /// <summary>
     /// Resolves the selected picture on the active sheet, or reports an explanatory status and returns null.
     /// </summary>
-    private bool HasSelectedPictureForRibbonCommand() =>
-        DrawingTargetResolver.ResolveSelectedPicture(
-                _session.ActiveSheet,
-                _selectedDrawingObjectKind,
-                _selectedDrawingObjectId)
-            .HasTarget;
+    private RibbonCommandState GetDrawingObjectContextualRibbonCommandState(
+        DrawingObjectContextualRibbonCommand command)
+    {
+        var plan = DrawingObjectContextualRibbonPlanner.Build(
+            _session.ActiveSheet,
+            _selectedDrawingObjectKind,
+            _selectedDrawingObjectId);
+        return new RibbonCommandState(IsEnabled: plan.IsEnabled(command));
+    }
 
     private PictureModel? ResolveSelectedPicture()
     {
@@ -142,6 +124,33 @@ public sealed partial class MainWindow
         return null;
     }
 
+    private DrawingObjectFormatTarget? ResolveSelectedFormatTarget()
+    {
+        var result = DrawingObjectFormatCommandPolicy.ResolveSelectedFormatTarget(
+            _session.ActiveSheet,
+            _selectedDrawingObjectKind,
+            _selectedDrawingObjectId);
+        if (result.Target is { } target)
+            return target;
+
+        RefreshShell(UiText.Get(result.Failure == DrawingObjectSelectionFailure.MissingSelection
+            ? "Drawing_SelectObjectFirst"
+            : "Drawing_ObjectNoLongerAvailable"));
+        return null;
+    }
+
+    private DrawingObjectFormatTarget? ResolveSelectedFillOutlineTarget()
+    {
+        if (ResolveSelectedFormatTarget() is not { } target)
+            return null;
+
+        if (DrawingObjectFormatCommandPolicy.SupportsFillAndOutline(target.Kind))
+            return target;
+
+        RefreshShell(UiText.Get("Drawing_SelectObjectFirst"));
+        return null;
+    }
+
     /// <summary>Runs a drawing-object command and reports success/failure on the status bar.</summary>
     private void RunDrawingObjectCommand(IWorkbookCommand command, string successStatus, string failurePrefix)
     {
@@ -155,38 +164,23 @@ public sealed partial class MainWindow
         RefreshShell(successStatus);
     }
 
+    private static string FormatDrawingObjectResourceText(DrawingObjectResourceText text) =>
+        text.Arguments.Length == 0
+            ? UiText.Get(text.ResourceKey)
+            : UiText.Format(text.ResourceKey, text.Arguments);
+
     // -------------------------------------------------------------------------------------------------------
-    // Shape z-order (shared drawing-object command planner)
+    // Drawing-object z-order (shared target policy + command planner)
     // -------------------------------------------------------------------------------------------------------
 
     private void BringSelectedShapeForward()
     {
-        if (ResolveSelectedShape() is not { } shape)
-            return;
-
-        RunDrawingObjectCommand(
-            DrawingObjectCommandPlanner.BuildZOrderCommand(
-                _session.ActiveSheet.Id,
-                SelectionPaneObjectKind.Shape,
-                shape.Id,
-                forward: true),
-            UiText.Get("InsertLoc_BroughtShapeForward"),
-            UiText.Get("InsertLoc_BringForwardLabel"));
+        ReorderSelectedDrawingObject(forward: true);
     }
 
     private void SendSelectedShapeBackward()
     {
-        if (ResolveSelectedShape() is not { } shape)
-            return;
-
-        RunDrawingObjectCommand(
-            DrawingObjectCommandPlanner.BuildZOrderCommand(
-                _session.ActiveSheet.Id,
-                SelectionPaneObjectKind.Shape,
-                shape.Id,
-                forward: false),
-            UiText.Get("InsertLoc_SentShapeBackward"),
-            UiText.Get("InsertLoc_SendBackwardLabel"));
+        ReorderSelectedDrawingObject(forward: false);
     }
 
     // -------------------------------------------------------------------------------------------------------
@@ -196,32 +190,27 @@ public sealed partial class MainWindow
 
     private void BringSelectedPictureForward()
     {
-        if (ResolveSelectedPicture() is not { } picture)
-            return;
-
-        RunDrawingObjectCommand(
-            DrawingObjectCommandPlanner.BuildZOrderCommand(
-                _session.ActiveSheet.Id,
-                SelectionPaneObjectKind.Picture,
-                picture.Id,
-                forward: true),
-            UiText.Get("Drawing_PictureBroughtForward"),
-            UiText.Get("Drawing_BringForwardLabel"));
+        ReorderSelectedDrawingObject(forward: true);
     }
 
     private void SendSelectedPictureBackward()
     {
-        if (ResolveSelectedPicture() is not { } picture)
+        ReorderSelectedDrawingObject(forward: false);
+    }
+
+    private void ReorderSelectedDrawingObject(bool forward)
+    {
+        if (ResolveSelectedFormatTarget() is not { } target)
             return;
 
         RunDrawingObjectCommand(
             DrawingObjectCommandPlanner.BuildZOrderCommand(
                 _session.ActiveSheet.Id,
-                SelectionPaneObjectKind.Picture,
-                picture.Id,
-                forward: false),
-            UiText.Get("Drawing_PictureSentBackward"),
-            UiText.Get("Drawing_SendBackwardLabel"));
+                DrawingObjectCommandPlanner.ToSelectionPaneObjectKind(target.Kind),
+                target.Id,
+                forward),
+            FormatDrawingObjectResourceText(DrawingObjectActionPlanner.ZOrderSuccess(target.Kind, forward)),
+            forward ? UiText.Get("Drawing_BringForwardLabel") : UiText.Get("Drawing_SendBackwardLabel"));
     }
 
     // -------------------------------------------------------------------------------------------------------
@@ -232,19 +221,25 @@ public sealed partial class MainWindow
     {
         if (_isOpening || _isSaving)
             return;
-        if (ResolveSelectedShape() is not { } shape)
+        if (ResolveSelectedFillOutlineTarget() is not { } target)
             return;
 
-        var initial = shape.FillColor ?? DrawingShapeModel.DefaultFillColor;
+        var initial =
+            DrawingObjectFormatCommandPolicy.ResolveFillColor(target.Target, _session.Workbook.Theme) ??
+            DrawingShapeModel.ResolveDefaultFillColor(_session.Workbook.Theme);
         var color = await ShowMoreColorsDialogAsync(UiText.Get("InsertLoc_ShapeFillTitle"), initial);
         if (color is not { } chosen)
             return;
-        if (ResolveSelectedShape() is not { } current)
+        if (ResolveSelectedFillOutlineTarget() is not { } current)
             return;
 
         RunDrawingObjectCommand(
-            new SetDrawingShapeColorsCommand(_session.ActiveSheet.Id, current.Id, fillColor: chosen, outlineColor: null, updateFill: true, updateOutline: false),
-            UiText.Format("InsertLoc_ShapeFillSet", FormatHex(chosen)),
+            DrawingObjectCommandPlanner.BuildFillColorCommand(
+                _session.ActiveSheet.Id,
+                current.Kind,
+                current.Id,
+                chosen),
+            FormatDrawingObjectResourceText(DrawingObjectActionPlanner.ShapeFillSuccess(FormatHex(chosen))),
             UiText.Get("InsertLoc_ShapeFillTitle"));
     }
 
@@ -252,43 +247,24 @@ public sealed partial class MainWindow
     {
         if (_isOpening || _isSaving)
             return;
-        if (ResolveSelectedShape() is not { } shape)
+        if (ResolveSelectedFillOutlineTarget() is not { } target)
             return;
 
-        var initial = shape.OutlineColor ?? DrawingShapeModel.DefaultOutlineColor;
+        var initial = DrawingObjectFormatCommandPolicy.ResolveOutlineColor(target.Target, _session.Workbook.Theme);
         var color = await ShowMoreColorsDialogAsync(UiText.Get("InsertLoc_ShapeOutlineTitle"), initial);
         if (color is not { } chosen)
             return;
-        if (ResolveSelectedShape() is not { } current)
+        if (ResolveSelectedFillOutlineTarget() is not { } current)
             return;
 
         RunDrawingObjectCommand(
-            new SetDrawingShapeColorsCommand(_session.ActiveSheet.Id, current.Id, fillColor: null, outlineColor: chosen, updateFill: false, updateOutline: true),
-            UiText.Format("InsertLoc_ShapeOutlineSet", FormatHex(chosen)),
+            DrawingObjectCommandPlanner.BuildOutlineColorCommand(
+                _session.ActiveSheet.Id,
+                current.Kind,
+                current.Id,
+                chosen),
+            FormatDrawingObjectResourceText(DrawingObjectActionPlanner.ShapeOutlineSuccess(FormatHex(chosen))),
             UiText.Get("InsertLoc_ShapeOutlineTitle"));
-    }
-
-    private async System.Threading.Tasks.Task SetSelectedShapeGradientAsync()
-    {
-        if (_isOpening || _isSaving)
-            return;
-        if (ResolveSelectedShape() is not { } shape)
-            return;
-
-        var startInitial = shape.FillColor ?? DrawingShapeModel.DefaultFillColor;
-        var start = await ShowMoreColorsDialogAsync(UiText.Get("InsertLoc_GradientStartColor"), startInitial);
-        if (start is not { } startColor)
-            return;
-        var end = await ShowMoreColorsDialogAsync(UiText.Get("InsertLoc_GradientEndColor"), new CellColor(0xFF, 0xFF, 0xFF));
-        if (end is not { } endColor)
-            return;
-        if (ResolveSelectedShape() is not { } current)
-            return;
-
-        RunDrawingObjectCommand(
-            new SetDrawingShapeGradientCommand(_session.ActiveSheet.Id, current.Id, startColor, endColor),
-            UiText.Format("InsertLoc_ShapeGradientSet", FormatHex(startColor), FormatHex(endColor)),
-            UiText.Get("InsertLoc_ShapeGradientTitle"));
     }
 
     private void ApplySelectedShapeEffect(DrawingShapeEffectPreset preset)
@@ -299,9 +275,8 @@ public sealed partial class MainWindow
         // Single-source the preset normalization through the portable ShapeEffectsPlanner so an unsupported
         // value collapses to None identically across shells.
         var normalized = ShapeEffectsPlanner.NormalizePreset(preset);
-        var status = normalized == DrawingShapeEffectPreset.None
-            ? UiText.Get("ShapeEffects_Cleared")
-            : UiText.Format("ShapeEffects_Applied", ShapeEffectPresetLabel(normalized));
+        var status = FormatDrawingObjectResourceText(
+            DrawingObjectActionPlanner.ShapeEffectSuccess(normalized, ShapeEffectPresetLabel(normalized)));
         RunDrawingObjectCommand(
             new SetDrawingShapeEffectCommand(_session.ActiveSheet.Id, shape.Id, normalized),
             status,
@@ -328,42 +303,24 @@ public sealed partial class MainWindow
     {
         if (_isOpening || _isSaving)
             return;
-
-        double current;
-        SelectionPaneObjectKind kind;
-        Guid id;
-        switch (_selectedDrawingObjectKind)
-        {
-            case SelectionPaneObjectKind.Picture when ResolveSelectedPicture() is { } picture:
-                current = picture.RotationDegrees;
-                kind = SelectionPaneObjectKind.Picture;
-                id = picture.Id;
-                break;
-            case SelectionPaneObjectKind.Shape when ResolveSelectedShape() is { } shape:
-                current = shape.RotationDegrees;
-                kind = SelectionPaneObjectKind.Shape;
-                id = shape.Id;
-                break;
-            default:
-                RefreshShell(UiText.Get("InsertLoc_SelectPictureOrShapeFirst"));
-                return;
-        }
+        if (ResolveSelectedFormatTarget() is not { } target)
+            return;
 
         var input = await ShowSingleValueDialogAsync(
             UiText.Get("InsertLoc_RotateObjectTitle"),
             UiText.Get("InsertLoc_RotationDegreesPrompt"),
-            current.ToString("0.##", CultureInfo.CurrentCulture));
+            target.Values.RotationDegrees.ToString("0.##", CultureInfo.CurrentCulture));
         if (input is null)
             return;
-        if (!double.TryParse(input, NumberStyles.Float, CultureInfo.CurrentCulture, out var degrees))
+        if (!FormatPicturePlanner.TryCreateRotationResult(input, out var rotation) || rotation is null)
         {
             ShowEditIssue(UiText.Get("InsertLoc_EnterValidRotation"));
             return;
         }
 
         RunDrawingObjectCommand(
-            DrawingObjectCommandPlanner.BuildRotateCommand(_session.ActiveSheet.Id, kind, id, degrees),
-            UiText.Format("InsertLoc_RotatedObject", degrees),
+            DrawingObjectFormatCommandPolicy.BuildRotationCommand(_session.ActiveSheet.Id, target, rotation),
+            FormatDrawingObjectResourceText(DrawingObjectActionPlanner.RotationSuccess(rotation)),
             UiText.Get("InsertLoc_RotateObjectTitle"));
     }
 
@@ -375,48 +332,19 @@ public sealed partial class MainWindow
     {
         if (_isOpening || _isSaving)
             return;
+        if (ResolveSelectedFormatTarget() is not { } target)
+            return;
 
-        double width;
-        double height;
-        SelectionPaneObjectKind kind;
-        Guid id;
-
-        switch (_selectedDrawingObjectKind)
-        {
-            case SelectionPaneObjectKind.Picture when ResolveSelectedPicture() is { } picture:
-                width = picture.Width;
-                height = picture.Height;
-                kind = SelectionPaneObjectKind.Picture;
-                id = picture.Id;
-                break;
-            case SelectionPaneObjectKind.Shape when ResolveSelectedShape() is { } shape:
-                width = shape.Width;
-                height = shape.Height;
-                kind = SelectionPaneObjectKind.Shape;
-                id = shape.Id;
-                break;
-            default:
-                RefreshShell(UiText.Get("InsertLoc_SelectPictureOrShapeFirst"));
-                return;
-        }
-
-        var size = await ShowSizeDialogAsync(width, height);
+        var size = await ShowSizeDialogAsync(target.Values.Width, target.Values.Height);
         if (size is not { } chosen)
             return;
-        if (_selectedDrawingObjectId is null)
-        {
-            RefreshShell(UiText.Get("InsertLoc_ObjectNoLongerAvailable"));
-            return;
-        }
 
         RunDrawingObjectCommand(
-            DrawingObjectCommandPlanner.BuildResizeCommand(
+            DrawingObjectFormatCommandPolicy.BuildResizeCommand(
                 _session.ActiveSheet.Id,
-                kind,
-                id,
-                chosen.Width,
-                chosen.Height),
-            UiText.Format("InsertLoc_ResizedObject", chosen.Width, chosen.Height),
+                target,
+                chosen),
+            FormatDrawingObjectResourceText(DrawingObjectActionPlanner.ResizeSuccess(chosen)),
             UiText.Get("InsertLoc_ObjectSizeTitle"));
     }
 
@@ -428,44 +356,20 @@ public sealed partial class MainWindow
     {
         if (_isOpening || _isSaving)
             return;
-
-        string? current;
-        SelectionPaneObjectKind kind;
-        Guid id;
-
-        switch (_selectedDrawingObjectKind)
-        {
-            case SelectionPaneObjectKind.Picture when ResolveSelectedPicture() is { } picture:
-                current = picture.AltText;
-                kind = SelectionPaneObjectKind.Picture;
-                id = picture.Id;
-                break;
-            case SelectionPaneObjectKind.Shape when ResolveSelectedShape() is { } shape:
-                current = shape.AltText;
-                kind = SelectionPaneObjectKind.Shape;
-                id = shape.Id;
-                break;
-            default:
-                RefreshShell(UiText.Get("InsertLoc_SelectPictureOrShapeFirst"));
-                return;
-        }
+        if (ResolveSelectedFormatTarget() is not { } target)
+            return;
 
         var input = await ShowSingleValueDialogAsync(
             UiText.Get("InsertLoc_AltTextTitle"),
             UiText.Get("InsertLoc_AltTextPrompt"),
-            current ?? string.Empty,
+            target.Values.AltText,
             multiline: true);
         if (input is null)
             return;
-        if (_selectedDrawingObjectId is null)
-        {
-            RefreshShell(UiText.Get("InsertLoc_ObjectNoLongerAvailable"));
-            return;
-        }
 
         RunDrawingObjectCommand(
-            DrawingObjectCommandPlanner.BuildAltTextCommand(_session.ActiveSheet.Id, kind, id, input),
-            string.IsNullOrWhiteSpace(input) ? UiText.Get("InsertLoc_AltTextCleared") : UiText.Get("InsertLoc_AltTextUpdated"),
+            DrawingObjectFormatCommandPolicy.BuildAltTextCommand(_session.ActiveSheet.Id, target, input),
+            FormatDrawingObjectResourceText(DrawingObjectActionPlanner.AltTextSuccess(input)),
             UiText.Get("InsertLoc_AltTextTitle"));
     }
 
@@ -487,6 +391,7 @@ public sealed partial class MainWindow
             TextWrapping = multiline ? TextWrapping.Wrap : TextWrapping.NoWrap,
             MinHeight = multiline ? 64 : double.NaN,
         };
+        AvaloniaCompactDialogChrome.ApplyTextBox(input, PictureShapeDialogChromeStyle, fixedHeight: !multiline);
         AutomationProperties.SetAutomationId(input, "PictureShapeInputBox");
 
         var dialog = new Window
@@ -506,8 +411,8 @@ public sealed partial class MainWindow
         var cancelButton = new Button { Content = UiText.Get("InsertLoc_CancelButton"), Width = 80, IsCancel = true };
         AutomationProperties.SetAutomationId(cancelButton, "PictureShapeInputCancelButton");
         cancelButton.Click += (_, _) => dialog.Close((string?)null);
-        ApplyDialogButtonChrome(okButton, 80, isDefault: true);
-        ApplyDialogButtonChrome(cancelButton, 80);
+        AvaloniaCompactDialogChrome.ApplyButton(okButton, PictureShapeDialogChromeStyle, 80, isDefault: true);
+        AvaloniaCompactDialogChrome.ApplyButton(cancelButton, PictureShapeDialogChromeStyle, 80);
 
         dialog.Content = new StackPanel
         {
@@ -518,45 +423,43 @@ public sealed partial class MainWindow
             {
                 new TextBlock { Text = prompt },
                 input,
-                new StackPanel
-                {
-                    Orientation = Orientation.Horizontal,
-                    Spacing = 8,
-                    HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-                    Children = { okButton, cancelButton },
-                },
+                AvaloniaCompactDialogChrome.CreateActionRow([okButton, cancelButton]),
             },
         };
 
         return await dialog.ShowDialog<string?>(this);
     }
 
-    private async System.Threading.Tasks.Task<(double Width, double Height)?> ShowSizeDialogAsync(
+    private async System.Threading.Tasks.Task<ObjectSizeDialogSize?> ShowSizeDialogAsync(
         double initialWidth,
         double initialHeight)
     {
+        var state = ObjectSizeDialogPlanner.CreateState(
+            initialWidth,
+            initialHeight,
+            ObjectSizeDialogField.Width,
+            ObjectSizeDialogField.Width,
+            CultureInfo.CurrentCulture);
         var widthBox = new TextBox
         {
-            Text = initialWidth.ToString("0.##", CultureInfo.CurrentCulture),
+            Text = state.WidthText,
             Width = 120,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
         };
+        AvaloniaCompactDialogChrome.ApplyTextBox(widthBox, PictureShapeDialogChromeStyle);
         AutomationProperties.SetAutomationId(widthBox, "ObjectSizeWidthBox");
 
         var heightBox = new TextBox
         {
-            Text = initialHeight.ToString("0.##", CultureInfo.CurrentCulture),
+            Text = state.HeightText,
             Width = 120,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
         };
+        AvaloniaCompactDialogChrome.ApplyTextBox(heightBox, PictureShapeDialogChromeStyle);
         AutomationProperties.SetAutomationId(heightBox, "ObjectSizeHeightBox");
 
-        var warning = new TextBlock
-        {
-            Foreground = Brush(180, 30, 30),
-            TextWrapping = TextWrapping.Wrap,
-            IsVisible = false,
-        };
+        var warning = new TextBlock();
+        AvaloniaCompactDialogChrome.ApplyValidationStatus(warning, PictureShapeDialogChromeStyle);
 
         var dialog = new Window
         {
@@ -572,23 +475,24 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(okButton, "ObjectSizeOkButton");
         okButton.Click += (_, _) =>
         {
-            if (!double.TryParse(widthBox.Text, NumberStyles.Float, CultureInfo.CurrentCulture, out var w) ||
-                !double.TryParse(heightBox.Text, NumberStyles.Float, CultureInfo.CurrentCulture, out var h) ||
-                !(w > 0) || !(h > 0))
+            if (!ObjectSizeDialogPlanner.TryCreateSize(
+                    new ObjectSizeDialogSubmission(widthBox.Text, heightBox.Text, state.FirstInvalidField),
+                    out var size,
+                    out _))
             {
                 warning.Text = UiText.Get("InsertLoc_EnterPositiveSize");
                 warning.IsVisible = true;
                 return;
             }
 
-            dialog.Close(((double, double)?)(w, h));
+            dialog.Close((ObjectSizeDialogSize?)size);
         };
 
         var cancelButton = new Button { Content = UiText.Get("InsertLoc_CancelButton"), Width = 80, IsCancel = true };
         AutomationProperties.SetAutomationId(cancelButton, "ObjectSizeCancelButton");
-        cancelButton.Click += (_, _) => dialog.Close(((double, double)?)null);
-        ApplyDialogButtonChrome(okButton, 80, isDefault: true);
-        ApplyDialogButtonChrome(cancelButton, 80);
+        cancelButton.Click += (_, _) => dialog.Close((ObjectSizeDialogSize?)null);
+        AvaloniaCompactDialogChrome.ApplyButton(okButton, PictureShapeDialogChromeStyle, 80, isDefault: true);
+        AvaloniaCompactDialogChrome.ApplyButton(cancelButton, PictureShapeDialogChromeStyle, 80);
 
         StackPanel Row(string label, TextBox box) => new()
         {
@@ -612,17 +516,10 @@ public sealed partial class MainWindow
                 Row(UiText.Get("InsertLoc_WidthLabel"), widthBox),
                 Row(UiText.Get("InsertLoc_HeightLabel"), heightBox),
                 warning,
-                new StackPanel
-                {
-                    Orientation = Orientation.Horizontal,
-                    Spacing = 8,
-                    HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-                    Children = { okButton, cancelButton },
-                },
+                AvaloniaCompactDialogChrome.CreateActionRow([okButton, cancelButton]),
             },
         };
 
-        var result = await dialog.ShowDialog<(double, double)?>(this);
-        return result is { } tuple ? (tuple.Item1, tuple.Item2) : null;
+        return await dialog.ShowDialog<ObjectSizeDialogSize?>(this);
     }
 }

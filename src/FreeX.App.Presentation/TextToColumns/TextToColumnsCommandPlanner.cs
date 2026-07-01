@@ -1,0 +1,28 @@
+using FreeX.Core.Commands;
+using FreeX.Core.Model;
+
+namespace FreeX.App.Presentation.TextToColumns;
+
+public static class TextToColumnsCommandPlanner
+{
+    public static IWorkbookCommand CreateCommand(
+        Workbook workbook,
+        IReadOnlyList<SheetId> targetSheetIds,
+        SheetId currentSheetId,
+        GridRange sourceRange,
+        TextToColumnsDialogResult result)
+    {
+        var plans = TextToColumnsApplyPlanner.BuildSheetPlans(workbook, targetSheetIds, sourceRange, result);
+        if (plans.Count <= 1)
+        {
+            var plan = plans.Count == 0 ? null : plans[0];
+            return new EditCellsCommand(plan?.SheetId ?? currentSheetId, plan?.Edits ?? []);
+        }
+
+        return new CompositeWorkbookCommand(
+            "Text to Columns",
+            plans
+                .Select(plan => (IWorkbookCommand)new EditCellsCommand(plan.SheetId, plan.Edits))
+                .ToList());
+    }
+}

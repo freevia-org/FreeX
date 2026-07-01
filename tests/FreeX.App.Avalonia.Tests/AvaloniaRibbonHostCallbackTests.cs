@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 
 using FreeX.App.Avalonia.Ribbon;
+using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.Ribbon.Definitions;
 using Free.Shared.Ribbon;
 
@@ -54,7 +55,7 @@ public sealed class AvaloniaRibbonHostCallbackTests
         var registry = AvaloniaRibbonComposition.BuildRegistry(() => null, _ => { }, AllWired());
 
         Assert.True(registry.TryGet(Canonical(commandId), out var command));
-        Assert.IsType<RelayRibbonCommand>(command);
+        Assert.IsType<ActionRibbonCommand>(command);
     }
 
     [Theory]
@@ -66,7 +67,7 @@ public sealed class AvaloniaRibbonHostCallbackTests
         var registry = AvaloniaRibbonComposition.BuildRegistry(() => null, _ => { });
 
         Assert.True(registry.TryGet(Canonical(commandId), out var command));
-        Assert.IsType<NoOpRibbonCommand>(command);
+        Assert.IsType<EmptyRibbonCommand>(command);
     }
 
     [Fact]
@@ -126,7 +127,7 @@ public sealed class AvaloniaRibbonHostCallbackTests
         var registry = AvaloniaRibbonComposition.BuildRegistry(() => null, _ => { }, callbacks);
 
         Assert.True(registry.TryGet(Canonical("home.bordersAll"), out var c));
-        Assert.IsType<RelayRibbonCommand>(c);
+        Assert.IsType<ActionRibbonCommand>(c);
 
         Execute(registry, "home.fmtGeneral");
         Execute(registry, "home.fmtDate");
@@ -184,6 +185,9 @@ public sealed class AvaloniaRibbonHostCallbackTests
     [InlineData("formulas.autoSum")]
     [InlineData("review.protectSheet")]
     [InlineData("review.checkAccessibility")]
+    [InlineData("review.convertNotesToComments")]
+    [InlineData("help.copyDiagnostics")]
+    [InlineData("help.legalNotices")]
     [InlineData("view.gridlines")]
     [InlineData("view.freezePanes")]
     [InlineData("view.zoom100")]
@@ -263,7 +267,7 @@ public sealed class AvaloniaRibbonHostCallbackTests
         // The canonical id exists in the shared definition (so it seeds a NoOp default to begin with) ...
         var defaults = AvaloniaRibbonComposition.BuildRegistry(() => null, _ => { });
         Assert.True(defaults.TryGet(Canonical(commandId), out var noOp));
-        Assert.IsType<NoOpRibbonCommand>(noOp);
+        Assert.IsType<EmptyRibbonCommand>(noOp);
 
         // ... and ExtraCommands (how MainWindow wires the new tabs) overrides it with a real command.
         var wired = AvaloniaRibbonComposition.BuildRegistry(() => null, _ => { }, new AvaloniaRibbonHostCallbacks
@@ -271,7 +275,27 @@ public sealed class AvaloniaRibbonHostCallbackTests
             ExtraCommands = new Dictionary<string, Action> { [commandId] = () => { } },
         });
         Assert.True(wired.TryGet(Canonical(commandId), out var command));
-        Assert.IsType<RelayRibbonCommand>(command);
+        Assert.IsType<ActionRibbonCommand>(command);
+    }
+
+    [Fact]
+    public void ConditionalFormatPopupCatalogRows_AreRealRawCommandIds_AndBindViaExtraCommands()
+    {
+        foreach (var item in ConditionalFormatPresetGalleryPlanner.PopupItems)
+        {
+            Assert.Contains(item.CommandId, AvaloniaExtraCommandIds.RawCanonical);
+
+            var defaults = AvaloniaRibbonComposition.BuildRegistry(() => null, _ => { });
+            Assert.True(defaults.TryGet(Canonical(item.CommandId), out var noOp), $"Conditional-format popup id '{item.CommandId}' is not in the shared definition.");
+            Assert.IsType<EmptyRibbonCommand>(noOp);
+
+            var wired = AvaloniaRibbonComposition.BuildRegistry(() => null, _ => { }, new AvaloniaRibbonHostCallbacks
+            {
+                ExtraCommands = new Dictionary<string, Action> { [item.CommandId] = () => { } },
+            });
+            Assert.True(wired.TryGet(Canonical(item.CommandId), out var command));
+            Assert.IsType<ActionRibbonCommand>(command);
+        }
     }
 
     [Fact]
@@ -286,14 +310,14 @@ public sealed class AvaloniaRibbonHostCallbackTests
 
             var defaults = AvaloniaRibbonComposition.BuildRegistry(() => null, _ => { });
             Assert.True(defaults.TryGet(Canonical(id), out var noOp), $"Cell-style id '{id}' is not in the shared definition.");
-            Assert.IsType<NoOpRibbonCommand>(noOp);
+            Assert.IsType<EmptyRibbonCommand>(noOp);
 
             var wired = AvaloniaRibbonComposition.BuildRegistry(() => null, _ => { }, new AvaloniaRibbonHostCallbacks
             {
                 ExtraCommands = new Dictionary<string, Action> { [id] = () => { } },
             });
             Assert.True(wired.TryGet(Canonical(id), out var command));
-            Assert.IsType<RelayRibbonCommand>(command);
+            Assert.IsType<ActionRibbonCommand>(command);
         }
     }
 
@@ -346,7 +370,7 @@ public sealed class AvaloniaRibbonHostCallbackTests
             () => null, _ => { }, new AvaloniaRibbonHostCallbacks { SetFontSize = v => applied = v });
 
         Assert.True(registry.TryGet(Canonical("home.fontSize"), out var command));
-        Assert.IsType<RelayValueRibbonCommand>(command);
+        Assert.IsType<ValueRibbonCommand>(command);
 
         command!.Execute(RibbonCommandContext.ForSelectedValue("14"));
         Assert.Equal("14", applied);
@@ -358,7 +382,7 @@ public sealed class AvaloniaRibbonHostCallbackTests
         var registry = AvaloniaRibbonComposition.BuildRegistry(() => null, _ => { });
 
         Assert.True(registry.TryGet(Canonical("home.fontSize"), out var command));
-        Assert.IsType<NoOpRibbonCommand>(command);
+        Assert.IsType<EmptyRibbonCommand>(command);
     }
 
     [Fact]
@@ -369,7 +393,7 @@ public sealed class AvaloniaRibbonHostCallbackTests
             () => null, _ => { }, new AvaloniaRibbonHostCallbacks { SetFontName = v => applied = v });
 
         Assert.True(registry.TryGet(Canonical("home.fontName"), out var command));
-        Assert.IsType<RelayValueRibbonCommand>(command);
+        Assert.IsType<ValueRibbonCommand>(command);
 
         command!.Execute(RibbonCommandContext.ForSelectedValue("Arial"));
         Assert.Equal("Arial", applied);
@@ -381,7 +405,7 @@ public sealed class AvaloniaRibbonHostCallbackTests
         var registry = AvaloniaRibbonComposition.BuildRegistry(() => null, _ => { });
 
         Assert.True(registry.TryGet(Canonical("home.fontName"), out var command));
-        Assert.IsType<NoOpRibbonCommand>(command);
+        Assert.IsType<EmptyRibbonCommand>(command);
     }
 
     [Fact]
@@ -390,9 +414,9 @@ public sealed class AvaloniaRibbonHostCallbackTests
         var registry = AvaloniaRibbonComposition.BuildRegistry(() => null, _ => { });
 
         Assert.True(registry.TryGet(new RibbonCommandId("Bring Forward"), out var bringForward));
-        Assert.IsType<NoOpRibbonCommand>(bringForward);
+        Assert.IsType<EmptyRibbonCommand>(bringForward);
         Assert.True(registry.TryGet(new RibbonCommandId("Shape Fill"), out var shapeFill));
-        Assert.IsType<NoOpRibbonCommand>(shapeFill);
+        Assert.IsType<EmptyRibbonCommand>(shapeFill);
 
         Assert.True(registry.TryGet(new RibbonCommandId("Crop Picture"), out var crop));
         var cropState = Assert.IsAssignableFrom<IRibbonStatefulCommand>(crop);
@@ -436,8 +460,8 @@ public sealed class AvaloniaRibbonHostCallbackTests
 
         Assert.True(registry.TryGet(Canonical("insert.picture"), out var picture));
         Assert.True(registry.TryGet(Canonical("insert.shapes"), out var shapes));
-        Assert.IsType<RelayRibbonCommand>(picture);
-        Assert.IsType<RelayRibbonCommand>(shapes);
+        Assert.IsType<ActionRibbonCommand>(picture);
+        Assert.IsType<ActionRibbonCommand>(shapes);
     }
 
     [Fact]

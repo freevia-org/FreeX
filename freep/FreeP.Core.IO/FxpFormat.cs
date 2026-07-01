@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Free.Shared.Opc;
 using FreeP.Core.Model;
 
 namespace FreeP.Core.IO;
@@ -82,18 +83,44 @@ public static class FxpFormat
         string? Author,
         string? Subject,
         string? Keywords,
-        string? Comments)
+        string? Comments,
+        string? LastModifiedBy,
+        DateTimeOffset? Created,
+        DateTimeOffset? Modified,
+        string? Category,
+        string? ContentStatus,
+        string? Language,
+        string? Version)
     {
-        public static PropertiesDto FromModel(PresentationProperties p) =>
-            new(p.Title, p.Author, p.Subject, p.Keywords, p.Comments);
+        public static PropertiesDto FromModel(DocumentProperties p) =>
+            new(
+                p.Title,
+                p.Author,
+                p.Subject,
+                p.Keywords,
+                p.Comments,
+                p.LastModifiedBy,
+                p.Created,
+                p.Modified,
+                p.Category,
+                p.ContentStatus,
+                p.Language,
+                p.Version);
 
-        public void ApplyTo(PresentationProperties p)
+        public void ApplyTo(DocumentProperties p)
         {
             p.Title = Title;
             p.Author = Author;
             p.Subject = Subject;
             p.Keywords = Keywords;
             p.Comments = Comments;
+            p.LastModifiedBy = LastModifiedBy;
+            p.Created = Created;
+            p.Modified = Modified;
+            p.Category = Category;
+            p.ContentStatus = ContentStatus;
+            p.Language = Language;
+            p.Version = Version;
         }
     }
 

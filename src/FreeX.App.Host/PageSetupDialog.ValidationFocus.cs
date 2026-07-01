@@ -1,5 +1,5 @@
-using System.Globalization;
 using System.Windows.Controls;
+using System.Windows.Input;
 
 using FreeX.App.Presentation.PageLayout;
 
@@ -7,70 +7,48 @@ namespace FreeX.App.Host;
 
 public partial class PageSetupDialog
 {
-    private void FocusInvalidPrintArea()
+    private void FocusDialogTarget(PageSetupDialogFocusPlan plan)
     {
-        PageSetupTabs.SelectedItem = SheetTab;
-        DialogFocus.FocusAndSelect(PrintAreaBox);
-    }
-
-    private void FocusInvalidPrintTitles()
-    {
-        var target = PageLayoutInputParser.TryParseRepeatRows(RowsRepeatBox.Text, out _)
-            ? ColumnsRepeatBox
-            : RowsRepeatBox;
-        PageSetupTabs.SelectedItem = SheetTab;
-        DialogFocus.FocusAndSelect(target);
-    }
-
-    private void FocusInvalidPageTabNumber(TextBox target)
-    {
-        PageSetupTabs.SelectedItem = PageTab;
-        DialogFocus.FocusAndSelect(target);
-    }
-
-    private void FocusInvalidScalingInput()
-    {
-        TextBox target;
-        if (FitToRadioButton.IsChecked == true)
+        PageSetupTabs.SelectedItem = plan.Route.Tab switch
         {
-            target = int.TryParse(FitPagesWideBox.Text.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var wide) && wide > 0
-                ? FitPagesTallBox
-                : FitPagesWideBox;
-        }
-        else
+            PageSetupDialogTab.Margins => MarginsTab,
+            PageSetupDialogTab.Sheet => SheetTab,
+            _ => PageTab,
+        };
+
+        var target = FocusControlFor(plan.Target);
+        if (target is TextBox textBox)
         {
-            target = ScalePercentBox;
+            DialogFocus.FocusAndSelect(textBox);
+            return;
         }
 
-        PageSetupTabs.SelectedItem = PageTab;
-        DialogFocus.FocusAndSelect(target);
+        target.Focus();
+        Keyboard.Focus(target);
     }
 
-    private void FocusInvalidMarginInput()
-    {
-        foreach (var target in new[] { LeftMarginBox, RightMarginBox, TopMarginBox, BottomMarginBox })
+    private Control FocusControlFor(PageSetupDialogFocusTarget target) =>
+        target switch
         {
-            if (!PageLayoutInputParser.TryParseMarginDistance(target.Text, out _))
-            {
-                FocusMarginsTabTextBox(target);
-                return;
-            }
-        }
-
-        FocusMarginsTabTextBox(LeftMarginBox);
-    }
-
-    private void FocusInvalidHeaderFooterMargin()
-    {
-        FocusMarginsTabTextBox(
-            PageLayoutInputParser.TryParseMarginDistance(HeaderMarginBox.Text, out _)
-                ? FooterMarginBox
-                : HeaderMarginBox);
-    }
-
-    private void FocusMarginsTabTextBox(TextBox target)
-    {
-        PageSetupTabs.SelectedItem = MarginsTab;
-        DialogFocus.FocusAndSelect(target);
-    }
+            PageSetupDialogFocusTarget.PaperSize => PaperSizeBox,
+            PageSetupDialogFocusTarget.Margins => LeftMarginBox,
+            PageSetupDialogFocusTarget.LeftMargin => LeftMarginBox,
+            PageSetupDialogFocusTarget.RightMargin => RightMarginBox,
+            PageSetupDialogFocusTarget.TopMargin => TopMarginBox,
+            PageSetupDialogFocusTarget.BottomMargin => BottomMarginBox,
+            PageSetupDialogFocusTarget.HeaderMargin => HeaderMarginBox,
+            PageSetupDialogFocusTarget.FooterMargin => FooterMarginBox,
+            PageSetupDialogFocusTarget.ScalePercent => ScalePercentBox,
+            PageSetupDialogFocusTarget.FitPagesWide => FitPagesWideBox,
+            PageSetupDialogFocusTarget.FitPagesTall => FitPagesTallBox,
+            PageSetupDialogFocusTarget.FirstPageNumber => FirstPageNumberBox,
+            PageSetupDialogFocusTarget.PrintQuality => PrintQualityBox,
+            PageSetupDialogFocusTarget.PrintArea => PrintAreaBox,
+            PageSetupDialogFocusTarget.RepeatRows => RowsRepeatBox,
+            PageSetupDialogFocusTarget.RepeatColumns => ColumnsRepeatBox,
+            PageSetupDialogFocusTarget.PageOrder => PageOrderBox,
+            PageSetupDialogFocusTarget.PrintErrorValue => PrintErrorValueBox,
+            PageSetupDialogFocusTarget.PrintComments => PrintCommentsBox,
+            _ => OrientationBox,
+        };
 }

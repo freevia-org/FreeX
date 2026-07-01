@@ -1,0 +1,319 @@
+using System.Globalization;
+using FreeP.Core.Model;
+
+namespace FreeP.App.Compositor;
+
+public enum PresentationTransitionCommandIntentKind
+{
+    SetKind,
+    SetDuration,
+    ToggleAdvanceOnClick,
+    SetAdvanceAfter,
+    ApplyToAllSlides,
+}
+
+public sealed record PresentationTransitionCommandPlan(
+    string CommandId,
+    PresentationTransitionCommandIntentKind Intent,
+    TransitionKind? Kind = null);
+
+public static class PresentationTransitionCommandPlanner
+{
+    public const int DefaultDurationMs = 500;
+
+    public static readonly IReadOnlyList<PresentationTransitionCommandPlan> BuiltInPlans =
+        new[]
+        {
+            new PresentationTransitionCommandPlan(
+                "freep.transition.none",
+                PresentationTransitionCommandIntentKind.SetKind,
+                TransitionKind.None),
+            new PresentationTransitionCommandPlan(
+                "freep.transition.fade",
+                PresentationTransitionCommandIntentKind.SetKind,
+                TransitionKind.Fade),
+            new PresentationTransitionCommandPlan(
+                "freep.transition.push",
+                PresentationTransitionCommandIntentKind.SetKind,
+                TransitionKind.Push),
+            new PresentationTransitionCommandPlan(
+                "freep.transition.wipe",
+                PresentationTransitionCommandIntentKind.SetKind,
+                TransitionKind.Wipe),
+            new PresentationTransitionCommandPlan(
+                "freep.transition.split",
+                PresentationTransitionCommandIntentKind.SetKind,
+                TransitionKind.Split),
+            new PresentationTransitionCommandPlan(
+                "freep.transition.cut",
+                PresentationTransitionCommandIntentKind.SetKind,
+                TransitionKind.Cut),
+            new PresentationTransitionCommandPlan(
+                "freep.transition.cover",
+                PresentationTransitionCommandIntentKind.SetKind,
+                TransitionKind.Cover),
+            new PresentationTransitionCommandPlan(
+                "freep.transition.uncover",
+                PresentationTransitionCommandIntentKind.SetKind,
+                TransitionKind.Uncover),
+            new PresentationTransitionCommandPlan(
+                "freep.transition.blinds",
+                PresentationTransitionCommandIntentKind.SetKind,
+                TransitionKind.Blinds),
+            new PresentationTransitionCommandPlan(
+                "freep.transition.dissolve",
+                PresentationTransitionCommandIntentKind.SetKind,
+                TransitionKind.Dissolve),
+            new PresentationTransitionCommandPlan(
+                "freep.transition.zoom",
+                PresentationTransitionCommandIntentKind.SetKind,
+                TransitionKind.Zoom),
+            new PresentationTransitionCommandPlan(
+                "freep.transition.wheel",
+                PresentationTransitionCommandIntentKind.SetKind,
+                TransitionKind.Wheel),
+            new PresentationTransitionCommandPlan(
+                "freep.transition.duration",
+                PresentationTransitionCommandIntentKind.SetDuration),
+            new PresentationTransitionCommandPlan(
+                "freep.transition.advance-on-click",
+                PresentationTransitionCommandIntentKind.ToggleAdvanceOnClick),
+            new PresentationTransitionCommandPlan(
+                "freep.transition.advance-after",
+                PresentationTransitionCommandIntentKind.SetAdvanceAfter),
+            new PresentationTransitionCommandPlan(
+                "freep.transition.apply-all",
+                PresentationTransitionCommandIntentKind.ApplyToAllSlides),
+        };
+
+    public static bool TryPlan(string commandId, out PresentationTransitionCommandPlan plan)
+    {
+        foreach (var candidate in BuiltInPlans)
+        {
+            if (StringComparer.Ordinal.Equals(candidate.CommandId, commandId))
+            {
+                plan = candidate;
+                return true;
+            }
+        }
+
+        plan = default!;
+        return false;
+    }
+
+    public static bool TryApply(
+        EditingSession editor,
+        PresentationTransitionCommandPlan plan,
+        string? selectedValue = null)
+    {
+        ArgumentNullException.ThrowIfNull(editor);
+        ArgumentNullException.ThrowIfNull(plan);
+
+        switch (plan.Intent)
+        {
+            case PresentationTransitionCommandIntentKind.SetKind:
+                if (plan.Kind is not { } kind)
+                {
+                    return false;
+                }
+
+                editor.SetTransition(BuildTransitionForKind(editor.CurrentSlideTransition, kind));
+                return true;
+
+            case PresentationTransitionCommandIntentKind.SetDuration:
+                if (!TryParseSeconds(selectedValue, allowZero: false, out int durationMs))
+                {
+                    return false;
+                }
+
+                editor.SetTransition(BuildDurationTransition(editor.CurrentSlideTransition, durationMs));
+                return true;
+
+            case PresentationTransitionCommandIntentKind.ToggleAdvanceOnClick:
+                editor.SetTransition(BuildAdvanceOnClickTransition(editor.CurrentSlideTransition));
+                return true;
+
+            case PresentationTransitionCommandIntentKind.SetAdvanceAfter:
+                if (!TryParseAdvanceAfterValue(selectedValue, out int advanceAfterMs))
+                {
+                    return false;
+                }
+
+                editor.SetTransition(BuildAdvanceAfterTransition(
+                    editor.CurrentSlideTransition,
+                    advanceAfterMs == 0 ? null : advanceAfterMs));
+                return true;
+
+            case PresentationTransitionCommandIntentKind.ApplyToAllSlides:
+                var transitions = BuildApplyToAllTransitions(
+                    editor.Presentation.Slides.Count,
+                    editor.CurrentSlideTransition);
+                for (int i = 0; i < transitions.Count; i++)
+                {
+                    editor.Presentation.Slides[i].Transition = transitions[i];
+                }
+
+                return true;
+
+            default:
+                return false;
+        }
+    }
+
+    public static SlideTransition? BuildTransitionForKind(
+        SlideTransition? currentTransition,
+        TransitionKind kind)
+    {
+        if (kind == TransitionKind.None)
+        {
+            return null;
+        }
+
+        var transition = CloneTransition(currentTransition) ?? new SlideTransition();
+        transition.Kind = kind;
+        transition.RawXml = null;
+        transition.MorphOption = null;
+        transition.DurationMs = transition.DurationMs <= 0
+            ? DefaultDurationMs
+            : transition.DurationMs;
+        return transition;
+    }
+
+    public static SlideTransition BuildDurationTransition(
+        SlideTransition? currentTransition,
+        int durationMs)
+    {
+        if (durationMs <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(durationMs), durationMs, "Duration must be positive.");
+        }
+
+        var transition = CloneTransition(currentTransition) ?? new SlideTransition();
+        transition.DurationMs = durationMs;
+        return transition;
+    }
+
+    public static SlideTransition BuildAdvanceOnClickTransition(SlideTransition? currentTransition)
+    {
+        var transition = CloneTransition(currentTransition) ?? new SlideTransition();
+        transition.AdvanceOnClick = !transition.AdvanceOnClick;
+        return transition;
+    }
+
+    public static SlideTransition BuildAdvanceAfterTransition(
+        SlideTransition? currentTransition,
+        int? advanceAfterMs)
+    {
+        if (advanceAfterMs is < 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(advanceAfterMs),
+                advanceAfterMs,
+                "Advance-after time cannot be negative.");
+        }
+
+        var transition = CloneTransition(currentTransition) ?? new SlideTransition();
+        transition.AdvanceAfterMs = advanceAfterMs;
+        return transition;
+    }
+
+    public static IReadOnlyList<SlideTransition?> BuildApplyToAllTransitions(
+        int slideCount,
+        SlideTransition? sourceTransition)
+    {
+        if (slideCount < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(slideCount), slideCount, "Slide count cannot be negative.");
+        }
+
+        var transitions = new SlideTransition?[slideCount];
+        for (int i = 0; i < transitions.Length; i++)
+        {
+            transitions[i] = CloneTransition(sourceTransition);
+        }
+
+        return transitions;
+    }
+
+    public static bool TryParseSeconds(string? selectedValue, bool allowZero, out int milliseconds)
+    {
+        var text = selectedValue?.Trim();
+        if (string.IsNullOrEmpty(text))
+        {
+            milliseconds = 0;
+            return false;
+        }
+
+        if (text.EndsWith("sec", StringComparison.OrdinalIgnoreCase))
+        {
+            text = text[..^3].Trim();
+        }
+        else if (text.EndsWith("s", StringComparison.OrdinalIgnoreCase))
+        {
+            text = text[..^1].Trim();
+        }
+
+        if (double.TryParse(
+                text,
+                NumberStyles.Float,
+                CultureInfo.InvariantCulture,
+                out double seconds)
+            && (allowZero ? seconds >= 0 : seconds > 0))
+        {
+            milliseconds = (int)Math.Round(seconds * 1000.0);
+            return true;
+        }
+
+        milliseconds = 0;
+        return false;
+    }
+
+    public static bool TryParseAdvanceAfterValue(string? selectedValue, out int milliseconds)
+    {
+        if (TryParseSeconds(selectedValue, allowZero: true, out milliseconds))
+        {
+            return true;
+        }
+
+        var text = selectedValue?.Trim();
+        if (text is not null &&
+            (StringComparer.OrdinalIgnoreCase.Equals(text, "(none)") ||
+             StringComparer.OrdinalIgnoreCase.Equals(text, "none")))
+        {
+            milliseconds = 0;
+            return true;
+        }
+
+        return false;
+    }
+
+    public static SlideTransition? CloneTransition(SlideTransition? transition)
+    {
+        if (transition is null)
+        {
+            return null;
+        }
+
+        return new SlideTransition
+        {
+            Kind = transition.Kind,
+            Direction = transition.Direction,
+            DurationMs = transition.DurationMs,
+            AdvanceOnClick = transition.AdvanceOnClick,
+            AdvanceAfterMs = transition.AdvanceAfterMs,
+            RawXml = transition.RawXml,
+            MorphOption = transition.MorphOption,
+            Sound = transition.Sound is null
+                ? null
+                : new TransitionSound
+                {
+                    AudioBytes = transition.Sound.AudioBytes,
+                    ContentType = transition.Sound.ContentType,
+                    RelId = transition.Sound.RelId,
+                    PartPath = transition.Sound.PartPath,
+                    Loop = transition.Sound.Loop,
+                    IsBuiltIn = transition.Sound.IsBuiltIn,
+                },
+        };
+    }
+}

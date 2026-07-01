@@ -53,6 +53,27 @@ public sealed class ForecastSheetPlannerTests
     }
 
     [Theory]
+    [InlineData("1", 1u)]
+    [InlineData(" 12 ", 12u)]
+    public void TryParseForecastPeriods_AcceptsPositiveWholeNumbers(string input, uint expected)
+    {
+        ForecastSheetPlanner.TryParseForecastPeriods(input, out var periods).Should().BeTrue();
+        periods.Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("0")]
+    [InlineData("-1")]
+    [InlineData("1.5")]
+    [InlineData("three")]
+    public void TryParseForecastPeriods_RejectsBlankNonNumericAndNonPositiveInput(string input)
+    {
+        ForecastSheetPlanner.TryParseForecastPeriods(input, out var periods).Should().BeFalse();
+        periods.Should().Be(0);
+    }
+
+    [Theory]
     [InlineData(null, ForecastSheetPlanStatus.NoSelection, "")]
     [InlineData("A1:A3", ForecastSheetPlanStatus.SourceRangeRequiresTwoColumns, "A1:A3")]
     [InlineData("A1:C3", ForecastSheetPlanStatus.SourceRangeRequiresTwoColumns, "A1:C3")]

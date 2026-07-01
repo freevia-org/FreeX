@@ -26,6 +26,13 @@ public sealed class PivotDataSourcePlannerTests
     }
 
     [Fact]
+    public void NormalizeReferenceText_TrimsDialogAndRequestText()
+    {
+        PivotDataSourcePlanner.NormalizeReferenceText("  Sheet1!A1:D10  ").Should().Be("Sheet1!A1:D10");
+        PivotDataSourcePlanner.NormalizeReferenceText(null).Should().BeEmpty();
+    }
+
+    [Fact]
     public void TryCreateChange_RejectsEmptyReference()
     {
         var ok = PivotDataSourcePlanner.TryCreateChange("  ", Resolve(Range(1, 1, 5, 3)), out var change, out var error);

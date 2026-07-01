@@ -24,11 +24,13 @@ public sealed class InsertCommandSourceTests
         insertSource.Should().Contain("new AddSparklineCommand(_currentSheetId, dataRange, currentRange.Start, kind)");
 
         pivotSource.Should().Contain("private void PivotTableBtn_Click(object sender, RoutedEventArgs e)");
-        pivotSource.Should().Contain("PivotTableSourceRangePlanner.CreatePlan(sheet, SheetGrid.SelectedRange)");
+        pivotSource.Should().Contain("PivotCreatePlanner.CreateSourceRangePlan(sheet, SheetGrid.SelectedRange)");
         pivotSource.Should().Contain("ShowPivotTableSourceRangeError(sourcePlan.Error)");
         pivotSource.Should().Contain("new PivotTableDialog(");
-        pivotSource.Should().Contain("new AddPivotTableCommand(");
-        pivotSource.Should().Contain("new AddPivotTableToNewWorksheetCommand(");
+        pivotSource.Should().Contain("PivotCreatePlanner.CreateDefaultLayout(sourceSheet, dialogSourceRange)");
+        pivotSource.Should().Contain("PivotCreatePlanner.SuggestName(_workbook)");
+        pivotSource.Should().Contain("PivotCreatePlanner.BuildInPlaceCommand(");
+        pivotSource.Should().Contain("PivotCreatePlanner.BuildNewWorksheetCommand(");
         pivotSource.Should().Contain("ActivateNewWorksheetAtA1(createdSheetId)");
         pivotSource.Should().Contain("private void PivotInsertSlicerBtn_Click(object sender, RoutedEventArgs e)");
         pivotSource.Should().Contain("new InsertSlicerDialog(headers, fieldName)");
@@ -77,7 +79,9 @@ public sealed class InsertCommandSourceTests
         insertSource.Should().Contain("ToCoreHyperlinkTargetKind(dialog.Result.LinkType)");
         insertSource.Should().Contain("private void InsertCommentBtn_Click(object sender, RoutedEventArgs e) => ReviewNewThreadedCommentBtn_Click(sender, e);");
         insertSource.Should().Contain("new HeaderFooterDialog(sheet)");
-        insertSource.Should().Contain("new SetHeaderFooterCommand(");
+        insertSource.Should().Contain("PageSetupCommandFactory.BuildHeaderFooterCommand(");
+        insertSource.Should().Contain("new PageSetupHeaderFooterRequest");
+        insertSource.Should().NotContain("new SetHeaderFooterCommand(");
         insertSource.Should().Contain("new SymbolPickerDialog");
         insertSource.Should().Contain("CreateSingleCellEditCommand(currentAddress, Cell.FromValue(new TextValue(currentText)))");
 

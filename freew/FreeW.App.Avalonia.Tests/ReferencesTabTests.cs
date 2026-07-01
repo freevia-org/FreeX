@@ -215,6 +215,85 @@ public sealed class ReferencesTabTests
         view.Document.Blocks.Count.Should().Be(before, "undo removes the whole bibliography block");
     }
 
+    [Fact]
+    public void ReplaceSources_replaces_source_list_and_undo_reverts()
+    {
+        var view = ViewWith();
+        view.Document.Sources.Add(new Source { Tag = "Old", Author = "Old Author", Title = "Old Title", Year = "1999" });
+
+        view.ReplaceSources(new[]
+        {
+            new Source { Tag = "New", Author = "New Author", Title = "New Title", Year = "2026" }
+        });
+
+        view.Document.Sources.Should().ContainSingle().Which.Tag.Should().Be("New");
+        view.Undo();
+        view.Document.Sources.Should().ContainSingle().Which.Tag.Should().Be("Old");
+    }
+
+    [Fact]
+    public void Index_commands_mark_insert_and_refresh_generated_index()
+    {
+        var view = ViewWith(new Paragraph("Beta"));
+
+        view.MarkIndexEntry("Beta");
+        view.InsertIndex();
+        view.MarkIndexEntry("Alpha");
+        view.RefreshIndex();
+
+        view.Document.Blocks.OfType<Paragraph>()
+            .Where(DocumentIndex.IsIndexParagraph)
+            .Select(paragraph => paragraph.PlainText)
+            .Should()
+            .Equal("Index", "Alpha", "Beta");
+        view.Document.Blocks.OfType<Paragraph>()
+            .Count(paragraph => paragraph.StyleId == DocumentIndex.HeadingStyleId)
+            .Should()
+            .Be(1);
+    }
+
+    [Fact]
+    public void Table_of_figures_commands_insert_and_refresh_caption_table()
+    {
+        var view = ViewWith();
+
+        view.InsertCaption(CaptionLabel.Figure, "First");
+        view.InsertTableOfFigures();
+        view.Document.Blocks.Add(Captions.BuildCaption(CaptionLabel.Figure, 2, "Second"));
+        view.RefreshTableOfFigures();
+
+        view.Document.Blocks.OfType<Paragraph>()
+            .Where(TableOfFigures.IsTableOfFiguresParagraph)
+            .Select(paragraph => paragraph.PlainText)
+            .Should()
+            .Equal("Table of Figures", "Figure 1: First", "Figure 2: Second");
+        view.Document.Blocks.OfType<Paragraph>()
+            .Count(paragraph => paragraph.StyleId == TableOfFigures.HeadingStyleId)
+            .Should()
+            .Be(1);
+    }
+
+    [Fact]
+    public void Table_of_authorities_commands_mark_insert_and_refresh_generated_table()
+    {
+        var view = ViewWith(new Paragraph("Brown v. Board"));
+
+        view.MarkCitation("Brown v. Board");
+        view.InsertTableOfAuthorities();
+        view.MarkCitation("Roe v. Wade");
+        view.RefreshTableOfAuthorities();
+
+        view.Document.Blocks.OfType<Paragraph>()
+            .Where(TableOfAuthorities.IsTableOfAuthoritiesParagraph)
+            .Select(paragraph => paragraph.PlainText)
+            .Should()
+            .ContainInOrder("Table of Authorities", "Cases", "Brown v. Board", "Roe v. Wade");
+        view.Document.Blocks.OfType<Paragraph>()
+            .Count(paragraph => paragraph.StyleId == TableOfAuthorities.HeadingStyleId)
+            .Should()
+            .Be(1);
+    }
+
     // ── Registry wiring ─────────────────────────────────────────────────────────────
 
     [Fact]
@@ -224,16 +303,47 @@ public sealed class ReferencesTabTests
 
         var expected = new[]
         {
+            "freew.footnote", "freew.endnote",
             "freew.insert-footnote", "freew.insert-endnote",
+            "freew.toc", "freew.toc-refresh",
             "freew.insert-toc", "freew.update-toc",
+            "freew.caption",
             "freew.insert-caption", "freew.insert-caption.figure", "freew.insert-caption.table",
             "freew.cross-reference",
+            "freew.citation",
             "freew.insert-citation", "freew.bibliography",
+            "freew.show-notes", "freew.footnote-endnote-options",
+            "freew.manage-sources",
+            "freew.tof", "freew.tof-refresh",
+            "freew.index-mark", "freew.index-insert", "freew.index-refresh",
+            "freew.mark-citation", "freew.table-of-authorities", "freew.table-of-authorities-refresh",
         };
 
         foreach (var id in expected)
             registry.TryGet(new RibbonCommandId(id), out _)
                 .Should().BeTrue($"References-tab command '{id}' must be registered");
+    }
+
+    [Fact]
+    public void Registry_preserves_legacy_references_aliases_for_canonical_commands()
+    {
+        var registry = FreeWAvaloniaRibbonCommands.Build(new DocumentView(), NoopCallbacks());
+        var aliases = new[]
+        {
+            ("freew.footnote", "freew.insert-footnote"),
+            ("freew.endnote", "freew.insert-endnote"),
+            ("freew.toc", "freew.insert-toc"),
+            ("freew.toc-refresh", "freew.update-toc"),
+            ("freew.caption", "freew.insert-caption"),
+            ("freew.citation", "freew.insert-citation"),
+        };
+
+        foreach (var (canonicalId, aliasId) in aliases)
+        {
+            registry.TryGet(new RibbonCommandId(canonicalId), out var canonical).Should().BeTrue();
+            registry.TryGet(new RibbonCommandId(aliasId), out var alias).Should().BeTrue();
+            alias.Should().BeSameAs(canonical, $"{aliasId} remains a compatibility alias for {canonicalId}");
+        }
     }
 
     [Fact]
@@ -244,18 +354,160 @@ public sealed class ReferencesTabTests
         references.Should().NotBeNull();
 
         references!.Groups.Select(g => g.Header).Should()
-            .Contain(new[] { "Table of Contents", "Footnotes", "Citations & Bibliography", "Captions" });
+            .Contain(new[]
+            {
+                "Table of Contents",
+                "Footnotes",
+                "Citations & Bibliography",
+                "Captions",
+                "Index",
+                "Table of Authorities"
+            });
     }
 
     [Fact]
-    public void InsertFootnote_command_executes_via_registry()
+    public void References_tab_definition_uses_canonical_shared_command_ids()
+    {
+        var definition = FreeWRibbon.BuildDefinition();
+        var references = definition.FindTab("references");
+        references.Should().NotBeNull();
+        var commandIds = references!.Groups
+            .SelectMany(group => group.Controls)
+            .SelectMany(CommandIds)
+            .ToHashSet(StringComparer.Ordinal);
+
+        commandIds.Should().Contain(new[]
+        {
+            "freew.toc",
+            "freew.toc-refresh",
+            "freew.footnote",
+            "freew.endnote",
+            "freew.citation",
+            "freew.bibliography",
+            "freew.caption",
+            "freew.insert-caption.figure",
+            "freew.insert-caption.table",
+            "freew.cross-reference",
+            "freew.show-notes",
+            "freew.footnote-endnote-options",
+            "freew.manage-sources",
+            "freew.tof",
+            "freew.tof-refresh",
+            "freew.index-mark",
+            "freew.index-insert",
+            "freew.index-refresh",
+            "freew.mark-citation",
+            "freew.table-of-authorities",
+            "freew.table-of-authorities-refresh",
+        });
+
+        commandIds.Should().NotContain(new[]
+        {
+            "freew.insert-toc",
+            "freew.update-toc",
+            "freew.insert-footnote",
+            "freew.insert-endnote",
+            "freew.insert-citation",
+            "freew.insert-caption",
+        });
+    }
+
+    [Fact]
+    public void Canonical_references_commands_execute_via_registry()
     {
         var view = ViewWith();
         var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
 
-        registry.TryGet(new RibbonCommandId("freew.insert-footnote"), out var cmd).Should().BeTrue();
-        cmd!.Execute(RibbonCommandContext.Empty);
+        Execute(registry, "freew.footnote");
+        view.Document.Footnotes.Should().ContainKey(1, "executing the canonical command inserts a footnote");
 
-        view.Document.Footnotes.Should().ContainKey(1, "executing the command inserts a footnote");
+        Execute(registry, "freew.endnote");
+        view.Document.Endnotes.Should().ContainKey(1, "executing the canonical command inserts an endnote");
+
+        var tocView = ViewWith(Heading("First", 1), new Paragraph("body"));
+        var tocRegistry = FreeWRibbon.BuildRegistry(tocView, NoopCallbacks());
+
+        Execute(tocRegistry, "freew.toc");
+        tocView.Document.Blocks.Count(TableOfContents.IsTocParagraph)
+            .Should().Be(2, "executing the canonical command inserts a generated TOC");
+
+        tocView.Document.Blocks.Add(Heading("Second", 1));
+        Execute(tocRegistry, "freew.toc-refresh");
+        tocView.Document.Blocks.Where(TableOfContents.IsTocParagraph)
+            .Select(block => ((Paragraph)block).PlainText)
+            .Should().Contain("Second", "executing the canonical refresh updates the TOC in place");
+
+        var citationView = ViewWith(new Paragraph("See "));
+        citationView.Document.Sources.Add(new Source { Tag = "Sm24", Author = "Smith", Title = "A Work", Year = "2024" });
+        var citationRegistry = FreeWRibbon.BuildRegistry(citationView, NoopCallbacks());
+
+        Execute(citationRegistry, "freew.citation");
+        citationView.Document.Blocks.OfType<Paragraph>()
+            .Select(paragraph => paragraph.PlainText)
+            .Should().Contain(text => text.Contains("Smith", StringComparison.Ordinal),
+                "executing the canonical command inserts an in-text citation");
+
+        var indexView = ViewWith(new Paragraph("Alpha"));
+        var indexRegistry = FreeWRibbon.BuildRegistry(indexView, NoopCallbacks());
+        Execute(indexRegistry, "freew.index-mark");
+        Execute(indexRegistry, "freew.index-insert");
+        indexView.Document.Blocks.OfType<Paragraph>()
+            .Where(DocumentIndex.IsIndexParagraph)
+            .Select(paragraph => paragraph.PlainText)
+            .Should()
+            .Contain("Alpha");
+
+        var authoritiesView = ViewWith(new Paragraph("Brown v. Board"));
+        var authoritiesRegistry = FreeWRibbon.BuildRegistry(authoritiesView, NoopCallbacks());
+        Execute(authoritiesRegistry, "freew.mark-citation");
+        Execute(authoritiesRegistry, "freew.table-of-authorities");
+        authoritiesView.Document.Blocks.OfType<Paragraph>()
+            .Where(TableOfAuthorities.IsTableOfAuthoritiesParagraph)
+            .Select(paragraph => paragraph.PlainText)
+            .Should()
+            .Contain("Brown v. Board");
+    }
+
+    [Fact]
+    public void Legacy_caption_label_commands_remain_backed()
+    {
+        var view = ViewWith();
+        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+
+        Execute(registry, "freew.insert-caption.figure");
+        Execute(registry, "freew.insert-caption.table");
+
+        view.Document.Blocks.OfType<Paragraph>()
+            .Where(Captions.IsCaptionParagraph)
+            .Select(paragraph => paragraph.PlainText)
+            .Should().Contain(text => text.StartsWith("Figure 1", StringComparison.Ordinal))
+            .And.Contain(text => text.StartsWith("Table 1", StringComparison.Ordinal));
+    }
+
+    private static void Execute(RibbonCommandRegistry registry, string commandId)
+    {
+        registry.TryGet(new RibbonCommandId(commandId), out var command).Should().BeTrue();
+        command!.Execute(RibbonCommandContext.Empty);
+    }
+
+    private static IEnumerable<string> CommandIds(RibbonControl control)
+    {
+        yield return control.CommandId.Value;
+
+        var menu = control switch
+        {
+            RibbonDropdown dropdown => dropdown.Menu,
+            RibbonSplitButton splitButton => splitButton.Menu,
+            _ => null,
+        };
+
+        if (menu is null)
+            yield break;
+
+        foreach (var item in menu.Items)
+        {
+            if (item.CommandId is { } commandId)
+                yield return commandId.Value;
+        }
     }
 }

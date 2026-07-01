@@ -1,0 +1,780 @@
+using System.Globalization;
+using System.Text.Json;
+using Free.Shared.Ribbon;
+using FreeP.App.Localization;
+
+namespace FreeP.Ribbon.Definitions.Tests;
+
+public sealed class FreePRibbonDefinitionProfileTests
+{
+    private static readonly string[] WpfOnlyTabIds = [];
+
+    private static readonly string[] AvaloniaOnlyShellCommands =
+    [
+        "freep.undo",
+        "freep.redo",
+    ];
+
+    [Fact]
+    public void Shared_factory_builds_valid_wpf_and_avalonia_profiles()
+    {
+        var wpf = FreePRibbon.Build(FreePRibbonCapabilities.Wpf);
+        var avalonia = FreePRibbon.Build(FreePRibbonCapabilities.Avalonia);
+
+        wpf.Tabs.Select(tab => tab.Id)
+            .Should()
+            .Equal("home", "insert", "design", "transitions", "animations");
+        avalonia.Tabs.Select(tab => tab.Id)
+            .Should()
+            .Equal("home", "insert", "design", "transitions", "animations");
+
+        RibbonDefinitionValidator.Validate(wpf).HasErrors.Should().BeFalse();
+        RibbonDefinitionValidator.Validate(avalonia).HasErrors.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Home_shell_ribbon_text_resolves_from_freep_localization_resources()
+    {
+        var text = WithUiCulture(Loc.PseudoLocalizationCultureName, () =>
+        {
+            var wpf = FreePRibbon.Build(FreePRibbonCapabilities.Wpf);
+            var avalonia = FreePRibbon.Build(FreePRibbonCapabilities.Avalonia);
+
+            return new[]
+            {
+                wpf.FindTab("home")!.Header,
+                wpf.FindTab("home")!.KeyTip!,
+                RequiredGroup(wpf, "home", "slides").Header,
+                RequiredGroup(wpf, "home", "slides").KeyTip!,
+                RequiredControl(wpf, "freep.new-slide").Label,
+                RequiredControl(wpf, "freep.new-slide").KeyTip!,
+                RequiredControl(wpf, "freep.duplicate-slide").Label,
+                RequiredControl(wpf, "freep.delete-slide").Label,
+                RequiredControl(wpf, "freep.layout").Label,
+                RequiredControl(wpf, "freep.layout").KeyTip!,
+                RequiredGroup(wpf, "home", "clipboard").Header,
+                RequiredGroup(wpf, "home", "clipboard").KeyTip!,
+                RequiredControl(wpf, "freep.paste").Label,
+                RequiredControl(wpf, "freep.paste").KeyTip!,
+                RequiredControl(wpf, "freep.cut").Label,
+                RequiredControl(wpf, "freep.cut").KeyTip!,
+                RequiredControl(wpf, "freep.copy").Label,
+                RequiredControl(wpf, "freep.copy").KeyTip!,
+                RequiredControl(wpf, "freep.format-painter").Label,
+                RequiredControl(wpf, "freep.format-painter").KeyTip!,
+                RequiredGroup(wpf, "home", "font").Header,
+                RequiredGroup(wpf, "home", "font").KeyTip!,
+                RequiredControl(wpf, "freep.font-family").Label,
+                RequiredControl(wpf, "freep.bold").Label,
+                RequiredControl(wpf, "freep.bold").KeyTip!,
+                RequiredControl(wpf, "freep.italic").Label,
+                RequiredControl(wpf, "freep.italic").KeyTip!,
+                RequiredControl(wpf, "freep.underline").Label,
+                RequiredControl(wpf, "freep.underline").KeyTip!,
+                RequiredGroup(wpf, "home", "editing").Header,
+                RequiredGroup(wpf, "home", "editing").KeyTip!,
+                RequiredControl(wpf, "freep.find").Label,
+                RequiredControl(wpf, "freep.find").KeyTip!,
+                RequiredControl(wpf, "freep.replace").Label,
+                RequiredControl(wpf, "freep.replace").KeyTip!,
+                RequiredGroup(wpf, "transitions", "slideshow-from-transitions").Header,
+                RequiredControl(wpf, "freep.slideshow.from-beginning").Label,
+                RequiredControl(wpf, "freep.slideshow.from-current-slide").Label,
+                RequiredGroup(avalonia, "home", "file").Header,
+                RequiredGroup(avalonia, "home", "file").KeyTip!,
+                RequiredControl(avalonia, "freep.file.new").Label,
+                RequiredControl(avalonia, "freep.file.open").Label,
+                RequiredControl(avalonia, "freep.file.save").Label,
+                RequiredControl(avalonia, "freep.file.save-as").Label,
+                RequiredGroup(avalonia, "home", "slides").Header,
+                RequiredControl(avalonia, "freep.new-slide").Label,
+                RequiredControl(avalonia, "freep.new-slide").KeyTip!,
+                RequiredControl(avalonia, "freep.layout").Label,
+                RequiredControl(avalonia, "freep.layout").KeyTip!,
+                RequiredGroup(avalonia, "home", "clipboard").Header,
+                RequiredGroup(avalonia, "home", "clipboard").KeyTip!,
+                RequiredControl(avalonia, "freep.paste").Label,
+                RequiredControl(avalonia, "freep.paste").KeyTip!,
+                RequiredControl(avalonia, "freep.cut").Label,
+                RequiredControl(avalonia, "freep.cut").KeyTip!,
+                RequiredControl(avalonia, "freep.copy").Label,
+                RequiredControl(avalonia, "freep.copy").KeyTip!,
+                RequiredControl(avalonia, "freep.format-painter").Label,
+                RequiredControl(avalonia, "freep.format-painter").KeyTip!,
+                RequiredGroup(avalonia, "home", "font").Header,
+                RequiredGroup(avalonia, "home", "font").KeyTip!,
+                RequiredControl(avalonia, "freep.font-family").Label,
+                RequiredControl(avalonia, "freep.bold").Label,
+                RequiredControl(avalonia, "freep.bold").KeyTip!,
+                RequiredControl(avalonia, "freep.italic").Label,
+                RequiredControl(avalonia, "freep.italic").KeyTip!,
+                RequiredControl(avalonia, "freep.underline").Label,
+                RequiredControl(avalonia, "freep.underline").KeyTip!,
+                RequiredGroup(avalonia, "home", "arrange").Header,
+                RequiredGroup(avalonia, "home", "arrange").KeyTip!,
+                RequiredControl(avalonia, "freep.arrange.group").Label,
+                RequiredControl(avalonia, "freep.arrange.group").KeyTip!,
+                RequiredControl(avalonia, "freep.arrange.ungroup").Label,
+                RequiredControl(avalonia, "freep.arrange.ungroup").KeyTip!,
+                RequiredControl(avalonia, "freep.arrange.bring-to-front").Label,
+                RequiredControl(avalonia, "freep.arrange.bring-to-front").KeyTip!,
+                RequiredControl(avalonia, "freep.arrange.bring-forward").Label,
+                RequiredControl(avalonia, "freep.arrange.bring-forward").KeyTip!,
+                RequiredControl(avalonia, "freep.arrange.send-backward").Label,
+                RequiredControl(avalonia, "freep.arrange.send-backward").KeyTip!,
+                RequiredControl(avalonia, "freep.arrange.send-to-back").Label,
+                RequiredControl(avalonia, "freep.arrange.send-to-back").KeyTip!,
+                RequiredControl(avalonia, "freep.arrange.align-left").Label,
+                RequiredControl(avalonia, "freep.arrange.align-left").KeyTip!,
+                RequiredControl(avalonia, "freep.arrange.align-center-h").Label,
+                RequiredControl(avalonia, "freep.arrange.align-center-h").KeyTip!,
+                RequiredControl(avalonia, "freep.arrange.align-right").Label,
+                RequiredControl(avalonia, "freep.arrange.align-right").KeyTip!,
+                RequiredControl(avalonia, "freep.arrange.align-top").Label,
+                RequiredControl(avalonia, "freep.arrange.align-top").KeyTip!,
+                RequiredControl(avalonia, "freep.arrange.align-middle").Label,
+                RequiredControl(avalonia, "freep.arrange.align-middle").KeyTip!,
+                RequiredControl(avalonia, "freep.arrange.align-bottom").Label,
+                RequiredControl(avalonia, "freep.arrange.align-bottom").KeyTip!,
+                RequiredControl(avalonia, "freep.arrange.distribute-h").Label,
+                RequiredControl(avalonia, "freep.arrange.distribute-h").KeyTip!,
+                RequiredControl(avalonia, "freep.arrange.distribute-v").Label,
+                RequiredControl(avalonia, "freep.arrange.distribute-v").KeyTip!,
+                RequiredGroup(avalonia, "home", "edit").Header,
+                RequiredControl(avalonia, "freep.undo").Label,
+                RequiredControl(avalonia, "freep.redo").Label,
+                RequiredGroup(avalonia, "home", "editing").Header,
+                RequiredGroup(avalonia, "home", "editing").KeyTip!,
+                RequiredControl(avalonia, "freep.find").Label,
+                RequiredControl(avalonia, "freep.find").KeyTip!,
+                RequiredControl(avalonia, "freep.replace").Label,
+                RequiredControl(avalonia, "freep.replace").KeyTip!,
+                RequiredGroup(avalonia, "home", "slideshow").Header,
+                RequiredControl(avalonia, "freep.slideshow.from-beginning").Label,
+                RequiredControl(avalonia, "freep.slideshow.from-current-slide").Label,
+                avalonia.FindTab("design")!.Header,
+                avalonia.FindTab("design")!.KeyTip!,
+                RequiredGroup(avalonia, "design", "themes").Header,
+                RequiredGroup(avalonia, "design", "themes").KeyTip!,
+                RequiredGroup(avalonia, "design", "customize").Header,
+                RequiredGroup(avalonia, "design", "customize").KeyTip!,
+                RequiredControl(avalonia, "freep.theme.office").Label,
+                RequiredControl(avalonia, "freep.theme.office").KeyTip!,
+                RequiredControl(avalonia, "freep.theme.berlin").Label,
+                RequiredControl(avalonia, "freep.theme.berlin").KeyTip!,
+                RequiredControl(avalonia, "freep.theme.facet").Label,
+                RequiredControl(avalonia, "freep.theme.facet").KeyTip!,
+                RequiredControl(avalonia, "freep.theme.ion").Label,
+                RequiredControl(avalonia, "freep.theme.ion").KeyTip!,
+                RequiredControl(avalonia, "freep.theme.slice").Label,
+                RequiredControl(avalonia, "freep.theme.slice").KeyTip!,
+                RequiredControl(avalonia, "freep.slide-size-16x9").Label,
+                RequiredControl(avalonia, "freep.slide-size-16x9").KeyTip!,
+                RequiredControl(avalonia, "freep.slide-size-4x3").Label,
+                RequiredControl(avalonia, "freep.slide-size-4x3").KeyTip!,
+                RequiredControl(avalonia, "freep.slide-size-custom").Label,
+                RequiredControl(avalonia, "freep.slide-size-custom").KeyTip!,
+            };
+        });
+
+        text.Should().OnlyContain(value =>
+            value.StartsWith("[[", StringComparison.Ordinal) &&
+            value.EndsWith("]]", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Insert_ribbon_text_resolves_from_freep_localization_resources()
+    {
+        var text = WithUiCulture(Loc.PseudoLocalizationCultureName, () =>
+        {
+            var wpf = FreePRibbon.Build(FreePRibbonCapabilities.Wpf);
+            var avalonia = FreePRibbon.Build(FreePRibbonCapabilities.Avalonia);
+
+            return new[]
+            {
+                wpf.FindTab("insert")!.Header,
+                wpf.FindTab("insert")!.KeyTip!,
+                RequiredGroup(wpf, "insert", "text").Header,
+                RequiredGroup(wpf, "insert", "text").KeyTip!,
+                RequiredControl(wpf, "freep.text-box").Label,
+                RequiredControl(wpf, "freep.text-box").KeyTip!,
+                RequiredGroup(wpf, "insert", "tables").Header,
+                RequiredControl(wpf, "freep.insert-table-3x3").Label,
+                RequiredControl(wpf, "freep.insert-table-2x2").Label,
+                RequiredControl(wpf, "freep.insert-table-4x4").Label,
+                RequiredGroup(wpf, "insert", "charts").Header,
+                RequiredControl(wpf, "freep.insert-chart-column").Label,
+                RequiredControl(wpf, "freep.insert-chart-bar").Label,
+                RequiredControl(wpf, "freep.insert-chart-line").Label,
+                RequiredControl(wpf, "freep.insert-chart-pie").Label,
+                RequiredControl(wpf, "freep.chart.edit-data").Label,
+                RequiredControl(wpf, "freep.chart.edit-data").KeyTip!,
+                RequiredGroup(wpf, "insert", "links").Header,
+                RequiredControl(wpf, "freep.insert-link").Label,
+                RequiredControl(wpf, "freep.remove-link").Label,
+                RequiredGroup(wpf, "insert", "illustrations").Header,
+                RequiredControl(wpf, "freep.picture").Label,
+                RequiredControl(wpf, "freep.shape-rectangle").Label,
+                RequiredControl(wpf, "freep.shape-ellipse").Label,
+                avalonia.FindTab("insert")!.Header,
+                RequiredGroup(avalonia, "insert", "text").Header,
+                RequiredControl(avalonia, "freep.text-box").Label,
+                RequiredGroup(avalonia, "insert", "tables").Header,
+                RequiredControl(avalonia, "freep.insert-table-3x3").Label,
+                RequiredGroup(avalonia, "insert", "charts").Header,
+                RequiredControl(avalonia, "freep.insert-chart-column").Label,
+                RequiredControl(avalonia, "freep.chart.edit-data").Label,
+                RequiredControl(avalonia, "freep.chart.edit-data").KeyTip!,
+                RequiredGroup(avalonia, "insert", "links").Header,
+                RequiredControl(avalonia, "freep.insert-link").Label,
+                RequiredControl(avalonia, "freep.remove-link").Label,
+                RequiredGroup(avalonia, "insert", "illustrations").Header,
+                RequiredControl(avalonia, "freep.picture").Label,
+            };
+        });
+
+        text.Should().OnlyContain(value =>
+            value.StartsWith("[[", StringComparison.Ordinal) &&
+            value.EndsWith("]]", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Wpf_only_residual_ribbon_text_resolves_from_freep_localization_resources()
+    {
+        var text = WithUiCulture(Loc.PseudoLocalizationCultureName, () =>
+        {
+            var wpf = FreePRibbon.Build(FreePRibbonCapabilities.Wpf);
+            var values = new List<string>
+            {
+                wpf.FindTab("transitions")!.Header,
+                wpf.FindTab("transitions")!.KeyTip!,
+                RequiredGroup(wpf, "transitions", "transition-gallery").Header,
+                RequiredGroup(wpf, "transitions", "transition-gallery").KeyTip!,
+                RequiredGroup(wpf, "transitions", "transition-timing").Header,
+                RequiredGroup(wpf, "transitions", "transition-timing").KeyTip!,
+                wpf.FindTab("animations")!.Header,
+                wpf.FindTab("animations")!.KeyTip!,
+                RequiredGroup(wpf, "animations", "animation-effects").Header,
+                RequiredGroup(wpf, "animations", "animation-effects").KeyTip!,
+                RequiredGroup(wpf, "animations", "animation-timing").Header,
+                RequiredGroup(wpf, "animations", "animation-timing").KeyTip!,
+                RequiredGroup(wpf, "animations", "animation-pane").Header,
+                RequiredGroup(wpf, "animations", "animation-pane").KeyTip!,
+                RequiredCombo(wpf, "freep.transition.advance-after").Items[0],
+            };
+
+            values.AddRange(ControlText(wpf,
+                "freep.transition.none",
+                "freep.transition.fade",
+                "freep.transition.push",
+                "freep.transition.wipe",
+                "freep.transition.split",
+                "freep.transition.cut",
+                "freep.transition.cover",
+                "freep.transition.uncover",
+                "freep.transition.blinds",
+                "freep.transition.dissolve",
+                "freep.transition.zoom",
+                "freep.transition.wheel",
+                "freep.transition.duration",
+                "freep.transition.advance-on-click",
+                "freep.transition.advance-after",
+                "freep.transition.apply-all",
+                "freep.anim.entrance.appear",
+                "freep.anim.entrance.fade",
+                "freep.anim.entrance.fly-in",
+                "freep.anim.entrance.wipe",
+                "freep.anim.entrance.zoom",
+                "freep.anim.entrance.split",
+                "freep.anim.emphasis.pulse",
+                "freep.anim.emphasis.spin",
+                "freep.anim.emphasis.grow-shrink",
+                "freep.anim.exit.disappear",
+                "freep.anim.exit.fade-out",
+                "freep.anim.exit.fly-out",
+                "freep.anim.none",
+                "freep.anim.trigger",
+                "freep.anim.duration",
+                "freep.anim.delay",
+                "freep.anim.move-earlier",
+                "freep.anim.move-later",
+                "freep.anim.pane"));
+            values.AddRange(RequiredCombo(wpf, "freep.anim.trigger").Items);
+
+            return values.ToArray();
+        });
+
+        text.Should().OnlyContain(value =>
+            value.StartsWith("[[", StringComparison.Ordinal) &&
+            value.EndsWith("]]", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Profile_tab_ids_match_except_named_capability_deltas()
+    {
+        var wpfTabIds = FreePRibbon.Build(FreePRibbonCapabilities.Wpf).Tabs.Select(tab => tab.Id).ToArray();
+        var avaloniaTabIds = FreePRibbon.Build(FreePRibbonCapabilities.Avalonia).Tabs.Select(tab => tab.Id).ToArray();
+
+        wpfTabIds.Except(avaloniaTabIds, StringComparer.Ordinal)
+            .Should()
+            .BeEquivalentTo(WpfOnlyTabIds);
+        avaloniaTabIds.Except(wpfTabIds, StringComparer.Ordinal)
+            .Should()
+            .BeEmpty();
+    }
+
+    [Fact]
+    public void Avalonia_backed_content_commands_are_wpf_commands_except_named_shell_aliases()
+    {
+        var wpfIds = CommandIds(FreePRibbon.Build(FreePRibbonCapabilities.Wpf))
+            .ToHashSet(StringComparer.Ordinal);
+        var unexpectedAvaloniaOnly = CommandIds(FreePRibbon.Build(FreePRibbonCapabilities.Avalonia))
+            .Where(commandId => !wpfIds.Contains(commandId))
+            .Where(commandId => !IsAllowedAvaloniaShellCommand(commandId))
+            .ToArray();
+
+        unexpectedAvaloniaOnly.Should().BeEmpty(
+            "cross-platform content commands should come from the shared FreeP command surface");
+    }
+
+    [Fact]
+    public void Avalonia_profile_exposes_design_commands_as_shared_surface()
+    {
+        var wpfIds = CommandIds(FreePRibbon.Build(FreePRibbonCapabilities.Wpf))
+            .ToHashSet(StringComparer.Ordinal);
+        var avaloniaIds = CommandIds(FreePRibbon.Build(FreePRibbonCapabilities.Avalonia))
+            .ToHashSet(StringComparer.Ordinal);
+        var designIds = new[]
+        {
+            "freep.theme.office",
+            "freep.theme.berlin",
+            "freep.theme.facet",
+            "freep.theme.ion",
+            "freep.theme.slice",
+            "freep.slide-size-16x9",
+            "freep.slide-size-4x3",
+            "freep.slide-size-custom",
+        };
+
+        avaloniaIds.Should().Contain(designIds);
+        designIds.Should().OnlyContain(commandId => wpfIds.Contains(commandId));
+    }
+
+    [Fact]
+    public void Avalonia_profile_exposes_transition_commands_as_shared_surface()
+    {
+        var wpfIds = CommandIds(FreePRibbon.Build(FreePRibbonCapabilities.Wpf))
+            .ToHashSet(StringComparer.Ordinal);
+        var avaloniaIds = CommandIds(FreePRibbon.Build(FreePRibbonCapabilities.Avalonia))
+            .ToHashSet(StringComparer.Ordinal);
+        var transitionIds = new[]
+        {
+            "freep.transition.none",
+            "freep.transition.fade",
+            "freep.transition.push",
+            "freep.transition.wipe",
+            "freep.transition.split",
+            "freep.transition.cut",
+            "freep.transition.cover",
+            "freep.transition.uncover",
+            "freep.transition.blinds",
+            "freep.transition.dissolve",
+            "freep.transition.zoom",
+            "freep.transition.wheel",
+            "freep.transition.duration",
+            "freep.transition.advance-on-click",
+            "freep.transition.advance-after",
+            "freep.transition.apply-all",
+        };
+
+        avaloniaIds.Should().Contain(transitionIds);
+        transitionIds.Should().OnlyContain(commandId => wpfIds.Contains(commandId));
+    }
+
+    [Fact]
+    public void Definition_project_stays_platform_neutral()
+    {
+        var project = File.ReadAllText(RepoFile("freep", "FreeP.Ribbon.Definitions", "FreeP.Ribbon.Definitions.csproj"));
+        project.Should().Contain(@"..\FreeP.App.Localization\FreeP.App.Localization.csproj");
+        project.Should().Contain(@"..\..\shared\Free.Shared.Ribbon\Free.Shared.Ribbon.csproj");
+        project.Should().NotContain("UseWPF");
+        project.Should().NotContain("Free.Shared.Ribbon.Wpf");
+        project.Should().NotContain("Free.Shared.Ribbon.Avalonia");
+        project.Should().NotContain("PackageReference Include=\"Avalonia");
+
+        var sourceFiles = Directory.GetFiles(
+            RepoPath("freep", "FreeP.Ribbon.Definitions"),
+            "*.cs",
+            SearchOption.AllDirectories);
+        foreach (var sourceFile in sourceFiles)
+        {
+            var source = File.ReadAllText(sourceFile);
+            source.Should().NotContain("using System.Windows");
+            source.Should().NotContain("using Avalonia");
+            source.Should().NotContain("PresentationFramework");
+        }
+    }
+
+    [Fact]
+    public void Localized_ribbon_slices_keep_raw_english_out_of_ribbon_definition_sources()
+    {
+        var source = string.Join(
+            Environment.NewLine,
+            File.ReadAllText(RepoFile("freep", "FreeP.Ribbon.Definitions", "FreePRibbon.cs")),
+            File.ReadAllText(RepoFile("freep", "FreeP.Ribbon.Definitions", "FreePAvaloniaRibbonDefinition.cs")));
+
+        source.Should().Contain("FreePRibbonText");
+        source.Should().NotContain("g.Medium(\"freep.layout\", \"Layout\"");
+        source.Should().NotContain("tab.Group(\"clipboard\", \"Clipboard\"");
+        source.Should().NotContain("g.Large(\"freep.paste\", \"Paste\"");
+        source.Should().NotContain("g.Medium(\"freep.cut\", \"Cut\"");
+        source.Should().NotContain("g.Medium(\"freep.copy\", \"Copy\"");
+        source.Should().NotContain("g.Medium(\"freep.format-painter\", \"Format Painter\"");
+        source.Should().NotContain("tab.Group(\"font\", \"Font\"");
+        source.Should().NotContain("g.ComboBox(\"freep.font-family\", \"Font\"");
+        source.Should().NotContain("g.IconToggle(\"freep.bold\", \"Bold\"");
+        source.Should().NotContain("g.IconToggle(\"freep.italic\", \"Italic\"");
+        source.Should().NotContain("g.IconToggle(\"freep.underline\", \"Underline\"");
+        source.Should().NotContain("tab.Group(\"editing\", \"Editing\"");
+        source.Should().NotContain("g.Large(\"freep.find\",    \"Find\"");
+        source.Should().NotContain("g.Medium(\"freep.replace\", \"Replace\"");
+        source.Should().Contain("FreePRibbonText.LayoutLabel");
+        source.Should().Contain("FreePRibbonText.ClipboardGroupLabel");
+        source.Should().Contain("FreePRibbonText.PasteLabel");
+        source.Should().Contain("FreePRibbonText.FontGroupLabel");
+        source.Should().Contain("FreePRibbonText.EditingGroupLabel");
+        source.Should().Contain("FreePRibbonText.FindLabel");
+        source.Should().Contain("FreePRibbonText.ArrangeGroup");
+        source.Should().Contain("FreePRibbonText.DesignTab");
+        source.Should().Contain("FreePRibbonText.TransitionsTab");
+        source.Should().Contain("FreePRibbonText.AnimationsTab");
+        source.Should().NotContain("tab.Group(\"arrange\", \"Arrange\"");
+        source.Should().NotContain(".Tab(\"design\", \"Design\"");
+        source.Should().NotContain(".Tab(\"transitions\", \"Transitions\"");
+        source.Should().NotContain(".Tab(\"animations\", \"Animations\"");
+        source.Should().NotContain("g.Medium(\"freep.transition.fade\",     \"Fade\"");
+        source.Should().NotContain("g.Medium(\"freep.anim.none\", \"No Animation\"");
+        foreach (var literal in new[]
+                 {
+                     "\"Home\"",
+                     "\"File\"",
+                     "\"New\"",
+                     "\"Open\"",
+                     "\"Save\"",
+                     "\"Save As\"",
+                     "\"Slides\"",
+                     "\"New Slide\"",
+                     "\"Duplicate Slide\"",
+                     "\"Delete Slide\"",
+                     "\"Edit\"",
+                     "\"Undo\"",
+                     "\"Redo\"",
+                     "\"Slide Show\"",
+                     "\"From Beginning\"",
+                     "\"From Current Slide\"",
+                     "\"Insert\"",
+                     "\"Text\"",
+                     "\"Text Box\"",
+                     "\"Tables\"",
+                     "\"Table\"",
+                     "\"2x2\"",
+                     "\"2×2\"",
+                     "\"4x4\"",
+                     "\"4×4\"",
+                     "\"Charts\"",
+                     "\"Column\"",
+                     "\"Bar\"",
+                     "\"Line\"",
+                     "\"Pie\"",
+                     "\"Edit Data\"",
+                     "\"Links\"",
+                     "\"Hyperlink\"",
+                     "\"Remove Link\"",
+                     "\"Illustrations\"",
+                     "\"Picture\"",
+                     "\"Rectangle\"",
+                     "\"Ellipse\""
+                 })
+        {
+            source.Should().NotContain(literal);
+        }
+    }
+
+    [Fact]
+    public void App_adapters_delegate_to_shared_definition_without_local_builders()
+    {
+        var host = File.ReadAllText(RepoFile("freep", "FreeP.App.Host", "FreePRibbon.cs"));
+        host.Should().Contain("FreeP.Ribbon.Definitions.FreePRibbon.Build(FreePRibbonCapabilities.Wpf)");
+        host.Should().NotContain("new RibbonDefinitionBuilder");
+
+        var avalonia = File.ReadAllText(RepoFile("freep", "FreeP.App.Avalonia", "FreePRibbonAvalonia.cs"));
+        avalonia.Should().Contain("FreeP.Ribbon.Definitions.FreePRibbon.Build(FreePRibbonCapabilities.Avalonia)");
+        avalonia.Should().NotContain("new RibbonDefinitionBuilder");
+    }
+
+    [Fact]
+    public void App_projects_reference_shared_definition_project()
+    {
+        File.ReadAllText(RepoFile("freep", "FreeP.App.Host", "FreeP.App.Host.csproj"))
+            .Should()
+            .Contain(@"..\FreeP.Ribbon.Definitions\FreeP.Ribbon.Definitions.csproj");
+        File.ReadAllText(RepoFile("freep", "FreeP.App.Avalonia", "FreeP.App.Avalonia.csproj"))
+            .Should()
+            .Contain(@"..\FreeP.Ribbon.Definitions\FreeP.Ribbon.Definitions.csproj");
+    }
+
+    [Fact]
+    public void FreeP_command_parity_inventory_json_matches_generated_profiles()
+    {
+        using var json = JsonDocument.Parse(File.ReadAllText(RepoFile(
+            "docs",
+            "parity",
+            "freep-command-parity-inventory.json")));
+
+        var root = json.RootElement;
+        root.GetProperty("schemaVersion").GetInt32().Should().Be(1);
+
+        var expectedSurfaces = ExpectedCommandSurfaces();
+        var commands = root.GetProperty("commands")
+            .EnumerateArray()
+            .ToDictionary(
+                command => command.GetProperty("commandId").GetString()
+                    ?? throw new InvalidOperationException("Command entry is missing commandId."),
+                StringComparer.Ordinal);
+
+        commands.Keys.Should().BeEquivalentTo(expectedSurfaces.Keys);
+        foreach (var (commandId, expectedSurface) in expectedSurfaces)
+        {
+            commands[commandId].GetProperty("surface").GetString()
+                .Should()
+                .Be(expectedSurface, $"'{commandId}' should match the generated FreeP ribbon profiles");
+        }
+
+        commands.Values.Select(command => command.GetProperty("surface").GetString())
+            .Should()
+            .Contain(["both", "avalonia-only"]);
+        commands.Values.Select(command => command.GetProperty("classification").GetString())
+            .Should()
+            .Contain(["shared", "platform-only"]);
+
+        root.GetProperty("summary").GetProperty("missingAvalonia").GetInt32()
+            .Should()
+            .Be(0);
+
+        root.GetProperty("summary").GetProperty("actionableMissingWpf").GetInt32()
+            .Should()
+            .Be(0, "platform-only Avalonia shell commands are not actionable WPF parity gaps");
+
+        root.GetProperty("summary").GetProperty("actionableMissingAvalonia").GetInt32()
+            .Should()
+            .Be(0);
+
+        root.GetProperty("summary").GetProperty("knownDeferred").GetInt32()
+            .Should()
+            .Be(0);
+
+        root.GetProperty("summary").GetProperty("commandIdAliases").GetInt32()
+            .Should()
+            .Be(0);
+
+        root.GetProperty("summary").GetProperty("totalCommands").GetInt32()
+            .Should()
+            .Be(expectedSurfaces.Count);
+    }
+
+    [Fact]
+    public void FreeP_command_parity_inventory_markdown_matches_json_matrix()
+    {
+        using var json = JsonDocument.Parse(File.ReadAllText(RepoFile(
+            "docs",
+            "parity",
+            "freep-command-parity-inventory.json")));
+        var markdown = File.ReadAllText(RepoFile(
+            "docs",
+            "parity",
+            "freep-command-parity-inventory.md"));
+
+        var summary = json.RootElement.GetProperty("summary");
+        var expectedSummaryRow =
+            $"| {summary.GetProperty("totalCommands").GetInt32()} | " +
+            $"{summary.GetProperty("both").GetInt32()} | " +
+            $"{summary.GetProperty("wpfOnly").GetInt32()} | " +
+            $"{summary.GetProperty("avaloniaOnly").GetInt32()} | " +
+            $"{summary.GetProperty("missingWpf").GetInt32()} | " +
+            $"{summary.GetProperty("missingAvalonia").GetInt32()} | " +
+            $"{summary.GetProperty("actionableMissingWpf").GetInt32()} | " +
+            $"{summary.GetProperty("actionableMissingAvalonia").GetInt32()} | " +
+            $"{summary.GetProperty("shared").GetInt32()} | " +
+            $"{summary.GetProperty("avaloniaGaps").GetInt32()} | " +
+            $"{summary.GetProperty("knownDeferred").GetInt32()} | " +
+            $"{summary.GetProperty("platformOnly").GetInt32()} | " +
+            $"{summary.GetProperty("commandIdAliases").GetInt32()} |";
+
+        markdown.Should().Contain("Generated by `tools/Generate-FreePCommandParityInventory.ps1`");
+        markdown.Should().Contain("Actionable missing counts exclude platform-only commands");
+        markdown.Should().Contain(expectedSummaryRow);
+
+        var expectedCommandIds = json.RootElement.GetProperty("commands")
+            .EnumerateArray()
+            .Select(command => command.GetProperty("commandId").GetString())
+            .Where(commandId => commandId is not null)
+            .Cast<string>()
+            .OrderBy(commandId => commandId, StringComparer.Ordinal)
+            .ToArray();
+        var markdownCommandIds = markdown.Split(Environment.NewLine)
+            .Where(line => line.StartsWith("| `freep.", StringComparison.Ordinal))
+            .Select(line =>
+            {
+                var start = line.IndexOf('`') + 1;
+                var end = line.IndexOf('`', start);
+                return line[start..end];
+            })
+            .ToArray();
+
+        markdownCommandIds.Should().Equal(expectedCommandIds);
+    }
+
+    private static bool IsAllowedAvaloniaShellCommand(string commandId) =>
+        commandId.StartsWith("freep.file.", StringComparison.Ordinal) ||
+        AvaloniaOnlyShellCommands.Contains(commandId, StringComparer.Ordinal);
+
+    private static Dictionary<string, string> ExpectedCommandSurfaces()
+    {
+        var wpf = CommandIds(FreePRibbon.Build(FreePRibbonCapabilities.Wpf))
+            .ToHashSet(StringComparer.Ordinal);
+        var avalonia = CommandIds(FreePRibbon.Build(FreePRibbonCapabilities.Avalonia))
+            .ToHashSet(StringComparer.Ordinal);
+
+        return wpf.Concat(avalonia)
+            .Distinct(StringComparer.Ordinal)
+            .ToDictionary(
+                commandId => commandId,
+                commandId => wpf.Contains(commandId) && avalonia.Contains(commandId)
+                    ? "both"
+                    : wpf.Contains(commandId)
+                        ? "wpf-only"
+                        : "avalonia-only",
+                StringComparer.Ordinal);
+    }
+
+    private static IEnumerable<string> CommandIds(RibbonDefinition definition)
+    {
+        foreach (var tab in definition.Tabs)
+        {
+            foreach (var group in tab.Groups)
+            {
+                foreach (var control in group.Controls)
+                {
+                    if (!string.IsNullOrEmpty(control.CommandId.Value))
+                        yield return control.CommandId.Value;
+
+                    foreach (var menuCommandId in MenuCommandIds(control))
+                        yield return menuCommandId;
+                }
+            }
+        }
+    }
+
+    private static IEnumerable<string> MenuCommandIds(RibbonControl control)
+    {
+        var menu = control switch
+        {
+            RibbonSplitButton splitButton => splitButton.Menu,
+            RibbonDropdown dropdown => dropdown.Menu,
+            _ => null,
+        };
+
+        return menu is null
+            ? Array.Empty<string>()
+            : MenuCommandIds(menu.Items);
+    }
+
+    private static IEnumerable<string> MenuCommandIds(IEnumerable<RibbonMenuItem> items)
+    {
+        foreach (var item in items)
+        {
+            if (item.CommandId is { } commandId)
+                yield return commandId.Value;
+
+            foreach (var childCommandId in MenuCommandIds(item.Children))
+                yield return childCommandId;
+        }
+    }
+
+    private static T WithUiCulture<T>(string cultureName, Func<T> action)
+    {
+        var originalUi = CultureInfo.CurrentUICulture;
+        var originalCulture = CultureInfo.CurrentCulture;
+        try
+        {
+            var culture = CultureInfo.GetCultureInfo(cultureName);
+            CultureInfo.CurrentUICulture = culture;
+            CultureInfo.CurrentCulture = culture;
+            return action();
+        }
+        finally
+        {
+            CultureInfo.CurrentUICulture = originalUi;
+            CultureInfo.CurrentCulture = originalCulture;
+        }
+    }
+
+    private static RibbonGroup RequiredGroup(RibbonDefinition definition, string tabId, string groupId) =>
+        definition.FindTab(tabId)?.FindGroup(groupId)
+        ?? throw new InvalidOperationException($"Could not find ribbon group '{tabId}/{groupId}'.");
+
+    private static RibbonControl RequiredControl(RibbonDefinition definition, string commandId)
+    {
+        foreach (var tab in definition.Tabs)
+        {
+            foreach (var group in tab.Groups)
+            {
+                foreach (var control in group.Controls)
+                {
+                    if (string.Equals(control.CommandId.Value, commandId, StringComparison.Ordinal))
+                    {
+                        return control;
+                    }
+                }
+            }
+        }
+
+        throw new InvalidOperationException($"Could not find ribbon control '{commandId}'.");
+    }
+
+    private static RibbonComboBox RequiredCombo(RibbonDefinition definition, string commandId) =>
+        RequiredControl(definition, commandId) as RibbonComboBox
+        ?? throw new InvalidOperationException($"Ribbon control '{commandId}' is not a combo box.");
+
+    private static IEnumerable<string> ControlText(RibbonDefinition definition, params string[] commandIds)
+    {
+        foreach (var commandId in commandIds)
+        {
+            var control = RequiredControl(definition, commandId);
+            yield return control.Label;
+            if (control.KeyTip is { } keyTip)
+                yield return keyTip;
+        }
+    }
+
+    private static string RepoFile(params string[] parts) =>
+        Path.Combine(RepoRoot(), Path.Combine(parts));
+
+    private static string RepoPath(params string[] parts) =>
+        Path.Combine(RepoRoot(), Path.Combine(parts));
+
+    private static string RepoRoot()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "FreeP.slnx")) &&
+                Directory.Exists(Path.Combine(directory.FullName, "freep")))
+                return directory.FullName;
+
+            directory = directory.Parent;
+        }
+
+        throw new DirectoryNotFoundException("Could not locate the FreeX repo root.");
+    }
+}

@@ -1,7 +1,7 @@
-using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using FreeX.App.Presentation.DrawingUI;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -41,18 +41,19 @@ public sealed class FormatPictureDialog : Window
 
     public FormatPictureDialog(PictureModel picture)
     {
+        var (state, cropValues) = FormatPicturePlanner.CreatePictureDialogState(picture);
         _initialResult = new FormatPictureDialogResult(
             picture.Width,
             picture.Height,
             picture.RotationDegrees,
-            picture.LockAspectRatio,
-            picture.CropLeft,
-            picture.CropTop,
-            picture.CropRight,
-            picture.CropBottom,
-            picture.AltText);
+            state.LockAspectRatio,
+            cropValues.Left,
+            cropValues.Top,
+            cropValues.Right,
+            cropValues.Bottom,
+            state.AltText);
         Result = _initialResult;
-        _aspectRatio = picture.Height > 0 ? picture.Width / picture.Height : 1;
+        _aspectRatio = state.AspectRatio;
         Title = UiText.Get("FormatPicture_Title");
         Width = 480;
         Height = 440;
@@ -60,16 +61,16 @@ public sealed class FormatPictureDialog : Window
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
 
-        _widthBox.Text = picture.Width.ToString(CultureInfo.CurrentCulture);
-        _heightBox.Text = picture.Height.ToString(CultureInfo.CurrentCulture);
-        _rotationBox.Text = picture.RotationDegrees.ToString(CultureInfo.CurrentCulture);
-        _lockAspectRatioBox.IsChecked = picture.LockAspectRatio;
-        _cropLeftBox.Text = DrawingInputParser.FormatCropPercent(picture.CropLeft);
-        _cropTopBox.Text = DrawingInputParser.FormatCropPercent(picture.CropTop);
-        _cropRightBox.Text = DrawingInputParser.FormatCropPercent(picture.CropRight);
-        _cropBottomBox.Text = DrawingInputParser.FormatCropPercent(picture.CropBottom);
-        _altTextBox.Text = picture.AltText ?? "";
-        if (picture.Kind != PictureKind.Image)
+        _widthBox.Text = state.WidthText;
+        _heightBox.Text = state.HeightText;
+        _rotationBox.Text = state.RotationText;
+        _lockAspectRatioBox.IsChecked = state.LockAspectRatio;
+        _cropLeftBox.Text = PictureCropDialogPlanner.FormatPercent(cropValues.Left);
+        _cropTopBox.Text = PictureCropDialogPlanner.FormatPercent(cropValues.Top);
+        _cropRightBox.Text = PictureCropDialogPlanner.FormatPercent(cropValues.Right);
+        _cropBottomBox.Text = PictureCropDialogPlanner.FormatPercent(cropValues.Bottom);
+        _altTextBox.Text = state.AltText;
+        if (!cropValues.IsCroppable)
         {
             foreach (var box in new[] { _cropLeftBox, _cropTopBox, _cropRightBox, _cropBottomBox })
                 box.IsEnabled = false;
@@ -92,31 +93,35 @@ public sealed class FormatPictureDialog : Window
     {
         result = new FormatPictureDialogResult(0, 0, 0, true, 0, 0, 0, 0, null);
         error = null;
-        if (!ObjectSizeDialog.TryParseSize(sizeInput, out var size))
+        if (!FormatPicturePlanner.TryCreatePictureResult(
+                sizeInput,
+                rotationInput,
+                lockAspectRatio,
+                cropInput,
+                altText,
+                out var plannerResult,
+                out var validationError) ||
+            plannerResult is null)
         {
-            error = UiText.Get("FormatPicture_InvalidSizeMessage");
+            error = validationError switch
+            {
+                FormatPicturePlanner.FormatPictureDialogValidationError.Rotation => UiText.Get("FormatPicture_InvalidRotationMessage"),
+                FormatPicturePlanner.FormatPictureDialogValidationError.Crop => UiText.Get("FormatPicture_InvalidCropPercentagesMessage"),
+                _ => UiText.Get("FormatPicture_InvalidSizeMessage")
+            };
             return false;
         }
-
-        if (!RotationDialog.TryParseRotation(rotationInput, out var rotation))
-        {
-            error = UiText.Get("FormatPicture_InvalidRotationMessage");
-            return false;
-        }
-
-        if (!PictureCropDialog.TryCreateResult(cropInput, out var crop, out error))
-            return false;
 
         result = new FormatPictureDialogResult(
-            size.Width,
-            size.Height,
-            rotation.Degrees,
-            lockAspectRatio,
-            crop.Left,
-            crop.Top,
-            crop.Right,
-            crop.Bottom,
-            string.IsNullOrWhiteSpace(altText) ? null : altText.Trim());
+            plannerResult.Format.Width,
+            plannerResult.Format.Height,
+            plannerResult.Format.RotationDegrees,
+            plannerResult.Format.LockAspectRatio,
+            plannerResult.Crop.Left,
+            plannerResult.Crop.Top,
+            plannerResult.Crop.Right,
+            plannerResult.Crop.Bottom,
+            plannerResult.Format.AltText);
         return true;
     }
 
@@ -163,30 +168,24 @@ public sealed class FormatPictureDialog : Window
 
     private TextBox ResolveInvalidSizeInput()
     {
-        if (!TryParsePositiveSize(_heightBox.Text))
-            return _heightBox;
-
-        if (!TryParsePositiveSize(_widthBox.Text))
-            return _widthBox;
-
-        return _heightBox;
+        var field = FormatPicturePlanner.ResolveInvalidField(
+            _widthBox.Text,
+            _heightBox.Text,
+            _rotationBox.Text);
+        return field == FormatPicturePlanner.FormatObjectDialogField.Width ? _widthBox : _heightBox;
     }
-
-    private static bool TryParsePositiveSize(string text) =>
-        DrawingInputParser.TryParseSize($"{text}x{text}", out var width, out _)
-        && width > 0;
 
     private TextBox ResolveInvalidCropInput(string? error)
     {
         if (string.Equals(error, UiText.Get("FormatPicture_InvalidCropPercentagesMessage"), StringComparison.Ordinal))
         {
-            if (!DrawingInputParser.TryParseCropPercent(_cropLeftBox.Text, out _))
+            if (!PictureCropDialogPlanner.TryParsePercent(_cropLeftBox.Text, out _))
                 return _cropLeftBox;
-            if (!DrawingInputParser.TryParseCropPercent(_cropTopBox.Text, out _))
+            if (!PictureCropDialogPlanner.TryParsePercent(_cropTopBox.Text, out _))
                 return _cropTopBox;
-            if (!DrawingInputParser.TryParseCropPercent(_cropRightBox.Text, out _))
+            if (!PictureCropDialogPlanner.TryParsePercent(_cropRightBox.Text, out _))
                 return _cropRightBox;
-            if (!DrawingInputParser.TryParseCropPercent(_cropBottomBox.Text, out _))
+            if (!PictureCropDialogPlanner.TryParsePercent(_cropBottomBox.Text, out _))
                 return _cropBottomBox;
         }
 
@@ -304,40 +303,42 @@ public sealed class FormatPictureDialog : Window
     private void ResetSizeToInitial()
     {
         _updatingAspect = true;
-        _widthBox.Text = _initialResult.Width.ToString(CultureInfo.CurrentCulture);
-        _heightBox.Text = _initialResult.Height.ToString(CultureInfo.CurrentCulture);
-        _rotationBox.Text = _initialResult.RotationDegrees.ToString(CultureInfo.CurrentCulture);
+        _widthBox.Text = FormatPicturePlanner.FormatSize(_initialResult.Width);
+        _heightBox.Text = FormatPicturePlanner.FormatSize(_initialResult.Height);
+        _rotationBox.Text = FormatPicturePlanner.FormatRotation(_initialResult.RotationDegrees);
         _lockAspectRatioBox.IsChecked = _initialResult.LockAspectRatio;
         _updatingAspect = false;
     }
 
     private void ResetCropToInitial()
     {
-        _cropLeftBox.Text = DrawingInputParser.FormatCropPercent(_initialResult.CropLeft);
-        _cropTopBox.Text = DrawingInputParser.FormatCropPercent(_initialResult.CropTop);
-        _cropRightBox.Text = DrawingInputParser.FormatCropPercent(_initialResult.CropRight);
-        _cropBottomBox.Text = DrawingInputParser.FormatCropPercent(_initialResult.CropBottom);
+        _cropLeftBox.Text = PictureCropDialogPlanner.FormatPercent(_initialResult.CropLeft);
+        _cropTopBox.Text = PictureCropDialogPlanner.FormatPercent(_initialResult.CropTop);
+        _cropRightBox.Text = PictureCropDialogPlanner.FormatPercent(_initialResult.CropRight);
+        _cropBottomBox.Text = PictureCropDialogPlanner.FormatPercent(_initialResult.CropBottom);
     }
 
     private void SyncAspectFromWidth()
     {
         if (_updatingAspect || _lockAspectRatioBox.IsChecked != true || _aspectRatio <= 0)
             return;
-        if (!NumericInputParser.TryParseFiniteDouble(_widthBox.Text, CultureInfo.CurrentCulture, CultureInfo.InvariantCulture, out var width) || width <= 0)
-            return;
-        _updatingAspect = true;
-        _heightBox.Text = (width / _aspectRatio).ToString("0.###", CultureInfo.CurrentCulture);
-        _updatingAspect = false;
+        if (FormatPicturePlanner.SyncHeightFromWidth(_widthBox.Text, _aspectRatio) is { } height)
+        {
+            _updatingAspect = true;
+            _heightBox.Text = FormatPicturePlanner.FormatSize(height);
+            _updatingAspect = false;
+        }
     }
 
     private void SyncAspectFromHeight()
     {
         if (_updatingAspect || _lockAspectRatioBox.IsChecked != true || _aspectRatio <= 0)
             return;
-        if (!NumericInputParser.TryParseFiniteDouble(_heightBox.Text, CultureInfo.CurrentCulture, CultureInfo.InvariantCulture, out var height) || height <= 0)
-            return;
-        _updatingAspect = true;
-        _widthBox.Text = (height * _aspectRatio).ToString("0.###", CultureInfo.CurrentCulture);
-        _updatingAspect = false;
+        if (FormatPicturePlanner.SyncWidthFromHeight(_heightBox.Text, _aspectRatio) is { } width)
+        {
+            _updatingAspect = true;
+            _widthBox.Text = FormatPicturePlanner.FormatSize(width);
+            _updatingAspect = false;
+        }
     }
 }

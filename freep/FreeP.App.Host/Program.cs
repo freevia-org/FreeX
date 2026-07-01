@@ -1,4 +1,3 @@
-using System.Windows;
 using Free.Shared.Theme;
 using Free.Shared.Theme.Wpf;
 
@@ -6,7 +5,7 @@ namespace FreeP.App.Host;
 
 /// <summary>
 /// FreeP entry point. Keeps FreeP-specific identity/seam/window choices local while the shared WPF
-/// runner owns options loading, local diagnostics, crash hooks, and app lifetime events.
+/// runner owns options loading, local diagnostics, theme/language startup, crash hooks, and app lifetime events.
 /// </summary>
 public static class Program
 {
@@ -24,25 +23,23 @@ public static class Program
 
         WpfApplicationStartupRunner.Run(new WpfApplicationStartupSpec<FreePOptions>(
             new AppProductIdentity("FreeP", "FREEP_DIAGNOSTICS", "FreeP"),
-            (options, optionsStore) =>
-            {
-                // Apply the brand theme early — before the main window loads — so that
-                // DynamicResource references in the chrome pick up the correct brushes.
-                // The theme values are BYTE-IDENTICAL to FreeP's current chrome palette,
-                // so the visual result is unchanged.  FREEP_THEME=midnight swaps in the
-                // alternate palette (currently reuses FreeXMidnight as a demo).
-                var theme = string.Equals(
-                    System.Environment.GetEnvironmentVariable("FREEP_THEME"),
-                    "midnight",
-                    StringComparison.OrdinalIgnoreCase)
-                    ? BrandThemes.FreeXMidnight
-                    : BrandThemes.FreeP;
-                ActiveTheme = theme;
-                WpfThemeApplier.Apply(Application.Current, theme, "FreeP");
-                return new MainWindow(options, optionsStore);
-            })
+            (options, optionsStore) => new MainWindow(options, optionsStore))
         {
-            InstallSharedSeams = AppComposition.InstallSharedSeams
+            InstallSharedSeams = AppComposition.InstallSharedSeams,
+            Theme = new WpfApplicationThemeStartupSpec<Theme>(
+                EnvironmentVariableName: "FREEP_THEME",
+                AlternateThemeValue: "midnight",
+                DefaultTheme: BrandThemes.FreeP,
+                AlternateTheme: BrandThemes.FreeXMidnight,
+                ResourceKeyPrefix: "FreeP",
+                ApplyTheme: WpfThemeApplier.Apply)
+            {
+                SetActiveTheme = theme => ActiveTheme = theme
+            },
+            Localization = new WpfApplicationLocalizationStartupSpec<FreePOptions>(
+                SelectUiLanguage: options => options.UiLanguage,
+                ApplyUiLanguage: AppLocalization.ApplyAppLanguage,
+                ApplyCurrentCultureToWpf: AppLocalization.ApplyCurrentCultureToWpf)
         });
     }
 }

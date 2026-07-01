@@ -122,7 +122,7 @@ internal sealed class ExportOptionsDialog : Window
         stack.Children.Add(_openAfterPublishBox);
 
         _openAfterPublishBox.Margin = new Thickness(0, 8, 0, 18);
-        ApplyFormatAvailability(ExportOptionsDialogPlanner.CreateFormatAvailability(format));
+        ApplyFormatAvailability(ExportOptionsDialogSurfacePlanner.CreateFormatAvailability(format));
 
         var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
         var ok = new Button { Content = UiText.Ok, Width = 80, Margin = new Thickness(0, 0, 8, 0), IsDefault = true };
@@ -131,17 +131,17 @@ internal sealed class ExportOptionsDialog : Window
         {
             ExportPageRange? pageRange = null;
             if (_pagesRangeButton.IsChecked == true &&
-                !ExportPlanner.TryCreatePageRange(_fromPageBox.Text, _toPageBox.Text, out pageRange, out var error))
+                !ExportPlanner.TryCreatePageRange(_fromPageBox.Text, _toPageBox.Text, out pageRange, out var error, WpfExportPlannerTextResolver.Instance))
             {
-                DialogMessageHelper.ShowWarning(this, error, UiText.Get("ExportOptions_ExportOptions"));
-                FocusInvalidPageRangeInput(error);
+                _pagesRangeButton.IsChecked = true;
+                SetPageRangeFieldsEnabled(true);
+                DialogFocus.ShowWarningAndFocus(this, error, UiText.Get("ExportOptions_ExportOptions"), ResolveInvalidPageRangeInput(error));
                 return;
             }
 
-            if (!ExportPlanner.TryNormalizePdfLanguage(_pdfLanguageBox.Text, out var pdfLanguage, out var pdfLanguageError))
+            if (!ExportPlanner.TryNormalizePdfLanguage(_pdfLanguageBox.Text, out var pdfLanguage, out var pdfLanguageError, WpfExportPlannerTextResolver.Instance))
             {
-                DialogMessageHelper.ShowWarning(this, pdfLanguageError, UiText.Get("ExportOptions_ExportOptions"));
-                FocusInvalidPdfLanguageInput();
+                DialogFocus.ShowWarningAndFocus(this, pdfLanguageError, UiText.Get("ExportOptions_ExportOptions"), _pdfLanguageBox);
                 return;
             }
 
@@ -191,7 +191,7 @@ internal sealed class ExportOptionsDialog : Window
         _toPageBox.IsEnabled = enabled;
     }
 
-    private void ApplyFormatAvailability(ExportOptionsFormatAvailability availability)
+    private void ApplyFormatAvailability(ExportOptionsDialogFormatAvailability availability)
     {
         if (!availability.PdfBookmarksEnabled)
         {
@@ -235,28 +235,14 @@ internal sealed class ExportOptionsDialog : Window
         AutomationProperties.SetHelpText(control, helpText);
     }
 
-    private void FocusInvalidPageRangeInput(string? error)
-    {
-        _pagesRangeButton.IsChecked = true;
-        SetPageRangeFieldsEnabled(true);
-        var target = ResolveInvalidPageRangeInput(error);
-        target.Focus();
-        target.SelectAll();
-        Keyboard.Focus(target);
-    }
-
     private TextBox ResolveInvalidPageRangeInput(string? error)
     {
-        return ExportOptionsDialogPlanner.ResolveInvalidPageRangeFocusTarget(error, _fromPageBox.Text) == ExportOptionsFocusTarget.ToPage
+        return ExportOptionsDialogSurfacePlanner.ResolveInvalidPageRangeFocusTarget(
+            error,
+            _fromPageBox.Text,
+            UiText.Get("Export_PageRangeFromLessThanToError")) == ExportOptionsDialogFocusTarget.ToPage
             ? _toPageBox
             : _fromPageBox;
-    }
-
-    private void FocusInvalidPdfLanguageInput()
-    {
-        _pdfLanguageBox.Focus();
-        _pdfLanguageBox.SelectAll();
-        Keyboard.Focus(_pdfLanguageBox);
     }
 
     public static ExportOptions CreateResult(
@@ -275,7 +261,7 @@ internal sealed class ExportOptionsDialog : Window
         PdfConformance pdfConformance = PdfConformance.Standard,
         bool includeDocumentStructureTags = false,
         ExportFormat format = ExportFormat.Pdf) =>
-        ExportOptionsDialogPlanner.CreateResult(
+        ExportOptionsDialogSurfacePlanner.CreateResult(
             scope,
             includeDocumentProperties,
             openAfterPublish,
@@ -293,11 +279,11 @@ internal sealed class ExportOptionsDialog : Window
             format);
 
     private PdfBookmarkMode GetSelectedBookmarkMode() =>
-        ExportOptionsDialogPlanner.BookmarkModeFromIndex(_bookmarkModeBox.SelectedIndex);
+        ExportOptionsDialogSurfacePlanner.BookmarkModeFromIndex(_bookmarkModeBox.SelectedIndex);
 
     private PdfInitialView GetSelectedInitialView() =>
-        ExportOptionsDialogPlanner.InitialViewFromIndex(_initialViewBox.SelectedIndex);
+        ExportOptionsDialogSurfacePlanner.InitialViewFromIndex(_initialViewBox.SelectedIndex);
 
     private PdfOpenMode GetSelectedOpenMode() =>
-        ExportOptionsDialogPlanner.OpenModeFromIndex(_openModeBox.SelectedIndex);
+        ExportOptionsDialogSurfacePlanner.OpenModeFromIndex(_openModeBox.SelectedIndex);
 }

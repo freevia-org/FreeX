@@ -1,34 +1,12 @@
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
-using FreeX.Core.Commands;
+using FreeX.App.Presentation;
+using FreeX.App.Presentation.DataTools;
 using FreeX.Core.Model;
+using SharedDataTableInputParser = FreeX.App.Presentation.DataTools.DataTableInputParser;
 
 namespace FreeX.App.Host;
-
-public enum DataTableMode
-{
-    OneVariable,
-    TwoVariable
-}
-
-public sealed record DataTableDialogResult(
-    DataTableMode Mode,
-    DataTableInputOrientation Orientation,
-    CellAddress FormulaCell,
-    CellAddress? RowInputCell,
-    CellAddress? ColumnInputCell);
-
-public enum DataTableRangeSelectionTarget
-{
-    RowInputCell,
-    ColumnInputCell
-}
-
-public sealed record DataTableRangeSelectionRequest(
-    DataTableRangeSelectionTarget Target,
-    string CurrentText,
-    bool CollapseDialog = true);
 
 public sealed class DataTableDialog : Window
 {
@@ -92,80 +70,19 @@ public sealed class DataTableDialog : Window
         string? rowInputCellText,
         string? columnInputCellText,
         out DataTableDialogResult result,
-        out string? error)
-    {
-        result = default!;
-        error = null;
-
-        var hasRowInput = !string.IsNullOrWhiteSpace(rowInputCellText);
-        var hasColumnInput = !string.IsNullOrWhiteSpace(columnInputCellText);
-        if (!TryParseOptionalCell(currentSheetId, rowInputCellText, hasRowInput, out var rowInputCell))
-        {
-            error = UiText.Get("DataTable_InvalidRowInputMessage");
-            return false;
-        }
-
-        if (!TryParseOptionalCell(currentSheetId, columnInputCellText, hasColumnInput, out var columnInputCell))
-        {
-            error = UiText.Get("DataTable_InvalidColumnInputMessage");
-            return false;
-        }
-
-        if (!hasRowInput && !hasColumnInput)
-        {
-            error = UiText.Get("DataTable_MissingInputMessage");
-            return false;
-        }
-
-        if (rowInputCell is { } rowCell && range.Contains(rowCell))
-        {
-            error = UiText.Get("DataTable_RowInputInsideRangeMessage");
-            return false;
-        }
-
-        if (columnInputCell is { } columnCell && range.Contains(columnCell))
-        {
-            error = UiText.Get("DataTable_ColumnInputInsideRangeMessage");
-            return false;
-        }
-
-        if (rowInputCell is { } rowInput && columnInputCell is { } columnInput && rowInput == columnInput)
-        {
-            error = UiText.Get("DataTable_SameInputCellMessage");
-            return false;
-        }
-
-        var mode = hasRowInput && hasColumnInput ? DataTableMode.TwoVariable : DataTableMode.OneVariable;
-        var orientation = hasRowInput && !hasColumnInput
-            ? DataTableInputOrientation.Row
-            : DataTableInputOrientation.Column;
-        var formulaCell = DataTableInputParser.GetDefaultFormulaCell(range, orientation, mode == DataTableMode.TwoVariable);
-
-        result = new DataTableDialogResult(mode, orientation, formulaCell, rowInputCell, columnInputCell);
-        return true;
-    }
-
-    private static bool TryParseOptionalCell(
-        SheetId sheetId,
-        string? text,
-        bool shouldParse,
-        out CellAddress? address)
-    {
-        address = null;
-        if (!shouldParse)
-            return true;
-
-        if (!DataTableInputParser.TryParseCell(text!, sheetId, out var parsed))
-            return false;
-
-        address = parsed;
-        return true;
-    }
+        out DataTableInputParseIssue issue) =>
+        SharedDataTableInputParser.TryParse(
+            currentSheetId,
+            range,
+            rowInputCellText,
+            columnInputCellText,
+            out result,
+            out issue);
 
     public static DataTableRangeSelectionRequest CreateRangeSelectionRequest(
         DataTableRangeSelectionTarget target,
         string currentText) =>
-        new(target, currentText.Trim(), CollapseDialog: true);
+        SharedDataTableInputParser.CreateRangeSelectionRequest(target, currentText);
 
     private DockPanel CreateReferenceEditor(
         TextBox textBox,
@@ -215,12 +132,15 @@ public sealed class DataTableDialog : Window
 
     public void ApplyRangeSelection(DataTableRangeSelectionTarget target, CellAddress address)
     {
-        var textBox = target == DataTableRangeSelectionTarget.ColumnInputCell
-            ? _columnInputBox
-            : _rowInputBox;
+        var textBox = GetInputBox(target);
         textBox.Text = address.ToA1();
         FocusRangeSelectionInput(textBox);
     }
+
+    private TextBox GetInputBox(DataTableRangeSelectionTarget target) =>
+        target == DataTableRangeSelectionTarget.ColumnInputCell
+            ? _columnInputBox
+            : _rowInputBox;
 
     private static void FocusRangeSelectionInput(TextBox target)
     {
@@ -232,22 +152,19 @@ public sealed class DataTableDialog : Window
         FocusRangeSelectionInput(_rowInputBox);
     }
 
-    private void FocusInvalidInput(string? error)
+    private void FocusInvalidInput(DataTableInputParseIssue issue)
     {
-        var target = string.Equals(error, UiText.Get("DataTable_InvalidColumnInputMessage"), StringComparison.Ordinal) ||
-            string.Equals(error, UiText.Get("DataTable_ColumnInputInsideRangeMessage"), StringComparison.Ordinal) ||
-            string.Equals(error, UiText.Get("DataTable_SameInputCellMessage"), StringComparison.Ordinal)
-            ? _columnInputBox
-            : _rowInputBox;
-        DialogFocus.FocusAndSelect(target);
+        var target = SharedDataTableInputParser.GetErrorFocusTarget(issue);
+        DialogFocus.FocusAndSelect(GetInputBox(target));
     }
 
     private void Accept()
     {
-        if (!TryParse(_sheetId, _range, _rowInputBox.Text, _columnInputBox.Text, out var result, out var error))
+        if (!TryParse(_sheetId, _range, _rowInputBox.Text, _columnInputBox.Text, out var result, out var issue))
         {
+            var error = DataTableInputParser.DescribeIssue(issue);
             DialogMessageHelper.ShowWarning(this, error ?? UiText.Get("DataTable_InvalidCellsMessage"), Title);
-            FocusInvalidInput(error);
+            FocusInvalidInput(issue);
             return;
         }
 

@@ -149,8 +149,20 @@ public sealed class TableDesignCommandPlannerTests
         sheet.StructuredTables[0].StyleName.Should().Be(option.StyleName);
     }
 
+    [Fact]
+    public void BuildConvertToRangePlan_CapturesDisplayNameAndCommand()
+    {
+        var (_, sheet, table) = BuildWorkbook(displayName: "");
+
+        var plan = TableDesignCommandPlanner.BuildConvertToRangePlan(sheet.Id, table);
+
+        plan.TableDisplayName.Should().Be(table.Name);
+        plan.Command.Should().BeOfType<ConvertStructuredTableToRangeCommand>();
+    }
+
     private static (Workbook Workbook, Sheet Sheet, StructuredTableModel Table) BuildWorkbook(
-        string styleName = "")
+        string styleName = "",
+        string displayName = "Table1")
     {
         var workbook = new Workbook("Test");
         var sheet = workbook.AddSheet("Sheet1");
@@ -163,7 +175,7 @@ public sealed class TableDesignCommandPlannerTests
         {
             Id = 1,
             Name = "Table1",
-            DisplayName = "Table1",
+            DisplayName = displayName,
             Range = Range(sheet.Id, 1, 1, 4, 2),
             StyleName = styleName,
             HasAutoFilter = true,

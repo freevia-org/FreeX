@@ -1,0 +1,91 @@
+using FluentAssertions;
+
+namespace FreeX.App.Presentation.Tests.Filtering;
+
+public sealed class AutoFilterPlannerSourceGuardTests
+{
+    [Fact]
+    public void AutoFilterRangePlanning_LivesBelowPresentation()
+    {
+        var presentationRoot = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Presentation");
+        var repoRoot = Directory.GetParent(presentationRoot)?.Parent?.FullName
+            ?? throw new DirectoryNotFoundException("Could not resolve repository root.");
+        var coreCommandsRoot = Path.Combine(repoRoot, "src", "FreeX.Core.Commands");
+
+        File.Exists(Path.Combine(presentationRoot, "Filtering", "AutoFilterHeaderButtonPlanner.cs"))
+            .Should()
+            .BeTrue("filter header targeting should be shared by WPF, Avalonia, and sister apps");
+        File.Exists(Path.Combine(coreCommandsRoot, "AutoFilterRangeResolver.cs"))
+            .Should()
+            .BeTrue("effective AutoFilter range resolution is model/command logic shared below app renderers");
+        File.Exists(Path.Combine(coreCommandsRoot, "AutoFilterToggleRangePlanner.cs"))
+            .Should()
+            .BeTrue("filter command range selection should be shared by Presentation and Services");
+        File.Exists(Path.Combine(presentationRoot, "AutoFilter", "AutoFilterRangeResolver.cs"))
+            .Should()
+            .BeFalse("Presentation should not duplicate Core AutoFilter range resolution");
+        File.Exists(Path.Combine(presentationRoot, "Filtering", "AutoFilterToggleRangePlanner.cs"))
+            .Should()
+            .BeFalse("Presentation should use the Core range planner instead of owning a copy");
+        File.Exists(Path.Combine(repoRoot, "src", "FreeX.App.Avalonia", "AutoFilterHeaderPlanner.cs"))
+            .Should()
+            .BeFalse("Avalonia should render shared filter-header plans instead of owning the planner");
+        File.Exists(Path.Combine(repoRoot, "src", "FreeX.App.Host", "AutoFilterToggleRangePlanner.cs"))
+            .Should()
+            .BeFalse("WPF Host should use the shared range planner instead of carrying a local copy");
+        File.Exists(Path.Combine(repoRoot, "src", "FreeX.App.Host", "AutoFilterDropdownPlanner.cs"))
+            .Should()
+            .BeFalse("WPF Host should call the shared dropdown planner directly and keep only UI text resources local");
+        File.Exists(Path.Combine(repoRoot, "src", "FreeX.App.Host", "ClearFilterRangePlanner.cs"))
+            .Should()
+            .BeFalse("WPF Host should call the shared AutoFilter range and active-filter planners directly");
+        File.Exists(Path.Combine(repoRoot, "src", "FreeX.App.Host", "FilterPromptPlanner.cs"))
+            .Should()
+            .BeFalse("filter prompt parsing should live below Host, with WPF owning only localized error text");
+    }
+
+    [Fact]
+    public void RendererLayers_DelegateToSharedFilteringPlanners()
+    {
+        var presentationRoot = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Presentation");
+        var repoRoot = Directory.GetParent(presentationRoot)?.Parent?.FullName
+            ?? throw new DirectoryNotFoundException("Could not resolve repository root.");
+        var avaloniaSource = File.ReadAllText(Path.Combine(repoRoot, "src", "FreeX.App.Avalonia", "MainWindow.AutoFilter.cs"));
+        var hostDropdownSource = File.ReadAllText(Path.Combine(repoRoot, "src", "FreeX.App.Host", "MainWindow.EditingDropdowns.cs"));
+        var hostResourcesSource = File.ReadAllText(Path.Combine(repoRoot, "src", "FreeX.App.Host", "AutoFilterMenuResources.cs"));
+        var hostDataFilterSource = File.ReadAllText(Path.Combine(repoRoot, "src", "FreeX.App.Host", "MainWindow.DataFilterCommands.cs"));
+        var presentationPromptSource = File.ReadAllText(Path.Combine(presentationRoot, "Filtering", "FilterPromptPlanner.cs"));
+
+        avaloniaSource.Should().Contain("AutoFilterHeaderButtonPlanner.IsFilterButtonCell");
+        avaloniaSource.Should().Contain("AutoFilterDropdownMenuPlanner.CreateMenuPlan");
+        avaloniaSource.Should().Contain("InvariantAutoFilterMenuTextProvider.Instance");
+        avaloniaSource.Should().NotContain("RangeHasActiveFilter(");
+        hostDropdownSource.Should().Contain("AutoFilterDropdownMenuPlanner.TryGetAutoFilterRange");
+        hostDropdownSource.Should().Contain("AutoFilterDropdownMenuPlanner.CreateMenuPlan");
+        hostDropdownSource.Should().Contain("AutoFilterMenuResources.TextProvider");
+        hostDropdownSource.Should().NotContain("AutoFilterDropdownPlanner.");
+        hostResourcesSource.Should().Contain("IAutoFilterMenuTextProvider");
+        hostResourcesSource.Should().NotContain("AutoFilterDropdownMenuPlanner.");
+        hostDataFilterSource.Should().Contain("AutoFilterToggleRangePlanner.Create(sheet, selectedRange)");
+        hostDataFilterSource.Should().Contain("AutoFilterDropdownMenuPlanner.HasActiveFilter(sheet, range)");
+        hostDataFilterSource.Should().Contain("FormatFilterPromptPlanError(promptError)");
+        hostDataFilterSource.Should().Contain("UiText.Get(\"FilterPrompt_ErrorTopBottomSyntax\")");
+        presentationPromptSource.Should().Contain("FilterInputParser.TryParseTopBottom");
+        presentationPromptSource.Should().Contain("FilterInputParser.TryParseCriterion");
+        presentationPromptSource.Should().NotContain("UiText.Get(");
+        hostDataFilterSource.Should().NotContain("SelectionRangeService.GetCurrentRegion");
+    }
+
+    [Fact]
+    public void ServicesLayer_DelegatesAutoFilterToggleRangeToCorePlanner()
+    {
+        var presentationRoot = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Presentation");
+        var repoRoot = Directory.GetParent(presentationRoot)?.Parent?.FullName
+            ?? throw new DirectoryNotFoundException("Could not resolve repository root.");
+        var sessionSource = File.ReadAllText(Path.Combine(repoRoot, "src", "FreeX.App.Services", "WorkbookSession.cs"));
+
+        sessionSource.Should().Contain("AutoFilterToggleRangePlanner.Create(ActiveSheet, SelectedRange)");
+        sessionSource.Should().NotContain("ResolveAutoFilterToggleRange");
+        sessionSource.Should().NotContain("Mirrors the desktop host");
+    }
+}

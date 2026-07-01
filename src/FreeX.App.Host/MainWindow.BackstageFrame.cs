@@ -2,7 +2,9 @@ using System.Windows;
 using System.Windows.Controls;
 using Free.Shared.Ribbon;
 using Free.Shared.Ribbon.Wpf;
+using Free.Shared.Shell.Wpf;
 using FreeX.App.Presentation.Backstage;
+using FreeX.App.Presentation.PageLayout;
 
 namespace FreeX.App.Host;
 
@@ -20,13 +22,9 @@ namespace FreeX.App.Host;
 /// </summary>
 public partial class MainWindow
 {
-    private BackstageFrame? _backstageFrame;
+    private static readonly FreeXBackstageFramePlan BackstageFramePlan = FreeXBackstageFramePlanner.Build();
 
-    // Language-invariant pane identifiers (the frame's automation ids) so ShowInfoView()/ShowPrintView()
-    // and Ctrl+P can land on a specific pane regardless of the current UI language.
-    private const string BackstageHomePaneId = FreeXBackstageNavigationPlanner.HomePaneAutomationId;
-    private const string BackstageInfoPaneId = FreeXBackstageNavigationPlanner.InfoPaneAutomationId;
-    private const string BackstagePrintPaneId = FreeXBackstageNavigationPlanner.PrintPaneAutomationId;
+    private BackstageFrame? _backstageFrame;
 
     private void InitializeBackstageFrame()
     {
@@ -48,6 +46,7 @@ public partial class MainWindow
                 ToolTip: UiText.Get("MainWindow_ToolTip_BackToWorkbook"),
                 TooltipTitle: UiText.Get("MainWindow_TooltipTitle_Back"),
                 KeyTip: "B"),
+            Chrome = BackstageRibbonChrome.Create(),
             DecorateNavButtons = DecorateBackstageNavButton,
             Closed = OnBackstageFrameClosed
         });
@@ -80,55 +79,63 @@ public partial class MainWindow
 
     private IEnumerable<BackstageEntry> BuildBackstageEntries()
     {
-        // Pane entries swap the content host to the existing FreeX pane after running its refresh logic;
-        // command entries fire an existing handler and the frame closes itself first (matching FreeW).
-        // IconCommandName routes each rail glyph to FreeX's Office SVG of that name (the same CommandName
-        // the old XAML RibbonIcon used); Icon is the geometry fallback.
-        return FreeXBackstageNavigationPlanner.Build().Select(MapBackstageNavigationEntry);
+        // Pane entries swap the content host to an existing FreeX pane; command entries resolve to existing
+        // WPF handlers. The presentation frame plan owns ordering, selection targets, refresh policy, and
+        // command workflow classification.
+        return BackstageFramePlan.Entries.Select(MapBackstageFrameEntry);
     }
 
-    private BackstageEntry MapBackstageNavigationEntry(FreeXBackstageNavigationEntry entry)
+    private BackstageEntry MapBackstageFrameEntry(FreeXBackstageFrameEntryPlan entry)
     {
-        if (entry.Kind == FreeXBackstageNavigationEntryKind.Divider)
-            return BackstageEntry.Divider(entry.DockBottom);
+        var navigation = entry.Navigation;
+        if (navigation.Kind == FreeXBackstageNavigationEntryKind.Divider)
+            return BackstageEntry.Divider(navigation.DockBottom);
 
-        var label = ResolveBackstageText(entry.LabelKey);
-        var automationName = ResolveOptionalBackstageText(entry.AutomationNameKey);
-        var automationHelpText = ResolveOptionalBackstageText(entry.AutomationHelpTextKey);
-        var tooltipTitle = ResolveOptionalBackstageText(entry.TooltipTitleKey);
-        var tooltipDescription = ResolveOptionalBackstageText(entry.TooltipDescriptionKey);
+        var label = ResolveBackstageText(navigation.LabelKey);
+        var automationName = ResolveOptionalBackstageText(navigation.AutomationNameKey);
+        var automationHelpText = ResolveOptionalBackstageText(navigation.AutomationHelpTextKey);
+        var tooltipTitle = ResolveOptionalBackstageText(navigation.TooltipTitleKey);
+        var tooltipDescription = ResolveOptionalBackstageText(navigation.TooltipDescriptionKey);
 
-        return entry.Kind switch
+        return navigation.Kind switch
         {
             FreeXBackstageNavigationEntryKind.Pane => BackstageEntry.Pane(
                 label,
-                entry.Icon,
-                ResolveBackstagePane(entry.Pane!.Value),
-                entry.DockBottom,
-                entry.KeyTip,
-                entry.AutomationId,
+                navigation.Icon,
+                () => BuildBackstagePane(RequirePaneFlow(entry)),
+                navigation.DockBottom,
+                navigation.KeyTip,
+                navigation.AutomationId,
                 automationName,
                 automationHelpText,
                 tooltipTitle,
                 tooltipDescription,
-                entry.IconCommandName),
+                navigation.IconCommandName),
 
             FreeXBackstageNavigationEntryKind.Command => BackstageEntry.Command(
                 label,
-                entry.Icon,
-                ResolveBackstageCommand(entry.Command!.Value),
-                entry.DockBottom,
-                entry.KeyTip,
-                entry.AutomationId,
+                navigation.Icon,
+                ResolveBackstageCommand(RequireCommandWorkflow(entry)),
+                navigation.DockBottom,
+                navigation.KeyTip,
+                navigation.AutomationId,
                 automationName,
                 automationHelpText,
                 tooltipTitle,
                 tooltipDescription,
-                entry.IconCommandName),
+                navigation.IconCommandName),
 
-            _ => throw new InvalidOperationException($"Unsupported Backstage entry kind '{entry.Kind}'.")
+            _ => throw new InvalidOperationException($"Unsupported Backstage entry kind '{navigation.Kind}'.")
         };
     }
+
+    private static FreeXBackstagePaneFlowPlan RequirePaneFlow(FreeXBackstageFrameEntryPlan entry) =>
+        entry.PaneFlow
+        ?? throw new InvalidOperationException($"Backstage pane entry '{entry.Navigation.LabelKey}' is missing a flow plan.");
+
+    private static FreeXBackstageCommandWorkflowPlan RequireCommandWorkflow(FreeXBackstageFrameEntryPlan entry) =>
+        entry.CommandWorkflow
+        ?? throw new InvalidOperationException($"Backstage command entry '{entry.Navigation.LabelKey}' is missing a workflow plan.");
 
     private static string ResolveBackstageText(string? key) =>
         key is null ? string.Empty : UiText.Get(key);
@@ -136,62 +143,87 @@ public partial class MainWindow
     private static string? ResolveOptionalBackstageText(string? key) =>
         key is null ? null : UiText.Get(key);
 
-    private Func<UIElement> ResolveBackstagePane(FreeXBackstagePaneId pane) =>
-        pane switch
-        {
-            FreeXBackstagePaneId.Home => BuildHomePane,
-            FreeXBackstagePaneId.Info => BuildInfoPane,
-            FreeXBackstagePaneId.Print => BuildPrintPane,
-            _ => throw new InvalidOperationException($"Unsupported Backstage pane '{pane}'.")
-        };
+    private Action ResolveBackstageCommand(FreeXBackstageCommandWorkflowPlan plan) =>
+        async () => await FreeXBackstageCommandWorkflowExecutor.ExecuteAsync(
+            plan,
+            CreateBackstageCommandHandlers());
 
-    private Action ResolveBackstageCommand(FreeXBackstageCommandId command) =>
-        command switch
-        {
-            FreeXBackstageCommandId.New => async () => await RequestNewWorkbookAsync(),
-            FreeXBackstageCommandId.Open => () => OpenButton_Click(this, new RoutedEventArgs()),
-            FreeXBackstageCommandId.Share => async () => await ShareWorkbookAsync(),
-            FreeXBackstageCommandId.Save => () => SaveButton_Click(this, new RoutedEventArgs()),
-            FreeXBackstageCommandId.SaveAs => () => SaveAsButton_Click(this, new RoutedEventArgs()),
-            FreeXBackstageCommandId.Export => () => ExportPdfButton_Click(this, new RoutedEventArgs()),
-            FreeXBackstageCommandId.Close => Close,
-            FreeXBackstageCommandId.Account => () => SsAccountBtn_Click(this, new RoutedEventArgs()),
-            FreeXBackstageCommandId.Options => () => SsOptionsBtn_Click(this, new RoutedEventArgs()),
-            _ => throw new InvalidOperationException($"Unsupported Backstage command '{command}'.")
-        };
+    private FreeXBackstageCommandHandlers CreateBackstageCommandHandlers() =>
+        new(
+            NewWorkbookAsync: RequestNewWorkbookAsync,
+            OpenWorkbookAsync: () => RunBackstageCommand(() => OpenButton_Click(this, new RoutedEventArgs())),
+            ShareWorkbookAsync: ShareWorkbookAsync,
+            SaveWorkbookAsync: () => RunBackstageCommand(() => SaveButton_Click(this, new RoutedEventArgs())),
+            SaveWorkbookAsAsync: () => RunBackstageCommand(() => SaveAsButton_Click(this, new RoutedEventArgs())),
+            ExportWorkbookAsync: () => RunBackstageCommand(() => ExportPdfButton_Click(this, new RoutedEventArgs())),
+            CloseWorkbookAsync: () => RunBackstageCommand(Close),
+            AccountAsync: () => RunBackstageCommand(() => SsAccountBtn_Click(this, new RoutedEventArgs())),
+            OptionsAsync: () => RunBackstageCommand(() => SsOptionsBtn_Click(this, new RoutedEventArgs())));
+
+    private static Task RunBackstageCommand(Action action)
+    {
+        action();
+        return Task.CompletedTask;
+    }
 
     // ── Pane content factories ──────────────────────────────────────────────────
     // Each runs the same live-refresh the old Show*View methods did, then hands the existing pane element to
     // the frame (after detaching it from its current parent — a WPF element has exactly one logical parent).
 
-    private UIElement BuildHomePane()
+    private UIElement BuildBackstagePane(FreeXBackstagePaneFlowPlan plan)
     {
-        UpdateSsGreeting();
-        SwitchToRecentTab();
-        UpdateSsRecentList();
-        return ReparentForBackstage(SsHomeView);
+        ApplyBackstagePaneFlow(plan);
+        var element = ReparentForBackstage(ResolveBackstagePaneElement(plan.Pane));
+        ApplyBackstagePaneFocus(plan);
+        return element;
     }
 
-    private UIElement BuildInfoPane()
+    private void ApplyBackstagePaneFlow(FreeXBackstagePaneFlowPlan plan)
     {
-        UpdateInfoView();
-        return ReparentForBackstage(SsInfoView);
-    }
+        if (plan.RefreshGreeting)
+            UpdateSsGreeting();
 
-    private UIElement BuildPrintPane()
-    {
+        if (plan.ResetRecentTab)
+            SwitchToRecentTab();
+
+        if (plan.RefreshRecentFiles)
+            UpdateSsRecentList();
+
+        if (plan.RefreshInfo)
+            UpdateInfoView();
+
+        if (!plan.RefreshPrintOptions && !plan.RefreshPrintPreview)
+            return;
+
         var activeSheet = _workbook.GetSheet(_currentSheetId);
-        _backstagePrintPreviewSettings = new PrintPreviewSettings();
-        ConfigureBackstagePrintOptions(activeSheet);
-        RefreshBackstagePrintPreview();
-        var pane = ReparentForBackstage(SsPrintView);
+        if (plan.ResetPrintPreviewSettings)
+            _backstagePrintPreviewSettings = new PrintPreviewSettings();
+        if (plan.RefreshPrintOptions)
+            ConfigureBackstagePrintOptions(activeSheet);
+        if (plan.RefreshPrintPreview)
+            RefreshBackstagePrintPreview();
+    }
+
+    private FrameworkElement ResolveBackstagePaneElement(FreeXBackstagePaneId pane) =>
+        pane switch
+        {
+            FreeXBackstagePaneId.Home => SsHomeView,
+            FreeXBackstagePaneId.Info => SsInfoView,
+            FreeXBackstagePaneId.Print => SsPrintView,
+            _ => throw new InvalidOperationException($"Unsupported Backstage pane '{pane}'.")
+        };
+
+    private void ApplyBackstagePaneFocus(FreeXBackstagePaneFlowPlan plan)
+    {
+        if (plan.FocusTarget != FreeXBackstagePaneFocusTarget.PrintNowButton)
+            return;
+
         // The print pane lands focus on Print Now (Ctrl+P / the screenshot tour rely on this).
         Dispatcher.BeginInvoke(() =>
         {
             SsBackstagePrintNowButton.Focus();
             System.Windows.Input.Keyboard.Focus(SsBackstagePrintNowButton);
         }, System.Windows.Threading.DispatcherPriority.Loaded);
-        return pane;
     }
 
     // Make a pane visible (the holder kept them collapsed) and detach it from whatever parent currently

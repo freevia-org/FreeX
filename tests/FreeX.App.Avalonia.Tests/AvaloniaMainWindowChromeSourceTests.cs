@@ -10,8 +10,39 @@ public sealed class AvaloniaMainWindowChromeSourceTests
     public void QuickAnalysisShell_UsesSharedGroupTitleMetadata()
     {
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.QuickAnalysis.cs"));
+        var plannerSource = File.ReadAllText(RepoFile(
+            "src",
+            "FreeX.App.Presentation",
+            "QuickAnalysis",
+            "QuickAnalysisShellPlanner.cs"));
+        var requestPlannerSource = File.ReadAllText(RepoFile(
+            "src",
+            "FreeX.App.Presentation",
+            "QuickAnalysis",
+            "QuickAnalysisShellRequestPlanner.cs"));
+        var openPlannerSource = File.ReadAllText(RepoFile(
+            "src",
+            "FreeX.App.Presentation",
+            "QuickAnalysis",
+            "QuickAnalysisShellOpenPlanner.cs"));
 
-        source.Should().Contain("QuickAnalysisShellPlanner.GroupTitleResourceKey(group.Group)");
+        source.Should().Contain("QuickAnalysisShellRequestPlanner.Build(");
+        source.Should().Contain("QuickAnalysisShellOpenPlanner.Plan(request)");
+        source.Should().NotContain("request.Status is QuickAnalysisShellRequestStatus");
+        source.Should().NotContain("if (!request.CanOpen)");
+        source.Should().Contain("QuickAnalysisShellOpenPlanner.FormatIssueText(");
+        source.Should().Contain("QuickAnalysisShellOpenIssueTextTarget.Dialog");
+        source.Should().NotContain("var issue = openPlan.Issue");
+        source.Should().NotContain("openPlan.Decision == QuickAnalysisShellOpenDecision");
+        source.Should().Contain("Text = UiText.Get(group.TitleResourceKey)");
+        source.Should().Contain("foreach (var group in shellPlan.Groups)");
+        source.Should().NotContain("foreach (var group in displayModel.Groups)");
+        source.Should().Contain("AutomationProperties.SetAutomationId(button, item.AutomationId)");
+        requestPlannerSource.Should().Contain("QuickAnalysisShellPlanner.BuildMenuPlan(displayModel, capabilities, range)");
+        openPlannerSource.Should().Contain("new QuickAnalysisShellOpenIssuePlan(");
+        openPlannerSource.Should().Contain("\"TableLoc_QaNoSuggestions\"");
+        plannerSource.Should().Contain("GroupTitleResourceKey(group.Group)");
+        plannerSource.Should().Contain("QuickAnalysisShellActionPlanner.Plan(item, capabilities)");
         source.Should().NotContain("QuickAnalysisGroupTitle(");
         source.Should().NotContain("QuickAnalysisGroup.Formatting => UiText.Get");
     }
@@ -20,19 +51,28 @@ public sealed class AvaloniaMainWindowChromeSourceTests
     public void QuickAnalysisShell_UsesSharedActionPlanning()
     {
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.QuickAnalysis.cs"));
-        var plannerSource = File.ReadAllText(RepoFile(
+        var actionPlannerSource = File.ReadAllText(RepoFile(
             "src",
             "FreeX.App.Presentation",
             "QuickAnalysis",
             "QuickAnalysisShellActionPlanner.cs"));
+        var operationPlannerSource = File.ReadAllText(RepoFile(
+            "src",
+            "FreeX.App.Presentation",
+            "QuickAnalysis",
+            "QuickAnalysisHostOperationPlanner.cs"));
 
-        source.Should().Contain("QuickAnalysisShellActionPlanner.Plan(item, QuickAnalysisShellCapabilities.DirectApplyLimited)");
-        source.Should().Contain("QuickAnalysisShellActionKind.ApplyConditionalFormat");
-        source.Should().Contain("QuickAnalysisShellActionKind.Deferred");
+        source.Should().Contain("var operation = QuickAnalysisHostOperationPlanner.Plan(item);");
+        source.Should().NotContain("QuickAnalysisShellActionPlanner.Plan(item, QuickAnalysisShellCapabilities.DirectApplyLimited)");
+        source.Should().Contain("operation.ConditionalFormatPreset is { } preset");
+        source.Should().NotContain("TryMapQuickAnalysisConditionalFormatPreset(");
+        source.Should().Contain("QuickAnalysisHostOperationKind.ApplyConditionalFormat");
+        source.Should().Contain("QuickAnalysisHostOperationKind.Deferred");
         source.Should().NotContain("IsQuickAnalysisAutoSumFunction(");
         source.Should().NotContain("QuickAnalysisCommandKind.PivotTable");
-        plannerSource.Should().Contain("This total is not yet available on {capabilities.DeferredPlatformName}.");
-        plannerSource.Should().Contain("Converting to a PivotTable is not yet available on {capabilities.DeferredPlatformName}.");
+        actionPlannerSource.Should().Contain("This total is not yet available on {capabilities.DeferredPlatformName}.");
+        actionPlannerSource.Should().Contain("Converting to a PivotTable is not yet available on {capabilities.DeferredPlatformName}.");
+        operationPlannerSource.Should().Contain("QuickAnalysisHostOperationKind.ApplyConditionalFormat");
     }
 
     [Fact]
@@ -46,11 +86,12 @@ public sealed class AvaloniaMainWindowChromeSourceTests
             File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ChartTypeFormatDialogs.cs")));
 
         chartTabsSource.Should().Contain("ChartQuickFormatCycler.NextDataLabelPosition(");
-        chartTabsSource.Should().Contain("ChartQuickFormatCycler.NextGridlineState(");
+        chartTabsSource.Should().Contain("ChartAxisWorkflowCommandCatalog.Gridlines(useXAxis: true)");
+        chartTabsSource.Should().Contain("ChartAxisPlanner.PlanQuickCommand(chart, command.UseXAxis, quickCommand)");
         chartTabsSource.Should().Contain("ChartQuickFormatCycler.ReadFirstSeriesFormat(chart).FillColor");
         chartTabsSource.Should().Contain("ChartQuickFormatCycler.DefaultSeriesColor");
         chartTabsSource.Should().Contain("ChartWorkflowTargetPlanner.FindSelectedChart(_session.ActiveSheet, _selectedDrawingObjectId)");
-        chartTabsSource.Should().Contain("ChartQuickFormatCycler.NextChartStyleId(chart.ChartStyleId)");
+        chartTabsSource.Should().Contain("ChartStylePlanner.NextStyleId(chart.ChartStyleId)");
         chartTabsSource.Should().Contain("ChartQuickFormatCycler.NextPlotAreaBorderThickness(chart.PlotAreaBorderThickness)");
         chartTabsSource.Should().Contain("ChartQuickFormatCycler.MergeFirstSeriesFillColor(chart, chosen)");
         chartDialogSources.Should().Contain("ChartQuickFormatCycler.DefaultSeriesColor");
@@ -61,8 +102,44 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         combined.Should().NotContain("candidate.Id == id && candidate.IsVisible && !candidate.IsPivotChart");
         combined.Should().NotContain("chart.PlotAreaBorderThickness >= 3 ? 0.75");
         combined.Should().NotContain("current >= 45 ? 1 : current + 4");
+        combined.Should().NotContain("ChartQuickFormatCycler.NextChartStyleId(chart.ChartStyleId)");
         combined.Should().NotContain("private static ChartDataLabelPosition NextDataLabelPosition");
         combined.Should().NotContain("private static (bool ShowMajor, bool ShowMinor) NextGridlineState");
+    }
+
+    [Fact]
+    public void SelectChartDataDialog_UsesSharedSelectDataSourcePlanner()
+    {
+        var chartTabsSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ChartTabs.cs"));
+
+        chartTabsSource.Should().Contain("SelectDataSourcePlanner.InferPreviewEntries(");
+        chartTabsSource.Should().Contain("SelectDataSourcePlanner.FormatSeriesListItem");
+        chartTabsSource.Should().Contain("SelectDataSourcePlanner.FormatNewSeriesItem");
+        chartTabsSource.Should().Contain("SelectDataSourcePlanner.CreateResult(");
+        chartTabsSource.Should().Contain("ChartTypePickerPlanner.GetAllChartsPanel()");
+        chartTabsSource.Should().Contain("SelectDataSourcePlanner.GetChartDataRangeField()");
+        chartTabsSource.Should().Contain("SelectDataSourcePlanner.GetSeriesPanel()");
+        chartTabsSource.Should().Contain("SelectDataSourcePlanner.GetAxisLabelsPanel()");
+        chartTabsSource.Should().NotContain("TryParseCellRef");
+        chartTabsSource.Should().NotContain("TryParseRangeReference");
+    }
+
+    [Fact]
+    public void ChartWorkflowDialogs_UseSharedResidualDescriptors()
+    {
+        var chartTabsSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ChartTabs.cs"));
+        var remainingDialogsSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ChartRemainingDialogs.cs"));
+        var pivotOptionsSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.PivotChartOptions.cs"));
+
+        chartTabsSource.Should().Contain("ChartTypePickerPlanner.GetAllChartsPanel()");
+        chartTabsSource.Should().Contain("BuildChartTypePreviewPanel(panel.Preview)");
+        remainingDialogsSource.Should().Contain("ChartMovePlanner.GetTargetChoices()");
+        remainingDialogsSource.Should().Contain("ChartMovePlanner.GetTargetNameField()");
+        pivotOptionsSource.Should().Contain("PivotChartOptionsPlanner.Read(chart!)");
+        pivotOptionsSource.Should().Contain("PivotChartOptionsPlanner.CreateResult(");
+        pivotOptionsSource.Should().Contain("PivotChartOptionsPlanner.GetBlankDisplayChoices()");
+        pivotOptionsSource.Should().Contain("PivotChartOptionsDialogFieldId.ShowHiddenData");
+        pivotOptionsSource.Should().Contain("PivotChartOptionsDialogFieldId.BlankDisplayMode");
     }
 
     [Fact]
@@ -104,6 +181,49 @@ public sealed class AvaloniaMainWindowChromeSourceTests
     }
 
     [Fact]
+    public void MainWindow_UsesSharedAvaloniaShellFrameAndStatusChrome()
+    {
+        var project = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "FreeX.App.Avalonia.csproj"));
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var normalizedSource = source.Replace("\r\n", "\n", StringComparison.Ordinal);
+
+        var buildContentBlock = ExtractSourceBlock(
+            normalizedSource,
+            "private Control BuildContent()",
+            "private Control BuildWorkbookWorkArea()");
+        var statusBarBlock = ExtractSourceBlock(
+            normalizedSource,
+            "private Control BuildStatusBar()",
+            "/// <summary>\n    /// Looks up a named brush");
+
+        project.Should().Contain(@"..\..\shared\Free.Shared.Shell.Avalonia\Free.Shared.Shell.Avalonia.csproj");
+        source.Should().Contain("using Free.Shared.Shell.Avalonia;");
+
+        buildContentBlock.Should().Contain("SisterAppClientFrameBuilder.Build(new SisterAppClientFrameSpec(");
+        buildContentBlock.Should().Contain("Ribbon: ribbon,");
+        buildContentBlock.Should().Contain("WorkArea: BuildWorkbookWorkArea(),");
+        buildContentBlock.Should().Contain("StatusBar: statusBar,");
+        buildContentBlock.Should().Contain("BottomPanelsAboveStatus: [sheetTabs],");
+        buildContentBlock.Should().Contain("TopPanelsBelowRibbon: [formulaBar]");
+        buildContentBlock.Should().Contain("return frame.Root;");
+        AssertBefore(buildContentBlock, "Ribbon: ribbon,", "WorkArea: BuildWorkbookWorkArea(),");
+        AssertBefore(buildContentBlock, "WorkArea: BuildWorkbookWorkArea(),", "StatusBar: statusBar,");
+        AssertBefore(buildContentBlock, "StatusBar: statusBar,", "BottomPanelsAboveStatus: [sheetTabs],");
+        AssertBefore(buildContentBlock, "BottomPanelsAboveStatus: [sheetTabs],", "TopPanelsBelowRibbon: [formulaBar]");
+        buildContentBlock.Should().NotContain("var root = new DockPanel();");
+        buildContentBlock.Should().NotContain("root.Children.Add(");
+
+        statusBarBlock.Should().Contain("SisterAppStatusBarChrome.Build(new SisterAppStatusBarSpec(");
+        statusBarBlock.Should().Contain("LeftContent: leftPanel,");
+        statusBarBlock.Should().Contain("RightItems: [rightPanel],");
+        statusBarBlock.Should().Contain("CenterContent: statsViewport,");
+        statusBarBlock.Should().Contain("Padding: new Thickness(8, 3)");
+        statusBarBlock.Should().NotContain("var grid = new AvaloniaGrid");
+        statusBarBlock.Should().NotContain("AddGridChild(grid, leftPanel");
+        statusBarBlock.Should().NotContain("Child = grid");
+    }
+
+    [Fact]
     public void FormulaBarToggle_HidesTheWholeFormulaBarRow()
     {
         var mainSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
@@ -115,6 +235,15 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         mainSource.Should().Contain("_cellAddressText.TextAlignment = TextAlignment.Left;");
         mainSource.Should().Contain("_formulaBox.FontFamily = FormulaBarFontFamily;");
         mainSource.Should().Contain("_formulaBox.FontSize = 15;");
+        mainSource.Should().Contain("FormulaBarChromePlanner.FormulaBox.AutomationNameResourceKey");
+        mainSource.Should().Contain("CreateFormulaBarPathButton(");
+        mainSource.Should().Contain("FormulaBarChromePlanner.CancelEditButton");
+        mainSource.Should().Contain("FormulaBarChromePlanner.EnterEditButton");
+        mainSource.Should().Contain("FormulaBarChromePlanner.InsertFunctionButton");
+        mainSource.Should().Contain("FormulaBarChromePlanner.BuildExpansion(_formulaBarExpanded)");
+        mainSource.Should().Contain("_formulaBox.Height = plan.EditorHeight;");
+        mainSource.Should().Contain("_formulaBarHost.Height = plan.HostHeight;");
+        mainSource.Should().Contain("ApplyFormulaBarExpandAutomation(plan.Button)");
         mainSource.Should().Contain("AutomationProperties.SetAutomationId(_formulaBarHost, \"FormulaBarRow\");");
         toggleSource.Should().Contain("_formulaBarHost.IsVisible = visible;");
     }
@@ -132,11 +261,33 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         source.Should().Contain("_formulaBox.Text = string.Concat(");
         source.Should().Contain("_formulaBox.Focus();");
 
-        source.Should().Contain("var rowDelta = e.KeyModifiers.HasFlag(KeyModifiers.Shift) ? -1 : 1;");
-        source.Should().Contain("_session.MoveActiveCell(rowDelta, 0);");
-        source.Should().Contain("FocusShellRegion(ShellFocusRegion.Worksheet);");
-        source.Should().Contain("_session.MoveActiveCell(0, colDelta);");
+        source.Should().Contain("ExcelEditKeyPlanner.GetIntent(");
+        source.Should().Contain("FormulaBarAvaloniaInputAdapter.ToFormulaEditorKey(e.Key)");
+        source.Should().Contain("FormulaBarAvaloniaInputAdapter.ToFormulaEditorModifiers(e.KeyModifiers)");
+        source.Should().Contain("intent.Action == ExcelEditKeyAction.CommitAndMove");
+        source.Should().Contain("var rowDelta = GetCellIndexDelta(current.Row, target.Row);");
+        source.Should().Contain("var colDelta = GetCellIndexDelta(current.Col, target.Col);");
+        source.Should().Contain("_session.MoveActiveCell(rowDelta, colDelta);");
+        source.Should().Contain("FocusShellRegion(ShellFocusTarget.Worksheet);");
         source.Should().Contain("private static bool IsFormulaPointModeText(string? text)");
+    }
+
+    [Fact]
+    public void F6ShellFocusCycle_UsesSharedPresentationPlanner()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+
+        source.Should().Contain("ShellFocusCyclePlanner.GetNextAvailable(current, reverse, IsShellFocusTargetAvailable)");
+        source.Should().Contain("private static bool IsShellFocusTargetAvailable(ShellFocusTarget target)");
+        source.Should().Contain("private ShellFocusTarget GetCurrentShellFocusTarget()");
+        source.Should().Contain("private bool FocusShellRegion(ShellFocusTarget target)");
+        source.Should().Contain("ShellFocusTarget.Ribbon => FocusFirstEnabledToolbarControl()");
+        source.Should().Contain("ShellFocusTarget.TaskPane => false");
+
+        source.Should().NotContain("private enum ShellFocusRegion");
+        source.Should().NotContain("private static readonly ShellFocusRegion[] ShellFocusCycle");
+        source.Should().NotContain("GetNextShellFocusRegion");
+        source.Should().NotContain("Array.IndexOf(ShellFocusCycle");
     }
 
     [Fact]
@@ -168,13 +319,23 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         captureSource.Should().Contain("CaptureBackstageSurface(outputDirectory, surfaceId)");
         captureSource.Should().Contain("CreateParityCapturedBackstageSurface(surfaceId)");
         captureSource.Should().Contain("FreeXBackstageNavigationPlanner.Build()");
-        captureSource.Should().Contain("FreeXBackstagePaneCatalog.BuildInfoActions(FreeXBackstageInfoSurface.ParityCapture)");
-        captureSource.Should().Contain("FreeXBackstagePaneCatalog.BuildInfoDetails(FreeXBackstageInfoSurface.ParityCapture)");
+        captureSource.Should().Contain("FreeXBackstageInfoPanePlanner.Build(");
+        captureSource.Should().Contain("FreeXBackstageInfoSurface.ParityCapture");
+        captureSource.Should().Contain("BuildParityCapturedBackstageInfoPanePlan()");
+        captureSource.Should().Contain("FreeXBackstagePaneProjectionPlanner.BuildInfoPane(");
+        captureSource.Should().Contain("FreeXBackstageHomePanePlanner.Build()");
         // The parity-captured Account pane mirrors the WPF host page ("Local account information"
         // with the local app/OS identity rows) rather than the 4-row product-info catalog, so the
         // Linux capture no longer mislabels Account as "Product information".
-        captureSource.Should().Contain("BuildParityCapturedBackstageAccountRows()");
+        captureSource.Should().Contain("FreeXBackstageAccountPanePlanner.Build(new FreeXBackstageAccountPaneRequest(");
+        captureSource.Should().Contain("FreeXBackstagePaneProjectionPlanner.BuildAccountDialog(");
+        captureSource.Should().Contain("BuildParityCapturedBackstageAccountRows(detailRows.Rows)");
         captureSource.Should().Contain("Backstage_Account_LocalInfoHeading");
+        captureSource.Should().NotContain("Backstage_Account_CurrentWorkbookNotSaved");
+        hostCaptureSource.Should().Contain("FreeXBackstageAccountPanePlanner.Build(new FreeXBackstageAccountPaneRequest(");
+        hostCaptureSource.Should().Contain("FreeXBackstagePaneProjectionPlanner.BuildAccountDialog(");
+        hostCaptureSource.Should().Contain("ResolveBackstageAccountValue(detail.Value)");
+        hostCaptureSource.Should().NotContain("(\"FreeX user name\", \"quinn\")");
         captureSource.Should().Contain("CreateParityCapturedBackstageContentScroll(content)");
         captureSource.Should().Contain("CreateParityCapturedBackstageScrollbar()");
         captureSource.Should().Contain("CreateParityCapturedStatusBarFooter()");
@@ -187,31 +348,13 @@ public sealed class AvaloniaMainWindowChromeSourceTests
     }
 
     [Fact]
-    public void BackstageInfo_DelegatesDisplayTextToSharedPlanner()
-    {
-        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.Backstage.cs"));
-
-        source.Should().Contain("WorkbookInfoDisplayPlanner.Build(");
-        source.Should().Contain("WorkbookInfoDisplaySurface.AvaloniaBackstageInfoDialog");
-        source.Should().Contain("FreeXBackstagePaneCatalog.BuildInfoDetails(FreeXBackstageInfoSurface.AvaloniaInfoDialog)");
-        source.Should().Contain("FreeXBackstagePaneCatalog.BuildInfoActions(FreeXBackstageInfoSurface.AvaloniaInfoDialog)");
-        source.Should().Contain("FreeXBackstagePaneCatalog.GetExportScopeLabelKey(");
-        source.Should().Contain("FreeXBackstagePaneCatalog.GetExportOutputKindLabelKey(");
-        source.Should().Contain("FreeXBackstagePaneCatalog.BuildAccountDetails()");
-        source.Should().Contain("FreeXBackstagePaneCatalog.BuildAccountActions(plan.OptionsAvailable)");
-        source.Should().NotContain("FormatBackstageFileSize");
-        source.Should().NotContain("FormatBackstageLastModified");
-        source.Should().NotContain("FormatBackstageProtection");
-        source.Should().NotContain("FormatBackstageStatistics");
-        source.Should().NotContain("FormatExportScopeLabel");
-    }
-
-    [Fact]
     public void NativeFileMenu_InstallsForMacOsDockAndMirrorsBackstageCommandGroups()
     {
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
         var appSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "App.cs"));
+        var catalogSource = File.ReadAllText(RepoFile("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
         var normalizedSource = source.Replace("\r\n", "\n", StringComparison.Ordinal);
+        var normalizedCatalogSource = catalogSource.Replace("\r\n", "\n", StringComparison.Ordinal);
 
         appSource.Should().Contain("private const string ApplicationTitle = \"FreeX\";");
         appSource.Should().Contain("Name = ApplicationTitle;");
@@ -219,92 +362,146 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         source.Should().Contain("NativeDock.SetMenu(app, menu);");
         source.Should().Contain("NativeMenu.SetMenu(this, menu);");
         source.Should().Contain("InstallNativeMenu(_nativeMenu);");
+        source.Should().Contain("private NativeMenu CreateNativeFileMenu()");
+        source.Should().Contain("foreach (var entry in NativeMenuCatalog.FileMenuEntries)");
+        source.Should().Contain("menu.Items.Add(GetNativeFileMenuItem(entry.Item!.Id));");
 
-        var fileMenuBlock = ExtractSourceBlock(
-            normalizedSource,
-            "var fileMenu = new NativeMenu();",
-            "fileMenu.Items.Add(_quitMenuItem);");
-        fileMenuBlock.Should().Contain("fileMenu.Items.Add(_openRecentMenuItem);");
-        fileMenuBlock.Should().Contain("fileMenu.Items.Add(_shareWorkbookMenuItem);");
-        fileMenuBlock.Should().Contain("fileMenu.Items.Add(_backstageInfoMenuItem);");
-        fileMenuBlock.Should().Contain("fileMenu.Items.Add(_printMenuItem);");
-        fileMenuBlock.Should().Contain("fileMenu.Items.Add(_printPreviewMenuItem);");
-        fileMenuBlock.Should().Contain("fileMenu.Items.Add(_backstageExportMenuItem);");
-        fileMenuBlock.Should().Contain("fileMenu.Items.Add(_exportPdfMenuItem);");
-        fileMenuBlock.Should().Contain("fileMenu.Items.Add(_filePageSetupMenuItem);");
-        fileMenuBlock.Should().Contain("fileMenu.Items.Add(_backstageAccountMenuItem);");
-        fileMenuBlock.Should().Contain("fileMenu.Items.Add(_optionsMenuItem);");
+        var fileMenuCatalogBlock = ExtractSourceBlock(
+            normalizedCatalogSource,
+            "public static IReadOnlyList<NativeFileMenuEntryPlan> FileMenuEntries",
+            "    ];");
+        fileMenuCatalogBlock.Should().Contain("FileItem(NativeFileMenuItemId.OpenRecent)");
+        fileMenuCatalogBlock.Should().Contain("FileItem(NativeFileMenuItemId.ShareWorkbook)");
+        fileMenuCatalogBlock.Should().Contain("FileItem(NativeFileMenuItemId.BackstageInfo)");
+        fileMenuCatalogBlock.Should().Contain("FileItem(NativeFileMenuItemId.Print)");
+        fileMenuCatalogBlock.Should().Contain("FileItem(NativeFileMenuItemId.PrintPreview)");
+        fileMenuCatalogBlock.Should().Contain("FileItem(NativeFileMenuItemId.BackstageExport)");
+        fileMenuCatalogBlock.Should().Contain("FileItem(NativeFileMenuItemId.ExportPdf)");
+        fileMenuCatalogBlock.Should().Contain("FileItem(NativeFileMenuItemId.PageSetup)");
+        fileMenuCatalogBlock.Should().Contain("FileItem(NativeFileMenuItemId.BackstageAccount)");
+        fileMenuCatalogBlock.Should().Contain("FileItem(NativeFileMenuItemId.Options)");
+        source.Should().Contain("NativeFileMenuItemId.PageSetup => _filePageSetupMenuItem");
 
-        AssertBefore(fileMenuBlock, "_openRecentMenuItem", "_shareWorkbookMenuItem");
-        AssertBefore(fileMenuBlock, "_shareWorkbookMenuItem", "_backstageInfoMenuItem");
-        AssertBefore(fileMenuBlock, "_backstageInfoMenuItem", "_saveMenuItem");
-        AssertBefore(fileMenuBlock, "_saveAsMenuItem", "_printMenuItem");
-        AssertBefore(fileMenuBlock, "_printPreviewMenuItem", "_backstageExportMenuItem");
-        AssertBefore(fileMenuBlock, "_backstageExportMenuItem", "_exportPdfMenuItem");
-        AssertBefore(fileMenuBlock, "_exportPdfMenuItem", "_workbookStatisticsMenuItem");
-        AssertBefore(fileMenuBlock, "_workbookStatisticsMenuItem", "_filePageSetupMenuItem");
-        AssertBefore(fileMenuBlock, "_filePageSetupMenuItem", "_closeWorkbookMenuItem");
-        AssertBefore(fileMenuBlock, "_closeWorkbookMenuItem", "_backstageAccountMenuItem");
-        AssertBefore(fileMenuBlock, "_backstageAccountMenuItem", "_optionsMenuItem");
+        AssertBefore(fileMenuCatalogBlock, "NativeFileMenuItemId.OpenRecent", "NativeFileMenuItemId.ShareWorkbook");
+        AssertBefore(fileMenuCatalogBlock, "NativeFileMenuItemId.ShareWorkbook", "NativeFileMenuItemId.BackstageInfo");
+        AssertBefore(fileMenuCatalogBlock, "NativeFileMenuItemId.BackstageInfo", "NativeFileMenuItemId.Save");
+        AssertBefore(fileMenuCatalogBlock, "NativeFileMenuItemId.SaveAs", "NativeFileMenuItemId.Print");
+        AssertBefore(fileMenuCatalogBlock, "NativeFileMenuItemId.PrintPreview", "NativeFileMenuItemId.BackstageExport");
+        AssertBefore(fileMenuCatalogBlock, "NativeFileMenuItemId.BackstageExport", "NativeFileMenuItemId.ExportPdf");
+        AssertBefore(fileMenuCatalogBlock, "NativeFileMenuItemId.ExportPdf", "NativeFileMenuItemId.WorkbookStatistics");
+        AssertBefore(fileMenuCatalogBlock, "NativeFileMenuItemId.WorkbookStatistics", "NativeFileMenuItemId.PageSetup");
+        AssertBefore(fileMenuCatalogBlock, "NativeFileMenuItemId.PageSetup", "NativeFileMenuItemId.CloseWorkbook");
+        AssertBefore(fileMenuCatalogBlock, "NativeFileMenuItemId.CloseWorkbook", "NativeFileMenuItemId.BackstageAccount");
+        AssertBefore(fileMenuCatalogBlock, "NativeFileMenuItemId.BackstageAccount", "NativeFileMenuItemId.Options");
     }
 
     [Fact]
     public void NativeMenuBar_UsesRibbonAndBackstageTopLevelOrder()
     {
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var catalogSource = File.ReadAllText(RepoFile("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
         var smokeSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
         var normalizedSource = source.Replace("\r\n", "\n", StringComparison.Ordinal);
+        var normalizedCatalogSource = catalogSource.Replace("\r\n", "\n", StringComparison.Ordinal);
 
         var nativeMenuBlock = ExtractSourceBlock(
             normalizedSource,
             "_nativeMenu = new NativeMenu();",
             "_nativeMenu.NeedsUpdate += (_, _) => UpdateSaveButton();");
 
-        nativeMenuBlock.Should().Contain("Header = \"File\"");
-        nativeMenuBlock.Should().Contain("Header = \"Home\"");
-        nativeMenuBlock.Should().Contain("Header = \"Insert\"");
-        nativeMenuBlock.Should().Contain("Header = \"Page Layout\"");
-        nativeMenuBlock.Should().Contain("Header = \"Formulas\"");
-        nativeMenuBlock.Should().Contain("Header = \"Data\"");
-        nativeMenuBlock.Should().Contain("Header = \"Review\"");
-        nativeMenuBlock.Should().Contain("Header = \"View\"");
-        nativeMenuBlock.Should().Contain("Header = \"Sheet\"");
-        nativeMenuBlock.Should().Contain("Header = \"Window\"");
-        nativeMenuBlock.Should().Contain("Header = \"Help\"");
+        nativeMenuBlock.Should().Contain("AddNativeTopLevelMenus(_nativeMenu");
+        nativeMenuBlock.Should().Contain("[NativeMenuTopLevelId.File] = fileMenu");
+        nativeMenuBlock.Should().Contain("[NativeMenuTopLevelId.Home] = homeMenu");
+        nativeMenuBlock.Should().Contain("[NativeMenuTopLevelId.Insert] = insertMenu");
+        nativeMenuBlock.Should().Contain("[NativeMenuTopLevelId.PageLayout] = pageLayoutMenu");
+        nativeMenuBlock.Should().Contain("[NativeMenuTopLevelId.Formulas] = formulasMenu");
+        nativeMenuBlock.Should().Contain("[NativeMenuTopLevelId.Data] = dataMenu");
+        nativeMenuBlock.Should().Contain("[NativeMenuTopLevelId.Review] = reviewMenu");
+        nativeMenuBlock.Should().Contain("[NativeMenuTopLevelId.View] = viewMenu");
+        nativeMenuBlock.Should().Contain("[NativeMenuTopLevelId.Sheet] = sheetMenu");
+        nativeMenuBlock.Should().Contain("[NativeMenuTopLevelId.Window] = windowMenu");
+        nativeMenuBlock.Should().Contain("[NativeMenuTopLevelId.Help] = helpMenu");
+
+        var topLevelCatalogBlock = ExtractSourceBlock(
+            normalizedCatalogSource,
+            "public static IReadOnlyList<NativeMenuTopLevelPlan> TopLevelMenus",
+            "    ];");
+        topLevelCatalogBlock.Should().Contain("new(NativeMenuTopLevelId.File, \"File\")");
+        topLevelCatalogBlock.Should().Contain("new(NativeMenuTopLevelId.Home, \"Home\")");
+        topLevelCatalogBlock.Should().Contain("new(NativeMenuTopLevelId.Insert, \"Insert\")");
+        topLevelCatalogBlock.Should().Contain("new(NativeMenuTopLevelId.PageLayout, \"Page Layout\")");
+        topLevelCatalogBlock.Should().Contain("new(NativeMenuTopLevelId.Formulas, \"Formulas\")");
+        topLevelCatalogBlock.Should().Contain("new(NativeMenuTopLevelId.Data, \"Data\")");
+        topLevelCatalogBlock.Should().Contain("new(NativeMenuTopLevelId.Review, \"Review\")");
+        topLevelCatalogBlock.Should().Contain("new(NativeMenuTopLevelId.View, \"View\")");
+        topLevelCatalogBlock.Should().Contain("new(NativeMenuTopLevelId.Sheet, \"Sheet\")");
+        topLevelCatalogBlock.Should().Contain("new(NativeMenuTopLevelId.Window, \"Window\")");
+        topLevelCatalogBlock.Should().Contain("new(NativeMenuTopLevelId.Help, \"Help\")");
         nativeMenuBlock.Should().NotContain("Header = \"Edit\"");
         nativeMenuBlock.Should().NotContain("Header = \"Format\"");
 
-        AssertBefore(nativeMenuBlock, "Header = \"File\"", "Header = \"Home\"");
-        AssertBefore(nativeMenuBlock, "Header = \"Home\"", "Header = \"Insert\"");
-        AssertBefore(nativeMenuBlock, "Header = \"Insert\"", "Header = \"Page Layout\"");
-        AssertBefore(nativeMenuBlock, "Header = \"Page Layout\"", "Header = \"Formulas\"");
-        AssertBefore(nativeMenuBlock, "Header = \"Formulas\"", "Header = \"Data\"");
-        AssertBefore(nativeMenuBlock, "Header = \"Data\"", "Header = \"Review\"");
-        AssertBefore(nativeMenuBlock, "Header = \"Review\"", "Header = \"View\"");
-        AssertBefore(nativeMenuBlock, "Header = \"View\"", "Header = \"Sheet\"");
-        AssertBefore(nativeMenuBlock, "Header = \"Sheet\"", "Header = \"Window\"");
-        AssertBefore(nativeMenuBlock, "Header = \"Window\"", "Header = \"Help\"");
+        AssertBefore(topLevelCatalogBlock, "NativeMenuTopLevelId.File", "NativeMenuTopLevelId.Home");
+        AssertBefore(topLevelCatalogBlock, "NativeMenuTopLevelId.Home", "NativeMenuTopLevelId.Insert");
+        AssertBefore(topLevelCatalogBlock, "NativeMenuTopLevelId.Insert", "NativeMenuTopLevelId.PageLayout");
+        AssertBefore(topLevelCatalogBlock, "NativeMenuTopLevelId.PageLayout", "NativeMenuTopLevelId.Formulas");
+        AssertBefore(topLevelCatalogBlock, "NativeMenuTopLevelId.Formulas", "NativeMenuTopLevelId.Data");
+        AssertBefore(topLevelCatalogBlock, "NativeMenuTopLevelId.Data", "NativeMenuTopLevelId.Review");
+        AssertBefore(topLevelCatalogBlock, "NativeMenuTopLevelId.Review", "NativeMenuTopLevelId.View");
+        AssertBefore(topLevelCatalogBlock, "NativeMenuTopLevelId.View", "NativeMenuTopLevelId.Sheet");
+        AssertBefore(topLevelCatalogBlock, "NativeMenuTopLevelId.Sheet", "NativeMenuTopLevelId.Window");
+        AssertBefore(topLevelCatalogBlock, "NativeMenuTopLevelId.Window", "NativeMenuTopLevelId.Help");
 
-        var homeMenuBlock = ExtractSourceBlock(
-            normalizedSource,
-            "var homeMenu = new NativeMenu();",
-            "homeMenu.Items.Add(_openHyperlinkMenuItem);");
-        homeMenuBlock.Should().Contain("homeMenu.Items.Add(_formatPainterMenuItem);");
-        homeMenuBlock.Should().Contain("homeMenu.Items.Add(_conditionalFormattingMenuItem);");
-        homeMenuBlock.Should().Contain("homeMenu.Items.Add(_fillCellsMenuItem);");
-        homeMenuBlock.Should().Contain("homeMenu.Items.Add(_clearMenuItem);");
-        homeMenuBlock.Should().Contain("homeMenu.Items.Add(_findMenuItem);");
+        source.Should().Contain("var homeMenu = CreateNativeMenu(NativeMenuTopLevelId.Home);");
+        source.Should().Contain("var insertMenu = CreateNativeMenu(NativeMenuTopLevelId.Insert);");
+        source.Should().Contain("var pageLayoutMenu = CreateNativeMenu(NativeMenuTopLevelId.PageLayout);");
+        source.Should().Contain("var formulasMenu = CreateNativeMenu(NativeMenuTopLevelId.Formulas);");
+        source.Should().Contain("var dataMenu = CreateNativeMenu(NativeMenuTopLevelId.Data);");
+        source.Should().Contain("var reviewMenu = CreateNativeMenu(NativeMenuTopLevelId.Review);");
+        source.Should().Contain("var viewMenu = CreateNativeMenu(NativeMenuTopLevelId.View);");
+        source.Should().Contain("var sheetMenu = CreateNativeMenu(NativeMenuTopLevelId.Sheet);");
+        source.Should().Contain("var windowMenu = CreateNativeMenu(NativeMenuTopLevelId.Window);");
+        source.Should().Contain("var helpMenu = CreateNativeMenu(NativeMenuTopLevelId.Help);");
 
-        var pageLayoutMenuBlock = ExtractSourceBlock(
-            normalizedSource,
-            "var pageLayoutMenu = new NativeMenu();",
-            "pageLayoutMenu.Items.Add(_printHeadingsMenuItem);");
-        pageLayoutMenuBlock.Should().Contain("pageLayoutMenu.Items.Add(_themesMenuItem);");
-        pageLayoutMenuBlock.Should().Contain("pageLayoutMenu.Items.Add(_pageMarginsMenuItem);");
-        pageLayoutMenuBlock.Should().Contain("pageLayoutMenu.Items.Add(_printAreaMenuItem);");
-        pageLayoutMenuBlock.Should().Contain("pageLayoutMenu.Items.Add(_pageBreaksMenuItem);");
-        pageLayoutMenuBlock.Should().Contain("pageLayoutMenu.Items.Add(_sheetBackgroundMenuItem);");
-        pageLayoutMenuBlock.Should().Contain("pageLayoutMenu.Items.Add(_pageSetupMenuItem);");
+        var homeMenuCatalogBlock = ExtractSourceBlock(
+            normalizedCatalogSource,
+            "public static IReadOnlyList<NativeMenuEntryPlan> HomeMenuEntries",
+            "    ];");
+        homeMenuCatalogBlock.Should().Contain("Item(NativeMenuItemId.FormatPainter)");
+        homeMenuCatalogBlock.Should().Contain("Item(NativeMenuItemId.ConditionalFormatting)");
+        homeMenuCatalogBlock.Should().Contain("Item(NativeMenuItemId.FillCells)");
+        homeMenuCatalogBlock.Should().Contain("Item(NativeMenuItemId.Clear)");
+        homeMenuCatalogBlock.Should().Contain("Item(NativeMenuItemId.Find)");
+
+        var pageLayoutMenuCatalogBlock = ExtractSourceBlock(
+            normalizedCatalogSource,
+            "public static IReadOnlyList<NativeMenuEntryPlan> PageLayoutMenuEntries",
+            "    ];");
+        pageLayoutMenuCatalogBlock.Should().Contain("Item(NativeMenuItemId.Themes)");
+        pageLayoutMenuCatalogBlock.Should().Contain("Item(NativeMenuItemId.PageMargins)");
+        pageLayoutMenuCatalogBlock.Should().Contain("Item(NativeMenuItemId.PrintArea)");
+        pageLayoutMenuCatalogBlock.Should().Contain("Item(NativeMenuItemId.PageBreaks)");
+        pageLayoutMenuCatalogBlock.Should().Contain("Item(NativeMenuItemId.SheetBackground)");
+        pageLayoutMenuCatalogBlock.Should().Contain("Item(NativeMenuItemId.PageSetup)");
+        AssertBefore(pageLayoutMenuCatalogBlock, "NativeMenuItemId.Themes", "NativeMenuItemId.PageMargins");
+        AssertBefore(pageLayoutMenuCatalogBlock, "NativeMenuItemId.PageMargins", "NativeMenuItemId.PageSetup");
+        AssertBefore(pageLayoutMenuCatalogBlock, "NativeMenuItemId.PageSetup", "NativeMenuItemId.PrintGridlines");
+
+        var formulasMenuCatalogBlock = ExtractSourceBlock(
+            normalizedCatalogSource,
+            "public static IReadOnlyList<NativeMenuEntryPlan> FormulasMenuEntries",
+            "    ];");
+        formulasMenuCatalogBlock.Should().Contain("Item(NativeMenuItemId.AutoSum)");
+        formulasMenuCatalogBlock.Should().Contain("Item(NativeMenuItemId.InsertFunction)");
+        formulasMenuCatalogBlock.Should().Contain("Item(NativeMenuItemId.NameManager)");
+        formulasMenuCatalogBlock.Should().Contain("Item(NativeMenuItemId.DefineName)");
+        formulasMenuCatalogBlock.Should().Contain("Item(NativeMenuItemId.CreateNamesFromSelection)");
+        formulasMenuCatalogBlock.Should().Contain("Item(NativeMenuItemId.ShowFormulas)");
+        AssertBefore(formulasMenuCatalogBlock, "NativeMenuItemId.AutoSum", "NativeMenuItemId.InsertFunction");
+        AssertBefore(formulasMenuCatalogBlock, "NativeMenuItemId.InsertFunction", "NativeMenuItemId.NameManager");
+        AssertBefore(formulasMenuCatalogBlock, "NativeMenuItemId.CreateNamesFromSelection", "NativeMenuItemId.ShowFormulas");
+        source.Should().NotContain("var pageLayoutMenu = new NativeMenu();");
+        source.Should().NotContain("pageLayoutMenu.Items.Add(");
+        source.Should().NotContain("formulasMenu.Items.Add(");
 
         smokeSource.Should().Contain("NativeTopLevelMenuOrder");
         smokeSource.Should().Contain("NativeDockTopLevelMenuOrder");
@@ -328,7 +525,7 @@ public sealed class AvaloniaMainWindowChromeSourceTests
 
         duplicates.Should().BeEmpty("Avalonia NativeMenuItem instances can only have one NativeMenu parent");
         source.Should().Contain("ConfigurePageSetupNativeMenuItem(_filePageSetupMenuItem);");
-        source.Should().Contain("ConfigurePageSetupNativeMenuItem(_pageSetupMenuItem);");
+        source.Should().Contain("_pageSetupMenuItem.Click += async (_, _) => await ShowPageSetupDialogAsync();");
     }
 
     [Fact]
@@ -340,6 +537,8 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         insertObjectsSource.Should().Contain("foreach (var group in DrawingInsertionPlanner.ShapeGroups)");
         insertObjectsSource.Should().Contain("DrawingInsertionPlanner.BuildShapeCommand(");
         insertObjectsSource.Should().Contain("DrawingInsertionPlanner.BuildTextBoxCommand(");
+        insertObjectsSource.Should().Contain("DrawingObjectActionPlanner.InsertShapeSuccess(");
+        insertObjectsSource.Should().Contain("DrawingObjectActionPlanner.InsertTextBoxSuccess(");
         mainSource.Should().Contain("DrawingInsertionPlanner.DefaultShape");
         File.Exists(RepoFile("src", "FreeX.App.Avalonia", "InsertShapeCommandFactory.cs")).Should().BeFalse();
         File.Exists(RepoFile("src", "FreeX.App.Avalonia", "InsertTextBoxCommandFactory.cs")).Should().BeFalse();
@@ -352,30 +551,91 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         var formatDialogSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.DrawingFormatDialogs.cs"));
 
         contextualTabsSource.Should().Contain("DrawingObjectCommandPlanner.BuildZOrderCommand(");
-        contextualTabsSource.Should().Contain("DrawingObjectCommandPlanner.BuildRotateCommand(");
-        contextualTabsSource.Should().Contain("DrawingObjectCommandPlanner.BuildResizeCommand(");
-        contextualTabsSource.Should().Contain("DrawingObjectCommandPlanner.BuildAltTextCommand(");
+        contextualTabsSource.Should().Contain("DrawingObjectFormatCommandPolicy.BuildRotationCommand(");
+        contextualTabsSource.Should().Contain("DrawingObjectFormatCommandPolicy.BuildResizeCommand(");
+        contextualTabsSource.Should().Contain("DrawingObjectFormatCommandPolicy.BuildAltTextCommand(");
+        contextualTabsSource.Should().Contain("DrawingObjectCommandPlanner.BuildFillColorCommand(");
+        contextualTabsSource.Should().Contain("DrawingObjectCommandPlanner.BuildOutlineColorCommand(");
+        contextualTabsSource.Should().Contain("DrawingObjectActionPlanner.ZOrderSuccess(");
+        contextualTabsSource.Should().Contain("DrawingObjectActionPlanner.ShapeFillSuccess(");
+        contextualTabsSource.Should().Contain("DrawingObjectActionPlanner.ShapeOutlineSuccess(");
+        contextualTabsSource.Should().Contain("DrawingObjectActionPlanner.ShapeEffectSuccess(");
+        contextualTabsSource.Should().Contain("DrawingObjectActionPlanner.RotationSuccess(");
+        contextualTabsSource.Should().Contain("DrawingObjectActionPlanner.ResizeSuccess(");
+        contextualTabsSource.Should().Contain("DrawingObjectActionPlanner.AltTextSuccess(");
+        contextualTabsSource.Should().Contain("DrawingObjectFormatCommandPolicy.ResolveSelectedFormatTarget(");
+        contextualTabsSource.Should().Contain("DrawingObjectFormatCommandPolicy.SupportsFillAndOutline(");
+        contextualTabsSource.Should().Contain("DrawingObjectFormatCommandPolicy.ResolveFillColor(");
+        contextualTabsSource.Should().Contain("DrawingObjectFormatCommandPolicy.ResolveOutlineColor(");
+        contextualTabsSource.Should().Contain("FormatPicturePlanner.TryCreateRotationResult(");
+        contextualTabsSource.Should().Contain("ObjectSizeDialogPlanner.TryCreateSize(");
+        contextualTabsSource.Should().Contain("new ObjectSizeDialogSubmission(");
         contextualTabsSource.Should().Contain("DrawingTargetResolver.ResolveSelectedPicture(");
         contextualTabsSource.Should().Contain("DrawingTargetResolver.ResolveSelectedDrawingShape(");
-        formatDialogSource.Should().Contain("DrawingObjectCommandPlanner.BuildResizeCommand(");
-        formatDialogSource.Should().Contain("DrawingObjectCommandPlanner.BuildRotateCommand(");
-        formatDialogSource.Should().Contain("DrawingObjectCommandPlanner.BuildAltTextCommand(");
+        contextualTabsSource.Should().Contain("DrawingObjectContextualCommandAction.ShapeGradient => () => RunGuarded(OpenShapeGradientDialogAsync),");
+        formatDialogSource.Should().Contain("DrawingObjectFormatCommandPolicy.BuildFormatCommands(");
+        formatDialogSource.Should().Contain("ShapeGradientPlanner.Capture(shape)");
+        formatDialogSource.Should().Contain("ShapeGradientPlanner.CreateDirectionOptions()");
+        formatDialogSource.Should().Contain("ShapeGradientPlanner.PreviewVector(");
+        formatDialogSource.Should().Contain("ShapeGradientPlanner.CreateResult(");
+        formatDialogSource.Should().Contain("DrawingObjectActionPlanner.ShapeGradientSuccess(");
 
         contextualTabsSource.Should().NotContain("_session.ActiveSheet.Pictures.FirstOrDefault(");
         contextualTabsSource.Should().NotContain("_session.ActiveSheet.DrawingShapes.FirstOrDefault(");
+        contextualTabsSource.Should().NotContain("switch (_selectedDrawingObjectKind)");
+        contextualTabsSource.Should().NotContain("ResolveZOrderSuccessStatus(");
         contextualTabsSource.Should().NotContain("new MoveSelectionPaneObjectCommand(");
         contextualTabsSource.Should().NotContain("new BringDrawingShapeForwardCommand(");
         contextualTabsSource.Should().NotContain("new SendDrawingShapeBackwardCommand(");
         contextualTabsSource.Should().NotContain("new SetDrawingObjectRotationCommand(");
+        contextualTabsSource.Should().NotContain("DrawingObjectCommandPlanner.BuildRotateCommand(");
+        contextualTabsSource.Should().NotContain("DrawingObjectCommandPlanner.BuildResizeCommand(");
+        contextualTabsSource.Should().NotContain("DrawingObjectCommandPlanner.BuildAltTextCommand(");
+        contextualTabsSource.Should().NotContain("new SetDrawingShapeColorsCommand(");
         contextualTabsSource.Should().NotContain("new ResizePictureCommand(");
         contextualTabsSource.Should().NotContain("new ResizeDrawingShapeCommand(");
         contextualTabsSource.Should().NotContain("new SetPictureAltTextCommand(");
         contextualTabsSource.Should().NotContain("new SetDrawingShapeAltTextCommand(");
+        contextualTabsSource.Should().NotContain("SetSelectedShapeGradientAsync(");
+        contextualTabsSource.Should().NotContain("new SetDrawingShapeGradientCommand(");
+        contextualTabsSource.Should().NotContain("InsertLoc_GradientStartColor");
+        contextualTabsSource.Should().NotContain("InsertLoc_GradientEndColor");
         formatDialogSource.Should().NotContain("new SetDrawingObjectRotationCommand(");
         formatDialogSource.Should().NotContain("new ResizePictureCommand(");
         formatDialogSource.Should().NotContain("new ResizeDrawingShapeCommand(");
+        formatDialogSource.Should().NotContain("new SetPictureLockAspectRatioCommand(");
         formatDialogSource.Should().NotContain("new SetPictureAltTextCommand(");
         formatDialogSource.Should().NotContain("new SetDrawingShapeAltTextCommand(");
+        formatDialogSource.Should().NotContain("DrawingObjectCommandPlanner.BuildResizeCommand(");
+        formatDialogSource.Should().NotContain("DrawingObjectCommandPlanner.BuildRotateCommand(");
+        formatDialogSource.Should().NotContain("DrawingObjectCommandPlanner.BuildAltTextCommand(");
+    }
+
+    [Fact]
+    public void DrawingObjectOverlay_DelegatesDisplayBoundsToSharedViewportPlanner()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var normalizedSource = source.Replace("\r\n", "\n", StringComparison.Ordinal);
+        var sharedPlanner = File.ReadAllText(RepoFile(
+            "src",
+            "FreeX.App.Presentation",
+            "DrawingUI",
+            "DrawingObjectViewportPlanner.cs"));
+        var displayBoundsBlock = ExtractSourceBlock(
+            normalizedSource,
+            "private static bool TryGetDisplayedDrawingObjectBounds(",
+            "private static bool TryGetDisplayedCellBounds(");
+
+        source.Should().Contain("using FreeX.App.Presentation.DrawingUI;");
+        displayBoundsBlock.Should().Contain("DrawingObjectViewportPlanner.TryCreateDisplayedObjectRect(");
+        displayBoundsBlock.Should().Contain("var rowHeaderWidth = showHeadings ? GetRowHeaderWidth(viewport, zoomFactor) : 0;");
+        displayBoundsBlock.Should().Contain("var columnHeaderHeight = showHeadings ? HeaderRowHeight * zoomFactor : 0;");
+        displayBoundsBlock.Should().NotContain("TryGetDisplayedColumnLeft(viewport.ColMetrics, drawingObject.AnchorCol");
+        displayBoundsBlock.Should().NotContain("TryGetDisplayedRowTop(viewport.RowMetrics, drawingObject.AnchorRow");
+        sharedPlanner.Should().Contain("rowHeaderWidth + (drawingObject.Left * zoomFactor)");
+        sharedPlanner.Should().Contain("columnHeaderHeight + (drawingObject.Top * zoomFactor)");
+        source.Should().Contain("DrawingObjectViewportPlanner.ShouldDisplayObjectRect(");
+        source.Should().Contain("new LayoutRect(left, top, width, height)");
     }
 
     [Fact]
@@ -387,12 +647,17 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         var tableStyleSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.TableStyleGallery.cs"));
 
         tableTabSource.Should().Contain("TableDesignCommandPlanner.TryGetActiveStructuredTable(");
-        tableTabSource.Should().Contain("TableDesignCommandPlanner.BuildConvertToRangeCommand(");
+        tableTabSource.Should().Contain("TableDesignCommandPlanner.BuildConvertToRangePlan(");
+        tableTabSource.Should().Contain("plan.TableDisplayName");
         tableTabSource.Should().Contain("TableDesignCommandPlanner.BuildStyleOptionsCommand(");
         tableTabSource.Should().Contain("TableDesignCommandPlanner.GetDisplayName(table)");
         tableNameSource.Should().Contain("TableDesignCommandPlanner.BuildRenameCommand(");
         tableResizeSource.Should().Contain("TableDesignCommandPlanner.BuildResizeCommand(");
         tableStyleSource.Should().Contain("TableDesignCommandPlanner.BuildApplyStyleCommand(");
+        tableStyleSource.Should().Contain("TableStyleGalleryPlanner.GetSurface(_session.Workbook.Theme)");
+        tableStyleSource.Should().Contain("ItemsSource = surface.Items.Select(item => item.Label).ToList()");
+        tableStyleSource.Should().Contain("TableStyleGalleryPlanner.FindSurfaceItemIndex(surface, table.StyleName)");
+        tableStyleSource.Should().Contain("TableStyleGalleryPlanner.GetSurfaceItem(surface, selectedIndex)");
         tableTabSource.Should().NotContain("new ReapplyStructuredTableStyleCommand(");
         tableTabSource.Should().NotContain("new SetStructuredTableTotalsRowCommand(");
         tableResizeSource.Should().NotContain("private IWorkbookCommand BuildResizeCommand(");
@@ -403,22 +668,43 @@ public sealed class AvaloniaMainWindowChromeSourceTests
     {
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.PageLayout.cs"));
 
-        source.Should().Contain("PageSetupDialogModel.OrientationChoices");
-        source.Should().Contain("PageSetupDialogModel.PaperSizeChoices");
-        source.Should().Contain("PageSetupDialogModel.PageOrderChoices");
-        source.Should().Contain("PageSetupDialogModel.PrintErrorValueChoices");
-        source.Should().Contain("PageSetupDialogModel.PrintCommentChoices");
+        source.Should().Contain("PageSetupDialogPlanner.OrientationChoices");
+        source.Should().Contain("PageSetupDialogPlanner.PaperSizeChoices");
+        source.Should().Contain("PageSetupDialogPlanner.PageOrderChoices");
+        source.Should().Contain("PageSetupDialogPlanner.PrintErrorValueChoices");
+        source.Should().Contain("PageSetupDialogPlanner.PrintCommentChoices");
+        source.Should().Contain("PageSetupDialogPlanner.ResolveChoiceLabels(");
+        source.Should().Contain("PageSetupDialogPlanner.PlanSurface(sheet)");
+        source.Should().Contain("PageSetupDialogSurfacePlan surface");
+        source.Should().Contain("surface.ChoiceIndexes.Orientation");
+        source.Should().Contain("PageSetupDialogPlanner.BuildFields(initial, new PageSetupDialogSurfaceInput");
         source.Should().Contain("PageSetupDialogModel.HeaderPresetChoices");
         source.Should().Contain("PageSetupDialogModel.FooterPresetChoices");
-        source.Should().Contain("HeaderFooterEditorPlanner.ApplyCenterPreset(");
-        source.Should().Contain("PageSetupDialogModel.ChoiceIndex(");
-        source.Should().Contain("PageSetupDialogModel.ChoiceValue(");
-        source.Should().Contain("PageSetupDialogModel.HeaderFooterPresetIndex(");
-        source.Should().Contain("PageSetupDialogModel.HeaderFooterPresetValue(");
+        source.Should().Contain("PageSetupDialogPlanner.ApplyHeaderPreset(");
+        source.Should().Contain("PageSetupDialogPlanner.ApplyFooterPreset(");
         source.Should().Contain("PageSetupSubmissionPlanner.TryBuild(");
-        source.Should().Contain("SelectValidationRoute(validation.Route)");
-        source.Should().Contain("ResolvePageSetupValidationIssue(validation)");
+        source.Should().Contain("PageSetupDialogPlanner.PlanOpen(source)");
+        source.Should().Contain("FocusOpenPlan(openPlan)");
+        source.Should().Contain("PageSetupDialogPlanner.PlanInitialFocus(");
+        source.Should().Contain("TryBuildCompositeCommandForTarget(sheet, sheet.Id)");
+        source.Should().Contain("PageSetupDialogPlanner.PlanValidationFocus(");
+        source.Should().Contain("CreateValidationFocusState()");
+        source.Should().Contain("PageLayoutStatusPlanner.ResolvePageSetupValidationIssue(");
+        source.Should().Contain("PageLayoutStatusPlanner.PageSetupSubmission");
+        source.Should().Contain("PageLayoutStatusPlanner.PlanPageBreakPreviewToggle(");
+        source.Should().NotContain("PageSetupDialogModel.ChoiceIndex(");
+        source.Should().NotContain("PageSetupDialogModel.ChoiceValue(");
+        source.Should().NotContain(".ValueAt(orientationBox.SelectedIndex)");
+        source.Should().NotContain(".IndexOf(initial.Orientation)");
+        source.Should().NotContain("PageSetupDialogModel.HeaderFooterPresetIndex(");
+        source.Should().NotContain("PageSetupDialogModel.HeaderFooterPresetValue(");
+        source.Should().NotContain("HeaderFooterEditorPlanner.ApplyCenterPreset(");
         source.Should().NotContain("PageSetupDialogModel.TryBuildCommand(_session.ActiveSheet, fields)");
+        source.Should().NotContain("ExecuteReviewCommand(plan.PageSetupCommand)");
+        source.Should().NotContain("ExecuteReviewCommand(plan.HeaderFooterCommand)");
+        source.Should().NotContain("UiText.Get(\"ShellLoc_PageSetupFailed\")");
+        source.Should().NotContain("UiText.Get(\"ShellLoc_PageBreakPreviewOn\")");
+        source.Should().NotContain("private bool ApplyPrintArea(");
         source.Should().NotContain("headerCenterBox.Text = PageSetupDialogModel.HeaderFooterPresetValue(");
         source.Should().NotContain("footerCenterBox.Text = PageSetupDialogModel.HeaderFooterPresetValue(");
         source.Should().NotContain("private static int PageSetupPresetIndex");
@@ -426,6 +712,56 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         source.Should().NotContain("initial.PageOrder == WorksheetPageOrder.OverThenDown ? 1 : 0");
         source.Should().NotContain("WorksheetPrintErrorValue ReadErrorValue()");
         source.Should().NotContain("WorksheetPrintComments ReadComments()");
+    }
+
+    [Fact]
+    public void PageBreakActions_DelegateMenuPolicyToSharedPlanner()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.PageBreakActions.cs"));
+        var mainSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var wireSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.RibbonMenuWires.cs"));
+
+        source.Should().Contain("ApplyPageBreakAction(PageBreakMenuAction.Insert)");
+        source.Should().Contain("ApplyPageBreakAction(PageBreakMenuAction.Remove)");
+        source.Should().Contain("ApplyPageBreakAction(PageBreakMenuAction.ResetAll)");
+        source.Should().Contain("PageLayoutRibbonCommandPlanner.PlanPageBreakAction(");
+        source.Should().Contain("PageLayoutRibbonCommandPlanner.BuildPageBreaksCommand(sheet.Id, plan)");
+        source.Should().NotContain("private enum PageBreakAction");
+        source.Should().NotContain("new SetPageBreaksCommand(");
+        source.Should().NotContain("PageBreakActionPlanner.Insert(");
+        source.Should().NotContain("PageBreakActionPlanner.Remove(");
+        mainSource.Should().Contain("RegisterPageLayoutRibbonActions(ribbonExtraCommands)");
+        mainSource.Should().NotContain("[\"Insert Page Break\"] = () => ApplyPageBreakAction(");
+        mainSource.Should().NotContain("[\"Remove Page Break\"] = () => ApplyPageBreakAction(");
+        mainSource.Should().NotContain("[\"Reset All Page Breaks\"] = () => ApplyPageBreakAction(");
+        wireSource.Should().Contain("ApplyPageBreakAction(descriptor.PageBreakAction!.Value)");
+    }
+
+    [Fact]
+    public void PageLayoutRibbonActions_RegisterSharedPresentationDescriptors()
+    {
+        var mainSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var wireSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.RibbonMenuWires.cs"));
+
+        mainSource.Should().Contain("RegisterPageLayoutRibbonActions(ribbonExtraCommands)");
+        wireSource.Should().Contain("PageLayoutRibbonActionPlanner.RibbonActionDescriptors");
+        wireSource.Should().Contain("ShowPageSetupDialogAsync(descriptor.PageSetupOpenSource)");
+        wireSource.Should().Contain("ApplyPageMarginsPreset(descriptor.MarginPreset!.Value)");
+        wireSource.Should().Contain("ApplyPageOrientationPreset(descriptor.OrientationPreset!.Value)");
+        wireSource.Should().Contain("ApplyPaperSizePreset(descriptor.PaperSizePreset!.Value)");
+        wireSource.Should().Contain("PageLayoutRibbonActionPlanner.PlanMarginsPreset(preset)");
+        wireSource.Should().Contain("PageLayoutRibbonActionPlanner.PlanOrientationPreset(preset)");
+        wireSource.Should().Contain("PageLayoutRibbonActionPlanner.PlanPaperSizePreset(preset)");
+        wireSource.Should().Contain("PageLayoutStatusPlanner.ForPreset(plan)");
+        wireSource.Should().Contain("PageLayoutStatusPlanner.PrintAreaSet");
+        wireSource.Should().Contain("PageLayoutStatusPlanner.PrintAreaClear");
+
+        mainSource.Should().NotContain("[\"pageLayout.printArea\"] = () => _ = ShowPageSetupDialogAsync()");
+        mainSource.Should().NotContain("[\"Normal\"] = () => ApplyPageMargins(");
+        mainSource.Should().NotContain("[\"Portrait\"] = () => ApplyPageOrientation(");
+        mainSource.Should().NotContain("[\"Letter\"] = () => ApplyPaperSize(");
+        wireSource.Should().NotContain("UiText.Get(\"RibbonWire_PrintAreaSet\")");
+        wireSource.Should().NotContain("UiText.Get(\"RibbonWire_PrintAreaClearFailed\")");
     }
 
     [Fact]
@@ -461,21 +797,37 @@ public sealed class AvaloniaMainWindowChromeSourceTests
     }
 
     [Fact]
+    public void ZoomToSelection_DelegatesFitMathToSharedPlanner()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+
+        source.Should().Contain("ZoomSelectionPlanner.CalculateFitWholePercent(");
+        source.Should().NotContain("ZoomToSelectionDefaultColumnWidth");
+        source.Should().NotContain("ZoomToSelectionDefaultRowHeight");
+        source.Should().NotContain("CalculateZoomAxisFitPercent(");
+        source.Should().NotContain("selectedCount * defaultCellPixels");
+    }
+
+    [Fact]
     public void StatusBarZoomSlider_UsesIdenticalMinMiddleMaxMarks()
     {
         var mainSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
         var statusBarSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.StatusBar.cs"));
         var captureSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
 
-        mainSource.Should().Contain("_statusZoomSliderHost.Children.Add(BuildStatusZoomTick(left: 60));");
-        mainSource.Should().Contain("_statusZoomSlider.Minimum = FreeX.App.Services.ZoomLevelMapper.ZoomPercentToSlider(SetWorksheetZoomCommand.MinZoomPercent);");
-        mainSource.Should().Contain("_statusZoomSlider.Maximum = FreeX.App.Services.ZoomLevelMapper.ZoomPercentToSlider(SetWorksheetZoomCommand.MaxZoomPercent);");
-        mainSource.Should().Contain("FreeX.App.Services.ZoomLevelMapper.SliderToZoomPercent(args.NewValue)");
-        statusBarSource.Should().Contain("FreeX.App.Services.ZoomLevelMapper.ZoomPercentToSlider(plan.ZoomPercent)");
+        mainSource.Should().Contain("var statusZoomPlan = StatusBarZoomSliderPlanner.Build(_session.ZoomPercent);");
+        mainSource.Should().Contain("_statusZoomSlider.Minimum = statusZoomPlan.MinimumSliderValue;");
+        mainSource.Should().Contain("_statusZoomSlider.Maximum = statusZoomPlan.MaximumSliderValue;");
+        mainSource.Should().Contain("var inputPlan = StatusBarZoomSliderPlanner.BuildInput(args.NewValue);");
+        mainSource.Should().Contain("foreach (var left in zoomSliderPlan.VisualTickLefts)");
+        mainSource.Should().Contain("StatusBarZoomSliderPlanner.BuildThumbPlan(");
+        statusBarSource.Should().Contain("var sliderPlan = StatusBarZoomSliderPlanner.Build(rendererPlan.ZoomPercent);");
         mainSource.Should().Contain("Width = 1,");
         mainSource.Should().Contain("Height = 4,");
         mainSource.Should().NotContain("BuildStatusZoomTick(left: 60, isMiddle: true)");
         mainSource.Should().NotContain("isMiddle ? 2 : 1");
+        mainSource.Should().NotContain("ZoomLevelMapper.ZoomPercentToSlider(SetWorksheetZoomCommand.MinZoomPercent)");
+        mainSource.Should().NotContain("ZoomLevelMapper.SliderToZoomPercent(args.NewValue)");
         captureSource.Should().Contain("foreach (var left in new[] { 8d, 60d, 111d })");
         captureSource.Should().Contain("Canvas.SetLeft(canvas.Children[^1], 55.5);");
         captureSource.Should().NotContain("isMiddle ? 2 : 1");
@@ -491,8 +843,10 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         mainSource.Should().Contain("private bool HasStatusBarAccessibleValue() =>");
         mainSource.Should().Contain("!string.IsNullOrWhiteSpace(_statusText.Text) ||");
         mainSource.Should().Contain("!string.IsNullOrWhiteSpace(_selectionStatsText.Text);");
-        statusBarSource.Should().Contain("_statusText.IsVisible = visibility.ReadyTextVisible && plan.VisibleReadoutText.Length == 0;");
-        statusBarSource.Should().Contain("_selectionStatsText.Text = plan.VisibleReadoutText;");
+        statusBarSource.Should().Contain("AvaloniaStatusBarSource.BuildRendererPlan(model, _statusBarOptionVisibility);");
+        statusBarSource.Should().Contain("_statusText.IsVisible = rendererPlan.ReadyTextVisible;");
+        statusBarSource.Should().Contain("_selectionStatsText.Text = rendererPlan.VisibleReadoutText;");
+        statusBarSource.Should().Contain("_selectionStatsText.IsVisible = rendererPlan.VisibleReadoutTextVisible;");
     }
 
     private static string RepoFile(params string[] parts)
@@ -514,45 +868,6 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         var endIndex = source.IndexOf(end, startIndex, StringComparison.Ordinal);
         endIndex.Should().BeGreaterThanOrEqualTo(0, $"source should contain '{end}' after '{start}'");
         return source[startIndex..(endIndex + end.Length)];
-    }
-
-    [Fact]
-    public void AccessibilityCheckerDialog_HasIssueListGoToCloseAndDispatchesViaNewMethod()
-    {
-        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.AccessibilityChecker.cs"));
-        var mainSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
-        var parityCaptureSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
-
-        // New partial file has the dedicated dialog method
-        source.Should().Contain("private async Task ShowAccessibilityCheckerDialogAsync()");
-        source.Should().Contain("private async Task ShowAccessibilityCheckerCleanDialogAsync()");
-        source.Should().Contain("private async Task ShowAccessibilityCheckerIssuesDialogAsync(");
-
-        // Issues dialog has the key WPF-parity controls. Redesigned to the Excel task-pane layout:
-        // an "Inspection Results" TreeView grouped by Errors/Warnings/Tips (replacing the flat
-        // ListBox), keyed by the same AccessibilityCheckerIssueList automation id.
-        source.Should().Contain("new TreeView");
-        source.Should().Contain("AutomationProperties.SetAutomationId(resultsTree, \"AccessibilityCheckerIssueList\");");
-        source.Should().Contain("AutomationProperties.SetAutomationId(goToButton, \"AccessibilityCheckerGoToButton\");");
-        source.Should().Contain("AutomationProperties.SetAutomationId(closeButton, \"AccessibilityCheckerCloseButton\");");
-
-        // Go To navigates via _session.GoToAccessibilityIssue (shared portable logic)
-        source.Should().Contain("_session.GoToAccessibilityIssue(selectedIssue)");
-        source.Should().NotContain("ReviewWorkflowPlanner.GetAccessibilityNavigationTarget(",
-            "navigation target resolution must stay in the shared session layer, not be duplicated in the shell");
-
-        // Uses shared localization keys (the Excel-style title resolves via the shared
-        // AccessibilityChecker_Title catalog key)
-        source.Should().Contain("AcText(\"AccessibilityChecker_Title\"");
-        source.Should().Contain("UiText.Get(\"ShellLoc_AccessibilityCheckerGoToButton\")");
-        source.Should().Contain("UiText.Get(\"ShellLoc_AccessibilityCheckerNoIssues\")");
-
-        // MainWindow.cs dispatches to the new method (not inline to ReviewSummary)
-        mainSource.Should().Contain("_checkAccessibilityMenuItem.Click += async (_, _) => await ShowAccessibilityCheckerDialogAsync();");
-        mainSource.Should().Contain("[\"review.checkAccessibility\"] = () => _ = ShowAccessibilityCheckerDialogAsync(),");
-
-        // Parity capture uses the new method
-        parityCaptureSource.Should().Contain("(\"dialog.AccessibilityChecker\", () => ShowAccessibilityCheckerDialogAsync()),");
     }
 
     private static void AssertBefore(string source, string first, string second)

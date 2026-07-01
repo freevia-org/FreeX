@@ -1,9 +1,12 @@
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using Avalonia.Headless;
+using Free.Shared.Shell;
 using FreeW.App.Avalonia.Backstage;
 using FreeW.App.Presentation.Backstage;
+using FreeW.App.Presentation.Options;
 using FreeW.Core.IO;
 using FreeW.Core.Model;
 using Free.Shared.AppServices;
@@ -60,6 +63,73 @@ public class BackstageViewTests
     }
 
     // ── Planner output assertions ──────────────────────────────────────────────
+
+    [Fact]
+    public void BackstageView_sources_use_shared_avalonia_backstage_chrome()
+    {
+        var source = File.ReadAllText(FindRepoFile(
+            "freew",
+            "FreeW.App.Avalonia",
+            "Backstage",
+            "BackstageView.cs"));
+        var project = File.ReadAllText(FindRepoFile(
+            "freew",
+            "FreeW.App.Avalonia",
+            "FreeW.App.Avalonia.csproj"));
+        var sharedSource = File.ReadAllText(FindRepoFile(
+            "shared",
+            "Free.Shared.Shell.Avalonia",
+            "AvaloniaBackstageChrome.cs"));
+
+        project.Should().Contain(@"..\..\shared\Free.Shared.Shell.Avalonia\Free.Shared.Shell.Avalonia.csproj");
+        source.Should().Contain("using Free.Shared.Shell.Avalonia;");
+        source.Should().Contain("BackstagePaneSurfacePlanner.BuildHomePane(");
+        source.Should().Contain("BackstagePaneSurfacePlanner.BuildOpenPane(");
+        source.Should().Contain("BackstagePaneSurfacePlanner.BuildSaveAsPane(");
+        source.Should().Contain("BackstagePaneSurfacePlanner.BuildSharePane(");
+        source.Should().Contain("BackstagePaneSurfacePlanner.BuildExportPane(");
+        source.Should().Contain("BackstagePaneSurfacePlanner.BuildPrintPane(");
+        source.Should().Contain("BackstagePaneSurfacePlanner.BuildInfoPane(");
+        source.Should().Contain("BackstagePaneSurfacePlanner.BuildAccountPane(");
+        source.Should().Contain("ApplicationOptionsSummaryPlanner.Build(");
+        source.Should().Contain("_callbacks.MarkAsFinal()");
+        source.Should().Contain("_callbacks.RestrictEditing()");
+        source.Should().Contain("_callbacks.InspectDocument()");
+        source.Should().Contain("_callbacks.CheckAccessibility()");
+        source.Should().Contain("_callbacks.OpenOptions()");
+        source.Should().Contain("BuildOpenSurface(");
+        source.Should().Contain("surface.Search.AutomationName");
+        source.Should().Contain("surface.Tabs.DocumentsTabLabel");
+        source.Should().Contain("_callbacks.OpenFolder(folder)");
+        source.Should().Contain("BuildActionGroupContent(surface)");
+        source.Should().Contain("BuildSurfaceActionRow(action)");
+        source.Should().Contain("printPreview: _callbacks.PrintPreview is null");
+        source.Should().Contain("AvaloniaBackstageChromeStyle BackstageChromeStyle");
+        source.Should().Contain("AvaloniaBackstageChrome.CreateContentArea(");
+        source.Should().Contain("AvaloniaBackstageChrome.CreateDescribedActionRow(");
+        source.Should().Contain("AvaloniaBackstageChrome.CreateStackedActionButton(");
+        source.Should().Contain("AvaloniaBackstageChrome.CreatePaneHeader(");
+        source.Should().Contain("AvaloniaBackstageChrome.CreateSectionHeader(");
+        source.Should().Contain("AvaloniaBackstageChrome.CreateDetailGrid(");
+        source.Should().Contain("AvaloniaBackstageChrome.AddDetailRow(");
+        source.Should().NotContain("new ScrollViewer");
+        source.Should().NotContain("var rowIndex = grid.RowDefinitions.Count");
+        source.Should().NotContain("new RowDefinition(GridLength.Auto)");
+        source.Should().NotContain("ColumnDefinitions = new ColumnDefinitions(\"Auto,*\")");
+        source.Should().NotContain("BackstagePaneSurfacePlanner.BuildOpenActionPane(");
+        source.Should().NotContain("BackstagePrintPanePlanner.Build(");
+        source.Should().NotContain("BackstageInfoSafetyPanePlanner.Build(");
+        source.Should().NotContain("SisterBackstageAccountPanePlanner.Build(");
+        source.Should().NotContain("markAsFinal: null");
+        source.Should().NotContain("restrictEditing: null");
+        source.Should().NotContain("inspectDocument: null");
+        source.Should().NotContain("checkAccessibility: null");
+        source.Should().NotContain("printPreview: null");
+
+        sharedSource.Should().Contain("public static class AvaloniaBackstageChrome");
+        sharedSource.Should().Contain("public static Border CreateContentArea(");
+        sharedSource.Should().Contain("public static Button CreateStackedActionButton(");
+    }
 
     [Fact]
     public void Home_planner_produces_New_group_and_Open_group()
@@ -140,6 +210,23 @@ public class BackstageViewTests
     }
 
     [Fact]
+    public void Print_pane_surface_enables_preview_and_keeps_direct_print_deferred()
+    {
+        var surface = BackstagePaneSurfacePlanner.BuildPrintPane(
+            "Test.docx",
+            new PageSettings(),
+            print: null,
+            printPreview: () => { });
+
+        surface.DeferredNote.Should().BeNull("preview is now available in the Avalonia shell");
+        var actions = surface.Groups.SelectMany(group => group.Actions).ToList();
+        actions.Single(action => action.AutomationId == "PrintAction_Print")
+            .IsEnabled.Should().BeFalse("native printer selection remains deferred");
+        actions.Where(action => action.AutomationId == "PrintAction_PrintPreview")
+            .Should().OnlyContain(action => action.IsEnabled);
+    }
+
+    [Fact]
     public void Info_safety_planner_produces_Protect_and_Inspect_groups()
     {
         var groups = BackstageInfoSafetyPanePlanner.Build();
@@ -152,12 +239,13 @@ public class BackstageViewTests
     [Fact]
     public void Account_planner_includes_product_and_user_sections()
     {
-        var plan = BackstageAccountPanePlanner.Build(
-            productName: "FreeW",
-            version: "1.0.0",
-            userName: "TestUser",
-            machineName: "TestMachine",
-            dataFolder: @"C:\AppData\FreeW");
+        var plan = SisterBackstageAccountPanePlanner.Build(
+            new SisterBackstageAccountPaneContext(
+                "FreeW",
+                "1.0.0",
+                "TestUser",
+                "TestMachine",
+                @"C:\AppData\FreeW"));
 
         plan.Groups.Should().Contain(g => g.Heading == "Product Information");
         plan.Groups.Should().Contain(g => g.Heading == "User Information");
@@ -191,6 +279,9 @@ public class BackstageViewTests
         callbacks!.GetRecentEntries.Should().NotBeNull();
         callbacks.GetFileFormats.Should().NotBeNull();
         callbacks.GetPageSettings.Should().NotBeNull();
+        callbacks.GetCurrentOptions().Should().NotBeNull();
+        callbacks.GetDataFolder().Should().NotBeNullOrWhiteSpace();
+        callbacks.PrintPreview.Should().NotBeNull();
     }
 
     [Fact]
@@ -212,6 +303,64 @@ public class BackstageViewTests
         extensions.Should().Contain(ext => ext.Contains("docx", StringComparison.OrdinalIgnoreCase));
     }
 
+    [Fact]
+    public async Task MainWindow_BackstageCallbacks_wire_mark_final_to_document_model()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "FreeW.Avalonia.OptionsTests", Guid.NewGuid().ToString("N"), "settings.json");
+        var marked = false;
+
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow(
+                [],
+                new FreeWOptions(),
+                ApplicationOptionsStore<FreeWOptions>.ForPath(path));
+            var callbacks = window.BuildBackstageCallbacks();
+
+            callbacks.MarkAsFinal();
+
+            marked = window.Editor.Document.MarkedAsFinal;
+        }, CancellationToken.None);
+
+        marked.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task MainWindow_LoadsFreeWOptionsFromSharedStoreForBackstageAndRecentCap()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "FreeW.Avalonia.OptionsTests", Guid.NewGuid().ToString("N"));
+        var path = Path.Combine(directory, "settings.json");
+        var store = ApplicationOptionsStore<FreeWOptions>.ForPath(path);
+        store.Save(new FreeWOptions { RecentFilesCap = 3 }).Should().BeTrue();
+        int cap = -1;
+
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow([], null, ApplicationOptionsStore<FreeWOptions>.ForPath(path));
+
+            cap = window.BuildBackstageCallbacks().GetCurrentOptions().RecentFilesCap;
+        }, CancellationToken.None);
+
+        cap.Should().Be(3);
+    }
+
+    [Fact]
+    public void MainWindow_UsesFreeWOptionsForRecentFileCapAndSafetyDialogs()
+    {
+        var source = File.ReadAllText(FindRepoFile(
+            "freew",
+            "FreeW.App.Avalonia",
+            "MainWindow.cs"));
+
+        source.Should().Contain("ApplicationOptionsStore<FreeWOptions>");
+        source.Should().Contain("maxRecentEntries: () => _options.RecentFilesCap");
+        source.Should().Contain("new OptionsDialog(_options)");
+        source.Should().Contain("new RestrictEditingDialog(_editor.Document.Protection)");
+        source.Should().Contain("DocumentInspector.Inspect(_editor.Document)");
+        source.Should().Contain("AccessibilityChecker.Check(_editor.Document)");
+        source.Should().NotContain("DefaultRecentFilesCap");
+    }
+
     // ── Helpers ────────────────────────────────────────────────────────────────
 
     private static BackstageCallbacks BuildTestCallbacks() =>
@@ -221,14 +370,38 @@ public class BackstageViewTests
             GetRecentEntries: () => Array.Empty<RecentFileEntry>(),
             GetFileFormats: () => DocumentFileAdapterCatalog.CreateDefaultAdapters().SelectMany(a => a.Formats),
             GetPageSettings: () => new PageSettings(),
+            GetCurrentOptions: () => new FreeWOptions(),
+            GetDataFolder: () => @"C:\AppData\FreeW",
             NewDocument: () => { },
             OpenRecent: _ => { },
+            OpenFolder: _ => { },
             Browse: () => { },
             RecoverUnsaved: () => { },
             SaveAs: () => { },
-            SaveAsExtension: _ => { },
+            SaveAsFormat: (_, _) => { },
             OpenContainingFolder: _ => { },
-            ExportPdf: () => { });
+            ExportPdf: () => { },
+            MarkAsFinal: () => { },
+            RestrictEditing: () => { },
+            InspectDocument: () => { },
+            CheckAccessibility: () => { },
+            OpenOptions: () => { });
+
+    private static string FindRepoFile(params string[] parts) =>
+        Path.Combine(FindRepoRoot(), Path.Combine(parts));
+
+    private static string FindRepoRoot()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "FreeW.slnx")))
+                return directory.FullName;
+            directory = directory.Parent;
+        }
+
+        throw new DirectoryNotFoundException("Could not locate repository root from the test output directory.");
+    }
 }
 
 // Local alias so the test can call the planner directly with the same name

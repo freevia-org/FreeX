@@ -294,8 +294,16 @@ public sealed class MailingsTabTests
 
         var expected = new[]
         {
-            "freew.select-recipients",
+            "freew.merge-data",
+            "freew.merge-edit-recipients",
+            "freew.merge-address-block",
+            "freew.merge-greeting-line",
             "freew.merge-field",
+            "freew.merge-preview",
+            "freew.merge-preview-previous",
+            "freew.merge-preview-next",
+            "freew.merge-finish",
+            "freew.select-recipients",
             "freew.address-block",
             "freew.greeting-line",
             "freew.preview-results",
@@ -307,6 +315,29 @@ public sealed class MailingsTabTests
         foreach (var id in expected)
             registry.TryGet(new RibbonCommandId(id), out _)
                 .Should().BeTrue($"Mailings-tab command '{id}' must be registered");
+    }
+
+    [Fact]
+    public void Registry_preserves_legacy_mailings_aliases_for_canonical_commands()
+    {
+        var registry = FreeWAvaloniaRibbonCommands.Build(new DocumentView(), Callbacks());
+        var aliases = new[]
+        {
+            ("freew.merge-data", "freew.select-recipients"),
+            ("freew.merge-address-block", "freew.address-block"),
+            ("freew.merge-greeting-line", "freew.greeting-line"),
+            ("freew.merge-preview", "freew.preview-results"),
+            ("freew.merge-preview-previous", "freew.prev-record"),
+            ("freew.merge-preview-next", "freew.next-record"),
+            ("freew.merge-finish", "freew.finish-merge"),
+        };
+
+        foreach (var (canonicalId, aliasId) in aliases)
+        {
+            registry.TryGet(new RibbonCommandId(canonicalId), out var canonical).Should().BeTrue();
+            registry.TryGet(new RibbonCommandId(aliasId), out var alias).Should().BeTrue();
+            alias.Should().BeSameAs(canonical, $"{aliasId} remains a compatibility alias for {canonicalId}");
+        }
     }
 
     [Fact]
@@ -326,15 +357,99 @@ public sealed class MailingsTabTests
     }
 
     [Fact]
-    public void PreviewResults_command_executes_via_registry()
+    public void Mailings_tab_definition_uses_canonical_shared_command_ids()
+    {
+        var definition = FreeWRibbon.BuildDefinition();
+        var mailings = definition.FindTab("mailings");
+        mailings.Should().NotBeNull();
+        var commandIds = mailings!.Groups
+            .SelectMany(group => group.Controls)
+            .SelectMany(CommandIds)
+            .ToHashSet(StringComparer.Ordinal);
+
+        commandIds.Should().Contain(new[]
+        {
+            "freew.merge-data",
+            "freew.merge-address-block",
+            "freew.merge-greeting-line",
+            "freew.merge-field",
+            "freew.merge-preview",
+            "freew.merge-preview-previous",
+            "freew.merge-preview-next",
+            "freew.merge-finish",
+        });
+
+        commandIds.Should().NotContain(new[]
+        {
+            "freew.select-recipients",
+            "freew.address-block",
+            "freew.greeting-line",
+            "freew.preview-results",
+            "freew.prev-record",
+            "freew.next-record",
+            "freew.finish-merge",
+        });
+    }
+
+    [Fact]
+    public void Canonical_mailings_commands_execute_via_registry()
     {
         var view = ViewWith(new Paragraph("«FirstName»"));
         var registry = FreeWRibbon.BuildRegistry(view, Callbacks(), out var engine);
         engine.LoadRecipientsCsv(SampleCsv);
 
-        registry.TryGet(new RibbonCommandId("freew.preview-results"), out var cmd).Should().BeTrue();
-        cmd!.Execute(RibbonCommandContext.Empty);
-
+        Execute(registry, "freew.merge-preview");
         PlainText(view.Document).Should().Contain("Ada", "executing the command previews record 1");
+
+        Execute(registry, "freew.merge-preview-next");
+        engine.Session.CurrentIndex.Should().Be(1);
+        PlainText(view.Document).Should().Contain("Grace", "executing Next Record previews record 2");
+
+        Execute(registry, "freew.merge-preview-previous");
+        engine.Session.CurrentIndex.Should().Be(0);
+        PlainText(view.Document).Should().Contain("Ada", "executing Previous Record returns to record 1");
+
+        Execute(registry, "freew.merge-finish");
+        PlainText(view.Document).Should().Contain("Ada").And.Contain("Grace");
+        engine.Session.IsPreviewing.Should().BeFalse("finish leaves preview mode");
+    }
+
+    [Fact]
+    public void MergeData_command_executes_via_registry_callback()
+    {
+        var view = ViewWith();
+        var registry = FreeWRibbon.BuildRegistry(view, Callbacks(recipientCsv: SampleCsv), out var engine);
+
+        Execute(registry, "freew.merge-data");
+
+        engine.Session.Data.Should().NotBeNull();
+        engine.Session.Data!.Count.Should().Be(2);
+    }
+
+    private static void Execute(RibbonCommandRegistry registry, string commandId)
+    {
+        registry.TryGet(new RibbonCommandId(commandId), out var command).Should().BeTrue();
+        command!.Execute(RibbonCommandContext.Empty);
+    }
+
+    private static IEnumerable<string> CommandIds(RibbonControl control)
+    {
+        yield return control.CommandId.Value;
+
+        var menu = control switch
+        {
+            RibbonDropdown dropdown => dropdown.Menu,
+            RibbonSplitButton splitButton => splitButton.Menu,
+            _ => null,
+        };
+
+        if (menu is null)
+            yield break;
+
+        foreach (var item in menu.Items)
+        {
+            if (item.CommandId is { } commandId)
+                yield return commandId.Value;
+        }
     }
 }

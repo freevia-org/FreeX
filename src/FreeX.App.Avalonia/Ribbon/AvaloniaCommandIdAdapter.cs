@@ -236,6 +236,7 @@ internal static class AvaloniaCommandIdAdapter
         ["review.deleteComment"] = "Delete Comment",
         ["review.newNote"] = "New Note",
         ["review.showNotes"] = "Show Notes",
+        ["review.convertNotesToComments"] = "Convert to Comments",
         ["review.protectSheet"] = "Protect Sheet#ProtectSheetBtn_Click",
         ["review.protectWorkbook"] = "Protect Workbook",
         // review.thesaurus / review.translate have no canonical control — see OrphanAvaloniaIds.
@@ -262,6 +263,8 @@ internal static class AvaloniaCommandIdAdapter
         ["help.helpOnline"] = "Help Online#HelpOnlineBtn_Click",
         ["help.feedback"] = "Feedback#FeedbackBtn_Click",
         ["help.checkUpdates"] = "Check for Updates#CheckForUpdatesBtn_Click",
+        ["help.copyDiagnostics"] = "Copy Diagnostics#CopyDiagnosticsBtn_Click",
+        ["help.legalNotices"] = "Legal Notices#LegalNoticesBtn_Click",
 
         // ── Chart Design (contextual: chart.selected) ────────────────────────────────────────────────────
         ["chartDesign.titles"] = "Chart Titles",

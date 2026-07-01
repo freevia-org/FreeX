@@ -7,6 +7,7 @@ using FreeX.Core.Calc;
 using FreeX.Core.IO;
 using System.Collections.Generic;
 using System.ComponentModel;
+using FreeX.App.Presentation.GridInteraction;
 using FreeX.App.Services;
 using FreeX.App.UI;
 using Free.Shared.Theme.Wpf;
@@ -209,7 +210,7 @@ public partial class MainWindow : Window, IWorkbookWindow
     ];
     private System.Windows.Controls.TextBox? _inlineEditor;
     private System.Windows.Controls.Border? _inlineEditorChrome;
-    private System.Windows.Rect? _inlineEditorChromeBaseRect;
+    private FormulaEditorRect? _inlineEditorChromeBaseRect;
     private System.Windows.Controls.TextBlock? _inlineFormulaReferenceOverlay;
     private System.Windows.Controls.TextBox? _textBoxInlineEditor;
     private System.Windows.Controls.Border? _textBoxInlineEditorChrome;
@@ -234,8 +235,8 @@ public partial class MainWindow : Window, IWorkbookWindow
     private int _formulaReferenceGridOverlayActiveCount;
     private WatchWindowDialog? _watchWindowDialog;
     private bool _suppressValidationDropdownCommit;
-    private ColumnResizeSnapshot? _columnResizeSnapshot;
-    private RowResizeSnapshot? _rowResizeSnapshot;
+    private GridResizePreviewSnapshot? _columnResizeSnapshot;
+    private GridResizePreviewSnapshot? _rowResizeSnapshot;
     private Action<CommandOutcome>? _repeatPostAction;
     private string? _pivotFieldMenuContextCaption;
     private PivotFieldDropZone? _pivotFieldMenuContextZone;
@@ -285,6 +286,7 @@ public partial class MainWindow : Window, IWorkbookWindow
         _diagnosticsOptions = diagnosticsOptions ?? AppDiagnosticsOptions.CreateDefault();
         _workbookRef = workbookRef;
         _workbook = workbook;
+        _currentSheetId = _workbook.Sheets[0].Id;
         _options = options ?? FreeXOptions.Load();
         _windowRegistry = windowRegistry;
         // A window created while others already exist over the shared workbook is a secondary
@@ -293,6 +295,8 @@ public partial class MainWindow : Window, IWorkbookWindow
         _recentFiles = RecentFilesStore.Load();
 
         InitializeComponent();
+        ApplySisterAppClientFrameContractRows();
+        ConfigureStatusZoomSlider();
         // Merge the active brand theme into this window's own resources (as the last entry so it
         // overrides same-keyed brushes from ThemeResources.xaml merged earlier in this dict).
         // DynamicResource references in the title-bar chrome then resolve to these token brushes,
@@ -307,11 +311,11 @@ public partial class MainWindow : Window, IWorkbookWindow
         RibbonMenuIconSeeder.Register();
         RebuildQuickAccessToolbar();
         InitializeQuickAccessToolbarCustomizationContextMenus();
+        ConfigureBackstageHomePaneDescriptors();
         ConfigureBackstageInfoActionButtons();
         InitializeBackstageFrame();
         RegisterKeyboardCommandShortcuts();
 
-        _currentSheetId = _workbook.Sheets[0].Id;
         SheetTabsControl.ItemsSource = _sheetTabs;
         
         // Wire up scrollbars

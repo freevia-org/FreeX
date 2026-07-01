@@ -4,6 +4,7 @@ using OxyPlot.Annotations;
 using OxyPlot.Axes;
 using OxyPlot.Legends;
 using OxyPlot.Series;
+using FreeX.App.Presentation.Charts;
 using FreeX.Core.Model;
 
 namespace FreeX.App.UI;
@@ -180,18 +181,8 @@ public static partial class ChartRenderer
         return (int)(col - dataStartCol - (chart.Type == ChartType.Scatter && !chart.FirstColIsCategories ? 1 : 0));
     }
 
-    private static ChartSeriesFormat? GetSeriesFormat(ChartModel chart, int seriesIndex)
-    {
-        var formats = chart.SeriesFormats;
-        for (var i = formats.Count - 1; i >= 0; i--)
-        {
-            var format = formats[i];
-            if (format.SeriesIndex == seriesIndex)
-                return format;
-        }
-
-        return null;
-    }
+    private static ChartSeriesFormat? GetSeriesFormat(ChartModel chart, int seriesIndex) =>
+        ChartStylePlanner.FindSeriesFormat(chart, seriesIndex);
 
     /// <summary>
     /// Returns true when the series with chart-XML index <paramref name="seriesIndex"/> has its
@@ -231,18 +222,8 @@ public static partial class ChartRenderer
     /// resolved against the workbook theme. Returns null when no per-point
     /// override exists (caller should fall back to series-level or palette color).
     /// </summary>
-    private static CellColor? GetPointFillColor(ChartModel chart, int seriesIndex, int pointIndex, WorkbookTheme theme)
-    {
-        var formats = chart.PointFillColors;
-        for (var i = formats.Count - 1; i >= 0; i--)
-        {
-            var format = formats[i];
-            if (format.SeriesIndex == seriesIndex && format.PointIndex == pointIndex)
-                return format.ResolveFillColor(theme);
-        }
-
-        return null;
-    }
+    private static CellColor? GetPointFillColor(ChartModel chart, int seriesIndex, int pointIndex, WorkbookTheme theme) =>
+        ChartStylePlanner.ResolvePointFillColor(chart, seriesIndex, pointIndex, theme);
 
     private static void ApplyLineFormat(LineSeries series, ChartSeriesFormat? format, WorkbookTheme theme)
     {
@@ -388,7 +369,7 @@ public static partial class ChartRenderer
             var midAngle = accumulatedAngle + sweep / 2.0;
             accumulatedAngle += sweep;
 
-            var value = ChartDataLabelFormatter.ShouldRenderPercentageLabels(chart)
+            var value = ChartDataLabelTextPlanner.ShouldRenderPercentageLabels(chart)
                 ? positiveValue / total
                 : point.Value;
             var position = GetPieDataLabelPosition(chart.DataLabelPosition, midAngle);
@@ -396,7 +377,7 @@ public static partial class ChartRenderer
             {
                 XAxisKey = PieAnnotationXAxisKey,
                 YAxisKey = PieAnnotationYAxisKey,
-                Text = ChartDataLabelFormatter.FormatDataLabel(chart, seriesName, point.CategoryName, value),
+                Text = ChartDataLabelTextPlanner.FormatDataLabel(chart, seriesName, point.CategoryName, value),
                 TextPosition = position,
                 TextHorizontalAlignment = OxyPlot.HorizontalAlignment.Center,
                 TextVerticalAlignment = OxyPlot.VerticalAlignment.Middle,
@@ -602,7 +583,7 @@ public static partial class ChartRenderer
         var fillColor = pointFormat?.ResolveFillColor(theme) ?? chart.ResolveDataLabelFillColor(theme);
         model.Annotations.Add(new TextAnnotation
         {
-            Text = ChartDataLabelFormatter.FormatDataLabel(chart, seriesName, categoryName, value),
+            Text = ChartDataLabelTextPlanner.FormatDataLabel(chart, seriesName, categoryName, value),
             TextPosition = new DataPoint(x, y),
             TextHorizontalAlignment = OxyPlot.HorizontalAlignment.Center,
             TextVerticalAlignment = chart.DataLabelPosition == ChartDataLabelPosition.InsideEnd
@@ -645,7 +626,7 @@ public static partial class ChartRenderer
                 seriesName,
                 seriesIndex,
                 pointIndex,
-                ChartDataLabelFormatter.GetCategory(categories, (int)Math.Round(point.X)),
+                ChartDataLabelTextPlanner.GetCategory(categories, (int)Math.Round(point.X)),
                 point.X,
                 point.Y,
                 point.Y);

@@ -1,5 +1,7 @@
+using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
+using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Host;
@@ -8,13 +10,6 @@ namespace FreeW.App.Host;
 /// Word's "Footnote and Endnote" options dialog (References &gt; Footnotes group launcher).
 /// Exposes the document-level numbering properties stored in <c>w:footnotePr</c> /
 /// <c>w:endnotePr</c> in word/settings.xml: number format, start-at value and restart mode.
-///
-/// <para>
-/// The dialog has two mirrored sections — Footnotes and Endnotes — matching Word's layout.
-/// On OK it returns a <see cref="Result"/> the caller applies to the document's
-/// <see cref="TextDocument.FootnoteNumbering"/> and <see cref="TextDocument.EndnoteNumbering"/>
-/// properties; on Cancel it returns null and nothing is changed.
-/// </para>
 /// </summary>
 internal sealed class FootnoteEndnoteOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
@@ -35,54 +30,44 @@ internal sealed class FootnoteEndnoteOptionsDialog : Free.Shared.Ribbon.Wpf.Dial
     private readonly ComboBox _endnoteRestartBox;
     private Result? _result;
 
-    private static readonly (string Label, NoteNumberFormat Value)[] FormatItems =
-    [
-        ("1, 2, 3, …",   NoteNumberFormat.Decimal),
-        ("i, ii, iii, …", NoteNumberFormat.LowerRoman),
-        ("I, II, III, …", NoteNumberFormat.UpperRoman),
-        ("a, b, c, …",   NoteNumberFormat.LowerLetter),
-        ("A, B, C, …",   NoteNumberFormat.UpperLetter),
-        ("*, †, ‡, …",   NoteNumberFormat.Chicago),
-    ];
-
-    private static readonly (string Label, NoteNumberRestart Value)[] FootnoteRestartItems =
-    [
-        ("Continuous",        NoteNumberRestart.Continuous),
-        ("Restart each section", NoteNumberRestart.EachSection),
-        ("Restart each page", NoteNumberRestart.EachPage),
-    ];
-
-    private static readonly (string Label, NoteNumberRestart Value)[] EndnoteRestartItems =
-    [
-        ("Continuous",           NoteNumberRestart.Continuous),
-        ("Restart each section", NoteNumberRestart.EachSection),
-    ];
-
     private FootnoteEndnoteOptionsDialog(Window? owner, NoteNumberingOptions footnote, NoteNumberingOptions endnote)
     {
         Owner = owner;
-        Title = "Footnote and Endnote";
+        Title = FootnoteEndnoteOptionsDialogPlanner.Title;
         Width = 380;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = owner is null ? WindowStartupLocation.CenterScreen : WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
 
-        _footnoteFormatBox = FormatCombo(footnote.NumberFormat, FormatItems);
-        _footnoteStartBox = StartBox(footnote.StartAt);
-        _footnoteRestartBox = RestartCombo(footnote.NumberRestart, FootnoteRestartItems);
-        _endnoteFormatBox = FormatCombo(endnote.NumberFormat, FormatItems);
-        _endnoteStartBox = StartBox(endnote.StartAt);
-        _endnoteRestartBox = RestartCombo(endnote.NumberRestart, EndnoteRestartItems);
+        var state = FootnoteEndnoteOptionsDialogPlanner.BuildInitialState(
+            footnote,
+            endnote,
+            CultureInfo.CurrentCulture);
+
+        _footnoteFormatBox = ChoiceCombo(
+            FootnoteEndnoteOptionsDialogPlanner.FormatItems,
+            state.FootnoteFormatIndex);
+        _footnoteStartBox = StartBox(state.FootnoteStartAtText);
+        _footnoteRestartBox = ChoiceCombo(
+            FootnoteEndnoteOptionsDialogPlanner.FootnoteRestartItems,
+            state.FootnoteRestartIndex);
+        _endnoteFormatBox = ChoiceCombo(
+            FootnoteEndnoteOptionsDialogPlanner.FormatItems,
+            state.EndnoteFormatIndex);
+        _endnoteStartBox = StartBox(state.EndnoteStartAtText);
+        _endnoteRestartBox = ChoiceCombo(
+            FootnoteEndnoteOptionsDialogPlanner.EndnoteRestartItems,
+            state.EndnoteRestartIndex);
 
         var outerStack = new StackPanel { Margin = new Thickness(14) };
 
-        outerStack.Children.Add(SectionHeader("Footnotes"));
+        outerStack.Children.Add(SectionHeader(FootnoteEndnoteOptionsDialogPlanner.FootnotesSectionLabel));
         outerStack.Children.Add(OptionsGrid(_footnoteFormatBox, _footnoteStartBox, _footnoteRestartBox));
 
         outerStack.Children.Add(new Separator { Margin = new Thickness(0, 10, 0, 8) });
 
-        outerStack.Children.Add(SectionHeader("Endnotes"));
+        outerStack.Children.Add(SectionHeader(FootnoteEndnoteOptionsDialogPlanner.EndnotesSectionLabel));
         outerStack.Children.Add(OptionsGrid(_endnoteFormatBox, _endnoteStartBox, _endnoteRestartBox));
 
         var buttons = DialogButtonRowFactory.Create(Accept, buttonWidth: 72, rowMargin: new Thickness(0, 14, 0, 0));
@@ -104,9 +89,9 @@ internal sealed class FootnoteEndnoteOptionsDialog : Free.Shared.Ribbon.Wpf.Dial
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
-        AddRow(grid, 0, "Number format:", formatBox);
-        AddRow(grid, 1, "Start at:",      startBox);
-        AddRow(grid, 2, "Numbering:",     restartBox);
+        AddRow(grid, 0, FootnoteEndnoteOptionsDialogPlanner.NumberFormatLabel, formatBox);
+        AddRow(grid, 1, FootnoteEndnoteOptionsDialogPlanner.StartAtLabel, startBox);
+        AddRow(grid, 2, FootnoteEndnoteOptionsDialogPlanner.NumberingLabel, restartBox);
 
         return grid;
     }
@@ -130,50 +115,59 @@ internal sealed class FootnoteEndnoteOptionsDialog : Free.Shared.Ribbon.Wpf.Dial
         grid.Children.Add(field);
     }
 
-    private static ComboBox FormatCombo(NoteNumberFormat current, (string Label, NoteNumberFormat Value)[] items)
+    private static ComboBox ChoiceCombo<TValue>(
+        IReadOnlyList<FootnoteEndnoteOptionsChoice<TValue>> items,
+        int selectedIndex)
     {
         var box = new ComboBox();
-        foreach (var (label, _) in items)
-            box.Items.Add(label);
-        box.SelectedIndex = System.Array.FindIndex(items, i => i.Value == current);
-        if (box.SelectedIndex < 0) box.SelectedIndex = 0;
+        foreach (var item in items)
+            box.Items.Add(item.Label);
+        box.SelectedIndex = selectedIndex;
         return box;
     }
 
-    private static ComboBox RestartCombo(NoteNumberRestart current, (string Label, NoteNumberRestart Value)[] items)
-    {
-        var box = new ComboBox();
-        foreach (var (label, _) in items)
-            box.Items.Add(label);
-        box.SelectedIndex = System.Array.FindIndex(items, i => i.Value == current);
-        if (box.SelectedIndex < 0) box.SelectedIndex = 0;
-        return box;
-    }
-
-    private static TextBox StartBox(int current) =>
-        new() { Text = current.ToString(System.Globalization.CultureInfo.CurrentCulture), MinWidth = 60 };
+    private static TextBox StartBox(string text) =>
+        new() { Text = text, MinWidth = 60 };
 
     private void Accept()
     {
-        if (!int.TryParse(_footnoteStartBox.Text,
-                System.Globalization.NumberStyles.Integer,
-                System.Globalization.CultureInfo.CurrentCulture, out var fnStart) || fnStart < 1
-         || !int.TryParse(_endnoteStartBox.Text,
-                System.Globalization.NumberStyles.Integer,
-                System.Globalization.CultureInfo.CurrentCulture, out var enStart) || enStart < 1)
+        var input = new FootnoteEndnoteOptionsDialogInput(
+            _footnoteFormatBox.SelectedIndex,
+            _footnoteStartBox.Text,
+            _footnoteRestartBox.SelectedIndex,
+            _endnoteFormatBox.SelectedIndex,
+            _endnoteStartBox.Text,
+            _endnoteRestartBox.SelectedIndex);
+
+        if (!FootnoteEndnoteOptionsDialogPlanner.TryBuildResult(
+                input,
+                CultureInfo.CurrentCulture,
+                out var result,
+                out var validation))
         {
-            DialogMessageHelper.ShowWarning(this, "Enter a positive integer for the start-at values.");
+            DialogMessageHelper.ShowWarning(
+                this,
+                validation?.Message ?? FootnoteEndnoteOptionsDialogPlanner.PositiveStartAtMessage);
+            FocusFailure(validation?.Field);
             return;
         }
 
         _result = new Result(
-            FormatItems[System.Math.Max(0, _footnoteFormatBox.SelectedIndex)].Value,
-            fnStart,
-            FootnoteRestartItems[System.Math.Max(0, _footnoteRestartBox.SelectedIndex)].Value,
-            FormatItems[System.Math.Max(0, _endnoteFormatBox.SelectedIndex)].Value,
-            enStart,
-            EndnoteRestartItems[System.Math.Max(0, _endnoteRestartBox.SelectedIndex)].Value);
+            result!.FootnoteFormat,
+            result.FootnoteStartAt,
+            result.FootnoteRestart,
+            result.EndnoteFormat,
+            result.EndnoteStartAt,
+            result.EndnoteRestart);
         Close();
+    }
+
+    private void FocusFailure(FootnoteEndnoteOptionsDialogField? field)
+    {
+        var target = field == FootnoteEndnoteOptionsDialogField.EndnoteStartAt
+            ? _endnoteStartBox
+            : _footnoteStartBox;
+        DialogFocus.FocusAndSelect(target);
     }
 
     /// <summary>

@@ -74,7 +74,8 @@ public sealed class PictureDrawingContextualTabTests
         return (doc, 0, 1);
     }
 
-    private static (TextDocument Doc, int BlockIdx, int RunIdx) DocWithFloatingShape()
+    private static (TextDocument Doc, int BlockIdx, int RunIdx) DocWithFloatingShape(
+        ShapeKind kind = ShapeKind.Rectangle)
     {
         var doc = TextDocument.CreateEmpty();
         doc.Blocks.Clear();
@@ -84,7 +85,7 @@ public sealed class PictureDrawingContextualTabTests
         {
             Shape = new Shape
             {
-                Kind = ShapeKind.Rectangle, WidthPt = 120, HeightPt = 80, FillColorHex = "#FF0000",
+                Kind = kind, WidthPt = 120, HeightPt = 80, FillColorHex = "#FF0000",
                 Placement = new FloatingPlacement
                 {
                     Wrapping = ImageWrapping.Square,
@@ -135,7 +136,10 @@ public sealed class PictureDrawingContextualTabTests
             "freew.shape-rotate", "freew.shape-rotate-right90", "freew.shape-flip-horizontal",
             "freew.shape-bring-to-front", "freew.shape-send-to-back", "freew.shape-bring-forward",
             "freew.shape-send-backward", "freew.shape-width", "freew.shape-height",
-            "freew.shape-fill", "freew.shape-outline",
+            "freew.shape-fill", "freew.shape-fill-no-fill", "freew.shape-fill-gradient-blue",
+            "freew.shape-fill-gradient-orange", "freew.shape-fill-pattern-diag",
+            "freew.shape-outline", "freew.shape-outline-no-outline", "freew.shape-outline-solid",
+            "freew.shape-outline-dash", "freew.shape-outline-dot",
         };
 
         foreach (var id in ids)
@@ -380,6 +384,84 @@ public sealed class PictureDrawingContextualTabTests
     }
 
     [Fact]
+    public async Task ShapeFillOutlineCommands_enable_only_for_shapes_and_textboxes()
+    {
+        bool? none = null, image = null, shape = null, textBox = null;
+        var ran = await OnUi(() =>
+        {
+            var view = new DocumentView();
+            var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
+            none = CommandIsEnabled(registry, "freew.shape-fill");
+
+            var (imageDoc, ibi, iri) = DocWithFloatingImage();
+            view.LoadDocument(imageDoc);
+            view.Measure(new Size(800, 2000));
+            view.SelectFloating(ibi, iri);
+            image = CommandIsEnabled(registry, "freew.shape-outline-dash");
+
+            var (shapeDoc, sbi, sri) = DocWithFloatingShape();
+            view.LoadDocument(shapeDoc);
+            view.Measure(new Size(800, 2000));
+            view.SelectFloating(sbi, sri);
+            shape = CommandIsEnabled(registry, "freew.shape-fill-gradient-blue");
+
+            var (textBoxDoc, tbi, tri) = DocWithFloatingShape(ShapeKind.TextBox);
+            view.LoadDocument(textBoxDoc);
+            view.Measure(new Size(800, 2000));
+            view.SelectFloating(tbi, tri);
+            textBox = CommandIsEnabled(registry, "freew.shape-outline");
+        });
+        if (!ran) return;
+
+        none.Should().BeFalse("fill/outline commands need a selected drawing shape");
+        image.Should().BeFalse("picture selections use the Picture Format tab, not shape fill/outline");
+        shape.Should().BeTrue("plain shapes can be formatted");
+        textBox.Should().BeTrue("text boxes share Word's Drawing Format fill/outline commands");
+    }
+
+    [Fact]
+    public async Task ShapeFillOutlineCommands_apply_shared_presets_to_selected_shape()
+    {
+        Shape? shape = null;
+        string? fillAfterNoFill = "unchanged";
+        ShapeFill? extendedAfterNoFill = ShapeFill.Patterned("diagCross", "#000000", "#FFFFFF");
+        var ran = await OnUi(() =>
+        {
+            var (doc, bi, ri) = DocWithFloatingShape();
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 2000));
+            view.SelectFloating(bi, ri);
+
+            var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
+            ExecuteCommand(registry, "freew.shape-fill-gradient-blue");
+            ExecuteCommand(registry, "freew.shape-fill-no-fill");
+            var noFillShape = ((Paragraph)doc.Blocks[0]).Runs[ri].Shape!;
+            fillAfterNoFill = noFillShape.FillColorHex;
+            extendedAfterNoFill = noFillShape.ExtendedFill;
+            ExecuteCommand(registry, "freew.shape-fill-gradient-blue");
+            ExecuteCommand(registry, "freew.shape-outline-dash");
+            ExecuteCommand(registry, "freew.shape-outline-no-outline");
+
+            shape = ((Paragraph)doc.Blocks[0]).Runs[ri].Shape!;
+        });
+        if (!ran) return;
+
+        fillAfterNoFill.Should().BeNull("No Fill should clear any simple solid fill");
+        extendedAfterNoFill.Should().BeNull("No Fill should clear any gradient or pattern fill");
+        shape.Should().NotBeNull();
+        shape!.FillColorHex.Should().BeNull("extended fill presets clear the simple solid fill");
+        shape.ExtendedFill.Should().NotBeNull();
+        shape.ExtendedFill!.Kind.Should().Be(ShapeFillKind.Gradient);
+        shape.ExtendedFill.GradientStops.Should().Equal(
+            new GradientStop(0, "#4472C4"),
+            new GradientStop(100000, "#1F4E79"));
+        shape.OutlineColorHex.Should().BeNull("No Outline should clear the stroke color after a dash preset");
+        shape.OutlineWidthPt.Should().Be(0);
+        shape.OutlineDash.Should().BeNull();
+    }
+
+    [Fact]
     public async Task Commands_are_noops_when_no_float_selected()
     {
         var ran = await OnUi(() =>
@@ -395,6 +477,7 @@ public sealed class PictureDrawingContextualTabTests
             {
                 "freew.image-bring-to-front", "freew.image-wrap-square", "freew.image-rotate-right90",
                 "freew.shape-send-backward", "freew.shape-flip-vertical", "freew.shape-fill",
+                "freew.shape-fill-gradient-blue", "freew.shape-outline-dash",
             })
             {
                 registry.TryGet(new RibbonCommandId(id), out var cmd);
@@ -402,6 +485,21 @@ public sealed class PictureDrawingContextualTabTests
             }
         });
         ran.Should().BeTrue("float-format commands must silently no-op when nothing is selected");
+    }
+
+    private static bool CommandIsEnabled(RibbonCommandRegistry registry, string id)
+    {
+        registry.TryGet(new RibbonCommandId(id), out var command)
+            .Should().BeTrue($"command '{id}' must be registered");
+        command.Should().BeAssignableTo<IRibbonStatefulCommand>($"command '{id}' should expose live enablement");
+        return ((IRibbonStatefulCommand)command!).GetState().IsEnabled;
+    }
+
+    private static void ExecuteCommand(RibbonCommandRegistry registry, string id)
+    {
+        registry.TryGet(new RibbonCommandId(id), out var command)
+            .Should().BeTrue($"command '{id}' must be registered");
+        command!.Execute(RibbonCommandContext.Empty);
     }
 
     private static RibbonCommandId? GetCommandId(RibbonControl control) => control switch

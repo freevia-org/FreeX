@@ -4,7 +4,9 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Free.Shared.Shell.Avalonia;
 using FreeW.App.Avalonia.Editing;
+using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Avalonia;
@@ -57,51 +59,7 @@ namespace FreeW.App.Avalonia;
 /// </summary>
 public sealed class FontDialog : Window
 {
-    // ── Standard font size ladder (mirrors FreeWRibbon.FontSizes) ────────────
-    private static readonly string[] SizeLadder =
-        ["8", "9", "10", "11", "12", "14", "16", "18", "20", "24", "28", "36", "48", "72"];
-
-    private static readonly string[] FamilyPresets =
-        ["Calibri", "Arial", "Times New Roman", "Inter", "Verdana", "Georgia", "Courier New"];
-
-    // Maximum allowed font size in points (Word clamps at 1638; we use 409 = the dialog
-    // input limit in Word's UI which rejects values above 1638 but the size box only shows 3 digits).
-    private const double MinFontSizePt = 1;
-    private const double MaxFontSizePt = 1638;
-
-    // ── Colour palettes ───────────────────────────────────────────────────────
-    private static readonly (string Label, string? Hex)[] FontColorPalette =
-    [
-        ("Automatic",  null),
-        ("Black",      "#000000"),
-        ("Dark Red",   "#C00000"),
-        ("Red",        "#FF0000"),
-        ("Orange",     "#FF6600"),
-        ("Yellow",     "#FFFF00"),
-        ("Green",      "#00B050"),
-        ("Blue",       "#0070C0"),
-        ("Dark Blue",  "#00008B"),
-        ("Purple",     "#7030A0"),
-        ("White",      "#FFFFFF"),
-    ];
-
-    private static readonly (string Label, string? Hex)[] HighlightPalette =
-    [
-        ("None",        null),
-        ("Yellow",      "#FFFF00"),
-        ("Bright Green","#00FF00"),
-        ("Cyan",        "#00FFFF"),
-        ("Magenta",     "#FF00FF"),
-        ("Red",         "#FF0000"),
-        ("Dark Blue",   "#0000CD"),
-        ("Teal",        "#008080"),
-        ("Dark Red",    "#8B0000"),
-        ("Dark Yellow", "#808000"),
-        ("Gray 50%",    "#808080"),
-        ("Gray 25%",    "#C0C0C0"),
-        ("Black",       "#000000"),
-        ("White",       "#FFFFFF"),
-    ];
+    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
 
     // ── Snapshot of the initial formatting ───────────────────────────────────
     private readonly RunFormatting _original;
@@ -127,14 +85,7 @@ public sealed class FontDialog : Window
     private readonly ComboBox _colorBox;
     private readonly ComboBox _highlightBox;
 
-    private readonly TextBlock _status = new()
-    {
-        Foreground = new SolidColorBrush(Color.FromRgb(0x80, 0x00, 0x00)),
-        FontSize = 11,
-        TextWrapping = TextWrapping.Wrap,
-        Margin = new Thickness(0, 6, 0, 0),
-        IsVisible = false,
-    };
+    private readonly TextBlock _status = new();
 
     // ── Construction ──────────────────────────────────────────────────────────
 
@@ -169,6 +120,11 @@ public sealed class FontDialog : Window
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         CanResize = false;
         ShowInTaskbar = false;
+        var state = FontDialogPlanner.BuildBasicInitialState(
+            current,
+            CultureInfo.InvariantCulture,
+            _familyIndeterminate,
+            _sizeIndeterminate);
 
         // ── Family combo ──────────────────────────────────────────────────────
         _familyBox = new ComboBox
@@ -176,18 +132,19 @@ public sealed class FontDialog : Window
             MinWidth = 260,
             IsEditable = true,
         };
-        _familyBox.ItemsSource = FamilyPresets;
+        AvaloniaCompactDialogChrome.ApplyComboBox(_familyBox, DialogChromeStyle);
+        _familyBox.ItemsSource = FontDialogPlanner.BasicFamilyChoices;
         if (_familyIndeterminate)
         {
             // BZ3: mixed family → show blank; SelectedItem/Text stays empty.
             _familyBox.SelectedIndex = -1;
         }
-        else if (!string.IsNullOrEmpty(current.FontFamily))
+        else if (!string.IsNullOrEmpty(state.FontFamilyText))
         {
             // BZ1: seed Text so a non-preset family (e.g. "Cambria") is visible.
-            _familyBox.SelectedItem = current.FontFamily;
+            _familyBox.SelectedItem = state.FontFamilyText;
             if (_familyBox.SelectedItem is null)
-                _familyBox.Text = current.FontFamily; // not in preset list
+                _familyBox.Text = state.FontFamilyText; // not in preset list
         }
         else
         {
@@ -200,21 +157,21 @@ public sealed class FontDialog : Window
             MinWidth = 100,
             IsEditable = true,
         };
-        _sizeBox.ItemsSource = SizeLadder;
+        AvaloniaCompactDialogChrome.ApplyComboBox(_sizeBox, DialogChromeStyle);
+        _sizeBox.ItemsSource = FontDialogPlanner.BasicSizeChoices.Select(size => size.Label).ToArray();
         if (_sizeIndeterminate)
         {
             // BZ3: mixed size → blank.
             _sizeBox.SelectedIndex = -1;
         }
-        else if (current.FontSizePt.HasValue)
+        else if (!string.IsNullOrEmpty(state.FontSizeText))
         {
-            var currentSizeStr = current.FontSizePt.Value.ToString("G", CultureInfo.InvariantCulture);
-            _sizeBox.SelectedItem = currentSizeStr;
+            _sizeBox.SelectedItem = state.FontSizeText;
             if (_sizeBox.SelectedItem is null)
             {
                 // BZ1: size not in the standard ladder (e.g. 13pt) — seed Text directly so
                 // the combo shows "13" instead of blank.
-                _sizeBox.Text = currentSizeStr;
+                _sizeBox.Text = state.FontSizeText;
             }
         }
         else
@@ -224,14 +181,16 @@ public sealed class FontDialog : Window
 
         // ── Style checkboxes ─────────────────────────────────────────────────
         // BZ3: null IsChecked = indeterminate (three-state).
-        _boldChk.IsChecked        = _boldIndeterminate       ? null : current.Bold;
-        _italicChk.IsChecked      = _italicIndeterminate     ? null : current.Italic;
-        _underlineChk.IsChecked   = _underlineIndeterminate  ? null : current.Underline;
-        _strikeChk.IsChecked      = _strikeIndeterminate     ? null : current.Strikethrough;
-        _superChk.IsChecked       = current.VerticalAlign == VerticalAlign.Superscript;
-        _subChk.IsChecked         = current.VerticalAlign == VerticalAlign.Subscript;
-        _smallCapsChk.IsChecked   = current.SmallCaps;
-        _allCapsChk.IsChecked     = current.AllCaps;
+        _boldChk.IsChecked        = _boldIndeterminate       ? null : state.Bold;
+        _italicChk.IsChecked      = _italicIndeterminate     ? null : state.Italic;
+        _underlineChk.IsChecked   = _underlineIndeterminate  ? null : state.Underline;
+        _strikeChk.IsChecked      = _strikeIndeterminate     ? null : state.Strikethrough;
+        _superChk.IsChecked       = state.Superscript;
+        _subChk.IsChecked         = state.Subscript;
+        _smallCapsChk.IsChecked   = state.SmallCaps;
+        _allCapsChk.IsChecked     = state.AllCaps;
+        ApplyCheckBoxChrome();
+        AvaloniaCompactDialogChrome.ApplyValidationStatus(_status, DialogChromeStyle, new Thickness(0, 6, 0, 0));
 
         // Super / Sub are mutually exclusive.
         _superChk.IsCheckedChanged += (_, _) =>
@@ -244,8 +203,8 @@ public sealed class FontDialog : Window
         };
 
         // ── Color combos ──────────────────────────────────────────────────────
-        _colorBox     = BuildPaletteCombo(FontColorPalette,     current.ColorHex);
-        _highlightBox = BuildPaletteCombo(HighlightPalette,     current.HighlightColorHex);
+        _colorBox     = BuildPaletteCombo(FontDialogPlanner.BasicColorChoices, state.ColorIndex);
+        _highlightBox = BuildPaletteCombo(FontDialogPlanner.HighlightColorChoices, state.HighlightColorIndex);
 
         // ── Layout ────────────────────────────────────────────────────────────
         var grid = BuildFormGrid();
@@ -265,18 +224,14 @@ public sealed class FontDialog : Window
         styleRow2.Children.Add(_allCapsChk);
 
         // ── Buttons ───────────────────────────────────────────────────────────
-        var ok     = new Button { Content = "OK",     MinWidth = 84, IsDefault = true, Margin = new Thickness(0, 0, 8, 0) };
-        var cancel = new Button { Content = "Cancel", MinWidth = 84, IsCancel = true  };
+        var ok     = new Button { Content = "OK", IsDefault = true };
+        AvaloniaCompactDialogChrome.ApplyButton(ok, DialogChromeStyle, minWidth: 84, isDefault: true);
+        var cancel = new Button { Content = "Cancel", IsCancel = true  };
+        AvaloniaCompactDialogChrome.ApplyButton(cancel, DialogChromeStyle, minWidth: 84);
         ok.Click     += (_, _) => OnOk();
         cancel.Click += (_, _) => Close(null);
 
-        var btnRow = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(0, 14, 0, 0),
-            Children = { ok, cancel },
-        };
+        var btnRow = AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 14, 0, 0));
 
         var outer = new StackPanel { Margin = new Thickness(16, 14, 16, 16) };
         outer.Children.Add(grid);
@@ -324,71 +279,52 @@ public sealed class FontDialog : Window
     {
         _status.IsVisible = false;
 
-        // BZ1: read .Text (not .SelectedItem) so a typed value that is not in the list is captured.
-        var sizeText = (_sizeBox.Text ?? (_sizeBox.SelectedItem as string) ?? string.Empty).Trim();
-        double? sizePt = null;
-        var sizeChanged = true;
-        if (_sizeIndeterminate && string.IsNullOrEmpty(sizeText))
-        {
-            // User left the size blank in an indeterminate combo → do not apply size.
-            sizeChanged = false;
-        }
-        else if (!string.IsNullOrEmpty(sizeText))
-        {
-            if (!double.TryParse(sizeText, NumberStyles.Any, CultureInfo.InvariantCulture, out var parsed)
-                || parsed < MinFontSizePt || parsed > MaxFontSizePt)
-            {
-                _status.Text = $"Invalid font size: \"{sizeText}\". Enter a number between {MinFontSizePt} and {MaxFontSizePt}.";
-                _status.IsVisible = true;
-                return;
-            }
-            sizePt = Math.Clamp(parsed, MinFontSizePt, MaxFontSizePt);
-        }
+        var input = new FontDialogBasicInput(
+            FontFamilyText: _familyBox.Text ?? (_familyBox.SelectedItem as string) ?? string.Empty,
+            FontSizeText: _sizeBox.Text ?? (_sizeBox.SelectedItem as string) ?? string.Empty,
+            FamilyIndeterminate: _familyIndeterminate,
+            SizeIndeterminate: _sizeIndeterminate,
+            ColorIndex: _colorBox.SelectedIndex,
+            HighlightColorIndex: _highlightBox.SelectedIndex,
+            Bold: _boldChk.IsChecked,
+            Italic: _italicChk.IsChecked,
+            Underline: _underlineChk.IsChecked,
+            Strikethrough: _strikeChk.IsChecked,
+            SmallCaps: _smallCapsChk.IsChecked == true,
+            AllCaps: _allCapsChk.IsChecked == true,
+            Superscript: _superChk.IsChecked == true,
+            Subscript: _subChk.IsChecked == true);
 
-        // BZ1: read family from .Text; fall back to SelectedItem for backwards compat.
-        var familyText = (_familyBox.Text ?? (_familyBox.SelectedItem as string) ?? string.Empty).Trim();
-        var family = string.IsNullOrWhiteSpace(familyText) ? null : familyText;
-        var familyChanged = true;
-        if (_familyIndeterminate && string.IsNullOrWhiteSpace(familyText))
+        if (!FontDialogPlanner.TryBuildBasicResult(
+                input,
+                CultureInfo.InvariantCulture,
+                out var plannedResult,
+                out var errorMessage))
         {
-            // User left family blank in an indeterminate combo → do not apply family.
-            familyChanged = false;
+            _status.Text = errorMessage ?? FontDialogPlanner.BuildBasicFontSizeValidationMessage(
+                input.FontSizeText,
+                CultureInfo.InvariantCulture);
+            _status.IsVisible = true;
+            return;
         }
 
-        // BZ3: a checkbox left at null (indeterminate by user) means "do not apply".
-        bool? boldResult       = _boldChk.IsChecked;
-        bool? italicResult     = _italicChk.IsChecked;
-        bool? underlineResult  = _underlineChk.IsChecked;
-        bool? strikeResult     = _strikeChk.IsChecked;
-
-        // Resolve vertical alignment.
-        var va = _superChk.IsChecked == true ? VerticalAlign.Superscript
-               : _subChk.IsChecked   == true ? VerticalAlign.Subscript
-               : VerticalAlign.Baseline;
-
-        // Resolve colors from the combo labels → hex.
-        var colorHex     = SelectedHex(_colorBox,     FontColorPalette);
-        var highlightHex = SelectedHex(_highlightBox, HighlightPalette);
-
-        var result = new FontDialogResult(
-            Family:       family,
-            SizePt:       sizePt,
-            Bold:         boldResult,
-            Italic:       italicResult,
-            Underline:    underlineResult,
-            Strikethrough: strikeResult,
-            VerticalAlign: va,
-            SmallCaps:    _smallCapsChk.IsChecked == true,
-            AllCaps:      _allCapsChk.IsChecked   == true,
-            ColorHex:     colorHex,
-            HighlightHex: highlightHex,
-            FamilyChanged: familyChanged,
-            SizeChanged:  sizeChanged);
-
-        Close(result);
+        Close(ToDialogResult(plannedResult!));
     }
 
-    // ── Static apply ──────────────────────────────────────────────────────────
+    private static FontDialogResult ToDialogResult(FontDialogBasicResult result) => new(
+        Family: result.Family,
+        SizePt: result.SizePt,
+        Bold: result.Bold,
+        Italic: result.Italic,
+        Underline: result.Underline,
+        Strikethrough: result.Strikethrough,
+        VerticalAlign: result.VerticalAlign,
+        SmallCaps: result.SmallCaps,
+        AllCaps: result.AllCaps,
+        ColorHex: result.ColorHex,
+        HighlightHex: result.HighlightHex,
+        FamilyChanged: result.FamilyChanged,
+        SizeChanged: result.SizeChanged);
 
     /// <summary>
     /// Apply <paramref name="result"/> to <paramref name="editor"/>, changing only properties that
@@ -465,11 +401,10 @@ public sealed class FontDialog : Window
             if (result.HighlightHex != original.HighlightColorHex)
                 editor.SetHighlightColor(result.HighlightHex);
 
-            // SmallCaps / AllCaps: DocumentView does not yet expose ToggleSmallCaps /
-            // ToggleAllCaps. These flags round-trip through the model but the dialog can
-            // already read them. Applying them requires adding methods; we leave this for
-            // the next wave (deferred) — marked below.
-            // TODO(deferred): editor.ToggleSmallCaps() / editor.ToggleAllCaps() when added.
+            if (result.SmallCaps != original.SmallCaps)
+                editor.ToggleSmallCaps();
+            if (result.AllCaps != original.AllCaps)
+                editor.ToggleAllCaps();
         }
         finally
         {
@@ -531,23 +466,31 @@ public sealed class FontDialog : Window
         return grid;
     }
 
-    private static ComboBox BuildPaletteCombo((string Label, string? Hex)[] palette, string? currentHex)
+    private static ComboBox BuildPaletteCombo(IReadOnlyList<FontDialogColorChoice> palette, int selectedIndex)
     {
         var cb = new ComboBox { MinWidth = 150 };
+        AvaloniaCompactDialogChrome.ApplyComboBox(cb, DialogChromeStyle);
         cb.ItemsSource = palette.Select(p => p.Label).ToArray();
-
-        // Select the entry matching the current hex (null = "Automatic" / "None").
-        var idx = Array.FindIndex(palette, p =>
-            string.Equals(p.Hex, currentHex, StringComparison.OrdinalIgnoreCase));
-        cb.SelectedIndex = idx >= 0 ? idx : 0;
+        cb.SelectedIndex = selectedIndex < 0 || selectedIndex >= palette.Count ? 0 : selectedIndex;
 
         return cb;
     }
 
-    private static string? SelectedHex(ComboBox cb, (string Label, string? Hex)[] palette)
+    private void ApplyCheckBoxChrome()
     {
-        var idx = cb.SelectedIndex;
-        if (idx < 0 || idx >= palette.Length) return null;
-        return palette[idx].Hex;
+        foreach (var checkBox in new[]
+        {
+            _boldChk,
+            _italicChk,
+            _underlineChk,
+            _strikeChk,
+            _superChk,
+            _subChk,
+            _smallCapsChk,
+            _allCapsChk,
+        })
+        {
+            AvaloniaCompactDialogChrome.ApplyCheckBox(checkBox, DialogChromeStyle);
+        }
     }
 }

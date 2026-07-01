@@ -96,6 +96,25 @@ public sealed class WorkbookFilePickerPlannerTests
     }
 
     [Fact]
+    public void TryResolveSaveDialogTarget_UsesSelectedFilterWhenExtensionMatches()
+    {
+        var adapters = WorkbookFileAdapterCatalog.CreateDefaultAdapters();
+        var plainCsvFilterIndex = FileDialogFilterBuilder.FindSaveFilterIndex(adapters, ".csv");
+        var utf8CsvFilterIndex = plainCsvFilterIndex + 1;
+
+        var resolved = WorkbookFilePickerPlanner.TryResolveSaveDialogTarget(
+            adapters,
+            @"C:\Work\Budget.csv",
+            utf8CsvFilterIndex,
+            out var target);
+
+        resolved.Should().BeTrue();
+        target.Should().NotBeNull();
+        target!.Adapter.Should().BeOfType<CsvUtf8FileAdapter>();
+        target.Path.Should().Be(@"C:\Work\Budget.csv");
+    }
+
+    [Fact]
     public void BuildSuggestedSaveAsFileName_UsesFallbackAndWorkbookFallbackWhenNeeded()
     {
         WorkbookFilePickerPlanner.BuildSuggestedSaveAsFileName(

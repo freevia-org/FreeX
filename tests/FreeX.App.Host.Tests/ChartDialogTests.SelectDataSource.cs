@@ -22,6 +22,19 @@ public sealed partial class ChartDialogTests
     }
 
     [Fact]
+    public void SelectDataSourceDialog_PlanningDelegatesToPresentationPlanner()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("SelectDataSourceDialog.Planning.cs");
+
+        source.Should().Contain("SelectDataSourcePlanner.CreateResult");
+        source.Should().Contain("SelectDataSourcePlanner.InferPreviewEntries");
+        source.Should().Contain("SelectDataSourcePlanner.CreateRangeSelectionRequest");
+        source.Should().NotContain("ParsedRangeReference");
+        source.Should().NotContain("TryParseCellReference");
+        source.Should().NotContain("CellAddress.");
+    }
+
+    [Fact]
     public void SelectDataSourceDialogOpenedFromKeyboard_FocusesChartDataRangeBox()
     {
         var source = ReadChartDialogSource();
@@ -38,7 +51,9 @@ public sealed partial class ChartDialogTests
         var source = ReadChartDialogSource();
         var dialogSource = source[source.IndexOf("public sealed partial class SelectDataSourceDialog", StringComparison.Ordinal)..];
 
-        dialogSource.Should().Contain("AutomationProperties.SetName(_rangeBox, UiText.Get(\"SelectDataSource_ChartDataRangeAutomationName\"));");
+        dialogSource.Should().Contain("var rangeField = SelectDataSourcePlanner.GetChartDataRangeField();");
+        dialogSource.Should().Contain("AutomationProperties.SetName(_rangeBox, UiText.Get(rangeField.AutomationNameResourceKey!));");
+        dialogSource.Should().Contain("AutomationProperties.SetAutomationId(_rangeBox, rangeField.AutomationId);");
     }
 
     [Fact]
@@ -47,23 +62,23 @@ public sealed partial class ChartDialogTests
         var source = ReadChartDialogSource();
 
         source.Should().Contain("CreateReferenceEditor(_rangeBox");
-        source.Should().Contain("UiText.Get(\"SelectDataSource_SelectChartDataRangeAutomationName\")");
+        source.Should().Contain("SelectDataSourcePlanner.SelectRangeAutomationNameResourceKey");
         source.Should().Contain("DialogReferencePicker.CreateEditor");
         source.Should().Contain("SelectDataSourceRangeSelectionRequest");
         source.Should().Contain("_switchRowColumnBox");
         source.Should().Contain("_seriesList");
         source.Should().Contain("_axisLabelsList");
-        source.Should().Contain("UiText.Get(\"SelectDataSource_SeriesPanelTitle\")");
-        source.Should().Contain("UiText.Get(\"SelectDataSource_AxisLabelsPanelTitle\")");
+        source.Should().Contain("SelectDataSourcePlanner.GetSeriesPanel()");
+        source.Should().Contain("SelectDataSourcePlanner.GetAxisLabelsPanel()");
         source.Should().Contain("AddEditRemoveButtons");
-        source.Should().Contain("UiText.Get(\"SelectDataSource_SeriesListAutomationName\")");
-        source.Should().Contain("UiText.Get(\"SelectDataSource_AxisLabelsListAutomationName\")");
-        source.Should().Contain("UiText.Get(\"SelectDataSource_AddSeriesButton\")");
-        source.Should().Contain("UiText.Get(\"SelectDataSource_EditSeriesButton\")");
-        source.Should().Contain("UiText.Get(\"SelectDataSource_EditAxisLabelsButton\")");
+        source.Should().Contain("UiText.Get(listField.AutomationNameResourceKey!)");
+        source.Should().Contain("AutomationProperties.SetAutomationId(list, listField.AutomationId)");
+        source.Should().Contain("SelectDataSourceDialogActionId.AddSeries");
+        source.Should().Contain("SelectDataSourceDialogActionId.EditSeries");
+        source.Should().Contain("SelectDataSourceDialogActionId.EditAxisLabels");
         source.Should().Contain("_seriesList.MouseDoubleClick += EditSeriesButton_Click;");
         source.Should().Contain("_axisLabelsList.MouseDoubleClick += EditAxisLabelsButton_Click;");
-        source.Should().Contain("UiText.Get(\"SelectDataSource_SeriesListHelpText\")");
+        source.Should().Contain("UiText.Get(listField.HelpResourceKey!)");
     }
 
     [Fact]
@@ -124,7 +139,7 @@ public sealed partial class ChartDialogTests
 
         dialogSource.Should().Contain("Window.GetWindow(dependencyObject)");
         dialogSource.Should().Contain("DialogMessageHelper.ShowInfo(owner,");
-        dialogSource.Should().Contain("UiText.Get(\"SelectDataSource_HiddenEmptyCellsTitle\")");
+        dialogSource.Should().Contain("SelectDataSourcePlanner.HiddenEmptyCellsTitleResourceKey");
         dialogSource.Should().NotContain("MessageBox.Show(");
     }
 
@@ -195,9 +210,8 @@ public sealed partial class ChartDialogTests
 
         dialogSource.Should().Contain("if (!ValidateInputs())");
         dialogSource.Should().Contain("ChartInputParser.TryParseDataRange(_rangeBox.Text, _sheetId, _resolveSheetId, out _)");
-        dialogSource.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"SelectDataSource_InvalidRangeMessage\"), _rangeBox);");
-        dialogSource.Should().Contain("DialogMessageHelper.ShowWarning(this, message, Title);");
-        dialogSource.Should().Contain("FocusRangeSelectionInput(target);");
+        dialogSource.Should().Contain("ShowInvalidInputWarning(UiText.Get(SelectDataSourcePlanner.InvalidRangeMessageResourceKey), _rangeBox);");
+        dialogSource.Should().Contain("DialogFocus.ShowWarningAndFocus(this, message, Title, target);");
         chartCommandSource.Should().Contain("sheetId: _currentSheetId");
         chartCommandSource.Should().Contain("resolveSheetId: ResolveSheetIdByName");
     }

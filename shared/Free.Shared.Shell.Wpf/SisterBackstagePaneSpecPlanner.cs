@@ -1,6 +1,57 @@
 using Free.Shared.AppServices;
+using Free.Shared.Localization;
+using Free.Shared.Shell;
 
 namespace Free.Shared.Shell.Wpf;
+
+public sealed record SisterBackstageExportPaneTextSpec(
+    string Heading,
+    string Description,
+    string FixedLayoutGroupHeading,
+    string PdfActionLabel,
+    string PdfActionDescription,
+    string? XpsActionLabel = null,
+    string? XpsActionDescription = null)
+{
+    public static SisterBackstageExportPaneTextSpec NeutralEnglish { get; } = new(
+        Heading: "Export",
+        Description: "Create a fixed-layout copy for sharing or presenting.",
+        FixedLayoutGroupHeading: "Create PDF Copy",
+        PdfActionLabel: "Export to PDF...",
+        PdfActionDescription: "Publish a fixed-layout copy.");
+
+    public static SisterBackstageExportPaneTextSpec FreeW { get; } =
+        FromDescriptor(SisterBackstagePaneTextDescriptorPlanner.Build(SisterBackstageAppKind.FreeW).Export);
+
+    public static SisterBackstageExportPaneTextSpec FreeP { get; } =
+        FromDescriptor(SisterBackstagePaneTextDescriptorPlanner.Build(SisterBackstageAppKind.FreeP).Export);
+
+    public static SisterBackstageExportPaneTextSpec FromDescriptor(
+        SisterBackstageExportPaneTextDescriptor descriptor,
+        Func<string, string?>? getText = null)
+    {
+        ArgumentNullException.ThrowIfNull(descriptor);
+
+        return new SisterBackstageExportPaneTextSpec(
+            Resolve(descriptor.Heading, getText),
+            Resolve(descriptor.Description, getText),
+            Resolve(descriptor.FixedLayoutGroupHeading, getText),
+            Resolve(descriptor.PdfActionLabel, getText),
+            Resolve(descriptor.PdfActionDescription, getText),
+            descriptor.XpsActionLabel is null ? null : Resolve(descriptor.XpsActionLabel, getText),
+            descriptor.XpsActionDescription is null ? null : Resolve(descriptor.XpsActionDescription, getText));
+    }
+
+    private static string Resolve(ResourceTextDescriptor descriptor, Func<string, string?>? getText)
+    {
+        ArgumentNullException.ThrowIfNull(descriptor);
+
+        return LocalizedFallbackTextResolver.Resolve(
+            descriptor.ResourceKey,
+            descriptor.FallbackText,
+            getText);
+    }
+}
 
 public sealed record SisterBackstagePaneTextSpec(
     string RecentEmptyText,
@@ -10,20 +61,45 @@ public sealed record SisterBackstagePaneTextSpec(
     string OptionsDescription,
     string? OptionsEditText = null)
 {
-    public static SisterBackstagePaneTextSpec FreeW { get; } = new(
-        RecentEmptyText: "No recent documents.",
-        TemplateHeading: "New",
-        TemplateTileCaption: "Blank document",
-        TemplateFooterText: "More templates are not available in this build.",
-        OptionsDescription: "FreeW application settings. These persist between sessions and apply immediately.",
-        OptionsEditText: "Edit options\u2026");
+    public static SisterBackstagePaneTextSpec FreeW { get; } =
+        FromDescriptor(SisterBackstagePaneTextDescriptorPlanner.Build(SisterBackstageAppKind.FreeW));
 
-    public static SisterBackstagePaneTextSpec FreeP { get; } = new(
-        RecentEmptyText: "No recent presentations.",
-        TemplateHeading: "New",
-        TemplateTileCaption: "Blank presentation",
-        TemplateFooterText: "More templates are not available in this build.",
-        OptionsDescription: "FreeP application settings. These persist between sessions.");
+    public static SisterBackstagePaneTextSpec FreeP { get; } =
+        FromDescriptor(SisterBackstagePaneTextDescriptorPlanner.Build(SisterBackstageAppKind.FreeP));
+
+    public SisterBackstageAccountPaneTextSpec Account { get; init; } =
+        SisterBackstageAccountPaneTextSpec.NeutralEnglish;
+
+    public SisterBackstageExportPaneTextSpec Export { get; init; } =
+        SisterBackstageExportPaneTextSpec.NeutralEnglish;
+
+    public static SisterBackstagePaneTextSpec FromDescriptor(
+        SisterBackstagePaneTextDescriptor descriptor,
+        Func<string, string?>? getText = null)
+    {
+        ArgumentNullException.ThrowIfNull(descriptor);
+
+        return new SisterBackstagePaneTextSpec(
+            Resolve(descriptor.RecentEmptyText, getText),
+            Resolve(descriptor.TemplateHeading, getText),
+            Resolve(descriptor.TemplateTileCaption, getText),
+            Resolve(descriptor.TemplateFooterText, getText),
+            Resolve(descriptor.OptionsDescription, getText),
+            descriptor.OptionsEditText is null ? null : Resolve(descriptor.OptionsEditText, getText))
+        {
+            Export = SisterBackstageExportPaneTextSpec.FromDescriptor(descriptor.Export, getText)
+        };
+    }
+
+    private static string Resolve(ResourceTextDescriptor descriptor, Func<string, string?>? getText)
+    {
+        ArgumentNullException.ThrowIfNull(descriptor);
+
+        return LocalizedFallbackTextResolver.Resolve(
+            descriptor.ResourceKey,
+            descriptor.FallbackText,
+            getText);
+    }
 }
 
 /// <summary>
@@ -77,5 +153,56 @@ public sealed class SisterBackstagePaneSpecPlanner
             dataFolder,
             _text.OptionsEditText,
             edit);
+    }
+
+    public BackstageAccountPaneSpec BuildAccountPaneSpec(
+        SisterBackstageAccountPaneContext context,
+        Action? openOptions)
+    {
+        var plan = SisterBackstageAccountPanePlanner.Build(context, _text.Account);
+
+        return new BackstageAccountPaneSpec(
+            plan.Heading,
+            plan.Description,
+            plan.Groups,
+            plan.OptionsText,
+            openOptions);
+    }
+
+    public BackstageActionPaneSpec BuildExportPaneSpec(
+        Action exportPdf,
+        Action? exportXps = null,
+        IReadOnlyList<BackstageActionGroup>? additionalGroups = null)
+    {
+        ArgumentNullException.ThrowIfNull(exportPdf);
+
+        var export = _text.Export;
+        var fixedLayoutRows = new List<BackstageActionRow>
+        {
+            new(export.PdfActionLabel, export.PdfActionDescription, exportPdf),
+        };
+
+        if (exportXps is not null &&
+            !string.IsNullOrWhiteSpace(export.XpsActionLabel) &&
+            !string.IsNullOrWhiteSpace(export.XpsActionDescription))
+        {
+            fixedLayoutRows.Add(new BackstageActionRow(
+                export.XpsActionLabel,
+                export.XpsActionDescription,
+                exportXps));
+        }
+
+        var groups = new List<BackstageActionGroup>
+        {
+            new(export.FixedLayoutGroupHeading, fixedLayoutRows),
+        };
+
+        if (additionalGroups is { Count: > 0 })
+            groups.AddRange(additionalGroups);
+
+        return new BackstageActionPaneSpec(
+            export.Heading,
+            export.Description,
+            groups);
     }
 }

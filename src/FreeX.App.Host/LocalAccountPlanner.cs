@@ -1,19 +1,11 @@
-using System.IO;
-using Free.Shared.AppServices;
 using FreeX.App.Services;
+using FreeX.App.Presentation.Backstage;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
 
-public sealed record LocalAccountDetail(string Label, string Value);
-
-public sealed record LocalAccountPlan(
-    string Title,
-    IReadOnlyList<LocalAccountDetail> Details,
-    string WorkbookStatus,
-    string SharingStatus,
-    string ExportStatus);
-
+// Host adapter: supplies localized labels, app-version text, and FreeXOptions persistence
+// boundaries, while LocalAccountWorkflowPlanner owns the portable account/workbook status shape.
 public static class LocalAccountPlanner
 {
     public static LocalAccountPlan Create(
@@ -34,93 +26,70 @@ public static class LocalAccountPlanner
         userDomainProvider ??= () => Environment.UserDomainName;
         machineNameProvider ??= () => Environment.MachineName;
         optionsPathProvider ??= () => FreeXOptions.StorePathForDisplay;
-        fileExists ??= File.Exists;
 
-        var userName = Normalize(options.UserName, userNameProvider());
-        var windowsUserName = Normalize(userNameProvider(), userName);
-        var windowsAccount = FormatWindowsAccount(userDomainProvider(), windowsUserName);
-        var machineName = Normalize(machineNameProvider(), "Unknown device");
-        var optionsPath = Normalize(optionsPathProvider(), "Unknown");
-        var workbookDisplayName = Normalize(workbookName, "Unsaved workbook");
-        var workbookStatus = FormatWorkbookStatus(workbookDisplayName, currentFilePath, fileExists);
-        var sharingStatus = FormatSharingStatus(WorkbookShareReadinessPlanner.CreatePlan(
-            currentFilePath,
-            WorkbookShareSurface.WindowsShare,
-            fileExists));
-        var exportStatus = workbook is null
-            ? WorkbookExportReadinessPlanner.CreateForAvailableWorkbook(hasSelection).StatusText
-            : WorkbookExportReadinessPlanner.Create(workbook, hasSelection).StatusText;
+        var workflowPlan = LocalAccountWorkflowPlanner.Create(
+            new LocalAccountPlannerInput(
+                UiText.Get("DeferredCommand_LocalAccount_Title"),
+                string.Empty,
+                string.Empty,
+                string.Empty,
+                string.Empty,
+                string.Empty,
+                string.Empty,
+                string.Empty,
+                string.Empty,
+                options.UserName,
+                userNameProvider(),
+                userDomainProvider(),
+                machineNameProvider(),
+                AppInfo.ExactVersionText,
+                optionsPathProvider(),
+                workbookName ?? "",
+                currentFilePath),
+            fileExists,
+            workbook,
+            hasSelection);
 
-        var details = new List<LocalAccountDetail>
-        {
-            new("FreeX user name", userName),
-            new("Local OS account", windowsAccount),
-            new("Device", machineName),
-            new("App version", AppInfo.ExactVersionText),
-            new("Options file", optionsPath),
-            new("Current workbook", workbookStatus),
-            new("Sharing", sharingStatus),
-            new("Export", exportStatus),
-        };
-
-        return new LocalAccountPlan(
-            UiText.Get("DeferredCommand_LocalAccount_Title"),
-            details,
-            workbookStatus,
-            sharingStatus,
-            exportStatus);
+        return ProjectBackstageAccountPlan(workflowPlan);
     }
 
     public static string FormatMessageBody(LocalAccountPlan plan)
     {
-        ArgumentNullException.ThrowIfNull(plan);
-
-        var lines = plan.Details.Select(detail => $"{detail.Label}: {detail.Value}");
-        return UiText.Get("DeferredCommand_LocalAccount_Body") +
-               Environment.NewLine +
-               Environment.NewLine +
-               string.Join(Environment.NewLine, lines);
+        return LocalAccountWorkflowPlanner.FormatMessageBody(plan, UiText.Get("DeferredCommand_LocalAccount_Body"));
     }
 
-    private static string FormatWindowsAccount(string? domain, string userName)
+    private static LocalAccountPlan ProjectBackstageAccountPlan(LocalAccountPlan workflowPlan)
     {
-        if (string.IsNullOrWhiteSpace(domain) ||
-            userName.Contains('\\', StringComparison.Ordinal))
+        var pane = FreeXBackstageAccountPanePlanner.Build(new FreeXBackstageAccountPaneRequest(
+            workflowPlan.UserName,
+            workflowPlan.DeviceName,
+            workflowPlan.AppVersionText,
+            OptionsAvailable: true,
+            CurrentWorkbookPath: null,
+            CurrentWorkbookName: workflowPlan.WorkbookStatus,
+            TrademarkNotice: AppHelpInfo.TrademarkNotice,
+            LicenseNotice: AppHelpInfo.ProjectLicenseNotice,
+            PrivacyNotice: AppHelpInfo.PrivacyNotice,
+            LocalOsAccount: workflowPlan.LocalAccount,
+            OptionsFile: workflowPlan.OptionsPath,
+            SharingStatus: workflowPlan.SharingStatus,
+            ExportStatus: workflowPlan.ExportStatus));
+
+        var details = pane.Details
+            .Select(detail => new LocalAccountDetail(
+                UiText.Get(detail.LabelKey),
+                ResolveBackstageTextValue(detail.Value)))
+            .ToArray();
+
+        return workflowPlan with
         {
-            return userName;
-        }
-
-        return $"{domain.Trim()}\\{userName}";
-    }
-
-    private static string FormatWorkbookStatus(
-        string workbookDisplayName,
-        string? currentFilePath,
-        Func<string, bool> fileExists)
-    {
-        var sharePlan = WorkbookShareReadinessPlanner.CreatePlan(
-            currentFilePath,
-            WorkbookShareSurface.WindowsShare,
-            fileExists);
-        if (sharePlan.Kind == WorkbookShareReadinessPlanKind.ShareExistingFile)
-            return $"{workbookDisplayName} ({sharePlan.Path})";
-
-        return sharePlan.SaveAsReason switch
-        {
-            WorkbookShareReadinessSaveAsReason.MissingFile when !string.IsNullOrWhiteSpace(sharePlan.CandidatePath) =>
-                $"{workbookDisplayName} (saved path missing: {sharePlan.CandidatePath})",
-            WorkbookShareReadinessSaveAsReason.InvalidPath when !string.IsNullOrWhiteSpace(sharePlan.CandidatePath) =>
-                $"{workbookDisplayName} (saved path is not a valid local file path: {sharePlan.CandidatePath})",
-            _ =>
-                $"{workbookDisplayName} (not saved yet)"
+            Title = UiText.Get(pane.TitleKey),
+            Details = details,
         };
     }
 
-    private static string FormatSharingStatus(WorkbookShareReadinessPlan plan) =>
-        WorkbookShareReadinessPlanner.FormatStatus(plan);
-
-    private static string Normalize(string? value, string fallback) =>
-        string.IsNullOrWhiteSpace(value)
-            ? fallback
-            : value.Trim();
+    private static string ResolveBackstageTextValue(FreeXBackstageTextValue value) =>
+        value.TextKey is { } key
+            ? UiText.Get(key)
+            : value.Text ?? string.Empty;
 }

@@ -7,6 +7,7 @@ using System.Windows.Input;
 using System.Windows.Interop;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
+using FreeX.App.Presentation.Shell;
 using FreeX.App.Services;
 
 namespace FreeX.App.Host;
@@ -204,7 +205,7 @@ public partial class MainWindow
             isEnabled: true,
             UiText.Get("MainWindow_TooltipDescription_OpenAnotherLiveWindowForThisWorkbook"));
 
-        var canSwitchWindows = (_windowRegistry?.Count ?? 1) > 1;
+        var canSwitchWindows = (_windowRegistry?.VisibleCount ?? 1) > 1;
         ApplyRibbonWindowCommandState(
             "Switch Windows",
             canSwitchWindows,
@@ -409,13 +410,27 @@ public partial class MainWindow
     private void CloseSysBtn_Click(object sender, RoutedEventArgs e) =>
         SystemCommands.CloseWindow(this);
 
+    private void ConfigureStatusZoomSlider()
+    {
+        var plan = StatusBarZoomSliderPlanner.Build((int)ZoomLevelMapper.DefaultZoomPercent);
+        ZoomSlider.Minimum = plan.MinimumSliderValue;
+        ZoomSlider.Maximum = plan.MaximumSliderValue;
+        ZoomSlider.SmallChange = plan.SmallChange;
+        ZoomSlider.LargeChange = plan.LargeChange;
+        ZoomSlider.Ticks = new System.Windows.Media.DoubleCollection(plan.SliderTickValues);
+        ZoomSlider.Value = plan.SliderValue;
+    }
+
+    private static double StatusZoomSliderValueForPercent(double zoomPercent) =>
+        StatusBarZoomSliderPlanner.Build((int)Math.Round(zoomPercent)).SliderValue;
+
     private void ZoomInBtn_Click(object sender, RoutedEventArgs e)
     {
-        ZoomSlider.Value = Math.Min(ZoomSlider.Maximum, ZoomSlider.Value + 5);
+        ZoomSlider.Value = Math.Min(ZoomSlider.Maximum, ZoomSlider.Value + StatusBarZoomSliderPlanner.SmallChange);
     }
     private void ZoomOutBtn_Click(object sender, RoutedEventArgs e)
     {
-        ZoomSlider.Value = Math.Max(ZoomSlider.Minimum, ZoomSlider.Value - 5);
+        ZoomSlider.Value = Math.Max(ZoomSlider.Minimum, ZoomSlider.Value - StatusBarZoomSliderPlanner.SmallChange);
     }
     private void ZoomPickerBtn_Click(object sender, RoutedEventArgs e)
     {
@@ -427,7 +442,7 @@ public partial class MainWindow
             !FreeX.App.Services.ZoomLevelMapper.TryParseZoomPercent(tag, out var zoomPercent))
             return;
 
-        ZoomSlider.Value = FreeX.App.Services.ZoomLevelMapper.ZoomPercentToSlider(zoomPercent);
+        ZoomSlider.Value = StatusZoomSliderValueForPercent(zoomPercent);
     }
     private void ZoomCustomMenuItem_Click(object sender, RoutedEventArgs e)
     {
@@ -438,13 +453,14 @@ public partial class MainWindow
             if (dialog.ShowDialog() != true)
                 return;
 
-            var zoomPercent = ZoomSelectionPlanner.CalculateDialogZoomPercent(
-                dialog.Result,
+            var zoomPercent = ZoomSelectionPlanner.CalculateZoomPercent(
+                dialog.Result.ZoomPercent,
+                dialog.Result.FitSelection,
                 SheetGrid.ActualWidth,
                 SheetGrid.ActualHeight,
                 SheetGrid.SelectedRange?.ColCount ?? 1,
                 SheetGrid.SelectedRange?.RowCount ?? 1);
-            ZoomSlider.Value = FreeX.App.Services.ZoomLevelMapper.ZoomPercentToSlider(zoomPercent);
+            ZoomSlider.Value = StatusZoomSliderValueForPercent(zoomPercent);
         }
         finally
         {
@@ -469,7 +485,7 @@ public partial class MainWindow
 
     private void Zoom100Btn_Click(object sender, RoutedEventArgs e)
     {
-        ZoomSlider.Value = 100;
+        ZoomSlider.Value = StatusZoomSliderValueForPercent(ZoomLevelMapper.DefaultZoomPercent);
     }
     private void ZoomSelectionBtn_Click(object sender, RoutedEventArgs e)
     {
@@ -479,38 +495,40 @@ public partial class MainWindow
             SheetGrid.ActualHeight,
             range.ColCount,
             range.RowCount);
-        ZoomSlider.Value = FreeX.App.Services.ZoomLevelMapper.ZoomPercentToSlider(fitPct);
+        ZoomSlider.Value = StatusZoomSliderValueForPercent(fitPct);
     }
     private void ZoomSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
         if (ZoomSlider == null || SheetGrid == null || StatusZoomText == null) return;
         if (_snapInProgress || _suppressZoomSync) return;
-        double sliderVal = e.NewValue;
+        var inputPlan = StatusBarZoomSliderPlanner.BuildInput(e.NewValue);
 
-        // Snap to 100% when near the midpoint
-        if (Math.Abs(sliderVal - 100.0) < 3.0)
+        if (inputPlan.SnappedToDefault)
         {
             _snapInProgress = true;
-            ZoomSlider.Value = 100.0;
-            _snapInProgress = false;
-            sliderVal = 100.0;
+            try
+            {
+                ZoomSlider.Value = inputPlan.SliderValue;
+            }
+            finally
+            {
+                _snapInProgress = false;
+            }
         }
 
-        double zoomPct = FreeX.App.Services.ZoomLevelMapper.SliderToZoomPercent(sliderVal);
-        var roundedZoomPct = (int)Math.Round(zoomPct);
         if (!TryExecuteGroupedSheetCommand(
                 "Zoom",
-                sheetId => new SetWorksheetZoomCommand(sheetId, roundedZoomPct)))
+                sheetId => new SetWorksheetZoomCommand(sheetId, inputPlan.ZoomPercent)))
             return;
 
-        SyncZoomFromSheet(roundedZoomPct, updateSlider: false);
+        SyncZoomFromSheet(inputPlan.ZoomPercent, updateSlider: false);
         UpdateViewport();
     }
 
     private void SyncZoomFromSheet(int zoomPercent, bool updateSlider = true)
     {
-        zoomPercent = Math.Clamp(zoomPercent, SetWorksheetZoomCommand.MinZoomPercent, SetWorksheetZoomCommand.MaxZoomPercent);
-        _zoomLevel = zoomPercent / 100.0;
+        var plan = StatusBarZoomSliderPlanner.Build(zoomPercent);
+        _zoomLevel = plan.ZoomPercent / 100.0;
         if (SheetGrid is not null)
         {
             SheetGrid.ZoomFactor = _zoomLevel;
@@ -518,9 +536,8 @@ public partial class MainWindow
         }
         if (StatusZoomText is not null)
         {
-            var zoomText = $"{zoomPercent}%";
-            StatusZoomText.Text = zoomText;
-            AutomationProperties.SetName(StatusZoomText, zoomText);
+            StatusZoomText.Text = plan.ZoomText;
+            AutomationProperties.SetName(StatusZoomText, plan.ZoomText);
         }
 
         if (!updateSlider || ZoomSlider is null)
@@ -529,7 +546,7 @@ public partial class MainWindow
         _suppressZoomSync = true;
         try
         {
-            ZoomSlider.Value = FreeX.App.Services.ZoomLevelMapper.ZoomPercentToSlider(zoomPercent);
+            ZoomSlider.Value = plan.SliderValue;
         }
         finally
         {
@@ -547,26 +564,15 @@ public partial class MainWindow
 
     private void ApplyFormulaBarExpansion()
     {
-        if (_formulaBarExpanded)
-        {
-            FormulaBar.Height       = 84;
-            FormulaBar.AcceptsReturn = true;
-            FormulaBarExpandBtn.Content = CreateFormulaBarChevron(pointsUp: true);
-            System.Windows.Automation.AutomationProperties.SetName(FormulaBarExpandBtn, UiText.Get("MainWindow_AutomationName_CollapseFormulaBar"));
-            System.Windows.Automation.AutomationProperties.SetHelpText(FormulaBarExpandBtn, UiText.Get("MainWindow_AutomationHelpText_CollapseTheFormulaBarToASingleLineEditor"));
-            RibbonTooltip.SetTitle(FormulaBarExpandBtn, UiText.Get("MainWindow_TooltipTitle_CollapseFormulaBar"));
-            RibbonTooltip.SetDescription(FormulaBarExpandBtn, UiText.Get("MainWindow_TooltipDescription_CollapseTheFormulaBarToASingleLineEditor"));
-        }
-        else
-        {
-            FormulaBar.Height       = 30;
-            FormulaBar.AcceptsReturn = false;
-            FormulaBarExpandBtn.Content = CreateFormulaBarChevron(pointsUp: false);
-            System.Windows.Automation.AutomationProperties.SetName(FormulaBarExpandBtn, UiText.Get("MainWindow_AutomationName_ExpandFormulaBar"));
-            System.Windows.Automation.AutomationProperties.SetHelpText(FormulaBarExpandBtn, UiText.Get("MainWindow_AutomationHelpText_ExpandTheFormulaBarToAMultiLineEditor"));
-            RibbonTooltip.SetTitle(FormulaBarExpandBtn, UiText.Get("MainWindow_TooltipTitle_ExpandFormulaBar"));
-            RibbonTooltip.SetDescription(FormulaBarExpandBtn, UiText.Get("MainWindow_TooltipDescription_ExpandTheFormulaBarToAMultiLineEditor"));
-        }
+        var plan = FormulaBarChromePlanner.BuildExpansion(_formulaBarExpanded);
+
+        FormulaBar.Height = plan.EditorHeight;
+        FormulaBar.AcceptsReturn = plan.AcceptsReturn;
+        FormulaBarExpandBtn.Content = CreateFormulaBarChevron(pointsUp: plan.ChevronPointsUp);
+        AutomationProperties.SetName(FormulaBarExpandBtn, UiText.Get(plan.Button.AutomationNameResourceKey));
+        AutomationProperties.SetHelpText(FormulaBarExpandBtn, UiText.Get(plan.Button.HelpTextResourceKey));
+        RibbonTooltip.SetTitle(FormulaBarExpandBtn, UiText.Get(plan.TooltipTitleResourceKey));
+        RibbonTooltip.SetDescription(FormulaBarExpandBtn, UiText.Get(plan.TooltipDescriptionResourceKey));
     }
 
     private static FrameworkElement CreateFormulaBarChevron(bool pointsUp) =>

@@ -44,7 +44,7 @@ and CI-friendly (no prompts; non-zero exit on failure).
 
 The release lane is **manual-only** (`workflow_dispatch`) — it does not run on
 push or PR. It runs on `windows-latest`, sets up .NET 10, runs
-`publish-windows.ps1`, and uploads the zip via `actions/upload-artifact@v4`.
+`publish-windows.ps1`, and uploads the zip via `actions/upload-artifact@v7`.
 
 Trigger it with the GitHub CLI:
 
@@ -55,3 +55,16 @@ gh workflow run freew-release.yml --ref <branch> -f release_version=0.1.0
 The uploaded artifact is named `FreeW-win-x64-<release_version>` and contains
 `FreeW-win-x64-<release_version>.zip`. Download it from the workflow run's
 Artifacts section.
+
+Use explicit artifact hygiene settings in workflow snippets:
+
+```yaml
+- uses: actions/upload-artifact@v7
+  with:
+    name: FreeW-win-x64-${{ inputs.release_version }}
+    path: artifacts/FreeW-win-x64-${{ inputs.release_version }}.zip
+    if-no-files-found: error
+    include-hidden-files: false
+    compression-level: 0
+    retention-days: 14
+```

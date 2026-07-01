@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using FreeP.App.Compositor;
@@ -228,7 +229,7 @@ public sealed class AnimationPaneTests
     [StaFact]
     public void MainWindow_ToggleAnimationPane_ShowsAndHidesPaneHost()
     {
-        var window = new MainWindow(new FreePOptions());
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
         try
         {
             // Initially collapsed.
@@ -256,7 +257,7 @@ public sealed class AnimationPaneTests
     [StaFact]
     public void MainWindow_ToggleAnimationPane_CreatesPaneChild()
     {
-        var window = new MainWindow(new FreePOptions());
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
         try
         {
             window.ToggleAnimationPane();
@@ -307,6 +308,43 @@ public sealed class AnimationPaneTests
         CountAnimationRows(pane).Should().Be(0, "pane should refresh when slide changes");
     }
 
+    [StaFact]
+    public void AnimationPane_ExposesSharedTimelinePlan()
+    {
+        var editor = MakeSessionWithAnimations();
+        editor.Select(20u);
+
+        var pane = new AnimationPane(editor);
+
+        var plan = pane.CurrentTimelinePlanForTest;
+        plan.Items.Should().HaveCount(2);
+        plan.SelectedIndex.Should().Be(1);
+        plan.SelectedItem!.ShapeName.Should().Be("Content Box");
+        plan.SelectedItem.EffectText.Should().Be("In: Fade");
+        plan.SelectedItem.CanMoveEarlier.Should().BeTrue();
+        plan.SelectedItem.CanMoveLater.Should().BeFalse();
+        plan.PreviewIntent.CanExecute.Should().BeTrue();
+    }
+
+    [Fact]
+    public void AnimationPane_UsesSharedPlannerForPolicy()
+    {
+        var source = ReadWorkspaceFile("freep", "FreeP.App.Host", "AnimationPane.cs");
+
+        source.Should().Contain("AnimationPanePlanner.BuildTimelinePlan(");
+        source.Should().Contain("var effectText = item.EffectText");
+        source.Should().Contain("AnimationPanePlanner.TriggerLabels");
+        source.Should().Contain("AnimationPanePlanner.TryGetTrigger(");
+        source.Should().Contain("Text              = item.DurationText");
+        source.Should().Contain("AnimationPanePlanner.BuildDurationEditPlan(");
+        source.Should().NotContain("private static string FormatEffect");
+        source.Should().NotContain("private static string FormatDuration");
+        source.Should().NotContain("private static bool TryParseDuration");
+        source.Should().NotContain("private string ResolveShapeName");
+        source.Should().NotContain("private static ShapeAnimation CloneAnimation");
+        source.Should().NotContain("double.TryParse");
+    }
+
     // ── Test-seam helpers ─────────────────────────────────────────────────────────
 
     /// <summary>
@@ -345,5 +383,26 @@ public sealed class AnimationPaneTests
                 names.Add(nameBlock.Text ?? string.Empty);
         }
         return names;
+    }
+
+    private static string ReadWorkspaceFile(params string[] relativeParts)
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            var parts = new string[relativeParts.Length + 1];
+            parts[0] = directory.FullName;
+            relativeParts.CopyTo(parts, 1);
+
+            var candidate = Path.Combine(parts);
+            if (File.Exists(candidate))
+                return File.ReadAllText(candidate);
+
+            directory = directory.Parent;
+        }
+
+        throw new FileNotFoundException(
+            "Could not locate workspace file.",
+            Path.Combine(relativeParts));
     }
 }

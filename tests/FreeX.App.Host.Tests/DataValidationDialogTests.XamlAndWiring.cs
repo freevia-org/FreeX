@@ -199,10 +199,9 @@ public sealed partial class DataValidationDialogTests
 
         xaml.Should().Contain("<TabControl x:Name=\"ValidationTabs\"");
         xaml.Should().Contain("<TabItem x:Name=\"SettingsTab\" Header=\"_Settings\"");
-        codeBehind.Should().Contain("FocusInvalidCriteriaInput(typeTag, opTag);");
-        codeBehind.Should().Contain("private void FocusInvalidCriteriaInput(string typeTag, string opTag)");
+        codeBehind.Should().Contain("DialogFocus.ShowWarningAndFocus(this, criteriaError, Title, ResolveInvalidCriteriaInput(type, op));");
+        codeBehind.Should().Contain("private TextBox ResolveInvalidCriteriaInput(DvType type, DvOperator op)");
         codeBehind.Should().Contain("ValidationTabs.SelectedItem = SettingsTab;");
-        codeBehind.Should().Contain("Keyboard.Focus(target);");
     }
 
     [Fact]
@@ -248,11 +247,27 @@ public sealed partial class DataValidationDialogTests
     {
         var codeBehind = DialogSourceTestSupport.ReadHostSources("DataValidationDialog.xaml.cs");
 
-        codeBehind.Should().Contain("Formula1Label.Content = UiText.Get(\"DataValidation_Source\")");
-        codeBehind.Should().Contain("Formula1Label.Content = UiText.Get(\"DataValidation_Formula\")");
-        codeBehind.Should().Contain("UiText.Get(\"DataValidation_Minimum\")");
-        codeBehind.Should().Contain("UiText.Get(\"DataValidation_Value\")");
+        codeBehind.Should().Contain("DataValidationDialogPlanner.CreateVisibilityPlan(");
+        codeBehind.Should().Contain("Formula1Label.Content = UiText.Get(Formula1LabelKey(plan.Formula1Label));");
+        codeBehind.Should().Contain("DvFormula1Label.Source => \"DataValidation_Source\"");
+        codeBehind.Should().Contain("DvFormula1Label.Formula => \"DataValidation_Formula\"");
+        codeBehind.Should().Contain("DvFormula1Label.Value => \"DataValidation_Value\"");
         codeBehind.Should().NotContain("Formula1Label.Text =");
+    }
+
+    [Fact]
+    public void DataValidationDialogPlanning_DelegatesPortableLogicToPresentation()
+    {
+        var planningSource = DialogSourceTestSupport.ReadHostSources("DataValidationDialog.Planning.cs");
+        var codeBehind = DialogSourceTestSupport.ReadHostSources("DataValidationDialog.xaml.cs");
+
+        planningSource.Should().Contain("DataValidationDialogPlanner.ValidateCriteria(");
+        planningSource.Should().Contain("DataValidationDialogPlanner.FocusTargetForInvalidCriteria(");
+        planningSource.Should().Contain("DataValidationDialogPlanner.CreateRangeSelectionRequest(");
+        planningSource.Should().NotContain("new Parser");
+        planningSource.Should().NotContain("TryParseInlineListCriteria");
+        codeBehind.Should().Contain("DataValidationDialogPlanner.CreateRule(input)");
+        codeBehind.Should().Contain("DataValidationDialogPlanner.IsClearAllState(input)");
     }
 
     [Fact]

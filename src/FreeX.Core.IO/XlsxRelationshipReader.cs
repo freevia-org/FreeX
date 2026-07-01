@@ -12,33 +12,30 @@ internal static class XlsxRelationshipReader
         Func<string, string> resolveTarget)
     {
         var targets = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var element in relationshipsXml.Root?.Elements(packageRelNs + "Relationship") ?? [])
+        foreach (var relationship in OpcRelationships.Load(relationshipsXml, packageRelNs))
         {
-            var id = element.Attribute("Id")?.Value;
-            var target = element.Attribute("Target")?.Value;
-            if (string.IsNullOrWhiteSpace(id) ||
-                string.IsNullOrWhiteSpace(target) ||
-                IsExternalRelationship(element, target))
+            if (string.IsNullOrWhiteSpace(relationship.Target) ||
+                IsExternalRelationship(relationship))
             {
                 continue;
             }
 
-            ref var targetPath = ref CollectionsMarshal.GetValueRefOrAddDefault(targets, id, out var exists);
+            ref var targetPath = ref CollectionsMarshal.GetValueRefOrAddDefault(targets, relationship.Id, out var exists);
             if (exists)
                 continue;
 
-            targetPath = resolveTarget(target);
+            targetPath = resolveTarget(relationship.Target);
         }
 
         return targets;
     }
 
-    private static bool IsExternalRelationship(XElement relationship, string target)
+    private static bool IsExternalRelationship(OpcRelationship relationship)
     {
-        if (string.Equals(relationship.Attribute("TargetMode")?.Value, "External", StringComparison.OrdinalIgnoreCase))
+        if (relationship.IsExternal)
             return true;
 
-        return Uri.TryCreate(target, UriKind.Absolute, out var uri) &&
+        return Uri.TryCreate(relationship.Target, UriKind.Absolute, out var uri) &&
                !string.IsNullOrWhiteSpace(uri.Scheme);
     }
 
@@ -52,15 +49,10 @@ internal static class XlsxRelationshipReader
         if (relationshipsEntry is null)
             return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
-        var relationshipsXml = LoadXml(relationshipsEntry);
+        var relationshipsXml = XlsxPackageXmlEditor.LoadXml(relationshipsEntry);
         return ReadTargets(
             relationshipsXml,
             packageRelNs,
             target => XlsxPackagePath.ResolveRelationshipTarget(sourcePart, target));
-    }
-
-    private static XDocument LoadXml(ZipArchiveEntry entry)
-    {
-        return XlsxPackageXmlEditor.LoadXml(entry);
     }
 }

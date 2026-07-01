@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Media;
 using FreeX.App.Presentation.Charts;
+using FreeX.App.Presentation.DrawingUI;
 using FreeX.App.Presentation.Shapes;
 using FreeX.App.Presentation.SlicerTimeline;
 using FreeX.Core.Model;
@@ -52,75 +53,64 @@ public partial class GridView
     private (uint LastRow, uint LastColumn) GetRenderableDrawingAnchorBounds(double visibleRight, double visibleBottom)
     {
         var viewport = Viewport!;
-        return (
-            FindLastRenderableDrawingRow(viewport.RowMetrics, EffectiveColHeaderHeight, visibleBottom),
-            FindLastRenderableDrawingColumn(viewport.ColMetrics, ActualRowHeaderWidth, visibleRight));
-    }
-
-    private static uint FindLastRenderableDrawingRow(
-        IReadOnlyList<RowMetric> rows,
-        double columnHeaderHeight,
-        double visibleBottom)
-    {
-        uint lastRow = 0;
-        foreach (var row in rows)
-        {
-            if (columnHeaderHeight + row.TopOffset >= visibleBottom)
-                break;
-            if (row.Row > lastRow)
-                lastRow = row.Row;
-        }
-
-        return lastRow;
-    }
-
-    private static uint FindLastRenderableDrawingColumn(
-        IReadOnlyList<ColMetric> columns,
-        double rowHeaderWidth,
-        double visibleRight)
-    {
-        uint lastColumn = 0;
-        foreach (var column in columns)
-        {
-            if (rowHeaderWidth + column.LeftOffset >= visibleRight)
-                break;
-            if (column.Col > lastColumn)
-                lastColumn = column.Col;
-        }
-
-        return lastColumn;
+        var bounds = DrawingObjectViewportPlanner.GetRenderableAnchorBounds(
+            viewport,
+            ActualRowHeaderWidth,
+            EffectiveColHeaderHeight,
+            visibleRight,
+            visibleBottom);
+        return (bounds.LastRow, bounds.LastColumn);
     }
 
     private static bool CanAnchoredObjectReachDrawingViewport(
         CellAddress anchor,
         uint lastRenderableRow,
         uint lastRenderableColumn) =>
-        lastRenderableRow > 0 &&
-        lastRenderableColumn > 0 &&
-        anchor.Row <= lastRenderableRow &&
-        anchor.Col <= lastRenderableColumn;
+        DrawingObjectViewportPlanner.CanAnchoredObjectReachViewport(
+            anchor,
+            new DrawingViewportAnchorBounds(lastRenderableRow, lastRenderableColumn));
 
     private static bool CanAnchoredObjectReachDrawingViewport(
         DrawingAnchorRange anchor,
         uint lastRenderableRow,
         uint lastRenderableColumn) =>
-        lastRenderableRow > 0 &&
-        lastRenderableColumn > 0 &&
-        anchor.From.Row != uint.MaxValue &&
-        anchor.From.Column != uint.MaxValue &&
-        anchor.From.Row < lastRenderableRow &&
-        anchor.From.Column < lastRenderableColumn;
+        DrawingObjectViewportPlanner.CanAnchorRangeReachViewport(
+            anchor,
+                new DrawingViewportAnchorBounds(lastRenderableRow, lastRenderableColumn));
+
+    private static bool ShouldDisplayAnchoredDrawingObject(
+        bool isVisible,
+        CellAddress anchor,
+        uint lastRenderableRow,
+        uint lastRenderableColumn) =>
+        GridDrawingObjectPlanner.ShouldDisplayAnchoredObject(
+            isVisible,
+            anchor,
+            lastRenderableRow,
+            lastRenderableColumn);
+
+    private static bool ShouldDisplayDrawingAnchorRange(
+        DrawingAnchorRange anchor,
+        uint lastRenderableRow,
+        uint lastRenderableColumn) =>
+        GridDrawingObjectPlanner.ShouldDisplayAnchorRange(
+            anchor,
+            lastRenderableRow,
+            lastRenderableColumn);
 
     private static bool NeedsDrawingViewportCull(
         Rect rect,
         double rotationDegrees,
         double visibleRight,
         double visibleBottom) =>
-        Math.Abs(rotationDegrees % 360) > 0.0001 ||
-        rect.Left < 0 ||
-        rect.Top < 0 ||
-        rect.Left >= visibleRight ||
-        rect.Top >= visibleBottom;
+        GridDrawingObjectPlanner.NeedsViewportCull(rect, rotationDegrees, visibleRight, visibleBottom);
+
+    private static bool ShouldDisplayDrawingObjectRect(
+        Rect rect,
+        double rotationDegrees,
+        double visibleRight,
+        double visibleBottom) =>
+        GridDrawingObjectPlanner.ShouldDisplayObjectRect(rect, rotationDegrees, visibleRight, visibleBottom);
 
     private bool IntersectsDrawingViewport(Rect rect) =>
         IntersectsDrawingViewport(rect, 0);
@@ -139,51 +129,10 @@ public partial class GridView
         double rotationDegrees,
         double visibleRight,
         double visibleBottom)
-    {
-        if (rect.Width <= 0 || rect.Height <= 0)
-            return false;
+        => GridDrawingObjectPlanner.IntersectsViewport(rect, rotationDegrees, visibleRight, visibleBottom);
 
-        if (visibleRight <= 0 || visibleBottom <= 0)
-            return false;
-
-        var cullRect = Math.Abs(rotationDegrees % 360) <= 0.0001
-            ? rect
-            : CalculateRotatedBounds(rect, rotationDegrees);
-        return IntersectsVisibleGrid(cullRect, 0, 0, visibleRight, visibleBottom);
-    }
-
-    private static Rect CalculateRotatedBounds(Rect rect, double rotationDegrees)
-    {
-        var radians = rotationDegrees * Math.PI / 180.0;
-        var cos = Math.Cos(radians);
-        var sin = Math.Sin(radians);
-        var centerX = rect.Left + rect.Width / 2.0;
-        var centerY = rect.Top + rect.Height / 2.0;
-
-        var minX = double.PositiveInfinity;
-        var minY = double.PositiveInfinity;
-        var maxX = double.NegativeInfinity;
-        var maxY = double.NegativeInfinity;
-
-        IncludeRotatedCorner(rect.Left, rect.Top);
-        IncludeRotatedCorner(rect.Right, rect.Top);
-        IncludeRotatedCorner(rect.Right, rect.Bottom);
-        IncludeRotatedCorner(rect.Left, rect.Bottom);
-
-        return new Rect(new Point(minX, minY), new Point(maxX, maxY));
-
-        void IncludeRotatedCorner(double x, double y)
-        {
-            var dx = x - centerX;
-            var dy = y - centerY;
-            var rotatedX = centerX + dx * cos - dy * sin;
-            var rotatedY = centerY + dx * sin + dy * cos;
-            minX = Math.Min(minX, rotatedX);
-            minY = Math.Min(minY, rotatedY);
-            maxX = Math.Max(maxX, rotatedX);
-            maxY = Math.Max(maxY, rotatedY);
-        }
-    }
+    private static Rect CalculateRotatedBounds(Rect rect, double rotationDegrees) =>
+        GridDrawingObjectPlanner.CalculateRotatedBounds(rect, rotationDegrees);
 
     private void RenderCharts(DrawingContext dc)
     {
@@ -212,7 +161,7 @@ public partial class GridView
                 rect = previewRect;
             }
 
-            if (!IntersectsDrawingViewport(rect, 0, visibleRight, visibleBottom))
+            if (!ShouldDisplayDrawingObjectRect(rect, 0, visibleRight, visibleBottom))
                 continue;
 
             DrawChartObjectBackground(dc, chart, rect);
@@ -269,8 +218,7 @@ public partial class GridView
         uint lastRenderableRow,
         uint lastRenderableColumn)
     {
-        if (!textBox.IsVisible) return;
-        if (!CanAnchoredObjectReachDrawingViewport(textBox.Anchor, lastRenderableRow, lastRenderableColumn))
+        if (!ShouldDisplayAnchoredDrawingObject(textBox.IsVisible, textBox.Anchor, lastRenderableRow, lastRenderableColumn))
             return;
         if (!TryCreateAnchoredObjectRect(
                 metricLookups,
@@ -284,9 +232,10 @@ public partial class GridView
                 textBox.AnchorOffsetY))
             return;
 
-        var rotationDegrees = textBox.RotationDegrees;
-        var flipHorizontal = textBox.FlipHorizontal;
-        var flipVertical = textBox.FlipVertical;
+        var metadata = ResolveTextBoxRenderMetadata(textBox, WorkbookTheme);
+        var rotationDegrees = metadata.Transform.RotationDegrees;
+        var flipHorizontal = metadata.Transform.FlipHorizontal;
+        var flipVertical = metadata.Transform.FlipVertical;
         if (TryResolveLiveObjectTransform(
                 textBox.Id,
                 ObjectKind.TextBox,
@@ -305,14 +254,13 @@ public partial class GridView
             flipVertical = previewFlipVertical;
         }
 
-        if (NeedsDrawingViewportCull(rect, rotationDegrees, visibleRight, visibleBottom) &&
-            !IntersectsDrawingViewport(rect, rotationDegrees, visibleRight, visibleBottom))
+        if (!ShouldDisplayDrawingObjectRect(rect, rotationDegrees, visibleRight, visibleBottom))
             return;
 
         var transformDepth = PushDrawingObjectTransform(dc, rotationDegrees, flipHorizontal, flipVertical, rect);
-        var colors = ResolveTextBoxColors(textBox, WorkbookTheme);
+        var colors = new DrawingObjectColors(metadata.Paint.Fill, metadata.Paint.Outline);
         DrawTextBoxThemeEffect(dc, rect, themeEffect);
-        var fillBrush = textBox.HasFill ? GetDrawingObjectBrush(242, colors.Fill) : null;
+        var fillBrush = metadata.Paint.HasFill ? GetDrawingObjectBrush(242, colors.Fill) : null;
         var borderPen = GetDrawingObjectPen(255, colors.Outline, 1);
         dc.DrawRectangle(fillBrush, borderPen, rect);
         DrawTextBoxThemeInnerShadow(dc, rect, themeEffect);
@@ -356,8 +304,7 @@ public partial class GridView
         uint lastRenderableRow,
         uint lastRenderableColumn)
     {
-        if (!shape.IsVisible) return;
-        if (!CanAnchoredObjectReachDrawingViewport(shape.Anchor, lastRenderableRow, lastRenderableColumn))
+        if (!ShouldDisplayAnchoredDrawingObject(shape.IsVisible, shape.Anchor, lastRenderableRow, lastRenderableColumn))
             return;
         if (!TryCreateAnchoredObjectRect(
                 metricLookups,
@@ -371,9 +318,10 @@ public partial class GridView
                 shape.AnchorOffsetY))
             return;
 
-        var rotationDegrees = shape.RotationDegrees;
-        var flipHorizontal = shape.FlipHorizontal;
-        var flipVertical = shape.FlipVertical;
+        var metadata = ResolveDrawingShapeRenderMetadata(shape, WorkbookTheme);
+        var rotationDegrees = metadata.Transform.RotationDegrees;
+        var flipHorizontal = metadata.Transform.FlipHorizontal;
+        var flipVertical = metadata.Transform.FlipVertical;
         if (TryResolveLiveObjectTransform(
                 shape.Id,
                 ObjectKind.Shape,
@@ -392,36 +340,35 @@ public partial class GridView
             flipVertical = previewFlipVertical;
         }
 
-        if (NeedsDrawingViewportCull(rect, rotationDegrees, visibleRight, visibleBottom) &&
-            !IntersectsDrawingViewport(rect, rotationDegrees, visibleRight, visibleBottom))
+        if (!ShouldDisplayDrawingObjectRect(rect, rotationDegrees, visibleRight, visibleBottom))
             return;
 
         var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
         var transformDepth = PushDrawingObjectTransform(dc, rotationDegrees, flipHorizontal, flipVertical, rect);
-        var colors = ResolveDrawingShapeColors(shape, WorkbookTheme);
-        var shapeThemeEffect = ResolveDrawingShapeThemeEffect(shape, themeEffect);
-        var pen = GetDrawingShapeOutlinePen(colors.Outline, shape);
+        var colors = new DrawingObjectColors(metadata.Paint.Fill, metadata.Paint.Outline);
+        var shapeThemeEffect = ResolveDrawingShapeThemeEffect(metadata, themeEffect);
+        var pen = GetDrawingShapeOutlinePen(colors.Outline, metadata.Outline);
         // Render the body fill when the shape has an authored fill (HasFill=true).
         // WordArt with no body fill (HasFill=false) correctly produces null here.
         // WordArt WITH an authored body fill still renders the box behind the styled text,
         // matching Excel which shows the filled box and the styled run text together.
-        var bodyFill = shape.HasFill ? CreateDrawingShapeFill(shape, colors.Fill) : null;
-        DrawShapeThemeEffect(dc, shape.Kind, rect, shapeThemeEffect, colors);
-        DrawShapeAuthoredEffect(dc, shape.Kind, rect, shape, colors);
-        DrawShapeGeometry(dc, shape.Kind, rect, DrawingShapeKindSupport.IsLineLike(shape.Kind) ? null : bodyFill, pen);
-        if (DrawingShapeKindSupport.IsLineLike(shape.Kind))
-            DrawShapeArrowheads(dc, shape, rect, flipHorizontal, flipVertical, colors.Outline);
-        DrawShapeAuthoredBevelEffect(dc, shape.Kind, rect, shape);
-        DrawShapeThemeBevelEffect(dc, shape.Kind, rect, shapeThemeEffect);
-        DrawShapeAuthoredInnerShadow(dc, shape.Kind, rect, shape);
-        DrawShapeThemeInnerShadow(dc, shape.Kind, rect, shapeThemeEffect);
-        if (shape.HasShapeText)
+        var bodyFill = metadata.Paint.HasFill ? CreateDrawingShapeFill(metadata) : null;
+        DrawShapeThemeEffect(dc, metadata.Kind, rect, shapeThemeEffect, colors);
+        DrawShapeAuthoredEffect(dc, metadata.Kind, rect, metadata.AuthoredEffect, colors);
+        DrawShapeGeometry(dc, metadata.Kind, rect, metadata.IsLineLike ? null : bodyFill, pen);
+        if (metadata.IsLineLike)
+            DrawShapeArrowheads(dc, shape, rect, flipHorizontal, flipVertical, colors.Outline, metadata.Outline.ThicknessDip);
+        DrawShapeAuthoredBevelEffect(dc, metadata.Kind, rect, metadata.AuthoredEffect);
+        DrawShapeThemeBevelEffect(dc, metadata.Kind, rect, shapeThemeEffect);
+        DrawShapeAuthoredInnerShadow(dc, metadata.Kind, rect, metadata.AuthoredEffect);
+        DrawShapeThemeInnerShadow(dc, metadata.Kind, rect, shapeThemeEffect);
+        if (metadata.HasShapeText)
             DrawShapeText(dc, shape, rect, pixelsPerDip);
         PopDrawingObjectTransform(dc, transformDepth);
     }
 
     private bool HasExplicitDrawingObjectZOrder() =>
-        DrawingObjectZOrder is { Count: > 0 };
+        GridDrawingObjectPlanner.HasExplicitDrawingObjectZOrder(DrawingObjectZOrder);
 
     private void RenderDrawingObjectsByZOrder(DrawingContext dc)
     {
@@ -454,58 +401,12 @@ public partial class GridView
         }
     }
 
-    private IReadOnlyList<DrawingObjectZOrderEntry> GetNormalizedDrawingObjectZOrder()
-    {
-        var normalized = new List<DrawingObjectZOrderEntry>(
-            (DrawingShapes?.Count ?? 0) + (Pictures?.Count ?? 0) + (TextBoxes?.Count ?? 0));
-        var seen = new HashSet<DrawingObjectZOrderEntry>();
-
-        if (DrawingObjectZOrder is not null)
-        {
-            foreach (var entry in DrawingObjectZOrder)
-            {
-                if (!FreeX.Core.Model.DrawingObjectZOrder.IsSupportedKind(entry.Kind) ||
-                    !ContainsRenderableDrawingObject(entry) ||
-                    !seen.Add(entry))
-                {
-                    continue;
-                }
-
-                normalized.Add(entry);
-            }
-        }
-
-        AddMissingDrawingObjectEntries(DrawingShapes, SelectionPaneObjectKind.Shape, normalized, seen);
-        AddMissingDrawingObjectEntries(Pictures, SelectionPaneObjectKind.Picture, normalized, seen);
-        AddMissingDrawingObjectEntries(TextBoxes, SelectionPaneObjectKind.TextBox, normalized, seen);
-        return normalized;
-    }
-
-    private static void AddMissingDrawingObjectEntries<T>(
-        IReadOnlyList<T>? items,
-        SelectionPaneObjectKind kind,
-        List<DrawingObjectZOrderEntry> normalized,
-        HashSet<DrawingObjectZOrderEntry> seen)
-    {
-        if (items is null)
-            return;
-
-        foreach (var item in items)
-        {
-            var entry = new DrawingObjectZOrderEntry(kind, GetDrawingObjectId(item));
-            if (seen.Add(entry))
-                normalized.Add(entry);
-        }
-    }
-
-    private bool ContainsRenderableDrawingObject(DrawingObjectZOrderEntry entry) =>
-        entry.Kind switch
-        {
-            SelectionPaneObjectKind.Shape => FindDrawingShape(entry.Id) is not null,
-            SelectionPaneObjectKind.Picture => FindPicture(entry.Id) is not null,
-            SelectionPaneObjectKind.TextBox => FindTextBox(entry.Id) is not null,
-            _ => false
-        };
+    private IReadOnlyList<DrawingObjectZOrderEntry> GetNormalizedDrawingObjectZOrder() =>
+        GridDrawingObjectPlanner.NormalizeDrawingObjectZOrder(
+            DrawingShapes,
+            Pictures,
+            TextBoxes,
+            DrawingObjectZOrder);
 
     private DrawingShapeModel? FindDrawingShape(Guid id)
     {
@@ -549,15 +450,6 @@ public partial class GridView
         return null;
     }
 
-    private static Guid GetDrawingObjectId<T>(T item) =>
-        item switch
-        {
-            DrawingShapeModel shape => shape.Id,
-            PictureModel picture => picture.Id,
-            TextBoxModel textBox => textBox.Id,
-            _ => Guid.Empty
-        };
-
     private void RenderNativeSlicerTimelineControls(DrawingContext dc)
     {
         if (Viewport == null ||
@@ -574,12 +466,12 @@ public partial class GridView
             foreach (var slicer in NativeSlicers)
             {
                 if (slicer.DrawingAnchor is not { } anchor ||
-                    !CanAnchoredObjectReachDrawingViewport(anchor, lastRenderableRow, lastRenderableColumn) ||
+                    !ShouldDisplayDrawingAnchorRange(anchor, lastRenderableRow, lastRenderableColumn) ||
                     !TryCreateDrawingAnchorRect(metricLookups, anchor, out var rect))
                     continue;
 
                 var controlRect = EnsureMinimumControlRect(rect);
-                if (!IntersectsDrawingViewport(controlRect, 0, visibleRight, visibleBottom))
+                if (!ShouldDisplayDrawingObjectRect(controlRect, 0, visibleRight, visibleBottom))
                     continue;
 
                 DrawNativeSlicerControl(dc, controlRect, slicer, pixelsPerDip);
@@ -591,12 +483,12 @@ public partial class GridView
             foreach (var timeline in NativeTimelines)
             {
                 if (timeline.DrawingAnchor is not { } anchor ||
-                    !CanAnchoredObjectReachDrawingViewport(anchor, lastRenderableRow, lastRenderableColumn) ||
+                    !ShouldDisplayDrawingAnchorRange(anchor, lastRenderableRow, lastRenderableColumn) ||
                     !TryCreateDrawingAnchorRect(metricLookups, anchor, out var rect))
                     continue;
 
                 var controlRect = EnsureMinimumControlRect(rect);
-                if (!IntersectsDrawingViewport(controlRect, 0, visibleRight, visibleBottom))
+                if (!ShouldDisplayDrawingObjectRect(controlRect, 0, visibleRight, visibleBottom))
                     continue;
 
                 DrawNativeTimelineControl(dc, controlRect, timeline, pixelsPerDip);
@@ -997,18 +889,18 @@ public partial class GridView
     private static string FormatTimelineRange(TimelineModel timeline)
         => GridDrawingObjectPlanner.FormatTimelineRange(timeline);
 
-    private Brush CreateDrawingShapeFill(DrawingShapeModel shape, CellColor startColor)
+    private Brush CreateDrawingShapeFill(DrawingShapeRenderMetadata metadata)
     {
-        if (shape.GradientFillEndColor is { } endColor && !DrawingShapeKindSupport.IsLineLike(shape.Kind))
-            return GetDrawingObjectGradientBrush(startColor, endColor, shape.GetEffectiveGradientFillDirection());
+        if (metadata.FillGradient is { } gradient)
+            return GetDrawingObjectGradientBrush(metadata.Paint.Fill, gradient.EndColor, gradient.Direction);
 
-        return GetDrawingObjectBrush(255, startColor);
+        return GetDrawingObjectBrush(255, metadata.Paint.Fill);
     }
 
     private static WorkbookThemeEffectStyle ResolveDrawingShapeThemeEffect(
-        DrawingShapeModel shape,
+        DrawingShapeRenderMetadata metadata,
         WorkbookThemeEffectStyle themeEffect) =>
-        shape.UsesThemeEffects ? themeEffect : default;
+        metadata.UsesThemeEffects ? themeEffect : default;
 
     private static void DrawShapeGeometry(
         DrawingContext dc,
@@ -1028,18 +920,14 @@ public partial class GridView
         Rect rect,
         bool flipHorizontal,
         bool flipVertical,
-        CellColor lineColor)
+        CellColor lineColor,
+        double strokeDip)
     {
         var headArrow = shape.HeadArrowhead;
         var tailArrow = shape.TailArrowhead;
         if ((headArrow is null || !headArrow.IsPresent) &&
             (tailArrow is null || !tailArrow.IsPresent))
             return;
-
-        const double PtToDip = 96.0 / 72.0;
-        var strokeDip = shape.OutlineWidthPoints > 0
-            ? shape.OutlineWidthPoints * PtToDip
-            : 1.5;
 
         // Pass flipHorizontal/flipVertical as false here: PushDrawingObjectTransform already pushed
         // a ScaleTransform onto the DrawingContext that flips the entire drawing context, including
@@ -1060,13 +948,13 @@ public partial class GridView
             DrawArrowheadWpf(dc, tailArrow, endPt, dirStartToEnd, strokeDip, arrowBrush);
     }
 
-    private static Point ArrowWpfPointFromLayout(FreeX.App.Presentation.Charts.LayoutPoint p) =>
+    private static Point ArrowWpfPointFromLayout(LayoutPoint p) =>
         new(p.X, p.Y);
 
     private void DrawArrowheadWpf(
         DrawingContext dc,
         DrawingArrowhead arrowhead,
-        FreeX.App.Presentation.Charts.LayoutPoint tip,
+        LayoutPoint tip,
         double directionRadians,
         double strokeWidth,
         Brush brush)
@@ -1097,10 +985,10 @@ public partial class GridView
         DrawingContext dc,
         DrawingShapeKind kind,
         Rect rect,
-        DrawingShapeModel shape,
+        DrawingShapeEffectPreset effectPreset,
         DrawingObjectColors colors)
     {
-        switch (shape.GetEffectiveEffectPreset())
+        switch (effectPreset)
         {
             case DrawingShapeEffectPreset.Shadow:
                 DrawShapeShadowEffect(dc, kind, rect, offsetX: 3, offsetY: 3, alpha: 58);
@@ -1166,9 +1054,13 @@ public partial class GridView
         dc.DrawGeometry(brush, pen, geometry);
     }
 
-    private void DrawShapeAuthoredBevelEffect(DrawingContext dc, DrawingShapeKind kind, Rect rect, DrawingShapeModel shape)
+    private void DrawShapeAuthoredBevelEffect(
+        DrawingContext dc,
+        DrawingShapeKind kind,
+        Rect rect,
+        DrawingShapeEffectPreset effectPreset)
     {
-        if (shape.GetEffectiveEffectPreset() != DrawingShapeEffectPreset.Bevel)
+        if (effectPreset != DrawingShapeEffectPreset.Bevel)
             return;
 
         DrawShapeBevelEffect(dc, kind, rect);
@@ -1202,9 +1094,13 @@ public partial class GridView
         DrawShapeGeometry(dc, kind, shadowRect, null, shadowPen);
     }
 
-    private void DrawShapeAuthoredInnerShadow(DrawingContext dc, DrawingShapeKind kind, Rect rect, DrawingShapeModel shape)
+    private void DrawShapeAuthoredInnerShadow(
+        DrawingContext dc,
+        DrawingShapeKind kind,
+        Rect rect,
+        DrawingShapeEffectPreset effectPreset)
     {
-        if (shape.GetEffectiveEffectPreset() != DrawingShapeEffectPreset.InnerShadow)
+        if (effectPreset != DrawingShapeEffectPreset.InnerShadow)
             return;
 
         var thickness = GetInnerShadowThickness(4);
@@ -1422,6 +1318,12 @@ public partial class GridView
     public static DrawingObjectColors ResolveTextBoxColors(TextBoxModel textBox, WorkbookTheme theme) =>
         GridDrawingObjectPlanner.ResolveTextBoxColors(textBox, theme);
 
+    public static DrawingShapeRenderMetadata ResolveDrawingShapeRenderMetadata(DrawingShapeModel shape, WorkbookTheme theme) =>
+        GridDrawingObjectPlanner.ResolveDrawingShapeRenderMetadata(shape, theme);
+
+    public static TextBoxRenderMetadata ResolveTextBoxRenderMetadata(TextBoxModel textBox, WorkbookTheme theme) =>
+        GridDrawingObjectPlanner.ResolveTextBoxRenderMetadata(textBox, theme);
+
     private static int PushDrawingObjectTransform(
         DrawingContext dc,
         double rotationDegrees,
@@ -1477,8 +1379,8 @@ public partial class GridView
                         chart.Top + EffectiveColHeaderHeight,
                         Math.Max(24, chart.Width),
                         Math.Max(18, chart.Height));
-                    if (IntersectsDrawingViewport(rect, 0, visibleRight, visibleBottom))
-                        DrawObjectPlaceholder(dc, rect, CreateObjectPlaceholderLabel("Chart", chart.Name, index), pixelsPerDip);
+                    if (ShouldDisplayDrawingObjectRect(rect, 0, visibleRight, visibleBottom))
+                        DrawObjectPlaceholder(dc, rect, CreateObjectPlaceholderMetadata("Chart", chart.Name, index).Label, pixelsPerDip);
                 }
                 index++;
             }
@@ -1491,8 +1393,7 @@ public partial class GridView
             var index = 1;
             foreach (var shape in DrawingShapes)
             {
-                if (shape.IsVisible &&
-                    CanAnchoredObjectReachDrawingViewport(shape.Anchor, lastRenderableRow, lastRenderableColumn) &&
+                if (ShouldDisplayAnchoredDrawingObject(shape.IsVisible, shape.Anchor, lastRenderableRow, lastRenderableColumn) &&
                     TryCreateAnchoredObjectRect(
                         metricLookups,
                         shape.Anchor,
@@ -1503,9 +1404,8 @@ public partial class GridView
                         out var rect,
                         shape.AnchorOffsetX,
                         shape.AnchorOffsetY) &&
-                    (!NeedsDrawingViewportCull(rect, shape.RotationDegrees, visibleRight, visibleBottom) ||
-                        IntersectsDrawingViewport(rect, shape.RotationDegrees, visibleRight, visibleBottom)))
-                    DrawObjectPlaceholder(dc, rect, CreateObjectPlaceholderLabel("Shape", shape.Name, index), pixelsPerDip);
+                    ShouldDisplayDrawingObjectRect(rect, shape.RotationDegrees, visibleRight, visibleBottom))
+                    DrawObjectPlaceholder(dc, rect, CreateObjectPlaceholderMetadata("Shape", shape.Name, index).Label, pixelsPerDip);
                 index++;
             }
         }
@@ -1515,8 +1415,7 @@ public partial class GridView
             var index = 1;
             foreach (var picture in Pictures)
             {
-                if (picture.IsVisible &&
-                    CanAnchoredObjectReachDrawingViewport(picture.Anchor, lastRenderableRow, lastRenderableColumn) &&
+                if (ShouldDisplayAnchoredDrawingObject(picture.IsVisible, picture.Anchor, lastRenderableRow, lastRenderableColumn) &&
                     TryCreateAnchoredObjectRect(
                         metricLookups,
                         picture.Anchor,
@@ -1527,9 +1426,8 @@ public partial class GridView
                         out var rect,
                         picture.AnchorOffsetX,
                         picture.AnchorOffsetY) &&
-                    (!NeedsDrawingViewportCull(rect, picture.RotationDegrees, visibleRight, visibleBottom) ||
-                        IntersectsDrawingViewport(rect, picture.RotationDegrees, visibleRight, visibleBottom)))
-                    DrawObjectPlaceholder(dc, rect, CreateObjectPlaceholderLabel("Picture", picture.Name, index), pixelsPerDip);
+                    ShouldDisplayDrawingObjectRect(rect, picture.RotationDegrees, visibleRight, visibleBottom))
+                    DrawObjectPlaceholder(dc, rect, CreateObjectPlaceholderMetadata("Picture", picture.Name, index).Label, pixelsPerDip);
                 index++;
             }
         }
@@ -1539,8 +1437,7 @@ public partial class GridView
             var index = 1;
             foreach (var textBox in TextBoxes)
             {
-                if (textBox.IsVisible &&
-                    CanAnchoredObjectReachDrawingViewport(textBox.Anchor, lastRenderableRow, lastRenderableColumn) &&
+                if (ShouldDisplayAnchoredDrawingObject(textBox.IsVisible, textBox.Anchor, lastRenderableRow, lastRenderableColumn) &&
                     TryCreateAnchoredObjectRect(
                         metricLookups,
                         textBox.Anchor,
@@ -1551,9 +1448,8 @@ public partial class GridView
                         out var rect,
                         textBox.AnchorOffsetX,
                         textBox.AnchorOffsetY) &&
-                    (!NeedsDrawingViewportCull(rect, textBox.RotationDegrees, visibleRight, visibleBottom) ||
-                        IntersectsDrawingViewport(rect, textBox.RotationDegrees, visibleRight, visibleBottom)))
-                    DrawObjectPlaceholder(dc, rect, CreateObjectPlaceholderLabel("Text Box", textBox.Name, index), pixelsPerDip);
+                    ShouldDisplayDrawingObjectRect(rect, textBox.RotationDegrees, visibleRight, visibleBottom))
+                    DrawObjectPlaceholder(dc, rect, CreateObjectPlaceholderMetadata("Text Box", textBox.Name, index).Label, pixelsPerDip);
                 index++;
             }
         }
@@ -1564,12 +1460,12 @@ public partial class GridView
             foreach (var slicer in NativeSlicers)
             {
                 if (slicer.DrawingAnchor is { } anchor &&
-                    CanAnchoredObjectReachDrawingViewport(anchor, lastRenderableRow, lastRenderableColumn) &&
+                    ShouldDisplayDrawingAnchorRange(anchor, lastRenderableRow, lastRenderableColumn) &&
                     TryCreateDrawingAnchorRect(metricLookups, anchor, out var rect))
                 {
                     var controlRect = EnsureMinimumControlRect(rect);
-                    if (IntersectsDrawingViewport(controlRect, 0, visibleRight, visibleBottom))
-                        DrawObjectPlaceholder(dc, controlRect, CreateObjectPlaceholderLabel("Slicer", slicer.DrawingShapeName ?? slicer.Caption ?? slicer.Name, index), pixelsPerDip);
+                    if (ShouldDisplayDrawingObjectRect(controlRect, 0, visibleRight, visibleBottom))
+                        DrawObjectPlaceholder(dc, controlRect, CreateObjectPlaceholderMetadata("Slicer", slicer.DrawingShapeName ?? slicer.Caption ?? slicer.Name, index).Label, pixelsPerDip);
                 }
                 index++;
             }
@@ -1581,17 +1477,20 @@ public partial class GridView
             foreach (var timeline in NativeTimelines)
             {
                 if (timeline.DrawingAnchor is { } anchor &&
-                    CanAnchoredObjectReachDrawingViewport(anchor, lastRenderableRow, lastRenderableColumn) &&
+                    ShouldDisplayDrawingAnchorRange(anchor, lastRenderableRow, lastRenderableColumn) &&
                     TryCreateDrawingAnchorRect(metricLookups, anchor, out var rect))
                 {
                     var controlRect = EnsureMinimumControlRect(rect);
-                    if (IntersectsDrawingViewport(controlRect, 0, visibleRight, visibleBottom))
-                        DrawObjectPlaceholder(dc, controlRect, CreateObjectPlaceholderLabel("Timeline", timeline.DrawingShapeName ?? timeline.Caption ?? timeline.Name, index), pixelsPerDip);
+                    if (ShouldDisplayDrawingObjectRect(controlRect, 0, visibleRight, visibleBottom))
+                        DrawObjectPlaceholder(dc, controlRect, CreateObjectPlaceholderMetadata("Timeline", timeline.DrawingShapeName ?? timeline.Caption ?? timeline.Name, index).Label, pixelsPerDip);
                 }
                 index++;
             }
         }
     }
+
+    public static DrawingObjectPlaceholderMetadata CreateObjectPlaceholderMetadata(string objectType, string? objectName, int index)
+        => GridDrawingObjectPlanner.CreateObjectPlaceholderMetadata(objectType, objectName, index);
 
     public static string CreateObjectPlaceholderLabel(string objectType, string? objectName, int index)
         => GridDrawingObjectPlanner.CreateObjectPlaceholderLabel(objectType, objectName, index);
@@ -1727,29 +1626,26 @@ public partial class GridView
     }
 
     /// <summary>
-    /// Builds the outline <see cref="Pen"/> for a drawing shape, honouring the model's
-    /// <see cref="DrawingShapeModel.OutlineWidthPoints"/>, <see cref="DrawingShapeModel.OutlineHasNoFill"/>,
-    /// and <see cref="DrawingShapeModel.OutlineDash"/> properties.
+    /// Builds the outline <see cref="Pen"/> for a drawing shape using portable outline metadata.
     /// Returns <see langword="null"/> when the shape explicitly has no border.
     /// </summary>
-    private Pen? GetDrawingShapeOutlinePen(CellColor outlineColor, DrawingShapeModel shape)
+    private Pen? GetDrawingShapeOutlinePen(
+        CellColor outlineColor,
+        DrawingShapeOutlineRenderMetadata outline)
     {
-        if (shape.OutlineHasNoFill)
+        if (!outline.HasOutline)
             return null;
 
         // Convert points → WPF DIPs (96 DPI screen): 1 pt = 96/72 DIP
-        const double PtToDip = 96.0 / 72.0;
-        var thicknessDip = shape.OutlineWidthPoints > 0
-            ? shape.OutlineWidthPoints * PtToDip
-            : 1.5; // preserve legacy default when width not stored
+        var thicknessDip = outline.ThicknessDip;
 
         // For solid outlines use the cached pen path (fast path).
-        if (shape.OutlineDash == DrawingShapeOutlineDash.Solid)
+        if (outline.Dash == DrawingShapeOutlineDash.Solid)
             return GetDrawingObjectPen(255, outlineColor, thicknessDip);
 
         // Dashed pens are rare; build without caching to keep cache key simple.
         var brush = GetDrawingObjectBrush(255, outlineColor);
-        var dashStyle = shape.OutlineDash switch
+        var dashStyle = outline.Dash switch
         {
             DrawingShapeOutlineDash.Dash => DashStyles.Dash,
             DrawingShapeOutlineDash.Dot => DashStyles.Dot,
@@ -2041,14 +1937,14 @@ public partial class GridView
                     continue;
 
                 // Build the portable layout to access the icon rects, using the control bounds.
-                var modelBounds = new FreeX.App.Presentation.Charts.LayoutRect(
+                var modelBounds = new LayoutRect(
                     controlRect.Left, controlRect.Top, controlRect.Width, controlRect.Height);
                 var availableItems = slicer.AvailableItems.Count > 0
                     ? (IEnumerable<string>)slicer.AvailableItems
                     : slicer.SelectedItems;
                 var layout = FreeX.App.Presentation.SlicerTimeline.SlicerLayoutBuilder.BuildFull(
                     slicer, availableItems, modelBounds);
-                var hitPoint = new FreeX.App.Presentation.Charts.LayoutPoint(pos.X, pos.Y);
+                var hitPoint = new LayoutPoint(pos.X, pos.Y);
 
                 // Clear-filter icon hit?
                 if (layout.HasActiveFilter &&
@@ -2084,11 +1980,11 @@ public partial class GridView
                 if (!controlRect.Contains(pos))
                     continue;
 
-                var modelBounds = new FreeX.App.Presentation.Charts.LayoutRect(
+                var modelBounds = new LayoutRect(
                     controlRect.Left, controlRect.Top, controlRect.Width, controlRect.Height);
                 var layout = FreeX.App.Presentation.SlicerTimeline.TimelineLayoutBuilder.Build(
                     timeline, modelBounds, ResolveTimelineGranularity(timeline));
-                var hitPoint = new FreeX.App.Presentation.Charts.LayoutPoint(pos.X, pos.Y);
+                var hitPoint = new LayoutPoint(pos.X, pos.Y);
 
                 // Clear-filter icon hit?
                 if (layout.HasActiveFilter &&
@@ -2129,8 +2025,8 @@ public partial class GridView
     }
 
     private static bool ContainsLayoutPoint(
-        FreeX.App.Presentation.Charts.LayoutRect rect,
-        FreeX.App.Presentation.Charts.LayoutPoint point) =>
+        LayoutRect rect,
+        LayoutPoint point) =>
         rect.Width > 0 && rect.Height > 0 &&
         point.X >= rect.Left && point.X <= rect.Right &&
         point.Y >= rect.Top && point.Y <= rect.Bottom;

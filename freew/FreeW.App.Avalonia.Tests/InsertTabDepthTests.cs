@@ -44,6 +44,12 @@ public sealed class InsertTabDepthTests
         return view;
     }
 
+    private static void Exec(RibbonCommandRegistry registry, string id)
+    {
+        registry.TryGet(new RibbonCommandId(id), out var cmd).Should().BeTrue($"command '{id}' must be registered");
+        cmd!.Execute(RibbonCommandContext.Empty);
+    }
+
     // ── Page Break ────────────────────────────────────────────────────────────
 
     [Fact]
@@ -61,6 +67,40 @@ public sealed class InsertTabDepthTests
 
         view.Undo();
         view.Document.Blocks.Count.Should().Be(before, "undo removes the page break");
+    }
+
+    [Fact]
+    public void Blank_page_command_inserts_two_page_breaks_as_one_undo_step()
+    {
+        var view = ViewWith();
+        var before = view.Document.Blocks.Count;
+        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+
+        Exec(registry, "freew.blank-page");
+
+        view.Document.Blocks.Count.Should().Be(before + 2);
+        view.Document.Blocks
+            .Skip(1)
+            .Take(2)
+            .OfType<Paragraph>()
+            .All(p => p.Formatting.PageBreakBefore)
+            .Should().BeTrue("a blank page is represented by the shared two-break model operation");
+
+        view.Undo();
+        view.Document.Blocks.Count.Should().Be(before, "blank-page undo removes both inserted page breaks");
+    }
+
+    [Fact]
+    public void Horizontal_rule_command_inserts_bottom_border_paragraph()
+    {
+        var view = ViewWith();
+        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+
+        Exec(registry, "freew.horizontal-rule");
+
+        var rule = view.Document.Blocks.OfType<Paragraph>().Single(p => p.Formatting.Border is not null);
+        rule.Formatting.Border!.BottomOnly.Should().BeTrue("horizontal rule uses the shared bottom-border paragraph");
+        rule.PlainText.Should().BeEmpty();
     }
 
     // ── Table size presets ──────────────────────────────────────────────────────
@@ -187,8 +227,9 @@ public sealed class InsertTabDepthTests
         {
             "freew.insert-table", "freew.table", "freew.table-2x2", "freew.table-3x3",
             "freew.table-4x4", "freew.table-5x2",
-            "freew.page-break", "freew.picture", "freew.shape", "freew.text-box",
-            "freew.symbol", "freew.header", "freew.footer",
+            "freew.blank-page", "freew.page-break", "freew.horizontal-rule",
+            "freew.picture", "freew.shape", "freew.text-box",
+            "freew.symbol", "freew.header", "freew.footer", "freew.datetime",
             "freew.symbol.euro", "freew.symbol.emdash", "freew.symbol.arrow-right",
         };
 
@@ -219,5 +260,18 @@ public sealed class InsertTabDepthTests
         cmd!.Execute(RibbonCommandContext.Empty);
 
         ((Paragraph)view.Document.Blocks[0]).PlainText.Should().Contain("©");
+    }
+
+    [Fact]
+    public void Date_time_command_inserts_date_field_run()
+    {
+        var view = ViewWith("");
+        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+
+        Exec(registry, "freew.datetime");
+
+        var paragraph = (Paragraph)view.Document.Blocks[0];
+        paragraph.Runs.Should().ContainSingle(run => run.FieldKind == RunFieldKind.Date);
+        paragraph.PlainText.Should().NotBeEmpty("the cached date text should render immediately");
     }
 }

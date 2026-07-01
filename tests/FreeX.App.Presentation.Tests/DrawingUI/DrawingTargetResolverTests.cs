@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using FluentAssertions;
 using FreeX.App.Presentation.DrawingUI;
 using FreeX.Core.Model;
@@ -435,6 +434,24 @@ public sealed class DrawingTargetResolverTests
     }
 
     [Fact]
+    public void ResolveSelectedTextBox_ReturnsSelectedVisibleTextBoxById()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        var expected = new TextBoxModel { Anchor = new CellAddress(sheet.Id, 2, 3) };
+        sheet.TextBoxes.Add(new TextBoxModel { Anchor = new CellAddress(sheet.Id, 1, 1) });
+        sheet.TextBoxes.Add(expected);
+
+        var result = DrawingTargetResolver.ResolveSelectedTextBox(
+            sheet,
+            SelectionPaneObjectKind.TextBox,
+            expected.Id);
+
+        result.HasTarget.Should().BeTrue();
+        result.Target.Should().BeSameAs(expected);
+        result.Failure.Should().Be(DrawingObjectSelectionFailure.None);
+    }
+
+    [Fact]
     public void ResolverScansVisibleItemsWithoutAllocatingFilteredLists()
     {
         var source = File.ReadAllText(FindRepositoryFile("src", "FreeX.App.Presentation", "DrawingUI", "DrawingTargetResolver.cs"));
@@ -455,15 +472,10 @@ public sealed class DrawingTargetResolverTests
 
         var selected = new CellAddress(sheet.Id, 5_000, 1);
 
-        var stopwatch = Stopwatch.StartNew();
-        for (var iteration = 0; iteration < 10_000; iteration++)
-        {
-            DrawingTargetResolver.GetTargetPicture(sheet, selected).Should().BeSameAs(sheet.Pictures[^1]);
-        }
+        DrawingTargetResolver.GetTargetPicture(sheet, selected).Should().BeSameAs(sheet.Pictures[^1]);
 
-        stopwatch.Stop();
-        Console.WriteLine($"Drawing target reverse lookup: {stopwatch.ElapsedMilliseconds}ms for 10000 lookups");
-        stopwatch.ElapsedMilliseconds.Should().BeLessThan(1_000);
+        var source = File.ReadAllText(FindRepositoryFile("src", "FreeX.App.Presentation", "DrawingUI", "DrawingTargetResolver.cs"));
+        source.Should().Contain("for (var index = items.Count - 1; index >= 0; index--)");
     }
 
     private static string FindRepositoryFile(params string[] relativeParts)

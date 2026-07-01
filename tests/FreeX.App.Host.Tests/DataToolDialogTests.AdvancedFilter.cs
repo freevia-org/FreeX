@@ -5,6 +5,8 @@ using System.Windows.Input;
 using FluentAssertions;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
+using AdvancedFilterRangeSelectionRequest = FreeX.App.Presentation.Filtering.AdvancedFilterRangeSelectionRequest;
+using AdvancedFilterRangeSelectionTarget = FreeX.App.Presentation.Filtering.AdvancedFilterRangeSelectionTarget;
 
 namespace FreeX.App.Host.Tests;
 
@@ -172,6 +174,25 @@ public sealed partial class DataToolDialogTests
             listRangeText: "A1:D20",
             criteriaRangeText: "F1:G2",
             copyToCellText: "NotACell",
+            uniqueRecordsOnly: false,
+            out _,
+            out var error);
+
+        parsed.Should().BeFalse();
+        error.Should().Be("Enter a valid copy-to cell or one-row header range.");
+    }
+
+    [Fact]
+    public void AdvancedFilterDialog_RejectsMissingCopyToRangeWhenCopyModeSelected()
+    {
+        var sheetId = SheetId.New();
+
+        var parsed = AdvancedFilterDialog.TryParse(
+            sheetId,
+            listRangeText: "A1:D20",
+            criteriaRangeText: "F1:G2",
+            copyToCellText: "",
+            copyToAnotherLocation: true,
             uniqueRecordsOnly: false,
             out _,
             out var error);
@@ -361,10 +382,15 @@ public sealed partial class DataToolDialogTests
     [Fact]
     public void AdvancedFilterDialogInvalidRange_RefocusesAndSelectsInvalidRangeInput()
     {
-        var source = DialogSourceTestSupport.ReadHostSources("AdvancedFilterDialog.cs");
+        var source = DialogSourceTestSupport.ReadHostSources(
+            "AdvancedFilterDialog.cs",
+            "AdvancedFilterDialog.Planning.cs");
 
-        source.Should().Contain("FocusInvalidRangeInput(error);");
-        source.Should().Contain("private void FocusInvalidRangeInput(string? error)");
+        source.Should().Contain("FocusInvalidRangeInput(planResult.Error);");
+        source.Should().Contain("private void FocusInvalidRangeInput(SharedAdvancedFilterPlanError error)");
+        source.Should().Contain("SharedAdvancedFilterPlanner.FocusTargetForPlanError(error)");
+        source.Should().Contain("AdvancedFilterErrorFocusTarget.CriteriaRange");
+        source.Should().Contain("AdvancedFilterErrorFocusTarget.CopyTo");
         source.Should().Contain("UiText.Get(\"AdvancedFilter_CriteriaRangeMustIncludeHeaders\")");
         source.Should().Contain("_copyToAnotherLocationButton.IsChecked = true;");
         source.Should().Contain("DialogFocus.FocusAndSelect(target);");
@@ -460,7 +486,8 @@ public sealed partial class DataToolDialogTests
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.DataCommands.cs");
 
         source.Should().Contain("new AdvancedFilterDialog(");
-        source.Should().Contain("AdvancedFilterDefaultListRangePlanner.Create(sheet, selected)");
+        source.Should().Contain("AdvancedFilterPlanner.CreateDefaultListRange(sheet, selected)");
+        source.Should().NotContain("AdvancedFilterDefaultListRangePlanner.");
         source.Should().Contain("ResolveSheetIdByName,");
         source.Should().Contain("request => ApplyAdvancedFilterRangeSelection(dialog, request)");
         source.Should().Contain("private void ApplyAdvancedFilterRangeSelection(");
@@ -510,6 +537,10 @@ public sealed partial class DataToolDialogTests
                 AdvancedFilterRangeSelectionTarget.CriteriaRange,
                 "E1:F4",
                 CollapseDialog: true));
+
+        var source = DialogSourceTestSupport.ReadHostSources("AdvancedFilterDialog.Planning.cs");
+        source.Should().Contain("SharedAdvancedFilterPlanner.CreateRangeSelectionRequest(target, currentText)");
+        source.Should().NotContain("ToServicesRangeSelectionTarget(target)");
     }
 
     [Theory]

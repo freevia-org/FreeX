@@ -1,7 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
-using FreeX.App.Services;
+using FreeX.App.Presentation.DrawingUI;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -25,7 +25,7 @@ public sealed partial class SelectionPaneDialog
             return;
 
         var forward = action == SelectionPaneDialogAction.MoveUp;
-        var plan = SelectionPaneDialogStatePlanner.PlanMove(CurrentItemStates(), selected.Source.Id, forward);
+        var plan = SelectionPanePlanner.PlanMove(CurrentItemStates(), selected.Source.Id, forward);
         if (plan is null)
             return;
 
@@ -71,7 +71,7 @@ public sealed partial class SelectionPaneDialog
         var placement = targetContainer is null ? SelectionPaneDropPlacement.Before : GetDropPlacement(e, targetContainer);
         var visualPlan = dragged is null || target is null
             ? null
-            : SelectionPaneDialogStatePlanner.PlanDropVisual(
+            : SelectionPanePlanner.PlanDropVisual(
                 CurrentItemStates(),
                 dragged.Source.Id,
                 target.Source.Id,
@@ -105,51 +105,46 @@ public sealed partial class SelectionPaneDialog
 
     private void List_KeyDown(object sender, KeyEventArgs e)
     {
-        if (TryHandleListReorderShortcut(e))
-            return;
-
-        if (e.Key == Key.F2)
+        var action = SelectionPanePlanner.PlanKeyboardAction(
+            ToSelectionPaneKeyboardKey(e.Key),
+            (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control);
+        switch (action)
         {
-            FocusRenameBox();
-            e.Handled = true;
-            return;
-        }
-
-        if (e.Key == Key.Space)
-        {
-            ToggleSelectedVisibility();
-            e.Handled = true;
+            case SelectionPaneKeyboardAction.MoveUp:
+                AcceptMove(SelectionPaneDialogAction.MoveUp);
+                e.Handled = true;
+                break;
+            case SelectionPaneKeyboardAction.MoveDown:
+                AcceptMove(SelectionPaneDialogAction.MoveDown);
+                e.Handled = true;
+                break;
+            case SelectionPaneKeyboardAction.FocusRename:
+                FocusRenameBox();
+                e.Handled = true;
+                break;
+            case SelectionPaneKeyboardAction.ToggleVisibility:
+                ToggleSelectedVisibility();
+                e.Handled = true;
+                break;
         }
     }
 
-    private bool TryHandleListReorderShortcut(KeyEventArgs e)
-    {
-        if ((Keyboard.Modifiers & ModifierKeys.Control) != ModifierKeys.Control)
-            return false;
-
-        if (e.Key == Key.Up)
+    private static SelectionPaneKeyboardKey ToSelectionPaneKeyboardKey(Key key) =>
+        key switch
         {
-            AcceptMove(SelectionPaneDialogAction.MoveUp);
-            e.Handled = true;
-            return true;
-        }
-
-        if (e.Key == Key.Down)
-        {
-            AcceptMove(SelectionPaneDialogAction.MoveDown);
-            e.Handled = true;
-            return true;
-        }
-
-        return false;
-    }
+            Key.F2 => SelectionPaneKeyboardKey.F2,
+            Key.Space => SelectionPaneKeyboardKey.Space,
+            Key.Up => SelectionPaneKeyboardKey.Up,
+            Key.Down => SelectionPaneKeyboardKey.Down,
+            _ => SelectionPaneKeyboardKey.Other
+        };
 
     private void DragReorder(
         SelectionPaneDialogItem dragged,
         SelectionPaneDialogItem target,
         SelectionPaneDropPlacement placement)
     {
-        var plan = SelectionPaneDialogStatePlanner.PlanDragReorder(
+        var plan = SelectionPanePlanner.PlanDragReorder(
             CurrentItemStates(),
             dragged.Source.Id,
             target.Source.Id,
@@ -163,10 +158,10 @@ public sealed partial class SelectionPaneDialog
     }
 
     private IReadOnlyList<SelectionPaneVisibilityChange> CurrentVisibilityChanges() =>
-        SelectionPaneDialogStatePlanner.CreateVisibilityChanges(_sourceItems, CurrentItemStates());
+        SelectionPanePlanner.CreateVisibilityChanges(_sourceItems, CurrentItemStates());
 
     private IReadOnlyList<SelectionPaneRenameChange> CurrentRenameChanges() =>
-        SelectionPaneDialogStatePlanner.CreateRenameChanges(_sourceItems, CurrentItemStates());
+        SelectionPanePlanner.CreateRenameChanges(_sourceItems, CurrentItemStates());
 
     private void SetAllVisibility(bool isVisible)
     {
@@ -182,7 +177,7 @@ public sealed partial class SelectionPaneDialog
     {
         var search = _searchBox.Text.Trim();
         var filter = (_filterBox.SelectedItem as SelectionPaneFilterChoice)?.Value ?? SelectionPaneFilterValues.All;
-        var filteredIds = SelectionPaneDialogStatePlanner
+        var filteredIds = SelectionPanePlanner
             .FilterItems(CurrentItemStates(), search, filter)
             .Select(item => item.Id)
             .ToHashSet();
@@ -260,7 +255,7 @@ public sealed partial class SelectionPaneDialog
         dragged is not null &&
         target is not null &&
         !ReferenceEquals(dragged, target) &&
-        SelectionPaneDialogStatePlanner.CanReorderKinds(dragged.Source.Kind, target.Source.Kind);
+        SelectionPanePlanner.CanReorderKinds(dragged.Source.Kind, target.Source.Kind);
 
     private void RenameSelectedItem()
     {
@@ -306,20 +301,20 @@ public sealed partial class SelectionPaneDialog
 
         var currentIndex = _items.IndexOf(selected);
         var states = CurrentItemStates();
-        _moveUpButton.IsEnabled = SelectionPaneDialogStatePlanner.FindMoveTargetIndex(states, currentIndex, forward: true) >= 0;
-        _moveDownButton.IsEnabled = SelectionPaneDialogStatePlanner.FindMoveTargetIndex(states, currentIndex, forward: false) >= 0;
+        _moveUpButton.IsEnabled = SelectionPanePlanner.FindMoveTargetIndex(states, currentIndex, forward: true) >= 0;
+        _moveDownButton.IsEnabled = SelectionPanePlanner.FindMoveTargetIndex(states, currentIndex, forward: false) >= 0;
     }
 
-    private IReadOnlyList<SelectionPaneDialogItemState> CurrentItemStates() =>
+    private IReadOnlyList<SelectionPaneItemState> CurrentItemStates() =>
         _items
-            .Select(item => new SelectionPaneDialogItemState(
+            .Select(item => new SelectionPaneItemState(
                 item.Source.Kind,
                 item.Source.Id,
                 item.Name,
                 item.IsVisible))
             .ToList();
 
-    private void ApplyReorderPlan(SelectionPaneDialogReorderPlan plan)
+    private void ApplyReorderPlan(SelectionPaneReorderPlan plan)
     {
         var itemsById = _items.ToDictionary(item => item.Source.Id);
         _items.Clear();

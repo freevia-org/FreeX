@@ -1,0 +1,99 @@
+using System.Globalization;
+using System.IO;
+using Free.Shared.Shell;
+using FreeP.App.Localization;
+
+namespace FreeP.App.Host.Tests;
+
+public sealed class FreePLocalizationStartupTests : IDisposable
+{
+    private readonly CultureInfo _originalCurrentCulture = CultureInfo.CurrentCulture;
+    private readonly CultureInfo _originalCurrentUiCulture = CultureInfo.CurrentUICulture;
+    private readonly CultureInfo? _originalDefaultThreadCurrentUiCulture = CultureInfo.DefaultThreadCurrentUICulture;
+    private readonly IShellStrings _originalShellStrings = ShellStrings.Current;
+    private readonly IBackstageStrings _originalBackstageStrings = BackstageStrings.Current;
+
+    public void Dispose()
+    {
+        CultureInfo.CurrentCulture = _originalCurrentCulture;
+        CultureInfo.CurrentUICulture = _originalCurrentUiCulture;
+        CultureInfo.DefaultThreadCurrentUICulture = _originalDefaultThreadCurrentUiCulture;
+        ShellStrings.Current = _originalShellStrings;
+        BackstageStrings.Current = _originalBackstageStrings;
+    }
+
+    [Fact]
+    public void InstallSharedSeams_RoutesSharedShellThroughFreePResources()
+    {
+        CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("fr-FR");
+
+        AppLocalization.InstallSharedSeams();
+
+        ShellStrings.Current.Cancel.Should().Be("_Annuler");
+        ShellStrings.Current.Ok.Should().Be("_OK");
+        ShellStrings.Current.ErrorTitle.Should().Be("Erreur");
+        ShellStrings.Current.CreateAutomationName("_Open _File").Should().Be("Open File");
+    }
+
+    [Fact]
+    public void InstallSharedSeams_RoutesSharedBackstageThroughFreePResources()
+    {
+        CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("fr-FR");
+
+        AppLocalization.InstallSharedSeams();
+
+        BackstageStrings.Current.Get("Backstage_GreetingMorning").Should().Be("Bonjour");
+        BackstageStrings.Current.Format("Backstage_Recent_OpenRecentFileAutomationName", "Roadmap.pptx")
+            .Should()
+            .Be("Open recent presentation Roadmap.pptx");
+        BackstageStrings.Current.Get("Backstage_Recent_RemoveAutomationHelpText")
+            .Should()
+            .Contain("presentation");
+    }
+
+    [Fact]
+    public void ApplyAppLanguage_UsesPersistedUiLanguageForResourceLookup()
+    {
+        AppLocalization.InstallSharedSeams();
+
+        AppLocalization.ApplyAppLanguage(AppLanguageCatalog.PseudoLocalizationCultureName);
+
+        string.Equals(
+            CultureInfo.CurrentUICulture.Name,
+            AppLanguageCatalog.PseudoLocalizationCultureName,
+            StringComparison.OrdinalIgnoreCase)
+            .Should()
+            .BeTrue();
+        ShellStrings.Current.Cancel.Should().Contain("CCaanncceell");
+        BackstageStrings.Current.Get("Backstage_GreetingMorning").Should().Contain("GGoooodd");
+    }
+
+    [Fact]
+    public void Program_InstallsResourceBackedSeamsInsteadOfNeutralDefaults()
+    {
+        var program = File.ReadAllText(RepositoryFile("freep", "FreeP.App.Host", "Program.cs"));
+        var composition = File.ReadAllText(RepositoryFile("freep", "FreeP.App.Host", "AppComposition.cs"));
+
+        program.Should().Contain("InstallSharedSeams = AppComposition.InstallSharedSeams");
+        program.Should().Contain("ApplyUiLanguage: AppLocalization.ApplyAppLanguage");
+        program.Should().Contain("ApplyCurrentCultureToWpf: AppLocalization.ApplyCurrentCultureToWpf");
+        composition.Should().Contain("AppLocalization.InstallSharedSeams();");
+        composition.Should().NotContain("StaticShellStrings.ForProductTitle");
+        composition.Should().NotContain("DefaultBackstageStrings.Instance");
+    }
+
+    private static string RepositoryFile(params string[] parts)
+    {
+        var directory = AppContext.BaseDirectory;
+        while (!string.IsNullOrEmpty(directory))
+        {
+            var candidate = Path.Combine(new[] { directory }.Concat(parts).ToArray());
+            if (File.Exists(candidate))
+                return candidate;
+
+            directory = Directory.GetParent(directory)?.FullName;
+        }
+
+        throw new FileNotFoundException("Could not locate repository file.", Path.Combine(parts));
+    }
+}

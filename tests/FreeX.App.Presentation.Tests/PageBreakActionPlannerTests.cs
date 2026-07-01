@@ -53,6 +53,28 @@ public sealed class PageBreakActionPlannerTests
     }
 
     [Fact]
+    public void Plan_InsertHonorsWholeRowAndColumnSelectionAxes()
+    {
+        var rowPlan = PageBreakActionPlanner.Plan(
+            PageBreakMenuAction.Insert,
+            Range(5, 1, 5, CellAddress.MaxCol),
+            [9u],
+            [7u]);
+        var columnPlan = PageBreakActionPlanner.Plan(
+            PageBreakMenuAction.Insert,
+            Range(1, 3, CellAddress.MaxRow, 3),
+            [9u],
+            [7u]);
+
+        rowPlan.RowBreaks.Should().Equal(5u, 9u);
+        rowPlan.ColumnBreaks.Should().Equal(7u);
+        rowPlan.Status.Should().Be("Inserted a page break above the row");
+        columnPlan.RowBreaks.Should().Equal(9u);
+        columnPlan.ColumnBreaks.Should().Equal(3u, 7u);
+        columnPlan.Status.Should().Be("Inserted a page break left of the column");
+    }
+
+    [Fact]
     public void Remove_ClearsBreaksAdjacentToActiveCell()
     {
         var plan = PageBreakActionPlanner.Remove(At(5, 3), [5u, 10u], [3u, 7u]);
@@ -73,6 +95,28 @@ public sealed class PageBreakActionPlannerTests
     }
 
     [Fact]
+    public void Plan_RemoveHonorsWholeRowAndColumnSelectionAxes()
+    {
+        var rowPlan = PageBreakActionPlanner.Plan(
+            PageBreakMenuAction.Remove,
+            Range(5, 1, 5, CellAddress.MaxCol),
+            [5u, 9u],
+            [3u, 7u]);
+        var columnPlan = PageBreakActionPlanner.Plan(
+            PageBreakMenuAction.Remove,
+            Range(1, 3, CellAddress.MaxRow, 3),
+            [5u, 9u],
+            [3u, 7u]);
+
+        rowPlan.RowBreaks.Should().Equal(9u);
+        rowPlan.ColumnBreaks.Should().Equal(3u, 7u);
+        rowPlan.Status.Should().Be("Removed page break");
+        columnPlan.RowBreaks.Should().Equal(5u, 9u);
+        columnPlan.ColumnBreaks.Should().Equal(7u);
+        columnPlan.Status.Should().Be("Removed page break");
+    }
+
+    [Fact]
     public void ResetAll_ClearsEverything()
     {
         var plan = PageBreakActionPlanner.ResetAll();
@@ -80,5 +124,27 @@ public sealed class PageBreakActionPlannerTests
         plan.RowBreaks.Should().BeEmpty();
         plan.ColumnBreaks.Should().BeEmpty();
         plan.Status.Should().Be("Reset all page breaks");
+    }
+
+    [Fact]
+    public void Plan_ResetAllClearsBreaks()
+    {
+        var plan = PageBreakActionPlanner.Plan(
+            PageBreakMenuAction.ResetAll,
+            Range(5, 3, 5, 3),
+            [5u, 9u],
+            [3u, 7u]);
+
+        plan.RowBreaks.Should().BeEmpty();
+        plan.ColumnBreaks.Should().BeEmpty();
+        plan.Status.Should().Be("Reset all page breaks");
+    }
+
+    private static GridRange Range(uint startRow, uint startCol, uint endRow, uint endCol)
+    {
+        var sheetId = default(SheetId);
+        return new GridRange(
+            new CellAddress(sheetId, startRow, startCol),
+            new CellAddress(sheetId, endRow, endCol));
     }
 }

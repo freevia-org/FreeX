@@ -347,18 +347,25 @@ public sealed partial class ChartRendererTests
         var seriesLookup = source[
             source.IndexOf("private static ChartSeriesFormat? GetSeriesFormat", StringComparison.Ordinal)..
             source.IndexOf("private static void ApplyLineFormat", StringComparison.Ordinal)];
+        var sharedStylePlanner = WorkspaceFileLocator.ReadAllTextWithFailureMessage(
+            "Unable to locate workspace file",
+            "src",
+            "FreeX.App.Presentation",
+            "Charts",
+            "ChartStylePlanner.cs");
 
         source.Should().Contain("private const int PointDataLabelFormatLookupThreshold = 16");
         pointLookup.Should().Contain("new Dictionary<(int SeriesIndex, int PointIndex), ChartPointDataLabelFormat>(formats.Count)");
         pointLookup.Should().Contain("_indexedFormats[(format.SeriesIndex, format.PointIndex)] = format;");
         pointLookup.Should().Contain("_indexedFormats.TryGetValue((seriesIndex, pointIndex)");
         pointLookup.Should().Contain("for (var i = _formats.Count - 1; i >= 0; i--)");
-        seriesLookup.Should().Contain("for (var i = formats.Count - 1; i >= 0; i--)");
-        seriesLookup.Should().Contain("format.SeriesIndex == seriesIndex");
+        seriesLookup.Should().Contain("ChartStylePlanner.FindSeriesFormat(chart, seriesIndex)");
+        sharedStylePlanner.Should().Contain("for (var i = formats.Count - 1; i >= 0; i--)");
+        sharedStylePlanner.Should().Contain("format.SeriesIndex == seriesIndex");
         pointLookup.Should().NotContain("LastOrDefault");
         pointLookup.Should().NotContain(".Where(");
-        seriesLookup.Should().NotContain("LastOrDefault");
-        seriesLookup.Should().NotContain(".Where(");
+        sharedStylePlanner.Should().NotContain("LastOrDefault");
+        sharedStylePlanner.Should().NotContain(".Where(");
     }
 
     [Fact]

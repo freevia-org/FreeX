@@ -21,6 +21,8 @@ namespace FreeX.App.Host;
 /// </summary>
 public partial class App : Application
 {
+    private static readonly IUserMessageService StartupMessageService = new WpfUserMessageService();
+
     private static FreeXOptions? _startupOptions;
 
     private static ServiceProvider? _services;
@@ -60,8 +62,15 @@ public partial class App : Application
         var options = FreeXOptions.Load();
         AppLocalization.ApplyAppLanguage(options.AppLanguage);
         AppLocalization.ApplyCurrentCultureToWpf();
-        ShellStrings.Current = new FreeXShellStrings();
-        BackstageStrings.Current = new FreeXBackstageStrings();
+        ShellStrings.Current = new ResourceShellStrings(
+            () => UiText.Ok,
+            () => UiText.Cancel,
+            () => UiText.ErrorTitle,
+            () => UiText.WarningTitle,
+            () => UiText.InformationTitle,
+            () => UiText.ConfirmTitle,
+            UiText.CreateAutomationName);
+        BackstageStrings.Current = new ResourceBackstageStrings(UiText.Get, UiText.Format);
         DialogSizing.RegisterAppDialogSizing();
 
         // Let the SHARED ribbon-icon factory (used by shared chrome — the BackstageFrame rail, QAT, …)
@@ -433,13 +442,11 @@ public partial class App : Application
                         : UiText.Format("Startup_RecoveryPromptNamed", displayName);
                 }
 
-                var result = MessageBox.Show(
+                var accepted = AskStartupYesNo(
                     prompt,
-                    UiText.Get("Startup_RecoveryTitle"),
-                    MessageBoxButton.YesNo,
-                    MessageBoxImage.Question);
+                    UiText.Get("Startup_RecoveryTitle"));
 
-                if (result == MessageBoxResult.Yes)
+                if (accepted)
                 {
                     var capturedCandidate = candidate;
                     var restoreIntoMainWindow = !anyAccepted;
@@ -518,16 +525,19 @@ public partial class App : Application
         if (!CrashAnalyticsConsentPlanner.ShouldPrompt(options, crashAnalyticsOptions))
             return;
 
-        // Use MessageBox directly here: IUserMessageService is not yet available at this early
-        // startup point (before the main window is shown), so we fall back to a raw call.
-        var result = MessageBox.Show(
+        var accepted = AskStartupYesNo(
             UiText.Get("Startup_CrashReportsConsentPrompt"),
-            UiText.Get("Startup_CrashReportsTitle"),
-            MessageBoxButton.YesNo,
-            MessageBoxImage.Question);
-        CrashAnalyticsConsentPlanner.ApplyConsent(options, result == MessageBoxResult.Yes);
+            UiText.Get("Startup_CrashReportsTitle"));
+        CrashAnalyticsConsentPlanner.ApplyConsent(options, accepted);
         options.Save();
     }
+
+    private static bool AskStartupYesNo(string message, string title) =>
+        StartupMessageService.ShowMessage(
+            message,
+            title,
+            UserMessageButtons.YesNo,
+            UserMessageIcon.Question) == UserMessageResult.Yes;
 
     protected override void OnExit(ExitEventArgs e)
     {

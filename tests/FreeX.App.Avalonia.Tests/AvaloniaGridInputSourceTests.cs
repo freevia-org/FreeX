@@ -252,11 +252,14 @@ public sealed class AvaloniaGridInputSourceTests
         // The body fill should now be driven by FillColor alone (non-null = has fill).
         // The old unconditional IsWordArt → Transparent gate must be gone.
         createVisual.Should().Contain(
-            "var fill = drawingObject.FillColor is { } fc",
-            "body fill should be derived from FillColor presence, not IsWordArt gate alone");
+            "var metadata = DrawingObjectRenderMetadataPlanner.ResolveBoundsShapeRenderMetadata(drawingObject);",
+            "body fill fallback policy should be owned by the shared Presentation planner");
         createVisual.Should().Contain(
-            "drawingObject.IsWordArt ? Brushes.Transparent : Brush(new CellColor(",
-            "fallback for null FillColor should still be Transparent for WordArt and default blue otherwise");
+            "var fill = metadata.FillColor is { } fc",
+            "Avalonia should only translate resolved colors to brushes");
+        createVisual.Should().Contain(
+            ": Brushes.Transparent;",
+            "null resolved fill still renders transparently for WordArt without an authored body fill");
 
         // The old pattern that gated fill on !IsWordArt unconditionally must not appear.
         createVisual.Should().NotContain(

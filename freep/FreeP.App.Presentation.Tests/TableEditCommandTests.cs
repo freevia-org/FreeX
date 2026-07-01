@@ -73,6 +73,148 @@ public sealed class TableEditCommandTests
         return string.Join("", cell.TextBody.Paragraphs.SelectMany(p => p.Runs).Select(run => run.Text));
     }
 
+    private static TextBody MakeRichBody(string text)
+    {
+        var levels = new TextStyleLevels();
+        levels[0] = new TextStyleLevel
+        {
+            Align = TextAlign.Right,
+            FontSizePt = 28.0,
+            Bold = true,
+            Italic = false,
+            LatinFont = "Aptos",
+            BulletKind = BulletKind.Char,
+            BulletChar = "*",
+            BulletColor = new ThemeAwareColor(new SrgbColor(10, 20, 30)),
+            BulletSizePct = 90000,
+            BulletFontFamily = "Wingdings",
+        };
+
+        var body = new TextBody
+        {
+            Anchor = VerticalAnchor.Bottom,
+            DefaultParaAlign = TextAlign.Center,
+            InsetLeftPt = 1.25,
+            InsetRightPt = 2.25,
+            InsetTopPt = 3.25,
+            InsetBottomPt = 4.25,
+            Wrap = false,
+            AutoFit = true,
+            FontScalePPT = 62500,
+            LnSpcReductionPPT = 20000,
+            LstStyle = levels,
+            VerticalType = TextVerticalType.Vertical270,
+            WarpPreset = "textWave1",
+            ColumnCount = 2,
+            ColumnSpacingEmu = 123456,
+        };
+        body.WarpAdjusts.Add(("adj1", "val 30000"));
+
+        var para = new Paragraph
+        {
+            Align = TextAlign.Justify,
+            Level = 2,
+            BulletKind = BulletKind.Auto,
+            BulletSuppressed = true,
+            BulletChar = "#",
+            AutoNumType = AutoNumType.RomanUcPeriod,
+            AutoNumStartAt = 4,
+            MarginLeftEmu = 457200,
+            IndentEmu = -228600,
+            BulletColor = new ThemeAwareColor(new SrgbColor(40, 50, 60)),
+            BulletSizePct = 75000,
+            BulletFontFamily = "Arial",
+            SpaceBeforePt = 3.5,
+            SpaceAfterPt = 4.5,
+        };
+        para.TabStops.Add(new TabStop { PositionEmu = 914400, Alignment = TabStopAlignment.Center });
+        para.Runs.Add(new Run
+        {
+            Text = text,
+            FontFamily = "Aptos",
+            FontSizePt = 18.0,
+            Bold = true,
+            BoldSet = true,
+            Italic = true,
+            ItalicSet = true,
+            Underline = true,
+            Strikethrough = true,
+            Color = new ThemeAwareColor(new SrgbColor(70, 80, 90)),
+            Hyperlink = new Hyperlink { Url = "https://example.test", Tooltip = "tip" },
+            Field = new FieldRun
+            {
+                FieldType = "slidenum",
+                CachedText = "7",
+                FontFamily = "Aptos",
+                FontSizePt = 14.0,
+                Bold = true,
+                Italic = true,
+                Color = new SrgbColor(100, 110, 120),
+            },
+            TextShadow = new RunTextShadow
+            {
+                Color = new ThemeAwareColor(new SrgbColor(130, 140, 150)),
+                Alpha = 77,
+                BlurPt = 1.5,
+                DistPt = 2.5,
+                DirDeg = 135.0,
+            },
+            Math = new MathRunInfo { RawXml = "<m:oMath/>", IsAlternateContent = true },
+        });
+        body.Paragraphs.Add(para);
+
+        return body;
+    }
+
+    private static void AssertRichBody(TextBody body, string expectedText)
+    {
+        body.Anchor.Should().Be(VerticalAnchor.Bottom);
+        body.DefaultParaAlign.Should().Be(TextAlign.Center);
+        body.InsetLeftPt.Should().Be(1.25);
+        body.Wrap.Should().BeFalse();
+        body.AutoFit.Should().BeTrue();
+        body.FontScalePPT.Should().Be(62500);
+        body.LnSpcReductionPPT.Should().Be(20000);
+        body.LstStyle.Should().NotBeNull();
+        body.LstStyle![0]!.FontSizePt.Should().Be(28.0);
+        body.LstStyle[0]!.BulletFontFamily.Should().Be("Wingdings");
+        body.VerticalType.Should().Be(TextVerticalType.Vertical270);
+        body.WarpPreset.Should().Be("textWave1");
+        body.WarpAdjusts.Should().Contain(("adj1", "val 30000"));
+        body.ColumnCount.Should().Be(2);
+        body.ColumnSpacingEmu.Should().Be(123456);
+
+        var para = body.Paragraphs.Should().ContainSingle().Subject;
+        para.Align.Should().Be(TextAlign.Justify);
+        para.Level.Should().Be(2);
+        para.BulletSuppressed.Should().BeTrue();
+        para.AutoNumType.Should().Be(AutoNumType.RomanUcPeriod);
+        para.AutoNumStartAt.Should().Be(4);
+        para.MarginLeftEmu.Should().Be(457200);
+        para.IndentEmu.Should().Be(-228600);
+        para.BulletFontFamily.Should().Be("Arial");
+        para.TabStops.Should().ContainSingle()
+            .Which.Alignment.Should().Be(TabStopAlignment.Center);
+
+        var run = para.Runs.Should().ContainSingle().Subject;
+        run.Text.Should().Be(expectedText);
+        run.FontFamily.Should().Be("Aptos");
+        run.Bold.Should().BeTrue();
+        run.BoldSet.Should().BeTrue();
+        run.Italic.Should().BeTrue();
+        run.ItalicSet.Should().BeTrue();
+        run.Underline.Should().BeTrue();
+        run.Strikethrough.Should().BeTrue();
+        run.Hyperlink.Should().NotBeNull();
+        run.Hyperlink!.Url.Should().Be("https://example.test");
+        run.Field.Should().NotBeNull();
+        run.Field!.FieldType.Should().Be("slidenum");
+        run.TextShadow.Should().NotBeNull();
+        run.TextShadow!.DirDeg.Should().Be(135.0);
+        run.Math.Should().NotBeNull();
+        run.Math!.IsAlternateContent.Should().BeTrue();
+    }
+
     // ════════════════════════════════════════════════════════════════════════════
     // SetTableCellTextCommand
     // ════════════════════════════════════════════════════════════════════════════
@@ -143,6 +285,79 @@ public sealed class TableEditCommandTests
     // ════════════════════════════════════════════════════════════════════════════
     // InsertTableRowCommand
     // ════════════════════════════════════════════════════════════════════════════
+
+    [Fact]
+    public void SetTableCellText_Revert_RestoresRichTextBodyClone()
+    {
+        var (p, bus, shape) = MakeTable(1, 1);
+        var original = MakeRichBody("Original");
+        shape.Table!.Rows[0].Cells[0].TextBody = original;
+
+        bus.Execute(new SetTableCellTextCommand(0, 1, 0, 0, MakeRichBody("Changed")));
+        bus.Undo();
+
+        var restored = shape.Table.Rows[0].Cells[0].TextBody;
+        restored.Should().NotBeNull();
+        restored.Should().NotBeSameAs(original);
+        restored!.LstStyle.Should().NotBeSameAs(original.LstStyle);
+        restored.Paragraphs[0].Should().NotBeSameAs(original.Paragraphs[0]);
+        restored.Paragraphs[0].Runs[0].Should().NotBeSameAs(original.Paragraphs[0].Runs[0]);
+        restored.Paragraphs[0].Runs[0].Hyperlink.Should().NotBeSameAs(original.Paragraphs[0].Runs[0].Hyperlink);
+        restored.Paragraphs[0].Runs[0].Field.Should().NotBeSameAs(original.Paragraphs[0].Runs[0].Field);
+        restored.Paragraphs[0].Runs[0].TextShadow.Should().NotBeSameAs(original.Paragraphs[0].Runs[0].TextShadow);
+        restored.Paragraphs[0].Runs[0].Math.Should().NotBeSameAs(original.Paragraphs[0].Runs[0].Math);
+        AssertRichBody(restored, "Original");
+    }
+
+    [Fact]
+    public void SlideCloner_CloneShape_TablePayloadUsesRichTextDeepClone()
+    {
+        var richBody = MakeRichBody("Table");
+        var table = new TableShape
+        {
+            TableStyleId = "{style}",
+            StyleData = new TableStyleData
+            {
+                StyleId = "{style}",
+                WholeTbl = new TableStyleEntry
+                {
+                    TextColor = new ThemeAwareColor(new SrgbColor(1, 2, 3)),
+                },
+            },
+        };
+        table.ColumnWidthsEmu.Add(914400L);
+        table.Rows.Add(new TableRow
+        {
+            HeightEmu = 457200L,
+            Cells = { new TableCell { TextBody = richBody, GridSpan = 2, RowSpan = 3 } },
+        });
+
+        var shape = new SlideShape
+        {
+            Id = 7,
+            Kind = SlideShapeKind.Table,
+            Table = table,
+        };
+
+        var clone = SlideCloner.CloneShape(shape);
+
+        clone.Table.Should().NotBeNull();
+        clone.Table.Should().NotBeSameAs(table);
+        clone.Table!.StyleData.Should().NotBeSameAs(table.StyleData);
+        clone.Table.StyleData!.WholeTbl.Should().NotBeSameAs(table.StyleData!.WholeTbl);
+        clone.Table.Rows[0].Should().NotBeSameAs(table.Rows[0]);
+        clone.Table.Rows[0].Cells[0].Should().NotBeSameAs(table.Rows[0].Cells[0]);
+        clone.Table.Rows[0].Cells[0].GridSpan.Should().Be(2);
+        clone.Table.Rows[0].Cells[0].RowSpan.Should().Be(3);
+
+        var clonedBody = clone.Table.Rows[0].Cells[0].TextBody;
+        clonedBody.Should().NotBeNull();
+        clonedBody.Should().NotBeSameAs(richBody);
+        AssertRichBody(clonedBody!, "Table");
+
+        clonedBody!.Paragraphs[0].Runs[0].Text = "Clone edit";
+        richBody.Paragraphs[0].Runs[0].Text.Should().Be("Table");
+    }
 
     [Fact]
     public void InsertRow_Apply_AddsRowAtIndex()

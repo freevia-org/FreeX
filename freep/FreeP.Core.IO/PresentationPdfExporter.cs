@@ -15,12 +15,15 @@ namespace FreeP.Core.IO;
 public static class PresentationPdfExporter
 {
     // Widescreen 16:9 slide (PowerPoint default 13.333in x 7.5in) in PDF points (1/72 inch).
-    private const double SlideWidthPt = 960.0;
-    private const double SlideHeightPt = 540.0;
+    public const double DefaultSlideWidthPoints = 960.0;
+    public const double DefaultSlideHeightPoints = 540.0;
     private const double MarginPt = 54.0;
     private const double TitleSize = 32.0;
     private const double BodySize = 18.0;
     private const double BodyLeadingPt = 26.0;
+    private const double ShapeTextInsetPt = 8.0;
+    private const double DefaultStrokeWidthPt = 0.75;
+    private const double EmuPerPoint = 12700.0;
 
     /// <summary>Renders the presentation to PDF bytes in memory.</summary>
     public static byte[] ExportToBytes(Presentation presentation) =>
@@ -53,13 +56,19 @@ public static class PresentationPdfExporter
         return new PdfContentDocument(pages, properties);
     }
 
-    private static PdfContentPage BuildSlidePage(Slide slide)
+    /// <summary>Builds the portable draw-op page for one slide at FreeP's default 16:9 slide size.</summary>
+    public static PdfContentPage BuildSlidePage(Slide slide)
     {
+        ArgumentNullException.ThrowIfNull(slide);
+
         var ops = new List<PdfDrawOp>();
+
+        if (TryMapFill(slide.Background, out var background))
+            ops.Add(new PdfFillRect(0, 0, DefaultSlideWidthPoints, DefaultSlideHeightPoints, background));
 
         // PDF user space has its origin at the bottom-left with y increasing upward, so we lay out from the
         // top down by starting at (height - margin) and decreasing y for each line.
-        var y = SlideHeightPt - MarginPt - TitleSize;
+        var y = DefaultSlideHeightPoints - MarginPt - TitleSize;
         if (!string.IsNullOrEmpty(slide.Title))
             ops.Add(new PdfText(MarginPt, y, TitleSize, PdfFontFace.Bold, PdfColor.Black, OneLine(slide.Title)));
         y -= TitleSize * 1.4;
@@ -67,21 +76,122 @@ public static class PresentationPdfExporter
         // Skip placeholder shapes (title already rendered above; body placeholders have no freestanding text).
         foreach (var shape in slide.Shapes.Where(s => s.Placeholder is null))
         {
+            var shapeBox = TryAppendShapeGeometry(ops, shape);
             var content = !string.IsNullOrEmpty(shape.Text) ? shape.Text : $"[{shape.Kind}]";
-            foreach (var line in content.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n'))
+
+            if (shapeBox is { } box)
+            {
+                AppendShapeText(ops, box, content);
+                continue;
+            }
+
+            foreach (var line in Lines(content))
             {
                 if (y < MarginPt)
-                    return new PdfContentPage(SlideWidthPt, SlideHeightPt, ops); // ran out of room on this slide
+                    return new PdfContentPage(DefaultSlideWidthPoints, DefaultSlideHeightPoints, ops); // ran out of room on this slide
                 ops.Add(new PdfText(MarginPt, y, BodySize, PdfFontFace.Regular, PdfColor.Black, OneLine(line)));
                 y -= BodyLeadingPt;
             }
         }
 
-        return new PdfContentPage(SlideWidthPt, SlideHeightPt, ops);
+        return new PdfContentPage(DefaultSlideWidthPoints, DefaultSlideHeightPoints, ops);
+    }
+
+    private static ShapeBox? TryAppendShapeGeometry(List<PdfDrawOp> ops, SlideShape shape)
+    {
+        var width = EmuToPoints(shape.ExtentCxEmu);
+        var height = EmuToPoints(shape.ExtentCyEmu);
+        if (width <= 0 || height <= 0)
+            return null;
+
+        var x = EmuToPoints(shape.OffsetXEmu);
+        var y = DefaultSlideHeightPoints - EmuToPoints(shape.OffsetYEmu) - height;
+
+        if (TryMapFill(shape.Fill, out var fill))
+            ops.Add(new PdfFillRect(x, y, width, height, fill));
+
+        if (TryMapOutline(shape.Outline, out var stroke, out var strokeWidth))
+            ops.Add(new PdfStrokeRect(x, y, width, height, stroke, strokeWidth));
+
+        return new ShapeBox(x, y, width, height);
+    }
+
+    private static void AppendShapeText(List<PdfDrawOp> ops, ShapeBox box, string content)
+    {
+        var y = box.Y + box.Height - ShapeTextInsetPt - BodySize;
+        foreach (var line in Lines(content))
+        {
+            if (y < box.Y + ShapeTextInsetPt)
+                return;
+
+            ops.Add(new PdfText(
+                box.X + ShapeTextInsetPt,
+                y,
+                BodySize,
+                PdfFontFace.Regular,
+                PdfColor.Black,
+                OneLine(line)));
+            y -= BodyLeadingPt;
+        }
+    }
+
+    private static bool TryMapFill(ShapeFill? fill, out PdfColor color)
+    {
+        switch (fill)
+        {
+            case ShapeFill.Solid solid:
+                color = ToPdfColor(solid.Color);
+                return true;
+            case ShapeFill.Gradient gradient:
+                color = ToPdfColor(gradient.StartColor);
+                return true;
+            case ShapeFill.Pattern pattern:
+                color = ToPdfColor(pattern.BackgroundColor);
+                return true;
+            default:
+                color = default;
+                return false;
+        }
+    }
+
+    private static bool TryMapOutline(ShapeOutline? outline, out PdfColor color, out double widthPt)
+    {
+        switch (outline)
+        {
+            case ShapeOutline.Visible visible:
+                color = ToPdfColor(visible.Color);
+                widthPt = Math.Max(0.1, visible.WidthPt);
+                return true;
+            case ShapeOutline.GradientVisible gradient:
+                color = ToPdfColor(gradient.Gradient.StartColor);
+                widthPt = Math.Max(0.1, gradient.WidthPt);
+                return true;
+            case null:
+                color = PdfColor.Black;
+                widthPt = DefaultStrokeWidthPt;
+                return true;
+            default:
+                color = default;
+                widthPt = 0;
+                return false;
+        }
     }
 
     private static string? NullIfBlank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
 
     // The portable text op draws a single line; flatten tabs so spacing is at least visible.
     private static string OneLine(string text) => text.Replace("\t", "    ");
+
+    private static string[] Lines(string text) =>
+        text.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n');
+
+    private static double EmuToPoints(long emu) => emu / EmuPerPoint;
+
+    private static PdfColor ToPdfColor(ThemeAwareColor color)
+    {
+        var resolved = color.Resolved;
+        return new PdfColor(resolved.R, resolved.G, resolved.B);
+    }
+
+    private sealed record ShapeBox(double X, double Y, double Width, double Height);
 }

@@ -42,6 +42,13 @@ public partial class MainWindow
             SaveResolvedAsync);
     }
 
+    private Task<bool> CanProceedAfterSaveBeforeDestructiveActionAsync(string message) =>
+        WorkbookFileLifecycleCoordinator.CanProceedAfterDirtyGateWithCleanSaveAsync(
+            _workbookDirty,
+            () => Task.FromResult(PromptSaveChangesBeforeDestructiveAction(message)),
+            SaveResolvedAsync,
+            () => _workbookDirty);
+
     /// <summary>
     /// Runs a Save, resolving Save-vs-Save-As through the shared <see cref="FileLifecyclePlanner.PlanSave"/>
     /// decision: an existing usable path saves directly to it; otherwise the Save-As dialog is shown.

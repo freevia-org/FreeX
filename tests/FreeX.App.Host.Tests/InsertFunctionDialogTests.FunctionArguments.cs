@@ -65,6 +65,11 @@ public sealed partial class InsertFunctionDialogTests
         FunctionArgumentsDialog.CreateFormula(" if ", ["A1>0", "\"Yes\"", ""])
             .Should()
             .Be("IF(A1>0, \"Yes\")");
+
+        var source = ReadFunctionArgumentsDialogSource();
+        source.Should().Contain("FunctionArgumentCatalog.GetArgumentSpecs(functionName)");
+        source.Should().Contain("FunctionArgumentCatalog.BuildFormula(functionName, arguments)");
+        source.Should().NotContain("KnownArguments");
     }
 
     [Fact]

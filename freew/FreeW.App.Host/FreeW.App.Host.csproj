@@ -33,7 +33,9 @@
     <ProjectReference Include="..\..\shared\Free.Shared.Opc\Free.Shared.Opc.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.Pdf\Free.Shared.Pdf.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.Pdf.Wpf\Free.Shared.Pdf.Wpf.csproj" />
+    <ProjectReference Include="..\FreeW.App.Localization\FreeW.App.Localization.csproj" />
     <ProjectReference Include="..\FreeW.App.Presentation\FreeW.App.Presentation.csproj" />
+    <ProjectReference Include="..\FreeW.Ribbon.Definitions\FreeW.Ribbon.Definitions.csproj" />
     <ProjectReference Include="..\FreeW.Core.Model\FreeW.Core.Model.csproj" />
     <ProjectReference Include="..\FreeW.Core.IO\FreeW.Core.IO.csproj" />
   </ItemGroup>

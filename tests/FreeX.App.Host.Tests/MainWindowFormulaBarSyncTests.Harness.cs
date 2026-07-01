@@ -439,7 +439,7 @@ public sealed partial class MainWindowFormulaBarSyncTests
 
         private void UpdateFormulaRangeEntryMode(string text)
         {
-            if (FormulaEditInteractionPlanner.ShouldStartPointModeFromTypedText(text))
+            if (FormulaEditInteractionPlanner.BuildTextChangePlan(text).StartsPointMode)
                 _formulaRangeEntryModeField.SetValue(_window, true);
         }
 

@@ -16,6 +16,6 @@ internal static class AppProductTestDefaults
         // The neutral backstage planners (greeting, recent-file list) now live in the shared
         // shell and resolve strings via BackstageStrings.Current; install FreeX's catalog so
         // their assertions match UiText, exactly as App.xaml.cs does at runtime.
-        BackstageStrings.Current = new FreeXBackstageStrings();
+        BackstageStrings.Current = new ResourceBackstageStrings(UiText.Get, UiText.Format);
     }
 }

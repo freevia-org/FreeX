@@ -35,15 +35,28 @@ public sealed partial class RemainingDialogTests
         // StatusDialogKeyboardFocus was extracted into the shared shell helpers project.
         + DialogSourceTestSupport.ReadShellSources("StatusDialogKeyboardFocus.cs");
 
+    private static string ReadMiniDialogSources() =>
+        DialogSourceTestSupport.ReadHostSources(
+            "ActivateSheetDialog.cs",
+            "UnhideSheetDialog.cs",
+            "UnhideWindowDialog.cs",
+            "AddWatchDialog.cs");
+
     private static string ReadPrintPreviewDialogSources() =>
         DialogSourceTestSupport.ReadHostSources(
             "PrintPreviewDialog.cs",
             "PrintPreviewDialog.Layout.cs",
             "PrintPreviewDialog.Helpers.cs",
             "PrintPreviewSettingsPanelFactory.cs",
-            "PrintPreviewToolbarPlanner.cs")
+            "WpfPrintPreviewToolbarPlanner.cs")
         + Environment.NewLine
-        + DialogSourceTestSupport.ReadPresentationSources("PageLayout", "PrintPreviewDialogPlanner.cs");
+        + DialogSourceTestSupport.ReadPresentationSources("PageLayout", "PrintPreviewDialogPlanner.cs")
+        + Environment.NewLine
+        + DialogSourceTestSupport.ReadPresentationSources("PageLayout", "PrintPreviewToolbarStatePlanner.cs")
+        + Environment.NewLine
+        + DialogSourceTestSupport.ReadPresentationSources("PageLayout", "PrintPreviewSurfacePlanner.cs")
+        + Environment.NewLine
+        + DialogSourceTestSupport.ReadPresentationSources("PageLayout", "PrintPreviewSettingsPanelPlanner.cs");
 
     private static string ReadClassSource(string fileName, string startMarker, string endMarker)
         => DialogSourceTestSupport.ReadClassSource(fileName, startMarker, endMarker);

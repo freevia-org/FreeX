@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using FluentAssertions;
+using FreeX.App.Presentation.PivotUI;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host.Tests;
@@ -198,6 +199,24 @@ public sealed partial class PivotWorkflowDialogTests
     }
 
     [Fact]
+    public void PivotTableOptionsDialogResult_DelegatesNormalizationToSharedPlanner()
+    {
+        var resultSource = DialogSourceTestSupport.ReadHostSources("PivotTableOptionsDialog.Result.cs");
+        var dialogSource = DialogSourceTestSupport.ReadHostSources("PivotTableOptionsDialog.cs");
+
+        resultSource.Should().Contain("PivotOptionsPlanner.CaptureDialogValues(pivotTable, cache)");
+        resultSource.Should().Contain("PivotOptionsPlanner.CreateDialogValues(");
+        resultSource.Should().Contain("private static PivotTableOptionsDialogResult FromShared(PivotOptionsDialogValues values)");
+        resultSource.Should().NotContain("private static string? NormalizeOptionalText");
+        resultSource.Should().NotContain("NormalizeCompactRowLabelIndent(int indent)");
+
+        dialogSource.Should().Contain("PivotStyleGalleryPlanner.GetStyleNames(result.StyleName)");
+        dialogSource.Should().Contain("PivotStyleGalleryPlanner.FindStyleIndex(styleNames, result.StyleName)");
+        dialogSource.Should().Contain("PivotOptionsPlanner.TryParseCompactRowLabelIndent(_compactIndentBox.Text");
+        dialogSource.Should().Contain("PivotOptionsPlanner.TryParsePageWrap(_pageWrapBox.Text");
+    }
+
+    [Fact]
     public void PivotTableOptionsDialog_FromPivotTable_UsesCurrentPivotSettings()
     {
         var sheetId = new SheetId(Guid.NewGuid());
@@ -298,25 +317,15 @@ public sealed partial class PivotWorkflowDialogTests
     }
 
     [Fact]
-    public void PivotStyleCatalog_ListsBuiltInLightMediumAndDarkStylesAndPreservesCustomCurrentStyle()
+    public void PivotStyleGalleryDialog_UsesPresentationPlannerForCatalogSelectionAndResult()
     {
-        var styleNames = PivotStyleCatalog.GetStyleNames("  MyWorkbookPivotStyle  ");
+        var source = DialogSourceTestSupport.ReadHostSources("PivotStyleGalleryDialog.cs");
 
-        styleNames.Should().HaveCount(85);
-        styleNames.Take(28).Should().Equal(Enumerable.Range(1, 28).Select(index => $"PivotStyleLight{index}"));
-        styleNames.Skip(28).Take(28).Should().Equal(Enumerable.Range(1, 28).Select(index => $"PivotStyleMedium{index}"));
-        styleNames.Skip(56).Take(28).Should().Equal(Enumerable.Range(1, 28).Select(index => $"PivotStyleDark{index}"));
-        styleNames[^1].Should().Be("MyWorkbookPivotStyle");
-    }
-
-    [Fact]
-    public void PivotStyleCatalog_DoesNotDuplicateBuiltInCurrentStyle()
-    {
-        PivotStyleCatalog.GetStyleNames("pivotstylemedium10")
-            .Should()
-            .HaveCount(84)
-            .And
-            .ContainSingle(styleName => string.Equals(styleName, "PivotStyleMedium10", StringComparison.OrdinalIgnoreCase));
+        source.Should().Contain("public PivotStyleGalleryValues Result { get; private set; }");
+        source.Should().Contain("PivotStyleGalleryPlanner.CreateResult(styleName)");
+        source.Should().Contain("PivotStyleGalleryPlanner.GetStyleNames(styleName)");
+        source.Should().Contain("PivotStyleGalleryPlanner.FindStyleIndex(styleNames, styleName)");
+        source.Should().NotContain("PivotStyleCatalog");
     }
 
     [Fact]
@@ -350,11 +359,11 @@ public sealed partial class PivotWorkflowDialogTests
     {
         PivotStyleGalleryDialog.CreateResult("  PivotStyleDark28  ")
             .Should()
-            .Be(new PivotStyleGalleryDialogResult("PivotStyleDark28"));
+            .Be(new PivotStyleGalleryValues("PivotStyleDark28"));
 
         PivotStyleGalleryDialog.CreateResult("  ")
             .Should()
-            .Be(new PivotStyleGalleryDialogResult("PivotStyleLight16"));
+            .Be(new PivotStyleGalleryValues("PivotStyleLight16"));
     }
 
     [Fact]
@@ -517,11 +526,8 @@ public sealed partial class PivotWorkflowDialogTests
         source.Should().Contain("if (!ValidateInputs())");
         source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"PivotTableOptions_EnterCompactIndent\"), _compactIndentBox);");
         source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"PivotTableOptions_EnterPageFieldsPerColumn\"), _pageWrapBox);");
-        source.Should().Contain("DialogMessageHelper.ShowWarning(this, message, Title)");
         source.Should().Contain("_tabs.SelectedItem = _layoutTab;");
-        source.Should().Contain("target.Focus();");
-        source.Should().Contain("target.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(target);");
+        source.Should().Contain("DialogFocus.ShowWarningAndFocus(this, message, Title, target);");
     }
 
     [Fact]

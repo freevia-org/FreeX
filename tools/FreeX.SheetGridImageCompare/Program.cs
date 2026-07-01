@@ -9,11 +9,16 @@ using System.Text.Json;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using FreeX.App.Presentation.Filtering;
 using FreeX.App.UI;
+using FreeX.App.Presentation.Sparklines;
 using FreeX.Core.Calc;
 using FreeX.Core.Formula;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
+using FreeX.ToolsShared;
+using FreeX.ToolsShared.Wpf;
+using static FreeX.ToolsShared.Wpf.WpfImageDiff;
 
 /// <summary>
 /// FreeX Sheet Grid Image Compare — renders each worksheet of an .xlsx to a PNG using
@@ -183,7 +188,7 @@ internal static class Program
             foreach (var item in pivotVisualCases ?? EnumeratePivotVisualRanges(workbook).ToArray())
             {
                 var (sheet, pivot, range, rangeSource) = item;
-                var safeName = SanitizeFileName($"{sheet.Name}_{pivot.Name}");
+                var safeName = ToolFileNameSanitizer.SanitizeSheetToken($"{sheet.Name}_{pivot.Name}");
                 var outFileName = $"freex_{sheetIndex:D2}_{safeName}.png";
                 var outPath = Path.Combine(freexOutputDir, outFileName);
 
@@ -221,7 +226,7 @@ internal static class Program
         {
             foreach (var item in pivotSheetVisualCases ?? EnumeratePivotSheetVisualRanges(workbook).ToArray())
             {
-                var safeName = SanitizeFileName(item.Name);
+                var safeName = ToolFileNameSanitizer.SanitizeSheetToken(item.Name);
                 var outFileName = $"freex_{sheetIndex:D2}_{safeName}.png";
                 var outPath = Path.Combine(freexOutputDir, outFileName);
 
@@ -259,7 +264,7 @@ internal static class Program
         {
             foreach (var item in tableSheetVisualCases ?? EnumerateTableSheetVisualRanges(workbook).ToArray())
             {
-                var safeName = SanitizeFileName(item.Name);
+                var safeName = ToolFileNameSanitizer.SanitizeSheetToken(item.Name);
                 var outFileName = $"freex_{sheetIndex:D2}_{safeName}.png";
                 var outPath = Path.Combine(freexOutputDir, outFileName);
 
@@ -302,7 +307,7 @@ internal static class Program
                 continue;
             }
 
-            var safeName = SanitizeFileName(sheet.Name);
+            var safeName = ToolFileNameSanitizer.SanitizeSheetToken(sheet.Name);
             var outFileName = $"freex_{sheetIndex:D2}_{safeName}.png";
             var outPath = Path.Combine(freexOutputDir, outFileName);
 
@@ -495,7 +500,7 @@ internal static class Program
             NativeTimelines = nativeVisualFilters.Timelines,
             Sparklines      = sheet.Sparklines,
             SparklineValues = sheet.Sparklines.Count > 0
-                ? FreeX.App.Host.SparklineValuePlanner.BuildValues(sheet)
+                ? SparklineSeriesReader.BuildValues(sheet)
                 : null,
             MergedRegions   = sheet.MergedRegions,
             WorksheetBackground = null,
@@ -512,7 +517,7 @@ internal static class Program
         // Surface the sheet's AutoFilter range (worksheet-level OR carried inside a structured table)
         // so the GridView draws the filter-arrow dropdown buttons on the header row, matching Excel.
         grid.AutoFilterRange =
-            FreeX.App.Host.AutoFilterDropdownPlanner.TryGetAutoFilterRange(sheet, out var autoFilterRange)
+            AutoFilterDropdownMenuPlanner.TryGetAutoFilterRange(sheet, out var autoFilterRange)
                 ? autoFilterRange
                 : null;
         grid.PivotHeaderDropdowns = FreeX.App.Host.PivotHeaderDropdownPlanner.BuildTargets(workbook, sheet)
@@ -840,7 +845,7 @@ internal static class Program
                     range.End.Col < range.Start.Col)
                     continue;
 
-                var safeName = SanitizeFileName($"{sheet.Name}_{table.Name}");
+                var safeName = ToolFileNameSanitizer.SanitizeSheetToken($"{sheet.Name}_{table.Name}");
                 yield return new SheetVisualCase(
                     sheet,
                     range,
@@ -1008,10 +1013,9 @@ internal static class Program
         object? workbookObject = null;
         try
         {
-            var excelType = Type.GetTypeFromProgID("Excel.Application")
-                ?? throw new InvalidOperationException("Excel.Application COM registration not found.");
-            excel = Activator.CreateInstance(excelType)
-                ?? throw new InvalidOperationException("Excel.Application activation returned null.");
+            excel = ExcelComAutomation.CreateExcelApplication(
+                "Excel.Application COM registration not found.",
+                "Excel.Application activation returned null.");
             dynamic app = excel;
             app.Visible = true;
             app.DisplayAlerts = false;
@@ -1029,7 +1033,7 @@ internal static class Program
                     pivotVisualCases ?? EnumeratePivotVisualRanges(workbook).ToArray()).ToArray();
                 foreach (var item in resolvedCases)
                 {
-                    var safeName = SanitizeFileName($"{item.Sheet.Name}_{item.Pivot.Name}");
+                    var safeName = ToolFileNameSanitizer.SanitizeSheetToken($"{item.Sheet.Name}_{item.Pivot.Name}");
                     var outPath = Path.Combine(outputDirectory, $"excel_{ordinal:D2}_{safeName}.png");
                     ExportExcelRangeToPng(workbookObject, item.Sheet.Name, item.Range, outPath);
                     Console.WriteLine($"  [{ordinal:D2}] {item.Sheet.Name}!{item.Range} ({item.RangeSource}) -> {Path.GetFileName(outPath)}");
@@ -1045,7 +1049,7 @@ internal static class Program
                 var cases = pivotSheetVisualCases ?? EnumeratePivotSheetVisualRanges(workbook).ToArray();
                 foreach (var item in cases)
                 {
-                    var safeName = SanitizeFileName(item.Name);
+                    var safeName = ToolFileNameSanitizer.SanitizeSheetToken(item.Name);
                     var outPath = Path.Combine(outputDirectory, $"excel_{ordinal:D2}_{safeName}.png");
                     ExportExcelRangeToPng(workbookObject, item.Sheet.Name, item.Range, outPath);
                     Console.WriteLine($"  [{ordinal:D2}] {item.Sheet.Name}!{item.Range} ({item.RangeSource}) -> {Path.GetFileName(outPath)}");
@@ -1061,7 +1065,7 @@ internal static class Program
                 var cases = tableSheetVisualCases ?? EnumerateTableSheetVisualRanges(workbook).ToArray();
                 foreach (var item in cases)
                 {
-                    var safeName = SanitizeFileName(item.Name);
+                    var safeName = ToolFileNameSanitizer.SanitizeSheetToken(item.Name);
                     var outPath = Path.Combine(outputDirectory, $"excel_{ordinal:D2}_{safeName}.png");
                     ExportExcelRangeToPng(workbookObject, item.Sheet.Name, item.Range, outPath);
                     Console.WriteLine($"  [{ordinal:D2}] {item.Sheet.Name}!{item.Range} ({item.RangeSource}) -> {Path.GetFileName(outPath)}");
@@ -1092,7 +1096,7 @@ internal static class Program
                 if (range is null)
                     continue;
 
-                var safeName = SanitizeFileName(sheet.Name);
+                var safeName = ToolFileNameSanitizer.SanitizeSheetToken(sheet.Name);
                 var outPath = Path.Combine(outputDirectory, $"excel_{ordinal:D2}_{safeName}.png");
                 ExportExcelRangeToPng(workbookObject, sheet.Name, range.Value, outPath);
                 Console.WriteLine($"  [{ordinal:D2}] {sheet.Name}!{range.Value} -> {Path.GetFileName(outPath)}");
@@ -1118,9 +1122,9 @@ internal static class Program
             }
             catch { }
 
-            ReleaseComObject(workbookObject);
-            ReleaseComObject(workbooks);
-            ReleaseComObject(excel);
+            ExcelComAutomation.ReleaseComObject(workbookObject);
+            ExcelComAutomation.ReleaseComObject(workbooks);
+            ExcelComAutomation.ReleaseComObject(excel);
             GC.Collect();
             GC.WaitForPendingFinalizers();
         }
@@ -1189,7 +1193,7 @@ internal static class Program
             if (TryParseExcelRangeAddress(address, sheetId, out range))
                 return true;
 
-            ReleaseComObject(tableRange);
+            ExcelComAutomation.ReleaseComObject(tableRange);
             tableRange = ((dynamic)pivotTable).TableRange1;
             address = Convert.ToString(((dynamic)tableRange).Address, CultureInfo.InvariantCulture);
             return TryParseExcelRangeAddress(address, sheetId, out range);
@@ -1201,10 +1205,10 @@ internal static class Program
         }
         finally
         {
-            ReleaseComObject(tableRange);
-            ReleaseComObject(pivotTable);
-            ReleaseComObject(pivotTables);
-            ReleaseComObject(worksheet);
+            ExcelComAutomation.ReleaseComObject(tableRange);
+            ExcelComAutomation.ReleaseComObject(pivotTable);
+            ExcelComAutomation.ReleaseComObject(pivotTables);
+            ExcelComAutomation.ReleaseComObject(worksheet);
         }
     }
 
@@ -1324,12 +1328,12 @@ internal static class Program
                 // Best-effort cleanup; export will retry with a fresh chart object.
             }
 
-            ReleaseComObject(chart);
-            ReleaseComObject(chartObject);
-            ReleaseComObject(chartObjects);
-            ReleaseComObject(activeWindow);
-            ReleaseComObject(excelRange);
-            ReleaseComObject(worksheet);
+            ExcelComAutomation.ReleaseComObject(chart);
+            ExcelComAutomation.ReleaseComObject(chartObject);
+            ExcelComAutomation.ReleaseComObject(chartObjects);
+            ExcelComAutomation.ReleaseComObject(activeWindow);
+            ExcelComAutomation.ReleaseComObject(excelRange);
+            ExcelComAutomation.ReleaseComObject(worksheet);
         }
     }
 
@@ -1509,7 +1513,7 @@ internal static class Program
                         }
                     }
 
-                    row.DiffPercent = ComputeMeanPixelDiff(excelPng, r.FreeXPngPath!);
+                    row.DiffPercent = ComputeMeanPixelDiff(excelPng, r.FreeXPngPath!, 800, 600);
                     r.DiffPercent = row.DiffPercent;
                 }
                 catch (Exception ex)
@@ -1541,7 +1545,19 @@ internal static class Program
             var compositePath = Path.Combine(freexOutputDir, $"worst_{row.NN:D2}.png");
             try
             {
-                WriteSideBySide(row.ExcelPng!, row.FreeXPng, compositePath, row);
+                WpfSideBySidePng.Write(
+                    row.ExcelPng!,
+                    row.FreeXPng,
+                    compositePath,
+                    new WpfSideBySidePngOptions(
+                        700,
+                        500,
+                        10,
+                        30,
+                        $"NN={row.NN:D2}  {row.SheetName}  diff={row.DiffPercent:F1}%",
+                        $"Excel (ground truth)  {row.ExcelDimensions}",
+                        $"FreeX GridView  {row.FreeXDimensions}",
+                        "Mean diff uses 800x600 compatibility resize fallback"));
                 Console.WriteLine($"  worst_{row.NN:D2}.png  diff={row.DiffPercent:F1}%  {row.SheetName}");
             }
             catch (Exception ex)
@@ -1667,54 +1683,12 @@ internal static class Program
     // -----------------------------------------------------------------------
     // Image utilities (adapted from FreeX.SheetImageCompare/Program.cs)
     // -----------------------------------------------------------------------
-    private static BitmapSource LoadBitmap(string path)
-    {
-        using var stream = File.OpenRead(path);
-        var decoder = BitmapDecoder.Create(stream, BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnLoad);
-        var source  = decoder.Frames[0];
-        return source.Format == PixelFormats.Bgra32
-            ? source
-            : new FormatConvertedBitmap(source, PixelFormats.Bgra32, null, 0);
-    }
-
     private static PngDimensions GetPngDimensions(string path)
     {
         using var stream = File.OpenRead(path);
         var decoder = BitmapDecoder.Create(stream, BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnLoad);
         var frame = decoder.Frames[0];
         return new PngDimensions(frame.PixelWidth, frame.PixelHeight);
-    }
-
-    private static double ComputeMeanPixelDiff(string excelPath, string freexPath)
-    {
-        const int W = 800, H = 600;
-
-        var excelBmp = ResizeTo(LoadBitmap(excelPath), W, H);
-        var freexBmp = File.Exists(freexPath)
-            ? ResizeTo(LoadBitmap(freexPath), W, H)
-            : CreateWhite(W, H);
-
-        var excelPixels = GetBgra32Pixels(excelBmp, W, H);
-        var freexPixels = GetBgra32Pixels(freexBmp, W, H);
-
-        long totalDiff = 0;
-        int  pixelCount = W * H;
-        for (int i = 0; i < pixelCount; i++)
-        {
-            int    offset = i * 4;
-            double ea     = excelPixels[offset + 3] / 255.0;
-            double fa     = freexPixels[offset + 3] / 255.0;
-
-            for (int c = 0; c < 3; c++)
-            {
-                double eVal = excelPixels[offset + c] * ea + 255 * (1 - ea);
-                double fVal = freexPixels[offset + c] * fa + 255 * (1 - fa);
-                totalDiff += (long)Math.Abs(eVal - fVal);
-            }
-        }
-
-        double maxDiff = (double)pixelCount * 3 * 255;
-        return totalDiff / maxDiff * 100.0;
     }
 
     private static PixelDiffMetrics ComputeExactPixelDiff(string excelPath, string freexPath, int pixelTolerance)
@@ -1767,99 +1741,6 @@ internal static class Program
             pixelTolerance);
     }
 
-    private static BitmapSource ResizeTo(BitmapSource source, int w, int h)
-    {
-        var visual = new System.Windows.Media.DrawingVisual();
-        using (var ctx = visual.RenderOpen())
-        {
-            ctx.DrawRectangle(Brushes.White, null, new Rect(0, 0, w, h));
-            double scale = Math.Min((double)w / source.PixelWidth, (double)h / source.PixelHeight);
-            double dw    = source.PixelWidth  * scale;
-            double dh    = source.PixelHeight * scale;
-            var    bounds = new Rect((w - dw) / 2, (h - dh) / 2, dw, dh);
-            ctx.DrawImage(source, bounds);
-        }
-        var rtb = new RenderTargetBitmap(w, h, 96, 96, PixelFormats.Pbgra32);
-        rtb.Render(visual);
-        return new FormatConvertedBitmap(rtb, PixelFormats.Bgra32, null, 0);
-    }
-
-    private static BitmapSource CreateWhite(int w, int h)
-    {
-        var visual = new System.Windows.Media.DrawingVisual();
-        using (var ctx = visual.RenderOpen())
-            ctx.DrawRectangle(Brushes.White, null, new Rect(0, 0, w, h));
-        var rtb = new RenderTargetBitmap(w, h, 96, 96, PixelFormats.Pbgra32);
-        rtb.Render(visual);
-        return new FormatConvertedBitmap(rtb, PixelFormats.Bgra32, null, 0);
-    }
-
-    private static byte[] GetBgra32Pixels(BitmapSource bmp, int w, int h)
-    {
-        var pixels = new byte[w * h * 4];
-        bmp.CopyPixels(pixels, w * 4, 0);
-        return pixels;
-    }
-
-    private static void WriteSideBySide(string excelPath, string? freexPath, string outPath, DiffRow row)
-    {
-        const int ThumbW  = 700, ThumbH  = 500;
-        const int Padding = 10;
-        const int LabelH  = 30;
-        int totalW = ThumbW * 2 + Padding * 3;
-        int totalH = ThumbH + Padding * 2 + LabelH * 2;
-
-        var excelBmp = File.Exists(excelPath)
-            ? ResizeTo(LoadBitmap(excelPath), ThumbW, ThumbH)
-            : CreateWhite(ThumbW, ThumbH);
-        var freexBmp = freexPath != null && File.Exists(freexPath)
-            ? ResizeTo(LoadBitmap(freexPath), ThumbW, ThumbH)
-            : CreateWhite(ThumbW, ThumbH);
-
-        var visual = new System.Windows.Media.DrawingVisual();
-        using (var ctx = visual.RenderOpen())
-        {
-            ctx.DrawRectangle(new SolidColorBrush(Color.FromRgb(240, 240, 240)), null, new Rect(0, 0, totalW, totalH));
-
-            var headerText = $"NN={row.NN:D2}  {row.SheetName}  diff={row.DiffPercent:F1}%";
-            ctx.DrawText(MakeText(headerText, 13, Brushes.Black, FontWeights.SemiBold), new Point(Padding, 4));
-
-            int yImg   = LabelH;
-            int xLeft  = Padding;
-            int xRight = Padding * 2 + ThumbW;
-
-            ctx.DrawText(MakeText($"Excel (ground truth)  {row.ExcelDimensions}", 11, Brushes.DarkSlateGray, FontWeights.Normal), new Point(xLeft,  yImg + ThumbH + 4));
-            ctx.DrawText(MakeText($"FreeX GridView  {row.FreeXDimensions}", 11, Brushes.DarkSlateGray, FontWeights.Normal), new Point(xRight, yImg + ThumbH + 4));
-            ctx.DrawText(MakeText("Mean diff uses 800x600 compatibility resize fallback", 10, Brushes.DarkSlateGray, FontWeights.Normal), new Point(Padding, yImg + ThumbH + LabelH + 4));
-
-            ctx.DrawImage(excelBmp, new Rect(xLeft,  yImg, ThumbW, ThumbH));
-            ctx.DrawImage(freexBmp, new Rect(xRight, yImg, ThumbW, ThumbH));
-        }
-
-        var rtb = new RenderTargetBitmap(totalW, totalH, 96, 96, PixelFormats.Pbgra32);
-        rtb.Render(visual);
-        var encoder = new PngBitmapEncoder();
-        encoder.Frames.Add(BitmapFrame.Create(rtb));
-        using var stream = File.Create(outPath);
-        encoder.Save(stream);
-    }
-
-    private static void ReleaseComObject(object? value)
-    {
-        if (value is null)
-            return;
-
-        try
-        {
-            if (Marshal.IsComObject(value))
-                Marshal.FinalReleaseComObject(value);
-        }
-        catch
-        {
-            // Best-effort cleanup for visual comparison tooling.
-        }
-    }
-
     [DllImport("user32.dll", SetLastError = true)]
     private static extern bool OpenClipboard(IntPtr hWndNewOwner);
 
@@ -1872,33 +1753,9 @@ internal static class Program
     [DllImport("gdi32.dll", CharSet = CharSet.Auto, SetLastError = true)]
     private static extern IntPtr CopyEnhMetaFile(IntPtr hemfSrc, string? fileName);
 
-    private static FormattedText MakeText(string text, double size, Brush brush, FontWeight weight) =>
-        new FormattedText(
-            text,
-            CultureInfo.CurrentCulture,
-            FlowDirection.LeftToRight,
-            new Typeface(new System.Windows.Media.FontFamily("Segoe UI"), FontStyles.Normal, weight, FontStretches.Normal),
-            size,
-            brush,
-            1.0);
-
     // -----------------------------------------------------------------------
     // Helpers
     // -----------------------------------------------------------------------
-    private static string SanitizeFileName(string name)
-    {
-        var sb = new StringBuilder(name.Length);
-        foreach (var ch in name)
-        {
-            if (char.IsLetterOrDigit(ch) || ch == '-')
-                sb.Append(ch);
-            else if (ch == ' ' || ch == '_')
-                sb.Append('_');
-            // drop other chars
-        }
-        return sb.Length > 0 ? sb.ToString() : "sheet";
-    }
-
     private static string FormatDimensions(DiffRow row)
     {
         if (row.ExcelDimensions is null && row.FreeXDimensions is null)

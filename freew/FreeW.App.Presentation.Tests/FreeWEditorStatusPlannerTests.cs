@@ -1,0 +1,71 @@
+using Free.Shared.AppServices;
+using FreeW.App.Presentation.Shell;
+
+namespace FreeW.App.Presentation.Tests;
+
+public sealed class FreeWEditorStatusPlannerTests
+{
+    [Fact]
+    public void Build_FormatsWpfStatusSegmentsFromDocumentCounts()
+    {
+        var plan = FreeWEditorStatusPlanner.Build(new FreeWEditorStatusSnapshot(
+            Words: 42,
+            CharactersWithSpaces: 350,
+            Paragraphs: 6,
+            CurrentPage: 2,
+            TotalPages: 5,
+            CurrentSection: 1,
+            TotalSections: 3));
+
+        plan.PageStatus.Should().Be("Page 2 of 5");
+        plan.SectionStatus.Should().Be("Section 1 of 3");
+        plan.CountsStatus.Should().Be("Words: 42   Characters: 350   Paragraphs: 6");
+    }
+
+    [Fact]
+    public void Build_UsesSelectionTextForCountsWithoutRequiringDocumentTotals()
+    {
+        var plan = FreeWEditorStatusPlanner.Build(new FreeWEditorStatusSnapshot(
+            Words: 0,
+            CharactersWithSpaces: 0,
+            Paragraphs: 0,
+            SelectionText: "hello world"));
+
+        plan.CountsStatus.Should().Be("Selection: 2 words, 11 characters");
+        plan.SummaryStatus.Should().Be("Page 1 of 1   Selection: 2 words, 11 characters");
+    }
+
+    [Fact]
+    public void Build_ClampsInvalidCountsThroughSharedStatusFormatter()
+    {
+        var plan = FreeWEditorStatusPlanner.Build(new FreeWEditorStatusSnapshot(
+            Words: -1,
+            CharactersWithSpaces: -2,
+            Paragraphs: -3,
+            CurrentPage: -4,
+            TotalPages: 0,
+            CurrentSection: -5,
+            TotalSections: 0));
+
+        plan.PageStatus.Should().Be("Page 1 of 1");
+        plan.SectionStatus.Should().Be("Section 1 of 1");
+        plan.CountsStatus.Should().Be("Words: 0   Characters: 0   Paragraphs: 0");
+    }
+
+    [Fact]
+    public void Build_CanOmitPageAndSectionForContinuousCompactStatus()
+    {
+        var plan = FreeWEditorStatusPlanner.Build(new FreeWEditorStatusSnapshot(
+            Words: 8,
+            CharactersWithSpaces: 64,
+            Paragraphs: 2,
+            IncludePageStatus: false,
+            IncludeSectionStatus: false,
+            IsEdited: true));
+
+        plan.PageStatus.Should().BeEmpty();
+        plan.SectionStatus.Should().BeEmpty();
+        plan.SummaryStatus.Should().Be(
+            $"8 words{SisterAppStatusBarTextPlanner.SegmentSeparator}64 characters{SisterAppStatusBarTextPlanner.SegmentSeparator}2 paragraphs{SisterAppStatusBarTextPlanner.SegmentSeparator}\u2022 edited");
+    }
+}

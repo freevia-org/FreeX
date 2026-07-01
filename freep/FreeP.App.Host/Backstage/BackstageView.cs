@@ -1,39 +1,38 @@
 using System;
-using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
+using Free.Shared.AppServices;
 using Free.Shared.Ribbon.Wpf;
+using Free.Shared.Shell;
 using Free.Shared.Shell.Wpf;
 using Free.Shared.Theme;
 using Free.Shared.Theme.Wpf;
+using FreeP.App.Compositor;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Host.Backstage;
 
 /// <summary>
-/// FreeP's Office-style Backstage, built on the shared Backstage frame, theme, entry builder, and pane specs.
-/// The backstage rail colours (sidebar/hover/selected/separator) come from <see cref="SisterBackstageTheme.FreeP"/>.
-/// The in-content link accent is sourced from the design-token (<see cref="BrandThemes.FreeP"/> Accent role)
-/// so that changing the theme value propagates to the backstage — byte-identical today since
-/// <c>BrandThemes.FreeP.Colors.Accent == #B7472A</c> matches the previous hard-coded <c>LinkColor</c>.
+/// FreeP's Office-style Backstage, built on the shared Backstage frame, theme, entry builder, pane resources,
+/// and pane specs. Hosts still provide live presentation values and command adapters.
 /// </summary>
 internal sealed class BackstageView : UserControl
 {
     private static readonly SisterBackstageTheme Theme = SisterBackstageTheme.FreeP;
 
-    // Link accent sourced from the design token (BrandThemes.FreeP.Colors.Accent = #B7472A).
-    // Byte-identical to the previous hard-coded SisterBackstageTheme.FreeP.LinkColor (#B7472A).
-    private static readonly BackstageVisualKit Kit = new(
+    private static readonly SisterBackstagePaneResources BackstageResources = SisterBackstagePaneResources.ForApp(
+        SisterBackstageAppKind.FreeP,
         WpfThemeApplier.ToColor(BrandThemes.FreeP.Colors.Accent),
         Theme.TileWidth,
-        Theme.TileHeight);
-    private static readonly BackstagePaneComposer Panes = new(Kit);
-    private static readonly SisterBackstagePaneSpecPlanner PaneSpecs = new(SisterBackstagePaneTextSpec.FreeP);
+        Theme.TileHeight,
+        BackstageStrings.Current.Get);
+    private static BackstagePaneComposer Panes => BackstageResources.Panes;
+    private static SisterBackstagePaneSpecPlanner PaneSpecs => BackstageResources.PaneSpecs;
 
     private readonly Func<Presentation> _getModel;
     private readonly FileCommands _file;
     private readonly BackstageActions _actions;
-    private readonly BackstageViewShell _shell;
+    private readonly SisterBackstageHostController _backstage;
 
     public BackstageView(Func<Presentation> getModel, FileCommands file, BackstageActions actions)
     {
@@ -41,49 +40,56 @@ internal sealed class BackstageView : UserControl
         _file = file;
         _actions = actions;
 
-        _shell = new BackstageViewShell(
+        _backstage = new SisterBackstageHostController(
             this,
-            Theme.Accent,
-            BuildEntries(),
-            _actions.OnClosed);
+            new SisterBackstageHostSpec(
+                Theme,
+                BuildEntries,
+                _actions.OnClosed)
+            {
+                Chrome = BackstageRibbonChrome.Create()
+            });
     }
 
-    public void Show()
-    {
-        _shell.Show();
-    }
+    public void Show() => _backstage.Show();
 
-    public void Hide() => _shell.Hide();
+    public void Hide() => _backstage.Hide();
 
-    private IEnumerable<BackstageEntry> BuildEntries()
+    private SisterBackstageEntrySpec BuildEntries(SisterBackstageHostController backstage)
     {
-        return SisterBackstageEntryBuilder.Build(new SisterBackstageEntrySpec(
+        return new SisterBackstageEntrySpec(
             BuildInfoPane,
-            _actions.New,
-            _actions.Open,
-            _actions.Save,
-            _actions.SaveAs,
+            backstage.FrameCommand(_actions.New),
+            backstage.FrameCommand(_actions.Open),
+            backstage.FrameCommand(_actions.Save),
+            backstage.FrameCommand(_actions.SaveAs),
             BuildRecentPane,
             BuildNewPane,
             BuildOptionsPane)
         {
             BuildExportPane = BuildExportPane,
-        });
+            BuildAccountPane = BuildAccountPane,
+        };
     }
 
     private UIElement BuildExportPane()
     {
-        var panel = new StackPanel { MaxWidth = 560, HorizontalAlignment = HorizontalAlignment.Left };
-        panel.Children.Add(Kit.HeadingText("Export"));
-        panel.Children.Add(new TextBlock
-        {
-            Text = "Create a PDF copy of this presentation — one page per slide, with selectable text.",
-            Foreground = Kit.Muted,
-            TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 0, 0, 16)
-        });
-        panel.Children.Add(Kit.LinkButton("Export to PDF…", () => { Hide(); _actions.ExportPdf(); }));
-        return panel;
+        var plan = PresentationExportPlanner.BuildBackstageExportPlan();
+        var additionalGroups = plan.DeferredActions.Where(action => action.IsEnabled)
+            .GroupBy(_ => plan.DeferredGroupHeading)
+            .Select(group => new BackstageActionGroup(
+                plan.DeferredGroupHeading,
+                group
+                    .Select(action => new BackstageActionRow(
+                        action.Label,
+                        action.Description,
+                        _backstage.HideThen(ResolveExportAction(action.CommandId))))
+                    .ToArray()))
+            .ToArray();
+
+        return Panes.BuildActionPane(PaneSpecs.BuildExportPaneSpec(
+            _backstage.HideThen(_actions.ExportPdf),
+            additionalGroups: additionalGroups));
     }
 
     private UIElement BuildInfoPane()
@@ -91,33 +97,33 @@ internal sealed class BackstageView : UserControl
         var model = _getModel();
         var properties = model.Properties;
 
-        return Panes.BuildInfoPane(new BackstageInfoPaneSpec(
+        return Panes.BuildInfoPane(SisterBackstageInfoPanePlanner.Build(new SisterBackstageInfoPaneContext(
             DocumentKindLabel: "Presentation",
             DisplayName: _file.DisplayName,
             IsDirty: _file.IsDirty,
             Location: _file.CurrentPath,
-            Properties: BackstageCorePropertiesPlanner.Build(new BackstageCoreProperties(
+            CoreProperties: new BackstageCoreProperties(
                 properties.Title,
                 properties.Author,
                 properties.Subject,
-                properties.Keywords)),
+                properties.Keywords),
             Statistics:
             [
                 new("Slides", model.Slides.Count.ToString()),
-            ]));
+            ])));
     }
 
     private UIElement BuildRecentPane()
     {
         return Panes.BuildRecentPane(PaneSpecs.BuildRecentPaneSpec(
             _file.RecentEntries.Select(entry => entry.Path),
-            path => { Hide(); _actions.OpenPath(path); }));
+            _backstage.HideThen<string>(_actions.OpenPath)));
     }
 
     private UIElement BuildNewPane()
     {
         return Panes.BuildTemplatePane(PaneSpecs.BuildNewPaneSpec(
-            () => { Hide(); _actions.New(); }));
+            _backstage.HideThen(_actions.New)));
     }
 
     private UIElement BuildOptionsPane()
@@ -128,6 +134,26 @@ internal sealed class BackstageView : UserControl
             options,
             _actions.DataFolder()));
     }
+
+    private UIElement BuildAccountPane()
+    {
+        return Panes.BuildAccountPane(PaneSpecs.BuildAccountPaneSpec(
+            new SisterBackstageAccountPaneContext(
+                AppProduct.Current.ProductName,
+                EntryAssemblyVersion.Resolve(),
+                Environment.UserName,
+                Environment.MachineName,
+                _actions.DataFolder()),
+            _backstage.ShowPane("Options")));
+    }
+
+    private Action ResolveExportAction(string commandId) =>
+        commandId switch
+        {
+            PresentationExportPlanner.PdfExportCommandId => _actions.ExportPdf,
+            PresentationExportPlanner.ImageExportCommandId => _actions.ExportImages,
+            _ => throw new InvalidOperationException($"Unsupported FreeP export command '{commandId}'."),
+        };
 }
 
 internal sealed record BackstageActions(
@@ -137,6 +163,7 @@ internal sealed record BackstageActions(
     Action Save,
     Action SaveAs,
     Action ExportPdf,
+    Action ExportImages,
     Func<FreePOptions> CurrentOptions,
     Action OnClosed,
     Func<string> DataFolder);

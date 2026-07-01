@@ -263,7 +263,7 @@ public sealed partial class GridViewRenderPerformanceTests
         hasPostSelectionLayerWork.Should().Contain("ClipboardRange is not null");
         hasPostSelectionLayerWork.Should().Contain("HasDrawingObjectLayerWork()");
         hasDrawingObjectLayerWork.Should().Contain("SelectedObjectId != Guid.Empty && SelectedObjectKind != ObjectKind.None");
-        hasDrawingObjectLayerWork.Should().Contain("ObjectDisplayMode == GridObjectDisplayMode.Nothing");
+        hasDrawingObjectLayerWork.Should().Contain("GridDrawingObjectPlanner.PlanLayerRenderMode(ObjectDisplayMode) == DrawingObjectLayerRenderMode.Hidden");
         hasDrawingObjectLayerWork.Should().Contain("Charts is { Count: > 0 }");
         hasDrawingObjectLayerWork.Should().Contain("TextBoxes is { Count: > 0 }");
         renderSplitDivider.Should().Contain("if (Viewport?.SplitPanes is null) return;");

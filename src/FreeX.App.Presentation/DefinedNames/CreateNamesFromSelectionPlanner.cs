@@ -14,6 +14,13 @@ public readonly record struct CreateNamesFromSelectionOptions(
     public bool HasAnyEdge => UseTopRow || UseLeftColumn || UseBottomRow || UseRightColumn;
 }
 
+/// <summary>Why a Create Names from Selection option set is not actionable.</summary>
+public enum CreateNamesFromSelectionInputError
+{
+    None,
+    NoSelectedEdge,
+}
+
 /// <summary>A single defined name planned from a selection: its name, refers-to range, and source label edge.</summary>
 public readonly record struct PlannedDefinedName(string Name, GridRange Range, CreateNamesLabelEdge Edge);
 
@@ -44,6 +51,31 @@ public enum CreateNamesLabelEdge
 /// </summary>
 public static class CreateNamesFromSelectionPlanner
 {
+    public static CreateNamesFromSelectionOptions DefaultOptions { get; } = new(
+        UseTopRow: true,
+        UseLeftColumn: true,
+        UseBottomRow: false,
+        UseRightColumn: false);
+
+    public static bool TryCreateOptions(
+        bool useTopRow,
+        bool useLeftColumn,
+        bool useBottomRow,
+        bool useRightColumn,
+        out CreateNamesFromSelectionOptions options,
+        out CreateNamesFromSelectionInputError error)
+    {
+        options = new CreateNamesFromSelectionOptions(useTopRow, useLeftColumn, useBottomRow, useRightColumn);
+        if (!options.HasAnyEdge)
+        {
+            error = CreateNamesFromSelectionInputError.NoSelectedEdge;
+            return false;
+        }
+
+        error = CreateNamesFromSelectionInputError.None;
+        return true;
+    }
+
     /// <summary>
     /// Plans the names to create. <paramref name="cellText"/> supplies the displayed/label text for a cell at
     /// a given (row, col) — return null or empty for blank cells. <paramref name="existingNames"/> are the

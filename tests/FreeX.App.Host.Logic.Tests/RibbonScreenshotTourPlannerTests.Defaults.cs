@@ -26,6 +26,26 @@ public sealed partial class RibbonScreenshotTourPlannerTests
     }
 
     [Fact]
+    public void PlannerLivesInRibbonDefinitionsAndHostOnlyConsumesThePlan()
+    {
+        var repoRoot = WorkspaceFileLocator.FindWorkspaceRoot();
+        var hostPlannerPath = Path.Combine(repoRoot, "src", "FreeX.App.Host", "RibbonScreenshotTourPlanner.cs");
+        var definitionsSource = DialogSourceTestSupport.ReadRibbonDefinitionSource("RibbonScreenshotTourPlanner.cs");
+
+        File.Exists(hostPlannerPath)
+            .Should()
+            .BeFalse("renderer-neutral screenshot tour tabs, widths, phases, and capture names belong in ribbon definitions");
+
+        definitionsSource.Should().Contain("namespace FreeX.Ribbon.Definitions;");
+        definitionsSource.Should().Contain("public static class RibbonScreenshotTourPlanner");
+        definitionsSource.Should().Contain("public sealed record RibbonScreenshotTourPlan");
+        definitionsSource.Should().NotContain("namespace FreeX.App.Host");
+        definitionsSource.Should().NotContain("using System.Windows");
+        definitionsSource.Should().NotContain("RenderTargetBitmap");
+        definitionsSource.Should().NotContain("Environment.GetEnvironmentVariable");
+    }
+
+    [Fact]
     public void DefaultTabs_MatchVisibleRibbonCatalogExceptBackstageAndContextualTabs()
     {
         var expectedTabs = RibbonXamlCatalogSnapshotReader.ReadMainWindow()

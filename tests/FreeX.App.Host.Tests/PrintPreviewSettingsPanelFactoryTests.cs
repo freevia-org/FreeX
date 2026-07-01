@@ -16,6 +16,43 @@ public sealed class PrintPreviewSettingsPanelFactoryTests
     //   0 ignorePrintAreaBox  1 gridlinesBox  2 headingsBox
 
     [Fact]
+    public void Build_DelegatesPageLayoutCommandConstructionToSharedPlanner()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("PrintPreviewSettingsPanelFactory.cs");
+
+        source.Should().Contain("PrintPreviewSettingsPanelPlanner.CreateOrientationAction(");
+        source.Should().Contain("PrintPreviewSettingsPanelPlanner.CreatePaperSizeAction(");
+        source.Should().Contain("PrintPreviewSettingsPanelPlanner.CreateMarginsAction(");
+        source.Should().Contain("PrintPreviewSettingsPanelPlanner.CreateScalingAction(");
+        source.Should().Contain("PrintPreviewSettingsPanelPlanner.CreatePrintOptionsAction(");
+        source.Should().NotContain("PageLayoutRibbonCommandPlanner.Build");
+        source.Should().NotContain("new SetPageOrientationCommand(");
+        source.Should().NotContain("new SetPaperSizeCommand(");
+        source.Should().NotContain("new SetPageMarginsCommand(");
+        source.Should().NotContain("new SetScaleToFitCommand(");
+        source.Should().NotContain("new SetPrintOptionsCommand(");
+    }
+
+    [Fact]
+    public void Build_DelegatesVisibleRailTextToSharedSurfacePlanner()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("PrintPreviewSettingsPanelFactory.cs");
+
+        source.Should().Contain("PrintPreviewSurfacePlanner.CreateSettingsRailPlan(");
+        source.Should().Contain("AddLabel(railPlan.CopiesSectionText, copiesUpDown);");
+        source.Should().Contain("AddLabel(railPlan.PrintWhatLabelText, printWhatBox);");
+        source.Should().Contain("AddLabel(railPlan.OrientationLabelText, orientBox);");
+        source.Should().Contain("Content = railPlan.PrintGridlinesText");
+        source.Should().Contain("Content = railPlan.PrintHeadingsText");
+        source.Should().Contain("Content = railPlan.PageSetupLinkText");
+
+        source.Should().NotContain("AddLabel(UiText.Get(\"PrintPreview_CopiesSectionLabel\")");
+        source.Should().NotContain("AddLabel(UiText.Get(\"PrintPreview_PrintWhatLabel\")");
+        source.Should().NotContain("Content = UiText.Get(\"PageSetup_PrintGridlines\")");
+        source.Should().NotContain("Content = UiText.Get(\"PageSetup_PrintRowAndColumnHeadings\")");
+    }
+
+    [Fact]
     public void Build_InitializesOrientationPaperMarginScaleFromSheetPrintSettings()
     {
         StaTestRunner.Run(() =>

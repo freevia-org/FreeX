@@ -89,14 +89,13 @@ public sealed class RibbonGroupHost : ContentControl
 
     private FrameworkElement BuildCollapsedButton()
     {
-        // Use the group's first real command icon (kind + command name so the actual SVG resolves, not a
-        // generic glyph) at a prominent size. A collapsed group reads as one representative command button.
-        var iconControl = _group.Controls.FirstOrDefault(c => c.Icon is not null);
+        // Use the shared representative icon choice so collapsed groups tell the same story across renderers.
+        var representativeIcon = RibbonCollapsedGroupPresentationPlanner.GetRepresentativeIcon(_group);
         var stack = new StackPanel { VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
         stack.Children.Add(new RibbonIcon
         {
-            Kind = iconControl?.Icon?.Kind ?? RibbonCommandIconKind.Generic,
-            CommandName = iconControl?.CommandId.Value ?? string.Empty,
+            Kind = representativeIcon.Icon.Kind,
+            CommandName = representativeIcon.CommandName ?? string.Empty,
             IconSize = 36,
             HorizontalAlignment = HorizontalAlignment.Center
         });
@@ -210,22 +209,23 @@ public sealed class RibbonAdaptivePanel : Panel
         var available = ResolveAvailableWidth(this, availableSize.Width);
         var fitAvailable = double.IsInfinity(available) ? available : Math.Max(0, available - 4);
 
-        // Decide the collapse set from the refreshed full widths, lowest priority first with child order
-        // as a deterministic tie-break, then apply only the groups whose state flips.
+        // Decide the collapse set from the refreshed full widths through the shared renderer-neutral
+        // full/collapsed policy, then apply only the groups whose state flips.
         if (!double.IsInfinity(fitAvailable))
         {
-            var collapsed = new HashSet<RibbonGroupHost>();
-            var total = hosts.Sum(h => h.FullWidth) + nonHostWidth + spacing;
-            foreach (var host in EnumerateCollapseCandidates(hosts))
-            {
-                if (total <= fitAvailable)
-                    break;
-                collapsed.Add(host);
-                total += RibbonGroupHost.CollapsedWidth - host.FullWidth;
-            }
+            var decisions = RibbonAdaptiveCollapsePolicy.Plan(
+                fitAvailable,
+                hosts
+                    .Select(host => new RibbonAdaptiveCollapseGroup(
+                        host.GroupName,
+                        host.FullWidth,
+                        RibbonGroupHost.CollapsedWidth,
+                        host.Priority))
+                    .ToList(),
+                fixedChromeWidth: nonHostWidth + spacing);
 
-            foreach (var host in hosts)
-                host.Collapsed = collapsed.Contains(host);
+            for (var index = 0; index < hosts.Count; index++)
+                hosts[index].Collapsed = decisions[index].IsCollapsed;
         }
 
         // Re-measure the groups whose state just flipped (unchanged ones short-circuit).

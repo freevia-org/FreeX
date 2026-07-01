@@ -1,5 +1,8 @@
-using FreeX.Core.Commands;
 using FreeX.Core.Model;
+using ChartTypeGalleryChoicePlan = FreeX.App.Presentation.Charts.Editing.ChartTypeGalleryChoicePlan;
+using ChartTypePickerCategoryPlan = FreeX.App.Presentation.Charts.Editing.ChartTypePickerCategoryPlan;
+using ChartTypePickerOptionPlan = FreeX.App.Presentation.Charts.Editing.ChartTypePickerOptionPlan;
+using PresentationChartTypePickerPlanner = FreeX.App.Presentation.Charts.Editing.ChartTypePickerPlanner;
 
 namespace FreeX.App.Host;
 
@@ -16,115 +19,72 @@ public sealed record ChartTypeGalleryChoice(
 
 public static class ChartTypePickerPlanner
 {
-    private static readonly ChartTypePickerOption[] Options =
-    [
-        new(ChartType.Column, UiText.Get("ChartType_ClusteredColumn"), true),
-        new(ChartType.StackedColumn, UiText.Get("ChartType_StackedColumn")),
-        new(ChartType.PercentStackedColumn, UiText.Get("ChartType_PercentStackedColumn")),
-        new(ChartType.ThreeDColumn, UiText.Get("ChartType_ThreeDColumn")),
-        new(ChartType.Line, UiText.Get("ChartType_Line"), true),
-        new(ChartType.ThreeDLine, UiText.Get("ChartType_ThreeDLine")),
-        new(ChartType.Pie, UiText.Get("ChartType_Pie"), true),
-        new(ChartType.ThreeDPie, UiText.Get("ChartType_ThreeDPie")),
-        new(ChartType.Doughnut, UiText.Get("ChartType_Doughnut")),
-        new(ChartType.Bar, UiText.Get("ChartType_ClusteredBar"), true),
-        new(ChartType.StackedBar, UiText.Get("ChartType_StackedBar")),
-        new(ChartType.PercentStackedBar, UiText.Get("ChartType_PercentStackedBar")),
-        new(ChartType.ThreeDBar, UiText.Get("ChartType_ThreeDBar")),
-        new(ChartType.Scatter, UiText.Get("ChartType_Scatter"), true),
-        new(ChartType.Bubble, UiText.Get("ChartType_Bubble")),
-        new(ChartType.Area, UiText.Get("ChartType_Area")),
-        new(ChartType.ThreeDArea, UiText.Get("ChartType_ThreeDArea")),
-        new(ChartType.Radar, UiText.Get("ChartType_Radar")),
-        new(ChartType.Stock, UiText.Get("ChartType_Stock")),
-        new(ChartType.Surface, UiText.Get("ChartType_Surface")),
-        new(ChartType.ThreeDSurface, UiText.Get("ChartType_ThreeDSurface")),
-        new(ChartType.Treemap, UiText.Get("MainWindow_Content_Treemap")),
-        new(ChartType.Sunburst, UiText.Get("MainWindow_Content_Sunburst")),
-        new(ChartType.Histogram, UiText.Get("MainWindow_Content_Histogram")),
-        new(ChartType.Pareto, UiText.Get("MainWindow_Content_Pareto")),
-        new(ChartType.BoxAndWhisker, UiText.Get("MainWindow_TooltipTitle_BoxAndWhiskerChart")),
-        new(ChartType.Waterfall, UiText.Get("MainWindow_Content_Waterfall")),
-        new(ChartType.Funnel, UiText.Get("MainWindow_Content_Funnel"))
-    ];
-
     public static IReadOnlyList<ChartTypePickerOption> GetSupportedOptions() =>
-        Options.Where(option => ChartAuthoringPlanner.CanAuthor(option.Type)).ToList();
+        PresentationChartTypePickerPlanner.GetSupportedOptions()
+            .Select(CreateOption)
+            .ToList();
 
     public static IReadOnlyList<ChartTypePickerOption> GetRecommendedOptions() =>
-        new[]
-        {
-            ChartType.Column,
-            ChartType.Line,
-            ChartType.Bar,
-            ChartType.Pie,
-            ChartType.Scatter
-        }
-        .Select(type => Options.Single(option => option.Type == type))
-        .Where(option => option.IsRecommended && ChartAuthoringPlanner.CanAuthor(option.Type))
-        .ToList();
+        PresentationChartTypePickerPlanner.GetRecommendedOptions()
+            .Select(CreateOption)
+            .ToList();
 
     public static IReadOnlyList<ChartTypePickerCategory> GetCategories()
     {
-        var supported = GetSupportedOptions();
-        return new (string Name, ChartType[] Types)[]
-            {
-                (UiText.Get("ChartTypeCategory_Column"), [ChartType.Column, ChartType.StackedColumn, ChartType.PercentStackedColumn, ChartType.ThreeDColumn]),
-                (UiText.Get("ChartTypeCategory_Line"), [ChartType.Line, ChartType.ThreeDLine]),
-                (UiText.Get("ChartTypeCategory_Pie"), [ChartType.Pie, ChartType.ThreeDPie, ChartType.Doughnut]),
-                (UiText.Get("ChartTypeCategory_Bar"), [ChartType.Bar, ChartType.StackedBar, ChartType.PercentStackedBar, ChartType.ThreeDBar]),
-                (UiText.Get("ChartTypeCategory_Area"), [ChartType.Area, ChartType.ThreeDArea]),
-                (UiText.Get("ChartTypeCategory_Scatter"), [ChartType.Scatter, ChartType.Bubble]),
-                (UiText.Get("ChartTypeCategory_Stock"), [ChartType.Stock]),
-                (UiText.Get("ChartTypeCategory_Radar"), [ChartType.Radar]),
-                (UiText.Get("ChartTypeCategory_Surface"), [ChartType.Surface, ChartType.ThreeDSurface]),
-                (UiText.Get("MainWindow_Content_Treemap"), [ChartType.Treemap]),
-                (UiText.Get("MainWindow_Content_Sunburst"), [ChartType.Sunburst]),
-                (UiText.Get("MainWindow_Content_Histogram"), [ChartType.Histogram, ChartType.Pareto]),
-                (UiText.Get("MainWindow_TooltipTitle_BoxAndWhiskerChart"), [ChartType.BoxAndWhisker]),
-                (UiText.Get("MainWindow_Content_Waterfall"), [ChartType.Waterfall]),
-                (UiText.Get("MainWindow_Content_Funnel"), [ChartType.Funnel])
-            }
+        return PresentationChartTypePickerPlanner.GetCategories()
             .Select(category => new ChartTypePickerCategory(
-                category.Name,
-                category.Types
-                    .Select(type => FindSupportedOption(supported, type))
-                    .OfType<ChartTypePickerOption>()
+                UiText.Get(category.NameKey),
+                category.Options
+                    .Select(CreateOption)
                     .ToList()))
             .Where(category => category.Options.Count > 0)
             .ToList();
     }
 
-    private static ChartTypePickerOption? FindSupportedOption(IReadOnlyList<ChartTypePickerOption> supported, ChartType type)
+    public static IReadOnlyList<ChartTypeGalleryChoice> GetGalleryChoices(string categoryName)
     {
-        for (var index = 0; index < supported.Count; index++)
+        var category = FindCategoryPlan(categoryName);
+        if (category is null)
+            return [];
+
+        return PresentationChartTypePickerPlanner.GetGalleryChoices(category.NameKey)
+            .Select(CreateGalleryChoice)
+            .ToList();
+    }
+
+    public static IReadOnlyList<ChartTypeGalleryChoice> GetRecommendedGalleryChoices() =>
+        PresentationChartTypePickerPlanner.GetRecommendedGalleryChoices()
+            .Select(CreateGalleryChoice)
+            .ToList();
+
+    private static ChartTypePickerOption CreateOption(ChartTypePickerOptionPlan plan) =>
+        new(
+            plan.Type,
+            UiText.Get(plan.DisplayNameKey),
+            plan.IsRecommended);
+
+    private static ChartTypeGalleryChoice CreateGalleryChoice(ChartTypeGalleryChoicePlan plan)
+    {
+        var subtypeName = UiText.Get(plan.SubtypeNameKey);
+        return new ChartTypeGalleryChoice(
+            plan.Type,
+            UiText.Get(plan.CategoryNameKey),
+            subtypeName,
+            UiText.Format(plan.PreviewTextFormatKey, subtypeName),
+            plan.IsRecommended);
+    }
+
+    private static ChartTypePickerCategoryPlan? FindCategoryPlan(string categoryName)
+    {
+        foreach (var category in PresentationChartTypePickerPlanner.GetCategories())
         {
-            var option = supported[index];
-            if (option.Type == type)
-                return option;
+            if (category.NameKey.Equals(categoryName, StringComparison.OrdinalIgnoreCase)
+                || UiText.Get(category.NameKey).Equals(categoryName, StringComparison.OrdinalIgnoreCase))
+            {
+                return category;
+            }
         }
 
         return null;
     }
-
-    public static IReadOnlyList<ChartTypeGalleryChoice> GetGalleryChoices(string categoryName) =>
-        GetCategories()
-            .Where(category => category.Name.Equals(categoryName, StringComparison.OrdinalIgnoreCase))
-            .SelectMany(category => category.Options.Select(option => new ChartTypeGalleryChoice(
-                option.Type,
-                category.Name,
-                option.DisplayName,
-                UiText.Format("ChartTypePicker_PreviewTextFormat", option.DisplayName),
-                option.IsRecommended)))
-            .ToList();
-
-    public static IReadOnlyList<ChartTypeGalleryChoice> GetRecommendedGalleryChoices() =>
-        GetRecommendedOptions()
-            .Select(option => new ChartTypeGalleryChoice(
-                option.Type,
-                UiText.Get("ChartTypePicker_RecommendedCategory"),
-                option.DisplayName,
-                UiText.Format("ChartTypePicker_PreviewTextFormat", option.DisplayName),
-                IsRecommended: true))
-            .ToList();
 }

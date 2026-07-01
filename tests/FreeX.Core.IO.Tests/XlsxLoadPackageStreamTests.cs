@@ -688,6 +688,41 @@ public sealed class XlsxLoadPackageStreamTests
     }
 
     [Fact]
+    public void ClosedXmlLoadSanitizer_RemovesCorePropertiesServiceMetadata()
+    {
+        using var package = CreatePackageWithCorePropertiesServiceMetadata();
+
+        using var sanitized = XlsxClosedXmlLoadPackageSanitizer.Create(package);
+
+        sanitized.Should().NotBeSameAs(package);
+        using var archive = new ZipArchive(sanitized, ZipArchiveMode.Read, leaveOpen: false);
+        archive.GetEntry("package/services/metadata/core-properties/microsoft.azureiplabel.psmdcp")
+            .Should()
+            .BeNull();
+
+        XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+        var contentTypes = XlsxPackageTestFixtures.LoadPackageXml(archive, "[Content_Types].xml");
+        var root = contentTypes.Root!;
+        var serviceOverrides = root
+            .Elements(contentTypeNs + "Override")
+            .Where(element => (element.Attribute("PartName")?.Value ?? string.Empty)
+                .Contains("/package/services/metadata/core-properties/", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        var serviceDefaults = root
+            .Elements(contentTypeNs + "Default")
+            .Where(element =>
+                string.Equals(element.Attribute("Extension")?.Value, "psmdcp", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(
+                    element.Attribute("ContentType")?.Value,
+                    "application/vnd.openxmlformats-package.core-properties+xml",
+                    StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+
+        serviceOverrides.Should().BeEmpty();
+        serviceDefaults.Should().BeEmpty();
+    }
+
+    [Fact]
     public void ClosedXmlLoadSanitizer_NormalizesWorksheetRelationshipMarkers()
     {
         using var package = CreatePackageWithWorksheet(
@@ -1470,6 +1505,56 @@ public sealed class XlsxLoadPackageStreamTests
             WritePackageEntry(
                 archive,
                 "package/services/metadata/core-properties/microsoft.azureiplabel.xml",
+                """
+                <Properties xmlns="http://schemas.openxmlformats.org/package/2006/metadata/core-properties"/>
+                """);
+            WritePackageEntry(
+                archive,
+                "xl/workbook.xml",
+                """
+                <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"/>
+                """);
+        }
+
+        package.Position = 0;
+        return package;
+    }
+
+    private static MemoryStream CreatePackageWithCorePropertiesServiceMetadata()
+    {
+        var package = new MemoryStream();
+        using (var archive = new ZipArchive(package, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            WritePackageEntry(
+                archive,
+                "_rels/.rels",
+                """
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rIdWorkbook" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+                  <Relationship Id="rIdCore" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/>
+                </Relationships>
+                """);
+            WritePackageEntry(
+                archive,
+                "[Content_Types].xml",
+                """
+                <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+                  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+                  <Default Extension="xml" ContentType="application/xml"/>
+                  <Default Extension="psmdcp" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>
+                  <Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>
+                  <Override PartName="/package/services/metadata/core-properties/microsoft.azureiplabel.psmdcp" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>
+                </Types>
+                """);
+            WritePackageEntry(
+                archive,
+                "docProps/core.xml",
+                """
+                <cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties"/>
+                """);
+            WritePackageEntry(
+                archive,
+                "package/services/metadata/core-properties/microsoft.azureiplabel.psmdcp",
                 """
                 <Properties xmlns="http://schemas.openxmlformats.org/package/2006/metadata/core-properties"/>
                 """);

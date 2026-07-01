@@ -4,7 +4,7 @@ using FreeX.Core.Model;
 
 namespace FreeX.App.Host.Tests;
 
-public sealed partial class AutoFilterDropdownPlannerTests
+public sealed partial class AutoFilterDropdownMenuPlannerHostResourceTests
 {
     [Fact]
     public void TryPlan_ReturnsCurrentRegionAndColumnOffsetForHeaderCell()
@@ -14,7 +14,7 @@ public sealed partial class AutoFilterDropdownPlannerTests
             new CellAddress(SheetId, 10, 6));
         var activeCell = new CellAddress(SheetId, 2, 5);
 
-        var planned = AutoFilterDropdownPlanner.TryPlan(region, activeCell, out var plan);
+        var planned = TryPlan(region, activeCell, out var plan);
 
         planned.Should().BeTrue();
         plan.Range.Should().Be(region);
@@ -31,7 +31,7 @@ public sealed partial class AutoFilterDropdownPlannerTests
             new CellAddress(SheetId, 2, 3),
             new CellAddress(SheetId, 10, 6));
 
-        AutoFilterDropdownPlanner.TryPlan(region, new CellAddress(SheetId, row, col), out _)
+        TryPlan(region, new CellAddress(SheetId, row, col), out _)
             .Should()
             .BeFalse();
     }

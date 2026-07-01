@@ -1,4 +1,5 @@
 using System.Windows.Input;
+using FreeX.App.Presentation;
 
 namespace FreeX.App.Host;
 
@@ -8,35 +9,24 @@ public static class ExcelSelectionModePlanner
         Key key,
         ModifierKeys modifiers,
         ExcelSelectionMode current,
-        out ExcelSelectionMode next)
-    {
-        next = current;
-        if (key != Key.F8)
-            return false;
-
-        if (modifiers == ModifierKeys.None)
-        {
-            next = current == ExcelSelectionMode.Extend ? ExcelSelectionMode.Normal : ExcelSelectionMode.Extend;
-            return true;
-        }
-
-        if (modifiers == ModifierKeys.Shift)
-        {
-            next = current == ExcelSelectionMode.Add ? ExcelSelectionMode.Normal : ExcelSelectionMode.Add;
-            return true;
-        }
-
-        return false;
-    }
+        out ExcelSelectionMode next) =>
+        FreeX.App.Presentation.ExcelSelectionModePlanner.TryToggle(
+            MapKey(key),
+            ExcelWorksheetNavigationPlanner.MapModifiers(modifiers),
+            current,
+            out next);
 
     public static bool ShouldExtendSelection(ExcelSelectionMode mode, ModifierKeys modifiers) =>
-        mode == ExcelSelectionMode.Extend ||
-        modifiers is ModifierKeys.Shift or (ModifierKeys.Control | ModifierKeys.Shift);
-}
+        FreeX.App.Presentation.ExcelSelectionModePlanner.ShouldExtendSelection(
+            mode,
+            ExcelWorksheetNavigationPlanner.MapModifiers(modifiers));
 
-public enum ExcelSelectionMode
-{
-    Normal,
-    Extend,
-    Add
+    public static string StatusBarModeResourceKey(ExcelSelectionMode mode) =>
+        FreeX.App.Presentation.ExcelSelectionModePlanner.StatusBarModeResourceKey(mode);
+
+    public static string EndModeStatusBarResourceKey(bool enabled) =>
+        FreeX.App.Presentation.ExcelSelectionModePlanner.EndModeStatusBarResourceKey(enabled);
+
+    private static ExcelSelectionKey MapKey(Key key) =>
+        key == Key.F8 ? ExcelSelectionKey.F8 : ExcelSelectionKey.Other;
 }

@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using FreeX.App.Services;
 using FreeX.Core.Model;
 using Free.Shared.Pdf.Wpf;
 using PdfSharp.Drawing;
@@ -68,7 +69,7 @@ internal static class PdfDocumentExporter
         ArgumentNullException.ThrowIfNull(document);
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
 
-        if (!ExportPlanner.TryValidatePageRange(pageRange, document.Pages.Count, out var pageRangeError))
+        if (!ExportPlanner.TryValidatePageRange(pageRange, document.Pages.Count, out var pageRangeError, WpfExportPlannerTextResolver.Instance))
             throw new InvalidOperationException(pageRangeError);
 
         var firstPageIndex = Math.Max(0, (pageRange?.FromPage ?? 1) - 1);
@@ -95,7 +96,7 @@ internal static class PdfDocumentExporter
     {
         ArgumentNullException.ThrowIfNull(document);
 
-        if (!ExportPlanner.TryValidatePageRange(pageRange, document.Pages.Count, out var pageRangeError))
+        if (!ExportPlanner.TryValidatePageRange(pageRange, document.Pages.Count, out var pageRangeError, WpfExportPlannerTextResolver.Instance))
             throw new InvalidOperationException(pageRangeError);
 
         var firstPageIndex = Math.Max(0, (pageRange?.FromPage ?? 1) - 1);

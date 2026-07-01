@@ -61,6 +61,14 @@ public class PreservedPartsRoundTripTests
         return zip.GetEntry(entryPath) is not null;
     }
 
+    private static XElement CustomProperty(string pid, string name, XElement value) =>
+        new(
+            CustomProps + "property",
+            new XAttribute("fmtid", "{D5CDD505-2E9C-101B-9397-08002B2CF9AE}"),
+            new XAttribute("pid", pid),
+            new XAttribute("name", name),
+            value);
+
     /// <summary>
     /// Hand-authors a minimal-but-valid docx package carrying: a body paragraph; a settings.xml with an
     /// unmodelled element (w:defaultTabStop) AND a FreeW-modelled toggle (w:autoHyphenation); a customXml item
@@ -401,6 +409,44 @@ public class PreservedPartsRoundTripTests
         reread.Page.Watermark.Should().Be("DRAFT");
         reread.MarkedAsFinal.Should().BeTrue();
         reread.Preserved.OriginalCustomProperties.Should().NotBeNull();
+    }
+
+    [Fact]
+    public void CustomDocumentProperties_OverlayUpdatesFreeWNamesAndPreservesUnknownRawValues()
+    {
+        var read = ReadDoc(AuthorPackageWithDocumentMetadata());
+        read.Preserved.OriginalCustomProperties.Should().NotBeNull();
+        read.Preserved.OriginalCustomProperties!.Add(
+            CustomProperty("4", "FreeWWatermark", new XElement(Vt + "lpwstr", "OLD")),
+            CustomProperty("6", "ReviewDate", new XElement(Vt + "filetime", "2026-06-30T09:30:00Z")));
+        read.Page.Watermark = "DRAFT";
+        read.MarkedAsFinal = true;
+
+        var rewritten = WriteBytes(read);
+        var custom = EntryXml(rewritten, "docProps/custom.xml").Root!;
+        var properties = custom.Elements(CustomProps + "property").ToList();
+
+        var watermark = properties
+            .Where(p => p.Attribute("name")!.Value == "FreeWWatermark")
+            .Should()
+            .ContainSingle()
+            .Subject;
+        watermark.Attribute("pid")!.Value.Should().Be("4");
+        watermark.Element(Vt + "lpwstr")!.Value.Should().Be("DRAFT");
+
+        properties.Should().Contain(p =>
+            p.Attribute("name")!.Value == "ReviewDate"
+            && p.Attribute("pid")!.Value == "6"
+            && p.Element(Vt + "filetime")!.Value == "2026-06-30T09:30:00Z");
+        properties.Should().Contain(p =>
+            p.Attribute("name")!.Value == "_MarkAsFinal"
+            && p.Attribute("pid")!.Value == "5"
+            && p.Element(Vt + "bool")!.Value == "true");
+        properties.Select(p => p.Attribute("pid")!.Value).Should().OnlyHaveUniqueItems();
+
+        var reread = ReadDoc(rewritten);
+        reread.Page.Watermark.Should().Be("DRAFT");
+        reread.MarkedAsFinal.Should().BeTrue();
     }
 
     // --- Regression: authored-from-scratch emits none of these --------------------------------------

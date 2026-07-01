@@ -5,7 +5,9 @@
     <ProjectReference Include="..\FreeX.Core.Formula\FreeX.Core.Formula.csproj" />
     <ProjectReference Include="..\FreeX.Core.IO\FreeX.Core.IO.csproj" />
     <ProjectReference Include="..\FreeX.Core.Model\FreeX.Core.Model.csproj" />
+    <ProjectReference Include="..\FreeX.App.Presentation\FreeX.App.Presentation.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.AppServices\Free.Shared.AppServices.csproj" />
+    <ProjectReference Include="..\..\shared\Free.Shared.Drawing\Free.Shared.Drawing.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.Pdf\Free.Shared.Pdf.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.Ribbon\Free.Shared.Ribbon.csproj" />
   </ItemGroup>
@@ -34,6 +36,7 @@
     <TargetFramework>net10.0</TargetFramework>
   </PropertyGroup>
   <ItemGroup>
+    <Using Include="Free.Shared.Drawing" />
     <Using Include="Free.Shared.IO.FileFormatDescriptor" Alias="FileFormatDescriptor" />
     <Using Include="Free.Shared.Opc" />
     <Using Include="Free.Shared.AppServices" />

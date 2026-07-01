@@ -6,58 +6,15 @@ using FreeP.App.Compositor;
 namespace FreeP.App.Host;
 
 /// <summary>
-/// Modal slide-size dialog (Wave 10B).
-///
-/// Lets the user set the slide width and height numerically, with a unit selector
-/// (Inches / Centimeters) and a presets dropdown (Standard 4:3, Widescreen 16:9, Custom).
-/// The dialog pre-fills the current presentation size on open.
-///
-/// Layout:
-///   ┌─────────────────────────────────────────────────┐
-///   │  Preset: [Standard 4:3 ▼]                       │
-///   ├─────────────────────────────────────────────────┤
-///   │  Unit:   ( ) Inches  (•) Centimeters             │
-///   │  Width:  [___13.333___] [in/cm]                  │
-///   │  Height: [___7.500____] [in/cm]                  │
-///   ├─────────────────────────────────────────────────┤
-///   │                          [OK]  [Cancel]           │
-///   └─────────────────────────────────────────────────┘
-///
-/// OK calls <see cref="EditingSession.SetSlideSize"/> (undoable).
-/// Cancel discards.
+/// Modal slide-size dialog. WPF owns the controls and localization shell; shared
+/// presentation policy lives in <see cref="SlideSizeDialogPlanner"/>.
 /// </summary>
-public sealed class SlideSizeDialog : Window
+public sealed class SlideSizeDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
-    // ── EMU constants ──────────────────────────────────────────────────────────────
-
-    /// <summary>EMU per inch (DrawingML). 914400 EMU = 1 inch.</summary>
-    public const long EmuPerInch = 914_400L;
-
-    /// <summary>EMU per centimetre (DrawingML). 360000 EMU = 1 cm.</summary>
-    public const long EmuPerCm = 360_000L;
-
-    // ── Presets ────────────────────────────────────────────────────────────────────
-
-    // Standard 4:3 — 10" × 7.5" (254 mm × 190.5 mm) — same as PowerPoint default
-    private static readonly long Standard43CxEmu = 9_144_000L;
-    private static readonly long Standard43CyEmu = 6_858_000L;
-
-    // Widescreen 16:9 — 13.333" × 7.5" (338.67 mm × 190.5 mm)
-    private static readonly long Widescreen169CxEmu = 12_192_000L;
-    private static readonly long Widescreen169CyEmu = 6_858_000L;
-
-    public enum Preset { Standard43, Widescreen169, Custom }
-
-    // ── State ──────────────────────────────────────────────────────────────────────
-
     private readonly EditingSession _editor;
 
-    /// <summary>True = inches; false = centimetres.</summary>
-    private bool _useInches = true;
-
-    private bool _suppressPresetRefresh;  // guards against re-entrance when controls update
-
-    // ── Controls ───────────────────────────────────────────────────────────────────
+    private SlideSizeDialogUnit _unit = SlideSizeDialogUnit.Inches;
+    private bool _suppressPresetRefresh;
 
     private readonly ComboBox _presetCombo;
     private readonly RadioButton _inchesRadio;
@@ -67,23 +24,16 @@ public sealed class SlideSizeDialog : Window
     private readonly Label _widthUnitLabel;
     private readonly Label _heightUnitLabel;
 
-    // ── Construction ───────────────────────────────────────────────────────────────
-
-    /// <summary>
-    /// Creates the dialog, pre-filling the current slide size from <paramref name="editor"/>.
-    /// </summary>
     public SlideSizeDialog(EditingSession editor)
     {
         _editor = editor ?? throw new ArgumentNullException(nameof(editor));
 
-        Title                 = "Slide Size";
-        Width                 = 380;
-        Height                = 260;
-        ResizeMode            = ResizeMode.NoResize;
+        Title = "Slide Size";
+        Width = 380;
+        Height = 260;
+        ResizeMode = ResizeMode.NoResize;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        Background            = new SolidColorBrush(Color.FromRgb(0xF3, 0xF3, 0xF3));
-
-        // ── Controls ──────────────────────────────────────────────────────────────
+        Background = new SolidColorBrush(Color.FromRgb(0xF3, 0xF3, 0xF3));
 
         _presetCombo = new ComboBox { Margin = new Thickness(4) };
         _presetCombo.Items.Add("Standard (4:3)");
@@ -92,249 +42,212 @@ public sealed class SlideSizeDialog : Window
         _presetCombo.SelectedIndex = 0;
         _presetCombo.SelectionChanged += OnPresetChanged;
 
-        _inchesRadio = new RadioButton { Content = "Inches",      IsChecked = true, Margin = new Thickness(4, 0, 12, 0) };
-        _cmRadio     = new RadioButton { Content = "Centimeters", IsChecked = false, Margin = new Thickness(4, 0, 4, 0) };
+        _inchesRadio = new RadioButton
+        {
+            Content = "Inches",
+            IsChecked = true,
+            Margin = new Thickness(4, 0, 12, 0)
+        };
+        _cmRadio = new RadioButton
+        {
+            Content = "Centimeters",
+            IsChecked = false,
+            Margin = new Thickness(4, 0, 4, 0)
+        };
         _inchesRadio.Checked += OnUnitChanged;
-        _cmRadio.Checked     += OnUnitChanged;
+        _cmRadio.Checked += OnUnitChanged;
 
-        _widthBox  = MakeNumericBox();
+        _widthBox = MakeNumericBox();
         _heightBox = MakeNumericBox();
 
-        _widthUnitLabel  = new Label { Content = "in", Width = 30 };
+        _widthUnitLabel = new Label { Content = "in", Width = 30 };
         _heightUnitLabel = new Label { Content = "in", Width = 30 };
 
-        // Pre-fill from current presentation size.
         LoadCurrentSize();
 
-        // ── OK / Cancel ───────────────────────────────────────────────────────────
-
-        var okBtn = new Button { Content = "OK", Width = 80, IsDefault = true,
-            Margin = new Thickness(0, 0, 8, 0) };
-        okBtn.Click += (_, _) => OnOk();
-
-        var cancelBtn = new Button { Content = "Cancel", Width = 80, IsCancel = true };
-        cancelBtn.Click += (_, _) => { DialogResult = false; Close(); };
-
-        var btnRow = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(4, 8, 8, 8)
-        };
-        btnRow.Children.Add(okBtn);
-        btnRow.Children.Add(cancelBtn);
-
-        // ── Layout ────────────────────────────────────────────────────────────────
+        var btnRow = DialogButtonRowFactory.Create(
+            OnOk,
+            buttonWidth: 80,
+            rowMargin: new Thickness(4, 8, 8, 8));
 
         var grid = new Grid { Margin = new Thickness(12) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // preset
-        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // units
-        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // width
-        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // height
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // buttons
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
-        // Row 0 — Preset
         AddLabel(grid, "Preset:", 0, 0);
-        Grid.SetRow(_presetCombo, 0); Grid.SetColumn(_presetCombo, 1); Grid.SetColumnSpan(_presetCombo, 2);
+        Grid.SetRow(_presetCombo, 0);
+        Grid.SetColumn(_presetCombo, 1);
+        Grid.SetColumnSpan(_presetCombo, 2);
         grid.Children.Add(_presetCombo);
 
-        // Row 1 — Units
         AddLabel(grid, "Unit:", 1, 0);
         var unitPanel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(4) };
         unitPanel.Children.Add(_inchesRadio);
         unitPanel.Children.Add(_cmRadio);
-        Grid.SetRow(unitPanel, 1); Grid.SetColumn(unitPanel, 1); Grid.SetColumnSpan(unitPanel, 2);
+        Grid.SetRow(unitPanel, 1);
+        Grid.SetColumn(unitPanel, 1);
+        Grid.SetColumnSpan(unitPanel, 2);
         grid.Children.Add(unitPanel);
 
-        // Row 2 — Width
         AddLabel(grid, "Width:", 2, 0);
-        Grid.SetRow(_widthBox, 2); Grid.SetColumn(_widthBox, 1);
+        Grid.SetRow(_widthBox, 2);
+        Grid.SetColumn(_widthBox, 1);
         grid.Children.Add(_widthBox);
-        Grid.SetRow(_widthUnitLabel, 2); Grid.SetColumn(_widthUnitLabel, 2);
+        Grid.SetRow(_widthUnitLabel, 2);
+        Grid.SetColumn(_widthUnitLabel, 2);
         grid.Children.Add(_widthUnitLabel);
 
-        // Row 3 — Height
         AddLabel(grid, "Height:", 3, 0);
-        Grid.SetRow(_heightBox, 3); Grid.SetColumn(_heightBox, 1);
+        Grid.SetRow(_heightBox, 3);
+        Grid.SetColumn(_heightBox, 1);
         grid.Children.Add(_heightBox);
-        Grid.SetRow(_heightUnitLabel, 3); Grid.SetColumn(_heightUnitLabel, 2);
+        Grid.SetRow(_heightUnitLabel, 3);
+        Grid.SetColumn(_heightUnitLabel, 2);
         grid.Children.Add(_heightUnitLabel);
 
-        // Row 5 — Buttons
-        Grid.SetRow(btnRow, 5); Grid.SetColumn(btnRow, 0); Grid.SetColumnSpan(btnRow, 3);
+        Grid.SetRow(btnRow, 5);
+        Grid.SetColumn(btnRow, 0);
+        Grid.SetColumnSpan(btnRow, 3);
         grid.Children.Add(btnRow);
 
         Content = grid;
     }
 
-    // ── Unit conversion helpers (public for unit tests) ────────────────────────────
-
-    /// <summary>Converts EMU to inches.</summary>
-    public static double EmuToInches(long emu) => emu / (double)EmuPerInch;
-
-    /// <summary>Converts EMU to centimetres.</summary>
-    public static double EmuToCm(long emu) => emu / (double)EmuPerCm;
-
-    /// <summary>Converts inches to EMU (rounded).</summary>
-    public static long InchesToEmu(double inches) => (long)Math.Round(inches * EmuPerInch);
-
-    /// <summary>Converts centimetres to EMU (rounded).</summary>
-    public static long CmToEmu(double cm) => (long)Math.Round(cm * EmuPerCm);
-
-    // ── Preset EMU accessors (public for tests) ────────────────────────────────────
-
-    /// <summary>Standard 4:3 slide size in EMU: 9144000 × 6858000.</summary>
-    public static (long CxEmu, long CyEmu) Standard43Emu => (Standard43CxEmu, Standard43CyEmu);
-
-    /// <summary>Widescreen 16:9 slide size in EMU: 12192000 × 6858000.</summary>
-    public static (long CxEmu, long CyEmu) Widescreen169Emu => (Widescreen169CxEmu, Widescreen169CyEmu);
-
-    // ── Preset classification (public for tests) ───────────────────────────────────
-
-    /// <summary>
-    /// Returns the <see cref="Preset"/> that matches the given EMU values, or
-    /// <see cref="Preset.Custom"/> if neither standard preset matches exactly.
-    /// </summary>
-    public static Preset ClassifySize(long cxEmu, long cyEmu)
+    public bool TryParseEmu(out long cxEmu, out long cyEmu)
     {
-        if (cxEmu == Standard43CxEmu   && cyEmu == Standard43CyEmu)   return Preset.Standard43;
-        if (cxEmu == Widescreen169CxEmu && cyEmu == Widescreen169CyEmu) return Preset.Widescreen169;
-        return Preset.Custom;
-    }
+        var parse = SlideSizeDialogPlanner.TryParsePositiveSize(
+            _widthBox.Text,
+            _heightBox.Text,
+            _unit);
 
-    // ── Internal helpers ───────────────────────────────────────────────────────────
+        cxEmu = parse.CxEmu;
+        cyEmu = parse.CyEmu;
+        return parse.IsValid;
+    }
 
     private void LoadCurrentSize()
     {
-        var cx = _editor.Presentation.SlideSizeCxEmu;
-        var cy = _editor.Presentation.SlideSizeCyEmu;
+        var initial = SlideSizeDialogPlanner.BuildInitialState(
+            _editor.Presentation.SlideSizeCxEmu,
+            _editor.Presentation.SlideSizeCyEmu,
+            _unit);
 
-        // Select preset combo without triggering the selection-changed handler.
         _suppressPresetRefresh = true;
         try
         {
-            _presetCombo.SelectedIndex = ClassifySize(cx, cy) switch
-            {
-                Preset.Standard43     => 0,
-                Preset.Widescreen169  => 1,
-                _                     => 2
-            };
+            _presetCombo.SelectedIndex = ToPresetIndex(initial.Preset);
         }
         finally
         {
             _suppressPresetRefresh = false;
         }
 
-        RefreshBoxesFromEmu(cx, cy);
-    }
-
-    private void RefreshBoxesFromEmu(long cxEmu, long cyEmu)
-    {
-        if (_useInches)
-        {
-            _widthBox.Text  = EmuToInches(cxEmu).ToString("F3");
-            _heightBox.Text = EmuToInches(cyEmu).ToString("F3");
-            _widthUnitLabel.Content  = "in";
-            _heightUnitLabel.Content = "in";
-        }
-        else
-        {
-            _widthBox.Text  = EmuToCm(cxEmu).ToString("F2");
-            _heightBox.Text = EmuToCm(cyEmu).ToString("F2");
-            _widthUnitLabel.Content  = "cm";
-            _heightUnitLabel.Content = "cm";
-        }
+        ApplyDisplay(initial.Display);
     }
 
     private void OnPresetChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (_suppressPresetRefresh) return;
+        if (_suppressPresetRefresh)
+        {
+            return;
+        }
 
-        var preset = (Preset)_presetCombo.SelectedIndex;
-        if (preset == Preset.Custom) return; // let user type freely
-
-        var (cx, cy) = preset == Preset.Widescreen169
-            ? (Widescreen169CxEmu, Widescreen169CyEmu)
-            : (Standard43CxEmu,   Standard43CyEmu);
-
-        RefreshBoxesFromEmu(cx, cy);
+        var preset = PresetFromIndex(_presetCombo.SelectedIndex);
+        var display = SlideSizeDialogPlanner.BuildPresetSelectionDisplay(preset, _unit);
+        if (display is not null)
+        {
+            ApplyDisplay(display);
+        }
     }
 
     private void OnUnitChanged(object sender, RoutedEventArgs e)
     {
-        // Read current values in old unit, convert, then re-render in new unit.
-        bool wasInches = _useInches;
-        _useInches = _inchesRadio.IsChecked == true;
+        var newUnit = _inchesRadio.IsChecked == true
+            ? SlideSizeDialogUnit.Inches
+            : SlideSizeDialogUnit.Centimeters;
 
-        if (wasInches == _useInches) return;
+        if (_unit == newUnit)
+        {
+            return;
+        }
 
-        // Parse current box values in the OLD unit.
-        if (!double.TryParse(_widthBox.Text,  out double w)) w = 0;
-        if (!double.TryParse(_heightBox.Text, out double h)) h = 0;
+        var display = SlideSizeDialogPlanner.BuildUnitChangeDisplay(
+            _widthBox.Text,
+            _heightBox.Text,
+            _unit,
+            newUnit);
 
-        long cxEmu = wasInches ? InchesToEmu(w) : CmToEmu(w);
-        long cyEmu = wasInches ? InchesToEmu(h) : CmToEmu(h);
-
-        RefreshBoxesFromEmu(cxEmu, cyEmu);
+        _unit = newUnit;
+        ApplyDisplay(display);
     }
 
     private void OnOk()
     {
-        if (!TryParseEmu(out long cxEmu, out long cyEmu))
+        var result = SlideSizeDialogPlanner.BuildOkResult(
+            _widthBox.Text,
+            _heightBox.Text,
+            _unit);
+
+        if (!result.ShouldApply)
         {
-            MessageBox.Show(
-                "Please enter valid positive numbers for width and height.",
-                "Invalid Size",
-                MessageBoxButton.OK,
-                MessageBoxImage.Warning);
+            var validation = result.Validation!;
+            DialogMessageHelper.ShowWarning(this, validation.Message, validation.Caption);
+            FocusField(validation.FocusField);
             return;
         }
 
-        // Minimum size guard: 0.5 inch each.
-        const long minEmu = 457_200L;
-        if (cxEmu < minEmu || cyEmu < minEmu)
-        {
-            MessageBox.Show(
-                "Slide dimensions must be at least 0.5 inches (1.27 cm).",
-                "Invalid Size",
-                MessageBoxButton.OK,
-                MessageBoxImage.Warning);
-            return;
-        }
-
-        _editor.SetSlideSize(cxEmu, cyEmu);
+        _editor.SetSlideSize(result.CxEmu, result.CyEmu);
         DialogResult = true;
         Close();
     }
 
-    /// <summary>
-    /// Parses the width and height boxes into EMU values.
-    /// Returns false if either value cannot be parsed or is non-positive.
-    /// </summary>
-    public bool TryParseEmu(out long cxEmu, out long cyEmu)
+    private void ApplyDisplay(SlideSizeDialogDisplayState display)
     {
-        cxEmu = 0;
-        cyEmu = 0;
-
-        if (!double.TryParse(_widthBox.Text,  System.Globalization.NumberStyles.Any,
-                System.Globalization.CultureInfo.CurrentCulture, out double w) || w <= 0)
-            return false;
-        if (!double.TryParse(_heightBox.Text, System.Globalization.NumberStyles.Any,
-                System.Globalization.CultureInfo.CurrentCulture, out double h) || h <= 0)
-            return false;
-
-        cxEmu = _useInches ? InchesToEmu(w) : CmToEmu(w);
-        cyEmu = _useInches ? InchesToEmu(h) : CmToEmu(h);
-        return true;
+        _widthBox.Text = display.WidthText;
+        _heightBox.Text = display.HeightText;
+        _widthUnitLabel.Content = display.UnitLabel;
+        _heightUnitLabel.Content = display.UnitLabel;
     }
+
+    private void FocusField(SlideSizeDialogField field)
+    {
+        var box = field switch
+        {
+            SlideSizeDialogField.Width => _widthBox,
+            SlideSizeDialogField.Height => _heightBox,
+            _ => null
+        };
+
+        if (box is not null)
+            DialogFocus.FocusAndSelect(box);
+    }
+
+    private static int ToPresetIndex(SlideSizeDialogPreset preset)
+        => preset switch
+        {
+            SlideSizeDialogPreset.Widescreen169 => 1,
+            SlideSizeDialogPreset.Custom => 2,
+            _ => 0
+        };
+
+    private static SlideSizeDialogPreset PresetFromIndex(int selectedIndex)
+        => selectedIndex switch
+        {
+            1 => SlideSizeDialogPreset.Widescreen169,
+            2 => SlideSizeDialogPreset.Custom,
+            _ => SlideSizeDialogPreset.Standard43
+        };
 
     private static TextBox MakeNumericBox() => new()
     {
-        Width  = 120,
+        Width = 120,
         Margin = new Thickness(4),
         HorizontalAlignment = HorizontalAlignment.Left
     };
@@ -343,10 +256,10 @@ public sealed class SlideSizeDialog : Window
     {
         var lbl = new Label
         {
-            Content             = text,
-            VerticalAlignment   = VerticalAlignment.Center,
+            Content = text,
+            VerticalAlignment = VerticalAlignment.Center,
             HorizontalAlignment = HorizontalAlignment.Right,
-            Margin              = new Thickness(4, 2, 4, 2)
+            Margin = new Thickness(4, 2, 4, 2)
         };
         Grid.SetRow(lbl, row);
         Grid.SetColumn(lbl, col);

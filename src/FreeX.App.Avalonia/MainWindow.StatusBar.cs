@@ -34,8 +34,8 @@ public sealed partial class MainWindow
     private StatusBarViewModel BuildStatusBarViewModel(string readyText) =>
         AvaloniaStatusBarSource.BuildModel(
             _session.SelectionStats,
-            ClampZoomPercent(_session.ZoomPercent),
-            NormalizeStatusBarReadyText(readyText),
+            StatusBarZoomSliderPlanner.ClampZoomPercent(_session.ZoomPercent),
+            AvaloniaStatusBarSource.NormalizeReadyText(readyText),
             _session.ActiveSheet.ViewMode);
 
     /// <summary>
@@ -46,57 +46,48 @@ public sealed partial class MainWindow
     /// </summary>
     private void ApplyStatusBarModel(string status)
     {
-        var normalizedStatus = NormalizeStatusBarReadyText(status);
-        var model = BuildStatusBarViewModel(normalizedStatus);
+        var model = BuildStatusBarViewModel(status);
 
         // Render the neutral StatusBarViewModel: the readout is the model's visible aggregate readouts
         // (filtered by the customize toggles); zoom comes from the model; CellMode/Zoom toggles gate the
         // status / zoom controls — mirroring the WPF host's per-option StatusBarShow* gating.
-        var plan = AvaloniaStatusBarSource.BuildPresentation(model, _statusBarOptionVisibility);
-        var visibility = plan.Visibility;
-        _statusText.Text = plan.ReadyText;
+        var rendererPlan = AvaloniaStatusBarSource.BuildRendererPlan(model, _statusBarOptionVisibility);
+        _statusText.Text = rendererPlan.ReadyText;
         _statusText.Foreground = StatusBarForeground;
-        _statusText.IsVisible = visibility.ReadyTextVisible && plan.VisibleReadoutText.Length == 0;
+        _statusText.IsVisible = rendererPlan.ReadyTextVisible;
 
-        _selectionStatsText.Text = plan.VisibleReadoutText;
+        _selectionStatsText.Text = rendererPlan.VisibleReadoutText;
         _selectionStatsText.Foreground = StatusBarForeground;
-        _selectionStatsText.IsVisible = visibility.StatsPanelVisible && plan.VisibleReadoutText.Length > 0;
+        _selectionStatsText.IsVisible = rendererPlan.VisibleReadoutTextVisible;
         // Keep the accessible NAME a stable label ("Selection statistics"); the dynamic readouts are the
         // element's Text (value/content). Overwriting Name with the readouts broke the launch-smoke /
         // accessibility contract (GetName must equal "Selection statistics") whenever a selection had stats.
         AutomationProperties.SetName(_selectionStatsText, "Selection statistics");
 
-        _zoomText.IsVisible = visibility.ZoomVisible;
+        _zoomText.IsVisible = rendererPlan.IsElementVisible(StatusBarPresentationElement.ZoomText);
         _zoomText.Foreground = StatusBarForeground;
-        _zoomText.Text = FormatZoomPercent(plan.ZoomPercent);
+        _zoomText.Text = StatusBarZoomSliderPlanner.FormatZoomPercent(rendererPlan.ZoomPercent);
 
-        _statusNormalViewButton.IsVisible = visibility.ViewShortcutsVisible;
-        _statusPageLayoutViewButton.IsVisible = visibility.ViewShortcutsVisible;
-        _statusPageBreakPreviewButton.IsVisible = visibility.ViewShortcutsVisible;
+        var viewShortcutsVisible = rendererPlan.IsElementVisible(StatusBarPresentationElement.ViewShortcuts);
+        _statusNormalViewButton.IsVisible = viewShortcutsVisible;
+        _statusPageLayoutViewButton.IsVisible = viewShortcutsVisible;
+        _statusPageBreakPreviewButton.IsVisible = viewShortcutsVisible;
         UpdateStatusBarViewButtons();
 
-        _statusZoomSliderHost.IsVisible = visibility.ZoomSliderVisible;
-        _statusZoomSlider.IsVisible = visibility.ZoomSliderVisible;
+        var zoomSliderVisible = rendererPlan.IsElementVisible(StatusBarPresentationElement.ZoomSlider);
+        _statusZoomSliderHost.IsVisible = zoomSliderVisible;
+        _statusZoomSlider.IsVisible = zoomSliderVisible;
         _isUpdatingStatusZoomSlider = true;
         try
         {
-            var sliderValue = FreeX.App.Services.ZoomLevelMapper.ZoomPercentToSlider(plan.ZoomPercent);
-            _statusZoomSlider.Value = sliderValue;
-            UpdateStatusZoomSliderThumb(sliderValue);
+            var sliderPlan = StatusBarZoomSliderPlanner.Build(rendererPlan.ZoomPercent);
+            _statusZoomSlider.Value = sliderPlan.SliderValue;
+            UpdateStatusZoomSliderThumb(sliderPlan.SliderValue);
         }
         finally
         {
             _isUpdatingStatusZoomSlider = false;
         }
-    }
-
-    private static string NormalizeStatusBarReadyText(string status)
-    {
-        if (status.StartsWith("Showing ", StringComparison.OrdinalIgnoreCase) ||
-            status.StartsWith("Hiding ", StringComparison.OrdinalIgnoreCase))
-            return "Ready";
-
-        return string.IsNullOrWhiteSpace(status) ? "Ready" : status;
     }
 
     // ── "Customize Status Bar" right-click menu ───────────────────────────────
@@ -122,6 +113,6 @@ public sealed partial class MainWindow
     private void OnStatusBarCustomizeToggled(string optionTag, bool isChecked)
     {
         _statusBarOptionVisibility[optionTag] = isChecked;
-        ApplyStatusBarModel(_statusText.Text ?? "Ready");
+        ApplyStatusBarModel(_statusText.Text ?? AvaloniaStatusBarSource.ReadyText());
     }
 }

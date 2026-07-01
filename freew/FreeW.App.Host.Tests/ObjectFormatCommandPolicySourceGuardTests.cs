@@ -1,0 +1,62 @@
+using System.IO;
+
+namespace FreeW.App.Host.Tests;
+
+public sealed class ObjectFormatCommandPolicySourceGuardTests
+{
+    [Fact]
+    public void WpfRibbonCommands_RoutePictureAndShapeObjectFormatPolicyThroughPresentationPlanner()
+    {
+        var source = ReadSource("freew", "FreeW.App.Host", "Ribbon", "FreeWRibbonCommands.cs");
+
+        source.Should().Contain("using FreeW.App.Presentation.Ribbon;");
+        source.Should().Contain("ObjectFormatCommandPlanner.WrapCommands(ObjectFormatTarget.Picture)");
+        source.Should().Contain("ObjectFormatCommandPlanner.TransformCommands(ObjectFormatTarget.Picture)");
+        source.Should().Contain("ObjectFormatCommandPlanner.ZOrderCommands(ObjectFormatTarget.Picture)");
+        source.Should().Contain("ObjectFormatCommandPlanner.WrapCommands(ObjectFormatTarget.Shape)");
+        source.Should().Contain("ObjectFormatCommandPlanner.TransformCommands(ObjectFormatTarget.Shape)");
+        source.Should().NotContain("new ImageWrapCommand(editor, ImageWrapping.");
+        source.Should().NotContain("new ShapeWrapCommand(editor, ImageWrapping.");
+        source.Should().NotContain("new ImageZOrderCommand(editor, ZOrderOperation.");
+        source.Should().NotContain("new ImageRotateStepCommand(editor, +90)");
+        source.Should().NotContain("new ShapeRotateStepCommand(editor, +90)");
+    }
+
+    [Fact]
+    public void AvaloniaRibbonCommands_RouteFloatingObjectFormatPolicyThroughPresentationPlanner()
+    {
+        var source = ReadSource("freew", "FreeW.App.Avalonia", "Ribbon", "FreeWAvaloniaRibbonCommands.cs");
+
+        source.Should().Contain("using FreeW.App.Presentation.Ribbon;");
+        source.Should().Contain("foreach (var target in ObjectFormatCommandPlanner.Targets)");
+        source.Should().Contain("ObjectFormatCommandPlanner.WrapDropdownCommandId(target)");
+        source.Should().Contain("ObjectFormatCommandPlanner.TransformDropdownCommandId(target)");
+        source.Should().Contain("ObjectFormatCommandPlanner.WrapCommands(target)");
+        source.Should().Contain("ObjectFormatCommandPlanner.TransformCommands(target)");
+        source.Should().Contain("ObjectFormatCommandPlanner.ZOrderCommands(target)");
+        source.Should().Contain("ObjectFormatCommandPlanner.SizeCommands(target)");
+        source.Should().Contain("ObjectFormatCommandPlanner.TryParseSizePoints(value, out var pt)");
+        source.Should().NotContain("foreach (var prefix in new[] { \"image\", \"shape\" })");
+        source.Should().NotContain("SetFloatingWrap(ImageWrapping.");
+        source.Should().NotContain("double.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var pt) && pt > 0");
+    }
+
+    private static string ReadSource(params string[] relativePath)
+    {
+        var path = relativePath.Aggregate(FindRepositoryRoot(), Path.Combine);
+        return File.ReadAllText(path);
+    }
+
+    private static string FindRepositoryRoot()
+    {
+        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
+             directory is not null;
+             directory = directory.Parent)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "FreeW.slnx")))
+                return directory.FullName;
+        }
+
+        throw new DirectoryNotFoundException("Could not locate repository root from test output directory.");
+    }
+}

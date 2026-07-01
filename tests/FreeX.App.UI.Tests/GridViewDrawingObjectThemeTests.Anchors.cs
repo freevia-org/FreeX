@@ -92,14 +92,21 @@ public sealed partial class GridViewDrawingObjectThemeTests
     [Fact]
     public void TryCreateDrawingAnchorRect_UsesSinglePassAnchorMetricLookups()
     {
-        var source = AppUiSourceTestSupport.ReadAppUiSources("GridDrawingObjectPlanner.cs");
+        var adapter = AppUiSourceTestSupport.ReadAppUiSources("GridDrawingObjectPlanner.cs");
+        var source = WorkspaceFileLocator.ReadAllTextWithFailureMessage(
+            "Unable to locate drawing viewport planner",
+            "src",
+            "FreeX.App.Presentation",
+            "DrawingUI",
+            "DrawingObjectViewportPlanner.cs");
         var anchorRange = source[
-            source.IndexOf("public static bool TryCreateDrawingAnchorRect", StringComparison.Ordinal)..
-            source.IndexOf("public static bool TryCreateAnchoredObjectRect", StringComparison.Ordinal)];
+            source.IndexOf("public static bool TryCreateAnchorRect", StringComparison.Ordinal)..
+            source.IndexOf("public static bool TryCreateSpanningAnchorRect", StringComparison.Ordinal)];
         var anchorHelpers = source[
             source.IndexOf("private static bool TryGetAnchorPoints", StringComparison.Ordinal)..
-            source.IndexOf("private static double EmusToPixels", StringComparison.Ordinal)];
+            source.IndexOf("public readonly record struct DrawingViewportAnchorBounds", StringComparison.Ordinal)];
 
+        adapter.Should().Contain("DrawingObjectViewportPlanner.TryCreateAnchorRect(");
         anchorRange.Should().Contain("TryGetAnchorPoints(viewport, anchor");
         anchorRange.Should().NotContain("TryGetAnchorPoint(viewport, anchor.From");
         anchorRange.Should().NotContain("TryGetAnchorPoint(viewport, anchor.To");
@@ -118,14 +125,20 @@ public sealed partial class GridViewDrawingObjectThemeTests
     public void AnchoredObjectRendering_UsesSharedSinglePassMetricPlanner()
     {
         var planner = AppUiSourceTestSupport.ReadAppUiSources("GridDrawingObjectPlanner.cs");
+        var sharedPlanner = WorkspaceFileLocator.ReadAllTextWithFailureMessage(
+            "Unable to locate drawing viewport planner",
+            "src",
+            "FreeX.App.Presentation",
+            "DrawingUI",
+            "DrawingObjectViewportPlanner.cs");
         var drawingObjects = AppUiSourceTestSupport.ReadAppUiSources("GridView.DrawingObjects.cs");
         var pictures = AppUiSourceTestSupport.ReadAppUiSources("GridView.DrawingObjects.Pictures.cs");
         var plannerMethod = planner[
             planner.IndexOf("public static bool TryCreateAnchoredObjectRect", StringComparison.Ordinal)..
             planner.IndexOf("public static string GetNativeControlCaption", StringComparison.Ordinal)];
-        var anchorHelpers = planner[
-            planner.IndexOf("private static bool TryFindAnchorRow", StringComparison.Ordinal)..
-            planner.IndexOf("private static double EmusToPixels", StringComparison.Ordinal)];
+        var anchorHelpers = sharedPlanner[
+            sharedPlanner.IndexOf("private static bool TryFindAnchorRow", StringComparison.Ordinal)..
+            sharedPlanner.IndexOf("private static uint FindLastRenderableRow", StringComparison.Ordinal)];
         var renderTextBoxes = drawingObjects[
             drawingObjects.IndexOf("private void RenderTextBoxes", StringComparison.Ordinal)..
             drawingObjects.IndexOf("private void RenderDrawingShapes", StringComparison.Ordinal)];
@@ -142,16 +155,16 @@ public sealed partial class GridViewDrawingObjectThemeTests
             pictures.IndexOf("private void RenderPictures", StringComparison.Ordinal)..
             pictures.IndexOf("private void DrawPictureCellStyle", StringComparison.Ordinal)];
 
-        plannerMethod.Should().Contain("TryFindAnchorRow(viewport.RowMetrics, anchor.Row");
-        plannerMethod.Should().Contain("TryFindAnchorColumn(viewport.ColMetrics, anchor.Col");
-        plannerMethod.Should().Contain("IReadOnlyDictionary<uint, RowMetric> rows");
-        plannerMethod.Should().Contain("rows.TryGetValue(anchor.Row");
-        plannerMethod.Should().Contain("columns.TryGetValue(anchor.Col");
-        planner.Should().Contain("IReadOnlyDictionary<uint, RowMetric> rows");
-        planner.Should().Contain("IReadOnlyDictionary<uint, ColMetric> columns");
-        planner.Should().Contain("DrawingAnchorRange anchor");
-        planner.Should().Contain("rows.TryGetValue(fromRowIndex");
-        planner.Should().Contain("columns.TryGetValue(fromColumnIndex");
+        plannerMethod.Should().Contain("DrawingObjectViewportPlanner.TryCreateAnchoredObjectRect(");
+        sharedPlanner.Should().Contain("TryFindAnchorRow(viewport.RowMetrics, anchor.Row");
+        sharedPlanner.Should().Contain("TryFindAnchorColumn(viewport.ColMetrics, anchor.Col");
+        sharedPlanner.Should().Contain("IReadOnlyDictionary<uint, RowMetric> rows");
+        sharedPlanner.Should().Contain("IReadOnlyDictionary<uint, ColMetric> columns");
+        sharedPlanner.Should().Contain("DrawingAnchorRange anchor");
+        sharedPlanner.Should().Contain("rows.TryGetValue(anchor.Row");
+        sharedPlanner.Should().Contain("columns.TryGetValue(anchor.Col");
+        sharedPlanner.Should().Contain("rows.TryGetValue(fromRowIndex");
+        sharedPlanner.Should().Contain("columns.TryGetValue(fromColumnIndex");
         plannerMethod.Should().NotContain("FirstOrDefault");
         anchorHelpers.Should().Contain("if (metric.Row > row)");
         anchorHelpers.Should().Contain("if (metric.Col > column)");

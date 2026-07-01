@@ -5,6 +5,8 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
+using FreeX.App.Presentation.Charts;
+using FreeX.App.Presentation.Charts.Editing;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 using static FreeX.App.Host.ChartDialogHelpers;
@@ -102,7 +104,7 @@ public sealed class ChartStyleDialog : Window
         var itemsPanelFactory = new FrameworkElementFactory(typeof(UniformGrid), "ChartStyleGalleryPanel");
         itemsPanelFactory.SetValue(UniformGrid.ColumnsProperty, 4);
         _styleGallery.ItemsPanel = new ItemsPanelTemplate(itemsPanelFactory);
-        _styleGallery.SelectedItem = FindStyleOption(options, Result.ChartStyleId) ?? options[0];
+        _styleGallery.SelectedIndex = ChartStylePlanner.FindStyleOptionIndex(Result.ChartStyleId);
         _styleGallery.Margin = new Thickness(0, 0, 0, 16);
         _styleGallery.Height = 230;
         AutomationProperties.SetName(_styleGallery, UiText.Get("ChartStyle_GalleryAutomationName"));
@@ -116,14 +118,14 @@ public sealed class ChartStyleDialog : Window
     }
 
     public static ChartStyleDialogResult FromChart(ChartModel chart) =>
-        new(NormalizeStyleId(chart.ChartStyleId));
+        new(ChartStylePlanner.Read(chart).StyleId);
 
     public static ChartStyleDialogResult CreateResult(int? chartStyleId) =>
-        new(NormalizeStyleId(chartStyleId));
+        new(ChartStylePlanner.CreateResult(chartStyleId).StyleId);
 
     public static IReadOnlyList<ChartStyleOption> GetStyleOptions() =>
-        new[] { new ChartStyleOption(null, UiText.Get("ChartStyle_AutomaticOption"), UiText.Get("ChartStyle_AutomaticPreview")) }
-            .Concat(Enumerable.Range(1, 48).Select(index => new ChartStyleOption(index, UiText.Format("ChartStyle_NumberedOption", index), UiText.Format("ChartStyle_NumberedPreview", index))))
+        ChartStylePlanner.GetStyleOptions()
+            .Select(CreateStyleOption)
             .ToList();
 
     private void Accept()
@@ -134,16 +136,15 @@ public sealed class ChartStyleDialog : Window
         DialogResult = true;
     }
 
-    private static ChartStyleOption? FindStyleOption(IReadOnlyList<ChartStyleOption> options, int? styleId)
+    private static ChartStyleOption CreateStyleOption(ChartStyleGalleryOptionDescriptor descriptor)
     {
-        for (var index = 0; index < options.Count; index++)
-        {
-            var option = options[index];
-            if (option.StyleId == styleId)
-                return option;
-        }
-
-        return null;
+        var displayName = descriptor.ResourceValue is { } displayValue
+            ? UiText.Format(descriptor.DisplayNameResourceKey, displayValue)
+            : UiText.Get(descriptor.DisplayNameResourceKey);
+        var previewLabel = descriptor.ResourceValue is { } previewValue
+            ? UiText.Format(descriptor.PreviewLabelResourceKey, previewValue)
+            : UiText.Get(descriptor.PreviewLabelResourceKey);
+        return new ChartStyleOption(descriptor.StyleId, displayName, previewLabel);
     }
 
     private void FocusInitialKeyboardTarget()
@@ -203,14 +204,6 @@ public sealed class ChartStyleDialog : Window
         border.AppendChild(bars);
         return border;
     }
-
-    private static int? NormalizeStyleId(int? value)
-    {
-        if (value is null)
-            return null;
-
-        return Math.Clamp(value.Value, 1, 48);
-    }
 }
 
 public sealed record ChartStyleOption(int? StyleId, string DisplayName, string PreviewLabel);
@@ -225,7 +218,8 @@ public sealed record MoveChartDialogResult(MoveChartTargetKind TargetKind, strin
 
 public sealed class MoveChartDialog : Window
 {
-    private readonly RadioButton _objectInSheet = new() { Content = UiText.Get("MoveChart_ObjectInSheet"), IsChecked = true };
+    private readonly RadioButton _objectInSheet = new() { Content = MoveTargetLabel(ChartMoveTargetKind.ObjectInSheet), IsChecked = true };
+    private readonly RadioButton _newChartSheet = new() { Content = MoveTargetLabel(ChartMoveTargetKind.NewSheet), Margin = new Thickness(0, 4, 0, 8) };
     private readonly TextBox _targetBox = new();
 
     public MoveChartDialogResult Result { get; private set; }
@@ -242,11 +236,15 @@ public sealed class MoveChartDialog : Window
 
         var stack = new StackPanel { Margin = new Thickness(16) };
         _targetBox.Text = currentSheetName;
-        AutomationProperties.SetName(_targetBox, UiText.Get("MoveChart_TargetNameAutomationName"));
-        AutomationProperties.SetHelpText(_targetBox, UiText.Get("MoveChart_TargetNameHelpText"));
+        var targetField = ChartMovePlanner.GetTargetNameField();
+        AutomationProperties.SetName(_targetBox, UiText.Get(targetField.AutomationNameResourceKey!));
+        AutomationProperties.SetAutomationId(_targetBox, targetField.AutomationId);
+        AutomationProperties.SetHelpText(_targetBox, UiText.Get(targetField.HelpResourceKey!));
+        ApplyTargetAutomation(_objectInSheet, ChartMoveTargetKind.ObjectInSheet);
+        ApplyTargetAutomation(_newChartSheet, ChartMoveTargetKind.NewSheet);
         stack.Children.Add(_objectInSheet);
-        stack.Children.Add(new RadioButton { Content = UiText.Get("MoveChart_NewChartSheet"), Margin = new Thickness(0, 4, 0, 8) });
-        stack.Children.Add(new Label { Content = UiText.Get("MoveChart_TargetNameLabel"), Target = _targetBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
+        stack.Children.Add(_newChartSheet);
+        stack.Children.Add(new Label { Content = UiText.Get(targetField.LabelResourceKey), Target = _targetBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
         stack.Children.Add(_targetBox);
         stack.Children.Add(InsertChartDialog.CreateButtonRow(Accept));
         Content = stack;
@@ -254,10 +252,10 @@ public sealed class MoveChartDialog : Window
     }
 
     public static MoveChartDialogResult CreateObjectResult(string? sheetName) =>
-        new(MoveChartTargetKind.ObjectInSheet, RequireTargetName(sheetName));
+        CreateResult(ChartMoveTargetKind.ObjectInSheet, sheetName);
 
     public static MoveChartDialogResult CreateNewSheetResult(string? sheetName) =>
-        new(MoveChartTargetKind.NewChartSheet, RequireTargetName(sheetName));
+        CreateResult(ChartMoveTargetKind.NewSheet, sheetName);
 
     private void Accept()
     {
@@ -290,11 +288,31 @@ public sealed class MoveChartDialog : Window
         Keyboard.Focus(_targetBox);
     }
 
-    private static string RequireTargetName(string? name)
+    private static MoveChartDialogResult CreateResult(ChartMoveTargetKind kind, string? name)
     {
-        if (string.IsNullOrWhiteSpace(name))
+        var plan = ChartMovePlanner.Plan(new ChartMoveInput(kind, name ?? string.Empty), _ => true);
+        if (!plan.IsValid)
             throw new ArgumentException(UiText.Get("MoveChart_TargetNameRequiredMessage"), nameof(name));
-        return name.Trim();
+
+        return new MoveChartDialogResult(ToDialogTargetKind(plan.TargetKind), plan.TargetName);
+    }
+
+    private static MoveChartTargetKind ToDialogTargetKind(ChartMoveTargetKind kind) =>
+        kind == ChartMoveTargetKind.NewSheet
+            ? MoveChartTargetKind.NewChartSheet
+            : MoveChartTargetKind.ObjectInSheet;
+
+    private static ChartMoveDialogTargetDescriptor MoveTargetDescriptor(ChartMoveTargetKind kind) =>
+        ChartMovePlanner.GetTargetChoices().Single(choice => choice.TargetKind == kind);
+
+    private static string MoveTargetLabel(ChartMoveTargetKind kind) =>
+        UiText.Get(MoveTargetDescriptor(kind).LabelResourceKey);
+
+    private static void ApplyTargetAutomation(RadioButton radio, ChartMoveTargetKind kind)
+    {
+        var descriptor = MoveTargetDescriptor(kind);
+        radio.GroupName = ChartMovePlanner.TargetGroupName;
+        AutomationProperties.SetAutomationId(radio, descriptor.AutomationId);
     }
 }
 

@@ -2,6 +2,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls.Primitives;
+using FreeX.App.Presentation.Editing;
+using FreeX.App.Presentation.GridInteraction;
 using FreeX.App.Services;
 using FreeX.App.Services.Ribbon;
 using FreeX.Core.Calc;
@@ -585,7 +587,7 @@ public partial class MainWindow
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet is null) return;
         var currentStyle = _workbook.GetStyle(sheet.GetCell(range.Start)?.StyleId ?? StyleId.Default);
-        var mergeCells = FormatCellsMergePlanner.IsSelectionMerged(sheet, range);
+        var mergeCells = CellMergePlanner.IsSelectionMerged(sheet, range);
         var dlg = new FormatCellsDialog(currentStyle, initialTab, mergeCells) { Owner = this };
         if (dlg.ShowDialog() != true || dlg.ResultDiff is null) return;
         var mergeContentResolution = MergeCellContentResolution.KeepFirstCell;
@@ -665,7 +667,7 @@ public partial class MainWindow
 
             if (mergeCells is { } shouldMerge && sheet is not null)
             {
-                commands.AddRange(FormatCellsMergePlanner.CreateMergeCommands(
+                commands.AddRange(CellMergePlanner.CreateFormatCellsMergeCommands(
                     sheet,
                     sheetId,
                     sheetRange,

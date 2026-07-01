@@ -1,3 +1,5 @@
+using FreeX.App.Services;
+using FreeX.App.Presentation.Shell;
 using FreeX.Core.IO;
 
 namespace FreeX.App.Host;
@@ -5,121 +7,88 @@ namespace FreeX.App.Host;
 public static class DeferredCommandMessages
 {
     public static DeferredCommandMessage WorkbookTheme(string commandName) =>
-        new(
-            commandName,
-            UiText.Format("DeferredCommand_WorkbookTheme_Body", commandName));
+        Resolve(DeferredCommandMessagePlanner.WorkbookTheme(commandName));
 
     public static DeferredCommandMessage MultiWindow(string commandName) =>
-        new(
-            commandName,
-            UiText.Format("DeferredCommand_MultiWindow_Body", commandName));
+        Resolve(DeferredCommandMessagePlanner.MultiWindow(commandName));
 
     public static DeferredCommandMessage OnlineTemplatesExcluded() =>
-        new(
-            UiText.Get("DeferredCommand_OnlineTemplates_Title"),
-            UiText.Get("DeferredCommand_OnlineTemplates_Body"));
+        Resolve(DeferredCommandMessagePlanner.OnlineTemplatesExcluded());
 
     public static DeferredCommandMessage LocalAccountInfo(LocalAccountPlan? plan = null) =>
-        new(
-            UiText.Get("DeferredCommand_LocalAccount_Title"),
-            plan is null
-                ? UiText.Get("DeferredCommand_LocalAccount_Body")
-                : LocalAccountPlanner.FormatMessageBody(plan));
+        Resolve(
+            DeferredCommandMessagePlanner.LocalAccountInfo(),
+            body => plan is null ? body : LocalAccountWorkflowPlanner.FormatMessageBody(plan, body));
 
     public static DeferredCommandMessage PivotTableModelFirst() =>
-        new(
-            UiText.Get("DeferredCommand_PivotTable_Title"),
-            UiText.Get("DeferredCommand_PivotTable_Body"));
+        Resolve(DeferredCommandMessagePlanner.PivotTableModelFirst());
 
     public static DeferredCommandMessage AutoCorrectOptions() =>
-        new(
-            UiText.Get("DeferredCommand_AutoCorrectOptions_Title"),
-            UiText.Get("DeferredCommand_AutoCorrectOptions_Body"));
+        Resolve(DeferredCommandMessagePlanner.AutoCorrectOptions());
 
     public static DeferredCommandMessage EditingLanguages() =>
-        new(
-            UiText.Get("DeferredCommand_EditingLanguages_Title"),
-            UiText.Get("DeferredCommand_EditingLanguages_Body"));
+        Resolve(DeferredCommandMessagePlanner.EditingLanguages());
 
     public static DeferredCommandMessage RibbonCustomizationImportExport() =>
-        new(
-            UiText.Get("DeferredCommand_RibbonCustomization_Title"),
-            UiText.Get("DeferredCommand_RibbonCustomization_Body"));
+        Resolve(DeferredCommandMessagePlanner.RibbonCustomizationImportExport());
 
     public static DeferredCommandMessage OfficeAddIns() =>
-        new(
-            UiText.Get("DeferredCommand_OfficeAddIns_Title"),
-            UiText.Get("DeferredCommand_OfficeAddIns_Body"));
+        Resolve(DeferredCommandMessagePlanner.OfficeAddIns());
 
     public static DeferredCommandMessage TrustCenterSettings() =>
-        new(
-            UiText.Get("DeferredCommand_TrustCenter_Title"),
-            UiText.Get("DeferredCommand_TrustCenter_Body"));
+        Resolve(DeferredCommandMessagePlanner.TrustCenterSettings());
 
     public static DeferredCommandMessage UnsupportedXlsxFeatureSaveWarning(XlsxFeatureReport report)
-    {
-        ArgumentNullException.ThrowIfNull(report);
-
-        var featureList = string.Join(", ",
-            FormatUnsupportedXlsxFeatureList(report));
-
-        return new(
-            UiText.Get("DeferredCommand_UnsupportedXlsxFeatureSaveWarning_Title"),
-            UiText.Format(
-                "DeferredCommand_UnsupportedXlsxFeatureSaveWarning_Body",
-                featureList,
-                DigitalSignatureWarning(report)));
-    }
+        => Resolve(DeferredCommandMessagePlanner.UnsupportedXlsxFeatureSaveWarning(report));
 
     public static DeferredCommandMessage UnsupportedXlsxFeatureOpenWarning(XlsxFeatureReport report)
+        => Resolve(DeferredCommandMessagePlanner.UnsupportedXlsxFeatureOpenWarning(report));
+
+    public static string FormatUnsupportedXlsxFeatureKind(XlsxUnsupportedFeatureKind kind) =>
+        ResolveText(DeferredCommandMessagePlanner.UnsupportedXlsxFeatureKindText(kind));
+
+    private static DeferredCommandMessage Resolve(
+        DeferredCommandMessagePlan plan,
+        Func<string, string>? bodyProjector = null)
     {
-        ArgumentNullException.ThrowIfNull(report);
-
-        var featureList = string.Join(", ",
-            FormatUnsupportedXlsxFeatureList(report));
-
-        return new(
-            UiText.Get("DeferredCommand_UnsupportedXlsxFeatureOpenWarning_Title"),
-            UiText.Format(
-                "DeferredCommand_UnsupportedXlsxFeatureOpenWarning_Body",
-                featureList,
-                DigitalSignatureWarning(report)));
+        var body = ResolveText(plan.Body);
+        return new DeferredCommandMessage(
+            ResolveText(plan.Title),
+            bodyProjector?.Invoke(body) ?? body);
     }
 
-    public static string FormatUnsupportedXlsxFeatureKind(XlsxUnsupportedFeatureKind kind) => kind switch
+    private static string ResolveText(DeferredCommandMessageTextPlan plan)
     {
-        XlsxUnsupportedFeatureKind.Macros => UiText.Get("UnsupportedXlsxFeatureKind_Macros"),
-        XlsxUnsupportedFeatureKind.Charts => UiText.Get("UnsupportedXlsxFeatureKind_Charts"),
-        XlsxUnsupportedFeatureKind.EmbeddedObjects => UiText.Get("UnsupportedXlsxFeatureKind_EmbeddedObjects"),
-        XlsxUnsupportedFeatureKind.CustomXmlParts => UiText.Get("UnsupportedXlsxFeatureKind_CustomXmlParts"),
-        XlsxUnsupportedFeatureKind.ConditionalFormats => UiText.Get("UnsupportedXlsxFeatureKind_ConditionalFormats"),
-        XlsxUnsupportedFeatureKind.DrawingObjects => UiText.Get("UnsupportedXlsxFeatureKind_DrawingObjects"),
-        XlsxUnsupportedFeatureKind.PowerQuery => UiText.Get("UnsupportedXlsxFeatureKind_PowerQuery"),
-        XlsxUnsupportedFeatureKind.DataModel => UiText.Get("UnsupportedXlsxFeatureKind_DataModel"),
-        XlsxUnsupportedFeatureKind.LinkedDataTypes => UiText.Get("UnsupportedXlsxFeatureKind_LinkedDataTypes"),
-        XlsxUnsupportedFeatureKind.ThreadedComments => UiText.Get("UnsupportedXlsxFeatureKind_ThreadedComments"),
-        XlsxUnsupportedFeatureKind.TrackChanges => UiText.Get("UnsupportedXlsxFeatureKind_TrackChanges"),
-        XlsxUnsupportedFeatureKind.FormControls => UiText.Get("UnsupportedXlsxFeatureKind_FormControls"),
-        XlsxUnsupportedFeatureKind.DigitalSignatures => UiText.Get("UnsupportedXlsxFeatureKind_DigitalSignatures"),
-        XlsxUnsupportedFeatureKind.CustomRibbonUi => UiText.Get("UnsupportedXlsxFeatureKind_CustomRibbonUi"),
-        XlsxUnsupportedFeatureKind.OfficeAddIns => UiText.Get("UnsupportedXlsxFeatureKind_OfficeAddIns"),
-        XlsxUnsupportedFeatureKind.LiveWebQueries => UiText.Get("UnsupportedXlsxFeatureKind_LiveWebQueries"),
-        XlsxUnsupportedFeatureKind.SensitivityLabels => UiText.Get("UnsupportedXlsxFeatureKind_SensitivityLabels"),
-        XlsxUnsupportedFeatureKind.SmartArtDiagrams => UiText.Get("UnsupportedXlsxFeatureKind_SmartArtDiagrams"),
-        XlsxUnsupportedFeatureKind.UnsupportedSheetTypes => UiText.Get("UnsupportedXlsxFeatureKind_UnsupportedSheetTypes"),
-        _ => kind.ToString()
-    };
+        if (plan.ResourceKey is null)
+            return plan.LiteralText ?? string.Empty;
 
-    private static IEnumerable<string> FormatUnsupportedXlsxFeatureList(XlsxFeatureReport report) =>
-        report.Features
-            .Select(f => FormatUnsupportedXlsxFeatureKind(f.Kind))
-            .Distinct(StringComparer.Ordinal)
-            .OrderBy(name => name, StringComparer.Ordinal);
+        if (plan.Arguments.Count == 0)
+            return UiText.Get(plan.ResourceKey);
 
-    private static string DigitalSignatureWarning(XlsxFeatureReport report) =>
-        report.Features.Any(feature => feature.Kind == XlsxUnsupportedFeatureKind.DigitalSignatures)
-            ? UiText.Get("DeferredCommand_UnsupportedXlsxFeature_DigitalSignatureWarningSuffix")
-            : string.Empty;
+        return UiText.Format(
+            plan.ResourceKey,
+            plan.Arguments.Select(ResolveArgument).ToArray());
+    }
+
+    private static object? ResolveArgument(DeferredCommandMessageArgument argument)
+    {
+        if (argument.ResourceKey is not null)
+            return UiText.Get(argument.ResourceKey);
+
+        if (argument.TextItems.Count > 0)
+        {
+            var values = argument.TextItems
+                .Select(ResolveText)
+                .Distinct(StringComparer.Ordinal);
+
+            if (argument.SortResolvedText)
+                values = values.OrderBy(value => value, StringComparer.Ordinal);
+
+            return string.Join(", ", values);
+        }
+
+        return argument.LiteralText ?? string.Empty;
+    }
 }
 
 public sealed record DeferredCommandMessage(string Title, string Body);

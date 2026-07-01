@@ -65,6 +65,92 @@ public sealed class WorkbookFileLifecycleCoordinatorTests
     }
 
     [Fact]
+    public async Task CanProceedAfterDirtyGate_Cancel_ReturnsFalseWithoutActionCeremony()
+    {
+        var canProceed = await WorkbookFileLifecycleCoordinator.CanProceedAfterDirtyGateAsync(
+            isDirty: true,
+            promptSaveChangesAsync: () => Task.FromResult(SaveChangesPrompt.Cancel),
+            saveCurrentAsync: () => throw new InvalidOperationException("Cancel should not save."));
+
+        canProceed.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task CanProceedAfterDirtyGateWithCleanSave_SaveThatLeavesWorkbookDirty_ReturnsFalse()
+    {
+        var canProceed = await WorkbookFileLifecycleCoordinator.CanProceedAfterDirtyGateWithCleanSaveAsync(
+            isDirty: true,
+            promptSaveChangesAsync: () => Task.FromResult(SaveChangesPrompt.Save),
+            saveCurrentAsync: () => Task.FromResult(true),
+            isDirtyNow: () => true);
+
+        canProceed.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task CanProceedAfterDirtyGateWithCleanSave_DiscardingChanges_ProceedsWithoutCleanRecheck()
+    {
+        var recheckedDirty = false;
+
+        var canProceed = await WorkbookFileLifecycleCoordinator.CanProceedAfterDirtyGateWithCleanSaveAsync(
+            isDirty: true,
+            promptSaveChangesAsync: () => Task.FromResult(SaveChangesPrompt.DontSave),
+            saveCurrentAsync: () => throw new InvalidOperationException("Discard should not save."),
+            isDirtyNow: () =>
+            {
+                recheckedDirty = true;
+                return true;
+            });
+
+        canProceed.Should().BeTrue();
+        recheckedDirty.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task RunAfterDirtyGate_DirtySaveAnswer_RunsActionAfterSave()
+    {
+        var saved = false;
+        var actionRan = false;
+
+        var proceeded = await WorkbookFileLifecycleCoordinator.RunAfterDirtyGateAsync(
+            isDirty: true,
+            promptSaveChangesAsync: () => Task.FromResult(SaveChangesPrompt.Save),
+            saveCurrentAsync: () =>
+            {
+                saved = true;
+                return Task.FromResult(true);
+            },
+            runActionAsync: () =>
+            {
+                actionRan = true;
+                return Task.CompletedTask;
+            });
+
+        proceeded.Should().BeTrue();
+        saved.Should().BeTrue();
+        actionRan.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task RunAfterDirtyGate_SaveFailure_DoesNotRunAction()
+    {
+        var actionRan = false;
+
+        var proceeded = await WorkbookFileLifecycleCoordinator.RunAfterDirtyGateAsync(
+            isDirty: true,
+            promptSaveChangesAsync: () => Task.FromResult(SaveChangesPrompt.Save),
+            saveCurrentAsync: () => Task.FromResult(false),
+            runActionAsync: () =>
+            {
+                actionRan = true;
+                return Task.CompletedTask;
+            });
+
+        proceeded.Should().BeFalse();
+        actionRan.Should().BeFalse();
+    }
+
+    [Fact]
     public async Task SaveResolved_NoCurrentPath_UsesSaveAsWithoutResolvingTarget()
     {
         var resolved = false;
@@ -112,6 +198,28 @@ public sealed class WorkbookFileLifecycleCoordinatorTests
     }
 
     [Fact]
+    public async Task SaveResolved_CleanCurrentPathSkipsTargetWrite()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "Book.fxl");
+        var target = new FileSaveTarget(path, new TestFileAdapter(extension: ".fxl"));
+        var saveTargetCalls = 0;
+
+        var saved = await WorkbookFileLifecycleCoordinator.SaveResolvedAsync(
+            isDirty: false,
+            currentFilePath: path,
+            resolveCurrentTarget: () => target,
+            saveTargetAsync: _ =>
+            {
+                saveTargetCalls++;
+                return Task.FromResult(true);
+            },
+            saveAsAsync: () => throw new InvalidOperationException("Save As should not be used."));
+
+        saved.Should().BeTrue();
+        saveTargetCalls.Should().Be(0);
+    }
+
+    [Fact]
     public async Task SaveResolved_CurrentPathButNoResolvedTarget_FallsBackToSaveAs()
     {
         var savedAs = false;
@@ -152,5 +260,68 @@ public sealed class WorkbookFileLifecycleCoordinatorTests
         savedTarget.Should().NotBeNull();
         savedTarget!.Path.Should().Be(@"C:\Work\Book.fxl");
         savedTarget.Adapter.Should().BeSameAs(adapter);
+    }
+
+    [Fact]
+    public void PlanSaveTargetWrite_CleanCurrentPathSkipsWrite()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "Book.fxl");
+        var target = new FileSaveTarget(path, new TestFileAdapter(extension: ".fxl"));
+
+        WorkbookFileLifecycleCoordinator.PlanSaveTargetWrite(
+                isDirty: false,
+                currentFilePath: path,
+                target)
+            .Should()
+            .Be(WorkbookSaveTargetIntent.SkipCleanCurrentPath);
+    }
+
+    [Fact]
+    public void PlanSaveTargetWrite_DirtyCurrentPathWrites()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "Book.fxl");
+        var target = new FileSaveTarget(path, new TestFileAdapter(extension: ".fxl"));
+
+        WorkbookFileLifecycleCoordinator.PlanSaveTargetWrite(
+                isDirty: true,
+                currentFilePath: path,
+                target)
+            .Should()
+            .Be(WorkbookSaveTargetIntent.Write);
+    }
+
+    [Fact]
+    public void PlanSavePathNormalization_AddsDefaultExtensionAndRequestsOverwriteConfirmation()
+    {
+        var requested = Path.Combine(Path.GetTempPath(), "Budget");
+        var normalized = requested + ".fxl";
+
+        var plan = WorkbookFileLifecycleCoordinator.PlanSavePathNormalization(
+            requested,
+            ".fxl",
+            path => string.Equals(path, normalized, StringComparison.Ordinal));
+
+        plan.Path.Should().Be(normalized);
+        plan.ShouldConfirmOverwrite.Should().BeTrue();
+    }
+
+    [Fact]
+    public void PlanSavePathNormalization_DoesNotConfirmWhenPathAlreadyMatches()
+    {
+        var requested = Path.Combine(Path.GetTempPath(), "Budget.fxl");
+        var existsChecked = false;
+
+        var plan = WorkbookFileLifecycleCoordinator.PlanSavePathNormalization(
+            requested,
+            ".fxl",
+            _ =>
+            {
+                existsChecked = true;
+                return true;
+            });
+
+        plan.Path.Should().Be(requested);
+        plan.ShouldConfirmOverwrite.Should().BeFalse();
+        existsChecked.Should().BeFalse();
     }
 }

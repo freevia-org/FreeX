@@ -100,10 +100,7 @@ public sealed class PivotCalculatedFieldDialog : Window
 
     private bool ShowInvalidInputWarning(string message, TextBox target)
     {
-        DialogMessageHelper.ShowWarning(this, message, Title);
-        target.Focus();
-        target.SelectAll();
-        Keyboard.Focus(target);
+        DialogFocus.ShowWarningAndFocus(this, message, Title, target);
         return false;
     }
 
@@ -283,10 +280,7 @@ public sealed class PivotCalculatedItemDialog : Window
 
     private bool ShowInvalidInputWarning(string message, TextBox target)
     {
-        DialogMessageHelper.ShowWarning(this, message, Title);
-        target.Focus();
-        target.SelectAll();
-        Keyboard.Focus(target);
+        DialogFocus.ShowWarningAndFocus(this, message, Title, target);
         return false;
     }
 

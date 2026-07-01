@@ -32,6 +32,15 @@ public sealed partial class XlsxFileAdapter
             XlsxWorkbookMetadataWriter.SavePostProcessingMetadata(packageStream, workbook);
         }
 
+        if (workbook.NamedRanges.Count > 0 ||
+            workbook.NamedFormulas.Count > 0 ||
+            workbook.ScopedNamedRanges.Count > 0 ||
+            workbook.ScopedNamedFormulas.Count > 0)
+        {
+            packageStream.Position = 0;
+            XlsxNamedRangeMapper.SaveToPackage(workbook, packageStream);
+        }
+
         if (featurePlan.HasNonDefaultDimensions)
         {
             packageStream.Position = 0;
@@ -573,10 +582,7 @@ public sealed partial class XlsxFileAdapter
             return;
 
         XDocument doc;
-        using (var entryStream = entry.Open())
-        {
-            doc = XDocument.Load(entryStream, LoadOptions.PreserveWhitespace);
-        }
+        doc = OpcXml.LoadXml(entry, LoadOptions.PreserveWhitespace);
 
         var root = doc.Root;
         if (root is null)

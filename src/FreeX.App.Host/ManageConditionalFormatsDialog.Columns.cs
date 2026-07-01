@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Data;
 using System.Windows.Media;
+using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -56,7 +57,7 @@ public sealed partial class ManageConditionalFormatsDialog
         previewBorderFactory.SetBinding(Border.BackgroundProperty, new Binding(".") { Converter = new PreviewBrushConverter() });
 
         var previewTextFactory = new FrameworkElementFactory(typeof(TextBlock));
-        previewTextFactory.SetValue(TextBlock.TextProperty, UiText.Get("ManageConditionalFormats_FormatPreviewSample"));
+        previewTextFactory.SetValue(TextBlock.TextProperty, UiText.Get(ManageConditionalFormatsPlanner.FormatPreviewSampleKey));
         previewTextFactory.SetValue(TextBlock.HorizontalAlignmentProperty, System.Windows.HorizontalAlignment.Center);
         previewTextFactory.SetValue(TextBlock.VerticalAlignmentProperty, System.Windows.VerticalAlignment.Center);
         previewTextFactory.SetValue(TextBlock.FontSizeProperty, 10.0);

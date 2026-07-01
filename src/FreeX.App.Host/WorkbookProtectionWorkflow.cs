@@ -7,35 +7,33 @@ public static class WorkbookProtectionWorkflow
 {
     public static WorkbookProtectionUiText GetUiText(Workbook workbook)
     {
-        if (workbook.IsStructureProtected)
-        {
-            return new WorkbookProtectionUiText(
-                UiText.Get("Protection_UnprotectWorkbookButton"),
-                UiText.Get("Protection_UnprotectWorkbookTitle"),
-                UiText.Get("Protection_UnprotectWorkbookDescription"));
-        }
+        var plan = ProtectionWorkflowPlanner.CreateWorkbookChromePlan(workbook.IsStructureProtected);
 
         return new WorkbookProtectionUiText(
-            UiText.Get("MainWindow_Content_ProtectWorkbook"),
-            UiText.Get("MainWindow_TooltipTitle_ProtectWorkbook"),
-            UiText.Get("MainWindow_TooltipDescription_PreventStructuralChangesToTheWorkbookSuchAsAddingDeletingOrRenamingSheet_47267D4F"));
+            UiText.Get(plan.ButtonContentResourceKey),
+            UiText.Get(plan.TooltipTitleResourceKey),
+            UiText.Get(plan.TooltipDescriptionResourceKey));
     }
 
     public static WorkbookProtectionAction CreateCommand(Workbook workbook, string? password)
     {
-        if (workbook.IsStructureProtected)
-        {
-            return new WorkbookProtectionAction(
-                new UnprotectWorkbookCommand(password),
-                UiText.Get("Protection_UnprotectWorkbookTitle"),
-                UiText.Get("Protection_WorkbookUnprotectedMessage"));
-        }
+        var plan = ProtectionWorkflowPlanner.CreateWorkbookCommandPlan(
+            workbook.IsStructureProtected,
+            password);
 
         return new WorkbookProtectionAction(
-            new ProtectWorkbookCommand(password),
-            UiText.Get("MainWindowMessage_ProtectWorkbookTitle"),
-            UiText.Get("Protection_WorkbookProtectedMessage"));
+            CreateCommand(plan),
+            UiText.Get(plan.TitleResourceKey),
+            UiText.Get(plan.SuccessMessageResourceKey));
     }
+
+    private static IWorkbookCommand CreateCommand(WorkbookProtectionCommandPlan plan) =>
+        plan.CommandIntent switch
+        {
+            ProtectionCommandIntent.ProtectWorkbook => new ProtectWorkbookCommand(plan.Password),
+            ProtectionCommandIntent.UnprotectWorkbook => new UnprotectWorkbookCommand(plan.Password),
+            _ => throw new ArgumentOutOfRangeException(nameof(plan), plan.CommandIntent, "Unsupported workbook protection intent.")
+        };
 }
 
 public sealed record WorkbookProtectionAction(

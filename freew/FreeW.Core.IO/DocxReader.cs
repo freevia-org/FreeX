@@ -1,6 +1,5 @@
 ﻿using System.IO;
 using System.IO.Compression;
-using System.Xml;
 using System.Xml.Linq;
 using Free.Shared.Opc;
 using FreeW.Core.Model;
@@ -30,7 +29,10 @@ public static class DocxReader
             ?? throw new InvalidDataException("Not a Word document: word/document.xml is missing.");
 
         var document = new TextDocument();
-        ReadCoreProperties(archive, document);
+        OpcDocumentProperties.ReadCoreProperties(
+            archive,
+            document.Properties,
+            emptyStringsAsNull: true);
         ReadCustomProperties(archive, document);
         ReadStyles(archive, document);
         var imageRelationships = ReadImageRelationships(archive);
@@ -140,23 +142,7 @@ public static class DocxReader
     /// resolved relative to the word/ folder. Returns null when no such relationship exists.
     /// </summary>
     private static string? ResolveThemePartPath(ZipArchive archive)
-    {
-        var relsXml = LoadPart(archive, "word/_rels/document.xml.rels");
-        var relationships = relsXml?.Root?.Elements(Rel + "Relationship");
-        if (relationships is null)
-            return null;
-
-        foreach (var rel in relationships)
-        {
-            var type = rel.Attribute("Type")?.Value;
-            if (type is null || !type.EndsWith("/theme", StringComparison.Ordinal))
-                continue;
-            var target = rel.Attribute("Target")?.Value;
-            if (!string.IsNullOrEmpty(target))
-                return "word/" + target.TrimStart('/');
-        }
-        return null;
-    }
+        => ResolveDocumentRelPartPath(archive, "/theme");
 
     /// <summary>
     /// Resolves the settings part (via the officeDocument's "/settings" relationship, falling back to the
@@ -304,8 +290,8 @@ public static class DocxReader
 
         // Package-level extended properties (docProps/app.xml) are not modelled by FreeW, but Word-authored
         // documents commonly use them for application/company/template metadata.
-        if (archive.GetEntry("docProps/app.xml") is not null)
-            Capture(ExtendedPropertiesPartName, relationshipType: null);
+        if (archive.GetEntry(OpcPackageProperties.ExtendedPropertiesZipEntry) is not null)
+            Capture(OpcPackageProperties.ExtendedPropertiesPartName, relationshipType: null);
 
         // VBA macro project (.docm/.dotm): word/vbaProject.bin, its optional word/vbaData.xml, and the
         // part-local word/_rels/vbaProject.bin.rels. Preserved verbatim and NEVER executed/deserialized. The
@@ -360,21 +346,7 @@ public static class DocxReader
     /// when the part is absent. Used to re-emit a preserved part's content-type Override unchanged.
     /// </summary>
     private static Dictionary<string, string> ReadContentTypeOverrides(ZipArchive archive)
-    {
-        var map = new Dictionary<string, string>(StringComparer.Ordinal);
-        var ctXml = LoadPart(archive, "[Content_Types].xml");
-        var overrides = ctXml?.Root?.Elements(Ct + "Override");
-        if (overrides is null)
-            return map;
-        foreach (var ov in overrides)
-        {
-            var partName = ov.Attribute("PartName")?.Value;
-            var contentType = ov.Attribute("ContentType")?.Value;
-            if (!string.IsNullOrEmpty(partName) && !string.IsNullOrEmpty(contentType))
-                map[partName] = contentType;
-        }
-        return map;
-    }
+        => OpcMediaTypes.ReadOverrideContentTypes(archive);
 
     /// <summary>
     /// Reads <c>word/_rels/document.xml.rels</c>, mapping each relationship Target → its Type. Targets are kept
@@ -382,21 +354,7 @@ public static class DocxReader
     /// relationship type the document used to reference it. Returns an empty map when the rels part is absent.
     /// </summary>
     private static Dictionary<string, string> ReadDocumentRelationshipTypesByTarget(ZipArchive archive)
-    {
-        var map = new Dictionary<string, string>(StringComparer.Ordinal);
-        var relsXml = LoadPart(archive, "word/_rels/document.xml.rels");
-        var relationships = relsXml?.Root?.Elements(Rel + "Relationship");
-        if (relationships is null)
-            return map;
-        foreach (var rel in relationships)
-        {
-            var target = rel.Attribute("Target")?.Value;
-            var type = rel.Attribute("Type")?.Value;
-            if (!string.IsNullOrEmpty(target) && !string.IsNullOrEmpty(type))
-                map[target] = type;
-        }
-        return map;
-    }
+        => OpcRelationships.LoadTypeByTargetMap(archive, "word/_rels/document.xml.rels");
 
     /// <summary>
     /// Resolves word/fontTable.xml (via the document's "/fontTable" relationship, falling back to the
@@ -449,22 +407,12 @@ public static class DocxReader
     /// Reads word/_rels/fontTable.xml.rels mapping each font relationship id to its part path (under
     /// word/). Returns an empty map when the rels part is absent.
     /// </summary>
-    private static Dictionary<string, string> ReadFontTableRelationships(ZipArchive archive)
-    {
-        var map = new Dictionary<string, string>(StringComparer.Ordinal);
-        var relsXml = LoadPart(archive, "word/_rels/fontTable.xml.rels");
-        var relationships = relsXml?.Root?.Elements(Rel + "Relationship");
-        if (relationships is null)
-            return map;
-        foreach (var rel in relationships)
-        {
-            var id = rel.Attribute("Id")?.Value;
-            var target = rel.Attribute("Target")?.Value;
-            if (!string.IsNullOrEmpty(id) && !string.IsNullOrEmpty(target))
-                map[id] = "word/" + target.TrimStart('/');
-        }
-        return map;
-    }
+    private static Dictionary<string, string> ReadFontTableRelationships(ZipArchive archive) =>
+        OpcRelationships.LoadTargetMap(
+            archive,
+            "word/_rels/fontTable.xml.rels",
+            relationship => OpcPathHelper.ResolveRelativeZipPath("word", relationship.Target),
+            relationship => !relationship.IsExternal);
 
     /// <summary>
     /// Finds a document-relationship target by the suffix of its Type (e.g. "/fontTable"), resolved
@@ -472,20 +420,26 @@ public static class DocxReader
     /// settings/theme resolvers.
     /// </summary>
     private static string? ResolveDocumentRelPartPath(ZipArchive archive, string typeSuffix)
+        => ResolveDocumentRelationshipPartPath(
+            archive,
+            relationship => relationship.Type.EndsWith(typeSuffix, StringComparison.Ordinal));
+
+    private static string? ResolveDocumentRelationshipPartPath(
+        ZipArchive archive,
+        Func<OpcRelationship, bool> predicate)
     {
-        var relsXml = LoadPart(archive, "word/_rels/document.xml.rels");
-        var relationships = relsXml?.Root?.Elements(Rel + "Relationship");
-        if (relationships is null)
-            return null;
-        foreach (var rel in relationships)
+        foreach (var relationship in OpcRelationships.Load(archive, "word/_rels/document.xml.rels"))
         {
-            var type = rel.Attribute("Type")?.Value;
-            if (type is null || !type.EndsWith(typeSuffix, StringComparison.Ordinal))
+            if (relationship.IsExternal ||
+                string.IsNullOrEmpty(relationship.Target) ||
+                !predicate(relationship))
+            {
                 continue;
-            var target = rel.Attribute("Target")?.Value;
-            if (!string.IsNullOrEmpty(target))
-                return "word/" + target.TrimStart('/');
+            }
+
+            return OpcPathHelper.ResolveRelativeZipPath("word", relationship.Target);
         }
+
         return null;
     }
 
@@ -494,23 +448,7 @@ public static class DocxReader
     /// "/settings"), resolved relative to the word/ folder. Returns null when no such relationship exists.
     /// </summary>
     private static string? ResolveSettingsPartPath(ZipArchive archive)
-    {
-        var relsXml = LoadPart(archive, "word/_rels/document.xml.rels");
-        var relationships = relsXml?.Root?.Elements(Rel + "Relationship");
-        if (relationships is null)
-            return null;
-
-        foreach (var rel in relationships)
-        {
-            var type = rel.Attribute("Type")?.Value;
-            if (type is null || !type.EndsWith("/settings", StringComparison.Ordinal))
-                continue;
-            var target = rel.Attribute("Target")?.Value;
-            if (!string.IsNullOrEmpty(target))
-                return "word/" + target.TrimStart('/');
-        }
-        return null;
-    }
+        => ResolveDocumentRelPartPath(archive, "/settings");
 
     /// <summary>
     /// Loads word/bibliography/sources.xml (if present) into <see cref="TextDocument.Sources"/> and
@@ -597,21 +535,9 @@ public static class DocxReader
     /// relationship exists so the caller can fall back to the conventional path.
     /// </summary>
     private static string? ResolveBibliographyPartPath(ZipArchive archive)
-    {
-        var relsXml = LoadPart(archive, "word/_rels/document.xml.rels");
-        var relationships = relsXml?.Root?.Elements(Rel + "Relationship");
-        if (relationships is null)
-            return null;
-
-        foreach (var rel in relationships)
-        {
-            var target = rel.Attribute("Target")?.Value;
-            if (!string.IsNullOrEmpty(target)
-                && target.EndsWith("bibliography/sources.xml", StringComparison.Ordinal))
-                return "word/" + target.TrimStart('/');
-        }
-        return null;
-    }
+        => ResolveDocumentRelationshipPartPath(
+            archive,
+            relationship => relationship.Target.EndsWith("bibliography/sources.xml", StringComparison.Ordinal));
 
     /// <summary>
     /// Loads word/comments.xml (if present) into <see cref="TextDocument.Comments"/>, reconstructing
@@ -1030,63 +956,31 @@ public static class DocxReader
     /// </summary>
     private static Dictionary<string, string> ReadPartImageRelationships(ZipArchive archive, string partPath)
     {
-        var map = new Dictionary<string, string>();
-        var lastSlash = partPath.LastIndexOf('/');
-        var dir = lastSlash >= 0 ? partPath[..lastSlash] : string.Empty;
-        var file = lastSlash >= 0 ? partPath[(lastSlash + 1)..] : partPath;
-        var relsPath = (dir.Length > 0 ? dir + "/" : string.Empty) + "_rels/" + file + ".rels";
+        var dir = OpcPathHelper.GetDirectoryName(partPath);
+        var relsPath = OpcPathHelper.GetRelationshipPartPath(partPath);
 
-        var relsXml = LoadPart(archive, relsPath);
-        var relationships = relsXml?.Root?.Elements(Rel + "Relationship");
-        if (relationships is null)
-            return map;
-
-        foreach (var rel in relationships)
-        {
-            var type = rel.Attribute("Type")?.Value;
-            if (type is null || !type.EndsWith("/image", StringComparison.Ordinal))
-                continue;
-            var id = rel.Attribute("Id")?.Value;
-            var target = rel.Attribute("Target")?.Value;
-            if (string.IsNullOrEmpty(id) || string.IsNullOrEmpty(target))
-                continue;
-            // Targets are relative to the part's directory (e.g. "media/header3_image1.png" under word/).
-            map[id] = (dir.Length > 0 ? dir + "/" : string.Empty) + target.TrimStart('/');
-        }
-        return map;
+        return OpcRelationships.LoadTargetMap(
+            archive,
+            relsPath,
+            relationship => OpcPathHelper.ResolveRelativeZipPath(dir, relationship.Target),
+            relationship =>
+                !relationship.IsExternal &&
+                relationship.Type.EndsWith("/image", StringComparison.Ordinal));
     }
 
     /// <summary>Maps relationship id → part path for header/footer relationships in document.xml.rels.</summary>
-    private static Dictionary<string, string> ReadHeaderFooterRelationships(ZipArchive archive)
-    {
-        var map = new Dictionary<string, string>();
-        var relsXml = LoadPart(archive, "word/_rels/document.xml.rels");
-        var relationships = relsXml?.Root?.Elements(Rel + "Relationship");
-        if (relationships is null)
-            return map;
-
-        foreach (var rel in relationships)
-        {
-            var type = rel.Attribute("Type")?.Value;
-            if (type is null || !(type.EndsWith("/header", StringComparison.Ordinal) || type.EndsWith("/footer", StringComparison.Ordinal)))
-                continue;
-            var id = rel.Attribute("Id")?.Value;
-            var target = rel.Attribute("Target")?.Value;
-            if (!string.IsNullOrEmpty(id) && !string.IsNullOrEmpty(target))
-                map[id] = "word/" + target.TrimStart('/');
-        }
-        return map;
-    }
+    private static Dictionary<string, string> ReadHeaderFooterRelationships(ZipArchive archive) =>
+        OpcRelationships.LoadTargetMap(
+            archive,
+            "word/_rels/document.xml.rels",
+            relationship => OpcPathHelper.ResolveRelativeZipPath("word", relationship.Target),
+            relationship =>
+                !relationship.IsExternal &&
+                (relationship.Type.EndsWith("/header", StringComparison.Ordinal) ||
+                 relationship.Type.EndsWith("/footer", StringComparison.Ordinal)));
 
     private static XDocument? LoadPart(ZipArchive archive, string entryPath)
-    {
-        var entry = archive.GetEntry(entryPath);
-        if (entry is null)
-            return null;
-        using var entryStream = entry.Open();
-        using var reader = XmlReader.Create(entryStream, SecureXmlReaderSettings.Create());
-        return XDocument.Load(reader);
-    }
+        => OpcXml.LoadXmlOrNull(archive, entryPath);
 
     private static Paragraph ReadParagraph(
         XElement p,
@@ -3465,7 +3359,7 @@ public static class DocxReader
             if (rel.Type is not (ChartRelType or ChartExRelType))
                 continue;
 
-            var partName = ResolveWordRelativePartName(rel.Target);
+            var partName = OpcPathHelper.ResolveAbsolutePartName("/word", rel.Target);
             if (partName is null)
                 continue;
 
@@ -3530,25 +3424,23 @@ public static class DocxReader
         IReadOnlyDictionary<string, string> contentTypeOverrides,
         IReadOnlyDictionary<string, string> contentTypeDefaults)
     {
-        var relsPartName = RelsPartNameFor(partName);
-        var relsXml = LoadPart(archive, relsPartName.TrimStart('/'));
-        var relationships = relsXml?.Root?.Elements(Rel + "Relationship");
-        if (relationships is null)
+        var relsPartName = OpcPathHelper.GetRelationshipPartName(partName);
+        var relationships = OpcRelationships.Load(archive, relsPartName.TrimStart('/'));
+        if (relationships.Count == 0)
             return;
 
         // The part's own _rels is itself preserved (covered by the rels Default content type, so no Override).
         CapturePreservedPart(archive, document, relsPartName, contentTypeOverrides, contentTypeDefaults, relationshipType: null);
 
-        var baseFolder = FolderOf(partName);
+        var baseFolder = OpcPathHelper.GetPartDirectoryName(partName);
         foreach (var rel in relationships)
         {
             // External targets (TargetMode="External") have no package part to capture.
-            if (rel.Attribute("TargetMode")?.Value == "External")
+            if (rel.IsExternal)
                 continue;
-            var target = rel.Attribute("Target")?.Value;
-            if (string.IsNullOrEmpty(target))
+            if (string.IsNullOrEmpty(rel.Target))
                 continue;
-            var targetPartName = ResolveRelativePartName(baseFolder, target);
+            var targetPartName = OpcPathHelper.ResolveAbsolutePartName(baseFolder, rel.Target);
             if (targetPartName is null || document.Preserved.Parts.Any(p => p.PartName == targetPartName))
                 continue;
             if (CapturePreservedPart(archive, document, targetPartName, contentTypeOverrides, contentTypeDefaults, relationshipType: null))
@@ -3561,94 +3453,15 @@ public static class DocxReader
     /// re-emit the Default a verbatim-preserved part relies on (e.g. a chart media part's png/emf Default).
     /// </summary>
     private static Dictionary<string, string> ReadContentTypeDefaults(ZipArchive archive)
-    {
-        var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        var ctXml = LoadPart(archive, "[Content_Types].xml");
-        var defaults = ctXml?.Root?.Elements(Ct + "Default");
-        if (defaults is null)
-            return map;
-        foreach (var def in defaults)
-        {
-            var extension = def.Attribute("Extension")?.Value;
-            var contentType = def.Attribute("ContentType")?.Value;
-            if (!string.IsNullOrEmpty(extension) && !string.IsNullOrEmpty(contentType))
-                map[extension] = contentType;
-        }
-        return map;
-    }
+        => OpcMediaTypes.ReadDefaultContentTypes(archive);
 
     /// <summary>Reads document.xml.rels as id → (Type, Target). Empty when the rels part is absent.</summary>
-    private static Dictionary<string, (string Type, string Target)> ReadDocumentRelationships(ZipArchive archive)
-    {
-        var map = new Dictionary<string, (string, string)>(StringComparer.Ordinal);
-        var relsXml = LoadPart(archive, "word/_rels/document.xml.rels");
-        var relationships = relsXml?.Root?.Elements(Rel + "Relationship");
-        if (relationships is null)
-            return map;
-        foreach (var rel in relationships)
-        {
-            var id = rel.Attribute("Id")?.Value;
-            var type = rel.Attribute("Type")?.Value;
-            var target = rel.Attribute("Target")?.Value;
-            if (!string.IsNullOrEmpty(id) && !string.IsNullOrEmpty(type) && !string.IsNullOrEmpty(target))
-                map[id] = (type, target);
-        }
-        return map;
-    }
-
-    /// <summary>
-    /// Resolves a document-relationship Target (relative to <c>word/</c>) to an absolute part name. A bare
-    /// target (e.g. <c>charts/chart1.xml</c>) lands under <c>/word/</c>; a <c>../</c>-prefixed target steps out
-    /// of word/. Returns null for an absolute or unresolvable target.
-    /// </summary>
-    private static string? ResolveWordRelativePartName(string target) =>
-        ResolveRelativePartName("/word", target);
-
-    /// <summary>
-    /// Resolves <paramref name="target"/> (relative to <paramref name="baseFolder"/>, an absolute folder such as
-    /// <c>/word/charts</c>) to an absolute part name, collapsing <c>../</c> and <c>./</c> segments. A target that
-    /// is already absolute (starts with <c>/</c>) is returned as-is. Returns null when the path escapes the root.
-    /// </summary>
-    private static string? ResolveRelativePartName(string baseFolder, string target)
-    {
-        if (target.StartsWith('/'))
-            return target;
-        var segments = new List<string>(baseFolder.Trim('/').Split('/', StringSplitOptions.RemoveEmptyEntries));
-        foreach (var segment in target.Replace('\\', '/').Split('/', StringSplitOptions.RemoveEmptyEntries))
-        {
-            if (segment == ".")
-                continue;
-            if (segment == "..")
-            {
-                if (segments.Count == 0)
-                    return null;
-                segments.RemoveAt(segments.Count - 1);
-            }
-            else
-            {
-                segments.Add(segment);
-            }
-        }
-        return "/" + string.Join('/', segments);
-    }
-
-    /// <summary>The absolute folder (no trailing slash) containing <paramref name="partName"/>, e.g.
-    /// <c>/word/charts/chart1.xml</c> → <c>/word/charts</c>.</summary>
-    private static string FolderOf(string partName)
-    {
-        var slash = partName.LastIndexOf('/');
-        return slash <= 0 ? "/" : partName[..slash];
-    }
-
-    /// <summary>The conventional <c>_rels</c> part name for a part, e.g. <c>/word/charts/chart1.xml</c> →
-    /// <c>/word/charts/_rels/chart1.xml.rels</c>.</summary>
-    private static string RelsPartNameFor(string partName)
-    {
-        var slash = partName.LastIndexOf('/');
-        var folder = slash <= 0 ? string.Empty : partName[..slash];
-        var file = slash < 0 ? partName : partName[(slash + 1)..];
-        return $"{folder}/_rels/{file}.rels";
-    }
+    private static Dictionary<string, (string Type, string Target)> ReadDocumentRelationships(ZipArchive archive) =>
+        OpcRelationships.LoadById(archive, "word/_rels/document.xml.rels")
+            .ToDictionary(
+                relationship => relationship.Key,
+                relationship => (Type: relationship.Value.Type, Target: relationship.Value.Target),
+                StringComparer.Ordinal);
 
     /// <summary>
     /// Finds the plot area's single chart-type element and maps it to a <see cref="ChartKind"/>:
@@ -3918,25 +3731,11 @@ public static class DocxReader
     }
 
     /// <summary>Maps relationship id -> media part path from word/_rels/document.xml.rels.</summary>
-    private static Dictionary<string, string> ReadImageRelationships(ZipArchive archive)
-    {
-        var map = new Dictionary<string, string>();
-        var relsXml = LoadPart(archive, "word/_rels/document.xml.rels");
-        var relationships = relsXml?.Root?.Elements(Rel + "Relationship");
-        if (relationships is null)
-            return map;
-
-        foreach (var rel in relationships)
-        {
-            var id = rel.Attribute("Id")?.Value;
-            var target = rel.Attribute("Target")?.Value;
-            if (string.IsNullOrEmpty(id) || string.IsNullOrEmpty(target))
-                continue;
-            // Targets in document rels are relative to the word/ folder.
-            map[id] = "word/" + target.TrimStart('/');
-        }
-        return map;
-    }
+    private static Dictionary<string, string> ReadImageRelationships(ZipArchive archive) =>
+        OpcRelationships.LoadTargetMap(
+            archive,
+            "word/_rels/document.xml.rels",
+            relationship => "word/" + relationship.Target.TrimStart('/'));
 
     /// <summary>
     /// Maps relationship id → archive entry path for a satellite part's own <c>_rels</c> (e.g.
@@ -3945,50 +3744,22 @@ public static class DocxReader
     /// an empty map when the rels part is absent — so a comments part with no image relationships behaves exactly
     /// as before. Mirrors <see cref="ReadImageRelationships"/> for non-document parts.
     /// </summary>
-    private static Dictionary<string, string> ReadPartImageRelationships(ZipArchive archive, string relsPath, string baseFolder)
-    {
-        var map = new Dictionary<string, string>(StringComparer.Ordinal);
-        var relsXml = LoadPart(archive, relsPath);
-        var relationships = relsXml?.Root?.Elements(Rel + "Relationship");
-        if (relationships is null)
-            return map;
-
-        foreach (var rel in relationships)
-        {
-            if (rel.Attribute("TargetMode")?.Value == "External")
-                continue;
-            var id = rel.Attribute("Id")?.Value;
-            var target = rel.Attribute("Target")?.Value;
-            if (string.IsNullOrEmpty(id) || string.IsNullOrEmpty(target))
-                continue;
-            // Targets are relative to baseFolder; a "../" steps out of it. Collapse to the archive entry path.
-            var resolved = ResolveRelativePartName("/" + baseFolder.Trim('/'), target);
-            if (resolved is not null)
-                map[id] = resolved.TrimStart('/');
-        }
-        return map;
-    }
+    private static Dictionary<string, string> ReadPartImageRelationships(ZipArchive archive, string relsPath, string baseFolder) =>
+        OpcRelationships.LoadTargetMap(
+            archive,
+            relsPath,
+            relationship => OpcPathHelper.ResolveAbsolutePartName(
+                "/" + baseFolder.Trim('/'),
+                relationship.Target)?.TrimStart('/'),
+            relationship => !relationship.IsExternal);
 
     /// <summary>Maps relationship id -> external hyperlink target (URL) from document.xml.rels.</summary>
-    private static Dictionary<string, string> ReadHyperlinkRelationships(ZipArchive archive)
-    {
-        var map = new Dictionary<string, string>();
-        var relsXml = LoadPart(archive, "word/_rels/document.xml.rels");
-        var relationships = relsXml?.Root?.Elements(Rel + "Relationship");
-        if (relationships is null)
-            return map;
-
-        foreach (var rel in relationships)
-        {
-            if (!rel.Attribute("Type")?.Value.EndsWith("/hyperlink", StringComparison.Ordinal) ?? true)
-                continue;
-            var id = rel.Attribute("Id")?.Value;
-            var target = rel.Attribute("Target")?.Value;
-            if (!string.IsNullOrEmpty(id) && !string.IsNullOrEmpty(target))
-                map[id] = target; // external targets are stored verbatim (TargetMode="External")
-        }
-        return map;
-    }
+    private static Dictionary<string, string> ReadHyperlinkRelationships(ZipArchive archive) =>
+        OpcRelationships.LoadTargetMap(
+            archive,
+            "word/_rels/document.xml.rels",
+            relationship => relationship.Target,
+            relationship => relationship.Type.EndsWith("/hyperlink", StringComparison.Ordinal));
 
     private static byte[]? LoadMedia(ZipArchive archive, string entryPath)
     {
@@ -4491,6 +4262,8 @@ public static class DocxReader
 
         // w:shd on a run: when val is "clear" (or absent, which defaults to clear) it is a solid highlight;
         // any other val token means a pattern-based character shading. Map the two cases to distinct fields.
+        // Keep this WordprocessingML color boundary local: "auto", named w:highlight tokens, and nullable
+        // model "#RRGGBB" fields are not the same contract as strict DrawingML srgbClr/theme helpers.
         var shdPattern = ShadingPatterns.FromToken(shdVal);
         var isSolidHighlight = shdVal is null or "clear";
         var fillHex = highlight is null or "auto" ? null : "#" + highlight.TrimStart('#');
@@ -4546,27 +4319,6 @@ public static class DocxReader
         };
     }
 
-    /// <summary>Parses docProps/core.xml into <see cref="TextDocument.Properties"/>; a missing part is fine.</summary>
-    private static void ReadCoreProperties(ZipArchive archive, TextDocument document)
-    {
-        var coreXml = LoadPart(archive, "docProps/core.xml");
-        var root = coreXml?.Root;
-        if (root is null)
-            return;
-
-        var properties = document.Properties;
-        properties.Title = Trimmed(root.Element(Dc + "title")?.Value);
-        properties.Author = Trimmed(root.Element(Dc + "creator")?.Value);
-        properties.Subject = Trimmed(root.Element(Dc + "subject")?.Value);
-        properties.Keywords = Trimmed(root.Element(Cp + "keywords")?.Value);
-        properties.Comments = Trimmed(root.Element(Dc + "description")?.Value);
-        properties.LastModifiedBy = Trimmed(root.Element(Cp + "lastModifiedBy")?.Value);
-        properties.Created = ParseW3CDtf(root.Element(DcTerms + "created")?.Value);
-        properties.Modified = ParseW3CDtf(root.Element(DcTerms + "modified")?.Value);
-
-        static string? Trimmed(string? value) => string.IsNullOrEmpty(value) ? null : value;
-    }
-
     /// <summary>
     /// Reads FreeW custom document properties from docProps/custom.xml: the page watermark into
     /// <see cref="PageSettings.WatermarkOptions"/> (or the legacy <see cref="PageSettings.Watermark"/>
@@ -4576,38 +4328,30 @@ public static class DocxReader
     /// </summary>
     private static void ReadCustomProperties(ZipArchive archive, TextDocument document)
     {
-        var customXml = LoadPart(archive, "docProps/custom.xml");
+        var customXml = LoadPart(archive, OpcPackageProperties.CustomPropertiesZipEntry);
         var root = customXml?.Root;
         if (root is null)
             return;
         document.Preserved.OriginalCustomProperties = new XElement(root);
 
-        var properties = root.Elements(CustomProps + "property").ToList();
+        var customProperties = OpcCustomDocumentProperties.FromRoot(root);
 
-        static string? PropStr(List<System.Xml.Linq.XElement> props, string name)
-        {
-            var el = props.FirstOrDefault(p => p.Attribute("name")?.Value == name);
-            return el?.Element(VtVariant + "lpwstr")?.Value;
-        }
-
-        var text = PropStr(properties, WatermarkPropertyName);
+        var text = customProperties.GetString(WatermarkPropertyName);
         // Accept empty text for picture watermarks: check for any WatermarkOptions property presence.
-        var imageBase64Check = PropStr(properties, WatermarkImagePropertyName);
+        var imageBase64Check = customProperties.GetString(WatermarkImagePropertyName);
         if (!string.IsNullOrEmpty(text) || !string.IsNullOrEmpty(imageBase64Check))
         {
             // Check if full WatermarkOptions properties are present (written by the new writer).
-            var font = PropStr(properties, WatermarkFontFamilyPropertyName);
-            var color = PropStr(properties, WatermarkColorPropertyName);
-            var layoutStr = PropStr(properties, WatermarkLayoutPropertyName);
-            var opacityStr = properties.FirstOrDefault(p => p.Attribute("name")?.Value == WatermarkOpacityPropertyName)
-                ?.Element(VtVariant + "r8")?.Value;
+            var font = customProperties.GetString(WatermarkFontFamilyPropertyName);
+            var color = customProperties.GetString(WatermarkColorPropertyName);
+            var layoutStr = customProperties.GetString(WatermarkLayoutPropertyName);
+            var opacity = customProperties.GetDouble(WatermarkOpacityPropertyName) ?? 0.3;
 
-            if (font is not null || color is not null || layoutStr is not null || opacityStr is not null
+            if (font is not null || color is not null || layoutStr is not null
+                || customProperties.Contains(WatermarkOpacityPropertyName)
                 || !string.IsNullOrEmpty(imageBase64Check))
             {
                 var layout = layoutStr is "Horizontal" ? WatermarkLayout.Horizontal : WatermarkLayout.Diagonal;
-                var opacity = double.TryParse(opacityStr, System.Globalization.NumberStyles.Float,
-                    System.Globalization.CultureInfo.InvariantCulture, out var op) ? op : 0.3;
 
                 // Picture watermark: image bytes encoded as base-64 (pre-read above).
                 byte[]? imageBytes = null;
@@ -4616,7 +4360,7 @@ public static class DocxReader
                     try { imageBytes = Convert.FromBase64String(imageBase64Check); }
                     catch { /* corrupt base-64 → treat as no image */ }
                 }
-                var scaleStr = PropStr(properties, WatermarkScalePropertyName);
+                var scaleStr = customProperties.GetString(WatermarkScalePropertyName);
                 int.TryParse(scaleStr, System.Globalization.NumberStyles.Integer,
                     System.Globalization.CultureInfo.InvariantCulture, out var scalePct);
 
@@ -4637,9 +4381,7 @@ public static class DocxReader
             }
         }
 
-        var markAsFinal = properties.FirstOrDefault(p => p.Attribute("name")?.Value == MarkAsFinalPropertyName);
-        var flag = markAsFinal?.Element(VtVariant + "bool")?.Value;
-        if (flag is not null && (flag.Equals("true", StringComparison.OrdinalIgnoreCase) || flag == "1"))
+        if (customProperties.GetBoolean(MarkAsFinalPropertyName) == true)
             document.MarkedAsFinal = true;
     }
 

@@ -101,6 +101,37 @@ public sealed class ChartDataDialogTests : IDisposable
         sess.SelectedChart!.Series[1].Name.Should().Be("Beta");
     }
 
+    [Fact]
+    public void ChartDataDialog_UsesSharedPlannerForPolicy()
+    {
+        var source = ReadWorkspaceFile("freep", "FreeP.App.Host", "ChartDataDialog.cs");
+
+        source.Should().Contain("ChartDataDialogPlanner.FromChart(chart)");
+        source.Should().Contain("_planner.BuildTableProjection()");
+        source.Should().Contain("new ChartRowViewModel(row)");
+        source.Should().Contain("MakeEditableHeader(seriesColumn)");
+        source.Should().Contain("_planner.BuildCommitPlan(ReadCategoryEditsFromGrid())");
+        source.Should().Contain("_planner.AddSeries()");
+        source.Should().Contain("_planner.AddCategory()");
+        source.Should().Contain("ChartDataDialogPlanner.FormatCellValue(");
+        source.Should().Contain("ChartDataDialogPlanner.ParseCellValue(");
+        source.Should().NotContain("private readonly List<string>       _categories");
+        source.Should().NotContain("private readonly List<string>       _seriesNames");
+        source.Should().NotContain("private readonly List<List<double?>> _values");
+        source.Should().NotContain("private void EnsureRectangular");
+        source.Should().NotContain("double.TryParse");
+        source.Should().NotContain("Enumerable.Repeat");
+        source.Should().NotContain("_planner.GetCategory(");
+        source.Should().NotContain("_planner.SetCategory(");
+        source.Should().NotContain("_planner.GetSeriesName(");
+        source.Should().NotContain("_planner.SetSeriesName(");
+        source.Should().NotContain("_planner.GetValue(");
+        source.Should().NotContain("_planner.SetValue(");
+        source.Should().NotContain("_planner.CategoriesForCommit()");
+        source.Should().NotContain("_planner.SeriesNamesForCommit()");
+        source.Should().NotContain("_planner.ValuesForCommit()");
+    }
+
     // ── EditingSession chart API (from session, not dialog) ───────────────────────
 
     [StaFact]
@@ -302,5 +333,26 @@ public sealed class ChartDataDialogTests : IDisposable
 
         sess.SelectedChart!.Series[0].Values[1]
             .Should().BeNull("W7: original Feb gap must be null after undo, not 0.0");
+    }
+
+    private static string ReadWorkspaceFile(params string[] relativeParts)
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            var parts = new string[relativeParts.Length + 1];
+            parts[0] = directory.FullName;
+            relativeParts.CopyTo(parts, 1);
+
+            var candidate = Path.Combine(parts);
+            if (File.Exists(candidate))
+                return File.ReadAllText(candidate);
+
+            directory = directory.Parent;
+        }
+
+        throw new FileNotFoundException(
+            "Could not locate workspace file.",
+            Path.Combine(relativeParts));
     }
 }

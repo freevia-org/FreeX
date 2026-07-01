@@ -26,13 +26,14 @@ public partial class ExportPlannerTests
         printExport.Should().Contain("RenderExportDocument(effectiveOptions)");
         printExport.Should().Contain("RenderExportPaginator(effectiveOptions)");
         printExport.Should().Contain("ApplyExportPageRange(options");
-        printExport.Should().Contain("ExportAsPdf(request.Path, ExportPlanner.DescribeRequest(request), request.Options)");
-        printExport.Should().Contain("ExportAsXps(request.Path, ExportPlanner.DescribeRequest(request), request.Options)");
+        printExport.Should().Contain("ExportAsPdf(request.Path, WpfExportDescriptionPlanner.DescribeRequest(request), request.Options)");
+        printExport.Should().Contain("ExportAsXps(request.Path, WpfExportDescriptionPlanner.DescribeRequest(request), request.Options)");
         printExport.Should().Contain("using (var pkg = System.IO.Packaging.Package.Open(");
         printExport.Should().Contain("ResolveExportRange(options)");
         printExport.Should().Contain("PdfDocumentProperties.FromWorkbook(_workbook, effectiveOptions)");
         printExport.Should().Contain("XpsDocumentProperties.ApplyToPackage(pkg, XpsDocumentProperties.FromWorkbook(_workbook, effectiveOptions))");
         printExport.Should().Contain("ExportPlanner.TryValidatePageRange(effectiveOptions.PageRange, document.Pages.Count");
+        printExport.Should().Contain("WpfExportPlannerTextResolver.Instance");
         printExport.Should().Contain("ExportPlanner.TryValidatePageRange(options.PageRange, paginator.PageCount");
         printExport.Should().Contain("CreatePdfBookmarks(effectiveOptions)");
         printExport.Should().Contain("includeSelectableText: !effectiveOptions.BitmapTextWhenFontsMayNotBeEmbedded");

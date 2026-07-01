@@ -11,12 +11,19 @@ FreeX is a free spreadsheet app for local workbook files. It opens and saves sta
 
 ## Downloads
 
-Tester builds are published on the [FreeX releases page](https://github.com/tony-xmelon/FreeX/releases). The stable latest non-prerelease tester asset is:
+Tester builds are published on the [FreeX releases page](https://github.com/tony-xmelon/FreeX/releases). The stable latest non-prerelease FreeX tester assets are:
 
 - [FreeX-latest-win-x64.exe](https://github.com/tony-xmelon/FreeX/releases/latest/download/FreeX-latest-win-x64.exe)
 - [FreeX-latest-win-x64.msix](https://github.com/tony-xmelon/FreeX/releases/latest/download/FreeX-latest-win-x64.msix)
+- [FreeX-latest-macos-arm64.zip](https://github.com/tony-xmelon/FreeX/releases/latest/download/FreeX-latest-macos-arm64.zip)
+- [FreeX-latest-macos-x64.zip](https://github.com/tony-xmelon/FreeX/releases/latest/download/FreeX-latest-macos-x64.zip)
 
-Latest verified tester release: [FreeX (Test Release) v0.8.127](https://github.com/tony-xmelon/FreeX/releases/tag/v0-8-127-2026-06-20-19-57-44-run127-attempt1%2B1790d2ab), published from Tester Release run 127 attempt 1 at commit `1790d2ab`. GitHub's `releases/latest` redirect remains on the latest non-prerelease tester build.
+Latest verified FreeX tester release: [FreeX (Test Release) v0.8.148](https://github.com/tony-xmelon/FreeX/releases/tag/v0-8-148-2026-07-01-19-22-54-run147-attempt1%2Bd1c354f0), published from Tester Release run 147 attempt 1 at commit `d1c354f0`. GitHub's `releases/latest` redirect remains on the latest non-prerelease tester build.
+
+Current platform tester releases:
+
+- [Windows and macOS v0.8.148](https://github.com/tony-xmelon/FreeX/releases/tag/v0-8-148-2026-07-01-19-22-54-run147-attempt1%2Bd1c354f0)
+- [Linux v0.8.148](https://github.com/tony-xmelon/FreeX/releases/tag/freex-linux-v0.8.148)
 
 ## Documentation
 

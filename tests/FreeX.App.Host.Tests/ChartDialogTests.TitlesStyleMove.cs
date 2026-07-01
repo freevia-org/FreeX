@@ -72,6 +72,12 @@ public sealed partial class ChartDialogTests
         options[0].Should().Be(new ChartStyleOption(null, "Automatic", "Use current chart formatting"));
         options.Skip(1).Select(option => option.StyleId).Should().Equal(Enumerable.Range(1, 48).Cast<int?>());
         options.Skip(1).Should().OnlyContain(option => !string.IsNullOrWhiteSpace(option.PreviewLabel));
+
+        var source = ReadChartDialogSource();
+        source.Should().Contain("ChartStylePlanner.GetStyleOptions()");
+        source.Should().Contain("ChartStylePlanner.CreateResult(chartStyleId)");
+        source.Should().NotContain("Enumerable.Range(1, 48).Select");
+        source.Should().NotContain("Math.Clamp(value.Value, 1, 48)");
     }
 
     [Fact]
@@ -168,9 +174,10 @@ public sealed partial class ChartDialogTests
             source.IndexOf("public sealed class MoveChartDialog", StringComparison.Ordinal)..
             source.IndexOf("public sealed record SelectDataSourceDialogResult", StringComparison.Ordinal)];
 
-        dialogSource.Should().Contain("new Label { Content = UiText.Get(\"MoveChart_TargetNameLabel\"), Target = _targetBox");
-        dialogSource.Should().Contain("AutomationProperties.SetName(_targetBox, UiText.Get(\"MoveChart_TargetNameAutomationName\"));");
-        dialogSource.Should().Contain("AutomationProperties.SetHelpText(_targetBox, UiText.Get(\"MoveChart_TargetNameHelpText\"));");
+        dialogSource.Should().Contain("var targetField = ChartMovePlanner.GetTargetNameField();");
+        dialogSource.Should().Contain("new Label { Content = UiText.Get(targetField.LabelResourceKey), Target = _targetBox");
+        dialogSource.Should().Contain("AutomationProperties.SetName(_targetBox, UiText.Get(targetField.AutomationNameResourceKey!));");
+        dialogSource.Should().Contain("AutomationProperties.SetHelpText(_targetBox, UiText.Get(targetField.HelpResourceKey!));");
     }
 
     [Fact]
@@ -178,22 +185,13 @@ public sealed partial class ChartDialogTests
     {
         var source = ReadChartDialogSource();
 
-        foreach (var key in new[]
-        {
-            "MoveChart_ObjectInSheet",
-            "MoveChart_NewChartSheet",
-            "MoveChart_TargetNameLabel",
-            "SelectDataSource_ChartDataRangeLabel",
-            "SelectDataSource_SwitchRowColumn",
-            "SelectDataSource_FirstColumnCategories",
-            "SelectDataSource_AddSeriesButton",
-            "SelectDataSource_EditSeriesButton",
-            "SelectDataSource_RemoveSeriesButton",
-            "SelectDataSource_EditAxisLabelsButton"
-        })
-        {
-            source.Should().Contain($"UiText.Get(\"{key}\")");
-        }
+        source.Should().Contain("MoveTargetLabel(ChartMoveTargetKind.ObjectInSheet)");
+        source.Should().Contain("MoveTargetLabel(ChartMoveTargetKind.NewSheet)");
+        source.Should().Contain("ChartMovePlanner.GetTargetChoices()");
+        source.Should().Contain("FieldLabel(SelectDataSourcePlanner.GetFirstColumnCategoriesField())");
+        source.Should().Contain("FieldLabel(SelectDataSourcePlanner.GetSwitchRowColumnField())");
+        source.Should().Contain("FieldLabel(rangeField)");
+        source.Should().Contain("UiText.Get(action.LabelResourceKey)");
     }
 
 }

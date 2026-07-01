@@ -127,14 +127,11 @@ public sealed partial class PivotWorkflowDialogTests
             "");
 
         source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"PivotFieldGrouping_EnterPositiveGroupingInterval\"), _intervalBox);");
-        source.Should().Contain("DialogMessageHelper.ShowWarning(this, message, Title)");
+        source.Should().Contain("DialogFocus.ShowWarningAndFocus(this, message, Title, target);");
         source.Should().Contain("private bool ShowInvalidInputWarning(string message, TextBox target)");
         source.Should().Contain("string.IsNullOrWhiteSpace(value)");
         source.Should().Contain("NumericInputParser.TryParseFiniteDouble(value.Trim(), CultureInfo.CurrentCulture, CultureInfo.InvariantCulture, out interval)");
         source.Should().Contain("interval <= 0");
-        source.Should().Contain("target.Focus();");
-        source.Should().Contain("target.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(target);");
     }
 
     [Fact]

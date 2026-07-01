@@ -1,3 +1,4 @@
+using System.Globalization;
 using FluentAssertions;
 using FreeX.App.Presentation.FillSeries;
 using FreeX.Core.Commands;
@@ -19,6 +20,50 @@ public sealed class FillSeriesPlannerTests
     {
         FillSeriesPlanner.TryParseStep(input, out var step).Should().Be(expected);
         step.Should().Be(expectedStep);
+    }
+
+    [Fact]
+    public void TryParseStep_WithExplicitCulture_ParsesCultureDecimalBeforeInvariantThousands()
+    {
+        var culture = CultureInfo.GetCultureInfo("fr-FR");
+
+        FillSeriesPlanner.TryParseStep("1,5", culture, out var step).Should().BeTrue();
+
+        step.Should().Be(1.5);
+    }
+
+    [Fact]
+    public void DefaultOptions_MatchExcelSeriesDialogDefaults()
+    {
+        FillSeriesPlanner.DefaultOptions.Should().Be(new FillSeriesOptions(
+            Step: 1,
+            SeriesIn: FillSeriesDirection.Columns,
+            Type: FillSeriesType.Linear,
+            DateUnit: FillSeriesDateUnit.Day));
+
+        FillSeriesPlanner.CreateDefaultOptions(2.5).Should().Be(
+            FillSeriesPlanner.DefaultOptions with { Step = 2.5 });
+    }
+
+    [Theory]
+    [InlineData(FillSeriesType.Linear, false)]
+    [InlineData(FillSeriesType.Growth, false)]
+    [InlineData(FillSeriesType.Date, true)]
+    [InlineData(FillSeriesType.AutoFill, false)]
+    public void IsDateUnitEnabled_OnlyEnablesDateUnitsForDateSeries(FillSeriesType type, bool expected)
+    {
+        FillSeriesPlanner.IsDateUnitEnabled(type).Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData(FillSeriesInputError.InvalidStep, FillSeriesInputFocusTarget.StepValue)]
+    [InlineData(FillSeriesInputError.InvalidStop, FillSeriesInputFocusTarget.StopValue)]
+    [InlineData(FillSeriesInputError.None, FillSeriesInputFocusTarget.StepValue)]
+    public void FocusTargetFor_MapsValidationErrorsToDialogInput(
+        FillSeriesInputError error,
+        FillSeriesInputFocusTarget expected)
+    {
+        FillSeriesPlanner.FocusTargetFor(error).Should().Be(expected);
     }
 
     [Theory]
@@ -76,6 +121,21 @@ public sealed class FillSeriesPlannerTests
     }
 
     [Fact]
+    public void TryCreateOptions_WithExplicitCulture_ParsesStepAndStopInThatCulture()
+    {
+        var culture = CultureInfo.GetCultureInfo("fr-FR");
+
+        var ok = FillSeriesPlanner.TryCreateOptions(
+            FillSeriesDirection.Columns, FillSeriesType.Linear, FillSeriesDateUnit.Day,
+            stepText: "1,5", stopText: "3,5", culture: culture, out var options, out var error);
+
+        ok.Should().BeTrue();
+        error.Should().Be(FillSeriesInputError.None);
+        options.Step.Should().Be(1.5);
+        options.StopValue.Should().Be(3.5);
+    }
+
+    [Fact]
     public void BuildLinearSeriesEdits_FillsRowMajorCellsAfterStartingCell()
     {
         var sheet = new Sheet(SheetId.New(), "Sheet1");
@@ -94,6 +154,24 @@ public sealed class FillSeriesPlannerTests
     }
 
     [Fact]
+    public void BuildLinearSeriesEdits_UsesColumnMajorOrderForExcelSeriesInColumns()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 2, 2),
+            new CellAddress(sheet.Id, 3, 3));
+        sheet.SetCell(range.Start, new NumberValue(10));
+
+        var edits = FillSeriesPlanner.BuildLinearSeriesEdits(sheet, range, step: 2, FillSeriesDirection.Columns);
+
+        edits.Select(edit => edit.Address).Should().Equal(
+            new CellAddress(sheet.Id, 3, 2),
+            new CellAddress(sheet.Id, 2, 3),
+            new CellAddress(sheet.Id, 3, 3));
+        edits.Select(edit => ((NumberValue)edit.NewCell.Value).Value).Should().Equal(12, 14, 16);
+    }
+
+    [Fact]
     public void BuildLinearSeriesEdits_StopsAtAscendingStopValue()
     {
         var sheet = new Sheet(SheetId.New(), "Sheet1");
@@ -105,6 +183,20 @@ public sealed class FillSeriesPlannerTests
         var edits = FillSeriesPlanner.BuildLinearSeriesEdits(sheet, range, step: 1, FillSeriesDirection.Rows, stopValue: 3);
 
         edits.Select(edit => ((NumberValue)edit.NewCell.Value).Value).Should().Equal(1, 2, 3);
+    }
+
+    [Fact]
+    public void BuildLinearSeriesEdits_StopsAtDescendingStopValue()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 1, 5));
+        sheet.SetCell(range.Start, new NumberValue(0));
+
+        var edits = FillSeriesPlanner.BuildLinearSeriesEdits(sheet, range, step: -1, FillSeriesDirection.Rows, stopValue: -3);
+
+        edits.Select(edit => ((NumberValue)edit.NewCell.Value).Value).Should().Equal(-1, -2, -3);
     }
 
     [Fact]
@@ -144,6 +236,49 @@ public sealed class FillSeriesPlannerTests
     }
 
     [Fact]
+    public void BuildSeriesEdits_DateSeriesPreservesEndOfMonth()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 1, 4));
+        sheet.SetCell(range.Start, DateTimeValue.FromDateTime(new DateTime(2026, 1, 31)));
+
+        var edits = FillSeriesPlanner.BuildSeriesEdits(
+            sheet,
+            range,
+            new FillSeriesOptions(Step: 1, SeriesIn: FillSeriesDirection.Rows, Type: FillSeriesType.Date, DateUnit: FillSeriesDateUnit.Month));
+
+        edits.Select(edit => ((DateTimeValue)edit.NewCell.Value).ToDateTime().Date)
+            .Should()
+            .Equal(
+                new DateTime(2026, 2, 28),
+                new DateTime(2026, 3, 31),
+                new DateTime(2026, 4, 30));
+    }
+
+    [Fact]
+    public void BuildDateSeriesEdits_SkipsWeekendsForExcelWeekdayUnit()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 1, 3));
+        sheet.SetCell(range.Start, DateTimeValue.FromDateTime(new DateTime(2026, 5, 29)));
+
+        var edits = FillSeriesPlanner.BuildDateSeriesEdits(
+            sheet,
+            range,
+            step: 1,
+            seriesIn: FillSeriesDirection.Rows,
+            dateUnit: FillSeriesDateUnit.Weekday);
+
+        edits.Select(edit => ((DateTimeValue)edit.NewCell.Value).ToDateTime().Date)
+            .Should()
+            .Equal(new DateTime(2026, 6, 1), new DateTime(2026, 6, 2));
+    }
+
+    [Fact]
     public void BuildSeriesEdits_ReturnsEmptyWhenSeedIsNotNumeric()
     {
         var sheet = new Sheet(SheetId.New(), "Sheet1");
@@ -158,5 +293,17 @@ public sealed class FillSeriesPlannerTests
             new FillSeriesOptions(Step: 1, Type: FillSeriesType.Linear));
 
         edits.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void BuildLinearSeriesEdits_ReturnsNoEditsWhenStartingCellIsNotNumeric()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 1, 3));
+        sheet.SetCell(range.Start, new TextValue("Start"));
+
+        FillSeriesPlanner.BuildLinearSeriesEdits(sheet, range, step: 1, FillSeriesDirection.Rows).Should().BeEmpty();
     }
 }

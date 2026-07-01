@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text.RegularExpressions;
 
 using FreeX.App.Avalonia.Ribbon;
+using FreeX.App.Presentation.PageLayout;
 
 using Xunit;
 
@@ -59,6 +60,12 @@ public sealed class AvaloniaExtraCommandIdsHygieneTests
                     continue; // routed through AvaloniaCommandIdAdapter, not a raw-canonical wiring.
                 keys.Add(key);
             }
+        }
+
+        foreach (var descriptor in PageLayoutRibbonActionPlanner.RibbonActionDescriptors)
+        {
+            if (!IsDottedHandlerId(descriptor.CommandId))
+                keys.Add(descriptor.CommandId);
         }
 
         return keys;

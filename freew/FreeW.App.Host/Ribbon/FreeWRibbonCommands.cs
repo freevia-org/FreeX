@@ -9,6 +9,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using Free.Shared.Ribbon;
 using FreeW.App.Host.Editing;
+using FreeW.App.Presentation.Dialogs;
 using FreeW.App.Presentation.Ribbon;
 using FreeW.Core.IO;
 using FreeW.Core.Model;
@@ -24,6 +25,28 @@ namespace FreeW.App.Host;
 /// </summary>
 internal static class FreeWRibbonCommands
 {
+    private static IRibbonCommand BuildImageTransformCommand(
+        DocumentView editor,
+        ObjectFormatTransformCommand command) =>
+        command.Kind switch
+        {
+            ObjectFormatTransformKind.Rotate => new ImageRotateStepCommand(editor, command.RotationDeltaDegrees),
+            ObjectFormatTransformKind.FlipHorizontal => new ImageFlipCommand(editor, vertical: false),
+            ObjectFormatTransformKind.FlipVertical => new ImageFlipCommand(editor, vertical: true),
+            _ => throw new ArgumentOutOfRangeException(nameof(command), command, null)
+        };
+
+    private static IRibbonCommand BuildShapeTransformCommand(
+        DocumentView editor,
+        ObjectFormatTransformCommand command) =>
+        command.Kind switch
+        {
+            ObjectFormatTransformKind.Rotate => new ShapeRotateStepCommand(editor, command.RotationDeltaDegrees),
+            ObjectFormatTransformKind.FlipHorizontal => new ShapeFlipCommand(editor, vertical: false),
+            ObjectFormatTransformKind.FlipVertical => new ShapeFlipCommand(editor, vertical: true),
+            _ => throw new ArgumentOutOfRangeException(nameof(command), command, null)
+        };
+
     public static RibbonCommandRegistry Build(DocumentView editor, RibbonStateStore stateStore) =>
         Build(editor, stateStore, onPrintPreview: null);
 
@@ -196,23 +219,23 @@ internal static class FreeWRibbonCommands
         Routed("freew.select", ApplicationCommands.SelectAll);
         if (onFindReplace is not null)
         {
-            registry.Register("freew.find", new ActionCommand(onFindReplace));
-            registry.Register("freew.replace", new ActionCommand(onFindReplace));
+            registry.Register("freew.find", new ActionRibbonCommand(onFindReplace));
+            registry.Register("freew.replace", new ActionRibbonCommand(onFindReplace));
         }
         // Home > Paragraph: apply multilevel/legal outline numbering (1, 1.1, 1.1.1) to the selected
         // paragraph(s); the outline definition persists to word/numbering.xml. Tab/Shift+Tab demote
         // and promote the outline depth (ListLevel) of the selected list paragraphs.
         // The top-level "freew.multilevel-list" id applies the first (standard decimal) preset directly
         // (clicking the button face vs. the dropdown arrow follows the same pattern as Word's gallery).
-        registry.Register("freew.multilevel-list", new ActionCommand(() => editor.ApplyMultiLevelList()));
-        registry.Register("freew.multilevel-demote", new ActionCommand(() => editor.ChangeListLevel(+1)));
-        registry.Register("freew.multilevel-promote", new ActionCommand(() => editor.ChangeListLevel(-1)));
+        registry.Register("freew.multilevel-list", new ActionRibbonCommand(() => editor.ApplyMultiLevelList()));
+        registry.Register("freew.multilevel-demote", new ActionRibbonCommand(() => editor.ChangeListLevel(+1)));
+        registry.Register("freew.multilevel-promote", new ActionRibbonCommand(() => editor.ChangeListLevel(-1)));
         // Predefined multilevel list preset commands — three Word-parity presets shown in the gallery.
         for (var pi = 0; pi < MultilevelListDialog.Presets.Length; pi++)
         {
             var preset = MultilevelListDialog.Presets[pi];
             var capturedPreset = preset; // capture for lambda
-            registry.Register($"freew.multilevel-preset-{pi}", new ActionCommand(() =>
+            registry.Register($"freew.multilevel-preset-{pi}", new ActionRibbonCommand(() =>
             {
                 editor.Focus();
                 capturedPreset.Apply(editor);
@@ -228,8 +251,8 @@ internal static class FreeWRibbonCommands
         // Formatting" matches the destination. In FreeW both resolve to match-destination insertion at
         // the caret (the pasted text inherits the caret run's formatting), routed through the editor's
         // undoable InsertText path. See DocumentView.PastePlainText / PasteMergeFormatting.
-        registry.Register("freew.paste-plain", new ActionCommand(() => editor.PastePlainText()));
-        registry.Register("freew.paste-merge", new ActionCommand(() => editor.PasteMergeFormatting()));
+        registry.Register("freew.paste-plain", new ActionRibbonCommand(() => editor.PastePlainText()));
+        registry.Register("freew.paste-merge", new ActionRibbonCommand(() => editor.PasteMergeFormatting()));
 
         // Home > Clipboard > Format Painter: arm the painter from the current selection's run +
         // paragraph formatting; the editor stamps it onto the user's next mouse selection and disarms.
@@ -248,33 +271,33 @@ internal static class FreeWRibbonCommands
         // Insert > Pages > Cover Page gallery: Default (existing centred layout), Banded (dark-blue title
         // band), and Motion (right-aligned title with date). The top-level id inserts the default preset
         // so clicking the button face (not the dropdown arrow) always works as before.
-        registry.Register("freew.cover-page", new ActionCommand(() => { editor.Focus(); editor.InsertCoverPage(CoverPagePreset.Default); }));
-        registry.Register("freew.cover-page-default", new ActionCommand(() => { editor.Focus(); editor.InsertCoverPage(CoverPagePreset.Default); }));
-        registry.Register("freew.cover-page-banded", new ActionCommand(() => { editor.Focus(); editor.InsertCoverPage(CoverPagePreset.Banded); }));
-        registry.Register("freew.cover-page-motion", new ActionCommand(() => { editor.Focus(); editor.InsertCoverPage(CoverPagePreset.Motion); }));
-        registry.Register("freew.blank-page", new ActionCommand(() => { editor.Focus(); editor.InsertBlankPage(); }));
-        registry.Register("freew.horizontal-rule", new ActionCommand(() => { editor.Focus(); editor.InsertHorizontalRule(); }));
-        registry.Register("freew.page-break", new ActionCommand(() => { editor.Focus(); editor.InsertPageBreak(); }));
+        registry.Register("freew.cover-page", new ActionRibbonCommand(() => { editor.Focus(); editor.InsertCoverPage(CoverPagePreset.Default); }));
+        registry.Register("freew.cover-page-default", new ActionRibbonCommand(() => { editor.Focus(); editor.InsertCoverPage(CoverPagePreset.Default); }));
+        registry.Register("freew.cover-page-banded", new ActionRibbonCommand(() => { editor.Focus(); editor.InsertCoverPage(CoverPagePreset.Banded); }));
+        registry.Register("freew.cover-page-motion", new ActionRibbonCommand(() => { editor.Focus(); editor.InsertCoverPage(CoverPagePreset.Motion); }));
+        registry.Register("freew.blank-page", new ActionRibbonCommand(() => { editor.Focus(); editor.InsertBlankPage(); }));
+        registry.Register("freew.horizontal-rule", new ActionRibbonCommand(() => { editor.Focus(); editor.InsertHorizontalRule(); }));
+        registry.Register("freew.page-break", new ActionRibbonCommand(() => { editor.Focus(); editor.InsertPageBreak(); }));
 
         // Layout > Page Setup > Breaks: section/column breaks. The page-break item reuses the existing
         // command (registered above). Each section break inserts a paragraph whose SectionBreak property
         // is set to the appropriate SectionBreakKind, inheriting the current document's page settings.
-        registry.Register("freew.column-break", new ActionCommand(() => { editor.Focus(); editor.InsertColumnBreak(); }));
-        registry.Register("freew.section-break-next-page", new ActionCommand(() => { editor.Focus(); editor.InsertSectionBreak(SectionBreakKind.NextPage); }));
-        registry.Register("freew.section-break-continuous", new ActionCommand(() => { editor.Focus(); editor.InsertSectionBreak(SectionBreakKind.Continuous); }));
-        registry.Register("freew.section-break-even-page", new ActionCommand(() => { editor.Focus(); editor.InsertSectionBreak(SectionBreakKind.EvenPage); }));
-        registry.Register("freew.section-break-odd-page", new ActionCommand(() => { editor.Focus(); editor.InsertSectionBreak(SectionBreakKind.OddPage); }));
+        registry.Register("freew.column-break", new ActionRibbonCommand(() => { editor.Focus(); editor.InsertColumnBreak(); }));
+        registry.Register("freew.section-break-next-page", new ActionRibbonCommand(() => { editor.Focus(); editor.InsertSectionBreak(SectionBreakKind.NextPage); }));
+        registry.Register("freew.section-break-continuous", new ActionRibbonCommand(() => { editor.Focus(); editor.InsertSectionBreak(SectionBreakKind.Continuous); }));
+        registry.Register("freew.section-break-even-page", new ActionRibbonCommand(() => { editor.Focus(); editor.InsertSectionBreak(SectionBreakKind.EvenPage); }));
+        registry.Register("freew.section-break-odd-page", new ActionRibbonCommand(() => { editor.Focus(); editor.InsertSectionBreak(SectionBreakKind.OddPage); }));
 
         // Insert tab — insert a small 2x2 table at the caret (routes through the undo/redo bus).
         registry.Register("freew.table", new InsertTableCommand(editor, rows: 2, columns: 2));
         // Insert tab — Table Tools: structural edits to the table containing the caret (all undoable).
-        registry.Register("freew.table-insert-row", new ActionCommand(() => { editor.Focus(); editor.InsertTableRow(); }));
-        registry.Register("freew.table-delete-row", new ActionCommand(() => { editor.Focus(); editor.DeleteTableRow(); }));
-        registry.Register("freew.table-insert-col", new ActionCommand(() => { editor.Focus(); editor.InsertTableColumn(); }));
-        registry.Register("freew.table-delete-col", new ActionCommand(() => { editor.Focus(); editor.DeleteTableColumn(); }));
+        registry.Register("freew.table-insert-row", new ActionRibbonCommand(() => { editor.Focus(); editor.InsertTableRow(); }));
+        registry.Register("freew.table-delete-row", new ActionRibbonCommand(() => { editor.Focus(); editor.DeleteTableRow(); }));
+        registry.Register("freew.table-insert-col", new ActionRibbonCommand(() => { editor.Focus(); editor.InsertTableColumn(); }));
+        registry.Register("freew.table-delete-col", new ActionRibbonCommand(() => { editor.Focus(); editor.DeleteTableColumn(); }));
         // Insert tab — Table Tools: merge the selected cells / split a merged cell (all undoable).
-        registry.Register("freew.merge-cells", new ActionCommand(() => { editor.Focus(); editor.MergeSelectedCells(); }));
-        registry.Register("freew.split-cell", new ActionCommand(() => { editor.Focus(); editor.SplitCell(); }));
+        registry.Register("freew.merge-cells", new ActionRibbonCommand(() => { editor.Focus(); editor.MergeSelectedCells(); }));
+        registry.Register("freew.split-cell", new ActionRibbonCommand(() => { editor.Focus(); editor.SplitCell(); }));
         // Insert tab — Table Tools: pick/clear a fill colour for the caret's cell (sets model + re-renders).
         registry.Register("freew.cell-shading", new CellShadingCommand(editor));
         // Insert tab — Table Tools: table-style toggles applied to the caret's table (sets model + re-renders).
@@ -282,59 +305,59 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.table-formula", new TableFormulaCommand(editor));
         // Table Tools — Properties: open the four-tab Table Properties dialog for the caret's table.
         registry.Register("freew.table-properties", new TablePropertiesCommand(editor));
-        registry.Register("freew.table-header-row", new ActionCommand(() => { editor.Focus(); editor.ToggleTableHeaderRow(); }));
-        registry.Register("freew.table-banded-rows", new ActionCommand(() => { editor.Focus(); editor.ToggleTableBandedRows(); }));
-        registry.Register("freew.table-repeat-header", new ActionCommand(() => { editor.Focus(); editor.ToggleTableRepeatHeaderRow(); }));
+        registry.Register("freew.table-header-row", new ActionRibbonCommand(() => { editor.Focus(); editor.ToggleTableHeaderRow(); }));
+        registry.Register("freew.table-banded-rows", new ActionRibbonCommand(() => { editor.Focus(); editor.ToggleTableBandedRows(); }));
+        registry.Register("freew.table-repeat-header", new ActionRibbonCommand(() => { editor.Focus(); editor.ToggleTableRepeatHeaderRow(); }));
 
         // Table Tools — Directional insert/delete
-        registry.Register("freew.table-insert-above", new ActionCommand(() => { editor.Focus(); editor.InsertTableRowAbove(); }));
-        registry.Register("freew.table-insert-col-left", new ActionCommand(() => { editor.Focus(); editor.InsertTableColumnLeft(); }));
-        registry.Register("freew.table-delete", new ActionCommand(() => { editor.Focus(); editor.DeleteTable(); }));
+        registry.Register("freew.table-insert-above", new ActionRibbonCommand(() => { editor.Focus(); editor.InsertTableRowAbove(); }));
+        registry.Register("freew.table-insert-col-left", new ActionRibbonCommand(() => { editor.Focus(); editor.InsertTableColumnLeft(); }));
+        registry.Register("freew.table-delete", new ActionRibbonCommand(() => { editor.Focus(); editor.DeleteTable(); }));
         // Table Tools — Merge/Split enhancements
-        registry.Register("freew.split-table", new ActionCommand(() => { editor.Focus(); editor.SplitTable(); }));
+        registry.Register("freew.split-table", new ActionRibbonCommand(() => { editor.Focus(); editor.SplitTable(); }));
         // Table Tools — Select
-        registry.Register("freew.table-select-table", new ActionCommand(() => { editor.Focus(); editor.SelectTable(); }));
-        registry.Register("freew.table-select-row", new ActionCommand(() => { editor.Focus(); editor.SelectTableRow(); }));
-        registry.Register("freew.table-select-col", new ActionCommand(() => { editor.Focus(); editor.SelectTableColumn(); }));
-        registry.Register("freew.table-select-cell", new ActionCommand(() => { editor.Focus(); editor.SelectTableCell(); }));
+        registry.Register("freew.table-select-table", new ActionRibbonCommand(() => { editor.Focus(); editor.SelectTable(); }));
+        registry.Register("freew.table-select-row", new ActionRibbonCommand(() => { editor.Focus(); editor.SelectTableRow(); }));
+        registry.Register("freew.table-select-col", new ActionRibbonCommand(() => { editor.Focus(); editor.SelectTableColumn(); }));
+        registry.Register("freew.table-select-cell", new ActionRibbonCommand(() => { editor.Focus(); editor.SelectTableCell(); }));
         // Table Tools — View Gridlines (toggle; display-only)
-        registry.Register("freew.table-view-gridlines", new ActionCommand(() => { editor.ViewGridlines = !editor.ViewGridlines; editor.Focus(); }));
+        registry.Register("freew.table-view-gridlines", new ActionRibbonCommand(() => { editor.ViewGridlines = !editor.ViewGridlines; editor.Focus(); }));
         // Table Tools — Cell Size
         registry.Register("freew.table-row-height", new TablePropertiesCommand(editor));
         registry.Register("freew.table-col-width", new TablePropertiesCommand(editor));
-        registry.Register("freew.table-distribute-rows", new ActionCommand(() => { editor.Focus(); editor.DistributeTableRows(); }));
-        registry.Register("freew.table-distribute-cols", new ActionCommand(() => { editor.Focus(); editor.DistributeTableColumns(); }));
-        registry.Register("freew.table-autofit-contents", new ActionCommand(() => { editor.Focus(); editor.SetTableAutoFit(AutoFitMode.Contents); }));
-        registry.Register("freew.table-autofit-window", new ActionCommand(() => { editor.Focus(); editor.SetTableAutoFit(AutoFitMode.Window); }));
-        registry.Register("freew.table-autofit-fixed", new ActionCommand(() => { editor.Focus(); editor.SetTableAutoFit(AutoFitMode.Fixed); }));
+        registry.Register("freew.table-distribute-rows", new ActionRibbonCommand(() => { editor.Focus(); editor.DistributeTableRows(); }));
+        registry.Register("freew.table-distribute-cols", new ActionRibbonCommand(() => { editor.Focus(); editor.DistributeTableColumns(); }));
+        registry.Register("freew.table-autofit-contents", new ActionRibbonCommand(() => { editor.Focus(); editor.SetTableAutoFit(AutoFitMode.Contents); }));
+        registry.Register("freew.table-autofit-window", new ActionRibbonCommand(() => { editor.Focus(); editor.SetTableAutoFit(AutoFitMode.Window); }));
+        registry.Register("freew.table-autofit-fixed", new ActionRibbonCommand(() => { editor.Focus(); editor.SetTableAutoFit(AutoFitMode.Fixed); }));
         // Table Tools — Cell Alignment (9-way)
-        registry.Register("freew.cell-align-top-left", new ActionCommand(() => { editor.Focus(); editor.SetCaretCellAlignment(TableCellVerticalAlignment.Top, FreeW.Core.Model.TextAlignment.Left); }));
-        registry.Register("freew.cell-align-top-center", new ActionCommand(() => { editor.Focus(); editor.SetCaretCellAlignment(TableCellVerticalAlignment.Top, FreeW.Core.Model.TextAlignment.Center); }));
-        registry.Register("freew.cell-align-top-right", new ActionCommand(() => { editor.Focus(); editor.SetCaretCellAlignment(TableCellVerticalAlignment.Top, FreeW.Core.Model.TextAlignment.Right); }));
-        registry.Register("freew.cell-align-middle-left", new ActionCommand(() => { editor.Focus(); editor.SetCaretCellAlignment(TableCellVerticalAlignment.Center, FreeW.Core.Model.TextAlignment.Left); }));
-        registry.Register("freew.cell-align-middle-center", new ActionCommand(() => { editor.Focus(); editor.SetCaretCellAlignment(TableCellVerticalAlignment.Center, FreeW.Core.Model.TextAlignment.Center); }));
-        registry.Register("freew.cell-align-middle-right", new ActionCommand(() => { editor.Focus(); editor.SetCaretCellAlignment(TableCellVerticalAlignment.Center, FreeW.Core.Model.TextAlignment.Right); }));
-        registry.Register("freew.cell-align-bottom-left", new ActionCommand(() => { editor.Focus(); editor.SetCaretCellAlignment(TableCellVerticalAlignment.Bottom, FreeW.Core.Model.TextAlignment.Left); }));
-        registry.Register("freew.cell-align-bottom-center", new ActionCommand(() => { editor.Focus(); editor.SetCaretCellAlignment(TableCellVerticalAlignment.Bottom, FreeW.Core.Model.TextAlignment.Center); }));
-        registry.Register("freew.cell-align-bottom-right", new ActionCommand(() => { editor.Focus(); editor.SetCaretCellAlignment(TableCellVerticalAlignment.Bottom, FreeW.Core.Model.TextAlignment.Right); }));
+        registry.Register("freew.cell-align-top-left", new ActionRibbonCommand(() => { editor.Focus(); editor.SetCaretCellAlignment(TableCellVerticalAlignment.Top, FreeW.Core.Model.TextAlignment.Left); }));
+        registry.Register("freew.cell-align-top-center", new ActionRibbonCommand(() => { editor.Focus(); editor.SetCaretCellAlignment(TableCellVerticalAlignment.Top, FreeW.Core.Model.TextAlignment.Center); }));
+        registry.Register("freew.cell-align-top-right", new ActionRibbonCommand(() => { editor.Focus(); editor.SetCaretCellAlignment(TableCellVerticalAlignment.Top, FreeW.Core.Model.TextAlignment.Right); }));
+        registry.Register("freew.cell-align-middle-left", new ActionRibbonCommand(() => { editor.Focus(); editor.SetCaretCellAlignment(TableCellVerticalAlignment.Center, FreeW.Core.Model.TextAlignment.Left); }));
+        registry.Register("freew.cell-align-middle-center", new ActionRibbonCommand(() => { editor.Focus(); editor.SetCaretCellAlignment(TableCellVerticalAlignment.Center, FreeW.Core.Model.TextAlignment.Center); }));
+        registry.Register("freew.cell-align-middle-right", new ActionRibbonCommand(() => { editor.Focus(); editor.SetCaretCellAlignment(TableCellVerticalAlignment.Center, FreeW.Core.Model.TextAlignment.Right); }));
+        registry.Register("freew.cell-align-bottom-left", new ActionRibbonCommand(() => { editor.Focus(); editor.SetCaretCellAlignment(TableCellVerticalAlignment.Bottom, FreeW.Core.Model.TextAlignment.Left); }));
+        registry.Register("freew.cell-align-bottom-center", new ActionRibbonCommand(() => { editor.Focus(); editor.SetCaretCellAlignment(TableCellVerticalAlignment.Bottom, FreeW.Core.Model.TextAlignment.Center); }));
+        registry.Register("freew.cell-align-bottom-right", new ActionRibbonCommand(() => { editor.Focus(); editor.SetCaretCellAlignment(TableCellVerticalAlignment.Bottom, FreeW.Core.Model.TextAlignment.Right); }));
         // Table Tools — Cell Margins (opens Table Properties dialog)
         registry.Register("freew.table-cell-margins", new TablePropertiesCommand(editor));
         // Table Design — Style Options toggles
-        registry.Register("freew.table-last-row", new ActionCommand(() => { editor.Focus(); editor.ToggleTableLastRow(); }));
-        registry.Register("freew.table-first-column", new ActionCommand(() => { editor.Focus(); editor.ToggleTableFirstColumn(); }));
-        registry.Register("freew.table-last-column", new ActionCommand(() => { editor.Focus(); editor.ToggleTableLastColumn(); }));
-        registry.Register("freew.table-banded-cols", new ActionCommand(() => { editor.Focus(); editor.ToggleTableBandedColumns(); }));
+        registry.Register("freew.table-last-row", new ActionRibbonCommand(() => { editor.Focus(); editor.ToggleTableLastRow(); }));
+        registry.Register("freew.table-first-column", new ActionRibbonCommand(() => { editor.Focus(); editor.ToggleTableFirstColumn(); }));
+        registry.Register("freew.table-last-column", new ActionRibbonCommand(() => { editor.Focus(); editor.ToggleTableLastColumn(); }));
+        registry.Register("freew.table-banded-cols", new ActionRibbonCommand(() => { editor.Focus(); editor.ToggleTableBandedColumns(); }));
         // Table Design > Draw Borders: drag-to-insert table (prompted dimensions) and eraser-merges right.
         registry.Register("freew.draw-table", new DrawTableCommand(editor));
         registry.Register("freew.eraser", new EraserCommand(editor));
         // Table Layout Data group — Convert to Text
-        registry.Register("freew.table-to-text", new ActionCommand(() => { editor.Focus(); editor.ConvertTableToText('\t'); }));
+        registry.Register("freew.table-to-text", new ActionRibbonCommand(() => { editor.Focus(); editor.ConvertTableToText('\t'); }));
         // Table Design — Cell Borders picker (per-edge borders for the caret cell).
         registry.Register("freew.cell-borders", new CellBordersCommand(editor));
         // Table Layout > Alignment — Text Direction cycling (Horizontal → Rotate90 → Rotate270 → Horizontal).
-        registry.Register("freew.cell-text-direction-horizontal", new ActionCommand(() => { editor.Focus(); editor.SetCaretCellTextDirection(CellTextDirection.Horizontal); }));
-        registry.Register("freew.cell-text-direction-rotate90", new ActionCommand(() => { editor.Focus(); editor.SetCaretCellTextDirection(CellTextDirection.Rotate90); }));
-        registry.Register("freew.cell-text-direction-rotate270", new ActionCommand(() => { editor.Focus(); editor.SetCaretCellTextDirection(CellTextDirection.Rotate270); }));
+        registry.Register("freew.cell-text-direction-horizontal", new ActionRibbonCommand(() => { editor.Focus(); editor.SetCaretCellTextDirection(CellTextDirection.Horizontal); }));
+        registry.Register("freew.cell-text-direction-rotate90", new ActionRibbonCommand(() => { editor.Focus(); editor.SetCaretCellTextDirection(CellTextDirection.Rotate90); }));
+        registry.Register("freew.cell-text-direction-rotate270", new ActionRibbonCommand(() => { editor.Focus(); editor.SetCaretCellTextDirection(CellTextDirection.Rotate270); }));
 
         // Insert tab — Text: pick a .docx file and insert its body content at the caret (block merge).
         registry.Register("freew.insert-file", new InsertFileCommand(editor));
@@ -361,17 +384,11 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.image-align-to-margin", new FloatingAlignCommand(editor, FloatingAlignTarget.Margin));
         registry.Register("freew.image-distribute-h", new FloatingDistributeCommand(editor, vertical: false));
         registry.Register("freew.image-distribute-v", new FloatingDistributeCommand(editor, vertical: true));
-        registry.Register("freew.image-wrap-inline", new ImageWrapCommand(editor, ImageWrapping.Inline));
-        registry.Register("freew.image-wrap-square", new ImageWrapCommand(editor, ImageWrapping.Square));
-        registry.Register("freew.image-wrap-tight", new ImageWrapCommand(editor, ImageWrapping.Tight));
-        registry.Register("freew.image-wrap-top-bottom", new ImageWrapCommand(editor, ImageWrapping.TopAndBottom));
-        registry.Register("freew.image-wrap-behind", new ImageWrapCommand(editor, ImageWrapping.Behind));
-        registry.Register("freew.image-wrap-front", new ImageWrapCommand(editor, ImageWrapping.InFront));
+        foreach (var command in ObjectFormatCommandPlanner.WrapCommands(ObjectFormatTarget.Picture))
+            registry.Register(command.CommandId, new ImageWrapCommand(editor, command.Wrapping));
         // Picture Format tab — Arrange > Rotate / Flip.
-        registry.Register("freew.image-rotate-right90", new ImageRotateStepCommand(editor, +90));
-        registry.Register("freew.image-rotate-left90",  new ImageRotateStepCommand(editor, -90));
-        registry.Register("freew.image-flip-vertical",  new ImageFlipCommand(editor, vertical: true));
-        registry.Register("freew.image-flip-horizontal",new ImageFlipCommand(editor, vertical: false));
+        foreach (var command in ObjectFormatCommandPlanner.TransformCommands(ObjectFormatTarget.Picture))
+            registry.Register(command.CommandId, BuildImageTransformCommand(editor, command));
         // Picture Format tab — Arrange > Position.
         registry.Register("freew.image-position", new ImagePositionCommand(editor));
         // Picture Format tab — Adjust > Corrections (brightness/contrast presets + dialog).
@@ -456,7 +473,7 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.image-artistic-film-grain",    new ImageArtisticEffectCommand(editor, ImageArtisticEffect.FilmGrain));
         registry.Register("freew.image-artistic-mosaic",        new ImageArtisticEffectCommand(editor, ImageArtisticEffect.Mosaic));
         // Artistic Effects: top-level gallery opener.
-        registry.Register("freew.image-artistic",               new ActionCommand(() =>
+        registry.Register("freew.image-artistic",               new ActionRibbonCommand(() =>
         {
             DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Choose an artistic effect from the dropdown menu.", "Artistic Effects");
         }));
@@ -467,10 +484,8 @@ internal static class FreeWRibbonCommands
             registry.Register($"freew.image-style-{p.Id}", new ImageStylePresetCommand(editor, p));
         }
         // Picture Format tab — Arrange > Z-order (floating images only).
-        registry.Register("freew.image-bring-to-front",  new ImageZOrderCommand(editor, ZOrderOperation.BringToFront));
-        registry.Register("freew.image-send-to-back",    new ImageZOrderCommand(editor, ZOrderOperation.SendToBack));
-        registry.Register("freew.image-bring-forward",   new ImageZOrderCommand(editor, ZOrderOperation.BringForward));
-        registry.Register("freew.image-send-backward",   new ImageZOrderCommand(editor, ZOrderOperation.SendBackward));
+        foreach (var command in ObjectFormatCommandPlanner.ZOrderCommands(ObjectFormatTarget.Picture))
+            registry.Register(command.CommandId, new ImageZOrderCommand(editor, command.Operation));
         // Picture Format / Drawing Format — Arrange > Group / Ungroup (Phase 4).
         registry.Register("freew.object-group",   new ObjectGroupCommand(editor));
         registry.Register("freew.object-ungroup", new ObjectUngroupCommand(editor));
@@ -478,22 +493,22 @@ internal static class FreeWRibbonCommands
         // inserts the matching Shape (preset geometry, or a text box carrying placeholder text) at the caret
         // via DocumentView.InsertShape. Round-trips through docx as an inline w:drawing/wps:wsp (see
         // DocxWriter/Reader). The top-level "freew.shapes" id only opens the menu (no direct insert).
-        registry.Register("freew.shape-rectangle", new ActionCommand(() =>
+        registry.Register("freew.shape-rectangle", new ActionRibbonCommand(() =>
         {
             editor.Focus();
             editor.InsertShape(FreeW.Core.Model.Shape.Preset(FreeW.Core.Model.ShapeKind.Rectangle, widthPt: 120, heightPt: 80, fillColorHex: "#DCE6F1"));
         }));
-        registry.Register("freew.shape-rounded", new ActionCommand(() =>
+        registry.Register("freew.shape-rounded", new ActionRibbonCommand(() =>
         {
             editor.Focus();
             editor.InsertShape(FreeW.Core.Model.Shape.Preset(FreeW.Core.Model.ShapeKind.RoundedRectangle, widthPt: 120, heightPt: 80, fillColorHex: "#DCE6F1"));
         }));
-        registry.Register("freew.shape-ellipse", new ActionCommand(() =>
+        registry.Register("freew.shape-ellipse", new ActionRibbonCommand(() =>
         {
             editor.Focus();
             editor.InsertShape(FreeW.Core.Model.Shape.Preset(FreeW.Core.Model.ShapeKind.Ellipse, widthPt: 100, heightPt: 100, fillColorHex: "#DCE6F1"));
         }));
-        registry.Register("freew.shape-textbox", new ActionCommand(() =>
+        registry.Register("freew.shape-textbox", new ActionRibbonCommand(() =>
         {
             editor.Focus();
             editor.InsertShape(FreeW.Core.Model.Shape.TextBoxWith("Text Box", widthPt: 180, heightPt: 90, fillColorHex: "#DCE6F1"));
@@ -502,40 +517,40 @@ internal static class FreeWRibbonCommands
         // Each routes through the editor's undoable insert path (mirroring InsertShape) and round-trips
         // through docx (the model + IO already exist; this surfaces them in the ribbon). Sample content is a
         // starting point the user can replace.
-        registry.Register("freew.equation", new ActionCommand(() =>
+        registry.Register("freew.equation", new ActionRibbonCommand(() =>
         {
             editor.Focus();
             editor.InsertEquation(SampleEquation());
         }));
         // Equation gallery presets (Insert > Media > Equation dropdown). Each inserts one OMML structure
         // at the caret as an editable starting point; all round-trip through the model/IO layer.
-        registry.Register("freew.equation-fraction", new ActionCommand(() => InsertEquationPreset(editor,
+        registry.Register("freew.equation-fraction", new ActionRibbonCommand(() => InsertEquationPreset(editor,
             new Equation([MathRun.Fraction("a", "b")]))));
-        registry.Register("freew.equation-script", new ActionCommand(() => InsertEquationPreset(editor,
+        registry.Register("freew.equation-script", new ActionRibbonCommand(() => InsertEquationPreset(editor,
             new Equation([MathRun.SubSuperscript("x", "n", "2")]))));
-        registry.Register("freew.equation-radical", new ActionCommand(() => InsertEquationPreset(editor,
+        registry.Register("freew.equation-radical", new ActionRibbonCommand(() => InsertEquationPreset(editor,
             new Equation([MathRun.Radical("x")]))));
-        registry.Register("freew.equation-nthroot", new ActionCommand(() => InsertEquationPreset(editor,
+        registry.Register("freew.equation-nthroot", new ActionRibbonCommand(() => InsertEquationPreset(editor,
             new Equation([MathRun.Radical("x", "n")]))));
-        registry.Register("freew.equation-integral", new ActionCommand(() => InsertEquationPreset(editor,
+        registry.Register("freew.equation-integral", new ActionRibbonCommand(() => InsertEquationPreset(editor,
             new Equation([MathRun.NAry("∫", "a", "b", "f(x) dx")]))));
-        registry.Register("freew.equation-summation", new ActionCommand(() => InsertEquationPreset(editor,
+        registry.Register("freew.equation-summation", new ActionRibbonCommand(() => InsertEquationPreset(editor,
             new Equation([MathRun.NAry("∑", "i=1", "n", "i")]))));
-        registry.Register("freew.equation-product", new ActionCommand(() => InsertEquationPreset(editor,
+        registry.Register("freew.equation-product", new ActionRibbonCommand(() => InsertEquationPreset(editor,
             new Equation([MathRun.NAry("∏", "i=1", "n", "i")]))));
-        registry.Register("freew.equation-accent", new ActionCommand(() => InsertEquationPreset(editor,
+        registry.Register("freew.equation-accent", new ActionRibbonCommand(() => InsertEquationPreset(editor,
             new Equation([MathRun.AccentOf("x")]))));
-        registry.Register("freew.equation-bar", new ActionCommand(() => InsertEquationPreset(editor,
+        registry.Register("freew.equation-bar", new ActionRibbonCommand(() => InsertEquationPreset(editor,
             new Equation([MathRun.BarOf("x")]))));
-        registry.Register("freew.equation-bracket", new ActionCommand(() => InsertEquationPreset(editor,
+        registry.Register("freew.equation-bracket", new ActionRibbonCommand(() => InsertEquationPreset(editor,
             new Equation([MathRun.Delimiter("a, b")]))));
-        registry.Register("freew.equation-matrix", new ActionCommand(() => InsertEquationPreset(editor,
+        registry.Register("freew.equation-matrix", new ActionRibbonCommand(() => InsertEquationPreset(editor,
             new Equation([MathRun.MatrixOf(MathMatrix.Identity2x2())]))));
-        registry.Register("freew.equation-func", new ActionCommand(() => InsertEquationPreset(editor,
+        registry.Register("freew.equation-func", new ActionRibbonCommand(() => InsertEquationPreset(editor,
             new Equation([MathRun.FunctionApply("sin", "x")]))));
-        registry.Register("freew.equation-groupchr", new ActionCommand(() => InsertEquationPreset(editor,
+        registry.Register("freew.equation-groupchr", new ActionRibbonCommand(() => InsertEquationPreset(editor,
             new Equation([MathRun.GroupCharOf("x+y")]))));
-        registry.Register("freew.chart", new ActionCommand(() =>
+        registry.Register("freew.chart", new ActionRibbonCommand(() =>
         {
             editor.Focus();
             var chart = InsertChartDialog.Prompt(Application.Current?.MainWindow);
@@ -547,20 +562,20 @@ internal static class FreeWRibbonCommands
         foreach (ChartKind kind in Enum.GetValues<ChartKind>())
         {
             var k = kind; // capture
-            registry.Register($"freew.chart-type-{k.ToString().ToLowerInvariant()}", new ActionCommand(() =>
+            registry.Register($"freew.chart-type-{k.ToString().ToLowerInvariant()}", new ActionRibbonCommand(() =>
             {
                 editor.Focus();
                 editor.SetSelectedChartKind(k);
             }));
         }
         // Add Chart Element — toggle Legend.
-        registry.Register("freew.chart-toggle-legend", new ActionCommand(() =>
+        registry.Register("freew.chart-toggle-legend", new ActionRibbonCommand(() =>
         {
             editor.Focus();
             editor.ToggleSelectedChartLegend();
         }));
         // Add Chart Element — set/clear Chart Title.
-        registry.Register("freew.chart-title", new ActionCommand(() =>
+        registry.Register("freew.chart-title", new ActionRibbonCommand(() =>
         {
             editor.Focus();
             var chart = editor.SelectedChart();
@@ -570,7 +585,7 @@ internal static class FreeWRibbonCommands
                 editor.SetSelectedChartTitle(newTitle);
         }));
         // Add Chart Element — set axis titles.
-        registry.Register("freew.chart-axis-titles", new ActionCommand(() =>
+        registry.Register("freew.chart-axis-titles", new ActionRibbonCommand(() =>
         {
             editor.Focus();
             var chart = editor.SelectedChart();
@@ -580,7 +595,7 @@ internal static class FreeWRibbonCommands
                 editor.SetSelectedChartAxisTitles(result.Value.CategoryTitle, result.Value.ValueTitle);
         }));
         // Edit Data — reopen the data grid dialog.
-        registry.Register("freew.chart-edit-data", new ActionCommand(() =>
+        registry.Register("freew.chart-edit-data", new ActionRibbonCommand(() =>
         {
             editor.Focus();
             var chart = editor.SelectedChart();
@@ -590,7 +605,7 @@ internal static class FreeWRibbonCommands
                 editor.ReplaceSelectedChartData(replacement);
         }));
         // Chart Format contextual tab — Size dialog.
-        registry.Register("freew.chart-size", new ActionCommand(() =>
+        registry.Register("freew.chart-size", new ActionRibbonCommand(() =>
         {
             editor.Focus();
             var chart = editor.SelectedChart();
@@ -606,7 +621,7 @@ internal static class FreeWRibbonCommands
         foreach (var layout in ChartQuickLayout.Catalog)
         {
             var l = layout;
-            registry.Register($"freew.chart-quick-layout-{l.Id}", new ActionCommand(() =>
+            registry.Register($"freew.chart-quick-layout-{l.Id}", new ActionRibbonCommand(() =>
             {
                 editor.Focus();
                 editor.ApplySelectedChartQuickLayout(l);
@@ -615,7 +630,7 @@ internal static class FreeWRibbonCommands
         foreach (var style in ChartStyle.Catalog)
         {
             var s = style;
-            registry.Register($"freew.chart-style-{s.Id}", new ActionCommand(() =>
+            registry.Register($"freew.chart-style-{s.Id}", new ActionRibbonCommand(() =>
             {
                 editor.Focus();
                 editor.ApplySelectedChartStyle(s);
@@ -624,7 +639,7 @@ internal static class FreeWRibbonCommands
         foreach (var scheme in ChartColorScheme.Catalog)
         {
             var sc = scheme;
-            registry.Register($"freew.chart-color-{sc.Id}", new ActionCommand(() =>
+            registry.Register($"freew.chart-color-{sc.Id}", new ActionRibbonCommand(() =>
             {
                 editor.Focus();
                 editor.ApplySelectedChartColorScheme(sc);
@@ -632,12 +647,12 @@ internal static class FreeWRibbonCommands
         }
         // ── Drawing Format contextual tab — Shape/Drawing/TextBox/WordArt commands ─────────────────
         // Edit Shape > Convert to Freeform / Edit Points (W25).
-        registry.Register("freew.shape-edit-shape", new ActionCommand(() =>
+        registry.Register("freew.shape-edit-shape", new ActionRibbonCommand(() =>
         {
             editor.Focus();
             DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Choose 'Convert to Freeform' or 'Edit Points' from the menu.", "Edit Shape");
         }));
-        registry.Register("freew.shape-convert-freeform", new ActionCommand(() =>
+        registry.Register("freew.shape-convert-freeform", new ActionRibbonCommand(() =>
         {
             editor.Focus();
             var shape = editor.SelectedShape();
@@ -648,7 +663,7 @@ internal static class FreeWRibbonCommands
             }
             editor.ConvertSelectedShapeToFreeform();
         }));
-        registry.Register("freew.shape-edit-points", new ActionCommand(() =>
+        registry.Register("freew.shape-edit-points", new ActionRibbonCommand(() =>
         {
             editor.Focus();
             var shape = editor.SelectedShape();
@@ -663,7 +678,7 @@ internal static class FreeWRibbonCommands
             editor.BeginShapeEditPoints();
         }));
         // Change Shape: picker over ShapeKind; no model work — ShapeKind already exists.
-        registry.Register("freew.shape-change-rectangle", new ActionCommand(() =>
+        registry.Register("freew.shape-change-rectangle", new ActionRibbonCommand(() =>
         {
             editor.Focus();
             if (editor.SelectedShape() is null)
@@ -673,7 +688,7 @@ internal static class FreeWRibbonCommands
             }
             editor.SetSelectedShapeKind(FreeW.Core.Model.ShapeKind.Rectangle);
         }));
-        registry.Register("freew.shape-change-rounded", new ActionCommand(() =>
+        registry.Register("freew.shape-change-rounded", new ActionRibbonCommand(() =>
         {
             editor.Focus();
             if (editor.SelectedShape() is null)
@@ -683,7 +698,7 @@ internal static class FreeWRibbonCommands
             }
             editor.SetSelectedShapeKind(FreeW.Core.Model.ShapeKind.RoundedRectangle);
         }));
-        registry.Register("freew.shape-change-ellipse", new ActionCommand(() =>
+        registry.Register("freew.shape-change-ellipse", new ActionRibbonCommand(() =>
         {
             editor.Focus();
             if (editor.SelectedShape() is null)
@@ -695,7 +710,7 @@ internal static class FreeWRibbonCommands
         }));
         // Shape Fill: solid color picker or No Fill.
         registry.Register("freew.shape-fill", new ShapeFillCommand(editor));
-        registry.Register("freew.shape-fill-no-fill", new ActionCommand(() =>
+        registry.Register("freew.shape-fill-no-fill", new ActionRibbonCommand(() =>
         {
             editor.Focus();
             if (editor.SelectedShape() is null)
@@ -707,7 +722,7 @@ internal static class FreeWRibbonCommands
         }));
         // Shape Outline: reuse same dialog as image border; dash presets; No Outline option.
         registry.Register("freew.shape-outline", new ShapeOutlineCommand(editor));
-        registry.Register("freew.shape-outline-no-outline", new ActionCommand(() =>
+        registry.Register("freew.shape-outline-no-outline", new ActionRibbonCommand(() =>
         {
             editor.Focus();
             if (editor.SelectedShape() is null)
@@ -717,7 +732,7 @@ internal static class FreeWRibbonCommands
             }
             editor.SetSelectedShapeOutline(null, 0, null);
         }));
-        registry.Register("freew.shape-outline-solid", new ActionCommand(() =>
+        registry.Register("freew.shape-outline-solid", new ActionRibbonCommand(() =>
         {
             editor.Focus();
             var shape = editor.SelectedShape();
@@ -728,7 +743,7 @@ internal static class FreeWRibbonCommands
             }
             editor.SetSelectedShapeOutline(shape.OutlineColorHex ?? "000000", Math.Max(0.75, shape.OutlineWidthPt), null);
         }));
-        registry.Register("freew.shape-outline-dash", new ActionCommand(() =>
+        registry.Register("freew.shape-outline-dash", new ActionRibbonCommand(() =>
         {
             editor.Focus();
             var shape = editor.SelectedShape();
@@ -739,7 +754,7 @@ internal static class FreeWRibbonCommands
             }
             editor.SetSelectedShapeOutline(shape.OutlineColorHex ?? "000000", Math.Max(0.75, shape.OutlineWidthPt), "dash");
         }));
-        registry.Register("freew.shape-outline-dot", new ActionCommand(() =>
+        registry.Register("freew.shape-outline-dot", new ActionRibbonCommand(() =>
         {
             editor.Focus();
             var shape = editor.SelectedShape();
@@ -751,12 +766,12 @@ internal static class FreeWRibbonCommands
             editor.SetSelectedShapeOutline(shape.OutlineColorHex ?? "000000", Math.Max(0.75, shape.OutlineWidthPt), "sysDot");
         }));
         // Text Direction: Horizontal / Rotate 90 / Rotate 270 — text-box only.
-        registry.Register("freew.shape-text-direction", new ActionCommand(() =>
+        registry.Register("freew.shape-text-direction", new ActionRibbonCommand(() =>
         {
             editor.Focus();
             DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Choose a text direction from the dropdown.", "Text Direction");
         }));
-        registry.Register("freew.shape-text-horizontal", new ActionCommand(() =>
+        registry.Register("freew.shape-text-horizontal", new ActionRibbonCommand(() =>
         {
             editor.Focus();
             if (editor.SelectedShape() is null)
@@ -766,7 +781,7 @@ internal static class FreeWRibbonCommands
             }
             editor.SetSelectedShapeTextDirection(FreeW.Core.Model.ShapeTextDirection.Horizontal);
         }));
-        registry.Register("freew.shape-text-rotate90", new ActionCommand(() =>
+        registry.Register("freew.shape-text-rotate90", new ActionRibbonCommand(() =>
         {
             editor.Focus();
             if (editor.SelectedShape() is null)
@@ -776,7 +791,7 @@ internal static class FreeWRibbonCommands
             }
             editor.SetSelectedShapeTextDirection(FreeW.Core.Model.ShapeTextDirection.Rotate90);
         }));
-        registry.Register("freew.shape-text-rotate270", new ActionCommand(() =>
+        registry.Register("freew.shape-text-rotate270", new ActionRibbonCommand(() =>
         {
             editor.Focus();
             if (editor.SelectedShape() is null)
@@ -787,7 +802,7 @@ internal static class FreeWRibbonCommands
             editor.SetSelectedShapeTextDirection(FreeW.Core.Model.ShapeTextDirection.Rotate270);
         }));
         // Shape Size: reuse ImageSizeDialog (same W/H in points).
-        registry.Register("freew.shape-size", new ActionCommand(() =>
+        registry.Register("freew.shape-size", new ActionRibbonCommand(() =>
         {
             editor.Focus();
             var shape = editor.SelectedShape();
@@ -811,22 +826,16 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.shape-distribute-h", new FloatingDistributeCommand(editor, vertical: false));
         registry.Register("freew.shape-distribute-v", new FloatingDistributeCommand(editor, vertical: true));
         // Drawing Tools > Arrange — Wrap Text (6 modes for shapes, mirrors image-wrap-* pattern).
-        registry.Register("freew.shape-wrap-inline",     new ShapeWrapCommand(editor, ImageWrapping.Inline));
-        registry.Register("freew.shape-wrap-square",     new ShapeWrapCommand(editor, ImageWrapping.Square));
-        registry.Register("freew.shape-wrap-tight",      new ShapeWrapCommand(editor, ImageWrapping.Tight));
-        registry.Register("freew.shape-wrap-top-bottom", new ShapeWrapCommand(editor, ImageWrapping.TopAndBottom));
-        registry.Register("freew.shape-wrap-behind",     new ShapeWrapCommand(editor, ImageWrapping.Behind));
-        registry.Register("freew.shape-wrap-front",      new ShapeWrapCommand(editor, ImageWrapping.InFront));
+        foreach (var command in ObjectFormatCommandPlanner.WrapCommands(ObjectFormatTarget.Shape))
+            registry.Register(command.CommandId, new ShapeWrapCommand(editor, command.Wrapping));
         // Drawing Tools > Arrange — Rotate / Flip (mirrors image-rotate-* / image-flip-* pattern).
-        registry.Register("freew.shape-rotate-right90",  new ShapeRotateStepCommand(editor, +90));
-        registry.Register("freew.shape-rotate-left90",   new ShapeRotateStepCommand(editor, -90));
-        registry.Register("freew.shape-flip-vertical",   new ShapeFlipCommand(editor, vertical: true));
-        registry.Register("freew.shape-flip-horizontal", new ShapeFlipCommand(editor, vertical: false));
+        foreach (var command in ObjectFormatCommandPlanner.TransformCommands(ObjectFormatTarget.Shape))
+            registry.Register(command.CommandId, BuildShapeTransformCommand(editor, command));
         // Drawing Tools > Arrange — Position (opens the same dialog as image-position, applied to shape).
         registry.Register("freew.shape-position", new ShapePositionCommand(editor));
 
         // ── Shape Styles gallery (W24) ────────────────────────────────────────────────────────────
-        registry.Register("freew.shape-styles-gallery", new ActionCommand(() =>
+        registry.Register("freew.shape-styles-gallery", new ActionRibbonCommand(() =>
         {
             editor.Focus();
             DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Choose a shape style from the gallery.", "Shape Styles");
@@ -835,7 +844,7 @@ internal static class FreeWRibbonCommands
         foreach (var stylePreset in ShapeStylePreset.Catalog)
         {
             var sp = stylePreset;
-            registry.Register($"freew.{sp.Id}", new ActionCommand(() =>
+            registry.Register($"freew.{sp.Id}", new ActionRibbonCommand(() =>
             {
                 editor.Focus();
                 if (editor.SelectedShape() is null)
@@ -848,7 +857,7 @@ internal static class FreeWRibbonCommands
         }
 
         // ── Shape fill extensions (W24) ───────────────────────────────────────────────────────────
-        registry.Register("freew.shape-fill-gradient-blue", new ActionCommand(() =>
+        registry.Register("freew.shape-fill-gradient-blue", new ActionRibbonCommand(() =>
         {
             editor.Focus();
             if (editor.SelectedShape() is null)
@@ -859,7 +868,7 @@ internal static class FreeWRibbonCommands
             editor.SetSelectedShapeExtendedFill(ShapeFill.LinearGradient(5400000,
                 new FreeW.Core.Model.GradientStop(0, "#4472C4"), new FreeW.Core.Model.GradientStop(100000, "#1F4E79")));
         }));
-        registry.Register("freew.shape-fill-gradient-orange", new ActionCommand(() =>
+        registry.Register("freew.shape-fill-gradient-orange", new ActionRibbonCommand(() =>
         {
             editor.Focus();
             if (editor.SelectedShape() is null)
@@ -870,7 +879,7 @@ internal static class FreeWRibbonCommands
             editor.SetSelectedShapeExtendedFill(ShapeFill.LinearGradient(5400000,
                 new FreeW.Core.Model.GradientStop(0, "#ED7D31"), new FreeW.Core.Model.GradientStop(100000, "#C55A11")));
         }));
-        registry.Register("freew.shape-fill-pattern-diag", new ActionCommand(() =>
+        registry.Register("freew.shape-fill-pattern-diag", new ActionRibbonCommand(() =>
         {
             editor.Focus();
             if (editor.SelectedShape() is null)
@@ -882,12 +891,12 @@ internal static class FreeWRibbonCommands
         }));
 
         // ── Shape Effects (W24) ───────────────────────────────────────────────────────────────────
-        registry.Register("freew.shape-effects", new ActionCommand(() =>
+        registry.Register("freew.shape-effects", new ActionRibbonCommand(() =>
         {
             editor.Focus();
             DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Choose an effect from the dropdown.", "Shape Effects");
         }));
-        registry.Register("freew.shape-effects-none", new ActionCommand(() =>
+        registry.Register("freew.shape-effects-none", new ActionRibbonCommand(() =>
         {
             editor.Focus();
             if (editor.SelectedShape() is null)
@@ -897,7 +906,7 @@ internal static class FreeWRibbonCommands
             }
             editor.SetSelectedShapeEffects(null);
         }));
-        registry.Register("freew.shape-effect-shadow", new ActionCommand(() =>
+        registry.Register("freew.shape-effect-shadow", new ActionRibbonCommand(() =>
         {
             editor.Focus();
             if (editor.SelectedShape() is null)
@@ -907,7 +916,7 @@ internal static class FreeWRibbonCommands
             }
             editor.SetSelectedShapeEffects(new ShapeEffectLst { HasShadow = true });
         }));
-        registry.Register("freew.shape-effect-glow", new ActionCommand(() =>
+        registry.Register("freew.shape-effect-glow", new ActionRibbonCommand(() =>
         {
             editor.Focus();
             if (editor.SelectedShape() is null)
@@ -917,7 +926,7 @@ internal static class FreeWRibbonCommands
             }
             editor.SetSelectedShapeEffects(new ShapeEffectLst { HasGlow = true });
         }));
-        registry.Register("freew.shape-effect-soft-edge", new ActionCommand(() =>
+        registry.Register("freew.shape-effect-soft-edge", new ActionRibbonCommand(() =>
         {
             editor.Focus();
             if (editor.SelectedShape() is null)
@@ -927,7 +936,7 @@ internal static class FreeWRibbonCommands
             }
             editor.SetSelectedShapeEffects(new ShapeEffectLst { HasSoftEdge = true });
         }));
-        registry.Register("freew.shape-effect-reflection", new ActionCommand(() =>
+        registry.Register("freew.shape-effect-reflection", new ActionRibbonCommand(() =>
         {
             editor.Focus();
             if (editor.SelectedShape() is null)
@@ -937,7 +946,7 @@ internal static class FreeWRibbonCommands
             }
             editor.SetSelectedShapeEffects(new ShapeEffectLst { HasReflection = true });
         }));
-        registry.Register("freew.shape-effect-bevel", new ActionCommand(() =>
+        registry.Register("freew.shape-effect-bevel", new ActionRibbonCommand(() =>
         {
             editor.Focus();
             if (editor.SelectedShape() is null)
@@ -949,7 +958,7 @@ internal static class FreeWRibbonCommands
         }));
 
         // ── WordArt style gallery — original four + extended eleven (W24) ─────────────────────────
-        registry.Register("freew.wordart-style", new ActionCommand(() =>
+        registry.Register("freew.wordart-style", new ActionRibbonCommand(() =>
         {
             editor.Focus();
             DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Choose a WordArt style from the dropdown.", "WordArt Style");
@@ -979,7 +988,7 @@ internal static class FreeWRibbonCommands
         foreach (WordArtStyle wapresent in Enum.GetValues<WordArtStyle>())
         {
             var p = wapresent;
-            registry.Register(WordArtStyleId(p), new ActionCommand(() =>
+            registry.Register(WordArtStyleId(p), new ActionRibbonCommand(() =>
             {
                 editor.Focus();
                 if (editor.SelectedWordArt() is null)
@@ -992,7 +1001,7 @@ internal static class FreeWRibbonCommands
         }
 
         // ── WordArt Transform / Warp (W24) ────────────────────────────────────────────────────────
-        registry.Register("freew.wordart-transform", new ActionCommand(() =>
+        registry.Register("freew.wordart-transform", new ActionRibbonCommand(() =>
         {
             editor.Focus();
             DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Choose a text transform from the dropdown.", "Text Effects: Transform");
@@ -1022,7 +1031,7 @@ internal static class FreeWRibbonCommands
         foreach (WordArtWarp warp in Enum.GetValues<WordArtWarp>())
         {
             var w = warp;
-            registry.Register(WarpId(w), new ActionCommand(() =>
+            registry.Register(WarpId(w), new ActionRibbonCommand(() =>
             {
                 editor.Focus();
                 if (editor.SelectedWordArt() is null)
@@ -1035,12 +1044,12 @@ internal static class FreeWRibbonCommands
         }
         // ── End Drawing Format commands ───────────────────────────────────────────────────────────
 
-        registry.Register("freew.wordart", new ActionCommand(() =>
+        registry.Register("freew.wordart", new ActionRibbonCommand(() =>
         {
             editor.Focus();
             editor.InsertWordArt(WordArt.Create("WordArt", WordArtStyle.GradientFill));
         }));
-        registry.Register("freew.smartart", new ActionCommand(() =>
+        registry.Register("freew.smartart", new ActionRibbonCommand(() =>
         {
             var owner = Application.Current?.MainWindow;
             var result = InsertSmartArtDialog.Prompt(owner);
@@ -1049,37 +1058,37 @@ internal static class FreeWRibbonCommands
             editor.InsertSmartArt(result);
         }));
         // SmartArt Design contextual tab — node mutation commands.
-        registry.Register("freew.smartart-add-shape", new ActionCommand(() =>
+        registry.Register("freew.smartart-add-shape", new ActionRibbonCommand(() =>
         {
             editor.Focus();
             editor.SmartArtAddShape();
         }));
-        registry.Register("freew.smartart-remove-shape", new ActionCommand(() =>
+        registry.Register("freew.smartart-remove-shape", new ActionRibbonCommand(() =>
         {
             editor.Focus();
             editor.SmartArtRemoveShape();
         }));
-        registry.Register("freew.smartart-promote", new ActionCommand(() =>
+        registry.Register("freew.smartart-promote", new ActionRibbonCommand(() =>
         {
             editor.Focus();
             editor.SmartArtPromote();
         }));
-        registry.Register("freew.smartart-demote", new ActionCommand(() =>
+        registry.Register("freew.smartart-demote", new ActionRibbonCommand(() =>
         {
             editor.Focus();
             editor.SmartArtDemote();
         }));
-        registry.Register("freew.smartart-move-up", new ActionCommand(() =>
+        registry.Register("freew.smartart-move-up", new ActionRibbonCommand(() =>
         {
             editor.Focus();
             editor.SmartArtMoveUp();
         }));
-        registry.Register("freew.smartart-move-down", new ActionCommand(() =>
+        registry.Register("freew.smartart-move-down", new ActionRibbonCommand(() =>
         {
             editor.Focus();
             editor.SmartArtMoveDown();
         }));
-        registry.Register("freew.smartart-edit-text", new ActionCommand(() =>
+        registry.Register("freew.smartart-edit-text", new ActionRibbonCommand(() =>
         {
             var owner = Application.Current?.MainWindow;
             var current = editor.SelectedSmartArt();
@@ -1092,10 +1101,10 @@ internal static class FreeWRibbonCommands
         // SmartArt Design contextual tab — gallery placeholder commands (no-ops; galleries are injected
         // as live-preview custom content via InjectGallery; these ids must be registered so the ribbon
         // renderer does not log "unknown command" warnings for the stub buttons).
-        registry.Register("freew.smartart-change-layout", new ActionCommand(() => { }));
-        registry.Register("freew.smartart-change-colors", new ActionCommand(() => { }));
-        registry.Register("freew.smartart-change-style", new ActionCommand(() => { }));
-        registry.Register("freew.object", new ActionCommand(() =>
+        registry.Register("freew.smartart-change-layout", EmptyRibbonCommand.Instance);
+        registry.Register("freew.smartart-change-colors", EmptyRibbonCommand.Instance);
+        registry.Register("freew.smartart-change-style", EmptyRibbonCommand.Instance);
+        registry.Register("freew.object", new ActionRibbonCommand(() =>
         {
             editor.Focus();
             editor.InsertEmbeddedObject(SampleEmbeddedObject());
@@ -1129,8 +1138,8 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.footnote-endnote-options", new FootnoteEndnoteOptionsCommand(editor));
         // Insert tab — References: generate a Table of Contents from the heading outline at the caret,
         // and rebuild it in place (remove the prior TOC region + re-insert). Both route through the bus.
-        registry.Register("freew.toc", new ActionCommand(() => { editor.Focus(); editor.InsertTableOfContents(); }));
-        registry.Register("freew.toc-refresh", new ActionCommand(() => { editor.Focus(); editor.RefreshTableOfContents(); }));
+        registry.Register("freew.toc", new ActionRibbonCommand(() => { editor.Focus(); editor.InsertTableOfContents(); }));
+        registry.Register("freew.toc-refresh", new ActionRibbonCommand(() => { editor.Focus(); editor.RefreshTableOfContents(); }));
         registry.Register("freew.toc-add-text", new ApplyTocStyleCommand(editor, "Heading1"));
         registry.Register("freew.toc-addtext-none", new ApplyTocStyleCommand(editor, "Normal"));
         registry.Register("freew.toc-addtext-level1", new ApplyTocStyleCommand(editor, "Heading1"));
@@ -1140,7 +1149,7 @@ internal static class FreeWRibbonCommands
         // and insert a bibliography built from the document's sources at the caret (reversible).
         registry.Register("freew.citation", new InsertCitationCommand(editor));
         registry.Register("freew.manage-sources", new ManageSourcesCommand(editor));
-        registry.Register("freew.bibliography", new ActionCommand(() => { editor.Focus(); editor.InsertBibliography(); }));
+        registry.Register("freew.bibliography", new ActionRibbonCommand(() => { editor.Focus(); editor.InsertBibliography(); }));
         // Insert tab — References: select the active citation/bibliography style (APA / MLA / Chicago) used
         // by the citation + bibliography commands. The combo box delivers its label via the "value" param.
         registry.Register("freew.citation-style", new CitationStyleCommand(editor));
@@ -1151,17 +1160,17 @@ internal static class FreeWRibbonCommands
         // Insert tab — References: mark the selection (or a prompted term) for the document index, and
         // insert an alphabetical index built from the marked terms at the caret (reversibly via the bus).
         registry.Register("freew.index-mark", new MarkIndexEntryCommand(editor));
-        registry.Register("freew.index-insert", new ActionCommand(() => { editor.Focus(); editor.InsertIndex(); }));
-        registry.Register("freew.index-refresh", new ActionCommand(() => { editor.Focus(); editor.RefreshIndex(); }));
+        registry.Register("freew.index-insert", new ActionRibbonCommand(() => { editor.Focus(); editor.InsertIndex(); }));
+        registry.Register("freew.index-refresh", new ActionRibbonCommand(() => { editor.Focus(); editor.RefreshIndex(); }));
         // Insert tab — References: generate a Table of Figures from the document's figure captions at the
         // caret, and rebuild it in place (remove the prior region + re-insert). Both route through the bus.
-        registry.Register("freew.tof", new ActionCommand(() => { editor.Focus(); editor.InsertTableOfFigures(); }));
-        registry.Register("freew.tof-refresh", new ActionCommand(() => { editor.Focus(); editor.RefreshTableOfFigures(); }));
+        registry.Register("freew.tof", new ActionRibbonCommand(() => { editor.Focus(); editor.InsertTableOfFigures(); }));
+        registry.Register("freew.tof-refresh", new ActionRibbonCommand(() => { editor.Focus(); editor.RefreshTableOfFigures(); }));
         // Insert tab — References: mark the selection as a legal citation (a hidden TA field), and insert /
         // rebuild a Table of Authorities built from those marks, grouped by category (reversibly via the bus).
         registry.Register("freew.mark-citation", new MarkCitationCommand(editor));
         registry.Register("freew.table-of-authorities", new InsertTableOfAuthoritiesCommand(editor));
-        registry.Register("freew.table-of-authorities-refresh", new ActionCommand(() => { editor.Focus(); editor.RefreshTableOfAuthorities(); }));
+        registry.Register("freew.table-of-authorities-refresh", new ActionRibbonCommand(() => { editor.Focus(); editor.RefreshTableOfAuthorities(); }));
         // Insert tab — Links: name the caret's paragraph as a bookmark target (an invisible marker).
         registry.Register("freew.bookmark", new InsertBookmarkCommand(editor));
         // Insert tab — Links: apply an internal link (to an existing bookmark) over the selection.
@@ -1181,12 +1190,12 @@ internal static class FreeWRibbonCommands
         // Insert tab — Controls: insert a content control (w:sdt) around the selection. The plain-text
         // control wraps the selection (or a placeholder) as an editable region; the checkbox control
         // drops a toggleable ☐/☒ checkbox. Both round-trip through docx as a w:sdt.
-        registry.Register("freew.cc-text", new ActionCommand(() => { editor.Focus(); editor.InsertPlainTextControl(); }));
-        registry.Register("freew.cc-richtext", new ActionCommand(() => { editor.Focus(); editor.InsertRichTextControl(); }));
-        registry.Register("freew.cc-checkbox", new ActionCommand(() => { editor.Focus(); editor.InsertCheckBoxControl(); }));
-        registry.Register("freew.cc-date", new ActionCommand(() => { editor.Focus(); editor.InsertDatePickerControl(); }));
-        registry.Register("freew.cc-dropdown", new ActionCommand(() => { editor.Focus(); editor.InsertDropDownListControl(); }));
-        registry.Register("freew.cc-combo", new ActionCommand(() => { editor.Focus(); editor.InsertComboBoxControl(); }));
+        registry.Register("freew.cc-text", new ActionRibbonCommand(() => { editor.Focus(); editor.InsertPlainTextControl(); }));
+        registry.Register("freew.cc-richtext", new ActionRibbonCommand(() => { editor.Focus(); editor.InsertRichTextControl(); }));
+        registry.Register("freew.cc-checkbox", new ActionRibbonCommand(() => { editor.Focus(); editor.InsertCheckBoxControl(); }));
+        registry.Register("freew.cc-date", new ActionRibbonCommand(() => { editor.Focus(); editor.InsertDatePickerControl(); }));
+        registry.Register("freew.cc-dropdown", new ActionRibbonCommand(() => { editor.Focus(); editor.InsertDropDownListControl(); }));
+        registry.Register("freew.cc-combo", new ActionRibbonCommand(() => { editor.Focus(); editor.InsertComboBoxControl(); }));
 
         // Review tab — Comments: prompt for comment text and attach it over the current selection.
         registry.Register("freew.new-comment", new NewCommentCommand(editor));
@@ -1208,9 +1217,9 @@ internal static class FreeWRibbonCommands
         // Moby II derivative, public domain). The action callback supplied by the host toggles the pane
         // and triggers a lookup; a no-op is registered when no host callback is wired (e.g. unit tests).
         if (onToggleThesaurus is not null)
-            registry.Register("freew.thesaurus", new ActionCommand(onToggleThesaurus));
+            registry.Register("freew.thesaurus", new ActionRibbonCommand(onToggleThesaurus));
         else
-            registry.Register("freew.thesaurus", new ActionCommand(() =>
+            registry.Register("freew.thesaurus", new ActionRibbonCommand(() =>
             {
                 DialogMessageHelper.ShowInfo(Window.GetWindow(editor),
                     "Thesaurus: no synonyms pane is wired. Host must supply onToggleThesaurus.", "Thesaurus");
@@ -1221,9 +1230,9 @@ internal static class FreeWRibbonCommands
         // anchored text by dashed leader lines, in a 200px strip to the right of the editor. The callback
         // is supplied by the host (BalloonOverlay.Toggle()); a no-op is registered in unit-test contexts.
         if (onToggleBalloons is not null)
-            registry.Register("freew.show-markup-balloons", new ActionCommand(onToggleBalloons));
+            registry.Register("freew.show-markup-balloons", new ActionRibbonCommand(onToggleBalloons));
         else
-            registry.Register("freew.show-markup-balloons", new ActionCommand(() => { }));
+            registry.Register("freew.show-markup-balloons", EmptyRibbonCommand.Instance);
 
         // Review tab — Proofing: custom dictionary + spelling options. The custom dictionary is a
         // word-per-line .lex file persisted under FreeW's data folder; its Uri is registered with the
@@ -1254,8 +1263,8 @@ internal static class FreeWRibbonCommands
         // with a non-empty selection marks that selection as an insertion. Accept All / Reject All resolve
         // every tracked change on the model from the Changes dropdowns.
         registry.Register("freew.track-changes", new TrackChangesToggleCommand(editor));
-        registry.Register("freew.accept-all", new ActionCommand(() => { editor.Focus(); editor.AcceptAllRevisions(); }));
-        registry.Register("freew.reject-all", new ActionCommand(() => { editor.Focus(); editor.RejectAllRevisions(); }));
+        registry.Register("freew.accept-all", new ActionRibbonCommand(() => { editor.Focus(); editor.AcceptAllRevisions(); }));
+        registry.Register("freew.reject-all", new ActionRibbonCommand(() => { editor.Focus(); editor.RejectAllRevisions(); }));
 
         // Review tab — Tracking display controls: Display for Review and Show Markup per-category toggles.
         //
@@ -1301,9 +1310,9 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.show-markup-formatting", showFormatting);
         stateful.Add(("freew.show-markup-formatting", showFormatting));
 
-        // The root "Show Markup" button opens the dropdown; no direct action needed — register it as an
-        // ActionCommand that is always a no-op so the "every command is backed" parity assertion passes.
-        registry.Register("freew.show-markup", new ActionCommand(() => { }));
+        // The root "Show Markup" button opens the dropdown; no direct action needed, but the command id
+        // still needs to be backed so the parity assertion passes.
+        registry.Register("freew.show-markup", EmptyRibbonCommand.Instance);
 
         // Review tab — single-revision reviewing surface (the Reviewing Pane). The toggle shows/hides the
         // dockable revisions list; Accept/Reject act on the SELECTED single change and Previous/Next step
@@ -1312,13 +1321,13 @@ internal static class FreeWRibbonCommands
             registry.Register("freew.reviewing-pane",
                 new ToggleActionCommand(onToggleReviewingPane, isReviewingPaneVisible));
         if (onAcceptThisChange is not null)
-            registry.Register("freew.accept-this", new ActionCommand(onAcceptThisChange));
+            registry.Register("freew.accept-this", new ActionRibbonCommand(onAcceptThisChange));
         if (onRejectThisChange is not null)
-            registry.Register("freew.reject-this", new ActionCommand(onRejectThisChange));
+            registry.Register("freew.reject-this", new ActionRibbonCommand(onRejectThisChange));
         if (onPreviousChange is not null)
-            registry.Register("freew.previous-change", new ActionCommand(onPreviousChange));
+            registry.Register("freew.previous-change", new ActionRibbonCommand(onPreviousChange));
         if (onNextChange is not null)
-            registry.Register("freew.next-change", new ActionCommand(onNextChange));
+            registry.Register("freew.next-change", new ActionRibbonCommand(onNextChange));
 
         // Review tab — Protect: Mark as Final. A stateful toggle over Word's advisory read-only flag:
         // turning it on makes the editor read-only, shows the "Marked as Final" banner and persists the
@@ -1416,7 +1425,7 @@ internal static class FreeWRibbonCommands
         // Close Header and Footer: hides the pane (when available) and returns focus to the body.
         registry.Register("freew.hf-close",
             onCloseHeaderFooterPane is not null
-                ? new ActionCommand(onCloseHeaderFooterPane)
+                ? new ActionRibbonCommand(onCloseHeaderFooterPane)
                 : new CloseHeaderFooterCommand(editor));
 
         // Header & Footer Design contextual tab — insert into default header/footer slot.
@@ -1438,25 +1447,25 @@ internal static class FreeWRibbonCommands
         // Home > Font: clear all character formatting in the selection (reset every run to the document
         // default, keeping text). Insert > Pages: apply a drop cap (enlarged leading letter) to the
         // caret's paragraph. Both route through the view's undo/redo bus and re-render.
-        registry.Register("freew.clear-formatting", new ActionCommand(() => editor.ClearFormatting()));
+        registry.Register("freew.clear-formatting", new ActionRibbonCommand(() => editor.ClearFormatting()));
         // Drop Cap top-level button: apply default (Dropped, 3 lines, 42 pt). Dropdown items:
         // Dropped / In Margin (apply with explicit position) / None (remove) / Options dialog.
-        registry.Register("freew.drop-cap",          new ActionCommand(() => editor.ApplyDropCap()));
-        registry.Register("freew.drop-cap-dropped",  new ActionCommand(() => editor.ApplyDropCap()));
-        registry.Register("freew.drop-cap-in-margin",new ActionCommand(() => editor.ApplyDropCap()));
-        registry.Register("freew.drop-cap-none",     new ActionCommand(() => editor.ClearDropCap()));
+        registry.Register("freew.drop-cap",          new ActionRibbonCommand(() => editor.ApplyDropCap()));
+        registry.Register("freew.drop-cap-dropped",  new ActionRibbonCommand(() => editor.ApplyDropCap()));
+        registry.Register("freew.drop-cap-in-margin",new ActionRibbonCommand(() => editor.ApplyDropCap()));
+        registry.Register("freew.drop-cap-none",     new ActionRibbonCommand(() => editor.ClearDropCap()));
         registry.Register("freew.drop-cap-options",  new DropCapOptionsCommand(editor));
 
         // Insert > Text Box gallery: preset-styled text boxes.  Simple is the plain box (matches the
         // existing freew.shape-textbox behaviour); Sidebar/Banded adds a dark accent fill; Quote
         // indents the text and italicises it. All insert via the existing InsertShape path and round-trip
         // as an inline w:drawing/wps:wsp in docx.
-        registry.Register("freew.textbox-simple",  new ActionCommand(() =>
+        registry.Register("freew.textbox-simple",  new ActionRibbonCommand(() =>
         {
             editor.Focus();
             editor.InsertShape(FreeW.Core.Model.Shape.TextBoxWith("Text Box", widthPt: 180, heightPt: 90, fillColorHex: "#DCE6F1"));
         }));
-        registry.Register("freew.textbox-sidebar", new ActionCommand(() =>
+        registry.Register("freew.textbox-sidebar", new ActionRibbonCommand(() =>
         {
             editor.Focus();
             // Banded sidebar: dark blue fill with white text paragraph.
@@ -1466,7 +1475,7 @@ internal static class FreeWRibbonCommands
             shape.TextParagraphs.Add(p);
             editor.InsertShape(shape);
         }));
-        registry.Register("freew.textbox-quote",   new ActionCommand(() =>
+        registry.Register("freew.textbox-quote",   new ActionRibbonCommand(() =>
         {
             editor.Focus();
             // Quote: light grey fill, indented italic text.
@@ -1480,11 +1489,8 @@ internal static class FreeWRibbonCommands
 
         // Insert > Quick Parts > Document Property: insert a live field run that renders the matching
         // document-property value. Uses RunFieldKind so it round-trips as w:fldSimple in docx.
-        registry.Register("freew.docprop-title",    new InsertDocPropFieldCommand(editor, RunFieldKind.Title));
-        registry.Register("freew.docprop-subject",  new InsertDocPropFieldCommand(editor, RunFieldKind.Subject));
-        registry.Register("freew.docprop-author",   new InsertDocPropFieldCommand(editor, RunFieldKind.Author));
-        registry.Register("freew.docprop-keywords", new InsertDocPropFieldCommand(editor, RunFieldKind.Keywords));
-        registry.Register("freew.docprop-comments", new InsertDocPropFieldCommand(editor, RunFieldKind.DocComments));
+        foreach (var plan in DocumentPropertyFieldPlanner.CommandPlans)
+            registry.Register(plan.CommandId, new InsertDocPropFieldCommand(editor, plan.Kind));
 
         // Home > Font > Change Case: open a small menu to pick a target case (UPPERCASE / lowercase /
         // Sentence case / Capitalize Each Word / tOGGLE cASE) and recase the selection's text via the
@@ -1494,8 +1500,8 @@ internal static class FreeWRibbonCommands
         // Home > Paragraph: set line spacing (a multiplier on the default font size) over the selection,
         // and toggle Add/Remove Space Before/After. All route through the view's undo/redo bus.
         registry.Register("freew.line-spacing", new LineSpacingCommand(editor));
-        registry.Register("freew.space-before-toggle", new ActionCommand(() => editor.ToggleSpaceBefore()));
-        registry.Register("freew.space-after-toggle", new ActionCommand(() => editor.ToggleSpaceAfter()));
+        registry.Register("freew.space-before-toggle", new ActionRibbonCommand(() => editor.ToggleSpaceBefore()));
+        registry.Register("freew.space-after-toggle", new ActionRibbonCommand(() => editor.ToggleSpaceAfter()));
 
         // Layout > Paragraph > numeric indent/spacing combos: exact-value controls that mirror Word's
         // Layout tab Paragraph group. Each is stateful so SelectionChanged can push the live value
@@ -1525,8 +1531,8 @@ internal static class FreeWRibbonCommands
 
         // Home > Paragraph: increase/decrease the left indent by one 0.5in step over the selection, and
         // open the Paragraph dialog to set left/right/first-line (incl. hanging) indents. All reversible.
-        registry.Register("freew.indent-increase", new ActionCommand(() => { editor.Focus(); editor.IncreaseIndent(); }));
-        registry.Register("freew.indent-decrease", new ActionCommand(() => { editor.Focus(); editor.DecreaseIndent(); }));
+        registry.Register("freew.indent-increase", new ActionRibbonCommand(() => { editor.Focus(); editor.IncreaseIndent(); }));
+        registry.Register("freew.indent-decrease", new ActionRibbonCommand(() => { editor.Focus(); editor.DecreaseIndent(); }));
         // freew.paragraph-dialog now opens the full two-tab Paragraph dialog (Indents and Spacing +
         // Line and Page Breaks), replacing the previous single-tab ParagraphIndentCommand. All fields
         // that ParagraphIndentCommand previously handled are present on the Indents and Spacing tab.
@@ -1539,16 +1545,16 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.paste-special", new PasteSpecialCommand(editor));
 
         // Home > Paragraph: toggle a box border on the selected paragraph(s), and pick/clear shading.
-        registry.Register("freew.para-border", new ActionCommand(() => editor.ToggleParagraphBorder()));
+        registry.Register("freew.para-border", new ActionRibbonCommand(() => editor.ToggleParagraphBorder()));
         registry.Register("freew.para-shading", new ParagraphShadingCommand(editor));
         // Home / Design > Borders and Shading…: the full dialog (paragraph border, page border, shading).
         registry.Register("freew.borders-shading", new BordersAndShadingCommand(editor));
 
         // Home > Paragraph (Line and Page Breaks): flow-control toggles over the selected paragraph(s).
         // Each flips its pPr flag (keepNext/keepLines/widowControl) reversibly through the undo/redo bus.
-        registry.Register("freew.keep-with-next", new ActionCommand(() => { editor.Focus(); editor.ToggleKeepWithNext(); }));
-        registry.Register("freew.keep-lines", new ActionCommand(() => { editor.Focus(); editor.ToggleKeepLinesTogether(); }));
-        registry.Register("freew.widow-control", new ActionCommand(() => { editor.Focus(); editor.ToggleWidowControl(); }));
+        registry.Register("freew.keep-with-next", new ActionRibbonCommand(() => { editor.Focus(); editor.ToggleKeepWithNext(); }));
+        registry.Register("freew.keep-lines", new ActionRibbonCommand(() => { editor.Focus(); editor.ToggleKeepLinesTogether(); }));
+        registry.Register("freew.widow-control", new ActionRibbonCommand(() => { editor.Focus(); editor.ToggleWidowControl(); }));
 
         // Layout > Sort: open a small dialog (A→Z / Z→A + case-sensitive option) and sort the selected
         // paragraphs in place through the view's undo/redo bus.
@@ -1656,7 +1662,7 @@ internal static class FreeWRibbonCommands
 
         // Layout tab — open the modeless print-preview window (paginated, page-settings-aware).
         if (onPrintPreview is not null)
-            registry.Register("freew.print-preview", new ActionCommand(onPrintPreview));
+            registry.Register("freew.print-preview", new ActionRibbonCommand(onPrintPreview));
 
         // View tab — toggle the navigation pane (heading outline). Stateful so the ribbon's toggle
         // button reflects whether the pane is currently shown.
@@ -1692,40 +1698,40 @@ internal static class FreeWRibbonCommands
         // The callback receives the choice token; behaviour applies immediately if in read mode.
         if (onReadModeColumnWidth is not null)
         {
-            registry.Register("freew.read-mode-column-narrow",  new ActionCommand(() => onReadModeColumnWidth("narrow")));
-            registry.Register("freew.read-mode-column-default", new ActionCommand(() => onReadModeColumnWidth("default")));
-            registry.Register("freew.read-mode-column-wide",    new ActionCommand(() => onReadModeColumnWidth("wide")));
+            registry.Register("freew.read-mode-column-narrow",  new ActionRibbonCommand(() => onReadModeColumnWidth("narrow")));
+            registry.Register("freew.read-mode-column-default", new ActionRibbonCommand(() => onReadModeColumnWidth("default")));
+            registry.Register("freew.read-mode-column-wide",    new ActionRibbonCommand(() => onReadModeColumnWidth("wide")));
         }
         else
         {
-            registry.Register("freew.read-mode-column-narrow",  new NoOpRibbonCommand());
-            registry.Register("freew.read-mode-column-default", new NoOpRibbonCommand());
-            registry.Register("freew.read-mode-column-wide",    new NoOpRibbonCommand());
+            registry.Register("freew.read-mode-column-narrow",  EmptyRibbonCommand.Instance);
+            registry.Register("freew.read-mode-column-default", EmptyRibbonCommand.Instance);
+            registry.Register("freew.read-mode-column-wide",    EmptyRibbonCommand.Instance);
         }
         if (onReadModePageColor is not null)
         {
-            registry.Register("freew.read-mode-color-none",    new ActionCommand(() => onReadModePageColor("none")));
-            registry.Register("freew.read-mode-color-sepia",   new ActionCommand(() => onReadModePageColor("sepia")));
-            registry.Register("freew.read-mode-color-inverse", new ActionCommand(() => onReadModePageColor("inverse")));
+            registry.Register("freew.read-mode-color-none",    new ActionRibbonCommand(() => onReadModePageColor("none")));
+            registry.Register("freew.read-mode-color-sepia",   new ActionRibbonCommand(() => onReadModePageColor("sepia")));
+            registry.Register("freew.read-mode-color-inverse", new ActionRibbonCommand(() => onReadModePageColor("inverse")));
         }
         else
         {
-            registry.Register("freew.read-mode-color-none",    new NoOpRibbonCommand());
-            registry.Register("freew.read-mode-color-sepia",   new NoOpRibbonCommand());
-            registry.Register("freew.read-mode-color-inverse", new NoOpRibbonCommand());
+            registry.Register("freew.read-mode-color-none",    EmptyRibbonCommand.Instance);
+            registry.Register("freew.read-mode-color-sepia",   EmptyRibbonCommand.Instance);
+            registry.Register("freew.read-mode-color-inverse", EmptyRibbonCommand.Instance);
         }
 
         // View > Window — New Window: open a second MainWindow (Feature 5).
         if (onNewWindow is not null)
-            registry.Register("freew.new-window", new ActionCommand(onNewWindow));
+            registry.Register("freew.new-window", new ActionRibbonCommand(onNewWindow));
         else
-            registry.Register("freew.new-window", new NoOpRibbonCommand());
+            registry.Register("freew.new-window", EmptyRibbonCommand.Instance);
 
         // View > Window — Arrange All: tile all open FreeW windows (Feature 5).
         if (onArrangeAll is not null)
-            registry.Register("freew.arrange-all", new ActionCommand(onArrangeAll));
+            registry.Register("freew.arrange-all", new ActionRibbonCommand(onArrangeAll));
         else
-            registry.Register("freew.arrange-all", new NoOpRibbonCommand());
+            registry.Register("freew.arrange-all", EmptyRibbonCommand.Instance);
 
         // View tab — toggle Print Layout (Word-style page view) vs the plain/continuous view. Stateful so
         // the ribbon's toggle button reflects whether the page presentation is currently active. Default
@@ -1765,13 +1771,13 @@ internal static class FreeWRibbonCommands
         // View tab — open Word's Zoom dialog (presets / page fits / custom %). The host computes the
         // page-relative fit factors from the live viewport and applies the chosen factor to the editor.
         if (onZoomDialog is not null)
-            registry.Register("freew.zoom-dialog", new ActionCommand(onZoomDialog));
+            registry.Register("freew.zoom-dialog", new ActionRibbonCommand(onZoomDialog));
         if (onZoom100 is not null)
-            registry.Register("freew.zoom-100", new ActionCommand(onZoom100));
+            registry.Register("freew.zoom-100", new ActionRibbonCommand(onZoom100));
         if (onZoomOnePage is not null)
-            registry.Register("freew.zoom-one-page", new ActionCommand(onZoomOnePage));
+            registry.Register("freew.zoom-one-page", new ActionRibbonCommand(onZoomOnePage));
         if (onZoomPageWidth is not null)
-            registry.Register("freew.zoom-page-width", new ActionCommand(onZoomPageWidth));
+            registry.Register("freew.zoom-page-width", new ActionRibbonCommand(onZoomPageWidth));
 
         // Home > Paragraph — Show Formatting Marks: a stateful toggle over the editor's display-only pilcrow /
         // space-dot / tab-arrow overlay. The marks are drawn as a non-editable adorner computed from the
@@ -1788,17 +1794,17 @@ internal static class FreeWRibbonCommands
         stateful.Add(("freew.gridlines", gridlines));
 
         if (onHelpOnline is not null)
-            registry.Register("freew.help-online", new ActionCommand(onHelpOnline));
+            registry.Register("freew.help-online", new ActionRibbonCommand(onHelpOnline));
         if (onFeedback is not null)
-            registry.Register("freew.feedback", new ActionCommand(onFeedback));
+            registry.Register("freew.feedback", new ActionRibbonCommand(onFeedback));
         if (onCopyDiagnostics is not null)
-            registry.Register("freew.copy-diagnostics", new ActionCommand(onCopyDiagnostics));
+            registry.Register("freew.copy-diagnostics", new ActionRibbonCommand(onCopyDiagnostics));
         if (onCheckForUpdates is not null)
-            registry.Register("freew.check-updates", new ActionCommand(onCheckForUpdates));
+            registry.Register("freew.check-updates", new ActionRibbonCommand(onCheckForUpdates));
         if (onAbout is not null)
-            registry.Register("freew.about", new ActionCommand(onAbout));
+            registry.Register("freew.about", new ActionRibbonCommand(onAbout));
         if (onLegalNotices is not null)
-            registry.Register("freew.legal-notices", new ActionCommand(onLegalNotices));
+            registry.Register("freew.legal-notices", new ActionRibbonCommand(onLegalNotices));
 
         // Mailings tab — a simple mail merge. Field placeholders are the literal text «FieldName»
         // (ordinary run text, so they round-trip through docx as plain text). The four commands share a
@@ -1825,7 +1831,7 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.merge-record-number", new InsertSpecialMergeFieldCommand(editor, MailMerge.MergeRecordNumberField));
         registry.Register("freew.merge-sequence-number", new InsertSpecialMergeFieldCommand(editor, MailMerge.MergeSequenceNumberField));
         // Rules dropdown — each sub-command inserts the appropriate rule instruction via a dialog.
-        registry.Register("freew.merge-rules", new NoOpRibbonCommand()); // dropdown host: no action of its own
+        registry.Register("freew.merge-rules", EmptyRibbonCommand.Instance); // dropdown host: no action of its own
         registry.Register("freew.merge-rule-if", new InsertMergeRuleIfCommand(editor, mergeSession));
         registry.Register("freew.merge-rule-skip-record-if", new InsertMergeRuleCondCommand(editor, mergeSession, RuleCondKind.SkipRecordIf));
         registry.Register("freew.merge-rule-next-record-if", new InsertMergeRuleCondCommand(editor, mergeSession, RuleCondKind.NextRecordIf));
@@ -1939,12 +1945,6 @@ internal static class FreeWRibbonCommands
                 Inline.TextDecorationsProperty,
                 decorations.Count == 0 ? null : decorations);
         }
-    }
-
-    // A parameterless ribbon command that runs a host-supplied action (e.g. opening a window).
-    private sealed class ActionCommand(Action action) : IRibbonCommand
-    {
-        public void Execute(RibbonCommandContext context) => action();
     }
 
     // Home > Clipboard > Format Painter: single-click arms for one-shot (stamps the next selection, then
@@ -2779,7 +2779,9 @@ internal static class FreeWRibbonCommands
             }
 
             var (table, rowIndex, columnIndex) = location.Value;
-            var formula = TableFormulaDialog.Prompt(owner, DefaultFormula(table, rowIndex, columnIndex));
+            var formula = TableFormulaDialog.Prompt(
+                owner,
+                TableFormulaDialogPlanner.BuildInitialState(table, rowIndex, columnIndex));
             if (formula is null)
                 return; // cancelled — leave the model untouched
 
@@ -2787,40 +2789,6 @@ internal static class FreeWRibbonCommands
             editor.InsertTableFormula(formula);
         }
 
-        // Word's default: =SUM(ABOVE) when numeric cells sit above the formula cell; otherwise =SUM(LEFT)
-        // when numbers sit to the left; falling back to =SUM(ABOVE).
-        private static string DefaultFormula(FreeW.Core.Model.Table table, int rowIndex, int columnIndex)
-        {
-            if (HasNumberAbove(table, rowIndex, columnIndex))
-                return "=SUM(ABOVE)";
-            if (HasNumberLeft(table, rowIndex, columnIndex))
-                return "=SUM(LEFT)";
-            return "=SUM(ABOVE)";
-        }
-
-        private static bool HasNumberAbove(FreeW.Core.Model.Table table, int rowIndex, int columnIndex)
-        {
-            for (var r = rowIndex - 1; r >= 0; r--)
-            {
-                var cells = table.Rows[r].Cells;
-                if (columnIndex < cells.Count && TableFormulaEvaluator.TryParseCellNumber(cells[columnIndex].PlainText, out _))
-                    return true;
-            }
-            return false;
-        }
-
-        private static bool HasNumberLeft(FreeW.Core.Model.Table table, int rowIndex, int columnIndex)
-        {
-            if (rowIndex < 0 || rowIndex >= table.Rows.Count)
-                return false;
-            var cells = table.Rows[rowIndex].Cells;
-            for (var c = columnIndex - 1; c >= 0; c--)
-            {
-                if (c < cells.Count && TableFormulaEvaluator.TryParseCellNumber(cells[c].PlainText, out _))
-                    return true;
-            }
-            return false;
-        }
     }
 
     // Table Tools — Layout > Properties (Word's Table Properties dialog). Requires the caret to be inside a
@@ -4466,9 +4434,9 @@ internal static class FreeWRibbonCommands
             var entry = NewSourceDialog.Ask(owner);
             if (entry is null)
                 return null;
-            if (entry.Author.Length == 0 && entry.Title.Length == 0 && entry.Year.Length == 0)
+            if (!SourceManagementDialogPlanner.TryBuildCitationSource(entry, out var source, out _))
                 return null;
-            return editor.AddSource(entry.Tag, entry.Author, entry.Title, entry.Year, entry.Publisher);
+            return editor.AddSource(source!.Tag, source.Author, source.Title, source.Year, source.Publisher);
         }
     }
 
@@ -4481,14 +4449,20 @@ internal static class FreeWRibbonCommands
         {
             editor.Focus();
             var masterStore = MasterSourceStore.Load();
-            var result = ManageSourcesDialog.Ask(Window.GetWindow(editor), editor.Sources, masterStore);
+            var result = ManageSourcesDialog.Ask(Window.GetWindow(editor), editor.Sources, masterStore.ToSources());
             if (result is null)
                 return;
 
             editor.Focus();
             editor.ReplaceSources(result.CurrentSources);
-            MasterSourceStore.Save(result.UpdatedMaster);
+            MasterSourceStore.Save(CreateMasterStore(result.MasterSources));
         }
+
+        private static MasterSourceStore CreateMasterStore(IReadOnlyList<Source> sources) =>
+            new()
+            {
+                Sources = sources.Select(SourceRecord.FromSource).ToList()
+            };
     }
 
     // Insert > References > Caption: pick a label (Figure/Table — defaulting to Table when the caret is
@@ -5522,13 +5496,11 @@ internal static class FreeWRibbonCommands
     }
 
     // The outcome of the SourcePicker: either an existing source was chosen, or "Add New Source…" was.
-    private sealed record SourcePick(Source? Source, bool AddNew);
-
     // A tiny modal dialog to pick one of the document's existing sources, or to choose "Add New Source…".
     // Returns the pick, or null if cancelled.
     private static class SourcePicker
     {
-        public static SourcePick? Ask(Window? owner, IReadOnlyList<Source> sources)
+        public static SourceManagementPick? Ask(Window? owner, IReadOnlyList<Source> sources)
         {
             var list = new System.Windows.Controls.ListBox
             {
@@ -5536,14 +5508,14 @@ internal static class FreeWRibbonCommands
                 MinHeight = 140,
                 Margin = new Thickness(0, 0, 0, 12)
             };
-            foreach (var source in sources)
-                list.Items.Add(DescribeSource(source));
+            foreach (var item in SourceManagementDialogPlanner.BuildPickerItems(sources))
+                list.Items.Add(item);
             list.SelectedIndex = 0;
 
-            SourcePick? result = null;
+            SourceManagementPick? result = null;
             var dialog = new Window
             {
-                Title = "Insert Citation",
+                Title = SourceManagementDialogPlanner.SourcePickerTitle,
                 SizeToContent = SizeToContent.WidthAndHeight,
                 ResizeMode = ResizeMode.NoResize,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -5552,21 +5524,21 @@ internal static class FreeWRibbonCommands
             };
 
             var ok = new System.Windows.Controls.Button { Content = "Insert", IsDefault = true, MinWidth = 80, Margin = new Thickness(0, 0, 8, 0) };
-            var addNew = new System.Windows.Controls.Button { Content = "Add New Source…", MinWidth = 120, Margin = new Thickness(0, 0, 8, 0) };
+            var addNew = new System.Windows.Controls.Button { Content = SourceManagementDialogPlanner.AddNewSourceButtonLabel, MinWidth = 120, Margin = new Thickness(0, 0, 8, 0) };
             var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
 
             void Choose()
             {
-                if (list.SelectedIndex >= 0 && list.SelectedIndex < sources.Count)
+                if (SourceManagementDialogPlanner.TryCreatePick(sources, list.SelectedIndex, out var pick))
                 {
-                    result = new SourcePick(sources[list.SelectedIndex], AddNew: false);
+                    result = pick;
                     dialog.DialogResult = true;
                 }
             }
 
             ok.Click += (_, _) => Choose();
             list.MouseDoubleClick += (_, _) => Choose();
-            addNew.Click += (_, _) => { result = new SourcePick(null, AddNew: true); dialog.DialogResult = true; };
+            addNew.Click += (_, _) => { result = SourceManagementDialogPlanner.CreateAddNewPick(); dialog.DialogResult = true; };
 
             var buttons = new System.Windows.Controls.StackPanel
             {
@@ -5578,7 +5550,7 @@ internal static class FreeWRibbonCommands
             buttons.Children.Add(cancel);
 
             var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(16) };
-            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = "Source:", Margin = new Thickness(0, 0, 0, 4) });
+            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = SourceManagementDialogPlanner.SourcePickerLabel, Margin = new Thickness(0, 0, 0, 4) });
             panel.Children.Add(list);
             panel.Children.Add(buttons);
             dialog.Content = panel;
@@ -5586,43 +5558,26 @@ internal static class FreeWRibbonCommands
             return dialog.ShowDialog() == true ? result : null;
         }
 
-        // A short human-readable label for the picker list: "Author (Year) — Title", degrading gracefully.
-        private static string DescribeSource(Source source)
-        {
-            var parts = new List<string>(3);
-            if (!string.IsNullOrWhiteSpace(source.Author))
-                parts.Add(source.Author.Trim());
-            if (!string.IsNullOrWhiteSpace(source.Year))
-                parts.Add($"({source.Year.Trim()})");
-            var head = string.Join(" ", parts);
-            if (!string.IsNullOrWhiteSpace(source.Title))
-                head = head.Length > 0 ? $"{head} — {source.Title.Trim()}" : source.Title.Trim();
-            if (head.Length == 0)
-                head = string.IsNullOrWhiteSpace(source.Tag) ? "(untitled source)" : source.Tag.Trim();
-            return head;
-        }
     }
-
-    // The fields captured by the NewSourceDialog (all trimmed; publisher may be empty).
-    private sealed record SourceEntry(string Tag, string Author, string Title, string Year, string Publisher);
 
     // A small modal form capturing a source's tag/author/title/year/publisher. Returns the entry, or
     // null if cancelled. When editing an existing source, type-specific fields not shown here are
     // preserved by the caller.
     private static class NewSourceDialog
     {
-        public static SourceEntry? Ask(Window? owner, Source? source = null)
+        public static SourceManagementSourceEntry? Ask(Window? owner, Source? source = null)
         {
-            var tag = NewField(source?.Tag);
-            var author = NewField(source?.Author);
-            var title = NewField(source?.Title);
-            var year = NewField(source?.Year);
-            var publisher = NewField(source?.Publisher);
+            var fieldPlans = SourceManagementDialogPlanner.BuildEntryFieldPlans(source);
+            var fields = fieldPlans.ToDictionary(
+                plan => plan.Field,
+                plan => NewField(plan.Text));
 
-            SourceEntry? result = null;
+            SourceManagementSourceEntry? result = null;
             var dialog = new Window
             {
-                Title = source is null ? "Add New Source" : "Edit Source",
+                Title = source is null
+                    ? SourceManagementDialogPlanner.AddNewSourceTitle
+                    : SourceManagementDialogPlanner.EditSourceTitle,
                 SizeToContent = SizeToContent.WidthAndHeight,
                 ResizeMode = ResizeMode.NoResize,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -5634,8 +5589,8 @@ internal static class FreeWRibbonCommands
             var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
             ok.Click += (_, _) =>
             {
-                result = new SourceEntry(
-                    tag.Text.Trim(), author.Text.Trim(), title.Text.Trim(), year.Text.Trim(), publisher.Text.Trim());
+                result = SourceManagementDialogPlanner.CreateEntry(
+                    fields.ToDictionary(pair => pair.Key, pair => (string?)pair.Value.Text));
                 dialog.DialogResult = true;
             };
 
@@ -5649,15 +5604,12 @@ internal static class FreeWRibbonCommands
             buttons.Children.Add(cancel);
 
             var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(16) };
-            AddRow(panel, "Tag (short id):", tag);
-            AddRow(panel, "Author:", author);
-            AddRow(panel, "Title:", title);
-            AddRow(panel, "Year:", year);
-            AddRow(panel, "Publisher (optional):", publisher);
+            foreach (var plan in fieldPlans)
+                AddRow(panel, plan.Label, fields[plan.Field]);
             panel.Children.Add(buttons);
             dialog.Content = panel;
 
-            author.Focus();
+            fields[SourceManagementSourceField.Author].Focus();
             return dialog.ShowDialog() == true ? result : null;
         }
 
@@ -5674,37 +5626,17 @@ internal static class FreeWRibbonCommands
     /// <summary>Return type for <see cref="ManageSourcesDialog.Ask"/>.</summary>
     private sealed record ManageSourcesResult(
         IReadOnlyList<Source> CurrentSources,
-        MasterSourceStore UpdatedMaster);
+        IReadOnlyList<Source> MasterSources);
 
     private static class ManageSourcesDialog
     {
         public static ManageSourcesResult? Ask(
             Window? owner,
             IReadOnlyList<Source> sources,
-            MasterSourceStore masterStore)
+            IReadOnlyList<Source> masterSources)
         {
-            // Working copies — mutations stay in the dialog until OK.
-            var workingDoc    = sources.Select(CloneSource).ToList();
-            var workingMaster = new MasterSourceStore
-            {
-                Sources = masterStore.Sources
-                    .Select(r => new SourceRecord
-                    {
-                        Tag       = r.Tag,
-                        Type      = r.Type,
-                        Author    = r.Author,
-                        Title     = r.Title,
-                        Year      = r.Year,
-                        Publisher = r.Publisher,
-                        Journal   = r.Journal,
-                        Volume    = r.Volume,
-                        Issue     = r.Issue,
-                        Pages     = r.Pages,
-                        Url       = r.Url,
-                        Accessed  = r.Accessed
-                    })
-                    .ToList()
-            };
+            // The planner owns the working copies; mutations stay in dialog state until OK.
+            var state = SourceManagementDialogPlanner.BuildInitialState(sources, masterSources);
 
             // ── left pane: Master List ────────────────────────────────────────────────────────
             var masterList = new System.Windows.Controls.ListBox
@@ -5733,92 +5665,111 @@ internal static class FreeWRibbonCommands
                 ShowInTaskbar = false
             };
 
-            void RefreshMasterList()
+            void RefreshMasterList(int? selectedIndex = null)
             {
-                var sel = masterList.SelectedIndex;
+                var selection = selectedIndex ?? masterList.SelectedIndex;
                 masterList.Items.Clear();
-                foreach (var s in workingMaster.ToSources())
-                    masterList.Items.Add(DescribeSource(s));
-                if (workingMaster.Sources.Count > 0)
-                    masterList.SelectedIndex = Math.Clamp(sel, 0, workingMaster.Sources.Count - 1);
+                foreach (var item in SourceManagementDialogPlanner.BuildPickerItems(state.MasterSources))
+                    masterList.Items.Add(item);
+                SelectIndex(masterList, selection, state.MasterSources.Count);
             }
 
-            void RefreshDocList()
+            void RefreshDocList(int? selectedIndex = null)
             {
-                var sel = docList.SelectedIndex;
+                var selection = selectedIndex ?? docList.SelectedIndex;
                 docList.Items.Clear();
-                foreach (var s in workingDoc)
-                    docList.Items.Add(DescribeSource(s));
-                if (workingDoc.Count > 0)
-                    docList.SelectedIndex = Math.Clamp(sel, 0, workingDoc.Count - 1);
+                foreach (var item in SourceManagementDialogPlanner.BuildPickerItems(state.CurrentSources))
+                    docList.Items.Add(item);
+                SelectIndex(docList, selection, state.CurrentSources.Count);
+            }
+
+            void ShowValidation(SourceManagementValidation validation) =>
+                DialogMessageHelper.ShowWarning(dialog, validation.Message, dialog.Title);
+
+            void SelectIndex(System.Windows.Controls.ListBox list, int selectedIndex, int count)
+            {
+                list.SelectedIndex = count == 0 ? -1 : Math.Clamp(selectedIndex, 0, count - 1);
             }
 
             // ── master-list actions ───────────────────────────────────────────────────────────
             void AddToMaster()
             {
                 var entry = NewSourceDialog.Ask(dialog);
-                if (entry is null || !HasSourceData(entry))
+                if (entry is null)
                     return;
-                workingMaster.AddOrUpdate(BuildSource(entry));
-                RefreshMasterList();
-                masterList.SelectedIndex = workingMaster.Sources.Count - 1;
+
+                var plan = SourceManagementDialogPlanner.AddMasterSource(state, entry);
+                if (plan.Validation is not null)
+                {
+                    ShowValidation(plan.Validation);
+                    return;
+                }
+
+                state = plan.State;
+                RefreshMasterList(plan.SelectedIndex);
             }
 
             void DeleteFromMaster()
             {
-                var idx = masterList.SelectedIndex;
-                if (idx < 0 || idx >= workingMaster.Sources.Count)
-                    return;
-                workingMaster.Sources.RemoveAt(idx);
-                RefreshMasterList();
+                var plan = SourceManagementDialogPlanner.DeleteMasterSource(state, masterList.SelectedIndex);
+                state = plan.State;
+                RefreshMasterList(plan.SelectedIndex);
             }
 
             // ── copy master → current doc ─────────────────────────────────────────────────────
             void CopyToDoc()
             {
-                var idx = masterList.SelectedIndex;
-                if (idx < 0 || idx >= workingMaster.Sources.Count)
-                    return;
-                var src = workingMaster.Sources[idx].ToSource();
-                if (!workingDoc.Any(s => s.Tag == src.Tag))
-                {
-                    workingDoc.Add(src);
-                    RefreshDocList();
-                    docList.SelectedIndex = workingDoc.Count - 1;
-                }
+                var plan = SourceManagementDialogPlanner.CopyMasterToCurrent(
+                    state,
+                    masterList.SelectedIndex,
+                    docList.SelectedIndex);
+                state = plan.State;
+                RefreshDocList(plan.SelectedIndex);
             }
 
             // ── current-doc actions ───────────────────────────────────────────────────────────
             void AddToDoc()
             {
                 var entry = NewSourceDialog.Ask(dialog);
-                if (entry is null || !HasSourceData(entry))
+                if (entry is null)
                     return;
-                workingDoc.Add(BuildSource(entry));
-                RefreshDocList();
-                docList.SelectedIndex = workingDoc.Count - 1;
+
+                var plan = SourceManagementDialogPlanner.AddCurrentSource(state, entry);
+                if (plan.Validation is not null)
+                {
+                    ShowValidation(plan.Validation);
+                    return;
+                }
+
+                state = plan.State;
+                RefreshDocList(plan.SelectedIndex);
             }
 
             void EditDocSource()
             {
                 var idx = docList.SelectedIndex;
-                if (idx < 0 || idx >= workingDoc.Count)
+                if (idx < 0 || idx >= state.CurrentSources.Count)
                     return;
-                var entry = NewSourceDialog.Ask(dialog, workingDoc[idx]);
-                if (entry is null || !HasSourceData(entry))
+                var entry = NewSourceDialog.Ask(dialog, state.CurrentSources[idx]);
+                if (entry is null)
                     return;
-                workingDoc[idx] = BuildSource(entry, workingDoc[idx]);
-                RefreshDocList();
-                docList.SelectedIndex = idx;
+
+                var plan = SourceManagementDialogPlanner.EditCurrentSource(state, idx, entry);
+                if (plan.Validation is not null)
+                {
+                    ShowValidation(plan.Validation);
+                    return;
+                }
+
+                state = plan.State;
+                RefreshDocList(plan.SelectedIndex);
             }
 
             void DeleteFromDoc()
             {
-                var idx = docList.SelectedIndex;
-                if (idx < 0 || idx >= workingDoc.Count)
-                    return;
-                workingDoc.RemoveAt(idx);
-                RefreshDocList();
+                var plan = SourceManagementDialogPlanner.DeleteCurrentSource(state, docList.SelectedIndex);
+                state = plan.State;
+                RefreshDocList(plan.SelectedIndex);
             }
 
             // ── buttons ───────────────────────────────────────────────────────────────────────
@@ -5841,7 +5792,8 @@ internal static class FreeWRibbonCommands
 
             ok.Click += (_, _) =>
             {
-                result = new ManageSourcesResult(workingDoc.ToArray(), workingMaster);
+                var plannedResult = SourceManagementDialogPlanner.BuildResult(state);
+                result = new ManageSourcesResult(plannedResult.CurrentSources, plannedResult.MasterSources);
                 dialog.DialogResult = true;
             };
 
@@ -5855,7 +5807,7 @@ internal static class FreeWRibbonCommands
             masterButtons.Children.Add(masterDelete);
 
             var masterPane = new System.Windows.Controls.StackPanel { Margin = new Thickness(0, 0, 8, 0) };
-            masterPane.Children.Add(new System.Windows.Controls.TextBlock { Text = "Master List:", Margin = new Thickness(0, 0, 0, 4) });
+            masterPane.Children.Add(new System.Windows.Controls.TextBlock { Text = SourceManagementDialogPlanner.MasterListLabel, Margin = new Thickness(0, 0, 0, 4) });
             masterPane.Children.Add(masterList);
             masterPane.Children.Add(masterButtons);
 
@@ -5876,7 +5828,7 @@ internal static class FreeWRibbonCommands
             docButtons.Children.Add(docDelete);
 
             var docPane = new System.Windows.Controls.StackPanel();
-            docPane.Children.Add(new System.Windows.Controls.TextBlock { Text = "Current Document:", Margin = new Thickness(0, 0, 0, 4) });
+            docPane.Children.Add(new System.Windows.Controls.TextBlock { Text = SourceManagementDialogPlanner.CurrentDocumentListLabel, Margin = new Thickness(0, 0, 0, 4) });
             docPane.Children.Add(docList);
             docPane.Children.Add(docButtons);
 
@@ -5903,61 +5855,6 @@ internal static class FreeWRibbonCommands
             return dialog.ShowDialog() == true ? result : null;
         }
 
-        private static bool HasSourceData(SourceEntry entry) =>
-            entry.Tag.Length > 0
-            || entry.Author.Length > 0
-            || entry.Title.Length > 0
-            || entry.Year.Length > 0
-            || entry.Publisher.Length > 0;
-
-        private static Source BuildSource(SourceEntry entry, Source? existing = null) =>
-            new()
-            {
-                Tag = entry.Tag,
-                Type = existing?.Type ?? SourceType.Book,
-                Author = entry.Author,
-                Title = entry.Title,
-                Year = entry.Year,
-                Publisher = string.IsNullOrWhiteSpace(entry.Publisher) ? null : entry.Publisher,
-                Journal = existing?.Journal,
-                Volume = existing?.Volume,
-                Issue = existing?.Issue,
-                Pages = existing?.Pages,
-                Url = existing?.Url,
-                Accessed = existing?.Accessed
-            };
-
-        private static Source CloneSource(Source source) =>
-            new()
-            {
-                Tag = source.Tag,
-                Type = source.Type,
-                Author = source.Author,
-                Title = source.Title,
-                Year = source.Year,
-                Publisher = source.Publisher,
-                Journal = source.Journal,
-                Volume = source.Volume,
-                Issue = source.Issue,
-                Pages = source.Pages,
-                Url = source.Url,
-                Accessed = source.Accessed
-            };
-
-        private static string DescribeSource(Source source)
-        {
-            var parts = new List<string>(3);
-            if (!string.IsNullOrWhiteSpace(source.Author))
-                parts.Add(source.Author.Trim());
-            if (!string.IsNullOrWhiteSpace(source.Year))
-                parts.Add($"({source.Year.Trim()})");
-            var head = string.Join(" ", parts);
-            if (!string.IsNullOrWhiteSpace(source.Title))
-                head = head.Length > 0 ? $"{head} - {source.Title.Trim()}" : source.Title.Trim();
-            if (head.Length == 0)
-                head = string.IsNullOrWhiteSpace(source.Tag) ? "(untitled source)" : source.Tag.Trim();
-            return head;
-        }
     }
 
     // Mailings: the shared mail-merge state across the four Mailings commands. Holds the data source
@@ -6129,19 +6026,11 @@ internal static class FreeWRibbonCommands
         }
     }
 
-    // A no-op command used as the host command for dropdown buttons that carry only a menu. The button
-    // itself has no direct action; all behaviour lives in the sub-items.
-    private sealed class NoOpRibbonCommand : IRibbonCommand
-    {
-        public void Execute(RibbonCommandContext context) { }
-    }
-
-    // ── Merge Rules: command kind tag for Skip/Next Record If ───────────────────────────────────
+    // Merge Rules: command kind tag for Skip/Next Record If.
     private enum RuleCondKind { SkipRecordIf, NextRecordIf }
 
-    // Mailings > Rules > If…Then…Else: ask the user for field/operator/value/true-text/false-text via
-    // a dialog and insert «If FieldName Op Value Then "TrueText" Else "FalseText"» at the caret.
-    // MergeRuleEvaluator.Evaluate recognises this instruction at preview/merge time.
+    // Mailings > Rules > If...Then...Else: ask the user for field/operator/value/true-text/false-text
+    // via a dialog and insert the IF merge instruction at the caret.
     private sealed class InsertMergeRuleIfCommand(DocumentView editor, MailMergeSession session) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
@@ -6233,40 +6122,12 @@ internal static class FreeWRibbonCommands
 
     // ── Merge Rule dialogs ───────────────────────────────────────────────────────────────────────
 
-    // All operators available in the Rules condition dialogs (matching Word's Rules dialog).
-    private static readonly (MergeConditionOperator Op, string Label)[] ConditionOperators =
-    [
-        (MergeConditionOperator.Equal,              "Equal to (=)"),
-        (MergeConditionOperator.NotEqual,           "Not equal to (<>)"),
-        (MergeConditionOperator.LessThan,           "Less than (<)"),
-        (MergeConditionOperator.LessThanOrEqual,    "Less than or equal (<=)"),
-        (MergeConditionOperator.GreaterThan,        "Greater than (>)"),
-        (MergeConditionOperator.GreaterThanOrEqual, "Greater than or equal (>=)"),
-        (MergeConditionOperator.IsBlank,            "Is blank"),
-        (MergeConditionOperator.IsNotBlank,         "Is not blank"),
-        (MergeConditionOperator.Contains,           "Contains"),
-    ];
-
-    // Result from If…Then…Else dialog.
-    private sealed record MergeRuleIfResult(
-        string FieldName,
-        MergeConditionOperator Operator,
-        string Value,
-        string TrueText,
-        string FalseText);
-
-    // Result from Skip/Next Record If dialog.
-    private sealed record MergeRuleCondResult(
-        string FieldName,
-        MergeConditionOperator Operator,
-        string Value);
-
     // If…Then…Else dialog: builds the complete rule definition.
     private static class MergeRuleIfDialog
     {
-        public static MergeRuleIfResult? Ask(Window? owner, IReadOnlyList<string> header)
+        public static MailMergeRuleIfDialogResult? Ask(Window? owner, IReadOnlyList<string> header)
         {
-            MergeRuleIfResult? result = null;
+            MailMergeRuleIfDialogResult? result = null;
             var dialog = new Window
             {
                 Title = "If…Then…Else",
@@ -6282,7 +6143,7 @@ internal static class FreeWRibbonCommands
             if (fieldCombo.Items.Count > 0) fieldCombo.SelectedIndex = 0;
 
             var opCombo = new System.Windows.Controls.ComboBox { MinWidth = 200 };
-            foreach (var (_, label) in ConditionOperators) opCombo.Items.Add(label);
+            foreach (var choice in MailMergeRuleDialogPlanner.GetConditionOperators()) opCombo.Items.Add(choice.Label);
             opCombo.SelectedIndex = 0;
 
             var valueBox = new System.Windows.Controls.TextBox { MinWidth = 140 };
@@ -6292,19 +6153,17 @@ internal static class FreeWRibbonCommands
             // Disable value field for blank/not blank operators.
             opCombo.SelectionChanged += (_, _) =>
             {
-                var idx = opCombo.SelectedIndex;
-                var op = ConditionOperators[idx].Op;
-                valueBox.IsEnabled = op != MergeConditionOperator.IsBlank && op != MergeConditionOperator.IsNotBlank;
+                var op = MailMergeRuleDialogPlanner.GetConditionOperator(opCombo.SelectedIndex);
+                valueBox.IsEnabled = MailMergeRuleDialogPlanner.IsComparisonValueEnabled(op);
             };
 
             var ok = new System.Windows.Controls.Button { Content = "OK", IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
             var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
             ok.Click += (_, _) =>
             {
-                var opIdx = opCombo.SelectedIndex < 0 ? 0 : opCombo.SelectedIndex;
-                result = new MergeRuleIfResult(
+                result = MailMergeRuleDialogPlanner.CreateIfResult(
                     fieldCombo.SelectedItem?.ToString() ?? fieldCombo.Text,
-                    ConditionOperators[opIdx].Op,
+                    opCombo.SelectedIndex,
                     valueBox.Text,
                     trueBox.Text,
                     falseBox.Text);
@@ -6350,9 +6209,9 @@ internal static class FreeWRibbonCommands
     // Skip Record If / Next Record If dialog.
     private static class MergeRuleCondDialog
     {
-        public static MergeRuleCondResult? Ask(Window? owner, IReadOnlyList<string> header, string title)
+        public static MailMergeRuleConditionDialogResult? Ask(Window? owner, IReadOnlyList<string> header, string title)
         {
-            MergeRuleCondResult? result = null;
+            MailMergeRuleConditionDialogResult? result = null;
             var dialog = new Window
             {
                 Title = title,
@@ -6368,25 +6227,23 @@ internal static class FreeWRibbonCommands
             if (fieldCombo.Items.Count > 0) fieldCombo.SelectedIndex = 0;
 
             var opCombo = new System.Windows.Controls.ComboBox { MinWidth = 200 };
-            foreach (var (_, label) in ConditionOperators) opCombo.Items.Add(label);
+            foreach (var choice in MailMergeRuleDialogPlanner.GetConditionOperators()) opCombo.Items.Add(choice.Label);
             opCombo.SelectedIndex = 0;
 
             var valueBox = new System.Windows.Controls.TextBox { MinWidth = 140 };
             opCombo.SelectionChanged += (_, _) =>
             {
-                var idx = opCombo.SelectedIndex;
-                var op = ConditionOperators[idx].Op;
-                valueBox.IsEnabled = op != MergeConditionOperator.IsBlank && op != MergeConditionOperator.IsNotBlank;
+                var op = MailMergeRuleDialogPlanner.GetConditionOperator(opCombo.SelectedIndex);
+                valueBox.IsEnabled = MailMergeRuleDialogPlanner.IsComparisonValueEnabled(op);
             };
 
             var ok = new System.Windows.Controls.Button { Content = "OK", IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
             var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
             ok.Click += (_, _) =>
             {
-                var opIdx = opCombo.SelectedIndex < 0 ? 0 : opCombo.SelectedIndex;
-                result = new MergeRuleCondResult(
+                result = MailMergeRuleDialogPlanner.CreateConditionResult(
                     fieldCombo.SelectedItem?.ToString() ?? fieldCombo.Text,
-                    ConditionOperators[opIdx].Op,
+                    opCombo.SelectedIndex,
                     valueBox.Text);
                 dialog.DialogResult = true;
             };
@@ -6781,13 +6638,11 @@ internal static class FreeWRibbonCommands
                 return;
             }
 
-            var result = FilterSortRecipientsDialog.Ask(Window.GetWindow(editor), data);
-            if (result is null)
+            var updatedData = FilterSortRecipientsDialog.Ask(Window.GetWindow(editor), data);
+            if (updatedData is null)
                 return; // cancelled
 
-            // Rebuild the session data from the user's chosen (possibly re-ordered) rows. The MergeData
-            // constructor takes the same header and an enumerable of rows, so no model change is needed.
-            session.Data = new MergeData(data.Header, result.Select(r => (IReadOnlyList<string>)data.Header.Select(h => r.TryGetValue(h, out var v) ? v : string.Empty).ToList()).ToList());
+            session.Data = updatedData;
             // Invalidate any in-progress preview so it re-reads the new filtered data.
             session.Template = null;
             session.CurrentIndex = 0;
@@ -6816,7 +6671,7 @@ internal static class FreeWRibbonCommands
                 // so the long dimension runs horizontally for printing, matching Word's envelope setup.
                 page.WidthPt   = envelope.WidthPt;
                 page.HeightPt  = envelope.HeightPt;
-                page.Landscape = true;
+                page.Landscape = envelope.Landscape;
                 // Narrow margins leave the maximum print area for the address block.
                 page.MarginLeftPt   = envelope.MarginPt;
                 page.MarginRightPt  = envelope.MarginPt;
@@ -6849,7 +6704,7 @@ internal static class FreeWRibbonCommands
             {
                 page.WidthPt        = label.PageWidthPt;
                 page.HeightPt       = label.PageHeightPt;
-                page.Landscape      = false;
+                page.Landscape      = label.Landscape;
                 page.MarginLeftPt   = label.MarginPt;
                 page.MarginRightPt  = label.MarginPt;
                 page.MarginTopPt    = label.MarginPt;
@@ -7044,28 +6899,12 @@ internal static class FreeWRibbonCommands
     // Window-building idiom as MergeDataDialog / FilterSortRecipientsDialog.
     private static class MatchFieldsDialog
     {
-        private static readonly FieldRole[] AllRoles = (FieldRole[])Enum.GetValues(typeof(FieldRole));
-
-        // Display labels for each role, matching Word's "Match Fields" dialog wording.
-        private static readonly Dictionary<FieldRole, string> RoleLabels = new()
-        {
-            [FieldRole.Title]      = "Title (Mr., Mrs., …)",
-            [FieldRole.FirstName]  = "First Name",
-            [FieldRole.MiddleName] = "Middle Name",
-            [FieldRole.LastName]   = "Last Name",
-            [FieldRole.Suffix]     = "Suffix (Jr., Sr., …)",
-            [FieldRole.Company]    = "Company",
-            [FieldRole.Address1]   = "Address 1",
-            [FieldRole.Address2]   = "Address 2",
-            [FieldRole.City]       = "City",
-            [FieldRole.State]      = "State",
-            [FieldRole.PostalCode] = "Postal Code",
-            [FieldRole.Country]    = "Country or Region",
-        };
-
         public static FieldMapping? Ask(Window? owner, IReadOnlyList<string> header, FieldMapping current)
         {
             FieldMapping? result = null;
+
+            var rolePlans = MailMergeMatchFieldsDialogPlanner.GetRolePlans(header, current);
+            var columnChoices = MailMergeMatchFieldsDialogPlanner.GetColumnChoices(header);
 
             // One ComboBox per role, keyed by role.
             var combos = new Dictionary<FieldRole, System.Windows.Controls.ComboBox>();
@@ -7074,15 +6913,15 @@ internal static class FreeWRibbonCommands
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
-            for (var i = 0; i < AllRoles.Length + 1; i++)
+            for (var i = 0; i < rolePlans.Count + 1; i++)
                 grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
-            for (var i = 0; i < AllRoles.Length; i++)
+            for (var i = 0; i < rolePlans.Count; i++)
             {
-                var role = AllRoles[i];
+                var plan = rolePlans[i];
                 var label = new System.Windows.Controls.TextBlock
                 {
-                    Text = RoleLabels.TryGetValue(role, out var lbl) ? lbl : role.ToString(),
+                    Text = plan.Label,
                     VerticalAlignment = VerticalAlignment.Center,
                     Margin = new Thickness(0, 3, 12, 3)
                 };
@@ -7091,18 +6930,11 @@ internal static class FreeWRibbonCommands
                 grid.Children.Add(label);
 
                 var combo = new System.Windows.Controls.ComboBox { MinWidth = 180, Margin = new Thickness(0, 3, 0, 3) };
-                combo.Items.Add("(not matched)");
-                foreach (var h in header)
-                    combo.Items.Add(h);
+                foreach (var choice in columnChoices)
+                    combo.Items.Add(choice);
+                combo.SelectedItem = plan.SelectedChoice;
 
-                // Pre-select the currently mapped column (or "(not matched)").
-                var mapped = current[role];
-                if (mapped is not null && header.Contains(mapped, StringComparer.OrdinalIgnoreCase))
-                    combo.SelectedItem = header.First(h => h.Equals(mapped, StringComparison.OrdinalIgnoreCase));
-                else
-                    combo.SelectedIndex = 0;
-
-                combos[role] = combo;
+                combos[plan.Role] = combo;
                 Grid.SetRow(combo, i);
                 Grid.SetColumn(combo, 1);
                 grid.Children.Add(combo);
@@ -7119,7 +6951,7 @@ internal static class FreeWRibbonCommands
             };
             buttonRow.Children.Add(ok);
             buttonRow.Children.Add(cancel);
-            Grid.SetRow(buttonRow, AllRoles.Length);
+            Grid.SetRow(buttonRow, rolePlans.Count);
             Grid.SetColumnSpan(buttonRow, 2);
             grid.Children.Add(buttonRow);
 
@@ -7135,13 +6967,8 @@ internal static class FreeWRibbonCommands
 
             ok.Click += (_, _) =>
             {
-                var mapping = new FieldMapping();
-                foreach (var (role, combo) in combos)
-                {
-                    var sel = combo.SelectedItem as string;
-                    mapping[role] = sel == "(not matched)" || sel is null ? null : sel;
-                }
-                result = mapping;
+                result = MailMergeMatchFieldsDialogPlanner.CreateResult(
+                    combos.ToDictionary(pair => pair.Key, pair => pair.Value.SelectedItem as string));
                 dialog.DialogResult = true;
             };
 
@@ -7162,11 +6989,10 @@ internal static class FreeWRibbonCommands
     // order, or null if cancelled. Structural template: MergeDataDialog (same Window-building idiom).
     private static class FilterSortRecipientsDialog
     {
-        // Returns the filtered, ordered rows as dictionaries, or null if cancelled.
-        public static IReadOnlyList<IReadOnlyDictionary<string, string>>? Ask(
+        public static MergeData? Ask(
             Window? owner, MergeData data)
         {
-            IReadOnlyList<IReadOnlyDictionary<string, string>>? result = null;
+            MergeData? result = null;
 
             var dialog = new Window
             {
@@ -7200,9 +7026,7 @@ internal static class FreeWRibbonCommands
             sortPanel.Children.Add(descRadio);
 
             // --- Row list with checkboxes ---
-            // Show up to the first 8 columns as preview text so the dialog stays a reasonable width.
-            const int MaxPreviewCols = 8;
-            var previewCols = data.Header.Take(MaxPreviewCols).ToList();
+            var previewCols = MailMergeRecipientFilterSortPlanner.GetPreviewColumns(data.Header);
 
             var rowChecks = new List<System.Windows.Controls.CheckBox>();
             var rowList = new System.Windows.Controls.StackPanel { Margin = new Thickness(0, 0, 0, 8) };
@@ -7210,7 +7034,7 @@ internal static class FreeWRibbonCommands
             // Header hint
             var headerHint = new System.Windows.Controls.TextBlock
             {
-                Text = "  " + string.Join("  |  ", previewCols),
+                Text = MailMergeRecipientFilterSortPlanner.FormatPreviewHeader(previewCols),
                 FontWeight = FontWeights.SemiBold,
                 Margin = new Thickness(0, 0, 0, 2),
                 Foreground = Brushes.Gray
@@ -7220,10 +7044,9 @@ internal static class FreeWRibbonCommands
             for (var i = 0; i < data.Rows.Count; i++)
             {
                 var row = data.Rows[i];
-                var preview = string.Join("  |  ", previewCols.Select(h => row.TryGetValue(h, out var v) ? v : string.Empty));
                 var cb = new System.Windows.Controls.CheckBox
                 {
-                    Content = $"{i + 1}. {preview}",
+                    Content = MailMergeRecipientFilterSortPlanner.FormatPreviewRow(i, row, previewCols),
                     IsChecked = true,
                     Margin = new Thickness(0, 1, 0, 1),
                     Tag = i  // row index
@@ -7246,19 +7069,15 @@ internal static class FreeWRibbonCommands
 
             ok.Click += (_, _) =>
             {
-                // Collect the indices of checked rows, then sort by the chosen column.
                 var sortCol  = sortColCombo.SelectedItem as string ?? string.Empty;
                 var ascending = ascRadio.IsChecked == true;
 
-                var chosen = rowChecks
+                var includedIndexes = rowChecks
                     .Where(cb => cb.IsChecked == true)
-                    .Select(cb => data.Rows[(int)cb.Tag!]);
-
-                result = (ascending
-                    ? chosen.OrderBy(r => r.TryGetValue(sortCol, out var v) ? v : string.Empty, StringComparer.OrdinalIgnoreCase)
-                    : chosen.OrderByDescending(r => r.TryGetValue(sortCol, out var v) ? v : string.Empty, StringComparer.OrdinalIgnoreCase))
+                    .Select(cb => (int)cb.Tag!)
                     .ToList();
 
+                result = MailMergeRecipientFilterSortPlanner.Apply(data, includedIndexes, sortCol, ascending);
                 dialog.DialogResult = true;
             };
 
@@ -7281,37 +7100,20 @@ internal static class FreeWRibbonCommands
         }
     }
 
-    // Standard envelope size preset for the Envelopes command.
-    private readonly record struct EnvelopeSize(string Name, double WidthPt, double HeightPt, double MarginPt);
-
-    // Result returned by EnvelopeSetupDialog.
-    private readonly record struct EnvelopeSetupResult(double WidthPt, double HeightPt, double MarginPt);
-
     // Mailings > Envelopes setup dialog. Offers a small set of standard ISO/US sizes (DL, C5, C6,
     // Comm-10, Monarch) matching Word's Envelopes and Labels dialog. Returns the chosen geometry, or null
     // if cancelled. The caller applies the settings via ApplyPageSettings (backed path).
     private static class EnvelopeSetupDialog
     {
-        // Standard sizes as portrait dimensions (width × height in points). Landscape is applied by the
-        // command so the long edge runs horizontally, matching Word's envelope-print orientation.
-        // 1 mm = 72/25.4 pt ≈ 2.8346 pt.
-        private static readonly EnvelopeSize[] Sizes =
-        [
-            new("DL  (110 × 220 mm)",  110 * 72 / 25.4,  220 * 72 / 25.4, 18),
-            new("C5  (162 × 229 mm)",  162 * 72 / 25.4,  229 * 72 / 25.4, 18),
-            new("C6  (114 × 162 mm)",  114 * 72 / 25.4,  162 * 72 / 25.4, 14),
-            new("Comm-10 (4.125 × 9.5 in)", 4.125 * 72, 9.5 * 72,        18),
-            new("Monarch (3.875 × 7.5 in)", 3.875 * 72, 7.5 * 72,        14),
-        ];
-
         public static EnvelopeSetupResult? Ask(Window? owner)
         {
             EnvelopeSetupResult? result = null;
 
+            var sizes = MailingsEnvelopeLabelPlanner.GetEnvelopeSizes();
             var combo = new System.Windows.Controls.ComboBox { MinWidth = 260, Margin = new Thickness(0, 0, 0, 12) };
-            foreach (var s in Sizes)
+            foreach (var s in sizes)
                 combo.Items.Add(s.Name);
-            combo.SelectedIndex = 0; // default: DL
+            combo.SelectedIndex = MailingsEnvelopeLabelPlanner.DefaultEnvelopeIndex;
 
             var dialog = new Window
             {
@@ -7327,8 +7129,7 @@ internal static class FreeWRibbonCommands
             var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true,  MinWidth = 72 };
             ok.Click += (_, _) =>
             {
-                var s = Sizes[combo.SelectedIndex];
-                result = new EnvelopeSetupResult(s.WidthPt, s.HeightPt, s.MarginPt);
+                result = MailingsEnvelopeLabelPlanner.PlanEnvelope(combo.SelectedIndex);
                 dialog.DialogResult = true;
             };
 
@@ -7360,37 +7161,20 @@ internal static class FreeWRibbonCommands
         }
     }
 
-    // Standard label sheet preset for the Labels command.
-    private readonly record struct LabelPreset(string Name, int Rows, int Columns, double PageWidthPt, double PageHeightPt, double MarginPt);
-
-    // Result returned by LabelSetupDialog.
-    private readonly record struct LabelSetupResult(int Rows, int Columns, double PageWidthPt, double PageHeightPt, double MarginPt);
-
     // Mailings > Labels setup dialog. Offers a handful of common Avery-style presets plus a custom
     // rows × columns option on US Letter. Returns the chosen grid / page geometry, or null if cancelled.
     // The caller applies page settings via ApplyPageSettings then inserts the grid via InsertTable.
     private static class LabelSetupDialog
     {
-        // A curated set of common label layouts on standard sheets.  Dimensions: US Letter = 612 × 792 pt.
-        private static readonly LabelPreset[] Presets =
-        [
-            new("Avery 5160 — 3 × 10 (Letter)",  10, 3, 612, 792, 18),
-            new("Avery 5162 — 2 × 7  (Letter)",   7, 2, 612, 792, 18),
-            new("Avery 5163 — 2 × 5  (Letter)",   5, 2, 612, 792, 18),
-            new("Avery L7160 — 3 × 7 (A4)",        7, 3, 595.28, 841.89, 14),
-            new("Custom rows × columns (Letter)",   0, 0, 612, 792, 18),
-        ];
-
-        private const int CustomPresetIndex = 4;
-
         public static LabelSetupResult? Ask(Window? owner)
         {
             LabelSetupResult? result = null;
 
+            var presets = MailingsEnvelopeLabelPlanner.GetLabelPresets();
             var combo = new System.Windows.Controls.ComboBox { MinWidth = 280, Margin = new Thickness(0, 0, 0, 8) };
-            foreach (var p in Presets)
+            foreach (var p in presets)
                 combo.Items.Add(p.Name);
-            combo.SelectedIndex = 0;
+            combo.SelectedIndex = MailingsEnvelopeLabelPlanner.DefaultLabelIndex;
 
             // Custom rows/columns spinners (shown only when "Custom" is selected).
             var rowsBox = new System.Windows.Controls.TextBox { Text = "10", MinWidth = 50, Margin = new Thickness(4, 0, 12, 0) };
@@ -7407,7 +7191,9 @@ internal static class FreeWRibbonCommands
             customPanel.Children.Add(colsBox);
 
             combo.SelectionChanged += (_, _) =>
-                customPanel.Visibility = combo.SelectedIndex == CustomPresetIndex ? Visibility.Visible : Visibility.Collapsed;
+                customPanel.Visibility = combo.SelectedIndex == MailingsEnvelopeLabelPlanner.CustomLabelPresetIndex
+                    ? Visibility.Visible
+                    : Visibility.Collapsed;
 
             var dialog = new Window
             {
@@ -7423,22 +7209,14 @@ internal static class FreeWRibbonCommands
             var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true,  MinWidth = 72 };
             ok.Click += (_, _) =>
             {
-                var idx = combo.SelectedIndex;
-                if (idx == CustomPresetIndex)
+                var plan = MailingsEnvelopeLabelPlanner.PlanLabel(combo.SelectedIndex, rowsBox.Text, colsBox.Text);
+                if (plan.Result is not { } label)
                 {
-                    if (!int.TryParse(rowsBox.Text, out var rows) || rows < 1 ||
-                        !int.TryParse(colsBox.Text, out var cols) || cols < 1)
-                    {
-                        DialogMessageHelper.ShowError(dialog, "Enter valid positive integers for rows and columns.");
-                        return;
-                    }
-                    result = new LabelSetupResult(rows, cols, Presets[idx].PageWidthPt, Presets[idx].PageHeightPt, Presets[idx].MarginPt);
+                    DialogMessageHelper.ShowError(dialog, "Enter valid positive integers for rows and columns.");
+                    return;
                 }
-                else
-                {
-                    var p = Presets[idx];
-                    result = new LabelSetupResult(p.Rows, p.Columns, p.PageWidthPt, p.PageHeightPt, p.MarginPt);
-                }
+
+                result = label;
                 dialog.DialogResult = true;
             };
 
@@ -7476,28 +7254,7 @@ internal static class FreeWRibbonCommands
             if (text is null)
                 return; // cancelled — leave the model untouched
 
-            var hadPageNumber = existing?.Paragraphs.SelectMany(p => p.Runs)
-                .Any(r => r.FieldKind == RunFieldKind.PageNumber) ?? false;
-
-            HeaderFooter? value;
-            if (text.Length == 0 && !hadPageNumber)
-            {
-                value = null;
-            }
-            else
-            {
-                value = new HeaderFooter();
-                var paragraph = new FreeW.Core.Model.Paragraph();
-                if (text.Length > 0)
-                    paragraph.Runs.Add(new FreeW.Core.Model.Run(text));
-                if (hadPageNumber)
-                {
-                    if (paragraph.Runs.Count > 0)
-                        paragraph.Runs.Add(new FreeW.Core.Model.Run("  "));
-                    paragraph.Runs.Add(FreeW.Core.Model.Run.PageNumberField());
-                }
-                value.Paragraphs.Add(paragraph);
-            }
+            var value = HeaderFooterDialogPlanner.BuildPlainTextHeaderFooter(text, existing);
 
             if (isFooter)
                 model.Footer = value;
@@ -7525,39 +7282,18 @@ internal static class FreeWRibbonCommands
     {
         public void Execute(RibbonCommandContext context)
         {
-            var hf = editor.Model.FinalSectionHeadersFooters;
             var page = editor.Model.Page;
-
-            // Warn if the slot requires a toggle that is currently off (same guard as EditHeaderSlotCommand).
-            var label = slotName switch
+            var plan = HeaderFooterDialogPlanner.PlanSlotActivation(slotName, page);
+            if (plan.Kind != HeaderFooterSlotActivationKind.Active)
             {
-                "header"       => "Default Header",
-                "footer"       => "Default Footer",
-                "even-header"  => "Even-Page Header",
-                "even-footer"  => "Even-Page Footer",
-                "first-header" => "First-Page Header",
-                "first-footer" => "First-Page Footer",
-                _              => slotName
-            };
-
-            if (slotName is "even-header" or "even-footer" && !page.DifferentOddEvenPages)
-            {
-                DialogMessageHelper.ShowInfo(Window.GetWindow(editor),
-                    $"'{label}' is only active when 'Different Odd & Even Pages' is turned on.\n" +
-                    "Enable that option in Header & Footer Design, then try again.",
-                    "Edit Header / Footer");
-                return;
-            }
-            if (slotName is "first-header" or "first-footer" && !page.DifferentFirstPage)
-            {
-                DialogMessageHelper.ShowInfo(Window.GetWindow(editor),
-                    $"'{label}' is only active when 'Different First Page' is turned on.\n" +
-                    "Enable that option in Header & Footer Design, then try again.",
-                    "Edit Header / Footer");
+                DialogMessageHelper.ShowInfo(
+                    Window.GetWindow(editor),
+                    plan.Message ?? string.Empty,
+                    HeaderFooterDialogPlanner.EditCaption);
                 return;
             }
 
-            openPane(slotName);
+            openPane(plan.SlotName);
         }
     }
 
@@ -7570,62 +7306,23 @@ internal static class FreeWRibbonCommands
             editor.Focus();
             var hf = editor.Model.FinalSectionHeadersFooters;
             var page = editor.Model.Page;
+            var plan = HeaderFooterDialogPlanner.PlanSlotActivation(slotName, page);
 
-            // Resolve the current slot value by name.
-            var current = slotName switch
+            if (plan.Kind != HeaderFooterSlotActivationKind.Active)
             {
-                "header"       => hf.Header,
-                "footer"       => hf.Footer,
-                "even-header"  => hf.EvenHeader,
-                "even-footer"  => hf.EvenFooter,
-                "first-header" => hf.FirstHeader,
-                "first-footer" => hf.FirstFooter,
-                _              => null
-            };
-
-            var label = slotName switch
-            {
-                "header"       => "Default Header",
-                "footer"       => "Default Footer",
-                "even-header"  => "Even-Page Header",
-                "even-footer"  => "Even-Page Footer",
-                "first-header" => "First-Page Header",
-                "first-footer" => "First-Page Footer",
-                _              => slotName
-            };
-
-            // Warn if the slot requires a toggle that is currently off.
-            if (slotName is "even-header" or "even-footer" && !page.DifferentOddEvenPages)
-            {
-                DialogMessageHelper.ShowInfo(Window.GetWindow(editor),
-                    $"'{label}' is only active when 'Different Odd & Even Pages' is turned on.\n" +
-                    "Enable that option in Header & Footer Design, then try again.",
-                    "Edit Header / Footer");
-                return;
-            }
-            if (slotName is "first-header" or "first-footer" && !page.DifferentFirstPage)
-            {
-                DialogMessageHelper.ShowInfo(Window.GetWindow(editor),
-                    $"'{label}' is only active when 'Different First Page' is turned on.\n" +
-                    "Enable that option in Header & Footer Design, then try again.",
-                    "Edit Header / Footer");
+                DialogMessageHelper.ShowInfo(
+                    Window.GetWindow(editor),
+                    plan.Message ?? string.Empty,
+                    HeaderFooterDialogPlanner.EditCaption);
                 return;
             }
 
-            var result = HeaderFooterSlotDialog.Prompt(Window.GetWindow(editor), label, current);
-            if (result is null)
+            var current = HeaderFooterDialogPlanner.GetSlot(hf, plan.Slot);
+            var result = HeaderFooterSlotDialog.Prompt(Window.GetWindow(editor), plan.Label, current);
+            if (!result.Accepted)
                 return; // cancelled
 
-            // Write back to the correct slot.
-            switch (slotName)
-            {
-                case "header":       hf.Header      = result; break;
-                case "footer":       hf.Footer      = result; break;
-                case "even-header":  hf.EvenHeader  = result; break;
-                case "even-footer":  hf.EvenFooter  = result; break;
-                case "first-header": hf.FirstHeader = result; break;
-                case "first-footer": hf.FirstFooter = result; break;
-            }
+            HeaderFooterDialogPlanner.SetSlot(hf, plan.Slot, result.Value);
 
             editor.Focus();
         }
@@ -7688,12 +7385,12 @@ internal static class FreeWRibbonCommands
         {
             if (!context.Parameters.TryGetValue("value", out var raw) || raw is not string value)
                 return;
-            if (double.TryParse(value, System.Globalization.CultureInfo.InvariantCulture, out var pt) && pt >= 0)
+            if (HeaderFooterDialogPlanner.TryParseDistance(value, out var pt))
                 editor.ApplyPageSettings(page => page.HeaderDistancePt = pt);
         }
 
         public RibbonCommandState GetState() =>
-            new(Value: editor.Model.Page.HeaderDistancePt.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture));
+            new(Value: HeaderFooterDialogPlanner.FormatDistance(editor.Model.Page.HeaderDistancePt));
     }
 
     private sealed class FooterFromBottomCommand(DocumentView editor) : IRibbonStatefulCommand
@@ -7702,12 +7399,12 @@ internal static class FreeWRibbonCommands
         {
             if (!context.Parameters.TryGetValue("value", out var raw) || raw is not string value)
                 return;
-            if (double.TryParse(value, System.Globalization.CultureInfo.InvariantCulture, out var pt) && pt >= 0)
+            if (HeaderFooterDialogPlanner.TryParseDistance(value, out var pt))
                 editor.ApplyPageSettings(page => page.FooterDistancePt = pt);
         }
 
         public RibbonCommandState GetState() =>
-            new(Value: editor.Model.Page.FooterDistancePt.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture));
+            new(Value: HeaderFooterDialogPlanner.FormatDistance(editor.Model.Page.FooterDistancePt));
     }
 
     // Insert into header/footer: insert page number, date/time, or a document-info field into the
@@ -7720,39 +7417,22 @@ internal static class FreeWRibbonCommands
             editor.Focus();
             var model = editor.Model;
             var hf = isFooter ? model.Footer : model.Header;
-            var slot = hf ?? new HeaderFooter();
+            var slot = hf;
 
             switch (kind)
             {
                 case InsertSlotKind.PageNumber:
-                {
-                    var alreadyPresent = slot.Paragraphs.SelectMany(p => p.Runs)
-                        .Any(r => r.FieldKind == RunFieldKind.PageNumber);
-                    if (!alreadyPresent)
-                    {
-                        var para = new FreeW.Core.Model.Paragraph
-                        {
-                            Formatting = ParagraphFormatting.Default with
-                            {
-                                Alignment = FreeW.Core.Model.TextAlignment.Center
-                            }
-                        };
-                        para.Runs.Add(new FreeW.Core.Model.Run("Page "));
-                        para.Runs.Add(FreeW.Core.Model.Run.PageNumberField());
-                        slot.Paragraphs.Add(para);
-                    }
+                    slot = HeaderFooterDialogPlanner.AddPageNumberToSlot(slot);
                     break;
-                }
                 case InsertSlotKind.DateTime:
                 {
                     var dtResult = DateTimeDialog.Prompt(Window.GetWindow(editor));
                     if (dtResult is null)
                         return;
-                    var para = EnsureDefaultParagraph(slot);
                     if (dtResult.IsField && dtResult.FieldInstruction is { Length: > 0 } dtInstr)
-                        para.Runs.Add(FreeW.Core.Model.Run.ComplexFieldRun(" " + dtInstr.Trim() + " "));
+                        slot = HeaderFooterDialogPlanner.AppendFieldDateTimeToSlot(slot, dtInstr);
                     else if (!string.IsNullOrEmpty(dtResult.Text))
-                        para.Runs.Add(new FreeW.Core.Model.Run(dtResult.Text));
+                        slot = HeaderFooterDialogPlanner.AppendPlainDateTimeToSlot(slot, dtResult.Text);
                     break;
                 }
                 case InsertSlotKind.DocumentInfo:
@@ -7760,8 +7440,7 @@ internal static class FreeWRibbonCommands
                     var instruction = FieldPickerDialog.Ask(Window.GetWindow(editor));
                     if (instruction is null)
                         return;
-                    var para = EnsureDefaultParagraph(slot);
-                    para.Runs.Add(FreeW.Core.Model.Run.ComplexFieldRun(instruction));
+                    slot = HeaderFooterDialogPlanner.AppendComplexFieldToSlot(slot, instruction);
                     break;
                 }
             }
@@ -7773,16 +7452,11 @@ internal static class FreeWRibbonCommands
 
             editor.Focus();
         }
-
-        private static FreeW.Core.Model.Paragraph EnsureDefaultParagraph(HeaderFooter hf)
-        {
-            if (hf.Paragraphs.Count == 0)
-                hf.Paragraphs.Add(new FreeW.Core.Model.Paragraph());
-            return hf.Paragraphs[^1];
-        }
     }
 
     private enum InsertSlotKind { PageNumber, DateTime, DocumentInfo }
+
+    private sealed record HeaderFooterSlotDialogResult(bool Accepted, HeaderFooter? Value);
 
     // A focused per-slot header/footer editor dialog. Shows the slot's current plain text, lets the
     // user edit it freely, and provides "Insert Page Number", "Insert Date & Time", and "Insert Field"
@@ -7796,23 +7470,19 @@ internal static class FreeWRibbonCommands
         /// (possibly null to clear the slot), or returns <paramref name="current"/> unchanged when the
         /// user cancels.
         /// </summary>
-        public static HeaderFooter? Prompt(Window? owner, string slotLabel, HeaderFooter? current)
+        public static HeaderFooterSlotDialogResult Prompt(Window? owner, string slotLabel, HeaderFooter? current)
         {
             // Seed the text box with the slot's plain text (if any).
-            var seed = current?.PlainText ?? string.Empty;
-            var hadPageNumber = current?.Paragraphs.SelectMany(p => p.Runs)
-                .Any(r => r.FieldKind == RunFieldKind.PageNumber) ?? false;
-            var hadComplexField = current?.Paragraphs.SelectMany(p => p.Runs)
-                .Any(r => r.ComplexField is not null) ?? false;
+            var state = HeaderFooterDialogPlanner.BuildSlotDialogState(current);
 
             // Track whether the user wants to append a page-number or date/time.
-            bool appendPageNumber = hadPageNumber;
+            bool appendPageNumber = state.HasPageNumber;
             string? appendDateTime = null;
             string? appendFieldInstruction = null;
 
             var box = new System.Windows.Controls.TextBox
             {
-                Text = seed,
+                Text = state.Text,
                 MinWidth = 400,
                 MaxHeight = 100,
                 TextWrapping = System.Windows.TextWrapping.Wrap,
@@ -7840,7 +7510,7 @@ internal static class FreeWRibbonCommands
                 Content = "Insert Page Number",
                 MinWidth = 140,
                 Margin = new Thickness(0, 0, 8, 8),
-                IsEnabled = !appendPageNumber
+                IsEnabled = state.CanInsertPageNumber
             };
             var btnDateTime = new System.Windows.Controls.Button
             {
@@ -7879,39 +7549,11 @@ internal static class FreeWRibbonCommands
             var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
             ok.Click += (_, _) =>
             {
-                var text = box.Text;
-                HeaderFooter? hf;
-                if (text.Length == 0 && !appendPageNumber && appendDateTime is null && appendFieldInstruction is null)
-                {
-                    hf = null; // clear slot
-                }
-                else
-                {
-                    hf = new HeaderFooter();
-                    var para = new FreeW.Core.Model.Paragraph();
-                    if (text.Length > 0)
-                        para.Runs.Add(new FreeW.Core.Model.Run(text));
-                    if (appendDateTime is { } dt)
-                    {
-                        if (para.Runs.Count > 0)
-                            para.Runs.Add(new FreeW.Core.Model.Run("  "));
-                        para.Runs.Add(new FreeW.Core.Model.Run(dt));
-                    }
-                    if (appendFieldInstruction is { } instr)
-                    {
-                        if (para.Runs.Count > 0)
-                            para.Runs.Add(new FreeW.Core.Model.Run("  "));
-                        para.Runs.Add(FreeW.Core.Model.Run.ComplexFieldRun(instr));
-                    }
-                    if (appendPageNumber)
-                    {
-                        if (para.Runs.Count > 0)
-                            para.Runs.Add(new FreeW.Core.Model.Run("  "));
-                        para.Runs.Add(FreeW.Core.Model.Run.PageNumberField());
-                    }
-                    hf.Paragraphs.Add(para);
-                }
-                result = hf;
+                result = HeaderFooterDialogPlanner.BuildSlotDialogResult(
+                    box.Text,
+                    appendPageNumber,
+                    appendDateTime,
+                    appendFieldInstruction);
                 dialog.DialogResult = true;
             };
 
@@ -7944,7 +7586,9 @@ internal static class FreeWRibbonCommands
             dialog.Content = panel;
 
             box.Focus();
-            return dialog.ShowDialog() == true ? result : current; // Cancel = unchanged
+            return dialog.ShowDialog() == true
+                ? new HeaderFooterSlotDialogResult(Accepted: true, result)
+                : new HeaderFooterSlotDialogResult(Accepted: false, current);
         }
     }
 
@@ -8004,7 +7648,7 @@ internal static class FreeWRibbonCommands
             string? hex = null;
             var window = new Window
             {
-                Title = "Page Color",
+                Title = UiText.Get("Ribbon_Dialog_PageColor_Title"),
                 SizeToContent = SizeToContent.WidthAndHeight,
                 ResizeMode = ResizeMode.NoResize,
                 WindowStartupLocation = owner is null
@@ -8035,7 +7679,7 @@ internal static class FreeWRibbonCommands
 
             var noColor = new Button
             {
-                Content = "No Color",
+                Content = UiText.Get("Ribbon_Palette_PageColor_NoColor_Label"),
                 Margin = new Thickness(2, 6, 2, 0),
                 Padding = new Thickness(8, 2, 8, 2)
             };
@@ -8044,20 +7688,27 @@ internal static class FreeWRibbonCommands
 
             var more = new Button
             {
-                Content = "More Colors…",
+                Content = UiText.Get("Ribbon_Dialog_PageColor_MoreColors_Label"),
                 Margin = new Thickness(2, 4, 2, 0),
                 Padding = new Thickness(8, 2, 8, 2)
             };
             more.Click += (_, _) =>
             {
                 var seed = editor.Model.Page.BackgroundColorHex ?? "#";
-                var typed = TextPrompt.Ask(window, "More Colors", "Hex colour (e.g. #FFCC00):", seed);
+                var typed = TextPrompt.Ask(
+                    window,
+                    UiText.Get("Ribbon_Dialog_PageColor_MoreColors_Title"),
+                    UiText.Get("Ribbon_Dialog_PageColor_HexPrompt"),
+                    seed);
                 if (typed is null)
                     return; // stay on the palette
                 var normalized = NormalizeHex(typed);
                 if (normalized is null)
                 {
-                    DialogMessageHelper.ShowWarning(window, "Enter a colour as a 6-digit hex value, e.g. #FFCC00.", "Page Color");
+                    DialogMessageHelper.ShowWarning(
+                        window,
+                        UiText.Get("Ribbon_Dialog_PageColor_InvalidHexWarning"),
+                        UiText.Get("Ribbon_Dialog_PageColor_Title"));
                     return;
                 }
                 chosen = true; hex = normalized; window.Close();
@@ -8107,37 +7758,11 @@ internal static class FreeWRibbonCommands
 
             if (position == PageNumberPosition.Top)
             {
-                var header = model.Header ?? new HeaderFooter();
-                var alreadyPresent = header.Paragraphs.SelectMany(p => p.Runs)
-                    .Any(r => r.FieldKind == RunFieldKind.PageNumber);
-                if (!alreadyPresent)
-                {
-                    var paragraph = new FreeW.Core.Model.Paragraph
-                    {
-                        Formatting = ParagraphFormatting.Default with { Alignment = FreeW.Core.Model.TextAlignment.Center }
-                    };
-                    paragraph.Runs.Add(new FreeW.Core.Model.Run("Page "));
-                    paragraph.Runs.Add(FreeW.Core.Model.Run.PageNumberField());
-                    header.Paragraphs.Add(paragraph);
-                }
-                model.Header = header;
+                model.Header = HeaderFooterDialogPlanner.AddPageNumberToSlot(model.Header);
             }
             else
             {
-                var footer = model.Footer ?? new HeaderFooter();
-                var alreadyPresent = footer.Paragraphs.SelectMany(p => p.Runs)
-                    .Any(r => r.FieldKind == RunFieldKind.PageNumber);
-                if (!alreadyPresent)
-                {
-                    var paragraph = new FreeW.Core.Model.Paragraph
-                    {
-                        Formatting = ParagraphFormatting.Default with { Alignment = FreeW.Core.Model.TextAlignment.Center }
-                    };
-                    paragraph.Runs.Add(new FreeW.Core.Model.Run("Page "));
-                    paragraph.Runs.Add(FreeW.Core.Model.Run.PageNumberField());
-                    footer.Paragraphs.Add(paragraph);
-                }
-                model.Footer = footer;
+                model.Footer = HeaderFooterDialogPlanner.AddPageNumberToSlot(model.Footer);
             }
         }
     }
@@ -8192,39 +7817,17 @@ internal static class FreeWRibbonCommands
     // field-name browser.
     private static class FieldPickerDialog
     {
-        private sealed record Choice(string Category, string Label, string Instruction);
-
         public static string? Ask(Window? owner)
         {
-            var choices = new[]
-            {
-                // Date and Time
-                new Choice("Date and Time", "Date (DATE)",                              @" DATE \@ ""M/d/yyyy"" "),
-                new Choice("Date and Time", "Time (TIME)",                              @" TIME \@ ""h:mm am/pm"" "),
-                // Document Information
-                new Choice("Document Information", "Author (AUTHOR)",                   " AUTHOR "),
-                new Choice("Document Information", "File Name (FILENAME)",              " FILENAME "),
-                new Choice("Document Information", "Title (TITLE)",                     " TITLE "),
-                new Choice("Document Information", "Subject (SUBJECT)",                 " SUBJECT "),
-                new Choice("Document Information", "Keywords (KEYWORDS)",               " KEYWORDS "),
-                new Choice("Document Information", "Comments (COMMENTS)",               " COMMENTS "),
-                // Numbering
-                new Choice("Numbering", "Page Number (PAGE)",                           " PAGE "),
-                new Choice("Numbering", "Number of Pages (NUMPAGES)",                  " NUMPAGES "),
-                // References (cross-reference / sequence)
-                new Choice("References", "StyleRef — heading style ref (STYLEREF)",    " STYLEREF 1 "),
-                new Choice("References", "Sequence number (SEQ Figure)",               " SEQ Figure \\* ARABIC "),
-            };
 
             // Category listbox on the left; field listbox on the right — a two-pane layout
             // matching the spirit of Word's Field dialog without requiring full XAML.
-            var categories = choices.Select(c => c.Category).Distinct().ToList();
             var catList = new System.Windows.Controls.ListBox
             {
                 MinWidth = 160,
                 Margin = new Thickness(0, 0, 8, 0)
             };
-            foreach (var cat in categories)
+            foreach (var cat in FieldPickerDialogPlanner.Categories)
                 catList.Items.Add(cat);
 
             var fieldList = new System.Windows.Controls.ListBox { MinWidth = 220 };
@@ -8233,7 +7836,7 @@ internal static class FreeWRibbonCommands
             {
                 var cat = catList.SelectedItem as string;
                 fieldList.Items.Clear();
-                foreach (var c in choices.Where(c => c.Category == cat))
+                foreach (var c in FieldPickerDialogPlanner.ChoicesForCategory(cat))
                     fieldList.Items.Add(c.Label);
                 if (fieldList.Items.Count > 0)
                     fieldList.SelectedIndex = 0;
@@ -8266,9 +7869,8 @@ internal static class FreeWRibbonCommands
             {
                 var cat = catList.SelectedItem as string;
                 var label = fieldList.SelectedItem as string;
-                var chosen = choices.FirstOrDefault(c => c.Category == cat && c.Label == label);
-                if (chosen is not null)
-                    result = chosen.Instruction;
+                if (FieldPickerDialogPlanner.TryGetInstruction(cat, label, out var instruction))
+                    result = instruction;
                 dialog.DialogResult = true;
             }
             ok.Click += (_, _) => Commit();

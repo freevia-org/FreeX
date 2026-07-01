@@ -167,6 +167,21 @@ public sealed class FileCommandWorkflowTests : IDisposable
     }
 
     [Fact]
+    public void CurrentFileName_DerivesDialogSourceNameFromCurrentPath()
+    {
+        var workflow = CreateWorkflow();
+        var path = Path.Combine(_tempDir, "Quarterly Draft.fxp");
+
+        workflow.CurrentFileName.Should().BeNull();
+        workflow.CurrentFileNameWithoutExtensionOr("Document").Should().Be("Document");
+
+        workflow.MarkSavedWithPath(path, suppressRecentFiles: true);
+
+        workflow.CurrentFileName.Should().Be("Quarterly Draft.fxp");
+        workflow.CurrentFileNameWithoutExtensionOr("Document").Should().Be("Quarterly Draft");
+    }
+
+    [Fact]
     public void MarkSavedWithPath_UsesCurrentRecentFilesCapAndNotifies()
     {
         var cap = 2;

@@ -6,6 +6,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Styling;
 
+using Free.Shared.Shell.Avalonia;
 using FreeX.App.Avalonia.Dialogs;
 using FreeX.App.Presentation.Protection;
 using FreeX.Core.Model;
@@ -27,6 +28,8 @@ namespace FreeX.App.Avalonia;
 /// </summary>
 public sealed partial class MainWindow
 {
+    private static AvaloniaCompactDialogChromeStyle ProtectionDialogChromeStyle => new(FormulaBarFontFamily);
+
     // ── Review ▸ Protect menu entry points ─────────────────────────────────────
     private void ProtectSheet() => _ = ShowProtectSheetDialogAsync();
 
@@ -466,15 +469,7 @@ public sealed partial class MainWindow
     private static DockPanel ProtectionDialogLayout(Controls bodyChildren, Button cancelButton, Button okButton)
     {
         // WPF order: [OK] [Cancel] — primary button on the left
-        cancelButton.Margin = new Thickness(8, 0, 0, 0);
-        var buttonRow = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 0,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Margin = new Thickness(0, 10, 0, 0),
-            Children = { okButton, cancelButton },
-        };
+        var buttonRow = AvaloniaCompactDialogChrome.CreateActionRow([okButton, cancelButton], new Thickness(0, 10, 0, 0));
         DockPanel.SetDock(buttonRow, Dock.Bottom);
 
         var body = new StackPanel { Spacing = 8 };
@@ -496,36 +491,13 @@ public sealed partial class MainWindow
     /// blue border for the default/OK button.
     /// </summary>
     private static void ApplyProtectButtonChrome(Button button, double minWidth, bool isDefault = false)
-    {
-        button.MinWidth = minWidth;
-        button.Height = 24;
-        button.MinHeight = 24;
-        button.MaxHeight = 24;
-        button.Padding = new Thickness(4, 1);
-        button.Background = Brushes.White;
-        button.BorderBrush = isDefault ? Brush(0, 120, 215) : Brush(112, 112, 112);
-        button.BorderThickness = new Thickness(1);
-        button.FontSize = 12;
-        button.FontFamily = FormulaBarFontFamily;
-        button.HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center;
-        button.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
-    }
+        => AvaloniaCompactDialogChrome.ApplyButton(button, ProtectionDialogChromeStyle, minWidth, isDefault);
 
     /// <summary>
     /// Applies standard Protection-dialog text-box chrome (Height=24, Padding=(4,1), FontSize=12, grey border).
     /// </summary>
     private static void ApplyProtectTextBoxChrome(TextBox textBox)
-    {
-        textBox.Height = 24;
-        textBox.MinHeight = 24;
-        textBox.MaxHeight = 24;
-        textBox.Padding = new Thickness(4, 1);
-        textBox.FontSize = 12;
-        textBox.FontFamily = FormulaBarFontFamily;
-        textBox.BorderBrush = Brush(130, 130, 130);
-        textBox.BorderThickness = new Thickness(1);
-        textBox.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
-    }
+        => AvaloniaCompactDialogChrome.ApplyTextBox(textBox, ProtectionDialogChromeStyle);
 
     /// <summary>
     /// Applies standard Protection-dialog check-box chrome (MinHeight=20, MaxHeight=20, FontSize=12).
@@ -533,9 +505,8 @@ public sealed partial class MainWindow
     private static void ApplyProtectCheckBoxChrome(CheckBox checkBox)
     {
         StripContentMnemonic(checkBox);
-        checkBox.FontSize = 12;
-        checkBox.FontFamily = FormulaBarFontFamily;
         checkBox.MinHeight = 20;
         checkBox.MaxHeight = 20;
+        AvaloniaCompactDialogChrome.ApplyCheckBox(checkBox, ProtectionDialogChromeStyle);
     }
 }

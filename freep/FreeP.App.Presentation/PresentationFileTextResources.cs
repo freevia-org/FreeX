@@ -1,0 +1,32 @@
+using Free.Shared.AppServices;
+using FreeP.App.Localization;
+
+namespace FreeP.App.Compositor;
+
+public static class PresentationFileTextResources
+{
+    public static string PictureFileTypeName => Loc.Get("File_PictureFileTypeName");
+
+    public static SisterAppFileTextSpec Presentation => new(
+        OpenPickerTitle: Loc.Get("File_OpenPresentationPickerTitle"),
+        SavePickerTitle: Loc.Get("File_SavePresentationPickerTitle"),
+        FallbackDisplayName: Loc.Get("File_PresentationFallbackDisplayName"),
+        NewAction: Loc.Get("File_NewPresentationAction"),
+        OpenAction: Loc.Get("File_OpenPresentationAction"),
+        OpenCommand: Loc.Get("File_OpenCommand"),
+        SaveCommand: Loc.Get("File_SaveCommand"),
+        InsertPictureCommand: Loc.Get("File_InsertPictureCommand"),
+        InsertPicturePickerTitle: Loc.Get("File_InsertPicturePickerTitle"),
+        Status: StatusText);
+
+    private static SisterAppFileStatusTextSpec StatusText => new(
+        CommandUnavailableFormat: Loc.Get("File_CommandUnavailableFormat"),
+        SelectedFileNotLocalPathFormat: Loc.Get("File_SelectedFileNotLocalPathFormat"),
+        UnsupportedFileTypeFormat: Loc.Get("File_UnsupportedFileTypeFormat"),
+        UnsupportedExtensionFormat: Loc.Get("File_UnsupportedExtensionFormat"),
+        CommandFailedFormat: Loc.Get("File_CommandFailedFormat"),
+        OpenedFormat: Loc.Get("File_OpenedFormat"),
+        SavedFormat: Loc.Get("File_SavedFormat"),
+        InsertedFormat: Loc.Get("File_InsertedFormat"),
+        SaveAsTitleFormat: Loc.Get("File_SaveAsTitleFormat"));
+}

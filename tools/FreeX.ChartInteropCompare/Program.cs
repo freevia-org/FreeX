@@ -4,6 +4,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading;
+using static FreeX.ToolsShared.Wpf.ExcelComAutomation;
 
 internal static class Program
 {
@@ -105,7 +106,7 @@ internal static partial class ChartInteropCompare
         try
         {
             excel = CreateExcelApplication();
-            ownedExcelPids = GetExcelProcessIds().Except(baselineExcelPids).ToHashSet();
+            ownedExcelPids = GetNewExcelProcessIds(baselineExcelPids);
             dynamic app = excel;
 
             ExportFreeXWorkbookThroughExcel(app, chartCase, directories, result);

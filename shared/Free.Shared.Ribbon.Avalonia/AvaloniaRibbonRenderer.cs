@@ -1375,12 +1375,10 @@ public static class AvaloniaRibbonRenderer
         Action? afterExecute)
     {
         var flyout = new MenuFlyout();
-        foreach (var control in group.Controls)
+        foreach (var control in RibbonCollapsedGroupPresentationPlanner.GetOverflowControls(group, includeSeparators: true))
         {
             switch (control)
             {
-                case RibbonRowBreak:
-                    break;
                 case RibbonSeparator:
                     flyout.Items.Add(new Separator());
                     break;
@@ -1466,6 +1464,7 @@ public static class AvaloniaRibbonRenderer
         }
 
         public int Priority { get; }
+        public string GroupId => _group.Id;
         public double FullWidth { get; set; }
 
         public bool Collapsed
@@ -1483,8 +1482,7 @@ public static class AvaloniaRibbonRenderer
 
         private Control BuildCollapsedButton()
         {
-            var iconSource = _group.Controls.FirstOrDefault(control =>
-                control is not RibbonRowBreak and not RibbonSeparator && control.Icon is not null);
+            var representativeIcon = RibbonCollapsedGroupPresentationPlanner.GetRepresentativeIcon(_group);
 
             var stack = new StackPanel
             {
@@ -1493,9 +1491,9 @@ public static class AvaloniaRibbonRenderer
                 VerticalAlignment = VerticalAlignment.Center,
             };
             stack.Children.Add(AvaloniaRibbonIcons.Build(
-                iconSource?.Icon?.Kind ?? RibbonCommandIconKind.Generic,
+                representativeIcon.Icon.Kind,
                 34,
-                iconSource?.CommandId.Value ?? _group.Header));
+                representativeIcon.CommandName ?? _group.Header));
             stack.Children.Add(new TextBlock
             {
                 Text = _group.Header,
@@ -1553,20 +1551,19 @@ public static class AvaloniaRibbonRenderer
                 .Where(child => child is not AvaloniaRibbonGroupHost)
                 .Sum(child => child.DesiredSize.Width);
             var available = double.IsInfinity(availableSize.Width) ? double.MaxValue : availableSize.Width;
-            var total = hosts.Sum(host => host.FullWidth) + nonHostWidth + spacing;
-            var collapsed = new HashSet<AvaloniaRibbonGroupHost>();
+            var decisions = RibbonAdaptiveCollapsePolicy.Plan(
+                available,
+                hosts
+                    .Select(host => new RibbonAdaptiveCollapseGroup(
+                        host.GroupId,
+                        host.FullWidth,
+                        AvaloniaRibbonGroupHost.CollapsedWidth,
+                        host.Priority))
+                    .ToList(),
+                fixedChromeWidth: nonHostWidth + spacing);
 
-            foreach (var host in hosts.OrderBy(host => host.Priority))
-            {
-                if (total <= available)
-                    break;
-
-                collapsed.Add(host);
-                total += AvaloniaRibbonGroupHost.CollapsedWidth - host.FullWidth;
-            }
-
-            foreach (var host in hosts)
-                host.Collapsed = collapsed.Contains(host);
+            for (var index = 0; index < hosts.Count; index++)
+                hosts[index].Collapsed = decisions[index].IsCollapsed;
 
             foreach (var child in children)
                 child.Measure(infinite);

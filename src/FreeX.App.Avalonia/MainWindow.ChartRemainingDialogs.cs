@@ -36,12 +36,13 @@ public sealed partial class MainWindow
     {
         if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
             return;
-        if (!TryGetSelectedChart("Combo Chart", out var chart))
+        var command = ChartWorkflowCommandCatalog.ComboChart;
+        if (!TryGetSelectedChart(command, out var chart))
             return;
 
-        if (!ChartComboPlanner.SupportsCombo(chart))
+        if (!ChartWorkflowCommandCatalog.CanOpenDialog(chart, command))
         {
-            RefreshShell(UiText.Get("ChartLoc_ComboChartsNeed"));
+            RefreshUnsupportedChartWorkflow(command);
             return;
         }
 
@@ -50,10 +51,10 @@ public sealed partial class MainWindow
         if (result is not { } edited)
             return;
 
-        if (!TryGetSelectedChart("Combo Chart", out chart))
+        if (!TryGetSelectedChart(command, out chart))
             return;
 
-        ApplyChartLayout("Combo Chart", chart, ChartComboPlanner.Plan(edited));
+        ApplyChartLayout(command, chart, ChartComboPlanner.Plan(edited));
     }
 
     private async Task<ChartComboInput?> ShowChartComboDialogAsync(ChartComboInput current)
@@ -75,9 +76,8 @@ public sealed partial class MainWindow
                 IsEnabled = !isBase,
                 MinHeight = 20,
                 MaxHeight = 20,
-                FontSize = 12,
-                FontFamily = FormulaBarFontFamily,
             };
+            ApplyChartCheckBoxChrome(lineCheck);
             AutomationProperties.SetAutomationId(lineCheck, $"ChartComboLineCheck{series.SeriesIndex}");
             lineChecks.Add(lineCheck);
 
@@ -88,9 +88,8 @@ public sealed partial class MainWindow
                 IsEnabled = !isBase,
                 MinHeight = 20,
                 MaxHeight = 20,
-                FontSize = 12,
-                FontFamily = FormulaBarFontFamily,
             };
+            ApplyChartCheckBoxChrome(secondaryCheck);
             AutomationProperties.SetAutomationId(secondaryCheck, $"ChartComboSecondaryCheck{series.SeriesIndex}");
             secondaryChecks.Add(secondaryCheck);
 
@@ -154,7 +153,8 @@ public sealed partial class MainWindow
     {
         if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
             return;
-        if (!TryGetSelectedChart("Move Chart", out var chart))
+        var command = ChartWorkflowCommandCatalog.MoveChart;
+        if (!TryGetSelectedChart(command, out var chart))
             return;
 
         var current = ChartMovePlanner.DefaultFor(_session.ActiveSheet.Name);
@@ -169,7 +169,7 @@ public sealed partial class MainWindow
             return;
         }
 
-        if (!TryGetSelectedChart("Move Chart", out chart))
+        if (!TryGetSelectedChart(command, out chart))
             return;
 
         if (plan.TargetKind == ChartMoveTargetKind.NewSheet)
@@ -211,48 +211,28 @@ public sealed partial class MainWindow
 
     private async Task<ChartMoveInput?> ShowMoveChartDialogAsync(ChartMoveInput current)
     {
-        var objectRadio = new RadioButton
-        {
-            Content = StripDisplayMnemonic(UiText.Get("MoveChart_ObjectInSheet")),
-            GroupName = "MoveChartTarget",
-            IsChecked = current.TargetKind == ChartMoveTargetKind.ObjectInSheet,
-            MinHeight = 20,
-            MaxHeight = 20,
-            FontSize = 12,
-            FontFamily = FormulaBarFontFamily,
-        };
-        AutomationProperties.SetAutomationId(objectRadio, "MoveChartObjectRadio");
+        var objectTarget = ChartMovePlanner.GetTargetChoices().Single(choice => choice.TargetKind == ChartMoveTargetKind.ObjectInSheet);
+        var newSheetTarget = ChartMovePlanner.GetTargetChoices().Single(choice => choice.TargetKind == ChartMoveTargetKind.NewSheet);
+        var targetField = ChartMovePlanner.GetTargetNameField();
 
-        var newSheetRadio = new RadioButton
-        {
-            Content = StripDisplayMnemonic(UiText.Get("MoveChart_NewChartSheet")),
-            GroupName = "MoveChartTarget",
-            IsChecked = current.TargetKind == ChartMoveTargetKind.NewSheet,
-            MinHeight = 20,
-            MaxHeight = 20,
-            FontSize = 12,
-            FontFamily = FormulaBarFontFamily,
-        };
-        AutomationProperties.SetAutomationId(newSheetRadio, "MoveChartNewSheetRadio");
+        var objectRadio = CreateChartRadioButton(
+            StripDisplayMnemonic(UiText.Get(objectTarget.LabelResourceKey)),
+            ChartMovePlanner.TargetGroupName,
+            current.TargetKind == ChartMoveTargetKind.ObjectInSheet);
+        AutomationProperties.SetAutomationId(objectRadio, objectTarget.AutomationId);
 
-        var targetBox = new TextBox
-        {
-            Text = current.TargetName,
-            Width = 260,
-            Height = 24,
-            MinHeight = 24,
-            MaxHeight = 24,
-            Padding = new Thickness(4, 1),
-            FontSize = 12,
-            FontFamily = FormulaBarFontFamily,
-            BorderBrush = Brush(130, 130, 130),
-            BorderThickness = new Thickness(1),
-            VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
-        };
-        AutomationProperties.SetName(targetBox, "Move chart target sheet");
-        AutomationProperties.SetAutomationId(targetBox, "MoveChartTargetBox");
+        var newSheetRadio = CreateChartRadioButton(
+            StripDisplayMnemonic(UiText.Get(newSheetTarget.LabelResourceKey)),
+            ChartMovePlanner.TargetGroupName,
+            current.TargetKind == ChartMoveTargetKind.NewSheet);
+        AutomationProperties.SetAutomationId(newSheetRadio, newSheetTarget.AutomationId);
 
-        var dialog = NewChartDialog(UiText.Get("MoveChart_Title"), "MoveChartDialog");
+        var targetBox = CreateChartTextBox(current.TargetName, 260);
+        AutomationProperties.SetName(targetBox, StripDisplayMnemonic(UiText.Get(targetField.AutomationNameResourceKey!)));
+        AutomationProperties.SetAutomationId(targetBox, targetField.AutomationId);
+        AutomationProperties.SetHelpText(targetBox, UiText.Get(targetField.HelpResourceKey!));
+
+        var dialog = NewChartDialog(UiText.Get("MoveChart_Title"), ChartMovePlanner.DialogAutomationId);
 
         var (okButton, cancelButton, buttonRow) = CreateChartDialogButtons("MoveChart");
         okButton.Click += (_, _) =>
@@ -271,7 +251,7 @@ public sealed partial class MainWindow
             {
                 objectRadio,
                 newSheetRadio,
-                new TextBlock { Text = StripDisplayMnemonic(UiText.Get("MoveChart_TargetNameLabel")), FontSize = 12, FontFamily = FormulaBarFontFamily, Margin = new Thickness(0, 6, 0, 0) },
+                new TextBlock { Text = StripDisplayMnemonic(UiText.Get(targetField.LabelResourceKey)), FontSize = 12, FontFamily = FormulaBarFontFamily, Margin = new Thickness(0, 6, 0, 0) },
                 targetBox,
                 buttonRow,
             },
@@ -286,7 +266,8 @@ public sealed partial class MainWindow
     {
         if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
             return;
-        if (!TryGetSelectedChart("Format Chart Area", out var chart))
+        var command = ChartWorkflowCommandCatalog.FormatChartArea;
+        if (!TryGetSelectedChart(command, out var chart))
             return;
 
         var current = ChartAreaFormatPlanner.Read(chart);
@@ -301,10 +282,10 @@ public sealed partial class MainWindow
             return;
         }
 
-        if (!TryGetSelectedChart("Format Chart Area", out chart))
+        if (!TryGetSelectedChart(command, out chart))
             return;
 
-        ApplyChartLayout("Format Chart Area", chart, ChartAreaFormatPlanner.Plan(edited));
+        ApplyChartLayout(command, chart, ChartAreaFormatPlanner.Plan(edited));
     }
 
     private async Task<ChartAreaFormatInput?> ShowFormatChartAreaDialogAsync(ChartAreaFormatInput current)
@@ -318,56 +299,51 @@ public sealed partial class MainWindow
         // Button width matches WPF inner content area (~380px dialog → 300px control width).
         const int ControlWidth = 300;
 
+        var fillLineSection = ChartAreaFormatPlanner.GetFillLineSection();
+        var legendSection = ChartAreaFormatPlanner.GetLegendSection();
+
         // ---- "Fill & Line" group controls ----------------------------------------------------------
-        var chartAreaButton = new Button { Content = DescribeColor(UiText.Get("ChartArea_ChartAreaFill"), current.ChartAreaFillColor), Width = ControlWidth };
-        ApplyChartButtonChrome(chartAreaButton, ControlWidth);
-        AutomationProperties.SetAutomationId(chartAreaButton, "ChartAreaFillButton");
-        var plotAreaButton = new Button { Content = DescribeColor(UiText.Get("ChartArea_PlotAreaFill"), current.PlotAreaFillColor), Width = ControlWidth };
-        ApplyChartButtonChrome(plotAreaButton, ControlWidth);
-        AutomationProperties.SetAutomationId(plotAreaButton, "ChartAreaPlotFillButton");
-        var plotBorderButton = new Button { Content = DescribeColor(UiText.Get("ChartArea_PlotAreaBorder"), current.PlotAreaBorderColor), Width = ControlWidth };
-        ApplyChartButtonChrome(plotBorderButton, ControlWidth);
-        AutomationProperties.SetAutomationId(plotBorderButton, "ChartAreaPlotBorderButton");
+        var chartAreaButton = MakeAreaColorButton(ChartAreaFormatDialogFieldId.ChartAreaFillColor, current.ChartAreaFillColor);
+        var plotAreaButton = MakeAreaColorButton(ChartAreaFormatDialogFieldId.PlotAreaFillColor, current.PlotAreaFillColor);
+        var plotBorderButton = MakeAreaColorButton(ChartAreaFormatDialogFieldId.PlotAreaBorderColor, current.PlotAreaBorderColor);
 
-        var borderWidthBox = MakeChartNumberBox(
+        var borderWidthBox = MakeAreaNumberBox(
+            ChartAreaFormatDialogFieldId.PlotAreaBorderThickness,
             current.PlotAreaBorderThickness.ToString(CultureInfo.InvariantCulture),
-            ControlWidth,
-            "Plot area border width",
-            "ChartAreaPlotBorderWidthBox");
+            ControlWidth);
 
-        chartAreaButton.Click += async (_, _) =>
+        async Task PickAreaColor(
+            ChartAreaFormatDialogFieldId fieldId,
+            Func<CellColor?> getColor,
+            Action<CellColor> setColor,
+            Button button)
         {
+            var label = AreaFieldLabel(fieldId);
             var chosen = await ShowMoreColorsDialogAsync(
-                UiText.Get("ChartArea_ChartAreaFill"),
-                state.ChartAreaFillColor ?? ChartQuickFormatCycler.DefaultSeriesColor);
+                label,
+                getColor() ?? ChartQuickFormatCycler.DefaultSeriesColor);
             if (chosen is { } color)
             {
-                state = state with { ChartAreaFillColor = color };
-                chartAreaButton.Content = DescribeColor(UiText.Get("ChartArea_ChartAreaFill"), color);
+                setColor(color);
+                button.Content = DescribeColor(label, color);
             }
-        };
-        plotAreaButton.Click += async (_, _) =>
-        {
-            var chosen = await ShowMoreColorsDialogAsync(
-                UiText.Get("ChartArea_PlotAreaFill"),
-                state.PlotAreaFillColor ?? ChartQuickFormatCycler.DefaultSeriesColor);
-            if (chosen is { } color)
-            {
-                state = state with { PlotAreaFillColor = color };
-                plotAreaButton.Content = DescribeColor(UiText.Get("ChartArea_PlotAreaFill"), color);
-            }
-        };
-        plotBorderButton.Click += async (_, _) =>
-        {
-            var chosen = await ShowMoreColorsDialogAsync(
-                UiText.Get("ChartArea_PlotAreaBorder"),
-                state.PlotAreaBorderColor ?? ChartQuickFormatCycler.DefaultSeriesColor);
-            if (chosen is { } color)
-            {
-                state = state with { PlotAreaBorderColor = color };
-                plotBorderButton.Content = DescribeColor(UiText.Get("ChartArea_PlotAreaBorder"), color);
-            }
-        };
+        }
+
+        chartAreaButton.Click += async (_, _) => await PickAreaColor(
+            ChartAreaFormatDialogFieldId.ChartAreaFillColor,
+            () => state.ChartAreaFillColor,
+            color => state = state with { ChartAreaFillColor = color },
+            chartAreaButton);
+        plotAreaButton.Click += async (_, _) => await PickAreaColor(
+            ChartAreaFormatDialogFieldId.PlotAreaFillColor,
+            () => state.PlotAreaFillColor,
+            color => state = state with { PlotAreaFillColor = color },
+            plotAreaButton);
+        plotBorderButton.Click += async (_, _) => await PickAreaColor(
+            ChartAreaFormatDialogFieldId.PlotAreaBorderColor,
+            () => state.PlotAreaBorderColor,
+            color => state = state with { PlotAreaBorderColor = color },
+            plotBorderButton);
 
         // "Fill & Line" group box — matches WPF CreateGroupBox(ChartDialog_FillLineGroup, ...) with
         // the inline help paragraph at the top (ChartAreaLegend_FillLineHelpText).
@@ -379,119 +355,70 @@ public sealed partial class MainWindow
             {
                 new TextBlock
                 {
-                    Text = UiText.Get("ChartAreaLegend_FillLineHelpText"),
+                    Text = UiText.Get(fillLineSection.HelpResourceKey ?? throw new InvalidOperationException("Fill-line section requires help text.")),
                     FontSize = 12,
                     FontFamily = FormulaBarFontFamily,
                     TextWrapping = TextWrapping.Wrap,
                     Foreground = new SolidColorBrush(Color.FromRgb(96, 96, 96)),
                     Margin = new Thickness(0, 0, 0, 4),
                 },
-                new TextBlock { Text = StripDisplayMnemonic(UiText.Get("ChartAreaLegend_ChartAreaFillColorLabel")), FontSize = 12, FontFamily = FormulaBarFontFamily },
+                MakeAreaDescriptorLabel(ChartAreaFormatDialogFieldId.ChartAreaFillColor),
                 chartAreaButton,
-                new TextBlock { Text = StripDisplayMnemonic(UiText.Get("ChartAreaLegend_PlotAreaFillColorLabel")), FontSize = 12, FontFamily = FormulaBarFontFamily },
+                MakeAreaDescriptorLabel(ChartAreaFormatDialogFieldId.PlotAreaFillColor),
                 plotAreaButton,
-                new TextBlock { Text = StripDisplayMnemonic(UiText.Get("ChartAreaLegend_PlotAreaBorderColorLabel")), FontSize = 12, FontFamily = FormulaBarFontFamily, Margin = new Thickness(0, 4, 0, 0) },
+                MakeAreaDescriptorLabel(ChartAreaFormatDialogFieldId.PlotAreaBorderColor, new Thickness(0, 4, 0, 0)),
                 plotBorderButton,
-                new TextBlock { Text = StripDisplayMnemonic(UiText.Get("ChartAreaLegend_PlotAreaBorderWidthLabel")), FontSize = 12, FontFamily = FormulaBarFontFamily },
+                MakeAreaDescriptorLabel(ChartAreaFormatDialogFieldId.PlotAreaBorderThickness),
                 borderWidthBox,
             },
         };
 
-        var fillLineGroup = new GroupBox
-        {
-            Header = StripDisplayMnemonic(UiText.Get("ChartDialog_FillLineGroup")),
-            Content = fillLineStack,
-            Padding = new Thickness(0),
-            Margin = new Thickness(0, 0, 0, 10),
-        };
+        var fillLineGroup = MakeAreaDescriptorGroup(fillLineSection, fillLineStack);
 
         // ---- "Legend" group controls ---------------------------------------------------------------
-        var showLegendCheck = new CheckBox
-        {
-            Content = StripDisplayMnemonic(UiText.Get("ChartAreaLegend_ShowLegend")),
-            IsChecked = current.ShowLegend,
-            FontSize = 12,
-            FontFamily = FormulaBarFontFamily,
-        };
-        AutomationProperties.SetAutomationId(showLegendCheck, "ChartAreaShowLegendCheck");
+        var showLegendCheck = MakeAreaDescriptorCheck(ChartAreaFormatDialogFieldId.ShowLegend, current.ShowLegend);
 
-        var positionChoices = ChartLegendPlanner.GetPositionChoices();
-        var positionCombo = new ComboBox
-        {
-            Width = ControlWidth,
-            ItemsSource = positionChoices,
-            DisplayMemberBinding = new global::Avalonia.Data.Binding(nameof(ChartLegendPositionChoice.DisplayName)),
-        };
-        AutomationProperties.SetName(positionCombo, "Legend position");
-        AutomationProperties.SetAutomationId(positionCombo, "ChartAreaLegendPositionCombo");
-        ApplyChartComboBoxChrome(positionCombo);
+        var positionChoices = ChartAreaFormatPlanner
+            .GetLegendPositionChoices()
+            .Select(position => new ChartLegendPositionChoice(position, ChartLegendPlanner.DisplayName(position)))
+            .ToList();
+        var positionCombo = CreateChartComboBox(ControlWidth, positionChoices);
+        positionCombo.DisplayMemberBinding = new global::Avalonia.Data.Binding(nameof(ChartLegendPositionChoice.DisplayName));
+        ApplyAreaDescriptorAutomation(positionCombo, ChartAreaFormatDialogFieldId.LegendPosition);
         positionCombo.SelectedItem =
             positionChoices.FirstOrDefault(c => c.Position == current.LegendPosition)
             ?? (positionChoices.Count > 0 ? positionChoices[0] : null);
 
-        var overlayCheck = new CheckBox
-        {
-            Content = StripDisplayMnemonic(UiText.Get("ChartAreaLegend_OverlayLegend")),
-            IsChecked = current.LegendOverlay,
-            FontSize = 12,
-            FontFamily = FormulaBarFontFamily,
-        };
-        AutomationProperties.SetAutomationId(overlayCheck, "ChartAreaLegendOverlayCheck");
+        var overlayCheck = MakeAreaDescriptorCheck(ChartAreaFormatDialogFieldId.LegendOverlay, current.LegendOverlay);
 
-        var legendTextButton = new Button { Content = DescribeColor(UiText.Get("ChartAreaLegend_LegendTextColorLabel"), current.LegendTextColor), Width = ControlWidth };
-        ApplyChartButtonChrome(legendTextButton, ControlWidth);
-        AutomationProperties.SetAutomationId(legendTextButton, "ChartAreaLegendTextColorButton");
-        var legendFillButton = new Button { Content = DescribeColor(UiText.Get("ChartAreaLegend_LegendFillColorLabel"), current.LegendFillColor), Width = ControlWidth };
-        ApplyChartButtonChrome(legendFillButton, ControlWidth);
-        AutomationProperties.SetAutomationId(legendFillButton, "ChartAreaLegendFillColorButton");
-        var legendBorderButton = new Button { Content = DescribeColor(UiText.Get("ChartAreaLegend_LegendBorderColorLabel"), current.LegendBorderColor), Width = ControlWidth };
-        ApplyChartButtonChrome(legendBorderButton, ControlWidth);
-        AutomationProperties.SetAutomationId(legendBorderButton, "ChartAreaLegendBorderColorButton");
+        var legendTextButton = MakeAreaColorButton(ChartAreaFormatDialogFieldId.LegendTextColor, current.LegendTextColor);
+        var legendFillButton = MakeAreaColorButton(ChartAreaFormatDialogFieldId.LegendFillColor, current.LegendFillColor);
+        var legendBorderButton = MakeAreaColorButton(ChartAreaFormatDialogFieldId.LegendBorderColor, current.LegendBorderColor);
 
-        legendTextButton.Click += async (_, _) =>
-        {
-            var chosen = await ShowMoreColorsDialogAsync(
-                UiText.Get("ChartAreaLegend_LegendTextColorLabel"),
-                state.LegendTextColor ?? ChartQuickFormatCycler.DefaultSeriesColor);
-            if (chosen is { } color)
-            {
-                state = state with { LegendTextColor = color };
-                legendTextButton.Content = DescribeColor(UiText.Get("ChartAreaLegend_LegendTextColorLabel"), color);
-            }
-        };
-        legendFillButton.Click += async (_, _) =>
-        {
-            var chosen = await ShowMoreColorsDialogAsync(
-                UiText.Get("ChartAreaLegend_LegendFillColorLabel"),
-                state.LegendFillColor ?? ChartQuickFormatCycler.DefaultSeriesColor);
-            if (chosen is { } color)
-            {
-                state = state with { LegendFillColor = color };
-                legendFillButton.Content = DescribeColor(UiText.Get("ChartAreaLegend_LegendFillColorLabel"), color);
-            }
-        };
-        legendBorderButton.Click += async (_, _) =>
-        {
-            var chosen = await ShowMoreColorsDialogAsync(
-                UiText.Get("ChartAreaLegend_LegendBorderColorLabel"),
-                state.LegendBorderColor ?? ChartQuickFormatCycler.DefaultSeriesColor);
-            if (chosen is { } color)
-            {
-                state = state with { LegendBorderColor = color };
-                legendBorderButton.Content = DescribeColor(UiText.Get("ChartAreaLegend_LegendBorderColorLabel"), color);
-            }
-        };
+        legendTextButton.Click += async (_, _) => await PickAreaColor(
+            ChartAreaFormatDialogFieldId.LegendTextColor,
+            () => state.LegendTextColor,
+            color => state = state with { LegendTextColor = color },
+            legendTextButton);
+        legendFillButton.Click += async (_, _) => await PickAreaColor(
+            ChartAreaFormatDialogFieldId.LegendFillColor,
+            () => state.LegendFillColor,
+            color => state = state with { LegendFillColor = color },
+            legendFillButton);
+        legendBorderButton.Click += async (_, _) => await PickAreaColor(
+            ChartAreaFormatDialogFieldId.LegendBorderColor,
+            () => state.LegendBorderColor,
+            color => state = state with { LegendBorderColor = color },
+            legendBorderButton);
 
-        var legendBorderWidthBox = MakeChartNumberBox(
+        var legendBorderWidthBox = MakeAreaNumberBox(
+            ChartAreaFormatDialogFieldId.LegendBorderThickness,
             current.LegendBorderThickness.ToString(CultureInfo.InvariantCulture),
-            ControlWidth,
-            "Legend border width",
-            "ChartAreaLegendBorderWidthBox");
-        var legendFontSizeBox = MakeChartNumberBox(
+            ControlWidth);
+        var legendFontSizeBox = MakeAreaNumberBox(
+            ChartAreaFormatDialogFieldId.LegendFontSize,
             current.LegendFontSize.ToString(CultureInfo.InvariantCulture),
-            ControlWidth,
-            "Legend font size",
-            "ChartAreaLegendFontSizeBox");
+            ControlWidth);
 
         var legendStack = new StackPanel
         {
@@ -500,29 +427,23 @@ public sealed partial class MainWindow
             Children =
             {
                 showLegendCheck,
-                new TextBlock { Text = StripDisplayMnemonic(UiText.Get("ChartAreaLegend_LegendPositionLabel")), FontSize = 12, FontFamily = FormulaBarFontFamily },
+                MakeAreaDescriptorLabel(ChartAreaFormatDialogFieldId.LegendPosition),
                 positionCombo,
                 overlayCheck,
-                new TextBlock { Text = StripDisplayMnemonic(UiText.Get("ChartAreaLegend_LegendTextColorLabel")), FontSize = 12, FontFamily = FormulaBarFontFamily },
+                MakeAreaDescriptorLabel(ChartAreaFormatDialogFieldId.LegendTextColor),
                 legendTextButton,
-                new TextBlock { Text = StripDisplayMnemonic(UiText.Get("ChartAreaLegend_LegendFillColorLabel")), FontSize = 12, FontFamily = FormulaBarFontFamily },
+                MakeAreaDescriptorLabel(ChartAreaFormatDialogFieldId.LegendFillColor),
                 legendFillButton,
-                new TextBlock { Text = StripDisplayMnemonic(UiText.Get("ChartAreaLegend_LegendBorderColorLabel")), FontSize = 12, FontFamily = FormulaBarFontFamily },
+                MakeAreaDescriptorLabel(ChartAreaFormatDialogFieldId.LegendBorderColor),
                 legendBorderButton,
-                new TextBlock { Text = StripDisplayMnemonic(UiText.Get("ChartAreaLegend_LegendBorderWidthLabel")), FontSize = 12, FontFamily = FormulaBarFontFamily },
+                MakeAreaDescriptorLabel(ChartAreaFormatDialogFieldId.LegendBorderThickness),
                 legendBorderWidthBox,
-                new TextBlock { Text = StripDisplayMnemonic(UiText.Get("ChartAreaLegend_LegendFontSizeLabel")), FontSize = 12, FontFamily = FormulaBarFontFamily },
+                MakeAreaDescriptorLabel(ChartAreaFormatDialogFieldId.LegendFontSize),
                 legendFontSizeBox,
             },
         };
 
-        var legendGroup = new GroupBox
-        {
-            Header = StripDisplayMnemonic(UiText.Get("ChartAreaLegend_LegendGroup")),
-            Content = legendStack,
-            Padding = new Thickness(0),
-            Margin = new Thickness(0, 0, 0, 10),
-        };
+        var legendGroup = MakeAreaDescriptorGroup(legendSection, legendStack);
 
         // Dialog title matches the WPF ChartAreaLegendDialog ("Format Chart Area").
         var dialog = NewChartDialog(UiText.Get("ChartAreaLegend_Title"), "FormatChartAreaDialog");
@@ -535,39 +456,37 @@ public sealed partial class MainWindow
         var (okButton, cancelButton, buttonRow) = CreateChartDialogButtons("FormatChartArea");
         okButton.Click += (_, _) =>
         {
-            if (!double.TryParse((borderWidthBox.Text ?? string.Empty).Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var width)
-                || !double.IsFinite(width))
-            {
-                RefreshShell(UiText.Format("ChartLoc_EnterPlotAreaBorderWidth", ChartAreaFormatPlanner.MinBorderThickness, ChartAreaFormatPlanner.MaxBorderThickness));
-                return;
-            }
-
-            if (!double.TryParse((legendBorderWidthBox.Text ?? string.Empty).Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var legendBorderWidth)
-                || !double.IsFinite(legendBorderWidth))
-            {
-                RefreshShell(UiText.Format("ChartLoc_EnterPlotAreaBorderWidth", ChartAreaFormatPlanner.MinBorderThickness, ChartAreaFormatPlanner.MaxBorderThickness));
-                return;
-            }
-
-            if (!double.TryParse((legendFontSizeBox.Text ?? string.Empty).Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var legendFontSize)
-                || !double.IsFinite(legendFontSize))
-            {
-                legendFontSize = ChartAreaFormatPlanner.MinLegendFontSize;
-            }
-
             var chosenPosition = positionCombo.SelectedItem is ChartLegendPositionChoice picked
                 ? picked.Position
-                : ChartLegendPosition.Right;
+                : (ChartLegendPosition?)null;
 
-            dialog.Close((ChartAreaFormatInput?)(state with
+            if (!ChartAreaFormatPlanner.TryParseDialogInput(
+                    FormatOptionalColorText(state.ChartAreaFillColor),
+                    FormatOptionalColorText(state.PlotAreaFillColor),
+                    FormatOptionalColorText(state.PlotAreaBorderColor),
+                    borderWidthBox.Text,
+                    showLegendCheck.IsChecked == true,
+                    chosenPosition,
+                    overlayCheck.IsChecked == true,
+                    FormatOptionalColorText(state.LegendTextColor),
+                    FormatOptionalColorText(state.LegendFillColor),
+                    FormatOptionalColorText(state.LegendBorderColor),
+                    legendBorderWidthBox.Text,
+                    legendFontSizeBox.Text,
+                    out var input,
+                    out var issue))
             {
-                PlotAreaBorderThickness = width,
-                ShowLegend = showLegendCheck.IsChecked == true,
-                LegendPosition = chosenPosition,
-                LegendOverlay = overlayCheck.IsChecked == true,
-                LegendBorderThickness = legendBorderWidth,
-                LegendFontSize = legendFontSize,
-            }));
+                RefreshShell(issue switch
+                {
+                    ChartAreaFormatParseIssue.PlotAreaBorderThickness => UiText.Get("ChartAreaLegend_InvalidPlotAreaBorderWidthMessage"),
+                    ChartAreaFormatParseIssue.LegendBorderThickness => UiText.Get("ChartAreaLegend_InvalidLegendBorderWidthMessage"),
+                    ChartAreaFormatParseIssue.LegendFontSize => UiText.Get("ChartAreaLegend_InvalidLegendFontSizeMessage"),
+                    _ => UiText.Get("ChartDialog_InvalidOptionalColorMessage"),
+                });
+                return;
+            }
+
+            dialog.Close((ChartAreaFormatInput?)input);
         };
         cancelButton.Click += (_, _) => dialog.Close((ChartAreaFormatInput?)null);
 
@@ -597,27 +516,60 @@ public sealed partial class MainWindow
         };
 
         return await dialog.ShowDialog<ChartAreaFormatInput?>(this);
-    }
 
-    /// <summary>A numeric text box with the standard chart-dialog chrome and automation metadata.</summary>
-    private TextBox MakeChartNumberBox(string text, double width, string automationName, string automationId)
-    {
-        var box = new TextBox
+        ChartAreaFormatDialogFieldDescriptor AreaField(ChartAreaFormatDialogFieldId fieldId) =>
+            ChartAreaFormatPlanner.GetDialogField(fieldId);
+
+        string AreaFieldLabel(ChartAreaFormatDialogFieldId fieldId) =>
+            StripDisplayMnemonic(UiText.Get(AreaField(fieldId).LabelResourceKey));
+
+        void ApplyAreaDescriptorAutomation(Control control, ChartAreaFormatDialogFieldId fieldId)
         {
-            Text = text,
-            Width = width,
-            Height = 24,
-            MinHeight = 24,
-            MaxHeight = 24,
-            Padding = new Thickness(4, 1),
-            FontSize = 12,
-            FontFamily = FormulaBarFontFamily,
-            BorderBrush = Brush(130, 130, 130),
-            BorderThickness = new Thickness(1),
-            VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
-        };
-        AutomationProperties.SetName(box, automationName);
-        AutomationProperties.SetAutomationId(box, automationId);
-        return box;
+            var descriptor = AreaField(fieldId);
+            AutomationProperties.SetName(control, AreaFieldLabel(fieldId));
+            AutomationProperties.SetAutomationId(control, descriptor.AutomationId);
+            if (descriptor.HelpResourceKey is { } helpKey)
+                AutomationProperties.SetHelpText(control, UiText.Get(helpKey));
+        }
+
+        CheckBox MakeAreaDescriptorCheck(ChartAreaFormatDialogFieldId fieldId, bool isChecked)
+        {
+            var checkBox = CreateChartCheckBox(AreaFieldLabel(fieldId), isChecked);
+            ApplyAreaDescriptorAutomation(checkBox, fieldId);
+            return checkBox;
+        }
+
+        TextBlock MakeAreaDescriptorLabel(ChartAreaFormatDialogFieldId fieldId, Thickness? margin = null) =>
+            new()
+            {
+                Text = AreaFieldLabel(fieldId),
+                FontSize = 12,
+                FontFamily = FormulaBarFontFamily,
+                Margin = margin ?? new Thickness(0),
+            };
+
+        Button MakeAreaColorButton(ChartAreaFormatDialogFieldId fieldId, CellColor? color)
+        {
+            var label = AreaFieldLabel(fieldId);
+            var button = CreateChartButton(DescribeColor(label, color), ControlWidth);
+            ApplyAreaDescriptorAutomation(button, fieldId);
+            return button;
+        }
+
+        TextBox MakeAreaNumberBox(ChartAreaFormatDialogFieldId fieldId, string text, double width)
+        {
+            var box = CreateChartTextBox(text, width);
+            ApplyAreaDescriptorAutomation(box, fieldId);
+            return box;
+        }
+
+        GroupBox MakeAreaDescriptorGroup(ChartAreaFormatDialogSectionDescriptor section, Control content) =>
+            new()
+            {
+                Header = StripDisplayMnemonic(UiText.Get(section.HeaderResourceKey)),
+                Content = content,
+                Padding = new Thickness(0),
+                Margin = new Thickness(0, 0, 0, 10),
+            };
     }
 }

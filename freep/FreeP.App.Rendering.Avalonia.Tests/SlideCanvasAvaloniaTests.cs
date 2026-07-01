@@ -52,6 +52,299 @@ public sealed class SlideCanvasAvaloniaTests
         return p;
     }
 
+    private static TextBody MakeTextBody(string text)
+    {
+        var body = new TextBody { Wrap = true };
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run { Text = text, FontFamily = "Aptos", FontSizePt = 18 });
+        body.Paragraphs.Add(paragraph);
+        return body;
+    }
+
+    private static SlideShape MakeTableShape(uint id, string text)
+    {
+        var table = new TableShape();
+        table.ColumnWidthsEmu.Add(DrawingMlCoordinateUnits.EmuPerPixel * 100);
+        var row = new TableRow { HeightEmu = DrawingMlCoordinateUnits.EmuPerPixel * 40 };
+        row.Cells.Add(new TableCell { TextBody = MakeTextBody(text) });
+        table.Rows.Add(row);
+
+        return new SlideShape
+        {
+            Id = id,
+            Kind = SlideShapeKind.Table,
+            OffsetXEmu = 0,
+            OffsetYEmu = 0,
+            ExtentCxEmu = DrawingMlCoordinateUnits.EmuPerPixel * 100,
+            ExtentCyEmu = DrawingMlCoordinateUnits.EmuPerPixel * 40,
+            Table = table,
+        };
+    }
+
+    private static SlideShape MakeMergedTableShape(uint id)
+    {
+        var table = new TableShape();
+        table.ColumnWidthsEmu.Add(DrawingMlCoordinateUnits.EmuPerPixel * 100);
+        table.ColumnWidthsEmu.Add(DrawingMlCoordinateUnits.EmuPerPixel * 100);
+        table.ColumnWidthsEmu.Add(DrawingMlCoordinateUnits.EmuPerPixel * 100);
+
+        var row = new TableRow { HeightEmu = DrawingMlCoordinateUnits.EmuPerPixel * 40 };
+        row.Cells.Add(new TableCell { GridSpan = 2, TextBody = MakeTextBody("Anchor") });
+        row.Cells.Add(new TableCell { HMerge = true });
+        row.Cells.Add(new TableCell { TextBody = MakeTextBody("Right") });
+        table.Rows.Add(row);
+
+        return new SlideShape
+        {
+            Id = id,
+            Kind = SlideShapeKind.Table,
+            OffsetXEmu = 0,
+            OffsetYEmu = 0,
+            ExtentCxEmu = DrawingMlCoordinateUnits.EmuPerPixel * 300,
+            ExtentCyEmu = DrawingMlCoordinateUnits.EmuPerPixel * 40,
+            Table = table,
+        };
+    }
+
+    private static string FindRepositoryRoot()
+    {
+        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
+             directory is not null;
+             directory = directory.Parent)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "FreeP.slnx")))
+                return directory.FullName;
+        }
+
+        throw new DirectoryNotFoundException("Could not locate repository root from test output directory.");
+    }
+
+    [Fact]
+    public async Task InCanvasTextEditor_CommitPlainText_UsesSharedPlannerCommand()
+    {
+        Presentation? presentation = null;
+        SlideShape? shape = null;
+        EditingSession? editor = null;
+
+        await Run(() =>
+        {
+            presentation = MakePresentation(pres =>
+            {
+                pres.Slides[0].Shapes.Clear();
+                shape = new SlideShape
+                {
+                    Id = 1,
+                    OffsetXEmu = 0,
+                    OffsetYEmu = 0,
+                    ExtentCxEmu = 2743200L,
+                    ExtentCyEmu = 1371600L,
+                    TextBody = MakeTextBody("Original"),
+                };
+                pres.Slides[0].Shapes.Add(shape);
+            });
+
+            var bus = new PresentationCommandBus(presentation);
+            editor = new EditingSession(presentation, bus);
+            var canvas = new SlideCanvas { Presentation = presentation, Slide = presentation.Slides[0] };
+            var overlay = new global::Avalonia.Controls.Canvas();
+            var textEditor = new AvaloniaInCanvasTextEditor(canvas, editor, overlay);
+
+            textEditor.Activate(shape!.Id);
+            textEditor.IsActive.Should().BeTrue();
+            overlay.Children.Should().ContainSingle();
+
+            var box = overlay.Children[0].Should().BeOfType<global::Avalonia.Controls.TextBox>().Subject;
+            box.Text = "Changed\nText";
+
+            textEditor.Commit();
+        });
+
+        editor!.CanUndo.Should().BeTrue("changed text should commit through the shared command");
+        shape!.TextBody!.Paragraphs.Should().HaveCount(2);
+        shape.TextBody.Paragraphs[0].Runs[0].Text.Should().Be("Changed");
+        shape.TextBody.Paragraphs[1].Runs[0].Text.Should().Be("Text");
+
+        editor.Undo();
+        shape.TextBody!.Paragraphs[0].Runs[0].Text.Should().Be("Original");
+    }
+
+    [Fact]
+    public async Task TableCellEditAdapter_UsesSharedPlannerForStateStartAndCommit()
+    {
+        EditingSession? editor = null;
+        SlideShape? shape = null;
+
+        await Run(() =>
+        {
+            var presentation = MakePresentation(pres =>
+            {
+                pres.Slides[0].Shapes.Clear();
+                shape = MakeTableShape(10, "Original");
+                pres.Slides[0].Shapes.Add(shape);
+            });
+
+            var bus = new PresentationCommandBus(presentation);
+            editor = new EditingSession(presentation, bus);
+            editor.Select(shape!.Id);
+            editor.SetActiveTableCell(0, 0);
+
+            var canvas = new SlideCanvas { Presentation = presentation, Slide = presentation.Slides[0] };
+            var state = AvaloniaTableCellEditAdapter.PlanSelectedCell(editor);
+            var startPlan = AvaloniaTableCellEditAdapter.BeginEdit(canvas, editor, shape.Id, 0, 0);
+
+            state.CanEditText.Should().BeTrue();
+            state.CanFormatText.Should().BeTrue();
+            startPlan.IsReady.Should().BeTrue();
+
+            var decision = AvaloniaTableCellEditAdapter.CommitRichText(
+                startPlan.EditPlanner,
+                MakeTextBody("Edited"));
+            decision.Command.Should().NotBeNull();
+            bus.Execute(decision.Command!);
+        });
+
+        shape!.Table!.Rows[0].Cells[0].TextBody!.Paragraphs[0].Runs[0].Text.Should().Be("Edited");
+
+        editor!.Undo();
+        shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs[0].Runs[0].Text.Should().Be("Original");
+    }
+
+    [Fact]
+    public async Task TableCellTextEditor_ActivateCommit_UsesSharedPlannerCommand()
+    {
+        EditingSession? editor = null;
+        SlideShape? shape = null;
+
+        await Run(() =>
+        {
+            var presentation = MakePresentation(pres =>
+            {
+                pres.Slides[0].Shapes.Clear();
+                shape = MakeTableShape(11, "Original");
+                pres.Slides[0].Shapes.Add(shape);
+            });
+
+            var bus = new PresentationCommandBus(presentation);
+            editor = new EditingSession(presentation, bus);
+            var canvas = new SlideCanvas { Presentation = presentation, Slide = presentation.Slides[0] };
+            var overlay = new global::Avalonia.Controls.Canvas();
+            var textEditor = new AvaloniaInCanvasTextEditor(canvas, editor, overlay);
+
+            textEditor.ActivateCellEdit(shape!.Id, 0, 0);
+            textEditor.IsCellEditActive.Should().BeTrue();
+            overlay.IsVisible.Should().BeTrue();
+            overlay.IsHitTestVisible.Should().BeTrue();
+
+            var box = overlay.Children.OfType<global::Avalonia.Controls.TextBox>().Single();
+            box.Text = "Changed\nText";
+
+            textEditor.CommitCellEdit();
+        });
+
+        editor!.CanUndo.Should().BeTrue("changed cell text should commit through the shared table-cell command");
+        shape!.Table!.Rows[0].Cells[0].TextBody!.Paragraphs.Should().HaveCount(2);
+        shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs[0].Runs[0].Text.Should().Be("Changed");
+        shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs[1].Runs[0].Text.Should().Be("Text");
+
+        editor.Undo();
+        shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs[0].Runs[0].Text.Should().Be("Original");
+    }
+
+    [Fact]
+    public async Task TableCellTextEditor_Cancel_DiscardsChanges()
+    {
+        EditingSession? editor = null;
+        SlideShape? shape = null;
+
+        await Run(() =>
+        {
+            var presentation = MakePresentation(pres =>
+            {
+                pres.Slides[0].Shapes.Clear();
+                shape = MakeTableShape(12, "Original");
+                pres.Slides[0].Shapes.Add(shape);
+            });
+
+            var bus = new PresentationCommandBus(presentation);
+            editor = new EditingSession(presentation, bus);
+            var canvas = new SlideCanvas { Presentation = presentation, Slide = presentation.Slides[0] };
+            var overlay = new global::Avalonia.Controls.Canvas();
+            var textEditor = new AvaloniaInCanvasTextEditor(canvas, editor, overlay);
+
+            textEditor.ActivateCellEdit(shape!.Id, 0, 0);
+            overlay.Children.OfType<global::Avalonia.Controls.TextBox>().Single().Text = "Discarded";
+
+            textEditor.CancelCellEdit();
+        });
+
+        editor!.CanUndo.Should().BeFalse();
+        shape!.Table!.Rows[0].Cells[0].TextBody!.Paragraphs[0].Runs[0].Text.Should().Be("Original");
+    }
+
+    [Fact]
+    public async Task TableCellTextEditor_DoubleClickContinuationCell_NormalizesToMergeAnchor()
+    {
+        EditingSession? editor = null;
+        SlideShape? shape = null;
+        AvaloniaInCanvasTextEditor? textEditor = null;
+
+        await Run(() =>
+        {
+            var presentation = MakePresentation(pres =>
+            {
+                pres.Slides[0].Shapes.Clear();
+                shape = MakeMergedTableShape(13);
+                pres.Slides[0].Shapes.Add(shape);
+            });
+
+            var bus = new PresentationCommandBus(presentation);
+            editor = new EditingSession(presentation, bus);
+            var canvas = new SlideCanvas { Presentation = presentation, Slide = presentation.Slides[0] };
+            var overlay = new global::Avalonia.Controls.Canvas();
+            textEditor = new AvaloniaInCanvasTextEditor(canvas, editor, overlay);
+
+            var handled = textEditor.TryHandleTableCellPointer(screenX: 150, screenY: 20, clickCount: 2);
+
+            handled.Should().BeTrue();
+            textEditor.IsCellEditActive.Should().BeTrue();
+            editor.ActiveTableCell.Should().Be((0, 0));
+            overlay.Children.OfType<global::Avalonia.Controls.TextBox>().Single().Text.Should().Be("Anchor");
+        });
+
+        textEditor!.ActiveTableShapeId.Should().Be(shape!.Id);
+    }
+
+    [Fact]
+    public void TableCellEditAdapter_DelegatesToSharedPlanner()
+    {
+        var root = FindRepositoryRoot();
+        var adapter = File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "FreeP.App.Rendering.Avalonia",
+            "AvaloniaTableCellEditAdapter.cs"));
+
+        adapter.Should().Contain("TableCellEditPlanner.PlanSelectedCell");
+        adapter.Should().Contain("TableCellEditPlanner.BeginEdit");
+        adapter.Should().Contain("TableCellEditPlanner.CommitRichText");
+        adapter.Should().Contain("TableCellEditPlanner.Cancel");
+    }
+
+    [Fact]
+    public void TableCellTextEditor_UsesAvaloniaAdapterForSharedPlannerDecisions()
+    {
+        var root = FindRepositoryRoot();
+        var source = File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "FreeP.App.Rendering.Avalonia",
+            "AvaloniaInCanvasTextEditor.cs"));
+
+        source.Should().Contain("AvaloniaTableCellEditAdapter.BeginEdit");
+        source.Should().Contain("AvaloniaTableCellEditAdapter.CommitRichText");
+        source.Should().Contain("AvaloniaTableCellEditAdapter.Cancel");
+    }
+
     // ── 1. Geometry factory round-trip ────────────────────────────────────────
 
     [Fact]
@@ -1416,7 +1709,7 @@ public sealed class AvaloniaInteractionTests
         var adorner = new SelectionAdornerLayer();
         var rect    = new Rect(0, 0, 200, 100);
         var kind    = adorner.HitTestHandle(rect, new Point(100, 50));
-        kind.Should().Be(SelectionAdornerLayer.HandleKind.Body);
+        kind.Should().Be(CanvasGestureHandleKind.Body);
     }
 
     [Fact]
@@ -1426,7 +1719,7 @@ public sealed class AvaloniaInteractionTests
         var rect    = new Rect(0, 100, 200, 100);
         // Rotate handle is above top-middle: (100, 100 - 18) = (100, 82)
         var kind = adorner.HitTestHandle(rect, new Point(100, 82));
-        kind.Should().Be(SelectionAdornerLayer.HandleKind.Rotate);
+        kind.Should().Be(CanvasGestureHandleKind.Rotate);
     }
 
     [Fact]
@@ -1435,13 +1728,13 @@ public sealed class AvaloniaInteractionTests
         var adorner = new SelectionAdornerLayer();
         var rect    = new Rect(0, 0, 200, 100);
         adorner.HitTestHandle(rect, new Point(0,    0))
-               .Should().Be(SelectionAdornerLayer.HandleKind.ResizeNW);
+               .Should().Be(CanvasGestureHandleKind.ResizeNW);
         adorner.HitTestHandle(rect, new Point(200,  0))
-               .Should().Be(SelectionAdornerLayer.HandleKind.ResizeNE);
+               .Should().Be(CanvasGestureHandleKind.ResizeNE);
         adorner.HitTestHandle(rect, new Point(200, 100))
-               .Should().Be(SelectionAdornerLayer.HandleKind.ResizeSE);
+               .Should().Be(CanvasGestureHandleKind.ResizeSE);
         adorner.HitTestHandle(rect, new Point(0,  100))
-               .Should().Be(SelectionAdornerLayer.HandleKind.ResizeSW);
+               .Should().Be(CanvasGestureHandleKind.ResizeSW);
     }
 
     [Fact]
@@ -1450,7 +1743,7 @@ public sealed class AvaloniaInteractionTests
         var adorner = new SelectionAdornerLayer();
         var rect    = new Rect(100, 100, 100, 50);
         var kind    = adorner.HitTestHandle(rect, new Point(0, 0));
-        kind.Should().Be(SelectionAdornerLayer.HandleKind.None);
+        kind.Should().Be(CanvasGestureHandleKind.None);
     }
 
     [Fact]
@@ -1665,7 +1958,7 @@ internal static class GestureHandlerTestExtensions
         KeyModifiers modifiers,
         SlideShape shape)
     {
-        handler.SeedResizeState(startScreen, shape, SelectionAdornerLayer.HandleKind.ResizeSE);
+        handler.SeedResizeState(startScreen, shape, CanvasGestureHandleKind.ResizeSE);
         return handler.ComputeResizeBounds(endScreen, xf, modifiers);
     }
 }

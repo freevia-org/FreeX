@@ -123,11 +123,15 @@ test gate (`dotnet test FreeX.DefaultTests.slnx`). To add it to CI:
          -File tools/FreeX.LinuxLiveTest/Run-LinuxLiveTest.ps1 \
          -OutputDir /tmp/linux-live-test-out
      shell: bash
-   - uses: actions/upload-artifact@v4
+   - uses: actions/upload-artifact@v7
      if: always()
      with:
        name: linux-live-test-screenshots
        path: /tmp/linux-live-test-out/
+       if-no-files-found: error
+       include-hidden-files: false
+       compression-level: 6
+       retention-days: 14
    ```
 3. On Windows runners with Docker Desktop, use the PowerShell form shown in *Running* above.
 4. The step exits non-zero on failure, so CI will mark the job failed appropriately.

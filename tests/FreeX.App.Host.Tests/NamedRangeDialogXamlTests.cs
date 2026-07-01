@@ -301,6 +301,20 @@ public sealed class NamedRangeDialogXamlTests
     }
 
     [Fact]
+    public void NameManager_UsesSharedPresentationPlannerAndParser()
+    {
+        var hostSource = ReadNamedRangeDialogSource();
+        var plannerSource = DialogSourceTestSupport.ReadPresentationSources("NamedRanges", "NamedRangeDialogPlanner.cs");
+        var parserSource = DialogSourceTestSupport.ReadPresentationSources("NamedRanges", "NamedRangeInputParser.cs");
+
+        hostSource.Should().Contain("using FreeX.App.Presentation.NamedRanges;");
+        hostSource.Should().Contain("NamedRangeDialogPlanner.FilterItems(_items, selected)");
+        hostSource.Should().Contain("NamedRangeInputParser.TryParseRange(_workbook, rangeText, out _)");
+        plannerSource.Should().Contain("public static class NamedRangeDialogPlanner");
+        parserSource.Should().Contain("public static class NamedRangeInputParser");
+    }
+
+    [Fact]
     public void Planner_FiltersWorkbookAndWorksheetScopedNames()
     {
         var workbookName = new NamedRangeViewModel("Sales", "Sheet1!A1:A2", "Sheet1!A1:A2", "Workbook", "");
@@ -511,8 +525,7 @@ public sealed class NamedRangeDialogXamlTests
     private static string ReadNamedRangeDialogSource() =>
         DialogSourceTestSupport.ReadHostSources(
             "NamedRangeDialog.xaml.cs",
-            "NameDefinitionDialog.cs",
-            "NamedRangeDialogPlanner.cs");
+            "NameDefinitionDialog.cs");
 
     private static void InvokePrivate(NamedRangeDialog dialog, string methodName)
         => DialogSourceTestSupport.InvokePrivateHandler(dialog, methodName);

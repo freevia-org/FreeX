@@ -1,24 +1,13 @@
 using FreeX.Core.IO;
+using FileFormatDialogDescriptorAdapter = Free.Shared.IO.FileFormatDialogDescriptorAdapter;
+using FileOpenDialogPlan = Free.Shared.IO.FileOpenDialogPlan;
+using FileOpenPickerPlan = Free.Shared.IO.FileOpenPickerPlan;
 using FileDialogRequestPlanner = Free.Shared.IO.FileDialogRequestPlanner;
-using SharedFileDialogFormatDescriptor = Free.Shared.IO.FileDialogFormatDescriptor;
-using SharedFileDialogPickerTypeDescriptor = Free.Shared.IO.FileDialogPickerTypeDescriptor;
+using FileDialogSaveSelectionResolver = Free.Shared.IO.FileDialogSaveSelectionResolver;
+using FileSaveDialogPlan = Free.Shared.IO.FileSaveDialogPlan;
+using FileSavePickerPlan = Free.Shared.IO.FileSavePickerPlan;
 
 namespace FreeX.App.Services;
-
-public sealed record WorkbookOpenDialogPlan(string Filter, string DefaultExtensionWithDot);
-
-public sealed record WorkbookSaveDialogPlan(
-    string Filter,
-    string SuggestedFileName,
-    string DefaultExtensionWithDot,
-    int FilterIndex);
-
-public sealed record WorkbookOpenPickerPlan(IReadOnlyList<FilePickerTypeDescriptor> FileTypes);
-
-public sealed record WorkbookSavePickerPlan(
-    IReadOnlyList<FilePickerTypeDescriptor> FileTypes,
-    string SuggestedFileName,
-    string DefaultExtensionWithoutDot);
 
 /// <summary>
 /// UI-free planning for workbook open/save picker requests. WPF and Avalonia still build native dialogs;
@@ -28,45 +17,41 @@ public static class WorkbookFilePickerPlanner
 {
     public const string AllSupportedWorkbooksName = "All supported workbooks";
 
-    public static WorkbookOpenDialogPlan BuildOpenDialogPlan(IEnumerable<IFileAdapter> adapters)
-    {
-        var plan = FileDialogRequestPlanner.BuildOpenDialogPlan(
-            ToSharedDescriptors(GetFormats(adapters, static format => format.CanOpen)));
-        return new WorkbookOpenDialogPlan(plan.Filter, plan.DefaultExtensionWithDot);
-    }
+    public static FileOpenDialogPlan BuildOpenDialogPlan(IEnumerable<IFileAdapter> adapters) =>
+        FileDialogRequestPlanner.BuildOpenDialogPlan(
+            FileFormatDialogDescriptorAdapter.ToOpenDialogDescriptors(GetFormats(adapters)));
 
-    public static WorkbookSaveDialogPlan BuildSaveDialogPlan(
+    public static FileSaveDialogPlan BuildSaveDialogPlan(
         IEnumerable<IFileAdapter> adapters,
         string workbookName,
         string? preferredDefaultFormat)
     {
         var defaultExtension = ResolveSaveDialogDefaultExtension(adapters, preferredDefaultFormat);
-        var plan = FileDialogRequestPlanner.BuildSaveDialogPlan(
-            ToSharedDescriptors(GetFormats(adapters, static format => format.CanSave)),
+        return FileDialogRequestPlanner.BuildSaveDialogPlan(
+            FileFormatDialogDescriptorAdapter.ToSaveDialogDescriptors(GetFormats(adapters)),
             workbookName,
             defaultExtension);
-        return new WorkbookSaveDialogPlan(
-            plan.Filter,
-            plan.SuggestedFileName,
-            plan.DefaultExtensionWithDot,
-            plan.FilterIndex);
     }
 
     public static bool TryResolveSaveDialogTarget(
         IEnumerable<IFileAdapter> adapters,
         string path,
         out FileSaveTarget? target) =>
-        FileSavePlanner.TryResolveExistingPath(path, adapters, out target);
+        TryResolveSaveDialogTarget(adapters, path, filterIndex: 0, out target);
 
-    public static WorkbookOpenPickerPlan BuildOpenPickerPlan(IEnumerable<FileFormatDescriptor> openFormats)
-    {
-        var plan = FileDialogRequestPlanner.BuildOpenPickerPlan(
-            openFormats.Select(ToSharedDescriptor),
+    public static bool TryResolveSaveDialogTarget(
+        IEnumerable<IFileAdapter> adapters,
+        string path,
+        int filterIndex,
+        out FileSaveTarget? target) =>
+        TryResolveSaveDialogTargetCore(adapters, path, filterIndex, out target);
+
+    public static FileOpenPickerPlan BuildOpenPickerPlan(IEnumerable<FileFormatDescriptor> openFormats) =>
+        FileDialogRequestPlanner.BuildOpenPickerPlan(
+            FileFormatDialogDescriptorAdapter.ToDialogDescriptors(openFormats),
             AllSupportedWorkbooksName);
-        return new WorkbookOpenPickerPlan(MapPickerTypes(plan.FileTypes));
-    }
 
-    public static WorkbookSavePickerPlan BuildSavePickerPlan(
+    public static FileSavePickerPlan BuildSavePickerPlan(
         IEnumerable<FileFormatDescriptor> saveFormats,
         string sourceName,
         string fallbackDisplayName,
@@ -74,15 +59,12 @@ public static class WorkbookFilePickerPlanner
     {
         var normalizedExtension = FileFormatResolver.NormalizeExtension(preferredExtension);
         var plan = FileDialogRequestPlanner.BuildSavePickerPlan(
-            saveFormats.Select(ToSharedDescriptor),
+            FileFormatDialogDescriptorAdapter.ToDialogDescriptors(saveFormats),
             sourceName,
             fallbackDisplayName,
             normalizedExtension,
             preferredFirstExtension: normalizedExtension);
-        return new WorkbookSavePickerPlan(
-            MapPickerTypes(plan.FileTypes),
-            plan.SuggestedFileName,
-            plan.DefaultExtensionWithoutDot);
+        return plan;
     }
 
     public static string BuildSuggestedSaveAsFileName(
@@ -111,20 +93,34 @@ public static class WorkbookFilePickerPlanner
             : preferredExtension;
     }
 
-    private static List<FileFormatDescriptor> GetFormats(
+    private static List<FileFormatDescriptor> GetFormats(IEnumerable<IFileAdapter> adapters) =>
+        adapters.SelectMany(adapter => adapter.Formats).ToList();
+
+    private static bool TryResolveSaveDialogTargetCore(
         IEnumerable<IFileAdapter> adapters,
-        Func<FileFormatDescriptor, bool> predicate) =>
-        adapters.SelectMany(adapter => adapter.Formats).Where(predicate).ToList();
+        string path,
+        int filterIndex,
+        out FileSaveTarget? target)
+    {
+        target = null;
+        var adapterRows = adapters.ToList();
+        if (!FileSavePlanner.TryResolveExistingPath(path, adapterRows, out var resolvedTarget) ||
+            resolvedTarget is null)
+        {
+            return false;
+        }
 
-    private static IEnumerable<SharedFileDialogFormatDescriptor> ToSharedDescriptors(IEnumerable<FileFormatDescriptor> formats) =>
-        formats.Select(ToSharedDescriptor);
+        var chosenExtension = Path.GetExtension(resolvedTarget.Path);
+        var adapter = FileDialogSaveSelectionResolver.ResolveAdapter(
+            adapterRows,
+            static candidate => candidate.Formats,
+            static (candidateAdapters, extension) => FileFormatResolver.FindSaveAdapter(candidateAdapters, extension, out _),
+            chosenExtension,
+            filterIndex);
+        if (adapter is null)
+            return false;
 
-    private static SharedFileDialogFormatDescriptor ToSharedDescriptor(FileFormatDescriptor format) =>
-        new(format.Extension, format.FormatName, format.CanOpen, format.CanSave);
-
-    private static IReadOnlyList<FilePickerTypeDescriptor> MapPickerTypes(
-        IEnumerable<SharedFileDialogPickerTypeDescriptor> descriptors) =>
-        descriptors
-            .Select(descriptor => new FilePickerTypeDescriptor(descriptor.DisplayName, descriptor.Patterns))
-            .ToList();
+        target = new FileSaveTarget(resolvedTarget.Path, adapter);
+        return true;
+    }
 }

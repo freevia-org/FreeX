@@ -3,20 +3,23 @@ using System.Windows;
 using Free.Shared.AppServices;
 using Free.Shared.IO;
 using Free.Shared.Shell;
+using Free.Shared.Shell.Wpf;
+using FreeP.App.Compositor;
 using FreeP.Core.IO;
 using FreeP.Core.Model;
+using Microsoft.Win32;
 
 namespace FreeP.App.Host;
 
 /// <summary>
-/// FreeP's File lifecycle: New / Open / Save / Save As / Close over the stub <c>.fxp</c> reader+writer.
+/// FreeP's File lifecycle: New / Open / Save / Save As / Close over native <c>.pptx</c> packages.
 ///
 /// <para>
 /// The file-lifecycle <em>ceremony</em> — the dirty-gate before destructive actions, the Save-vs-Save-As
 /// resolution, and recent-files registration — is decided by the shared, neutral
 /// <see cref="FileLifecyclePlanner"/>. FreeP supplies only the thin host side: the native
-/// <see cref="OpenFileDialog"/>/<see cref="SaveFileDialog"/> for its single <c>.fxp</c> format (via the shared
-/// <see cref="FileDialogRequestPlanner"/>), the actual <c>.fxp</c> read/write, and the message prompts. Dirty/path
+/// <see cref="OpenFileDialog"/>/<see cref="SaveFileDialog"/> for <c>.pptx</c> plus legacy <c>.fxp</c> compatibility
+/// (via the shared <see cref="FileDialogRequestPlanner"/>), the actual read/write, and the message prompts. Dirty/path
 /// state and lifecycle ceremony live in the shared <see cref="FileCommandWorkflow"/>; recent files in the
 /// shared <see cref="RecentFilesStore"/>. Mirrors FreeW.FileCommands exactly (FreeW already adopted these seams).
 /// </para>
@@ -32,23 +35,12 @@ internal sealed class FileCommands
     private readonly Window _window;
     private readonly Func<Presentation> _getModel;
     private readonly Action<Presentation> _loadModel;
-    private readonly Action _onChanged;
-    private readonly FileCommandWorkflow _workflow;
+    private readonly SisterWpfFileCommandWorkflow _workflow;
     private readonly FreePOptions _options;
-
-    // FreeP ships a single .fxp format; the filter/default-extension are composed by the shared I/O
-    // FileDialogFilterBuilder so any future format additions stay a data change, not a string edit.
-    private static readonly IReadOnlyList<FileDialogFormatDescriptor> Formats =
-        [new FileDialogFormatDescriptor(FxpFormat.Extension, "FreeP presentations")];
-
-    // Export-only target: PDF is a fixed-layout publish format, not a FreeP document format.
-    private static readonly IReadOnlyList<FileDialogFormatDescriptor> PdfFormats =
-        [new FileDialogFormatDescriptor(".pdf", "PDF documents")];
+    private readonly Func<PresentationSlideRangeRequest?> _getImageExportRange;
 
     private static readonly FileOpenDialogPlan OpenDialogPlan =
-        FileDialogRequestPlanner.BuildPerFormatOpenDialogPlan(Formats);
-
-    private static string DefaultExtension => OpenDialogPlan.DefaultExtensionWithDot;
+        PresentationFileDialogPlanner.BuildOpenDialogPlan();
 
     public FileCommands(
         Window window,
@@ -56,19 +48,22 @@ internal sealed class FileCommands
         Action<Presentation> loadModel,
         Action onChanged,
         FreePOptions? options = null,
-        Func<RecentFilesStore>? loadRecentFilesStore = null)
+        Func<RecentFilesStore>? loadRecentFilesStore = null,
+        IUserMessageService? messageService = null,
+        Func<PresentationSlideRangeRequest?>? getImageExportRange = null)
     {
         _window = window;
         _getModel = getModel;
         _loadModel = loadModel;
-        _onChanged = onChanged;
         _options = options ?? new FreePOptions();
-        _workflow = new FileCommandWorkflow(
+        _getImageExportRange = getImageExportRange ?? (() => null);
+        _workflow = new SisterWpfFileCommandWorkflow(
+            "FreeP",
             () => _options.RecentFilesCap,
-            _onChanged,
-            PromptSaveChanges,
+            onChanged,
             Save,
-            loadRecentFilesStore: loadRecentFilesStore);
+            loadRecentFilesStore,
+            messageService);
     }
 
     public bool IsDirty => _workflow.IsDirty;
@@ -97,8 +92,9 @@ internal sealed class FileCommands
     {
         try
         {
-            _loadModel(FxpFormat.Read(path));
-            SetSaved(path, suppressRecentFiles);
+            var result = PresentationFilePersistenceWorkflow.Open(path);
+            _loadModel(result.Presentation);
+            SetSaved(result.SavedPath, suppressRecentFiles || result.SuppressRecentFiles);
             return true;
         }
         catch (Exception ex)
@@ -117,20 +113,18 @@ internal sealed class FileCommands
     /// <summary>File &gt; Save As. Always prompts for a target.</summary>
     public bool SaveAs()
     {
-        var plan = BuildSaveAsDialogPlan(_workflow.CurrentPath);
+        var plan = PresentationFileDialogPlanner.BuildSaveAsDialogPlan(_workflow.CurrentFileName);
         var result = WpfFileDialogService.ShowSaveDialog(_window, plan);
         return result.Chosen && SaveTo(result.FileName!);
     }
 
     /// <summary>
     /// File &gt; Export to PDF. Prompts for a target and writes a fixed-layout PDF (one page per slide) via the
-    /// shared portable PDF tier. Does not change the dirty/saved state (the <c>.fxp</c> is the document of record).
+    /// shared portable PDF tier. Does not change the dirty/saved state (the presentation document is the source of record).
     /// </summary>
     public bool ExportPdf()
     {
-        var sourceName = _workflow.CurrentPath is { } current ? Path.GetFileName(current) : null;
-        var plan = FileDialogRequestPlanner.BuildPerFormatSaveDialogPlanFromSourceName(
-            PdfFormats, sourceName, "Presentation", ".pdf");
+        var plan = PresentationExportPlanner.BuildPdfExportDialogPlan(_workflow.CurrentFileName);
         var result = WpfFileDialogService.ShowSaveDialog(_window, plan);
         if (!result.Chosen)
             return false;
@@ -148,6 +142,58 @@ internal sealed class FileCommands
         }
     }
 
+    /// <summary>
+    /// File &gt; Export &gt; Images. Prompts for a folder, then exports the host-selected slide range.
+    /// </summary>
+    public bool ExportImages()
+    {
+        var outputDirectory = PromptImageExportFolder();
+        return outputDirectory is not null && ExportImagesToFolder(outputDirectory, _getImageExportRange());
+    }
+
+    /// <summary>
+    /// Exports one PNG per requested slide to an already chosen folder. The host owns folder picking;
+    /// shared code owns PowerPoint-style range policy, naming, and atomic writes.
+    /// </summary>
+    public bool ExportImagesToFolder(string outputDirectory, PresentationSlideRangeRequest? range = null)
+    {
+        try
+        {
+            PresentationImageExportExecutor.Export(
+                _getModel(),
+                new PresentationImageExportRequest(
+                    outputDirectory,
+                    BaseFileName: Path.GetFileNameWithoutExtension(_workflow.CurrentFileName),
+                    SlideRange: range),
+                WpfPresentationSlideImageRenderer.RenderSlideToPng);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            ShowError("Could not export the presentation slides to images", ex);
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Builds the shared PowerPoint-style handout page plan. WPF owns native print/preview UI later;
+    /// page slots and range policy stay in the shared presentation planner.
+    /// </summary>
+    public PresentationHandoutLayoutPlan BuildHandoutLayoutPlan(
+        int? slidesPerPage = null,
+        PresentationSlideRangeRequest? range = null)
+    {
+        var presentation = _getModel();
+        return PresentationExportPlanner.BuildHandoutLayoutPlan(
+            new PresentationPrintRequest(
+                PresentationPrintLayoutKind.Handouts,
+                range,
+                HandoutSlidesPerPage: slidesPerPage),
+            presentation.Slides.Count,
+            presentation.SlideSizeCxEmu,
+            presentation.SlideSizeCyEmu);
+    }
+
     /// <summary>Save-before-close gate, called from the window's Closing handler.</summary>
     public bool ConfirmCloseAllowed() => _workflow.ConfirmCloseAllowed();
 
@@ -155,13 +201,8 @@ internal sealed class FileCommands
     {
         try
         {
-            // Write through a sibling temp file and atomically replace the target, mirroring the
-            // ExportPdf path — so a mid-write failure (disk full, serialization error, AV lock)
-            // never truncates the previously-saved presentation.
-            var json = FxpFormat.Serialize(_getModel());
-            var bytes = new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false).GetBytes(json);
-            ExportAtomicWriter.WriteAllBytes(path, bytes);
-            SetSaved(path, suppressRecentFiles: false);
+            var result = PresentationFilePersistenceWorkflow.Save(path, _getModel());
+            SetSaved(result.SavedPath, result.SuppressRecentFiles);
             return true;
         }
         catch (Exception ex)
@@ -171,9 +212,12 @@ internal sealed class FileCommands
         }
     }
 
-    private void SetSaved(string path, bool suppressRecentFiles)
+    private void SetSaved(string? path, bool suppressRecentFiles)
     {
-        _workflow.MarkSavedWithPath(path, suppressRecentFiles);
+        if (path is null)
+            _workflow.MarkSavedWithoutPath();
+        else
+            _workflow.MarkSavedWithPath(path, suppressRecentFiles);
     }
 
     private string? PromptOpenPath()
@@ -182,17 +226,26 @@ internal sealed class FileCommands
         return result.Chosen ? result.FileName : null;
     }
 
-    private static FileSaveDialogPlan BuildSaveAsDialogPlan(string? currentPath) =>
-        FileDialogRequestPlanner.BuildPerFormatSaveDialogPlanFromSourceName(
-            Formats,
-            currentPath is null ? null : Path.GetFileName(currentPath),
-            "Presentation",
-            DefaultExtension);
+    private string? PromptImageExportFolder()
+    {
+        var dialog = new OpenFolderDialog
+        {
+            Title = PresentationExportPlanner.ImageExportPickerTitle,
+            Multiselect = false,
+        };
+
+        var currentDirectory = _workflow.CurrentPath is null
+            ? null
+            : Path.GetDirectoryName(_workflow.CurrentPath);
+        if (!string.IsNullOrWhiteSpace(currentDirectory) && Directory.Exists(currentDirectory))
+            dialog.InitialDirectory = currentDirectory;
+
+        return dialog.ShowDialog(_window) == true && !string.IsNullOrWhiteSpace(dialog.FolderName)
+            ? dialog.FolderName
+            : null;
+    }
 
     // ── Host seams (WPF) ─────────────────────────────────────────────────────
-    private SaveChangesPrompt PromptSaveChanges(string action)
-        => FileCommandMessageBox.PromptSaveChanges(_window, DisplayName, action, "FreeP");
-
     private void ShowError(string summary, Exception ex) =>
-        FileCommandMessageBox.ShowError(_window, summary, ex, "FreeP");
+        _workflow.ShowError(summary, ex);
 }

@@ -58,6 +58,7 @@ internal static class Program
                 "--diff"              => RunDiff(args[1..]),
                 "--compare"           => RunCompare(args[1..]),
                 "--avalonia-compare"  => RunAvaloniaCompare(args[1..]),
+                "--corpus-summary"    => RunCorpusSummary(args[1..]),
                 "--generate-corpus"           => RunGenerateCorpus(args[1..]),
                 "--patch-chart-labels-19"     => RunPatchChartLabels19(args[1..]),
                 "--generate-smartart-fixture" => RunGenerateSmartArtFixture(args[1..]),
@@ -196,7 +197,13 @@ internal static class Program
         Console.WriteLine();
         Console.WriteLine("=== Step 3: PowerPoint export (ground truth) ===");
         Directory.CreateDirectory(ppDir);
-        int rc3 = PowerPointInterop.ExportSlidesToPng(pptxPath, ppDir, width, height);
+        var powerPoint = PowerPointInterop.ExportSlidesToPngDetailed(pptxPath, ppDir, width, height);
+        int rc3 = powerPoint.ExitCode;
+        if (rc3 != 0)
+        {
+            Console.Error.WriteLine(
+                $"PowerPoint export did not complete ({powerPoint.FailureKind}); PowerPoint-backed diffs will be n/a and the final exit code will be nonzero.");
+        }
 
         Console.WriteLine();
         Console.WriteLine("=== Step 4: Per-slide diffs ===");
@@ -257,7 +264,7 @@ internal static class Program
         Console.WriteLine();
         Console.WriteLine($"Output directory: {outDir}");
 
-        return Math.Max(rc1, Math.Max(rc2, rc3 == 0 ? 0 : 0));
+        return RenderCompareExitCodes.Combine(rc1, rc2, rc3);
     }
 
     // -----------------------------------------------------------------------
@@ -333,11 +340,11 @@ internal static class Program
         Directory.CreateDirectory(freepDir);
 
         Console.WriteLine("=== Step 1: PowerPoint export ===");
-        int rc1 = PowerPointInterop.ExportSlidesToPng(pptxPath, ppDir, width, height);
-        if (rc1 != 0)
+        var powerPoint = PowerPointInterop.ExportSlidesToPngDetailed(pptxPath, ppDir, width, height);
+        if (powerPoint.ExitCode != 0)
         {
-            Console.Error.WriteLine($"PowerPoint export failed (rc={rc1}). Aborting.");
-            return rc1;
+            Console.Error.WriteLine($"PowerPoint export failed ({powerPoint.FailureKind}, rc={powerPoint.ExitCode}). Aborting.");
+            return powerPoint.ExitCode;
         }
 
         Console.WriteLine();
@@ -410,6 +417,39 @@ internal static class Program
 
         Console.WriteLine($"Generate corpus -> {outDir}");
         return CorpusGenerator.Generate(outDir);
+    }
+
+    // -----------------------------------------------------------------------
+    // Mode: --corpus-summary
+    // -----------------------------------------------------------------------
+    private static int RunCorpusSummary(string[] args)
+    {
+        if (args.Length < 1)
+        {
+            Console.Error.WriteLine("usage: --corpus-summary <corpusDir> [--refs <refsDir>]");
+            return 2;
+        }
+
+        var corpusDir = Path.GetFullPath(args[0]);
+        var refsDir = Path.Combine(corpusDir, "pptx-ref");
+        for (var i = 1; i < args.Length - 1; i++)
+        {
+            if (args[i].Equals("--refs", StringComparison.OrdinalIgnoreCase))
+            {
+                refsDir = Path.GetFullPath(args[i + 1]);
+                i++;
+            }
+        }
+
+        if (!Directory.Exists(corpusDir))
+        {
+            Console.Error.WriteLine($"Corpus directory not found: {corpusDir}");
+            return 1;
+        }
+
+        var summary = CorpusSummary.Create(corpusDir, refsDir);
+        summary.Print(Console.Out);
+        return 0;
     }
 
     // -----------------------------------------------------------------------
@@ -488,6 +528,9 @@ internal static class Program
         Console.WriteLine();
         Console.WriteLine("  --avalonia-compare <deck.pptx> <outDir> [--width W] [--height H]");
         Console.WriteLine("      WPF + Avalonia + PowerPoint renders + per-slide diff table.");
+        Console.WriteLine();
+        Console.WriteLine("  --corpus-summary <corpusDir> [--refs <refsDir>]");
+        Console.WriteLine("      Print compact per-deck status and PowerPoint reference PNG availability.");
         Console.WriteLine();
         Console.WriteLine("  --generate-corpus <outDir>");
         Console.WriteLine("      Author test .pptx decks via PowerPoint COM.");

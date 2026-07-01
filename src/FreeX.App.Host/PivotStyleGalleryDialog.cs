@@ -2,16 +2,15 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
+using FreeX.App.Presentation.PivotUI;
 
 namespace FreeX.App.Host;
-
-public sealed record PivotStyleGalleryDialogResult(string StyleName);
 
 public sealed class PivotStyleGalleryDialog : Window
 {
     private readonly ListBox _styleGallery = new() { MinHeight = 260 };
 
-    public PivotStyleGalleryDialogResult Result { get; private set; }
+    public PivotStyleGalleryValues Result { get; private set; }
 
     public PivotStyleGalleryDialog(string? currentStyleName)
     {
@@ -27,8 +26,8 @@ public sealed class PivotStyleGalleryDialog : Window
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
-    public static PivotStyleGalleryDialogResult CreateResult(string? styleName) =>
-        new(PivotStyleCatalog.NormalizeStyleName(styleName));
+    public static PivotStyleGalleryValues CreateResult(string? styleName) =>
+        PivotStyleGalleryPlanner.CreateResult(styleName);
 
     private DockPanel CreateContent()
     {
@@ -46,22 +45,10 @@ public sealed class PivotStyleGalleryDialog : Window
 
     private void Load(string styleName)
     {
-        var styleNames = PivotStyleCatalog.GetStyleNames(styleName);
+        var styleNames = PivotStyleGalleryPlanner.GetStyleNames(styleName);
         _styleGallery.ItemsSource = styleNames;
-        _styleGallery.SelectedItem = FindStyleName(styleNames, styleName) ?? PivotStyleCatalog.NormalizeStyleName(null);
+        _styleGallery.SelectedIndex = PivotStyleGalleryPlanner.FindStyleIndex(styleNames, styleName);
         _styleGallery.ScrollIntoView(_styleGallery.SelectedItem);
-    }
-
-    private static string? FindStyleName(IReadOnlyList<string> styleNames, string styleName)
-    {
-        for (var index = 0; index < styleNames.Count; index++)
-        {
-            var item = styleNames[index];
-            if (string.Equals(item, styleName, StringComparison.OrdinalIgnoreCase))
-                return item;
-        }
-
-        return null;
     }
 
     private void Accept()

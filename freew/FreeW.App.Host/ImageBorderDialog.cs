@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
+using FreeW.App.Presentation.Dialogs;
 
 namespace FreeW.App.Host;
 
@@ -14,8 +15,6 @@ internal sealed class ImageBorderDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private readonly ComboBox _dashBox;
     private (string? Color, double Width, string? Dash)? _result;
 
-    private static readonly string[] DashStyles = ["solid", "dash", "dot", "dashDot", "dashDotDot", "lgDash", "lgDashDot"];
-
     private ImageBorderDialog(Window? owner, string? colorHex, double widthPt, string? dash)
     {
         Owner = owner;
@@ -26,12 +25,18 @@ internal sealed class ImageBorderDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
 
-        _colorBox = new TextBox { Text = colorHex?.TrimStart('#') ?? string.Empty, MinWidth = 80 };
-        _widthBox = new TextBox { Text = (widthPt > 0 ? widthPt : 0.75).ToString("0.##", CultureInfo.CurrentCulture), MinWidth = 80 };
+        var state = ImageBorderDialogPlanner.BuildInitialState(
+            colorHex,
+            widthPt,
+            dash,
+            CultureInfo.CurrentCulture);
 
+        _colorBox = new TextBox { Text = state.ColorText, MinWidth = 80 };
+        _widthBox = new TextBox { Text = state.WidthText, MinWidth = 80 };
         _dashBox = new ComboBox { MinWidth = 100 };
-        foreach (var style in DashStyles) _dashBox.Items.Add(style);
-        _dashBox.SelectedItem = string.IsNullOrEmpty(dash) ? "solid" : dash;
+        foreach (var style in ImageBorderDialogPlanner.DashItems)
+            _dashBox.Items.Add(style.Label);
+        _dashBox.SelectedIndex = state.DashIndex;
 
         var grid = new Grid { Margin = new Thickness(14) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -69,31 +74,19 @@ internal sealed class ImageBorderDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     private void Accept()
     {
-        var rawColor = _colorBox.Text.Trim().TrimStart('#');
-
-        // Empty color = remove border.
-        if (rawColor.Length == 0)
+        if (!ImageBorderDialogPlanner.TryBuildResult(
+                new ImageBorderDialogInput(_colorBox.Text, _widthBox.Text, _dashBox.SelectedIndex),
+                CultureInfo.CurrentCulture,
+                out var result,
+                out var validation))
         {
-            _result = (null, 0, null);
-            Close();
+            DialogMessageHelper.ShowWarning(
+                this,
+                validation?.Message ?? ImageBorderDialogPlanner.ColorValidationMessage);
             return;
         }
 
-        // Validate 6-digit hex.
-        if (rawColor.Length != 6 || !System.Text.RegularExpressions.Regex.IsMatch(rawColor, @"^[0-9A-Fa-f]{6}$"))
-        {
-            DialogMessageHelper.ShowWarning(this, "Enter a valid 6-digit hex color (e.g. FF0000) or leave blank to remove the border.");
-            return;
-        }
-
-        if (!double.TryParse(_widthBox.Text, NumberStyles.Float, CultureInfo.CurrentCulture, out var width) || width <= 0)
-        {
-            DialogMessageHelper.ShowWarning(this, "Enter a positive border width in points.");
-            return;
-        }
-
-        var dash = _dashBox.SelectedItem?.ToString();
-        _result = (rawColor.ToUpperInvariant(), width, dash == "solid" ? null : dash);
+        _result = (result!.Color, result.Width, result.Dash);
         Close();
     }
 

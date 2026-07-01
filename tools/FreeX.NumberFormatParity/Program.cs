@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
-using System.Runtime.InteropServices;
+using FreeX.ToolsShared.Wpf;
 
 /// <summary>
 /// FreeX NumberFormat Parity Capture Tool
@@ -117,13 +117,6 @@ var formats = new List<string>
 Console.WriteLine($"Output: {outputPath}");
 Console.WriteLine($"Matrix: {values.Count} values x {formats.Count} formats = {values.Count * formats.Count} cells");
 
-Type? excelType = Type.GetTypeFromProgID("Excel.Application");
-if (excelType is null)
-{
-    Console.Error.WriteLine("ERROR: Excel.Application COM class not found. Is Excel installed?");
-    return 1;
-}
-
 dynamic? excel = null;
 dynamic? wb = null;
 dynamic? ws = null;
@@ -134,7 +127,18 @@ int skipped = 0;
 
 try
 {
-    excel = Activator.CreateInstance(excelType)!;
+    try
+    {
+        excel = ExcelComAutomation.CreateExcelApplication(
+            "ERROR: Excel.Application COM class not found. Is Excel installed?",
+            "ERROR: Excel.Application COM activation returned null.");
+    }
+    catch (InvalidOperationException ex)
+    {
+        Console.Error.WriteLine(ex.Message);
+        return 1;
+    }
+
     excel.Visible = false;
     excel.DisplayAlerts = false;
 
@@ -212,11 +216,11 @@ try
 }
 finally
 {
-    try { wb?.Close(false); } catch { /* ignore */ }
+    ExcelComAutomation.TryCloseWorkbook(wb);
     try { excel?.Quit(); } catch { /* ignore */ }
-    if (ws is not null) Marshal.ReleaseComObject(ws);
-    if (wb is not null) Marshal.ReleaseComObject(wb);
-    if (excel is not null) Marshal.ReleaseComObject(excel);
+    ExcelComAutomation.ReleaseComObject(ws);
+    ExcelComAutomation.ReleaseComObject(wb);
+    ExcelComAutomation.ReleaseComObject(excel);
 }
 
 // ── Write CSV ─────────────────────────────────────────────────────────────────

@@ -131,6 +131,7 @@ public sealed class MainWindowQuickAnalysisKeyboardTests
     {
         private readonly MainWindow _window;
         private readonly Workbook _workbook;
+        private readonly SheetId _quickAnalysisSheetId;
         private readonly MethodInfo _showQuickAnalysisMenu;
         private readonly MethodInfo _showQuickAnalysisPreview;
         private string? _focusedMenuHeader;
@@ -138,10 +139,11 @@ public sealed class MainWindowQuickAnalysisKeyboardTests
         private IReadOnlyList<string> _openMenuHeaders = [];
         private GridRange? _selectedRange;
 
-        private MainWindowHarness(MainWindow window, Workbook workbook)
+        private MainWindowHarness(MainWindow window, Workbook workbook, SheetId quickAnalysisSheetId)
         {
             _window = window;
             _workbook = workbook;
+            _quickAnalysisSheetId = quickAnalysisSheetId;
             _showQuickAnalysisMenu = typeof(MainWindow)
                 .GetMethod("ShowQuickAnalysisMenu", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "ShowQuickAnalysisMenu");
@@ -163,9 +165,11 @@ public sealed class MainWindowQuickAnalysisKeyboardTests
             ActiveContextMenu?.PlacementTarget is FrameworkElement target ? target.Name : _contextMenuPlacementTargetName;
 
         public IReadOnlyList<string> OpenMenuHeaders =>
-            ActiveContextMenu?.Items.OfType<MenuItem>()
-                .Select(item => item.Header?.ToString() ?? "")
-                .ToList() ?? _openMenuHeaders;
+            _openMenuHeaders.Count > 0
+                ? _openMenuHeaders
+                : ActiveContextMenu?.Items.OfType<MenuItem>()
+                    .Select(item => item.Header?.ToString() ?? "")
+                    .ToList() ?? _openMenuHeaders;
 
         public QuickAnalysisPreviewVisualKind QuickAnalysisPreviewVisual =>
             SheetGrid.QuickAnalysisPreviewVisual;
@@ -186,7 +190,8 @@ public sealed class MainWindowQuickAnalysisKeyboardTests
 
         public void SelectRange(uint startRow, uint startCol, uint endRow, uint endCol)
         {
-            var sheet = _workbook.Sheets[0];
+            var sheet = _workbook.GetSheet(_quickAnalysisSheetId)
+                ?? throw new InvalidOperationException("Seeded Quick Analysis sheet was not found.");
             _selectedRange = new GridRange(
                 new CellAddress(sheet.Id, startRow, startCol),
                 new CellAddress(sheet.Id, endRow, endCol));
@@ -215,15 +220,15 @@ public sealed class MainWindowQuickAnalysisKeyboardTests
             if (_selectedRange is not { } range)
                 return;
 
-            var displayModel = BuildDisplayModel(range);
-            if (displayModel.IsEmpty)
+            var shellPlan = BuildShellPlan(range);
+            if (shellPlan.IsEmpty)
                 return;
 
             _contextMenuPlacementTargetName = "SheetGrid";
-            _openMenuHeaders = BuildOpenMenuHeaders(displayModel);
+            _openMenuHeaders = BuildOpenMenuHeaders(shellPlan);
             ActiveContextMenu!.IsOpen = false;
             PumpDispatcher();
-            PreviewItem(displayModel.AllItems().First());
+            PreviewItem(shellPlan.AllItems().First());
         }
 
         public void FocusMenuItem(string header)
@@ -245,7 +250,7 @@ public sealed class MainWindowQuickAnalysisKeyboardTests
             PreviewItem(item);
         }
 
-        private void PreviewItem(QuickAnalysisDisplayItem item)
+        private void PreviewItem(QuickAnalysisShellItemPlan item)
         {
             SheetGrid.SelectedRange = _selectedRange;
             _focusedMenuHeader = item.Label;
@@ -258,33 +263,37 @@ public sealed class MainWindowQuickAnalysisKeyboardTests
             PumpDispatcher();
             PumpDispatcher();
             if (SheetGrid.QuickAnalysisPreviewVisual == QuickAnalysisPreviewVisualKind.None &&
-                _selectedRange is { } range)
+                _selectedRange is not null)
             {
-                var preview = QuickAnalysisPlanner.BuildHoverPreview(range, item);
+                var preview = item.HoverPreview;
                 SheetGrid.QuickAnalysisPreviewRange = preview.Range;
                 SheetGrid.QuickAnalysisPreviewVisual = preview.PreviewVisual.Kind;
             }
         }
 
-        private IReadOnlyList<QuickAnalysisDisplayItem> CurrentItems() =>
+        private IReadOnlyList<QuickAnalysisShellItemPlan> CurrentItems() =>
             _selectedRange is { } range
-                ? BuildDisplayModel(range).AllItems().ToArray()
+                ? BuildShellPlan(range).AllItems().ToArray()
                 : [];
 
-        private QuickAnalysisDisplayModel BuildDisplayModel(GridRange range)
+        private QuickAnalysisShellPlan BuildShellPlan(GridRange range)
         {
             var sheet = _workbook.GetSheet(range.Start.Sheet)
                 ?? throw new InvalidOperationException("Selected Quick Analysis sheet was not found.");
             var description = QuickAnalysisSelectionReader.Describe(sheet, range);
-            return QuickAnalysisModelBuilder.Build(description).ToDisplayModel();
+            var displayModel = QuickAnalysisModelBuilder.Build(description).ToDisplayModel();
+            return QuickAnalysisShellPlanner.BuildMenuPlan(
+                displayModel,
+                QuickAnalysisShellCapabilities.DialogBacked,
+                range);
         }
 
-        private static IReadOnlyList<string> BuildOpenMenuHeaders(QuickAnalysisDisplayModel displayModel)
+        private static IReadOnlyList<string> BuildOpenMenuHeaders(QuickAnalysisShellPlan shellPlan)
         {
             var headers = new List<string>();
-            foreach (var group in displayModel.Groups)
+            foreach (var group in shellPlan.Groups)
             {
-                headers.Add(QuickAnalysisShellPlanner.GroupTitleFallback(group.Group));
+                headers.Add(group.TitleFallback);
 
                 foreach (var item in group.Items)
                     headers.Add(item.Label);
@@ -296,8 +305,7 @@ public sealed class MainWindowQuickAnalysisKeyboardTests
         public static MainWindowHarness Create()
         {
             var workbook = new Workbook("Book1");
-            var sheet = workbook.AddSheet("Sheet1");
-            SeedQuickAnalysisRange(sheet);
+            workbook.AddSheet("Sheet1");
             var workbookRef = new WorkbookRef { Current = workbook };
             var graph = new DependencyGraph();
             var evaluator = new FormulaEvaluator();
@@ -316,10 +324,14 @@ public sealed class MainWindowQuickAnalysisKeyboardTests
                 Height = 720
             };
 
+            var currentSheetId = GetCurrentSheetId(window);
+            var currentSheet = workbook.GetSheet(currentSheetId)
+                ?? throw new InvalidOperationException("MainWindow current sheet was not found.");
+            SeedQuickAnalysisRange(currentSheet);
             window.Show();
             window.UpdateLayout();
             PumpDispatcher();
-            return new MainWindowHarness(window, workbook);
+            return new MainWindowHarness(window, workbook, currentSheetId);
         }
 
         private static void SeedQuickAnalysisRange(Sheet sheet)
@@ -334,6 +346,14 @@ public sealed class MainWindowQuickAnalysisKeyboardTests
 
         private SheetGridView SheetGrid =>
             (SheetGridView)_window.FindName("SheetGrid");
+
+        private static SheetId GetCurrentSheetId(MainWindow window)
+        {
+            var field = typeof(MainWindow)
+                .GetField("_currentSheetId", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingFieldException(nameof(MainWindow), "_currentSheetId");
+            return (SheetId)field.GetValue(window)!;
+        }
 
         private ContextMenu? ActiveContextMenu
         {

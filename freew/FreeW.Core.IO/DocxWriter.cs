@@ -1,6 +1,7 @@
 ﻿using System.IO;
 using System.IO.Compression;
 using System.Xml.Linq;
+using Free.Shared.Opc;
 using FreeW.Core.Model;
 using static FreeW.Core.IO.Ooxml;
 
@@ -187,14 +188,19 @@ public static class DocxWriter
         // only re-emitted for macro-enabled targets (.docm/.dotm); a .docx/.dotx must not carry them. Filtered
         // once here and used for the content types, document rels, the inline-drawing rel ids and the byte parts
         // so the four stay in lock-step.
-        var hasExtendedProps = preservedParts.Any(p => p.PartName == ExtendedPropertiesPartName);
+        var hasExtendedProps = preservedParts.Any(p => p.PartName == OpcPackageProperties.ExtendedPropertiesPartName);
 
         using var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true);
         WritePart(archive, "[Content_Types].xml", BuildContentTypes(imageExtensions, emitNumbering, headerFooterParts, hasFootnotes, hasEndnotes, hasComments, hasCustomProps, hasSettings, hasBibliography, charts, embeddedObjects.Count > 0, smartArts, hasEmbeddedFonts, preservedParts, document.Preserved.ContentTypeDefaults, options.MainDocumentContentType));
         WritePart(archive, "_rels/.rels", BuildPackageRels(hasCustomProps, hasExtendedProps));
-        WritePart(archive, "docProps/core.xml", BuildCoreProperties(document.Properties));
+        WritePart(
+            archive,
+            OpcPackageProperties.CorePropertiesZipEntry,
+            OpcDocumentProperties.BuildCorePropertiesDocument(
+                document.Properties,
+                includeDcmiTypeNamespace: true));
         if (hasCustomProps)
-            WritePart(archive, "docProps/custom.xml", BuildCustomProperties(document.Preserved.OriginalCustomProperties, document.Page.WatermarkOptions, document.Page.Watermark, document.MarkedAsFinal));
+            WritePart(archive, OpcPackageProperties.CustomPropertiesZipEntry, BuildCustomProperties(document.Preserved.OriginalCustomProperties, document.Page.WatermarkOptions, document.Page.Watermark, document.MarkedAsFinal));
         WritePart(archive, "word/_rels/document.xml.rels", BuildDocumentRels(images, hyperlinks, emitNumbering, headerFooterParts, hasFootnotes, hasEndnotes, hasComments, hasSettings, hasBibliography, charts, embeddedObjects, smartArts, hasEmbeddedFonts, preservedParts));
         WritePart(archive, "word/document.xml", BuildDocument(document, images, charts, embeddedObjects, smartArts, hyperlinks, headerFooterParts, preservedNumbering, restartOverrides, preservedParts));
         WritePart(archive, "word/styles.xml", BuildStyles(document, preservedNumbering));
@@ -652,11 +658,7 @@ public static class DocxWriter
     }
 
     private static void WritePart(ZipArchive archive, string entryPath, XDocument content)
-    {
-        var entry = archive.CreateEntry(entryPath, CompressionLevel.Optimal);
-        using var entryStream = entry.Open();
-        content.Save(entryStream);
-    }
+        => OpcXml.WriteXmlEntry(archive, entryPath, content);
 
     private static void WriteBinaryPart(ZipArchive archive, string entryPath, byte[] content)
     {
@@ -794,11 +796,11 @@ public static class DocxWriter
             // The theme part is always present (one per document).
             new XElement(Ct + "Override", new XAttribute("PartName", ThemePartName),
                 new XAttribute("ContentType", ThemeContentType)),
-            new XElement(Ct + "Override", new XAttribute("PartName", CorePropertiesPartName),
-                new XAttribute("ContentType", CorePropertiesContentType)),
+            new XElement(Ct + "Override", new XAttribute("PartName", OpcPackageProperties.CorePropertiesPartName),
+                new XAttribute("ContentType", OpcPackageProperties.CorePropertiesContentType)),
             hasCustomProps
-                ? new XElement(Ct + "Override", new XAttribute("PartName", CustomPropertiesPartName),
-                    new XAttribute("ContentType", CustomPropertiesContentType))
+                ? new XElement(Ct + "Override", new XAttribute("PartName", OpcPackageProperties.CustomPropertiesPartName),
+                    new XAttribute("ContentType", OpcPackageProperties.CustomPropertiesContentType))
                 : null,
             // One Override per chart part declares the DrawingML chart content type.
             charts.Select(chart => new XElement(Ct + "Override",
@@ -834,140 +836,96 @@ public static class DocxWriter
                     new XAttribute("ContentType", p.ContentTypeOverride!)))));
 
     private static XDocument BuildPackageRels(bool hasCustomProps, bool hasExtendedProps) => new(
-        new XElement(Rel + "Relationships",
-            new XElement(Rel + "Relationship",
-                new XAttribute("Id", "rId1"),
-                new XAttribute("Type", OfficeDocumentRel),
-                new XAttribute("Target", "word/document.xml")),
-            new XElement(Rel + "Relationship",
-                new XAttribute("Id", "rIdCore"),
-                new XAttribute("Type", CorePropertiesRelType),
-                new XAttribute("Target", "docProps/core.xml")),
+        OpcRelationships.CreateRoot(
+            OpcRelationships.CreateRelationship("rId1", OfficeDocumentRel, "word/document.xml"),
+            OpcRelationships.CreateRelationship(
+                "rIdCore",
+                OpcPackageProperties.CorePropertiesRelationshipType,
+                OpcPackageProperties.CorePropertiesZipEntry),
             hasCustomProps
-                ? new XElement(Rel + "Relationship",
-                    new XAttribute("Id", "rIdCustom"),
-                    new XAttribute("Type", CustomPropertiesRelType),
-                    new XAttribute("Target", "docProps/custom.xml"))
+                ? OpcRelationships.CreateRelationship(
+                    "rIdCustom",
+                    OpcPackageProperties.CustomPropertiesRelationshipType,
+                    OpcPackageProperties.CustomPropertiesZipEntry)
                 : null,
             hasExtendedProps
-                ? new XElement(Rel + "Relationship",
-                    new XAttribute("Id", "rIdExtended"),
-                    new XAttribute("Type", ExtendedPropertiesRelType),
-                    new XAttribute("Target", "docProps/app.xml"))
+                ? OpcRelationships.CreateRelationship(
+                    "rIdExtended",
+                    OpcPackageProperties.ExtendedPropertiesRelationshipType,
+                    OpcPackageProperties.ExtendedPropertiesZipEntry)
                 : null));
 
     /// <summary>
-    /// Builds docProps/custom.xml carrying the page watermark text (<see cref="WatermarkPropertyName"/>,
-    /// vt:lpwstr) and/or Word's "Mark as Final" flag (<see cref="MarkAsFinalPropertyName"/>, vt:bool) as
-    /// named custom properties. This is a standards-compliant OPC custom-properties part. Properties get
-    /// sequential pids starting at 2 (pid 0/1 are reserved); only set properties are emitted.
+    /// Builds docProps/custom.xml carrying the FreeW watermark properties and/or Word's "Mark as Final"
+    /// flag over any source-package custom properties.
     /// </summary>
     private static XDocument BuildCustomProperties(XElement? originalProperties, WatermarkOptions? watermarkOptions, string? legacyWatermark, bool markedAsFinal)
     {
-        var properties = originalProperties is null
-            ? new XElement(CustomProps + "Properties",
-                new XAttribute(XNamespace.Xmlns + "vt", VtVariant.NamespaceName))
-            : new XElement(originalProperties);
+        string[] freeWPropertyNames =
+        [
+            WatermarkPropertyName,
+            WatermarkFontFamilyPropertyName,
+            WatermarkColorPropertyName,
+            WatermarkLayoutPropertyName,
+            WatermarkOpacityPropertyName,
+            WatermarkImagePropertyName,
+            WatermarkScalePropertyName,
+            MarkAsFinalPropertyName
+        ];
 
-        properties.SetAttributeValue(XNamespace.Xmlns + "vt", VtVariant.NamespaceName);
-        // Remove all FreeW watermark properties (both legacy and new) and MarkAsFinal so we can re-add cleanly.
-        properties.Elements(CustomProps + "property")
-            .Where(p =>
-            {
-                var name = p.Attribute("name")?.Value;
-                return name == WatermarkPropertyName
-                    || name == WatermarkFontFamilyPropertyName
-                    || name == WatermarkColorPropertyName
-                    || name == WatermarkLayoutPropertyName
-                    || name == WatermarkOpacityPropertyName
-                    || name == WatermarkImagePropertyName
-                    || name == WatermarkScalePropertyName
-                    || name == MarkAsFinalPropertyName;
-            })
-            .Remove();
-
-        static XElement StringProp(string name, int pid, string value) =>
-            new(CustomProps + "property",
-                new XAttribute("fmtid", "{D5CDD505-2E9C-101B-9397-08002B2CF9AE}"),
-                new XAttribute("pid", pid.ToString(System.Globalization.CultureInfo.InvariantCulture)),
-                new XAttribute("name", name),
-                new XElement(VtVariant + "lpwstr", value));
-
-        var pid = Math.Max(2, properties.Elements(CustomProps + "property")
-            .Select(p => int.TryParse(p.Attribute("pid")?.Value, out var parsed) ? parsed + 1 : 2)
-            .DefaultIfEmpty(2)
-            .Max());
+        var properties = OpcCustomDocumentProperties.FromRoot(originalProperties);
+        var activePropertyNames = new HashSet<string>(StringComparer.Ordinal);
 
         // Write full WatermarkOptions if present; otherwise fall back to legacy plain text.
         if (watermarkOptions is not null)
         {
-            // Always emit the text (the primary property that the legacy reader also picks up).
-            properties.Add(StringProp(WatermarkPropertyName, pid++, watermarkOptions.Text));
-            properties.Add(StringProp(WatermarkFontFamilyPropertyName, pid++, watermarkOptions.FontFamily));
-            properties.Add(StringProp(WatermarkColorPropertyName, pid++, watermarkOptions.FontColorHex));
-            properties.Add(StringProp(WatermarkLayoutPropertyName, pid++, watermarkOptions.Layout.ToString()));
-            properties.Add(new XElement(CustomProps + "property",
-                new XAttribute("fmtid", "{D5CDD505-2E9C-101B-9397-08002B2CF9AE}"),
-                new XAttribute("pid", (pid++).ToString(System.Globalization.CultureInfo.InvariantCulture)),
-                new XAttribute("name", WatermarkOpacityPropertyName),
-                new XElement(VtVariant + "r8", watermarkOptions.Opacity.ToString("G", System.Globalization.CultureInfo.InvariantCulture))));
-            // Picture watermark: persist image bytes as base-64 and scale.
+            activePropertyNames.Add(WatermarkPropertyName);
+            activePropertyNames.Add(WatermarkFontFamilyPropertyName);
+            activePropertyNames.Add(WatermarkColorPropertyName);
+            activePropertyNames.Add(WatermarkLayoutPropertyName);
+            activePropertyNames.Add(WatermarkOpacityPropertyName);
+
             if (watermarkOptions.IsPicture)
             {
-                properties.Add(StringProp(WatermarkImagePropertyName, pid++,
-                    Convert.ToBase64String(watermarkOptions.ImageBytes!)));
-                properties.Add(StringProp(WatermarkScalePropertyName, pid++,
-                    watermarkOptions.ScalePct.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+                activePropertyNames.Add(WatermarkImagePropertyName);
+                activePropertyNames.Add(WatermarkScalePropertyName);
             }
         }
         else if (!string.IsNullOrEmpty(legacyWatermark))
         {
-            properties.Add(StringProp(WatermarkPropertyName, pid++, legacyWatermark));
+            activePropertyNames.Add(WatermarkPropertyName);
         }
 
         if (markedAsFinal)
-            properties.Add(new XElement(CustomProps + "property",
-                new XAttribute("fmtid", "{D5CDD505-2E9C-101B-9397-08002B2CF9AE}"),
-                new XAttribute("pid", (pid++).ToString(System.Globalization.CultureInfo.InvariantCulture)),
-                new XAttribute("name", MarkAsFinalPropertyName),
-                new XElement(VtVariant + "bool", "true")));
-        return new XDocument(properties);
-    }
+            activePropertyNames.Add(MarkAsFinalPropertyName);
 
-    /// <summary>Builds docProps/core.xml from <see cref="DocumentProperties"/>, emitting only set values.</summary>
-    private static XDocument BuildCoreProperties(DocumentProperties properties)
-    {
-        var core = new XElement(Cp + "coreProperties",
-            new XAttribute(XNamespace.Xmlns + "cp", Cp.NamespaceName),
-            new XAttribute(XNamespace.Xmlns + "dc", Dc.NamespaceName),
-            new XAttribute(XNamespace.Xmlns + "dcterms", DcTerms.NamespaceName),
-            new XAttribute(XNamespace.Xmlns + "dcmitype", DcmiType.NamespaceName),
-            new XAttribute(XNamespace.Xmlns + "xsi", Xsi.NamespaceName));
+        properties.RemoveRange(freeWPropertyNames.Where(name => !activePropertyNames.Contains(name)));
 
-        AddIfSet(core, Dc + "title", properties.Title);
-        AddIfSet(core, Dc + "creator", properties.Author);
-        AddIfSet(core, Dc + "subject", properties.Subject);
-        AddIfSet(core, Cp + "keywords", properties.Keywords);
-        AddIfSet(core, Dc + "description", properties.Comments);
-        AddIfSet(core, Cp + "lastModifiedBy", properties.LastModifiedBy);
-        AddTimestamp(core, DcTerms + "created", properties.Created);
-        AddTimestamp(core, DcTerms + "modified", properties.Modified);
-
-        return new XDocument(core);
-
-        static void AddIfSet(XElement parent, XName name, string? value)
+        if (watermarkOptions is not null)
         {
-            if (!string.IsNullOrEmpty(value))
-                parent.Add(new XElement(name, value));
+            // Always emit the text (the primary property that the legacy reader also picks up).
+            properties.SetString(WatermarkPropertyName, watermarkOptions.Text);
+            properties.SetString(WatermarkFontFamilyPropertyName, watermarkOptions.FontFamily);
+            properties.SetString(WatermarkColorPropertyName, watermarkOptions.FontColorHex);
+            properties.SetString(WatermarkLayoutPropertyName, watermarkOptions.Layout.ToString());
+            properties.SetDouble(WatermarkOpacityPropertyName, watermarkOptions.Opacity);
+            // Picture watermark: persist image bytes as base-64 and scale.
+            if (watermarkOptions.IsPicture)
+            {
+                properties.SetString(WatermarkImagePropertyName, Convert.ToBase64String(watermarkOptions.ImageBytes!));
+                properties.SetString(
+                    WatermarkScalePropertyName,
+                    watermarkOptions.ScalePct.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            }
+        }
+        else if (!string.IsNullOrEmpty(legacyWatermark))
+        {
+            properties.SetString(WatermarkPropertyName, legacyWatermark);
         }
 
-        static void AddTimestamp(XElement parent, XName name, DateTimeOffset? value)
-        {
-            if (value is { } v)
-                parent.Add(new XElement(name,
-                    new XAttribute(Xsi + "type", "dcterms:W3CDTF"),
-                    ToW3CDtf(v)));
-        }
+        if (markedAsFinal)
+            properties.SetBoolean(MarkAsFinalPropertyName, true);
+        return properties.ToXDocument();
     }
 
     private static XDocument BuildDocumentRels(
@@ -986,110 +944,55 @@ public static class DocxWriter
         bool hasEmbeddedFonts,
         IReadOnlyList<PreservedPart> preservedParts)
     {
-        var relationships = new XElement(Rel + "Relationships",
-            new XElement(Rel + "Relationship",
-                new XAttribute("Id", "rId1"),
-                new XAttribute("Type", StylesRel),
-                new XAttribute("Target", "styles.xml")));
+        static XElement Relationship(string id, string type, string target, bool external = false) =>
+            OpcRelationships.CreateRelationship(id, type, target, external);
+
+        var relationships = OpcRelationships.CreateRoot(
+            Relationship("rId1", StylesRel, "styles.xml"));
         if (hasSettings)
-            relationships.Add(new XElement(Rel + "Relationship",
-                new XAttribute("Id", SettingsRelationshipId),
-                new XAttribute("Type", SettingsRelType),
-                new XAttribute("Target", "settings.xml")));
+            relationships.Add(Relationship(SettingsRelationshipId, SettingsRelType, "settings.xml"));
         // The document→bibliography relationship (word/bibliography/sources.xml, target relative to word/).
         if (hasBibliography)
-            relationships.Add(new XElement(Rel + "Relationship",
-                new XAttribute("Id", BibliographyRelationshipId),
-                new XAttribute("Type", BibliographyRelType),
-                new XAttribute("Target", "bibliography/sources.xml")));
+            relationships.Add(Relationship(BibliographyRelationshipId, BibliographyRelType, "bibliography/sources.xml"));
         // The document→fontTable relationship (the fontTable's own rels reference the .odttf font parts).
         if (hasEmbeddedFonts)
-            relationships.Add(new XElement(Rel + "Relationship",
-                new XAttribute("Id", FontTableRelationshipId),
-                new XAttribute("Type", FontTableRelType),
-                new XAttribute("Target", "fontTable.xml")));
+            relationships.Add(Relationship(FontTableRelationshipId, FontTableRelType, "fontTable.xml"));
         // The theme part is always present, so its relationship is unconditional.
-        relationships.Add(new XElement(Rel + "Relationship",
-            new XAttribute("Id", ThemeRelationshipId),
-            new XAttribute("Type", ThemeRelType),
-            new XAttribute("Target", "theme/theme1.xml")));
+        relationships.Add(Relationship(ThemeRelationshipId, ThemeRelType, "theme/theme1.xml"));
         if (includeNumbering)
-            relationships.Add(new XElement(Rel + "Relationship",
-                new XAttribute("Id", "rIdNumbering"),
-                new XAttribute("Type", NumberingRelType),
-                new XAttribute("Target", "numbering.xml")));
+            relationships.Add(Relationship("rIdNumbering", NumberingRelType, "numbering.xml"));
         // One document relationship per emitted header/footer part (in collection order — which reproduces
         // the legacy header1, footer1, header2, footer2 ordering and rel ids for single-section documents).
         // The owning section's w:sectPr references the part by this relationship id.
         foreach (var part in headerFooterParts)
-            relationships.Add(new XElement(Rel + "Relationship",
-                new XAttribute("Id", part.RelationshipId),
-                new XAttribute("Type", part.IsHeader ? HeaderRel : FooterRel),
-                new XAttribute("Target", part.FileName)));
+            relationships.Add(Relationship(part.RelationshipId, part.IsHeader ? HeaderRel : FooterRel, part.FileName));
         if (hasFootnotes)
-            relationships.Add(new XElement(Rel + "Relationship",
-                new XAttribute("Id", FootnotesRelationshipId),
-                new XAttribute("Type", FootnotesRelType),
-                new XAttribute("Target", "footnotes.xml")));
+            relationships.Add(Relationship(FootnotesRelationshipId, FootnotesRelType, "footnotes.xml"));
         if (hasEndnotes)
-            relationships.Add(new XElement(Rel + "Relationship",
-                new XAttribute("Id", EndnotesRelationshipId),
-                new XAttribute("Type", EndnotesRelType),
-                new XAttribute("Target", "endnotes.xml")));
+            relationships.Add(Relationship(EndnotesRelationshipId, EndnotesRelType, "endnotes.xml"));
         if (hasComments)
         {
-            relationships.Add(new XElement(Rel + "Relationship",
-                new XAttribute("Id", CommentsRelationshipId),
-                new XAttribute("Type", CommentsRelType),
-                new XAttribute("Target", "comments.xml")));
-            relationships.Add(new XElement(Rel + "Relationship",
-                new XAttribute("Id", CommentsExtendedRelationshipId),
-                new XAttribute("Type", CommentsExtendedRelType),
-                new XAttribute("Target", "commentsExtended.xml")));
+            relationships.Add(Relationship(CommentsRelationshipId, CommentsRelType, "comments.xml"));
+            relationships.Add(Relationship(CommentsExtendedRelationshipId, CommentsExtendedRelType, "commentsExtended.xml"));
         }
         foreach (var image in images)
-            relationships.Add(new XElement(Rel + "Relationship",
-                new XAttribute("Id", image.RelationshipId),
-                new XAttribute("Type", ImageRel),
-                new XAttribute("Target", "media/" + image.FileName)));
+            relationships.Add(Relationship(image.RelationshipId, ImageRel, "media/" + image.FileName));
         foreach (var chart in charts)
-            relationships.Add(new XElement(Rel + "Relationship",
-                new XAttribute("Id", chart.RelationshipId),
-                new XAttribute("Type", ChartRelType),
-                new XAttribute("Target", "charts/" + chart.FileName)));
+            relationships.Add(Relationship(chart.RelationshipId, ChartRelType, "charts/" + chart.FileName));
         // The embedded OLE payload relationship (the icon's image relationship is emitted in the images loop).
         foreach (var embedded in embeddedObjects)
-            relationships.Add(new XElement(Rel + "Relationship",
-                new XAttribute("Id", embedded.RelationshipId),
-                new XAttribute("Type", OleObjectRelType),
-                new XAttribute("Target", "embeddings/" + embedded.FileName)));
+            relationships.Add(Relationship(embedded.RelationshipId, OleObjectRelType, "embeddings/" + embedded.FileName));
         // Each SmartArt diagram contributes four relationships (data / layout / quickStyle / colors), all
         // referenced together by the inline drawing's dgm:relIds.
         foreach (var s in smartArts)
         {
-            relationships.Add(new XElement(Rel + "Relationship",
-                new XAttribute("Id", s.DataRelationshipId),
-                new XAttribute("Type", DiagramDataRelType),
-                new XAttribute("Target", "diagrams/" + s.DataFileName)));
-            relationships.Add(new XElement(Rel + "Relationship",
-                new XAttribute("Id", s.LayoutRelationshipId),
-                new XAttribute("Type", DiagramLayoutRelType),
-                new XAttribute("Target", "diagrams/" + s.LayoutFileName)));
-            relationships.Add(new XElement(Rel + "Relationship",
-                new XAttribute("Id", s.QuickStyleRelationshipId),
-                new XAttribute("Type", DiagramStyleRelType),
-                new XAttribute("Target", "diagrams/" + s.QuickStyleFileName)));
-            relationships.Add(new XElement(Rel + "Relationship",
-                new XAttribute("Id", s.ColorsRelationshipId),
-                new XAttribute("Type", DiagramColorsRelType),
-                new XAttribute("Target", "diagrams/" + s.ColorsFileName)));
+            relationships.Add(Relationship(s.DataRelationshipId, DiagramDataRelType, "diagrams/" + s.DataFileName));
+            relationships.Add(Relationship(s.LayoutRelationshipId, DiagramLayoutRelType, "diagrams/" + s.LayoutFileName));
+            relationships.Add(Relationship(s.QuickStyleRelationshipId, DiagramStyleRelType, "diagrams/" + s.QuickStyleFileName));
+            relationships.Add(Relationship(s.ColorsRelationshipId, DiagramColorsRelType, "diagrams/" + s.ColorsFileName));
         }
         foreach (var (url, relationshipId) in hyperlinks)
-            relationships.Add(new XElement(Rel + "Relationship",
-                new XAttribute("Id", relationshipId),
-                new XAttribute("Type", HyperlinkRel),
-                new XAttribute("Target", url),
-                new XAttribute("TargetMode", "External")));
+            relationships.Add(Relationship(relationshipId, HyperlinkRel, url, external: true));
         // One document relationship per preserved part that the document references directly (customXml items,
         // webSettings and unmodelled chart/chartex parts carry a RelationshipType; their props/_rels/media do
         // not, being referenced from the part's own _rels instead). The Target is reconstructed relative to
@@ -1097,10 +1000,7 @@ public static class DocxWriter
         // targets "../customXml/…". The id assigned here must match PreservedPartRelIds (consumed by the inline
         // drawing rewrite) — both replay the same order, so a shared helper keeps them in lock-step.
         foreach (var (part, relId) in PreservedPartRelIds(preservedParts))
-            relationships.Add(new XElement(Rel + "Relationship",
-                new XAttribute("Id", relId),
-                new XAttribute("Type", part.RelationshipType!),
-                new XAttribute("Target", DocumentRelativeTarget(part.PartName))));
+            relationships.Add(Relationship(relId, part.RelationshipType!, DocumentRelativeTarget(part.PartName)));
         return new XDocument(relationships);
     }
 
@@ -1545,12 +1445,12 @@ public static class DocxWriter
     /// <summary>Builds word/_rels/comments.xml.rels: one image relationship per comment media part.</summary>
     private static XDocument BuildCommentsRels(IReadOnlyList<ImagePart> commentImages)
     {
-        var relationships = new XElement(Rel + "Relationships");
+        var relationships = OpcRelationships.CreateRoot();
         foreach (var image in commentImages)
-            relationships.Add(new XElement(Rel + "Relationship",
-                new XAttribute("Id", image.RelationshipId),
-                new XAttribute("Type", ImageRel),
-                new XAttribute("Target", "media/" + image.FileName)));
+            relationships.Add(OpcRelationships.CreateRelationship(
+                image.RelationshipId,
+                ImageRel,
+                "media/" + image.FileName));
         return new XDocument(relationships);
     }
 
@@ -4039,11 +3939,11 @@ public static class DocxWriter
     /// which the data part's dgm:dataModelExt/@relId references. Targets are data-part-relative.
     /// </summary>
     private static XDocument BuildDiagramDataRels(SmartArtPart part) => new(
-        new XElement(Rel + "Relationships",
-            new XElement(Rel + "Relationship",
-                new XAttribute("Id", part.DrawingRelationshipId),
-                new XAttribute("Type", DiagramDrawingRelType),
-                new XAttribute("Target", part.DrawingFileName))));
+        OpcRelationships.CreateRoot(
+            OpcRelationships.CreateRelationship(
+                part.DrawingRelationshipId,
+                DiagramDrawingRelType,
+                part.DrawingFileName)));
 
     /// <summary>
     /// Builds the SmartArt rendered-geometry part (word/diagrams/drawingN.xml — dsp:drawing). F2: computes a
@@ -4314,11 +4214,11 @@ public static class DocxWriter
     /// "Edit Data" follows from the chart, and it is what c:externalData/@r:id resolves against. F1.
     /// </summary>
     private static XDocument BuildChartRels(ChartPart part) => new(
-        new XElement(Rel + "Relationships",
-            new XElement(Rel + "Relationship",
-                new XAttribute("Id", part.ExternalDataRelId),
-                new XAttribute("Type", ExternalDataRelType),
-                new XAttribute("Target", "../embeddings/" + part.EmbeddingFileName))));
+        OpcRelationships.CreateRoot(
+            OpcRelationships.CreateRelationship(
+                part.ExternalDataRelId,
+                ExternalDataRelType,
+                "../embeddings/" + part.EmbeddingFileName)));
 
     /// <summary>
     /// Builds a minimal, self-contained xlsx (OPC ZIP) holding the chart's data so Word's "Edit Data" has a
@@ -4376,11 +4276,11 @@ public static class DocxWriter
                         new XAttribute(sr + "id", "rId1")))));
 
         var workbookRels = new XDocument(
-            new XElement(Rel + "Relationships",
-                new XElement(Rel + "Relationship",
-                    new XAttribute("Id", "rId1"),
-                    new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet"),
-                    new XAttribute("Target", "worksheets/sheet1.xml"))));
+            OpcRelationships.CreateRoot(
+                OpcRelationships.CreateRelationship(
+                    "rId1",
+                    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet",
+                    "worksheets/sheet1.xml")));
 
         var contentTypes = new XDocument(
             new XElement(Ct + "Types",
@@ -4394,11 +4294,11 @@ public static class DocxWriter
                     new XAttribute("ContentType", "application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"))));
 
         var packageRels = new XDocument(
-            new XElement(Rel + "Relationships",
-                new XElement(Rel + "Relationship",
-                    new XAttribute("Id", "rId1"),
-                    new XAttribute("Type", OfficeDocumentRel),
-                    new XAttribute("Target", "xl/workbook.xml"))));
+            OpcRelationships.CreateRoot(
+                OpcRelationships.CreateRelationship(
+                    "rId1",
+                    OfficeDocumentRel,
+                    "xl/workbook.xml")));
 
         using var buffer = new MemoryStream();
         using (var zip = new ZipArchive(buffer, ZipArchiveMode.Create, leaveOpen: true))
@@ -4683,6 +4583,8 @@ public static class DocxWriter
         // w:highlight (Word's highlighter) precedes w:u in CT_RPr (EG_RPrBase). Emitted only for a
         // HighlightColorHex that maps to a named gallery token, and only when CharacterShadingHex (which
         // owns the single w:shd slot) is not set — Word's highlight gallery only recognises named tokens.
+        // Keep this WordprocessingML color boundary local: named highlight tokens, w:shd fallback, "auto"
+        // attributes, and nullable model "#RRGGBB" fields are not strict DrawingML srgbClr normalization.
         if (f.CharacterShadingHex is not { Length: > 0 }
             && f.HighlightColorHex is { Length: > 0 } highlightToken
             && HexToHighlightToken(highlightToken) is { } namedHighlight)
@@ -4859,12 +4761,12 @@ public static class DocxWriter
     /// </summary>
     private static XDocument BuildHeaderFooterRels(HeaderFooterPart part)
     {
-        var relationships = new XElement(Rel + "Relationships");
+        var relationships = OpcRelationships.CreateRoot();
         foreach (var image in part.Images)
-            relationships.Add(new XElement(Rel + "Relationship",
-                new XAttribute("Id", image.RelationshipId),
-                new XAttribute("Type", ImageRel),
-                new XAttribute("Target", "media/" + image.FileName)));
+            relationships.Add(OpcRelationships.CreateRelationship(
+                image.RelationshipId,
+                ImageRel,
+                "media/" + image.FileName));
         return new XDocument(relationships);
     }
 
@@ -5527,12 +5429,12 @@ public static class DocxWriter
     /// </summary>
     private static XDocument BuildFontTableRels(IReadOnlyList<FontTablePart> embeddedFonts)
     {
-        var relationships = new XElement(Rel + "Relationships");
+        var relationships = OpcRelationships.CreateRoot();
         foreach (var part in embeddedFonts.SelectMany(f => f.Parts))
-            relationships.Add(new XElement(Rel + "Relationship",
-                new XAttribute("Id", part.RelationshipId),
-                new XAttribute("Type", FontRelType),
-                new XAttribute("Target", "fonts/" + part.FileName)));
+            relationships.Add(OpcRelationships.CreateRelationship(
+                part.RelationshipId,
+                FontRelType,
+                "fonts/" + part.FileName));
         return new XDocument(relationships);
     }
 

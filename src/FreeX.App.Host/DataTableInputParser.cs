@@ -1,30 +1,47 @@
-using FreeX.Core.Model;
-using FreeX.Core.Commands;
 using FreeX.App.Presentation;
+using FreeX.Core.Model;
+using SharedDataTableInputParseIssue = FreeX.App.Presentation.DataTools.DataTableInputParseIssue;
+using SharedDataTableInputParser = FreeX.App.Presentation.DataTools.DataTableInputParser;
 
 namespace FreeX.App.Host;
 
 public static class DataTableInputParser
 {
-    public static bool IsTwoVariableMode(string input)
+    public static bool TryParse(
+        SheetId currentSheetId,
+        GridRange range,
+        string? rowInputCellText,
+        string? columnInputCellText,
+        out DataTableDialogResult result,
+        out string? error)
     {
-        var normalized = input.Trim();
-        return normalized.Equals("two", StringComparison.OrdinalIgnoreCase) ||
-               normalized.Equals("2", StringComparison.OrdinalIgnoreCase);
+        if (SharedDataTableInputParser.TryParse(
+                currentSheetId,
+                range,
+                rowInputCellText,
+                columnInputCellText,
+                out var parsed,
+                out var issue))
+        {
+            result = parsed;
+            error = null;
+            return true;
+        }
+
+        result = default!;
+        error = DescribeIssue(issue);
+        return false;
     }
 
-    public static CellAddress GetDefaultFormulaCell(GridRange range, bool twoVariable) =>
-        GetDefaultFormulaCell(range, DataTableInputOrientation.Column, twoVariable);
-
-    public static CellAddress GetDefaultFormulaCell(
-        GridRange range,
-        DataTableInputOrientation orientation,
-        bool twoVariable = false) =>
-        new(
-            range.Start.Sheet,
-            twoVariable || orientation == DataTableInputOrientation.Column ? range.Start.Row : range.Start.Row + 1,
-            twoVariable || orientation == DataTableInputOrientation.Row ? range.Start.Col : range.Start.Col + 1);
-
-    public static bool TryParseCell(string input, SheetId sheetId, out CellAddress address) =>
-        CellReferenceInputParser.TryParseCell(input, sheetId, out address);
+    internal static string? DescribeIssue(SharedDataTableInputParseIssue issue) =>
+        issue switch
+        {
+            SharedDataTableInputParseIssue.InvalidRowInputCell => UiText.Get("DataTable_InvalidRowInputMessage"),
+            SharedDataTableInputParseIssue.InvalidColumnInputCell => UiText.Get("DataTable_InvalidColumnInputMessage"),
+            SharedDataTableInputParseIssue.MissingInputCell => UiText.Get("DataTable_MissingInputMessage"),
+            SharedDataTableInputParseIssue.RowInputCellInsideTableRange => UiText.Get("DataTable_RowInputInsideRangeMessage"),
+            SharedDataTableInputParseIssue.ColumnInputCellInsideTableRange => UiText.Get("DataTable_ColumnInputInsideRangeMessage"),
+            SharedDataTableInputParseIssue.InputCellsMustBeDifferent => UiText.Get("DataTable_SameInputCellMessage"),
+            _ => null
+        };
 }

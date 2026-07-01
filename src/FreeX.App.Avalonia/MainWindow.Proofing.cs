@@ -7,6 +7,7 @@ using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Free.Shared.Shell.Avalonia;
 using FreeX.App.Services;
 using FreeX.Core.Model;
 using AvaloniaProofingHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
@@ -15,6 +16,8 @@ namespace FreeX.App.Avalonia;
 
 public sealed partial class MainWindow
 {
+    private static AvaloniaCompactDialogChromeStyle ProofingDialogChromeStyle => new(FormulaBarFontFamily);
+
     // Review ▸ Proofing (Thesaurus / Translate) and Insert ▸ Equation / Object.
     // Honest scope: the thesaurus uses a small built-in synonym map (see ThesaurusData),
     // translation is offline-unavailable (no network/service in this build), equation is
@@ -76,6 +79,7 @@ public sealed partial class MainWindow
             Height = 150,
             ItemsSource = synonyms,
         };
+        AvaloniaCompactDialogChrome.ApplyListBox(list, ProofingDialogChromeStyle);
         if (synonyms.Count == 0)
             layout.Children.Add(new TextBlock { Text = UiText.Get("ShellLoc_ThesaurusNoSynonyms"), TextWrapping = TextWrapping.Wrap });
         else
@@ -90,16 +94,10 @@ public sealed partial class MainWindow
             ShowInTaskbar = false,
         };
 
-        var buttons = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 8,
-            HorizontalAlignment = AvaloniaProofingHorizontalAlignment.Right,
-        };
         var replace = new Button { Content = UiText.Get("ShellLoc_ReplaceButton"), IsEnabled = synonyms.Count > 0, IsDefault = true };
         var close = new Button { Content = UiText.Get("Common_Close"), IsCancel = true };
-        ApplyDialogButtonChrome(replace, 90, isDefault: true);
-        ApplyDialogButtonChrome(close, 90);
+        AvaloniaCompactDialogChrome.ApplyButton(replace, ProofingDialogChromeStyle, 90, isDefault: true);
+        AvaloniaCompactDialogChrome.ApplyButton(close, ProofingDialogChromeStyle, 90);
         replace.Click += (_, _) =>
         {
             var chosen = list.SelectedItem as string ?? (synonyms.Count > 0 ? synonyms[0] : null);
@@ -114,9 +112,7 @@ public sealed partial class MainWindow
             dialog.Close();
         };
         close.Click += (_, _) => dialog.Close();
-        buttons.Children.Add(replace);
-        buttons.Children.Add(close);
-        layout.Children.Add(buttons);
+        layout.Children.Add(AvaloniaCompactDialogChrome.CreateActionRow([replace, close]));
 
         dialog.Content = layout;
         await dialog.ShowDialog(this);
@@ -141,6 +137,8 @@ public sealed partial class MainWindow
         var languages = TranslateDialogPlanner.Languages;
         var fromBox = CreateTranslateLanguageBox("WfTranslateFromLanguage", languages, TranslateDialogPlanner.DefaultFromCode);
         var toBox = CreateTranslateLanguageBox("WfTranslateToLanguage", languages, TranslateDialogPlanner.DefaultToCode);
+        AvaloniaCompactDialogChrome.ApplyComboBox(fromBox, ProofingDialogChromeStyle);
+        AvaloniaCompactDialogChrome.ApplyComboBox(toBox, ProofingDialogChromeStyle);
         var languagesRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12 };
         languagesRow.Children.Add(new StackPanel
         {
@@ -169,12 +167,14 @@ public sealed partial class MainWindow
             Height = 70,
             PlaceholderText = UiText.Get("WfTranslate_TranslationWatermark"),
         };
+        AvaloniaCompactDialogChrome.ApplyTextBox(translationBox, ProofingDialogChromeStyle, fixedHeight: false);
         AutomationProperties.SetAutomationId(translationBox, "WfTranslateTranslationBox");
         AutomationProperties.SetName(translationBox, UiText.Get("WfTranslate_TranslationLabel"));
         layout.Children.Add(translationBox);
 
         layout.Children.Add(new TextBlock { Text = UiText.Get("WfTranslate_TargetLabel") });
         var targetBox = new TextBox { Text = TranslateDialogPlanner.SuggestTargetReference(source) };
+        AvaloniaCompactDialogChrome.ApplyTextBox(targetBox, ProofingDialogChromeStyle);
         AutomationProperties.SetAutomationId(targetBox, "WfTranslateTargetBox");
         AutomationProperties.SetName(targetBox, UiText.Get("WfTranslate_TargetLabel"));
         layout.Children.Add(targetBox);
@@ -196,16 +196,10 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetAutomationId(dialog, "WfTranslateDialog");
 
-        var buttons = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 8,
-            HorizontalAlignment = AvaloniaProofingHorizontalAlignment.Right,
-        };
         var insert = new Button { Content = UiText.Get("WfTranslate_InsertButton"), IsDefault = true };
         var close = new Button { Content = UiText.Get("WfTranslate_CloseButton"), IsCancel = true };
-        ApplyDialogButtonChrome(insert, 110, isDefault: true);
-        ApplyDialogButtonChrome(close, 90);
+        AvaloniaCompactDialogChrome.ApplyButton(insert, ProofingDialogChromeStyle, 110, isDefault: true);
+        AvaloniaCompactDialogChrome.ApplyButton(close, ProofingDialogChromeStyle, 90);
         AutomationProperties.SetAutomationId(insert, "WfTranslateInsertButton");
         AutomationProperties.SetAutomationId(close, "WfTranslateCloseButton");
         insert.Click += (_, _) =>
@@ -216,9 +210,7 @@ public sealed partial class MainWindow
                 dialog.Close();
         };
         close.Click += (_, _) => dialog.Close();
-        buttons.Children.Add(insert);
-        buttons.Children.Add(close);
-        layout.Children.Add(buttons);
+        layout.Children.Add(AvaloniaCompactDialogChrome.CreateActionRow([insert, close]));
 
         dialog.Content = layout;
         await dialog.ShowDialog(this);
@@ -301,11 +293,13 @@ public sealed partial class MainWindow
             Width = 360,
             AcceptsReturn = false,
         };
+        AvaloniaCompactDialogChrome.ApplyTextBox(input, ProofingDialogChromeStyle);
 
         var symbols = new WrapPanel { MaxWidth = 360 };
         foreach (var symbol in new[] { "±", "×", "÷", "≤", "≥", "≠", "√", "π", "∑", "∞", "→", "²", "³" })
         {
             var btn = new Button { Content = symbol, Width = 40, Margin = new Thickness(2) };
+            AvaloniaCompactDialogChrome.ApplyButton(btn, ProofingDialogChromeStyle, 40);
             btn.Click += (_, _) =>
             {
                 input.Text += symbol;
@@ -319,16 +313,10 @@ public sealed partial class MainWindow
         layout.Children.Add(input);
         layout.Children.Add(symbols);
 
-        var buttons = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 8,
-            HorizontalAlignment = AvaloniaProofingHorizontalAlignment.Right,
-        };
         var ok = new Button { Content = UiText.Get("ShellLoc_InsertButton"), IsDefault = true };
         var cancel = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true };
-        ApplyDialogButtonChrome(ok, 90, isDefault: true);
-        ApplyDialogButtonChrome(cancel, 90);
+        AvaloniaCompactDialogChrome.ApplyButton(ok, ProofingDialogChromeStyle, 90, isDefault: true);
+        AvaloniaCompactDialogChrome.ApplyButton(cancel, ProofingDialogChromeStyle, 90);
         // Captured below once the dialog exists. layout is the Window's Content, so the previous
         // layout.Parent.Parent walked one level too far (Parent is the Window, Parent.Parent null).
         Window? dialog = null;
@@ -340,9 +328,7 @@ public sealed partial class MainWindow
             dialog?.Close();
         };
         cancel.Click += (_, _) => dialog?.Close();
-        buttons.Children.Add(ok);
-        buttons.Children.Add(cancel);
-        layout.Children.Add(buttons);
+        layout.Children.Add(AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel]));
 
         dialog = new Window
         {

@@ -9,22 +9,22 @@ public sealed partial class ExcelEditKeyPlannerTests
     [Fact]
     public void GetIntent_DoesNotCommitInlineEditorOnPlainArrowKeys()
     {
-        var intent = ExcelEditKeyPlanner.GetIntent(Key.Left, ModifierKeys.None, Current, pageSize: 20, allowFormulaBarNavigationKeys: false);
+        var intent = ExcelEditKeyPlanner.GetIntent(FormulaEditorKey.Left, FormulaEditorModifiers.None, Current, pageSize: 20, allowFormulaBarNavigationKeys: false);
 
         intent.Action.Should().Be(ExcelEditKeyAction.None);
         intent.Target.Should().BeNull();
     }
 
     [Theory]
-    [InlineData(Key.Up, 9, 5)]
-    [InlineData(Key.Down, 11, 5)]
-    [InlineData(Key.Left, 10, 4)]
-    [InlineData(Key.Right, 10, 6)]
-    public void GetIntent_CommitsEmptyInlineEditorAndMovesOnPlainArrowKeys(Key key, uint expectedRow, uint expectedCol)
+    [InlineData(FormulaEditorKey.Up, 9, 5)]
+    [InlineData(FormulaEditorKey.Down, 11, 5)]
+    [InlineData(FormulaEditorKey.Left, 10, 4)]
+    [InlineData(FormulaEditorKey.Right, 10, 6)]
+    public void GetIntent_CommitsEmptyInlineEditorAndMovesOnPlainArrowKeys(FormulaEditorKey key, uint expectedRow, uint expectedCol)
     {
         var intent = ExcelEditKeyPlanner.GetIntent(
             key,
-            ModifierKeys.None,
+            FormulaEditorModifiers.None,
             Current,
             pageSize: 20,
             allowFormulaBarNavigationKeys: false,
@@ -35,15 +35,15 @@ public sealed partial class ExcelEditKeyPlannerTests
     }
 
     [Theory]
-    [InlineData(Key.Up, 9, 5)]
-    [InlineData(Key.Down, 11, 5)]
-    [InlineData(Key.Left, 10, 4)]
-    [InlineData(Key.Right, 10, 6)]
-    public void GetIntent_CommitsNonFormulaInlineEditorAndMovesOnPlainArrowKeys(Key key, uint expectedRow, uint expectedCol)
+    [InlineData(FormulaEditorKey.Up, 9, 5)]
+    [InlineData(FormulaEditorKey.Down, 11, 5)]
+    [InlineData(FormulaEditorKey.Left, 10, 4)]
+    [InlineData(FormulaEditorKey.Right, 10, 6)]
+    public void GetIntent_CommitsNonFormulaInlineEditorAndMovesOnPlainArrowKeys(FormulaEditorKey key, uint expectedRow, uint expectedCol)
     {
         var intent = ExcelEditKeyPlanner.GetIntent(
             key,
-            ModifierKeys.None,
+            FormulaEditorModifiers.None,
             Current,
             pageSize: 20,
             allowFormulaBarNavigationKeys: false,
@@ -57,8 +57,8 @@ public sealed partial class ExcelEditKeyPlannerTests
     public void GetIntent_LetsNonEmptyInlineEditorHandlePlainArrowKeys()
     {
         var intent = ExcelEditKeyPlanner.GetIntent(
-            Key.Right,
-            ModifierKeys.None,
+            FormulaEditorKey.Right,
+            FormulaEditorModifiers.None,
             Current,
             pageSize: 20,
             allowFormulaBarNavigationKeys: false,
@@ -72,8 +72,8 @@ public sealed partial class ExcelEditKeyPlannerTests
     public void GetIntent_LetsInlineEditorHandleShiftArrowTextSelection()
     {
         var intent = ExcelEditKeyPlanner.GetIntent(
-            Key.Right,
-            ModifierKeys.Shift,
+            FormulaEditorKey.Right,
+            FormulaEditorModifiers.Shift,
             Current,
             pageSize: 20,
             allowFormulaBarNavigationKeys: false,

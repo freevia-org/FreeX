@@ -4,7 +4,9 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Free.Shared.Shell.Avalonia;
 using FreeW.App.Avalonia.Editing;
+using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Avalonia;
@@ -14,19 +16,21 @@ namespace FreeW.App.Avalonia;
 /// Replace fields, match-case / whole-word / wildcard checkboxes, Find Next / Replace / Replace All
 /// buttons, and a Go To section (headings via <see cref="DocumentOutline"/> + document start/end).
 ///
-/// Text matching is delegated entirely to the pure <see cref="TextSearch"/> helper in the model tier;
-/// no matching logic lives here. Navigation (Find Next, Go To) uses the editor's
+/// Find/replace option policy, validation, request composition, and result text live in
+/// <see cref="FindReplaceDialogPlanner"/>. Navigation (Find Next, Go To) uses the editor's
 /// <see cref="DocumentView.FindNext"/> / <see cref="DocumentView.GetBlockTop"/> surface so the editor
 /// controls the caret and scroll.
 ///
-/// Options supported: Match Case, Whole Word, Use Wildcards (per <see cref="TextSearch.FindAll"/>).
-/// "Use Wildcards" disables "Whole Word" (incompatible, matching the WPF dialog's behaviour).
+/// Options supported: Match Case, Whole Word, Use Wildcards.
+/// "Use Wildcards" disables "Whole Word" through the presentation planner policy.
 ///
 /// The inline find bar in MainWindow continues to work; the dialog is opened via a separate
 /// <c>freew.find-replace-dialog</c> ribbon command (Home → Editing group) or Ctrl+H.
 /// </summary>
 public sealed class FindReplaceDialog : Window
 {
+    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
+
     // ── Editor reference ──────────────────────────────────────────────────────
 
     private readonly DocumentView _editor;
@@ -49,19 +53,19 @@ public sealed class FindReplaceDialog : Window
 
     private readonly CheckBox _matchCase = new()
     {
-        Content = "Match case",
+        Content = FindReplaceDialogPlanner.LabelFor(FindReplaceOptionKind.MatchCase),
         Margin = new Thickness(0, 8, 0, 0),
     };
 
     private readonly CheckBox _wholeWord = new()
     {
-        Content = "Whole word",
+        Content = FindReplaceDialogPlanner.LabelFor(FindReplaceOptionKind.WholeWord),
         Margin = new Thickness(0, 4, 0, 0),
     };
 
     private readonly CheckBox _useWildcards = new()
     {
-        Content = "Use wildcards  (* ? [ ] < >)",
+        Content = FindReplaceDialogPlanner.LabelFor(FindReplaceOptionKind.UseWildcards),
         Margin = new Thickness(0, 4, 0, 0),
     };
 
@@ -92,9 +96,14 @@ public sealed class FindReplaceDialog : Window
         CanResize = false;
         ShowInTaskbar = false;
 
-        // "Use Wildcards" disables "Whole Word" (incompatible — mirrors WPF dialog).
-        _useWildcards.IsCheckedChanged += (_, _) =>
-            _wholeWord.IsEnabled = _useWildcards.IsChecked != true;
+        _useWildcards.IsCheckedChanged += (_, _) => ApplyOptionPolicy();
+        ApplyOptionPolicy();
+        AvaloniaCompactDialogChrome.ApplyTextBox(_findBox, DialogChromeStyle);
+        AvaloniaCompactDialogChrome.ApplyTextBox(_replaceBox, DialogChromeStyle);
+        AvaloniaCompactDialogChrome.ApplyCheckBox(_matchCase, DialogChromeStyle);
+        AvaloniaCompactDialogChrome.ApplyCheckBox(_wholeWord, DialogChromeStyle);
+        AvaloniaCompactDialogChrome.ApplyCheckBox(_useWildcards, DialogChromeStyle);
+        AvaloniaCompactDialogChrome.ApplyComboBox(_goToTarget, DialogChromeStyle);
 
         // --- Main grid (Find label | Find box, Replace label | Replace box) ------
         var grid = new Grid { Margin = new Thickness(14, 10, 14, 0) };
@@ -116,16 +125,13 @@ public sealed class FindReplaceDialog : Window
         }
 
         // --- Action buttons ---------------------------------------------------
-        var btnRow = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(14, 10, 14, 0),
-        };
-        btnRow.Children.Add(MakeButton("Find Next", (_, _) => FindNext()));
-        btnRow.Children.Add(MakeButton("Replace", (_, _) => Replace()));
-        btnRow.Children.Add(MakeButton("Replace All", (_, _) => ReplaceAll()));
-        btnRow.Children.Add(MakeButton("Close", (_, _) => Close()));
+        var findNextButton = MakeButton("Find Next", (_, _) => FindNext());
+        var replaceButton = MakeButton("Replace", (_, _) => Replace());
+        var replaceAllButton = MakeButton("Replace All", (_, _) => ReplaceAll());
+        var closeButton = MakeButton("Close", (_, _) => Close());
+        var btnRow = AvaloniaCompactDialogChrome.CreateActionRow(
+            [findNextButton, replaceButton, replaceAllButton, closeButton],
+            new Thickness(14, 10, 14, 0));
 
         // --- Go To section ---------------------------------------------------
         var goToSection = BuildGoToSection();
@@ -181,14 +187,14 @@ public sealed class FindReplaceDialog : Window
 
         var row = new Grid();
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(8) });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
         Grid.SetColumn(_goToTarget, 0);
         row.Children.Add(_goToTarget);
 
         var goBtn = MakeButton("Go", (_, _) => GoTo());
-        goBtn.Margin = new Thickness(8, 0, 0, 0);
-        Grid.SetColumn(goBtn, 1);
+        Grid.SetColumn(goBtn, 2);
         row.Children.Add(goBtn);
 
         panel.Children.Add(row);
@@ -257,94 +263,85 @@ public sealed class FindReplaceDialog : Window
 
     // ── Find / Replace logic ──────────────────────────────────────────────────
 
-    private bool MatchCase => _matchCase.IsChecked == true;
-    private bool WholeWord => _wholeWord.IsChecked == true;
-    private bool UseWildcards => _useWildcards.IsChecked == true;
-
     private void FindNext()
     {
-        var term = _findBox.Text ?? string.Empty;
-        if (term.Length == 0)
+        if (!FindReplaceDialogPlanner.TryCreateSearchRequest(
+                _findBox.Text,
+                CurrentOptions(),
+                out var request,
+                out var error))
         {
-            _status.Text = "Enter a search term.";
+            _status.Text = FindReplaceDialogPlanner.ValidationMessageFor(error);
             return;
         }
 
-        // Build the effective search query honoring the active options.
-        // DocumentView.FindNext uses DocumentSearch (case-insensitive, plain); for option-aware
-        // search we go direct to TextSearch across the document's plain text and use GetBlockTop
-        // to scroll, so Match Case / Whole Word / Wildcards are all respected.
-        if (FindNextWithOptions(term))
-        {
-            _status.Text = string.Empty;
-        }
-        else
-        {
-            _status.Text = $"\"{term}\" not found.";
-        }
+        var found = FindNextWithOptions(request!);
+        _status.Text = FindReplaceDialogPlanner.BuildFindStatus(request!, found);
     }
 
     /// <summary>
-    /// Finds the next match of <paramref name="term"/> after the editor's current caret using
-    /// <see cref="TextSearch.FindAll"/> with the active options, scanning paragraphs in document
-    /// order. When a match is found in a block the editor's <see cref="DocumentView.FindNext"/>
-    /// is called (which re-uses DocumentSearch for actual selection + scroll). If FindNext is
-    /// not case/wildcard-aware we fall back to a best-effort: we locate the right block via
-    /// TextSearch, then let the editor's plain FindNext select within it.
+    /// Keeps the existing Avalonia editor behavior: plain searches delegate directly to the editor;
+    /// option-aware searches first ask the presentation planner whether any document match exists,
+    /// then let the editor perform its current plain selection/scroll behavior.
     /// </summary>
-    private bool FindNextWithOptions(string term)
+    private bool FindNextWithOptions(FindReplaceSearchRequest request)
     {
-        if (!UseWildcards && !MatchCase && !WholeWord)
-        {
-            // Fast path: delegate entirely to the editor (case-insensitive plain search).
-            return _editor.FindNext(term);
-        }
+        if (FindReplaceDialogPlanner.ShouldUsePlainEditorSearch(request.Options))
+            return _editor.FindNext(request.Term);
 
-        // Option-aware path: scan blocks via TextSearch, then use the editor to select.
-        var blocks = _editor.Document.Blocks;
-        for (var bi = 0; bi < blocks.Count; bi++)
-        {
-            if (blocks[bi] is not Paragraph p)
-                continue;
-            var text = p.PlainText;
-            var hits = TextSearch.FindAll(text, term, MatchCase, WholeWord, UseWildcards);
-            if (hits.Any())
-            {
-                // Navigate the editor to this block via GetBlockTop + ScrollToCaretRequested
-                // equivalent: use FindNext for the actual text selection so the editor moves
-                // the caret (FindNext uses DocumentSearch which is case-insensitive; we already
-                // confirmed the match exists above, so this reliably selects it).
-                return _editor.FindNext(term);
-            }
-        }
-
-        return false;
+        return FindReplaceDialogPlanner.DocumentContains(_editor.Document, request) &&
+               _editor.FindNext(request.Term);
     }
 
     private void Replace()
     {
-        var term = _findBox.Text ?? string.Empty;
-        var replacement = _replaceBox.Text ?? string.Empty;
-        if (term.Length == 0)
+        if (!FindReplaceDialogPlanner.TryCreateReplaceRequest(
+                _findBox.Text,
+                _replaceBox.Text,
+                CurrentOptions(),
+                out var request,
+                out var error))
+        {
+            _status.Text = FindReplaceDialogPlanner.ValidationMessageFor(error);
             return;
+        }
 
-        if (!_editor.ReplaceNext(term, replacement))
-            _status.Text = $"\"{term}\" not found.";
-        else
-            _status.Text = string.Empty;
+        var replaced = _editor.ReplaceNext(request!.Term, request.Replacement);
+        _status.Text = FindReplaceDialogPlanner.BuildReplaceStatus(request, replaced);
     }
 
     private void ReplaceAll()
     {
-        var term = _findBox.Text ?? string.Empty;
-        var replacement = _replaceBox.Text ?? string.Empty;
-        if (term.Length == 0)
+        if (!FindReplaceDialogPlanner.TryCreateReplaceRequest(
+                _findBox.Text,
+                _replaceBox.Text,
+                CurrentOptions(),
+                out var request,
+                out var error))
+        {
+            _status.Text = FindReplaceDialogPlanner.ValidationMessageFor(error);
             return;
+        }
 
-        var count = _editor.ReplaceAll(term, replacement);
-        _status.Text = count == 0
-            ? $"\"{term}\" not found."
-            : $"Replaced {count} occurrence{(count == 1 ? "" : "s")}.";
+        var count = _editor.ReplaceAll(request!.Term, request.Replacement);
+        _status.Text = FindReplaceDialogPlanner.BuildReplaceAllStatus(request, count);
+    }
+
+    private FindReplaceSearchOptions CurrentOptions() =>
+        FindReplaceDialogPlanner.NormalizeOptions(new FindReplaceSearchOptions(
+            _matchCase.IsChecked == true,
+            _wholeWord.IsChecked == true,
+            _useWildcards.IsChecked == true));
+
+    private void ApplyOptionPolicy()
+    {
+        var options = CurrentOptions();
+        var wholeWordEnabled = FindReplaceDialogPlanner.IsOptionEnabled(
+            FindReplaceOptionKind.WholeWord,
+            options);
+        _wholeWord.IsEnabled = wholeWordEnabled;
+        if (!wholeWordEnabled)
+            _wholeWord.IsChecked = false;
     }
 
     // ── Scroll helper (mirrors NavigationPane.ScrollEditorToBlock) ────────────
@@ -392,37 +389,10 @@ public sealed class FindReplaceDialog : Window
         var btn = new Button
         {
             Content = content,
-            MinWidth = 84,
-            Margin = new Thickness(6, 0, 0, 0),
-            Padding = new Thickness(6, 3, 6, 3),
         };
+        AvaloniaCompactDialogChrome.ApplyButton(btn, DialogChromeStyle, minWidth: 84);
         btn.Click += onClick;
         return btn;
     }
 
-    // ── Test-support ──────────────────────────────────────────────────────────
-
-    /// <summary>
-    /// Counts all matches of <paramref name="term"/> in <paramref name="doc"/> using the given
-    /// options. Exposed for headless tests so the matching logic can be verified without showing
-    /// the dialog or needing an Avalonia backend.
-    /// </summary>
-    internal static int CountMatches(
-        TextDocument doc, string term,
-        bool matchCase = false, bool wholeWord = false, bool useWildcards = false)
-    {
-        ArgumentNullException.ThrowIfNull(doc);
-        if (string.IsNullOrEmpty(term))
-            return 0;
-
-        var count = 0;
-        foreach (var block in doc.Blocks)
-        {
-            if (block is not Paragraph p)
-                continue;
-            count += TextSearch.FindAll(p.PlainText, term, matchCase, wholeWord, useWildcards).Count();
-        }
-
-        return count;
-    }
 }

@@ -385,9 +385,7 @@ public sealed class AvaloniaChartSeriesAxisTests
         noLineFormat.NoLine.Should().BeTrue("NoLine=true must suppress bar outline");
 
         // Verify CE3 gating logic: NoLine takes precedence over StrokeThickness.
-        var hasExplicitStroke = noLineFormat.StrokeColor is not null
-                              || noLineFormat.StrokeThemeColor is not null
-                              || noLineFormat.StrokeThickness is not null;
+        var hasExplicitStroke = ChartStylePlanner.HasExplicitStroke(noLineFormat);
         // Even if hasExplicitStroke were true, NoLine wins. But for a clean NoLine format, all are null.
         hasExplicitStroke.Should().BeFalse("clean NoLine format has no explicit stroke properties");
     }
@@ -405,9 +403,7 @@ public sealed class AvaloniaChartSeriesAxisTests
         formatNoStroke.StrokeThickness.Should().BeNull("no explicit stroke thickness");
 
         // These three nulls form the CE3 condition: format != null AND all stroke props absent → no outline.
-        var hasAnyStrokeProp = formatNoStroke.StrokeColor is not null
-                            || formatNoStroke.StrokeThemeColor is not null
-                            || formatNoStroke.StrokeThickness is not null;
+        var hasAnyStrokeProp = ChartStylePlanner.HasExplicitStroke(formatNoStroke);
         hasAnyStrokeProp.Should().BeFalse("CE3: format with no stroke properties must not produce an outline");
     }
 
@@ -417,9 +413,7 @@ public sealed class AvaloniaChartSeriesAxisTests
         // A format with an explicit stroke color should draw an outline with the specified color.
         var formatWithStroke = new ChartSeriesFormat(SeriesIndex: 0, StrokeColor: new CellColor(0x20, 0x20, 0x20));
 
-        var hasAnyStrokeProp = formatWithStroke.StrokeColor is not null
-                            || formatWithStroke.StrokeThemeColor is not null
-                            || formatWithStroke.StrokeThickness is not null;
+        var hasAnyStrokeProp = ChartStylePlanner.HasExplicitStroke(formatWithStroke);
         hasAnyStrokeProp.Should().BeTrue("CE3: format with explicit stroke color must produce an outline");
         formatWithStroke.StrokeColor.Should().Be(new CellColor(0x20, 0x20, 0x20));
     }

@@ -1,3 +1,4 @@
+using Free.Shared.Drawing;
 using FreeX.Core.Model;
 using System.Globalization;
 using System.Xml.Linq;
@@ -9,19 +10,10 @@ public static class XlsxColorReader
     public static bool TryParseHexColor(string? text, out CellColor color)
     {
         color = default;
-        if (string.IsNullOrWhiteSpace(text))
+        if (!DrawingMlRgbColor.TryParseHexRgb(text, out var rgb))
             return false;
 
-        var normalized = text.Trim().TrimStart('#');
-        if (normalized.Length != 6 ||
-            !byte.TryParse(normalized[..2], NumberStyles.HexNumber, null, out var r) ||
-            !byte.TryParse(normalized[2..4], NumberStyles.HexNumber, null, out var g) ||
-            !byte.TryParse(normalized[4..6], NumberStyles.HexNumber, null, out var b))
-        {
-            return false;
-        }
-
-        color = new CellColor(r, g, b);
+        color = new CellColor(rgb.R, rgb.G, rgb.B);
         return true;
     }
 
@@ -203,7 +195,7 @@ public static class XlsxColorReader
             return false;
         }
 
-        color = ApplyTint(indexedColor, ReadTint(element));
+        color = WorkbookThemeTint.Apply(indexedColor, ReadTint(element));
         return true;
     }
 
@@ -214,25 +206,6 @@ public static class XlsxColorReader
             double.TryParse(tintText, NumberStyles.Float, CultureInfo.InvariantCulture, out var tint)
             ? tint
             : 0d;
-    }
-
-    private static CellColor ApplyTint(CellColor color, double tint)
-    {
-        if (Math.Abs(tint) < 0.000001)
-            return color;
-
-        return new CellColor(
-            ApplyTint(color.R, tint),
-            ApplyTint(color.G, tint),
-            ApplyTint(color.B, tint));
-    }
-
-    private static byte ApplyTint(byte channel, double tint)
-    {
-        var value = tint < 0
-            ? channel * (1.0 + tint)
-            : channel + ((255 - channel) * tint);
-        return (byte)Math.Clamp(Math.Round(value), 0, 255);
     }
 
     private static bool TryMapThemeColorSlot(int themeIndex, out WorkbookThemeColorSlot slot)

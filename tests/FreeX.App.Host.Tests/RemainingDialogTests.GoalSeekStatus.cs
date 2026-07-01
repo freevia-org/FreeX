@@ -29,8 +29,8 @@ public sealed partial class RemainingDialogTests
 
         source.Should().Contain("Content = UiText.Get(\"GoalSeekStatus_KeepResult\")");
         source.Should().Contain("Content = UiText.Get(\"GoalSeekStatus_RestoreOriginalValues\")");
-        source.Should().Contain("Content = UiText.Ok");
-        source.Should().Contain("IsCancel = true");
+        source.Should().Contain("DialogButtonRowFactory.Create(keepButton, restoreButton)");
+        source.Should().Contain("DialogButtonRowFactory.CreateOkOnly(() => DialogResult = false, 76);");
     }
 
     [Fact]

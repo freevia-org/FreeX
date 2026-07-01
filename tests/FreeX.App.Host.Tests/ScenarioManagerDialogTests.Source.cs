@@ -62,12 +62,10 @@ public sealed partial class ScenarioManagerDialogTests
         source.Should().Contain("UiText.Get(\"ScenarioManager_AddEditScenario\")");
         source.Should().Contain("ProjectSelectionFields(selected, _newNameBox.Text, _defaultScenarioName)");
         source.Should().Contain("ApplySelectionFields(fields)");
-        source.Should().Contain("selected.Name");
-        source.Should().Contain("selected.ChangingCellsText");
-        source.Should().Contain("ResultCellsText: \"\"");
-        source.Should().Contain("selected.Comment ?? \"\"");
-        source.Should().Contain("selected.Locked");
-        source.Should().Contain("selected.Hidden");
+        source.Should().Contain("SharedScenarioManagerDialogPlanner.ProjectSelectionFields(");
+        source.Should().Contain("ScenarioManagerDialogSelectionFields");
+        source.Should().NotContain("ScenarioManagerSelectionFields");
+        source.Should().NotContain("ToHostSelectionFields");
     }
 
     [Fact]
@@ -93,16 +91,14 @@ public sealed partial class ScenarioManagerDialogTests
         source.Should().Contain("ScenarioLocked = result.Locked");
         source.Should().Contain("ScenarioHidden = result.Hidden");
         source.Should().Contain("ValidateAcceptRequest(");
-        source.Should().Contain("!TryValidateScenarioName(scenarioName, out var error)");
-        source.Should().Contain("new ScenarioManagerValidationFailure(error ?? UiText.Get(\"ScenarioManager_EnterScenarioDetails\"), ScenarioManagerValidationField.ScenarioName)");
-        source.Should().Contain("!TryValidateChangingCells(changingCellsText, currentSheetId, resolveSheetIdByName, out error)");
-        source.Should().Contain("new ScenarioManagerValidationFailure(error ?? UiText.Get(\"ScenarioManager_EnterScenarioDetails\"), ScenarioManagerValidationField.ChangingCells)");
-        source.Should().Contain("WorkbookRangeTextCodec.TryParseMany(currentSheetId.Value, resultCellsText, resolveSheetIdByName, out _)");
-        source.Should().Contain("!TryValidateResultCells(resultCellsText, currentSheetId, resolveSheetIdByName, out error)");
-        source.Should().Contain("new ScenarioManagerValidationFailure(error ?? UiText.Get(\"ScenarioManager_EnterScenarioResultCells\"), ScenarioManagerValidationField.ResultCells)");
+        source.Should().Contain("SharedScenarioManagerDialogPlanner.ValidateAcceptRequest(");
+        source.Should().Contain("LocalizeValidationError(failure.Error)");
+        source.Should().Contain("ScenarioManagerDialogValidationField");
+        source.Should().NotContain("ScenarioManagerValidationField");
+        source.Should().NotContain("ToHostValidationField");
+        source.Should().NotContain("WorkbookRangeTextCodec.TryParseMany");
         source.Should().Contain("GetValidationTarget(failure.Field)");
-        source.Should().Contain("DialogMessageHelper.ShowWarning(this, message, Title);");
-        source.Should().Contain("target.SelectAll();");
+        source.Should().Contain("DialogFocus.ShowWarningAndFocus(this, message, Title, target);");
         handlerSource.Should().Contain("new ScenarioManagerDialog(");
         handlerSource.Should().Contain("request => ApplyScenarioManagerRangeSelection(dialog, request)");
         handlerSource.Should().Contain("private void ApplyScenarioManagerRangeSelection(");

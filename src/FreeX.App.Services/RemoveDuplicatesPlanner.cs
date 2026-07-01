@@ -33,6 +33,14 @@ public sealed record RemoveDuplicatesPlan(
 
     public RemoveDuplicateRowsCommand CreateCommand(SheetId sheetId, GridRange activeRange) =>
         new(sheetId, activeRange, SelectedColumnOffsets);
+
+    public RemoveDuplicateRowsCommand CreateCommand(SheetId sheetId) =>
+        CreateCommand(sheetId, ActiveRangeForSheet(sheetId));
+
+    public GridRange ActiveRangeForSheet(SheetId sheetId) =>
+        new(
+            new CellAddress(sheetId, ActiveRange.Start.Row, ActiveRange.Start.Col),
+            new CellAddress(sheetId, ActiveRange.End.Row, ActiveRange.End.Col));
 }
 
 public sealed record RemoveDuplicatesPlanResult(
@@ -75,6 +83,22 @@ public static class RemoveDuplicatesPlanner
             selectedColumns));
     }
 
+    public static RemoveDuplicatesPlanResult CreatePlan(
+        GridRange range,
+        bool hasHeaders,
+        IEnumerable<uint> selectedColumnOffsets)
+    {
+        ArgumentNullException.ThrowIfNull(selectedColumnOffsets);
+
+        return CreatePlan(
+            range,
+            hasHeaders,
+            selectedColumnOffsets.Select(static offset => new RemoveDuplicateColumnChoice(
+                offset,
+                string.Empty,
+                true)));
+    }
+
     public static IReadOnlyList<RemoveDuplicateColumnChoice> SelectAll(int columnCount) =>
         BuildColumnChoices(columnCount, isSelected: true);
 
@@ -83,6 +107,16 @@ public static class RemoveDuplicatesPlanner
 
     public static IReadOnlyList<RemoveDuplicateColumnChoice> ClearAll(IEnumerable<RemoveDuplicateColumnChoice> columns) =>
         columns.Select(static column => column with { IsSelected = false }).ToArray();
+
+    public static IReadOnlyList<uint> GetSelectedColumnOffsets(IEnumerable<RemoveDuplicateColumnChoice> columns)
+    {
+        ArgumentNullException.ThrowIfNull(columns);
+
+        return columns
+            .Where(static column => column.IsSelected)
+            .Select(static column => column.Offset)
+            .ToArray();
+    }
 
     public static IReadOnlyList<RemoveDuplicateColumnChoice> BuildColumnChoices(
         int columnCount,

@@ -64,7 +64,7 @@ public static class DrawingObjectCommandPlanner
         bool? flipHorizontal = null,
         bool? flipVertical = null) =>
         new CompositeWorkbookCommand(
-            "Resize Object",
+            DrawingObjectActionPlanner.ResizeObjectCommandTitle,
             [
                 BuildMoveCommand(sheetId, kind, objectId, anchor),
                 BuildResizeCommand(sheetId, kind, objectId, width, height, flipHorizontal, flipVertical)
@@ -116,6 +116,73 @@ public static class DrawingObjectCommandPlanner
         Guid objectId,
         string? altText) =>
         BuildAltTextCommand(sheetId, RequireDrawingObjectTargetKind(kind), objectId, altText);
+
+    public static IWorkbookCommand BuildFillColorCommand(
+        SheetId sheetId,
+        DrawingObjectTargetKind kind,
+        Guid objectId,
+        CellColor? fillColor)
+    {
+        var hasFill = fillColor is not null;
+        return kind switch
+        {
+            DrawingObjectTargetKind.Shape => new SetDrawingShapeColorsCommand(
+                sheetId,
+                objectId,
+                fillColor,
+                null,
+                updateFill: true,
+                updateOutline: false,
+                hasFill: hasFill),
+            DrawingObjectTargetKind.TextBox => new SetTextBoxColorsCommand(
+                sheetId,
+                objectId,
+                fillColor,
+                null,
+                updateFill: true,
+                updateOutline: false,
+                hasFill: hasFill),
+            _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Drawing object fill is not supported.")
+        };
+    }
+
+    public static IWorkbookCommand BuildFillColorCommand(
+        SheetId sheetId,
+        SelectionPaneObjectKind kind,
+        Guid objectId,
+        CellColor? fillColor) =>
+        BuildFillColorCommand(sheetId, RequireDrawingObjectTargetKind(kind), objectId, fillColor);
+
+    public static IWorkbookCommand BuildOutlineColorCommand(
+        SheetId sheetId,
+        DrawingObjectTargetKind kind,
+        Guid objectId,
+        CellColor? outlineColor) =>
+        kind switch
+        {
+            DrawingObjectTargetKind.Shape => new SetDrawingShapeColorsCommand(
+                sheetId,
+                objectId,
+                null,
+                outlineColor,
+                updateFill: false,
+                updateOutline: true),
+            DrawingObjectTargetKind.TextBox => new SetTextBoxColorsCommand(
+                sheetId,
+                objectId,
+                null,
+                outlineColor,
+                updateFill: false,
+                updateOutline: true),
+            _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Drawing object outline is not supported.")
+        };
+
+    public static IWorkbookCommand BuildOutlineColorCommand(
+        SheetId sheetId,
+        SelectionPaneObjectKind kind,
+        Guid objectId,
+        CellColor? outlineColor) =>
+        BuildOutlineColorCommand(sheetId, RequireDrawingObjectTargetKind(kind), objectId, outlineColor);
 
     public static SelectionPaneObjectKind ToSelectionPaneObjectKind(DrawingObjectTargetKind kind) =>
         DrawingObjectKindMapper.ToSelectionPaneObjectKind(kind);

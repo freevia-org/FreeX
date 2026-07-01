@@ -1,5 +1,6 @@
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
+using System.Globalization;
 
 namespace FreeX.App.Presentation.Charts.Editing;
 
@@ -17,6 +18,41 @@ public readonly record struct ChartStockFormatInput(
     CellColor? HighLowLineColor,
     double HighLowLineThickness);
 
+public enum ChartStockFormatParseIssue
+{
+    None,
+    UpDownBarGapWidth,
+    HighLowLineThickness
+}
+
+public enum ChartStockFormatDialogControlKind
+{
+    Number,
+    Color,
+}
+
+public enum ChartStockFormatDialogFieldId
+{
+    GapWidth,
+    UpBarFill,
+    UpBarBorder,
+    DownBarFill,
+    DownBarBorder,
+    HighLowLineColor,
+    HighLowLineThickness,
+}
+
+public sealed record ChartStockFormatDialogFieldDescriptor(
+    ChartStockFormatDialogFieldId Id,
+    ChartStockFormatDialogControlKind ControlKind,
+    string LabelResourceKey,
+    string AutomationId,
+    string? HelpResourceKey = null);
+
+public sealed record ChartStockFormatDialogSectionDescriptor(
+    string HeaderResourceKey,
+    IReadOnlyList<ChartStockFormatDialogFieldDescriptor> Fields);
+
 /// <summary>
 /// Portable (no UI) planner for the "Format Stock Chart" editing dialog: the up/down-bar gap width, the
 /// up-bar and down-bar fill/border colors, and the high-low connector line color/thickness. Single-sources
@@ -28,11 +64,55 @@ public readonly record struct ChartStockFormatInput(
 /// </summary>
 public static class ChartStockFormatPlanner
 {
+    public const string TitleResourceKey = "ChartStockFormat_Title";
+    public const string DialogAutomationId = "ChartStockFormatDialog";
+    public const string BarsGroupResourceKey = "ChartFmt_StockBarsLabel";
+    public const string HighLowGroupResourceKey = "ChartFmt_StockHighLowLabel";
+
     public const int MinGapWidth = 0;
     public const int MaxGapWidth = 500;
 
     public const double MinLineThickness = 0.5;
     public const double MaxLineThickness = 10.0;
+
+    private static readonly ChartStockFormatDialogFieldDescriptor[] OptionFields =
+    [
+        new(ChartStockFormatDialogFieldId.GapWidth, ChartStockFormatDialogControlKind.Number, "ChartStockFormat_GapWidthLabel", "ChartStockFormatGapWidthBox", "ChartStockFormat_GapWidthHelpText"),
+        new(ChartStockFormatDialogFieldId.UpBarFill, ChartStockFormatDialogControlKind.Color, "ChartStockFormat_UpBarFillLabel", "ChartStockFormatUpFillButton"),
+        new(ChartStockFormatDialogFieldId.UpBarBorder, ChartStockFormatDialogControlKind.Color, "ChartStockFormat_UpBarBorderLabel", "ChartStockFormatUpBorderButton"),
+        new(ChartStockFormatDialogFieldId.DownBarFill, ChartStockFormatDialogControlKind.Color, "ChartStockFormat_DownBarFillLabel", "ChartStockFormatDownFillButton"),
+        new(ChartStockFormatDialogFieldId.DownBarBorder, ChartStockFormatDialogControlKind.Color, "ChartStockFormat_DownBarBorderLabel", "ChartStockFormatDownBorderButton"),
+        new(ChartStockFormatDialogFieldId.HighLowLineColor, ChartStockFormatDialogControlKind.Color, "ChartStockFormat_HighLowLineColorLabel", "ChartStockFormatHighLowButton"),
+        new(ChartStockFormatDialogFieldId.HighLowLineThickness, ChartStockFormatDialogControlKind.Number, "ChartStockFormat_LineThicknessLabel", "ChartStockFormatThicknessBox", "ChartStockFormat_LineThicknessHelpText"),
+    ];
+
+    private static readonly ChartStockFormatDialogSectionDescriptor[] DialogSections =
+    [
+        new("ChartStockFormat_OptionsGroup", OptionFields),
+    ];
+
+    public static IReadOnlyList<ChartStockFormatDialogSectionDescriptor> GetDialogSections() => DialogSections;
+
+    public static ChartStockFormatDialogSectionDescriptor GetOptionsSection() => DialogSections[0];
+
+    public static ChartStockFormatDialogFieldDescriptor GetDialogField(ChartStockFormatDialogFieldId id)
+    {
+        foreach (var section in DialogSections)
+        {
+            foreach (var field in section.Fields)
+            {
+                if (field.Id == id)
+                    return field;
+            }
+        }
+
+        throw new ArgumentOutOfRangeException(nameof(id), id, null);
+    }
+
+    public static string InvalidInputMessageResourceKey(ChartStockFormatParseIssue issue) =>
+        issue == ChartStockFormatParseIssue.HighLowLineThickness
+            ? "ChartStockFormat_InvalidLineThicknessMessage"
+            : "ChartStockFormat_InvalidGapWidthMessage";
 
     /// <summary>True when the chart is a stock chart that has up/down bars and high-low lines.</summary>
     public static bool Supports(ChartModel chart)
@@ -45,14 +125,14 @@ public static class ChartStockFormatPlanner
     public static ChartStockFormatInput Read(ChartModel chart)
     {
         ArgumentNullException.ThrowIfNull(chart);
-        return new ChartStockFormatInput(
+        return Normalize(new ChartStockFormatInput(
             chart.UpDownBarGapWidth ?? 150,
             chart.UpBarFillColor,
             chart.UpBarBorderColor,
             chart.DownBarFillColor,
             chart.DownBarBorderColor,
             chart.HighLowLineColor,
-            chart.HighLowLineThickness);
+            chart.HighLowLineThickness));
     }
 
     /// <summary>Validates the edited input. Returns null when valid, else an English reason.</summary>
@@ -71,14 +151,82 @@ public static class ChartStockFormatPlanner
         return null;
     }
 
-    /// <summary>Builds the <see cref="ChartLayoutOptions"/> delta for the edited stock formatting.</summary>
-    public static ChartLayoutOptions Plan(ChartStockFormatInput input) =>
+    public static bool TryParseDialogInput(
+        string upDownBarGapWidthText,
+        CellColor? upBarFillColor,
+        CellColor? upBarBorderColor,
+        CellColor? downBarFillColor,
+        CellColor? downBarBorderColor,
+        CellColor? highLowLineColor,
+        string highLowLineThicknessText,
+        out ChartStockFormatInput input,
+        out ChartStockFormatParseIssue issue)
+    {
+        if (!TryParseClampedInt(upDownBarGapWidthText, MinGapWidth, MaxGapWidth, out var gapWidth))
+        {
+            input = default;
+            issue = ChartStockFormatParseIssue.UpDownBarGapWidth;
+            return false;
+        }
+
+        if (!TryParseClampedDouble(highLowLineThicknessText, MinLineThickness, MaxLineThickness, out var thickness))
+        {
+            input = default;
+            issue = ChartStockFormatParseIssue.HighLowLineThickness;
+            return false;
+        }
+
+        input = new ChartStockFormatInput(
+            gapWidth,
+            upBarFillColor,
+            upBarBorderColor,
+            downBarFillColor,
+            downBarBorderColor,
+            highLowLineColor,
+            thickness);
+        issue = ChartStockFormatParseIssue.None;
+        return true;
+    }
+
+    public static ChartStockFormatInput Normalize(ChartStockFormatInput input) =>
         new(
-            UpDownBarGapWidth: Math.Clamp(input.UpDownBarGapWidth, MinGapWidth, MaxGapWidth),
-            UpBarFillColor: input.UpBarFillColor,
-            UpBarBorderColor: input.UpBarBorderColor,
-            DownBarFillColor: input.DownBarFillColor,
-            DownBarBorderColor: input.DownBarBorderColor,
-            HighLowLineColor: input.HighLowLineColor,
-            HighLowLineThickness: Math.Clamp(input.HighLowLineThickness, MinLineThickness, MaxLineThickness));
+            Math.Clamp(input.UpDownBarGapWidth, MinGapWidth, MaxGapWidth),
+            input.UpBarFillColor,
+            input.UpBarBorderColor,
+            input.DownBarFillColor,
+            input.DownBarBorderColor,
+            input.HighLowLineColor,
+            double.IsFinite(input.HighLowLineThickness)
+                ? Math.Clamp(input.HighLowLineThickness, MinLineThickness, MaxLineThickness)
+                : MinLineThickness);
+
+    /// <summary>Builds the <see cref="ChartLayoutOptions"/> delta for the edited stock formatting.</summary>
+    public static ChartLayoutOptions Plan(ChartStockFormatInput input)
+    {
+        var normalized = Normalize(input);
+        return new(
+            UpDownBarGapWidth: normalized.UpDownBarGapWidth,
+            UpBarFillColor: normalized.UpBarFillColor,
+            UpBarBorderColor: normalized.UpBarBorderColor,
+            DownBarFillColor: normalized.DownBarFillColor,
+            DownBarBorderColor: normalized.DownBarBorderColor,
+            HighLowLineColor: normalized.HighLowLineColor,
+            HighLowLineThickness: normalized.HighLowLineThickness);
+    }
+
+    private static bool TryParseClampedInt(string text, int min, int max, out int value) =>
+        TryParseInt(text, out value) && value >= min && value <= max;
+
+    private static bool TryParseInt(string text, out int value) =>
+        int.TryParse(text.Trim(), NumberStyles.Integer, CultureInfo.CurrentCulture, out value)
+        || int.TryParse(text.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out value);
+
+    private static bool TryParseClampedDouble(string text, double min, double max, out double value) =>
+        NumericInputParser.TryParseFiniteDouble(
+            text.Trim(),
+            CultureInfo.CurrentCulture,
+            CultureInfo.InvariantCulture,
+            out value)
+        && value >= min
+        && value <= max;
 }

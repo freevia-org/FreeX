@@ -35,6 +35,22 @@ public sealed class CustomViewsPlannerTests
     }
 
     [Fact]
+    public void BuildDialogRows_UsesSuppliedIncludedIndicators()
+    {
+        var wb = NewWorkbook();
+        CustomViewsPlanner.BuildSaveCommand("Print Layout", includePrintSettings: true, includeHiddenRowsColumnsAndFilterSettings: false)
+            .Apply(Ctx(wb));
+
+        var rows = CustomViewsPlanner.BuildDialogRows(wb, "Yes", "No");
+
+        rows.Should().ContainSingle().Which.Should().Be(new CustomViewsPlanner.DialogRow(
+            "Print Layout",
+            2,
+            "Yes",
+            "No"));
+    }
+
+    [Fact]
     public void SuggestDefaultName_CountsExistingViews()
     {
         var wb = NewWorkbook();
@@ -42,6 +58,28 @@ public sealed class CustomViewsPlannerTests
 
         CustomViewsPlanner.BuildSaveCommand("View 1").Apply(Ctx(wb));
         CustomViewsPlanner.SuggestDefaultName(wb, "View {0}").Should().Be("View 2");
+    }
+
+    [Fact]
+    public void SuggestDefaultName_FromCountUsesFormat()
+    {
+        CustomViewsPlanner.SuggestDefaultName(2, "Custom View {0}")
+            .Should()
+            .Be("Custom View 3");
+    }
+
+    [Fact]
+    public void CreateNameSubmission_TrimsViewNameAndKeepsIncludeFlags()
+    {
+        CustomViewsPlanner.CreateNameSubmission(
+                "  Quarter Close  ",
+                includePrintSettings: false,
+                includeHiddenRowsColumnsAndFilterSettings: true)
+            .Should()
+            .Be(new CustomViewsPlanner.NameSubmission(
+                "Quarter Close",
+                IncludePrintSettings: false,
+                IncludeHiddenRowsColumnsAndFilterSettings: true));
     }
 
     [Fact]
@@ -101,6 +139,54 @@ public sealed class CustomViewsPlannerTests
 
         CustomViewsPlanner.BuildDeleteCommand("Doomed").Apply(Ctx(wb));
         CustomViewsPlanner.BuildRows(wb).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void CustomViewsDialogPlanning_IsSharedAndHostOnlyAdaptsLocalization()
+    {
+        var presentationRoot = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Presentation");
+        var repoRoot = Directory.GetParent(presentationRoot)?.Parent?.FullName
+            ?? throw new DirectoryNotFoundException("Could not resolve repository root.");
+        var plannerSource = File.ReadAllText(Path.Combine(presentationRoot, "CustomViews", "CustomViewsPlanner.cs"));
+        var hostPlanningSource = File.ReadAllText(Path.Combine(
+            repoRoot,
+            "src",
+            "FreeX.App.Host",
+            "CustomViewsDialog.Planning.cs"));
+        var hostDialogSource = File.ReadAllText(Path.Combine(
+            repoRoot,
+            "src",
+            "FreeX.App.Host",
+            "CustomViewsDialog.xaml.cs"));
+        var hostNameDialogSource = File.ReadAllText(Path.Combine(
+            repoRoot,
+            "src",
+            "FreeX.App.Host",
+            "CustomViewNameDialog.cs"));
+
+        plannerSource.Should().Contain("public readonly record struct DialogRow");
+        plannerSource.Should().Contain("public static IReadOnlyList<DialogRow> BuildDialogRows");
+        plannerSource.Should().Contain("public static string SuggestDefaultName(int customViewCount");
+        plannerSource.Should().Contain("public readonly record struct NameSubmission");
+        plannerSource.Should().Contain("public static NameSubmission CreateNameSubmission(");
+        plannerSource.Should().NotContain("UiText");
+
+        hostPlanningSource.Should().Contain("CustomViewsPlanner.BuildDialogRows(");
+        hostPlanningSource.Should().Contain("UiText.Get(\"CustomViews_Included\")");
+        hostPlanningSource.Should().Contain("UiText.Get(\"CustomViews_NotIncluded\")");
+        hostPlanningSource.Should().Contain("CustomViewsPlanner.SuggestDefaultName(");
+        hostPlanningSource.Should().NotContain("GetIncludedIndicator");
+        hostPlanningSource.Should().NotContain("view.IncludePrintSettings");
+
+        hostDialogSource.Should().Contain("CustomViewsPlanner.BuildApplyCommand(vm.Name)");
+        hostDialogSource.Should().Contain("CustomViewsPlanner.BuildSaveCommand(");
+        hostDialogSource.Should().Contain("CustomViewsPlanner.BuildDeleteCommand(vm.Name)");
+        hostDialogSource.Should().NotContain("new SaveCustomViewCommand(");
+        hostDialogSource.Should().NotContain("new ApplyCustomViewCommand(");
+        hostDialogSource.Should().NotContain("new DeleteCustomViewCommand(");
+
+        hostNameDialogSource.Should().Contain("CustomViewsPlanner.CreateNameSubmission(");
+        hostNameDialogSource.Should().NotContain("viewName.Trim()");
     }
 
     private static ICommandContext Ctx(Workbook workbook) => new TestCommandContext(workbook);

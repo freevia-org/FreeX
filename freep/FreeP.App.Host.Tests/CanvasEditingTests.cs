@@ -1,12 +1,12 @@
+using System.IO;
 using System.Windows;
 using FreeP.App.Compositor;
 using FreeP.App.Host;
 using FreeP.App.Rendering.Wpf;
 using Free.Shared.Drawing;
-// Disambiguate: this test file exercises the WPF-project ShapeHitTester.
-// The shared one lives in FreeP.App.Compositor (added by Theme 15).
+// Disambiguate: this test file exercises the WPF ShapeHitTester compatibility facade.
+// The implementation lives in FreeP.App.Compositor.
 using ShapeHitTester = FreeP.App.Rendering.Wpf.ShapeHitTester;
-using ShapeBoundsDip = FreeP.App.Rendering.Wpf.ShapeBoundsDip;
 
 namespace FreeP.App.Host.Tests;
 
@@ -65,6 +65,26 @@ public sealed class CanvasEditingTests
         long emuBack = SlideTransform.DipToEmu(dip);
         dip.Should().BeApproximately(96.0, 1e-9);   // 96 DIP = 1 inch
         emuBack.Should().Be(emu);
+    }
+
+    [Fact]
+    public void SlideTransform_WpfFacadeDelegatesToCompositorCore()
+    {
+        var transform = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "SlideTransform.cs");
+        var canvas = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "SlideCanvas.cs");
+        var gestures = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "CanvasGestureHandler.cs");
+
+        transform.Should().Contain("internal SlideTransformCore Core");
+        transform.Should().Contain("Core.SlideToScreen");
+        transform.Should().Contain("Core.ScreenToSlide");
+        transform.Should().Contain("SlideTransformCore.DipToEmu");
+        transform.Should().Contain("SlideTransformCore.Compute");
+        transform.Should().NotContain("private const double EmuPerDip");
+        transform.Should().NotContain("Math.Min(renderW / slideWidthDip");
+
+        canvas.Should().Contain("SlideTransform.Compute(renderW, renderH");
+        gestures.Should().Contain("=> xf.Core;");
+        gestures.Should().NotContain("new(xf.Scale, xf.OffsetX");
     }
 
     // ── ShapeHitTester ────────────────────────────────────────────────────────────
@@ -172,6 +192,41 @@ public sealed class CanvasEditingTests
         b.Height.Should().BeApproximately(192.0, 1e-6);
     }
 
+    [Fact]
+    public void ShapeHitTester_WpfFacadeDelegatesToCompositorImplementation()
+    {
+        var source = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "ShapeHitTester.cs");
+
+        source.Should().Contain("FreeP.App.Compositor.ShapeHitTester.HitTest");
+        source.Should().Contain("FreeP.App.Compositor.ShapeHitTester.MarqueeHitTest");
+        source.Should().Contain("FreeP.App.Compositor.ShapeHitTester.GetShapeBoundsDip");
+        source.Should().NotContain("PlaceholderResolver.ResolveAnchor");
+        source.Should().NotContain("SlideTransformCore.UnRotatePoint");
+        source.Should().NotContain("private const double EmuPerDip");
+        source.Should().NotContain("private static bool HitTestShape");
+    }
+
+    private static string ReadWorkspaceFile(params string[] relativeParts)
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            var parts = new string[relativeParts.Length + 1];
+            parts[0] = directory.FullName;
+            relativeParts.CopyTo(parts, 1);
+
+            var candidate = Path.Combine(parts);
+            if (File.Exists(candidate))
+                return File.ReadAllText(candidate);
+
+            directory = directory.Parent;
+        }
+
+        throw new FileNotFoundException(
+            "Could not locate workspace file.",
+            Path.Combine(relativeParts));
+    }
+
     // ── SelectionAdorner handle positions ────────────────────────────────────────
 
     [StaFact]
@@ -207,7 +262,7 @@ public sealed class CanvasEditingTests
         var adorner = new SelectionAdorner(new System.Windows.Controls.Canvas());
         var rect    = new Rect(100, 100, 200, 100);
         var handle  = adorner.HitTestHandle(rect, new Point(200, 150)); // inside
-        handle.Should().Be(SelectionAdorner.HandleKind.Body);
+        handle.Should().Be(CanvasGestureHandleKind.Body);
     }
 
     [StaFact]
@@ -216,7 +271,7 @@ public sealed class CanvasEditingTests
         var adorner = new SelectionAdorner(new System.Windows.Controls.Canvas());
         var rect    = new Rect(100, 100, 200, 100);
         var handle  = adorner.HitTestHandle(rect, new Point(5, 5)); // outside
-        handle.Should().Be(SelectionAdorner.HandleKind.None);
+        handle.Should().Be(CanvasGestureHandleKind.None);
     }
 
     // ── CanvasGestureHandler.ComputeResizeBounds (pure logic) ────────────────────
@@ -258,7 +313,7 @@ public sealed class CanvasEditingTests
             OrigY         = 0L,
             OrigCx        = 914400L,
             OrigCy        = 914400L,
-            Handle        = SelectionAdorner.HandleKind.ResizeSE
+            Handle        = CanvasGestureHandleKind.ResizeSE
         };
 
         var (nx, ny, ncx, ncy) = handler.Compute(new Point(150, 160), xf);
@@ -280,7 +335,7 @@ public sealed class CanvasEditingTests
             OrigY         = 476250L,
             OrigCx        = 952500L,  // 100 DIP
             OrigCy        = 952500L,
-            Handle        = SelectionAdorner.HandleKind.ResizeNW
+            Handle        = CanvasGestureHandleKind.ResizeNW
         };
 
         // Drag NW +10px screen → should shrink (10 DIP = 95250 EMU)
@@ -446,7 +501,7 @@ public sealed class CanvasEditingTests
     [StaFact]
     public void MainWindow_HasSlideCanvas_AndEditorAfterConstruction()
     {
-        var window = new MainWindow();
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
         try
         {
             window.SlideCanvas.Should().NotBeNull();
@@ -470,7 +525,7 @@ internal struct ResizeBoundsTestHelper
 {
     public Point StartScreen;
     public long OrigX, OrigY, OrigCx, OrigCy;
-    public SelectionAdorner.HandleKind Handle;
+    public CanvasGestureHandleKind Handle;
 
     public (long nx, long ny, long ncx, long ncy) Compute(Point endScreen, SlideTransform xf)
     {
@@ -487,36 +542,36 @@ internal struct ResizeBoundsTestHelper
 
         switch (Handle)
         {
-            case SelectionAdorner.HandleKind.ResizeN:
+            case CanvasGestureHandleKind.ResizeN:
                 y  = OrigY  + dy;
                 cy = Math.Max(MinEmu, OrigCy - dy);
                 break;
-            case SelectionAdorner.HandleKind.ResizeS:
+            case CanvasGestureHandleKind.ResizeS:
                 cy = Math.Max(MinEmu, OrigCy + dy);
                 break;
-            case SelectionAdorner.HandleKind.ResizeW:
+            case CanvasGestureHandleKind.ResizeW:
                 x  = OrigX  + dx;
                 cx = Math.Max(MinEmu, OrigCx - dx);
                 break;
-            case SelectionAdorner.HandleKind.ResizeE:
+            case CanvasGestureHandleKind.ResizeE:
                 cx = Math.Max(MinEmu, OrigCx + dx);
                 break;
-            case SelectionAdorner.HandleKind.ResizeNE:
+            case CanvasGestureHandleKind.ResizeNE:
                 y  = OrigY  + dy;
                 cy = Math.Max(MinEmu, OrigCy - dy);
                 cx = Math.Max(MinEmu, OrigCx + dx);
                 break;
-            case SelectionAdorner.HandleKind.ResizeNW:
+            case CanvasGestureHandleKind.ResizeNW:
                 x  = OrigX  + dx;
                 y  = OrigY  + dy;
                 cx = Math.Max(MinEmu, OrigCx - dx);
                 cy = Math.Max(MinEmu, OrigCy - dy);
                 break;
-            case SelectionAdorner.HandleKind.ResizeSE:
+            case CanvasGestureHandleKind.ResizeSE:
                 cx = Math.Max(MinEmu, OrigCx + dx);
                 cy = Math.Max(MinEmu, OrigCy + dy);
                 break;
-            case SelectionAdorner.HandleKind.ResizeSW:
+            case CanvasGestureHandleKind.ResizeSW:
                 x  = OrigX  + dx;
                 cx = Math.Max(MinEmu, OrigCx - dx);
                 cy = Math.Max(MinEmu, OrigCy + dy);

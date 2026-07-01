@@ -90,11 +90,7 @@ public sealed class InsertSlicerDialog : Window
 
     private void ShowInvalidInputWarning(string message, Control target)
     {
-        DialogMessageHelper.ShowWarning(this, message, Title);
-        target.Focus();
-        if (target is TextBox textBox)
-            textBox.SelectAll();
-        Keyboard.Focus(target);
+        DialogFocus.ShowWarningAndFocus(this, message, Title, target);
     }
 }
 
@@ -180,11 +176,7 @@ public sealed class InsertTimelineDialog : Window
 
     private void ShowInvalidInputWarning(string message, Control target)
     {
-        DialogMessageHelper.ShowWarning(this, message, Title);
-        target.Focus();
-        if (target is TextBox textBox)
-            textBox.SelectAll();
-        Keyboard.Focus(target);
+        DialogFocus.ShowWarningAndFocus(this, message, Title, target);
     }
 }
 

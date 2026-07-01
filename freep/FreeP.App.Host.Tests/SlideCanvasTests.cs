@@ -119,7 +119,7 @@ public sealed class SlideCanvasTests
     [StaFact]
     public void MainWindow_WithSlideCanvas_ConstructsSuccessfully()
     {
-        var window = new MainWindow();
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
         try
         {
             window.Should().NotBeNull();

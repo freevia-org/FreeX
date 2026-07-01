@@ -4,51 +4,30 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
-using FreeX.App.Services;
+using Free.Shared.Shell.Avalonia;
+using FreeX.App.Presentation.Dialogs;
 
 namespace FreeX.App.Avalonia;
 
 public sealed partial class MainWindow
 {
-    private static readonly string[] SymbolPickerFontChoices =
-    [
-        "Segoe UI Symbol",
-        "Segoe UI Emoji",
-        "Segoe UI",
-        "Calibri",
-        "Arial",
-        "Times New Roman",
-        "Cambria Math",
-    ];
+    private static AvaloniaCompactDialogChromeStyle SymbolDialogChromeStyle => new(FormulaBarFontFamily);
 
-    private static readonly string[] SymbolPickerRecentSymbols =
-    [
-        "\u20ac", "\u00a3", "\u00a5", "\u00a9", "\u00ae", "\u2122",
-        "\u00b0", "\u00b1", "\u2192", "\u03c0", "\u221e", "\u2713",
-    ];
+    private static void ApplySymbolButtonChrome(Button button, double minWidth, bool isDefault = false)
+        => AvaloniaCompactDialogChrome.ApplyButton(button, SymbolDialogChromeStyle, minWidth, isDefault);
 
-    private static readonly IReadOnlyDictionary<string, string> SymbolPickerNames = new Dictionary<string, string>(StringComparer.Ordinal)
-    {
-        ["\u00a1"] = "Inverted Exclamation Mark",
-        ["\u00a2"] = "Cent Sign",
-        ["\u00a3"] = "Pound Sign",
-        ["\u00a4"] = "Currency Sign",
-        ["\u00a5"] = "Yen Sign",
-        ["\u00a7"] = "Section Sign",
-        ["\u00a9"] = "Copyright Sign",
-        ["\u00ae"] = "Registered Sign",
-        ["\u00b0"] = "Degree Sign",
-        ["\u00b1"] = "Plus-Minus Sign",
-        ["\u00b5"] = "Micro Sign",
-        ["\u00b6"] = "Pilcrow Sign",
-        ["\u00d7"] = "Multiplication Sign",
-        ["\u00f7"] = "Division Sign",
-    };
+    private static void ApplySymbolTextBoxChrome(TextBox textBox)
+        => AvaloniaCompactDialogChrome.ApplyTextBox(textBox, SymbolDialogChromeStyle);
+
+    private static void ApplySymbolComboBoxChrome(ComboBox comboBox)
+        => AvaloniaCompactDialogChrome.ApplyComboBox(
+            comboBox,
+            SymbolDialogChromeStyle with { ComboBoxPadding = new Thickness(6, 1) });
 
     private async Task ShowSymbolPickerAsync()
     {
-        var symbols = CreateLatinSupplementSymbols();
-        var selectedSymbol = symbols[0];
+        var selectedSymbol = SymbolPickerCatalogPlanner.CreateDefaultSelection().Symbol;
+        var recentSymbols = SymbolPickerCatalogPlanner.DefaultRecentSymbols.ToList();
         var selectedName = new TextBlock
         {
             FontWeight = FontWeight.SemiBold,
@@ -61,16 +40,8 @@ public sealed partial class MainWindow
         var selectedCode = new TextBox
         {
             Width = 120,
-            Height = 24,
-            MinHeight = 24,
-            MaxHeight = 24,
-            Padding = new Thickness(4, 1),
-            FontSize = 12,
-            FontFamily = FormulaBarFontFamily,
-            BorderBrush = Brush(130, 130, 130),
-            BorderThickness = new Thickness(1),
-            VerticalContentAlignment = VerticalAlignment.Center,
         };
+        ApplySymbolTextBoxChrome(selectedCode);
         var preview = new TextBlock
         {
             FontSize = 44,
@@ -93,79 +64,80 @@ public sealed partial class MainWindow
         var accepted = false;
         void AcceptAndClose()
         {
+            recentSymbols = SymbolPickerCatalogPlanner
+                .PromoteRecentSymbol(
+                    recentSymbols,
+                    selectedSymbol,
+                    SymbolPickerCatalogPlanner.DefaultRecentSymbolCapacity)
+                .ToList();
             accepted = true;
             dialog.Close();
         }
 
-        var symbolCells = new List<Button>();
+        var symbolCells = new List<(Button Cell, string Symbol)>();
         var selectedCellBrush = Brush(0, 120, 215);
         void HighlightSelectedCell(string symbol)
         {
-            foreach (var cell in symbolCells)
+            foreach (var (cell, cellSymbol) in symbolCells)
             {
-                var isSelected = string.Equals(cell.Content as string, symbol, StringComparison.Ordinal);
+                var isSelected = string.Equals(cellSymbol, symbol, StringComparison.Ordinal);
                 cell.Background = isSelected ? Brush(204, 232, 255) : Brushes.Transparent;
                 cell.BorderBrush = isSelected ? selectedCellBrush : Brushes.Transparent;
             }
         }
 
-        void ApplySelection(string symbol)
+        void ApplySelection(string symbol, string? name = null, string? subset = null, string? codeText = null)
         {
-            selectedSymbol = symbol;
-            var selection = SymbolPickerSelectionPlanner.CreateSelection(symbol);
-            preview.Text = symbol;
-            selectedCode.Text = selection.CodeText;
-            selectedName.Text = SymbolPickerNames.TryGetValue(symbol, out var name)
-                ? name
-                : $"Unicode U+{selection.CodeText}";
-            selectedSubset.Text = "Latin-1 Supplement";
-            HighlightSelectedCell(symbol);
+            var selection = SymbolPickerCatalogPlanner.CreateSelection(symbol);
+            var entry = SymbolPickerCatalogPlanner.CreateSymbolEntry(
+                selection.Symbol,
+                subset ?? SymbolPickerCatalogPlanner.DefaultSubsetName);
+            selectedSymbol = selection.Symbol;
+            preview.Text = SymbolPickerCatalogPlanner.CreateDisplaySymbol(selection.Symbol);
+            selectedCode.Text = string.IsNullOrEmpty(codeText) ? selection.CodeText : codeText;
+            selectedName.Text = string.IsNullOrEmpty(name) ? entry.Name : name;
+            selectedSubset.Text = string.IsNullOrEmpty(subset) ? entry.Subset : subset;
+            HighlightSelectedCell(selection.Symbol);
         }
+
+        void SelectCatalogEntry(SymbolPickerCatalogEntry entry) =>
+            ApplySelection(entry.Symbol, entry.Name, entry.Subset, entry.CodeText);
+
+        void SelectSpecialCharacter(SymbolPickerSpecialCharacter special) =>
+            ApplySelection(
+                special.Symbol,
+                special.Name,
+                "Special Characters",
+                special.CodeText);
 
         var fontBox = new ComboBox
         {
-            ItemsSource = SymbolPickerFontChoices,
+            ItemsSource = SymbolPickerCatalogPlanner.GetPreferredFontChoices(),
             SelectedIndex = 0,
             MinWidth = 150,
             Width = 150,
-            FontSize = 12,
-            Height = 24,
-            MinHeight = 24,
-            MaxHeight = 24,
-            Padding = new Thickness(6, 1),
-            VerticalContentAlignment = VerticalAlignment.Center,
         };
+        ApplySymbolComboBoxChrome(fontBox);
         var subsetBox = new ComboBox
         {
-            ItemsSource = new[] { "Latin-1 Supplement" },
+            ItemsSource = SymbolPickerCatalogPlanner.GetSubsetNames(),
             SelectedIndex = 0,
             MinWidth = 150,
             Width = 150,
-            FontSize = 12,
-            Height = 24,
-            MinHeight = 24,
-            MaxHeight = 24,
-            Padding = new Thickness(6, 1),
-            VerticalContentAlignment = VerticalAlignment.Center,
         };
+        ApplySymbolComboBoxChrome(subsetBox);
         var searchBox = new TextBox
         {
             MinWidth = 150,
             MaxWidth = 200,
             HorizontalAlignment = HorizontalAlignment.Stretch,
-            FontSize = 12,
-            Height = 24,
-            MinHeight = 24,
-            MaxHeight = 24,
             // Right margin keeps the field inside the tab pane (it sits in the trailing
             // star column and would otherwise stretch flush to / past the dialog edge).
             Margin = new Thickness(0, 0, 8, 0),
-            Padding = new Thickness(4, 1),
-            VerticalContentAlignment = VerticalAlignment.Center,
         };
+        ApplySymbolTextBoxChrome(searchBox);
         var resultCount = new TextBlock
         {
-            Text = $"Symbols shown: {symbols.Count}",
             FontSize = 12,
             FontFamily = FormulaBarFontFamily,
             Foreground = Brush(96, 96, 96),
@@ -179,12 +151,6 @@ public sealed partial class MainWindow
             ItemHeight = 31,
             Margin = new Thickness(3),
         };
-        foreach (var symbol in symbols)
-        {
-            var cell = CreateSymbolCell(symbol, ApplySelection, AcceptAndClose);
-            symbolCells.Add(cell);
-            symbolGrid.Children.Add(cell);
-        }
 
         var symbolListHost = new Border
         {
@@ -215,8 +181,16 @@ public sealed partial class MainWindow
             ItemHeight = 30,
             Margin = new Thickness(4, 0),
         };
-        foreach (var symbol in SymbolPickerRecentSymbols)
-            recentGrid.Children.Add(CreateSymbolCell(symbol, ApplySelection, AcceptAndClose, compact: true));
+        void PopulateRecentSymbols()
+        {
+            recentGrid.Children.Clear();
+            foreach (var symbol in recentSymbols)
+            {
+                var entry = SymbolPickerCatalogPlanner.CreateSymbolEntry(symbol, "Recently used symbols");
+                recentGrid.Children.Add(CreateSymbolCell(entry, SelectCatalogEntry, AcceptAndClose, compact: true));
+            }
+        }
+
         DockPanel.SetDock(recentLabel, Dock.Left);
         recentPanel.Children.Add(recentLabel);
         recentPanel.Children.Add(new Border
@@ -237,7 +211,33 @@ public sealed partial class MainWindow
         symbolsPanel.Children.Add(recentPanel);
         symbolsPanel.Children.Add(symbolListHost);
 
-        var specialPanel = CreateSpecialCharactersPanel(ApplySelection, AcceptAndClose);
+        void RefreshSymbols()
+        {
+            var plan = SymbolPickerCatalogPlanner.PlanSymbolList(
+                subsetBox.SelectedItem as string,
+                searchBox.Text,
+                selectedSymbol);
+
+            symbolCells.Clear();
+            symbolGrid.Children.Clear();
+            foreach (var entry in plan.Entries)
+            {
+                var cell = CreateSymbolCell(entry, SelectCatalogEntry, AcceptAndClose);
+                symbolCells.Add((cell, entry.Symbol));
+                symbolGrid.Children.Add(cell);
+            }
+
+            resultCount.Text = $"Symbols shown: {plan.Entries.Count}";
+            if (plan.SelectedEntry is { } selectedEntry)
+                SelectCatalogEntry(selectedEntry);
+            else
+                HighlightSelectedCell(selectedSymbol);
+        }
+
+        subsetBox.SelectionChanged += (_, _) => RefreshSymbols();
+        searchBox.TextChanged += (_, _) => RefreshSymbols();
+
+        var specialPanel = CreateSpecialCharactersPanel(SelectSpecialCharacter, AcceptAndClose);
         var tabs = new TabControl
         {
             Items =
@@ -248,7 +248,7 @@ public sealed partial class MainWindow
         };
         ApplyClassicTabChrome(tabs);
 
-        var details = CreateSymbolDetailsPanel(preview, selectedName, selectedSubset, selectedCode, ApplySelection);
+        var details = CreateSymbolDetailsPanel(preview, selectedName, selectedSubset, selectedCode, symbol => ApplySelection(symbol));
         // Right details column: 210px to comfortably fit "Inverted Exclamation Mark" in SemiBold on Linux/Skia.
         var contentGrid = new Grid
         {
@@ -262,44 +262,17 @@ public sealed partial class MainWindow
         {
             Content = "Insert",
             MinWidth = 84,
-            Height = 24,
-            MinHeight = 24,
-            MaxHeight = 24,
-            Padding = new Thickness(4, 1),
-            Background = Brushes.White,
-            BorderBrush = Brush(0, 120, 215),
-            BorderThickness = new Thickness(1),
-            FontSize = 12,
-            FontFamily = FormulaBarFontFamily,
-            HorizontalContentAlignment = HorizontalAlignment.Center,
-            VerticalContentAlignment = VerticalAlignment.Center,
             IsDefault = true,
         };
+        ApplySymbolButtonChrome(insert, 84, isDefault: true);
         var cancel = new Button
         {
             Content = "Cancel",
             MinWidth = 84,
-            Height = 24,
-            MinHeight = 24,
-            MaxHeight = 24,
-            Padding = new Thickness(4, 1),
-            Background = Brushes.White,
-            BorderBrush = Brush(112, 112, 112),
-            BorderThickness = new Thickness(1),
-            FontSize = 12,
-            FontFamily = FormulaBarFontFamily,
-            HorizontalContentAlignment = HorizontalAlignment.Center,
-            VerticalContentAlignment = VerticalAlignment.Center,
             IsCancel = true,
-            Margin = new Thickness(8, 0, 0, 0),
         };
-        var buttons = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(0, 12, 0, 0),
-            Children = { insert, cancel },
-        };
+        ApplySymbolButtonChrome(cancel, 84);
+        var buttons = AvaloniaCompactDialogChrome.CreateActionRow([insert, cancel], new Thickness(0, 12, 0, 0));
 
         insert.Click += (_, _) =>
         {
@@ -312,6 +285,8 @@ public sealed partial class MainWindow
         root.Children.Add(buttons);
         root.Children.Add(contentGrid);
         dialog.Content = root;
+        PopulateRecentSymbols();
+        RefreshSymbols();
         dialog.Opened += (_, _) =>
         {
             ApplySelection(selectedSymbol);
@@ -322,20 +297,13 @@ public sealed partial class MainWindow
         if (!accepted || string.IsNullOrEmpty(selectedSymbol))
             return;
 
-        var selection = SymbolPickerSelectionPlanner.CreateSelection(selectedSymbol);
+        var selection = SymbolPickerCatalogPlanner.CreateSelection(selectedSymbol);
         var current = FormatEditText(_session.ActiveSheet.GetCell(_session.ActiveCell), _session.ActiveCell);
         var result = _session.CommitCellText(current + selection.Symbol);
         RefreshShell(result.Success
             ? $"Inserted {selection.Symbol} into {FormatCellReference(_session.ActiveCell)}"
             : result.ErrorMessage ?? "Could not insert the symbol.");
     }
-
-    private static IReadOnlyList<string> CreateLatinSupplementSymbols() =>
-        Enumerable
-            .Range(0x00A1, 0x00FF - 0x00A1 + 1)
-            .Where(static codePoint => codePoint != 0x00AD)
-            .Select(static codePoint => char.ConvertFromUtf32(codePoint))
-            .ToArray();
 
     private static Grid CreateSymbolChooserGrid(ComboBox fontBox, ComboBox subsetBox, TextBox searchBox)
     {
@@ -367,14 +335,14 @@ public sealed partial class MainWindow
     }
 
     private static Button CreateSymbolCell(
-        string symbol,
-        Action<string> select,
+        SymbolPickerCatalogEntry entry,
+        Action<SymbolPickerCatalogEntry> select,
         Action close,
         bool compact = false)
     {
         var button = new Button
         {
-            Content = symbol,
+            Content = SymbolPickerCatalogPlanner.CreateDisplaySymbol(entry.Symbol),
             Width = compact ? 30 : 31,
             Height = compact ? 28 : 30,
             Padding = new Thickness(0),
@@ -387,10 +355,10 @@ public sealed partial class MainWindow
             HorizontalContentAlignment = HorizontalAlignment.Center,
             VerticalContentAlignment = VerticalAlignment.Center,
         };
-        button.Click += (_, _) => select(symbol);
+        button.Click += (_, _) => select(entry);
         button.DoubleTapped += (_, _) =>
         {
-            select(symbol);
+            select(entry);
             close();
         };
         return button;
@@ -416,22 +384,12 @@ public sealed partial class MainWindow
         {
             Content = "Go",
             MinWidth = 64,
-            Height = 24,
-            MinHeight = 24,
-            MaxHeight = 24,
-            Padding = new Thickness(4, 1),
-            Background = Brushes.White,
-            BorderBrush = Brush(112, 112, 112),
-            BorderThickness = new Thickness(1),
-            FontSize = 12,
-            FontFamily = FormulaBarFontFamily,
-            HorizontalContentAlignment = HorizontalAlignment.Center,
-            VerticalContentAlignment = VerticalAlignment.Center,
             Margin = new Thickness(0, 6, 0, 0),
         };
+        ApplySymbolButtonChrome(goButton, 64);
         goButton.Click += (_, _) =>
         {
-            if (TryParseSymbolCode(selectedCode.Text, out var symbol))
+            if (SymbolPickerCatalogPlanner.TryParseCharacterCode(selectedCode.Text, out var symbol))
                 select(symbol);
         };
 
@@ -463,33 +421,21 @@ public sealed partial class MainWindow
         return new Border { Child = panel };
     }
 
-    private static Border CreateSpecialCharactersPanel(Action<string> select, Action close)
+    private static Border CreateSpecialCharactersPanel(Action<SymbolPickerSpecialCharacter> select, Action close)
     {
         var list = new StackPanel { Spacing = 4, Margin = new Thickness(8) };
-        foreach (var (name, symbol) in new[]
-                 {
-                     ("Em Dash", "\u2014"),
-                     ("Nonbreaking Space", "\u00a0"),
-                     ("Copyright", "\u00a9"),
-                     ("Registered", "\u00ae"),
-                     ("Trademark", "\u2122"),
-                     ("Section", "\u00a7"),
-                     ("Paragraph", "\u00b6"),
-                     ("Ellipsis", "\u2026"),
-                     ("Degree", "\u00b0"),
-                     ("Check Mark", "\u2713"),
-                 })
+        foreach (var special in SymbolPickerCatalogPlanner.GetSpecialCharacters())
         {
             var button = new Button
             {
-                Content = $"{name}    {SymbolPickerSelectionPlanner.CreateSelection(symbol).CodeText}",
+                Content = $"{special.Name}    {special.CodeText}",
                 HorizontalAlignment = HorizontalAlignment.Stretch,
                 HorizontalContentAlignment = HorizontalAlignment.Left,
             };
-            button.Click += (_, _) => select(symbol);
+            button.Click += (_, _) => select(special);
             button.DoubleTapped += (_, _) =>
             {
-                select(symbol);
+                select(special);
                 close();
             };
             list.Children.Add(button);
@@ -502,21 +448,5 @@ public sealed partial class MainWindow
             Background = Brushes.White,
             Child = list,
         };
-    }
-
-    private static bool TryParseSymbolCode(string? text, out string symbol)
-    {
-        symbol = "";
-        var normalized = text?.Trim() ?? "";
-        if (normalized.StartsWith("U+", StringComparison.OrdinalIgnoreCase))
-            normalized = normalized[2..];
-
-        if (!int.TryParse(normalized, System.Globalization.NumberStyles.HexNumber, null, out var codePoint))
-            return false;
-        if (codePoint < 0 || codePoint > 0x10FFFF || codePoint is >= 0xD800 and <= 0xDFFF)
-            return false;
-
-        symbol = char.ConvertFromUtf32(codePoint);
-        return true;
     }
 }

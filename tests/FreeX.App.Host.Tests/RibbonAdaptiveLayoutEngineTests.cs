@@ -6,6 +6,20 @@ namespace FreeX.App.Host.Tests;
 public sealed class RibbonAdaptiveLayoutEngineTests
 {
     [Fact]
+    public void LayoutEngine_SourceLivesInRibbonDefinitions()
+    {
+        var repoRoot = WorkspaceFileLocator.FindWorkspaceRoot();
+        System.IO.File.Exists(System.IO.Path.Combine(repoRoot, "src", "FreeX.App.Host", "RibbonAdaptiveLayoutEngine.cs"))
+            .Should()
+            .BeFalse("the pure adaptive planner should live outside the WPF host adapter");
+
+        var source = DialogSourceTestSupport.ReadRibbonDefinitionSource("RibbonAdaptiveLayoutEngine.cs");
+
+        source.Should().Contain("namespace FreeX.Ribbon.Definitions;");
+        source.Should().Contain("public static class RibbonAdaptiveLayoutEngine");
+    }
+
+    [Fact]
     public void Plan_ReturnsEmptyLayoutForEmptyGroupSet()
     {
         var layout = RibbonAdaptiveLayoutEngine.Plan(900, [], fixedChromeWidth: 36);
@@ -239,7 +253,7 @@ public sealed class RibbonAdaptiveLayoutEngineTests
     [Fact]
     public void BuildResizeThresholds_SourceAvoidsRedundantSortedSetLinqPasses()
     {
-        var source = DialogSourceTestSupport.ReadHostSources("RibbonAdaptiveLayoutEngine.cs");
+        var source = DialogSourceTestSupport.ReadRibbonDefinitionSource("RibbonAdaptiveLayoutEngine.cs");
         var method = source.Substring(
             source.IndexOf("public static IReadOnlyList<double> BuildResizeThresholds", StringComparison.Ordinal),
             source.IndexOf("public static IReadOnlyList<int> GetExpandableGroupIndexes", StringComparison.Ordinal) -
@@ -254,10 +268,10 @@ public sealed class RibbonAdaptiveLayoutEngineTests
     [Fact]
     public void BreakpointThresholds_SourceAvoidsRedundantSortedSetLinqPasses()
     {
-        var source = DialogSourceTestSupport.ReadHostSources("RibbonAdaptiveTabProfiles.cs");
+        var source = DialogSourceTestSupport.ReadRibbonDefinitionSource("RibbonAdaptiveTabProfiles.cs");
         var method = source.Substring(
             source.IndexOf("public static IReadOnlyList<double> GetBreakpointThresholds", StringComparison.Ordinal),
-            source.IndexOf("internal static string? ResolveProfileName", StringComparison.Ordinal) -
+            source.IndexOf("public static string? ResolveProfileName", StringComparison.Ordinal) -
             source.IndexOf("public static IReadOnlyList<double> GetBreakpointThresholds", StringComparison.Ordinal));
 
         method.Should().Contain("new List<double>(thresholds.Count)");
@@ -269,7 +283,7 @@ public sealed class RibbonAdaptiveLayoutEngineTests
     [Fact]
     public void Plan_SourceAppliesProfileOverridesInPlace()
     {
-        var source = DialogSourceTestSupport.ReadHostSources("RibbonAdaptiveLayoutEngine.cs");
+        var source = DialogSourceTestSupport.ReadRibbonDefinitionSource("RibbonAdaptiveLayoutEngine.cs");
         var planStart = source.IndexOf("public static RibbonAdaptiveLayoutResult Plan(", StringComparison.Ordinal);
         planStart = source.IndexOf("public static RibbonAdaptiveLayoutResult Plan(", planStart + 1, StringComparison.Ordinal);
         var method = source.Substring(
@@ -289,7 +303,7 @@ public sealed class RibbonAdaptiveLayoutEngineTests
     [Fact]
     public void Plan_SourceUsesRollbackBuffersInsteadOfPerAttemptStateSnapshots()
     {
-        var source = DialogSourceTestSupport.ReadHostSources("RibbonAdaptiveLayoutEngine.cs");
+        var source = DialogSourceTestSupport.ReadRibbonDefinitionSource("RibbonAdaptiveLayoutEngine.cs");
         var method = source.Substring(
             source.IndexOf("private static void ExpandStatesIntoAvailableWidth", StringComparison.Ordinal),
             source.IndexOf("private static bool TryCollapseUnprotectedGroupsToFit", StringComparison.Ordinal) -
@@ -351,7 +365,7 @@ public sealed class RibbonAdaptiveLayoutEngineTests
     [Fact]
     public void Plan_SourceStaysFreeOfWpfVisualTreeMeasurementWork()
     {
-        var source = DialogSourceTestSupport.ReadHostSources("RibbonAdaptiveLayoutEngine.cs");
+        var source = DialogSourceTestSupport.ReadRibbonDefinitionSource("RibbonAdaptiveLayoutEngine.cs");
 
         source.Should().NotContain("System.Windows", "the adaptive planner should remain CI-safe and independent of WPF runtime state");
         source.Should().NotContain("FrameworkElement", "the adaptive planner should operate on measured group data rather than controls");
@@ -507,6 +521,23 @@ public sealed class RibbonAdaptiveLayoutEngineTests
 
         result.Should().Be(expectedResult);
         expandedState.Should().Be(expectedState);
+    }
+
+    [Fact]
+    public void StateTransition_SourceDelegatesNeutralPolicyToSharedRibbon()
+    {
+        var source = DialogSourceTestSupport.ReadRibbonDefinitionSource("RibbonAdaptiveLayoutEngine.cs");
+        var transitionSource = WorkspaceFileLocator.ReadAllText(
+            "shared",
+            "Free.Shared.Ribbon",
+            "Layout",
+            "RibbonAdaptiveStateTransitions.cs");
+
+        source.Should().Contain("RibbonAdaptiveStateTransitions.TryGetNextExpandedState(");
+        source.Should().Contain("RibbonAdaptiveStateTransitions.TryFindNextFallback(");
+        source.Should().Contain("RibbonAdaptiveStateTransitions.TryFindNextCollapse(");
+        source.Should().NotContain("stateValue <= (int)RibbonAdaptiveGroupState.IconOnly");
+        transitionSource.Should().Contain("stateValue <= (int)RibbonAdaptiveGroupState.IconOnly");
     }
 
     [Fact]

@@ -1,4 +1,6 @@
-using FreeX.Core.Commands;
+using SharedSubtotalDialogInputParseIssue = FreeX.App.Presentation.DataTools.SubtotalDialogInputParseIssue;
+using SharedSubtotalDialogInputParseResult = FreeX.App.Presentation.DataTools.SubtotalDialogInputParseResult;
+using SharedSubtotalDialogInputParser = FreeX.App.Presentation.DataTools.SubtotalDialogInputParser;
 
 namespace FreeX.App.Host;
 
@@ -14,61 +16,84 @@ public static class SubtotalDialogInputParser
         out SubtotalDialogResult result,
         out string? error)
     {
+        if (SharedSubtotalDialogInputParser.TryParse(
+                groupColumnText,
+                subtotalColumnsText,
+                functionText,
+                replaceCurrentSubtotals,
+                pageBreakBetweenGroups,
+                summaryBelowData,
+                out var parsed,
+                out var issue))
+        {
+            result = Project(parsed);
+            error = null;
+            return true;
+        }
+
         result = default!;
-        error = null;
-
-        if (!uint.TryParse(groupColumnText.Trim(), out var groupColumnOffset))
-        {
-            error = UiText.Get("Subtotal_EnterValidGroupColumnOffset");
-            return false;
-        }
-
-        var subtotalColumnOffsets = ParseColumnOffsets(subtotalColumnsText);
-        if (subtotalColumnOffsets.Count == 0)
-        {
-            error = UiText.Get("Subtotal_EnterValidSubtotalColumnOffsets");
-            return false;
-        }
-
-        if (!SubtotalFunctionService.TryParse(functionText, out var functionNumber))
-        {
-            error = UiText.Get("Subtotal_UnsupportedSubtotalFunction");
-            return false;
-        }
-
-        result = new SubtotalDialogResult(
-            groupColumnOffset,
-            subtotalColumnOffsets,
-            functionNumber,
-            replaceCurrentSubtotals,
-            pageBreakBetweenGroups,
-            summaryBelowData);
-        return true;
+        error = DescribeTextInputIssue(issue);
+        return false;
     }
 
-    private static IReadOnlyList<uint> ParseColumnOffsets(string input)
+    public static bool TryCreateResult(
+        uint groupColumnOffset,
+        IEnumerable<uint> subtotalColumnOffsets,
+        string functionText,
+        bool replaceCurrentSubtotals,
+        bool pageBreakBetweenGroups,
+        bool summaryBelowData,
+        out SubtotalDialogResult result,
+        out string? error)
     {
-        var offsets = new List<uint>();
-        foreach (var part in SplitColumnOffsetParts(input))
+        if (SharedSubtotalDialogInputParser.TryCreateResult(
+                groupColumnOffset,
+                subtotalColumnOffsets,
+                functionText,
+                replaceCurrentSubtotals,
+                pageBreakBetweenGroups,
+                summaryBelowData,
+                out var parsed,
+                out var issue))
         {
-            if (!TryAddColumnOffset(offsets, part))
-                return [];
+            result = Project(parsed);
+            error = null;
+            return true;
         }
 
-        return offsets;
+        result = default!;
+        error = DescribeCreateResultIssue(issue);
+        return false;
     }
 
-    private static string[] SplitColumnOffsetParts(string input) =>
-        input.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+    private static SubtotalDialogResult Project(SharedSubtotalDialogInputParseResult parsed) =>
+        new(
+            parsed.GroupColumnOffset,
+            parsed.SubtotalColumnOffsets,
+            parsed.FunctionNumber,
+            parsed.ReplaceCurrentSubtotals,
+            parsed.PageBreakBetweenGroups,
+            parsed.SummaryBelowData);
 
-    private static bool TryAddColumnOffset(List<uint> offsets, string part)
-    {
-        if (!uint.TryParse(part, out var offset))
-            return false;
+    private static string? DescribeTextInputIssue(SharedSubtotalDialogInputParseIssue issue) =>
+        issue switch
+        {
+            SharedSubtotalDialogInputParseIssue.InvalidGroupColumnOffset =>
+                UiText.Get("Subtotal_EnterValidGroupColumnOffset"),
+            SharedSubtotalDialogInputParseIssue.InvalidSubtotalColumnOffsets =>
+                UiText.Get("Subtotal_EnterValidSubtotalColumnOffsets"),
+            SharedSubtotalDialogInputParseIssue.UnsupportedSubtotalFunction =>
+                UiText.Get("Subtotal_UnsupportedSubtotalFunction"),
+            _ => null
+        };
 
-        if (!offsets.Contains(offset))
-            offsets.Add(offset);
-
-        return true;
-    }
+    private static string? DescribeCreateResultIssue(SharedSubtotalDialogInputParseIssue issue) =>
+        issue switch
+        {
+            SharedSubtotalDialogInputParseIssue.InvalidSubtotalColumnOffsets =>
+                UiText.Get("Subtotal_AtLeastOneSubtotalColumnIsRequired"),
+            SharedSubtotalDialogInputParseIssue.UnsupportedSubtotalFunction =>
+                UiText.Get("Subtotal_UnsupportedSubtotalFunction"),
+            _ => null
+        };
 }

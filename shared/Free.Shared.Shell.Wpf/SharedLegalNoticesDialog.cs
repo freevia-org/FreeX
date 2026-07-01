@@ -13,7 +13,7 @@ namespace Free.Shared.Shell.Wpf;
 /// strings (title, intro, help text) so each app preserves its exact automation IDs and
 /// displayed text while sharing all structural and interaction logic.
 /// </summary>
-public partial class SharedLegalNoticesDialog : Window
+public partial class SharedLegalNoticesDialog : DialogWindow
 {
     private static readonly Regex NonAutomationIdCharacter = new("[^A-Za-z0-9]+", RegexOptions.Compiled);
     private readonly TabControl _tabControl = new();

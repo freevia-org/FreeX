@@ -1,10 +1,10 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using FreeX.App.Presentation.Charts.Editing;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
-using static FreeX.App.Host.ChartDialogInputParser;
 using static FreeX.App.Host.ChartDialogHelpers;
 
 namespace FreeX.App.Host;
@@ -27,34 +27,37 @@ public sealed record ChartDataLabelsDialogResult(
     double FontSize,
     double Angle)
 {
-    public ChartLayoutOptions ToOptions() => new(
-        ShowDataLabels: ShowDataLabels,
-        DataLabelPosition: Position,
-        ShowDataLabelValue: ShowValue,
-        ShowDataLabelLegendKey: ShowLegendKey,
-        ShowDataLabelCategoryName: ShowCategoryName,
-        ShowDataLabelSeriesName: ShowSeriesName,
-        ShowDataLabelPercentage: ShowPercentage,
-        DataLabelSeparator: Separator,
-        DataLabelNumberFormat: NumberFormat,
-        ShowDataLabelCallouts: ShowCallouts,
-        DataLabelFillColor: FillColor,
-        DataLabelBorderColor: BorderColor,
-        DataLabelTextColor: TextColor,
-        DataLabelBorderThickness: BorderThickness,
-        DataLabelFontSize: FontSize,
-        DataLabelAngle: Angle);
+    public ChartDataLabelsInput ToInput() =>
+        new(
+            ShowDataLabels,
+            Position,
+            ShowValue,
+            ShowCategoryName,
+            ShowSeriesName,
+            ShowPercentage,
+            ShowLegendKey,
+            Separator,
+            NumberFormat,
+            ShowCallouts,
+            FillColor,
+            BorderColor,
+            TextColor,
+            BorderThickness,
+            FontSize,
+            Angle);
+
+    public ChartLayoutOptions ToOptions() => ChartDataLabelsPlanner.Plan(ToInput());
 }
 
 public sealed class ChartDataLabelsDialog : Window
 {
-    private readonly CheckBox _showBox = new() { Content = UiText.Get("ChartDataLabels_ShowDataLabels") };
-    private readonly CheckBox _valueBox = new() { Content = UiText.Get("ChartDataLabels_Value") };
-    private readonly CheckBox _legendKeyBox = new() { Content = UiText.Get("ChartDataLabels_LegendKey") };
-    private readonly CheckBox _categoryBox = new() { Content = UiText.Get("ChartDataLabels_CategoryName") };
-    private readonly CheckBox _seriesBox = new() { Content = UiText.Get("ChartDataLabels_SeriesName") };
-    private readonly CheckBox _percentageBox = new() { Content = UiText.Get("ChartDataLabels_Percentage") };
-    private readonly CheckBox _calloutsBox = new() { Content = UiText.Get("ChartDataLabels_Callouts") };
+    private readonly CheckBox _showBox = new() { Content = LabelText(ChartDataLabelsDialogFieldId.ShowDataLabels) };
+    private readonly CheckBox _valueBox = new() { Content = LabelText(ChartDataLabelsDialogFieldId.Value) };
+    private readonly CheckBox _legendKeyBox = new() { Content = LabelText(ChartDataLabelsDialogFieldId.LegendKey) };
+    private readonly CheckBox _categoryBox = new() { Content = LabelText(ChartDataLabelsDialogFieldId.CategoryName) };
+    private readonly CheckBox _seriesBox = new() { Content = LabelText(ChartDataLabelsDialogFieldId.SeriesName) };
+    private readonly CheckBox _percentageBox = new() { Content = LabelText(ChartDataLabelsDialogFieldId.Percentage) };
+    private readonly CheckBox _calloutsBox = new() { Content = LabelText(ChartDataLabelsDialogFieldId.Callouts) };
     private readonly ComboBox _positionBox = new();
     private readonly ComboBox _separatorBox = new();
     private readonly ComboBox _numberFormatBox = new();
@@ -76,28 +79,33 @@ public sealed class ChartDataLabelsDialog : Window
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
+        ApplyAutomationIds();
         Content = CreateContent();
         Load(Result);
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
-    public static ChartDataLabelsDialogResult FromChart(ChartModel chart) => CreateResult(
-        chart.ShowDataLabels,
-        chart.DataLabelPosition,
-        chart.ShowDataLabelValue,
-        chart.ShowDataLabelLegendKey,
-        chart.ShowDataLabelCategoryName,
-        chart.ShowDataLabelSeriesName,
-        chart.ShowDataLabelPercentage,
-        chart.DataLabelSeparator,
-        chart.DataLabelNumberFormat,
-        chart.ShowDataLabelCallouts,
-        chart.DataLabelFillColor,
-        chart.DataLabelBorderColor,
-        chart.DataLabelTextColor,
-        chart.DataLabelBorderThickness,
-        chart.DataLabelFontSize,
-        chart.DataLabelAngle);
+    public static ChartDataLabelsDialogResult FromChart(ChartModel chart)
+    {
+        var input = ChartDataLabelsPlanner.Read(chart);
+        return CreateResult(
+            input.ShowDataLabels,
+            input.Position,
+            input.ShowValue,
+            input.ShowLegendKey,
+            input.ShowCategoryName,
+            input.ShowSeriesName,
+            input.ShowPercentage,
+            input.Separator ?? ChartDataLabelSeparator.Comma,
+            input.NumberFormat ?? ChartDataLabelNumberFormat.General,
+            input.ShowCallouts ?? false,
+            input.FillColor,
+            input.BorderColor,
+            input.TextColor,
+            input.BorderThickness ?? 0,
+            input.FontSize ?? 11,
+            input.Angle ?? 0);
+    }
 
     public static ChartDataLabelsDialogResult CreateResult(
         bool showDataLabels,
@@ -115,36 +123,72 @@ public sealed class ChartDataLabelsDialog : Window
         CellColor? textColor,
         double borderThickness,
         double fontSize,
-        double angle) =>
-        new(showDataLabels, position, showValue, showLegendKey, showCategoryName, showSeriesName, showPercentage,
-            separator, numberFormat, showCallouts, fillColor, borderColor, textColor, borderThickness, fontSize, angle);
+        double angle)
+    {
+        var input = ChartDataLabelsPlanner.Normalize(new ChartDataLabelsInput(
+            showDataLabels,
+            position,
+            showValue,
+            showCategoryName,
+            showSeriesName,
+            showPercentage,
+            showLegendKey,
+            separator,
+            numberFormat,
+            showCallouts,
+            fillColor,
+            borderColor,
+            textColor,
+            borderThickness,
+            fontSize,
+            angle));
+        return new(
+            input.ShowDataLabels,
+            input.Position,
+            input.ShowValue,
+            input.ShowLegendKey,
+            input.ShowCategoryName,
+            input.ShowSeriesName,
+            input.ShowPercentage,
+            input.Separator ?? ChartDataLabelSeparator.Comma,
+            input.NumberFormat ?? ChartDataLabelNumberFormat.General,
+            input.ShowCallouts ?? false,
+            input.FillColor,
+            input.BorderColor,
+            input.TextColor,
+            input.BorderThickness ?? 0,
+            input.FontSize ?? 11,
+            input.Angle ?? 0);
+    }
 
     private StackPanel CreateContent()
     {
         var root = ChartDialogHelpers.DialogStack();
         {
+            var section = ChartDataLabelsPlanner.GetLabelOptionsSection();
             var stack = new StackPanel();
             ChartDialogHelpers.AddCheck(stack, _showBox);
-            ChartDialogHelpers.AddCombo(stack, UiText.Get("ChartDataLabels_PositionLabel"), _positionBox, Enum.GetValues<ChartDataLabelPosition>());
+            ChartDialogHelpers.AddCombo(stack, LabelText(ChartDataLabelsDialogFieldId.Position), _positionBox, ChartDataLabelsPlanner.GetPositionChoices().Select(choice => choice.Position));
             ChartDialogHelpers.AddCheck(stack, _valueBox);
             ChartDialogHelpers.AddCheck(stack, _legendKeyBox);
             ChartDialogHelpers.AddCheck(stack, _categoryBox);
             ChartDialogHelpers.AddCheck(stack, _seriesBox);
             ChartDialogHelpers.AddCheck(stack, _percentageBox);
-            ChartDialogHelpers.AddCombo(stack, UiText.Get("ChartDataLabels_SeparatorLabel"), _separatorBox, Enum.GetValues<ChartDataLabelSeparator>());
-            ChartDialogHelpers.AddCombo(stack, UiText.Get("ChartDataLabels_NumberFormatLabel"), _numberFormatBox, Enum.GetValues<ChartDataLabelNumberFormat>());
+            ChartDialogHelpers.AddCombo(stack, LabelText(ChartDataLabelsDialogFieldId.Separator), _separatorBox, ChartDataLabelsPlanner.GetSeparatorChoices());
+            ChartDialogHelpers.AddCombo(stack, LabelText(ChartDataLabelsDialogFieldId.NumberFormat), _numberFormatBox, ChartDataLabelsPlanner.GetNumberFormatChoices());
             ChartDialogHelpers.AddCheck(stack, _calloutsBox);
-            root.Children.Add(CreateGroupBox(UiText.Get("ChartDataLabels_LabelOptionsGroup"), stack));
+            root.Children.Add(CreateGroupBox(UiText.Get(section.HeaderResourceKey), stack));
         }
         {
+            var section = ChartDataLabelsPlanner.GetStyleSection();
             var stack = new StackPanel();
-            ChartDialogHelpers.AddColorText(stack, UiText.Get("ChartDataLabels_FillColorLabel"), _fillBox);
-            ChartDialogHelpers.AddColorText(stack, UiText.Get("ChartDataLabels_BorderColorLabel"), _borderBox);
-            ChartDialogHelpers.AddColorText(stack, UiText.Get("ChartDataLabels_TextColorLabel"), _textBox);
-            ChartDialogHelpers.AddNumericText(stack, UiText.Get("ChartDataLabels_BorderThicknessLabel"), _borderThicknessBox, UiText.Get("ChartDataLabels_BorderThicknessHelpText"));
-            ChartDialogHelpers.AddNumericText(stack, UiText.Get("ChartDataLabels_FontSizeLabel"), _fontSizeBox, UiText.Get("ChartDataLabels_FontSizeHelpText"));
-            ChartDialogHelpers.AddNumericText(stack, UiText.Get("ChartDataLabels_TextAngleLabel"), _angleBox, UiText.Get("ChartDataLabels_TextAngleHelpText"));
-            root.Children.Add(CreateGroupBox(UiText.Get("ChartDialog_FillLineGroup"), stack));
+            ChartDialogHelpers.AddColorText(stack, LabelText(ChartDataLabelsDialogFieldId.FillColor), _fillBox);
+            ChartDialogHelpers.AddColorText(stack, LabelText(ChartDataLabelsDialogFieldId.BorderColor), _borderBox);
+            ChartDialogHelpers.AddColorText(stack, LabelText(ChartDataLabelsDialogFieldId.TextColor), _textBox);
+            ChartDialogHelpers.AddNumericText(stack, LabelText(ChartDataLabelsDialogFieldId.BorderThickness), _borderThicknessBox, HelpText(ChartDataLabelsDialogFieldId.BorderThickness));
+            ChartDialogHelpers.AddNumericText(stack, LabelText(ChartDataLabelsDialogFieldId.FontSize), _fontSizeBox, HelpText(ChartDataLabelsDialogFieldId.FontSize));
+            ChartDialogHelpers.AddNumericText(stack, LabelText(ChartDataLabelsDialogFieldId.TextAngle), _angleBox, HelpText(ChartDataLabelsDialogFieldId.TextAngle));
+            root.Children.Add(CreateGroupBox(UiText.Get(section.HeaderResourceKey), stack));
         }
         root.Children.Add(InsertChartDialog.CreateButtonRow(Accept));
         return root;
@@ -172,68 +216,76 @@ public sealed class ChartDataLabelsDialog : Window
 
     private void Accept()
     {
-        if (!TryReadOptionalColor(_fillBox, out var fillColor))
+        if (!ChartDataLabelsPlanner.TryParseDialogInput(
+                _showBox.IsChecked == true,
+                SelectedPosition(),
+                _valueBox.IsChecked == true,
+                _legendKeyBox.IsChecked == true,
+                _categoryBox.IsChecked == true,
+                _seriesBox.IsChecked == true,
+                _percentageBox.IsChecked == true,
+                SelectedSeparator(),
+                SelectedNumberFormat(),
+                _calloutsBox.IsChecked == true,
+                _fillBox.Text,
+                _borderBox.Text,
+                _textBox.Text,
+                _borderThicknessBox.Text,
+                _fontSizeBox.Text,
+                _angleBox.Text,
+                out var input,
+                out var issue))
         {
-            ShowInvalidInputWarning(UiText.Get("ChartDialog_InvalidOptionalColorMessage"), _fillBox);
-            return;
-        }
-
-        if (!TryReadOptionalColor(_borderBox, out var borderColor))
-        {
-            ShowInvalidInputWarning(UiText.Get("ChartDialog_InvalidOptionalColorMessage"), _borderBox);
-            return;
-        }
-
-        if (!TryReadOptionalColor(_textBox, out var textColor))
-        {
-            ShowInvalidInputWarning(UiText.Get("ChartDialog_InvalidOptionalColorMessage"), _textBox);
-            return;
-        }
-
-        if (!TryReadClampedDouble(_borderThicknessBox, min: 0, max: 10, out var borderThickness))
-        {
-            ShowInvalidInputWarning(UiText.Get("ChartDataLabels_InvalidBorderThicknessMessage"), _borderThicknessBox);
-            return;
-        }
-
-        if (!TryReadClampedDouble(_fontSizeBox, min: 6, max: 72, out var fontSize))
-        {
-            ShowInvalidInputWarning(UiText.Get("ChartDataLabels_InvalidFontSizeMessage"), _fontSizeBox);
-            return;
-        }
-
-        if (!TryReadClampedDouble(_angleBox, min: -90, max: 90, out var angle))
-        {
-            ShowInvalidInputWarning(UiText.Get("ChartDataLabels_InvalidAngleMessage"), _angleBox);
+            ShowPlannerParseWarning(issue);
             return;
         }
 
         Result = CreateResult(
-            _showBox.IsChecked == true,
-            ChartDialogHelpers.Selected(_positionBox, ChartDataLabelPosition.BestFit),
-            _valueBox.IsChecked == true,
-            _legendKeyBox.IsChecked == true,
-            _categoryBox.IsChecked == true,
-            _seriesBox.IsChecked == true,
-            _percentageBox.IsChecked == true,
-            ChartDialogHelpers.Selected(_separatorBox, ChartDataLabelSeparator.Comma),
-            ChartDialogHelpers.Selected(_numberFormatBox, ChartDataLabelNumberFormat.General),
-            _calloutsBox.IsChecked == true,
-            fillColor,
-            borderColor,
-            textColor,
-            borderThickness,
-            fontSize,
-            angle);
+            input.ShowDataLabels,
+            input.Position,
+            input.ShowValue,
+            input.ShowLegendKey,
+            input.ShowCategoryName,
+            input.ShowSeriesName,
+            input.ShowPercentage,
+            input.Separator ?? ChartDataLabelSeparator.Comma,
+            input.NumberFormat ?? ChartDataLabelNumberFormat.General,
+            input.ShowCallouts ?? false,
+            input.FillColor,
+            input.BorderColor,
+            input.TextColor,
+            input.BorderThickness ?? 0,
+            input.FontSize ?? 11,
+            input.Angle ?? 0);
         DialogResult = true;
+    }
+
+    private ChartDataLabelPosition? SelectedPosition() =>
+        _positionBox.SelectedItem is ChartDataLabelPosition value ? value : null;
+
+    private ChartDataLabelSeparator? SelectedSeparator() =>
+        _separatorBox.SelectedItem is ChartDataLabelSeparator value ? value : null;
+
+    private ChartDataLabelNumberFormat? SelectedNumberFormat() =>
+        _numberFormatBox.SelectedItem is ChartDataLabelNumberFormat value ? value : null;
+
+    private void ShowPlannerParseWarning(ChartDataLabelsParseIssue issue)
+    {
+        var (message, target) = issue switch
+        {
+            ChartDataLabelsParseIssue.BorderColor => (UiText.Get("ChartDialog_InvalidOptionalColorMessage"), _borderBox),
+            ChartDataLabelsParseIssue.TextColor => (UiText.Get("ChartDialog_InvalidOptionalColorMessage"), _textBox),
+            ChartDataLabelsParseIssue.BorderThickness => (UiText.Get("ChartDataLabels_InvalidBorderThicknessMessage"), _borderThicknessBox),
+            ChartDataLabelsParseIssue.FontSize => (UiText.Get("ChartDataLabels_InvalidFontSizeMessage"), _fontSizeBox),
+            ChartDataLabelsParseIssue.Angle => (UiText.Get("ChartDataLabels_InvalidAngleMessage"), _angleBox),
+            _ => (UiText.Get("ChartDialog_InvalidOptionalColorMessage"), _fillBox),
+        };
+        ShowInvalidInputWarning(message, target);
     }
 
     private bool ShowInvalidInputWarning(string message, TextBox target)
     {
-        DialogMessageHelper.ShowWarning(this, message, Title);
-        target.Focus();
-        target.SelectAll();
-        Keyboard.Focus(target);
+        DialogFocus.ShowWarningAndFocus(this, message, Title, target);
         return true;
     }
 
@@ -242,4 +294,33 @@ public sealed class ChartDataLabelsDialog : Window
         _showBox.Focus();
         Keyboard.Focus(_showBox);
     }
+
+    private void ApplyAutomationIds()
+    {
+        System.Windows.Automation.AutomationProperties.SetAutomationId(_showBox, Field(ChartDataLabelsDialogFieldId.ShowDataLabels).AutomationId);
+        System.Windows.Automation.AutomationProperties.SetAutomationId(_positionBox, Field(ChartDataLabelsDialogFieldId.Position).AutomationId);
+        System.Windows.Automation.AutomationProperties.SetAutomationId(_valueBox, Field(ChartDataLabelsDialogFieldId.Value).AutomationId);
+        System.Windows.Automation.AutomationProperties.SetAutomationId(_legendKeyBox, Field(ChartDataLabelsDialogFieldId.LegendKey).AutomationId);
+        System.Windows.Automation.AutomationProperties.SetAutomationId(_categoryBox, Field(ChartDataLabelsDialogFieldId.CategoryName).AutomationId);
+        System.Windows.Automation.AutomationProperties.SetAutomationId(_seriesBox, Field(ChartDataLabelsDialogFieldId.SeriesName).AutomationId);
+        System.Windows.Automation.AutomationProperties.SetAutomationId(_percentageBox, Field(ChartDataLabelsDialogFieldId.Percentage).AutomationId);
+        System.Windows.Automation.AutomationProperties.SetAutomationId(_separatorBox, Field(ChartDataLabelsDialogFieldId.Separator).AutomationId);
+        System.Windows.Automation.AutomationProperties.SetAutomationId(_numberFormatBox, Field(ChartDataLabelsDialogFieldId.NumberFormat).AutomationId);
+        System.Windows.Automation.AutomationProperties.SetAutomationId(_calloutsBox, Field(ChartDataLabelsDialogFieldId.Callouts).AutomationId);
+        System.Windows.Automation.AutomationProperties.SetAutomationId(_fillBox, Field(ChartDataLabelsDialogFieldId.FillColor).AutomationId);
+        System.Windows.Automation.AutomationProperties.SetAutomationId(_borderBox, Field(ChartDataLabelsDialogFieldId.BorderColor).AutomationId);
+        System.Windows.Automation.AutomationProperties.SetAutomationId(_textBox, Field(ChartDataLabelsDialogFieldId.TextColor).AutomationId);
+        System.Windows.Automation.AutomationProperties.SetAutomationId(_borderThicknessBox, Field(ChartDataLabelsDialogFieldId.BorderThickness).AutomationId);
+        System.Windows.Automation.AutomationProperties.SetAutomationId(_fontSizeBox, Field(ChartDataLabelsDialogFieldId.FontSize).AutomationId);
+        System.Windows.Automation.AutomationProperties.SetAutomationId(_angleBox, Field(ChartDataLabelsDialogFieldId.TextAngle).AutomationId);
+    }
+
+    private static string LabelText(ChartDataLabelsDialogFieldId id) =>
+        UiText.Get(Field(id).LabelResourceKey);
+
+    private static string HelpText(ChartDataLabelsDialogFieldId id) =>
+        UiText.Get(Field(id).HelpResourceKey ?? throw new InvalidOperationException($"Field {id} has no help resource key."));
+
+    private static ChartDataLabelsDialogFieldDescriptor Field(ChartDataLabelsDialogFieldId id) =>
+        ChartDataLabelsPlanner.GetDialogField(id);
 }

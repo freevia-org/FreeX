@@ -48,6 +48,21 @@ public sealed partial class ThreadedCommentDialogTests
     }
 
     [Fact]
+    public void DialogSource_DelegatesPortableResultPlanningToPresentation()
+    {
+        var source = ReadThreadedCommentDialogSource();
+
+        source.Should().Contain("ThreadedCommentDialogPlanner.TryCreateResult");
+        source.Should().Contain("ThreadedCommentDialogPlanner.TryCreateReplyEditResult");
+        source.Should().Contain("ThreadedCommentDialogPlanner.TryCreateReplyDeleteResult");
+        source.Should().Contain("ThreadedCommentDialogPlanner.CreateResult");
+        source.Should().Contain("ThreadedCommentDialogPlanner.FormatReplyChoice");
+        source.Should().Contain("ThreadedCommentDialogPlanner.FormatMessageHeading");
+        source.Should().NotContain("public enum ThreadedCommentDialogAction");
+        source.Should().NotContain("public sealed record ThreadedCommentDialogResult");
+    }
+
+    [Fact]
     public void DialogSource_ReplyBox_KeepsAcceptsReturnForPlainEnter()
     {
         var source = ReadThreadedCommentDialogSource();

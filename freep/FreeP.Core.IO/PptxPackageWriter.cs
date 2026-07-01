@@ -1,8 +1,11 @@
 using System.Globalization;
 using System.IO.Compression;
+using System.Xml;
 using System.Xml.Linq;
 using Free.Shared.Drawing;
+using Free.Shared.Opc;
 using FreeP.Core.Model;
+using static Free.Shared.Opc.OpcPathHelper;
 
 namespace FreeP.Core.IO;
 
@@ -17,15 +20,12 @@ public static class PptxPackageWriter
     private static readonly XNamespace P       = "http://schemas.openxmlformats.org/presentationml/2006/main";
     private static readonly XNamespace A       = PptxColorReader.A;
     private static readonly XNamespace R       = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-    private static readonly XNamespace PkgRels = "http://schemas.openxmlformats.org/package/2006/relationships";
-    private static readonly XNamespace Dc      = "http://purl.org/dc/elements/1.1/";
-    private static readonly XNamespace Cp      = "http://schemas.openxmlformats.org/package/2006/metadata/core-properties";
-    private static readonly XNamespace Dcterms = "http://purl.org/dc/terms/";
-    private static readonly XNamespace Xsi     = XNamespace.Get("http://www.w3.org/2001/XMLSchema-instance");
+    private static readonly XNamespace Adec    = "http://schemas.microsoft.com/office/drawing/2017/decorative";
+    private const string DecorativeExtUri = "{C183D7F6-B498-43B3-948B-1728B52AA6E4}";
 
     // ── Relationship types ────────────────────────────────────────────────────────
     private const string OfficeDocRelType   = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument";
-    private const string CorePropsRelType   = "http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties";
+    private const string CorePropsRelType   = OpcPackageProperties.CorePropertiesRelationshipType;
     private const string SlideRelType       = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide";
     private const string SlideMasterRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster";
     private const string SlideLayoutRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout";
@@ -56,6 +56,68 @@ public static class PptxPackageWriter
     private const string DiagramColorsRelType    = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramColors";
     private const string DiagramDrawingRelType   = "http://schemas.microsoft.com/office/2007/relationships/diagramDrawing";
 
+    private static readonly HashSet<string> RegeneratedRelationshipTypes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        OfficeDocRelType,
+        CorePropsRelType,
+        SlideRelType,
+        SlideMasterRelType,
+        SlideLayoutRelType,
+        ThemeRelType,
+        ImageRelType,
+        PresPropsRelType,
+        ViewPropsRelType,
+        TableStylesRelType,
+        ChartRelType,
+        NotesSlideRelType,
+        NotesMasterRelType,
+        HyperlinkRelType,
+        CommentsRelType,
+        CommentAuthorsRelType,
+        VideoRelType,
+        AudioRelType,
+        OleObjectRelType,
+        PackageRelType,
+        DiagramDataRelType,
+        DiagramLayoutRelType,
+        DiagramQuickStyleRelType,
+        DiagramColorsRelType,
+        DiagramDrawingRelType,
+    };
+
+    private static readonly string[] WriterOwnedPackagePartPaths =
+    [
+        "[Content_Types].xml",
+        "_rels/.rels",
+        OpcPackageProperties.CorePropertiesZipEntry,
+        "ppt/presentation.xml",
+        "ppt/_rels/presentation.xml.rels",
+        "ppt/presProps.xml",
+        "ppt/viewProps.xml",
+        "ppt/tableStyles.xml",
+        "ppt/commentAuthors.xml",
+    ];
+
+    private static readonly string[] WriterOwnedPackagePartPrefixes =
+    [
+        "ppt/slides/",
+        "ppt/slideLayouts/",
+        "ppt/slideMasters/",
+        "ppt/theme/",
+        "ppt/charts/",
+        "ppt/media/",
+        "ppt/comments/",
+        "ppt/notesSlides/",
+        "ppt/notesMasters/",
+        "ppt/embeddings/",
+        "ppt/diagrams/",
+    ];
+
+    private static readonly OpcPackageRetentionClassifier WriterOwnedPackageClassifier = new(
+        WriterOwnedPackagePartPaths,
+        WriterOwnedPackagePartPrefixes,
+        RegeneratedRelationshipTypes);
+
     // ── Content types ─────────────────────────────────────────────────────────────
     private const string PresentationCT  = "application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml";
     private const string SlideCT         = "application/vnd.openxmlformats-officedocument.presentationml.slide+xml";
@@ -65,8 +127,7 @@ public static class PptxPackageWriter
     private const string PresPropsCT     = "application/vnd.openxmlformats-officedocument.presentationml.presProps+xml";
     private const string ViewPropsCT     = "application/vnd.openxmlformats-officedocument.presentationml.viewProps+xml";
     private const string TableStylesCT   = "application/vnd.openxmlformats-officedocument.presentationml.tableStyles+xml";
-    private const string CorePropsCT     = "application/vnd.openxmlformats-package.core-properties+xml";
-    private const string RelsCT          = "application/vnd.openxmlformats-package.relationships+xml";
+    private const string RelsCT          = OpcMediaTypes.RelationshipsContentType;
     private const string ChartCT         = PptxChartWriter.ChartCT;
     private const string NotesSlideCT    = "application/vnd.openxmlformats-officedocument.presentationml.notesSlide+xml";
     private const string NotesMasterCT   = "application/vnd.openxmlformats-officedocument.presentationml.notesMaster+xml";
@@ -140,7 +201,7 @@ public static class PptxPackageWriter
             if (slide.Transition?.Sound?.AudioBytes is { Length: > 0 })
             {
                 var sndCt  = slide.Transition.Sound.ContentType ?? "audio/mpeg";
-                var sndExt = MediaContentTypeToExtension(sndCt);
+                var sndExt = OpcMediaTypes.GetAudioVideoExtension(sndCt);
                 mediaExtensions.Add(sndExt);
             }
 
@@ -150,20 +211,20 @@ public static class PptxPackageWriter
                     && shape.Picture?.Bytes is { Length: > 0 })
                 {
                     var ct = shape.Picture.ContentType ?? "image/png";
-                    mediaExtensions.Add(ContentTypeToExtension(ct));
+                    mediaExtensions.Add(OpcMediaTypes.GetDrawingMediaExtension(ct));
                 }
 
                 // HH1: also register picture-fill images so their extension gets a Default
                 if (shape.Fill is ShapeFill.Picture picFill && picFill.ImageBytes.Length > 0)
                 {
                     var ct = picFill.ContentType ?? "image/png";
-                    mediaExtensions.Add(ContentTypeToExtension(ct));
+                    mediaExtensions.Add(OpcMediaTypes.GetDrawingMediaExtension(ct));
                 }
 
                 // II1: register audio/video file extensions for Media shapes
                 if (shape.Kind == SlideShapeKind.Media && shape.Media?.Bytes is { Length: > 0 } && shape.Media.ContentType is not null)
                 {
-                    var mediaExt = MediaContentTypeToExtension(shape.Media.ContentType);
+                    var mediaExt = OpcMediaTypes.GetAudioVideoExtension(shape.Media.ContentType);
                     mediaExtensions.Add(mediaExt);
                 }
 
@@ -171,7 +232,7 @@ public static class PptxPackageWriter
                 // Without this, the .png/.jpg etc. part has no content-type → PowerPoint repair.
                 if (shape.PreservedObject is not null && shape.Picture is { Bytes.Length: > 0 } prvPic)
                 {
-                    var prvExt = ContentTypeToExtension(prvPic.ContentType ?? "image/png");
+                    var prvExt = OpcMediaTypes.GetDrawingMediaExtension(prvPic.ContentType ?? "image/png");
                     mediaExtensions.Add(prvExt);
                 }
             }
@@ -209,17 +270,25 @@ public static class PptxPackageWriter
         }
 
         // --- 1. [Content_Types].xml ---
-        var ctXml = BuildContentTypesXml(presentation, masters, layouts, mediaExtensions, prvPartCtRemaps);
+        var packageSnapshot = presentation.PackageSnapshot;
+        var ctXml = BuildContentTypesXml(presentation, masters, layouts, mediaExtensions, prvPartCtRemaps, packageSnapshot);
         WriteEntry(archive, "[Content_Types].xml", ctXml);
 
         // --- 2. Root rels ---
-        var rootRels = new RelsDoc();
+        var rootRels = new OpcRelationshipDocument();
         rootRels.Add("rId1", OfficeDocRelType, "ppt/presentation.xml");
-        rootRels.Add("rId2", CorePropsRelType, "docProps/core.xml");
+        rootRels.Add("rId2", CorePropsRelType, OpcPackageProperties.CorePropertiesZipEntry);
+        MergePreservedRelationships(rootRels, packageSnapshot, "_rels/.rels", string.Empty);
         WriteEntry(archive, "_rels/.rels", rootRels.ToXDocument());
 
         // --- 3. Core properties ---
-        WriteEntry(archive, "docProps/core.xml", BuildCorePropsXml(presentation.Properties));
+        WriteEntry(
+            archive,
+            OpcPackageProperties.CorePropertiesZipEntry,
+            OpcDocumentProperties.BuildCorePropertiesDocument(
+                presentation.Properties,
+                includeEmptyStrings: true,
+                includeXmlDeclaration: true));
 
         // --- 4. Theme(s) — one per master (MM4: multi-master theme fix) ---
         // Build the per-master theme map: master index (0-based) → theme to write.
@@ -260,9 +329,9 @@ public static class PptxPackageWriter
             WriteEntry(archive, layoutPath, BuildSlideLayoutXml(layout, layoutColorScheme));
 
             // Layout rels: -> master
-            var layoutRels = new RelsDoc();
+            var layoutRels = new OpcRelationshipDocument();
             layoutRels.Add("rId1", SlideMasterRelType, $"../{masterPath.Replace("ppt/", "")}");
-            WriteRels(archive, layoutPath, layoutRels);
+            WriteRels(archive, layoutPath, layoutRels, packageSnapshot);
         }
 
         // --- 7. Masters ---
@@ -285,7 +354,7 @@ public static class PptxPackageWriter
             WriteEntry(archive, masterPath, BuildSlideMasterXml(master, masterThemes[mi].ColorScheme, layoutRelIds));
 
             // Master rels: rId1=theme (points to THIS master's own theme part), rId2..=layouts
-            var masterRels = new RelsDoc();
+            var masterRels = new OpcRelationshipDocument();
             // Each master references its own theme file (theme1.xml, theme2.xml, …).
             var themeRelTarget = $"../theme/theme{mi + 1}.xml";
             masterRels.Add("rId1", ThemeRelType, themeRelTarget);
@@ -296,11 +365,11 @@ public static class PptxPackageWriter
                 var relTarget = $"../slideLayouts/{layoutPath.Split('/').Last()}";
                 masterRels.Add(relId, SlideLayoutRelType, relTarget);
             }
-            WriteRels(archive, masterPath, masterRels);
+            WriteRels(archive, masterPath, masterRels, packageSnapshot);
         }
 
         // --- 8. Slides ---
-        var presRels = new RelsDoc();
+        var presRels = new OpcRelationshipDocument();
         var sldIdElements = new List<XElement>();
         uint sldIdCounter = 256;
 
@@ -316,9 +385,9 @@ public static class PptxPackageWriter
         {
             WriteEntry(archive, "ppt/notesMasters/notesMaster1.xml", BuildNotesMasterXml());
             // notesMaster rels: -> theme (reuse the same theme1.xml)
-            var nmRels = new RelsDoc();
+            var nmRels = new OpcRelationshipDocument();
             nmRels.Add("rId1", ThemeRelType, "../theme/theme1.xml");
-            WriteRels(archive, "ppt/notesMasters/notesMaster1.xml", nmRels);
+            WriteRels(archive, "ppt/notesMasters/notesMaster1.xml", nmRels, packageSnapshot);
         }
 
         int globalChartIndex = 1; // monotonically increasing across all slides
@@ -409,7 +478,7 @@ public static class PptxPackageWriter
             WriteEntry(archive, slidePath, BuildSlideXml(slide, slideColorScheme, mediaById, smartArtRelIdRemap, hlinkRelIds, presentation.Slides, fillBlipById, transSoundRelId));
 
             // Slide rels: rId1=layout, images (picture shapes + fill blips), charts, SmartArt, optional notesSlide
-            var slideRels = new RelsDoc();
+            var slideRels = new OpcRelationshipDocument();
             slideRels.Add("rId1", SlideLayoutRelType, $"../slideLayouts/{layoutPath.Split('/').Last()}");
             foreach (var (_, mediaRelId, mediaPath) in mediaRelIds)
                 slideRels.Add(mediaRelId, ImageRelType, $"../media/{mediaPath.Split('/').Last()}");
@@ -446,10 +515,10 @@ public static class PptxPackageWriter
                 WriteEntry(archive, notesPath, BuildNotesSlideXml(slide.Notes, slidePath));
 
                 // notesSlide rels: -> slide + notesMaster
-                var notesRels = new RelsDoc();
+                var notesRels = new OpcRelationshipDocument();
                 notesRels.Add("rId1", SlideRelType,       $"../slides/slide{si + 1}.xml");
                 notesRels.Add("rId2", NotesMasterRelType, "../notesMasters/notesMaster1.xml");
-                WriteRels(archive, notesPath, notesRels);
+                WriteRels(archive, notesPath, notesRels, packageSnapshot);
 
                 slideRels.Add(notesRelId, NotesSlideRelType, $"../notesSlides/notesSlide{si + 1}.xml");
             }
@@ -463,7 +532,7 @@ public static class PptxPackageWriter
                 slideRels.Add(cmRelId, CommentsRelType, $"../comments/comment{si + 1}.xml");
             }
 
-            WriteRels(archive, slidePath, slideRels);
+            WriteRels(archive, slidePath, slideRels, packageSnapshot);
 
             presRels.Add(slideRelId, SlideRelType, $"slides/slide{si + 1}.xml");
             sldIdElements.Add(new XElement(P + "sldId",
@@ -495,7 +564,7 @@ public static class PptxPackageWriter
         if (hasSomeComments)
             presRels.Add($"rId{masterRelIdStart + masters.Count + extraPresRelOffset}", CommentAuthorsRelType, "commentAuthors.xml");
 
-        WriteRels(archive, "ppt/presentation.xml", presRels);
+        WriteRels(archive, "ppt/presentation.xml", presRels, packageSnapshot);
 
         // --- 10. presentation.xml (last, so sldIdElements are complete) ---
         var masterRelIds = Enumerable.Range(0, masters.Count)
@@ -504,43 +573,19 @@ public static class PptxPackageWriter
 
         WriteEntry(archive, "ppt/presentation.xml",
             BuildPresentationXml(presentation, sldIdElements, masterRelIds));
+
+        CopyPreservedPackageEntries(archive, packageSnapshot);
     }
 
     // ── [Content_Types].xml ───────────────────────────────────────────────────────
 
-    // Maps a file extension to its IANA media type for [Content_Types].xml Default entries.
-    private static readonly Dictionary<string, string> ExtensionToContentType =
-        new(StringComparer.OrdinalIgnoreCase)
-        {
-            ["png"]  = "image/png",
-            ["jpg"]  = "image/jpeg",
-            ["jpeg"] = "image/jpeg",
-            ["gif"]  = "image/gif",
-            ["bmp"]  = "image/bmp",
-            ["tiff"] = "image/tiff",
-            ["svg"]  = "image/svg+xml",
-            ["wmf"]  = "image/x-wmf",
-            ["emf"]  = "image/x-emf",
-            // Audio/video types (II1: required so media parts have a declared content type)
-            ["mp4"]  = "video/mp4",
-            ["mov"]  = "video/quicktime",
-            ["avi"]  = "video/x-msvideo",
-            ["wmv"]  = "video/x-ms-wmv",
-            ["mp3"]  = "audio/mpeg",
-            ["m4a"]  = "audio/mp4",
-            ["wav"]  = "audio/wav",
-            ["wma"]  = "audio/x-ms-wma",
-            // EB4: ogg/aac must be present so transition sound parts get a content-type Default
-            ["ogg"]  = "audio/ogg",
-            ["aac"]  = "audio/aac",
-        };
-
     private static XDocument BuildContentTypesXml(
         Presentation p, List<SlideMaster> masters, List<SlideLayout> layouts,
         HashSet<string> mediaExtensions,
-        Dictionary<string, string>? prvPartPathRemaps = null)
+        Dictionary<string, string>? prvPartPathRemaps = null,
+        PptxPackageSnapshot? packageSnapshot = null)
     {
-        var CT = XNamespace.Get("http://schemas.openxmlformats.org/package/2006/content-types");
+        var CT = OpcMediaTypes.ContentTypesNamespace;
 
         var defaults = new List<XElement>
         {
@@ -551,7 +596,7 @@ public static class PptxPackageWriter
         // Emit a Default entry for every media extension actually written (covers all paths correctly).
         foreach (var ext in mediaExtensions.OrderBy(e => e))
         {
-            if (ExtensionToContentType.TryGetValue(ext, out var imgCt))
+            if (OpcMediaTypes.TryGetDefaultContentType(ext, out var imgCt))
                 defaults.Add(new XElement(CT + "Default",
                     new XAttribute("Extension", ext),
                     new XAttribute("ContentType", imgCt)));
@@ -563,7 +608,7 @@ public static class PptxPackageWriter
             Override(CT, "/ppt/presProps.xml", PresPropsCT),
             Override(CT, "/ppt/viewProps.xml", ViewPropsCT),
             Override(CT, "/ppt/tableStyles.xml", TableStylesCT),
-            Override(CT, "/docProps/core.xml", CorePropsCT),
+            Override(CT, OpcPackageProperties.CorePropertiesPartName, OpcPackageProperties.CorePropertiesContentType),
         };
         // MM4: one theme Override entry per master (theme1.xml, theme2.xml, …).
         for (int mi = 0; mi < masters.Count; mi++)
@@ -690,11 +735,14 @@ public static class PptxPackageWriter
             }
         }
 
-        return new XDocument(
+        var doc = new XDocument(
             new XDeclaration("1.0", "UTF-8", "yes"),
             new XElement(CT + "Types",
                 defaults,
                 overrides));
+
+        MergePreservedContentTypes(doc, packageSnapshot);
+        return doc;
     }
 
     private static XElement Override(XNamespace ct, string partName, string contentType) =>
@@ -723,8 +771,8 @@ public static class PptxPackageWriter
                 new XAttribute("cy", p.SlideSizeCyEmu),
                 new XAttribute("type", "screen16x9")),
             new XElement(P + "notesSz",
-                new XAttribute("cx", 6858000),
-                new XAttribute("cy", 9144000)));
+                new XAttribute("cx", DrawingMlUnits.EmuPerInch * 15 / 2),
+                new XAttribute("cy", DrawingMlUnits.EmuPerInch * 10)));
 
         // Emit p14:sectionLst inside p:extLst when sections are present.
         if (p.Sections.Count > 0)
@@ -1757,7 +1805,7 @@ public static class PptxPackageWriter
                         new XElement(A + "fillStyleLst",
                             SolidPhClr(), SolidPhClr(), SolidPhClr()),
                         new XElement(A + "lnStyleLst",
-                            LnStyle("6350"), LnStyle("12700"), LnStyle("19050")),
+                            LnStyle(0.5), LnStyle(1.0), LnStyle(1.5)),
                         new XElement(A + "effectStyleLst",
                             EffectStyle(), EffectStyle(), EffectStyle()),
                         new XElement(A + "bgFillStyleLst",
@@ -1767,8 +1815,8 @@ public static class PptxPackageWriter
     private static XElement SolidPhClr() =>
         new XElement(A + "solidFill", new XElement(A + "schemeClr", new XAttribute("val", "phClr")));
 
-    private static XElement LnStyle(string w) =>
-        new XElement(A + "ln", new XAttribute("w", w),
+    private static XElement LnStyle(double widthPt) =>
+        new XElement(A + "ln", new XAttribute("w", DrawingMlUnits.PointsToEmu(widthPt)),
             new XElement(A + "solidFill", new XElement(A + "schemeClr", new XAttribute("val", "phClr"))),
             new XElement(A + "prstDash", new XAttribute("val", "solid")));
 
@@ -1798,17 +1846,6 @@ public static class PptxPackageWriter
                 new XAttribute("def", "{5C22544A-7EE6-4342-B048-85BDC9FD1C3A}")));
 
     // ── Core properties ───────────────────────────────────────────────────────────
-
-    private static XDocument BuildCorePropsXml(PresentationProperties props) =>
-        new XDocument(
-            new XDeclaration("1.0", "UTF-8", "yes"),
-            new XElement(Cp + "coreProperties",
-                NsAttr("cp", Cp), NsAttr("dc", Dc), NsAttr("dcterms", Dcterms), NsAttr("xsi", Xsi),
-                props.Title is not null ? new XElement(Dc + "title", props.Title) : null,
-                props.Author is not null ? new XElement(Dc + "creator", props.Author) : null,
-                props.Subject is not null ? new XElement(Dc + "subject", props.Subject) : null,
-                props.Keywords is not null ? new XElement(Cp + "keywords", props.Keywords) : null,
-                props.Comments is not null ? new XElement(Dc + "description", props.Comments) : null));
 
     // ── Shape elements ────────────────────────────────────────────────────────────
 
@@ -1848,7 +1885,7 @@ public static class PptxPackageWriter
         fillBlipById?.TryGetValue(shape.Id, out fillBlipRelId);
         return new XElement(P + "sp",
             new XElement(P + "nvSpPr",
-                CnvPrWithHlink(shape.Id, shape.Name, shape.Hyperlink, hlinkRelIds, allSlides),
+                CnvPrWithHlink(shape, hlinkRelIds, allSlides),
                 new XElement(P + "cNvSpPr"),
                 new XElement(P + "nvPr",
                     shape.Placeholder is not null ? BuildPhEl(shape.Placeholder) : null)),
@@ -1876,7 +1913,7 @@ public static class PptxPackageWriter
 
         return new XElement(P + "cxnSp",
             new XElement(P + "nvCxnSpPr",
-                CnvPrWithHlink(shape.Id, shape.Name, shape.Hyperlink, hlinkRelIds, null),
+                CnvPrWithHlink(shape, hlinkRelIds, null),
                 cNvCxnSpPrEl,
                 new XElement(P + "nvPr")),
             BuildSpPrEl(shape, scheme, fillBlipRelId: fillBlipRelId));
@@ -1902,7 +1939,7 @@ public static class PptxPackageWriter
 
         return new XElement(P + "pic",
             new XElement(P + "nvPicPr",
-                CnvPr(shape.Id, shape.Name),
+                CnvPr(shape),
                 new XElement(P + "cNvPicPr"),
                 new XElement(P + "nvPr")),
             blipFillEl,
@@ -2003,7 +2040,7 @@ public static class PptxPackageWriter
 
         return new XElement(P + "pic",
             new XElement(P + "nvPicPr",
-                CnvPr(shape.Id, shape.Name),
+                CnvPr(shape),
                 new XElement(P + "cNvPicPr"),
                 new XElement(P + "nvPr",
                     mediaFileEl)),
@@ -2019,7 +2056,7 @@ public static class PptxPackageWriter
         Dictionary<uint, string>? fillBlipById = null) =>
         new XElement(P + "grpSp",
             new XElement(P + "nvGrpSpPr",
-                CnvPr(shape.Id, shape.Name),
+                CnvPr(shape),
                 new XElement(P + "cNvGrpSpPr"),
                 new XElement(P + "nvPr")),
             BuildGrpSpPrEl(shape),
@@ -2300,9 +2337,7 @@ public static class PptxPackageWriter
 
         return new XElement(P + "graphicFrame",
             new XElement(P + "nvGraphicFramePr",
-                new XElement(P + "cNvPr",
-                    new XAttribute("id", shape.Id),
-                    new XAttribute("name", shape.Name)),
+                CnvPr(shape),
                 new XElement(P + "cNvGraphicFramePr",
                     new XElement(A + "graphicFrameLocks",
                         new XAttribute("noGrp", "1"))),
@@ -2341,9 +2376,7 @@ public static class PptxPackageWriter
 
         return new XElement(P + "graphicFrame",
             new XElement(P + "nvGraphicFramePr",
-                new XElement(P + "cNvPr",
-                    new XAttribute("id", shape.Id),
-                    new XAttribute("name", shape.Name)),
+                CnvPr(shape),
                 new XElement(P + "cNvGraphicFramePr",
                     new XElement(A + "graphicFrameLocks",
                         new XAttribute("noGrp", "1"))),
@@ -2403,9 +2436,7 @@ public static class PptxPackageWriter
 
         return new XElement(P + "graphicFrame",
             new XElement(P + "nvGraphicFramePr",
-                new XElement(P + "cNvPr",
-                    new XAttribute("id", shape.Id),
-                    new XAttribute("name", shape.Name)),
+                CnvPr(shape),
                 new XElement(P + "cNvGraphicFramePr",
                     new XElement(A + "graphicFrameLocks",
                         new XAttribute("noGrp", "1"))),
@@ -2477,10 +2508,10 @@ public static class PptxPackageWriter
 
         // tcPr
         var tcPr = new XElement(A + "tcPr");
-        if (cell.InsetLeftPt.HasValue)   tcPr.Add(new XAttribute("marL", (long)Math.Round(cell.InsetLeftPt.Value * 12700)));
-        if (cell.InsetRightPt.HasValue)  tcPr.Add(new XAttribute("marR", (long)Math.Round(cell.InsetRightPt.Value * 12700)));
-        if (cell.InsetTopPt.HasValue)    tcPr.Add(new XAttribute("marT", (long)Math.Round(cell.InsetTopPt.Value * 12700)));
-        if (cell.InsetBottomPt.HasValue) tcPr.Add(new XAttribute("marB", (long)Math.Round(cell.InsetBottomPt.Value * 12700)));
+        if (cell.InsetLeftPt.HasValue)   tcPr.Add(new XAttribute("marL", DrawingMlUnits.PointsToEmu(cell.InsetLeftPt.Value)));
+        if (cell.InsetRightPt.HasValue)  tcPr.Add(new XAttribute("marR", DrawingMlUnits.PointsToEmu(cell.InsetRightPt.Value)));
+        if (cell.InsetTopPt.HasValue)    tcPr.Add(new XAttribute("marT", DrawingMlUnits.PointsToEmu(cell.InsetTopPt.Value)));
+        if (cell.InsetBottomPt.HasValue) tcPr.Add(new XAttribute("marB", DrawingMlUnits.PointsToEmu(cell.InsetBottomPt.Value)));
         if (cell.Anchor.HasValue)
             tcPr.Add(new XAttribute("anchor", cell.Anchor.Value switch
             {
@@ -2526,7 +2557,7 @@ public static class PptxPackageWriter
         {
             var children = new List<object>
             {
-                new XAttribute("w", (long)Math.Round(v.WidthPt * 12700)),
+                new XAttribute("w", DrawingMlUnits.PointsToEmu(v.WidthPt)),
                 new XElement(A + "solidFill", BuildColorEl(v.Color))
             };
             if (v.Dash != OutlineDash.Solid)
@@ -2539,7 +2570,7 @@ public static class PptxPackageWriter
         {
             var children = new List<object>
             {
-                new XAttribute("w", (long)Math.Round(gv.WidthPt * 12700)),
+                new XAttribute("w", DrawingMlUnits.PointsToEmu(gv.WidthPt)),
                 BuildGradFillEl(gv.Gradient)
             };
             if (gv.Dash != OutlineDash.Solid)
@@ -2671,14 +2702,14 @@ public static class PptxPackageWriter
         {
             ShapeOutline.None => new XElement(A + "ln", new XElement(A + "noFill")),
             ShapeOutline.Visible v => new XElement(A + "ln",
-                new XAttribute("w", (long)Math.Round(v.WidthPt * 12700)),
+                new XAttribute("w", DrawingMlUnits.PointsToEmu(v.WidthPt)),
                 new XElement(A + "solidFill", BuildColorEl(v.Color)),
                 v.Dash != OutlineDash.Solid
                     ? new XElement(A + "prstDash", new XAttribute("val", ToDashStr(v.Dash)))
                     : null),
             // Wave 22B: gradient outline
             ShapeOutline.GradientVisible gv => new XElement(A + "ln",
-                new XAttribute("w", (long)Math.Round(gv.WidthPt * 12700)),
+                new XAttribute("w", DrawingMlUnits.PointsToEmu(gv.WidthPt)),
                 BuildGradFillEl(gv.Gradient),
                 gv.Dash != OutlineDash.Solid
                     ? new XElement(A + "prstDash", new XAttribute("val", ToDashStr(gv.Dash)))
@@ -2744,10 +2775,10 @@ public static class PptxPackageWriter
         }
 
         if (!body.Wrap) bodyPr.Add(new XAttribute("wrap", "none"));
-        if (body.InsetLeftPt.HasValue) bodyPr.Add(new XAttribute("lIns", (long)Math.Round(body.InsetLeftPt.Value * 12700)));
-        if (body.InsetRightPt.HasValue) bodyPr.Add(new XAttribute("rIns", (long)Math.Round(body.InsetRightPt.Value * 12700)));
-        if (body.InsetTopPt.HasValue) bodyPr.Add(new XAttribute("tIns", (long)Math.Round(body.InsetTopPt.Value * 12700)));
-        if (body.InsetBottomPt.HasValue) bodyPr.Add(new XAttribute("bIns", (long)Math.Round(body.InsetBottomPt.Value * 12700)));
+        if (body.InsetLeftPt.HasValue) bodyPr.Add(new XAttribute("lIns", DrawingMlUnits.PointsToEmu(body.InsetLeftPt.Value)));
+        if (body.InsetRightPt.HasValue) bodyPr.Add(new XAttribute("rIns", DrawingMlUnits.PointsToEmu(body.InsetRightPt.Value)));
+        if (body.InsetTopPt.HasValue) bodyPr.Add(new XAttribute("tIns", DrawingMlUnits.PointsToEmu(body.InsetTopPt.Value)));
+        if (body.InsetBottomPt.HasValue) bodyPr.Add(new XAttribute("bIns", DrawingMlUnits.PointsToEmu(body.InsetBottomPt.Value)));
         // Wave 19A: write normAutofit with cached fontScale/lnSpcReduction
         if (body.AutoFit)
         {
@@ -2971,8 +3002,8 @@ public static class PptxPackageWriter
                     new XAttribute("val", (long)Math.Round(ts.Alpha / 255.0 * 100000))));
             rPr.Add(new XElement(A + "effectLst",
                 new XElement(A + "outerShdw",
-                    new XAttribute("blurRad", (long)Math.Round(ts.BlurPt * 12700)),
-                    new XAttribute("dist",    (long)Math.Round(ts.DistPt * 12700)),
+                    new XAttribute("blurRad", DrawingMlUnits.PointsToEmu(ts.BlurPt)),
+                    new XAttribute("dist",    DrawingMlUnits.PointsToEmu(ts.DistPt)),
                     new XAttribute("dir",     (long)Math.Round(ts.DirDeg * 60000)),
                     shdwColorEl)));
         }
@@ -3111,7 +3142,7 @@ public static class PptxPackageWriter
                 && shape.Picture?.Bytes is { Length: > 0 } picBytes)
             {
                 var ct = shape.Picture.ContentType ?? "image/png";
-                var ext = ContentTypeToExtension(ct);
+                var ext = OpcMediaTypes.GetDrawingMediaExtension(ct);
                 var mediaPath = $"ppt/media/slide{slideIndex}_media{mediaIdx}.{ext}";
 
                 var entry = archive.CreateEntry(mediaPath, CompressionLevel.Optimal);
@@ -3128,7 +3159,7 @@ public static class PptxPackageWriter
             if (shape.Fill is ShapeFill.Picture picFill && picFill.ImageBytes.Length > 0)
             {
                 var ct = picFill.ContentType ?? "image/png";
-                var ext = ContentTypeToExtension(ct);
+                var ext = OpcMediaTypes.GetDrawingMediaExtension(ct);
                 var mediaPath = $"ppt/media/slide{slideIndex}_media{mediaIdx}.{ext}";
 
                 var entry = archive.CreateEntry(mediaPath, CompressionLevel.Optimal);
@@ -3275,7 +3306,7 @@ public static class PptxPackageWriter
                 // Write this part's rels file if we have it
                 if (smart.PartRels.TryGetValue(part.PartPath, out var relsBytes) && relsBytes.Length > 0)
                 {
-                    var partDir  = GetDirectory(part.PartPath);
+                    var partDir  = GetDirectoryName(part.PartPath);
                     var partFile = part.PartPath[(part.PartPath.LastIndexOf('/') + 1)..];
                     var relsPath = string.IsNullOrEmpty(partDir)
                         ? $"_rels/{partFile}.rels"
@@ -3386,8 +3417,8 @@ public static class PptxPackageWriter
         slidePath  = slidePath.TrimStart('/');
         targetPath = targetPath.TrimStart('/');
 
-        var slideDir  = GetDirectory(slidePath);
-        var targetDir = GetDirectory(targetPath);
+        var slideDir  = GetDirectoryName(slidePath);
+        var targetDir = GetDirectoryName(targetPath);
         var fileName  = targetPath[(targetPath.LastIndexOf('/') + 1)..];
 
         // Count how many levels up we need to go from slideDir
@@ -3502,7 +3533,7 @@ public static class PptxPackageWriter
             // Write the fallback image (shape.Picture) if present
             if (shape.Picture is { Bytes.Length: > 0 } pic)
             {
-                var imgExt    = ContentTypeToExtension(pic.ContentType ?? "image/png");
+                var imgExt    = OpcMediaTypes.GetDrawingMediaExtension(pic.ContentType ?? "image/png");
                 var imgPath   = $"ppt/media/preservedImg{slideIdx}_{shape.Id}.{imgExt}";
                 if (!writtenPaths.Contains(imgPath))
                 {
@@ -3521,9 +3552,7 @@ public static class PptxPackageWriter
 
     private static string MakePartRelsPath(string partPath)
     {
-        var dir  = GetDirectory(partPath);
-        var file = partPath[(partPath.LastIndexOf('/') + 1)..];
-        return string.IsNullOrEmpty(dir) ? $"_rels/{file}.rels" : $"{dir}/_rels/{file}.rels";
+        return OpcPathHelper.GetRelationshipPartPath(partPath);
     }
 
     /// <summary>
@@ -3633,7 +3662,7 @@ public static class PptxPackageWriter
             // ── Write fallback image ───────────────────────────────────────────
             if (shape.Picture is { Bytes.Length: > 0 } pic)
             {
-                var imgExt = ContentTypeToExtension(pic.ContentType ?? "image/png");
+                var imgExt = OpcMediaTypes.GetDrawingMediaExtension(pic.ContentType ?? "image/png");
                 var imgPath = $"ppt/media/oleImg{slideIdx}_{shape.Id}.{imgExt}";
                 var imgEntry = archive.CreateEntry(imgPath, CompressionLevel.Optimal);
                 using (var s = imgEntry.Open())
@@ -3708,9 +3737,7 @@ public static class PptxPackageWriter
         // Build the p:graphicFrame
         var graphicFrame = new XElement(P + "graphicFrame",
             new XElement(P + "nvGraphicFramePr",
-                new XElement(P + "cNvPr",
-                    new XAttribute("id", shape.Id),
-                    new XAttribute("name", shape.Name)),
+                CnvPr(shape),
                 new XElement(P + "cNvGraphicFramePr"),
                 new XElement(P + "nvPr")),
             xfrm,
@@ -3787,43 +3814,137 @@ public static class PptxPackageWriter
         doc.Save(writer);
     }
 
-    private static void WriteRels(ZipArchive archive, string partPath, RelsDoc rels)
+    private static void WriteRels(ZipArchive archive, string partPath, OpcRelationshipDocument rels, PptxPackageSnapshot? packageSnapshot = null)
     {
-        var dir = GetDirectory(partPath);
-        var file = partPath[(partPath.LastIndexOf('/') + 1)..];
-        var relsPath = string.IsNullOrEmpty(dir)
-            ? $"_rels/{file}.rels"
-            : $"{dir}/_rels/{file}.rels";
+        var relsPath = OpcPathHelper.GetRelationshipPartPath(partPath);
 
+        MergePreservedRelationships(rels, packageSnapshot, relsPath, partPath);
         WriteEntry(archive, relsPath, rels.ToXDocument());
     }
 
-    private static string GetDirectory(string path)
+    private static void MergePreservedContentTypes(XDocument contentTypes, PptxPackageSnapshot? packageSnapshot)
     {
-        var i = path.LastIndexOf('/');
-        return i < 0 ? string.Empty : path[..i];
+        if (packageSnapshot is null || !packageSnapshot.TryGetEntry("[Content_Types].xml", out var bytes))
+            return;
+
+        var sourceTypes = OpcXml.TryLoadXml(bytes);
+        if (sourceTypes is not null)
+            OpcMediaTypes.MergePreservedContentTypes(contentTypes, sourceTypes, IsWriterOwnedPath);
     }
+
+    private static void MergePreservedRelationships(
+        OpcRelationshipDocument rels,
+        PptxPackageSnapshot? packageSnapshot,
+        string relsPath,
+        string sourcePartPath)
+    {
+        if (packageSnapshot is null || !packageSnapshot.TryGetEntry(relsPath, out var bytes))
+            return;
+
+        var sourceRels = OpcXml.TryLoadXml(bytes);
+        if (sourceRels is null)
+            return;
+
+        if (sourceRels.Root is null)
+            return;
+
+        foreach (var rel in OpcRelationships.Load(sourceRels))
+        {
+            if (string.IsNullOrWhiteSpace(rel.Type) ||
+                string.IsNullOrWhiteSpace(rel.Target))
+                continue;
+
+            if (IsWriterOwnedRelationship(sourcePartPath, rel.Type, rel.Target, rel.IsExternal))
+                continue;
+
+            rels.AddUnique(rel.Id, rel.Type, rel.Target, rel.IsExternal);
+        }
+    }
+
+    private static void CopyPreservedPackageEntries(ZipArchive archive, PptxPackageSnapshot? packageSnapshot)
+    {
+        if (packageSnapshot is null)
+            return;
+
+        var copied = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var (path, bytes) in packageSnapshot.Entries)
+        {
+            var normalizedPath = ToZipEntryPath(path);
+            if (copied.Contains(normalizedPath) || IsWriterOwnedPath(normalizedPath))
+                continue;
+
+            var entry = archive.CreateEntry(normalizedPath, CompressionLevel.Optimal);
+            using var stream = entry.Open();
+            stream.Write(bytes, 0, bytes.Length);
+            copied.Add(normalizedPath);
+        }
+    }
+
+    private static bool IsWriterOwnedRelationship(string sourcePartPath, string type, string target, bool external) =>
+        WriterOwnedPackageClassifier.IsRegeneratedRelationship(sourcePartPath, type, target, external);
+
+    private static bool IsWriterOwnedPath(string path) =>
+        WriterOwnedPackageClassifier.IsRegeneratedPart(path);
 
     // ── Small utilities ───────────────────────────────────────────────────────────
 
     private static XAttribute NsAttr(string prefix, XNamespace ns) =>
         new XAttribute(XNamespace.Xmlns + prefix, ns.NamespaceName);
 
-    private static XElement CnvPr(uint id, string name) =>
-        new XElement(P + "cNvPr", new XAttribute("id", id), new XAttribute("name", name));
+    private static XElement CnvPr(SlideShape shape)
+    {
+        var el = CnvPrBase(shape);
+        AddDecorativeExtList(el, shape);
+        return el;
+    }
+
+    private static XElement CnvPrBase(SlideShape shape)
+    {
+        var el = new XElement(P + "cNvPr", new XAttribute("id", shape.Id), new XAttribute("name", shape.Name));
+        if (!string.IsNullOrWhiteSpace(shape.AlternativeTextTitle))
+        {
+            el.Add(new XAttribute("title", shape.AlternativeTextTitle.Trim()));
+        }
+
+        if (!string.IsNullOrWhiteSpace(shape.AlternativeText))
+        {
+            el.Add(new XAttribute("descr", shape.AlternativeText.Trim()));
+        }
+
+        return el;
+    }
+
+    private static void AddDecorativeExtList(XElement cNvPr, SlideShape shape)
+    {
+        if (!shape.IsDecorative)
+        {
+            return;
+        }
+
+        cNvPr.Add(new XElement(A + "extLst",
+            new XElement(A + "ext",
+                new XAttribute("uri", DecorativeExtUri),
+                new XElement(Adec + "decorative",
+                    NsAttr("adec", Adec),
+                    new XAttribute("val", "1")))));
+    }
 
     /// <summary>
     /// Builds a cNvPr element and, when the shape carries a hyperlink, appends an a:hlinkClick child.
     /// </summary>
-    private static XElement CnvPrWithHlink(uint id, string name, Hyperlink? hlink,
-        Dictionary<string, string>? hlinkRelIds, List<Slide>? allSlides)
+    private static XElement CnvPrWithHlink(
+        SlideShape shape,
+        Dictionary<string, string>? hlinkRelIds,
+        List<Slide>? allSlides)
     {
-        var el = new XElement(P + "cNvPr", new XAttribute("id", id), new XAttribute("name", name));
-        if (hlink is not null)
+        var el = CnvPrBase(shape);
+        if (shape.Hyperlink is not null)
         {
-            var hlinkEl = BuildHlinkClickEl(hlink, hlinkRelIds, allSlides);
+            var hlinkEl = BuildHlinkClickEl(shape.Hyperlink, hlinkRelIds, allSlides);
             if (hlinkEl is not null) el.Add(hlinkEl);
         }
+        AddDecorativeExtList(el, shape);
         return el;
     }
 
@@ -3882,42 +4003,9 @@ public static class PptxPackageWriter
         }
     }
 
-    private static string FmtColor(SrgbColor c) => $"{c.R:X2}{c.G:X2}{c.B:X2}";
+    private static string FmtColor(SrgbColor c) => new DrawingMlRgbColor(c.R, c.G, c.B).ToHexRgb();
 
     private static string GetShapeId(SlideShape s) => s.Id.ToString(CultureInfo.InvariantCulture);
-
-    private static string ContentTypeToExtension(string ct) =>
-        ct.ToLowerInvariant() switch
-        {
-            "image/jpeg" or "image/jpg" => "jpg",
-            "image/gif" => "gif",
-            "image/bmp" => "bmp",
-            "image/tiff" => "tiff",
-            "image/svg+xml" => "svg",
-            "image/x-wmf" or "image/wmf" => "wmf",
-            "image/x-emf" or "image/emf" => "emf",
-            _ => "png"
-        };
-
-    // II1: maps audio/video content types to their file extensions (mirrors WriteSlideMediaFiles switch)
-    // EB4: ogg/aac added here AND in ExtensionToContentType so they both stay consistent.
-    private static string MediaContentTypeToExtension(string ct) =>
-        ct.ToLowerInvariant() switch
-        {
-            "video/mp4"       => "mp4",
-            "video/quicktime" => "mov",
-            "video/x-msvideo" => "avi",
-            "video/x-ms-wmv"  => "wmv",
-            "audio/mpeg" or "audio/mp3" => "mp3",
-            "audio/mp4"       => "m4a",
-            "audio/wav"       => "wav",
-            "audio/x-ms-wma"  => "wma",
-            // EB4: ogg/aac were missing — WriteTransitionSoundPart mapped them but
-            // ExtensionToContentType had no entry, so the Default entry was never emitted.
-            "audio/ogg"       => "ogg",
-            "audio/aac"       => "aac",
-            _                 => "mp4"
-        };
 
     private static string ToLayoutTypeStr(SlideLayoutType type) =>
         type switch
@@ -3946,33 +4034,4 @@ public static class PptxPackageWriter
             _ => "solid"
         };
 
-    // ── RelsDoc helper ────────────────────────────────────────────────────────────
-
-    private sealed class RelsDoc
-    {
-        private readonly List<(string id, string type, string target, bool external)> _rels = new();
-
-        public void Add(string id, string type, string target, bool external = false)
-            => _rels.Add((id, type, target, external));
-
-        public XDocument ToXDocument() =>
-            new XDocument(
-                new XDeclaration("1.0", "UTF-8", "yes"),
-                // OPC spec §9.3: Relationships element MUST use the default namespace,
-                // not a prefixed namespace (PowerPoint rejects r:Relationships).
-                new XElement(PkgRels + "Relationships",
-                    _rels.Select(r =>
-                    {
-                        var el = new XElement(PkgRels + "Relationship",
-                            new XAttribute("Id", r.id),
-                            new XAttribute("Type", r.type),
-                            new XAttribute("Target", r.target));
-                        if (r.external)
-                            el.Add(new XAttribute("TargetMode", "External"));
-                        return el;
-                    })));
-
-        // Re-expose PkgRels from outer class
-        private static readonly XNamespace PkgRels = PptxPackageWriter.PkgRels;
-    }
 }

@@ -10,4 +10,8 @@
     <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
   </PropertyGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\FreeX.ToolsShared.Wpf\FreeX.ToolsShared.Wpf.csproj" />
+  </ItemGroup>
+
 </Project>

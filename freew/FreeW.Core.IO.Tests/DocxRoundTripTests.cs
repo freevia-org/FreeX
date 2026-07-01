@@ -1229,6 +1229,10 @@ public class DocxRoundTripTests
         doc.Properties.LastModifiedBy = "Charles Babbage";
         doc.Properties.Created = new DateTimeOffset(1843, 10, 1, 9, 30, 0, TimeSpan.Zero);
         doc.Properties.Modified = new DateTimeOffset(1843, 10, 15, 14, 0, 0, TimeSpan.Zero);
+        doc.Properties.Category = "Computing";
+        doc.Properties.ContentStatus = "Draft";
+        doc.Properties.Language = "en-GB";
+        doc.Properties.Version = "1.0";
 
         var properties = RoundTrip(doc).Properties;
 
@@ -1240,6 +1244,10 @@ public class DocxRoundTripTests
         properties.LastModifiedBy.Should().Be("Charles Babbage");
         properties.Created.Should().Be(new DateTimeOffset(1843, 10, 1, 9, 30, 0, TimeSpan.Zero));
         properties.Modified.Should().Be(new DateTimeOffset(1843, 10, 15, 14, 0, 0, TimeSpan.Zero));
+        properties.Category.Should().Be("Computing");
+        properties.ContentStatus.Should().Be("Draft");
+        properties.Language.Should().Be("en-GB");
+        properties.Version.Should().Be("1.0");
     }
 
     [Fact]

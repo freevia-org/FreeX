@@ -306,8 +306,8 @@ internal static class XlsxWorksheetDrawingObjectWriter
                 new XElement(spreadsheetDrawingNs + "row", Math.Max(0, (long)picture.Anchor.Row - 1).ToString(CultureInfo.InvariantCulture)),
                 new XElement(spreadsheetDrawingNs + "rowOff", "0")),
             new XElement(spreadsheetDrawingNs + "ext",
-                new XAttribute("cx", PixelsToEmus(picture.Width)),
-                new XAttribute("cy", PixelsToEmus(picture.Height))),
+                new XAttribute("cx", DrawingMlUnits.PixelsToEmu(picture.Width)),
+                new XAttribute("cy", DrawingMlUnits.PixelsToEmu(picture.Height))),
             new XElement(spreadsheetDrawingNs + "pic",
                 new XElement(spreadsheetDrawingNs + "nvPicPr",
                     new XElement(spreadsheetDrawingNs + "cNvPr",
@@ -361,8 +361,8 @@ internal static class XlsxWorksheetDrawingObjectWriter
         new(spreadsheetDrawingNs + "oneCellAnchor",
             ToDrawingAnchorFrom(textBox.Anchor, spreadsheetDrawingNs),
             new XElement(spreadsheetDrawingNs + "ext",
-                new XAttribute("cx", PixelsToEmus(textBox.Width)),
-                new XAttribute("cy", PixelsToEmus(textBox.Height))),
+                new XAttribute("cx", DrawingMlUnits.PixelsToEmu(textBox.Width)),
+                new XAttribute("cy", DrawingMlUnits.PixelsToEmu(textBox.Height))),
             new XElement(spreadsheetDrawingNs + "sp",
                 new XElement(spreadsheetDrawingNs + "nvSpPr",
                     new XElement(spreadsheetDrawingNs + "cNvPr",
@@ -399,8 +399,8 @@ internal static class XlsxWorksheetDrawingObjectWriter
         new(spreadsheetDrawingNs + "oneCellAnchor",
             ToDrawingAnchorFrom(shape.Anchor, spreadsheetDrawingNs),
             new XElement(spreadsheetDrawingNs + "ext",
-                new XAttribute("cx", PixelsToEmus(shape.Width)),
-                new XAttribute("cy", PixelsToEmus(shape.Height))),
+                new XAttribute("cx", DrawingMlUnits.PixelsToEmu(shape.Width)),
+                new XAttribute("cy", DrawingMlUnits.PixelsToEmu(shape.Height))),
             new XElement(spreadsheetDrawingNs + "sp",
                 new XElement(spreadsheetDrawingNs + "nvSpPr",
                     new XElement(spreadsheetDrawingNs + "cNvPr",
@@ -410,7 +410,7 @@ internal static class XlsxWorksheetDrawingObjectWriter
                         string.IsNullOrWhiteSpace(shape.AltText) ? null : new XAttribute("descr", shape.AltText)),
                     new XElement(spreadsheetDrawingNs + "cNvSpPr")),
                 ToShapePropertiesForDrawingObject(
-                    ToDrawingPreset(shape.Kind),
+                    DrawingMlPresetGeometryMap.GetPreset(shape.Kind),
                     shape.RotationDegrees,
                     shape.FlipHorizontal,
                     shape.FlipVertical,
@@ -473,7 +473,7 @@ internal static class XlsxWorksheetDrawingObjectWriter
         {
             var textLn = new XElement(drawingNs + "ln");
             if (shape.ShapeTextOutlineWidthPoints > 0)
-                textLn.Add(new XAttribute("w", ((long)Math.Round(shape.ShapeTextOutlineWidthPoints * 12700)).ToString(CultureInfo.InvariantCulture)));
+                textLn.Add(new XAttribute("w", DrawingMlUnits.PointsToEmu(shape.ShapeTextOutlineWidthPoints).ToString(CultureInfo.InvariantCulture)));
             var outlineFill = ToSolidFill(shape.ShapeTextOutlineThemeColor, shape.ShapeTextOutlineColor, drawingNs);
             if (outlineFill is not null)
                 textLn.Add(outlineFill);
@@ -594,8 +594,8 @@ internal static class XlsxWorksheetDrawingObjectWriter
         if (shapeWidthPixels > 0 && shapeHeightPixels > 0)
         {
             extElement = new XElement(drawingNs + "ext",
-                new XAttribute("cx", PixelsToEmus(shapeWidthPixels)),
-                new XAttribute("cy", PixelsToEmus(shapeHeightPixels)));
+                new XAttribute("cx", DrawingMlUnits.PixelsToEmu(shapeWidthPixels)),
+                new XAttribute("cy", DrawingMlUnits.PixelsToEmu(shapeHeightPixels)));
         }
 
         return new XElement(drawingNs + "xfrm",
@@ -614,10 +614,10 @@ internal static class XlsxWorksheetDrawingObjectWriter
             new XElement(drawingNs + "gsLst",
                 new XElement(drawingNs + "gs",
                     new XAttribute("pos", "0"),
-                    ToRgbColorElement(startColor, drawingNs)),
+                    XlsxDrawingColorWriter.ToRgbColorElement(startColor, drawingNs)),
                 new XElement(drawingNs + "gs",
                     new XAttribute("pos", "100000"),
-                    ToRgbColorElement(endColor, drawingNs))),
+                    XlsxDrawingColorWriter.ToRgbColorElement(endColor, drawingNs))),
             new XElement(drawingNs + "lin",
                 new XAttribute("ang", ToGradientFillAngle(direction)),
                 new XAttribute("scaled", "1")));
@@ -637,7 +637,7 @@ internal static class XlsxWorksheetDrawingObjectWriter
                 new XAttribute("blurRad", "40000"),
                 new XAttribute("dist", "20000"),
                 new XAttribute("dir", "5400000"),
-                ToRgbColorElement(new CellColor(128, 128, 128), drawingNs)));
+                XlsxDrawingColorWriter.ToRgbColorElement(new CellColor(128, 128, 128), drawingNs)));
 
     private static XElement ToInnerShadowEffect(XNamespace drawingNs) =>
         new(drawingNs + "effectLst",
@@ -669,7 +669,7 @@ internal static class XlsxWorksheetDrawingObjectWriter
             DrawingShapeEffectPreset.Glow => new XElement(drawingNs + "effectLst",
                 new XElement(drawingNs + "glow",
                     new XAttribute("rad", "50000"),
-                    ToRgbColorElement(new CellColor(91, 155, 213), drawingNs))),
+                    XlsxDrawingColorWriter.ToRgbColorElement(new CellColor(91, 155, 213), drawingNs))),
             DrawingShapeEffectPreset.SoftEdges => new XElement(drawingNs + "effectLst",
                 new XElement(drawingNs + "softEdge", new XAttribute("rad", "30000"))),
             _ => null
@@ -692,9 +692,6 @@ internal static class XlsxWorksheetDrawingObjectWriter
                     new XAttribute("dir", "t")))
             : null;
 
-    private static XElement ToRgbColorElement(CellColor color, XNamespace drawingNs) =>
-        new(drawingNs + "srgbClr", new XAttribute("val", FormatColor(color)));
-
     private static XElement? ToLineProperties(
         WorkbookThemeColorReference? outlineThemeColor,
         CellColor? outlineColor,
@@ -713,8 +710,8 @@ internal static class XlsxWorksheetDrawingObjectWriter
         if (fill is null)
             return null;
 
-        // w attribute: 12700 EMU per point; omit if zero/default to keep output compact
-        var wEmu = outlineWidthPoints > 0 ? (long)Math.Round(outlineWidthPoints * 12700) : 0;
+        // Omit zero/default outline widths to keep output compact.
+        var wEmu = outlineWidthPoints > 0 ? DrawingMlUnits.PointsToEmu(outlineWidthPoints) : 0;
         var prstDashVal = outlineDash switch
         {
             DrawingShapeOutlineDash.Dash => "dash",
@@ -779,23 +776,9 @@ internal static class XlsxWorksheetDrawingObjectWriter
         WorkbookThemeColorReference? themeColor,
         CellColor? color)
     {
-        XElement colorElement;
-        if (themeColor is { } theme)
-        {
-            colorElement = new XElement(drawingNs + "schemeClr",
-                new XAttribute("val", ToDrawingSchemeColor(theme.Slot)));
-            ApplyTint(colorElement, theme.Tint, drawingNs);
-        }
-        else if (color is { } concrete)
-        {
-            colorElement = new XElement(drawingNs + "srgbClr",
-                new XAttribute("val", FormatColor(concrete)));
-        }
-        else
-        {
+        var colorElement = XlsxDrawingColorWriter.ToColorElement(themeColor, color, drawingNs)
             // Fallback: transparent white.
-            colorElement = new XElement(drawingNs + "srgbClr", new XAttribute("val", "FFFFFF"));
-        }
+            ?? XlsxDrawingColorWriter.ToRgbColorElement(new CellColor(255, 255, 255), drawingNs);
 
         return new XElement(drawingNs + "gs",
             new XAttribute("pos", position),
@@ -805,90 +788,8 @@ internal static class XlsxWorksheetDrawingObjectWriter
     private static XElement? ToSolidFill(
         WorkbookThemeColorReference? themeColor,
         CellColor? color,
-        XNamespace drawingNs)
-    {
-        XElement? colorElement = null;
-        if (themeColor is { } theme)
-        {
-            colorElement = new XElement(drawingNs + "schemeClr",
-                new XAttribute("val", ToDrawingSchemeColor(theme.Slot)));
-            ApplyTint(colorElement, theme.Tint, drawingNs);
-        }
-        else if (color is { } concrete)
-        {
-            colorElement = new XElement(drawingNs + "srgbClr",
-                new XAttribute("val", FormatColor(concrete)));
-        }
-
-        return colorElement is null
-            ? null
-            : new XElement(drawingNs + "solidFill", colorElement);
-    }
-
-    private static void ApplyTint(XElement colorElement, double tint, XNamespace drawingNs)
-    {
-        if (tint > 0)
-        {
-            colorElement.Add(
-                new XElement(drawingNs + "lumMod", new XAttribute("val", Math.Clamp((int)Math.Round((1 - tint) * 100000), 0, 100000))),
-                new XElement(drawingNs + "lumOff", new XAttribute("val", Math.Clamp((int)Math.Round(tint * 100000), 0, 100000))));
-        }
-        else if (tint < 0)
-        {
-            colorElement.Add(new XElement(drawingNs + "lumMod",
-                new XAttribute("val", Math.Clamp((int)Math.Round((1 + tint) * 100000), 0, 100000))));
-        }
-    }
-
-    private static string ToDrawingPreset(DrawingShapeKind kind) =>
-        kind switch
-        {
-            DrawingShapeKind.RoundedRectangle => "roundRect",
-            DrawingShapeKind.Ellipse => "ellipse",
-            DrawingShapeKind.Line => "line",
-            DrawingShapeKind.ElbowConnector => "bentConnector2",
-            DrawingShapeKind.CurvedConnector => "curvedConnector2",
-            DrawingShapeKind.Triangle => "triangle",
-            DrawingShapeKind.RightTriangle => "rtTriangle",
-            DrawingShapeKind.Diamond => "diamond",
-            DrawingShapeKind.Parallelogram => "parallelogram",
-            DrawingShapeKind.Trapezoid => "trapezoid",
-            DrawingShapeKind.Pentagon => "pentagon",
-            DrawingShapeKind.Hexagon => "hexagon",
-            DrawingShapeKind.Octagon => "octagon",
-            DrawingShapeKind.Cross => "cross",
-            DrawingShapeKind.RightArrow => "rightArrow",
-            DrawingShapeKind.LeftArrow => "leftArrow",
-            DrawingShapeKind.UpArrow => "upArrow",
-            DrawingShapeKind.DownArrow => "downArrow",
-            DrawingShapeKind.LeftRightArrow => "leftRightArrow",
-            DrawingShapeKind.UpDownArrow => "upDownArrow",
-            DrawingShapeKind.PlusSign => "mathPlus",
-            DrawingShapeKind.MinusSign => "mathMinus",
-            DrawingShapeKind.MultiplySign => "mathMultiply",
-            DrawingShapeKind.DivideSign => "mathDivide",
-            DrawingShapeKind.EqualSign => "mathEqual",
-            DrawingShapeKind.NotEqualSign => "mathNotEqual",
-            DrawingShapeKind.FlowchartProcess => "flowChartProcess",
-            DrawingShapeKind.FlowchartDecision => "flowChartDecision",
-            DrawingShapeKind.FlowchartData => "flowChartInputOutput",
-            DrawingShapeKind.FlowchartPredefinedProcess => "flowChartPredefinedProcess",
-            DrawingShapeKind.FlowchartDocument => "flowChartDocument",
-            DrawingShapeKind.FlowchartTerminator => "flowChartTerminator",
-            DrawingShapeKind.Star5 => "star5",
-            DrawingShapeKind.Star8 => "star8",
-            DrawingShapeKind.Explosion => "irregularSeal1",
-            DrawingShapeKind.Ribbon => "ribbon",
-            DrawingShapeKind.Wave => "wave",
-            DrawingShapeKind.RectangularCallout => "wedgeRectCallout",
-            DrawingShapeKind.RoundedRectangularCallout => "wedgeRoundRectCallout",
-            DrawingShapeKind.OvalCallout => "wedgeEllipseCallout",
-            DrawingShapeKind.LineCallout => "lineCallout1",
-            DrawingShapeKind.Chevron => "chevron",
-            DrawingShapeKind.HomePlate => "homePlate",
-            DrawingShapeKind.Cylinder => "can",
-            _ => "rect"
-        };
+        XNamespace drawingNs) =>
+        XlsxDrawingColorWriter.ToSolidFill(themeColor, color, drawingNs);
 
     private static double NormalizeRotation(double rotationDegrees)
     {
@@ -925,27 +826,4 @@ internal static class XlsxWorksheetDrawingObjectWriter
     private static string DrawingName(string? name, string fallback) =>
         string.IsNullOrWhiteSpace(name) ? fallback : name;
 
-    private static string FormatColor(CellColor color) =>
-        $"{color.R:X2}{color.G:X2}{color.B:X2}";
-
-    private static string ToDrawingSchemeColor(WorkbookThemeColorSlot slot) =>
-        slot switch
-        {
-            WorkbookThemeColorSlot.Dark1 => "dk1",
-            WorkbookThemeColorSlot.Light1 => "lt1",
-            WorkbookThemeColorSlot.Dark2 => "dk2",
-            WorkbookThemeColorSlot.Light2 => "lt2",
-            WorkbookThemeColorSlot.Accent1 => "accent1",
-            WorkbookThemeColorSlot.Accent2 => "accent2",
-            WorkbookThemeColorSlot.Accent3 => "accent3",
-            WorkbookThemeColorSlot.Accent4 => "accent4",
-            WorkbookThemeColorSlot.Accent5 => "accent5",
-            WorkbookThemeColorSlot.Accent6 => "accent6",
-            WorkbookThemeColorSlot.Hyperlink => "hlink",
-            WorkbookThemeColorSlot.FollowedHyperlink => "folHlink",
-            _ => "accent1"
-        };
-
-    private static long PixelsToEmus(double pixels) =>
-        (long)Math.Round(Math.Max(0, pixels) * 9525.0);
 }

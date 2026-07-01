@@ -126,7 +126,7 @@ public partial class MainWindow
             return;
         }
 
-        if (!ExportPlanner.TryValidatePublishOptions(request.Options, request.Format, out var publishOptionsError))
+        if (!ExportPlanner.TryValidatePublishOptions(request.Options, request.Format, out var publishOptionsError, WpfExportPlannerTextResolver.Instance))
         {
             ShowOwnedMessage(
                 publishOptionsError ?? UiText.Get("MainWindowMessage_ExportUnsupportedOptions"),
@@ -137,8 +137,8 @@ public partial class MainWindow
         }
 
         var exported = request.Format == ExportFormat.Pdf
-            ? await ExportAsPdf(request.Path, ExportPlanner.DescribeRequest(request), request.Options)
-            : await ExportAsXps(request.Path, ExportPlanner.DescribeRequest(request), request.Options);
+            ? await ExportAsPdf(request.Path, WpfExportDescriptionPlanner.DescribeRequest(request), request.Options)
+            : await ExportAsXps(request.Path, WpfExportDescriptionPlanner.DescribeRequest(request), request.Options);
         if (exported && request.Options.OpenAfterPublish)
             OpenExportedFile(request.ActualPath);
         // Return to the workbook after a successful export instead of leaving the user
@@ -162,11 +162,11 @@ public partial class MainWindow
                 null);
 
             var effectiveOptions = ExportPlanner.CreateEffectiveOptionsForFormat(options, ExportFormat.Pdf);
-            if (!ExportPlanner.TryValidatePublishOptions(effectiveOptions, ExportFormat.Pdf, out var publishOptionsError))
+            if (!ExportPlanner.TryValidatePublishOptions(effectiveOptions, ExportFormat.Pdf, out var publishOptionsError, WpfExportPlannerTextResolver.Instance))
                 throw new InvalidOperationException(publishOptionsError);
 
             var document = RenderExportDocument(effectiveOptions);
-            if (!ExportPlanner.TryValidatePageRange(effectiveOptions.PageRange, document.Pages.Count, out var pageRangeError))
+            if (!ExportPlanner.TryValidatePageRange(effectiveOptions.PageRange, document.Pages.Count, out var pageRangeError, WpfExportPlannerTextResolver.Instance))
                 throw new InvalidOperationException(pageRangeError);
 
             var properties = PdfDocumentProperties.FromWorkbook(_workbook, effectiveOptions);
@@ -261,7 +261,7 @@ public partial class MainWindow
                 null);
 
             var effectiveOptions = ExportPlanner.CreateEffectiveOptionsForFormat(options, ExportFormat.Xps);
-            if (!ExportPlanner.TryValidatePublishOptions(effectiveOptions, ExportFormat.Xps, out var publishOptionsError))
+            if (!ExportPlanner.TryValidatePublishOptions(effectiveOptions, ExportFormat.Xps, out var publishOptionsError, WpfExportPlannerTextResolver.Instance))
                 throw new InvalidOperationException(publishOptionsError);
 
             var paginator = RenderExportPaginator(effectiveOptions);
@@ -375,7 +375,7 @@ public partial class MainWindow
         options.Scope == ExportContentScope.EntireWorkbook
             ? PrintRenderer.RenderWorkbook(_workbook, _viewportService, options.IgnorePrintAreas)
             : RenderExportSheets(
-                ExportSheetSelectionPlanner.ResolveSheetIds(_workbook, options, _currentSheetId, _groupedSheetIds),
+                WorkbookExportSheetSelectionPlanner.ResolveSheetIds(_workbook, options, _currentSheetId, _groupedSheetIds),
                 options);
 
     private System.Windows.Documents.FixedDocument RenderExportSheets(
@@ -465,7 +465,7 @@ public partial class MainWindow
 
         var result = new List<PdfBookmark>();
         var pageIndex = 0;
-        var sheets = ExportSheetSelectionPlanner
+        var sheets = WorkbookExportSheetSelectionPlanner
             .ResolveSheetIds(_workbook, options, _currentSheetId, _groupedSheetIds)
             .Select(_workbook.GetSheet)
             .OfType<Sheet>();
@@ -521,7 +521,7 @@ public partial class MainWindow
             ? PrintRenderer.CreateWorkbookPaginator(_workbook, _viewportService, options.IgnorePrintAreas)
             : RenderExportDocument(options).DocumentPaginator;
 
-        if (!ExportPlanner.TryValidatePageRange(options.PageRange, paginator.PageCount, out var pageRangeError))
+        if (!ExportPlanner.TryValidatePageRange(options.PageRange, paginator.PageCount, out var pageRangeError, WpfExportPlannerTextResolver.Instance))
             throw new InvalidOperationException(pageRangeError);
 
         return ApplyExportPageRange(options, paginator);

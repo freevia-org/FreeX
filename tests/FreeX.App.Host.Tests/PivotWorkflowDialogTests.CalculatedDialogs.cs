@@ -70,10 +70,7 @@ public sealed partial class PivotWorkflowDialogTests
         source.Should().Contain("if (!ValidateInputs())");
         source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"PivotCalculated_EnterCalculatedFieldName\"), _nameBox);");
         source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"PivotCalculated_EnterCalculatedFieldFormula\"), _formulaBox);");
-        source.Should().Contain("DialogMessageHelper.ShowWarning(this, message, Title)");
-        source.Should().Contain("target.Focus();");
-        source.Should().Contain("target.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(target);");
+        source.Should().Contain("DialogFocus.ShowWarningAndFocus(this, message, Title, target);");
     }
 
     [Fact]
@@ -160,10 +157,7 @@ public sealed partial class PivotWorkflowDialogTests
         source.Should().Contain("if (!ValidateInputs())");
         source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"PivotCalculated_EnterCalculatedItemName\"), _nameBox);");
         source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"PivotCalculated_EnterCalculatedItemFormula\"), _formulaBox);");
-        source.Should().Contain("DialogMessageHelper.ShowWarning(this, message, Title)");
-        source.Should().Contain("target.Focus();");
-        source.Should().Contain("target.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(target);");
+        source.Should().Contain("DialogFocus.ShowWarningAndFocus(this, message, Title, target);");
     }
 
     [Fact]

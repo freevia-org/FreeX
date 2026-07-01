@@ -35,7 +35,7 @@ public sealed class InCanvasTableCellEditor
     // ── Cell-edit state ───────────────────────────────────────────────────────
 
     private RichTextBox? _cellTextBox;
-    private TextBody?    _cellOriginalBody;  // snapshot for change detection
+    private InCanvasTableCellTextEditPlanner? _cellEditPlan;
     private bool         _cellEditActive;
     private int          _editRow;
     private int          _editCol;
@@ -78,32 +78,28 @@ public sealed class InCanvasTableCellEditor
         var slide = _editor.CurrentSlide;
         if (slide is null) return;
 
-        var shape = slide.Shapes.FirstOrDefault(s => s.Id == shapeId);
-        if (shape?.Table is null) return;
-        var table = shape.Table;
+        var editStart = TableCellEditPlanner.BeginEdit(
+            _editor.CurrentSlideIndex,
+            slide,
+            shapeId,
+            row,
+            col,
+            _canvas.CurrentTransform.Core,
+            minimumWidth: 30,
+            minimumHeight: 18);
+        if (!editStart.IsReady || editStart.Cell is null || editStart.Placement is null)
+            return;
 
-        if (row < 0 || row >= table.Rows.Count) return;
-        if (col < 0 || col >= table.ColumnWidthsEmu.Count) return;
-        var cell = table.Rows[row].Cells[col];
-        if (cell.HMerge || cell.VMerge) return; // can't edit a continuation cell directly
+        var cell = editStart.Cell;
 
         _editShapeId = shapeId;
-        _editRow     = row;
-        _editCol     = col;
+        _editRow     = editStart.Row;
+        _editCol     = editStart.Col;
         _cellEditActive = true;
 
-        // Get cell rect in slide DIP → screen coords.
-        var cellRect = TableCellHitTester.GetCellRect(shape, row, col);
-        if (cellRect is null) { _cellEditActive = false; return; }
-
-        var xf = _canvas.CurrentTransform;
-        double x = cellRect.Value.X * xf.Scale + xf.OffsetX;
-        double y = cellRect.Value.Y * xf.Scale + xf.OffsetY;
-        double w = cellRect.Value.Width  * xf.Scale;
-        double h = cellRect.Value.Height * xf.Scale;
-
-        // Keep a snapshot for change detection.
-        _cellOriginalBody = SetShapeTextBodyCommand.CloneTextBody(cell.TextBody);
+        // Use the shared start plan for placement and commit routing.
+        _cellEditPlan = editStart.EditPlanner;
+        var placement = editStart.Placement.Value;
 
         // Determine a fallback font size from the cell's first run.
         double fallbackPt = cell.TextBody?.Paragraphs
@@ -120,16 +116,16 @@ public sealed class InCanvasTableCellEditor
             BorderThickness       = new Thickness(1.5),
             SpellCheck            = { IsEnabled = false },
             IsUndoEnabled         = false,
-            MinWidth              = Math.Max(30, w),
-            MinHeight             = Math.Max(18, h),
-            Width                 = Math.Max(30, w),
-            Height                = Math.Max(18, h),
+            MinWidth              = placement.Width,
+            MinHeight             = placement.Height,
+            Width                 = placement.Width,
+            Height                = placement.Height,
             VerticalScrollBarVisibility   = ScrollBarVisibility.Hidden,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden,
         };
 
-        Canvas.SetLeft(_cellTextBox, x);
-        Canvas.SetTop (_cellTextBox, y);
+        Canvas.SetLeft(_cellTextBox, placement.Left);
+        Canvas.SetTop (_cellTextBox, placement.Top);
 
         _cellTextBox.LostFocus    += (_, _) => CommitCellEdit();
         _cellTextBox.KeyDown      += OnCellTextBoxKeyDown;
@@ -140,7 +136,7 @@ public sealed class InCanvasTableCellEditor
         _cellTextBox.SelectAll();
 
         // Keep active cell in sync.
-        _editor.SetActiveTableCell(row, col);
+        _editor.SetActiveTableCell(editStart.Row, editStart.Col);
     }
 
     /// <summary>Commits the current cell edit (if active) and hides the text box.</summary>
@@ -152,6 +148,8 @@ public sealed class InCanvasTableCellEditor
         _overlay.Children.Remove(_cellTextBox);
         _cellTextBox    = null;
         _cellEditActive = false;
+        var editPlan = _cellEditPlan;
+        _cellEditPlan = null;
 
         var slide = _editor.CurrentSlide;
         if (slide is null) return;
@@ -166,13 +164,10 @@ public sealed class InCanvasTableCellEditor
 
         // Rebuild the full rich TextBody from the FlowDocument.
         var newBody = TextBodyFlowDocumentConverter.FromFlowDocument(doc, cell.TextBody);
+        var decision = TableCellEditPlanner.CommitRichText(editPlan, newBody);
 
-        // Only issue a command if content actually changed.
-        if (CellBodiesEqual(_cellOriginalBody, newBody)) return;
-
-        // Use the bus directly (the EditingSession API requires the shape to be selected).
-        _editor.Bus.Execute(new SetTableCellTextCommand(
-            _editor.CurrentSlideIndex, _editShapeId, row, col, newBody));
+        if (decision.Command is not null)
+            _editor.Bus.Execute(decision.Command);
     }
 
     /// <summary>Cancels the current cell edit without writing back.</summary>
@@ -182,6 +177,8 @@ public sealed class InCanvasTableCellEditor
         _overlay.Children.Remove(_cellTextBox);
         _cellTextBox = null;
         _cellEditActive = false;
+        _ = TableCellEditPlanner.Cancel(_cellEditPlan);
+        _cellEditPlan = null;
     }
 
     // ── Mouse handling ────────────────────────────────────────────────────────
@@ -383,79 +380,35 @@ public sealed class InCanvasTableCellEditor
 
         var slide = _editor.CurrentSlide;
         if (slide is null || _editor.Presentation is null) return;
-        if (_editor.SelectedShapeIds.Count == 0) return;
+        var cellState = TableCellEditPlanner.PlanSelectedCell(
+            slide,
+            _editor.SelectedShapeIds,
+            _editor.ActiveTableCell);
+        if (!cellState.CanEditText || cellState.ShapeId is null || cellState.Row is null || cellState.Col is null)
+            return;
 
-        var ac = _editor.ActiveTableCell;
-        if (ac is null) return;
-
-        var selId = _editor.SelectedShapeIds[0];
-        var shape = slide.Shapes.FirstOrDefault(s => s.Id == selId);
+        var shape = slide.Shapes.FirstOrDefault(s => s.Id == cellState.ShapeId.Value);
         if (shape?.Kind != SlideShapeKind.Table) return;
 
-        var cellRect = TableCellHitTester.GetCellRect(shape, ac.Value.Row, ac.Value.Col);
+        var cellRect = TableCellHitTester.GetCellRect(shape, cellState.Row.Value, cellState.Col.Value);
         if (cellRect is null) return;
 
         var xf = _canvas.CurrentTransform;
-        double x = cellRect.Value.X * xf.Scale + xf.OffsetX;
-        double y = cellRect.Value.Y * xf.Scale + xf.OffsetY;
-        double w = cellRect.Value.Width  * xf.Scale;
-        double h = cellRect.Value.Height * xf.Scale;
+        var screenRect = SlideCanvasGeometryPlanner.DipBoundsToScreen(cellRect.Value, xf.Core);
 
         _cellHighlight = new Rectangle
         {
-            Width           = Math.Max(1, w),
-            Height          = Math.Max(1, h),
+            Width           = Math.Max(1, screenRect.Width),
+            Height          = Math.Max(1, screenRect.Height),
             Stroke          = new SolidColorBrush(Color.FromRgb(0x21, 0x96, 0xF3)),
             StrokeThickness = 2.0,
             Fill            = new SolidColorBrush(Color.FromArgb(0x18, 0x21, 0x96, 0xF3)),
             IsHitTestVisible = false,
         };
 
-        Canvas.SetLeft(_cellHighlight, x);
-        Canvas.SetTop (_cellHighlight, y);
+        Canvas.SetLeft(_cellHighlight, screenRect.Left);
+        Canvas.SetTop (_cellHighlight, screenRect.Top);
         _overlay.Children.Add(_cellHighlight);
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
-
-    private static bool CellBodiesEqual(TextBody? a, TextBody? b)
-    {
-        if (a is null && b is null) return true;
-        if (a is null || b is null) return false;
-        if (a.Paragraphs.Count != b.Paragraphs.Count) return false;
-        for (int pi = 0; pi < a.Paragraphs.Count; pi++)
-        {
-            var pa = a.Paragraphs[pi];
-            var pb = b.Paragraphs[pi];
-            if (pa.Runs.Count != pb.Runs.Count) return false;
-            for (int ri = 0; ri < pa.Runs.Count; ri++)
-            {
-                var ra = pa.Runs[ri];
-                var rb = pb.Runs[ri];
-                if (ra.Text != rb.Text || ra.Bold != rb.Bold || ra.Italic != rb.Italic
-                    || ra.Underline != rb.Underline || ra.Strikethrough != rb.Strikethrough
-                    || ra.FontFamily != rb.FontFamily || ra.FontSizePt != rb.FontSizePt
-                    || !ColorsEqual(ra.Color, rb.Color))   // Y3: include Color in change detection
-                    return false;
-            }
-        }
-        return true;
-    }
-
-    /// <summary>
-    /// Compares two <see cref="ThemeAwareColor"/> values, including resolved sRGB and SchemeColor ref.
-    /// </summary>
-    private static bool ColorsEqual(ThemeAwareColor? a, ThemeAwareColor? b)
-    {
-        if (a is null && b is null) return true;
-        if (a is null || b is null) return false;
-        if (a.Resolved != b.Resolved) return false;
-        if (a.SchemeColor is null && b.SchemeColor is null) return true;
-        if (a.SchemeColor is null || b.SchemeColor is null) return false;
-        return a.SchemeColor.Slot    == b.SchemeColor.Slot
-            && a.SchemeColor.LumMod  == b.SchemeColor.LumMod
-            && a.SchemeColor.LumOff  == b.SchemeColor.LumOff
-            && a.SchemeColor.Tint    == b.SchemeColor.Tint
-            && a.SchemeColor.Shade   == b.SchemeColor.Shade;
-    }
 }

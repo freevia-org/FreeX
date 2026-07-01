@@ -1,5 +1,3 @@
-using System.Globalization;
-
 namespace FreeX.App.Services;
 
 public static class ZoomLevelMapper
@@ -7,49 +5,30 @@ public static class ZoomLevelMapper
     public const double MinZoomPercent = 10.0;
     public const double DefaultZoomPercent = 100.0;
     public const double MaxZoomPercent = 400.0;
-    private const double MinSliderValue = 0.0;
-    private const double MidSliderValue = 100.0;
-    private const double MaxSliderValue = 200.0;
+
+    private static readonly ZoomPercentPolicy Policy = new(
+        MinZoomPercent,
+        DefaultZoomPercent,
+        MaxZoomPercent);
 
     public static double ClampZoomPercent(double zoomPercent) =>
-        Clamp(zoomPercent, MinZoomPercent, MaxZoomPercent);
+        Policy.ClampPercent(zoomPercent);
 
-    public static double SliderToZoomPercent(double sliderValue)
-    {
-        sliderValue = Clamp(sliderValue, MinSliderValue, MaxSliderValue);
-        return sliderValue <= MidSliderValue
-            ? MinZoomPercent + sliderValue / MidSliderValue * (DefaultZoomPercent - MinZoomPercent)
-            : DefaultZoomPercent + (sliderValue - MidSliderValue) / MidSliderValue * (MaxZoomPercent - DefaultZoomPercent);
-    }
+    public static double SliderToZoomPercent(double sliderValue) =>
+        Policy.SliderToPercent(sliderValue);
 
-    public static double ZoomPercentToSlider(double zoomPercent)
-    {
-        zoomPercent = ClampZoomPercent(zoomPercent);
-        return zoomPercent <= DefaultZoomPercent
-            ? (zoomPercent - MinZoomPercent) / (DefaultZoomPercent - MinZoomPercent) * MidSliderValue
-            : MidSliderValue + (zoomPercent - DefaultZoomPercent) / (MaxZoomPercent - DefaultZoomPercent) * MidSliderValue;
-    }
+    public static double ZoomPercentToSlider(double zoomPercent) =>
+        Policy.PercentToSlider(zoomPercent);
 
-    public static bool TryParseZoomPercent(string? text, out double zoomPercent)
-    {
-        zoomPercent = DefaultZoomPercent;
-        if (string.IsNullOrWhiteSpace(text))
-            return false;
+    public static bool TryParseZoomPercent(string? text, out double zoomPercent) =>
+        Policy.TryParsePercentInRange(text, out zoomPercent);
 
-        var normalized = text.Trim().TrimEnd('%').Trim();
-        if (!double.TryParse(normalized, NumberStyles.Number, CultureInfo.CurrentCulture, out var parsed) &&
-            !double.TryParse(normalized, NumberStyles.Number, CultureInfo.InvariantCulture, out parsed))
-        {
-            return false;
-        }
+    public static bool TryNormalizeWholeZoomPercent(double zoomPercent, out int wholePercent) =>
+        Policy.TryNormalizeWholePercent(zoomPercent, out wholePercent);
 
-        if (parsed < MinZoomPercent || parsed > MaxZoomPercent)
-            return false;
+    public static string FormatZoomPercent(double zoomPercent) =>
+        Policy.FormatPercentLabel(zoomPercent);
 
-        zoomPercent = parsed;
-        return true;
-    }
-
-    private static double Clamp(double value, double min, double max) =>
-        Math.Max(min, Math.Min(max, value));
+    public static bool IsPresetZoomPercent(int zoomPercent, IEnumerable<int> presets) =>
+        Policy.IsPresetPercent(zoomPercent, presets);
 }

@@ -7,6 +7,8 @@ using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using FreeX.App.Presentation.ConditionalFormatting;
+using FreeX.App.Presentation.SheetUI;
 using FreeX.App.Presentation.TableUI;
 using FreeX.App.Services;
 using FreeX.Core.Calc;
@@ -252,7 +254,7 @@ public partial class MainWindow
         if (_workbook.GetSheet(sheetId) is not { } sheet)
             return new MergeCellsCommand(sheetId, range);
 
-        var commands = FormatCellsMergePlanner.CreateMergeCommands(
+        var commands = CellMergePlanner.CreateFormatCellsMergeCommands(
             sheet,
             sheetId,
             range,
@@ -1088,7 +1090,7 @@ public partial class MainWindow
         if (SheetGrid.SelectedRange is not { } range)
             return;
 
-        var rule = ConditionalFormatIconSetPlanner.CreateRule(style, range);
+        var rule = ConditionalFormatIconSetCatalog.CreateRule(style, range);
         if (rule is null)
             return;
 
@@ -1127,11 +1129,12 @@ public partial class MainWindow
 
         foreach (var group in ConditionalFormatPresetGalleryPlanner.DataBarGroups)
         {
-            AddConditionalFormatGalleryHeader(menuItem, group.Name);
+            AddConditionalFormatGalleryHeader(menuItem, UiText.Get(group.CategoryKey));
             foreach (var option in group.Options)
             {
+                var label = UiText.Get(option.LabelKey);
                 var item = CreateConditionalFormatPresetMenuItem(
-                    option.Label,
+                    label,
                     option.Style,
                     option.KeyTip,
                     CreateDataBarPresetSwatch(option.Color, option.Gradient));
@@ -1150,11 +1153,12 @@ public partial class MainWindow
 
         foreach (var group in ConditionalFormatPresetGalleryPlanner.ColorScaleGroups)
         {
-            AddConditionalFormatGalleryHeader(menuItem, group.Name);
+            AddConditionalFormatGalleryHeader(menuItem, UiText.Get(group.CategoryKey));
             foreach (var option in group.Options)
             {
+                var label = UiText.Get(option.LabelKey);
                 var item = CreateConditionalFormatPresetMenuItem(
-                    option.Label,
+                    label,
                     option.Style,
                     option.KeyTip,
                     CreateColorScalePresetSwatch(option.MinColor, option.MidColor, option.MaxColor));
@@ -1297,29 +1301,25 @@ public partial class MainWindow
         }
 
         var menu = _formatTableGalleryMenu ??= new ContextMenu();
-        var options = TableStyleGalleryPlanner.GetOptions(_workbook.Theme);
-        string? currentFamily = null;
-        for (var index = 0; index < options.Count; index++)
+        var surface = TableStyleGalleryPlanner.GetSurface(_workbook.Theme);
+        foreach (var group in surface.Groups)
         {
-            var option = options[index];
-            var family = option.Label.Split(' ', 2)[0];
-            if (!string.Equals(currentFamily, family, StringComparison.Ordinal))
-            {
-                if (menu.Items.Count > 0)
-                    menu.Items.Add(new Separator());
-                menu.Items.Add(CreateFormatTableGallerySectionHeader(family));
-                currentFamily = family;
-            }
+            if (menu.Items.Count > 0)
+                menu.Items.Add(new Separator());
+            menu.Items.Add(CreateFormatTableGallerySectionHeader(group.Family));
 
-            var menuItem = new MenuItem
+            foreach (var item in group.Items)
             {
-                Header = CreateFormatTableGalleryHeader(option),
-                Tag = index.ToString(CultureInfo.InvariantCulture),
-                MinWidth = 176
-            };
-            RibbonTooltip.SetKeyTip(menuItem, $"{family[0]}{option.Label[(family.Length + 1)..]}");
-            menuItem.Click += FormatTableGalleryMenuItem_Click;
-            menu.Items.Add(menuItem);
+                var menuItem = new MenuItem
+                {
+                    Header = CreateFormatTableGalleryHeader(item),
+                    Tag = item,
+                    MinWidth = 176
+                };
+                RibbonTooltip.SetKeyTip(menuItem, item.KeyTip);
+                menuItem.Click += FormatTableGalleryMenuItem_Click;
+                menu.Items.Add(menuItem);
+            }
         }
 
         AttachFormatTableGalleryContextMenu();
@@ -1351,14 +1351,19 @@ public partial class MainWindow
             IsEnabled = false
         };
 
+    private static StackPanel CreateFormatTableGalleryHeader(TableStyleGallerySurfaceItem item)
+        => CreateFormatTableGalleryHeader(item.Label, item.Banding);
+
     private static StackPanel CreateFormatTableGalleryHeader(TableStyleGalleryOption option)
+        => CreateFormatTableGalleryHeader(option.Label, option.Banding);
+
+    private static StackPanel CreateFormatTableGalleryHeader(string label, StructuredTableStyleBanding banding)
     {
-        var banding = option.Banding;
         var panel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 1, 0, 1) };
         panel.Children.Add(CreateFormatTableGallerySwatch(banding));
         panel.Children.Add(new TextBlock
         {
-            Text = option.Label,
+            Text = label,
             VerticalAlignment = System.Windows.VerticalAlignment.Center,
             Margin = new Thickness(8, 0, 0, 0)
         });
@@ -1396,20 +1401,25 @@ public partial class MainWindow
 
     private void FormatTableGalleryMenuItem_Click(object sender, RoutedEventArgs e)
     {
-        var index = sender is MenuItem { Tag: string tag } && int.TryParse(tag, out var parsed)
-            ? parsed
-            : 0;
-        ApplyTableFormat(index);
+        var item = sender is MenuItem { Tag: TableStyleGallerySurfaceItem tagged }
+            ? tagged
+            : TableStyleGalleryPlanner.GetSurfaceItem(TableStyleGalleryPlanner.GetSurface(_workbook.Theme), 0);
+        ApplyTableFormat(item.Option);
     }
 
     private void ApplyTableFormat(int variant)
+    {
+        var surface = TableStyleGalleryPlanner.GetSurface(_workbook.Theme);
+        ApplyTableFormat(TableStyleGalleryPlanner.GetSurfaceItem(surface, variant).Option);
+    }
+
+    private void ApplyTableFormat(TableStyleGalleryOption tableStyle)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet is null) return;
 
         var sourceRange = TableCreationPlanner.PlanSourceRange(sheet, range);
-        var tableStyle = TableStyleGalleryPlanner.GetOption(variant, _workbook.Theme);
         var tableStyleName = tableStyle.StyleName;
         CreateTableDialog? dialog = null;
         dialog = new CreateTableDialog(

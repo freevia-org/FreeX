@@ -1,4 +1,5 @@
 using FluentAssertions;
+using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.App.Presentation.QuickAnalysis;
 using FreeX.Core.Model;
 
@@ -23,7 +24,35 @@ public sealed class QuickAnalysisShellActionPlannerTests
 
         action.Kind.Should().Be(QuickAnalysisShellActionKind.ApplyConditionalFormat);
         action.ConditionalFormat.Should().Be(QuickAnalysisConditionalFormatCommand.LessThan);
+        action.ConditionalFormatPreset.Should().Be(ConditionalFormatPreset.HighlightLessThan);
         action.ConditionalFormatDialogTitle.Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData("format.databars", ConditionalFormatPreset.DataBar)]
+    [InlineData("format.colorscale", ConditionalFormatPreset.ColorScale)]
+    [InlineData("format.iconset", ConditionalFormatPreset.IconSet)]
+    [InlineData("format.greaterthan", ConditionalFormatPreset.HighlightGreaterThan)]
+    [InlineData("format.lessthan", ConditionalFormatPreset.HighlightLessThan)]
+    [InlineData("format.between", ConditionalFormatPreset.HighlightBetween)]
+    [InlineData("format.equalto", ConditionalFormatPreset.HighlightEqualTo)]
+    [InlineData("format.textcontains", ConditionalFormatPreset.HighlightTextContains)]
+    [InlineData("format.dateoccurring", ConditionalFormatPreset.HighlightDateOccurring)]
+    [InlineData("format.duplicatevalues", ConditionalFormatPreset.HighlightDuplicateValues)]
+    [InlineData("format.top10", ConditionalFormatPreset.Top10)]
+    [InlineData("format.top10percent", ConditionalFormatPreset.Top10Percent)]
+    [InlineData("format.bottom10", ConditionalFormatPreset.Bottom10Items)]
+    [InlineData("format.bottom10percent", ConditionalFormatPreset.Bottom10Percent)]
+    [InlineData("format.aboveaverage", ConditionalFormatPreset.AboveAverage)]
+    [InlineData("format.belowaverage", ConditionalFormatPreset.BelowAverage)]
+    public void Plan_AvaloniaConditionalFormat_CarriesSharedPreset(
+        string itemId,
+        ConditionalFormatPreset expectedPreset)
+    {
+        var action = Plan(itemId, QuickAnalysisShellCapabilities.DirectApplyLimited);
+
+        action.Kind.Should().Be(QuickAnalysisShellActionKind.ApplyConditionalFormat);
+        action.ConditionalFormatPreset.Should().Be(expectedPreset);
     }
 
     [Theory]
@@ -58,6 +87,17 @@ public sealed class QuickAnalysisShellActionPlannerTests
 
         action.Kind.Should().Be(QuickAnalysisShellActionKind.InsertAggregateTotalFormula);
         action.TotalFunction.Should().Be("SUM");
+        action.TotalCommandTitle.Should().Be("Quick Analysis Sum");
+    }
+
+    [Theory]
+    [InlineData("total.percenttotal", "Quick Analysis % Total")]
+    [InlineData("total.runningtotal", "Quick Analysis Running Total")]
+    public void Plan_ExpandedTotalsCarryStableCommandTitles(string itemId, string expectedTitle)
+    {
+        var action = Plan(itemId, QuickAnalysisShellCapabilities.DialogBacked);
+
+        action.TotalCommandTitle.Should().Be(expectedTitle);
     }
 
     [Theory]

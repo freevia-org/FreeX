@@ -86,11 +86,11 @@ public partial class MainWindow
                 System.Windows.Media.Color.FromRgb(120, 120, 120)),
             BorderThickness = new System.Windows.Thickness(1),
             MaxDropDownHeight = 220,
-            ToolTip = "Pick from list"
+            ToolTip = UiText.CreateAutomationName(UiText.Get("DataValidation_InCellDropdown"))
         };
         AutomationProperties.SetAutomationId(_validationDropdown, "WorksheetDataValidationDropdown");
-        AutomationProperties.SetName(_validationDropdown, "Data validation list");
-        AutomationProperties.SetHelpText(_validationDropdown, "Pick a permitted value for the active cell.");
+        AutomationProperties.SetName(_validationDropdown, UiText.CreateAutomationName(UiText.Get("DataValidation_InCellDropdown")));
+        AutomationProperties.SetHelpText(_validationDropdown, UiText.CreateAutomationName(UiText.Get("DataValidation_InCellDropdown")));
         _validationDropdown.SelectionChanged += ValidationDropdown_SelectionChanged;
         EditOverlay.Children.Add(_validationDropdown);
     }
@@ -168,7 +168,7 @@ public partial class MainWindow
             }
         };
         AutomationProperties.SetAutomationId(_dvInputMessageBorder, "WorksheetDvInputMessagePopup");
-        AutomationProperties.SetName(_dvInputMessageBorder, "Data validation input message");
+        AutomationProperties.SetName(_dvInputMessageBorder, UiText.CreateAutomationName(UiText.Get("DataValidation_InputMessage")));
         CommentOverlay.Children.Add(_dvInputMessageBorder);
     }
 
@@ -275,7 +275,7 @@ public partial class MainWindow
             return false;
         }
 
-        if (AutoFilterDropdownPlanner.TryGetAutoFilterRange(sheet, out var autoFilterRange))
+        if (AutoFilterDropdownMenuPlanner.TryGetAutoFilterRange(sheet, out var autoFilterRange))
             return range == autoFilterRange;
 
         return SelectionRangeService.GetCurrentRegion(sheet, headerCell) is { } currentRegion &&
@@ -347,17 +347,22 @@ public partial class MainWindow
         System.Windows.Point? anchorPoint,
         out AutoFilterDropdownPlan? createdPlan)
     {
-        var currentRegion = AutoFilterDropdownPlanner.TryGetAutoFilterRange(sheet, out var autoFilterRange)
+        var currentRegion = AutoFilterDropdownMenuPlanner.TryGetAutoFilterRange(sheet, out var autoFilterRange)
             ? autoFilterRange
             : SelectionRangeService.GetCurrentRegion(sheet, headerCell);
         createdPlan = null;
         if (currentRegion is not { } range ||
-            !AutoFilterDropdownPlanner.TryPlan(range, headerCell, out var plan))
+            !AutoFilterDropdownMenuPlanner.TryPlan(range, headerCell, out var plan))
         {
             return null;
         }
 
-        var menuPlan = AutoFilterDropdownPlanner.CreateMenuPlan(_workbook, sheet, plan);
+        var menuPlan = AutoFilterDropdownMenuPlanner.CreateMenuPlan(
+            _workbook,
+            sheet,
+            plan,
+            AutoFilterMenuResources.TextProvider,
+            AutoFilterMenuResources.BlankDisplayText);
         if (menuPlan.Entries.All(entry => entry.Kind != AutoFilterMenuEntryKind.ChecklistItem))
             return null;
 

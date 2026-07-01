@@ -17,7 +17,7 @@ freew                                      # ensure ~/.local/bin is on PATH
 
 - `lib/freew/` — the self-contained app payload (native apphost `FreeW`).
 - `bin/freew` — relocatable launcher wrapper.
-- `share/applications/…desktop` — desktop entry (associates Word `.docx`).
+- `share/applications/…desktop` — desktop entry (associates Word `.docx` and OpenDocument Text files).
 - `share/icons/hicolor/scalable/apps/…svg` — application icon.
 - `share/metainfo/…metainfo.xml` — AppStream metadata.
 

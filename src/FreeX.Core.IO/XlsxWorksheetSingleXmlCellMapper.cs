@@ -13,8 +13,7 @@ internal static class XlsxWorksheetSingleXmlCellMapper
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/tableSingleCells";
 
     private static readonly XNamespace WorksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-    private static readonly XNamespace PackageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-    private static readonly XNamespace ContentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+    private static readonly XNamespace PackageRelNs = OpcRelationships.Namespace;
 
     public static WorksheetSingleXmlCellsModel? Read(
         ZipArchive archive,
@@ -157,13 +156,13 @@ internal static class XlsxWorksheetSingleXmlCellMapper
         var relsPath = XlsxPackagePath.GetRelationshipPartPath(worksheetPath);
         var existingRelsEntry = archive.GetEntry(relsPath);
         var relsXml = existingRelsEntry is null
-            ? new XDocument(new XElement(PackageRelNs + "Relationships"))
+            ? OpcRelationships.CreateDocument()
             : XlsxPackageXmlEditor.LoadXml(existingRelsEntry);
 
         var existingPartPaths = RemoveSingleCellTableRelationships(relsXml, worksheetPath);
         foreach (var partPath in existingPartPaths)
             archive.GetEntry(partPath)?.Delete();
-        RemoveSpecificContentTypes(archive, existingPartPaths);
+        OpcMediaTypes.RemoveOverrideContentTypes(archive, existingPartPaths);
 
         var partXml = ToPartXml(singleXmlCells);
         if (partXml is not null)
@@ -258,7 +257,7 @@ internal static class XlsxWorksheetSingleXmlCellMapper
         var root = relsXml.Root;
         if (root is null)
         {
-            root = new XElement(PackageRelNs + "Relationships");
+            root = OpcRelationships.CreateRoot();
             relsXml.Add(root);
         }
 
@@ -283,32 +282,6 @@ internal static class XlsxWorksheetSingleXmlCellMapper
         return partPaths
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
-    }
-
-    private static void RemoveSpecificContentTypes(ZipArchive archive, IReadOnlyList<string> partPaths)
-    {
-        if (partPaths.Count == 0)
-            return;
-
-        var contentTypesEntry = archive.GetEntry("[Content_Types].xml");
-        if (contentTypesEntry is null)
-            return;
-
-        var normalizedPartNames = partPaths
-            .Select(path => path.StartsWith('/') ? path : $"/{path}")
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var contentTypesXml = XlsxPackageXmlEditor.LoadXml(contentTypesEntry);
-        var overrides = contentTypesXml.Root?
-            .Elements(ContentTypeNs + "Override")
-            .Where(element => normalizedPartNames.Contains(element.Attribute("PartName")?.Value ?? ""))
-            .ToList()
-            ?? [];
-        if (overrides.Count == 0)
-            return;
-
-        foreach (var element in overrides)
-            element.Remove();
-        XlsxPackageXmlEditor.ReplaceXml(archive, "[Content_Types].xml", contentTypesXml);
     }
 
     private static string NextSingleCellTablePartPath(ZipArchive archive)

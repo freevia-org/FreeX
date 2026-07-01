@@ -31,8 +31,8 @@ public sealed class CommonMessageTextTests
     {
         // DialogButtonRowFactory was extracted into Free.Shared.Shell, where it resolves its
         // localized button labels and accessibility text through ShellStrings.Current. In FreeX,
-        // ShellStrings.Current is FreeXShellStrings, which simply delegates to the host's UiText
-        // catalog, so the localized text still originates from UiText.
+        // ShellStrings.Current is a ResourceShellStrings adapter over the host's UiText catalog,
+        // so the localized text still originates from UiText.
         var source = DialogSourceTestSupport.ReadShellSources("DialogButtonRowFactory.cs");
 
         source.Should().Contain("ResolveDefaultAcceptContent(acceptContent)");
@@ -66,6 +66,7 @@ public sealed class CommonMessageTextTests
         var source = DialogSourceTestSupport.ReadShellSources("WpfMessageBoxRealizer.cs");
 
         serviceSource.Should().Contain("WpfMessageBoxRealizer.Show(");
+        serviceSource.Should().Contain("Application.Current?.MainWindow");
         source.Should().Contain("ResolveDefaultTitle(title, DefaultErrorTitle, ShellStrings.Current.ErrorTitle)");
         source.Should().Contain("ResolveDefaultTitle(title, DefaultWarningTitle, ShellStrings.Current.WarningTitle)");
         source.Should().Contain("ResolveDefaultTitle(title, DefaultInformationTitle, ShellStrings.Current.InformationTitle)");
@@ -81,7 +82,6 @@ public sealed class CommonMessageTextTests
         foreach (var sourceFile in new[]
         {
             "DialogMessageHelper.cs",
-            "FileCommandMessageBox.cs",
             "WpfUserMessageService.cs"
         })
         {
@@ -89,5 +89,42 @@ public sealed class CommonMessageTextTests
             source.Should().Contain("WpfMessageBoxRealizer.Show(");
             source.Should().NotContain("MessageBox.Show(");
         }
+    }
+
+    [Fact]
+    public void StartupPrompts_UseSharedWpfUserMessageService()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("App.xaml.cs");
+
+        source.Should().Contain("new WpfUserMessageService()");
+        source.Should().Contain("StartupMessageService.ShowMessage(");
+        source.Should().Contain("UserMessageButtons.YesNo");
+        source.Should().NotContain("MessageBox.Show(");
+    }
+
+    [Fact]
+    public void SharedFileCommandMessageBox_IsServiceBacked()
+    {
+        var source = DialogSourceTestSupport.ReadShellSources("FileCommandMessageBox.cs");
+
+        source.Should().Contain("IUserMessageService messageService");
+        source.Should().Contain("messageService.PromptSaveChanges(");
+        source.Should().Contain("messageService.ShowFileCommandError(");
+        source.Should().NotContain("WpfMessageBoxRealizer.Show(");
+        source.Should().NotContain("MessageBox.Show(");
+    }
+
+    [Fact]
+    public void SharedDialogChromeResources_LiveInShellWpfWithRibbonCompatibilityWrapper()
+    {
+        var shellDialogWindow = DialogSourceTestSupport.ReadShellSources("DialogWindow.cs");
+        var shellDialogResources = DialogSourceTestSupport.ReadShellSources("DialogResources.xaml");
+        var ribbonDialogWindow = WorkspaceFileLocator.ReadAllText("shared", "Free.Shared.Ribbon.Wpf", "DialogWindow.cs");
+
+        shellDialogWindow.Should().Contain("namespace Free.Shared.Shell.Wpf;");
+        shellDialogWindow.Should().Contain("/Free.Shared.Shell.Wpf;component/DialogResources.xaml");
+        shellDialogResources.Should().Contain("Shared dialog control theme.");
+        ribbonDialogWindow.Should().Contain("Free.Shared.Shell.Wpf.DialogWindow");
+        ribbonDialogWindow.Should().NotContain("DialogResources.xaml");
     }
 }

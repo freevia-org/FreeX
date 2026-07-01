@@ -626,8 +626,7 @@ public sealed class WorkbookSession
             "Remove Duplicates",
             sheetId =>
             {
-                var sheetRange = RemapRangeToSheet(plan.ActiveRange, sheetId);
-                var removeCommand = plan.CreateCommand(sheetId, sheetRange);
+                var removeCommand = plan.CreateCommand(sheetId);
                 if (sheetId == ActiveSheet.Id)
                     activeSheetCommand = removeCommand;
 
@@ -2272,39 +2271,11 @@ public sealed class WorkbookSession
     /// <summary>
     /// Toggles the active sheet's AutoFilter over the effective range: the existing AutoFilter range when one
     /// is set (to disable it), the current region around a single-cell selection, or the selected range.
-    /// Mirrors the desktop host's <c>AutoFilterToggleRangePlanner</c>.
     /// </summary>
     public WorkbookCellEditResult ToggleSelectedRangeAutoFilter() =>
-        ExecuteReviewCommand(new ToggleWorksheetAutoFilterCommand(ActiveSheet.Id, ResolveAutoFilterToggleRange()));
-
-    private GridRange ResolveAutoFilterToggleRange()
-    {
-        var sheet = ActiveSheet;
-        if (sheet.AutoFilter?.Reference is { } reference && !string.IsNullOrWhiteSpace(reference))
-        {
-            try
-            {
-                return GridRange.Parse(reference, sheet.Id);
-            }
-            catch (FormatException)
-            {
-                // Fall through to selection-based resolution below.
-            }
-            catch (ArgumentException)
-            {
-                // Fall through to selection-based resolution below.
-            }
-        }
-
-        var selection = SelectedRange;
-        if (selection.RowCount == 1 && selection.ColCount == 1 &&
-            SelectionRangeService.GetCurrentRegion(sheet, ActiveCell) is { RowCount: > 1 } region)
-        {
-            return region;
-        }
-
-        return selection;
-    }
+        ExecuteReviewCommand(new ToggleWorksheetAutoFilterCommand(
+            ActiveSheet.Id,
+            AutoFilterToggleRangePlanner.Create(ActiveSheet, SelectedRange)));
 
     public WorkbookCellEditResult SortSelectedRange(bool ascending)
     {
@@ -2743,37 +2714,13 @@ public sealed class WorkbookSession
         string path,
         WorkbookFileAccessIdentity? fileAccessIdentity,
         out WorkbookOpenTarget? target,
-        out string message)
-    {
-        target = null;
-        if (!LocalFilePath.TryNormalize(path, out var openPath))
-        {
-            message = "Open requires a local file path.";
-            return false;
-        }
-
-        if (!TryGetExtension(openPath, out var extension))
-        {
-            message = "Unsupported file type.";
-            return false;
-        }
-
-        var adapter = FileFormatResolver.FindOpenAdapter(_adapters, extension, out var format);
-        if (adapter is null || format is null)
-        {
-            message = $"Unsupported file type: {extension}.";
-            return false;
-        }
-
-        target = new WorkbookOpenTarget(
-            openPath,
-            adapter,
-            extension,
-            format,
-            ResolveOpenFileAccessIdentity(openPath, fileAccessIdentity));
-        message = "";
-        return true;
-    }
+        out string message) =>
+        WorkbookOpenTargetPlanner.TryCreateOpenTarget(
+            _adapters,
+            path,
+            fileAccessIdentity,
+            out target,
+            out message);
 
     public bool TryResolveSaveTarget(string path, out FileSaveTarget? target, out string message)
     {
@@ -2823,18 +2770,43 @@ public sealed class WorkbookSession
         string path,
         WorkbookFileAccessIdentity? fileAccessIdentity = null)
     {
+        var plan = CreateSaveCompletionPlan(generationAtSaveStart, path, fileAccessIdentity);
+        return ApplySaveCompletion(plan);
+    }
+
+    public SaveCompletionPlan CreateSaveCompletionPlan(
+        int generationAtSaveStart,
+        string path,
+        WorkbookFileAccessIdentity? fileAccessIdentity = null)
+    {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
 
         var resolvedIdentity = ResolveSavedFileAccessIdentity(path, fileAccessIdentity);
-        var noEditsArrived = DirtyGeneration == generationAtSaveStart;
-        if (noEditsArrived)
+        return SaveCompletionPlanner.Plan(
+            generationAtSaveStart,
+            DirtyGeneration,
+            sameWorkbook: true,
+            path,
+            resolvedIdentity,
+            displayName: Path.GetFileName(path));
+    }
+
+    public bool ApplySaveCompletion(SaveCompletionPlan plan)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+
+        if (plan.MarkSaved)
             IsDirty = false;
 
-        CurrentFilePath = path;
-        CurrentFileAccessIdentity = resolvedIdentity;
-        CurrentXlsxFeatureReport = null;
-        Workbook.Name = Path.GetFileName(path);
-        return noEditsArrived;
+        if (plan.ApplyFileContext && plan.FileContext is { } fileContext)
+        {
+            CurrentFilePath = fileContext.Path;
+            CurrentFileAccessIdentity = fileContext.FileAccessIdentity;
+            CurrentXlsxFeatureReport = null;
+            Workbook.Name = fileContext.DisplayName;
+        }
+
+        return plan.MarkSaved;
     }
 
     public string BuildSuggestedSaveAsFileName(string defaultExtension)
@@ -4733,37 +4705,6 @@ public sealed class WorkbookSession
     private static bool IsXlsxPath(string path) =>
         string.Equals(Path.GetExtension(path), ".xlsx", StringComparison.OrdinalIgnoreCase);
 
-    private static bool TryGetExtension(string path, out string extension)
-    {
-        try
-        {
-            if (path.Contains('\0', StringComparison.Ordinal) ||
-                path.IndexOfAny(Path.GetInvalidPathChars()) >= 0)
-            {
-                extension = "";
-                return false;
-            }
-
-            extension = Path.GetExtension(path) ?? "";
-            return !string.IsNullOrWhiteSpace(extension);
-        }
-        catch (ArgumentException)
-        {
-            extension = "";
-            return false;
-        }
-        catch (NotSupportedException)
-        {
-            extension = "";
-            return false;
-        }
-        catch (PathTooLongException)
-        {
-            extension = "";
-            return false;
-        }
-    }
-
     private static CellAddress GetInitialActiveCell(Sheet sheet) =>
         new(sheet.Id, Math.Max(1, sheet.ActiveRow ?? 1), Math.Max(1, sheet.ActiveCol ?? 1));
 
@@ -4793,26 +4734,12 @@ public sealed class WorkbookSession
             : WorkbookFileAccessIdentity.FromLocalPath(source.SourcePath);
     }
 
-    private static WorkbookFileAccessIdentity ResolveOpenFileAccessIdentity(
-        string openPath,
-        WorkbookFileAccessIdentity? fileAccessIdentity)
-    {
-        if (fileAccessIdentity is not null &&
-            fileAccessIdentity.TryWithLocalPath(openPath, out var resolvedIdentity) &&
-            resolvedIdentity is not null)
-        {
-            return resolvedIdentity;
-        }
-
-        return WorkbookFileAccessIdentity.FromLocalPath(openPath);
-    }
-
     private WorkbookFileAccessIdentity ResolveSavedFileAccessIdentity(
         string savedPath,
         WorkbookFileAccessIdentity? fileAccessIdentity)
     {
         if (fileAccessIdentity is not null)
-            return ResolveOpenFileAccessIdentity(savedPath, fileAccessIdentity);
+            return WorkbookOpenTargetPlanner.ResolveFileAccessIdentity(savedPath, fileAccessIdentity);
 
         if (CurrentFileAccessIdentity is not null &&
             CurrentFilePath is not null &&

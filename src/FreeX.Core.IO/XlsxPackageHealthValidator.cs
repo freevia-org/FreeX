@@ -64,10 +64,8 @@ public static class XlsxPackageHealthValidator
     private const string TableContentType =
         "application/vnd.openxmlformats-officedocument.spreadsheetml.table+xml";
 
-    private static readonly XNamespace PackageContentTypeNs =
-        "http://schemas.openxmlformats.org/package/2006/content-types";
-    private static readonly XNamespace PackageRelationshipNs =
-        "http://schemas.openxmlformats.org/package/2006/relationships";
+    private static readonly XNamespace PackageContentTypeNs = OpcMediaTypes.ContentTypesNamespace;
+    private static readonly XNamespace PackageRelationshipNs = OpcRelationships.Namespace;
     private static readonly XNamespace WorkbookNs =
         "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
     private static readonly XNamespace OfficeRelationshipNs =
@@ -2567,21 +2565,10 @@ public static class XlsxPackageHealthValidator
     }
 
     private static string GetRelationshipPartPath(string sourcePartPath)
-    {
-        var normalizedPath = NormalizePackagePart(sourcePartPath);
-        var slashIndex = normalizedPath.LastIndexOf('/');
-        if (slashIndex < 0)
-            return $"_rels/{normalizedPath}.rels";
-
-        return string.Concat(
-            normalizedPath.AsSpan(0, slashIndex),
-            "/_rels/",
-            normalizedPath.AsSpan(slashIndex + 1),
-            ".rels");
-    }
+        => OpcPathHelper.GetRelationshipPartPath(NormalizePackagePart(sourcePartPath));
 
     private static string NormalizePackagePart(string part) =>
-        part.Replace('\\', '/').TrimStart('/');
+        OpcPathHelper.ToZipEntryPath(part);
 
     private static bool TryLoadPackageXml(
         ZipArchive archive,

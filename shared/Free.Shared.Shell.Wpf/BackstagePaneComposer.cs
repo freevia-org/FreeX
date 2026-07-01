@@ -151,6 +151,37 @@ public sealed class BackstagePaneComposer
         return panel;
     }
 
+    public UIElement BuildAccountPane(BackstageAccountPaneSpec spec)
+    {
+        ArgumentNullException.ThrowIfNull(spec);
+        ArgumentNullException.ThrowIfNull(spec.Groups);
+
+        var panel = new StackPanel { MaxWidth = 640, HorizontalAlignment = HorizontalAlignment.Left };
+        panel.Children.Add(_kit.HeadingText(spec.Heading));
+        panel.Children.Add(new TextBlock
+        {
+            Text = spec.Description,
+            Foreground = _kit.Muted,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 16)
+        });
+
+        foreach (var group in spec.Groups)
+        {
+            panel.Children.Add(_kit.SubHeading(group.Heading));
+            AddFields(panel, group.Fields);
+        }
+
+        if (!string.IsNullOrWhiteSpace(spec.OptionsText) && spec.OpenOptions is not null)
+        {
+            var options = _kit.LinkButton(spec.OptionsText, spec.OpenOptions);
+            options.Margin = new Thickness(0, 18, 0, 0);
+            panel.Children.Add(options);
+        }
+
+        return _kit.Scroll(panel);
+    }
+
     public UIElement BuildActionPane(BackstageActionPaneSpec spec)
     {
         ArgumentNullException.ThrowIfNull(spec);
@@ -263,6 +294,13 @@ public sealed record BackstageOptionsPaneSpec(
     IReadOnlyList<BackstageFieldRow> Fields,
     string? EditText = null,
     Action? Edit = null);
+
+public sealed record BackstageAccountPaneSpec(
+    string Heading,
+    string Description,
+    IReadOnlyList<SisterBackstageAccountFieldGroup> Groups,
+    string? OptionsText = null,
+    Action? OpenOptions = null);
 
 public sealed record BackstageActionPaneSpec(
     string Heading,

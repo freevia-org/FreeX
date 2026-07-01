@@ -14,6 +14,12 @@ internal static class XlsxDocumentPropertiesPreserver
     private const string CustomPropertiesPart = OpcPackageProperties.CustomPropertiesZipEntry;
     private const string CustomPropertiesRelationshipType = OpcPackageProperties.CustomPropertiesRelationshipType;
     private const string CorePropertiesServicePartPrefix = "package/services/metadata/core-properties/";
+    private static readonly OpcCanonicalRelationship[] RootDocumentPropertyRelationships =
+    [
+        new(CorePropertiesPart, CorePropertiesRelationshipType),
+        new(ExtendedPropertiesPart, ExtendedPropertiesRelationshipType),
+        new(CustomPropertiesPart, CustomPropertiesRelationshipType)
+    ];
 
     public static void Preserve(ZipArchive sourceArchive, ZipArchive targetArchive)
     {
@@ -21,26 +27,13 @@ internal static class XlsxDocumentPropertiesPreserver
             sourceArchive,
             targetArchive,
             CorePropertiesPart,
-            [
-                XName.Get("subject", "http://purl.org/dc/elements/1.1/"),
-                XName.Get("keywords", "http://schemas.openxmlformats.org/package/2006/metadata/core-properties"),
-                XName.Get("category", "http://schemas.openxmlformats.org/package/2006/metadata/core-properties"),
-                XName.Get("contentStatus", "http://schemas.openxmlformats.org/package/2006/metadata/core-properties"),
-                XName.Get("language", "http://purl.org/dc/elements/1.1/"),
-                XName.Get("version", "http://schemas.openxmlformats.org/package/2006/metadata/core-properties")
-            ]);
+            OpcDocumentProperties.WorkbookStableCorePropertyElementNames);
 
         PreserveDocumentPropertyElements(
             sourceArchive,
             targetArchive,
             ExtendedPropertiesPart,
-            [
-                XName.Get("Application", "http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"),
-                XName.Get("Company", "http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"),
-                XName.Get("Manager", "http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"),
-                XName.Get("PresentationFormat", "http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"),
-                XName.Get("Template", "http://schemas.openxmlformats.org/officeDocument/2006/extended-properties")
-            ]);
+            OpcDocumentProperties.StableExtendedPropertyElementNames);
 
         PreserveDocumentPropertyPart(sourceArchive, targetArchive, CustomPropertiesPart);
     }
@@ -92,127 +85,45 @@ internal static class XlsxDocumentPropertiesPreserver
 
     private static bool NeedsRootRelationshipsNormalization(ZipArchive archive)
     {
-        XNamespace relationshipNs = "http://schemas.openxmlformats.org/package/2006/relationships";
         var relationshipsEntry = archive.GetEntry("_rels/.rels");
         var relationshipsXml = relationshipsEntry is null
-            ? new XDocument(new XElement(relationshipNs + "Relationships"))
+            ? new XDocument(new XElement(OpcRelationships.Namespace + "Relationships"))
             : XlsxPackageXmlEditor.LoadXml(relationshipsEntry);
         if (relationshipsXml.Root is null ||
-            relationshipsXml.Root.Name != relationshipNs + "Relationships")
+            relationshipsXml.Root.Name != OpcRelationships.Namespace + "Relationships")
         {
             return false;
         }
 
-        return NeedsRootRelationshipNormalization(
-                archive,
+        return RootDocumentPropertyRelationships.Any(relationship =>
+            OpcRelationships.NeedsCanonicalPackageRelationshipNormalization(
                 relationshipsXml,
-                relationshipNs,
-                CorePropertiesPart,
-                CorePropertiesRelationshipType) ||
-            NeedsRootRelationshipNormalization(
-                archive,
-                relationshipsXml,
-                relationshipNs,
-                ExtendedPropertiesPart,
-                ExtendedPropertiesRelationshipType) ||
-            NeedsRootRelationshipNormalization(
-                archive,
-                relationshipsXml,
-                relationshipNs,
-                CustomPropertiesPart,
-                CustomPropertiesRelationshipType);
-    }
-
-    private static bool NeedsRootRelationshipNormalization(
-        ZipArchive archive,
-        XDocument relationshipsXml,
-        XNamespace relationshipNs,
-        string partName,
-        string relationshipType)
-    {
-        var hasPart = archive.GetEntry(partName) is not null;
-        var relationships = relationshipsXml.Root!
-            .Elements(relationshipNs + "Relationship")
-            .Where(relationship =>
-                RelationshipTypeMatches(relationship, relationshipType) ||
-                RelationshipTargetsPart(relationship, partName))
-            .ToList();
-
-        if (!hasPart)
-            return relationships.Count > 0;
-
-        var canonicalRelationships = 0;
-        foreach (var relationship in relationships)
-        {
-            if (!RelationshipTypeMatches(relationship, relationshipType))
-                return true;
-
-            var target = relationship.Attribute("Target")?.Value?.Trim();
-            var targetMode = relationship.Attribute("TargetMode")?.Value?.Trim();
-            var targetsCanonicalPart = RelationshipTargetsPart(relationship, partName);
-
-            if (!targetsCanonicalPart)
-                return true;
-
-            canonicalRelationships++;
-            if (canonicalRelationships > 1 ||
-                !string.Equals(target, partName, StringComparison.Ordinal) ||
-                !string.IsNullOrWhiteSpace(targetMode))
-            {
-                return true;
-            }
-        }
-
-        return canonicalRelationships == 0;
+                relationship,
+                archive.GetEntry(relationship.PartName) is not null,
+                ResolveRootRelationshipTarget));
     }
 
     private static bool NormalizeRootRelationships(ZipArchive archive)
     {
-        XNamespace relationshipNs = "http://schemas.openxmlformats.org/package/2006/relationships";
         var relationshipsEntry = archive.GetEntry("_rels/.rels");
         var relationshipsXml = relationshipsEntry is null
-            ? new XDocument(new XElement(relationshipNs + "Relationships"))
+            ? new XDocument(new XElement(OpcRelationships.Namespace + "Relationships"))
             : XlsxPackageXmlEditor.LoadXml(relationshipsEntry);
         if (relationshipsXml.Root is null ||
-            relationshipsXml.Root.Name != relationshipNs + "Relationships")
+            relationshipsXml.Root.Name != OpcRelationships.Namespace + "Relationships")
         {
             return false;
         }
 
         var changed = false;
-        changed |= RemoveMismatchedRootRelationships(
-            relationshipsXml,
-            relationshipNs,
-            CorePropertiesPart,
-            CorePropertiesRelationshipType);
-        changed |= RemoveMismatchedRootRelationships(
-            relationshipsXml,
-            relationshipNs,
-            ExtendedPropertiesPart,
-            ExtendedPropertiesRelationshipType);
-        changed |= RemoveMismatchedRootRelationships(
-            relationshipsXml,
-            relationshipNs,
-            CustomPropertiesPart,
-            CustomPropertiesRelationshipType);
-        changed |= NormalizeRootRelationship(
-            archive,
-            relationshipsXml,
-            relationshipNs,
-            CorePropertiesPart,
-            CorePropertiesRelationshipType);
-        changed |= NormalizeRootRelationship(
-            archive,
-            relationshipsXml,
-            relationshipNs,
-            ExtendedPropertiesPart,
-            ExtendedPropertiesRelationshipType);
-        changed |= NormalizeRootRelationship(
-            archive,
-            relationshipsXml,
-            relationshipNs,
-            CustomPropertiesPart,
-            CustomPropertiesRelationshipType);
+        foreach (var relationship in RootDocumentPropertyRelationships)
+        {
+            changed |= OpcRelationships.NormalizeCanonicalPackageRelationship(
+                relationshipsXml,
+                relationship,
+                archive.GetEntry(relationship.PartName) is not null,
+                ResolveRootRelationshipTarget);
+        }
 
         if (changed || (relationshipsEntry is null && relationshipsXml.Root.HasElements))
             XlsxPackageXmlEditor.ReplaceXml(archive, "_rels/.rels", relationshipsXml);
@@ -220,133 +131,8 @@ internal static class XlsxDocumentPropertiesPreserver
         return changed;
     }
 
-    private static bool RemoveMismatchedRootRelationships(
-        XDocument relationshipsXml,
-        XNamespace relationshipNs,
-        string partName,
-        string relationshipType)
-    {
-        var relationships = relationshipsXml.Root!
-            .Elements(relationshipNs + "Relationship")
-            .Where(relationship =>
-                RelationshipTargetsPart(relationship, partName) &&
-                !string.Equals(
-                    relationship.Attribute("Type")?.Value?.Trim(),
-                    relationshipType,
-                    StringComparison.OrdinalIgnoreCase))
-            .ToList();
-        if (relationships.Count == 0)
-            return false;
-
-        relationships.Remove();
-        return true;
-    }
-
-    private static bool NormalizeRootRelationship(
-        ZipArchive archive,
-        XDocument relationshipsXml,
-        XNamespace relationshipNs,
-        string partName,
-        string relationshipType)
-    {
-        var changed = false;
-        var hasPart = archive.GetEntry(partName) is not null;
-        var rootRelationships = relationshipsXml.Root!
-            .Elements(relationshipNs + "Relationship")
-            .ToList();
-        foreach (var relationship in rootRelationships)
-        {
-            var type = relationship.Attribute("Type")?.Value?.Trim();
-            if (string.Equals(type, relationshipType, StringComparison.OrdinalIgnoreCase))
-                continue;
-
-            if (!RelationshipTargetsPart(relationship, partName))
-                continue;
-
-            relationship.Remove();
-            changed = true;
-        }
-
-        var relationships = relationshipsXml.Root!
-            .Elements(relationshipNs + "Relationship")
-            .Where(relationship =>
-                RelationshipTypeMatches(relationship, relationshipType) ||
-                RelationshipTargetsPart(relationship, partName))
-            .ToList();
-
-        XElement? canonicalRelationship = null;
-        foreach (var relationship in relationships)
-        {
-            if (!hasPart)
-            {
-                relationship.Remove();
-                changed = true;
-                continue;
-            }
-
-            var target = relationship.Attribute("Target")?.Value?.Trim();
-            var targetMode = relationship.Attribute("TargetMode")?.Value?.Trim();
-            var targetsCanonicalPart = RelationshipTargetsPart(relationship, partName);
-
-            if (targetsCanonicalPart &&
-                canonicalRelationship is null &&
-                RelationshipTypeMatches(relationship, relationshipType))
-            {
-                canonicalRelationship = relationship;
-                if (!string.Equals(target, partName, StringComparison.Ordinal))
-                {
-                    relationship.SetAttributeValue("Target", partName);
-                    changed = true;
-                }
-
-                if (!string.IsNullOrWhiteSpace(targetMode))
-                {
-                    relationship.SetAttributeValue("TargetMode", null);
-                    changed = true;
-                }
-
-                continue;
-            }
-
-            relationship.Remove();
-            changed = true;
-        }
-
-        if (!hasPart || canonicalRelationship is not null)
-            return changed;
-
-        relationshipsXml.Root!.Add(new XElement(
-            relationshipNs + "Relationship",
-            new XAttribute("Id", XlsxPackageXmlEditor.NextRelationshipId(relationshipsXml, relationshipNs)),
-            new XAttribute("Type", relationshipType),
-            new XAttribute("Target", partName)));
-        return true;
-    }
-
-    private static bool RelationshipTypeMatches(XElement relationship, string relationshipType) =>
-        string.Equals(
-            relationship.Attribute("Type")?.Value?.Trim(),
-            relationshipType,
-            StringComparison.OrdinalIgnoreCase);
-
-    private static bool RelationshipTargetsPart(XElement relationship, string partName)
-    {
-        var target = relationship.Attribute("Target")?.Value?.Trim();
-        if (string.IsNullOrWhiteSpace(target))
-            return false;
-
-        var targetMode = relationship.Attribute("TargetMode")?.Value?.Trim();
-        if (!string.IsNullOrWhiteSpace(targetMode) &&
-            !string.Equals(targetMode, "Internal", StringComparison.OrdinalIgnoreCase))
-        {
-            return false;
-        }
-
-        return string.Equals(
-            XlsxPackagePath.ResolveRelationshipTarget("", target),
-            partName,
-            StringComparison.OrdinalIgnoreCase);
-    }
+    private static string ResolveRootRelationshipTarget(string target) =>
+        XlsxPackagePath.ResolveRelationshipTarget("", target);
 
     private static bool RemoveCorePropertiesServiceContentTypes(ZipArchive archive)
     {
@@ -458,28 +244,7 @@ internal static class XlsxDocumentPropertiesPreserver
         if (sourceRoot is null || targetRoot is null)
             return;
 
-        var changed = false;
-        foreach (var stableElementName in stableElementNames)
-        {
-            var sourceElement = sourceRoot.Element(stableElementName);
-            if (sourceElement is null)
-                continue;
-
-            var targetElement = targetRoot.Element(stableElementName);
-            if (targetElement is null)
-            {
-                targetRoot.Add(new XElement(sourceElement));
-                changed = true;
-                continue;
-            }
-
-            if (XNode.DeepEquals(targetElement, sourceElement))
-                continue;
-
-            targetElement.ReplaceWith(new XElement(sourceElement));
-            changed = true;
-        }
-
+        var changed = OpcDocumentProperties.PreservePropertyElements(sourceRoot, targetRoot, stableElementNames);
         if (changed)
             XlsxPackageXmlEditor.ReplaceXml(targetArchive, partName, targetXml);
     }

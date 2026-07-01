@@ -1,6 +1,7 @@
 using System.Windows.Data;
 using System.Windows.Media;
 using FluentAssertions;
+using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host.Tests;
@@ -83,7 +84,7 @@ public sealed partial class ManageConditionalFormatsDialogTests
         source.Should().Contain("Header = UiText.Get(\"ManageConditionalFormats_FormatColumn\")");
         source.Should().Contain("typeof(Border)");
         source.Should().Contain("typeof(TextBlock)");
-        source.Should().Contain("UiText.Get(\"ManageConditionalFormats_FormatPreviewSample\")");
+        source.Should().Contain("UiText.Get(ManageConditionalFormatsPlanner.FormatPreviewSampleKey)");
         source.Should().Contain("new PreviewForegroundBrushConverter()");
         source.Should().Contain("new PreviewFontWeightConverter()");
         source.Should().Contain("new PreviewFontStyleConverter()");

@@ -20,21 +20,21 @@ public static class SheetProtectionOptions
     /// </summary>
     public static IReadOnlyList<SheetProtectionOption> All { get; } =
     [
-        new(SheetProtectionPermission.SelectLockedCells, DefaultEnabled: true),
-        new(SheetProtectionPermission.SelectUnlockedCells, DefaultEnabled: true),
-        new(SheetProtectionPermission.FormatCells, DefaultEnabled: false),
-        new(SheetProtectionPermission.FormatColumns, DefaultEnabled: false),
-        new(SheetProtectionPermission.FormatRows, DefaultEnabled: false),
-        new(SheetProtectionPermission.InsertColumns, DefaultEnabled: false),
-        new(SheetProtectionPermission.InsertRows, DefaultEnabled: false),
-        new(SheetProtectionPermission.InsertHyperlinks, DefaultEnabled: false),
-        new(SheetProtectionPermission.DeleteColumns, DefaultEnabled: false),
-        new(SheetProtectionPermission.DeleteRows, DefaultEnabled: false),
-        new(SheetProtectionPermission.Sort, DefaultEnabled: false),
-        new(SheetProtectionPermission.UseAutoFilter, DefaultEnabled: false),
-        new(SheetProtectionPermission.UsePivotTableReports, DefaultEnabled: false),
-        new(SheetProtectionPermission.EditObjects, DefaultEnabled: false),
-        new(SheetProtectionPermission.EditScenarios, DefaultEnabled: false),
+        new(SheetProtectionPermission.SelectLockedCells, DefaultEnabled: true, "Protection_PermissionSelectLockedCells"),
+        new(SheetProtectionPermission.SelectUnlockedCells, DefaultEnabled: true, "Protection_PermissionSelectUnlockedCells"),
+        new(SheetProtectionPermission.FormatCells, DefaultEnabled: false, "Protection_PermissionFormatCells"),
+        new(SheetProtectionPermission.FormatColumns, DefaultEnabled: false, "Protection_PermissionFormatColumns"),
+        new(SheetProtectionPermission.FormatRows, DefaultEnabled: false, "Protection_PermissionFormatRows"),
+        new(SheetProtectionPermission.InsertColumns, DefaultEnabled: false, "Protection_PermissionInsertColumns"),
+        new(SheetProtectionPermission.InsertRows, DefaultEnabled: false, "Protection_PermissionInsertRows"),
+        new(SheetProtectionPermission.InsertHyperlinks, DefaultEnabled: false, "Protection_PermissionInsertHyperlinks"),
+        new(SheetProtectionPermission.DeleteColumns, DefaultEnabled: false, "Protection_PermissionDeleteColumns"),
+        new(SheetProtectionPermission.DeleteRows, DefaultEnabled: false, "Protection_PermissionDeleteRows"),
+        new(SheetProtectionPermission.Sort, DefaultEnabled: false, "Protection_PermissionSort"),
+        new(SheetProtectionPermission.UseAutoFilter, DefaultEnabled: false, "Protection_PermissionUseAutoFilter"),
+        new(SheetProtectionPermission.UsePivotTableReports, DefaultEnabled: false, "Protection_PermissionUsePivotTableReports"),
+        new(SheetProtectionPermission.EditObjects, DefaultEnabled: false, "Protection_PermissionEditObjects"),
+        new(SheetProtectionPermission.EditScenarios, DefaultEnabled: false, "Protection_PermissionEditScenarios"),
     ];
 
     /// <summary>The permissions, in dialog order, that start checked for an unprotected sheet.</summary>

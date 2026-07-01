@@ -1,6 +1,8 @@
 using System.Windows.Input;
 using FluentAssertions;
-using FreeX.App.Host;
+using Free.Shared.AppServices;
+using FreeX.App.Presentation;
+using HostExcelSelectionModePlanner = FreeX.App.Host.ExcelSelectionModePlanner;
 
 namespace FreeX.App.Host.Tests;
 
@@ -17,7 +19,7 @@ public sealed class ExcelSelectionModePlannerTests
         ExcelSelectionMode current,
         ExcelSelectionMode expected)
     {
-        var handled = ExcelSelectionModePlanner.TryToggle(key, modifiers, current, out var next);
+        var handled = HostExcelSelectionModePlanner.TryToggle(key, modifiers, current, out var next);
 
         handled.Should().BeTrue();
         next.Should().Be(expected);
@@ -26,7 +28,7 @@ public sealed class ExcelSelectionModePlannerTests
     [Fact]
     public void TryToggle_IgnoresOtherKeys()
     {
-        var handled = ExcelSelectionModePlanner.TryToggle(
+        var handled = HostExcelSelectionModePlanner.TryToggle(
             Key.F7,
             ModifierKeys.None,
             ExcelSelectionMode.Normal,
@@ -45,7 +47,7 @@ public sealed class ExcelSelectionModePlannerTests
     [InlineData(ModifierKeys.Control | ModifierKeys.Alt | ModifierKeys.Shift)]
     public void TryToggle_IgnoresF8WithNonExcelSelectionModeModifiers(ModifierKeys modifiers)
     {
-        var handled = ExcelSelectionModePlanner.TryToggle(
+        var handled = HostExcelSelectionModePlanner.TryToggle(
             Key.F8,
             modifiers,
             ExcelSelectionMode.Normal,
@@ -71,6 +73,27 @@ public sealed class ExcelSelectionModePlannerTests
         ModifierKeys modifiers,
         bool expected)
     {
-        ExcelSelectionModePlanner.ShouldExtendSelection(mode, modifiers).Should().Be(expected);
+        HostExcelSelectionModePlanner.ShouldExtendSelection(mode, modifiers).Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData(ExcelSelectionMode.Normal, StatusBarTextResourceKeys.ReadyText)]
+    [InlineData(ExcelSelectionMode.Extend, StatusBarTextResourceKeys.ExtendSelectionMode)]
+    [InlineData(ExcelSelectionMode.Add, StatusBarTextResourceKeys.AddToSelectionMode)]
+    public void StatusBarModeResourceKey_MapsSelectionModeToSharedStatusText(
+        ExcelSelectionMode mode,
+        string expectedResourceKey)
+    {
+        HostExcelSelectionModePlanner.StatusBarModeResourceKey(mode).Should().Be(expectedResourceKey);
+    }
+
+    [Theory]
+    [InlineData(false, StatusBarTextResourceKeys.ReadyText)]
+    [InlineData(true, StatusBarTextResourceKeys.EndMode)]
+    public void EndModeStatusBarResourceKey_MapsEndModeToSharedStatusText(
+        bool enabled,
+        string expectedResourceKey)
+    {
+        HostExcelSelectionModePlanner.EndModeStatusBarResourceKey(enabled).Should().Be(expectedResourceKey);
     }
 }

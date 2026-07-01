@@ -52,6 +52,20 @@ public sealed partial class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void MainWindow_InitializesCurrentSheetBeforeComponentSetupCanRaiseEvents()
+    {
+        var mainSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
+
+        var workbookAssignment = mainSource.IndexOf("_workbook = workbook;", StringComparison.Ordinal);
+        var currentSheetAssignment = mainSource.IndexOf("_currentSheetId = _workbook.Sheets[0].Id;", StringComparison.Ordinal);
+        var initializeComponentCall = mainSource.IndexOf("InitializeComponent();", StringComparison.Ordinal);
+
+        workbookAssignment.Should().BeGreaterThanOrEqualTo(0);
+        currentSheetAssignment.Should().BeGreaterThan(workbookAssignment);
+        currentSheetAssignment.Should().BeLessThan(initializeComponentCall);
+    }
+
+    [Fact]
     public void UpdateViewport_SyncsWorkbookViewStateAndPagePreviewInputs()
     {
         var viewportSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Viewport.cs");
@@ -271,23 +285,28 @@ public sealed partial class MainWindowSourceHygieneTests
     }
 
     [Fact]
-    public void UpdateViewport_RoutesSparklineValuesThroughSparklineValueCache()
+    public void UpdateViewport_RoutesSparklineValuesThroughSparklineValueCacheAndSharedReader()
     {
+        var appHostDirectory = DialogSourceTestSupport.FindHostSourceDirectory("MainWindow.xaml");
         var viewportSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Viewport.cs");
+        var hostPlannerPath = Path.Combine(appHostDirectory, "SparklineValuePlanner.cs");
         const string assignment = "SheetGrid.SparklineValues = sheet is null";
         const string cacheRoute = "_sparklineValueCache.GetOrCreate(";
-        const string directRoute = "SheetGrid.SparklineValues = SparklineValuePlanner.BuildValues(sheet)";
-        const string plannerCall = "SparklineValuePlanner.BuildValues(sheet)";
-        const string cacheCallback = "() => SparklineValuePlanner.BuildValues(sheet)";
+        const string directRoute = "SheetGrid.SparklineValues = SparklineSeriesReader.BuildValues(sheet)";
+        const string readerCall = "SparklineSeriesReader.BuildValues(sheet)";
+        const string oldPlannerCall = "SparklineValuePlanner.BuildValues(sheet)";
+        const string cacheCallback = "() => SparklineSeriesReader.BuildValues(sheet)";
 
+        File.Exists(hostPlannerPath).Should().BeFalse("Host should call the shared Presentation sparkline reader directly");
         viewportSource.Should().Contain(assignment);
         viewportSource.Should().Contain(cacheRoute);
         viewportSource.Should().NotContain(directRoute);
         viewportSource.Should().Contain(cacheCallback);
-        CountOccurrences(viewportSource, plannerCall).Should().Be(1);
+        viewportSource.Should().NotContain(oldPlannerCall);
+        CountOccurrences(viewportSource, readerCall).Should().Be(1);
         viewportSource.IndexOf(cacheRoute, StringComparison.Ordinal)
             .Should()
-            .BeLessThan(viewportSource.IndexOf(plannerCall, StringComparison.Ordinal));
+            .BeLessThan(viewportSource.IndexOf(readerCall, StringComparison.Ordinal));
     }
 
     [Fact]

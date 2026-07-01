@@ -1,4 +1,5 @@
 using FluentAssertions;
+using FreeX.App.Presentation.SheetUI;
 
 namespace FreeX.App.Host.Tests;
 
@@ -43,10 +44,7 @@ public sealed partial class RemainingDialogTests
 
         source.Should().Contain("Content = ObjectSizeDialog.CreateSingleInputContent(UiText.Get(\"SheetName_SheetName2\"), _nameBox, Accept);");
         source.Should().Contain("if (!TryCreateResult(_nameBox.Text, out var result, out var error))");
-        source.Should().Contain("DialogMessageHelper.ShowWarning(this, message, Title);");
-        source.Should().Contain("_nameBox.Focus();");
-        source.Should().Contain("_nameBox.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(_nameBox);");
+        source.Should().Contain("DialogFocus.ShowWarningAndFocus(this, message, Title, _nameBox);");
     }
 
     [Fact]

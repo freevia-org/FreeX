@@ -2,24 +2,19 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
+using FreeX.App.Presentation.DefinedNames;
 
 namespace FreeX.App.Host;
 
-public sealed record CreateNamesFromSelectionDialogResult(
-    bool UseTopRow,
-    bool UseLeftColumn,
-    bool UseBottomRow,
-    bool UseRightColumn);
-
 public sealed class CreateNamesFromSelectionDialog : Window
 {
-    private readonly CheckBox _topRow = new() { Content = UiText.Get("CreateNamesFromSelection_TopRow"), IsChecked = true, Margin = new Thickness(0, 4, 0, 0) };
-    private readonly CheckBox _leftColumn = new() { Content = UiText.Get("CreateNamesFromSelection_LeftColumn"), IsChecked = true, Margin = new Thickness(0, 4, 0, 0) };
-    private readonly CheckBox _bottomRow = new() { Content = UiText.Get("CreateNamesFromSelection_BottomRow"), Margin = new Thickness(0, 4, 0, 0) };
-    private readonly CheckBox _rightColumn = new() { Content = UiText.Get("CreateNamesFromSelection_RightColumn"), Margin = new Thickness(0, 4, 0, 0) };
+    private readonly CheckBox _topRow = new() { Content = UiText.Get("CreateNamesFromSelection_TopRow"), IsChecked = CreateNamesFromSelectionPlanner.DefaultOptions.UseTopRow, Margin = new Thickness(0, 4, 0, 0) };
+    private readonly CheckBox _leftColumn = new() { Content = UiText.Get("CreateNamesFromSelection_LeftColumn"), IsChecked = CreateNamesFromSelectionPlanner.DefaultOptions.UseLeftColumn, Margin = new Thickness(0, 4, 0, 0) };
+    private readonly CheckBox _bottomRow = new() { Content = UiText.Get("CreateNamesFromSelection_BottomRow"), IsChecked = CreateNamesFromSelectionPlanner.DefaultOptions.UseBottomRow, Margin = new Thickness(0, 4, 0, 0) };
+    private readonly CheckBox _rightColumn = new() { Content = UiText.Get("CreateNamesFromSelection_RightColumn"), IsChecked = CreateNamesFromSelectionPlanner.DefaultOptions.UseRightColumn, Margin = new Thickness(0, 4, 0, 0) };
 
-    public CreateNamesFromSelectionDialogResult Result { get; private set; } =
-        new(UseTopRow: true, UseLeftColumn: true, UseBottomRow: false, UseRightColumn: false);
+    public CreateNamesFromSelectionOptions Result { get; private set; } =
+        CreateNamesFromSelectionPlanner.DefaultOptions;
 
     public bool UseTopRow => Result.UseTopRow;
     public bool UseLeftColumn => Result.UseLeftColumn;
@@ -90,19 +85,29 @@ public sealed class CreateNamesFromSelectionDialog : Window
         bool useLeftColumn,
         bool useBottomRow,
         bool useRightColumn,
-        out CreateNamesFromSelectionDialogResult result,
+        out CreateNamesFromSelectionOptions result,
         out string? error)
     {
-        result = new CreateNamesFromSelectionDialogResult(useTopRow, useLeftColumn, useBottomRow, useRightColumn);
-        if (!useTopRow && !useLeftColumn && !useBottomRow && !useRightColumn)
+        if (CreateNamesFromSelectionPlanner.TryCreateOptions(
+                useTopRow,
+                useLeftColumn,
+                useBottomRow,
+                useRightColumn,
+                out result,
+                out var inputError))
         {
-            error = UiText.Get("CreateNamesFromSelection_NoSelectionMessage");
-            return false;
+            error = null;
+            return true;
         }
 
-        error = null;
-        return true;
+        error = ToErrorMessage(inputError);
+        return false;
     }
+
+    private static string? ToErrorMessage(CreateNamesFromSelectionInputError inputError) =>
+        inputError == CreateNamesFromSelectionInputError.NoSelectedEdge
+            ? UiText.Get("CreateNamesFromSelection_NoSelectionMessage")
+            : null;
 
     private void Accept()
     {

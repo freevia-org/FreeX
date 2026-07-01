@@ -1,0 +1,88 @@
+using System.IO;
+
+namespace FreeP.App.Avalonia.Tests;
+
+public sealed class FilePickerPlannerSourceTests
+{
+    [Fact]
+    public void MainWindow_RoutesPresentationPickerPolicyThroughSharedPlanner()
+    {
+        var root = FindRepositoryRoot();
+        var source = File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "FreeP.App.Avalonia",
+            "MainWindow.cs"));
+        var project = File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "FreeP.App.Avalonia",
+            "FreeP.App.Avalonia.csproj"));
+
+        source.Should().Contain("PresentationFileDialogPlanner.BuildOpenPickerPlan()");
+        source.Should().Contain("PresentationFileDialogPlanner.BuildSavePickerPlan(");
+        source.Should().Contain("PresentationExportPlanner.PdfExportCommandId");
+        source.Should().Contain("PresentationExportPlanner.ImageExportCommandId");
+        source.Should().Contain("PresentationExportPlanner.PrintCommandId");
+        source.Should().Contain("PresentationExportPlanner.BuildPdfExportPickerPlan(");
+        source.Should().Contain("PresentationExportPlanner.BuildHandoutLayoutPlan(");
+        source.Should().Contain("PresentationPdfExporter.ExportToBytes(_presentation)");
+        source.Should().Contain("PresentationImageExportExecutor.Export(");
+        source.Should().Contain("internal PresentationHandoutLayoutPlan RefreshHandoutLayoutPlan(");
+        source.Should().Contain("LastHandoutLayoutPlan");
+        source.Should().Contain("PresentationExportPlanner.ImageExportPickerTitle");
+        source.Should().Contain("StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions");
+        source.Should().Contain("BuildCurrentSlideImageExportRange()");
+        source.Should().Contain("SlideRenderer.RenderToBytes");
+        source.Should().Contain("ExportAtomicWriter.WriteAllBytes(path,");
+        source.Should().Contain("PresentationFilePersistenceWorkflow.Open(path)");
+        source.Should().Contain("PresentationFilePersistenceWorkflow.Save(path, _presentation)");
+        source.Should().Contain("PresentationFilePersistenceWorkflow.IsSupportedPresentationPath(path)");
+        source.Should().Contain("AvaloniaFilePickerService.PickSingleOpenFileWithLocalPathAsync(");
+        source.Should().Contain("AvaloniaFilePickerService.PickSaveFileWithLocalPathAsync(");
+        source.Should().Contain("AvaloniaFilePickerOpenRequest.FromDescriptors(FileText.OpenPickerTitle, plan.FileTypes)");
+        source.Should().Contain("AvaloniaFilePickerSaveRequest.FromSavePlan(FileText.SavePickerTitle, plan)");
+        source.Should().Contain("AvaloniaFilePickerSaveRequest.FromSavePlan(PresentationExportPlanner.PdfExportPickerTitle, plan)");
+        source.Should().Contain("SisterAppFileTextPlanner.Presentation");
+        source.Should().Contain("PresentationFileTextResources.PictureFileTypeName");
+        source.Should().Contain("AvaloniaFilePickerTypeAdapter.CreateFileType(");
+        source.Should().Contain("FileText.OpenPickerTitle");
+        source.Should().Contain("FileText.SavePickerTitle");
+        source.Should().Contain("SisterAppFileTextPlanner.FormatSelectedFileNotLocalPath(");
+        source.Should().Contain("SisterAppFileTextPlanner.FormatCommandFailed(");
+        source.Should().NotContain("OpenFilePickerAsync(");
+        source.Should().NotContain("SaveFilePickerAsync(");
+        source.Should().NotContain("new FilePickerFileType(descriptor.DisplayName)");
+        source.Should().NotContain("Patterns = descriptor.Patterns.ToArray()");
+        source.Should().Contain("IsSupportedPresentationPath(a)");
+        source.Should().NotContain("PptxFileType");
+        source.Should().NotContain("new FilePickerFileType(\"Images\")");
+        source.Should().NotContain("Title         = \"Open Presentation\"");
+        source.Should().NotContain("Title             = \"Save Presentation\"");
+        source.Should().NotContain("_statusText.Text = $\"Open failed:");
+        source.Should().NotContain("_statusText.Text = $\"Save failed:");
+        source.Should().NotContain("new FilePickerFileType(\"PowerPoint Presentation\")");
+        source.Should().NotContain("DefaultExtension  = \"pptx\"");
+        source.Should().NotContain("SuggestedFileName = suggested");
+        source.Should().NotContain("FxpFormat.");
+        source.Should().NotContain("PptxPackageReader.");
+        source.Should().NotContain("PptxPackageWriter.");
+        source.Should().NotContain("File.Create(");
+        source.Should().NotContain("new PresentationHandoutSlideSlot(");
+        project.Should().Contain(@"..\..\shared\Free.Shared.IO\Free.Shared.IO.csproj");
+        project.Should().Contain(@"..\..\shared\Free.Shared.Shell.Avalonia\Free.Shared.Shell.Avalonia.csproj");
+    }
+
+    private static string FindRepositoryRoot()
+    {
+        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
+             directory is not null;
+             directory = directory.Parent)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "FreeP.slnx")))
+                return directory.FullName;
+        }
+
+        throw new DirectoryNotFoundException("Could not locate repository root from test output directory.");
+    }
+}

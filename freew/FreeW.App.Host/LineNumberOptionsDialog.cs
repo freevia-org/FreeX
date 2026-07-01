@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
+using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Host;
@@ -16,9 +17,7 @@ internal sealed class LineNumberOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
     private readonly TextBox _startAtBox;
     private readonly TextBox _countByBox;
     private readonly ComboBox _modeBox;
-    private Result? _result;
-
-    private static readonly string[] ModeLabels = ["Continuous", "Restart Each Page"];
+    private LineNumberOptionsDialogResult? _result;
 
     private LineNumberOptionsDialog(Window? owner, int startAt, int countBy, LineNumberMode mode)
     {
@@ -30,12 +29,18 @@ internal sealed class LineNumberOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
 
-        _startAtBox = new TextBox { Text = startAt.ToString(CultureInfo.CurrentCulture), MinWidth = 80 };
-        _countByBox = new TextBox { Text = countBy.ToString(CultureInfo.CurrentCulture), MinWidth = 80 };
+        var state = LineNumberOptionsDialogPlanner.BuildInitialState(
+            startAt,
+            countBy,
+            mode,
+            CultureInfo.CurrentCulture);
+
+        _startAtBox = new TextBox { Text = state.StartAtText, MinWidth = 80 };
+        _countByBox = new TextBox { Text = state.CountByText, MinWidth = 80 };
 
         _modeBox = new ComboBox { MinWidth = 140 };
-        foreach (var label in ModeLabels) _modeBox.Items.Add(label);
-        _modeBox.SelectedIndex = mode == LineNumberMode.RestartEachPage ? 1 : 0;
+        foreach (var label in LineNumberOptionsDialogPlanner.ModeLabels) _modeBox.Items.Add(label);
+        _modeBox.SelectedIndex = state.ModeIndex;
 
         var grid = new Grid { Margin = new Thickness(14) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -64,30 +69,29 @@ internal sealed class LineNumberOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
 
     private void Accept()
     {
-        if (!int.TryParse(_startAtBox.Text, out var startAt) || startAt < 1)
+        var input = new LineNumberOptionsDialogInput(
+            _startAtBox.Text,
+            _countByBox.Text,
+            _modeBox.SelectedIndex);
+
+        if (!LineNumberOptionsDialogPlanner.TryBuildResult(
+                input,
+                CultureInfo.CurrentCulture,
+                out var result,
+                out var errorMessage))
         {
-            DialogMessageHelper.ShowWarning(this, "Start At must be a whole number of 1 or greater.");
+            DialogMessageHelper.ShowWarning(this, errorMessage ?? LineNumberOptionsDialogPlanner.StartAtValidationMessage);
             return;
         }
-        if (!int.TryParse(_countByBox.Text, out var countBy) || countBy < 1)
-        {
-            DialogMessageHelper.ShowWarning(this, "Count By must be a whole number of 1 or greater.");
-            return;
-        }
-        var mode = _modeBox.SelectedIndex == 1
-            ? LineNumberMode.RestartEachPage
-            : LineNumberMode.Continuous;
-        _result = new Result(startAt, countBy, mode);
+
+        _result = result;
         Close();
     }
-
-    /// <summary>Return value of the dialog when the user clicks OK.</summary>
-    internal sealed record Result(int StartAt, int CountBy, LineNumberMode Mode);
 
     /// <summary>
     /// Show the Line Numbering Options dialog. Returns the user-chosen values, or null on cancel.
     /// </summary>
-    public static Result? Prompt(Window? owner, int startAt, int countBy, LineNumberMode mode)
+    public static LineNumberOptionsDialogResult? Prompt(Window? owner, int startAt, int countBy, LineNumberMode mode)
     {
         var dialog = new LineNumberOptionsDialog(owner, startAt, countBy, mode);
         dialog.ShowDialog();

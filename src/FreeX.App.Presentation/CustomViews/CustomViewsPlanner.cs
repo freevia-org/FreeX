@@ -50,6 +50,21 @@ public static class CustomViewsPlanner
         bool IncludeHiddenRowsColumnsAndFilterSettings);
 
     /// <summary>
+    /// A manager-dialog row after the shell has supplied its localized indicator labels.
+    /// </summary>
+    public readonly record struct DialogRow(
+        string Name,
+        int SheetCount,
+        string PrintSettingsIndicator,
+        string FilterSettingsIndicator);
+
+    /// <summary>The app-neutral submission shape collected by the add-custom-view dialogs.</summary>
+    public readonly record struct NameSubmission(
+        string ViewName,
+        bool IncludePrintSettings = true,
+        bool IncludeHiddenRowsColumnsAndFilterSettings = true);
+
+    /// <summary>
     /// Projects the workbook's stored custom views into manager rows, in workbook order. Pure: reads the model
     /// only.
     /// </summary>
@@ -71,15 +86,60 @@ public static class CustomViewsPlanner
     }
 
     /// <summary>
+    /// Projects stored custom views into manager rows with localized included/not-included labels supplied by
+    /// the host.
+    /// </summary>
+    public static IReadOnlyList<DialogRow> BuildDialogRows(
+        Workbook workbook,
+        string includedIndicator,
+        string notIncludedIndicator)
+    {
+        ArgumentNullException.ThrowIfNull(workbook);
+        ArgumentNullException.ThrowIfNull(includedIndicator);
+        ArgumentNullException.ThrowIfNull(notIncludedIndicator);
+
+        return BuildRows(workbook)
+            .Select(row => new DialogRow(
+                row.Name,
+                row.SheetCount,
+                GetIncludedIndicator(row.IncludePrintSettings, includedIndicator, notIncludedIndicator),
+                GetIncludedIndicator(
+                    row.IncludeHiddenRowsColumnsAndFilterSettings,
+                    includedIndicator,
+                    notIncludedIndicator)))
+            .ToArray();
+    }
+
+    /// <summary>
     /// Suggests the next default name for a new view ("View 1", "View 2", …) based on the current view count.
     /// The shell passes the resulting <paramref name="format"/> ("View {0}") so the label is localizable.
     /// </summary>
     public static string SuggestDefaultName(Workbook workbook, string format)
     {
         ArgumentNullException.ThrowIfNull(workbook);
-        ArgumentNullException.ThrowIfNull(format);
-        return string.Format(System.Globalization.CultureInfo.CurrentCulture, format, workbook.CustomViews.Count + 1);
+        return SuggestDefaultName(workbook.CustomViews.Count, format);
     }
+
+    /// <summary>
+    /// Suggests the next default name for a new view based on the current view count.
+    /// </summary>
+    public static string SuggestDefaultName(int customViewCount, string format)
+    {
+        ArgumentNullException.ThrowIfNull(format);
+        return string.Format(System.Globalization.CultureInfo.CurrentCulture, format, customViewCount + 1);
+    }
+
+    /// <summary>
+    /// Normalizes the add-view dialog submission before each host maps it to its local dialog result type.
+    /// </summary>
+    public static NameSubmission CreateNameSubmission(
+        string? viewName,
+        bool includePrintSettings = true,
+        bool includeHiddenRowsColumnsAndFilterSettings = true) =>
+        new(
+            viewName?.Trim() ?? string.Empty,
+            includePrintSettings,
+            includeHiddenRowsColumnsAndFilterSettings);
 
     /// <summary>
     /// Validates a proposed new-view name against the workbook's existing views: non-blank, within
@@ -128,4 +188,10 @@ public static class CustomViewsPlanner
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         return new DeleteCustomViewCommand(name);
     }
+
+    private static string GetIncludedIndicator(
+        bool isIncluded,
+        string includedIndicator,
+        string notIncludedIndicator) =>
+        isIncluded ? includedIndicator : notIncludedIndicator;
 }

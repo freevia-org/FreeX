@@ -1,5 +1,6 @@
 using System.IO;
 using FluentAssertions;
+using FreeX.App.Presentation.ConditionalFormatting;
 
 namespace FreeX.App.Host.Tests;
 
@@ -487,7 +488,8 @@ public sealed partial class MainWindowSourceHygieneTests
         insertSource.Should().Contain("private void InsertLinkBtn_Click(");
         insertSource.Should().Contain("private void HeaderFooterBtn_Click(");
         insertSource.Should().Contain("private void SymbolPickerBtn_Click(");
-        insertSource.Should().Contain("SparklineInputParser");
+        insertSource.Should().Contain("SparklinePlanner");
+        insertSource.Should().NotContain("SparklineInputParser");
     }
 
     [Fact]
@@ -616,7 +618,7 @@ public sealed partial class MainWindowSourceHygieneTests
         lifecycleSource.Should().Contain("_documentState.MarkDirty();");
         lifecycleSource.Should().Contain("_documentState.MarkSavedAtUndoDepth(undoDepth);");
         lifecycleSource.Should().Contain("UpdateTitleBar();");
-        backstageSource.Should().Contain("_workbook.Name = WorkbookTitleFormatter.DisplayNameFromPath(target.Path);");
+        backstageSource.Should().Contain("_workbook.Name = fileContext.DisplayName;");
         backstageSource.Should().Contain("MarkWorkbookSaved();");
     }
 
@@ -682,10 +684,10 @@ public sealed partial class MainWindowSourceHygieneTests
         var iconResources = DialogSourceTestSupport.ReadHostSources("Resources\\IconResources.xaml");
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.Ribbon.cs");
         // RibbonCommandIconKind/Accent now live in Free.Shared.Ribbon (Model/RibbonCommandIcon.cs);
-        // the presentation planner still references them, which is what this test asserts.
-        var planner = DialogSourceTestSupport.ReadHostSources(
-            "RibbonCommandPresentationPlanner.cs",
-            "RibbonCommandPresentationPlanner.Icons.cs");
+        // the shared presentation planner still references them, which is what this test asserts.
+        var planner =
+            DialogSourceTestSupport.ReadRibbonDefinitionSource("RibbonCommandPresentationPlanner.cs") +
+            DialogSourceTestSupport.ReadRibbonDefinitionSource("RibbonCommandPresentationPlanner.Icons.cs");
 
         DialogSourceTestSupport.ReadHostSources("RibbonIconFactory.cs").Should().NotBeNull();
         iconResources.Should().Contain("FreeXRibbonLargeIconSlot");
@@ -720,8 +722,8 @@ public sealed partial class MainWindowSourceHygieneTests
         var source = DialogSourceTestSupport.ReadHostSourcesWithSeparator(
             "",
             "MainWindow.RibbonDeclarative.cs",
-            "MainWindow.HomeFormatting.cs",
-            "HomeNumberFormatDropdownPlanner.cs")
+            "MainWindow.HomeFormatting.cs")
+            + DialogSourceTestSupport.ReadAppServicesSource("HomeNumberFormatDropdownPlanner.cs")
             + DialogSourceTestSupport.ReadAppServicesSource("FormatCellsNumberFormatPlanner.cs");
 
         source.Should().Contain("HomeNumberFormatDropdownPlanner.Options.Select(option => option.Label)");
@@ -1019,7 +1021,7 @@ public sealed partial class MainWindowSourceHygieneTests
     {
         var source = ReadPivotCommandSource();
 
-        source.Should().Contain("new AddPivotTableToNewWorksheetCommand(");
+        source.Should().Contain("PivotCreatePlanner.BuildNewWorksheetCommand(");
         source.Should().Contain("command.CreatedSheetId");
         source.Should().NotContain("New chart-style PivotTable sheets are tracked for Wave 2");
     }
@@ -1038,17 +1040,35 @@ public sealed partial class MainWindowSourceHygieneTests
     public void QuickAnalysisMenu_UsesPlannerPreviewMetadataForHoverTooltips()
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.QuickAnalysis.cs");
+        var requestPlanner = DialogSourceTestSupport.ReadPresentationSources("QuickAnalysis", "QuickAnalysisShellRequestPlanner.cs");
+        var openPlanner = DialogSourceTestSupport.ReadPresentationSources("QuickAnalysis", "QuickAnalysisShellOpenPlanner.cs");
         var planner = DialogSourceTestSupport.ReadPresentationSources("QuickAnalysis", "QuickAnalysisPlanner.cs");
         var shellPlanner = DialogSourceTestSupport.ReadPresentationSources("QuickAnalysis", "QuickAnalysisShellPlanner.cs");
 
-        source.Should().Contain("ToolTip = item.PreviewText");
-        source.Should().Contain("QuickAnalysisSelectionReader.Describe(sheet, range)");
-        source.Should().Contain("QuickAnalysisModelBuilder.Build(description).ToDisplayModel()");
+        source.Should().Contain("QuickAnalysisShellRequestPlanner.Build(");
+        source.Should().Contain("QuickAnalysisShellOpenPlanner.Plan(request)");
+        source.Should().NotContain("if (!request.CanOpen");
+        source.Should().Contain("QuickAnalysisShellOpenPlanner.FormatIssueText(");
+        source.Should().Contain("QuickAnalysisShellOpenIssueTextTarget.Status");
+        source.Should().NotContain("var issue = openPlan.Issue");
+        source.Should().NotContain("openPlan.Decision == QuickAnalysisShellOpenDecision");
+        source.Should().Contain("ToolTip = item.ToolTip");
+        source.Should().NotContain("QuickAnalysisSelectionReader.Describe(sheet, range)");
+        source.Should().NotContain("QuickAnalysisModelBuilder.Build(description).ToDisplayModel()");
         source.Should().NotContain("QuickAnalysisPlanner.BuildDisplayModel(range)");
-        source.Should().Contain("QuickAnalysisShellPlanner.GroupTitleFallback(group.Group)");
-        source.Should().Contain("foreach (var group in displayModel.Groups)");
+        source.Should().Contain("Header = UiText.Get(group.TitleResourceKey)");
+        source.Should().NotContain("Header = group.TitleFallback");
+        source.Should().Contain("foreach (var group in shellPlan.Groups)");
+        source.Should().NotContain("foreach (var group in displayModel.Groups)");
+        requestPlanner.Should().Contain("QuickAnalysisSelectionReader.Describe(sheet, range)");
+        requestPlanner.Should().Contain("QuickAnalysisModelBuilder.Build(description).ToDisplayModel()");
+        requestPlanner.Should().Contain("QuickAnalysisShellPlanner.BuildMenuPlan(displayModel, capabilities, range)");
+        openPlanner.Should().Contain("new QuickAnalysisShellOpenIssuePlan(");
+        openPlanner.Should().Contain("\"TableLoc_QaNoSuggestions\"");
         planner.Should().Contain("QuickAnalysisPreviewKind");
-        shellPlanner.Should().Contain("GroupTitleFallback(QuickAnalysisGroup group)");
+        shellPlanner.Should().Contain("public static QuickAnalysisShellPlan BuildMenuPlan(");
+        shellPlanner.Should().Contain("QuickAnalysisShellActionPlanner.Plan(item, capabilities)");
+        shellPlanner.Should().Contain("QuickAnalysisPlanner.BuildHoverPreview(selection, item)");
     }
 
     [Fact]
@@ -1072,8 +1092,10 @@ public sealed partial class MainWindowSourceHygieneTests
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.QuickAnalysis.cs");
         var planner = DialogSourceTestSupport.ReadPresentationSources("QuickAnalysis", "QuickAnalysisPlanner.cs");
+        var iconPlanner = DialogSourceTestSupport.ReadPresentationSources("QuickAnalysis", "QuickAnalysisPreviewIconPlanner.cs");
 
         planner.Should().Contain("QuickAnalysisPreviewVisual");
+        iconPlanner.Should().Contain("QuickAnalysisPreviewIconGlyph");
         source.Should().Contain("QuickAnalysisPreviewIconFactory.Create(item.PreviewVisual)");
     }
 
@@ -1099,7 +1121,8 @@ public sealed partial class MainWindowSourceHygieneTests
 
         source.Should().Contain("QuickAnalysisMenuItem_MouseEnter");
         source.Should().Contain("QuickAnalysisMenuItem_MouseLeave");
-        source.Should().Contain("QuickAnalysisPlanner.BuildHoverPreview(range, item)");
+        source.Should().Contain("var preview = item.HoverPreview");
+        source.Should().NotContain("QuickAnalysisPlanner.BuildHoverPreview(range, item)");
         source.Should().Contain("StatusReadyText.Text = preview.StatusText");
         source.Should().Contain("StatusReadyText.Text = UiText.Get(\"MainWindow_Text_Ready\")");
     }
@@ -1111,12 +1134,16 @@ public sealed partial class MainWindowSourceHygieneTests
         var routeSource = DialogSourceTestSupport.ReadPresentationSources("QuickAnalysis", "QuickAnalysisCommandRouter.cs");
         var catalogSource = DialogSourceTestSupport.ReadPresentationSources("QuickAnalysis", "QuickAnalysisCatalog.cs");
         var actionPlannerSource = DialogSourceTestSupport.ReadPresentationSources("QuickAnalysis", "QuickAnalysisShellActionPlanner.cs");
+        var operationPlannerSource = DialogSourceTestSupport.ReadPresentationSources("QuickAnalysis", "QuickAnalysisHostOperationPlanner.cs");
+        var shellPlannerSource = DialogSourceTestSupport.ReadPresentationSources("QuickAnalysis", "QuickAnalysisShellPlanner.cs");
 
-        hostSource.Should().Contain("QuickAnalysisShellActionPlanner.Plan(item, QuickAnalysisShellCapabilities.DialogBacked)");
-        hostSource.Should().Contain("QuickAnalysisShellActionKind.OpenConditionalFormatDialog");
+        hostSource.Should().Contain("var operation = QuickAnalysisHostOperationPlanner.Plan(item);");
+        hostSource.Should().NotContain("QuickAnalysisShellActionPlanner.Plan(item, QuickAnalysisShellCapabilities.DialogBacked)");
+        hostSource.Should().Contain("QuickAnalysisHostOperationKind.OpenConditionalFormatDialog");
         hostSource.Should().Contain("ShowCfDialog(title)");
         hostSource.Should().NotContain("QuickAnalysisConditionalFormatDialogTitle(");
 
+        shellPlannerSource.Should().Contain("QuickAnalysisShellActionPlanner.Plan(item, capabilities)");
         routeSource.Should().Contain("return item.Route;");
         catalogSource.Should().Contain("QuickAnalysisFormatKind.LessThan => QuickAnalysisConditionalFormatCommand.LessThan");
         catalogSource.Should().Contain("QuickAnalysisFormatKind.Between => QuickAnalysisConditionalFormatCommand.Between");
@@ -1140,6 +1167,7 @@ public sealed partial class MainWindowSourceHygieneTests
         actionPlannerSource.Should().Contain("QuickAnalysisConditionalFormatCommand.Bottom10Percent => \"Bottom 10%\"");
         actionPlannerSource.Should().Contain("QuickAnalysisConditionalFormatCommand.AboveAverage => \"Above Average\"");
         actionPlannerSource.Should().Contain("QuickAnalysisConditionalFormatCommand.BelowAverage => \"Below Average\"");
+        operationPlannerSource.Should().Contain("QuickAnalysisHostOperationKind.OpenConditionalFormatDialog");
     }
 
     [Fact]
@@ -1148,7 +1176,7 @@ public sealed partial class MainWindowSourceHygieneTests
         var hostSource = DialogSourceTestSupport.ReadHostSources("MainWindow.QuickAnalysis.cs");
         var catalogSource = DialogSourceTestSupport.ReadPresentationSources("QuickAnalysis", "QuickAnalysisCatalog.cs");
 
-        hostSource.Should().Contain("case QuickAnalysisShellActionKind.OpenChartPicker:");
+        hostSource.Should().Contain("case QuickAnalysisHostOperationKind.OpenChartPicker:");
         hostSource.Should().Contain("InsertChartPickerBtn_Click(sender, e);");
         catalogSource.Should().Contain("QuickAnalysisCommand.MoreCharts");
         catalogSource.Should().Contain("new QuickAnalysisCommandRoute(QuickAnalysisCommandKind.MoreCharts)");
@@ -1160,11 +1188,13 @@ public sealed partial class MainWindowSourceHygieneTests
         var hostSource = DialogSourceTestSupport.ReadHostSources("MainWindow.QuickAnalysis.cs");
         var catalogSource = DialogSourceTestSupport.ReadPresentationSources("QuickAnalysis", "QuickAnalysisCatalog.cs");
         var actionPlannerSource = DialogSourceTestSupport.ReadPresentationSources("QuickAnalysis", "QuickAnalysisShellActionPlanner.cs");
+        var operationPlannerSource = DialogSourceTestSupport.ReadPresentationSources("QuickAnalysis", "QuickAnalysisHostOperationPlanner.cs");
 
-        hostSource.Should().Contain("QuickAnalysisShellActionKind.InsertPercentTotalFormula");
-        hostSource.Should().Contain("QuickAnalysisShellActionKind.InsertRunningTotalFormula");
-        hostSource.Should().Contain("QuickAnalysisTotalsPlanner.BuildPercentTotalEdits");
-        hostSource.Should().Contain("QuickAnalysisTotalsPlanner.BuildRunningTotalEdits");
+        hostSource.Should().Contain("QuickAnalysisHostOperationKind.InsertPercentTotalFormula");
+        hostSource.Should().Contain("QuickAnalysisHostOperationKind.InsertRunningTotalFormula");
+        hostSource.Should().Contain("QuickAnalysisHostOperationPlanner.TryBuildTotalFormulaEdits(operation, range, out var edits)");
+        hostSource.Should().NotContain("QuickAnalysisTotalsPlanner.BuildPercentTotalEdits");
+        hostSource.Should().NotContain("QuickAnalysisTotalsPlanner.BuildRunningTotalEdits");
         catalogSource.Should().Contain("QuickAnalysisCommand.PercentTotal");
         catalogSource.Should().Contain("QuickAnalysisTotalFunction.PercentTotal");
         catalogSource.Should().Contain("TotalFormulaKind: QuickAnalysisTotalFormulaKind.PercentTotal");
@@ -1173,6 +1203,29 @@ public sealed partial class MainWindowSourceHygieneTests
         catalogSource.Should().Contain("TotalFormulaKind: QuickAnalysisTotalFormulaKind.RunningTotal");
         actionPlannerSource.Should().Contain("QuickAnalysisShellActionKind.InsertPercentTotalFormula");
         actionPlannerSource.Should().Contain("QuickAnalysisShellActionKind.InsertRunningTotalFormula");
+        actionPlannerSource.Should().Contain("TotalCommandTitle: \"Quick Analysis % Total\"");
+        actionPlannerSource.Should().Contain("TotalCommandTitle: \"Quick Analysis Running Total\"");
+        operationPlannerSource.Should().Contain("TotalCommandTitle: action.TotalCommandTitle");
+        operationPlannerSource.Should().Contain("QuickAnalysisTotalsPlanner.BuildPercentTotalEdits(range)");
+        operationPlannerSource.Should().Contain("QuickAnalysisTotalsPlanner.BuildRunningTotalEdits(range)");
+    }
+
+    [Fact]
+    public void ConditionalFormattingPopupRows_UseSharedCatalogEvidenceAndGeneratedRibbonMenu()
+    {
+        var homeFormattingSource = DialogSourceTestSupport.ReadHostSources("MainWindow.HomeFormatting.cs");
+        var menuSource = DialogSourceTestSupport.ReadRibbonDefinitionSource("HomeRibbonMenus.g.cs");
+
+        foreach (var item in ConditionalFormatPresetGalleryPlanner.PopupItems)
+            menuSource.Should().Contain($"\"{item.CommandId}\"");
+
+        homeFormattingSource.Should().Contain("PopulateConditionalFormatDataBarGallery");
+        homeFormattingSource.Should().Contain("PopulateConditionalFormatColorScaleGallery");
+        homeFormattingSource.Should().Contain("ConditionalFormatPresetGalleryPlanner.DataBarGroups");
+        homeFormattingSource.Should().Contain("ConditionalFormatPresetGalleryPlanner.ColorScaleGroups");
+        homeFormattingSource.Should().Contain("ConditionalFormatPresetGalleryPlanner.CreateDataBarRule(style, range)");
+        homeFormattingSource.Should().Contain("ConditionalFormatPresetGalleryPlanner.CreateColorScaleRule(style, range)");
+        homeFormattingSource.Should().Contain("ConditionalFormatIconSetCatalog.CreateRule(style, range)");
     }
 
     [Fact]
@@ -1228,7 +1281,7 @@ public sealed partial class MainWindowSourceHygieneTests
 
         source.Should().Contain("ApplyRangeBorderPreset");
         source.Should().Contain("SelectionStyleCommandPlanner.CreatePerCellStyleCommand");
-        var plannerSource = DialogSourceTestSupport.ReadHostSources("SelectionStyleCommandPlanner.cs");
+        var plannerSource = DialogSourceTestSupport.ReadAppServicesSource("SelectionStyleCommandPlanner.cs");
         plannerSource.Should().Contain("new CompositeWorkbookCommand(title, commands)");
         plannerSource.Should().Contain("MergeCompleteRectangularBands");
         source.Should().Contain("OpenFormatCellsDialog(FormatCellsDialogTab.Border)");
@@ -1252,7 +1305,7 @@ public sealed partial class MainWindowSourceHygieneTests
 
         source.Should().Contain("new CreateTableDialog");
         source.Should().Contain("TableCreationPlanner.BuildStyledCommand(");
-        source.Should().Contain("TableStyleGalleryPlanner.GetOption(variant, _workbook.Theme)");
+        source.Should().Contain("ApplyTableFormat(item.Option);");
         source.Should().NotContain("new CreateStructuredTableCommand(");
         source.Should().NotContain("new CreateStyledStructuredTableCommand(");
         source.Should().Contain("GroupedSheetRangePlanner.RemapRangeToSheet(dialog.Result.Range, sheetId)");

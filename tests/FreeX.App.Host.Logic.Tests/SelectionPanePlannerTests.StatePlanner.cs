@@ -1,4 +1,5 @@
 using FluentAssertions;
+using FreeX.App.Presentation.DrawingUI;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host.Tests;
@@ -6,17 +7,17 @@ namespace FreeX.App.Host.Tests;
 public sealed partial class SelectionPanePlannerTests
 {
     [Fact]
-    public void SelectionPaneDialogStatePlanner_FilterItems_AppliesSearchAndKindFilters()
+    public void SelectionPanePlanner_FilterItems_AppliesSearchAndKindFilters()
     {
         var picture = DialogState(SelectionPaneObjectKind.Picture, "Logo", isVisible: true);
         var hiddenShape = DialogState(SelectionPaneObjectKind.Shape, "Process Box", isVisible: false);
         var textBox = DialogState(SelectionPaneObjectKind.TextBox, "Quarter Notes", isVisible: true);
 
-        var visibleMatches = SelectionPaneDialogStatePlanner.FilterItems(
+        var visibleMatches = SelectionPanePlanner.FilterItems(
             [picture, hiddenShape, textBox],
             "  notes  ",
             "Visible");
-        var shapeMatches = SelectionPaneDialogStatePlanner.FilterItems(
+        var shapeMatches = SelectionPanePlanner.FilterItems(
             [picture, hiddenShape, textBox],
             "shape",
             "All");
@@ -26,17 +27,17 @@ public sealed partial class SelectionPanePlannerTests
     }
 
     [Fact]
-    public void SelectionPaneDialogStatePlanner_FindMoveTargetIndex_UsesSupportedDrawingObjectStack()
+    public void SelectionPanePlanner_FindMoveTargetIndex_UsesSupportedDrawingObjectStack()
     {
         var frontPicture = DialogState(SelectionPaneObjectKind.Picture, "Front", isVisible: true);
         var shape = DialogState(SelectionPaneObjectKind.Shape, "Shape", isVisible: true);
         var backPicture = DialogState(SelectionPaneObjectKind.Picture, "Back", isVisible: true);
 
-        var forwardTarget = SelectionPaneDialogStatePlanner.FindMoveTargetIndex(
+        var forwardTarget = SelectionPanePlanner.FindMoveTargetIndex(
             [frontPicture, shape, backPicture],
             currentIndex: 2,
             forward: true);
-        var backwardTarget = SelectionPaneDialogStatePlanner.FindMoveTargetIndex(
+        var backwardTarget = SelectionPanePlanner.FindMoveTargetIndex(
             [frontPicture, shape, backPicture],
             currentIndex: 0,
             forward: false);
@@ -46,13 +47,13 @@ public sealed partial class SelectionPanePlannerTests
     }
 
     [Fact]
-    public void SelectionPaneDialogStatePlanner_PlanMove_ReordersAgainstMixedSupportedTarget()
+    public void SelectionPanePlanner_PlanMove_ReordersAgainstMixedSupportedTarget()
     {
         var frontPicture = DialogState(SelectionPaneObjectKind.Picture, "Front", isVisible: true);
         var shape = DialogState(SelectionPaneObjectKind.Shape, "Shape", isVisible: true);
         var backPicture = DialogState(SelectionPaneObjectKind.Picture, "Back", isVisible: true);
 
-        var plan = SelectionPaneDialogStatePlanner.PlanMove(
+        var plan = SelectionPanePlanner.PlanMove(
             [frontPicture, shape, backPicture],
             backPicture.Id,
             forward: true);
@@ -66,13 +67,13 @@ public sealed partial class SelectionPanePlannerTests
     }
 
     [Fact]
-    public void SelectionPaneDialogStatePlanner_PlanDragReorder_ReordersAndPlansAdjacentMoves()
+    public void SelectionPanePlanner_PlanDragReorder_ReordersAndPlansAdjacentMoves()
     {
         var front = DialogState(SelectionPaneObjectKind.Picture, "Front", isVisible: true);
         var middle = DialogState(SelectionPaneObjectKind.Picture, "Middle", isVisible: true);
         var back = DialogState(SelectionPaneObjectKind.Picture, "Back", isVisible: true);
 
-        var plan = SelectionPaneDialogStatePlanner.PlanDragReorder(
+        var plan = SelectionPanePlanner.PlanDragReorder(
             [front, middle, back],
             draggedId: back.Id,
             targetId: front.Id);
@@ -85,13 +86,13 @@ public sealed partial class SelectionPanePlannerTests
     }
 
     [Fact]
-    public void SelectionPaneDialogStatePlanner_PlanDragReorder_CanInsertAfterTarget()
+    public void SelectionPanePlanner_PlanDragReorder_CanInsertAfterTarget()
     {
         var front = DialogState(SelectionPaneObjectKind.Picture, "Front", isVisible: true);
         var middle = DialogState(SelectionPaneObjectKind.Picture, "Middle", isVisible: true);
         var back = DialogState(SelectionPaneObjectKind.Picture, "Back", isVisible: true);
 
-        var plan = SelectionPaneDialogStatePlanner.PlanDragReorder(
+        var plan = SelectionPanePlanner.PlanDragReorder(
             [front, middle, back],
             draggedId: front.Id,
             targetId: back.Id,
@@ -105,12 +106,12 @@ public sealed partial class SelectionPanePlannerTests
     }
 
     [Fact]
-    public void SelectionPaneDialogStatePlanner_PlanDropVisual_AllowsMixedSupportedInsertionCue()
+    public void SelectionPanePlanner_PlanDropVisual_AllowsMixedSupportedInsertionCue()
     {
         var front = DialogState(SelectionPaneObjectKind.Picture, "Front", isVisible: true);
         var back = DialogState(SelectionPaneObjectKind.Shape, "Back", isVisible: true);
 
-        var plan = SelectionPaneDialogStatePlanner.PlanDropVisual(
+        var plan = SelectionPanePlanner.PlanDropVisual(
             [front, back],
             draggedId: back.Id,
             targetId: front.Id,
@@ -123,17 +124,17 @@ public sealed partial class SelectionPanePlannerTests
     }
 
     [Fact]
-    public void SelectionPaneDialogStatePlanner_PlanDropVisual_RejectsSameItemAndUnsupportedChartCues()
+    public void SelectionPanePlanner_PlanDropVisual_RejectsSameItemAndUnsupportedChartCues()
     {
         var picture = DialogState(SelectionPaneObjectKind.Picture, "Picture", isVisible: true);
         var chart = DialogState(SelectionPaneObjectKind.Chart, "Chart", isVisible: true);
 
-        var sameItem = SelectionPaneDialogStatePlanner.PlanDropVisual(
+        var sameItem = SelectionPanePlanner.PlanDropVisual(
             [picture, chart],
             draggedId: picture.Id,
             targetId: picture.Id,
             placement: SelectionPaneDropPlacement.After);
-        var chartCue = SelectionPaneDialogStatePlanner.PlanDropVisual(
+        var chartCue = SelectionPanePlanner.PlanDropVisual(
             [picture, chart],
             draggedId: picture.Id,
             targetId: chart.Id,
@@ -150,12 +151,12 @@ public sealed partial class SelectionPanePlannerTests
     }
 
     [Fact]
-    public void SelectionPaneDialogStatePlanner_PlanDropVisual_RejectsNoOpAdjacentCue()
+    public void SelectionPanePlanner_PlanDropVisual_RejectsNoOpAdjacentCue()
     {
         var front = DialogState(SelectionPaneObjectKind.Picture, "Front", isVisible: true);
         var back = DialogState(SelectionPaneObjectKind.Picture, "Back", isVisible: true);
 
-        var plan = SelectionPaneDialogStatePlanner.PlanDropVisual(
+        var plan = SelectionPanePlanner.PlanDropVisual(
             [front, back],
             draggedId: front.Id,
             targetId: back.Id,
@@ -168,7 +169,7 @@ public sealed partial class SelectionPanePlannerTests
     }
 
     [Fact]
-    public void SelectionPaneDialogStatePlanner_PlanDragReorder_HandlesLargeListsWithConsolidatedLookup()
+    public void SelectionPanePlanner_PlanDragReorder_HandlesLargeListsWithConsolidatedLookup()
     {
         const int itemCount = 5_000;
         var items = Enumerable.Range(0, itemCount)
@@ -177,7 +178,7 @@ public sealed partial class SelectionPanePlannerTests
         var dragged = items[^1];
         var target = items[0];
 
-        var plan = SelectionPaneDialogStatePlanner.PlanDragReorder(
+        var plan = SelectionPanePlanner.PlanDragReorder(
             items,
             draggedId: dragged.Id,
             targetId: target.Id);
@@ -202,7 +203,7 @@ public sealed partial class SelectionPanePlannerTests
             DialogState(SelectionPaneObjectKind.Shape, "Process Box", isVisible: false)
         };
 
-        var filtered = SelectionPaneDialogStatePlanner.FilterItems(items, " ", "");
+        var filtered = SelectionPanePlanner.FilterItems(items, " ", "");
 
         filtered.Should().BeSameAs(items);
     }

@@ -1,6 +1,8 @@
 using System;
 using System.Linq;
 using System.Windows;
+using FreeX.App.Presentation.PageLayout;
+using FreeX.App.Presentation.SparklineUI;
 using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -45,14 +47,20 @@ public partial class MainWindow
         dialog = new SparklineDialog(
             selected?.ToString() ?? "",
             "",
-            SparklineInputParser.ParseDialogKindChoice(type),
+            SparklinePlanner.ParseKind(type),
             request => ApplySparklineRangeSelection(dialog, request),
             sheetId: _currentSheetId)
         { Owner = this };
         if (dialog.ShowDialog() != true)
             return;
 
-        if (!SparklineInputParser.TryParseDataRange(dialog.Result.DataRangeText, _currentSheetId, out var dataRange))
+        var validation = SparklinePlanner.ValidateInsert(
+            dialog.Result.DataRangeText,
+            dialog.Result.LocationText,
+            _currentSheetId,
+            out var dataRange,
+            out var location);
+        if (validation == SparklineInputValidation.InvalidDataRange)
         {
             ShowOwnedMessage(
                 UiText.Get("MainWindowMessage_InsertSparklineInvalidDataRange"),
@@ -62,7 +70,7 @@ public partial class MainWindow
             return;
         }
 
-        if (!SparklineInputParser.TryParseLocation(dialog.Result.LocationText, _currentSheetId, out var location))
+        if (validation == SparklineInputValidation.InvalidLocation)
         {
             ShowOwnedMessage(
                 UiText.Get("MainWindowMessage_InsertSparklineInvalidLocation"),
@@ -72,7 +80,7 @@ public partial class MainWindow
             return;
         }
 
-        var kind = SparklineInputParser.ToModelKind(dialog.Result.Kind);
+        var kind = dialog.Result.Kind;
 
         var fallbackLocationRange = new GridRange(location, location);
         var useDialogLocationForInitialInsert = true;
@@ -297,24 +305,27 @@ public partial class MainWindow
 
         if (!TryExecuteGroupedSheetCommand(
                 "Header & Footer",
-                sheetId => new SetHeaderFooterCommand(
+                sheetId => PageSetupCommandFactory.BuildHeaderFooterCommand(
                     sheetId,
-                    dialog.Header,
-                    dialog.Footer,
-                    dialog.FirstPageHeader,
-                    dialog.FirstPageFooter,
-                    dialog.EvenPageHeader,
-                    dialog.EvenPageFooter,
-                    dialog.DifferentFirstPage,
-                    dialog.DifferentOddEvenPages,
-                    dialog.ScaleWithDocument,
-                    dialog.AlignWithMargins,
-                    dialog.HeaderPictures,
-                    dialog.FooterPictures,
-                    dialog.FirstPageHeaderPictures,
-                    dialog.FirstPageFooterPictures,
-                    dialog.EvenPageHeaderPictures,
-                    dialog.EvenPageFooterPictures)))
+                    new PageSetupHeaderFooterRequest
+                    {
+                        Header = dialog.Header,
+                        Footer = dialog.Footer,
+                        FirstPageHeader = dialog.FirstPageHeader,
+                        FirstPageFooter = dialog.FirstPageFooter,
+                        EvenPageHeader = dialog.EvenPageHeader,
+                        EvenPageFooter = dialog.EvenPageFooter,
+                        DifferentFirstPage = dialog.DifferentFirstPage,
+                        DifferentOddEvenPages = dialog.DifferentOddEvenPages,
+                        ScaleHeaderFooterWithDocument = dialog.ScaleWithDocument,
+                        AlignHeaderFooterWithMargins = dialog.AlignWithMargins,
+                        HeaderPictures = dialog.HeaderPictures,
+                        FooterPictures = dialog.FooterPictures,
+                        FirstPageHeaderPictures = dialog.FirstPageHeaderPictures,
+                        FirstPageFooterPictures = dialog.FirstPageFooterPictures,
+                        EvenPageHeaderPictures = dialog.EvenPageHeaderPictures,
+                        EvenPageFooterPictures = dialog.EvenPageFooterPictures
+                    })))
             return;
 
         UpdateViewport();

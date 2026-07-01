@@ -7,6 +7,7 @@ using System.Text.RegularExpressions;
 using FreeX.App.Services;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
+using FreeX.ToolsShared;
 
 namespace FreeX.FormatCrossCheck;
 
@@ -103,7 +104,9 @@ internal sealed class CrossCheckRunner
                     : FileFormatResolver.FindSaveAdapter(_adapters, fmt.Extension, out _))
                 ?? throw new InvalidOperationException($"no FreeX save adapter for {fmt.Extension}");
 
-            var baseName = Sanitize(Path.GetFileNameWithoutExtension(sourcePath)) + "_" + fmt.Key;
+            var baseName =
+                ToolFileNameSanitizer.ReplaceNonAlphaNumericWithUnderscore(Path.GetFileNameWithoutExtension(sourcePath))
+                + "_" + fmt.Key;
             freexFile = Path.Combine(_scratchDir, baseName + fmt.Extension);
             // xlsx control: detach the source package so we exercise FreeX's full OOXML writer, not a
             // byte-copy patch-save of the original file.
@@ -392,9 +395,6 @@ internal sealed class CrossCheckRunner
         => string.Equals(fmt.Key, "spreadsheetml-xml", StringComparison.Ordinal)
            && source is BoolValue
            && got is BlankValue;
-
-    private static string Sanitize(string name) =>
-        new string(name.Select(c => char.IsLetterOrDigit(c) ? c : '_').ToArray());
 
     private static string Describe(Exception ex)
     {

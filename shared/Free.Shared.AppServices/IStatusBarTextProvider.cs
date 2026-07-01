@@ -1,12 +1,17 @@
 namespace Free.Shared.AppServices;
 
 /// <summary>
-/// Supplies the localized label/format strings the status-bar model needs, decoupling the
+/// Supplies the localized ready, label, and format strings the status-bar model needs, decoupling the
 /// neutral <see cref="StatusBarDisplayModelBuilder"/> from any particular resource system
 /// (the WPF host backs this with its <c>UiText</c> resources; other shells can supply their own).
 /// </summary>
 public interface IStatusBarTextProvider
 {
+    /// <summary>
+    /// The default ready/cell-mode text used when no active-cell prompt or edit mode overrides it.
+    /// </summary>
+    string GetReadyText();
+
     /// <summary>
     /// The composite format string for a readout (e.g. <c>"Average: {0}"</c>) for the given kind.
     /// </summary>

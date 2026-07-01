@@ -70,6 +70,9 @@ public sealed record DocumentTheme(
         FollowedHyperlink: "954F72");
 
     /// <summary>Normalises a palette colour to an uppercase six-hex-digit RRGGBB string (drops any '#').</summary>
+    // Keep this boundary local: the model-facing theme palette uses "#RRGGBB", while theme1.xml uses
+    // bare RRGGBB slots. That is narrower than shared ThemeColor (#RRGGBB/#AARRGGBB) and different from
+    // DrawingMlRgbColor, whose contract is strict a:srgbClr parsing.
     private static string Hex(string value) => value.TrimStart('#').ToUpperInvariant();
 
     /// <summary>

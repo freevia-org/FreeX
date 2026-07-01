@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using FreeW.App.Presentation.Options;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Host;

@@ -2,6 +2,7 @@ using System.Windows.Input;
 using System.Xml.Linq;
 using FluentAssertions;
 using FreeX.App.Host;
+using FreeX.App.Presentation.PivotUI;
 
 namespace FreeX.App.Host.Tests;
 
@@ -209,6 +210,7 @@ public sealed partial class MainWindowXamlKeyTipTests
         mainWindowSource.Should().Contain("new PivotValueFieldSettingsDialog(current, context.Headers)");
         mainWindowSource.Should().NotContain("Value Field Settings: name,function,show-values-as");
         var plannerSource = DialogSourceTestSupport.ReadHostSources("PivotValueFieldSettingsDialogPlanner.cs");
+        var presentationSource = DialogSourceTestSupport.ReadPresentationSources("PivotUI", "PivotValueFieldPlanner.cs");
         var dialogSource = DialogSourceTestSupport.ReadHostSources("PivotValueFieldSettingsDialog.xaml.cs");
         var expectedShowValuesAsKeys = new[]
         {
@@ -220,7 +222,31 @@ public sealed partial class MainWindowXamlKeyTipTests
             "PivotValueFieldSettings_ShowRankSmallest"
         };
         foreach (var key in expectedShowValuesAsKeys)
-            plannerSource.Should().Contain($"UiText.Get(\"{key}\")");
+        {
+            presentationSource.Should().Contain($"\"{key}\"");
+            plannerSource.Should().NotContain($"\"{key}\"");
+        }
+
+        presentationSource.Should().Contain("PivotValueFieldOption<PivotShowValuesAs>");
+        presentationSource.Should().Contain("PivotValueFieldValidationErrorPlan");
+        presentationSource.Should().Contain("PivotValueNumberFormatPreset");
+        presentationSource.Should().Contain("NumberFormatPresets");
+        presentationSource.Should().Contain("\"PivotValueFieldSettings_NumberFormatCurrency\"");
+        presentationSource.Should().Contain("DefaultCustomNumberFormatId");
+        presentationSource.Should().Contain("\"PivotValueFieldSettings_SelectBaseFieldMessage\"");
+        presentationSource.Should().Contain("\"PivotValueFieldSettings_EnterBaseItemMessage\"");
+        plannerSource.Should().Contain("LocalizeOptions(PivotValueFieldPlanner.ShowValuesAsOptions)");
+        plannerSource.Should().Contain("UiText.Get(option.ResourceKey)");
+        plannerSource.Should().Contain("PivotValueFieldPlanner.DescribeValidationError");
+        plannerSource.Should().Contain("UiText.Get(errorPlan.ResourceKey)");
+        plannerSource.Should().Contain("PivotValueFieldPlanner.FindNumberFormatPresetIndex");
+        plannerSource.Should().NotContain("\"PivotValueFieldSettings_SelectBaseFieldMessage\"");
+        plannerSource.Should().NotContain("\"PivotValueFieldSettings_EnterBaseItemMessage\"");
+        plannerSource.Should().NotContain("\"PivotValueFieldSettings_NumberFormatCurrency\"");
+        PivotValueFieldPlanner.ShowValuesAsOptions
+            .Select(option => option.ResourceKey)
+            .Should()
+            .Contain(expectedShowValuesAsKeys);
         PivotValueFieldSettingsDialogPlanner.ShowValuesAsOptions
             .Select(option => option.Label)
             .Should()
@@ -381,17 +407,16 @@ public sealed partial class MainWindowXamlKeyTipTests
             .Should().Contain(["LabelFilterKindBox", "LabelFilterValueBox", "LabelFilterValue2Box"]);
         DialogSourceTestSupport.ReadHostSources("PivotLabelFilterDialog.xaml.cs")
             .Should()
-            .Contain("PivotLabelFilterKind.Between")
-            .And.Contain("PivotLabelFilterKind.GreaterThan")
-            .And.Contain("PivotLabelFilterKind.LessThan");
+            .Contain("PivotFieldFilterPlanner.LabelFilterKinds")
+            .And.Contain("PivotFieldFilterPlanner.LabelKindNeedsSecondValue")
+            .And.Contain("PivotFieldFilterPlanner.TryCreateLabelFilterWithValidationError");
         valueDialog.Descendants().Select(element => element.Attribute(xaml + "Name")?.Value)
             .Should().Contain(["ValueFilterKindBox", "ValueFilterValueBox", "ValueFilterValue2Box"]);
         DialogSourceTestSupport.ReadHostSources("PivotValueFilterDialog.xaml.cs")
             .Should()
-            .Contain("PivotValueFilterKind.Between")
-            .And.Contain("PivotValueFilterKind.NotBetween")
-            .And.Contain("PivotValueFilterKind.AboveAverage")
-            .And.Contain("PivotValueFilterKind.BelowAverage");
+            .Contain("PivotFieldFilterPlanner.ValueFilterKinds")
+            .And.Contain("PivotFieldFilterPlanner.ValueKindNeedsPrimaryInput")
+            .And.Contain("PivotFieldFilterPlanner.ValueKindNeedsSecondValue");
     }
 
     [Fact]

@@ -1,5 +1,6 @@
-using FreeX.Core.Model;
 using FluentAssertions;
+using FreeX.App.Presentation.SparklineUI;
+using FreeX.Core.Model;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Threading;
@@ -11,15 +12,15 @@ public sealed partial class RemainingDialogTests
     [Fact]
     public void SparklineDialog_CreateResult_TrimsRangeAndLocation()
     {
-        SparklineDialogPlanner.CreateResult(" A1:E1 ", " F1 ", SparklineKindChoice.Column)
+        SparklineDialog.CreateResult(" A1:E1 ", " F1 ", SparklineKind.Column)
             .Should()
-            .Be(new SparklineDialogResult("A1:E1", "F1", SparklineKindChoice.Column));
+            .Be(new SparklineDialogResult("A1:E1", "F1", SparklineKind.Column));
     }
 
     [Fact]
     public void SparklineDialog_CreateRangeSelectionRequest_TrimsCurrentTextAndRequestsCollapse()
     {
-        SparklineDialogPlanner.CreateRangeSelectionRequest(SparklineRangeSelectionTarget.DataRange, " A1:E1 ")
+        SparklineDialog.CreateRangeSelectionRequest(SparklineRangeSelectionTarget.DataRange, " A1:E1 ")
             .Should()
             .Be(new SparklineRangeSelectionRequest(SparklineRangeSelectionTarget.DataRange, "A1:E1", CollapseDialog: true));
     }
@@ -30,7 +31,7 @@ public sealed partial class RemainingDialogTests
         StaTestRunner.Run(() =>
         {
             var requests = new List<SparklineRangeSelectionRequest>();
-            var dialog = new SparklineDialog("A1:E1", "F1", SparklineKindChoice.Line, requests.Add);
+            var dialog = new SparklineDialog("A1:E1", "F1", SparklineKind.Line, requests.Add);
 
             DialogSourceTestSupport.ClickButton(GetField<Button>(dialog, "_dataRangePickerButton"));
             DialogSourceTestSupport.ClickButton(GetField<Button>(dialog, "_locationPickerButton"));
@@ -47,7 +48,7 @@ public sealed partial class RemainingDialogTests
     {
         StaTestRunner.Run(() =>
         {
-            var dialog = new SparklineDialog("A1:E1", "F1", SparklineKindChoice.Line);
+            var dialog = new SparklineDialog("A1:E1", "F1", SparklineKind.Line);
             try
             {
                 dialog.ApplyRangeSelection(SparklineRangeSelectionTarget.DataRange, "Sheet2!A1:D6");
@@ -68,7 +69,7 @@ public sealed partial class RemainingDialogTests
     {
         StaTestRunner.Run(() =>
         {
-            var dialog = new SparklineDialog("A1:E1", "F1", SparklineKindChoice.Line, sheetId: SheetId.New());
+            var dialog = new SparklineDialog("A1:E1", "F1", SparklineKind.Line, sheetId: SheetId.New());
             try
             {
                 dialog.Show();
@@ -76,7 +77,7 @@ public sealed partial class RemainingDialogTests
                 DialogSourceTestSupport.ClickButton(GetSparklineOkButton(dialog));
 
                 dialog.IsVisible.Should().BeFalse();
-                dialog.Result.Should().Be(new SparklineDialogResult("A1:E1", "F1", SparklineKindChoice.Line));
+                dialog.Result.Should().Be(new SparklineDialogResult("A1:E1", "F1", SparklineKind.Line));
             }
             finally
             {
@@ -91,14 +92,14 @@ public sealed partial class RemainingDialogTests
     {
         StaTestRunner.Run(() =>
         {
-            var dialog = new SparklineDialog(" A1:E1 ", " F1 ", SparklineKindChoice.Column, sheetId: SheetId.New());
+            var dialog = new SparklineDialog(" A1:E1 ", " F1 ", SparklineKind.Column, sheetId: SheetId.New());
             dialog.Loaded += (_, _) =>
                 dialog.Dispatcher.BeginInvoke(
                     () => DialogSourceTestSupport.ClickButton(GetSparklineOkButton(dialog)),
                     DispatcherPriority.Background);
 
             dialog.ShowDialog().Should().BeTrue();
-            dialog.Result.Should().Be(new SparklineDialogResult("A1:E1", "F1", SparklineKindChoice.Column));
+            dialog.Result.Should().Be(new SparklineDialogResult("A1:E1", "F1", SparklineKind.Column));
         });
     }
 
@@ -168,7 +169,7 @@ public sealed partial class RemainingDialogTests
     {
         StaTestRunner.Run(() =>
         {
-            var dialog = new SparklineDialog("A1:E1", "F1", SparklineKindChoice.Line);
+            var dialog = new SparklineDialog("A1:E1", "F1", SparklineKind.Line);
             try
             {
                 dialog.SizeToContent.Should().Be(SizeToContent.Height);
@@ -194,9 +195,9 @@ public sealed partial class RemainingDialogTests
     [Fact]
     public void SparklineDialog_UsesExcelWinLossLabel()
     {
-        SparklineDialogPlanner.GetKindLabel(SparklineKindChoice.Line).Should().Be("Line");
-        SparklineDialogPlanner.GetKindLabel(SparklineKindChoice.Column).Should().Be("Column");
-        SparklineDialogPlanner.GetKindLabel(SparklineKindChoice.WinLoss).Should().Be("Win/Loss");
+        SparklineDialog.GetKindLabel(SparklineKind.Line).Should().Be("Line");
+        SparklineDialog.GetKindLabel(SparklineKind.Column).Should().Be("Column");
+        SparklineDialog.GetKindLabel(SparklineKind.WinLoss).Should().Be("Win/Loss");
 
         var source = ReadRemainingDialogSources();
         source.Should().Contain("GetKindLabel(choice)");
@@ -229,33 +230,32 @@ public sealed partial class RemainingDialogTests
     public void SparklineDialogInvalidRanges_ShowOwnedWarningAndRefocusBadInput()
     {
         var source = DialogSourceTestSupport.ReadHostSources("SparklineDialog.cs");
-        var plannerSource = DialogSourceTestSupport.ReadHostSources("SparklineDialogPlanner.cs");
         var insertSource = DialogSourceTestSupport.ReadHostSources("MainWindow.InsertCommands.cs");
 
         source.Should().Contain("if (!ValidateInputs())");
-        source.Should().Contain("SparklineDialogPlanner.ValidateInputs(_dataRangeBox.Text, _locationBox.Text, _sheetId)");
-        plannerSource.Should().Contain("SparklineInputParser.TryParseDataRange(dataRangeText, sheetId, out _)");
-        plannerSource.Should().Contain("SparklineInputParser.TryParseLocation(locationText, sheetId, out _)");
+        source.Should().Contain("SparklinePlanner.ValidateDialogInputs(_dataRangeBox.Text, _locationBox.Text, _sheetId)");
+        source.Should().NotContain("SparklineDialogPlanner");
+        source.Should().Contain("SparklineInputValidation.InvalidDataRange");
+        source.Should().Contain("SparklineInputValidation.InvalidLocation");
         source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"Sparkline_InvalidDataRange\"), _dataRangeBox)");
         source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"Sparkline_InvalidLocationCell\"), _locationBox)");
-        source.Should().Contain("DialogMessageHelper.ShowWarning(this, message, Title)");
-        source.Should().Contain("FocusRangeSelectionInput(textBox);");
+        source.Should().Contain("DialogFocus.ShowWarningAndFocus(this, message, Title, textBox);");
         insertSource.Should().Contain("_currentSheetId,");
     }
 
     [Fact]
-    public void SparklineDialogPlanner_ValidatesInputsWithParser()
+    public void SparklineDialog_ValidatesInputsWithPresentationPlanner()
     {
         var sheetId = SheetId.New();
 
-        SparklineDialogPlanner.ValidateInputs("A1:E1", "F1", sheetId)
-            .Should().Be(SparklineDialogValidationResult.Valid);
-        SparklineDialogPlanner.ValidateInputs("A1:E1", "F1:G1", sheetId)
-            .Should().Be(SparklineDialogValidationResult.InvalidLocation);
-        SparklineDialogPlanner.ValidateInputs("A1", "F1", sheetId)
-            .Should().Be(SparklineDialogValidationResult.InvalidDataRange);
-        SparklineDialogPlanner.ValidateInputs("A1:A4097", "F1", sheetId)
-            .Should().Be(SparklineDialogValidationResult.InvalidDataRange);
+        SparklinePlanner.ValidateDialogInputs("A1:E1", "F1", sheetId)
+            .Should().Be(SparklineInputValidation.Valid);
+        SparklinePlanner.ValidateDialogInputs("A1:E1", "F1:G1", sheetId)
+            .Should().Be(SparklineInputValidation.InvalidLocation);
+        SparklinePlanner.ValidateDialogInputs("A1", "F1", sheetId)
+            .Should().Be(SparklineInputValidation.InvalidDataRange);
+        SparklinePlanner.ValidateDialogInputs("A1:A4097", "F1", sheetId)
+            .Should().Be(SparklineInputValidation.InvalidDataRange);
     }
 
     private static Button GetSparklineOkButton(SparklineDialog dialog)

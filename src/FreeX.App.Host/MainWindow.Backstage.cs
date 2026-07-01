@@ -3,6 +3,8 @@ using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Threading;
+using FreeX.App.Presentation.Backstage;
+using FreeX.App.Presentation.Shell;
 using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.IO;
@@ -12,6 +14,7 @@ namespace FreeX.App.Host;
 
 public partial class MainWindow
 {
+    private static readonly FreeXBackstageHomePanePlan BackstageHomePanePlan = FreeXBackstageHomePanePlanner.Build();
     private PrintPreviewSettings _backstagePrintPreviewSettings = new();
     private FixedDocument? _backstagePrintPreviewDocument;
 
@@ -22,10 +25,10 @@ public partial class MainWindow
         // and lands focus on the Home rail entry. The overlay/frame become visible on the next layout pass,
         // so post the focus at Loaded priority (the rail buttons aren't focusable until they are visible) —
         // mirroring how the Print pane focuses Print Now.
-        _backstageFrame?.Show(BackstageHomePaneId);
-        FocusBackstageHomeNavigation();
+        _backstageFrame?.Show(BackstageFramePlan.Selection.DefaultPaneAutomationId);
+        FocusDefaultBackstagePaneNavigation();
         Dispatcher.BeginInvoke(
-            new Action(FocusBackstageHomeNavigation),
+            new Action(FocusDefaultBackstagePaneNavigation),
             System.Windows.Threading.DispatcherPriority.Loaded);
     }
 
@@ -43,12 +46,86 @@ public partial class MainWindow
         SheetGrid.Focus();
     }
 
-    private void FocusBackstageHomeNavigation() =>
-        _backstageFrame?.FocusEntry(BackstageHomePaneId);
+    private void FocusDefaultBackstagePaneNavigation() =>
+        _backstageFrame?.FocusEntry(BackstageFramePlan.Selection.DefaultPaneAutomationId);
+
+    private void ConfigureBackstageHomePaneDescriptors()
+    {
+        var plan = BackstageHomePanePlan;
+        ConfigureBackstageRecentTab(plan.RecentTab, SsRecentTabButton, SsRecentTabText);
+        ConfigureBackstageRecentTab(plan.PinnedTab, SsPinnedTabButton, SsPinnedTabText);
+
+        System.Windows.Automation.AutomationProperties.SetName(
+            SsSearchBox,
+            UiText.Get(plan.Search.AutomationNameKey));
+        System.Windows.Automation.AutomationProperties.SetHelpText(
+            SsSearchBox,
+            UiText.Get(plan.Search.AutomationHelpTextKey));
+
+        foreach (var column in plan.Columns)
+        {
+            ResolveBackstageRecentColumnHeader(column.Id).Text = UiText.Get(column.LabelKey);
+        }
+    }
+
+    private static void ConfigureBackstageRecentTab(
+        FreeXBackstageRecentTabDescriptor descriptor,
+        Button button,
+        TextBlock label)
+    {
+        label.Text = UiText.Get(descriptor.LabelKey);
+        RibbonTooltip.SetTitle(button, UiText.Get(descriptor.TooltipTitleKey));
+        RibbonTooltip.SetKeyTip(button, descriptor.KeyTip);
+        RibbonMetadata.SetCommandName(button, descriptor.CommandName);
+    }
+
+    private TextBlock ResolveBackstageRecentColumnHeader(FreeXBackstageRecentColumnId id) =>
+        id switch
+        {
+            FreeXBackstageRecentColumnId.Name => SsRecentNameColumnHeader,
+            FreeXBackstageRecentColumnId.DateModified => SsRecentDateModifiedColumnHeader,
+            _ => throw new ArgumentOutOfRangeException(nameof(id), id, null)
+        };
+
+    private static void ApplyBackstageRecentFileRowDescriptor(
+        FrameworkElement element,
+        FreeXBackstageRecentFileRowKind kind)
+    {
+        var descriptor = BackstageHomePanePlan.Rows.Single(row => row.Kind == kind);
+        System.Windows.Automation.AutomationProperties.SetAutomationId(element, descriptor.AutomationId);
+    }
+
+    private void SsRecentPinCommandButton_Loaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button button)
+            ConfigureBackstageRecentFileCommandButton(button, FreeXBackstageRecentFileCommandId.Pin);
+    }
+
+    private void SsPinnedUnpinCommandButton_Loaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button button)
+            ConfigureBackstageRecentFileCommandButton(button, FreeXBackstageRecentFileCommandId.Unpin);
+    }
+
+    private static void ConfigureBackstageRecentFileCommandButton(
+        Button button,
+        FreeXBackstageRecentFileCommandId id)
+    {
+        var command = BackstageHomePanePlan.RowCommands.Single(command => command.Id == id);
+        RibbonTooltip.SetTitle(button, UiText.Get(command.TooltipTitleKey));
+        RibbonTooltip.SetDescription(button, UiText.Get(command.TooltipDescriptionKey));
+        System.Windows.Automation.AutomationProperties.SetAutomationId(button, command.AutomationId);
+        button.ToolTip = UiText.Get(command.ToolTipKey);
+        RibbonMetadata.SetCommandName(button, command.CommandName);
+    }
 
     private void ConfigureBackstageInfoActionButtons()
     {
-        foreach (var action in FreeXBackstagePaneCatalog.BuildInfoActions(FreeXBackstageInfoSurface.WpfInfoPane))
+        var pane = FreeXBackstageInfoPanePlanner.Build(
+            FreeXBackstageInfoSurface.WpfInfoPane,
+            FreeXBackstageInfoPaneRequest.Empty);
+
+        foreach (var action in pane.Actions)
         {
             if (action.Id == FreeXBackstageInfoActionId.ProtectWorkbook)
             {
@@ -115,7 +192,7 @@ public partial class MainWindow
         if (Keyboard.FocusedElement is not DependencyObject focusedElement ||
             !IsInsideStartScreenOverlay(focusedElement))
         {
-            FocusBackstageHomeNavigation();
+            FocusDefaultBackstagePaneNavigation();
             return true;
         }
 
@@ -126,12 +203,12 @@ public partial class MainWindow
         if (StartScreenOverlay.MoveFocus(new TraversalRequest(direction)))
             return true;
 
-        FocusBackstageHomeNavigation();
+        FocusDefaultBackstagePaneNavigation();
         return true;
     }
 
     // The Up/Down/Home/End rail navigation that used to live here is now owned by the shared
-    // BackstageFrame (see Free.Shared.Ribbon.Wpf.BackstageFrame.OnKeyDown), so the overlay no longer
+    // BackstageFrame (see Free.Shared.Shell.Wpf.BackstageFrame.OnKeyDown), so the overlay no longer
     // hooks PreviewKeyDown for it.
 
     private bool TryOpenFocusedBackstageContextMenu()
@@ -182,11 +259,14 @@ public partial class MainWindow
     // The three Show*View methods now drive the shared frame: selecting a pane entry highlights the rail
     // button and runs that pane's ContentFactory (which does the live refresh + reparents the pane element).
     // They are addressed by language-invariant automation id so they work in any UI language.
-    private void ShowHomeView() => _backstageFrame?.Show(BackstageHomePaneId);
+    private void ShowHomeView() => ShowBackstagePane(FreeXBackstagePaneId.Home);
 
-    private void ShowInfoView() => _backstageFrame?.Show(BackstageInfoPaneId);
+    private void ShowInfoView() => ShowBackstagePane(FreeXBackstagePaneId.Info);
 
-    private void ShowPrintView() => _backstageFrame?.Show(BackstagePrintPaneId);
+    private void ShowPrintView() => ShowBackstagePane(FreeXBackstagePaneId.Print);
+
+    private void ShowBackstagePane(FreeXBackstagePaneId pane) =>
+        _backstageFrame?.Show(BackstageFramePlan.Selection.For(pane));
 
     private void ConfigureBackstagePrintOptions(Sheet? activeSheet)
     {
@@ -271,26 +351,63 @@ public partial class MainWindow
     private void UpdateInfoView()
     {
         var activeSheet = _workbook.GetSheet(_currentSheetId);
-        var plan = BackstageInfoPlanner.Build(
+        var info = BackstageInfoPlanner.Build(
             _workbook,
             _currentFilePath,
+            BackstageInfoResources.Strings,
             activeSheet,
             hasSelection: SheetGrid.SelectedRange is not null);
-        InfoWorkbookName.Text = plan.WorkbookName;
-        InfoFilePath.Text = plan.FilePath;
-        InfoSheetCount.Text = plan.SheetCount;
-        InfoFormat.Text = plan.Format;
-        InfoFileSize.Text = plan.FileSize;
-        InfoLastModified.Text = plan.LastModified;
-        InfoShareStatus.Text = plan.SharingStatus;
-        InfoExportStatus.Text = plan.ExportStatus;
-        InfoWorkbookProtectionSummary.Text = plan.Summary.WorkbookProtectionSummary;
-        InfoActiveSheetProtectionSummary.Text = plan.Summary.ActiveSheetProtectionSummary;
-        InfoStatisticsSummary.Text = plan.StatisticsSummary;
-        InfoAccessibilitySummary.Text = plan.AccessibilitySummary;
-        InfoFormulaErrorSummary.Text = plan.FormulaErrorSummary;
+        var pane = FreeXBackstageInfoPanePlanner.Build(
+            FreeXBackstageInfoSurface.WpfInfoPane,
+            CreateBackstageInfoPaneRequest(info));
+
+        foreach (var detail in pane.Details)
+        {
+            ResolveBackstageInfoDetailTextBlock(detail.Id).Text = ResolveBackstageTextValue(detail.Value);
+        }
+
         RefreshBackstageInfoProtectionButton();
     }
+
+    private static FreeXBackstageInfoPaneRequest CreateBackstageInfoPaneRequest(BackstageInfoPlan plan) =>
+        new(
+            plan.WorkbookName,
+            plan.FilePath,
+            plan.SheetCount,
+            plan.Format,
+            plan.FileSize,
+            plan.LastModified,
+            plan.SharingStatus,
+            plan.ExportStatus,
+            plan.Summary.WorkbookProtectionSummary,
+            plan.Summary.ActiveSheetProtectionSummary,
+            plan.StatisticsSummary,
+            plan.AccessibilitySummary,
+            plan.FormulaErrorSummary);
+
+    private TextBlock ResolveBackstageInfoDetailTextBlock(FreeXBackstageInfoDetailId id) =>
+        id switch
+        {
+            FreeXBackstageInfoDetailId.WorkbookName => InfoWorkbookName,
+            FreeXBackstageInfoDetailId.FilePath => InfoFilePath,
+            FreeXBackstageInfoDetailId.SheetCount => InfoSheetCount,
+            FreeXBackstageInfoDetailId.Format => InfoFormat,
+            FreeXBackstageInfoDetailId.FileSize => InfoFileSize,
+            FreeXBackstageInfoDetailId.LastModified => InfoLastModified,
+            FreeXBackstageInfoDetailId.Share => InfoShareStatus,
+            FreeXBackstageInfoDetailId.Export => InfoExportStatus,
+            FreeXBackstageInfoDetailId.WorkbookProtection => InfoWorkbookProtectionSummary,
+            FreeXBackstageInfoDetailId.ActiveSheetProtection => InfoActiveSheetProtectionSummary,
+            FreeXBackstageInfoDetailId.WorkbookStatistics => InfoStatisticsSummary,
+            FreeXBackstageInfoDetailId.Accessibility => InfoAccessibilitySummary,
+            FreeXBackstageInfoDetailId.FormulaErrors => InfoFormulaErrorSummary,
+            _ => throw new ArgumentOutOfRangeException(nameof(id), id, null)
+        };
+
+    private static string ResolveBackstageTextValue(FreeXBackstageTextValue value) =>
+        value.TextKey is { } key
+            ? UiText.Get(key)
+            : value.Text ?? string.Empty;
 
     private void RefreshBackstageInfoProtectionButton()
     {
@@ -434,7 +551,7 @@ public partial class MainWindow
 
     private async Task RequestNewWorkbookAsync()
     {
-        if (await ConfirmSaveBeforeDestructiveActionAsync(UiText.Get("MainWindowMessage_SaveChangesBeforeCreatingWorkbook")) == SaveChangesConfirmation.Cancel)
+        if (!await CanProceedAfterSaveBeforeDestructiveActionAsync(UiText.Get("MainWindowMessage_SaveChangesBeforeCreatingWorkbook")))
             return;
 
         // Advance the session name sequence so File > New produces Book2, Book3, … rather than
@@ -455,45 +572,51 @@ public partial class MainWindow
 
     private async Task OpenFileAsync(string path, bool suppressRecentFiles = false)
     {
-        var ext = System.IO.Path.GetExtension(path).ToLower();
-        var adapter = FileDialogFilterBuilder.FindOpenAdapter(_fileAdapters, ext, out var format);
-        if (adapter == null) return;
+        if (!WorkbookOpenTargetPlanner.TryCreateOpenTarget(_fileAdapters, path, out var target, out _))
+            return;
+        var ext = FileFormatResolver.NormalizeExtension(target!.Extension);
         if (_isOpeningFile) return;
         _isOpeningFile = true;
         using var operationCancellation = BeginFileOperationCancellation();
         try
         {
-            if (await ConfirmSaveBeforeDestructiveActionAsync(UiText.Get("MainWindowMessage_SaveChangesBeforeOpeningWorkbook")) == SaveChangesConfirmation.Cancel)
+            if (!await CanProceedAfterSaveBeforeDestructiveActionAsync(UiText.Get("MainWindowMessage_SaveChangesBeforeOpeningWorkbook")))
                 return;
 
-            _operationProgressFileName = System.IO.Path.GetFileName(path);
+            _operationProgressFileName = System.IO.Path.GetFileName(target.Path);
             ShowOpenProgress(CreateOpenProgress("preparing", TimeSpan.Zero, 1));
 
             var progress = new Progress<OpenProgressUpdate>(
                 update => ShowOpenProgress(update.Title, update.Detail, update.Percent));
             var loader = new OpenWorkbookLoader(workbook => _recalcEngine.RecalculateAllFormulas(workbook));
-            var result = await loader.LoadAsync(path, adapter, ext, format!, progress, operationCancellation.Token);
+            var result = await loader.LoadAsync(
+                target.Path,
+                target.Adapter,
+                ext,
+                target.Format,
+                progress,
+                operationCancellation.Token);
             operationCancellation.Token.ThrowIfCancellationRequested();
 
+            var plan = WorkbookFileCompletionPlanner.PlanOpen(
+                target,
+                new FreeX.App.Services.WorkbookOpenResult(
+                    result.Workbook,
+                    result.FeatureReport,
+                    result.DisplayName,
+                    result.OpenedAsTemplate,
+                    result.LoadWarnings ?? []),
+                suppressRecentFiles);
             CloseFindReplaceDialogIfOpen();
-            _currentXlsxFeatureReport = result.FeatureReport;
-            _workbook = result.Workbook;
-            _workbookRef.Current = result.Workbook;
+            _currentXlsxFeatureReport = plan.FeatureReport;
+            _workbook = plan.Workbook;
+            _workbookRef.Current = plan.Workbook;
             InvalidateToolbarVisualState();
-            _workbook.Name = result.DisplayName;
+            _workbook.Name = plan.DisplayName;
             _worksheetSelections.Clear();
-            // Honor the workbook's saved active sheet (Excel's activeTab) instead of always landing on
-            // the first sheet.  ApplyOpenedWorksheetViewState below then restores that sheet's saved
-            // active cell / scroll position, so the file reopens exactly where it was saved.
-            var activeSheetIndex =
-                _workbook.ActiveSheetIndex is { } savedActiveIndex &&
-                savedActiveIndex >= 0 &&
-                savedActiveIndex < _workbook.Sheets.Count
-                    ? savedActiveIndex
-                    : 0;
-            _currentSheetId = _workbook.Sheets[activeSheetIndex].Id;
+            _currentSheetId = plan.ActiveSheetId;
             InvalidateNavigationCaches();
-            _currentFilePath = result.OpenedAsTemplate ? null : path;
+            _currentFilePath = plan.CurrentFilePath;
             UpdateTitleBar();
             MarkWorkbookSaved();
             // Notify sibling windows so they rebind their viewports to the new workbook.
@@ -501,10 +624,7 @@ public partial class MainWindow
             // resolves the new one — their mutations would target the wrong workbook.
             NotifyOtherWindowsOfWorkbookChange();
 
-            // P2b: the recent-files registration DECISION routes through the shared planner
-            // (skip suppressed snapshots/transient paths); the MRU store write stays FreeX-specific.
-            if (FileLifecyclePlanner.PlanRecentRegistration(path, suppressRecentFiles) == RecentFileRegistration.Register)
-                _recentFiles.AddOrUpdate(path);
+            RecentFileRegistrationService.RegisterIfNeeded(_recentFiles, plan.RecentFileRegistration);
             ShowOpenProgress(CreateOpenProgress("preparing view", TimeSpan.Zero, null));
             operationCancellation.Token.ThrowIfCancellationRequested();
             ApplyOpenedWorksheetViewState();
@@ -517,7 +637,7 @@ public partial class MainWindow
             {
                 ["extension"] = ext,
                 ["fileType"] = FileDialogFilterBuilder.SafeFileTypeFromExtension(ext),
-                ["format"] = format?.FormatName,
+                ["format"] = target.Format.FormatName,
                 ["worksheetCount"] = _workbook.Sheets.Count.ToString()
             });
         }
@@ -527,7 +647,7 @@ public partial class MainWindow
             {
                 ["extension"] = ext,
                 ["fileType"] = FileDialogFilterBuilder.SafeFileTypeFromExtension(ext),
-                ["format"] = format?.FormatName
+                ["format"] = target.Format.FormatName
             });
         }
         catch (Exception ex)
@@ -536,7 +656,7 @@ public partial class MainWindow
             {
                 ["extension"] = ext,
                 ["fileType"] = FileDialogFilterBuilder.SafeFileTypeFromExtension(ext),
-                ["format"] = format?.FormatName,
+                ["format"] = target.Format.FormatName,
                 ["reason"] = ex.GetType().Name
             });
             ShowOwnedMessage(
@@ -936,7 +1056,7 @@ public partial class MainWindow
 
         if (result.Chosen)
         {
-            if (!WorkbookFilePickerPlanner.TryResolveSaveDialogTarget(_fileAdapters, result.FileName!, out var target) ||
+            if (!WorkbookFilePickerPlanner.TryResolveSaveDialogTarget(_fileAdapters, result.FileName!, result.FilterIndex, out var target) ||
                 target is null)
             {
                 return false;
@@ -953,7 +1073,8 @@ public partial class MainWindow
         if (_isSavingFile)
             return false;
 
-        if (FileSavePlanner.CanSkipCleanSave(_workbookDirty, _currentFilePath, target))
+        if (WorkbookFileLifecycleCoordinator.PlanSaveTargetWrite(_workbookDirty, _currentFilePath, target)
+            == WorkbookSaveTargetIntent.SkipCleanCurrentPath)
             return true;
 
         var ext = System.IO.Path.GetExtension(target.Path).ToLowerInvariant();
@@ -991,16 +1112,14 @@ public partial class MainWindow
             var plan = SaveCompletionPlanner.Plan(
                 generationAtSaveStart,
                 _workbookDirtyGeneration,
-                sameWorkbook: ReferenceEquals(_workbook, workbookAtSaveStart));
+                sameWorkbook: ReferenceEquals(_workbook, workbookAtSaveStart),
+                target.Path);
 
-            if (plan.ApplyFileContext)
+            if (plan.ApplyFileContext && plan.FileContext is { } fileContext)
             {
-                _currentFilePath = target.Path;
-                _workbook.Name = WorkbookTitleFormatter.DisplayNameFromPath(target.Path);
-                // P2b: recent-files registration DECISION via the shared planner (a saved target is
-                // always a real, non-suppressed path); the MRU store write stays FreeX-specific.
-                if (FileLifecyclePlanner.PlanRecentRegistration(target.Path, suppressRecentFiles: false) == RecentFileRegistration.Register)
-                    _recentFiles.AddOrUpdate(target.Path);
+                _currentFilePath = fileContext.Path;
+                _workbook.Name = fileContext.DisplayName;
+                RecentFileRegistrationService.RegisterIfNeeded(_recentFiles, fileContext.RecentFileRegistration);
             }
 
             if (plan.MarkSaved)

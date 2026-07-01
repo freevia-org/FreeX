@@ -1,4 +1,5 @@
 using System.Windows;
+using FreeP.App.Compositor;
 using FreeP.App.Host;
 using Xunit;
 using FluentAssertions;
@@ -409,6 +410,69 @@ public sealed class SlideShowWindowTests
     }
 
     [StaFact]
+    public void SlideShowWindow_CreatePresenterState_UsesSharedPlannerState()
+    {
+        var pres = Presentation.CreateEmpty();
+        pres.Slides[0].Title = "Agenda";
+        pres.Slides[0].Notes = MakeTextBody("speaker note");
+        pres.Slides.Add(new Slide { Title = "Details" });
+
+        var window = new SlideShowWindow(pres, 0);
+        try
+        {
+            var displayIntent = new SlideShowPresenterDisplayIntent(
+                IsFullScreenRequested: true,
+                MonitorIndex: 2,
+                MonitorName: "Confidence monitor");
+
+            var state = window.CreatePresenterState(
+                window.PresenterStartedAtUtc.AddSeconds(12),
+                displayIntent);
+
+            state.CurrentSlide!.SlideIndex.Should().Be(0);
+            state.NextSlide!.Title.Should().Be("Details");
+            state.NotesText.Should().Be("speaker note");
+            state.Elapsed.Should().Be(TimeSpan.FromSeconds(12));
+            state.DisplayIntent.Should().BeSameAs(displayIntent);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [StaFact]
+    public void SlideShowWindow_ApplyPresenterToolIntent_UsesSharedPlannerState()
+    {
+        var pres = Presentation.CreateEmpty();
+        var window = new SlideShowWindow(pres, 0);
+        try
+        {
+            var plan = window.ApplyPresenterToolIntent(
+                SlideShowTimingIntent.RecordTimings,
+                SlideShowRecordingMediaIntent.NarrationAndMedia,
+                SlideShowPresenterPointerMode.Pen,
+                "#336699",
+                5,
+                SlideShowInkRetentionDecision.ClearInk);
+
+            plan.Should().BeSameAs(window.PresenterToolPlan);
+            plan.Recording.NarrationCapture.IsDeferred.Should().BeTrue();
+            plan.Recording.MediaCapture.IsDeferred.Should().BeTrue();
+            plan.PointerInk.PointerMode.Should().Be(SlideShowPresenterPointerMode.Pen);
+            plan.PointerInk.InkState.ColorHex.Should().Be("#336699");
+            plan.PointerInk.InkRetentionDecision.Should().Be(SlideShowInkRetentionDecision.ClearInk);
+
+            var state = window.CreatePresenterState(window.PresenterStartedAtUtc.AddSeconds(3));
+            state.ToolPlan.Should().BeSameAs(plan);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [StaFact]
     public void SlideShowWindow_MultipleSlides_AdvanceNavigatesCorrectly()
     {
         var pres = Presentation.CreateEmpty();
@@ -493,6 +557,15 @@ public sealed class SlideShowWindowTests
             window.Close();
         }
     }
+
+    private static TextBody MakeTextBody(string text)
+    {
+        var body = new TextBody();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run { Text = text });
+        body.Paragraphs.Add(paragraph);
+        return body;
+    }
 }
 
 /// <summary>
@@ -522,7 +595,7 @@ public sealed class SlideShowMainWindowTests
     public void MainWindow_Presentation_CanConstructSlideShowWindow_FromStart()
     {
         // Verify SlideShowWindow can be constructed with the main window's presentation at index 0.
-        var mainWindow = new MainWindow();
+        var mainWindow = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
         try
         {
             var slideShow = new SlideShowWindow(mainWindow.Editor.Presentation, startIndex: 0);
@@ -544,7 +617,7 @@ public sealed class SlideShowMainWindowTests
     [StaFact]
     public void MainWindow_Presentation_CanConstructSlideShowWindow_FromCurrent()
     {
-        var mainWindow = new MainWindow();
+        var mainWindow = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
         try
         {
             mainWindow.Editor.InsertSlide();  // now on slide 1
@@ -569,7 +642,7 @@ public sealed class SlideShowMainWindowTests
     [StaFact]
     public void MainWindow_StartSlideShow_EmptyPresentation_DoesNotThrow()
     {
-        var window = new MainWindow();
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
         try
         {
             // Clear all slides

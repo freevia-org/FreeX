@@ -1,8 +1,8 @@
 using System.Collections.Generic;
 using System.Globalization;
-using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Host;
@@ -24,19 +24,13 @@ namespace FreeW.App.Host;
 /// </summary>
 internal sealed class TabsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
-    // Alignment / leader option order shown in the drop-downs; indexes map to the enums below.
-    private static readonly string[] Alignments = ["Left", "Center", "Right", "Decimal"];
-    private static readonly string[] Leaders = ["1 None", "2 ....", "3 ----", "4 ____"];
-
     private readonly ListBox _stopList;
     private readonly TextBox _positionBox;
     private readonly TextBox _defaultTabStopBox;
     private readonly ComboBox _alignmentBox;
     private readonly ComboBox _leaderBox;
-    private readonly List<TabStop> _stops;
-    private Result? _result;
-
-    internal sealed record Result(IReadOnlyList<TabStop> TabStops, double DefaultTabStopPt);
+    private TabsDialogState _state;
+    private TabsDialogResult? _result;
 
     private TabsDialog(Window? owner, IReadOnlyList<TabStop> tabStops, double defaultTabStopPt)
     {
@@ -48,8 +42,7 @@ internal sealed class TabsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
 
-        // Work on a sorted, de-duplicated copy so Set/Clear edit a stable list and re-applying preserves order.
-        _stops = tabStops.OrderBy(s => s.PositionPt).ToList();
+        _state = TabsDialogPlanner.BuildInitialState(tabStops, defaultTabStopPt, CultureInfo.CurrentCulture);
 
         _stopList = new ListBox { Height = 120, MinWidth = 150 };
         _stopList.SelectionChanged += (_, _) => OnStopSelected();
@@ -59,17 +52,17 @@ internal sealed class TabsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         _defaultTabStopBox = new TextBox
         {
             MinWidth = 120,
-            Text = defaultTabStopPt.ToString("0.##", CultureInfo.CurrentCulture)
+            Text = _state.DefaultTabStopText
         };
 
         _alignmentBox = new ComboBox { MinWidth = 120 };
-        foreach (var alignment in Alignments)
-            _alignmentBox.Items.Add(alignment);
+        foreach (var alignment in TabsDialogPlanner.Alignments)
+            _alignmentBox.Items.Add(alignment.Label);
         _alignmentBox.SelectedIndex = 0;
 
         _leaderBox = new ComboBox { MinWidth = 120 };
-        foreach (var leader in Leaders)
-            _leaderBox.Items.Add(leader);
+        foreach (var leader in TabsDialogPlanner.Leaders)
+            _leaderBox.Items.Add(leader.Label);
         _leaderBox.SelectedIndex = 0;
 
         var grid = new Grid { Margin = new Thickness(14) };
@@ -135,89 +128,88 @@ internal sealed class TabsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private void RefreshList()
     {
         _stopList.Items.Clear();
-        foreach (var stop in _stops)
-            _stopList.Items.Add(Describe(stop));
-    }
-
-    private static string Describe(TabStop stop)
-    {
-        var leader = stop.Leader == TabLeader.None ? "" : $"  {stop.Leader}";
-        return $"{stop.PositionPt.ToString("0.##", CultureInfo.CurrentCulture)} pt  {stop.Alignment}{leader}";
+        foreach (var row in _state.Rows)
+            _stopList.Items.Add(row.DisplayText);
     }
 
     // Reflect the selected stop into the position/alignment/leader editors so Set updates it in place.
     private void OnStopSelected()
     {
-        var index = _stopList.SelectedIndex;
-        if (index < 0 || index >= _stops.Count)
+        var selection = TabsDialogPlanner.ProjectSelectedStop(
+            _state,
+            _stopList.SelectedIndex,
+            CultureInfo.CurrentCulture);
+        if (selection is null)
             return;
-        var stop = _stops[index];
-        _positionBox.Text = stop.PositionPt.ToString("0.##", CultureInfo.CurrentCulture);
-        _alignmentBox.SelectedIndex = (int)stop.Alignment;
-        _leaderBox.SelectedIndex = (int)stop.Leader;
+        _positionBox.Text = selection.PositionText;
+        _alignmentBox.SelectedIndex = selection.AlignmentIndex;
+        _leaderBox.SelectedIndex = selection.LeaderIndex;
     }
 
     // Add a new stop at the typed position, or replace an existing stop at the same position (so editing a
     // stop's alignment/leader and pressing Set updates it rather than duplicating it). Re-sorts the list.
     private void OnSet()
     {
-        if (!TryParse(_positionBox.Text, out var position) || position < 0)
+        var request = new TabsDialogSetRequest(
+            _positionBox.Text,
+            _alignmentBox.SelectedIndex,
+            _leaderBox.SelectedIndex);
+
+        if (!TabsDialogPlanner.TrySetStop(
+                _state,
+                request,
+                CultureInfo.CurrentCulture,
+                out var plan,
+                out var error))
         {
-            DialogMessageHelper.ShowWarning(this, "Enter a non-negative tab-stop position in points.");
+            DialogMessageHelper.ShowWarning(this, TabsDialogPlanner.ValidationMessageFor(error));
             return;
         }
 
-        var stop = new TabStop(position, (TabStopAlignment)_alignmentBox.SelectedIndex, (TabLeader)_leaderBox.SelectedIndex);
-        // Replace any existing stop within a small tolerance of this position; otherwise add a new one.
-        var existing = _stops.FindIndex(s => System.Math.Abs(s.PositionPt - position) < 0.01);
-        if (existing >= 0)
-            _stops[existing] = stop;
-        else
-            _stops.Add(stop);
-        _stops.Sort((a, b) => a.PositionPt.CompareTo(b.PositionPt));
-
+        _state = plan!.State;
         RefreshList();
-        _stopList.SelectedIndex = _stops.FindIndex(s => System.Math.Abs(s.PositionPt - position) < 0.01);
+        _stopList.SelectedIndex = plan.SelectedIndex;
     }
 
     // Remove the selected stop (Word's "Clear"), or the one matching the typed position if none is selected.
     private void OnClear()
     {
-        var index = _stopList.SelectedIndex;
-        if (index < 0 && TryParse(_positionBox.Text, out var position))
-            index = _stops.FindIndex(s => System.Math.Abs(s.PositionPt - position) < 0.01);
-        if (index < 0 || index >= _stops.Count)
-            return;
-        _stops.RemoveAt(index);
+        _state = TabsDialogPlanner.ClearStop(
+            _state,
+            _stopList.SelectedIndex,
+            _positionBox.Text,
+            CultureInfo.CurrentCulture);
         RefreshList();
     }
 
     private void OnClearAll()
     {
-        _stops.Clear();
+        _state = TabsDialogPlanner.ClearAll(_state);
         RefreshList();
     }
 
     private void Accept()
     {
-        if (!TryParse(_defaultTabStopBox.Text, out var defaultTabStop) || defaultTabStop <= 0)
+        if (!TabsDialogPlanner.TryBuildResult(
+                _state,
+                _defaultTabStopBox.Text,
+                CultureInfo.CurrentCulture,
+                out var result,
+                out var error))
         {
-            DialogMessageHelper.ShowWarning(this, "Enter a positive default tab-stop interval in points.");
+            DialogMessageHelper.ShowWarning(this, TabsDialogPlanner.ValidationMessageFor(error));
             return;
         }
 
-        _result = new Result(_stops.OrderBy(s => s.PositionPt).ToList(), defaultTabStop);
+        _result = result;
         Close();
     }
-
-    private static bool TryParse(string text, out double value) =>
-        double.TryParse(text, NumberStyles.Float, CultureInfo.CurrentCulture, out value);
 
     /// <summary>
     /// Show the dialog seeded with the paragraph's current tab stops and the document's default tab-stop
     /// spacing; returns the edited stop list and interval to apply, or null if cancelled.
     /// </summary>
-    public static Result? Prompt(Window? owner, IReadOnlyList<TabStop> tabStops, double defaultTabStopPt)
+    public static TabsDialogResult? Prompt(Window? owner, IReadOnlyList<TabStop> tabStops, double defaultTabStopPt)
     {
         var dialog = new TabsDialog(owner, tabStops, defaultTabStopPt);
         dialog.ShowDialog();

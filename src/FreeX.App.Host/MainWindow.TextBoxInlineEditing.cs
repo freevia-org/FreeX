@@ -5,6 +5,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
 using FreeX.App.Services;
+using FreeX.App.Presentation.DrawingUI;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 using WpfTextBox = System.Windows.Controls.TextBox;
@@ -13,10 +14,6 @@ namespace FreeX.App.Host;
 
 public partial class MainWindow
 {
-    private const double TextBoxInlineEditorMinimumWidth = 24.0;
-    private const double TextBoxInlineEditorMinimumHeight = 18.0;
-    private const double TextBoxInlineEditorInset = 4.0;
-
     private void OnTextBoxEditRequested(Guid textBoxId) =>
         BeginTextBoxInlineEdit(textBoxId);
 
@@ -63,7 +60,7 @@ public partial class MainWindow
         Keyboard.Focus(_textBoxInlineEditor);
         _textBoxInlineEditor.CaretIndex = _textBoxInlineEditor.Text.Length;
         _textBoxInlineEditor.SelectionLength = 0;
-        SetStatusBarModeText(UiText.Get("StatusBar_EditMode"));
+        SetFormulaEditStatusBarMode(pointMode: false);
         SheetGrid.InvalidateVisual();
     }
 
@@ -116,8 +113,8 @@ public partial class MainWindow
                 textBox.Anchor,
                 textBox.Width,
                 textBox.Height,
-                TextBoxInlineEditorMinimumWidth,
-                TextBoxInlineEditorMinimumHeight,
+                TextBoxFrameLayoutPlanner.MinimumWidth,
+                TextBoxFrameLayoutPlanner.MinimumHeight,
                 out var unscaledRect,
                 textBox.AnchorOffsetX,
                 textBox.AnchorOffsetY))
@@ -126,21 +123,9 @@ public partial class MainWindow
         }
 
         var zoom = _zoomLevel;
-        var rect = new Rect(
-            unscaledRect.Left * zoom,
-            unscaledRect.Top * zoom,
-            unscaledRect.Width * zoom,
-            unscaledRect.Height * zoom);
-
-        Canvas.SetLeft(_textBoxInlineEditorChrome, rect.Left);
-        Canvas.SetTop(_textBoxInlineEditorChrome, rect.Top);
-        _textBoxInlineEditorChrome.Width = rect.Width;
-        _textBoxInlineEditorChrome.Height = rect.Height;
-
-        Canvas.SetLeft(_textBoxInlineEditor, rect.Left + TextBoxInlineEditorInset);
-        Canvas.SetTop(_textBoxInlineEditor, rect.Top + TextBoxInlineEditorInset);
-        _textBoxInlineEditor.Width = Math.Max(1, rect.Width - (TextBoxInlineEditorInset * 2));
-        _textBoxInlineEditor.Height = Math.Max(1, rect.Height - (TextBoxInlineEditorInset * 2));
+        var layout = TextBoxFrameLayoutPlanner.CreateScaled(ToLayoutRect(unscaledRect), zoom);
+        ApplyTextBoxInlineElementBounds(_textBoxInlineEditorChrome, layout.Bounds);
+        ApplyTextBoxInlineElementBounds(_textBoxInlineEditor, layout.TextBounds);
         return true;
     }
 
@@ -186,6 +171,17 @@ public partial class MainWindow
         return true;
     }
 
+    private static LayoutRect ToLayoutRect(Rect rect) =>
+        new(rect.Left, rect.Top, rect.Width, rect.Height);
+
+    private static void ApplyTextBoxInlineElementBounds(FrameworkElement element, LayoutRect bounds)
+    {
+        Canvas.SetLeft(element, bounds.Left);
+        Canvas.SetTop(element, bounds.Top);
+        element.Width = bounds.Width;
+        element.Height = bounds.Height;
+    }
+
     private bool TryCommitTextBoxInlineEdit(out bool textChanged)
     {
         textChanged = false;
@@ -195,21 +191,31 @@ public partial class MainWindow
             return true;
         }
 
-        var newText = _textBoxInlineEditor.Text;
-        if (string.Equals(_textBoxInlineOriginalText, newText, StringComparison.Ordinal))
+        var plan = TextBoxInlineEditPlanner.CreateCommitPlan(
+            _textBoxInlineOriginalText,
+            _textBoxInlineEditor.Text);
+        if (!plan.TextChanged)
             return true;
 
-        if (!TryExecuteCommand(new SetTextBoxTextCommand(_currentSheetId, textBoxId, newText), "Edit Text Box"))
+        if (!TryExecuteCommand(
+                new SetTextBoxTextCommand(_currentSheetId, textBoxId, plan.Text),
+                TextBoxInlineEditPlanner.CommitCommandTitle))
             return false;
 
-        _textBoxInlineOriginalText = newText;
+        _textBoxInlineOriginalText = plan.Text;
         textChanged = true;
         return true;
     }
 
     private void TextBoxInlineEditor_KeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key == Key.Escape && Keyboard.Modifiers == ModifierKeys.None)
+        var action = TextBoxInlineEditPlanner.PlanKeyDown(
+            ToTextBoxInlineEditKey(e.Key),
+            Keyboard.Modifiers != ModifierKeys.None);
+        if (action == TextBoxInlineEditKeyAction.None)
+            return;
+
+        if (action == TextBoxInlineEditKeyAction.Cancel)
         {
             if (_textBoxInlineEditor is not null && _textBoxInlineOriginalText is not null)
                 _textBoxInlineEditor.Text = _textBoxInlineOriginalText;
@@ -220,21 +226,22 @@ public partial class MainWindow
             return;
         }
 
-        if (e.Key is Key.Enter or Key.Return && Keyboard.Modifiers == ModifierKeys.None)
-        {
-            if (HideTextBoxInlineEditor(commit: true))
-                FocusSheetGridIfNeeded();
-            e.Handled = true;
-            return;
-        }
-
-        if (e.Key == Key.Tab)
+        if (action == TextBoxInlineEditKeyAction.Commit)
         {
             if (HideTextBoxInlineEditor(commit: true))
                 FocusSheetGridIfNeeded();
             e.Handled = true;
         }
     }
+
+    private static TextBoxInlineEditKey ToTextBoxInlineEditKey(Key key) =>
+        key switch
+        {
+            Key.Escape => TextBoxInlineEditKey.Escape,
+            Key.Enter => TextBoxInlineEditKey.Enter,
+            Key.Tab => TextBoxInlineEditKey.Tab,
+            _ => TextBoxInlineEditKey.Other
+        };
 
     private void TextBoxInlineEditor_LostFocus(object sender, RoutedEventArgs e)
     {
@@ -245,11 +252,10 @@ public partial class MainWindow
 
     private void CommitTextBoxInlineEditorLostFocusIfNeeded()
     {
-        if (_textBoxInlineEditor?.IsVisible != true)
-            return;
-
-        if (ReferenceEquals(Keyboard.FocusedElement, _textBoxInlineEditor) ||
-            ReferenceEquals(FocusManager.GetFocusedElement(this), _textBoxInlineEditor))
+        if (!TextBoxInlineEditPlanner.ShouldCommitLostFocus(
+                _textBoxInlineEditor?.IsVisible == true,
+                ReferenceEquals(Keyboard.FocusedElement, _textBoxInlineEditor),
+                ReferenceEquals(FocusManager.GetFocusedElement(this), _textBoxInlineEditor)))
             return;
 
         HideTextBoxInlineEditor(commit: true);
@@ -261,12 +267,6 @@ public partial class MainWindow
         if (sheet is null)
             return null;
 
-        foreach (var textBox in sheet.TextBoxes)
-        {
-            if (textBox.Id == textBoxId)
-                return textBox;
-        }
-
-        return null;
+        return TextBoxModel.FindById(sheet.TextBoxes, textBoxId);
     }
 }

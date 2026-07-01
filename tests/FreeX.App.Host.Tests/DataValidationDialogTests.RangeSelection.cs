@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using FreeX.App.Presentation.Dialogs;
 using FreeX.App.Host;
 using FreeX.Core.Model;
 using FluentAssertions;

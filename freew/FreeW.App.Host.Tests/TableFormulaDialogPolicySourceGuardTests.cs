@@ -1,0 +1,63 @@
+using System.IO;
+
+namespace FreeW.App.Host.Tests;
+
+public sealed class TableFormulaDialogPolicySourceGuardTests
+{
+    [Fact]
+    public void TableFormulaDialog_DelegatesCatalogsAndResultPolicyToPresentationPlanner()
+    {
+        var source = ReadHostSource("TableFormulaDialog.cs");
+
+        source.Should().Contain("using FreeW.App.Presentation.Dialogs;");
+        source.Should().Contain("TableFormulaDialogPlanner.NumberFormats");
+        source.Should().Contain("TableFormulaDialogPlanner.Functions");
+        source.Should().Contain("Title = TableFormulaDialogPlanner.Title;");
+        source.Should().Contain("TableFormulaDialogPlanner.FormulaLabel");
+        source.Should().Contain("TableFormulaDialogPlanner.NumberFormatLabel");
+        source.Should().Contain("TableFormulaDialogPlanner.PasteFunctionLabel");
+        source.Should().Contain("TableFormulaDialogPlanner.PasteFunction(");
+        source.Should().Contain("new TableFormulaDialogInput(");
+        source.Should().Contain("TableFormulaDialogPlanner.TryBuildResult(");
+        source.Should().NotContain("Title = \"Formula\"");
+        source.Should().NotContain("Text = \"Formula:\"");
+        source.Should().NotContain("Text = \"Number format:\"");
+        source.Should().NotContain("Text = \"Paste function:\"");
+        source.Should().NotContain("private static readonly string[] Functions");
+        source.Should().NotContain("private static readonly string[] NumberFormats");
+        source.Should().NotContain("new TableFormulaField(");
+    }
+
+    [Fact]
+    public void TableFormulaCommand_DelegatesDefaultFormulaPolicyToPresentationPlanner()
+    {
+        var source = ReadHostSource("Ribbon", "FreeWRibbonCommands.cs");
+
+        source.Should().Contain("using FreeW.App.Presentation.Dialogs;");
+        source.Should().Contain("TableFormulaDialogPlanner.BuildInitialState(");
+        source.Should().NotContain("private static string DefaultFormula(");
+        source.Should().NotContain("private static bool HasNumberAbove(");
+        source.Should().NotContain("private static bool HasNumberLeft(");
+        source.Should().NotContain("TableFormulaEvaluator.TryParseCellNumber(");
+    }
+
+    private static string ReadHostSource(params string[] pathParts)
+    {
+        var root = Path.Combine(FindRepositoryRoot(), "freew", "FreeW.App.Host");
+        var fullPath = pathParts.Aggregate(root, Path.Combine);
+        return File.ReadAllText(fullPath);
+    }
+
+    private static string FindRepositoryRoot()
+    {
+        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
+             directory is not null;
+             directory = directory.Parent)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "FreeW.slnx")))
+                return directory.FullName;
+        }
+
+        throw new DirectoryNotFoundException("Could not locate repository root from test output directory.");
+    }
+}

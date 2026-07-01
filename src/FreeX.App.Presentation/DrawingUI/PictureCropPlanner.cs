@@ -86,6 +86,24 @@ public static class PictureCropDialogPlanner
         return true;
     }
 
+    /// <summary>Validates a comma- or semicolon-delimited left/top/right/bottom crop percentage list.</summary>
+    public static bool TryCreateResult(string? input, out CropResult? result, out string? error)
+    {
+        result = null;
+        error = null;
+        var parts = (input ?? string.Empty).Split([',', ';'], StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length == 4
+            ? TryCreateResult(parts[0], parts[1], parts[2], parts[3], out result, out error)
+            : Invalid(out result, out error);
+    }
+
+    private static bool Invalid(out CropResult? result, out string? error)
+    {
+        result = null;
+        error = InvalidPercentMessage;
+        return false;
+    }
+
     private static bool TryParseNumber(string text, out double value)
     {
         if (double.TryParse(text, NumberStyles.Float, CultureInfo.CurrentCulture, out value) && double.IsFinite(value))

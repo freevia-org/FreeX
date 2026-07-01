@@ -59,13 +59,7 @@ public sealed record WorkbookTheme(
     public CellColor ResolveColor(WorkbookThemeColorSlot slot, double tint = 0)
     {
         var color = GetColor(slot);
-        if (Math.Abs(tint) < 0.000001)
-            return color;
-
-        return new CellColor(
-            ApplyTint(color.R, tint),
-            ApplyTint(color.G, tint),
-            ApplyTint(color.B, tint));
+        return WorkbookThemeTint.Apply(color, tint);
     }
 
     public WorkbookTheme WithName(string name) =>
@@ -134,14 +128,6 @@ public sealed record WorkbookTheme(
             [slot] = color
         };
         return this with { Colors = colors, NativeColorSchemeXml = null };
-    }
-
-    private static byte ApplyTint(byte channel, double tint)
-    {
-        var value = tint < 0
-            ? channel * (1.0 + tint)
-            : channel + ((255 - channel) * tint);
-        return (byte)Math.Clamp(Math.Round(value), 0, 255);
     }
 
     private static string? RenameNativeFormatScheme(string? formatSchemeXml, string effectsName)
@@ -428,9 +414,7 @@ public sealed record WorkbookTheme(
             return 0;
         }
 
-        const double emusPerInch = 914400d; // DrawingMlUnits.EmuPerInch — not referenceable from FreeX.Core.Model (no shared-opc dep)
-        const double pixelsPerInch = 96d;
-        return coordinate / emusPerInch * pixelsPerInch;
+        return DrawingMlCoordinateUnits.EmuToPixels(coordinate);
     }
 
     private static double ReadAngleRadians(string? angleText)
@@ -444,7 +428,7 @@ public sealed record WorkbookTheme(
             return 0;
         }
 
-        return angle / 60000d * Math.PI / 180d;
+        return DrawingMlCoordinateUnits.AngleToRadians(angle);
     }
 
     private static double CleanZero(double value) =>

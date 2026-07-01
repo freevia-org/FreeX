@@ -2,6 +2,8 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Automation.Peers;
+using FreeX.App.Presentation.GridInteraction;
+using FreeX.App.Presentation.PageLayout;
 using FreeX.Core.Calc;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -11,20 +13,6 @@ namespace FreeX.App.Host;
 
 public partial class MainWindow
 {
-    private sealed record ColumnResizeSnapshot(
-        SheetId SheetId,
-        uint StartCol,
-        uint EndCol,
-        Dictionary<uint, double> OriginalWidths,
-        HashSet<uint> OriginalHiddenCols);
-
-    private sealed record RowResizeSnapshot(
-        SheetId SheetId,
-        uint StartRow,
-        uint EndRow,
-        Dictionary<uint, double> OriginalHeights,
-        HashSet<uint> OriginalHiddenRows);
-
     private void InvalidateNavigationCaches()
     {
         _navigationCacheRevision++;
@@ -34,42 +22,48 @@ public partial class MainWindow
 
     private void RefreshStatusBar()
     {
-        var viewMode = GetCurrentStatusBarViewMode();
-        if (IsFileOperationProgressVisible())
-        {
-            SetVisibilityIfChanged(StatusReadyText, Visibility.Collapsed);
-            SetVisibilityIfChanged(StatusStatsPanel, Visibility.Collapsed);
-            return;
-        }
-
-        if (SheetGrid.SelectedRange is not { } range)
-        {
-            ApplyStatusBarDisplayState(_statusBarDisplayStateCache.GetReady(
-                viewMode,
-                zoomPercent: 0,
-                UiText.Get("MainWindow_Text_Ready")));
-            return;
-        }
-
         var sheet = _workbook.GetSheet(_currentSheetId);
-        if (sheet is null) return;
-        viewMode = WorksheetViewModeUiStatePlanner.ToStatusBarViewMode(sheet.ViewMode);
+        var selectedRange = SheetGrid.SelectedRange;
+        WorkbookSelectionStats? stats = sheet is not null && selectedRange is { } range
+            ? StatusBarCalculator.ToShared(_statusBarStatsCache.GetOrCalculate(sheet, range, _navigationCacheRevision))
+            : null;
 
-        var stats = _statusBarStatsCache.GetOrCalculate(sheet, range, _navigationCacheRevision);
-
-        if (stats.Count == 0)
-        {
-            ApplyStatusBarDisplayState(_statusBarDisplayStateCache.GetReady(
-                viewMode,
-                zoomPercent: 0,
-                StatusBarCalculator.GetReadyStatusText(sheet, range.Start)));
-            return;
-        }
-
-        ApplyStatusBarDisplayState(_statusBarDisplayStateCache.GetStats(
-            viewMode,
+        var plan = StatusBarRefreshPlanner.Build(
+            sheet,
+            selectedRange,
+            stats,
+            IsFileOperationProgressVisible(),
             zoomPercent: 0,
-            StatusBarCalculator.ToShared(stats)));
+            StatusBarCalculator.TextProvider);
+        ApplyStatusBarRefreshPlan(plan);
+    }
+
+    private void ApplyStatusBarRefreshPlan(StatusBarRefreshPlan plan)
+    {
+        switch (plan.Action)
+        {
+            case StatusBarRefreshAction.HideReadouts:
+                SetVisibilityIfChanged(StatusReadyText, Visibility.Collapsed);
+                SetVisibilityIfChanged(StatusStatsPanel, Visibility.Collapsed);
+                return;
+            case StatusBarRefreshAction.Ready:
+                ApplyStatusBarDisplayState(_statusBarDisplayStateCache.GetReady(
+                    plan.ViewMode,
+                    plan.ZoomPercent,
+                    plan.ReadyText));
+                return;
+            case StatusBarRefreshAction.Stats:
+                ApplyStatusBarDisplayState(_statusBarDisplayStateCache.GetStats(
+                    plan.ViewMode,
+                    plan.ZoomPercent,
+                    plan.Stats));
+                return;
+            default:
+                ApplyStatusBarDisplayState(_statusBarDisplayStateCache.GetReady(
+                    plan.ViewMode,
+                    plan.ZoomPercent));
+                return;
+        }
     }
 
     private StatusBarViewMode GetCurrentStatusBarViewMode()
@@ -89,25 +83,8 @@ public partial class MainWindow
             return;
 
         var plan = BuildStatusBarPresentationPlan(state);
-        var visibility = plan.Visibility;
-        SetVisibilityIfChanged(StatusReadyText, ToVisibility(visibility.ReadyTextVisible));
-        SetVisibilityIfChanged(StatusPageNumberText, ToVisibility(visibility.PageNumberVisible));
-        SetVisibilityIfChanged(StatusStatsPanel, ToVisibility(visibility.StatsPanelVisible));
-        SetVisibilityIfChanged(StatusAvgText, ToVisibility(visibility.AverageVisible));
-        SetVisibilityIfChanged(StatusCountText, ToVisibility(visibility.CountVisible));
-        SetVisibilityIfChanged(StatusNumericalCountText, ToVisibility(visibility.NumericalCountVisible));
-        SetVisibilityIfChanged(StatusSumText, ToVisibility(visibility.SumVisible));
-        SetVisibilityIfChanged(StatusMinText, ToVisibility(visibility.MinimumVisible));
-        SetVisibilityIfChanged(StatusMaxText, ToVisibility(visibility.MaximumVisible));
-        SetTextIfChanged(StatusReadyText, plan.ReadyText);
-        SetStatusStatisticTextIfChanged(StatusAvgText, plan.AverageText, UiText.Get("StatusBar_Average"));
-        SetStatusStatisticTextIfChanged(StatusCountText, plan.CountText, UiText.Get("StatusBar_Count"));
-        SetStatusStatisticTextIfChanged(StatusNumericalCountText, plan.NumericalCountText, UiText.Get("StatusBar_NumericalCount"));
-        SetStatusStatisticTextIfChanged(StatusSumText, plan.SumText, UiText.Get("StatusBar_Sum"));
-        SetStatusStatisticTextIfChanged(StatusMinText, plan.MinimumText, UiText.Get("StatusBar_Minimum"));
-        SetStatusStatisticTextIfChanged(StatusMaxText, plan.MaximumText, UiText.Get("StatusBar_Maximum"));
-        UpdateStatusStatsPanelAutomation(state, plan.AutomationText);
-        ApplyStatusBarInteractiveDisplayState(visibility);
+        var rendererPlan = StatusBarPresentationPlanner.BuildRendererPlan(plan);
+        ApplyStatusBarRendererPlan(state, rendererPlan);
         _lastStatusBarDisplayState = state;
     }
 
@@ -116,29 +93,8 @@ public partial class MainWindow
     private bool IsStatusBarDisplayStateApplied(Free.Shared.AppServices.StatusBarViewModel state)
     {
         var plan = BuildStatusBarPresentationPlan(state);
-        var visibility = plan.Visibility;
-        return
-            StatusReadyText.Visibility == ToVisibility(visibility.ReadyTextVisible) &&
-            StatusPageNumberText.Visibility == ToVisibility(visibility.PageNumberVisible) &&
-            StatusStatsPanel.Visibility == ToVisibility(visibility.StatsPanelVisible) &&
-            StatusAvgText.Visibility == ToVisibility(visibility.AverageVisible) &&
-            StatusCountText.Visibility == ToVisibility(visibility.CountVisible) &&
-            StatusNumericalCountText.Visibility == ToVisibility(visibility.NumericalCountVisible) &&
-            StatusSumText.Visibility == ToVisibility(visibility.SumVisible) &&
-            StatusMinText.Visibility == ToVisibility(visibility.MinimumVisible) &&
-            StatusMaxText.Visibility == ToVisibility(visibility.MaximumVisible) &&
-            StatusViewShortcutControls.Visibility == ToVisibility(visibility.ViewShortcutsVisible) &&
-            StatusZoomText.Visibility == ToVisibility(visibility.ZoomVisible) &&
-            StatusZoomSliderControls.Visibility == ToVisibility(visibility.ZoomSliderVisible) &&
-            StatusZoomControls.Visibility == ToVisibility(visibility.ZoomControlsVisible) &&
-            StatusInteractiveControls.Visibility == ToVisibility(visibility.InteractiveControlsVisible) &&
-            StatusReadyText.Text == plan.ReadyText &&
-            StatusAvgText.Text == plan.AverageText &&
-            StatusCountText.Text == plan.CountText &&
-            StatusNumericalCountText.Text == plan.NumericalCountText &&
-            StatusSumText.Text == plan.SumText &&
-            StatusMinText.Text == plan.MinimumText &&
-            StatusMaxText.Text == plan.MaximumText;
+        var rendererPlan = StatusBarPresentationPlanner.BuildRendererPlan(plan);
+        return IsStatusBarRendererPlanApplied(rendererPlan);
     }
 
     private StatusBarPresentationPlan BuildStatusBarPresentationPlan(Free.Shared.AppServices.StatusBarViewModel state) =>
@@ -153,35 +109,103 @@ public partial class MainWindow
         var state = _lastStatusBarDisplayState ??
             _statusBarDisplayStateCache.GetReady(
                 GetCurrentStatusBarViewMode(),
-                zoomPercent: 0,
-                UiText.Get("MainWindow_Text_Ready"));
-        ApplyStatusBarInteractiveDisplayState(BuildStatusBarPresentationPlan(state).Visibility);
+                zoomPercent: 0);
+        ApplyStatusBarInteractiveDisplayState(
+            StatusBarPresentationPlanner.BuildRendererPlan(BuildStatusBarPresentationPlan(state)));
     }
 
-    private void ApplyStatusBarInteractiveDisplayState(StatusBarVisibilityPlan visibility)
+    private void ApplyStatusBarInteractiveDisplayState(StatusBarRendererPlan rendererPlan)
     {
-        SetVisibilityIfChanged(StatusViewShortcutControls, ToVisibility(visibility.ViewShortcutsVisible));
-        SetVisibilityIfChanged(StatusZoomText, ToVisibility(visibility.ZoomVisible));
-        SetVisibilityIfChanged(StatusZoomSliderControls, ToVisibility(visibility.ZoomSliderVisible));
-        SetVisibilityIfChanged(StatusZoomControls, ToVisibility(visibility.ZoomControlsVisible));
-        SetVisibilityIfChanged(StatusInteractiveControls, ToVisibility(visibility.InteractiveControlsVisible));
+        SetVisibilityIfChanged(
+            StatusViewShortcutControls,
+            ToVisibility(rendererPlan.IsElementVisible(StatusBarPresentationElement.ViewShortcuts)));
+        SetVisibilityIfChanged(
+            StatusZoomText,
+            ToVisibility(rendererPlan.IsElementVisible(StatusBarPresentationElement.ZoomText)));
+        SetVisibilityIfChanged(
+            StatusZoomSliderControls,
+            ToVisibility(rendererPlan.IsElementVisible(StatusBarPresentationElement.ZoomSlider)));
+        SetVisibilityIfChanged(
+            StatusZoomControls,
+            ToVisibility(rendererPlan.IsElementVisible(StatusBarPresentationElement.ZoomControls)));
+        SetVisibilityIfChanged(
+            StatusInteractiveControls,
+            ToVisibility(rendererPlan.IsElementVisible(StatusBarPresentationElement.InteractiveControls)));
     }
+
+    private void ApplyStatusBarRendererPlan(
+        Free.Shared.AppServices.StatusBarViewModel state,
+        StatusBarRendererPlan rendererPlan)
+    {
+        foreach (var entry in rendererPlan.VisibilityElements)
+            SetVisibilityIfChanged(GetStatusBarElement(entry.Element), ToVisibility(entry.IsVisible));
+
+        SetTextIfChanged(StatusReadyText, rendererPlan.ReadyText);
+        foreach (var readout in rendererPlan.ReadoutElements)
+        {
+            SetStatusStatisticTextIfChanged(
+                GetStatusBarReadoutTextBlock(readout.Kind),
+                readout.Text,
+                UiText.Get(readout.AutomationFallbackResourceKey));
+        }
+
+        UpdateStatusStatsPanelAutomation(state, rendererPlan.StatsPanelAutomationText);
+    }
+
+    private bool IsStatusBarRendererPlanApplied(StatusBarRendererPlan rendererPlan)
+    {
+        foreach (var entry in rendererPlan.VisibilityElements)
+        {
+            if (GetStatusBarElement(entry.Element).Visibility != ToVisibility(entry.IsVisible))
+                return false;
+        }
+
+        if (StatusReadyText.Text != rendererPlan.ReadyText)
+            return false;
+
+        foreach (var readout in rendererPlan.ReadoutElements)
+        {
+            if (GetStatusBarReadoutTextBlock(readout.Kind).Text != readout.Text)
+                return false;
+        }
+
+        return true;
+    }
+
+    private UIElement GetStatusBarElement(StatusBarPresentationElement element) =>
+        element switch
+        {
+            StatusBarPresentationElement.ReadyText => StatusReadyText,
+            StatusBarPresentationElement.PageNumberText => StatusPageNumberText,
+            StatusBarPresentationElement.StatsPanel => StatusStatsPanel,
+            StatusBarPresentationElement.Average => StatusAvgText,
+            StatusBarPresentationElement.Count => StatusCountText,
+            StatusBarPresentationElement.NumericalCount => StatusNumericalCountText,
+            StatusBarPresentationElement.Sum => StatusSumText,
+            StatusBarPresentationElement.Minimum => StatusMinText,
+            StatusBarPresentationElement.Maximum => StatusMaxText,
+            StatusBarPresentationElement.ViewShortcuts => StatusViewShortcutControls,
+            StatusBarPresentationElement.ZoomText => StatusZoomText,
+            StatusBarPresentationElement.ZoomSlider => StatusZoomSliderControls,
+            StatusBarPresentationElement.ZoomControls => StatusZoomControls,
+            StatusBarPresentationElement.InteractiveControls => StatusInteractiveControls,
+            _ => StatusReadyText
+        };
+
+    private TextBlock GetStatusBarReadoutTextBlock(StatusBarReadoutKind kind) =>
+        kind switch
+        {
+            StatusBarReadoutKind.Average => StatusAvgText,
+            StatusBarReadoutKind.Count => StatusCountText,
+            StatusBarReadoutKind.NumericalCount => StatusNumericalCountText,
+            StatusBarReadoutKind.Sum => StatusSumText,
+            StatusBarReadoutKind.Minimum => StatusMinText,
+            StatusBarReadoutKind.Maximum => StatusMaxText,
+            _ => StatusCountText
+        };
 
     private StatusBarOptionVisibility GetStatusBarOptionVisibility() =>
-        new(
-            CellMode: _options.StatusBarShowCellMode,
-            EndMode: _options.StatusBarShowEndMode,
-            SelectionMode: _options.StatusBarShowSelectionMode,
-            PageNumber: _options.StatusBarShowPageNumber,
-            Average: _options.StatusBarShowAverage,
-            Count: _options.StatusBarShowCount,
-            NumericalCount: _options.StatusBarShowNumericalCount,
-            Minimum: _options.StatusBarShowMinimum,
-            Maximum: _options.StatusBarShowMaximum,
-            Sum: _options.StatusBarShowSum,
-            ViewShortcuts: _options.StatusBarShowViewShortcuts,
-            Zoom: _options.StatusBarShowZoom,
-            ZoomSlider: _options.StatusBarShowZoomSlider);
+        StatusBarOptionVisibilityStore.ToVisibility(_options);
 
     // Tracks the runtime-built status-bar customize toggle items by their persisted-option Tag so the menu's
     // live checked state can be refreshed on open without relying on hand-authored x:Name fields.
@@ -207,50 +231,8 @@ public partial class MainWindow
             return;
 
         var isChecked = menuItem.IsChecked;
-        switch (option)
-        {
-            case StatusBarOptionTags.CellMode:
-                _options.StatusBarShowCellMode = isChecked;
-                break;
-            case StatusBarOptionTags.EndMode:
-                _options.StatusBarShowEndMode = isChecked;
-                break;
-            case StatusBarOptionTags.SelectionMode:
-                _options.StatusBarShowSelectionMode = isChecked;
-                break;
-            case StatusBarOptionTags.PageNumber:
-                _options.StatusBarShowPageNumber = isChecked;
-                break;
-            case StatusBarOptionTags.Average:
-                _options.StatusBarShowAverage = isChecked;
-                break;
-            case StatusBarOptionTags.Count:
-                _options.StatusBarShowCount = isChecked;
-                break;
-            case StatusBarOptionTags.NumericalCount:
-                _options.StatusBarShowNumericalCount = isChecked;
-                break;
-            case StatusBarOptionTags.Minimum:
-                _options.StatusBarShowMinimum = isChecked;
-                break;
-            case StatusBarOptionTags.Maximum:
-                _options.StatusBarShowMaximum = isChecked;
-                break;
-            case StatusBarOptionTags.Sum:
-                _options.StatusBarShowSum = isChecked;
-                break;
-            case StatusBarOptionTags.ViewShortcuts:
-                _options.StatusBarShowViewShortcuts = isChecked;
-                break;
-            case StatusBarOptionTags.Zoom:
-                _options.StatusBarShowZoom = isChecked;
-                break;
-            case StatusBarOptionTags.ZoomSlider:
-                _options.StatusBarShowZoomSlider = isChecked;
-                break;
-            default:
-                return;
-        }
+        if (!StatusBarOptionVisibilityStore.TrySetOption(_options, option, isChecked))
+            return;
 
         if (!_options.Save())
         {
@@ -373,33 +355,17 @@ public partial class MainWindow
         }
     }
 
-    private (uint start, uint end) GetSelectedColRange(uint col)
-    {
-        var sel = SheetGrid.SelectedRange;
-        if (sel.HasValue && col >= sel.Value.Start.Col && col <= sel.Value.End.Col
-            && sel.Value.Start.Col != sel.Value.End.Col)
-            return (sel.Value.Start.Col, sel.Value.End.Col);
-        return (col, col);
-    }
+    private (uint start, uint end) GetSelectedColRange(uint col) =>
+        GridResizePreviewPlanner.GetSelectedColumnResizeRange(SheetGrid.SelectedRange, col);
 
     private (uint start, uint end) GetColumnResizeRange(Sheet sheet, uint col) =>
-        sheet.HiddenCols.Contains(col)
-            ? GetContiguousHiddenColumnRange(sheet, col)
-            : GetSelectedColRange(col);
+        GridResizePreviewPlanner.GetColumnResizeRange(sheet, SheetGrid.SelectedRange, col);
 
-    private (uint start, uint end) GetSelectedRowRange(uint row)
-    {
-        var sel = SheetGrid.SelectedRange;
-        if (sel.HasValue && row >= sel.Value.Start.Row && row <= sel.Value.End.Row
-            && sel.Value.Start.Row != sel.Value.End.Row)
-            return (sel.Value.Start.Row, sel.Value.End.Row);
-        return (row, row);
-    }
+    private (uint start, uint end) GetSelectedRowRange(uint row) =>
+        GridResizePreviewPlanner.GetSelectedRowResizeRange(SheetGrid.SelectedRange, row);
 
     private (uint start, uint end) GetRowResizeRange(Sheet sheet, uint row) =>
-        sheet.HiddenRows.Contains(row)
-            ? GetContiguousHiddenRowRange(sheet, row)
-            : GetSelectedRowRange(row);
+        GridResizePreviewPlanner.GetRowResizeRange(sheet, SheetGrid.SelectedRange, row);
 
     private void OnColumnResizing(uint col, double newWidthPx)
     {
@@ -411,11 +377,7 @@ public partial class MainWindow
 
         var (startCol, endCol) = GetColumnResizeRange(sheet, col);
         CaptureColumnResizeSnapshot(sheet, startCol, endCol);
-        ApplyColumnResizePreview(
-            sheet,
-            startCol,
-            endCol,
-            ColumnWidthPixelMapper.PixelsToColumnWidth(newWidthPx));
+        GridResizePreviewPlanner.ApplyColumnResizePreview(sheet, startCol, endCol, newWidthPx);
         UpdateViewport();
     }
 
@@ -423,8 +385,8 @@ public partial class MainWindow
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet == null) return;
-        var (startCol, endCol) = _columnResizeSnapshot is { } snap && snap.SheetId == sheet.Id
-            ? (snap.StartCol, snap.EndCol)
+        var (startCol, endCol) = _columnResizeSnapshot is { SheetId: var sheetId } snap && sheetId == sheet.Id
+            ? (snap.StartIndex, snap.EndIndex)
             : GetColumnResizeRange(sheet, col);
         var restoredPreview = RestoreColumnResizePreview(sheet);
         if (!TryExecuteGroupedSheetCommand(
@@ -465,7 +427,7 @@ public partial class MainWindow
 
         var (startRow, endRow) = GetRowResizeRange(sheet, row);
         CaptureRowResizeSnapshot(sheet, startRow, endRow);
-        ApplyRowResizePreview(sheet, startRow, endRow, newHeightPx);
+        GridResizePreviewPlanner.ApplyRowResizePreview(sheet, startRow, endRow, newHeightPx);
         UpdateViewport();
     }
 
@@ -486,8 +448,8 @@ public partial class MainWindow
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet == null) return;
-        var (startRow, endRow) = _rowResizeSnapshot is { } snap && snap.SheetId == sheet.Id
-            ? (snap.StartRow, snap.EndRow)
+        var (startRow, endRow) = _rowResizeSnapshot is { SheetId: var sheetId } snap && sheetId == sheet.Id
+            ? (snap.StartIndex, snap.EndIndex)
             : GetRowResizeRange(sheet, row);
         var restoredPreview = RestoreRowResizePreview(sheet);
         if (!TryExecuteGroupedSheetCommand("Row Height", sheetId => new SetRowHeightCommand(sheetId, startRow, endRow, newHeightPx)))
@@ -501,7 +463,9 @@ public partial class MainWindow
 
     private void OnPageMarginsChanged(WorksheetPageMargins margins)
     {
-        if (!TryExecuteGroupedSheetCommand("Page Margins", sheetId => new SetPageMarginsCommand(sheetId, margins)))
+        if (!TryExecuteGroupedSheetCommand(
+                PageLayoutRibbonActionPlanner.PageMarginsCommandLabel,
+                sheetId => PageLayoutRibbonCommandPlanner.BuildMarginsCommand(sheetId, margins)))
             return;
 
         UpdateViewport();
@@ -510,17 +474,17 @@ public partial class MainWindow
 
     private void CaptureColumnResizeSnapshot(Sheet sheet, uint startCol, uint endCol)
     {
-        if (_columnResizeSnapshot is { } existing &&
-            existing.SheetId == sheet.Id &&
-            existing.StartCol == startCol && existing.EndCol == endCol)
+        if (GridResizePreviewPlanner.SnapshotMatches(
+                _columnResizeSnapshot,
+                sheet,
+                GridResizeAxis.Column,
+                startCol,
+                endCol))
+        {
             return;
+        }
 
-        _columnResizeSnapshot = new ColumnResizeSnapshot(
-            sheet.Id,
-            startCol,
-            endCol,
-            CaptureDimensionSnapshot(sheet.ColumnWidths, startCol, endCol),
-            CaptureIndexSnapshot(sheet.HiddenCols, startCol, endCol));
+        _columnResizeSnapshot = GridResizePreviewPlanner.CaptureColumnSnapshot(sheet, startCol, endCol);
     }
 
     private void OnResizeCanceled()
@@ -544,148 +508,31 @@ public partial class MainWindow
 
     private void CaptureRowResizeSnapshot(Sheet sheet, uint startRow, uint endRow)
     {
-        if (_rowResizeSnapshot is { } existing &&
-            existing.SheetId == sheet.Id &&
-            existing.StartRow == startRow && existing.EndRow == endRow)
+        if (GridResizePreviewPlanner.SnapshotMatches(
+                _rowResizeSnapshot,
+                sheet,
+                GridResizeAxis.Row,
+                startRow,
+                endRow))
+        {
             return;
-
-        _rowResizeSnapshot = new RowResizeSnapshot(
-            sheet.Id,
-            startRow,
-            endRow,
-            CaptureDimensionSnapshot(sheet.RowHeights, startRow, endRow),
-            CaptureIndexSnapshot(sheet.HiddenRows, startRow, endRow));
-    }
-
-    private static Dictionary<uint, double> CaptureDimensionSnapshot(
-        Dictionary<uint, double> dimensions,
-        uint start,
-        uint end)
-    {
-        var snapshot = new Dictionary<uint, double>();
-        for (var index = start; index <= end; index++)
-        {
-            if (dimensions.TryGetValue(index, out var size))
-                snapshot[index] = size;
         }
 
-        return snapshot;
+        _rowResizeSnapshot = GridResizePreviewPlanner.CaptureRowSnapshot(sheet, startRow, endRow);
     }
-
-    private static HashSet<uint> CaptureIndexSnapshot(HashSet<uint> indexes, uint start, uint end)
-    {
-        var snapshot = new HashSet<uint>();
-        for (var index = start; index <= end; index++)
-        {
-            if (indexes.Contains(index))
-                snapshot.Add(index);
-        }
-
-        return snapshot;
-    }
-
-    private static void RestoreDimensionSnapshot(
-        Dictionary<uint, double> dimensions,
-        uint start,
-        uint end,
-        IReadOnlyDictionary<uint, double> snapshot)
-    {
-        for (var index = start; index <= end; index++)
-            dimensions.Remove(index);
-
-        foreach (var (index, size) in snapshot)
-            dimensions[index] = size;
-    }
-
-    private static void RestoreIndexSnapshot(HashSet<uint> indexes, uint start, uint end, IReadOnlySet<uint> snapshot)
-    {
-        for (var index = start; index <= end; index++)
-            indexes.Remove(index);
-
-        foreach (var index in snapshot)
-            indexes.Add(index);
-    }
-
-    private static void ApplyDimensionResizePreview(
-        Dictionary<uint, double> dimensions,
-        HashSet<uint> hiddenIndexes,
-        uint start,
-        uint end,
-        double size)
-    {
-        for (var index = start; index <= end; index++)
-        {
-            if (size == 0)
-            {
-                dimensions.Remove(index);
-                hiddenIndexes.Add(index);
-            }
-            else
-            {
-                dimensions[index] = size;
-                hiddenIndexes.Remove(index);
-            }
-        }
-    }
-
-    private static void ApplyColumnResizePreview(Sheet sheet, uint startCol, uint endCol, double width) =>
-        ApplyDimensionResizePreview(sheet.ColumnWidths, sheet.HiddenCols, startCol, endCol, width);
-
-    private static void ApplyRowResizePreview(Sheet sheet, uint startRow, uint endRow, double height) =>
-        ApplyDimensionResizePreview(sheet.RowHeights, sheet.HiddenRows, startRow, endRow, height);
 
     private bool RestoreColumnResizePreview(Sheet sheet)
     {
-        if (_columnResizeSnapshot is not { } snapshot || snapshot.SheetId != sheet.Id)
-        {
-            _columnResizeSnapshot = null;
-            return false;
-        }
-
-        RestoreDimensionSnapshot(sheet.ColumnWidths, snapshot.StartCol, snapshot.EndCol, snapshot.OriginalWidths);
-        RestoreIndexSnapshot(sheet.HiddenCols, snapshot.StartCol, snapshot.EndCol, snapshot.OriginalHiddenCols);
+        var restored = GridResizePreviewPlanner.RestoreColumnResizePreview(sheet, _columnResizeSnapshot);
         _columnResizeSnapshot = null;
-        return true;
+        return restored;
     }
 
     private bool RestoreRowResizePreview(Sheet sheet)
     {
-        if (_rowResizeSnapshot is not { } snapshot || snapshot.SheetId != sheet.Id)
-        {
-            _rowResizeSnapshot = null;
-            return false;
-        }
-
-        RestoreDimensionSnapshot(sheet.RowHeights, snapshot.StartRow, snapshot.EndRow, snapshot.OriginalHeights);
-        RestoreIndexSnapshot(sheet.HiddenRows, snapshot.StartRow, snapshot.EndRow, snapshot.OriginalHiddenRows);
+        var restored = GridResizePreviewPlanner.RestoreRowResizePreview(sheet, _rowResizeSnapshot);
         _rowResizeSnapshot = null;
-        return true;
-    }
-
-    private static (uint start, uint end) GetContiguousHiddenColumnRange(Sheet sheet, uint col)
-    {
-        var startCol = col;
-        while (startCol > 1 && sheet.HiddenCols.Contains(startCol - 1))
-            startCol--;
-
-        var endCol = col;
-        while (endCol < CellAddress.MaxCol && sheet.HiddenCols.Contains(endCol + 1))
-            endCol++;
-
-        return (startCol, endCol);
-    }
-
-    private static (uint start, uint end) GetContiguousHiddenRowRange(Sheet sheet, uint row)
-    {
-        var startRow = row;
-        while (startRow > 1 && sheet.HiddenRows.Contains(startRow - 1))
-            startRow--;
-
-        var endRow = row;
-        while (endRow < CellAddress.MaxRow && sheet.HiddenRows.Contains(endRow + 1))
-            endRow++;
-
-        return (startRow, endRow);
+        return restored;
     }
 
 }

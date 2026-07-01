@@ -60,14 +60,14 @@ public sealed partial class MainWindow
             return;
         }
 
-        var result = _session.ExecuteReviewCommand(
-            TableDesignCommandPlanner.BuildConvertToRangeCommand(_session.ActiveSheet.Id, table));
+        var plan = TableDesignCommandPlanner.BuildConvertToRangePlan(_session.ActiveSheet.Id, table);
+        var result = _session.ExecuteReviewCommand(plan.Command);
 
         if (result.Success)
         {
             // The table is gone, so the contextual tab must retract.
             RefreshTableContextualTab();
-            RefreshShell(UiText.Format("TableLoc_ConvertedTableToRange", TableDisplayName(table)));
+            RefreshShell(UiText.Format("TableLoc_ConvertedTableToRange", plan.TableDisplayName));
         }
         else
         {

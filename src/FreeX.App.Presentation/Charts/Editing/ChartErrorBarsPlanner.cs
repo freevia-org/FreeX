@@ -1,3 +1,4 @@
+using FreeX.App.Presentation.Charts;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -20,6 +21,40 @@ public readonly record struct ChartErrorBarsInput(
     ChartErrorBarDirection Direction,
     double Value,
     bool EndCaps);
+
+public enum ChartErrorBarsDialogControlKind
+{
+    CheckBox,
+    ComboBox,
+    Number,
+}
+
+public enum ChartErrorBarsDialogFieldId
+{
+    ShowErrorBars,
+    Kind,
+    Direction,
+    Value,
+    EndCaps,
+}
+
+public sealed record ChartErrorBarsDialogFieldDescriptor(
+    ChartErrorBarsDialogFieldId Id,
+    ChartErrorBarsDialogControlKind ControlKind,
+    string LabelResourceKey,
+    string AutomationId,
+    string? HelpResourceKey = null,
+    string? AutomationNameResourceKey = null);
+
+public sealed record ChartErrorBarsDialogSectionDescriptor(
+    string HeaderResourceKey,
+    IReadOnlyList<ChartErrorBarsDialogFieldDescriptor> Fields);
+
+public enum ChartErrorBarsParseIssue
+{
+    None,
+    Value,
+}
 
 /// <summary>
 /// Portable (no UI) planner for the "Error Bars" editing dialog (standard-error / percentage / fixed-value /
@@ -50,11 +85,43 @@ public static class ChartErrorBarsPlanner
         new(ChartErrorBarDirection.Minus, "Minus"),
     ];
 
+    private static readonly ChartErrorBarsDialogFieldDescriptor[] ErrorAmountFields =
+    [
+        new(ChartErrorBarsDialogFieldId.ShowErrorBars, ChartErrorBarsDialogControlKind.CheckBox, "ChartErrorBars_ShowErrorBars", "ChartErrorBarsShowCheck"),
+        new(ChartErrorBarsDialogFieldId.Kind, ChartErrorBarsDialogControlKind.ComboBox, "ChartErrorBars_TypeLabel", "ChartErrorBarsKindCombo"),
+        new(ChartErrorBarsDialogFieldId.Direction, ChartErrorBarsDialogControlKind.ComboBox, "ChartErrorBars_DirectionLabel", "ChartErrorBarsDirectionCombo"),
+        new(ChartErrorBarsDialogFieldId.Value, ChartErrorBarsDialogControlKind.Number, "ChartErrorBars_ValueLabel", "ChartErrorBarsValueBox", "ChartErrorBars_ValueHelpText", "ChartErrorBars_ValueAutomationName"),
+        new(ChartErrorBarsDialogFieldId.EndCaps, ChartErrorBarsDialogControlKind.CheckBox, "ChartErrorBars_EndCaps", "ChartErrorBarsEndCapsCheck"),
+    ];
+
+    private static readonly ChartErrorBarsDialogSectionDescriptor[] DialogSections =
+    [
+        new("ChartErrorBars_ErrorAmountGroup", ErrorAmountFields),
+    ];
+
     /// <summary>The selectable error-amount kinds, in display order.</summary>
     public static IReadOnlyList<ChartErrorBarKindChoice> GetKindChoices() => KindCatalog;
 
     /// <summary>The selectable directions, in display order.</summary>
     public static IReadOnlyList<ChartErrorBarDirectionChoice> GetDirectionChoices() => DirectionCatalog;
+
+    public static IReadOnlyList<ChartErrorBarsDialogSectionDescriptor> GetDialogSections() => DialogSections;
+
+    public static ChartErrorBarsDialogSectionDescriptor GetErrorAmountSection() => DialogSections[0];
+
+    public static ChartErrorBarsDialogFieldDescriptor GetDialogField(ChartErrorBarsDialogFieldId id)
+    {
+        foreach (var section in DialogSections)
+        {
+            foreach (var field in section.Fields)
+            {
+                if (field.Id == id)
+                    return field;
+            }
+        }
+
+        throw new ArgumentOutOfRangeException(nameof(id), id, null);
+    }
 
     /// <summary>The English display label for <paramref name="kind"/> (falls back to the enum name).</summary>
     public static string DisplayName(ChartErrorBarKind kind)
@@ -85,12 +152,24 @@ public static class ChartErrorBarsPlanner
 
     /// <summary>Reads the chart's current error-bar state into the dialog input shape.</summary>
     public static ChartErrorBarsInput Read(ChartModel chart) =>
-        new(
+        Normalize(new ChartErrorBarsInput(
             chart.ShowErrorBars,
-            IsKnownKind(chart.ErrorBarKind) ? chart.ErrorBarKind : ChartErrorBarKind.StandardError,
-            IsKnownDirection(chart.ErrorBarDirection) ? chart.ErrorBarDirection : ChartErrorBarDirection.Both,
-            ClampValue(chart.ErrorBarValue),
-            chart.ErrorBarEndCaps);
+            chart.ErrorBarKind,
+            chart.ErrorBarDirection,
+            chart.ErrorBarValue,
+            chart.ErrorBarEndCaps));
+
+    /// <summary>
+    /// Normalizes error-bar dialog state: unknown kind/direction values fall back to Excel defaults, and the
+    /// amount is clamped into Excel's accepted range.
+    /// </summary>
+    public static ChartErrorBarsInput Normalize(ChartErrorBarsInput input) =>
+        input with
+        {
+            Kind = IsKnownKind(input.Kind) ? input.Kind : ChartErrorBarKind.StandardError,
+            Direction = IsKnownDirection(input.Direction) ? input.Direction : ChartErrorBarDirection.Both,
+            Value = ClampValue(input.Value),
+        };
 
     /// <summary>
     /// Builds the <see cref="ChartLayoutOptions"/> delta for the edited error-bar state. An invalid/unknown
@@ -98,13 +177,43 @@ public static class ChartErrorBarsPlanner
     /// range. The kind, direction, amount, and end-cap toggle are always set (even when hiding) so re-showing
     /// keeps the chosen configuration.
     /// </summary>
-    public static ChartLayoutOptions Plan(ChartErrorBarsInput input) =>
-        new ChartLayoutOptions(
-            ShowErrorBars: input.ShowErrorBars,
-            ErrorBarKind: IsKnownKind(input.Kind) ? input.Kind : ChartErrorBarKind.StandardError,
-            ErrorBarDirection: IsKnownDirection(input.Direction) ? input.Direction : ChartErrorBarDirection.Both,
-            ErrorBarValue: ClampValue(input.Value),
-            ErrorBarEndCaps: input.EndCaps);
+    public static ChartLayoutOptions Plan(ChartErrorBarsInput input)
+    {
+        var normalized = Normalize(input);
+        return new ChartLayoutOptions(
+            ShowErrorBars: normalized.ShowErrorBars,
+            ErrorBarKind: normalized.Kind,
+            ErrorBarDirection: normalized.Direction,
+            ErrorBarValue: normalized.Value,
+            ErrorBarEndCaps: normalized.EndCaps);
+    }
+
+    public static bool TryParseDialogInput(
+        bool showErrorBars,
+        ChartErrorBarKind? selectedKind,
+        ChartErrorBarDirection? selectedDirection,
+        string? valueText,
+        bool endCaps,
+        out ChartErrorBarsInput input,
+        out ChartErrorBarsParseIssue issue)
+    {
+        input = default;
+
+        if (!ChartDialogValueParser.TryParseClampedDouble(valueText ?? string.Empty, MinValue, MaxValue, out var value))
+        {
+            issue = ChartErrorBarsParseIssue.Value;
+            return false;
+        }
+
+        input = Normalize(new ChartErrorBarsInput(
+            showErrorBars,
+            selectedKind is { } kind && IsKnownKind(kind) ? kind : ChartErrorBarKind.StandardError,
+            selectedDirection is { } direction && IsKnownDirection(direction) ? direction : ChartErrorBarDirection.Both,
+            value,
+            endCaps));
+        issue = ChartErrorBarsParseIssue.None;
+        return true;
+    }
 
     private static double ClampValue(double value) =>
         Math.Clamp(double.IsFinite(value) ? value : 5, MinValue, MaxValue);

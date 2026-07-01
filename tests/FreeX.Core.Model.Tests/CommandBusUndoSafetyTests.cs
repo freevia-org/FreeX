@@ -36,6 +36,34 @@ public sealed class CommandBusUndoSafetyTests
         public void Revert(ICommandContext ctx) => throw new InvalidOperationException("simulated revert failure");
     }
 
+    private sealed class ThrowingApplyCommand : IWorkbookCommand
+    {
+        private readonly Exception _exception;
+
+        public ThrowingApplyCommand(string message)
+            : this(new InvalidOperationException(message))
+        {
+        }
+
+        public ThrowingApplyCommand(Exception exception) => _exception = exception;
+
+        public string Label => "ThrowingApply";
+        public CommandOutcome Apply(ICommandContext ctx) => throw _exception;
+        public void Revert(ICommandContext ctx) { }
+    }
+
+    private sealed class MissingSheetLookupCommand : IWorkbookCommand
+    {
+        public string Label => "MissingSheetLookup";
+        public CommandOutcome Apply(ICommandContext ctx)
+        {
+            ctx.GetSheet(default);
+            return new(true);
+        }
+
+        public void Revert(ICommandContext ctx) { }
+    }
+
     private sealed class ObservingCommand(Action onApply, Action onRevert) : IWorkbookCommand
     {
         public string Label => "Observing";
@@ -162,6 +190,53 @@ public sealed class CommandBusUndoSafetyTests
     }
 
     // ── failure-path: Revert throws ───────────────────────────────────────────
+
+    [Fact]
+    public void Execute_WhenApplyThrowsMissingSheetId_NormalizesInternalSheetId()
+    {
+        var bus = MakeBus(out _);
+
+        var outcome = bus.Execute(WbId, new ThrowingApplyCommand("Sheet 00000000 not found"));
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Be("Sheet not found.");
+    }
+
+    [Fact]
+    public void Execute_WhenApplyLooksUpMissingSheet_NormalizesInternalSheetId()
+    {
+        var bus = MakeBus(out _);
+
+        var outcome = bus.Execute(WbId, new MissingSheetLookupCommand());
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Be("Sheet not found.");
+    }
+
+    [Fact]
+    public void Execute_WhenApplyThrowsWrappedMissingSheetId_NormalizesInternalSheetId()
+    {
+        var bus = MakeBus(out _);
+        var exception = new InvalidOperationException(
+            "outer command failure",
+            new KeyNotFoundException("Sheet 00000000 not found"));
+
+        var outcome = bus.Execute(WbId, new ThrowingApplyCommand(exception));
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Be("Sheet not found.");
+    }
+
+    [Fact]
+    public void Execute_WhenApplyThrowsOtherError_PreservesCommandFailureContext()
+    {
+        var bus = MakeBus(out _);
+
+        var outcome = bus.Execute(WbId, new ThrowingApplyCommand("simulated apply failure"));
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Be("Command failed: simulated apply failure");
+    }
 
     [Fact]
     public void Undo_WhenRevertThrows_ReturnsFailureOutcome()

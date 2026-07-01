@@ -1,4 +1,5 @@
 using System.Linq;
+using System.Reflection;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
@@ -11,10 +12,12 @@ using Avalonia.Styling;
 using Avalonia.Themes.Fluent;
 using Avalonia.VisualTree;
 using FreeX.App.Avalonia.Ribbon;
+using FreeX.App.Presentation.DrawingUI;
 using Free.Shared.Ribbon;
 using Free.Shared.Ribbon.Avalonia;
 using Free.Shared.Ribbon.Icons;
 using AvaloniaPath = Avalonia.Controls.Shapes.Path;
+using SelectionPaneObjectKind = FreeX.Core.Model.SelectionPaneObjectKind;
 
 [assembly: AvaloniaTestApplication(typeof(FreeX.App.Avalonia.Tests.RibbonHeadlessApp))]
 
@@ -176,6 +179,43 @@ public sealed class AvaloniaRibbonRendererTests
     });
 
     [Fact]
+    public Task BuildTabContent_CollapseSet_MatchesSharedPolicyForMeasuredWidths() => RunOnUiThread(() =>
+    {
+        var tab = BuildHomeTab();
+        var content = AvaloniaRibbonRenderer.BuildTabContent(tab, registry: null);
+
+        var window = new Window { Width = 1200, Height = 200, Content = content };
+        window.Show();
+        Layout(window, 1200);
+
+        var panel = FindAdaptivePanel(content);
+        var hosts = panel.Children.OfType<Control>().Where(IsAdaptiveGroupHost).ToList();
+        var fixedChromeWidth = GetFixedChromeWidth(panel);
+        var groups = hosts
+            .Select(host =>
+            {
+                var group = GetHostGroup(host);
+                return new RibbonAdaptiveCollapseGroup(
+                    group.Id,
+                    GetHostDouble(host, "FullWidth"),
+                    GetHostCollapsedWidth(host),
+                    GetHostInt(host, "Priority"));
+            })
+            .ToList();
+
+        var targetWidth = PickPartialCollapseWidth(groups, fixedChromeWidth);
+        var expected = RibbonAdaptiveCollapsePolicy.Plan(targetWidth, groups, fixedChromeWidth);
+        Assert.Contains(expected, decision => decision.IsCollapsed);
+        Assert.Contains(expected, decision => !decision.IsCollapsed);
+
+        Layout(window, targetWidth);
+
+        Assert.Equal(
+            expected.Select(decision => decision.IsCollapsed),
+            hosts.Select(host => GetHostBool(host, "Collapsed")));
+    });
+
+    [Fact]
     public Task Dropdown_ButtonHasFlyout_BuiltFromMenu() => RunOnUiThread(() =>
     {
         var tab = BuildHomeTab();
@@ -192,6 +232,69 @@ public sealed class AvaloniaRibbonRendererTests
         Assert.Contains(flyout.Items, i => i is MenuItem);
         Assert.Contains(flyout.Items, i => i is Separator);
     });
+
+    private static void Layout(Window window, double width)
+    {
+        window.Width = width;
+        window.Measure(new Size(width, 200));
+        window.Arrange(new Rect(0, 0, width, 200));
+    }
+
+    private static Panel FindAdaptivePanel(Control root) =>
+        root.GetVisualDescendants()
+            .OfType<Panel>()
+            .Single(panel => panel.GetType().Name == "AvaloniaRibbonAdaptivePanel");
+
+    private static bool IsAdaptiveGroupHost(Control control) =>
+        control.GetType().Name == "AvaloniaRibbonGroupHost";
+
+    private static double GetFixedChromeWidth(Panel panel)
+    {
+        var spacing = (double)panel.GetType()
+            .GetField("GroupSpacing", BindingFlags.NonPublic | BindingFlags.Static)!
+            .GetRawConstantValue()!;
+        return panel.Children
+            .Where(child => !IsAdaptiveGroupHost(child))
+            .Sum(child => child.DesiredSize.Width) +
+            spacing * Math.Max(0, panel.Children.Count - 1);
+    }
+
+    private static RibbonGroup GetHostGroup(Control host) =>
+        (RibbonGroup)host.GetType()
+            .GetField("_group", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .GetValue(host)!;
+
+    private static double GetHostDouble(Control host, string propertyName) =>
+        (double)host.GetType()
+            .GetProperty(propertyName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)!
+            .GetValue(host)!;
+
+    private static int GetHostInt(Control host, string propertyName) =>
+        (int)host.GetType()
+            .GetProperty(propertyName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)!
+            .GetValue(host)!;
+
+    private static bool GetHostBool(Control host, string propertyName) =>
+        (bool)host.GetType()
+            .GetProperty(propertyName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)!
+            .GetValue(host)!;
+
+    private static double GetHostCollapsedWidth(Control host) =>
+        Convert.ToDouble(host.GetType()
+            .GetField("CollapsedWidth", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)!
+            .GetRawConstantValue());
+
+    private static double PickPartialCollapseWidth(
+        IReadOnlyList<RibbonAdaptiveCollapseGroup> groups,
+        double fixedChromeWidth)
+    {
+        var total = groups.Sum(group => group.FullWidth) + fixedChromeWidth;
+        var firstSavings = groups
+            .OrderBy(group => group.Priority)
+            .Select(group => group.FullWidth - group.CollapsedWidth)
+            .First(savings => savings > 0.5);
+        return total - firstSavings / 2;
+    }
 
     [Fact]
     public Task BuildRibbon_ProducesTabPerVisibleTab() => RunOnUiThread(() =>
@@ -370,6 +473,17 @@ public sealed class AvaloniaRibbonRendererTests
         source.SetParityCaptureContext(null);
 
         Assert.False(source.Current.IsActive("pivot.active"));
+    }
+
+    [Fact]
+    public void DrawingObjectContext_TextBoxActivatesShapeFormatContext()
+    {
+        var source = new AvaloniaRibbonContextSource();
+
+        source.OnDrawingObjectSelected(SelectionPaneObjectKind.TextBox);
+
+        Assert.True(source.Current.IsActive(DrawingObjectContextualRibbonPlanner.ShapeContextKey));
+        Assert.False(source.Current.IsActive(DrawingObjectContextualRibbonPlanner.PictureContextKey));
     }
 
     private sealed class FakeContextSource : IRibbonContextSource

@@ -21,12 +21,12 @@ public sealed partial class FormatCellsDialogXamlTests
     {
         var source = ReadFormatCellsDialogSource();
 
-        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"FormatCells_InvalidTextRotationMessage\"), DlgTextRotationBox);");
-        source.Should().Contain("Tabs.SelectedIndex = (int)FormatCellsDialogTab.Alignment;");
+        source.Should().Contain("FormatCells_InvalidTextRotationMessage");
+        source.Should().Contain("FormatCellsDialogValidationTarget.TextRotation");
+        source.Should().Contain("ShowInvalidInputWarning(message, DlgTextRotationBox);");
+        source.Should().Contain("FormatCellsDialogPlannerTab.Alignment => (int)FormatCellsDialogTab.Alignment");
         source.Should().Contain("private bool ShowInvalidInputWarning(string message, TextBox target)");
-        source.Should().Contain("DialogMessageHelper.ShowWarning(this,");
-        source.Should().Contain("target.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(target);");
+        source.Should().Contain("DialogFocus.ShowWarningAndFocus(this, message, Title, target);");
     }
 
     [Fact]
@@ -34,8 +34,10 @@ public sealed partial class FormatCellsDialogXamlTests
     {
         var source = ReadFormatCellsDialogSource();
 
-        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"FormatCells_InvalidFontSizeMessage\"), DlgFontSizeBox);");
-        source.Should().Contain("Tabs.SelectedIndex = (int)FormatCellsDialogTab.Font;");
+        source.Should().Contain("FormatCells_InvalidFontSizeMessage");
+        source.Should().Contain("FormatCellsDialogValidationTarget.FontSize");
+        source.Should().Contain("ShowInvalidInputWarning(message, DlgFontSizeBox);");
+        source.Should().Contain("FormatCellsDialogPlannerTab.Font => (int)FormatCellsDialogTab.Font");
         source.Should().Contain("private bool ShowInvalidInputWarning(string message, ComboBox target)");
     }
 
@@ -44,8 +46,10 @@ public sealed partial class FormatCellsDialogXamlTests
     {
         var source = ReadFormatCellsDialogSource();
 
-        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"FormatCells_InvalidIndentLevelMessage\"), DlgIndentLevelBox);");
-        source.Should().Contain("Tabs.SelectedIndex = (int)FormatCellsDialogTab.Alignment;");
+        source.Should().Contain("FormatCells_InvalidIndentLevelMessage");
+        source.Should().Contain("FormatCellsDialogValidationTarget.IndentLevel");
+        source.Should().Contain("ShowInvalidInputWarning(message, DlgIndentLevelBox);");
+        source.Should().Contain("FormatCellsDialogPlannerTab.Alignment => (int)FormatCellsDialogTab.Alignment");
     }
 
     [Fact]
@@ -53,11 +57,13 @@ public sealed partial class FormatCellsDialogXamlTests
     {
         var source = ReadFormatCellsDialogSource();
 
-        source.Should().Contain("if (!ValidateNumberInputs())");
-        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"FormatCells_InvalidDecimalPlacesMessage\"), NumberDecimalPlacesBox);");
-        source.Should().Contain("FormatCellsInputParser.IsSupportedCustomNumberFormat(NumberFormatCombo.Text)");
-        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"FormatCells_InvalidCustomNumberFormatMessage\"), NumberFormatCombo);");
-        source.Should().Contain("Tabs.SelectedIndex = (int)FormatCellsDialogTab.Number;");
+        source.Should().Contain("FormatCellsDialogPlanner.TryCreateResult(");
+        source.Should().Contain("FormatCells_InvalidDecimalPlacesMessage");
+        source.Should().Contain("FormatCells_InvalidCustomNumberFormatMessage");
+        source.Should().Contain("FormatCellsDialogValidationTarget.NumberDecimalPlaces");
+        source.Should().Contain("FormatCellsDialogValidationTarget.NumberFormat");
+        source.Should().Contain("ShowInvalidInputWarning(message, NumberFormatCombo);");
+        source.Should().Contain("ShowInvalidInputWarning(message, NumberDecimalPlacesBox);");
     }
 
     [Fact]
@@ -65,9 +71,10 @@ public sealed partial class FormatCellsDialogXamlTests
     {
         var source = ReadFormatCellsDialogSource();
 
-        source.Should().Contain("if (!TryParseRequiredColor(DlgFontColorBox.Text, out var fontColor))");
-        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"FormatCells_InvalidFontColorMessage\"), DlgFontColorBox);");
-        source.Should().Contain("Tabs.SelectedIndex = (int)FormatCellsDialogTab.Font;");
+        source.Should().Contain("FormatCells_InvalidFontColorMessage");
+        source.Should().Contain("FormatCellsDialogValidationTarget.FontColor");
+        source.Should().Contain("ShowInvalidInputWarning(message, DlgFontColorBox);");
+        source.Should().Contain("FormatCellsDialogPlannerTab.Font => (int)FormatCellsDialogTab.Font");
     }
 
     [Fact]
@@ -75,11 +82,13 @@ public sealed partial class FormatCellsDialogXamlTests
     {
         var source = ReadFormatCellsDialogSource();
 
-        source.Should().Contain("if (!TryParseOptionalColor(DlgFillColorBox.Text, out var fillColor))");
-        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"FormatCells_InvalidFillColorMessage\"), DlgFillColorBox);");
-        source.Should().Contain("if (!TryParseOptionalColor(DlgFillPatternColorBox.Text, out var fillPatternColor))");
-        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"FormatCells_InvalidPatternColorMessage\"), DlgFillPatternColorBox);");
-        source.Should().Contain("Tabs.SelectedIndex = (int)FormatCellsDialogTab.Fill;");
+        source.Should().Contain("FormatCells_InvalidFillColorMessage");
+        source.Should().Contain("FormatCells_InvalidPatternColorMessage");
+        source.Should().Contain("FormatCellsDialogValidationTarget.FillColor");
+        source.Should().Contain("FormatCellsDialogValidationTarget.FillPatternColor");
+        source.Should().Contain("ShowInvalidInputWarning(message, DlgFillColorBox);");
+        source.Should().Contain("ShowInvalidInputWarning(message, DlgFillPatternColorBox);");
+        source.Should().Contain("FormatCellsDialogPlannerTab.Fill => (int)FormatCellsDialogTab.Fill");
     }
 
     [Fact]
@@ -87,12 +96,21 @@ public sealed partial class FormatCellsDialogXamlTests
     {
         var source = ReadFormatCellsDialogSource();
 
-        source.Should().Contain("if (!ValidateBorderInputs())");
-        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"FormatCells_InvalidBorderColorMessage\"), DlgBorderLineColorBox);");
-        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"FormatCells_InvalidTopBorderColorMessage\"), DlgBorderTopColorBox);");
-        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"FormatCells_InvalidRightBorderColorMessage\"), DlgBorderRightColorBox);");
-        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"FormatCells_InvalidBottomBorderColorMessage\"), DlgBorderBottomColorBox);");
-        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"FormatCells_InvalidLeftBorderColorMessage\"), DlgBorderLeftColorBox);");
-        source.Should().Contain("Tabs.SelectedIndex = (int)FormatCellsDialogTab.Border;");
+        source.Should().Contain("FormatCells_InvalidBorderColorMessage");
+        source.Should().Contain("FormatCells_InvalidTopBorderColorMessage");
+        source.Should().Contain("FormatCells_InvalidRightBorderColorMessage");
+        source.Should().Contain("FormatCells_InvalidBottomBorderColorMessage");
+        source.Should().Contain("FormatCells_InvalidLeftBorderColorMessage");
+        source.Should().Contain("FormatCellsDialogValidationTarget.BorderLineColor");
+        source.Should().Contain("FormatCellsDialogValidationTarget.BorderTopColor");
+        source.Should().Contain("FormatCellsDialogValidationTarget.BorderRightColor");
+        source.Should().Contain("FormatCellsDialogValidationTarget.BorderBottomColor");
+        source.Should().Contain("FormatCellsDialogValidationTarget.BorderLeftColor");
+        source.Should().Contain("ShowInvalidInputWarning(message, DlgBorderLineColorBox);");
+        source.Should().Contain("ShowInvalidInputWarning(message, DlgBorderTopColorBox);");
+        source.Should().Contain("ShowInvalidInputWarning(message, DlgBorderRightColorBox);");
+        source.Should().Contain("ShowInvalidInputWarning(message, DlgBorderBottomColorBox);");
+        source.Should().Contain("ShowInvalidInputWarning(message, DlgBorderLeftColorBox);");
+        source.Should().Contain("FormatCellsDialogPlannerTab.Border => (int)FormatCellsDialogTab.Border");
     }
 }

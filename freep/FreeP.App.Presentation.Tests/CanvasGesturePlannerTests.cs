@@ -1,0 +1,271 @@
+using FreeP.App.Compositor;
+using FreeP.Core.Model;
+
+namespace FreeP.App.Compositor.Tests;
+
+public sealed class CanvasGesturePlannerTests
+{
+    private const double EmuPerDip = 9525.0;
+
+    private static long ToEmu(double dip) => (long)Math.Round(dip * EmuPerDip);
+
+    private static CanvasResizeRequest MakeResizeRequest(
+        CanvasGestureHandleKind handle,
+        CanvasGesturePoint currentScreen,
+        double x = 100,
+        double y = 50,
+        double cx = 200,
+        double cy = 100,
+        double rotation = 0,
+        bool snapToGrid = false,
+        bool snapToShapes = false,
+        bool bypassSnap = false,
+        Slide? slide = null)
+        => new(
+            StartScreen: new CanvasGesturePoint(0, 0),
+            CurrentScreen: currentScreen,
+            Transform: new SlideTransformCore(1, 0, 0, 1280, 720),
+            State: new CanvasResizeState(
+                ShapeId: 1,
+                XEmu: ToEmu(x),
+                YEmu: ToEmu(y),
+                CxEmu: ToEmu(cx),
+                CyEmu: ToEmu(cy),
+                RotationDeg: rotation,
+                Handle: handle),
+            CurrentSlide: slide,
+            SnapToGrid: snapToGrid,
+            SnapToShapes: snapToShapes,
+            BypassSnap: bypassSnap);
+
+    [Fact]
+    public void ReduceDrag_BelowStartThreshold_DoesNotStartOrCommit()
+    {
+        var plan = CanvasGesturePlanner.ReduceDrag(new CanvasDragReducerRequest(
+            StartScreen: new CanvasGesturePoint(10, 20),
+            CurrentScreen: new CanvasGesturePoint(12.9, 20),
+            DragStarted: false,
+            StartThresholdPx: CanvasGesturePlanner.DefaultDragStartThresholdPx,
+            CommitThresholdPx: CanvasGesturePlanner.MeaningfulDragCommitThresholdPx));
+
+        plan.DragStarted.Should().BeFalse();
+        plan.ShouldCommit.Should().BeFalse();
+    }
+
+    [Fact]
+    public void ReduceDrag_CrossingStartThreshold_StartsAndCanCommit()
+    {
+        var plan = CanvasGesturePlanner.ReduceDrag(new CanvasDragReducerRequest(
+            StartScreen: new CanvasGesturePoint(10, 20),
+            CurrentScreen: new CanvasGesturePoint(13, 20),
+            DragStarted: false,
+            StartThresholdPx: CanvasGesturePlanner.DefaultDragStartThresholdPx,
+            CommitThresholdPx: CanvasGesturePlanner.MeaningfulDragCommitThresholdPx));
+
+        plan.DragStarted.Should().BeTrue();
+        plan.ShouldCommit.Should().BeTrue();
+    }
+
+    [Fact]
+    public void ReduceDrag_StartedButBelowCommitThreshold_DoesNotCommit()
+    {
+        var plan = CanvasGesturePlanner.ReduceDrag(new CanvasDragReducerRequest(
+            StartScreen: new CanvasGesturePoint(10, 20),
+            CurrentScreen: new CanvasGesturePoint(10.5, 20),
+            DragStarted: true,
+            StartThresholdPx: CanvasGesturePlanner.DefaultDragStartThresholdPx,
+            CommitThresholdPx: CanvasGesturePlanner.MeaningfulDragCommitThresholdPx));
+
+        plan.DragStarted.Should().BeTrue();
+        plan.ShouldCommit.Should().BeFalse();
+    }
+
+    [Fact]
+    public void ComputeResizeBounds_SeHandle_GrowsWithoutMovingOrigin()
+    {
+        var result = CanvasGesturePlanner.ComputeResizeBounds(
+            MakeResizeRequest(CanvasGestureHandleKind.ResizeSE, new CanvasGesturePoint(50, 60)));
+
+        (result.XEmu / EmuPerDip).Should().BeApproximately(100, 0.001);
+        (result.YEmu / EmuPerDip).Should().BeApproximately(50, 0.001);
+        (result.CxEmu / EmuPerDip).Should().BeApproximately(250, 0.001);
+        (result.CyEmu / EmuPerDip).Should().BeApproximately(160, 0.001);
+    }
+
+    [Fact]
+    public void ComputeResizeBounds_EHandle_ClampsToMinimumWidth()
+    {
+        var result = CanvasGesturePlanner.ComputeResizeBounds(
+            MakeResizeRequest(
+                CanvasGestureHandleKind.ResizeE,
+                new CanvasGesturePoint(-200, 0),
+                x: 0,
+                y: 0,
+                cx: 100,
+                cy: 100));
+
+        result.XEmu.Should().Be(0);
+        result.CxEmu.Should().Be(CanvasGesturePlanner.MinimumShapeSizeEmu);
+    }
+
+    [Fact]
+    public void ComputeResizeBounds_AltBypassSkipsGridSnap()
+    {
+        var slide = new Slide();
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 1,
+            OffsetXEmu = 0,
+            OffsetYEmu = 0,
+            ExtentCxEmu = ToEmu(96),
+            ExtentCyEmu = ToEmu(96),
+        });
+
+        var snapped = CanvasGesturePlanner.ComputeResizeBounds(
+            MakeResizeRequest(
+                CanvasGestureHandleKind.ResizeSE,
+                new CanvasGesturePoint(47, 47),
+                x: 0,
+                y: 0,
+                cx: 96,
+                cy: 96,
+                snapToGrid: true,
+                slide: slide));
+
+        var bypassed = CanvasGesturePlanner.ComputeResizeBounds(
+            MakeResizeRequest(
+                CanvasGestureHandleKind.ResizeSE,
+                new CanvasGesturePoint(47, 47),
+                x: 0,
+                y: 0,
+                cx: 96,
+                cy: 96,
+                snapToGrid: true,
+                bypassSnap: true,
+                slide: slide));
+
+        (snapped.CxEmu / EmuPerDip).Should().BeApproximately(144, 0.001);
+        (bypassed.CxEmu / EmuPerDip).Should().BeApproximately(143, 0.001);
+    }
+
+    [Fact]
+    public void ComputeResizeBounds_RotatedSeHandle_KeepsNwAnchorFixed()
+    {
+        var result = CanvasGesturePlanner.ComputeResizeBounds(
+            MakeResizeRequest(
+                CanvasGestureHandleKind.ResizeSE,
+                new CanvasGesturePoint(20, 20),
+                x: 100,
+                y: 100,
+                cx: 100,
+                cy: 100,
+                rotation: 90));
+
+        var (originalAnchorX, originalAnchorY) = Rotate(100, 100, 150, 150, 90);
+
+        double newX = result.XEmu / EmuPerDip;
+        double newY = result.YEmu / EmuPerDip;
+        double newCx = result.CxEmu / EmuPerDip;
+        double newCy = result.CyEmu / EmuPerDip;
+        var (newAnchorX, newAnchorY) = Rotate(
+            newX,
+            newY,
+            newX + newCx / 2,
+            newY + newCy / 2,
+            90);
+
+        newCx.Should().BeGreaterThan(100);
+        newAnchorX.Should().BeApproximately(originalAnchorX, 0.001);
+        newAnchorY.Should().BeApproximately(originalAnchorY, 0.001);
+    }
+
+    [Fact]
+    public void ComputeRotationAngle_ShiftSnapRoundsToFifteenDegrees()
+    {
+        double rawDegrees = 100;
+        double vectorDegrees = rawDegrees - 90;
+        double radians = vectorDegrees * Math.PI / 180.0;
+        var current = new CanvasGesturePoint(
+            100 + Math.Cos(radians) * 100,
+            100 + Math.Sin(radians) * 100);
+
+        var unsnapped = CanvasGesturePlanner.ComputeRotationAngle(new CanvasRotationRequest(
+            CurrentScreen: current,
+            CenterSlide: new CanvasGesturePoint(100, 100),
+            Transform: new SlideTransformCore(1, 0, 0, 1280, 720),
+            OriginalRotationDeg: 0,
+            SnapToFifteenDegrees: false));
+
+        var snapped = CanvasGesturePlanner.ComputeRotationAngle(new CanvasRotationRequest(
+            CurrentScreen: current,
+            CenterSlide: new CanvasGesturePoint(100, 100),
+            Transform: new SlideTransformCore(1, 0, 0, 1280, 720),
+            OriginalRotationDeg: 0,
+            SnapToFifteenDegrees: true));
+
+        unsnapped.Should().BeApproximately(100, 0.001);
+        snapped.Should().Be(105);
+    }
+
+    [Fact]
+    public void WpfAndAvaloniaHandlers_DelegateGesturePolicyToSharedPlanner()
+    {
+        var wpf = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "CanvasGestureHandler.cs");
+        var avalonia = ReadWorkspaceFile(
+            "freep",
+            "FreeP.App.Rendering.Avalonia",
+            "AvaloniaCanvasGestureHandler.cs");
+
+        wpf.Should().Contain("CanvasGesturePlanner.ComputeResizeBounds");
+        wpf.Should().Contain("CanvasGesturePlanner.ComputeRotationAngle");
+        wpf.Should().Contain("CanvasGesturePlanner.ReduceDrag");
+        wpf.Should().Contain("StartResize(uint shapeId, Slide slide, CanvasGestureHandleKind handle");
+        wpf.Should().NotContain("ToCanvasGestureHandle");
+        wpf.Should().NotContain("private const long MinEmu");
+        wpf.Should().NotContain("SlideTransformCore.UnRotateDelta(dxDip, dyDip");
+        wpf.Should().NotContain("Math.Abs(ddxPx)");
+        wpf.Should().NotContain("Math.Abs(ddyPx)");
+
+        avalonia.Should().Contain("CanvasGesturePlanner.ComputeResizeBounds");
+        avalonia.Should().Contain("CanvasGesturePlanner.ComputeRotationAngle");
+        avalonia.Should().Contain("CanvasGesturePlanner.ReduceDrag");
+        avalonia.Should().Contain("StartResize(uint shapeId, Slide slide, CanvasGestureHandleKind handle");
+        avalonia.Should().NotContain("ToCanvasGestureHandle");
+        avalonia.Should().NotContain("private const long MinEmu");
+        avalonia.Should().NotContain("SlideTransformCore.UnRotateDelta(dxDip, dyDip");
+        avalonia.Should().NotContain("Math.Abs(ddxPx)");
+        avalonia.Should().NotContain("Math.Abs(ddyPx)");
+    }
+
+    private static (double X, double Y) Rotate(double px, double py, double cx, double cy, double degrees)
+    {
+        if (degrees == 0) return (px, py);
+        double radians = degrees * Math.PI / 180.0;
+        double cos = Math.Cos(radians);
+        double sin = Math.Sin(radians);
+        double dx = px - cx;
+        double dy = py - cy;
+        return (cx + dx * cos - dy * sin, cy + dx * sin + dy * cos);
+    }
+
+    private static string ReadWorkspaceFile(params string[] relativeParts)
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            var parts = new string[relativeParts.Length + 1];
+            parts[0] = directory.FullName;
+            relativeParts.CopyTo(parts, 1);
+
+            var candidate = Path.Combine(parts);
+            if (File.Exists(candidate))
+                return File.ReadAllText(candidate);
+
+            directory = directory.Parent;
+        }
+
+        throw new FileNotFoundException(
+            "Could not locate workspace file.",
+            Path.Combine(relativeParts));
+    }
+}

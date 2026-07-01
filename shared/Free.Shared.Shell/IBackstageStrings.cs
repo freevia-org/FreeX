@@ -23,12 +23,41 @@ public interface IBackstageStrings
 }
 
 /// <summary>
+/// Backstage string adapter for app-owned resource catalogs.
+/// </summary>
+public sealed class ResourceBackstageStrings : IBackstageStrings
+{
+    private readonly Func<string, string> _get;
+    private readonly Func<string, object?[], string> _format;
+
+    public ResourceBackstageStrings(
+        Func<string, string> get,
+        Func<string, object?[], string>? format = null)
+    {
+        _get = get ?? throw new ArgumentNullException(nameof(get));
+        _format = format ?? FormatResolvedString;
+    }
+
+    public string Get(string key) => _get(key);
+
+    public string Format(string key, params object?[] args) =>
+        _format(key, args);
+
+    private string FormatResolvedString(string key, object?[] args) =>
+        args is { Length: > 0 }
+            ? string.Format(CultureInfo.CurrentCulture, _get(key), args)
+            : _get(key);
+}
+
+/// <summary>
 /// Neutral fallback used until an app installs its own <see cref="IBackstageStrings"/> via
 /// <see cref="BackstageStrings.Current"/>. Echoes the key (and appends arguments) so the
 /// shared backstage planners remain usable standalone without crashing on missing strings.
 /// </summary>
 public sealed class DefaultBackstageStrings : IBackstageStrings
 {
+    public static DefaultBackstageStrings Instance { get; } = new();
+
     public string Get(string key) => key;
 
     public string Format(string key, params object?[] args) =>
@@ -44,5 +73,5 @@ public sealed class DefaultBackstageStrings : IBackstageStrings
 /// </summary>
 public static class BackstageStrings
 {
-    public static IBackstageStrings Current { get; set; } = new DefaultBackstageStrings();
+    public static IBackstageStrings Current { get; set; } = DefaultBackstageStrings.Instance;
 }

@@ -9,6 +9,7 @@ using System.Windows.Media.Imaging;
 using Free.Shared.AppServices;
 using Free.Shared.Ribbon.Wpf;
 using Free.Shared.Shell;
+using Free.Shared.Shell.Wpf;
 using FreeW.App.Host;
 
 // FreeW.RibbonShot — renders the FreeW MainWindow offscreen to a PNG so the ribbon can be visually
@@ -43,7 +44,7 @@ static int Run(string outDir, string tabArg, double w, double h)
     try
     {
         AppProduct.Current = new AppProductIdentity("FreeW", "FREEW_DIAGNOSTICS", "FreeW");
-        ShellStrings.Current = new DefaultShellStrings();
+        ShellStrings.Current = DefaultShellStrings.Instance;
 
         // "dialog" mode: render a sample form using the shared DialogResources theme so the code-built
         // dialog look (flat buttons, accent primary, fields, groupbox) can be verified without standing up

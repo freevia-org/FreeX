@@ -4,7 +4,7 @@ using FreeX.Core.Model;
 
 namespace FreeX.App.Host.Tests;
 
-public sealed partial class AutoFilterDropdownPlannerTests
+public sealed partial class AutoFilterDropdownMenuPlannerHostResourceTests
 {
     [Fact]
     public void CreateMenuPlan_CollectsDistinctColumnFillAndFontColorsForFilterByColorMenu()
@@ -36,7 +36,7 @@ public sealed partial class AutoFilterDropdownPlannerTests
             new GridRange(new CellAddress(sid, 1, 1), new CellAddress(sid, 5, 1)),
             FilterColumnOffset: 0);
 
-        var menu = AutoFilterDropdownPlanner.CreateMenuPlan(workbook, sheet, plan);
+        var menu = CreateMenuPlan(workbook, sheet, plan);
 
         menu.Entries.Should().Contain(entry => entry.Kind == AutoFilterMenuEntryKind.FilterByColor);
         menu.Sections[1].Entries.Select(entry => entry.Kind).Should().Contain(AutoFilterMenuEntryKind.FilterByColor);
@@ -57,9 +57,9 @@ public sealed partial class AutoFilterDropdownPlannerTests
             new GridRange(new CellAddress(SheetId, 1, 1), new CellAddress(SheetId, 2, 1)),
             FilterColumnOffset: 0);
 
-        AutoFilterDropdownPlanner.CreateMenuPlan(sheet, plan)
+        CreateMenuPlan(sheet, plan)
             .ColorOptions.Should().BeEmpty();
-        AutoFilterDropdownPlanner.CreateMenuPlan(sheet, plan)
+        CreateMenuPlan(sheet, plan)
             .Entries.Should().NotContain(entry => entry.Kind == AutoFilterMenuEntryKind.FilterByColor);
     }
 
@@ -74,7 +74,7 @@ public sealed partial class AutoFilterDropdownPlannerTests
             new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 2, 1)),
             FilterColumnOffset: 0);
 
-        var menu = AutoFilterDropdownPlanner.CreateMenuPlan(workbook, sheet, plan);
+        var menu = CreateMenuPlan(workbook, sheet, plan);
 
         menu.ColorOptions.Should().BeEmpty();
         menu.Entries.Should().NotContain(entry => entry.Kind == AutoFilterMenuEntryKind.FilterByColor);

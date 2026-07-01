@@ -3,12 +3,10 @@ using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using FreeX.App.Services;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
-
-public sealed record ColorPickerSwatch(string Hex, CellColor Color);
-public sealed record ColorPickerThemeColumn(string Name, IReadOnlyList<ColorPickerSwatch> Shades);
 
 public partial class ColorPickerDialog : Window
 {
@@ -45,17 +43,17 @@ public partial class ColorPickerDialog : Window
 
     public bool AllowNoColor { get; }
 
-    public static IReadOnlyList<ColorPickerSwatch> BuildDefaultSwatches() =>
-        ColorPickerPalettePlanner.BuildDefaultSwatches();
+    public static IReadOnlyList<CellColorSwatch> BuildDefaultSwatches() =>
+        CellColorPalettePlanner.BuildDefaultSwatches();
 
-    public static IReadOnlyList<ColorPickerThemeColumn> BuildThemePalette() =>
-        ColorPickerPalettePlanner.BuildThemePalette();
+    public static IReadOnlyList<CellColorThemeColumn> BuildThemePalette() =>
+        CellColorPalettePlanner.BuildThemePalette();
 
-    public static IReadOnlyList<ColorPickerSwatch> BuildStandardSwatches() =>
-        ColorPickerPalettePlanner.BuildStandardSwatches();
+    public static IReadOnlyList<CellColorSwatch> BuildStandardSwatches() =>
+        CellColorPalettePlanner.BuildStandardSwatches();
 
-    public static IReadOnlyList<ColorPickerSwatch> BuildCustomSpectrumSwatches() =>
-        ColorPickerPalettePlanner.BuildCustomSpectrumSwatches();
+    public static IReadOnlyList<CellColorSwatch> BuildCustomSpectrumSwatches() =>
+        CellColorPalettePlanner.BuildCustomSpectrumSwatches();
 
     public static bool TryParseColorText(string text, out CellColor color)
     {
@@ -109,15 +107,14 @@ public partial class ColorPickerDialog : Window
             return;
 
         var factor = CustomLuminositySlider.Value / 100d;
-        SelectColor(ColorPickerPalettePlanner.ScaleColor(baseColor, factor), updateSpectrumBase: false);
+        SelectColor(CellColorPalettePlanner.ScaleColor(baseColor, factor), updateSpectrumBase: false);
     }
 
     private void OkButton_Click(object sender, RoutedEventArgs e)
     {
         if (!TryParseColorText(CustomColorTextBox.Text, out var color))
         {
-            DialogMessageHelper.ShowWarning(this, UiText.Get("ColorPicker_InvalidColorMessage"), Title);
-            FocusInvalidCustomColorInput();
+            ShowInvalidCustomColorWarning(UiText.Get("ColorPicker_InvalidColorMessage"), CustomColorTextBox);
             return;
         }
 
@@ -134,19 +131,8 @@ public partial class ColorPickerDialog : Window
 
     private void ShowInvalidCustomColorWarning(string message, TextBox target)
     {
-        DialogMessageHelper.ShowWarning(this, message, Title);
-        FocusInvalidCustomColorInput(target);
-    }
-
-    private void FocusInvalidCustomColorInput()
-    {
-        FocusInvalidCustomColorInput(CustomColorTextBox);
-    }
-
-    private void FocusInvalidCustomColorInput(TextBox target)
-    {
         ColorTabs.SelectedItem = CustomTab;
-        DialogFocus.FocusAndSelect(target);
+        DialogFocus.ShowWarningAndFocus(this, message, Title, target);
     }
 
     private void NoColorButton_Click(object sender, RoutedEventArgs e)
@@ -174,7 +160,7 @@ public partial class ColorPickerDialog : Window
             CustomSpectrumPanel.Children.Add(CreateSwatchButton(swatch, UiText.Get("ColorPicker_CustomSpectrumColorGroup")));
     }
 
-    private Button CreateSwatchButton(ColorPickerSwatch swatch, string? groupName = null)
+    private Button CreateSwatchButton(CellColorSwatch swatch, string? groupName = null)
     {
         var button = new Button
         {
@@ -197,7 +183,7 @@ public partial class ColorPickerDialog : Window
         return button;
     }
 
-    private static string CreateSwatchAutomationName(ColorPickerSwatch swatch, string? groupName) =>
+    private static string CreateSwatchAutomationName(CellColorSwatch swatch, string? groupName) =>
         groupName is null
             ? UiText.Format("ColorPicker_ColorSwatchAutomationName", swatch.Hex)
             : UiText.Format("ColorPicker_GroupSwatchAutomationName", groupName, swatch.Hex);
@@ -359,6 +345,6 @@ public partial class ColorPickerDialog : Window
 
     private static Brush GetReadableBrush(CellColor color)
     {
-        return ColorPickerPalettePlanner.NeedsDarkForeground(color) ? Brushes.Black : Brushes.White;
+        return CellColorPalettePlanner.NeedsDarkForeground(color) ? Brushes.Black : Brushes.White;
     }
 }

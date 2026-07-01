@@ -6,6 +6,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
+using FreeX.App.Presentation.SheetUI;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -26,7 +27,7 @@ public partial class MainWindow
         _currentSheetId = plan.CurrentSheetId;
         _sheetTabs.Clear();
         foreach (var tab in plan.Tabs)
-            _sheetTabs.Add(tab);
+            _sheetTabs.Add(MapSheetTabListEntry(tab));
         UpdateSheetTabNavigation();
         Dispatcher.BeginInvoke(() =>
         {
@@ -40,6 +41,15 @@ public partial class MainWindow
 
     private string GenerateUniqueSheetName()
         => SheetTabListPlanner.GenerateUniqueSheetName(_workbook);
+
+    private static SheetTabViewModel MapSheetTabListEntry(SheetTabListEntry entry) =>
+        new(entry.Id, entry.Name, entry.TabColor, entry.IsProtected)
+        {
+            IsActive = entry.IsActive,
+            IsGrouped = entry.IsGrouped,
+            IsLeftSideCoveredByActive = entry.IsLeftSideCoveredByActive,
+            IsRightSideCoveredByActive = entry.IsRightSideCoveredByActive
+        };
 
     private int FindWorkbookSheetIndex(SheetId sheetId)
     {
@@ -1437,7 +1447,7 @@ public partial class MainWindow
 
     private bool FocusAdjacentVisibleSheetTab(int direction)
     {
-        var nextSheetId = SheetTabFocusPlanner.AdjacentTab(_sheetTabs, _currentSheetId, direction);
+        var nextSheetId = SheetTabFocusPlanner.AdjacentTab(_sheetTabs, _currentSheetId, direction, static tab => tab.Id);
         if (nextSheetId is null)
             return false;
 
@@ -1447,7 +1457,7 @@ public partial class MainWindow
 
     private bool FocusEdgeVisibleSheetTab(bool first)
     {
-        var sheetId = SheetTabFocusPlanner.EdgeTab(_sheetTabs, first);
+        var sheetId = SheetTabFocusPlanner.EdgeTab(_sheetTabs, first, static tab => tab.Id);
         if (sheetId is null)
             return false;
 

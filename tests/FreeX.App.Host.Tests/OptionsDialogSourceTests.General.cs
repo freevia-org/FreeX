@@ -201,12 +201,7 @@ public sealed partial class OptionsDialogSourceTests
         source.Should().Contain("OptionsInputParser.TryParseDefaultSheetCount(OptSheetCount.Text, out var defaultSheetCount)");
         source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"Options_InvalidSheetCountMessage\"), OptSheetCount);");
         source.Should().Contain("private bool ShowInvalidInputWarning(string message, Control target)");
-        source.Should().Contain("DialogMessageHelper.ShowWarning(this, message, Title);");
-        source.Should().Contain("if (target is TextBox textBox)");
-        source.Should().Contain("textBox.SelectAll();");
-        source.Should().Contain("else if (target is ComboBox comboBox)");
-        source.Should().Contain("comboBox.Focus();");
-        source.Should().Contain("Keyboard.Focus(target);");
+        source.Should().Contain("DialogFocus.ShowWarningAndFocus(this, message, Title, target);");
         source.Should().NotContain("ParseDefaultFontSizeOrFallback");
         source.Should().NotContain("ParseDefaultSheetCountOrFallback");
     }

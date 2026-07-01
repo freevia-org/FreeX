@@ -10,6 +10,7 @@ using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Platform.Storage;
 
+using Free.Shared.Shell.Avalonia;
 using FreeX.App.Presentation.DrawingUI;
 using FreeX.App.Presentation.QuickAnalysis;
 using FreeX.App.Presentation.TableUI;
@@ -19,6 +20,20 @@ namespace FreeX.App.Avalonia;
 
 public sealed partial class MainWindow
 {
+    private static AvaloniaCompactDialogChromeStyle InsertObjectDialogChromeStyle => new(FormulaBarFontFamily);
+
+    private static void ApplyInsertObjectFixedButtonChrome(Button button, double width, bool isDefault = false)
+    {
+        button.Width = width;
+        AvaloniaCompactDialogChrome.ApplyButton(button, InsertObjectDialogChromeStyle, width, isDefault);
+    }
+
+    private static void ApplyInsertObjectTextBoxChrome(TextBox textBox)
+        => AvaloniaCompactDialogChrome.ApplyTextBox(textBox, InsertObjectDialogChromeStyle);
+
+    private static void ApplyInsertObjectCheckBoxChrome(CheckBox checkBox)
+        => AvaloniaCompactDialogChrome.ApplyCheckBox(checkBox, InsertObjectDialogChromeStyle);
+
     /// <summary>Builds the native Insert ▸ Shape submenu from the common-shapes catalog.</summary>
     private NativeMenu CreateNativeShapeMenu()
     {
@@ -45,11 +60,11 @@ public sealed partial class MainWindow
         return menu;
     }
 
-    private static readonly FilePickerFileType PictureFileType = new("Images")
-    {
-        Patterns = ["*.png", "*.jpg", "*.jpeg", "*.gif", "*.bmp", "*.webp", "*.tif", "*.tiff"],
-        MimeTypes = ["image/*"],
-    };
+    private static readonly FilePickerFileType PictureFileType =
+        AvaloniaFilePickerTypeAdapter.CreateFileType(
+            "Images",
+            ["*.png", "*.jpg", "*.jpeg", "*.gif", "*.bmp", "*.webp", "*.tif", "*.tiff"],
+            ["image/*"]);
 
     /// <summary>
     /// Inserts a picture chosen from a file onto the active sheet at the active cell, through the shared
@@ -69,19 +84,11 @@ public sealed partial class MainWindow
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
-        {
-            Title = UiText.Get("InsertLoc_InsertPictureTitle"),
-            AllowMultiple = false,
-            FileTypeFilter = [PictureFileType],
-        });
-
-        IStorageFile? file = null;
-        foreach (var candidate in files)
-        {
-            file = candidate;
-            break;
-        }
+        var file = await AvaloniaFilePickerService.PickSingleOpenFileAsync(
+            StorageProvider,
+            AvaloniaFilePickerOpenRequest.FromFileTypes(
+                UiText.Get("InsertLoc_InsertPictureTitle"),
+                [PictureFileType]));
 
         if (file is null)
             return;
@@ -134,7 +141,7 @@ public sealed partial class MainWindow
     /// overlay already renders. The shape is selectable and editable (move/resize/rotate) like other drawing
     /// objects. Surfaces the Core guard message on failure.
     /// </summary>
-    private void InsertShapeAtActiveCell(FreeX.Core.Model.DrawingShapeKind kind)
+    private void InsertShapeAtActiveCell(DrawingShapeKind kind)
     {
         if (!TryCommitPendingFormulaEdit())
             return;
@@ -149,7 +156,8 @@ public sealed partial class MainWindow
         }
 
         ClearSelectedDrawingObject();
-        RefreshShell(UiText.Format("InsertLoc_InsertedShapeAt", kind, FormatCellReference(anchor)));
+        RefreshShell(FormatDrawingObjectResourceText(
+            DrawingObjectActionPlanner.InsertShapeSuccess(kind, FormatCellReference(anchor))));
     }
 
     /// <summary>
@@ -173,7 +181,8 @@ public sealed partial class MainWindow
         }
 
         ClearSelectedDrawingObject();
-        RefreshShell(UiText.Format("InsertLoc_InsertedTextBoxAt", FormatCellReference(anchor)));
+        RefreshShell(FormatDrawingObjectResourceText(
+            DrawingObjectActionPlanner.InsertTextBoxSuccess(FormatCellReference(anchor))));
     }
 
     /// <summary>Decodes the image's native pixel size via Avalonia, or null when decoding fails.</summary>
@@ -240,15 +249,7 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(dialog, CreateTableDialogPlanner.DialogAutomationId);
 
         var rangeBox = new TextBox { Text = defaultRangeText, MinWidth = 248 };
-        rangeBox.Height = 24;
-        rangeBox.MinHeight = 24;
-        rangeBox.MaxHeight = 24;
-        rangeBox.Padding = new Thickness(4, 1);
-        rangeBox.FontSize = 12;
-        rangeBox.FontFamily = FormulaBarFontFamily;
-        rangeBox.BorderBrush = Brush(130, 130, 130);
-        rangeBox.BorderThickness = new Thickness(1);
-        rangeBox.VerticalContentAlignment = VerticalAlignment.Center;
+        ApplyInsertObjectTextBoxChrome(rangeBox);
         // Lighter selection highlight so the (auto-selected) range text stays readable in black —
         // Avalonia's default accent selection is too dark for black text (matches Windows' lighter selection).
         rangeBox.SelectionBrush = Brush(173, 214, 255);
@@ -259,18 +260,9 @@ public sealed partial class MainWindow
         var rangePicker = new Button
         {
             Content = "...",
-            Width = 28,
-            Height = 24,
-            MinHeight = 24,
-            MaxHeight = 24,
-            Padding = new Thickness(4, 1),
-            Background = Brushes.White,
-            BorderBrush = Brush(112, 112, 112),
-            BorderThickness = new Thickness(1),
-            FontSize = 12,
-            FontFamily = FormulaBarFontFamily,
             Margin = new Thickness(4, 0, 0, 0),
         };
+        ApplyInsertObjectFixedButtonChrome(rangePicker, 28);
         AutomationProperties.SetName(rangePicker, UiText.Get(CreateTableDialogPlanner.RangePickerAutomationNameKey));
         rangePicker.Click += (_, _) =>
         {
@@ -284,11 +276,8 @@ public sealed partial class MainWindow
             Content = StripDisplayMnemonic(UiText.Get(CreateTableDialogPlanner.HeadersCheckBoxKey)),
             IsChecked = true,
             Margin = new Thickness(0, 0, 0, 16),
-            MinHeight = 20,
-            MaxHeight = 20,
-            FontSize = 12,
-            FontFamily = FormulaBarFontFamily,
         };
+        ApplyInsertObjectCheckBoxChrome(headersBox);
         AutomationProperties.SetName(headersBox, UiText.Get(CreateTableDialogPlanner.HeadersAutomationNameKey));
         AutomationProperties.SetAutomationId(headersBox, CreateTableDialogPlanner.HeadersBoxAutomationId);
         AutomationProperties.SetHelpText(headersBox, UiText.Get(CreateTableDialogPlanner.HeadersAutomationHelpTextKey));
@@ -296,38 +285,15 @@ public sealed partial class MainWindow
         var okButton = new Button
         {
             Content = UiText.Get("Common_Ok"),
-            Width = CreateTableDialogPlanner.ButtonWidth,
-            Height = 24,
-            MinHeight = 24,
-            MaxHeight = 24,
-            Padding = new Thickness(4, 1),
-            Background = Brushes.White,
-            BorderBrush = Brush(0, 120, 215),
-            BorderThickness = new Thickness(1),
-            FontSize = 12,
-            FontFamily = FormulaBarFontFamily,
-            HorizontalContentAlignment = HorizontalAlignment.Center,
-            VerticalContentAlignment = VerticalAlignment.Center,
             IsDefault = true,
-            Margin = new Thickness(0, 0, 8, 0),
         };
+        ApplyInsertObjectFixedButtonChrome(okButton, CreateTableDialogPlanner.ButtonWidth, isDefault: true);
         var cancelButton = new Button
         {
             Content = UiText.Get("Common_Cancel"),
-            Width = CreateTableDialogPlanner.ButtonWidth,
-            Height = 24,
-            MinHeight = 24,
-            MaxHeight = 24,
-            Padding = new Thickness(4, 1),
-            Background = Brushes.White,
-            BorderBrush = Brush(112, 112, 112),
-            BorderThickness = new Thickness(1),
-            FontSize = 12,
-            FontFamily = FormulaBarFontFamily,
-            HorizontalContentAlignment = HorizontalAlignment.Center,
-            VerticalContentAlignment = VerticalAlignment.Center,
             IsCancel = true,
         };
+        ApplyInsertObjectFixedButtonChrome(cancelButton, CreateTableDialogPlanner.ButtonWidth);
         okButton.Click += (_, _) =>
         {
             if (!CreateTableDialogPlanner.TryParse(
@@ -349,12 +315,7 @@ public sealed partial class MainWindow
         };
         cancelButton.Click += (_, _) => dialog.Close();
 
-        var buttonRow = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Children = { okButton, cancelButton },
-        };
+        var buttonRow = AvaloniaCompactDialogChrome.CreateActionRow([okButton, cancelButton]);
 
         dialog.Content = new StackPanel
         {
@@ -388,10 +349,8 @@ public sealed partial class MainWindow
         return result;
     }
 
-    private static readonly FilePickerFileType AnyFileType = new("All Files")
-    {
-        Patterns = ["*.*"],
-    };
+    private static readonly FilePickerFileType AnyFileType =
+        AvaloniaFilePickerTypeAdapter.CreateFileType("All Files", ["*.*"]);
 
     /// <summary>
     /// Insert ▸ Object (create from file) — honest scope. The FreeX Core model has no editable embedded-OLE
@@ -434,17 +393,11 @@ public sealed partial class MainWindow
 
         browse.Click += async (_, _) =>
         {
-            var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
-            {
-                Title = UiText.Get("WfInsertObject_Title"),
-                AllowMultiple = false,
-                FileTypeFilter = [AnyFileType],
-            });
-            foreach (var candidate in files)
-            {
-                chosen = candidate;
-                break;
-            }
+            chosen = await AvaloniaFilePickerService.PickSingleOpenFileAsync(
+                StorageProvider,
+                AvaloniaFilePickerOpenRequest.FromFileTypes(
+                    UiText.Get("WfInsertObject_Title"),
+                    [AnyFileType]));
 
             if (chosen is not null)
             {

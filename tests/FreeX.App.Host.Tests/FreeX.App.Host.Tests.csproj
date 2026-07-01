@@ -18,10 +18,14 @@
 
   <ItemGroup>
     <Using Include="Xunit" />
+    <Using Include="Free.Shared.Drawing" />
     <Using Include="Free.Shared.Ribbon" />
     <Using Include="FreeX.Ribbon.Definitions" />
     <Using Include="FreeX.App.Services.Ribbon" />
+    <Using Include="FreeX.App.Presentation.FormulaBar" />
     <Using Include="FreeX.App.Presentation.TextToColumns" />
+    <Using Include="FreeX.App.Presentation.NamedRanges" />
+    <Using Include="FreeX.App.Presentation.Protection" />
   </ItemGroup>
 
   <ItemGroup>
@@ -30,6 +34,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\FreeX.App.Host\FreeX.App.Host.csproj" />
+    <ProjectReference Include="..\..\shared\Free.Shared.Drawing\Free.Shared.Drawing.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.Theme.Wpf\Free.Shared.Theme.Wpf.csproj" />
   </ItemGroup>
 
@@ -39,6 +44,8 @@
   </ItemGroup>
   <ItemGroup>
     <Using Include="Free.Shared.AppServices" />
+    <Using Include="FreeX.App.Services" />
+    <Using Include="FreeX.App.Presentation" />
   </ItemGroup>
   <ItemGroup>
     <Using Include="Free.Shared.Shell" />

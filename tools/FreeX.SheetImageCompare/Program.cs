@@ -13,6 +13,9 @@ using FreeX.App.Host;
 using FreeX.Core.Calc;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
+using FreeX.ToolsShared;
+using FreeX.ToolsShared.Wpf;
+using static FreeX.ToolsShared.Wpf.WpfImageDiff;
 
 /// <summary>
 /// FreeX Sheet Image Compare — renders each worksheet of an .xlsx to a PNG using
@@ -91,7 +94,7 @@ internal static class Program
                 continue;
             }
 
-            var safeName = SanitizeFileName(sheet.Name);
+            var safeName = ToolFileNameSanitizer.SanitizeSheetToken(sheet.Name);
             var outFileName = $"freex_{sheetIndex:D2}_{safeName}.png";
             var outPath = Path.Combine(freexOutputDir, outFileName);
 
@@ -279,7 +282,7 @@ internal static class Program
                 row.ExcelPng = excelPng;
                 try
                 {
-                    row.DiffPercent = ComputeMeanPixelDiff(excelPng, r.FreeXPngPath!);
+                    row.DiffPercent = ComputeMeanPixelDiff(excelPng, r.FreeXPngPath!, 800, 600);
                 }
                 catch (Exception ex)
                 {
@@ -309,7 +312,18 @@ internal static class Program
             var compositePath = Path.Combine(freexOutputDir, $"worst_{row.NN:D2}.png");
             try
             {
-                WriteSideBySide(row.ExcelPng!, row.FreeXPng, compositePath, row);
+                WpfSideBySidePng.Write(
+                    row.ExcelPng!,
+                    row.FreeXPng,
+                    compositePath,
+                    new WpfSideBySidePngOptions(
+                        700,
+                        500,
+                        10,
+                        30,
+                        $"NN={row.NN:D2}  {row.SheetName}  diff={row.DiffPercent:F1}%",
+                        "Excel (ground truth)",
+                        $"FreeX renderer  diff={row.DiffPercent:F1}%"));
                 Console.WriteLine($"  worst_{row.NN:D2}.png  diff={row.DiffPercent:F1}%  {row.SheetName}");
             }
             catch (Exception ex)
@@ -341,149 +355,8 @@ internal static class Program
     }
 
     // -----------------------------------------------------------------------
-    // Image utilities (adapted from FreeX.ChartFileCompare/Program.cs)
-    // -----------------------------------------------------------------------
-    private static BitmapSource LoadBitmap(string path)
-    {
-        using var stream = File.OpenRead(path);
-        var decoder = BitmapDecoder.Create(stream, BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnLoad);
-        var source = decoder.Frames[0];
-        return source.Format == PixelFormats.Bgra32
-            ? source
-            : new FormatConvertedBitmap(source, PixelFormats.Bgra32, null, 0);
-    }
-
-    private static double ComputeMeanPixelDiff(string excelPath, string freexPath)
-    {
-        const int W = 800, H = 600;
-
-        var excelBmp = ResizeTo(LoadBitmap(excelPath), W, H);
-        var freexBmp = File.Exists(freexPath)
-            ? ResizeTo(LoadBitmap(freexPath), W, H)
-            : CreateWhite(W, H);
-
-        var excelPixels = GetBgra32Pixels(excelBmp, W, H);
-        var freexPixels = GetBgra32Pixels(freexBmp, W, H);
-
-        long totalDiff = 0;
-        int pixelCount = W * H;
-        for (int i = 0; i < pixelCount; i++)
-        {
-            int offset = i * 4;
-            double ea = excelPixels[offset + 3] / 255.0;
-            double fa = freexPixels[offset + 3] / 255.0;
-
-            for (int c = 0; c < 3; c++)
-            {
-                double eVal = excelPixels[offset + c] * ea + 255 * (1 - ea);
-                double fVal = freexPixels[offset + c] * fa + 255 * (1 - fa);
-                totalDiff += (long)Math.Abs(eVal - fVal);
-            }
-        }
-
-        double maxDiff = (double)pixelCount * 3 * 255;
-        return totalDiff / maxDiff * 100.0;
-    }
-
-    private static BitmapSource ResizeTo(BitmapSource source, int w, int h)
-    {
-        var visual = new DrawingVisual();
-        using (var ctx = visual.RenderOpen())
-        {
-            ctx.DrawRectangle(Brushes.White, null, new Rect(0, 0, w, h));
-            double scale = Math.Min((double)w / source.PixelWidth, (double)h / source.PixelHeight);
-            double dw = source.PixelWidth * scale;
-            double dh = source.PixelHeight * scale;
-            var bounds = new Rect((w - dw) / 2, (h - dh) / 2, dw, dh);
-            ctx.DrawImage(source, bounds);
-        }
-        var rtb = new RenderTargetBitmap(w, h, 96, 96, PixelFormats.Pbgra32);
-        rtb.Render(visual);
-        return new FormatConvertedBitmap(rtb, PixelFormats.Bgra32, null, 0);
-    }
-
-    private static BitmapSource CreateWhite(int w, int h)
-    {
-        var visual = new DrawingVisual();
-        using (var ctx = visual.RenderOpen())
-            ctx.DrawRectangle(Brushes.White, null, new Rect(0, 0, w, h));
-        var rtb = new RenderTargetBitmap(w, h, 96, 96, PixelFormats.Pbgra32);
-        rtb.Render(visual);
-        return new FormatConvertedBitmap(rtb, PixelFormats.Bgra32, null, 0);
-    }
-
-    private static byte[] GetBgra32Pixels(BitmapSource bmp, int w, int h)
-    {
-        var pixels = new byte[w * h * 4];
-        bmp.CopyPixels(pixels, w * 4, 0);
-        return pixels;
-    }
-
-    private static void WriteSideBySide(string excelPath, string? freexPath, string outPath, DiffRow row)
-    {
-        const int ThumbW = 700, ThumbH = 500;
-        const int Padding = 10;
-        const int LabelH = 30;
-        int totalW = ThumbW * 2 + Padding * 3;
-        int totalH = ThumbH + Padding * 2 + LabelH * 2;
-
-        var excelBmp = File.Exists(excelPath) ? ResizeTo(LoadBitmap(excelPath), ThumbW, ThumbH) : CreateWhite(ThumbW, ThumbH);
-        var freexBmp = freexPath != null && File.Exists(freexPath) ? ResizeTo(LoadBitmap(freexPath), ThumbW, ThumbH) : CreateWhite(ThumbW, ThumbH);
-
-        var visual = new DrawingVisual();
-        using (var ctx = visual.RenderOpen())
-        {
-            ctx.DrawRectangle(new SolidColorBrush(Color.FromRgb(240, 240, 240)), null, new Rect(0, 0, totalW, totalH));
-
-            var headerText = $"NN={row.NN:D2}  {row.SheetName}  diff={row.DiffPercent:F1}%";
-            ctx.DrawText(MakeText(headerText, 13, Brushes.Black, FontWeights.SemiBold), new Point(Padding, 4));
-
-            int yImg = LabelH;
-            int xLeft = Padding;
-            int xRight = Padding * 2 + ThumbW;
-
-            ctx.DrawText(MakeText("Excel (ground truth)", 11, Brushes.DarkSlateGray, FontWeights.Normal), new Point(xLeft, yImg + ThumbH + 4));
-            ctx.DrawText(MakeText($"FreeX renderer  diff={row.DiffPercent:F1}%", 11, Brushes.DarkSlateGray, FontWeights.Normal), new Point(xRight, yImg + ThumbH + 4));
-
-            ctx.DrawImage(excelBmp, new Rect(xLeft, yImg, ThumbW, ThumbH));
-            ctx.DrawImage(freexBmp, new Rect(xRight, yImg, ThumbW, ThumbH));
-        }
-
-        var rtb = new RenderTargetBitmap(totalW, totalH, 96, 96, PixelFormats.Pbgra32);
-        rtb.Render(visual);
-        var encoder = new PngBitmapEncoder();
-        encoder.Frames.Add(BitmapFrame.Create(rtb));
-        using var stream = File.Create(outPath);
-        encoder.Save(stream);
-    }
-
-    private static FormattedText MakeText(string text, double size, Brush brush, FontWeight weight) =>
-        new FormattedText(
-            text,
-            CultureInfo.CurrentCulture,
-            FlowDirection.LeftToRight,
-            new Typeface(new FontFamily("Segoe UI"), FontStyles.Normal, weight, FontStretches.Normal),
-            size,
-            brush,
-            1.0);
-
-    // -----------------------------------------------------------------------
     // Helpers
     // -----------------------------------------------------------------------
-    private static string SanitizeFileName(string name)
-    {
-        var sb = new StringBuilder(name.Length);
-        foreach (var ch in name)
-        {
-            if (char.IsLetterOrDigit(ch) || ch == '-')
-                sb.Append(ch);
-            else if (ch == ' ' || ch == '_')
-                sb.Append('_');
-            // drop other chars
-        }
-        return sb.Length > 0 ? sb.ToString() : "sheet";
-    }
-
     private static string Trunc(string? s, int max)
     {
         s ??= "";

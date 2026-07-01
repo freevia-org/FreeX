@@ -2,10 +2,10 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
+using FreeX.App.Presentation.Dialogs;
 
 namespace FreeX.App.Host;
 
-public sealed record FunctionArgumentSpec(string Name, string Description, bool Optional = false);
 public sealed record FunctionArgumentRangeSelectionRequest(int ArgumentIndex, string CurrentText, bool CollapseDialog = true);
 
 public sealed partial class FunctionArgumentsDialog : Window
@@ -20,7 +20,7 @@ public sealed partial class FunctionArgumentsDialog : Window
     public FunctionArgumentRangeSelectionRequest? RangeSelectionRequest { get; private set; }
 
     public FunctionArgumentsDialog(
-        FreeX.App.Presentation.Dialogs.InsertFunctionCatalogEntry function,
+        InsertFunctionCatalogEntry function,
         Action<FunctionArgumentRangeSelectionRequest>? requestRangeSelection = null)
     {
         _functionName = function.Name.Trim().ToUpperInvariant();
@@ -72,23 +72,10 @@ public sealed partial class FunctionArgumentsDialog : Window
     }
 
     public static IReadOnlyList<FunctionArgumentSpec> GetArgumentSpecs(string functionName)
-    {
-        var normalized = functionName.Trim().ToUpperInvariant();
-        if (KnownArguments.TryGetValue(normalized, out var arguments))
-            return arguments;
+        => FunctionArgumentCatalog.GetArgumentSpecs(functionName);
 
-        return [new FunctionArgumentSpec("Number1", UiText.Get("FunctionArguments_DefaultArgumentDescription"))];
-    }
-
-    public static string CreateFormula(string functionName, IEnumerable<string?> arguments)
-    {
-        var normalized = functionName.Trim().ToUpperInvariant();
-        var cleaned = arguments.Select(argument => argument?.Trim() ?? "").ToList();
-        while (cleaned.Count > 0 && cleaned[^1].Length == 0)
-            cleaned.RemoveAt(cleaned.Count - 1);
-
-        return $"{normalized}({string.Join(", ", cleaned)})";
-    }
+    public static string CreateFormula(string functionName, IEnumerable<string?> arguments) =>
+        FunctionArgumentCatalog.BuildFormula(functionName, arguments);
 
     public static FunctionArgumentRangeSelectionRequest CreateRangeSelectionRequest(
         int argumentIndex,

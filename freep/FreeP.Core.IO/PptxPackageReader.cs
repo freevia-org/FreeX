@@ -1,10 +1,10 @@
 using System.Globalization;
 using System.IO.Compression;
-using System.Xml;
 using System.Xml.Linq;
 using Free.Shared.Drawing;
 using Free.Shared.Opc;
 using FreeP.Core.Model;
+using static Free.Shared.Opc.OpcPathHelper;
 
 namespace FreeP.Core.IO;
 
@@ -18,9 +18,7 @@ public static class PptxPackageReader
     private static readonly XNamespace P   = "http://schemas.openxmlformats.org/presentationml/2006/main";
     private static readonly XNamespace A   = PptxColorReader.A;
     private static readonly XNamespace R   = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-    private static readonly XNamespace Pkgr = "http://schemas.openxmlformats.org/package/2006/relationships";
-    private static readonly XNamespace Dc  = "http://purl.org/dc/elements/1.1/";
-    private static readonly XNamespace Cp  = "http://schemas.openxmlformats.org/package/2006/metadata/core-properties";
+    private static readonly XNamespace Adec = "http://schemas.microsoft.com/office/drawing/2017/decorative";
 
     // ── Relationship type constants ───────────────────────────────────────────────
     private const string OfficeDocRelType   = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument";
@@ -29,7 +27,7 @@ public static class PptxPackageReader
     private const string SlideLayoutRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout";
     private const string ThemeRelType       = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme";
     private const string ImageRelType       = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image";
-    private const string CorePropsRelType     = "http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties";
+    private const string CorePropsRelType     = OpcPackageProperties.CorePropertiesRelationshipType;
     private const string TableStylesRelType   = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/tableStyles";
     private const string ChartRelType         = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart";
     private const string NotesSlideRelType    = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesSlide";
@@ -67,7 +65,10 @@ public static class PptxPackageReader
         ms.Position = 0;
 
         using var archive = new ZipArchive(ms, ZipArchiveMode.Read, leaveOpen: false);
-        return ReadArchive(archive);
+        var snapshot = CapturePackageSnapshot(archive);
+        var presentation = ReadArchive(archive);
+        presentation.PackageSnapshot = snapshot;
+        return presentation;
     }
 
     // ── Core archive reading ──────────────────────────────────────────────────────
@@ -77,24 +78,27 @@ public static class PptxPackageReader
         var presentation = new Presentation();
 
         // Parse root rels to find presentation.xml path
-        var rootRels = LoadRels(archive, "_rels/.rels");
-        var presPath = GetRelTarget(rootRels, OfficeDocRelType);
+        var rootRels = OpcRelationships.LoadTargets(archive, "_rels/.rels");
+        var presPath = OpcRelationships.FirstTargetByType(rootRels, OfficeDocRelType);
         if (presPath is null) return presentation;
 
         // Normalize path (remove leading /)
-        presPath = NormalizePath(presPath);
+        presPath = ToZipEntryPath(presPath);
 
         // Core properties
-        var corePropsPath = GetRelTarget(rootRels, CorePropsRelType);
+        var corePropsPath = OpcRelationships.FirstTargetByType(rootRels, CorePropsRelType);
         if (corePropsPath is not null)
-            ReadCoreProperties(archive, NormalizePath(corePropsPath), presentation.Properties);
+            OpcDocumentProperties.ReadCoreProperties(
+                archive,
+                presentation.Properties,
+                ToZipEntryPath(corePropsPath));
 
         // Parse presentation.xml
-        var presXml = LoadXml(archive, presPath);
+        var presXml = OpcXml.TryLoadXml(archive, presPath);
         if (presXml?.Root is null) return presentation;
 
         var presRoot = presXml.Root;
-        var presDir = GetDirectory(presPath);
+        var presDir = GetDirectoryName(presPath);
 
         // Slide size
         var sldSz = presRoot.Element(P + "sldSz");
@@ -107,23 +111,23 @@ public static class PptxPackageReader
         }
 
         // Rels for presentation.xml
-        var presRels = LoadRels(archive, GetRelsPath(presPath));
+        var presRels = OpcRelationships.LoadTargets(archive, GetRelationshipPartPath(presPath));
 
         // Table styles (keyed by style GUID)
         var tableStyles = new Dictionary<string, TableStyleData>(StringComparer.OrdinalIgnoreCase);
-        var tableStylesTarget = GetRelTarget(presRels, TableStylesRelType);
+        var tableStylesTarget = OpcRelationships.FirstTargetByType(presRels, TableStylesRelType);
         if (tableStylesTarget is not null)
         {
-            var tableStylesPath = ResolvePath(presDir, tableStylesTarget);
+            var tableStylesPath = ResolveRelativeZipPath(presDir, tableStylesTarget);
             ReadTableStyles(archive, tableStylesPath, presentation.Theme.ColorScheme, tableStyles);
         }
 
         // Slide masters → layouts
-        var masterRelEntries = presRels.Where(r => r.type == SlideMasterRelType).ToList();
+        var masterRelEntries = presRels.Where(r => r.Type == SlideMasterRelType).ToList();
         bool firstMaster = true;
         foreach (var (masterId, _, masterTarget) in masterRelEntries)
         {
-            var masterPath = ResolvePath(presDir, masterTarget);
+            var masterPath = ResolveRelativeZipPath(presDir, masterTarget);
             var (master, theme) = ReadSlideMaster(archive, masterPath, masterId);
             // MM4: assign the theme to its OWNING master instead of clobbering presentation.Theme.
             // presentation.Theme stays as the first master's theme for backward-compatibility with
@@ -137,14 +141,14 @@ public static class PptxPackageReader
             firstMaster = false;
             presentation.Masters.Add(master);
 
-            var masterDir = GetDirectory(masterPath);
-            var masterRels = LoadRels(archive, GetRelsPath(masterPath));
+            var masterDir = GetDirectoryName(masterPath);
+            var masterRels = OpcRelationships.LoadTargets(archive, GetRelationshipPartPath(masterPath));
 
             // Use this master's own theme (or fall back to presentation.Theme) for layout parsing.
             var masterColorScheme = (master.Theme ?? presentation.Theme).ColorScheme;
-            foreach (var (layoutId, _, layoutTarget) in masterRels.Where(r => r.type == SlideLayoutRelType))
+            foreach (var (layoutId, _, layoutTarget) in masterRels.Where(r => r.Type == SlideLayoutRelType))
             {
-                var layoutPath = ResolvePath(masterDir, layoutTarget);
+                var layoutPath = ResolveRelativeZipPath(masterDir, layoutTarget);
                 var layout = ReadSlideLayout(archive, layoutPath, layoutId, master.Id, masterColorScheme);
                 presentation.Layouts.Add(layout);
             }
@@ -153,7 +157,7 @@ public static class PptxPackageReader
         // Slides in order from sldIdLst — two-phase so internal hyperlinks can resolve to Slide.Id.
         // Phase 1: collect ordered (rId, slidePath) pairs and create placeholder Slide objects so we
         //           have a complete allSlides list before parsing shapes.
-        var slideRelEntries = presRels.ToDictionary(r => r.id, StringComparer.OrdinalIgnoreCase);
+        var slideRelEntries = presRels.ToDictionary(r => r.Id, StringComparer.OrdinalIgnoreCase);
         var sldIdList = presRoot.Element(P + "sldIdLst")?.Elements(P + "sldId").ToList() ?? new();
 
         // Build ordered list of (rId, slidePath) for all valid slide entries.
@@ -163,8 +167,8 @@ public static class PptxPackageReader
             var rId = sldIdEl.Attribute(R + "id")?.Value;
             if (string.IsNullOrWhiteSpace(rId) || !slideRelEntries.TryGetValue(rId, out var slideRel))
                 continue;
-            if (slideRel.type != SlideRelType) continue;
-            slideInfos.Add((rId, ResolvePath(presDir, slideRel.target)));
+            if (slideRel.Type != SlideRelType) continue;
+            slideInfos.Add((rId, ResolveRelativeZipPath(presDir, slideRel.Target)));
         }
 
         // Create placeholder slides (with Id set) for the allSlides reference list.
@@ -204,11 +208,11 @@ public static class PptxPackageReader
         ReadSections(presRoot, sldIdToRId, presentation);
 
         // Comment authors live in a single ppt/commentAuthors.xml part referenced from presRels.
-        var cmAuthorsTarget = GetRelTarget(presRels, CommentAuthorsRelType);
+        var cmAuthorsTarget = OpcRelationships.FirstTargetByType(presRels, CommentAuthorsRelType);
         var authorMap = new Dictionary<int, (string name, string initials)>();
         if (cmAuthorsTarget is not null)
         {
-            var cmAuthorsPath = ResolvePath(presDir, cmAuthorsTarget);
+            var cmAuthorsPath = ResolveRelativeZipPath(presDir, cmAuthorsTarget);
             authorMap = ReadCommentAuthors(archive, cmAuthorsPath);
         }
 
@@ -220,29 +224,39 @@ public static class PptxPackageReader
             var rId = sldIdList.Count > si ? sldIdList[si].Attribute(R + "id")?.Value : null;
             if (rId is null) continue;
             if (!slideRelEntries.TryGetValue(rId, out var sr)) continue;
-            var slidePath2 = ResolvePath(presDir, sr.target);
-            var slideRels2 = LoadRels(archive, GetRelsPath(slidePath2));
-            var cmTarget = GetRelTarget(slideRels2, CommentsRelType);
+            var slidePath2 = ResolveRelativeZipPath(presDir, sr.Target);
+            var slideRels2 = OpcRelationships.LoadTargets(archive, GetRelationshipPartPath(slidePath2));
+            var cmTarget = OpcRelationships.FirstTargetByType(slideRels2, CommentsRelType);
             if (cmTarget is null) continue;
-            var cmPath = ResolvePath(GetDirectory(slidePath2), cmTarget);
+            var cmPath = ResolveRelativeZipPath(GetDirectoryName(slidePath2), cmTarget);
             ReadSlideComments(archive, cmPath, authorMap, slide.Comments);
         }
 
         return presentation;
     }
 
-    // ── Core properties ──────────────────────────────────────────────────────────
-
-    private static void ReadCoreProperties(ZipArchive archive, string path, PresentationProperties props)
+    private static PptxPackageSnapshot CapturePackageSnapshot(ZipArchive archive)
     {
-        var xml = LoadXml(archive, path);
-        if (xml?.Root is null) return;
+        var entries = new List<KeyValuePair<string, byte[]>>();
+        foreach (var entry in archive.Entries)
+        {
+            if (string.IsNullOrWhiteSpace(entry.FullName) || entry.FullName.EndsWith('/'))
+                continue;
 
-        props.Title = xml.Root.Element(Dc + "title")?.Value;
-        props.Author = xml.Root.Element(Dc + "creator")?.Value;
-        props.Subject = xml.Root.Element(Dc + "subject")?.Value;
-        props.Keywords = xml.Root.Element(Cp + "keywords")?.Value;
-        props.Comments = xml.Root.Element(Dc + "description")?.Value;
+            try
+            {
+                using var source = entry.Open();
+                using var ms = new MemoryStream();
+                source.CopyTo(ms);
+                entries.Add(new KeyValuePair<string, byte[]>(entry.FullName, ms.ToArray()));
+            }
+            catch
+            {
+                // Preserve-bag capture should not prevent semantic import.
+            }
+        }
+
+        return new PptxPackageSnapshot(entries);
     }
 
     // ── Sections ─────────────────────────────────────────────────────────────────
@@ -307,7 +321,7 @@ public static class PptxPackageReader
         ZipArchive archive, string path)
     {
         var result = new Dictionary<int, (string name, string initials)>();
-        var xml = LoadXml(archive, path);
+        var xml = OpcXml.TryLoadXml(archive, path);
         if (xml?.Root is null) return result;
 
         foreach (var cmAuthorEl in xml.Root.Elements(P + "cmAuthor"))
@@ -334,7 +348,7 @@ public static class PptxPackageReader
         Dictionary<int, (string name, string initials)> authorMap,
         List<SlideComment> comments)
     {
-        var xml = LoadXml(archive, path);
+        var xml = OpcXml.TryLoadXml(archive, path);
         if (xml?.Root is null) return;
 
         foreach (var cmEl in xml.Root.Elements(P + "cm"))
@@ -377,13 +391,13 @@ public static class PptxPackageReader
 
     private static PresentationTheme? ReadTheme(ZipArchive archive, string masterPath)
     {
-        var masterDir = GetDirectory(masterPath);
-        var masterRels = LoadRels(archive, GetRelsPath(masterPath));
-        var themeTarget = GetRelTarget(masterRels, ThemeRelType);
+        var masterDir = GetDirectoryName(masterPath);
+        var masterRels = OpcRelationships.LoadTargets(archive, GetRelationshipPartPath(masterPath));
+        var themeTarget = OpcRelationships.FirstTargetByType(masterRels, ThemeRelType);
         if (themeTarget is null) return null;
 
-        var themePath = ResolvePath(masterDir, themeTarget);
-        var xml = LoadXml(archive, themePath);
+        var themePath = ResolveRelativeZipPath(masterDir, themeTarget);
+        var xml = OpcXml.TryLoadXml(archive, themePath);
         if (xml?.Root is null) return null;
 
         var theme = new PresentationTheme
@@ -443,7 +457,7 @@ public static class PptxPackageReader
         var master = new SlideMaster { Id = masterId };
         var theme = ReadTheme(archive, masterPath);
 
-        var xml = LoadXml(archive, masterPath);
+        var xml = OpcXml.TryLoadXml(archive, masterPath);
         if (xml?.Root is null) return (master, theme);
 
         var scheme = theme?.ColorScheme ?? PresentationColorScheme.CreateDefault();
@@ -579,7 +593,7 @@ public static class PptxPackageReader
     {
         var layout = new SlideLayout { Id = layoutId, MasterId = masterId, PartPath = layoutPath };
 
-        var xml = LoadXml(archive, layoutPath);
+        var xml = OpcXml.TryLoadXml(archive, layoutPath);
         if (xml?.Root is null) return layout;
 
         layout.Name = xml.Root.Element(P + "cSld")?.Attribute("name")?.Value ?? string.Empty;
@@ -609,15 +623,15 @@ public static class PptxPackageReader
     {
         var slide = new Slide { Id = slideId };
 
-        var xml = LoadXml(archive, slidePath);
+        var xml = OpcXml.TryLoadXml(archive, slidePath);
         if (xml?.Root is null) return slide;
 
         // Layout via rels
-        var slideRels = LoadRels(archive, GetRelsPath(slidePath));
-        var layoutTarget = GetRelTarget(slideRels, SlideLayoutRelType);
+        var slideRels = OpcRelationships.LoadTargets(archive, GetRelationshipPartPath(slidePath));
+        var layoutTarget = OpcRelationships.FirstTargetByType(slideRels, SlideLayoutRelType);
         if (layoutTarget is not null)
         {
-            var layoutPath = ResolvePath(GetDirectory(slidePath), layoutTarget);
+            var layoutPath = ResolveRelativeZipPath(GetDirectoryName(slidePath), layoutTarget);
             // Match with our loaded layouts by exact normalized path (PartPath).
             slide.LayoutId = MatchLayoutIdByPath(layoutPath, layouts);
         }
@@ -625,7 +639,7 @@ public static class PptxPackageReader
         var bg = xml.Root.Element(P + "cSld")?.Element(P + "bg");
         if (bg is not null) slide.Background = ReadBackground(bg, scheme);
 
-        var slideDir = GetDirectory(slidePath);
+        var slideDir = GetDirectoryName(slidePath);
         var spTree = xml.Root.Element(P + "cSld")?.Element(P + "spTree");
         if (spTree is not null)
         {
@@ -644,10 +658,10 @@ public static class PptxPackageReader
             ReadAnimations(timingEl, slide);
 
         // Speaker notes — follow notesSlide relationship if present
-        var notesTarget = GetRelTarget(slideRels, NotesSlideRelType);
+        var notesTarget = OpcRelationships.FirstTargetByType(slideRels, NotesSlideRelType);
         if (notesTarget is not null)
         {
-            var notesPath = ResolvePath(GetDirectory(slidePath), notesTarget);
+            var notesPath = ResolveRelativeZipPath(GetDirectoryName(slidePath), notesTarget);
             slide.Notes = ReadNotesSlide(archive, notesPath, scheme);
         }
 
@@ -695,7 +709,7 @@ public static class PptxPackageReader
     /// </summary>
     private static TextBody? ReadNotesSlide(ZipArchive archive, string notesPath, PresentationColorScheme scheme)
     {
-        var xml = LoadXml(archive, notesPath);
+        var xml = OpcXml.TryLoadXml(archive, notesPath);
         if (xml?.Root is null) return null;
 
         // p:notes/p:cSld/p:spTree contains shape elements.
@@ -755,7 +769,7 @@ public static class PptxPackageReader
     private static IEnumerable<SlideShape> ReadShapesFromTree(
         XElement spTree, ZipArchive archive, string partPath, PresentationColorScheme scheme,
         Dictionary<string, TableStyleData>? tableStyles = null,
-        List<(string id, string type, string target)>? slideRels = null,
+        IReadOnlyList<OpcRelationshipTarget>? slideRels = null,
         List<Slide>? allSlides = null,
         string? slideDir = null,
         IReadOnlyDictionary<string, string>? slidePartPathToId = null)
@@ -821,7 +835,7 @@ public static class PptxPackageReader
     /// </param>
     private static Hyperlink? ResolveHlinkClick(
         XElement hlinkEl,
-        List<(string id, string type, string target)>? slideRels,
+        IReadOnlyList<OpcRelationshipTarget>? slideRels,
         List<Slide>? allSlides,
         string? slideDir = null,
         IReadOnlyDictionary<string, string>? slidePartPathToId = null)
@@ -838,16 +852,16 @@ public static class PptxPackageReader
 
         if (!string.IsNullOrEmpty(rId))
         {
-            var rel = slideRels.FirstOrDefault(r => r.id == rId);
+            var rel = slideRels.FirstOrDefault(r => r.Id == rId);
             if (rel == default) return null;
 
-            if (rel.type == HyperlinkRelType)
+            if (rel.Type == HyperlinkRelType)
             {
                 // External hyperlink
-                return new Hyperlink { Url = rel.target, Tooltip = tooltip };
+                return new Hyperlink { Url = rel.Target, Tooltip = tooltip };
             }
 
-            if (rel.type == SlideRelType || rel.type == SlideHlinkRelType || isSlideJumpAction)
+            if (rel.Type == SlideRelType || rel.Type == SlideHlinkRelType || isSlideJumpAction)
             {
                 // Internal slide jump: target is a relative path like "../slides/slide3.xml".
                 // Resolve by part path → Slide.Id rather than filename digit, so decks where the
@@ -856,7 +870,7 @@ public static class PptxPackageReader
                 {
                     // Resolve the relative target against the slide's directory to get an absolute
                     // OPC part path, then look it up in the part-path→rId map.
-                    var absTarget = ResolvePath(slideDir, rel.target);
+                    var absTarget = ResolveRelativeZipPath(slideDir, rel.Target);
                     if (slidePartPathToId.TryGetValue(absTarget, out var slideId))
                         return new Hyperlink { TargetSlideId = slideId, Tooltip = tooltip };
                     // absTarget didn't match — fall through to filename-digit fallback below.
@@ -867,7 +881,7 @@ public static class PptxPackageReader
                     // Fallback (no map available or path not found): derive slide index from the
                     // numeric suffix of the filename. This is order-sensitive and wrong for reordered
                     // decks, but preserves the pre-fix behaviour when the map is absent.
-                    var targetSeg = rel.target.Split('/').Last(); // e.g. "slide2.xml"
+                    var targetSeg = rel.Target.Split('/').Last(); // e.g. "slide2.xml"
                     var numStr = System.Text.RegularExpressions.Regex
                         .Match(targetSeg, @"\d+").Value;
                     if (int.TryParse(numStr, out var num) && num >= 1 && num <= allSlides.Count)
@@ -877,7 +891,7 @@ public static class PptxPackageReader
                     }
                 }
                 // Last resort: store the target path as the id (round-trip acceptable).
-                return new Hyperlink { TargetSlideId = rel.target, Tooltip = tooltip };
+                return new Hyperlink { TargetSlideId = rel.Target, Tooltip = tooltip };
             }
         }
         else if (isSlideJumpAction)
@@ -984,6 +998,9 @@ public static class PptxPackageReader
             {
                 Id = ParseUint(cNvPr?.Attribute("id")?.Value),
                 Name = cNvPr?.Attribute("name")?.Value ?? string.Empty,
+                AlternativeTextTitle = ReadAlternativeTextTitle(cNvPr),
+                AlternativeText = ReadAlternativeText(cNvPr),
+                IsDecorative = ReadDecorative(cNvPr),
                 Kind = SlideShapeKind.Table,
                 OffsetXEmu = offX,
                 OffsetYEmu = offY,
@@ -1000,12 +1017,12 @@ public static class PptxPackageReader
             if (string.IsNullOrWhiteSpace(chartRelId)) return null;
 
             // Resolve the chart part path via the slide's rels
-            var partRels = LoadRels(archive, GetRelsPath(partPath));
+            var partRels = OpcRelationships.LoadTargets(archive, GetRelationshipPartPath(partPath));
             var chartTarget = partRels
-                .FirstOrDefault(r => r.id == chartRelId && r.type == ChartRelType).target;
+                .FirstOrDefault(r => r.Id == chartRelId && r.Type == ChartRelType).Target;
             if (string.IsNullOrWhiteSpace(chartTarget)) return null;
 
-            var chartPath = ResolvePath(GetDirectory(partPath), chartTarget);
+            var chartPath = ResolveRelativeZipPath(GetDirectoryName(partPath), chartTarget);
             var chartShape = PptxChartReader.ReadChartPart(archive, chartPath, scheme);
             if (chartShape is null) return null;
 
@@ -1013,6 +1030,9 @@ public static class PptxPackageReader
             {
                 Id = ParseUint(cNvPr?.Attribute("id")?.Value),
                 Name = cNvPr?.Attribute("name")?.Value ?? string.Empty,
+                AlternativeTextTitle = ReadAlternativeTextTitle(cNvPr),
+                AlternativeText = ReadAlternativeText(cNvPr),
+                IsDecorative = ReadDecorative(cNvPr),
                 Kind = SlideShapeKind.Chart,
                 OffsetXEmu = offX,
                 OffsetYEmu = offY,
@@ -1030,6 +1050,9 @@ public static class PptxPackageReader
             {
                 Id = ParseUint(cNvPr?.Attribute("id")?.Value),
                 Name = cNvPr?.Attribute("name")?.Value ?? string.Empty,
+                AlternativeTextTitle = ReadAlternativeTextTitle(cNvPr),
+                AlternativeText = ReadAlternativeText(cNvPr),
+                IsDecorative = ReadDecorative(cNvPr),
                 Kind = SlideShapeKind.SmartArt,
                 OffsetXEmu = offX,
                 OffsetYEmu = offY,
@@ -1054,6 +1077,9 @@ public static class PptxPackageReader
                 {
                     oleShape.Id = ParseUint(cNvPr?.Attribute("id")?.Value);
                     oleShape.Name = cNvPr?.Attribute("name")?.Value ?? string.Empty;
+                    oleShape.AlternativeTextTitle = ReadAlternativeTextTitle(cNvPr);
+                    oleShape.AlternativeText = ReadAlternativeText(cNvPr);
+                    oleShape.IsDecorative = ReadDecorative(cNvPr);
                     oleShape.OffsetXEmu = offX;
                     oleShape.OffsetYEmu = offY;
                     oleShape.ExtentCxEmu = extCx;
@@ -1130,7 +1156,7 @@ public static class PptxPackageReader
         };
 
         // Capture all referenced parts via the slide's rels
-        var slideRels2 = LoadRels(archive, GetRelsPath(partPath));
+        var slideRels2 = OpcRelationships.LoadTargets(archive, GetRelationshipPartPath(partPath));
         CaptureReferencedParts(gfEl, slideRels2, archive, partPath, info);
 
         // Extract fallback preview image if present (a:blip or p:pic inside graphicData or nearby)
@@ -1140,6 +1166,9 @@ public static class PptxPackageReader
         {
             Id              = ParseUint(cNvPr?.Attribute("id")?.Value),
             Name            = cNvPr?.Attribute("name")?.Value ?? string.Empty,
+            AlternativeTextTitle = ReadAlternativeTextTitle(cNvPr),
+            AlternativeText = ReadAlternativeText(cNvPr),
+            IsDecorative    = ReadDecorative(cNvPr),
             Kind            = slideShapeKind,
             OffsetXEmu      = offX,
             OffsetYEmu      = offY,
@@ -1172,7 +1201,7 @@ public static class PptxPackageReader
         long extCx = ParseLong(xfrmEl?.Element(A + "ext")?.Attribute("cx")?.Value);
         long extCy = ParseLong(xfrmEl?.Element(A + "ext")?.Attribute("cy")?.Value);
 
-        var slideRels2 = LoadRels(archive, GetRelsPath(partPath));
+        var slideRels2 = OpcRelationships.LoadTargets(archive, GetRelationshipPartPath(partPath));
 
         // EA3: capture original mc:Choice Requires token for round-trip fidelity.
         bool wasAc = originalEl != contentPartEl;
@@ -1198,11 +1227,11 @@ public static class PptxPackageReader
         var rId = contentPartEl.Attribute(R + "id")?.Value;
         if (!string.IsNullOrEmpty(rId))
         {
-            var rel = slideRels2.FirstOrDefault(r => r.id == rId);
+            var rel = slideRels2.FirstOrDefault(r => r.Id == rId);
             if (rel != default)
             {
-                var inkPath = ResolvePath(GetDirectory(partPath), rel.target);
-                info.SlideRels[rId] = (rel.type, inkPath);
+                var inkPath = ResolveRelativeZipPath(GetDirectoryName(partPath), rel.Target);
+                info.SlideRels[rId] = (rel.Type, inkPath);
                 CapturePartBytes(inkPath, archive, info);
             }
         }
@@ -1219,10 +1248,10 @@ public static class PptxPackageReader
                 var imgRelId = blipEl?.Attribute(R + "embed")?.Value;
                 if (!string.IsNullOrEmpty(imgRelId))
                 {
-                    var imgRel = slideRels2.FirstOrDefault(r => r.id == imgRelId);
+                    var imgRel = slideRels2.FirstOrDefault(r => r.Id == imgRelId);
                     if (imgRel != default)
                     {
-                        var imgPath = ResolvePath(GetDirectory(partPath), imgRel.target);
+                        var imgPath = ResolveRelativeZipPath(GetDirectoryName(partPath), imgRel.Target);
                         var imgBytes = ReadEntryBytes(archive, imgPath);
                         if (imgBytes is not null)
                         {
@@ -1241,6 +1270,9 @@ public static class PptxPackageReader
         {
             Id              = ParseUint(cNvPr?.Attribute("id")?.Value),
             Name            = cNvPr?.Attribute("name")?.Value ?? string.Empty,
+            AlternativeTextTitle = ReadAlternativeTextTitle(cNvPr),
+            AlternativeText = ReadAlternativeText(cNvPr),
+            IsDecorative    = ReadDecorative(cNvPr),
             Kind            = SlideShapeKind.Ink,
             OffsetXEmu      = offX,
             OffsetYEmu      = offY,
@@ -1257,7 +1289,7 @@ public static class PptxPackageReader
     /// </summary>
     private static void CaptureReferencedParts(
         XElement el,
-        List<(string id, string type, string target)> slideRels2,
+        IReadOnlyList<OpcRelationshipTarget> slideRels2,
         ZipArchive archive, string partPath,
         PreservedObjectInfo info)
     {
@@ -1268,11 +1300,11 @@ public static class PptxPackageReader
                                 .ToList())
         {
             var rId = attr.Value;
-            var rel = slideRels2.FirstOrDefault(r => r.id == rId);
+            var rel = slideRels2.FirstOrDefault(r => r.Id == rId);
             if (rel == default) continue;
-            var targetPath = ResolvePath(GetDirectory(partPath), rel.target);
+            var targetPath = ResolveRelativeZipPath(GetDirectoryName(partPath), rel.Target);
             if (info.SlideRels.ContainsKey(rId)) continue;
-            info.SlideRels[rId] = (rel.type, targetPath);
+            info.SlideRels[rId] = (rel.Type, targetPath);
             CapturePartBytes(targetPath, archive, info);
         }
     }
@@ -1286,7 +1318,7 @@ public static class PptxPackageReader
         info.PartContentTypes[partPath2] = GuessPreservedContentType(partPath2);
 
         // Capture rels file for this part if it exists
-        var relsPath2 = GetRelsPath(partPath2);
+        var relsPath2 = GetRelationshipPartPath(partPath2);
         if (!info.PartRels.ContainsKey(partPath2))
         {
             var relsBytes = ReadEntryBytes(archive, relsPath2);
@@ -1297,7 +1329,7 @@ public static class PptxPackageReader
 
     private static ImagePart? ExtractPreservedFallbackImage(
         XElement gfEl, XElement graphicData,
-        List<(string id, string type, string target)> slideRels2,
+        IReadOnlyList<OpcRelationshipTarget> slideRels2,
         ZipArchive archive, string partPath)
     {
         // Look for an a:blip with r:embed inside the graphicData (common for 3D model preview)
@@ -1311,10 +1343,10 @@ public static class PptxPackageReader
         }
         if (string.IsNullOrEmpty(imgRelId)) return null;
 
-        var imgRel = slideRels2.FirstOrDefault(r => r.id == imgRelId);
+        var imgRel = slideRels2.FirstOrDefault(r => r.Id == imgRelId);
         if (imgRel == default) return null;
 
-        var imgPath = ResolvePath(GetDirectory(partPath), imgRel.target);
+        var imgPath = ResolveRelativeZipPath(GetDirectoryName(partPath), imgRel.Target);
         var imgBytes = ReadEntryBytes(archive, imgPath);
         if (imgBytes is null) return null;
 
@@ -1328,14 +1360,14 @@ public static class PptxPackageReader
     private static string GuessPreservedContentType(string path)
     {
         var ext = path.Contains('.') ? path[(path.LastIndexOf('.') + 1)..].ToLowerInvariant() : "";
+        if (ext is "png" or "jpg" or "jpeg" or "gif" or "svg" or "wmf" or "emf" &&
+            OpcMediaTypes.TryGetDefaultContentType(ext, out var contentType))
+        {
+            return contentType;
+        }
+
         return ext switch
         {
-            "png"  => "image/png",
-            "jpg" or "jpeg" => "image/jpeg",
-            "gif"  => "image/gif",
-            "svg"  => "image/svg+xml",
-            "wmf"  => "image/x-wmf",
-            "emf"  => "image/x-emf",
             "glb" or "gltf" => "model/gltf-binary",
             "xml"  => "application/xml",
             _      => "application/octet-stream",
@@ -1365,8 +1397,8 @@ public static class PptxPackageReader
         if (csRelId is not null) smart.DiagramRelIds["cs"] = csRelId;
 
         // Resolve each rel id -> part path via slide rels.
-        var slideRels = LoadRels(archive, GetRelsPath(partPath));
-        var slideDir  = GetDirectory(partPath);
+        var slideRels = OpcRelationships.LoadTargets(archive, GetRelationshipPartPath(partPath));
+        var slideDir  = GetDirectoryName(partPath);
 
         var relTypeForKey = new Dictionary<string, string>
         {
@@ -1391,10 +1423,10 @@ public static class PptxPackageReader
             if (!relTypeForKey.TryGetValue(key, out var relType)) continue;
 
             // Find target by relId (type not always set correctly — match by id first)
-            var target = slideRels.FirstOrDefault(r => r.id == relId).target;
+            var target = slideRels.FirstOrDefault(r => r.Id == relId).Target;
             if (string.IsNullOrWhiteSpace(target)) continue;
 
-            var absPath = ResolvePath(slideDir, target);
+            var absPath = ResolveRelativeZipPath(slideDir, target);
             var bytes = ReadEntryBytes(archive, absPath);
             if (bytes is null) continue;
 
@@ -1407,7 +1439,7 @@ public static class PptxPackageReader
             };
 
             // Capture and store rels for this part
-            var partRelsPath = GetRelsPath(absPath);
+            var partRelsPath = GetRelationshipPartPath(absPath);
             var partRelsBytes = ReadEntryBytes(archive, partRelsPath);
             if (partRelsBytes is not null)
                 smart.PartRels[absPath] = partRelsBytes;
@@ -1418,13 +1450,13 @@ public static class PptxPackageReader
         // Resolve the dsp:drawing part path from the data part's rels.
         if (dataPartPath is not null)
         {
-            var dataPartRels = LoadRels(archive, GetRelsPath(dataPartPath));
+            var dataPartRels = OpcRelationships.LoadTargets(archive, GetRelationshipPartPath(dataPartPath));
             var drawingTarget = dataPartRels
-                .FirstOrDefault(r => r.type == DiagramDrawingRelType).target;
+                .FirstOrDefault(r => r.Type == DiagramDrawingRelType).Target;
 
             if (!string.IsNullOrWhiteSpace(drawingTarget))
             {
-                var drawingPath = ResolvePath(GetDirectory(dataPartPath), drawingTarget);
+                var drawingPath = ResolveRelativeZipPath(GetDirectoryName(dataPartPath), drawingTarget);
                 smart.DrawingPartPath = drawingPath;
 
                 var drawingBytes = ReadEntryBytes(archive, drawingPath);
@@ -1438,7 +1470,7 @@ public static class PptxPackageReader
                     };
 
                     // Also capture rels for drawing part if present
-                    var drawRelsBytes = ReadEntryBytes(archive, GetRelsPath(drawingPath));
+                    var drawRelsBytes = ReadEntryBytes(archive, GetRelationshipPartPath(drawingPath));
                     if (drawRelsBytes is not null)
                         smart.PartRels[drawingPath] = drawRelsBytes;
 
@@ -1494,8 +1526,8 @@ public static class PptxPackageReader
         PresentationColorScheme scheme,
         bool wasAlternateContent)
     {
-        var slideRels = LoadRels(archive, GetRelsPath(partPath));
-        var slideDir  = GetDirectory(partPath);
+        var slideRels = OpcRelationships.LoadTargets(archive, GetRelationshipPartPath(partPath));
+        var slideDir  = GetDirectoryName(partPath);
 
         var ole = new OleObjectInfo
         {
@@ -1507,23 +1539,23 @@ public static class PptxPackageReader
         var embRelId = oleObjEl.Attribute(R + "id")?.Value;
         if (!string.IsNullOrWhiteSpace(embRelId))
         {
-            var embRel = slideRels.FirstOrDefault(r => r.id == embRelId);
-            if (!string.IsNullOrWhiteSpace(embRel.target))
+            var embRel = slideRels.FirstOrDefault(r => r.Id == embRelId);
+            if (!string.IsNullOrWhiteSpace(embRel.Target))
             {
-                var embPath = ResolvePath(slideDir, embRel.target);
+                var embPath = ResolveRelativeZipPath(slideDir, embRel.Target);
                 var embBytes = ReadEntryBytes(archive, embPath);
                 if (embBytes is not null)
                     ole.EmbeddedBytes = embBytes;
 
                 // Infer content type and extension from path
-                var ext = embRel.target.Split('.').LastOrDefault() ?? "bin";
+                var ext = embRel.Target.Split('.').LastOrDefault() ?? "bin";
                 ole.EmbeddedExtension = ext;
                 ole.EmbeddedContentType = OleExtensionToContentType(ext);
 
                 // Capture the rel type for round-trip (package vs oleObject vs other)
-                ole.RelType = string.IsNullOrWhiteSpace(embRel.type)
+                ole.RelType = string.IsNullOrWhiteSpace(embRel.Type)
                     ? PackageRelType
-                    : embRel.type;
+                    : embRel.Type;
             }
         }
 
@@ -1572,7 +1604,7 @@ public static class PptxPackageReader
     /// </summary>
     private static ImagePart? LoadImageFromBlip(
         XElement? blip,
-        List<(string id, string type, string target)> slideRels,
+        IReadOnlyList<OpcRelationshipTarget> slideRels,
         string slideDir,
         ZipArchive archive)
     {
@@ -1580,17 +1612,17 @@ public static class PptxPackageReader
         var embedId = blip.Attribute(R + "embed")?.Value;
         if (string.IsNullOrWhiteSpace(embedId)) return null;
 
-        var rel = slideRels.FirstOrDefault(r => r.id == embedId);
-        if (string.IsNullOrWhiteSpace(rel.target)) return null;
+        var rel = slideRels.FirstOrDefault(r => r.Id == embedId);
+        if (string.IsNullOrWhiteSpace(rel.Target)) return null;
 
-        var imgPath = ResolvePath(slideDir, rel.target);
+        var imgPath = ResolveRelativeZipPath(slideDir, rel.Target);
         var bytes = ReadEntryBytes(archive, imgPath);
         if (bytes is null) return null;
 
         return new ImagePart
         {
             Bytes = bytes,
-            ContentType = GuessContentType(imgPath)
+            ContentType = OpcMediaTypes.GetDrawingMediaContentType(imgPath)
         };
     }
 
@@ -1629,7 +1661,7 @@ public static class PptxPackageReader
         {
             XDocument layoutDoc;
             using (var ms = new MemoryStream(layoutEntry.Bytes))
-                layoutDoc = XDocument.Load(ms);
+                layoutDoc = OpcXml.LoadXml(ms);
 
             layoutUniqueId = layoutDoc.Root?.Attribute("uniqueId")?.Value ?? string.Empty;
             family = ClassifySmartArtFamily(layoutUniqueId);
@@ -1638,7 +1670,7 @@ public static class PptxPackageReader
         // ── Parse data1.xml → node tree ────────────────────────────────────────
         XDocument dataDoc;
         using (var ms2 = new MemoryStream(dataEntry.Bytes))
-            dataDoc = XDocument.Load(ms2);
+            dataDoc = OpcXml.LoadXml(ms2);
 
         var data = new SmartArtData
         {
@@ -1787,7 +1819,7 @@ public static class PptxPackageReader
     {
         XDocument doc;
         using (var ms = new MemoryStream(bytes))
-            doc = XDocument.Load(ms);
+            doc = OpcXml.LoadXml(ms);
 
         var root = doc.Root;
         if (root is null) return;
@@ -1830,6 +1862,9 @@ public static class PptxPackageReader
         {
             Id   = ParseUint(cNvPrEl?.Attribute("id")?.Value),
             Name = cNvPrEl?.Attribute("name")?.Value ?? string.Empty,
+            AlternativeTextTitle = ReadAlternativeTextTitle(cNvPrEl),
+            AlternativeText = ReadAlternativeText(cNvPrEl),
+            IsDecorative = ReadDecorative(cNvPrEl),
             Kind = SlideShapeKind.AutoShape
         };
 
@@ -1866,6 +1901,9 @@ public static class PptxPackageReader
         {
             Id   = ParseUint(cNvPrEl?.Attribute("id")?.Value),
             Name = cNvPrEl?.Attribute("name")?.Value ?? string.Empty,
+            AlternativeTextTitle = ReadAlternativeTextTitle(cNvPrEl),
+            AlternativeText = ReadAlternativeText(cNvPrEl),
+            IsDecorative = ReadDecorative(cNvPrEl),
             Kind = SlideShapeKind.Group
         };
 
@@ -1964,10 +2002,10 @@ public static class PptxPackageReader
         if (tcPr is not null)
         {
             // Insets (EMU -> points)
-            if (ParseLongNullable(tcPr.Attribute("marL")?.Value) is { } ml) cell.InsetLeftPt   = ml / 12700.0;
-            if (ParseLongNullable(tcPr.Attribute("marR")?.Value) is { } mr) cell.InsetRightPt  = mr / 12700.0;
-            if (ParseLongNullable(tcPr.Attribute("marT")?.Value) is { } mt) cell.InsetTopPt    = mt / 12700.0;
-            if (ParseLongNullable(tcPr.Attribute("marB")?.Value) is { } mb) cell.InsetBottomPt = mb / 12700.0;
+            if (ParseLongNullable(tcPr.Attribute("marL")?.Value) is { } ml) cell.InsetLeftPt   = DrawingMlUnits.EmuToPoints(ml);
+            if (ParseLongNullable(tcPr.Attribute("marR")?.Value) is { } mr) cell.InsetRightPt  = DrawingMlUnits.EmuToPoints(mr);
+            if (ParseLongNullable(tcPr.Attribute("marT")?.Value) is { } mt) cell.InsetTopPt    = DrawingMlUnits.EmuToPoints(mt);
+            if (ParseLongNullable(tcPr.Attribute("marB")?.Value) is { } mb) cell.InsetBottomPt = DrawingMlUnits.EmuToPoints(mb);
 
             // Vertical anchor
             cell.Anchor = tcPr.Attribute("anchor")?.Value switch
@@ -2008,7 +2046,7 @@ public static class PptxPackageReader
     // ── p:sp ─────────────────────────────────────────────────────────────────────
 
     private static SlideShape ReadSp(XElement sp, PresentationColorScheme scheme,
-        List<(string id, string type, string target)>? slideRels = null,
+        IReadOnlyList<OpcRelationshipTarget>? slideRels = null,
         List<Slide>? allSlides = null,
         string? slideDir = null,
         IReadOnlyDictionary<string, string>? slidePartPathToId = null,
@@ -2022,6 +2060,9 @@ public static class PptxPackageReader
         {
             Id = ParseUint(cNvPr?.Attribute("id")?.Value),
             Name = cNvPr?.Attribute("name")?.Value ?? string.Empty,
+            AlternativeTextTitle = ReadAlternativeTextTitle(cNvPr),
+            AlternativeText = ReadAlternativeText(cNvPr),
+            IsDecorative = ReadDecorative(cNvPr),
             Kind = SlideShapeKind.AutoShape
         };
 
@@ -2059,6 +2100,9 @@ public static class PptxPackageReader
         {
             Id = ParseUint(cNvPr?.Attribute("id")?.Value),
             Name = cNvPr?.Attribute("name")?.Value ?? string.Empty,
+            AlternativeTextTitle = ReadAlternativeTextTitle(cNvPr),
+            AlternativeText = ReadAlternativeText(cNvPr),
+            IsDecorative = ReadDecorative(cNvPr),
             Kind = SlideShapeKind.Picture
         };
 
@@ -2078,11 +2122,11 @@ public static class PptxPackageReader
         var embedId = blip?.Attribute(R + "embed")?.Value;
         if (!string.IsNullOrWhiteSpace(embedId))
         {
-            var partRels = LoadRels(archive, GetRelsPath(partPath));
-            var imageTarget = partRels.FirstOrDefault(r => r.id == embedId && r.type == ImageRelType).target;
+            var partRels = OpcRelationships.LoadTargets(archive, GetRelationshipPartPath(partPath));
+            var imageTarget = partRels.FirstOrDefault(r => r.Id == embedId && r.Type == ImageRelType).Target;
             if (!string.IsNullOrWhiteSpace(imageTarget))
             {
-                var imagePath = ResolvePath(GetDirectory(partPath), imageTarget);
+                var imagePath = ResolveRelativeZipPath(GetDirectoryName(partPath), imageTarget);
                 var entry = archive.GetEntry(imagePath);
                 if (entry is not null)
                 {
@@ -2092,7 +2136,7 @@ public static class PptxPackageReader
                     shape.Picture = new ImagePart
                     {
                         Bytes = ms.ToArray(),
-                        ContentType = GuessContentType(imagePath)
+                        ContentType = OpcMediaTypes.GetDrawingMediaContentType(imagePath)
                     };
                 }
             }
@@ -2118,25 +2162,25 @@ public static class PptxPackageReader
 
                 if (!string.IsNullOrWhiteSpace(mediaRelId))
                 {
-                    var partRels = LoadRels(archive, GetRelsPath(partPath));
-                    var mediaRel = partRels.FirstOrDefault(r => r.id == mediaRelId);
-                    if (!string.IsNullOrEmpty(mediaRel.target))
+                    var partRels = OpcRelationships.LoadTargets(archive, GetRelationshipPartPath(partPath));
+                    var mediaRel = partRels.FirstOrDefault(r => r.Id == mediaRelId);
+                    if (!string.IsNullOrEmpty(mediaRel.Target))
                     {
-                        if (mediaRel.type == HyperlinkRelType ||
-                            mediaRel.target.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+                        if (mediaRel.Type == HyperlinkRelType ||
+                            mediaRel.Target.StartsWith("http", StringComparison.OrdinalIgnoreCase))
                         {
                             // External / link-only
-                            mediaInfo.LinkUrl = mediaRel.target;
+                            mediaInfo.LinkUrl = mediaRel.Target;
                         }
                         else
                         {
                             // Embedded
-                            var mediaPath  = ResolvePath(GetDirectory(partPath), mediaRel.target);
+                            var mediaPath  = ResolveRelativeZipPath(GetDirectoryName(partPath), mediaRel.Target);
                             var mediaBytes = ReadEntryBytes(archive, mediaPath);
                             if (mediaBytes is not null)
                             {
                                 mediaInfo.Bytes       = mediaBytes;
-                                mediaInfo.ContentType = GuessMediaContentType(mediaPath);
+                                mediaInfo.ContentType = OpcMediaTypes.GetAudioVideoContentType(mediaPath);
                             }
                         }
                     }
@@ -2148,7 +2192,7 @@ public static class PptxPackageReader
                     var extLst = nvPr.Element(P + "extLst");
                     if (extLst is not null)
                     {
-                        var partRels = LoadRels(archive, GetRelsPath(partPath));
+                        var partRels = OpcRelationships.LoadTargets(archive, GetRelationshipPartPath(partPath));
                         foreach (var ext in extLst.Elements(P + "ext"))
                         {
                             var mediaRef = ext.Descendants()
@@ -2158,14 +2202,14 @@ public static class PptxPackageReader
                             var mRelId = mediaRef.Attribute(R + "embed")?.Value
                                       ?? mediaRef.Attribute(R + "link")?.Value;
                             if (string.IsNullOrEmpty(mRelId)) continue;
-                            var mRel = partRels.FirstOrDefault(r => r.id == mRelId);
-                            if (string.IsNullOrEmpty(mRel.target)) continue;
-                            var mPath  = ResolvePath(GetDirectory(partPath), mRel.target);
+                            var mRel = partRels.FirstOrDefault(r => r.Id == mRelId);
+                            if (string.IsNullOrEmpty(mRel.Target)) continue;
+                            var mPath  = ResolveRelativeZipPath(GetDirectoryName(partPath), mRel.Target);
                             var mBytes = ReadEntryBytes(archive, mPath);
                             if (mBytes is not null)
                             {
                                 mediaInfo.Bytes       = mBytes;
-                                mediaInfo.ContentType = GuessMediaContentType(mPath);
+                                mediaInfo.ContentType = OpcMediaTypes.GetAudioVideoContentType(mPath);
                             }
                             break;
                         }
@@ -2180,28 +2224,10 @@ public static class PptxPackageReader
         return shape;
     }
 
-    private static string GuessMediaContentType(string path)
-    {
-        var ext = path.Split('.').Last().ToLowerInvariant();
-        return ext switch
-        {
-            "mp4"  => "video/mp4",
-            "m4v"  => "video/mp4",
-            "mov"  => "video/quicktime",
-            "avi"  => "video/x-msvideo",
-            "wmv"  => "video/x-ms-wmv",
-            "mp3"  => "audio/mpeg",
-            "m4a"  => "audio/mp4",
-            "wav"  => "audio/wav",
-            "wma"  => "audio/x-ms-wma",
-            _      => "video/mp4"
-        };
-    }
-
     // ── p:cxnSp ──────────────────────────────────────────────────────────────────
 
     private static SlideShape ReadCxnSp(XElement cxnSp, PresentationColorScheme scheme,
-        List<(string id, string type, string target)>? slideRels = null,
+        IReadOnlyList<OpcRelationshipTarget>? slideRels = null,
         List<Slide>? allSlides = null,
         string? slideDir = null,
         IReadOnlyDictionary<string, string>? slidePartPathToId = null,
@@ -2214,6 +2240,9 @@ public static class PptxPackageReader
         {
             Id = ParseUint(cNvPr?.Attribute("id")?.Value),
             Name = cNvPr?.Attribute("name")?.Value ?? string.Empty,
+            AlternativeTextTitle = ReadAlternativeTextTitle(cNvPr),
+            AlternativeText = ReadAlternativeText(cNvPr),
+            IsDecorative = ReadDecorative(cNvPr),
             Kind = SlideShapeKind.Connector
         };
 
@@ -2259,7 +2288,7 @@ public static class PptxPackageReader
 
     private static SlideShape ReadGrpSp(XElement grpSp, ZipArchive archive, string partPath,
         PresentationColorScheme scheme, Dictionary<string, TableStyleData>? tableStyles = null,
-        List<(string id, string type, string target)>? slideRels = null,
+        IReadOnlyList<OpcRelationshipTarget>? slideRels = null,
         List<Slide>? allSlides = null,
         string? slideDir = null,
         IReadOnlyDictionary<string, string>? slidePartPathToId = null)
@@ -2270,6 +2299,9 @@ public static class PptxPackageReader
         {
             Id = ParseUint(cNvPr?.Attribute("id")?.Value),
             Name = cNvPr?.Attribute("name")?.Value ?? string.Empty,
+            AlternativeTextTitle = ReadAlternativeTextTitle(cNvPr),
+            AlternativeText = ReadAlternativeText(cNvPr),
+            IsDecorative = ReadDecorative(cNvPr),
             Kind = SlideShapeKind.Group
         };
 
@@ -2349,23 +2381,23 @@ public static class PptxPackageReader
     /// </summary>
     private static Func<string, (byte[] bytes, string contentType)?> BuildBlipResolver(
         ZipArchive archive,
-        List<(string id, string type, string target)> slideRels,
+        IReadOnlyList<OpcRelationshipTarget> slideRels,
         string partPath)
     {
         return (embedId) =>
         {
             var imageTarget = slideRels
-                .FirstOrDefault(r => r.id == embedId && r.type == ImageRelType).target;
+                .FirstOrDefault(r => r.Id == embedId && r.Type == ImageRelType).Target;
             if (string.IsNullOrWhiteSpace(imageTarget)) return null;
 
-            var imagePath = ResolvePath(GetDirectory(partPath), imageTarget);
+            var imagePath = ResolveRelativeZipPath(GetDirectoryName(partPath), imageTarget);
             var entry = archive.GetEntry(imagePath);
             if (entry is null) return null;
 
             using var imgStream = entry.Open();
             using var ms = new MemoryStream();
             imgStream.CopyTo(ms);
-            return (ms.ToArray(), GuessContentType(imagePath));
+            return (ms.ToArray(), OpcMediaTypes.GetDrawingMediaContentType(imagePath));
         };
     }
 
@@ -2615,7 +2647,7 @@ public static class PptxPackageReader
     // ── TextBody ─────────────────────────────────────────────────────────────────
 
     private static TextBody ReadTxBody(XElement txBody, PresentationColorScheme scheme,
-        List<(string id, string type, string target)>? slideRels = null,
+        IReadOnlyList<OpcRelationshipTarget>? slideRels = null,
         List<Slide>? allSlides = null,
         string? slideDir = null,
         IReadOnlyDictionary<string, string>? slidePartPathToId = null)
@@ -2635,10 +2667,10 @@ public static class PptxPackageReader
                 _ => (VerticalAnchor?)null
             };
 
-            if (ParseLongNullable(bodyPr.Attribute("lIns")?.Value) is { } li) body.InsetLeftPt = li / 12700.0;
-            if (ParseLongNullable(bodyPr.Attribute("rIns")?.Value) is { } ri) body.InsetRightPt = ri / 12700.0;
-            if (ParseLongNullable(bodyPr.Attribute("tIns")?.Value) is { } ti) body.InsetTopPt = ti / 12700.0;
-            if (ParseLongNullable(bodyPr.Attribute("bIns")?.Value) is { } bi) body.InsetBottomPt = bi / 12700.0;
+            if (ParseLongNullable(bodyPr.Attribute("lIns")?.Value) is { } li) body.InsetLeftPt = DrawingMlUnits.EmuToPoints(li);
+            if (ParseLongNullable(bodyPr.Attribute("rIns")?.Value) is { } ri) body.InsetRightPt = DrawingMlUnits.EmuToPoints(ri);
+            if (ParseLongNullable(bodyPr.Attribute("tIns")?.Value) is { } ti) body.InsetTopPt = DrawingMlUnits.EmuToPoints(ti);
+            if (ParseLongNullable(bodyPr.Attribute("bIns")?.Value) is { } bi) body.InsetBottomPt = DrawingMlUnits.EmuToPoints(bi);
             body.Wrap = bodyPr.Attribute("wrap")?.Value != "none";
             var normAf = bodyPr.Element(A + "normAutofit");
             var spAf   = bodyPr.Element(A + "spAutoFit");
@@ -2721,7 +2753,7 @@ public static class PptxPackageReader
     }
 
     private static Paragraph ReadParagraph(XElement pEl, PresentationColorScheme scheme,
-        List<(string id, string type, string target)>? slideRels = null,
+        IReadOnlyList<OpcRelationshipTarget>? slideRels = null,
         List<Slide>? allSlides = null,
         string? slideDir = null,
         IReadOnlyDictionary<string, string>? slidePartPathToId = null)
@@ -2904,7 +2936,7 @@ public static class PptxPackageReader
     }
 
     private static Run ReadRun(XElement rEl, PresentationColorScheme scheme,
-        List<(string id, string type, string target)>? slideRels = null,
+        IReadOnlyList<OpcRelationshipTarget>? slideRels = null,
         List<Slide>? allSlides = null,
         string? slideDir = null,
         IReadOnlyDictionary<string, string>? slidePartPathToId = null)
@@ -2961,8 +2993,8 @@ public static class PptxPackageReader
                         alpha = (byte)Math.Clamp((int)Math.Round(av / 100000.0 * 255), 0, 255);
                 }
                 double blurPt = 2.0, distPt = 2.0, dirDeg = 45.0;
-                if (long.TryParse(outerShdw.Attribute("blurRad")?.Value, out var blurEmu)) blurPt = blurEmu / 12700.0;
-                if (long.TryParse(outerShdw.Attribute("dist")?.Value,    out var distEmu)) distPt = distEmu / 12700.0;
+                if (long.TryParse(outerShdw.Attribute("blurRad")?.Value, out var blurEmu)) blurPt = DrawingMlUnits.EmuToPoints(blurEmu);
+                if (long.TryParse(outerShdw.Attribute("dist")?.Value,    out var distEmu)) distPt = DrawingMlUnits.EmuToPoints(distEmu);
                 if (long.TryParse(outerShdw.Attribute("dir")?.Value,     out var dirRaw))  dirDeg = dirRaw  / 60000.0;
                 run.TextShadow = new RunTextShadow
                 {
@@ -2994,7 +3026,7 @@ public static class PptxPackageReader
     private static SlideTransition? ResolveTransitionEl(
         XElement? root,
         ZipArchive? archive = null,
-        List<(string id, string type, string target)>? slideRels = null,
+        IReadOnlyList<OpcRelationshipTarget>? slideRels = null,
         string? slidePath = null)
     {
         if (root is null) return null;
@@ -3027,7 +3059,7 @@ public static class PptxPackageReader
         XElement transEl,
         bool preferP14Dur,
         ZipArchive? archive = null,
-        List<(string id, string type, string target)>? slideRels = null,
+        IReadOnlyList<OpcRelationshipTarget>? slideRels = null,
         string? slidePath = null)
     {
         var t = new SlideTransition();
@@ -3100,7 +3132,7 @@ public static class PptxPackageReader
     private static TransitionSound? ReadTransitionSound(
         XElement sndAcEl,
         ZipArchive? archive,
-        List<(string id, string type, string target)>? slideRels,
+        IReadOnlyList<OpcRelationshipTarget>? slideRels,
         string? slidePath)
     {
         // p:sndAc > p:stSnd > p:snd  (snd has r:embed or r:link)
@@ -3118,11 +3150,11 @@ public static class PptxPackageReader
         // Try to resolve the audio part from the slide's relationships.
         if (sound.RelId is not null && slideRels is not null && archive is not null && slidePath is not null)
         {
-            var slideDir = GetDirectory(slidePath);
-            var audioTarget = slideRels.FirstOrDefault(r => r.id == sound.RelId).target;
+            var slideDir = GetDirectoryName(slidePath);
+            var audioTarget = slideRels.FirstOrDefault(r => r.Id == sound.RelId).Target;
             if (!string.IsNullOrEmpty(audioTarget))
             {
-                var audioPath = ResolvePath(slideDir, audioTarget);
+                var audioPath = ResolveRelativeZipPath(slideDir, audioTarget);
                 sound.PartPath = audioPath;
 
                 // Try to load the audio bytes.
@@ -3614,7 +3646,7 @@ public static class PptxPackageReader
         ZipArchive archive, string path, PresentationColorScheme scheme,
         Dictionary<string, TableStyleData> tableStyles)
     {
-        var xml = LoadXml(archive, path);
+        var xml = OpcXml.TryLoadXml(archive, path);
         if (xml?.Root is null) return;
 
         foreach (var styleEl in xml.Root.Elements(A + "tblStyle"))
@@ -3692,84 +3724,6 @@ public static class PptxPackageReader
         return new TableStyleEntry { Fill = fill, BorderOutline = border, TextColor = textColor };
     }
 
-    // ── OPC / Rels helpers ────────────────────────────────────────────────────────
-
-    /// <summary>Loads and parses a .rels file from the archive. Returns empty list on missing/error.</summary>
-    private static List<(string id, string type, string target)> LoadRels(ZipArchive archive, string relsPath)
-    {
-        var entry = archive.GetEntry(relsPath);
-        if (entry is null) return new();
-
-        try
-        {
-            using var stream = entry.Open();
-            using var reader = XmlReader.Create(stream, SecureXmlReaderSettings.Create());
-            var doc = XDocument.Load(reader);
-            return doc.Root?
-                .Elements(Pkgr + "Relationship")
-                .Select(r => (
-                    r.Attribute("Id")?.Value ?? string.Empty,
-                    r.Attribute("Type")?.Value ?? string.Empty,
-                    r.Attribute("Target")?.Value ?? string.Empty))
-                .Where(t => !string.IsNullOrEmpty(t.Item1))
-                .ToList() ?? new();
-        }
-        catch { return new(); }
-    }
-
-    private static string? GetRelTarget(List<(string id, string type, string target)> rels, string relType) =>
-        rels.FirstOrDefault(r => r.type == relType).target is { Length: > 0 } t ? t : null;
-
-    private static XDocument? LoadXml(ZipArchive archive, string path)
-    {
-        var entry = archive.GetEntry(path);
-        if (entry is null) return null;
-        try
-        {
-            using var stream = entry.Open();
-            using var reader = XmlReader.Create(stream, SecureXmlReaderSettings.Create());
-            return XDocument.Load(reader);
-        }
-        catch { return null; }
-    }
-
-    // ── Path helpers ──────────────────────────────────────────────────────────────
-
-    private static string NormalizePath(string path) =>
-        path.TrimStart('/');
-
-    private static string GetDirectory(string path)
-    {
-        var lastSlash = path.LastIndexOf('/');
-        return lastSlash < 0 ? string.Empty : path[..lastSlash];
-    }
-
-    private static string GetRelsPath(string partPath)
-    {
-        var dir = GetDirectory(partPath);
-        var file = partPath[(partPath.LastIndexOf('/') + 1)..];
-        return string.IsNullOrEmpty(dir)
-            ? $"_rels/{file}.rels"
-            : $"{dir}/_rels/{file}.rels";
-    }
-
-    private static string ResolvePath(string baseDir, string target)
-    {
-        if (target.StartsWith('/')) return NormalizePath(target);
-
-        // Resolve relative path
-        var parts = (string.IsNullOrEmpty(baseDir) ? target : $"{baseDir}/{target}").Split('/');
-        var resolved = new List<string>();
-        foreach (var part in parts)
-        {
-            if (part == "..") { if (resolved.Count > 0) resolved.RemoveAt(resolved.Count - 1); }
-            else if (part != ".") resolved.Add(part);
-        }
-        return string.Join("/", resolved);
-    }
-
-    // ── Content-type guessing ────────────────────────────────────────────────────
-
     // ── 18A: picture crop + colour effects ───────────────────────────────────────────
 
     /// <summary>
@@ -3843,22 +3797,6 @@ public static class PptxPackageReader
         return v / 100_000.0;
     }
 
-    private static string GuessContentType(string path)
-    {
-        var ext = path.Split('.').Last().ToLowerInvariant();
-        return ext switch
-        {
-            "jpg" or "jpeg" => "image/jpeg",
-            "gif" => "image/gif",
-            "bmp" => "image/bmp",
-            "tif" or "tiff" => "image/tiff",
-            "svg" => "image/svg+xml",
-            "wmf" => "image/x-wmf",
-            "emf" => "image/x-emf",
-            _ => "image/png"
-        };
-    }
-
     // ── Value parsers ─────────────────────────────────────────────────────────────
 
     /// <summary>Maps OOXML a:buAutoNum type= string to the <see cref="AutoNumType"/> enum.</summary>
@@ -3889,15 +3827,34 @@ public static class PptxPackageReader
     private static long? ParseLongNullable(string? value) =>
         long.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var v) ? v : null;
 
-    private static bool TryParseHex6(string hex, out SrgbColor color)
+    private static string ReadAlternativeText(XElement? cNvPr)
+        => cNvPr?.Attribute("descr")?.Value ?? string.Empty;
+
+    private static string ReadAlternativeTextTitle(XElement? cNvPr)
+        => cNvPr?.Attribute("title")?.Value ?? string.Empty;
+
+    private static bool ReadDecorative(XElement? cNvPr)
+    {
+        var decorative = cNvPr?
+            .Element(A + "extLst")
+            ?.Elements(A + "ext")
+            .Elements(Adec + "decorative")
+            .FirstOrDefault();
+        var value = decorative?.Attribute("val")?.Value;
+        return decorative is not null && (value is null || ParseBoolean(value));
+    }
+
+    private static bool ParseBoolean(string? value)
+        => value is "1"
+            || string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
+
+    private static bool TryParseHex6(string? hex, out SrgbColor color)
     {
         color = default;
-        var s = hex.Trim().TrimStart('#');
-        if (s.Length != 6) return false;
-        if (!byte.TryParse(s[..2], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var r)) return false;
-        if (!byte.TryParse(s[2..4], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var g)) return false;
-        if (!byte.TryParse(s[4..6], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var b)) return false;
-        color = new SrgbColor(r, g, b);
+        if (!DrawingMlRgbColor.TryParseHexRgb(hex, out var rgb))
+            return false;
+
+        color = new SrgbColor(rgb.R, rgb.G, rgb.B);
         return true;
     }
 

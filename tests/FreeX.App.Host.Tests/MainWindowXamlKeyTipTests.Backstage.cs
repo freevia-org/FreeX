@@ -9,7 +9,7 @@ namespace FreeX.App.Host.Tests;
 
 /// <summary>
 /// Backstage rail tests, de-brittled for the unification program (P1). The rail moved from a hand-rolled
-/// <c>StartScreenSidebar</c> to the shared <see cref="Free.Shared.Ribbon.Wpf.BackstageFrame"/>, so the rail
+/// <c>StartScreenSidebar</c> to the shared <see cref="Free.Shared.Shell.Wpf.BackstageFrame"/>, so the rail
 /// assertions are now <b>behavioural / automation-tree</b> queries against a live window (open the backstage,
 /// read the rail buttons' AutomationIds / KeyTips / localized names / tooltips and the pane-swap behaviour)
 /// instead of literal XAML <c>x:Name</c> / handler-name lookups. Tests about the backstage <i>content panes</i>
@@ -47,10 +47,12 @@ public sealed partial class MainWindowXamlKeyTipTests
             harness.OpenBackstage();
 
             var railIcons = harness.RailButtons()
-                .SelectMany(button => Descendants(button).OfType<Free.Shared.Ribbon.Wpf.RibbonIcon>())
+                .SelectMany(button => Descendants(button).OfType<System.Windows.FrameworkElement>())
+                .Where(element => element is not AccessText and not TextBlock)
+                .Where(element => element.Width >= 20 || element.Height >= 20)
                 .ToList();
             railIcons.Should().NotBeEmpty("every primary rail entry shows a leading glyph");
-            railIcons.Should().OnlyContain(icon => icon.IconSize >= 20, "rail glyphs use large readable slots");
+            railIcons.Should().OnlyContain(icon => icon.Width >= 20 || icon.Height >= 20, "rail glyphs use large readable slots");
         });
 
         var resources = DialogSourceTestSupport.LoadHostXamlDocument("Resources", "MainWindowResources.xaml");
@@ -355,16 +357,30 @@ public sealed partial class MainWindowXamlKeyTipTests
             .Select(button => button.ToString())
             .ToList();
 
-        buttons.Should().Contain(markup => markup.Contains("AutomationProperties.AutomationId=\"BackstageRecentFileItem\""));
-        buttons.Should().Contain(markup => markup.Contains("AutomationProperties.AutomationId=\"BackstagePinnedFileItem\""));
-        buttons.Should().Contain(markup => markup.Contains("AutomationProperties.AutomationId=\"BackstageRecentPinButton\""));
-        buttons.Should().Contain(markup => markup.Contains("AutomationProperties.AutomationId=\"BackstagePinnedUnpinButton\""));
         buttons.Should().OnlyContain(markup => markup.Contains("AutomationProperties.Name="));
         buttons.Should().OnlyContain(markup => markup.Contains("AutomationProperties.HelpText="));
 
         var xamlSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml");
         xamlSource.Should().Contain("Loaded=\"SsRecentFileItem_Loaded\"");
         xamlSource.Should().Contain("Loaded=\"SsPinnedFileItem_Loaded\"");
+        xamlSource.Should().Contain("Loaded=\"SsRecentPinCommandButton_Loaded\"");
+        xamlSource.Should().Contain("Loaded=\"SsPinnedUnpinCommandButton_Loaded\"");
+        xamlSource.Should().NotContain("AutomationProperties.AutomationId=\"BackstageRecentFileItem\"");
+        xamlSource.Should().NotContain("AutomationProperties.AutomationId=\"BackstagePinnedFileItem\"");
+        xamlSource.Should().NotContain("AutomationProperties.AutomationId=\"BackstageRecentPinButton\"");
+        xamlSource.Should().NotContain("AutomationProperties.AutomationId=\"BackstagePinnedUnpinButton\"");
+
+        var backstageSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Backstage.cs");
+        var contextMenuSource = DialogSourceTestSupport.ReadHostSources("MainWindow.ContextMenus.cs");
+        var plannerSource = DialogSourceTestSupport.ReadPresentationSources("Backstage", "FreeXBackstageHomePanePlanner.cs");
+        backstageSource.Should().Contain("ApplyBackstageRecentFileRowDescriptor(");
+        backstageSource.Should().Contain("ConfigureBackstageRecentFileCommandButton(");
+        contextMenuSource.Should().Contain("ApplyBackstageRecentFileRowDescriptor(element, FreeXBackstageRecentFileRowKind.Recent)");
+        contextMenuSource.Should().Contain("ApplyBackstageRecentFileRowDescriptor(element, FreeXBackstageRecentFileRowKind.Pinned)");
+        plannerSource.Should().Contain("\"BackstageRecentFileItem\"");
+        plannerSource.Should().Contain("\"BackstagePinnedFileItem\"");
+        plannerSource.Should().Contain("\"BackstageRecentPinButton\"");
+        plannerSource.Should().Contain("\"BackstagePinnedUnpinButton\"");
 
         var contextMenuItems = BackstageRecentFileContextMenuPlanner.BuildRecentFileCommands()
             .Concat(BackstageRecentFileContextMenuPlanner.BuildPinnedFileCommands())
@@ -402,8 +418,8 @@ public sealed partial class MainWindowXamlKeyTipTests
     public void BackstageRecentPinnedTabs_AreKeyboardReachableCommands()
     {
         var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
-        XNamespace local = "clr-namespace:FreeX.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
 
         document
             .Descendants()
@@ -411,14 +427,21 @@ public sealed partial class MainWindowXamlKeyTipTests
             .Should()
             .BeEmpty("Recent/Pinned Backstage tab selectors should be command buttons, not mouse-only elements");
 
-        var missing = document
+        document
             .Descendants(presentation + "Button")
             .Where(button => button.Attribute("Click")?.Value is "SsRecentTab_Click" or "SsPinnedTab_Click")
-            .Where(button => button.Attribute(local + "RibbonTooltip.KeyTip") is null)
-            .Select(button => LocalizedAttribute(button, "Content") ?? button.Attribute("Click")!.Value)
-            .ToList();
+            .Select(button => button.Attribute(x + "Name")?.Value)
+            .Should()
+            .BeEquivalentTo("SsRecentTabButton", "SsPinnedTabButton");
 
-        missing.Should().BeEmpty("Recent/Pinned Backstage tab selectors should participate in keytip navigation");
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.Backstage.cs");
+        var plannerSource = DialogSourceTestSupport.ReadPresentationSources("Backstage", "FreeXBackstageHomePanePlanner.cs");
+
+        source.Should().Contain("ConfigureBackstageRecentTab(plan.RecentTab, SsRecentTabButton, SsRecentTabText)");
+        source.Should().Contain("ConfigureBackstageRecentTab(plan.PinnedTab, SsPinnedTabButton, SsPinnedTabText)");
+        source.Should().Contain("RibbonTooltip.SetKeyTip(button, descriptor.KeyTip);");
+        plannerSource.Should().Contain("\"RC\"");
+        plannerSource.Should().Contain("\"PN\"");
     }
 
     [Fact]
@@ -432,13 +455,22 @@ public sealed partial class MainWindowXamlKeyTipTests
             .Descendants(presentation + "TextBox")
             .Single(element => element.Attribute(x + "Name")?.Value == "SsSearchBox");
 
-        var name = searchBox.Attribute("AutomationProperties.Name");
-        var helpText = searchBox.Attribute("AutomationProperties.HelpText");
+        searchBox.Attribute("AutomationProperties.Name")
+            .Should()
+            .BeNull("Backstage search descriptor ownership lives in the Presentation planner");
+        searchBox.Attribute("AutomationProperties.HelpText")
+            .Should()
+            .BeNull("Backstage search descriptor ownership lives in the Presentation planner");
 
-        name.Should().NotBeNull("Backstage search is a keyboard-focusable File workflow field");
-        helpText.Should().NotBeNull("Backstage search should announce what it filters");
-        LocalizedAttribute(searchBox, "AutomationProperties.Name").Should().Be("Search Recent Files");
-        LocalizedAttribute(searchBox, "AutomationProperties.HelpText").Should().Be("Filter recent and pinned files");
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.Backstage.cs");
+        var plannerSource = DialogSourceTestSupport.ReadPresentationSources("Backstage", "FreeXBackstageHomePanePlanner.cs");
+
+        source.Should().Contain("System.Windows.Automation.AutomationProperties.SetName(");
+        source.Should().Contain("System.Windows.Automation.AutomationProperties.SetHelpText(");
+        source.Should().Contain("UiText.Get(plan.Search.AutomationNameKey)");
+        source.Should().Contain("UiText.Get(plan.Search.AutomationHelpTextKey)");
+        plannerSource.Should().Contain("\"MainWindow_AutomationName_SearchRecentFiles\"");
+        plannerSource.Should().Contain("\"MainWindow_AutomationHelpText_FilterRecentAndPinnedFiles\"");
     }
 
     [Fact]

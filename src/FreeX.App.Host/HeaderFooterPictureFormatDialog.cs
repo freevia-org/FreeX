@@ -1,7 +1,9 @@
+using System.Globalization;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
-using System.Windows.Input;
+using FreeX.App.Presentation.DrawingUI;
+using FreeX.App.Presentation.PageLayout;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -11,25 +13,26 @@ public sealed class HeaderFooterPictureFormatDialog : Window
     private readonly TextBox _widthBox = new();
     private readonly TextBox _heightBox = new();
     private readonly CheckBox _lockAspectRatioBox = new() { Content = UiText.Get("FormatPicture_LockAspectRatio"), IsChecked = true };
-    private readonly double _originalWidth;
-    private readonly double _originalHeight;
+    private readonly HeaderFooterPictureFormatState _pictureState;
     private bool _updatingSize;
 
     public WorksheetHeaderFooterPicture Result { get; private set; }
 
     public HeaderFooterPictureFormatDialog(WorksheetHeaderFooterPicture picture)
     {
-        Result = picture.DeepClone();
-        _originalWidth = Math.Max(1, picture.Width);
-        _originalHeight = Math.Max(1, picture.Height);
+        Result = HeaderFooterPictureFormatPlanner.NormalizePictureSize(picture.DeepClone());
+        _pictureState = HeaderFooterPictureFormatPlanner.CreateState(
+            picture,
+            UiText.Get("HeaderFooterPicture_DefaultFileName"),
+            CultureInfo.InvariantCulture);
         Title = UiText.Get("FormatPicture_Title");
         Width = 360;
         Height = 270;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
-        _widthBox.Text = picture.Width.ToString(System.Globalization.CultureInfo.InvariantCulture);
-        _heightBox.Text = picture.Height.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        _widthBox.Text = _pictureState.WidthText;
+        _heightBox.Text = _pictureState.HeightText;
         AutomationProperties.SetName(_widthBox, UiText.Get("HeaderFooterPicture_WidthAutomationName"));
         AutomationProperties.SetAutomationId(_widthBox, "HeaderFooterPictureWidthBox");
         AutomationProperties.SetHelpText(_widthBox, UiText.Get("HeaderFooterPicture_WidthHelpText"));
@@ -41,7 +44,7 @@ public sealed class HeaderFooterPictureFormatDialog : Window
         AutomationProperties.SetHelpText(_lockAspectRatioBox, UiText.Get("HeaderFooterPicture_LockAspectRatioHelpText"));
         _widthBox.TextChanged += WidthBox_TextChanged;
         _heightBox.TextChanged += HeightBox_TextChanged;
-        Content = CreateContent(picture.FileName ?? UiText.Get("HeaderFooterPicture_DefaultFileName"));
+        Content = CreateContent(_pictureState.FileName);
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
@@ -70,33 +73,30 @@ public sealed class HeaderFooterPictureFormatDialog : Window
 
     private void Accept()
     {
-        if (!TryParsePositiveSize(_widthBox.Text, out var width))
+        if (!HeaderFooterPictureFormatPlanner.TryCreateResult(
+                Result,
+                _widthBox.Text,
+                _heightBox.Text,
+                out var result,
+                out var invalidField))
         {
             DialogMessageHelper.ShowWarning(this, UiText.Get("FormatPicture_InvalidSizeMessage"), Title);
-            DialogFocus.FocusAndSelect(_widthBox);
+            FocusSizeInput(invalidField);
             return;
         }
 
-        if (!TryParsePositiveSize(_heightBox.Text, out var height))
-        {
-            DialogMessageHelper.ShowWarning(this, UiText.Get("FormatPicture_InvalidSizeMessage"), Title);
-            DialogFocus.FocusAndSelect(_heightBox);
-            return;
-        }
-
-        Result = Result with { Width = width, Height = height };
+        Result = result!;
         DialogResult = true;
     }
 
-    private static bool TryParsePositiveSize(string text, out double value) =>
-        double.TryParse(text, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out value)
-        && value > 0;
-
     private void FocusInitialKeyboardTarget()
     {
-        _widthBox.Focus();
-        _widthBox.SelectAll();
-        Keyboard.Focus(_widthBox);
+        FocusSizeInput(_pictureState.InitialFocusField);
+    }
+
+    private void FocusSizeInput(ObjectSizeDialogField field)
+    {
+        DialogFocus.FocusAndSelect(field == ObjectSizeDialogField.Width ? _widthBox : _heightBox);
     }
 
     private void WidthBox_TextChanged(object sender, TextChangedEventArgs e)
@@ -104,10 +104,10 @@ public sealed class HeaderFooterPictureFormatDialog : Window
         if (_updatingSize || _lockAspectRatioBox.IsChecked != true)
             return;
 
-        if (!double.TryParse(_widthBox.Text, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var width) || width <= 0)
+        if (HeaderFooterPictureFormatPlanner.SyncHeightFromWidth(_widthBox.Text, _pictureState.OriginalSize) is not { } height)
             return;
 
-        SetHeight(CalculateLockedAspectHeight(width, _originalWidth, _originalHeight));
+        SetHeight(height);
     }
 
     private void HeightBox_TextChanged(object sender, TextChangedEventArgs e)
@@ -115,19 +115,20 @@ public sealed class HeaderFooterPictureFormatDialog : Window
         if (_updatingSize || _lockAspectRatioBox.IsChecked != true)
             return;
 
-        if (!double.TryParse(_heightBox.Text, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var height) || height <= 0)
+        if (HeaderFooterPictureFormatPlanner.SyncWidthFromHeight(_heightBox.Text, _pictureState.OriginalSize) is not { } width)
             return;
 
-        SetWidth(CalculateLockedAspectWidth(height, _originalWidth, _originalHeight));
+        SetWidth(width);
     }
 
     private void ResetSize()
     {
+        var resetSize = HeaderFooterPictureFormatPlanner.ResetSize(_pictureState);
         _updatingSize = true;
         try
         {
-            _widthBox.Text = FormatSize(_originalWidth);
-            _heightBox.Text = FormatSize(_originalHeight);
+            _widthBox.Text = FormatSize(resetSize.Width);
+            _heightBox.Text = FormatSize(resetSize.Height);
         }
         finally
         {
@@ -136,10 +137,10 @@ public sealed class HeaderFooterPictureFormatDialog : Window
     }
 
     internal static double CalculateLockedAspectHeight(double width, double originalWidth, double originalHeight) =>
-        originalWidth <= 0 || originalHeight <= 0 ? width : width * originalHeight / originalWidth;
+        HeaderFooterPictureFormatPlanner.CalculateLockedAspectHeight(width, originalWidth, originalHeight);
 
     internal static double CalculateLockedAspectWidth(double height, double originalWidth, double originalHeight) =>
-        originalWidth <= 0 || originalHeight <= 0 ? height : height * originalWidth / originalHeight;
+        HeaderFooterPictureFormatPlanner.CalculateLockedAspectWidth(height, originalWidth, originalHeight);
 
     private void SetWidth(double width)
     {
@@ -168,7 +169,7 @@ public sealed class HeaderFooterPictureFormatDialog : Window
     }
 
     private static string FormatSize(double value) =>
-        Math.Round(value, 2).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+        HeaderFooterPictureFormatPlanner.FormatSize(value, CultureInfo.InvariantCulture);
 
     private static void AddLabeledBox(Panel stack, string label, TextBox box)
     {

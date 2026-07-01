@@ -32,10 +32,23 @@ public class RibbonAndDocumentTests
     }
 
     [Fact]
+    public void Ribbon_file_tab_exposes_explicit_pdf_text_import()
+    {
+        var file = FreeWRibbon.BuildDefinition().FindTab("file");
+
+        file.Should().NotBeNull();
+        file!.Groups
+            .SelectMany(group => group.Controls)
+            .Select(CommandIdOf)
+            .Where(id => id is not null)
+            .Select(id => id!.Value.Value)
+            .Should().Contain(new[] { "freew.open", "freew.save", "freew.import-pdf-text" });
+    }
+    [Fact]
     public void Every_ribbon_command_id_is_registered()
     {
         var definition = FreeWRibbon.BuildDefinition();
-        var callbacks = new RibbonHostCallbacks(() => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, _ => { }, _ => { }, () => { }, () => { }, (_, _) => { });
+        var callbacks = NoopCallbacks();
         var registry = FreeWRibbon.BuildRegistry(new Editing.DocumentView(), callbacks);
 
         foreach (var id in CommandIds(definition))
@@ -64,20 +77,51 @@ public class RibbonAndDocumentTests
         project.Should().Contain(@"..\..\shared\Free.Shared.AppServices\Free.Shared.AppServices.csproj");
 
         var mainWindow = File.ReadAllText(FindRepoFile("freew", "FreeW.App.Avalonia", "MainWindow.cs"));
-        mainWindow.Should().Contain("private readonly FileCommandWorkflow _fileWorkflow;");
-        mainWindow.Should().Contain("new FileCommandWorkflow(");
+        var sharedShellWorkflow = File.ReadAllText(FindRepoFile(
+            "shared",
+            "Free.Shared.Shell.Avalonia",
+            "SisterAvaloniaFileCommandWorkflow.cs"));
+
+        mainWindow.Should().Contain("private readonly SisterAvaloniaFileCommandWorkflow _fileWorkflow;");
+        mainWindow.Should().Contain("new SisterAvaloniaFileCommandWorkflow(");
+        mainWindow.Should().Contain("new SisterAvaloniaFileTitleSpec(");
+        mainWindow.Should().Contain("private readonly DocumentPersistenceWorkflow _documentPersistence");
         mainWindow.Should().Contain("_fileWorkflow.New(");
         mainWindow.Should().Contain("_fileWorkflow.OpenAsync(");
         mainWindow.Should().Contain("_fileWorkflow.SaveAsync(");
+        mainWindow.Should().Contain("_documentPersistence.Open(path)");
+        mainWindow.Should().Contain("_documentPersistence.Save(_editor.Document, target)");
+        mainWindow.Should().Contain("_documentPersistence.BuildSavePickerPlan(");
         mainWindow.Should().Contain("_fileWorkflow.MarkDirty();");
         // suppressRecentFiles was true (stub) and is now false so files register in the store.
         mainWindow.Should().Contain("_fileWorkflow.MarkSavedWithPath(path, suppressRecentFiles:");
+        sharedShellWorkflow.Should().Contain("new FileCommandWorkflow(");
+        sharedShellWorkflow.Should().Contain("WindowTitlePlanner.Compose(");
+        sharedShellWorkflow.Should().Contain("AvaloniaSaveChangesDialog.ShowAsync(");
+        sharedShellWorkflow.Should().Contain("RecentEntries => _workflow.RecentEntries");
+        mainWindow.Should().NotContain("PromptSaveChangesSync");
+        mainWindow.Should().NotContain("AvaloniaSaveChangesDialog.ShowAsync(");
         mainWindow.Should().NotContain("new FileCommandSession");
         mainWindow.Should().NotContain("FileLifecyclePlanner.PlanSave(");
         mainWindow.Should().NotContain("WorkbookDocumentState");
         mainWindow.Should().NotContain("_state.");
         mainWindow.Should().NotContain("CurrentFilePath");
         mainWindow.Should().NotContain("private string? _currentPath");
+        mainWindow.Should().NotContain("DocumentFileFormatResolver.FindSaveAdapter(");
+        mainWindow.Should().NotContain("File.Create(path)");
+    }
+
+    [Fact]
+    public void Import_pdf_ribbon_command_invokes_host_route()
+    {
+        var invoked = 0;
+        var callbacks = NoopCallbacks() with { ImportPdfText = () => invoked++ };
+        var registry = FreeWRibbon.BuildRegistry(new Editing.DocumentView(), callbacks);
+
+        registry.TryGet(new RibbonCommandId("freew.import-pdf-text"), out var command).Should().BeTrue();
+        command!.Execute(RibbonCommandContext.Empty);
+
+        invoked.Should().Be(1);
     }
 
     [Fact]
@@ -142,4 +186,7 @@ public class RibbonAndDocumentTests
 
         throw new DirectoryNotFoundException("Could not locate repository root from the test output directory.");
     }
+
+    private static RibbonHostCallbacks NoopCallbacks() =>
+        new(() => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, _ => { }, _ => { }, () => { }, () => { }, (_, _) => { });
 }

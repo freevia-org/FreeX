@@ -1,5 +1,6 @@
 using System.Linq;
 using FreeW.App.Host.Editing;
+using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
 using Xunit;
 using WpfTable = System.Windows.Documents.Table;

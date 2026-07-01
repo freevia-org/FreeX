@@ -14,6 +14,8 @@ public sealed class ReleaseAutomationWorkflowTests
         workflow.Should().Contain("workflow_dispatch:");
         workflow.Should().Contain("release_notes:");
         workflow.Should().Contain("include_macos_preview:");
+        workflow.Should().Contain("Optionally attach matching macOS internal-preview artifacts");
+        workflow.Should().Contain("default: false");
         workflow.Should().Contain("macos_preview_run_id:");
         workflow.Should().Contain("public_preview_candidate:");
         workflow.Should().Contain("accessibility_keyboard_only:");
@@ -34,7 +36,7 @@ public sealed class ReleaseAutomationWorkflowTests
         workflow.Should().Contain("-not ($isMainRelease -or $isDailyReleaseBranch)");
         workflow.Should().Contain("Tester releases publish stable latest assets and must run from refs/heads/main or a codex/daily-tester-release-* branch.");
         workflow.Should().Contain("actions/setup-dotnet@v5");
-        workflow.Should().Contain("timeout-minutes: 60");
+        workflow.Should().Contain("timeout-minutes: 180");
         workflow.Should().Contain("name: Repository preflight");
         workflow.Should().Contain("powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\\Test-RepositoryPreflight.ps1");
         workflow.Should().Contain("dotnet build FreeX.slnx --configuration Release");
@@ -72,7 +74,8 @@ public sealed class ReleaseAutomationWorkflowTests
         workflow.Should().Contain("FreeX-latest-macos-arm64.zip");
         workflow.Should().Contain("FreeX-latest-macos-x64.zip");
         workflow.Should().Contain("include_macos_preview=true requires a successful macOS App Preview run");
-        workflow.Should().Contain("gh api \"repos/$env:GITHUB_REPOSITORY/actions/workflows/macos-app.yml/runs?branch=main&status=success&per_page=50\"");
+        workflow.Should().Contain("$encodedBranchName = [System.Uri]::EscapeDataString($env:GITHUB_REF_NAME)");
+        workflow.Should().Contain("gh api \"repos/$env:GITHUB_REPOSITORY/actions/workflows/macos-app.yml/runs?branch=$encodedBranchName&status=success&per_page=50\"");
         workflow.Should().Contain("gh run download $($macOsRun.id) --name $artifactName --dir $runtimeRoot");
         workflow.Should().Contain("attempt ${macOsRunAttempt}: $macOsRunUrl");
         workflow.Should().NotContain("attempt $macOsRunAttempt: $macOsRunUrl");

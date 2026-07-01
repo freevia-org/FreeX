@@ -238,7 +238,7 @@ public sealed class RibbonCommandPresentationPlannerTests
     [Fact]
     public void GetIcon_DoesNotContainDuplicateContainsPredicates()
     {
-        var source = DialogSourceTestSupport.ReadHostSources("RibbonCommandPresentationPlanner.Icons.cs");
+        var source = DialogSourceTestSupport.ReadRibbonDefinitionSource("RibbonCommandPresentationPlanner.Icons.cs");
         var getIconSource = SourceMethodExtractor.ExtractMethodSource(source, "public static RibbonCommandIcon GetIcon(");
         var duplicatePredicates = Regex
             .Matches(getIconSource, @"name\.Contains\(""(?<predicate>[^""]+)""\)")

@@ -27,7 +27,7 @@ public sealed partial class PivotWorkflowDialogTests
             "PivotDialogLayout.AddLabeledControl(fieldPanel, UiText.Get(\"PivotSlicerTimeline_DateFieldToConnectLabel\"), _fieldBox",
             "PivotDialogLayout.AddLabeledControl(fieldPanel, UiText.Get(\"PivotSlicerTimeline_TimelineCaptionLabel\"), _nameBox",
             "InsertChartDialog.CreateAllChartsPanel(_categoryList, _subtypeGallery",
-            "AutomationProperties.SetName(_styleGallery, UiText.Get(\"PivotChartOptions_PivotChartStyleGallery\"))",
+            "ApplyFieldAutomation(_styleGallery, PivotChartOptionsDialogFieldId.ChartStyle)",
             "AddCombo(selectionPanel, UiText.Get(\"PivotFieldGrouping_FieldLabel\"), _fieldBox",
             "AddCombo(groupingPanel, UiText.Get(\"PivotFieldGrouping_GroupByLabel\"), _groupingBox",
             "AddTextBox(rangePanel, UiText.Get(\"PivotFieldGrouping_StartingAtLabel\"), _startBox",
@@ -76,9 +76,7 @@ public sealed partial class PivotWorkflowDialogTests
 
         source.Should().Contain("if (!TryCreateResult(_fieldBox.Text, _nameBox.Text, out var result, out var error))");
         source.Should().Contain("ShowInvalidInputWarning(error ?? UiText.Get(\"PivotSlicerTimeline_EnterSlicerOptions\")");
-        source.Should().Contain("DialogMessageHelper.ShowWarning(this, message, Title);");
-        source.Should().Contain("Keyboard.Focus(target);");
-        source.Should().Contain("textBox.SelectAll();");
+        source.Should().Contain("DialogFocus.ShowWarningAndFocus(this, message, Title, target);");
     }
 
     [Fact]
@@ -139,9 +137,7 @@ public sealed partial class PivotWorkflowDialogTests
 
         source.Should().Contain("if (!TryCreateResult(_fieldBox.Text, _nameBox.Text, out var result, out var error))");
         source.Should().Contain("ShowInvalidInputWarning(error ?? UiText.Get(\"PivotSlicerTimeline_EnterTimelineOptions\")");
-        source.Should().Contain("DialogMessageHelper.ShowWarning(this, message, Title);");
-        source.Should().Contain("Keyboard.Focus(target);");
-        source.Should().Contain("textBox.SelectAll();");
+        source.Should().Contain("DialogFocus.ShowWarningAndFocus(this, message, Title, target);");
     }
 
     [Fact]
@@ -211,6 +207,41 @@ public sealed partial class PivotWorkflowDialogTests
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
         source.Should().Contain("_recommendedGallery.Focus();");
         source.Should().Contain("Keyboard.Focus(_recommendedGallery);");
+    }
+
+    [Fact]
+    public void PivotValueFilterDialog_DelegatesOptionAndInputPolicyToPresentationPlanner()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("PivotValueFilterDialog.xaml.cs");
+
+        source.Should().Contain("PivotFieldFilterPlanner.ValueFilterKinds");
+        source.Should().Contain("PivotFieldFilterPlanner.DefaultValueKindIndex");
+        source.Should().Contain("PivotFieldFilterPlanner.TryCreateValueFilter");
+        source.Should().Contain("PivotFieldFilterPlanner.ValueKindNeedsPrimaryInput");
+        source.Should().Contain("PivotFieldFilterPlanner.ValueKindNeedsSecondValue");
+        source.Should().Contain("PivotFieldFilterPlanner.DescribeValueFilterValidationError");
+        source.Should().NotContain("PivotValueFilterInputParser.TryCreateFilter");
+        source.Should().NotContain("bool UsesCount");
+    }
+
+    [Fact]
+    public void PivotLabelFilterDialog_DelegatesOptionAndInputPolicyToPresentationPlanner()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("PivotLabelFilterDialog.xaml.cs");
+
+        source.Should().Contain("PivotFieldFilterPlanner.LabelFilterKinds");
+        source.Should().Contain("PivotFieldFilterPlanner.DefaultLabelKindIndex");
+        source.Should().Contain("PivotFieldFilterPlanner.FindLabelKindIndex");
+        source.Should().Contain("PivotFieldFilterPlanner.TryCreateLabelFilterWithValidationError");
+        source.Should().Contain("PivotFieldFilterPlanner.LabelKindFromIndex");
+        source.Should().Contain("PivotFieldFilterPlanner.LabelKindNeedsSecondValue");
+        source.Should().Contain("PivotFieldFilterPlanner.DescribeLabelFilterValidationError");
+        source.Should().NotContain("new PivotLabelFilterModel");
+        source.Should().NotContain("LabelFilterValueBox.Text.Trim");
+        source.Should().NotContain("LabelFilterValue2Box.Text.Trim");
+        source.Should().NotContain("PivotLabelFilter_Equals");
+        source.Should().NotContain("PivotLabelFilter_Contains");
+        source.Should().NotContain("PivotLabelFilter_Between");
     }
 
     [Fact]

@@ -5,6 +5,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using FreeX.App.Presentation;
+using FreeX.App.Presentation.PivotUI;
 using FreeX.App.Presentation.SlicerTimeline;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -18,7 +19,7 @@ public partial class MainWindow
     private void PivotTableBtn_Click(object sender, RoutedEventArgs e)
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
-        var sourcePlan = PivotTableSourceRangePlanner.CreatePlan(sheet, SheetGrid.SelectedRange);
+        var sourcePlan = PivotCreatePlanner.CreateSourceRangePlan(sheet, SheetGrid.SelectedRange);
         if (!sourcePlan.IsValid || sourcePlan.SourceRange is not { } sourceRange)
         {
             ShowPivotTableSourceRangeError(sourcePlan.Error);
@@ -44,15 +45,15 @@ public partial class MainWindow
         }
 
         var sourceSheet = _workbook.GetSheet(dialogSourceRange.Start.Sheet) ?? activeSheet;
-        var dataFieldIndex = PivotUiPlanner.ChooseDefaultDataField(sourceSheet, dialogSourceRange);
-        var rowFieldIndex = dataFieldIndex == 0 ? 1 : 0;
+        var layout = PivotCreatePlanner.CreateDefaultLayout(sourceSheet, dialogSourceRange);
+        var name = PivotCreatePlanner.SuggestName(_workbook);
         if (dialog.Result.DestinationKind == PivotTableDestinationKind.NewWorksheet)
         {
-            var command = new AddPivotTableToNewWorksheetCommand(
+            var command = PivotCreatePlanner.BuildNewWorksheetCommand(
                 dialogSourceRange,
-                PivotUiPlanner.GenerateUniquePivotTableName(activeSheet),
-                rowFieldIndexes: [rowFieldIndex],
-                dataFieldIndexes: [dataFieldIndex]);
+                name,
+                layout.RowFieldIndexes,
+                layout.DataFieldIndexes);
 
             if (!TryExecuteCommand(command, "Insert PivotTable"))
                 return;
@@ -77,16 +78,14 @@ public partial class MainWindow
             return;
         }
 
-        var name = PivotUiPlanner.GenerateUniquePivotTableName(activeSheet);
-
         if (!TryExecuteCommand(
-                new AddPivotTableCommand(
+                PivotCreatePlanner.BuildInPlaceCommand(
                     _currentSheetId,
                     dialogSourceRange,
                     targetRange,
                     name,
-                    rowFieldIndexes: [rowFieldIndex],
-                    dataFieldIndexes: [dataFieldIndex]),
+                    layout.RowFieldIndexes,
+                    layout.DataFieldIndexes),
                 "Insert PivotTable"))
             return;
 
@@ -95,21 +94,21 @@ public partial class MainWindow
             RefreshPivotFieldListPane();
     }
 
-    private void ShowPivotTableSourceRangeError(PivotTableSourceRangeError error)
+    private void ShowPivotTableSourceRangeError(PivotCreateSourceRangeError error)
     {
         switch (error)
         {
-            case PivotTableSourceRangeError.MissingSource:
+            case PivotCreateSourceRangeError.MissingSource:
                 _messageService.ShowInfo(
                     UiText.Get("MainWindowMessage_PivotTableSelectSourceRange"),
                     UiText.Get("MainWindowMessage_InsertPivotTableTitle"));
                 break;
-            case PivotTableSourceRangeError.MinimumShape:
+            case PivotCreateSourceRangeError.MinimumShape:
                 _messageService.ShowInfo(
                     UiText.Get("MainWindowMessage_PivotTableSourceMinimumShape"),
                     UiText.Get("MainWindowMessage_InsertPivotTableTitle"));
                 break;
-            case PivotTableSourceRangeError.MissingHeaders:
+            case PivotCreateSourceRangeError.MissingHeaders:
                 _messageService.ShowWarning(
                     UiText.Get("MainWindowMessage_PivotTableInvalidSourceRange"),
                     UiText.Get("MainWindowMessage_InsertPivotTableTitle"));
@@ -417,11 +416,11 @@ public partial class MainWindow
             FormatWorkbookRange(pivotTable.SourceRange),
             request => ApplyPivotTableDataSourceRangeSelection(dialog, request),
             sheetId: sheet.Id,
-            resolveSheetId: ResolveSheetIdByName)
+            resolveSheetId: ResolveSheetIdByName,
+            resolveReference: (string reference, out GridRange range) => TryParseWorkbookRange(sheet.Id, reference, out range))
         { Owner = this };
         if (dialog.ShowDialog() != true ||
-            string.IsNullOrWhiteSpace(dialog.Result.SourceRangeText) ||
-            !TryParseWorkbookRange(sheet.Id, dialog.Result.SourceRangeText, out var sourceRange))
+            dialog.Result.SourceRange is not { } sourceRange)
             return;
 
         if (!TryExecuteCommand(

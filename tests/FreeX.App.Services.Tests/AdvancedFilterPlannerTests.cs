@@ -161,6 +161,46 @@ public sealed class AdvancedFilterPlannerTests
         result.InvalidText.Should().Be(expectedInvalidText);
     }
 
+    [Theory]
+    [InlineData("bad", AdvancedFilterPlanError.InvalidListRange)]
+    [InlineData("A1", AdvancedFilterPlanError.ListRangeRequiresDataRows)]
+    [InlineData("A1:XFD1048576", AdvancedFilterPlanError.ListRangeTooLarge)]
+    public void CreatePlan_ReportsStructuredListRangeValidationIssues(
+        string listRangeText,
+        AdvancedFilterPlanError expectedError)
+    {
+        var result = AdvancedFilterPlanner.CreatePlan(
+            SheetId,
+            listRangeText,
+            criteriaRangeText: "F1:G2",
+            copyToRangeText: "",
+            outputMode: AdvancedFilterOutputMode.FilterInPlace,
+            uniqueRecordsOnly: false);
+
+        result.Success.Should().BeFalse();
+        result.Error.Should().Be(expectedError);
+    }
+
+    [Theory]
+    [InlineData("bad", AdvancedFilterPlanError.InvalidCriteriaRange)]
+    [InlineData("F1:G1", AdvancedFilterPlanError.CriteriaRangeRequiresCriteriaRows)]
+    [InlineData("F1:XFD1048576", AdvancedFilterPlanError.CriteriaRangeTooLarge)]
+    public void CreatePlan_ReportsStructuredCriteriaRangeValidationIssues(
+        string criteriaRangeText,
+        AdvancedFilterPlanError expectedError)
+    {
+        var result = AdvancedFilterPlanner.CreatePlan(
+            SheetId,
+            listRangeText: "A1:C5",
+            criteriaRangeText,
+            copyToRangeText: "",
+            outputMode: AdvancedFilterOutputMode.FilterInPlace,
+            uniqueRecordsOnly: false);
+
+        result.Success.Should().BeFalse();
+        result.Error.Should().Be(expectedError);
+    }
+
     [Fact]
     public void CreatePlan_FilterInPlaceIgnoresCopyToText()
     {
@@ -202,6 +242,26 @@ public sealed class AdvancedFilterPlannerTests
         result.InvalidText.Should().Be(expectedInvalidText);
     }
 
+    [Theory]
+    [InlineData("", AdvancedFilterPlanError.CopyDestinationRequired)]
+    [InlineData("A8:C9", AdvancedFilterPlanError.InvalidCopyDestinationRange)]
+    [InlineData("A8:XFD8", AdvancedFilterPlanError.CopyDestinationRangeTooLarge)]
+    public void CreatePlan_ReportsStructuredCopyDestinationValidationIssues(
+        string copyToRangeText,
+        AdvancedFilterPlanError expectedError)
+    {
+        var result = AdvancedFilterPlanner.CreatePlan(
+            SheetId,
+            listRangeText: "A1:D20",
+            criteriaRangeText: "F1:G2",
+            copyToRangeText: copyToRangeText,
+            outputMode: AdvancedFilterOutputMode.CopyToAnotherLocation,
+            uniqueRecordsOnly: false);
+
+        result.Success.Should().BeFalse();
+        result.Error.Should().Be(expectedError);
+    }
+
     [Fact]
     public void CreatePlan_RejectsCopyDestinationOnDifferentSheetThanListRange()
     {
@@ -240,6 +300,65 @@ public sealed class AdvancedFilterPlannerTests
         result.Success.Should().BeTrue();
         plan.Should().Be(result.Plan);
         plan.CopyToCell.Should().Be(new CellAddress(SheetId, 1, 10));
+    }
+
+    [Theory]
+    [InlineData("A1:C10", true, "A1", "C10")]
+    [InlineData(" B2 ", true, "B2", "B2")]
+    [InlineData("$D$4:$F$6", true, "D4", "F6")]
+    [InlineData("R4C4:R4C6", true, "D4", "F4")]
+    [InlineData("Missing!A1:B2", false, "", "")]
+    [InlineData("A1:B2:C3", false, "", "")]
+    public void TryParseRange_ParsesAdvancedFilterReferences(
+        string input,
+        bool expected,
+        string expectedStart,
+        string expectedEnd)
+    {
+        var result = AdvancedFilterPlanner.TryParseRange(
+            SheetId,
+            input,
+            sheetName => string.Equals(sheetName, "Sheet1", StringComparison.OrdinalIgnoreCase) ? SheetId : null,
+            out var range);
+
+        result.Should().Be(expected);
+        if (expected)
+        {
+            range.Start.ToA1().Should().Be(expectedStart);
+            range.End.ToA1().Should().Be(expectedEnd);
+        }
+    }
+
+    [Fact]
+    public void TryParseRange_ParsesSheetQualifiedRange()
+    {
+        AdvancedFilterPlanner.TryParseRange(
+            SheetId.New(),
+            "Sheet1!A1:B2",
+            sheetName => string.Equals(sheetName, "Sheet1", StringComparison.OrdinalIgnoreCase) ? SheetId : null,
+            out var range).Should().BeTrue();
+
+        range.Start.Sheet.Should().Be(SheetId);
+        range.Start.ToA1().Should().Be("A1");
+        range.End.ToA1().Should().Be("B2");
+    }
+
+    [Theory]
+    [InlineData("", true, null)]
+    [InlineData("   ", true, null)]
+    [InlineData("$D$4", true, "D4")]
+    [InlineData("R4C4", true, "D4")]
+    [InlineData("A1:B2", false, null)]
+    [InlineData("bad", false, null)]
+    public void TryParseCopyDestination_AllowsBlankOrSingleCellAddress(
+        string input,
+        bool expected,
+        string? expectedAddress)
+    {
+        var result = AdvancedFilterPlanner.TryParseCopyDestination(input, SheetId, out var address);
+
+        result.Should().Be(expected);
+        address?.ToA1().Should().Be(expectedAddress);
     }
 
     [Theory]

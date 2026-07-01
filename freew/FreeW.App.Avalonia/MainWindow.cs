@@ -10,10 +10,14 @@ using Avalonia.Platform.Storage;
 using Free.Shared.AppServices;
 using Free.Shared.Ribbon;
 using Free.Shared.Ribbon.Avalonia;
+using Free.Shared.Shell.Avalonia;
 using FreeW.App.Avalonia.Backstage;
 using FreeW.App.Avalonia.Editing;
 using FreeW.App.Avalonia.Pdf;
 using FreeW.App.Avalonia.Ribbon;
+using FreeW.App.Presentation.Dialogs;
+using FreeW.App.Presentation.Options;
+using FreeW.App.Presentation.Shell;
 using FreeW.Core.IO;
 using FreeW.Core.Model;
 
@@ -21,35 +25,31 @@ namespace FreeW.App.Avalonia;
 
 public sealed class MainWindow : Window
 {
-    private const string DefaultSaveExtension = ".docx";
+    private const string DefaultTitle = "FreeW";
+    private static readonly SisterAppFileTextSpec FileText = SisterAppFileTextPlanner.Document;
 
-    /// <summary>
-    /// Number of entries kept in the recent-files store for this session.
-    /// A FreeWOptions-driven cap comes in a later round; this constant is the
-    /// interim default (matches the WPF host's <c>FreeWOptions.DefaultRecentFilesCap</c>).
-    /// </summary>
-    private const int DefaultRecentFilesCap = 10;
+    private static readonly FilePickerFileType PdfFileType =
+        AvaloniaFilePickerTypeAdapter.CreateFileType(
+            FreeWFileTextResources.PdfFileTypeName,
+            ["*.pdf"],
+            ["application/pdf"]);
 
-    private static readonly FilePickerFileType PdfFileType = new("PDF document")
-    {
-        Patterns = ["*.pdf"],
-        MimeTypes = ["application/pdf"],
-    };
-
-    private readonly IReadOnlyList<IDocumentFileAdapter> _adapters = DocumentFileAdapterCatalog.CreateDefaultAdapters();
+    private readonly DocumentPersistenceWorkflow _documentPersistence = new();
     private readonly DocumentView _editor = new();
-    private readonly TextBlock _status = new() { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0) };
+    private readonly TextBlock _status = SisterAppStatusBarChrome.CreateInfoText(margin: new Thickness(8, 0));
     // AV-MAIL: the Mailings engine (recipients / merge fields / preview / finish-merge) shared with the ribbon.
     private MailMergeEngine? _mailMerge;
     private readonly TextBox _findBox = new() { Width = 200, VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBox _replaceBox = new() { Width = 200, VerticalAlignment = VerticalAlignment.Center };
-    private readonly TextBlock _zoomLabel = new() { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0) };
+    private readonly TextBlock _zoomLabel = SisterAppStatusBarChrome.CreateInfoText("100%", margin: new Thickness(8, 0));
     private readonly ScaleTransform _zoom = new(1, 1);
     // Status-bar view-mode buttons (Print / Web / Draft).
     private readonly Button _btnPrintLayout  = MakeViewModeButton("Print");
     private readonly Button _btnWebLayout    = MakeViewModeButton("Web");
     private readonly Button _btnDraftView    = MakeViewModeButton("Draft");
-    private readonly FileCommandWorkflow _fileWorkflow;
+    private readonly SisterAvaloniaFileCommandWorkflow _fileWorkflow;
+    private readonly FreeWOptions _options;
+    private readonly ApplicationOptionsStore<FreeWOptions> _optionsStore;
     private readonly AutosaveAdapter _autosave;
     private readonly NavigationPane _navPane;
     private readonly ReviewingPane _reviewingPane;
@@ -58,6 +58,8 @@ public sealed class MainWindow : Window
     private FindReplaceDialog? _findReplaceDialog;
     private ScrollViewer? _scroller;
     private double _zoomScale = 1.0;
+    private bool _multiplePagesMode;
+    private bool _sideToSideMode;
     private bool _suppressEditorDirty;
     private bool _closingConfirmed;
 
@@ -67,43 +69,50 @@ public sealed class MainWindow : Window
     }
 
     public MainWindow(IReadOnlyList<string> startupArguments)
+        : this(
+            startupArguments,
+            null,
+            ApplicationOptionsStore<FreeWOptions>.Create(PlatformApplicationDataPathProvider.LocalInstance))
     {
-        Title = "FreeW";
+    }
+
+    internal MainWindow(
+        IReadOnlyList<string> startupArguments,
+        FreeWOptions? options,
+        ApplicationOptionsStore<FreeWOptions> optionsStore)
+    {
+        _optionsStore = optionsStore;
+        _options = options ?? _optionsStore.Load();
+        _options.Normalize();
+
+        Title = DefaultTitle;
         Width = 1040;
         Height = 720;
         MinWidth = 720;
         MinHeight = 480;
         Background = new SolidColorBrush(Color.FromRgb(0xF3, 0xF3, 0xF3));
-        _fileWorkflow = new FileCommandWorkflow(
-            maxRecentEntries: () => DefaultRecentFilesCap,
+        _fileWorkflow = new SisterAvaloniaFileCommandWorkflow(
+            owner: this,
+            titleSpec: new SisterAvaloniaFileTitleSpec(
+                ApplicationName: DefaultTitle,
+                Separator: " - ",
+                CollapseCleanUntitledTitle: true),
+            maxRecentEntries: () => _options.RecentFilesCap,
             onChanged: UpdateStatus,
-            promptSaveChanges: action => PromptSaveChangesSync(action),
             save: () => SaveAsync().GetAwaiter().GetResult());
-        _autosave = new AutosaveAdapter(_editor, _fileWorkflow);
+        _autosave = new AutosaveAdapter(_editor, _fileWorkflow.Workflow);
         _navPane = new NavigationPane(_editor);
         _reviewingPane = new ReviewingPane(_editor);
         _revealPane = new RevealFormattingPane(_editor);
 
-        var root = new DockPanel();
-
         var ribbon = BuildRibbon();
-        DockPanel.SetDock(ribbon, Dock.Top);
-        root.Children.Add(ribbon);
-
-        var statusBar = new Border
-        {
-            Background = Brushes.White,
-            BorderBrush = new SolidColorBrush(Color.FromRgb(0xDD, 0xDD, 0xDD)),
-            BorderThickness = new Thickness(0, 1, 0, 0),
-            Height = 26,
-            Child = BuildStatusContent(),
-        };
-        DockPanel.SetDock(statusBar, Dock.Bottom);
-        root.Children.Add(statusBar);
-
+        var statusBar = SisterAppStatusBarChrome.Build(new SisterAppStatusBarSpec(
+            Background: Brushes.White,
+            LeftContent: _status,
+            RightItems: BuildStatusRightItems(),
+            BorderBrush: new SolidColorBrush(Color.FromRgb(0xDD, 0xDD, 0xDD)),
+            BorderThickness: new Thickness(0, 1, 0, 0))).Root;
         var findBar = BuildFindBar();
-        DockPanel.SetDock(findBar, Dock.Bottom);
-        root.Children.Add(findBar);
 
         _scroller = new ScrollViewer
         {
@@ -114,18 +123,20 @@ public sealed class MainWindow : Window
         };
         _navPane.ScrollerRef = _scroller;
 
+        var workArea = new DockPanel { LastChildFill = true };
+
         // Nav pane docked left; reviewing pane docked right; workspace fills the remainder.
         DockPanel.SetDock(_navPane, Dock.Left);
-        root.Children.Add(_navPane);
+        workArea.Children.Add(_navPane);
 
         DockPanel.SetDock(_reviewingPane, Dock.Right);
-        root.Children.Add(_reviewingPane);
+        workArea.Children.Add(_reviewingPane);
 
         DockPanel.SetDock(_revealPane, Dock.Right);
-        root.Children.Add(_revealPane);
+        workArea.Children.Add(_revealPane);
 
         var workspace = new Border { Background = new SolidColorBrush(Color.FromRgb(0xE6, 0xE6, 0xE6)), Child = _scroller };
-        root.Children.Add(workspace);
+        workArea.Children.Add(workspace);
 
         _editor.DocumentChanged += OnEditorDocumentChanged;
         _editor.DocumentChanged += () => { if (_navPane.IsVisible) _navPane.Refresh(); };
@@ -162,7 +173,13 @@ public sealed class MainWindow : Window
         // and let the async flow re-close if the user saves or discards.
         Closing += OnWindowClosing;
 
-        Content = root;
+        var frame = SisterAppClientFrameBuilder.Build(SisterAppClientFrameSpec.ForWorkArea(
+            chrome: ribbon,
+            workArea: workArea,
+            statusBar: statusBar,
+            bottomPanelsAboveStatus: [findBar]));
+
+        Content = frame.Root;
         UpdateStatus();
     }
 
@@ -299,6 +316,24 @@ public sealed class MainWindow : Window
         new WordCountDialog(_editor.ComputeStatistics()).ShowDialog(this);
 
     /// <summary>
+    /// Opens the Avalonia print-preview surface over a snapshot of the current document. Native print
+    /// selection remains deferred, but the preview uses the same paginated renderer as the live editor.
+    /// </summary>
+    private Task OpenPrintPreviewAsync()
+    {
+        try
+        {
+            var snapshot = CloneDocument(_editor.Document);
+            return new PrintPreviewDialog(snapshot, _fileWorkflow.DisplayName).ShowDialog(this);
+        }
+        catch (Exception ex)
+        {
+            _status.Text = SisterAppFileTextPlanner.FormatCommandFailed("Print Preview", ex.Message);
+            return Task.CompletedTask;
+        }
+    }
+
+    /// <summary>
     /// AV-VIEW: Opens the Zoom dialog (modal). Pre-selects the preset matching the current zoom (or the
     /// custom box), and on OK applies the chosen scale through the same <see cref="ApplyZoom(double)"/>
     /// path as the quick zoom commands. Wired to <c>freew.zoom-dialog</c> (View → Zoom group).
@@ -336,7 +371,7 @@ public sealed class MainWindow : Window
         }
         catch (Exception ex)
         {
-            _status.Text = $"New window failed: {ex.Message}";
+            _status.Text = SisterAppFileTextPlanner.FormatCommandFailed("New window", ex.Message);
         }
     }
 
@@ -348,6 +383,62 @@ public sealed class MainWindow : Window
     private void ToggleSplit()
     {
         _status.Text = "Split view is not yet available in the Avalonia shell (deferred).";
+    }
+
+    private void ZoomToOnePage()
+    {
+        var (_, _, wholePageFactor) = ComputeZoomFitFactors();
+        ApplyZoom(wholePageFactor);
+        _editor.Focus();
+    }
+
+    private void ZoomToPageWidth()
+    {
+        var (pageWidthFactor, _, _) = ComputeZoomFitFactors();
+        ApplyZoom(pageWidthFactor);
+        _editor.Focus();
+    }
+
+    private void ToggleMultiplePages()
+    {
+        _multiplePagesMode = !_multiplePagesMode;
+        if (_multiplePagesMode)
+            _sideToSideMode = false;
+
+        _status.Text = _multiplePagesMode
+            ? "Multiple Pages view is not yet available in the Avalonia shell (deferred)."
+            : "Multiple Pages view is off.";
+    }
+
+    private void ToggleSideToSide()
+    {
+        _sideToSideMode = !_sideToSideMode;
+        if (_sideToSideMode)
+            _multiplePagesMode = false;
+
+        _status.Text = _sideToSideMode
+            ? "Side to Side view is not yet available in the Avalonia shell (deferred)."
+            : "Side to Side view is off.";
+    }
+
+    private (double PageWidthFactor, double TextWidthFactor, double WholePageFactor) ComputeZoomFitFactors()
+    {
+        var page = _editor.Document.Page;
+        var (pageWidthDip, pageHeightDip) = PageLayout.PageSizeDip(page);
+        var (contentWidthDip, _) = PageLayout.ContentAreaDip(page);
+
+        var viewportWidth = 0.0;
+        var viewportHeight = 0.0;
+        if (_scroller is not null)
+        {
+            viewportWidth = Math.Max(0, _scroller.Bounds.Width - _scroller.Padding.Left - _scroller.Padding.Right);
+            viewportHeight = Math.Max(0, _scroller.Bounds.Height - _scroller.Padding.Top - _scroller.Padding.Bottom);
+        }
+
+        return (
+            ZoomFit.PageWidth(pageWidthDip, viewportWidth),
+            ZoomFit.TextWidth(contentWidthDip, viewportWidth),
+            ZoomFit.WholePage(pageWidthDip, pageHeightDip, viewportWidth, viewportHeight));
     }
 
     /// <summary>
@@ -441,6 +532,7 @@ public sealed class MainWindow : Window
         var callbacks = new RibbonHostCallbacks(
             Open: () => _ = OpenAsync(),
             Save: () => _ = SaveAsync(),
+            ImportPdfText: () => _ = ImportPdfTextAsync(),
             Cut: () => _ = CutAsync(),
             Copy: () => _ = CopyAsync(),
             Paste: () => _ = PasteAsync(),
@@ -467,8 +559,15 @@ public sealed class MainWindow : Window
                 ApplyZoom(newScale);
             },
             OpenZoomDialog: () => _ = OpenZoomDialogAsync(),
+            OpenPrintPreview: () => _ = OpenPrintPreviewAsync(),
             NewWindow:       OpenNewWindow,
             ToggleSplit:     ToggleSplit,
+            ZoomOnePage:     ZoomToOnePage,
+            ZoomPageWidth:   ZoomToPageWidth,
+            ToggleMultiplePages: ToggleMultiplePages,
+            IsMultiplePagesActive: () => _multiplePagesMode,
+            ToggleSideToSide: ToggleSideToSide,
+            IsSideToSideActive: () => _sideToSideMode,
             // AV-INSERT2: Insert depth 2 dialog launchers (optional callbacks).
             OpenHyperlinkDialog: () => _ = OpenHyperlinkDialogAsync(),
             OpenBookmarkDialog:  () => _ = OpenBookmarkDialogAsync(),
@@ -478,7 +577,12 @@ public sealed class MainWindow : Window
             ShowMailMergeInfo: msg => _status.Text = msg,
             // AV-DESIGN: Page Borders + Custom Watermark dialog launchers (optional callbacks).
             OpenPageBordersDialog: () => _ = OpenPageBordersDialogAsync(),
-            OpenWatermarkDialog:   () => _ = OpenWatermarkDialogAsync());
+            OpenWatermarkDialog:   () => _ = OpenWatermarkDialogAsync(),
+            // AV-REVIEW: route ribbon safety/protect commands through the same Backstage flows.
+            MarkAsFinal: ToggleMarkAsFinal,
+            RestrictEditing: () => _ = OpenRestrictEditingAsync(),
+            InspectDocument: () => _ = InspectDocumentAsync(),
+            CheckAccessibility: () => _ = CheckAccessibilityAsync());
 
         // AV-MAIL: capture the Mailings engine so the shell can drive its two dialog-bound commands
         // (Select Recipients / Insert Merge Field) with async Avalonia dialogs over the same session the
@@ -487,9 +591,9 @@ public sealed class MainWindow : Window
         var registry = FreeWRibbon.BuildRegistry(_editor, callbacks, out var mailMerge);
         _mailMerge = mailMerge;
         registry.Register(new RibbonCommandId("freew.select-recipients"),
-            new RelayCommand(() => _ = SelectRecipientsAsync()));
+            new ActionRibbonCommand(() => _ = SelectRecipientsAsync()));
         registry.Register(new RibbonCommandId("freew.merge-field"),
-            new RelayCommand(() => _ = InsertMergeFieldAsync()));
+            new ActionRibbonCommand(() => _ = InsertMergeFieldAsync()));
         // AV-PICTAB: merge the Table (caret-in-cell) and Floating (picture/drawing selected)
         // contextual triggers so both sets of contextual tabs can surface from one source.
         var contextSource = new CompositeRibbonContextSource(
@@ -592,15 +696,8 @@ public sealed class MainWindow : Window
         return _findBar;
     }
 
-    private Control BuildStatusContent()
+    private IReadOnlyList<Control> BuildStatusRightItems()
     {
-        _zoomLabel.Text = "100%";
-        var panel = new DockPanel();
-
-        // Right side: zoom label, then view-mode buttons (right-to-left in DockPanel).
-        DockPanel.SetDock(_zoomLabel, Dock.Right);
-        panel.Children.Add(_zoomLabel);
-
         var viewModeRow = new StackPanel
         {
             Orientation = Orientation.Horizontal,
@@ -608,12 +705,7 @@ public sealed class MainWindow : Window
             Margin = new Thickness(4, 0),
             Children = { _btnPrintLayout, _btnWebLayout, _btnDraftView },
         };
-        DockPanel.SetDock(viewModeRow, Dock.Right);
-        panel.Children.Add(viewModeRow);
-
-        // Left side: status text.
-        panel.Children.Add(_status);
-        return panel;
+        return [_zoomLabel, viewModeRow];
     }
 
     private static Button MakeViewModeButton(string label) => new()
@@ -669,18 +761,6 @@ public sealed class MainWindow : Window
 
     // ── Closing gate ─────────────────────────────────────────────────────────
 
-    /// <summary>
-    /// Synchronous bridge called by <see cref="FileCommandWorkflow"/> when it needs a save-changes
-    /// answer. Because the workflow's dirty-gate is synchronous, we block the UI thread here by
-    /// getting the async dialog result via GetAwaiter().GetResult(). This is safe because
-    /// <see cref="OnWindowClosing"/> always cancels the OS close first and then re-invokes
-    /// the async path — the sync call here only happens from the New/Open dirty-gate paths
-    /// which already run synchronously on the UI thread.
-    /// </summary>
-    private SaveChangesPrompt PromptSaveChangesSync(string action) =>
-        SaveChangesDialog.ShowAsync(this, _fileWorkflow.DisplayName, action)
-            .GetAwaiter().GetResult();
-
     private void OnWindowClosing(object? sender, WindowClosingEventArgs e)
     {
         // If we already ran the async gate and decided it's OK to close, let it through.
@@ -697,9 +777,8 @@ public sealed class MainWindow : Window
 
     private async Task ConfirmAndCloseAsync()
     {
-        // ConfirmCloseAllowed runs on the UI thread because PromptSaveChangesSync shows
-        // an Avalonia dialog. It blocks the UI thread briefly via GetAwaiter().GetResult()
-        // on the dialog task — acceptable for a synchronous dirty-gate path.
+        // ConfirmCloseAllowed runs on the UI thread because the shared Avalonia workflow
+        // shows the save-changes dialog synchronously for the dirty-gate path.
         var allowed = _fileWorkflow.ConfirmCloseAllowed("closing");
         if (!allowed)
             return;
@@ -720,9 +799,8 @@ public sealed class MainWindow : Window
     private void NewDocument()
     {
         _fileWorkflow.New(
-            "replace the current document",
-            () => LoadDocumentContent(TextDocument.CreateEmpty()),
-            () => Title = "FreeW");
+            FileText.NewAction,
+            () => LoadDocumentContent(TextDocument.CreateEmpty()));
     }
 
     private void ToggleFindBar(bool show)
@@ -797,109 +875,126 @@ public sealed class MainWindow : Window
     private async Task OpenAsync()
     {
         await _fileWorkflow.OpenAsync(
-            "opening another document",
+            FileText.OpenAction,
             PromptOpenPathAsync,
             OpenPathAsync);
     }
 
     private async Task<string?> PromptOpenPathAsync()
     {
-        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
-        {
-            Title = "Open document",
-            AllowMultiple = false,
-            FileTypeFilter = [.. DocumentFilePickerTypes.BuildOpenTypes(_adapters)],
-        });
-
-        if (files.Count == 0)
-            return null;
-
-        return files[0].TryGetLocalPath();
+        using var file = await AvaloniaFilePickerService.PickSingleOpenFileWithLocalPathAsync(
+            StorageProvider,
+            AvaloniaFilePickerOpenRequest.FromFileTypes(
+                FileText.OpenPickerTitle,
+                DocumentFilePickerTypes.BuildOpenTypes(_documentPersistence.Adapters)));
+        return file?.LocalPath;
     }
 
     private Task<bool> OpenPathAsync(string path)
     {
-        var adapter = DocumentFileFormatResolver.FindOpenAdapter(_adapters, Path.GetExtension(path), out var format);
-        if (adapter is null)
+        if (!_documentPersistence.CanOpenPath(path))
         {
-            _status.Text = $"Open failed: unsupported file type \"{Path.GetExtension(path)}\".";
+            _status.Text = SisterAppFileTextPlanner.FormatUnsupportedFileType(
+                SisterAppFileTextPlanner.OpenCommand,
+                Path.GetExtension(path));
             return Task.FromResult(false);
         }
 
         try
         {
-            using var stream = File.OpenRead(path);
-            var document = adapter.Load(stream);
-
-            if (format?.OpensAsTemplate == true)
-            {
-                // Templates seed a new untitled document: clearing the path makes the next Save a Save-As.
-                LoadDocumentAsSaved(document, path: null);
-                Title = "FreeW";
-            }
-            else
-            {
-                LoadDocumentAsSaved(document, path);
-                Title = $"FreeW - {Path.GetFileName(path)}";
-            }
+            ApplyOpenResult(_documentPersistence.Open(path));
 
             return Task.FromResult(true);
         }
         catch (Exception ex)
         {
-            _status.Text = $"Open failed: {ex.Message}";
+            _status.Text = SisterAppFileTextPlanner.FormatCommandFailed(SisterAppFileTextPlanner.OpenCommand, ex.Message);
             return Task.FromResult(false);
+        }
+    }
+
+    private async Task ImportPdfTextAsync()
+    {
+        using var file = await AvaloniaFilePickerService.PickSingleOpenFileWithLocalPathAsync(
+            StorageProvider,
+            AvaloniaFilePickerOpenRequest.FromFileTypes(
+                "Import PDF (text only)",
+                DocumentFilePickerTypes.BuildPdfImportTypes()));
+        var path = file?.LocalPath;
+        if (path is null)
+            return;
+
+        if (DocumentFileFormatResolver.FindOpenAdapter(
+                DocumentFileAdapterCatalog.CreatePdfImportAdapters(),
+                Path.GetExtension(path),
+                out _) is not { } adapter)
+        {
+            _status.Text = $"PDF import failed: unsupported file type \"{Path.GetExtension(path)}\".";
+            return;
+        }
+
+        try
+        {
+            using var stream = File.OpenRead(path);
+            LoadDocumentContent(adapter.Load(stream));
+            _fileWorkflow.MarkDirtyWithPath(null);
+            _status.Text = $"Imported PDF text from {Path.GetFileName(path)}";
+        }
+        catch (Exception ex)
+        {
+            _status.Text = $"PDF import failed: {ex.Message}";
         }
     }
 
     private Task<bool> SaveAsync() =>
         _fileWorkflow.SaveAsync(SaveToCurrentPathAsync, SaveAsAsync);
 
-    private Task<bool> SaveToCurrentPathAsync(string path) => SaveToPathAsync(path);
+    private Task<bool> SaveToCurrentPathAsync(string path) =>
+        _documentPersistence.TryResolveCurrentSaveTarget(path, out var target)
+            ? SaveToTargetAsync(target)
+            : SaveAsAsync();
 
     private async Task<bool> SaveAsAsync()
     {
-        var defaultExtension = _fileWorkflow.CurrentPath is null
-            ? DefaultSaveExtension
-            : Path.GetExtension(_fileWorkflow.CurrentPath);
-        var savePlan = DocumentFileDialogRequestPlanner.BuildSavePickerPlan(
-            _adapters,
-            _fileWorkflow.CurrentPath is null ? null : Path.GetFileName(_fileWorkflow.CurrentPath),
-            "Document",
-            defaultExtension);
-        var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
-        {
-            Title = "Save document",
-            DefaultExtension = savePlan.DefaultExtensionWithoutDot,
-            SuggestedFileName = savePlan.SuggestedFileName,
-            FileTypeChoices = [.. savePlan.FileTypes.Select(DocumentFilePickerTypes.ToFileType)],
-        });
-
-        var path = file?.TryGetLocalPath();
+        var savePlan = _documentPersistence.BuildSavePickerPlan(
+            _fileWorkflow.CurrentPath,
+            _fileWorkflow.CurrentFileName,
+            FileText.FallbackDisplayName);
+        using var file = await AvaloniaFilePickerService.PickSaveFileWithLocalPathAsync(
+            StorageProvider,
+            AvaloniaFilePickerSaveRequest.FromSavePlan(FileText.SavePickerTitle, savePlan));
+        var path = file?.LocalPath;
         return path is not null && await SaveToPathAsync(path);
     }
 
-    private Task<bool> SaveToPathAsync(string path)
+    private Task<bool> SaveToPathAsync(string path) =>
+        SaveToPathAsync(path, filterIndex: 0);
+
+    private Task<bool> SaveToPathAsync(string path, int filterIndex)
     {
-        var adapter = DocumentFileFormatResolver.FindSaveAdapter(_adapters, Path.GetExtension(path), out _);
-        if (adapter is null)
+        if (!_documentPersistence.TryResolveSaveTarget(path, filterIndex, out var target))
         {
-            _status.Text = $"Save failed: unsupported file type \"{Path.GetExtension(path)}\".";
+            _status.Text = SisterAppFileTextPlanner.FormatUnsupportedFileType(
+                SisterAppFileTextPlanner.SaveCommand,
+                Path.GetExtension(path));
             return Task.FromResult(false);
         }
 
+        return SaveToTargetAsync(target);
+    }
+
+    private Task<bool> SaveToTargetAsync(DocumentSaveTarget target)
+    {
         try
         {
-            using (var stream = File.Create(path))
-                adapter.Save(_editor.Document, stream);
-            MarkDocumentSavedWithPath(path);
-            Title = $"FreeW - {Path.GetFileName(path)}";
-            _status.Text = $"Saved {Path.GetFileName(path)}";
+            _documentPersistence.Save(_editor.Document, target);
+            MarkDocumentSavedWithPath(target.Path);
+            _status.Text = SisterAppFileTextPlanner.FormatSaved(Path.GetFileName(target.Path));
             return Task.FromResult(true);
         }
         catch (Exception ex)
         {
-            _status.Text = $"Save failed: {ex.Message}";
+            _status.Text = SisterAppFileTextPlanner.FormatCommandFailed(SisterAppFileTextPlanner.SaveCommand, ex.Message);
             return Task.FromResult(false);
         }
     }
@@ -912,33 +1007,33 @@ public sealed class MainWindow : Window
     /// </summary>
     private async Task ExportPdfAsync()
     {
-        var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
-        {
-            Title = "Export to PDF",
-            DefaultExtension = "pdf",
-            SuggestedFileName = (_fileWorkflow.CurrentPath is null ? "Document" : Path.GetFileNameWithoutExtension(_fileWorkflow.CurrentPath)) + ".pdf",
-            FileTypeChoices = [PdfFileType],
-        });
-        var path = file?.TryGetLocalPath();
+        using var file = await AvaloniaFilePickerService.PickSaveFileWithLocalPathAsync(
+            StorageProvider,
+            AvaloniaFilePickerSaveRequest.FromFileTypes(
+                FreeWFileTextResources.ExportPdfPickerTitle,
+                [PdfFileType],
+                _fileWorkflow.CurrentFileNameWithoutExtensionOr(FileText.FallbackDisplayName) + ".pdf",
+                "pdf"));
+        var path = file?.LocalPath;
         if (path is null)
             return;
 
         try
         {
             var result = FreeWAvaloniaPdfExport.Save(_editor, path);
-            _status.Text = $"Exported PDF ({result.PageCount} page{(result.PageCount == 1 ? "" : "s")}, {result.Backend}): {Path.GetFileName(path)}";
+            _status.Text = FreeWFileTextResources.FormatPdfExported(result.PageCount, result.Backend, Path.GetFileName(path));
         }
         catch (Exception ex)
         {
-            _status.Text = $"PDF export failed: {ex.Message}";
+            _status.Text = SisterAppFileTextPlanner.FormatCommandFailed(FreeWFileTextResources.PdfExportCommand, ex.Message);
         }
     }
 
-    private static readonly FilePickerFileType ImageFileType = new("Pictures")
-    {
-        Patterns = ["*.png", "*.jpg", "*.jpeg", "*.gif", "*.bmp", "*.tif", "*.tiff"],
-        MimeTypes = ["image/png", "image/jpeg", "image/gif", "image/bmp", "image/tiff"],
-    };
+    private static readonly FilePickerFileType ImageFileType =
+        AvaloniaFilePickerTypeAdapter.CreateFileType(
+            FreeWFileTextResources.PictureFileTypeName,
+            ["*.png", "*.jpg", "*.jpeg", "*.gif", "*.bmp", "*.tif", "*.tiff"],
+            ["image/png", "image/jpeg", "image/gif", "image/bmp", "image/tiff"]);
 
     /// <summary>
     /// Insert &gt; Picture (AV-INSERT): open a file picker, read the chosen image, and insert it at the
@@ -947,15 +1042,12 @@ public sealed class MainWindow : Window
     /// </summary>
     private async Task InsertPictureAsync()
     {
-        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
-        {
-            Title = "Insert Picture",
-            AllowMultiple = false,
-            FileTypeFilter = [ImageFileType],
-        });
-        if (files.Count == 0)
-            return;
-        var path = files[0].TryGetLocalPath();
+        using var file = await AvaloniaFilePickerService.PickSingleOpenFileWithLocalPathAsync(
+            StorageProvider,
+            AvaloniaFilePickerOpenRequest.FromFileTypes(
+                SisterAppFileTextPlanner.InsertPicturePickerTitle,
+                [ImageFileType]));
+        var path = file?.LocalPath;
         if (path is null)
             return;
 
@@ -968,7 +1060,7 @@ public sealed class MainWindow : Window
         }
         catch (Exception ex)
         {
-            _status.Text = $"Insert picture failed: {ex.Message}";
+            _status.Text = SisterAppFileTextPlanner.FormatCommandFailed(SisterAppFileTextPlanner.InsertPictureCommand, ex.Message);
         }
     }
 
@@ -1062,15 +1154,12 @@ public sealed class MainWindow : Window
     /// </summary>
     private async Task InsertTextFromFileAsync()
     {
-        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
-        {
-            Title = "Insert Text from File",
-            AllowMultiple = false,
-            FileTypeFilter = [TextFromFileType],
-        });
-        if (files.Count == 0)
-            return;
-        var path = files[0].TryGetLocalPath();
+        using var file = await AvaloniaFilePickerService.PickSingleOpenFileWithLocalPathAsync(
+            StorageProvider,
+            AvaloniaFilePickerOpenRequest.FromFileTypes(
+                InsertDialogTextResources.TextFromFilePickerTitle,
+                [TextFromFileType]));
+        var path = file?.LocalPath;
         if (path is null)
             return;
 
@@ -1084,10 +1173,10 @@ public sealed class MainWindow : Window
             }
             else
             {
-                var adapter = DocumentFileFormatResolver.FindOpenAdapter(_adapters, ext, out _);
+                var adapter = DocumentFileFormatResolver.FindOpenAdapter(_documentPersistence.Adapters, ext, out _);
                 if (adapter is null)
                 {
-                    _status.Text = $"Insert text failed: unsupported file type \"{ext}\".";
+                    _status.Text = SisterAppFileTextPlanner.FormatUnsupportedFileType("Insert text", ext);
                     return;
                 }
                 using var stream = File.OpenRead(path);
@@ -1100,15 +1189,18 @@ public sealed class MainWindow : Window
         }
         catch (Exception ex)
         {
-            _status.Text = $"Insert text failed: {ex.Message}";
+            _status.Text = SisterAppFileTextPlanner.FormatCommandFailed("Insert text", ex.Message);
         }
     }
 
-    private static readonly FilePickerFileType TextFromFileType = new("Documents")
-    {
-        Patterns = ["*.docx", "*.txt"],
-        MimeTypes = ["application/vnd.openxmlformats-officedocument.wordprocessingml.document", "text/plain"],
-    };
+    private static readonly FilePickerFileType TextFromFileType =
+        AvaloniaFilePickerTypeAdapter.CreateFileType(
+            FreeWFileTextResources.TextFromFileTypeName,
+            ["*.docx", "*.txt"],
+            ["application/vnd.openxmlformats-officedocument.wordprocessingml.document", "text/plain"]);
+
+    private void ApplyOpenResult(DocumentOpenResult result) =>
+        LoadDocumentAsSaved(result.Document, result.SavedPath);
 
     private void LoadDocumentAsSaved(TextDocument document, string? path)
     {
@@ -1152,14 +1244,18 @@ public sealed class MainWindow : Window
 
     private void UpdateStatus()
     {
-        var text = _editor.PlainText;
-        var words = text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).Length;
-        var chars = text.Length;
-        var pageInfo = _editor.ViewMode == DocumentViewMode.PrintLayout
-            ? $"Page {_editor.CaretPageIndex + 1} of {_editor.PageCount}   "
-            : string.Empty; // Web/Draft: no discrete pages — hide page indicator.
-        _status.Text = $"{pageInfo}{words} words   {chars} characters   {_editor.ParagraphCount} paragraphs"
-            + (_editor.CanUndo ? "   • edited" : "");
+        var stats = _editor.ComputeStatistics();
+        var plan = FreeWEditorStatusPlanner.Build(new FreeWEditorStatusSnapshot(
+            stats.Words,
+            stats.CharactersWithSpaces,
+            stats.Paragraphs,
+            CurrentPage: _editor.CaretPageIndex + 1,
+            TotalPages: _editor.PageCount,
+            SelectionText: _editor.SelectedText,
+            IncludePageStatus: _editor.ViewMode == DocumentViewMode.PrintLayout,
+            IncludeSectionStatus: false,
+            IsEdited: _editor.CanUndo));
+        _status.Text = plan.SummaryStatus;
     }
 
     // ── Backstage (File screen) ───────────────────────────────────────────────
@@ -1180,15 +1276,16 @@ public sealed class MainWindow : Window
             DisplayName: _fileWorkflow.DisplayName,
             CurrentPath: _fileWorkflow.CurrentPath,
             GetRecentEntries: () => _fileWorkflow.RecentEntries,
-            GetFileFormats: () => _adapters.SelectMany(a => a.Formats),
+            GetFileFormats: () => _documentPersistence.Adapters.SelectMany(a => a.Formats),
             GetPageSettings: () => _editor.Document.Page,
+            GetCurrentOptions: () => _options,
+            GetDataFolder: ResolveDataFolderLabel,
 
             NewDocument: NewDocument,
             OpenRecent: path =>
             {
-                // Run the dirty-gate synchronously (ConfirmDiscardOrSave calls PromptSaveChangesSync
-                // which is safe because we block the UI thread only briefly for the dialog).
-                if (_fileWorkflow.Open("opening another document", () => path, p =>
+                // Run the dirty-gate synchronously through the shared Avalonia workflow.
+                if (_fileWorkflow.Open(FileText.OpenAction, () => path, p =>
                     {
                         _ = OpenPathAsync(p);
                         return true;
@@ -1197,62 +1294,173 @@ public sealed class MainWindow : Window
                     // success — OpenPathAsync was already fired
                 }
             },
+            OpenFolder: OpenFolderInShell,
             Browse: () => _ = OpenAsync(),
             RecoverUnsaved: () => _ = _autosave.OfferRecoveryAsync(this),
             SaveAs: () => _ = SaveAsAsync(),
-            SaveAsExtension: ext => _ = SaveAsWithExtensionAsync(ext),
+            SaveAsFormat: (ext, filterIndex) => _ = SaveAsWithFormatAsync(ext, filterIndex),
             OpenContainingFolder: path =>
             {
-                try
-                {
-                    var folder = System.IO.Path.GetDirectoryName(path);
-                    if (!string.IsNullOrWhiteSpace(folder) && Directory.Exists(folder))
-                        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                        {
-                            FileName = folder,
-                            UseShellExecute = true,
-                        });
-                }
-                catch (Exception ex)
-                {
-                    _status.Text = $"Could not open folder: {ex.Message}";
-                }
+                var folder = System.IO.Path.GetDirectoryName(path);
+                if (!string.IsNullOrWhiteSpace(folder))
+                    OpenFolderInShell(folder);
             },
-            ExportPdf: () => _ = ExportPdfAsync());
+            ExportPdf: () => _ = ExportPdfAsync(),
+            MarkAsFinal: ToggleMarkAsFinal,
+            RestrictEditing: () => _ = OpenRestrictEditingAsync(),
+            InspectDocument: () => _ = InspectDocumentAsync(),
+            CheckAccessibility: () => _ = CheckAccessibilityAsync(),
+            OpenOptions: () => _ = OpenOptionsAsync(),
+            PrintPreview: () => _ = OpenPrintPreviewAsync());
+
+    private static TextDocument CloneDocument(TextDocument document)
+    {
+        using var buffer = new MemoryStream();
+        DocxWriter.Write(document, buffer);
+        buffer.Position = 0;
+        return DocxReader.Read(buffer);
+    }
+
+    private void ToggleMarkAsFinal()
+    {
+        _editor.SetMarkedAsFinal(!_editor.IsMarkedAsFinal);
+        _status.Text = _editor.IsMarkedAsFinal
+            ? "Document marked as final."
+            : "Document is no longer marked as final.";
+        _editor.Focus();
+    }
+
+    private async Task OpenRestrictEditingAsync()
+    {
+        var dialog = new RestrictEditingDialog(_editor.Document.Protection);
+        await dialog.ShowDialog(this);
+        if (dialog.Result is not { } settings)
+            return;
+
+        _editor.SetProtection(settings);
+        _status.Text = settings.Mode == ProtectionMode.None
+            ? "Editing restrictions removed."
+            : $"Editing restricted: {settings.Mode}.";
+        _editor.Focus();
+    }
+
+    private async Task InspectDocumentAsync()
+    {
+        var result = DocumentInspector.Inspect(_editor.Document);
+        var dialog = new DocumentInspectorDialog(result);
+        await dialog.ShowDialog(this);
+        if (dialog.Choice is not { } choice)
+            return;
+
+        if (choice.HasAnySelection)
+            _editor.ApplyInspectorRemovals(choice.Comments, choice.Revisions, choice.Properties, choice.Bookmarks);
+
+        _status.Text = choice.HasAnySelection
+            ? "Selected document data removed."
+            : "Document Inspector completed.";
+        _editor.Focus();
+    }
+
+    private async Task CheckAccessibilityAsync()
+    {
+        var report = AccessibilityChecker.Check(_editor.Document);
+        var dialog = new AccessibilityReportDialog(report);
+        await dialog.ShowDialog(this);
+        _status.Text = report.IsClean
+            ? "No accessibility issues found."
+            : $"{report.Issues.Count} accessibility issue(s) found.";
+        _editor.Focus();
+    }
+
+    private async Task OpenOptionsAsync()
+    {
+        var dialog = new OptionsDialog(_options);
+        await dialog.ShowDialog(this);
+        if (dialog.Result is not { } edited)
+            return;
+
+        ApplyOptions(edited);
+        if (!_optionsStore.Save(_options))
+            _status.Text = _optionsStore.LastError ?? "FreeW Options could not be saved.";
+        else
+            _status.Text = "FreeW Options saved.";
+    }
+
+    private void ApplyOptions(FreeWOptions edited)
+    {
+        _options.RecentFilesCap = edited.RecentFilesCap;
+        _options.DefaultSaveFormat = edited.DefaultSaveFormat;
+        _options.UiLanguage = edited.UiLanguage;
+        _options.AutoCorrectEnabled = edited.AutoCorrectEnabled;
+        _options.AutoFormat = edited.AutoFormat;
+        _options.AutoCorrect = edited.AutoCorrect;
+        _options.Normalize();
+    }
+
+    private string ResolveDataFolderLabel()
+    {
+        try
+        {
+            return Path.GetDirectoryName(_optionsStore.StorePath) ?? _optionsStore.StorePath;
+        }
+        catch
+        {
+            return AppStoragePathPlanner.GetOptionsFilePathLabelOrFallback(PlatformApplicationDataPathProvider.LocalInstance);
+        }
+    }
+
+    private void OpenFolderInShell(string folder)
+    {
+        try
+        {
+            if (!string.IsNullOrWhiteSpace(folder) && Directory.Exists(folder))
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = folder,
+                    UseShellExecute = true,
+                });
+        }
+        catch (Exception ex)
+        {
+            _status.Text = $"Could not open folder: {ex.Message}";
+        }
+    }
 
     /// <summary>
-    /// Save As targeting a specific file extension chosen from the backstage planner.
-    /// Builds a save-picker pre-filtered to the requested extension and lets the user
+    /// Save As targeting a specific file format chosen from the backstage planner.
+    /// Builds a save-picker pre-filtered to the requested format and lets the user
     /// confirm the filename before saving.
     /// </summary>
-    private async Task SaveAsWithExtensionAsync(string extension)
+    private async Task SaveAsWithFormatAsync(string extension, int filterIndex)
     {
         var normalizedExt = DocumentFileFormatResolver.NormalizeExtension(extension);
-        var adapter = DocumentFileFormatResolver.FindSaveAdapter(_adapters, normalizedExt, out var format);
-        if (adapter is null)
+        if (!_documentPersistence.TryGetSaveFormat(filterIndex, out var format) &&
+            !_documentPersistence.TryGetSaveFormat(normalizedExt, out format))
         {
-            _status.Text = $"Save failed: unsupported extension \"{extension}\".";
+            _status.Text = SisterAppFileTextPlanner.FormatUnsupportedExtension(extension);
             return;
         }
 
-        var suggestedName = (_fileWorkflow.CurrentPath is null
-            ? "Document"
-            : System.IO.Path.GetFileNameWithoutExtension(_fileWorkflow.CurrentPath)) + normalizedExt;
+        var savePlan = _documentPersistence.BuildSavePickerPlan(
+            _fileWorkflow.CurrentPath,
+            _fileWorkflow.CurrentFileName,
+            FileText.FallbackDisplayName,
+            normalizedExt);
 
-        var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
-        {
-            Title = $"Save as {format?.FormatName ?? extension}",
-            DefaultExtension = normalizedExt.TrimStart('.'),
-            SuggestedFileName = suggestedName,
-            FileTypeChoices = [DocumentFilePickerTypes.ToFileType(
-                new Free.Shared.IO.FileDialogPickerTypeDescriptor(
-                    format?.FormatName ?? extension,
-                    [$"*{normalizedExt}"]))],
-        });
-
-        var path = file?.TryGetLocalPath();
+        using var file = await AvaloniaFilePickerService.PickSaveFileWithLocalPathAsync(
+            StorageProvider,
+            AvaloniaFilePickerSaveRequest.FromFileTypes(
+                SisterAppFileTextPlanner.FormatSaveAsTitle(format?.FormatName ?? extension),
+                [
+                    AvaloniaFilePickerTypeAdapter.CreateFileType(
+                        format?.FormatName ?? extension,
+                        [$"*{normalizedExt}"])
+                ],
+                savePlan.SuggestedFileName,
+                savePlan.DefaultExtensionWithoutDot));
+        var path = file?.LocalPath;
         if (path is not null)
-            await SaveToPathAsync(path);
+            await SaveToPathAsync(path, filterIndex);
     }
 
     // Opens an external URL raised by DocumentView.HyperlinkActivated through the shared scheme allowlist.

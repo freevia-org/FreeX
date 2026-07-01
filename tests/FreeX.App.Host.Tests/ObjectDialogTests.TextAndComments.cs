@@ -2,6 +2,8 @@ using System.IO;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using FluentAssertions;
+using FreeX.App.Presentation.Comments;
+using FreeX.App.Presentation.Dialogs;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host.Tests;
@@ -13,6 +15,10 @@ public sealed partial class ObjectDialogTests
     {
         TextEntryDialog.CreateResult(null).Text.Should().Be("");
         TextEntryDialog.CreateResult("  keep spacing inside  ").Text.Should().Be("keep spacing inside");
+
+        var source = ReadObjectDialogSources();
+        source.Should().Contain("TextEntryDialogPlanner.CreateResult(text)");
+        source.Should().NotContain("public sealed record TextEntryDialogResult");
     }
 
     [Fact]
@@ -77,10 +83,7 @@ public sealed partial class ObjectDialogTests
 
         source.Should().Contain("if (!TryCreateResult(existing, _rootBox.Text, _replyBox.Text, _resolveBox.IsChecked == true, out var result, out var error))");
         source.Should().Contain("ShowInvalidThreadedCommentWarning(error ?? UiText.Get(\"ThreadedComment_EnterCommentMessage\"), _rootBox);");
-        source.Should().Contain("DialogMessageHelper.ShowWarning(this, message, Title);");
-        source.Should().Contain("target.Focus();");
-        source.Should().Contain("target.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(target);");
+        source.Should().Contain("DialogFocus.ShowWarningAndFocus(this, message, Title, target);");
     }
 
     [Fact]

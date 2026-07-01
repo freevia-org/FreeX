@@ -1,7 +1,9 @@
+using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using Microsoft.Extensions.DependencyInjection;
+using FreeX.App.Presentation.Shell;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -258,9 +260,10 @@ public partial class MainWindow
         }
 
         foreach (var target in WorkbookWindowSelectionPlanner.BuildSwitchWindowTargets(
-                     _windowRegistry,
+                     BuildWorkbookWindowSelectionEntries(_windowRegistry, _windowRegistry.VisibleWindows),
                      this,
-                     _workbook.Name))
+                     _workbook.Name,
+                     _windowRegistry.Count))
         {
             var item = new MenuItem
             {
@@ -317,7 +320,10 @@ public partial class MainWindow
             return;
         }
 
-        var targets = WorkbookWindowSelectionPlanner.BuildUnhideWindowTargets(_windowRegistry, _workbook.Name);
+        var targets = WorkbookWindowSelectionPlanner.BuildUnhideWindowTargets(
+            BuildWorkbookWindowSelectionEntries(_windowRegistry, hidden),
+            _workbook.Name,
+            _windowRegistry.Count);
         var dialog = new UnhideWindowDialog(targets) { Owner = this };
         if (dialog.ShowDialog() != true)
         {
@@ -335,6 +341,15 @@ public partial class MainWindow
 
         RefreshViewWindowCommandState();
     }
+
+    private static IReadOnlyList<WorkbookWindowSelectionEntry<IWorkbookWindow>> BuildWorkbookWindowSelectionEntries(
+        WorkbookWindowRegistry registry,
+        IEnumerable<IWorkbookWindow> windows) =>
+        windows
+            .Select(window => new WorkbookWindowSelectionEntry<IWorkbookWindow>(
+                window,
+                registry.IndexOf(window)))
+            .ToList();
 
     // ── Ribbon: View ▸ Window ▸ Reset Window Position ─────────────────────────
 

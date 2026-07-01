@@ -13,10 +13,11 @@ public sealed partial class MainWindowSourceHygieneTests
 
         method.Should().Contain("try");
         method.Should().Contain("if (dialog.ShowDialog() != true)");
-        method.Should().Contain("var zoomPercent = ZoomSelectionPlanner.CalculateDialogZoomPercent(");
-        method.Should().Contain("dialog.Result,");
+        method.Should().Contain("var zoomPercent = ZoomSelectionPlanner.CalculateZoomPercent(");
+        method.Should().Contain("dialog.Result.ZoomPercent,");
+        method.Should().Contain("dialog.Result.FitSelection,");
         method.Should().Contain("SheetGrid.SelectedRange?.ColCount ?? 1,");
-        method.Should().Contain("ZoomSlider.Value = FreeX.App.Services.ZoomLevelMapper.ZoomPercentToSlider(zoomPercent);");
+        method.Should().Contain("ZoomSlider.Value = StatusZoomSliderValueForPercent(zoomPercent);");
         method.Should().Contain("finally");
         method.Should().Contain("FocusSheetGridIfNeeded();");
     }
@@ -174,8 +175,12 @@ public sealed partial class MainWindowSourceHygieneTests
         var method = ExtractMethodSource(insertSource, "private void InsertSparkline(");
 
         method.Should().Contain("new SparklineDialog(");
-        method.Should().Contain("SparklineInputParser.TryParseDataRange(dialog.Result.DataRangeText, _currentSheetId, out var dataRange)");
-        method.Should().Contain("SparklineInputParser.TryParseLocation(dialog.Result.LocationText, _currentSheetId, out var location)");
+        method.Should().Contain("SparklinePlanner.ParseKind(type)");
+        method.Should().Contain("SparklinePlanner.ValidateInsert(");
+        method.Should().Contain("SparklineInputValidation.InvalidDataRange");
+        method.Should().Contain("SparklineInputValidation.InvalidLocation");
+        method.Should().Contain("var kind = dialog.Result.Kind;");
+        method.Should().NotContain("SparklineInputParser");
         method.Should().Contain("UiText.Get(\"MainWindowMessage_InsertSparklineInvalidDataRange\")");
         method.Should().Contain("UiText.Get(\"MainWindowMessage_InsertSparklineInvalidLocation\")");
         method.Should().Contain("UiText.Get(\"MainWindowMessage_InsertSparklineTitle\")");
@@ -242,7 +247,7 @@ public sealed partial class MainWindowSourceHygieneTests
         source.Should().Contain("TryExecuteCommand(command, \"Spell Check\")");
         source.Should().NotContain("TryExecuteEditCells(edits, \"Spell Check\")");
 
-        var plannerSource = DialogSourceTestSupport.ReadHostSources("SpellCheckWorkflowPlanner.cs");
+        var plannerSource = DialogSourceTestSupport.ReadAppServicesSource("SpellCheckWorkflowPlanner.cs");
         plannerSource.Should().Contain("ContainsIgnoredWord(ignoredWords, issue.Word)");
         plannerSource.Should().Contain("ignoredIssues.Contains(CreateIssueKey(issue))");
         plannerSource.Should().Contain("new(FilterIssues(");
@@ -410,13 +415,17 @@ public sealed partial class MainWindowSourceHygieneTests
         source.Should().Contain("new ChartDataLabelsDialog(chart)");
         source.Should().Contain("new ChartTrendlineOptionsDialog(chart)");
         source.Should().Contain("new ChartAxisFormatDialog(chart, useXAxis)");
-        source.Should().Contain("new ChartSeriesFormatDialog(chart, ChartOptionCycler.GetSeriesCount(chart))");
-        source.Should().Contain("ApplyChartLayoutDialogResult(\"Format Data Labels\"");
-        source.Should().Contain("ApplyChartLayoutDialogResult(\"Format Trendline\"");
+        source.Should().Contain("var seriesCount = ChartSeriesFormatPlanner.GetSeriesCount(chart);");
+        source.Should().Contain("new ChartSeriesFormatDialog(chart, seriesCount)");
+        source.Should().Contain("var command = ChartWorkflowCommandCatalog.FormatDataLabels;");
+        source.Should().Contain("var command = ChartWorkflowCommandCatalog.FormatTrendline;");
+        source.Should().Contain("var command = ChartWorkflowCommandCatalog.FormatDataSeries;");
+        source.Should().Contain("ChartWorkflowCommandCatalog.CanOpenDialog(chart, command)");
+        source.Should().Contain("ShowUnsupportedChartWorkflow(command)");
         source.Should().Contain("ApplyChartLayoutDialogResult(caption, chart, dialog.Result.ToOptions())");
         source.Should().Contain("UiText.Get(\"ChartAxisFormat_XAxisTitle\")");
         source.Should().Contain("UiText.Get(\"ChartAxisFormat_YAxisTitle\")");
-        source.Should().Contain("ApplyChartLayoutDialogResult(\"Format Data Series\"");
+        source.Should().Contain("ApplyChartLayoutDialogResult(caption, chart, dialog.Result.ToOptions(chart))");
     }
 
     [Fact]

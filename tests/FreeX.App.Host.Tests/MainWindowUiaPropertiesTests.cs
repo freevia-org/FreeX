@@ -55,14 +55,18 @@ public sealed class MainWindowUiaPropertiesTests
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ViewCommands.cs");
 
-        source.Should().Contain("AutomationProperties.SetName(FormulaBarExpandBtn, UiText.Get(\"MainWindow_AutomationName_CollapseFormulaBar\"))");
-        source.Should().Contain("AutomationProperties.SetHelpText(FormulaBarExpandBtn, UiText.Get(\"MainWindow_AutomationHelpText_CollapseTheFormulaBarToASingleLineEditor\"))");
-        source.Should().Contain("RibbonTooltip.SetTitle(FormulaBarExpandBtn, UiText.Get(\"MainWindow_TooltipTitle_CollapseFormulaBar\"))");
-        source.Should().Contain("RibbonTooltip.SetDescription(FormulaBarExpandBtn, UiText.Get(\"MainWindow_TooltipDescription_CollapseTheFormulaBarToASingleLineEditor\"))");
-        source.Should().Contain("AutomationProperties.SetName(FormulaBarExpandBtn, UiText.Get(\"MainWindow_AutomationName_ExpandFormulaBar\"))");
-        source.Should().Contain("AutomationProperties.SetHelpText(FormulaBarExpandBtn, UiText.Get(\"MainWindow_AutomationHelpText_ExpandTheFormulaBarToAMultiLineEditor\"))");
-        source.Should().Contain("RibbonTooltip.SetTitle(FormulaBarExpandBtn, UiText.Get(\"MainWindow_TooltipTitle_ExpandFormulaBar\"))");
-        source.Should().Contain("RibbonTooltip.SetDescription(FormulaBarExpandBtn, UiText.Get(\"MainWindow_TooltipDescription_ExpandTheFormulaBarToAMultiLineEditor\"))");
+        source.Should().Contain("var plan = FormulaBarChromePlanner.BuildExpansion(_formulaBarExpanded);");
+        source.Should().Contain("FormulaBar.Height = plan.EditorHeight;");
+        source.Should().Contain("FormulaBar.AcceptsReturn = plan.AcceptsReturn;");
+        source.Should().Contain("CreateFormulaBarChevron(pointsUp: plan.ChevronPointsUp)");
+        source.Should().Contain("AutomationProperties.SetName(FormulaBarExpandBtn, UiText.Get(plan.Button.AutomationNameResourceKey));");
+        source.Should().Contain("AutomationProperties.SetHelpText(FormulaBarExpandBtn, UiText.Get(plan.Button.HelpTextResourceKey));");
+        source.Should().Contain("RibbonTooltip.SetTitle(FormulaBarExpandBtn, UiText.Get(plan.TooltipTitleResourceKey));");
+        source.Should().Contain("RibbonTooltip.SetDescription(FormulaBarExpandBtn, UiText.Get(plan.TooltipDescriptionResourceKey));");
+        source.Should().NotContain("UiText.Get(\"MainWindow_AutomationName_CollapseFormulaBar\")");
+        source.Should().NotContain("UiText.Get(\"MainWindow_AutomationName_ExpandFormulaBar\")");
+        source.Should().NotContain("UiText.Get(\"MainWindow_TooltipTitle_CollapseFormulaBar\")");
+        source.Should().NotContain("UiText.Get(\"MainWindow_TooltipTitle_ExpandFormulaBar\")");
     }
 
     [Fact]

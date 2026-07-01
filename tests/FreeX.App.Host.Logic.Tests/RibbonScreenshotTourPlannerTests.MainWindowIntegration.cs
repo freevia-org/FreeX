@@ -264,7 +264,8 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("RibbonScreenshotTourManifestJsonContext.Default.AutoFilterFlyoutTourManifest");
 
         editingSource.Should().Contain("private AutoFilterDialog? CreateAutoFilterFlyoutDialog");
-        editingSource.Should().Contain("AutoFilterDropdownPlanner.CreateMenuPlan(_workbook, sheet, plan)");
+        editingSource.Should().Contain("AutoFilterDropdownMenuPlanner.CreateMenuPlan(");
+        editingSource.Should().Contain("AutoFilterMenuResources.TextProvider");
         editingSource.Should().Contain("dialog.ConfigureAsModelessFlyout();");
         editingSource.Should().Contain("PositionAutoFilterFlyout(dialog, headerCell, anchorPoint);");
     }
@@ -421,8 +422,8 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("freex_backstage_back_to_workbook_focus_return");
         source.Should().Contain("SwitchToPinnedTab();");
         source.Should().Contain("new ExportOptionsDialog(");
-        source.Should().Contain("ExportPlanner.DescribeRequest(request)");
-        source.Should().Contain("ShareWorkbookPlanner.CreatePlan(null)");
+        source.Should().Contain("WpfExportDescriptionPlanner.DescribeRequest(request)");
+        source.Should().Contain("WorkbookShareReadinessPlanner.CreatePlan(null, WorkbookShareSurface.WindowsShare)");
         source.Should().Contain("SaveBackstageRecentExportShareTourWorkbookAsync");
         source.Should().Contain("ConfirmUnsupportedXlsxFeatureSave();");
         source.Should().Contain("CaptureBackstageOwnedNativeDialogWhenShownAsync");
@@ -871,12 +872,12 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("sheet.TextBoxes.Add(textBox);");
         source.Should().Contain("new ColorPickerDialog(context.Shape.FillColor, allowNoColor: true, UiText.Get(\"FormatCells_NoFill\"))");
         source.Should().Contain("new ShapeGradientDialog(");
-        source.Should().Contain("context.Shape.GradientFillEndColor ?? ShapeGradientDialogPlanner.DefaultEndColor");
+        source.Should().Contain("context.Shape.GradientFillEndColor ?? ShapeGradientPlanner.DefaultEndColor");
         source.Should().Contain("context.Shape.GetEffectiveGradientFillDirection()");
         source.Should().Contain("new ShapeEffectsDialog(context.Shape.GetEffectiveEffectPreset())");
         source.Should().Contain("new ObjectSizeDialog(context.Shape.Width, context.Shape.Height, UiText.Get(\"MainWindowMessage_ObjectSizeTitle\"))");
         source.Should().Contain("new FormatPictureDialog(picture)");
-        source.Should().Contain("new SelectionPaneDialog(SelectionPanePlanner.BuildItems(context.Sheet))");
+        source.Should().Contain("new SelectionPaneDialog(SelectionPaneDialog.BuildItems(context.Sheet))");
         source.Should().Contain("FindDescendantByRibbonCommandName<Button>(RibbonTabs, \"Crop Picture\")");
         source.Should().Contain("SelectionPaneToggleVisibilityButton");
         source.Should().Contain("freex_draw_object_formatting_draw_tab_baseline");
@@ -1256,8 +1257,8 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("SelectRibbonTourTab(RibbonScreenshotTourPlanner.DefaultTabs.Single(tab => tab.Header == \"Review\"))");
         source.Should().Contain("new WorkbookStatisticsDialog(WorkbookStatisticsService.GetStatistics(_workbook))");
         source.Should().Contain("WorkbookStatisticsDialog.CreateMessage(WorkbookStatisticsService.GetStatistics(_workbook))");
-        source.Should().Contain("ShareWorkbookPlanner.CreatePlan(null)");
-        source.Should().Contain("ShareWorkbookPlanner.FormatStatus(savedSharePlan)");
+        source.Should().Contain("WorkbookShareReadinessPlanner.CreatePlan(null, WorkbookShareSurface.WindowsShare)");
+        source.Should().Contain("WorkbookShareReadinessPlanner.FormatStatus(savedSharePlan)");
         source.Should().Contain("ReviewShareButton");
         source.Should().Contain("freex_review_workbook_statistics_dialog");
         source.Should().Contain("freex_review_share_unsaved_guard_status");

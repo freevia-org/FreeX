@@ -112,6 +112,24 @@ public sealed partial class MainWindowRibbonKeyTipTests
             harness.ActiveSheetPaperSize.Should().Be(WorksheetPaperSize.Legal);
             harness.KeyTipScope.Should().Be("None");
 
+            harness.OpenRibbonMenu(Key.P, Key.S, Key.Z);
+            harness.ActiveMenuItemGestureText("B4 (JIS)").Should().Be("B4");
+            harness.HandleKeyTip(Key.B);
+            harness.KeyTipScope.Should().Be("Menu", "B is the shared prefix for B4 and B5 paper sizes");
+            harness.HandleKeyTip(Key.D4);
+
+            harness.ActiveSheetPaperSize.Should().Be(WorksheetPaperSize.B4);
+            harness.KeyTipScope.Should().Be("None");
+
+            harness.OpenRibbonMenu(Key.P, Key.S, Key.Z);
+            harness.ActiveMenuItemGestureText("B5 (JIS)").Should().Be("B5");
+            harness.HandleKeyTip(Key.B);
+            harness.KeyTipScope.Should().Be("Menu", "B is the shared prefix for B4 and B5 paper sizes");
+            harness.HandleKeyTip(Key.D5);
+
+            harness.ActiveSheetPaperSize.Should().Be(WorksheetPaperSize.B5);
+            harness.KeyTipScope.Should().Be("None");
+
             harness.SelectRange(2, 2, 4, 3);
             harness.ActiveSheetPrintArea.Should().BeNull();
             harness.OpenRibbonMenu(Key.P, Key.P, Key.A);

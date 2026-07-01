@@ -45,6 +45,13 @@ public enum FillSeriesInputError
     InvalidStop,
 }
 
+/// <summary>The Fill Series input that should receive focus after a validation error.</summary>
+public enum FillSeriesInputFocusTarget
+{
+    StepValue,
+    StopValue,
+}
+
 /// <summary>
 /// Portable (no UI) backing logic for the Fill ▸ Series dialog (Home ▸ Fill ▸ Series). It parses and
 /// validates the step/stop inputs and builds the linear / growth / date cell edits over a range, reading the
@@ -53,21 +60,43 @@ public enum FillSeriesInputError
 /// </summary>
 public static class FillSeriesPlanner
 {
+    public static FillSeriesOptions DefaultOptions { get; } = new(
+        Step: 1,
+        SeriesIn: FillSeriesDirection.Columns,
+        Type: FillSeriesType.Linear,
+        DateUnit: FillSeriesDateUnit.Day);
+
+    public static FillSeriesOptions CreateDefaultOptions(double step) =>
+        DefaultOptions with { Step = step };
+
+    public static bool IsDateUnitEnabled(FillSeriesType type) =>
+        type == FillSeriesType.Date;
+
+    public static FillSeriesInputFocusTarget FocusTargetFor(FillSeriesInputError error) =>
+        error == FillSeriesInputError.InvalidStop
+            ? FillSeriesInputFocusTarget.StopValue
+            : FillSeriesInputFocusTarget.StepValue;
+
     /// <summary>
     /// Parses a step value, accepting the invariant decimal form and the current UI culture (so a typed
     /// <c>1.5</c> or a locale's <c>1,5</c> both work). Rejects non-finite values.
     /// </summary>
     public static bool TryParseStep(string? input, out double step)
     {
-        const NumberStyles styles = NumberStyles.Float | NumberStyles.AllowThousands;
-        var text = (input ?? string.Empty).Trim();
-        if (double.TryParse(text, styles, CultureInfo.InvariantCulture, out step) && double.IsFinite(step))
+        if (TryParseFiniteDouble(input, CultureInfo.InvariantCulture, out step))
             return true;
-        if (double.TryParse(text, styles, CultureInfo.CurrentCulture, out step) && double.IsFinite(step))
+        if (TryParseFiniteDouble(input, CultureInfo.CurrentCulture, out step))
             return true;
 
         step = 0;
         return false;
+    }
+
+    /// <summary>Parses a finite step value using only the supplied culture.</summary>
+    public static bool TryParseStep(string? input, CultureInfo culture, out double step)
+    {
+        ArgumentNullException.ThrowIfNull(culture);
+        return TryParseFiniteDouble(input, culture, out step);
     }
 
     /// <summary>
@@ -96,6 +125,47 @@ public static class FillSeriesPlanner
         if (!string.IsNullOrWhiteSpace(stopText))
         {
             if (!TryParseStep(stopText, out var parsedStop))
+            {
+                error = FillSeriesInputError.InvalidStop;
+                return false;
+            }
+
+            stopValue = parsedStop;
+        }
+
+        options = new FillSeriesOptions(step, seriesIn, type, dateUnit, stopValue);
+        return true;
+    }
+
+    /// <summary>
+    /// Parses and validates dialog inputs with one explicit culture. Use this when a shell must preserve
+    /// current-culture-only decimal handling instead of the invariant-first portable default.
+    /// </summary>
+    public static bool TryCreateOptions(
+        FillSeriesDirection seriesIn,
+        FillSeriesType type,
+        FillSeriesDateUnit dateUnit,
+        string? stepText,
+        string? stopText,
+        CultureInfo culture,
+        out FillSeriesOptions options,
+        out FillSeriesInputError error)
+    {
+        ArgumentNullException.ThrowIfNull(culture);
+
+        options = new FillSeriesOptions(1, seriesIn, type, dateUnit);
+        error = FillSeriesInputError.None;
+
+        if (!TryParseStep(stepText, culture, out var step))
+        {
+            error = FillSeriesInputError.InvalidStep;
+            return false;
+        }
+
+        double? stopValue = null;
+        if (!string.IsNullOrWhiteSpace(stopText))
+        {
+            if (!TryParseStep(stopText, culture, out var parsedStop))
             {
                 error = FillSeriesInputError.InvalidStop;
                 return false;
@@ -313,4 +383,11 @@ public static class FillSeriesPlanner
 
     private static bool IsLastDayOfMonth(DateTime date) =>
         date.Day == DateTime.DaysInMonth(date.Year, date.Month);
+
+    private static bool TryParseFiniteDouble(string? input, CultureInfo culture, out double value)
+    {
+        const NumberStyles styles = NumberStyles.Float | NumberStyles.AllowThousands;
+        return double.TryParse((input ?? string.Empty).Trim(), styles, culture, out value) &&
+               double.IsFinite(value);
+    }
 }

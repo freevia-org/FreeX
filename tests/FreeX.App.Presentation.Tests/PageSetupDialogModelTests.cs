@@ -35,6 +35,7 @@ public sealed class PageSetupDialogModelTests
                 WorksheetPaperSize.Executive,
                 WorksheetPaperSize.A3,
                 WorksheetPaperSize.A5,
+                WorksheetPaperSize.B4,
                 WorksheetPaperSize.B5);
         PageSetupDialogModel.PaperSizes.Should().Equal(
             PageSetupDialogModel.PaperSizeChoices.Select(choice => choice.Value));
@@ -147,6 +148,16 @@ public sealed class PageSetupDialogModelTests
                 selectedIndex: 99)
             .Should()
             .BeEmpty();
+        PageSetupDialogModel.HeaderFooterPresetExactIndex(
+                PageSetupDialogModel.HeaderPresetChoices,
+                "Confidential, Page &[Page]")
+            .Should()
+            .Be(7);
+        PageSetupDialogModel.HeaderFooterPresetExactIndex(
+                PageSetupDialogModel.HeaderPresetChoices,
+                "Custom center text")
+            .Should()
+            .Be(-1);
 
         PageSetupDialogModel.BuildHeaderFooterPreview(new WorksheetHeaderFooter("&[File]", "", "&[Date]"), "(none)")
             .Should()
@@ -627,6 +638,48 @@ public sealed class PageSetupDialogModelTests
             new CellAddress(target.Id, 2, 2),
             new CellAddress(target.Id, 5, 4)));
         target.PageHeader.Center.Should().Be("Report");
+    }
+
+    [Fact]
+    public void SubmissionPlanner_BuildsCompositeCommandForGroupedTargetsAndRoutesFollowUp()
+    {
+        var workbook = new Workbook("Book");
+        var source = workbook.AddSheet("Sheet1");
+        var target = workbook.AddSheet("Sheet2");
+        var ctx = new PageSetupTestCommandContext(workbook);
+
+        var fields = PageSetupDialogModel.FromSheet(source) with
+        {
+            Orientation = WorksheetPageOrientation.Landscape,
+            PrintAreaText = "A1:B4",
+            Header = new WorksheetHeaderFooter("", "Grouped", ""),
+        };
+
+        var submission = PageSetupSubmissionPlanner.TryBuild(source, fields, PageSetupDialogAction.Options);
+        var commandBuild = submission.Submission!.TryBuildCompositeCommandForTargets(
+            source,
+            [source.Id, target.Id]);
+
+        submission.Success.Should().BeTrue();
+        submission.Submission.FollowUpAction.Should().Be(PageSetupDialogFollowUpAction.ShowPrinterOptions);
+        PageSetupSubmissionPlanner.ResolveFollowUp(PageSetupDialogAction.PrintPreview)
+            .Should()
+            .Be(PageSetupDialogFollowUpAction.Print);
+        commandBuild.Success.Should().BeTrue(commandBuild.Validation?.Message.FallbackText);
+        commandBuild.Command!.Label.Should().Be(PageSetupSubmissionPlanner.DefaultCommandLabel);
+
+        commandBuild.Command.Apply(ctx).Success.Should().BeTrue();
+
+        source.PageOrientation.Should().Be(WorksheetPageOrientation.Landscape);
+        target.PageOrientation.Should().Be(WorksheetPageOrientation.Landscape);
+        source.PrintArea.Should().Be(new GridRange(
+            new CellAddress(source.Id, 1, 1),
+            new CellAddress(source.Id, 4, 2)));
+        target.PrintArea.Should().Be(new GridRange(
+            new CellAddress(target.Id, 1, 1),
+            new CellAddress(target.Id, 4, 2)));
+        source.PageHeader.Center.Should().Be("Grouped");
+        target.PageHeader.Center.Should().Be("Grouped");
     }
 
     [Fact]

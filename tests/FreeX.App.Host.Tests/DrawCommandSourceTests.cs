@@ -16,16 +16,21 @@ public sealed class DrawCommandSourceTests
         insertSource.Should().Contain("private void ShapesBtn_Click(object sender, RoutedEventArgs e) => DrawRectBtn_Click(sender, e);");
         source.Should().Contain("private async void InsertPictureBtn_Click(object sender, RoutedEventArgs e)");
         source.Should().Contain("PictureInsertionPlacementPlanner.CreateInsertPictureCommand(");
+        source.Should().Contain("DrawingObjectFormatCommandPolicy.BuildPictureFormatCommands(");
         source.Should().Contain("DrawRectBtn_Click(object sender, RoutedEventArgs e)");
         source.Should().Contain("InsertDrawingShape(DrawingShapeKind.Rectangle)");
         source.Should().Contain("DrawEllipseBtn_Click(object sender, RoutedEventArgs e)");
         source.Should().Contain("InsertDrawingShape(DrawingShapeKind.Ellipse)");
         source.Should().Contain("DrawLineBtn_Click(object sender, RoutedEventArgs e)");
         source.Should().Contain("InsertDrawingShape(DrawingShapeKind.Line)");
-        DialogSourceTestSupport.ReadHostSources("MainWindow.ShapeGallery.cs")
+        var shapeGallerySource = DialogSourceTestSupport.ReadHostSources("MainWindow.ShapeGallery.cs");
+        shapeGallerySource
             .Should()
             .Contain("ShapeGalleryMenuItem_Click")
             .And.Contain("InsertDrawingShape(kind)");
+        shapeGallerySource.Should().Contain("foreach (var item in group.MenuItems)");
+        shapeGallerySource.Should().Contain("RibbonTooltip.SetKeyTip(shapeItem, item.KeyTip);");
+        shapeGallerySource.Should().NotContain("group.KeyTip + item.KeyTip");
         source.Should().Contain("private void BringForwardBtn_Click(object sender, RoutedEventArgs e) => ReorderSelectedDrawingObject(forward: true);");
         source.Should().Contain("private void SendBackwardBtn_Click(object sender, RoutedEventArgs e) => ReorderSelectedDrawingObject(forward: false);");
         source.Should().Contain("private void SelectionPaneBtn_Click(object sender, RoutedEventArgs e) => ShowSelectionPaneDialog();");
@@ -40,6 +45,8 @@ public sealed class DrawCommandSourceTests
         source.Should().Contain("menuItem.IsChecked = preset == currentPreset;");
         source.Should().Contain("private void ShapeEffectPresetMenuItem_Click(object sender, RoutedEventArgs e)");
         source.Should().Contain("SetSelectedDrawingShapeEffect(preset);");
+        source.Should().Contain("var normalizedPreset = ShapeEffectsDialogPlanner.NormalizePreset(preset);");
+        source.Should().NotContain("Enum.IsDefined(preset)");
         source.Should().Contain("DrawingObjectCommandPlanner.BuildZOrderCommand(");
         source.Should().Contain("var target = GetTargetDrawingZOrderObject(sheetId, currentTarget.Kind);");
         source.Should().Contain("private DrawingObjectTarget? GetTargetTransformDrawingObject(");
@@ -48,14 +55,19 @@ public sealed class DrawCommandSourceTests
         source.Should().Contain("DrawingObjectKindMapper.ToDrawingObjectTargetKind(kind)");
         contextualSource.Should().Contain("DrawingTargetResolver.ResolveSelectedPicture(");
         contextualSource.Should().NotContain("foreach (var picture in sheet.Pictures)");
+        source.Should().NotContain("new SetPictureLockAspectRatioCommand(");
+        source.Should().Contain("DrawingObjectFormatCommandPolicy.BuildResizeCommand(");
+        source.Should().Contain("DrawingObjectFormatCommandPolicy.BuildRotationCommand(");
         source.Should().Contain("DrawingObjectCommandPlanner.BuildResizeCommand(");
         source.Should().Contain("DrawingObjectCommandPlanner.BuildRotateCommand(");
         source.Should().Contain("DrawingObjectCommandPlanner.BuildMoveCommand(");
         source.Should().Contain("DrawingObjectCommandPlanner.BuildResizeWithAnchorCommand(");
+        source.Should().Contain("DrawingObjectCommandPlanner.BuildFillColorCommand(");
+        source.Should().Contain("DrawingObjectCommandPlanner.BuildOutlineColorCommand(");
         source.Should().Contain("new ObjectSizeDialog(target.Width, target.Height, UiText.Get(\"MainWindowMessage_ObjectSizeTitle\"))");
         source.Should().Contain("new RotationDialog(target.RotationDegrees, UiText.Get(\"MainWindowMessage_RotateObjectTitle\"))");
-        source.Should().Contain("new SetDrawingShapeColorsCommand(");
-        source.Should().Contain("new SetTextBoxColorsCommand(");
+        source.Should().NotContain("new SetDrawingShapeColorsCommand(");
+        source.Should().NotContain("new SetTextBoxColorsCommand(");
         source.Should().Contain("new ShapeGradientDialog");
         source.Should().Contain("new SetDrawingShapeGradientCommand(");
         source.Should().Contain("new SetDrawingShapeEffectCommand(");
@@ -81,14 +93,18 @@ public sealed class DrawCommandSourceTests
         source.Should().Contain("hasFill: ResolveCurrentShapeHasFill()");
         source.Should().Contain("outlineColor: ResolveCurrentShapeOutlineColor()");
         source.Should().Contain("TryShowColorPicker(title, initial, allowNoColor: true, out var selectedColor, UiText.Get(\"FormatCells_NoFill\"))");
-        source.Should().Contain("hasFill ? \"Object Fill\" : \"Object No Fill\"");
+        source.Should().Contain("DrawingObjectActionPlanner.FillCommandTitle(hasFill)");
         source.Should().Contain("RememberCurrentShapeFill(target.Kind, selectedColor);");
         source.Should().Contain("RememberCurrentShapeColor(target.Kind, isFill, color);");
-        source.Should().Contain("target.FillThemeColor?.Resolve(_workbook.Theme)");
-        source.Should().Contain("target.OutlineThemeColor?.Resolve(_workbook.Theme)");
-        source.Should().Contain("hasFill: hasFill");
-        source.Should().Contain("updateFill: isFill");
-        source.Should().Contain("updateOutline: !isFill");
+        source.Should().Contain("DrawingObjectFormatCommandPolicy.ResolveFillColor(");
+        source.Should().Contain("DrawingObjectFormatCommandPolicy.ResolveOutlineColor(");
+        source.Should().Contain("DrawingObjectCommandPlanner.BuildFillColorCommand(");
+        source.Should().Contain("DrawingObjectCommandPlanner.BuildOutlineColorCommand(");
+        source.Should().NotContain("target.FillThemeColor?.Resolve(_workbook.Theme)");
+        source.Should().NotContain("target.OutlineThemeColor?.Resolve(_workbook.Theme)");
+        source.Should().NotContain("hasFill: hasFill");
+        source.Should().NotContain("updateFill: isFill");
+        source.Should().NotContain("updateOutline: !isFill");
     }
 
     [Fact]

@@ -5,6 +5,7 @@ using System.Windows.Automation;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Threading;
+using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -113,7 +114,7 @@ public partial class MainWindow
                 outputDir,
                 "zoom-custom-125-result",
                 "freex_status_footer_interactions_zoom_custom_125",
-                "ZoomDialog.TryCreateResult -> ZoomSelectionPlanner.CalculateDialogZoomPercent -> ZoomSlider_ValueChanged",
+                "ZoomDialog.TryCreateResult -> ZoomSelectionPlanner.CalculateZoomPercent -> ZoomSlider_ValueChanged",
                 "Custom 125% zoom result updates the status footer zoom text and slider without foreground wheel input."));
 
             await CaptureStatusFooterInteractionsModalCloseAsync();
@@ -151,13 +152,14 @@ public partial class MainWindow
         if (!ZoomDialog.TryCreateResult(zoomPercent.ToString(System.Globalization.CultureInfo.InvariantCulture), out var result, out var error))
             throw new InvalidOperationException(error ?? "Status/footer interactions tour could not create a custom Zoom dialog result.");
 
-        var plannedZoom = ZoomSelectionPlanner.CalculateDialogZoomPercent(
-            result,
+        var plannedZoom = ZoomSelectionPlanner.CalculateZoomPercent(
+            result.ZoomPercent,
+            result.FitSelection,
             SheetGrid.ActualWidth,
             SheetGrid.ActualHeight,
             SheetGrid.SelectedRange?.ColCount ?? 1,
             SheetGrid.SelectedRange?.RowCount ?? 1);
-        ZoomSlider.Value = FreeX.App.Services.ZoomLevelMapper.ZoomPercentToSlider(plannedZoom);
+        ZoomSlider.Value = StatusZoomSliderValueForPercent(plannedZoom);
         RefreshStatusBar();
         UpdateViewport();
     }

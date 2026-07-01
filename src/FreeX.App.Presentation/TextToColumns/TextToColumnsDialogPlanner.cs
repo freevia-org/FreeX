@@ -189,34 +189,13 @@ public static class TextToColumnsDialogPlanner
     public static IReadOnlyList<(CellAddress Address, Cell NewCell)> MapToEdits(
         SheetId sheetId,
         TextToColumnsResult result,
-        GridRange sourceRange)
-    {
-        ArgumentNullException.ThrowIfNull(result);
-
-        var edits = new List<(CellAddress, Cell)>();
-        var startRow = sourceRange.Start.Row;
-        var startCol = sourceRange.Start.Col;
-
-        for (var rowIndex = 0; rowIndex < result.Rows.Count; rowIndex++)
-        {
-            var row = result.Rows[rowIndex];
-            var targetOffset = 0u;
-
-            for (var fieldIndex = 0; fieldIndex < result.ColumnCount; fieldIndex++)
-            {
-                var format = result.FormatFor(fieldIndex);
-                if (format == TextToColumnsColumnFormat.Skip)
-                    continue;
-
-                var text = fieldIndex < row.Fields.Count ? row.Fields[fieldIndex] : string.Empty;
-                var address = new CellAddress(sheetId, startRow + (uint)rowIndex, startCol + targetOffset);
-                edits.Add((address, Cell.FromValue(TextToColumnsValueConverter.ConvertValue(text, format))));
-                targetOffset++;
-            }
-        }
-
-        return edits;
-    }
+        GridRange sourceRange,
+        TextToColumnsAdvancedOptions? advancedOptions = null) =>
+        TextToColumnsApplyPlanner.MapResultToEdits(
+            sheetId,
+            result,
+            sourceRange,
+            advancedOptions: advancedOptions);
 
     /// <summary>
     /// The non-empty cells an apply would overwrite that lie outside the source column. These are the

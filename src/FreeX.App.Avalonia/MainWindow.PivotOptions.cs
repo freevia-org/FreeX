@@ -5,12 +5,12 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
 using Avalonia.Media;
 
+using Free.Shared.Shell.Avalonia;
 using FreeX.App.Presentation.PivotUI;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
-using AvaloniaVerticalAlignment = Avalonia.Layout.VerticalAlignment;
 
 namespace FreeX.App.Avalonia;
 
@@ -30,46 +30,36 @@ public sealed partial class MainWindow
     // ── Shared pivot-dialog chrome helpers ───────────────────────────────────
     // Defined here (in the first pivot partial) so all sibling pivot partials can call them.
 
+    private static AvaloniaCompactDialogChromeStyle PivotDialogChromeStyle => new(FormulaBarFontFamily);
+
     private static void ApplyPivotButtonChrome(Button button, double minWidth, bool isDefault = false)
     {
-        button.MinWidth = minWidth;
-        button.Height = 24;
-        button.MinHeight = 24;
-        button.MaxHeight = 24;
-        button.Padding = new Thickness(4, 1);
-        button.Background = Brushes.White;
-        button.BorderBrush = isDefault ? Brush(0, 120, 215) : Brush(112, 112, 112);
-        button.BorderThickness = new Thickness(1);
-        button.FontSize = 12;
-        button.FontFamily = FormulaBarFontFamily;
-        button.HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center;
-        button.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
+        AvaloniaCompactDialogChrome.ApplyButton(button, PivotDialogChromeStyle, minWidth, isDefault);
     }
 
-    private static void ApplyPivotTextBoxChrome(TextBox textBox)
+    private static void ApplyPivotTextBoxChrome(TextBox textBox, bool fixedHeight = true)
     {
-        textBox.Height = 24;
-        textBox.MinHeight = 24;
-        textBox.MaxHeight = 24;
-        textBox.Padding = new Thickness(4, 1);
-        textBox.FontSize = 12;
-        textBox.FontFamily = FormulaBarFontFamily;
-        textBox.BorderBrush = Brush(130, 130, 130);
-        textBox.BorderThickness = new Thickness(1);
-        textBox.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
+        AvaloniaCompactDialogChrome.ApplyTextBox(textBox, PivotDialogChromeStyle, fixedHeight);
     }
 
     private static void ApplyPivotComboBoxChrome(ComboBox comboBox)
     {
-        comboBox.Height = 24;
-        comboBox.MinHeight = 24;
-        comboBox.MaxHeight = 24;
-        comboBox.Padding = new Thickness(5, 0, 4, 0);
-        comboBox.FontSize = 12;
-        comboBox.FontFamily = FormulaBarFontFamily;
-        comboBox.BorderBrush = Brush(130, 130, 130);
-        comboBox.BorderThickness = new Thickness(1);
-        comboBox.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
+        AvaloniaCompactDialogChrome.ApplyComboBox(comboBox, PivotDialogChromeStyle);
+    }
+
+    private static void ApplyPivotCheckBoxChrome(CheckBox checkBox)
+    {
+        AvaloniaCompactDialogChrome.ApplyCheckBox(checkBox, PivotDialogChromeStyle);
+    }
+
+    private static void ApplyPivotRadioButtonChrome(RadioButton radioButton)
+    {
+        AvaloniaCompactDialogChrome.ApplyRadioButton(radioButton, PivotDialogChromeStyle);
+    }
+
+    private static void ApplyPivotListBoxChrome(ListBox listBox)
+    {
+        AvaloniaCompactDialogChrome.ApplyListBox(listBox, PivotDialogChromeStyle);
     }
 
     // ── PivotTable Options dialog ─────────────────────────────────────────────
@@ -97,17 +87,15 @@ public sealed partial class MainWindow
         {
             Content = UiText.Get("PivotOptions_ShowRowGrandTotals"),
             IsChecked = values.ShowRowGrandTotals,
-            FontSize = 12,
-            FontFamily = FormulaBarFontFamily,
         };
+        ApplyPivotCheckBoxChrome(rowGrandTotalsBox);
         AutomationProperties.SetAutomationId(rowGrandTotalsBox, "PivotOptionsRowGrandTotalsBox");
         var columnGrandTotalsBox = new CheckBox
         {
             Content = UiText.Get("PivotOptions_ShowColumnGrandTotals"),
             IsChecked = values.ShowColumnGrandTotals,
-            FontSize = 12,
-            FontFamily = FormulaBarFontFamily,
         };
+        ApplyPivotCheckBoxChrome(columnGrandTotalsBox);
         AutomationProperties.SetAutomationId(columnGrandTotalsBox, "PivotOptionsColumnGrandTotalsBox");
 
         var reportLayoutBox = new ComboBox { MinWidth = 220 };
@@ -131,9 +119,8 @@ public sealed partial class MainWindow
         {
             Content = UiText.Get("PivotOptions_ShowSubtotals"),
             IsChecked = values.ShowSubtotals,
-            FontSize = 12,
-            FontFamily = FormulaBarFontFamily,
         };
+        ApplyPivotCheckBoxChrome(subtotalsBox);
         AutomationProperties.SetAutomationId(subtotalsBox, "PivotOptionsSubtotalsBox");
 
         var subtotalPlacementBox = new ComboBox { MinWidth = 220 };
@@ -149,27 +136,24 @@ public sealed partial class MainWindow
         {
             Content = UiText.Get("PivotOptions_RepeatItemLabels"),
             IsChecked = values.RepeatItemLabels,
-            FontSize = 12,
-            FontFamily = FormulaBarFontFamily,
         };
+        ApplyPivotCheckBoxChrome(repeatLabelsBox);
         AutomationProperties.SetAutomationId(repeatLabelsBox, "PivotOptionsRepeatLabelsBox");
 
         var blankRowBox = new CheckBox
         {
             Content = UiText.Get("PivotOptions_InsertBlankRow"),
             IsChecked = values.BlankLineAfterItems,
-            FontSize = 12,
-            FontFamily = FormulaBarFontFamily,
         };
+        ApplyPivotCheckBoxChrome(blankRowBox);
         AutomationProperties.SetAutomationId(blankRowBox, "PivotOptionsBlankRowBox");
 
         var mergeLabelsBox = new CheckBox
         {
             Content = UiText.Get("PivotOptions_MergeAndCenterLabels"),
             IsChecked = values.MergeAndCenterLabels,
-            FontSize = 12,
-            FontFamily = FormulaBarFontFamily,
         };
+        ApplyPivotCheckBoxChrome(mergeLabelsBox);
         AutomationProperties.SetAutomationId(mergeLabelsBox, "PivotOptionsMergeLabelsBox");
 
         void SyncSubtotalState()
@@ -309,13 +293,7 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetAutomationId(tabs, "PivotTableOptionsTabs");
 
-        var buttonRow = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Spacing = 8,
-            Children = { ok, cancel },
-        };
+        var buttonRow = AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel]);
 
         var content = new DockPanel { Margin = new Thickness(16) };
         DockPanel.SetDock(buttonRow, Dock.Bottom);
@@ -376,13 +354,16 @@ public sealed partial class MainWindow
         Foreground = HeaderForeground,
     };
 
-    private static CheckBox OptionCheckBox(string text, bool isChecked) => new()
+    private static CheckBox OptionCheckBox(string text, bool isChecked)
     {
-        Content = StripDisplayMnemonic(text),
-        IsChecked = isChecked,
-        FontSize = 12,
-        FontFamily = FormulaBarFontFamily,
-    };
+        var checkBox = new CheckBox
+        {
+            Content = StripDisplayMnemonic(text),
+            IsChecked = isChecked,
+        };
+        ApplyPivotCheckBoxChrome(checkBox);
+        return checkBox;
+    }
 
     private static TextBox OptionTextBox(string text, double minWidth)
     {

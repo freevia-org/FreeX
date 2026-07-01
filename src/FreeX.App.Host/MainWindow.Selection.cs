@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using FreeX.App.Services;
 using FreeX.App.UI;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -331,8 +332,9 @@ public partial class MainWindow
             {
                 _inlineEditor.Text = e.Text;
                 _inlineEditor.CaretIndex = _inlineEditor.Text.Length;
-                _formulaRangeEntryMode = FormulaEditInteractionPlanner.ShouldStartPointModeFromTypedText(e.Text);
-                SetFormulaEnterStatusBarMode();
+                var typedEntryPlan = FormulaEditInteractionPlanner.BuildTypedEntryPlan(e.Text);
+                _formulaRangeEntryMode = typedEntryPlan.PointMode;
+                ApplyFormulaEditStatusBarPlan(typedEntryPlan.StatusBarPlan);
                 RefreshFormulaReferenceHighlights();
             }
         }

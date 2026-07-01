@@ -80,6 +80,16 @@ public sealed class GridShapePlacementPlannerTests
     }
 
     [Fact]
+    public void TextBoxCalculateAnchorPoint_ReverseDragUsesTopLeft()
+    {
+        var anchorPoint = GridTextBoxPlacementPlanner.CalculateAnchorPoint(
+            new Point(120, 90),
+            new Point(40, 50));
+
+        anchorPoint.Should().Be(new Point(40, 50));
+    }
+
+    [Fact]
     public void GridView_BeginShapePlacementClearsSelectedObjectAndCanCancel()
     {
         WpfTestThread.Run(() =>

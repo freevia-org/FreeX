@@ -7,20 +7,20 @@ namespace FreeX.App.Host.Tests;
 public sealed partial class ExcelEditKeyPlannerTests
 {
     [Theory]
-    [InlineData(Key.Up, 9, 5)]
-    [InlineData(Key.Down, 11, 5)]
-    [InlineData(Key.Left, 10, 4)]
-    [InlineData(Key.Right, 10, 6)]
-    [InlineData(Key.PageUp, 1, 5)]
-    [InlineData(Key.PageDown, 19, 5)]
+    [InlineData(FormulaEditorKey.Up, 9, 5)]
+    [InlineData(FormulaEditorKey.Down, 11, 5)]
+    [InlineData(FormulaEditorKey.Left, 10, 4)]
+    [InlineData(FormulaEditorKey.Right, 10, 6)]
+    [InlineData(FormulaEditorKey.PageUp, 1, 5)]
+    [InlineData(FormulaEditorKey.PageDown, 19, 5)]
     public void GetIntent_SelectsFormulaReferenceRangeInsteadOfCommittingWhenFormulaRangeEntryIsActive(
-        Key key,
+        FormulaEditorKey key,
         uint expectedRow,
         uint expectedCol)
     {
         var intent = ExcelEditKeyPlanner.GetIntent(
             key,
-            ModifierKeys.None,
+            FormulaEditorModifiers.None,
             Current,
             pageSize: 9,
             allowFormulaBarNavigationKeys: false,
@@ -31,18 +31,18 @@ public sealed partial class ExcelEditKeyPlannerTests
     }
 
     [Theory]
-    [InlineData(Key.PageUp, 0, 9)]
-    [InlineData(Key.PageDown, 0, 11)]
-    [InlineData(Key.PageUp, -5, 9)]
-    [InlineData(Key.PageDown, -5, 11)]
+    [InlineData(FormulaEditorKey.PageUp, 0, 9)]
+    [InlineData(FormulaEditorKey.PageDown, 0, 11)]
+    [InlineData(FormulaEditorKey.PageUp, -5, 9)]
+    [InlineData(FormulaEditorKey.PageDown, -5, 11)]
     public void GetIntent_FormulaReferencePageNavigationUsesMinimumSingleRowStep(
-        Key key,
+        FormulaEditorKey key,
         int pageSize,
         uint expectedRow)
     {
         var intent = ExcelEditKeyPlanner.GetIntent(
             key,
-            ModifierKeys.None,
+            FormulaEditorModifiers.None,
             Current,
             pageSize,
             allowFormulaBarNavigationKeys: false,
@@ -53,14 +53,14 @@ public sealed partial class ExcelEditKeyPlannerTests
     }
 
     [Theory]
-    [InlineData(Key.Up, 1, 1)]
-    [InlineData(Key.Left, 1, 1)]
-    [InlineData(Key.PageUp, 1, 1)]
-    [InlineData(Key.Down, CellAddress.MaxRow, CellAddress.MaxCol)]
-    [InlineData(Key.Right, CellAddress.MaxRow, CellAddress.MaxCol)]
-    [InlineData(Key.PageDown, CellAddress.MaxRow, CellAddress.MaxCol)]
+    [InlineData(FormulaEditorKey.Up, 1, 1)]
+    [InlineData(FormulaEditorKey.Left, 1, 1)]
+    [InlineData(FormulaEditorKey.PageUp, 1, 1)]
+    [InlineData(FormulaEditorKey.Down, CellAddress.MaxRow, CellAddress.MaxCol)]
+    [InlineData(FormulaEditorKey.Right, CellAddress.MaxRow, CellAddress.MaxCol)]
+    [InlineData(FormulaEditorKey.PageDown, CellAddress.MaxRow, CellAddress.MaxCol)]
     public void GetIntent_FormulaReferenceMovementClampsAtWorksheetEdges(
-        Key key,
+        FormulaEditorKey key,
         uint currentRow,
         uint currentCol)
     {
@@ -68,7 +68,7 @@ public sealed partial class ExcelEditKeyPlannerTests
 
         var intent = ExcelEditKeyPlanner.GetIntent(
             key,
-            ModifierKeys.None,
+            FormulaEditorModifiers.None,
             edgeCell,
             pageSize: 20,
             allowFormulaBarNavigationKeys: false,
@@ -79,11 +79,11 @@ public sealed partial class ExcelEditKeyPlannerTests
     }
 
     [Theory]
-    [InlineData(Key.Enter, ModifierKeys.None, 11, 5)]
-    [InlineData(Key.Tab, ModifierKeys.None, 10, 6)]
+    [InlineData(FormulaEditorKey.Enter, FormulaEditorModifiers.None, 11, 5)]
+    [InlineData(FormulaEditorKey.Tab, FormulaEditorModifiers.None, 10, 6)]
     public void GetIntent_StillCommitsEnterAndTabWhenFormulaRangeEntryIsActive(
-        Key key,
-        ModifierKeys modifiers,
+        FormulaEditorKey key,
+        FormulaEditorModifiers modifiers,
         uint expectedRow,
         uint expectedCol)
     {

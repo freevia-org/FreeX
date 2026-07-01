@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -9,6 +10,7 @@ using Avalonia.Platform.Storage;
 
 using FreeX.App.Presentation.PageLayout;
 using FreeX.App.Services;
+using Free.Shared.Shell.Avalonia;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -225,43 +227,86 @@ public sealed partial class MainWindow
     }
 
     // ── Page Layout ▸ Page Setup group quick presets ─────────────────────────────
-    private void ApplyPageMargins(WorksheetPageMargins margins, string statusKey)
+    private void RegisterPageLayoutRibbonActions(IDictionary<string, Action> commands)
     {
-        var result = _session.ExecuteReviewCommand(
-            PageLayoutRibbonCommandPlanner.BuildMarginsCommand(_session.ActiveSheet.Id, margins));
-        RefreshShell(result.Success ? UiText.Get(statusKey) : result.ErrorMessage ?? UiText.Get(statusKey));
+        foreach (var descriptor in PageLayoutRibbonActionPlanner.RibbonActionDescriptors)
+            commands[descriptor.CommandId] = CreatePageLayoutRibbonAction(descriptor);
     }
 
-    private void ApplyPageOrientation(WorksheetPageOrientation orientation, string statusKey)
+    private Action CreatePageLayoutRibbonAction(PageLayoutRibbonActionDescriptor descriptor) =>
+        descriptor.Kind switch
+        {
+            PageLayoutRibbonActionKind.OpenPageSetupDialog => () => _ = ShowPageSetupDialogAsync(descriptor.PageSetupOpenSource),
+            PageLayoutRibbonActionKind.ShowPageBreaksMenu => ShowPageBreaksMenu,
+            PageLayoutRibbonActionKind.ShowGridlinesSheetOptions => () => _ = ShowGridlinesSheetOptionsAsync(),
+            PageLayoutRibbonActionKind.ShowHeadingsSheetOptions => () => _ = ShowHeadingsSheetOptionsAsync(),
+            PageLayoutRibbonActionKind.ChooseBackground => ChooseSheetBackground,
+            PageLayoutRibbonActionKind.DeleteBackground => DeleteSheetBackground,
+            PageLayoutRibbonActionKind.SetPrintArea => SetPrintAreaFromSelection,
+            PageLayoutRibbonActionKind.ClearPrintArea => ClearPrintArea,
+            PageLayoutRibbonActionKind.ApplyMarginsPreset => () => ApplyPageMarginsPreset(descriptor.MarginPreset!.Value),
+            PageLayoutRibbonActionKind.ApplyOrientationPreset => () => ApplyPageOrientationPreset(descriptor.OrientationPreset!.Value),
+            PageLayoutRibbonActionKind.ApplyPaperSizePreset => () => ApplyPaperSizePreset(descriptor.PaperSizePreset!.Value),
+            PageLayoutRibbonActionKind.ApplyPageBreakAction => () => ApplyPageBreakAction(descriptor.PageBreakAction!.Value),
+            _ => throw new InvalidOperationException($"Unsupported Page Layout ribbon action: {descriptor.Kind}"),
+        };
+
+    private void ApplyPageMarginsPreset(PageLayoutMarginPreset preset)
     {
+        var plan = PageLayoutRibbonActionPlanner.PlanMarginsPreset(preset);
         var result = _session.ExecuteReviewCommand(
-            PageLayoutRibbonCommandPlanner.BuildOrientationCommand(_session.ActiveSheet.Id, orientation));
-        RefreshShell(result.Success ? UiText.Get(statusKey) : result.ErrorMessage ?? UiText.Get(statusKey));
+            PageLayoutRibbonCommandPlanner.BuildMarginsCommand(_session.ActiveSheet.Id, plan.Value));
+        RefreshShell(PageLayoutStatusPlanner.ResolveCommandStatus(
+            PageLayoutStatusPlanner.ForPreset(plan),
+            result.Success,
+            result.ErrorMessage,
+            UiText.Get));
     }
 
-    private void ApplyPaperSize(WorksheetPaperSize paperSize, string statusKey)
+    private void ApplyPageOrientationPreset(PageLayoutOrientationPreset preset)
     {
+        var plan = PageLayoutRibbonActionPlanner.PlanOrientationPreset(preset);
         var result = _session.ExecuteReviewCommand(
-            PageLayoutRibbonCommandPlanner.BuildPaperSizeCommand(_session.ActiveSheet.Id, paperSize));
-        RefreshShell(result.Success ? UiText.Get(statusKey) : result.ErrorMessage ?? UiText.Get(statusKey));
+            PageLayoutRibbonCommandPlanner.BuildOrientationCommand(_session.ActiveSheet.Id, plan.Value));
+        RefreshShell(PageLayoutStatusPlanner.ResolveCommandStatus(
+            PageLayoutStatusPlanner.ForPreset(plan),
+            result.Success,
+            result.ErrorMessage,
+            UiText.Get));
+    }
+
+    private void ApplyPaperSizePreset(PageLayoutPaperSizePreset preset)
+    {
+        var plan = PageLayoutRibbonActionPlanner.PlanPaperSizePreset(preset);
+        var result = _session.ExecuteReviewCommand(
+            PageLayoutRibbonCommandPlanner.BuildPaperSizeCommand(_session.ActiveSheet.Id, plan.Value));
+        RefreshShell(PageLayoutStatusPlanner.ResolveCommandStatus(
+            PageLayoutStatusPlanner.ForPreset(plan),
+            result.Success,
+            result.ErrorMessage,
+            UiText.Get));
     }
 
     private void SetPrintAreaFromSelection()
     {
         var result = _session.ExecuteReviewCommand(
             PageLayoutRibbonCommandPlanner.BuildSetPrintAreaCommand(_session.ActiveSheet.Id, _session.SelectedRange));
-        RefreshShell(result.Success
-            ? UiText.Get("RibbonWire_PrintAreaSet")
-            : result.ErrorMessage ?? UiText.Get("RibbonWire_PrintAreaSetFailed"));
+        RefreshShell(PageLayoutStatusPlanner.ResolveCommandStatus(
+            PageLayoutStatusPlanner.PrintAreaSet,
+            result.Success,
+            result.ErrorMessage,
+            UiText.Get));
     }
 
     private void ClearPrintArea()
     {
         var result = _session.ExecuteReviewCommand(
             PageLayoutRibbonCommandPlanner.BuildClearPrintAreaCommand(_session.ActiveSheet.Id));
-        RefreshShell(result.Success
-            ? UiText.Get("RibbonWire_PrintAreaCleared")
-            : result.ErrorMessage ?? UiText.Get("RibbonWire_PrintAreaClearFailed"));
+        RefreshShell(PageLayoutStatusPlanner.ResolveCommandStatus(
+            PageLayoutStatusPlanner.PrintAreaClear,
+            result.Success,
+            result.ErrorMessage,
+            UiText.Get));
     }
 
     // ── Page Layout ▸ Page Setup ▸ Background (Choose / Delete) ──────────────────
@@ -279,20 +324,11 @@ public sealed partial class MainWindow
             return;
 
         var pickerPlan = SheetBackgroundPickerPlanner.BuildOpenPickerPlan();
-        var fileTypes = CreateFilePickerFileTypes(pickerPlan.FileTypes);
-        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
-        {
-            Title = UiText.Get("RibbonWire_BackgroundPickerTitle"),
-            AllowMultiple = false,
-            FileTypeFilter = fileTypes,
-        });
-
-        IStorageFile? file = null;
-        foreach (var candidate in files)
-        {
-            file = candidate;
-            break;
-        }
+        var file = await AvaloniaFilePickerService.PickSingleOpenFileAsync(
+            StorageProvider,
+            AvaloniaFilePickerOpenRequest.FromDescriptors(
+                UiText.Get("RibbonWire_BackgroundPickerTitle"),
+                pickerPlan.FileTypes));
 
         if (file is null)
             return;

@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -64,8 +65,7 @@ public sealed partial class FindReplaceDialog : Window
 
     private void FocusSearchBox()
     {
-        var target = FindReplaceTabs.SelectedItem == ReplaceTab ? ReplaceFindBox : FindBox;
-        DialogFocus.FocusAndSelect(target);
+        DialogFocus.FocusAndSelect(ResolveSearchBox());
     }
 
     private void FindNext_Click(object sender, RoutedEventArgs e) => FindNext();
@@ -279,10 +279,11 @@ public sealed partial class FindReplaceDialog : Window
 
     private bool ShowBlankSearchWarning()
     {
-        DialogMessageHelper.ShowWarning(this, UiText.Get("FindReplace_FindWhatRequired"), Title);
-        FocusSearchBox();
+        DialogFocus.ShowWarningAndFocus(this, UiText.Get("FindReplace_FindWhatRequired"), Title, ResolveSearchBox());
         return true;
     }
+
+    private TextBox ResolveSearchBox() => FindReplaceTabs.SelectedItem == ReplaceTab ? ReplaceFindBox : FindBox;
 
     private FindOptions CreateFindOptions() =>
         new(

@@ -52,19 +52,6 @@ public sealed class AvaloniaChartRenderer
     private static readonly AvaloniaList<double> DashArray = [4, 3];
     private static readonly AvaloniaList<double> DotArray = [1.5, 1.5];
 
-    // Accent tint schedule mirrors WPF ChartRenderer.AccentTintSchedule.
-    private static readonly double[] AccentTintSchedule = [0.0, 0.4, -0.25, 0.6, -0.5];
-
-    private static readonly WorkbookThemeColorSlot[] AccentSlots =
-    [
-        WorkbookThemeColorSlot.Accent1,
-        WorkbookThemeColorSlot.Accent2,
-        WorkbookThemeColorSlot.Accent3,
-        WorkbookThemeColorSlot.Accent4,
-        WorkbookThemeColorSlot.Accent5,
-        WorkbookThemeColorSlot.Accent6,
-    ];
-
     private readonly ChartModel _chart;
     private readonly WorkbookTheme _theme;
 
@@ -281,48 +268,9 @@ public sealed class AvaloniaChartRenderer
     private void RenderBars(Canvas canvas, SeriesLayout series)
     {
         // Fix 7: NoFill / NoLine — transparent helper/invisible bars.
-        var format = FindSeriesFormat(series.SeriesIndex);
-        IBrush fill;
-        IBrush? stroke;
-        double strokeThickness;
-
-        if (format?.NoFill == true)
-        {
-            fill = Brushes.Transparent;
-        }
-        else
-        {
-            fill = SeriesFill(series.SeriesIndex);
-        }
-
-        if (format?.NoLine == true)
-        {
-            // CE3: Explicit NoLine — no outline at all (transparent spacer/helper series).
-            stroke = null;
-            strokeThickness = 0;
-        }
-        else if (format is not null && (format.StrokeColor is not null || format.StrokeThemeColor is not null || format.StrokeThickness is not null))
-        {
-            // CE3: Format has an explicit stroke color or thickness — honor both, mirroring
-            // WPF's ApplyRectangleBarFormat/ApplyBarFormat which only sets StrokeColor/StrokeThickness
-            // when explicitly present in the format. No explicit stroke color → no outline.
-            stroke = format.ResolveStrokeColor(_theme) is { } sc ? SolidBrush(sc) : SeriesStroke(series.SeriesIndex);
-            strokeThickness = format.StrokeThickness ?? 0.75;
-        }
-        else if (format is null)
-        {
-            // Default: no per-series format at all — use the theme palette stroke with default 0.75px
-            // outline (Excel/Avalonia default visual for a normal bar).
-            stroke = SeriesStroke(series.SeriesIndex);
-            strokeThickness = 0.75;
-        }
-        else
-        {
-            // CE3: Format exists but has no explicit stroke properties — no outline, matching WPF
-            // where RectangleBarSeries keeps its default StrokeThickness=0 when no stroke is set.
-            stroke = null;
-            strokeThickness = 0;
-        }
+        var paint = ChartStylePlanner.ResolveBarPaint(_chart, series.SeriesIndex, _theme, ThemePalette);
+        var fill = paint.FillColor is { } fillColor ? SolidBrush(fillColor) : Brushes.Transparent;
+        var stroke = paint.StrokeColor is { } strokeColor ? SolidBrush(strokeColor) : null;
 
         foreach (var bar in series.Bars)
         {
@@ -340,7 +288,7 @@ public sealed class AvaloniaChartRenderer
                 Height = Math.Max(1, bar.Rect.Height),
                 Fill = barFill,
                 Stroke = stroke,
-                StrokeThickness = strokeThickness,
+                StrokeThickness = paint.StrokeThickness,
             };
             Canvas.SetLeft(rect, bar.Rect.Left);
             Canvas.SetTop(rect, bar.Rect.Top);
@@ -1296,34 +1244,20 @@ public sealed class AvaloniaChartRenderer
 
     private IBrush SeriesFill(int seriesIndex, byte alpha = 0xFF)
     {
-        var format = FindSeriesFormat(seriesIndex);
-        var color = format?.ResolveFillColor(_theme)
-            ?? format?.ResolveStrokeColor(_theme)
-            ?? ThemePaletteColor(seriesIndex);
+        var color = ChartStylePlanner.ResolveSeriesPaint(_chart, seriesIndex, _theme, ThemePalette).FillColor;
         return SolidBrush(color.R, color.G, color.B, alpha);
     }
 
     private IBrush SeriesStroke(int seriesIndex)
     {
-        var format = FindSeriesFormat(seriesIndex);
-        var color = format?.ResolveStrokeColor(_theme)
-            ?? format?.ResolveFillColor(_theme)
-            ?? ThemePaletteColor(seriesIndex);
+        var color = ChartStylePlanner.ResolveSeriesPaint(_chart, seriesIndex, _theme, ThemePalette).StrokeColor;
         return SolidBrush(color.R, color.G, color.B);
     }
 
     private IBrush PaletteFill(int index) => SolidBrush(ThemePaletteColor(index));
 
-    private ChartSeriesFormat? FindSeriesFormat(int seriesIndex)
-    {
-        foreach (var format in _chart.SeriesFormats)
-        {
-            if (format.SeriesIndex == seriesIndex)
-                return format;
-        }
-
-        return null;
-    }
+    private ChartSeriesFormat? FindSeriesFormat(int seriesIndex) =>
+        ChartStylePlanner.FindSeriesFormat(_chart, seriesIndex);
 
     /// <summary>
     /// Returns a color from the theme-derived Excel series palette. The palette is built once per
@@ -1332,28 +1266,17 @@ public sealed class AvaloniaChartRenderer
     /// </summary>
     private CellColor ThemePaletteColor(int index)
     {
-        _themePalette ??= BuildThemePalette(_theme);
-        var i = index < 0 ? 0 : index;
-        return _themePalette[i % _themePalette.Length];
+        return ChartStylePlanner.GetPaletteColor(ThemePalette, index);
     }
 
     /// <summary>
     /// Builds a 30-entry palette: Accent1–6 base colors (tint 0), then four more tint rounds
     /// (+0.4, -0.25, +0.6, -0.5), exactly as WPF's BuildExcelSeriesPalette.
     /// </summary>
-    internal static CellColor[] BuildThemePalette(WorkbookTheme theme)
-    {
-        var palette = new CellColor[AccentSlots.Length * AccentTintSchedule.Length];
-        var idx = 0;
-        foreach (var tint in AccentTintSchedule)
-        {
-            foreach (var slot in AccentSlots)
-            {
-                palette[idx++] = theme.ResolveColor(slot, tint);
-            }
-        }
-        return palette;
-    }
+    internal static CellColor[] BuildThemePalette(WorkbookTheme theme) =>
+        ChartStylePlanner.BuildExcelSeriesPalette(theme);
+
+    private IReadOnlyList<CellColor> ThemePalette => _themePalette ??= BuildThemePalette(_theme);
 
     // ── Dash style helpers (Fix 6) ───────────────────────────────────────────
 

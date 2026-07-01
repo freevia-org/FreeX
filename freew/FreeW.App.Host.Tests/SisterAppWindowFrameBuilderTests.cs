@@ -3,7 +3,8 @@ using System.Windows.Controls;
 using System.Linq;
 using System.Windows.Media;
 using System.Windows.Shapes;
-using Free.Shared.Ribbon.Wpf;
+using Free.Shared.AppServices;
+using Free.Shared.Shell.Wpf;
 using Xunit;
 
 namespace FreeW.App.Host.Tests;
@@ -30,22 +31,116 @@ public sealed class SisterAppWindowFrameBuilderTests
     }
 
     [StaFact]
-    public void ClientFrameBuilder_ComposesChromeBodyAndStatusRows()
+    public void WindowTitleBinder_ComposesAndUpdatesWindowAndTitleText()
+    {
+        var window = new Window();
+        var titleText = new TextBlock();
+
+        var title = SisterWpfWindowTitleBinder.Update(
+            window,
+            titleText,
+            new SisterWpfWindowTitleSpec(
+                DisplayName: "Quarterly Review",
+                ApplicationName: "FreeP",
+                IsDirty: true,
+                DirtyMarker: " *",
+                Separator: " \u2014 "));
+
+        title.Should().Be("Quarterly Review * \u2014 FreeP");
+        window.Title.Should().Be(title);
+        titleText.Text.Should().Be(title);
+    }
+
+    [StaFact]
+    public void ClientFrameBuilder_ComposesChromeWorkAreaAndStatusRows()
     {
         var chrome = new Border();
-        var body = new Grid();
-        var status = new Border();
+        var workArea = new Grid();
+        var statusBar = new Border();
 
-        var result = SisterAppClientFrameBuilder.Build(new SisterAppClientFrameSpec(chrome, body, status));
+        var result = SisterAppClientFrameBuilder.Build(new SisterAppClientFrameSpec(
+            Chrome: chrome,
+            WorkArea: workArea,
+            StatusBar: statusBar));
 
         result.Root.RowDefinitions.Should().HaveCount(3);
         result.Root.RowDefinitions[0].Height.Should().Be(GridLength.Auto);
         result.Root.RowDefinitions[1].Height.Should().Be(new GridLength(1, GridUnitType.Star));
         result.Root.RowDefinitions[2].Height.Should().Be(GridLength.Auto);
-        result.Root.Children.Cast<UIElement>().Should().Equal(chrome, body, status);
+        result.Root.Children.Cast<UIElement>().Should().Equal(chrome, workArea, statusBar);
         Grid.GetRow(chrome).Should().Be(0);
-        Grid.GetRow(body).Should().Be(1);
-        Grid.GetRow(status).Should().Be(2);
+        Grid.GetRow(workArea).Should().Be(1);
+        Grid.GetRow(statusBar).Should().Be(2);
+    }
+
+    [StaFact]
+    public void ClientFrameBuilder_ComposesOptionalPanelRowsFromSharedContract()
+    {
+        var chrome = new Border();
+        var topPanel1 = new Border();
+        var topPanel2 = new Border();
+        var workArea = new Grid();
+        var bottomPanel1 = new Border();
+        var bottomPanel2 = new Border();
+        var statusBar = new Border();
+
+        var result = SisterAppClientFrameBuilder.Build(new SisterAppClientFrameSpec(
+            Chrome: chrome,
+            WorkArea: workArea,
+            StatusBar: statusBar,
+            BottomPanelsAboveStatus: [bottomPanel1, bottomPanel2],
+            TopPanelsBelowChrome: [topPanel1, topPanel2]));
+
+        result.Root.RowDefinitions.Select(row => row.Height).Should().Equal(
+            GridLength.Auto,
+            GridLength.Auto,
+            GridLength.Auto,
+            new GridLength(1, GridUnitType.Star),
+            GridLength.Auto,
+            GridLength.Auto,
+            GridLength.Auto);
+        result.Root.Children.Cast<UIElement>().Should().Equal(
+            chrome,
+            topPanel1,
+            topPanel2,
+            workArea,
+            bottomPanel1,
+            bottomPanel2,
+            statusBar);
+        Grid.GetRow(chrome).Should().Be(0);
+        Grid.GetRow(topPanel1).Should().Be(1);
+        Grid.GetRow(topPanel2).Should().Be(2);
+        Grid.GetRow(workArea).Should().Be(3);
+        Grid.GetRow(bottomPanel1).Should().Be(4);
+        Grid.GetRow(bottomPanel2).Should().Be(5);
+        Grid.GetRow(statusBar).Should().Be(6);
+    }
+
+    [Fact]
+    public void ClientFrameContractPlanner_DescribesSharedChromeWorkAreaStatusOrderAndIndexes()
+    {
+        var contract = SisterAppClientFrameContractPlanner.Plan(
+            topPanelsBelowChrome: 2,
+            bottomPanelsAboveStatus: 2);
+
+        contract.Slots.Should().Equal(
+            new SisterAppClientFrameSlotPlan(SisterAppClientFrameSlotRole.Chrome, 0),
+            new SisterAppClientFrameSlotPlan(SisterAppClientFrameSlotRole.TopPanelBelowChrome, 0),
+            new SisterAppClientFrameSlotPlan(SisterAppClientFrameSlotRole.TopPanelBelowChrome, 1),
+            new SisterAppClientFrameSlotPlan(SisterAppClientFrameSlotRole.WorkArea, 0),
+            new SisterAppClientFrameSlotPlan(SisterAppClientFrameSlotRole.BottomPanelAboveStatus, 0),
+            new SisterAppClientFrameSlotPlan(SisterAppClientFrameSlotRole.BottomPanelAboveStatus, 1),
+            new SisterAppClientFrameSlotPlan(SisterAppClientFrameSlotRole.StatusBar, 0));
+    }
+
+    [Fact]
+    public void ClientFrameContractPlanner_RejectsNegativePanelCounts()
+    {
+        Action negativeTop = () => SisterAppClientFrameContractPlanner.Plan(topPanelsBelowChrome: -1);
+        Action negativeBottom = () => SisterAppClientFrameContractPlanner.Plan(bottomPanelsAboveStatus: -1);
+
+        negativeTop.Should().Throw<ArgumentOutOfRangeException>();
+        negativeBottom.Should().Throw<ArgumentOutOfRangeException>();
     }
 
     [StaFact]

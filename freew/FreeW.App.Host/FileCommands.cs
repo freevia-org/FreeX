@@ -2,8 +2,11 @@ using System;
 using System.IO;
 using System.Windows;
 using Free.Shared.AppServices;
-using Free.Shared.Shell;
+using Free.Shared.IO;
+using Free.Shared.Shell.Wpf;
 using FreeW.App.Host.Editing;
+using FreeW.App.Presentation.Options;
+using FreeW.App.Presentation.Shell;
 using FreeW.Core.IO;
 using FreeW.Core.Model;
 
@@ -17,9 +20,9 @@ namespace FreeW.App.Host;
 /// Save-vs-Save-As resolution, and recent-files registration — is decided by the shared, neutral
 /// <see cref="FileLifecyclePlanner"/> (P2). FreeW supplies only the thin host side: the native
 /// <see cref="OpenFileDialog"/>/<see cref="SaveFileDialog"/> for its catalog formats
-/// (via the shared dialog request planners), the actual document read/write, and the message
-/// prompts. The dirty/path state and lifecycle ceremony live in the shared
-/// <see cref="FileCommandWorkflow"/>.
+/// and the message prompts. The document-format read/write decisions live in the neutral
+/// <see cref="DocumentPersistenceWorkflow"/>; dirty/path state and lifecycle ceremony live in the
+/// shared <see cref="FileCommandWorkflow"/>.
 /// </para>
 ///
 /// <para>
@@ -29,22 +32,19 @@ namespace FreeW.App.Host;
 /// </summary>
 internal sealed class FileCommands
 {
+    private static readonly IReadOnlyList<IDocumentFileAdapter> PdfImportAdapters =
+        DocumentFileAdapterCatalog.CreatePdfImportAdapters();
+
     private readonly Window _window;
     private readonly DocumentView _editor;
-    private readonly Action _onChanged;
-    private readonly FileCommandWorkflow _workflow;
+    private readonly SisterWpfFileCommandWorkflow _workflow;
 
     // FreeW's persisted settings (shared JsonSettingsStore under %APPDATA%\FreeW). The recent-files cap
     // is read from here when registering a saved/opened file — a real read site that proves the options
     // mechanism end-to-end. Defaults are used when no store is supplied (e.g. tests).
     private readonly FreeWOptions _options;
 
-    // FreeW's supported formats are data: a catalog of IDocumentFileAdapter drives the open/save dialogs and
-    // the open/save dispatch, so adding a format is a catalog edit, not a string edit here.
-    private readonly IReadOnlyList<IDocumentFileAdapter> _adapters;
-
-    // Default extension used when there is no current file (new-document Save-As) and for AddExtension.
-    private const string DefaultSaveExtension = ".docx";
+    private readonly DocumentPersistenceWorkflow _persistence;
 
     public FileCommands(
         Window window,
@@ -52,19 +52,20 @@ internal sealed class FileCommands
         Action onChanged,
         FreeWOptions? options = null,
         IReadOnlyList<IDocumentFileAdapter>? adapters = null,
-        Func<RecentFilesStore>? loadRecentFilesStore = null)
+        Func<RecentFilesStore>? loadRecentFilesStore = null,
+        IUserMessageService? messageService = null)
     {
         _window = window;
         _editor = editor;
-        _onChanged = onChanged;
         _options = options ?? new FreeWOptions();
-        _adapters = adapters ?? DocumentFileAdapterCatalog.CreateDefaultAdapters();
-        _workflow = new FileCommandWorkflow(
+        _persistence = new DocumentPersistenceWorkflow(adapters);
+        _workflow = new SisterWpfFileCommandWorkflow(
+            "FreeW",
             () => _options.RecentFilesCap,
-            _onChanged,
-            PromptSaveChanges,
+            onChanged,
             Save,
-            loadRecentFilesStore: loadRecentFilesStore);
+            loadRecentFilesStore,
+            messageService);
     }
 
     public bool IsDirty => _workflow.IsDirty;
@@ -76,8 +77,7 @@ internal sealed class FileCommands
 
     public string DisplayName => _workflow.DisplayName;
 
-    public IReadOnlyList<FileFormatDescriptor> SaveFormats =>
-        _adapters.SelectMany(adapter => adapter.Formats).Where(format => format.CanSave).ToArray();
+    public IReadOnlyList<FileFormatDescriptor> SaveFormats => _persistence.SaveFormats;
 
     /// <summary>
     /// Load a recovered autosave snapshot, targeting the original path and marking dirty.
@@ -98,10 +98,11 @@ internal sealed class FileCommands
     {
         try
         {
-            _editor.LoadModel(DocxReader.Read(snapshotPath));
+            var result = _persistence.OpenSnapshot(snapshotPath, originalPath);
+            _editor.LoadModel(result.Document);
             _workflow.MarkDirtyWithPath(
-                originalPath,
-                () => _editor.CurrentFileName = originalPath is null ? null : Path.GetFileName(originalPath));
+                result.TargetPath,
+                () => _editor.CurrentFileName = result.TargetPath is null ? null : Path.GetFileName(result.TargetPath));
             return true;
         }
         catch (Exception ex)
@@ -140,20 +141,25 @@ internal sealed class FileCommands
         _workflow.Open("opening another document", () => PromptOpenPath(folderPath), OpenPath);
 
     /// <summary>
-    /// Loads a specific path (recent-files click / drag-drop / startup). Does NOT dirty-gate: callers
-    /// that bypass the dialog already chose to replace the document. Returns true on success.
+    /// File &gt; Import PDF (text only). This is deliberately not a normal Open path: PDF extraction is lossy,
+    /// read-only text import, so the result becomes an untitled dirty document that must be saved elsewhere.
     /// </summary>
-    public bool OpenPath(string path) => OpenPath(path, suppressRecentFiles: false);
+    public bool ImportPdfText() =>
+        _workflow.Open("importing a PDF", PromptPdfImportPath, ImportPdfTextPath);
 
-    private bool OpenPath(string path, bool suppressRecentFiles)
+    /// <summary>
+    /// Dialog-free PDF text import for tests and host integrations. The PDF path is never associated with the
+    /// document or recent-files list because the imported text must be saved to a writable document format.
+    /// </summary>
+    public bool ImportPdfTextPath(string path)
     {
         var extension = Path.GetExtension(path);
-        var adapter = DocumentFileFormatResolver.FindOpenAdapter(_adapters, extension, out var format);
+        var adapter = DocumentFileFormatResolver.FindOpenAdapter(PdfImportAdapters, extension, out _);
         if (adapter is null)
         {
             ShowError(
-                "Unrecognized file type",
-                new InvalidOperationException($"FreeW has no reader for “{extension}” files."));
+                "Unrecognized PDF import file",
+                new InvalidOperationException($"FreeW can import text only from \".pdf\" files, not \"{extension}\"."));
             return false;
         }
 
@@ -162,15 +168,38 @@ internal sealed class FileCommands
             using (var fs = File.OpenRead(path))
                 _editor.LoadModel(adapter.Load(fs));
 
-            if (format!.OpensAsTemplate)
-            {
-                // A template seeds a new untitled document: clear the path so the next Save becomes Save-As.
-                _workflow.MarkSavedWithoutPath(() => _editor.CurrentFileName = null);
-            }
-            else
-            {
-                SetSaved(path, suppressRecentFiles);
-            }
+            _workflow.MarkDirtyWithPath(null, () => _editor.CurrentFileName = null);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            ShowError("Could not import PDF text", ex);
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Loads a specific path (recent-files click / drag-drop / startup). Does NOT dirty-gate: callers
+    /// that bypass the dialog already chose to replace the document. Returns true on success.
+    /// </summary>
+    public bool OpenPath(string path) => OpenPath(path, suppressRecentFiles: false);
+
+    private bool OpenPath(string path, bool suppressRecentFiles)
+    {
+        if (!_persistence.CanOpenPath(path))
+        {
+            var extension = Path.GetExtension(path);
+            ShowError(
+                "Unrecognized file type",
+                new InvalidOperationException($"FreeW has no reader for “{extension}” files."));
+            return false;
+        }
+
+        try
+        {
+            var result = _persistence.Open(path);
+            _editor.LoadModel(result.Document);
+            ApplyOpenMetadata(result, suppressRecentFiles);
 
             return true;
         }
@@ -198,7 +227,7 @@ internal sealed class FileCommands
         SaveAsSuggested(suggestedFileName: null, preferredExtension);
 
     public bool SaveAsSuggested(string? suggestedFileName, string? preferredExtension) =>
-        TryPromptSaveTarget(preferredExtension, suggestedFileName, out var path, out var adapter) && SaveTo(path, adapter);
+        TryPromptSaveTarget(preferredExtension, suggestedFileName, out var target) && SaveTo(target);
 
     /// <summary>
     /// File &gt; Save a Copy. Writes to a chosen path WITHOUT changing the current file or dirty state,
@@ -206,12 +235,12 @@ internal sealed class FileCommands
     /// </summary>
     public bool SaveCopy()
     {
-        if (!TryPromptSaveTarget(preferredExtension: null, suggestedFileName: null, out var path, out var adapter))
+        if (!TryPromptSaveTarget(preferredExtension: null, suggestedFileName: null, out var target))
             return false;
         try
         {
             _editor.CommitToModel();
-            SaveAtomically(path, adapter);
+            _persistence.Save(_editor.Model, target);
             return true;
         }
         catch (Exception ex)
@@ -234,47 +263,24 @@ internal sealed class FileCommands
     /// </summary>
     private bool SaveToCurrentPath(string path)
     {
-        var adapter = DocumentFileFormatResolver.FindSaveAdapter(_adapters, Path.GetExtension(path), out _);
-        return adapter is null ? SaveAs() : SaveTo(path, adapter);
+        return _persistence.TryResolveCurrentSaveTarget(path, out var target)
+            ? SaveTo(target)
+            : SaveAs();
     }
 
-    private bool SaveTo(string path, IDocumentFileAdapter adapter)
+    private bool SaveTo(DocumentSaveTarget target)
     {
         try
         {
             _editor.CommitToModel();
-            SaveAtomically(path, adapter);
-            SetSaved(path, suppressRecentFiles: false);
+            _persistence.Save(_editor.Model, target);
+            SetSaved(target.Path, suppressRecentFiles: false);
             return true;
         }
         catch (Exception ex)
         {
             ShowError("Could not save the document", ex);
             return false;
-        }
-    }
-
-    /// <summary>
-    /// Writes the current model to <paramref name="path"/> atomically: the adapter serialises into a sibling
-    /// temp file, which is then moved into place via <see cref="ExportAtomicWriter.ReplaceTarget"/> so a
-    /// mid-write failure (disk full, serialization error, AV lock) never truncates the existing file.
-    /// </summary>
-    private void SaveAtomically(string path, IDocumentFileAdapter adapter)
-    {
-        var tempPath = ExportAtomicWriter.CreateTempPath(path);
-        try
-        {
-            using (var fs = File.Create(tempPath))
-                adapter.Save(_editor.Model, fs);
-            ExportAtomicWriter.ReplaceTarget(tempPath, path);
-        }
-        catch
-        {
-            if (File.Exists(tempPath))
-            {
-                try { File.Delete(tempPath); } catch { /* best effort */ }
-            }
-            throw;
         }
     }
 
@@ -286,33 +292,22 @@ internal sealed class FileCommands
     private bool TryPromptSaveTarget(
         string? preferredExtension,
         string? suggestedFileName,
-        out string path,
-        out IDocumentFileAdapter adapter)
+        out DocumentSaveTarget target)
     {
-        path = "";
-        adapter = null!;
+        target = null!;
 
-        var normalizedPreferred = DocumentFileFormatResolver.NormalizeExtension(preferredExtension ?? string.Empty);
-        var currentExtension = normalizedPreferred.Length > 0
-            ? normalizedPreferred
-            : _workflow.CurrentPath is { } existing
-            ? Path.GetExtension(existing)
-            : DefaultSaveExtension;
-        var plan = DocumentFileDialogRequestPlanner.BuildSaveDialogPlanFromSourceName(
-            _adapters,
-            string.IsNullOrWhiteSpace(suggestedFileName)
-                ? _workflow.CurrentPath is null ? null : Path.GetFileName(_workflow.CurrentPath)
-                : suggestedFileName,
-            "Document",
-            currentExtension);
+        var plan = _persistence.BuildSaveDialogPlan(
+            _workflow.CurrentPath,
+            _workflow.CurrentFileName,
+            suggestedFileName,
+            preferredExtension);
 
         var result = WpfFileDialogService.ShowSaveDialog(_window, plan);
         if (!result.Chosen)
             return false;
 
         var chosenExtension = Path.GetExtension(result.FileName!);
-        var resolved = ResolveSaveAdapter(chosenExtension, result.FilterIndex);
-        if (resolved is null)
+        if (!_persistence.TryResolveSaveTarget(result.FileName!, result.FilterIndex, out target))
         {
             ShowError(
                 "Cannot save",
@@ -320,40 +315,32 @@ internal sealed class FileCommands
             return false;
         }
 
-        path = result.FileName!;
-        adapter = resolved;
         return true;
-    }
-
-    /// <summary>
-    /// Resolves the writer for a Save target. When several writable formats share an extension (e.g. <c>.docx</c>
-    /// Word vs Strict Open XML; <c>.xml</c> Word XML vs Word 2003 XML; <c>.htm</c> Web Page vs Web Page, Filtered),
-    /// honour the format the user picked in the Save dialog's filter dropdown — <paramref name="filterIndex"/> is
-    /// 1-based over the save formats in catalog order (the same order the filter is built from). Falls back to
-    /// extension resolution when the selected row's extension doesn't match the chosen filename (user typed a
-    /// different extension than the selected filter).
-    /// </summary>
-    private IDocumentFileAdapter? ResolveSaveAdapter(string chosenExtension, int filterIndex)
-    {
-        var savePairs = _adapters
-            .SelectMany(a => a.Formats.Where(f => f.CanSave).Select(f => (Adapter: a, Format: f)))
-            .ToList();
-        var index = filterIndex - 1;
-        if (index >= 0 && index < savePairs.Count
-            && DocumentFileFormatResolver.NormalizeExtension(savePairs[index].Format.Extension)
-               == DocumentFileFormatResolver.NormalizeExtension(chosenExtension))
-        {
-            return savePairs[index].Adapter;
-        }
-
-        return DocumentFileFormatResolver.FindSaveAdapter(_adapters, chosenExtension, out _);
     }
 
     private string? PromptOpenPath(string? initialDirectory = null)
     {
-        var plan = DocumentFileDialogRequestPlanner.BuildOpenDialogPlan(_adapters);
+        var plan = _persistence.BuildOpenDialogPlan();
         var result = WpfFileDialogService.ShowOpenDialog(_window, plan, initialDirectory: initialDirectory);
         return result.Chosen ? result.FileName : null;
+    }
+
+    private string? PromptPdfImportPath()
+    {
+        var plan = DocumentFileDialogRequestPlanner.BuildOpenDialogPlan(PdfImportAdapters, "PDF documents");
+        var result = WpfFileDialogService.ShowOpenDialog(
+            _window,
+            plan,
+            title: "Import PDF (text only)");
+        return result.Chosen ? result.FileName : null;
+    }
+
+    private void ApplyOpenMetadata(DocumentOpenResult result, bool suppressRecentFiles)
+    {
+        if (result.SavedPath is null)
+            _workflow.MarkSavedWithoutPath(() => _editor.CurrentFileName = null);
+        else
+            SetSaved(result.SavedPath, suppressRecentFiles);
     }
 
     private void SetSaved(string path, bool suppressRecentFiles)
@@ -366,12 +353,8 @@ internal sealed class FileCommands
     }
 
     // ── Host seams (WPF) ─────────────────────────────────────────────────────
-    // The planner decides; these execute the I/O effects on the WPF host. Any other platform would
-    // supply its own implementations (e.g. Avalonia pickers / message dialogs).
-
-    private SaveChangesPrompt PromptSaveChanges(string action)
-        => FileCommandMessageBox.PromptSaveChanges(_window, DisplayName, action, "FreeW");
+    // The planners decide; this host supplies WPF pickers, editor commit/load, and message dialogs.
 
     private void ShowError(string summary, Exception ex) =>
-        FileCommandMessageBox.ShowError(_window, summary, ex, "FreeW");
+        _workflow.ShowError(summary, ex);
 }

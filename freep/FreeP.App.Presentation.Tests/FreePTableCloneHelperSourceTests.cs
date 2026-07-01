@@ -1,0 +1,48 @@
+using System.IO;
+
+namespace FreeP.App.Compositor.Tests;
+
+public sealed class FreePTableCloneHelperSourceTests
+{
+    [Fact]
+    public void TableCommandsAndSlideCloner_UseSharedCoreModelCloneHelper()
+    {
+        var root = FindRepositoryRoot();
+        var commandSource = File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "FreeP.Core.Model",
+            "PresentationCommands.Table.cs"));
+        var clonerSource = File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "FreeP.Core.Model",
+            "SlideCloner.cs"));
+
+        commandSource.Should().NotContain("file static class TableCommandHelper");
+        commandSource.Should().NotContain("file static class TableGridHelper");
+        commandSource.Should().Contain("PresentationModelCloneHelper.FindTable");
+        commandSource.Should().Contain("PresentationModelCloneHelper.CloneTable");
+        commandSource.Should().Contain("PresentationModelCloneHelper.RestoreTableState");
+        commandSource.Should().Contain("PresentationModelCloneHelper.CloneTextBody");
+
+        clonerSource.Should().Contain("PresentationModelCloneHelper.CloneTextBody");
+        clonerSource.Should().Contain("PresentationModelCloneHelper.CloneTable");
+        clonerSource.Should().NotContain("private static TextBody CloneTextBody");
+        clonerSource.Should().NotContain("private static TableShape CloneTable");
+        clonerSource.Should().NotContain("private static TableCell CloneTableCell");
+    }
+
+    private static string FindRepositoryRoot()
+    {
+        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
+             directory is not null;
+             directory = directory.Parent)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "FreeP.slnx")))
+                return directory.FullName;
+        }
+
+        throw new DirectoryNotFoundException("Could not locate repository root from test output directory.");
+    }
+}

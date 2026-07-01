@@ -104,35 +104,8 @@ public static class WorkbookOpenIngressPlanner
         string path,
         IEnumerable<IFileAdapter> adapters)
     {
-        if (!TryGetExtension(path, out var extension))
-            return WorkbookOpenIngressResolution.Failed("Unsupported file type.");
-
-        return FileFormatResolver.FindOpenAdapter(adapters, extension, out _) is null
-            ? WorkbookOpenIngressResolution.Failed($"Unsupported file type: {extension}.")
-            : WorkbookOpenIngressResolution.Resolved(path);
-    }
-
-    private static bool TryGetExtension(string path, out string extension)
-    {
-        try
-        {
-            extension = Path.GetExtension(path) ?? "";
-            return !string.IsNullOrWhiteSpace(extension);
-        }
-        catch (ArgumentException)
-        {
-            extension = "";
-            return false;
-        }
-        catch (NotSupportedException)
-        {
-            extension = "";
-            return false;
-        }
-        catch (PathTooLongException)
-        {
-            extension = "";
-            return false;
-        }
+        return WorkbookOpenTargetPlanner.TryCreateOpenTarget(adapters, path, out var target, out var message)
+            ? WorkbookOpenIngressResolution.Resolved(target!.Path)
+            : WorkbookOpenIngressResolution.Failed(message);
     }
 }

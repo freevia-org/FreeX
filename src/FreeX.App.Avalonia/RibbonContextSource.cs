@@ -1,4 +1,5 @@
 using Free.Shared.Ribbon;
+using FreeX.App.Presentation.DrawingUI;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Avalonia;
@@ -27,7 +28,7 @@ internal sealed class AvaloniaRibbonContextSource : IRibbonContextSource
     {
         if (_parityCaptureActivationKey is not null)
             return;
-        SetDrawingObjectKey(MapDrawingObjectKey(kind));
+        SetDrawingObjectKey(DrawingObjectContextualRibbonPlanner.ResolveActivationKey(kind));
     }
 
     /// <summary>The active cell entered/left a structured table.</summary>
@@ -70,16 +71,6 @@ internal sealed class AvaloniaRibbonContextSource : IRibbonContextSource
         Recompute();
     }
 
-    private static string MapDrawingObjectKey(SelectionPaneObjectKind kind) => kind switch
-    {
-        SelectionPaneObjectKind.Chart => "chart.selected",
-        SelectionPaneObjectKind.Picture => "picture.selected",
-        SelectionPaneObjectKind.Shape => "shape.selected",
-        // Text boxes are shapes for ribbon purposes (the shared definition has no textbox.selected tab).
-        SelectionPaneObjectKind.TextBox => "shape.selected",
-        _ => "shape.selected",
-    };
-
     private void SetDrawingObjectKey(string? key)
     {
         if (string.Equals(_drawingObjectKey, key, StringComparison.Ordinal))
@@ -101,9 +92,9 @@ internal sealed class AvaloniaRibbonContextSource : IRibbonContextSource
         if (_drawingObjectKey is not null)
             state = state.With(_drawingObjectKey);
         if (_tableActive)
-            state = state.With("table.active");
+            state = state.With(DrawingObjectContextualRibbonPlanner.TableContextKey);
         if (_pivotActive)
-            state = state.With("pivot.active");
+            state = state.With(DrawingObjectContextualRibbonPlanner.PivotContextKey);
 
         Current = state;
         ContextChanged?.Invoke(this, EventArgs.Empty);

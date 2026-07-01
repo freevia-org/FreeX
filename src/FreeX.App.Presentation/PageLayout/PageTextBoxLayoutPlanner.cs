@@ -1,5 +1,6 @@
 using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.App.Presentation.Charts;
+using FreeX.App.Presentation.DrawingUI;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Presentation.PageLayout;
@@ -12,13 +13,13 @@ namespace FreeX.App.Presentation.PageLayout;
 public static class PageTextBoxLayoutPlanner
 {
     /// <summary>Minimum printed text-box width in device-independent units, matching the WPF print renderer.</summary>
-    public const double MinimumWidth = 24.0;
+    public const double MinimumWidth = TextBoxFrameLayoutPlanner.MinimumWidth;
 
     /// <summary>Minimum printed text-box height in device-independent units, matching the WPF print renderer.</summary>
-    public const double MinimumHeight = 18.0;
+    public const double MinimumHeight = TextBoxFrameLayoutPlanner.MinimumHeight;
 
     /// <summary>Inset between a printed text-box border and its text content.</summary>
-    public const double TextInset = 4.0;
+    public const double TextInset = TextBoxFrameLayoutPlanner.TextInset;
 
     /// <summary>Alpha used for text-box fills by the source WPF print renderer.</summary>
     public const byte FillAlpha = 242;
@@ -53,23 +54,18 @@ public static class PageTextBoxLayoutPlanner
                 continue;
             }
 
-            var bounds = new LayoutRect(
+            var layout = TextBoxFrameLayoutPlanner.CreateNormalized(new LayoutRect(
                 gridLeft + columnIndex * colWidth,
                 gridTop + rowIndex * rowHeight,
-                Math.Max(MinimumWidth, textBox.Width),
-                Math.Max(MinimumHeight, textBox.Height));
-            var textBounds = new LayoutRect(
-                bounds.Left + TextInset,
-                bounds.Top + TextInset,
-                Math.Max(1, bounds.Width - TextInset * 2),
-                Math.Max(1, bounds.Height - TextInset * 2));
+                textBox.Width,
+                textBox.Height));
             var fill = textBox.ResolveFillColor(workbookTheme, CellColor.White);
             var outline = textBox.GetEffectiveOutlineColor(workbookTheme, new CellColor(89, 89, 89));
 
             blocks.Add(new PageTextBoxBlock(
                 textBox.Id,
-                bounds,
-                textBounds,
+                layout.Bounds,
+                layout.TextBounds,
                 textBox.Text,
                 fill is { } fillColor ? PresentationRgb.FromCellColor(fillColor) : null,
                 FillAlpha,

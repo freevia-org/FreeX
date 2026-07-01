@@ -58,10 +58,8 @@ public sealed partial class RemainingDialogTests
     {
         var source = ReadClassSource("ForecastSheetDialog.cs", "public sealed class ForecastSheetDialog", "public sealed record __NoNextForecastSheetDialog");
 
-        source.Should().Contain("DialogMessageHelper.ShowWarning(this,");
+        source.Should().Contain("DialogFocus.ShowWarningAndFocus(this,");
         source.Should().Contain("error ?? UiText.Get(\"ForecastSheet_InvalidPeriodsMessage\")");
-        source.Should().Contain("FocusInvalidPeriodsInput();");
-        source.Should().Contain("private void FocusInvalidPeriodsInput()");
-        source.Should().Contain("DialogFocus.FocusAndSelect(_periodsBox);");
+        source.Should().Contain("Title, _periodsBox");
     }
 }

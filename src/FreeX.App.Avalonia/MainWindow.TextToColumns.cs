@@ -5,6 +5,7 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
 using Avalonia.Media;
 
+using Free.Shared.Shell.Avalonia;
 using FreeX.App.Presentation.TextToColumns;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -500,14 +501,9 @@ public sealed partial class MainWindow
         };
 
         // WPF wizard nav button order: [< Back][Next >][Finish][Cancel]
-        var buttonRow = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 8,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Margin = new Thickness(0, 10, 0, 0),
-            Children = { backButton, nextButton, applyButton, cancelButton },
-        };
+        var buttonRow = AvaloniaCompactDialogChrome.CreateActionRow(
+            [backButton, nextButton, applyButton, cancelButton],
+            new Thickness(0, 10, 0, 0));
         DockPanel.SetDock(buttonRow, Dock.Bottom);
 
         dialog.Content = new DockPanel

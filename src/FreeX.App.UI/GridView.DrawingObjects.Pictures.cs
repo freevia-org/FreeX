@@ -41,8 +41,7 @@ public partial class GridView
         uint lastRenderableRow,
         uint lastRenderableColumn)
     {
-        if (!picture.IsVisible) return;
-        if (!CanAnchoredObjectReachDrawingViewport(picture.Anchor, lastRenderableRow, lastRenderableColumn))
+        if (!ShouldDisplayAnchoredDrawingObject(picture.IsVisible, picture.Anchor, lastRenderableRow, lastRenderableColumn))
             return;
         if (!TryCreateAnchoredObjectRect(
                 metricLookups,
@@ -77,8 +76,7 @@ public partial class GridView
             flipVertical = previewFlipVertical;
         }
 
-        if (NeedsDrawingViewportCull(rect, rotationDegrees, visibleRight, visibleBottom) &&
-            !IntersectsDrawingViewport(rect, rotationDegrees, visibleRight, visibleBottom))
+        if (!ShouldDisplayDrawingObjectRect(rect, rotationDegrees, visibleRight, visibleBottom))
             return;
 
         var transformDepth = PushDrawingObjectTransform(dc, rotationDegrees, flipHorizontal, flipVertical, rect);

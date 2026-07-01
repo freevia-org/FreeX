@@ -3,6 +3,7 @@ using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Media;
 using FluentAssertions;
+using FreeX.App.Services;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host.Tests;
@@ -10,23 +11,42 @@ namespace FreeX.App.Host.Tests;
 public sealed partial class ObjectDialogTests
 {
     [Fact]
-    public void ShapeAppearanceDialogPlanners_DelegatePortableRulesToSharedDrawingPlanners()
+    public void ShapeAppearanceDialogPlanners_DelegatePortableRulesToAppServicesPlanners()
     {
         var gradientSource = DialogSourceTestSupport.ReadHostSources("ShapeGradientDialog.cs");
         var effectsSource = DialogSourceTestSupport.ReadHostSources("ShapeEffectsDialog.cs");
+        var gradientPlannerSource = DialogSourceTestSupport.ReadAppServicesSource("ShapeGradientPlanner.cs");
+        var effectsPlannerSource = DialogSourceTestSupport.ReadAppServicesSource("ShapeEffectsPlanner.cs");
 
+        gradientSource.Should().Contain("using FreeX.App.Services;");
         gradientSource.Should().Contain("ShapeGradientPlanner.CreateDirectionOptions()");
+        gradientSource.Should().Contain("ShapeGradientPlanner.DefaultStartColor");
+        gradientSource.Should().Contain("ShapeGradientPlanner.DefaultEndColor");
         gradientSource.Should().Contain("ShapeGradientPlanner.NormalizeDirection(direction)");
         gradientSource.Should().Contain("ShapeGradientPlanner.CreateResult(startColor, endColor, direction)");
         gradientSource.Should().Contain("ShapeGradientPlanner.PreviewVector(direction, width, height)");
+        gradientSource.Should().NotContain("using FreeX.App.Presentation.DrawingUI;");
+        gradientSource.Should().NotContain("new(31, 119, 180)");
+        gradientSource.Should().NotContain("new(180, 210, 240)");
         gradientSource.Should().NotContain("if (width > height)");
         gradientSource.Should().NotContain("Enum.IsDefined(direction)");
 
+        effectsSource.Should().Contain("using FreeX.App.Services;");
         effectsSource.Should().Contain("ShapeEffectsPlanner.CreatePlan(currentPreset)");
         effectsSource.Should().Contain("ShapeEffectsPlanner.NormalizePreset(preset)");
         effectsSource.Should().Contain("ShapeEffectsPlanner.CreateOptions()");
+        effectsSource.Should().NotContain("using FreeX.App.Presentation.DrawingUI;");
         effectsSource.Should().NotContain("Enum.IsDefined(preset)");
         effectsSource.Should().NotContain("DrawingShapeEffectPreset.InnerShadow,");
+
+        gradientPlannerSource.Should().Contain("namespace FreeX.App.Services;");
+        gradientPlannerSource.Should().Contain("public static class ShapeGradientPlanner");
+        gradientPlannerSource.Should().NotContain("System.Windows");
+        gradientPlannerSource.Should().NotContain("UiText");
+        effectsPlannerSource.Should().Contain("namespace FreeX.App.Services;");
+        effectsPlannerSource.Should().Contain("public static class ShapeEffectsPlanner");
+        effectsPlannerSource.Should().NotContain("System.Windows");
+        effectsPlannerSource.Should().NotContain("UiText");
     }
 
     [Fact]
@@ -84,22 +104,24 @@ public sealed partial class ObjectDialogTests
                 AutomationProperties.GetHelpText(endColorBox).Should().Be("Enter the second gradient stop color as R,G,B.");
 
                 var startColorButton = GetField<Button>(dialog, "_startColorButton");
+                var expectedStartColor = ShapeGradientPlanner.DefaultStartColor;
                 AutomationProperties.GetName(startColorButton).Should().Be("Choose start gradient color");
                 AutomationProperties.GetAutomationId(startColorButton).Should().Be("ShapeGradientStartColorButton");
                 AutomationProperties.GetHelpText(startColorButton).Should().Be("Open the color picker for the first gradient stop.");
                 startColorButton.Background.Should()
                     .BeOfType<SolidColorBrush>()
                     .Which.Color.Should()
-                    .Be(Color.FromRgb(31, 119, 180));
+                    .Be(Color.FromRgb(expectedStartColor.R, expectedStartColor.G, expectedStartColor.B));
 
                 var endColorButton = GetField<Button>(dialog, "_endColorButton");
+                var expectedEndColor = ShapeGradientPlanner.DefaultEndColor;
                 AutomationProperties.GetName(endColorButton).Should().Be("Choose end gradient color");
                 AutomationProperties.GetAutomationId(endColorButton).Should().Be("ShapeGradientEndColorButton");
                 AutomationProperties.GetHelpText(endColorButton).Should().Be("Open the color picker for the second gradient stop.");
                 endColorButton.Background.Should()
                     .BeOfType<SolidColorBrush>()
                     .Which.Color.Should()
-                    .Be(Color.FromRgb(180, 210, 240));
+                    .Be(Color.FromRgb(expectedEndColor.R, expectedEndColor.G, expectedEndColor.B));
 
                 var directionBox = GetField<ComboBox>(dialog, "_directionBox");
                 AutomationProperties.GetName(directionBox).Should().Be("Direction");
@@ -115,7 +137,9 @@ public sealed partial class ObjectDialogTests
                     .BeOfType<LinearGradientBrush>()
                     .Which.GradientStops.Select(stop => stop.Color)
                     .Should()
-                    .Equal(Color.FromRgb(31, 119, 180), Color.FromRgb(180, 210, 240));
+                    .Equal(
+                        Color.FromRgb(expectedStartColor.R, expectedStartColor.G, expectedStartColor.B),
+                        Color.FromRgb(expectedEndColor.R, expectedEndColor.G, expectedEndColor.B));
             }
             finally
             {

@@ -3,6 +3,7 @@
     <Project Path="shared/Free.Shared.AppServices/Free.Shared.AppServices.csproj" />
     <Project Path="shared/Free.Shared.Commands/Free.Shared.Commands.csproj" />
     <Project Path="shared/Free.Shared.IO/Free.Shared.IO.csproj" />
+    <Project Path="shared/Free.Shared.Localization/Free.Shared.Localization.csproj" />
     <Project Path="shared/Free.Shared.Opc/Free.Shared.Opc.csproj" />
     <Project Path="shared/Free.Shared.Pdf/Free.Shared.Pdf.csproj" />
     <Project Path="shared/Free.Shared.Pdf.Skia/Free.Shared.Pdf.Skia.csproj" />
@@ -11,6 +12,7 @@
     <Project Path="shared/Free.Shared.Ribbon.Avalonia/Free.Shared.Ribbon.Avalonia.csproj" />
     <Project Path="shared/Free.Shared.Ribbon.Wpf/Free.Shared.Ribbon.Wpf.csproj" />
     <Project Path="shared/Free.Shared.Shell/Free.Shared.Shell.csproj" />
+    <Project Path="shared/Free.Shared.Shell.Avalonia/Free.Shared.Shell.Avalonia.csproj" />
     <Project Path="shared/Free.Shared.Shell.Wpf/Free.Shared.Shell.Wpf.csproj" />
   </Folder>
   <Folder Name="/freew/">
@@ -20,11 +22,16 @@
     <Project Path="freew/FreeW.Core.IO.Tests/FreeW.Core.IO.Tests.csproj" />
     <Project Path="freew/FreeW.App.Presentation/FreeW.App.Presentation.csproj" />
     <Project Path="freew/FreeW.App.Presentation.Tests/FreeW.App.Presentation.Tests.csproj" />
+    <Project Path="freew/FreeW.App.Localization/FreeW.App.Localization.csproj" />
+    <Project Path="freew/FreeW.App.Localization.Tests/FreeW.App.Localization.Tests.csproj" />
+    <Project Path="freew/FreeW.Ribbon.Definitions/FreeW.Ribbon.Definitions.csproj" />
+    <Project Path="freew/FreeW.Ribbon.Definitions.Tests/FreeW.Ribbon.Definitions.Tests.csproj" />
     <Project Path="freew/FreeW.App.Host/FreeW.App.Host.csproj" />
     <Project Path="freew/FreeW.App.Host.Tests/FreeW.App.Host.Tests.csproj" />
     <Project Path="freew/FreeW.App.Avalonia/FreeW.App.Avalonia.csproj" />
     <Project Path="freew/FreeW.App.Avalonia.Tests/FreeW.App.Avalonia.Tests.csproj" />
     <Project Path="freew/tools/FreeW.FidelityRender/FreeW.FidelityRender.csproj" />
+    <Project Path="freew/tools/FreeW.VisualEvidenceSummary/FreeW.VisualEvidenceSummary.csproj" />
     <Project Path="freew/tools/FreeW.RibbonShot/FreeW.RibbonShot.csproj" />
     <Project Path="freew/tools/FreeW.PageLayoutShot/FreeW.PageLayoutShot.csproj" />
     <Project Path="freew/tools/FreeW.PdfRasterize/FreeW.PdfRasterize.csproj" />

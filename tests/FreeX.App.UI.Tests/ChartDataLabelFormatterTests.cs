@@ -131,18 +131,15 @@ public sealed class ChartDataLabelFormatterTests
     }
 
     [Fact]
-    public void FormatDataLabel_AssemblesAnnotationTextWithoutListOrJoin()
+    public void NeutralDataLabelFormatting_DelegatesToPresentationPlanner()
     {
         var source = AppUiSourceTestSupport.ReadAppUiSources("ChartDataLabelFormatter.cs");
-        var formatDataLabel = source[
-            source.IndexOf("public static string FormatDataLabel", StringComparison.Ordinal)..
-            source.IndexOf("public static string GetPieLabelFormat", StringComparison.Ordinal)];
 
-        formatDataLabel.Should().Contain("var valueText = hasValue ? FormatLabelValue(chart, value) : \"\";");
-        formatDataLabel.Should().Contain("return (hasSeriesName, hasCategoryName, hasValue) switch");
-        formatDataLabel.Should().NotContain("new List<string>");
-        formatDataLabel.Should().NotContain("parts.Add(");
-        formatDataLabel.Should().NotContain("string.Join(");
+        source.Should().Contain("ChartDataLabelTextPlanner.FormatDataLabel");
+        source.Should().Contain("ChartDataLabelTextPlanner.FormatLabelValue");
+        source.Should().Contain("ChartDataLabelTextPlanner.GetDataLabelSeparatorText");
+        source.Should().NotContain("return (hasSeriesName, hasCategoryName, hasValue) switch");
+        source.Should().NotContain("value.ToString(\"0.00\"");
     }
 
     [Fact]

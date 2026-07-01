@@ -1,15 +1,13 @@
 using System.Globalization;
 using System.Windows;
 using System.Windows.Media;
+using FreeX.App.Presentation.PageLayout;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
 
 public static partial class PrintRenderer
 {
-    private const double CommentSummaryHeaderHeight = 34.0;
-    private const double CommentSummaryLineHeight = 24.0;
-
     private static void DrawDisplayedComments(
         DrawingContext dc,
         ICollection<PdfTextOverlay> textOverlays,
@@ -85,7 +83,7 @@ public static partial class PrintRenderer
         double pageH,
         double marginLeft,
         double marginTop,
-        IReadOnlyList<KeyValuePair<CellAddress, string>> commentsForPage)
+        IReadOnlyList<PrintCommentSummaryEntry> commentsForPage)
     {
         var visual = new DrawingVisual();
         using var dc = visual.RenderOpen();
@@ -97,10 +95,10 @@ public static partial class PrintRenderer
         AddCommentTextOverlays(textOverlays, "Comments", marginLeft, marginTop, typeface, 14, FontWeights.SemiBold, maxWidth);
         DrawCommentText(dc, "Comments", new Point(marginLeft, marginTop), typeface, 14, FontWeights.SemiBold, maxWidth);
 
-        var y = marginTop + CommentSummaryHeaderHeight;
-        foreach (var (address, comment) in commentsForPage)
+        var y = marginTop + PrintCommentSummaryPlanner.HeaderHeight;
+        foreach (var entry in commentsForPage)
         {
-            var line = $"{address.ToA1()}: {comment}";
+            var line = $"{entry.Address.ToA1()}: {entry.Text}";
             AddCommentTextOverlays(textOverlays, line, marginLeft, y, typeface, PrintFontSize, FontWeights.Normal, maxWidth);
             var height = DrawCommentText(dc, line, new Point(marginLeft, y), typeface, PrintFontSize, FontWeights.Normal, maxWidth);
             y += Math.Max(18, height + 6);
@@ -121,7 +119,10 @@ public static partial class PrintRenderer
     {
         var lineHeight = MeasureCommentText("Ag", typeface, fontSize, fontWeight).Height;
         var lineIndex = 0;
-        foreach (var line in WrapCommentSummaryOverlayText(text, typeface, fontSize, fontWeight, maxWidth))
+        foreach (var line in PrintCommentSummaryPlanner.WrapOverlayText(
+            text,
+            maxWidth,
+            candidate => MeasureCommentText(candidate, typeface, fontSize, fontWeight).WidthIncludingTrailingWhitespace))
         {
             textOverlays.Add(new PdfTextOverlay(
                 line,
@@ -136,116 +137,6 @@ public static partial class PrintRenderer
         }
     }
 
-    private static IReadOnlyList<string> WrapCommentSummaryOverlayText(
-        string text,
-        Typeface typeface,
-        double fontSize,
-        FontWeight fontWeight,
-        double maxWidth)
-    {
-        const int maxLines = 3;
-        var lines = new List<string>();
-        var hardLines = text.Replace("\r\n", "\n", StringComparison.Ordinal)
-            .Replace('\r', '\n')
-            .Split('\n');
-
-        var truncated = false;
-        for (var hardLineIndex = 0; hardLineIndex < hardLines.Length && lines.Count < maxLines && !truncated; hardLineIndex++)
-        {
-            truncated = AddWrappedCommentSummaryHardLine(
-                lines,
-                hardLines[hardLineIndex],
-                typeface,
-                fontSize,
-                fontWeight,
-                maxWidth,
-                maxLines);
-        }
-
-        if (lines.Count > 0 &&
-            !lines[^1].EndsWith("\u2026", StringComparison.Ordinal) &&
-            (truncated || lines.Count == maxLines && ProducesMoreCommentOverlayLines(text, lines, typeface, fontSize, fontWeight, maxWidth, maxLines)))
-        {
-            lines[^1] = TrimCommentOverlayText(lines[^1], typeface, fontSize, fontWeight, maxWidth);
-        }
-
-        return lines;
-    }
-
-    private static bool AddWrappedCommentSummaryHardLine(
-        ICollection<string> lines,
-        string hardLine,
-        Typeface typeface,
-        double fontSize,
-        FontWeight fontWeight,
-        double maxWidth,
-        int maxLines)
-    {
-        var words = hardLine.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        if (words.Length == 0)
-        {
-            if (lines.Count < maxLines)
-                lines.Add("");
-            return false;
-        }
-
-        var index = 0;
-        while (index < words.Length && lines.Count < maxLines)
-        {
-            var line = words[index++];
-            while (index < words.Length && FitsCommentOverlayWidth($"{line} {words[index]}", typeface, fontSize, fontWeight, maxWidth))
-                line = $"{line} {words[index++]}";
-
-            if (!FitsCommentOverlayWidth(line, typeface, fontSize, fontWeight, maxWidth))
-            {
-                line = TrimCommentOverlayText(line, typeface, fontSize, fontWeight, maxWidth);
-                lines.Add(line);
-                return true;
-            }
-
-            lines.Add(line);
-        }
-
-        return index < words.Length;
-    }
-
-    private static bool ProducesMoreCommentOverlayLines(
-        string originalText,
-        IReadOnlyList<string> emittedLines,
-        Typeface typeface,
-        double fontSize,
-        FontWeight fontWeight,
-        double maxWidth,
-        int maxLines)
-    {
-        var replay = new List<string>();
-        var hardLines = originalText.Replace("\r\n", "\n", StringComparison.Ordinal)
-            .Replace('\r', '\n')
-            .Split('\n');
-
-        foreach (var hardLine in hardLines)
-        {
-            AddWrappedCommentSummaryHardLine(replay, hardLine, typeface, fontSize, fontWeight, maxWidth, int.MaxValue);
-            if (replay.Count > maxLines)
-                return true;
-        }
-
-        return replay.Count > emittedLines.Count;
-    }
-
-    private static bool FitsCommentOverlayWidth(string text, Typeface typeface, double fontSize, FontWeight fontWeight, double maxWidth) =>
-        MeasureCommentText(text, typeface, fontSize, fontWeight).WidthIncludingTrailingWhitespace <= Math.Max(1, maxWidth);
-
-    private static string TrimCommentOverlayText(string text, Typeface typeface, double fontSize, FontWeight fontWeight, double maxWidth)
-    {
-        const string ellipsis = "\u2026";
-        var candidate = text.TrimEnd();
-        while (candidate.Length > 0 && !FitsCommentOverlayWidth(candidate + ellipsis, typeface, fontSize, fontWeight, maxWidth))
-            candidate = candidate[..^1].TrimEnd();
-
-        return candidate.Length == 0 ? ellipsis : candidate + ellipsis;
-    }
-
     private static FormattedText MeasureCommentText(string text, Typeface typeface, double fontSize, FontWeight fontWeight)
     {
         var weightedTypeface = new Typeface(typeface.FontFamily, typeface.Style, fontWeight, typeface.Stretch);
@@ -257,64 +148,6 @@ public static partial class PrintRenderer
             fontSize,
             Brushes.Black,
             1.0);
-    }
-
-    internal static IReadOnlyList<IReadOnlyList<KeyValuePair<CellAddress, string>>> BuildCommentSummaryPages(
-        IReadOnlyDictionary<CellAddress, string> comments,
-        IReadOnlyDictionary<CellAddress, ThreadedComment> threadedComments,
-        double pageH,
-        double marginTop)
-    {
-        var printableComments = GetPrintableComments(comments, threadedComments);
-        if (printableComments.Count == 0)
-            return [];
-
-        var bodyHeight = Math.Max(
-            CommentSummaryLineHeight,
-            pageH - marginTop * 2 - CommentSummaryHeaderHeight);
-        var commentsPerPage = Math.Max(1, (int)Math.Floor(bodyHeight / CommentSummaryLineHeight));
-
-        var pageCount = (printableComments.Count + commentsPerPage - 1) / commentsPerPage;
-        var pages = new List<IReadOnlyList<KeyValuePair<CellAddress, string>>>(pageCount);
-        for (var pageIndex = 0; pageIndex < pageCount; pageIndex++)
-        {
-            var start = pageIndex * commentsPerPage;
-            var count = Math.Min(commentsPerPage, printableComments.Count - start);
-            var page = new List<KeyValuePair<CellAddress, string>>(count);
-            for (var index = 0; index < count; index++)
-                page.Add(printableComments[start + index]);
-            pages.Add(page);
-        }
-
-        return pages;
-    }
-
-    private static List<KeyValuePair<CellAddress, string>> GetPrintableComments(
-        IReadOnlyDictionary<CellAddress, string> comments,
-        IReadOnlyDictionary<CellAddress, ThreadedComment> threadedComments)
-    {
-        var result = new List<KeyValuePair<CellAddress, string>>(comments.Count + threadedComments.Count);
-        foreach (var pair in comments)
-            result.Add(pair);
-
-        foreach (var pair in threadedComments)
-        {
-            if (comments.ContainsKey(pair.Key))
-                continue;
-
-            result.Add(new KeyValuePair<CellAddress, string>(
-                pair.Key,
-                CommentNavigationPlanner.FormatThreadedComment(pair.Value)));
-        }
-
-        result.Sort(static (left, right) =>
-        {
-            var rowComparison = left.Key.Row.CompareTo(right.Key.Row);
-            return rowComparison != 0
-                ? rowComparison
-                : left.Key.Col.CompareTo(right.Key.Col);
-        });
-        return result;
     }
 
     private static double DrawCommentText(

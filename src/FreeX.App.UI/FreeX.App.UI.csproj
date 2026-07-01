@@ -8,6 +8,7 @@
     <ProjectReference Include="..\FreeX.Core.IO\FreeX.Core.IO.csproj" />
     <ProjectReference Include="..\FreeX.App.Presentation\FreeX.App.Presentation.csproj" />
     <ProjectReference Include="..\FreeX.App.Services\FreeX.App.Services.csproj" />
+    <ProjectReference Include="..\..\shared\Free.Shared.Drawing\Free.Shared.Drawing.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -24,5 +25,9 @@
     <UseWPF>true</UseWPF>
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Using Include="Free.Shared.Drawing" />
+  </ItemGroup>
 
 </Project>

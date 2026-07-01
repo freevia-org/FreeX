@@ -4,8 +4,12 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
+using Free.Shared.AppServices;
+using Free.Shared.IO;
 using Free.Shared.Ribbon;
 using Free.Shared.Ribbon.Avalonia;
+using Free.Shared.Shell;
+using Free.Shared.Shell.Avalonia;
 using FreeP.App.Compositor;
 using FreeP.App.Rendering.Avalonia;
 using FreeP.Core.IO;
@@ -33,29 +37,49 @@ namespace FreeP.App.Avalonia;
 ///   └──────────────────────────────────────────┘
 ///
 /// Commands wired (v1):
-///   File:  New, Open, Save, Save As
-///   Slide: New Slide, Duplicate, Delete
-///   Edit:  Undo, Redo
+///   File:   New, Open, Save, Save As
+///   Slide:  New Slide, Duplicate, Delete
+///   Insert: Text Box, Table, Chart, Link, Picture, Rectangle, Ellipse
+///   Edit:   Undo, Redo, Find, Replace
 ///   Keyboard: Ctrl+N/O/S/Shift+S, Ctrl+Z/Y
 ///
-/// Deferred to Wave 14C: shape editing, text in-canvas, transitions, animations,
-///   font/format ribbon, find/replace, clipboard (full), drag-reorder thumbnails.
+/// Deferred to later Avalonia parity: transitions, animations, full platform dialogs,
+///   clipboard (full), drag-reorder thumbnails.
 /// </summary>
 public sealed class MainWindow : Window
 {
     private const string DefaultTitle = "FreeP";
+    private const int DefaultRecentFilesCap = ApplicationOptionsNormalizer.DefaultRecentFilesCap;
+    private static readonly SisterAppFileTextSpec FileText = SisterAppFileTextPlanner.Presentation;
 
-    private static readonly FilePickerFileType PptxFileType = new("PowerPoint Presentation")
-    {
-        Patterns = ["*.pptx"],
-        MimeTypes = ["application/vnd.openxmlformats-officedocument.presentationml.presentation"],
-    };
+    private static readonly FilePickerFileType PictureFileType =
+        AvaloniaFilePickerTypeAdapter.CreateFileType(
+            PresentationFileTextResources.PictureFileTypeName,
+            ["*.png", "*.jpg", "*.jpeg", "*.gif", "*.bmp", "*.svg"],
+            ["image/png", "image/jpeg", "image/gif", "image/bmp", "image/svg+xml"]);
+
+    private static readonly (string CommandId, Action<EditingSession> Execute)[] ArrangeCommandRoutes =
+    [
+        ("freep.arrange.group", static editor => editor.GroupSelectedShapes()),
+        ("freep.arrange.ungroup", static editor => editor.UngroupSelected()),
+        ("freep.arrange.bring-to-front", static editor => editor.BringToFront()),
+        ("freep.arrange.bring-forward", static editor => editor.BringForward()),
+        ("freep.arrange.send-backward", static editor => editor.SendBackward()),
+        ("freep.arrange.send-to-back", static editor => editor.SendToBack()),
+        ("freep.arrange.align-left", static editor => editor.AlignLeft()),
+        ("freep.arrange.align-center-h", static editor => editor.AlignCenterH()),
+        ("freep.arrange.align-right", static editor => editor.AlignRight()),
+        ("freep.arrange.align-top", static editor => editor.AlignTop()),
+        ("freep.arrange.align-middle", static editor => editor.AlignMiddle()),
+        ("freep.arrange.align-bottom", static editor => editor.AlignBottom()),
+        ("freep.arrange.distribute-h", static editor => editor.DistributeHorizontally()),
+        ("freep.arrange.distribute-v", static editor => editor.DistributeVertically()),
+    ];
 
     // ── Presentation model ─────────────────────────────────────────────────────
 
     private Presentation _presentation = Presentation.CreateEmpty();
-    private string? _currentPath;
-    private bool _isDirty;
+    private readonly SisterAvaloniaFileCommandWorkflow _fileWorkflow;
 
     // ── Editing session ────────────────────────────────────────────────────────
 
@@ -88,6 +112,22 @@ public sealed class MainWindow : Window
     /// <summary>Current slide index (0-based) — read by the launch-smoke coordinator.</summary>
     internal int CurrentSlideIndex => Editor?.CurrentSlideIndex ?? -1;
 
+    internal bool IsDirty => _fileWorkflow.IsDirty;
+
+    internal string? CurrentPath => _fileWorkflow.CurrentPath;
+
+    internal IReadOnlyList<RecentFileEntry> RecentEntries => _fileWorkflow.RecentEntries;
+
+    internal PresentationCommentPanePlan? LastCommentPanePlan { get; private set; }
+    internal PresentationAccessibilitySummaryPlan? LastAccessibilitySummaryPlan { get; private set; }
+    internal PresentationAltTextRequestPlan? LastAltTextRequestPlan { get; private set; }
+    internal PresentationProofingRequestPlan? LastProofingRequestPlan { get; private set; }
+    internal AnimationPaneTimelinePlan? LastAnimationPaneTimelinePlan { get; private set; }
+    internal PresentationDesignCommandPlan? LastLayoutRequestPlan { get; private set; }
+    internal PresentationHandoutLayoutPlan? LastHandoutLayoutPlan { get; private set; }
+    internal PresentationLayoutPickerPlan? LastLayoutPickerPlan { get; private set; }
+    internal PresentationLayoutChoice? LastAppliedLayoutChoice { get; private set; }
+
     // ── Constructors ───────────────────────────────────────────────────────────
 
     public MainWindow()
@@ -96,6 +136,13 @@ public sealed class MainWindow : Window
     }
 
     public MainWindow(IReadOnlyList<string> startupArguments)
+        : this(startupArguments, loadRecentFilesStore: null)
+    {
+    }
+
+    internal MainWindow(
+        IReadOnlyList<string> startupArguments,
+        Func<RecentFilesStore>? loadRecentFilesStore)
     {
         Title = DefaultTitle;
         Width = 1280;
@@ -139,34 +186,27 @@ public sealed class MainWindow : Window
         };
         _notesBox.TextChanged += OnNotesTextChanged;
 
-        _statusText = new TextBlock
-        {
-            VerticalAlignment = VerticalAlignment.Center,
-            Foreground        = Brushes.White,
-            Margin            = new Thickness(8, 0),
-        };
+        _statusText = SisterAppStatusBarChrome.CreateInfoText(foreground: Brushes.White, margin: new Thickness(8, 0));
+        _fileWorkflow = new SisterAvaloniaFileCommandWorkflow(
+            owner: this,
+            titleSpec: new SisterAvaloniaFileTitleSpec(
+                ApplicationName: DefaultTitle,
+                Separator: " \u2014 "),
+            maxRecentEntries: () => DefaultRecentFilesCap,
+            onChanged: UpdateStatus,
+            save: () => FileSaveAsync().GetAwaiter().GetResult(),
+            loadRecentFilesStore: loadRecentFilesStore);
 
         // ── Root layout ───────────────────────────────────────────────────────
 
-        var root = new DockPanel();
-
-        // Ribbon (top)
         var ribbon = BuildRibbon();
-        DockPanel.SetDock(ribbon, Dock.Top);
-        root.Children.Add(ribbon);
-
-        // Status bar (bottom)
-        var statusBar = new Border
-        {
-            Background = new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A)),
-            Height     = 26,
-            Child      = _statusText,
-        };
-        DockPanel.SetDock(statusBar, Dock.Bottom);
-        root.Children.Add(statusBar);
-
-        // Body (fills remainder)
-        root.Children.Add(BuildBody());
+        var statusBar = SisterAppStatusBarChrome.Build(new SisterAppStatusBarSpec(
+            Background: new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A)),
+            LeftContent: _statusText)).Root;
+        var frame = SisterAppClientFrameBuilder.Build(SisterAppClientFrameSpec.ForWorkArea(
+            chrome: ribbon,
+            workArea: BuildBody(),
+            statusBar: statusBar));
 
         // ── Keyboard shortcuts ────────────────────────────────────────────────
 
@@ -174,16 +214,15 @@ public sealed class MainWindow : Window
 
         // ── Initial content ───────────────────────────────────────────────────
 
-        var startupPptx = startupArguments
-            .FirstOrDefault(a => a.EndsWith(".pptx", StringComparison.OrdinalIgnoreCase)
-                               && File.Exists(a));
+        var startupPresentation = startupArguments
+            .FirstOrDefault(a => IsSupportedPresentationPath(a) && File.Exists(a));
 
-        if (startupPptx is not null)
-            TryLoadPptxFile(startupPptx);
+        if (startupPresentation is not null)
+            TryLoadPresentationFile(startupPresentation);
         else
-            LoadPresentation(_presentation, path: null);
+            LoadPresentationAsSaved(_presentation, path: null);
 
-        Content = root;
+        Content = frame.Root;
         UpdateStatus();
     }
 
@@ -196,6 +235,7 @@ public sealed class MainWindow : Window
 
         Editor.Changed             += OnEditorChanged;
         Editor.CurrentSlideChanged += OnCurrentSlideChanged;
+        Editor.SelectionChanged    += OnEditorSelectionChanged;
     }
 
     private void RebuildEditorAndRewireInteraction()
@@ -339,130 +379,581 @@ public sealed class MainWindow : Window
         };
     }
 
-    private RibbonCommandRegistry BuildCommandRegistry()
+    internal RibbonCommandRegistry BuildCommandRegistry()
     {
         var r = new RibbonCommandRegistry();
 
         // File operations
-        r.Register("freep.file.new",     new RelayCommand(FileNew));
-        r.Register("freep.file.open",    new RelayCommand(() => _ = FileOpenAsync()));
-        r.Register("freep.file.save",    new RelayCommand(() => _ = FileSaveAsync()));
-        r.Register("freep.file.save-as", new RelayCommand(() => _ = FileSaveAsAsync()));
+        r.Register("freep.file.new",     new ActionRibbonCommand(FileNew));
+        r.Register("freep.file.open",    new ActionRibbonCommand(() => _ = FileOpenAsync()));
+        r.Register("freep.file.save",    new ActionRibbonCommand(() => _ = FileSaveAsync()));
+        r.Register("freep.file.save-as", new ActionRibbonCommand(() => _ = FileSaveAsAsync()));
+        r.Register(PresentationExportPlanner.PdfExportCommandId, new ActionRibbonCommand(() => _ = FileExportPdfAsync()));
+        r.Register(PresentationExportPlanner.ImageExportCommandId, new ActionRibbonCommand(() => _ = FileExportImagesAsync()));
+        r.Register(PresentationExportPlanner.PrintCommandId, new ActionRibbonCommand(() => RefreshHandoutLayoutPlan()));
 
         // Slide navigation/management
-        r.Register("freep.new-slide",       new RelayCommand(() => Editor.InsertSlide()));
-        r.Register("freep.duplicate-slide", new RelayCommand(() => Editor.DuplicateCurrentSlide()));
-        r.Register("freep.delete-slide",    new RelayCommand(() => Editor.DeleteCurrentSlide()));
+        r.Register("freep.new-slide",       new ActionRibbonCommand(() => Editor.InsertSlide()));
+        r.Register("freep.duplicate-slide", new ActionRibbonCommand(() => Editor.DuplicateCurrentSlide()));
+        r.Register("freep.delete-slide",    new ActionRibbonCommand(() => Editor.DeleteCurrentSlide()));
+        r.Register(PresentationDesignCommandPlanner.LayoutCommandId, new ActionRibbonCommand(() =>
+            PresentationDesignCommandPlanner.TryApply(
+                Editor,
+                PresentationDesignCommandPlanner.LayoutPlan,
+                OnDesignHostRequest)));
+
+        // Clipboard
+        r.Register("freep.copy", new ActionRibbonCommand(() => Editor.CopySelectedShapes()));
+        r.Register("freep.cut", new ActionRibbonCommand(() => Editor.CutSelectedShapes()));
+        r.Register("freep.paste", new ActionRibbonCommand(() => Editor.Paste()));
+        r.Register("freep.format-painter", new ActionRibbonCommand(() =>
+        {
+            Editor.CopyFormatting();
+            Editor.ApplyFormattingToSelection();
+        }));
+
+        // Font formatting
+        r.Register("freep.font-family", new ContextRibbonCommand(ctx =>
+        {
+            if (string.IsNullOrEmpty(ctx.SelectedValue))
+                return;
+
+            Editor.SetFontFamilyOnSelection(ctx.SelectedValue);
+        }));
+        r.Register("freep.bold", new ActionRibbonCommand(() => Editor.ToggleBoldOnSelection()));
+        r.Register("freep.italic", new ActionRibbonCommand(() => Editor.ToggleItalicOnSelection()));
+        r.Register("freep.underline", new ActionRibbonCommand(() => Editor.ToggleUnderlineOnSelection()));
+
+        foreach (var route in ArrangeCommandRoutes)
+        {
+            r.Register(route.CommandId, new ActionRibbonCommand(() => route.Execute(Editor)));
+        }
+
+        // Insert objects/text
+        foreach (var plan in SlideObjectInsertionPlanner.BuiltInPlans)
+        {
+            if (plan.RequiresPicturePayload)
+            {
+                r.Register(plan.CommandId, new ActionRibbonCommand(() => _ = InsertPictureFromFileAsync()));
+                continue;
+            }
+
+            r.Register(plan.CommandId, new ActionRibbonCommand(() =>
+                SlideObjectInsertionPlanner.Apply(Editor, plan)));
+        }
+
+        r.Register(ChartDataDialogPlanner.EditDataCommandId, new ActionRibbonCommand(OpenChartDataDialog));
+        r.Register("freep.insert-link", new ActionRibbonCommand(OpenHyperlinkDialog));
+        r.Register("freep.remove-link", new ActionRibbonCommand(() => Editor.RemoveShapeHyperlink()));
 
         // Undo / Redo
-        r.Register("freep.undo", new RelayCommand(() => Editor.Undo()));
-        r.Register("freep.redo", new RelayCommand(() => Editor.Redo()));
+        r.Register("freep.undo", new ActionRibbonCommand(() => Editor.Undo()));
+        r.Register("freep.redo", new ActionRibbonCommand(() => Editor.Redo()));
+        r.Register("freep.find", new ActionRibbonCommand(OpenFindDialog));
+        r.Register("freep.replace", new ActionRibbonCommand(OpenFindReplaceDialog));
+        RegisterReviewWorkflowCommands(r);
+
+        foreach (var plan in PresentationTransitionCommandPlanner.BuiltInPlans)
+        {
+            r.Register(plan.CommandId, new ContextRibbonCommand(ctx =>
+                PresentationTransitionCommandPlanner.TryApply(Editor, plan, ctx.SelectedValue)));
+        }
+
+        foreach (var plan in PresentationDesignCommandPlanner.BuiltInPlans)
+        {
+            r.Register(plan.CommandId, new ActionRibbonCommand(() =>
+                PresentationDesignCommandPlanner.TryApply(Editor, plan, OnDesignHostRequest)));
+        }
+
+        foreach (var plan in PresentationAnimationCommandPlanner.BuiltInPlans)
+        {
+            r.Register(plan.CommandId, new ContextRibbonCommand(ctx =>
+                PresentationAnimationCommandPlanner.TryApply(
+                    Editor,
+                    plan,
+                    ctx.SelectedValue,
+                    OnAnimationPaneRequested)));
+        }
 
         // Slide show
         r.Register("freep.slideshow.from-beginning",
-            new RelayCommand(() => StartSlideShow(fromStart: true)));
-        r.Register("freep.slideshow.from-current",
-            new RelayCommand(() => StartSlideShow(fromStart: false)));
+            new ActionRibbonCommand(() => StartSlideShow(fromStart: true)));
+        r.Register("freep.slideshow.from-current-slide",
+            new ActionRibbonCommand(() => StartSlideShow(fromStart: false)));
 
         return r;
     }
 
+    private void OnDesignHostRequest(PresentationDesignCommandPlan plan)
+    {
+        switch (plan.Intent)
+        {
+            case PresentationDesignCommandIntentKind.RequestCustomSlideSize:
+                OnCustomSlideSizeRequested(plan);
+                break;
+            case PresentationDesignCommandIntentKind.RequestLayoutPicker:
+                OnLayoutPickerRequested(plan);
+                break;
+        }
+    }
+
+    private void OnCustomSlideSizeRequested(PresentationDesignCommandPlan plan)
+    {
+        _ = plan;
+        _ = SlideSizeDialogPlanner.BuildInitialState(
+            _presentation.SlideSizeCxEmu,
+            _presentation.SlideSizeCyEmu,
+            SlideSizeDialogUnit.Inches);
+    }
+
+    private void OnLayoutPickerRequested(PresentationDesignCommandPlan plan)
+    {
+        LastLayoutRequestPlan = plan;
+        LastLayoutPickerPlan = PresentationDesignCommandPlanner.BuildLayoutPickerPlan(
+            _presentation,
+            Editor.CurrentSlideIndex);
+        _statusText.Text = $"Layout picker: {LastLayoutPickerPlan.Choices.Count} choices";
+    }
+
+    internal bool ApplyLayoutChoice(string layoutId)
+    {
+        var applied = PresentationDesignCommandPlanner.TryApplyLayoutChoice(
+            Editor,
+            layoutId,
+            out var choice);
+        if (applied)
+        {
+            LastAppliedLayoutChoice = choice;
+            RefreshSlidePane();
+            RefreshCanvas();
+            UpdateStatus();
+        }
+
+        return applied;
+    }
+
+    private async Task InsertPictureFromFileAsync()
+    {
+        if (!AvaloniaFilePickerService.CanOpen(StorageProvider))
+        {
+            _statusText.Text = SisterAppFileTextPlanner.FormatCommandUnavailable(SisterAppFileTextPlanner.InsertPictureCommand);
+            return;
+        }
+
+        var file = await AvaloniaFilePickerService.PickSingleOpenFileAsync(
+            StorageProvider,
+            AvaloniaFilePickerOpenRequest.FromFileTypes(
+                SisterAppFileTextPlanner.InsertPicturePickerTitle,
+                [PictureFileType]));
+
+        if (file is null)
+            return;
+
+        try
+        {
+            await using var source = await file.OpenReadAsync();
+            using var memory = new MemoryStream();
+            await source.CopyToAsync(memory);
+
+            var payload = SlideObjectInsertionPlanner.CreatePicturePayload(memory.ToArray(), file.Name);
+            var added = SlideObjectInsertionPlanner.ApplyCommand(
+                Editor,
+                SlideObjectInsertionPlanner.PictureCommandId,
+                payload);
+
+            if (added is not null)
+                _statusText.Text = SisterAppFileTextPlanner.FormatInserted(file.Name);
+        }
+        catch (Exception ex)
+        {
+            _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(SisterAppFileTextPlanner.InsertPictureCommand, ex.Message);
+        }
+    }
+
     // ── File lifecycle ─────────────────────────────────────────────────────────
+
+    internal void OpenChartDataDialog()
+    {
+        if (Editor.SelectedChart is null)
+            return;
+
+        var dialog = new ChartDataDialog(Editor);
+        if (IsVisible)
+        {
+            _ = dialog.ShowDialog<bool?>(this);
+            return;
+        }
+
+        dialog.Show();
+    }
+
+    internal void OpenHyperlinkDialog()
+    {
+        _ = HyperlinkDialogPlanner.BuildDialogRequest(
+            Editor.Presentation.Slides,
+            Editor.SelectedShapeHyperlink);
+    }
+
+    internal void OpenFindDialog() =>
+        OpenFindReplaceDialog(showReplace: false);
+
+    internal void OpenFindReplaceDialog() =>
+        OpenFindReplaceDialog(showReplace: true);
+
+    private void OpenFindReplaceDialog(bool showReplace)
+    {
+        _ = FindReplaceDialogPlanner.TitleForMode(showReplace);
+    }
 
     private void FileNew()
     {
-        // v1: proceed without a save-changes dialog (dirty gate is tracked; modal dialog in 14C).
-        LoadPresentation(Presentation.CreateEmpty(), path: null);
+        _fileWorkflow.New(
+            FileText.NewAction,
+            () => LoadPresentationContent(Presentation.CreateEmpty()));
     }
 
-    private async Task FileOpenAsync()
+    private Task<bool> FileOpenAsync() =>
+        _fileWorkflow.OpenAsync(
+            FileText.OpenAction,
+            PromptOpenPathAsync,
+            path => Task.FromResult(TryLoadPresentationFile(path)));
+
+    private async Task<string?> PromptOpenPathAsync()
     {
-        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        if (!AvaloniaFilePickerService.CanOpen(StorageProvider))
         {
-            Title         = "Open Presentation",
+            _statusText.Text = SisterAppFileTextPlanner.FormatCommandUnavailable(SisterAppFileTextPlanner.OpenCommand);
+            return null;
+        }
+
+        var plan = PresentationFileDialogPlanner.BuildOpenPickerPlan();
+        using var file = await AvaloniaFilePickerService.PickSingleOpenFileWithLocalPathAsync(
+            StorageProvider,
+            AvaloniaFilePickerOpenRequest.FromDescriptors(FileText.OpenPickerTitle, plan.FileTypes));
+
+        if (file is null)
+            return null;
+
+        var path = file.LocalPath;
+        if (path is null)
+            _statusText.Text = SisterAppFileTextPlanner.FormatSelectedFileNotLocalPath(SisterAppFileTextPlanner.OpenCommand);
+
+        return path;
+    }
+
+    private Task<bool> FileSaveAsync() =>
+        _fileWorkflow.SaveAsync(
+            path => Task.FromResult(TrySavePresentationFile(path)),
+            FileSaveAsAsync);
+
+    private async Task<bool> FileSaveAsAsync()
+    {
+        if (!AvaloniaFilePickerService.CanSave(StorageProvider))
+        {
+            _statusText.Text = SisterAppFileTextPlanner.FormatCommandUnavailable(SisterAppFileTextPlanner.SaveCommand);
+            return false;
+        }
+
+        var plan = PresentationFileDialogPlanner.BuildSavePickerPlan(_fileWorkflow.CurrentFileName);
+
+        using var file = await AvaloniaFilePickerService.PickSaveFileWithLocalPathAsync(
+            StorageProvider,
+            AvaloniaFilePickerSaveRequest.FromSavePlan(FileText.SavePickerTitle, plan));
+
+        var path = file?.LocalPath;
+        if (path is null)
+        {
+            if (file is not null)
+                _statusText.Text = SisterAppFileTextPlanner.FormatSelectedFileNotLocalPath(SisterAppFileTextPlanner.SaveCommand);
+
+            return false;
+        }
+
+        return TrySavePresentationFile(path);
+    }
+
+    private async Task<bool> FileExportPdfAsync()
+    {
+        if (!AvaloniaFilePickerService.CanSave(StorageProvider))
+        {
+            _statusText.Text = SisterAppFileTextPlanner.FormatCommandUnavailable(
+                FileText,
+                PresentationExportPlanner.PdfExportCommandText);
+            return false;
+        }
+
+        var plan = PresentationExportPlanner.BuildPdfExportPickerPlan(_fileWorkflow.CurrentFileName);
+
+        using var file = await AvaloniaFilePickerService.PickSaveFileWithLocalPathAsync(
+            StorageProvider,
+            AvaloniaFilePickerSaveRequest.FromSavePlan(PresentationExportPlanner.PdfExportPickerTitle, plan));
+
+        var path = file?.LocalPath;
+        if (path is null)
+        {
+            if (file is not null)
+            {
+                _statusText.Text = SisterAppFileTextPlanner.FormatSelectedFileNotLocalPath(
+                    FileText,
+                    PresentationExportPlanner.PdfExportCommandText);
+            }
+
+            return false;
+        }
+
+        try
+        {
+            ExportAtomicWriter.WriteAllBytes(path, PresentationPdfExporter.ExportToBytes(_presentation));
+            _statusText.Text = $"Exported {Path.GetFileName(path)}";
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(
+                FileText,
+                PresentationExportPlanner.PdfExportCommandText,
+                ex.Message);
+            return false;
+        }
+    }
+
+    internal PresentationImageExportResult FileExportImagesToFolder(
+        string outputDirectory,
+        PresentationSlideRangeRequest? range = null) =>
+        PresentationImageExportExecutor.Export(
+            _presentation,
+            new PresentationImageExportRequest(
+                outputDirectory,
+                BaseFileName: Path.GetFileNameWithoutExtension(_fileWorkflow.CurrentFileName),
+                SlideRange: range),
+            SlideRenderer.RenderToBytes);
+
+    private async Task<bool> FileExportImagesAsync()
+    {
+        if (!StorageProvider.CanPickFolder)
+        {
+            _statusText.Text = SisterAppFileTextPlanner.FormatCommandUnavailable(
+                FileText,
+                PresentationExportPlanner.ImageExportCommandText);
+            return false;
+        }
+
+        var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
+        {
+            Title = PresentationExportPlanner.ImageExportPickerTitle,
             AllowMultiple = false,
-            FileTypeFilter = [PptxFileType],
         });
 
-        if (files.Count == 0)
-            return;
-
-        var path = files[0].TryGetLocalPath();
-        if (path is not null)
-            TryLoadPptxFile(path);
-    }
-
-    private async Task FileSaveAsync()
-    {
-        if (_currentPath is not null)
-            TrySavePptxFile(_currentPath);
-        else
-            await FileSaveAsAsync();
-    }
-
-    private async Task FileSaveAsAsync()
-    {
-        var suggested = _currentPath is not null
-            ? Path.GetFileName(_currentPath)
-            : "Presentation.pptx";
-
-        var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        var folder = folders.Count == 0 ? null : folders[0];
+        var path = folder?.TryGetLocalPath();
+        if (path is null)
         {
-            Title             = "Save Presentation",
-            DefaultExtension  = "pptx",
-            SuggestedFileName = suggested,
-            FileTypeChoices   = [PptxFileType],
-        });
+            if (folder is not null)
+            {
+                _statusText.Text = SisterAppFileTextPlanner.FormatSelectedFileNotLocalPath(
+                    FileText,
+                    PresentationExportPlanner.ImageExportCommandText);
+            }
 
-        var path = file?.TryGetLocalPath();
-        if (path is not null)
-            TrySavePptxFile(path);
-    }
+            return false;
+        }
 
-    private void TryLoadPptxFile(string path)
-    {
         try
         {
-            using var stream = File.OpenRead(path);
-            var presentation = PptxPackageReader.Read(stream);
-            LoadPresentation(presentation, path);
+            FileExportImagesToFolder(path, BuildCurrentSlideImageExportRange());
+            return true;
         }
         catch (Exception ex)
         {
-            _statusText.Text = $"Open failed: {ex.Message}";
+            _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(
+                FileText,
+                PresentationExportPlanner.ImageExportCommandText,
+                ex.Message);
+            return false;
         }
     }
 
-    private void TrySavePptxFile(string path)
+    private PresentationSlideRangeRequest BuildCurrentSlideImageExportRange() =>
+        new(
+            PresentationSlideRangeKind.CurrentSlide,
+            CurrentSlideNumber: Editor.CurrentSlideIndex + 1);
+
+    internal PresentationHandoutLayoutPlan RefreshHandoutLayoutPlan(int? slidesPerPage = null)
+    {
+        LastHandoutLayoutPlan = PresentationExportPlanner.BuildHandoutLayoutPlan(
+            new PresentationPrintRequest(
+                PresentationPrintLayoutKind.Handouts,
+                HandoutSlidesPerPage: slidesPerPage),
+            _presentation.Slides.Count,
+            _presentation.SlideSizeCxEmu,
+            _presentation.SlideSizeCyEmu);
+        _statusText.Text = "Print handout layout planned";
+        return LastHandoutLayoutPlan;
+    }
+
+    private void RegisterReviewWorkflowCommands(RibbonCommandRegistry registry)
+    {
+        registry.Register(
+            PresentationReviewWorkflowPlanner.CommentsPaneCommandId,
+            new ActionRibbonCommand(ShowReviewCommentsPane));
+        registry.Register(
+            PresentationReviewWorkflowPlanner.AccessibilityCommandId,
+            new ActionRibbonCommand(RefreshAccessibilitySummaryPlan));
+        registry.Register(
+            PresentationReviewWorkflowPlanner.AltTextCommandId,
+            new ActionRibbonCommand(RefreshAltTextRequestPlan));
+        registry.Register(
+            PresentationReviewWorkflowPlanner.ProofingCommandId,
+            new ActionRibbonCommand(RefreshProofingRequestPlan));
+        registry.Register(PresentationReviewWorkflowPlanner.AddCommentCommandId, EmptyRibbonCommand.Instance);
+        registry.Register(PresentationReviewWorkflowPlanner.EditCommentCommandId, EmptyRibbonCommand.Instance);
+        registry.Register(PresentationReviewWorkflowPlanner.DeleteCommentCommandId, EmptyRibbonCommand.Instance);
+        registry.Register(PresentationReviewWorkflowPlanner.PreviousCommentCommandId, EmptyRibbonCommand.Instance);
+        registry.Register(PresentationReviewWorkflowPlanner.NextCommentCommandId, EmptyRibbonCommand.Instance);
+        registry.Register(PresentationReviewWorkflowPlanner.ResolveCommentCommandId, EmptyRibbonCommand.Instance);
+    }
+
+    internal void RefreshReviewWorkflowPlans()
+    {
+        LastCommentPanePlan = PresentationReviewWorkflowPlanner.BuildCommentPanePlan(
+            _presentation.Slides,
+            Editor.CurrentSlideIndex);
+        RefreshAccessibilitySummaryPlan();
+        RefreshAltTextRequestPlan();
+        RefreshProofingRequestPlan();
+    }
+
+    private void ShowReviewCommentsPane()
+    {
+        LastCommentPanePlan = PresentationReviewWorkflowPlanner.BuildCommentPanePlan(
+            _presentation.Slides,
+            Editor.CurrentSlideIndex);
+    }
+
+    private void OnAnimationPaneRequested(PresentationAnimationCommandPlan plan)
+    {
+        _ = plan;
+        RefreshAnimationPaneTimelinePlan();
+    }
+
+    internal AnimationPaneTimelinePlan RefreshAnimationPaneTimelinePlan(int selectedAnimationIndex = -1)
+    {
+        LastAnimationPaneTimelinePlan = AnimationPanePlanner.BuildTimelinePlan(
+            Editor.CurrentSlide,
+            Editor.SelectedShapeIds,
+            selectedAnimationIndex);
+        return LastAnimationPaneTimelinePlan;
+    }
+
+    private void RefreshAccessibilitySummaryPlan()
+    {
+        LastAccessibilitySummaryPlan =
+            PresentationReviewWorkflowPlanner.BuildAccessibilitySummaryPlan(_presentation);
+    }
+
+    private void RefreshAltTextRequestPlan()
+    {
+        uint? selectedShapeId = Editor.SelectedShapeIds.Count == 1
+            ? Editor.SelectedShapeIds[0]
+            : null;
+        LastAltTextRequestPlan = PresentationReviewWorkflowPlanner.BuildAltTextRequestPlan(
+            Editor.CurrentSlide,
+            selectedShapeId,
+            proposedDescription: null);
+    }
+
+    internal PresentationAltTextMutationPlan ApplySelectedShapeAlternativeText(
+        string? description,
+        string? title = null,
+        bool isDecorative = false)
+    {
+        uint? selectedShapeId = Editor.SelectedShapeIds.Count == 1
+            ? Editor.SelectedShapeIds[0]
+            : null;
+        var plan = PresentationReviewWorkflowPlanner.BuildAltTextMutationPlan(
+            Editor.CurrentSlide,
+            Editor.CurrentSlideIndex,
+            selectedShapeId,
+            description,
+            title,
+            isDecorative);
+        if (plan.ShouldApply)
+        {
+            Editor.SetSelectedShapeAlternativeText(plan.Description, plan.Title, plan.IsDecorative);
+            LastAltTextRequestPlan = PresentationReviewWorkflowPlanner.BuildAltTextRequestPlan(
+                Editor.CurrentSlide,
+                plan.ShapeId,
+                plan.Description,
+                plan.Title,
+                plan.IsDecorative);
+            RefreshAccessibilitySummaryPlan();
+        }
+
+        return plan;
+    }
+
+    private void RefreshProofingRequestPlan()
+    {
+        LastProofingRequestPlan =
+            PresentationReviewWorkflowPlanner.BuildProofingRequestPlan(_presentation);
+    }
+
+    private bool TryLoadPresentationFile(string path)
     {
         try
         {
-            using var stream = File.Create(path);
-            PptxPackageWriter.Write(_presentation, stream);
-            _currentPath = path;
-            _isDirty     = false;
-            UpdateTitle();
-            _statusText.Text = $"Saved {Path.GetFileName(path)}";
+            var result = PresentationFilePersistenceWorkflow.Open(path);
+            LoadPresentationAsSaved(result.Presentation, result.SavedPath, result.SuppressRecentFiles);
+            _statusText.Text = SisterAppFileTextPlanner.FormatOpened(Path.GetFileName(path));
+            return true;
         }
         catch (Exception ex)
         {
-            _statusText.Text = $"Save failed: {ex.Message}";
+            _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(SisterAppFileTextPlanner.OpenCommand, ex.Message);
+            return false;
         }
     }
+
+    private bool TrySavePresentationFile(string path)
+    {
+        try
+        {
+            var result = PresentationFilePersistenceWorkflow.Save(path, _presentation);
+            _fileWorkflow.MarkSavedWithPath(result.SavedPath, result.SuppressRecentFiles);
+            _statusText.Text = SisterAppFileTextPlanner.FormatSaved(Path.GetFileName(result.SavedPath));
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(SisterAppFileTextPlanner.SaveCommand, ex.Message);
+            return false;
+        }
+    }
+
+    private static bool IsSupportedPresentationPath(string path) =>
+        PresentationFilePersistenceWorkflow.IsSupportedPresentationPath(path);
 
     // ── Presentation load ──────────────────────────────────────────────────────
 
-    private void LoadPresentation(Presentation presentation, string? path)
+    private void LoadPresentationAsSaved(Presentation presentation, string? path, bool suppressRecentFiles = false)
+    {
+        LoadPresentationContent(presentation);
+
+        if (path is null)
+            _fileWorkflow.MarkSavedWithoutPath();
+        else
+            _fileWorkflow.MarkSavedWithPath(path, suppressRecentFiles);
+    }
+
+    private void LoadPresentationContent(Presentation presentation)
     {
         _presentation = presentation;
-        _currentPath  = path;
-        _isDirty      = false;
 
         RebuildEditorAndRewireInteraction();
         RefreshSlidePane();
         RefreshCanvas();
         RefreshNotesPane();
-        UpdateTitle();
+        RefreshReviewWorkflowPlans();
         UpdateStatus();
     }
 
@@ -485,25 +976,32 @@ public sealed class MainWindow : Window
         {
             _slidePaneList.Items.Clear();
 
-            for (int i = 0; i < _presentation.Slides.Count; i++)
+            var entries = SlidePanePlanner.BuildEntries(_presentation.Slides, _presentation.Sections);
+            foreach (var entry in entries)
             {
-                var slideIdx = i;
-                var slide    = _presentation.Slides[i];
+                if (entry.Kind == SlidePaneEntryKind.SectionHeader)
+                {
+                    _slidePaneList.Items.Add(BuildSlidePaneSectionHeader(entry));
+                    continue;
+                }
 
-                // Small SlideCanvas thumbnail (148 × 84 px letterboxed).
+                var slideIdx = entry.SlideIndex;
+                var slide    = _presentation.Slides[entry.SlideIndex];
+
+                // Small SlideCanvas thumbnail using the shared slide pane metrics.
                 var thumb = new SlideCanvas
                 {
                     Presentation = _presentation,
                     Slide        = slide,
                     SlideIndex   = slideIdx,
-                    Width        = 148,
-                    Height       = 84,
+                    Width        = SlidePanePlanner.DefaultThumbnailWidth,
+                    Height       = SlidePanePlanner.DefaultThumbnailHeight,
                 };
 
                 // Slide number label beneath thumbnail.
                 var label = new TextBlock
                 {
-                    Text                = $"{slideIdx + 1}",
+                    Text                = entry.Text,
                     HorizontalAlignment = HorizontalAlignment.Center,
                     FontSize            = 10,
                     Margin              = new Thickness(0, 2, 0, 0),
@@ -515,13 +1013,16 @@ public sealed class MainWindow : Window
                     Children = { thumb, label },
                 };
 
-                _slidePaneList.Items.Add(new ListBoxItem { Content = panel, Padding = new Thickness(2) });
+                _slidePaneList.Items.Add(new ListBoxItem
+                {
+                    Tag         = entry.SlideIndex,
+                    Content     = panel,
+                    Padding     = new Thickness(2),
+                    ContextMenu = BuildSlidePaneContextMenu(entry.SlideIndex),
+                });
             }
 
-            // Restore selection.
-            var current = Editor.CurrentSlideIndex;
-            if (current >= 0 && current < _slidePaneList.Items.Count)
-                _slidePaneList.SelectedIndex = current;
+            SelectSlidePaneItem(Editor.CurrentSlideIndex);
         }
         finally
         {
@@ -529,12 +1030,79 @@ public sealed class MainWindow : Window
         }
     }
 
+    private static ListBoxItem BuildSlidePaneSectionHeader(SlidePaneEntry entry)
+    {
+        var label = new TextBlock
+        {
+            Text              = entry.Text,
+            FontSize          = 11,
+            FontWeight        = FontWeight.SemiBold,
+            Foreground        = new SolidColorBrush(Color.FromRgb(0x33, 0x33, 0x33)),
+            VerticalAlignment = VerticalAlignment.Center,
+            TextTrimming      = TextTrimming.CharacterEllipsis,
+        };
+
+        return new ListBoxItem
+        {
+            Content = new Border
+            {
+                Background = new SolidColorBrush(Color.FromRgb(0xC8, 0xC8, 0xC8)),
+                Padding    = new Thickness(10, 4),
+                Child      = label,
+            },
+            Padding   = new Thickness(0),
+            Margin    = new Thickness(0, 6, 0, 2),
+            Focusable = false,
+            IsEnabled = false,
+        };
+    }
+
+    private ContextMenu BuildSlidePaneContextMenu(int slideIndex)
+    {
+        var menu = new ContextMenu();
+
+        foreach (var action in SlidePanePlanner.BuildContextActions(_presentation.Slides.Count, slideIndex))
+        {
+            if (action.Kind == SlidePaneActionKind.DeleteSlide)
+                menu.Items.Add(new Separator());
+
+            var item = new MenuItem
+            {
+                Header = action.Text,
+                IsEnabled = action.IsEnabled,
+            };
+            item.Click += (_, _) => SlidePanePlanner.TryApplyAction(Editor, action);
+            menu.Items.Add(item);
+        }
+
+        return menu;
+    }
+
+    private void SelectSlidePaneItem(int slideIndex)
+    {
+        var itemIndex = 0;
+        foreach (var item in _slidePaneList.Items)
+        {
+            if (item is ListBoxItem { Tag: int itemSlideIndex } && itemSlideIndex == slideIndex)
+            {
+                _slidePaneList.SelectedIndex = itemIndex;
+                return;
+            }
+
+            itemIndex++;
+        }
+
+        _slidePaneList.SelectedIndex = -1;
+    }
+
     private void OnSlidePaneSelectionChanged(object? sender, SelectionChangedEventArgs e)
     {
         if (_slidePaneRefreshing)
             return;
 
-        var idx = _slidePaneList.SelectedIndex;
+        if (_slidePaneList.SelectedItem is not ListBoxItem { Tag: int idx })
+            return;
+
         if (idx < 0 || idx >= _presentation.Slides.Count)
             return;
 
@@ -572,10 +1140,10 @@ public sealed class MainWindow : Window
 
     private void OnEditorChanged()
     {
-        _isDirty = true;
+        _fileWorkflow.MarkDirty();
         RefreshSlidePane();
         RefreshCanvas(); // refresh canvas so shape moves/resizes are reflected immediately
-        UpdateTitle();
+        RefreshReviewWorkflowPlans();
         UpdateStatus();
     }
 
@@ -583,30 +1151,25 @@ public sealed class MainWindow : Window
     {
         // Sync slide-pane selection without re-triggering OnSlidePaneSelectionChanged.
         _slidePaneRefreshing = true;
-        try { _slidePaneList.SelectedIndex = Editor.CurrentSlideIndex; }
+        try { SelectSlidePaneItem(Editor.CurrentSlideIndex); }
         finally { _slidePaneRefreshing = false; }
 
         RefreshCanvas();
         RefreshNotesPane();
+        RefreshReviewWorkflowPlans();
         UpdateStatus();
     }
 
-    // ── Status / title ─────────────────────────────────────────────────────────
+    private void OnEditorSelectionChanged(object? sender, EventArgs e) =>
+        RefreshAltTextRequestPlan();
 
-    private void UpdateTitle()
-    {
-        var filename = _currentPath is not null ? Path.GetFileName(_currentPath) : "Untitled";
-        var dirty    = _isDirty ? " *" : string.Empty;
-        Title = $"FreeP — {filename}{dirty}";
-    }
+    // ── Status ─────────────────────────────────────────────────────────────────
 
     private void UpdateStatus()
     {
         var count   = _presentation.Slides.Count;
         var current = Editor.CurrentSlideIndex;
-        _statusText.Text = count == 0
-            ? "No slides"
-            : $"Slide {current + 1} / {count}";
+        _statusText.Text = SisterAppStatusBarTextPlanner.FormatPresentationSlideStatus(current, count);
     }
 
     // ── Keyboard shortcuts ─────────────────────────────────────────────────────

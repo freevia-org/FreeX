@@ -39,6 +39,26 @@ public static class SaveCompletionPlanner
             MarkSaved: noEditsArrivedDuringSave,
             ApplyFileContext: true);
     }
+
+    public static SaveCompletionPlan Plan(
+        int generationAtSaveStart,
+        int generationNow,
+        bool sameWorkbook,
+        string path,
+        WorkbookFileAccessIdentity? fileAccessIdentity = null,
+        string? displayName = null)
+    {
+        var plan = Plan(generationAtSaveStart, generationNow, sameWorkbook);
+        return !plan.ApplyFileContext
+            ? plan
+            : plan with
+            {
+                FileContext = WorkbookFileCompletionPlanner.PlanSaveFileContext(
+                    path,
+                    fileAccessIdentity,
+                    displayName)
+            };
+    }
 }
 
 /// <summary>
@@ -54,4 +74,10 @@ public static class SaveCompletionPlanner
 ///   When <c>false</c>, skip these mutations (the save result is stale relative to
 ///   the current workbook state).
 /// </param>
-public sealed record SaveCompletionPlan(bool MarkSaved, bool ApplyFileContext);
+/// <param name="FileContext">
+///   The saved file context to apply when <see cref="ApplyFileContext"/> is true.
+/// </param>
+public sealed record SaveCompletionPlan(
+    bool MarkSaved,
+    bool ApplyFileContext,
+    WorkbookSaveFileContext? FileContext = null);

@@ -11,7 +11,7 @@ namespace Free.Shared.Shell.Wpf;
 /// suffixes so that per-app automation IDs (e.g. "AboutFreeXDialog" vs "AboutFreeWDialog")
 /// are preserved exactly, keeping per-app UI tests green.
 /// </summary>
-public class SharedAboutDialog : Window
+public class SharedAboutDialog : DialogWindow
 {
     private readonly TextBox _aboutTextBox;
 

@@ -36,6 +36,37 @@ public sealed class DialogFocusTests
     }
 
     [Fact]
+    public void ShowWarningAndFocus_UsesSharedMessageHelperAndSelectsTextTarget()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var textBox = new TextBox { Text = "bad input" };
+            string? capturedMessage = null;
+            UserMessageButtons? capturedButtons = null;
+            HeadlessMessageBox.Handler = (message, buttons) =>
+            {
+                capturedMessage = message;
+                capturedButtons = buttons;
+                return UserMessageResult.Ok;
+            };
+
+            try
+            {
+                DialogFocus.ShowWarningAndFocus(owner: null, "Check the range.", "Validation", textBox);
+
+                capturedMessage.Should().Be("Check the range.");
+                capturedButtons.Should().Be(UserMessageButtons.Ok);
+                textBox.SelectionStart.Should().Be(0);
+                textBox.SelectionLength.Should().Be(textBox.Text.Length);
+            }
+            finally
+            {
+                HeadlessMessageBox.Handler = null;
+            }
+        });
+    }
+
+    [Fact]
     public void FocusDefaultButton_SkipsDisabledDefaultButtons()
     {
         StaTestRunner.Run(() =>

@@ -3,6 +3,7 @@ using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using FluentAssertions;
+using FreeX.App.Presentation.Consolidate;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -105,7 +106,18 @@ public sealed partial class DataToolDialogTests
     {
         ConsolidateDialog.SplitSourceRangeText("A1:B3; D5:E7").Should().Equal("A1:B3", "D5:E7");
         ConsolidateDialog.JoinSourceRanges(["A1:B3", "D5:E7"]).Should().Be("A1:B3; D5:E7");
-        ConsolidateDialogPlanner.JoinSourceRanges([" A1:B3 ", "", " D5:E7 "]).Should().Be("A1:B3; D5:E7");
+        ConsolidateDialog.JoinSourceRanges([" A1:B3 ", "", " D5:E7 "]).Should().Be("A1:B3; D5:E7");
+    }
+
+    [Fact]
+    public void ConsolidateDialogPlanning_AdaptsSharedPresentationPlanner()
+    {
+        var source = ReadConsolidateDialogSources() + DialogSourceTestSupport.ReadHostSources("ConsolidateInputParser.cs");
+
+        source.Should().Contain("FreeX.App.Presentation.Consolidate.ConsolidateDialogPlanner");
+        source.Should().Contain("FreeX.App.Presentation.Consolidate.ConsolidateInputParser");
+        source.Should().NotContain("WorkbookRangeTextCodec.TryParse");
+        source.Should().NotContain("private static IEnumerable<string> SplitReferences");
     }
 
     [Theory]
@@ -543,8 +555,8 @@ public sealed partial class DataToolDialogTests
         DialogSourceTestSupport.ReadHostSourcesWithSeparator(
             "",
             "ConsolidateDialog.cs",
-            "ConsolidateDialog.Planning.cs",
-            "ConsolidateDialogPlanner.cs");
+            "ConsolidateDialog.Planning.cs") +
+        DialogSourceTestSupport.ReadPresentationSources("Consolidate", "ConsolidateDialogModels.cs");
 
     [Fact]
     public void ConsolidateDialog_TryParse_RejectsMalformedSourceRange()

@@ -6,6 +6,7 @@ using System.Windows.Media;
 using FreeX.Core.Model;
 
 using static FreeX.App.Host.ChartDialogHelpers;
+using PresentationChartTypePickerPlanner = FreeX.App.Presentation.Charts.Editing.ChartTypePickerPlanner;
 
 namespace FreeX.App.Host;
 
@@ -13,21 +14,22 @@ public sealed partial class InsertChartDialog
 {
     internal static Grid CreateRecommendedChartsPanel(ListBox gallery)
     {
+        var panel = PresentationChartTypePickerPlanner.GetRecommendedPanel();
         var grid = CreatePickerGrid();
         var heading = new StackPanel();
         heading.Children.Add(new TextBlock
         {
-            Text = UiText.Get("ChartTypePicker_ChooseChartTypeHeading"),
+            Text = UiText.Get(panel.HeadingResourceKey),
             FontWeight = FontWeights.SemiBold,
             Margin = new Thickness(0, 0, 0, 2)
         });
-        heading.Children.Add(CreateInlineHelp(UiText.Get("ChartTypePicker_RecommendedHelpText")));
+        heading.Children.Add(CreateInlineHelp(UiText.Get(panel.HelpResourceKey)));
         grid.Children.Add(heading);
         gallery.Margin = new Thickness(0, 34, 12, 0);
-        AutomationProperties.SetName(gallery, UiText.Get("ChartTypePicker_SubtypeGalleryAutomationName"));
+        AutomationProperties.SetName(gallery, UiText.Get(panel.SubtypeGalleryAutomationNameResourceKey));
         Grid.SetRow(gallery, 1);
         grid.Children.Add(gallery);
-        var preview = CreatePreviewPanel(UiText.Get("ChartTypePicker_PreviewTitle"), UiText.Get("ChartTypePicker_RecommendedPreviewBody"));
+        var preview = CreatePreviewPanel(panel.Preview);
         Grid.SetColumn(preview, 1);
         Grid.SetRowSpan(preview, 2);
         grid.Children.Add(preview);
@@ -40,15 +42,16 @@ public sealed partial class InsertChartDialog
         ChartType? selectedType = null)
     {
         var categories = ChartTypePickerPlanner.GetCategories();
+        var panel = PresentationChartTypePickerPlanner.GetAllChartsPanel();
         var grid = CreatePickerGrid();
         categoryList.ItemsSource = categories;
         categoryList.DisplayMemberPath = nameof(ChartTypePickerCategory.Name);
         categoryList.Width = 150;
         categoryList.Margin = new Thickness(0, 24, 12, 0);
-        AutomationProperties.SetName(categoryList, UiText.Get("ChartTypePicker_CategoriesAutomationName"));
+        AutomationProperties.SetName(categoryList, UiText.Get(panel.CategoryListAutomationNameResourceKey!));
         subtypeGallery.DisplayMemberPath = nameof(ChartTypeGalleryChoice.SubtypeName);
         subtypeGallery.Margin = new Thickness(0, 24, 12, 0);
-        AutomationProperties.SetName(subtypeGallery, UiText.Get("ChartTypePicker_SubtypeGalleryAutomationName"));
+        AutomationProperties.SetName(subtypeGallery, UiText.Get(panel.SubtypeGalleryAutomationNameResourceKey));
         categoryList.SelectionChanged += (_, _) =>
         {
             if (categoryList.SelectedItem is not ChartTypePickerCategory category)
@@ -68,18 +71,18 @@ public sealed partial class InsertChartDialog
         var heading = new StackPanel();
         heading.Children.Add(new TextBlock
         {
-            Text = UiText.Get("ChartTypePicker_AllChartsHeading"),
+            Text = UiText.Get(panel.HeadingResourceKey),
             FontWeight = FontWeights.SemiBold,
             Margin = new Thickness(0, 0, 0, 2)
         });
-        heading.Children.Add(CreateInlineHelp(UiText.Get("ChartTypePicker_AllChartsHelpText")));
+        heading.Children.Add(CreateInlineHelp(UiText.Get(panel.HelpResourceKey)));
         grid.Children.Add(heading);
         Grid.SetRow(categoryList, 1);
         grid.Children.Add(categoryList);
         Grid.SetColumn(subtypeGallery, 1);
         Grid.SetRow(subtypeGallery, 1);
         grid.Children.Add(subtypeGallery);
-        var preview = CreatePreviewPanel(UiText.Get("ChartTypePicker_PreviewTitle"), UiText.Get("ChartTypePicker_ChartPreviewBody"));
+        var preview = CreatePreviewPanel(panel.Preview);
         Grid.SetColumn(preview, 2);
         Grid.SetRowSpan(preview, 2);
         grid.Children.Add(preview);
@@ -126,7 +129,7 @@ public sealed partial class InsertChartDialog
         return grid;
     }
 
-    private static Border CreatePreviewPanel(string title, string body) =>
+    private static Border CreatePreviewPanel(FreeX.App.Presentation.Charts.Editing.ChartTypePickerPreviewDescriptor preview) =>
         new()
         {
             BorderBrush = SystemColors.ControlDarkBrush,
@@ -139,19 +142,19 @@ public sealed partial class InsertChartDialog
                 {
                     new TextBlock
                     {
-                        Text = title,
+                        Text = UiText.Get(preview.TitleResourceKey),
                         FontWeight = FontWeights.SemiBold,
                         Margin = new Thickness(0, 0, 0, 12)
                     },
                     new TextBlock
                     {
-                        Text = body,
+                        Text = UiText.Get(preview.BodyResourceKey),
                         TextWrapping = TextWrapping.Wrap,
                         Margin = new Thickness(0, 0, 0, 14)
                     },
                     new TextBlock
                     {
-                        Text = UiText.Get("ChartTypePicker_PreviewSampleLabel"),
+                        Text = UiText.Get(preview.SampleLabelResourceKey),
                         FontWeight = FontWeights.SemiBold,
                         Margin = new Thickness(0, 0, 0, 8)
                     },

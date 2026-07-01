@@ -13,44 +13,30 @@ public partial class MainWindow
         RefreshChartContextualTabs();
         RefreshTableContextualTab();
         RefreshPivotFieldListPaneAfterSelectionChange();
-        if (SheetGrid.IsPictureCropMode && GetSelectedPictureOnSheet(_workbook.GetSheet(_currentSheetId))?.Kind != PictureKind.Image)
+        if (SheetGrid.IsPictureCropMode && !GetDrawingObjectContextualRibbonPlan().CropPictureEnabled)
             SheetGrid.IsPictureCropMode = false;
     }
 
     private void RefreshDrawingObjectContextualTabs()
     {
-        var sheet = _workbook.GetSheet(_currentSheetId);
-        var selectedTarget = GetSelectedDrawingObjectContextualTarget(sheet);
-        var shapeVisible = selectedTarget?.Kind is DrawingObjectTargetKind.Shape or DrawingObjectTargetKind.TextBox;
-        var picture = GetSelectedPictureOnSheet(sheet);
-        var pictureVisible = picture is not null;
-        var selectedShape = selectedTarget?.Kind == DrawingObjectTargetKind.Shape;
-        var canCropPicture = picture?.Kind == PictureKind.Image;
+        var plan = GetDrawingObjectContextualRibbonPlan();
 
         // Enablement of the contextual Shape/Picture ribbon buttons flows through the neutral state
         // store, which drives the rendered controls. The Crop Picture button is store-disabled when
         // cropping is unavailable, which gates access to its Crop / Reset Crop dropdown items.
-        _ribbonState.SetEnabled("Shape Gradient", selectedShape);
-        _ribbonState.SetEnabled("Shape Effects", selectedShape);
-        _ribbonState.SetEnabled("Crop Picture", canCropPicture);
+        _ribbonState.SetEnabled(DrawingObjectContextualRibbonPlanner.ShapeGradientCommandName, plan.ShapeGradientEnabled);
+        _ribbonState.SetEnabled(DrawingObjectContextualRibbonPlanner.ShapeEffectsCommandName, plan.ShapeEffectsEnabled);
+        _ribbonState.SetEnabled(DrawingObjectContextualRibbonPlanner.CropPictureCommandName, plan.CropPictureEnabled);
 
-        SetDrawingObjectContextualTabsVisible(shapeVisible, pictureVisible);
+        SetDrawingObjectContextualTabsVisible(plan.ShapeFormatVisible, plan.PictureFormatVisible);
     }
 
-    private DrawingObjectTarget? GetSelectedDrawingObjectContextualTarget(Sheet? sheet)
-    {
-        var selectedKind = GetSelectedDrawingObjectSelectionKind();
-        if (selectedKind is null || SheetGrid.SelectedObjectId == Guid.Empty)
-            return null;
-
-        return DrawingTargetResolver.GetTargetDrawingObject(
-            sheet,
+    private DrawingObjectContextualRibbonPlan GetDrawingObjectContextualRibbonPlan() =>
+        DrawingObjectContextualRibbonPlanner.Build(
+            _workbook.GetSheet(_currentSheetId),
             SheetGrid.SelectedRange?.Start,
-            selectedKind,
-            SheetGrid.SelectedObjectId,
-            includePictures: true,
-            allowFallback: false);
-    }
+            GetSelectedDrawingObjectSelectionKind(),
+            SheetGrid.SelectedObjectId);
 
     private PictureModel? GetSelectedPictureOnSheet(Sheet? sheet)
     {

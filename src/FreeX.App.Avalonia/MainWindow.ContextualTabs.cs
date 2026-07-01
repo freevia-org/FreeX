@@ -21,11 +21,13 @@ public sealed partial class MainWindow
     {
         var dict = new Dictionary<string, Action>(StringComparer.Ordinal)
         {
-            // --- Help tab (always visible): About is real; the rest report honestly. ---
+            // --- Help tab (always visible). ---
             ["help.about"] = () => RunGuarded(ShowAboutDialogAsync),
             ["help.helpOnline"] = () => RunGuarded(() => OpenExternalHelpLinkAsync(AppHelpInfo.HelpUrl, "Help Online")),
             ["help.feedback"] = () => RunGuarded(() => OpenExternalHelpLinkAsync(AppHelpInfo.FeedbackUrl, "Send Feedback")),
             ["help.checkUpdates"] = () => RunGuarded(() => OpenExternalHelpLinkAsync(AppHelpInfo.LatestReleaseUrl, "Check for Updates")),
+            ["help.copyDiagnostics"] = () => RunGuarded(CopyDiagnosticsToClipboardAsync),
+            ["help.legalNotices"] = () => RunGuarded(ShowLegalNoticesDialogAsync),
 
             // --- Chart Design (chart.selected) — real handlers via SetChartLayoutCommand /
             // ChangeChartTypeCommand / ChangeChartSourceCommand / SetChartStyleCommand (MainWindow.ChartTabs). ---

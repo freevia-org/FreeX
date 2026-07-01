@@ -1,10 +1,11 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
+using FreeX.App.Presentation.Charts.Editing;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
-using static FreeX.App.Host.ChartDialogInputParser;
 using static FreeX.App.Host.ChartDialogHelpers;
 
 namespace FreeX.App.Host;
@@ -18,33 +19,10 @@ public sealed record ChartSeriesFormatDialogResult(
     ChartMarkerStyle? MarkerStyle,
     double? MarkerSize)
 {
-    public ChartLayoutOptions ToOptions(IReadOnlyList<ChartSeriesFormat> currentFormats)
-    {
-        var formats = currentFormats.ToList();
-        var replacement = new ChartSeriesFormat(
-            SeriesIndex,
-            FillColor,
-            StrokeColor,
-            StrokeThickness,
-            DashStyle,
-            MarkerStyle,
-            MarkerSize);
-        var existingIndex = IndexOfSeriesFormat(formats, SeriesIndex);
-        if (existingIndex >= 0)
-            formats[existingIndex] = replacement;
-        else
-            formats.Add(replacement);
-        return new ChartLayoutOptions(SeriesFormats: formats);
-    }
+    public ChartSeriesFormatInput ToInput() =>
+        new(SeriesIndex, FillColor, StrokeColor, StrokeThickness, MarkerStyle, MarkerSize, DashStyle);
 
-    private static int IndexOfSeriesFormat(IReadOnlyList<ChartSeriesFormat> formats, int seriesIndex)
-    {
-        for (var index = 0; index < formats.Count; index++)
-            if (formats[index].SeriesIndex == seriesIndex)
-                return index;
-
-        return -1;
-    }
+    public ChartLayoutOptions ToOptions(ChartModel chart) => ChartSeriesFormatPlanner.Plan(chart, ToInput());
 }
 
 public sealed class ChartSeriesFormatDialog : Window
@@ -61,35 +39,23 @@ public sealed class ChartSeriesFormatDialog : Window
 
     public ChartSeriesFormatDialog(ChartModel chart, int seriesCount)
     {
-        Result = FromChart(chart, seriesCount);
+        Result = FromChart(chart);
         Title = UiText.Get("ChartSeriesFormat_Title");
         Width = 380;
         Height = 390;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
+        ApplyAutomationIds();
         Content = CreateContent(seriesCount);
         Load(Result);
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
-    public static ChartSeriesFormatDialogResult FromChart(ChartModel chart, int seriesCount)
+    public static ChartSeriesFormatDialogResult FromChart(ChartModel chart)
     {
-        var seriesIndex = Math.Clamp(GetFirstSeriesFormatIndex(chart), 0, Math.Max(0, seriesCount - 1));
-        var format = FindSeriesFormat(chart, seriesIndex) ?? new ChartSeriesFormat(seriesIndex);
-        return CreateResult(seriesIndex, format.FillColor, format.StrokeColor, format.StrokeThickness, format.DashStyle, format.MarkerStyle, format.MarkerSize);
-    }
-
-    private static int GetFirstSeriesFormatIndex(ChartModel chart) =>
-        chart.SeriesFormats.Count > 0 ? chart.SeriesFormats[0].SeriesIndex : 0;
-
-    private static ChartSeriesFormat? FindSeriesFormat(ChartModel chart, int seriesIndex)
-    {
-        foreach (var format in chart.SeriesFormats)
-            if (format.SeriesIndex == seriesIndex)
-                return format;
-
-        return null;
+        var input = ChartSeriesFormatPlanner.ReadDefault(chart);
+        return CreateResult(input.SeriesIndex, input.FillColor, input.StrokeColor, input.StrokeThickness, input.DashStyle, input.MarkerStyle, input.MarkerSize);
     }
 
     public static ChartSeriesFormatDialogResult CreateResult(
@@ -99,27 +65,47 @@ public sealed class ChartSeriesFormatDialog : Window
         double? strokeThickness,
         ChartLineDashStyle? dashStyle,
         ChartMarkerStyle? markerStyle,
-        double? markerSize) =>
-        new(Math.Max(0, seriesIndex), fillColor, strokeColor, strokeThickness, dashStyle, markerStyle, markerSize);
+        double? markerSize)
+    {
+        var input = ChartSeriesFormatPlanner.Normalize(new ChartSeriesFormatInput(
+            seriesIndex,
+            fillColor,
+            strokeColor,
+            strokeThickness,
+            markerStyle,
+            markerSize,
+            dashStyle));
+        return new(
+            input.SeriesIndex,
+            input.FillColor,
+            input.StrokeColor,
+            input.StrokeThickness,
+            input.DashStyle,
+            input.MarkerStyle,
+            input.MarkerSize);
+    }
 
     private StackPanel CreateContent(int seriesCount)
     {
         var root = ChartDialogHelpers.DialogStack();
         {
+            var section = ChartSeriesFormatPlanner.GetSeriesOptionsSection();
             var stack = new StackPanel();
-            ChartDialogHelpers.AddCombo(stack, UiText.Get("ChartSeriesFormat_SeriesLabel"), _seriesBox, Enumerable.Range(0, Math.Max(1, seriesCount)).Select(index => UiText.Format("SelectDataSource_SeriesNameFormat", index + 1)).ToArray());
-            stack.Children.Add(CreateInlineHelp(UiText.Get("ChartSeriesFormat_SeriesHelpText")));
-            root.Children.Add(CreateGroupBox(UiText.Get("ChartSeriesFormat_SeriesOptionsGroup"), stack));
+            ChartDialogHelpers.AddCombo(stack, LabelText(ChartSeriesFormatDialogFieldId.Series), _seriesBox, Enumerable.Range(0, Math.Max(1, seriesCount)).Select(index => UiText.Format("SelectDataSource_SeriesNameFormat", index + 1)).ToArray());
+            if (section.HelpResourceKey is { } helpKey)
+                stack.Children.Add(CreateInlineHelp(UiText.Get(helpKey)));
+            root.Children.Add(CreateGroupBox(UiText.Get(section.HeaderResourceKey), stack));
         }
         {
+            var section = ChartSeriesFormatPlanner.GetFillLineSection();
             var stack = new StackPanel();
-            ChartDialogHelpers.AddColorText(stack, UiText.Get("ChartSeriesFormat_FillColorLabel"), _fillBox);
-            ChartDialogHelpers.AddColorText(stack, UiText.Get("ChartSeriesFormat_LineColorLabel"), _strokeBox);
-            ChartDialogHelpers.AddNumericText(stack, UiText.Get("ChartSeriesFormat_LineWidthLabel"), _strokeThicknessBox, UiText.Get("ChartSeriesFormat_LineWidthHelpText"));
-            ChartDialogHelpers.AddCombo(stack, UiText.Get("ChartSeriesFormat_DashStyleLabel"), _dashBox, Enum.GetValues<ChartLineDashStyle>().Cast<object>().Prepend(UiText.Get("Common_NoneParenthetical")).ToArray());
-            ChartDialogHelpers.AddCombo(stack, UiText.Get("ChartSeriesFormat_MarkerLabel"), _markerBox, Enum.GetValues<ChartMarkerStyle>().Cast<object>().Prepend(UiText.Get("Common_NoneParenthetical")).ToArray());
-            ChartDialogHelpers.AddNumericText(stack, UiText.Get("ChartSeriesFormat_MarkerSizeLabel"), _markerSizeBox, UiText.Get("ChartSeriesFormat_MarkerSizeHelpText"));
-            root.Children.Add(CreateGroupBox(UiText.Get("ChartDialog_FillLineGroup"), stack));
+            ChartDialogHelpers.AddColorText(stack, LabelText(ChartSeriesFormatDialogFieldId.FillColor), _fillBox);
+            ChartDialogHelpers.AddColorText(stack, LabelText(ChartSeriesFormatDialogFieldId.StrokeColor), _strokeBox);
+            ChartDialogHelpers.AddNumericText(stack, LabelText(ChartSeriesFormatDialogFieldId.StrokeThickness), _strokeThicknessBox, HelpText(ChartSeriesFormatDialogFieldId.StrokeThickness));
+            ChartDialogHelpers.AddCombo(stack, LabelText(ChartSeriesFormatDialogFieldId.DashStyle), _dashBox, ChartSeriesFormatPlanner.GetDashStyleChoices().Cast<object>().Prepend(UiText.Get("Common_NoneParenthetical")).ToArray());
+            ChartDialogHelpers.AddCombo(stack, LabelText(ChartSeriesFormatDialogFieldId.MarkerStyle), _markerBox, ChartSeriesFormatPlanner.GetMarkerStyleChoices().Cast<object>().Prepend(UiText.Get("Common_NoneParenthetical")).ToArray());
+            ChartDialogHelpers.AddNumericText(stack, LabelText(ChartSeriesFormatDialogFieldId.MarkerSize), _markerSizeBox, HelpText(ChartSeriesFormatDialogFieldId.MarkerSize));
+            root.Children.Add(CreateGroupBox(UiText.Get(section.HeaderResourceKey), stack));
         }
         root.Children.Add(InsertChartDialog.CreateButtonRow(Accept));
         return root;
@@ -144,47 +130,73 @@ public sealed class ChartSeriesFormatDialog : Window
 
     private void Accept()
     {
-        if (!TryReadOptionalColor(_fillBox, out var fillColor))
+        if (!ChartSeriesFormatPlanner.TryParseDialogInput(
+                _seriesBox.SelectedIndex < 0 ? 0 : _seriesBox.SelectedIndex,
+                _fillBox.Text,
+                _strokeBox.Text,
+                _strokeThicknessBox.Text,
+                SelectedDashStyle(),
+                SelectedMarkerStyle(),
+                _markerSizeBox.Text,
+                out var input,
+                out var issue))
         {
-            ShowInvalidInputWarning(UiText.Get("ChartDialog_InvalidOptionalColorMessage"), _fillBox);
-            return;
-        }
-
-        if (!TryReadOptionalColor(_strokeBox, out var strokeColor))
-        {
-            ShowInvalidInputWarning(UiText.Get("ChartDialog_InvalidOptionalColorMessage"), _strokeBox);
-            return;
-        }
-
-        if (!TryReadNullablePositiveDouble(_strokeThicknessBox, out var strokeThickness))
-        {
-            ShowInvalidInputWarning(UiText.Get("ChartSeriesFormat_InvalidLineWidthMessage"), _strokeThicknessBox);
-            return;
-        }
-
-        if (!TryReadNullablePositiveDouble(_markerSizeBox, out var markerSize))
-        {
-            ShowInvalidInputWarning(UiText.Get("ChartSeriesFormat_InvalidMarkerSizeMessage"), _markerSizeBox);
+            ShowPlannerParseWarning(issue);
             return;
         }
 
         Result = CreateResult(
-            _seriesBox.SelectedIndex < 0 ? 0 : _seriesBox.SelectedIndex,
-            fillColor,
-            strokeColor,
-            strokeThickness,
-            _dashBox.SelectedItem is ChartLineDashStyle dash ? dash : null,
-            _markerBox.SelectedItem is ChartMarkerStyle marker ? marker : null,
-            markerSize);
+            input.SeriesIndex,
+            input.FillColor,
+            input.StrokeColor,
+            input.StrokeThickness,
+            input.DashStyle,
+            input.MarkerStyle,
+            input.MarkerSize);
         DialogResult = true;
+    }
+
+    private ChartLineDashStyle? SelectedDashStyle() =>
+        _dashBox.SelectedItem is ChartLineDashStyle value ? value : null;
+
+    private ChartMarkerStyle? SelectedMarkerStyle() =>
+        _markerBox.SelectedItem is ChartMarkerStyle value ? value : null;
+
+    private void ShowPlannerParseWarning(ChartSeriesFormatParseIssue issue)
+    {
+        var (message, target) = issue switch
+        {
+            ChartSeriesFormatParseIssue.StrokeColor => (UiText.Get("ChartDialog_InvalidOptionalColorMessage"), _strokeBox),
+            ChartSeriesFormatParseIssue.StrokeThickness => (UiText.Get("ChartSeriesFormat_InvalidLineWidthMessage"), _strokeThicknessBox),
+            ChartSeriesFormatParseIssue.MarkerSize => (UiText.Get("ChartSeriesFormat_InvalidMarkerSizeMessage"), _markerSizeBox),
+            _ => (UiText.Get("ChartDialog_InvalidOptionalColorMessage"), _fillBox)
+        };
+        ShowInvalidInputWarning(message, target);
     }
 
     private bool ShowInvalidInputWarning(string message, TextBox target)
     {
-        DialogMessageHelper.ShowWarning(this, message, Title);
-        target.Focus();
-        target.SelectAll();
-        Keyboard.Focus(target);
+        DialogFocus.ShowWarningAndFocus(this, message, Title, target);
         return true;
     }
+
+    private void ApplyAutomationIds()
+    {
+        AutomationProperties.SetAutomationId(_seriesBox, Field(ChartSeriesFormatDialogFieldId.Series).AutomationId);
+        AutomationProperties.SetAutomationId(_fillBox, Field(ChartSeriesFormatDialogFieldId.FillColor).AutomationId);
+        AutomationProperties.SetAutomationId(_strokeBox, Field(ChartSeriesFormatDialogFieldId.StrokeColor).AutomationId);
+        AutomationProperties.SetAutomationId(_strokeThicknessBox, Field(ChartSeriesFormatDialogFieldId.StrokeThickness).AutomationId);
+        AutomationProperties.SetAutomationId(_dashBox, Field(ChartSeriesFormatDialogFieldId.DashStyle).AutomationId);
+        AutomationProperties.SetAutomationId(_markerBox, Field(ChartSeriesFormatDialogFieldId.MarkerStyle).AutomationId);
+        AutomationProperties.SetAutomationId(_markerSizeBox, Field(ChartSeriesFormatDialogFieldId.MarkerSize).AutomationId);
+    }
+
+    private static string LabelText(ChartSeriesFormatDialogFieldId id) =>
+        UiText.Get(Field(id).LabelResourceKey);
+
+    private static string HelpText(ChartSeriesFormatDialogFieldId id) =>
+        UiText.Get(Field(id).HelpResourceKey ?? throw new InvalidOperationException($"Field {id} has no help resource key."));
+
+    private static ChartSeriesFormatDialogFieldDescriptor Field(ChartSeriesFormatDialogFieldId id) =>
+        ChartSeriesFormatPlanner.GetDialogField(id);
 }

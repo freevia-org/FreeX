@@ -1,5 +1,6 @@
 using System.IO;
 using Free.Shared.Drawing;
+using Free.Shared.Opc;
 using FreeP.Core.IO;
 using FreeP.Core.Model;
 
@@ -79,6 +80,69 @@ public sealed class PptxRoundTripTests : IDisposable
         s.OffsetYEmu.Should().Be(457200);
         s.ExtentCxEmu.Should().Be(2743200);
         s.ExtentCyEmu.Should().Be(1828800);
+    }
+
+    [Fact]
+    public void RoundTrip_ShapeAlternativeTextMetadata_PreservedInPptxNonVisualProperties()
+    {
+        var pres = new Presentation();
+        var slide = new Slide();
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 11,
+            Name = "Sales chart",
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            AlternativeTextTitle = "Sales chart summary",
+            AlternativeText = "Quarterly sales by region.",
+            OffsetXEmu = 914400,
+            OffsetYEmu = 457200,
+            ExtentCxEmu = 2743200,
+            ExtentCyEmu = 1828800
+        });
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 12,
+            Name = "Decorative divider",
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            Hyperlink = new Hyperlink
+            {
+                Url = "https://example.com/details",
+                Tooltip = "Open details"
+            },
+            IsDecorative = true,
+            OffsetXEmu = 914400,
+            OffsetYEmu = 2743200,
+            ExtentCxEmu = 2743200,
+            ExtentCyEmu = 228600
+        });
+        pres.Slides.Add(slide);
+
+        var path = WriteToPptx(pres);
+
+        using (var archive = System.IO.Compression.ZipFile.OpenRead(path))
+        using (var slideStream = archive.GetEntry("ppt/slides/slide1.xml")!.Open())
+        using (var reader = new StreamReader(slideStream))
+        {
+            var slideXml = reader.ReadToEnd();
+            slideXml.Should().Contain("title=\"Sales chart summary\"");
+            slideXml.Should().Contain("descr=\"Quarterly sales by region.\"");
+            slideXml.Should().Contain("adec:decorative");
+            slideXml.Should().Contain("val=\"1\"");
+            slideXml.IndexOf("<a:hlinkClick", StringComparison.Ordinal)
+                .Should().BeLessThan(slideXml.IndexOf("<a:extLst>", StringComparison.Ordinal));
+        }
+
+        var reloaded = PptxPackageReader.Read(path);
+        var salesChart = reloaded.Slides[0].Shapes.Single(shape => shape.Id == 11);
+        salesChart.AlternativeTextTitle.Should().Be("Sales chart summary");
+        salesChart.AlternativeText.Should().Be("Quarterly sales by region.");
+        salesChart.IsDecorative.Should().BeFalse();
+        var decorative = reloaded.Slides[0].Shapes.Single(shape => shape.Id == 12);
+        decorative.IsDecorative.Should().BeTrue();
+        decorative.AlternativeTextTitle.Should().BeEmpty();
+        decorative.AlternativeText.Should().BeEmpty();
     }
 
     [Fact]
@@ -887,6 +951,131 @@ public sealed class PptxRoundTripTests : IDisposable
         rt.Rows[0].Cells[2].HMerge.Should().BeFalse("last cell is not merged");
     }
 
+    [Fact]
+    public void RoundTrip_PointBasedDrawingMlUnits_PreservedInPptxIo()
+    {
+        var pres = new Presentation();
+        var slide = new Slide();
+
+        var body = new TextBody
+        {
+            InsetLeftPt = 1.25,
+            InsetRightPt = 2.5,
+            InsetTopPt = 3.75,
+            InsetBottomPt = 4.5
+        };
+        var para = new Paragraph();
+        para.Runs.Add(new Run
+        {
+            Text = "Units",
+            TextOutline = new ShapeOutline.Visible(new SrgbColor(0x11, 0x22, 0x33), widthPt: 1.25),
+            TextShadow = new RunTextShadow
+            {
+                Color = new ThemeAwareColor(new SrgbColor(0x44, 0x55, 0x66)),
+                Alpha = 255,
+                BlurPt = 1.5,
+                DistPt = 2.25,
+                DirDeg = 30
+            }
+        });
+        body.Paragraphs.Add(para);
+
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 21,
+            Name = "UnitShape",
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            OffsetXEmu = 457200,
+            OffsetYEmu = 457200,
+            ExtentCxEmu = 2743200,
+            ExtentCyEmu = 914400,
+            TextBody = body,
+            Outline = new ShapeOutline.Visible(new SrgbColor(0x77, 0x88, 0x99), widthPt: 1.75)
+        });
+
+        var table = new TableShape();
+        table.ColumnWidthsEmu.Add(1828800);
+        var row = new TableRow { HeightEmu = 685800 };
+        row.Cells.Add(new TableCell
+        {
+            InsetLeftPt = 5.5,
+            InsetRightPt = 6.25,
+            InsetTopPt = 7.0,
+            InsetBottomPt = 8.75,
+            Borders = new TableCellBorders
+            {
+                Left = new ShapeOutline.Visible(new SrgbColor(0x10, 0x20, 0x30), widthPt: 0.5),
+                Top = new ShapeOutline.GradientVisible(
+                    new ShapeFill.Gradient(
+                        new ThemeAwareColor(new SrgbColor(0x20, 0x30, 0x40)),
+                        new ThemeAwareColor(new SrgbColor(0x60, 0x70, 0x80))),
+                    widthPt: 1.25)
+            },
+            TextBody = MakeBody("Cell")
+        });
+        table.Rows.Add(row);
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 22,
+            Name = "UnitTable",
+            Kind = SlideShapeKind.Table,
+            OffsetXEmu = 457200,
+            OffsetYEmu = 1600200,
+            ExtentCxEmu = 1828800,
+            ExtentCyEmu = 685800,
+            Table = table
+        });
+        pres.Slides.Add(slide);
+
+        var path = WriteToPptx(pres);
+
+        using var archive = System.IO.Compression.ZipFile.OpenRead(path);
+        var entry = archive.GetEntry("ppt/slides/slide1.xml");
+        entry.Should().NotBeNull();
+        using var stream = entry!.Open();
+        var doc = System.Xml.Linq.XDocument.Load(stream);
+        var p = System.Xml.Linq.XNamespace.Get("http://schemas.openxmlformats.org/presentationml/2006/main");
+        var a = System.Xml.Linq.XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main");
+
+        var unitShape = doc.Descendants(p + "sp")
+            .Single(sp => sp.Descendants(p + "cNvPr").Any(c => c.Attribute("name")?.Value == "UnitShape"));
+        var bodyPr = unitShape.Descendants(a + "bodyPr").Single();
+        bodyPr.Attribute("lIns")?.Value.Should().Be(EmuText(1.25));
+        bodyPr.Attribute("rIns")?.Value.Should().Be(EmuText(2.5));
+        bodyPr.Attribute("tIns")?.Value.Should().Be(EmuText(3.75));
+        bodyPr.Attribute("bIns")?.Value.Should().Be(EmuText(4.5));
+        unitShape.Element(p + "spPr")!.Element(a + "ln")!.Attribute("w")?.Value.Should().Be(EmuText(1.75));
+        unitShape.Descendants(a + "rPr").Single().Element(a + "ln")!.Attribute("w")?.Value.Should().Be(EmuText(1.25));
+        var outerShadow = unitShape.Descendants(a + "outerShdw").Single();
+        outerShadow.Attribute("blurRad")?.Value.Should().Be(EmuText(1.5));
+        outerShadow.Attribute("dist")?.Value.Should().Be(EmuText(2.25));
+
+        var tcPr = doc.Descendants(a + "tcPr").Single();
+        tcPr.Attribute("marL")?.Value.Should().Be(EmuText(5.5));
+        tcPr.Attribute("marR")?.Value.Should().Be(EmuText(6.25));
+        tcPr.Attribute("marT")?.Value.Should().Be(EmuText(7.0));
+        tcPr.Attribute("marB")?.Value.Should().Be(EmuText(8.75));
+        tcPr.Element(a + "lnL")!.Attribute("w")?.Value.Should().Be(EmuText(0.5));
+        tcPr.Element(a + "lnT")!.Attribute("w")?.Value.Should().Be(EmuText(1.25));
+
+        var reloaded = PptxPackageReader.Read(path);
+        var reloadedShape = reloaded.Slides[0].Shapes.Single(s => s.Name == "UnitShape");
+        reloadedShape.TextBody!.InsetLeftPt.Should().BeApproximately(1.25, 1e-9);
+        reloadedShape.TextBody.InsetRightPt.Should().BeApproximately(2.5, 1e-9);
+        reloadedShape.TextBody.InsetTopPt.Should().BeApproximately(3.75, 1e-9);
+        reloadedShape.TextBody.InsetBottomPt.Should().BeApproximately(4.5, 1e-9);
+        var reloadedRun = reloadedShape.TextBody.Paragraphs[0].Runs[0];
+        reloadedRun.TextShadow!.BlurPt.Should().BeApproximately(1.5, 1e-9);
+        reloadedRun.TextShadow.DistPt.Should().BeApproximately(2.25, 1e-9);
+
+        var reloadedCell = reloaded.Slides[0].Shapes.Single(s => s.Name == "UnitTable").Table!.Rows[0].Cells[0];
+        reloadedCell.InsetLeftPt.Should().BeApproximately(5.5, 1e-9);
+        reloadedCell.InsetRightPt.Should().BeApproximately(6.25, 1e-9);
+        reloadedCell.InsetTopPt.Should().BeApproximately(7.0, 1e-9);
+        reloadedCell.InsetBottomPt.Should().BeApproximately(8.75, 1e-9);
+    }
+
     private static TextBody MakeBody(string text)
     {
         var body = new TextBody();
@@ -895,6 +1084,9 @@ public sealed class PptxRoundTripTests : IDisposable
         body.Paragraphs.Add(para);
         return body;
     }
+
+    private static string EmuText(double points) =>
+        DrawingMlUnits.PointsToEmu(points).ToString(System.Globalization.CultureInfo.InvariantCulture);
 
     // ─────────────────────────────────────────────────────────────────────────────
     // Bug-fix regression tests (Q1–Q7)

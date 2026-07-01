@@ -1,172 +1,137 @@
+using FreeX.App.Services;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
 
 public static class ViewportScrollCalculator
 {
-    public static int NormalizeWheelNotches(int delta)
-    {
-        if (delta == 0)
-            return 0;
-
-        var notches = delta / 120;
-        return notches != 0 ? notches : Math.Sign(delta);
-    }
+    public static int NormalizeWheelNotches(int delta) =>
+        WorkbookViewportScrollPlanner.NormalizeWheelNotches(delta);
 
     public static (uint TopRow, uint LeftCol) CalculateViewportOrigin(
         Sheet? sheet,
         double verticalScrollValue,
-        double horizontalScrollValue)
-    {
-        var frozenRows = sheet?.FrozenRows ?? 0;
-        var frozenCols = sheet?.FrozenCols ?? 0;
-        return (
-            ScrollbarValueToWorksheetIndex(verticalScrollValue, frozenRows, CellAddress.MaxRow),
-            ScrollbarValueToWorksheetIndex(horizontalScrollValue, frozenCols, CellAddress.MaxCol));
-    }
+        double horizontalScrollValue) =>
+        WorkbookViewportScrollPlanner.CalculateViewportOrigin(sheet, verticalScrollValue, horizontalScrollValue);
 
     public static uint ScrollbarValueToWorksheetIndex(
         double scrollbarValue,
         uint frozenCount,
-        uint absoluteLimit)
-    {
-        var scrollValue = scrollbarValue is > 0 and <= uint.MaxValue
-            ? (uint)Math.Ceiling(scrollbarValue)
-            : 1;
-        var origin = frozenCount > 0
-            ? (ulong)frozenCount + scrollValue
-            : scrollValue;
-        return (uint)Math.Clamp(origin, 1UL, absoluteLimit);
-    }
+        uint absoluteLimit) =>
+        WorkbookViewportScrollPlanner.ScrollbarValueToWorksheetIndex(scrollbarValue, frozenCount, absoluteLimit);
 
-    public static uint WorksheetIndexToScrollbarValue(uint worksheetIndex, uint frozenCount)
-    {
-        if (frozenCount == 0)
-            return Math.Max(1, worksheetIndex);
+    public static uint WorksheetIndexToScrollbarValue(uint worksheetIndex, uint frozenCount) =>
+        WorkbookViewportScrollPlanner.WorksheetIndexToScrollbarValue(worksheetIndex, frozenCount);
 
-        return worksheetIndex > frozenCount
-            ? worksheetIndex - frozenCount
-            : 1;
-    }
-
-    public static uint CalculateScrollableLimit(uint absoluteLimit, uint frozenCount)
-    {
-        if (absoluteLimit <= 1)
-            return 1;
-
-        return Math.Max(1, absoluteLimit - Math.Min(frozenCount, absoluteLimit - 1));
-    }
+    public static uint CalculateScrollableLimit(uint absoluteLimit, uint frozenCount) =>
+        WorkbookViewportScrollPlanner.CalculateScrollableLimit(absoluteLimit, frozenCount);
 
     public static uint GetScrollableRowLimit(Sheet? sheet) =>
-        CalculateScrollableLimit(CellAddress.MaxRow, sheet?.FrozenRows ?? 0);
+        WorkbookViewportScrollPlanner.GetScrollableRowLimit(sheet);
 
     public static uint GetScrollableColumnLimit(Sheet? sheet) =>
-        CalculateScrollableLimit(CellAddress.MaxCol, sheet?.FrozenCols ?? 0);
+        WorkbookViewportScrollPlanner.GetScrollableColumnLimit(sheet);
 
-    public static uint ClampViewportOrigin(double rawValue, uint absoluteLimit, uint visibleSpan)
-    {
-        var value = rawValue is > 0 and <= uint.MaxValue ? (uint)Math.Ceiling(rawValue) : 1;
-        return Math.Clamp(value, 1, CalculateMaximumViewportOrigin(absoluteLimit, visibleSpan));
-    }
+    public static uint ClampViewportOrigin(double rawValue, uint absoluteLimit, uint visibleSpan) =>
+        WorkbookViewportScrollPlanner.ClampViewportOrigin(rawValue, absoluteLimit, visibleSpan);
 
     public static double CalculateViewportAvailableWidth(
         double gridWidth,
         double rowHeaderWidth,
-        double zoomLevel)
-    {
-        var effectiveZoom = zoomLevel > 0 ? zoomLevel : 1.0;
-        return Math.Max(0, gridWidth - rowHeaderWidth) / effectiveZoom;
-    }
+        double zoomLevel) =>
+        WorkbookViewportScrollPlanner.CalculateViewportAvailableWidth(gridWidth, rowHeaderWidth, zoomLevel);
 
     public static uint CalculateOpenedWorksheetScrollValue(
         uint? savedTopLeftIndex,
         uint fallbackIndex,
         uint absoluteLimit,
-        uint frozenCount = 0)
-    {
-        var worksheetIndex = Math.Clamp(savedTopLeftIndex ?? fallbackIndex, 1, absoluteLimit);
-        return WorksheetIndexToScrollbarValue(worksheetIndex, frozenCount);
-    }
+        uint frozenCount = 0) =>
+        WorkbookViewportScrollPlanner.CalculateOpenedWorksheetScrollValue(
+            savedTopLeftIndex,
+            fallbackIndex,
+            absoluteLimit,
+            frozenCount);
+
+    public static WorkbookViewportCellRevealPlan PlanCellReveal(
+        ViewportModel viewport,
+        Sheet? sheet,
+        CellAddress target,
+        double currentVerticalMaximum,
+        double currentHorizontalMaximum) =>
+        WorkbookViewportScrollPlanner.PlanCellReveal(
+            viewport,
+            sheet,
+            target,
+            currentVerticalMaximum,
+            currentHorizontalMaximum);
 
     public static uint CalculateScrollValueToRevealCell(
         uint targetIndex,
         uint firstVisibleIndex,
         uint lastVisibleIndex,
-        uint absoluteLimit)
-    {
-        var visibleSpan = Math.Max(1, lastVisibleIndex - firstVisibleIndex + 1);
-        return CalculateScrollValueToRevealCell(
+        uint absoluteLimit) =>
+        WorkbookViewportScrollPlanner.CalculateScrollValueToRevealCell(
             targetIndex,
             firstVisibleIndex,
             lastVisibleIndex,
-            absoluteLimit,
-            visibleSpan);
-    }
+            absoluteLimit);
 
     public static uint CalculateScrollValueToRevealCell(
         uint targetIndex,
         uint firstVisibleIndex,
         uint lastVisibleIndex,
         uint absoluteLimit,
-        uint visibleSpan)
-    {
-        var maxOrigin = CalculateMaximumViewportOrigin(absoluteLimit, visibleSpan);
-        if (targetIndex < firstVisibleIndex)
-            return Math.Clamp(targetIndex, 1, maxOrigin);
-        if (targetIndex > lastVisibleIndex)
-            return Math.Clamp(targetIndex - (lastVisibleIndex - firstVisibleIndex), 1, maxOrigin);
-        return Math.Clamp(firstVisibleIndex, 1, maxOrigin);
-    }
+        uint visibleSpan) =>
+        WorkbookViewportScrollPlanner.CalculateScrollValueToRevealCell(
+            targetIndex,
+            firstVisibleIndex,
+            lastVisibleIndex,
+            absoluteLimit,
+            visibleSpan);
 
     public static uint CalculateScrollValueToRevealCell(
         uint targetIndex,
         uint firstVisibleIndex,
         uint lastVisibleIndex) =>
-        CalculateScrollValueToRevealCell(targetIndex, firstVisibleIndex, lastVisibleIndex, CellAddress.MaxRow);
+        WorkbookViewportScrollPlanner.CalculateScrollValueToRevealCell(targetIndex, firstVisibleIndex, lastVisibleIndex);
 
     public static double CalculateScrollbarMaximumForKeyboardReveal(
         double currentMaximum,
         uint desiredScrollValue,
-        uint absoluteLimit)
-    {
-        return Math.Min(absoluteLimit, Math.Max(currentMaximum, desiredScrollValue));
-    }
+        uint absoluteLimit) =>
+        WorkbookViewportScrollPlanner.CalculateScrollbarMaximumForKeyboardReveal(
+            currentMaximum,
+            desiredScrollValue,
+            absoluteLimit);
 
     public static double CalculateScrollbarMaximumForKeyboardReveal(
         double currentMaximum,
         uint desiredScrollValue) =>
-        CalculateScrollbarMaximumForKeyboardReveal(currentMaximum, desiredScrollValue, CellAddress.MaxRow);
+        WorkbookViewportScrollPlanner.CalculateScrollbarMaximumForKeyboardReveal(currentMaximum, desiredScrollValue);
 
     public static (double Maximum, double Value) CalculateScrollbarArrowSmallIncrement(
         double currentValue,
         double currentMaximum,
         double smallChange,
-        uint absoluteLimit)
-    {
-        return CalculateScrollbarArrowSmallIncrement(
+        uint absoluteLimit) =>
+        WorkbookViewportScrollPlanner.CalculateScrollbarArrowSmallIncrement(
             currentValue,
             currentMaximum,
             smallChange,
-            visibleSpan: 1,
             absoluteLimit);
-    }
 
     public static (double Maximum, double Value) CalculateScrollbarArrowSmallIncrement(
         double currentValue,
         double currentMaximum,
         double smallChange,
         double visibleSpan,
-        uint absoluteLimit)
-    {
-        var maxOrigin = CalculateMaximumViewportOrigin(absoluteLimit, ToVisibleSpan(visibleSpan));
-        if (currentValue < currentMaximum || currentMaximum >= maxOrigin)
-            return (currentMaximum, currentValue);
-
-        var step = Math.Max(1, smallChange);
-        var maximum = Math.Min(maxOrigin, currentMaximum + step);
-        var value = Math.Min(maximum, currentValue + step);
-        return (maximum, value);
-    }
+        uint absoluteLimit) =>
+        WorkbookViewportScrollPlanner.CalculateScrollbarArrowSmallIncrement(
+            currentValue,
+            currentMaximum,
+            smallChange,
+            visibleSpan,
+            absoluteLimit);
 
     public static (double Maximum, double Value) CalculateWheelScroll(
         double currentValue,
@@ -174,15 +139,14 @@ public static class ViewportScrollCalculator
         int wheelNotches,
         double stepPerNotch,
         double visibleSpan,
-        uint absoluteLimit)
-    {
-        var step = Math.Max(1, stepPerNotch);
-        var desired = currentValue - wheelNotches * step;
-        var maxOrigin = CalculateMaximumViewportOrigin(absoluteLimit, ToVisibleSpan(visibleSpan));
-        var maximum = Math.Min(maxOrigin, Math.Max(currentMaximum, desired));
-        var value = Math.Clamp(desired, 1, maximum);
-        return (maximum, value);
-    }
+        uint absoluteLimit) =>
+        WorkbookViewportScrollPlanner.CalculateWheelScroll(
+            currentValue,
+            currentMaximum,
+            wheelNotches,
+            stepPerNotch,
+            visibleSpan,
+            absoluteLimit);
 
     public static (double Maximum, double Value) CalculateDragAutoScroll(
         double currentValue,
@@ -190,39 +154,26 @@ public static class ViewportScrollCalculator
         int direction,
         double step,
         double visibleSpan,
-        uint absoluteLimit)
-    {
-        if (direction == 0)
-            return (currentMaximum, currentValue);
+        uint absoluteLimit) =>
+        WorkbookViewportScrollPlanner.CalculateDragAutoScroll(
+            currentValue,
+            currentMaximum,
+            direction,
+            step,
+            visibleSpan,
+            absoluteLimit);
 
-        var effectiveStep = Math.Max(1, step);
-        var desired = currentValue + Math.Sign(direction) * effectiveStep;
-        var maxOrigin = CalculateMaximumViewportOrigin(absoluteLimit, ToVisibleSpan(visibleSpan));
-        var maximum = Math.Min(maxOrigin, Math.Max(currentMaximum, desired));
-        var value = Math.Clamp(desired, 1, maximum);
-        return (maximum, value);
-    }
-
-    public static uint CalculateMaximumViewportOrigin(uint absoluteLimit, uint visibleSpan)
-    {
-        visibleSpan = Math.Max(1, visibleSpan);
-        return visibleSpan >= absoluteLimit ? 1 : absoluteLimit - visibleSpan + 1;
-    }
+    public static uint CalculateMaximumViewportOrigin(uint absoluteLimit, uint visibleSpan) =>
+        WorkbookViewportScrollPlanner.CalculateMaximumViewportOrigin(absoluteLimit, visibleSpan);
 
     public static uint CalculateScrollbarMaximumForUsedRange(
         uint usedMax,
         uint visibleSpan,
         uint currentScrollValue,
-        uint absoluteLimit)
-    {
-        var maxOrigin = CalculateMaximumViewportOrigin(absoluteLimit, visibleSpan);
-        return Math.Min(maxOrigin, Math.Max(Math.Max(usedMax, visibleSpan), currentScrollValue));
-    }
-
-    private static uint ToVisibleSpan(double visibleSpan)
-    {
-        return visibleSpan is > 0 and <= uint.MaxValue
-            ? Math.Max(1, (uint)Math.Ceiling(visibleSpan))
-            : 1;
-    }
+        uint absoluteLimit) =>
+        WorkbookViewportScrollPlanner.CalculateScrollbarMaximumForUsedRange(
+            usedMax,
+            visibleSpan,
+            currentScrollValue,
+            absoluteLimit);
 }

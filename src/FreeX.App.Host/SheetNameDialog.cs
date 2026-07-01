@@ -1,12 +1,9 @@
-using FreeX.Core.Model;
+using FreeX.App.Presentation.SheetUI;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
-using System.Windows.Input;
 
 namespace FreeX.App.Host;
-
-public sealed record SheetNameDialogResult(string SheetName);
 
 public sealed class SheetNameDialog : Window
 {
@@ -31,44 +28,25 @@ public sealed class SheetNameDialog : Window
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
-    public static SheetNameDialogResult CreateResult(string sheetName) => new(sheetName.Trim());
+    public static SheetNameDialogResult CreateResult(string sheetName) =>
+        SheetDialogPlanner.CreateSheetNameResult(sheetName);
 
     public static bool TryCreateResult(string? sheetName, out SheetNameDialogResult result, out string? error)
     {
-        result = CreateResult(sheetName ?? "");
-
-        // Each structural rule is validated by the canonical Workbook.ValidateSheetNameStructure;
-        // per-rule localized messages are mapped here.  Duplicate-name checking is intentionally
-        // omitted because the dialog has no access to the workbook's sheet list.
-        if (string.IsNullOrWhiteSpace(result.SheetName))
-        {
-            error = UiText.Get("SheetName_InvalidBlank");
-            return false;
-        }
-
-        if (result.SheetName.Length > 31)
-        {
-            error = UiText.Get("SheetName_InvalidTooLong");
-            return false;
-        }
-
-        if (Workbook.ContainsInvalidSheetNameCharacter(result.SheetName))
-        {
-            error = UiText.Get("SheetName_InvalidCharacters");
-            return false;
-        }
-
-        // Delegate remaining structural rules (apostrophe rule + any future additions) to the
-        // canonical model check rather than duplicating them here.
-        if (Workbook.ValidateSheetNameStructure(result.SheetName) is not null)
-        {
-            error = UiText.Get("SheetName_InvalidApostrophe");
-            return false;
-        }
-
-        error = null;
-        return true;
+        var success = SheetDialogPlanner.TryCreateSheetNameResult(sheetName, out result, out var validationError);
+        error = validationError is null ? null : GetSheetNameValidationErrorText(validationError.Value);
+        return success;
     }
+
+    private static string GetSheetNameValidationErrorText(SheetNameValidationError error) =>
+        error switch
+        {
+            SheetNameValidationError.Blank => UiText.Get("SheetName_InvalidBlank"),
+            SheetNameValidationError.TooLong => UiText.Get("SheetName_InvalidTooLong"),
+            SheetNameValidationError.InvalidCharacters => UiText.Get("SheetName_InvalidCharacters"),
+            SheetNameValidationError.InvalidApostrophe => UiText.Get("SheetName_InvalidApostrophe"),
+            _ => UiText.Get("SheetName_EnterValidSheetName")
+        };
 
     private void Accept()
     {
@@ -84,10 +62,7 @@ public sealed class SheetNameDialog : Window
 
     private void ShowInvalidInputWarning(string message)
     {
-        DialogMessageHelper.ShowWarning(this, message, Title);
-        _nameBox.Focus();
-        _nameBox.SelectAll();
-        Keyboard.Focus(_nameBox);
+        DialogFocus.ShowWarningAndFocus(this, message, Title, _nameBox);
     }
 
     private void FocusInitialKeyboardTarget()

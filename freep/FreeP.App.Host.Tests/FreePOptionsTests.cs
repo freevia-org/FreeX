@@ -80,6 +80,19 @@ public sealed class FreePOptionsTests : IDisposable
         options.UiLanguage.Should().Be("en-GB");
     }
 
+    [Theory]
+    [InlineData("  en-us  ", "en-US")]
+    [InlineData(" QPS-PLOC ", "qps-ploc")]
+    [InlineData("not-a-culture", "")]
+    public void Normalize_CanonicalizesUiLanguage(string input, string expected)
+    {
+        var options = new FreePOptions { UiLanguage = input };
+
+        options.Normalize();
+
+        options.UiLanguage.Should().Be(expected);
+    }
+
     [Fact]
     public void Create_ResolvesUnderFreePProductFolder()
     {

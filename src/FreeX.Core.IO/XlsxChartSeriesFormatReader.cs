@@ -128,7 +128,7 @@ internal static class XlsxChartSeriesFormatReader
 
         double? markerBorderThickness = null;
         if (int.TryParse(markerLine?.Attribute("w")?.Value, out var markerLineEmus))
-            markerBorderThickness = Math.Clamp(markerLineEmus / 12700.0, 0, 10);
+            markerBorderThickness = Math.Clamp(markerLineEmus / (double)DrawingMlUnits.EmuPerPoint, 0, 10);
 
         if (strokeColor is null &&
             strokeThemeColor is null &&

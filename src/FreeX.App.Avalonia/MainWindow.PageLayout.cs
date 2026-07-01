@@ -9,6 +9,7 @@ using FreeX.App.Presentation.PageLayout;
 using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
+using Free.Shared.Shell.Avalonia;
 
 using AvaloniaControlShapesLine = Avalonia.Controls.Shapes.Line;
 using AvaloniaDock = Avalonia.Controls.Dock;
@@ -39,8 +40,10 @@ public sealed partial class MainWindow
     private static readonly IBrush PageBreakBorderBrush = Brush(11, 112, 116);
     private static readonly IBrush PageBreakLineBrush = Brush(11, 112, 116);
     private static readonly IBrush PageBreakWatermarkBrush = Brush(60, 11, 112, 116);
+    private static AvaloniaCompactDialogChromeStyle PageLayoutDialogChromeStyle => new(FormulaBarFontFamily);
 
-    private async Task ShowPageSetupDialogAsync()
+    private async Task ShowPageSetupDialogAsync(
+        PageLayoutPageSetupOpenSource source = PageLayoutPageSetupOpenSource.DialogButton)
     {
         if (_isOpening || _isSaving)
             return;
@@ -51,7 +54,9 @@ public sealed partial class MainWindow
         ClearSelectedDrawingObject();
 
         var sheet = _session.ActiveSheet;
-        var fields = await ShowPageSetupDialogCoreAsync(PageSetupDialogModel.FromSheet(sheet));
+        var fields = await ShowPageSetupDialogCoreAsync(
+            PageSetupDialogPlanner.PlanSurface(sheet),
+            PageSetupDialogPlanner.PlanOpen(source));
         if (fields is null)
             return;
 
@@ -63,51 +68,30 @@ public sealed partial class MainWindow
         var submission = PageSetupSubmissionPlanner.TryBuild(sheet, fields);
         if (!submission.Success)
         {
-            ShowEditIssue(ResolvePageSetupValidationIssue(submission.Validation!));
+            ShowEditIssue(PageLayoutStatusPlanner.ResolvePageSetupValidationIssue(submission.Validation!, UiText.Get));
             return;
         }
 
-        var plan = submission.Submission!.CommandPlan;
-        var pageSetupResult = _session.ExecuteReviewCommand(plan.PageSetupCommand);
-        if (!pageSetupResult.Success)
+        var commandBuild = submission.Submission!.TryBuildCompositeCommandForTarget(sheet, sheet.Id);
+        if (!commandBuild.Success)
         {
-            ShowEditIssue(pageSetupResult.ErrorMessage ?? UiText.Get("ShellLoc_PageSetupFailed"));
+            ShowEditIssue(PageLayoutStatusPlanner.ResolvePageSetupValidationIssue(commandBuild.Validation!, UiText.Get));
             return;
         }
 
-        var headerFooterResult = _session.ExecuteReviewCommand(plan.HeaderFooterCommand);
-        if (!headerFooterResult.Success)
-        {
-            ShowEditIssue(headerFooterResult.ErrorMessage ?? UiText.Get("ShellLoc_HeaderFooterUpdateFailed"));
-            return;
-        }
-
-        if (!ApplyPrintArea(sheet, plan.PrintArea, plan.PrintAreaCommand))
-            return;
-
-        RefreshShell(UiText.Get("ShellLoc_PageSetupUpdated"));
-    }
-
-    private static string ResolvePageSetupValidationIssue(PageSetupSubmissionValidation validation) =>
-        validation.Message.Resolve(UiText.Get, "ShellLoc_PageSetupInvalid");
-
-    private bool ApplyPrintArea(Sheet sheet, GridRange? printArea, IWorkbookCommand command)
-    {
-        var current = sheet.PrintArea is { } existing && existing.Start.Sheet == sheet.Id
-            ? existing
-            : (GridRange?)null;
-
-        if (Equals(current, printArea))
-            return true;
-
-        var result = _session.ExecuteReviewCommand(command);
+        var result = _session.ExecuteReviewCommand(commandBuild.Command!);
+        var status = PageLayoutStatusPlanner.ResolveCommandStatus(
+            PageLayoutStatusPlanner.PageSetupSubmission,
+            result.Success,
+            result.ErrorMessage,
+            UiText.Get);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? UiText.Get("ShellLoc_PrintAreaFailed"));
-            return false;
+            ShowEditIssue(status);
+            return;
         }
 
-        return true;
+        RefreshShell(status);
     }
 
     private void TogglePageBreakPreview()
@@ -119,19 +103,20 @@ public sealed partial class MainWindow
             return;
 
         ClearSelectedDrawingObject();
-        var viewMode = _session.ActiveSheet.ViewMode == WorksheetViewMode.PageBreakPreview
-            ? WorksheetViewMode.Normal
-            : WorksheetViewMode.PageBreakPreview;
-        var result = _session.SetWorksheetViewMode(viewMode);
+        var plan = PageLayoutStatusPlanner.PlanPageBreakPreviewToggle(_session.ActiveSheet.ViewMode);
+        var result = _session.SetWorksheetViewMode(plan.TargetViewMode);
+        var status = PageLayoutStatusPlanner.ResolveCommandStatus(
+            plan.Status,
+            result.Success,
+            result.ErrorMessage,
+            UiText.Get);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? UiText.Get("ShellLoc_PageBreakPreviewOff"));
+            ShowEditIssue(status);
             return;
         }
 
-        RefreshShell(viewMode == WorksheetViewMode.PageBreakPreview
-            ? UiText.Get("ShellLoc_PageBreakPreviewOn")
-            : UiText.Get("ShellLoc_PageBreakPreviewOff"));
+        RefreshShell(status);
     }
 
     private Canvas? BuildPageBreakPreviewOverlay(ViewportModel viewport, bool showHeadings, double zoomFactor)
@@ -275,44 +260,17 @@ public sealed partial class MainWindow
 
     private static void ApplyPageLayoutButtonChrome(Button button, double minWidth, bool isDefault = false)
     {
-        button.Height = 24;
-        button.MinHeight = 24;
-        button.MaxHeight = 24;
-        button.MinWidth = minWidth;
-        button.Padding = new Thickness(4, 1);
-        button.Background = Brushes.White;
-        button.BorderBrush = isDefault ? Brush(0, 120, 215) : Brush(112, 112, 112);
-        button.BorderThickness = new Thickness(1);
-        button.FontSize = 12;
-        button.FontFamily = FormulaBarFontFamily;
-        button.HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center;
-        button.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
+        AvaloniaCompactDialogChrome.ApplyButton(button, PageLayoutDialogChromeStyle, minWidth, isDefault);
     }
 
     private static void ApplyPageLayoutTextBoxChrome(TextBox textBox)
     {
-        textBox.Height = 24;
-        textBox.MinHeight = 24;
-        textBox.MaxHeight = 24;
-        textBox.Padding = new Thickness(4, 1);
-        textBox.FontSize = 12;
-        textBox.FontFamily = FormulaBarFontFamily;
-        textBox.BorderBrush = Brush(130, 130, 130);
-        textBox.BorderThickness = new Thickness(1);
-        textBox.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
+        AvaloniaCompactDialogChrome.ApplyTextBox(textBox, PageLayoutDialogChromeStyle);
     }
 
     private static void ApplyPageLayoutComboBoxChrome(ComboBox comboBox)
     {
-        comboBox.Height = 24;
-        comboBox.MinHeight = 24;
-        comboBox.MaxHeight = 24;
-        comboBox.Padding = new Thickness(5, 0, 4, 0);
-        comboBox.FontSize = 12;
-        comboBox.FontFamily = FormulaBarFontFamily;
-        comboBox.BorderBrush = Brush(130, 130, 130);
-        comboBox.BorderThickness = new Thickness(1);
-        comboBox.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
+        AvaloniaCompactDialogChrome.ApplyComboBox(comboBox, PageLayoutDialogChromeStyle);
     }
 
     private static void ApplyPageLayoutCheckBoxChrome(CheckBox checkBox)
@@ -320,62 +278,54 @@ public sealed partial class MainWindow
         StripContentMnemonic(checkBox);
         checkBox.MinHeight = 20;
         checkBox.MaxHeight = 20;
-        checkBox.FontSize = 12;
-        checkBox.FontFamily = FormulaBarFontFamily;
+        AvaloniaCompactDialogChrome.ApplyCheckBox(checkBox, PageLayoutDialogChromeStyle);
     }
 
     private static void ApplyPageLayoutRadioButtonChrome(RadioButton radioButton)
     {
         StripContentMnemonic(radioButton);
         radioButton.MinHeight = 20;
-        radioButton.FontSize = 12;
-        radioButton.FontFamily = FormulaBarFontFamily;
+        AvaloniaCompactDialogChrome.ApplyRadioButton(radioButton, PageLayoutDialogChromeStyle);
     }
 
-    private async Task<PageSetupDialogFields?> ShowPageSetupDialogCoreAsync(PageSetupDialogFields initial)
+    private async Task<PageSetupDialogFields?> ShowPageSetupDialogCoreAsync(
+        PageSetupDialogSurfacePlan surface,
+        PageSetupDialogOpenPlan openPlan)
     {
         PageSetupDialogFields? result = null;
+        var initial = surface.Fields;
         var dialog = new Window
         {
-            Title = UiText.Get("PageSetup_Title"),
-            Width = 600,
-            Height = 560,
-            MinWidth = 580,
-            MinHeight = 520,
+            Title = UiText.Get(PageSetupDialogPlanner.TitleResourceKey),
+            Width = PageSetupDialogPlanner.WindowWidth,
+            Height = PageSetupDialogPlanner.WindowHeight,
+            MinWidth = PageSetupDialogPlanner.MinWindowWidth,
+            MinHeight = PageSetupDialogPlanner.MinWindowHeight,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
-        AutomationProperties.SetAutomationId(dialog, "PageSetupDialog");
-
-        static IReadOnlyList<string> ChoiceLabels<T>(IReadOnlyList<PageSetupChoice<T>> choices) =>
-            choices.Select(choice => UiText.Get(choice.LabelResourceKey)).ToList();
+        AutomationProperties.SetAutomationId(dialog, PageSetupDialogPlanner.DialogAutomationId);
 
         // --- Page tab ---
-        var orientationChoices = PageSetupDialogModel.OrientationChoices;
+        var orientationChoices = PageSetupDialogPlanner.OrientationChoices;
         var orientationBox = new ComboBox
         {
-            ItemsSource = ChoiceLabels(orientationChoices),
-            SelectedIndex = PageSetupDialogModel.ChoiceIndex(
-                orientationChoices,
-                initial.Orientation,
-                WorksheetPageOrientation.Portrait),
-            MinWidth = 220,
+            ItemsSource = PageSetupDialogPlanner.ResolveChoiceLabels(orientationChoices, UiText.Get),
+            SelectedIndex = surface.ChoiceIndexes.Orientation,
+            MinWidth = PageSetupDialogPlanner.FieldMinWidth,
         };
         ApplyPageLayoutComboBoxChrome(orientationBox);
-        AutomationProperties.SetAutomationId(orientationBox, "PageSetupOrientationBox");
+        AutomationProperties.SetAutomationId(orientationBox, PageSetupDialogPlanner.OrientationBoxAutomationId);
 
-        var paperSizeChoices = PageSetupDialogModel.PaperSizeChoices;
+        var paperSizeChoices = PageSetupDialogPlanner.PaperSizeChoices;
         var paperBox = new ComboBox
         {
-            ItemsSource = ChoiceLabels(paperSizeChoices),
-            SelectedIndex = PageSetupDialogModel.ChoiceIndex(
-                paperSizeChoices,
-                initial.PaperSize,
-                WorksheetPaperSize.A4),
-            MinWidth = 220,
+            ItemsSource = PageSetupDialogPlanner.ResolveChoiceLabels(paperSizeChoices, UiText.Get),
+            SelectedIndex = surface.ChoiceIndexes.PaperSize,
+            MinWidth = PageSetupDialogPlanner.FieldMinWidth,
         };
         ApplyPageLayoutComboBoxChrome(paperBox);
-        AutomationProperties.SetAutomationId(paperBox, "PageSetupPaperSizeBox");
+        AutomationProperties.SetAutomationId(paperBox, PageSetupDialogPlanner.PaperSizeBoxAutomationId);
 
         var adjustRadio = new RadioButton
         {
@@ -385,7 +335,7 @@ public sealed partial class MainWindow
         };
         ApplyPageLayoutRadioButtonChrome(adjustRadio);
         AutomationProperties.SetAutomationId(adjustRadio, "PageSetupAdjustToRadio");
-        var scalePercentBox = new TextBox { Text = initial.ScalePercentText, MinWidth = 90 };
+        var scalePercentBox = new TextBox { Text = surface.Scaling.ScalePercentText, MinWidth = 90 };
         ApplyPageLayoutTextBoxChrome(scalePercentBox);
         AutomationProperties.SetAutomationId(scalePercentBox, "PageSetupScalePercentBox");
 
@@ -397,16 +347,16 @@ public sealed partial class MainWindow
         };
         ApplyPageLayoutRadioButtonChrome(fitRadio);
         AutomationProperties.SetAutomationId(fitRadio, "PageSetupFitToRadio");
-        var fitWideBox = new TextBox { Text = initial.FitToWideText, MinWidth = 70 };
+        var fitWideBox = new TextBox { Text = surface.Scaling.FitToWideText, MinWidth = 70 };
         ApplyPageLayoutTextBoxChrome(fitWideBox);
         AutomationProperties.SetAutomationId(fitWideBox, "PageSetupFitWideBox");
-        var fitTallBox = new TextBox { Text = initial.FitToTallText, MinWidth = 70 };
+        var fitTallBox = new TextBox { Text = surface.Scaling.FitToTallText, MinWidth = 70 };
         ApplyPageLayoutTextBoxChrome(fitTallBox);
         AutomationProperties.SetAutomationId(fitTallBox, "PageSetupFitTallBox");
 
         var firstPageNumberBox = new TextBox
         {
-            Text = initial.FirstPageNumberText,
+            Text = surface.FirstPageNumberText,
             MinWidth = 220,
             PlaceholderText = UiText.Get("PageSetup_Auto"),
         };
@@ -415,7 +365,7 @@ public sealed partial class MainWindow
 
         var printQualityBox = new TextBox
         {
-            Text = initial.PrintQualityDpiText,
+            Text = surface.PrintQualityDpiText,
             MinWidth = 220,
             PlaceholderText = UiText.Get("PageSetup_Auto"),
         };
@@ -428,10 +378,10 @@ public sealed partial class MainWindow
         ApplyPageLayoutTextBoxChrome(marginsBox);
         AutomationProperties.SetAutomationId(marginsBox, "PageSetupMarginsBox");
         AutomationProperties.SetHelpText(marginsBox, UiText.Get("PageSetup_MarginsHelp"));
-        var headerMarginBox = new TextBox { Text = initial.HeaderMarginText, MinWidth = 220 };
+        var headerMarginBox = new TextBox { Text = surface.HeaderMarginText, MinWidth = 220 };
         ApplyPageLayoutTextBoxChrome(headerMarginBox);
         AutomationProperties.SetAutomationId(headerMarginBox, "PageSetupHeaderMarginBox");
-        var footerMarginBox = new TextBox { Text = initial.FooterMarginText, MinWidth = 220 };
+        var footerMarginBox = new TextBox { Text = surface.FooterMarginText, MinWidth = 220 };
         ApplyPageLayoutTextBoxChrome(footerMarginBox);
         AutomationProperties.SetAutomationId(footerMarginBox, "PageSetupFooterMarginBox");
         var centerHorizontallyCheck = new CheckBox
@@ -454,20 +404,20 @@ public sealed partial class MainWindow
         var footerPresetChoices = PageSetupDialogModel.FooterPresetChoices;
         var headerPresetBox = new ComboBox
         {
-            ItemsSource = ChoiceLabels(headerPresetChoices),
-            SelectedIndex = PageSetupDialogModel.HeaderFooterPresetIndex(headerPresetChoices, initial.Header.Center),
-            MinWidth = 260,
+            ItemsSource = PageSetupDialogPlanner.ResolveChoiceLabels(headerPresetChoices, UiText.Get),
+            SelectedIndex = surface.ChoiceIndexes.HeaderPreset,
+            MinWidth = PageSetupDialogPlanner.HeaderFooterPresetMinWidth,
         };
         ApplyPageLayoutComboBoxChrome(headerPresetBox);
-        AutomationProperties.SetAutomationId(headerPresetBox, "PageSetupHeaderPresetBox");
+        AutomationProperties.SetAutomationId(headerPresetBox, PageSetupDialogPlanner.HeaderPresetBoxAutomationId);
         var footerPresetBox = new ComboBox
         {
-            ItemsSource = ChoiceLabels(footerPresetChoices),
-            SelectedIndex = PageSetupDialogModel.HeaderFooterPresetIndex(footerPresetChoices, initial.Footer.Center),
-            MinWidth = 260,
+            ItemsSource = PageSetupDialogPlanner.ResolveChoiceLabels(footerPresetChoices, UiText.Get),
+            SelectedIndex = surface.ChoiceIndexes.FooterPreset,
+            MinWidth = PageSetupDialogPlanner.HeaderFooterPresetMinWidth,
         };
         ApplyPageLayoutComboBoxChrome(footerPresetBox);
-        AutomationProperties.SetAutomationId(footerPresetBox, "PageSetupFooterPresetBox");
+        AutomationProperties.SetAutomationId(footerPresetBox, PageSetupDialogPlanner.FooterPresetBoxAutomationId);
 
         var headerLeftBox = new TextBox { Text = initial.Header.Left, MinWidth = 120 };
         ApplyPageLayoutTextBoxChrome(headerLeftBox);
@@ -491,26 +441,28 @@ public sealed partial class MainWindow
         // A preset selection fills the matching custom center box (mirrors the WPF preset combo).
         headerPresetBox.SelectionChanged += (_, _) =>
         {
-            var idx = headerPresetBox.SelectedIndex;
-            var preset = PageSetupDialogModel.HeaderFooterPresetValue(headerPresetChoices, idx);
-            var header = HeaderFooterEditorPlanner.ApplyCenterPreset(
+            if (headerPresetBox.SelectedIndex < 0)
+                return;
+
+            var header = PageSetupDialogPlanner.ApplyHeaderPreset(
                 new WorksheetHeaderFooter(
                     headerLeftBox.Text ?? "",
                     headerCenterBox.Text ?? "",
                     headerRightBox.Text ?? ""),
-                preset);
+                headerPresetBox.SelectedIndex);
             headerCenterBox.Text = header.Center;
         };
         footerPresetBox.SelectionChanged += (_, _) =>
         {
-            var idx = footerPresetBox.SelectedIndex;
-            var preset = PageSetupDialogModel.HeaderFooterPresetValue(footerPresetChoices, idx);
-            var footer = HeaderFooterEditorPlanner.ApplyCenterPreset(
+            if (footerPresetBox.SelectedIndex < 0)
+                return;
+
+            var footer = PageSetupDialogPlanner.ApplyFooterPreset(
                 new WorksheetHeaderFooter(
                     footerLeftBox.Text ?? "",
                     footerCenterBox.Text ?? "",
                     footerRightBox.Text ?? ""),
-                preset);
+                footerPresetBox.SelectedIndex);
             footerCenterBox.Text = footer.Center;
         };
 
@@ -544,17 +496,17 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(alignWithMarginsCheck, "PageSetupAlignWithMarginsCheck");
 
         // --- Sheet tab ---
-        var printAreaBox = new TextBox { Text = initial.PrintAreaText, MinWidth = 220 };
+        var printAreaBox = new TextBox { Text = surface.PrintAreaText, MinWidth = 220 };
         ApplyPageLayoutTextBoxChrome(printAreaBox);
         AutomationProperties.SetAutomationId(printAreaBox, "PageSetupPrintAreaBox");
         AutomationProperties.SetHelpText(printAreaBox, UiText.Get("PageSetup_PrintAreaHelp"));
 
-        var repeatRowsBox = new TextBox { Text = initial.RepeatRowsText, MinWidth = 220 };
+        var repeatRowsBox = new TextBox { Text = surface.RepeatRowsText, MinWidth = 220 };
         ApplyPageLayoutTextBoxChrome(repeatRowsBox);
         AutomationProperties.SetAutomationId(repeatRowsBox, "PageSetupRepeatRowsBox");
         AutomationProperties.SetHelpText(repeatRowsBox, UiText.Get("PageSetup_RepeatRowsHelp"));
 
-        var repeatColumnsBox = new TextBox { Text = initial.RepeatColumnsText, MinWidth = 220 };
+        var repeatColumnsBox = new TextBox { Text = surface.RepeatColumnsText, MinWidth = 220 };
         ApplyPageLayoutTextBoxChrome(repeatColumnsBox);
         AutomationProperties.SetAutomationId(repeatColumnsBox, "PageSetupRepeatColumnsBox");
         AutomationProperties.SetHelpText(repeatColumnsBox, UiText.Get("PageSetup_RepeatColumnsHelp"));
@@ -572,44 +524,35 @@ public sealed partial class MainWindow
         ApplyPageLayoutCheckBoxChrome(draftQualityCheck);
         AutomationProperties.SetAutomationId(draftQualityCheck, "PageSetupDraftQualityCheck");
 
-        var pageOrderChoices = PageSetupDialogModel.PageOrderChoices;
+        var pageOrderChoices = PageSetupDialogPlanner.PageOrderChoices;
         var pageOrderBox = new ComboBox
         {
-            ItemsSource = ChoiceLabels(pageOrderChoices),
-            SelectedIndex = PageSetupDialogModel.ChoiceIndex(
-                pageOrderChoices,
-                initial.PageOrder,
-                WorksheetPageOrder.DownThenOver),
-            MinWidth = 220,
+            ItemsSource = PageSetupDialogPlanner.ResolveChoiceLabels(pageOrderChoices, UiText.Get),
+            SelectedIndex = surface.ChoiceIndexes.PageOrder,
+            MinWidth = PageSetupDialogPlanner.FieldMinWidth,
         };
         ApplyPageLayoutComboBoxChrome(pageOrderBox);
-        AutomationProperties.SetAutomationId(pageOrderBox, "PageSetupPageOrderBox");
+        AutomationProperties.SetAutomationId(pageOrderBox, PageSetupDialogPlanner.PageOrderBoxAutomationId);
 
-        var printErrorValueChoices = PageSetupDialogModel.PrintErrorValueChoices;
+        var printErrorValueChoices = PageSetupDialogPlanner.PrintErrorValueChoices;
         var cellErrorsBox = new ComboBox
         {
-            ItemsSource = ChoiceLabels(printErrorValueChoices),
-            SelectedIndex = PageSetupDialogModel.ChoiceIndex(
-                printErrorValueChoices,
-                initial.PrintErrorValue,
-                WorksheetPrintErrorValue.Displayed),
-            MinWidth = 220,
+            ItemsSource = PageSetupDialogPlanner.ResolveChoiceLabels(printErrorValueChoices, UiText.Get),
+            SelectedIndex = surface.ChoiceIndexes.PrintErrorValue,
+            MinWidth = PageSetupDialogPlanner.FieldMinWidth,
         };
         ApplyPageLayoutComboBoxChrome(cellErrorsBox);
-        AutomationProperties.SetAutomationId(cellErrorsBox, "PageSetupCellErrorsBox");
+        AutomationProperties.SetAutomationId(cellErrorsBox, PageSetupDialogPlanner.CellErrorsBoxAutomationId);
 
-        var printCommentChoices = PageSetupDialogModel.PrintCommentChoices;
+        var printCommentChoices = PageSetupDialogPlanner.PrintCommentChoices;
         var commentsBox = new ComboBox
         {
-            ItemsSource = ChoiceLabels(printCommentChoices),
-            SelectedIndex = PageSetupDialogModel.ChoiceIndex(
-                printCommentChoices,
-                initial.PrintComments,
-                WorksheetPrintComments.None),
-            MinWidth = 220,
+            ItemsSource = PageSetupDialogPlanner.ResolveChoiceLabels(printCommentChoices, UiText.Get),
+            SelectedIndex = surface.ChoiceIndexes.PrintComments,
+            MinWidth = PageSetupDialogPlanner.FieldMinWidth,
         };
         ApplyPageLayoutComboBoxChrome(commentsBox);
-        AutomationProperties.SetAutomationId(commentsBox, "PageSetupCommentsBox");
+        AutomationProperties.SetAutomationId(commentsBox, PageSetupDialogPlanner.CommentsBoxAutomationId);
 
         var validationText = new TextBlock
         {
@@ -617,40 +560,34 @@ public sealed partial class MainWindow
             TextWrapping = TextWrapping.Wrap,
             IsVisible = false,
         };
-        AutomationProperties.SetAutomationId(validationText, "PageSetupValidationText");
+        AutomationProperties.SetAutomationId(validationText, PageSetupDialogPlanner.ValidationTextAutomationId);
 
-        var okButton = new Button { Content = UiText.Get("Common_Ok"), MinWidth = 84 };
-        ApplyPageLayoutButtonChrome(okButton, 84, isDefault: true);
-        var cancelButton = new Button { Content = UiText.Get("Common_Cancel"), MinWidth = 84 };
-        ApplyPageLayoutButtonChrome(cancelButton, 84);
-        AutomationProperties.SetAutomationId(okButton, "PageSetupOkButton");
-        AutomationProperties.SetAutomationId(cancelButton, "PageSetupCancelButton");
+        var okButton = new Button { Content = UiText.Get("Common_Ok"), MinWidth = PageSetupDialogPlanner.FooterButtonMinWidth };
+        ApplyPageLayoutButtonChrome(okButton, PageSetupDialogPlanner.FooterButtonMinWidth, isDefault: true);
+        var cancelButton = new Button { Content = UiText.Get("Common_Cancel"), MinWidth = PageSetupDialogPlanner.FooterButtonMinWidth };
+        ApplyPageLayoutButtonChrome(cancelButton, PageSetupDialogPlanner.FooterButtonMinWidth);
+        AutomationProperties.SetAutomationId(okButton, PageSetupDialogPlanner.OkButtonAutomationId);
+        AutomationProperties.SetAutomationId(cancelButton, PageSetupDialogPlanner.CancelButtonAutomationId);
 
         // WPF has [Print...][Print Preview][Options...] on the bottom left
-        var printButton = new Button { Content = UiText.Get("PageSetup_PrintButton"), MinWidth = 84 };
-        ApplyPageLayoutButtonChrome(printButton, 84);
-        AutomationProperties.SetAutomationId(printButton, "PageSetupPrintButton");
-        var printPreviewButton = new Button { Content = UiText.Get("PageSetup_PrintPreviewButton"), MinWidth = 100 };
-        ApplyPageLayoutButtonChrome(printPreviewButton, 100);
-        AutomationProperties.SetAutomationId(printPreviewButton, "PageSetupPrintPreviewButton");
-        var optionsButton = new Button { Content = UiText.Get("PageSetup_OptionsButton"), MinWidth = 84 };
-        ApplyPageLayoutButtonChrome(optionsButton, 84);
-        AutomationProperties.SetAutomationId(optionsButton, "PageSetupOptionsButton");
+        var printButton = new Button { Content = UiText.Get("PageSetup_PrintButton"), MinWidth = PageSetupDialogPlanner.FooterButtonMinWidth };
+        ApplyPageLayoutButtonChrome(printButton, PageSetupDialogPlanner.FooterButtonMinWidth);
+        AutomationProperties.SetAutomationId(printButton, PageSetupDialogPlanner.PrintButtonAutomationId);
+        var printPreviewButton = new Button { Content = UiText.Get("PageSetup_PrintPreviewButton"), MinWidth = PageSetupDialogPlanner.PrintPreviewButtonMinWidth };
+        ApplyPageLayoutButtonChrome(printPreviewButton, PageSetupDialogPlanner.PrintPreviewButtonMinWidth);
+        AutomationProperties.SetAutomationId(printPreviewButton, PageSetupDialogPlanner.PrintPreviewButtonAutomationId);
+        var optionsButton = new Button { Content = UiText.Get("PageSetup_OptionsButton"), MinWidth = PageSetupDialogPlanner.FooterButtonMinWidth };
+        ApplyPageLayoutButtonChrome(optionsButton, PageSetupDialogPlanner.FooterButtonMinWidth);
+        AutomationProperties.SetAutomationId(optionsButton, PageSetupDialogPlanner.OptionsButtonAutomationId);
         // These are stub buttons (print/preview not yet wired in Avalonia shell)
         printButton.IsEnabled = false;
         printPreviewButton.IsEnabled = false;
         optionsButton.IsEnabled = false;
 
-        PageSetupDialogFields ReadFields() => initial with
+        PageSetupDialogFields ReadFields() => PageSetupDialogPlanner.BuildFields(initial, new PageSetupDialogSurfaceInput
         {
-            Orientation = PageSetupDialogModel.ChoiceValue(
-                orientationChoices,
-                orientationBox.SelectedIndex,
-                WorksheetPageOrientation.Portrait),
-            PaperSize = PageSetupDialogModel.ChoiceValue(
-                paperSizeChoices,
-                paperBox.SelectedIndex,
-                WorksheetPaperSize.A4),
+            OrientationIndex = orientationBox.SelectedIndex,
+            PaperSizeIndex = paperBox.SelectedIndex,
             MarginsText = marginsBox.Text ?? "",
             HeaderMarginText = headerMarginBox.Text ?? "",
             FooterMarginText = footerMarginBox.Text ?? "",
@@ -671,25 +608,26 @@ public sealed partial class MainWindow
             PrintHeadings = headingsCheck.IsChecked == true,
             PrintBlackAndWhite = blackAndWhiteCheck.IsChecked == true,
             PrintDraftQuality = draftQualityCheck.IsChecked == true,
-            PrintErrorValue = PageSetupDialogModel.ChoiceValue(
-                printErrorValueChoices,
-                cellErrorsBox.SelectedIndex,
-                WorksheetPrintErrorValue.Displayed),
-            PrintComments = PageSetupDialogModel.ChoiceValue(
-                printCommentChoices,
-                commentsBox.SelectedIndex,
-                WorksheetPrintComments.None),
-            PageOrder = PageSetupDialogModel.ChoiceValue(
-                pageOrderChoices,
-                pageOrderBox.SelectedIndex,
-                WorksheetPageOrder.DownThenOver),
+            PrintErrorValueIndex = cellErrorsBox.SelectedIndex,
+            PrintCommentsIndex = commentsBox.SelectedIndex,
+            PageOrderIndex = pageOrderBox.SelectedIndex,
             Header = new WorksheetHeaderFooter(headerLeftBox.Text ?? "", headerCenterBox.Text ?? "", headerRightBox.Text ?? ""),
             Footer = new WorksheetHeaderFooter(footerLeftBox.Text ?? "", footerCenterBox.Text ?? "", footerRightBox.Text ?? ""),
+            FirstPageHeader = initial.FirstPageHeader,
+            FirstPageFooter = initial.FirstPageFooter,
+            EvenPageHeader = initial.EvenPageHeader,
+            EvenPageFooter = initial.EvenPageFooter,
+            HeaderPictures = initial.HeaderPictures,
+            FooterPictures = initial.FooterPictures,
+            FirstPageHeaderPictures = initial.FirstPageHeaderPictures,
+            FirstPageFooterPictures = initial.FirstPageFooterPictures,
+            EvenPageHeaderPictures = initial.EvenPageHeaderPictures,
+            EvenPageFooterPictures = initial.EvenPageFooterPictures,
             DifferentFirstPage = differentFirstPageCheck.IsChecked == true,
             DifferentOddEvenPages = differentOddEvenCheck.IsChecked == true,
             ScaleHeaderFooterWithDocument = scaleWithDocumentCheck.IsChecked == true,
             AlignHeaderFooterWithMargins = alignWithMarginsCheck.IsChecked == true,
-        };
+        });
 
         // WPF layout: [Print...][Print Preview][Options...]  ··fill··  [OK][Cancel]
         var leftButtons = new StackPanel
@@ -866,7 +804,7 @@ public sealed partial class MainWindow
         {
             Items = { pageTab, marginsTab, headerFooterTab, sheetTab },
         };
-        AutomationProperties.SetAutomationId(tabs, "PageSetupTabs");
+        AutomationProperties.SetAutomationId(tabs, PageSetupDialogPlanner.TabsAutomationId);
         ApplyClassicTabChrome(tabs);
 
         void SelectValidationRoute(PageSetupValidationRoute route)
@@ -879,6 +817,64 @@ public sealed partial class MainWindow
             };
         }
 
+        Control FocusControlFor(PageSetupDialogFocusTarget target) =>
+            target switch
+            {
+                PageSetupDialogFocusTarget.PaperSize => paperBox,
+                PageSetupDialogFocusTarget.Margins => marginsBox,
+                PageSetupDialogFocusTarget.LeftMargin => marginsBox,
+                PageSetupDialogFocusTarget.RightMargin => marginsBox,
+                PageSetupDialogFocusTarget.TopMargin => marginsBox,
+                PageSetupDialogFocusTarget.BottomMargin => marginsBox,
+                PageSetupDialogFocusTarget.HeaderMargin => headerMarginBox,
+                PageSetupDialogFocusTarget.FooterMargin => footerMarginBox,
+                PageSetupDialogFocusTarget.ScalePercent => scalePercentBox,
+                PageSetupDialogFocusTarget.FitPagesWide => fitWideBox,
+                PageSetupDialogFocusTarget.FitPagesTall => fitTallBox,
+                PageSetupDialogFocusTarget.FirstPageNumber => firstPageNumberBox,
+                PageSetupDialogFocusTarget.PrintQuality => printQualityBox,
+                PageSetupDialogFocusTarget.PrintArea => printAreaBox,
+                PageSetupDialogFocusTarget.RepeatRows => repeatRowsBox,
+                PageSetupDialogFocusTarget.RepeatColumns => repeatColumnsBox,
+                PageSetupDialogFocusTarget.PageOrder => pageOrderBox,
+                PageSetupDialogFocusTarget.PrintErrorValue => cellErrorsBox,
+                PageSetupDialogFocusTarget.PrintComments => commentsBox,
+                _ => orientationBox,
+            };
+
+        void FocusDialogTarget(PageSetupDialogFocusPlan plan)
+        {
+            SelectValidationRoute(plan.Route);
+            var target = FocusControlFor(plan.Target);
+            target.Focus();
+            if (target is TextBox textBox)
+                textBox.SelectAll();
+        }
+
+        PageSetupDialogValidationFocusState CreateValidationFocusState() =>
+            new()
+            {
+                HasSeparateMarginFields = false,
+                MarginsText = marginsBox.Text ?? "",
+                HeaderMarginText = headerMarginBox.Text ?? "",
+                FooterMarginText = footerMarginBox.Text ?? "",
+                ScalingMode = fitRadio.IsChecked == true
+                    ? PageSetupScalingMode.FitToPages
+                    : PageSetupScalingMode.AdjustToPercent,
+                FitToWideText = fitWideBox.Text ?? "",
+                RepeatRowsText = repeatRowsBox.Text ?? "",
+            };
+
+        void FocusOpenPlan(PageSetupDialogOpenPlan plan)
+        {
+            FocusDialogTarget(
+                PageSetupDialogPlanner.PlanInitialFocus(
+                    plan,
+                    fitRadio.IsChecked == true
+                        ? PageSetupScalingMode.FitToPages
+                        : PageSetupScalingMode.AdjustToPercent));
+        }
+
         void Accept()
         {
             var fields = ReadFields();
@@ -886,8 +882,11 @@ public sealed partial class MainWindow
             if (!submission.Success)
             {
                 var validation = submission.Validation!;
-                SelectValidationRoute(validation.Route);
-                validationText.Text = ResolvePageSetupValidationIssue(validation);
+                FocusDialogTarget(
+                    PageSetupDialogPlanner.PlanValidationFocus(
+                        validation.Target,
+                        CreateValidationFocusState()));
+                validationText.Text = PageLayoutStatusPlanner.ResolvePageSetupValidationIssue(validation, UiText.Get);
                 validationText.IsVisible = true;
                 return;
             }
@@ -914,7 +913,7 @@ public sealed partial class MainWindow
             Margin = new Thickness(8),
             Children = { buttonRow, validationText, tabs },
         };
-        dialog.Opened += (_, _) => orientationBox.Focus();
+        dialog.Opened += (_, _) => FocusOpenPlan(openPlan);
 
         await dialog.ShowDialog(this);
         return result;

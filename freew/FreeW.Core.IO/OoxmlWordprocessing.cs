@@ -22,8 +22,8 @@ internal static class Ooxml
     /// Declared on the document root so inline equations serialise and parse like any other run feature.
     /// </summary>
     public static readonly XNamespace M = "http://schemas.openxmlformats.org/officeDocument/2006/math";
-    public static readonly XNamespace Ct = "http://schemas.openxmlformats.org/package/2006/content-types";
-    public static readonly XNamespace Rel = "http://schemas.openxmlformats.org/package/2006/relationships";
+    public static readonly XNamespace Ct = OpcMediaTypes.ContentTypesNamespace;
+    public static readonly XNamespace Rel = OpcRelationships.Namespace;
 
     // DrawingML namespaces used by inline pictures (w:drawing/wp:inline/.../a:blip).
     public static readonly XNamespace Wp = "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing";
@@ -130,19 +130,19 @@ internal static class Ooxml
     public const string DiagramDrawingRelType = "http://schemas.microsoft.com/office/2007/relationships/diagramDrawing";
 
     // OPC core properties (docProps/core.xml): Dublin Core + the cp / dcterms / xsi vocabularies.
-    public static readonly XNamespace Cp = "http://schemas.openxmlformats.org/package/2006/metadata/core-properties";
-    public static readonly XNamespace Dc = "http://purl.org/dc/elements/1.1/";
-    public static readonly XNamespace DcTerms = "http://purl.org/dc/terms/";
-    public static readonly XNamespace DcmiType = "http://purl.org/dc/dcmitype/";
-    public static readonly XNamespace Xsi = "http://www.w3.org/2001/XMLSchema-instance";
+    public static readonly XNamespace Cp = OpcDocumentProperties.CorePropertiesNamespace;
+    public static readonly XNamespace Dc = OpcDocumentProperties.DublinCoreNamespace;
+    public static readonly XNamespace DcTerms = OpcDocumentProperties.DublinCoreTermsNamespace;
+    public static readonly XNamespace DcmiType = OpcDocumentProperties.DublinCoreTypeNamespace;
+    public static readonly XNamespace Xsi = OpcDocumentProperties.XmlSchemaInstanceNamespace;
 
     public const string CorePropertiesContentType = OpcPackageProperties.CorePropertiesContentType;
     public const string CorePropertiesRelType = OpcPackageProperties.CorePropertiesRelationshipType;
     public const string CorePropertiesPartName = OpcPackageProperties.CorePropertiesPartName;
 
     // OPC custom properties (docProps/custom.xml): used best-effort to persist the page watermark text.
-    public static readonly XNamespace CustomProps = "http://schemas.openxmlformats.org/officeDocument/2006/custom-properties";
-    public static readonly XNamespace VtVariant = "http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes";
+    public static readonly XNamespace CustomProps = OpcCustomDocumentProperties.CustomPropertiesNamespace;
+    public static readonly XNamespace VtVariant = OpcCustomDocumentProperties.VariantTypesNamespace;
     public const string CustomPropertiesContentType = OpcPackageProperties.CustomPropertiesContentType;
     public const string CustomPropertiesRelType = OpcPackageProperties.CustomPropertiesRelationshipType;
     public const string CustomPropertiesPartName = OpcPackageProperties.CustomPropertiesPartName;
@@ -325,16 +325,11 @@ internal static class Ooxml
     /// extension is the lower-case file extension (no dot) produced by <c>InlineImage.ExtensionFor</c>.
     /// Defaults to <c>image/png</c> for an unrecognised extension (the historical behaviour).
     /// </summary>
-    public static string ImageContentTypeForExtension(string extension) => extension switch
-    {
-        "jpeg" or "jpg" => "image/jpeg",
-        "gif" => "image/gif",
-        "bmp" => "image/bmp",
-        "tiff" or "tif" => "image/tiff",
-        "emf" => "image/x-emf",
-        "wmf" => "image/x-wmf",
-        _ => "image/png"
-    };
+    public static string ImageContentTypeForExtension(string extension) =>
+        OpcMediaTypes.TryGetDefaultContentType(extension, out var contentType) &&
+        contentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase)
+            ? contentType
+            : "image/png";
 
     /// <summary>W3CDTF as used by dcterms:created/modified (UTC, second precision, trailing 'Z').</summary>
     public static string ToW3CDtf(DateTimeOffset value) => OpcPackageProperties.ToW3CDtf(value);

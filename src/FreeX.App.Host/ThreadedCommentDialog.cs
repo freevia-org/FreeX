@@ -1,27 +1,12 @@
-using System.Globalization;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using FreeX.App.Presentation.Comments;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
-
-public enum ThreadedCommentDialogAction
-{
-    ApplyThread,
-    EditReply,
-    DeleteReply
-}
-
-public sealed record ThreadedCommentDialogResult(
-    string? RootText,
-    string? ReplyText,
-    bool IsResolved,
-    ThreadedCommentDialogAction Action = ThreadedCommentDialogAction.ApplyThread,
-    int? ReplyIndex = null,
-    string? ReplyEditText = null);
 
 public sealed class ThreadedCommentDialog : Window
 {
@@ -150,21 +135,9 @@ public sealed class ThreadedCommentDialog : Window
         out ThreadedCommentDialogResult result,
         out string? error)
     {
-        result = CreateResult(existing, rootText, replyText, isResolved);
-        if (existing is not null && string.IsNullOrWhiteSpace(rootText))
-        {
-            error = UiText.Get("ThreadedComment_EnterCommentMessage");
-            return false;
-        }
-
-        if (existing is null && string.IsNullOrWhiteSpace(result.ReplyText))
-        {
-            error = UiText.Get("ThreadedComment_EnterCommentMessage");
-            return false;
-        }
-
-        error = null;
-        return true;
+        var success = ThreadedCommentDialogPlanner.TryCreateResult(existing, rootText, replyText, isResolved, out result, out var errorCode);
+        error = GetThreadedCommentDialogErrorMessage(errorCode);
+        return success;
     }
 
     public static bool TryCreateReplyEditResult(
@@ -183,33 +156,9 @@ public sealed class ThreadedCommentDialog : Window
         out ThreadedCommentDialogResult result,
         out string? error)
     {
-        result = new ThreadedCommentDialogResult(
-            null,
-            null,
-            isResolved,
-            ThreadedCommentDialogAction.EditReply,
-            replyIndex,
-            (replyText ?? "").Trim());
-        if (existing is null)
-        {
-            error = UiText.Get("ThreadedComment_NoThreadedCommentAvailableMessage");
-            return false;
-        }
-
-        if (!IsValidReplyIndex(existing, replyIndex))
-        {
-            error = UiText.Get("ThreadedComment_SelectReplyMessage");
-            return false;
-        }
-
-        if (string.IsNullOrWhiteSpace(result.ReplyEditText))
-        {
-            error = UiText.Get("ThreadedComment_EnterReplyMessage");
-            return false;
-        }
-
-        error = null;
-        return true;
+        var success = ThreadedCommentDialogPlanner.TryCreateReplyEditResult(existing, replyIndex, replyText, isResolved, out result, out var errorCode);
+        error = GetThreadedCommentDialogErrorMessage(errorCode);
+        return success;
     }
 
     public static bool TryCreateReplyDeleteResult(
@@ -226,53 +175,17 @@ public sealed class ThreadedCommentDialog : Window
         out ThreadedCommentDialogResult result,
         out string? error)
     {
-        result = new ThreadedCommentDialogResult(
-            null,
-            null,
-            isResolved,
-            ThreadedCommentDialogAction.DeleteReply,
-            replyIndex);
-        if (existing is null)
-        {
-            error = UiText.Get("ThreadedComment_NoThreadedCommentAvailableMessage");
-            return false;
-        }
-
-        if (!IsValidReplyIndex(existing, replyIndex))
-        {
-            error = UiText.Get("ThreadedComment_SelectReplyMessage");
-            return false;
-        }
-
-        error = null;
-        return true;
+        var success = ThreadedCommentDialogPlanner.TryCreateReplyDeleteResult(existing, replyIndex, isResolved, out result, out var errorCode);
+        error = GetThreadedCommentDialogErrorMessage(errorCode);
+        return success;
     }
 
     public static ThreadedCommentDialogResult CreateResult(
         ThreadedComment? existing,
         string? rootText,
         string? replyText,
-        bool isResolved)
-    {
-        var trimmedRoot = (rootText ?? "").Trim();
-        var trimmedReply = (replyText ?? "").Trim();
-        if (existing is null)
-        {
-            return new ThreadedCommentDialogResult(
-                null,
-                string.IsNullOrWhiteSpace(trimmedRoot) ? null : trimmedRoot,
-                isResolved);
-        }
-
-        var rootEdit = !string.IsNullOrWhiteSpace(trimmedRoot)
-            && !string.Equals(trimmedRoot, existing.Text, StringComparison.Ordinal)
-                ? trimmedRoot
-                : null;
-        return new ThreadedCommentDialogResult(
-            rootEdit,
-            string.IsNullOrWhiteSpace(trimmedReply) ? null : trimmedReply,
-            isResolved);
-    }
+        bool isResolved) =>
+        ThreadedCommentDialogPlanner.CreateResult(existing, rootText, replyText, isResolved);
 
     private StackPanel BuildSelectedReplyEditor(ThreadedComment existing)
     {
@@ -329,7 +242,7 @@ public sealed class ThreadedCommentDialog : Window
     private void PopulateSelectedReplyText(ThreadedComment existing)
     {
         var replyIndex = _replySelector.SelectedIndex;
-        _selectedReplyBox.Text = IsValidReplyIndex(existing, replyIndex)
+        _selectedReplyBox.Text = ThreadedCommentDialogPlanner.IsValidReplyIndex(existing, replyIndex)
             ? existing.Replies[replyIndex].Text
             : "";
         UpdateSelectedReplyActionState(existing);
@@ -337,7 +250,7 @@ public sealed class ThreadedCommentDialog : Window
 
     private void UpdateSelectedReplyActionState(ThreadedComment existing)
     {
-        var hasSelection = IsValidReplyIndex(existing, _replySelector.SelectedIndex);
+        var hasSelection = ThreadedCommentDialogPlanner.IsValidReplyIndex(existing, _replySelector.SelectedIndex);
         _deleteReplyButton.IsEnabled = hasSelection;
         _updateReplyButton.IsEnabled = hasSelection && !string.IsNullOrWhiteSpace(_selectedReplyBox.Text);
     }
@@ -366,20 +279,15 @@ public sealed class ThreadedCommentDialog : Window
         DialogResult = true;
     }
 
-    private static bool IsValidReplyIndex(ThreadedComment comment, int replyIndex) =>
-        replyIndex >= 0 && replyIndex < comment.Replies.Count;
-
     private static string FormatReplyChoice(int index, CommentReply reply) =>
-        $"{index + 1}. {FormatMessageHeading(reply.Author, reply.CreatedAtUtc)}: {SummarizeReplyText(reply.Text)}";
+        ThreadedCommentDialogPlanner.FormatReplyChoice(index, reply);
 
     private static string FormatReplyAutomationName(int index, CommentReply reply) =>
-        UiText.Format("ThreadedComment_ReplyAutomationNameFormat", index + 1, FormatMessageHeading(reply.Author, reply.CreatedAtUtc), SummarizeReplyText(reply.Text));
-
-    private static string SummarizeReplyText(string text)
-    {
-        var normalized = text.Replace('\r', ' ').Replace('\n', ' ').Trim();
-        return normalized.Length <= 60 ? normalized : normalized[..57] + "...";
-    }
+        UiText.Format(
+            "ThreadedComment_ReplyAutomationNameFormat",
+            index + 1,
+            ThreadedCommentDialogPlanner.FormatMessageHeading(reply.Author, reply.CreatedAtUtc),
+            ThreadedCommentDialogPlanner.SummarizeReplyText(reply.Text));
 
     private static Border BuildMessage(string author, string text, DateTimeOffset? createdAtUtc, bool isRoot)
     {
@@ -410,24 +318,21 @@ public sealed class ThreadedCommentDialog : Window
     }
 
     private static string FormatMessageHeading(string author, DateTimeOffset? createdAtUtc)
-    {
-        var label = author.Trim();
-        if (createdAtUtc is null)
-            return label;
+        => ThreadedCommentDialogPlanner.FormatMessageHeading(author, createdAtUtc);
 
-        var formatted = createdAtUtc.Value
-            .ToUniversalTime()
-            .ToString("yyyy-MM-dd HH:mm 'UTC'", CultureInfo.InvariantCulture);
-        return string.IsNullOrWhiteSpace(label)
-            ? formatted
-            : $"{label} - {formatted}";
-    }
+    private static string? GetThreadedCommentDialogErrorMessage(ThreadedCommentDialogValidationError error) =>
+        error switch
+        {
+            ThreadedCommentDialogValidationError.None => null,
+            ThreadedCommentDialogValidationError.EnterComment => UiText.Get("ThreadedComment_EnterCommentMessage"),
+            ThreadedCommentDialogValidationError.NoThreadedCommentAvailable => UiText.Get("ThreadedComment_NoThreadedCommentAvailableMessage"),
+            ThreadedCommentDialogValidationError.SelectReply => UiText.Get("ThreadedComment_SelectReplyMessage"),
+            ThreadedCommentDialogValidationError.EnterReply => UiText.Get("ThreadedComment_EnterReplyMessage"),
+            _ => null
+        };
 
     private void ShowInvalidThreadedCommentWarning(string message, TextBox target)
     {
-        DialogMessageHelper.ShowWarning(this, message, Title);
-        target.Focus();
-        target.SelectAll();
-        Keyboard.Focus(target);
+        DialogFocus.ShowWarningAndFocus(this, message, Title, target);
     }
 }

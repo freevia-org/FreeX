@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Free.Shared.Shell.Avalonia;
 using FreeW.App.Avalonia.Editing;
 using FreeW.Core.Model;
 using TextAlignment = FreeW.Core.Model.TextAlignment;
@@ -38,6 +39,8 @@ namespace FreeW.App.Avalonia;
 /// </summary>
 public sealed class ParagraphDialog : Window
 {
+    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
+
     // ── Alignment items ───────────────────────────────────────────────────────
     private static readonly (string Label, TextAlignment Value)[] AlignmentItems =
     [
@@ -79,14 +82,7 @@ public sealed class ParagraphDialog : Window
         Margin = new Thickness(8, 6, 4, 0),
     };
 
-    private readonly TextBlock _status = new()
-    {
-        Foreground = new SolidColorBrush(Color.FromRgb(0x80, 0x00, 0x00)),
-        FontSize = 11,
-        TextWrapping = TextWrapping.Wrap,
-        Margin = new Thickness(0, 6, 0, 0),
-        IsVisible = false,
-    };
+    private readonly TextBlock _status = new();
 
     // ── Construction ──────────────────────────────────────────────────────────
 
@@ -103,6 +99,7 @@ public sealed class ParagraphDialog : Window
 
         // ── Alignment combo ───────────────────────────────────────────────────
         _alignBox = new ComboBox { MinWidth = 180 };
+        AvaloniaCompactDialogChrome.ApplyComboBox(_alignBox, DialogChromeStyle);
         _alignBox.ItemsSource = AlignmentItems.Select(a => a.Label).ToArray();
         var alignIdx = Array.FindIndex(AlignmentItems, a => a.Value == current.Alignment);
         _alignBox.SelectedIndex = alignIdx >= 0 ? alignIdx : 0;
@@ -119,6 +116,7 @@ public sealed class ParagraphDialog : Window
 
         // ── Line-spacing combo ────────────────────────────────────────────────
         _lineSpacingBox = new ComboBox { MinWidth = 180 };
+        AvaloniaCompactDialogChrome.ApplyComboBox(_lineSpacingBox, DialogChromeStyle);
         _lineSpacingBox.ItemsSource = SpacingItems.Select(s => s.Label).ToArray();
 
         var (initPreset, initValue) = ToPreset(current);
@@ -129,6 +127,7 @@ public sealed class ParagraphDialog : Window
         // Show/hide the "At:" value box based on selected preset.
         _lineSpacingBox.SelectionChanged += (_, _) => UpdateLineValueVisibility();
         UpdateLineValueVisibility();
+        AvaloniaCompactDialogChrome.ApplyValidationStatus(_status, DialogChromeStyle, new Thickness(0, 6, 0, 0));
 
         // ── Layout ────────────────────────────────────────────────────────────
         var content = new StackPanel { Margin = new Thickness(16, 14, 16, 16) };
@@ -173,17 +172,13 @@ public sealed class ParagraphDialog : Window
 
         // --- Status + buttons ---
         content.Children.Add(_status);
-        var ok     = new Button { Content = "OK",     MinWidth = 84, IsDefault = true, Margin = new Thickness(0, 0, 8, 0) };
-        var cancel = new Button { Content = "Cancel", MinWidth = 84, IsCancel = true };
+        var ok     = new Button { Content = "OK", IsDefault = true };
+        AvaloniaCompactDialogChrome.ApplyButton(ok, DialogChromeStyle, minWidth: 84, isDefault: true);
+        var cancel = new Button { Content = "Cancel", IsCancel = true };
+        AvaloniaCompactDialogChrome.ApplyButton(cancel, DialogChromeStyle, minWidth: 84);
         ok.Click     += (_, _) => OnOk();
         cancel.Click += (_, _) => Close(null);
-        content.Children.Add(new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(0, 14, 0, 0),
-            Children = { ok, cancel },
-        });
+        content.Children.Add(AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 14, 0, 0)));
 
         Content = content;
 
@@ -379,7 +374,12 @@ public sealed class ParagraphDialog : Window
 
     private static string Pt(double v) => v == 0 ? "0" : v.ToString("G", CultureInfo.InvariantCulture);
 
-    private static TextBox MakeNumericBox() => new() { Width = 80, Margin = new Thickness(0, 6, 0, 0) };
+    private static TextBox MakeNumericBox()
+    {
+        var box = new TextBox { Width = 80, Margin = new Thickness(0, 6, 0, 0) };
+        AvaloniaCompactDialogChrome.ApplyTextBox(box, DialogChromeStyle);
+        return box;
+    }
 
     private static TextBlock SectionLabel(string text) => new()
     {

@@ -6,15 +6,9 @@ using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Input;
 using FreeX.App.Presentation.PageLayout;
+using FreeX.App.Services;
 
 namespace FreeX.App.Host;
-
-internal enum PrintPreviewPageRangeMode
-{
-    AllPages,
-    CurrentPage,
-    Pages
-}
 
 public sealed partial class PrintPreviewDialog
 {
@@ -31,18 +25,12 @@ public sealed partial class PrintPreviewDialog
 
     private void ShowInvalidCopiesWarning(TextBox copiesBox)
     {
-        DialogMessageHelper.ShowWarning(this, UiText.Get("PrintPreview_InvalidCopiesMessage"), Title);
-        copiesBox.Focus();
-        copiesBox.SelectAll();
-        Keyboard.Focus(copiesBox);
+        DialogFocus.ShowWarningAndFocus(this, UiText.Get("PrintPreview_InvalidCopiesMessage"), Title, copiesBox);
     }
 
     private void ShowInvalidPageNumberWarning(TextBox pageNumberBox, int totalPages)
     {
-        DialogMessageHelper.ShowWarning(this, UiText.Format("PrintPreview_InvalidPageNumberMessage", totalPages), Title);
-        pageNumberBox.Focus();
-        pageNumberBox.SelectAll();
-        Keyboard.Focus(pageNumberBox);
+        DialogFocus.ShowWarningAndFocus(this, UiText.Format("PrintPreview_InvalidPageNumberMessage", totalPages), Title, pageNumberBox);
     }
 
     internal static DocumentPaginator ResolvePrintPaginator(
@@ -50,26 +38,23 @@ public sealed partial class PrintPreviewDialog
         PrintPreviewPageRangeMode pageRangeMode,
         int currentPage,
         ExportPageRange? pageRange = null) =>
-        PrintPreviewToolbarPlanner.ResolvePrintPaginator(document, pageRangeMode, currentPage, pageRange);
+        WpfPrintPreviewToolbarPlanner.ResolvePrintPaginator(document, pageRangeMode, currentPage, pageRange);
 
     internal static Duplexing ResolvePrintTicketDuplexing(PrintPreviewSidesMode mode) =>
-        PrintPreviewToolbarPlanner.ResolvePrintTicketDuplexing(mode);
+        WpfPrintPreviewToolbarPlanner.ResolvePrintTicketDuplexing(mode);
 
     internal static PrintPreviewNavigationState CreateNavigationState(int currentPage, int totalPages) =>
-        PrintPreviewToolbarPlanner.CreateNavigationState(currentPage, totalPages);
+        PrintPreviewToolbarStatePlanner.CreateNavigationState(currentPage, totalPages);
 
     private static PrintPreviewSidesMode ResolveSelectedSidesMode(ComboBox sidesBox) =>
         PrintPreviewToolbarStatePlanner.SidesIndexToMode(sidesBox.SelectedIndex);
 
     private void ShowInvalidPageRangeWarning(TextBox fromPageBox, TextBox toPageBox, string? error)
     {
-        DialogMessageHelper.ShowWarning(this, error ?? UiText.Get("PrintPreview_InvalidPageRangeMessage"), Title);
         var target = string.Equals(error, UiText.Get("Export_PageRangeFromLessThanToError"), StringComparison.OrdinalIgnoreCase)
             ? toPageBox
             : fromPageBox;
-        target.Focus();
-        target.SelectAll();
-        Keyboard.Focus(target);
+        DialogFocus.ShowWarningAndFocus(this, error ?? UiText.Get("PrintPreview_InvalidPageRangeMessage"), Title, target);
     }
 
     private void ShowNativePrintDialog(
@@ -80,54 +65,15 @@ public sealed partial class PrintPreviewDialog
         PrintPreviewSidesMode sidesMode) =>
         NativePrintDialogService.ShowPrintDialogAndPrint(paginator, printQueue, copies, collated, sidesMode, this);
 
-    private static void PopulatePrinterBox(ComboBox printerBox)
-    {
-        try
-        {
-            using var server = new LocalPrintServer();
-            foreach (var queue in server.GetPrintQueues())
-                printerBox.Items.Add(queue);
-
-            if (printerBox.Items.Count > 0)
-            {
-                printerBox.DisplayMemberPath = nameof(PrintQueue.FullName);
-                printerBox.SelectedItem = null;
-                foreach (var item in printerBox.Items)
-                {
-                    if (item is not PrintQueue queue)
-                        continue;
-
-                    if (string.Equals(
-                        queue.FullName,
-                        server.DefaultPrintQueue.FullName,
-                        StringComparison.OrdinalIgnoreCase))
-                    {
-                        printerBox.SelectedItem = queue;
-                        break;
-                    }
-                }
-
-                if (printerBox.SelectedItem is null)
-                    printerBox.SelectedIndex = 0;
-
-                return;
-            }
-        }
-        catch (PrintSystemException)
-        {
-        }
-
-        printerBox.IsEnabled = false;
-        printerBox.ToolTip = UiText.Get("PrintPreview_NoInstalledPrintersToolTip");
-        AutomationProperties.SetHelpText(printerBox, UiText.Get("PrintPreview_NoInstalledPrintersHelpText"));
-    }
-
     private static void RefreshPrintStatus(TextBlock statusText, ComboBox printerBox, TextBox copiesBox, int totalPages)
     {
         var validCopies = TryParseCopyCount(copiesBox.Text, out var copies);
-        var printerName = printerBox.SelectedItem is PrintQueue queue
-            ? queue.FullName
-            : null;
+        var printerName = printerBox.SelectedItem switch
+        {
+            PrintQueue queue => queue.FullName,
+            string name => name,
+            _ => null
+        };
 
         statusText.Text = PrintPreviewToolbarStatePlanner.CreateStatusText(printerName, validCopies ? copies : null, totalPages);
     }

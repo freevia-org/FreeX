@@ -1,8 +1,7 @@
-using System.Globalization;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
-using FreeW.Core.Model;
+using FreeW.App.Presentation.Dialogs;
 
 namespace FreeW.App.Host;
 
@@ -12,17 +11,12 @@ namespace FreeW.App.Host;
 /// returns the chosen zoom factor (1.0 == 100%) to drive <c>DocumentView.ZoomLevel</c>, or null if cancelled.
 ///
 /// <para>
-/// The dialog stays WPF-only chrome: the fit factors are pre-computed by the host from the live page
-/// geometry + viewport via the pure <see cref="ZoomFit"/> helper and handed in, so the dialog itself just
-/// picks one. Custom percentages are parsed and clamped to the supported zoom range
-/// (<see cref="ZoomLevels.Min"/>..<see cref="ZoomLevels.Max"/>) — the same range as the status-bar slider.
+/// The dialog stays WPF-only chrome: fit factors are handed in by the host, while preset selection,
+/// custom percentage parsing, validation, and result resolution live in the shared presentation planner.
 /// </para>
 /// </summary>
 internal sealed class ZoomDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
-    // The fixed magnification presets Word offers in the Zoom dialog, as whole percentages.
-    private static readonly int[] Presets = [200, 100, 75];
-
     private readonly RadioButton _customButton =
         new() { Content = "Percent:", GroupName = "Zoom", VerticalAlignment = VerticalAlignment.Center };
     private readonly RadioButton _pageWidthButton = new() { Content = "Page width", GroupName = "Zoom" };
@@ -31,9 +25,7 @@ internal sealed class ZoomDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private readonly TextBox _percentBox = new() { Width = 64 };
     private readonly List<(RadioButton Button, int Percent)> _presetButtons = [];
 
-    private readonly double _pageWidthFactor;
-    private readonly double _textWidthFactor;
-    private readonly double _wholePageFactor;
+    private readonly ZoomDialogFitFactors _fitFactors;
     private double? _result;
 
     private ZoomDialog(Window? owner, double currentFactor, double pageWidthFactor, double textWidthFactor, double wholePageFactor)
@@ -46,23 +38,21 @@ internal sealed class ZoomDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
 
-        _pageWidthFactor = pageWidthFactor;
-        _textWidthFactor = textWidthFactor;
-        _wholePageFactor = wholePageFactor;
+        _fitFactors = new ZoomDialogFitFactors(pageWidthFactor, textWidthFactor, wholePageFactor);
 
-        var currentPercent = ZoomLevels.ToPercent(currentFactor);
-        _percentBox.Text = currentPercent.ToString(CultureInfo.CurrentCulture);
+        var plan = ZoomDialogPlanner.Build(currentFactor);
+        _percentBox.Text = plan.CustomPercentText;
         AutomationProperties.SetName(_percentBox, "Custom zoom percent");
         AutomationProperties.SetAutomationId(_percentBox, "ZoomCustomPercentBox");
         _percentBox.GotKeyboardFocus += (_, _) => _customButton.IsChecked = true;
 
-        Content = BuildContent(currentPercent);
+        Content = BuildContent(plan);
         DialogFocus.FocusAndSelect(_percentBox);
     }
 
     // The radio column: the fixed presets, then the page-relative fits, then the custom % row. The button
     // matching the current zoom (a preset if one matches exactly, else Percent:) starts checked.
-    private UIElement BuildContent(int currentPercent)
+    private UIElement BuildContent(ZoomDialogPlan plan)
     {
         var group = new GroupBox
         {
@@ -72,18 +62,16 @@ internal sealed class ZoomDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         };
 
         var stack = new StackPanel();
-        var matchedPreset = false;
-        foreach (var percent in Presets)
+        foreach (var preset in plan.Presets)
         {
             var button = new RadioButton
             {
-                Content = $"{percent}%",
+                Content = $"{preset.Percent}%",
                 GroupName = "Zoom",
-                IsChecked = percent == currentPercent,
+                IsChecked = preset.IsSelected,
                 Margin = new Thickness(0, 0, 0, 4)
             };
-            matchedPreset |= percent == currentPercent;
-            _presetButtons.Add((button, percent));
+            _presetButtons.Add((button, preset.Percent));
             stack.Children.Add(button);
         }
 
@@ -95,7 +83,7 @@ internal sealed class ZoomDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         stack.Children.Add(_wholePageButton);
 
         var customRow = new StackPanel { Orientation = Orientation.Horizontal };
-        _customButton.IsChecked = !matchedPreset;
+        _customButton.IsChecked = plan.InitialChoice == ZoomDialogInitialChoice.Custom;
         customRow.Children.Add(_customButton);
         _percentBox.Margin = new Thickness(6, 0, 4, 0);
         customRow.Children.Add(_percentBox);
@@ -113,26 +101,51 @@ internal sealed class ZoomDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     private void Accept()
     {
-        if (_pageWidthButton.IsChecked == true) { _result = _pageWidthFactor; Close(); return; }
-        if (_textWidthButton.IsChecked == true) { _result = _textWidthFactor; Close(); return; }
-        if (_wholePageButton.IsChecked == true) { _result = _wholePageFactor; Close(); return; }
-
-        foreach (var (button, percent) in _presetButtons)
+        var request = new ZoomDialogSelectionRequest(
+            GetSelectedFitOption(),
+            GetSelectedPresetPercent(),
+            _percentBox.Text);
+        if (!ZoomDialogPlanner.TryCreateResult(request, _fitFactors, out var result, out var error))
         {
-            if (button.IsChecked == true) { _result = ZoomLevels.FromPercent(percent); Close(); return; }
-        }
-
-        // Custom percent: parse a whole percentage and clamp to the supported range.
-        if (!int.TryParse(_percentBox.Text, NumberStyles.Integer, CultureInfo.CurrentCulture, out var custom))
-        {
-            DialogMessageHelper.ShowWarning(this, "Enter a whole zoom percentage.", Title);
+            DialogMessageHelper.ShowWarning(this, ResolveValidationError(error), Title);
+            _customButton.IsChecked = true;
             DialogFocus.FocusAndSelect(_percentBox);
             return;
         }
 
-        _result = ZoomLevels.FromPercent(custom);
+        _result = result;
         Close();
     }
+
+    private ZoomDialogFitOption? GetSelectedFitOption()
+    {
+        if (_pageWidthButton.IsChecked == true)
+            return ZoomDialogFitOption.PageWidth;
+        if (_textWidthButton.IsChecked == true)
+            return ZoomDialogFitOption.TextWidth;
+        if (_wholePageButton.IsChecked == true)
+            return ZoomDialogFitOption.WholePage;
+
+        return null;
+    }
+
+    private int? GetSelectedPresetPercent()
+    {
+        foreach (var (button, percent) in _presetButtons)
+        {
+            if (button.IsChecked == true)
+                return percent;
+        }
+
+        return null;
+    }
+
+    private static string ResolveValidationError(ZoomDialogValidationError? error) =>
+        error switch
+        {
+            ZoomDialogValidationError.WholePercentRequired => "Enter a whole zoom percentage.",
+            _ => "Enter a whole zoom percentage."
+        };
 
     /// <summary>
     /// Show the Zoom dialog seeded with the current zoom and the host-computed fit factors (Page width /

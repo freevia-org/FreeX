@@ -184,6 +184,46 @@ public sealed class QuickAnalysisPlannerTests
     }
 
     [Fact]
+    public void ShellPlanner_BuildMenuPlan_MaterializesTitlesActionsAutomationIdsAndHoverPreviews()
+    {
+        var sheetId = SheetId.New();
+        var selection = new GridRange(new CellAddress(sheetId, 2, 2), new CellAddress(sheetId, 6, 5));
+        var displayModel = QuickAnalysisPlanner.BuildDisplayModel(selection);
+
+        var plan = QuickAnalysisShellPlanner.BuildMenuPlan(
+            displayModel,
+            QuickAnalysisShellCapabilities.DialogBacked,
+            selection);
+
+        plan.Groups.Select(group => group.TitleResourceKey)
+            .Should()
+            .Equal(
+                "TableLoc_QaGroupFormatting",
+                "TableLoc_QaGroupCharts",
+                "TableLoc_QaGroupTotals",
+                "TableLoc_QaGroupTables",
+                "TableLoc_QaGroupSparklines");
+        plan.Groups.Select(group => group.TitleFallback)
+            .Should()
+            .Equal("Formatting", "Charts", "Totals", "Tables", "Sparklines");
+
+        var dataBars = plan.AllItems().Single(item => item.Id == "format.databars");
+        dataBars.Label.Should().Be("Data Bars");
+        dataBars.ToolTip.Should().Be("Preview data bars across the selected values.");
+        dataBars.AutomationId.Should().Be("QuickAnalysis_format.databars");
+        dataBars.PreviewVisual.Kind.Should().Be(QuickAnalysisPreviewVisualKind.DataBars);
+        dataBars.Action.Kind.Should().Be(QuickAnalysisShellActionKind.OpenConditionalFormatDialog);
+        dataBars.Action.ConditionalFormatDialogTitle.Should().Be("Data Bar");
+        dataBars.HoverPreview.Range.Should().Be(selection);
+        dataBars.HoverPreview.StatusText.Should().Be(dataBars.ToolTip);
+
+        var sparkline = plan.AllItems().Single(item => item.Id == "sparkline.line");
+        sparkline.Action.Kind.Should().Be(QuickAnalysisShellActionKind.InsertSparkline);
+        sparkline.HoverPreview.Range.Should().Be(
+            new GridRange(new CellAddress(sheetId, 2, 6), new CellAddress(sheetId, 6, 6)));
+    }
+
+    [Fact]
     public void BuildOptions_AttachesHoverPreviewMetadataToEachOption()
     {
         var sheetId = SheetId.New();

@@ -2,30 +2,28 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
+using Free.Shared.Shell.Wpf;
+using FreeX.App.Presentation.SheetUI;
 
 namespace FreeX.App.Host;
 
-public sealed record UnhideSheetDialogResult(string SheetName);
-
-public sealed class UnhideSheetDialog : Window
+public sealed class UnhideSheetDialog : DialogWindow
 {
     private readonly ListBox _sheetBox = new();
-    private readonly Button _okButton = new() { Content = UiText.Ok, Width = 72, Margin = new Thickness(0, 0, 8, 0), IsDefault = true };
-    private readonly Button _cancelButton = new() { Content = UiText.Cancel, Width = 72, IsCancel = true };
+    private readonly Button _okButton = new() { Content = UiText.Ok, Width = 72 };
+    private readonly Button _cancelButton = new() { Content = UiText.Cancel, Width = 72 };
 
     public UnhideSheetDialogResult Result { get; private set; }
 
     public UnhideSheetDialog(IEnumerable<string> hiddenSheetNames)
     {
-        var names = hiddenSheetNames.ToList();
+        var names = SheetDialogPlanner.BuildUnhideSheetTargets(hiddenSheetNames);
         var selected = names.Count == 0 ? "" : names[0];
         Result = CreateResult(selected);
         Title = UiText.Get("UnhideSheet_UnhideSheet");
         Width = 340;
         Height = 160;
-        WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
-        ShowInTaskbar = false;
         _sheetBox.ItemsSource = names;
         _sheetBox.SelectedItem = selected;
         _sheetBox.SelectionMode = SelectionMode.Single;
@@ -48,35 +46,24 @@ public sealed class UnhideSheetDialog : Window
         _sheetBox.Margin = new Thickness(0, 0, 0, 12);
         _sheetBox.MinHeight = 64;
         stack.Children.Add(_sheetBox);
-        stack.Children.Add(CreateButtonRow());
+        stack.Children.Add(DialogButtonRowFactory.Create(_okButton, _cancelButton));
         Content = stack;
         UpdateButtonState();
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
-    public static UnhideSheetDialogResult CreateResult(string sheetName) => new(sheetName.Trim());
+    public static UnhideSheetDialogResult CreateResult(string sheetName) =>
+        SheetDialogPlanner.CreateUnhideSheetResult(sheetName);
 
     private void FocusInitialKeyboardTarget()
     {
-        _sheetBox.Focus();
-        Keyboard.Focus(_sheetBox);
-    }
-
-    private UIElement CreateButtonRow()
-    {
-        var row = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right
-        };
-        row.Children.Add(_okButton);
-        row.Children.Add(_cancelButton);
-        return row;
+        DialogFocus.Focus(_sheetBox);
     }
 
     private void UpdateButtonState()
     {
-        _okButton.IsEnabled = _sheetBox.SelectedItem is string sheetName && !string.IsNullOrWhiteSpace(sheetName);
+        _okButton.IsEnabled = _sheetBox.SelectedItem is string sheetName &&
+            SheetDialogPlanner.CanAcceptUnhideSheetTarget(sheetName);
     }
 
     private bool Accept()

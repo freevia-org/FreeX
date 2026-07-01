@@ -13,6 +13,9 @@ namespace FreeX.App.Host;
 /// </summary>
 public static class StatusBarCalculator
 {
+    internal static readonly IStatusBarTextProvider TextProvider =
+        new ResourceKeyStatusBarTextProvider(UiText.Get);
+
     public readonly record struct Stats(double Sum, int Count, int NumericalCount, double? Average, double? Min, double? Max);
 
     public static Stats Calculate(Sheet sheet, GridRange range) =>
@@ -27,18 +30,6 @@ public static class StatusBarCalculator
     public static string FormatNumber(double value) =>
         StatusBarDisplayModelBuilder.FormatNumber(value);
 
-    public static string GetReadyStatusText(Sheet sheet, CellAddress activeCell)
-    {
-        var prompt = DataValidationService.GetInputPrompt(sheet, activeCell);
-        if (prompt is not { } inputPrompt)
-            return UiText.Get("MainWindow_Text_Ready");
-
-        if (inputPrompt.Title.Length == 0)
-            return inputPrompt.Message;
-
-        if (inputPrompt.Message.Length == 0)
-            return inputPrompt.Title;
-
-        return $"{inputPrompt.Title}: {inputPrompt.Message}";
-    }
+    public static string GetReadyStatusText(Sheet sheet, CellAddress activeCell) =>
+        StatusBarReadyTextPlanner.BuildReadyText(sheet, activeCell, TextProvider);
 }

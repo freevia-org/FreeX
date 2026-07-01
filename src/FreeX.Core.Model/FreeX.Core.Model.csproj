@@ -6,4 +6,12 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\..\shared\Free.Shared.Drawing\Free.Shared.Drawing.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Free.Shared.Drawing" />
+  </ItemGroup>
+
 </Project>

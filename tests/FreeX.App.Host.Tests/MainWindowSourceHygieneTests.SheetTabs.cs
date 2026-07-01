@@ -25,6 +25,31 @@ public sealed partial class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void SheetTabListPlanning_LivesInPresentationWithHostMappingOnly()
+    {
+        var hostDirectory = DialogSourceTestSupport.FindHostSourceDirectory("MainWindow.SheetTabs.cs");
+        var sheetTabsSource = DialogSourceTestSupport.ReadHostSources("MainWindow.SheetTabs.cs");
+        var refreshSource = ExtractMethodSource(sheetTabsSource, "private void RefreshSheetTabs()");
+        var mapperSource = ExtractMethodSource(sheetTabsSource, "private static SheetTabViewModel MapSheetTabListEntry(");
+        var presentationSource = File.ReadAllText(TestWorkspaceFileLocator.Find(
+            "src",
+            "FreeX.App.Presentation",
+            "SheetUI",
+            "SheetTabListPlanner.cs"));
+
+        File.Exists(Path.Combine(hostDirectory, "SheetTabListPlanner.cs")).Should().BeFalse();
+        presentationSource.Should().Contain("public sealed record SheetTabListEntry");
+        presentationSource.Should().Contain("public static class SheetTabListPlanner");
+        presentationSource.Should().NotContain("SheetTabViewModel");
+        refreshSource.Should().Contain("SheetTabListPlanner.Build(_workbook, _currentSheetId, _groupedSheetIds)");
+        refreshSource.Should().Contain("MapSheetTabListEntry(tab)");
+        refreshSource.Should().NotContain("_workbook.Sheets");
+        refreshSource.Should().NotContain("workbook.Sheets");
+        refreshSource.Should().NotContain("new SheetTabViewModel(");
+        mapperSource.Should().Contain("new(entry.Id, entry.Name, entry.TabColor, entry.IsProtected)");
+    }
+
+    [Fact]
     public void WorksheetContextMenuController_LivesOutsideMainWindowCodeBehind()
     {
         var mainSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
@@ -102,7 +127,8 @@ public sealed partial class MainWindowSourceHygieneTests
         formulaReferenceSource.Should().Contain("FormulaReferenceHighlightPlanner");
         dropdownSource.Should().Contain("private void RefreshValidationDropdown(");
         dropdownSource.Should().Contain("private void OpenActiveDropdown(");
-        dropdownSource.Should().Contain("AutoFilterDropdownPlanner");
+        dropdownSource.Should().Contain("AutoFilterDropdownMenuPlanner");
+        dropdownSource.Should().Contain("AutoFilterMenuResources");
         dropdownSource.Should().Contain("DataValidationDropdownPlanner");
     }
 
@@ -139,6 +165,10 @@ public sealed partial class MainWindowSourceHygieneTests
         gridSource.Should().Contain("private void OnPageMarginsChanged(");
         gridSource.Should().Contain("private void CaptureColumnResizeSnapshot(");
         gridSource.Should().Contain("private void CaptureRowResizeSnapshot(");
+        gridSource.Should().Contain("GridResizePreviewPlanner.CaptureColumnSnapshot(sheet, startCol, endCol)");
+        gridSource.Should().Contain("GridResizePreviewPlanner.CaptureRowSnapshot(sheet, startRow, endRow)");
+        gridSource.Should().Contain("GridResizePreviewPlanner.ApplyColumnResizePreview(sheet, startCol, endCol, newWidthPx)");
+        gridSource.Should().Contain("GridResizePreviewPlanner.ApplyRowResizePreview(sheet, startRow, endRow, newHeightPx)");
         gridSource.Should().Contain("StatusBarCalculator");
     }
 
@@ -463,21 +493,27 @@ public sealed partial class MainWindowSourceHygieneTests
         sheetTabsSource.Should().Contain("Key.End => FocusEdgeVisibleSheetTab(first: false)");
         sheetTabsSource.Should().Contain("FocusSheetTab(nextSheetId.Value);");
         sheetTabsSource.Should().Contain("FocusSheetTab(sheetId.Value);");
-        focusAdjacentSource.Should().Contain("SheetTabFocusPlanner.AdjacentTab(_sheetTabs, _currentSheetId, direction)");
+        focusAdjacentSource.Should().Contain("SheetTabFocusPlanner.AdjacentTab(_sheetTabs, _currentSheetId, direction, static tab => tab.Id)");
         focusAdjacentSource.Should().NotContain("_sheetTabs.ToList()");
-        focusEdgeSource.Should().Contain("SheetTabFocusPlanner.EdgeTab(_sheetTabs, first)");
+        focusEdgeSource.Should().Contain("SheetTabFocusPlanner.EdgeTab(_sheetTabs, first, static tab => tab.Id)");
         focusEdgeSource.Should().NotContain("_sheetTabs.ToList()");
     }
 
     [Fact]
-    public void F6StatusBar_FocusesFirstZoomControlBeforeSliderFallback()
+    public void F6StatusBar_DelegatesInitialFocusOrderToServicesPlanner()
     {
         var keyboardFocusSource = DialogSourceTestSupport.ReadHostSources("MainWindow.KeyboardFocus.cs");
+        var plannerSource = DialogSourceTestSupport.ReadAppServicesSource("StatusBarFocusNavigationPlanner.cs");
         var xaml = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml");
 
         keyboardFocusSource.Should().Contain("return FocusStatusBar();");
         keyboardFocusSource.Should().Contain("private bool FocusStatusBar()");
-        keyboardFocusSource.Should().Contain("return StatusZoomOutButton.Focus() || ZoomSlider.Focus();");
+        keyboardFocusSource.Should().Contain("StatusBarFocusNavigationPlanner.BuildInitialFocusOrder(candidates)");
+        keyboardFocusSource.Should().Contain("TryFocusStatusBarElement(GetStatusBarFocusElement(target))");
+        keyboardFocusSource.Should().NotContain("return StatusZoomOutButton.Focus() || ZoomSlider.Focus();");
+        plannerSource.IndexOf("StatusBarFocusTarget.ZoomOutButton", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(plannerSource.IndexOf("StatusBarFocusTarget.ZoomSlider", StringComparison.Ordinal));
         xaml.Should().Contain("x:Name=\"StatusZoomOutButton\"");
         xaml.Should().Contain("x:Name=\"StatusZoomInButton\"");
     }
@@ -553,14 +589,20 @@ public sealed partial class MainWindowSourceHygieneTests
         xaml.IndexOf("x:Name=\"StatusNumericalCountText\"", StringComparison.Ordinal)
             .Should().BeLessThan(xaml.IndexOf("x:Name=\"StatusSumText\"", StringComparison.Ordinal));
 
-        gridStatusSource.Should().Contain("StatusBarCalculator.ToShared(stats)");
-        gridStatusSource.Should().Contain("if (IsFileOperationProgressVisible())");
+        gridStatusSource.Should().Contain("StatusBarRefreshPlanner.Build(");
+        gridStatusSource.Should().Contain("ApplyStatusBarRefreshPlan(plan)");
+        gridStatusSource.Should().Contain("StatusBarCalculator.ToShared(_statusBarStatsCache.GetOrCalculate");
+        gridStatusSource.Should().Contain("IsFileOperationProgressVisible()");
         gridStatusSource.Should().Contain("SetVisibilityIfChanged(StatusReadyText, Visibility.Collapsed)");
         gridStatusSource.Should().Contain("SetVisibilityIfChanged(StatusStatsPanel, Visibility.Collapsed)");
-        gridStatusSource.Should().Contain("SetStatusStatisticTextIfChanged(StatusCountText, plan.CountText");
-        gridStatusSource.Should().Contain("SetStatusStatisticTextIfChanged(StatusNumericalCountText, plan.NumericalCountText");
-        gridStatusSource.Should().Contain("SetStatusStatisticTextIfChanged(StatusSumText, plan.SumText");
-        gridStatusSource.Should().Contain("UiText.Get(\"MainWindow_Text_Ready\")");
+        gridStatusSource.Should().Contain("StatusBarPresentationPlanner.BuildRendererPlan(plan)");
+        gridStatusSource.Should().Contain("GetStatusBarReadoutTextBlock(readout.Kind)");
+        gridStatusSource.Should().Contain("StatusBarReadoutKind.Count => StatusCountText");
+        gridStatusSource.Should().Contain("StatusBarReadoutKind.NumericalCount => StatusNumericalCountText");
+        gridStatusSource.Should().Contain("StatusBarReadoutKind.Sum => StatusSumText");
+        WorkspaceFileLocator.ReadAllText("shared", "Free.Shared.AppServices", "StatusBarViewModelCache.cs")
+            .Should()
+            .Contain("_textProvider.GetReadyText()");
         // Readout formatting now lives in the platform-neutral shared builder, keyed by readout kind
         // (ResourceKeyStatusBarTextProvider maps each kind to its StatusBar_*Format resource).
         WorkspaceFileLocator.ReadAllText("shared", "Free.Shared.AppServices", "StatusBarDisplayModelBuilder.cs")
@@ -573,13 +615,21 @@ public sealed partial class MainWindowSourceHygieneTests
             .Should()
             .Contain("ReadoutValue(model, StatusBarReadoutKind.Count)")
             .And.Contain("ReadoutValue(model, StatusBarReadoutKind.NumericalCount)")
-            .And.Contain("ReadoutValue(model, StatusBarReadoutKind.Sum)");
+            .And.Contain("ReadoutValue(model, StatusBarReadoutKind.Sum)")
+            .And.Contain("ReadoutElement(StatusBarReadoutKind.Count")
+            .And.Contain("ReadoutElement(StatusBarReadoutKind.NumericalCount")
+            .And.Contain("ReadoutElement(StatusBarReadoutKind.Sum");
         WorkspaceFileLocator.ReadAllText("shared", "Free.Shared.AppServices", "StatusBarTextResourceKeys.cs")
             .Should()
             .Contain("StatusBar_CountFormat")
             .And.Contain("StatusBar_NumericalCountFormat")
             .And.Contain("StatusBar_SumFormat");
-        gridStatusSource.Should().Contain("if (stats.Count == 0)");
+        gridStatusSource.Should().NotContain("if (stats.Count == 0)");
+        WorkspaceFileLocator.ReadAllText("src", "FreeX.App.Services", "StatusBarRefreshPlanner.cs")
+            .Should()
+            .Contain("StatusBarRefreshAction.Ready")
+            .And.Contain("StatusBarRefreshAction.Stats")
+            .And.Contain("StatusBarRefreshAction.HideReadouts");
     }
 
     [Fact]
@@ -865,7 +915,7 @@ public sealed partial class MainWindowSourceHygieneTests
         mainSource.Should().Contain("SheetGrid.AutoFilterDropdownRequested += OnAutoFilterDropdownRequested;");
         editingSource.Should().Contain("private void OnAutoFilterDropdownRequested(CellAddress headerCell, System.Windows.Point position)");
         editingSource.Should().Contain("ShowAutoFilterDropdownForHeaderCell(sheet, headerCell, position);");
-        editingSource.Should().Contain("AutoFilterDropdownPlanner.TryGetAutoFilterRange(sheet, out var autoFilterRange)");
+        editingSource.Should().Contain("AutoFilterDropdownMenuPlanner.TryGetAutoFilterRange(sheet, out var autoFilterRange)");
     }
 
     [Fact]
@@ -874,7 +924,8 @@ public sealed partial class MainWindowSourceHygieneTests
         var source = ReadEditingSource();
         var dialog = DialogSourceTestSupport.ReadHostSources("AutoFilterDialog.cs");
 
-        source.Should().Contain("AutoFilterDropdownPlanner.CreateMenuPlan(_workbook, sheet, plan)");
+        source.Should().Contain("AutoFilterDropdownMenuPlanner.CreateMenuPlan(");
+        source.Should().Contain("AutoFilterMenuResources.TextProvider");
         source.Should().Contain("new AutoFilterDialog(menuPlan)");
         dialog.Should().Contain("AutoFilterMenuPlan menuPlan");
         dialog.Should().Contain("CriteriaSuggestions");
@@ -891,15 +942,25 @@ public sealed partial class MainWindowSourceHygieneTests
     }
 
     [Fact]
-    public void GridResizeSnapshots_LiveWithGridStatusController()
+    public void GridResizeSnapshots_DelegatePolicyToPresentationPlanner()
     {
         var mainSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
         var gridStatusSource = DialogSourceTestSupport.ReadHostSources("MainWindow.GridStatus.cs");
+        var plannerSource = File.ReadAllText(WorkspaceFileLocator.Find(
+            "src",
+            "FreeX.App.Presentation",
+            "GridInteraction",
+            "GridResizePreviewPlanner.cs"));
 
         mainSource.Should().NotContain("private sealed record ColumnResizeSnapshot(");
         mainSource.Should().NotContain("private sealed record RowResizeSnapshot(");
 
-        gridStatusSource.Should().Contain("private sealed record ColumnResizeSnapshot(");
-        gridStatusSource.Should().Contain("private sealed record RowResizeSnapshot(");
+        gridStatusSource.Should().NotContain("private sealed record ColumnResizeSnapshot(");
+        gridStatusSource.Should().NotContain("private sealed record RowResizeSnapshot(");
+        mainSource.Should().Contain("GridResizePreviewSnapshot?");
+        gridStatusSource.Should().Contain("GridResizePreviewPlanner.RestoreColumnResizePreview(sheet, _columnResizeSnapshot)");
+        gridStatusSource.Should().Contain("GridResizePreviewPlanner.RestoreRowResizePreview(sheet, _rowResizeSnapshot)");
+        plannerSource.Should().Contain("public sealed record GridResizePreviewSnapshot");
+        plannerSource.Should().Contain("public static class GridResizePreviewPlanner");
     }
 }

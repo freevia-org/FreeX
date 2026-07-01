@@ -33,12 +33,13 @@ public sealed partial class MainWindow
     {
         if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
             return;
-        if (!TryGetSelectedChart("Format Bar/Column", out var chart))
+        var command = ChartWorkflowCommandCatalog.FormatBarColumn;
+        if (!TryGetSelectedChart(command, out var chart))
             return;
 
-        if (!ChartBarFormatPlanner.Supports(chart))
+        if (!ChartWorkflowCommandCatalog.CanOpenDialog(chart, command))
         {
-            RefreshShell(UiText.Get("ChartLoc_GapWidthOverlapAvailableOn"));
+            RefreshUnsupportedChartWorkflow(command);
             return;
         }
 
@@ -54,36 +55,38 @@ public sealed partial class MainWindow
             return;
         }
 
-        if (!TryGetSelectedChart("Format Bar/Column", out chart))
+        if (!TryGetSelectedChart(command, out chart))
             return;
 
-        ApplyChartLayout("Format Bar/Column", chart, ChartBarFormatPlanner.Plan(edited));
+        ApplyChartLayout(command, chart, ChartBarFormatPlanner.Plan(edited));
     }
 
     private async Task<ChartBarFormatInput?> ShowChartBarFormatDialogAsync(ChartBarFormatInput current)
     {
-        var gapWidthBox = new TextBox { Text = current.BarGapWidth.ToString(CultureInfo.InvariantCulture), Width = 260 };
-        AutomationProperties.SetName(gapWidthBox, "Gap width");
-        AutomationProperties.SetAutomationId(gapWidthBox, "ChartBarFormatGapWidthBox");
-        ApplyChartTextBoxChrome(gapWidthBox);
-        var overlapBox = new TextBox { Text = current.BarOverlap.ToString(CultureInfo.InvariantCulture), Width = 260 };
-        AutomationProperties.SetName(overlapBox, "Series overlap");
-        AutomationProperties.SetAutomationId(overlapBox, "ChartBarFormatOverlapBox");
-        ApplyChartTextBoxChrome(overlapBox);
+        var gapWidthField = ChartBarFormatPlanner.GetDialogField(ChartBarFormatDialogFieldId.GapWidth);
+        var overlapField = ChartBarFormatPlanner.GetDialogField(ChartBarFormatDialogFieldId.Overlap);
 
-        var dialog = NewChartDialog(UiText.Get("ChartFmt_BarTitle"), "ChartBarFormatDialog");
+        var gapWidthBox = CreateChartTextBox(current.BarGapWidth.ToString(CultureInfo.InvariantCulture), 260);
+        ApplyTypeFormatDescriptorAutomation(gapWidthBox, gapWidthField.LabelResourceKey, gapWidthField.AutomationId);
+        var overlapBox = CreateChartTextBox(current.BarOverlap.ToString(CultureInfo.InvariantCulture), 260);
+        ApplyTypeFormatDescriptorAutomation(overlapBox, overlapField.LabelResourceKey, overlapField.AutomationId);
+
+        var dialog = NewChartDialog(UiText.Get(ChartBarFormatPlanner.TitleResourceKey), ChartBarFormatPlanner.DialogAutomationId);
 
         var (okButton, cancelButton, buttonRow) = CreateChartDialogButtons("ChartBarFormat");
         okButton.Click += (_, _) =>
         {
-            if (!TryParseIntInRange(gapWidthBox.Text, ChartBarFormatPlanner.MinGapWidth, ChartBarFormatPlanner.MaxGapWidth, out var gapWidth)
-                || !TryParseIntInRange(overlapBox.Text, ChartBarFormatPlanner.MinOverlap, ChartBarFormatPlanner.MaxOverlap, out var overlap))
+            if (!ChartBarFormatPlanner.TryParseDialogInput(
+                    gapWidthBox.Text ?? string.Empty,
+                    overlapBox.Text ?? string.Empty,
+                    out var input,
+                    out var issue))
             {
-                RefreshShell(UiText.Get("ChartLoc_EnterWholeNumbersGapOverlap"));
+                RefreshShell(UiText.Get(ChartBarFormatPlanner.InvalidInputMessageResourceKey(issue)));
                 return;
             }
 
-            dialog.Close((ChartBarFormatInput?)new ChartBarFormatInput(gapWidth, overlap));
+            dialog.Close((ChartBarFormatInput?)input);
         };
         cancelButton.Click += (_, _) => dialog.Close((ChartBarFormatInput?)null);
 
@@ -94,9 +97,9 @@ public sealed partial class MainWindow
             MinWidth = 300,
             Children =
             {
-                new TextBlock { Text = UiText.Get("ChartFmt_BarGapWidthLabel"), FontSize = 12 },
+                TypeFormatDescriptorLabel(gapWidthField.LabelResourceKey),
                 gapWidthBox,
-                new TextBlock { Text = UiText.Get("ChartFmt_BarOverlapLabel"), FontSize = 12 },
+                TypeFormatDescriptorLabel(overlapField.LabelResourceKey),
                 overlapBox,
                 buttonRow,
             },
@@ -111,12 +114,13 @@ public sealed partial class MainWindow
     {
         if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
             return;
-        if (!TryGetSelectedChart("Format Pie/Doughnut", out var chart))
+        var command = ChartWorkflowCommandCatalog.FormatPieDoughnut;
+        if (!TryGetSelectedChart(command, out var chart))
             return;
 
-        if (!ChartPieFormatPlanner.Supports(chart))
+        if (!ChartWorkflowCommandCatalog.CanOpenDialog(chart, command))
         {
-            RefreshShell(UiText.Get("ChartLoc_OptionsAvailablePieDoughnut"));
+            RefreshUnsupportedChartWorkflow(command);
             return;
         }
 
@@ -132,87 +136,64 @@ public sealed partial class MainWindow
             return;
         }
 
-        if (!TryGetSelectedChart("Format Pie/Doughnut", out chart))
+        if (!TryGetSelectedChart(command, out chart))
             return;
 
-        ApplyChartLayout("Format Pie/Doughnut", chart, ChartPieFormatPlanner.Plan(edited));
+        ApplyChartLayout(command, chart, ChartPieFormatPlanner.Plan(edited));
     }
 
     private async Task<ChartPieFormatInput?> ShowChartPieFormatDialogAsync(ChartPieFormatInput current, bool isDoughnut)
     {
-        var angleBox = new TextBox { Text = current.FirstSliceAngle.ToString(CultureInfo.InvariantCulture), Width = 260 };
-        AutomationProperties.SetName(angleBox, "First slice angle");
-        AutomationProperties.SetAutomationId(angleBox, "ChartPieFormatAngleBox");
-        ApplyChartTextBoxChrome(angleBox);
-        var explodedIndexBox = new TextBox { Text = current.ExplodedSliceIndex.ToString(CultureInfo.InvariantCulture), Width = 260 };
-        AutomationProperties.SetName(explodedIndexBox, "Exploded slice index");
-        AutomationProperties.SetAutomationId(explodedIndexBox, "ChartPieFormatExplodedIndexBox");
-        ApplyChartTextBoxChrome(explodedIndexBox);
-        var explodedDistBox = new TextBox
-        {
-            Text = ((int)Math.Round(current.ExplodedSliceDistance * 100)).ToString(CultureInfo.InvariantCulture),
-            Width = 260,
-        };
-        AutomationProperties.SetName(explodedDistBox, "Exploded slice distance percent");
-        AutomationProperties.SetAutomationId(explodedDistBox, "ChartPieFormatExplodedDistanceBox");
-        ApplyChartTextBoxChrome(explodedDistBox);
-        var holeBox = new TextBox
-        {
-            Text = ((int)Math.Round(current.DoughnutHoleSize * 100)).ToString(CultureInfo.InvariantCulture),
-            Width = 260,
-        };
-        AutomationProperties.SetName(holeBox, "Doughnut hole size percent");
-        AutomationProperties.SetAutomationId(holeBox, "ChartPieFormatHoleSizeBox");
-        ApplyChartTextBoxChrome(holeBox);
+        var angleField = ChartPieFormatPlanner.GetDialogField(ChartPieFormatDialogFieldId.FirstSliceAngle);
+        var explodedIndexField = ChartPieFormatPlanner.GetDialogField(ChartPieFormatDialogFieldId.ExplodedSliceIndex);
+        var explodedDistanceField = ChartPieFormatPlanner.GetDialogField(ChartPieFormatDialogFieldId.ExplodedSliceDistance);
+        var holeField = ChartPieFormatPlanner.GetDialogField(ChartPieFormatDialogFieldId.DoughnutHoleSize);
 
-        var dialog = NewChartDialog(UiText.Get("ChartFmt_PieTitle"), "ChartPieFormatDialog");
+        var angleBox = CreateChartTextBox(current.FirstSliceAngle.ToString(CultureInfo.InvariantCulture), 260);
+        ApplyTypeFormatDescriptorAutomation(angleBox, angleField.LabelResourceKey, angleField.AutomationId);
+        var explodedIndexBox = CreateChartTextBox(current.ExplodedSliceIndex.ToString(CultureInfo.InvariantCulture), 260);
+        ApplyTypeFormatDescriptorAutomation(explodedIndexBox, explodedIndexField.LabelResourceKey, explodedIndexField.AutomationId);
+        var explodedDistBox = CreateChartTextBox(
+            ChartPieFormatPlanner.ToDisplayPercent(current.ExplodedSliceDistance).ToString(CultureInfo.InvariantCulture),
+            260);
+        ApplyTypeFormatDescriptorAutomation(explodedDistBox, explodedDistanceField.LabelResourceKey, explodedDistanceField.AutomationId);
+        var holeBox = CreateChartTextBox(
+            ChartPieFormatPlanner.ToDisplayPercent(current.DoughnutHoleSize).ToString(CultureInfo.InvariantCulture),
+            260);
+        ApplyTypeFormatDescriptorAutomation(holeBox, holeField.LabelResourceKey, holeField.AutomationId);
+
+        var dialog = NewChartDialog(UiText.Get(ChartPieFormatPlanner.TitleResourceKey), ChartPieFormatPlanner.DialogAutomationId);
 
         var (okButton, cancelButton, buttonRow) = CreateChartDialogButtons("ChartPieFormat");
         okButton.Click += (_, _) =>
         {
-            if (!TryParseIntInRange(angleBox.Text, ChartPieFormatPlanner.MinFirstSliceAngle, ChartPieFormatPlanner.MaxFirstSliceAngle, out var angle))
+            if (!ChartPieFormatPlanner.TryParseDialogInput(
+                    angleBox.Text ?? string.Empty,
+                    explodedIndexBox.Text ?? string.Empty,
+                    explodedDistBox.Text ?? string.Empty,
+                    holeBox.Text ?? string.Empty,
+                    isDoughnut,
+                    out var input,
+                    out var issue))
             {
-                RefreshShell(UiText.Format("ChartLoc_EnterFirstSliceAngle", ChartPieFormatPlanner.MinFirstSliceAngle, ChartPieFormatPlanner.MaxFirstSliceAngle));
+                RefreshShell(UiText.Get(ChartPieFormatPlanner.InvalidInputMessageResourceKey(issue)));
                 return;
             }
 
-            if (!int.TryParse((explodedIndexBox.Text ?? string.Empty).Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var explodedIndex))
-            {
-                RefreshShell(UiText.Get("ChartLoc_EnterExplodedSliceIndex"));
-                return;
-            }
-
-            if (!TryParseIntInRange(explodedDistBox.Text, 0, 50, out var explodedDistPct))
-            {
-                RefreshShell(UiText.Get("ChartLoc_EnterExplodedSliceDistance"));
-                return;
-            }
-
-            var holePct = (int)Math.Round(current.DoughnutHoleSize * 100);
-            if (isDoughnut && !TryParseIntInRange(holeBox.Text, 10, 90, out holePct))
-            {
-                RefreshShell(UiText.Get("ChartLoc_EnterDoughnutHoleSize"));
-                return;
-            }
-
-            dialog.Close((ChartPieFormatInput?)new ChartPieFormatInput(
-                angle,
-                explodedIndex,
-                explodedDistPct / 100.0,
-                holePct / 100.0));
+            dialog.Close((ChartPieFormatInput?)input);
         };
         cancelButton.Click += (_, _) => dialog.Close((ChartPieFormatInput?)null);
 
         var panel = new StackPanel { Margin = new Thickness(16), Spacing = 8, MinWidth = 300 };
-        panel.Children.Add(new TextBlock { Text = UiText.Get("ChartFmt_PieFirstSliceAngleLabel"), FontSize = 12 });
+        panel.Children.Add(TypeFormatDescriptorLabel(angleField.LabelResourceKey));
         panel.Children.Add(angleBox);
-        panel.Children.Add(new TextBlock { Text = UiText.Get("ChartFmt_PieExplodedIndexLabel"), FontSize = 12 });
+        panel.Children.Add(TypeFormatDescriptorLabel(explodedIndexField.LabelResourceKey));
         panel.Children.Add(explodedIndexBox);
-        panel.Children.Add(new TextBlock { Text = UiText.Get("ChartFmt_PieExplodedDistanceLabel"), FontSize = 12 });
+        panel.Children.Add(TypeFormatDescriptorLabel(explodedDistanceField.LabelResourceKey));
         panel.Children.Add(explodedDistBox);
         if (isDoughnut)
         {
-            panel.Children.Add(new TextBlock { Text = UiText.Get("ChartFmt_PieHoleSizeLabel"), FontSize = 12 });
+            panel.Children.Add(TypeFormatDescriptorLabel(holeField.LabelResourceKey));
             panel.Children.Add(holeBox);
         }
 
@@ -228,12 +209,13 @@ public sealed partial class MainWindow
     {
         if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
             return;
-        if (!TryGetSelectedChart("Format Bubble Chart", out var chart))
+        var command = ChartWorkflowCommandCatalog.FormatBubbleChart;
+        if (!TryGetSelectedChart(command, out var chart))
             return;
 
-        if (!ChartBubbleFormatPlanner.Supports(chart))
+        if (!ChartWorkflowCommandCatalog.CanOpenDialog(chart, command))
         {
-            RefreshShell(UiText.Get("ChartLoc_OptionsAvailableBubble"));
+            RefreshUnsupportedChartWorkflow(command);
             return;
         }
 
@@ -249,42 +231,51 @@ public sealed partial class MainWindow
             return;
         }
 
-        if (!TryGetSelectedChart("Format Bubble Chart", out chart))
+        if (!TryGetSelectedChart(command, out chart))
             return;
 
-        ApplyChartLayout("Format Bubble Chart", chart, ChartBubbleFormatPlanner.Plan(edited));
+        ApplyChartLayout(command, chart, ChartBubbleFormatPlanner.Plan(edited));
     }
 
     private async Task<ChartBubbleFormatInput?> ShowChartBubbleFormatDialogAsync(ChartBubbleFormatInput current)
     {
-        var scaleBox = new TextBox { Text = current.BubbleScale.ToString(CultureInfo.InvariantCulture), Width = 260 };
-        AutomationProperties.SetName(scaleBox, "Bubble scale");
-        AutomationProperties.SetAutomationId(scaleBox, "ChartBubbleFormatScaleBox");
-        ApplyChartTextBoxChrome(scaleBox);
+        var scaleField = ChartBubbleFormatPlanner.GetDialogField(ChartBubbleFormatDialogFieldId.BubbleScale);
+        var negativeField = ChartBubbleFormatPlanner.GetDialogField(ChartBubbleFormatDialogFieldId.ShowNegativeBubbles);
+        var sizeField = ChartBubbleFormatPlanner.GetDialogField(ChartBubbleFormatDialogFieldId.SizeRepresents);
 
-        var negativeCheck = new CheckBox { Content = UiText.Get("ChartFmt_BubbleShowNegative"), IsChecked = current.ShowNegativeBubbles };
-        AutomationProperties.SetAutomationId(negativeCheck, "ChartBubbleFormatNegativeCheck");
+        var scaleBox = CreateChartTextBox(current.BubbleScale.ToString(CultureInfo.InvariantCulture), 260);
+        ApplyTypeFormatDescriptorAutomation(scaleBox, scaleField.LabelResourceKey, scaleField.AutomationId);
+
+        var negativeCheck = CreateChartCheckBox(
+            TypeFormatDescriptorText(negativeField.LabelResourceKey),
+            current.ShowNegativeBubbles);
+        ApplyTypeFormatDescriptorAutomation(negativeCheck, negativeField.LabelResourceKey, negativeField.AutomationId);
 
         var sizeChoices = ChartBubbleFormatPlanner.GetSizeRepresentsChoices();
-        var sizeCombo = new ComboBox { Width = 260, ItemsSource = sizeChoices };
-        AutomationProperties.SetName(sizeCombo, "Bubble size represents");
-        AutomationProperties.SetAutomationId(sizeCombo, "ChartBubbleFormatSizeCombo");
-        ApplyChartComboBoxChrome(sizeCombo);
+        var sizeCombo = CreateChartComboBox(260, sizeChoices);
+        ApplyTypeFormatDescriptorAutomation(sizeCombo, sizeField.LabelResourceKey, sizeField.AutomationId);
         sizeCombo.SelectedItem = current.BubbleSizeRepresents;
 
-        var dialog = NewChartDialog(UiText.Get("ChartFmt_BubbleTitle"), "ChartBubbleFormatDialog");
+        var dialog = NewChartDialog(UiText.Get(ChartBubbleFormatPlanner.TitleResourceKey), ChartBubbleFormatPlanner.DialogAutomationId);
 
         var (okButton, cancelButton, buttonRow) = CreateChartDialogButtons("ChartBubbleFormat");
         okButton.Click += (_, _) =>
         {
-            if (!TryParseIntInRange(scaleBox.Text, ChartBubbleFormatPlanner.MinBubbleScale, ChartBubbleFormatPlanner.MaxBubbleScale, out var scale))
+            var sizeRepresents = sizeCombo.SelectedItem is ChartBubbleSizeRepresents picked
+                ? picked
+                : (ChartBubbleSizeRepresents?)null;
+            if (!ChartBubbleFormatPlanner.TryParseDialogInput(
+                    scaleBox.Text ?? string.Empty,
+                    negativeCheck.IsChecked == true,
+                    sizeRepresents,
+                    out var input,
+                    out var issue))
             {
-                RefreshShell(UiText.Format("ChartLoc_EnterBubbleScale", ChartBubbleFormatPlanner.MinBubbleScale, ChartBubbleFormatPlanner.MaxBubbleScale));
+                RefreshShell(UiText.Get(ChartBubbleFormatPlanner.InvalidInputMessageResourceKey(issue)));
                 return;
             }
 
-            var sizeRepresents = sizeCombo.SelectedItem is ChartBubbleSizeRepresents picked ? picked : ChartBubbleSizeRepresents.Area;
-            dialog.Close((ChartBubbleFormatInput?)new ChartBubbleFormatInput(scale, negativeCheck.IsChecked == true, sizeRepresents));
+            dialog.Close((ChartBubbleFormatInput?)input);
         };
         cancelButton.Click += (_, _) => dialog.Close((ChartBubbleFormatInput?)null);
 
@@ -295,10 +286,10 @@ public sealed partial class MainWindow
             MinWidth = 300,
             Children =
             {
-                new TextBlock { Text = UiText.Get("ChartFmt_BubbleScaleLabel"), FontSize = 12 },
+                TypeFormatDescriptorLabel(scaleField.LabelResourceKey),
                 scaleBox,
                 negativeCheck,
-                new TextBlock { Text = UiText.Get("ChartFmt_BubbleSizeRepresentsLabel"), FontSize = 12 },
+                TypeFormatDescriptorLabel(sizeField.LabelResourceKey),
                 sizeCombo,
                 buttonRow,
             },
@@ -313,12 +304,13 @@ public sealed partial class MainWindow
     {
         if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
             return;
-        if (!TryGetSelectedChart("Format Stock Chart", out var chart))
+        var command = ChartWorkflowCommandCatalog.FormatStockChart;
+        if (!TryGetSelectedChart(command, out var chart))
             return;
 
-        if (!ChartStockFormatPlanner.Supports(chart))
+        if (!ChartWorkflowCommandCatalog.CanOpenDialog(chart, command))
         {
-            RefreshShell(UiText.Get("ChartLoc_OptionsAvailableStock"));
+            RefreshUnsupportedChartWorkflow(command);
             return;
         }
 
@@ -334,101 +326,97 @@ public sealed partial class MainWindow
             return;
         }
 
-        if (!TryGetSelectedChart("Format Stock Chart", out chart))
+        if (!TryGetSelectedChart(command, out chart))
             return;
 
-        ApplyChartLayout("Format Stock Chart", chart, ChartStockFormatPlanner.Plan(edited));
+        ApplyChartLayout(command, chart, ChartStockFormatPlanner.Plan(edited));
     }
 
     private async Task<ChartStockFormatInput?> ShowChartStockFormatDialogAsync(ChartStockFormatInput current)
     {
         var state = current;
+        var gapWidthField = ChartStockFormatPlanner.GetDialogField(ChartStockFormatDialogFieldId.GapWidth);
+        var upFillField = ChartStockFormatPlanner.GetDialogField(ChartStockFormatDialogFieldId.UpBarFill);
+        var upBorderField = ChartStockFormatPlanner.GetDialogField(ChartStockFormatDialogFieldId.UpBarBorder);
+        var downFillField = ChartStockFormatPlanner.GetDialogField(ChartStockFormatDialogFieldId.DownBarFill);
+        var downBorderField = ChartStockFormatPlanner.GetDialogField(ChartStockFormatDialogFieldId.DownBarBorder);
+        var highLowColorField = ChartStockFormatPlanner.GetDialogField(ChartStockFormatDialogFieldId.HighLowLineColor);
+        var thicknessField = ChartStockFormatPlanner.GetDialogField(ChartStockFormatDialogFieldId.HighLowLineThickness);
 
-        var gapWidthBox = new TextBox { Text = current.UpDownBarGapWidth.ToString(CultureInfo.InvariantCulture), Width = 260 };
-        AutomationProperties.SetName(gapWidthBox, "Up/down bar gap width");
-        AutomationProperties.SetAutomationId(gapWidthBox, "ChartStockFormatGapWidthBox");
-        ApplyChartTextBoxChrome(gapWidthBox);
+        var gapWidthBox = CreateChartTextBox(current.UpDownBarGapWidth.ToString(CultureInfo.InvariantCulture), 260);
+        ApplyTypeFormatDescriptorAutomation(gapWidthBox, gapWidthField.LabelResourceKey, gapWidthField.AutomationId);
 
-        var upFillButton = ColorPickerButton("ChartFmt_StockUpBarFill", "ChartStockFormatUpFillButton", current.UpBarFillColor);
-        ApplyChartButtonChrome(upFillButton, 260);
-        var upBorderButton = ColorPickerButton("ChartFmt_StockUpBarBorder", "ChartStockFormatUpBorderButton", current.UpBarBorderColor);
-        ApplyChartButtonChrome(upBorderButton, 260);
-        var downFillButton = ColorPickerButton("ChartFmt_StockDownBarFill", "ChartStockFormatDownFillButton", current.DownBarFillColor);
-        ApplyChartButtonChrome(downFillButton, 260);
-        var downBorderButton = ColorPickerButton("ChartFmt_StockDownBarBorder", "ChartStockFormatDownBorderButton", current.DownBarBorderColor);
-        ApplyChartButtonChrome(downBorderButton, 260);
-        var highLowButton = ColorPickerButton("ChartFmt_StockHighLowLineColor", "ChartStockFormatHighLowButton", current.HighLowLineColor);
-        ApplyChartButtonChrome(highLowButton, 260);
+        var upFillButton = ColorPickerButton(upFillField, current.UpBarFillColor);
+        var upBorderButton = ColorPickerButton(upBorderField, current.UpBarBorderColor);
+        var downFillButton = ColorPickerButton(downFillField, current.DownBarFillColor);
+        var downBorderButton = ColorPickerButton(downBorderField, current.DownBarBorderColor);
+        var highLowButton = ColorPickerButton(highLowColorField, current.HighLowLineColor);
 
-        var thicknessBox = new TextBox { Text = current.HighLowLineThickness.ToString("G", CultureInfo.InvariantCulture), Width = 260 };
-        AutomationProperties.SetName(thicknessBox, "High-low line thickness");
-        AutomationProperties.SetAutomationId(thicknessBox, "ChartStockFormatThicknessBox");
-        ApplyChartTextBoxChrome(thicknessBox);
+        var thicknessBox = CreateChartTextBox(current.HighLowLineThickness.ToString("G", CultureInfo.InvariantCulture), 260);
+        ApplyTypeFormatDescriptorAutomation(thicknessBox, thicknessField.LabelResourceKey, thicknessField.AutomationId);
 
         upFillButton.Click += async (_, _) =>
         {
+            var label = TypeFormatDescriptorText(upFillField.LabelResourceKey);
             var chosen = await ShowMoreColorsDialogAsync(
-                UiText.Get("ChartFmt_StockUpBarFill"),
+                label,
                 state.UpBarFillColor ?? ChartQuickFormatCycler.DefaultSeriesColor);
-            if (chosen is { } color) { state = state with { UpBarFillColor = color }; upFillButton.Content = DescribeColor(UiText.Get("ChartFmt_StockUpBarFill"), color); }
+            if (chosen is { } color) { state = state with { UpBarFillColor = color }; upFillButton.Content = DescribeColor(label, color); }
         };
         upBorderButton.Click += async (_, _) =>
         {
+            var label = TypeFormatDescriptorText(upBorderField.LabelResourceKey);
             var chosen = await ShowMoreColorsDialogAsync(
-                UiText.Get("ChartFmt_StockUpBarBorder"),
+                label,
                 state.UpBarBorderColor ?? ChartQuickFormatCycler.DefaultSeriesColor);
-            if (chosen is { } color) { state = state with { UpBarBorderColor = color }; upBorderButton.Content = DescribeColor(UiText.Get("ChartFmt_StockUpBarBorder"), color); }
+            if (chosen is { } color) { state = state with { UpBarBorderColor = color }; upBorderButton.Content = DescribeColor(label, color); }
         };
         downFillButton.Click += async (_, _) =>
         {
+            var label = TypeFormatDescriptorText(downFillField.LabelResourceKey);
             var chosen = await ShowMoreColorsDialogAsync(
-                UiText.Get("ChartFmt_StockDownBarFill"),
+                label,
                 state.DownBarFillColor ?? ChartQuickFormatCycler.DefaultSeriesColor);
-            if (chosen is { } color) { state = state with { DownBarFillColor = color }; downFillButton.Content = DescribeColor(UiText.Get("ChartFmt_StockDownBarFill"), color); }
+            if (chosen is { } color) { state = state with { DownBarFillColor = color }; downFillButton.Content = DescribeColor(label, color); }
         };
         downBorderButton.Click += async (_, _) =>
         {
+            var label = TypeFormatDescriptorText(downBorderField.LabelResourceKey);
             var chosen = await ShowMoreColorsDialogAsync(
-                UiText.Get("ChartFmt_StockDownBarBorder"),
+                label,
                 state.DownBarBorderColor ?? ChartQuickFormatCycler.DefaultSeriesColor);
-            if (chosen is { } color) { state = state with { DownBarBorderColor = color }; downBorderButton.Content = DescribeColor(UiText.Get("ChartFmt_StockDownBarBorder"), color); }
+            if (chosen is { } color) { state = state with { DownBarBorderColor = color }; downBorderButton.Content = DescribeColor(label, color); }
         };
         highLowButton.Click += async (_, _) =>
         {
+            var label = TypeFormatDescriptorText(highLowColorField.LabelResourceKey);
             var chosen = await ShowMoreColorsDialogAsync(
-                UiText.Get("ChartFmt_StockHighLowLineColor"),
+                label,
                 state.HighLowLineColor ?? ChartQuickFormatCycler.DefaultSeriesColor);
-            if (chosen is { } color) { state = state with { HighLowLineColor = color }; highLowButton.Content = DescribeColor(UiText.Get("ChartFmt_StockHighLowLineColor"), color); }
+            if (chosen is { } color) { state = state with { HighLowLineColor = color }; highLowButton.Content = DescribeColor(label, color); }
         };
 
-        var dialog = NewChartDialog(UiText.Get("ChartFmt_StockTitle"), "ChartStockFormatDialog");
+        var dialog = NewChartDialog(UiText.Get(ChartStockFormatPlanner.TitleResourceKey), ChartStockFormatPlanner.DialogAutomationId);
 
         var (okButton, cancelButton, buttonRow) = CreateChartDialogButtons("ChartStockFormat");
         okButton.Click += (_, _) =>
         {
-            if (!TryParseIntInRange(gapWidthBox.Text, ChartStockFormatPlanner.MinGapWidth, ChartStockFormatPlanner.MaxGapWidth, out var gapWidth))
+            if (!ChartStockFormatPlanner.TryParseDialogInput(
+                    gapWidthBox.Text ?? string.Empty,
+                    state.UpBarFillColor,
+                    state.UpBarBorderColor,
+                    state.DownBarFillColor,
+                    state.DownBarBorderColor,
+                    state.HighLowLineColor,
+                    thicknessBox.Text ?? string.Empty,
+                    out var input,
+                    out var issue))
             {
-                RefreshShell(UiText.Format("ChartLoc_EnterUpDownBarGapWidth", ChartStockFormatPlanner.MinGapWidth, ChartStockFormatPlanner.MaxGapWidth));
+                RefreshShell(UiText.Get(ChartStockFormatPlanner.InvalidInputMessageResourceKey(issue)));
                 return;
             }
 
-            if (!double.TryParse((thicknessBox.Text ?? string.Empty).Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var thickness)
-                || !double.IsFinite(thickness)
-                || thickness < ChartStockFormatPlanner.MinLineThickness
-                || thickness > ChartStockFormatPlanner.MaxLineThickness)
-            {
-                RefreshShell(UiText.Format("ChartLoc_EnterHighLowLineThickness", ChartStockFormatPlanner.MinLineThickness, ChartStockFormatPlanner.MaxLineThickness));
-                return;
-            }
-
-            dialog.Close((ChartStockFormatInput?)new ChartStockFormatInput(
-                gapWidth,
-                state.UpBarFillColor,
-                state.UpBarBorderColor,
-                state.DownBarFillColor,
-                state.DownBarBorderColor,
-                state.HighLowLineColor,
-                thickness));
+            dialog.Close((ChartStockFormatInput?)input);
         };
         cancelButton.Click += (_, _) => dialog.Close((ChartStockFormatInput?)null);
 
@@ -439,16 +427,16 @@ public sealed partial class MainWindow
             MinWidth = 300,
             Children =
             {
-                new TextBlock { Text = UiText.Get("ChartFmt_StockGapWidthLabel"), FontSize = 12 },
+                TypeFormatDescriptorLabel(gapWidthField.LabelResourceKey),
                 gapWidthBox,
-                new TextBlock { Text = UiText.Get("ChartFmt_StockBarsLabel"), FontSize = 12, Margin = new Thickness(0, 6, 0, 0) },
+                TypeFormatDescriptorLabel(ChartStockFormatPlanner.BarsGroupResourceKey, new Thickness(0, 6, 0, 0)),
                 upFillButton,
                 upBorderButton,
                 downFillButton,
                 downBorderButton,
-                new TextBlock { Text = UiText.Get("ChartFmt_StockHighLowLabel"), FontSize = 12, Margin = new Thickness(0, 6, 0, 0) },
+                TypeFormatDescriptorLabel(ChartStockFormatPlanner.HighLowGroupResourceKey, new Thickness(0, 6, 0, 0)),
                 highLowButton,
-                new TextBlock { Text = UiText.Get("ChartFmt_StockLineThicknessLabel"), FontSize = 12 },
+                TypeFormatDescriptorLabel(thicknessField.LabelResourceKey),
                 thicknessBox,
                 buttonRow,
             },
@@ -457,11 +445,29 @@ public sealed partial class MainWindow
         return await dialog.ShowDialog<ChartStockFormatInput?>(this);
     }
 
-    /// <summary>Builds a 260-wide color-picker button labelled by a UiText key, showing the current color.</summary>
-    private static Button ColorPickerButton(string labelKey, string automationId, CellColor? color)
+    private static string TypeFormatDescriptorText(string resourceKey) =>
+        StripDisplayMnemonic(UiText.Get(resourceKey));
+
+    private static TextBlock TypeFormatDescriptorLabel(string resourceKey, Thickness? margin = null) =>
+        new()
+        {
+            Text = TypeFormatDescriptorText(resourceKey),
+            FontSize = 12,
+            Margin = margin ?? default,
+        };
+
+    private static void ApplyTypeFormatDescriptorAutomation(Control control, string labelResourceKey, string automationId)
     {
-        var button = new Button { Content = DescribeColor(UiText.Get(labelKey), color), Width = 260 };
-        AutomationProperties.SetAutomationId(button, automationId);
+        AutomationProperties.SetName(control, TypeFormatDescriptorText(labelResourceKey));
+        AutomationProperties.SetAutomationId(control, automationId);
+    }
+
+    /// <summary>Builds a 260-wide color-picker button labelled by a shared descriptor, showing the current color.</summary>
+    private static Button ColorPickerButton(ChartStockFormatDialogFieldDescriptor field, CellColor? color)
+    {
+        var label = TypeFormatDescriptorText(field.LabelResourceKey);
+        var button = CreateChartButton(DescribeColor(label, color), 260);
+        ApplyTypeFormatDescriptorAutomation(button, field.LabelResourceKey, field.AutomationId);
         return button;
     }
 }

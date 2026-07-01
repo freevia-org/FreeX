@@ -39,8 +39,7 @@ internal static class XlsxLegacyCommentVisibilityNormalizer
         XDocument workbookXml;
         try
         {
-            using var s = workbookEntry.Open();
-            workbookXml = XDocument.Load(s);
+            workbookXml = OpcXml.LoadXml(workbookEntry);
         }
         catch { return; }
 
@@ -82,8 +81,7 @@ internal static class XlsxLegacyCommentVisibilityNormalizer
         XDocument worksheetXml;
         try
         {
-            using var s = worksheetEntry.Open();
-            worksheetXml = XDocument.Load(s);
+            worksheetXml = OpcXml.LoadXml(worksheetEntry);
         }
         catch { return; }
 
@@ -103,8 +101,7 @@ internal static class XlsxLegacyCommentVisibilityNormalizer
         XDocument relsXml;
         try
         {
-            using var s = relsEntry.Open();
-            relsXml = XDocument.Load(s);
+            relsXml = OpcXml.LoadXml(relsEntry);
         }
         catch { return; }
 
@@ -125,8 +122,7 @@ internal static class XlsxLegacyCommentVisibilityNormalizer
         XDocument vml;
         try
         {
-            using var s = vmlEntry.Open();
-            vml = XDocument.Load(s);
+            vml = OpcXml.LoadXml(vmlEntry);
         }
         catch { return; }
 

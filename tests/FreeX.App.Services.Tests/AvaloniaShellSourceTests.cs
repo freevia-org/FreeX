@@ -58,7 +58,7 @@ public sealed class AvaloniaShellSourceTests
         ingressPlannerSource.Should().Contain("LocalFilePath.TryNormalize(candidatePath, out var normalizedPath)");
         ingressPlannerSource.Should().Contain("Directory.Exists(normalizedPath)");
         ingressPlannerSource.Should().Contain("File.Exists(normalizedPath)");
-        ingressPlannerSource.Should().Contain("FileFormatResolver.FindOpenAdapter(adapters, extension, out _)");
+        ingressPlannerSource.Should().Contain("WorkbookOpenTargetPlanner.TryCreateOpenTarget(adapters, path");
         source.Should().Contain("ShowOpenIssue(message)");
         source.Should().Contain("await OpenWorkbookPathAsync(path!, fileAccessIdentity)");
         source.Should().Contain("await OpenWorkbookFromTargetAsync(target!)");
@@ -76,7 +76,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("WorkbookFileAccessServiceFactory.Create(App.Diagnostics)");
         source.Should().Contain("ArgumentNullException.ThrowIfNull(workbookFileAccessService);");
         source.Should().Contain("_workbookFileAccessService = workbookFileAccessService;");
-        source.Should().Contain("_workbookFileAccessService.CreateIdentityAsync(path, storageFile)");
+        source.Should().Contain("pickedStorageFile.StorageFile");
         source.Should().Contain("TrySelectOpenableLocalWorkbookPath(files, out var path, out var storageItem, out var message)");
         source.Should().Contain("TrySelectDroppedWorkbookPath(e, out var path, out var storageItem, out var message)");
         source.Should().Contain("storageItem = candidates[plan.CandidateIndex].StorageItem;");
@@ -143,6 +143,7 @@ public sealed class AvaloniaShellSourceTests
     public void MainWindow_WiresWorkbookSharePlannerToAvaloniaFallback()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
         var serviceSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "WorkbookShareSheetService.cs"));
         var macOsServiceSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOs", "MacOsWorkbookShareSheetService.cs"));
 
@@ -152,12 +153,14 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("WorkbookFileAccessServiceFactory.Create(App.Diagnostics),");
         source.Should().Contain("ArgumentNullException.ThrowIfNull(workbookShareSheetService);");
         source.Should().Contain("private readonly NativeMenuItem _shareWorkbookMenuItem = new();");
-        source.Should().Contain("_shareWorkbookMenuItem.Header = UiText.Get(\"AvaloniaNativeMenu_ShareWorkbook\");");
-        source.Should().Contain("_shareWorkbookMenuItem.Click += async (_, _) => await ShareWorkbookAsync();");
-        source.Should().Contain("fileMenu.Items.Add(_shareWorkbookMenuItem);");
-        source.Should().Contain("_shareWorkbookMenuItem.IsEnabled = isIdle;");
-        source.Should().Contain("HasNativeShareWorkbookMenuItem: HasEnabledNativeMenuItem(_shareWorkbookMenuItem, UiText.Get(\"AvaloniaNativeMenu_ShareWorkbook\"), requireGesture: false)");
-        source.Should().Contain("private static bool HasEnabledNativeMenuItem(NativeMenuItem item, string expectedHeader, bool requireGesture = true)");
+        source.Should().Contain("ConfigureNativeFileMenuItem(_shareWorkbookMenuItem, NativeFileMenuItemId.ShareWorkbook);");
+        catalogSource.Should().Contain("NativeFileMenuItemId.ShareWorkbook");
+        catalogSource.Should().Contain("\"AvaloniaNativeMenu_ShareWorkbook\"");
+        source.Should().Contain("_shareWorkbookMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Share);");
+        catalogSource.Should().Contain("FileItem(NativeFileMenuItemId.ShareWorkbook)");
+        source.Should().Contain("ApplyNativeFileMenuAvailability(isIdle);");
+        source.Should().Contain("HasNativeShareWorkbookMenuItem: HasEnabledNativeFileMenuItem(_shareWorkbookMenuItem, NativeFileMenuItemId.ShareWorkbook)");
+        source.Should().Contain("private static bool HasEnabledNativeFileMenuItem(NativeMenuItem item, NativeFileMenuItemId id)");
         source.Should().Contain("private async Task ShareWorkbookAsync()");
         source.Should().Contain("WorkbookShareActionPlanner.CreatePlan(");
         source.Should().Contain("_session.CurrentFilePath");
@@ -237,30 +240,31 @@ public sealed class AvaloniaShellSourceTests
     public void MainWindow_WiresPortablePdfExportToNativeFileMenu()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
         var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
         var exporterSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "PortablePdfDocumentExporter.cs"));
 
         source.Should().Contain("private readonly NativeMenuItem _exportPdfMenuItem = new();");
-        source.Should().Contain("_exportPdfMenuItem.Header = UiText.Get(\"AvaloniaNativeMenu_ExportPdf\");");
+        source.Should().Contain("ConfigureNativeFileMenuItem(_exportPdfMenuItem, NativeFileMenuItemId.ExportPdf);");
+        catalogSource.Should().Contain("\"AvaloniaNativeMenu_ExportPdf\"");
         source.Should().Contain("_exportPdfMenuItem.Click += async (_, _) => await ExportActiveSheetPdfAsync();");
-        source.Should().Contain("fileMenu.Items.Add(_exportPdfMenuItem);");
-        source.Should().Contain("_exportPdfMenuItem.IsEnabled = isIdle && StorageProvider.CanSave;");
+        catalogSource.Should().Contain("FileItem(NativeFileMenuItemId.ExportPdf)");
+        catalogSource.Should().Contain("new(NativeFileMenuItemId.ExportPdf, context.IsIdle && context.CanSaveThroughStorageProvider)");
         source.Should().Contain("private async Task ExportActiveSheetPdfAsync()");
         source.Should().Contain("var storageFile = await ShowPortablePdfSavePickerAsync(\"Export to PDF\");");
-        source.Should().Contain("private async Task<IStorageFile?> ShowPortablePdfSavePickerAsync(string title)");
+        source.Should().Contain("private Task<AvaloniaPickedStorageFile?> ShowPortablePdfSavePickerAsync(string title)");
         source.Should().Contain("ExportFilePickerPlanner.BuildPortablePdfPickerPlan(_session.DisplayName, ApplicationTitle)");
-        source.Should().Contain("var fileTypes = CreateFilePickerFileTypes(pickerPlan.FileTypes);");
-        source.Should().Contain("Title = title");
-        source.Should().Contain("SuggestedFileName = pickerPlan.SuggestedFileName");
-        source.Should().Contain("DefaultExtension = pickerPlan.DefaultExtensionWithoutDot");
-        source.Should().Contain("FileTypeChoices = fileTypes");
-        source.Should().Contain("SuggestedFileType = fileTypes[0]");
-        source.Should().Contain("ShowOverwritePrompt = true");
-        source.Should().Contain("storageFile.TryGetLocalPath()");
-        source.Should().Contain("var exportPathPlan = ExportPathPlanner.Plan(requestedPath, ExportFileFormat.Pdf);");
-        source.Should().Contain("ExportPathPlanner.ShouldPromptForNormalizedOverwrite(requestedPath, exportPathPlan, File.Exists)");
-        source.Should().Contain("!await ConfirmNormalizedPdfOverwriteAsync(exportPathPlan.Path)");
-        source.Should().Contain("path = exportPathPlan.Path;");
+        source.Should().Contain("AvaloniaFilePickerService.PickSaveFileWithLocalPathAsync(");
+        source.Should().Contain("AvaloniaFilePickerSaveRequest.FromDescriptors(");
+        source.Should().Contain("pickerPlan.SuggestedFileName");
+        source.Should().Contain("pickerPlan.DefaultExtensionWithoutDot");
+        source.Should().Contain("showOverwritePrompt: true");
+        source.Should().Contain("suggestFirstFileType: true");
+        source.Should().Contain("storageFile.LocalPath");
+        source.Should().Contain("var exportTargetPlan = ExportFilePickerPlanner.BuildPortablePdfSaveTargetPlan(path, File.Exists);");
+        source.Should().Contain("exportTargetPlan.ShouldConfirmNormalizedOverwrite");
+        source.Should().Contain("!await ConfirmNormalizedPdfOverwriteAsync(exportTargetPlan.Path)");
+        source.Should().Contain("path = exportTargetPlan.Path;");
         source.Should().Contain("private async Task<bool> ConfirmNormalizedPdfOverwriteAsync(string normalizedPath)");
         var normalizedOverwriteDialog = ExtractSourceBlock(
             source,
@@ -285,7 +289,7 @@ public sealed class AvaloniaShellSourceTests
         // Unicode-capable export goes through Skia (auto font embedding); portable WinAnsi is the fallback.
         pdfRouterSource.Should().Contain("SkiaPdfDocumentExporter.Save(workbook, exportPlan, stream");
         pdfRouterSource.Should().Contain("PortablePdfDocumentExporter.Save(workbook, exportPlan, stream");
-        source.Should().Contain("HasNativeExportPdfMenuItem: HasNativeMenuItem(_exportPdfMenuItem, UiText.Get(\"AvaloniaNativeMenu_ExportPdf\"), requireGesture: false)");
+        source.Should().Contain("HasNativeExportPdfMenuItem: HasNativeFileMenuItem(_exportPdfMenuItem, NativeFileMenuItemId.ExportPdf)");
 
         smokeSource.Should().Contain("bool HasNativeExportPdfMenuItem,");
         smokeSource.Should().Contain("HasNativeExportPdfMenuItem &&");
@@ -322,9 +326,9 @@ public sealed class AvaloniaShellSourceTests
         var printSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.Print.cs"));
         var cupsSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "CupsPlatformPrinter.cs"));
 
-        printSource.Should().Contain("var requestedPath = path;");
-        printSource.Should().Contain("ExportPathPlanner.ShouldPromptForNormalizedOverwrite(requestedPath, exportPathPlan, File.Exists)");
-        printSource.Should().Contain("!await ConfirmNormalizedPdfOverwriteAsync(exportPathPlan.Path)");
+        printSource.Should().Contain("var exportTargetPlan = ExportFilePickerPlanner.BuildPortablePdfSaveTargetPlan(path, File.Exists);");
+        printSource.Should().Contain("exportTargetPlan.ShouldConfirmNormalizedOverwrite");
+        printSource.Should().Contain("!await ConfirmNormalizedPdfOverwriteAsync(exportTargetPlan.Path)");
         printSource.Should().Contain("UiText.Get(\"Print_SaveCanceled\")");
         printSource.Should().Contain("ShowPortablePdfSavePickerAsync(UiText.Get(\"Print_SaveAsPdfButton\"))");
 
@@ -344,22 +348,22 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("if (_isOpening || _isSaving)");
         source.Should().Contain("_isSaving = true;");
         source.Should().Contain("private void EndFileOperation()");
-        source.Should().Contain("private static bool ShouldPromptForNormalizedWorkbookOverwrite(string requestedPath, string normalizedPath)");
-        source.Should().Contain("!string.Equals(Path.GetFullPath(requestedPath), Path.GetFullPath(normalizedPath), StringComparison.OrdinalIgnoreCase)");
-        source.Should().Contain("&& File.Exists(normalizedPath);");
+        source.Should().Contain("WorkbookFileLifecycleCoordinator.PlanSavePathNormalization(");
+        source.Should().NotContain("private static bool ShouldPromptForNormalizedWorkbookOverwrite(");
+        source.Should().NotContain("Path.GetFullPath(requestedPath)");
 
         var saveAsBlock = ExtractSourceBlock(
             source,
-            "private async Task SaveWorkbookAsAsync()",
-            "await SaveWorkbookToTargetAsync(target!, fileAccessIdentity);");
+            "private async Task<bool> SaveWorkbookAsAsync()",
+            "return await SaveWorkbookToTargetAsync(target!, fileAccessIdentity);");
         saveAsBlock.Should().Contain("if (!TryBeginFileOperation())");
-        saveAsBlock.Should().Contain("var storageFile = await StorageProvider.SaveFilePickerAsync");
+        saveAsBlock.Should().Contain("AvaloniaFilePickerService.PickSaveFileWithLocalPathAsync(");
         saveAsBlock.IndexOf("if (!TryBeginFileOperation())", StringComparison.Ordinal)
-            .Should().BeLessThan(saveAsBlock.IndexOf("StorageProvider.SaveFilePickerAsync", StringComparison.Ordinal));
-        saveAsBlock.Should().Contain("var requestedPath = path;");
-        saveAsBlock.Should().Contain("path = WorkbookSession.EnsureSaveExtension(path, NativeWorkbookExtension);");
-        saveAsBlock.Should().Contain("ShouldPromptForNormalizedWorkbookOverwrite(requestedPath, path)");
-        saveAsBlock.Should().Contain("!await ConfirmNormalizedWorkbookOverwriteAsync(path)");
+            .Should().BeLessThan(saveAsBlock.IndexOf("AvaloniaFilePickerService.PickSaveFileWithLocalPathAsync", StringComparison.Ordinal));
+        saveAsBlock.Should().Contain("var pathPlan = WorkbookFileLifecycleCoordinator.PlanSavePathNormalization(");
+        saveAsBlock.Should().Contain("pathPlan.ShouldConfirmOverwrite");
+        saveAsBlock.Should().Contain("!await ConfirmNormalizedWorkbookOverwriteAsync(pathPlan.Path)");
+        saveAsBlock.Should().Contain("path = pathPlan.Path;");
         source.Should().Contain("AutomationProperties.SetAutomationId(replaceButton, \"WorkbookSaveOverwriteReplaceButton\")");
         source.Should().Contain("AutomationProperties.SetAutomationId(cancelButton, \"WorkbookSaveOverwriteCancelButton\")");
 
@@ -412,10 +416,11 @@ public sealed class AvaloniaShellSourceTests
     public void MainWindow_NativeFileMenuLabelsUseLocalizedResources()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
         var neutralResources = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Localization", "Resources", "Strings.resx"));
         var frenchResources = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Localization", "Resources", "Strings.fr-FR.resx"));
 
-        var keys = new[]
+        var fileMenuKeys = new[]
         {
             "AvaloniaNativeMenu_NewWorkbook",
             "AvaloniaNativeMenu_Open",
@@ -428,20 +433,28 @@ public sealed class AvaloniaShellSourceTests
             "AvaloniaNativeMenu_ShareWorkbook",
             "AvaloniaNativeMenu_WorkbookStatistics",
             "AvaloniaNativeMenu_CloseWorkbook",
-            "AvaloniaNativeMenu_NewSheet",
         };
 
-        foreach (var key in keys)
+        foreach (var key in fileMenuKeys)
         {
-            source.Should().Contain($"UiText.Get(\"{key}\")");
+            catalogSource.Should().Contain($"\"{key}\"");
             neutralResources.Should().Contain($"<data name=\"{key}\"");
             frenchResources.Should().Contain($"<data name=\"{key}\"");
         }
 
+        source.Should().Contain("ConfigureNativeFileMenuItem(_newWorkbookMenuItem, NativeFileMenuItemId.NewWorkbook);");
+        source.Should().Contain("GetNativeFileMenuItemHeader(NativeMenuCatalog.GetFileMenuItem(id))");
+        source.Should().Contain("plan.UsesResourceKey");
+        source.Should().Contain("UiText.Get(plan.Label)");
+        catalogSource.Should().Contain("new(NativeMenuItemId.NewSheet, \"AvaloniaNativeMenu_NewSheet\"");
+        catalogSource.Should().Contain("UsesResourceKey: true");
+        neutralResources.Should().Contain("<data name=\"AvaloniaNativeMenu_NewSheet\"");
+        frenchResources.Should().Contain("<data name=\"AvaloniaNativeMenu_NewSheet\"");
+
         var nativeMenuBlock = ExtractSourceBlock(
             source,
             "private void ConfigureNativeMenu()",
-            "_renameSheetMenuItem.Header = \"Rename Sheet...\";");
+            "_renameSheetMenuItem.Click += async (_, _) => await RenameActiveSheetAsync();");
         nativeMenuBlock.Should().NotContain("_newWorkbookMenuItem.Header = \"New Workbook\"");
         nativeMenuBlock.Should().NotContain("_openMenuItem.Header = \"Open...\"");
         nativeMenuBlock.Should().NotContain("_openRecentMenuItem.Header = \"Open Recent\"");
@@ -452,6 +465,7 @@ public sealed class AvaloniaShellSourceTests
         nativeMenuBlock.Should().NotContain("_workbookStatisticsMenuItem.Header = \"Workbook Statistics...\"");
         nativeMenuBlock.Should().NotContain("_closeWorkbookMenuItem.Header = \"Close Workbook\"");
         nativeMenuBlock.Should().NotContain("_newSheetMenuItem.Header = \"New Sheet\"");
+        nativeMenuBlock.Should().NotContain("_renameSheetMenuItem.Header = \"Rename Sheet...\"");
     }
 
     [Fact]
@@ -468,13 +482,16 @@ public sealed class AvaloniaShellSourceTests
     public void MainWindow_WiresOptionsDialogToSharedAppOptionsStore()
     {
         var menuSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
         var optionsSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.Options.cs"));
 
-        // Wired into the native File menu with an Options entry that calls ShowOptions.
+        // Wired into the native File menu with an Options entry that routes through the shared
+        // Backstage workflow planner before the platform executor calls ShowOptions.
         menuSource.Should().Contain("private readonly NativeMenuItem _optionsMenuItem = new();");
-        menuSource.Should().Contain("_optionsMenuItem.Header = UiText.Get(\"Options_Title\");");
-        menuSource.Should().Contain("_optionsMenuItem.Click += (_, _) => ShowOptions();");
-        menuSource.Should().Contain("fileMenu.Items.Add(_optionsMenuItem);");
+        menuSource.Should().Contain("ConfigureNativeFileMenuItem(_optionsMenuItem, NativeFileMenuItemId.Options);");
+        catalogSource.Should().Contain("\"Options_Title\"");
+        menuSource.Should().Contain("_optionsMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Options);");
+        catalogSource.Should().Contain("FileItem(NativeFileMenuItemId.Options)");
 
         // The dialog edits the shared AppOptions via the portable store and planner — no bespoke model.
         optionsSource.Should().Contain("var current = AppOptionsStore.Load();");
@@ -501,9 +518,12 @@ public sealed class AvaloniaShellSourceTests
     public void MainWindow_WiresNativeFileMenuToSharedOpenSavePipeline()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
+        var workflowSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.BackstageWorkflow.cs"));
         var normalizedSource = source.Replace("\r\n", "\n", StringComparison.Ordinal);
 
         source.Should().Contain("ConfigureNativeMenu();");
+        source.Should().Contain("using FreeX.App.Presentation.Backstage;");
         source.Should().Contain("private readonly RecentFilesStore _recentFiles = RecentFilesStore.Load();");
         source.Should().Contain("private readonly NativeMenuItem _newWorkbookMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _openMenuItem = new();");
@@ -553,40 +573,53 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private readonly NativeMenuItem _checkForUpdatesMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _aboutMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _legalNoticesMenuItem = new();");
-        source.Should().Contain("_newWorkbookMenuItem.Header = UiText.Get(\"AvaloniaNativeMenu_NewWorkbook\");");
-        source.Should().Contain("_newWorkbookMenuItem.Gesture = new KeyGesture(Key.N, KeyModifiers.Meta);");
-        source.Should().Contain("_newWorkbookMenuItem.Click += async (_, _) => await CreateNewWorkbookAsync();");
-        source.Should().Contain("_openMenuItem.Header = UiText.Get(\"AvaloniaNativeMenu_Open\");");
-        source.Should().Contain("_openMenuItem.Gesture = new KeyGesture(Key.O, KeyModifiers.Meta);");
-        source.Should().Contain("_openMenuItem.Click += async (_, _) => await OpenWorkbookAsync();");
-        source.Should().Contain("_openRecentMenuItem.Header = UiText.Get(\"AvaloniaNativeMenu_OpenRecent\");");
+        source.Should().Contain("ConfigureNativeFileMenuItem(_newWorkbookMenuItem, NativeFileMenuItemId.NewWorkbook);");
+        catalogSource.Should().Contain("\"AvaloniaNativeMenu_NewWorkbook\"");
+        catalogSource.Should().Contain("new NativeMenuGesturePlan(NativeMenuGestureKey.N, NativeMenuGestureModifiers.Meta)");
+        source.Should().Contain("_newWorkbookMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.New);");
+        source.Should().Contain("ConfigureNativeFileMenuItem(_openMenuItem, NativeFileMenuItemId.Open);");
+        catalogSource.Should().Contain("\"AvaloniaNativeMenu_Open\"");
+        catalogSource.Should().Contain("new NativeMenuGesturePlan(NativeMenuGestureKey.O, NativeMenuGestureModifiers.Meta)");
+        source.Should().Contain("_openMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Open);");
+        source.Should().Contain("ConfigureNativeFileMenuItem(_openRecentMenuItem, NativeFileMenuItemId.OpenRecent);");
+        catalogSource.Should().Contain("\"AvaloniaNativeMenu_OpenRecent\"");
         source.Should().Contain("_openRecentMenuItem.Menu = CreateNativeOpenRecentMenu(isIdle: true);");
-        source.Should().Contain("_saveMenuItem.Header = UiText.Get(\"AvaloniaNativeMenu_Save\");");
-        source.Should().Contain("_saveMenuItem.Gesture = new KeyGesture(Key.S, KeyModifiers.Meta);");
-        source.Should().Contain("_saveMenuItem.Click += async (_, _) => await SaveCurrentWorkbookAsync();");
-        source.Should().Contain("_saveAsMenuItem.Header = UiText.Get(\"AvaloniaNativeMenu_SaveAs\");");
-        source.Should().Contain("_saveAsMenuItem.Gesture = new KeyGesture(Key.S, KeyModifiers.Meta | KeyModifiers.Shift);");
-        source.Should().Contain("_saveAsMenuItem.Click += async (_, _) => await SaveWorkbookAsAsync();");
-        source.Should().Contain("_closeWorkbookMenuItem.Header = UiText.Get(\"AvaloniaNativeMenu_CloseWorkbook\");");
-        source.Should().Contain("_closeWorkbookMenuItem.Gesture = new KeyGesture(Key.W, KeyModifiers.Meta);");
-        source.Should().Contain("_closeWorkbookMenuItem.Click += async (_, _) => await CloseWorkbookAsync();");
-        source.Should().Contain("_undoMenuItem.Header = \"Undo\";");
-        source.Should().Contain("_undoMenuItem.Gesture = new KeyGesture(Key.Z, KeyModifiers.Meta);");
+        source.Should().Contain("ConfigureNativeFileMenuItem(_saveMenuItem, NativeFileMenuItemId.Save);");
+        catalogSource.Should().Contain("\"AvaloniaNativeMenu_Save\"");
+        catalogSource.Should().Contain("new NativeMenuGesturePlan(NativeMenuGestureKey.S, NativeMenuGestureModifiers.Meta)");
+        source.Should().Contain("_saveMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Save);");
+        source.Should().Contain("ConfigureNativeFileMenuItem(_saveAsMenuItem, NativeFileMenuItemId.SaveAs);");
+        catalogSource.Should().Contain("\"AvaloniaNativeMenu_SaveAs\"");
+        catalogSource.Should().Contain("NativeMenuGestureModifiers.Meta | NativeMenuGestureModifiers.Shift");
+        source.Should().Contain("_saveAsMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.SaveAs);");
+        source.Should().Contain("ConfigureNativeFileMenuItem(_closeWorkbookMenuItem, NativeFileMenuItemId.CloseWorkbook);");
+        catalogSource.Should().Contain("\"AvaloniaNativeMenu_CloseWorkbook\"");
+        catalogSource.Should().Contain("new NativeMenuGesturePlan(NativeMenuGestureKey.W, NativeMenuGestureModifiers.Meta)");
+        source.Should().Contain("_closeWorkbookMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Close);");
+        source.Should().Contain("_backstageExportMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Export);");
+        source.Should().Contain("_backstageAccountMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Account);");
+        source.Should().Contain("_optionsMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Options);");
+        workflowSource.Should().Contain("private Task ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId command)");
+        workflowSource.Should().Contain("FreeXBackstageCommandWorkflowExecutor.ExecuteAsync(");
+        workflowSource.Should().Contain("CreateBackstageCommandHandlers()");
+        workflowSource.Should().Contain("ExportWorkbookAsync: ShowBackstageExportDialogAsync");
+        workflowSource.Should().Contain("AccountAsync: ShowBackstageAccountDialogAsync");
+        workflowSource.Should().Contain("OptionsAsync: () =>");
+        workflowSource.Should().NotContain("FreeXBackstageFlowPlanner.BuildCommandWorkflow(command)");
+        workflowSource.Should().NotContain("case FreeXBackstageCommandWorkflowKind.");
+        source.Should().Contain("ConfigureNativeCatalogMenuItems();");
+        source.Should().Contain("ConfigureNativeMenuItem(GetNativeMenuItem(id), id);");
+        catalogSource.Should().Contain("new(NativeMenuItemId.Undo, \"Undo\", new NativeMenuGesturePlan(NativeMenuGestureKey.Z, NativeMenuGestureModifiers.Meta))");
         source.Should().Contain("_undoMenuItem.Click += (_, _) => UndoLastEdit();");
-        source.Should().Contain("_redoMenuItem.Header = \"Redo\";");
-        source.Should().Contain("_redoMenuItem.Gesture = new KeyGesture(Key.Z, KeyModifiers.Meta | KeyModifiers.Shift);");
+        catalogSource.Should().Contain("new(NativeMenuItemId.Redo, \"Redo\", new NativeMenuGesturePlan(NativeMenuGestureKey.Z, NativeMenuGestureModifiers.Meta | NativeMenuGestureModifiers.Shift))");
         source.Should().Contain("_redoMenuItem.Click += (_, _) => RedoLastEdit();");
-        source.Should().Contain("_cutMenuItem.Header = \"Cut\";");
-        source.Should().Contain("_cutMenuItem.Gesture = new KeyGesture(Key.X, KeyModifiers.Meta);");
+        catalogSource.Should().Contain("new(NativeMenuItemId.Cut, \"Cut\", new NativeMenuGesturePlan(NativeMenuGestureKey.X, NativeMenuGestureModifiers.Meta))");
         source.Should().Contain("_cutMenuItem.Click += async (_, _) => await CutSelectedRangeToClipboardAsync();");
-        source.Should().Contain("_copyMenuItem.Header = \"Copy\";");
-        source.Should().Contain("_copyMenuItem.Gesture = new KeyGesture(Key.C, KeyModifiers.Meta);");
+        catalogSource.Should().Contain("new(NativeMenuItemId.Copy, \"Copy\", new NativeMenuGesturePlan(NativeMenuGestureKey.C, NativeMenuGestureModifiers.Meta))");
         source.Should().Contain("_copyMenuItem.Click += async (_, _) => await CopySelectedRangeToClipboardAsync();");
-        source.Should().Contain("_pasteMenuItem.Header = \"Paste\";");
-        source.Should().Contain("_pasteMenuItem.Gesture = new KeyGesture(Key.V, KeyModifiers.Meta);");
+        catalogSource.Should().Contain("new(NativeMenuItemId.Paste, \"Paste\", new NativeMenuGesturePlan(NativeMenuGestureKey.V, NativeMenuGestureModifiers.Meta))");
         source.Should().Contain("_pasteMenuItem.Click += async (_, _) => await PasteClipboardTextAsync();");
-        source.Should().Contain("_pasteSpecialMenuItem.Header = \"Paste Special\";");
-        source.Should().Contain("_pasteSpecialMenuItem.Gesture = new KeyGesture(Key.V, KeyModifiers.Meta | KeyModifiers.Alt);");
+        catalogSource.Should().Contain("new(NativeMenuItemId.PasteSpecial, \"Paste Special\", new NativeMenuGesturePlan(NativeMenuGestureKey.V, NativeMenuGestureModifiers.Meta | NativeMenuGestureModifiers.Alt))");
         source.Should().Contain("_pasteSpecialMenuItem.Menu = CreateNativePasteSpecialMenu();");
         source.Should().Contain("CreateNativePasteCommentsMenuItem(\"Comments and Notes\")");
         source.Should().Contain("CreateNativePasteDataValidationMenuItem(\"Validation\")");
@@ -602,85 +635,79 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("CreateNativePasteSpecialTextMenuItem(\"Unicode Text\")");
         source.Should().Contain("CreateNativePastePictureMenuItem(\"Picture\", linkedPicture: false)");
         source.Should().Contain("CreateNativePastePictureMenuItem(\"Linked Picture\", linkedPicture: true)");
-        source.Should().Contain("_selectAllMenuItem.Header = \"Select All\";");
-        source.Should().Contain("_selectAllMenuItem.Gesture = new KeyGesture(Key.A, KeyModifiers.Meta);");
+        catalogSource.Should().Contain("new(NativeMenuItemId.SelectAll, \"Select All\", new NativeMenuGesturePlan(NativeMenuGestureKey.A, NativeMenuGestureModifiers.Meta))");
         source.Should().Contain("_selectAllMenuItem.Click += (_, _) => SelectCurrentRegionOrAll();");
-        source.Should().Contain("_clearMenuItem.Header = \"Clear\";");
         source.Should().Contain("_clearMenuItem.Menu = CreateNativeClearMenu();");
-        source.Should().Contain("_clearAllMenuItem.Header = \"Clear All\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.Clear, \"Clear\", RequiresGestureInSmoke: false)");
+        catalogSource.Should().Contain("new(NativeMenuItemId.ClearAll, \"Clear All\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_clearAllMenuItem.Click += (_, _) => ClearSelectedRangeAll();");
-        source.Should().Contain("_clearFormatsMenuItem.Header = \"Clear Formats\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.ClearFormats, \"Clear Formats\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_clearFormatsMenuItem.Click += (_, _) => ClearSelectedRangeFormats();");
-        source.Should().Contain("_clearContentsMenuItem.Header = \"Clear Contents\";");
-        source.Should().Contain("_clearContentsMenuItem.Gesture = new KeyGesture(Key.Delete);");
+        catalogSource.Should().Contain("new(NativeMenuItemId.ClearContents, \"Clear Contents\", new NativeMenuGesturePlan(NativeMenuGestureKey.Delete))");
         source.Should().Contain("_clearContentsMenuItem.Click += (_, _) => ClearSelectedRangeContents();");
-        source.Should().Contain("_clearCommentsMenuItem.Header = \"Clear Comments and Notes\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.ClearComments, \"Clear Comments and Notes\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_clearCommentsMenuItem.Click += (_, _) => ClearSelectedRangeComments();");
-        source.Should().Contain("_clearHyperlinksMenuItem.Header = \"Clear Hyperlinks\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.ClearHyperlinks, \"Clear Hyperlinks\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_clearHyperlinksMenuItem.Click += (_, _) => ClearSelectedRangeHyperlinks();");
-        source.Should().Contain("_boldMenuItem.Header = \"Bold\";");
-        source.Should().Contain("_boldMenuItem.Gesture = new KeyGesture(Key.B, KeyModifiers.Meta);");
+        catalogSource.Should().Contain("new(NativeMenuItemId.Bold, \"Bold\", new NativeMenuGesturePlan(NativeMenuGestureKey.B, NativeMenuGestureModifiers.Meta))");
         source.Should().Contain("_boldMenuItem.Click += (_, _) => ToggleSelectedRangeBold(trackLaunchSmokeLiveCommandKey: true);");
-        source.Should().Contain("_italicMenuItem.Header = \"Italic\";");
-        source.Should().Contain("_italicMenuItem.Gesture = new KeyGesture(Key.I, KeyModifiers.Meta);");
+        catalogSource.Should().Contain("new(NativeMenuItemId.Italic, \"Italic\", new NativeMenuGesturePlan(NativeMenuGestureKey.I, NativeMenuGestureModifiers.Meta))");
         source.Should().Contain("_italicMenuItem.Click += (_, _) => ToggleSelectedRangeItalic(trackLaunchSmokeLiveCommandKey: true);");
-        source.Should().Contain("_underlineMenuItem.Header = \"Underline\";");
-        source.Should().Contain("_underlineMenuItem.Gesture = new KeyGesture(Key.U, KeyModifiers.Meta);");
+        catalogSource.Should().Contain("new(NativeMenuItemId.Underline, \"Underline\", new NativeMenuGesturePlan(NativeMenuGestureKey.U, NativeMenuGestureModifiers.Meta))");
         source.Should().Contain("_underlineMenuItem.Click += (_, _) => ToggleSelectedRangeUnderline(trackLaunchSmokeLiveCommandKey: true);");
-        source.Should().Contain("_doubleUnderlineMenuItem.Header = \"Double Underline\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.DoubleUnderline, \"Double Underline\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_doubleUnderlineMenuItem.Click += (_, _) => ToggleSelectedRangeDoubleUnderline();");
-        source.Should().Contain("_strikethroughMenuItem.Header = \"Strikethrough\";");
-        source.Should().Contain("_strikethroughMenuItem.Gesture = new KeyGesture(Key.D5, KeyModifiers.Control);");
+        catalogSource.Should().Contain("new(NativeMenuItemId.Strikethrough, \"Strikethrough\", new NativeMenuGesturePlan(NativeMenuGestureKey.D5, NativeMenuGestureModifiers.Control))");
         source.Should().Contain("_strikethroughMenuItem.Click += (_, _) => ToggleSelectedRangeStrikethrough();");
-        source.Should().Contain("_increaseFontSizeMenuItem.Header = \"Increase Font Size\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.IncreaseFontSize, \"Increase Font Size\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_increaseFontSizeMenuItem.Click += (_, _) => IncreaseSelectedRangeFontSize();");
-        source.Should().Contain("_decreaseFontSizeMenuItem.Header = \"Decrease Font Size\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.DecreaseFontSize, \"Decrease Font Size\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_decreaseFontSizeMenuItem.Click += (_, _) => DecreaseSelectedRangeFontSize();");
-        source.Should().Contain("_fillColorMenuItem.Header = \"Fill Color\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.FillColor, \"Fill Color\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_fillColorMenuItem.Menu = CreateNativeColorPaletteMenu(ColorPaletteTarget.Fill, includeClearFill: true);");
-        source.Should().Contain("_clearFillMenuItem.Header = \"No Fill\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.ClearFill, \"No Fill\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_clearFillMenuItem.Click += (_, _) => ClearSelectedRangeFill();");
-        source.Should().Contain("_fontColorMenuItem.Header = \"Font Color\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.FontColor, \"Font Color\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_fontColorMenuItem.Menu = CreateNativeColorPaletteMenu(ColorPaletteTarget.Font, includeClearFill: false);");
-        source.Should().Contain("_horizontalTextMenuItem.Header = \"Horizontal\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.HorizontalText, \"Horizontal\", RequiresGestureInSmoke: false)");
         source.Should().Contain("ApplySelectedRangeTextRotation(0, \"Set horizontal text for\", \"Horizontal Text failed.\");");
-        source.Should().Contain("_angleCounterclockwiseMenuItem.Header = \"Angle Counterclockwise\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.AngleCounterclockwise, \"Angle Counterclockwise\", RequiresGestureInSmoke: false)");
         source.Should().Contain("ApplySelectedRangeTextRotation(45, \"Angled text counterclockwise for\", \"Angle Counterclockwise failed.\");");
-        source.Should().Contain("_angleClockwiseMenuItem.Header = \"Angle Clockwise\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.AngleClockwise, \"Angle Clockwise\", RequiresGestureInSmoke: false)");
         source.Should().Contain("ApplySelectedRangeTextRotation(-45, \"Angled text clockwise for\", \"Angle Clockwise failed.\");");
-        source.Should().Contain("_verticalTextMenuItem.Header = \"Vertical Text\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.VerticalText, \"Vertical Text\", RequiresGestureInSmoke: false)");
         source.Should().Contain("ApplySelectedRangeTextRotation(255, \"Set vertical text for\", \"Vertical Text failed.\");");
-        source.Should().Contain("_rotateTextUpMenuItem.Header = \"Rotate Text Up\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.RotateTextUp, \"Rotate Text Up\", RequiresGestureInSmoke: false)");
         source.Should().Contain("ApplySelectedRangeTextRotation(90, \"Rotated text up for\", \"Rotate Text Up failed.\");");
-        source.Should().Contain("_rotateTextDownMenuItem.Header = \"Rotate Text Down\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.RotateTextDown, \"Rotate Text Down\", RequiresGestureInSmoke: false)");
         source.Should().Contain("ApplySelectedRangeTextRotation(-90, \"Rotated text down for\", \"Rotate Text Down failed.\");");
-        source.Should().Contain("_currencyFormatMenuItem.Header = \"Accounting Number Format\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.CurrencyFormat, \"Accounting Number Format\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_currencyFormatMenuItem.Click += (_, _) => ApplySelectedRangeCurrencyFormat();");
-        source.Should().Contain("_percentFormatMenuItem.Header = \"Percent Style\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.PercentFormat, \"Percent Style\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_percentFormatMenuItem.Click += (_, _) => ApplySelectedRangePercentFormat();");
-        source.Should().Contain("_commaStyleMenuItem.Header = \"Comma Style\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.CommaStyle, \"Comma Style\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_commaStyleMenuItem.Click += (_, _) => ApplySelectedRangeCommaStyle();");
-        source.Should().Contain("_increaseDecimalMenuItem.Header = \"Increase Decimal Places\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.IncreaseDecimal, \"Increase Decimal Places\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_increaseDecimalMenuItem.Click += (_, _) => IncreaseSelectedRangeDecimalPlaces();");
-        source.Should().Contain("_decreaseDecimalMenuItem.Header = \"Decrease Decimal Places\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.DecreaseDecimal, \"Decrease Decimal Places\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_decreaseDecimalMenuItem.Click += (_, _) => DecreaseSelectedRangeDecimalPlaces();");
-        source.Should().Contain("_alignTopMenuItem.Header = \"Align Top\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.AlignTop, \"Align Top\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_alignTopMenuItem.Click += (_, _) => ApplySelectedRangeVerticalAlignment(CellVAlign.Top);");
-        source.Should().Contain("_alignMiddleMenuItem.Header = \"Align Middle\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.AlignMiddle, \"Align Middle\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_alignMiddleMenuItem.Click += (_, _) => ApplySelectedRangeVerticalAlignment(CellVAlign.Center);");
-        source.Should().Contain("_alignBottomMenuItem.Header = \"Align Bottom\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.AlignBottom, \"Align Bottom\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_alignBottomMenuItem.Click += (_, _) => ApplySelectedRangeVerticalAlignment(CellVAlign.Bottom);");
-        source.Should().Contain("_wrapTextMenuItem.Header = \"Wrap Text\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.WrapText, \"Wrap Text\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_wrapTextMenuItem.Click += (_, _) => ToggleSelectedRangeWrapText();");
-        source.Should().Contain("_decreaseIndentMenuItem.Header = \"Decrease Indent\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.DecreaseIndent, \"Decrease Indent\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_decreaseIndentMenuItem.Click += (_, _) => DecreaseSelectedRangeIndent();");
-        source.Should().Contain("_increaseIndentMenuItem.Header = \"Increase Indent\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.IncreaseIndent, \"Increase Indent\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_increaseIndentMenuItem.Click += (_, _) => IncreaseSelectedRangeIndent();");
-        source.Should().Contain("_alignLeftMenuItem.Header = \"Align Left\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.AlignLeft, \"Align Left\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_alignLeftMenuItem.Click += (_, _) => ApplySelectedRangeHorizontalAlignment(CellHAlign.Left);");
-        source.Should().Contain("_alignCenterMenuItem.Header = \"Align Center\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.AlignCenter, \"Align Center\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_alignCenterMenuItem.Click += (_, _) => ApplySelectedRangeHorizontalAlignment(CellHAlign.Center);");
-        source.Should().Contain("_alignRightMenuItem.Header = \"Align Right\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.AlignRight, \"Align Right\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_alignRightMenuItem.Click += (_, _) => ApplySelectedRangeHorizontalAlignment(CellHAlign.Right);");
         source.Should().Contain("private readonly NativeMenuItem _showGridlinesMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _showHeadingsMenuItem = new();");
@@ -689,64 +716,47 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private readonly NativeMenuItem _zoom100MenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _zoomToSelectionMenuItem = new();");
         source.Should().Contain("private readonly TextBlock _zoomText = new();");
-        source.Should().Contain("_showGridlinesMenuItem.Header = \"Gridlines\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.ShowGridlines, \"Gridlines\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_showGridlinesMenuItem.ToggleType = MenuItemToggleType.CheckBox;");
         source.Should().Contain("_showGridlinesMenuItem.Click += (_, _) => ToggleShowGridlines();");
-        source.Should().Contain("_showHeadingsMenuItem.Header = \"Headings\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.ShowHeadings, \"Headings\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_showHeadingsMenuItem.ToggleType = MenuItemToggleType.CheckBox;");
         source.Should().Contain("_showHeadingsMenuItem.Click += (_, _) => ToggleShowHeadings();");
-        source.Should().Contain("_zoomInMenuItem.Header = \"Zoom In\";");
-        source.Should().Contain("_zoomInMenuItem.Gesture = new KeyGesture(Key.OemPlus, KeyModifiers.Meta);");
+        catalogSource.Should().Contain("new(NativeMenuItemId.ZoomIn, \"Zoom In\", new NativeMenuGesturePlan(NativeMenuGestureKey.OemPlus, NativeMenuGestureModifiers.Meta))");
         source.Should().Contain("_zoomInMenuItem.Click += (_, _) => ZoomIn();");
-        source.Should().Contain("_zoomOutMenuItem.Header = \"Zoom Out\";");
-        source.Should().Contain("_zoomOutMenuItem.Gesture = new KeyGesture(Key.OemMinus, KeyModifiers.Meta);");
+        catalogSource.Should().Contain("new(NativeMenuItemId.ZoomOut, \"Zoom Out\", new NativeMenuGesturePlan(NativeMenuGestureKey.OemMinus, NativeMenuGestureModifiers.Meta))");
         source.Should().Contain("_zoomOutMenuItem.Click += (_, _) => ZoomOut();");
-        source.Should().Contain("_zoom100MenuItem.Header = \"100%\";");
-        source.Should().Contain("_zoom100MenuItem.Gesture = new KeyGesture(Key.D0, KeyModifiers.Meta);");
+        catalogSource.Should().Contain("new(NativeMenuItemId.Zoom100, \"100%\", new NativeMenuGesturePlan(NativeMenuGestureKey.D0, NativeMenuGestureModifiers.Meta))");
         source.Should().Contain("_zoom100MenuItem.Click += (_, _) => ZoomTo100Percent();");
-        source.Should().Contain("_zoomToSelectionMenuItem.Header = \"Zoom to Selection\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.ZoomToSelection, \"Zoom to Selection\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_zoomToSelectionMenuItem.Click += (_, _) => ZoomToSelection();");
         source.Should().Contain("private readonly NativeMenuItem _freezePanesMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _freezeTopRowMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _freezeFirstColumnMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _unfreezePanesMenuItem = new();");
-        source.Should().Contain("_freezePanesMenuItem.Header = \"Freeze Panes\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.FreezePanes, \"Freeze Panes\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_freezePanesMenuItem.Click += (_, _) => FreezePanesAtActiveCell();");
-        source.Should().Contain("_freezeTopRowMenuItem.Header = \"Freeze Top Row\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.FreezeTopRow, \"Freeze Top Row\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_freezeTopRowMenuItem.Click += (_, _) => FreezeTopRow();");
-        source.Should().Contain("_freezeFirstColumnMenuItem.Header = \"Freeze First Column\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.FreezeFirstColumn, \"Freeze First Column\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_freezeFirstColumnMenuItem.Click += (_, _) => FreezeFirstColumn();");
-        source.Should().Contain("_unfreezePanesMenuItem.Header = \"Unfreeze Panes\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.UnfreezePanes, \"Unfreeze Panes\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_unfreezePanesMenuItem.Click += (_, _) => UnfreezePanes();");
         source.Should().Contain("private readonly NativeMenuItem _showFormulasMenuItem = new();");
-        source.Should().Contain("_showFormulasMenuItem.Header = \"Show Formulas\";");
-        source.Should().Contain("_showFormulasMenuItem.Gesture = new KeyGesture(Key.Oem3, KeyModifiers.Control);");
+        catalogSource.Should().Contain("new(NativeMenuItemId.ShowFormulas, \"Show Formulas\", new NativeMenuGesturePlan(NativeMenuGestureKey.Oem3, NativeMenuGestureModifiers.Control))");
         source.Should().Contain("_showFormulasMenuItem.ToggleType = MenuItemToggleType.CheckBox;");
         source.Should().Contain("_showFormulasMenuItem.Click += (_, _) => ToggleShowFormulas();");
-        source.Should().Contain("viewMenu.Items.Add(_showGridlinesMenuItem);");
-        source.Should().Contain("viewMenu.Items.Add(_showHeadingsMenuItem);");
-        source.Should().Contain("viewMenu.Items.Add(_zoomInMenuItem);");
-        source.Should().Contain("viewMenu.Items.Add(_zoomOutMenuItem);");
-        source.Should().Contain("viewMenu.Items.Add(_zoom100MenuItem);");
-        source.Should().Contain("viewMenu.Items.Add(_zoomToSelectionMenuItem);");
-        source.Should().Contain("viewMenu.Items.Add(_freezePanesMenuItem);");
-        source.Should().Contain("viewMenu.Items.Add(_freezeTopRowMenuItem);");
-        source.Should().Contain("viewMenu.Items.Add(_freezeFirstColumnMenuItem);");
-        source.Should().Contain("viewMenu.Items.Add(_unfreezePanesMenuItem);");
-        source.Should().Contain("formulasMenu.Items.Add(_showFormulasMenuItem);");
-        source.Should().Contain("Header = \"View\"");
-        source.Should().Contain("_freezePanesMenuItem.IsEnabled = isIdle;");
-        source.Should().Contain("_freezeTopRowMenuItem.IsEnabled = isIdle;");
-        source.Should().Contain("_freezeFirstColumnMenuItem.IsEnabled = isIdle;");
-        source.Should().Contain("_unfreezePanesMenuItem.IsEnabled = isIdle;");
-        source.Should().Contain("_showGridlinesMenuItem.IsEnabled = isIdle;");
-        source.Should().Contain("_showGridlinesMenuItem.IsChecked = _session.IsShowingGridlines;");
-        source.Should().Contain("_showHeadingsMenuItem.IsEnabled = isIdle;");
-        source.Should().Contain("_showHeadingsMenuItem.IsChecked = _session.IsShowingHeadings;");
-        source.Should().Contain("_zoomInMenuItem.IsEnabled = isIdle && _session.ZoomPercent < SetWorksheetZoomCommand.MaxZoomPercent;");
-        source.Should().Contain("_zoomOutMenuItem.IsEnabled = isIdle && _session.ZoomPercent > SetWorksheetZoomCommand.MinZoomPercent;");
-        source.Should().Contain("_zoom100MenuItem.IsEnabled = isIdle;");
-        source.Should().Contain("_zoomToSelectionMenuItem.IsEnabled = isIdle;");
+        source.Should().Contain("var viewMenu = CreateNativeMenu(NativeMenuTopLevelId.View);");
+        source.Should().Contain("var formulasMenu = CreateNativeMenu(NativeMenuTopLevelId.Formulas);");
+        catalogSource.Should().Contain("Item(NativeMenuItemId.ShowFormulas)");
+        source.Should().NotContain("_showFormulasMenuItem.Header = \"Show Formulas\";");
+        source.Should().NotContain("_showFormulasMenuItem.Gesture = new KeyGesture(Key.Oem3, KeyModifiers.Control);");
+        source.Should().NotContain("formulasMenu.Items.Add(_showFormulasMenuItem);");
+        catalogSource.Should().Contain("new(NativeMenuTopLevelId.View, \"View\")");
+        source.Should().Contain("ApplyNativeMenuAvailability(isIdle);");
+        catalogSource.Should().Contain("new(NativeMenuItemId.FreezePanes, context.IsIdle)");
+        catalogSource.Should().Contain("new(NativeMenuItemId.ShowGridlines, context.IsIdle, context.IsShowingGridlines)");
+        catalogSource.Should().Contain("new(NativeMenuItemId.ZoomIn, context.IsIdle && context.CanZoomIn)");
         source.Should().Contain("private void ToggleShowGridlines()");
         source.Should().Contain("var showGridlines = !_session.IsShowingGridlines;");
         source.Should().Contain("var result = _session.SetShowGridlines(showGridlines);");
@@ -759,9 +769,9 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("[\"view.zoom\"] = () => _ = ShowZoomDialogAsync(),");
         source.Should().Contain("[\"More\"] = () => _ = ShowZoomDialogAsync(),");
         source.Should().Contain("private void ZoomIn() =>");
-        source.Should().Contain("ApplyZoomPercent(_session.ZoomPercent + ZoomStepPercent, \"Zoom In failed.\")");
+        source.Should().Contain("ApplyZoomPercent(_session.ZoomPercent + StatusBarZoomSliderPlanner.ZoomStepPercent, \"Zoom In failed.\")");
         source.Should().Contain("private void ZoomOut() =>");
-        source.Should().Contain("ApplyZoomPercent(_session.ZoomPercent - ZoomStepPercent, \"Zoom Out failed.\")");
+        source.Should().Contain("ApplyZoomPercent(_session.ZoomPercent - StatusBarZoomSliderPlanner.ZoomStepPercent, \"Zoom Out failed.\")");
         source.Should().Contain("private void ZoomTo100Percent() =>");
         source.Should().Contain("ApplyZoomPercent(100, \"100% Zoom failed.\")");
         source.Should().Contain("private void ZoomToSelection()");
@@ -773,16 +783,19 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("AutomationProperties.SetAutomationId(customBox, \"ZoomCustomPercentBox\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(okButton, \"ZoomOkButton\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(cancelButton, \"ZoomCancelButton\");");
-        source.Should().Contain("ZoomLevelMapper.TryParseZoomPercent(customBox.Text, out var customZoom)");
+        source.Should().Contain("ZoomDialogPlanner.TryCreateResult(customBox.Text, out var customResult, out var validationError)");
+        source.Should().Contain("ResolveZoomDialogValidationError(validationError)");
         source.Should().Contain("selectedZoomPercent = CalculateZoomToSelectionPercent();");
         source.Should().Contain("private void ApplyZoomPercent(int zoomPercent, string errorMessage)");
         source.Should().Contain("var result = _session.SetZoomPercent(zoomPercent);");
-        source.Should().Contain("RefreshShell($\"Zoom {FormatZoomPercent(_session.ZoomPercent)}\");");
+        source.Should().Contain("RefreshShell($\"Zoom {StatusBarZoomSliderPlanner.FormatZoomPercent(_session.ZoomPercent)}\");");
         source.Should().Contain("private int CalculateZoomToSelectionPercent()");
-        source.Should().Contain("CalculateZoomAxisFitPercent(");
-        source.Should().Contain("_zoomText.Text = FormatZoomPercent(_session.ZoomPercent);");
-        source.Should().Contain("_showFormulasMenuItem.IsEnabled = isIdle;");
-        source.Should().Contain("_showFormulasMenuItem.IsChecked = _session.IsShowingFormulas;");
+        source.Should().Contain("ZoomSelectionPlanner.CalculateFitWholePercent(");
+        source.Should().Contain("_zoomText.Text = StatusBarZoomSliderPlanner.FormatZoomPercent(_session.ZoomPercent);");
+        catalogSource.Should().Contain("new(NativeMenuItemId.ShowFormulas, context.IsIdle, context.IsShowingFormulas)");
+        source.Should().Contain("IsShowingFormulas: _session.IsShowingFormulas");
+        source.Should().NotContain("_showFormulasMenuItem.IsEnabled = isIdle;");
+        source.Should().NotContain("_showFormulasMenuItem.IsChecked = _session.IsShowingFormulas;");
         source.Should().Contain("private void FreezePanesAtActiveCell()");
         source.Should().Contain("private void FreezeTopRow()");
         source.Should().Contain("private void FreezeFirstColumn()");
@@ -808,121 +821,52 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("displayHeight / zoomFactor");
         source.Should().Contain("private double GetActiveZoomFactor()");
         source.Should().Contain("TryGetDisplayedDrawingObjectBounds(");
-        source.Should().Contain("_helpOnlineMenuItem.Header = \"Help Online\";");
-        source.Should().Contain("_helpOnlineMenuItem.Gesture = new KeyGesture(Key.F1, default);");
+        catalogSource.Should().Contain("new(NativeMenuItemId.HelpOnline, \"Help Online\", new NativeMenuGesturePlan(NativeMenuGestureKey.F1))");
         source.Should().Contain("_helpOnlineMenuItem.Click += async (_, _) => await OpenExternalHelpLinkAsync(AppHelpInfo.HelpUrl, \"Help Online\");");
-        source.Should().Contain("_sendFeedbackMenuItem.Header = \"Send Feedback\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.SendFeedback, \"Send Feedback\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_sendFeedbackMenuItem.Click += async (_, _) => await OpenExternalHelpLinkAsync(AppHelpInfo.FeedbackUrl, \"Send Feedback\");");
-        source.Should().Contain("_checkForUpdatesMenuItem.Header = \"Check for Updates\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.CheckForUpdates, \"Check for Updates\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_checkForUpdatesMenuItem.Click += async (_, _) => await OpenExternalHelpLinkAsync(AppHelpInfo.LatestReleaseUrl, \"Check for Updates\");");
-        source.Should().Contain("_aboutMenuItem.Header = \"About FreeX\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.About, \"About FreeX\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_aboutMenuItem.Click += async (_, _) => await ShowAboutDialogAsync();");
-        source.Should().Contain("_legalNoticesMenuItem.Header = \"Legal Notices\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.LegalNotices, \"Legal Notices\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_legalNoticesMenuItem.Click += async (_, _) => await ShowLegalNoticesDialogAsync();");
-        source.Should().Contain("_quitMenuItem.Header = \"Quit FreeX\";");
-        source.Should().Contain("_quitMenuItem.Gesture = new KeyGesture(Key.Q, KeyModifiers.Meta);");
+        source.Should().Contain("ConfigureNativeFileMenuItem(_quitMenuItem, NativeFileMenuItemId.Quit);");
+        catalogSource.Should().Contain("\"Quit FreeX\"");
+        catalogSource.Should().Contain("new NativeMenuGesturePlan(NativeMenuGestureKey.Q, NativeMenuGestureModifiers.Meta)");
         source.Should().Contain("_quitMenuItem.Click += async (_, _) => await TryQuitApplicationAsync();");
-        source.Should().Contain("fileMenu.Items.Add(_newWorkbookMenuItem);");
-        source.Should().Contain("fileMenu.Items.Add(_openRecentMenuItem);");
-        source.Should().Contain("fileMenu.Items.Add(_closeWorkbookMenuItem);");
-        source.Should().Contain("homeMenu.Items.Add(_undoMenuItem);");
-        source.Should().Contain("homeMenu.Items.Add(_redoMenuItem);");
-        source.Should().Contain("homeMenu.Items.Add(_cutMenuItem);");
-        source.Should().Contain("homeMenu.Items.Add(_copyMenuItem);");
-        source.Should().Contain("homeMenu.Items.Add(_pasteMenuItem);");
-        source.Should().Contain("homeMenu.Items.Add(_pasteSpecialMenuItem);");
-        source.Should().Contain("homeMenu.Items.Add(_clearMenuItem);");
-        source.Should().Contain("homeMenu.Items.Add(_boldMenuItem);");
-        source.Should().Contain("homeMenu.Items.Add(_italicMenuItem);");
-        source.Should().Contain("homeMenu.Items.Add(_underlineMenuItem);");
-        source.Should().Contain("homeMenu.Items.Add(_doubleUnderlineMenuItem);");
-        source.Should().Contain("homeMenu.Items.Add(_strikethroughMenuItem);");
-        source.Should().Contain("homeMenu.Items.Add(_increaseFontSizeMenuItem);");
-        source.Should().Contain("homeMenu.Items.Add(_decreaseFontSizeMenuItem);");
-        source.Should().Contain("homeMenu.Items.Add(_fillColorMenuItem);");
-        source.Should().Contain("homeMenu.Items.Add(_clearFillMenuItem);");
-        source.Should().Contain("homeMenu.Items.Add(_fontColorMenuItem);");
-        source.Should().Contain("homeMenu.Items.Add(_horizontalTextMenuItem);");
-        source.Should().Contain("homeMenu.Items.Add(_angleCounterclockwiseMenuItem);");
-        source.Should().Contain("homeMenu.Items.Add(_angleClockwiseMenuItem);");
-        source.Should().Contain("homeMenu.Items.Add(_verticalTextMenuItem);");
-        source.Should().Contain("homeMenu.Items.Add(_rotateTextUpMenuItem);");
-        source.Should().Contain("homeMenu.Items.Add(_rotateTextDownMenuItem);");
-        source.Should().Contain("homeMenu.Items.Add(_currencyFormatMenuItem);");
-        source.Should().Contain("homeMenu.Items.Add(_percentFormatMenuItem);");
-        source.Should().Contain("homeMenu.Items.Add(_commaStyleMenuItem);");
-        source.Should().Contain("homeMenu.Items.Add(_increaseDecimalMenuItem);");
-        source.Should().Contain("homeMenu.Items.Add(_decreaseDecimalMenuItem);");
-        source.Should().Contain("homeMenu.Items.Add(_alignTopMenuItem);");
-        source.Should().Contain("homeMenu.Items.Add(_alignMiddleMenuItem);");
-        source.Should().Contain("homeMenu.Items.Add(_alignBottomMenuItem);");
-        source.Should().Contain("homeMenu.Items.Add(_wrapTextMenuItem);");
-        source.Should().Contain("homeMenu.Items.Add(_decreaseIndentMenuItem);");
-        source.Should().Contain("homeMenu.Items.Add(_increaseIndentMenuItem);");
-        source.Should().Contain("homeMenu.Items.Add(_alignLeftMenuItem);");
-        source.Should().Contain("homeMenu.Items.Add(_alignCenterMenuItem);");
-        source.Should().Contain("homeMenu.Items.Add(_alignRightMenuItem);");
-        source.Should().Contain("helpMenu.Items.Add(_helpOnlineMenuItem);");
-        source.Should().Contain("helpMenu.Items.Add(_sendFeedbackMenuItem);");
-        source.Should().Contain("helpMenu.Items.Add(_checkForUpdatesMenuItem);");
-        source.Should().Contain("helpMenu.Items.Add(_aboutMenuItem);");
-        source.Should().Contain("helpMenu.Items.Add(_legalNoticesMenuItem);");
-        source.Should().Contain("Header = \"Home\"");
-        source.Should().Contain("Header = \"Page Layout\"");
-        source.Should().Contain("Header = \"Help\"");
+        source.Should().Contain("var fileMenu = CreateNativeFileMenu();");
+        catalogSource.Should().Contain("FileItem(NativeFileMenuItemId.NewWorkbook)");
+        catalogSource.Should().Contain("FileItem(NativeFileMenuItemId.OpenRecent)");
+        catalogSource.Should().Contain("FileItem(NativeFileMenuItemId.CloseWorkbook)");
+        source.Should().Contain("var homeMenu = CreateNativeMenu(NativeMenuTopLevelId.Home);");
+        source.Should().Contain("var helpMenu = CreateNativeMenu(NativeMenuTopLevelId.Help);");
+        catalogSource.Should().Contain("public static IReadOnlyList<NativeMenuEntryPlan> HomeMenuEntries");
+        catalogSource.Should().Contain("public static IReadOnlyList<NativeMenuEntryPlan> HelpMenuEntries");
+        catalogSource.Should().Contain("Item(NativeMenuItemId.Undo)");
+        catalogSource.Should().Contain("Item(NativeMenuItemId.HelpOnline)");
+        catalogSource.Should().Contain("new(NativeMenuTopLevelId.Home, \"Home\")");
+        catalogSource.Should().Contain("new(NativeMenuTopLevelId.PageLayout, \"Page Layout\")");
+        catalogSource.Should().Contain("new(NativeMenuTopLevelId.Help, \"Help\")");
         source.Should().Contain("InstallNativeMenu(_nativeMenu);");
         source.Should().Contain("NativeDock.SetMenu(app, menu);");
         source.Should().Contain("NativeMenu.SetMenu(this, menu);");
         source.Should().Contain("_nativeMenu.NeedsUpdate += (_, _) => UpdateSaveButton();");
-        source.Should().Contain("_newWorkbookMenuItem.IsEnabled = isIdle;");
-        source.Should().Contain("_openMenuItem.IsEnabled = _openButton.IsEnabled;");
-        source.Should().Contain("_openRecentMenuItem.IsEnabled = isIdle;");
+        source.Should().Contain("ApplyNativeFileMenuAvailability(isIdle);");
+        source.Should().Contain("new NativeFileMenuAvailabilityContext(");
+        source.Should().Contain("CanOpen: _openButton.IsEnabled");
         source.Should().Contain("RefreshNativeOpenRecentMenu(isIdle);");
-        source.Should().Contain("_saveMenuItem.IsEnabled = _saveButton.IsEnabled;");
-        source.Should().Contain("_saveAsMenuItem.IsEnabled = _saveAsButton.IsEnabled;");
-        source.Should().Contain("_closeWorkbookMenuItem.IsEnabled = isIdle;");
-        source.Should().Contain("_undoMenuItem.IsEnabled = _undoButton.IsEnabled;");
-        source.Should().Contain("_redoMenuItem.IsEnabled = _redoButton.IsEnabled;");
-        source.Should().Contain("_cutMenuItem.IsEnabled = _cutButton.IsEnabled;");
-        source.Should().Contain("_copyMenuItem.IsEnabled = _copyButton.IsEnabled;");
-        source.Should().Contain("_pasteMenuItem.IsEnabled = _pasteButton.IsEnabled;");
-        source.Should().Contain("_pasteSpecialMenuItem.IsEnabled = _pasteSpecialButton.IsEnabled;");
-        source.Should().Contain("_clearMenuItem.IsEnabled = _clearButton.IsEnabled;");
-        source.Should().Contain("_clearAllMenuItem.IsEnabled = _clearButton.IsEnabled;");
-        source.Should().Contain("_clearFormatsMenuItem.IsEnabled = _clearButton.IsEnabled;");
-        source.Should().Contain("_clearContentsMenuItem.IsEnabled = _clearButton.IsEnabled;");
-        source.Should().Contain("_clearCommentsMenuItem.IsEnabled = _clearButton.IsEnabled;");
-        source.Should().Contain("_clearHyperlinksMenuItem.IsEnabled = _clearButton.IsEnabled;");
-        source.Should().Contain("_boldMenuItem.IsEnabled = _boldButton.IsEnabled;");
-        source.Should().Contain("_italicMenuItem.IsEnabled = _italicButton.IsEnabled;");
-        source.Should().Contain("_underlineMenuItem.IsEnabled = _underlineButton.IsEnabled;");
-        source.Should().Contain("_doubleUnderlineMenuItem.IsEnabled = _doubleUnderlineButton.IsEnabled;");
-        source.Should().Contain("_strikethroughMenuItem.IsEnabled = _strikethroughButton.IsEnabled;");
-        source.Should().Contain("_increaseFontSizeMenuItem.IsEnabled = _increaseFontSizeButton.IsEnabled;");
-        source.Should().Contain("_decreaseFontSizeMenuItem.IsEnabled = _decreaseFontSizeButton.IsEnabled;");
-        source.Should().Contain("_fillColorMenuItem.IsEnabled = _fillColorButton.IsEnabled;");
-        source.Should().Contain("_clearFillMenuItem.IsEnabled = _fillColorButton.IsEnabled;");
-        source.Should().Contain("_fontColorMenuItem.IsEnabled = _fontColorButton.IsEnabled;");
-        source.Should().Contain("_horizontalTextMenuItem.IsEnabled = isIdle;");
-        source.Should().Contain("_angleCounterclockwiseMenuItem.IsEnabled = isIdle;");
-        source.Should().Contain("_angleClockwiseMenuItem.IsEnabled = isIdle;");
-        source.Should().Contain("_verticalTextMenuItem.IsEnabled = isIdle;");
-        source.Should().Contain("_rotateTextUpMenuItem.IsEnabled = isIdle;");
-        source.Should().Contain("_rotateTextDownMenuItem.IsEnabled = isIdle;");
-        source.Should().Contain("_currencyFormatMenuItem.IsEnabled = _currencyFormatButton.IsEnabled;");
-        source.Should().Contain("_percentFormatMenuItem.IsEnabled = _percentFormatButton.IsEnabled;");
-        source.Should().Contain("_commaStyleMenuItem.IsEnabled = _commaStyleButton.IsEnabled;");
-        source.Should().Contain("_increaseDecimalMenuItem.IsEnabled = _increaseDecimalButton.IsEnabled;");
-        source.Should().Contain("_decreaseDecimalMenuItem.IsEnabled = _decreaseDecimalButton.IsEnabled;");
-        source.Should().Contain("_alignTopMenuItem.IsEnabled = _alignTopButton.IsEnabled;");
-        source.Should().Contain("_alignMiddleMenuItem.IsEnabled = _alignMiddleButton.IsEnabled;");
-        source.Should().Contain("_alignBottomMenuItem.IsEnabled = _alignBottomButton.IsEnabled;");
-        source.Should().Contain("_wrapTextMenuItem.IsEnabled = _wrapTextButton.IsEnabled;");
-        source.Should().Contain("_decreaseIndentMenuItem.IsEnabled = _decreaseIndentButton.IsEnabled;");
-        source.Should().Contain("_increaseIndentMenuItem.IsEnabled = _increaseIndentButton.IsEnabled;");
-        source.Should().Contain("_alignLeftMenuItem.IsEnabled = _alignLeftButton.IsEnabled;");
-        source.Should().Contain("_alignCenterMenuItem.IsEnabled = _alignCenterButton.IsEnabled;");
-        source.Should().Contain("_alignRightMenuItem.IsEnabled = _alignRightButton.IsEnabled;");
+        source.Should().Contain("CanSave: _saveButton.IsEnabled");
+        source.Should().Contain("CanSaveAs: _saveAsButton.IsEnabled");
+        catalogSource.Should().Contain("new(NativeFileMenuItemId.CloseWorkbook, context.IsIdle)");
+        source.Should().Contain("ApplyNativeMenuAvailability(isIdle);");
+        catalogSource.Should().Contain("new(NativeMenuItemId.Undo, context.CanUndo)");
+        catalogSource.Should().Contain("new(NativeMenuItemId.PasteSpecial, context.CanPasteSpecial)");
+        catalogSource.Should().Contain("new(NativeMenuItemId.ClearAll, context.CanClear)");
+        catalogSource.Should().Contain("new(NativeMenuItemId.Bold, context.CanBold)");
+        catalogSource.Should().Contain("new(NativeMenuItemId.HorizontalText, context.IsIdle)");
+        catalogSource.Should().Contain("new(NativeMenuItemId.CurrencyFormat, context.CanCurrencyFormat)");
+        catalogSource.Should().Contain("new(NativeMenuItemId.AlignRight, context.CanAlignRight)");
         source.Should().Contain("private async Task CreateNewWorkbookAsync()");
         source.Should().Contain("ConfirmBeforeDestructiveWorkbookActionAsync(\"New Workbook\", \"Discard and Create\")");
         source.Should().Contain("_sessionFactory.CreateNew(viewportHeight, viewportWidth, includeObjects: true)");
@@ -948,7 +892,9 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("await OpenWorkbookPathAsync(target.Path, target.FileAccessIdentity);");
         source.Should().Contain("private void RecordStartupRecentWorkbook(StartupWorkbookLoadResult source)");
         source.Should().Contain("private void RecordRecentWorkbook(string path, WorkbookFileAccessIdentity? fileAccessIdentity = null)");
-        source.Should().Contain("_recentFiles.AddOrUpdate(target.Path, fileAccessIdentity ?? target.FileAccessIdentity);");
+        source.Should().Contain("RecentFileRegistrationService.RegisterIfNeeded(");
+        source.Should().Contain("new RecentFileRegistrationRequest(");
+        source.Should().Contain("FileAccessIdentity: fileAccessIdentity ?? target.FileAccessIdentity");
         source.Should().Contain("RecordRecentWorkbook(target.Path, target.FileAccessIdentity);");
         source.Should().Contain("RecordRecentWorkbook(target.Path, fileAccessIdentity);");
         normalizedSource.Should().Contain("_session = _sessionFactory.CreateOpened(target, result, viewportHeight, viewportWidth, includeObjects: true);\n            RefreshViewportSizeForZoom();\n            RecordRecentWorkbook(target.Path, target.FileAccessIdentity);");
@@ -963,9 +909,11 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("ConfirmBeforeDestructiveWorkbookActionAsync(\"Quit FreeX\", \"Discard and Quit\")");
         source.Should().Contain("_allowCloseWithoutDirtyPrompt = true;");
         source.Should().Contain("private async Task<bool> ConfirmBeforeDestructiveWorkbookActionAsync(string title, string discardButtonText)");
-        source.Should().Contain("WorkbookFileLifecycleCoordinator.ConfirmBeforeDestructiveActionAsync(");
+        source.Should().Contain("WorkbookFileLifecycleCoordinator.CanProceedAfterDirtyGateWithCleanSaveAsync(");
         source.Should().Contain("ToSaveChangesPrompt(await ShowDirtyWorkbookCloseDialogAsync(title, discardButtonText))");
-        source.Should().Contain("SaveCurrentWorkbookThenConfirmCleanAsync");
+        source.Should().Contain("SaveCurrentWorkbookAsync");
+        source.Should().Contain("() => _session.IsDirty");
+        source.Should().NotContain("SaveCurrentWorkbookThenConfirmCleanAsync");
         source.Should().Contain("private static SaveChangesPrompt ToSaveChangesPrompt(DirtyWorkbookCloseChoice choice)");
         source.Should().Contain("WorkbookFileLifecycleCoordinator.SaveResolvedAsync(");
         source.Should().Contain("() => _session.CanSaveCurrentSource(out var target) ? target : null");
@@ -1033,17 +981,30 @@ public sealed class AvaloniaShellSourceTests
     }
 
     [Fact]
-    public void MainWindow_BuildsAvaloniaFilePickerTypesFromCoreIoDescriptors()
+    public void MainWindow_BuildsAvaloniaFilePickerTypesFromSharedIoDescriptors()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var commandPlanner = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookFileCommandPlanner.cs"));
         var pickerPlanner = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookFilePickerPlanner.cs"));
+        var adapter = File.ReadAllText(RepositoryFileLocator.Find("shared", "Free.Shared.Shell.Avalonia", "AvaloniaFilePickerTypeAdapter.cs"));
+        var pickerService = File.ReadAllText(RepositoryFileLocator.Find("shared", "Free.Shared.Shell.Avalonia", "AvaloniaFilePickerService.cs"));
 
-        source.Should().Contain("WorkbookFilePickerPlanner.BuildOpenPickerPlan(_session.OpenFormats)");
-        source.Should().Contain("WorkbookFilePickerPlanner.BuildSavePickerPlan(");
+        source.Should().Contain("WorkbookFileCommandPlanner.PlanOpenPicker(StorageProvider.CanOpen, _session.OpenFormats)");
+        source.Should().Contain("WorkbookFileCommandPlanner.PlanSaveAsPicker(");
+        source.Should().NotContain("WorkbookFilePickerPlanner.BuildOpenPickerPlan(_session.OpenFormats)");
+        source.Should().NotContain("WorkbookFilePickerPlanner.BuildSavePickerPlan(");
+        commandPlanner.Should().Contain("WorkbookFilePickerPlanner.BuildOpenPickerPlan(openFormats)");
+        commandPlanner.Should().Contain("WorkbookFilePickerPlanner.BuildSavePickerPlan(");
         pickerPlanner.Should().Contain("FileDialogRequestPlanner.BuildOpenPickerPlan(");
         pickerPlanner.Should().Contain("FileDialogRequestPlanner.BuildSavePickerPlan(");
-        source.Should().Contain("private static FilePickerFileType CreateFilePickerFileType(FilePickerTypeDescriptor descriptor)");
-        source.Should().Contain("Patterns = descriptor.Patterns.ToList()");
+        pickerPlanner.Should().Contain("FileOpenPickerPlan BuildOpenPickerPlan");
+        pickerPlanner.Should().Contain("FileSavePickerPlan BuildSavePickerPlan");
+        source.Should().Contain("AvaloniaFilePickerOpenRequest.FromDescriptors(\"Open Workbook\", openPlan.FileTypes)");
+        source.Should().Contain("AvaloniaFilePickerSaveRequest.FromSavePlan(");
+        pickerService.Should().Contain("AvaloniaFilePickerTypeAdapter.ToFileTypes(fileTypes)");
+        pickerService.Should().Contain("AvaloniaFilePickerTypeAdapter.ToFileTypes(plan.FileTypes)");
+        source.Should().NotContain("private static FilePickerFileType CreateFilePickerFileType(FilePickerTypeDescriptor descriptor)");
+        adapter.Should().Contain("CreateFileType(descriptor.DisplayName, descriptor.Patterns)");
     }
 
     [Fact]
@@ -1320,7 +1281,7 @@ public sealed class AvaloniaShellSourceTests
         windowSource.Should().Contain("NativeMenu.SetMenu(this, menu);");
         windowSource.Should().Contain("internal MacOsLaunchSmokeSnapshot CreateLaunchSmokeSnapshot()");
         windowSource.Should().Contain("internal MacOsLaunchSmokeLiveCommandKeySnapshot BeginLaunchSmokeLiveCommandKeyProbe()");
-        windowSource.Should().Contain("FocusShellRegion(ShellFocusRegion.Worksheet);");
+        windowSource.Should().Contain("FocusShellRegion(ShellFocusTarget.Worksheet);");
         windowSource.Should().Contain("private void RecordLaunchSmokeLiveCommandKey(Key key, bool before, bool after)");
         windowSource.Should().Contain("private void RecordLaunchSmokeLiveSelectAllCommandKey(GridRange before, GridRange after)");
         windowSource.Should().Contain("RecordLaunchSmokeLiveSelectAllCommandKey(before, _session.SelectedRange);");
@@ -1330,14 +1291,15 @@ public sealed class AvaloniaShellSourceTests
         windowSource.Should().Contain("ExternalImageClipboardPictureCount: externalImageClipboardPictures.Length");
         windowSource.Should().Contain("ExternalImageClipboardPicturePngByteCount: externalImageClipboardPictures.Sum(static picture => picture.ImageBytes!.Length)");
         windowSource.Should().Contain("GetNativeTopLevelMenuOrder(_nativeMenu)");
-        windowSource.Should().Contain("HasNativeTopLevelMenu(_nativeMenu, expectedHeader)");
+        windowSource.Should().Contain("HasNativeTopLevelMenu(_nativeMenu, id);");
+        windowSource.Should().Contain("HasNativeTopLevelMenu(menu, GetNativeTopLevelHeader(id))");
         windowSource.Should().Contain("FindNativeTopLevelSubmenu(menu, expectedHeader)");
         windowSource.Should().Contain("WindowShown: IsVisible");
         windowSource.Should().Contain("OpenedSourcePath: _session.CurrentFilePath");
-        windowSource.Should().Contain("HasNativeNewWorkbookMenuItem: HasNativeMenuItem(_newWorkbookMenuItem, UiText.Get(\"AvaloniaNativeMenu_NewWorkbook\"))");
-        windowSource.Should().Contain("HasNativeOpenRecentMenuItem: HasNativeMenuItem(_openRecentMenuItem, UiText.Get(\"AvaloniaNativeMenu_OpenRecent\"), requireGesture: false)");
+        windowSource.Should().Contain("HasNativeNewWorkbookMenuItem: HasNativeFileMenuItem(_newWorkbookMenuItem, NativeFileMenuItemId.NewWorkbook)");
+        windowSource.Should().Contain("HasNativeOpenRecentMenuItem: HasNativeFileMenuItem(_openRecentMenuItem, NativeFileMenuItemId.OpenRecent)");
         windowSource.Should().Contain("NativeOpenRecentItemCount: nativeOpenRecentItemCount");
-        windowSource.Should().Contain("HasNativeWorkbookStatisticsMenuItem: HasNativeMenuItem(_workbookStatisticsMenuItem, UiText.Get(\"AvaloniaNativeMenu_WorkbookStatistics\"))");
+        windowSource.Should().Contain("HasNativeWorkbookStatisticsMenuItem: HasNativeFileMenuItem(_workbookStatisticsMenuItem, NativeFileMenuItemId.WorkbookStatistics)");
         windowSource.Should().Contain("NativeTabColorSwatchCount: nativeTabColorSwatchCount");
         windowSource.Should().Contain("HasFocusableSheetTab: HasSheetTabButton(button => button.Focusable)");
         windowSource.Should().Contain("HasFocusableActiveSheetTab: FindSheetTabButton(_session.ActiveSheet.Id)?.Focusable == true");
@@ -1356,10 +1318,10 @@ public sealed class AvaloniaShellSourceTests
         windowSource.Should().Contain("HasNativeDockMenu: hasNativeDockMenu");
         windowSource.Should().Contain("HasNativeDockFileMenu: hasNativeDockFileMenu");
         windowSource.Should().Contain("NativeDockFileMenuItemCount: nativeDockFileMenuItemCount");
-        windowSource.Should().Contain("CountNativeTopLevelMenuItems(nativeDockMenu, \"File\")");
-        windowSource.Should().Contain("HasNativeSelectAllSheetsMenuItem: HasNativeMenuItem(_selectAllSheetsMenuItem, \"Select All Sheets\", requireGesture: false)");
-        windowSource.Should().Contain("HasNativeUngroupSheetsMenuItem: HasNativeMenuItem(_ungroupSheetsMenuItem, \"Ungroup Sheets\", requireGesture: false)");
-        windowSource.Should().Contain("HasNativeCloseWorkbookMenuItem: HasNativeMenuItem(_closeWorkbookMenuItem, UiText.Get(\"AvaloniaNativeMenu_CloseWorkbook\"))");
+        windowSource.Should().Contain("CountNativeTopLevelMenuItems(nativeDockMenu, NativeMenuTopLevelId.File)");
+        windowSource.Should().Contain("HasNativeSelectAllSheetsMenuItem: HasNativeMenuItem(_selectAllSheetsMenuItem, NativeMenuItemId.SelectAllSheets)");
+        windowSource.Should().Contain("HasNativeUngroupSheetsMenuItem: HasNativeMenuItem(_ungroupSheetsMenuItem, NativeMenuItemId.UngroupSheets)");
+        windowSource.Should().Contain("HasNativeCloseWorkbookMenuItem: HasNativeFileMenuItem(_closeWorkbookMenuItem, NativeFileMenuItemId.CloseWorkbook)");
         windowSource.Should().Contain("NativeTopLevelMenuOrder: nativeTopLevelMenuOrder");
         windowSource.Should().Contain("HasNativeHomeMenu: hasNativeHomeMenu");
         windowSource.Should().Contain("HasNativeInsertMenu: hasNativeInsertMenu");
@@ -1368,12 +1330,12 @@ public sealed class AvaloniaShellSourceTests
         windowSource.Should().Contain("HasNativeDataMenu: hasNativeDataMenu");
         windowSource.Should().Contain("HasNativeViewMenu: hasNativeViewMenu");
         windowSource.Should().Contain("HasNativeHelpMenu: hasNativeHelpMenu");
-        windowSource.Should().Contain("HasNativeUndoMenuItem: HasNativeMenuItem(_undoMenuItem, \"Undo\")");
-        windowSource.Should().Contain("HasNativeRedoMenuItem: HasNativeMenuItem(_redoMenuItem, \"Redo\")");
-        windowSource.Should().Contain("HasNativeCutMenuItem: HasNativeMenuItem(_cutMenuItem, \"Cut\")");
-        windowSource.Should().Contain("HasNativeCopyMenuItem: HasNativeMenuItem(_copyMenuItem, \"Copy\")");
-        windowSource.Should().Contain("HasNativePasteMenuItem: HasNativeMenuItem(_pasteMenuItem, \"Paste\")");
-        windowSource.Should().Contain("HasNativePasteSpecialMenuItem: HasNativeMenuItem(_pasteSpecialMenuItem, \"Paste Special\")");
+        windowSource.Should().Contain("HasNativeUndoMenuItem: HasNativeMenuItem(_undoMenuItem, NativeMenuItemId.Undo)");
+        windowSource.Should().Contain("HasNativeRedoMenuItem: HasNativeMenuItem(_redoMenuItem, NativeMenuItemId.Redo)");
+        windowSource.Should().Contain("HasNativeCutMenuItem: HasNativeMenuItem(_cutMenuItem, NativeMenuItemId.Cut)");
+        windowSource.Should().Contain("HasNativeCopyMenuItem: HasNativeMenuItem(_copyMenuItem, NativeMenuItemId.Copy)");
+        windowSource.Should().Contain("HasNativePasteMenuItem: HasNativeMenuItem(_pasteMenuItem, NativeMenuItemId.Paste)");
+        windowSource.Should().Contain("HasNativePasteSpecialMenuItem: HasNativeMenuItem(_pasteSpecialMenuItem, NativeMenuItemId.PasteSpecial)");
         windowSource.Should().Contain("HasNativePasteSpecialCommentsMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, \"Comments and Notes\")");
         windowSource.Should().Contain("HasNativePasteSpecialValidationMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, \"Validation\")");
         windowSource.Should().Contain("HasNativePasteSpecialAllExceptBordersMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, \"All Except Borders\")");
@@ -1389,11 +1351,11 @@ public sealed class AvaloniaShellSourceTests
         windowSource.Should().Contain("HasNativePasteSpecialPictureMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, \"Picture\")");
         windowSource.Should().Contain("HasNativePasteSpecialLinkedPictureMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, \"Linked Picture\")");
         windowSource.Should().Contain("private static bool HasNativeSubmenuItem(NativeMenu? menu, string expectedHeader)");
-        windowSource.Should().Contain("HasNativeSelectAllMenuItem: HasNativeMenuItem(_selectAllMenuItem, \"Select All\")");
-        windowSource.Should().Contain("HasNativeFindMenuItem: HasNativeMenuItem(_findMenuItem, \"Find...\")");
-        windowSource.Should().Contain("HasNativeFindNextMenuItem: HasNativeMenuItem(_findNextMenuItem, \"Find Next\")");
-        windowSource.Should().Contain("HasNativeReplaceMenuItem: HasNativeMenuItem(_replaceMenuItem, \"Replace...\")");
-        windowSource.Should().Contain("HasNativeGoToMenuItem: HasNativeMenuItem(_goToMenuItem, \"Go To...\")");
+        windowSource.Should().Contain("HasNativeSelectAllMenuItem: HasNativeMenuItem(_selectAllMenuItem, NativeMenuItemId.SelectAll)");
+        windowSource.Should().Contain("HasNativeFindMenuItem: HasNativeMenuItem(_findMenuItem, NativeMenuItemId.Find)");
+        windowSource.Should().Contain("HasNativeFindNextMenuItem: HasNativeMenuItem(_findNextMenuItem, NativeMenuItemId.FindNext)");
+        windowSource.Should().Contain("HasNativeReplaceMenuItem: HasNativeMenuItem(_replaceMenuItem, NativeMenuItemId.Replace)");
+        windowSource.Should().Contain("HasNativeGoToMenuItem: HasNativeMenuItem(_goToMenuItem, NativeMenuItemId.GoTo)");
         windowSource.Should().Contain("HasClearButton: _clearButton.Content?.ToString() == \"Clear\"");
         windowSource.Should().Contain("HasClearAllMenuItem: HasToolbarMenuItem(_clearAllFlyoutItem, \"Clear All\")");
         windowSource.Should().Contain("HasClearFormatsMenuItem: HasToolbarMenuItem(_clearFormatsFlyoutItem, \"Clear Formats\")");
@@ -1401,70 +1363,70 @@ public sealed class AvaloniaShellSourceTests
         windowSource.Should().Contain("HasClearCommentsMenuItem: HasToolbarMenuItem(_clearCommentsFlyoutItem, \"Clear Comments and Notes\")");
         windowSource.Should().Contain("HasClearHyperlinksMenuItem: HasToolbarMenuItem(_clearHyperlinksFlyoutItem, \"Clear Hyperlinks\")");
         windowSource.Should().Contain("private static bool HasToolbarMenuItem(MenuItem item, string expectedHeader)");
-        windowSource.Should().Contain("HasNativeClearMenuItem: HasNativeMenuItem(_clearMenuItem, \"Clear\", requireGesture: false)");
-        windowSource.Should().Contain("HasNativeClearAllMenuItem: HasNativeSubmenuItem(_clearMenuItem.Menu, \"Clear All\")");
-        windowSource.Should().Contain("HasNativeClearFormatsMenuItem: HasNativeSubmenuItem(_clearMenuItem.Menu, \"Clear Formats\")");
-        windowSource.Should().Contain("HasNativeClearContentsMenuItem: HasNativeSubmenuItem(_clearMenuItem.Menu, \"Clear Contents\")");
-        windowSource.Should().Contain("HasNativeClearCommentsMenuItem: HasNativeSubmenuItem(_clearMenuItem.Menu, \"Clear Comments and Notes\")");
-        windowSource.Should().Contain("HasNativeClearHyperlinksMenuItem: HasNativeSubmenuItem(_clearMenuItem.Menu, \"Clear Hyperlinks\")");
-        windowSource.Should().Contain("HasNativeBoldMenuItem: HasNativeMenuItem(_boldMenuItem, \"Bold\")");
-        windowSource.Should().Contain("HasNativeItalicMenuItem: HasNativeMenuItem(_italicMenuItem, \"Italic\")");
-        windowSource.Should().Contain("HasNativeUnderlineMenuItem: HasNativeMenuItem(_underlineMenuItem, \"Underline\")");
-        windowSource.Should().Contain("HasNativeDoubleUnderlineMenuItem: HasNativeMenuItem(_doubleUnderlineMenuItem, \"Double Underline\", requireGesture: false)");
-        windowSource.Should().Contain("HasNativeStrikethroughMenuItem: HasNativeMenuItem(_strikethroughMenuItem, \"Strikethrough\")");
-        windowSource.Should().Contain("HasNativeIncreaseFontSizeMenuItem: HasNativeMenuItem(_increaseFontSizeMenuItem, \"Increase Font Size\", requireGesture: false)");
-        windowSource.Should().Contain("HasNativeDecreaseFontSizeMenuItem: HasNativeMenuItem(_decreaseFontSizeMenuItem, \"Decrease Font Size\", requireGesture: false)");
-        windowSource.Should().Contain("HasNativeFillColorMenuItem: HasNativeMenuItem(_fillColorMenuItem, \"Fill Color\", requireGesture: false)");
-        windowSource.Should().Contain("HasNativeClearFillMenuItem: HasNativeMenuItem(_clearFillMenuItem, \"No Fill\", requireGesture: false)");
-        windowSource.Should().Contain("HasNativeFontColorMenuItem: HasNativeMenuItem(_fontColorMenuItem, \"Font Color\", requireGesture: false)");
+        windowSource.Should().Contain("HasNativeClearMenuItem: HasNativeMenuItem(_clearMenuItem, NativeMenuItemId.Clear)");
+        windowSource.Should().Contain("HasNativeClearAllMenuItem: HasNativeSubmenuItem(_clearMenuItem.Menu, NativeMenuItemId.ClearAll)");
+        windowSource.Should().Contain("HasNativeClearFormatsMenuItem: HasNativeSubmenuItem(_clearMenuItem.Menu, NativeMenuItemId.ClearFormats)");
+        windowSource.Should().Contain("HasNativeClearContentsMenuItem: HasNativeSubmenuItem(_clearMenuItem.Menu, NativeMenuItemId.ClearContents)");
+        windowSource.Should().Contain("HasNativeClearCommentsMenuItem: HasNativeSubmenuItem(_clearMenuItem.Menu, NativeMenuItemId.ClearComments)");
+        windowSource.Should().Contain("HasNativeClearHyperlinksMenuItem: HasNativeSubmenuItem(_clearMenuItem.Menu, NativeMenuItemId.ClearHyperlinks)");
+        windowSource.Should().Contain("HasNativeBoldMenuItem: HasNativeMenuItem(_boldMenuItem, NativeMenuItemId.Bold)");
+        windowSource.Should().Contain("HasNativeItalicMenuItem: HasNativeMenuItem(_italicMenuItem, NativeMenuItemId.Italic)");
+        windowSource.Should().Contain("HasNativeUnderlineMenuItem: HasNativeMenuItem(_underlineMenuItem, NativeMenuItemId.Underline)");
+        windowSource.Should().Contain("HasNativeDoubleUnderlineMenuItem: HasNativeMenuItem(_doubleUnderlineMenuItem, NativeMenuItemId.DoubleUnderline)");
+        windowSource.Should().Contain("HasNativeStrikethroughMenuItem: HasNativeMenuItem(_strikethroughMenuItem, NativeMenuItemId.Strikethrough)");
+        windowSource.Should().Contain("HasNativeIncreaseFontSizeMenuItem: HasNativeMenuItem(_increaseFontSizeMenuItem, NativeMenuItemId.IncreaseFontSize)");
+        windowSource.Should().Contain("HasNativeDecreaseFontSizeMenuItem: HasNativeMenuItem(_decreaseFontSizeMenuItem, NativeMenuItemId.DecreaseFontSize)");
+        windowSource.Should().Contain("HasNativeFillColorMenuItem: HasNativeMenuItem(_fillColorMenuItem, NativeMenuItemId.FillColor)");
+        windowSource.Should().Contain("HasNativeClearFillMenuItem: HasNativeMenuItem(_clearFillMenuItem, NativeMenuItemId.ClearFill)");
+        windowSource.Should().Contain("HasNativeFontColorMenuItem: HasNativeMenuItem(_fontColorMenuItem, NativeMenuItemId.FontColor)");
         windowSource.Should().Contain("NativeFillColorSwatchCount: nativeFillColorSwatchCount");
         windowSource.Should().Contain("NativeFontColorSwatchCount: nativeFontColorSwatchCount");
         windowSource.Should().Contain("HasBordersButton: _bordersButton.Content?.ToString() == \"Borders\"");
         windowSource.Should().Contain("HasMergeAndCenterButton: _mergeAndCenterButton.Content?.ToString() == \"Merge & Center\"");
-        windowSource.Should().Contain("HasNativeBordersMenuItem: HasNativeMenuItem(_bordersMenuItem, \"Borders\", requireGesture: false)");
+        windowSource.Should().Contain("HasNativeBordersMenuItem: HasNativeMenuItem(_bordersMenuItem, NativeMenuItemId.Borders)");
         windowSource.Should().Contain("NativeBordersPresetCount: nativeBordersPresetCount");
-        windowSource.Should().Contain("HasNativeCellStylesMenuItem: HasNativeMenuItem(_cellStylesMenuItem, \"Cell Styles\", requireGesture: false)");
+        windowSource.Should().Contain("HasNativeCellStylesMenuItem: HasNativeMenuItem(_cellStylesMenuItem, NativeMenuItemId.CellStyles)");
         windowSource.Should().Contain("NativeCellStylesPresetCount: nativeCellStylesPresetCount");
-        windowSource.Should().Contain("HasNativeHorizontalTextMenuItem: HasNativeMenuItem(_horizontalTextMenuItem, \"Horizontal\", requireGesture: false)");
-        windowSource.Should().Contain("HasNativeAngleCounterclockwiseMenuItem: HasNativeMenuItem(_angleCounterclockwiseMenuItem, \"Angle Counterclockwise\", requireGesture: false)");
-        windowSource.Should().Contain("HasNativeAngleClockwiseMenuItem: HasNativeMenuItem(_angleClockwiseMenuItem, \"Angle Clockwise\", requireGesture: false)");
-        windowSource.Should().Contain("HasNativeVerticalTextMenuItem: HasNativeMenuItem(_verticalTextMenuItem, \"Vertical Text\", requireGesture: false)");
-        windowSource.Should().Contain("HasNativeRotateTextUpMenuItem: HasNativeMenuItem(_rotateTextUpMenuItem, \"Rotate Text Up\", requireGesture: false)");
-        windowSource.Should().Contain("HasNativeRotateTextDownMenuItem: HasNativeMenuItem(_rotateTextDownMenuItem, \"Rotate Text Down\", requireGesture: false)");
-        windowSource.Should().Contain("HasNativeCurrencyFormatMenuItem: HasNativeMenuItem(_currencyFormatMenuItem, \"Accounting Number Format\", requireGesture: false)");
-        windowSource.Should().Contain("HasNativePercentFormatMenuItem: HasNativeMenuItem(_percentFormatMenuItem, \"Percent Style\", requireGesture: false)");
-        windowSource.Should().Contain("HasNativeCommaStyleMenuItem: HasNativeMenuItem(_commaStyleMenuItem, \"Comma Style\", requireGesture: false)");
-        windowSource.Should().Contain("HasNativeIncreaseDecimalMenuItem: HasNativeMenuItem(_increaseDecimalMenuItem, \"Increase Decimal Places\", requireGesture: false)");
-        windowSource.Should().Contain("HasNativeDecreaseDecimalMenuItem: HasNativeMenuItem(_decreaseDecimalMenuItem, \"Decrease Decimal Places\", requireGesture: false)");
-        windowSource.Should().Contain("HasNativeAlignTopMenuItem: HasNativeMenuItem(_alignTopMenuItem, \"Align Top\", requireGesture: false)");
-        windowSource.Should().Contain("HasNativeAlignMiddleMenuItem: HasNativeMenuItem(_alignMiddleMenuItem, \"Align Middle\", requireGesture: false)");
-        windowSource.Should().Contain("HasNativeAlignBottomMenuItem: HasNativeMenuItem(_alignBottomMenuItem, \"Align Bottom\", requireGesture: false)");
+        windowSource.Should().Contain("HasNativeHorizontalTextMenuItem: HasNativeMenuItem(_horizontalTextMenuItem, NativeMenuItemId.HorizontalText)");
+        windowSource.Should().Contain("HasNativeAngleCounterclockwiseMenuItem: HasNativeMenuItem(_angleCounterclockwiseMenuItem, NativeMenuItemId.AngleCounterclockwise)");
+        windowSource.Should().Contain("HasNativeAngleClockwiseMenuItem: HasNativeMenuItem(_angleClockwiseMenuItem, NativeMenuItemId.AngleClockwise)");
+        windowSource.Should().Contain("HasNativeVerticalTextMenuItem: HasNativeMenuItem(_verticalTextMenuItem, NativeMenuItemId.VerticalText)");
+        windowSource.Should().Contain("HasNativeRotateTextUpMenuItem: HasNativeMenuItem(_rotateTextUpMenuItem, NativeMenuItemId.RotateTextUp)");
+        windowSource.Should().Contain("HasNativeRotateTextDownMenuItem: HasNativeMenuItem(_rotateTextDownMenuItem, NativeMenuItemId.RotateTextDown)");
+        windowSource.Should().Contain("HasNativeCurrencyFormatMenuItem: HasNativeMenuItem(_currencyFormatMenuItem, NativeMenuItemId.CurrencyFormat)");
+        windowSource.Should().Contain("HasNativePercentFormatMenuItem: HasNativeMenuItem(_percentFormatMenuItem, NativeMenuItemId.PercentFormat)");
+        windowSource.Should().Contain("HasNativeCommaStyleMenuItem: HasNativeMenuItem(_commaStyleMenuItem, NativeMenuItemId.CommaStyle)");
+        windowSource.Should().Contain("HasNativeIncreaseDecimalMenuItem: HasNativeMenuItem(_increaseDecimalMenuItem, NativeMenuItemId.IncreaseDecimal)");
+        windowSource.Should().Contain("HasNativeDecreaseDecimalMenuItem: HasNativeMenuItem(_decreaseDecimalMenuItem, NativeMenuItemId.DecreaseDecimal)");
+        windowSource.Should().Contain("HasNativeAlignTopMenuItem: HasNativeMenuItem(_alignTopMenuItem, NativeMenuItemId.AlignTop)");
+        windowSource.Should().Contain("HasNativeAlignMiddleMenuItem: HasNativeMenuItem(_alignMiddleMenuItem, NativeMenuItemId.AlignMiddle)");
+        windowSource.Should().Contain("HasNativeAlignBottomMenuItem: HasNativeMenuItem(_alignBottomMenuItem, NativeMenuItemId.AlignBottom)");
         windowSource.Should().Contain("HasWrapTextButton: _wrapTextButton.Content?.ToString() == \"Wrap\"");
-        windowSource.Should().Contain("HasNativeWrapTextMenuItem: HasNativeMenuItem(_wrapTextMenuItem, \"Wrap Text\", requireGesture: false)");
-        windowSource.Should().Contain("HasNativeMergeAndCenterMenuItem: HasNativeMenuItem(_mergeAndCenterMenuItem, \"Merge & Center\", requireGesture: false)");
-        windowSource.Should().Contain("HasNativeUnmergeCellsMenuItem: HasNativeMenuItem(_unmergeCellsMenuItem, \"Unmerge Cells\", requireGesture: false)");
-        windowSource.Should().Contain("HasNativeShowGridlinesMenuItem: HasNativeMenuItem(_showGridlinesMenuItem, \"Gridlines\", requireGesture: false)");
-        windowSource.Should().Contain("HasNativeShowHeadingsMenuItem: HasNativeMenuItem(_showHeadingsMenuItem, \"Headings\", requireGesture: false)");
-        windowSource.Should().Contain("HasNativeZoomInMenuItem: HasNativeMenuItem(_zoomInMenuItem, \"Zoom In\")");
-        windowSource.Should().Contain("HasNativeZoomOutMenuItem: HasNativeMenuItem(_zoomOutMenuItem, \"Zoom Out\")");
-        windowSource.Should().Contain("HasNativeZoom100MenuItem: HasNativeMenuItem(_zoom100MenuItem, \"100%\")");
-        windowSource.Should().Contain("HasNativeZoomToSelectionMenuItem: HasNativeMenuItem(_zoomToSelectionMenuItem, \"Zoom to Selection\", requireGesture: false)");
-        windowSource.Should().Contain("HasNativeFreezePanesMenuItem: HasNativeMenuItem(_freezePanesMenuItem, \"Freeze Panes\", requireGesture: false)");
-        windowSource.Should().Contain("HasNativeFreezeTopRowMenuItem: HasNativeMenuItem(_freezeTopRowMenuItem, \"Freeze Top Row\", requireGesture: false)");
-        windowSource.Should().Contain("HasNativeFreezeFirstColumnMenuItem: HasNativeMenuItem(_freezeFirstColumnMenuItem, \"Freeze First Column\", requireGesture: false)");
-        windowSource.Should().Contain("HasNativeUnfreezePanesMenuItem: HasNativeMenuItem(_unfreezePanesMenuItem, \"Unfreeze Panes\", requireGesture: false)");
-        windowSource.Should().Contain("HasNativeDecreaseIndentMenuItem: HasNativeMenuItem(_decreaseIndentMenuItem, \"Decrease Indent\", requireGesture: false)");
-        windowSource.Should().Contain("HasNativeIncreaseIndentMenuItem: HasNativeMenuItem(_increaseIndentMenuItem, \"Increase Indent\", requireGesture: false)");
-        windowSource.Should().Contain("HasNativeAlignLeftMenuItem: HasNativeMenuItem(_alignLeftMenuItem, \"Align Left\", requireGesture: false)");
-        windowSource.Should().Contain("HasNativeAlignCenterMenuItem: HasNativeMenuItem(_alignCenterMenuItem, \"Align Center\", requireGesture: false)");
-        windowSource.Should().Contain("HasNativeAlignRightMenuItem: HasNativeMenuItem(_alignRightMenuItem, \"Align Right\", requireGesture: false)");
-        windowSource.Should().Contain("HasNativeShowFormulasMenuItem: HasNativeMenuItem(_showFormulasMenuItem, \"Show Formulas\")");
-        windowSource.Should().Contain("HasNativeHelpOnlineMenuItem: HasNativeMenuItem(_helpOnlineMenuItem, \"Help Online\")");
-        windowSource.Should().Contain("HasNativeSendFeedbackMenuItem: HasNativeMenuItem(_sendFeedbackMenuItem, \"Send Feedback\", requireGesture: false)");
-        windowSource.Should().Contain("HasNativeCheckForUpdatesMenuItem: HasNativeMenuItem(_checkForUpdatesMenuItem, \"Check for Updates\", requireGesture: false)");
-        windowSource.Should().Contain("HasNativeAboutMenuItem: HasNativeMenuItem(_aboutMenuItem, \"About FreeX\", requireGesture: false)");
-        windowSource.Should().Contain("HasNativeLegalNoticesMenuItem: HasNativeMenuItem(_legalNoticesMenuItem, \"Legal Notices\", requireGesture: false)");
-        windowSource.Should().Contain("HasNativeQuitMenuItem: HasNativeMenuItem(_quitMenuItem, \"Quit FreeX\")");
+        windowSource.Should().Contain("HasNativeWrapTextMenuItem: HasNativeMenuItem(_wrapTextMenuItem, NativeMenuItemId.WrapText)");
+        windowSource.Should().Contain("HasNativeMergeAndCenterMenuItem: HasNativeMenuItem(_mergeAndCenterMenuItem, NativeMenuItemId.MergeAndCenter)");
+        windowSource.Should().Contain("HasNativeUnmergeCellsMenuItem: HasNativeMenuItem(_unmergeCellsMenuItem, NativeMenuItemId.UnmergeCells)");
+        windowSource.Should().Contain("HasNativeShowGridlinesMenuItem: HasNativeMenuItem(_showGridlinesMenuItem, NativeMenuItemId.ShowGridlines)");
+        windowSource.Should().Contain("HasNativeShowHeadingsMenuItem: HasNativeMenuItem(_showHeadingsMenuItem, NativeMenuItemId.ShowHeadings)");
+        windowSource.Should().Contain("HasNativeZoomInMenuItem: HasNativeMenuItem(_zoomInMenuItem, NativeMenuItemId.ZoomIn)");
+        windowSource.Should().Contain("HasNativeZoomOutMenuItem: HasNativeMenuItem(_zoomOutMenuItem, NativeMenuItemId.ZoomOut)");
+        windowSource.Should().Contain("HasNativeZoom100MenuItem: HasNativeMenuItem(_zoom100MenuItem, NativeMenuItemId.Zoom100)");
+        windowSource.Should().Contain("HasNativeZoomToSelectionMenuItem: HasNativeMenuItem(_zoomToSelectionMenuItem, NativeMenuItemId.ZoomToSelection)");
+        windowSource.Should().Contain("HasNativeFreezePanesMenuItem: HasNativeMenuItem(_freezePanesMenuItem, NativeMenuItemId.FreezePanes)");
+        windowSource.Should().Contain("HasNativeFreezeTopRowMenuItem: HasNativeMenuItem(_freezeTopRowMenuItem, NativeMenuItemId.FreezeTopRow)");
+        windowSource.Should().Contain("HasNativeFreezeFirstColumnMenuItem: HasNativeMenuItem(_freezeFirstColumnMenuItem, NativeMenuItemId.FreezeFirstColumn)");
+        windowSource.Should().Contain("HasNativeUnfreezePanesMenuItem: HasNativeMenuItem(_unfreezePanesMenuItem, NativeMenuItemId.UnfreezePanes)");
+        windowSource.Should().Contain("HasNativeDecreaseIndentMenuItem: HasNativeMenuItem(_decreaseIndentMenuItem, NativeMenuItemId.DecreaseIndent)");
+        windowSource.Should().Contain("HasNativeIncreaseIndentMenuItem: HasNativeMenuItem(_increaseIndentMenuItem, NativeMenuItemId.IncreaseIndent)");
+        windowSource.Should().Contain("HasNativeAlignLeftMenuItem: HasNativeMenuItem(_alignLeftMenuItem, NativeMenuItemId.AlignLeft)");
+        windowSource.Should().Contain("HasNativeAlignCenterMenuItem: HasNativeMenuItem(_alignCenterMenuItem, NativeMenuItemId.AlignCenter)");
+        windowSource.Should().Contain("HasNativeAlignRightMenuItem: HasNativeMenuItem(_alignRightMenuItem, NativeMenuItemId.AlignRight)");
+        windowSource.Should().Contain("HasNativeShowFormulasMenuItem: HasNativeMenuItem(_showFormulasMenuItem, NativeMenuItemId.ShowFormulas)");
+        windowSource.Should().Contain("HasNativeHelpOnlineMenuItem: HasNativeMenuItem(_helpOnlineMenuItem, NativeMenuItemId.HelpOnline)");
+        windowSource.Should().Contain("HasNativeSendFeedbackMenuItem: HasNativeMenuItem(_sendFeedbackMenuItem, NativeMenuItemId.SendFeedback)");
+        windowSource.Should().Contain("HasNativeCheckForUpdatesMenuItem: HasNativeMenuItem(_checkForUpdatesMenuItem, NativeMenuItemId.CheckForUpdates)");
+        windowSource.Should().Contain("HasNativeAboutMenuItem: HasNativeMenuItem(_aboutMenuItem, NativeMenuItemId.About)");
+        windowSource.Should().Contain("HasNativeLegalNoticesMenuItem: HasNativeMenuItem(_legalNoticesMenuItem, NativeMenuItemId.LegalNotices)");
+        windowSource.Should().Contain("HasNativeQuitMenuItem: HasNativeFileMenuItem(_quitMenuItem, NativeFileMenuItemId.Quit)");
     }
 
     [Fact]
@@ -1546,7 +1508,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private readonly ScrollBar _verticalWorksheetScrollBar = new();");
         source.Should().Contain("private readonly ScrollBar _horizontalWorksheetScrollBar = new();");
         source.Should().Contain("private bool _isUpdatingWorksheetScrollBars;");
-        source.Should().Contain("root.Children.Add(BuildWorksheetViewportChrome());");
+        source.Should().Contain("workArea.Children.Add(BuildWorksheetViewportChrome());");
         source.Should().Contain("_sheetScrollViewer.HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled;");
         source.Should().Contain("_sheetScrollViewer.VerticalScrollBarVisibility = ScrollBarVisibility.Disabled;");
         source.Should().Contain("_verticalWorksheetScrollBar.Orientation = Orientation.Vertical;");
@@ -1582,9 +1544,13 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("string.IsNullOrEmpty(e.Text)");
         source.Should().Contain("char.IsControl(character)");
         source.Should().Contain("BeginFormulaEdit(_session.ActiveCell, e.Text);");
-        source.Should().Contain("else if (e.Key == Key.Tab)");
-        source.Should().Contain("e.KeyModifiers.HasFlag(KeyModifiers.Shift) ? -1 : 1");
-        source.Should().Contain("_session.MoveActiveCell(0, colDelta);");
+        source.Should().Contain("ExcelEditKeyPlanner.GetIntent(");
+        source.Should().Contain("FormulaBarAvaloniaInputAdapter.ToFormulaEditorKey(e.Key)");
+        source.Should().Contain("FormulaBarAvaloniaInputAdapter.ToFormulaEditorModifiers(e.KeyModifiers)");
+        source.Should().Contain("intent.Action == ExcelEditKeyAction.CommitAndMove");
+        source.Should().Contain("var rowDelta = GetCellIndexDelta(current.Row, target.Row);");
+        source.Should().Contain("var colDelta = GetCellIndexDelta(current.Col, target.Col);");
+        source.Should().Contain("_session.MoveActiveCell(rowDelta, colDelta);");
         source.Should().Contain("var result = _session.CommitCellText(_formulaBox.Text ?? \"\");");
         source.Should().Contain("if (_isOpening || _isSaving)");
         source.Should().Contain("Finish saving before editing cells.");
@@ -1752,6 +1718,7 @@ public sealed class AvaloniaShellSourceTests
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
         var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
+        var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
 
         source.Should().Contain("private readonly Button _formatPainterButton = new();");
         source.Should().Contain("private readonly NativeMenuItem _formatPainterMenuItem = new();");
@@ -1761,11 +1728,14 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("CaptureFormatPainterSource(persistent: true);");
         source.Should().Contain("AutomationProperties.SetAutomationId(_formatPainterButton, \"HomeFormatPainterButton\");");
         source.Should().Contain("AutomationProperties.SetHelpText(_formatPainterButton, \"Copy formatting from the selection and apply it to another range.\");");
-        source.Should().Contain("_formatPainterMenuItem.Header = \"Format Painter\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.FormatPainter, \"Format Painter\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_formatPainterMenuItem.Click += (_, _) => CaptureFormatPainterSource(persistent: false);");
-        source.Should().Contain("homeMenu.Items.Add(_formatPainterMenuItem);");
+        source.Should().Contain("NativeMenuItemId.FormatPainter => _formatPainterMenuItem,");
+        source.Should().Contain("var homeMenu = CreateNativeMenu(NativeMenuTopLevelId.Home);");
+        catalogSource.Should().Contain("Item(NativeMenuItemId.FormatPainter)");
         source.Should().Contain("_formatPainterButton.IsEnabled = isIdle;");
-        source.Should().Contain("_formatPainterMenuItem.IsEnabled = _formatPainterButton.IsEnabled;");
+        source.Should().Contain("ApplyNativeMenuAvailability(isIdle);");
+        catalogSource.Should().Contain("new(NativeMenuItemId.FormatPainter, context.CanFormatPainter)");
         source.Should().Contain("_formatPainterButton,");
         source.Should().Contain("private void FormatPainterButton_Click(object? sender, RoutedEventArgs e)");
         source.Should().Contain("private void CaptureFormatPainterSource(bool persistent)");
@@ -1779,7 +1749,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? \"Format Painter failed.\");");
         source.Should().Contain("HasFormatPainterButton: _formatPainterButton.Content?.ToString() == \"Format Painter\"");
         source.Should().Contain("HomeFormatPainterButton");
-        source.Should().Contain("HasNativeFormatPainterMenuItem: HasNativeMenuItem(_formatPainterMenuItem, \"Format Painter\", requireGesture: false)");
+        source.Should().Contain("HasNativeFormatPainterMenuItem: HasNativeMenuItem(_formatPainterMenuItem, NativeMenuItemId.FormatPainter)");
 
         smokeSource.Should().Contain("bool HasFormatPainterButton,");
         smokeSource.Should().Contain("bool HasNativeFormatPainterMenuItem,");
@@ -1795,6 +1765,7 @@ public sealed class AvaloniaShellSourceTests
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
         var sessionSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookSession.cs"));
         var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
+        var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
 
         sessionSource.Should().Contain("public WorkbookCellEditResult InsertAutoSumFormula(string functionName)");
         sessionSource.Should().Contain("AutoSumFormulaPlanner.TryCreatePlan(ActiveSheet, functionName, SelectedRange, out var plan)");
@@ -1817,12 +1788,19 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_autoSumCountAllFlyoutItem.Click += (_, _) => InsertAutoSumFormula(\"COUNTA\");");
         source.Should().Contain("_autoSumMaxFlyoutItem.Click += (_, _) => InsertAutoSumFormula(\"MAX\");");
         source.Should().Contain("_autoSumMinFlyoutItem.Click += (_, _) => InsertAutoSumFormula(\"MIN\");");
-        source.Should().Contain("_autoSumMenuItem.Header = \"AutoSum\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.AutoSum, \"AutoSum\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_autoSumMenuItem.Menu = CreateNativeAutoSumMenu();");
-        source.Should().Contain("_autoSumSumMenuItem.Gesture = new KeyGesture(Key.OemPlus, KeyModifiers.Alt);");
-        source.Should().Contain("formulasMenu.Items.Add(_autoSumMenuItem);");
+        catalogSource.Should().Contain("new(NativeMenuItemId.AutoSumSum, \"Sum\", new NativeMenuGesturePlan(NativeMenuGestureKey.OemPlus, NativeMenuGestureModifiers.Alt))");
+        catalogSource.Should().Contain("public static IReadOnlyList<NativeMenuEntryPlan> AutoSumMenuEntries");
+        source.Should().Contain("=> CreateNativeMenu(NativeMenuCatalog.AutoSumMenuEntries);");
+        source.Should().Contain("var formulasMenu = CreateNativeMenu(NativeMenuTopLevelId.Formulas);");
+        catalogSource.Should().Contain("Item(NativeMenuItemId.AutoSum)");
+        source.Should().NotContain("_autoSumMenuItem.Header = \"AutoSum\";");
+        source.Should().NotContain("_autoSumSumMenuItem.Gesture = new KeyGesture(Key.OemPlus, KeyModifiers.Alt);");
+        source.Should().NotContain("formulasMenu.Items.Add(_autoSumMenuItem);");
         source.Should().Contain("_autoSumButton.IsEnabled = isIdle;");
-        source.Should().Contain("_autoSumMenuItem.IsEnabled = _autoSumButton.IsEnabled;");
+        catalogSource.Should().Contain("new(NativeMenuItemId.AutoSum, context.IsIdle)");
+        catalogSource.Should().Contain("new(NativeMenuItemId.AutoSumSum, context.IsIdle)");
         source.Should().Contain("_autoSumButton,");
         source.Should().Contain("private MenuFlyout CreateAutoSumFlyout()");
         source.Should().Contain("private NativeMenu CreateNativeAutoSumMenu()");
@@ -1836,8 +1814,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("InsertAutoSumFormula(\"SUM\");");
         source.Should().Contain("HasAutoSumButton: _autoSumButton.Content?.ToString() == \"AutoSum\"");
         source.Should().Contain("HasAutoSumSumMenuItem: HasToolbarMenuItem(_autoSumSumFlyoutItem, \"Sum\")");
-        source.Should().Contain("HasNativeAutoSumMenuItem: HasNativeMenuItem(_autoSumMenuItem, \"AutoSum\", requireGesture: false)");
-        source.Should().Contain("HasNativeAutoSumSumMenuItem: HasNativeSubmenuItem(_autoSumMenuItem.Menu, \"Sum\")");
+        source.Should().Contain("HasNativeAutoSumMenuItem: HasNativeMenuItem(_autoSumMenuItem, NativeMenuItemId.AutoSum)");
+        source.Should().Contain("HasNativeAutoSumSumMenuItem: HasNativeSubmenuItem(_autoSumMenuItem.Menu, NativeMenuItemId.AutoSumSum)");
 
         smokeSource.Should().Contain("bool HasAutoSumButton,");
         smokeSource.Should().Contain("bool HasAutoSumSumMenuItem,");
@@ -1859,6 +1837,7 @@ public sealed class AvaloniaShellSourceTests
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
         var sessionSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookSession.cs"));
         var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
+        var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
         var normalizedSource = source.Replace("\r\n", "\n", StringComparison.Ordinal);
 
         sessionSource.Should().Contain("public bool CanSortSelectedRange => SelectedRange.RowCount > 1;");
@@ -1872,23 +1851,23 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private readonly NativeMenuItem _sortAscendingMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _sortDescendingMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _customSortMenuItem = new();");
-        source.Should().Contain("_sortAscendingMenuItem.Header = \"Sort A to Z\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.SortAscending, \"Sort A to Z\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_sortAscendingMenuItem.Click += (_, _) => SortSelectedRange(ascending: true);");
-        source.Should().Contain("_sortDescendingMenuItem.Header = \"Sort Z to A\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.SortDescending, \"Sort Z to A\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_sortDescendingMenuItem.Click += (_, _) => SortSelectedRange(ascending: false);");
-        source.Should().Contain("_customSortMenuItem.Header = \"Sort...\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.CustomSort, \"Sort...\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_customSortMenuItem.Click += async (_, _) => await ShowSortDialogAsync();");
-        source.Should().Contain("var dataMenu = new NativeMenu();");
-        source.Should().Contain("dataMenu.Items.Add(_sortAscendingMenuItem);");
-        source.Should().Contain("dataMenu.Items.Add(_sortDescendingMenuItem);");
-        source.Should().Contain("dataMenu.Items.Add(_customSortMenuItem);");
-        source.Should().Contain("Header = \"Data\",");
-        source.Should().Contain("Menu = dataMenu,");
-        source.Should().Contain("var hasNativeDataMenu = HasNativeTopLevelMenu(\"Data\");");
+        source.Should().Contain("var dataMenu = CreateNativeMenu(NativeMenuTopLevelId.Data);");
+        catalogSource.Should().Contain("Item(NativeMenuItemId.SortAscending)");
+        catalogSource.Should().Contain("Item(NativeMenuItemId.SortDescending)");
+        catalogSource.Should().Contain("Item(NativeMenuItemId.CustomSort)");
+        catalogSource.Should().Contain("new(NativeMenuTopLevelId.Data, \"Data\")");
+        source.Should().Contain("[NativeMenuTopLevelId.Data] = dataMenu,");
+        source.Should().Contain("var hasNativeDataMenu = HasNativeTopLevelMenu(NativeMenuTopLevelId.Data);");
         source.Should().Contain("HasNativeDataMenu: hasNativeDataMenu");
-        source.Should().Contain("_sortAscendingMenuItem.IsEnabled = isIdle && _session.CanSortSelectedRange;");
-        source.Should().Contain("_sortDescendingMenuItem.IsEnabled = isIdle && _session.CanSortSelectedRange;");
-        source.Should().Contain("_customSortMenuItem.IsEnabled = isIdle && _session.CanSortSelectedRange;");
+        catalogSource.Should().Contain("new(NativeMenuItemId.SortAscending, context.IsIdle && context.CanSortSelectedRange)");
+        catalogSource.Should().Contain("new(NativeMenuItemId.SortDescending, context.IsIdle && context.CanSortSelectedRange)");
+        catalogSource.Should().Contain("new(NativeMenuItemId.CustomSort, context.IsIdle && context.CanSortSelectedRange)");
         source.Should().Contain("private void SortSelectedRange(bool ascending)");
         source.Should().Contain("var result = _session.SortSelectedRange(ascending);");
         source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? \"Sort failed.\");");
@@ -1939,8 +1918,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("AutomationProperties.SetAutomationId(firstKeyBox, \"SortOptionsFirstKeySortOrderBox\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(leftToRightButton, \"SortOptionsLeftToRightRadio\");");
         source.Should().Contain("Custom sort supports cell values, cell color, font color, custom first-key sort order, case-sensitive sorting, and left-to-right sorting through the shared SortDialogPlanner.");
-        source.Should().Contain("HasNativeSortAscendingMenuItem: HasNativeMenuItem(_sortAscendingMenuItem, \"Sort A to Z\", requireGesture: false)");
-        source.Should().Contain("HasNativeSortDescendingMenuItem: HasNativeMenuItem(_sortDescendingMenuItem, \"Sort Z to A\", requireGesture: false)");
+        source.Should().Contain("HasNativeSortAscendingMenuItem: HasNativeMenuItem(_sortAscendingMenuItem, NativeMenuItemId.SortAscending)");
+        source.Should().Contain("HasNativeSortDescendingMenuItem: HasNativeMenuItem(_sortDescendingMenuItem, NativeMenuItemId.SortDescending)");
         smokeSource.Should().Contain("HasNativeDataMenu &&");
         smokeSource.Should().Contain("HasNativeReviewMenu &&");
         smokeSource.Should().Contain("HasNativeSortAscendingMenuItem &&");
@@ -1980,11 +1959,11 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("native_next_comment_menu_item={FormatBool(snapshot.HasNativeNextCommentMenuItem)}");
         smokeSource.Should().Contain("native_previous_comment_menu_item={FormatBool(snapshot.HasNativePreviousCommentMenuItem)}");
 
-        var homeMenuIndex = normalizedSource.IndexOf("Header = \"Home\",\n            Menu = homeMenu,", StringComparison.Ordinal);
-        var insertMenuIndex = normalizedSource.IndexOf("Header = \"Insert\",\n            Menu = insertMenu,", StringComparison.Ordinal);
-        var pageLayoutMenuIndex = normalizedSource.IndexOf("Header = \"Page Layout\",\n            Menu = pageLayoutMenu,", StringComparison.Ordinal);
-        var formulasMenuIndex = normalizedSource.IndexOf("Header = \"Formulas\",\n            Menu = formulasMenu,", StringComparison.Ordinal);
-        var dataMenuIndex = normalizedSource.IndexOf("Header = \"Data\",\n            Menu = dataMenu,", StringComparison.Ordinal);
+        var homeMenuIndex = catalogSource.IndexOf("new(NativeMenuTopLevelId.Home, \"Home\")", StringComparison.Ordinal);
+        var insertMenuIndex = catalogSource.IndexOf("new(NativeMenuTopLevelId.Insert, \"Insert\")", StringComparison.Ordinal);
+        var pageLayoutMenuIndex = catalogSource.IndexOf("new(NativeMenuTopLevelId.PageLayout, \"Page Layout\")", StringComparison.Ordinal);
+        var formulasMenuIndex = catalogSource.IndexOf("new(NativeMenuTopLevelId.Formulas, \"Formulas\")", StringComparison.Ordinal);
+        var dataMenuIndex = catalogSource.IndexOf("new(NativeMenuTopLevelId.Data, \"Data\")", StringComparison.Ordinal);
         homeMenuIndex.Should().BeGreaterThanOrEqualTo(0);
         insertMenuIndex.Should().BeGreaterThanOrEqualTo(0);
         pageLayoutMenuIndex.Should().BeGreaterThanOrEqualTo(0);
@@ -2003,6 +1982,7 @@ public sealed class AvaloniaShellSourceTests
         var sessionSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookSession.cs"));
         var plannerSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "FlashFillRangePlanner.cs"));
         var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
+        var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
 
         sessionSource.Should().Contain("public WorkbookCellEditResult FlashFillSelectedRange()");
         sessionSource.Should().Contain("var plan = FlashFillRangePlanner.Plan(sheet, sheetRange);");
@@ -2012,16 +1992,15 @@ public sealed class AvaloniaShellSourceTests
         plannerSource.Should().Contain("new FlashFillCommand(sheetId, FillColumn, SourceColumn, StartRow, EndRow)");
 
         source.Should().Contain("private readonly NativeMenuItem _flashFillMenuItem = new();");
-        source.Should().Contain("_flashFillMenuItem.Header = \"Flash Fill\";");
-        source.Should().Contain("_flashFillMenuItem.Gesture = new KeyGesture(Key.E, KeyModifiers.Control);");
+        catalogSource.Should().Contain("new(NativeMenuItemId.FlashFill, \"Flash Fill\", new NativeMenuGesturePlan(NativeMenuGestureKey.E, NativeMenuGestureModifiers.Control))");
         source.Should().Contain("_flashFillMenuItem.Click += (_, _) => FlashFillSelectedRange();");
-        source.Should().Contain("dataMenu.Items.Add(_flashFillMenuItem);");
-        source.Should().Contain("_flashFillMenuItem.IsEnabled = isIdle;");
+        catalogSource.Should().Contain("Item(NativeMenuItemId.FlashFill)");
+        catalogSource.Should().Contain("new(NativeMenuItemId.FlashFill, context.IsIdle)");
         source.Should().Contain("e.Key == Key.E && HasOnlyControlModifier(e.KeyModifiers)");
         source.Should().Contain("private void FlashFillSelectedRange()");
         source.Should().Contain("var result = _session.FlashFillSelectedRange();");
         source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? \"Flash Fill failed.\");");
-        source.Should().Contain("HasNativeFlashFillMenuItem: HasNativeMenuItem(_flashFillMenuItem, \"Flash Fill\")");
+        source.Should().Contain("HasNativeFlashFillMenuItem: HasNativeMenuItem(_flashFillMenuItem, NativeMenuItemId.FlashFill)");
 
         smokeSource.Should().Contain("bool HasNativeFlashFillMenuItem,");
         smokeSource.Should().Contain("HasNativeFlashFillMenuItem &&");
@@ -2034,13 +2013,16 @@ public sealed class AvaloniaShellSourceTests
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
         var sessionSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookSession.cs"));
         var presetSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "DataValidationPresetPlanner.cs"));
+        var displayTextSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "DataValidationDisplayTextPlanner.cs"));
+        var dialogPlannerSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Dialogs", "DataValidationDialogPlanner.cs"));
+        var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
         var normalizedSource = source.Replace("\r\n", "\n", StringComparison.Ordinal);
 
         source.Should().Contain("private readonly NativeMenuItem _dataValidationMenuItem = new();");
-        source.Should().Contain("_dataValidationMenuItem.Header = \"Data Validation...\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.DataValidation, \"Data Validation...\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_dataValidationMenuItem.Click += async (_, _) => await ShowDataValidationDialogAsync();");
-        source.Should().Contain("dataMenu.Items.Add(_dataValidationMenuItem);");
-        source.Should().Contain("_dataValidationMenuItem.IsEnabled = isIdle;");
+        catalogSource.Should().Contain("Item(NativeMenuItemId.DataValidation)");
+        catalogSource.Should().Contain("new(NativeMenuItemId.DataValidation, context.IsIdle)");
         source.Should().Contain("private async Task ShowDataValidationDialogAsync()");
         source.Should().Contain("if (!TryCommitPendingFormulaEdit())");
         source.Should().Contain("var selection = await ShowDataValidationInputDialogAsync();");
@@ -2060,9 +2042,16 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("CreateDataValidationTypeChoices()");
         source.Should().Contain("DataValidationPresetPlanner.GetRuleTypeMetadata()");
         source.Should().Contain(".Where(metadata => metadata.Type is DvType.WholeNumber or DvType.Decimal or DvType.List or DvType.Date or DvType.Time or DvType.TextLength or DvType.Custom or DvType.Any)");
-        source.Should().Contain("CreateDefaultDataValidationRule(initialType, _session.SelectedRange)");
-        source.Should().Contain("DataValidationPresetPlanner.CreateDefaultRule(type, _session.SelectedRange)");
-        source.Should().Contain("DataValidationPresetPlanner.RequiresSecondFormula(type, op)");
+        source.Should().Contain("DataValidationDialogPlanner.CreateDefaultRule(initialType, _session.SelectedRange)");
+        source.Should().Contain("DataValidationDialogPlanner.CreateDefaultRule(type, _session.SelectedRange)");
+        source.Should().Contain("DataValidationDialogPlanner.DefaultOperatorForType(SelectedType())");
+        source.Should().Contain("DataValidationDialogPlanner.CreateVisibilityPlan(");
+        source.Should().Contain("DataValidationDialogPlanner.ValidateCriteria(");
+        source.Should().Contain("DataValidationDialogPlanner.CreateRule(new DataValidationRuleEditorInput");
+        source.Should().Contain("DataValidationDisplayTextPlanner.GetAlertStyleMetadata()");
+        source.Should().NotContain("CreateDefaultDataValidationRule");
+        source.Should().NotContain("GetDefaultDataValidationOperator");
+        source.Should().NotContain("TryValidateDataValidationCriteria");
 
         sessionSource.Should().Contain("public WorkbookDataValidationMutationResult ApplyDataValidationToSelectedRange(DataValidation rule)");
         sessionSource.Should().Contain("public WorkbookDataValidationMutationResult ClearSelectedRangeDataValidation()");
@@ -2070,8 +2059,13 @@ public sealed class AvaloniaShellSourceTests
         sessionSource.Should().Contain("new ClearDataValidationCommand(sheetId, sheetRange)");
 
         presetSource.Should().Contain("public static IReadOnlyList<DataValidationRuleTypeMetadata> GetRuleTypeMetadata()");
-        presetSource.Should().Contain("public static DataValidation CreateDefaultRule(DvType type, GridRange selectedRange)");
         presetSource.Should().Contain("public static DataValidationSelectionSummary CreateSelectionSummary(");
+        presetSource.Should().Contain("DataValidationDisplayTextPlanner.GetRuleTypeMetadata()");
+        displayTextSource.Should().Contain("public static IReadOnlyList<DataValidationRuleTypeMetadata> GetRuleTypeMetadata()");
+        displayTextSource.Should().Contain("public static IReadOnlyList<DataValidationAlertStyleMetadata> GetAlertStyleMetadata()");
+        dialogPlannerSource.Should().Contain("public static DataValidation CreateDefaultRule(DvType type, GridRange selectedRange)");
+        dialogPlannerSource.Should().Contain("public static DvValidationResult ValidateCriteria(");
+        dialogPlannerSource.Should().Contain("public static DataValidation CreateRule(DataValidationRuleEditorInput input)");
 
         var handlerIndex = normalizedSource.IndexOf("private async Task ShowDataValidationDialogAsync()", StringComparison.Ordinal);
         handlerIndex.Should().BeGreaterThanOrEqualTo(0);
@@ -2094,14 +2088,15 @@ public sealed class AvaloniaShellSourceTests
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
         var plannerSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "DataValidationPreviewPlanner.cs"));
+        var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
         var normalizedSource = source.Replace("\r\n", "\n", StringComparison.Ordinal);
 
         source.Should().Contain("private readonly NativeMenuItem _dataValidationPreviewMenuItem = new();");
-        source.Should().Contain("_dataValidationPreviewMenuItem.Header = \"Data Validation Preview...\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.DataValidationPreview, \"Data Validation Preview...\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_dataValidationPreviewMenuItem.Click += async (_, _) => await ShowDataValidationPreviewDialogAsync();");
-        source.Should().Contain("dataMenu.Items.Add(_dataValidationPreviewMenuItem);");
-        source.Should().Contain("_dataValidationPreviewMenuItem.IsEnabled = isIdle;");
-        source.Should().Contain("HasNativeDataValidationPreviewMenuItem: HasNativeMenuItem(_dataValidationPreviewMenuItem, \"Data Validation Preview...\", requireGesture: false)");
+        catalogSource.Should().Contain("Item(NativeMenuItemId.DataValidationPreview)");
+        catalogSource.Should().Contain("new(NativeMenuItemId.DataValidationPreview, context.IsIdle)");
+        source.Should().Contain("HasNativeDataValidationPreviewMenuItem: HasNativeMenuItem(_dataValidationPreviewMenuItem, NativeMenuItemId.DataValidationPreview)");
         source.Should().Contain("private async Task ShowDataValidationPreviewDialogAsync()");
         source.Should().Contain("DataValidationPreviewPlanner.Create(");
         source.Should().Contain("_session.Workbook");
@@ -2113,6 +2108,8 @@ public sealed class AvaloniaShellSourceTests
         plannerSource.Should().Contain("DataValidationService.GetApplicable(sheet, activeCell)");
         plannerSource.Should().Contain("DataValidationService.GetListItems(rule, sheet, workbook)");
         plannerSource.Should().Contain("DataValidationService.FormatListSourceRange");
+        plannerSource.Should().Contain("DataValidationDisplayTextPlanner.FormatAlertStyle");
+        plannerSource.Should().NotContain("private static string FormatAlertStyle");
 
         var handlerIndex = normalizedSource.IndexOf("private async Task ShowDataValidationPreviewDialogAsync()", StringComparison.Ordinal);
         handlerIndex.Should().BeGreaterThanOrEqualTo(0);
@@ -2290,17 +2287,18 @@ public sealed class AvaloniaShellSourceTests
         var parityCaptureSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
         var sessionSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookSession.cs"));
         var parserSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "GoalSeekRequestParser.cs"));
+        var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
         var normalizedSource = source.Replace("\r\n", "\n", StringComparison.Ordinal);
 
         source.Should().Contain("private readonly NativeMenuItem _whatIfAnalysisMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _goalSeekMenuItem = new();");
-        source.Should().Contain("_goalSeekMenuItem.Header = \"Goal Seek...\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.GoalSeek, \"Goal Seek...\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_goalSeekMenuItem.Click += async (_, _) => await ShowGoalSeekDialogAsync();");
-        source.Should().Contain("_whatIfAnalysisMenuItem.Header = \"What-If Analysis\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.WhatIfAnalysis, \"What-If Analysis\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_whatIfAnalysisMenuItem.Menu = CreateNativeWhatIfAnalysisMenu();");
-        source.Should().Contain("dataMenu.Items.Add(_whatIfAnalysisMenuItem);");
-        source.Should().Contain("_whatIfAnalysisMenuItem.IsEnabled = isIdle;");
-        source.Should().Contain("_goalSeekMenuItem.IsEnabled = isIdle;");
+        catalogSource.Should().Contain("Item(NativeMenuItemId.WhatIfAnalysis)");
+        catalogSource.Should().Contain("new(NativeMenuItemId.WhatIfAnalysis, context.IsIdle)");
+        catalogSource.Should().Contain("new(NativeMenuItemId.GoalSeek, context.IsIdle)");
 
         source.Should().Contain("private async Task ShowGoalSeekDialogAsync()");
         source.Should().Contain("if (!TryCommitPendingFormulaEdit())");
@@ -2522,7 +2520,8 @@ public sealed class AvaloniaShellSourceTests
         parityCaptureSource.Should().Contain("private async Task ShowAllowEditRangesParityDialogAsync()");
         parityCaptureSource.Should().Contain("new AllowEditRangeCommand(sheetId, range)");
 
-        pictureShapeSource.Should().Contain("[\"shapeFormat.shapeEffects\"] = () => RunGuarded(OpenShapeEffectsDialogAsync),");
+        pictureShapeSource.Should().Contain("DrawingObjectContextualRibbonPlanner.CreatePictureShapeCommandSpecs()");
+        pictureShapeSource.Should().Contain("DrawingObjectContextualCommandAction.ShapeEffectsDialog => () => RunGuarded(OpenShapeEffectsDialogAsync)");
         drawingFormatSource.Should().Contain("private async System.Threading.Tasks.Task OpenShapeEffectsDialogAsync()");
         drawingFormatSource.Should().Contain("ShapeEffectsPlanner.CreatePlan(shape.GetEffectiveEffectPreset())");
         drawingFormatSource.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"ShapeEffectsDialog\");");
@@ -2549,9 +2548,36 @@ public sealed class AvaloniaShellSourceTests
         selectionPaneSource.Should().Contain("ApplySelectionPaneListStyle(listBox)");
         selectionPaneSource.Should().Contain("x.OfType<ListBoxItem>().Class(\":selected\")");
         selectionPaneSource.Should().Contain("Children = { showAllButton, hideAllButton, moveUpButton, moveDownButton }");
-        selectionPaneSource.Should().Contain("Children = { ok, cancel }");
+        selectionPaneSource.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel]);");
         selectionPaneSource.Should().Contain("CreateSelectionPaneEyeIcon()");
         selectionPaneSource.Should().NotContain("SelectionPane_Hint");
+    }
+
+    [Fact]
+    public void AvaloniaPageSetupDialog_UsesSharedPlannerForChoiceSurface()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.PageLayout.cs"));
+
+        source.Should().Contain("Title = UiText.Get(PageSetupDialogPlanner.TitleResourceKey)");
+        source.Should().Contain("Width = PageSetupDialogPlanner.WindowWidth");
+        source.Should().Contain("AutomationProperties.SetAutomationId(dialog, PageSetupDialogPlanner.DialogAutomationId)");
+        source.Should().Contain("PageSetupDialogPlanner.PlanSurface(sheet)");
+        source.Should().Contain("private async Task<PageSetupDialogFields?> ShowPageSetupDialogCoreAsync(");
+        source.Should().Contain("PageSetupDialogSurfacePlan surface,");
+        source.Should().Contain("var orientationChoices = PageSetupDialogPlanner.OrientationChoices");
+        source.Should().Contain("ItemsSource = PageSetupDialogPlanner.ResolveChoiceLabels(orientationChoices, UiText.Get)");
+        source.Should().Contain("SelectedIndex = surface.ChoiceIndexes.Orientation");
+        source.Should().Contain("SelectedIndex = surface.ChoiceIndexes.PaperSize");
+        source.Should().Contain("PageSetupDialogPlanner.BuildFields(initial, new PageSetupDialogSurfaceInput");
+        source.Should().Contain("var paperSizeChoices = PageSetupDialogPlanner.PaperSizeChoices");
+        source.Should().Contain("var pageOrderChoices = PageSetupDialogPlanner.PageOrderChoices");
+        source.Should().Contain("var printErrorValueChoices = PageSetupDialogPlanner.PrintErrorValueChoices");
+        source.Should().Contain("var printCommentChoices = PageSetupDialogPlanner.PrintCommentChoices");
+        source.Should().Contain("AutomationProperties.SetAutomationId(tabs, PageSetupDialogPlanner.TabsAutomationId)");
+        source.Should().NotContain("Orientation = orientationChoices.ValueAt(orientationBox.SelectedIndex)");
+        source.Should().NotContain("static IReadOnlyList<string> ChoiceLabels");
+        source.Should().NotContain("PageSetupDialogModel.ChoiceIndex(");
+        source.Should().NotContain("PageSetupDialogModel.ChoiceValue(");
     }
 
     [Fact]
@@ -2559,6 +2585,8 @@ public sealed class AvaloniaShellSourceTests
     {
         var avaloniaCaptureSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
         var wpfCaptureSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Host", "ParityCapture.cs"));
+        var autoFilterFixtureSource = File.ReadAllText(RepositoryFileLocator.Find(
+            "src", "FreeX.App.Presentation", "Filtering", "AutoFilterParityFixturePlanner.cs"));
         var dialogIds = new[]
         {
             "dialog.FormatCells",
@@ -2569,6 +2597,7 @@ public sealed class AvaloniaShellSourceTests
             "dialog.RecommendedPivotTables",
             "dialog.Sort",
             "dialog.SortOptions",
+            "dialog.AutoFilter",
             "dialog.TextToColumns",
             "dialog.AdvancedFilter",
             "dialog.Consolidate",
@@ -2625,6 +2654,15 @@ public sealed class AvaloniaShellSourceTests
             wpfCaptureSource.Should().Contain(dialogId);
         }
 
+        avaloniaCaptureSource.Should().Contain("AutoFilterParityFixturePlanner.CreateFixturePlan(");
+        wpfCaptureSource.Should().Contain("AutoFilterParityFixturePlanner.CreateFixturePlan(");
+        avaloniaCaptureSource.Should().NotContain("SeedAutoFilterParityRange");
+        wpfCaptureSource.Should().NotContain("SeedAutoFilterParityRange");
+        avaloniaCaptureSource.Should().NotContain("AutoFilterDropdownMenuPlanner.CreateMenuPlan");
+        wpfCaptureSource.Should().NotContain("AutoFilterDropdownMenuPlanner.CreateMenuPlan");
+        autoFilterFixtureSource.Should().Contain("AutoFilterDropdownMenuPlanner.CreateMenuPlan(");
+        autoFilterFixtureSource.Should().Contain("WorksheetAutoFilterModel(range.ToString(), null)");
+
         // The multi-tab / multi-category dialogs declare an identical, position-ordered tab-name list in
         // each shell, so the comparison runner pairs `dialog.<Name>.<TabName>` one-for-one. The capture
         // builds each per-tab PNG name as $"{surfaceId}.{tabName}", so assert each tab name appears in the
@@ -2657,14 +2695,16 @@ public sealed class AvaloniaShellSourceTests
         var parityCaptureSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
         var sessionSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookSession.cs"));
         var plannerSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "DataTablePlanner.cs"));
+        var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
         var normalizedSource = source.Replace("\r\n", "\n", StringComparison.Ordinal);
 
         source.Should().Contain("private readonly NativeMenuItem _dataTableMenuItem = new();");
-        source.Should().Contain("_dataTableMenuItem.Header = \"Data Table...\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.DataTable, \"Data Table...\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_dataTableMenuItem.Click += async (_, _) => await ShowDataTableDialogAsync();");
-        source.Should().Contain("_dataTableMenuItem.IsEnabled = isIdle && _session.SelectedRange.RowCount > 1 && _session.SelectedRange.ColCount > 1;");
-        source.Should().Contain("menu.Items.Add(_goalSeekMenuItem);");
-        source.Should().Contain("menu.Items.Add(_dataTableMenuItem);");
+        catalogSource.Should().Contain("new(NativeMenuItemId.DataTable,");
+        source.Should().Contain("=> CreateNativeMenu(NativeMenuCatalog.WhatIfAnalysisMenuEntries);");
+        catalogSource.Should().Contain("Item(NativeMenuItemId.GoalSeek)");
+        catalogSource.Should().Contain("Item(NativeMenuItemId.DataTable)");
 
         source.Should().Contain("private async Task ShowDataTableDialogAsync()");
         source.Should().Contain("if (!TryCommitPendingFormulaEdit())");
@@ -2723,16 +2763,17 @@ public sealed class AvaloniaShellSourceTests
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
         var parityCaptureSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
         var sessionSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookSession.cs"));
+        var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
         var normalizedSource = source.Replace("\r\n", "\n", StringComparison.Ordinal);
 
         source.Should().Contain("private readonly NativeMenuItem _forecastSheetMenuItem = new();");
-        source.Should().Contain("_forecastSheetMenuItem.Header = \"Forecast Sheet...\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.ForecastSheet, \"Forecast Sheet...\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_forecastSheetMenuItem.Click += async (_, _) => await ShowForecastSheetDialogAsync();");
-        source.Should().Contain("dataMenu.Items.Add(_forecastSheetMenuItem);");
-        source.Should().Contain("_forecastSheetMenuItem.IsEnabled = isIdle;");
+        catalogSource.Should().Contain("Item(NativeMenuItemId.ForecastSheet)");
+        catalogSource.Should().Contain("new(NativeMenuItemId.ForecastSheet, context.IsIdle)");
 
-        var whatIfMenuIndex = normalizedSource.IndexOf("dataMenu.Items.Add(_whatIfAnalysisMenuItem);", StringComparison.Ordinal);
-        var forecastSheetMenuIndex = normalizedSource.IndexOf("dataMenu.Items.Add(_forecastSheetMenuItem);", StringComparison.Ordinal);
+        var whatIfMenuIndex = catalogSource.IndexOf("Item(NativeMenuItemId.WhatIfAnalysis)", StringComparison.Ordinal);
+        var forecastSheetMenuIndex = catalogSource.IndexOf("Item(NativeMenuItemId.ForecastSheet)", StringComparison.Ordinal);
         whatIfMenuIndex.Should().BeGreaterThanOrEqualTo(0);
         forecastSheetMenuIndex.Should().BeGreaterThan(whatIfMenuIndex);
 
@@ -2806,16 +2847,14 @@ public sealed class AvaloniaShellSourceTests
         var parityCaptureSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
         var sessionSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookSession.cs"));
         var plannerSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "ScenarioManagerPlanner.cs"));
+        var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
         var normalizedSource = source.Replace("\r\n", "\n", StringComparison.Ordinal);
 
         source.Should().Contain("private readonly NativeMenuItem _scenarioManagerMenuItem = new();");
-        source.Should().Contain("_scenarioManagerMenuItem.Header = \"Scenario Manager...\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.ScenarioManager, \"Scenario Manager...\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_scenarioManagerMenuItem.Click += async (_, _) => await ShowScenarioManagerDialogAsync();");
-        source.Should().Contain("_scenarioManagerMenuItem.IsEnabled = isIdle;");
-        normalizedSource.Should().Contain(
-            "menu.Items.Add(_goalSeekMenuItem);\n" +
-            "        menu.Items.Add(_scenarioManagerMenuItem);\n" +
-            "        menu.Items.Add(_dataTableMenuItem);");
+        catalogSource.Should().Contain("new(NativeMenuItemId.ScenarioManager, context.IsIdle)");
+        catalogSource.Should().Contain("Item(NativeMenuItemId.ScenarioManager)");
 
         source.Should().Contain("private async Task ShowScenarioManagerDialogAsync()");
         source.Should().Contain("if (_isOpening || _isSaving)");
@@ -2889,17 +2928,18 @@ public sealed class AvaloniaShellSourceTests
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
         var sessionSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookSession.cs"));
         var plannerSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "AdvancedFilterPlanner.cs"));
+        var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
         var normalizedSource = source.Replace("\r\n", "\n", StringComparison.Ordinal);
 
         source.Should().Contain("private readonly NativeMenuItem _advancedFilterMenuItem = new();");
-        source.Should().Contain("_advancedFilterMenuItem.Header = \"Advanced Filter...\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.AdvancedFilter, \"Advanced Filter...\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_advancedFilterMenuItem.Click += async (_, _) => await ShowAdvancedFilterDialogAsync();");
-        source.Should().Contain("dataMenu.Items.Add(_advancedFilterMenuItem);");
-        source.Should().Contain("_advancedFilterMenuItem.IsEnabled = isIdle;");
+        catalogSource.Should().Contain("Item(NativeMenuItemId.AdvancedFilter)");
+        catalogSource.Should().Contain("new(NativeMenuItemId.AdvancedFilter, context.IsIdle)");
 
-        var customSortMenuIndex = normalizedSource.IndexOf("dataMenu.Items.Add(_customSortMenuItem);", StringComparison.Ordinal);
-        var advancedFilterMenuIndex = normalizedSource.IndexOf("dataMenu.Items.Add(_advancedFilterMenuItem);", StringComparison.Ordinal);
-        var dataValidationMenuIndex = normalizedSource.IndexOf("dataMenu.Items.Add(_dataValidationMenuItem);", StringComparison.Ordinal);
+        var customSortMenuIndex = catalogSource.IndexOf("Item(NativeMenuItemId.CustomSort)", StringComparison.Ordinal);
+        var advancedFilterMenuIndex = catalogSource.IndexOf("Item(NativeMenuItemId.AdvancedFilter)", StringComparison.Ordinal);
+        var dataValidationMenuIndex = catalogSource.IndexOf("Item(NativeMenuItemId.DataValidation)", StringComparison.Ordinal);
         customSortMenuIndex.Should().BeGreaterThanOrEqualTo(0);
         advancedFilterMenuIndex.Should().BeGreaterThan(customSortMenuIndex);
         dataValidationMenuIndex.Should().BeGreaterThan(advancedFilterMenuIndex);
@@ -2974,18 +3014,19 @@ public sealed class AvaloniaShellSourceTests
         var parityCaptureSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
         var sessionSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookSession.cs"));
         var plannerSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "RemoveDuplicatesPlanner.cs"));
+        var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
         var normalizedSource = source.Replace("\r\n", "\n", StringComparison.Ordinal);
 
         source.Should().Contain("private readonly NativeMenuItem _removeDuplicatesMenuItem = new();");
-        source.Should().Contain("_removeDuplicatesMenuItem.Header = \"Remove Duplicates...\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.RemoveDuplicates, \"Remove Duplicates...\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_removeDuplicatesMenuItem.Click += async (_, _) => await ShowRemoveDuplicatesDialogAsync();");
-        source.Should().Contain("dataMenu.Items.Add(_removeDuplicatesMenuItem);");
-        source.Should().Contain("_removeDuplicatesMenuItem.IsEnabled = isIdle && _session.SelectedRange.RowCount > 1;");
-        source.Should().Contain("HasNativeRemoveDuplicatesMenuItem: HasNativeMenuItem(_removeDuplicatesMenuItem, \"Remove Duplicates...\", requireGesture: false)");
+        catalogSource.Should().Contain("Item(NativeMenuItemId.RemoveDuplicates)");
+        catalogSource.Should().Contain("new(NativeMenuItemId.RemoveDuplicates, context.IsIdle && context.SelectedRangeRowCount > 1)");
+        source.Should().Contain("HasNativeRemoveDuplicatesMenuItem: HasNativeMenuItem(_removeDuplicatesMenuItem, NativeMenuItemId.RemoveDuplicates)");
 
-        var advancedFilterMenuIndex = normalizedSource.IndexOf("dataMenu.Items.Add(_advancedFilterMenuItem);", StringComparison.Ordinal);
-        var removeDuplicatesMenuIndex = normalizedSource.IndexOf("dataMenu.Items.Add(_removeDuplicatesMenuItem);", StringComparison.Ordinal);
-        var dataValidationMenuIndex = normalizedSource.IndexOf("dataMenu.Items.Add(_dataValidationMenuItem);", StringComparison.Ordinal);
+        var advancedFilterMenuIndex = catalogSource.IndexOf("Item(NativeMenuItemId.AdvancedFilter)", StringComparison.Ordinal);
+        var removeDuplicatesMenuIndex = catalogSource.IndexOf("Item(NativeMenuItemId.RemoveDuplicates)", StringComparison.Ordinal);
+        var dataValidationMenuIndex = catalogSource.IndexOf("Item(NativeMenuItemId.DataValidation)", StringComparison.Ordinal);
         advancedFilterMenuIndex.Should().BeGreaterThanOrEqualTo(0);
         removeDuplicatesMenuIndex.Should().BeGreaterThan(advancedFilterMenuIndex);
         dataValidationMenuIndex.Should().BeGreaterThan(removeDuplicatesMenuIndex);
@@ -3019,12 +3060,13 @@ public sealed class AvaloniaShellSourceTests
         sessionSource.Should().Contain("public WorkbookRemoveDuplicatesResult ExecuteRemoveDuplicatesPlan(RemoveDuplicatesPlan plan)");
         sessionSource.Should().Contain("CreateGroupedSheetCommand(");
         sessionSource.Should().Contain("\"Remove Duplicates\"");
-        sessionSource.Should().Contain("var sheetRange = RemapRangeToSheet(plan.ActiveRange, sheetId);");
-        sessionSource.Should().Contain("plan.CreateCommand(sheetId, sheetRange)");
+        sessionSource.Should().Contain("plan.CreateCommand(sheetId)");
         sessionSource.Should().Contain("ApplySuccessfulRangeEditResult(result, plan.SourceRange);");
         plannerSource.Should().Contain("public static bool GuessHasHeaders(Sheet sheet, GridRange range)");
         plannerSource.Should().Contain("public static GridRange ExcludeHeaderRow(GridRange range, bool hasHeaders)");
+        plannerSource.Should().Contain("public GridRange ActiveRangeForSheet(SheetId sheetId)");
         plannerSource.Should().Contain("public RemoveDuplicateRowsCommand CreateCommand(SheetId sheetId, GridRange activeRange)");
+        plannerSource.Should().Contain("public RemoveDuplicateRowsCommand CreateCommand(SheetId sheetId)");
         parityCaptureSource.Should().Contain("(\"dialog.RemoveDuplicates\", () => ShowRemoveDuplicatesParityDialogAsync()),");
         parityCaptureSource.Should().Contain("private async Task ShowRemoveDuplicatesParityDialogAsync()");
         parityCaptureSource.Should().Contain("await ShowRemoveDuplicatesInputDialogAsync(forceHasHeaders: true);");
@@ -3051,18 +3093,19 @@ public sealed class AvaloniaShellSourceTests
         var parityCaptureSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
         var sessionSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookSession.cs"));
         var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
+        var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
         var normalizedSource = source.Replace("\r\n", "\n", StringComparison.Ordinal);
 
         source.Should().Contain("private readonly NativeMenuItem _subtotalMenuItem = new();");
-        source.Should().Contain("_subtotalMenuItem.Header = \"Subtotal...\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.Subtotal, \"Subtotal...\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_subtotalMenuItem.Click += async (_, _) => await ShowSubtotalDialogAsync();");
-        source.Should().Contain("dataMenu.Items.Add(_subtotalMenuItem);");
-        source.Should().Contain("_subtotalMenuItem.IsEnabled = isIdle && _session.SelectedRange.RowCount > 1 && _session.SelectedRange.ColCount > 1;");
-        source.Should().Contain("HasNativeSubtotalMenuItem: HasNativeMenuItem(_subtotalMenuItem, \"Subtotal...\", requireGesture: false)");
+        catalogSource.Should().Contain("Item(NativeMenuItemId.Subtotal)");
+        catalogSource.Should().Contain("NativeMenuItemId.Subtotal,");
+        source.Should().Contain("HasNativeSubtotalMenuItem: HasNativeMenuItem(_subtotalMenuItem, NativeMenuItemId.Subtotal)");
 
-        var removeDuplicatesMenuIndex = normalizedSource.IndexOf("dataMenu.Items.Add(_removeDuplicatesMenuItem);", StringComparison.Ordinal);
-        var subtotalMenuIndex = normalizedSource.IndexOf("dataMenu.Items.Add(_subtotalMenuItem);", StringComparison.Ordinal);
-        var dataValidationMenuIndex = normalizedSource.IndexOf("dataMenu.Items.Add(_dataValidationMenuItem);", StringComparison.Ordinal);
+        var removeDuplicatesMenuIndex = catalogSource.IndexOf("Item(NativeMenuItemId.RemoveDuplicates)", StringComparison.Ordinal);
+        var subtotalMenuIndex = catalogSource.IndexOf("Item(NativeMenuItemId.Subtotal)", StringComparison.Ordinal);
+        var dataValidationMenuIndex = catalogSource.IndexOf("Item(NativeMenuItemId.DataValidation)", StringComparison.Ordinal);
         removeDuplicatesMenuIndex.Should().BeGreaterThanOrEqualTo(0);
         subtotalMenuIndex.Should().BeGreaterThan(removeDuplicatesMenuIndex);
         dataValidationMenuIndex.Should().BeGreaterThan(subtotalMenuIndex);
@@ -3085,9 +3128,10 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("AutomationProperties.SetAutomationId(okButton, \"SubtotalOkButton\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(removeAllButton, \"SubtotalRemoveAllButton\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(cancelButton, \"SubtotalCancelButton\");");
-        source.Should().Contain("BuildSubtotalColumnChoices(_session.ActiveSheet, range)");
-        source.Should().Contain("CreateSubtotalFunctionChoices()");
-        source.Should().Contain("new SubtotalInputOptions(");
+        source.Should().Contain("SubtotalDialogPlanner.BuildColumnChoices(");
+        source.Should().Contain("SubtotalDialogPlanner.CreateFunctionChoices()");
+        source.Should().Contain("SubtotalDialogPlanner.TryCreateResult(");
+        source.Should().Contain("plan.ToInputOptions()");
 
         sessionSource.Should().Contain("public WorkbookCellEditResult ExecuteSubtotalOptions(SubtotalInputOptions options)");
         sessionSource.Should().Contain("public WorkbookCellEditResult RemoveSelectedRangeSubtotals()");
@@ -3110,6 +3154,8 @@ public sealed class AvaloniaShellSourceTests
         routeSource.Should().NotContain("new SubtotalCommand");
         routeSource.Should().NotContain("new RemoveSubtotalRowsCommand");
         routeSource.Should().NotContain("new SubtotalDialog(");
+        routeSource.Should().NotContain("SubtotalFunctionService.TryParse");
+        routeSource.Should().NotContain("new SubtotalInputOptions(");
         routeSource.Should().NotContain("FreeX.App.Host");
         routeSource.Should().NotContain("DataTransferManager");
         routeSource.Should().NotContain("WindowInteropHelper");
@@ -3207,6 +3253,7 @@ public sealed class AvaloniaShellSourceTests
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
         var sessionSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookSession.cs"));
         var plannerSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "ReviewWorkflowPlanner.cs"));
+        var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
         var normalizedSource = source.Replace("\r\n", "\n", StringComparison.Ordinal);
 
         source.Should().Contain("private readonly NativeMenuItem _reviewSummaryMenuItem = new();");
@@ -3216,12 +3263,12 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private readonly NativeMenuItem _nextCommentMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _previousCommentMenuItem = new();");
 
-        source.Should().Contain("_reviewSummaryMenuItem.Header = \"Review Summary...\";");
-        source.Should().Contain("_checkAccessibilityMenuItem.Header = \"Check Accessibility...\";");
-        source.Should().Contain("_nextNoteMenuItem.Header = \"Next Note\";");
-        source.Should().Contain("_previousNoteMenuItem.Header = \"Previous Note\";");
-        source.Should().Contain("_nextCommentMenuItem.Header = \"Next Comment\";");
-        source.Should().Contain("_previousCommentMenuItem.Header = \"Previous Comment\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.ReviewSummary, \"Review Summary...\", RequiresGestureInSmoke: false)");
+        catalogSource.Should().Contain("new(NativeMenuItemId.CheckAccessibility, \"Check Accessibility...\", RequiresGestureInSmoke: false)");
+        catalogSource.Should().Contain("new(NativeMenuItemId.NextNote, \"Next Note\", RequiresGestureInSmoke: false)");
+        catalogSource.Should().Contain("new(NativeMenuItemId.PreviousNote, \"Previous Note\", RequiresGestureInSmoke: false)");
+        catalogSource.Should().Contain("new(NativeMenuItemId.NextComment, \"Next Comment\", RequiresGestureInSmoke: false)");
+        catalogSource.Should().Contain("new(NativeMenuItemId.PreviousComment, \"Previous Comment\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_reviewSummaryMenuItem.Click += async (_, _) => await ShowReviewSummaryDialogAsync();");
         source.Should().Contain("_checkAccessibilityMenuItem.Click += async (_, _) => await ShowAccessibilityCheckerDialogAsync();");
         source.Should().Contain("_nextNoteMenuItem.Click += (_, _) => NavigateReviewNote(previous: false);");
@@ -3229,30 +3276,31 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_nextCommentMenuItem.Click += (_, _) => NavigateReviewThreadedComment(previous: false);");
         source.Should().Contain("_previousCommentMenuItem.Click += (_, _) => NavigateReviewThreadedComment(previous: true);");
 
-        source.Should().Contain("var reviewMenu = new NativeMenu();");
-        source.Should().Contain("reviewMenu.Items.Add(_reviewSummaryMenuItem);");
-        source.Should().Contain("reviewMenu.Items.Add(_checkAccessibilityMenuItem);");
-        source.Should().Contain("reviewMenu.Items.Add(_nextNoteMenuItem);");
-        source.Should().Contain("reviewMenu.Items.Add(_previousNoteMenuItem);");
-        source.Should().Contain("reviewMenu.Items.Add(_nextCommentMenuItem);");
-        source.Should().Contain("reviewMenu.Items.Add(_previousCommentMenuItem);");
+        source.Should().Contain("var reviewMenu = CreateNativeMenu(NativeMenuTopLevelId.Review);");
+        catalogSource.Should().Contain("public static IReadOnlyList<NativeMenuEntryPlan> ReviewMenuEntries");
+        catalogSource.Should().Contain("Item(NativeMenuItemId.ReviewSummary)");
+        catalogSource.Should().Contain("Item(NativeMenuItemId.CheckAccessibility)");
+        catalogSource.Should().Contain("Item(NativeMenuItemId.NextNote)");
+        catalogSource.Should().Contain("Item(NativeMenuItemId.PreviousNote)");
+        catalogSource.Should().Contain("Item(NativeMenuItemId.NextComment)");
+        catalogSource.Should().Contain("Item(NativeMenuItemId.PreviousComment)");
 
-        var nativeMenuIndex = normalizedSource.IndexOf("_nativeMenu = new NativeMenu();", StringComparison.Ordinal);
+        var nativeMenuIndex = normalizedSource.IndexOf("NativeMenuCatalog.TopLevelMenus", StringComparison.Ordinal);
         nativeMenuIndex.Should().BeGreaterThanOrEqualTo(0);
-        var nativeMenuSource = normalizedSource[nativeMenuIndex..];
-        var dataIndex = nativeMenuSource.IndexOf("Header = \"Data\"", StringComparison.Ordinal);
-        var reviewIndex = nativeMenuSource.IndexOf("Header = \"Review\"", StringComparison.Ordinal);
-        var viewIndex = nativeMenuSource.IndexOf("Header = \"View\"", StringComparison.Ordinal);
+        var dataIndex = catalogSource.IndexOf("new(NativeMenuTopLevelId.Data, \"Data\")", StringComparison.Ordinal);
+        var reviewIndex = catalogSource.IndexOf("new(NativeMenuTopLevelId.Review, \"Review\")", StringComparison.Ordinal);
+        var viewIndex = catalogSource.IndexOf("new(NativeMenuTopLevelId.View, \"View\")", StringComparison.Ordinal);
         dataIndex.Should().BeGreaterThanOrEqualTo(0);
         reviewIndex.Should().BeGreaterThan(dataIndex);
         viewIndex.Should().BeGreaterThan(reviewIndex);
 
-        source.Should().Contain("_reviewSummaryMenuItem.IsEnabled = isIdle;");
-        source.Should().Contain("_checkAccessibilityMenuItem.IsEnabled = isIdle;");
-        source.Should().Contain("_nextNoteMenuItem.IsEnabled = isIdle;");
-        source.Should().Contain("_previousNoteMenuItem.IsEnabled = isIdle;");
-        source.Should().Contain("_nextCommentMenuItem.IsEnabled = isIdle;");
-        source.Should().Contain("_previousCommentMenuItem.IsEnabled = isIdle;");
+        source.Should().Contain("ApplyNativeMenuAvailability(isIdle);");
+        catalogSource.Should().Contain("new(NativeMenuItemId.ReviewSummary, context.IsIdle)");
+        catalogSource.Should().Contain("new(NativeMenuItemId.CheckAccessibility, context.IsIdle)");
+        catalogSource.Should().Contain("new(NativeMenuItemId.NextNote, context.IsIdle)");
+        catalogSource.Should().Contain("new(NativeMenuItemId.PreviousNote, context.IsIdle)");
+        catalogSource.Should().Contain("new(NativeMenuItemId.NextComment, context.IsIdle)");
+        catalogSource.Should().Contain("new(NativeMenuItemId.PreviousComment, context.IsIdle)");
 
         source.Should().Contain("private async Task ShowReviewSummaryDialogAsync(bool focusAccessibility = false)");
         source.Should().Contain("var plan = _session.GetReviewWorkflowPlan();");
@@ -3313,6 +3361,7 @@ public sealed class AvaloniaShellSourceTests
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
         var sessionSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookSession.cs"));
         var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
+        var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
 
         sessionSource.Should().Contain("public bool CanFillSelectedRange(FillCellsDirection direction)");
         sessionSource.Should().Contain("public WorkbookCellEditResult FillSelectedRange(FillCellsDirection direction)");
@@ -3345,30 +3394,28 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_fillUpFlyoutItem.Click += (_, _) => FillSelectedRange(FillCellsDirection.Up);");
         source.Should().Contain("_fillLeftFlyoutItem.Header = \"Left\";");
         source.Should().Contain("_fillLeftFlyoutItem.Click += (_, _) => FillSelectedRange(FillCellsDirection.Left);");
-        source.Should().Contain("_fillCellsMenuItem.Header = \"Fill\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.FillCells, \"Fill\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_fillCellsMenuItem.Menu = CreateNativeFillCellsMenu();");
-        source.Should().Contain("_fillDownMenuItem.Header = \"Down\";");
-        source.Should().Contain("_fillDownMenuItem.Gesture = new KeyGesture(Key.D, KeyModifiers.Control);");
+        catalogSource.Should().Contain("new(NativeMenuItemId.FillDown, \"Down\", new NativeMenuGesturePlan(NativeMenuGestureKey.D, NativeMenuGestureModifiers.Control))");
         source.Should().Contain("_fillDownMenuItem.Click += (_, _) => FillSelectedRange(FillCellsDirection.Down);");
-        source.Should().Contain("_fillRightMenuItem.Header = \"Right\";");
-        source.Should().Contain("_fillRightMenuItem.Gesture = new KeyGesture(Key.R, KeyModifiers.Control);");
+        catalogSource.Should().Contain("new(NativeMenuItemId.FillRight, \"Right\", new NativeMenuGesturePlan(NativeMenuGestureKey.R, NativeMenuGestureModifiers.Control))");
         source.Should().Contain("_fillRightMenuItem.Click += (_, _) => FillSelectedRange(FillCellsDirection.Right);");
-        source.Should().Contain("_fillUpMenuItem.Header = \"Up\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.FillUp, \"Up\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_fillUpMenuItem.Click += (_, _) => FillSelectedRange(FillCellsDirection.Up);");
-        source.Should().Contain("_fillLeftMenuItem.Header = \"Left\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.FillLeft, \"Left\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_fillLeftMenuItem.Click += (_, _) => FillSelectedRange(FillCellsDirection.Left);");
-        source.Should().Contain("homeMenu.Items.Add(_fillCellsMenuItem);");
+        catalogSource.Should().Contain("Item(NativeMenuItemId.FillCells)");
         source.Should().Contain("private MenuFlyout CreateFillCellsFlyout()");
         source.Should().Contain("private NativeMenu CreateNativeFillCellsMenu()");
         source.Should().Contain("_fillDownFlyoutItem.IsEnabled = isIdle && _session.CanFillSelectedRange(FillCellsDirection.Down);");
         source.Should().Contain("_fillRightFlyoutItem.IsEnabled = isIdle && _session.CanFillSelectedRange(FillCellsDirection.Right);");
         source.Should().Contain("_fillUpFlyoutItem.IsEnabled = isIdle && _session.CanFillSelectedRange(FillCellsDirection.Up);");
         source.Should().Contain("_fillLeftFlyoutItem.IsEnabled = isIdle && _session.CanFillSelectedRange(FillCellsDirection.Left);");
-        source.Should().Contain("_fillCellsMenuItem.IsEnabled = _fillCellsButton.IsEnabled;");
-        source.Should().Contain("_fillDownMenuItem.IsEnabled = _fillDownFlyoutItem.IsEnabled;");
-        source.Should().Contain("_fillRightMenuItem.IsEnabled = _fillRightFlyoutItem.IsEnabled;");
-        source.Should().Contain("_fillUpMenuItem.IsEnabled = _fillUpFlyoutItem.IsEnabled;");
-        source.Should().Contain("_fillLeftMenuItem.IsEnabled = _fillLeftFlyoutItem.IsEnabled;");
+        catalogSource.Should().Contain("new(NativeMenuItemId.FillCells, context.CanFillCells)");
+        catalogSource.Should().Contain("new(NativeMenuItemId.FillDown, context.CanFillDown)");
+        catalogSource.Should().Contain("new(NativeMenuItemId.FillRight, context.CanFillRight)");
+        catalogSource.Should().Contain("new(NativeMenuItemId.FillUp, context.CanFillUp)");
+        catalogSource.Should().Contain("new(NativeMenuItemId.FillLeft, context.CanFillLeft)");
         source.Should().Contain("_fillCellsButton,");
         source.Should().Contain("private void FillSelectedRange(FillCellsDirection direction)");
         source.Should().Contain("var result = _session.FillSelectedRange(direction);");
@@ -3385,11 +3432,11 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("HasFillRightMenuItem: HasToolbarMenuItem(_fillRightFlyoutItem, \"Right\")");
         source.Should().Contain("HasFillUpMenuItem: HasToolbarMenuItem(_fillUpFlyoutItem, \"Up\")");
         source.Should().Contain("HasFillLeftMenuItem: HasToolbarMenuItem(_fillLeftFlyoutItem, \"Left\")");
-        source.Should().Contain("HasNativeFillCellsMenuItem: HasNativeMenuItem(_fillCellsMenuItem, \"Fill\", requireGesture: false)");
-        source.Should().Contain("HasNativeFillDownMenuItem: HasNativeSubmenuItem(_fillCellsMenuItem.Menu, \"Down\")");
-        source.Should().Contain("HasNativeFillRightMenuItem: HasNativeSubmenuItem(_fillCellsMenuItem.Menu, \"Right\")");
-        source.Should().Contain("HasNativeFillUpMenuItem: HasNativeSubmenuItem(_fillCellsMenuItem.Menu, \"Up\")");
-        source.Should().Contain("HasNativeFillLeftMenuItem: HasNativeSubmenuItem(_fillCellsMenuItem.Menu, \"Left\")");
+        source.Should().Contain("HasNativeFillCellsMenuItem: HasNativeMenuItem(_fillCellsMenuItem, NativeMenuItemId.FillCells)");
+        source.Should().Contain("HasNativeFillDownMenuItem: HasNativeSubmenuItem(_fillCellsMenuItem.Menu, NativeMenuItemId.FillDown)");
+        source.Should().Contain("HasNativeFillRightMenuItem: HasNativeSubmenuItem(_fillCellsMenuItem.Menu, NativeMenuItemId.FillRight)");
+        source.Should().Contain("HasNativeFillUpMenuItem: HasNativeSubmenuItem(_fillCellsMenuItem.Menu, NativeMenuItemId.FillUp)");
+        source.Should().Contain("HasNativeFillLeftMenuItem: HasNativeSubmenuItem(_fillCellsMenuItem.Menu, NativeMenuItemId.FillLeft)");
 
         smokeSource.Should().Contain("bool HasFillCellsButton,");
         smokeSource.Should().Contain("bool HasFillDownMenuItem,");
@@ -3429,6 +3476,7 @@ public sealed class AvaloniaShellSourceTests
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
         var sessionSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookSession.cs"));
         var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
+        var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
 
         sessionSource.Should().Contain("public WorkbookCellEditResult ClearSelectedRangeAll()");
         sessionSource.Should().Contain("public WorkbookCellEditResult ClearSelectedRangeFormats()");
@@ -3468,13 +3516,30 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_clearCommentsFlyoutItem.Click += (_, _) => ClearSelectedRangeComments();");
         source.Should().Contain("_clearHyperlinksFlyoutItem.Header = \"Clear Hyperlinks\";");
         source.Should().Contain("_clearHyperlinksFlyoutItem.Click += (_, _) => ClearSelectedRangeHyperlinks();");
-        source.Should().Contain("_clearMenuItem.Header = \"Clear\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.Clear, \"Clear\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_clearMenuItem.Menu = CreateNativeClearMenu();");
-        source.Should().Contain("homeMenu.Items.Add(_clearMenuItem);");
+        catalogSource.Should().Contain("Item(NativeMenuItemId.Clear)");
+        catalogSource.Should().Contain("new(NativeMenuItemId.ClearAll, \"Clear All\", RequiresGestureInSmoke: false)");
+        catalogSource.Should().Contain("new(NativeMenuItemId.ClearFormats, \"Clear Formats\", RequiresGestureInSmoke: false)");
+        catalogSource.Should().Contain("new(NativeMenuItemId.ClearContents, \"Clear Contents\", new NativeMenuGesturePlan(NativeMenuGestureKey.Delete))");
+        catalogSource.Should().Contain("new(NativeMenuItemId.ClearComments, \"Clear Comments and Notes\", RequiresGestureInSmoke: false)");
+        catalogSource.Should().Contain("new(NativeMenuItemId.ClearHyperlinks, \"Clear Hyperlinks\", RequiresGestureInSmoke: false)");
+        catalogSource.Should().Contain("Item(NativeMenuItemId.ClearAll)");
+        catalogSource.Should().Contain("Item(NativeMenuItemId.ClearFormats)");
+        catalogSource.Should().Contain("Item(NativeMenuItemId.ClearContents)");
+        catalogSource.Should().Contain("Item(NativeMenuItemId.ClearComments)");
+        catalogSource.Should().Contain("Item(NativeMenuItemId.ClearHyperlinks)");
         source.Should().Contain("private MenuFlyout CreateClearFlyout()");
         source.Should().Contain("private NativeMenu CreateNativeClearMenu()");
+        source.Should().Contain("=> CreateNativeMenu(NativeMenuCatalog.ClearMenuEntries);");
         source.Should().Contain("_clearButton.IsEnabled = isIdle;");
-        source.Should().Contain("_clearMenuItem.IsEnabled = _clearButton.IsEnabled;");
+        source.Should().Contain("ApplyNativeMenuAvailability(isIdle);");
+        catalogSource.Should().Contain("new(NativeMenuItemId.Clear, context.CanClear)");
+        catalogSource.Should().Contain("new(NativeMenuItemId.ClearAll, context.CanClear)");
+        catalogSource.Should().Contain("new(NativeMenuItemId.ClearFormats, context.CanClear)");
+        catalogSource.Should().Contain("new(NativeMenuItemId.ClearContents, context.CanClear)");
+        catalogSource.Should().Contain("new(NativeMenuItemId.ClearComments, context.CanClear)");
+        catalogSource.Should().Contain("new(NativeMenuItemId.ClearHyperlinks, context.CanClear)");
         source.Should().Contain("private void ClearButton_Click(object? sender, RoutedEventArgs e)");
         source.Should().Contain("private void ClearSelectedRangeAll()");
         source.Should().Contain("var result = _session.ClearSelectedRangeAll();");
@@ -3517,6 +3582,7 @@ public sealed class AvaloniaShellSourceTests
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
         var sessionSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookSession.cs"));
         var plannerSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "HyperlinkDialogPlanner.cs"));
+        var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
 
         plannerSource.Should().Contain("public sealed record HyperlinkDialogPrefill(");
         sessionSource.Should().Contain("public HyperlinkDialogPrefill GetSelectedRangeHyperlinkDialogPrefill()");
@@ -3526,10 +3592,11 @@ public sealed class AvaloniaShellSourceTests
         sessionSource.Should().Contain("return ToCommand(\"Insert Hyperlink\", commands);");
 
         source.Should().Contain("private readonly NativeMenuItem _insertHyperlinkMenuItem = new();");
-        source.Should().Contain("_insertHyperlinkMenuItem.Header = \"Hyperlink...\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.InsertHyperlink, \"Hyperlink...\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_insertHyperlinkMenuItem.Click += async (_, _) => await ShowInsertHyperlinkDialogAsync();");
-        source.Should().Contain("insertMenu.Items.Add(_insertHyperlinkMenuItem);");
-        source.Should().Contain("_insertHyperlinkMenuItem.IsEnabled = isIdle;");
+        source.Should().Contain("var insertMenu = CreateNativeMenu(NativeMenuTopLevelId.Insert);");
+        catalogSource.Should().Contain("Item(NativeMenuItemId.InsertHyperlink)");
+        catalogSource.Should().Contain("new(NativeMenuItemId.InsertHyperlink, context.IsIdle)");
         source.Should().Contain("private async Task ShowInsertHyperlinkDialogAsync()");
         source.Should().Contain("private async Task<HyperlinkDialogPlan?> ShowInsertHyperlinkInputDialogAsync()");
         source.Should().Contain("var prefill = _session.GetSelectedRangeHyperlinkDialogPrefill();");
@@ -3546,6 +3613,7 @@ public sealed class AvaloniaShellSourceTests
         var sessionSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookSession.cs"));
         var plannerSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "HyperlinkNavigationPlanner.cs"));
         var launcherSource = File.ReadAllText(RepositoryFileLocator.Find("shared", "Free.Shared.AppServices", "ExternalUriLauncher.cs"));
+        var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
 
         plannerSource.Should().Contain("public enum HyperlinkNavigationKind");
         plannerSource.Should().Contain("HyperlinkTargetKind.PlaceInThisDocument");
@@ -3565,10 +3633,11 @@ public sealed class AvaloniaShellSourceTests
         sessionSource.Should().Contain("External hyperlinks are not supported on this platform.");
 
         source.Should().Contain("private readonly NativeMenuItem _openHyperlinkMenuItem = new();");
-        source.Should().Contain("_openHyperlinkMenuItem.Header = \"Open Hyperlink\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.OpenHyperlink, \"Open Hyperlink\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_openHyperlinkMenuItem.Click += async (_, _) => await OpenSelectedHyperlinkAsync();");
-        source.Should().Contain("homeMenu.Items.Add(_openHyperlinkMenuItem);");
-        source.Should().Contain("_openHyperlinkMenuItem.IsEnabled = isIdle && _session.CanOpenSelectedHyperlink;");
+        source.Should().Contain("NativeMenuItemId.OpenHyperlink => _openHyperlinkMenuItem,");
+        catalogSource.Should().Contain("Item(NativeMenuItemId.OpenHyperlink)");
+        catalogSource.Should().Contain("new(NativeMenuItemId.OpenHyperlink, context.IsIdle && context.CanOpenSelectedHyperlink)");
         source.Should().Contain("private async Task OpenSelectedHyperlinkAsync()");
         source.Should().Contain("if (!_session.TryGetSelectedHyperlinkPlan(out var plan) || plan is null)");
         source.Should().Contain("await OpenExternalHyperlinkAsync(plan.Target);");
@@ -3814,6 +3883,7 @@ public sealed class AvaloniaShellSourceTests
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
         var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
+        var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
 
         source.Should().Contain("private readonly DropDownButton _bordersButton = new();");
         source.Should().Contain("private readonly NativeMenuItem _bordersMenuItem = new();");
@@ -3821,11 +3891,13 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_bordersButton.Flyout = CreateBorderPresetFlyout();");
         source.Should().Contain("AutomationProperties.SetAutomationId(_bordersButton, \"HomeBordersButton\");");
         source.Should().Contain("AutomationProperties.SetHelpText(_bordersButton, \"Apply or change borders on the selected cells.\");");
-        source.Should().Contain("_bordersMenuItem.Header = \"Borders\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.Borders, \"Borders\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_bordersMenuItem.Menu = CreateNativeBorderPresetMenu();");
-        source.Should().Contain("homeMenu.Items.Add(_bordersMenuItem);");
+        source.Should().Contain("NativeMenuItemId.Borders => _bordersMenuItem,");
+        catalogSource.Should().Contain("Item(NativeMenuItemId.Borders)");
         source.Should().Contain("_bordersButton.IsEnabled = isIdle;");
-        source.Should().Contain("_bordersMenuItem.IsEnabled = _bordersButton.IsEnabled;");
+        source.Should().Contain("ApplyNativeMenuAvailability(isIdle);");
+        catalogSource.Should().Contain("new(NativeMenuItemId.Borders, context.CanBorders)");
         source.Should().Contain("_bordersButton,");
         source.Should().Contain("private MenuFlyout CreateBorderPresetFlyout()");
         source.Should().Contain(".GetValues<CellBorderPreset>()");
@@ -3843,7 +3915,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("RefreshShell($\"Applied {presetName} to {rangeReference}\");");
         source.Should().Contain("var nativeBordersPresetCount = _bordersMenuItem.Menu?");
         source.Should().Contain("HasBordersButton: _bordersButton.Content?.ToString() == \"Borders\"");
-        source.Should().Contain("HasNativeBordersMenuItem: HasNativeMenuItem(_bordersMenuItem, \"Borders\", requireGesture: false)");
+        source.Should().Contain("HasNativeBordersMenuItem: HasNativeMenuItem(_bordersMenuItem, NativeMenuItemId.Borders)");
         source.Should().Contain("NativeBordersPresetCount: nativeBordersPresetCount");
 
         smokeSource.Should().Contain("bool HasBordersButton,");
@@ -3862,6 +3934,7 @@ public sealed class AvaloniaShellSourceTests
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
         var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
+        var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
 
         source.Should().Contain("private readonly Button _mergeAndCenterButton = new();");
         source.Should().Contain("private readonly NativeMenuItem _mergeAndCenterMenuItem = new();");
@@ -3870,15 +3943,18 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_mergeAndCenterButton.Click += MergeAndCenterButton_Click;");
         source.Should().Contain("AutomationProperties.SetAutomationId(_mergeAndCenterButton, \"HomeMergeAndCenterButton\");");
         source.Should().Contain("AutomationProperties.SetHelpText(_mergeAndCenterButton, \"Merge and center the selected cells.\");");
-        source.Should().Contain("_mergeAndCenterMenuItem.Header = \"Merge & Center\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.MergeAndCenter, \"Merge & Center\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_mergeAndCenterMenuItem.Click += async (_, _) => await MergeAndCenterSelectedRangeAsync();");
-        source.Should().Contain("_unmergeCellsMenuItem.Header = \"Unmerge Cells\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.UnmergeCells, \"Unmerge Cells\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_unmergeCellsMenuItem.Click += (_, _) => UnmergeSelectedRange();");
-        source.Should().Contain("homeMenu.Items.Add(_mergeAndCenterMenuItem);");
-        source.Should().Contain("homeMenu.Items.Add(_unmergeCellsMenuItem);");
+        source.Should().Contain("NativeMenuItemId.MergeAndCenter => _mergeAndCenterMenuItem,");
+        source.Should().Contain("NativeMenuItemId.UnmergeCells => _unmergeCellsMenuItem,");
+        catalogSource.Should().Contain("Item(NativeMenuItemId.MergeAndCenter)");
+        catalogSource.Should().Contain("Item(NativeMenuItemId.UnmergeCells)");
         source.Should().Contain("_mergeAndCenterButton.IsEnabled = isIdle;");
-        source.Should().Contain("_mergeAndCenterMenuItem.IsEnabled = _mergeAndCenterButton.IsEnabled;");
-        source.Should().Contain("_unmergeCellsMenuItem.IsEnabled = isIdle && _session.IsSelectedRangeMerged;");
+        source.Should().Contain("ApplyNativeMenuAvailability(isIdle);");
+        catalogSource.Should().Contain("new(NativeMenuItemId.MergeAndCenter, context.CanMergeAndCenter)");
+        catalogSource.Should().Contain("new(NativeMenuItemId.UnmergeCells, context.IsIdle && context.IsSelectedRangeMerged)");
         source.Should().Contain("_mergeAndCenterButton,");
         source.Should().Contain("private async void MergeAndCenterButton_Click(object? sender, RoutedEventArgs e)");
         source.Should().Contain("private async Task MergeAndCenterSelectedRangeAsync()");
@@ -3898,8 +3974,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("RefreshShell($\"Unmerged cells in {rangeReference}\");");
         source.Should().Contain("HasMergeAndCenterButton: _mergeAndCenterButton.Content?.ToString() == \"Merge & Center\"");
         source.Should().Contain("HomeMergeAndCenterButton");
-        source.Should().Contain("HasNativeMergeAndCenterMenuItem: HasNativeMenuItem(_mergeAndCenterMenuItem, \"Merge & Center\", requireGesture: false)");
-        source.Should().Contain("HasNativeUnmergeCellsMenuItem: HasNativeMenuItem(_unmergeCellsMenuItem, \"Unmerge Cells\", requireGesture: false)");
+        source.Should().Contain("HasNativeMergeAndCenterMenuItem: HasNativeMenuItem(_mergeAndCenterMenuItem, NativeMenuItemId.MergeAndCenter)");
+        source.Should().Contain("HasNativeUnmergeCellsMenuItem: HasNativeMenuItem(_unmergeCellsMenuItem, NativeMenuItemId.UnmergeCells)");
 
         smokeSource.Should().Contain("bool HasMergeAndCenterButton,");
         smokeSource.Should().Contain("bool HasNativeMergeAndCenterMenuItem,");
@@ -3917,16 +3993,19 @@ public sealed class AvaloniaShellSourceTests
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
         var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
+        var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
 
         source.Should().Contain("private readonly DropDownButton _cellStylesButton = new();");
         source.Should().Contain("private readonly NativeMenuItem _cellStylesMenuItem = new();");
         source.Should().Contain("_cellStylesButton.Content = \"Styles\";");
         source.Should().Contain("_cellStylesButton.Flyout = CreateCellStylesFlyout();");
-        source.Should().Contain("_cellStylesMenuItem.Header = \"Cell Styles\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.CellStyles, \"Cell Styles\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_cellStylesMenuItem.Menu = CreateNativeCellStylesMenu();");
-        source.Should().Contain("homeMenu.Items.Add(_cellStylesMenuItem);");
+        source.Should().Contain("NativeMenuItemId.CellStyles => _cellStylesMenuItem,");
+        catalogSource.Should().Contain("Item(NativeMenuItemId.CellStyles)");
         source.Should().Contain("_cellStylesButton.IsEnabled = isIdle;");
-        source.Should().Contain("_cellStylesMenuItem.IsEnabled = _cellStylesButton.IsEnabled;");
+        source.Should().Contain("ApplyNativeMenuAvailability(isIdle);");
+        catalogSource.Should().Contain("new(NativeMenuItemId.CellStyles, context.CanCellStyles)");
         source.Should().Contain("private MenuFlyout CreateCellStylesFlyout()");
         source.Should().Contain("Enum");
         source.Should().Contain(".GetValues<CellStylePreset>()");
@@ -3940,7 +4019,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? \"Cell Style failed.\");");
         source.Should().Contain("RefreshShell($\"Applied {presetName} style to {rangeReference}\");");
         source.Should().Contain("var nativeCellStylesPresetCount = _cellStylesMenuItem.Menu?");
-        source.Should().Contain("HasNativeCellStylesMenuItem: HasNativeMenuItem(_cellStylesMenuItem, \"Cell Styles\", requireGesture: false)");
+        source.Should().Contain("HasNativeCellStylesMenuItem: HasNativeMenuItem(_cellStylesMenuItem, NativeMenuItemId.CellStyles)");
         source.Should().Contain("NativeCellStylesPresetCount: nativeCellStylesPresetCount");
 
         smokeSource.Should().Contain("bool HasNativeCellStylesMenuItem,");
@@ -3955,6 +4034,7 @@ public sealed class AvaloniaShellSourceTests
     public void MainWindow_WiresTextRotationThroughSharedWorkbookSession()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
 
         source.Should().Contain("private readonly NativeMenuItem _horizontalTextMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _angleCounterclockwiseMenuItem = new();");
@@ -3967,17 +4047,17 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_orientationButton.Flyout = CreateTextRotationFlyout();");
         source.Should().Contain("_orientationButton.IsEnabled = isIdle;");
         source.Should().Contain("_orientationButton,");
-        source.Should().Contain("_horizontalTextMenuItem.Header = \"Horizontal\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.HorizontalText, \"Horizontal\", RequiresGestureInSmoke: false)");
         source.Should().Contain("ApplySelectedRangeTextRotation(0, \"Set horizontal text for\", \"Horizontal Text failed.\");");
-        source.Should().Contain("_angleCounterclockwiseMenuItem.Header = \"Angle Counterclockwise\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.AngleCounterclockwise, \"Angle Counterclockwise\", RequiresGestureInSmoke: false)");
         source.Should().Contain("ApplySelectedRangeTextRotation(45, \"Angled text counterclockwise for\", \"Angle Counterclockwise failed.\");");
-        source.Should().Contain("_angleClockwiseMenuItem.Header = \"Angle Clockwise\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.AngleClockwise, \"Angle Clockwise\", RequiresGestureInSmoke: false)");
         source.Should().Contain("ApplySelectedRangeTextRotation(-45, \"Angled text clockwise for\", \"Angle Clockwise failed.\");");
-        source.Should().Contain("_verticalTextMenuItem.Header = \"Vertical Text\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.VerticalText, \"Vertical Text\", RequiresGestureInSmoke: false)");
         source.Should().Contain("ApplySelectedRangeTextRotation(255, \"Set vertical text for\", \"Vertical Text failed.\");");
-        source.Should().Contain("_rotateTextUpMenuItem.Header = \"Rotate Text Up\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.RotateTextUp, \"Rotate Text Up\", RequiresGestureInSmoke: false)");
         source.Should().Contain("ApplySelectedRangeTextRotation(90, \"Rotated text up for\", \"Rotate Text Up failed.\");");
-        source.Should().Contain("_rotateTextDownMenuItem.Header = \"Rotate Text Down\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.RotateTextDown, \"Rotate Text Down\", RequiresGestureInSmoke: false)");
         source.Should().Contain("ApplySelectedRangeTextRotation(-90, \"Rotated text down for\", \"Rotate Text Down failed.\");");
         source.Should().Contain("private void ApplySelectedRangeTextRotation(int textRotation, string successAction, string failureMessage)");
         source.Should().Contain("var result = _session.SetSelectedRangeTextRotation(textRotation);");
@@ -4212,13 +4292,14 @@ public sealed class AvaloniaShellSourceTests
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
         var sessionSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookSession.cs"));
         var plannerSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "FormatCellsCompactPlanner.cs"));
+        var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
 
         source.Should().Contain("private readonly NativeMenuItem _formatCellsMenuItem = new();");
-        source.Should().Contain("_formatCellsMenuItem.Header = \"Format Cells...\";");
-        source.Should().Contain("_formatCellsMenuItem.Gesture = new KeyGesture(Key.D1, KeyModifiers.Meta);");
+        catalogSource.Should().Contain("new(NativeMenuItemId.FormatCells, \"Format Cells...\", new NativeMenuGesturePlan(NativeMenuGestureKey.D1, NativeMenuGestureModifiers.Meta))");
         source.Should().Contain("_formatCellsMenuItem.Click += async (_, _) => await ShowFormatCells");
-        source.Should().Contain("homeMenu.Items.Add(_formatCellsMenuItem);");
-        source.Should().Contain("_formatCellsMenuItem.IsEnabled = isIdle;");
+        source.Should().Contain("NativeMenuItemId.FormatCells => _formatCellsMenuItem,");
+        catalogSource.Should().Contain("Item(NativeMenuItemId.FormatCells)");
+        catalogSource.Should().Contain("new(NativeMenuItemId.FormatCells, context.IsIdle)");
         source.Should().Contain("Key.D1");
         source.Should().Contain("HasOnlyCommandModifier(e.KeyModifiers)");
         source.Should().Contain("await ShowFormatCells");
@@ -4393,6 +4474,7 @@ public sealed class AvaloniaShellSourceTests
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
         var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
+        var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
 
         source.Should().Contain("private readonly Button _newSheetButton = new();");
         source.Should().Contain("private readonly NativeMenuItem _newSheetMenuItem = new();");
@@ -4409,54 +4491,58 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_newSheetButton.Content = \"+\";");
         source.Should().Contain("_newSheetButton.Click += (_, _) => AddNewSheet();");
         source.Should().Contain("AutomationProperties.SetName(_newSheetButton, \"New Sheet\");");
-        source.Should().Contain("_newSheetMenuItem.Header = UiText.Get(\"AvaloniaNativeMenu_NewSheet\");");
-        source.Should().Contain("_newSheetMenuItem.Gesture = new KeyGesture(Key.F11, KeyModifiers.Shift);");
+        catalogSource.Should().Contain("new(NativeMenuItemId.NewSheet, \"AvaloniaNativeMenu_NewSheet\", new NativeMenuGesturePlan(NativeMenuGestureKey.F11, NativeMenuGestureModifiers.Shift), UsesResourceKey: true)");
         source.Should().Contain("_newSheetMenuItem.Click += (_, _) => AddNewSheet();");
-        source.Should().Contain("_renameSheetMenuItem.Header = \"Rename Sheet...\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.RenameSheet, \"Rename Sheet...\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_renameSheetMenuItem.Click += async (_, _) => await RenameActiveSheetAsync();");
-        source.Should().Contain("_duplicateSheetMenuItem.Header = \"Duplicate Sheet\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.DuplicateSheet, \"Duplicate Sheet\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_duplicateSheetMenuItem.Click += (_, _) => DuplicateActiveSheet();");
-        source.Should().Contain("_moveSheetLeftMenuItem.Header = \"Move Sheet Left\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.MoveSheetLeft, \"Move Sheet Left\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_moveSheetLeftMenuItem.Click += (_, _) => MoveActiveSheetLeft();");
-        source.Should().Contain("_moveSheetRightMenuItem.Header = \"Move Sheet Right\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.MoveSheetRight, \"Move Sheet Right\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_moveSheetRightMenuItem.Click += (_, _) => MoveActiveSheetRight();");
-        source.Should().Contain("_tabColorMenuItem.Header = \"Tab Color\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.TabColor, \"Tab Color\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_tabColorMenuItem.Menu = CreateNativeSheetTabColorMenu();");
-        source.Should().Contain("_selectAllSheetsMenuItem.Header = \"Select All Sheets\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.SelectAllSheets, \"Select All Sheets\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_selectAllSheetsMenuItem.Click += (_, _) => SelectAllVisibleSheets();");
-        source.Should().Contain("_ungroupSheetsMenuItem.Header = \"Ungroup Sheets\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.UngroupSheets, \"Ungroup Sheets\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_ungroupSheetsMenuItem.Click += (_, _) => UngroupSheets();");
-        source.Should().Contain("_hideSheetMenuItem.Header = \"Hide Sheet\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.HideSheet, \"Hide Sheet\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_hideSheetMenuItem.Click += (_, _) => HideActiveSheet();");
-        source.Should().Contain("_unhideSheetMenuItem.Header = \"Unhide Sheet...\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.UnhideSheet, \"Unhide Sheet...\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_unhideSheetMenuItem.Click += async (_, _) => await UnhideSheetAsync();");
-        source.Should().Contain("_deleteSheetMenuItem.Header = \"Delete Sheet\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.DeleteSheet, \"Delete Sheet\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_deleteSheetMenuItem.Click += (_, _) => DeleteActiveSheet();");
-        source.Should().Contain("sheetMenu.Items.Add(_newSheetMenuItem);");
-        source.Should().Contain("sheetMenu.Items.Add(_renameSheetMenuItem);");
-        source.Should().Contain("sheetMenu.Items.Add(_duplicateSheetMenuItem);");
-        source.Should().Contain("sheetMenu.Items.Add(_moveSheetLeftMenuItem);");
-        source.Should().Contain("sheetMenu.Items.Add(_moveSheetRightMenuItem);");
-        source.Should().Contain("sheetMenu.Items.Add(_tabColorMenuItem);");
-        source.Should().Contain("sheetMenu.Items.Add(_selectAllSheetsMenuItem);");
-        source.Should().Contain("sheetMenu.Items.Add(_ungroupSheetsMenuItem);");
-        source.Should().Contain("sheetMenu.Items.Add(_hideSheetMenuItem);");
-        source.Should().Contain("sheetMenu.Items.Add(_unhideSheetMenuItem);");
-        source.Should().Contain("sheetMenu.Items.Add(_deleteSheetMenuItem);");
-        source.Should().Contain("Header = \"Sheet\"");
+        source.Should().Contain("var sheetMenu = CreateNativeMenu(NativeMenuTopLevelId.Sheet);");
+        catalogSource.Should().Contain("public static IReadOnlyList<NativeMenuEntryPlan> SheetMenuEntries");
+        catalogSource.Should().Contain("Item(NativeMenuItemId.NewSheet)");
+        catalogSource.Should().Contain("Item(NativeMenuItemId.RenameSheet)");
+        catalogSource.Should().Contain("Item(NativeMenuItemId.DuplicateSheet)");
+        catalogSource.Should().Contain("Item(NativeMenuItemId.MoveSheetLeft)");
+        catalogSource.Should().Contain("Item(NativeMenuItemId.MoveSheetRight)");
+        catalogSource.Should().Contain("Item(NativeMenuItemId.TabColor)");
+        catalogSource.Should().Contain("Item(NativeMenuItemId.SelectAllSheets)");
+        catalogSource.Should().Contain("Item(NativeMenuItemId.UngroupSheets)");
+        catalogSource.Should().Contain("Item(NativeMenuItemId.HideSheet)");
+        catalogSource.Should().Contain("Item(NativeMenuItemId.UnhideSheet)");
+        catalogSource.Should().Contain("Item(NativeMenuItemId.DeleteSheet)");
+        catalogSource.Should().Contain("new(NativeMenuTopLevelId.Sheet, \"Sheet\")");
         source.Should().Contain("_newSheetButton.IsEnabled = isIdle;");
-        source.Should().Contain("_newSheetMenuItem.IsEnabled = _newSheetButton.IsEnabled;");
-        source.Should().Contain("_renameSheetMenuItem.IsEnabled = isIdle;");
-        source.Should().Contain("_duplicateSheetMenuItem.IsEnabled = isIdle;");
-        source.Should().Contain("var activeSheetTabIndex = FindActiveSheetTabIndex();");
-        source.Should().Contain("_moveSheetLeftMenuItem.IsEnabled = isIdle && activeSheetTabIndex > 0;");
-        source.Should().Contain("activeSheetTabIndex < _session.SheetTabs.Count - 1;");
-        source.Should().Contain("_tabColorMenuItem.IsEnabled = isIdle;");
-        source.Should().Contain("_selectAllSheetsMenuItem.IsEnabled = isIdle && _session.SheetTabs.Count > 1;");
-        source.Should().Contain("_ungroupSheetsMenuItem.IsEnabled = isIdle && _session.IsWorkbookGrouped;");
-        source.Should().Contain("_hideSheetMenuItem.IsEnabled = isIdle && _session.CanHideActiveSheet;");
-        source.Should().Contain("_unhideSheetMenuItem.IsEnabled = isIdle && _session.HiddenSheets.Count > 0;");
-        source.Should().Contain("_deleteSheetMenuItem.IsEnabled = isIdle;");
+        source.Should().Contain("ApplyNativeMenuAvailability(isIdle);");
+        catalogSource.Should().Contain("new(NativeMenuItemId.NewSheet, context.CanAddSheet)");
+        catalogSource.Should().Contain("new(NativeMenuItemId.RenameSheet, context.IsIdle)");
+        catalogSource.Should().Contain("new(NativeMenuItemId.DuplicateSheet, context.IsIdle)");
+        source.Should().Contain("ActiveSheetTabIndex: FindActiveSheetTabIndex(),");
+        catalogSource.Should().Contain("new(NativeMenuItemId.MoveSheetLeft, context.IsIdle && context.ActiveSheetTabIndex > 0)");
+        source.Should().Contain("SheetTabCount: _session.SheetTabs.Count,");
+        catalogSource.Should().Contain("NativeMenuItemId.MoveSheetRight");
+        catalogSource.Should().Contain("context.ActiveSheetTabIndex < context.SheetTabCount - 1");
+        catalogSource.Should().Contain("new(NativeMenuItemId.TabColor, context.IsIdle)");
+        catalogSource.Should().Contain("new(NativeMenuItemId.SelectAllSheets, context.IsIdle && context.SheetTabCount > 1)");
+        catalogSource.Should().Contain("new(NativeMenuItemId.UngroupSheets, context.IsIdle && context.IsWorkbookGrouped)");
+        catalogSource.Should().Contain("new(NativeMenuItemId.HideSheet, context.IsIdle && context.CanHideActiveSheet)");
+        catalogSource.Should().Contain("new(NativeMenuItemId.UnhideSheet, context.IsIdle && context.HiddenSheetCount > 0)");
+        catalogSource.Should().Contain("new(NativeMenuItemId.DeleteSheet, context.IsIdle)");
         source.Should().Contain("private int FindActiveSheetTabIndex()");
         source.Should().Contain("private void AddNewSheet()");
         source.Should().Contain("var result = _session.AddSheet();");
@@ -4512,8 +4598,9 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private bool SelectAdjacentVisibleSheetFromKeyboard(int direction, bool selectRange)");
         source.Should().Contain("private void SelectSheetTabFromKeyboard(SheetId sheetId, bool selectRange)");
         source.Should().Contain("private SheetId? GetAdjacentSheetTabId(SheetId sheetId, int direction)");
-        source.Should().Contain("Math.Clamp(targetIndex, 0, _session.SheetTabs.Count - 1)");
+        source.Should().Contain("SheetTabFocusPlanner.AdjacentTab(_session.SheetTabs, sheetId, direction, static tab => tab.Id)");
         source.Should().Contain("private SheetId? GetEdgeSheetTabId(bool first)");
+        source.Should().Contain("SheetTabFocusPlanner.EdgeTab(_session.SheetTabs, first, static tab => tab.Id)");
         source.Should().Contain("private bool FocusActiveSheetTab()");
         source.Should().Contain("private bool FocusSheetTab(SheetId sheetId)");
         source.Should().Contain("private static void SheetTabContextMenu_Opened(object? sender, RoutedEventArgs args)");
@@ -4580,13 +4667,12 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("RefreshShell($\"Deleted {sheetName}\");");
         source.Should().Contain("e.Key == Key.F11 && e.KeyModifiers == KeyModifiers.Shift");
         source.Should().Contain("private static bool HasCommandAndShiftModifiers(KeyModifiers modifiers)");
-        source.Should().Contain("private enum ShellFocusRegion");
-        source.Should().Contain("private static readonly ShellFocusRegion[] ShellFocusCycle");
-        source.Should().Contain("ShellFocusRegion.Worksheet");
-        source.Should().Contain("ShellFocusRegion.Toolbar");
-        source.Should().Contain("ShellFocusRegion.FormulaBar");
-        source.Should().Contain("ShellFocusRegion.SheetTabs");
-        source.Should().Contain("ShellFocusRegion.StatusBar");
+        source.Should().Contain("ShellFocusTarget.Worksheet");
+        source.Should().Contain("ShellFocusTarget.Ribbon");
+        source.Should().Contain("ShellFocusTarget.FormulaBar");
+        source.Should().Contain("ShellFocusTarget.SheetTabs");
+        source.Should().Contain("ShellFocusTarget.TaskPane");
+        source.Should().Contain("ShellFocusTarget.StatusBar");
         source.Should().Contain("_sheetGridHost.Focusable = true;");
         source.Should().Contain("AutomationProperties.SetName(_sheetGridHost, \"Worksheet\");");
         source.Should().Contain("_zoomText.Focusable = true;");
@@ -4596,13 +4682,15 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("if (IsShellFocusCycleKey(e))");
         source.Should().Contain("CycleShellFocus(reverse: e.KeyModifiers == KeyModifiers.Shift);");
         source.Should().Contain("private void CycleShellFocus(bool reverse)");
-        source.Should().Contain("private static ShellFocusRegion GetNextShellFocusRegion(ShellFocusRegion current, bool reverse)");
-        source.Should().Contain("private ShellFocusRegion GetCurrentShellFocusRegion()");
-        source.Should().Contain("private bool FocusShellRegion(ShellFocusRegion region)");
-        source.Should().Contain("ShellFocusRegion.Toolbar => FocusFirstEnabledToolbarControl()");
-        source.Should().Contain("ShellFocusRegion.FormulaBar => FocusControl(_formulaBox)");
-        source.Should().Contain("ShellFocusRegion.SheetTabs => FocusActiveSheetTab()");
-        source.Should().Contain("ShellFocusRegion.StatusBar => FocusControl(_zoomText)");
+        source.Should().Contain("ShellFocusCyclePlanner.GetNextAvailable(current, reverse, IsShellFocusTargetAvailable)");
+        source.Should().Contain("private static bool IsShellFocusTargetAvailable(ShellFocusTarget target)");
+        source.Should().Contain("private ShellFocusTarget GetCurrentShellFocusTarget()");
+        source.Should().Contain("private bool FocusShellRegion(ShellFocusTarget target)");
+        source.Should().Contain("ShellFocusTarget.Ribbon => FocusFirstEnabledToolbarControl()");
+        source.Should().Contain("ShellFocusTarget.FormulaBar => FocusControl(_formulaBox)");
+        source.Should().Contain("ShellFocusTarget.SheetTabs => FocusActiveSheetTab()");
+        source.Should().Contain("ShellFocusTarget.TaskPane => false");
+        source.Should().Contain("ShellFocusTarget.StatusBar => FocusControl(_zoomText)");
         source.Should().Contain("_ => FocusControl(_sheetGridHost)");
         source.Should().Contain("private bool FocusFirstEnabledToolbarControl()");
         source.Should().Contain("private IReadOnlyList<Control> GetToolbarFocusTargets()");
@@ -4621,12 +4709,12 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("SelectAdjacentVisibleSheetFromKeyboard(direction: 1, selectRange: false)");
         source.Should().Contain("HasNewSheetButton: _newSheetButton.Content?.ToString() == \"+\"");
         source.Should().Contain("HasNativeSheetMenu: hasNativeSheetMenu");
-        source.Should().Contain("HasNativeNewSheetMenuItem: HasNativeMenuItem(_newSheetMenuItem, UiText.Get(\"AvaloniaNativeMenu_NewSheet\"))");
-        source.Should().Contain("HasNativeRenameSheetMenuItem: HasNativeMenuItem(_renameSheetMenuItem, \"Rename Sheet...\", requireGesture: false)");
-        source.Should().Contain("HasNativeDuplicateSheetMenuItem: HasNativeMenuItem(_duplicateSheetMenuItem, \"Duplicate Sheet\", requireGesture: false)");
-        source.Should().Contain("HasNativeMoveSheetLeftMenuItem: HasNativeMenuItem(_moveSheetLeftMenuItem, \"Move Sheet Left\", requireGesture: false)");
-        source.Should().Contain("HasNativeMoveSheetRightMenuItem: HasNativeMenuItem(_moveSheetRightMenuItem, \"Move Sheet Right\", requireGesture: false)");
-        source.Should().Contain("HasNativeTabColorMenuItem: HasNativeMenuItem(_tabColorMenuItem, \"Tab Color\", requireGesture: false)");
+        source.Should().Contain("HasNativeNewSheetMenuItem: HasNativeMenuItem(_newSheetMenuItem, NativeMenuItemId.NewSheet)");
+        source.Should().Contain("HasNativeRenameSheetMenuItem: HasNativeMenuItem(_renameSheetMenuItem, NativeMenuItemId.RenameSheet)");
+        source.Should().Contain("HasNativeDuplicateSheetMenuItem: HasNativeMenuItem(_duplicateSheetMenuItem, NativeMenuItemId.DuplicateSheet)");
+        source.Should().Contain("HasNativeMoveSheetLeftMenuItem: HasNativeMenuItem(_moveSheetLeftMenuItem, NativeMenuItemId.MoveSheetLeft)");
+        source.Should().Contain("HasNativeMoveSheetRightMenuItem: HasNativeMenuItem(_moveSheetRightMenuItem, NativeMenuItemId.MoveSheetRight)");
+        source.Should().Contain("HasNativeTabColorMenuItem: HasNativeMenuItem(_tabColorMenuItem, NativeMenuItemId.TabColor)");
         source.Should().Contain("HasNativeClearTabColorMenuItem: HasNativeSubmenuItem(_tabColorMenuItem.Menu, \"No Color\")");
         source.Should().Contain("NativeTabColorSwatchCount: nativeTabColorSwatchCount");
         source.Should().Contain("private bool HasSheetTabButton(Func<Button, bool> predicate)");
@@ -4639,11 +4727,11 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("HasSheetTabContextNoColorMenuItem: HasSheetTabContextSubmenuItem(\"Tab Color\", \"No Color\")");
         source.Should().Contain("HasSheetTabContextSelectAllSheetsMenuItem: HasSheetTabContextMenuItem(\"Select All Sheets\")");
         source.Should().Contain("HasSheetTabContextUngroupSheetsMenuItem: HasSheetTabContextMenuItem(\"Ungroup Sheets\")");
-        source.Should().Contain("HasNativeSelectAllSheetsMenuItem: HasNativeMenuItem(_selectAllSheetsMenuItem, \"Select All Sheets\", requireGesture: false)");
-        source.Should().Contain("HasNativeUngroupSheetsMenuItem: HasNativeMenuItem(_ungroupSheetsMenuItem, \"Ungroup Sheets\", requireGesture: false)");
-        source.Should().Contain("HasNativeHideSheetMenuItem: HasNativeMenuItem(_hideSheetMenuItem, \"Hide Sheet\", requireGesture: false)");
-        source.Should().Contain("HasNativeUnhideSheetMenuItem: HasNativeMenuItem(_unhideSheetMenuItem, \"Unhide Sheet...\", requireGesture: false)");
-        source.Should().Contain("HasNativeDeleteSheetMenuItem: HasNativeMenuItem(_deleteSheetMenuItem, \"Delete Sheet\", requireGesture: false)");
+        source.Should().Contain("HasNativeSelectAllSheetsMenuItem: HasNativeMenuItem(_selectAllSheetsMenuItem, NativeMenuItemId.SelectAllSheets)");
+        source.Should().Contain("HasNativeUngroupSheetsMenuItem: HasNativeMenuItem(_ungroupSheetsMenuItem, NativeMenuItemId.UngroupSheets)");
+        source.Should().Contain("HasNativeHideSheetMenuItem: HasNativeMenuItem(_hideSheetMenuItem, NativeMenuItemId.HideSheet)");
+        source.Should().Contain("HasNativeUnhideSheetMenuItem: HasNativeMenuItem(_unhideSheetMenuItem, NativeMenuItemId.UnhideSheet)");
+        source.Should().Contain("HasNativeDeleteSheetMenuItem: HasNativeMenuItem(_deleteSheetMenuItem, NativeMenuItemId.DeleteSheet)");
         smokeSource.Should().Contain("SheetTabCount > 0");
         smokeSource.Should().Contain("HasNewSheetButton &&");
         smokeSource.Should().Contain("HasNativeSheetMenu &&");
@@ -4712,8 +4800,8 @@ public sealed class AvaloniaShellSourceTests
         var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
 
         source.Should().Contain("AutomationProperties.SetAutomationId(_formulaBox, \"FormulaBox\");");
-        source.Should().Contain("AutomationProperties.SetName(_formulaBox, \"Formula bar\");");
-        source.Should().Contain("AutomationProperties.SetHelpText(_formulaBox, \"Edit the active cell value or formula.\");");
+        source.Should().Contain("AutomationProperties.SetName(_formulaBox, FormulaBarText(FormulaBarChromePlanner.FormulaBox.AutomationNameResourceKey));");
+        source.Should().Contain("AutomationProperties.SetHelpText(_formulaBox, FormulaBarText(FormulaBarChromePlanner.FormulaBox.HelpTextResourceKey));");
         source.Should().Contain("AutomationProperties.SetAutomationId(_statusText, \"StatusText\");");
         source.Should().Contain("AutomationProperties.SetName(_statusText, \"Status\");");
         source.Should().Contain("AutomationProperties.SetHelpText(_statusText, \"Shows the current workbook status.\");");
@@ -4723,8 +4811,10 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("AutomationProperties.SetAutomationId(_selectionStatsText, \"SelectionStatsText\");");
         source.Should().Contain("AutomationProperties.SetName(_selectionStatsText, \"Selection statistics\");");
         source.Should().Contain("AutomationProperties.SetHelpText(_selectionStatsText, \"Shows statistics for the current selection.\");");
-        source.Should().Contain("HasFormulaBoxAutomationName: string.Equals(AutomationProperties.GetName(_formulaBox), \"Formula bar\", StringComparison.Ordinal)");
-        source.Should().Contain("HasFormulaBoxAutomationHelp: string.Equals(AutomationProperties.GetHelpText(_formulaBox), \"Edit the active cell value or formula.\", StringComparison.Ordinal)");
+        source.Should().Contain("HasFormulaBoxAutomationName: string.Equals(");
+        source.Should().Contain("FormulaBarText(FormulaBarChromePlanner.FormulaBox.AutomationNameResourceKey)");
+        source.Should().Contain("HasFormulaBoxAutomationHelp: string.Equals(");
+        source.Should().Contain("FormulaBarText(FormulaBarChromePlanner.FormulaBox.HelpTextResourceKey)");
         source.Should().Contain("HasFormulaBoxAutomationId: string.Equals(AutomationProperties.GetAutomationId(_formulaBox), \"FormulaBox\", StringComparison.Ordinal)");
         source.Should().Contain("HasStatusTextAutomationName: string.Equals(AutomationProperties.GetName(_statusText), \"Status\", StringComparison.Ordinal)");
         source.Should().Contain("HasStatusTextAutomationHelp: string.Equals(AutomationProperties.GetHelpText(_statusText), \"Shows the current workbook status.\", StringComparison.Ordinal)");
@@ -4757,6 +4847,7 @@ public sealed class AvaloniaShellSourceTests
         var findReplaceServiceSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.Core.Commands", "FindReplaceService.cs"));
         var findReplaceSearchPlannerSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.Core.Commands", "FindReplaceSearchPlanner.cs"));
         var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
+        var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
 
         source.Should().Contain("private readonly NativeMenuItem _findMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _findNextMenuItem = new();");
@@ -4777,30 +4868,31 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("GoToDialogPlanner.BuildReferenceChoices(");
         source.Should().Contain("GoToSpecialDialogPlanner.BuildChoices().ToArray()");
         source.Should().Contain("GoToSpecialDialogPlanner.BuildOptions(choice.Kind, GetValueTypes())");
-        source.Should().Contain("_findMenuItem.Header = \"Find...\";");
-        source.Should().Contain("_findMenuItem.Gesture = new KeyGesture(Key.F, KeyModifiers.Meta);");
+        catalogSource.Should().Contain("new(NativeMenuItemId.Find, \"Find...\", new NativeMenuGesturePlan(NativeMenuGestureKey.F, NativeMenuGestureModifiers.Meta))");
         source.Should().Contain("_findMenuItem.Click += async (_, _) => await ShowFindDialogAsync();");
-        source.Should().Contain("_findNextMenuItem.Header = \"Find Next\";");
-        source.Should().Contain("_findNextMenuItem.Gesture = new KeyGesture(Key.G, KeyModifiers.Meta);");
+        catalogSource.Should().Contain("new(NativeMenuItemId.FindNext, \"Find Next\", new NativeMenuGesturePlan(NativeMenuGestureKey.G, NativeMenuGestureModifiers.Meta))");
         source.Should().Contain("_findNextMenuItem.Click += (_, _) => FindNext();");
-        source.Should().Contain("_replaceMenuItem.Header = \"Replace...\";");
-        source.Should().Contain("_replaceMenuItem.Gesture = new KeyGesture(Key.H, KeyModifiers.Control);");
+        catalogSource.Should().Contain("new(NativeMenuItemId.Replace, \"Replace...\", new NativeMenuGesturePlan(NativeMenuGestureKey.H, NativeMenuGestureModifiers.Control))");
         source.Should().Contain("_replaceMenuItem.Click += async (_, _) => await ShowReplaceDialogAsync();");
-        source.Should().Contain("_goToMenuItem.Header = \"Go To...\";");
-        source.Should().Contain("_goToMenuItem.Gesture = new KeyGesture(Key.G, KeyModifiers.Control);");
+        catalogSource.Should().Contain("new(NativeMenuItemId.GoTo, \"Go To...\", new NativeMenuGesturePlan(NativeMenuGestureKey.G, NativeMenuGestureModifiers.Control))");
         source.Should().Contain("_goToMenuItem.Click += async (_, _) => await ShowGoToDialogAsync();");
-        source.Should().Contain("_goToSpecialMenuItem.Header = \"Go To Special...\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.GoToSpecial, \"Go To Special...\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_goToSpecialMenuItem.Click += async (_, _) => await ShowGoToSpecialDialogAsync();");
-        source.Should().Contain("homeMenu.Items.Add(_findMenuItem);");
-        source.Should().Contain("homeMenu.Items.Add(_findNextMenuItem);");
-        source.Should().Contain("homeMenu.Items.Add(_replaceMenuItem);");
-        source.Should().Contain("homeMenu.Items.Add(_goToMenuItem);");
-        source.Should().Contain("homeMenu.Items.Add(_goToSpecialMenuItem);");
-        source.Should().Contain("_findMenuItem.IsEnabled = isIdle;");
-        source.Should().Contain("_findNextMenuItem.IsEnabled = isIdle && !string.IsNullOrWhiteSpace(_session.LastFindText);");
-        source.Should().Contain("_replaceMenuItem.IsEnabled = isIdle;");
-        source.Should().Contain("_goToMenuItem.IsEnabled = isIdle;");
-        source.Should().Contain("_goToSpecialMenuItem.IsEnabled = isIdle;");
+        source.Should().Contain("NativeMenuItemId.Find => _findMenuItem,");
+        source.Should().Contain("NativeMenuItemId.FindNext => _findNextMenuItem,");
+        source.Should().Contain("NativeMenuItemId.Replace => _replaceMenuItem,");
+        source.Should().Contain("NativeMenuItemId.GoTo => _goToMenuItem,");
+        source.Should().Contain("NativeMenuItemId.GoToSpecial => _goToSpecialMenuItem,");
+        catalogSource.Should().Contain("Item(NativeMenuItemId.Find)");
+        catalogSource.Should().Contain("Item(NativeMenuItemId.FindNext)");
+        catalogSource.Should().Contain("Item(NativeMenuItemId.Replace)");
+        catalogSource.Should().Contain("Item(NativeMenuItemId.GoTo)");
+        catalogSource.Should().Contain("Item(NativeMenuItemId.GoToSpecial)");
+        catalogSource.Should().Contain("new(NativeMenuItemId.Find, context.IsIdle)");
+        catalogSource.Should().Contain("new(NativeMenuItemId.FindNext, context.IsIdle && context.CanFindNext)");
+        catalogSource.Should().Contain("new(NativeMenuItemId.Replace, context.IsIdle)");
+        catalogSource.Should().Contain("new(NativeMenuItemId.GoTo, context.IsIdle)");
+        catalogSource.Should().Contain("new(NativeMenuItemId.GoToSpecial, context.IsIdle)");
         source.Should().Contain("private async Task ShowFindDialogAsync()");
         source.Should().Contain("private async Task<FindDialogResult?> ShowFindInputDialogAsync(Action<FindDialogSmokeProbe>? launchSmokeProbe = null)");
         source.Should().Contain("private void NavigateToFindAllMatch(WorkbookFindAllMatch match)");
@@ -4886,11 +4978,11 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("e.Key == Key.G && e.KeyModifiers == KeyModifiers.Meta");
         source.Should().Contain("e.Key == Key.H && HasOnlyControlModifier(e.KeyModifiers)");
         source.Should().Contain("e.Key == Key.G && HasOnlyControlModifier(e.KeyModifiers)");
-        source.Should().Contain("HasNativeFindMenuItem: HasNativeMenuItem(_findMenuItem, \"Find...\")");
-        source.Should().Contain("HasNativeFindNextMenuItem: HasNativeMenuItem(_findNextMenuItem, \"Find Next\")");
-        source.Should().Contain("HasNativeReplaceMenuItem: HasNativeMenuItem(_replaceMenuItem, \"Replace...\")");
-        source.Should().Contain("HasNativeGoToMenuItem: HasNativeMenuItem(_goToMenuItem, \"Go To...\")");
-        source.Should().Contain("HasNativeGoToSpecialMenuItem: HasNativeMenuItem(_goToSpecialMenuItem, \"Go To Special...\", requireGesture: false)");
+        source.Should().Contain("HasNativeFindMenuItem: HasNativeMenuItem(_findMenuItem, NativeMenuItemId.Find)");
+        source.Should().Contain("HasNativeFindNextMenuItem: HasNativeMenuItem(_findNextMenuItem, NativeMenuItemId.FindNext)");
+        source.Should().Contain("HasNativeReplaceMenuItem: HasNativeMenuItem(_replaceMenuItem, NativeMenuItemId.Replace)");
+        source.Should().Contain("HasNativeGoToMenuItem: HasNativeMenuItem(_goToMenuItem, NativeMenuItemId.GoTo)");
+        source.Should().Contain("HasNativeGoToSpecialMenuItem: HasNativeMenuItem(_goToSpecialMenuItem, NativeMenuItemId.GoToSpecial)");
         sessionSource.Should().Contain("public IReadOnlyList<GridRange> SelectedRanges { get; private set; } = [];");
         sessionSource.Should().Contain("public StyleDiff? CreateFormatDiffFromActiveCell()");
         sessionSource.Should().Contain("public StyleDiff? CreateFormatDiffFromCell(CellAddress address)");
@@ -5029,15 +5121,17 @@ public sealed class AvaloniaShellSourceTests
     public void MainWindow_WiresWorkbookStatisticsToCompactNativeMenuDialog()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
         var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
 
         source.Should().Contain("private readonly NativeMenuItem _workbookStatisticsMenuItem = new();");
-        source.Should().Contain("_workbookStatisticsMenuItem.Header = UiText.Get(\"AvaloniaNativeMenu_WorkbookStatistics\");");
-        source.Should().Contain("_workbookStatisticsMenuItem.Gesture = new KeyGesture(Key.G, KeyModifiers.Control | KeyModifiers.Shift);");
+        source.Should().Contain("ConfigureNativeFileMenuItem(_workbookStatisticsMenuItem, NativeFileMenuItemId.WorkbookStatistics);");
+        catalogSource.Should().Contain("\"AvaloniaNativeMenu_WorkbookStatistics\"");
+        catalogSource.Should().Contain("NativeMenuGestureModifiers.Control | NativeMenuGestureModifiers.Shift");
         source.Should().Contain("_workbookStatisticsMenuItem.Click += async (_, _) => await ShowWorkbookStatisticsDialogAsync();");
-        source.Should().Contain("fileMenu.Items.Add(_workbookStatisticsMenuItem);");
-        source.Should().Contain("_workbookStatisticsMenuItem.IsEnabled = isIdle;");
-        source.Should().Contain("HasNativeWorkbookStatisticsMenuItem: HasNativeMenuItem(_workbookStatisticsMenuItem, UiText.Get(\"AvaloniaNativeMenu_WorkbookStatistics\"))");
+        catalogSource.Should().Contain("FileItem(NativeFileMenuItemId.WorkbookStatistics)");
+        catalogSource.Should().Contain("new(NativeFileMenuItemId.WorkbookStatistics, context.IsIdle)");
+        source.Should().Contain("HasNativeWorkbookStatisticsMenuItem: HasNativeFileMenuItem(_workbookStatisticsMenuItem, NativeFileMenuItemId.WorkbookStatistics)");
         smokeSource.Should().Contain("bool HasNativeWorkbookStatisticsMenuItem,");
         smokeSource.Should().Contain("HasNativeWorkbookStatisticsMenuItem &&");
         smokeSource.Should().Contain("native_workbook_statistics_menu_item={FormatBool(snapshot.HasNativeWorkbookStatisticsMenuItem)}");
@@ -5070,6 +5164,7 @@ public sealed class AvaloniaShellSourceTests
     public void MainWindow_KeepsMacOsCommandKeyMenuGesturesAndDirectInputRoutesAligned()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
 
         source.Should().Contain("const KeyModifiers commandModifiers = KeyModifiers.Control | KeyModifiers.Meta;");
         source.Should().Contain("return (modifiers & commandModifiers) != 0 &&");
@@ -5077,25 +5172,25 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("return modifiers.HasFlag(KeyModifiers.Shift) &&");
         source.Should().Contain("(modifiers & ~(commandModifiers | KeyModifiers.Shift)) == 0;");
 
-        source.Should().Contain("_newWorkbookMenuItem.Gesture = new KeyGesture(Key.N, KeyModifiers.Meta);");
-        source.Should().Contain("_openMenuItem.Gesture = new KeyGesture(Key.O, KeyModifiers.Meta);");
-        source.Should().Contain("_saveMenuItem.Gesture = new KeyGesture(Key.S, KeyModifiers.Meta);");
-        source.Should().Contain("_saveAsMenuItem.Gesture = new KeyGesture(Key.S, KeyModifiers.Meta | KeyModifiers.Shift);");
-        source.Should().Contain("_closeWorkbookMenuItem.Gesture = new KeyGesture(Key.W, KeyModifiers.Meta);");
-        source.Should().Contain("_undoMenuItem.Gesture = new KeyGesture(Key.Z, KeyModifiers.Meta);");
-        source.Should().Contain("_redoMenuItem.Gesture = new KeyGesture(Key.Z, KeyModifiers.Meta | KeyModifiers.Shift);");
-        source.Should().Contain("_cutMenuItem.Gesture = new KeyGesture(Key.X, KeyModifiers.Meta);");
-        source.Should().Contain("_copyMenuItem.Gesture = new KeyGesture(Key.C, KeyModifiers.Meta);");
-        source.Should().Contain("_pasteMenuItem.Gesture = new KeyGesture(Key.V, KeyModifiers.Meta);");
-        source.Should().Contain("_pasteSpecialMenuItem.Gesture = new KeyGesture(Key.V, KeyModifiers.Meta | KeyModifiers.Alt);");
-        source.Should().Contain("_selectAllMenuItem.Gesture = new KeyGesture(Key.A, KeyModifiers.Meta);");
-        source.Should().Contain("_findMenuItem.Gesture = new KeyGesture(Key.F, KeyModifiers.Meta);");
-        source.Should().Contain("_findNextMenuItem.Gesture = new KeyGesture(Key.G, KeyModifiers.Meta);");
-        source.Should().Contain("_boldMenuItem.Gesture = new KeyGesture(Key.B, KeyModifiers.Meta);");
-        source.Should().Contain("_italicMenuItem.Gesture = new KeyGesture(Key.I, KeyModifiers.Meta);");
-        source.Should().Contain("_underlineMenuItem.Gesture = new KeyGesture(Key.U, KeyModifiers.Meta);");
-        source.Should().Contain("_formatCellsMenuItem.Gesture = new KeyGesture(Key.D1, KeyModifiers.Meta);");
-        source.Should().Contain("_quitMenuItem.Gesture = new KeyGesture(Key.Q, KeyModifiers.Meta);");
+        catalogSource.Should().Contain("NativeMenuGestureKey.N, NativeMenuGestureModifiers.Meta");
+        catalogSource.Should().Contain("NativeMenuGestureKey.O, NativeMenuGestureModifiers.Meta");
+        catalogSource.Should().Contain("NativeMenuGestureKey.S, NativeMenuGestureModifiers.Meta");
+        catalogSource.Should().Contain("NativeMenuGestureModifiers.Meta | NativeMenuGestureModifiers.Shift");
+        catalogSource.Should().Contain("NativeMenuGestureKey.W, NativeMenuGestureModifiers.Meta");
+        catalogSource.Should().Contain("NativeMenuGestureKey.Z, NativeMenuGestureModifiers.Meta");
+        catalogSource.Should().Contain("NativeMenuGestureKey.Z, NativeMenuGestureModifiers.Meta | NativeMenuGestureModifiers.Shift");
+        catalogSource.Should().Contain("NativeMenuGestureKey.X, NativeMenuGestureModifiers.Meta");
+        catalogSource.Should().Contain("NativeMenuGestureKey.C, NativeMenuGestureModifiers.Meta");
+        catalogSource.Should().Contain("NativeMenuGestureKey.V, NativeMenuGestureModifiers.Meta");
+        catalogSource.Should().Contain("NativeMenuGestureKey.V, NativeMenuGestureModifiers.Meta | NativeMenuGestureModifiers.Alt");
+        catalogSource.Should().Contain("NativeMenuGestureKey.A, NativeMenuGestureModifiers.Meta");
+        catalogSource.Should().Contain("NativeMenuGestureKey.F, NativeMenuGestureModifiers.Meta");
+        catalogSource.Should().Contain("NativeMenuGestureKey.G, NativeMenuGestureModifiers.Meta");
+        catalogSource.Should().Contain("NativeMenuGestureKey.B, NativeMenuGestureModifiers.Meta");
+        catalogSource.Should().Contain("NativeMenuGestureKey.I, NativeMenuGestureModifiers.Meta");
+        catalogSource.Should().Contain("NativeMenuGestureKey.U, NativeMenuGestureModifiers.Meta");
+        catalogSource.Should().Contain("NativeMenuGestureKey.D1, NativeMenuGestureModifiers.Meta");
+        catalogSource.Should().Contain("NativeMenuGestureKey.Q, NativeMenuGestureModifiers.Meta");
 
         source.Should().Contain("e.Key == Key.PageUp && HasCommandAndShiftModifiers(e.KeyModifiers)");
         source.Should().Contain("e.Key == Key.PageDown && HasCommandAndShiftModifiers(e.KeyModifiers)");
@@ -5117,26 +5212,26 @@ public sealed class AvaloniaShellSourceTests
     {
         var windowSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
         var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
+        var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
 
         windowSource.Should().Contain("private readonly NativeMenuItem _minimizeWindowMenuItem = new();");
         windowSource.Should().Contain("private readonly NativeMenuItem _zoomWindowMenuItem = new();");
         windowSource.Should().Contain("private readonly NativeMenuItem _bringAllToFrontMenuItem = new();");
-        windowSource.Should().Contain("_minimizeWindowMenuItem.Header = \"Minimize\";");
-        windowSource.Should().Contain("_minimizeWindowMenuItem.Gesture = new KeyGesture(Key.M, KeyModifiers.Meta);");
+        catalogSource.Should().Contain("new(NativeMenuItemId.MinimizeWindow, \"Minimize\", new NativeMenuGesturePlan(NativeMenuGestureKey.M, NativeMenuGestureModifiers.Meta))");
         windowSource.Should().Contain("_minimizeWindowMenuItem.Click += (_, _) => WindowState = WindowState.Minimized;");
-        windowSource.Should().Contain("_zoomWindowMenuItem.Header = \"Zoom\";");
+        catalogSource.Should().Contain("new(NativeMenuItemId.ZoomWindow, \"Zoom\", RequiresGestureInSmoke: false)");
         windowSource.Should().Contain("WindowState = WindowState == WindowState.Maximized");
-        windowSource.Should().Contain("_bringAllToFrontMenuItem.Header = \"Bring All to Front\";");
-        windowSource.Should().Contain("var windowMenu = new NativeMenu();");
-        windowSource.Should().Contain("windowMenu.Items.Add(_minimizeWindowMenuItem);");
-        windowSource.Should().Contain("windowMenu.Items.Add(_zoomWindowMenuItem);");
-        windowSource.Should().Contain("windowMenu.Items.Add(_bringAllToFrontMenuItem);");
-        windowSource.Should().Contain("Header = \"Window\",");
-        windowSource.Should().Contain("Menu = windowMenu,");
+        catalogSource.Should().Contain("new(NativeMenuItemId.BringAllToFront, \"Bring All to Front\", RequiresGestureInSmoke: false)");
+        windowSource.Should().Contain("var windowMenu = CreateNativeMenu(NativeMenuTopLevelId.Window);");
+        catalogSource.Should().Contain("public static IReadOnlyList<NativeMenuEntryPlan> WindowMenuEntries");
+        catalogSource.Should().Contain("Item(NativeMenuItemId.MinimizeWindow)");
+        catalogSource.Should().Contain("Item(NativeMenuItemId.ZoomWindow)");
+        catalogSource.Should().Contain("Item(NativeMenuItemId.BringAllToFront)");
+        windowSource.Should().Contain("[NativeMenuTopLevelId.Window] = windowMenu,");
         windowSource.Should().Contain("HasNativeWindowMenu: hasNativeWindowMenu");
-        windowSource.Should().Contain("HasNativeMinimizeWindowMenuItem: HasNativeMenuItem(_minimizeWindowMenuItem, \"Minimize\")");
-        windowSource.Should().Contain("HasNativeZoomWindowMenuItem: HasNativeMenuItem(_zoomWindowMenuItem, \"Zoom\", requireGesture: false)");
-        windowSource.Should().Contain("HasNativeBringAllToFrontMenuItem: HasNativeMenuItem(_bringAllToFrontMenuItem, \"Bring All to Front\", requireGesture: false)");
+        windowSource.Should().Contain("HasNativeMinimizeWindowMenuItem: HasNativeMenuItem(_minimizeWindowMenuItem, NativeMenuItemId.MinimizeWindow)");
+        windowSource.Should().Contain("HasNativeZoomWindowMenuItem: HasNativeMenuItem(_zoomWindowMenuItem, NativeMenuItemId.ZoomWindow)");
+        windowSource.Should().Contain("HasNativeBringAllToFrontMenuItem: HasNativeMenuItem(_bringAllToFrontMenuItem, NativeMenuItemId.BringAllToFront)");
 
         smokeSource.Should().Contain("bool HasNativeWindowMenu,");
         smokeSource.Should().Contain("bool HasNativeMinimizeWindowMenuItem,");
@@ -5247,6 +5342,10 @@ public sealed class AvaloniaShellSourceTests
 
         // The dialog gathers options and previews via the portable ImportDataPlanner.
         getDataSource.Should().Contain("private void GetDataFromText() => _ = ShowGetDataDialogAsync();");
+        getDataSource.Should().Contain("ImportDataFilePickerPlanner.BuildTextOpenPickerPlan(UiText.Get(\"GetData_FileTypeName\"))");
+        getDataSource.Should().Contain("AvaloniaFilePickerService.PickSingleOpenFileWithLocalPathAsync(");
+        getDataSource.Should().Contain("AvaloniaFilePickerOpenRequest.FromDescriptors(");
+        getDataSource.Should().NotContain("Patterns = [\"*.csv\", \"*.tsv\", \"*.tab\", \"*.txt\"]");
         getDataSource.Should().Contain("ImportDataPlanner.DecodeBytes(bytes, encodingKind)");
         getDataSource.Should().Contain("ImportDataPlanner.PreviewText(decodedText, options");
         getDataSource.Should().Contain("ImportDataPlanner.ResolveDelimiter(options, decodedText)");

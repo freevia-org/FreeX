@@ -10,6 +10,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Styling;
 
+using Free.Shared.Shell.Avalonia;
 using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -27,6 +28,20 @@ namespace FreeX.App.Avalonia;
 /// </summary>
 public sealed partial class MainWindow
 {
+    private static AvaloniaCompactDialogChromeStyle RibbonMenuDialogChromeStyle => new(FormulaBarFontFamily);
+
+    private static void ApplyRibbonMenuButtonChrome(Button button, double minWidth, bool isDefault = false)
+        => AvaloniaCompactDialogChrome.ApplyButton(button, RibbonMenuDialogChromeStyle, minWidth, isDefault);
+
+    private static void ApplyRibbonMenuFixedButtonChrome(Button button, double width, bool isDefault = false)
+    {
+        button.Width = width;
+        AvaloniaCompactDialogChrome.ApplyButton(button, RibbonMenuDialogChromeStyle, width, isDefault);
+    }
+
+    private static void ApplyRibbonMenuTextBoxChrome(TextBox textBox)
+        => AvaloniaCompactDialogChrome.ApplyTextBox(textBox, RibbonMenuDialogChromeStyle);
+
     // ── Home ▸ Cells ▸ Format ▸ Tab Color ────────────────────────────────────────
     private async Task ShowSheetTabColorPickerAsync()
     {
@@ -70,18 +85,8 @@ public sealed partial class MainWindow
             Content = UiText.Get("RibbonWire_TabColorNone"),
             HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
             Margin = new Thickness(12, 0, 12, 12),
-            Height = 24,
-            MinHeight = 24,
-            MaxHeight = 24,
-            Padding = new Thickness(4, 1),
-            Background = Brushes.White,
-            BorderBrush = Brush(112, 112, 112),
-            BorderThickness = new Thickness(1),
-            FontSize = 12,
-            FontFamily = FormulaBarFontFamily,
-            HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center,
-            VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
         };
+        ApplyRibbonMenuButtonChrome(noColorButton, 0);
         AutomationProperties.SetAutomationId(noColorButton, "SheetTabColorNoColorButton");
         noColorButton.Click += (_, _) => { cleared = true; dialog.Close(); };
 
@@ -210,18 +215,8 @@ public sealed partial class MainWindow
         {
             Content = UiText.Get("RibbonWire_WatchWindowAdd"),
             MinWidth = 110,
-            Height = 24,
-            MinHeight = 24,
-            MaxHeight = 24,
-            Padding = new Thickness(4, 1),
-            Background = Brushes.White,
-            BorderBrush = Brush(112, 112, 112),
-            BorderThickness = new Thickness(1),
-            FontSize = 12,
-            FontFamily = FormulaBarFontFamily,
-            HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center,
-            VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
         };
+        ApplyRibbonMenuButtonChrome(addButton, 110);
         AutomationProperties.SetAutomationId(addButton, "WatchWindowAddButton");
         addButton.Click += async (_, _) =>
         {
@@ -236,18 +231,8 @@ public sealed partial class MainWindow
         {
             Content = UiText.Get("RibbonWire_WatchWindowDelete"),
             MinWidth = 110,
-            Height = 24,
-            MinHeight = 24,
-            MaxHeight = 24,
-            Padding = new Thickness(4, 1),
-            Background = Brushes.White,
-            BorderBrush = Brush(112, 112, 112),
-            BorderThickness = new Thickness(1),
-            FontSize = 12,
-            FontFamily = FormulaBarFontFamily,
-            HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center,
-            VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
         };
+        ApplyRibbonMenuButtonChrome(deleteButton, 110);
         AutomationProperties.SetAutomationId(deleteButton, "WatchWindowDeleteButton");
         deleteButton.Click += (_, _) => DeleteSelectedWatches();
 
@@ -255,18 +240,8 @@ public sealed partial class MainWindow
         {
             Content = UiText.Get("RibbonWire_WatchWindowRefresh"),
             MinWidth = 110,
-            Height = 24,
-            MinHeight = 24,
-            MaxHeight = 24,
-            Padding = new Thickness(4, 1),
-            Background = Brushes.White,
-            BorderBrush = Brush(112, 112, 112),
-            BorderThickness = new Thickness(1),
-            FontSize = 12,
-            FontFamily = FormulaBarFontFamily,
-            HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center,
-            VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
         };
+        ApplyRibbonMenuButtonChrome(refreshButton, 110);
         AutomationProperties.SetAutomationId(refreshButton, "WatchWindowRefreshButton");
         refreshButton.Click += (_, _) => RefreshList();
 
@@ -275,18 +250,8 @@ public sealed partial class MainWindow
             Content = UiText.Get("Common_Close"),
             MinWidth = 84,
             IsCancel = true,
-            Height = 24,
-            MinHeight = 24,
-            MaxHeight = 24,
-            Padding = new Thickness(4, 1),
-            Background = Brushes.White,
-            BorderBrush = Brush(112, 112, 112),
-            BorderThickness = new Thickness(1),
-            FontSize = 12,
-            FontFamily = FormulaBarFontFamily,
-            HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center,
-            VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
         };
+        ApplyRibbonMenuButtonChrome(closeButton, 84);
         AutomationProperties.SetAutomationId(closeButton, "WatchWindowCloseButton");
         closeButton.Click += (_, _) => dialog.Close();
 
@@ -412,17 +377,9 @@ public sealed partial class MainWindow
         {
             Text = selectedRangeText,
             IsReadOnly = true,
-            Height = 24,
-            MinHeight = 24,
-            MaxHeight = 24,
-            Padding = new Thickness(4, 1),
-            FontSize = 12,
-            FontFamily = FormulaBarFontFamily,
-            BorderBrush = Brush(130, 130, 130),
-            BorderThickness = new Thickness(1),
-            VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
             Margin = new Thickness(0, 0, 0, 8),
         };
+        ApplyRibbonMenuTextBoxChrome(rangeBox);
         AutomationProperties.SetName(rangeBox, UiText.Get(AddWatchDialogPlanner.SelectedRangeAutomationNameKey));
         AutomationProperties.SetAutomationId(rangeBox, AddWatchDialogPlanner.SelectedRangeAutomationId);
         AutomationProperties.SetHelpText(rangeBox, UiText.Get(AddWatchDialogPlanner.SelectedRangeHelpTextKey));
@@ -430,21 +387,9 @@ public sealed partial class MainWindow
         var addButton = new Button
         {
             Content = UiText.Get(AddWatchDialogPlanner.AddButtonKey),
-            Width = AddWatchDialogPlanner.ButtonWidth,
             IsDefault = true,
-            Height = 24,
-            MinHeight = 24,
-            MaxHeight = 24,
-            Padding = new Thickness(4, 1),
-            Background = Brushes.White,
-            BorderBrush = Brush(0, 120, 215),
-            BorderThickness = new Thickness(1),
-            FontSize = 12,
-            FontFamily = FormulaBarFontFamily,
-            HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center,
-            VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
-            Margin = new Thickness(0, 0, 8, 0),
         };
+        ApplyRibbonMenuFixedButtonChrome(addButton, AddWatchDialogPlanner.ButtonWidth, isDefault: true);
         AutomationProperties.SetName(addButton, UiText.Get(AddWatchDialogPlanner.AddAutomationNameKey));
         AutomationProperties.SetAutomationId(addButton, AddWatchDialogPlanner.AddButtonAutomationId);
         AutomationProperties.SetHelpText(addButton, UiText.Get(AddWatchDialogPlanner.AddHelpTextKey));
@@ -452,20 +397,9 @@ public sealed partial class MainWindow
         var cancelButton = new Button
         {
             Content = UiText.Get("Common_Cancel"),
-            Width = AddWatchDialogPlanner.ButtonWidth,
             IsCancel = true,
-            Height = 24,
-            MinHeight = 24,
-            MaxHeight = 24,
-            Padding = new Thickness(4, 1),
-            Background = Brushes.White,
-            BorderBrush = Brush(112, 112, 112),
-            BorderThickness = new Thickness(1),
-            FontSize = 12,
-            FontFamily = FormulaBarFontFamily,
-            HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center,
-            VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
         };
+        ApplyRibbonMenuFixedButtonChrome(cancelButton, AddWatchDialogPlanner.ButtonWidth);
         AutomationProperties.SetName(cancelButton, UiText.Get(AddWatchDialogPlanner.CancelAutomationNameKey));
         AutomationProperties.SetAutomationId(cancelButton, AddWatchDialogPlanner.CancelButtonAutomationId);
         AutomationProperties.SetHelpText(cancelButton, UiText.Get(AddWatchDialogPlanner.CancelHelpTextKey));
@@ -478,13 +412,9 @@ public sealed partial class MainWindow
         };
         cancelButton.Click += (_, _) => dialog.Close();
 
-        var buttons = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Margin = new Thickness(0, 12, 0, 0),
-            Children = { addButton, cancelButton },
-        };
+        var buttons = AvaloniaCompactDialogChrome.CreateActionRow(
+            [addButton, cancelButton],
+            new Thickness(0, 12, 0, 0));
 
         var body = new StackPanel
         {

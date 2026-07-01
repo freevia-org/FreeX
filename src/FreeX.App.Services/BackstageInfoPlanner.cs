@@ -1,0 +1,99 @@
+using System.Globalization;
+using Free.Shared.AppServices;
+using FreeX.Core.Commands;
+using FreeX.Core.Model;
+
+namespace FreeX.App.Services;
+
+public sealed record BackstageInfoPlan(
+    string WorkbookName,
+    string FilePath,
+    string SheetCount,
+    string Format,
+    string StatisticsSummary,
+    string AccessibilitySummary,
+    string FormulaErrorSummary,
+    string FileSize,
+    string LastModified,
+    string SharingStatus,
+    string ExportStatus,
+    InfoPanelSummaryPlan Summary);
+
+public static class BackstageInfoPlanner
+{
+    public static BackstageInfoPlan Build(
+        Workbook workbook,
+        string? currentFilePath,
+        WorkbookInfoDisplayStrings strings,
+        Sheet? activeSheet = null,
+        CultureInfo? culture = null,
+        Func<string, bool>? fileExists = null,
+        bool hasSelection = false)
+    {
+        ArgumentNullException.ThrowIfNull(strings);
+        culture ??= CultureInfo.CurrentCulture;
+        var accessibilityIssues = AccessibilityCheckerService.FindIssues(workbook);
+        var formulaIssues = FormulaAuditingService.FindFormulaErrorIssues(workbook);
+        var summary = InfoPanelSummaryPlanner.Create(workbook, activeSheet, culture);
+        var sharingStatus = WorkbookShareReadinessPlanner.FormatStatus(
+            WorkbookShareReadinessPlanner.CreatePlan(
+                currentFilePath,
+                WorkbookShareSurface.WindowsShare,
+                fileExists));
+        var exportStatus = WorkbookExportReadinessPlanner.Create(workbook, hasSelection).StatusText;
+        var workbookInfoPlan = WorkbookInfoFileMetadataReader.BuildPlan(
+            workbook,
+            currentFilePath,
+            ResolveActiveSheetIndex(workbook, activeSheet));
+        var display = WorkbookInfoDisplayPlanner.Build(
+            workbookInfoPlan,
+            WorkbookInfoDisplaySurface.WindowsBackstagePane,
+            strings,
+            culture);
+
+        return new BackstageInfoPlan(
+            display.WorkbookName,
+            display.FilePath,
+            display.SheetCount,
+            display.Format,
+            display.StatisticsSummary,
+            FormatAccessibilitySummary(accessibilityIssues.Count, strings),
+            FormatFormulaErrorSummary(formulaIssues.Count, strings),
+            display.FileSize,
+            display.LastModified,
+            sharingStatus,
+            exportStatus,
+            summary);
+    }
+
+    private static string FormatAccessibilitySummary(int issueCount, WorkbookInfoDisplayStrings strings) =>
+        FormatIssueSummary(issueCount, strings.Get("Backstage_Info_NoAccessibilityIssues"), strings);
+
+    private static string FormatFormulaErrorSummary(int issueCount, WorkbookInfoDisplayStrings strings) =>
+        FormatIssueSummary(issueCount, strings.Get("Backstage_Info_NoFormulaErrors"), strings);
+
+    private static string FormatIssueSummary(
+        int issueCount,
+        string emptySummary,
+        WorkbookInfoDisplayStrings strings) =>
+        issueCount == 0
+            ? emptySummary
+            : issueCount == 1
+                ? strings.Get("Backstage_Info_OneIssueFound")
+                : strings.Format("Backstage_Info_MultipleIssuesFound", issueCount);
+
+    private static int ResolveActiveSheetIndex(Workbook workbook, Sheet? activeSheet)
+    {
+        if (activeSheet is not null)
+        {
+            for (var i = 0; i < workbook.Sheets.Count; i++)
+            {
+                if (ReferenceEquals(workbook.Sheets[i], activeSheet))
+                    return i;
+            }
+        }
+
+        return workbook.ActiveSheetIndex ?? 0;
+    }
+
+}

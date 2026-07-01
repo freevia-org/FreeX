@@ -7,12 +7,14 @@
     <ProjectReference Include="..\FreeX.Core.Commands\FreeX.Core.Commands.csproj" />
     <ProjectReference Include="..\FreeX.Core.IO\FreeX.Core.IO.csproj" />
     <ProjectReference Include="..\FreeX.Core.Model\FreeX.Core.Model.csproj" />
+    <ProjectReference Include="..\..\shared\Free.Shared.Drawing\Free.Shared.Drawing.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.Pdf\Free.Shared.Pdf.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.Pdf.Skia\Free.Shared.Pdf.Skia.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.Ribbon\Free.Shared.Ribbon.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.Shell\Free.Shared.Shell.csproj" />
     <ProjectReference Include="..\FreeX.Ribbon.Definitions\FreeX.Ribbon.Definitions.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.Ribbon.Avalonia\Free.Shared.Ribbon.Avalonia.csproj" />
+    <ProjectReference Include="..\..\shared\Free.Shared.Shell.Avalonia\Free.Shared.Shell.Avalonia.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.Theme.Avalonia\Free.Shared.Theme.Avalonia.csproj" />
   </ItemGroup>
 
@@ -58,9 +60,11 @@
     <DefineConstants>$(DefineConstants);FREEX_MACOS_SHARE_SHEET</DefineConstants>
   </PropertyGroup>
   <ItemGroup>
+    <Using Include="Free.Shared.Drawing" />
     <Using Include="Free.Shared.Opc" />
   </ItemGroup>
   <ItemGroup>
     <Using Include="Free.Shared.AppServices" />
+    <Using Include="FreeX.App.Presentation.FormulaBar" />
   </ItemGroup>
 </Project>

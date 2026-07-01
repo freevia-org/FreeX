@@ -198,6 +198,46 @@ public sealed partial class AutoFilterDialogTests
     }
 
     [Fact]
+    public void DialogControls_MenuPlanChecklistStateSeedsDialogSelections()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var menuPlan = new AutoFilterMenuPlan(
+                "Status",
+                AutoFilterMenuFilterKind.Text,
+                [
+                    new AutoFilterMenuEntry("Sort A to Z", AutoFilterMenuEntryKind.SortAscending),
+                    new AutoFilterMenuEntry("Select All", AutoFilterMenuEntryKind.SelectAll, isChecked: null),
+                    new AutoFilterMenuEntry(new AutoFilterChecklistItem("Open", "Open")),
+                    new AutoFilterMenuEntry(new AutoFilterChecklistItem("Closed", "Closed", IsChecked: false))
+                ]);
+            var dialog = new AutoFilterDialog(menuPlan);
+            dialog.Show();
+            try
+            {
+                dialog.UpdateLayout();
+                var listBox = WpfTestTree.FindVisualDescendants<ListBox>(dialog).Single();
+                var items = listBox.Items
+                    .Cast<AutoFilterDialogItem>()
+                    .ToDictionary(item => item.Value, item => item.IsSelected);
+                var selectAll = WpfTestTree.FindVisualDescendants<CheckBox>(dialog)
+                    .Single(checkBox => checkBox.Content?.ToString() == UiText.Get("AutoFilter_SelectAll"));
+
+                items.Should().BeEquivalentTo(new Dictionary<string, bool>
+                {
+                    ["Open"] = true,
+                    ["Closed"] = false
+                });
+                selectAll.IsChecked.Should().BeNull();
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
     public void DialogControls_SearchWithNoMatchesDisablesSelectAllAndChecklist()
     {
         StaTestRunner.Run(() =>
@@ -453,9 +493,7 @@ public sealed partial class AutoFilterDialogTests
         source.Should().Contain("ShowInvalidCriteriaWarning(UiText.Get(\"AutoFilter_EnterFirstBetweenValue\"), _betweenMinBox);");
         source.Should().Contain("ShowInvalidCriteriaWarning(UiText.Get(\"AutoFilter_EnterSecondBetweenValue\"), _betweenMaxBox);");
         source.Should().Contain("ShowInvalidCriteriaWarning(UiText.Get(\"AutoFilter_EnterValidTopOrBottomCount\"), _topBottomCountBox);");
-        source.Should().Contain("DialogMessageHelper.ShowWarning(this, message, Title);");
-        source.Should().Contain("target.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(target);");
+        source.Should().Contain("DialogFocus.ShowWarningAndFocus(this, message, Title, target);");
     }
 
     [Fact]

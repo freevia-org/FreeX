@@ -130,6 +130,6 @@ public sealed partial class DataToolDialogTests
         source.Should().Contain("FindOverwriteTargets");
         source.Should().Contain("UiText.Get(\"MainWindowMessage_TextToColumnsReplaceDataPrompt\")");
         source.Should().Contain("_messageService.AskYesNo");
-        source.Should().Contain("TextToColumnsCommandPlanner.FindOverwriteTargets(_workbook, targetSheetIds, currentRange, dialog.Result)");
+        source.Should().Contain("TextToColumnsApplyPlanner.FindOverwriteTargets(_workbook, targetSheetIds, currentRange, dialog.Result)");
     }
 }

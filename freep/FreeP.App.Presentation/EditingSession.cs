@@ -7,10 +7,10 @@ namespace FreeP.App.Compositor;
 // Wave 12B: TextSearchMatch, TextSearchOptions, PresentationTextSearch, ReplaceOneCommand,
 // ReplaceAllCommand are all in FreeP.Core.Model (no extra using needed — same namespace chain).
 
-// Paste offset: ~0.2 inches in EMU  (914400 EMU = 1 inch)
+// Paste offset: ~0.2 inches in EMU.
 file static class PasteOffset
 {
-    internal const long Emu = 182880L; // 0.2 inch
+    internal const long Emu = DrawingMlCoordinateUnits.EmuPerInch / 5;
 }
 
 /// <summary>
@@ -28,6 +28,10 @@ file static class PasteOffset
 /// </summary>
 public sealed class EditingSession
 {
+    private const long Standard43WidthEmu = DrawingMlCoordinateUnits.EmuPerInch * 10;
+    private const long StandardSlideHeightEmu = DrawingMlCoordinateUnits.EmuPerInch * 15 / 2;
+    private const long Widescreen169WidthEmu = DrawingMlCoordinateUnits.EmuPerInch * 40 / 3;
+
     // ── Core state ────────────────────────────────────────────────────────────────
 
     private int _currentSlideIndex;
@@ -183,6 +187,22 @@ public sealed class EditingSession
         slide.Title = $"Slide {insertAt + 1}";
         Bus.Execute(new InsertSlideCommand(insertAt, slide));
         CurrentSlideIndex = insertAt;
+    }
+
+    public bool SetCurrentSlideLayout(string layoutId)
+    {
+        if (CurrentSlide is null || string.IsNullOrWhiteSpace(layoutId))
+        {
+            return false;
+        }
+
+        if (!Presentation.Layouts.Any(layout => StringComparer.Ordinal.Equals(layout.Id, layoutId)))
+        {
+            return false;
+        }
+
+        Bus.Execute(new SetSlideLayoutCommand(_currentSlideIndex, layoutId));
+        return StringComparer.Ordinal.Equals(CurrentSlide.LayoutId, layoutId);
     }
 
     /// <summary>Deletes the current slide. Adjusts CurrentSlideIndex after deletion.</summary>
@@ -469,9 +489,8 @@ public sealed class EditingSession
     /// </summary>
     private (long x, long y, long cx, long cy) DefaultShapeBounds()
     {
-        // 1 inch = 914400 EMU; default 3"×2" centered on a 10"×7.5" slide
-        const long cx = 2743200L; // 3 inches
-        const long cy = 1828800L; // 2 inches
+        const long cx = DrawingMlCoordinateUnits.EmuPerInch * 3;
+        const long cy = DrawingMlCoordinateUnits.EmuPerInch * 2;
         var x = (Presentation.SlideSizeCxEmu - cx) / 2;
         var y = (Presentation.SlideSizeCyEmu - cy) / 2;
         return (x, y, cx, cy);
@@ -768,13 +787,13 @@ public sealed class EditingSession
     public void SetSlideSizeCustom(long cxEmu, long cyEmu)
         => Bus.Execute(new SetSlideSizeCommand(cxEmu, cyEmu));
 
-    /// <summary>Sets the slide size to 16:9 widescreen (12192000 × 6858000 EMU). Undoable.</summary>
+    /// <summary>Sets the slide size to 16:9 widescreen. Undoable.</summary>
     public void SetSlideSize16x9()
-        => SetSlideSizeCustom(12192000L, 6858000L);
+        => SetSlideSizeCustom(Widescreen169WidthEmu, StandardSlideHeightEmu);
 
-    /// <summary>Sets the slide size to 4:3 standard (9144000 × 6858000 EMU). Undoable.</summary>
+    /// <summary>Sets the slide size to 4:3 standard. Undoable.</summary>
     public void SetSlideSize4x3()
-        => SetSlideSizeCustom(9144000L, 6858000L);
+        => SetSlideSizeCustom(Standard43WidthEmu, StandardSlideHeightEmu);
 
     /// <summary>
     /// Overload alias — same as <see cref="SetSlideSizeCustom"/> but named per the spec contract.
@@ -903,6 +922,24 @@ public sealed class EditingSession
     /// <summary>Removes the shape-level hyperlink from every selected shape.  Undoable.</summary>
     public void RemoveShapeHyperlink()
         => SetShapeHyperlink(); // null link = remove
+
+    /// <summary>Sets persistent alternative text metadata on every selected shape. Undoable.</summary>
+    public void SetSelectedShapeAlternativeText(
+        string? alternativeText,
+        string? title = null,
+        bool? isDecorative = null)
+    {
+        if (CurrentSlide is null) return;
+        foreach (var id in _selectedShapeIds)
+        {
+            Bus.Execute(new SetShapeAlternativeTextCommand(
+                _currentSlideIndex,
+                id,
+                alternativeText,
+                title,
+                isDecorative));
+        }
+    }
 
     /// <summary>
     /// Returns the shape-level hyperlink of the first selected shape, if any.

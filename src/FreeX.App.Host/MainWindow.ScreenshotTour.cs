@@ -17,10 +17,15 @@ using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
+using Free.Shared.AppServices;
 using Free.Shared.Ribbon.Wpf;
 using FreeX.Core.Calc;
-using FreeX.App.Presentation.Filtering;
+using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.App.Presentation.DrawingUI;
+using FreeX.App.Presentation.Editing;
+using FreeX.App.Presentation.Filtering;
+using FreeX.App.Presentation.PageLayout;
+using FreeX.App.Presentation.SheetUI;
 using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.IO;
@@ -2922,14 +2927,14 @@ public partial class MainWindow
         RefreshStatusBar();
         MarkWorkbookDirty();
 
-        var unsavedSharePlan = ShareWorkbookPlanner.CreatePlan(null);
-        var exportReadiness = ExportReadinessPlanner.Create(_workbook, hasSelection: SheetGrid?.SelectedRange is not null);
+        var unsavedSharePlan = WorkbookShareReadinessPlanner.CreatePlan(null, WorkbookShareSurface.WindowsShare);
+        var exportReadiness = WorkbookExportReadinessPlanner.Create(_workbook, hasSelection: SheetGrid?.SelectedRange is not null);
         return new BackstageRecentExportShareTourContext(
             SheetName: sheet.Name,
             ActiveRange: SheetGrid?.SelectedRange?.ToString() ?? activeCell.ToA1(),
             RecentFileNames: recentPaths.Select(Path.GetFileName).OfType<string>().ToArray(),
             PinnedFileNames: pinnedPaths.Select(Path.GetFileName).OfType<string>().ToArray(),
-            UnsavedShareStatus: ShareWorkbookPlanner.FormatStatus(unsavedSharePlan),
+            UnsavedShareStatus: WorkbookShareReadinessPlanner.FormatStatus(unsavedSharePlan),
             ExportStatus: exportReadiness.StatusText);
     }
 
@@ -2984,7 +2989,7 @@ public partial class MainWindow
                 evidenceSummary,
                 dialog.ActualWidth,
                 dialog.ActualHeight,
-                ExportPlanner.DescribeRequest(request));
+                WpfExportDescriptionPlanner.DescribeRequest(request));
         }
         finally
         {
@@ -3028,7 +3033,7 @@ public partial class MainWindow
         double captureLogicalHeight,
         string? exportRequestSummary)
     {
-        var sharePlan = ShareWorkbookPlanner.CreatePlan(_currentFilePath);
+        var sharePlan = WorkbookShareReadinessPlanner.CreatePlan(_currentFilePath, WorkbookShareSurface.WindowsShare);
         var focusedAutomationId = Keyboard.FocusedElement is DependencyObject focusedElement
             ? AutomationProperties.GetAutomationId(focusedElement)
             : null;
@@ -3048,8 +3053,8 @@ public partial class MainWindow
             SelectedRange: SheetGrid?.SelectedRange?.ToString() ?? string.Empty,
             CurrentFilePath: _currentFilePath,
             SharePlanKind: sharePlan.Kind.ToString(),
-            ShareStatus: ShareWorkbookPlanner.FormatStatus(sharePlan),
-            ExportStatus: ExportReadinessPlanner.Create(_workbook, hasSelection: SheetGrid?.SelectedRange is not null).StatusText,
+            ShareStatus: WorkbookShareReadinessPlanner.FormatStatus(sharePlan),
+            ExportStatus: WorkbookExportReadinessPlanner.Create(_workbook, hasSelection: SheetGrid?.SelectedRange is not null).StatusText,
             ExportRequestSummary: exportRequestSummary,
             EvidenceSummary: evidenceSummary);
     }
@@ -3090,7 +3095,7 @@ public partial class MainWindow
             return capturedSize;
         });
 
-        var sharePlan = ShareWorkbookPlanner.CreatePlan(_currentFilePath);
+        var sharePlan = WorkbookShareReadinessPlanner.CreatePlan(_currentFilePath, WorkbookShareSurface.WindowsShare);
         return new BackstageRecentExportShareTourManifestCapture(
             CaptureKey: captureKey,
             PairKey: $"interactive:backstage-recent-export-share:{state}",
@@ -3107,8 +3112,8 @@ public partial class MainWindow
             SelectedRange: SheetGrid?.SelectedRange?.ToString() ?? string.Empty,
             CurrentFilePath: _currentFilePath,
             SharePlanKind: sharePlan.Kind.ToString(),
-            ShareStatus: ShareWorkbookPlanner.FormatStatus(sharePlan),
-            ExportStatus: ExportReadinessPlanner.Create(_workbook, hasSelection: SheetGrid?.SelectedRange is not null).StatusText,
+            ShareStatus: WorkbookShareReadinessPlanner.FormatStatus(sharePlan),
+            ExportStatus: WorkbookExportReadinessPlanner.Create(_workbook, hasSelection: SheetGrid?.SelectedRange is not null).StatusText,
             ExportRequestSummary: null,
             EvidenceSummary: evidenceSummary);
     }
@@ -5106,7 +5111,7 @@ public partial class MainWindow
 
     private async Task SetStatusFooterTourZoomAsync(int zoomPercent)
     {
-        ZoomSlider.Value = FreeX.App.Services.ZoomLevelMapper.ZoomPercentToSlider(zoomPercent);
+        ZoomSlider.Value = StatusZoomSliderValueForPercent(zoomPercent);
         RefreshStatusBar();
         UpdateViewport();
         await Task.Delay(250);
@@ -6183,7 +6188,7 @@ public partial class MainWindow
 
     private async Task SetViewPanesZoomTourZoomAsync(int zoomPercent)
     {
-        ZoomSlider.Value = FreeX.App.Services.ZoomLevelMapper.ZoomPercentToSlider(zoomPercent);
+        ZoomSlider.Value = StatusZoomSliderValueForPercent(zoomPercent);
         RefreshStatusBar();
         UpdateViewport();
         await Task.Delay(250);
@@ -6686,7 +6691,7 @@ public partial class MainWindow
                     context.Shape.FillThemeColor?.Resolve(_workbook.Theme)
                         ?? context.Shape.FillColor
                         ?? DrawingShapeModel.ResolveDefaultFillColor(_workbook.Theme),
-                    context.Shape.GradientFillEndColor ?? ShapeGradientDialogPlanner.DefaultEndColor,
+                    context.Shape.GradientFillEndColor ?? ShapeGradientPlanner.DefaultEndColor,
                     context.Shape.GetEffectiveGradientFillDirection())
                 {
                     Owner = this
@@ -6996,7 +7001,7 @@ public partial class MainWindow
         string outputDir,
         DrawObjectFormattingTourContext context)
     {
-        var dialog = new SelectionPaneDialog(SelectionPanePlanner.BuildItems(context.Sheet)) { Owner = this };
+        var dialog = new SelectionPaneDialog(SelectionPaneDialog.BuildItems(context.Sheet)) { Owner = this };
         try
         {
             dialog.Show();
@@ -8839,7 +8844,7 @@ public partial class MainWindow
             openDialog = new SparklineDialog(
                 "B2:C2",
                 context.SparklineLocation.ToA1(),
-                SparklineKindChoice.Line,
+                SparklineKind.Line,
                 sheetId: context.Sheet.Id)
             {
                 Owner = this

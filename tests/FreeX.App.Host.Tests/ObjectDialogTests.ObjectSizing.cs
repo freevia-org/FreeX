@@ -91,13 +91,29 @@ public sealed partial class ObjectDialogTests
 
         source.Should().Contain("DialogMessageHelper.ShowWarning(this,");
         source.Should().Contain("UiText.Get(\"ObjectSizing_EnterPositiveWidthAndHeightValues\")");
-        source.Should().Contain("FocusInvalidSizeInput(ResolveInvalidSizeInput());");
-        source.Should().Contain("private TextBox ResolveInvalidSizeInput()");
-        source.Should().Contain("if (!TryParsePositiveSize(_heightBox.Text))");
-        source.Should().Contain("if (!TryParsePositiveSize(_widthBox.Text))");
-        source.Should().Contain("private static bool TryParsePositiveSize(string text)");
+        source.Should().Contain("FocusInvalidSizeInput(invalidField == ObjectSizeDialogField.Height ? _heightBox : _widthBox);");
+        source.Should().Contain("ObjectSizeDialogPlanner.TryCreateSize(");
+        source.Should().Contain("new ObjectSizeDialogSubmission(_widthBox.Text, _heightBox.Text, _sizeState.FirstInvalidField)");
+        source.Should().Contain("_sizeState.FirstInvalidField");
+        source.Should().NotContain("private TextBox ResolveInvalidSizeInput()");
+        source.Should().NotContain("private static bool TryParsePositiveSize(string text)");
         source.Should().Contain("private static void FocusInvalidSizeInput(TextBox textBox)");
         source.Should().Contain("DialogFocus.FocusAndSelect(textBox);");
+    }
+
+    [Fact]
+    public void ObjectSizeDialog_RoutesParsingAndAspectMathThroughSharedPlanner()
+    {
+        var source = ReadClassSource("ObjectSizingDialogs.cs", "public sealed class ObjectSizeDialog", "public sealed record RotationDialogResult");
+
+        source.Should().Contain("ObjectSizeDialogPlanner.CreateState(");
+        source.Should().Contain("ObjectSizeDialogPlanner.TryCreateDelimitedSize(input");
+        source.Should().Contain("ObjectSizeDialogPlanner.TryCreateSize(");
+        source.Should().Contain("new ObjectSizeDialogSubmission(");
+        source.Should().Contain("ObjectSizeDialogPlanner.SyncHeightFromWidth(");
+        source.Should().Contain("ObjectSizeDialogPlanner.SyncWidthFromHeight(");
+        source.Should().Contain("ObjectSizeDialogPlanner.FormatSize(value");
+        source.Should().NotContain("DrawingInputParser.TryParseSize(input");
     }
 
     [Fact]
@@ -161,6 +177,16 @@ public sealed partial class ObjectDialogTests
         source.Should().Contain("FocusInvalidRotationInput();");
         source.Should().Contain("private void FocusInvalidRotationInput()");
         source.Should().Contain("DialogFocus.FocusAndSelect(_rotationBox);");
+    }
+
+    [Fact]
+    public void RotationDialog_RoutesParsingThroughSharedPlanner()
+    {
+        var source = ReadClassSource("ObjectSizingDialogs.cs", "public sealed class RotationDialog", "public sealed record PictureCropDialogResult");
+
+        source.Should().Contain("FormatPicturePlanner.TryCreateRotationResult(input");
+        source.Should().Contain("FormatPicturePlanner.NormalizeRotationDegrees(value)");
+        source.Should().NotContain("DrawingInputParser.TryParseRotationDegrees(input");
     }
 
     [Fact]
@@ -239,5 +265,15 @@ public sealed partial class ObjectDialogTests
         source.Should().Contain("return _cropBottomBox;");
         source.Should().Contain("private static void FocusInvalidCropInput(TextBox textBox)");
         source.Should().Contain("DialogFocus.FocusAndSelect(textBox);");
+    }
+
+    [Fact]
+    public void PictureCropDialog_RoutesParsingThroughSharedPlanner()
+    {
+        var source = ReadClassSource("ObjectSizingDialogs.cs", "public sealed class PictureCropDialog", "");
+
+        source.Should().Contain("PictureCropDialogPlanner.TryCreateResult(input");
+        source.Should().Contain("PictureCropDialogPlanner.TryParsePercent(_cropLeftBox.Text");
+        source.Should().NotContain("DrawingInputParser.TryParseCropPercents(input");
     }
 }

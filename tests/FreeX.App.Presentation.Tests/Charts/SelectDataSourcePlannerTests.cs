@@ -185,6 +185,43 @@ public sealed class SelectDataSourcePlannerTests
         result.SwitchRowColumn.Should().BeFalse();
     }
 
+    [Fact]
+    public void CreateRangeSelectionRequest_TrimsCurrentTextAndRequestsCollapse()
+    {
+        var request = SelectDataSourcePlanner.CreateRangeSelectionRequest("  Sheet1!A1:D4  ");
+
+        request.CurrentText.Should().Be("Sheet1!A1:D4");
+        request.CollapseDialog.Should().BeTrue();
+    }
+
+    [Fact]
+    public void InferPreviewEntries_CustomDisplayText_IsAppliedToInferredLabelsAndFallback()
+    {
+        var preview = SelectDataSourcePlanner.InferPreviewEntries(
+            "Sheet1!$A$1:$C$3",
+            firstColumnIsCategories: true,
+            index => $"Localized series {index}",
+            index => $"Localized category {index}",
+            "Localized category fallback");
+
+        preview.Series.Select(series => series.Name).Should().ContainInOrder(
+            "Localized series 1",
+            "Localized series 2");
+        preview.Categories.Select(category => category.Label).Should().ContainInOrder(
+            "Localized category 1",
+            "Localized category 2");
+
+        var fallback = SelectDataSourcePlanner.InferPreviewEntries(
+            "not a range",
+            firstColumnIsCategories: true,
+            index => $"Localized series {index}",
+            index => $"Localized category {index}",
+            "Localized category fallback");
+
+        fallback.Series[0].Name.Should().Be("Localized series 1");
+        fallback.Categories[0].Label.Should().Be("Localized category fallback");
+    }
+
     // ---- FormatRangeReference ------------------------------------------------------------------
 
     [Fact]

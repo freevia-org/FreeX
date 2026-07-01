@@ -7,6 +7,7 @@ using Avalonia;
 using Avalonia.Headless;
 using FreeW.App.Avalonia.Editing;
 using FreeW.App.Avalonia.Ribbon;
+using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
 using Free.Shared.Ribbon;
 
@@ -62,7 +63,13 @@ public sealed class ViewTabDepthTests
 
         foreach (var id in new[]
                  {
-                     "freew.zoom-dialog", "freew.view-gridlines", "freew.view-ruler",
+                     "freew.print-preview",
+                     "freew.print-layout", "freew.web-layout", "freew.draft-view",
+                     "freew.printlayout", "freew.weblayout", "freew.draftview",
+                     "freew.zoom-one-page", "freew.zoom-page-width",
+                     "freew.zoom-multiple-pages", "freew.zoom-side-to-side",
+                     "freew.zoom-dialog", "freew.gridlines", "freew.ruler", "freew.nav-pane",
+                     "freew.view-gridlines", "freew.view-ruler", "freew.navigationpane",
                      "freew.new-window", "freew.split",
                  })
             registry.TryGet(new RibbonCommandId(id), out _)
@@ -78,13 +85,109 @@ public sealed class ViewTabDepthTests
             .Select(c => c.CommandId.Value)
             .ToList();
 
+        ids.Should().Contain("freew.print-layout");
+        ids.Should().Contain("freew.web-layout");
+        ids.Should().Contain("freew.draft-view");
+        ids.Should().NotContain("freew.printlayout");
+        ids.Should().NotContain("freew.weblayout");
+        ids.Should().NotContain("freew.draftview");
         ids.Should().Contain("freew.zoom-dialog");
-        ids.Should().Contain("freew.view-gridlines");
-        ids.Should().Contain("freew.view-ruler");
+        ids.Should().Contain("freew.zoom-one-page");
+        ids.Should().Contain("freew.zoom-page-width");
+        ids.Should().Contain("freew.zoom-multiple-pages");
+        ids.Should().Contain("freew.zoom-side-to-side");
+        ids.Should().Contain("freew.gridlines");
+        ids.Should().Contain("freew.ruler");
+        ids.Should().Contain("freew.nav-pane");
+        ids.Should().NotContain("freew.view-gridlines");
+        ids.Should().NotContain("freew.view-ruler");
+        ids.Should().NotContain("freew.navigationpane");
         ids.Should().Contain("freew.new-window");
         ids.Should().Contain("freew.split");
         // Show group must surface the Reviewing Pane toggle on the View tab too.
-        ids.Should().Contain("freew.reviewingpane");
+        ids.Should().Contain("freew.reviewing-pane");
+    }
+
+    [Fact]
+    public void View_zoom_page_fit_commands_invoke_host_callbacks()
+    {
+        var onePage = 0;
+        var pageWidth = 0;
+        var callbacks = NoopCallbacks() with
+        {
+            ZoomOnePage = () => onePage++,
+            ZoomPageWidth = () => pageWidth++,
+        };
+        var registry = FreeWRibbon.BuildRegistry(new DocumentView(), callbacks);
+
+        registry.TryGet(new RibbonCommandId("freew.zoom-one-page"), out var onePageCommand)
+            .Should().BeTrue();
+        registry.TryGet(new RibbonCommandId("freew.zoom-page-width"), out var pageWidthCommand)
+            .Should().BeTrue();
+
+        onePageCommand!.Execute(RibbonCommandContext.Empty);
+        pageWidthCommand!.Execute(RibbonCommandContext.Empty);
+
+        onePage.Should().Be(1);
+        pageWidth.Should().Be(1);
+    }
+
+    [Fact]
+    public void View_zoom_page_mode_toggles_are_stateful_host_callbacks()
+    {
+        var multiplePages = false;
+        var sideToSide = false;
+        var callbacks = NoopCallbacks() with
+        {
+            ToggleMultiplePages = () => multiplePages = !multiplePages,
+            IsMultiplePagesActive = () => multiplePages,
+            ToggleSideToSide = () => sideToSide = !sideToSide,
+            IsSideToSideActive = () => sideToSide,
+        };
+        var registry = FreeWRibbon.BuildRegistry(new DocumentView(), callbacks);
+
+        registry.TryGet(new RibbonCommandId("freew.zoom-multiple-pages"), out var multiplePagesCommand)
+            .Should().BeTrue();
+        registry.TryGet(new RibbonCommandId("freew.zoom-side-to-side"), out var sideToSideCommand)
+            .Should().BeTrue();
+
+        var multiplePagesState = (IRibbonStatefulCommand)multiplePagesCommand!;
+        var sideToSideState = (IRibbonStatefulCommand)sideToSideCommand!;
+        multiplePagesState.GetState().IsChecked.Should().BeFalse();
+        sideToSideState.GetState().IsChecked.Should().BeFalse();
+
+        multiplePagesCommand!.Execute(RibbonCommandContext.Empty);
+        sideToSideCommand!.Execute(RibbonCommandContext.Empty);
+
+        multiplePagesState.GetState().IsChecked.Should().BeTrue();
+        sideToSideState.GetState().IsChecked.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Layout_tab_contains_print_preview_command()
+    {
+        var definition = FreeWRibbon.BuildDefinition();
+        var layoutTab = definition.Tabs.Single(t => t.Id == "layout");
+        var ids = layoutTab.Groups.SelectMany(g => g.Controls)
+            .Select(c => c.CommandId.Value)
+            .ToList();
+
+        ids.Should().Contain("freew.print-preview");
+    }
+
+    [Fact]
+    public void Print_preview_command_invokes_host_callback()
+    {
+        var invoked = false;
+        var callbacks = NoopCallbacks() with { OpenPrintPreview = () => invoked = true };
+        var registry = FreeWRibbon.BuildRegistry(new DocumentView(), callbacks);
+
+        registry.TryGet(new RibbonCommandId("freew.print-preview"), out var command)
+            .Should().BeTrue();
+
+        command!.Execute(RibbonCommandContext.Empty);
+
+        invoked.Should().BeTrue("freew.print-preview must route to the Avalonia host preview surface");
     }
 
     [Fact]
@@ -106,10 +209,10 @@ public sealed class ViewTabDepthTests
         view.ShowGridlines.Should().BeFalse("gridlines off by default");
 
         var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
-        registry.TryGet(new RibbonCommandId("freew.view-gridlines"), out var cmd).Should().BeTrue();
+        registry.TryGet(new RibbonCommandId("freew.gridlines"), out var cmd).Should().BeTrue();
 
         cmd!.Execute(RibbonCommandContext.Empty);
-        view.ShowGridlines.Should().BeTrue("executing freew.view-gridlines must turn gridlines on");
+        view.ShowGridlines.Should().BeTrue("executing freew.gridlines must turn gridlines on");
 
         cmd!.Execute(RibbonCommandContext.Empty);
         view.ShowGridlines.Should().BeFalse("executing it again must turn gridlines off");
@@ -123,13 +226,31 @@ public sealed class ViewTabDepthTests
         view.ShowRuler.Should().BeFalse("ruler off by default");
 
         var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
-        registry.TryGet(new RibbonCommandId("freew.view-ruler"), out var cmd).Should().BeTrue();
+        registry.TryGet(new RibbonCommandId("freew.ruler"), out var cmd).Should().BeTrue();
 
         cmd!.Execute(RibbonCommandContext.Empty);
-        view.ShowRuler.Should().BeTrue("executing freew.view-ruler must turn the ruler on");
+        view.ShowRuler.Should().BeTrue("executing freew.ruler must turn the ruler on");
 
         cmd!.Execute(RibbonCommandContext.Empty);
         view.ShowRuler.Should().BeFalse("executing it again must turn the ruler off");
+    }
+
+    [Fact]
+    public void Legacy_view_ids_remain_aliases_for_canonical_wpf_ids()
+    {
+        var registry = FreeWRibbon.BuildRegistry(new DocumentView(), NoopCallbacks());
+
+        registry.TryGet(new RibbonCommandId("freew.gridlines"), out var gridlines).Should().BeTrue();
+        registry.TryGet(new RibbonCommandId("freew.view-gridlines"), out var viewGridlines).Should().BeTrue();
+        viewGridlines.Should().BeSameAs(gridlines);
+
+        registry.TryGet(new RibbonCommandId("freew.ruler"), out var ruler).Should().BeTrue();
+        registry.TryGet(new RibbonCommandId("freew.view-ruler"), out var viewRuler).Should().BeTrue();
+        viewRuler.Should().BeSameAs(ruler);
+
+        registry.TryGet(new RibbonCommandId("freew.nav-pane"), out var navPane).Should().BeTrue();
+        registry.TryGet(new RibbonCommandId("freew.navigationpane"), out var navigationPane).Should().BeTrue();
+        navigationPane.Should().BeSameAs(navPane);
     }
 
     // ── Gridlines / ruler render geometry (reflects the flag) ─────────────────
@@ -237,10 +358,22 @@ public sealed class ViewTabDepthTests
     [Fact]
     public async Task Zoom_dialog_page_relative_presets_resolve_to_their_scales()
     {
-        // Constants are exposed so the shell + tests agree on the page-relative fit factors.
-        ZoomDialog.PageWidthScale.Should().BeGreaterThan(1.0);
-        ZoomDialog.TextWidthScale.Should().BeGreaterThan(ZoomDialog.PageWidthScale);
-        ZoomDialog.WholePageScale.Should().BeLessThan(1.0);
+        // Page-relative fit arithmetic is owned by the shared presentation planner; the Avalonia
+        // dialog only supplies the host's current fit factors.
+        ZoomDialogPlanner
+            .TryCreateResult(
+                new ZoomDialogSelectionRequest(
+                    ZoomDialogFitOption.PageWidth,
+                    PresetPercent: null,
+                    CustomPercentText: "not parsed"),
+                new ZoomDialogFitFactors(1.25, 1.5, 0.6),
+                out var scale,
+                out var error)
+            .Should()
+            .BeTrue();
+
+        scale.Should().Be(1.25);
+        error.Should().BeNull();
         await Task.CompletedTask;
     }
 }

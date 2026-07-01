@@ -49,4 +49,46 @@ public class TablePropertiesModelTests
         margins.LeftPt.Should().Be(5.4);
         margins.RightPt.Should().Be(5.4);
     }
+
+    [Fact]
+    public void TableLayoutOperations_DistributeColumns_SetsSharedGridAndCellWidths()
+    {
+        var table = Table.Create(2, 3);
+        table.ColumnWidthsPt.AddRange([60, 120, 180]);
+
+        TableLayoutOperations.DistributeColumns(table).Should().BeTrue();
+
+        table.ColumnWidthsPt.Should().Equal(120, 120, 120);
+        table.Rows.SelectMany(row => row.Cells)
+            .Should().AllSatisfy(cell => cell.WidthPt.Should().Be(120));
+    }
+
+    [Fact]
+    public void TableLayoutOperations_SplitPreservesTableShellProperties()
+    {
+        var table = Table.Create(3, 2);
+        table.Formatting = table.Formatting with { HeaderRow = true, BandedColumns = true };
+        table.TableStyleId = "GridTable1Light";
+        table.PreferredWidthPt = 360;
+        table.Alignment = TableAlignment.Center;
+        table.DefaultCellMargins = new TableCellMargins(1, 6, 1, 6);
+        table.AutoFit = AutoFitMode.Window;
+        table.ColumnWidthsPt.AddRange([180, 180]);
+
+        TableLayoutOperations.TryBuildSplitReplacement(table, 1, out var replacement)
+            .Should().BeTrue();
+
+        replacement.Should().HaveCount(3);
+        var top = replacement[0].Should().BeOfType<Table>().Subject;
+        var bottom = replacement[2].Should().BeOfType<Table>().Subject;
+        top.Rows.Should().HaveCount(1);
+        bottom.Rows.Should().HaveCount(2);
+        bottom.TableStyleId.Should().Be("GridTable1Light");
+        bottom.Formatting.BandedColumns.Should().BeTrue();
+        bottom.PreferredWidthPt.Should().Be(360);
+        bottom.Alignment.Should().Be(TableAlignment.Center);
+        bottom.DefaultCellMargins.Should().Be(new TableCellMargins(1, 6, 1, 6));
+        bottom.AutoFit.Should().Be(AutoFitMode.Window);
+        bottom.ColumnWidthsPt.Should().Equal(180, 180);
+    }
 }

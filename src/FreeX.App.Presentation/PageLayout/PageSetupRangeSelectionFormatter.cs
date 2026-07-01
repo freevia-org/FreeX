@@ -15,6 +15,18 @@ public static class PageSetupRangeSelectionFormatter
             _ => FormatCells(selectedRange, useR1C1ReferenceStyle)
         };
 
+    public static string FormatRepeatRows(WorksheetRepeatRange range, bool useR1C1ReferenceStyle) =>
+        useR1C1ReferenceStyle
+            ? $"R{range.Start}:R{range.End}"
+            : $"${range.Start}:${range.End}";
+
+    public static string FormatRepeatColumns(WorksheetRepeatRange range, bool useR1C1ReferenceStyle)
+    {
+        var start = FormatColumn(range.Start, useR1C1ReferenceStyle);
+        var end = FormatColumn(range.End, useR1C1ReferenceStyle);
+        return $"{start}:{end}";
+    }
+
     private static string FormatRows(GridRange selectedRange, bool useR1C1ReferenceStyle) =>
         useR1C1ReferenceStyle
             ? $"R{selectedRange.Start.Row}:R{selectedRange.End.Row}"

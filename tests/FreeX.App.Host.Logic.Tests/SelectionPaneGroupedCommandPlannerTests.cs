@@ -1,5 +1,5 @@
 using FluentAssertions;
-using FreeX.App.Services;
+using FreeX.App.Presentation.DrawingUI;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 using System.IO;
@@ -143,7 +143,7 @@ public sealed class SelectionPaneGroupedCommandPlannerTests
         method.Should().NotContain("new SetSelectionPaneObjectVisibilityCommand(_currentSheetId");
         method.Should().NotContain("new MoveSelectionPaneObjectCommand(_currentSheetId");
 
-        WorkspaceFileLocator.ReadAllText("src", "FreeX.App.Services", "SelectionPaneGroupedCommandPlanner.cs")
+        WorkspaceFileLocator.ReadAllText("src", "FreeX.App.Presentation", "DrawingUI", "SelectionPaneGroupedCommandPlanner.cs")
             .Should()
             .Contain("public static class SelectionPaneGroupedCommandPlanner");
         File.Exists(Path.Combine(
@@ -152,7 +152,14 @@ public sealed class SelectionPaneGroupedCommandPlannerTests
                 "FreeX.App.Host",
                 "SelectionPaneGroupedCommandPlanner.cs"))
             .Should()
-            .BeFalse("grouped selection-pane command composition is shared app-service logic, not WPF renderer code");
+            .BeFalse("grouped selection-pane command composition is shared DrawingUI planning, not WPF renderer code");
+        File.Exists(Path.Combine(
+                WorkspaceFileLocator.FindWorkspaceRoot(),
+                "src",
+                "FreeX.App.Services",
+                "SelectionPaneGroupedCommandPlanner.cs"))
+            .Should()
+            .BeFalse("drawing/selection command planning should stay with the shared DrawingUI planner layer");
     }
 
     private static PictureModel AddPicture(Sheet sheet, uint row, uint col, string name)

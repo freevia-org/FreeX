@@ -4,18 +4,20 @@ using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
 
+using Free.Shared.Shell.Avalonia;
 using FreeX.App.Presentation.Consolidate;
 using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
-using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
 using AvaloniaVerticalAlignment = Avalonia.Layout.VerticalAlignment;
 
 namespace FreeX.App.Avalonia;
 
 public sealed partial class MainWindow
 {
+    private static AvaloniaCompactDialogChromeStyle DataOpsDialogChromeStyle => new(FormulaBarFontFamily);
+
     /// <summary>Opens the Consolidate dialog (invoked from the Data menu and the Data-tab ribbon button).</summary>
     private void Consolidate() => _ = ShowConsolidateDialogAsync();
 
@@ -23,9 +25,8 @@ public sealed partial class MainWindow
     /// The compact Consolidate dialog: pick an aggregation function, add one or more source ranges (typed as
     /// <c>Sheet!A1:B5</c>-style references and resolved through <see cref="WorkbookReferenceNavigator"/>),
     /// choose a destination anchor (defaulting to the active selection's top-left), and toggle "Use labels in
-    /// Top row" / "Left column". On Apply each source range is read into a <see cref="ConsolidateSource"/>
-    /// grid, the <see cref="ConsolidatePlanner"/> aggregates them, and the resulting cells are written into the
-    /// destination through the shared session command path (undoable + refreshing). Overwriting non-empty
+    /// Top row" / "Left column". On Apply the shared planner reads the source ranges, plans the output, and
+    /// the result is applied through the shared session command path (undoable + refreshing). Overwriting non-empty
     /// destination cells requires a second Apply click.
     /// </summary>
     private async Task ShowConsolidateDialogAsync()
@@ -46,7 +47,7 @@ public sealed partial class MainWindow
 
         var functionBox = new ComboBox
         {
-            ItemsSource = ConsolidateShellPlanner.FunctionChoices.Select(c => c.Label).ToList(),
+            ItemsSource = ConsolidateDialogPlanner.FunctionChoices.Select(c => c.Label).ToList(),
             SelectedIndex = 0,
             MinWidth = 160,
         };
@@ -70,6 +71,7 @@ public sealed partial class MainWindow
         };
 
         var referencesList = new ListBox { MinHeight = 96 };
+        ApplyDataOpsListBoxChrome(referencesList);
         AutomationProperties.SetAutomationId(referencesList, "ConsolidateAllReferencesList");
 
         var addButton = new Button { Content = UiText.Get("TableLoc_Add"), MinWidth = 76 };
@@ -130,21 +132,21 @@ public sealed partial class MainWindow
         {
             warningText.IsVisible = false;
             var text = referenceBox.Text?.Trim() ?? string.Empty;
-            if (!TryParseConsolidateReference(text, out _))
+            if (!ConsolidateDialogPlanner.TryAddReference(
+                    references,
+                    text,
+                    TryParseConsolidateSourceRanges,
+                    rejectDuplicateReferences: true,
+                    out var updatedReferences,
+                    out var issue))
             {
-                warningText.Text = UiText.Get("TableLoc_ConsolidateEnterValidSource");
+                warningText.Text = ConsolidateAddWarningText(issue);
                 warningText.IsVisible = true;
                 return;
             }
 
-            if (references.Contains(text, StringComparer.OrdinalIgnoreCase))
-            {
-                warningText.Text = UiText.Get("TableLoc_ConsolidateSourceAlreadyListed");
-                warningText.IsVisible = true;
-                return;
-            }
-
-            references.Add(text);
+            references.Clear();
+            references.AddRange(updatedReferences);
             RefreshReferences();
             referenceBox.Clear();
         };
@@ -169,75 +171,36 @@ public sealed partial class MainWindow
         {
             warningText.IsVisible = false;
 
-            if (references.Count == 0)
-            {
-                warningText.Text = UiText.Get("TableLoc_ConsolidateAddAtLeastOne");
-                warningText.IsVisible = true;
-                return;
-            }
-
-            var sources = new List<ConsolidateSource>(references.Count);
-            foreach (var reference in references)
-            {
-                if (!TryParseConsolidateReference(reference, out var sourceRange))
-                {
-                    warningText.Text = UiText.Format("TableLoc_ConsolidateCannotResolveSource", reference);
-                    warningText.IsVisible = true;
-                    return;
-                }
-
-                var sheet = _session.Workbook.GetSheet(sourceRange.Start.Sheet);
-                if (sheet is null)
-                {
-                    warningText.Text = UiText.Format("TableLoc_ConsolidateCannotResolveSource", reference);
-                    warningText.IsVisible = true;
-                    return;
-                }
-
-                sources.Add(ConsolidateSource.FromGrid(ConsolidateShellPlanner.ReadSource(sheet, sourceRange)));
-            }
-
-            if (!TryParseConsolidateReference(destinationBox.Text?.Trim() ?? string.Empty, out var destinationRange))
-            {
-                warningText.Text = UiText.Get("TableLoc_ConsolidateEnterValidDestination");
-                warningText.IsVisible = true;
-                return;
-            }
-
             var options = new ConsolidateOptions
             {
-                Function = ConsolidateShellPlanner.FunctionChoices[Math.Max(0, functionBox.SelectedIndex)].Function,
+                Function = ConsolidateDialogPlanner.FunctionChoices[Math.Max(0, functionBox.SelectedIndex)].Function,
                 UseTopRowLabels = topRowBox.IsChecked == true,
                 UseLeftColumnLabels = leftColumnBox.IsChecked == true,
             };
 
-            var result = ConsolidatePlanner.Plan(sources, options);
-            if (result.IsEmpty)
+            if (!ConsolidateDialogPlanner.TryPlanApply(
+                    _session.Workbook,
+                    references,
+                    destinationBox.Text?.Trim() ?? string.Empty,
+                    TryParseConsolidateReference,
+                    options,
+                    out var plan,
+                    out var issue))
             {
-                warningText.Text = UiText.Get("TableLoc_ConsolidateNoOutput");
+                warningText.Text = ConsolidateApplyWarningText(issue);
                 warningText.IsVisible = true;
                 return;
             }
 
-            var destinationSheet = _session.Workbook.GetSheet(destinationRange.Start.Sheet) ?? _session.ActiveSheet;
-            var edits = ConsolidateShellPlanner.MapToEdits(destinationSheet.Id, result, destinationRange.Start);
-            if (edits.Count == 0)
-            {
-                warningText.Text = UiText.Get("TableLoc_ConsolidateOutsideBounds");
-                warningText.IsVisible = true;
-                return;
-            }
-
-            var overwrites = ConsolidateShellPlanner.FindOverwriteTargets(destinationSheet, edits);
-            if (overwrites.Count > 0 && !overwriteConfirmed)
+            if (plan.OverwriteTargets.Count > 0 && !overwriteConfirmed)
             {
                 overwriteConfirmed = true;
-                warningText.Text = UiText.Format("TableLoc_ConsolidateOverwriteWarning", overwrites.Count);
+                warningText.Text = UiText.Format("TableLoc_ConsolidateOverwriteWarning", plan.OverwriteTargets.Count);
                 warningText.IsVisible = true;
                 return;
             }
 
-            if (!ApplyConsolidateEdits(destinationSheet.Id, edits, destinationRange.Start))
+            if (!ApplyConsolidatePlan(plan, createLinksBox.IsChecked == true))
                 return;
 
             dialog.Close();
@@ -253,14 +216,9 @@ public sealed partial class MainWindow
 
         // Windows: Add / Delete buttons sit between the Reference field and the "All references" list,
         // right-aligned side by side (matches the WPF ConsolidateDialog layout / win.png ground truth).
-        addButton.Margin = new Thickness(0, 0, 8, 0);
-        var addRemoveRow = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Margin = new Thickness(0, 6, 0, 2),
-            Children = { addButton, removeButton },
-        };
+        var addRemoveRow = AvaloniaCompactDialogChrome.CreateActionRow(
+            [addButton, removeButton],
+            new Thickness(0, 6, 0, 2));
 
         // Windows: "[...] <Destination textbox>" — Browse (ellipsis) sits left of the destination field.
         var destinationRow = new DockPanel { LastChildFill = true };
@@ -282,14 +240,7 @@ public sealed partial class MainWindow
         };
 
         // WPF button order: [OK][Cancel] — primary on left; the Apply button maps to WPF OK
-        var buttonRow = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 8,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Margin = new Thickness(0, 10, 0, 0),
-            Children = { applyButton, cancelButton },
-        };
+        var buttonRow = AvaloniaCompactDialogChrome.CreateActionRow([applyButton, cancelButton], new Thickness(0, 10, 0, 0));
         DockPanel.SetDock(buttonRow, Dock.Bottom);
 
         dialog.Content = new DockPanel
@@ -339,13 +290,50 @@ public sealed partial class MainWindow
             _session.Workbook.NamedRanges,
             out range);
 
-    /// <summary>Applies the consolidated cell edits through the shared session command path and refreshes the shell.</summary>
-    private bool ApplyConsolidateEdits(
-        SheetId sheetId,
-        IReadOnlyList<(CellAddress Address, Cell NewCell)> edits,
-        CellAddress destination)
+    private bool TryParseConsolidateSourceRanges(
+        string text,
+        out IReadOnlyList<GridRange> ranges,
+        out string? invalidPart)
     {
-        var command = new EditCellsCommand(sheetId, edits);
+        if (TryParseConsolidateReference(text, out var range))
+        {
+            ranges = [range];
+            invalidPart = null;
+            return true;
+        }
+
+        ranges = [];
+        invalidPart = text;
+        return false;
+    }
+
+    private static string ConsolidateAddWarningText(ConsolidateDialogIssue issue) =>
+        issue.Kind == ConsolidateDialogIssueKind.DuplicateSourceReference
+            ? UiText.Get("TableLoc_ConsolidateSourceAlreadyListed")
+            : UiText.Get("TableLoc_ConsolidateEnterValidSource");
+
+    private static string ConsolidateApplyWarningText(ConsolidateDialogIssue issue) =>
+        issue.Kind switch
+        {
+            ConsolidateDialogIssueKind.InvalidSourceRange when !string.IsNullOrWhiteSpace(issue.InvalidPart) =>
+                UiText.Format("TableLoc_ConsolidateCannotResolveSource", issue.InvalidPart),
+            ConsolidateDialogIssueKind.MismatchedSourceSizes => UiText.Get("Consolidate_SourceRangesMustBeSameSize"),
+            ConsolidateDialogIssueKind.InvalidDestinationCell => UiText.Get("TableLoc_ConsolidateEnterValidDestination"),
+            ConsolidateDialogIssueKind.NoOutput => UiText.Get("TableLoc_ConsolidateNoOutput"),
+            ConsolidateDialogIssueKind.OutsideWorksheetBounds => UiText.Get("TableLoc_ConsolidateOutsideBounds"),
+            _ => UiText.Get("TableLoc_ConsolidateAddAtLeastOne")
+        };
+
+    /// <summary>Applies the shared Consolidate command through the session command path and refreshes the shell.</summary>
+    private bool ApplyConsolidatePlan(ConsolidateApplyPlan plan, bool createLinksToSourceData)
+    {
+        var command = new ConsolidateCommand(
+            plan.SourceRanges,
+            plan.DestinationCell,
+            plan.Options.Function,
+            plan.Options.UseTopRowLabels,
+            plan.Options.UseLeftColumnLabels,
+            createLinksToSourceData);
         var result = _session.ExecuteReviewCommand(command);
         if (!result.Success)
         {
@@ -353,7 +341,7 @@ public sealed partial class MainWindow
             return false;
         }
 
-        RefreshShell(UiText.Format("TableLoc_ConsolidatedInto", FormatCellReference(destination)));
+        RefreshShell(UiText.Format("TableLoc_ConsolidatedInto", FormatCellReference(plan.DestinationCell)));
         return true;
     }
 
@@ -368,53 +356,27 @@ public sealed partial class MainWindow
     /// FontFamily=FormulaBarFontFamily.
     /// </summary>
     private static void ApplyDataOpsButtonChrome(Button button, bool isDefault = false)
-    {
-        button.Height = 24;
-        button.MinHeight = 24;
-        button.MaxHeight = 24;
-        button.Padding = new Thickness(4, 1);
-        button.Background = Brushes.White;
-        button.BorderBrush = isDefault ? Brush(0, 120, 215) : Brush(112, 112, 112);
-        button.BorderThickness = new Thickness(1);
-        button.FontSize = 12;
-        button.FontFamily = FormulaBarFontFamily;
-        button.HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center;
-        button.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
-    }
+        => AvaloniaCompactDialogChrome.ApplyButton(button, DataOpsDialogChromeStyle, button.MinWidth, isDefault);
 
     /// <summary>
     /// Applies standard text box chrome: Height=24, Padding=(4,1), FontSize=12,
     /// Brush(130,130,130) border, BorderThickness=1.
     /// </summary>
     private static void ApplyDataOpsTextBoxChrome(TextBox textBox)
-    {
-        textBox.Height = 24;
-        textBox.MinHeight = 24;
-        textBox.MaxHeight = 24;
-        textBox.Padding = new Thickness(4, 1);
-        textBox.FontSize = 12;
-        textBox.FontFamily = FormulaBarFontFamily;
-        textBox.BorderBrush = Brush(130, 130, 130);
-        textBox.BorderThickness = new Thickness(1);
-        textBox.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
-    }
+        => AvaloniaCompactDialogChrome.ApplyTextBox(textBox, DataOpsDialogChromeStyle);
 
     /// <summary>
     /// Applies standard combo box chrome: Height=24, Padding=(5,0,4,0), FontSize=12,
     /// Brush(130,130,130) border, BorderThickness=1.
     /// </summary>
     private static void ApplyDataOpsComboBoxChrome(ComboBox comboBox)
-    {
-        comboBox.Height = 24;
-        comboBox.MinHeight = 24;
-        comboBox.MaxHeight = 24;
-        comboBox.Padding = new Thickness(5, 0, 4, 0);
-        comboBox.FontSize = 12;
-        comboBox.FontFamily = FormulaBarFontFamily;
-        comboBox.BorderBrush = Brush(130, 130, 130);
-        comboBox.BorderThickness = new Thickness(1);
-        comboBox.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
-    }
+        => AvaloniaCompactDialogChrome.ApplyComboBox(comboBox, DataOpsDialogChromeStyle);
+
+    /// <summary>
+    /// Applies standard list-box row chrome: MinHeight=24 per row, FontSize=12.
+    /// </summary>
+    private static void ApplyDataOpsListBoxChrome(ListBox listBox)
+        => AvaloniaCompactDialogChrome.ApplyListBox(listBox, DataOpsDialogChromeStyle);
 
     /// <summary>
     /// Applies standard check box chrome: MinHeight=20, MaxHeight=20, FontSize=12,
@@ -425,8 +387,7 @@ public sealed partial class MainWindow
         StripContentMnemonic(checkBox);
         checkBox.MinHeight = 20;
         checkBox.MaxHeight = 20;
-        checkBox.FontSize = 12;
-        checkBox.FontFamily = FormulaBarFontFamily;
+        AvaloniaCompactDialogChrome.ApplyCheckBox(checkBox, DataOpsDialogChromeStyle);
     }
 
     /// <summary>
@@ -438,7 +399,6 @@ public sealed partial class MainWindow
         StripContentMnemonic(radioButton);
         radioButton.MinHeight = 20;
         radioButton.MaxHeight = 20;
-        radioButton.FontSize = 12;
-        radioButton.FontFamily = FormulaBarFontFamily;
+        AvaloniaCompactDialogChrome.ApplyRadioButton(radioButton, DataOpsDialogChromeStyle);
     }
 }

@@ -15,13 +15,16 @@ public sealed partial class DataToolDialogTests
     public void TextToColumnsDialog_ExposesDelimitedAndFixedWidthSplitChoices()
     {
         var source = ReadTextToColumnsDialogSources();
+        var surfacePlannerSource = DialogSourceTestSupport.ReadPresentationSources(
+            "TextToColumns",
+            "TextToColumnsWizardSurfacePlanner.cs");
 
         source.Should().Contain("UiText.Get(\"TextToColumns_OriginalDataTypeGroup\")");
         source.Should().Contain("Content = UiText.Get(\"TextToColumns_Delimited\")");
         source.Should().Contain("Content = UiText.Get(\"TextToColumns_FixedWidth\")");
         source.Should().Contain("CreateFixedWidthResult");
         source.Should().Contain("ParseFixedWidthBreakPositions");
-        source.Should().Contain("UiText.Get(\"TextToColumns_ChooseDelimitersInstruction\")");
+        surfacePlannerSource.Should().Contain("\"TextToColumns_ChooseDelimitersInstruction\"");
         source.Should().Contain("UiText.Get(\"TextToColumns_DelimitersGroup\")");
         source.Should().Contain("UiText.Get(\"TextToColumns_FixedWidth2\")");
         source.Should().Contain("_fixedWidthRuler");
@@ -52,8 +55,12 @@ public sealed partial class DataToolDialogTests
     public void TextToColumnsDialog_UsesExcelWizardChromeAroundDelimitedFlow()
     {
         var source = ReadTextToColumnsDialogSources();
+        var surfacePlannerSource = DialogSourceTestSupport.ReadPresentationSources(
+            "TextToColumns",
+            "TextToColumnsWizardSurfacePlanner.cs");
 
-        source.Should().Contain("UiText.Format(\"TextToColumns_TextWizardStepOf3\", normalizedStep)");
+        source.Should().Contain("UiText.Format(TextToColumnsWizardSurfacePlanner.HeaderFormatKey, normalizedStep)");
+        source.Should().Contain("TextToColumnsWizardSurfacePlanner.CreateStepPlan");
         source.Should().Contain("CreateWizardButtonRow");
         source.Should().Contain("Content = UiText.Get(\"TextToColumns_BackButton\")");
         source.Should().Contain("Content = UiText.Get(\"TextToColumns_NextButton\")");
@@ -62,9 +69,9 @@ public sealed partial class DataToolDialogTests
         source.Should().Contain("UpdateWizardStep");
         source.Should().Contain("_backButton.IsEnabled = plan.BackEnabled");
         source.Should().Contain("_nextButton.IsEnabled = plan.NextEnabled");
-        source.Should().Contain("UiText.Get(\"TextToColumns_ChooseFileTypeInstruction\")");
-        source.Should().Contain("NextDefault: normalizedStep < 3");
-        source.Should().Contain("FinishDefault: normalizedStep == 3");
+        surfacePlannerSource.Should().Contain("\"TextToColumns_ChooseFileTypeInstruction\"");
+        surfacePlannerSource.Should().Contain("NextDefault: normalizedStep < 3");
+        surfacePlannerSource.Should().Contain("FinishDefault: normalizedStep == 3");
         source.Should().Contain("Accept()");
         source.Should().NotContain("Additional wizard steps are not supported yet.");
         source.Should().NotContain("This dialog opens on the split-options step.");

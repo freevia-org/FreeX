@@ -35,7 +35,8 @@ public partial class ExportPlannerTests
     {
         var source = ReadPrintPreviewDialogSources();
 
-        source.Should().Contain("Content = UiText.Get(\"PrintPreview_PrintButton\")");
+        source.Should().Contain("PrintPreviewToolbarCommand.Print");
+        source.Should().Contain("\"PrintPreview_PrintButton\"");
         source.Should().Contain("ShowNativePrintDialog");
         source.Should().Contain("NativePrintDialogService.ShowPrintDialogAndPrint");
         source.Should().Contain("Forms.PrintDialog");
@@ -160,13 +161,14 @@ public partial class ExportPlannerTests
     {
         var source = ReadPrintPreviewDialogSources();
 
-        source.Should().Contain("Content = UiText.Get(\"PageSetup_PrintGridlines\")");
-        source.Should().Contain("Content = UiText.Get(\"PageSetup_PrintRowAndColumnHeadings\")");
+        source.Should().Contain("Content = railPlan.PrintGridlinesText");
+        source.Should().Contain("Content = railPlan.PrintHeadingsText");
         source.Should().Contain("gridlinesBox.Checked +=");
         source.Should().Contain("gridlinesBox.Unchecked +=");
         source.Should().Contain("headingsBox.Checked +=");
         source.Should().Contain("headingsBox.Unchecked +=");
-        source.Should().Contain("new SetPrintOptionsCommand(");
+        source.Should().Contain("PageLayoutRibbonCommandPlanner.BuildPrintOptionsCommand(");
+        source.Should().NotContain("new SetPrintOptionsCommand(");
         source.Should().Contain("refreshPreview();");
     }
 
@@ -175,7 +177,7 @@ public partial class ExportPlannerTests
     {
         var source = ReadPrintPreviewDialogSources();
 
-        source.Should().Contain("Content = UiText.Get(\"PrintPreview_IgnorePrintArea\")");
+        source.Should().Contain("Content = railPlan.IgnorePrintAreaText");
         source.Should().Contain("IgnorePrintArea");
         source.Should().Contain("ignorePrintAreaBox.Checked +=");
         source.Should().Contain("ignorePrintAreaBox.Unchecked +=");
@@ -192,10 +194,19 @@ public partial class ExportPlannerTests
         source.Should().Contain("void AddLabel(string text, Control target)");
         source.Should().Contain("Content = text");
         source.Should().Contain("Target = target");
-        source.Should().Contain("AddLabel(UiText.Get(\"PrintPreview_OrientationLabel\"), orientBox);");
-        source.Should().Contain("AddLabel(UiText.Get(\"PageSetup_PaperSize\"), paperBox);");
-        source.Should().Contain("AddLabel(UiText.Get(\"PageSetup_Margins\"), marginsBox);");
-        source.Should().Contain("AddLabel(UiText.Get(\"PrintPreview_ScalingLabel\"), scaleBox);");
+        source.Should().Contain("PrintPreviewSurfacePlanner.CreateSettingsRailPlan(");
+        source.Should().Contain("AddLabel(railPlan.OrientationLabelText, orientBox);");
+        source.Should().Contain("AddLabel(railPlan.PaperSizeLabelText, paperBox);");
+        source.Should().Contain("AddLabel(railPlan.MarginsLabelText, marginsBox);");
+        source.Should().Contain("AddLabel(railPlan.ScalingLabelText, scaleBox);");
+        source.Should().Contain("PrintPreviewSettingsPanelPlanner.Build(");
+        source.Should().NotContain("AddLabel(UiText.Get(\"PrintPreview_OrientationLabel\")");
+        source.Should().NotContain("AddLabel(UiText.Get(\"PageSetup_PaperSize\")");
+        source.Should().NotContain("AddLabel(UiText.Get(\"PageSetup_Margins\")");
+        source.Should().NotContain("AddLabel(UiText.Get(\"PrintPreview_ScalingLabel\")");
+        source.Should().NotContain("UiText.Get(\"PrintPreview_PrintWhatActiveSheets\")");
+        source.Should().NotContain("UiText.Get(\"PrintPreview_ScaleFitColumns\")");
+        source.Should().NotContain("PrintSettingsPlanner.ScaleIndexToScaleToFit(scaleBox.SelectedIndex)");
     }
 
     [Fact]
@@ -213,19 +224,32 @@ public partial class ExportPlannerTests
     {
         var source = ReadPrintPreviewDialogSources();
 
-        source.Should().Contain("SetToolbarAutomation(firstButton, \"PrintPreviewFirstPageButton\", UiText.Get(\"PrintPreview_FirstPageAutomationName\")");
-        source.Should().Contain("SetToolbarAutomation(previousButton, \"PrintPreviewPreviousPageButton\", UiText.Get(\"PrintPreview_PreviousPageAutomationName\")");
-        source.Should().Contain("SetToolbarAutomation(nextButton, \"PrintPreviewNextPageButton\", UiText.Get(\"PrintPreview_NextPageAutomationName\")");
-        source.Should().Contain("SetToolbarAutomation(lastButton, \"PrintPreviewLastPageButton\", UiText.Get(\"PrintPreview_LastPageAutomationName\")");
-        source.Should().Contain("AutomationProperties.SetAutomationId(printButton, \"PrintPreviewPrintButton\")");
-        source.Should().Contain("SetToolbarAutomation(closeButton, PrintPreviewDialogPlanner.CloseButtonAutomationId, UiText.Get(\"PrintPreview_CloseAutomationName\")");
-        source.Should().Contain("AutomationProperties.SetAutomationId(pageNumberBox, \"PrintPreviewPageNumberBox\")");
-        source.Should().Contain("AutomationProperties.SetAutomationId(pageStatusText, \"PrintPreviewPageStatusText\")");
-        source.Should().Contain("AutomationProperties.SetAutomationId(zoomBox, \"PrintPreviewZoomBox\")");
-        source.Should().Contain("SetToolbarAutomation(marginsButton, \"PrintPreviewMarginsButton\", UiText.Get(\"PrintPreview_MarginsAutomationName\")");
-        source.Should().Contain("SetToolbarAutomation(pageSetupButton, \"PrintPreviewPageSetupButton\", UiText.Get(\"PrintPreview_PageSetupAutomationName\")");
-        source.Should().Contain("AutomationProperties.SetAutomationId(settingsSummaryText, \"PrintPreviewSettingsSummaryText\")");
+        source.Should().Contain("PrintPreviewDialogPlanner.CreateToolbarCommandPlan(command)");
+        source.Should().Contain("PrintPreviewDialogPlanner.CreateNavigationCommandPlans()");
+        source.Should().Contain("PrintPreviewToolbarCommand.FirstPage");
+        source.Should().Contain("PrintPreviewToolbarCommand.PreviousPage");
+        source.Should().Contain("PrintPreviewToolbarCommand.NextPage");
+        source.Should().Contain("PrintPreviewToolbarCommand.LastPage");
+        source.Should().Contain("PrintButtonAutomationId,");
+        source.Should().Contain("CloseButtonAutomationId,");
+        source.Should().Contain("PrintPreviewDialogPlanner.PageNumberBoxAutomationId");
+        source.Should().Contain("PrintPreviewDialogPlanner.PageStatusTextAutomationId");
+        source.Should().Contain("PrintPreviewDialogPlanner.ZoomBoxAutomationId");
+        source.Should().Contain("PrintPreviewDialogPlanner.SettingsSummaryTextAutomationId");
+        source.Should().Contain("SetToolbarAutomation(button, plan)");
+        source.Should().Contain("private static void SetToolbarAutomation(Control control, PrintPreviewToolbarCommandPlan plan)");
+        source.Should().Contain("plan.AutomationId");
         source.Should().Contain("private static void SetToolbarAutomation(Control control, string automationId, string name, string helpText)");
+    }
+
+    [Fact]
+    public void PrintPreviewDialogAndSettingsPanel_SharePrinterBoxPopulation()
+    {
+        var source = ReadPrintPreviewDialogSources();
+
+        source.Should().Contain("WpfPrintPreviewToolbarPlanner.PopulatePrinterBox(");
+        source.Should().Contain("public static void PopulatePrinterBox(");
+        source.Should().NotContain("private static void PopulatePrinterBox(ComboBox printerBox)");
     }
 
     [Fact]
@@ -254,8 +278,7 @@ public partial class ExportPlannerTests
         source.Should().Contain("TryParsePageNumber(pageNumberBox.Text, totalPages, out var pageNumber)");
         source.Should().Contain("ShowInvalidPageNumberWarning(pageNumberBox, totalPages)");
         source.Should().Contain("UiText.Format(\"PrintPreview_InvalidPageNumberMessage\", totalPages)");
-        source.Should().Contain("pageNumberBox.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(pageNumberBox);");
+        source.Should().Contain("DialogFocus.ShowWarningAndFocus(this, UiText.Format(\"PrintPreview_InvalidPageNumberMessage\", totalPages), Title, pageNumberBox);");
     }
 
     [Fact]
@@ -265,11 +288,11 @@ public partial class ExportPlannerTests
 
         source.Should().Contain("Content = UiText.Get(\"PrintPreview_PrinterLabel\")");
         source.Should().Contain("Content = UiText.Get(\"PrintPreview_CopiesLabel\")");
-        source.Should().Contain("Content = UiText.Get(\"PrintPreview_CollatedLabel\")");
+        source.Should().Contain("PrintPreview_CollatedLabel");
         source.Should().Contain("Content = UiText.Get(\"PrintPreview_SidesLabel\")");
-        source.Should().Contain("sidesBox.Items.Add(UiText.Get(\"PrintPreview_SidesOneSided\"))");
-        source.Should().Contain("sidesBox.Items.Add(UiText.Get(\"PrintPreview_SidesFlipLongEdge\"))");
-        source.Should().Contain("sidesBox.Items.Add(UiText.Get(\"PrintPreview_SidesFlipShortEdge\"))");
+        source.Should().Contain("PrintPreviewToolbarStatePlanner.CreateToolbarCollatedText(WpfPrintSettingsTextResolver.Instance)");
+        source.Should().Contain("PrintPreviewToolbarStatePlanner.CreateSidesOptions(WpfPrintSettingsTextResolver.Instance)");
+        source.Should().Contain("sidesBox.Items.Add(option.Text)");
         source.Should().Contain("printerBox");
         source.Should().Contain("copiesBox");
         source.Should().Contain("collatedBox");
@@ -285,9 +308,7 @@ public partial class ExportPlannerTests
         source.Should().Contain("UseEXDialog = false");
         source.Should().Contain("ResolveSelectedSidesMode(sidesBox)");
         source.Should().Contain("collatedBox.IsChecked == true");
-        source.Should().Contain("DialogMessageHelper.ShowWarning(this, UiText.Get(\"PrintPreview_InvalidCopiesMessage\"), Title);");
-        source.Should().Contain("copiesBox.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(copiesBox);");
+        source.Should().Contain("DialogFocus.ShowWarningAndFocus(this, UiText.Get(\"PrintPreview_InvalidCopiesMessage\"), Title, copiesBox);");
         source.Should().Contain("AutomationProperties.SetHelpText");
         source.Should().Contain("RefreshPrintStatus");
     }
@@ -297,16 +318,18 @@ public partial class ExportPlannerTests
     {
         var source = ReadPrintPreviewDialogSources();
 
-        source.Should().Contain("Content = UiText.Get(\"PrintPreview_AllPagesLabel\")");
-        source.Should().Contain("Content = UiText.Get(\"PrintPreview_CurrentPageLabel\")");
-        source.Should().Contain("Content = UiText.Get(\"PrintPreview_PagesLabel\")");
+        source.Should().Contain("PrintPreviewToolbarStatePlanner.CreatePageRangeToolbarPlan(");
+        source.Should().Contain("PrintPreviewToolbarStatePlanner.CreatePageRangeSelectionPlan(mode)");
+        source.Should().Contain("Content = allPagesChoice.Text");
+        source.Should().Contain("Content = currentPageChoice.Text");
+        source.Should().Contain("Content = pagesChoice.Text");
         source.Should().Contain("fromPageBox");
         source.Should().Contain("toPageBox");
         source.Should().Contain("PrintPreviewPageRangeMode.CurrentPage");
         source.Should().Contain("PrintPreviewPageRangeMode.Pages");
         source.Should().Contain("ResolvePrintPaginator(previewDocument, selectedPageRangeMode, currentPrintPage, selectedPageRange)");
-        source.Should().Contain("ExportPlanner.TryCreatePageRange(fromPageBox.Text, toPageBox.Text, out selectedPageRange, out var pageRangeError)");
-        source.Should().Contain("ExportPlanner.TryValidatePageRange(selectedPageRange, totalPages, out var validatedPageRangeError)");
+        source.Should().Contain("ExportPlanner.TryCreatePageRange(fromPageBox.Text, toPageBox.Text, out selectedPageRange, out var pageRangeError, WpfExportPlannerTextResolver.Instance)");
+        source.Should().Contain("ExportPlanner.TryValidatePageRange(selectedPageRange, totalPages, out var validatedPageRangeError, WpfExportPlannerTextResolver.Instance)");
         source.Should().Contain("TryParsePageNumber(pageNumberBox.Text, totalPages, out currentPrintPage)");
         source.Should().Contain("ShowInvalidPageNumberWarning(pageNumberBox, totalPages)");
         source.Should().Contain("ShowInvalidPageRangeWarning(fromPageBox, toPageBox, pageRangeError)");
@@ -327,9 +350,9 @@ public partial class ExportPlannerTests
 
         source.Should().ContainAll(
             [
-                "Content = UiText.Get(\"PrintPreview_AllPagesLabel\")",
-                "Content = UiText.Get(\"PrintPreview_CurrentPageLabel\")",
-                "Content = UiText.Get(\"PrintPreview_PagesLabel\")"
+                "PrintPreview_AllPagesLabel",
+                "PrintPreview_CurrentPageLabel",
+                "PrintPreview_PagesLabel"
             ]);
         accessKeys.Should().OnlyHaveUniqueItems("Print Preview range choices share one access-key scope");
     }
@@ -341,9 +364,15 @@ public partial class ExportPlannerTests
             "PrintPreviewDialog.Helpers.cs",
             "NativePrintDialogService.cs",
             "PrintPreviewSettingsPanelFactory.cs",
-            "PrintPreviewToolbarPlanner.cs")
+            "WpfPrintPreviewToolbarPlanner.cs")
         + Environment.NewLine
-        + DialogSourceTestSupport.ReadPresentationSources("PageLayout", "PrintPreviewDialogPlanner.cs");
+        + DialogSourceTestSupport.ReadPresentationSources("PageLayout", "PrintPreviewDialogPlanner.cs")
+        + Environment.NewLine
+        + DialogSourceTestSupport.ReadPresentationSources("PageLayout", "PrintPreviewToolbarStatePlanner.cs")
+        + Environment.NewLine
+        + DialogSourceTestSupport.ReadPresentationSources("PageLayout", "PrintPreviewSurfacePlanner.cs")
+        + Environment.NewLine
+        + DialogSourceTestSupport.ReadPresentationSources("PageLayout", "PrintPreviewSettingsPanelPlanner.cs");
 
     private static char ExtractAccessKey(string label)
     {

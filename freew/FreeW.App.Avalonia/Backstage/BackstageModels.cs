@@ -1,4 +1,5 @@
 using Free.Shared.AppServices;
+using FreeW.App.Presentation.Options;
 using FreeW.Core.IO;
 using FreeW.Core.Model;
 
@@ -41,6 +42,12 @@ internal sealed record BackstageCallbacks(
     /// <summary>Current page settings for the Print pane.</summary>
     Func<PageSettings> GetPageSettings,
 
+    /// <summary>Current persisted FreeW options snapshot.</summary>
+    Func<FreeWOptions> GetCurrentOptions,
+
+    /// <summary>Current app data folder path or a readable fallback label.</summary>
+    Func<string> GetDataFolder,
+
     // ── Actions ──────────────────────────────────────────────────────────────
 
     /// <summary>Create a new empty document.</summary>
@@ -48,6 +55,9 @@ internal sealed record BackstageCallbacks(
 
     /// <summary>Open the document at <paramref name="path"/> directly (no picker).</summary>
     Action<string> OpenRecent,
+
+    /// <summary>Open a recent folder in the operating system shell.</summary>
+    Action<string> OpenFolder,
 
     /// <summary>Open the file picker to browse for a document.</summary>
     Action Browse,
@@ -58,11 +68,29 @@ internal sealed record BackstageCallbacks(
     /// <summary>Trigger a Save-As dialog (format chosen by the user).</summary>
     Action SaveAs,
 
-    /// <summary>Trigger a Save-As targeting a specific file extension (from the planner choice).</summary>
-    Action<string> SaveAsExtension,
+    /// <summary>Trigger a Save-As targeting a specific catalog save format (from the planner choice).</summary>
+    Action<string, int> SaveAsFormat,
 
     /// <summary>Open the folder containing the current file.</summary>
     Action<string> OpenContainingFolder,
 
     /// <summary>Export the document as PDF via the existing PDF path.</summary>
-    Action ExportPdf);
+    Action ExportPdf,
+
+    /// <summary>Toggle Word-style Mark as Final advisory read-only state.</summary>
+    Action MarkAsFinal,
+
+    /// <summary>Open the document protection/restrict editing surface.</summary>
+    Action RestrictEditing,
+
+    /// <summary>Run the Document Inspector and optionally remove selected metadata.</summary>
+    Action InspectDocument,
+
+    /// <summary>Run the Accessibility Checker and show its report.</summary>
+    Action CheckAccessibility,
+
+    /// <summary>Open the FreeW options editor.</summary>
+    Action OpenOptions,
+
+    /// <summary>Open the paginated print-preview surface. Direct native printing remains host-deferred.</summary>
+    Action? PrintPreview = null);

@@ -99,4 +99,127 @@ public sealed class PivotOptionsPlannerTests
         result.RepeatItemLabels.Should().BeTrue();
         result.MergeAndCenterLabels.Should().BeTrue();
     }
+
+    [Fact]
+    public void CreateDialogValues_NormalizesFullDialogResult()
+    {
+        var result = PivotOptionsPlanner.CreateDialogValues(
+            showRowGrandTotals: true,
+            showColumnGrandTotals: false,
+            showSubtotals: true,
+            subtotalPlacement: PivotSubtotalPlacement.Top,
+            repeatItemLabels: false,
+            blankLineAfterItems: true,
+            styleName: "  PivotStyleMedium9  ",
+            showRowHeaders: false,
+            showColumnHeaders: true,
+            showRowStripes: true,
+            showColumnStripes: false,
+            reportLayout: PivotReportLayout.Outline,
+            emptyValueText: "  N/A  ",
+            refreshOnOpen: true,
+            saveSourceData: false,
+            enableRefresh: false,
+            preserveSourceSortFilter: false,
+            missingItemsLimit: 42,
+            altTextTitle: "  Sales pivot ",
+            altTextDescription: " Quarterly sales summary ",
+            compactRowLabelIndent: 99,
+            showExpandCollapseButtons: false,
+            autofitColumnsOnUpdate: false,
+            preserveFormattingOnUpdate: false,
+            showFieldHeaders: false,
+            showContextualTooltips: false,
+            showPropertiesInTooltips: false,
+            showClassicLayout: true,
+            mergeAndCenterLabels: true,
+            pageOverThenDown: true,
+            pageWrap: 999,
+            errorValueText: "  #VALUE!  ",
+            enableDrill: false);
+
+        result.StyleName.Should().Be("PivotStyleMedium9");
+        result.EmptyValueText.Should().Be("N/A");
+        result.ErrorValueText.Should().Be("#VALUE!");
+        result.AltTextTitle.Should().Be("Sales pivot");
+        result.AltTextDescription.Should().Be("Quarterly sales summary");
+        result.MissingItemsLimit.Should().Be(PivotOptionsPlanner.MaxMissingItemsLimit);
+        result.CompactRowLabelIndent.Should().Be(PivotOptionsPlanner.MaxCompactRowLabelIndent);
+        result.PageWrap.Should().Be(PivotOptionsPlanner.MaxPageWrap);
+        result.ShowExpandCollapseButtons.Should().BeFalse();
+        result.AutofitColumnsOnUpdate.Should().BeFalse();
+        result.PreserveFormattingOnUpdate.Should().BeFalse();
+        result.ShowFieldHeaders.Should().BeFalse();
+        result.ShowClassicLayout.Should().BeTrue();
+        result.MergeAndCenterLabels.Should().BeTrue();
+        result.PageOverThenDown.Should().BeTrue();
+        result.EnableDrill.Should().BeFalse();
+    }
+
+    [Fact]
+    public void CaptureDialogValues_ReadsPivotAndConnectedCacheOptions()
+    {
+        var pivot = new PivotTableModel
+        {
+            Name = "P",
+            CacheId = 7,
+            ShowSubtotals = true,
+            SubtotalPlacement = PivotSubtotalPlacement.Top,
+            ReportLayout = PivotReportLayout.Compact,
+            StyleName = "PivotStyleDark4",
+            EmptyValueText = "-",
+            ErrorCaption = "(error)",
+            CompactRowLabelIndent = 5,
+            PageOverThenDown = true,
+            PageWrap = 2,
+            PrintExpandCollapseButtons = true,
+            EnableDrill = false
+        };
+        pivot.ShowRowGrandTotals = false;
+        pivot.ShowColumnGrandTotals = true;
+
+        var cache = new PivotCacheModel
+        {
+            CacheId = 7,
+            RefreshOnLoad = true,
+            SaveData = false,
+            EnableRefresh = false,
+            PreserveSourceSortFilter = false,
+            MissingItemsLimit = 0
+        };
+
+        var values = PivotOptionsPlanner.CaptureDialogValues(pivot, cache);
+
+        values.ShowRowGrandTotals.Should().BeFalse();
+        values.ShowColumnGrandTotals.Should().BeTrue();
+        values.StyleName.Should().Be("PivotStyleDark4");
+        values.EmptyValueText.Should().Be("-");
+        values.ErrorValueText.Should().Be("(error)");
+        values.RefreshOnOpen.Should().BeTrue();
+        values.SaveSourceData.Should().BeFalse();
+        values.EnableRefresh.Should().BeFalse();
+        values.PreserveSourceSortFilter.Should().BeFalse();
+        values.MissingItemsLimit.Should().Be(0);
+        values.PrintExpandCollapseButtons.Should().BeTrue();
+        values.CompactRowLabelIndent.Should().Be(5);
+        values.PageOverThenDown.Should().BeTrue();
+        values.PageWrap.Should().Be(2);
+        values.EnableDrill.Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData("255", true, 255)]
+    [InlineData("256", false, 0)]
+    [InlineData("-1", false, 0)]
+    [InlineData("x", false, 0)]
+    public void TryParsePageWrap_ValidatesRange(string text, bool expectedOk, int expectedPageWrap)
+    {
+        var ok = PivotOptionsPlanner.TryParsePageWrap(text, out var pageWrap, out var error);
+        ok.Should().Be(expectedOk);
+        pageWrap.Should().Be(expectedPageWrap);
+        if (expectedOk)
+            error.Should().BeNull();
+        else
+            error.Should().Be(PivotOptionsPlanner.PageWrapRangeMessage);
+    }
 }

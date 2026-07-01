@@ -7,11 +7,15 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Interop;
+using FreeX.App.Presentation.Consolidate;
+using FreeX.App.Presentation.DataTools;
 using FreeX.App.Services;
 using FreeX.Core.Calc;
 using FreeX.Core.Commands;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
+using AdvancedFilterPlanner = FreeX.App.Presentation.Filtering.AdvancedFilterPlanner;
+using AdvancedFilterRangeSelectionRequest = FreeX.App.Presentation.Filtering.AdvancedFilterRangeSelectionRequest;
 
 namespace FreeX.App.Host;
 
@@ -21,10 +25,8 @@ public partial class MainWindow
 
     private async void GetDataBtn_Click(object sender, RoutedEventArgs e)
     {
-        string[] dataExtensions = [".csv", ".txt", ".tsv", ".tab", ".xml"];
-        var adapters = _fileAdapters
-            .Where(adapter => dataExtensions.Contains(adapter.Extension, StringComparer.OrdinalIgnoreCase))
-            .ToList();
+        var plan = ImportDataFilePickerPlanner.BuildAdapterOpenDialogPlan(_fileAdapters);
+        var adapters = plan.Adapters;
         if (adapters.Count == 0)
         {
             RecordDiagnosticEvent("import_failed", new Dictionary<string, string?>
@@ -39,12 +41,11 @@ public partial class MainWindow
             return;
         }
 
-        var filter = FileDialogFilterBuilder.BuildOpenFilter(adapters);
         var result = WpfFileDialogService.ShowOpenDialog(
             this,
-            filter,
-            checkFileExists: true,
-            multiselect: false);
+            plan.Filter,
+            checkFileExists: plan.CheckFileExists,
+            multiselect: plan.Multiselect);
         if (!result.Chosen) return;
 
         var ext = System.IO.Path.GetExtension(result.FileName!).ToLowerInvariant();
@@ -143,7 +144,7 @@ public partial class MainWindow
 
         var targetSheetIds = CurrentGroupedEditSheetIds();
         var currentRange = SheetGrid.SelectedRange ?? range;
-        if (TextToColumnsCommandPlanner.FindOverwriteTargets(_workbook, targetSheetIds, currentRange, dialog.Result).Count > 0 &&
+        if (TextToColumnsApplyPlanner.FindOverwriteTargets(_workbook, targetSheetIds, currentRange, dialog.Result).Count > 0 &&
             !_messageService.AskYesNo(
                 UiText.Get("MainWindowMessage_TextToColumnsReplaceDataPrompt"),
                 UiText.Get("MainWindowMessage_TextToColumnsTitle")))
@@ -202,20 +203,28 @@ public partial class MainWindow
         var dialog = new RemoveDuplicatesDialog(columns, genericColumns, hasHeaders) { Owner = this };
         if (dialog.ShowDialog() != true || dialog.Result is null) return;
 
+        var currentRange = SheetGrid.SelectedRange ?? range;
+        var planResult = RemoveDuplicatesPlanner.CreatePlan(
+            currentRange,
+            dialog.Result.HasHeaders,
+            dialog.Result.SelectedColumnOffsets);
+        if (!planResult.IsReady || planResult.Plan is null)
+        {
+            ShowOwnedMessage(
+                planResult.StatusText,
+                UiText.Get("MainWindowMessage_RemoveDuplicatesTitle"),
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            return;
+        }
+
+        var plan = planResult.Plan;
         RemoveDuplicateRowsCommand? activeSheetCommand = null;
         if (!TryExecuteRepeatableGroupedSheetCommand(
                 "Remove Duplicates",
                 sheetId =>
                 {
-                    var currentRange = SheetGrid.SelectedRange ?? range;
-                    var activeRange = RemoveDuplicatesDialog.ExcludeHeaderRow(currentRange, dialog.Result.HasHeaders);
-                    var sheetRange = GroupedSheetRangePlanner.RemapRangeToSheet(
-                        activeRange,
-                        sheetId);
-                    var command = new RemoveDuplicateRowsCommand(
-                        sheetId,
-                        sheetRange,
-                        dialog.Result.SelectedColumnOffsets);
+                    var command = plan.CreateCommand(sheetId);
                     if (sheetId == _currentSheetId)
                         activeSheetCommand = command;
                     return command;
@@ -234,7 +243,7 @@ public partial class MainWindow
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
         var defaultList = SheetGrid.SelectedRange is { } selected && sheet is not null
-            ? FormatWorkbookRange(AdvancedFilterDefaultListRangePlanner.Create(sheet, selected))
+            ? FormatWorkbookRange(AdvancedFilterPlanner.CreateDefaultListRange(sheet, selected))
             : "A1:C10";
         AdvancedFilterDialog? dialog = null;
         dialog = new AdvancedFilterDialog(
@@ -280,7 +289,7 @@ public partial class MainWindow
     }
 
     private bool TryParseAdvancedFilterRange(string input, out GridRange range)
-        => AdvancedFilterInputParser.TryParseRange(
+        => AdvancedFilterPlanner.TryParseRange(
             _currentSheetId,
             input,
             ResolveSheetIdByName,

@@ -23,10 +23,8 @@ public sealed class SelectionAdornerLayer : Control
 {
     // ── Handle appearance ───────────────────────────────────────────────────────
 
-    private const double HandleSize         = 8.0;   // screen px
-    private const double RotateHandleRadius = 4.0;   // screen px
-    private const double RotateHandleOffset = 18.0;  // above top-middle handle, screen px
-    private const double HandleHitRadius    = 8.0;   // screen px
+    private const double HandleSize         = SelectionAdornerGeometry.HandleSize;
+    private const double RotateHandleRadius = SelectionAdornerGeometry.RotateHandleRadius;
 
     private static readonly IPen SelectionPen;
     private static readonly IPen PreviewPen;
@@ -134,12 +132,12 @@ public sealed class SelectionAdornerLayer : Control
         {
             if (g.IsHorizontal)
             {
-                double sy = g.Position * xf.Scale + xf.OffsetY;
+                double sy = SlideCanvasGeometryPlanner.SnapGuideToScreenPosition(g, xf);
                 dc.DrawLine(SnapGuidePen, new Point(-Span, sy), new Point(Span, sy));
             }
             else
             {
-                double sx = g.Position * xf.Scale + xf.OffsetX;
+                double sx = SlideCanvasGeometryPlanner.SnapGuideToScreenPosition(g, xf);
                 dc.DrawLine(SnapGuidePen, new Point(sx, -Span), new Point(sx, Span));
             }
         }
@@ -181,8 +179,9 @@ public sealed class SelectionAdornerLayer : Control
             dc.DrawRectangle(HandleFill, HandleBorder, new Rect(c.X - r, c.Y - r, h, h));
 
         // Rotate handle (circle above N)
-        double topCenterX = rect.Left + rect.Width / 2;
-        double rotY       = rect.Top - RotateHandleOffset;
+        var rotateCenter = GetRotateHandleCenter(rect);
+        double topCenterX = rotateCenter.X;
+        double rotY       = rotateCenter.Y;
         dc.DrawLine(new Pen(((Pen)HandleBorder).Brush, 1.0),
             new Point(topCenterX, rect.Top),
             new Point(topCenterX, rotY));
@@ -198,65 +197,36 @@ public sealed class SelectionAdornerLayer : Control
     /// </summary>
     internal static Point[] GetHandleCenters(Rect rect)
     {
-        double mx = rect.Left + rect.Width  / 2;
-        double my = rect.Top  + rect.Height / 2;
-        return
-        [
-            new Point(mx,         rect.Top),     // N
-            new Point(rect.Right, rect.Top),     // NE
-            new Point(rect.Right, my),           // E
-            new Point(rect.Right, rect.Bottom),  // SE
-            new Point(mx,         rect.Bottom),  // S
-            new Point(rect.Left,  rect.Bottom),  // SW
-            new Point(rect.Left,  my),           // W
-            new Point(rect.Left,  rect.Top),     // NW
-        ];
+        return SelectionAdornerGeometry.GetHandleCenters(ToSelectionAdornerRect(rect))
+            .Select(ToAvaloniaPoint)
+            .ToArray();
     }
 
     /// <summary>Returns the rotate handle center for a given selection rect.</summary>
     internal static Point GetRotateHandleCenter(Rect rect)
-        => new(rect.Left + rect.Width / 2, rect.Top - RotateHandleOffset);
+        => ToAvaloniaPoint(
+            SelectionAdornerGeometry.GetRotateHandleCenter(ToSelectionAdornerRect(rect)));
 
     // ── Hit-test helpers ────────────────────────────────────────────────────────
-
-    public enum HandleKind
-    {
-        None,
-        Body,
-        ResizeN, ResizeNE, ResizeE, ResizeSE, ResizeS, ResizeSW, ResizeW, ResizeNW,
-        Rotate
-    }
 
     /// <summary>
     /// Returns which part of the selection a screen-space point hits (for a single selected shape).
     /// </summary>
-    public HandleKind HitTestHandle(Rect selectionRect, Point screenPt)
+    public CanvasGestureHandleKind HitTestHandle(Rect selectionRect, Point screenPt)
     {
-        // Rotate handle
-        var rotCenter = GetRotateHandleCenter(selectionRect);
-        if (Distance(screenPt, rotCenter) <= HandleHitRadius)
-            return HandleKind.Rotate;
-
-        // Resize handles
-        var centers = GetHandleCenters(selectionRect);
-        var kinds   = new[]
-        {
-            HandleKind.ResizeN, HandleKind.ResizeNE, HandleKind.ResizeE, HandleKind.ResizeSE,
-            HandleKind.ResizeS, HandleKind.ResizeSW, HandleKind.ResizeW, HandleKind.ResizeNW
-        };
-        for (int i = 0; i < centers.Length; i++)
-            if (Distance(screenPt, centers[i]) <= HandleHitRadius)
-                return kinds[i];
-
-        // Body
-        if (selectionRect.Contains(screenPt))
-            return HandleKind.Body;
-
-        return HandleKind.None;
+        return SelectionAdornerGeometry.HitTestHandle(
+            ToSelectionAdornerRect(selectionRect),
+            ToCanvasPoint(screenPt));
     }
 
-    private static double Distance(Point a, Point b)
-        => Math.Sqrt((a.X - b.X) * (a.X - b.X) + (a.Y - b.Y) * (a.Y - b.Y));
+    private static SelectionAdornerRect ToSelectionAdornerRect(Rect rect)
+        => new(rect.Left, rect.Top, rect.Width, rect.Height);
+
+    private static Point ToAvaloniaPoint(CanvasGesturePoint point)
+        => new(point.X, point.Y);
+
+    private static CanvasGesturePoint ToCanvasPoint(Point point)
+        => new(point.X, point.Y);
 
     /// <summary>Selection rects accessible to the gesture handler for external queries.</summary>
     public IReadOnlyList<(uint id, Rect screenRect)> SelectionRects => _selectionRects;

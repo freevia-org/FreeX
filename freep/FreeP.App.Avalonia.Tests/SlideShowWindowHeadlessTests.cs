@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -81,6 +82,69 @@ public sealed class SlideShowWindowHeadlessTests
 
         if (!ran) return;
         idx.Should().Be(2);
+    }
+
+    [Fact]
+    public async Task SlideShowWindow_create_presenter_state_uses_shared_planner_state()
+    {
+        SlideShowPresenterState? state = null;
+        SlideShowPresenterDisplayIntent? displayIntent = null;
+        var ran = await OnUiThread(() =>
+        {
+            var pres = MakePresentation(2);
+            pres.Slides[0].Title = "Agenda";
+            pres.Slides[0].Notes = MakeTextBody("speaker note");
+            pres.Slides[1].Title = "Details";
+
+            var window = new SlideShowWindow(pres, 0);
+            displayIntent = new SlideShowPresenterDisplayIntent(
+                IsFullScreenRequested: true,
+                MonitorIndex: 2,
+                MonitorName: "Confidence monitor");
+
+            state = window.CreatePresenterState(
+                window.PresenterStartedAtUtc.AddSeconds(12),
+                displayIntent);
+        });
+
+        if (!ran) return;
+        state.Should().NotBeNull();
+        state!.CurrentSlide!.SlideIndex.Should().Be(0);
+        state.NextSlide!.Title.Should().Be("Details");
+        state.NotesText.Should().Be("speaker note");
+        state.Elapsed.Should().Be(TimeSpan.FromSeconds(12));
+        state.DisplayIntent.Should().BeSameAs(displayIntent);
+    }
+
+    [Fact]
+    public async Task SlideShowWindow_apply_presenter_tool_intent_uses_shared_planner_state()
+    {
+        SlideShowPresenterToolPlan? plan = null;
+        SlideShowPresenterState? state = null;
+        var ran = await OnUiThread(() =>
+        {
+            var pres = MakePresentation(1);
+            var window = new SlideShowWindow(pres, 0);
+
+            plan = window.ApplyPresenterToolIntent(
+                SlideShowTimingIntent.RecordTimings,
+                SlideShowRecordingMediaIntent.NarrationAndMedia,
+                SlideShowPresenterPointerMode.Highlighter,
+                "#ffee00",
+                8,
+                SlideShowInkRetentionDecision.ClearInk);
+            state = window.CreatePresenterState(window.PresenterStartedAtUtc.AddSeconds(3));
+        });
+
+        if (!ran) return;
+        plan.Should().NotBeNull();
+        plan!.Recording.NarrationCapture.IsDeferred.Should().BeTrue();
+        plan.Recording.MediaCapture.IsDeferred.Should().BeTrue();
+        plan.PointerInk.PointerMode.Should().Be(SlideShowPresenterPointerMode.Highlighter);
+        plan.PointerInk.InkState.ColorHex.Should().Be("#FFEE00");
+        plan.PointerInk.InkRetentionDecision.Should().Be(SlideShowInkRetentionDecision.ClearInk);
+        state.Should().NotBeNull();
+        state!.ToolPlan.Should().BeSameAs(plan);
     }
 
     [Fact]
@@ -177,6 +241,15 @@ public sealed class SlideShowWindowHeadlessTests
 
     // ── Hyperlink routing ───────────────────────────────────────────────────────
 
+    private static TextBody MakeTextBody(string text)
+    {
+        var body = new TextBody();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run { Text = text });
+        body.Paragraphs.Add(paragraph);
+        return body;
+    }
+
     [Fact]
     public async Task HitTestHyperlink_external_url_route()
     {
@@ -244,6 +317,20 @@ public sealed class SlideShowWindowHeadlessTests
     }
 
     [Fact]
+    public void OpenExternalUrl_RoutesThroughSharedLauncher()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            FindRepositoryRoot(),
+            "freep",
+            "FreeP.App.Avalonia",
+            "SlideShowWindow.cs"));
+
+        source.Should().Contain("ExternalUriLauncher.Open(");
+        source.Should().NotContain("new Uri(url");
+        source.Should().NotContain("uri.Scheme is not");
+    }
+
+    [Fact]
     public void OpenExternalUrl_rejects_file_scheme()
     {
         // Security guard: file:// must be silently rejected (no exception thrown).
@@ -254,7 +341,7 @@ public sealed class SlideShowWindowHeadlessTests
     [Fact]
     public void OpenExternalUrl_rejects_unknown_scheme()
     {
-        var act = () => SlideShowWindow.OpenExternalUrl("ftp://example.com/file");
+        var act = () => SlideShowWindow.OpenExternalUrl("gopher://example.com/file");
         act.Should().NotThrow();
     }
 
@@ -311,7 +398,7 @@ public sealed class SlideShowWindowHeadlessTests
         var sg    = home.Groups.Single(g => g.Id == "slideshow");
         var ids   = sg.Controls.Select(i => i.CommandId.Value).ToList();
         ids.Should().Contain("freep.slideshow.from-beginning");
-        ids.Should().Contain("freep.slideshow.from-current");
+        ids.Should().Contain("freep.slideshow.from-current-slide");
     }
 
     // ── DA2 + DA3: timer tracking ─────────────────────────────────────────────
@@ -517,4 +604,16 @@ public sealed class SlideShowWindowHeadlessTests
             "Controller.CurrentSlideIndex must track the current slide for DA5 exit restore");
     }
 
+    private static string FindRepositoryRoot()
+    {
+        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
+             directory is not null;
+             directory = directory.Parent)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "FreeP.slnx")))
+                return directory.FullName;
+        }
+
+        throw new DirectoryNotFoundException("Could not locate repository root from test output directory.");
+    }
 }

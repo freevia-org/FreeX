@@ -48,7 +48,7 @@ public sealed partial class SymbolPickerDialogSourceTests
         var source = ReadSymbolPickerDialogSources();
 
         source.Should().Contain("void SelectCatalogEntry(SymbolCatalogEntry entry)");
-        source.Should().Contain("SymbolPickerSelectionPlanner.CreateSelection(value)");
+        source.Should().Contain("SymbolPickerCatalogPlanner.CreateSelection(value)");
         source.Should().Contain("ApplySelection(selection)");
         source.Should().Contain("insert.Click += (_, _) =>");
         source.Should().Contain("DialogResult = true");

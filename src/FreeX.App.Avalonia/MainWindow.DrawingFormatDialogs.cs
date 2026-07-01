@@ -3,7 +3,9 @@ using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Free.Shared.Shell.Avalonia;
 using FreeX.App.Presentation.DrawingUI;
+using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -16,9 +18,9 @@ namespace FreeX.App.Avalonia;
 /// Windows-parity drawing-object editing dialogs for the Avalonia/macOS shell: Format Picture / Format Shape
 /// (size with lock-aspect syncing, rotation, alt text), Crop Picture (per-edge crop percentages), and the shape
 /// Gradient Fill (start/end stop colors + direction with a live preview). Input collection lives here; all the
-/// validation, parsing, aspect-ratio math, preset/direction catalogs, and result building come from the portable
-/// planners in <see cref="FreeX.App.Presentation.DrawingUI"/> so the behavior is single-sourced with the WPF host
-/// and reusable on macOS. Results round-trip through the existing Core drawing commands (ResizePicture /
+/// validation, parsing, aspect-ratio math, preset/direction catalogs, and result building come from portable
+/// planners in <see cref="FreeX.App.Presentation.DrawingUI"/> and <see cref="FreeX.App.Services"/> so the behavior
+/// is single-sourced with the WPF host and reusable on macOS. Results round-trip through the existing Core drawing commands (ResizePicture /
 /// ResizeDrawingShape, SetPictureLockAspectRatio, SetDrawingObjectRotation, SetPicture/DrawingShapeAltText,
 /// SetPictureCrop, SetDrawingShapeGradient). Reached from the Picture/Shape Format contextual-tab buttons.
 /// </summary>
@@ -28,54 +30,25 @@ public sealed partial class MainWindow
     // Drawing dialog chrome helpers
     // -------------------------------------------------------------------------------------------------------
 
+    private static AvaloniaCompactDialogChromeStyle DrawingDialogChromeStyle => new(FormulaBarFontFamily);
+
     private static void ApplyDrawingButtonChrome(Button button, double width = 0, bool isDefault = false)
     {
-        if (width > 0) { button.Width = width; button.MinWidth = width; }
-        button.Height = 24;
-        button.MinHeight = 24;
-        button.MaxHeight = 24;
-        button.Padding = new Thickness(4, 1);
-        button.Background = Brushes.White;
-        button.BorderBrush = isDefault ? Brush(0, 120, 215) : Brush(112, 112, 112);
-        button.BorderThickness = new Thickness(1);
-        button.FontSize = 12;
-        button.FontFamily = FormulaBarFontFamily;
-        button.HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center;
-        button.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
+        if (width > 0)
+            button.Width = width;
+        AvaloniaCompactDialogChrome.ApplyButton(button, DrawingDialogChromeStyle, width, isDefault);
     }
 
     private static void ApplyDrawingTextBoxChrome(TextBox tb)
-    {
-        tb.Height = 24;
-        tb.MinHeight = 24;
-        tb.MaxHeight = 24;
-        tb.Padding = new Thickness(4, 1);
-        tb.FontSize = 12;
-        tb.FontFamily = FormulaBarFontFamily;
-        tb.BorderBrush = Brush(130, 130, 130);
-        tb.BorderThickness = new Thickness(1);
-        tb.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
-    }
+        => AvaloniaCompactDialogChrome.ApplyTextBox(tb, DrawingDialogChromeStyle);
 
     private static void ApplyDrawingComboBoxChrome(ComboBox cb)
-    {
-        cb.Height = 24;
-        cb.MinHeight = 24;
-        cb.MaxHeight = 24;
-        cb.Padding = new Thickness(5, 0, 4, 0);
-        cb.FontSize = 12;
-        cb.FontFamily = FormulaBarFontFamily;
-        cb.BorderBrush = Brush(130, 130, 130);
-        cb.BorderThickness = new Thickness(1);
-    }
+        => AvaloniaCompactDialogChrome.ApplyComboBox(cb, DrawingDialogChromeStyle);
 
     private static void ApplyDrawingCheckBoxChrome(CheckBox cb)
     {
         StripContentMnemonic(cb);
-        cb.MinHeight = 20;
-        cb.MaxHeight = 20;
-        cb.FontSize = 12;
-        cb.FontFamily = FormulaBarFontFamily;
+        AvaloniaCompactDialogChrome.ApplyCheckBox(cb, DrawingDialogChromeStyle);
     }
 
     // -------------------------------------------------------------------------------------------------------
@@ -87,37 +60,23 @@ public sealed partial class MainWindow
         if (_isOpening || _isSaving)
             return;
 
-        FormatPicturePlanner.FormatObjectValues values;
-        bool isPicture;
-        switch (_selectedDrawingObjectKind)
-        {
-            case SelectionPaneObjectKind.Picture when ResolveSelectedPicture() is { } picture:
-                values = FormatPicturePlanner.Capture(picture);
-                isPicture = true;
-                break;
-            case SelectionPaneObjectKind.Shape when ResolveSelectedShape() is { } shape:
-                values = FormatPicturePlanner.Capture(shape);
-                isPicture = false;
-                break;
-            default:
-                RefreshShell(UiText.Get("Drawing_SelectObjectFirst"));
-                return;
-        }
+        if (ResolveSelectedFormatTarget() is not { } target)
+            return;
 
-        var aspectRatio = FormatPicturePlanner.AspectRatio(values.Width, values.Height);
+        var state = FormatPicturePlanner.CreateDialogState(target.Values);
         var suppressSync = false;
 
-        var widthBox = new TextBox { Text = FormatPicturePlanner.FormatSize(values.Width), Width = 140 };
+        var widthBox = new TextBox { Text = state.WidthText, Width = 140 };
         ApplyDrawingTextBoxChrome(widthBox);
         AutomationProperties.SetAutomationId(widthBox, "FormatObjectWidthBox");
         AutomationProperties.SetName(widthBox, UiText.Get("FormatPicture_WidthLabel"));
 
-        var heightBox = new TextBox { Text = FormatPicturePlanner.FormatSize(values.Height), Width = 140 };
+        var heightBox = new TextBox { Text = state.HeightText, Width = 140 };
         ApplyDrawingTextBoxChrome(heightBox);
         AutomationProperties.SetAutomationId(heightBox, "FormatObjectHeightBox");
         AutomationProperties.SetName(heightBox, UiText.Get("FormatPicture_HeightLabel"));
 
-        var rotationBox = new TextBox { Text = FormatPicturePlanner.FormatRotation(values.RotationDegrees), Width = 140 };
+        var rotationBox = new TextBox { Text = state.RotationText, Width = 140 };
         ApplyDrawingTextBoxChrome(rotationBox);
         AutomationProperties.SetAutomationId(rotationBox, "FormatObjectRotationBox");
         AutomationProperties.SetName(rotationBox, UiText.Get("FormatPicture_RotationLabel"));
@@ -125,15 +84,15 @@ public sealed partial class MainWindow
         var lockAspectBox = new CheckBox
         {
             Content = StripDisplayMnemonic(UiText.Get("FormatPicture_LockAspectRatio")),
-            IsChecked = values.LockAspectRatio,
-            IsVisible = values.LockAspectRatioSupported,
+            IsChecked = state.LockAspectRatio,
+            IsVisible = state.LockAspectRatioSupported,
         };
         ApplyDrawingCheckBoxChrome(lockAspectBox);
         AutomationProperties.SetAutomationId(lockAspectBox, "FormatObjectLockAspectBox");
 
         var altTextBox = new TextBox
         {
-            Text = values.AltText,
+            Text = state.AltText,
             AcceptsReturn = true,
             TextWrapping = TextWrapping.Wrap,
             MinHeight = 64,
@@ -146,13 +105,13 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(altTextBox, "FormatObjectAltTextBox");
         AutomationProperties.SetName(altTextBox, UiText.Get("FormatPicture_AltTextLabel"));
 
-        bool AspectLocked() => values.LockAspectRatioSupported && lockAspectBox.IsChecked == true;
+        bool AspectLocked() => state.LockAspectRatioSupported && lockAspectBox.IsChecked == true;
 
         widthBox.TextChanged += (_, _) =>
         {
             if (suppressSync || !AspectLocked())
                 return;
-            if (FormatPicturePlanner.SyncHeightFromWidth(widthBox.Text, aspectRatio) is { } h)
+            if (FormatPicturePlanner.SyncHeightFromWidth(widthBox.Text, state.AspectRatio) is { } h)
             {
                 suppressSync = true;
                 heightBox.Text = FormatPicturePlanner.FormatSize(h);
@@ -163,7 +122,7 @@ public sealed partial class MainWindow
         {
             if (suppressSync || !AspectLocked())
                 return;
-            if (FormatPicturePlanner.SyncWidthFromHeight(heightBox.Text, aspectRatio) is { } w)
+            if (FormatPicturePlanner.SyncWidthFromHeight(heightBox.Text, state.AspectRatio) is { } w)
             {
                 suppressSync = true;
                 widthBox.Text = FormatPicturePlanner.FormatSize(w);
@@ -173,7 +132,7 @@ public sealed partial class MainWindow
 
         var dialog = new Window
         {
-            Title = isPicture
+            Title = target.Kind == DrawingObjectTargetKind.Picture
                 ? UiText.Get("FormatPicture_PictureTitle")
                 : UiText.Get("FormatPicture_ShapeTitle"),
             Width = 360,
@@ -194,8 +153,14 @@ public sealed partial class MainWindow
         ok.Click += (_, _) =>
         {
             if (!FormatPicturePlanner.TryCreateResult(
-                    widthBox.Text, heightBox.Text, rotationBox.Text,
-                    lockAspectBox.IsChecked == true, altTextBox.Text, out _, out var error))
+                    new FormatPicturePlanner.FormatObjectSubmission(
+                        widthBox.Text,
+                        heightBox.Text,
+                        rotationBox.Text,
+                        lockAspectBox.IsChecked == true,
+                        altTextBox.Text),
+                    out _,
+                    out var error))
             {
                 ShowEditIssue(error ?? FormatPicturePlanner.InvalidSizeMessage);
                 return;
@@ -209,7 +174,7 @@ public sealed partial class MainWindow
         content.Children.Add(FormRow(UiText.Get("FormatPicture_WidthLabel"), widthBox));
         content.Children.Add(FormRow(UiText.Get("FormatPicture_HeightLabel"), heightBox));
         content.Children.Add(FormRow(UiText.Get("FormatPicture_RotationLabel"), rotationBox));
-        if (values.LockAspectRatioSupported)
+        if (state.LockAspectRatioSupported)
             content.Children.Add(lockAspectBox);
         content.Children.Add(SectionHeader(UiText.Get("FormatPicture_AltTextHeader")));
         content.Children.Add(new TextBlock
@@ -219,14 +184,7 @@ public sealed partial class MainWindow
             TextWrapping = TextWrapping.Wrap,
         });
         content.Children.Add(altTextBox);
-        content.Children.Add(new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Spacing = 8,
-            Margin = new Thickness(0, 8, 0, 0),
-            Children = { ok, cancel },
-        });
+        content.Children.Add(AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 8, 0, 0)));
         dialog.Content = content;
 
         var confirmed = await dialog.ShowDialog<bool>(this);
@@ -234,44 +192,35 @@ public sealed partial class MainWindow
             return;
 
         if (!FormatPicturePlanner.TryCreateResult(
-                widthBox.Text, heightBox.Text, rotationBox.Text,
-                lockAspectBox.IsChecked == true, altTextBox.Text, out var result, out _) ||
+                new FormatPicturePlanner.FormatObjectSubmission(
+                    widthBox.Text,
+                    heightBox.Text,
+                    rotationBox.Text,
+                    lockAspectBox.IsChecked == true,
+                    altTextBox.Text),
+                out var result,
+                out _) ||
             result is null)
         {
             return;
         }
 
-        ApplyFormatObjectResult(result, isPicture);
+        ApplyFormatObjectResult(result, target);
     }
 
     /// <summary>
     /// Applies the validated Format dialog result as a small batch of existing Core commands: resize, then
-    /// rotation, then (pictures only) lock-aspect-ratio, then alt text. Each runs only when its value actually
-    /// changed so undo history stays tight; the first failure stops and surfaces its message.
+    /// rotation, then (pictures only) lock-aspect-ratio, then alt text. The first failure stops and surfaces
+    /// its message.
     /// </summary>
-    private void ApplyFormatObjectResult(FormatPicturePlanner.FormatObjectResult result, bool isPicture)
+    private void ApplyFormatObjectResult(FormatPicturePlanner.FormatObjectResult result, DrawingObjectFormatTarget target)
     {
-        if (_selectedDrawingObjectId is not { } id)
-        {
-            RefreshShell(UiText.Get("Drawing_ObjectNoLongerAvailable"));
-            return;
-        }
-
         var sheetId = _session.ActiveSheet.Id;
-        var kind = isPicture ? SelectionPaneObjectKind.Picture : SelectionPaneObjectKind.Shape;
-
-        if (!RunFormatStep(DrawingObjectCommandPlanner.BuildResizeCommand(sheetId, kind, id, result.Width, result.Height)))
-            return;
-
-        if (!RunFormatStep(DrawingObjectCommandPlanner.BuildRotateCommand(sheetId, kind, id, result.RotationDegrees)))
-            return;
-
-        if (isPicture &&
-            !RunFormatStep(new SetPictureLockAspectRatioCommand(sheetId, id, result.LockAspectRatio)))
-            return;
-
-        if (!RunFormatStep(DrawingObjectCommandPlanner.BuildAltTextCommand(sheetId, kind, id, result.AltText)))
-            return;
+        foreach (var command in DrawingObjectFormatCommandPolicy.BuildFormatCommands(sheetId, target, result))
+        {
+            if (!RunFormatStep(command))
+                return;
+        }
 
         RefreshShell(UiText.Get("FormatPicture_Applied"));
     }
@@ -358,14 +307,7 @@ public sealed partial class MainWindow
         content.Children.Add(FormRow(UiText.Get("PictureCrop_TopLabel"), topBox));
         content.Children.Add(FormRow(UiText.Get("PictureCrop_RightLabel"), rightBox));
         content.Children.Add(FormRow(UiText.Get("PictureCrop_BottomLabel"), bottomBox));
-        content.Children.Add(new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Spacing = 8,
-            Margin = new Thickness(0, 8, 0, 0),
-            Children = { resetButton, ok, cancel },
-        });
+        content.Children.Add(AvaloniaCompactDialogChrome.CreateActionRow([resetButton, ok, cancel], new Thickness(0, 8, 0, 0)));
         dialog.Content = content;
 
         var confirmed = await dialog.ShowDialog<bool>(this);
@@ -486,14 +428,7 @@ public sealed partial class MainWindow
                 new TextBlock { Text = UiText.Get("ShapeEffects_Label"), Foreground = HeaderForeground, FontSize = 12, FontFamily = FormulaBarFontFamily },
                 effectBox,
                 descriptionText,
-                new StackPanel
-                {
-                    Orientation = Orientation.Horizontal,
-                    HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-                    Spacing = 8,
-                    Margin = new Thickness(0, 4, 0, 0),
-                    Children = { ok, cancel },
-                },
+                AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 4, 0, 0)),
             },
         };
 
@@ -677,14 +612,7 @@ public sealed partial class MainWindow
         content.Children.Add(gradientGroup);
         content.Children.Add(startSummary);
         content.Children.Add(endSummary);
-        content.Children.Add(new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Spacing = 8,
-            Margin = new Thickness(0, 8, 0, 0),
-            Children = { ok, cancel },
-        });
+        content.Children.Add(AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 8, 0, 0)));
         dialog.Content = content;
 
         UpdatePreview();
@@ -698,8 +626,10 @@ public sealed partial class MainWindow
         var result = ShapeGradientPlanner.CreateResult(startColor, endColor, SelectedDirection());
         RunDrawingObjectCommand(
             new SetDrawingShapeGradientCommand(_session.ActiveSheet.Id, current.Id, result.StartColor, result.EndColor, result.Direction),
-            UiText.Format("ShapeGradient_Applied", FormatHex(result.StartColor), FormatHex(result.EndColor)),
-            "Shape Gradient");
+            FormatDrawingObjectResourceText(DrawingObjectActionPlanner.ShapeGradientSuccess(
+                FormatHex(result.StartColor),
+                FormatHex(result.EndColor))),
+            DrawingObjectActionPlanner.ShapeGradientCommandTitle);
 
         async System.Threading.Tasks.Task ChooseGradientColorAsync(string title, Action<CellColor> apply)
         {
@@ -774,20 +704,16 @@ public sealed partial class MainWindow
         grid.Children.Add(directionBox);
     }
 
-    private static TextBox CreateGradientTextBox(string text) => new()
+    private static TextBox CreateGradientTextBox(string text)
     {
-        Text = text,
-        Width = 198,
-        Height = 24,
-        MinHeight = 24,
-        MaxHeight = 24,
-        Padding = new Thickness(4, 1, 4, 1),
-        FontSize = 12,
-        FontFamily = FormulaBarFontFamily,
-        BorderBrush = Brush(130, 130, 130),
-        BorderThickness = new Thickness(1),
-        VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
-    };
+        var box = new TextBox
+        {
+            Text = text,
+            Width = 198,
+        };
+        ApplyDrawingTextBoxChrome(box);
+        return box;
+    }
 
     private static Button CreateGradientDialogButton(string text, bool isDefault)
     {
@@ -796,19 +722,12 @@ public sealed partial class MainWindow
             Content = text,
             IsDefault = isDefault,
             Width = 76,
-            MinWidth = 76,
-            Height = 24,
-            MinHeight = 24,
-            MaxHeight = 24,
-            Padding = new Thickness(8, 1),
-            Background = Brushes.White,
-            BorderBrush = isDefault ? Brush(0, 120, 215) : Brush(112, 112, 112),
-            BorderThickness = new Thickness(1),
-            FontSize = 12,
-            FontFamily = FormulaBarFontFamily,
-            HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center,
-            VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
         };
+        AvaloniaCompactDialogChrome.ApplyButton(
+            button,
+            DrawingDialogChromeStyle with { ButtonPadding = new Thickness(8, 1) },
+            76,
+            isDefault);
         return button;
     }
 

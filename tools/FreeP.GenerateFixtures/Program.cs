@@ -46,6 +46,20 @@ static SlideShape MakeShape(uint id, string name, DrawingShapeKind kind,
     return shape;
 }
 
+static TextBody MakeTextBody(params string[] paragraphs)
+{
+    var body = new TextBody();
+    foreach (var text in paragraphs)
+    {
+        body.Paragraphs.Add(new Paragraph
+        {
+            Runs = { new Run { Text = text } },
+        });
+    }
+
+    return body;
+}
+
 // ── 10-motionpath.pptx ──────────────────────────────────────────────────────────
 // A slide with:
 //   Shape 2 "Mover"   — line motion path (moves right 40% of slide width)
@@ -115,6 +129,64 @@ static SlideShape MakeShape(uint id, string name, DrawingShapeKind kind,
     });
 
     var outPath = Path.Combine(outDir, "10-motionpath.pptx");
+    using var fs = File.Create(outPath);
+    PptxPackageWriter.Write(pres, fs);
+    Console.WriteLine($"Generated: {outPath}");
+}
+
+// 21-comments-notes.pptx
+// A deterministic FreeP-authored deck that exercises speaker notes plus legacy
+// slide comments/commentAuthors package parts without requiring PowerPoint COM.
+{
+    var pres = Presentation.CreateEmpty();
+    var slide1 = pres.Slides[0];
+    slide1.Title = "Comments and notes";
+    slide1.Shapes.Clear();
+    slide1.Shapes.Add(MakeShape(2, "Notes marker", DrawingShapeKind.Rectangle,
+        914400, 914400, 2743200, 914400, new SrgbColor(0x44, 0x72, 0xC4),
+        "Slide 1 has speaker notes"));
+    slide1.Notes = MakeTextBody(
+        "Speaker note: introduce the review workflow.",
+        "Mention that comments should round-trip through package save.");
+    slide1.Comments.Add(new SlideComment
+    {
+        Author = "Alice Reviewer",
+        Initials = "AR",
+        Text = "Confirm the title before publishing.",
+        Xemu = 914400,
+        Yemu = 457200,
+        Idx = 1,
+    });
+
+    var slide2 = new Slide
+    {
+        Title = "Follow-up comments",
+        Notes = MakeTextBody("Speaker note: summarize the comment decisions."),
+    };
+    slide2.Shapes.Add(MakeShape(2, "Decision marker", DrawingShapeKind.RoundedRectangle,
+        914400, 1371600, 3200400, 914400, new SrgbColor(0x70, 0xAD, 0x47),
+        "Slide 2 has two comments"));
+    slide2.Comments.Add(new SlideComment
+    {
+        Author = "Bob Reviewer",
+        Initials = "BR",
+        Text = "Add a data source footnote.",
+        Xemu = 1371600,
+        Yemu = 914400,
+        Idx = 1,
+    });
+    slide2.Comments.Add(new SlideComment
+    {
+        Author = "Alice Reviewer",
+        Initials = "AR",
+        Text = "Keep this callout for presenter notes.",
+        Xemu = 2743200,
+        Yemu = 1371600,
+        Idx = 2,
+    });
+    pres.Slides.Add(slide2);
+
+    var outPath = Path.Combine(outDir, "21-comments-notes.pptx");
     using var fs = File.Create(outPath);
     PptxPackageWriter.Write(pres, fs);
     Console.WriteLine($"Generated: {outPath}");

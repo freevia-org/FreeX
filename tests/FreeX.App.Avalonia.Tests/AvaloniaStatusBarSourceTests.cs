@@ -27,6 +27,12 @@ public sealed class AvaloniaStatusBarSourceTests
         new(Sum: 60, Count: 4, NumericalCount: 3, Average: 20, Min: 10, Max: 30);
 
     [Fact]
+    public void ReadyText_ResolvesSharedResourceKey()
+    {
+        Assert.Equal(UiText.Get(StatusBarTextResourceKeys.ReadyText), AvaloniaStatusBarSource.ReadyText());
+    }
+
+    [Fact]
     public void BuildModel_ProducesSharedStatsModel_ForRepresentativeSelection()
     {
         var model = AvaloniaStatusBarSource.BuildModel(
@@ -64,6 +70,24 @@ public sealed class AvaloniaStatusBarSourceTests
         Assert.False(model.AreStatsVisible);
         Assert.Equal("Ready", model.ReadyText);
         Assert.Empty(model.Readouts);
+    }
+
+    [Fact]
+    public void BuildReadyText_UsesSharedInputPromptPlanner()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        var address = new CellAddress(sheet.Id, 1, 1);
+        sheet.DataValidations.Add(new DataValidation
+        {
+            AppliesTo = new GridRange(address, address),
+            ShowInputMessage = true,
+            PromptTitle = "Input",
+            PromptMessage = "Use a number"
+        });
+
+        var text = AvaloniaStatusBarSource.BuildReadyText(sheet, address);
+
+        Assert.Equal("Input: Use a number", text);
     }
 
     [Fact]
@@ -122,6 +146,28 @@ public sealed class AvaloniaStatusBarSourceTests
         Assert.Equal("Sum: 60", plan.SumText);
         Assert.Equal("Average: 20   Count: 4   Numerical Count: 3", plan.VisibleReadoutText);
         Assert.Equal("Average: 20; Count: 4; Numerical Count: 3", plan.AutomationText);
+    }
+
+    [Fact]
+    public void BuildRendererPlan_UsesSharedStatusBarRendererPlan()
+    {
+        var visibility = AvaloniaStatusBarSource.CreateDefaultOptionVisibility();
+        visibility["NumericalCount"] = true;
+        visibility["Sum"] = false;
+        var model = AvaloniaStatusBarSource.BuildModel(SampleStats(), zoomPercent: 90, readyText: "Ready");
+
+        var plan = AvaloniaStatusBarSource.BuildRendererPlan(model, visibility);
+
+        Assert.False(plan.ReadyTextVisible);
+        Assert.Equal("Average: 20   Count: 4   Numerical Count: 3", plan.VisibleReadoutText);
+        Assert.True(plan.VisibleReadoutTextVisible);
+        Assert.Equal(90, plan.ZoomPercent);
+        Assert.True(plan.IsElementVisible(StatusBarPresentationElement.StatsPanel));
+        Assert.True(plan.IsElementVisible(StatusBarPresentationElement.ZoomText));
+        Assert.True(plan.IsElementVisible(StatusBarPresentationElement.ZoomSlider));
+        Assert.Contains(
+            plan.ReadoutElements,
+            readout => readout.Kind == StatusBarReadoutKind.Sum && readout.Text == "Sum: 60");
     }
 
     [Fact]

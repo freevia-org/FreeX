@@ -1,6 +1,8 @@
 using FluentAssertions;
+using FreeX.App.Presentation.DrawingUI;
 using FreeX.Core.Model;
 using System.Diagnostics;
+using System.IO;
 
 namespace FreeX.App.Host.Tests;
 
@@ -9,12 +11,16 @@ public sealed partial class SelectionPanePlannerTests
     [Fact]
     public void SelectionPaneDialog_PlannerAvoidsLinqScaffoldingInRepeatedStatePaths()
     {
-        var source = DialogSourceTestSupport.ReadHostSources("SelectionPaneDialog.Planning.cs");
+        var source = WorkspaceFileLocator.ReadAllText(
+            "src",
+            "FreeX.App.Presentation",
+            "DrawingUI",
+            "SelectionPanePlanner.cs");
 
         var filterItems = SourceMethod(
             source,
-            "public static IReadOnlyList<SelectionPaneDialogItemState> FilterItems",
-            "public static SelectionPaneDialogReorderPlan? PlanMove");
+            "public static IReadOnlyList<SelectionPaneItemState> FilterItems",
+            "public static SelectionPaneReorderPlan? PlanMove");
         var createVisibilityChanges = SourceMethod(
             source,
             "public static IReadOnlyList<SelectionPaneVisibilityChange> CreateVisibilityChanges",
@@ -42,7 +48,7 @@ public sealed partial class SelectionPanePlannerTests
             .Select(index => DialogState(SelectionPaneObjectKind.Picture, $"Picture {index}", isVisible: true))
             .ToArray();
 
-        SelectionPaneDialogStatePlanner.FilterItems(items, "", "All").Should().BeSameAs(items);
+        SelectionPanePlanner.FilterItems(items, "", "All").Should().BeSameAs(items);
 
         GC.Collect();
         GC.WaitForPendingFinalizers();
@@ -52,7 +58,7 @@ public sealed partial class SelectionPanePlannerTests
         var stopwatch = Stopwatch.StartNew();
         for (var index = 0; index < 1_000; index++)
         {
-            if (!ReferenceEquals(SelectionPaneDialogStatePlanner.FilterItems(items, "", "All"), items))
+            if (!ReferenceEquals(SelectionPanePlanner.FilterItems(items, "", "All"), items))
                 throw new InvalidOperationException("Default Selection Pane filtering should return the source list.");
         }
 
@@ -70,6 +76,7 @@ public sealed partial class SelectionPanePlannerTests
     {
         var source = DialogSourceTestSupport.ReadHostSources("SelectionPaneDialog.Planning.cs");
 
+        source.Should().Contain("private static IReadOnlyList<SelectionPaneItemState> ToItemStates");
         source.Should().Contain("private static IReadOnlyList<(Guid Id, bool IsVisible, string Name)> ToNamedCurrentStates");
         source.Should().Contain("TryGetValue(state.Id");
         source.Should().NotContain("originalItems.FirstOrDefault(item => item.Id == state.Id)");
@@ -79,17 +86,52 @@ public sealed partial class SelectionPanePlannerTests
     [Fact]
     public void SelectionPaneDialog_PlannerConsolidatesDragReorderIndexLookups()
     {
-        var hostSource = DialogSourceTestSupport.ReadHostSources("SelectionPaneDialog.Planning.cs");
-        var serviceSource = WorkspaceFileLocator.ReadAllText(
+        var hostSource = DialogSourceTestSupport.ReadHostSources("SelectionPaneDialog.State.cs");
+        var presentationSource = WorkspaceFileLocator.ReadAllText(
             "src",
-            "FreeX.App.Services",
+            "FreeX.App.Presentation",
+            "DrawingUI",
             "SelectionPanePlanner.cs");
 
-        hostSource.Should().Contain("SharedSelectionPanePlanner.PlanDragReorder(");
-        serviceSource.Should().Contain("private static (int DraggedIndex, int TargetIndex) FindDragIndexes");
-        serviceSource.Should().Contain("var dragPlan = CreateDragMovePlan(items, draggedId, targetId, placement);");
-        serviceSource.Should().NotContain("items.Select(item => (item.Kind, item.Id)).ToList()");
-        serviceSource.Should().NotContain("var draggedIndex = FindIndex(items, draggedId);");
-        serviceSource.Should().NotContain("var targetIndex = FindIndex(items, targetId);");
+        hostSource.Should().Contain("SelectionPanePlanner.PlanDragReorder(");
+        presentationSource.Should().Contain("private static (int DraggedIndex, int TargetIndex) FindDragIndexes");
+        presentationSource.Should().Contain("var dragPlan = CreateDragMovePlan(items, draggedId, targetId, placement);");
+        presentationSource.Should().NotContain("items.Select(item => (item.Kind, item.Id)).ToList()");
+        presentationSource.Should().NotContain("var draggedIndex = FindIndex(items, draggedId);");
+        presentationSource.Should().NotContain("var targetIndex = FindIndex(items, targetId);");
+    }
+
+    [Fact]
+    public void SelectionPaneDialog_BuildItemsUsesPortablePlannerWithLocalizedText()
+    {
+        var repoRoot = WorkspaceFileLocator.FindWorkspaceRoot();
+        var hostPlannerPath = Path.Combine(repoRoot, "src", "FreeX.App.Host", "SelectionPanePlanner.cs");
+        var servicePlannerPath = Path.Combine(repoRoot, "src", "FreeX.App.Services", "SelectionPanePlanner.cs");
+        var dialogSource = DialogSourceTestSupport.ReadHostSources("SelectionPaneDialog.Planning.cs");
+        var presentationSource = WorkspaceFileLocator.ReadAllText(
+            "src",
+            "FreeX.App.Presentation",
+            "DrawingUI",
+            "SelectionPanePlanner.cs");
+
+        File.Exists(hostPlannerPath)
+            .Should()
+            .BeFalse("the WPF Selection Pane should use the portable planner through the dialog edge");
+        File.Exists(servicePlannerPath)
+            .Should()
+            .BeFalse("drawing/selection UI planning should live in FreeX.App.Presentation.DrawingUI, not the service layer");
+
+        dialogSource.Should().Contain("SharedSelectionPanePlanner.BuildItems(sheet, CreateLocalizedPlannerText())");
+        dialogSource.Should().Contain("using SharedSelectionPanePlanner = FreeX.App.Presentation.DrawingUI.SelectionPanePlanner;");
+        dialogSource.Should().Contain("UiText.Get(\"SelectionPane_DefaultChartName\")");
+        dialogSource.Should().Contain("UiText.Get(\"SelectionPane_DefaultPictureName\")");
+        dialogSource.Should().Contain("UiText.Get(\"SelectionPane_DefaultTextBoxName\")");
+        dialogSource.Should().Contain("UiText.Get(\"SelectionPane_DefaultShapeNameFormat\")");
+        dialogSource.Should().Contain("UiText.Get(\"SelectionPane_DefaultEllipseName\")");
+        dialogSource.Should().Contain("UiText.Get(\"SelectionPane_DefaultLineName\")");
+        dialogSource.Should().Contain("UiText.Get(\"SelectionPane_DefaultRectangleName\")");
+        presentationSource.Should().Contain("namespace FreeX.App.Presentation.DrawingUI;");
+        presentationSource.Should().Contain("SelectionPanePlannerText.Default");
+        presentationSource.Should().NotContain("UiText.Get(");
     }
 }

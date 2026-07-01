@@ -7,6 +7,8 @@ public sealed class StatusBarVisibilityPlannerTests
 {
     private sealed class TestTextProvider : IStatusBarTextProvider
     {
+        public string GetReadyText() => "Ready";
+
         public string GetReadoutFormat(StatusBarReadoutKind kind) => GetReadoutLabel(kind) + ": {0}";
 
         public string GetReadoutLabel(StatusBarReadoutKind kind) => kind switch
@@ -19,6 +21,23 @@ public sealed class StatusBarVisibilityPlannerTests
             StatusBarReadoutKind.Maximum => "Max",
             _ => kind.ToString()
         };
+    }
+
+    private sealed class TestStatusBarOptions : IStatusBarOptionVisibilityStore
+    {
+        public bool StatusBarShowCellMode { get; set; }
+        public bool StatusBarShowEndMode { get; set; }
+        public bool StatusBarShowSelectionMode { get; set; }
+        public bool StatusBarShowPageNumber { get; set; }
+        public bool StatusBarShowAverage { get; set; }
+        public bool StatusBarShowCount { get; set; }
+        public bool StatusBarShowNumericalCount { get; set; }
+        public bool StatusBarShowMinimum { get; set; }
+        public bool StatusBarShowMaximum { get; set; }
+        public bool StatusBarShowSum { get; set; }
+        public bool StatusBarShowViewShortcuts { get; set; }
+        public bool StatusBarShowZoom { get; set; }
+        public bool StatusBarShowZoomSlider { get; set; }
     }
 
     private static readonly TestTextProvider Text = new();
@@ -181,6 +200,38 @@ public sealed class StatusBarVisibilityPlannerTests
         StatusBarOptionVisibility.ExcelDefaults
             .With(StatusBarOptionTags.Maximum, true)
             .Maximum.Should().BeTrue();
+    }
+
+    [Fact]
+    public void OptionStoreHelpers_ProjectApplyAndToggleBySharedOptionTag()
+    {
+        var store = new TestStatusBarOptions();
+
+        StatusBarOptionVisibilityStore.ApplyVisibility(store, StatusBarOptionVisibility.FullReadoutDefaults with
+        {
+            PageNumber = true,
+            Minimum = true,
+            Zoom = false
+        });
+
+        var visibility = StatusBarOptionVisibilityStore.ToVisibility(store);
+        visibility.SelectionMode.Should().BeTrue();
+        visibility.PageNumber.Should().BeTrue();
+        visibility.NumericalCount.Should().BeTrue();
+        visibility.Minimum.Should().BeTrue();
+        visibility.Maximum.Should().BeFalse();
+        visibility.Zoom.Should().BeFalse();
+
+        StatusBarOptionVisibilityStore
+            .TrySetOption(store, StatusBarOptionTags.Maximum, true)
+            .Should()
+            .BeTrue();
+        StatusBarOptionVisibilityStore
+            .TrySetOption(store, "NotAStatusBarOption", true)
+            .Should()
+            .BeFalse();
+
+        StatusBarOptionVisibilityStore.ToVisibility(store).Maximum.Should().BeTrue();
     }
 
     private static StatusBarViewModel StatsModel() =>

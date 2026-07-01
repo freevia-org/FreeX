@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
+using FreeW.App.Presentation.Dialogs;
 
 namespace FreeW.App.Host;
 
@@ -24,13 +25,20 @@ internal sealed class ImageCropDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
 
-        static TextBox Box(double fraction) =>
-            new() { Text = (fraction * 100).ToString("0.#", CultureInfo.CurrentCulture), MinWidth = 80 };
+        var state = ImageCropDialogPlanner.BuildInitialState(
+            left,
+            right,
+            top,
+            bottom,
+            CultureInfo.CurrentCulture);
 
-        _leftBox   = Box(left);
-        _rightBox  = Box(right);
-        _topBox    = Box(top);
-        _bottomBox = Box(bottom);
+        static TextBox Box(string text) =>
+            new() { Text = text, MinWidth = 80 };
+
+        _leftBox = Box(state.LeftText);
+        _rightBox = Box(state.RightText);
+        _topBox = Box(state.TopText);
+        _bottomBox = Box(state.BottomText);
 
         var grid = new Grid { Margin = new Thickness(14) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -69,29 +77,23 @@ internal sealed class ImageCropDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     private void Accept()
     {
-        static bool TryFrac(TextBox box, out double frac)
+        if (!ImageCropDialogPlanner.TryBuildResult(
+                new ImageCropDialogInput(
+                    _leftBox.Text,
+                    _rightBox.Text,
+                    _topBox.Text,
+                    _bottomBox.Text),
+                CultureInfo.CurrentCulture,
+                out var result,
+                out var validation))
         {
-            frac = 0;
-            if (!double.TryParse(box.Text, NumberStyles.Float, CultureInfo.CurrentCulture, out var pct))
-                return false;
-            if (pct < 0 || pct >= 100)
-                return false;
-            frac = pct / 100.0;
-            return true;
+            DialogMessageHelper.ShowWarning(
+                this,
+                validation?.Message ?? ImageCropDialogPlanner.PercentageValidationMessage);
+            return;
         }
 
-        if (!TryFrac(_leftBox, out var l) || !TryFrac(_rightBox, out var r) ||
-            !TryFrac(_topBox, out var t)  || !TryFrac(_bottomBox, out var b))
-        {
-            DialogMessageHelper.ShowWarning(this, "Each crop value must be a percentage between 0 and 99.");
-            return;
-        }
-        if (l + r >= 1.0 || t + b >= 1.0)
-        {
-            DialogMessageHelper.ShowWarning(this, "Left + Right and Top + Bottom must each total less than 100%.");
-            return;
-        }
-        _result = (l, r, t, b);
+        _result = (result!.Left, result.Right, result.Top, result.Bottom);
         Close();
     }
 

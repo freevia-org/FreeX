@@ -1,4 +1,5 @@
 using FluentAssertions;
+using DrawingMlUnits = Free.Shared.Drawing.DrawingMlCoordinateUnits;
 
 namespace FreeX.Core.IO.Tests;
 
@@ -22,6 +23,37 @@ public sealed class DrawingMlUnitsTests
     [Fact]
     public void EmuPerInch_Is72xEmuPerPoint()
         => DrawingMlUnits.EmuPerInch.Should().Be(72L * DrawingMlUnits.EmuPerPoint);
+
+    [Fact]
+    public void EmuPerPixel_Is9525()
+        => DrawingMlUnits.EmuPerPixel.Should().Be(9525L);
+
+    [Fact]
+    public void AngleUnitsPerDegree_Is60000()
+        => DrawingMlUnits.AngleUnitsPerDegree.Should().Be(60000L);
+
+    [Fact]
+    public void OpcFacade_DelegatesToSharedDrawingUnits()
+    {
+        Free.Shared.Opc.DrawingMlUnits.EmuPerInch.Should().Be(DrawingMlUnits.EmuPerInch);
+        Free.Shared.Opc.DrawingMlUnits.PointsToEmu(1.5).Should().Be(DrawingMlUnits.PointsToEmu(1.5));
+        Free.Shared.Opc.DrawingMlUnits.AngleToDegrees(60000).Should().Be(DrawingMlUnits.AngleToDegrees(60000));
+    }
+
+    [Theory]
+    [InlineData(0, 0)]
+    [InlineData(60000, 1)]
+    [InlineData(5400000, 90)]
+    [InlineData(-5400000, -90)]
+    public void AngleToDegrees_ReturnsExpected(double angleUnits, double expectedDegrees)
+        => DrawingMlUnits.AngleToDegrees(angleUnits).Should().BeApproximately(expectedDegrees, 1e-9);
+
+    [Theory]
+    [InlineData(0, 0)]
+    [InlineData(5400000, Math.PI / 2)]
+    [InlineData(10800000, Math.PI)]
+    public void AngleToRadians_ReturnsExpected(double angleUnits, double expectedRadians)
+        => DrawingMlUnits.AngleToRadians(angleUnits).Should().BeApproximately(expectedRadians, 1e-9);
 
     // ── EMU ↔ points ─────────────────────────────────────────────────────────
 
@@ -47,6 +79,15 @@ public sealed class DrawingMlUnitsTests
         => DrawingMlUnits.EmuToPoints(emuText).Should().BeApproximately(expectedPoints, 1e-9);
 
     [Theory]
+    [InlineData(12700,  1.0)]
+    [InlineData(0,      0.0)]
+    [InlineData(6350,   0.5)]
+    [InlineData(19050,  1.5)]
+    [InlineData(127000, 10.0)]
+    public void EmuToPoints_Numeric_ReturnsExpected(double emu, double expectedPoints)
+        => DrawingMlUnits.EmuToPoints(emu).Should().BeApproximately(expectedPoints, 1e-9);
+
+    [Theory]
     [InlineData(0.5)]
     [InlineData(1.0)]
     [InlineData(1.5)]
@@ -57,6 +98,47 @@ public sealed class DrawingMlUnitsTests
         var emu = DrawingMlUnits.PointsToEmu(points);
         var back = DrawingMlUnits.EmuToPoints(emu.ToString());
         back.Should().BeApproximately(points, 1e-9);
+    }
+
+    [Theory]
+    [InlineData(0, 0L)]
+    [InlineData(1, 9525L)]
+    [InlineData(0.5, 4762L)]
+    [InlineData(10, 95250L)]
+    [InlineData(-5, 0L)]
+    public void PixelsToEmu_ReturnsExpected(double pixels, long expectedEmu)
+        => DrawingMlUnits.PixelsToEmu(pixels).Should().Be(expectedEmu);
+
+    [Theory]
+    [InlineData("9525", 1.0)]
+    [InlineData("0", 0.0)]
+    [InlineData("4762.5", 0.5)]
+    [InlineData("95250", 10.0)]
+    [InlineData(null, 0.0)]
+    [InlineData("", 0.0)]
+    [InlineData("abc", 0.0)]
+    public void EmuToPixels_ReturnsExpected(string? emuText, double expectedPixels)
+        => DrawingMlUnits.EmuToPixels(emuText).Should().BeApproximately(expectedPixels, 1e-9);
+
+    [Theory]
+    [InlineData(0.0)]
+    [InlineData(1.0)]
+    [InlineData(10.0)]
+    public void EmuRoundTrip_Pixels(double pixels)
+    {
+        var emu = DrawingMlUnits.PixelsToEmu(pixels);
+        var back = DrawingMlUnits.EmuToPixels(emu.ToString());
+        back.Should().BeApproximately(pixels, 1e-9);
+    }
+
+    [Fact]
+    public void EmuRoundTrip_FractionalPixels_PreservesRoundedEmuBehavior()
+    {
+        var emu = DrawingMlUnits.PixelsToEmu(1.5);
+        var back = DrawingMlUnits.EmuToPixels(emu.ToString());
+
+        emu.Should().Be(14288L);
+        back.Should().BeApproximately(14288d / DrawingMlUnits.EmuPerPixel, 1e-9);
     }
 
     // ── dxa ↔ points ─────────────────────────────────────────────────────────

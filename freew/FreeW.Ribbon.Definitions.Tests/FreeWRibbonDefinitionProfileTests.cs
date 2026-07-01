@@ -1,0 +1,1430 @@
+using System.Globalization;
+using System.Text.Json;
+using Free.Shared.Ribbon;
+using FreeW.App.Localization;
+
+namespace FreeW.Ribbon.Definitions.Tests;
+
+public sealed class FreeWRibbonDefinitionProfileTests
+{
+    private static readonly string[] WpfOnlyTabIds =
+    [
+        "developer",
+        "header-footer-design",
+        "help",
+    ];
+
+    private static readonly string[] AvaloniaOnlyTabIds =
+    [
+        "file",
+    ];
+
+    private static readonly string[] WpfFontEffectCommandIds =
+    [
+        "freew.grow-font",
+        "freew.shrink-font",
+        "freew.subscript",
+        "freew.superscript",
+        "freew.change-case",
+        "freew.smallcaps",
+        "freew.allcaps",
+        "freew.highlight",
+        "freew.font-color",
+        "freew.char-border",
+        "freew.char-shading",
+        "freew.clear-formatting",
+    ];
+
+    private static readonly string[] AvaloniaFontEffectCommandIds =
+    [
+        "freew.grow-font",
+        "freew.shrink-font",
+        "freew.superscript",
+        "freew.subscript",
+        "freew.smallcaps",
+        "freew.allcaps",
+        "freew.highlight",
+        "freew.char-border",
+        "freew.char-shading",
+        "freew.clear-formatting",
+        "freew.font-color",
+        "freew.change-case",
+    ];
+
+    private static readonly DivergenceRule[] WpfOnlyCommandRules =
+    [
+        new("WPF-only tabs", entry => WpfOnlyTabIds.Contains(entry.TabId, StringComparer.Ordinal)),
+        new("WPF gallery injection placeholders", entry => entry.GroupId is
+            "chart-colors" or
+            "chart-quick-layout" or
+            "chart-style" or
+            "picture-adjust" or
+            "picture-size" or
+            "picture-styles" or
+            "smartart-colors" or
+            "smartart-create-graphic" or
+            "smartart-edit" or
+            "smartart-layouts"),
+        new("WPF desktop dialog and custom surfaces", entry => entry.CommandId.StartsWith("freew.custom", StringComparison.Ordinal) ||
+            entry.CommandId.Contains("dialog", StringComparison.Ordinal) ||
+            entry.CommandId.Contains("options", StringComparison.Ordinal) ||
+            entry.CommandId.Contains("organizer", StringComparison.Ordinal) ||
+            entry.CommandId.Contains("manager", StringComparison.Ordinal)),
+        new("WPF richer Word surface not yet exposed by Avalonia", entry => entry.TabId is
+            "home" or
+            "insert" or
+            "design" or
+            "layout" or
+            "references" or
+            "mailings" or
+            "review" or
+            "view" or
+            "picture-format" or
+            "drawing-format" or
+            "chart-design" or
+            "chart-format" or
+            "smartart-design" or
+            "table-design" or
+            "table-layout"),
+    ];
+
+    private static readonly DivergenceRule[] AvaloniaOnlyCommandRules =
+    [
+        new("Avalonia-only File tab shell commands", entry => entry.TabId == "file"),
+        new("Avalonia portable command registry aliases", entry => entry.CommandId is
+            "freew.find-replace-dialog" or
+            "freew.insert-bookmark" or
+            "freew.insert-hyperlink" or
+            "freew.insert-table" or
+            "freew.shape" or
+            "freew.show-hide-para" or
+            "freew.text-box"),
+        new("Avalonia menu-backed portable palettes", entry => entry.CommandId.StartsWith("freew.font-color.", StringComparison.Ordinal) ||
+            entry.CommandId.StartsWith("freew.page-color.", StringComparison.Ordinal) ||
+            entry.CommandId.StartsWith("freew.para-spacing.", StringComparison.Ordinal) ||
+            entry.CommandId.StartsWith("freew.quick-parts.", StringComparison.Ordinal) ||
+            entry.CommandId.StartsWith("freew.symbol.", StringComparison.Ordinal) ||
+            entry.CommandId.StartsWith("freew.table-borders.", StringComparison.Ordinal) ||
+            entry.CommandId.StartsWith("freew.theme.", StringComparison.Ordinal) ||
+            entry.CommandId.StartsWith("freew.theme-colors.", StringComparison.Ordinal) ||
+            entry.CommandId.StartsWith("freew.theme-fonts.", StringComparison.Ordinal) ||
+            entry.CommandId.StartsWith("freew.watermark.", StringComparison.Ordinal)),
+        new("Avalonia backed subset commands with different ids from WPF", entry => entry.TabId is
+            "home" or
+            "insert" or
+            "design" or
+            "layout" or
+            "references" or
+            "mailings" or
+            "review" or
+            "view" or
+            "picture-format" or
+            "drawing-format" or
+            "chart-design" or
+            "chart-format" or
+            "smartart-design" or
+            "table-design" or
+            "table-layout"),
+    ];
+
+    [Fact]
+    public void Shared_factory_builds_wpf_and_avalonia_profiles()
+    {
+        var wpf = FreeWRibbon.Build(FreeWRibbonCapabilities.Wpf);
+        var avalonia = FreeWRibbon.Build(FreeWRibbonCapabilities.Avalonia);
+
+        wpf.VisibleTabs.Select(tab => tab.Id)
+            .Should()
+            .Equal("home", "insert", "design", "layout", "references", "mailings", "review", "view", "help", "developer");
+        avalonia.Tabs.Select(tab => tab.Id)
+            .Should()
+            .Contain(new[] { "file", "home", "insert", "design", "layout", "references", "mailings", "review", "view" });
+    }
+
+    [Fact]
+    public void Profile_tab_ids_match_except_named_capability_deltas()
+    {
+        var wpfTabIds = FreeWRibbon.Build(FreeWRibbonCapabilities.Wpf).Tabs.Select(tab => tab.Id).ToArray();
+        var avaloniaTabIds = FreeWRibbon.Build(FreeWRibbonCapabilities.Avalonia).Tabs.Select(tab => tab.Id).ToArray();
+
+        wpfTabIds.Except(avaloniaTabIds, StringComparer.Ordinal)
+            .Should()
+            .BeEquivalentTo(WpfOnlyTabIds);
+        avaloniaTabIds.Except(wpfTabIds, StringComparer.Ordinal)
+            .Should()
+            .BeEquivalentTo(AvaloniaOnlyTabIds);
+    }
+
+    [Fact]
+    public void Profile_context_keys_match_for_shared_contextual_tabs()
+    {
+        var wpf = FreeWRibbon.Build(FreeWRibbonCapabilities.Wpf).ContextualTabs
+            .ToDictionary(tab => tab.Id, tab => tab.Context!.ActivationKey, StringComparer.Ordinal);
+        var avalonia = FreeWRibbon.Build(FreeWRibbonCapabilities.Avalonia).ContextualTabs
+            .ToDictionary(tab => tab.Id, tab => tab.Context!.ActivationKey, StringComparer.Ordinal);
+
+        foreach (var tabId in wpf.Keys.Intersect(avalonia.Keys, StringComparer.Ordinal))
+            avalonia[tabId].Should().Be(wpf[tabId], $"{tabId} uses the same activation key across profiles");
+    }
+
+    [Fact]
+    public void Profile_command_id_differences_are_named_capability_deltas()
+    {
+        var wpf = CommandEntries(FreeWRibbon.Build(FreeWRibbonCapabilities.Wpf)).ToArray();
+        var avalonia = CommandEntries(FreeWRibbon.Build(FreeWRibbonCapabilities.Avalonia)).ToArray();
+        var wpfIds = wpf.Select(entry => entry.CommandId).ToHashSet(StringComparer.Ordinal);
+        var avaloniaIds = avalonia.Select(entry => entry.CommandId).ToHashSet(StringComparer.Ordinal);
+
+        var unexpectedWpfOnly = wpf
+            .Where(entry => !avaloniaIds.Contains(entry.CommandId))
+            .Where(entry => !IsAllowed(entry, WpfOnlyCommandRules))
+            .Select(entry => entry.Display)
+            .ToArray();
+        var unexpectedAvaloniaOnly = avalonia
+            .Where(entry => !wpfIds.Contains(entry.CommandId))
+            .Where(entry => !IsAllowed(entry, AvaloniaOnlyCommandRules))
+            .Select(entry => entry.Display)
+            .ToArray();
+
+        unexpectedWpfOnly.Should().BeEmpty("every WPF-only ribbon id must have an explicit capability rule");
+        unexpectedAvaloniaOnly.Should().BeEmpty("every Avalonia-only ribbon id must have an explicit capability rule");
+    }
+
+    [Fact]
+    public void Avalonia_profile_uses_shared_print_preview_and_view_command_ids()
+    {
+        var avaloniaIds = CommandEntries(FreeWRibbon.Build(FreeWRibbonCapabilities.Avalonia))
+            .Select(entry => entry.CommandId)
+            .ToHashSet(StringComparer.Ordinal);
+
+        avaloniaIds.Should().Contain("freew.print-preview");
+        avaloniaIds.Should().Contain("freew.print-layout");
+        avaloniaIds.Should().Contain("freew.web-layout");
+        avaloniaIds.Should().Contain("freew.draft-view");
+        avaloniaIds.Should().NotContain("freew.printlayout");
+        avaloniaIds.Should().NotContain("freew.weblayout");
+        avaloniaIds.Should().NotContain("freew.draftview");
+    }
+
+    [Fact]
+    public void Avalonia_profile_uses_shared_layout_page_setup_command_ids()
+    {
+        var avaloniaIds = CommandEntries(FreeWRibbon.Build(FreeWRibbonCapabilities.Avalonia))
+            .Select(entry => entry.CommandId)
+            .ToHashSet(StringComparer.Ordinal);
+
+        avaloniaIds.Should().Contain(new[]
+        {
+            "freew.margins",
+            "freew.orientation",
+            "freew.size",
+            "freew.columns",
+            "freew.columns-one",
+            "freew.columns-two",
+            "freew.columns-three",
+            "freew.columns-left",
+            "freew.columns-right",
+            "freew.breaks",
+            "freew.column-break",
+            "freew.section-break-next-page",
+            "freew.section-break-continuous",
+            "freew.section-break-even-page",
+            "freew.section-break-odd-page",
+            "freew.page-setup",
+            "freew.custom-margins",
+            "freew.more-paper-sizes",
+        });
+
+        avaloniaIds.Should().NotContain("freew.page-setup-dialog");
+        avaloniaIds.Should().NotContain("freew.page-orientation");
+    }
+
+    [Fact]
+    public void Avalonia_profile_uses_shared_references_command_ids()
+    {
+        var avaloniaIds = CommandEntries(FreeWRibbon.Build(FreeWRibbonCapabilities.Avalonia))
+            .Select(entry => entry.CommandId)
+            .ToHashSet(StringComparer.Ordinal);
+
+        avaloniaIds.Should().Contain(new[]
+        {
+            "freew.toc",
+            "freew.toc-refresh",
+            "freew.footnote",
+            "freew.endnote",
+            "freew.citation",
+            "freew.bibliography",
+            "freew.caption",
+            "freew.cross-reference",
+        });
+
+        avaloniaIds.Should().NotContain(new[]
+        {
+            "freew.insert-toc",
+            "freew.update-toc",
+            "freew.insert-footnote",
+            "freew.insert-endnote",
+            "freew.insert-citation",
+            "freew.insert-caption",
+        });
+    }
+
+    [Fact]
+    public void Avalonia_profile_uses_shared_mailings_command_ids()
+    {
+        var avaloniaIds = CommandEntries(FreeWRibbon.Build(FreeWRibbonCapabilities.Avalonia))
+            .Select(entry => entry.CommandId)
+            .ToHashSet(StringComparer.Ordinal);
+
+        avaloniaIds.Should().Contain(new[]
+        {
+            "freew.merge-data",
+            "freew.merge-address-block",
+            "freew.merge-greeting-line",
+            "freew.merge-field",
+            "freew.merge-preview",
+            "freew.merge-preview-previous",
+            "freew.merge-preview-next",
+            "freew.merge-finish",
+        });
+
+        avaloniaIds.Should().NotContain(new[]
+        {
+            "freew.select-recipients",
+            "freew.address-block",
+            "freew.greeting-line",
+            "freew.preview-results",
+            "freew.prev-record",
+            "freew.next-record",
+            "freew.finish-merge",
+        });
+    }
+
+    [Fact]
+    public void Checked_in_command_inventory_matches_compiled_profiles()
+    {
+        var wpf = InventoryLocations(FreeWRibbon.Build(FreeWRibbonCapabilities.Wpf), "WPF");
+        var avalonia = InventoryLocations(FreeWRibbon.Build(FreeWRibbonCapabilities.Avalonia), "Avalonia");
+        var commandIds = wpf.Keys.Concat(avalonia.Keys)
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        var both = commandIds.Count(commandId => wpf.ContainsKey(commandId) && avalonia.ContainsKey(commandId));
+        var wpfOnly = commandIds.Count(commandId => wpf.ContainsKey(commandId) && !avalonia.ContainsKey(commandId));
+        var avaloniaOnly = commandIds.Count(commandId => !wpf.ContainsKey(commandId) && avalonia.ContainsKey(commandId));
+
+        using var document = JsonDocument.Parse(ReadRepositoryFile("docs", "parity", "freew-command-inventory.json"));
+        var root = document.RootElement;
+
+        root.GetProperty("schema").GetString().Should().Be("freew.command-inventory.v3");
+        root.GetProperty("generatedBy").GetString().Should().Be("tools/Generate-FreeWCommandInventory.ps1");
+        root.GetProperty("topologySource").GetString().Should().Contain("FreeWRibbon.Build(FreeWRibbonCapabilities.Wpf/Avalonia)");
+        root.GetProperty("sourceLiteralEvidenceNote").GetString().Should().Contain("not behavior proof");
+        root.GetProperty("classificationNote").GetString().Should().Contain("profile-shape-only");
+        root.GetProperty("classificationNote").GetString().Should().Contain("actionable-gap");
+        root.GetProperty("classificationRules").EnumerateArray()
+            .Select(rule => rule.GetProperty("name").GetString())
+            .Should()
+            .Equal("shared-profile", "profile-shape-only", "command-id-alias", "platform-only", "deferred", "actionable-gap");
+
+        var summary = root.GetProperty("summary");
+        summary.GetProperty("totalCommands").GetInt32().Should().Be(commandIds.Length);
+        summary.GetProperty("both").GetInt32().Should().Be(both);
+        summary.GetProperty("wpfOnly").GetInt32().Should().Be(wpfOnly);
+        summary.GetProperty("avaloniaOnly").GetInt32().Should().Be(avaloniaOnly);
+        summary.GetProperty("missingWpf").GetInt32().Should().Be(avaloniaOnly);
+        summary.GetProperty("missingAvalonia").GetInt32().Should().Be(wpfOnly);
+
+        var commands = root.GetProperty("commands").EnumerateArray().ToArray();
+        commands.Select(command => command.GetProperty("commandId").GetString()!)
+            .Should()
+            .Equal(commandIds);
+        var gapClassificationCounts = commands
+            .GroupBy(command => command.GetProperty("gapClassification").GetString()!, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
+
+        summary.GetProperty("sharedProfile").GetInt32().Should().Be(CountGap(gapClassificationCounts, "shared-profile"));
+        summary.GetProperty("profileShapeOnly").GetInt32().Should().Be(CountGap(gapClassificationCounts, "profile-shape-only"));
+        summary.GetProperty("commandIdAliases").GetInt32().Should().Be(CountGap(gapClassificationCounts, "command-id-alias"));
+        summary.GetProperty("platformOnly").GetInt32().Should().Be(CountGap(gapClassificationCounts, "platform-only"));
+        summary.GetProperty("deferred").GetInt32().Should().Be(CountGap(gapClassificationCounts, "deferred"));
+        summary.GetProperty("actionableGaps").GetInt32().Should().Be(CountGap(gapClassificationCounts, "actionable-gap"));
+        summary.GetProperty("actionableMissingWpf").GetInt32().Should().Be(commands.Count(command =>
+            command.GetProperty("missingProfile").GetString() == "WPF" &&
+            command.GetProperty("gapClassification").GetString() == "actionable-gap"));
+        summary.GetProperty("actionableMissingAvalonia").GetInt32().Should().Be(commands.Count(command =>
+            command.GetProperty("missingProfile").GetString() == "Avalonia" &&
+            command.GetProperty("gapClassification").GetString() == "actionable-gap"));
+
+        foreach (var command in commands)
+        {
+            var commandId = command.GetProperty("commandId").GetString()!;
+            var wpfPresent = wpf.TryGetValue(commandId, out var wpfLocations);
+            var avaloniaPresent = avalonia.TryGetValue(commandId, out var avaloniaLocations);
+
+            command.GetProperty("wpfPresent").GetBoolean().Should().Be(wpfPresent);
+            command.GetProperty("avaloniaPresent").GetBoolean().Should().Be(avaloniaPresent);
+            command.GetProperty("profileSurface").GetString().Should().Be(ProfileSurface(wpfPresent, avaloniaPresent));
+            command.GetProperty("missingProfile").GetString().Should().Be(MissingProfile(wpfPresent, avaloniaPresent));
+            command.GetProperty("classification").GetString().Should().Be(ProfileClassification(wpfPresent, avaloniaPresent));
+            command.GetProperty("gapClassification").GetString().Should().NotBeNullOrWhiteSpace();
+            command.GetProperty("gapClassificationRule").GetString().Should().Be(command.GetProperty("gapClassification").GetString());
+            command.GetProperty("notes").GetString().Should().NotBeNullOrWhiteSpace();
+
+            AssertInventoryLocations(command.GetProperty("wpfLocations"), wpfLocations ?? Array.Empty<InventoryLocation>());
+            AssertInventoryLocations(command.GetProperty("avaloniaLocations"), avaloniaLocations ?? Array.Empty<InventoryLocation>());
+        }
+
+        AssertGapClassification(commands, "freew.accept-all", "shared-profile");
+        AssertGapClassification(commands, "freew.font-color.black", "profile-shape-only");
+        AssertGapClassification(commands, "freew.bookmark", "shared-profile");
+        AssertGapClassification(commands, "freew.insert-bookmark", "command-id-alias");
+        AssertGapClassification(commands, "freew.about", "platform-only");
+        AssertGapClassification(commands, "freew.cc-checkbox", "deferred");
+        AssertGapClassification(commands, "freew.add-to-dictionary", "actionable-gap");
+
+        var markdown = ReadRepositoryFile("docs", "parity", "freew-command-inventory.md");
+        markdown.Should().Contain($"| {commandIds.Length} | {both} | {wpfOnly} | {avaloniaOnly} | {avaloniaOnly} | {wpfOnly} |");
+        markdown.Should().Contain("## Classification Rules");
+        markdown.Should().Contain("profile-shape-only");
+        markdown.Should().Contain("actionable-gap");
+        markdown.Should().Contain("Source literal evidence columns show exact command-id text in source files only; they are not behavior proof and never create rows.");
+    }
+
+    [Fact]
+    public void Home_clipboard_text_is_resource_backed_for_wpf_and_avalonia_profiles()
+    {
+        var neutral = WithUiCulture("en-US", () => new[]
+        {
+            ClipboardSurface(FreeWRibbonCapabilities.Wpf),
+            ClipboardSurface(FreeWRibbonCapabilities.Avalonia),
+        });
+
+        foreach (var surface in neutral)
+        {
+            surface.HomeHeader.Should().Be("Home");
+            surface.HomeKeyTip.Should().Be("H");
+            surface.ClipboardHeader.Should().Be("Clipboard");
+            surface.ClipboardKeyTip.Should().Be("C");
+            surface.PasteLabel.Should().Be("Paste");
+            surface.PasteKeyTip.Should().Be("V");
+            surface.CutLabel.Should().Be("Cut");
+            surface.CutKeyTip.Should().Be("X");
+            surface.CopyLabel.Should().Be("Copy");
+            surface.CopyKeyTip.Should().Be("C");
+        }
+
+        WithUiCulture("en-US", () =>
+        {
+            AssertWpfClipboardAccessoryLabelsUseResources(WpfClipboardAccessorySurface());
+
+            return true;
+        }).Should().BeTrue();
+
+        var pseudo = WithUiCulture(Loc.PseudoLocalizationCultureName, () => new[]
+        {
+            ClipboardSurface(FreeWRibbonCapabilities.Wpf),
+            ClipboardSurface(FreeWRibbonCapabilities.Avalonia),
+        });
+
+        foreach (var surface in pseudo)
+        {
+            surface.HomeHeader.Should().Be("[[HHoommee]]");
+            surface.HomeKeyTip.Should().Be("H");
+            surface.ClipboardHeader.Should().Be("[[CClliippbbooaarrdd]]");
+            surface.ClipboardKeyTip.Should().Be("C");
+            surface.PasteLabel.Should().Be("[[PPaassttee]]");
+            surface.PasteKeyTip.Should().Be("V");
+            surface.CutLabel.Should().Be("[[CCuutt]]");
+            surface.CutKeyTip.Should().Be("X");
+            surface.CopyLabel.Should().Be("[[CCooppyy]]");
+            surface.CopyKeyTip.Should().Be("C");
+        }
+
+        WithUiCulture(Loc.PseudoLocalizationCultureName, () =>
+        {
+            var surface = WpfClipboardAccessorySurface();
+
+            AssertWpfClipboardAccessoryLabelsUseResources(surface);
+            surface.FormatPainterLabel.Should().Be("[[FFoorrmmaatt PPaaiinntteerr]]");
+            surface.FormatPainterKeyTip.Should().Be("FP");
+            surface.PasteTextOnlyLabel.Should().Be("[[PPaassttee TTeexxtt OOnnllyy]]");
+
+            return true;
+        }).Should().BeTrue();
+    }
+
+    [Fact]
+    public void Home_clipboard_profile_sources_use_resource_descriptors()
+    {
+        var wpfSource = ReadRepositoryFile("freew", "FreeW.Ribbon.Definitions", "FreeWRibbon.cs");
+        var avaloniaSource = ReadRepositoryFile("freew", "FreeW.Ribbon.Definitions", "FreeWAvaloniaRibbonDefinition.cs");
+
+        wpfSource.Should().NotContain(".Tab(\"home\", \"Home\"");
+        wpfSource.Should().NotContain("tab.Group(\"clipboard\", \"Clipboard\"");
+        wpfSource.Should().NotContain("g.Large(\"freew.paste\", \"Paste\"");
+        wpfSource.Should().NotContain("g.Medium(\"freew.cut\", \"Cut\"");
+        wpfSource.Should().NotContain("g.Medium(\"freew.copy\", \"Copy\"");
+        wpfSource.Should().NotContain("g.Medium(\"freew.format-painter\", \"Format Painter\"");
+        wpfSource.Should().NotContain("g.Icon(\"freew.paste-plain\", \"Paste Text Only\"");
+        wpfSource.Should().NotContain("g.Icon(\"freew.paste-merge\", \"Merge Formatting\"");
+        wpfSource.Should().NotContain("g.Icon(\"freew.paste-special\", \"Paste Special");
+        wpfSource.Should().Contain("FreeWRibbonText.HomeTab");
+        wpfSource.Should().Contain("FreeWRibbonText.ClipboardGroup");
+        wpfSource.Should().Contain("FreeWRibbonText.PasteCommand");
+        wpfSource.Should().Contain("FreeWRibbonText.CutCommand");
+        wpfSource.Should().Contain("FreeWRibbonText.CopyCommand");
+        wpfSource.Should().Contain("FreeWRibbonText.FormatPainterCommand");
+        wpfSource.Should().Contain("FreeWRibbonText.PasteTextOnlyCommand");
+        wpfSource.Should().Contain("FreeWRibbonText.PasteMergeFormattingCommand");
+        wpfSource.Should().Contain("FreeWRibbonText.PasteSpecialCommand");
+
+        avaloniaSource.Should().NotContain(".Tab(\"home\", \"Home\"");
+        avaloniaSource.Should().NotContain("tab.Group(\"clipboard\", \"Clipboard\"");
+        avaloniaSource.Should().NotContain("g.Button(\"freew.cut\",   \"Cut\"");
+        avaloniaSource.Should().NotContain("g.Button(\"freew.copy\",  \"Copy\"");
+        avaloniaSource.Should().NotContain("g.Button(\"freew.paste\", \"Paste\"");
+        avaloniaSource.Should().Contain("FreeWRibbonText.HomeTab");
+        avaloniaSource.Should().Contain("FreeWRibbonText.ClipboardGroup");
+        avaloniaSource.Should().Contain("FreeWRibbonText.PasteCommand");
+        avaloniaSource.Should().Contain("FreeWRibbonText.CutCommand");
+        avaloniaSource.Should().Contain("FreeWRibbonText.CopyCommand");
+    }
+
+    [Fact]
+    public void Home_font_core_text_is_resource_backed_for_wpf_and_avalonia_profiles()
+    {
+        WithUiCulture("en-US", () =>
+        {
+            foreach (var surface in new[]
+            {
+                FontCoreSurface(FreeWRibbonCapabilities.Wpf),
+                FontCoreSurface(FreeWRibbonCapabilities.Avalonia),
+            })
+            {
+                AssertFontCoreSurfaceUsesResources(surface);
+            }
+
+            return true;
+        }).Should().BeTrue();
+
+        WithUiCulture(Loc.PseudoLocalizationCultureName, () =>
+        {
+            foreach (var surface in new[]
+            {
+                FontCoreSurface(FreeWRibbonCapabilities.Wpf),
+                FontCoreSurface(FreeWRibbonCapabilities.Avalonia),
+            })
+            {
+                AssertFontCoreSurfaceUsesResources(surface);
+                surface.FontGroupHeader.Should().Be("[[FFoonntt]]");
+                surface.BoldLabel.Should().Be("[[BBoolldd]]");
+                surface.BoldKeyTip.Should().Be("1");
+            }
+
+            return true;
+        }).Should().BeTrue();
+    }
+
+    [Fact]
+    public void Home_font_core_profile_sources_use_resource_descriptors()
+    {
+        var wpfSource = ReadRepositoryFile("freew", "FreeW.Ribbon.Definitions", "FreeWRibbon.cs");
+        var avaloniaSource = ReadRepositoryFile("freew", "FreeW.Ribbon.Definitions", "FreeWAvaloniaRibbonDefinition.cs");
+
+        wpfSource.Should().NotContain("tab.Group(\"font\", \"Font\"");
+        wpfSource.Should().NotContain("g.ComboBox(\"freew.font-family\", \"Font\"");
+        wpfSource.Should().NotContain("g.ComboBox(\"freew.font-size\", \"Size\"");
+        wpfSource.Should().NotContain("g.IconToggle(\"freew.bold\", \"Bold\"");
+        wpfSource.Should().NotContain("g.IconToggle(\"freew.italic\", \"Italic\"");
+        wpfSource.Should().NotContain("g.IconToggle(\"freew.underline\", \"Underline\"");
+        wpfSource.Should().NotContain("g.Icon(\"freew.strikethrough\", \"Strikethrough\"");
+        wpfSource.Should().NotContain("g.Icon(\"freew.font-dialog\", \"Font");
+        wpfSource.Should().Contain("FreeWRibbonText.FontGroup");
+        wpfSource.Should().Contain("FreeWRibbonText.FontFamilyCommand");
+        wpfSource.Should().Contain("FreeWRibbonText.FontSizeCommand");
+        wpfSource.Should().Contain("FreeWRibbonText.BoldCommand");
+        wpfSource.Should().Contain("FreeWRibbonText.ItalicCommand");
+        wpfSource.Should().Contain("FreeWRibbonText.UnderlineCommand");
+        wpfSource.Should().Contain("FreeWRibbonText.StrikethroughCommand");
+        wpfSource.Should().Contain("FreeWRibbonText.FontDialogCommand");
+
+        avaloniaSource.Should().NotContain("tab.Group(\"font\", \"Font\"");
+        avaloniaSource.Should().NotContain("g.ComboBox(\"freew.font-family\", \"Font\"");
+        avaloniaSource.Should().NotContain("g.ComboBox(\"freew.font-size\",   \"Size\"");
+        avaloniaSource.Should().NotContain("g.Toggle(\"freew.bold\",           \"Bold\"");
+        avaloniaSource.Should().NotContain("g.Toggle(\"freew.italic\",          \"Italic\"");
+        avaloniaSource.Should().NotContain("g.Toggle(\"freew.underline\",       \"Underline\"");
+        avaloniaSource.Should().NotContain("g.Toggle(\"freew.strikethrough\",   \"Strikethrough\"");
+        avaloniaSource.Should().NotContain("g.Button(\"freew.font-dialog\",     \"Font");
+        avaloniaSource.Should().Contain("FreeWRibbonText.FontGroup");
+        avaloniaSource.Should().Contain("FreeWRibbonText.FontFamilyCommand");
+        avaloniaSource.Should().Contain("FreeWRibbonText.FontSizeCommand");
+        avaloniaSource.Should().Contain("FreeWRibbonText.BoldCommand");
+        avaloniaSource.Should().Contain("FreeWRibbonText.ItalicCommand");
+        avaloniaSource.Should().Contain("FreeWRibbonText.UnderlineCommand");
+        avaloniaSource.Should().Contain("FreeWRibbonText.StrikethroughCommand");
+        avaloniaSource.Should().Contain("FreeWRibbonText.FontDialogCommand");
+    }
+
+    [Fact]
+    public void Home_font_effect_text_is_resource_backed_for_wpf_and_avalonia_profiles()
+    {
+        WithUiCulture("en-US", () =>
+        {
+            AssertWpfFontEffectLabelsUseResources(
+                FontControlLabels(FreeWRibbonCapabilities.Wpf, WpfFontEffectCommandIds));
+            AssertAvaloniaFontEffectLabelsUseResources(
+                FontControlLabels(FreeWRibbonCapabilities.Avalonia, AvaloniaFontEffectCommandIds));
+
+            return true;
+        }).Should().BeTrue();
+
+        WithUiCulture(Loc.PseudoLocalizationCultureName, () =>
+        {
+            AssertWpfFontEffectLabelsUseResources(
+                FontControlLabels(FreeWRibbonCapabilities.Wpf, WpfFontEffectCommandIds));
+            AssertAvaloniaFontEffectLabelsUseResources(
+                FontControlLabels(FreeWRibbonCapabilities.Avalonia, AvaloniaFontEffectCommandIds));
+
+            return true;
+        }).Should().BeTrue();
+    }
+
+    [Fact]
+    public void Home_font_effect_profile_sources_use_resource_descriptors()
+    {
+        var wpfSource = ReadRepositoryFile("freew", "FreeW.Ribbon.Definitions", "FreeWRibbon.cs");
+        var avaloniaSource = ReadRepositoryFile("freew", "FreeW.Ribbon.Definitions", "FreeWAvaloniaRibbonDefinition.cs");
+
+        wpfSource.Should().NotContain("g.Icon(\"freew.grow-font\", \"Grow Font\"");
+        wpfSource.Should().NotContain("g.Icon(\"freew.shrink-font\", \"Shrink Font\"");
+        wpfSource.Should().NotContain("g.Icon(\"freew.subscript\", \"Subscript\"");
+        wpfSource.Should().NotContain("g.Icon(\"freew.superscript\", \"Superscript\"");
+        wpfSource.Should().NotContain("g.Icon(\"freew.change-case\", \"Change Case\"");
+        wpfSource.Should().NotContain("g.Icon(\"freew.smallcaps\", \"Small Caps\"");
+        wpfSource.Should().NotContain("g.Icon(\"freew.allcaps\", \"All Caps\"");
+        wpfSource.Should().NotContain("g.Icon(\"freew.highlight\", \"Text Highlight Colour\"");
+        wpfSource.Should().NotContain("g.Icon(\"freew.font-color\", \"Font Colour\"");
+        wpfSource.Should().NotContain("g.Icon(\"freew.char-border\", \"Character Border\"");
+        wpfSource.Should().NotContain("g.Icon(\"freew.char-shading\", \"Character Shading\"");
+        wpfSource.Should().NotContain("g.Icon(\"freew.clear-formatting\", \"Clear All Formatting\"");
+        wpfSource.Should().Contain("FreeWRibbonText.GrowFontCommand");
+        wpfSource.Should().Contain("FreeWRibbonText.ShrinkFontCommand");
+        wpfSource.Should().Contain("FreeWRibbonText.SubscriptCommand");
+        wpfSource.Should().Contain("FreeWRibbonText.SuperscriptCommand");
+        wpfSource.Should().Contain("FreeWRibbonText.ChangeCaseCommand");
+        wpfSource.Should().Contain("FreeWRibbonText.SmallCapsCommand");
+        wpfSource.Should().Contain("FreeWRibbonText.AllCapsCommand");
+        wpfSource.Should().Contain("FreeWRibbonText.TextHighlightColorCommand");
+        wpfSource.Should().Contain("FreeWRibbonText.FontColorCommand");
+        wpfSource.Should().Contain("FreeWRibbonText.CharacterBorderCommand");
+        wpfSource.Should().Contain("FreeWRibbonText.CharacterShadingCommand");
+        wpfSource.Should().Contain("FreeWRibbonText.ClearAllFormattingCommand");
+
+        avaloniaSource.Should().NotContain("g.Toggle(\"freew.superscript\",     \"X");
+        avaloniaSource.Should().NotContain("g.Toggle(\"freew.subscript\",       \"X");
+        avaloniaSource.Should().NotContain("g.Toggle(\"freew.smallcaps\",       \"Small Caps\"");
+        avaloniaSource.Should().NotContain("g.Toggle(\"freew.allcaps\",         \"All Caps\"");
+        avaloniaSource.Should().NotContain("g.Button(\"freew.highlight\",       \"Highlight\"");
+        avaloniaSource.Should().NotContain("g.Button(\"freew.char-border\",     \"Character Border\"");
+        avaloniaSource.Should().NotContain("g.Button(\"freew.char-shading\",    \"Character Shading\"");
+        avaloniaSource.Should().NotContain("g.Button(\"freew.grow-font\",       \"A");
+        avaloniaSource.Should().NotContain("g.Button(\"freew.shrink-font\",     \"A");
+        avaloniaSource.Should().NotContain("g.Button(\"freew.clear-formatting\", \"Clear\"");
+        avaloniaSource.Should().NotContain("g.Dropdown(\"freew.font-color\", \"Font Color\"");
+        avaloniaSource.Should().NotContain("g.Button(\"freew.change-case\",     \"Aa\"");
+        avaloniaSource.Should().Contain("FreeWRibbonText.SuperscriptCompactCommand");
+        avaloniaSource.Should().Contain("FreeWRibbonText.SubscriptCompactCommand");
+        avaloniaSource.Should().Contain("FreeWRibbonText.SmallCapsCommand");
+        avaloniaSource.Should().Contain("FreeWRibbonText.AllCapsCommand");
+        avaloniaSource.Should().Contain("FreeWRibbonText.HighlightCompactCommand");
+        avaloniaSource.Should().Contain("FreeWRibbonText.CharacterBorderCommand");
+        avaloniaSource.Should().Contain("FreeWRibbonText.CharacterShadingCommand");
+        avaloniaSource.Should().Contain("FreeWRibbonText.GrowFontCompactCommand");
+        avaloniaSource.Should().Contain("FreeWRibbonText.ShrinkFontCompactCommand");
+        avaloniaSource.Should().Contain("FreeWRibbonText.ClearFormattingCompactCommand");
+        avaloniaSource.Should().Contain("FreeWRibbonText.FontColorDropdownCommand");
+        avaloniaSource.Should().Contain("FreeWRibbonText.ChangeCaseCompactCommand");
+    }
+
+    [Fact]
+    public void Home_font_color_palette_labels_are_resource_backed_for_avalonia_profile()
+    {
+        WithUiCulture("en-US", () =>
+        {
+            FontColorPaletteLabels().Should().Equal(
+                Loc.Get("Ribbon_Palette_FontColor_Automatic_Label"),
+                Loc.Get("Ribbon_Palette_FontColor_Black_Label"),
+                Loc.Get("Ribbon_Palette_FontColor_DarkRed_Label"),
+                Loc.Get("Ribbon_Palette_FontColor_Red_Label"),
+                Loc.Get("Ribbon_Palette_FontColor_Orange_Label"),
+                Loc.Get("Ribbon_Palette_FontColor_Yellow_Label"),
+                Loc.Get("Ribbon_Palette_FontColor_Green_Label"),
+                Loc.Get("Ribbon_Palette_FontColor_Blue_Label"),
+                Loc.Get("Ribbon_Palette_FontColor_DarkBlue_Label"),
+                Loc.Get("Ribbon_Palette_FontColor_Purple_Label"),
+                Loc.Get("Ribbon_Palette_FontColor_White_Label"));
+
+            return true;
+        }).Should().BeTrue();
+
+        WithUiCulture(Loc.PseudoLocalizationCultureName, () =>
+        {
+            FontColorPaletteLabels().Should().Equal(
+                Loc.Get("Ribbon_Palette_FontColor_Automatic_Label"),
+                Loc.Get("Ribbon_Palette_FontColor_Black_Label"),
+                Loc.Get("Ribbon_Palette_FontColor_DarkRed_Label"),
+                Loc.Get("Ribbon_Palette_FontColor_Red_Label"),
+                Loc.Get("Ribbon_Palette_FontColor_Orange_Label"),
+                Loc.Get("Ribbon_Palette_FontColor_Yellow_Label"),
+                Loc.Get("Ribbon_Palette_FontColor_Green_Label"),
+                Loc.Get("Ribbon_Palette_FontColor_Blue_Label"),
+                Loc.Get("Ribbon_Palette_FontColor_DarkBlue_Label"),
+                Loc.Get("Ribbon_Palette_FontColor_Purple_Label"),
+                Loc.Get("Ribbon_Palette_FontColor_White_Label"));
+
+            return true;
+        }).Should().BeTrue();
+    }
+
+    [Fact]
+    public void Home_font_color_palette_source_uses_resource_descriptors()
+    {
+        var dataSource = ReadRepositoryFile("freew", "FreeW.Ribbon.Definitions", "FreeWRibbonDefinitionData.cs");
+        var avaloniaSource = ReadRepositoryFile("freew", "FreeW.Ribbon.Definitions", "FreeWAvaloniaRibbonDefinition.cs");
+
+        dataSource.Should().NotContain("(\"freew.font-color.automatic\", \"Automatic\")");
+        dataSource.Should().NotContain("(\"freew.font-color.dark-red\", \"Dark Red\")");
+        dataSource.Should().NotContain("(\"freew.font-color.dark-blue\", \"Dark Blue\")");
+        dataSource.Should().Contain("Loc.Get(\"Ribbon_Palette_FontColor_Automatic_Label\")");
+        dataSource.Should().Contain("Loc.Get(\"Ribbon_Palette_FontColor_DarkRed_Label\")");
+        dataSource.Should().Contain("Loc.Get(\"Ribbon_Palette_FontColor_DarkBlue_Label\")");
+        avaloniaSource.Should().NotContain("private static readonly (string CommandId, string Label)[] FontColors");
+        avaloniaSource.Should().Contain("FreeWRibbonDefinitionData.FontColors");
+    }
+
+    [Fact]
+    public void Home_paragraph_list_text_is_resource_backed_for_wpf_and_avalonia_profiles()
+    {
+        WithUiCulture("en-US", () =>
+        {
+            AssertParagraphListSurfaceUsesResources(ParagraphListSurface(FreeWRibbonCapabilities.Wpf), includesMultilevel: true);
+            AssertParagraphListSurfaceUsesResources(
+                ParagraphListSurface(FreeWRibbonCapabilities.Avalonia),
+                includesMultilevel: true,
+                includesMultilevelMenu: false);
+
+            return true;
+        }).Should().BeTrue();
+
+        WithUiCulture(Loc.PseudoLocalizationCultureName, () =>
+        {
+            var wpf = ParagraphListSurface(FreeWRibbonCapabilities.Wpf);
+            var avalonia = ParagraphListSurface(FreeWRibbonCapabilities.Avalonia);
+
+            AssertParagraphListSurfaceUsesResources(wpf, includesMultilevel: true);
+            AssertParagraphCommonSurfaceUsesResources(avalonia);
+            avalonia.MultilevelListLabel.Should().NotBeNullOrWhiteSpace();
+            wpf.ParagraphHeader.Should().Be("[[PPaarraaggrraapphh]]");
+            wpf.BulletsLabel.Should().Be("[[BBuulllleettss]]");
+            avalonia.NumberingLabel.Should().Be("[[NNuummbbeerriinngg]]");
+
+            return true;
+        }).Should().BeTrue();
+    }
+
+    [Fact]
+    public void Insert_symbols_and_design_page_color_text_are_resource_backed_for_wpf_and_avalonia_profiles()
+    {
+        WithUiCulture("en-US", () =>
+        {
+            AssertSymbolSurfaceUsesResources(SymbolSurface(FreeWRibbonCapabilities.Wpf), includesMenu: false);
+            AssertSymbolSurfaceUsesResources(SymbolSurface(FreeWRibbonCapabilities.Avalonia), includesMenu: true);
+            AssertPageBackgroundSurfaceUsesResources(PageBackgroundSurface(FreeWRibbonCapabilities.Wpf), includesPalette: false);
+            AssertPageBackgroundSurfaceUsesResources(PageBackgroundSurface(FreeWRibbonCapabilities.Avalonia), includesPalette: true);
+
+            return true;
+        }).Should().BeTrue();
+
+        WithUiCulture(Loc.PseudoLocalizationCultureName, () =>
+        {
+            var symbols = SymbolSurface(FreeWRibbonCapabilities.Avalonia);
+            var pageBackground = PageBackgroundSurface(FreeWRibbonCapabilities.Avalonia);
+
+            AssertSymbolSurfaceUsesResources(symbols, includesMenu: true);
+            AssertPageBackgroundSurfaceUsesResources(pageBackground, includesPalette: true);
+            symbols.SymbolMenuHeaders![0].Should().Be($"€   {Loc.Get("Ribbon_Palette_Symbol_Euro_Label")}");
+            pageBackground.PageColorMenuHeaders![0].Should().Be(Loc.Get("Ribbon_Palette_PageColor_NoColor_Label"));
+
+            return true;
+        }).Should().BeTrue();
+    }
+
+    [Fact]
+    public void List_symbol_page_color_profile_sources_use_resource_descriptors()
+    {
+        var wpfSource = ReadRepositoryFile("freew", "FreeW.Ribbon.Definitions", "FreeWRibbon.cs");
+        var avaloniaSource = ReadRepositoryFile("freew", "FreeW.Ribbon.Definitions", "FreeWAvaloniaRibbonDefinition.cs");
+        var dataSource = ReadRepositoryFile("freew", "FreeW.Ribbon.Definitions", "FreeWRibbonDefinitionData.cs");
+        var hostCommands = ReadRepositoryFile("freew", "FreeW.App.Host", "Ribbon", "FreeWRibbonCommands.cs");
+
+        wpfSource.Should().NotContain("g.Icon(\"freew.bullets\", \"Bullets\"");
+        wpfSource.Should().NotContain("g.Icon(\"freew.numbering\", \"Numbering\"");
+        wpfSource.Should().NotContain("g.Icon(\"freew.multilevel-list\", \"Multilevel List\"");
+        wpfSource.Should().NotContain("tab.Group(\"symbols\", \"Symbols\"");
+        wpfSource.Should().NotContain("g.Medium(\"freew.symbol\", \"Symbol\"");
+        wpfSource.Should().NotContain("tab.Group(\"page-background\", \"Page Background\"");
+        wpfSource.Should().NotContain("g.Medium(\"freew.page-color\", \"Page Color\"");
+        wpfSource.Should().Contain("FreeWRibbonText.ParagraphGroup");
+        wpfSource.Should().Contain("FreeWRibbonText.SymbolsGroup");
+        wpfSource.Should().Contain("FreeWRibbonText.PageBackgroundGroup");
+
+        avaloniaSource.Should().NotContain("tab.Group(\"paragraph\", \"Paragraph\"");
+        avaloniaSource.Should().NotContain("g.Toggle(\"freew.bullets\",           \"Bullets\"");
+        avaloniaSource.Should().NotContain("g.Dropdown(\"freew.symbol\", \"Symbol\"");
+        avaloniaSource.Should().NotContain("g.Dropdown(\"freew.page-color\", \"Page Color\"");
+        avaloniaSource.Should().NotContain("private static readonly (string CommandId, string Label)[] PageColors");
+        avaloniaSource.Should().Contain("FreeWRibbonText.ParagraphGroup");
+        avaloniaSource.Should().Contain("FreeWRibbonText.SymbolCommand");
+        avaloniaSource.Should().Contain("FreeWRibbonDefinitionData.PageColors");
+        avaloniaSource.Should().Contain("FreeWRibbonDefinitionData.Symbols");
+
+        dataSource.Should().NotContain("(\"freew.page-color.none\", \"No Color\")");
+        dataSource.Should().NotContain("\"Outline: 1. / 1.1. / 1.1.1.\"");
+        dataSource.Should().NotContain("\"Euro Sign\"");
+        dataSource.Should().Contain("Loc.Get(\"Ribbon_Palette_PageColor_NoColor_Label\")");
+        dataSource.Should().Contain("Loc.Get(\"Ribbon_Palette_MultilevelList_OutlineDecimal_Label\")");
+        dataSource.Should().Contain("Loc.Get(\"Ribbon_Palette_Symbol_Euro_Label\")");
+
+        hostCommands.Should().NotContain("Title = \"Page Color\"");
+        hostCommands.Should().NotContain("Content = \"More Colors");
+        hostCommands.Should().Contain("UiText.Get(\"Ribbon_Dialog_PageColor_Title\")");
+        hostCommands.Should().Contain("UiText.Get(\"Ribbon_Palette_PageColor_NoColor_Label\")");
+    }
+
+    private static bool IsAllowed(CommandEntry entry, IReadOnlyList<DivergenceRule> rules) =>
+        rules.Any(rule => rule.IsAllowed(entry));
+
+    private static T WithUiCulture<T>(string cultureName, Func<T> action)
+    {
+        var originalUi = CultureInfo.CurrentUICulture;
+        var originalCulture = CultureInfo.CurrentCulture;
+        try
+        {
+            var culture = CultureInfo.GetCultureInfo(cultureName);
+            CultureInfo.CurrentUICulture = culture;
+            CultureInfo.CurrentCulture = culture;
+            return action();
+        }
+        finally
+        {
+            CultureInfo.CurrentUICulture = originalUi;
+            CultureInfo.CurrentCulture = originalCulture;
+        }
+    }
+
+    private static ClipboardRibbonSurface ClipboardSurface(FreeWRibbonCapabilities capabilities)
+    {
+        var definition = FreeWRibbon.Build(capabilities);
+        var home = definition.FindTab("home");
+        home.Should().NotBeNull();
+        var clipboard = home!.FindGroup("clipboard");
+        clipboard.Should().NotBeNull();
+
+        var paste = RequiredControl(clipboard!, "freew.paste");
+        var cut = RequiredControl(clipboard!, "freew.cut");
+        var copy = RequiredControl(clipboard!, "freew.copy");
+
+        return new ClipboardRibbonSurface(
+            home.Header,
+            home.KeyTip,
+            clipboard.Header,
+            clipboard.KeyTip,
+            paste.Label,
+            paste.KeyTip,
+            cut.Label,
+            cut.KeyTip,
+            copy.Label,
+            copy.KeyTip);
+    }
+
+    private static RibbonControl RequiredControl(RibbonGroup group, string commandId) =>
+        group.Controls.Single(control => control.CommandId.Value == commandId);
+
+    private static FontCoreRibbonSurface FontCoreSurface(FreeWRibbonCapabilities capabilities)
+    {
+        var definition = FreeWRibbon.Build(capabilities);
+        var home = definition.FindTab("home");
+        home.Should().NotBeNull();
+        var font = home!.FindGroup("font");
+        font.Should().NotBeNull();
+
+        var fontFamily = RequiredControl(font!, "freew.font-family");
+        var fontSize = RequiredControl(font!, "freew.font-size");
+        var bold = RequiredControl(font!, "freew.bold");
+        var italic = RequiredControl(font!, "freew.italic");
+        var underline = RequiredControl(font!, "freew.underline");
+        var strikethrough = RequiredControl(font!, "freew.strikethrough");
+        var fontDialog = RequiredControl(font!, "freew.font-dialog");
+
+        return new FontCoreRibbonSurface(
+            font.Header,
+            font.KeyTip,
+            fontFamily.Label,
+            fontSize.Label,
+            bold.Label,
+            bold.KeyTip,
+            italic.Label,
+            italic.KeyTip,
+            underline.Label,
+            underline.KeyTip,
+            strikethrough.Label,
+            fontDialog.Label);
+    }
+
+    private static void AssertFontCoreSurfaceUsesResources(FontCoreRibbonSurface surface)
+    {
+        surface.FontGroupHeader.Should().Be(Loc.Get("Ribbon_Group_Font_Label"));
+        surface.FontGroupKeyTip.Should().Be(Loc.GetNeutral("Ribbon_Group_Font_KeyTip"));
+        surface.FontFamilyLabel.Should().Be(Loc.Get("Ribbon_Command_FontFamily_Label"));
+        surface.FontSizeLabel.Should().Be(Loc.Get("Ribbon_Command_FontSize_Label"));
+        surface.BoldLabel.Should().Be(Loc.Get("Ribbon_Command_Bold_Label"));
+        surface.BoldKeyTip.Should().Be(Loc.GetNeutral("Ribbon_Command_Bold_KeyTip"));
+        surface.ItalicLabel.Should().Be(Loc.Get("Ribbon_Command_Italic_Label"));
+        surface.ItalicKeyTip.Should().Be(Loc.GetNeutral("Ribbon_Command_Italic_KeyTip"));
+        surface.UnderlineLabel.Should().Be(Loc.Get("Ribbon_Command_Underline_Label"));
+        surface.UnderlineKeyTip.Should().Be(Loc.GetNeutral("Ribbon_Command_Underline_KeyTip"));
+        surface.StrikethroughLabel.Should().Be(Loc.Get("Ribbon_Command_Strikethrough_Label"));
+        surface.FontDialogLabel.Should().Be(Loc.Get("Ribbon_Command_FontDialog_Label"));
+    }
+
+    private static IReadOnlyDictionary<string, string> FontControlLabels(
+        FreeWRibbonCapabilities capabilities,
+        IEnumerable<string> commandIds)
+    {
+        var definition = FreeWRibbon.Build(capabilities);
+        var home = definition.FindTab("home");
+        home.Should().NotBeNull();
+        var font = home!.FindGroup("font");
+        font.Should().NotBeNull();
+
+        return commandIds.ToDictionary(
+            commandId => commandId,
+            commandId => RequiredControl(font!, commandId).Label,
+            StringComparer.Ordinal);
+    }
+
+    private static void AssertWpfFontEffectLabelsUseResources(IReadOnlyDictionary<string, string> labels)
+    {
+        labels["freew.grow-font"].Should().Be(Loc.Get("Ribbon_Command_GrowFont_Label"));
+        labels["freew.shrink-font"].Should().Be(Loc.Get("Ribbon_Command_ShrinkFont_Label"));
+        labels["freew.subscript"].Should().Be(Loc.Get("Ribbon_Command_Subscript_Label"));
+        labels["freew.superscript"].Should().Be(Loc.Get("Ribbon_Command_Superscript_Label"));
+        labels["freew.change-case"].Should().Be(Loc.Get("Ribbon_Command_ChangeCase_Label"));
+        labels["freew.smallcaps"].Should().Be(Loc.Get("Ribbon_Command_SmallCaps_Label"));
+        labels["freew.allcaps"].Should().Be(Loc.Get("Ribbon_Command_AllCaps_Label"));
+        labels["freew.highlight"].Should().Be(Loc.Get("Ribbon_Command_TextHighlightColor_Label"));
+        labels["freew.font-color"].Should().Be(Loc.Get("Ribbon_Command_FontColor_Label"));
+        labels["freew.char-border"].Should().Be(Loc.Get("Ribbon_Command_CharacterBorder_Label"));
+        labels["freew.char-shading"].Should().Be(Loc.Get("Ribbon_Command_CharacterShading_Label"));
+        labels["freew.clear-formatting"].Should().Be(Loc.Get("Ribbon_Command_ClearAllFormatting_Label"));
+    }
+
+    private static WpfClipboardAccessoryRibbonSurface WpfClipboardAccessorySurface()
+    {
+        var definition = FreeWRibbon.Build(FreeWRibbonCapabilities.Wpf);
+        var home = definition.FindTab("home");
+        home.Should().NotBeNull();
+        var clipboard = home!.FindGroup("clipboard");
+        clipboard.Should().NotBeNull();
+
+        var formatPainter = RequiredControl(clipboard!, "freew.format-painter");
+        var pasteTextOnly = RequiredControl(clipboard!, "freew.paste-plain");
+        var pasteMergeFormatting = RequiredControl(clipboard!, "freew.paste-merge");
+        var pasteSpecial = RequiredControl(clipboard!, "freew.paste-special");
+
+        return new WpfClipboardAccessoryRibbonSurface(
+            formatPainter.Label,
+            formatPainter.KeyTip,
+            pasteTextOnly.Label,
+            pasteMergeFormatting.Label,
+            pasteSpecial.Label);
+    }
+
+    private static void AssertWpfClipboardAccessoryLabelsUseResources(WpfClipboardAccessoryRibbonSurface surface)
+    {
+        surface.FormatPainterLabel.Should().Be(Loc.Get("Ribbon_Command_FormatPainter_Label"));
+        surface.FormatPainterKeyTip.Should().Be(Loc.GetNeutral("Ribbon_Command_FormatPainter_KeyTip"));
+        surface.PasteTextOnlyLabel.Should().Be(Loc.Get("Ribbon_Command_PasteTextOnly_Label"));
+        surface.PasteMergeFormattingLabel.Should().Be(Loc.Get("Ribbon_Command_PasteMergeFormatting_Label"));
+        surface.PasteSpecialLabel.Should().Be(Loc.Get("Ribbon_Command_PasteSpecial_Label"));
+    }
+
+    private static void AssertAvaloniaFontEffectLabelsUseResources(IReadOnlyDictionary<string, string> labels)
+    {
+        labels["freew.grow-font"].Should().Be(Loc.Get("Ribbon_Command_GrowFontCompact_Label"));
+        labels["freew.shrink-font"].Should().Be(Loc.Get("Ribbon_Command_ShrinkFontCompact_Label"));
+        labels["freew.superscript"].Should().Be(Loc.Get("Ribbon_Command_SuperscriptCompact_Label"));
+        labels["freew.subscript"].Should().Be(Loc.Get("Ribbon_Command_SubscriptCompact_Label"));
+        labels["freew.smallcaps"].Should().Be(Loc.Get("Ribbon_Command_SmallCaps_Label"));
+        labels["freew.allcaps"].Should().Be(Loc.Get("Ribbon_Command_AllCaps_Label"));
+        labels["freew.highlight"].Should().Be(Loc.Get("Ribbon_Command_HighlightCompact_Label"));
+        labels["freew.char-border"].Should().Be(Loc.Get("Ribbon_Command_CharacterBorder_Label"));
+        labels["freew.char-shading"].Should().Be(Loc.Get("Ribbon_Command_CharacterShading_Label"));
+        labels["freew.clear-formatting"].Should().Be(Loc.Get("Ribbon_Command_ClearFormattingCompact_Label"));
+        labels["freew.font-color"].Should().Be(Loc.Get("Ribbon_Command_FontColorDropdown_Label"));
+        labels["freew.change-case"].Should().Be(Loc.Get("Ribbon_Command_ChangeCaseCompact_Label"));
+    }
+
+    private static IReadOnlyList<string> FontColorPaletteLabels()
+    {
+        var definition = FreeWRibbon.Build(FreeWRibbonCapabilities.Avalonia);
+        var home = definition.FindTab("home");
+        home.Should().NotBeNull();
+        var font = home!.FindGroup("font");
+        font.Should().NotBeNull();
+
+        var fontColor = RequiredControl(font!, "freew.font-color");
+        var dropdown = fontColor.Should().BeOfType<RibbonDropdown>().Subject;
+
+        return dropdown.Menu.Items.Select(item => item.Header).ToArray();
+    }
+
+    private static ParagraphListRibbonSurface ParagraphListSurface(FreeWRibbonCapabilities capabilities)
+    {
+        var paragraph = RequiredGroup(FreeWRibbon.Build(capabilities), "home", "paragraph");
+        var bullets = RequiredControl(paragraph, "freew.bullets");
+        var numbering = RequiredControl(paragraph, "freew.numbering");
+        var multilevel = paragraph.Controls.SingleOrDefault(control => control.CommandId.Value == "freew.multilevel-list");
+
+        return new ParagraphListRibbonSurface(
+            paragraph.Header,
+            paragraph.KeyTip,
+            bullets.Label,
+            numbering.Label,
+            multilevel?.Label,
+            multilevel is RibbonDropdown dropdown
+                ? dropdown.Menu.Items.Select(item => item.Header).ToArray()
+                : null);
+    }
+
+    private static SymbolRibbonSurface SymbolSurface(FreeWRibbonCapabilities capabilities)
+    {
+        var symbols = RequiredGroup(FreeWRibbon.Build(capabilities), "insert", "symbols");
+        var symbol = RequiredControl(symbols, "freew.symbol");
+
+        return new SymbolRibbonSurface(
+            symbols.Header,
+            symbols.KeyTip,
+            symbol.Label,
+            symbol is RibbonDropdown dropdown
+                ? dropdown.Menu.Items.Select(item => item.Header).ToArray()
+                : null);
+    }
+
+    private static PageBackgroundRibbonSurface PageBackgroundSurface(FreeWRibbonCapabilities capabilities)
+    {
+        var pageBackground = RequiredGroup(FreeWRibbon.Build(capabilities), "design", "page-background");
+        var watermark = RequiredControl(pageBackground, "freew.watermark");
+        var pageColor = RequiredControl(pageBackground, "freew.page-color");
+        var pageBorders = RequiredControl(pageBackground, capabilities.UseAvaloniaBackedSurface ? "freew.page-borders" : "freew.page-border");
+
+        return new PageBackgroundRibbonSurface(
+            pageBackground.Header,
+            pageBackground.KeyTip,
+            watermark.Label,
+            pageColor.Label,
+            pageBorders.Label,
+            pageColor is RibbonDropdown { Menu.Items.Count: > 0 } dropdown
+                ? dropdown.Menu.Items.Select(item => item.Header).ToArray()
+                : null);
+    }
+
+    private static RibbonGroup RequiredGroup(RibbonDefinition definition, string tabId, string groupId)
+    {
+        var tab = definition.FindTab(tabId);
+        tab.Should().NotBeNull();
+        var group = tab!.FindGroup(groupId);
+        group.Should().NotBeNull();
+
+        return group!;
+    }
+
+    private static void AssertParagraphListSurfaceUsesResources(
+        ParagraphListRibbonSurface surface,
+        bool includesMultilevel,
+        bool includesMultilevelMenu = true)
+    {
+        AssertParagraphCommonSurfaceUsesResources(surface);
+
+        if (!includesMultilevel)
+        {
+            surface.MultilevelListLabel.Should().BeNull();
+            surface.MultilevelMenuHeaders.Should().BeNull();
+            return;
+        }
+
+        surface.MultilevelListLabel.Should().Be(Loc.Get("Ribbon_Command_MultilevelList_Label"));
+        if (!includesMultilevelMenu)
+            return;
+
+        surface.MultilevelMenuHeaders.Should().Equal(
+            Loc.Get("Ribbon_Command_MultilevelPromote_Label"),
+            Loc.Get("Ribbon_Command_MultilevelDemote_Label"),
+            Loc.Get("Ribbon_Palette_MultilevelList_OutlineDecimal_Label"),
+            Loc.Get("Ribbon_Palette_MultilevelList_OutlineMixed_Label"),
+            Loc.Get("Ribbon_Palette_MultilevelList_OutlineHeadings_Label"),
+            Loc.Get("Ribbon_Command_MultilevelDefine_Label"));
+    }
+
+    private static void AssertParagraphCommonSurfaceUsesResources(ParagraphListRibbonSurface surface)
+    {
+        surface.ParagraphHeader.Should().Be(Loc.Get("Ribbon_Group_Paragraph_Label"));
+        if (surface.ParagraphKeyTip is not null)
+            surface.ParagraphKeyTip.Should().Be(Loc.GetNeutral("Ribbon_Group_Paragraph_KeyTip"));
+        surface.BulletsLabel.Should().Be(Loc.Get("Ribbon_Command_Bullets_Label"));
+        surface.NumberingLabel.Should().Be(Loc.Get("Ribbon_Command_Numbering_Label"));
+    }
+
+    private static void AssertSymbolSurfaceUsesResources(SymbolRibbonSurface surface, bool includesMenu)
+    {
+        surface.SymbolsHeader.Should().Be(Loc.Get("Ribbon_Group_Symbols_Label"));
+        if (surface.SymbolsKeyTip is not null)
+            surface.SymbolsKeyTip.Should().Be(Loc.GetNeutral("Ribbon_Group_Symbols_KeyTip"));
+        surface.SymbolLabel.Should().Be(Loc.Get("Ribbon_Command_Symbol_Label"));
+
+        if (!includesMenu)
+        {
+            surface.SymbolMenuHeaders.Should().BeNull();
+            return;
+        }
+
+        surface.SymbolMenuHeaders.Should().Equal(FreeWRibbonDefinitionData.Symbols
+            .Select(symbol => $"{symbol.Glyph}   {symbol.Label}"));
+    }
+
+    private static void AssertPageBackgroundSurfaceUsesResources(PageBackgroundRibbonSurface surface, bool includesPalette)
+    {
+        surface.PageBackgroundHeader.Should().Be(Loc.Get("Ribbon_Group_PageBackground_Label"));
+        if (surface.PageBackgroundKeyTip is not null)
+            surface.PageBackgroundKeyTip.Should().Be(Loc.GetNeutral("Ribbon_Group_PageBackground_KeyTip"));
+        surface.WatermarkLabel.Should().Be(Loc.Get("Ribbon_Command_Watermark_Label"));
+        surface.PageColorLabel.Should().Be(Loc.Get("Ribbon_Command_PageColor_Label"));
+        surface.PageBordersLabel.Should().Be(Loc.Get("Ribbon_Command_PageBorders_Label"));
+
+        if (!includesPalette)
+        {
+            surface.PageColorMenuHeaders.Should().BeNull();
+            return;
+        }
+
+        surface.PageColorMenuHeaders.Should().Equal(FreeWRibbonDefinitionData.PageColors.Select(color => color.Label));
+    }
+
+    private static int CountGap(IReadOnlyDictionary<string, int> counts, string classification) =>
+        counts.TryGetValue(classification, out var count) ? count : 0;
+
+    private static void AssertGapClassification(
+        IReadOnlyList<JsonElement> commands,
+        string commandId,
+        string expectedClassification)
+    {
+        var command = commands.Single(candidate =>
+            candidate.GetProperty("commandId").GetString() == commandId);
+
+        command.GetProperty("gapClassification").GetString().Should().Be(expectedClassification);
+    }
+
+    private static string ReadRepositoryFile(params string[] relativeParts)
+    {
+        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
+             directory is not null;
+             directory = directory.Parent)
+        {
+            var candidate = Path.Combine(new[] { directory.FullName }.Concat(relativeParts).ToArray());
+            if (File.Exists(candidate))
+                return File.ReadAllText(candidate);
+        }
+
+        throw new FileNotFoundException(
+            $"Could not locate {Path.Combine(relativeParts)} from {AppContext.BaseDirectory}.");
+    }
+
+    private static IEnumerable<CommandEntry> CommandEntries(RibbonDefinition definition)
+    {
+        foreach (var tab in definition.Tabs)
+        {
+            foreach (var group in tab.Groups)
+            {
+                foreach (var control in group.Controls)
+                {
+                    foreach (var commandId in CommandIds(control))
+                        yield return new CommandEntry(tab.Id, group.Id, commandId);
+                }
+            }
+        }
+    }
+
+    private static IEnumerable<string> CommandIds(RibbonControl control)
+    {
+        var commandId = control switch
+        {
+            RibbonButton b => b.CommandId.Value,
+            RibbonToggleButton t => t.CommandId.Value,
+            RibbonComboBox c => c.CommandId.Value,
+            RibbonCheckBox cb => cb.CommandId.Value,
+            RibbonSplitButton sb => sb.CommandId.Value,
+            RibbonDropdown d => d.CommandId.Value,
+            RibbonGallery g => g.CommandId.Value,
+            _ => null,
+        };
+
+        if (commandId is not null)
+            yield return commandId;
+
+        var menu = control switch
+        {
+            RibbonSplitButton sb => sb.Menu,
+            RibbonDropdown d => d.Menu,
+            _ => null,
+        };
+
+        if (menu is null)
+            yield break;
+
+        foreach (var item in CommandIds(menu.Items))
+            yield return item;
+    }
+
+    private static IEnumerable<string> CommandIds(IEnumerable<RibbonMenuItem> items)
+    {
+        foreach (var item in items)
+        {
+            if (item.CommandId is { } commandId)
+                yield return commandId.Value;
+
+            foreach (var childId in CommandIds(item.Children))
+                yield return childId;
+        }
+    }
+
+    private static IReadOnlyDictionary<string, IReadOnlyList<InventoryLocation>> InventoryLocations(
+        RibbonDefinition definition,
+        string profile)
+    {
+        var locations = new Dictionary<string, List<InventoryLocation>>(StringComparer.Ordinal);
+        foreach (var tab in definition.Tabs)
+        {
+            foreach (var group in tab.Groups)
+            {
+                foreach (var control in group.Controls)
+                    AddInventoryControl(locations, tab, group, control, profile);
+            }
+        }
+
+        return locations.ToDictionary(
+            pair => pair.Key,
+            pair => (IReadOnlyList<InventoryLocation>)pair.Value
+                .OrderBy(location => location.TabId, StringComparer.Ordinal)
+                .ThenBy(location => location.GroupId, StringComparer.Ordinal)
+                .ThenBy(location => location.Label, StringComparer.Ordinal)
+                .ThenBy(location => location.ControlType, StringComparer.Ordinal)
+                .ThenBy(location => location.Layout, StringComparer.Ordinal)
+                .ToArray(),
+            StringComparer.Ordinal);
+    }
+
+    private static void AddInventoryControl(
+        Dictionary<string, List<InventoryLocation>> locations,
+        RibbonTab tab,
+        RibbonGroup group,
+        RibbonControl control,
+        string profile)
+    {
+        if (!string.IsNullOrEmpty(control.CommandId.Value))
+        {
+            AddInventoryLocation(locations, control.CommandId.Value, new InventoryLocation(
+                profile,
+                tab.Id,
+                tab.Header,
+                group.Id,
+                group.Header,
+                control.Label,
+                control.GetType().Name,
+                control.PreferredLayout.ToString()));
+        }
+
+        foreach (var menuLocation in InventoryMenuLocations(control, tab, group, profile))
+            AddInventoryLocation(locations, menuLocation.CommandId, menuLocation.Location);
+    }
+
+    private static IEnumerable<(string CommandId, InventoryLocation Location)> InventoryMenuLocations(
+        RibbonControl control,
+        RibbonTab tab,
+        RibbonGroup group,
+        string profile)
+    {
+        var menu = control switch
+        {
+            RibbonSplitButton splitButton => splitButton.Menu,
+            RibbonDropdown dropdown => dropdown.Menu,
+            _ => null,
+        };
+
+        if (menu is null)
+            yield break;
+
+        foreach (var item in MenuItems(menu.Items))
+        {
+            if (item.CommandId is null)
+                continue;
+
+            yield return (item.CommandId.Value.Value, new InventoryLocation(
+                profile,
+                tab.Id,
+                tab.Header,
+                group.Id,
+                group.Header,
+                item.Header,
+                "RibbonMenuItem",
+                "Menu"));
+        }
+    }
+
+    private static IEnumerable<RibbonMenuItem> MenuItems(IEnumerable<RibbonMenuItem> items)
+    {
+        foreach (var item in items)
+        {
+            yield return item;
+            foreach (var child in MenuItems(item.Children))
+                yield return child;
+        }
+    }
+
+    private static void AddInventoryLocation(
+        Dictionary<string, List<InventoryLocation>> locations,
+        string commandId,
+        InventoryLocation location)
+    {
+        if (!locations.TryGetValue(commandId, out var existing))
+        {
+            existing = [];
+            locations.Add(commandId, existing);
+        }
+
+        existing.Add(location);
+    }
+
+    private static void AssertInventoryLocations(JsonElement element, IReadOnlyList<InventoryLocation> expected)
+    {
+        element.EnumerateArray()
+            .Select(ReadInventoryLocation)
+            .Should()
+            .Equal(expected);
+    }
+
+    private static InventoryLocation ReadInventoryLocation(JsonElement element) =>
+        new(
+            element.GetProperty("profile").GetString()!,
+            element.GetProperty("tabId").GetString()!,
+            element.GetProperty("tab").GetString()!,
+            element.GetProperty("groupId").GetString()!,
+            element.GetProperty("group").GetString()!,
+            element.GetProperty("label").GetString()!,
+            element.GetProperty("controlType").GetString()!,
+            element.GetProperty("layout").GetString()!);
+
+    private static string ProfileSurface(bool wpfPresent, bool avaloniaPresent) =>
+        wpfPresent && avaloniaPresent
+            ? "both"
+            : wpfPresent
+                ? "wpf-only"
+                : "avalonia-only";
+
+    private static string MissingProfile(bool wpfPresent, bool avaloniaPresent) =>
+        wpfPresent && avaloniaPresent
+            ? "none"
+            : wpfPresent
+                ? "Avalonia"
+                : "WPF";
+
+    private static string ProfileClassification(bool wpfPresent, bool avaloniaPresent) =>
+        wpfPresent && avaloniaPresent
+            ? "shared-profile"
+            : wpfPresent
+                ? "wpf-profile-only"
+                : "avalonia-profile-only";
+
+    private sealed record DivergenceRule(string Reason, Func<CommandEntry, bool> IsAllowed);
+
+    private sealed record InventoryLocation(
+        string Profile,
+        string TabId,
+        string Tab,
+        string GroupId,
+        string Group,
+        string Label,
+        string ControlType,
+        string Layout);
+
+    private sealed record ClipboardRibbonSurface(
+        string HomeHeader,
+        string? HomeKeyTip,
+        string ClipboardHeader,
+        string? ClipboardKeyTip,
+        string PasteLabel,
+        string? PasteKeyTip,
+        string CutLabel,
+        string? CutKeyTip,
+        string CopyLabel,
+        string? CopyKeyTip);
+
+    private sealed record WpfClipboardAccessoryRibbonSurface(
+        string FormatPainterLabel,
+        string? FormatPainterKeyTip,
+        string PasteTextOnlyLabel,
+        string PasteMergeFormattingLabel,
+        string PasteSpecialLabel);
+
+    private sealed record FontCoreRibbonSurface(
+        string FontGroupHeader,
+        string? FontGroupKeyTip,
+        string FontFamilyLabel,
+        string FontSizeLabel,
+        string BoldLabel,
+        string? BoldKeyTip,
+        string ItalicLabel,
+        string? ItalicKeyTip,
+        string UnderlineLabel,
+        string? UnderlineKeyTip,
+        string StrikethroughLabel,
+        string FontDialogLabel);
+
+    private sealed record ParagraphListRibbonSurface(
+        string ParagraphHeader,
+        string? ParagraphKeyTip,
+        string BulletsLabel,
+        string NumberingLabel,
+        string? MultilevelListLabel,
+        IReadOnlyList<string>? MultilevelMenuHeaders);
+
+    private sealed record SymbolRibbonSurface(
+        string SymbolsHeader,
+        string? SymbolsKeyTip,
+        string SymbolLabel,
+        IReadOnlyList<string>? SymbolMenuHeaders);
+
+    private sealed record PageBackgroundRibbonSurface(
+        string PageBackgroundHeader,
+        string? PageBackgroundKeyTip,
+        string WatermarkLabel,
+        string PageColorLabel,
+        string PageBordersLabel,
+        IReadOnlyList<string>? PageColorMenuHeaders);
+
+    private sealed record CommandEntry(string TabId, string GroupId, string CommandId)
+    {
+        public string Display => $"{TabId}/{GroupId}/{CommandId}";
+    }
+}

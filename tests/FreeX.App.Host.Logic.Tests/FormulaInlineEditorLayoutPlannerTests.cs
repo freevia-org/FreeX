@@ -38,7 +38,7 @@ public sealed class FormulaInlineEditorLayoutPlannerTests
             desiredTextWidth: 340,
             availableRight: 600);
 
-        layout.EditorRect.Should().Be(new Rect(100, 40, 64, 20));
+        layout.EditorRect.Should().Be(new FormulaEditorRect(100, 40, 64, 20));
         layout.TextOverlayRect.Left.Should().Be(104);
         layout.TextOverlayRect.Width.Should().BeGreaterThan(340);
         layout.TextOverlayRect.Right.Should().BeLessThanOrEqualTo(600);
@@ -55,7 +55,7 @@ public sealed class FormulaInlineEditorLayoutPlannerTests
             desiredTextWidth: 340,
             availableRight: 300);
 
-        layout.EditorRect.Should().Be(new Rect(100, 40, 64, 20));
+        layout.EditorRect.Should().Be(new FormulaEditorRect(100, 40, 64, 20));
         layout.TextOverlayRect.Right.Should().Be(300);
     }
 
@@ -63,27 +63,27 @@ public sealed class FormulaInlineEditorLayoutPlannerTests
     public void GetChromeBorderThickness_RemovesOverflowSideBorders()
     {
         FormulaInlineEditorLayoutPlanner.GetChromeBorderThickness(FormulaInlineEditorOverflow.None)
-            .Should().Be(new Thickness(1));
+            .Should().Be(new FormulaEditorThickness(1));
 
         FormulaInlineEditorLayoutPlanner.GetChromeBorderThickness(new FormulaInlineEditorOverflow(Left: false, Right: true))
-            .Should().Be(new Thickness(1, 1, 0, 1));
+            .Should().Be(new FormulaEditorThickness(1, 1, 0, 1));
 
         FormulaInlineEditorLayoutPlanner.GetChromeBorderThickness(new FormulaInlineEditorOverflow(Left: true, Right: false))
-            .Should().Be(new Thickness(0, 1, 1, 1));
+            .Should().Be(new FormulaEditorThickness(0, 1, 1, 1));
     }
 
     [Fact]
     public void GetChromeRect_ExtendsOnlyUnderHiddenOverflowEdges()
     {
-        var editorRect = new Rect(100, 40, 64, 20);
+        var editorRect = new FormulaEditorRect(100, 40, 64, 20);
 
         FormulaInlineEditorLayoutPlanner.GetChromeRect(editorRect, FormulaInlineEditorOverflow.None)
             .Should().Be(editorRect);
 
         FormulaInlineEditorLayoutPlanner.GetChromeRect(editorRect, new FormulaInlineEditorOverflow(Left: false, Right: true))
-            .Should().Be(new Rect(100, 40, 66, 20));
+            .Should().Be(new FormulaEditorRect(100, 40, 66, 20));
 
         FormulaInlineEditorLayoutPlanner.GetChromeRect(editorRect, new FormulaInlineEditorOverflow(Left: true, Right: false))
-            .Should().Be(new Rect(98, 40, 66, 20));
+            .Should().Be(new FormulaEditorRect(98, 40, 66, 20));
     }
 }

@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using FreeX.App.Presentation.Charts.Editing;
 
 namespace FreeX.App.Host;
 
@@ -75,7 +76,7 @@ public sealed partial class SelectDataSourceDialog
             ? Window.GetWindow(dependencyObject)
             : null;
         DialogMessageHelper.ShowInfo(owner,
-            UiText.Get("SelectDataSource_HiddenEmptyCellsMessage"),
-            UiText.Get("SelectDataSource_HiddenEmptyCellsTitle"));
+            UiText.Get(SelectDataSourcePlanner.HiddenEmptyCellsMessageResourceKey),
+            UiText.Get(SelectDataSourcePlanner.HiddenEmptyCellsTitleResourceKey));
     }
 }

@@ -29,17 +29,10 @@
                     </Grid.ColumnDefinitions>
 
                     <Label Grid.Row="0" Grid.Column="0" Content="{local:Loc Key=PageSetup_Orientation}" Target="{Binding ElementName=OrientationBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,8"/>
-                    <ComboBox x:Name="OrientationBox" Grid.Row="0" Grid.Column="1" Margin="0,0,0,8">
-                        <ComboBoxItem Content="{local:Loc Key=PageSetup_Portrait}" Tag="Portrait"/>
-                        <ComboBoxItem Content="{local:Loc Key=PageSetup_Landscape}" Tag="Landscape"/>
-                    </ComboBox>
+                    <ComboBox x:Name="OrientationBox" Grid.Row="0" Grid.Column="1" Margin="0,0,0,8"/>
 
                     <Label Grid.Row="1" Grid.Column="0" Content="{local:Loc Key=PageSetup_PaperSize}" Target="{Binding ElementName=PaperSizeBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,8"/>
-                    <ComboBox x:Name="PaperSizeBox" Grid.Row="1" Grid.Column="1" Margin="0,0,0,8">
-                        <ComboBoxItem Content="{local:Loc Key=PageSetup_Letter85X11}" Tag="Letter"/>
-                        <ComboBoxItem Content="{local:Loc Key=PageSetup_A4210X297Mm}" Tag="A4"/>
-                        <ComboBoxItem Content="{local:Loc Key=PageSetup_Legal85X14}" Tag="Legal"/>
-                    </ComboBox>
+                    <ComboBox x:Name="PaperSizeBox" Grid.Row="1" Grid.Column="1" Margin="0,0,0,8"/>
 
                     <GroupBox Grid.Row="2" Grid.ColumnSpan="2" Header="{local:Loc Key=PageSetup_Scaling}" Margin="0,2,0,8">
                         <Grid Margin="8">
@@ -211,25 +204,13 @@
                     <CheckBox x:Name="PrintGridlinesBox" Grid.Row="3" Grid.Column="1" Content="{local:Loc Key=PageSetup_PrintGridlines}" Margin="0,0,0,8"/>
                     <CheckBox x:Name="PrintHeadingsBox" Grid.Row="4" Grid.Column="1" Content="{local:Loc Key=PageSetup_PrintRowAndColumnHeadings}" Margin="0,0,0,8"/>
                     <Label Grid.Row="5" Grid.Column="0" Content="{local:Loc Key=PageSetup_PageOrder}" Target="{Binding ElementName=PageOrderBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                    <ComboBox x:Name="PageOrderBox" Grid.Row="5" Grid.Column="1">
-                        <ComboBoxItem Content="{local:Loc Key=PageSetup_DownThenOver}" Tag="DownThenOver"/>
-                        <ComboBoxItem Content="{local:Loc Key=PageSetup_OverThenDown}" Tag="OverThenDown"/>
-                    </ComboBox>
+                    <ComboBox x:Name="PageOrderBox" Grid.Row="5" Grid.Column="1"/>
                     <CheckBox x:Name="PrintBlackAndWhiteBox" Grid.Row="6" Grid.Column="1" Content="{local:Loc Key=PageSetup_BlackAndWhite}" Margin="0,8,0,8"/>
                     <CheckBox x:Name="PrintDraftQualityBox" Grid.Row="7" Grid.Column="1" Content="{local:Loc Key=PageSetup_DraftQuality}"/>
                     <Label Grid.Row="8" Grid.Column="0" Content="{local:Loc Key=PageSetup_CellErrorsAs}" Target="{Binding ElementName=PrintErrorValueBox}" Padding="0" VerticalAlignment="Center" Margin="0,8,8,0"/>
-                    <ComboBox x:Name="PrintErrorValueBox" Grid.Row="8" Grid.Column="1" Margin="0,8,0,0">
-                        <ComboBoxItem Content="{local:Loc Key=PageSetup_Displayed}" Tag="Displayed"/>
-                        <ComboBoxItem Content="{local:Loc Key=PageSetup_Blank}" Tag="Blank"/>
-                        <ComboBoxItem Content="--" Tag="Dash"/>
-                        <ComboBoxItem Content="{local:Loc Key=PageSetup_NotAvailable}" Tag="NotAvailable"/>
-                    </ComboBox>
+                    <ComboBox x:Name="PrintErrorValueBox" Grid.Row="8" Grid.Column="1" Margin="0,8,0,0"/>
                     <Label Grid.Row="9" Grid.Column="0" Content="{local:Loc Key=PageSetup_Comments}" Target="{Binding ElementName=PrintCommentsBox}" Padding="0" VerticalAlignment="Center" Margin="0,8,8,0"/>
-                    <ComboBox x:Name="PrintCommentsBox" Grid.Row="9" Grid.Column="1" Margin="0,8,0,0">
-                        <ComboBoxItem Content="{local:Loc Key=PageSetup_None2}" Tag="None"/>
-                        <ComboBoxItem Content="{local:Loc Key=PageSetup_AtEndOfSheet}" Tag="AtEnd"/>
-                        <ComboBoxItem Content="{local:Loc Key=PageSetup_AsDisplayedOnSheet}" Tag="AsDisplayed"/>
-                    </ComboBox>
+                    <ComboBox x:Name="PrintCommentsBox" Grid.Row="9" Grid.Column="1" Margin="0,8,0,0"/>
                 </Grid>
             </TabItem>
         </TabControl>

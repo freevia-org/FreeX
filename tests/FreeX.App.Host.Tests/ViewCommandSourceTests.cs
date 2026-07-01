@@ -15,11 +15,16 @@ public sealed class ViewCommandSourceTests
             .Should().Contain("ZoomCustomMenuItem_Click(sender, e);");
         source.Should().Contain("FreeX.App.Services.ZoomLevelMapper.TryParseZoomPercent(tag, out var zoomPercent)");
         source.Should().Contain("new ZoomDialog(current) { Owner = this }");
-        source.Should().Contain("ZoomSelectionPlanner.CalculateDialogZoomPercent(");
+        source.Should().Contain("ZoomSelectionPlanner.CalculateZoomPercent(");
         source.Should().Contain("private void Zoom100Btn_Click(object sender, RoutedEventArgs e)");
-        source.Should().Contain("ZoomSlider.Value = 100;");
+        source.Should().Contain("ZoomSlider.Value = StatusZoomSliderValueForPercent(ZoomLevelMapper.DefaultZoomPercent);");
         source.Should().Contain("ZoomSelectionPlanner.CalculateFitPercent(");
-        source.Should().Contain("FreeX.App.Services.ZoomLevelMapper.ZoomPercentToSlider(fitPct)");
+        source.Should().Contain("private void ConfigureStatusZoomSlider()");
+        source.Should().Contain("private static double StatusZoomSliderValueForPercent(double zoomPercent)");
+        source.Should().Contain("var inputPlan = StatusBarZoomSliderPlanner.BuildInput(e.NewValue);");
+        source.Should().NotContain("Math.Abs(sliderVal - 100.0)");
+        source.Should().NotContain("ZoomLevelMapper.SliderToZoomPercent(sliderVal)");
+        source.Should().NotContain("ZoomLevelMapper.ZoomPercentToSlider(fitPct)");
     }
 
     [Fact]
@@ -33,6 +38,7 @@ public sealed class ViewCommandSourceTests
         source.Should().Contain("_windowRegistry?.ArrangeVisibleWindows(arrangement, workArea.Width, workArea.Height)");
         source.Should().Contain("RefreshViewWindowCommandState()");
         source.Should().Contain("ApplyLiveWindowCommandState()");
+        source.Should().Contain("var canSwitchWindows = (_windowRegistry?.VisibleCount ?? 1) > 1;");
         source.Should().Contain("MainWindow_TooltipDescription_UnavailableSwitchWindowsRequiresSecondVisibleWindow");
         source.Should().Contain("AutomationProperties.SetHelpText(control, description)");
         source.Should().NotContain("ViewWindowCommandPlanner");
@@ -54,7 +60,8 @@ public sealed class ViewCommandSourceTests
         source.Should().Contain("private void ViewHideWindowBtn_Click(object sender, RoutedEventArgs e)");
         source.Should().Contain("_windowRegistry.Hide(this)");
         source.Should().Contain("private void ViewUnhideWindowBtn_Click(object sender, RoutedEventArgs e)");
-        source.Should().Contain("WorkbookWindowSelectionPlanner.BuildUnhideWindowTargets(_windowRegistry, _workbook.Name)");
+        source.Should().Contain("WorkbookWindowSelectionPlanner.BuildUnhideWindowTargets(");
+        source.Should().Contain("BuildWorkbookWindowSelectionEntries(_windowRegistry, hidden)");
         source.Should().Contain("new UnhideWindowDialog(targets)");
         source.Should().Contain("dialog.Result?.Window");
         source.Should().Contain("_windowRegistry.Unhide(window)");

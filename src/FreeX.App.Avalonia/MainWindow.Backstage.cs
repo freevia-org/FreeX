@@ -2,13 +2,13 @@ using System.Globalization;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
-using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Free.Shared.Shell.Avalonia;
+using FreeX.App.Presentation.Backstage;
 using FreeX.App.Services;
 using FreeX.Core.Commands;
-using AvaloniaGrid = Avalonia.Controls.Grid;
 using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
 
 namespace FreeX.App.Avalonia;
@@ -16,15 +16,23 @@ namespace FreeX.App.Avalonia;
 /// <summary>
 /// The File backstage panes for the Avalonia/macOS shell: Info, Export, and Account. These complete the
 /// File menu the audit flagged as missing the three consolidated panes. Each is a lightweight dialog that
-/// renders a PORTABLE, framework-neutral plan
+/// adapts a PORTABLE, framework-neutral plan into shared Avalonia pane specs
 /// (<see cref="WorkbookInfoPlanner"/> / <see cref="WorkbookExportScopePlanner"/> /
-/// <see cref="LocalAccountInfoPlanner"/>) so macOS inherits the data shaping; this file only lays out and
+/// <see cref="LocalAccountInfoPlanner"/>) so macOS inherits the data shaping; this file only wires and
 /// localizes. Strings flow through <see cref="UiText"/> with the <c>Backstage_*</c> prefix. Export reuses
 /// the existing <see cref="WorkbookExportPrintPlanner"/> + PDF path — it adds scope selection, not a new
 /// export engine.
 /// </summary>
 public sealed partial class MainWindow
 {
+    private static readonly AvaloniaBackstageChromeStyle BackstageChromeStyle = new(PrimaryInk!, SecondaryInk!)
+    {
+        SectionHeaderFontSize = 14,
+        SectionHeaderMargin = default,
+        DetailLabelMargin = new Thickness(0, 3, 12, 3),
+        NoteLineHeight = 20,
+    };
+
     // ── File ▸ Info ────────────────────────────────────────────────────────────
     private void ShowBackstageInfo() => _ = ShowBackstageInfoDialogAsync();
 
@@ -54,60 +62,17 @@ public sealed partial class MainWindow
 
         var closeButton = CreateBackstageCloseButton("BackstageInfoCloseButton", dialog);
 
-        var content = new StackPanel { Spacing = 14 };
+        var pane = FreeXBackstageInfoPanePlanner.Build(
+            FreeXBackstageInfoSurface.AvaloniaInfoDialog,
+            CreateBackstageInfoPaneRequest(display));
+        var content = AvaloniaBackstageChrome.CreatePane(
+            BuildBackstagePaneSpec(
+                FreeXBackstagePaneProjectionPlanner.BuildInfoDialog(pane),
+                dialog),
+            BackstageChromeStyle);
 
-        // File section
-        content.Children.Add(CreateBackstageSectionHeader(UiText.Get("Backstage_Info_FileSectionHeader")));
-        var fileGrid = CreateBackstageDetailGrid();
-        foreach (var detail in FreeXBackstagePaneCatalog.BuildInfoDetails(FreeXBackstageInfoSurface.AvaloniaInfoDialog))
-        {
-            AddBackstageDetailRow(
-                fileGrid,
-                UiText.Get(detail.LabelKey),
-                ResolveBackstageInfoDetailValue(detail.Id, display),
-                detail.ValueAutomationId);
-        }
-        content.Children.Add(fileGrid);
-
-        if (display.UnsavedChangesNote is { } unsavedChangesNote)
-            content.Children.Add(CreateBackstageNote(unsavedChangesNote, "BackstageInfoUnsaved"));
-
-        // Protection section
-        content.Children.Add(CreateBackstageSectionHeader(UiText.Get("Backstage_Info_ProtectionSectionHeader")));
-        content.Children.Add(CreateBackstageNote(display.WorkbookProtectionSummary, "BackstageInfoProtection"));
-        content.Children.Add(CreateBackstageNote(display.ActiveSheetProtectionSummary, "BackstageInfoActiveSheetProtection"));
-
-        var protectActions = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 8,
-        };
-        foreach (var action in FreeXBackstagePaneCatalog.BuildInfoActions(FreeXBackstageInfoSurface.AvaloniaInfoDialog))
-        {
-            protectActions.Children.Add(CreateBackstageActionButton(
-                UiText.Get(action.LabelKey),
-                action.AutomationId,
-                dialog,
-                ResolveBackstageInfoAction(action.Id)));
-        }
-        content.Children.Add(protectActions);
-
-        // Statistics section
-        content.Children.Add(CreateBackstageSectionHeader(UiText.Get("Backstage_Info_StatisticsSectionHeader")));
-        content.Children.Add(CreateBackstageNote(display.StatisticsSummary, "BackstageInfoStatistics"));
-
-        var root = new DockPanel { Margin = new Thickness(18) };
-        DockPanel.SetDock(closeButton, Dock.Bottom);
-        root.Children.Add(closeButton);
-        root.Children.Add(new ScrollViewer
-        {
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-            Margin = new Thickness(0, 0, 0, 12),
-            Content = content,
-        });
-
-        dialog.Content = root;
+        dialog.Content = AvaloniaBackstageChrome.CreateDialogLayout(
+            new AvaloniaBackstageDialogLayoutSpec(content, closeButton));
         dialog.KeyDown += (_, e) =>
         {
             if (e.Key == Key.Escape)
@@ -122,53 +87,50 @@ public sealed partial class MainWindow
 
     private WorkbookInfoPlan BuildWorkbookInfoPlan()
     {
-        long? sizeBytes = null;
-        System.DateTime? modifiedUtc = null;
-        System.DateTime? modifiedLocal = null;
-        var path = _session.CurrentFilePath;
-        if (!string.IsNullOrWhiteSpace(path) && File.Exists(path))
-        {
-            try
-            {
-                var info = new FileInfo(path);
-                sizeBytes = info.Length;
-                modifiedUtc = info.LastWriteTimeUtc;
-                modifiedLocal = info.LastWriteTime;
-            }
-            catch (IOException)
-            {
-            }
-            catch (UnauthorizedAccessException)
-            {
-            }
-        }
-
-        return WorkbookInfoPlanner.Build(
+        return WorkbookInfoFileMetadataReader.BuildPlan(
             _session.Workbook,
-            path,
+            _session.CurrentFilePath,
             ResolveActiveSheetIndex(),
-            sizeBytes,
-            modifiedUtc,
-            modifiedLocal,
-            _session.IsDirty);
+            hasUnsavedChanges: _session.IsDirty);
     }
 
     private static WorkbookInfoDisplayStrings CreateWorkbookInfoDisplayStrings() =>
         new(UiText.Get, (key, args) => UiText.Format(key, args));
 
-    private static string ResolveBackstageInfoDetailValue(
-        FreeXBackstageInfoDetailId id,
+    private static FreeXBackstageInfoPaneRequest CreateBackstageInfoPaneRequest(
         WorkbookInfoDisplayPlan display) =>
-        id switch
+        new(
+            display.WorkbookName,
+            display.FilePath,
+            display.SheetCount,
+            display.Format,
+            display.FileSize,
+            display.LastModified,
+            SharingStatus: string.Empty,
+            ExportStatus: string.Empty,
+            display.WorkbookProtectionSummary,
+            display.ActiveSheetProtectionSummary,
+            display.StatisticsSummary,
+            AccessibilitySummary: string.Empty,
+            FormulaErrorSummary: string.Empty,
+            display.UnsavedChangesNote);
+
+    private IReadOnlyList<AvaloniaBackstageActionButtonSpec> BuildBackstageInfoActionButtons(
+        IReadOnlyList<FreeXBackstageInfoActionPlan> actions,
+        Window dialog)
+    {
+        var buttons = new List<AvaloniaBackstageActionButtonSpec>();
+        foreach (var action in actions)
         {
-            FreeXBackstageInfoDetailId.WorkbookName => display.WorkbookName,
-            FreeXBackstageInfoDetailId.FilePath => display.FilePath,
-            FreeXBackstageInfoDetailId.Format => display.Format,
-            FreeXBackstageInfoDetailId.FileSize => display.FileSize,
-            FreeXBackstageInfoDetailId.LastModified => display.LastModified,
-            FreeXBackstageInfoDetailId.SheetCount => display.SheetCount,
-            _ => throw new ArgumentOutOfRangeException(nameof(id), id, null)
-        };
+            buttons.Add(CreateBackstageClosingActionButtonSpec(
+                UiText.Get(action.LabelKey),
+                action.AutomationId,
+                dialog,
+                ResolveBackstageInfoAction(action.Id)));
+        }
+
+        return buttons;
+    }
 
     private Action ResolveBackstageInfoAction(FreeXBackstageInfoActionId id) =>
         id switch
@@ -196,6 +158,17 @@ public sealed partial class MainWindow
             _session.Workbook,
             hasSelection,
             WorkbookExportPrintSurface.MacOs);
+        var exportPane = FreeXBackstageExportPanePlanner.Build(
+            FreeXBackstageExportPanePlanner.CreateRequest(
+                scopePlan.Scopes
+                    .Select(scope => new FreeXBackstageExportScopeOptionSource<WorkbookExportPrintScope>(
+                        scope.Scope,
+                        scope.IsAvailable,
+                        scope.IsDefault))
+                    .ToArray(),
+                scopePlan.SupportedOutputKinds,
+                scopePlan.DefaultOutputKind,
+                scopePlan.CanExport));
 
         var dialog = new Window
         {
@@ -209,57 +182,15 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetAutomationId(dialog, "BackstageExportDialog");
 
-        var content = new StackPanel { Spacing = 14 };
-
-        if (!scopePlan.CanExport)
-        {
-            content.Children.Add(CreateBackstageNote(UiText.Get("Backstage_Export_Unavailable"), "BackstageExportUnavailable"));
-        }
-
-        // Scope radios
-        content.Children.Add(CreateBackstageSectionHeader(UiText.Get("Backstage_Export_ScopeHeader")));
         var selectedScope = scopePlan.DefaultScope;
-        foreach (var option in scopePlan.Scopes)
-        {
-            var radio = new RadioButton
-            {
-                GroupName = "BackstageExportScope",
-                Content = UiText.Get(FreeXBackstagePaneCatalog.GetExportScopeLabelKey(option.Scope, option.IsAvailable)),
-                IsEnabled = option.IsAvailable,
-                IsChecked = option.IsDefault,
-                Margin = new Thickness(0, 2),
-            };
-            AutomationProperties.SetAutomationId(radio, FreeXBackstagePaneCatalog.GetExportScopeAutomationId(option.Scope));
-            var capturedScope = option.Scope;
-            radio.IsCheckedChanged += (_, _) =>
-            {
-                if (radio.IsChecked == true)
-                    selectedScope = capturedScope;
-            };
-            content.Children.Add(radio);
-        }
-
-        // Format radios (PDF, and XPS only where the surface supports it)
-        content.Children.Add(CreateBackstageSectionHeader(UiText.Get("Backstage_Export_FormatHeader")));
         var selectedFormat = scopePlan.DefaultOutputKind;
-        foreach (var outputKind in scopePlan.SupportedOutputKinds)
-        {
-            var formatRadio = new RadioButton
-            {
-                GroupName = "BackstageExportFormat",
-                Content = UiText.Get(FreeXBackstagePaneCatalog.GetExportOutputKindLabelKey(outputKind)),
-                IsChecked = outputKind == scopePlan.DefaultOutputKind,
-                Margin = new Thickness(0, 2),
-            };
-            AutomationProperties.SetAutomationId(formatRadio, FreeXBackstagePaneCatalog.GetExportOutputKindAutomationId(outputKind));
-            var capturedKind = outputKind;
-            formatRadio.IsCheckedChanged += (_, _) =>
-            {
-                if (formatRadio.IsChecked == true)
-                    selectedFormat = capturedKind;
-            };
-            content.Children.Add(formatRadio);
-        }
+        var content = AvaloniaBackstageChrome.CreatePane(
+            BuildBackstagePaneSpec(
+                FreeXBackstagePaneProjectionPlanner.BuildExportDialog(exportPane),
+                dialog,
+                scope => selectedScope = FreeXBackstageExportPanePlanner.ToExternalScope<WorkbookExportPrintScope>(scope),
+                outputKind => selectedFormat = FreeXBackstageExportPanePlanner.ToExternalOutputKind<WorkbookExportPrintOutputKind>(outputKind)),
+            BackstageChromeStyle);
 
         var exportButton = new Button
         {
@@ -292,18 +223,8 @@ public sealed partial class MainWindow
             Children = { cancelButton, exportButton },
         };
 
-        var root = new DockPanel { Margin = new Thickness(18) };
-        DockPanel.SetDock(buttonRow, Dock.Bottom);
-        root.Children.Add(buttonRow);
-        root.Children.Add(new ScrollViewer
-        {
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-            Margin = new Thickness(0, 0, 0, 12),
-            Content = content,
-        });
-
-        dialog.Content = root;
+        dialog.Content = AvaloniaBackstageChrome.CreateDialogLayout(
+            new AvaloniaBackstageDialogLayoutSpec(content, buttonRow));
         dialog.KeyDown += (_, e) =>
         {
             if (e.Key == Key.Escape)
@@ -314,6 +235,47 @@ public sealed partial class MainWindow
         };
         dialog.Opened += (_, _) => exportButton.Focus();
         await dialog.ShowDialog(this);
+    }
+
+    private static IReadOnlyList<AvaloniaBackstageRadioOptionSpec> BuildBackstageExportScopeOptions(
+        IReadOnlyList<FreeXBackstageExportRadioOptionProjection> scopeOptions,
+        Action<FreeXBackstageExportScopeId> selectScope)
+    {
+        var options = new List<AvaloniaBackstageRadioOptionSpec>();
+        foreach (var option in scopeOptions.OfType<FreeXBackstageExportScopeRadioOptionProjection>())
+        {
+            var capturedScope = option.Scope;
+            options.Add(new AvaloniaBackstageRadioOptionSpec(
+                UiText.Get(option.LabelKey),
+                option.AutomationId,
+                () => selectScope(capturedScope))
+            {
+                IsEnabled = option.IsEnabled,
+                IsChecked = option.IsDefault,
+            });
+        }
+
+        return options;
+    }
+
+    private static IReadOnlyList<AvaloniaBackstageRadioOptionSpec> BuildBackstageExportFormatOptions(
+        IReadOnlyList<FreeXBackstageExportRadioOptionProjection> outputKindOptions,
+        Action<FreeXBackstageExportOutputKindId> selectOutputKind)
+    {
+        var options = new List<AvaloniaBackstageRadioOptionSpec>();
+        foreach (var option in outputKindOptions.OfType<FreeXBackstageExportOutputKindRadioOptionProjection>())
+        {
+            var capturedKind = option.OutputKind;
+            options.Add(new AvaloniaBackstageRadioOptionSpec(
+                UiText.Get(option.LabelKey),
+                option.AutomationId,
+                () => selectOutputKind(capturedKind))
+            {
+                IsChecked = option.IsDefault,
+            });
+        }
+
+        return options;
     }
 
     // ── File ▸ Account ────────────────────────────────────────────────────────────
@@ -339,68 +301,16 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetAutomationId(dialog, "BackstageAccountDialog");
 
-        var content = new StackPanel { Spacing = 14 };
+        var closeButton = CreateBackstageCloseButton("BackstageAccountCloseButton", dialog);
+        var content = AvaloniaBackstageChrome.CreatePane(
+            BuildBackstagePaneSpec(
+                FreeXBackstagePaneProjectionPlanner.BuildAccountDialog(
+                    BuildBackstageAccountPanePlan(plan)),
+                dialog),
+            BackstageChromeStyle);
 
-        // Match the Windows backstage Account page: an "Account" heading + "Local account information"
-        // subheading over the local app/OS identity rows sourced from the shared catalog (no cloud note).
-        content.Children.Add(CreateBackstageAccountHeading(UiText.Get("Backstage_Account_Title")));
-        content.Children.Add(CreateBackstageSectionHeader(UiText.Get("Backstage_Account_LocalInfoHeading")));
-        var grid = CreateBackstageDetailGrid();
-        foreach (var detail in FreeXBackstagePaneCatalog.BuildAccountDetails())
-        {
-            AddBackstageDetailRow(
-                grid,
-                UiText.Get(detail.LabelKey),
-                ResolveBackstageAccountDetailValue(detail.Id, plan),
-                detail.ValueAutomationId);
-        }
-        content.Children.Add(grid);
-
-        var actionRow = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 8,
-        };
-        foreach (var action in FreeXBackstagePaneCatalog.BuildAccountActions(plan.OptionsAvailable))
-        {
-            actionRow.Children.Add(CreateBackstageActionButton(
-                UiText.Get(action.LabelKey),
-                action.AutomationId,
-                dialog,
-                ResolveBackstageAccountAction(action.Id)));
-        }
-        content.Children.Add(actionRow);
-
-        content.Children.Add(CreateBackstageSectionHeader(UiText.Get("Backstage_Account_NoticesSectionHeader")));
-        foreach (var notice in FreeXBackstagePaneCatalog.BuildAccountNotices())
-        {
-            content.Children.Add(CreateBackstageNote(
-                ResolveBackstageAccountNoticeValue(notice.Id, plan),
-                notice.AutomationId));
-        }
-
-        var closeButton = new Button
-        {
-            Content = UiText.Get("Backstage_Account_CloseButton"),
-            MinWidth = 96,
-            Padding = new Thickness(10, 4),
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-        };
-        AutomationProperties.SetAutomationId(closeButton, "BackstageAccountCloseButton");
-        closeButton.Click += (_, _) => dialog.Close();
-
-        var root = new DockPanel { Margin = new Thickness(18) };
-        DockPanel.SetDock(closeButton, Dock.Bottom);
-        root.Children.Add(closeButton);
-        root.Children.Add(new ScrollViewer
-        {
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-            Margin = new Thickness(0, 0, 0, 12),
-            Content = content,
-        });
-
-        dialog.Content = root;
+        dialog.Content = AvaloniaBackstageChrome.CreateDialogLayout(
+            new AvaloniaBackstageDialogLayoutSpec(content, closeButton));
         dialog.KeyDown += (_, e) =>
         {
             if (e.Key == Key.Escape)
@@ -413,57 +323,113 @@ public sealed partial class MainWindow
         await dialog.ShowDialog(this);
     }
 
-    private string ResolveBackstageAccountDetailValue(
-        FreeXBackstageAccountDetailId id,
+    private FreeXBackstageAccountPanePlan BuildBackstageAccountPanePlan(
         LocalAccountInfoPlan plan) =>
-        id switch
+        FreeXBackstageAccountPanePlanner.Build(new FreeXBackstageAccountPaneRequest(
+            plan.UserName,
+            plan.DeviceName,
+            plan.VersionText,
+            plan.OptionsAvailable,
+            _session.CurrentFilePath,
+            _session.Workbook.Name,
+            plan.TrademarkNotice,
+            plan.LicenseNotice,
+            plan.PrivacyNotice));
+
+    private IReadOnlyList<AvaloniaBackstageActionButtonSpec> BuildBackstageAccountActionButtons(
+        IReadOnlyList<FreeXBackstageAccountActionDefinition> actions,
+        Window dialog)
+    {
+        var buttons = new List<AvaloniaBackstageActionButtonSpec>();
+        foreach (var action in actions)
         {
-            // No personalized FreeX user name override is configured, so it falls back to the OS account
-            // — matching the Windows page, which shows the same identity for both rows by default.
-            FreeXBackstageAccountDetailId.FreeXUserName => ResolveBackstageAccountUserName(plan),
-            FreeXBackstageAccountDetailId.LocalOsAccount => ResolveBackstageAccountUserName(plan),
-            FreeXBackstageAccountDetailId.Device => plan.DeviceName,
-            FreeXBackstageAccountDetailId.AppVersion => plan.VersionText,
-            FreeXBackstageAccountDetailId.OptionsFile => UiText.Get("Backstage_Account_OptionsFileLocalProfile"),
-            FreeXBackstageAccountDetailId.CurrentWorkbook => ResolveBackstageAccountCurrentWorkbook(),
-            FreeXBackstageAccountDetailId.Sharing => UiText.Get("Backstage_Account_SharingSaveAsRequired"),
-            FreeXBackstageAccountDetailId.Export => UiText.Get("Backstage_Account_ExportReadyLocal"),
-            _ => throw new ArgumentOutOfRangeException(nameof(id), id, null)
+            buttons.Add(CreateBackstageClosingActionButtonSpec(
+                UiText.Get(action.LabelKey),
+                action.AutomationId,
+                dialog,
+                ResolveBackstageAccountAction(action.Id)));
+        }
+
+        return buttons;
+    }
+
+    private AvaloniaBackstagePaneSpec BuildBackstagePaneSpec(
+        FreeXBackstagePaneProjectionPlan projection,
+        Window dialog,
+        Action<FreeXBackstageExportScopeId>? selectScope = null,
+        Action<FreeXBackstageExportOutputKindId>? selectOutputKind = null)
+    {
+        var elements = new List<AvaloniaBackstagePaneElementSpec>();
+        foreach (var element in projection.Elements)
+        {
+            elements.Add(element switch
+            {
+                FreeXBackstageHeadingProjectionElement heading =>
+                    new AvaloniaBackstageHeadingElementSpec(UiText.Get(heading.TextKey)),
+                FreeXBackstageSectionHeaderProjectionElement section =>
+                    new AvaloniaBackstageSectionHeaderElementSpec(UiText.Get(section.TextKey)),
+                FreeXBackstageNoteProjectionElement note =>
+                    new AvaloniaBackstageNoteElementSpec(
+                        ResolveBackstageTextValue(note.Text),
+                        note.AutomationId),
+                FreeXBackstageDetailRowsProjectionElement details =>
+                    new AvaloniaBackstageDetailRowsElementSpec(BuildBackstageDetailRows(details.Rows)),
+                FreeXBackstageInfoActionRowProjectionElement actions =>
+                    new AvaloniaBackstageActionRowElementSpec(BuildBackstageInfoActionButtons(actions.Actions, dialog)),
+                FreeXBackstageAccountActionRowProjectionElement actions =>
+                    new AvaloniaBackstageActionRowElementSpec(BuildBackstageAccountActionButtons(actions.Actions, dialog)),
+                FreeXBackstageExportRadioGroupProjectionElement group =>
+                    new AvaloniaBackstageRadioGroupElementSpec(
+                        group.GroupAutomationId,
+                        BuildBackstageExportOptions(group.Options, selectScope, selectOutputKind)),
+                _ => throw new ArgumentOutOfRangeException(nameof(element), element, null),
+            });
+        }
+
+        return new AvaloniaBackstagePaneSpec(elements);
+    }
+
+    private static IReadOnlyList<AvaloniaBackstageDetailRowSpec> BuildBackstageDetailRows(
+        IReadOnlyList<FreeXBackstageDetailRowProjection> details)
+    {
+        var rows = new List<AvaloniaBackstageDetailRowSpec>();
+        foreach (var detail in details)
+        {
+            rows.Add(new AvaloniaBackstageDetailRowSpec(
+                UiText.Get(detail.LabelKey),
+                ResolveBackstageTextValue(detail.Value),
+                detail.ValueAutomationId));
+        }
+
+        return rows;
+    }
+
+    private static IReadOnlyList<AvaloniaBackstageRadioOptionSpec> BuildBackstageExportOptions(
+        IReadOnlyList<FreeXBackstageExportRadioOptionProjection> options,
+        Action<FreeXBackstageExportScopeId>? selectScope,
+        Action<FreeXBackstageExportOutputKindId>? selectOutputKind) =>
+        options.FirstOrDefault() switch
+        {
+            FreeXBackstageExportScopeRadioOptionProjection => BuildBackstageExportScopeOptions(
+                options,
+                selectScope ?? throw new ArgumentNullException(nameof(selectScope))),
+            FreeXBackstageExportOutputKindRadioOptionProjection => BuildBackstageExportFormatOptions(
+                options,
+                selectOutputKind ?? throw new ArgumentNullException(nameof(selectOutputKind))),
+            null => [],
+            _ => throw new ArgumentOutOfRangeException(nameof(options), options, null)
         };
 
-    private static string ResolveBackstageAccountUserName(LocalAccountInfoPlan plan) =>
-        string.IsNullOrWhiteSpace(plan.UserName)
-            ? UiText.Get("Backstage_Account_UserLocalOnly")
-            : plan.UserName;
-
-    private string ResolveBackstageAccountCurrentWorkbook()
-    {
-        var path = _session.CurrentFilePath;
-        if (!string.IsNullOrWhiteSpace(path))
-            return Path.GetFileName(path);
-
-        var name = _session.Workbook.Name;
-        return string.IsNullOrWhiteSpace(name)
-            ? UiText.Get("Backstage_Account_CurrentWorkbookUnsaved")
-            : name;
-    }
+    private static string ResolveBackstageTextValue(FreeXBackstageTextValue value) =>
+        value.TextKey is { } key
+            ? UiText.Get(key)
+            : value.Text ?? string.Empty;
 
     private Action ResolveBackstageAccountAction(FreeXBackstageAccountActionId id) =>
         id switch
         {
             FreeXBackstageAccountActionId.Options => ShowOptions,
             FreeXBackstageAccountActionId.LegalNotices => () => _ = ShowLegalNoticesDialogAsync(),
-            _ => throw new ArgumentOutOfRangeException(nameof(id), id, null)
-        };
-
-    private static string ResolveBackstageAccountNoticeValue(
-        FreeXBackstageAccountNoticeId id,
-        LocalAccountInfoPlan plan) =>
-        id switch
-        {
-            FreeXBackstageAccountNoticeId.Trademark => plan.TrademarkNotice,
-            FreeXBackstageAccountNoticeId.License => plan.LicenseNotice,
-            FreeXBackstageAccountNoticeId.Privacy => plan.PrivacyNotice,
             _ => throw new ArgumentOutOfRangeException(nameof(id), id, null)
         };
 
@@ -480,101 +446,32 @@ public sealed partial class MainWindow
     }
 
     // ── shared backstage chrome helpers ─────────────────────────────────────────
-    private static TextBlock CreateBackstageAccountHeading(string text) =>
-        new()
-        {
-            Text = text,
-            FontWeight = FontWeight.SemiBold,
-            FontSize = 22,
-            Foreground = PrimaryInk,
-        };
-
-    private static TextBlock CreateBackstageSectionHeader(string text) =>
-        new()
-        {
-            Text = text,
-            FontWeight = FontWeight.SemiBold,
-            FontSize = 14,
-            Foreground = PrimaryInk,
-        };
-
-    private static TextBlock CreateBackstageNote(string text, string automationId)
-    {
-        var block = new TextBlock
-        {
-            Text = text,
-            TextWrapping = TextWrapping.Wrap,
-            Foreground = SecondaryInk,
-            LineHeight = 20,
-        };
-        AutomationProperties.SetAutomationId(block, automationId);
-        return block;
-    }
-
-    private static AvaloniaGrid CreateBackstageDetailGrid() =>
-        new()
-        {
-            ColumnDefinitions = new ColumnDefinitions("Auto,*"),
-            Margin = new Thickness(0, 2, 0, 0),
-        };
-
-    private static void AddBackstageDetailRow(AvaloniaGrid grid, string label, string value, string valueAutomationId)
-    {
-        var rowIndex = grid.RowDefinitions.Count;
-        grid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
-
-        var labelBlock = new TextBlock
-        {
-            Text = label,
-            Foreground = SecondaryInk,
-            Margin = new Thickness(0, 3, 12, 3),
-        };
-        AvaloniaGrid.SetColumn(labelBlock, 0);
-        AvaloniaGrid.SetRow(labelBlock, rowIndex);
-
-        var valueBlock = new TextBlock
-        {
-            Text = value,
-            Foreground = PrimaryInk,
-            TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 3, 0, 3),
-        };
-        AutomationProperties.SetAutomationId(valueBlock, valueAutomationId);
-        AvaloniaGrid.SetColumn(valueBlock, 1);
-        AvaloniaGrid.SetRow(valueBlock, rowIndex);
-
-        grid.Children.Add(labelBlock);
-        grid.Children.Add(valueBlock);
-    }
-
-    private static Button CreateBackstageActionButton(string text, string automationId, Window dialog, Action action)
-    {
-        var button = new Button
-        {
-            Content = text,
-            Padding = new Thickness(10, 4),
-        };
-        AutomationProperties.SetAutomationId(button, automationId);
-        button.Click += (_, _) =>
-        {
-            dialog.Close();
-            action();
-        };
-        return button;
-    }
+    private static AvaloniaBackstageActionButtonSpec CreateBackstageClosingActionButtonSpec(
+        string text,
+        string automationId,
+        Window dialog,
+        Action action) =>
+        new(
+            text,
+            automationId,
+            () =>
+            {
+                dialog.Close();
+                action();
+            });
 
     private static Button CreateBackstageCloseButton(string automationId, Window dialog)
     {
-        var button = new Button
+        var closeText = UiText.Get("Backstage_Account_CloseButton");
+        return AvaloniaBackstageChrome.CreateActionButton(new AvaloniaBackstageActionButtonSpec(
+            closeText,
+            automationId,
+            dialog.Close)
         {
-            Content = UiText.Get("Backstage_Account_CloseButton"),
+            AutomationName = closeText,
             MinWidth = 96,
             Padding = new Thickness(10, 4),
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-        };
-        AutomationProperties.SetName(button, UiText.Get("Backstage_Account_CloseButton"));
-        AutomationProperties.SetAutomationId(button, automationId);
-        button.Click += (_, _) => dialog.Close();
-        return button;
+        });
     }
 }

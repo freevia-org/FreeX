@@ -226,6 +226,13 @@ public sealed partial class DataToolDialogTests
         source.Should().Contain("Target = _columnsPanel");
         source.Should().Contain("_columnsPanel.Focusable = true");
         source.Should().Contain("_columnsPanel.GotKeyboardFocus");
+        source.Should().Contain("ServicesRemoveDuplicatesPlanner.BuildColumnChoices");
+        source.Should().Contain("ServicesRemoveDuplicatesPlanner.GetSelectedColumnOffsets");
+        source.Should().Contain("ServicesRemoveDuplicatesPlanner.GuessHasHeaders");
+        source.Should().Contain("ServicesRemoveDuplicatesPlanner.ExcludeHeaderRow");
+        source.Should().NotContain("SpreadsheetDisplayFormatter");
+        source.Should().NotContain("ScalarValue?");
+        source.Should().NotContain("NumberValue or DateTimeValue or BoolValue");
         source.Should().NotContain("new TextBlock { Text = \"Columns:\"");
         source.Should().Contain("SelectAllButton_Click");
         source.Should().Contain("UnselectAllButton_Click");
@@ -233,10 +240,11 @@ public sealed partial class DataToolDialogTests
         source.Should().Contain("HasHeaders");
         mainWindowSource.Should().Contain("TryExecuteRepeatableGroupedSheetCommand(");
         mainWindowSource.Should().Contain("var currentRange = SheetGrid.SelectedRange ?? range;");
-        mainWindowSource.Should().Contain("var activeRange = RemoveDuplicatesDialog.ExcludeHeaderRow(currentRange, dialog.Result.HasHeaders);");
-        mainWindowSource.Should().Contain("GroupedSheetRangePlanner.RemapRangeToSheet(");
-        mainWindowSource.Should().Contain("activeRange,");
-        mainWindowSource.Should().Contain("new RemoveDuplicateRowsCommand(");
+        mainWindowSource.Should().Contain("RemoveDuplicatesPlanner.CreatePlan(");
+        mainWindowSource.Should().Contain("dialog.Result.SelectedColumnOffsets");
+        mainWindowSource.Should().Contain("var command = plan.CreateCommand(sheetId);");
+        mainWindowSource.Should().NotContain("var activeRange = RemoveDuplicatesDialog.ExcludeHeaderRow(currentRange, dialog.Result.HasHeaders);");
+        mainWindowSource.Should().NotContain("new RemoveDuplicateRowsCommand(");
         mainWindowSource.Should().Contain("UiText.Format(\"MainWindowMessage_RemoveDuplicatesRemovedRows\", activeSheetCommand?.RemovedRowCount ?? 0)");
     }
 

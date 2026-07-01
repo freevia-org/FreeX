@@ -24,8 +24,8 @@ namespace FreeP.App.Compositor;
 /// </summary>
 public static class SmartArtLayoutEngine
 {
-    // 1 inch = 914400 EMU
-    private const long EmuPerDip = 9525L;
+    // DrawingML EMU per 96-DPI DIP.
+    private const long EmuPerDip = DrawingMlCoordinateUnits.EmuPerPixel;
 
     // Padding as a fraction of the available dimension
     private const double OuterPaddingFrac = 0.04;  // 4% outer margin

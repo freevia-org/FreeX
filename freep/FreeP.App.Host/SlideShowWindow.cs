@@ -5,7 +5,9 @@ using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
+using Free.Shared.AppServices;
 using Free.Shared.Drawing;
+using FreeP.App.Compositor;
 using FreeP.App.Rendering.Wpf;
 using FreeP.Core.Model;
 
@@ -48,7 +50,9 @@ public sealed class SlideShowWindow : Window
 
     private readonly Presentation    _presentation;
     private readonly SlideShowController _controller;
+    private readonly DateTimeOffset _presenterStartedAtUtc;
     private readonly DispatcherTimer  _autoAdvanceTimer;
+    private SlideShowPresenterToolPlan _presenterToolPlan = SlideShowPresenterToolPlanner.BuildPlan();
 
     // ── Visual tree ───────────────────────────────────────────────────────────────
 
@@ -88,11 +92,15 @@ public sealed class SlideShowWindow : Window
     {
         _presentation = presentation ?? throw new ArgumentNullException(nameof(presentation));
         _controller   = new SlideShowController(presentation.Slides, startIndex);
+        _presenterStartedAtUtc = DateTimeOffset.UtcNow;
 
         // Pre-compute slide DIP dimensions so HitTestHyperlink works even before the first
         // DisplayCurrentSlide call (e.g. in unit tests that construct but don't show the window).
-        _slideDipW = presentation.SlideSizeCxEmu / 9525.0;
-        _slideDipH = presentation.SlideSizeCyEmu / 9525.0;
+        var metrics = SlideShowHostPlanner.BuildSlideMetrics(
+            presentation.SlideSizeCxEmu,
+            presentation.SlideSizeCyEmu);
+        _slideDipW = metrics.WidthDip;
+        _slideDipH = metrics.HeightDip;
 
         // Window chrome
         WindowStyle  = WindowStyle.None;
@@ -176,76 +184,62 @@ public sealed class SlideShowWindow : Window
     /// </summary>
     public AdvanceResult ExecuteAdvance()
     {
-        var result = _controller.Advance();
-        switch (result)
-        {
-            case AdvanceResult.PlayStep ps:
-                PlayAnimationStep(ps.Step);
-                break;
-            case AdvanceResult.NavigateToSlide nav:
-                NavigateToSlide(nav.Slide, nav.SlideIndex);
-                break;
-            case AdvanceResult.AtEnd:
-                CloseSlideShow();
-                break;
-        }
-        return result;
+        var command = SlideShowHostPlanner.PlanAdvance(_controller);
+        ApplyHostCommand(command);
+        return command.AdvanceResult!;
     }
 
     /// <summary>Execute a logical back step and return what happened.</summary>
     public BackResult ExecuteBack()
     {
-        var result = _controller.Back();
-        if (result is BackResult.NavigateToSlide nav)
-            NavigateToSlide(nav.Slide, nav.SlideIndex);
-        return result;
+        var command = SlideShowHostPlanner.PlanBack(_controller);
+        ApplyHostCommand(command);
+        return command.BackResult!;
     }
 
     /// <summary>The underlying state machine (for test assertions).</summary>
     public SlideShowController Controller => _controller;
 
+    public DateTimeOffset PresenterStartedAtUtc => _presenterStartedAtUtc;
+
+    public SlideShowPresenterToolPlan PresenterToolPlan => _presenterToolPlan;
+
+    public SlideShowPresenterState CreatePresenterState(
+        DateTimeOffset nowUtc,
+        SlideShowPresenterDisplayIntent? displayIntent = null) =>
+        SlideShowHostPlanner.BuildPresenterState(
+            _presentation,
+            _controller,
+            _presenterStartedAtUtc,
+            nowUtc,
+            displayIntent,
+            _presenterToolPlan);
+
+    public SlideShowPresenterToolPlan ApplyPresenterToolIntent(
+        SlideShowTimingIntent timingIntent = SlideShowTimingIntent.None,
+        SlideShowRecordingMediaIntent mediaIntent = SlideShowRecordingMediaIntent.None,
+        SlideShowPresenterPointerMode pointerMode = SlideShowPresenterPointerMode.Arrow,
+        string? inkColorHex = null,
+        double inkThicknessDip = 0,
+        SlideShowInkRetentionDecision inkRetentionDecision = SlideShowInkRetentionDecision.KeepInk)
+    {
+        _presenterToolPlan = SlideShowPresenterToolPlanner.BuildPlan(
+            timingIntent,
+            mediaIntent,
+            pointerMode,
+            inkColorHex,
+            inkThicknessDip,
+            inkRetentionDecision);
+        return _presenterToolPlan;
+    }
+
     // ── Keyboard navigation ───────────────────────────────────────────────────────
 
     private void OnKeyDown(object sender, KeyEventArgs e)
     {
-        switch (e.Key)
-        {
-            case Key.Escape:
-                CloseSlideShow();
-                e.Handled = true;
-                break;
-
-            // Advance / forward
-            case Key.Right:
-            case Key.Space:
-            case Key.PageDown:
-            case Key.Enter:
-                DoAdvance();
-                e.Handled = true;
-                break;
-
-            // Back
-            case Key.Left:
-            case Key.PageUp:
-            case Key.Back:
-                DoBack();
-                e.Handled = true;
-                break;
-
-            case Key.Home:
-                _autoAdvanceTimer.Stop();
-                _controller.GoToSlide(0);
-                DisplayCurrentSlide(animated: false);
-                e.Handled = true;
-                break;
-
-            case Key.End:
-                _autoAdvanceTimer.Stop();
-                _controller.GoToSlide(_presentation.Slides.Count - 1);
-                DisplayCurrentSlide(animated: false);
-                e.Handled = true;
-                break;
-        }
+        var command = SlideShowHostPlanner.PlanKey(e.Key.ToString(), _controller, _presentation.Slides);
+        ApplyHostCommand(command);
+        e.Handled = command.IsHandled;
     }
 
     // ── Navigation helpers ────────────────────────────────────────────────────────
@@ -317,66 +311,13 @@ public sealed class SlideShowWindow : Window
     /// </summary>
     internal Hyperlink? HitTestHyperlink(Slide slide, double canvasX, double canvasY)
     {
-        double slideX = CanvasToSlideX(canvasX);
-        double slideY = CanvasToSlideY(canvasY);
-
-        return HitTestHyperlinkInShapes(slide.Shapes, slideX, slideY);
-    }
-
-    /// <summary>
-    /// Recursively searches <paramref name="shapes"/> (and their group children) for a shape
-    /// that contains (<paramref name="slideX"/>, <paramref name="slideY"/>) and carries a
-    /// hyperlink.  Group bounds are checked first so we only recurse when inside the group.
-    /// </summary>
-    private static Hyperlink? HitTestHyperlinkInShapes(
-        IReadOnlyList<SlideShape> shapes, double slideX, double slideY)
-    {
-        foreach (var shape in shapes)
-        {
-            if (!HitTestShape(shape, slideX, slideY)) continue;
-
-            // Shape-level hyperlink takes priority.
-            if (shape.Hyperlink is not null) return shape.Hyperlink;
-
-            // Recurse into group children — they share the same coordinate space as the
-            // parent slide (group children use absolute EMU offsets, not relative to the group),
-            // so no coordinate transform is needed; the same slideX/slideY is correct.
-            if (shape.Children.Count > 0)
-            {
-                var groupResult = HitTestHyperlinkInShapes(shape.Children, slideX, slideY);
-                if (groupResult is not null) return groupResult;
-            }
-
-            // Run-level: return the first hyperlink found in any run (shape-level approximation).
-            if (shape.TextBody is not null)
-            {
-                foreach (var para in shape.TextBody.Paragraphs)
-                    foreach (var run in para.Runs)
-                        if (run.Hyperlink is not null) return run.Hyperlink;
-            }
-        }
-        return null;
-    }
-
-    private static bool HitTestShape(SlideShape shape, double slideX, double slideY)
-    {
-        double sx  = shape.OffsetXEmu / 9525.0;
-        double sy  = shape.OffsetYEmu / 9525.0;
-        double scx = shape.ExtentCxEmu / 9525.0;
-        double scy = shape.ExtentCyEmu / 9525.0;
-        return slideX >= sx && slideX <= sx + scx && slideY >= sy && slideY <= sy + scy;
-    }
-
-    private double CanvasToSlideX(double canvasX)
-    {
-        double cw = _slideCanvas.ActualWidth  > 0 ? _slideCanvas.ActualWidth  : _slideDipW;
-        return canvasX * (_slideDipW / cw);
-    }
-
-    private double CanvasToSlideY(double canvasY)
-    {
-        double ch = _slideCanvas.ActualHeight > 0 ? _slideCanvas.ActualHeight : _slideDipH;
-        return canvasY * (_slideDipH / ch);
+        var slidePoint = SlideShowHostPlanner.MapCanvasPointToSlide(
+            canvasX,
+            canvasY,
+            _slideCanvas.ActualWidth,
+            _slideCanvas.ActualHeight,
+            CurrentSlideMetrics());
+        return SlideShowHostPlanner.HitTestHyperlink(slide, slidePoint);
     }
 
     /// <summary>
@@ -391,37 +332,25 @@ public sealed class SlideShowWindow : Window
         }
         else if (hlink.TargetSlideId is not null)
         {
-            var targetIdx = _presentation.Slides
-                .FindIndex(s => s.Id == hlink.TargetSlideId);
-            if (targetIdx >= 0)
-            {
-                _autoAdvanceTimer.Stop();
-                _controller.GoToSlide(targetIdx);
-                DisplayCurrentSlide(animated: false);
-            }
+            ApplyHostCommand(SlideShowHostPlanner.PlanInternalSlideJump(
+                _controller,
+                _presentation.Slides,
+                hlink.TargetSlideId));
         }
     }
 
     /// <summary>
-    /// Opens an external URL in the default browser.
-    /// Only http, https, and mailto schemes are allowed; all others are silently ignored.
+    /// Opens an external URL in the default browser through the shared URI allowlist.
+    /// Blocked schemes and launch failures are silently ignored so a bad slideshow link never crashes playback.
     /// </summary>
     internal static void OpenExternalUrl(string url)
     {
-        try
-        {
-            var uri = new Uri(url, UriKind.Absolute);
-            if (uri.Scheme is not ("http" or "https" or "mailto"))
-                return; // security guard: reject file:// and other schemes
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url)
+        ExternalUriLauncher.Open(
+            url,
+            uri => System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(uri.AbsoluteUri)
             {
                 UseShellExecute = true
-            });
-        }
-        catch
-        {
-            // Swallow — never crash the slideshow over a bad URL.
-        }
+            }));
     }
 
     /// <summary>
@@ -430,37 +359,13 @@ public sealed class SlideShowWindow : Window
     /// </summary>
     private uint? HitTestTriggerShape(Slide slide, double canvasX, double canvasY)
     {
-        // Convert canvas DIP coords to slide DIP coords.
-        // The canvas renders the slide at the canonical slide size (_slideDipW x _slideDipH)
-        // scaled to fit _slideCanvas.ActualWidth x _slideCanvas.ActualHeight.
-        double cw = _slideCanvas.ActualWidth  > 0 ? _slideCanvas.ActualWidth  : _slideDipW;
-        double ch = _slideCanvas.ActualHeight > 0 ? _slideCanvas.ActualHeight : _slideDipH;
-        double scaleX = _slideDipW / cw;
-        double scaleY = _slideDipH / ch;
-        double slideX = canvasX * scaleX;
-        double slideY = canvasY * scaleY;
-
-        // Get all unique trigger shape ids.
-        var triggerShapeIds = slide.Animations
-            .Where(a => a.TriggerShapeId is not null)
-            .Select(a => a.TriggerShapeId!.Value)
-            .Distinct();
-
-        foreach (var spid in triggerShapeIds)
-        {
-            var shape = slide.Shapes.FirstOrDefault(s => s.Id == spid);
-            if (shape is null) continue;
-
-            double shapeX  = shape.OffsetXEmu / 9525.0;
-            double shapeY  = shape.OffsetYEmu / 9525.0;
-            double shapeCx = shape.ExtentCxEmu / 9525.0;
-            double shapeCy = shape.ExtentCyEmu / 9525.0;
-
-            if (slideX >= shapeX && slideX <= shapeX + shapeCx &&
-                slideY >= shapeY && slideY <= shapeY + shapeCy)
-                return spid;
-        }
-        return null;
+        var slidePoint = SlideShowHostPlanner.MapCanvasPointToSlide(
+            canvasX,
+            canvasY,
+            _slideCanvas.ActualWidth,
+            _slideCanvas.ActualHeight,
+            CurrentSlideMetrics());
+        return SlideShowHostPlanner.HitTestTriggerShape(slide, slidePoint);
     }
 
     /// <summary>
@@ -470,21 +375,17 @@ public sealed class SlideShowWindow : Window
     /// </summary>
     private void PlayTriggerGroup(uint triggerShapeId)
     {
-        var step = _controller.AdvanceTrigger(triggerShapeId);
-        if (step is not null)
-            PlayAnimationStep(step);
+        ApplyHostCommand(SlideShowHostPlanner.PlanTrigger(_controller, triggerShapeId));
     }
 
     private void DoAdvance()
     {
-        _autoAdvanceTimer.Stop();
-        ExecuteAdvance();
+        ApplyHostCommand(SlideShowHostPlanner.PlanAdvance(_controller, stopAutoAdvance: true));
     }
 
     private void DoBack()
     {
-        _autoAdvanceTimer.Stop();
-        ExecuteBack();
+        ApplyHostCommand(SlideShowHostPlanner.PlanBack(_controller, stopAutoAdvance: true));
     }
 
     private void CloseSlideShow()
@@ -493,11 +394,30 @@ public sealed class SlideShowWindow : Window
         Close();
     }
 
-    private void NavigateToSlide(Slide slide, int index)
+    private void NavigateToSlide(Slide slide, int index, bool animated)
     {
         _ = slide;  // passed for callers that need it; we use _controller.CurrentSlide
         _ = index;
-        DisplayCurrentSlide(animated: true);
+        DisplayCurrentSlide(animated);
+    }
+
+    private void ApplyHostCommand(SlideShowHostCommand command)
+    {
+        if (command.StopAutoAdvance)
+            _autoAdvanceTimer.Stop();
+
+        switch (command.Kind)
+        {
+            case SlideShowHostCommandKind.Close:
+                CloseSlideShow();
+                break;
+            case SlideShowHostCommandKind.PlayAnimationStep when command.Step is not null:
+                PlayAnimationStep(command.Step);
+                break;
+            case SlideShowHostCommandKind.NavigateToSlide when command.Slide is not null:
+                NavigateToSlide(command.Slide, command.SlideIndex, command.AnimateSlide);
+                break;
+        }
     }
 
     // ── Slide display + transitions ───────────────────────────────────────────────
@@ -508,12 +428,12 @@ public sealed class SlideShowWindow : Window
     /// </summary>
     private void DisplayCurrentSlide(bool animated)
     {
-        var slide = _controller.CurrentSlide;
-        if (slide is null) return;
+        var plan = SlideShowHostPlanner.BuildDisplayPlan(_presentation, _controller, animated);
+        _slideDipW = plan.Metrics.WidthDip;
+        _slideDipH = plan.Metrics.HeightDip;
 
-        // Compute slide dimensions in DIP.
-        _slideDipW = _presentation.SlideSizeCxEmu / 9525.0;
-        _slideDipH = _presentation.SlideSizeCyEmu / 9525.0;
+        var slide = plan.Slide;
+        if (slide is null) return;
 
         // Prepare animation overlay for the new slide.
         PrepareAnimationOverlay(slide);
@@ -525,19 +445,21 @@ public sealed class SlideShowWindow : Window
         _mediaController.EnterSlide(slide, _slideDipW, _slideDipH, mediaCanvasW, mediaCanvasH);
 
         // Apply transition if requested.
-        if (animated && slide.Transition is { Kind: not TransitionKind.None } t)
+        if (plan.Transition is { } t)
             PlayTransition(slide, t);
         else
             ShowSlideInstant(slide);
 
         // Wire auto-advance timer.
         _autoAdvanceTimer.Stop();
-        if (slide.Transition?.AdvanceAfterMs is int advMs && advMs > 0)
+        if (plan.AutoAdvanceAfterMs is int advMs)
         {
             _autoAdvanceTimer.Interval = TimeSpan.FromMilliseconds(advMs);
             _autoAdvanceTimer.Start();
         }
     }
+
+    private SlideShowSlideMetrics CurrentSlideMetrics() => new(_slideDipW, _slideDipH);
 
     /// <summary>Instantly shows a slide without any transition animation.</summary>
     private void ShowSlideInstant(Slide slide)
@@ -575,51 +497,26 @@ public sealed class SlideShowWindow : Window
 
     private void PlayTransition(Slide slide, SlideTransition t)
     {
-        int ms = Math.Max(50, t.DurationMs);
-
         // Play transition sound first (fire-and-forget; swallowed on error).
         PlayTransitionSound(t);
 
-        switch (t.Kind)
+        var plan = SlideShowPlaybackPlanner.PlanTransition(t);
+        switch (plan.ActionKind)
         {
-            case TransitionKind.Cut:
+            case SlideShowTransitionPlaybackActionKind.ShowInstant:
                 ShowSlideInstant(slide);
                 return;
 
-            case TransitionKind.Fade:
-            case TransitionKind.Dissolve:
-            case TransitionKind.Flash:       // flash → fast fade approximation
-                PlayFadeTransition(slide, ms);
+            case SlideShowTransitionPlaybackActionKind.Fade:
+                PlayFadeTransition(slide, plan.DurationMs);
                 return;
 
-            case TransitionKind.Push:
-            case TransitionKind.Cover:
-            case TransitionKind.Wipe:
-            case TransitionKind.Uncover:
-                PlayPushTransition(slide, t, ms);
+            case SlideShowTransitionPlaybackActionKind.Push:
+                PlayPushTransition(slide, plan);
                 return;
 
-            // Directional / slide-like transitions: Push approximation
-            case TransitionKind.Gallery:
-            case TransitionKind.Conveyor:
-            case TransitionKind.Pan:
-            case TransitionKind.Reveal:
-            case TransitionKind.Comb:
-            case TransitionKind.Doors:
-            case TransitionKind.Window:
-                PlayPushTransition(slide, t, ms);
-                return;
-
-            // Exotic / 3-D transitions: Fade fallback
-            // Full morph/3D transition engines are out of scope; Fade is the safe approximation.
-            // Kinds: Morph, Cube, Box, Rotate, Flip, Ferris, Flythrough, Switch, Orbit, Honeycomb,
-            //        Glitter, Vortex, Shred, Wind, Ripple, Warp, Fracture, Crush, PeelOff,
-            //        PageCurlDouble, PageCurlSingle, Airplane, Origami, Prism, Curtains, Drape,
-            //        Prestige, WheelReverse, Zoom, Wheel, RandomBar, Strips, Blinds, Split, Random,
-            //        Fly, Other (unknown/exotic)
             default:
-                // All other kinds (including morph and all 3-D effects) fall back to Fade.
-                PlayFadeTransition(slide, ms);
+                PlayFadeTransition(slide, plan.DurationMs);
                 return;
         }
     }
@@ -705,12 +602,12 @@ public sealed class SlideShowWindow : Window
         _slideCanvas.BeginAnimation(OpacityProperty, anim);
     }
 
-    private void PlayPushTransition(Slide slide, SlideTransition t, int durationMs)
+    private void PlayPushTransition(Slide slide, SlideShowTransitionPlaybackPlan plan)
     {
         var snapshot = CaptureCurrentSlide();
 
-        // Determine direction vector for the push.
-        var (dx, dy) = GetDirectionVector(t.Direction, t.Kind);
+        var dx = plan.IncomingOffsetX;
+        var dy = plan.IncomingOffsetY;
 
         double w = _slideCanvas.ActualWidth  > 0 ? _slideCanvas.ActualWidth  : 960;
         double h = _slideCanvas.ActualHeight > 0 ? _slideCanvas.ActualHeight : 540;
@@ -728,7 +625,7 @@ public sealed class SlideShowWindow : Window
             _transitionBackImage.Visibility = Visibility.Visible;
         }
 
-        var duration = new Duration(TimeSpan.FromMilliseconds(durationMs));
+        var duration = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs));
         var ease     = new CubicEase { EasingMode = EasingMode.EaseInOut };
 
         // Animate incoming slide from off-screen to center.
@@ -743,26 +640,6 @@ public sealed class SlideShowWindow : Window
 
         incomingTranslate.BeginAnimation(TranslateTransform.XProperty, animX);
         incomingTranslate.BeginAnimation(TranslateTransform.YProperty, animY);
-    }
-
-    /// <summary>
-    /// Returns the (dx, dy) unit vector for the incoming slide's starting position
-    /// (before the push animation brings it to centre).
-    /// For Push/Cover: slide comes from the opposite edge it pushes toward.
-    /// </summary>
-    private static (double dx, double dy) GetDirectionVector(
-        TransitionDirection? dir, TransitionKind kind)
-    {
-        // Push/Cover right: incoming comes from the right → starts at +1,0
-        // Push left: incoming comes from the left → starts at -1,0
-        return dir switch
-        {
-            TransitionDirection.Right => (-1, 0),   // slide going right, incoming from left
-            TransitionDirection.Left  => ( 1, 0),   // slide going left,  incoming from right
-            TransitionDirection.Down  => ( 0,-1),   // slide going down,  incoming from top
-            TransitionDirection.Up    => ( 0, 1),   // slide going up,    incoming from bottom
-            _                         => ( 1, 0),   // default: slide from right
-        };
     }
 
     // ── Shape animation overlay ───────────────────────────────────────────────────
@@ -873,72 +750,67 @@ public sealed class SlideShowWindow : Window
 
     private void PlayAnimationStep(AnimationStep step)
     {
-        foreach (var anim in step.Animations)
+        foreach (var plan in SlideShowPlaybackPlanner.PlanAnimationStep(step))
         {
+            var anim = plan.Animation;
             if (!_animElements.TryGetValue(anim.ShapeId, out var element))
             {
                 // No overlay element (shape has no entrance overlay or is emphasis/exit):
                 // handle emphasis / exit on the live canvas best-effort.
-                PlayFallbackAnimation(anim);
+                PlayFallbackAnimation(SlideShowPlaybackPlanner.PlanFallbackAnimation(anim, plan.DelayMs));
                 continue;
             }
 
-            PlayShapeAnimation(element, anim);
+            PlayShapeAnimation(element, plan);
             _revealedShapes.Add(anim.ShapeId);
         }
     }
 
-    private void PlayShapeAnimation(FrameworkElement element, ShapeAnimation anim)
+    private void PlayShapeAnimation(FrameworkElement element, SlideShowShapeAnimationPlaybackPlan plan)
     {
-        int durationMs = Math.Max(50, anim.DurationMs);
-        int delayMs    = Math.Max(0,  anim.DelayMs);
-
         var sb = new Storyboard();
 
-        // Motion-path animation takes priority over preset.
-        if (anim.Kind == AnimationKind.Motion && anim.Motion is not null)
+        if (plan.EffectKind == SlideShowShapeAnimationEffectKind.MotionPath)
         {
-            MotionPathEffect(sb, element, anim.Motion, durationMs, delayMs);
+            MotionPathEffect(sb, element, plan);
             _pendingStoryboards.Add(sb);
             sb.Begin(element, isControllable: true);
             return;
         }
 
-        switch (anim.Preset)
+        switch (plan.EffectKind)
         {
-            case AnimationPreset.Appear:
-                AppearEffect(sb, element, delayMs);
+            case SlideShowShapeAnimationEffectKind.Appear:
+                AppearEffect(sb, element, plan.DelayMs);
                 break;
 
-            case AnimationPreset.Fade:
-                FadeEffect(sb, element, anim.Kind, durationMs, delayMs);
+            case SlideShowShapeAnimationEffectKind.Fade:
+                FadeEffect(sb, element, plan);
                 break;
 
-            case AnimationPreset.FlyIn:
-                FlyInEffect(sb, element, anim, durationMs, delayMs);
+            case SlideShowShapeAnimationEffectKind.FlyIn:
+                FlyInEffect(sb, element, plan);
                 break;
 
-            case AnimationPreset.Wipe:
-                WipeEffect(sb, element, anim, durationMs, delayMs);
+            case SlideShowShapeAnimationEffectKind.Wipe:
+                WipeEffect(sb, element, plan);
                 break;
 
-            case AnimationPreset.Zoom:
-                ZoomEffect(sb, element, anim.Kind, durationMs, delayMs);
+            case SlideShowShapeAnimationEffectKind.Zoom:
+                ZoomEffect(sb, element, plan);
                 break;
 
-            // Emphasis effects on overlay image (best-effort)
-            case AnimationPreset.Pulse:
-            case AnimationPreset.Grow:
-                PulseEffect(sb, element, durationMs, delayMs);
+            case SlideShowShapeAnimationEffectKind.Pulse:
+                PulseEffect(sb, element, plan);
                 break;
 
-            case AnimationPreset.Spin:
-                SpinEffect(sb, element, durationMs, delayMs);
+            case SlideShowShapeAnimationEffectKind.Spin:
+                SpinEffect(sb, element, plan);
                 break;
 
             default:
                 // Unknown preset → instant appear
-                AppearEffect(sb, element, delayMs);
+                AppearEffect(sb, element, plan.DelayMs);
                 break;
         }
 
@@ -958,14 +830,14 @@ public sealed class SlideShowWindow : Window
     }
 
     private static void FadeEffect(Storyboard sb, FrameworkElement el,
-        AnimationKind kind, int durationMs, int delayMs)
+        SlideShowShapeAnimationPlaybackPlan plan)
     {
-        double from = kind == AnimationKind.Exit ? 1 : 0;
-        double to   = kind == AnimationKind.Exit ? 0 : 1;
-
-        var anim = new DoubleAnimation(from, to, new Duration(TimeSpan.FromMilliseconds(durationMs)))
+        var anim = new DoubleAnimation(
+            plan.FromOpacity,
+            plan.ToOpacity,
+            new Duration(TimeSpan.FromMilliseconds(plan.DurationMs)))
         {
-            BeginTime     = TimeSpan.FromMilliseconds(delayMs),
+            BeginTime     = TimeSpan.FromMilliseconds(plan.DelayMs),
             EasingFunction = new CubicEase { EasingMode = EasingMode.EaseInOut }
         };
         Storyboard.SetTarget(anim, el);
@@ -974,7 +846,7 @@ public sealed class SlideShowWindow : Window
     }
 
     private void FlyInEffect(Storyboard sb, FrameworkElement el,
-        ShapeAnimation anim, int durationMs, int delayMs)
+        SlideShowShapeAnimationPlaybackPlan plan)
     {
         double w = _slideCanvas.ActualWidth  > 0 ? _slideCanvas.ActualWidth  : 960;
         double h = _slideCanvas.ActualHeight > 0 ? _slideCanvas.ActualHeight : 540;
@@ -982,33 +854,18 @@ public sealed class SlideShowWindow : Window
         var translate = new TranslateTransform(0, 0);
         el.RenderTransform = translate;
 
-        // Determine starting offset direction.
-        var (dx, dy) = anim.Direction switch
-        {
-            AnimationDirection.FromLeft        => (-w,  0),
-            AnimationDirection.FromRight       => ( w,  0),
-            AnimationDirection.FromTop         => ( 0, -h),
-            AnimationDirection.FromBottom      => ( 0,  h),
-            AnimationDirection.FromTopLeft     => (-w, -h),
-            AnimationDirection.FromTopRight    => ( w, -h),
-            AnimationDirection.FromBottomLeft  => (-w,  h),
-            AnimationDirection.FromBottomRight => ( w,  h),
-            AnimationDirection.Left            => (-w,  0),
-            AnimationDirection.Right           => ( w,  0),
-            AnimationDirection.Up              => ( 0, -h),
-            AnimationDirection.Down            => ( 0,  h),
-            _                                  => ( 0,  h),  // default from bottom
-        };
+        double dx = plan.OffsetXFactor * w;
+        double dy = plan.OffsetYFactor * h;
 
-        var dur = new Duration(TimeSpan.FromMilliseconds(durationMs));
+        var dur = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs));
         var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
 
         var animX = new DoubleAnimation(dx, 0, dur)
-            { BeginTime = TimeSpan.FromMilliseconds(delayMs), EasingFunction = ease };
+            { BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs), EasingFunction = ease };
         var animY = new DoubleAnimation(dy, 0, dur)
-            { BeginTime = TimeSpan.FromMilliseconds(delayMs), EasingFunction = ease };
-        var animOp = new DoubleAnimation(0, 1, dur)
-            { BeginTime = TimeSpan.FromMilliseconds(delayMs) };
+            { BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs), EasingFunction = ease };
+        var animOp = new DoubleAnimation(plan.FromOpacity, plan.ToOpacity, dur)
+            { BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs) };
 
         Storyboard.SetTarget(animX,  el);
         Storyboard.SetTarget(animY,  el);
@@ -1026,7 +883,7 @@ public sealed class SlideShowWindow : Window
     }
 
     private static void WipeEffect(Storyboard sb, FrameworkElement el,
-        ShapeAnimation anim, int durationMs, int delayMs)
+        SlideShowShapeAnimationPlaybackPlan plan)
     {
         // Wipe: reveal via a clip RectangleGeometry that grows from 0 to full.
         // Direction determines which edge to wipe from.
@@ -1036,25 +893,19 @@ public sealed class SlideShowWindow : Window
         var clip  = new RectangleGeometry(new Rect(0, 0, 0, 0));
         el.Clip   = clip;
 
-        var dur  = new Duration(TimeSpan.FromMilliseconds(durationMs));
+        var dur  = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs));
         var ease = new CubicEase { EasingMode = EasingMode.EaseInOut };
 
         // Make visible first.
         el.Opacity = 1;
 
-        // Animate clip rect width or height depending on direction.
-        bool horizontal = anim.Direction is
-            AnimationDirection.Left or AnimationDirection.Right or
-            AnimationDirection.FromLeft or AnimationDirection.FromRight or
-            AnimationDirection.Horizontal or null;
-
-        if (horizontal)
+        if (plan.WipeHorizontal)
         {
             clip.Rect = new Rect(0, 0, 0, h);
             var a = new RectAnimation(
                 new Rect(0, 0, 0, h), new Rect(0, 0, w, h), dur)
             {
-                BeginTime = TimeSpan.FromMilliseconds(delayMs),
+                BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs),
                 EasingFunction = ease
             };
             Storyboard.SetTarget(a, el);
@@ -1067,7 +918,7 @@ public sealed class SlideShowWindow : Window
             var a = new RectAnimation(
                 new Rect(0, 0, w, 0), new Rect(0, 0, w, h), dur)
             {
-                BeginTime = TimeSpan.FromMilliseconds(delayMs),
+                BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs),
                 EasingFunction = ease
             };
             Storyboard.SetTarget(a, el);
@@ -1077,26 +928,23 @@ public sealed class SlideShowWindow : Window
     }
 
     private void ZoomEffect(Storyboard sb, FrameworkElement el,
-        AnimationKind kind, int durationMs, int delayMs)
+        SlideShowShapeAnimationPlaybackPlan plan)
     {
         double cx = (el.Width  > 0 ? el.Width  : _slideCanvas.ActualWidth)  / 2;
         double cy = (el.Height > 0 ? el.Height : _slideCanvas.ActualHeight) / 2;
 
-        var scale = new ScaleTransform(0, 0, cx, cy);
+        var scale = new ScaleTransform(plan.FromScale, plan.FromScale, cx, cy);
         el.RenderTransform = scale;
 
-        double fromScale = kind == AnimationKind.Exit ? 1.0 : 0.0;
-        double toScale   = kind == AnimationKind.Exit ? 0.0 : 1.0;
-
-        var dur  = new Duration(TimeSpan.FromMilliseconds(durationMs));
+        var dur  = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs));
         var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
 
-        var animSX = new DoubleAnimation(fromScale, toScale, dur)
-            { BeginTime = TimeSpan.FromMilliseconds(delayMs), EasingFunction = ease };
-        var animSY = new DoubleAnimation(fromScale, toScale, dur)
-            { BeginTime = TimeSpan.FromMilliseconds(delayMs), EasingFunction = ease };
-        var animOp = new DoubleAnimation(kind == AnimationKind.Exit ? 1 : 0, kind == AnimationKind.Exit ? 0 : 1, dur)
-            { BeginTime = TimeSpan.FromMilliseconds(delayMs) };
+        var animSX = new DoubleAnimation(plan.FromScale, plan.ToScale, dur)
+            { BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs), EasingFunction = ease };
+        var animSY = new DoubleAnimation(plan.FromScale, plan.ToScale, dur)
+            { BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs), EasingFunction = ease };
+        var animOp = new DoubleAnimation(plan.FromOpacity, plan.ToOpacity, dur)
+            { BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs) };
 
         Storyboard.SetTarget(animSX,  el);
         Storyboard.SetTarget(animSY,  el);
@@ -1112,7 +960,7 @@ public sealed class SlideShowWindow : Window
         sb.Children.Add(animOp);
     }
 
-    private static void PulseEffect(Storyboard sb, FrameworkElement el, int durationMs, int delayMs)
+    private static void PulseEffect(Storyboard sb, FrameworkElement el, SlideShowShapeAnimationPlaybackPlan plan)
     {
         // Ensure visible
         el.Opacity = 1;
@@ -1122,10 +970,10 @@ public sealed class SlideShowWindow : Window
         var scale = new ScaleTransform(1, 1, cx, cy);
         el.RenderTransform = scale;
 
-        var halfDur = new Duration(TimeSpan.FromMilliseconds(durationMs / 2));
+        var halfDur = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs / 2));
 
-        var animSXUp = new DoubleAnimation(1, 1.2, halfDur)
-            { BeginTime = TimeSpan.FromMilliseconds(delayMs), AutoReverse = true };
+        var animSXUp = new DoubleAnimation(1, plan.PeakScale, halfDur)
+            { BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs), AutoReverse = true };
 
         Storyboard.SetTarget(animSXUp, el);
         Storyboard.SetTargetProperty(animSXUp,
@@ -1140,7 +988,7 @@ public sealed class SlideShowWindow : Window
         sb.Children.Add(animSYUp);
     }
 
-    private static void SpinEffect(Storyboard sb, FrameworkElement el, int durationMs, int delayMs)
+    private static void SpinEffect(Storyboard sb, FrameworkElement el, SlideShowShapeAnimationPlaybackPlan plan)
     {
         el.Opacity = 1;
 
@@ -1149,9 +997,9 @@ public sealed class SlideShowWindow : Window
         var rotate = new RotateTransform(0, cx, cy);
         el.RenderTransform = rotate;
 
-        var anim = new DoubleAnimation(0, 360, new Duration(TimeSpan.FromMilliseconds(durationMs)))
+        var anim = new DoubleAnimation(0, plan.RotationDegrees, new Duration(TimeSpan.FromMilliseconds(plan.DurationMs)))
         {
-            BeginTime = TimeSpan.FromMilliseconds(delayMs),
+            BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs),
             EasingFunction = new CubicEase { EasingMode = EasingMode.EaseInOut }
         };
 
@@ -1164,11 +1012,13 @@ public sealed class SlideShowWindow : Window
     /// <summary>
     /// Motion-path animation: translates the shape along the normalized path in DIP space.
     /// The path coords (0..1 relative to shape center) are scaled to actual slide DIP dimensions.
-    /// We sample the path using DoubleAnimationUsingKeyFrames at 20 discrete frames.
+    /// We sample the path using DoubleAnimationUsingKeyFrames at 30 discrete frames.
     /// The element must be visible (Opacity=1) from the start.
     /// </summary>
-    private void MotionPathEffect(Storyboard sb, FrameworkElement element,
-        MotionPath path, int durationMs, int delayMs)
+    private void MotionPathEffect(
+        Storyboard sb,
+        FrameworkElement element,
+        SlideShowShapeAnimationPlaybackPlan plan)
     {
         double slideW = _slideDipW > 0 ? _slideDipW : 960;
         double slideH = _slideDipH > 0 ? _slideDipH : 540;
@@ -1179,22 +1029,17 @@ public sealed class SlideShowWindow : Window
         var translate = new TranslateTransform(0, 0);
         element.RenderTransform = translate;
 
-        var dur      = new Duration(TimeSpan.FromMilliseconds(durationMs));
-        var delay    = TimeSpan.FromMilliseconds(delayMs);
-        const int frames = 30;
+        var delay    = TimeSpan.FromMilliseconds(plan.DelayMs);
 
         var animX = new DoubleAnimationUsingKeyFrames { BeginTime = delay };
         var animY = new DoubleAnimationUsingKeyFrames { BeginTime = delay };
 
-        for (int f = 0; f <= frames; f++)
+        foreach (var frame in plan.MotionKeyFrames)
         {
-            double t = f / (double)frames;
-            var (dx, dy) = MotionPathEvaluator.Sample(path, t);
+            double dxDip = frame.OffsetXFactor * slideW;
+            double dyDip = frame.OffsetYFactor * slideH;
 
-            double dxDip = dx * slideW;
-            double dyDip = dy * slideH;
-
-            var keyTime = KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(durationMs * t));
+            var keyTime = KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(plan.DurationMs * frame.Progress));
             animX.KeyFrames.Add(new LinearDoubleKeyFrame(dxDip, keyTime));
             animY.KeyFrames.Add(new LinearDoubleKeyFrame(dyDip, keyTime));
         }
@@ -1215,18 +1060,17 @@ public sealed class SlideShowWindow : Window
     /// entrance shapes that failed to render into the overlay).
     /// Applies a brief opacity flash on the main SlideCanvas (coarse but visible).
     /// </summary>
-    private void PlayFallbackAnimation(ShapeAnimation anim)
+    private void PlayFallbackAnimation(SlideShowFallbackAnimationPlaybackPlan? plan)
     {
-        if (anim.Kind != AnimationKind.Emphasis) return;
+        if (plan is null) return;
 
         var sb = new Storyboard();
-        int ms = Math.Max(100, anim.DurationMs);
-        var halfDur = new Duration(TimeSpan.FromMilliseconds(ms / 2));
+        var halfDur = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs / 2));
 
-        var flashAnim = new DoubleAnimation(1, 0.5, halfDur)
+        var flashAnim = new DoubleAnimation(plan.FromOpacity, plan.FlashOpacity, halfDur)
         {
             AutoReverse    = true,
-            BeginTime      = TimeSpan.FromMilliseconds(anim.DelayMs),
+            BeginTime      = TimeSpan.FromMilliseconds(plan.DelayMs),
             EasingFunction = new CubicEase { EasingMode = EasingMode.EaseInOut }
         };
 

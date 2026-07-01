@@ -25,9 +25,9 @@ public sealed partial class FormulaRangeEntryPlannerTests
     }
 
     [Theory]
-    [InlineData(Key.Right, Key.None)]
-    [InlineData(Key.System, Key.Right)]
-    public void GetKeyboardSelectionTarget_UsesCtrlShiftArrowDataBoundary(Key key, Key systemKey)
+    [InlineData(FormulaEditorKey.Right, FormulaEditorKey.None)]
+    [InlineData(FormulaEditorKey.System, FormulaEditorKey.Right)]
+    public void GetKeyboardSelectionTarget_UsesCtrlShiftArrowDataBoundary(FormulaEditorKey key, FormulaEditorKey systemKey)
     {
         var workbook = new Workbook("Book");
         var sheet = workbook.AddSheet("Sheet1");
@@ -36,10 +36,9 @@ public sealed partial class FormulaRangeEntryPlannerTests
         sheet.SetCell(CellAddress.Parse("D2", sheet.Id), Cell.FromValue(new NumberValue(4)));
         sheet.SetCell(CellAddress.Parse("E2", sheet.Id), Cell.FromValue(new NumberValue(5)));
 
-        FormulaRangeEntryPlanner.GetKeyboardSelectionTarget(
-                key,
+        FormulaRangeEntryPlanner.GetKeyboardSelectionTarget(key,
                 systemKey,
-                ModifierKeys.Control | ModifierKeys.Shift,
+                FormulaEditorModifiers.Control | FormulaEditorModifiers.Shift,
                 CellAddress.Parse("B2", sheet.Id),
                 sheet,
                 rowPageSize: 20,
@@ -49,16 +48,15 @@ public sealed partial class FormulaRangeEntryPlannerTests
     }
 
     [Theory]
-    [InlineData(Key.None, Key.Right)]
-    [InlineData(Key.System, Key.Right)]
-    public void GetKeyboardSelectionTarget_NormalizesSyntheticSystemArrowKeys(Key key, Key systemKey)
+    [InlineData(FormulaEditorKey.None, FormulaEditorKey.Right)]
+    [InlineData(FormulaEditorKey.System, FormulaEditorKey.Right)]
+    public void GetKeyboardSelectionTarget_NormalizesSyntheticSystemArrowKeys(FormulaEditorKey key, FormulaEditorKey systemKey)
     {
         var current = CellAddress.Parse("B2", SheetId);
 
-        FormulaRangeEntryPlanner.GetKeyboardSelectionTarget(
-                key,
+        FormulaRangeEntryPlanner.GetKeyboardSelectionTarget(key,
                 systemKey,
-                ModifierKeys.Shift,
+                FormulaEditorModifiers.Shift,
                 current,
                 sheet: null,
                 rowPageSize: 20,
@@ -68,19 +66,18 @@ public sealed partial class FormulaRangeEntryPlannerTests
     }
 
     [Theory]
-    [InlineData(Key.None, Key.Home, "A2")]
-    [InlineData(Key.System, Key.Home, "A2")]
-    [InlineData(Key.None, Key.PageDown, "B22")]
-    [InlineData(Key.System, Key.PageDown, "B22")]
+    [InlineData(FormulaEditorKey.None, FormulaEditorKey.Home, "A2")]
+    [InlineData(FormulaEditorKey.System, FormulaEditorKey.Home, "A2")]
+    [InlineData(FormulaEditorKey.None, FormulaEditorKey.PageDown, "B22")]
+    [InlineData(FormulaEditorKey.System, FormulaEditorKey.PageDown, "B22")]
     public void GetKeyboardSelectionTarget_NormalizesSyntheticSystemNavigationKeys(
-        Key key,
-        Key systemKey,
+        FormulaEditorKey key,
+        FormulaEditorKey systemKey,
         string expected)
     {
-        FormulaRangeEntryPlanner.GetKeyboardSelectionTarget(
-                key,
+        FormulaRangeEntryPlanner.GetKeyboardSelectionTarget(key,
                 systemKey,
-                ModifierKeys.None,
+                FormulaEditorModifiers.None,
                 CellAddress.Parse("B2", SheetId),
                 sheet: null,
                 rowPageSize: 20,
@@ -90,16 +87,15 @@ public sealed partial class FormulaRangeEntryPlannerTests
     }
 
     [Theory]
-    [InlineData(Key.Right, Key.None, ModifierKeys.Alt)]
-    [InlineData(Key.System, Key.Right, ModifierKeys.Alt)]
-    [InlineData(Key.Right, Key.None, ModifierKeys.Control | ModifierKeys.Alt)]
+    [InlineData(FormulaEditorKey.Right, FormulaEditorKey.None, FormulaEditorModifiers.Alt)]
+    [InlineData(FormulaEditorKey.System, FormulaEditorKey.Right, FormulaEditorModifiers.Alt)]
+    [InlineData(FormulaEditorKey.Right, FormulaEditorKey.None, FormulaEditorModifiers.Control | FormulaEditorModifiers.Alt)]
     public void GetKeyboardSelectionTarget_IgnoresUnsupportedAltNavigationChords(
-        Key key,
-        Key systemKey,
-        ModifierKeys modifiers)
+        FormulaEditorKey key,
+        FormulaEditorKey systemKey,
+        FormulaEditorModifiers modifiers)
     {
-        FormulaRangeEntryPlanner.GetKeyboardSelectionTarget(
-                key,
+        FormulaRangeEntryPlanner.GetKeyboardSelectionTarget(key,
                 systemKey,
                 modifiers,
                 CellAddress.Parse("B2", SheetId),

@@ -1,38 +1,36 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Media;
+using Free.Shared.Drawing;
 using FreeP.App.Compositor;
 using FreeP.Core.Model;
-using ModelParagraph = FreeP.Core.Model.Paragraph;
-using ModelRun       = FreeP.Core.Model.Run;
 
 namespace FreeP.App.Rendering.Avalonia;
 
 /// <summary>
 /// Manages a plain-text in-canvas editing overlay for the Avalonia <see cref="SlideCanvas"/>.
-///
-/// When the user double-clicks a shape that has a <see cref="TextBody"/>, this class:
-/// <list type="number">
-///   <item>Extracts the shape's text into a single multi-line string (newlines = paragraphs).</item>
-///   <item>Shows an Avalonia <see cref="TextBox"/> positioned over the shape bounds.</item>
-///   <item>On commit (Escape / focus-loss), rebuilds a <see cref="TextBody"/> from the
-///         edited text and issues a <see cref="SetShapeTextCommand"/> (one undoable step).</item>
-/// </list>
-///
-/// Per-run rich-text editing (bold/italic/color per run) is deferred for Avalonia v1.
-/// The WPF host uses <c>InCanvasTextEditor</c> (with RichTextBox) for that capability.
 /// </summary>
 public sealed class AvaloniaInCanvasTextEditor
 {
-    private readonly SlideCanvas    _canvas;
+    private readonly SlideCanvas _canvas;
     private readonly EditingSession _editor;
-    private readonly Panel          _overlay;  // Canvas or Grid that hosts the TextBox
+    private readonly Panel _overlay;
 
-    private TextBox?  _textBox;
-    private uint      _editingShapeId;
-    private string?   _originalText;   // snapshot for change detection
-    private bool      _active;
-    private bool      _committing;     // re-entrancy guard
+    private TextBox? _textBox;
+    private InCanvasTextEditPlanner? _editPlan;
+    private uint _editingShapeId;
+    private bool _active;
+    private bool _committing;
+
+    private TextBox? _cellTextBox;
+    private Border? _cellHighlight;
+    private InCanvasTableCellTextEditPlanner? _cellEditPlan;
+    private uint _editingTableShapeId;
+    private int _editingCellRow;
+    private int _editingCellCol;
+    private bool _cellEditActive;
+    private bool _cellClosing;
 
     /// <summary>True while a shape's text is being edited in the overlay TextBox.</summary>
     public bool IsActive => _active;
@@ -40,94 +38,180 @@ public sealed class AvaloniaInCanvasTextEditor
     /// <summary>The id of the shape currently being edited, or 0 if not active.</summary>
     public uint ActiveShapeId => _editingShapeId;
 
+    /// <summary>True while a table cell is being edited in the overlay TextBox.</summary>
+    public bool IsCellEditActive => _cellEditActive;
+
+    /// <summary>The id of the table shape currently being edited, or 0 if not active.</summary>
+    public uint ActiveTableShapeId => _editingTableShapeId;
+
     public AvaloniaInCanvasTextEditor(SlideCanvas canvas, EditingSession editor, Panel overlay)
     {
-        _canvas  = canvas  ?? throw new ArgumentNullException(nameof(canvas));
-        _editor  = editor  ?? throw new ArgumentNullException(nameof(editor));
+        _canvas = canvas ?? throw new ArgumentNullException(nameof(canvas));
+        _editor = editor ?? throw new ArgumentNullException(nameof(editor));
         _overlay = overlay ?? throw new ArgumentNullException(nameof(overlay));
 
         _canvas.PointerPressed += OnCanvasPointerPressed;
+
+        _editor.SelectionChanged += (_, _) => RefreshTableCellHighlight();
+        _editor.ActiveTableCellChanged += (_, _) => RefreshTableCellHighlight();
+        _editor.Changed += RefreshTableCellHighlight;
+        _editor.CurrentSlideChanged += (_, _) =>
+        {
+            CommitCellEdit();
+            RefreshTableCellHighlight();
+        };
     }
 
-    // ── Public surface ─────────────────────────────────────────────────────────
-
-    /// <summary>Activates the text editor for the given shape (must have a TextBody).</summary>
+    /// <summary>Activates the text editor for the given shape.</summary>
     public void Activate(uint shapeId)
     {
-        if (_active && _editingShapeId == shapeId) return;
-        Commit(); // commit previous session first
+        if (_active && _editingShapeId == shapeId)
+            return;
+
+        CommitCellEdit();
+        Commit();
 
         var slide = _editor.CurrentSlide;
-        if (slide is null || _editor.Presentation is null) return;
+        if (slide is null || _editor.Presentation is null)
+            return;
 
         var shape = slide.Shapes.FirstOrDefault(s => s.Id == shapeId);
-        if (shape?.TextBody is null) return;
+        if (shape?.TextBody is null)
+            return;
 
         _editingShapeId = shapeId;
-        _active         = true;
-        _originalText   = ExtractPlainText(shape.TextBody);
+        _active = true;
+        _editPlan = InCanvasTextEditPlanner.BeginPlainText(
+            _editor.CurrentSlideIndex,
+            shapeId,
+            shape.TextBody);
 
         var xf = _canvas.CurrentTransform;
-        var b  = ShapeHitTester.GetShapeBoundsDip(shape, _editor.Presentation);
-        double x = b.Left   * xf.Scale + xf.OffsetX;
-        double y = b.Top    * xf.Scale + xf.OffsetY;
-        double w = b.Width  * xf.Scale;
-        double h = b.Height * xf.Scale;
+        var screenRect = SlideCanvasGeometryPlanner.ShapeBoundsToScreen(shape, _editor.Presentation, xf);
+        var placement = SlideCanvasGeometryPlanner.PlanEditorPlacement(screenRect, 40, 20);
 
         _textBox = new TextBox
         {
-            AcceptsReturn   = true,
-            TextWrapping    = global::Avalonia.Media.TextWrapping.Wrap,
-            Text            = _originalText,
-            MinWidth        = Math.Max(40, w),
-            MinHeight       = Math.Max(20, h),
-            Width           = Math.Max(40, w),
-            Height          = Math.Max(20, h),
-            Padding         = new Thickness(2),
-            Background      = new global::Avalonia.Media.SolidColorBrush(
-                                  global::Avalonia.Media.Color.FromArgb(0xCC, 0xFF, 0xFF, 0xFF)),
-            BorderBrush     = new global::Avalonia.Media.SolidColorBrush(
-                                  global::Avalonia.Media.Color.FromRgb(0x21, 0x96, 0xF3)),
+            AcceptsReturn = true,
+            TextWrapping = global::Avalonia.Media.TextWrapping.Wrap,
+            Text = _editPlan.OriginalPlainText,
+            MinWidth = placement.Width,
+            MinHeight = placement.Height,
+            Width = placement.Width,
+            Height = placement.Height,
+            Padding = new Thickness(2),
+            Background = new global::Avalonia.Media.SolidColorBrush(
+                global::Avalonia.Media.Color.FromArgb(0xCC, 0xFF, 0xFF, 0xFF)),
+            BorderBrush = new global::Avalonia.Media.SolidColorBrush(
+                global::Avalonia.Media.Color.FromRgb(0x21, 0x96, 0xF3)),
             BorderThickness = new Thickness(1.5),
         };
 
-        Canvas.SetLeft(_textBox, x);
-        Canvas.SetTop (_textBox, y);
+        Canvas.SetLeft(_textBox, placement.Left);
+        Canvas.SetTop(_textBox, placement.Top);
 
         _textBox.LostFocus += (_, _) => Commit();
-        _textBox.KeyDown   += OnTextBoxKeyDown;
+        _textBox.KeyDown += OnTextBoxKeyDown;
 
-        _overlay.IsVisible = true;
         _overlay.Children.Add(_textBox);
+        UpdateOverlayState();
         _textBox.Focus();
         _textBox.SelectAll();
     }
 
-    /// <summary>Commits the current text edit (if active) to the command bus and hides the overlay.</summary>
+    /// <summary>Activates the text editor for the given table cell.</summary>
+    public void ActivateCellEdit(uint shapeId, int row, int col)
+    {
+        if (_cellEditActive &&
+            _editingTableShapeId == shapeId &&
+            _editingCellRow == row &&
+            _editingCellCol == col)
+        {
+            return;
+        }
+
+        Commit();
+        CommitCellEdit();
+
+        var startPlan = AvaloniaTableCellEditAdapter.BeginEdit(
+            _canvas,
+            _editor,
+            shapeId,
+            row,
+            col,
+            minimumWidth: 30,
+            minimumHeight: 18);
+        if (!startPlan.IsReady || startPlan.Cell is null || startPlan.Placement is null)
+            return;
+
+        var placement = startPlan.Placement.Value;
+        _editingTableShapeId = shapeId;
+        _editingCellRow = startPlan.Row;
+        _editingCellCol = startPlan.Col;
+        _cellEditPlan = startPlan.EditPlanner;
+        _cellEditActive = true;
+
+        _editor.Select(shapeId);
+        _editor.SetActiveTableCell(startPlan.Row, startPlan.Col);
+
+        _cellTextBox = new TextBox
+        {
+            AcceptsReturn = true,
+            TextWrapping = TextWrapping.Wrap,
+            Text = InCanvasTextEditPlanner.ExtractPlainText(startPlan.OriginalBody),
+            MinWidth = placement.Width,
+            MinHeight = placement.Height,
+            Width = placement.Width,
+            Height = placement.Height,
+            Padding = new Thickness(2),
+            Background = new SolidColorBrush(Color.FromArgb(0xEE, 0xFF, 0xFF, 0xFF)),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0x21, 0x96, 0xF3)),
+            BorderThickness = new Thickness(1.5),
+        };
+
+        Canvas.SetLeft(_cellTextBox, placement.Left);
+        Canvas.SetTop(_cellTextBox, placement.Top);
+
+        _cellTextBox.LostFocus += (_, _) => CommitCellEdit();
+        _cellTextBox.KeyDown += OnCellTextBoxKeyDown;
+
+        _overlay.Children.Add(_cellTextBox);
+        RefreshTableCellHighlight();
+        UpdateOverlayState();
+        _cellTextBox.Focus();
+        _cellTextBox.SelectAll();
+    }
+
+    /// <summary>Commits the current text edit, if active, to the command bus and hides the overlay.</summary>
     public void Commit()
     {
-        if (!_active || _textBox is null || _committing) return;
+        if (!_active || _textBox is null || _committing)
+            return;
+
         _committing = true;
         try
         {
             var newText = _textBox.Text ?? string.Empty;
+            var editPlan = _editPlan;
 
             _overlay.Children.Remove(_textBox);
-            _overlay.IsVisible = false;
             _textBox = null;
-            _active  = false;
-
-            // Only issue a command if content changed.
-            if (newText == _originalText) return;
+            _active = false;
+            _editPlan = null;
+            UpdateOverlayState();
 
             var slide = _editor.CurrentSlide;
-            if (slide is null) return;
-            var shape = slide.Shapes.FirstOrDefault(s => s.Id == _editingShapeId);
-            if (shape is null) return;
+            if (slide is null)
+                return;
 
-            // Build TextBody from edited text (preserve first-run formatting).
-            var newBody = BuildTextBody(shape.TextBody, newText);
-            _editor.Bus.Execute(new SetShapeTextBodyCommand(_editor.CurrentSlideIndex, _editingShapeId, newBody));
+            var shape = slide.Shapes.FirstOrDefault(s => s.Id == _editingShapeId);
+            if (shape is null)
+                return;
+
+            var decision = editPlan?.CommitPlainText(newText)
+                ?? new InCanvasTextEditDecision(InCanvasTextEditOutcome.Unchanged, null);
+            if (decision.Command is not null)
+                _editor.Bus.Execute(decision.Command);
         }
         finally
         {
@@ -135,38 +219,152 @@ public sealed class AvaloniaInCanvasTextEditor
         }
     }
 
+    /// <summary>Commits the current table-cell edit, if active, to the command bus and hides the overlay.</summary>
+    public void CommitCellEdit()
+    {
+        if (!_cellEditActive || _cellTextBox is null || _cellClosing)
+            return;
+
+        _cellClosing = true;
+        try
+        {
+            var newText = _cellTextBox.Text ?? string.Empty;
+            var editPlan = _cellEditPlan;
+            var shapeId = _editingTableShapeId;
+            var row = _editingCellRow;
+            var col = _editingCellCol;
+
+            _overlay.Children.Remove(_cellTextBox);
+            _cellTextBox = null;
+            _cellEditActive = false;
+            _cellEditPlan = null;
+            UpdateOverlayState();
+
+            var slide = _editor.CurrentSlide;
+            var shape = slide?.Shapes.FirstOrDefault(s => s.Id == shapeId);
+            var cell = shape?.Table?.Rows.ElementAtOrDefault(row)?.Cells.ElementAtOrDefault(col);
+            if (cell is null)
+                return;
+
+            var newBody = InCanvasTextEditPlanner.BuildPlainTextBody(cell.TextBody, newText);
+            var decision = AvaloniaTableCellEditAdapter.CommitRichText(editPlan, newBody);
+            if (decision.Command is not null)
+                _editor.Bus.Execute(decision.Command);
+        }
+        finally
+        {
+            _cellClosing = false;
+            RefreshTableCellHighlight();
+        }
+    }
+
     /// <summary>Cancels the edit without committing.</summary>
     public void Cancel()
     {
-        if (!_active || _textBox is null) return;
+        if (!_active || _textBox is null)
+            return;
+
         _overlay.Children.Remove(_textBox);
-        _overlay.IsVisible = false;
         _textBox = null;
-        _active  = false;
+        _active = false;
+        _ = _editPlan?.Cancel();
+        _editPlan = null;
+        UpdateOverlayState();
     }
 
-    // ── Double-click detection ──────────────────────────────────────────────────
+    /// <summary>Cancels the current table-cell edit without committing.</summary>
+    public void CancelCellEdit()
+    {
+        if (!_cellEditActive || _cellTextBox is null || _cellClosing)
+            return;
+
+        _cellClosing = true;
+        try
+        {
+            _overlay.Children.Remove(_cellTextBox);
+            _cellTextBox = null;
+            _cellEditActive = false;
+            _ = AvaloniaTableCellEditAdapter.Cancel(_cellEditPlan);
+            _cellEditPlan = null;
+            UpdateOverlayState();
+        }
+        finally
+        {
+            _cellClosing = false;
+            RefreshTableCellHighlight();
+        }
+    }
 
     private void OnCanvasPointerPressed(object? sender, PointerPressedEventArgs e)
     {
-        if (e.ClickCount < 2) return;
-        if (!e.GetCurrentPoint(_canvas).Properties.IsLeftButtonPressed) return;
+        if (!e.GetCurrentPoint(_canvas).Properties.IsLeftButtonPressed)
+            return;
+
+        var pt = e.GetPosition(_canvas);
+        if (TryHandleTableCellPointer(pt.X, pt.Y, e.ClickCount))
+        {
+            e.Handled = true;
+            return;
+        }
+
+        if (e.ClickCount < 2)
+            return;
 
         var slide = _editor.CurrentSlide;
-        if (slide is null || _editor.Presentation is null) return;
+        if (slide is null || _editor.Presentation is null)
+            return;
 
-        var xf      = _canvas.CurrentTransform;
-        var pt      = e.GetPosition(_canvas);
-        var slidePt = xf.ScreenToSlide(pt.X, pt.Y);
+        var xf = _canvas.CurrentTransform;
+        var shapeEditPoint = e.GetPosition(_canvas);
+        var slidePt = xf.ScreenToSlide(shapeEditPoint.X, shapeEditPoint.Y);
 
         var hitId = ShapeHitTester.HitTest(slide, _editor.Presentation, slidePt.X, slidePt.Y);
-        if (!hitId.HasValue) return;
+        if (!hitId.HasValue)
+        {
+            CommitCellEdit();
+            return;
+        }
 
         var shape = slide.Shapes.FirstOrDefault(s => s.Id == hitId.Value);
-        if (shape?.TextBody is null) return;
+        if (shape?.TextBody is null)
+        {
+            CommitCellEdit();
+            return;
+        }
 
         Activate(hitId.Value);
         e.Handled = true;
+    }
+
+    internal bool TryHandleTableCellPointer(double screenX, double screenY, int clickCount)
+    {
+        var slide = _editor.CurrentSlide;
+        if (slide is null || _editor.Presentation is null)
+            return false;
+
+        var xf = _canvas.CurrentTransform;
+        var slidePt = xf.ScreenToSlide(screenX, screenY);
+        var hitId = ShapeHitTester.HitTest(slide, _editor.Presentation, slidePt.X, slidePt.Y);
+        if (!hitId.HasValue)
+        {
+            CommitCellEdit();
+            return false;
+        }
+
+        var shape = slide.Shapes.FirstOrDefault(s => s.Id == hitId.Value);
+        if (shape?.Kind != SlideShapeKind.Table || shape.Table is null)
+            return false;
+
+        var cellHit = TableCellHitTester.HitTest(shape, slidePt.X, slidePt.Y);
+        if (!cellHit.HasValue)
+            return false;
+
+        _editor.SetActiveTableCell(cellHit.Value.Row, cellHit.Value.Col);
+
+        if (clickCount >= 2)
+            ActivateCellEdit(shape.Id, cellHit.Value.Row, cellHit.Value.Col);
+
+        return true;
     }
 
     private void OnTextBoxKeyDown(object? sender, KeyEventArgs e)
@@ -178,160 +376,73 @@ public sealed class AvaloniaInCanvasTextEditor
         }
     }
 
-    // ── Helpers ────────────────────────────────────────────────────────────────
-
-    private static string ExtractPlainText(TextBody body)
+    private void OnCellTextBoxKeyDown(object? sender, KeyEventArgs e)
     {
-        var sb = new System.Text.StringBuilder();
-        for (int pi = 0; pi < body.Paragraphs.Count; pi++)
+        if (e.Key == Key.Escape)
         {
-            if (pi > 0) sb.Append('\n');
-            foreach (var run in body.Paragraphs[pi].Runs)
-                sb.Append(run.Text);
+            CancelCellEdit();
+            e.Handled = true;
         }
-        return sb.ToString();
     }
 
-    private static TextBody BuildTextBody(TextBody? original, string text)
+    private void RefreshTableCellHighlight()
     {
-        // Capture first-run formatting to preserve it.
-        string  fontFamily = "Calibri";
-        double? fontSize   = null;
-        bool    bold = false, italic = false, underline = false;
-        ThemeAwareColor? color = null;
-
-        if (original?.Paragraphs.Count > 0 && original.Paragraphs[0].Runs.Count > 0)
+        if (!_overlay.Dispatcher.CheckAccess())
         {
-            var r0 = original.Paragraphs[0].Runs[0];
-            fontFamily = r0.FontFamily ?? fontFamily;
-            fontSize   = r0.FontSizePt;
-            bold       = r0.Bold;
-            italic     = r0.Italic;
-            underline  = r0.Underline;
-            color      = r0.Color;
+            _overlay.Dispatcher.Post(RefreshTableCellHighlight);
+            return;
         }
 
-        var body = new TextBody
+        if (_cellHighlight is not null)
         {
-            Wrap          = original?.Wrap ?? true,
-            Anchor        = original?.Anchor ?? VerticalAnchor.Top,
-            InsetLeftPt   = original?.InsetLeftPt,
-            InsetRightPt  = original?.InsetRightPt,
-            InsetTopPt    = original?.InsetTopPt,
-            InsetBottomPt = original?.InsetBottomPt,
+            _overlay.Children.Remove(_cellHighlight);
+            _cellHighlight = null;
+        }
+
+        var state = AvaloniaTableCellEditAdapter.PlanSelectedCell(_editor);
+        if (!state.CanEditText ||
+            state.ShapeId is null ||
+            state.Row is null ||
+            state.Col is null)
+        {
+            UpdateOverlayState();
+            return;
+        }
+
+        var shape = _editor.CurrentSlide?.Shapes.FirstOrDefault(s => s.Id == state.ShapeId.Value);
+        if (shape?.Kind != SlideShapeKind.Table)
+        {
+            UpdateOverlayState();
+            return;
+        }
+
+        var cellRect = TableCellHitTester.GetCellRect(shape, state.Row.Value, state.Col.Value);
+        if (cellRect is null)
+        {
+            UpdateOverlayState();
+            return;
+        }
+
+        var screenRect = SlideCanvasGeometryPlanner.DipBoundsToScreen(cellRect.Value, _canvas.CurrentTransform);
+        _cellHighlight = new Border
+        {
+            Width = Math.Max(1, screenRect.Width),
+            Height = Math.Max(1, screenRect.Height),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0x21, 0x96, 0xF3)),
+            BorderThickness = new Thickness(2),
+            Background = new SolidColorBrush(Color.FromArgb(0x18, 0x21, 0x96, 0xF3)),
+            IsHitTestVisible = false,
         };
 
-        var lines = text.Split('\n');
-        foreach (var line in lines)
-        {
-            var para = new ModelParagraph();
-            para.Runs.Add(new ModelRun
-            {
-                Text       = line,
-                FontFamily = fontFamily,
-                FontSizePt = fontSize,
-                Bold       = bold,
-                Italic     = italic,
-                Underline  = underline,
-                Color      = color,
-            });
-            body.Paragraphs.Add(para);
-        }
-
-        if (body.Paragraphs.Count == 0)
-        {
-            var para = new ModelParagraph();
-            para.Runs.Add(new ModelRun { Text = string.Empty });
-            body.Paragraphs.Add(para);
-        }
-
-        return body;
-    }
-}
-
-// ── SetShapeTextBodyCommand ─────────────────────────────────────────────────────────────────
-
-/// <summary>
-/// Replaces the entire <see cref="TextBody"/> of a shape.  One undoable step per edit session.
-/// Reuses the same command name as the WPF version so the undo history is consistent.
-/// </summary>
-internal sealed class SetShapeTextBodyCommand : IPresentationCommand
-{
-    private readonly int      _slideIndex;
-    private readonly uint     _shapeId;
-    private readonly TextBody _newBody;
-    private TextBody?         _previousBody;
-
-    public SetShapeTextBodyCommand(int slideIndex, uint shapeId, TextBody newBody)
-    {
-        _slideIndex = slideIndex;
-        _shapeId    = shapeId;
-        _newBody    = newBody ?? throw new ArgumentNullException(nameof(newBody));
+        Canvas.SetLeft(_cellHighlight, screenRect.Left);
+        Canvas.SetTop(_cellHighlight, screenRect.Top);
+        _overlay.Children.Insert(0, _cellHighlight);
+        UpdateOverlayState();
     }
 
-    public string Label => "Edit Text";
-
-    public void Apply(Presentation presentation)
+    private void UpdateOverlayState()
     {
-        var shape = GetShape(presentation);
-        if (shape is null) return;
-        _previousBody  = CloneTextBody(shape.TextBody);
-        shape.TextBody = CloneTextBody(_newBody);
-    }
-
-    public void Revert(Presentation presentation)
-    {
-        var shape = GetShape(presentation);
-        if (shape is null) return;
-        shape.TextBody = CloneTextBody(_previousBody);
-    }
-
-    private SlideShape? GetShape(Presentation p)
-    {
-        if (_slideIndex < 0 || _slideIndex >= p.Slides.Count) return null;
-        return p.Slides[_slideIndex].Shapes.FirstOrDefault(s => s.Id == _shapeId);
-    }
-
-    private static TextBody? CloneTextBody(TextBody? src)
-    {
-        if (src is null) return null;
-        var clone = new TextBody
-        {
-            Wrap          = src.Wrap,
-            Anchor        = src.Anchor,
-            AutoFit       = src.AutoFit,
-            InsetLeftPt   = src.InsetLeftPt,
-            InsetRightPt  = src.InsetRightPt,
-            InsetTopPt    = src.InsetTopPt,
-            InsetBottomPt = src.InsetBottomPt,
-        };
-        foreach (var p in src.Paragraphs)
-        {
-            var cp = new ModelParagraph
-            {
-                Align         = p.Align,
-                Level         = p.Level,
-                BulletKind    = p.BulletKind,
-                BulletChar    = p.BulletChar,
-                SpaceBeforePt = p.SpaceBeforePt,
-                SpaceAfterPt  = p.SpaceAfterPt,
-            };
-            foreach (var r in p.Runs)
-            {
-                cp.Runs.Add(new ModelRun
-                {
-                    Text          = r.Text,
-                    FontFamily    = r.FontFamily,
-                    FontSizePt    = r.FontSizePt,
-                    Bold          = r.Bold,
-                    Italic        = r.Italic,
-                    Underline     = r.Underline,
-                    Strikethrough = r.Strikethrough,
-                    Color         = r.Color,
-                });
-            }
-            clone.Paragraphs.Add(cp);
-        }
-        return clone;
+        _overlay.IsVisible = _overlay.Children.Count > 0;
+        _overlay.IsHitTestVisible = _active || _cellEditActive;
     }
 }

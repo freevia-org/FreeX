@@ -3,6 +3,7 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Xml.Linq;
+using FreeP.App.Compositor;
 using FreeP.Core.IO;
 using FreeP.Core.Model;
 using Xunit;
@@ -585,10 +586,11 @@ public class TransitionCompletenessTests
     {
         // Contract: TransitionKind.Other must NOT be None (so it's not skipped by the
         // "Kind: not TransitionKind.None" guard in DisplayCurrentSlide), and must map
-        // to some kind of playback (Fade fallback) in the slideshow.
+        // to shared fallback playback in the slideshow.
         Assert.NotEqual(TransitionKind.None, TransitionKind.Other);
-        // The fallback is exercised by the default case in PlayTransition in both SlideShowWindows.
-        // This test verifies the enum value itself is correctly != None.
+
+        var plan = SlideShowTransitionPlanner.Plan(new SlideTransition { Kind = TransitionKind.Other });
+        Assert.Equal(SlideShowTransitionPlaybackKind.FadeFallback, plan.PlaybackKind);
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────────

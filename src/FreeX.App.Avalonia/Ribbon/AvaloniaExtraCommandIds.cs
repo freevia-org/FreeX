@@ -73,7 +73,7 @@ internal static class AvaloniaExtraCommandIds
         "Custom Margins", "Narrow", "Wide", "Normal", "Portrait", "Landscape",
         "Set Print Area", "Clear Print Area", "Choose Background", "Delete Background",
         // Paper sizes the Avalonia shell wires individually.
-        "Letter", "Legal", "Executive", "Statement", "Tabloid", "A3", "A4", "A5", "B4", "B5",
+        "Letter", "Legal", "Executive", "Statement", "Tabloid", "A3", "A4", "A5", "B4 (JIS)", "B5 (JIS)",
 
         // ── Re-keyed ids (formerly allowlisted as native-menu-only, now wired as ExtraCommands) ─────
         // Page Layout ▸ Themes preset submenu + customize entries.

@@ -25,4 +25,48 @@ public class RibbonCommandRegistryTests
     {
         new RibbonCommandRegistry().TryGet("nope", out _).Should().BeFalse();
     }
+
+    [Fact]
+    public void ActionRibbonCommand_InvokesDelegate()
+    {
+        var invocations = 0;
+        var command = new ActionRibbonCommand(() => invocations++);
+
+        command.Execute(RibbonCommandContext.Empty);
+
+        invocations.Should().Be(1);
+    }
+
+    [Fact]
+    public void ContextRibbonCommand_ForwardsExecutionContext()
+    {
+        RibbonCommandContext? captured = null;
+        var context = RibbonCommandContext.ForSelectedValue("Heading1");
+        var command = new ContextRibbonCommand(value => captured = value);
+
+        command.Execute(context);
+
+        captured.Should().BeSameAs(context);
+    }
+
+    [Fact]
+    public void ValueRibbonCommand_ForwardsSelectedValue()
+    {
+        string? captured = null;
+        var command = new ValueRibbonCommand(value => captured = value);
+
+        command.Execute(RibbonCommandContext.ForSelectedValue("12"));
+
+        captured.Should().Be("12");
+    }
+
+    [Fact]
+    public void EmptyRibbonCommand_IsReusableSafePlaceholder()
+    {
+        var command = EmptyRibbonCommand.Instance;
+
+        command.Execute(RibbonCommandContext.Empty);
+
+        command.Should().BeSameAs(EmptyRibbonCommand.Instance);
+    }
 }

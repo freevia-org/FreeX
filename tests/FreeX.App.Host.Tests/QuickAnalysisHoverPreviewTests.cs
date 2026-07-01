@@ -17,8 +17,10 @@ public sealed class QuickAnalysisHoverPreviewTests
         source.Should().Contain("ClearQuickAnalysisPreview();");
         source.Should().Contain("ApplyQuickAnalysisPreview(");
         source.Should().Contain("preview.Range");
+        source.Should().Contain("var preview = item.HoverPreview");
         source.Should().Contain("ApplyQuickAnalysisPreview(null, QuickAnalysisPreviewVisualKind.None)");
         source.Should().Contain("if (SheetGrid.QuickAnalysisPreviewRange != range)");
+        source.Should().NotContain("QuickAnalysisPlanner.BuildHoverPreview(range, item)");
     }
 
     [Fact]
