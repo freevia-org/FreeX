@@ -228,6 +228,28 @@ public sealed class RendererNeutralDedupPlannerTests
     }
 
     [Fact]
+    public void WpfAndAvaloniaSlideCanvases_UseRendererNeutralChartLegendPlanning()
+    {
+        var wpf = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "SlideCanvas.cs");
+        var avalonia = ReadWorkspaceFile(
+            "freep",
+            "FreeP.App.Rendering.Avalonia",
+            "SlideCanvas.cs");
+
+        foreach (var source in new[] { wpf, avalonia })
+        {
+            source.Should().Contain("ChartRenderPlanner.BuildLegendItemPlans(chart, frame, chartOp.SeriesColors)");
+            source.Should().Contain("item.SwatchBounds");
+            source.Should().Contain("item.Label.Bounds");
+            source.Should().NotContain("legendAreaH");
+            source.Should().NotContain("legendH");
+            source.Should().NotContain("legendRight ? plotH / itemH");
+            source.Should().NotContain("Point {ci + 1}");
+            source.Should().NotContain("chart.Series[si].Name");
+        }
+    }
+
+    [Fact]
     public void WpfAndAvaloniaSlideShowWindows_UseRendererNeutralPlaybackPlanner()
     {
         var wpf = ReadWorkspaceFile("freep", "FreeP.App.Host", "SlideShowWindow.cs");

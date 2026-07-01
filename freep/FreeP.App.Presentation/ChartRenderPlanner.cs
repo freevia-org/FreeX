@@ -179,6 +179,11 @@ public readonly record struct ChartDataLabelPlan(
     double FontSize,
     ChartPlanTextAlignment Alignment);
 
+public readonly record struct ChartLegendItemPlan(
+    ChartPlanRect SwatchBounds,
+    ChartTextPlan Label,
+    ChartFillPlan Fill);
+
 /// <summary>
 /// Renderer-neutral chart planning helpers shared by the WPF and Avalonia slide canvases.
 /// </summary>
@@ -282,6 +287,72 @@ public static class ChartRenderPlanner
             ChartType.Radar => ChartRenderFamily.Radar,
             _ => ChartRenderFamily.Cartesian
         };
+
+    public static IReadOnlyList<ChartLegendItemPlan> BuildLegendItemPlans(
+        ChartShape chart,
+        ChartFramePlan frame,
+        IReadOnlyList<SrgbColor>? seriesColors)
+    {
+        if (!frame.HasLegend || !frame.HasPlot || chart.Series.Count == 0)
+            return Array.Empty<ChartLegendItemPlan>();
+
+        var plot = frame.Plot;
+        double legendX;
+        double legendY;
+        double legendWidth;
+        if (frame.LegendRight)
+        {
+            legendX = frame.Bounds.X + frame.Bounds.Width - frame.LegendAreaWidth - Margin / 2;
+            legendY = plot.Y;
+            legendWidth = frame.LegendAreaWidth - Margin / 2;
+        }
+        else
+        {
+            legendX = plot.X;
+            legendY = frame.Bounds.Y + frame.Bounds.Height - frame.LegendAreaHeight - Margin / 2;
+            legendWidth = plot.Width;
+        }
+
+        int itemCount = frame.IsPie
+            ? chart.Categories.Count > 0
+                ? chart.Categories.Count
+                : chart.Series[0].Values.Count > 0
+                    ? chart.Series[0].Values.Count
+                    : 0
+            : chart.Series.Count;
+        int maxItems = (int)Math.Max(1, frame.LegendRight ? plot.Height / LegendHeight : legendWidth / 80);
+        int itemsToShow = Math.Min(itemCount, maxItems);
+        if (itemsToShow == 0)
+            return Array.Empty<ChartLegendItemPlan>();
+
+        var items = new List<ChartLegendItemPlan>(itemsToShow);
+        for (int itemIndex = 0; itemIndex < itemsToShow; itemIndex++)
+        {
+            double itemX = frame.LegendRight ? legendX : legendX + itemIndex * 80.0;
+            double itemY = frame.LegendRight ? legendY + itemIndex * LegendHeight : legendY;
+            double textWidth = frame.LegendRight ? legendWidth - 10 : 70;
+            string text = frame.IsPie
+                ? itemIndex < chart.Categories.Count
+                    ? chart.Categories[itemIndex]
+                    : $"Point {itemIndex + 1}"
+                : chart.Series[itemIndex].Name;
+            var color = seriesColors is not null && itemIndex < seriesColors.Count
+                ? seriesColors[itemIndex]
+                : FallbackSeriesColors[0];
+
+            items.Add(new ChartLegendItemPlan(
+                new ChartPlanRect(itemX, itemY + 3, 8, 8),
+                new ChartTextPlan(
+                    text,
+                    new ChartPlanRect(itemX + 10, itemY, textWidth, LegendHeight),
+                    IsBold: false,
+                    FontSize: 7.0,
+                    Alignment: ChartPlanTextAlignment.Left),
+                new ChartFillPlan(color, Alpha: 255)));
+        }
+
+        return items;
+    }
 
     public static bool IsLineOrArea(ChartType chartType) =>
         chartType is ChartType.Line

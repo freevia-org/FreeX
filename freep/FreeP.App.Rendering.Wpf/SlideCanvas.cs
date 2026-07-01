@@ -625,16 +625,12 @@ public sealed class SlideCanvas : FrameworkElement
 
         // ── Layout areas ────────────────────────────────────────────────────────
         var frame = ChartRenderPlanner.BuildFramePlan(chart, ToPlanRect(bounds));
-        bool hasLegend = frame.HasLegend;
-        bool legendRight = frame.LegendRight;
         bool isPie = frame.IsPie;
         bool isBar = frame.IsBar;
         bool isScatterLike = frame.IsScatterLike;
         bool isRadar = frame.IsRadar;
         double legendAreaW = frame.LegendAreaWidth;
-        double legendAreaH = frame.LegendAreaHeight;
         double margin = ChartRenderPlanner.Margin;
-        double legendH = ChartRenderPlanner.LegendHeight;
 
         // Title
         if (chart.Title is not null)
@@ -768,100 +764,16 @@ public sealed class SlideCanvas : FrameworkElement
                 align: ToTextAlignment(label.Alignment));
         }
 
-        // ── Legend ─────────────────────────────────────────────────────────────
-        if (hasLegend && chart.Series.Count > 0)
+        foreach (var item in ChartRenderPlanner.BuildLegendItemPlans(chart, frame, chartOp.SeriesColors))
         {
-            double lx, ly, lw;
-            if (legendRight)
-            {
-                lx = bounds.X + bounds.Width - legendAreaW - margin / 2;
-                ly = plotY;
-                lw = legendAreaW - margin / 2;
-            }
-            else
-            {
-                lx = plotX;
-                ly = bounds.Y + bounds.Height - legendAreaH - margin / 2;
-                lw = plotW;
-            }
-
-            double itemH = legendH;
-
-            if (isPie)  // includes Doughnut
-            {
-                // Pie/Doughnut chart legend: one entry per category (slice), not per series
-                int catItems = chart.Categories.Count > 0 ? chart.Categories.Count
-                    : (chart.Series[0].Values.Count > 0 ? chart.Series[0].Values.Count : 0);
-                int maxItems = (int)Math.Max(1, legendRight ? plotH / itemH : lw / 80);
-                int itemsToShow = Math.Min(catItems, maxItems);
-
-                for (int ci = 0; ci < itemsToShow; ci++)
-                {
-                    var sc = ci < chartOp.SeriesColors.Count
-                        ? chartOp.SeriesColors[ci]
-                        : new SrgbColor(0x4F, 0x81, 0xBD);
-                    string label = ci < chart.Categories.Count ? chart.Categories[ci] : $"Point {ci + 1}";
-
-                    if (legendRight)
-                    {
-                        double iy = ly + ci * itemH;
-                        dc.DrawRectangle(
-                            FreezeBrush(new SolidColorBrush(Color.FromRgb(sc.R, sc.G, sc.B))),
-                            null,
-                            new Rect(lx, iy + 3, 8, 8));
-                        DrawChartLabel(dc, label,
-                            new Rect(lx + 10, iy, lw - 10, itemH),
-                            isBold: false, fontSize: 7.0, align: TextAlignment.Left);
-                    }
-                    else
-                    {
-                        double ix = lx + ci * 80.0;
-                        dc.DrawRectangle(
-                            FreezeBrush(new SolidColorBrush(Color.FromRgb(sc.R, sc.G, sc.B))),
-                            null,
-                            new Rect(ix, ly + 3, 8, 8));
-                        DrawChartLabel(dc, label,
-                            new Rect(ix + 10, ly, 70, itemH),
-                            isBold: false, fontSize: 7.0, align: TextAlignment.Left);
-                    }
-                }
-            }
-            else
-            {
-                // Column/bar/line/area: one entry per series
-                int maxItems = (int)Math.Max(1, legendRight ? plotH / itemH : lw / 80);
-                int itemsToShow = Math.Min(chart.Series.Count, maxItems);
-
-                for (int si = 0; si < itemsToShow; si++)
-                {
-                    var sc = si < chartOp.SeriesColors.Count
-                        ? chartOp.SeriesColors[si]
-                        : new SrgbColor(0x4F, 0x81, 0xBD);
-
-                    if (legendRight)
-                    {
-                        double iy = ly + si * itemH;
-                        dc.DrawRectangle(
-                            FreezeBrush(new SolidColorBrush(Color.FromRgb(sc.R, sc.G, sc.B))),
-                            null,
-                            new Rect(lx, iy + 3, 8, 8));
-                        DrawChartLabel(dc, chart.Series[si].Name,
-                            new Rect(lx + 10, iy, lw - 10, itemH),
-                            isBold: false, fontSize: 7.0, align: TextAlignment.Left);
-                    }
-                    else
-                    {
-                        double ix = lx + si * 80.0;
-                        dc.DrawRectangle(
-                            FreezeBrush(new SolidColorBrush(Color.FromRgb(sc.R, sc.G, sc.B))),
-                            null,
-                            new Rect(ix, ly + 3, 8, 8));
-                        DrawChartLabel(dc, chart.Series[si].Name,
-                            new Rect(ix + 10, ly, 70, itemH),
-                            isBold: false, fontSize: 7.0, align: TextAlignment.Left);
-                    }
-                }
-            }
+            dc.DrawRectangle(
+                ToBrush(item.Fill),
+                null,
+                ToRect(item.SwatchBounds));
+            DrawChartLabel(dc, item.Label.Text, ToRect(item.Label.Bounds),
+                isBold: item.Label.IsBold,
+                fontSize: item.Label.FontSize,
+                align: ToTextAlignment(item.Label.Alignment));
         }
     }
 

@@ -135,6 +135,58 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void BuildLegendItemPlans_BottomLegend_PlansOneItemPerSeries()
+    {
+        var chart = MakeTwoSeriesChart(ChartType.ColumnClustered);
+        chart.Legend = LegendPosition.Bottom;
+        var colors = new[]
+        {
+            new SrgbColor(0x11, 0x22, 0x33),
+            new SrgbColor(0x44, 0x55, 0x66)
+        };
+        var frame = ChartRenderPlanner.BuildFramePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+
+        var items = ChartRenderPlanner.BuildLegendItemPlans(chart, frame, colors);
+
+        items.Should().HaveCount(2);
+        items[0].SwatchBounds.Should().Be(new ChartPlanRect(48, 277, 8, 8));
+        items[0].Label.Text.Should().Be("Actual");
+        items[0].Label.Bounds.Should().Be(new ChartPlanRect(58, 274, 70, ChartRenderPlanner.LegendHeight));
+        items[0].Label.FontSize.Should().Be(7.0);
+        items[0].Label.Alignment.Should().Be(ChartPlanTextAlignment.Left);
+        items[0].Fill.Should().Be(new ChartFillPlan(colors[0], Alpha: 255));
+        items[1].SwatchBounds.Should().Be(new ChartPlanRect(128, 277, 8, 8));
+        items[1].Label.Text.Should().Be("Forecast");
+        items[1].Fill.Should().Be(new ChartFillPlan(colors[1], Alpha: 255));
+    }
+
+    [Fact]
+    public void BuildLegendItemPlans_RightPieLegend_PlansPointItemsAndFallbackColor()
+    {
+        var series = new ChartSeries { Name = "Share" };
+        series.Values.AddRange(new double?[] { 1, 2 });
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.Pie,
+            Legend = LegendPosition.Right
+        };
+        chart.Series.Add(series);
+        var suppliedColor = new SrgbColor(0x10, 0x20, 0x30);
+        var frame = ChartRenderPlanner.BuildFramePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+
+        var items = ChartRenderPlanner.BuildLegendItemPlans(chart, frame, new[] { suppliedColor });
+
+        items.Should().HaveCount(2);
+        items[0].SwatchBounds.Should().Be(new ChartPlanRect(316, 11, 8, 8));
+        items[0].Label.Text.Should().Be("Point 1");
+        items[0].Label.Bounds.Should().Be(new ChartPlanRect(326, 8, 66, ChartRenderPlanner.LegendHeight));
+        items[0].Fill.Should().Be(new ChartFillPlan(suppliedColor, Alpha: 255));
+        items[1].SwatchBounds.Should().Be(new ChartPlanRect(316, 25, 8, 8));
+        items[1].Label.Text.Should().Be("Point 2");
+        items[1].Fill.Should().Be(new ChartFillPlan(new SrgbColor(0x4F, 0x81, 0xBD), Alpha: 255));
+    }
+
+    [Fact]
     public void BuildColumnPrimitives_MatchesPowerPointClusterGeometry()
     {
         var chart = MakeTwoSeriesChart(ChartType.ColumnClustered);
