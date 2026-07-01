@@ -93,6 +93,7 @@ public sealed class MainWindow : Window
     private readonly SlideCanvas _slideCanvas;
     private readonly ListBox _slidePaneList;
     private readonly Border _slidePaneInsertionIndicator;
+    private readonly Button _slidePaneNewSlideButton;
     private readonly TextBox _notesBox;
     private readonly TextBlock _statusText;
     private Border _layoutPickerHost = null!;
@@ -138,6 +139,8 @@ public sealed class MainWindow : Window
         .OfType<ListBoxItem>()
         .Count(item => item.Tag is int);
     internal bool IsSlidePaneInsertionIndicatorVisible => _slidePaneInsertionIndicator.IsVisible;
+    internal bool IsSlidePaneNewSlideButtonVisible => _slidePaneNewSlideButton.IsVisible;
+    internal string? SlidePaneNewSlideButtonText => _slidePaneNewSlideButton.Content?.ToString();
 
     internal bool IsDirty => _fileWorkflow.IsDirty;
 
@@ -228,6 +231,7 @@ public sealed class MainWindow : Window
             IsHitTestVisible    = false,
             IsVisible           = false,
         };
+        _slidePaneNewSlideButton = BuildSlidePaneNewSlideButton();
 
         _notesBox = new TextBox
         {
@@ -401,8 +405,17 @@ public sealed class MainWindow : Window
         {
             Width = 180,
         };
-        slidePaneHost.Children.Add(_slidePaneList);
-        slidePaneHost.Children.Add(_slidePaneInsertionIndicator);
+        slidePaneHost.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        slidePaneHost.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+        var slidePaneListHost = new Grid();
+        slidePaneListHost.Children.Add(_slidePaneList);
+        slidePaneListHost.Children.Add(_slidePaneInsertionIndicator);
+
+        Grid.SetRow(slidePaneListHost, 0);
+        Grid.SetRow(_slidePaneNewSlideButton, 1);
+        slidePaneHost.Children.Add(slidePaneListHost);
+        slidePaneHost.Children.Add(_slidePaneNewSlideButton);
 
         // Left (slide pane) + right split.
         var body = new Grid();
@@ -1788,6 +1801,36 @@ public sealed class MainWindow : Window
 
         return SlidePanePlanner.TryApplyAction(Editor, action);
     }
+
+    internal bool ClickSlidePaneNewSlideAffordanceForTests()
+    {
+        var before = _presentation.Slides.Count;
+        InsertSlideFromSlidePaneAffordance();
+        return _presentation.Slides.Count == before + 1;
+    }
+
+    private Button BuildSlidePaneNewSlideButton()
+    {
+        var button = new Button
+        {
+            Content                    = SlidePanePlanner.NewSlideButtonText,
+            Margin                     = new Thickness(8, 6, 8, 8),
+            Padding                    = new Thickness(0, 6),
+            HorizontalAlignment        = HorizontalAlignment.Stretch,
+            HorizontalContentAlignment = HorizontalAlignment.Center,
+            Background                 = new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A)),
+            Foreground                 = Brushes.White,
+            BorderThickness            = new Thickness(0),
+            CornerRadius               = new CornerRadius(3),
+            FontSize                   = 12,
+            FontWeight                 = FontWeight.SemiBold,
+        };
+        button.Click += (_, _) => InsertSlideFromSlidePaneAffordance();
+        return button;
+    }
+
+    private void InsertSlideFromSlidePaneAffordance() =>
+        Editor.InsertSlide();
 
     private void ShowSlidePaneInsertionIndicator()
     {
