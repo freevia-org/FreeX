@@ -957,6 +957,73 @@ public sealed class MainWindowHeadlessTests
         delay.Should().Be(250);
     }
 
+    [Fact]
+    public async Task Ribbon_review_workflow_commands_refresh_shared_adapter_state()
+    {
+        var foundComments = false;
+        var foundAccessibility = false;
+        var foundAltText = false;
+        var foundProofing = false;
+        PresentationCommentPanePlan? commentPlan = null;
+        PresentationAccessibilitySummaryPlan? accessibilityPlan = null;
+        PresentationAltTextRequestPlan? altTextPlan = null;
+        PresentationProofingRequestPlan? proofingPlan = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            window.Editor.CurrentSlide!.Comments.Add(new SlideComment
+            {
+                Author = "Reviewer",
+                Initials = "RV",
+                Text = "Use shared review state.",
+                Idx = 1,
+            });
+            var shape = new SlideShape
+            {
+                Id = 328,
+                Name = "Product image",
+                Kind = SlideShapeKind.Picture,
+                Picture = new ImagePart(),
+            };
+            window.Editor.CurrentSlide.Shapes.Add(shape);
+            window.Editor.Select(shape.Id);
+
+            var registry = window.BuildCommandRegistry();
+            foundComments = registry.TryGet(PresentationReviewWorkflowPlanner.CommentsPaneCommandId, out var comments);
+            foundAccessibility = registry.TryGet(PresentationReviewWorkflowPlanner.AccessibilityCommandId, out var accessibility);
+            foundAltText = registry.TryGet(PresentationReviewWorkflowPlanner.AltTextCommandId, out var altText);
+            foundProofing = registry.TryGet(PresentationReviewWorkflowPlanner.ProofingCommandId, out var proofing);
+
+            comments!.Execute(RibbonCommandContext.Empty);
+            accessibility!.Execute(RibbonCommandContext.Empty);
+            altText!.Execute(RibbonCommandContext.Empty);
+            proofing!.Execute(RibbonCommandContext.Empty);
+
+            commentPlan = window.LastCommentPanePlan;
+            accessibilityPlan = window.LastAccessibilitySummaryPlan;
+            altTextPlan = window.LastAltTextRequestPlan;
+            proofingPlan = window.LastProofingRequestPlan;
+        });
+
+        if (!ran) return;
+        foundComments.Should().BeTrue();
+        foundAccessibility.Should().BeTrue();
+        foundAltText.Should().BeTrue();
+        foundProofing.Should().BeTrue();
+        commentPlan.Should().NotBeNull();
+        commentPlan!.TotalCommentCount.Should().Be(1);
+        accessibilityPlan.Should().NotBeNull();
+        accessibilityPlan!.Issues.Should().Contain(issue =>
+            issue.ShapeId == 328 && issue.Title == "Alt text needs model support");
+        altTextPlan.Should().NotBeNull();
+        altTextPlan!.HasSelection.Should().BeTrue();
+        altTextPlan.ShapeId.Should().Be(328);
+        altTextPlan.Status.Should().Be(PresentationWorkflowCapabilityStatus.Deferred);
+        proofingPlan.Should().NotBeNull();
+        proofingPlan!.Status.Should().Be(PresentationWorkflowCapabilityStatus.RequiresHost);
+    }
+
     [Theory]
     [InlineData("freep.layout")]
     [InlineData("freep.find")]

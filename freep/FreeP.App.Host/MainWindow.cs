@@ -119,6 +119,11 @@ public sealed class MainWindow : Window
     private StackPanel _commentListPanel = null!; // shows comment text list below canvas
     private Border  _commentListHost = null!; // collapsible container for _commentListPanel
 
+    internal PresentationCommentPanePlan? LastCommentPanePlan { get; private set; }
+    internal PresentationAccessibilitySummaryPlan? LastAccessibilitySummaryPlan { get; private set; }
+    internal PresentationAltTextRequestPlan? LastAltTextRequestPlan { get; private set; }
+    internal PresentationProofingRequestPlan? LastProofingRequestPlan { get; private set; }
+
     // ── Wave 16B: Animation pane (right-side collapsible panel) ──────────────────
     // 16B SEAM START — do not restructure this region (16A/16C may conflict nearby).
     private AnimationPane? _animPane;
@@ -190,6 +195,10 @@ public sealed class MainWindow : Window
             // Wave 12B: Find & Replace dialogs.
             onFind:             () => OpenFindDialog(),
             onFindReplace:      () => OpenFindReplaceDialog(),
+            onReviewCommentsPane: () => ShowReviewCommentsPane(),
+            onReviewAccessibility: () => RefreshAccessibilitySummaryPlan(),
+            onReviewAltText: () => RefreshAltTextRequestPlan(),
+            onReviewProofing: () => RefreshProofingRequestPlan(),
             // Wave 16B: Animation pane toggle.
             onAnimPane:         () => ToggleAnimationPane());
         var ribbon = BuildRibbon(FreePRibbon.Build(), commands, stateStore);
@@ -239,6 +248,7 @@ public sealed class MainWindow : Window
         RefreshCanvas();
         RefreshNotesPane();
         RefreshCommentPane();
+        RefreshReviewWorkflowPlans();
         UpdateSlideCount();
     }
 
@@ -249,9 +259,9 @@ public sealed class MainWindow : Window
         var bus = new PresentationCommandBus(_presentation);
         Editor  = new EditingSession(_presentation, bus);
 
-        Editor.Changed           += () => { _file.MarkDirty(); RefreshCanvas(); UpdateSlideCount(); UpdateTitle(); };
-        Editor.CurrentSlideChanged += (_, _) => { RefreshCanvas(); RefreshNotesPane(); RefreshCommentPane(); };
-        // SelectionChanged: 3C subscribes directly to Editor.SelectionChanged.
+        Editor.Changed           += () => { _file.MarkDirty(); RefreshCanvas(); UpdateSlideCount(); UpdateTitle(); RefreshReviewWorkflowPlans(); };
+        Editor.CurrentSlideChanged += (_, _) => { RefreshCanvas(); RefreshNotesPane(); RefreshCommentPane(); RefreshReviewWorkflowPlans(); };
+        Editor.SelectionChanged += (_, _) => RefreshAltTextRequestPlan();
 
         // Re-attach editing layer whenever the editor is rebuilt (file open/new).
         // Guard: SlideCanvas is null during initial construction; BuildBody calls
@@ -289,6 +299,7 @@ public sealed class MainWindow : Window
         UpdateSlideCount();
         RefreshNotesPane();
         RefreshCommentPane();
+        RefreshReviewWorkflowPlans();
         // 16B: rebuild animation pane for new editor (only if the pane is currently shown).
         RebuildAnimationPaneIfVisible();
     }
@@ -481,8 +492,11 @@ public sealed class MainWindow : Window
     {
         if (_commentOverlay is null || _commentListHost is null || _commentListPanel is null) return;
 
-        var slide    = Editor.CurrentSlide;
-        var comments = slide?.Comments ?? new List<FreeP.Core.Model.SlideComment>();
+        var plan = PresentationReviewWorkflowPlanner.BuildCommentPanePlan(
+            _presentation.Slides,
+            Editor.CurrentSlideIndex);
+        LastCommentPanePlan = plan;
+        var comments = plan.Comments;
 
         // ── Overlay: rebuild speech-bubble markers ──────────────────────────────
         _commentOverlay.Children.Clear();
@@ -543,7 +557,7 @@ public sealed class MainWindow : Window
                 // Comment body text
                 var bodyText = new TextBlock
                 {
-                    Text         = cm.Text,
+                    Text         = cm.TextPreview,
                     FontSize     = 11,
                     TextWrapping = TextWrapping.Wrap,
                     Foreground   = new SolidColorBrush(Color.FromRgb(0x44, 0x44, 0x44)),
@@ -564,8 +578,7 @@ public sealed class MainWindow : Window
     private void OnCommentOverlayLoaded(object sender, RoutedEventArgs e)
     {
         _commentOverlay.Loaded -= OnCommentOverlayLoaded;
-        var slide    = Editor.CurrentSlide;
-        var comments = slide?.Comments ?? new List<FreeP.Core.Model.SlideComment>();
+        var comments = LastCommentPanePlan?.Comments ?? [];
         DrawCommentDots(comments);
     }
 
@@ -574,7 +587,7 @@ public sealed class MainWindow : Window
     /// Positions are derived from the comment's EMU coordinates mapped into the overlay bounds,
     /// accounting for SlideCanvas's 40 px margin on each side.
     /// </summary>
-    private void DrawCommentDots(IReadOnlyList<FreeP.Core.Model.SlideComment> comments)
+    private void DrawCommentDots(IReadOnlyList<PresentationCommentDescriptor> comments)
     {
         _commentOverlay.Children.Clear();
         if (comments.Count == 0) return;
@@ -617,13 +630,51 @@ public sealed class MainWindow : Window
                 Background      = new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A)),
                 BorderBrush     = System.Windows.Media.Brushes.White,
                 BorderThickness = new Thickness(1.5),
-                ToolTip         = $"{cm.Author}: {cm.Text}",
+                ToolTip         = $"{cm.Author}: {cm.TextPreview}",
             };
 
             Canvas.SetLeft(dot, cx - 7);
             Canvas.SetTop(dot,  cy - 7);
             _commentOverlay.Children.Add(dot);
         }
+    }
+
+    internal void RefreshReviewWorkflowPlans()
+    {
+        LastCommentPanePlan = PresentationReviewWorkflowPlanner.BuildCommentPanePlan(
+            _presentation.Slides,
+            Editor.CurrentSlideIndex);
+        RefreshAccessibilitySummaryPlan();
+        RefreshAltTextRequestPlan();
+        RefreshProofingRequestPlan();
+    }
+
+    private void ShowReviewCommentsPane()
+    {
+        RefreshCommentPane();
+    }
+
+    private void RefreshAccessibilitySummaryPlan()
+    {
+        LastAccessibilitySummaryPlan =
+            PresentationReviewWorkflowPlanner.BuildAccessibilitySummaryPlan(_presentation);
+    }
+
+    private void RefreshAltTextRequestPlan()
+    {
+        uint? selectedShapeId = Editor.SelectedShapeIds.Count == 1
+            ? Editor.SelectedShapeIds[0]
+            : null;
+        LastAltTextRequestPlan = PresentationReviewWorkflowPlanner.BuildAltTextRequestPlan(
+            Editor.CurrentSlide,
+            selectedShapeId,
+            proposedDescription: null);
+    }
+
+    private void RefreshProofingRequestPlan()
+    {
+        LastProofingRequestPlan =
+            PresentationReviewWorkflowPlanner.BuildProofingRequestPlan(_presentation);
     }
 
     // ── Wave 16B: Animation pane show/hide ───────────────────────────────────────
