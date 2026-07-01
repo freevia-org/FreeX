@@ -141,6 +141,26 @@ public sealed record PresentationHandoutLayoutPlan(
     int PageCount,
     IReadOnlyList<PresentationHandoutPagePlan> Pages);
 
+public sealed record PresentationHandoutSlideSlot(
+    int PageIndex,
+    int SlotIndex,
+    int SlideIndex,
+    int SlideNumber,
+    LayoutRect SlideBounds,
+    LayoutRect? NotesOrLinesBounds,
+    IReadOnlyList<LayoutRect> BlankLineBounds);
+
+public sealed record PresentationHandoutPagePlan(
+    int PageIndex,
+    IReadOnlyList<PresentationHandoutSlideSlot> Slots);
+
+public sealed record PresentationHandoutLayoutPlan(
+    PresentationPrintPlan PrintPlan,
+    double PageWidth,
+    double PageHeight,
+    int PageCount,
+    IReadOnlyList<PresentationHandoutPagePlan> Pages);
+
 public sealed record PresentationDeferredExportPlan(
     PresentationExportFormat Format,
     string CommandId,
@@ -449,6 +469,40 @@ public static class PresentationExportPlanner
                 : null,
         };
         var printPlan = BuildPrintPlan(handoutRequest, presentation);
+        var slidesPerPage = printPlan.Layout.SlidesPerPage;
+        var slideAspect = NormalizeAspectRatio(slideWidth, slideHeight);
+        var pages = BuildHandoutPages(
+            printPlan.SlideRange.SlideNumbers,
+            slidesPerPage,
+            Math.Max(1, pageWidth),
+            Math.Max(1, pageHeight),
+            slideAspect);
+
+        return new PresentationHandoutLayoutPlan(
+            printPlan,
+            Math.Max(1, pageWidth),
+            Math.Max(1, pageHeight),
+            pages.Count,
+            pages);
+    }
+
+    public static PresentationHandoutLayoutPlan BuildHandoutLayoutPlan(
+        PresentationPrintRequest? request,
+        int slideCount,
+        double slideWidth = 16,
+        double slideHeight = 9,
+        double pageWidth = DefaultPrintPageWidth,
+        double pageHeight = DefaultPrintPageHeight)
+    {
+        request ??= new PresentationPrintRequest(PresentationPrintLayoutKind.Handouts);
+        var handoutRequest = request with
+        {
+            Layout = PresentationPrintLayoutKind.Handouts,
+            HandoutSlidesPerPage = request.Layout == PresentationPrintLayoutKind.Handouts
+                ? request.HandoutSlidesPerPage
+                : null,
+        };
+        var printPlan = BuildPrintPlan(handoutRequest, slideCount);
         var slidesPerPage = printPlan.Layout.SlidesPerPage;
         var slideAspect = NormalizeAspectRatio(slideWidth, slideHeight);
         var pages = BuildHandoutPages(

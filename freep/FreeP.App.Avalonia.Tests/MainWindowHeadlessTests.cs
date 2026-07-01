@@ -3163,6 +3163,36 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task Print_command_refreshes_shared_handout_layout_plan()
+    {
+        var found = false;
+        PresentationHandoutLayoutPlan? handoutPlan = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            window.Editor.InsertSlide();
+            window.Editor.InsertSlide();
+            window.Editor.InsertSlide();
+
+            var registry = window.BuildCommandRegistry();
+            found = registry.TryGet(PresentationExportPlanner.PrintCommandId, out var print);
+
+            print!.Execute(RibbonCommandContext.Empty);
+            handoutPlan = window.LastHandoutLayoutPlan;
+        });
+
+        if (!ran) return;
+        found.Should().BeTrue("the Avalonia registry should expose the shared print plan seam");
+        handoutPlan.Should().NotBeNull();
+        handoutPlan!.PrintPlan.CommandId.Should().Be(PresentationExportPlanner.PrintCommandId);
+        handoutPlan.PrintPlan.Layout.Layout.Should().Be(PresentationPrintLayoutKind.Handouts);
+        handoutPlan.PrintPlan.Layout.SlidesPerPage.Should().Be(6);
+        handoutPlan.Pages.Should().ContainSingle();
+        handoutPlan.Pages[0].Slots.Select(slot => slot.SlideNumber).Should().Equal(1, 2, 3, 4);
+    }
+
+    [Fact]
     public async Task Ribbon_transition_commands_route_through_shared_planner()
     {
         var foundFade = false;

@@ -2386,6 +2386,7 @@ public sealed partial class MainWindow : Window
         r.Register(PresentationExportPlanner.ImageExportCommandId, new ActionRibbonCommand(() => _ = FileExportImagesAsync()));
         r.Register(PresentationExportPlanner.PrintCommandId, new ActionRibbonCommand(ShowPrintBackstage));
         r.Register(PresentationExportPlanner.VideoExportCommandId, new ActionRibbonCommand(() => _ = FileExportVideoAsync()));
+        
 
         // Slide navigation/management
         r.Register("freep.new-slide",       new ActionRibbonCommand(() => Editor.InsertSlide()));

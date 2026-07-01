@@ -40,6 +40,7 @@ public sealed class FileCommandsSourceTests
         source.Should().Contain("WpfVideoExportAdapter");
         source.Should().Contain("LastVideoFramePackage");
         source.Should().Contain("LastVideoExportHandoffPlan");
+        source.Should().Contain("PresentationExportPlanner.BuildHandoutLayoutPlan(");
         source.Should().Contain("PresentationExportPlanner.ImageExportPickerTitle");
         source.Should().Contain("PresentationImageExportExecutor.Export(");
         source.Should().Contain("public bool ExportNotesPagePdf(");
