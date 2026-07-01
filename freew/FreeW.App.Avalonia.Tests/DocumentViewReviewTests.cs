@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -505,6 +506,33 @@ public sealed class DocumentViewReviewTests
             "mark-final",
             "restrict",
         });
+    }
+
+    [Fact]
+    public void Review_comment_dialog_commands_route_to_host_callbacks()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("Hello") { CommentId = 1 });
+        paragraph.Runs.Add(Run.CommentReference(1));
+        doc.Blocks.Add(paragraph);
+        doc.Comments[1] = new Comment(1, "note", "A", "A");
+
+        var view = new DocumentView();
+        view.LoadDocument(doc);
+        var calls = new List<string>();
+        var callbacks = NoopCallbacks() with
+        {
+            ReplyComment = () => calls.Add("reply"),
+            ShowComments = rows => calls.Add($"show:{rows.Count}"),
+        };
+        var registry = FreeWAvaloniaRibbonCommands.Build(view, callbacks);
+
+        Execute(registry, "freew.reply-comment");
+        Execute(registry, "freew.show-comments");
+
+        calls.Should().Equal("reply", "show:1");
     }
 
     private static RibbonHostCallbacks NoopCallbacks() =>

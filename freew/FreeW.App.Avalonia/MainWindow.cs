@@ -17,6 +17,7 @@ using FreeW.App.Avalonia.Pdf;
 using FreeW.App.Avalonia.Ribbon;
 using FreeW.App.Presentation.Dialogs;
 using FreeW.App.Presentation.Options;
+using FreeW.App.Presentation.Ribbon;
 using FreeW.App.Presentation.Shell;
 using FreeW.Core.IO;
 using FreeW.Core.Model;
@@ -324,6 +325,27 @@ public sealed class MainWindow : Window
     private Task OpenWordCountDialogAsync() =>
         new WordCountDialog(_editor.ComputeStatistics()).ShowDialog(this);
 
+    private async Task ReplyToCommentAsync()
+    {
+        if (_editor.CommentsAtCaret.Count == 0)
+        {
+            _status.Text = "Place the caret in a comment to reply.";
+            _editor.Focus();
+            return;
+        }
+
+        var text = await CommentReplyDialog.AskAsync(this);
+        if (!string.IsNullOrWhiteSpace(text) && !_editor.ReplyToCommentAtCaret(text))
+            _status.Text = "Place the caret in a comment to reply.";
+        _editor.Focus();
+    }
+
+    private async Task ShowCommentsAsync(IReadOnlyList<CommentListItem> items)
+    {
+        await CommentListDialog.ShowAsync(this, items);
+        _editor.Focus();
+    }
+
     /// <summary>
     /// Opens the Avalonia print-preview surface over a snapshot of the current document. Native print
     /// selection remains deferred, but the preview uses the same paginated renderer as the live editor.
@@ -594,7 +616,9 @@ public sealed class MainWindow : Window
             MarkAsFinal: ToggleMarkAsFinal,
             RestrictEditing: () => _ = OpenRestrictEditingAsync(),
             InspectDocument: () => _ = InspectDocumentAsync(),
-            CheckAccessibility: () => _ = CheckAccessibilityAsync());
+            CheckAccessibility: () => _ = CheckAccessibilityAsync(),
+            ReplyComment: () => _ = ReplyToCommentAsync(),
+            ShowComments: rows => _ = ShowCommentsAsync(rows));
 
         // AV-MAIL: capture the Mailings engine so the shell can drive its two dialog-bound commands
         // (Select Recipients / Insert Merge Field) with async Avalonia dialogs over the same session the

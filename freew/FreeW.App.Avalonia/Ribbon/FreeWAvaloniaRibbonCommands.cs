@@ -414,16 +414,16 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.reject-change", rejectCurrentRevisionCommand);
         r.Register("freew.accept-all",    new ActionRibbonCommand(() => editor.AcceptAllRevisions()));
         r.Register("freew.reject-all",    new ActionRibbonCommand(() => editor.RejectAllRevisions()));
-        // Comments — expose the WPF Review > Comments command IDs in Avalonia. New/Delete/Resolve use
-        // existing editor primitives; navigation, reply, and comments pane are registered as safe
-        // placeholders until the Avalonia editor grows public navigation/pane flows.
+        // Comments — thread navigation/actions over the shared comment model.
         r.Register("freew.new-comment",    new ActionRibbonCommand(() => editor.NewComment()));
         r.Register("freew.delete-comment", new ActionRibbonCommand(() => editor.DeleteCommentAtCaret()));
-        r.Register("freew.previous-comment", new ActionRibbonCommand(() => { }));
-        r.Register("freew.next-comment", new ActionRibbonCommand(() => { }));
-        r.Register("freew.reply-comment", new ActionRibbonCommand(() => { }));
+        r.Register("freew.previous-comment", new ActionRibbonCommand(() => editor.PreviousComment()));
+        r.Register("freew.next-comment", new ActionRibbonCommand(() => editor.NextComment()));
+        r.Register("freew.reply-comment", new ActionRibbonCommand(
+            callbacks.ReplyComment ?? (() => editor.ReplyToCommentAtCaret())));
         r.Register("freew.resolve-comment", new ActionRibbonCommand(() => editor.ToggleResolveCommentAtCaret()));
-        r.Register("freew.show-comments", new ActionRibbonCommand(() => { }));
+        r.Register("freew.show-comments", new ActionRibbonCommand(() =>
+            callbacks.ShowComments?.Invoke(editor.PlannedCommentList())));
         // Word Count — opens the modal stats dialog (shell callback; reads DocumentStatistics).
         var statisticsCommand = new ActionRibbonCommand(callbacks.OpenWordCountDialog);
         r.Register("freew.statistics", statisticsCommand);

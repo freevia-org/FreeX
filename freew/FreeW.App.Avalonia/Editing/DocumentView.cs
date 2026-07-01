@@ -7893,6 +7893,38 @@ public sealed class DocumentView : Control
     }
 
     /// <summary>
+    /// Appends a reply to the specified top-level comment thread using the shared comment model.
+    /// Undoable. Returns true when the reply was appended.
+    /// </summary>
+    public bool ReplyToComment(int commentId, string text, string author = "", string initials = "")
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return false;
+
+        var topId = DeleteCommentCommand.ResolveTopLevel(_doc, commentId);
+        if (!_doc.Comments.TryGetValue(topId, out var comment))
+            return false;
+
+        var replyId = _doc.NextCommentId();
+        var reply = new Comment(replyId, text, author, initials)
+        {
+            DateXml = DateTimeOffset.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture),
+        };
+
+        _bus.Execute(new AddCommentReplyCommand(topId, reply));
+        return comment.Replies.Any(candidate => candidate.Id == replyId);
+    }
+
+    /// <summary>Replies to the comment thread covering the caret. Returns true when a reply was appended.</summary>
+    public bool ReplyToCommentAtCaret(string text = "Reply")
+    {
+        if (CommentIdAtCaret() is not { } id)
+            return false;
+
+        return ReplyToComment(id, text, RevisionAuthor, DeriveInitials(RevisionAuthor));
+    }
+
+    /// <summary>
     /// Toggles the resolved flag of the comment thread covering the caret/selection. Returns the new
     /// resolved state, or null when the caret is not inside a comment.
     /// </summary>
@@ -7908,6 +7940,48 @@ public sealed class DocumentView : Control
     /// <summary>All top-level review comments in the document, in id order. Replies live on each thread.</summary>
     public IReadOnlyList<Comment> AllComments =>
         _doc.Comments.Values.OrderBy(c => c.Id).ToList();
+
+    /// <summary>Shared planned comment list rows in document order, including anchor positions.</summary>
+    public IReadOnlyList<CommentListItem> PlannedCommentList() =>
+        CommentListPlanner.Build(_doc);
+
+    /// <summary>Moves the caret to the previous comment in document order, wrapping at the start.</summary>
+    public bool PreviousComment() => NavigateComment(direction: -1);
+
+    /// <summary>Moves the caret to the next comment in document order, wrapping at the end.</summary>
+    public bool NextComment() => NavigateComment(direction: 1);
+
+    private bool NavigateComment(int direction)
+    {
+        var target = CommentListPlanner.SelectAdjacent(PlannedCommentList(), CommentIdAtCaret(), direction);
+        return target is not null && MoveCaretToComment(target);
+    }
+
+    private bool MoveCaretToComment(CommentListItem item)
+    {
+        var anchor = item.Anchor;
+        if (anchor.IsTableAnchor)
+        {
+            PlaceCaretInCell(
+                anchor.BlockIndex,
+                anchor.TableRowIndex!.Value,
+                anchor.TableGridColumnIndex!.Value,
+                anchor.TableParagraphIndex!.Value,
+                anchor.Offset);
+            ScrollToCaretRequested?.Invoke();
+            return true;
+        }
+
+        if (anchor.BlockIndex < 0 || anchor.BlockIndex >= _doc.Blocks.Count || _doc.Blocks[anchor.BlockIndex] is not Paragraph)
+            return false;
+
+        _hfCaret = null;
+        MoveCaretToBlock(anchor.BlockIndex, Math.Clamp(anchor.Offset, 0, BlockLength(anchor.BlockIndex)));
+        InvalidateVisual();
+        CaretMoved?.Invoke();
+        ScrollToCaretRequested?.Invoke();
+        return true;
+    }
 
     /// <summary>
     /// The top-level comment threads whose anchored range covers the caret (or selection start), in id
@@ -7925,13 +7999,29 @@ public sealed class DocumentView : Control
     /// </summary>
     private int? CommentIdAtCaret()
     {
+        if (_cellCaret is { } cellCaret && GetCellParagraph(
+                cellCaret.TableBlock,
+                cellCaret.Row,
+                cellCaret.Col,
+                cellCaret.ParaIdx) is { } cellParagraph)
+        {
+            return CommentIdInParagraphAtOffset(cellParagraph, cellCaret.Offset);
+        }
+
         if (_caret.Block < 0 || _caret.Block >= _doc.Blocks.Count || _doc.Blocks[_caret.Block] is not Paragraph paragraph)
             return null;
+
+        return CommentIdInParagraphAtOffset(paragraph, _caret.Offset);
+    }
+
+    private int? CommentIdInParagraphAtOffset(Paragraph paragraph, int offset)
+    {
         var cells = ParaCells(paragraph);
         if (cells.Count == 0)
             return null;
+
         // Probe the cell just before the caret (the char the caret sits after), then the one at the caret.
-        foreach (var probe in new[] { _caret.Offset - 1, _caret.Offset })
+        foreach (var probe in new[] { offset - 1, offset })
         {
             if (probe < 0 || probe >= cells.Count)
                 continue;
