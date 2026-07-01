@@ -189,78 +189,8 @@ internal static class FreePRibbonCommands
 
         // ── Wave 4C: Animations tab ──────────────────────────────────────────────
 
-        // Entrance effects — AddAnimation with Kind=Entrance + appropriate Preset.
-        RegisterEntranceAnim(registry, editor, "freep.anim.entrance.appear", AnimationPreset.Appear);
-        RegisterEntranceAnim(registry, editor, "freep.anim.entrance.fade",   AnimationPreset.Fade);
-        RegisterEntranceAnim(registry, editor, "freep.anim.entrance.fly-in", AnimationPreset.FlyIn);
-        RegisterEntranceAnim(registry, editor, "freep.anim.entrance.wipe",   AnimationPreset.Wipe);
-        RegisterEntranceAnim(registry, editor, "freep.anim.entrance.zoom",   AnimationPreset.Zoom);
-        RegisterEntranceAnim(registry, editor, "freep.anim.entrance.split",  AnimationPreset.Split);
-
-        // Emphasis effects.
-        RegisterEmphasisAnim(registry, editor, "freep.anim.emphasis.pulse",       AnimationPreset.Pulse);
-        RegisterEmphasisAnim(registry, editor, "freep.anim.emphasis.spin",        AnimationPreset.Spin);
-        RegisterEmphasisAnim(registry, editor, "freep.anim.emphasis.grow-shrink", AnimationPreset.Grow);
-
-        // Exit effects.
-        RegisterExitAnim(registry, editor, "freep.anim.exit.disappear", AnimationPreset.Appear);
-        RegisterExitAnim(registry, editor, "freep.anim.exit.fade-out",  AnimationPreset.Fade);
-        RegisterExitAnim(registry, editor, "freep.anim.exit.fly-out",   AnimationPreset.FlyIn);
-
-        // No animation — removes the first animation that targets the selected shape.
-        registry.Register("freep.anim.none", new ActionRibbonCommand(() =>
-        {
-            var animations = editor.CurrentSlideAnimations;
-            var selectedIds = editor.SelectedShapeIds;
-            if (selectedIds.Count == 0) return;
-            var targetId = selectedIds[0];
-            // Walk backwards to keep indices valid after removal.
-            for (int i = animations.Count - 1; i >= 0; i--)
-            {
-                if (animations[i].ShapeId == targetId)
-                    editor.RemoveAnimation(i);
-            }
-        }));
-
-        // Timing: trigger combo (STUB — full implementation deferred to Wave 5).
-        registry.Register("freep.anim.trigger", new ActionRibbonCommand(() =>
-        {
-            /* STUB: Wave 5 will read the selected item and call editor.SetAnimation() */
-        }));
-
-        // Timing: duration + delay combos (STUBs).
-        registry.Register("freep.anim.duration", new ActionRibbonCommand(() => { /* STUB */ }));
-        registry.Register("freep.anim.delay",    new ActionRibbonCommand(() => { /* STUB */ }));
-
-        // Reorder animations — Move Earlier / Move Later.
-        registry.Register("freep.anim.move-earlier", new ActionRibbonCommand(() =>
-        {
-            var animations  = editor.CurrentSlideAnimations;
-            var selectedIds = editor.SelectedShapeIds;
-            if (selectedIds.Count == 0 || animations.Count == 0) return;
-            var targetId = selectedIds[0];
-            var idx = FindLastAnimationIndex(animations, targetId);
-            if (idx > 0)
-                editor.MoveAnimation(idx, idx - 1);
-        }));
-
-        registry.Register("freep.anim.move-later", new ActionRibbonCommand(() =>
-        {
-            var animations  = editor.CurrentSlideAnimations;
-            var selectedIds = editor.SelectedShapeIds;
-            if (selectedIds.Count == 0 || animations.Count == 0) return;
-            var targetId = selectedIds[0];
-            var idx = FindLastAnimationIndex(animations, targetId);
-            if (idx >= 0 && idx < animations.Count - 1)
-                editor.MoveAnimation(idx, idx + 1);
-        }));
-
-        // Animation Pane toggle — Wave 16B: wired to MainWindow.ToggleAnimationPane().
-        registry.Register("freep.anim.pane",
-            new EditorToggleCommand(stateStore, "freep.anim.pane", () =>
-            {
-                onAnimPane?.Invoke();
-            }));
+        // Animation effects/timing/order/pane route through the shared planner.
+        RegisterAnimationCommands(registry, stateStore, editor, onAnimPane);
 
         // ── Wave 5B: Insert — Tables ─────────────────────────────────────────────
 
@@ -442,47 +372,22 @@ internal static class FreePRibbonCommands
         }
     }
 
-    private static void RegisterEntranceAnim(
+    private static void RegisterAnimationCommands(
         RibbonCommandRegistry registry,
-        EditingSession        editor,
-        string                id,
-        AnimationPreset       preset)
-        => registry.Register(id, new ActionRibbonCommand(() =>
-            editor.AddAnimation(0, new ShapeAnimation
-            {
-                Kind       = AnimationKind.Entrance,
-                Preset     = preset,
-                Trigger    = AnimationTrigger.OnClick,
-                DurationMs = 500,
-            })));
-
-    private static void RegisterEmphasisAnim(
-        RibbonCommandRegistry registry,
-        EditingSession        editor,
-        string                id,
-        AnimationPreset       preset)
-        => registry.Register(id, new ActionRibbonCommand(() =>
-            editor.AddAnimation(0, new ShapeAnimation
-            {
-                Kind       = AnimationKind.Emphasis,
-                Preset     = preset,
-                Trigger    = AnimationTrigger.OnClick,
-                DurationMs = 500,
-            })));
-
-    private static void RegisterExitAnim(
-        RibbonCommandRegistry registry,
-        EditingSession        editor,
-        string                id,
-        AnimationPreset       preset)
-        => registry.Register(id, new ActionRibbonCommand(() =>
-            editor.AddAnimation(0, new ShapeAnimation
-            {
-                Kind       = AnimationKind.Exit,
-                Preset     = preset,
-                Trigger    = AnimationTrigger.OnClick,
-                DurationMs = 500,
-            })));
+        RibbonStateStore stateStore,
+        EditingSession editor,
+        Action? onAnimPane)
+    {
+        foreach (var plan in PresentationAnimationCommandPlanner.BuiltInPlans)
+        {
+            registry.Register(
+                plan.CommandId,
+                plan.Intent == PresentationAnimationCommandIntentKind.TogglePane
+                    ? new AnimationPaneToggleCommand(stateStore, editor, plan, onAnimPane)
+                    : new ContextRibbonCommand(ctx =>
+                        PresentationAnimationCommandPlanner.TryApply(editor, plan, ctx.SelectedValue)));
+        }
+    }
 
     // ── Wave 10A: active-editor routing ──────────────────────────────────────────
     //
@@ -516,16 +421,6 @@ internal static class FreePRibbonCommands
         }
 
         return false;
-    }
-
-    /// <summary>Finds the last animation index targeting <paramref name="shapeId"/>; -1 if not found.</summary>
-    private static int FindLastAnimationIndex(
-        IReadOnlyList<ShapeAnimation> animations,
-        uint shapeId)
-    {
-        for (int i = animations.Count - 1; i >= 0; i--)
-            if (animations[i].ShapeId == shapeId) return i;
-        return -1;
     }
 
     // ── Inner helpers ─────────────────────────────────────────────────────────────
@@ -581,6 +476,46 @@ internal static class FreePRibbonCommands
         public void Execute(RibbonCommandContext context)
         {
             if (!PresentationTransitionCommandPlanner.TryApply(_editor, _plan, context.SelectedValue))
+            {
+                return;
+            }
+
+            _checked = !_checked;
+            _stateStore.SetChecked(_id, _checked);
+        }
+
+        public RibbonCommandState GetState() => new(IsEnabled: true, IsChecked: _checked);
+    }
+
+    private sealed class AnimationPaneToggleCommand : IRibbonStatefulCommand
+    {
+        private readonly RibbonStateStore _stateStore;
+        private readonly EditingSession _editor;
+        private readonly PresentationAnimationCommandPlan _plan;
+        private readonly Action? _onAnimPane;
+        private readonly RibbonCommandId _id;
+        private bool _checked;
+
+        public AnimationPaneToggleCommand(
+            RibbonStateStore stateStore,
+            EditingSession editor,
+            PresentationAnimationCommandPlan plan,
+            Action? onAnimPane)
+        {
+            _stateStore = stateStore;
+            _editor = editor;
+            _plan = plan;
+            _onAnimPane = onAnimPane;
+            _id = plan.CommandId;
+        }
+
+        public void Execute(RibbonCommandContext context)
+        {
+            if (!PresentationAnimationCommandPlanner.TryApply(
+                    _editor,
+                    _plan,
+                    context.SelectedValue,
+                    _onAnimPane is null ? null : _ => _onAnimPane()))
             {
                 return;
             }

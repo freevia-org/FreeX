@@ -447,6 +447,12 @@ public sealed class MainWindow : Window
                 PresentationDesignCommandPlanner.TryApply(Editor, plan, OnCustomSlideSizeRequested)));
         }
 
+        foreach (var plan in PresentationAnimationCommandPlanner.BuiltInPlans)
+        {
+            r.Register(plan.CommandId, new ContextRibbonCommand(ctx =>
+                PresentationAnimationCommandPlanner.TryApply(Editor, plan, ctx.SelectedValue)));
+        }
+
         // Slide show
         r.Register("freep.slideshow.from-beginning",
             new ActionRibbonCommand(() => StartSlideShow(fromStart: true)));

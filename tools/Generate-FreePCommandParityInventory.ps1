@@ -266,6 +266,12 @@ internal static class FreePCommandInventory
         IReadOnlyList<CommandLocation>? avaloniaLocations,
         IReadOnlyCollection<string> allCommandIds)
     {
+        if (wpfPresent && avaloniaPresent && string.Equals(commandId, "freep.anim.pane", StringComparison.Ordinal))
+            return new Classification("shared", "Shared callback intent; pane UI remains host-local.");
+
+        if (wpfPresent && avaloniaPresent && IsAnimationTimingCommand(commandId))
+            return new Classification("shared", "Shared typed timing intent; applies when a selected value and selected-shape animation are available.");
+
         if (wpfPresent && avaloniaPresent)
             return new Classification("shared", "Available in both generated FreeP ribbon profiles.");
 
@@ -291,6 +297,11 @@ internal static class FreePCommandInventory
 
     private static bool IsKnownDeferredWpfSlice(IReadOnlyList<CommandLocation> locations) =>
         locations.Any(location => location.TabId is "design" or "transitions" or "animations");
+
+    private static bool IsAnimationTimingCommand(string commandId) =>
+        string.Equals(commandId, "freep.anim.trigger", StringComparison.Ordinal) ||
+        string.Equals(commandId, "freep.anim.duration", StringComparison.Ordinal) ||
+        string.Equals(commandId, "freep.anim.delay", StringComparison.Ordinal);
 
     private static string Surface(bool wpfPresent, bool avaloniaPresent) =>
         wpfPresent && avaloniaPresent

@@ -236,7 +236,7 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
-    public void RibbonDefinition_contains_design_and_transitions_tabs_without_animations()
+    public void RibbonDefinition_contains_design_transitions_and_animations_tabs()
     {
         var definition = FreePRibbonAvalonia.Build();
 
@@ -246,7 +246,7 @@ public sealed class MainWindowHeadlessTests
             .And
             .Contain("transitions")
             .And
-            .NotContain("animations");
+            .Contain("animations");
     }
 
     [Fact]
@@ -264,6 +264,20 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public void RibbonDefinition_animations_tab_has_planned_animation_commands()
+    {
+        var definition = FreePRibbonAvalonia.Build();
+        var animations = definition.Tabs.Single(t => t.Id == "animations");
+        var commandIds = animations.Groups
+            .SelectMany(group => group.Controls)
+            .Where(control => !string.IsNullOrEmpty(control.CommandId.Value))
+            .Select(control => control.CommandId.Value)
+            .ToArray();
+
+        commandIds.Should().Contain(PresentationAnimationCommandPlanner.BuiltInPlans.Select(plan => plan.CommandId));
+    }
+
+    [Fact]
     public void MainWindow_sources_route_design_commands_through_shared_planner()
     {
         var source = File.ReadAllText(FindRepoFile("freep", "FreeP.App.Avalonia", "MainWindow.cs"));
@@ -273,6 +287,15 @@ public sealed class MainWindowHeadlessTests
         source.Should().NotContain("Editor.SetTheme(");
         source.Should().NotContain("Editor.SetSlideSize16x9()");
         source.Should().NotContain("Editor.SetSlideSize4x3()");
+    }
+
+    [Fact]
+    public void MainWindow_sources_route_animation_commands_through_shared_planner()
+    {
+        var source = File.ReadAllText(FindRepoFile("freep", "FreeP.App.Avalonia", "MainWindow.cs"));
+
+        source.Should().Contain("PresentationAnimationCommandPlanner.BuiltInPlans");
+        source.Should().Contain("PresentationAnimationCommandPlanner.TryApply(Editor, plan, ctx.SelectedValue)");
     }
 
     [Fact]
@@ -889,6 +912,49 @@ public sealed class MainWindowHeadlessTests
         firstKind.Should().Be(TransitionKind.Fade);
         firstDuration.Should().Be(1500);
         secondKind.Should().Be(TransitionKind.Fade);
+    }
+
+    [Fact]
+    public async Task Ribbon_animation_commands_route_through_shared_planner()
+    {
+        var foundFade = false;
+        var foundDuration = false;
+        var foundDelay = false;
+        var foundPane = false;
+        AnimationPreset? preset = null;
+        int? duration = null;
+        int? delay = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var shape = window.Editor.InsertDefaultRectangle();
+            window.Editor.Select(shape.Id);
+            var registry = window.BuildCommandRegistry();
+            foundFade = registry.TryGet("freep.anim.entrance.fade", out var fade);
+            foundDuration = registry.TryGet("freep.anim.duration", out var durationCommand);
+            foundDelay = registry.TryGet("freep.anim.delay", out var delayCommand);
+            foundPane = registry.TryGet("freep.anim.pane", out var pane);
+
+            fade!.Execute(RibbonCommandContext.Empty);
+            durationCommand!.Execute(RibbonCommandContext.ForSelectedValue("1.50s"));
+            delayCommand!.Execute(RibbonCommandContext.ForSelectedValue("0.25s"));
+            pane!.Execute(RibbonCommandContext.Empty);
+
+            var animation = window.Editor.CurrentSlideAnimations.Single();
+            preset = animation.Preset;
+            duration = animation.DurationMs;
+            delay = animation.DelayMs;
+        });
+
+        if (!ran) return;
+        foundFade.Should().BeTrue("animation effects must be registered through the Avalonia registry");
+        foundDuration.Should().BeTrue("duration must be registered through the Avalonia registry");
+        foundDelay.Should().BeTrue("delay must be registered through the Avalonia registry");
+        foundPane.Should().BeTrue("pane command is exposed as a conservative callback/no-op intent");
+        preset.Should().Be(AnimationPreset.Fade);
+        duration.Should().Be(1500);
+        delay.Should().Be(250);
     }
 
     [Theory]

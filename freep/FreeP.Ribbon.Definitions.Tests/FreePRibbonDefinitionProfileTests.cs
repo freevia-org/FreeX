@@ -7,10 +7,7 @@ namespace FreeP.Ribbon.Definitions.Tests;
 
 public sealed class FreePRibbonDefinitionProfileTests
 {
-    private static readonly string[] WpfOnlyTabIds =
-    [
-        "animations",
-    ];
+    private static readonly string[] WpfOnlyTabIds = [];
 
     private static readonly string[] AvaloniaOnlyShellCommands =
     [
@@ -30,7 +27,7 @@ public sealed class FreePRibbonDefinitionProfileTests
             .Equal("home", "insert", "design", "transitions", "animations");
         avalonia.Tabs.Select(tab => tab.Id)
             .Should()
-            .Equal("home", "insert", "design", "transitions");
+            .Equal("home", "insert", "design", "transitions", "animations");
 
         RibbonDefinitionValidator.Validate(wpf).HasErrors.Should().BeFalse();
         RibbonDefinitionValidator.Validate(avalonia).HasErrors.Should().BeFalse();
@@ -559,7 +556,11 @@ public sealed class FreePRibbonDefinitionProfileTests
             .Contain(["both", "wpf-only", "avalonia-only"]);
         commands.Values.Select(command => command.GetProperty("classification").GetString())
             .Should()
-            .Contain(["known-deferred", "platform-only"]);
+            .Contain(["shared", "platform-only"]);
+
+        root.GetProperty("summary").GetProperty("knownDeferred").GetInt32()
+            .Should()
+            .Be(0);
 
         root.GetProperty("summary").GetProperty("totalCommands").GetInt32()
             .Should()

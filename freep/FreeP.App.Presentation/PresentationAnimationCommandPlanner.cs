@@ -1,0 +1,298 @@
+using FreeP.Core.Model;
+
+namespace FreeP.App.Compositor;
+
+public enum PresentationAnimationCommandIntentKind
+{
+    AddEffect,
+    RemoveSelectedShapeAnimations,
+    SetTrigger,
+    SetDuration,
+    SetDelay,
+    MoveEarlier,
+    MoveLater,
+    TogglePane,
+}
+
+public sealed record PresentationAnimationCommandPlan(
+    string CommandId,
+    PresentationAnimationCommandIntentKind Intent,
+    AnimationKind? Kind = null,
+    AnimationPreset? Preset = null);
+
+public static class PresentationAnimationCommandPlanner
+{
+    public const int DefaultDurationMs = 500;
+
+    public static readonly IReadOnlyList<PresentationAnimationCommandPlan> BuiltInPlans =
+        new[]
+        {
+            new PresentationAnimationCommandPlan("freep.anim.entrance.appear", PresentationAnimationCommandIntentKind.AddEffect, AnimationKind.Entrance, AnimationPreset.Appear),
+            new PresentationAnimationCommandPlan("freep.anim.entrance.fade", PresentationAnimationCommandIntentKind.AddEffect, AnimationKind.Entrance, AnimationPreset.Fade),
+            new PresentationAnimationCommandPlan("freep.anim.entrance.fly-in", PresentationAnimationCommandIntentKind.AddEffect, AnimationKind.Entrance, AnimationPreset.FlyIn),
+            new PresentationAnimationCommandPlan("freep.anim.entrance.wipe", PresentationAnimationCommandIntentKind.AddEffect, AnimationKind.Entrance, AnimationPreset.Wipe),
+            new PresentationAnimationCommandPlan("freep.anim.entrance.zoom", PresentationAnimationCommandIntentKind.AddEffect, AnimationKind.Entrance, AnimationPreset.Zoom),
+            new PresentationAnimationCommandPlan("freep.anim.entrance.split", PresentationAnimationCommandIntentKind.AddEffect, AnimationKind.Entrance, AnimationPreset.Split),
+            new PresentationAnimationCommandPlan("freep.anim.emphasis.pulse", PresentationAnimationCommandIntentKind.AddEffect, AnimationKind.Emphasis, AnimationPreset.Pulse),
+            new PresentationAnimationCommandPlan("freep.anim.emphasis.spin", PresentationAnimationCommandIntentKind.AddEffect, AnimationKind.Emphasis, AnimationPreset.Spin),
+            new PresentationAnimationCommandPlan("freep.anim.emphasis.grow-shrink", PresentationAnimationCommandIntentKind.AddEffect, AnimationKind.Emphasis, AnimationPreset.Grow),
+            new PresentationAnimationCommandPlan("freep.anim.exit.disappear", PresentationAnimationCommandIntentKind.AddEffect, AnimationKind.Exit, AnimationPreset.Appear),
+            new PresentationAnimationCommandPlan("freep.anim.exit.fade-out", PresentationAnimationCommandIntentKind.AddEffect, AnimationKind.Exit, AnimationPreset.Fade),
+            new PresentationAnimationCommandPlan("freep.anim.exit.fly-out", PresentationAnimationCommandIntentKind.AddEffect, AnimationKind.Exit, AnimationPreset.FlyIn),
+            new PresentationAnimationCommandPlan("freep.anim.none", PresentationAnimationCommandIntentKind.RemoveSelectedShapeAnimations),
+            new PresentationAnimationCommandPlan("freep.anim.trigger", PresentationAnimationCommandIntentKind.SetTrigger),
+            new PresentationAnimationCommandPlan("freep.anim.duration", PresentationAnimationCommandIntentKind.SetDuration),
+            new PresentationAnimationCommandPlan("freep.anim.delay", PresentationAnimationCommandIntentKind.SetDelay),
+            new PresentationAnimationCommandPlan("freep.anim.move-earlier", PresentationAnimationCommandIntentKind.MoveEarlier),
+            new PresentationAnimationCommandPlan("freep.anim.move-later", PresentationAnimationCommandIntentKind.MoveLater),
+            new PresentationAnimationCommandPlan("freep.anim.pane", PresentationAnimationCommandIntentKind.TogglePane),
+        };
+
+    public static bool TryPlan(string commandId, out PresentationAnimationCommandPlan plan)
+    {
+        foreach (var candidate in BuiltInPlans)
+        {
+            if (StringComparer.Ordinal.Equals(candidate.CommandId, commandId))
+            {
+                plan = candidate;
+                return true;
+            }
+        }
+
+        plan = default!;
+        return false;
+    }
+
+    public static bool TryApply(
+        EditingSession editor,
+        PresentationAnimationCommandPlan plan,
+        string? selectedValue = null,
+        Action<PresentationAnimationCommandPlan>? onAnimationPane = null)
+    {
+        ArgumentNullException.ThrowIfNull(editor);
+        ArgumentNullException.ThrowIfNull(plan);
+
+        switch (plan.Intent)
+        {
+            case PresentationAnimationCommandIntentKind.AddEffect:
+                if (plan.Kind is not { } kind || plan.Preset is not { } preset)
+                {
+                    return false;
+                }
+
+                editor.AddAnimation(0, BuildAnimation(kind, preset));
+                return true;
+
+            case PresentationAnimationCommandIntentKind.RemoveSelectedShapeAnimations:
+                return RemoveSelectedShapeAnimations(editor);
+
+            case PresentationAnimationCommandIntentKind.SetTrigger:
+                return TryApplyToSelectedShapeAnimation(editor, animation =>
+                {
+                    if (!TryParseTrigger(selectedValue, out var trigger))
+                    {
+                        return null;
+                    }
+
+                    var updated = CloneAnimation(animation);
+                    updated.Trigger = trigger;
+                    return updated;
+                });
+
+            case PresentationAnimationCommandIntentKind.SetDuration:
+                return TryApplyToSelectedShapeAnimation(editor, animation =>
+                {
+                    if (!PresentationTransitionCommandPlanner.TryParseSeconds(selectedValue, allowZero: false, out int durationMs))
+                    {
+                        return null;
+                    }
+
+                    var updated = CloneAnimation(animation);
+                    updated.DurationMs = durationMs;
+                    return updated;
+                });
+
+            case PresentationAnimationCommandIntentKind.SetDelay:
+                return TryApplyToSelectedShapeAnimation(editor, animation =>
+                {
+                    if (!PresentationTransitionCommandPlanner.TryParseSeconds(selectedValue, allowZero: true, out int delayMs))
+                    {
+                        return null;
+                    }
+
+                    var updated = CloneAnimation(animation);
+                    updated.DelayMs = delayMs;
+                    return updated;
+                });
+
+            case PresentationAnimationCommandIntentKind.MoveEarlier:
+                return MoveSelectedShapeAnimation(editor, offset: -1);
+
+            case PresentationAnimationCommandIntentKind.MoveLater:
+                return MoveSelectedShapeAnimation(editor, offset: 1);
+
+            case PresentationAnimationCommandIntentKind.TogglePane:
+                if (onAnimationPane is null)
+                {
+                    return false;
+                }
+
+                onAnimationPane(plan);
+                return true;
+
+            default:
+                return false;
+        }
+    }
+
+    public static ShapeAnimation BuildAnimation(AnimationKind kind, AnimationPreset preset) =>
+        new()
+        {
+            Kind = kind,
+            Preset = preset,
+            Trigger = AnimationTrigger.OnClick,
+            DurationMs = DefaultDurationMs,
+        };
+
+    public static bool TryParseTrigger(string? selectedValue, out AnimationTrigger trigger)
+    {
+        var text = selectedValue?.Trim();
+        if (string.IsNullOrEmpty(text))
+        {
+            trigger = AnimationTrigger.OnClick;
+            return false;
+        }
+
+        var normalized = text.Replace(" ", string.Empty, StringComparison.Ordinal)
+            .Replace("-", string.Empty, StringComparison.Ordinal);
+
+        if (StringComparer.OrdinalIgnoreCase.Equals(normalized, "OnClick"))
+        {
+            trigger = AnimationTrigger.OnClick;
+            return true;
+        }
+
+        if (StringComparer.OrdinalIgnoreCase.Equals(normalized, "WithPrevious"))
+        {
+            trigger = AnimationTrigger.WithPrevious;
+            return true;
+        }
+
+        if (StringComparer.OrdinalIgnoreCase.Equals(normalized, "AfterPrevious"))
+        {
+            trigger = AnimationTrigger.AfterPrevious;
+            return true;
+        }
+
+        trigger = AnimationTrigger.OnClick;
+        return false;
+    }
+
+    public static ShapeAnimation CloneAnimation(ShapeAnimation animation)
+    {
+        ArgumentNullException.ThrowIfNull(animation);
+
+        return new ShapeAnimation
+        {
+            ShapeId = animation.ShapeId,
+            Kind = animation.Kind,
+            Preset = animation.Preset,
+            Trigger = animation.Trigger,
+            DelayMs = animation.DelayMs,
+            DurationMs = animation.DurationMs,
+            Direction = animation.Direction,
+            Motion = animation.Motion,
+            TriggerShapeId = animation.TriggerShapeId,
+        };
+    }
+
+    private static bool RemoveSelectedShapeAnimations(EditingSession editor)
+    {
+        if (!TryGetSelectedShapeId(editor, out uint shapeId))
+        {
+            return false;
+        }
+
+        var animations = editor.CurrentSlideAnimations;
+        var removed = false;
+        for (int i = animations.Count - 1; i >= 0; i--)
+        {
+            if (animations[i].ShapeId == shapeId)
+            {
+                editor.RemoveAnimation(i);
+                removed = true;
+            }
+        }
+
+        return removed;
+    }
+
+    private static bool TryApplyToSelectedShapeAnimation(
+        EditingSession editor,
+        Func<ShapeAnimation, ShapeAnimation?> update)
+    {
+        if (!TryGetSelectedShapeAnimationIndex(editor, out int index))
+        {
+            return false;
+        }
+
+        var updated = update(editor.CurrentSlideAnimations[index]);
+        if (updated is null)
+        {
+            return false;
+        }
+
+        editor.SetAnimation(index, updated);
+        return true;
+    }
+
+    private static bool MoveSelectedShapeAnimation(EditingSession editor, int offset)
+    {
+        if (!TryGetSelectedShapeAnimationIndex(editor, out int index))
+        {
+            return false;
+        }
+
+        var newIndex = index + offset;
+        if (newIndex < 0 || newIndex >= editor.CurrentSlideAnimations.Count)
+        {
+            return false;
+        }
+
+        editor.MoveAnimation(index, newIndex);
+        return true;
+    }
+
+    private static bool TryGetSelectedShapeAnimationIndex(EditingSession editor, out int index)
+    {
+        index = -1;
+        if (!TryGetSelectedShapeId(editor, out uint shapeId))
+        {
+            return false;
+        }
+
+        var animations = editor.CurrentSlideAnimations;
+        for (int i = animations.Count - 1; i >= 0; i--)
+        {
+            if (animations[i].ShapeId == shapeId)
+            {
+                index = i;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool TryGetSelectedShapeId(EditingSession editor, out uint shapeId)
+    {
+        if (editor.SelectedShapeIds.Count > 0)
+        {
+            shapeId = editor.SelectedShapeIds[0];
+            return true;
+        }
+
+        shapeId = 0;
+        return false;
+    }
+}

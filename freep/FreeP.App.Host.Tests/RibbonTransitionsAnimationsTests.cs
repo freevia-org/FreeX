@@ -209,6 +209,18 @@ public class RibbonTransitionsAnimationsTests
         Assert.DoesNotContain("freep.transition.duration\", new ActionRibbonCommand", source);
     }
 
+    [Fact]
+    public void FreePRibbonCommands_source_routes_animations_through_shared_planner()
+    {
+        var source = File.ReadAllText(FindRepoFile("freep", "FreeP.App.Host", "FreePRibbonCommands.cs"));
+
+        Assert.Contains("PresentationAnimationCommandPlanner.BuiltInPlans", source);
+        Assert.Contains("PresentationAnimationCommandPlanner.TryApply", source);
+        Assert.DoesNotContain("RegisterEntranceAnim(", source);
+        Assert.DoesNotContain("freep.anim.duration\", new ActionRibbonCommand", source);
+        Assert.DoesNotContain("freep.anim.delay\",    new ActionRibbonCommand", source);
+    }
+
     // ── Transition Apply To All ────────────────────────────────────────────────────
 
     [Fact]
@@ -325,6 +337,31 @@ public class RibbonTransitionsAnimationsTests
         var reg = MakeRegistry(ed);
         Exec(reg, "freep.anim.none");
         Assert.Empty(ed.CurrentSlideAnimations);
+    }
+
+    [Fact]
+    public void Cmd_AnimTiming_UsesSelectedRibbonValues()
+    {
+        var (ed, pres) = MakeSession();
+        var shapeId = pres.Slides[0].Shapes[0].Id;
+        ed.Select(shapeId);
+        pres.Slides[0].Animations.Add(new ShapeAnimation
+        {
+            ShapeId = shapeId,
+            Preset = AnimationPreset.Fade,
+            Trigger = AnimationTrigger.OnClick,
+            DurationMs = 500,
+            DelayMs = 0,
+        });
+
+        var reg = MakeRegistry(ed);
+        Exec(reg, "freep.anim.trigger", RibbonCommandContext.ForSelectedValue("After Previous"));
+        Exec(reg, "freep.anim.duration", RibbonCommandContext.ForSelectedValue("1.50s"));
+        Exec(reg, "freep.anim.delay", RibbonCommandContext.ForSelectedValue("0.25s"));
+
+        Assert.Equal(AnimationTrigger.AfterPrevious, ed.CurrentSlideAnimations[0].Trigger);
+        Assert.Equal(1500, ed.CurrentSlideAnimations[0].DurationMs);
+        Assert.Equal(250, ed.CurrentSlideAnimations[0].DelayMs);
     }
 
     // ── Move Earlier / Move Later ──────────────────────────────────────────────────
