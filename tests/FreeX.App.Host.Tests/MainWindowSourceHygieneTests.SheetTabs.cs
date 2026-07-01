@@ -658,6 +658,9 @@ public sealed partial class MainWindowSourceHygieneTests
         foregroundSource.Should().Contain("Opened the FreeX sheet-tab context menu through guarded tab-strip coordinate fallback");
         foregroundSource.Should().Contain("TryShowExcelCellCommandBar");
         foregroundSource.Should().Contain("Cell command-bar context menu fallback");
+        foregroundSource.Should().Contain("TryInvokeAutomationElement(addButton)");
+        foregroundSource.Should().Contain("Visible tabs:");
+        foregroundSource.Should().Contain("FindForegroundWindow(");
     }
 
     [Fact]

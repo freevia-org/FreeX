@@ -4315,10 +4315,17 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                 return CaptureResult.Blocked(options.Scenario, "uia-target-not-found", $"Could not find the Insert Sheet button before creating {sheetName}.", options.OutputRoot, "freex");
             }
 
-            var blocked = GuardedClickElement(options.Scenario, processId, handle, addButton, MouseButtonKind.Left);
-            if (blocked is not null)
+            if (!TryInvokeAutomationElement(addButton))
             {
-                return blocked;
+                var blocked = GuardedClickElement(options.Scenario, processId, handle, addButton, MouseButtonKind.Left);
+                if (blocked is not null)
+                {
+                    return blocked;
+                }
+            }
+            else
+            {
+                Thread.Sleep(options.AfterInputDelay);
             }
 
             var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(2);
@@ -4334,11 +4341,39 @@ internal sealed class ScenarioRunner(CaptureOptions options)
 
             if (FindVisibleSheetTabElement(handle, sheetName) is null)
             {
-                return CaptureResult.Blocked(options.Scenario, "sheet-seed-validation-failed", $"Insert Sheet click did not expose expected tab {sheetName}.", options.OutputRoot, "freex");
+                var visibleTabs = string.Join(", ", GetVisibleSheetTabOrder(handle));
+                return CaptureResult.Blocked(options.Scenario, "sheet-seed-validation-failed", $"Insert Sheet activation did not expose expected tab {sheetName}. Visible tabs: {visibleTabs}.", options.OutputRoot, "freex");
             }
         }
 
         return null;
+    }
+
+    private static bool TryInvokeAutomationElement(AutomationElement element)
+    {
+        try
+        {
+            if (element.TryGetCurrentPattern(InvokePattern.Pattern, out var invokePatternObject) &&
+                invokePatternObject is InvokePattern invoke)
+            {
+                invoke.Invoke();
+                return true;
+            }
+        }
+        catch (COMException)
+        {
+            return false;
+        }
+        catch (ElementNotAvailableException)
+        {
+            return false;
+        }
+        catch (InvalidOperationException)
+        {
+            return false;
+        }
+
+        return false;
     }
 
     private static AutomationElement? FindNamedVisibleElement(IntPtr handle, string name, ControlType? controlType = null)
@@ -4485,10 +4520,20 @@ internal sealed class ScenarioRunner(CaptureOptions options)
     }
 
     private static WindowInfo? FindActivateDialogWindow(int processId, long ownerHandle, TimeSpan timeout)
-        => WindowFinder.FindProcessWindowIncludingChildren(
+    {
+        var dialog = WindowFinder.FindProcessWindowIncludingChildren(
             processId,
             window => IsActivateDialogWindow(window, ownerHandle),
             timeout);
+        if (dialog is not null)
+        {
+            return dialog;
+        }
+
+        return WindowFinder.FindForegroundWindow(
+            window => window.ProcessId == processId && IsActivateDialogWindow(window, ownerHandle),
+            TimeSpan.FromMilliseconds(Math.Max(1200, timeout.TotalMilliseconds / 2.0)));
+    }
 
     private static WindowInfo? TryOpenExcelActivateDialogFromSheetNavCoordinates(int processId, IntPtr excelWindowHandle, TimeSpan timeout)
     {
