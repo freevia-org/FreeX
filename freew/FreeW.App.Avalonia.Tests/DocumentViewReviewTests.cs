@@ -351,6 +351,30 @@ public sealed class DocumentViewReviewTests
         countAfterDelete.Should().Be(0, "DeleteCommentAtCaret removes the thread at the caret");
     }
 
+    [Fact]
+    public async Task ResolveComment_registry_command_toggles_the_comment_at_the_caret()
+    {
+        bool resolved = false;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            doc.Blocks.Add(new Paragraph("Hello world"));
+            var view = Build(doc);
+            view.SetSelectionRangePublic(0, 0, 0, 5);
+            var id = view.NewComment("note");
+            view.MoveCaretToBlock(0, 2);
+
+            var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
+            Execute(registry, "freew.resolve-comment");
+
+            resolved = id is { } commentId && view.Document.Comments[commentId].Resolved;
+        });
+
+        if (!ran) return;
+        resolved.Should().BeTrue("the Review > Comments > Resolve command uses the editor comment model");
+    }
+
     // ── Word count ────────────────────────────────────────────────────────────────
 
     [Fact]
@@ -399,6 +423,11 @@ public sealed class DocumentViewReviewTests
             "freew.inspect-document",
             "freew.new-comment",
             "freew.delete-comment",
+            "freew.previous-comment",
+            "freew.next-comment",
+            "freew.reply-comment",
+            "freew.resolve-comment",
+            "freew.show-comments",
         })
         {
             registry.TryGet(new RibbonCommandId(id), out _)
@@ -423,7 +452,9 @@ public sealed class DocumentViewReviewTests
             "freew.track-changes", "freew.reviewing-pane", "freew.statistics",
             "freew.check-accessibility", "freew.accept-this", "freew.reject-this",
             "freew.accept-all", "freew.reject-all", "freew.new-comment",
-            "freew.delete-comment", "freew.mark-as-final", "freew.restrict-editing",
+            "freew.delete-comment", "freew.previous-comment", "freew.next-comment",
+            "freew.reply-comment", "freew.resolve-comment", "freew.show-comments",
+            "freew.mark-as-final", "freew.restrict-editing",
             "freew.inspect-document",
         })
         {

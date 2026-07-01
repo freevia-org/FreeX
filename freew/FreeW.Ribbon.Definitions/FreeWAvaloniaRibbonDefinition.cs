@@ -621,6 +621,11 @@ internal static class FreeWAvaloniaRibbonDefinition
                 {
                     g.Button("freew.new-comment",    "New Comment");
                     g.Button("freew.delete-comment", "Delete");
+                    g.Button("freew.previous-comment", "Previous");
+                    g.Button("freew.next-comment", "Next");
+                    g.Button("freew.reply-comment", "Reply");
+                    g.Button("freew.resolve-comment", "Resolve");
+                    g.Button("freew.show-comments", "Show Comments");
                 });
                 // AV-REVIEW: Tracking group — Track Changes toggle + reviewing pane.
                 tab.Group("tracking", "Tracking", null, 90, g =>
