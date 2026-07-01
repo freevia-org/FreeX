@@ -8,6 +8,87 @@ namespace FreeP.App.Host.Tests;
 
 public sealed class PptxPackageRetentionTests
 {
+    private static readonly string[] ExpectedCorpusDeckNames =
+    [
+        "01-title-slide.pptx",
+        "02-autoshapes.pptx",
+        "03-mixed-text.pptx",
+        "04-picture.pptx",
+        "05-table.pptx",
+        "06-charts.pptx",
+        "07-customgeom.pptx",
+        "08-effects.pptx",
+        "09-smartart.pptx",
+        "10-motionpath.pptx",
+        "11-bevel3d.pptx",
+        "12-fills.pptx",
+        "13-wordart.pptx",
+        "14-smartart-live.pptx",
+        "15-picture-crop.pptx",
+        "16-bg-tabs-vtext.pptx",
+        "17-bullets-autofit.pptx",
+        "18-chart-types.pptx",
+        "19-chart-labels.pptx",
+        "20-columns-gradoutline.pptx",
+    ];
+
+    private static readonly string[] WriterOwnedPackagePartPaths =
+    [
+        "[Content_Types].xml",
+        "_rels/.rels",
+        OpcPackageProperties.CorePropertiesZipEntry,
+        "ppt/presentation.xml",
+        "ppt/_rels/presentation.xml.rels",
+        "ppt/presProps.xml",
+        "ppt/viewProps.xml",
+        "ppt/tableStyles.xml",
+        "ppt/commentAuthors.xml",
+    ];
+
+    private static readonly string[] WriterOwnedPackagePartPrefixes =
+    [
+        "ppt/slides/",
+        "ppt/slideLayouts/",
+        "ppt/slideMasters/",
+        "ppt/theme/",
+        "ppt/charts/",
+        "ppt/media/",
+        "ppt/comments/",
+        "ppt/notesSlides/",
+        "ppt/notesMasters/",
+        "ppt/embeddings/",
+        "ppt/diagrams/",
+    ];
+
+    private static readonly HashSet<string> WriterOwnedRelationshipTypes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument",
+        OpcPackageProperties.CorePropertiesRelationshipType,
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide",
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster",
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout",
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme",
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image",
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/presProps",
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/viewProps",
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/tableStyles",
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart",
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesSlide",
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesMaster",
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink",
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments",
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/commentAuthors",
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/video",
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/audio",
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/oleObject",
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/package",
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramData",
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramLayout",
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramQuickStyle",
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramColors",
+        "http://schemas.microsoft.com/office/2007/relationships/diagramDrawing",
+    };
+
     private const string CustomXmlRelType =
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXml";
     private const string ExternalReviewRelType =
@@ -16,6 +97,47 @@ public sealed class PptxPackageRetentionTests
         "http://example.com/freep/relationships/viewState";
     private const string UnknownSlideMirrorRelType =
         "http://example.com/freep/relationships/slideMirror";
+
+    public static IEnumerable<object[]> CorpusDecks() =>
+        ExpectedCorpusDeckNames.Select(name => new object[] { name });
+
+    [Fact]
+    public void RenderCompareCorpus_TracksExpectedTwentyDecks()
+    {
+        var corpusDirectory = FindCorpusDirectory();
+        Directory.GetFiles(corpusDirectory, "*.pptx")
+            .Select(Path.GetFileName)
+            .Order(StringComparer.OrdinalIgnoreCase)
+            .Should()
+            .Equal(ExpectedCorpusDeckNames.Order(StringComparer.OrdinalIgnoreCase));
+    }
+
+    [Theory]
+    [MemberData(nameof(CorpusDecks))]
+    public void RenderCompareCorpusDeck_OpenSaveReopen_RetainsSharedPackageContract(string deckName)
+    {
+        var sourcePath = Path.Combine(FindCorpusDirectory(), deckName);
+        var loaded = PptxPackageReader.Read(sourcePath);
+        loaded.PackageSnapshot.Should().NotBeNull($"{deckName} must be captured by the shared preserve-bag layer");
+        loaded.Slides.Should().NotBeEmpty($"{deckName} should load through shared Core.IO before save");
+
+        using var saved = new MemoryStream();
+        PptxPackageWriter.Write(loaded, saved);
+        var savedBytes = saved.ToArray();
+        savedBytes.Should().NotBeEmpty($"{deckName} should save through shared Core.IO");
+
+        using var reopenedStream = new MemoryStream(savedBytes);
+        var reopened = PptxPackageReader.Read(reopenedStream);
+        reopened.Slides.Should().HaveCount(loaded.Slides.Count, $"{deckName} should reopen after Core.IO save");
+        reopened.PackageSnapshot.Should().NotBeNull($"{deckName} should capture a package snapshot after reopen");
+
+        using var sourceArchive = ZipFile.OpenRead(sourcePath);
+        using var savedArchive = new ZipArchive(new MemoryStream(savedBytes), ZipArchiveMode.Read);
+
+        AssertPreservedPackageEntries(sourceArchive, savedArchive, deckName);
+        AssertPreservedContentTypes(sourceArchive, savedArchive, deckName);
+        AssertPreservedRelationships(sourceArchive, savedArchive, deckName);
+    }
 
     [Fact]
     public void CoreProperties_RoundTripThroughPptxPackage()
@@ -237,6 +359,168 @@ public sealed class PptxPackageRetentionTests
         package.Position = 0;
         return package;
     }
+
+    private static void AssertPreservedPackageEntries(
+        ZipArchive sourceArchive,
+        ZipArchive savedArchive,
+        string deckName)
+    {
+        foreach (var sourceEntry in sourceArchive.Entries
+                     .Where(entry => !string.IsNullOrWhiteSpace(entry.FullName) && !entry.FullName.EndsWith('/'))
+                     .Where(entry => !IsWriterOwnedPart(entry.FullName)))
+        {
+            var savedEntry = savedArchive.GetEntry(sourceEntry.FullName);
+            savedEntry.Should().NotBeNull($"{deckName} should retain package entry {sourceEntry.FullName}");
+            ReadBytes(savedArchive, sourceEntry.FullName).Should().Equal(
+                ReadBytes(sourceArchive, sourceEntry.FullName),
+                $"{deckName} should byte-preserve non-writer-owned package entry {sourceEntry.FullName}");
+        }
+    }
+
+    private static void AssertPreservedContentTypes(
+        ZipArchive sourceArchive,
+        ZipArchive savedArchive,
+        string deckName)
+    {
+        var sourceTypes = LoadXml(sourceArchive, "[Content_Types].xml");
+        var savedTypes = LoadXml(savedArchive, "[Content_Types].xml");
+
+        var savedDefaults = savedTypes.Root!
+            .Elements(ContentTypesNs + "Default")
+            .ToDictionary(
+                element => element.Attribute("Extension")!.Value,
+                element => element.Attribute("ContentType")!.Value,
+                StringComparer.OrdinalIgnoreCase);
+        foreach (var sourceDefault in sourceTypes.Root!.Elements(ContentTypesNs + "Default"))
+        {
+            var extension = sourceDefault.Attribute("Extension")?.Value;
+            var contentType = sourceDefault.Attribute("ContentType")?.Value;
+            if (string.IsNullOrWhiteSpace(extension) || string.IsNullOrWhiteSpace(contentType))
+                continue;
+
+            savedDefaults.Should().ContainKey(extension, $"{deckName} should retain Default content type for .{extension}");
+            savedDefaults[extension].Should().Be(contentType, $"{deckName} should retain Default content type for .{extension}");
+        }
+
+        var savedOverrides = savedTypes.Root!
+            .Elements(ContentTypesNs + "Override")
+            .ToDictionary(
+                element => NormalizePartName(element.Attribute("PartName")!.Value),
+                element => element.Attribute("ContentType")!.Value,
+                StringComparer.OrdinalIgnoreCase);
+        foreach (var sourceOverride in sourceTypes.Root!.Elements(ContentTypesNs + "Override"))
+        {
+            var partName = sourceOverride.Attribute("PartName")?.Value;
+            var contentType = sourceOverride.Attribute("ContentType")?.Value;
+            if (string.IsNullOrWhiteSpace(partName) ||
+                string.IsNullOrWhiteSpace(contentType) ||
+                IsWriterOwnedPart(partName))
+            {
+                continue;
+            }
+
+            var normalizedPartName = NormalizePartName(partName);
+            savedOverrides.Should().ContainKey(normalizedPartName,
+                $"{deckName} should retain Override content type for {normalizedPartName}");
+            savedOverrides[normalizedPartName].Should().Be(contentType,
+                $"{deckName} should retain Override content type for {normalizedPartName}");
+        }
+    }
+
+    private static void AssertPreservedRelationships(
+        ZipArchive sourceArchive,
+        ZipArchive savedArchive,
+        string deckName)
+    {
+        foreach (var sourceRelsEntry in sourceArchive.Entries
+                     .Where(entry => entry.FullName.EndsWith(".rels", StringComparison.OrdinalIgnoreCase)))
+        {
+            var sourcePartPath = SourcePartPathFromRelationshipPath(sourceRelsEntry.FullName);
+            var retainedRelationships = OpcRelationships.Load(sourceArchive, sourceRelsEntry.FullName)
+                .Where(relationship => !IsWriterOwnedRelationship(
+                    sourcePartPath,
+                    relationship.Type,
+                    relationship.Target,
+                    relationship.IsExternal))
+                .ToArray();
+            if (retainedRelationships.Length == 0)
+                continue;
+
+            savedArchive.GetEntry(sourceRelsEntry.FullName).Should().NotBeNull(
+                $"{deckName} should retain relationship part {sourceRelsEntry.FullName}");
+            var savedRelationships = OpcRelationships.Load(savedArchive, sourceRelsEntry.FullName);
+            foreach (var relationship in retainedRelationships)
+            {
+                savedRelationships.Should().Contain(saved => RelationshipMatches(saved, relationship),
+                    $"{deckName} should retain {sourceRelsEntry.FullName} relationship {relationship.Type} -> {relationship.Target}");
+            }
+        }
+    }
+
+    private static string FindCorpusDirectory()
+    {
+        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
+             directory is not null;
+             directory = directory.Parent)
+        {
+            var candidate = Path.Combine(directory.FullName, "tools", "FreeP.RenderCompare", "corpus");
+            if (Directory.Exists(candidate) &&
+                ExpectedCorpusDeckNames.All(name => File.Exists(Path.Combine(candidate, name))))
+            {
+                return candidate;
+            }
+        }
+
+        throw new DirectoryNotFoundException("Could not locate tools/FreeP.RenderCompare/corpus with all tracked PPTX decks.");
+    }
+
+    private static bool RelationshipMatches(OpcRelationship actual, OpcRelationship expected) =>
+        string.Equals(actual.Type, expected.Type, StringComparison.OrdinalIgnoreCase) &&
+        string.Equals(actual.Target, expected.Target, StringComparison.Ordinal) &&
+        actual.IsExternal == expected.IsExternal;
+
+    private static bool IsWriterOwnedRelationship(string sourcePartPath, string type, string target, bool external)
+    {
+        if (WriterOwnedRelationshipTypes.Contains(type))
+            return true;
+
+        if (external || string.IsNullOrWhiteSpace(target))
+            return false;
+
+        var sourceDirectory = string.IsNullOrWhiteSpace(sourcePartPath)
+            ? string.Empty
+            : OpcPathHelper.GetDirectoryName(sourcePartPath);
+        var targetPath = OpcPathHelper.ResolveRelativeZipPath(sourceDirectory, target);
+        return IsWriterOwnedPart(targetPath);
+    }
+
+    private static bool IsWriterOwnedPart(string partName)
+    {
+        var normalized = NormalizePartName(partName);
+        return WriterOwnedPackagePartPaths.Any(path => string.Equals(
+                   NormalizePartName(path),
+                   normalized,
+                   StringComparison.OrdinalIgnoreCase)) ||
+               WriterOwnedPackagePartPrefixes.Any(prefix =>
+                   normalized.StartsWith(NormalizePartName(prefix), StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static string SourcePartPathFromRelationshipPath(string relsPath)
+    {
+        var normalized = relsPath.Replace('\\', '/').TrimStart('/');
+        if (string.Equals(normalized, "_rels/.rels", StringComparison.OrdinalIgnoreCase))
+            return string.Empty;
+
+        const string marker = "/_rels/";
+        var markerIndex = normalized.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+        if (markerIndex < 0 || !normalized.EndsWith(".rels", StringComparison.OrdinalIgnoreCase))
+            return string.Empty;
+
+        return normalized[..markerIndex] + "/" + normalized[(markerIndex + marker.Length)..^".rels".Length];
+    }
+
+    private static string NormalizePartName(string partName) =>
+        OpcPathHelper.ToZipEntryPath(partName);
 
     private static readonly XNamespace RelsNs =
         "http://schemas.openxmlformats.org/package/2006/relationships";
