@@ -5,7 +5,7 @@ param(
 
     [string]$FreeXExe,
 
-    [ValidateSet("smoke", "dialogs", "all")]
+    [ValidateSet("smoke", "core", "dialogs", "all")]
     [string]$Suite = "smoke",
 
     [switch]$SkipBuild,
@@ -136,6 +136,7 @@ function Get-ScenarioPairs {
 
     switch ($Suite) {
         "smoke" { return $pairs | Where-Object { $_["id"] -in @("format-cells-dialog", "sheet-tab-context-menu") } }
+        "core" { return $pairs | Where-Object { $_["id"] -in @("format-cells-dialog", "format-cells-context-dialog", "sheet-tab-context-menu", "sheet-tab-overflow-activate-dialog") } }
         "dialogs" { return $pairs | Where-Object { $_["area"] -in @("Dialogs", "Native file dialogs") } }
         default { return $pairs }
     }

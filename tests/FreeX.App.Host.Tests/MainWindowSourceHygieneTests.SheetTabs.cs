@@ -659,6 +659,15 @@ public sealed partial class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void UxParityScenarioBatch_ExposesExpandedCoreSuite()
+    {
+        var batchSource = WorkspaceFileLocator.ReadAllText("tools", "Run-UxParityScenarioBatch.ps1");
+
+        batchSource.Should().Contain("[ValidateSet(\"smoke\", \"core\", \"dialogs\", \"all\")]");
+        batchSource.Should().Contain("\"core\" { return $pairs | Where-Object { $_[\"id\"] -in @(\"format-cells-dialog\", \"format-cells-context-dialog\", \"sheet-tab-context-menu\", \"sheet-tab-overflow-activate-dialog\") } }");
+    }
+
+    [Fact]
     public void FocusedPivotFieldListTaskPane_TabTraversalIsNotHijackedByWorksheetMovement()
     {
         var selectionSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Selection.cs");
