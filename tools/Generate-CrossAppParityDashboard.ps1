@@ -165,7 +165,7 @@ try {
             platformOnly = [int]$freep.summary.platformOnly
             commandIdAliases = [int]$freep.summary.commandIdAliases
         }
-        nextSlice = "Command-profile parity is green; move to slide-pane/editing/workflow evidence depth."
+        nextSlice = "Layout command routing now has a shared host intent; move to actual picker UI, slide-pane/editing, and workflow evidence depth."
     }
 
     $dashboard = [ordered]@{
