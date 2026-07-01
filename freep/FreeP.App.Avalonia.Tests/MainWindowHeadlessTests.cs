@@ -288,6 +288,8 @@ public sealed class MainWindowHeadlessTests
         source.Should().Contain("OnLayoutPickerRequested");
         source.Should().Contain("PresentationDesignCommandPlanner.BuildLayoutPickerPlan(");
         source.Should().Contain("PresentationDesignCommandPlanner.TryApplyLayoutChoice(");
+        source.Should().Contain("ShowLayoutPicker(LastLayoutPickerPlan);");
+        source.Should().Contain("BuildLayoutChoiceLabel(choice)");
         source.Should().NotContain("Editor.SetTheme(");
         source.Should().NotContain("Editor.SetSlideSize16x9()");
         source.Should().NotContain("Editor.SetSlideSize4x3()");
@@ -893,6 +895,9 @@ public sealed class MainWindowHeadlessTests
         PresentationLayoutChoice? appliedChoice = null;
         string? currentLayoutId = null;
         var applied = false;
+        var pickerVisibleAfterOpen = false;
+        var pickerChoiceButtonCount = 0;
+        var pickerVisibleAfterApply = true;
 
         var ran = await OnUiThread(() =>
         {
@@ -912,7 +917,10 @@ public sealed class MainWindowHeadlessTests
             found = registry.TryGet(PresentationDesignCommandPlanner.LayoutCommandId, out var layout);
 
             layout!.Execute(RibbonCommandContext.Empty);
+            pickerVisibleAfterOpen = window.IsLayoutPickerVisible;
+            pickerChoiceButtonCount = window.LayoutPickerChoiceButtonCount;
             applied = window.ApplyLayoutChoice("rId2");
+            pickerVisibleAfterApply = window.IsLayoutPickerVisible;
 
             layoutPlan = window.LastLayoutRequestPlan;
             pickerPlan = window.LastLayoutPickerPlan;
@@ -926,6 +934,8 @@ public sealed class MainWindowHeadlessTests
         layoutPlan!.CommandId.Should().Be(PresentationDesignCommandPlanner.LayoutCommandId);
         layoutPlan.Intent.Should().Be(PresentationDesignCommandIntentKind.RequestLayoutPicker);
         pickerPlan.Should().NotBeNull("the host callback should expose concrete shared layout choices");
+        pickerVisibleAfterOpen.Should().BeTrue("the Avalonia command should show an actual picker surface");
+        pickerChoiceButtonCount.Should().Be(2);
         pickerPlan!.Choices.Should().Contain(choice =>
             choice.LayoutId == "rId2" &&
             choice.DisplayName == "Blank" &&
@@ -935,6 +945,7 @@ public sealed class MainWindowHeadlessTests
             choice.PlaceholderCount == 1 &&
             choice.DisplayOrder == 1);
         applied.Should().BeTrue("Avalonia should be able to apply a shared picker choice");
+        pickerVisibleAfterApply.Should().BeFalse("the picker should collapse after a choice is applied");
         currentLayoutId.Should().Be("rId2");
         appliedChoice.Should().NotBeNull();
         appliedChoice!.LayoutId.Should().Be("rId2");

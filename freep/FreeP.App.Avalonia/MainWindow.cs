@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
@@ -91,6 +92,8 @@ public sealed class MainWindow : Window
     private readonly ListBox _slidePaneList;
     private readonly TextBox _notesBox;
     private readonly TextBlock _statusText;
+    private Border _layoutPickerHost = null!;
+    private StackPanel _layoutPickerPanel = null!;
 
     // ── Interaction layer (Theme 15) ────────────────────────────────────────────
 
@@ -127,6 +130,8 @@ public sealed class MainWindow : Window
     internal PresentationHandoutLayoutPlan? LastHandoutLayoutPlan { get; private set; }
     internal PresentationLayoutPickerPlan? LastLayoutPickerPlan { get; private set; }
     internal PresentationLayoutChoice? LastAppliedLayoutChoice { get; private set; }
+    internal bool IsLayoutPickerVisible => _layoutPickerHost?.IsVisible == true;
+    internal int LayoutPickerChoiceButtonCount => _layoutPickerPanel?.Children.Count ?? 0;
 
     // ── Constructors ───────────────────────────────────────────────────────────
 
@@ -254,6 +259,7 @@ public sealed class MainWindow : Window
         var rightGrid = new Grid();
         rightGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         rightGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        rightGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
         // ── Interaction overlay stack ───────────────────────────────────────────
         // A Panel stack: SlideCanvas at the bottom, SelectionAdornerLayer on top (transparent to
@@ -287,9 +293,29 @@ public sealed class MainWindow : Window
             Background = new SolidColorBrush(Color.FromRgb(0xE6, 0xE6, 0xE6)),
             Child      = canvasStack,
         };
+        _layoutPickerPanel = new StackPanel
+        {
+            Orientation = Orientation.Vertical,
+        };
+        _layoutPickerHost = new Border
+        {
+            Background      = Brushes.White,
+            BorderBrush     = new SolidColorBrush(Color.FromRgb(0xC0, 0xC0, 0xC0)),
+            BorderThickness = new Thickness(0, 1, 0, 0),
+            MaxHeight       = 132,
+            IsVisible       = false,
+            Child           = new ScrollViewer
+            {
+                VerticalScrollBarVisibility   = ScrollBarVisibility.Auto,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                Content                       = _layoutPickerPanel,
+            },
+        };
         Grid.SetRow(canvasHost, 0);
-        Grid.SetRow(_notesBox,  1);
+        Grid.SetRow(_layoutPickerHost, 1);
+        Grid.SetRow(_notesBox,  2);
         rightGrid.Children.Add(canvasHost);
+        rightGrid.Children.Add(_layoutPickerHost);
         rightGrid.Children.Add(_notesBox);
 
         // Wire interaction after the overlay panel is built.
@@ -512,6 +538,7 @@ public sealed class MainWindow : Window
         LastLayoutPickerPlan = PresentationDesignCommandPlanner.BuildLayoutPickerPlan(
             _presentation,
             Editor.CurrentSlideIndex);
+        ShowLayoutPicker(LastLayoutPickerPlan);
         _statusText.Text = $"Layout picker: {LastLayoutPickerPlan.Choices.Count} choices";
     }
 
@@ -527,9 +554,51 @@ public sealed class MainWindow : Window
             RefreshSlidePane();
             RefreshCanvas();
             UpdateStatus();
+            HideLayoutPicker();
         }
 
         return applied;
+    }
+
+    private void ShowLayoutPicker(PresentationLayoutPickerPlan plan)
+    {
+        if (_layoutPickerHost is null || _layoutPickerPanel is null)
+            return;
+
+        _layoutPickerPanel.Children.Clear();
+        foreach (var choice in plan.Choices)
+        {
+            var button = new Button
+            {
+                Tag = choice.LayoutId,
+                Content = BuildLayoutChoiceLabel(choice),
+                Margin = new Thickness(6, 3),
+                Padding = new Thickness(8, 5),
+                HorizontalContentAlignment = HorizontalAlignment.Left,
+                IsEnabled = plan.CanApply && !choice.IsCurrent,
+            };
+            button.Click += (_, _) =>
+            {
+                if (button.Tag is string layoutId)
+                    ApplyLayoutChoice(layoutId);
+            };
+            _layoutPickerPanel.Children.Add(button);
+        }
+
+        _layoutPickerHost.IsVisible = true;
+    }
+
+    private void HideLayoutPicker()
+    {
+        if (_layoutPickerHost is not null)
+            _layoutPickerHost.IsVisible = false;
+    }
+
+    private static string BuildLayoutChoiceLabel(PresentationLayoutChoice choice)
+    {
+        var currentPrefix = choice.IsCurrent ? "Current - " : string.Empty;
+        var placeholders = choice.PlaceholderCount == 1 ? "1 placeholder" : $"{choice.PlaceholderCount} placeholders";
+        return $"{currentPrefix}{choice.DisplayName}\n{choice.MasterDisplayName} - {placeholders}";
     }
 
     private async Task InsertPictureFromFileAsync()
@@ -950,6 +1019,7 @@ public sealed class MainWindow : Window
         _presentation = presentation;
 
         RebuildEditorAndRewireInteraction();
+        HideLayoutPicker();
         RefreshSlidePane();
         RefreshCanvas();
         RefreshNotesPane();
