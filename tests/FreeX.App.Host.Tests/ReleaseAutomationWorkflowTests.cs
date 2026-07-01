@@ -34,7 +34,7 @@ public sealed class ReleaseAutomationWorkflowTests
         workflow.Should().Contain("-not ($isMainRelease -or $isDailyReleaseBranch)");
         workflow.Should().Contain("Tester releases publish stable latest assets and must run from refs/heads/main or a codex/daily-tester-release-* branch.");
         workflow.Should().Contain("actions/setup-dotnet@v5");
-        workflow.Should().Contain("timeout-minutes: 60");
+        workflow.Should().Contain("timeout-minutes: 180");
         workflow.Should().Contain("name: Repository preflight");
         workflow.Should().Contain("powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\\Test-RepositoryPreflight.ps1");
         workflow.Should().Contain("dotnet build FreeX.slnx --configuration Release");
