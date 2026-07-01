@@ -1,6 +1,7 @@
 using Free.Shared.Ribbon;
 using FreeW.App.Avalonia.Editing;
 using FreeW.App.Presentation.Dialogs;
+using FreeW.App.Presentation.Ribbon;
 using FreeW.Core.Model;
 using FreeW.Ribbon.Definitions;
 
@@ -166,6 +167,10 @@ internal sealed record RibbonHostCallbacks(
     Action? InspectDocument = null,
     /// <summary>AV-REVIEW: Review &gt; Accessibility &gt; Check Accessibility. Optional; registry no-ops when null.</summary>
     Action? CheckAccessibility = null,
+    /// <summary>AV-REVIEW: Review &gt; Comments &gt; Reply. Optional; registry uses a default reply when null.</summary>
+    Action? ReplyComment = null,
+    /// <summary>AV-REVIEW: Review &gt; Comments &gt; Show Comments. Optional; registry no-ops when null.</summary>
+    Action<IReadOnlyList<CommentListItem>>? ShowComments = null,
     /// <summary>FreeW File &gt; Import PDF (text only). Optional; registry no-ops when null.</summary>
     Action? ImportPdfText = null,
     /// <summary>Table Layout &gt; Properties / Cell Margins. Optional; registry no-ops when null.</summary>

@@ -229,6 +229,19 @@ public static class SlideCompositor
                 theme, slideIndex, effectiveClrMap, layoutPh?.TextBody, masterPh?.TextBody, resolvedMaster?.TextStyles);
         }
 
+        // Wave 26: convert the elbow route from EMU to DIP for connector shapes
+        IReadOnlyList<LayoutPoint>? elbowRouteDip = null;
+        if (shape.Kind == SlideShapeKind.Connector
+            && shape.AutoShapeKind == DrawingShapeKind.ElbowConnector
+            && shape.ElbowRoute is { Count: >= 2 })
+        {
+            var pts = new LayoutPoint[shape.ElbowRoute.Count];
+            for (int i = 0; i < pts.Length; i++)
+                pts[i] = new LayoutPoint(shape.ElbowRoute[i].X / EmuPerDip,
+                                         shape.ElbowRoute[i].Y / EmuPerDip);
+            elbowRouteDip = pts;
+        }
+
         ops.Add(new DrawOp.Shape
         {
             ShapeId = shape.Id,
@@ -240,7 +253,8 @@ public static class SlideCompositor
             FlipV = anchor.FlipV,
             BoundsDip = boundsDip,
             Text = text,
-            Effects = ResolveEffects(shape.Effects)
+            Effects = ResolveEffects(shape.Effects),
+            ElbowRouteDip = elbowRouteDip,
         });
     }
 
@@ -392,6 +406,10 @@ public static class SlideCompositor
             Brightness   = pf?.Brightness,
             Contrast     = pf?.Contrast,
             AlphaModPct  = pf?.AlphaModPct,
+            // Wave 26: picture frame clip geometry
+            PictureFrameGeometry = shape.PictureFrameGeometry,
+            // Wave 26: also carry shape effects (shadow/soft-edge from effectLst)
+            Effects      = ResolveEffects(shape.Effects),
         });
     }
 

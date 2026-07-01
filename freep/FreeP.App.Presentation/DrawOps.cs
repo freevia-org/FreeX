@@ -416,6 +416,14 @@ public abstract class DrawOp
 
         /// <summary>Resolved shape effects (shadow, glow, soft-edge), or null if none.</summary>
         public ResolvedShapeEffects? Effects { get; init; }
+
+        /// <summary>
+        /// Wave 26: computed Manhattan (orthogonal) elbow route for attached ElbowConnector shapes.
+        /// When non-null, the renderer draws this polyline directly instead of using
+        /// <see cref="Geometry"/> (which is the default bbox-based elbow path).
+        /// Coordinates are in DIP. Empty or null = use the default geometry.
+        /// </summary>
+        public IReadOnlyList<LayoutPoint>? ElbowRouteDip { get; init; }
     }
 
     // ── Picture draw op ───────────────────────────────────────────────────────────────────────────────────────────
@@ -486,6 +494,31 @@ public abstract class DrawOp
 
         /// <summary>Opacity multiplier 0..1. Null = fully opaque.</summary>
         public double? AlphaModPct { get; init; }
+
+        // ── Wave 26: shape effects (shadow/soft-edge from picture's effectLst) ──────
+
+        /// <summary>
+        /// Wave 26: resolved shape effects (shadow, glow, soft-edge) from the picture's
+        /// <c>p:spPr/a:effectLst</c>. Null if no effects are present.
+        /// Renderers draw a shadow or soft-edge around the (possibly clipped) picture frame.
+        /// </summary>
+        public ResolvedShapeEffects? Effects { get; init; }
+
+        // ── Wave 26: picture frame geometry ───────────────────────────────────────
+
+        /// <summary>
+        /// Wave 26: preset geometry name used to clip the picture.
+        /// Null or "rect" = plain rectangle (no clip).
+        /// "roundRect" = clip to a rounded rectangle (the most common picture style frame).
+        /// "ellipse"   = clip to an ellipse (oval frame).
+        /// Other values are treated as "rect" by the renderer.
+        /// </summary>
+        public string? PictureFrameGeometry { get; init; }
+
+        /// <summary>True when <see cref="PictureFrameGeometry"/> is set to a non-rect value.</summary>
+        public bool HasFrameClip =>
+            !string.IsNullOrEmpty(PictureFrameGeometry)
+            && PictureFrameGeometry != "rect";
     }
 
     // ── Background draw op ────────────────────────────────────────────────────────────────────────────────────────

@@ -188,7 +188,8 @@ public sealed class SlideCanvas : Control
 
     private static void RenderShape(DrawingContext dc, DrawOp.Shape shape)
     {
-        if (shape.Geometry.Contours.Count == 0 && shape.Text is null) return;
+        if (shape.Geometry.Contours.Count == 0 && shape.Text is null
+            && (shape.ElbowRouteDip is null || shape.ElbowRouteDip.Count < 2)) return;
 
         var bounds = shape.BoundsDip;
         bool hasTransform = shape.RotationDeg != 0 || shape.FlipH || shape.FlipV;
@@ -200,7 +201,28 @@ public sealed class SlideCanvas : Control
         if (shape.Effects is not null)
             RenderShapeEffects(dc, shape);
 
-        if (shape.Geometry.Contours.Count > 0)
+        // Wave 26: draw explicit elbow polyline route when available (overrides bbox geometry)
+        if (shape.ElbowRouteDip is { Count: >= 2 })
+        {
+            var pen = MakePen(shape.Outline);
+            if (pen is not null)
+            {
+                var pg = new PathGeometry();
+                var pf = new PathFigure
+                {
+                    StartPoint = new Point(shape.ElbowRouteDip[0].X, shape.ElbowRouteDip[0].Y),
+                    IsFilled = false,
+                };
+                for (int ri = 1; ri < shape.ElbowRouteDip.Count; ri++)
+                    pf.Segments!.Add(new LineSegment
+                    {
+                        Point = new Point(shape.ElbowRouteDip[ri].X, shape.ElbowRouteDip[ri].Y)
+                    });
+                pg.Figures!.Add(pf);
+                dc.DrawGeometry(null, pen, pg);
+            }
+        }
+        else if (shape.Geometry.Contours.Count > 0)
         {
             var geometry  = AvaloniaSlideGeometryFactory.ToGeometry(shape.Geometry);
             if (geometry is not null)
@@ -435,9 +457,56 @@ public sealed class SlideCanvas : Control
                 * Matrix.CreateTranslation(cx, cy));
         }
 
+        // Wave 26: draw outer shadow behind the picture when effects are set.
+        // Route the shadow-direction/blur math through the shared renderer-neutral planner
+        // (ShapeEffectRenderPlanner) so WPF + Avalonia stay in lock-step and we don't duplicate it.
+        var picShadowPlan = ShapeEffectRenderPlanner.PlanOuterEffects(pic.Effects);
+        foreach (var pass in picShadowPlan.ShadowPasses)
+        {
+            var shadowBrush = new SolidColorBrush(
+                Color.FromArgb(pass.Alpha, pass.Color.R, pass.Color.G, pass.Color.B));
+            var shadowDest = new Rect(dest.X + pass.OffsetX, dest.Y + pass.OffsetY, dest.Width, dest.Height);
+            if (pic.HasFrameClip && pic.PictureFrameGeometry == "roundRect")
+            {
+                double srx = Math.Min(dest.Width, dest.Height) * 0.18;
+                dc.DrawRectangle(shadowBrush, null, shadowDest, srx, srx);
+            }
+            else if (pic.HasFrameClip && pic.PictureFrameGeometry == "ellipse")
+            {
+                double scx = shadowDest.X + shadowDest.Width / 2;
+                double scy = shadowDest.Y + shadowDest.Height / 2;
+                dc.DrawEllipse(shadowBrush, null, new Point(scx, scy), shadowDest.Width / 2, shadowDest.Height / 2);
+            }
+            else
+                dc.DrawRectangle(shadowBrush, null, shadowDest);
+        }
+
         // 18A: alpha opacity
         if (pic.AlphaModPct.HasValue && pic.AlphaModPct.Value < 1.0)
             alphaScope = dc.PushOpacity(Math.Max(0, Math.Min(1, pic.AlphaModPct.Value)));
+
+        // Wave 26: build clip geometry for non-rect frame presets.
+        IDisposable? clipScope = null;
+        if (pic.HasFrameClip)
+        {
+            Geometry clipGeom;
+            if (pic.PictureFrameGeometry == "ellipse")
+            {
+                clipGeom = new EllipseGeometry
+                {
+                    Center  = new Point(dest.X + dest.Width / 2, dest.Y + dest.Height / 2),
+                    RadiusX = dest.Width  / 2,
+                    RadiusY = dest.Height / 2,
+                };
+            }
+            else
+            {
+                // roundRect and other non-rect presets use a rounded rectangle
+                double rx = Math.Min(dest.Width, dest.Height) * 0.18;
+                clipGeom = new RectangleGeometry { Rect = dest, RadiusX = rx, RadiusY = rx };
+            }
+            clipScope = dc.PushGeometryClip(clipGeom);
+        }
 
         // 18A: crop — expand the dest rect to show only the cropped sub-region of the image.
         // We do this by scaling the dest rect outward so that the uncropped image region maps to
@@ -457,7 +526,7 @@ public sealed class SlideCanvas : Control
                 var expandedDest = new Rect(offX, offY, fullW, fullH);
 
                 // Clip to dest so the cropped-off margins aren't visible
-                using var clip = dc.PushClip(dest);
+                using var cropClip = pic.HasFrameClip ? null : (IDisposable?)dc.PushClip(dest);
                 dc.DrawImage(renderBitmap, expandedDest);
             }
         }
@@ -466,13 +535,30 @@ public sealed class SlideCanvas : Control
             dc.DrawImage(renderBitmap, dest);
         }
 
+        clipScope?.Dispose(); // pop frame clip
+
         alphaScope?.Dispose();
 
+        // P3 / Wave 26: draw the picture frame outline (shaped when HasFrameClip).
         if (pic.Outline is ResolvedOutline.Visible visOutline)
         {
             var pen = MakePen(visOutline);
             if (pen is not null)
-                dc.DrawRectangle(null, pen, dest);
+            {
+                if (pic.HasFrameClip && pic.PictureFrameGeometry == "ellipse")
+                {
+                    double cx = dest.X + dest.Width / 2;
+                    double cy = dest.Y + dest.Height / 2;
+                    dc.DrawEllipse(null, pen, new Point(cx, cy), dest.Width / 2, dest.Height / 2);
+                }
+                else if (pic.HasFrameClip)
+                {
+                    double rx = Math.Min(dest.Width, dest.Height) * 0.18;
+                    dc.DrawRectangle(null, pen, dest, rx, rx);
+                }
+                else
+                    dc.DrawRectangle(null, pen, dest);
+            }
         }
 
         if (pic.IsMedia)

@@ -212,7 +212,8 @@ public sealed class SlideCanvas : FrameworkElement
 
     private static void RenderShape(DrawingContext dc, DrawOp.Shape shape)
     {
-        if (shape.Geometry.Contours.Count == 0 && shape.Text is null) return;
+        if (shape.Geometry.Contours.Count == 0 && shape.Text is null
+            && (shape.ElbowRouteDip is null || shape.ElbowRouteDip.Count < 2)) return;
 
         var bounds = shape.BoundsDip;
         bool hasTransform = shape.RotationDeg != 0 || shape.FlipH || shape.FlipV;
@@ -226,9 +227,24 @@ public sealed class SlideCanvas : FrameworkElement
         if (shape.Effects is not null)
             RenderShapeEffects(dc, shape);
 
-        // Draw geometry
-        if (shape.Geometry.Contours.Count > 0)
+        // Wave 26: if an explicit elbow route is provided, draw it as a polyline and
+        // skip the bbox-derived elbow geometry.
+        if (shape.ElbowRouteDip is { Count: >= 2 })
         {
+            var pen = MakePen(shape.Outline);
+            if (pen is not null)
+            {
+                var pg = new PathGeometry();
+                var pf = new PathFigure { StartPoint = new Point(shape.ElbowRouteDip[0].X, shape.ElbowRouteDip[0].Y), IsFilled = false };
+                for (int ri = 1; ri < shape.ElbowRouteDip.Count; ri++)
+                    pf.Segments.Add(new LineSegment(new Point(shape.ElbowRouteDip[ri].X, shape.ElbowRouteDip[ri].Y), isStroked: true));
+                pg.Figures.Add(pf);
+                dc.DrawGeometry(null, pen, pg);
+            }
+        }
+        else if (shape.Geometry.Contours.Count > 0)
+        {
+            // Draw geometry
             var geometry = ContourListToGeometry(shape.Geometry);
             var fillBrush = MakeBrush(shape.Fill, bounds);
             var pen = MakePen(shape.Outline);
@@ -469,21 +485,67 @@ public sealed class SlideCanvas : FrameworkElement
             dc.PushTransform(new RotateTransform(pic.RotationDeg, cx, cy));
         }
 
+        // Wave 26: draw outer shadow behind the picture when effects are set.
+        // Route the shadow-direction/blur math through the shared renderer-neutral planner
+        // (ShapeEffectRenderPlanner) so WPF + Avalonia stay in lock-step and we don't duplicate it.
+        var picShadowPlan = ShapeEffectRenderPlanner.PlanOuterEffects(pic.Effects);
+        foreach (var pass in picShadowPlan.ShadowPasses)
+        {
+            var shadowBrush = new System.Windows.Media.SolidColorBrush(
+                System.Windows.Media.Color.FromArgb(
+                    pass.Alpha, pass.Color.R, pass.Color.G, pass.Color.B));
+            var shadowDest = new Rect(dest.X + pass.OffsetX, dest.Y + pass.OffsetY, dest.Width, dest.Height);
+            if (pic.HasFrameClip && pic.PictureFrameGeometry == "roundRect")
+            {
+                double rx = Math.Min(dest.Width, dest.Height) * 0.18;
+                dc.DrawRoundedRectangle(shadowBrush, null, shadowDest, rx, rx);
+            }
+            else if (pic.HasFrameClip && pic.PictureFrameGeometry == "ellipse")
+                dc.DrawEllipse(shadowBrush, null, new System.Windows.Point(shadowDest.X + shadowDest.Width / 2, shadowDest.Y + shadowDest.Height / 2), shadowDest.Width / 2, shadowDest.Height / 2);
+            else
+                dc.DrawRectangle(shadowBrush, null, shadowDest);
+        }
+
         // 18A: apply alpha opacity layer if needed
         bool hasAlpha = pic.AlphaModPct.HasValue && pic.AlphaModPct.Value < 1.0;
         if (hasAlpha)
             dc.PushOpacity(Math.Max(0, Math.Min(1, pic.AlphaModPct!.Value)));
 
+        // Wave 26: clip to frame geometry when a non-rect preset is specified.
+        bool hasFrameClip = pic.HasFrameClip;
+        if (hasFrameClip)
+        {
+            double rx = Math.Min(dest.Width, dest.Height) * 0.18;
+            Geometry clipGeom = pic.PictureFrameGeometry switch
+            {
+                "ellipse" => new EllipseGeometry(new System.Windows.Point(dest.X + dest.Width / 2, dest.Y + dest.Height / 2), dest.Width / 2, dest.Height / 2),
+                _         => new RectangleGeometry(dest, rx, rx), // roundRect + others
+            };
+            dc.PushClip(clipGeom);
+        }
+
         dc.DrawImage(bitmap, dest);
+
+        if (hasFrameClip) dc.Pop(); // pop clip
 
         if (hasAlpha) dc.Pop();
 
-        // P3: draw the picture frame outline if present.
+        // P3 / Wave 26: draw the picture frame outline (rounded when HasFrameClip).
         if (pic.Outline is ResolvedOutline.Visible visOutline)
         {
             var pen = MakePen(visOutline);
             if (pen is not null)
-                dc.DrawRectangle(null, pen, dest);
+            {
+                if (pic.HasFrameClip && pic.PictureFrameGeometry == "ellipse")
+                    dc.DrawEllipse(null, pen, new System.Windows.Point(dest.X + dest.Width / 2, dest.Y + dest.Height / 2), dest.Width / 2, dest.Height / 2);
+                else if (pic.HasFrameClip)
+                {
+                    double rx = Math.Min(dest.Width, dest.Height) * 0.18;
+                    dc.DrawRoundedRectangle(null, pen, dest, rx, rx);
+                }
+                else
+                    dc.DrawRectangle(null, pen, dest);
+            }
         }
 
         // Draw play button overlay for media shapes (already in scaled coords since a transform is pushed).

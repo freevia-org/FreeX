@@ -71,8 +71,9 @@ public static class SlideCloner
             Fill           = shape.Fill,      // immutable — share
             Outline        = shape.Outline,   // immutable — share
             Placeholder    = shape.Placeholder is null ? null : ClonePlaceholder(shape.Placeholder),
-            Picture        = shape.Picture,   // byte[] treated as immutable
-            PictureFormat  = shape.PictureFormat is null ? null : ClonePictureFormat(shape.PictureFormat),
+            Picture              = shape.Picture,   // byte[] treated as immutable
+            PictureFormat        = shape.PictureFormat is null ? null : ClonePictureFormat(shape.PictureFormat),
+            PictureFrameGeometry = shape.PictureFrameGeometry,  // Wave 26: string is immutable
             Media          = shape.Media,     // MediaInfo bytes are immutable once loaded — share reference
             LegacyFxpKind  = shape.LegacyFxpKind,
             TextBody       = PresentationModelCloneHelper.CloneTextBody(shape.TextBody),
@@ -91,6 +92,10 @@ public static class SlideCloner
         // Connector attachments — small value-like objects, always deep-copied.
         copy.ConnectionStart = shape.ConnectionStart is null ? null : CloneConnectorAttachment(shape.ConnectionStart);
         copy.ConnectionEnd   = shape.ConnectionEnd   is null ? null : CloneConnectorAttachment(shape.ConnectionEnd);
+
+        // Wave 26: elbow route — copy the waypoints list so mutations are independent.
+        if (shape.ElbowRoute is not null)
+            copy.ElbowRoute = new List<(long X, long Y)>(shape.ElbowRoute);
 
         foreach (var child in shape.Children)
             copy.Children.Add(CloneShape(child));

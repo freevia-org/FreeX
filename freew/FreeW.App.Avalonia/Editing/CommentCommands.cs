@@ -280,6 +280,46 @@ internal sealed class DeleteCommentCommand(int commentId) : IDocumentCommand
 }
 
 /// <summary>
+/// Appends a reply to an existing top-level comment. Captures the inserted reply id and list ordinal so
+/// Undo removes exactly this reply while preserving any other thread edits.
+/// </summary>
+internal sealed class AddCommentReplyCommand(int topLevelCommentId, Comment reply) : IDocumentCommand
+{
+    private int _insertedIndex = -1;
+    private bool _applied;
+
+    public string Label => "Reply to Comment";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        if (!context.Document.Comments.TryGetValue(topLevelCommentId, out var comment))
+            return;
+        if (comment.ThreadInOrder().Any(existing => existing.Id == reply.Id))
+            return;
+
+        _insertedIndex = comment.Replies.Count;
+        comment.Replies.Add(reply);
+        _applied = true;
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (!_applied)
+            return;
+        if (context.Document.Comments.TryGetValue(topLevelCommentId, out var comment))
+        {
+            var index = comment.Replies.FindIndex(candidate => candidate.Id == reply.Id);
+            if (index >= 0)
+                comment.Replies.RemoveAt(index);
+            else if (_insertedIndex >= 0 && _insertedIndex < comment.Replies.Count && ReferenceEquals(comment.Replies[_insertedIndex], reply))
+                comment.Replies.RemoveAt(_insertedIndex);
+        }
+
+        _applied = false;
+    }
+}
+
+/// <summary>
 /// Toggles (sets) the resolved/done flag on the comment thread with a given id. Captures the previous flag
 /// so Undo restores it. The flag lives on the model <see cref="Comment.Resolved"/> property (Word's
 /// w15:done) and already round-trips through Core.IO.

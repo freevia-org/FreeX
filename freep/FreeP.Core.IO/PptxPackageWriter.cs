@@ -1940,13 +1940,19 @@ public static class PptxPackageWriter
         // 18A: build a:blipFill with optional a:srcRect (crop)
         var blipFillEl = BuildBlipFillEl(blipEl, shape.PictureFormat);
 
+        // Wave 26: use the stored frame geometry preset (roundRect, ellipse, etc.) if set;
+        // otherwise default to "rect" as before.
+        var framePrst = !string.IsNullOrEmpty(shape.PictureFrameGeometry)
+            ? shape.PictureFrameGeometry
+            : "rect";
+
         return new XElement(P + "pic",
             new XElement(P + "nvPicPr",
                 CnvPr(shape),
                 new XElement(P + "cNvPicPr"),
                 new XElement(P + "nvPr")),
             blipFillEl,
-            BuildSpPrEl(shape, PresentationColorScheme.CreateDefault(), forcePrst: "rect"));
+            BuildSpPrEl(shape, PresentationColorScheme.CreateDefault(), forcePrst: framePrst));
     }
 
     /// <summary>

@@ -315,4 +315,130 @@ public sealed class DocumentViewCommentTests
         allCount.Should().Be(1, "AllComments lists the thread");
         atCaretCount.Should().Be(1, "CommentsAtCaret finds the thread covering the caret");
     }
+
+    [Fact]
+    public async Task NextPreviousComment_moves_caret_in_document_order_and_wraps()
+    {
+        (int Block, int Offset) afterNext = default;
+        (int Block, int Offset) afterWrapNext = default;
+        (int Block, int Offset) afterWrapPrevious = default;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            doc.Blocks.Add(new Paragraph("First"));
+            doc.Blocks.Add(new Paragraph("Second"));
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 2000));
+
+            view.SetSelectionRangePublic(0, 0, 0, 5);
+            view.AddComment("first", "A", "A");
+            view.SetSelectionRangePublic(1, 0, 1, 6);
+            view.AddComment("second", "B", "B");
+
+            view.MoveCaretToBlock(0, 2);
+            view.NextComment();
+            afterNext = view.CaretPositionForTest;
+
+            view.NextComment();
+            afterWrapNext = view.CaretPositionForTest;
+
+            view.PreviousComment();
+            afterWrapPrevious = view.CaretPositionForTest;
+        });
+
+        if (!ran) return;
+        afterNext.Should().Be((1, 0), "Next should move to the following comment anchor");
+        afterWrapNext.Should().Be((0, 0), "Next should wrap from the last comment to the first");
+        afterWrapPrevious.Should().Be((1, 0), "Previous should wrap from the first comment to the last");
+    }
+
+    [Fact]
+    public async Task NextComment_moves_into_table_comment_anchor()
+    {
+        (int TableBlock, int Row, int Col, int ParaIdx, int Offset)? cellCaret = null;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            var table = new Table();
+            var row = new TableRow();
+            var cell = new TableCell();
+            var paragraph = new Paragraph();
+            paragraph.Runs.Add(new Run("Cell") { CommentId = 4 });
+            paragraph.Runs.Add(Run.CommentReference(4));
+            cell.Paragraphs.Add(paragraph);
+            row.Cells.Add(cell);
+            table.Rows.Add(row);
+            doc.Blocks.Add(table);
+            doc.Comments[4] = new Comment(4, "table note", "T", "T");
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 2000));
+            view.NextComment();
+            cellCaret = view.CellCaretInfo;
+        });
+
+        if (!ran) return;
+        cellCaret.Should().Be((0, 0, 0, 0, 0), "comment navigation should enter the table cell anchor");
+    }
+
+    [Fact]
+    public async Task ReplyToCommentAtCaret_appends_reply_with_next_comment_id_and_undo()
+    {
+        var replyCountAfterAdd = -1;
+        var replyCountAfterUndo = -1;
+        var replyId = -1;
+        var replyAuthor = "";
+        var replyInitials = "";
+        var ran = await OnUiThread(() =>
+        {
+            var view = Build("Hello world");
+            view.RevisionAuthor = "Ann Reviewer";
+            view.SetSelectionRangePublic(0, 0, 0, 5);
+            var id = view.AddComment("note", "A", "A")!.Value;
+            view.MoveCaretToBlock(0, 2);
+
+            view.ReplyToCommentAtCaret("reply");
+            var reply = view.Document.Comments[id].Replies.Single();
+            replyCountAfterAdd = view.Document.Comments[id].Replies.Count;
+            replyCountAfterUndo = -1;
+            replyId = reply.Id;
+            replyAuthor = reply.Author;
+            replyInitials = reply.Initials;
+
+            view.Undo();
+            replyCountAfterUndo = view.Document.Comments[id].Replies.Count;
+        });
+
+        if (!ran) return;
+        replyCountAfterAdd.Should().Be(1);
+        replyId.Should().Be(1, "the reply id should come from TextDocument.NextCommentId()");
+        replyAuthor.Should().Be("Ann Reviewer");
+        replyInitials.Should().Be("AR");
+        replyCountAfterUndo.Should().Be(0, "reply append should be undoable");
+    }
+
+    [Fact]
+    public async Task PlannedCommentList_exposes_shared_rows()
+    {
+        var plannedCount = -1;
+        var plannedText = "";
+        var ran = await OnUiThread(() =>
+        {
+            var view = Build("Hello world");
+            view.SetSelectionRangePublic(0, 6, 0, 11);
+            view.AddComment("planned", "A", "A");
+
+            var planned = view.PlannedCommentList();
+            plannedCount = planned.Count;
+            plannedText = planned[0].Text;
+        });
+
+        if (!ran) return;
+        plannedCount.Should().Be(1);
+        plannedText.Should().Be("planned");
+    }
 }

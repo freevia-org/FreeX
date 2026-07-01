@@ -374,6 +374,18 @@ public sealed class SlideShape
     /// </summary>
     public PictureFormat? PictureFormat { get; set; }
 
+    /// <summary>
+    /// Wave 26: picture frame clip geometry preset name from the picture's <c>p:spPr/a:prstGeom prst=</c>.
+    /// Common values:
+    ///   <c>rect</c>      = plain rectangle (default, no rounding).
+    ///   <c>roundRect</c> = rounded-rectangle clip (most common picture style frame).
+    ///   <c>ellipse</c>   = elliptical clip (oval frame).
+    /// Null or "rect" = no special clipping (draw a rectangle).
+    /// Stored as the raw OOXML prst string so unknown shapes pass through unchanged.
+    /// Only populated for Kind == Picture.
+    /// </summary>
+    public string? PictureFrameGeometry { get; set; }
+
     // ── Media (audio/video) ───────────────────────────────────────────────────────────
 
     /// <summary>
@@ -442,6 +454,16 @@ public sealed class SlideShape
     /// Only meaningful when <see cref="Kind"/> == <see cref="SlideShapeKind.Connector"/>.
     /// </summary>
     public ConnectorAttachment? ConnectionEnd { get; set; }
+
+    /// <summary>
+    /// Wave 26: computed Manhattan (orthogonal) route for an elbow/bent connector.
+    /// A list of waypoints (in slide EMU) that the connector polyline passes through,
+    /// starting at the start-site and ending at the end-site.
+    /// Null = not computed (use the bbox-only fallback path drawn by the compositor).
+    /// Only meaningful for <see cref="DrawingShapeKind.ElbowConnector"/> connectors when
+    /// both endpoints are attached to shapes.
+    /// </summary>
+    public List<(long X, long Y)>? ElbowRoute { get; set; }
 
     // ── Hyperlink ─────────────────────────────────────────────────────────────────
 

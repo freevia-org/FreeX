@@ -290,6 +290,8 @@ public sealed class MainWindowHeadlessTests
         source.Should().Contain("PresentationDesignCommandPlanner.TryApplyLayoutChoice(");
         source.Should().Contain("ShowLayoutPicker(LastLayoutPickerPlan);");
         source.Should().Contain("BuildLayoutChoiceLabel(choice)");
+        source.Should().Contain("BuildLayoutChoiceTile(choice)");
+        source.Should().Contain("BuildLayoutThumbnail(choice)");
         source.Should().NotContain("Editor.SetTheme(");
         source.Should().NotContain("Editor.SetSlideSize16x9()");
         source.Should().NotContain("Editor.SetSlideSize4x3()");
@@ -897,6 +899,9 @@ public sealed class MainWindowHeadlessTests
         var applied = false;
         var pickerVisibleAfterOpen = false;
         var pickerChoiceButtonCount = 0;
+        var pickerGroupHeaderCount = 0;
+        var pickerThumbnailPlaceholderCount = 0;
+        var pickerCurrentChoiceCount = 0;
         var pickerVisibleAfterApply = true;
 
         var ran = await OnUiThread(() =>
@@ -919,6 +924,9 @@ public sealed class MainWindowHeadlessTests
             layout!.Execute(RibbonCommandContext.Empty);
             pickerVisibleAfterOpen = window.IsLayoutPickerVisible;
             pickerChoiceButtonCount = window.LayoutPickerChoiceButtonCount;
+            pickerGroupHeaderCount = window.LayoutPickerGroupHeaderCount;
+            pickerThumbnailPlaceholderCount = window.LayoutPickerThumbnailPlaceholderCount;
+            pickerCurrentChoiceCount = window.LayoutPickerCurrentChoiceCount;
             applied = window.ApplyLayoutChoice("rId2");
             pickerVisibleAfterApply = window.IsLayoutPickerVisible;
 
@@ -936,7 +944,18 @@ public sealed class MainWindowHeadlessTests
         pickerPlan.Should().NotBeNull("the host callback should expose concrete shared layout choices");
         pickerVisibleAfterOpen.Should().BeTrue("the Avalonia command should show an actual picker surface");
         pickerChoiceButtonCount.Should().Be(2);
-        pickerPlan!.Choices.Should().Contain(choice =>
+        pickerGroupHeaderCount.Should().Be(1, "the Avalonia picker should render grouped gallery sections");
+        pickerThumbnailPlaceholderCount.Should().BeGreaterThan(0, "layout choices should render thumbnail placeholder glyphs");
+        pickerCurrentChoiceCount.Should().Be(1, "the current layout should have explicit selected chrome");
+        pickerPlan!.Groups.Should().ContainSingle(group =>
+            group.Heading == "Master 1" &&
+            group.Choices.Select(choice => choice.LayoutId).SequenceEqual(new[] { "rId1", "rId2" }));
+        pickerPlan.Choices.Single(choice => choice.LayoutId == "rId1").Chrome.State
+            .Should().Be(PresentationLayoutChoiceChromeState.Current);
+        pickerPlan.Choices.Single(choice => choice.LayoutId == "rId2").ThumbnailPlaceholders
+            .Should()
+            .ContainSingle(slot => slot.PlaceholderType == PlaceholderType.Title);
+        pickerPlan.Choices.Should().Contain(choice =>
             choice.LayoutId == "rId2" &&
             choice.DisplayName == "Blank" &&
             choice.LayoutType == SlideLayoutType.Blank &&
@@ -1083,6 +1102,7 @@ public sealed class MainWindowHeadlessTests
         PresentationCommentPanePlan? commentPlan = null;
         PresentationAccessibilitySummaryPlan? accessibilityPlan = null;
         PresentationAltTextRequestPlan? altTextPlan = null;
+        PresentationAltTextPanePlan? altTextPanePlan = null;
         PresentationProofingRequestPlan? proofingPlan = null;
 
         var ran = await OnUiThread(() =>
@@ -1119,6 +1139,7 @@ public sealed class MainWindowHeadlessTests
             commentPlan = window.LastCommentPanePlan;
             accessibilityPlan = window.LastAccessibilitySummaryPlan;
             altTextPlan = window.LastAltTextRequestPlan;
+            altTextPanePlan = window.LastAltTextPanePlan;
             proofingPlan = window.LastProofingRequestPlan;
         });
 
@@ -1140,6 +1161,17 @@ public sealed class MainWindowHeadlessTests
         altTextPlan!.HasSelection.Should().BeTrue();
         altTextPlan.ShapeId.Should().Be(328);
         altTextPlan.Status.Should().Be(PresentationWorkflowCapabilityStatus.Available);
+        altTextPanePlan.Should().NotBeNull();
+        altTextPanePlan!.ShapeId.Should().Be(328);
+        altTextPanePlan.CanApply.Should().BeFalse();
+        altTextPanePlan.Description.ValidationMessage
+            .Should().Be(PresentationReviewWorkflowPlanner.MissingAltTextDescriptionMessage);
+        altTextPanePlan.Actions.Select(action => action.CommandId).Should().Contain(new[]
+        {
+            PresentationReviewWorkflowPlanner.AltTextPaneApplyCommandId,
+            PresentationReviewWorkflowPlanner.AltTextPaneDecorativeCommandId,
+            PresentationReviewWorkflowPlanner.AltTextPaneCloseCommandId
+        });
         proofingPlan.Should().NotBeNull();
         proofingPlan!.Status.Should().Be(PresentationWorkflowCapabilityStatus.RequiresHost);
     }
@@ -1150,6 +1182,7 @@ public sealed class MainWindowHeadlessTests
         string? altTextTitle = null;
         string? altText = null;
         PresentationAltTextRequestPlan? requestPlan = null;
+        PresentationAltTextPanePlan? panePlan = null;
         PresentationAccessibilitySummaryPlan? accessibilityPlan = null;
 
         var ran = await OnUiThread(() =>
@@ -1180,6 +1213,7 @@ public sealed class MainWindowHeadlessTests
             altTextTitle = shape.AlternativeTextTitle;
             altText = shape.AlternativeText;
             requestPlan = window.LastAltTextRequestPlan;
+            panePlan = window.LastAltTextPanePlan;
             accessibilityPlan = window.LastAccessibilitySummaryPlan;
         });
 
@@ -1189,6 +1223,10 @@ public sealed class MainWindowHeadlessTests
         requestPlan.Should().NotBeNull();
         requestPlan!.CurrentTitle.Should().Be("Hero packaging photo");
         requestPlan!.CurrentDescription.Should().Be("Product packaging on a white background.");
+        panePlan.Should().NotBeNull();
+        panePlan!.CanApply.Should().BeTrue();
+        panePlan.Title.Value.Should().Be("Hero packaging photo");
+        panePlan.Description.Value.Should().Be("Product packaging on a white background.");
         accessibilityPlan.Should().NotBeNull();
         accessibilityPlan!.Issues.Should().NotContain(issue =>
             issue.ShapeId == 329 && issue.Title == "Alt text missing");
