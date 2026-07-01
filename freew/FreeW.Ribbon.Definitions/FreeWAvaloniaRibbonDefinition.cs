@@ -347,6 +347,14 @@ internal static class FreeWAvaloniaRibbonDefinition
                     {
                         KeyTip = FreeWRibbonText.PasteCommand.KeyTip
                     });
+                    g.Button("freew.format-painter", FreeWRibbonText.FormatPainterCommand.Label, b => b with
+                    {
+                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.FormatPainter),
+                        KeyTip = FreeWRibbonText.FormatPainterCommand.KeyTip
+                    });
+                    g.Icon("freew.paste-plain", FreeWRibbonText.PasteTextOnlyCommand.Label, RibbonCommandIconKind.Paste);
+                    g.Icon("freew.paste-merge", FreeWRibbonText.PasteMergeFormattingCommand.Label, RibbonCommandIconKind.Paste);
+                    g.Icon("freew.paste-special", FreeWRibbonText.PasteSpecialCommand.Label, RibbonCommandIconKind.Paste);
                 });
                 tab.Group("font", FreeWRibbonText.FontGroup.Label, FreeWRibbonText.FontGroup.KeyTip, 90, g =>
                 {

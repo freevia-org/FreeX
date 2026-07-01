@@ -191,6 +191,8 @@ public sealed class DocumentView : Control
     // is collapsed (no selection). Set by the Font dialog on a collapsed-caret apply; consumed
     // and cleared by the next InsertText call.
     private RunFormatting? _pendingRunFmt;
+    private FormatPainterClipboard? _formatPainter;
+    private bool _formatPainterLocked;
     private double _laidOutWidth = -1;
     private double _contentHeight;
     private double _pageLeft;
@@ -7100,6 +7102,9 @@ public sealed class DocumentView : Control
                 ? Cursor.Default
                 : CursorForHandle(HitTestHandle(e.GetPosition(this)));
         }
+
+        if (ApplyFormatPainterToSelection())
+            e.Handled = true;
     }
 
     protected override void OnTextInput(TextInputEventArgs e)
@@ -7125,6 +7130,13 @@ public sealed class DocumentView : Control
 
         if (IsEditingLocked && IsEditingKey(e.Key, ctrl))
         {
+            e.Handled = true;
+            return;
+        }
+
+        if (e.Key == Key.Escape && IsFormatPainterArmed)
+        {
+            CancelFormatPainter();
             e.Handled = true;
             return;
         }
@@ -10232,6 +10244,92 @@ public sealed class DocumentView : Control
         if (NormalizedSelection() is null)
             return false;
         DeleteSelection();
+        return true;
+    }
+
+    public bool PastePlainText(string? clipboardText) =>
+        PasteNormalizedText(clipboardText, "Paste Text Only");
+
+    public bool PasteMergeFormatting(string? clipboardText) =>
+        PasteNormalizedText(clipboardText, "Merge Formatting");
+
+    private bool PasteNormalizedText(string? clipboardText, string undoLabel)
+    {
+        if (IsEditingLocked)
+            return false;
+
+        var normalized = PasteText.Normalize(clipboardText);
+        if (normalized.Length == 0)
+            return false;
+
+        var lines = normalized.Split('\n');
+        _bus.BeginUndoGroup();
+        try
+        {
+            InsertText(lines[0]);
+            for (var i = 1; i < lines.Length; i++)
+            {
+                InsertParagraphBreak();
+                if (lines[i].Length > 0)
+                    InsertText(lines[i]);
+            }
+
+            _bus.CommitUndoGroup(undoLabel);
+        }
+        catch
+        {
+            _bus.AbortUndoGroup();
+            throw;
+        }
+
+        Focus();
+        return true;
+    }
+
+    public bool IsFormatPainterArmed => _formatPainter is not null;
+
+    public void ArmFormatPainter(bool locked = false)
+    {
+        if (IsEditingLocked)
+            return;
+
+        var formatting = GetSelectionFormatting();
+        _formatPainter = FormatPainterClipboard.Capture(formatting.Run, formatting.Paragraph);
+        _formatPainterLocked = locked;
+    }
+
+    public void CancelFormatPainter()
+    {
+        _formatPainter = null;
+        _formatPainterLocked = false;
+    }
+
+    public bool ApplyFormatPainterToSelection()
+    {
+        if (_formatPainter is not { } painter || IsEditingLocked || NormalizedSelection() is null)
+            return false;
+
+        _bus.BeginUndoGroup();
+        try
+        {
+            ApplyRunFormatting(painter.ApplyTo);
+            foreach (var index in SelectedParagraphIndices())
+            {
+                if (_doc.Blocks[index] is Paragraph paragraph && IsEditable(paragraph))
+                    _bus.Execute(new SetParagraphFormattingCommand(index, painter.ApplyTo(paragraph.Formatting)));
+            }
+
+            _bus.CommitUndoGroup("Format Painter");
+        }
+        catch
+        {
+            _bus.AbortUndoGroup();
+            throw;
+        }
+
+        if (!_formatPainterLocked)
+            CancelFormatPainter();
+        Focus();
         return true;
     }
 

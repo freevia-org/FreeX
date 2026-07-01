@@ -80,6 +80,10 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.cut",   new ActionRibbonCommand(callbacks.Cut));
         r.Register("freew.copy",  new ActionRibbonCommand(callbacks.Copy));
         r.Register("freew.paste", new ActionRibbonCommand(callbacks.Paste));
+        r.Register("freew.paste-plain", new ActionRibbonCommand(callbacks.PastePlainText ?? (() => { })));
+        r.Register("freew.paste-merge", new ActionRibbonCommand(callbacks.PasteMergeFormatting ?? (() => { })));
+        r.Register("freew.paste-special", new ActionRibbonCommand(callbacks.OpenPasteSpecial ?? (() => { })));
+        r.Register("freew.format-painter", new FormatPainterCommand(editor));
 
         // ── Font ─────────────────────────────────────────────────────────────
         r.Register("freew.font-family", new ValueRibbonCommand(value =>
@@ -571,6 +575,21 @@ internal static class FreeWAvaloniaRibbonCommands
         public void Execute(RibbonCommandContext context) => toggle();
 
         public RibbonCommandState GetState() => new(IsChecked: isChecked());
+    }
+
+    private sealed class FormatPainterCommand(DocumentView editor) : IRibbonCommand
+    {
+        private DateTime _lastExecute = DateTime.MinValue;
+        private const double DoubleClickMs = 500;
+
+        public void Execute(RibbonCommandContext context)
+        {
+            var now = DateTime.UtcNow;
+            var isDoubleClick = (now - _lastExecute).TotalMilliseconds <= DoubleClickMs;
+            _lastExecute = now;
+            editor.ArmFormatPainter(locked: isDoubleClick);
+            editor.Focus();
+        }
     }
 
     private sealed class FormattingMarksCommand(DocumentView editor) : IRibbonStatefulCommand

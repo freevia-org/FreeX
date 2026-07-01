@@ -176,5 +176,11 @@ internal sealed record RibbonHostCallbacks(
     /// <summary>Table Layout &gt; Properties / Cell Margins. Optional; registry no-ops when null.</summary>
     Func<ModelTableContext, TablePropertiesValues?>? OpenTablePropertiesDialog = null,
     /// <summary>Table Layout &gt; Formula. Optional; registry inserts the shared default formula when null.</summary>
-    Func<TableFormulaDialogInitialState, TableFormulaField?>? OpenTableFormulaDialog = null);
+    Func<TableFormulaDialogInitialState, TableFormulaField?>? OpenTableFormulaDialog = null,
+    /// <summary>Home &gt; Clipboard &gt; Paste Text Only. Optional; registry no-ops when null.</summary>
+    Action? PastePlainText = null,
+    /// <summary>Home &gt; Clipboard &gt; Merge Formatting. Optional; registry no-ops when null.</summary>
+    Action? PasteMergeFormatting = null,
+    /// <summary>Home &gt; Clipboard &gt; Paste Special. Optional; registry no-ops when null.</summary>
+    Action? OpenPasteSpecial = null);
 

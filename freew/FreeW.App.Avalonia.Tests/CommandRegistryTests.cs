@@ -133,6 +133,10 @@ public sealed class CommandRegistryTests
             "freew.zoom-in",
             "freew.zoom-out",
             "freew.zoom-100",
+            "freew.format-painter",
+            "freew.paste-plain",
+            "freew.paste-merge",
+            "freew.paste-special",
         };
 
         foreach (var id in expected)
@@ -370,6 +374,25 @@ public sealed class CommandRegistryTests
     }
 
     [Fact]
+    public void Clipboard_paste_special_commands_route_to_host_callbacks()
+    {
+        var calls = new List<string>();
+        var callbacks = NoopCallbacks() with
+        {
+            PastePlainText = () => calls.Add("plain"),
+            PasteMergeFormatting = () => calls.Add("merge"),
+            OpenPasteSpecial = () => calls.Add("special"),
+        };
+        var registry = FreeWRibbon.BuildRegistry(new DocumentView(), callbacks);
+
+        Execute(registry, "freew.paste-plain");
+        Execute(registry, "freew.paste-merge");
+        Execute(registry, "freew.paste-special");
+
+        calls.Should().Equal("plain", "merge", "special");
+    }
+
+    [Fact]
     public void Sort_command_fallback_sorts_selected_paragraphs()
     {
         var doc = TextDocument.CreateEmpty();
@@ -509,6 +532,67 @@ public sealed class CommandRegistryTests
         var result = (Paragraph)view.Document.Blocks[0];
         result.Runs.All(r => !r.Formatting.Bold && !r.Formatting.Italic)
             .Should().BeTrue("ClearFormatting should reset Bold and Italic");
+    }
+
+    [Fact]
+    public void Paste_plain_text_normalizes_clipboard_text_and_splits_lines()
+    {
+        var view = new DocumentView();
+        view.LoadDocument(MakeDoc("Start"));
+        view.MoveCaretToBlockForTest(0, 5);
+
+        view.PastePlainText("\r\nNext\0\tTab").Should().BeTrue();
+
+        view.Document.Blocks.OfType<Paragraph>().Select(p => p.PlainText)
+            .Should().Equal("Start", "Next\tTab");
+    }
+
+    [Fact]
+    public void Format_painter_command_stamps_run_and_paragraph_formatting()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var source = new Paragraph
+        {
+            Formatting = ParagraphFormatting.Default with
+            {
+                Alignment = TextAlignment.Center,
+                SpaceBeforePt = 6,
+                SpaceAfterPt = 12,
+            },
+        };
+        source.Runs.Add(new Run("Source", new RunFormatting
+        {
+            Bold = true,
+            Italic = true,
+            FontFamily = "Cambria",
+            FontSizePt = 18,
+            ColorHex = "#336699",
+        }));
+        doc.Blocks.Add(source);
+        doc.Blocks.Add(new Paragraph("Target"));
+        var view = new DocumentView();
+        view.LoadDocument(doc);
+        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+
+        view.SetSelectionRangePublic(0, 0, 0, 6);
+        Execute(registry, "freew.format-painter");
+        view.IsFormatPainterArmed.Should().BeTrue();
+
+        view.SetSelectionRangePublic(1, 0, 1, 6);
+        view.ApplyFormatPainterToSelection().Should().BeTrue();
+
+        view.IsFormatPainterArmed.Should().BeFalse("single-click Format Painter should disarm after stamping");
+        var target = (Paragraph)view.Document.Blocks[1];
+        target.Formatting.Alignment.Should().Be(TextAlignment.Center);
+        target.Formatting.SpaceBeforePt.Should().Be(6);
+        target.Formatting.SpaceAfterPt.Should().Be(12);
+        target.Runs.Should().ContainSingle();
+        target.Runs[0].Formatting.Bold.Should().BeTrue();
+        target.Runs[0].Formatting.Italic.Should().BeTrue();
+        target.Runs[0].Formatting.FontFamily.Should().Be("Cambria");
+        target.Runs[0].Formatting.FontSizePt.Should().Be(18);
+        target.Runs[0].Formatting.ColorHex.Should().Be("#336699");
     }
 
     [Fact]
