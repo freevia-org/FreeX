@@ -10025,6 +10025,16 @@ public sealed class DocumentView : Control
     }
 
     /// <summary>
+    /// AV-DESIGN: apply a Word-style Design &gt; Style Set to the built-in style catalog. Paragraphs retain
+    /// their StyleId links and pick up the new look through normal style resolution.
+    /// </summary>
+    public void ApplyStyleSet(DocumentStyleSet styleSet)
+    {
+        ArgumentNullException.ThrowIfNull(styleSet);
+        _bus.Execute(new DesignCatalogCommand("Style Set", doc => DocumentStyleSet.Apply(doc, styleSet)));
+    }
+
+    /// <summary>
     /// AV-DESIGN: set (or clear) the whole-page background colour (Design &gt; Page Color). A null/empty
     /// value clears it back to the default white sheet; the hex is normalised to "#RRGGBB". Undoable; the
     /// page sheet recolours immediately and round-trips through <c>w:background</c> on save.

@@ -1252,6 +1252,13 @@ internal static class FreeWAvaloniaRibbonCommands
         }
 
         // ── Page Color swatches (+ No Color) ─────────────────────────────────
+        r.Register("freew.style-set", new ValueRibbonCommand(value =>
+        {
+            if (!string.IsNullOrWhiteSpace(value) && DocumentStyleSet.FindByName(value) is { } styleSet)
+                editor.ApplyStyleSet(styleSet);
+        }));
+        r.Register("freew.reset-style-set", new ActionRibbonCommand(() => editor.ApplyStyleSet(DocumentStyleSet.Default)));
+
         r.Register("freew.page-color", new ActionRibbonCommand(() => { /* dropdown opener */ }));
         RegisterPageColorPalette(r, editor);
 
