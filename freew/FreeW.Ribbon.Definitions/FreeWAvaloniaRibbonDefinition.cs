@@ -487,7 +487,7 @@ internal static class FreeWAvaloniaRibbonDefinition
                     g.Toggle("freew.view-gridlines",    "Gridlines");
                     g.Toggle("freew.navigationpane",    "Navigation Pane");
                     // AV-VIEW: surface the Reviewing Pane toggle on View as well (also on Review tab).
-                    g.Toggle("freew.reviewingpane",     "Reviewing Pane");
+                    g.Toggle("freew.reviewing-pane",    "Reviewing Pane");
                     g.Toggle("freew.reveal-formatting", "Reveal Formatting");
                 });
                 tab.Group("zoom", "Zoom", null, 90, g =>
@@ -510,7 +510,12 @@ internal static class FreeWAvaloniaRibbonDefinition
                 // AV-REVIEW: Proofing group — word count dialog.
                 tab.Group("proofing", "Proofing", null, 110, g =>
                 {
-                    g.Button("freew.word-count", "Word Count");
+                    g.Button("freew.statistics", "Word Count");
+                });
+                // AV-REVIEW: Accessibility group — backed by the same report flow as Backstage safety.
+                tab.Group("accessibility", "Accessibility", null, 92, g =>
+                {
+                    g.Button("freew.check-accessibility", "Check Accessibility");
                 });
                 // AV-REVIEW: Comments group — new / delete review comment.
                 tab.Group("comments", "Comments", null, 100, g =>
@@ -522,15 +527,26 @@ internal static class FreeWAvaloniaRibbonDefinition
                 tab.Group("tracking", "Tracking", null, 90, g =>
                 {
                     g.Toggle("freew.track-changes", "Track Changes");
-                    g.Toggle("freew.reviewingpane", "Reviewing Pane");
+                    g.Toggle("freew.reviewing-pane", "Reviewing Pane");
                 });
                 // AV-REVIEW: Changes group — accept / reject (current + all).
                 tab.Group("changes", "Changes", null, 80, g =>
                 {
-                    g.Button("freew.accept-change", "Accept");
+                    g.Button("freew.accept-this",   "Accept");
                     g.Button("freew.accept-all",    "Accept All");
-                    g.Button("freew.reject-change", "Reject");
+                    g.Button("freew.reject-this",   "Reject");
                     g.Button("freew.reject-all",    "Reject All");
+                });
+                // AV-REVIEW: Protect and Inspect groups are wired through host callbacks to the existing
+                // MainWindow/Backstage safety flows.
+                tab.Group("protect", "Protect", null, 85, g =>
+                {
+                    g.Toggle("freew.mark-as-final",    "Mark as Final");
+                    g.Toggle("freew.restrict-editing", "Restrict Editing");
+                });
+                tab.Group("inspect", "Inspect", null, 75, g =>
+                {
+                    g.Button("freew.inspect-document", "Inspect Document");
                 });
             })
             .Tab("references", "References", "S", tab =>

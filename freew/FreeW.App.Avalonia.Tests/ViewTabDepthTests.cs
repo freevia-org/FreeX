@@ -85,7 +85,7 @@ public sealed class ViewTabDepthTests
         ids.Should().Contain("freew.new-window");
         ids.Should().Contain("freew.split");
         // Show group must surface the Reviewing Pane toggle on the View tab too.
-        ids.Should().Contain("freew.reviewingpane");
+        ids.Should().Contain("freew.reviewing-pane");
     }
 
     [Fact]

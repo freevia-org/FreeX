@@ -383,13 +383,22 @@ public sealed class DocumentViewReviewTests
         foreach (var id in new[]
         {
             "freew.track-changes",
+            "freew.reviewing-pane",
+            "freew.reviewingpane",
+            "freew.statistics",
+            "freew.word-count",
+            "freew.check-accessibility",
             "freew.accept-change",
+            "freew.accept-this",
             "freew.reject-change",
+            "freew.reject-this",
             "freew.accept-all",
             "freew.reject-all",
+            "freew.mark-as-final",
+            "freew.restrict-editing",
+            "freew.inspect-document",
             "freew.new-comment",
             "freew.delete-comment",
-            "freew.word-count",
         })
         {
             registry.TryGet(new RibbonCommandId(id), out _)
@@ -411,13 +420,60 @@ public sealed class DocumentViewReviewTests
 
         foreach (var id in new[]
         {
-            "freew.track-changes", "freew.accept-change", "freew.reject-change",
+            "freew.track-changes", "freew.reviewing-pane", "freew.statistics",
+            "freew.check-accessibility", "freew.accept-this", "freew.reject-this",
             "freew.accept-all", "freew.reject-all", "freew.new-comment",
-            "freew.delete-comment", "freew.word-count",
+            "freew.delete-comment", "freew.mark-as-final", "freew.restrict-editing",
+            "freew.inspect-document",
         })
         {
             ids.Should().Contain(id, $"Review tab must declare '{id}'");
         }
+
+        ids.Should().NotContain(new[]
+        {
+            "freew.reviewingpane",
+            "freew.word-count",
+            "freew.accept-change",
+            "freew.reject-change",
+        });
+    }
+
+    [Fact]
+    public void Review_safety_commands_route_to_host_callbacks()
+    {
+        var callbacks = NoopCallbacks();
+        var calls = new System.Collections.Generic.HashSet<string>(StringComparer.Ordinal);
+        callbacks = callbacks with
+        {
+            ToggleReviewingPane = () => calls.Add("reviewing-pane"),
+            OpenWordCountDialog = () => calls.Add("statistics"),
+            CheckAccessibility = () => calls.Add("accessibility"),
+            InspectDocument = () => calls.Add("inspect"),
+            MarkAsFinal = () => calls.Add("mark-final"),
+            RestrictEditing = () => calls.Add("restrict"),
+        };
+
+        var registry = FreeWAvaloniaRibbonCommands.Build(new DocumentView(), callbacks);
+
+        Execute(registry, "freew.reviewing-pane");
+        Execute(registry, "freew.reviewingpane");
+        Execute(registry, "freew.statistics");
+        Execute(registry, "freew.word-count");
+        Execute(registry, "freew.check-accessibility");
+        Execute(registry, "freew.inspect-document");
+        Execute(registry, "freew.mark-as-final");
+        Execute(registry, "freew.restrict-editing");
+
+        calls.Should().Contain(new[]
+        {
+            "reviewing-pane",
+            "statistics",
+            "accessibility",
+            "inspect",
+            "mark-final",
+            "restrict",
+        });
     }
 
     private static RibbonHostCallbacks NoopCallbacks() =>
@@ -429,6 +485,13 @@ public sealed class DocumentViewReviewTests
             SetDraftView: () => { }, OpenFontDialog: () => { }, OpenParagraphDialog: () => { },
             OpenPageSetupDialog: () => { }, ToggleOrientation: () => { }, ApplyMarginPreset: _ => { },
             ApplyPaperSize: _ => { }, InsertPicture: () => { }, OpenWordCountDialog: () => { }, ApplyZoom: (_, _) => { });
+
+    private static void Execute(RibbonCommandRegistry registry, string id)
+    {
+        registry.TryGet(new RibbonCommandId(id), out var command)
+            .Should().BeTrue($"command '{id}' must be registered");
+        command!.Execute(RibbonCommandContext.Empty);
+    }
 
     private static RibbonCommandId? GetCommandId(RibbonControl control) => control switch
     {
