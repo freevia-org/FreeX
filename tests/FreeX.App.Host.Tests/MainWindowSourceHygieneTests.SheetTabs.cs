@@ -661,6 +661,13 @@ public sealed partial class MainWindowSourceHygieneTests
         foregroundSource.Should().Contain("TryInvokeAutomationElement(addButton)");
         foregroundSource.Should().Contain("Visible tabs:");
         foregroundSource.Should().Contain("FindForegroundWindow(");
+        foregroundSource.Should().Contain("ProcessHasVisibleMenuItems(processId, \"Rename\", \"Move or Copy\", \"Select All Sheets\")");
+        foregroundSource.Should().Contain("Visible menu items after final attempt:");
+        foregroundSource.Should().Contain("GetSheetTabIdentity(element)");
+        foregroundSource.Should().Contain("element.Current.AutomationId");
+        foregroundSource.Should().Contain("OpenFreeXSheetTabContextMenuNearAddButton");
+        foregroundSource.Should().Contain("immediately left of the Insert Sheet button");
+        foregroundSource.Should().Contain("Opened the FreeX sheet-tab context menu by cycling focus with F6 and pressing Shift+F10");
     }
 
     [Fact]
