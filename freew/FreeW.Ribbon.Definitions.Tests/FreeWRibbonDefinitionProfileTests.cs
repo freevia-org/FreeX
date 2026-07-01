@@ -552,7 +552,10 @@ public sealed class FreeWRibbonDefinitionProfileTests
         WithUiCulture("en-US", () =>
         {
             AssertParagraphListSurfaceUsesResources(ParagraphListSurface(FreeWRibbonCapabilities.Wpf), includesMultilevel: true);
-            AssertParagraphListSurfaceUsesResources(ParagraphListSurface(FreeWRibbonCapabilities.Avalonia), includesMultilevel: false);
+            AssertParagraphListSurfaceUsesResources(
+                ParagraphListSurface(FreeWRibbonCapabilities.Avalonia),
+                includesMultilevel: true,
+                includesMultilevelMenu: false);
 
             return true;
         }).Should().BeTrue();
@@ -563,7 +566,8 @@ public sealed class FreeWRibbonDefinitionProfileTests
             var avalonia = ParagraphListSurface(FreeWRibbonCapabilities.Avalonia);
 
             AssertParagraphListSurfaceUsesResources(wpf, includesMultilevel: true);
-            AssertParagraphListSurfaceUsesResources(avalonia, includesMultilevel: false);
+            AssertParagraphCommonSurfaceUsesResources(avalonia);
+            avalonia.MultilevelListLabel.Should().NotBeNullOrWhiteSpace();
             wpf.ParagraphHeader.Should().Be("[[PPaarraaggrraapphh]]");
             wpf.BulletsLabel.Should().Be("[[BBuulllleettss]]");
             avalonia.NumberingLabel.Should().Be("[[NNuummbbeerriinngg]]");
@@ -885,13 +889,12 @@ public sealed class FreeWRibbonDefinitionProfileTests
         return group!;
     }
 
-    private static void AssertParagraphListSurfaceUsesResources(ParagraphListRibbonSurface surface, bool includesMultilevel)
+    private static void AssertParagraphListSurfaceUsesResources(
+        ParagraphListRibbonSurface surface,
+        bool includesMultilevel,
+        bool includesMultilevelMenu = true)
     {
-        surface.ParagraphHeader.Should().Be(Loc.Get("Ribbon_Group_Paragraph_Label"));
-        if (surface.ParagraphKeyTip is not null)
-            surface.ParagraphKeyTip.Should().Be(Loc.GetNeutral("Ribbon_Group_Paragraph_KeyTip"));
-        surface.BulletsLabel.Should().Be(Loc.Get("Ribbon_Command_Bullets_Label"));
-        surface.NumberingLabel.Should().Be(Loc.Get("Ribbon_Command_Numbering_Label"));
+        AssertParagraphCommonSurfaceUsesResources(surface);
 
         if (!includesMultilevel)
         {
@@ -901,6 +904,9 @@ public sealed class FreeWRibbonDefinitionProfileTests
         }
 
         surface.MultilevelListLabel.Should().Be(Loc.Get("Ribbon_Command_MultilevelList_Label"));
+        if (!includesMultilevelMenu)
+            return;
+
         surface.MultilevelMenuHeaders.Should().Equal(
             Loc.Get("Ribbon_Command_MultilevelPromote_Label"),
             Loc.Get("Ribbon_Command_MultilevelDemote_Label"),
@@ -908,6 +914,15 @@ public sealed class FreeWRibbonDefinitionProfileTests
             Loc.Get("Ribbon_Palette_MultilevelList_OutlineMixed_Label"),
             Loc.Get("Ribbon_Palette_MultilevelList_OutlineHeadings_Label"),
             Loc.Get("Ribbon_Command_MultilevelDefine_Label"));
+    }
+
+    private static void AssertParagraphCommonSurfaceUsesResources(ParagraphListRibbonSurface surface)
+    {
+        surface.ParagraphHeader.Should().Be(Loc.Get("Ribbon_Group_Paragraph_Label"));
+        if (surface.ParagraphKeyTip is not null)
+            surface.ParagraphKeyTip.Should().Be(Loc.GetNeutral("Ribbon_Group_Paragraph_KeyTip"));
+        surface.BulletsLabel.Should().Be(Loc.Get("Ribbon_Command_Bullets_Label"));
+        surface.NumberingLabel.Should().Be(Loc.Get("Ribbon_Command_Numbering_Label"));
     }
 
     private static void AssertSymbolSurfaceUsesResources(SymbolRibbonSurface surface, bool includesMenu)
