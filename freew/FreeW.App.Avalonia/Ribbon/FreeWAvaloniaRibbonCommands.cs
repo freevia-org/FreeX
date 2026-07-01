@@ -698,16 +698,28 @@ internal static class FreeWAvaloniaRibbonCommands
     private static void RegisterReferencesCommands(RibbonCommandRegistry r, DocumentView editor)
     {
         // Footnotes & Endnotes — insert an empty note + reference marker at the caret.
-        r.Register("freew.insert-footnote", new ActionRibbonCommand(() => editor.InsertFootnote()));
-        r.Register("freew.insert-endnote",  new ActionRibbonCommand(() => editor.InsertEndnote()));
+        var footnote = new ActionRibbonCommand(() => editor.InsertFootnote());
+        r.Register("freew.footnote", footnote);
+        r.Register("freew.insert-footnote", footnote);
+
+        var endnote = new ActionRibbonCommand(() => editor.InsertEndnote());
+        r.Register("freew.endnote", endnote);
+        r.Register("freew.insert-endnote", endnote);
 
         // Table of Contents — generate from the heading outline / regenerate in place.
-        r.Register("freew.insert-toc", new ActionRibbonCommand(editor.InsertTableOfContents));
-        r.Register("freew.update-toc", new ActionRibbonCommand(editor.UpdateTableOfContents));
+        var toc = new ActionRibbonCommand(editor.InsertTableOfContents);
+        r.Register("freew.toc", toc);
+        r.Register("freew.insert-toc", toc);
+
+        var tocRefresh = new ActionRibbonCommand(editor.UpdateTableOfContents);
+        r.Register("freew.toc-refresh", tocRefresh);
+        r.Register("freew.update-toc", tocRefresh);
 
         // Captions — auto-numbered Figure / Table caption paragraph after the caret block.
         // The top-level opener is a no-op; each label is its own command.
-        r.Register("freew.insert-caption",        new ActionRibbonCommand(() => { /* dropdown opener */ }));
+        var caption = new ActionRibbonCommand(() => { /* dropdown opener */ });
+        r.Register("freew.caption", caption);
+        r.Register("freew.insert-caption", caption);
         r.Register("freew.insert-caption.figure", new ActionRibbonCommand(() => editor.InsertCaption(CaptionLabel.Figure)));
         r.Register("freew.insert-caption.table",  new ActionRibbonCommand(() => editor.InsertCaption(CaptionLabel.Table)));
 
@@ -716,8 +728,10 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.cross-reference", new ActionRibbonCommand(() => InsertDefaultCrossReference(editor)));
 
         // Citations & Bibliography — in-text citation for the first source; back-matter bibliography block.
-        r.Register("freew.insert-citation", new ActionRibbonCommand(() => InsertDefaultCitation(editor)));
-        r.Register("freew.bibliography",    new ActionRibbonCommand(editor.InsertBibliography));
+        var citation = new ActionRibbonCommand(() => InsertDefaultCitation(editor));
+        r.Register("freew.citation", citation);
+        r.Register("freew.insert-citation", citation);
+        r.Register("freew.bibliography", new ActionRibbonCommand(editor.InsertBibliography));
     }
 
     /// <summary>

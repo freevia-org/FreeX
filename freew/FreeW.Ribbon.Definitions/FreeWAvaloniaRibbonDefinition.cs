@@ -599,23 +599,23 @@ internal static class FreeWAvaloniaRibbonDefinition
                 // AV-REF: References-tab depth — TOC, footnotes/endnotes, captions, cross-ref, citations.
                 tab.Group("toc", "Table of Contents", null, 110, g =>
                 {
-                    g.Button("freew.insert-toc", "Table of Contents");
-                    g.Button("freew.update-toc", "Update Table");
+                    g.Button("freew.toc", "Table of Contents");
+                    g.Button("freew.toc-refresh", "Update Table");
                 });
                 tab.Group("footnotes", "Footnotes", null, 100, g =>
                 {
-                    g.Button("freew.insert-footnote", "Insert Footnote");
-                    g.Button("freew.insert-endnote",  "Insert Endnote");
+                    g.Button("freew.footnote", "Insert Footnote");
+                    g.Button("freew.endnote",  "Insert Endnote");
                 });
                 tab.Group("citations", "Citations & Bibliography", null, 90, g =>
                 {
-                    g.Button("freew.insert-citation", "Insert Citation");
-                    g.Button("freew.bibliography",    "Bibliography");
+                    g.Button("freew.citation",     "Insert Citation");
+                    g.Button("freew.bibliography", "Bibliography");
                 });
                 tab.Group("captions", "Captions", null, 80, g =>
                 {
-                    g.Dropdown("freew.insert-caption", "Insert Caption", BuildCaptionMenu());
-                    g.Button("freew.cross-reference",  "Cross-reference");
+                    g.Dropdown("freew.caption", "Insert Caption", BuildCaptionMenu());
+                    g.Button("freew.cross-reference", "Cross-reference");
                 });
             })
             .Tab("mailings", "Mailings", "M", tab =>

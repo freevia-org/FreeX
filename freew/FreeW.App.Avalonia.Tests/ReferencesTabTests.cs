@@ -224,16 +224,42 @@ public sealed class ReferencesTabTests
 
         var expected = new[]
         {
+            "freew.footnote", "freew.endnote",
             "freew.insert-footnote", "freew.insert-endnote",
+            "freew.toc", "freew.toc-refresh",
             "freew.insert-toc", "freew.update-toc",
+            "freew.caption",
             "freew.insert-caption", "freew.insert-caption.figure", "freew.insert-caption.table",
             "freew.cross-reference",
+            "freew.citation",
             "freew.insert-citation", "freew.bibliography",
         };
 
         foreach (var id in expected)
             registry.TryGet(new RibbonCommandId(id), out _)
                 .Should().BeTrue($"References-tab command '{id}' must be registered");
+    }
+
+    [Fact]
+    public void Registry_preserves_legacy_references_aliases_for_canonical_commands()
+    {
+        var registry = FreeWAvaloniaRibbonCommands.Build(new DocumentView(), NoopCallbacks());
+        var aliases = new[]
+        {
+            ("freew.footnote", "freew.insert-footnote"),
+            ("freew.endnote", "freew.insert-endnote"),
+            ("freew.toc", "freew.insert-toc"),
+            ("freew.toc-refresh", "freew.update-toc"),
+            ("freew.caption", "freew.insert-caption"),
+            ("freew.citation", "freew.insert-citation"),
+        };
+
+        foreach (var (canonicalId, aliasId) in aliases)
+        {
+            registry.TryGet(new RibbonCommandId(canonicalId), out var canonical).Should().BeTrue();
+            registry.TryGet(new RibbonCommandId(aliasId), out var alias).Should().BeTrue();
+            alias.Should().BeSameAs(canonical, $"{aliasId} remains a compatibility alias for {canonicalId}");
+        }
     }
 
     [Fact]
@@ -248,14 +274,117 @@ public sealed class ReferencesTabTests
     }
 
     [Fact]
-    public void InsertFootnote_command_executes_via_registry()
+    public void References_tab_definition_uses_canonical_shared_command_ids()
+    {
+        var definition = FreeWRibbon.BuildDefinition();
+        var references = definition.FindTab("references");
+        references.Should().NotBeNull();
+        var commandIds = references!.Groups
+            .SelectMany(group => group.Controls)
+            .SelectMany(CommandIds)
+            .ToHashSet(StringComparer.Ordinal);
+
+        commandIds.Should().Contain(new[]
+        {
+            "freew.toc",
+            "freew.toc-refresh",
+            "freew.footnote",
+            "freew.endnote",
+            "freew.citation",
+            "freew.bibliography",
+            "freew.caption",
+            "freew.insert-caption.figure",
+            "freew.insert-caption.table",
+            "freew.cross-reference",
+        });
+
+        commandIds.Should().NotContain(new[]
+        {
+            "freew.insert-toc",
+            "freew.update-toc",
+            "freew.insert-footnote",
+            "freew.insert-endnote",
+            "freew.insert-citation",
+            "freew.insert-caption",
+        });
+    }
+
+    [Fact]
+    public void Canonical_references_commands_execute_via_registry()
     {
         var view = ViewWith();
         var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
 
-        registry.TryGet(new RibbonCommandId("freew.insert-footnote"), out var cmd).Should().BeTrue();
-        cmd!.Execute(RibbonCommandContext.Empty);
+        Execute(registry, "freew.footnote");
+        view.Document.Footnotes.Should().ContainKey(1, "executing the canonical command inserts a footnote");
 
-        view.Document.Footnotes.Should().ContainKey(1, "executing the command inserts a footnote");
+        Execute(registry, "freew.endnote");
+        view.Document.Endnotes.Should().ContainKey(1, "executing the canonical command inserts an endnote");
+
+        var tocView = ViewWith(Heading("First", 1), new Paragraph("body"));
+        var tocRegistry = FreeWRibbon.BuildRegistry(tocView, NoopCallbacks());
+
+        Execute(tocRegistry, "freew.toc");
+        tocView.Document.Blocks.Count(TableOfContents.IsTocParagraph)
+            .Should().Be(2, "executing the canonical command inserts a generated TOC");
+
+        tocView.Document.Blocks.Add(Heading("Second", 1));
+        Execute(tocRegistry, "freew.toc-refresh");
+        tocView.Document.Blocks.Where(TableOfContents.IsTocParagraph)
+            .Select(block => ((Paragraph)block).PlainText)
+            .Should().Contain("Second", "executing the canonical refresh updates the TOC in place");
+
+        var citationView = ViewWith(new Paragraph("See "));
+        citationView.Document.Sources.Add(new Source { Tag = "Sm24", Author = "Smith", Title = "A Work", Year = "2024" });
+        var citationRegistry = FreeWRibbon.BuildRegistry(citationView, NoopCallbacks());
+
+        Execute(citationRegistry, "freew.citation");
+        citationView.Document.Blocks.OfType<Paragraph>()
+            .Select(paragraph => paragraph.PlainText)
+            .Should().Contain(text => text.Contains("Smith", StringComparison.Ordinal),
+                "executing the canonical command inserts an in-text citation");
+    }
+
+    [Fact]
+    public void Legacy_caption_label_commands_remain_backed()
+    {
+        var view = ViewWith();
+        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+
+        Execute(registry, "freew.insert-caption.figure");
+        Execute(registry, "freew.insert-caption.table");
+
+        view.Document.Blocks.OfType<Paragraph>()
+            .Where(Captions.IsCaptionParagraph)
+            .Select(paragraph => paragraph.PlainText)
+            .Should().Contain(text => text.StartsWith("Figure 1", StringComparison.Ordinal))
+            .And.Contain(text => text.StartsWith("Table 1", StringComparison.Ordinal));
+    }
+
+    private static void Execute(RibbonCommandRegistry registry, string commandId)
+    {
+        registry.TryGet(new RibbonCommandId(commandId), out var command).Should().BeTrue();
+        command!.Execute(RibbonCommandContext.Empty);
+    }
+
+    private static IEnumerable<string> CommandIds(RibbonControl control)
+    {
+        yield return control.CommandId.Value;
+
+        var menu = control switch
+        {
+            RibbonDropdown dropdown => dropdown.Menu,
+            RibbonSplitButton splitButton => splitButton.Menu,
+            _ => null,
+        };
+
+        if (menu is null)
+            yield break;
+
+        foreach (var item in menu.Items)
+        {
+            if (item.CommandId is { } commandId)
+                yield return commandId.Value;
+        }
     }
 }

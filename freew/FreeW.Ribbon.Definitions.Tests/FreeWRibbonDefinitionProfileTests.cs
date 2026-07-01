@@ -236,6 +236,36 @@ public sealed class FreeWRibbonDefinitionProfileTests
     }
 
     [Fact]
+    public void Avalonia_profile_uses_shared_references_command_ids()
+    {
+        var avaloniaIds = CommandEntries(FreeWRibbon.Build(FreeWRibbonCapabilities.Avalonia))
+            .Select(entry => entry.CommandId)
+            .ToHashSet(StringComparer.Ordinal);
+
+        avaloniaIds.Should().Contain(new[]
+        {
+            "freew.toc",
+            "freew.toc-refresh",
+            "freew.footnote",
+            "freew.endnote",
+            "freew.citation",
+            "freew.bibliography",
+            "freew.caption",
+            "freew.cross-reference",
+        });
+
+        avaloniaIds.Should().NotContain(new[]
+        {
+            "freew.insert-toc",
+            "freew.update-toc",
+            "freew.insert-footnote",
+            "freew.insert-endnote",
+            "freew.insert-citation",
+            "freew.insert-caption",
+        });
+    }
+
+    [Fact]
     public void Checked_in_command_inventory_matches_compiled_profiles()
     {
         var wpf = InventoryLocations(FreeWRibbon.Build(FreeWRibbonCapabilities.Wpf), "WPF");
