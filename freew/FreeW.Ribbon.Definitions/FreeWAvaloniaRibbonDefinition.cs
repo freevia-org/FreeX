@@ -519,8 +519,12 @@ internal static class FreeWAvaloniaRibbonDefinition
                 {
                     g.Dropdown("freew.quick-parts", "Quick Parts", BuildQuickPartsMenu());
                     g.Dropdown("freew.drop-cap",    "Drop Cap",    BuildDropCapMenu());
+                    g.Button("freew.insert-file", "Text from File");
+                    g.Button("freew.wordart", "WordArt");
                     g.Button("freew.datetime", "Date & Time");
-                    g.Button("freew.text-from-file", "Text from File");
+                    g.Button("freew.update-fields", "Update Fields");
+                    g.Button("freew.toggle-field-codes", "Toggle Field Codes");
+                    g.Button("freew.object", "Object");
                 });
                 tab.Group("symbols", FreeWRibbonText.SymbolsGroup.Label, null, 92, g =>
                 {

@@ -8871,6 +8871,32 @@ public sealed class DocumentView : Control
         InsertShape(Shape.TextBoxWith("Text Box", widthPt: 180, heightPt: 90, fillColorHex: "#DCE6F1"));
 
     /// <summary>
+    /// Insert inline decorative WordArt at the caret (AV-INSERT-TEXT). The run uses the shared
+    /// <see cref="WordArt"/> model so it round-trips through DOCX and renders via the existing inline
+    /// WordArt layout path.
+    /// </summary>
+    public void InsertWordArt(WordArt? wordArt = null)
+    {
+        InsertObjectRun(Run.FromWordArt(wordArt ?? WordArt.Create("WordArt", WordArtStyle.GradientFill)));
+        Focus();
+    }
+
+    /// <summary>
+    /// Insert a generic embedded object placeholder at the caret (AV-INSERT-TEXT). FreeW preserves the
+    /// embedded payload and ProgID in the shared model; live OLE activation is intentionally out of scope.
+    /// </summary>
+    public void InsertEmbeddedObject(EmbeddedObject? embeddedObject = null)
+    {
+        InsertObjectRun(Run.FromEmbeddedObject(embeddedObject ?? SampleEmbeddedObject()));
+        Focus();
+    }
+
+    private static EmbeddedObject SampleEmbeddedObject() =>
+        EmbeddedObject.Create(
+            System.Text.Encoding.UTF8.GetBytes("FreeW embedded object placeholder."),
+            progId: "Package");
+
+    /// <summary>
     /// Insert a symbol / special character at the caret as ordinary text (AV-INSERT). Flows through the
     /// normal text-edit/undo path (<see cref="InsertText"/>), so it works inside table cells too.
     /// Wired to the <c>freew.symbol</c> ribbon command's per-glyph sub-commands.
@@ -9522,6 +9548,78 @@ public sealed class DocumentView : Control
         InsertObjectRun(run);
         Focus();
     }
+
+    /// <summary>
+    /// Toggle complex field-code display across the document, matching Word's Alt+F9 surface.
+    /// </summary>
+    public void ToggleFieldCodes()
+    {
+        var fields = _doc.Blocks
+            .OfType<Paragraph>()
+            .SelectMany(p => p.Runs)
+            .Where(r => r.ComplexField is not null)
+            .ToList();
+        if (fields.Count == 0)
+            return;
+
+        var show = fields.Count(r => r.ComplexField!.ShowCode) * 2 <= fields.Count;
+        foreach (var run in fields)
+            run.ComplexField = run.ComplexField! with { ShowCode = show };
+
+        InvalidateVisual();
+        Focus();
+    }
+
+    /// <summary>
+    /// Refresh the cached display text for simple and recomputable complex fields.
+    /// </summary>
+    public void UpdateFields()
+    {
+        for (var b = 0; b < _doc.Blocks.Count; b++)
+        {
+            if (_doc.Blocks[b] is not Paragraph paragraph)
+                continue;
+
+            for (var r = 0; r < paragraph.Runs.Count; r++)
+            {
+                var run = paragraph.Runs[r];
+                if (run.ComplexField is { } complexField)
+                {
+                    var resolved = ComplexFieldEngine.CanRecompute(complexField)
+                        ? ComplexFieldEngine.Recompute(_doc, b, r)
+                        : ResolveComplexField(complexField, run.Text);
+                    if (!string.IsNullOrEmpty(resolved))
+                        run.Text = resolved;
+                }
+                else if (run.FieldKind != RunFieldKind.None)
+                {
+                    var resolved = ResolveDocumentField(run.FieldKind);
+                    if (!string.IsNullOrEmpty(resolved))
+                        run.Text = resolved;
+                }
+            }
+        }
+
+        if (_doc.Blocks.Any(TableOfContents.IsTocParagraph))
+        {
+            UpdateTableOfContents();
+            return;
+        }
+
+        InvalidateVisual();
+        Focus();
+    }
+
+    private string ResolveComplexField(ComplexField field, string fallback) =>
+        field.Keyword switch
+        {
+            "DATE" or "TIME" => DateTime.Now.ToString("M/d/yyyy", CultureInfo.InvariantCulture),
+            "AUTHOR" => _doc.Properties.Author ?? string.Empty,
+            "TITLE" => _doc.Properties.Title ?? string.Empty,
+            "FILENAME" => string.Empty,
+            "PAGE" or "NUMPAGES" => "1",
+            _ => fallback,
+        };
 
     // Resolve a document-property / date field's cached display text (page-independent fields only).
     // Page/NumPages resolve to "1" as a sensible placeholder; the renderer recomputes paginated fields.

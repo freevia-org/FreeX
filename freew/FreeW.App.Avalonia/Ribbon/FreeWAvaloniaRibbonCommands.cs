@@ -702,7 +702,13 @@ internal static class FreeWAvaloniaRibbonCommands
 
         // ── Text from File ───────────────────────────────────────────────────
         // Opens a file picker (shell callback) and inserts the loaded document's text at the caret.
-        r.Register("freew.text-from-file", new ActionRibbonCommand(callbacks.InsertTextFromFile ?? (() => { })));
+        var textFromFileCommand = new ActionRibbonCommand(callbacks.InsertTextFromFile ?? (() => { }));
+        r.Register("freew.insert-file", textFromFileCommand);
+        r.Register("freew.text-from-file", textFromFileCommand);
+        r.Register("freew.wordart", new ActionRibbonCommand(() => editor.InsertWordArt()));
+        r.Register("freew.object", new ActionRibbonCommand(() => editor.InsertEmbeddedObject()));
+        r.Register("freew.update-fields", new ActionRibbonCommand(editor.UpdateFields));
+        r.Register("freew.toggle-field-codes", new ActionRibbonCommand(editor.ToggleFieldCodes));
     }
 
     /// <summary>
