@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 
 using FreeX.App.Presentation.ConditionalFormatting;
+using FreeX.App.Presentation.Ribbon;
+using FreeX.App.Services;
 
 namespace FreeX.App.Avalonia.Tests.Parity;
 
@@ -79,32 +81,18 @@ public static class FunctionalParityClassifier
         "Scale Percent",
     };
 
-    private static readonly IReadOnlySet<string> AccountingSymbolRows = new HashSet<string>(StringComparer.Ordinal)
-    {
-        "Accounting Number Format US Dollar",
-        "Accounting Number Format Euro",
-        "Accounting Number Format British Pound",
-        "Accounting Number Format Japanese Yen",
-    };
+    public static IReadOnlySet<string> AccountingSymbolRows { get; } =
+        HomeNumberFormatDropdownPlanner.AccountingSymbolOptions
+            .Select(option => option.CommandId)
+            .ToHashSet(StringComparer.Ordinal);
 
     public static IReadOnlySet<string> ConditionalFormattingGalleryRows { get; } =
         ConditionalFormatPresetGalleryPlanner.PopupItems
             .Select(item => item.CommandId)
             .ToHashSet(StringComparer.Ordinal);
 
-    private static readonly IReadOnlySet<string> FontAndBorderChoiceRows = new HashSet<string>(StringComparer.Ordinal)
-    {
-        "Accent 1",
-        "Accent 2",
-        "Black",
-        "Gray",
-        "Dashed",
-        "Dotted",
-        "Double",
-        "Medium",
-        "Thick",
-        "Thin",
-    };
+    public static IReadOnlySet<string> FontAndBorderChoiceRows { get; } =
+        HomeFontBorderPopupCatalogPlanner.ClassifiedFontBorderRowsCovered;
 
     public static IReadOnlyList<ClassifiedRow> Classify(IReadOnlyList<FunctionalParityMatrix.Row> rows)
         => rows.Where(row => row.Status != FunctionalParityMatrix.ParityStatus.Parity)
@@ -139,8 +127,8 @@ public static class FunctionalParityClassifier
                 ClassificationKind.PseudoCommandGalleryItem,
                 "P3",
                 500,
-                "Accounting currency child entry is a menu choice under a shared split-button command, not a standalone WPF Click-handler command id.",
-                "Track accounting fidelity in the number-format popup work; do not treat this row as a missing WPF command."));
+                "Accounting currency child entry is published by the shared number-format symbol catalog under the accounting split button, not as a standalone WPF Click-handler command id.",
+                "Use the HomeNumberFormatDropdownPlanner accounting symbol catalog for parity evidence; do not treat this row as a missing WPF command."));
         }
 
         if (ConditionalFormattingGalleryRows.Contains(row.CommandId))
@@ -159,8 +147,8 @@ public static class FunctionalParityClassifier
                 ClassificationKind.PseudoCommandGalleryItem,
                 "P3",
                 520,
-                "Font color or border-style choice row is a swatch/menu selection inside a split-button gallery, not an independent command on either host.",
-                "Treat this as covered by the committed font/border swatch catalog evidence; keep it classified as a pseudo-gallery row unless the binding matrix grows per-choice popup evidence."));
+                "Font color or border-style choice row is a runtime swatch/menu selection inside a split-button gallery, not an independent command on either host.",
+                "Use the HomeFontBorderPopupCatalogPlanner evidence; keep it classified as a pseudo-gallery row unless the binding matrix grows per-choice popup evidence."));
         }
 
         return ToClassifiedRow(row, new ClassificationRule(
@@ -198,6 +186,18 @@ public static class FunctionalParityClassifier
         string.Equals(row.MatrixRow.TabHeader, "Home", StringComparison.Ordinal) &&
         string.Equals(row.MatrixRow.GroupHeader, "Styles", StringComparison.Ordinal) &&
         ConditionalFormattingGalleryRows.Contains(row.MatrixRow.CommandId);
+
+    public static bool IsAccountingSymbolGalleryRow(ClassifiedRow row) =>
+        row.Classification == ClassificationKind.PseudoCommandGalleryItem &&
+        string.Equals(row.MatrixRow.TabHeader, "Home", StringComparison.Ordinal) &&
+        string.Equals(row.MatrixRow.GroupHeader, "Number", StringComparison.Ordinal) &&
+        AccountingSymbolRows.Contains(row.MatrixRow.CommandId);
+
+    public static bool IsFontBorderGalleryRow(ClassifiedRow row) =>
+        row.Classification == ClassificationKind.PseudoCommandGalleryItem &&
+        string.Equals(row.MatrixRow.TabHeader, "Home", StringComparison.Ordinal) &&
+        string.Equals(row.MatrixRow.GroupHeader, "Font", StringComparison.Ordinal) &&
+        FontAndBorderChoiceRows.Contains(row.MatrixRow.CommandId);
 
     public static IReadOnlyList<ClassificationKind> OrderedKinds { get; } =
     [

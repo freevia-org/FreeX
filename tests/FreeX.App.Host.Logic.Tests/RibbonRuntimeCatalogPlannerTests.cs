@@ -18,6 +18,7 @@ public sealed class RibbonRuntimeCatalogPlannerTests
         surfaces.Select(surface => surface.CommandTitle).Should().Equal(
             "Format as Table",
             "Number Format Dropdown",
+            "Accounting Symbol Dropdown",
             "Font Color Popup",
             "Borders Popup",
             "Conditional Formatting Popup",
@@ -34,6 +35,10 @@ public sealed class RibbonRuntimeCatalogPlannerTests
         Surface(surfaces, "Number Format Dropdown").Groups.Select(group => group.Name)
             .Should()
             .Equal("Formats", "Actions");
+
+        Surface(surfaces, "Accounting Symbol Dropdown").Groups.Select(group => (group.Name, group.Items.Count))
+            .Should()
+            .Equal(("Symbols", 4));
 
         Surface(surfaces, "Font Color Popup").Groups.Select(group => (group.Name, group.Items.Count))
             .Should()
@@ -111,6 +116,9 @@ public sealed class RibbonRuntimeCatalogPlannerTests
         Surface(surfaces, "Format as Table").ItemCount.Should().Be(TableStyleGalleryPlanner.GetOptions().Count);
         Surface(surfaces, "Number Format Dropdown").ItemCount.Should()
             .Be(HomeNumberFormatDropdownPlanner.Options.Count);
+        Surface(surfaces, "Accounting Symbol Dropdown").ItemCount.Should()
+            .Be(HomeNumberFormatDropdownPlanner.AccountingSymbolOptions.Count);
+        Surface(surfaces, "Accounting Symbol Dropdown").Source.Should().Be("HomeNumberFormatDropdownPlanner");
         Surface(surfaces, "Font Color Popup").ItemCount.Should()
             .Be(HomeFontBorderPopupCatalogPlanner.FontColorItems.Count);
         Surface(surfaces, "Borders Popup").ItemCount.Should()
@@ -149,6 +157,7 @@ public sealed class RibbonRuntimeCatalogPlannerTests
         presentationSource.Should().Contain("namespace FreeX.App.Presentation.Ribbon;");
         presentationSource.Should().Contain("Func<string, string> textProvider");
         presentationSource.Should().Contain("IReadOnlyList<RibbonRuntimeCatalogNumberFormatOption> numberFormatOptions");
+        presentationSource.Should().Contain("IReadOnlyList<RibbonRuntimeCatalogAccountingSymbolOption> accountingSymbolOptions");
         presentationSource.Should().Contain("HomeFontBorderPopupCatalogPlanner.FontColorPopupGroups");
         presentationSource.Should().Contain("HomeFontBorderPopupCatalogPlanner.BorderPopupGroups");
         presentationSource.Should().Contain("ConditionalFormatPresetGalleryPlanner.PopupGroups");
@@ -165,6 +174,11 @@ public sealed class RibbonRuntimeCatalogPlannerTests
                 .Select(option => new RibbonRuntimeCatalogNumberFormatOption(
                     option.Label,
                     option.OpensFormatCellsDialog))
+                .ToArray(),
+            HomeNumberFormatDropdownPlanner.AccountingSymbolOptions
+                .Select(option => new RibbonRuntimeCatalogAccountingSymbolOption(
+                    option.CommandId,
+                    option.Label))
                 .ToArray());
 
     private static RibbonRuntimeCatalogSurface Surface(

@@ -11,7 +11,8 @@ public sealed class RibbonRuntimeCatalogPlannerTests
     {
         var surfaces = RibbonRuntimeCatalogPlanner.GetSurfaces(
             static key => key,
-            [new RibbonRuntimeCatalogNumberFormatOption("General")]);
+            [new RibbonRuntimeCatalogNumberFormatOption("General")],
+            AccountingSymbolOptions());
 
         var surface = surfaces.Should().ContainSingle(s => s.CommandTitle == "Conditional Formatting Popup").Subject;
 
@@ -66,7 +67,21 @@ public sealed class RibbonRuntimeCatalogPlannerTests
     {
         var surfaces = RibbonRuntimeCatalogPlanner.GetSurfaces(
             static key => key,
-            [new RibbonRuntimeCatalogNumberFormatOption("General")]);
+            [new RibbonRuntimeCatalogNumberFormatOption("General")],
+            AccountingSymbolOptions());
+
+        var accounting = surfaces.Should().ContainSingle(s => s.CommandTitle == "Accounting Symbol Dropdown").Subject;
+        accounting.TabHeader.Should().Be("Home");
+        accounting.InventoryRow.Should().Be("Accounting/Date/Time");
+        accounting.Source.Should().Be("HomeNumberFormatDropdownPlanner");
+        accounting.Groups.Select(group => group.Name).Should().Equal("Symbols");
+        accounting.Groups.SelectMany(group => group.Items)
+            .Should()
+            .ContainInOrder(
+                "Accounting Number Format US Dollar",
+                "Accounting Number Format Euro",
+                "Accounting Number Format British Pound",
+                "Accounting Number Format Japanese Yen");
 
         var fontColor = surfaces.Should().ContainSingle(s => s.CommandTitle == "Font Color Popup").Subject;
         fontColor.TabHeader.Should().Be("Home");
@@ -106,4 +121,12 @@ public sealed class RibbonRuntimeCatalogPlannerTests
                 "Double",
                 "More Borders");
     }
+
+    private static IReadOnlyList<RibbonRuntimeCatalogAccountingSymbolOption> AccountingSymbolOptions() =>
+    [
+        new("Accounting Number Format US Dollar", "US Dollar ($)"),
+        new("Accounting Number Format Euro", "Euro (EUR)"),
+        new("Accounting Number Format British Pound", "British Pound (GBP)"),
+        new("Accounting Number Format Japanese Yen", "Japanese Yen (JPY)"),
+    ];
 }

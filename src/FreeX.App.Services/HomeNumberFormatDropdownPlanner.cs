@@ -2,6 +2,12 @@ namespace FreeX.App.Services;
 
 public sealed record HomeNumberFormatDropdownOption(string Label, string? Code, bool OpensFormatCellsDialog = false);
 
+public sealed record HomeAccountingSymbolDropdownOption(
+    string CommandId,
+    string Label,
+    string Symbol,
+    string NumberFormatCode);
+
 public static class HomeNumberFormatDropdownPlanner
 {
     public const string AccountingNumberFormatCode = "_($* #,##0.00_);_($* (#,##0.00);_($* \"-\"??_);_(@_)";
@@ -24,5 +30,30 @@ public static class HomeNumberFormatDropdownPlanner
         new(MoreNumberFormatsLabel, null, OpensFormatCellsDialog: true)
     ];
 
+    public static IReadOnlyList<HomeAccountingSymbolDropdownOption> AccountingSymbolOptions { get; } =
+    [
+        AccountingSymbol("Accounting Number Format US Dollar", "US Dollar ($)", "$"),
+        AccountingSymbol("Accounting Number Format Euro", "Euro (EUR)", "\u20AC"),
+        AccountingSymbol("Accounting Number Format British Pound", "British Pound (GBP)", "\u00A3"),
+        AccountingSymbol("Accounting Number Format Japanese Yen", "Japanese Yen (JPY)", "\u00A5"),
+    ];
+
     public static int DefaultSelectionIndex => 0;
+
+    public static string ResolveAccountingNumberFormatCode(string? symbol)
+    {
+        if (string.IsNullOrEmpty(symbol))
+            symbol = "$";
+
+        return AccountingSymbolOptions
+            .FirstOrDefault(option => string.Equals(option.Symbol, symbol, StringComparison.Ordinal))
+            ?.NumberFormatCode
+            ?? FormatCellsNumberFormatPlanner.BuildAccountingFormatFor(2, symbol);
+    }
+
+    private static HomeAccountingSymbolDropdownOption AccountingSymbol(
+        string commandId,
+        string label,
+        string symbol) =>
+        new(commandId, label, symbol, FormatCellsNumberFormatPlanner.BuildAccountingFormatFor(2, symbol));
 }

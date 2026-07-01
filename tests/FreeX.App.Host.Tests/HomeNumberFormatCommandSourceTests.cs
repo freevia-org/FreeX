@@ -13,6 +13,7 @@ public sealed class HomeNumberFormatCommandSourceTests
         source.Should().Contain("private void CurrencyBtn_Click(object sender, RoutedEventArgs e)    => ApplyStyleDiff(new StyleDiff(NumberFormat: HomeNumberFormatDropdownPlanner.AccountingNumberFormatCode));");
         source.Should().Contain("private void PercentBtn_Click(object sender, RoutedEventArgs e)     => ApplyStyleDiff(new StyleDiff(NumberFormat: \"0%\"));");
         source.Should().Contain("private void CommaStyleBtn_Click(object sender, RoutedEventArgs e)  => ApplyStyleDiff(new StyleDiff(NumberFormat: HomeNumberFormatDropdownPlanner.CommaStyleNumberFormatCode));");
+        source.Should().Contain("HomeNumberFormatDropdownPlanner.ResolveAccountingNumberFormatCode(symbol)");
     }
 
     [Fact]
@@ -43,6 +44,30 @@ public sealed class HomeNumberFormatCommandSourceTests
         HomeNumberFormatDropdownPlanner.Options.Single(option => option.Label == "Accounting").Code
             .Should()
             .Be(HomeNumberFormatDropdownPlanner.AccountingNumberFormatCode);
+    }
+
+    [Fact]
+    public void AccountingSymbolDropdown_UsesSharedCatalogAndFormatBuilder()
+    {
+        HomeNumberFormatDropdownPlanner.AccountingSymbolOptions
+            .Select(option => (option.CommandId, option.Label, option.Symbol))
+            .Should()
+            .Equal(
+                ("Accounting Number Format US Dollar", "US Dollar ($)", "$"),
+                ("Accounting Number Format Euro", "Euro (EUR)", "\u20AC"),
+                ("Accounting Number Format British Pound", "British Pound (GBP)", "\u00A3"),
+                ("Accounting Number Format Japanese Yen", "Japanese Yen (JPY)", "\u00A5"));
+
+        HomeNumberFormatDropdownPlanner.AccountingSymbolOptions
+            .Should()
+            .OnlyContain(option => option.NumberFormatCode == FormatCellsNumberFormatPlanner.BuildAccountingFormatFor(2, option.Symbol));
+
+        HomeNumberFormatDropdownPlanner.ResolveAccountingNumberFormatCode(null)
+            .Should()
+            .Be(HomeNumberFormatDropdownPlanner.AccountingSymbolOptions.Single(option => option.Symbol == "$").NumberFormatCode);
+        HomeNumberFormatDropdownPlanner.ResolveAccountingNumberFormatCode("CHF")
+            .Should()
+            .Be(FormatCellsNumberFormatPlanner.BuildAccountingFormatFor(2, "CHF"));
     }
 
     [Fact]

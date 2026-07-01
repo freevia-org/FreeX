@@ -6,6 +6,8 @@ using System.Linq;
 using System.Text;
 
 using FreeX.App.Presentation.ConditionalFormatting;
+using FreeX.App.Presentation.Ribbon;
+using FreeX.App.Services;
 
 using Xunit;
 
@@ -151,6 +153,88 @@ public sealed class FunctionalParityMatrixTests
         Assert.Contains(conditionalFormatRows, row => row.MatrixRow.CommandId == "More Rules");
     }
 
+    [Fact]
+    public void Classifier_AccountingSymbolPseudoGalleryRows_AreBackedBySharedNumberFormatCatalog()
+    {
+        var wpf = FunctionalParityMatrix.LoadWpfHandlerIds();
+        var rows = FunctionalParityMatrix.Compute(wpf);
+        var classifications = FunctionalParityClassifier.Classify(rows);
+        var catalogIds = HomeNumberFormatDropdownPlanner.AccountingSymbolOptions
+            .Select(option => option.CommandId)
+            .ToArray();
+
+        var accountingRows = classifications
+            .Where(FunctionalParityClassifier.IsAccountingSymbolGalleryRow)
+            .ToArray();
+
+        Assert.Equal(4, accountingRows.Length);
+        Assert.Equal(catalogIds.OrderBy(id => id, StringComparer.Ordinal), accountingRows
+            .Select(row => row.MatrixRow.CommandId)
+            .OrderBy(id => id, StringComparer.Ordinal));
+        Assert.All(accountingRows, row =>
+        {
+            Assert.Equal(FunctionalParityClassifier.ClassificationKind.PseudoCommandGalleryItem, row.Classification);
+            Assert.Contains(row.MatrixRow.CommandId, catalogIds);
+            Assert.Equal("Use the HomeNumberFormatDropdownPlanner accounting symbol catalog for parity evidence; do not treat this row as a missing WPF command.", row.NextAction);
+        });
+
+        Assert.All(HomeNumberFormatDropdownPlanner.AccountingSymbolOptions, option =>
+            Assert.Equal(option.NumberFormatCode, HomeNumberFormatDropdownPlanner.ResolveAccountingNumberFormatCode(option.Symbol)));
+    }
+
+    [Fact]
+    public void Classifier_FontBorderPseudoGalleryRows_AreBackedByRuntimePopupCatalog()
+    {
+        var wpf = FunctionalParityMatrix.LoadWpfHandlerIds();
+        var rows = FunctionalParityMatrix.Compute(wpf);
+        var classifications = FunctionalParityClassifier.Classify(rows);
+        var catalogIds = HomeFontBorderPopupCatalogPlanner.ClassifiedFontBorderRowsCovered;
+
+        var fontBorderRows = classifications
+            .Where(FunctionalParityClassifier.IsFontBorderGalleryRow)
+            .ToArray();
+
+        Assert.Equal(10, fontBorderRows.Length);
+        Assert.Equal(catalogIds.OrderBy(id => id, StringComparer.Ordinal), fontBorderRows
+            .Select(row => row.MatrixRow.CommandId)
+            .OrderBy(id => id, StringComparer.Ordinal));
+        Assert.All(fontBorderRows, row =>
+        {
+            Assert.Equal(FunctionalParityClassifier.ClassificationKind.PseudoCommandGalleryItem, row.Classification);
+            Assert.Contains(row.MatrixRow.CommandId, catalogIds);
+            Assert.Equal("Use the HomeFontBorderPopupCatalogPlanner evidence; keep it classified as a pseudo-gallery row unless the binding matrix grows per-choice popup evidence.", row.NextAction);
+        });
+    }
+
+    [Fact]
+    public void Classifier_NonClickRows_AreExplicitlyBoundedInventoryNoise()
+    {
+        var wpf = FunctionalParityMatrix.LoadWpfHandlerIds();
+        var rows = FunctionalParityMatrix.Compute(wpf);
+        var classifications = FunctionalParityClassifier.Classify(rows);
+
+        var nonClickRows = classifications
+            .Where(row => row.Classification == FunctionalParityClassifier.ClassificationKind.NonClickControlInventoryRow)
+            .Select(row => row.MatrixRow.CommandId)
+            .OrderBy(id => id, StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Equal(
+            [
+                "About FreeX#AboutBtn_Click",
+                "Check for Updates#CheckForUpdatesBtn_Click",
+                "Feedback#FeedbackBtn_Click",
+                "Font",
+                "Font Size",
+                "Help Online#HelpOnlineBtn_Click",
+                "Number Format",
+                "Scale Height",
+                "Scale Percent",
+                "Scale Width",
+            ],
+            nonClickRows);
+    }
+
     private static void WriteJson(IReadOnlyList<FunctionalParityMatrix.Row> rows)
     {
         var total = rows.Count;
@@ -248,6 +332,8 @@ public sealed class FunctionalParityMatrixTests
     {
         int Count(FunctionalParityMatrix.ParityStatus s) => rows.Count(r => r.Status == s);
         var conditionalFormatPopupGalleryRows = classifications.Count(FunctionalParityClassifier.IsConditionalFormattingGalleryRow);
+        var accountingSymbolPopupGalleryRows = classifications.Count(FunctionalParityClassifier.IsAccountingSymbolGalleryRow);
+        var fontBorderPopupGalleryRows = classifications.Count(FunctionalParityClassifier.IsFontBorderGalleryRow);
 
         var sb = new StringBuilder();
         sb.Append('{').Append('\n');
@@ -262,6 +348,10 @@ public sealed class FunctionalParityMatrixTests
         sb.Append("    \"intentionalLinuxOmissions\": ").Append(IntentionalLinuxOmissions.Count).Append(",\n");
         sb.Append("    \"conditional-format-popup-gallery-row\": ").Append(conditionalFormatPopupGalleryRows).Append(",\n");
         sb.Append("    \"conditional-format-popup-catalog-item\": ").Append(FunctionalParityClassifier.ConditionalFormattingGalleryRows.Count).Append(",\n");
+        sb.Append("    \"accounting-symbol-popup-gallery-row\": ").Append(accountingSymbolPopupGalleryRows).Append(",\n");
+        sb.Append("    \"accounting-symbol-popup-catalog-item\": ").Append(FunctionalParityClassifier.AccountingSymbolRows.Count).Append(",\n");
+        sb.Append("    \"font-border-popup-gallery-row\": ").Append(fontBorderPopupGalleryRows).Append(",\n");
+        sb.Append("    \"font-border-popup-catalog-item\": ").Append(FunctionalParityClassifier.FontAndBorderChoiceRows.Count).Append(",\n");
         for (var i = 0; i < FunctionalParityClassifier.OrderedKinds.Count; i++)
         {
             var kind = FunctionalParityClassifier.OrderedKinds[i];
@@ -327,6 +417,8 @@ public sealed class FunctionalParityMatrixTests
     {
         int Count(FunctionalParityMatrix.ParityStatus s) => rows.Count(r => r.Status == s);
         var conditionalFormatPopupGalleryRows = classifications.Count(FunctionalParityClassifier.IsConditionalFormattingGalleryRow);
+        var accountingSymbolPopupGalleryRows = classifications.Count(FunctionalParityClassifier.IsAccountingSymbolGalleryRow);
+        var fontBorderPopupGalleryRows = classifications.Count(FunctionalParityClassifier.IsFontBorderGalleryRow);
 
         var sb = new StringBuilder();
         sb.Append("# FreeX functional parity classification dashboard\n\n");
@@ -342,6 +434,10 @@ public sealed class FunctionalParityMatrixTests
         sb.Append("| Intentional Linux omissions | ").Append(IntentionalLinuxOmissions.Count).Append(" |\n");
         sb.Append("| Conditional-format popup/gallery rows backed by runtime catalog | ").Append(conditionalFormatPopupGalleryRows).Append(" |\n");
         sb.Append("| Conditional-format popup runtime catalog items | ").Append(FunctionalParityClassifier.ConditionalFormattingGalleryRows.Count).Append(" |\n");
+        sb.Append("| Accounting-symbol popup/gallery rows backed by shared number-format catalog | ").Append(accountingSymbolPopupGalleryRows).Append(" |\n");
+        sb.Append("| Accounting-symbol shared catalog items | ").Append(FunctionalParityClassifier.AccountingSymbolRows.Count).Append(" |\n");
+        sb.Append("| Font/border popup/gallery rows backed by runtime catalog | ").Append(fontBorderPopupGalleryRows).Append(" |\n");
+        sb.Append("| Font/border popup runtime catalog items | ").Append(FunctionalParityClassifier.FontAndBorderChoiceRows.Count).Append(" |\n");
         foreach (var kind in FunctionalParityClassifier.OrderedKinds)
         {
             sb.Append("| ").Append(FunctionalParityClassifier.ClassificationLabel(kind))
