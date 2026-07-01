@@ -36,7 +36,10 @@ internal static class PowerPointInterop
     /// Files are named slide-01.png, slide-02.png, etc.
     /// </summary>
     /// <returns>0 on success, 1 on failure.</returns>
-    internal static int ExportSlidesToPng(string pptxPath, string outDir, int width, int height)
+    internal static int ExportSlidesToPng(string pptxPath, string outDir, int width, int height) =>
+        ExportSlidesToPngDetailed(pptxPath, outDir, width, height).ExitCode;
+
+    internal static PowerPointExportResult ExportSlidesToPngDetailed(string pptxPath, string outDir, int width, int height)
     {
         var ownedPids = GetPowerPointProcessIds();
 
@@ -77,12 +80,21 @@ internal static class PowerPointInterop
             WaitForPowerPointToExit(ownedPids, timeoutMs: 15_000);
 
             Console.WriteLine($"  Export complete. {slideCount - errors}/{slideCount} slides exported.");
-            return errors > 0 ? 1 : 0;
+            return errors > 0
+                ? PowerPointExportResult.Failed(PowerPointExportFailureKind.ExportFailed, slideCount - errors, slideCount)
+                : PowerPointExportResult.Success(slideCount);
+        }
+        catch (PowerPointPrerequisiteException ex)
+        {
+            Console.Error.WriteLine($"PowerPoint prerequisite unavailable: {ex.Message}");
+            Console.Error.WriteLine("  This is a machine prerequisite failure, not a FreeP WPF/Avalonia render or image-diff failure.");
+            return PowerPointExportResult.Failed(PowerPointExportFailureKind.ComUnavailable, 0, 0);
         }
         catch (Exception ex)
         {
             Console.Error.WriteLine($"PowerPoint export failed: {ex.GetType().Name}: {ex.Message}");
-            return 1;
+            Console.Error.WriteLine("  PowerPoint automation failed; FreeP WPF/Avalonia render status is reported separately by compare modes.");
+            return PowerPointExportResult.Failed(PowerPointExportFailureKind.ExportFailed, 0, 0);
         }
         finally
         {
@@ -101,7 +113,7 @@ internal static class PowerPointInterop
     private static dynamic CreatePowerPointApplication()
     {
         var type = Type.GetTypeFromProgID(ProgId)
-            ?? throw new InvalidOperationException($"COM ProgID '{ProgId}' not registered. Is PowerPoint installed?");
+            ?? throw new PowerPointPrerequisiteException($"COM ProgID '{ProgId}' is not registered. Is PowerPoint installed?");
 
         Exception? lastEx = null;
         for (var attempt = 1; attempt <= 3; attempt++)
@@ -134,7 +146,7 @@ internal static class PowerPointInterop
             }
         }
 
-        throw new InvalidOperationException(
+        throw new PowerPointPrerequisiteException(
             $"PowerPoint.Application COM activation failed after retries: {lastEx?.Message}", lastEx);
     }
 
@@ -254,5 +266,38 @@ internal static class PowerPointInterop
         {
             // Best effort; the process-kill safety net handles lingering instances.
         }
+    }
+}
+
+internal sealed record PowerPointExportResult(
+    int ExitCode,
+    PowerPointExportFailureKind FailureKind,
+    int ExportedSlides,
+    int TotalSlides)
+{
+    internal static PowerPointExportResult Success(int totalSlides) =>
+        new(0, PowerPointExportFailureKind.None, totalSlides, totalSlides);
+
+    internal static PowerPointExportResult Failed(PowerPointExportFailureKind failureKind, int exportedSlides, int totalSlides) =>
+        new(1, failureKind, exportedSlides, totalSlides);
+}
+
+internal enum PowerPointExportFailureKind
+{
+    None,
+    ComUnavailable,
+    ExportFailed
+}
+
+internal sealed class PowerPointPrerequisiteException : InvalidOperationException
+{
+    internal PowerPointPrerequisiteException(string message)
+        : base(message)
+    {
+    }
+
+    internal PowerPointPrerequisiteException(string message, Exception? innerException)
+        : base(message, innerException)
+    {
     }
 }
