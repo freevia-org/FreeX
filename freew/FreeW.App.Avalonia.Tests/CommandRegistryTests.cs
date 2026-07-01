@@ -116,6 +116,8 @@ public sealed class CommandRegistryTests
             "freew.line-spacing",
             "freew.space-before-toggle",
             "freew.space-after-toggle",
+            "freew.keep-with-next",
+            "freew.keep-lines",
             "freew.multilevel-list",
             "freew.multilevel-promote",
             "freew.multilevel-demote",
@@ -265,6 +267,25 @@ public sealed class CommandRegistryTests
         paragraph.Formatting.SpaceAfterIsSet.Should().BeTrue();
         Execute(registry, "freew.space-after-toggle");
         paragraph.Formatting.SpaceAfterPt.Should().Be(0);
+    }
+
+    [Fact]
+    public void Keep_paragraph_flow_commands_toggle_model_flags()
+    {
+        var view = new DocumentView();
+        view.LoadDocument(MakeDoc("Flow"));
+        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+        var paragraph = (Paragraph)view.Document.Blocks[0];
+
+        Execute(registry, "freew.keep-with-next");
+        paragraph.Formatting.KeepWithNext.Should().BeTrue();
+        Execute(registry, "freew.keep-with-next");
+        paragraph.Formatting.KeepWithNext.Should().BeFalse();
+
+        Execute(registry, "freew.keep-lines");
+        paragraph.Formatting.KeepLinesTogether.Should().BeTrue();
+        Execute(registry, "freew.keep-lines");
+        paragraph.Formatting.KeepLinesTogether.Should().BeFalse();
     }
 
     [Fact]

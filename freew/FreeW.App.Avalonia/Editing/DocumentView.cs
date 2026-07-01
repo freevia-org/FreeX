@@ -8271,6 +8271,24 @@ public sealed class DocumentView : Control
         _bus.CommitUndoGroup("Paragraph Formatting");
     }
 
+    public void ToggleKeepWithNext()
+    {
+        var indices = SelectedParagraphIndices();
+        var enable = indices
+            .Select(i => (Paragraph)_doc.Blocks[i])
+            .Any(p => !p.Formatting.KeepWithNext);
+        FormatSelectedParagraphs(f => f with { KeepWithNext = enable });
+    }
+
+    public void ToggleKeepLinesTogether()
+    {
+        var indices = SelectedParagraphIndices();
+        var enable = indices
+            .Select(i => (Paragraph)_doc.Blocks[i])
+            .Any(p => !p.Formatting.KeepLinesTogether);
+        FormatSelectedParagraphs(f => f with { KeepLinesTogether = enable });
+    }
+
     /// <summary>
     /// Apply the complete set of paragraph-dialog fields (alignment, indents, spacing, line spacing)
     /// to every paragraph spanned by the current selection. All changes are issued as one undoable

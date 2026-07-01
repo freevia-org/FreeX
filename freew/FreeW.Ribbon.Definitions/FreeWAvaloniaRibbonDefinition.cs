@@ -409,6 +409,16 @@ internal static class FreeWAvaloniaRibbonDefinition
                         PreferredLayout = RibbonCommandLayoutKind.Small,
                         Icon = new RibbonCommandIcon(RibbonCommandIconKind.SpaceAfter)
                     });
+                    g.Button("freew.keep-with-next", "Keep with Next", b => b with
+                    {
+                        PreferredLayout = RibbonCommandLayoutKind.Small,
+                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.TextFunction)
+                    });
+                    g.Button("freew.keep-lines", "Keep Lines Together", b => b with
+                    {
+                        PreferredLayout = RibbonCommandLayoutKind.Small,
+                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.TextFunction)
+                    });
                     g.Toggle("freew.formatting-marks", "Show Formatting Marks", t => t with
                     {
                         PreferredLayout = RibbonCommandLayoutKind.Small,
@@ -532,9 +542,9 @@ internal static class FreeWAvaloniaRibbonDefinition
                 tab.Group("show", "Show", null, 100, g =>
                 {
                     // AV-VIEW: layout gridlines + ruler toggles (DocumentView render chrome).
-                    g.Toggle("freew.view-ruler",        "Ruler");
-                    g.Toggle("freew.view-gridlines",    "Gridlines");
-                    g.Toggle("freew.navigationpane",    "Navigation Pane");
+                    g.Toggle("freew.ruler",             "Ruler");
+                    g.Toggle("freew.gridlines",         "Gridlines");
+                    g.Toggle("freew.nav-pane",          "Navigation Pane");
                     // AV-VIEW: surface the Reviewing Pane toggle on View as well (also on Review tab).
                     g.Toggle("freew.reviewing-pane",    "Reviewing Pane");
                     g.Toggle("freew.reveal-formatting", "Reveal Formatting");

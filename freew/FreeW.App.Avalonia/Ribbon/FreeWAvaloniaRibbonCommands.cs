@@ -147,6 +147,8 @@ internal static class FreeWAvaloniaRibbonCommands
         }));
         r.Register("freew.space-before-toggle", new ActionRibbonCommand(() => ToggleSpaceBefore(editor)));
         r.Register("freew.space-after-toggle", new ActionRibbonCommand(() => ToggleSpaceAfter(editor)));
+        r.Register("freew.keep-with-next", new ActionRibbonCommand(editor.ToggleKeepWithNext));
+        r.Register("freew.keep-lines", new ActionRibbonCommand(editor.ToggleKeepLinesTogether));
         // Line-spacing commands — value = multiplier for Multiple. The fixed ids are compatibility
         // aliases for older Avalonia controls and are no longer used by the Home ribbon profile.
         r.Register("freew.line-spacing", new ValueRibbonCommand(value => SetLineSpacing(editor, value)));
@@ -331,7 +333,9 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.printlayout", printLayoutCommand);
         r.Register("freew.weblayout", webLayoutCommand);
         r.Register("freew.draftview", draftViewCommand);
-        r.Register("freew.navigationpane",    new ActionRibbonCommand(callbacks.ToggleNavigationPane));
+        var navigationPaneCommand = new ActionRibbonCommand(callbacks.ToggleNavigationPane);
+        r.Register("freew.nav-pane",          navigationPaneCommand);
+        r.Register("freew.navigationpane",    navigationPaneCommand);
         r.Register("freew.reveal-formatting", new ActionRibbonCommand(callbacks.ToggleRevealFormatting));
         r.Register("freew.zoom-in",           new ActionRibbonCommand(() => callbacks.ApplyZoom(null, +0.1)));
         r.Register("freew.zoom-out",          new ActionRibbonCommand(() => callbacks.ApplyZoom(null, -0.1)));
@@ -340,8 +344,12 @@ internal static class FreeWAvaloniaRibbonCommands
         // The three Window/Zoom-dialog callbacks are optional on RibbonHostCallbacks (default null so
         // test call sites stay terse); fall back to a safe no-op when the shell didn't supply one.
         r.Register("freew.zoom-dialog",       new ActionRibbonCommand(callbacks.OpenZoomDialog ?? (() => { })));
-        r.Register("freew.view-gridlines",    new ActionRibbonCommand(() => editor.ShowGridlines = !editor.ShowGridlines));
-        r.Register("freew.view-ruler",        new ActionRibbonCommand(() => editor.ShowRuler = !editor.ShowRuler));
+        var gridlinesCommand = new ActionRibbonCommand(() => editor.ShowGridlines = !editor.ShowGridlines);
+        var rulerCommand = new ActionRibbonCommand(() => editor.ShowRuler = !editor.ShowRuler);
+        r.Register("freew.gridlines",         gridlinesCommand);
+        r.Register("freew.view-gridlines",    gridlinesCommand);
+        r.Register("freew.ruler",             rulerCommand);
+        r.Register("freew.view-ruler",        rulerCommand);
         // AV-VIEW: Window group — new window + split (shell callbacks; may note "deferred" in the status bar).
         r.Register("freew.new-window",        new ActionRibbonCommand(callbacks.NewWindow ?? (() => { })));
         r.Register("freew.split",             new ActionRibbonCommand(callbacks.ToggleSplit ?? (() => { })));
