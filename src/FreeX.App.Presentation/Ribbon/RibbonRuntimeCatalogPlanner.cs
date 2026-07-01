@@ -37,6 +37,8 @@ public static class RibbonRuntimeCatalogPlanner
         [
             CreateFormatAsTableSurface(),
             CreateNumberFormatSurface(numberFormatOptions),
+            CreateFontColorPopupSurface(),
+            CreateBordersPopupSurface(),
             CreateConditionalFormattingPopupSurface(),
             CreateConditionalFormattingDataBarSurface(textProvider),
             CreateConditionalFormattingColorScaleSurface(textProvider),
@@ -82,6 +84,28 @@ public static class RibbonRuntimeCatalogPlanner
                         .Select(option => option.Label)
                         .ToArray())
             ]);
+
+    private static RibbonRuntimeCatalogSurface CreateFontColorPopupSurface() =>
+        new(
+            "Home",
+            "Font Color Popup",
+            "Home",
+            "Font Color",
+            nameof(HomeFontBorderPopupCatalogPlanner),
+            HomeFontBorderPopupCatalogPlanner.FontColorPopupGroups
+                .Select(group => new RibbonRuntimeCatalogGroup(group.Name, group.Items))
+                .ToArray());
+
+    private static RibbonRuntimeCatalogSurface CreateBordersPopupSurface() =>
+        new(
+            "Home",
+            "Borders Popup",
+            "Home",
+            "Full Border Gallery",
+            nameof(HomeFontBorderPopupCatalogPlanner),
+            HomeFontBorderPopupCatalogPlanner.BorderPopupGroups
+                .Select(group => new RibbonRuntimeCatalogGroup(group.Name, group.Items))
+                .ToArray());
 
     private static RibbonRuntimeCatalogSurface CreateConditionalFormattingPopupSurface() =>
         new(

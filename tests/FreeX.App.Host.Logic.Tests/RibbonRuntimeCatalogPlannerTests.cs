@@ -18,6 +18,8 @@ public sealed class RibbonRuntimeCatalogPlannerTests
         surfaces.Select(surface => surface.CommandTitle).Should().Equal(
             "Format as Table",
             "Number Format Dropdown",
+            "Font Color Popup",
+            "Borders Popup",
             "Conditional Formatting Popup",
             "Conditional Formatting Data Bars",
             "Conditional Formatting Color Scales",
@@ -32,6 +34,19 @@ public sealed class RibbonRuntimeCatalogPlannerTests
         Surface(surfaces, "Number Format Dropdown").Groups.Select(group => group.Name)
             .Should()
             .Equal("Formats", "Actions");
+
+        Surface(surfaces, "Font Color Popup").Groups.Select(group => (group.Name, group.Items.Count))
+            .Should()
+            .Equal(("Swatches", 6), ("Actions", 1));
+
+        Surface(surfaces, "Borders Popup").Groups.Select(group => (group.Name, group.Items.Count))
+            .Should()
+            .Equal(
+                ("Presets", 14),
+                ("Draw", 3),
+                ("Line Color", 4),
+                ("Line Style", 6),
+                ("Actions", 1));
 
         Surface(surfaces, "Conditional Formatting Popup").Groups.Select(group => (group.Name, group.Items.Count))
             .Should()
@@ -96,6 +111,10 @@ public sealed class RibbonRuntimeCatalogPlannerTests
         Surface(surfaces, "Format as Table").ItemCount.Should().Be(TableStyleGalleryPlanner.GetOptions().Count);
         Surface(surfaces, "Number Format Dropdown").ItemCount.Should()
             .Be(HomeNumberFormatDropdownPlanner.Options.Count);
+        Surface(surfaces, "Font Color Popup").ItemCount.Should()
+            .Be(HomeFontBorderPopupCatalogPlanner.FontColorItems.Count);
+        Surface(surfaces, "Borders Popup").ItemCount.Should()
+            .Be(HomeFontBorderPopupCatalogPlanner.BorderItems.Count);
         Surface(surfaces, "Conditional Formatting Popup").ItemCount.Should()
             .Be(ConditionalFormatPresetGalleryPlanner.PopupItems.Count);
         Surface(surfaces, "Conditional Formatting Data Bars").ItemCount.Should()
@@ -109,6 +128,8 @@ public sealed class RibbonRuntimeCatalogPlannerTests
             WorkbookThemeCatalog.FontPresets.Count +
             WorkbookThemeCatalog.EffectPresets.Count);
         Surface(surfaces, "Themes").Source.Should().Be(nameof(WorkbookThemeCatalog));
+        Surface(surfaces, "Font Color Popup").Source.Should().Be(nameof(HomeFontBorderPopupCatalogPlanner));
+        Surface(surfaces, "Borders Popup").Source.Should().Be(nameof(HomeFontBorderPopupCatalogPlanner));
         Surface(surfaces, "PivotTable Styles").ItemCount.Should().Be(PivotStyleGalleryPlanner.BuiltInStyleNames.Count);
     }
 
@@ -128,6 +149,8 @@ public sealed class RibbonRuntimeCatalogPlannerTests
         presentationSource.Should().Contain("namespace FreeX.App.Presentation.Ribbon;");
         presentationSource.Should().Contain("Func<string, string> textProvider");
         presentationSource.Should().Contain("IReadOnlyList<RibbonRuntimeCatalogNumberFormatOption> numberFormatOptions");
+        presentationSource.Should().Contain("HomeFontBorderPopupCatalogPlanner.FontColorPopupGroups");
+        presentationSource.Should().Contain("HomeFontBorderPopupCatalogPlanner.BorderPopupGroups");
         presentationSource.Should().Contain("ConditionalFormatPresetGalleryPlanner.PopupGroups");
         presentationSource.Should().Contain("PivotStyleGalleryPlanner.BuiltInStyleNames");
         presentationSource.Should().NotContain("namespace FreeX.App.Host");
