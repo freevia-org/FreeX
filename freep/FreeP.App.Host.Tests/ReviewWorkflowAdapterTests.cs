@@ -27,6 +27,7 @@ public sealed class ReviewWorkflowAdapterTests
                 Name = "Product image",
                 Kind = SlideShapeKind.Picture,
                 Picture = new ImagePart(),
+                AlternativeTextTitle = "Packaging photo",
             };
             window.Editor.CurrentSlide.Shapes.Add(shape);
             window.Editor.Select(shape.Id);
@@ -50,21 +51,31 @@ public sealed class ReviewWorkflowAdapterTests
                 true,
                 shape.Id,
                 "Product image",
-                "Product image",
+                "Packaging photo",
+                "Packaging photo",
+                "Packaging photo",
                 string.Empty,
                 string.Empty,
+                false,
                 true,
                 PresentationWorkflowCapabilityStatus.Available,
                 "Add a persistent alt-text description for the selected shape."));
 
-            var mutation = window.ApplySelectedShapeAlternativeText("  Product packaging on a white background. ");
+            var mutation = window.ApplySelectedShapeAlternativeText(
+                "  Product packaging on a white background. ",
+                "  Hero packaging photo ");
             mutation.Should().Be(new PresentationAltTextMutationPlan(
                 true,
                 0,
                 shape.Id,
+                "Hero packaging photo",
                 "Product packaging on a white background.",
+                false,
                 null));
+            shape.AlternativeTextTitle.Should().Be("Hero packaging photo");
             shape.AlternativeText.Should().Be("Product packaging on a white background.");
+            shape.IsDecorative.Should().BeFalse();
+            window.LastAltTextRequestPlan!.CurrentTitle.Should().Be("Hero packaging photo");
             window.LastAltTextRequestPlan!.CurrentDescription.Should().Be("Product packaging on a white background.");
             window.LastAccessibilitySummaryPlan!.Issues.Should().NotContain(issue =>
                 issue.ShapeId == shape.Id && issue.Title == "Alt text missing");
@@ -87,7 +98,11 @@ public sealed class ReviewWorkflowAdapterTests
                 Id = "rId2",
                 Name = "Blank",
                 LayoutType = SlideLayoutType.Blank,
-                MasterId = window.Editor.Presentation.Masters[0].Id
+                MasterId = window.Editor.Presentation.Masters[0].Id,
+                Placeholders =
+                {
+                    new SlideShape { Id = 211, Placeholder = new Placeholder { Type = PlaceholderType.Title } },
+                }
             });
 
             window.OpenLayoutPicker();
@@ -97,12 +112,18 @@ public sealed class ReviewWorkflowAdapterTests
             window.LastLayoutPickerPlan!.Choices.Should().Contain(choice =>
                 choice.LayoutId == "rId2" &&
                 choice.DisplayName == "Blank" &&
-                choice.LayoutType == SlideLayoutType.Blank);
+                choice.LayoutType == SlideLayoutType.Blank &&
+                choice.MasterId == "rId1" &&
+                choice.MasterDisplayName == "Master 1" &&
+                choice.PlaceholderCount == 1 &&
+                choice.DisplayOrder == 1);
 
             window.ApplyLayoutChoice("rId2").Should().BeTrue();
             window.Editor.CurrentSlide!.LayoutId.Should().Be("rId2");
             window.LastAppliedLayoutChoice.Should().NotBeNull();
             window.LastAppliedLayoutChoice!.LayoutId.Should().Be("rId2");
+            window.LastAppliedLayoutChoice.MasterDisplayName.Should().Be("Master 1");
+            window.LastAppliedLayoutChoice.PlaceholderCount.Should().Be(1);
         }
         finally
         {

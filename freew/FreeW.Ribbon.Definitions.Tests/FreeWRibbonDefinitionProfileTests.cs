@@ -377,7 +377,8 @@ public sealed class FreeWRibbonDefinitionProfileTests
 
         AssertGapClassification(commands, "freew.accept-all", "shared-profile");
         AssertGapClassification(commands, "freew.font-color.black", "profile-shape-only");
-        AssertGapClassification(commands, "freew.bookmark", "command-id-alias");
+        AssertGapClassification(commands, "freew.bookmark", "shared-profile");
+        AssertGapClassification(commands, "freew.insert-bookmark", "command-id-alias");
         AssertGapClassification(commands, "freew.about", "platform-only");
         AssertGapClassification(commands, "freew.cc-checkbox", "deferred");
         AssertGapClassification(commands, "freew.add-to-dictionary", "actionable-gap");

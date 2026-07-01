@@ -902,7 +902,11 @@ public sealed class MainWindowHeadlessTests
                 Id = "rId2",
                 Name = "Blank",
                 LayoutType = SlideLayoutType.Blank,
-                MasterId = window.Editor.Presentation.Masters[0].Id
+                MasterId = window.Editor.Presentation.Masters[0].Id,
+                Placeholders =
+                {
+                    new SlideShape { Id = 212, Placeholder = new Placeholder { Type = PlaceholderType.Title } },
+                }
             });
             var registry = window.BuildCommandRegistry();
             found = registry.TryGet(PresentationDesignCommandPlanner.LayoutCommandId, out var layout);
@@ -925,11 +929,17 @@ public sealed class MainWindowHeadlessTests
         pickerPlan!.Choices.Should().Contain(choice =>
             choice.LayoutId == "rId2" &&
             choice.DisplayName == "Blank" &&
-            choice.LayoutType == SlideLayoutType.Blank);
+            choice.LayoutType == SlideLayoutType.Blank &&
+            choice.MasterId == "rId1" &&
+            choice.MasterDisplayName == "Master 1" &&
+            choice.PlaceholderCount == 1 &&
+            choice.DisplayOrder == 1);
         applied.Should().BeTrue("Avalonia should be able to apply a shared picker choice");
         currentLayoutId.Should().Be("rId2");
         appliedChoice.Should().NotBeNull();
         appliedChoice!.LayoutId.Should().Be("rId2");
+        appliedChoice.MasterDisplayName.Should().Be("Master 1");
+        appliedChoice.PlaceholderCount.Should().Be(1);
     }
 
     [Fact]
@@ -1126,6 +1136,7 @@ public sealed class MainWindowHeadlessTests
     [Fact]
     public async Task Review_alt_text_apply_routes_through_shared_mutation_plan()
     {
+        string? altTextTitle = null;
         string? altText = null;
         PresentationAltTextRequestPlan? requestPlan = null;
         PresentationAccessibilitySummaryPlan? accessibilityPlan = null;
@@ -1143,22 +1154,29 @@ public sealed class MainWindowHeadlessTests
             window.Editor.CurrentSlide!.Shapes.Add(shape);
             window.Editor.Select(shape.Id);
 
-            var mutation = window.ApplySelectedShapeAlternativeText("  Product packaging on a white background. ");
+            var mutation = window.ApplySelectedShapeAlternativeText(
+                "  Product packaging on a white background. ",
+                "  Hero packaging photo ");
             mutation.Should().Be(new PresentationAltTextMutationPlan(
                 true,
                 0,
                 shape.Id,
+                "Hero packaging photo",
                 "Product packaging on a white background.",
+                false,
                 null));
 
+            altTextTitle = shape.AlternativeTextTitle;
             altText = shape.AlternativeText;
             requestPlan = window.LastAltTextRequestPlan;
             accessibilityPlan = window.LastAccessibilitySummaryPlan;
         });
 
         if (!ran) return;
+        altTextTitle.Should().Be("Hero packaging photo");
         altText.Should().Be("Product packaging on a white background.");
         requestPlan.Should().NotBeNull();
+        requestPlan!.CurrentTitle.Should().Be("Hero packaging photo");
         requestPlan!.CurrentDescription.Should().Be("Product packaging on a white background.");
         accessibilityPlan.Should().NotBeNull();
         accessibilityPlan!.Issues.Should().NotContain(issue =>

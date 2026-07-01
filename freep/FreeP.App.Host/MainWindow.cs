@@ -683,7 +683,10 @@ public sealed class MainWindow : Window
             proposedDescription: null);
     }
 
-    internal PresentationAltTextMutationPlan ApplySelectedShapeAlternativeText(string? description)
+    internal PresentationAltTextMutationPlan ApplySelectedShapeAlternativeText(
+        string? description,
+        string? title = null,
+        bool isDecorative = false)
     {
         uint? selectedShapeId = Editor.SelectedShapeIds.Count == 1
             ? Editor.SelectedShapeIds[0]
@@ -692,14 +695,18 @@ public sealed class MainWindow : Window
             Editor.CurrentSlide,
             Editor.CurrentSlideIndex,
             selectedShapeId,
-            description);
+            description,
+            title,
+            isDecorative);
         if (plan.ShouldApply)
         {
-            Editor.SetSelectedShapeAlternativeText(plan.Description);
+            Editor.SetSelectedShapeAlternativeText(plan.Description, plan.Title, plan.IsDecorative);
             LastAltTextRequestPlan = PresentationReviewWorkflowPlanner.BuildAltTextRequestPlan(
                 Editor.CurrentSlide,
                 plan.ShapeId,
-                plan.Description);
+                plan.Description,
+                plan.Title,
+                plan.IsDecorative);
             RefreshAccessibilitySummaryPlan();
         }
 

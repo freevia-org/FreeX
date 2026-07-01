@@ -112,10 +112,12 @@ public sealed class LocalizationConvergenceTests
         host.Should().NotContain("Loc.");
         avalonia.Should().NotContain("Loc.");
 
-        shared.Should().Contain("Loc.Get(");
-        shared.Should().Contain("Loc.Format(");
-        shared.Should().Contain("Loc.GetNeutral(");
-        shared.Should().Contain("Loc.GetNeutralResourceKeys(");
+        shared.Should().Contain("LocalizedUiTextCatalog<Loc>");
+        var sharedCatalog = WorkspaceFileLocator.ReadAllText("shared", "Free.Shared.Localization", "LocalizedUiTextCatalog.cs");
+        sharedCatalog.Should().Contain("Facade.Get(");
+        sharedCatalog.Should().Contain("Facade.Format(");
+        sharedCatalog.Should().Contain("Facade.GetNeutral(");
+        sharedCatalog.Should().Contain("Facade.GetNeutralResourceKeys(");
     }
 
     [Theory]

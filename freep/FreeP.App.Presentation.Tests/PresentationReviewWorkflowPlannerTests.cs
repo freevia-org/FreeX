@@ -156,7 +156,7 @@ public sealed class PresentationReviewWorkflowPlannerTests
     }
 
     [Fact]
-    public void BuildAltTextRequestPlan_UsesSelectedShapePersistentDescription()
+    public void BuildAltTextRequestPlan_UsesSelectedShapePersistentMetadata()
     {
         var slide = new Slide { Title = "Intro" };
         slide.Shapes.Add(new SlideShape
@@ -165,24 +165,97 @@ public sealed class PresentationReviewWorkflowPlannerTests
             Name = "Sales chart",
             Kind = SlideShapeKind.Chart,
             Chart = new ChartShape(),
+            AlternativeTextTitle = "Sales summary",
             AlternativeText = "Existing sales chart description."
         });
 
         var plan = PresentationReviewWorkflowPlanner.BuildAltTextRequestPlan(
             slide,
             7,
-            "  Quarterly sales by region. ");
+            "  Quarterly sales by region. ",
+            "  Regional sales chart ");
 
         plan.Should().Be(new PresentationAltTextRequestPlan(
             true,
             7,
             "Sales chart",
-            "Sales chart",
+            "Sales summary",
+            "Sales summary",
+            "Regional sales chart",
             "Existing sales chart description.",
             "Quarterly sales by region.",
+            false,
             true,
             PresentationWorkflowCapabilityStatus.Available,
             "Edit the persistent alt-text description for the selected shape."));
+    }
+
+    [Fact]
+    public void BuildAltTextRequestPlan_ReportsDecorativeShapeWithoutRequiredDescription()
+    {
+        var slide = new Slide { Title = "Intro" };
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 9,
+            Name = "Divider flourish",
+            Kind = SlideShapeKind.Picture,
+            Picture = new ImagePart(),
+            IsDecorative = true
+        });
+
+        var plan = PresentationReviewWorkflowPlanner.BuildAltTextRequestPlan(slide, 9, " ignored ");
+
+        plan.Should().Be(new PresentationAltTextRequestPlan(
+            true,
+            9,
+            "Divider flourish",
+            "Divider flourish",
+            string.Empty,
+            string.Empty,
+            string.Empty,
+            string.Empty,
+            true,
+            true,
+            PresentationWorkflowCapabilityStatus.Available,
+            "Selected shape is marked decorative and does not require alt text."));
+    }
+
+    [Fact]
+    public void BuildAltTextMutationPlan_NormalizesTitleDescriptionAndDecorativeState()
+    {
+        var slide = new Slide { Title = "Intro" };
+        slide.Shapes.Add(new SlideShape { Id = 7, Name = "Sales chart" });
+
+        var metadata = PresentationReviewWorkflowPlanner.BuildAltTextMutationPlan(
+            slide,
+            0,
+            7,
+            "  Quarterly sales by region. ",
+            "  Regional sales chart ");
+        var decorative = PresentationReviewWorkflowPlanner.BuildAltTextMutationPlan(
+            slide,
+            0,
+            7,
+            "  ignored ",
+            "  ignored ",
+            isDecorative: true);
+
+        metadata.Should().Be(new PresentationAltTextMutationPlan(
+            true,
+            0,
+            7,
+            "Regional sales chart",
+            "Quarterly sales by region.",
+            false,
+            null));
+        decorative.Should().Be(new PresentationAltTextMutationPlan(
+            true,
+            0,
+            7,
+            string.Empty,
+            string.Empty,
+            true,
+            null));
     }
 
     [Fact]
@@ -201,8 +274,31 @@ public sealed class PresentationReviewWorkflowPlannerTests
             true,
             0,
             7,
+            string.Empty,
             "Quarterly sales by region.",
+            false,
             null));
+    }
+
+    [Fact]
+    public void BuildAccessibilitySummaryPlan_SkipsDecorativeObjects()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Title = "Intro";
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 10,
+            Name = "Decorative divider",
+            Kind = SlideShapeKind.Picture,
+            Picture = new ImagePart(),
+            IsDecorative = true
+        });
+
+        var plan = PresentationReviewWorkflowPlanner.BuildAccessibilitySummaryPlan(presentation);
+
+        plan.Issues.Should().NotContain(issue =>
+            issue.ShapeId == 10 && issue.Title == "Alt text missing");
     }
 
     [Fact]

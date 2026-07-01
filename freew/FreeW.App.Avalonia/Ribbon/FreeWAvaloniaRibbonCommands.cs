@@ -199,6 +199,8 @@ internal static class FreeWAvaloniaRibbonCommands
 
         // Page break — empty paragraph forcing a page break before it, after the caret block.
         r.Register("freew.page-break", new ActionRibbonCommand(editor.InsertPageBreak));
+        r.Register("freew.blank-page", new ActionRibbonCommand(editor.InsertBlankPage));
+        r.Register("freew.horizontal-rule", new ActionRibbonCommand(editor.InsertHorizontalRule));
 
         // Picture — open a file picker, load the bytes, insert as an inline image (host callback).
         r.Register("freew.picture", new ActionRibbonCommand(callbacks.InsertPicture));
@@ -214,6 +216,7 @@ internal static class FreeWAvaloniaRibbonCommands
         // Header / Footer — enable the page-margin region (render-ready). Region caret editing deferred.
         r.Register("freew.header", new ActionRibbonCommand(editor.EnsureHeader));
         r.Register("freew.footer", new ActionRibbonCommand(editor.EnsureFooter));
+        r.Register("freew.datetime", new ActionRibbonCommand(() => editor.InsertField(RunFieldKind.Date)));
 
         // ── Insert depth 2 (AV-INSERT2) ──────────────────────────────────────
         RegisterInsertDepth2Commands(r, editor, callbacks);
@@ -369,6 +372,12 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.zoom-in",           new ActionRibbonCommand(() => callbacks.ApplyZoom(null, +0.1)));
         r.Register("freew.zoom-out",          new ActionRibbonCommand(() => callbacks.ApplyZoom(null, -0.1)));
         r.Register("freew.zoom-100",          new ActionRibbonCommand(() => callbacks.ApplyZoom(1.0, 0)));
+        r.Register("freew.zoom-one-page",     new ActionRibbonCommand(callbacks.ZoomOnePage ?? (() => { })));
+        r.Register("freew.zoom-page-width",   new ActionRibbonCommand(callbacks.ZoomPageWidth ?? (() => { })));
+        r.Register("freew.zoom-multiple-pages",
+            new ToggleActionCommand(callbacks.ToggleMultiplePages ?? (() => { }), callbacks.IsMultiplePagesActive ?? (() => false)));
+        r.Register("freew.zoom-side-to-side",
+            new ToggleActionCommand(callbacks.ToggleSideToSide ?? (() => { }), callbacks.IsSideToSideActive ?? (() => false)));
         // AV-VIEW: Zoom dialog (presets + custom %) and layout gridlines / ruler toggles.
         // The three Window/Zoom-dialog callbacks are optional on RibbonHostCallbacks (default null so
         // test call sites stay terse); fall back to a safe no-op when the shell didn't supply one.
@@ -638,8 +647,11 @@ internal static class FreeWAvaloniaRibbonCommands
     {
         // ── Links ────────────────────────────────────────────────────────────
         // Hyperlink / Bookmark open small dialogs (shell callbacks) that call InsertHyperlink / InsertBookmark.
+        r.Register("freew.hyperlink",        new ActionRibbonCommand(callbacks.OpenHyperlinkDialog ?? (() => { })));
         r.Register("freew.insert-hyperlink", new ActionRibbonCommand(callbacks.OpenHyperlinkDialog ?? (() => { })));
+        r.Register("freew.bookmark",         new ActionRibbonCommand(callbacks.OpenBookmarkDialog ?? (() => { })));
         r.Register("freew.insert-bookmark",  new ActionRibbonCommand(callbacks.OpenBookmarkDialog ?? (() => { })));
+        r.Register("freew.bookmark-manager", new ActionRibbonCommand(callbacks.OpenBookmarkDialog ?? (() => { })));
 
         // ── Cover Page ───────────────────────────────────────────────────────
         // The top-level dropdown opener is a no-op; each preset prepends a cover-page block layout.
@@ -790,6 +802,8 @@ internal static class FreeWAvaloniaRibbonCommands
         var footnote = new ActionRibbonCommand(() => editor.InsertFootnote());
         r.Register("freew.footnote", footnote);
         r.Register("freew.insert-footnote", footnote);
+        r.Register("freew.show-notes", new ActionRibbonCommand(editor.ShowNotes));
+        r.Register("freew.footnote-endnote-options", new ActionRibbonCommand(editor.ApplyDefaultFootnoteEndnoteOptions));
 
         var endnote = new ActionRibbonCommand(() => editor.InsertEndnote());
         r.Register("freew.endnote", endnote);
@@ -820,7 +834,17 @@ internal static class FreeWAvaloniaRibbonCommands
         var citation = new ActionRibbonCommand(() => InsertDefaultCitation(editor));
         r.Register("freew.citation", citation);
         r.Register("freew.insert-citation", citation);
+        r.Register("freew.manage-sources", new ActionRibbonCommand(() => editor.ReplaceSources(editor.Document.Sources.ToArray())));
         r.Register("freew.bibliography", new ActionRibbonCommand(editor.InsertBibliography));
+
+        r.Register("freew.tof", new ActionRibbonCommand(() => editor.InsertTableOfFigures()));
+        r.Register("freew.tof-refresh", new ActionRibbonCommand(() => editor.RefreshTableOfFigures()));
+        r.Register("freew.index-mark", new ActionRibbonCommand(() => editor.MarkIndexEntry()));
+        r.Register("freew.index-insert", new ActionRibbonCommand(editor.InsertIndex));
+        r.Register("freew.index-refresh", new ActionRibbonCommand(editor.RefreshIndex));
+        r.Register("freew.mark-citation", new ActionRibbonCommand(() => editor.MarkCitation()));
+        r.Register("freew.table-of-authorities", new ActionRibbonCommand(editor.InsertTableOfAuthorities));
+        r.Register("freew.table-of-authorities-refresh", new ActionRibbonCommand(editor.RefreshTableOfAuthorities));
     }
 
     /// <summary>

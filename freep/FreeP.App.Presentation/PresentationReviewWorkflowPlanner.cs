@@ -74,8 +74,11 @@ public sealed record PresentationAltTextRequestPlan(
     uint? ShapeId,
     string ShapeName,
     string SuggestedTitle,
+    string CurrentTitle,
+    string ProposedTitle,
     string CurrentDescription,
     string ProposedDescription,
+    bool IsDecorative,
     bool CanApply,
     PresentationWorkflowCapabilityStatus Status,
     string Message);
@@ -84,7 +87,9 @@ public sealed record PresentationAltTextMutationPlan(
     bool ShouldApply,
     int SlideIndex,
     uint? ShapeId,
+    string Title,
     string Description,
+    bool IsDecorative,
     string? ValidationMessage);
 
 public sealed record PresentationAccessibilityIssueDescriptor(
@@ -290,35 +295,52 @@ public static class PresentationReviewWorkflowPlanner
     public static PresentationAltTextRequestPlan BuildAltTextRequestPlan(
         Slide? slide,
         uint? selectedShapeId,
-        string? proposedDescription)
+        string? proposedDescription,
+        string? proposedTitle = null,
+        bool? isDecorative = null)
     {
         var shape = selectedShapeId is { } id ? FindShape(slide?.Shapes, id) : null;
         if (shape is null)
         {
+            var missingIsDecorative = isDecorative ?? false;
             return new PresentationAltTextRequestPlan(
                 false,
                 null,
                 string.Empty,
                 string.Empty,
                 string.Empty,
-                NormalizeText(proposedDescription) ?? string.Empty,
+                NormalizeAltTextTitle(proposedTitle),
+                string.Empty,
+                missingIsDecorative ? string.Empty : NormalizeAltTextDescription(proposedDescription),
+                missingIsDecorative,
                 false,
                 PresentationWorkflowCapabilityStatus.Available,
                 MissingShapeMessage);
         }
 
         var suggestedTitle = BuildAltTextSuggestedTitle(shape);
-        var normalizedProposed = NormalizeText(proposedDescription);
+        var decorative = isDecorative ?? shape.IsDecorative;
+        var normalizedTitle = decorative
+            ? string.Empty
+            : (proposedTitle is null ? shape.AlternativeTextTitle : NormalizeAltTextTitle(proposedTitle));
+        var normalizedDescription = decorative
+            ? string.Empty
+            : (proposedDescription is null ? shape.AlternativeText : NormalizeAltTextDescription(proposedDescription));
         return new PresentationAltTextRequestPlan(
             true,
             shape.Id,
             shape.Name,
             suggestedTitle,
+            shape.AlternativeTextTitle,
+            normalizedTitle,
             shape.AlternativeText,
-            normalizedProposed ?? shape.AlternativeText,
+            normalizedDescription,
+            decorative,
             true,
             PresentationWorkflowCapabilityStatus.Available,
-            string.IsNullOrEmpty(shape.AlternativeText)
+            decorative
+                ? "Selected shape is marked decorative and does not require alt text."
+                : string.IsNullOrEmpty(shape.AlternativeText)
                 ? "Add a persistent alt-text description for the selected shape."
                 : "Edit the persistent alt-text description for the selected shape.");
     }
@@ -327,9 +349,12 @@ public static class PresentationReviewWorkflowPlanner
         Slide? slide,
         int slideIndex,
         uint? selectedShapeId,
-        string? description)
+        string? description,
+        string? title = null,
+        bool isDecorative = false)
     {
-        var normalizedDescription = NormalizeAltText(description);
+        var normalizedTitle = isDecorative ? string.Empty : NormalizeAltTextTitle(title);
+        var normalizedDescription = isDecorative ? string.Empty : NormalizeAltTextDescription(description);
         var shape = selectedShapeId is { } id ? FindShape(slide?.Shapes, id) : null;
         if (shape is null)
         {
@@ -337,7 +362,9 @@ public static class PresentationReviewWorkflowPlanner
                 false,
                 slideIndex,
                 null,
+                normalizedTitle,
                 normalizedDescription,
+                isDecorative,
                 MissingShapeMessage);
         }
 
@@ -345,7 +372,9 @@ public static class PresentationReviewWorkflowPlanner
             true,
             slideIndex,
             shape.Id,
+            normalizedTitle,
             normalizedDescription,
+            isDecorative,
             null);
     }
 
@@ -385,7 +414,9 @@ public static class PresentationReviewWorkflowPlanner
             {
                 shapeCount++;
 
-                if (NeedsAltText(shape) && string.IsNullOrWhiteSpace(shape.AlternativeText))
+                if (NeedsAltText(shape)
+                    && !shape.IsDecorative
+                    && string.IsNullOrWhiteSpace(shape.AlternativeText))
                 {
                     issues.Add(new PresentationAccessibilityIssueDescriptor(
                         PresentationAccessibilityIssueSeverity.Warning,
@@ -580,7 +611,10 @@ public static class PresentationReviewWorkflowPlanner
         return string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;
     }
 
-    private static string NormalizeAltText(string? value)
+    private static string NormalizeAltTextTitle(string? value)
+        => NormalizeText(value) ?? string.Empty;
+
+    private static string NormalizeAltTextDescription(string? value)
         => NormalizeText(value) ?? string.Empty;
 
     private static string NormalizeInitials(string? initials, string? author)
@@ -608,6 +642,12 @@ public static class PresentationReviewWorkflowPlanner
 
     private static string BuildAltTextSuggestedTitle(SlideShape shape)
     {
+        var title = NormalizeText(shape.AlternativeTextTitle);
+        if (title is not null)
+        {
+            return title;
+        }
+
         var name = NormalizeText(shape.Name);
         return name is not null ? name : DescribeShape(shape);
     }

@@ -66,6 +66,8 @@ public sealed class ViewTabDepthTests
                      "freew.print-preview",
                      "freew.print-layout", "freew.web-layout", "freew.draft-view",
                      "freew.printlayout", "freew.weblayout", "freew.draftview",
+                     "freew.zoom-one-page", "freew.zoom-page-width",
+                     "freew.zoom-multiple-pages", "freew.zoom-side-to-side",
                      "freew.zoom-dialog", "freew.gridlines", "freew.ruler", "freew.nav-pane",
                      "freew.view-gridlines", "freew.view-ruler", "freew.navigationpane",
                      "freew.new-window", "freew.split",
@@ -90,6 +92,10 @@ public sealed class ViewTabDepthTests
         ids.Should().NotContain("freew.weblayout");
         ids.Should().NotContain("freew.draftview");
         ids.Should().Contain("freew.zoom-dialog");
+        ids.Should().Contain("freew.zoom-one-page");
+        ids.Should().Contain("freew.zoom-page-width");
+        ids.Should().Contain("freew.zoom-multiple-pages");
+        ids.Should().Contain("freew.zoom-side-to-side");
         ids.Should().Contain("freew.gridlines");
         ids.Should().Contain("freew.ruler");
         ids.Should().Contain("freew.nav-pane");
@@ -100,6 +106,61 @@ public sealed class ViewTabDepthTests
         ids.Should().Contain("freew.split");
         // Show group must surface the Reviewing Pane toggle on the View tab too.
         ids.Should().Contain("freew.reviewing-pane");
+    }
+
+    [Fact]
+    public void View_zoom_page_fit_commands_invoke_host_callbacks()
+    {
+        var onePage = 0;
+        var pageWidth = 0;
+        var callbacks = NoopCallbacks() with
+        {
+            ZoomOnePage = () => onePage++,
+            ZoomPageWidth = () => pageWidth++,
+        };
+        var registry = FreeWRibbon.BuildRegistry(new DocumentView(), callbacks);
+
+        registry.TryGet(new RibbonCommandId("freew.zoom-one-page"), out var onePageCommand)
+            .Should().BeTrue();
+        registry.TryGet(new RibbonCommandId("freew.zoom-page-width"), out var pageWidthCommand)
+            .Should().BeTrue();
+
+        onePageCommand!.Execute(RibbonCommandContext.Empty);
+        pageWidthCommand!.Execute(RibbonCommandContext.Empty);
+
+        onePage.Should().Be(1);
+        pageWidth.Should().Be(1);
+    }
+
+    [Fact]
+    public void View_zoom_page_mode_toggles_are_stateful_host_callbacks()
+    {
+        var multiplePages = false;
+        var sideToSide = false;
+        var callbacks = NoopCallbacks() with
+        {
+            ToggleMultiplePages = () => multiplePages = !multiplePages,
+            IsMultiplePagesActive = () => multiplePages,
+            ToggleSideToSide = () => sideToSide = !sideToSide,
+            IsSideToSideActive = () => sideToSide,
+        };
+        var registry = FreeWRibbon.BuildRegistry(new DocumentView(), callbacks);
+
+        registry.TryGet(new RibbonCommandId("freew.zoom-multiple-pages"), out var multiplePagesCommand)
+            .Should().BeTrue();
+        registry.TryGet(new RibbonCommandId("freew.zoom-side-to-side"), out var sideToSideCommand)
+            .Should().BeTrue();
+
+        var multiplePagesState = (IRibbonStatefulCommand)multiplePagesCommand!;
+        var sideToSideState = (IRibbonStatefulCommand)sideToSideCommand!;
+        multiplePagesState.GetState().IsChecked.Should().BeFalse();
+        sideToSideState.GetState().IsChecked.Should().BeFalse();
+
+        multiplePagesCommand!.Execute(RibbonCommandContext.Empty);
+        sideToSideCommand!.Execute(RibbonCommandContext.Empty);
+
+        multiplePagesState.GetState().IsChecked.Should().BeTrue();
+        sideToSideState.GetState().IsChecked.Should().BeTrue();
     }
 
     [Fact]

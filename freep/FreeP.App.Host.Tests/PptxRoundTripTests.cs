@@ -83,7 +83,7 @@ public sealed class PptxRoundTripTests : IDisposable
     }
 
     [Fact]
-    public void RoundTrip_ShapeAlternativeText_PreservedInPptxDescr()
+    public void RoundTrip_ShapeAlternativeTextMetadata_PreservedInPptxNonVisualProperties()
     {
         var pres = new Presentation();
         var slide = new Slide();
@@ -93,11 +93,29 @@ public sealed class PptxRoundTripTests : IDisposable
             Name = "Sales chart",
             Kind = SlideShapeKind.AutoShape,
             AutoShapeKind = DrawingShapeKind.Rectangle,
+            AlternativeTextTitle = "Sales chart summary",
             AlternativeText = "Quarterly sales by region.",
             OffsetXEmu = 914400,
             OffsetYEmu = 457200,
             ExtentCxEmu = 2743200,
             ExtentCyEmu = 1828800
+        });
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 12,
+            Name = "Decorative divider",
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            Hyperlink = new Hyperlink
+            {
+                Url = "https://example.com/details",
+                Tooltip = "Open details"
+            },
+            IsDecorative = true,
+            OffsetXEmu = 914400,
+            OffsetYEmu = 2743200,
+            ExtentCxEmu = 2743200,
+            ExtentCyEmu = 228600
         });
         pres.Slides.Add(slide);
 
@@ -107,12 +125,24 @@ public sealed class PptxRoundTripTests : IDisposable
         using (var slideStream = archive.GetEntry("ppt/slides/slide1.xml")!.Open())
         using (var reader = new StreamReader(slideStream))
         {
-            reader.ReadToEnd().Should().Contain("descr=\"Quarterly sales by region.\"");
+            var slideXml = reader.ReadToEnd();
+            slideXml.Should().Contain("title=\"Sales chart summary\"");
+            slideXml.Should().Contain("descr=\"Quarterly sales by region.\"");
+            slideXml.Should().Contain("adec:decorative");
+            slideXml.Should().Contain("val=\"1\"");
+            slideXml.IndexOf("<a:hlinkClick", StringComparison.Ordinal)
+                .Should().BeLessThan(slideXml.IndexOf("<a:extLst>", StringComparison.Ordinal));
         }
 
         var reloaded = PptxPackageReader.Read(path);
-        reloaded.Slides[0].Shapes.Single(shape => shape.Id == 11)
-            .AlternativeText.Should().Be("Quarterly sales by region.");
+        var salesChart = reloaded.Slides[0].Shapes.Single(shape => shape.Id == 11);
+        salesChart.AlternativeTextTitle.Should().Be("Sales chart summary");
+        salesChart.AlternativeText.Should().Be("Quarterly sales by region.");
+        salesChart.IsDecorative.Should().BeFalse();
+        var decorative = reloaded.Slides[0].Shapes.Single(shape => shape.Id == 12);
+        decorative.IsDecorative.Should().BeTrue();
+        decorative.AlternativeTextTitle.Should().BeEmpty();
+        decorative.AlternativeText.Should().BeEmpty();
     }
 
     [Fact]

@@ -60,4 +60,50 @@ public sealed class RibbonRuntimeCatalogPlannerTests
                 "5 Boxes",
                 "More Rules");
     }
+
+    [Fact]
+    public void GetSurfaces_PublishesFontColorAndBorderPopupPseudoCommandEvidence()
+    {
+        var surfaces = RibbonRuntimeCatalogPlanner.GetSurfaces(
+            static key => key,
+            [new RibbonRuntimeCatalogNumberFormatOption("General")]);
+
+        var fontColor = surfaces.Should().ContainSingle(s => s.CommandTitle == "Font Color Popup").Subject;
+        fontColor.TabHeader.Should().Be("Home");
+        fontColor.InventoryRow.Should().Be("Font Color");
+        fontColor.Source.Should().Be(nameof(HomeFontBorderPopupCatalogPlanner));
+        fontColor.Groups.Select(group => group.Name).Should().Equal("Swatches", "Actions");
+        fontColor.Groups.SelectMany(group => group.Items)
+            .Should()
+            .ContainInOrder("Black", "Red", "Green", "Blue", "Accent 1", "Accent 2", "More Colors");
+
+        var borders = surfaces.Should().ContainSingle(s => s.CommandTitle == "Borders Popup").Subject;
+        borders.TabHeader.Should().Be("Home");
+        borders.InventoryRow.Should().Be("Full Border Gallery");
+        borders.Source.Should().Be(nameof(HomeFontBorderPopupCatalogPlanner));
+        borders.Groups.Select(group => group.Name)
+            .Should()
+            .Equal("Presets", "Draw", "Line Color", "Line Style", "Actions");
+        borders.Groups.SelectMany(group => group.Items)
+            .Should()
+            .ContainInOrder(
+                "All Borders",
+                "Outside Borders",
+                "Inside Borders",
+                "No Border",
+                "Draw Border",
+                "Draw Border Grid",
+                "Erase Border",
+                "Black",
+                "Gray",
+                "Accent 1",
+                "Accent 2",
+                "Thin",
+                "Medium",
+                "Thick",
+                "Dashed",
+                "Dotted",
+                "Double",
+                "More Borders");
+    }
 }

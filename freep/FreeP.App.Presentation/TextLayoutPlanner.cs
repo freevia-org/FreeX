@@ -45,6 +45,11 @@ public readonly record struct TextBulletPlacement(
     double X,
     double Y);
 
+public readonly record struct TextTabSegmentPlacement(
+    int RunIndex,
+    string Text,
+    double X);
+
 public readonly record struct TextColumnLayout(
     TextLayoutArea Area,
     int ColumnCount,
@@ -63,10 +68,14 @@ public sealed record TextBlockLayoutPlan(
     TextLayoutArea Area,
     IReadOnlyList<TextParagraphPlacement> Paragraphs);
 
+public sealed record TextTabLayoutPlan(
+    IReadOnlyList<TextTabSegmentPlacement> Segments);
+
 public static class TextLayoutPlanner
 {
     public const double DipPerPoint = 96.0 / 72.0;
     public const double DefaultColumnSpacingDip = 48.5;
+    public const double DefaultTabStopDip = 96.0;
 
     public static double PointsToDip(double points) => points * DipPerPoint;
 
@@ -226,6 +235,59 @@ public static class TextLayoutPlanner
         return new TextBlockLayoutPlan(layout.Area, placements);
     }
 
+    public static TextTabLayoutPlan PlanTabStops(
+        ResolvedParagraph paragraph,
+        double startX,
+        Func<ResolvedRun, string, double> measureText)
+    {
+        ArgumentNullException.ThrowIfNull(paragraph);
+        ArgumentNullException.ThrowIfNull(measureText);
+
+        return PlanTabStops(paragraph, startX, paragraph.TabStops, measureText);
+    }
+
+    public static TextTabLayoutPlan PlanTabStops(
+        ResolvedParagraph paragraph,
+        double startX,
+        IReadOnlyList<ResolvedTabStop> tabStops,
+        Func<ResolvedRun, string, double> measureText)
+    {
+        ArgumentNullException.ThrowIfNull(paragraph);
+        ArgumentNullException.ThrowIfNull(tabStops);
+        ArgumentNullException.ThrowIfNull(measureText);
+
+        var tokens = CreateTabTokens(paragraph);
+        double currentX = startX;
+        var placements = new List<TextTabSegmentPlacement>(tokens.Count);
+
+        for (int tokenIndex = 0; tokenIndex < tokens.Count; tokenIndex++)
+        {
+            var token = tokens[tokenIndex];
+            var run = paragraph.Runs[token.RunIndex];
+
+            if (token.IsTab)
+                currentX = AdvanceToTabStop(
+                    paragraph,
+                    tokens,
+                    tokenIndex,
+                    currentX,
+                    startX,
+                    tabStops,
+                    measureText);
+
+            if (token.Text.Length == 0)
+                continue;
+
+            placements.Add(new TextTabSegmentPlacement(
+                token.RunIndex,
+                token.Text,
+                currentX));
+            currentX += measureText(run, token.Text);
+        }
+
+        return new TextTabLayoutPlan(placements);
+    }
+
     private static double ComputeStartY(
         TextLayoutArea area,
         double totalHeight,
@@ -273,4 +335,120 @@ public static class TextLayoutPlanner
             paragraphX - paragraph.HangingDip,
             paragraphY);
     }
+
+    private static double AdvanceToTabStop(
+        ResolvedParagraph paragraph,
+        IReadOnlyList<TextTabToken> tokens,
+        int tokenIndex,
+        double currentX,
+        double startX,
+        IReadOnlyList<ResolvedTabStop> tabStops,
+        Func<ResolvedRun, string, double> measureText)
+    {
+        double relativeX = currentX - startX;
+        var matchedStop = FindNextTabStop(tabStops, relativeX);
+        double stopDip = matchedStop?.PositionDip
+            ?? Math.Floor(relativeX / DefaultTabStopDip + 1.0) * DefaultTabStopDip;
+
+        double alignOffset = GetTabAlignmentOffset(
+            paragraph,
+            tokens,
+            tokenIndex,
+            matchedStop?.Alignment ?? TabStopAlignment.Left,
+            measureText);
+
+        return Math.Max(currentX, startX + stopDip + alignOffset);
+    }
+
+    private static ResolvedTabStop? FindNextTabStop(
+        IReadOnlyList<ResolvedTabStop> tabStops,
+        double relativeX)
+    {
+        foreach (var tabStop in tabStops)
+        {
+            if (tabStop.PositionDip > relativeX + 0.5)
+                return tabStop;
+        }
+
+        return null;
+    }
+
+    private static double GetTabAlignmentOffset(
+        ResolvedParagraph paragraph,
+        IReadOnlyList<TextTabToken> tokens,
+        int tokenIndex,
+        TabStopAlignment alignment,
+        Func<ResolvedRun, string, double> measureText)
+    {
+        if (alignment == TabStopAlignment.Left)
+            return 0;
+
+        double segmentWidth = 0;
+        double decimalPrefixWidth = 0;
+        bool foundDecimal = false;
+        for (int scanIndex = tokenIndex; scanIndex < tokens.Count; scanIndex++)
+        {
+            var token = tokens[scanIndex];
+            if (scanIndex > tokenIndex && token.IsTab)
+                break;
+
+            if (token.Text.Length == 0)
+                continue;
+
+            var tokenRun = paragraph.Runs[token.RunIndex];
+            if (!foundDecimal)
+            {
+                int decimalIndex = token.Text.IndexOf('.');
+                if (decimalIndex >= 0)
+                {
+                    decimalPrefixWidth += measureText(tokenRun, token.Text[..(decimalIndex + 1)]);
+                    foundDecimal = true;
+                }
+                else
+                {
+                    decimalPrefixWidth += measureText(tokenRun, token.Text);
+                }
+            }
+
+            segmentWidth += measureText(tokenRun, token.Text);
+        }
+
+        if (segmentWidth <= 0)
+            return 0;
+
+        return alignment switch
+        {
+            TabStopAlignment.Right => -segmentWidth,
+            TabStopAlignment.Center => -segmentWidth / 2.0,
+            TabStopAlignment.Decimal => foundDecimal ? -decimalPrefixWidth : -segmentWidth,
+            _ => 0
+        };
+    }
+
+    private static List<TextTabToken> CreateTabTokens(ResolvedParagraph paragraph)
+    {
+        var tokens = new List<TextTabToken>();
+        for (int runIndex = 0; runIndex < paragraph.Runs.Count; runIndex++)
+        {
+            var run = paragraph.Runs[runIndex];
+            if (run.Text.Length == 0)
+                continue;
+
+            var segments = run.Text.Split('\t');
+            for (int segmentIndex = 0; segmentIndex < segments.Length; segmentIndex++)
+            {
+                tokens.Add(new TextTabToken(
+                    runIndex,
+                    segments[segmentIndex],
+                    segmentIndex > 0));
+            }
+        }
+
+        return tokens;
+    }
+
+    private readonly record struct TextTabToken(
+        int RunIndex,
+        string Text,
+        bool IsTab);
 }

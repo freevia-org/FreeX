@@ -454,7 +454,9 @@ internal static class FreeWAvaloniaRibbonDefinition
                 {
                     // AV-INSERT2: Cover Page (gallery of presets) + Page Break.
                     g.Dropdown("freew.cover-page", "Cover Page", BuildCoverPageMenu());
+                    g.Button("freew.blank-page", "Blank Page");
                     g.Button("freew.page-break", "Page Break");
+                    g.Button("freew.horizontal-rule", "Horizontal Rule");
                 });
                 tab.Group("tables", "Tables", null, 98, g =>
                 {
@@ -470,8 +472,11 @@ internal static class FreeWAvaloniaRibbonDefinition
                 // AV-INSERT2: Links group — Hyperlink + Bookmark.
                 tab.Group("links", "Links", null, 95, g =>
                 {
+                    g.Button("freew.hyperlink", "Hyperlink");
                     g.Button("freew.insert-hyperlink", "Hyperlink");
+                    g.Button("freew.bookmark", "Bookmark");
                     g.Button("freew.insert-bookmark",  "Bookmark");
+                    g.Button("freew.bookmark-manager", "Bookmark Manager");
                 });
                 tab.Group("header-footer", "Header & Footer", null, 94, g =>
                 {
@@ -484,6 +489,7 @@ internal static class FreeWAvaloniaRibbonDefinition
                 {
                     g.Dropdown("freew.quick-parts", "Quick Parts", BuildQuickPartsMenu());
                     g.Dropdown("freew.drop-cap",    "Drop Cap",    BuildDropCapMenu());
+                    g.Button("freew.datetime", "Date & Time");
                     g.Button("freew.text-from-file", "Text from File");
                 });
                 tab.Group("symbols", FreeWRibbonText.SymbolsGroup.Label, null, 92, g =>
@@ -556,6 +562,10 @@ internal static class FreeWAvaloniaRibbonDefinition
                     g.Button("freew.zoom-in",  "Zoom In");
                     g.Button("freew.zoom-out", "Zoom Out");
                     g.Button("freew.zoom-100", "100%");
+                    g.Button("freew.zoom-one-page", "One Page");
+                    g.Button("freew.zoom-page-width", "Page Width");
+                    g.Toggle("freew.zoom-multiple-pages", "Multiple Pages");
+                    g.Toggle("freew.zoom-side-to-side", "Side to Side");
                 });
                 // AV-VIEW: Window group — new window (second view on the same doc) + split.
                 tab.Group("window", "Window", null, 80, g =>
@@ -620,16 +630,33 @@ internal static class FreeWAvaloniaRibbonDefinition
                 {
                     g.Button("freew.footnote", "Insert Footnote");
                     g.Button("freew.endnote",  "Insert Endnote");
+                    g.Button("freew.show-notes", "Show Notes");
+                    g.Button("freew.footnote-endnote-options", "Footnote/Endnote Options...");
                 });
                 tab.Group("citations", "Citations & Bibliography", null, 90, g =>
                 {
                     g.Button("freew.citation",     "Insert Citation");
+                    g.Button("freew.manage-sources", "Manage Sources");
                     g.Button("freew.bibliography", "Bibliography");
                 });
                 tab.Group("captions", "Captions", null, 80, g =>
                 {
                     g.Dropdown("freew.caption", "Insert Caption", BuildCaptionMenu());
+                    g.Button("freew.tof", "Insert Table of Figures");
+                    g.Button("freew.tof-refresh", "Update Table");
                     g.Button("freew.cross-reference", "Cross-reference");
+                });
+                tab.Group("index", "Index", null, 70, g =>
+                {
+                    g.Button("freew.index-mark", "Mark Entry");
+                    g.Button("freew.index-insert", "Insert Index");
+                    g.Button("freew.index-refresh", "Update Index");
+                });
+                tab.Group("authorities", "Table of Authorities", null, 60, g =>
+                {
+                    g.Button("freew.mark-citation", "Mark Citation");
+                    g.Button("freew.table-of-authorities", "Insert Table of Authorities");
+                    g.Button("freew.table-of-authorities-refresh", "Update Table");
                 });
             })
             .Tab("mailings", "Mailings", "M", tab =>

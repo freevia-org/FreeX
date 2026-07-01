@@ -648,14 +648,11 @@ public sealed class SlideCanvas : FrameworkElement
         double plotH = plot.Height;
 
         // ── Gridlines (drawn before bars so they appear behind) ─────────────────
-        var gridLinePlans = ChartRenderPlanner.BuildMajorGridLinePlans(chart, frame);
-        if (gridLinePlans.Count > 0)
+        var gridLinePlan = ChartRenderPlanner.BuildMajorGridLinePrimitivePlan(chart, frame);
+        if (gridLinePlan.GridLines.Count > 0)
         {
-            var gridPen = new Pen(
-                FreezeBrush(new SolidColorBrush(Color.FromRgb(0xD9, 0xD9, 0xD9))), 0.5);
-            if (gridPen.CanFreeze) gridPen.Freeze();
-
-            foreach (var gridLine in gridLinePlans)
+            var gridPen = ToPen(gridLinePlan.Stroke);
+            foreach (var gridLine in gridLinePlan.GridLines)
                 dc.DrawLine(gridPen, ToPoint(gridLine.Start), ToPoint(gridLine.End));
         }
 
@@ -1382,109 +1379,16 @@ public sealed class SlideCanvas : FrameworkElement
         double startY,
         IReadOnlyList<ResolvedTabStop> tabStops)
     {
-        const double DefaultTabDip = 96.0; // 1 inch fallback
+        var plan = TextLayoutPlanner.PlanTabStops(
+            para,
+            startX,
+            tabStops,
+            (run, text) => BuildSingleRunFormattedTextAt(run, text).Width);
 
-        // BO1: Flatten all runs into a sequence of (text, run, isTabBefore) tokens.
-        // Each entry is a text segment + the run it belongs to; a true isTab flag means
-        // a tab character precedes this segment (so alignment must be applied before drawing).
-        var tokens = new System.Collections.Generic.List<(string text, ResolvedRun run, bool isTab)>();
-        foreach (var run in para.Runs)
+        foreach (var segment in plan.Segments)
         {
-            if (run.Text.Length == 0) continue;
-            var segs = run.Text.Split('\t');
-            for (int si = 0; si < segs.Length; si++)
-                tokens.Add((segs[si], run, si > 0));
-        }
-
-        double curX = startX;
-
-        for (int ti = 0; ti < tokens.Count; ti++)
-        {
-            var (seg, run, isTab) = tokens[ti];
-
-            // Advance to the next tab stop before drawing this segment.
-            if (isTab)
-            {
-                double relX = curX - startX;
-
-                // Find the matching tab stop.
-                double stopDip = DefaultTabDip;
-                ResolvedTabStop? matchedStop = null;
-                bool found = false;
-                foreach (var ts in tabStops)
-                {
-                    if (ts.PositionDip > relX + 0.5)
-                    {
-                        stopDip     = ts.PositionDip;
-                        matchedStop = ts;
-                        found       = true;
-                        break;
-                    }
-                }
-                if (!found)
-                    stopDip = Math.Floor(relX / DefaultTabDip + 1.0) * DefaultTabDip;
-
-                // BQ1+BQ2: compute alignment offset by scanning the segment width ACROSS all
-                // following tokens up to the next tab (run-agnostic, mirrors FreeW EmitLinePaged).
-                // The aligned segment may span multiple runs (e.g. tab in run1, text in run2).
-                double alignOffset = 0;
-                TabStopAlignment align = matchedStop?.Alignment ?? TabStopAlignment.Left;
-                if (align != TabStopAlignment.Left)
-                {
-                    // Forward-scan: collect the combined text and total width of consecutive
-                    // non-tab tokens starting from the CURRENT token (seg, which may be "") and
-                    // continuing into following tokens until we hit another tab token or end.
-                    var sbCombined = new System.Text.StringBuilder();
-                    double segW = 0;
-
-                    // Include the current (same-run) segment first.
-                    if (seg.Length > 0)
-                    {
-                        sbCombined.Append(seg);
-                        segW += BuildSingleRunFormattedTextAt(run, seg).Width;
-                    }
-                    // Then scan following tokens until the next isTab==true or end.
-                    for (int fwd = ti + 1; fwd < tokens.Count; fwd++)
-                    {
-                        var (fwdSeg, fwdRun, fwdIsTab) = tokens[fwd];
-                        if (fwdIsTab) break;           // next tab boundary — stop here
-                        if (fwdSeg.Length > 0)
-                        {
-                            sbCombined.Append(fwdSeg);
-                            segW += BuildSingleRunFormattedTextAt(fwdRun, fwdSeg).Width;
-                        }
-                    }
-
-                    if (segW > 0)
-                    {
-                        string combinedText = sbCombined.ToString();
-                        alignOffset = align switch
-                        {
-                            TabStopAlignment.Right   => -segW,            // segment ends at stop
-                            TabStopAlignment.Center  => -segW / 2.0,      // segment centred on stop
-                            TabStopAlignment.Decimal =>                    // decimal pt at stop
-                                -(combinedText.Contains('.')
-                                    ? BuildSingleRunFormattedTextAt(run,
-                                          combinedText[..(combinedText.IndexOf('.') + 1)]).Width
-                                    : segW),
-                            _ => 0
-                        };
-                    }
-                }
-
-                // BQ2: clamp — never start the aligned segment before the current pen position
-                // (prevents overlap when segment width > gap from prior text to stop).
-                double prevCurX = curX;
-                curX = Math.Max(prevCurX, startX + stopDip + alignOffset);
-            }
-
-            // Draw the segment.
-            if (seg.Length > 0)
-            {
-                var ft = BuildSingleRunFormattedTextAt(run, seg);
-                dc.DrawText(ft, new Point(curX, startY));
-                curX += ft.Width;
-            }
+            var ft = BuildSingleRunFormattedTextAt(para.Runs[segment.RunIndex], segment.Text);
+            dc.DrawText(ft, new Point(segment.X, startY));
         }
     }
 

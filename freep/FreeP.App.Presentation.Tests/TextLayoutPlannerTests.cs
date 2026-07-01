@@ -250,6 +250,116 @@ public sealed class TextLayoutPlannerTests
     }
 
     [Fact]
+    public void PlanTabStops_UsesExplicitStopThenDefaultFallbackStop()
+    {
+        var paragraph = Paragraph("A\tB\tC");
+        var tabStops = new[]
+        {
+            new ResolvedTabStop
+            {
+                PositionDip = 50,
+                Alignment = TabStopAlignment.Left
+            }
+        };
+
+        var plan = TextLayoutPlanner.PlanTabStops(
+            paragraph,
+            startX: 100,
+            tabStops,
+            MeasureTenDipPerCharacter);
+
+        plan.Segments.Should().Equal(
+            new TextTabSegmentPlacement(0, "A", 100),
+            new TextTabSegmentPlacement(0, "B", 150),
+            new TextTabSegmentPlacement(0, "C", 196));
+    }
+
+    [Fact]
+    public void PlanTabStops_RightAlignedStop_ClampsToCurrentPenWhenSegmentWouldOverlap()
+    {
+        var paragraph = Paragraph("LongLong\tWide!");
+        var tabStops = new[]
+        {
+            new ResolvedTabStop
+            {
+                PositionDip = 100,
+                Alignment = TabStopAlignment.Right
+            }
+        };
+
+        var plan = TextLayoutPlanner.PlanTabStops(
+            paragraph,
+            startX: 0,
+            tabStops,
+            MeasureTenDipPerCharacter);
+
+        plan.Segments.Should().Equal(
+            new TextTabSegmentPlacement(0, "LongLong", 0),
+            new TextTabSegmentPlacement(0, "Wide!", 80));
+    }
+
+    [Fact]
+    public void PlanTabStops_DecimalAlignedStop_MeasuresAcrossRuns()
+    {
+        var paragraph = ParagraphWithRuns(
+            "Label\t",
+            "12",
+            ".34");
+        var tabStops = new[]
+        {
+            new ResolvedTabStop
+            {
+                PositionDip = 100,
+                Alignment = TabStopAlignment.Decimal
+            }
+        };
+
+        var plan = TextLayoutPlanner.PlanTabStops(
+            paragraph,
+            startX: 0,
+            tabStops,
+            MeasureTenDipPerCharacter);
+
+        plan.Segments.Should().Equal(
+            new TextTabSegmentPlacement(0, "Label", 0),
+            new TextTabSegmentPlacement(1, "12", 70),
+            new TextTabSegmentPlacement(2, ".34", 90));
+    }
+
+    [Fact]
+    public void PlanTabStops_DecimalAlignedStop_UsesEachRunMeasurement()
+    {
+        var paragraph = new ResolvedParagraph
+        {
+            Runs = new[]
+            {
+                new ResolvedRun { Text = "Label\t", FontSizePt = 12 },
+                new ResolvedRun { Text = "12", FontSizePt = 12 },
+                new ResolvedRun { Text = ".34", FontSizePt = 24 }
+            }
+        };
+        var tabStops = new[]
+        {
+            new ResolvedTabStop
+            {
+                PositionDip = 100,
+                Alignment = TabStopAlignment.Decimal
+            }
+        };
+
+        var plan = TextLayoutPlanner.PlanTabStops(
+            paragraph,
+            startX: 0,
+            tabStops,
+            (run, text) => text.Length * (run.FontSizePt <= 12 ? 10 : 20));
+
+        plan.Segments.Should().Equal(
+            new TextTabSegmentPlacement(0, "Label", 0),
+            new TextTabSegmentPlacement(1, "12", 60),
+            new TextTabSegmentPlacement(2, ".34", 80));
+    }
+
+    [Fact]
     public void WpfAndAvaloniaSlideCanvases_DelegateTextLayoutMathToSharedPlanner()
     {
         var wpf = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "SlideCanvas.cs");
@@ -263,9 +373,12 @@ public sealed class TextLayoutPlannerTests
         wpf.Should().Contain("TextLayoutPlanner.PlanBodyText");
         wpf.Should().Contain("TextLayoutPlanner.GetColumnLayout");
         wpf.Should().Contain("TextLayoutPlanner.PlanColumns");
+        wpf.Should().Contain("TextLayoutPlanner.PlanTabStops");
         wpf.Should().Contain("placement.Bullet");
         wpf.Should().NotContain("placement.X - para.HangingDip");
         wpf.Should().NotContain("const double DefaultSpacingDip");
+        wpf.Should().NotContain("const double DefaultTabDip");
+        wpf.Should().NotContain("Math.Floor(relX /");
         wpf.Should().NotContain("TableCellAnchor.Middle => bounds.Y");
         wpf.Should().NotContain("VerticalAnchor.Middle => bounds.Y");
 
@@ -274,9 +387,12 @@ public sealed class TextLayoutPlannerTests
         avalonia.Should().Contain("TextLayoutPlanner.PlanBodyText");
         avalonia.Should().Contain("TextLayoutPlanner.GetColumnLayout");
         avalonia.Should().Contain("TextLayoutPlanner.PlanColumns");
+        avalonia.Should().Contain("TextLayoutPlanner.PlanTabStops");
         avalonia.Should().Contain("placement.Bullet");
         avalonia.Should().NotContain("placement.X - para.HangingDip");
         avalonia.Should().NotContain("const double DefaultSpacingDip");
+        avalonia.Should().NotContain("const double DefaultTabDip");
+        avalonia.Should().NotContain("Math.Floor(relX /");
         avalonia.Should().NotContain("TableCellAnchor.Middle => bounds.Y");
         avalonia.Should().NotContain("VerticalAnchor.Middle => bounds.Y");
     }
@@ -320,6 +436,14 @@ public sealed class TextLayoutPlannerTests
         };
     }
 
+    private static ResolvedParagraph ParagraphWithRuns(params string[] runs)
+    {
+        return new ResolvedParagraph
+        {
+            Runs = runs.Select(text => new ResolvedRun { Text = text }).ToArray()
+        };
+    }
+
     private static ResolvedParagraph BulletParagraph(double indent, double hanging)
     {
         return new ResolvedParagraph
@@ -333,6 +457,9 @@ public sealed class TextLayoutPlannerTests
             Runs = new[] { new ResolvedRun { Text = "Item" } }
         };
     }
+
+    private static double MeasureTenDipPerCharacter(ResolvedRun run, string text) =>
+        text.Length * 10;
 
     private static string ReadWorkspaceFile(params string[] relativeParts)
     {

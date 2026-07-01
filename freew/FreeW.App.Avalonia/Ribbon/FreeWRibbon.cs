@@ -89,6 +89,18 @@ internal sealed record RibbonHostCallbacks(
     Action? NewWindow = null,
     /// <summary>AV-VIEW: Toggle the split view (or status note if unsupported / deferred).</summary>
     Action? ToggleSplit = null,
+    /// <summary>AV-VIEW: Fit the whole page in the current viewport.</summary>
+    Action? ZoomOnePage = null,
+    /// <summary>AV-VIEW: Fit the page width in the current viewport.</summary>
+    Action? ZoomPageWidth = null,
+    /// <summary>AV-VIEW: Toggle the Multiple Pages view mode (or status note if unsupported / deferred).</summary>
+    Action? ToggleMultiplePages = null,
+    /// <summary>AV-VIEW: Whether Multiple Pages view mode is active.</summary>
+    Func<bool>? IsMultiplePagesActive = null,
+    /// <summary>AV-VIEW: Toggle the Side to Side view mode (or status note if unsupported / deferred).</summary>
+    Action? ToggleSideToSide = null,
+    /// <summary>AV-VIEW: Whether Side to Side view mode is active.</summary>
+    Func<bool>? IsSideToSideActive = null,
     /// <summary>
     /// AV-INSERT2: Opens the Insert Hyperlink dialog (display text + address/anchor) and applies it via
     /// <see cref="DocumentView.InsertHyperlink"/>. Optional (default null) so existing call sites still

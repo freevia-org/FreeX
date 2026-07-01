@@ -31,11 +31,12 @@ referenced by a direct raw GitHub URL in `manifest.csv`.
 
 ## What is committed vs. downloaded
 
-- **Committed:** `manifest.csv` and `tools/Fetch-FreeWFidelityCorpus.ps1`.
+- **Committed:** `manifest.csv`, `tools/Fetch-FreeWFidelityCorpus.ps1`, and visual-runner scripts.
 - **Committed local fixtures:** repo-generated DOCX files under `freew-fidelity-corpus/files/review/`
   and `freew-fidelity-corpus/files/tables/`, each covered by a `source=local` manifest row.
 - **Not committed:** downloaded third-party DOCX binaries in `freew-fidelity-corpus/files/` and future
-  run output under `freew-fidelity-corpus/runs/`.
+  run output under `freew-fidelity-corpus/runs/`, including generated F2 DOCX fixtures, PNG/PDF
+  captures, raw visual manifests with machine-local absolute paths, and comparison scratch files.
 
 ## Getting the files
 
@@ -66,6 +67,22 @@ Run the commands from the repository root; `tools/Fetch-FreeWFidelityCorpus.ps1`
 asserts no modelled-content loss (it no-ops when `files/` is absent). Findings:
 `docs/fidelity/2026-06-17-freew-corpus-roundtrip.md` is the historical 26-file baseline; the current
 corpus growth note is `docs/fidelity/2026-06-19-freew-corpus-feature-growth.md`.
+
+**FreeW visual evidence smoke (no Word needed):** use the repeatable WPF + Avalonia runner when you
+need local evidence that the shared manifest contract is healthy:
+
+```powershell
+pwsh freew-fidelity-corpus/tools/Run-FreeWVisualEvidence.ps1 -OutDir freew-fidelity-corpus/runs/visual-evidence-smoke
+```
+
+The runner generates F2 DOCX fixtures under `runs/<name>/fixtures/f2/`, renders WPF evidence through
+`freew/tools/FreeW.FidelityRender` in composite mode, renders Avalonia page-layout evidence through
+`freew/tools/FreeW.PageLayoutShot`, validates both `freew_visual_evidence_manifest.json` files through
+the shared `FreeW.App.Presentation` normalizer, and writes retained summaries:
+`freew_visual_evidence_summary.json` and `freew_visual_evidence_summary.md`. Those summaries contain
+stable relative paths, scenario IDs, host IDs, dimensions, byte lengths, SHA-256 hashes, pixel stats,
+and trust status. Keep the entire run folder local; do not commit generated images, DOCX files, PDFs,
+or raw absolute-path manifests.
 
 **Visual vs MS Word / LibreOffice:** run on a machine that has MS Word (preferred) or LibreOffice installed:
 

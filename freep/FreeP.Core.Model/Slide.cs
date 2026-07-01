@@ -286,8 +286,14 @@ public sealed class SlideShape
     /// <summary>Display name for the shape (from p:sp/nvSpPr/cNvPr name="...").</summary>
     public string Name { get; set; } = string.Empty;
 
+    /// <summary>Persistent alternative text title (from cNvPr title="...").</summary>
+    public string AlternativeTextTitle { get; set; } = string.Empty;
+
     /// <summary>Persistent alternative text description (from cNvPr descr="...").</summary>
     public string AlternativeText { get; set; } = string.Empty;
+
+    /// <summary>True when the object is marked decorative and should not require alt text.</summary>
+    public bool IsDecorative { get; set; }
 
     // ── Kind discriminator ───────────────────────────────────────────────────────
 

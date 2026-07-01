@@ -58,6 +58,8 @@ public sealed class MainWindow : Window
     private FindReplaceDialog? _findReplaceDialog;
     private ScrollViewer? _scroller;
     private double _zoomScale = 1.0;
+    private bool _multiplePagesMode;
+    private bool _sideToSideMode;
     private bool _suppressEditorDirty;
     private bool _closingConfirmed;
 
@@ -383,6 +385,62 @@ public sealed class MainWindow : Window
         _status.Text = "Split view is not yet available in the Avalonia shell (deferred).";
     }
 
+    private void ZoomToOnePage()
+    {
+        var (_, _, wholePageFactor) = ComputeZoomFitFactors();
+        ApplyZoom(wholePageFactor);
+        _editor.Focus();
+    }
+
+    private void ZoomToPageWidth()
+    {
+        var (pageWidthFactor, _, _) = ComputeZoomFitFactors();
+        ApplyZoom(pageWidthFactor);
+        _editor.Focus();
+    }
+
+    private void ToggleMultiplePages()
+    {
+        _multiplePagesMode = !_multiplePagesMode;
+        if (_multiplePagesMode)
+            _sideToSideMode = false;
+
+        _status.Text = _multiplePagesMode
+            ? "Multiple Pages view is not yet available in the Avalonia shell (deferred)."
+            : "Multiple Pages view is off.";
+    }
+
+    private void ToggleSideToSide()
+    {
+        _sideToSideMode = !_sideToSideMode;
+        if (_sideToSideMode)
+            _multiplePagesMode = false;
+
+        _status.Text = _sideToSideMode
+            ? "Side to Side view is not yet available in the Avalonia shell (deferred)."
+            : "Side to Side view is off.";
+    }
+
+    private (double PageWidthFactor, double TextWidthFactor, double WholePageFactor) ComputeZoomFitFactors()
+    {
+        var page = _editor.Document.Page;
+        var (pageWidthDip, pageHeightDip) = PageLayout.PageSizeDip(page);
+        var (contentWidthDip, _) = PageLayout.ContentAreaDip(page);
+
+        var viewportWidth = 0.0;
+        var viewportHeight = 0.0;
+        if (_scroller is not null)
+        {
+            viewportWidth = Math.Max(0, _scroller.Bounds.Width - _scroller.Padding.Left - _scroller.Padding.Right);
+            viewportHeight = Math.Max(0, _scroller.Bounds.Height - _scroller.Padding.Top - _scroller.Padding.Bottom);
+        }
+
+        return (
+            ZoomFit.PageWidth(pageWidthDip, viewportWidth),
+            ZoomFit.TextWidth(contentWidthDip, viewportWidth),
+            ZoomFit.WholePage(pageWidthDip, pageHeightDip, viewportWidth, viewportHeight));
+    }
+
     /// <summary>
     /// Toggle the document orientation between Portrait and Landscape (AV-PAGE).
     /// Wired to <c>freew.page-orientation</c>.
@@ -504,6 +562,12 @@ public sealed class MainWindow : Window
             OpenPrintPreview: () => _ = OpenPrintPreviewAsync(),
             NewWindow:       OpenNewWindow,
             ToggleSplit:     ToggleSplit,
+            ZoomOnePage:     ZoomToOnePage,
+            ZoomPageWidth:   ZoomToPageWidth,
+            ToggleMultiplePages: ToggleMultiplePages,
+            IsMultiplePagesActive: () => _multiplePagesMode,
+            ToggleSideToSide: ToggleSideToSide,
+            IsSideToSideActive: () => _sideToSideMode,
             // AV-INSERT2: Insert depth 2 dialog launchers (optional callbacks).
             OpenHyperlinkDialog: () => _ = OpenHyperlinkDialogAsync(),
             OpenBookmarkDialog:  () => _ = OpenBookmarkDialogAsync(),

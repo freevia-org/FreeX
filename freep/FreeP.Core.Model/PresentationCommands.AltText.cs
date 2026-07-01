@@ -7,24 +7,40 @@ public sealed class SetShapeAlternativeTextCommand : IPresentationCommand
 {
     private readonly int _slideIndex;
     private readonly uint _shapeId;
+    private readonly string? _newTitle;
     private readonly string _newAlternativeText;
+    private readonly bool? _newIsDecorative;
+    private string _previousTitle = string.Empty;
     private string _previousAlternativeText = string.Empty;
+    private bool _previousIsDecorative;
 
-    public SetShapeAlternativeTextCommand(int slideIndex, uint shapeId, string? alternativeText)
+    public SetShapeAlternativeTextCommand(
+        int slideIndex,
+        uint shapeId,
+        string? alternativeText,
+        string? title = null,
+        bool? isDecorative = null)
     {
         _slideIndex = slideIndex;
         _shapeId = shapeId;
+        _newTitle = title is null ? null : Normalize(title);
         _newAlternativeText = Normalize(alternativeText);
+        _newIsDecorative = isDecorative;
     }
 
-    public string Label => string.IsNullOrEmpty(_newAlternativeText)
+    public string Label => _newIsDecorative == true
+        ? "Mark Decorative"
+        : string.IsNullOrEmpty(_newAlternativeText)
         ? "Clear Alternative Text"
         : "Set Alternative Text";
 
     public bool HasEffect(Presentation presentation)
     {
         var shape = FindShape(presentation);
-        return shape is not null && shape.AlternativeText != _newAlternativeText;
+        return shape is not null
+            && ((_newTitle is not null && shape.AlternativeTextTitle != _newTitle)
+                || shape.AlternativeText != _newAlternativeText
+                || (_newIsDecorative.HasValue && shape.IsDecorative != _newIsDecorative.Value));
     }
 
     public void Apply(Presentation presentation)
@@ -35,8 +51,19 @@ public sealed class SetShapeAlternativeTextCommand : IPresentationCommand
             return;
         }
 
+        _previousTitle = shape.AlternativeTextTitle;
         _previousAlternativeText = shape.AlternativeText;
+        _previousIsDecorative = shape.IsDecorative;
+        if (_newTitle is not null)
+        {
+            shape.AlternativeTextTitle = _newTitle;
+        }
+
         shape.AlternativeText = _newAlternativeText;
+        if (_newIsDecorative.HasValue)
+        {
+            shape.IsDecorative = _newIsDecorative.Value;
+        }
     }
 
     public void Revert(Presentation presentation)
@@ -47,7 +74,9 @@ public sealed class SetShapeAlternativeTextCommand : IPresentationCommand
             return;
         }
 
+        shape.AlternativeTextTitle = _previousTitle;
         shape.AlternativeText = _previousAlternativeText;
+        shape.IsDecorative = _previousIsDecorative;
     }
 
     private SlideShape? FindShape(Presentation presentation)

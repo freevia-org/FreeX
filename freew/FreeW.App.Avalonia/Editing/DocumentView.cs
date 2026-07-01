@@ -8533,6 +8533,34 @@ public sealed class DocumentView : Control
     }
 
     /// <summary>
+    /// Insert a whole blank page after the caret block using the shared Word-compatible page-break pair.
+    /// </summary>
+    public void InsertBlankPage()
+    {
+        if (IsEditingLocked)
+            return;
+
+        var insertAt = Math.Clamp(_caret.Block + 1, 0, _doc.Blocks.Count);
+        var blocks = DocumentOps.BuildBlankPage();
+        _bus.BeginUndoGroup();
+        for (var i = 0; i < blocks.Count; i++)
+            _bus.Execute(new InsertBlockCommand(insertAt + i, blocks[i]));
+        _bus.CommitUndoGroup("Insert Blank Page");
+    }
+
+    /// <summary>
+    /// Insert a horizontal-rule paragraph after the caret block.
+    /// </summary>
+    public void InsertHorizontalRule()
+    {
+        if (IsEditingLocked)
+            return;
+
+        var insertAt = Math.Clamp(_caret.Block + 1, 0, _doc.Blocks.Count);
+        _bus.Execute(new InsertBlockCommand(insertAt, DocumentOps.CreateHorizontalRule()));
+    }
+
+    /// <summary>
     /// Insert a column break after the caret block using the shared model command path.
     /// </summary>
     public void InsertColumnBreak()
@@ -9068,6 +9096,118 @@ public sealed class DocumentView : Control
         foreach (var paragraph in Citations.BuildBibliography(_doc, _doc.BibliographyStyle))
             _bus.Execute(new InsertParagraphCommand(index++, paragraph));
         _bus.CommitUndoGroup("Insert Bibliography");
+    }
+
+    public void ReplaceSources(IReadOnlyList<Source> sources)
+    {
+        ArgumentNullException.ThrowIfNull(sources);
+        _bus.Execute(new ReplaceSourcesCommand(sources));
+        Focus();
+    }
+
+    public void MarkIndexEntry(string? term = null)
+    {
+        var resolved = string.IsNullOrWhiteSpace(term)
+            ? SelectedText.Trim()
+            : term.Trim();
+        if (string.IsNullOrWhiteSpace(resolved))
+            resolved = CurrentParagraph()?.PlainText.Trim() ?? string.Empty;
+        if (resolved.Length == 0)
+            return;
+
+        _bus.Execute(new AddIndexEntryCommand(resolved));
+        Focus();
+    }
+
+    public void InsertIndex()
+    {
+        DocumentIndex.EnsureStyles(_doc);
+        InsertGeneratedReferenceBlocks(DocumentIndex.Build(_doc), "Insert Index", Math.Clamp(_caret.Block, 0, _doc.Blocks.Count));
+    }
+
+    public void RefreshIndex()
+    {
+        DocumentIndex.EnsureStyles(_doc);
+        RefreshGeneratedReferenceBlocks(DocumentIndex.IsIndexParagraph, () => DocumentIndex.Build(_doc), "Update Index");
+    }
+
+    public void InsertTableOfFigures(CaptionLabel label = CaptionLabel.Figure)
+    {
+        TableOfFigures.EnsureStyles(_doc);
+        InsertGeneratedReferenceBlocks(TableOfFigures.Build(_doc, label), "Insert Table of Figures", Math.Clamp(_caret.Block, 0, _doc.Blocks.Count));
+    }
+
+    public void RefreshTableOfFigures(CaptionLabel label = CaptionLabel.Figure)
+    {
+        TableOfFigures.EnsureStyles(_doc);
+        RefreshGeneratedReferenceBlocks(TableOfFigures.IsTableOfFiguresParagraph, () => TableOfFigures.Build(_doc, label), "Update Table of Figures");
+    }
+
+    public void MarkCitation(string? longCitation = null)
+    {
+        var resolved = string.IsNullOrWhiteSpace(longCitation)
+            ? SelectedText.Trim()
+            : longCitation.Trim();
+        if (string.IsNullOrWhiteSpace(resolved))
+            resolved = CurrentParagraph()?.PlainText.Trim() ?? string.Empty;
+        if (resolved.Length == 0)
+            return;
+
+        _bus.Execute(new AddCitationCommand(new Citation(resolved)));
+        Focus();
+    }
+
+    public void InsertTableOfAuthorities()
+    {
+        TableOfAuthorities.EnsureStyles(_doc);
+        InsertGeneratedReferenceBlocks(TableOfAuthorities.Build(_doc), "Insert Table of Authorities", Math.Clamp(_caret.Block, 0, _doc.Blocks.Count));
+    }
+
+    public void RefreshTableOfAuthorities()
+    {
+        TableOfAuthorities.EnsureStyles(_doc);
+        RefreshGeneratedReferenceBlocks(TableOfAuthorities.IsTableOfAuthoritiesParagraph, () => TableOfAuthorities.Build(_doc), "Update Table of Authorities");
+    }
+
+    public void ShowNotes()
+    {
+        Focus();
+        InvalidateVisual();
+    }
+
+    public void ApplyDefaultFootnoteEndnoteOptions()
+    {
+        Focus();
+        InvalidateVisual();
+    }
+
+    private void InsertGeneratedReferenceBlocks(IReadOnlyList<Paragraph> paragraphs, string label, int insertAt)
+    {
+        ArgumentNullException.ThrowIfNull(paragraphs);
+
+        _bus.BeginUndoGroup();
+        var index = Math.Clamp(insertAt, 0, _doc.Blocks.Count);
+        foreach (var paragraph in paragraphs)
+            _bus.Execute(new InsertParagraphCommand(index++, paragraph));
+        _bus.CommitUndoGroup(label);
+    }
+
+    private void RefreshGeneratedReferenceBlocks(Func<Block, bool> isGeneratedBlock, Func<IReadOnlyList<Paragraph>> build, string label)
+    {
+        var indices = new List<int>();
+        for (var i = 0; i < _doc.Blocks.Count; i++)
+            if (isGeneratedBlock(_doc.Blocks[i]))
+                indices.Add(i);
+
+        var insertAt = indices.Count > 0 ? indices[0] : 0;
+
+        _bus.BeginUndoGroup();
+        for (var i = indices.Count - 1; i >= 0; i--)
+            _bus.Execute(new DeleteParagraphCommand(indices[i]));
+        var index = Math.Clamp(insertAt, 0, _doc.Blocks.Count);
+        foreach (var paragraph in build())
+            _bus.Execute(new InsertParagraphCommand(index++, paragraph));
+        _bus.CommitUndoGroup(label);
     }
 
     // ── AV-INSERT2: Insert depth 2 (cover page / drop cap / document-property field / equation / quick part) ──
