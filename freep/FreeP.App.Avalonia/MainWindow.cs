@@ -123,6 +123,7 @@ public sealed class MainWindow : Window
     internal PresentationAltTextRequestPlan? LastAltTextRequestPlan { get; private set; }
     internal PresentationProofingRequestPlan? LastProofingRequestPlan { get; private set; }
     internal AnimationPaneTimelinePlan? LastAnimationPaneTimelinePlan { get; private set; }
+    internal PresentationDesignCommandPlan? LastLayoutRequestPlan { get; private set; }
 
     // ── Constructors ───────────────────────────────────────────────────────────
 
@@ -391,7 +392,11 @@ public sealed class MainWindow : Window
         r.Register("freep.new-slide",       new ActionRibbonCommand(() => Editor.InsertSlide()));
         r.Register("freep.duplicate-slide", new ActionRibbonCommand(() => Editor.DuplicateCurrentSlide()));
         r.Register("freep.delete-slide",    new ActionRibbonCommand(() => Editor.DeleteCurrentSlide()));
-        r.Register("freep.layout",          new ActionRibbonCommand(() => { }));
+        r.Register(PresentationDesignCommandPlanner.LayoutCommandId, new ActionRibbonCommand(() =>
+            PresentationDesignCommandPlanner.TryApply(
+                Editor,
+                PresentationDesignCommandPlanner.LayoutPlan,
+                OnDesignHostRequest)));
 
         // Clipboard
         r.Register("freep.copy", new ActionRibbonCommand(() => Editor.CopySelectedShapes()));
@@ -453,7 +458,7 @@ public sealed class MainWindow : Window
         foreach (var plan in PresentationDesignCommandPlanner.BuiltInPlans)
         {
             r.Register(plan.CommandId, new ActionRibbonCommand(() =>
-                PresentationDesignCommandPlanner.TryApply(Editor, plan, OnCustomSlideSizeRequested)));
+                PresentationDesignCommandPlanner.TryApply(Editor, plan, OnDesignHostRequest)));
         }
 
         foreach (var plan in PresentationAnimationCommandPlanner.BuiltInPlans)
@@ -475,6 +480,19 @@ public sealed class MainWindow : Window
         return r;
     }
 
+    private void OnDesignHostRequest(PresentationDesignCommandPlan plan)
+    {
+        switch (plan.Intent)
+        {
+            case PresentationDesignCommandIntentKind.RequestCustomSlideSize:
+                OnCustomSlideSizeRequested(plan);
+                break;
+            case PresentationDesignCommandIntentKind.RequestLayoutPicker:
+                OnLayoutPickerRequested(plan);
+                break;
+        }
+    }
+
     private void OnCustomSlideSizeRequested(PresentationDesignCommandPlan plan)
     {
         _ = plan;
@@ -482,6 +500,12 @@ public sealed class MainWindow : Window
             _presentation.SlideSizeCxEmu,
             _presentation.SlideSizeCyEmu,
             SlideSizeDialogUnit.Inches);
+    }
+
+    private void OnLayoutPickerRequested(PresentationDesignCommandPlan plan)
+    {
+        LastLayoutRequestPlan = plan;
+        _statusText.Text = "Layout picker requested";
     }
 
     private async Task InsertPictureFromFileAsync()

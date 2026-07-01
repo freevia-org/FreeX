@@ -283,10 +283,13 @@ public sealed class MainWindowHeadlessTests
         var source = File.ReadAllText(FindRepoFile("freep", "FreeP.App.Avalonia", "MainWindow.cs"));
 
         source.Should().Contain("PresentationDesignCommandPlanner.BuiltInPlans");
-        source.Should().Contain("PresentationDesignCommandPlanner.TryApply(Editor, plan, OnCustomSlideSizeRequested)");
+        source.Should().Contain("PresentationDesignCommandPlanner.TryApply(Editor, plan, OnDesignHostRequest)");
+        source.Should().Contain("PresentationDesignCommandPlanner.LayoutPlan");
+        source.Should().Contain("OnLayoutPickerRequested");
         source.Should().NotContain("Editor.SetTheme(");
         source.Should().NotContain("Editor.SetSlideSize16x9()");
         source.Should().NotContain("Editor.SetSlideSize4x3()");
+        source.Should().NotContain("new ActionRibbonCommand(() => { })");
     }
 
     [Fact]
@@ -877,6 +880,30 @@ public sealed class MainWindowHeadlessTests
         themeName.Should().Be("Berlin");
         slideWidth.Should().Be(PresentationDesignCommandPlanner.SlideSizeStandard4x3CxEmu);
         slideHeight.Should().Be(PresentationDesignCommandPlanner.SlideSizeStandardCyEmu);
+    }
+
+    [Fact]
+    public async Task Ribbon_layout_command_routes_through_shared_planner()
+    {
+        var found = false;
+        PresentationDesignCommandPlan? layoutPlan = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var registry = window.BuildCommandRegistry();
+            found = registry.TryGet(PresentationDesignCommandPlanner.LayoutCommandId, out var layout);
+
+            layout!.Execute(RibbonCommandContext.Empty);
+
+            layoutPlan = window.LastLayoutRequestPlan;
+        });
+
+        if (!ran) return;
+        found.Should().BeTrue("layout must be registered through the Avalonia registry");
+        layoutPlan.Should().NotBeNull("the command should expose a host callback intent instead of no-oping");
+        layoutPlan!.CommandId.Should().Be(PresentationDesignCommandPlanner.LayoutCommandId);
+        layoutPlan.Intent.Should().Be(PresentationDesignCommandIntentKind.RequestLayoutPicker);
     }
 
     [Fact]

@@ -73,6 +73,22 @@ public sealed class ReviewWorkflowAdapterTests
     }
 
     [StaFact]
+    public void MainWindow_LayoutPickerRequest_RecordsSharedDesignPlan()
+    {
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
+        try
+        {
+            window.OpenLayoutPicker();
+
+            window.LastLayoutRequestPlan.Should().Be(PresentationDesignCommandPlanner.LayoutPlan);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [StaFact]
     public void FreePRibbonCommands_RegistersSharedReviewWorkflowCommandIds()
     {
         var presentation = Presentation.CreateEmpty();
@@ -110,6 +126,8 @@ public sealed class ReviewWorkflowAdapterTests
         source.Should().Contain("PresentationReviewWorkflowPlanner.BuildAltTextMutationPlan(");
         source.Should().Contain("PresentationReviewWorkflowPlanner.BuildProofingRequestPlan(_presentation)");
         source.Should().Contain("LastCommentPanePlan = plan;");
+        source.Should().Contain("onLayoutPicker:     () => OpenLayoutPicker()");
+        source.Should().Contain("LastLayoutRequestPlan = PresentationDesignCommandPlanner.LayoutPlan;");
         source.Should().NotContain("Modern resolved-thread state is not modeled yet.\";");
     }
 

@@ -57,6 +57,20 @@ public sealed class PresentationDesignCommandPlannerTests
     }
 
     [Fact]
+    public void TryPlan_MapsLayoutToHostCallbackIntent()
+    {
+        PresentationDesignCommandPlanner.TryPlan(PresentationDesignCommandPlanner.LayoutCommandId, out var plan)
+            .Should()
+            .BeTrue();
+
+        plan.CommandId.Should().Be(PresentationDesignCommandPlanner.LayoutCommandId);
+        plan.Intent.Should().Be(PresentationDesignCommandIntentKind.RequestLayoutPicker);
+        plan.ThemeId.Should().BeNull();
+        plan.SlideSizeCxEmu.Should().BeNull();
+        plan.SlideSizeCyEmu.Should().BeNull();
+    }
+
+    [Fact]
     public void TryPlan_RejectsUnknownCommandId()
     {
         PresentationDesignCommandPlanner.TryPlan("freep.design.missing", out var plan)
@@ -114,6 +128,33 @@ public sealed class PresentationDesignCommandPlannerTests
     {
         var editor = MakeSession(out _);
         PresentationDesignCommandPlanner.TryPlan("freep.slide-size-custom", out var plan)
+            .Should()
+            .BeTrue();
+
+        PresentationDesignCommandPlanner.TryApply(editor, plan).Should().BeFalse();
+    }
+
+    [Fact]
+    public void TryApply_LayoutCommand_InvokesHostCallback()
+    {
+        var editor = MakeSession(out _);
+        PresentationDesignCommandPlanner.TryPlan(PresentationDesignCommandPlanner.LayoutCommandId, out var plan)
+            .Should()
+            .BeTrue();
+        PresentationDesignCommandPlan? callbackPlan = null;
+
+        PresentationDesignCommandPlanner.TryApply(editor, plan, p => callbackPlan = p)
+            .Should()
+            .BeTrue();
+
+        callbackPlan.Should().Be(plan);
+    }
+
+    [Fact]
+    public void TryApply_LayoutCommand_RequiresHostCallback()
+    {
+        var editor = MakeSession(out _);
+        PresentationDesignCommandPlanner.TryPlan(PresentationDesignCommandPlanner.LayoutCommandId, out var plan)
             .Should()
             .BeTrue();
 

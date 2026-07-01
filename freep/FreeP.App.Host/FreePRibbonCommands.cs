@@ -16,8 +16,7 @@ namespace FreeP.App.Host;
 /// Wave 5B: clipboard (copy/cut/paste) wired; font-family ComboBox wired; Design tab (themes +
 ///           slide-size) wired; Insert tables + charts wired; Format Painter wired.
 ///
-/// Still stubbed (noted below): freep.layout, freep.anim.trigger / .duration / .delay combo-box
-///   live-change, freep.anim.pane toggle.
+/// Still stubbed (noted below): freep.anim.trigger / .duration / .delay combo-box live-change.
 /// </summary>
 internal static class FreePRibbonCommands
 {
@@ -43,6 +42,10 @@ internal static class FreePRibbonCommands
     /// <param name="onCustomSlideSize">
     ///   Callback that opens the custom slide-size dialog (Wave 10B).
     ///   Wired to <c>MainWindow.OpenSlideSizeDialog()</c>.  When null the button is a no-op.
+    /// </param>
+    /// <param name="onLayoutPicker">
+    ///   Callback that opens or announces the slide-layout picker.  The shared planner exposes this
+    ///   as an explicit host intent so the command is no longer a silent stub.
     /// </param>
     /// <param name="osClipboard">
     ///   Optional OS-clipboard service (Wave 10B). When provided, ribbon Copy/Cut also
@@ -75,7 +78,8 @@ internal static class FreePRibbonCommands
         Action?             onReviewAltText = null,
         Action?             onReviewProofing = null,
         // Wave 16B: Animation pane toggle.
-        Action?             onAnimPane         = null)
+        Action?             onAnimPane         = null,
+        Action?             onLayoutPicker     = null)
     {
         var registry = new RibbonCommandRegistry();
 
@@ -158,8 +162,10 @@ internal static class FreePRibbonCommands
                 editor.ApplyFormattingToSelection();
             }));
 
-        // ── Layout — STUBBED (no layout model yet) ────────────────────────────────
-        registry.Register("freep.layout", new ActionRibbonCommand(() => { /* STUB: layout picker deferred */ }));
+        registry.Register(
+            PresentationDesignCommandPlanner.LayoutCommandId,
+            new ActionRibbonCommand(() =>
+                ApplyDesignCommand(editor, PresentationDesignCommandPlanner.LayoutPlan, onCustomSlideSize, onLayoutPicker)));
 
         // ── Font family — Wave 5B / 10A ───────────────────────────────────────────
         // When the in-canvas editor is active, apply to the RichTextBox selection;
@@ -202,7 +208,7 @@ internal static class FreePRibbonCommands
 
         // ── Wave 5B: Design tab — Themes ─────────────────────────────────────────
 
-        RegisterDesignCommands(registry, editor, onCustomSlideSize);
+        RegisterDesignCommands(registry, editor, onCustomSlideSize, onLayoutPicker);
 
         // ── Wave 5B: Design tab — Slide Size ─────────────────────────────────────
 
@@ -369,7 +375,8 @@ internal static class FreePRibbonCommands
     private static void RegisterDesignCommands(
         RibbonCommandRegistry registry,
         EditingSession editor,
-        Action? onCustomSlideSize)
+        Action? onCustomSlideSize,
+        Action? onLayoutPicker)
     {
         foreach (var plan in PresentationDesignCommandPlanner.BuiltInPlans)
         {
@@ -379,9 +386,32 @@ internal static class FreePRibbonCommands
                     PresentationDesignCommandPlanner.TryApply(
                         editor,
                         plan,
-                        onCustomSlideSize is null ? null : _ => onCustomSlideSize())));
+                        CreateDesignHostCallback(plan, onCustomSlideSize, onLayoutPicker))));
         }
     }
+
+    private static bool ApplyDesignCommand(
+        EditingSession editor,
+        PresentationDesignCommandPlan plan,
+        Action? onCustomSlideSize,
+        Action? onLayoutPicker) =>
+        PresentationDesignCommandPlanner.TryApply(
+            editor,
+            plan,
+            CreateDesignHostCallback(plan, onCustomSlideSize, onLayoutPicker));
+
+    private static Action<PresentationDesignCommandPlan>? CreateDesignHostCallback(
+        PresentationDesignCommandPlan plan,
+        Action? onCustomSlideSize,
+        Action? onLayoutPicker) =>
+        plan.Intent switch
+        {
+            PresentationDesignCommandIntentKind.RequestCustomSlideSize when onCustomSlideSize is not null =>
+                _ => onCustomSlideSize(),
+            PresentationDesignCommandIntentKind.RequestLayoutPicker when onLayoutPicker is not null =>
+                _ => onLayoutPicker(),
+            _ => null,
+        };
 
     private static void RegisterAnimationCommands(
         RibbonCommandRegistry registry,

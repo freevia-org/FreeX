@@ -8,6 +8,7 @@ public enum PresentationDesignCommandIntentKind
     SetTheme,
     SetSlideSize,
     RequestCustomSlideSize,
+    RequestLayoutPicker,
 }
 
 public sealed record PresentationDesignCommandPlan(
@@ -19,9 +20,13 @@ public sealed record PresentationDesignCommandPlan(
 
 public static class PresentationDesignCommandPlanner
 {
+    public const string LayoutCommandId = "freep.layout";
     public const long SlideSizeWidescreen16x9CxEmu = DrawingMlCoordinateUnits.EmuPerInch * 40 / 3;
     public const long SlideSizeStandard4x3CxEmu = DrawingMlCoordinateUnits.EmuPerInch * 10;
     public const long SlideSizeStandardCyEmu = DrawingMlCoordinateUnits.EmuPerInch * 15 / 2;
+
+    public static readonly PresentationDesignCommandPlan LayoutPlan =
+        new(LayoutCommandId, PresentationDesignCommandIntentKind.RequestLayoutPicker);
 
     public static readonly IReadOnlyList<PresentationDesignCommandPlan> BuiltInPlans =
         new[]
@@ -63,6 +68,12 @@ public static class PresentationDesignCommandPlanner
 
     public static bool TryPlan(string commandId, out PresentationDesignCommandPlan plan)
     {
+        if (StringComparer.Ordinal.Equals(LayoutPlan.CommandId, commandId))
+        {
+            plan = LayoutPlan;
+            return true;
+        }
+
         foreach (var candidate in BuiltInPlans)
         {
             if (StringComparer.Ordinal.Equals(candidate.CommandId, commandId))
@@ -79,7 +90,7 @@ public static class PresentationDesignCommandPlanner
     public static bool TryApply(
         EditingSession editor,
         PresentationDesignCommandPlan plan,
-        Action<PresentationDesignCommandPlan>? onCustomSlideSize = null)
+        Action<PresentationDesignCommandPlan>? onHostRequest = null)
     {
         ArgumentNullException.ThrowIfNull(editor);
         ArgumentNullException.ThrowIfNull(plan);
@@ -108,12 +119,13 @@ public static class PresentationDesignCommandPlanner
                 return true;
 
             case PresentationDesignCommandIntentKind.RequestCustomSlideSize:
-                if (onCustomSlideSize is null)
+            case PresentationDesignCommandIntentKind.RequestLayoutPicker:
+                if (onHostRequest is null)
                 {
                     return false;
                 }
 
-                onCustomSlideSize(plan);
+                onHostRequest(plan);
                 return true;
 
             default:
