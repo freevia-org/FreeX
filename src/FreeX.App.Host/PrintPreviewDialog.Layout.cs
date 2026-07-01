@@ -25,7 +25,8 @@ public sealed partial class PrintPreviewDialog : Window
         Func<PrintPreviewSettings, (FixedDocument Document, PrintSettingsPlan Settings)>? refreshPreviewWithSettings = null,
         SheetId sheetId = default,
         Sheet? sheet = null,
-        Action<IWorkbookCommand>? executeCommand = null)
+        Action<IWorkbookCommand>? executeCommand = null,
+        string? fixturePrinterName = null)
     {
         ConfigurePrintPreviewWindow(workbookName);
 
@@ -34,7 +35,7 @@ public sealed partial class PrintPreviewDialog : Window
         var previewDocument = document;
         var viewer = new DocumentViewer { Document = previewDocument };
         var totalPages = Math.Max(1, previewDocument.Pages.Count);
-        var printControls = CreatePrintControls();
+        var printControls = CreatePrintControls(fixturePrinterName);
         var printerBox = printControls.PrinterBox;
         var copiesBox = printControls.CopiesBox;
         var collatedBox = printControls.CollatedBox;
@@ -122,7 +123,8 @@ public sealed partial class PrintPreviewDialog : Window
             RefreshPreviewDocument,
             refreshPreviewWithSettings is not null
                 ? settings => currentPrintPreviewSettings = settings
-                : null);
+                : null,
+            fixturePrinterName);
         AddPreviewSurfaceToRoot(root, toolbar, settingsScroll, viewer);
 
         Content = root;
@@ -191,7 +193,7 @@ public sealed partial class PrintPreviewDialog : Window
         return button;
     }
 
-    private static PrintControls CreatePrintControls()
+    private static PrintControls CreatePrintControls(string? fixturePrinterName = null)
     {
         var printerBox = new ComboBox
         {
@@ -205,7 +207,8 @@ public sealed partial class PrintPreviewDialog : Window
         WpfPrintPreviewToolbarPlanner.PopulatePrinterBox(
             printerBox,
             UiText.Get("PrintPreview_NoInstalledPrintersToolTip"),
-            UiText.Get("PrintPreview_NoInstalledPrintersHelpText"));
+            UiText.Get("PrintPreview_NoInstalledPrintersHelpText"),
+            fixturePrinterName);
 
         var copiesBox = new TextBox
         {
@@ -613,7 +616,8 @@ public sealed partial class PrintPreviewDialog : Window
         Sheet? sheet,
         Action<IWorkbookCommand>? executeCommand,
         Action refreshPreview,
-        Action<PrintPreviewSettings>? updateSettings)
+        Action<PrintPreviewSettings>? updateSettings,
+        string? fixturePrinterName = null)
     {
         var settingsScroll = new ScrollViewer
         {
@@ -626,7 +630,8 @@ public sealed partial class PrintPreviewDialog : Window
             sheet,
             executeCommand,
             refreshPreview,
-            updateSettings);
+            updateSettings,
+            fixturePrinterName: fixturePrinterName);
 
         return settingsScroll;
     }

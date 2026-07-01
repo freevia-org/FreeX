@@ -68,9 +68,12 @@ public sealed partial class PrintPreviewDialog
     private static void RefreshPrintStatus(TextBlock statusText, ComboBox printerBox, TextBox copiesBox, int totalPages)
     {
         var validCopies = TryParseCopyCount(copiesBox.Text, out var copies);
-        var printerName = printerBox.SelectedItem is PrintQueue queue
-            ? queue.FullName
-            : null;
+        var printerName = printerBox.SelectedItem switch
+        {
+            PrintQueue queue => queue.FullName,
+            string name => name,
+            _ => null
+        };
 
         statusText.Text = PrintPreviewToolbarStatePlanner.CreateStatusText(printerName, validCopies ? copies : null, totalPages);
     }

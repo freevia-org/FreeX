@@ -40,7 +40,7 @@ namespace FreeX.App.Avalonia;
 /// </summary>
 public sealed partial class MainWindow
 {
-    private const string PrintPreviewDefaultPrinterName = "HP30138B4D655D(HP Color Laser MFP 178 179)";
+    private const string PrintPreviewDefaultPrinterName = "Windows print dialog";
 
     private static readonly ITextMeasurer PrintPreviewTextMeasurer = new AvaloniaTextMeasurer();
     private static readonly IBrush PrintPreviewSurfaceBackground = Brush(82, 86, 92);
@@ -50,7 +50,7 @@ public sealed partial class MainWindow
         UiText.Get,
         (key, args) => UiText.Format(key, args));
 
-    private async Task ShowPrintPreviewDialogAsync()
+    private async Task ShowPrintPreviewDialogAsync(string? fixturePrinterName = null)
     {
         if (_isOpening || _isSaving)
             return;
@@ -67,7 +67,7 @@ public sealed partial class MainWindow
             return;
         }
 
-        await ShowPrintPreviewWindowCoreAsync(context);
+        await ShowPrintPreviewWindowCoreAsync(context, fixturePrinterName);
     }
 
     /// <summary>
@@ -134,15 +134,16 @@ public sealed partial class MainWindow
         sheet.SetCell(new CellAddress(sheet.Id, row, col), cell);
     }
 
-    private async Task ShowPrintPreviewWindowCoreAsync(PrintPreviewPaginationContext context)
+    private async Task ShowPrintPreviewWindowCoreAsync(PrintPreviewPaginationContext context, string? fixturePrinterName = null)
     {
+        var printerName = fixturePrinterName ?? PrintPreviewDefaultPrinterName;
         var navigator = PrintPreviewPageNavigator.Create(context.PageCount);
         var documentToolbarPlan = PrintPreviewSurfacePlanner.CreateDocumentToolbarPlan(
             context.PageCount,
             PrintPreviewSettingsTextResolver);
         var topToolbarPlan = PrintPreviewSurfacePlanner.CreateTopToolbarPlan(
             context.PageCount,
-            PrintPreviewDefaultPrinterName,
+            printerName,
             PrintPreviewSettingsTextResolver);
 
         var dialog = new Window
@@ -324,7 +325,7 @@ public sealed partial class MainWindow
             PrintPreviewSurfacePlanner.CreateSettingsRailPlan(
                 _session.ActiveSheet,
                 context.PageCount,
-                PrintPreviewDefaultPrinterName,
+                printerName,
                 new PrintPreviewSettings(),
                 hasSelection: false,
                 canUpdatePrintPreviewSettings: false,

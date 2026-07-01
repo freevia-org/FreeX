@@ -28,6 +28,7 @@ public sealed class PrintPreviewSurfacePlannerTests
         plan.StatusText.Should().Be("Ready: Office Printer; 1 copy; 3 pages");
         plan.PageRangeText.Should().Be("All pages");
         plan.CloseButtonText.Should().Be("Close");
+        PrintPreviewSurfacePlanner.ParityPrinterName.Should().Be("FreeX Parity Printer");
     }
 
     [Fact]

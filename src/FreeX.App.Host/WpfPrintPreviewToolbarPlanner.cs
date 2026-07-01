@@ -39,8 +39,16 @@ internal static class WpfPrintPreviewToolbarPlanner
     public static void PopulatePrinterBox(
         ComboBox printerBox,
         string noInstalledPrintersToolTip,
-        string noInstalledPrintersHelpText)
+        string noInstalledPrintersHelpText,
+        string? fixturePrinterName = null)
     {
+        if (!string.IsNullOrWhiteSpace(fixturePrinterName))
+        {
+            printerBox.Items.Add(fixturePrinterName.Trim());
+            printerBox.SelectedIndex = 0;
+            return;
+        }
+
         try
         {
             using var server = new LocalPrintServer();

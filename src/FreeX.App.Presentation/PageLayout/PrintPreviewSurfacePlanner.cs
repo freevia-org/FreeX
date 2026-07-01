@@ -77,6 +77,7 @@ public sealed record PrintPreviewSettingsRailPlan(
 
 public static class PrintPreviewSurfacePlanner
 {
+    public const string ParityPrinterName = "FreeX Parity Printer";
     public const double PrinterComboWidth = 190;
     public const double ToolbarCopiesBoxWidth = 44;
     public const double ToolbarSidesComboWidth = 178;

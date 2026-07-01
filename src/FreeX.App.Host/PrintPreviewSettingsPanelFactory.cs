@@ -21,7 +21,8 @@ internal static class PrintPreviewSettingsPanelFactory
         Action<PrintPreviewSettings>? setPrintPreviewSettings = null,
         bool hasSelection = false,
         Action? showPageSetup = null,
-        Action? showCustomMargins = null)
+        Action? showCustomMargins = null,
+        string? fixturePrinterName = null)
     {
         var panel = new StackPanel
         {
@@ -34,7 +35,7 @@ internal static class PrintPreviewSettingsPanelFactory
         var railPlan = PrintPreviewSurfacePlanner.CreateSettingsRailPlan(
             sheet,
             totalPages: 1,
-            printerName: string.Empty,
+            printerName: fixturePrinterName ?? string.Empty,
             currentSettings,
             hasSelection,
             setPrintPreviewSettings is not null,
@@ -146,11 +147,17 @@ internal static class PrintPreviewSettingsPanelFactory
         WpfPrintPreviewToolbarPlanner.PopulatePrinterBox(
             printerBox,
             UiText.Get("PrintPreview_NoInstalledPrintersToolTip"),
-            UiText.Get("PrintPreview_NoInstalledPrintersHelpText"));
+            UiText.Get("PrintPreview_NoInstalledPrintersHelpText"),
+            fixturePrinterName);
         AddLabel(railPlan.PrinterSectionText, printerBox);
         printerBox.SelectionChanged += (_, _) =>
         {
-            var name = printerBox.SelectedItem is PrintQueue q ? q.FullName : null;
+            var name = printerBox.SelectedItem switch
+            {
+                PrintQueue q => q.FullName,
+                string fixtureName => fixtureName,
+                _ => null
+            };
             ApplyAction(PrintPreviewSettingsPanelPlanner.CreatePrinterAction(currentSettings, name));
         };
         panel.Children.Add(printerBox);

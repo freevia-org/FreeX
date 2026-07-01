@@ -601,7 +601,8 @@ internal static class ParityCapture
             new PrintPreviewDialog(
                 workbook.Name,
                 CreatePrintPreviewDocument(),
-                new PrintSettingsPlan([UiText.Get("PrintPreview_DefaultScopeActiveSheet")])));
+                new PrintSettingsPlan([UiText.Get("PrintPreview_DefaultScopeActiveSheet")]),
+                fixturePrinterName: PrintPreviewSurfacePlanner.ParityPrinterName));
 
         CaptureDialog(results, "dialog.OpenWorkbook", outDir, () =>
             CreateWorkbookFileDialogSurface(CreateOpenWorkbookDialogSurfacePlan()));

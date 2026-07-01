@@ -20,6 +20,7 @@ using FreeX.App.Presentation.Backstage;
 using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.App.Presentation.DrawingUI;
 using FreeX.App.Presentation.Filtering;
+using FreeX.App.Presentation.PageLayout;
 using FreeX.App.Presentation.PivotUI;
 using FreeX.App.Services;
 using FreeX.Core.Calc;
@@ -221,7 +222,7 @@ public sealed partial class MainWindow
     private Task ShowPrintPreviewParityDialogAsync()
     {
         SeedPrintPreviewParityReport();
-        return ShowPrintPreviewDialogAsync();
+        return ShowPrintPreviewDialogAsync(PrintPreviewSurfacePlanner.ParityPrinterName);
     }
 
     private WorkbookFileDialogSurfacePlan CreateOpenWorkbookDialogSurfacePlan() =>

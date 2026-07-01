@@ -22,7 +22,8 @@ public sealed partial class PrintPreviewDialog : Window
         Func<PrintPreviewSettings, (FixedDocument Document, PrintSettingsPlan Settings)>? refreshPreviewWithSettings = null,
         SheetId sheetId = default,
         Sheet? sheet = null,
-        Action<IWorkbookCommand>? executeCommand = null)
+        Action<IWorkbookCommand>? executeCommand = null,
+        string? fixturePrinterName = null)
     {
         InitializePrintPreviewLayout(
             workbookName,
@@ -34,6 +35,7 @@ public sealed partial class PrintPreviewDialog : Window
             refreshPreviewWithSettings,
             sheetId,
             sheet,
-            executeCommand);
+            executeCommand,
+            fixturePrinterName);
     }
 }
