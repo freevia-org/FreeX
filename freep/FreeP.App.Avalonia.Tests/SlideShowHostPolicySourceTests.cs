@@ -19,6 +19,7 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("SlideShowHostPlanner.PlanTrigger(");
         source.Should().Contain("SlideShowHostPlanner.PlanInternalSlideJump(");
         source.Should().Contain("SlideShowHostPlanner.BuildDisplayPlan(");
+        source.Should().Contain("SlideShowHostPlanner.BuildPresenterState(");
         source.Should().Contain("SlideShowHostPlanner.MapCanvasPointToSlide(");
         source.Should().Contain("SlideShowHostPlanner.HitTestHyperlink(");
         source.Should().Contain("SlideShowHostPlanner.HitTestTriggerShape(");

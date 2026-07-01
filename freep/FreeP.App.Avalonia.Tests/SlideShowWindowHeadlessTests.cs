@@ -85,6 +85,38 @@ public sealed class SlideShowWindowHeadlessTests
     }
 
     [Fact]
+    public async Task SlideShowWindow_create_presenter_state_uses_shared_planner_state()
+    {
+        SlideShowPresenterState? state = null;
+        SlideShowPresenterDisplayIntent? displayIntent = null;
+        var ran = await OnUiThread(() =>
+        {
+            var pres = MakePresentation(2);
+            pres.Slides[0].Title = "Agenda";
+            pres.Slides[0].Notes = MakeTextBody("speaker note");
+            pres.Slides[1].Title = "Details";
+
+            var window = new SlideShowWindow(pres, 0);
+            displayIntent = new SlideShowPresenterDisplayIntent(
+                IsFullScreenRequested: true,
+                MonitorIndex: 2,
+                MonitorName: "Confidence monitor");
+
+            state = window.CreatePresenterState(
+                window.PresenterStartedAtUtc.AddSeconds(12),
+                displayIntent);
+        });
+
+        if (!ran) return;
+        state.Should().NotBeNull();
+        state!.CurrentSlide!.SlideIndex.Should().Be(0);
+        state.NextSlide!.Title.Should().Be("Details");
+        state.NotesText.Should().Be("speaker note");
+        state.Elapsed.Should().Be(TimeSpan.FromSeconds(12));
+        state.DisplayIntent.Should().BeSameAs(displayIntent);
+    }
+
+    [Fact]
     public async Task SlideShowWindow_advance_past_last_slide_returns_AtEnd()
     {
         AdvanceResult? result = null;
@@ -177,6 +209,15 @@ public sealed class SlideShowWindowHeadlessTests
     }
 
     // ── Hyperlink routing ───────────────────────────────────────────────────────
+
+    private static TextBody MakeTextBody(string text)
+    {
+        var body = new TextBody();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run { Text = text });
+        body.Paragraphs.Add(paragraph);
+        return body;
+    }
 
     [Fact]
     public async Task HitTestHyperlink_external_url_route()

@@ -1,4 +1,5 @@
 using System.Windows;
+using FreeP.App.Compositor;
 using FreeP.App.Host;
 using Xunit;
 using FluentAssertions;
@@ -409,6 +410,38 @@ public sealed class SlideShowWindowTests
     }
 
     [StaFact]
+    public void SlideShowWindow_CreatePresenterState_UsesSharedPlannerState()
+    {
+        var pres = Presentation.CreateEmpty();
+        pres.Slides[0].Title = "Agenda";
+        pres.Slides[0].Notes = MakeTextBody("speaker note");
+        pres.Slides.Add(new Slide { Title = "Details" });
+
+        var window = new SlideShowWindow(pres, 0);
+        try
+        {
+            var displayIntent = new SlideShowPresenterDisplayIntent(
+                IsFullScreenRequested: true,
+                MonitorIndex: 2,
+                MonitorName: "Confidence monitor");
+
+            var state = window.CreatePresenterState(
+                window.PresenterStartedAtUtc.AddSeconds(12),
+                displayIntent);
+
+            state.CurrentSlide!.SlideIndex.Should().Be(0);
+            state.NextSlide!.Title.Should().Be("Details");
+            state.NotesText.Should().Be("speaker note");
+            state.Elapsed.Should().Be(TimeSpan.FromSeconds(12));
+            state.DisplayIntent.Should().BeSameAs(displayIntent);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [StaFact]
     public void SlideShowWindow_MultipleSlides_AdvanceNavigatesCorrectly()
     {
         var pres = Presentation.CreateEmpty();
@@ -492,6 +525,15 @@ public sealed class SlideShowWindowTests
         {
             window.Close();
         }
+    }
+
+    private static TextBody MakeTextBody(string text)
+    {
+        var body = new TextBody();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run { Text = text });
+        body.Paragraphs.Add(paragraph);
+        return body;
     }
 }
 

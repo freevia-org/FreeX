@@ -218,6 +218,61 @@ public sealed class SlideShowHostPlannerTests
     }
 
     [Fact]
+    public void BuildPresenterState_ExposesCurrentNextNotesElapsedAndDisplayIntent()
+    {
+        var pres = MakePresentation(3);
+        pres.Slides[1].Notes = MakeTextBody("speaker notes\nsecond line");
+        var controller = new SlideShowController(pres.Slides, startIndex: 1);
+        var started = new DateTimeOffset(2026, 7, 1, 10, 0, 0, TimeSpan.Zero);
+        var now = started.AddSeconds(95);
+        var displayIntent = new SlideShowPresenterDisplayIntent(
+            IsFullScreenRequested: true,
+            MonitorIndex: 1,
+            MonitorName: "Presenter display");
+
+        var state = SlideShowHostPlanner.BuildPresenterState(
+            pres,
+            controller,
+            started,
+            now,
+            displayIntent);
+
+        state.HostState.StatusText.Should().Be("Slide 2 of 3");
+        state.CurrentSlide.Should().NotBeNull();
+        state.CurrentSlide!.SlideIndex.Should().Be(1);
+        state.CurrentSlide.Slide.Should().BeSameAs(pres.Slides[1]);
+        state.NextSlide.Should().NotBeNull();
+        state.NextSlide!.SlideIndex.Should().Be(2);
+        state.NextSlide.Slide.Should().BeSameAs(pres.Slides[2]);
+        state.NotesText.Should().Be("speaker notes\nsecond line");
+        state.StartedAtUtc.Should().Be(started);
+        state.Elapsed.Should().Be(TimeSpan.FromSeconds(95));
+        state.DisplayIntent.Should().BeSameAs(displayIntent);
+    }
+
+    [Fact]
+    public void BuildPresenterState_HandlesEmptyDeckAndClampsNegativeElapsed()
+    {
+        var pres = Presentation.CreateEmpty();
+        pres.Slides.Clear();
+        var controller = new SlideShowController(pres.Slides, startIndex: 0);
+        var started = new DateTimeOffset(2026, 7, 1, 10, 0, 0, TimeSpan.Zero);
+
+        var state = SlideShowHostPlanner.BuildPresenterState(
+            pres,
+            controller,
+            started,
+            started.AddSeconds(-1));
+
+        state.HostState.StatusText.Should().Be(SlideShowHostPlanner.NoSlidesStatusText);
+        state.CurrentSlide.Should().BeNull();
+        state.NextSlide.Should().BeNull();
+        state.NotesText.Should().BeEmpty();
+        state.Elapsed.Should().Be(TimeSpan.Zero);
+        state.DisplayIntent.Should().Be(SlideShowPresenterDisplayIntent.FullScreen);
+    }
+
+    [Fact]
     public void HitTesting_UsesSharedSlideGeometryForTriggersAndHyperlinks()
     {
         var slide = new Slide();
@@ -294,5 +349,18 @@ public sealed class SlideShowHostPlannerTests
         }
 
         return pres;
+    }
+
+    private static TextBody MakeTextBody(string text)
+    {
+        var body = new TextBody();
+        foreach (var line in text.Split('\n'))
+        {
+            var paragraph = new Paragraph();
+            paragraph.Runs.Add(new Run { Text = line });
+            body.Paragraphs.Add(paragraph);
+        }
+
+        return body;
     }
 }

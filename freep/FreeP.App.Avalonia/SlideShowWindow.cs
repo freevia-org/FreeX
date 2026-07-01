@@ -56,6 +56,7 @@ public sealed class SlideShowWindow : Window
 
     private readonly Presentation    _presentation;
     private readonly SlideShowController _controller;
+    private readonly DateTimeOffset _presenterStartedAtUtc;
     private readonly DispatcherTimer  _autoAdvanceTimer;
 
     // DA2 + DA3: all per-frame DispatcherTimers created by animation/transition helpers
@@ -96,6 +97,7 @@ public sealed class SlideShowWindow : Window
     {
         _presentation = presentation ?? throw new ArgumentNullException(nameof(presentation));
         _controller   = new SlideShowController(presentation.Slides, startIndex);
+        _presenterStartedAtUtc = DateTimeOffset.UtcNow;
 
         // Pre-compute slide DIP dimensions.
         var metrics = SlideShowHostPlanner.BuildSlideMetrics(
@@ -191,6 +193,18 @@ public sealed class SlideShowWindow : Window
 
     /// <summary>The underlying state machine (for test assertions).</summary>
     public SlideShowController Controller => _controller;
+
+    public DateTimeOffset PresenterStartedAtUtc => _presenterStartedAtUtc;
+
+    public SlideShowPresenterState CreatePresenterState(
+        DateTimeOffset nowUtc,
+        SlideShowPresenterDisplayIntent? displayIntent = null) =>
+        SlideShowHostPlanner.BuildPresenterState(
+            _presentation,
+            _controller,
+            _presenterStartedAtUtc,
+            nowUtc,
+            displayIntent);
 
     /// <summary>Exposes the slide canvas for test assertions (DA1 suppression).</summary>
     internal SlideCanvas CanvasForTest => _slideCanvas;

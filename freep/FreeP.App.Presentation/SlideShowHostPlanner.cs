@@ -43,6 +43,29 @@ public sealed record SlideShowHostDisplayPlan(
     SlideTransition? Transition,
     int? AutoAdvanceAfterMs);
 
+public sealed record SlideShowPresenterDisplayIntent(
+    bool IsFullScreenRequested,
+    int? MonitorIndex = null,
+    string? MonitorName = null)
+{
+    public static SlideShowPresenterDisplayIntent FullScreen { get; } = new(true);
+}
+
+public sealed record SlideShowPresenterSlideState(
+    int SlideIndex,
+    string SlideId,
+    string Title,
+    Slide Slide);
+
+public sealed record SlideShowPresenterState(
+    SlideShowHostState HostState,
+    SlideShowPresenterSlideState? CurrentSlide,
+    SlideShowPresenterSlideState? NextSlide,
+    string NotesText,
+    DateTimeOffset StartedAtUtc,
+    TimeSpan Elapsed,
+    SlideShowPresenterDisplayIntent DisplayIntent);
+
 public sealed record SlideShowHostCommand
 {
     private SlideShowHostCommand(
@@ -321,6 +344,37 @@ public static class SlideShowHostPlanner
             FormatStatusText(currentIndex, slideCount));
     }
 
+    public static SlideShowPresenterState BuildPresenterState(
+        Presentation presentation,
+        SlideShowController controller,
+        DateTimeOffset startedAtUtc,
+        DateTimeOffset nowUtc,
+        SlideShowPresenterDisplayIntent? displayIntent = null)
+    {
+        ArgumentNullException.ThrowIfNull(presentation);
+        ArgumentNullException.ThrowIfNull(controller);
+
+        var hostState = BuildState(controller, presentation.Slides.Count);
+        var currentSlide = hostState.HasSlides
+            ? BuildPresenterSlideState(presentation.Slides, hostState.CurrentSlideIndex)
+            : null;
+        var nextSlide = hostState.HasSlides
+            ? BuildPresenterSlideState(presentation.Slides, hostState.CurrentSlideIndex + 1)
+            : null;
+        var elapsed = nowUtc >= startedAtUtc
+            ? nowUtc - startedAtUtc
+            : TimeSpan.Zero;
+
+        return new SlideShowPresenterState(
+            hostState,
+            currentSlide,
+            nextSlide,
+            InCanvasTextEditPlanner.ExtractPlainText(currentSlide?.Slide.Notes),
+            startedAtUtc,
+            elapsed,
+            displayIntent ?? SlideShowPresenterDisplayIntent.FullScreen);
+    }
+
     public static string FormatStatusText(int currentSlideIndex, int slideCount) =>
         slideCount <= 0 || currentSlideIndex < 0
             ? NoSlidesStatusText
@@ -411,6 +465,23 @@ public static class SlideShowHostPlanner
         }
 
         return -1;
+    }
+
+    private static SlideShowPresenterSlideState? BuildPresenterSlideState(
+        IReadOnlyList<Slide> slides,
+        int slideIndex)
+    {
+        if (slideIndex < 0 || slideIndex >= slides.Count)
+        {
+            return null;
+        }
+
+        var slide = slides[slideIndex];
+        return new SlideShowPresenterSlideState(
+            slideIndex,
+            slide.Id,
+            slide.Title,
+            slide);
     }
 
     private static Hyperlink? HitTestHyperlinkInShapes(
