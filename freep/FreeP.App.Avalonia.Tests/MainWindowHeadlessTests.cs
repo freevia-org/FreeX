@@ -1136,6 +1136,7 @@ public sealed class MainWindowHeadlessTests
     [Fact]
     public async Task Review_alt_text_apply_routes_through_shared_mutation_plan()
     {
+        string? altTextTitle = null;
         string? altText = null;
         PresentationAltTextRequestPlan? requestPlan = null;
         PresentationAccessibilitySummaryPlan? accessibilityPlan = null;
@@ -1153,22 +1154,29 @@ public sealed class MainWindowHeadlessTests
             window.Editor.CurrentSlide!.Shapes.Add(shape);
             window.Editor.Select(shape.Id);
 
-            var mutation = window.ApplySelectedShapeAlternativeText("  Product packaging on a white background. ");
+            var mutation = window.ApplySelectedShapeAlternativeText(
+                "  Product packaging on a white background. ",
+                "  Hero packaging photo ");
             mutation.Should().Be(new PresentationAltTextMutationPlan(
                 true,
                 0,
                 shape.Id,
+                "Hero packaging photo",
                 "Product packaging on a white background.",
+                false,
                 null));
 
+            altTextTitle = shape.AlternativeTextTitle;
             altText = shape.AlternativeText;
             requestPlan = window.LastAltTextRequestPlan;
             accessibilityPlan = window.LastAccessibilitySummaryPlan;
         });
 
         if (!ran) return;
+        altTextTitle.Should().Be("Hero packaging photo");
         altText.Should().Be("Product packaging on a white background.");
         requestPlan.Should().NotBeNull();
+        requestPlan!.CurrentTitle.Should().Be("Hero packaging photo");
         requestPlan!.CurrentDescription.Should().Be("Product packaging on a white background.");
         accessibilityPlan.Should().NotBeNull();
         accessibilityPlan!.Issues.Should().NotContain(issue =>

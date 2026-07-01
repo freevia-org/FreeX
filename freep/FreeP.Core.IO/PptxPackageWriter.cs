@@ -20,6 +20,8 @@ public static class PptxPackageWriter
     private static readonly XNamespace P       = "http://schemas.openxmlformats.org/presentationml/2006/main";
     private static readonly XNamespace A       = PptxColorReader.A;
     private static readonly XNamespace R       = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+    private static readonly XNamespace Adec    = "http://schemas.microsoft.com/office/drawing/2017/decorative";
+    private const string DecorativeExtUri = "{C183D7F6-B498-43B3-948B-1728B52AA6E4}";
 
     // ── Relationship types ────────────────────────────────────────────────────────
     private const string OfficeDocRelType   = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument";
@@ -1883,7 +1885,7 @@ public static class PptxPackageWriter
         fillBlipById?.TryGetValue(shape.Id, out fillBlipRelId);
         return new XElement(P + "sp",
             new XElement(P + "nvSpPr",
-                CnvPrWithHlink(shape.Id, shape.Name, shape.AlternativeText, shape.Hyperlink, hlinkRelIds, allSlides),
+                CnvPrWithHlink(shape, hlinkRelIds, allSlides),
                 new XElement(P + "cNvSpPr"),
                 new XElement(P + "nvPr",
                     shape.Placeholder is not null ? BuildPhEl(shape.Placeholder) : null)),
@@ -1911,7 +1913,7 @@ public static class PptxPackageWriter
 
         return new XElement(P + "cxnSp",
             new XElement(P + "nvCxnSpPr",
-                CnvPrWithHlink(shape.Id, shape.Name, shape.AlternativeText, shape.Hyperlink, hlinkRelIds, null),
+                CnvPrWithHlink(shape, hlinkRelIds, null),
                 cNvCxnSpPrEl,
                 new XElement(P + "nvPr")),
             BuildSpPrEl(shape, scheme, fillBlipRelId: fillBlipRelId));
@@ -1931,7 +1933,7 @@ public static class PptxPackageWriter
 
         return new XElement(P + "pic",
             new XElement(P + "nvPicPr",
-                CnvPr(shape.Id, shape.Name, shape.AlternativeText),
+                CnvPr(shape),
                 new XElement(P + "cNvPicPr"),
                 new XElement(P + "nvPr")),
             blipFillEl,
@@ -2032,7 +2034,7 @@ public static class PptxPackageWriter
 
         return new XElement(P + "pic",
             new XElement(P + "nvPicPr",
-                CnvPr(shape.Id, shape.Name, shape.AlternativeText),
+                CnvPr(shape),
                 new XElement(P + "cNvPicPr"),
                 new XElement(P + "nvPr",
                     mediaFileEl)),
@@ -2048,7 +2050,7 @@ public static class PptxPackageWriter
         Dictionary<uint, string>? fillBlipById = null) =>
         new XElement(P + "grpSp",
             new XElement(P + "nvGrpSpPr",
-                CnvPr(shape.Id, shape.Name, shape.AlternativeText),
+                CnvPr(shape),
                 new XElement(P + "cNvGrpSpPr"),
                 new XElement(P + "nvPr")),
             BuildGrpSpPrEl(shape),
@@ -2329,7 +2331,7 @@ public static class PptxPackageWriter
 
         return new XElement(P + "graphicFrame",
             new XElement(P + "nvGraphicFramePr",
-                CnvPr(shape.Id, shape.Name, shape.AlternativeText),
+                CnvPr(shape),
                 new XElement(P + "cNvGraphicFramePr",
                     new XElement(A + "graphicFrameLocks",
                         new XAttribute("noGrp", "1"))),
@@ -2368,7 +2370,7 @@ public static class PptxPackageWriter
 
         return new XElement(P + "graphicFrame",
             new XElement(P + "nvGraphicFramePr",
-                CnvPr(shape.Id, shape.Name, shape.AlternativeText),
+                CnvPr(shape),
                 new XElement(P + "cNvGraphicFramePr",
                     new XElement(A + "graphicFrameLocks",
                         new XAttribute("noGrp", "1"))),
@@ -2428,7 +2430,7 @@ public static class PptxPackageWriter
 
         return new XElement(P + "graphicFrame",
             new XElement(P + "nvGraphicFramePr",
-                CnvPr(shape.Id, shape.Name, shape.AlternativeText),
+                CnvPr(shape),
                 new XElement(P + "cNvGraphicFramePr",
                     new XElement(A + "graphicFrameLocks",
                         new XAttribute("noGrp", "1"))),
@@ -3729,7 +3731,7 @@ public static class PptxPackageWriter
         // Build the p:graphicFrame
         var graphicFrame = new XElement(P + "graphicFrame",
             new XElement(P + "nvGraphicFramePr",
-                CnvPr(shape.Id, shape.Name, shape.AlternativeText),
+                CnvPr(shape),
                 new XElement(P + "cNvGraphicFramePr"),
                 new XElement(P + "nvPr")),
             xfrm,
@@ -3884,29 +3886,59 @@ public static class PptxPackageWriter
     private static XAttribute NsAttr(string prefix, XNamespace ns) =>
         new XAttribute(XNamespace.Xmlns + prefix, ns.NamespaceName);
 
-    private static XElement CnvPr(uint id, string name, string? alternativeText = null)
+    private static XElement CnvPr(SlideShape shape)
     {
-        var el = new XElement(P + "cNvPr", new XAttribute("id", id), new XAttribute("name", name));
-        if (!string.IsNullOrWhiteSpace(alternativeText))
+        var el = CnvPrBase(shape);
+        AddDecorativeExtList(el, shape);
+        return el;
+    }
+
+    private static XElement CnvPrBase(SlideShape shape)
+    {
+        var el = new XElement(P + "cNvPr", new XAttribute("id", shape.Id), new XAttribute("name", shape.Name));
+        if (!string.IsNullOrWhiteSpace(shape.AlternativeTextTitle))
         {
-            el.Add(new XAttribute("descr", alternativeText.Trim()));
+            el.Add(new XAttribute("title", shape.AlternativeTextTitle.Trim()));
+        }
+
+        if (!string.IsNullOrWhiteSpace(shape.AlternativeText))
+        {
+            el.Add(new XAttribute("descr", shape.AlternativeText.Trim()));
         }
 
         return el;
     }
 
+    private static void AddDecorativeExtList(XElement cNvPr, SlideShape shape)
+    {
+        if (!shape.IsDecorative)
+        {
+            return;
+        }
+
+        cNvPr.Add(new XElement(A + "extLst",
+            new XElement(A + "ext",
+                new XAttribute("uri", DecorativeExtUri),
+                new XElement(Adec + "decorative",
+                    NsAttr("adec", Adec),
+                    new XAttribute("val", "1")))));
+    }
+
     /// <summary>
     /// Builds a cNvPr element and, when the shape carries a hyperlink, appends an a:hlinkClick child.
     /// </summary>
-    private static XElement CnvPrWithHlink(uint id, string name, string? alternativeText, Hyperlink? hlink,
-        Dictionary<string, string>? hlinkRelIds, List<Slide>? allSlides)
+    private static XElement CnvPrWithHlink(
+        SlideShape shape,
+        Dictionary<string, string>? hlinkRelIds,
+        List<Slide>? allSlides)
     {
-        var el = CnvPr(id, name, alternativeText);
-        if (hlink is not null)
+        var el = CnvPrBase(shape);
+        if (shape.Hyperlink is not null)
         {
-            var hlinkEl = BuildHlinkClickEl(hlink, hlinkRelIds, allSlides);
+            var hlinkEl = BuildHlinkClickEl(shape.Hyperlink, hlinkRelIds, allSlides);
             if (hlinkEl is not null) el.Add(hlinkEl);
         }
+        AddDecorativeExtList(el, shape);
         return el;
     }
 

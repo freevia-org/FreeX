@@ -923,12 +923,22 @@ public sealed class EditingSession
     public void RemoveShapeHyperlink()
         => SetShapeHyperlink(); // null link = remove
 
-    /// <summary>Sets persistent alternative text on every selected shape. Undoable.</summary>
-    public void SetSelectedShapeAlternativeText(string? alternativeText)
+    /// <summary>Sets persistent alternative text metadata on every selected shape. Undoable.</summary>
+    public void SetSelectedShapeAlternativeText(
+        string? alternativeText,
+        string? title = null,
+        bool? isDecorative = null)
     {
         if (CurrentSlide is null) return;
         foreach (var id in _selectedShapeIds)
-            Bus.Execute(new SetShapeAlternativeTextCommand(_currentSlideIndex, id, alternativeText));
+        {
+            Bus.Execute(new SetShapeAlternativeTextCommand(
+                _currentSlideIndex,
+                id,
+                alternativeText,
+                title,
+                isDecorative));
+        }
     }
 
     /// <summary>
