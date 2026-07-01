@@ -16,6 +16,7 @@ using FreeW.App.Avalonia.Editing;
 using FreeW.App.Avalonia.Pdf;
 using FreeW.App.Avalonia.Ribbon;
 using FreeW.App.Presentation.Dialogs;
+using FreeW.App.Presentation.Options;
 using FreeW.App.Presentation.Shell;
 using FreeW.Core.IO;
 using FreeW.Core.Model;
@@ -26,13 +27,6 @@ public sealed class MainWindow : Window
 {
     private const string DefaultTitle = "FreeW";
     private static readonly SisterAppFileTextSpec FileText = SisterAppFileTextPlanner.Document;
-
-    /// <summary>
-    /// Number of entries kept in the recent-files store for this session.
-    /// A FreeWOptions-driven cap comes in a later round; this constant is the
-    /// interim default (matches the WPF host's <c>FreeWOptions.DefaultRecentFilesCap</c>).
-    /// </summary>
-    private const int DefaultRecentFilesCap = 10;
 
     private static readonly FilePickerFileType PdfFileType =
         AvaloniaFilePickerTypeAdapter.CreateFileType(
@@ -54,6 +48,8 @@ public sealed class MainWindow : Window
     private readonly Button _btnWebLayout    = MakeViewModeButton("Web");
     private readonly Button _btnDraftView    = MakeViewModeButton("Draft");
     private readonly SisterAvaloniaFileCommandWorkflow _fileWorkflow;
+    private readonly FreeWOptions _options;
+    private readonly ApplicationOptionsStore<FreeWOptions> _optionsStore;
     private readonly AutosaveAdapter _autosave;
     private readonly NavigationPane _navPane;
     private readonly ReviewingPane _reviewingPane;
@@ -71,7 +67,22 @@ public sealed class MainWindow : Window
     }
 
     public MainWindow(IReadOnlyList<string> startupArguments)
+        : this(
+            startupArguments,
+            null,
+            ApplicationOptionsStore<FreeWOptions>.Create(PlatformApplicationDataPathProvider.LocalInstance))
     {
+    }
+
+    internal MainWindow(
+        IReadOnlyList<string> startupArguments,
+        FreeWOptions? options,
+        ApplicationOptionsStore<FreeWOptions> optionsStore)
+    {
+        _optionsStore = optionsStore;
+        _options = options ?? _optionsStore.Load();
+        _options.Normalize();
+
         Title = DefaultTitle;
         Width = 1040;
         Height = 720;
@@ -84,7 +95,7 @@ public sealed class MainWindow : Window
                 ApplicationName: DefaultTitle,
                 Separator: " - ",
                 CollapseCleanUntitledTitle: true),
-            maxRecentEntries: () => DefaultRecentFilesCap,
+            maxRecentEntries: () => _options.RecentFilesCap,
             onChanged: UpdateStatus,
             save: () => SaveAsync().GetAwaiter().GetResult());
         _autosave = new AutosaveAdapter(_editor, _fileWorkflow.Workflow);
@@ -1142,6 +1153,8 @@ public sealed class MainWindow : Window
             GetRecentEntries: () => _fileWorkflow.RecentEntries,
             GetFileFormats: () => _documentPersistence.Adapters.SelectMany(a => a.Formats),
             GetPageSettings: () => _editor.Document.Page,
+            GetCurrentOptions: () => _options,
+            GetDataFolder: ResolveDataFolderLabel,
 
             NewDocument: NewDocument,
             OpenRecent: path =>
@@ -1167,7 +1180,100 @@ public sealed class MainWindow : Window
                 if (!string.IsNullOrWhiteSpace(folder))
                     OpenFolderInShell(folder);
             },
-            ExportPdf: () => _ = ExportPdfAsync());
+            ExportPdf: () => _ = ExportPdfAsync(),
+            MarkAsFinal: ToggleMarkAsFinal,
+            RestrictEditing: () => _ = OpenRestrictEditingAsync(),
+            InspectDocument: () => _ = InspectDocumentAsync(),
+            CheckAccessibility: () => _ = CheckAccessibilityAsync(),
+            OpenOptions: () => _ = OpenOptionsAsync());
+
+    private void ToggleMarkAsFinal()
+    {
+        _editor.SetMarkedAsFinal(!_editor.IsMarkedAsFinal);
+        _status.Text = _editor.IsMarkedAsFinal
+            ? "Document marked as final."
+            : "Document is no longer marked as final.";
+        _editor.Focus();
+    }
+
+    private async Task OpenRestrictEditingAsync()
+    {
+        var dialog = new RestrictEditingDialog(_editor.Document.Protection);
+        await dialog.ShowDialog(this);
+        if (dialog.Result is not { } settings)
+            return;
+
+        _editor.SetProtection(settings);
+        _status.Text = settings.Mode == ProtectionMode.None
+            ? "Editing restrictions removed."
+            : $"Editing restricted: {settings.Mode}.";
+        _editor.Focus();
+    }
+
+    private async Task InspectDocumentAsync()
+    {
+        var result = DocumentInspector.Inspect(_editor.Document);
+        var dialog = new DocumentInspectorDialog(result);
+        await dialog.ShowDialog(this);
+        if (dialog.Choice is not { } choice)
+            return;
+
+        if (choice.HasAnySelection)
+            _editor.ApplyInspectorRemovals(choice.Comments, choice.Revisions, choice.Properties, choice.Bookmarks);
+
+        _status.Text = choice.HasAnySelection
+            ? "Selected document data removed."
+            : "Document Inspector completed.";
+        _editor.Focus();
+    }
+
+    private async Task CheckAccessibilityAsync()
+    {
+        var report = AccessibilityChecker.Check(_editor.Document);
+        var dialog = new AccessibilityReportDialog(report);
+        await dialog.ShowDialog(this);
+        _status.Text = report.IsClean
+            ? "No accessibility issues found."
+            : $"{report.Issues.Count} accessibility issue(s) found.";
+        _editor.Focus();
+    }
+
+    private async Task OpenOptionsAsync()
+    {
+        var dialog = new OptionsDialog(_options);
+        await dialog.ShowDialog(this);
+        if (dialog.Result is not { } edited)
+            return;
+
+        ApplyOptions(edited);
+        if (!_optionsStore.Save(_options))
+            _status.Text = _optionsStore.LastError ?? "FreeW Options could not be saved.";
+        else
+            _status.Text = "FreeW Options saved.";
+    }
+
+    private void ApplyOptions(FreeWOptions edited)
+    {
+        _options.RecentFilesCap = edited.RecentFilesCap;
+        _options.DefaultSaveFormat = edited.DefaultSaveFormat;
+        _options.UiLanguage = edited.UiLanguage;
+        _options.AutoCorrectEnabled = edited.AutoCorrectEnabled;
+        _options.AutoFormat = edited.AutoFormat;
+        _options.AutoCorrect = edited.AutoCorrect;
+        _options.Normalize();
+    }
+
+    private string ResolveDataFolderLabel()
+    {
+        try
+        {
+            return Path.GetDirectoryName(_optionsStore.StorePath) ?? _optionsStore.StorePath;
+        }
+        catch
+        {
+            return AppStoragePathPlanner.GetOptionsFilePathLabelOrFallback(PlatformApplicationDataPathProvider.LocalInstance);
+        }
+    }
 
     private void OpenFolderInShell(string folder)
     {

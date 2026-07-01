@@ -12,6 +12,7 @@ using Free.Shared.Theme;
 using Free.Shared.Theme.Wpf;
 using FreeW.App.Host.Editing;
 using FreeW.App.Presentation.Backstage;
+using FreeW.App.Presentation.Options;
 using FreeW.Core.IO;
 using FreeW.Core.Model;
 

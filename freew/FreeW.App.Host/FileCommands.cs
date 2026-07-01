@@ -5,6 +5,7 @@ using Free.Shared.AppServices;
 using Free.Shared.IO;
 using Free.Shared.Shell.Wpf;
 using FreeW.App.Host.Editing;
+using FreeW.App.Presentation.Options;
 using FreeW.App.Presentation.Shell;
 using FreeW.Core.IO;
 using FreeW.Core.Model;

@@ -1,5 +1,6 @@
 using Free.Shared.Theme;
 using Free.Shared.Theme.Wpf;
+using FreeW.App.Presentation.Options;
 
 namespace FreeW.App.Host;
 

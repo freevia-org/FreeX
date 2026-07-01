@@ -2,13 +2,13 @@ using Free.Shared.AppServices;
 using FreeW.App.Localization;
 using FreeW.Core.Model;
 
-namespace FreeW.App.Host;
+namespace FreeW.App.Presentation.Options;
 
 /// <summary>
 /// FreeW's persisted application settings. App-specific by design (the spreadsheet vs. word-processor
 /// option sets are genuinely different); only the <em>persistence</em> is shared, via the neutral
 /// <see cref="JsonSettingsStore{T}"/> in <c>Free.Shared.AppServices</c>. Kept deliberately small for now
-/// — enough real settings to prove the mechanism end-to-end (a read site, a write site, a round-trip).
+/// - enough real settings to prove the mechanism end-to-end (a read site, a write site, a round-trip).
 ///
 /// <para>
 /// All properties carry sensible defaults and the type is JSON round-trippable with a parameterless
@@ -45,7 +45,7 @@ public sealed class FreeWOptions : INormalizableApplicationOptions, IApplication
     public AutoFormatOptions AutoFormat { get; set; } = AutoFormatOptions.Default;
 
     /// <summary>
-    /// The Word "AutoCorrect" tab settings — the two-initial-capitals fix, day-name capitalization, and the
+    /// The Word "AutoCorrect" tab settings - the two-initial-capitals fix, day-name capitalization, and the
     /// user-editable replace-text table. A JSON-round-trippable, never-null sub-object; a missing value
     /// degrades to <see cref="AutoCorrectOptions.Default"/> (every rule on, default replace table).
     /// </summary>

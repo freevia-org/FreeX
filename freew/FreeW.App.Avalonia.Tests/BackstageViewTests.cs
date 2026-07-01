@@ -6,6 +6,7 @@ using Avalonia.Headless;
 using Free.Shared.Shell;
 using FreeW.App.Avalonia.Backstage;
 using FreeW.App.Presentation.Backstage;
+using FreeW.App.Presentation.Options;
 using FreeW.Core.IO;
 using FreeW.Core.Model;
 using Free.Shared.AppServices;
@@ -90,6 +91,12 @@ public class BackstageViewTests
         source.Should().Contain("BackstagePaneSurfacePlanner.BuildPrintPane(");
         source.Should().Contain("BackstagePaneSurfacePlanner.BuildInfoPane(");
         source.Should().Contain("BackstagePaneSurfacePlanner.BuildAccountPane(");
+        source.Should().Contain("ApplicationOptionsSummaryPlanner.Build(");
+        source.Should().Contain("_callbacks.MarkAsFinal()");
+        source.Should().Contain("_callbacks.RestrictEditing()");
+        source.Should().Contain("_callbacks.InspectDocument()");
+        source.Should().Contain("_callbacks.CheckAccessibility()");
+        source.Should().Contain("_callbacks.OpenOptions()");
         source.Should().Contain("BuildOpenSurface(");
         source.Should().Contain("surface.Search.AutomationName");
         source.Should().Contain("surface.Tabs.DocumentsTabLabel");
@@ -112,6 +119,10 @@ public class BackstageViewTests
         source.Should().NotContain("BackstagePrintPanePlanner.Build(");
         source.Should().NotContain("BackstageInfoSafetyPanePlanner.Build(");
         source.Should().NotContain("SisterBackstageAccountPanePlanner.Build(");
+        source.Should().NotContain("markAsFinal: null");
+        source.Should().NotContain("restrictEditing: null");
+        source.Should().NotContain("inspectDocument: null");
+        source.Should().NotContain("checkAccessibility: null");
 
         sharedSource.Should().Contain("public static class AvaloniaBackstageChrome");
         sharedSource.Should().Contain("public static Border CreateContentArea(");
@@ -249,6 +260,8 @@ public class BackstageViewTests
         callbacks!.GetRecentEntries.Should().NotBeNull();
         callbacks.GetFileFormats.Should().NotBeNull();
         callbacks.GetPageSettings.Should().NotBeNull();
+        callbacks.GetCurrentOptions().Should().NotBeNull();
+        callbacks.GetDataFolder().Should().NotBeNullOrWhiteSpace();
     }
 
     [Fact]
@@ -270,6 +283,64 @@ public class BackstageViewTests
         extensions.Should().Contain(ext => ext.Contains("docx", StringComparison.OrdinalIgnoreCase));
     }
 
+    [Fact]
+    public async Task MainWindow_BackstageCallbacks_wire_mark_final_to_document_model()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "FreeW.Avalonia.OptionsTests", Guid.NewGuid().ToString("N"), "settings.json");
+        var marked = false;
+
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow(
+                [],
+                new FreeWOptions(),
+                ApplicationOptionsStore<FreeWOptions>.ForPath(path));
+            var callbacks = window.BuildBackstageCallbacks();
+
+            callbacks.MarkAsFinal();
+
+            marked = window.Editor.Document.MarkedAsFinal;
+        }, CancellationToken.None);
+
+        marked.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task MainWindow_LoadsFreeWOptionsFromSharedStoreForBackstageAndRecentCap()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "FreeW.Avalonia.OptionsTests", Guid.NewGuid().ToString("N"));
+        var path = Path.Combine(directory, "settings.json");
+        var store = ApplicationOptionsStore<FreeWOptions>.ForPath(path);
+        store.Save(new FreeWOptions { RecentFilesCap = 3 }).Should().BeTrue();
+        int cap = -1;
+
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow([], null, ApplicationOptionsStore<FreeWOptions>.ForPath(path));
+
+            cap = window.BuildBackstageCallbacks().GetCurrentOptions().RecentFilesCap;
+        }, CancellationToken.None);
+
+        cap.Should().Be(3);
+    }
+
+    [Fact]
+    public void MainWindow_UsesFreeWOptionsForRecentFileCapAndSafetyDialogs()
+    {
+        var source = File.ReadAllText(FindRepoFile(
+            "freew",
+            "FreeW.App.Avalonia",
+            "MainWindow.cs"));
+
+        source.Should().Contain("ApplicationOptionsStore<FreeWOptions>");
+        source.Should().Contain("maxRecentEntries: () => _options.RecentFilesCap");
+        source.Should().Contain("new OptionsDialog(_options)");
+        source.Should().Contain("new RestrictEditingDialog(_editor.Document.Protection)");
+        source.Should().Contain("DocumentInspector.Inspect(_editor.Document)");
+        source.Should().Contain("AccessibilityChecker.Check(_editor.Document)");
+        source.Should().NotContain("DefaultRecentFilesCap");
+    }
+
     // ── Helpers ────────────────────────────────────────────────────────────────
 
     private static BackstageCallbacks BuildTestCallbacks() =>
@@ -279,6 +350,8 @@ public class BackstageViewTests
             GetRecentEntries: () => Array.Empty<RecentFileEntry>(),
             GetFileFormats: () => DocumentFileAdapterCatalog.CreateDefaultAdapters().SelectMany(a => a.Formats),
             GetPageSettings: () => new PageSettings(),
+            GetCurrentOptions: () => new FreeWOptions(),
+            GetDataFolder: () => @"C:\AppData\FreeW",
             NewDocument: () => { },
             OpenRecent: _ => { },
             OpenFolder: _ => { },
@@ -287,7 +360,12 @@ public class BackstageViewTests
             SaveAs: () => { },
             SaveAsExtension: _ => { },
             OpenContainingFolder: _ => { },
-            ExportPdf: () => { });
+            ExportPdf: () => { },
+            MarkAsFinal: () => { },
+            RestrictEditing: () => { },
+            InspectDocument: () => { },
+            CheckAccessibility: () => { },
+            OpenOptions: () => { });
 
     private static string FindRepoFile(params string[] parts) =>
         Path.Combine(FindRepoRoot(), Path.Combine(parts));

@@ -157,20 +157,23 @@ internal sealed class BackstageView : Window
         // Spacer
         panel.Children.Add(new Border { Height = 16 });
 
-        // Options placeholder (no implementation yet)
         var optionsBtn = new Button
         {
             Content = BackstageViewTextResources.OptionsButton,
             Background = Brushes.Transparent,
-            Foreground = new SolidColorBrush(Color.FromArgb(0xAA, 0xFF, 0xFF, 0xFF)),
+            Foreground = RailForeground,
             BorderThickness = new Thickness(0),
             Padding = new Thickness(16, 10),
             HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
             HorizontalContentAlignment = AvaloniaHorizontalAlignment.Left,
             FontSize = 13,
-            IsEnabled = false,
         };
         AutomationProperties.SetAutomationId(optionsBtn, "BackstageOptionsButton");
+        optionsBtn.Click += (_, _) =>
+        {
+            Close();
+            _callbacks.OpenOptions();
+        };
         panel.Children.Add(optionsBtn);
 
         return panel;
@@ -400,10 +403,10 @@ internal sealed class BackstageView : Window
     {
         var surface = BackstagePaneSurfacePlanner.BuildInfoPane(
             BuildInfoDocumentFields(),
-            markAsFinal: null,
-            restrictEditing: null,
-            inspectDocument: null,
-            checkAccessibility: null);
+            markAsFinal: () => { Close(); _callbacks.MarkAsFinal(); },
+            restrictEditing: () => { Close(); _callbacks.RestrictEditing(); },
+            inspectDocument: () => { Close(); _callbacks.InspectDocument(); },
+            checkAccessibility: () => { Close(); _callbacks.CheckAccessibility(); });
 
         var content = new StackPanel { Spacing = 16 };
         content.Children.Add(BuildPaneHeader(surface.Title, surface.Description));
@@ -415,7 +418,7 @@ internal sealed class BackstageView : Window
             AddDetailRow(propsGrid, field.Label, field.Value, InfoDocumentFieldAutomationId(field.Label));
         content.Children.Add(propsGrid);
 
-        // Safety groups (all placeholder — actions not yet implemented for FreeW)
+        // Safety groups
         foreach (var group in surface.SafetyGroups)
         {
             content.Children.Add(BuildSectionHeader(group.Heading));
@@ -437,9 +440,8 @@ internal sealed class BackstageView : Window
                 version,
                 SafeEnvironment(() => Environment.UserName),
                 SafeEnvironment(() => Environment.MachineName),
-                SafeEnvironment(() =>
-                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "FreeW"))),
-            openOptions: null);
+                _callbacks.GetDataFolder()),
+            openOptions: () => { Close(); _callbacks.OpenOptions(); });
 
         var content = new StackPanel { Spacing = 16 };
         content.Children.Add(BuildPaneHeader(surface.Title, surface.Description));
@@ -453,7 +455,9 @@ internal sealed class BackstageView : Window
             content.Children.Add(fieldGrid);
         }
 
-        // Options placeholder (same as rail — not yet implemented)
+        content.Children.Add(BuildSectionHeader("Application Options"));
+        content.Children.Add(BuildOptionsSummaryGrid());
+
         var optionsBtn = new Button
         {
             Content = surface.OptionsAction.Label,
@@ -469,6 +473,18 @@ internal sealed class BackstageView : Window
     }
 
     // ── Generic action-group renderer ────────────────────────────────────────
+
+    private Control BuildOptionsSummaryGrid()
+    {
+        var summary = ApplicationOptionsSummaryPlanner.Build(
+            _callbacks.GetCurrentOptions(),
+            _callbacks.GetDataFolder());
+        var grid = CreateDetailGrid();
+        foreach (var row in summary.Rows)
+            AddDetailRow(grid, row.Label, row.Value, "Options_" + row.Label.Replace(' ', '_'));
+
+        return grid;
+    }
 
     private Control BuildActionGroupContent(string title, IReadOnlyList<BackstageActionGroup> groups, string description)
     {

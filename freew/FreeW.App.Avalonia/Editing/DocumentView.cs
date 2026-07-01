@@ -330,12 +330,37 @@ public sealed class DocumentView : Control
         return string.Empty;
     }
 
-    public void SetCellText(int block, int row, int col, string text) =>
+    public void SetCellText(int block, int row, int col, string text)
+    {
+        if (IsEditingLocked)
+            return;
+
         _bus.Execute(new CellTextCommand(block, row, col, text));
+    }
 
     public TextDocument Document => _doc;
     public bool CanUndo => _bus.CanUndo;
     public bool CanRedo => _bus.CanRedo;
+
+    /// <summary>Raised whenever document protection or Mark-as-Final state changes.</summary>
+    public event EventHandler? ProtectionStateChanged;
+
+    /// <summary>True when restrict-editing protection is enforced.</summary>
+    public bool IsProtected => _doc.Protection.IsProtected;
+
+    /// <summary>The current restrict-editing mode stored in the document model.</summary>
+    public ProtectionMode ProtectionMode => _doc.Protection.Mode;
+
+    /// <summary>The full document protection settings stored in the document model.</summary>
+    public ProtectionSettings Protection => _doc.Protection;
+
+    /// <summary>True when the document is marked final, Word's advisory read-only state.</summary>
+    public bool IsMarkedAsFinal => _doc.MarkedAsFinal;
+
+    /// <summary>True when free typing/editing should be blocked by final/protection state.</summary>
+    public bool IsEditingLocked =>
+        _doc.MarkedAsFinal ||
+        _doc.Protection.Mode is ProtectionMode.ReadOnly or ProtectionMode.CommentsOnly or ProtectionMode.FillingForms;
 
     public void LoadDocument(TextDocument document)
     {
@@ -351,6 +376,8 @@ public sealed class DocumentView : Control
         _hfCaret = null; // AV-HFEDIT: clear header/footer caret on document load
         _selectedFloating = null; // AV-PICTAB: clear float selection on document load
         _floatDragState   = null;
+        if (_doc.Protection.Mode == ProtectionMode.TrackChangesOnly)
+            TrackChangesEnabled = true;
         RaiseFloatingSelectionChangedIfIdentityChanged();
         InvalidateLayoutAndVisual();
         DocumentChanged?.Invoke();
@@ -366,6 +393,50 @@ public sealed class DocumentView : Control
     {
         if (_bus.Redo())
             ClampCaret();
+    }
+
+    /// <summary>Set the document's Word-style Mark as Final advisory read-only state.</summary>
+    public void SetMarkedAsFinal(bool markedAsFinal)
+    {
+        if (_doc.MarkedAsFinal == markedAsFinal)
+            return;
+
+        _doc.MarkedAsFinal = markedAsFinal;
+        OnProtectionStateChanged();
+    }
+
+    /// <summary>Apply restrict-editing protection settings stored on the document model.</summary>
+    public void SetProtection(ProtectionSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+
+        if (_doc.Protection == settings)
+            return;
+
+        _doc.Protection = settings;
+        if (_doc.Protection.Mode == ProtectionMode.TrackChangesOnly)
+            TrackChangesEnabled = true;
+        OnProtectionStateChanged();
+    }
+
+    /// <summary>Apply a restrict-editing mode without a password.</summary>
+    public void SetProtection(ProtectionMode mode) => SetProtection(new ProtectionSettings(mode));
+
+    /// <summary>Toggle the common no-changes/read-only protection mode.</summary>
+    public ProtectionMode ToggleReadOnlyProtection()
+    {
+        var next = _doc.Protection.Mode == ProtectionMode.None
+            ? ProtectionMode.ReadOnly
+            : ProtectionMode.None;
+        SetProtection(next);
+        return next;
+    }
+
+    private void OnProtectionStateChanged()
+    {
+        InvalidateLayoutAndVisual();
+        ProtectionStateChanged?.Invoke(this, EventArgs.Empty);
+        DocumentChanged?.Invoke();
     }
 
     /// <summary>Select the next occurrence of <paramref name="query"/> after the caret (wraps around).</summary>
@@ -1103,6 +1174,9 @@ public sealed class DocumentView : Control
     /// </summary>
     private void MutateCaretTable(Func<int, int, int, IDocumentCommand> build)
     {
+        if (IsEditingLocked)
+            return;
+
         if (_cellCaret is not { } cc)
             return;
         var blockIdx = cc.TableBlock;
@@ -1131,6 +1205,9 @@ public sealed class DocumentView : Control
     /// </summary>
     public void MergeSelectedCells()
     {
+        if (IsEditingLocked)
+            return;
+
         if (SelectedCellRange is not { } sel)
             return;
         var blockIdx = sel.TableBlock;
@@ -1185,6 +1262,9 @@ public sealed class DocumentView : Control
     /// <param name="cols">Reserved for future subdivision; currently ignored.</param>
     public void SplitCurrentCell(int rows = 1, int cols = 1)
     {
+        if (IsEditingLocked)
+            return;
+
         if (_cellCaret is not { } cc)
             return;
         var blockIdx = cc.TableBlock;
@@ -1215,6 +1295,9 @@ public sealed class DocumentView : Control
     /// </summary>
     public void SetCellShading(string? hexColor)
     {
+        if (IsEditingLocked)
+            return;
+
         if (SelectedCellRange is { } sel)
         {
             // Block selection: apply to every cell in the rectangle.
@@ -1280,6 +1363,9 @@ public sealed class DocumentView : Control
         BorderLineStyle style = BorderLineStyle.Single,
         bool clearEdges = false)
     {
+        if (IsEditingLocked)
+            return;
+
         int blockIdx;
         int minRow, maxRow, minCol, maxCol;
 
@@ -1379,6 +1465,9 @@ public sealed class DocumentView : Control
     /// </summary>
     public void SetCaretCellAlignment(TableCellVerticalAlignment verticalAlignment, TextAlignment horizontalAlignment)
     {
+        if (IsEditingLocked)
+            return;
+
         if (SelectedCellRange is { } sel)
         {
             if (sel.TableBlock < 0 || sel.TableBlock >= _doc.Blocks.Count
@@ -6824,6 +6913,12 @@ public sealed class DocumentView : Control
     protected override void OnTextInput(TextInputEventArgs e)
     {
         base.OnTextInput(e);
+        if (IsEditingLocked)
+        {
+            e.Handled = true;
+            return;
+        }
+
         if (string.IsNullOrEmpty(e.Text) || e.Text == "\r" || e.Text == "\n")
             return;
         InsertText(e.Text);
@@ -6835,6 +6930,12 @@ public sealed class DocumentView : Control
         base.OnKeyDown(e);
         var shift = (e.KeyModifiers & KeyModifiers.Shift) != 0;
         var ctrl = (e.KeyModifiers & (KeyModifiers.Control | KeyModifiers.Meta)) != 0;
+
+        if (IsEditingLocked && IsEditingKey(e.Key, ctrl))
+        {
+            e.Handled = true;
+            return;
+        }
 
         // AV-FLSEL: when a float is selected, intercept navigation/delete keys before body text.
         if (_selectedFloating is { } selFloat)
@@ -6968,10 +7069,17 @@ public sealed class DocumentView : Control
         }
     }
 
+    private static bool IsEditingKey(Key key, bool ctrl) =>
+        key is Key.Back or Key.Delete or Key.Enter or Key.Tab ||
+        (ctrl && key is (Key.B or Key.I or Key.U or Key.Z or Key.Y));
+
     // ---- Editing operations (all via the command bus) -------------------------------------------
 
     public void InsertText(string text)
     {
+        if (IsEditingLocked)
+            return;
+
         // AV-HFEDIT: route into a header/footer region when the caret is inside one.
         if (_hfCaret is not null)
         {
@@ -7048,6 +7156,9 @@ public sealed class DocumentView : Control
 
     private void Backspace()
     {
+        if (IsEditingLocked)
+            return;
+
         // AV-HFEDIT: route into a header/footer region.
         if (_hfCaret is not null)
         {
@@ -7129,6 +7240,9 @@ public sealed class DocumentView : Control
 
     private void DeleteForward()
     {
+        if (IsEditingLocked)
+            return;
+
         // AV-HFEDIT: route into a header/footer region.
         if (_hfCaret is not null)
         {
@@ -7244,6 +7358,9 @@ public sealed class DocumentView : Control
 
     private void InsertParagraphBreak()
     {
+        if (IsEditingLocked)
+            return;
+
         // AV-HFEDIT: route into a header/footer region.
         if (_hfCaret is not null)
         {
@@ -7395,6 +7512,9 @@ public sealed class DocumentView : Control
 
     private void DeleteSelection()
     {
+        if (IsEditingLocked)
+            return;
+
         if (NormalizedSelection() is not { } sel)
             return;
 
@@ -8187,6 +8307,9 @@ public sealed class DocumentView : Control
     /// <summary>Insert a bordered table (with a header row) after the current block. Cells edit on double-click.</summary>
     public void InsertTable(int rows, int columns)
     {
+        if (IsEditingLocked)
+            return;
+
         var table = Table.Create(Math.Max(1, rows), Math.Max(1, columns));
         table.Formatting = TableFormatting.Default with { Borders = true, HeaderRow = true };
         var insertAt = Math.Clamp(_caret.Block + 1, 0, _doc.Blocks.Count);
@@ -8202,6 +8325,9 @@ public sealed class DocumentView : Control
     /// </summary>
     public void InsertPageBreak()
     {
+        if (IsEditingLocked)
+            return;
+
         var insertAt = Math.Clamp(_caret.Block + 1, 0, _doc.Blocks.Count);
         _bus.Execute(new InsertBlockCommand(insertAt, DocumentOps.CreatePageBreak()));
     }
@@ -8893,6 +9019,9 @@ public sealed class DocumentView : Control
     /// </summary>
     private void InsertObjectRun(Run run)
     {
+        if (IsEditingLocked)
+            return;
+
         // Resolve a body paragraph to host the object. Prefer the caret's block; otherwise the first
         // editable body paragraph; otherwise append a fresh empty paragraph and target that.
         var index = _caret.Block;
@@ -9399,6 +9528,9 @@ public sealed class DocumentView : Control
 
     public bool TryDeleteSelection()
     {
+        if (IsEditingLocked)
+            return false;
+
         if (NormalizedSelection() is null)
             return false;
         DeleteSelection();
@@ -10102,6 +10234,24 @@ public sealed class DocumentView : Control
         DocumentChanged?.Invoke();
     }
 
+    /// <summary>
+    /// Apply the Document Inspector's selected removal operations to the model and re-render.
+    /// Direct mutations bypass undo/redo, matching the existing accept/reject review semantics.
+    /// </summary>
+    public void ApplyInspectorRemovals(bool comments, bool revisions, bool properties, bool bookmarks)
+    {
+        if (comments)
+            DocumentInspector.RemoveComments(_doc);
+        if (revisions)
+            DocumentInspector.RemoveRevisions(_doc);
+        if (properties)
+            DocumentInspector.RemoveProperties(_doc);
+        if (bookmarks)
+            DocumentInspector.RemoveBookmarks(_doc);
+
+        InvalidateAfterExternalMutation();
+    }
+
     private void OnModelChanged()
     {
         InvalidateLayoutAndVisual();
@@ -10165,7 +10315,10 @@ public sealed class DocumentView : Control
     }
 
     /// <summary>Char-level editing only on paragraphs whose runs are all plain text (no images/fields/controls).</summary>
-    private static bool IsEditable(Paragraph paragraph) =>
+    private bool IsEditable(Paragraph paragraph) =>
+        !IsEditingLocked && IsPlainTextEditable(paragraph);
+
+    private static bool IsPlainTextEditable(Paragraph paragraph) =>
         // AV-COMMENT: a CommentId is a soft run mark (like a hyperlink) — it must NOT make the paragraph
         // non-editable, or its glyphs would fall back to FallbackCells (which drops the comment id and the
         // anchor render). Word keeps commented text fully editable. The textless comment-reference run has

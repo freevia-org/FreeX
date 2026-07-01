@@ -5,6 +5,7 @@ using System.Windows;
 using Free.Shared.AppServices;
 using FreeW.App.Host;
 using FreeW.App.Host.Editing;
+using FreeW.App.Presentation.Options;
 using FreeW.Core.IO;
 using Xunit;
 
