@@ -22,9 +22,13 @@ public sealed class FilePickerPlannerSourceTests
         source.Should().Contain("PresentationFileDialogPlanner.BuildOpenPickerPlan()");
         source.Should().Contain("PresentationFileDialogPlanner.BuildSavePickerPlan(");
         source.Should().Contain("PresentationExportPlanner.PdfExportCommandId");
+        source.Should().Contain("PresentationExportPlanner.ImageExportCommandId");
         source.Should().Contain("PresentationExportPlanner.BuildPdfExportPickerPlan(");
         source.Should().Contain("PresentationPdfExporter.ExportToBytes(_presentation)");
         source.Should().Contain("PresentationImageExportExecutor.Export(");
+        source.Should().Contain("PresentationExportPlanner.ImageExportPickerTitle");
+        source.Should().Contain("StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions");
+        source.Should().Contain("BuildCurrentSlideImageExportRange()");
         source.Should().Contain("SlideRenderer.RenderToBytes");
         source.Should().Contain("ExportAtomicWriter.WriteAllBytes(path,");
         source.Should().Contain("PresentationFilePersistenceWorkflow.Open(path)");

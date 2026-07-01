@@ -164,7 +164,14 @@ public sealed class MainWindow : Window
         RebuildEditor();
 
         // File commands.
-        _file = new FileCommands(this, () => _presentation, LoadModel, UpdateTitle, _options, messageService: _messageService);
+        _file = new FileCommands(
+            this,
+            () => _presentation,
+            LoadModel,
+            UpdateTitle,
+            _options,
+            messageService: _messageService,
+            getImageExportRange: BuildCurrentSlideImageExportRange);
 
         // Title bar.
         var titleBar = ShellChrome.BuildTitleBar(this, chromeOptions);
@@ -237,6 +244,7 @@ public sealed class MainWindow : Window
             Save: () => _file.Save(),
             SaveAs: () => _file.SaveAs(),
             ExportPdf: () => _file.ExportPdf(),
+            ExportImages: () => _file.ExportImages(),
             CurrentOptions: () => _options,
             OnClosed: () => { },
             DataFolder: ResolveDataFolderLabel));
@@ -954,6 +962,11 @@ public sealed class MainWindow : Window
     // ── Backstage ─────────────────────────────────────────────────────────────────
 
     private void ShowBackstage() => _backstage.Show();
+
+    private PresentationSlideRangeRequest BuildCurrentSlideImageExportRange() =>
+        new(
+            PresentationSlideRangeKind.CurrentSlide,
+            CurrentSlideNumber: Editor.CurrentSlideIndex + 1);
 
     // ── Ribbon ────────────────────────────────────────────────────────────────────
 

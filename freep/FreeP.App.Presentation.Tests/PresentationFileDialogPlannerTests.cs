@@ -88,7 +88,7 @@ public sealed class PresentationFileDialogPlannerTests
         formats.Should().Contain(format =>
             format.Format == PresentationExportFormat.ImageSequence &&
             format.DefaultExtensionWithDot == ".png" &&
-            !format.IsImplemented);
+            format.IsImplemented);
         formats.Should().Contain(format =>
             format.Format == PresentationExportFormat.Video &&
             format.DefaultExtensionWithDot == ".mp4" &&
@@ -98,9 +98,14 @@ public sealed class PresentationFileDialogPlannerTests
             !format.IsImplemented);
 
         var backstage = PresentationExportPlanner.BuildBackstageExportPlan();
+        backstage.DeferredGroupHeading.Should().Be("Other File Types");
         backstage.FixedLayoutActions.Should().ContainSingle(action =>
             action.Format == PresentationExportFormat.Pdf &&
             action.CommandId == PresentationExportPlanner.PdfExportCommandId &&
+            action.IsEnabled);
+        backstage.DeferredActions.Should().ContainSingle(action =>
+            action.Format == PresentationExportFormat.ImageSequence &&
+            action.CommandId == PresentationExportPlanner.ImageExportCommandId &&
             action.IsEnabled);
         backstage.DeferredActions.Select(action => action.Format)
             .Should()
