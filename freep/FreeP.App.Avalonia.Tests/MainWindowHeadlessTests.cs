@@ -1220,6 +1220,105 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task Review_alt_text_pane_shows_shared_ui_and_applies_from_controls()
+    {
+        var paneVisibleWithoutSelection = false;
+        var applyEnabledWithoutSelection = true;
+        var paneVisibleWithSelection = false;
+        var titleLabel = string.Empty;
+        var descriptionLabel = string.Empty;
+        var titleText = string.Empty;
+        var titlePlaceholder = string.Empty;
+        var descriptionPlaceholder = string.Empty;
+        var missingDescriptionApplyEnabled = true;
+        var validApplyEnabled = false;
+        var decorativeApplyEnabled = false;
+        string? altTextTitle = null;
+        string? altText = null;
+        var isDecorative = false;
+        PresentationAltTextMutationPlan? metadataMutation = null;
+        PresentationAltTextMutationPlan? decorativeMutation = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var registry = window.BuildCommandRegistry();
+            registry.TryGet(PresentationReviewWorkflowPlanner.AltTextCommandId, out var altTextCommand)
+                .Should().BeTrue();
+
+            altTextCommand!.Execute(RibbonCommandContext.Empty);
+            paneVisibleWithoutSelection = window.IsAltTextPaneVisible;
+            applyEnabledWithoutSelection = window.IsAltTextPaneApplyEnabled;
+            window.AltTextPaneMessage.Should().Be(PresentationReviewWorkflowPlanner.MissingShapeMessage);
+
+            var shape = new SlideShape
+            {
+                Id = 330,
+                Name = "Product image",
+                Kind = SlideShapeKind.Picture,
+                Picture = new ImagePart(),
+                AlternativeTextTitle = "Packaging photo",
+            };
+            window.Editor.CurrentSlide!.Shapes.Add(shape);
+            window.Editor.Select(shape.Id);
+            altTextCommand.Execute(RibbonCommandContext.Empty);
+
+            paneVisibleWithSelection = window.IsAltTextPaneVisible;
+            titleLabel = window.AltTextPaneTitleLabel;
+            descriptionLabel = window.AltTextPaneDescriptionLabel;
+            titleText = window.AltTextPaneTitleText;
+            titlePlaceholder = window.AltTextPaneTitlePlaceholder;
+            descriptionPlaceholder = window.AltTextPaneDescriptionPlaceholder;
+            missingDescriptionApplyEnabled = window.IsAltTextPaneApplyEnabled;
+
+            window.SetAltTextPaneInput("  Hero packaging photo  ", "  Product packaging on a white background.  ", isDecorative: false);
+            validApplyEnabled = window.IsAltTextPaneApplyEnabled;
+            metadataMutation = window.ApplyAltTextPane();
+            altTextTitle = shape.AlternativeTextTitle;
+            altText = shape.AlternativeText;
+
+            window.SetAltTextPaneInput("Ignored title", string.Empty, isDecorative: true);
+            decorativeApplyEnabled = window.IsAltTextPaneApplyEnabled;
+            decorativeMutation = window.ApplyAltTextPane();
+            isDecorative = shape.IsDecorative;
+            window.HideAltTextPane();
+            window.IsAltTextPaneVisible.Should().BeFalse();
+        });
+
+        if (!ran) return;
+        paneVisibleWithoutSelection.Should().BeTrue();
+        applyEnabledWithoutSelection.Should().BeFalse();
+        paneVisibleWithSelection.Should().BeTrue();
+        titleLabel.Should().Be("Title");
+        descriptionLabel.Should().Be("Description");
+        titleText.Should().Be("Packaging photo");
+        titlePlaceholder.Should().Be("Packaging photo");
+        descriptionPlaceholder.Should().Be("Describe the selected object for people who cannot see it.");
+        missingDescriptionApplyEnabled.Should().BeFalse();
+        validApplyEnabled.Should().BeTrue();
+        metadataMutation.Should().Be(new PresentationAltTextMutationPlan(
+            true,
+            0,
+            330,
+            "Hero packaging photo",
+            "Product packaging on a white background.",
+            false,
+            null));
+        altTextTitle.Should().Be("Hero packaging photo");
+        altText.Should().Be("Product packaging on a white background.");
+        decorativeApplyEnabled.Should().BeTrue();
+        decorativeMutation.Should().Be(new PresentationAltTextMutationPlan(
+            true,
+            0,
+            330,
+            string.Empty,
+            string.Empty,
+            true,
+            null));
+        isDecorative.Should().BeTrue();
+    }
+
+    [Fact]
     public async Task Review_alt_text_apply_routes_through_shared_mutation_plan()
     {
         string? altTextTitle = null;
