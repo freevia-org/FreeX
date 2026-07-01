@@ -184,7 +184,10 @@ public sealed record DocumentFloatingObjectSnapshot(
     DocumentFloatRect Rect,
     bool BehindText,
     int ZOrderIndex,
-    ImageWrapping Wrapping)
+    ImageWrapping Wrapping,
+    double RotationAngle = 0,
+    bool FlipH = false,
+    bool FlipV = false)
 {
     public string TypeTag => Kind switch
     {
@@ -428,7 +431,10 @@ public static class DocumentViewLayoutPlanner
                     image.HorizontalAnchor,
                     image.HorizontalOffsetPt,
                     image.VerticalAnchor,
-                    image.VerticalOffsetPt);
+                    image.VerticalOffsetPt,
+                    image.RotationAngle,
+                    image.FlipH,
+                    image.FlipV);
             }
             else if (run.Shape is { IsFloating: true, Placement: { } shapePlacement } shape)
             {
@@ -444,7 +450,10 @@ public static class DocumentViewLayoutPlanner
                     shape.HeightPt,
                     defaultWidthPt: 120,
                     defaultHeightPt: 80,
-                    shapePlacement);
+                    shapePlacement,
+                    shape.RotationAngle,
+                    shape.FlipH,
+                    shape.FlipV);
             }
             else if (run.Chart is { IsFloating: true, Placement: { } chartPlacement } chart)
             {
@@ -536,12 +545,56 @@ public static class DocumentViewLayoutPlanner
         ArgumentNullException.ThrowIfNull(snapshots);
 
         return snapshots
-            .Where(snapshot => snapshot.Rect.Contains(point))
+            .Where(snapshot => snapshot.Rect.Contains(
+                UnTransformPoint(point, snapshot.Rect, snapshot.RotationAngle, snapshot.FlipH, snapshot.FlipV)))
             .OrderBy(snapshot => snapshot.BehindText ? 1 : 0)
             .ThenByDescending(snapshot => snapshot.ZOrderIndex)
             .ThenByDescending(snapshot => snapshot.BlockIndex)
             .ThenByDescending(snapshot => snapshot.RunIndex)
             .FirstOrDefault();
+    }
+
+    /// <summary>
+    /// Maps a SCREEN/page-space <paramref name="point"/> into the LOCAL (un-rotated, un-flipped) frame
+    /// of a floating object whose visible bounds are <paramref name="rect"/> rotated by
+    /// <paramref name="rotationAngle"/> degrees and flipped per <paramref name="flipH"/>/<paramref name="flipV"/>,
+    /// all about the rect's own centre. Mirrors the render transform applied in DrawFloatingShape
+    /// (translate to centre, flip, rotate, translate back) — this is that transform's inverse, so the
+    /// returned point can be tested against the plain axis-aligned <paramref name="rect"/> with
+    /// <see cref="DocumentFloatRect.Contains"/>. Rotation and flip are both self-inverse (flip is its own
+    /// inverse; rotating by -angle undoes +angle), so the inverse is applied in reverse order: undo the
+    /// rotation first, then undo the flip.
+    /// </summary>
+    public static DocumentFloatPoint UnTransformPoint(
+        DocumentFloatPoint point,
+        DocumentFloatRect rect,
+        double rotationAngle,
+        bool flipH,
+        bool flipV)
+    {
+        if (rotationAngle == 0 && !flipH && !flipV)
+            return point;
+
+        var cx = rect.CenterXDip;
+        var cy = rect.CenterYDip;
+        var x = point.XDip - cx;
+        var y = point.YDip - cy;
+
+        if (rotationAngle != 0)
+        {
+            // Undo the render's +rotationAngle by rotating the point by -rotationAngle.
+            var rad = -rotationAngle * Math.PI / 180.0;
+            var cos = Math.Cos(rad);
+            var sin = Math.Sin(rad);
+            (x, y) = (x * cos - y * sin, x * sin + y * cos);
+        }
+
+        // Undo the render's flip(s) — flip is applied before rotation when drawing, so it is undone
+        // after un-rotating here (reverse order of the forward transform).
+        if (flipH) x = -x;
+        if (flipV) y = -y;
+
+        return new DocumentFloatPoint(x + cx, y + cy);
     }
 
     public static IReadOnlyList<DocumentFloatingWrapExclusionZone> BuildFloatingWrapExclusionZones(
@@ -769,9 +822,24 @@ public static class DocumentViewLayoutPlanner
         return Math.Max(currentContentYDip, targetContentYDip);
     }
 
+    /// <summary>
+    /// Builds the eight resize-handle squares (corners + edge midpoints) for a selection
+    /// <paramref name="rect"/>. When <paramref name="rotationAngle"/> is non-zero or
+    /// <paramref name="flipH"/>/<paramref name="flipV"/> is set, each handle's centre point is carried
+    /// through the SAME forward transform DrawFloatingShape uses to render the object (flip about the
+    /// rect centre, then rotate by <paramref name="rotationAngle"/>, both about the rect centre) so the
+    /// drawn handle sits on the VISIBLE rotated/flipped corner instead of the plain axis-aligned one.
+    /// The <see cref="DocumentFloatingHandle"/> tag stays the model-space corner it represents (e.g.
+    /// <see cref="DocumentFloatingHandle.TopLeft"/> is always the model's top-left corner, wherever it is
+    /// now drawn) — hit-testing against these transformed rects is what lets a click on the visible
+    /// corner resolve to the correct model handle.
+    /// </summary>
     public static IReadOnlyList<DocumentFloatingHandleRect> BuildFloatingHandleRects(
         DocumentFloatRect rect,
-        double handleSizeDip)
+        double handleSizeDip,
+        double rotationAngle = 0,
+        bool flipH = false,
+        bool flipV = false)
     {
         var sizeDip = Math.Max(0, handleSizeDip);
         var halfDip = sizeDip / 2;
@@ -793,11 +861,12 @@ public static class DocumentViewLayoutPlanner
                 if (handle == DocumentFloatingHandle.None)
                     continue;
 
+                var (px, py) = TransformPoint(x[col], y[row], rect, rotationAngle, flipH, flipV);
                 handles.Add(new DocumentFloatingHandleRect(
                     handle,
                     new DocumentFloatRect(
-                        x[col] - halfDip,
-                        y[row] - halfDip,
+                        px - halfDip,
+                        py - halfDip,
                         sizeDip,
                         sizeDip)));
             }
@@ -806,19 +875,59 @@ public static class DocumentViewLayoutPlanner
         return handles;
     }
 
+    /// <summary>
+    /// Applies the forward render transform (flip about the rect centre, then rotate by
+    /// <paramref name="rotationAngle"/> degrees, both about <paramref name="rect"/>'s centre) to a single
+    /// model-space point. This is the exact inverse of <see cref="UnTransformPoint"/> and mirrors the
+    /// matrix DrawFloatingShape builds: translate to centre, flip, rotate, translate back.
+    /// </summary>
+    private static (double X, double Y) TransformPoint(
+        double xDip,
+        double yDip,
+        DocumentFloatRect rect,
+        double rotationAngle,
+        bool flipH,
+        bool flipV)
+    {
+        if (rotationAngle == 0 && !flipH && !flipV)
+            return (xDip, yDip);
+
+        var cx = rect.CenterXDip;
+        var cy = rect.CenterYDip;
+        var x = xDip - cx;
+        var y = yDip - cy;
+
+        if (flipH) x = -x;
+        if (flipV) y = -y;
+
+        if (rotationAngle != 0)
+        {
+            var rad = rotationAngle * Math.PI / 180.0;
+            var cos = Math.Cos(rad);
+            var sin = Math.Sin(rad);
+            (x, y) = (x * cos - y * sin, x * sin + y * cos);
+        }
+
+        return (x + cx, y + cy);
+    }
+
     public static DocumentFloatingHandle HitTestFloatingHandle(
         DocumentFloatRect selectionRect,
         DocumentFloatPoint point,
         double handleSizeDip,
-        double hitPaddingDip)
+        double hitPaddingDip,
+        double rotationAngle = 0,
+        bool flipH = false,
+        bool flipV = false)
     {
-        foreach (var handleRect in BuildFloatingHandleRects(selectionRect, handleSizeDip))
+        foreach (var handleRect in BuildFloatingHandleRects(selectionRect, handleSizeDip, rotationAngle, flipH, flipV))
         {
             if (handleRect.Rect.Inflate(Math.Max(0, hitPaddingDip)).Contains(point))
                 return handleRect.Handle;
         }
 
-        return selectionRect.Contains(point)
+        var localPoint = UnTransformPoint(point, selectionRect, rotationAngle, flipH, flipV);
+        return selectionRect.Contains(localPoint)
             ? DocumentFloatingHandle.Body
             : DocumentFloatingHandle.None;
     }
@@ -837,13 +946,29 @@ public static class DocumentViewLayoutPlanner
             baseRect.HeightDip);
     }
 
+    /// <summary>
+    /// Computes the resized axis-aligned rect for a handle drag, working entirely in the floating
+    /// object's OWN (model) frame so the result composes correctly with rotation/flip at render time.
+    /// When <paramref name="rotationAngle"/> and/or <paramref name="flipH"/>/<paramref name="flipV"/> are
+    /// set, <paramref name="pointer"/> (a SCREEN/page-space point) is first mapped into that local frame
+    /// via <see cref="UnTransformPoint"/> — the inverse of DrawFloatingShape's render transform — so the
+    /// object grows along its OWN axes instead of the screen axes, and the opposite (anchored) corner in
+    /// LOCAL space stays fixed (which is also the correct anchor once the caller re-applies the
+    /// rotation/flip for rendering). The returned rect is in the SAME local frame as <paramref
+    /// name="baseRect"/>. Rotation/flip default to zero/false so existing unrotated callers are unaffected.
+    /// </summary>
     public static DocumentFloatRect BuildFloatingResizeRect(
         DocumentFloatRect baseRect,
         DocumentFloatingHandle handle,
         DocumentFloatPoint pointer,
         bool preserveAspect,
-        double minimumSizeDip)
+        double minimumSizeDip,
+        double rotationAngle = 0,
+        bool flipH = false,
+        bool flipV = false)
     {
+        var localPointer = UnTransformPoint(pointer, baseRect, rotationAngle, flipH, flipV);
+
         var minimumDip = Math.Max(0, minimumSizeDip);
         var leftDip = baseRect.LeftDip;
         var topDip = baseRect.TopDip;
@@ -864,13 +989,13 @@ public static class DocumentViewLayoutPlanner
             or DocumentFloatingHandle.BottomRight;
 
         if (movesLeft)
-            leftDip = Math.Min(pointer.XDip, rightDip - minimumDip);
+            leftDip = Math.Min(localPointer.XDip, rightDip - minimumDip);
         if (movesRight)
-            rightDip = Math.Max(pointer.XDip, leftDip + minimumDip);
+            rightDip = Math.Max(localPointer.XDip, leftDip + minimumDip);
         if (movesTop)
-            topDip = Math.Min(pointer.YDip, bottomDip - minimumDip);
+            topDip = Math.Min(localPointer.YDip, bottomDip - minimumDip);
         if (movesBottom)
-            bottomDip = Math.Max(pointer.YDip, topDip + minimumDip);
+            bottomDip = Math.Max(localPointer.YDip, topDip + minimumDip);
 
         var widthDip = rightDip - leftDip;
         var heightDip = bottomDip - topDip;
@@ -919,7 +1044,10 @@ public static class DocumentViewLayoutPlanner
         double heightPt,
         double defaultWidthPt,
         double defaultHeightPt,
-        FloatingPlacement placement)
+        FloatingPlacement placement,
+        double rotationAngle = 0,
+        bool flipH = false,
+        bool flipV = false)
     {
         AddSnapshot(
             snapshots,
@@ -938,7 +1066,10 @@ public static class DocumentViewLayoutPlanner
             placement.HorizontalAnchor,
             placement.HorizontalOffsetPt,
             placement.VerticalAnchor,
-            placement.VerticalOffsetPt);
+            placement.VerticalOffsetPt,
+            rotationAngle,
+            flipH,
+            flipV);
     }
 
     private static void AddSnapshot(
@@ -958,7 +1089,10 @@ public static class DocumentViewLayoutPlanner
         HorizontalAnchor horizontalAnchor,
         double horizontalOffsetPt,
         VerticalAnchor verticalAnchor,
-        double verticalOffsetPt)
+        double verticalOffsetPt,
+        double rotationAngle = 0,
+        bool flipH = false,
+        bool flipV = false)
     {
         var placement = BuildFloatingObjectPlacement(
             surface,
@@ -978,7 +1112,10 @@ public static class DocumentViewLayoutPlanner
             new DocumentFloatRect(placement.XDip, placement.YDip, widthDip, heightDip),
             wrapping == ImageWrapping.Behind,
             zOrderIndex,
-            wrapping));
+            wrapping,
+            rotationAngle,
+            flipH,
+            flipV));
     }
 
     private static double EstimateWordArtWidthPt(WordArt wordArt) =>

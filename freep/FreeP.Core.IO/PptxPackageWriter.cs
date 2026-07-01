@@ -238,34 +238,56 @@ public static class PptxPackageWriter
             }
         }
 
-        // EA2: Pre-scan preserved parts to determine which paths will be reindexed by
+        // FA1 (was EA2): Pre-scan preserved parts to determine which paths will be reindexed by
         // WriteSlidePreservedObjects, so BuildContentTypesXml can emit Overrides at the
         // WRITTEN (possibly reindexed) path rather than the original path.
         // This must run BEFORE BuildContentTypesXml since CT is written first.
-        var prvPartCtRemaps = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        //
+        // CRITICAL: this pre-scan MUST mirror WriteSlidePreservedObjects' reindex logic
+        // byte-for-byte, or the Override lands on a path the writer never actually produced
+        // (FA1 bug: a single global HashSet/counter + a global "already remapped" guard
+        // predicted different paths than the writer's PER-SLIDE writtenPaths/partCounter reset,
+        // whenever the same OPC part path was referenced from more than 2 occurrences, or from
+        // two shapes on the same slide followed by another slide reusing the path).
+        //
+        // The remap is keyed by (slideIdx, shapeId, origPath) — NOT origPath alone — because the
+        // same origPath can legitimately be reindexed to a DIFFERENT written path on each
+        // occurrence (each slide resets its own writtenPaths/partCounter), so a plain
+        // origPath -> path dictionary cannot represent that. BuildContentTypesXml below walks
+        // slides/shapes in the same order and looks up this same (slideIdx, shapeId, origPath) key.
+        var prvPartCtRemaps = new Dictionary<(int slideIdx, uint shapeId, string origPath), string>();
         {
-            var preScannedPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            int prePartCounter  = 1;
-            int preSlideIdx     = 1;
-            foreach (var slide in presentation.Slides)
+            for (int preSlideIdx = 1; preSlideIdx <= presentation.Slides.Count; preSlideIdx++)
             {
+                var slide = presentation.Slides[preSlideIdx - 1];
+
+                // Mirrors WriteSlidePreservedObjects: fresh writtenPaths + partCounter PER SLIDE.
+                var preWrittenPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                int prePartCounter  = 1;
+
                 foreach (var shape in AllShapes(slide.Shapes))
                 {
                     if (shape.PreservedObject is not { } prvInfo) continue;
+
+                    // Mirrors WriteSlidePreservedObjects: fresh pathRemap PER SHAPE.
+                    var prePathRemap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
                     foreach (var kv in prvInfo.Parts)
                     {
                         var origPath = kv.Key;
-                        if (prvPartCtRemaps.ContainsKey(origPath)) continue; // already remapped from a prior shape
+                        if (prePathRemap.ContainsKey(origPath)) continue;
+
                         var ext       = origPath.Contains('.') ? origPath[(origPath.LastIndexOf('.') + 1)..] : "bin";
                         var freshPath = origPath;
-                        if (preScannedPaths.Contains(freshPath))
+                        if (preWrittenPaths.Contains(freshPath))
                             freshPath = $"ppt/media/preserved_{preSlideIdx}_{prePartCounter++}.{ext}";
-                        preScannedPaths.Add(freshPath);
-                        if (!string.Equals(origPath, freshPath, StringComparison.OrdinalIgnoreCase))
-                            prvPartCtRemaps[origPath] = freshPath;
+
+                        if (!preWrittenPaths.Contains(freshPath))
+                            preWrittenPaths.Add(freshPath);
+                        prePathRemap[origPath] = freshPath;
+
+                        prvPartCtRemaps[(preSlideIdx, shape.Id, origPath)] = freshPath;
                     }
                 }
-                preSlideIdx++;
             }
         }
 
@@ -590,7 +612,7 @@ public static class PptxPackageWriter
     private static XDocument BuildContentTypesXml(
         Presentation p, List<SlideMaster> masters, List<SlideLayout> layouts,
         HashSet<string> mediaExtensions,
-        Dictionary<string, string>? prvPartPathRemaps = null,
+        Dictionary<(int slideIdx, uint shapeId, string origPath), string>? prvPartPathRemaps = null,
         PptxPackageSnapshot? packageSnapshot = null,
         IReadOnlySet<string>? preservedWriterOwnedPaths = null)
     {
@@ -714,11 +736,20 @@ public static class PptxPackageWriter
         }
 
         // Wave 25A: Preserved modern object part content types
-        // EA2: apply prvPartPathRemaps so Overrides are emitted at the WRITTEN (possibly reindexed)
-        // path, not the original path. Without this, a reindexed part has no Override → repair.
+        // FA1 (was EA2): apply prvPartPathRemaps so Overrides are emitted at the WRITTEN
+        // (possibly reindexed) path, not the original path. Without this, a reindexed part has
+        // no Override → repair. The remap is keyed by (slideIdx, shapeId, origPath) — the same
+        // granularity WriteSlidePreservedObjects reindexes at — because the same origPath can be
+        // reindexed to a DIFFERENT written path on each occurrence (each slide independently
+        // resets its own written-paths tracking), so a plain origPath -> path map cannot capture
+        // this. We must walk slides/shapes here in the SAME order as the pre-scan and the real
+        // writer for the (slideIdx, shapeId) keys to align.
         var seenPrvParts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var slide in p.Slides)
+        for (int si = 0; si < p.Slides.Count; si++)
         {
+            var slide = p.Slides[si];
+            int slideIdxForRemap = si + 1; // matches preSlideIdx / slideIdx (1-based) elsewhere
+
             foreach (var shape in AllShapes(slide.Shapes))
             {
                 if (shape.PreservedObject is { } info)
@@ -728,9 +759,9 @@ public static class PptxPackageWriter
                         if (string.IsNullOrEmpty(kv.Key) || string.IsNullOrEmpty(kv.Value))
                             continue;
 
-                        // EA2: resolve the WRITTEN path (may differ from original if reindexed)
+                        // FA1: resolve the WRITTEN path (may differ from original if reindexed)
                         var writtenPath = (prvPartPathRemaps is not null &&
-                                          prvPartPathRemaps.TryGetValue(kv.Key, out var rp))
+                                          prvPartPathRemaps.TryGetValue((slideIdxForRemap, shape.Id, kv.Key), out var rp))
                             ? rp : kv.Key;
 
                         if (seenPrvParts.Add(writtenPath))
@@ -3594,23 +3625,58 @@ public static class PptxPackageWriter
                 attr.SetValue(newId);
         }
 
-        // EA3: Re-wrap in mc:AlternateContent if the original was wrapped.
-        // Use the original Requires token (+ its namespace URI) verbatim — do NOT hardcode "p14".
-        // XElement.ToString() drops xmlns declarations for prefixes that appear only in attribute
-        // values (like Requires="p14"), so we must explicitly declare xmlns:xxx on the wrapper.
+        // EA3/FA2: Re-wrap in mc:AlternateContent if the original was wrapped.
+        // Use the original Requires token(s) (+ their namespace URI(s)) verbatim — do NOT
+        // hardcode "p14". XElement.ToString() drops xmlns declarations for prefixes that appear
+        // only in attribute values (like Requires="p14"), so we must explicitly declare
+        // xmlns:xxx on the wrapper.
+        //
+        // FA2: Requires may be a SPACE-SEPARATED list of tokens (mc:AlternateContent permits
+        // Requires="p14 p15"). The old code did `new XAttribute(XNamespace.Xmlns + requiresToken, ...)`
+        // with the RAW (possibly multi-token) string as the xmlns local-name, which is not a
+        // valid XML name when it contains a space -> XmlException on serialization, failing the
+        // save entirely. We now split on whitespace and declare one xmlns per token, resolving
+        // each token's URI individually via McRequiresNsUris. A token whose URI is unknown does
+        // NOT get the p14 URI forced onto it (that would be a wrong binding for a non-p14
+        // prefix) — its xmlns declaration is simply omitted; the Requires attribute still lists
+        // the token so a reader with knowledge of that prefix elsewhere in the package can still
+        // resolve it, but if NO token resolves to a URI we bail out and preserve the original
+        // element without re-wrapping (better than emitting a broken/ambiguous wrapper).
         if (info.WasAlternateContent)
         {
-            var clone = new XElement(el);   // deep clone for the Fallback branch
             var requiresToken = info.McRequiresToken ?? "p14";
-            var requiresNsUri = info.McRequiresNsUri
-                ?? "http://schemas.microsoft.com/office/powerpoint/2010/main";
+            var tokens = requiresToken.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+            if (tokens.Length == 0) tokens = new[] { requiresToken };
 
-            var choiceAttrs = new List<object>
+            var choiceAttrs = new List<object> { new XAttribute("Requires", requiresToken) };
+            int resolvedCount = 0;
+            foreach (var token in tokens)
             {
-                new XAttribute("Requires", requiresToken),
-                new XAttribute(XNamespace.Xmlns + requiresToken, requiresNsUri),
-            };
+                string? uri = null;
+                if (info.McRequiresNsUris.TryGetValue(token, out var mappedUri))
+                    uri = mappedUri;
+                else if (tokens.Length == 1 && info.McRequiresNsUri is not null)
+                    uri = info.McRequiresNsUri; // single-token back-compat fallback
+                else if (KnownMcPrefixNsUris.TryGetValue(token, out var knownUri))
+                    uri = knownUri; // last resort: well-known MS prefix table
 
+                if (uri is not null)
+                {
+                    choiceAttrs.Add(new XAttribute(XNamespace.Xmlns + token, uri));
+                    resolvedCount++;
+                }
+                // else: omit this token's xmlns — do NOT force an unrelated URI onto it.
+            }
+
+            if (resolvedCount == 0)
+            {
+                // No token resolved to any namespace URI — re-wrapping would produce an
+                // AlternateContent with an unusable Choice (Requires references prefixes with
+                // no xmlns binding at all). Preserve the original element verbatim instead.
+                return el;
+            }
+
+            var clone = new XElement(el);   // deep clone for the Fallback branch
             return new XElement(MC + "AlternateContent",
                 new XAttribute(XNamespace.Xmlns + "mc",
                     "http://schemas.openxmlformats.org/markup-compatibility/2006"),
@@ -3621,6 +3687,22 @@ public static class PptxPackageWriter
 
         return el;
     }
+
+    /// <summary>
+    /// FA2: well-known mc:AlternateContent Requires prefixes and their namespace URIs, used as a
+    /// last-resort fallback when a token's URI could not be resolved from the source document's
+    /// xmlns scope (e.g. an older captured PreservedObjectInfo without McRequiresNsUris populated).
+    /// Never used to override a URI that WAS captured on read.
+    /// </summary>
+    private static readonly Dictionary<string, string> KnownMcPrefixNsUris = new(StringComparer.Ordinal)
+    {
+        ["p14"]  = "http://schemas.microsoft.com/office/powerpoint/2010/main",
+        ["p15"]  = "http://schemas.microsoft.com/office/powerpoint/2012/main",
+        ["p159"] = "http://schemas.microsoft.com/office/powerpoint/2015/09/main",
+        ["p188"] = "http://schemas.microsoft.com/office/powerpoint/2018/8/main",
+        ["a14"]  = "http://schemas.microsoft.com/office/drawing/2010/main",
+        ["am3d"] = "http://schemas.microsoft.com/office/drawing/2017/model3d",
+    };
 
     // ── OLE embedded object writing (Theme 21) ────────────────────────────────────
 

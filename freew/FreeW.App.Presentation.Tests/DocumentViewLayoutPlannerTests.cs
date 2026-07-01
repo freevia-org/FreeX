@@ -367,6 +367,102 @@ public sealed class DocumentViewLayoutPlannerTests
         clamped.Should().Be(new DocumentFloatRect(10, 20, 20, 20));
     }
 
+    // FB1: BuildFloatingResizeRect resolves the pointer against the object's OWN axes when rotated, not
+    // the screen axes — dragging the BottomRight handle of a 90°-rotated square to the SCREEN point that
+    // un-rotates to local (140,120) must grow the LOCAL rect to that same local target, anchoring the
+    // opposite (TopLeft) corner in local space (which is also the correct anchor once the +90° rotation
+    // is re-applied for rendering).
+    [Fact]
+    public void BuildFloatingResizeRect_Rotated90_ResolvesPointerInLocalFrameAndAnchorsOppositeCorner()
+    {
+        var rect = new DocumentFloatRect(0, 0, 100, 100); // centre (50, 50)
+
+        // Screen point (-20, 140) un-rotates (by -90°) to local (140, 120) — see method doc for the math.
+        var resized = DocumentViewLayoutPlanner.BuildFloatingResizeRect(
+            rect,
+            DocumentFloatingHandle.BottomRight,
+            new DocumentFloatPoint(-20, 140),
+            preserveAspect: false,
+            minimumSizeDip: 20,
+            rotationAngle: 90);
+
+        // Anchored TopLeft corner (0,0) stays fixed in LOCAL space; the local rect grows to (140, 120).
+        resized.Should().Be(new DocumentFloatRect(0, 0, 140, 120));
+
+        // The SAME drag with rotationAngle defaulted to 0 (screen == local) must NOT reproduce this
+        // local-space result — confirms the un-rotate is actually doing something, not a no-op.
+        var unrotated = DocumentViewLayoutPlanner.BuildFloatingResizeRect(
+            rect,
+            DocumentFloatingHandle.BottomRight,
+            new DocumentFloatPoint(-20, 140),
+            preserveAspect: false,
+            minimumSizeDip: 20);
+        unrotated.Should().NotBe(resized);
+    }
+
+    // FB3: flip composes with the same un-rotate pipeline — a horizontally-flipped object's BottomRight
+    // handle drag resolves against the flipped local axes.
+    [Fact]
+    public void BuildFloatingResizeRect_FlippedHorizontal_ResolvesPointerInLocalFrame()
+    {
+        var rect = new DocumentFloatRect(0, 0, 100, 100); // centre (50, 50)
+
+        // Screen point (-40, 120) un-flips (FlipH) to local (140, 120).
+        var resized = DocumentViewLayoutPlanner.BuildFloatingResizeRect(
+            rect,
+            DocumentFloatingHandle.BottomRight,
+            new DocumentFloatPoint(-40, 120),
+            preserveAspect: false,
+            minimumSizeDip: 20,
+            flipH: true);
+
+        resized.Should().Be(new DocumentFloatRect(0, 0, 140, 120));
+    }
+
+    // FB1: BuildFloatingHandleRects must draw handles at the VISIBLE rotated corners, not the
+    // axis-aligned ones, so the drawn square and the clickable target for e.g. TopRight sit where the
+    // shape is actually rendered after a +90° rotation about its centre.
+    [Fact]
+    public void BuildFloatingHandleRects_Rotated90_DrawsHandlesAtVisibleRotatedCorners()
+    {
+        var rect = new DocumentFloatRect(0, 0, 100, 100); // centre (50, 50)
+
+        var handles = DocumentViewLayoutPlanner.BuildFloatingHandleRects(rect, handleSizeDip: 8, rotationAngle: 90);
+        var topRight = handles.Single(h => h.Handle == DocumentFloatingHandle.TopRight);
+
+        // Model TopRight (100, 0) rotated +90° about (50,50): relative (50,-50) -> (50, 50) -> absolute (100, 100).
+        topRight.Rect.CenterXDip.Should().BeApproximately(100, 0.01);
+        topRight.Rect.CenterYDip.Should().BeApproximately(100, 0.01);
+
+        // Without rotation, TopRight stays at the axis-aligned corner (100, 0).
+        var unrotatedHandles = DocumentViewLayoutPlanner.BuildFloatingHandleRects(rect, handleSizeDip: 8);
+        var unrotatedTopRight = unrotatedHandles.Single(h => h.Handle == DocumentFloatingHandle.TopRight);
+        unrotatedTopRight.Rect.CenterXDip.Should().BeApproximately(100, 0.01);
+        unrotatedTopRight.Rect.CenterYDip.Should().BeApproximately(0, 0.01);
+    }
+
+    // FB1/FB2: HitTestFloatingHandle must resolve a click on the VISIBLE rotated handle to the correct
+    // model handle, and a click on the empty (un-rotated) box corner must NOT be mistaken for a handle.
+    [Fact]
+    public void HitTestFloatingHandle_Rotated90_ResolvesVisibleCornerNotAxisAlignedCorner()
+    {
+        var rect = new DocumentFloatRect(0, 0, 100, 100);
+
+        // Visible TopRight handle after +90° rotation sits at (100, 100) (see prior test) — a click there
+        // must resolve to TopRight even though (100,100) is the axis-aligned BottomRight corner.
+        var hitVisibleCorner = DocumentViewLayoutPlanner.HitTestFloatingHandle(
+            rect, new DocumentFloatPoint(100, 100), handleSizeDip: 8, hitPaddingDip: 0, rotationAngle: 90);
+        hitVisibleCorner.Should().Be(DocumentFloatingHandle.TopRight);
+
+        // A 90° rotation just relabels one axis-aligned corner as another (it stays a square), so use a
+        // 45° rotation to probe a genuinely EMPTY box corner: the rotated diamond's vertices pull well
+        // away from the box corners, so the un-rotated TopRight corner (100, 0) sits in the gap outside
+        // the rotated shape's footprint and must not resolve to any handle.
+        var hitEmptyAxisCorner = DocumentViewLayoutPlanner.HitTestFloatingHandle(
+            rect, new DocumentFloatPoint(100, 0), handleSizeDip: 8, hitPaddingDip: 0, rotationAngle: 45);
+        hitEmptyAxisCorner.Should().Be(DocumentFloatingHandle.None);
+    }
+
     [Fact]
     public void BuildFloatingObjectSnapshots_CollectsEveryFloatingKindAndWrapZones()
     {
@@ -463,6 +559,60 @@ public sealed class DocumentViewLayoutPlannerTests
             snapshots,
             new DocumentFloatPoint(200, 50))
             .Should().BeNull();
+    }
+
+    // FB2: HitTestFloatingObject must un-rotate the pointer into each candidate's own frame before the
+    // containment test, so a rotated float's hit region tracks its VISIBLE (rotated) footprint rather
+    // than its axis-aligned bounding box: clicking the visible rotated shape (which reaches outside the
+    // axis-aligned box, near the middle of a rotated edge) hits; clicking an empty axis-aligned box
+    // corner (which the 45° rotation moved the shape away from) misses.
+    [Fact]
+    public void HitTestFloatingObject_Rotated45_MatchesVisibleFootprintNotAxisAlignedBox()
+    {
+        // A 100x100 square rotated 45° about its centre (50,50) becomes a diamond whose vertices reach
+        // out to (50, 50±70.71) and (50±70.71, 50) — i.e. straight above/below/left/right of centre,
+        // ~20.7 past the axis-aligned box edge (50,0)/(50,100)/(0,50)/(100,50).
+        var rect = new DocumentFloatRect(0, 0, 100, 100);
+        var snapshots = new[]
+        {
+            new DocumentFloatingObjectSnapshot(
+                DocumentFloatingObjectKind.Shape, 0, 0, rect, BehindText: false, ZOrderIndex: 1,
+                ImageWrapping.Square, RotationAngle: 45),
+        };
+
+        // 1) The axis-aligned box corner (5, 5) is empty space once the shape is rotated 45° about its
+        //    centre (the corner rotated away from that spot) -> must NOT hit.
+        DocumentViewLayoutPlanner.HitTestFloatingObject(snapshots, new DocumentFloatPoint(5, 5))
+            .Should().BeNull("the un-rotated box corner is empty space once the shape is rotated 45°");
+
+        // 2) The shape's own centre (50, 50) is invariant under rotation about itself -> must hit.
+        DocumentViewLayoutPlanner.HitTestFloatingObject(snapshots, new DocumentFloatPoint(50, 50))
+            .Should().NotBeNull("the centre point is unaffected by rotation about itself");
+
+        // 3) The SCREEN point that the +45° render rotates onto local (85, 85) (a point safely inside the
+        //    un-rotated square) must still hit the rotated shape — proves the un-rotate in the hit-test
+        //    is the true inverse of the render transform, not an approximation.
+        var screenForLocal85 = InverseRotate(new DocumentFloatPoint(85, 85), rect, 45);
+        DocumentViewLayoutPlanner.HitTestFloatingObject(snapshots, screenForLocal85)
+            .Should().NotBeNull("the screen point that rotates onto local (85,85) must hit the rotated shape");
+    }
+
+    /// <summary>Test helper: the SCREEN point that rotates onto <paramref name="local"/> by +<paramref name="angle"/>°
+    /// about <paramref name="rect"/>'s centre (the forward transform DrawFloatingShape applies) — the exact inverse of
+    /// <see cref="DocumentViewLayoutPlanner.UnTransformPoint"/>, used here to build test fixtures rather than to test
+    /// production logic directly.</summary>
+    private static DocumentFloatPoint InverseRotate(DocumentFloatPoint local, DocumentFloatRect rect, double angle)
+    {
+        var cx = rect.CenterXDip;
+        var cy = rect.CenterYDip;
+        var ax = local.XDip - cx;
+        var ay = local.YDip - cy;
+        var rad = angle * System.Math.PI / 180.0;
+        var cos = System.Math.Cos(rad);
+        var sin = System.Math.Sin(rad);
+        var sx = ax * cos - ay * sin;
+        var sy = ax * sin + ay * cos;
+        return new DocumentFloatPoint(sx + cx, sy + cy);
     }
 
     [Fact]

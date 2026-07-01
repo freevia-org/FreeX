@@ -435,4 +435,142 @@ public sealed class DocumentViewFloatingHandleTests
         Assert.Equal(hOffB, hOffU, 3);
         Assert.Equal(vOffB, vOffU, 3);
     }
+
+    // ── H-10 (FB1): rotated corner resize grows the object along ITS OWN axes, anchoring the opposite
+    // corner in the object's local frame — not the screen axes ──────────────────────────────────────────
+
+    [Fact]
+    public async Task CornerResize_on_90DegreeRotatedShape_growsAlongLocalAxesAndAnchorsOppositeCorner()
+    {
+        double wBefore = 0, hBefore = 0, wAfter = 0, hAfter = 0;
+        FloatHandle grabbedHandle = FloatHandle.None;
+        var ran = await OnUiThread(() =>
+        {
+            var (doc, bi, ri) = MakeDocWithFloatingShape(); // 120x80pt
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 2000));
+            view.SelectFloating(bi, ri);
+            view.RotateSelectedFloating(90);
+
+            var shape = ((Paragraph)doc.Blocks[bi]).Runs[ri].Shape!;
+            wBefore = shape.WidthPt; hBefore = shape.HeightPt;
+
+            // After a +90° rotation, the drawn (visible) handles are the SAME 8 axis-aligned positions
+            // relabeled (a square rotated 90° about its centre maps corners onto adjacent corners) — so
+            // the model's BottomRight handle is now drawn at the rect's TopRight screen position. Find
+            // the visible handle tagged BottomRight (the one this fix must resolve correctly) and drag it
+            // outward along the SCREEN axis it is actually drawn on.
+            var handles = view.HandleRectsForSelection();
+            var bottomRightHandle = handles[FloatHandle.BottomRight].Center;
+            grabbedHandle = view.BeginFloatDrag(bottomRightHandle);
+            // Drag further in the direction the visible handle already points (away from centre) so the
+            // object grows rather than clamps to the minimum size.
+            var rect = view.SelectedFloatingInfo!.Value.Rect;
+            var centre = rect.Center;
+            var outward = bottomRightHandle - centre;
+            var target = bottomRightHandle + outward * 0.5; // move further outward along the same ray
+            view.SimulateDragTo(target);
+            view.EndFloatDrag(target);
+
+            wAfter = shape.WidthPt; hAfter = shape.HeightPt;
+        });
+        if (!ran) return;
+        Assert.Equal(FloatHandle.BottomRight, grabbedHandle);
+        // Dragging the visible BottomRight handle further outward must grow the object (along its own
+        // local axes once un-rotated) rather than shrink it or leave it unchanged, which is what the
+        // pre-fix screen-axis math would do for a rotated object (wrong axis / wrong direction).
+        Assert.True(wAfter > wBefore || hAfter > hBefore,
+            $"rotated resize should grow the shape along its own axis: {wBefore}x{hBefore} -> {wAfter}x{hAfter}");
+    }
+
+    // ── H-11 (FB3): a flipped object's visible corner handle resizes that visual corner ─────────────────
+
+    [Fact]
+    public async Task CornerResize_on_HorizontallyFlippedShape_dragsVisibleCornerCorrectly()
+    {
+        double wBefore = 0, hBefore = 0, wAfter = 0, hAfter = 0;
+        var ran = await OnUiThread(() =>
+        {
+            var (doc, bi, ri) = MakeDocWithFloatingShape(); // 120x80pt
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 2000));
+            view.SelectFloating(bi, ri);
+            view.FlipSelectedFloating(horizontal: true);
+
+            var shape = ((Paragraph)doc.Blocks[bi]).Runs[ri].Shape!;
+            wBefore = shape.WidthPt; hBefore = shape.HeightPt;
+
+            // FlipH mirrors left/right about the centre, so the model's BottomRight handle is now drawn
+            // at the rect's BOTTOM-LEFT screen position. Grab the VISIBLE handle tagged BottomRight and
+            // drag it further outward (down-left) — this must grow the object, proving the flip was
+            // composed into the resize math rather than resizing/anchoring the wrong (un-flipped) corner.
+            var handles = view.HandleRectsForSelection();
+            var visibleBottomRight = handles[FloatHandle.BottomRight].Center;
+            var rect = view.SelectedFloatingInfo!.Value.Rect;
+            var outward = visibleBottomRight - rect.Center;
+            var target = visibleBottomRight + outward * 0.5;
+            view.BeginFloatDrag(visibleBottomRight);
+            view.SimulateDragTo(target);
+            view.EndFloatDrag(target);
+
+            wAfter = shape.WidthPt; hAfter = shape.HeightPt;
+        });
+        if (!ran) return;
+        Assert.True(wAfter > wBefore || hAfter > hBefore,
+            $"flipped resize should grow the shape from its visible corner: {wBefore}x{hBefore} -> {wAfter}x{hAfter}");
+    }
+
+    // ── H-12 (FB4): resizing a non-Image float via a top/left handle when GetFloatingPlacement returns
+    // null must NOT silently shift the anchored edge (skip the size-only commit rather than apply a
+    // visually-wrong resize) ───────────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task TopLeftResize_onGroupWithNullPlacement_doesNotShiftAnchorOrChangeSize()
+    {
+        double wBefore = 0, hBefore = 0, wAfter = 0, hAfter = 0;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            var para = new Paragraph();
+            para.Runs.Add(new Run("Body text.", RunFormatting.Default));
+            var group = new FreeW.Core.Model.DrawingGroup
+            {
+                WidthPt = 120,
+                HeightPt = 80,
+#pragma warning disable CS8625 // FB4 regression fixture: Placement is documented "always non-null" but
+                                // GetFloatingPlacement's `is { } pl` match must still be guarded against
+                                // a null value reaching it defensively.
+                Placement = null!,
+#pragma warning restore CS8625
+            };
+            group.Children.Add(new InlineImage([1], widthPt: 36, heightPt: 18));
+            para.Runs.Add(new Run(string.Empty, RunFormatting.Default) { DrawingGroup = group });
+            doc.Blocks.Add(para);
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 2000));
+            view.SelectFloating(0, 1);
+
+            wBefore = group.WidthPt; hBefore = group.HeightPt;
+
+            var rect = view.SelectedFloatingInfo!.Value.Rect;
+            var tl = new Point(rect.X, rect.Y);
+            view.BeginFloatDrag(tl);
+            var target = tl + new Vector(-40, -30); // pull the top-left corner out
+            view.SimulateDragTo(target);
+            view.EndFloatDrag(target);
+
+            wAfter = group.WidthPt; hAfter = group.HeightPt;
+        });
+        if (!ran) return;
+        // No placement to carry the anchor delta on -> the size-only commit must be skipped entirely
+        // rather than silently growing the group from the WRONG (unmoved) top-left, which would visually
+        // slide the corner the user just dragged.
+        Assert.Equal(wBefore, wAfter, 3);
+        Assert.Equal(hBefore, hAfter, 3);
+    }
 }
