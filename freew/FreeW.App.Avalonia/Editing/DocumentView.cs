@@ -8533,6 +8533,34 @@ public sealed class DocumentView : Control
     }
 
     /// <summary>
+    /// Insert a whole blank page after the caret block using the shared Word-compatible page-break pair.
+    /// </summary>
+    public void InsertBlankPage()
+    {
+        if (IsEditingLocked)
+            return;
+
+        var insertAt = Math.Clamp(_caret.Block + 1, 0, _doc.Blocks.Count);
+        var blocks = DocumentOps.BuildBlankPage();
+        _bus.BeginUndoGroup();
+        for (var i = 0; i < blocks.Count; i++)
+            _bus.Execute(new InsertBlockCommand(insertAt + i, blocks[i]));
+        _bus.CommitUndoGroup("Insert Blank Page");
+    }
+
+    /// <summary>
+    /// Insert a horizontal-rule paragraph after the caret block.
+    /// </summary>
+    public void InsertHorizontalRule()
+    {
+        if (IsEditingLocked)
+            return;
+
+        var insertAt = Math.Clamp(_caret.Block + 1, 0, _doc.Blocks.Count);
+        _bus.Execute(new InsertBlockCommand(insertAt, DocumentOps.CreateHorizontalRule()));
+    }
+
+    /// <summary>
     /// Insert a column break after the caret block using the shared model command path.
     /// </summary>
     public void InsertColumnBreak()

@@ -199,6 +199,8 @@ internal static class FreeWAvaloniaRibbonCommands
 
         // Page break — empty paragraph forcing a page break before it, after the caret block.
         r.Register("freew.page-break", new ActionRibbonCommand(editor.InsertPageBreak));
+        r.Register("freew.blank-page", new ActionRibbonCommand(editor.InsertBlankPage));
+        r.Register("freew.horizontal-rule", new ActionRibbonCommand(editor.InsertHorizontalRule));
 
         // Picture — open a file picker, load the bytes, insert as an inline image (host callback).
         r.Register("freew.picture", new ActionRibbonCommand(callbacks.InsertPicture));
@@ -214,6 +216,7 @@ internal static class FreeWAvaloniaRibbonCommands
         // Header / Footer — enable the page-margin region (render-ready). Region caret editing deferred.
         r.Register("freew.header", new ActionRibbonCommand(editor.EnsureHeader));
         r.Register("freew.footer", new ActionRibbonCommand(editor.EnsureFooter));
+        r.Register("freew.datetime", new ActionRibbonCommand(() => editor.InsertField(RunFieldKind.Date)));
 
         // ── Insert depth 2 (AV-INSERT2) ──────────────────────────────────────
         RegisterInsertDepth2Commands(r, editor, callbacks);
@@ -638,8 +641,11 @@ internal static class FreeWAvaloniaRibbonCommands
     {
         // ── Links ────────────────────────────────────────────────────────────
         // Hyperlink / Bookmark open small dialogs (shell callbacks) that call InsertHyperlink / InsertBookmark.
+        r.Register("freew.hyperlink",        new ActionRibbonCommand(callbacks.OpenHyperlinkDialog ?? (() => { })));
         r.Register("freew.insert-hyperlink", new ActionRibbonCommand(callbacks.OpenHyperlinkDialog ?? (() => { })));
+        r.Register("freew.bookmark",         new ActionRibbonCommand(callbacks.OpenBookmarkDialog ?? (() => { })));
         r.Register("freew.insert-bookmark",  new ActionRibbonCommand(callbacks.OpenBookmarkDialog ?? (() => { })));
+        r.Register("freew.bookmark-manager", new ActionRibbonCommand(callbacks.OpenBookmarkDialog ?? (() => { })));
 
         // ── Cover Page ───────────────────────────────────────────────────────
         // The top-level dropdown opener is a no-op; each preset prepends a cover-page block layout.

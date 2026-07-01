@@ -64,6 +64,7 @@ public sealed class InsertDepth2Tests
 
         var ids = new[]
         {
+            "freew.hyperlink", "freew.bookmark", "freew.bookmark-manager",
             "freew.insert-hyperlink", "freew.insert-bookmark",
             "freew.cover-page", "freew.cover-page.default", "freew.cover-page.banded", "freew.cover-page.motion",
             "freew.drop-cap", "freew.drop-cap.dropped", "freew.drop-cap.in-margin", "freew.drop-cap.none",
@@ -143,6 +144,19 @@ public sealed class InsertDepth2Tests
     }
 
     [Fact]
+    public void Wpf_hyperlink_command_id_routes_to_existing_hyperlink_callback()
+    {
+        var view = MakeView("");
+        var registry = FreeWRibbon.BuildRegistry(view,
+            Callbacks(hyperlink: () => view.InsertHyperlink("WPF Link", "https://wpf.example")));
+
+        Exec(registry, "freew.hyperlink");
+
+        var para = (Paragraph)view.Document.Blocks[0];
+        para.Runs.Should().Contain(run => run.HyperlinkUrl == "https://wpf.example");
+    }
+
+    [Fact]
     public void Insert_hyperlink_is_undoable()
     {
         var view = MakeView("");
@@ -166,6 +180,20 @@ public sealed class InsertDepth2Tests
 
         Bookmarks.List(view.Document).Any(b => b.Name == "Mark1")
             .Should().BeTrue("the caret paragraph must carry the bookmark name");
+    }
+
+    [Theory]
+    [InlineData("freew.bookmark")]
+    [InlineData("freew.bookmark-manager")]
+    public void Wpf_bookmark_command_ids_route_to_existing_bookmark_callback(string commandId)
+    {
+        var view = MakeView("Target");
+        var registry = FreeWRibbon.BuildRegistry(view,
+            Callbacks(bookmark: () => view.InsertBookmark(commandId.Replace('.', '-'))));
+
+        Exec(registry, commandId);
+
+        Bookmarks.List(view.Document).Should().Contain(b => b.Name == commandId.Replace('.', '-'));
     }
 
     [Fact]

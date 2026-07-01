@@ -454,7 +454,9 @@ internal static class FreeWAvaloniaRibbonDefinition
                 {
                     // AV-INSERT2: Cover Page (gallery of presets) + Page Break.
                     g.Dropdown("freew.cover-page", "Cover Page", BuildCoverPageMenu());
+                    g.Button("freew.blank-page", "Blank Page");
                     g.Button("freew.page-break", "Page Break");
+                    g.Button("freew.horizontal-rule", "Horizontal Rule");
                 });
                 tab.Group("tables", "Tables", null, 98, g =>
                 {
@@ -470,8 +472,11 @@ internal static class FreeWAvaloniaRibbonDefinition
                 // AV-INSERT2: Links group — Hyperlink + Bookmark.
                 tab.Group("links", "Links", null, 95, g =>
                 {
+                    g.Button("freew.hyperlink", "Hyperlink");
                     g.Button("freew.insert-hyperlink", "Hyperlink");
+                    g.Button("freew.bookmark", "Bookmark");
                     g.Button("freew.insert-bookmark",  "Bookmark");
+                    g.Button("freew.bookmark-manager", "Bookmark Manager");
                 });
                 tab.Group("header-footer", "Header & Footer", null, 94, g =>
                 {
@@ -484,6 +489,7 @@ internal static class FreeWAvaloniaRibbonDefinition
                 {
                     g.Dropdown("freew.quick-parts", "Quick Parts", BuildQuickPartsMenu());
                     g.Dropdown("freew.drop-cap",    "Drop Cap",    BuildDropCapMenu());
+                    g.Button("freew.datetime", "Date & Time");
                     g.Button("freew.text-from-file", "Text from File");
                 });
                 tab.Group("symbols", FreeWRibbonText.SymbolsGroup.Label, null, 92, g =>
