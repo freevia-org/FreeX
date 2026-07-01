@@ -39,8 +39,12 @@ public sealed class ReviewWorkflowAdapterTests
                 .Should()
                 .Contain(PresentationReviewWorkflowPlanner.CommentsPaneCommandId);
             window.LastAccessibilitySummaryPlan.Should().NotBeNull();
-            window.LastAccessibilitySummaryPlan!.Issues.Should().Contain(issue =>
+            var missingAltText = window.LastAccessibilitySummaryPlan!.Issues.Single(issue =>
                 issue.ShapeId == shape.Id && issue.Title == "Alt text missing");
+            missingAltText.Action.Should().Be(new PresentationAccessibilityIssueActionSummary(
+                PresentationReviewWorkflowPlanner.MissingAltTextActionSummary,
+                PresentationReviewWorkflowPlanner.AltTextCommandId,
+                true));
             window.LastAltTextRequestPlan.Should().NotBeNull();
             window.LastAltTextRequestPlan!.Should().Be(new PresentationAltTextRequestPlan(
                 true,
