@@ -287,6 +287,7 @@ internal static class FreeWAvaloniaRibbonDefinition
                     g.Button("freew.backstage", "File...");
                     g.Button("freew.new",  "New");
                     g.Button("freew.open", "Open");
+                    g.Button("freew.import-pdf-text", "Import PDF (text only)");
                     g.Button("freew.save", "Save");
                 }))
             .Tab("home", FreeWRibbonText.HomeTab.Label, FreeWRibbonText.HomeTab.KeyTip, tab =>

@@ -474,6 +474,7 @@ public sealed class MainWindow : Window
         var callbacks = new RibbonHostCallbacks(
             Open: () => _ = OpenAsync(),
             Save: () => _ = SaveAsync(),
+            ImportPdfText: () => _ = ImportPdfTextAsync(),
             Cut: () => _ = CutAsync(),
             Copy: () => _ = CopyAsync(),
             Paste: () => _ = PasteAsync(),
@@ -845,6 +846,39 @@ public sealed class MainWindow : Window
         {
             _status.Text = SisterAppFileTextPlanner.FormatCommandFailed(SisterAppFileTextPlanner.OpenCommand, ex.Message);
             return Task.FromResult(false);
+        }
+    }
+
+    private async Task ImportPdfTextAsync()
+    {
+        using var file = await AvaloniaFilePickerService.PickSingleOpenFileWithLocalPathAsync(
+            StorageProvider,
+            AvaloniaFilePickerOpenRequest.FromFileTypes(
+                "Import PDF (text only)",
+                DocumentFilePickerTypes.BuildPdfImportTypes()));
+        var path = file?.LocalPath;
+        if (path is null)
+            return;
+
+        if (DocumentFileFormatResolver.FindOpenAdapter(
+                DocumentFileAdapterCatalog.CreatePdfImportAdapters(),
+                Path.GetExtension(path),
+                out _) is not { } adapter)
+        {
+            _status.Text = $"PDF import failed: unsupported file type \"{Path.GetExtension(path)}\".";
+            return;
+        }
+
+        try
+        {
+            using var stream = File.OpenRead(path);
+            LoadDocumentContent(adapter.Load(stream));
+            _fileWorkflow.MarkDirtyWithPath(null);
+            _status.Text = $"Imported PDF text from {Path.GetFileName(path)}";
+        }
+        catch (Exception ex)
+        {
+            _status.Text = $"PDF import failed: {ex.Message}";
         }
     }
 

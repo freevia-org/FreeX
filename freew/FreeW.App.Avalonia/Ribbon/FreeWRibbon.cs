@@ -46,6 +46,7 @@ internal static class FreeWRibbon
 internal sealed record RibbonHostCallbacks(
     Action Open,
     Action Save,
+    Action ImportPdfText,
     Action Cut,
     Action Copy,
     Action Paste,

@@ -32,10 +32,23 @@ public class RibbonAndDocumentTests
     }
 
     [Fact]
+    public void Ribbon_file_tab_exposes_explicit_pdf_text_import()
+    {
+        var file = FreeWRibbon.BuildDefinition().FindTab("file");
+
+        file.Should().NotBeNull();
+        file!.Groups
+            .SelectMany(group => group.Controls)
+            .Select(CommandIdOf)
+            .Where(id => id is not null)
+            .Select(id => id!.Value.Value)
+            .Should().Contain(new[] { "freew.open", "freew.save", "freew.import-pdf-text" });
+    }
+    [Fact]
     public void Every_ribbon_command_id_is_registered()
     {
         var definition = FreeWRibbon.BuildDefinition();
-        var callbacks = new RibbonHostCallbacks(() => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, _ => { }, _ => { }, () => { }, () => { }, (_, _) => { });
+        var callbacks = NoopCallbacks();
         var registry = FreeWRibbon.BuildRegistry(new Editing.DocumentView(), callbacks);
 
         foreach (var id in CommandIds(definition))
@@ -96,6 +109,19 @@ public class RibbonAndDocumentTests
         mainWindow.Should().NotContain("private string? _currentPath");
         mainWindow.Should().NotContain("DocumentFileFormatResolver.FindSaveAdapter(");
         mainWindow.Should().NotContain("File.Create(path)");
+    }
+
+    [Fact]
+    public void Import_pdf_ribbon_command_invokes_host_route()
+    {
+        var invoked = 0;
+        var callbacks = NoopCallbacks() with { ImportPdfText = () => invoked++ };
+        var registry = FreeWRibbon.BuildRegistry(new Editing.DocumentView(), callbacks);
+
+        registry.TryGet(new RibbonCommandId("freew.import-pdf-text"), out var command).Should().BeTrue();
+        command!.Execute(RibbonCommandContext.Empty);
+
+        invoked.Should().Be(1);
     }
 
     [Fact]
@@ -160,4 +186,7 @@ public class RibbonAndDocumentTests
 
         throw new DirectoryNotFoundException("Could not locate repository root from the test output directory.");
     }
+
+    private static RibbonHostCallbacks NoopCallbacks() =>
+        new(() => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, _ => { }, _ => { }, () => { }, () => { }, (_, _) => { });
 }
