@@ -6,12 +6,18 @@ internal sealed class AvaloniaAppDiagnostics
 {
     private readonly AppDiagnosticsFileStore _fileStore;
     private readonly AppDiagnosticsMetadata _metadata;
+    private readonly bool _isEnabled;
 
-    private AvaloniaAppDiagnostics(AppDiagnosticsFileStore fileStore, AppDiagnosticsMetadata metadata)
+    private AvaloniaAppDiagnostics(AppDiagnosticsFileStore fileStore, AppDiagnosticsMetadata metadata, bool isEnabled)
     {
         _fileStore = fileStore;
         _metadata = metadata;
+        _isEnabled = isEnabled;
     }
+
+    public AppDiagnosticsMetadata Metadata => _metadata;
+
+    public bool IsEnabled => _isEnabled;
 
     public static AvaloniaAppDiagnostics Create(string? diagnosticsDirectory = null)
     {
@@ -23,7 +29,7 @@ internal sealed class AvaloniaAppDiagnostics
             defaultOptions.IsEnabled);
         var metadata = AppDiagnosticsMetadata.Create(AppHelpInfo.GetVersionText(typeof(AvaloniaAppDiagnostics).Assembly));
 
-        return new AvaloniaAppDiagnostics(new AppDiagnosticsFileStore(options), metadata);
+        return new AvaloniaAppDiagnostics(new AppDiagnosticsFileStore(options), metadata, options.IsEnabled);
     }
 
     public void RegisterUnhandledExceptionHandlers()

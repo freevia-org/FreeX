@@ -5,6 +5,7 @@ using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Free.Shared.Shell.Avalonia;
+using FreeX.Core.Commands;
 
 namespace FreeX.App.Avalonia;
 
@@ -86,6 +87,24 @@ public sealed partial class MainWindow
         RefreshShell(UiText.Format(
             resolved ? "Comment_Resolved" : "Comment_Unresolved",
             FormatCellReference(_session.ActiveCell)));
+    }
+
+    private void ConvertNotesToComments()
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var result = _session.ExecuteReviewCommand(new ConvertNotesToCommentsCommand(_session.ActiveSheet.Id));
+        if (!result.Success)
+        {
+            ShowEditIssue(result.ErrorMessage ?? "Convert to Comments failed.");
+            return;
+        }
+
+        RefreshShell("Converted notes to comments.");
     }
 
     private async Task<string?> ShowCommentTextPromptAsync(string title, string label, string? initialText = null)

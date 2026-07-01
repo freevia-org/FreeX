@@ -1295,6 +1295,7 @@ public sealed partial class MainWindow : Window
                     ["Sort & Filter"] = ToggleAutoFilter,
 
                     // Review ▸ Notes ▸ Next / Previous Note.
+                    ["review.convertNotesToComments"] = ConvertNotesToComments,
                     ["Next Note"] = () => NavigateReviewNote(previous: false),
                     ["Previous Note"] = () => NavigateReviewNote(previous: true),
 
