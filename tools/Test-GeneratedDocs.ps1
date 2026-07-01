@@ -1,7 +1,8 @@
 param(
     [string]$CommandInventoryScriptPath = "tools\Generate-CommandInventoryDocs.ps1",
     [string]$DialogParityInventoryScriptPath = "tools\Generate-DialogParityInventory.ps1",
-    [string]$FreePCommandParityInventoryScriptPath = "tools\Generate-FreePCommandParityInventory.ps1"
+    [string]$FreePCommandParityInventoryScriptPath = "tools\Generate-FreePCommandParityInventory.ps1",
+    [string]$FreeWCommandInventoryScriptPath = "tools\Generate-FreeWCommandInventory.ps1"
 )
 
 $ErrorActionPreference = "Stop"
@@ -36,5 +37,6 @@ function Invoke-GeneratedDocsCheck {
 Invoke-GeneratedDocsCheck -ScriptPath $CommandInventoryScriptPath -Label "command inventory"
 Invoke-GeneratedDocsCheck -ScriptPath $DialogParityInventoryScriptPath -Label "dialog parity inventory"
 Invoke-GeneratedDocsCheck -ScriptPath $FreePCommandParityInventoryScriptPath -Label "FreeP command parity inventory"
+Invoke-GeneratedDocsCheck -ScriptPath $FreeWCommandInventoryScriptPath -Label "FreeW command inventory"
 
 Write-Host "Generated documentation checks passed."
