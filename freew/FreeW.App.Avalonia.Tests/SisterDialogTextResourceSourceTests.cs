@@ -92,6 +92,25 @@ public sealed class SisterDialogTextResourceSourceTests
         source.Should().NotContain("BackstageViewTextResources.DirectPrintDeferredNote");
     }
 
+    [Fact]
+    public void OptionsDialog_ResolvesTabsAndRulesFromPresentationPlanner()
+    {
+        var source = ReadAvaloniaSource("OptionsDialog.cs");
+
+        source.Should().Contain("OptionsDialogPlanner.BuildSurface(");
+        source.Should().Contain("_surface.Tabs[0].Header");
+        source.Should().Contain("_surface.AutoCorrect.Header");
+        source.Should().Contain("_surface.AutoFormat.Header");
+        source.Should().Contain("OptionsDialogPlanner.TryParseRecentFilesCap(");
+        source.Should().Contain("OptionsDialogPlanner.TryParseAutoCorrectReplacements(");
+        source.Should().Contain("OptionsDialogPlanner.BuildResult(");
+        source.Should().Contain("new AutoCorrectOptions");
+        source.Should().Contain("new AutoFormatOptions");
+        source.Should().NotContain("Title = \"FreeW Options\"");
+        source.Should().NotContain("AddRow(grid, 0, \"Recent files to keep:\"");
+        source.Should().NotContain("new[] { new FormatChoice(");
+    }
+
     private static string ReadAvaloniaSource(params string[] pathParts)
     {
         var path = Path.Combine(new[] { FindRepositoryRoot(), "freew", "FreeW.App.Avalonia" }.Concat(pathParts).ToArray());

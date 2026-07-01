@@ -148,7 +148,7 @@ try {
             missingAvaloniaProfile = [int]$freew.summary.missingAvalonia
             classifiedRows = $false
         }
-        nextSlice = "Classify one-sided command rows; safest product slice is Avalonia Backstage Info/Options safety parity."
+        nextSlice = "Avalonia Options parity improved; next classify one-sided command rows and deepen Backstage safety/print/export actions."
     }
 
     $freeP = [ordered]@{
