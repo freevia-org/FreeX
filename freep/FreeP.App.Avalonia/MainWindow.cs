@@ -8,9 +8,11 @@ using Free.Shared.AppServices;
 using Free.Shared.IO;
 using Free.Shared.Ribbon;
 using Free.Shared.Ribbon.Avalonia;
+using Free.Shared.Shell;
 using Free.Shared.Shell.Avalonia;
 using FreeP.App.Compositor;
 using FreeP.App.Rendering.Avalonia;
+using FreeP.Core.IO;
 using FreeP.Core.Model;
 using System.Linq;
 
@@ -375,6 +377,7 @@ public sealed class MainWindow : Window
         r.Register("freep.file.open",    new ActionRibbonCommand(() => _ = FileOpenAsync()));
         r.Register("freep.file.save",    new ActionRibbonCommand(() => _ = FileSaveAsync()));
         r.Register("freep.file.save-as", new ActionRibbonCommand(() => _ = FileSaveAsAsync()));
+        r.Register(PresentationExportPlanner.PdfExportCommandId, new ActionRibbonCommand(() => _ = FileExportPdfAsync()));
 
         // Slide navigation/management
         r.Register("freep.new-slide",       new ActionRibbonCommand(() => Editor.InsertSlide()));
@@ -579,6 +582,51 @@ public sealed class MainWindow : Window
         }
 
         return TrySavePresentationFile(path);
+    }
+
+    private async Task<bool> FileExportPdfAsync()
+    {
+        if (!AvaloniaFilePickerService.CanSave(StorageProvider))
+        {
+            _statusText.Text = SisterAppFileTextPlanner.FormatCommandUnavailable(
+                FileText,
+                PresentationExportPlanner.PdfExportCommandText);
+            return false;
+        }
+
+        var plan = PresentationExportPlanner.BuildPdfExportPickerPlan(_fileWorkflow.CurrentFileName);
+
+        using var file = await AvaloniaFilePickerService.PickSaveFileWithLocalPathAsync(
+            StorageProvider,
+            AvaloniaFilePickerSaveRequest.FromSavePlan(PresentationExportPlanner.PdfExportPickerTitle, plan));
+
+        var path = file?.LocalPath;
+        if (path is null)
+        {
+            if (file is not null)
+            {
+                _statusText.Text = SisterAppFileTextPlanner.FormatSelectedFileNotLocalPath(
+                    FileText,
+                    PresentationExportPlanner.PdfExportCommandText);
+            }
+
+            return false;
+        }
+
+        try
+        {
+            ExportAtomicWriter.WriteAllBytes(path, PresentationPdfExporter.ExportToBytes(_presentation));
+            _statusText.Text = $"Exported {Path.GetFileName(path)}";
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(
+                FileText,
+                PresentationExportPlanner.PdfExportCommandText,
+                ex.Message);
+            return false;
+        }
     }
 
     private bool TryLoadPresentationFile(string path)

@@ -21,7 +21,9 @@ public sealed class BackstageHostDedupSourceTests
         source.Should().Contain("public void Show() => _backstage.Show();");
         source.Should().Contain("public void Hide() => _backstage.Hide();");
         source.Should().Contain("backstage.FrameCommand(_actions.New)");
-        source.Should().Contain("_backstage.HideThen(_actions.ExportPdf)");
+        source.Should().Contain("PresentationExportPlanner.BuildBackstageExportPlan()");
+        source.Should().Contain("_backstage.HideThen(ResolveExportAction(action.CommandId))");
+        source.Should().Contain("PresentationExportPlanner.PdfExportCommandId => _actions.ExportPdf");
         source.Should().Contain("_backstage.ShowPane(\"Options\")");
         source.Should().NotContain("new BackstageViewShell(");
         source.Should().NotContain("SisterBackstageEntryBuilder.Build(");

@@ -9,7 +9,7 @@ public static class PresentationFileDialogPlanner
 {
     public const string DefaultPresentationExtension = PresentationFilePersistenceWorkflow.DefaultPresentationExtension;
     public const string LegacyFxpExtension = PresentationFilePersistenceWorkflow.LegacyFxpExtension;
-    public const string PdfExportExtension = ".pdf";
+    public const string PdfExportExtension = PresentationExportPlanner.PdfExportExtension;
 
     private const string FallbackPresentationName = "Presentation";
 
@@ -17,11 +17,6 @@ public static class PresentationFileDialogPlanner
     [
         new FileDialogFormatDescriptor(DefaultPresentationExtension, "PowerPoint presentations"),
         new FileDialogFormatDescriptor(LegacyFxpExtension, "FreeP legacy presentations"),
-    ];
-
-    private static readonly IReadOnlyList<FileDialogFormatDescriptor> PdfFormats =
-    [
-        new FileDialogFormatDescriptor(PdfExportExtension, "PDF documents"),
     ];
 
     public static FileOpenDialogPlan BuildOpenDialogPlan() =>
@@ -35,11 +30,7 @@ public static class PresentationFileDialogPlanner
             DefaultPresentationExtension);
 
     public static FileSaveDialogPlan BuildPdfExportDialogPlan(string? sourceName) =>
-        FileDialogRequestPlanner.BuildPerFormatSaveDialogPlanFromSourceName(
-            PdfFormats,
-            sourceName,
-            FallbackPresentationName,
-            PdfExportExtension);
+        PresentationExportPlanner.BuildPdfExportDialogPlan(sourceName);
 
     public static FileOpenPickerPlan BuildOpenPickerPlan() =>
         FileDialogRequestPlanner.BuildOpenPickerPlan(
@@ -53,6 +44,9 @@ public static class PresentationFileDialogPlanner
             FallbackPresentationName,
             DefaultPresentationExtension,
             preferredFirstExtension: DefaultPresentationExtension);
+
+    public static FileSavePickerPlan BuildPdfExportPickerPlan(string? sourceName) =>
+        PresentationExportPlanner.BuildPdfExportPickerPlan(sourceName);
 
     public static bool IsLegacyPresentationPath(string path) =>
         PresentationFilePersistenceWorkflow.IsLegacyPresentationPath(path);

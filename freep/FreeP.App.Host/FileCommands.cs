@@ -119,7 +119,7 @@ internal sealed class FileCommands
     /// </summary>
     public bool ExportPdf()
     {
-        var plan = PresentationFileDialogPlanner.BuildPdfExportDialogPlan(_workflow.CurrentFileName);
+        var plan = PresentationExportPlanner.BuildPdfExportDialogPlan(_workflow.CurrentFileName);
         var result = WpfFileDialogService.ShowSaveDialog(_window, plan);
         if (!result.Chosen)
             return false;

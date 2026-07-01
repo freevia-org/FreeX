@@ -76,6 +76,55 @@ public class PresentationPdfExporterTests
     }
 
     [Fact]
+    public void BuildDocument_EmitsSlideBackgroundAndBasicShapeGeometry()
+    {
+        var deck = Presentation.CreateEmpty();
+        deck.Slides.Clear();
+
+        var slide = new Slide
+        {
+            Background = new ShapeFill.Solid(SrgbColor.FromRgb(0xF2E6D8)),
+        };
+        var shape = new SlideShape
+        {
+            OffsetXEmu = DrawingMlCoordinateUnits.PointsToEmu(72),
+            OffsetYEmu = DrawingMlCoordinateUnits.PointsToEmu(90),
+            ExtentCxEmu = DrawingMlCoordinateUnits.PointsToEmu(144),
+            ExtentCyEmu = DrawingMlCoordinateUnits.PointsToEmu(72),
+            Fill = new ShapeFill.Solid(SrgbColor.FromRgb(0x4472C4)),
+            Outline = new ShapeOutline.Visible(SrgbColor.Black, widthPt: 1.5),
+            Text = "Positioned text",
+        };
+        slide.Shapes.Add(shape);
+        deck.Slides.Add(slide);
+
+        var ops = PresentationPdfExporter.BuildDocument(deck).Pages[0].Ops;
+
+        ops.OfType<PdfFillRect>().Should().Contain(fill =>
+            fill.X == 0 &&
+            fill.Y == 0 &&
+            fill.Width == 960 &&
+            fill.Height == 540 &&
+            fill.Color == new PdfColor(0xF2, 0xE6, 0xD8));
+        ops.OfType<PdfFillRect>().Should().Contain(fill =>
+            fill.X == 72 &&
+            fill.Y == 378 &&
+            fill.Width == 144 &&
+            fill.Height == 72 &&
+            fill.Color == new PdfColor(0x44, 0x72, 0xC4));
+        ops.OfType<PdfStrokeRect>().Should().Contain(stroke =>
+            stroke.X == 72 &&
+            stroke.Y == 378 &&
+            stroke.Width == 144 &&
+            stroke.Height == 72 &&
+            stroke.LineWidth == 1.5);
+        ops.OfType<PdfText>().Should().Contain(text =>
+            text.X == 80 &&
+            text.Y == 424 &&
+            text.Text == "Positioned text");
+    }
+
+    [Fact]
     public void TitleOp_IsBold()
     {
         var doc = PresentationPdfExporter.BuildDocument(SampleDeck());

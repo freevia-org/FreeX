@@ -15,7 +15,7 @@ public sealed class FileCommandsSourceTests
 
         source.Should().Contain("PresentationFileDialogPlanner.BuildOpenDialogPlan()");
         source.Should().Contain("PresentationFileDialogPlanner.BuildSaveAsDialogPlan(");
-        source.Should().Contain("PresentationFileDialogPlanner.BuildPdfExportDialogPlan(");
+        source.Should().Contain("PresentationExportPlanner.BuildPdfExportDialogPlan(");
         source.Should().Contain("PresentationFilePersistenceWorkflow.Open(path)");
         source.Should().Contain("PresentationFilePersistenceWorkflow.Save(path, _getModel())");
         source.Should().Contain("WpfFileDialogService.ShowOpenDialog(");

@@ -7,6 +7,7 @@ using Free.Shared.Shell;
 using Free.Shared.Shell.Wpf;
 using Free.Shared.Theme;
 using Free.Shared.Theme.Wpf;
+using FreeP.App.Compositor;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Host.Backstage;
@@ -73,8 +74,24 @@ internal sealed class BackstageView : UserControl
 
     private UIElement BuildExportPane()
     {
-        return Panes.BuildActionPane(PaneSpecs.BuildExportPaneSpec(
-            _backstage.HideThen(_actions.ExportPdf)));
+        var plan = PresentationExportPlanner.BuildBackstageExportPlan();
+        var groups = new List<BackstageActionGroup>
+        {
+            new(
+                plan.FixedLayoutGroupHeading,
+                plan.FixedLayoutActions
+                    .Where(action => action.IsEnabled)
+                    .Select(action => new BackstageActionRow(
+                        action.Label,
+                        action.Description,
+                        _backstage.HideThen(ResolveExportAction(action.CommandId))))
+                    .ToArray()),
+        };
+
+        return Panes.BuildActionPane(new BackstageActionPaneSpec(
+            plan.Heading,
+            plan.Description,
+            groups));
     }
 
     private UIElement BuildInfoPane()
@@ -131,6 +148,13 @@ internal sealed class BackstageView : UserControl
                 _actions.DataFolder()),
             _backstage.ShowPane("Options")));
     }
+
+    private Action ResolveExportAction(string commandId) =>
+        commandId switch
+        {
+            PresentationExportPlanner.PdfExportCommandId => _actions.ExportPdf,
+            _ => throw new InvalidOperationException($"Unsupported FreeP export command '{commandId}'."),
+        };
 }
 
 internal sealed record BackstageActions(

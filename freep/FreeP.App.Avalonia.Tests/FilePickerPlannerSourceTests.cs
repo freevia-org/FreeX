@@ -21,6 +21,10 @@ public sealed class FilePickerPlannerSourceTests
 
         source.Should().Contain("PresentationFileDialogPlanner.BuildOpenPickerPlan()");
         source.Should().Contain("PresentationFileDialogPlanner.BuildSavePickerPlan(");
+        source.Should().Contain("PresentationExportPlanner.PdfExportCommandId");
+        source.Should().Contain("PresentationExportPlanner.BuildPdfExportPickerPlan(");
+        source.Should().Contain("PresentationPdfExporter.ExportToBytes(_presentation)");
+        source.Should().Contain("ExportAtomicWriter.WriteAllBytes(path,");
         source.Should().Contain("PresentationFilePersistenceWorkflow.Open(path)");
         source.Should().Contain("PresentationFilePersistenceWorkflow.Save(path, _presentation)");
         source.Should().Contain("PresentationFilePersistenceWorkflow.IsSupportedPresentationPath(path)");
@@ -28,6 +32,7 @@ public sealed class FilePickerPlannerSourceTests
         source.Should().Contain("AvaloniaFilePickerService.PickSaveFileWithLocalPathAsync(");
         source.Should().Contain("AvaloniaFilePickerOpenRequest.FromDescriptors(FileText.OpenPickerTitle, plan.FileTypes)");
         source.Should().Contain("AvaloniaFilePickerSaveRequest.FromSavePlan(FileText.SavePickerTitle, plan)");
+        source.Should().Contain("AvaloniaFilePickerSaveRequest.FromSavePlan(PresentationExportPlanner.PdfExportPickerTitle, plan)");
         source.Should().Contain("SisterAppFileTextPlanner.Presentation");
         source.Should().Contain("PresentationFileTextResources.PictureFileTypeName");
         source.Should().Contain("AvaloniaFilePickerTypeAdapter.CreateFileType(");

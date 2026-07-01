@@ -67,6 +67,39 @@ public sealed class PresentationFileDialogPlannerTests
         plan.DefaultExtensionWithDot.Should().Be(".pdf");
         plan.DefaultExtensionWithoutDot.Should().Be("pdf");
         plan.FilterIndex.Should().Be(1);
+
+        var pickerPlan = PresentationFileDialogPlanner.BuildPdfExportPickerPlan("Quarterly Review.pptx");
+        pickerPlan.SuggestedFileName.Should().Be("Quarterly Review.pdf");
+        pickerPlan.DefaultExtensionWithDot.Should().Be(".pdf");
+        pickerPlan.DefaultExtensionWithoutDot.Should().Be("pdf");
+        pickerPlan.FileTypes.Select(fileType => fileType.DisplayName).Should().Equal("PDF documents");
+    }
+
+    [Fact]
+    public void ExportPlanner_DefinesSharedBackstageAndCommandDescriptors()
+    {
+        var formats = PresentationExportPlanner.BuildFormatDescriptors();
+
+        formats.Should().ContainSingle(format =>
+            format.Format == PresentationExportFormat.Pdf &&
+            format.CommandId == PresentationExportPlanner.PdfExportCommandId &&
+            format.DefaultExtensionWithDot == ".pdf" &&
+            format.IsImplemented);
+        formats.Should().Contain(format =>
+            format.Format == PresentationExportFormat.ImageSequence &&
+            !format.IsImplemented);
+        formats.Should().Contain(format =>
+            format.Format == PresentationExportFormat.Print &&
+            !format.IsImplemented);
+
+        var backstage = PresentationExportPlanner.BuildBackstageExportPlan();
+        backstage.FixedLayoutActions.Should().ContainSingle(action =>
+            action.Format == PresentationExportFormat.Pdf &&
+            action.CommandId == PresentationExportPlanner.PdfExportCommandId &&
+            action.IsEnabled);
+        backstage.DeferredActions.Select(action => action.Format)
+            .Should()
+            .Equal(PresentationExportFormat.ImageSequence, PresentationExportFormat.Print);
     }
 
     [Fact]
