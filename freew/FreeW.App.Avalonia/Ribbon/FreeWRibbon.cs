@@ -81,6 +81,8 @@ internal sealed record RibbonHostCallbacks(
     Action<double?, double> ApplyZoom,
     /// <summary>AV-VIEW: Opens the Zoom dialog (modal); applies the chosen preset/custom zoom on OK.</summary>
     Action? OpenZoomDialog = null,
+    /// <summary>Opens the paginated print-preview surface.</summary>
+    Action? OpenPrintPreview = null,
     /// <summary>AV-VIEW: Opens a second window on the same document (or status note if unsupported).</summary>
     Action? NewWindow = null,
     /// <summary>AV-VIEW: Toggle the split view (or status note if unsupported / deferred).</summary>
@@ -143,5 +145,7 @@ internal sealed record RibbonHostCallbacks(
     /// <summary>AV-REVIEW: Review &gt; Inspect &gt; Inspect Document. Optional; registry no-ops when null.</summary>
     Action? InspectDocument = null,
     /// <summary>AV-REVIEW: Review &gt; Accessibility &gt; Check Accessibility. Optional; registry no-ops when null.</summary>
-    Action? CheckAccessibility = null);
+    Action? CheckAccessibility = null,
+    /// <summary>FreeW File &gt; Import PDF (text only). Optional; registry no-ops when null.</summary>
+    Action? ImportPdfText = null);
 

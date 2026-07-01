@@ -63,7 +63,11 @@ public sealed class ViewTabDepthTests
 
         foreach (var id in new[]
                  {
-                     "freew.zoom-dialog", "freew.view-gridlines", "freew.view-ruler",
+                     "freew.print-preview",
+                     "freew.print-layout", "freew.web-layout", "freew.draft-view",
+                     "freew.printlayout", "freew.weblayout", "freew.draftview",
+                     "freew.zoom-dialog", "freew.gridlines", "freew.ruler", "freew.nav-pane",
+                     "freew.view-gridlines", "freew.view-ruler", "freew.navigationpane",
                      "freew.new-window", "freew.split",
                  })
             registry.TryGet(new RibbonCommandId(id), out _)
@@ -79,13 +83,50 @@ public sealed class ViewTabDepthTests
             .Select(c => c.CommandId.Value)
             .ToList();
 
+        ids.Should().Contain("freew.print-layout");
+        ids.Should().Contain("freew.web-layout");
+        ids.Should().Contain("freew.draft-view");
+        ids.Should().NotContain("freew.printlayout");
+        ids.Should().NotContain("freew.weblayout");
+        ids.Should().NotContain("freew.draftview");
         ids.Should().Contain("freew.zoom-dialog");
-        ids.Should().Contain("freew.view-gridlines");
-        ids.Should().Contain("freew.view-ruler");
+        ids.Should().Contain("freew.gridlines");
+        ids.Should().Contain("freew.ruler");
+        ids.Should().Contain("freew.nav-pane");
+        ids.Should().NotContain("freew.view-gridlines");
+        ids.Should().NotContain("freew.view-ruler");
+        ids.Should().NotContain("freew.navigationpane");
         ids.Should().Contain("freew.new-window");
         ids.Should().Contain("freew.split");
         // Show group must surface the Reviewing Pane toggle on the View tab too.
         ids.Should().Contain("freew.reviewing-pane");
+    }
+
+    [Fact]
+    public void Layout_tab_contains_print_preview_command()
+    {
+        var definition = FreeWRibbon.BuildDefinition();
+        var layoutTab = definition.Tabs.Single(t => t.Id == "layout");
+        var ids = layoutTab.Groups.SelectMany(g => g.Controls)
+            .Select(c => c.CommandId.Value)
+            .ToList();
+
+        ids.Should().Contain("freew.print-preview");
+    }
+
+    [Fact]
+    public void Print_preview_command_invokes_host_callback()
+    {
+        var invoked = false;
+        var callbacks = NoopCallbacks() with { OpenPrintPreview = () => invoked = true };
+        var registry = FreeWRibbon.BuildRegistry(new DocumentView(), callbacks);
+
+        registry.TryGet(new RibbonCommandId("freew.print-preview"), out var command)
+            .Should().BeTrue();
+
+        command!.Execute(RibbonCommandContext.Empty);
+
+        invoked.Should().BeTrue("freew.print-preview must route to the Avalonia host preview surface");
     }
 
     [Fact]
@@ -107,10 +148,10 @@ public sealed class ViewTabDepthTests
         view.ShowGridlines.Should().BeFalse("gridlines off by default");
 
         var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
-        registry.TryGet(new RibbonCommandId("freew.view-gridlines"), out var cmd).Should().BeTrue();
+        registry.TryGet(new RibbonCommandId("freew.gridlines"), out var cmd).Should().BeTrue();
 
         cmd!.Execute(RibbonCommandContext.Empty);
-        view.ShowGridlines.Should().BeTrue("executing freew.view-gridlines must turn gridlines on");
+        view.ShowGridlines.Should().BeTrue("executing freew.gridlines must turn gridlines on");
 
         cmd!.Execute(RibbonCommandContext.Empty);
         view.ShowGridlines.Should().BeFalse("executing it again must turn gridlines off");
@@ -124,13 +165,31 @@ public sealed class ViewTabDepthTests
         view.ShowRuler.Should().BeFalse("ruler off by default");
 
         var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
-        registry.TryGet(new RibbonCommandId("freew.view-ruler"), out var cmd).Should().BeTrue();
+        registry.TryGet(new RibbonCommandId("freew.ruler"), out var cmd).Should().BeTrue();
 
         cmd!.Execute(RibbonCommandContext.Empty);
-        view.ShowRuler.Should().BeTrue("executing freew.view-ruler must turn the ruler on");
+        view.ShowRuler.Should().BeTrue("executing freew.ruler must turn the ruler on");
 
         cmd!.Execute(RibbonCommandContext.Empty);
         view.ShowRuler.Should().BeFalse("executing it again must turn the ruler off");
+    }
+
+    [Fact]
+    public void Legacy_view_ids_remain_aliases_for_canonical_wpf_ids()
+    {
+        var registry = FreeWRibbon.BuildRegistry(new DocumentView(), NoopCallbacks());
+
+        registry.TryGet(new RibbonCommandId("freew.gridlines"), out var gridlines).Should().BeTrue();
+        registry.TryGet(new RibbonCommandId("freew.view-gridlines"), out var viewGridlines).Should().BeTrue();
+        viewGridlines.Should().BeSameAs(gridlines);
+
+        registry.TryGet(new RibbonCommandId("freew.ruler"), out var ruler).Should().BeTrue();
+        registry.TryGet(new RibbonCommandId("freew.view-ruler"), out var viewRuler).Should().BeTrue();
+        viewRuler.Should().BeSameAs(ruler);
+
+        registry.TryGet(new RibbonCommandId("freew.nav-pane"), out var navPane).Should().BeTrue();
+        registry.TryGet(new RibbonCommandId("freew.navigationpane"), out var navigationPane).Should().BeTrue();
+        navigationPane.Should().BeSameAs(navPane);
     }
 
     // ── Gridlines / ruler render geometry (reflects the flag) ─────────────────

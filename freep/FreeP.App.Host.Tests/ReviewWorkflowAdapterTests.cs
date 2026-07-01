@@ -40,7 +40,7 @@ public sealed class ReviewWorkflowAdapterTests
                 .Contain(PresentationReviewWorkflowPlanner.CommentsPaneCommandId);
             window.LastAccessibilitySummaryPlan.Should().NotBeNull();
             window.LastAccessibilitySummaryPlan!.Issues.Should().Contain(issue =>
-                issue.ShapeId == shape.Id && issue.Title == "Alt text needs model support");
+                issue.ShapeId == shape.Id && issue.Title == "Alt text missing");
             window.LastAltTextRequestPlan.Should().NotBeNull();
             window.LastAltTextRequestPlan!.Should().Be(new PresentationAltTextRequestPlan(
                 true,
@@ -48,10 +48,57 @@ public sealed class ReviewWorkflowAdapterTests
                 "Product image",
                 "Product image",
                 string.Empty,
-                false,
-                PresentationWorkflowCapabilityStatus.Deferred,
-                PresentationReviewWorkflowPlanner.AltTextModelDeferredMessage));
+                string.Empty,
+                true,
+                PresentationWorkflowCapabilityStatus.Available,
+                "Add a persistent alt-text description for the selected shape."));
+
+            var mutation = window.ApplySelectedShapeAlternativeText("  Product packaging on a white background. ");
+            mutation.Should().Be(new PresentationAltTextMutationPlan(
+                true,
+                0,
+                shape.Id,
+                "Product packaging on a white background.",
+                null));
+            shape.AlternativeText.Should().Be("Product packaging on a white background.");
+            window.LastAltTextRequestPlan!.CurrentDescription.Should().Be("Product packaging on a white background.");
+            window.LastAccessibilitySummaryPlan!.Issues.Should().NotContain(issue =>
+                issue.ShapeId == shape.Id && issue.Title == "Alt text missing");
             window.LastProofingRequestPlan.Should().NotBeNull();
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [StaFact]
+    public void MainWindow_LayoutPickerRequest_RecordsSharedDesignPlan()
+    {
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
+        try
+        {
+            window.Editor.Presentation.Layouts.Add(new SlideLayout
+            {
+                Id = "rId2",
+                Name = "Blank",
+                LayoutType = SlideLayoutType.Blank,
+                MasterId = window.Editor.Presentation.Masters[0].Id
+            });
+
+            window.OpenLayoutPicker();
+
+            window.LastLayoutRequestPlan.Should().Be(PresentationDesignCommandPlanner.LayoutPlan);
+            window.LastLayoutPickerPlan.Should().NotBeNull();
+            window.LastLayoutPickerPlan!.Choices.Should().Contain(choice =>
+                choice.LayoutId == "rId2" &&
+                choice.DisplayName == "Blank" &&
+                choice.LayoutType == SlideLayoutType.Blank);
+
+            window.ApplyLayoutChoice("rId2").Should().BeTrue();
+            window.Editor.CurrentSlide!.LayoutId.Should().Be("rId2");
+            window.LastAppliedLayoutChoice.Should().NotBeNull();
+            window.LastAppliedLayoutChoice!.LayoutId.Should().Be("rId2");
         }
         finally
         {
@@ -94,10 +141,13 @@ public sealed class ReviewWorkflowAdapterTests
         source.Should().Contain("PresentationReviewWorkflowPlanner.BuildCommentPanePlan(");
         source.Should().Contain("PresentationReviewWorkflowPlanner.BuildAccessibilitySummaryPlan(_presentation)");
         source.Should().Contain("PresentationReviewWorkflowPlanner.BuildAltTextRequestPlan(");
+        source.Should().Contain("PresentationReviewWorkflowPlanner.BuildAltTextMutationPlan(");
         source.Should().Contain("PresentationReviewWorkflowPlanner.BuildProofingRequestPlan(_presentation)");
         source.Should().Contain("LastCommentPanePlan = plan;");
+        source.Should().Contain("onLayoutPicker:     () => OpenLayoutPicker()");
+        source.Should().Contain("PresentationDesignCommandPlanner.BuildLayoutPickerPlan(");
+        source.Should().Contain("PresentationDesignCommandPlanner.TryApplyLayoutChoice(");
         source.Should().NotContain("Modern resolved-thread state is not modeled yet.\";");
-        source.Should().NotContain("FreeP shapes do not have a persistent alt-text field yet.\";");
     }
 
     private static string FindRepositoryRoot()

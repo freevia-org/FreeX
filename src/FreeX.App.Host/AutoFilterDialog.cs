@@ -99,7 +99,7 @@ public sealed partial class AutoFilterDialog : Window
     public event EventHandler<AutoFilterDialogResult>? ResultCommitted;
 
     public AutoFilterDialog(IEnumerable<AutoFilterChecklistItem> items)
-        : this(items.Select(item => new AutoFilterDialogItem(item.DisplayText, item.Value, true)))
+        : this(items.Select(item => new AutoFilterDialogItem(item.DisplayText, item.Value, item.IsChecked)))
     {
     }
 

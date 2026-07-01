@@ -41,7 +41,11 @@ public sealed class FreeWRibbonDefinitionProfileTests
         "freew.shrink-font",
         "freew.superscript",
         "freew.subscript",
+        "freew.smallcaps",
+        "freew.allcaps",
         "freew.highlight",
+        "freew.char-border",
+        "freew.char-shading",
         "freew.clear-formatting",
         "freew.font-color",
         "freew.change-case",
@@ -187,6 +191,116 @@ public sealed class FreeWRibbonDefinitionProfileTests
     }
 
     [Fact]
+    public void Avalonia_profile_uses_shared_print_preview_and_view_command_ids()
+    {
+        var avaloniaIds = CommandEntries(FreeWRibbon.Build(FreeWRibbonCapabilities.Avalonia))
+            .Select(entry => entry.CommandId)
+            .ToHashSet(StringComparer.Ordinal);
+
+        avaloniaIds.Should().Contain("freew.print-preview");
+        avaloniaIds.Should().Contain("freew.print-layout");
+        avaloniaIds.Should().Contain("freew.web-layout");
+        avaloniaIds.Should().Contain("freew.draft-view");
+        avaloniaIds.Should().NotContain("freew.printlayout");
+        avaloniaIds.Should().NotContain("freew.weblayout");
+        avaloniaIds.Should().NotContain("freew.draftview");
+    }
+
+    [Fact]
+    public void Avalonia_profile_uses_shared_layout_page_setup_command_ids()
+    {
+        var avaloniaIds = CommandEntries(FreeWRibbon.Build(FreeWRibbonCapabilities.Avalonia))
+            .Select(entry => entry.CommandId)
+            .ToHashSet(StringComparer.Ordinal);
+
+        avaloniaIds.Should().Contain(new[]
+        {
+            "freew.margins",
+            "freew.orientation",
+            "freew.size",
+            "freew.columns",
+            "freew.columns-one",
+            "freew.columns-two",
+            "freew.columns-three",
+            "freew.columns-left",
+            "freew.columns-right",
+            "freew.breaks",
+            "freew.column-break",
+            "freew.section-break-next-page",
+            "freew.section-break-continuous",
+            "freew.section-break-even-page",
+            "freew.section-break-odd-page",
+            "freew.page-setup",
+            "freew.custom-margins",
+            "freew.more-paper-sizes",
+        });
+
+        avaloniaIds.Should().NotContain("freew.page-setup-dialog");
+        avaloniaIds.Should().NotContain("freew.page-orientation");
+    }
+
+    [Fact]
+    public void Avalonia_profile_uses_shared_references_command_ids()
+    {
+        var avaloniaIds = CommandEntries(FreeWRibbon.Build(FreeWRibbonCapabilities.Avalonia))
+            .Select(entry => entry.CommandId)
+            .ToHashSet(StringComparer.Ordinal);
+
+        avaloniaIds.Should().Contain(new[]
+        {
+            "freew.toc",
+            "freew.toc-refresh",
+            "freew.footnote",
+            "freew.endnote",
+            "freew.citation",
+            "freew.bibliography",
+            "freew.caption",
+            "freew.cross-reference",
+        });
+
+        avaloniaIds.Should().NotContain(new[]
+        {
+            "freew.insert-toc",
+            "freew.update-toc",
+            "freew.insert-footnote",
+            "freew.insert-endnote",
+            "freew.insert-citation",
+            "freew.insert-caption",
+        });
+    }
+
+    [Fact]
+    public void Avalonia_profile_uses_shared_mailings_command_ids()
+    {
+        var avaloniaIds = CommandEntries(FreeWRibbon.Build(FreeWRibbonCapabilities.Avalonia))
+            .Select(entry => entry.CommandId)
+            .ToHashSet(StringComparer.Ordinal);
+
+        avaloniaIds.Should().Contain(new[]
+        {
+            "freew.merge-data",
+            "freew.merge-address-block",
+            "freew.merge-greeting-line",
+            "freew.merge-field",
+            "freew.merge-preview",
+            "freew.merge-preview-previous",
+            "freew.merge-preview-next",
+            "freew.merge-finish",
+        });
+
+        avaloniaIds.Should().NotContain(new[]
+        {
+            "freew.select-recipients",
+            "freew.address-block",
+            "freew.greeting-line",
+            "freew.preview-results",
+            "freew.prev-record",
+            "freew.next-record",
+            "freew.finish-merge",
+        });
+    }
+
+    [Fact]
     public void Checked_in_command_inventory_matches_compiled_profiles()
     {
         var wpf = InventoryLocations(FreeWRibbon.Build(FreeWRibbonCapabilities.Wpf), "WPF");
@@ -202,10 +316,16 @@ public sealed class FreeWRibbonDefinitionProfileTests
         using var document = JsonDocument.Parse(ReadRepositoryFile("docs", "parity", "freew-command-inventory.json"));
         var root = document.RootElement;
 
-        root.GetProperty("schema").GetString().Should().Be("freew.command-inventory.v2");
+        root.GetProperty("schema").GetString().Should().Be("freew.command-inventory.v3");
         root.GetProperty("generatedBy").GetString().Should().Be("tools/Generate-FreeWCommandInventory.ps1");
         root.GetProperty("topologySource").GetString().Should().Contain("FreeWRibbon.Build(FreeWRibbonCapabilities.Wpf/Avalonia)");
         root.GetProperty("sourceLiteralEvidenceNote").GetString().Should().Contain("not behavior proof");
+        root.GetProperty("classificationNote").GetString().Should().Contain("profile-shape-only");
+        root.GetProperty("classificationNote").GetString().Should().Contain("actionable-gap");
+        root.GetProperty("classificationRules").EnumerateArray()
+            .Select(rule => rule.GetProperty("name").GetString())
+            .Should()
+            .Equal("shared-profile", "profile-shape-only", "command-id-alias", "platform-only", "deferred", "actionable-gap");
 
         var summary = root.GetProperty("summary");
         summary.GetProperty("totalCommands").GetInt32().Should().Be(commandIds.Length);
@@ -219,6 +339,22 @@ public sealed class FreeWRibbonDefinitionProfileTests
         commands.Select(command => command.GetProperty("commandId").GetString()!)
             .Should()
             .Equal(commandIds);
+        var gapClassificationCounts = commands
+            .GroupBy(command => command.GetProperty("gapClassification").GetString()!, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
+
+        summary.GetProperty("sharedProfile").GetInt32().Should().Be(CountGap(gapClassificationCounts, "shared-profile"));
+        summary.GetProperty("profileShapeOnly").GetInt32().Should().Be(CountGap(gapClassificationCounts, "profile-shape-only"));
+        summary.GetProperty("commandIdAliases").GetInt32().Should().Be(CountGap(gapClassificationCounts, "command-id-alias"));
+        summary.GetProperty("platformOnly").GetInt32().Should().Be(CountGap(gapClassificationCounts, "platform-only"));
+        summary.GetProperty("deferred").GetInt32().Should().Be(CountGap(gapClassificationCounts, "deferred"));
+        summary.GetProperty("actionableGaps").GetInt32().Should().Be(CountGap(gapClassificationCounts, "actionable-gap"));
+        summary.GetProperty("actionableMissingWpf").GetInt32().Should().Be(commands.Count(command =>
+            command.GetProperty("missingProfile").GetString() == "WPF" &&
+            command.GetProperty("gapClassification").GetString() == "actionable-gap"));
+        summary.GetProperty("actionableMissingAvalonia").GetInt32().Should().Be(commands.Count(command =>
+            command.GetProperty("missingProfile").GetString() == "Avalonia" &&
+            command.GetProperty("gapClassification").GetString() == "actionable-gap"));
 
         foreach (var command in commands)
         {
@@ -231,13 +367,26 @@ public sealed class FreeWRibbonDefinitionProfileTests
             command.GetProperty("profileSurface").GetString().Should().Be(ProfileSurface(wpfPresent, avaloniaPresent));
             command.GetProperty("missingProfile").GetString().Should().Be(MissingProfile(wpfPresent, avaloniaPresent));
             command.GetProperty("classification").GetString().Should().Be(ProfileClassification(wpfPresent, avaloniaPresent));
+            command.GetProperty("gapClassification").GetString().Should().NotBeNullOrWhiteSpace();
+            command.GetProperty("gapClassificationRule").GetString().Should().Be(command.GetProperty("gapClassification").GetString());
+            command.GetProperty("notes").GetString().Should().NotBeNullOrWhiteSpace();
 
             AssertInventoryLocations(command.GetProperty("wpfLocations"), wpfLocations ?? Array.Empty<InventoryLocation>());
             AssertInventoryLocations(command.GetProperty("avaloniaLocations"), avaloniaLocations ?? Array.Empty<InventoryLocation>());
         }
 
+        AssertGapClassification(commands, "freew.accept-all", "shared-profile");
+        AssertGapClassification(commands, "freew.font-color.black", "profile-shape-only");
+        AssertGapClassification(commands, "freew.bookmark", "command-id-alias");
+        AssertGapClassification(commands, "freew.about", "platform-only");
+        AssertGapClassification(commands, "freew.cc-checkbox", "deferred");
+        AssertGapClassification(commands, "freew.add-to-dictionary", "actionable-gap");
+
         var markdown = ReadRepositoryFile("docs", "parity", "freew-command-inventory.md");
         markdown.Should().Contain($"| {commandIds.Length} | {both} | {wpfOnly} | {avaloniaOnly} | {avaloniaOnly} | {wpfOnly} |");
+        markdown.Should().Contain("## Classification Rules");
+        markdown.Should().Contain("profile-shape-only");
+        markdown.Should().Contain("actionable-gap");
         markdown.Should().Contain("Source literal evidence columns show exact command-id text in source files only; they are not behavior proof and never create rows.");
     }
 
@@ -474,7 +623,11 @@ public sealed class FreeWRibbonDefinitionProfileTests
 
         avaloniaSource.Should().NotContain("g.Toggle(\"freew.superscript\",     \"X");
         avaloniaSource.Should().NotContain("g.Toggle(\"freew.subscript\",       \"X");
+        avaloniaSource.Should().NotContain("g.Toggle(\"freew.smallcaps\",       \"Small Caps\"");
+        avaloniaSource.Should().NotContain("g.Toggle(\"freew.allcaps\",         \"All Caps\"");
         avaloniaSource.Should().NotContain("g.Button(\"freew.highlight\",       \"Highlight\"");
+        avaloniaSource.Should().NotContain("g.Button(\"freew.char-border\",     \"Character Border\"");
+        avaloniaSource.Should().NotContain("g.Button(\"freew.char-shading\",    \"Character Shading\"");
         avaloniaSource.Should().NotContain("g.Button(\"freew.grow-font\",       \"A");
         avaloniaSource.Should().NotContain("g.Button(\"freew.shrink-font\",     \"A");
         avaloniaSource.Should().NotContain("g.Button(\"freew.clear-formatting\", \"Clear\"");
@@ -482,7 +635,11 @@ public sealed class FreeWRibbonDefinitionProfileTests
         avaloniaSource.Should().NotContain("g.Button(\"freew.change-case\",     \"Aa\"");
         avaloniaSource.Should().Contain("FreeWRibbonText.SuperscriptCompactCommand");
         avaloniaSource.Should().Contain("FreeWRibbonText.SubscriptCompactCommand");
+        avaloniaSource.Should().Contain("FreeWRibbonText.SmallCapsCommand");
+        avaloniaSource.Should().Contain("FreeWRibbonText.AllCapsCommand");
         avaloniaSource.Should().Contain("FreeWRibbonText.HighlightCompactCommand");
+        avaloniaSource.Should().Contain("FreeWRibbonText.CharacterBorderCommand");
+        avaloniaSource.Should().Contain("FreeWRibbonText.CharacterShadingCommand");
         avaloniaSource.Should().Contain("FreeWRibbonText.GrowFontCompactCommand");
         avaloniaSource.Should().Contain("FreeWRibbonText.ShrinkFontCompactCommand");
         avaloniaSource.Should().Contain("FreeWRibbonText.ClearFormattingCompactCommand");
@@ -809,7 +966,11 @@ public sealed class FreeWRibbonDefinitionProfileTests
         labels["freew.shrink-font"].Should().Be(Loc.Get("Ribbon_Command_ShrinkFontCompact_Label"));
         labels["freew.superscript"].Should().Be(Loc.Get("Ribbon_Command_SuperscriptCompact_Label"));
         labels["freew.subscript"].Should().Be(Loc.Get("Ribbon_Command_SubscriptCompact_Label"));
+        labels["freew.smallcaps"].Should().Be(Loc.Get("Ribbon_Command_SmallCaps_Label"));
+        labels["freew.allcaps"].Should().Be(Loc.Get("Ribbon_Command_AllCaps_Label"));
         labels["freew.highlight"].Should().Be(Loc.Get("Ribbon_Command_HighlightCompact_Label"));
+        labels["freew.char-border"].Should().Be(Loc.Get("Ribbon_Command_CharacterBorder_Label"));
+        labels["freew.char-shading"].Should().Be(Loc.Get("Ribbon_Command_CharacterShading_Label"));
         labels["freew.clear-formatting"].Should().Be(Loc.Get("Ribbon_Command_ClearFormattingCompact_Label"));
         labels["freew.font-color"].Should().Be(Loc.Get("Ribbon_Command_FontColorDropdown_Label"));
         labels["freew.change-case"].Should().Be(Loc.Get("Ribbon_Command_ChangeCaseCompact_Label"));
@@ -958,6 +1119,20 @@ public sealed class FreeWRibbonDefinitionProfileTests
         }
 
         surface.PageColorMenuHeaders.Should().Equal(FreeWRibbonDefinitionData.PageColors.Select(color => color.Label));
+    }
+
+    private static int CountGap(IReadOnlyDictionary<string, int> counts, string classification) =>
+        counts.TryGetValue(classification, out var count) ? count : 0;
+
+    private static void AssertGapClassification(
+        IReadOnlyList<JsonElement> commands,
+        string commandId,
+        string expectedClassification)
+    {
+        var command = commands.Single(candidate =>
+            candidate.GetProperty("commandId").GetString() == commandId);
+
+        command.GetProperty("gapClassification").GetString().Should().Be(expectedClassification);
     }
 
     private static string ReadRepositoryFile(params string[] relativeParts)

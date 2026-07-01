@@ -401,11 +401,10 @@ public sealed class FontDialog : Window
             if (result.HighlightHex != original.HighlightColorHex)
                 editor.SetHighlightColor(result.HighlightHex);
 
-            // SmallCaps / AllCaps: DocumentView does not yet expose ToggleSmallCaps /
-            // ToggleAllCaps. These flags round-trip through the model but the dialog can
-            // already read them. Applying them requires adding methods; we leave this for
-            // the next wave (deferred) — marked below.
-            // TODO(deferred): editor.ToggleSmallCaps() / editor.ToggleAllCaps() when added.
+            if (result.SmallCaps != original.SmallCaps)
+                editor.ToggleSmallCaps();
+            if (result.AllCaps != original.AllCaps)
+                editor.ToggleAllCaps();
         }
         finally
         {

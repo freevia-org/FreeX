@@ -72,6 +72,7 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.backstage", new ActionRibbonCommand(callbacks.Backstage));
         r.Register("freew.new",       new ActionRibbonCommand(callbacks.NewDocument));
         r.Register("freew.open",      new ActionRibbonCommand(callbacks.Open));
+        r.Register("freew.import-pdf-text", new ActionRibbonCommand(callbacks.ImportPdfText ?? (() => { })));
         r.Register("freew.save",      new ActionRibbonCommand(callbacks.Save));
 
         // ── Clipboard ────────────────────────────────────────────────────────
@@ -95,9 +96,13 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.italic",           new ActionRibbonCommand(editor.ToggleItalic));
         r.Register("freew.underline",        new ActionRibbonCommand(editor.ToggleUnderline));
         r.Register("freew.strikethrough",    new ActionRibbonCommand(editor.ToggleStrikethrough));
+        r.Register("freew.smallcaps",        new ActionRibbonCommand(editor.ToggleSmallCaps));
+        r.Register("freew.allcaps",          new ActionRibbonCommand(editor.ToggleAllCaps));
         r.Register("freew.superscript",      new ActionRibbonCommand(editor.ToggleSuperscript));
         r.Register("freew.subscript",        new ActionRibbonCommand(editor.ToggleSubscript));
         r.Register("freew.highlight",        new ValueRibbonCommand(value => editor.SetHighlightColor(value)));
+        r.Register("freew.char-border",      new ActionRibbonCommand(() => editor.SetCharacterBorder(new ParagraphBorder("#000000", 0.5))));
+        r.Register("freew.char-shading",     new ActionRibbonCommand(() => editor.SetCharacterShading("#FFF2CC")));
         r.Register("freew.grow-font",        new ActionRibbonCommand(editor.GrowFont));
         r.Register("freew.shrink-font",      new ActionRibbonCommand(editor.ShrinkFont));
         r.Register("freew.clear-formatting", new ActionRibbonCommand(editor.ClearFormatting));
@@ -142,6 +147,8 @@ internal static class FreeWAvaloniaRibbonCommands
         }));
         r.Register("freew.space-before-toggle", new ActionRibbonCommand(() => ToggleSpaceBefore(editor)));
         r.Register("freew.space-after-toggle", new ActionRibbonCommand(() => ToggleSpaceAfter(editor)));
+        r.Register("freew.keep-with-next", new ActionRibbonCommand(editor.ToggleKeepWithNext));
+        r.Register("freew.keep-lines", new ActionRibbonCommand(editor.ToggleKeepLinesTogether));
         // Line-spacing commands — value = multiplier for Multiple. The fixed ids are compatibility
         // aliases for older Avalonia controls and are no longer used by the Home ribbon profile.
         r.Register("freew.line-spacing", new ValueRibbonCommand(value => SetLineSpacing(editor, value)));
@@ -279,22 +286,56 @@ internal static class FreeWAvaloniaRibbonCommands
 
         // ── Layout / Page Setup (AV-PAGE) ────────────────────────────────────
         // Dialog launcher: opens the Page Setup modal (margins + paper + orientation).
-        r.Register("freew.page-setup-dialog",   new ActionRibbonCommand(callbacks.OpenPageSetupDialog));
+        var pageSetupCommand = new ActionRibbonCommand(callbacks.OpenPageSetupDialog);
+        r.Register("freew.page-setup", pageSetupCommand);
+        r.Register("freew.custom-margins", pageSetupCommand);
+        r.Register("freew.more-paper-sizes", pageSetupCommand);
+        r.Register("freew.page-setup-dialog", pageSetupCommand);
         // Toggle orientation (portrait ↔ landscape).
-        r.Register("freew.page-orientation",    new ActionRibbonCommand(callbacks.ToggleOrientation));
+        var orientationCommand = new ActionRibbonCommand(callbacks.ToggleOrientation);
+        r.Register("freew.orientation", orientationCommand);
+        r.Register("freew.page-orientation", orientationCommand);
         // Margin presets.
+        r.Register("freew.margins", new ActionRibbonCommand(() => ToggleNormalNarrowMargins(editor, callbacks)));
         r.Register("freew.page-margins-normal", new ActionRibbonCommand(() => callbacks.ApplyMarginPreset("normal")));
         r.Register("freew.page-margins-narrow", new ActionRibbonCommand(() => callbacks.ApplyMarginPreset("narrow")));
-        r.Register("freew.page-margins-wide",   new ActionRibbonCommand(() => callbacks.ApplyMarginPreset("wide")));
+        r.Register("freew.page-margins-wide", new ActionRibbonCommand(() => callbacks.ApplyMarginPreset("wide")));
         // Quick paper-size selectors.
-        r.Register("freew.page-size-letter",    new ActionRibbonCommand(() => callbacks.ApplyPaperSize("letter")));
-        r.Register("freew.page-size-a4",        new ActionRibbonCommand(() => callbacks.ApplyPaperSize("a4")));
+        r.Register("freew.size", new ActionRibbonCommand(() => ToggleLetterA4Paper(editor, callbacks)));
+        r.Register("freew.page-size-letter", new ActionRibbonCommand(() => callbacks.ApplyPaperSize("letter")));
+        r.Register("freew.page-size-a4", new ActionRibbonCommand(() => callbacks.ApplyPaperSize("a4")));
+
+        r.Register("freew.columns", EmptyRibbonCommand.Instance);
+        r.Register("freew.columns-one", new ActionRibbonCommand(() => ApplyColumnPreset(editor, ColumnsPreset.One)));
+        r.Register("freew.columns-two", new ActionRibbonCommand(() => ApplyColumnPreset(editor, ColumnsPreset.Two)));
+        r.Register("freew.columns-three", new ActionRibbonCommand(() => ApplyColumnPreset(editor, ColumnsPreset.Three)));
+        r.Register("freew.columns-left", new ActionRibbonCommand(() => ApplyColumnPreset(editor, ColumnsPreset.Left)));
+        r.Register("freew.columns-right", new ActionRibbonCommand(() => ApplyColumnPreset(editor, ColumnsPreset.Right)));
+
+        r.Register("freew.breaks", EmptyRibbonCommand.Instance);
+        r.Register("freew.column-break", new ActionRibbonCommand(editor.InsertColumnBreak));
+        r.Register("freew.section-break-next-page", new ActionRibbonCommand(() => editor.InsertSectionBreak(SectionBreakKind.NextPage)));
+        r.Register("freew.section-break-continuous", new ActionRibbonCommand(() => editor.InsertSectionBreak(SectionBreakKind.Continuous)));
+        r.Register("freew.section-break-even-page", new ActionRibbonCommand(() => editor.InsertSectionBreak(SectionBreakKind.EvenPage)));
+        r.Register("freew.section-break-odd-page", new ActionRibbonCommand(() => editor.InsertSectionBreak(SectionBreakKind.OddPage)));
 
         // ── View ─────────────────────────────────────────────────────────────
-        r.Register("freew.printlayout",       new ActionRibbonCommand(callbacks.SetPrintLayout));
-        r.Register("freew.weblayout",         new ActionRibbonCommand(callbacks.SetWebLayout));
-        r.Register("freew.draftview",         new ActionRibbonCommand(callbacks.SetDraftView));
-        r.Register("freew.navigationpane",    new ActionRibbonCommand(callbacks.ToggleNavigationPane));
+        var printPreviewCommand = new ActionRibbonCommand(callbacks.OpenPrintPreview ?? (() => { }));
+        r.Register("freew.print-preview", printPreviewCommand);
+
+        var printLayoutCommand = new ActionRibbonCommand(callbacks.SetPrintLayout);
+        var webLayoutCommand = new ActionRibbonCommand(callbacks.SetWebLayout);
+        var draftViewCommand = new ActionRibbonCommand(callbacks.SetDraftView);
+        r.Register("freew.print-layout", printLayoutCommand);
+        r.Register("freew.web-layout", webLayoutCommand);
+        r.Register("freew.draft-view", draftViewCommand);
+        // Compatibility aliases for older Avalonia definitions/tests that used compact ids.
+        r.Register("freew.printlayout", printLayoutCommand);
+        r.Register("freew.weblayout", webLayoutCommand);
+        r.Register("freew.draftview", draftViewCommand);
+        var navigationPaneCommand = new ActionRibbonCommand(callbacks.ToggleNavigationPane);
+        r.Register("freew.nav-pane",          navigationPaneCommand);
+        r.Register("freew.navigationpane",    navigationPaneCommand);
         r.Register("freew.reveal-formatting", new ActionRibbonCommand(callbacks.ToggleRevealFormatting));
         r.Register("freew.zoom-in",           new ActionRibbonCommand(() => callbacks.ApplyZoom(null, +0.1)));
         r.Register("freew.zoom-out",          new ActionRibbonCommand(() => callbacks.ApplyZoom(null, -0.1)));
@@ -303,8 +344,12 @@ internal static class FreeWAvaloniaRibbonCommands
         // The three Window/Zoom-dialog callbacks are optional on RibbonHostCallbacks (default null so
         // test call sites stay terse); fall back to a safe no-op when the shell didn't supply one.
         r.Register("freew.zoom-dialog",       new ActionRibbonCommand(callbacks.OpenZoomDialog ?? (() => { })));
-        r.Register("freew.view-gridlines",    new ActionRibbonCommand(() => editor.ShowGridlines = !editor.ShowGridlines));
-        r.Register("freew.view-ruler",        new ActionRibbonCommand(() => editor.ShowRuler = !editor.ShowRuler));
+        var gridlinesCommand = new ActionRibbonCommand(() => editor.ShowGridlines = !editor.ShowGridlines);
+        var rulerCommand = new ActionRibbonCommand(() => editor.ShowRuler = !editor.ShowRuler);
+        r.Register("freew.gridlines",         gridlinesCommand);
+        r.Register("freew.view-gridlines",    gridlinesCommand);
+        r.Register("freew.ruler",             rulerCommand);
+        r.Register("freew.view-ruler",        rulerCommand);
         // AV-VIEW: Window group — new window + split (shell callbacks; may note "deferred" in the status bar).
         r.Register("freew.new-window",        new ActionRibbonCommand(callbacks.NewWindow ?? (() => { })));
         r.Register("freew.split",             new ActionRibbonCommand(callbacks.ToggleSplit ?? (() => { })));
@@ -395,6 +440,80 @@ internal static class FreeWAvaloniaRibbonCommands
         var paragraph = editor.GetCaretFormatting().Paragraph;
         editor.SetSpaceAfter(paragraph.SpaceAfterPt > 0 ? 0 : ParagraphSpacingTogglePoints);
     }
+
+    private static void ToggleNormalNarrowMargins(DocumentView editor, RibbonHostCallbacks callbacks)
+    {
+        var page = editor.Document.Page;
+        var isNormal =
+            Nearly(page.MarginTopPt, 72) &&
+            Nearly(page.MarginBottomPt, 72) &&
+            Nearly(page.MarginLeftPt, 72) &&
+            Nearly(page.MarginRightPt, 72);
+
+        callbacks.ApplyMarginPreset(isNormal ? "narrow" : "normal");
+    }
+
+    private static void ToggleLetterA4Paper(DocumentView editor, RibbonHostCallbacks callbacks)
+    {
+        var page = editor.Document.Page;
+        callbacks.ApplyPaperSize(IsPaper(page, 612.0, 792.0) ? "a4" : "letter");
+    }
+
+    private enum ColumnsPreset
+    {
+        One,
+        Two,
+        Three,
+        Left,
+        Right
+    }
+
+    private static void ApplyColumnPreset(DocumentView editor, ColumnsPreset preset) =>
+        editor.ApplyPageSettings(page =>
+        {
+            var spacing = page.ColumnSpacingPt;
+            page.ColumnsLineBetween = false;
+            page.ColumnWidthsPt = null;
+
+            switch (preset)
+            {
+                case ColumnsPreset.One:
+                    page.ColumnCount = 1;
+                    break;
+                case ColumnsPreset.Two:
+                    page.ColumnCount = 2;
+                    break;
+                case ColumnsPreset.Three:
+                    page.ColumnCount = 3;
+                    break;
+                case ColumnsPreset.Left:
+                    page.ColumnCount = 2;
+                    page.ColumnWidthsPt = UnequalColumnWidths(page, narrowFirst: true, spacing);
+                    break;
+                case ColumnsPreset.Right:
+                    page.ColumnCount = 2;
+                    page.ColumnWidthsPt = UnequalColumnWidths(page, narrowFirst: false, spacing);
+                    break;
+            }
+        });
+
+    private static IReadOnlyList<double> UnequalColumnWidths(PageSettings page, bool narrowFirst, double spacing)
+    {
+        var contentWidthPt = Math.Max(72, page.WidthPt - page.MarginLeftPt - page.MarginRightPt);
+        const double narrowPt = 108;
+        var widePt = Math.Max(36, contentWidthPt - spacing - narrowPt);
+        return narrowFirst ? [narrowPt, widePt] : [widePt, narrowPt];
+    }
+
+    private static bool IsPaper(PageSettings page, double portraitWidthPt, double portraitHeightPt)
+    {
+        var width = Math.Min(page.WidthPt, page.HeightPt);
+        var height = Math.Max(page.WidthPt, page.HeightPt);
+        return Nearly(width, portraitWidthPt) && Nearly(height, portraitHeightPt);
+    }
+
+    private static bool Nearly(double actual, double expected) =>
+        Math.Abs(actual - expected) < 0.5;
 
     private sealed class ToggleActionCommand(Action toggle, Func<bool> isChecked) : IRibbonStatefulCommand
     {
@@ -591,16 +710,28 @@ internal static class FreeWAvaloniaRibbonCommands
     private static void RegisterReferencesCommands(RibbonCommandRegistry r, DocumentView editor)
     {
         // Footnotes & Endnotes — insert an empty note + reference marker at the caret.
-        r.Register("freew.insert-footnote", new ActionRibbonCommand(() => editor.InsertFootnote()));
-        r.Register("freew.insert-endnote",  new ActionRibbonCommand(() => editor.InsertEndnote()));
+        var footnote = new ActionRibbonCommand(() => editor.InsertFootnote());
+        r.Register("freew.footnote", footnote);
+        r.Register("freew.insert-footnote", footnote);
+
+        var endnote = new ActionRibbonCommand(() => editor.InsertEndnote());
+        r.Register("freew.endnote", endnote);
+        r.Register("freew.insert-endnote", endnote);
 
         // Table of Contents — generate from the heading outline / regenerate in place.
-        r.Register("freew.insert-toc", new ActionRibbonCommand(editor.InsertTableOfContents));
-        r.Register("freew.update-toc", new ActionRibbonCommand(editor.UpdateTableOfContents));
+        var toc = new ActionRibbonCommand(editor.InsertTableOfContents);
+        r.Register("freew.toc", toc);
+        r.Register("freew.insert-toc", toc);
+
+        var tocRefresh = new ActionRibbonCommand(editor.UpdateTableOfContents);
+        r.Register("freew.toc-refresh", tocRefresh);
+        r.Register("freew.update-toc", tocRefresh);
 
         // Captions — auto-numbered Figure / Table caption paragraph after the caret block.
         // The top-level opener is a no-op; each label is its own command.
-        r.Register("freew.insert-caption",        new ActionRibbonCommand(() => { /* dropdown opener */ }));
+        var caption = new ActionRibbonCommand(() => { /* dropdown opener */ });
+        r.Register("freew.caption", caption);
+        r.Register("freew.insert-caption", caption);
         r.Register("freew.insert-caption.figure", new ActionRibbonCommand(() => editor.InsertCaption(CaptionLabel.Figure)));
         r.Register("freew.insert-caption.table",  new ActionRibbonCommand(() => editor.InsertCaption(CaptionLabel.Table)));
 
@@ -609,8 +740,10 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.cross-reference", new ActionRibbonCommand(() => InsertDefaultCrossReference(editor)));
 
         // Citations & Bibliography — in-text citation for the first source; back-matter bibliography block.
-        r.Register("freew.insert-citation", new ActionRibbonCommand(() => InsertDefaultCitation(editor)));
-        r.Register("freew.bibliography",    new ActionRibbonCommand(editor.InsertBibliography));
+        var citation = new ActionRibbonCommand(() => InsertDefaultCitation(editor));
+        r.Register("freew.citation", citation);
+        r.Register("freew.insert-citation", citation);
+        r.Register("freew.bibliography", new ActionRibbonCommand(editor.InsertBibliography));
     }
 
     /// <summary>
@@ -879,14 +1012,33 @@ internal static class FreeWAvaloniaRibbonCommands
     /// </summary>
     private static void RegisterMailingsCommands(RibbonCommandRegistry r, MailMergeEngine engine)
     {
-        r.Register("freew.select-recipients", new ActionRibbonCommand(engine.SelectRecipients));
-        r.Register("freew.merge-field",       new ActionRibbonCommand(engine.InsertMergeField));
-        r.Register("freew.address-block",     new ActionRibbonCommand(engine.InsertAddressBlock));
-        r.Register("freew.greeting-line",     new ActionRibbonCommand(engine.InsertGreetingLine));
-        r.Register("freew.preview-results",   new ActionRibbonCommand(engine.TogglePreview));
-        r.Register("freew.next-record",       new ActionRibbonCommand(engine.NextRecord));
-        r.Register("freew.prev-record",       new ActionRibbonCommand(engine.PreviousRecord));
-        r.Register("freew.finish-merge",      new ActionRibbonCommand(() => engine.FinishMerge()));
+        RegisterMailingsAlias(r, "freew.merge-data", new ActionRibbonCommand(engine.SelectRecipients),
+            "freew.select-recipients");
+        r.Register("freew.merge-edit-recipients", new ActionRibbonCommand(engine.SelectRecipients));
+        r.Register("freew.merge-field", new ActionRibbonCommand(engine.InsertMergeField));
+        RegisterMailingsAlias(r, "freew.merge-address-block", new ActionRibbonCommand(engine.InsertAddressBlock),
+            "freew.address-block");
+        RegisterMailingsAlias(r, "freew.merge-greeting-line", new ActionRibbonCommand(engine.InsertGreetingLine),
+            "freew.greeting-line");
+        RegisterMailingsAlias(r, "freew.merge-preview", new ActionRibbonCommand(engine.TogglePreview),
+            "freew.preview-results");
+        RegisterMailingsAlias(r, "freew.merge-preview-next", new ActionRibbonCommand(engine.NextRecord),
+            "freew.next-record");
+        RegisterMailingsAlias(r, "freew.merge-preview-previous", new ActionRibbonCommand(engine.PreviousRecord),
+            "freew.prev-record");
+        RegisterMailingsAlias(r, "freew.merge-finish", new ActionRibbonCommand(() => engine.FinishMerge()),
+            "freew.finish-merge");
+    }
+
+    private static void RegisterMailingsAlias(
+        RibbonCommandRegistry r,
+        string canonicalId,
+        IRibbonCommand command,
+        params string[] aliases)
+    {
+        r.Register(canonicalId, command);
+        foreach (var alias in aliases)
+            r.Register(alias, command);
     }
 
     /// <summary>

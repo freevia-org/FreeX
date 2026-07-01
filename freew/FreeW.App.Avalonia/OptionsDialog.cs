@@ -17,9 +17,31 @@ internal sealed class OptionsDialog : Window
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
 
     private readonly FreeWOptions _seed;
+    private readonly OptionsDialogSurfaceSpec _surface;
     private readonly TextBox _recentFilesCap = new() { Width = 72 };
     private readonly ComboBox _defaultFormat = new() { Width = 180 };
     private readonly TextBox _uiLanguage = new() { Width = 180 };
+    private readonly CheckBox _autoCorrectEnabled = new();
+    private readonly CheckBox _smartQuotes = new();
+    private readonly CheckBox _dashes = new();
+    private readonly CheckBox _ellipsis = new();
+    private readonly CheckBox _symbols = new();
+    private readonly CheckBox _capitalization = new();
+    private readonly CheckBox _bulletedLists = new();
+    private readonly CheckBox _numberedLists = new();
+    private readonly CheckBox _ordinals = new();
+    private readonly CheckBox _fractions = new();
+    private readonly CheckBox _hyperlinks = new();
+    private readonly CheckBox _correctTwoInitialCaps = new();
+    private readonly CheckBox _capitalizeDayNames = new();
+    private readonly CheckBox _replaceText = new();
+    private readonly TextBox _replacements = new()
+    {
+        AcceptsReturn = true,
+        TextWrapping = TextWrapping.Wrap,
+        MinHeight = 110,
+        Width = 300,
+    };
     private readonly TextBlock _status = new();
 
     public FreeWOptions? Result { get; private set; }
@@ -27,32 +49,31 @@ internal sealed class OptionsDialog : Window
     public OptionsDialog(FreeWOptions options)
     {
         _seed = options ?? new FreeWOptions();
+        _surface = OptionsDialogPlanner.BuildSurface(_seed, SystemLanguageLabel());
 
-        Title = "FreeW Options";
-        Width = 360;
+        Title = _surface.Title;
+        Width = 460;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         CanResize = false;
         ShowInTaskbar = false;
 
         _recentFilesCap.Text = _seed.RecentFilesCap.ToString();
-        _defaultFormat.ItemsSource = new[] { new FormatChoice("Word Document (*.docx)", FreeWOptions.DocxDefaultFormat) };
+        _defaultFormat.ItemsSource = _surface.General.FormatChoices;
         _defaultFormat.SelectedIndex = 0;
         _uiLanguage.Text = _seed.UiLanguage;
+        _replacements.Text = _surface.AutoCorrect.ReplacementsText;
 
         AvaloniaCompactDialogChrome.ApplyTextBox(_recentFilesCap, DialogChromeStyle);
         AvaloniaCompactDialogChrome.ApplyComboBox(_defaultFormat, DialogChromeStyle);
         AvaloniaCompactDialogChrome.ApplyTextBox(_uiLanguage, DialogChromeStyle);
+        AvaloniaCompactDialogChrome.ApplyTextBox(_replacements, DialogChromeStyle);
         AvaloniaCompactDialogChrome.ApplyValidationStatus(_status, DialogChromeStyle, new Thickness(16, 8, 16, 0));
 
-        var grid = new Grid
-        {
-            Margin = new Thickness(16, 16, 16, 0),
-            ColumnDefinitions = new ColumnDefinitions("Auto,*"),
-        };
-        AddRow(grid, 0, "Recent files to keep:", _recentFilesCap);
-        AddRow(grid, 1, "Default save format:", _defaultFormat);
-        AddRow(grid, 2, "UI language:", _uiLanguage);
+        var tabs = new TabControl { Margin = new Thickness(14, 14, 14, 0) };
+        tabs.Items.Add(new TabItem { Header = _surface.Tabs[0].Header, Content = BuildGeneralTab() });
+        tabs.Items.Add(new TabItem { Header = _surface.AutoCorrect.Header, Content = BuildAutoCorrectTab() });
+        tabs.Items.Add(new TabItem { Header = _surface.AutoFormat.Header, Content = BuildAutoFormatTab() });
 
         var ok = new Button { Content = "OK", IsDefault = true };
         AvaloniaCompactDialogChrome.ApplyButton(ok, DialogChromeStyle, minWidth: 72, isDefault: true);
@@ -70,7 +91,7 @@ internal sealed class OptionsDialog : Window
             Children =
             {
                 buttons,
-                new StackPanel { Children = { grid, _status } },
+                new StackPanel { Children = { tabs, _status } },
             },
         };
     }
@@ -86,18 +107,165 @@ internal sealed class OptionsDialog : Window
             return;
         }
 
-        var format = (_defaultFormat.SelectedItem as FormatChoice)?.Extension;
+        if (!OptionsDialogPlanner.TryParseAutoCorrectReplacements(
+            _replacements.Text,
+            out var replacements,
+            out var replacementsError))
+        {
+            _status.Text = replacementsError ?? _surface.AutoCorrect.ReplacementsValidationMessage;
+            _status.IsVisible = true;
+            _replacements.Focus();
+            return;
+        }
+
+        var format = (_defaultFormat.SelectedItem as OptionsDialogFormatChoice)?.Extension;
+        var autoFormat = new AutoFormatOptions
+        {
+            SmartQuotes = _smartQuotes.IsChecked == true,
+            Dashes = _dashes.IsChecked == true,
+            Ellipsis = _ellipsis.IsChecked == true,
+            Symbols = _symbols.IsChecked == true,
+            Capitalization = _capitalization.IsChecked == true,
+            BulletedLists = _bulletedLists.IsChecked == true,
+            NumberedLists = _numberedLists.IsChecked == true,
+            Ordinals = _ordinals.IsChecked == true,
+            Fractions = _fractions.IsChecked == true,
+            Hyperlinks = _hyperlinks.IsChecked == true,
+        };
+        var autoCorrect = new AutoCorrectOptions
+        {
+            CorrectTwoInitialCapitals = _correctTwoInitialCaps.IsChecked == true,
+            CapitalizeDayNames = _capitalizeDayNames.IsChecked == true,
+            ReplaceText = _replaceText.IsChecked == true,
+            Replacements = replacements.ToList(),
+        };
+
         Result = OptionsDialogPlanner.BuildResult(
             cap,
             format,
             _uiLanguage.Text,
-            _seed.AutoCorrectEnabled,
-            _seed.AutoFormat ?? AutoFormatOptions.Default,
-            _seed.AutoCorrect ?? AutoCorrectOptions.Default);
+            _autoCorrectEnabled.IsChecked == true,
+            autoFormat,
+            autoCorrect);
         Close();
     }
 
-    private static void AddRow(Grid grid, int row, string label, Control field)
+    private Control BuildGeneralTab()
+    {
+        var grid = new Grid
+        {
+            Margin = new Thickness(16, 16, 16, 12),
+            ColumnDefinitions = new ColumnDefinitions("Auto,*"),
+        };
+        AddRow(grid, 0, _surface.General.RecentFilesLabel, _recentFilesCap);
+        AddRow(grid, 1, _surface.General.DefaultSaveFormatLabel, _defaultFormat);
+        AddRow(grid, 2, _surface.General.UiLanguageLabel, _uiLanguage, _surface.General.UiLanguageHint);
+        return grid;
+    }
+
+    private Control BuildAutoCorrectTab()
+    {
+        foreach (var spec in _surface.AutoCorrect.Toggles)
+            ConfigureToggle(ToggleFor(spec.Kind), spec);
+
+        var panel = new StackPanel { Margin = new Thickness(16, 16, 16, 12), Spacing = 4 };
+        panel.Children.Add(_correctTwoInitialCaps);
+        panel.Children.Add(_capitalizeDayNames);
+        panel.Children.Add(_replaceText);
+        panel.Children.Add(new TextBlock
+        {
+            Text = _surface.AutoCorrect.ReplacementsLabel,
+            FontWeight = FontWeight.SemiBold,
+            Margin = new Thickness(0, 12, 0, 0),
+        });
+        panel.Children.Add(_replacements);
+        panel.Children.Add(new TextBlock
+        {
+            Text = _surface.AutoCorrect.ReplacementsHelpText,
+            FontSize = 11,
+            Foreground = Brushes.Gray,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 4, 0, 0),
+        });
+
+        void SyncReplacements() => _replacements.IsEnabled = _replaceText.IsChecked == true;
+        _replaceText.IsCheckedChanged += (_, _) => SyncReplacements();
+        SyncReplacements();
+        return panel;
+    }
+
+    private Control BuildAutoFormatTab()
+    {
+        ConfigureToggle(_autoCorrectEnabled, _surface.AutoFormat.MasterToggle);
+        foreach (var spec in _surface.AutoFormat.RuleToggles)
+            ConfigureToggle(ToggleFor(spec.Kind), spec);
+
+        var ruleBoxes = new[]
+        {
+            _smartQuotes,
+            _dashes,
+            _ellipsis,
+            _symbols,
+            _capitalization,
+            _bulletedLists,
+            _numberedLists,
+            _ordinals,
+            _fractions,
+            _hyperlinks,
+        };
+
+        var rules = new StackPanel { Margin = new Thickness(16, 4, 16, 0), Spacing = 4 };
+        foreach (var box in ruleBoxes)
+            rules.Children.Add(box);
+
+        var panel = new StackPanel { Margin = new Thickness(16, 16, 16, 12) };
+        panel.Children.Add(_autoCorrectEnabled);
+        panel.Children.Add(new TextBlock
+        {
+            Text = _surface.AutoFormat.RuleSectionLabel,
+            FontWeight = FontWeight.SemiBold,
+            Margin = new Thickness(0, 12, 0, 0),
+        });
+        panel.Children.Add(rules);
+
+        void SyncEnabled()
+        {
+            foreach (var box in ruleBoxes)
+                box.IsEnabled = _autoCorrectEnabled.IsChecked == true;
+        }
+        _autoCorrectEnabled.IsCheckedChanged += (_, _) => SyncEnabled();
+        SyncEnabled();
+        return panel;
+    }
+
+    private static void ConfigureToggle(CheckBox box, OptionsDialogToggleSpec spec)
+    {
+        box.Content = spec.Label;
+        box.IsChecked = spec.IsChecked;
+        box.Margin = new Thickness(0, 4, 0, 0);
+    }
+
+    private CheckBox ToggleFor(OptionsDialogToggleKind kind) =>
+        kind switch
+        {
+            OptionsDialogToggleKind.AutoCorrectEnabled => _autoCorrectEnabled,
+            OptionsDialogToggleKind.SmartQuotes => _smartQuotes,
+            OptionsDialogToggleKind.Dashes => _dashes,
+            OptionsDialogToggleKind.Ellipsis => _ellipsis,
+            OptionsDialogToggleKind.Symbols => _symbols,
+            OptionsDialogToggleKind.Capitalization => _capitalization,
+            OptionsDialogToggleKind.BulletedLists => _bulletedLists,
+            OptionsDialogToggleKind.NumberedLists => _numberedLists,
+            OptionsDialogToggleKind.Ordinals => _ordinals,
+            OptionsDialogToggleKind.Fractions => _fractions,
+            OptionsDialogToggleKind.Hyperlinks => _hyperlinks,
+            OptionsDialogToggleKind.CorrectTwoInitialCapitals => _correctTwoInitialCaps,
+            OptionsDialogToggleKind.CapitalizeDayNames => _capitalizeDayNames,
+            OptionsDialogToggleKind.ReplaceText => _replaceText,
+            _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
+        };
+
+    private static void AddRow(Grid grid, int row, string label, Control field, string? hint = null)
     {
         grid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
 
@@ -111,15 +279,37 @@ internal sealed class OptionsDialog : Window
         Grid.SetColumn(text, 0);
 
         field.Margin = new Thickness(0, 4, 0, 4);
-        Grid.SetRow(field, row);
-        Grid.SetColumn(field, 1);
+
+        Control value = field;
+        if (!string.IsNullOrWhiteSpace(hint))
+        {
+            value = new StackPanel
+            {
+                Children =
+                {
+                    field,
+                    new TextBlock
+                    {
+                        Text = hint,
+                        FontSize = 11,
+                        Foreground = Brushes.Gray,
+                        TextWrapping = TextWrapping.Wrap,
+                        Margin = new Thickness(0, 0, 0, 4),
+                    },
+                },
+            };
+        }
+
+        Grid.SetRow(value, row);
+        Grid.SetColumn(value, 1);
 
         grid.Children.Add(text);
-        grid.Children.Add(field);
+        grid.Children.Add(value);
     }
 
-    private sealed record FormatChoice(string Label, string Extension)
+    private static string SystemLanguageLabel()
     {
-        public override string ToString() => Label;
+        var name = System.Globalization.CultureInfo.CurrentCulture.Name;
+        return string.IsNullOrEmpty(name) ? "invariant" : name;
     }
 }

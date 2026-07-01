@@ -1043,12 +1043,27 @@ public sealed partial class XlsxFileAdapter
                 stream.Position = Count;
         }
 
+        public void RestoreWorkbookDefinedNames(Stream stream)
+        {
+            var sourceWorkbookDefinedNames = ReadWorkbookDefinedNames();
+            if (sourceWorkbookDefinedNames is null)
+                return;
+
+            if (stream.CanSeek)
+                stream.Position = 0;
+
+            using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
+            RestorePatchWorkbookDefinedNames(archive, sourceWorkbookDefinedNames);
+        }
+
         public bool TrySavePatchedCellValues(
             Workbook workbook,
             Stream stream,
             ref string? currentModelFingerprint,
             out XlsxSaveDiagnostics diagnostics)
         {
+            var sourceWorkbookDefinedNames = ReadWorkbookDefinedNames();
+
             static bool Fail(
                 string reason,
                 out XlsxSaveDiagnostics diagnostics,
@@ -1168,6 +1183,7 @@ public sealed partial class XlsxFileAdapter
                 NormalizePatchWorkbookCalculationProperties(archive);
                 NormalizePatchWorkbookExternalReferences(archive);
                 NormalizePatchWorkbookDefinedNames(archive);
+                RestorePatchWorkbookDefinedNames(archive, sourceWorkbookDefinedNames);
                 NormalizePatchWorkbookOleSize(archive);
                 NormalizePatchWorkbookPivotCaches(archive);
                 NormalizePatchPivotTableDefinitions(archive);
@@ -1596,6 +1612,96 @@ public sealed partial class XlsxFileAdapter
 
             if (changed)
                 XlsxPackageXmlEditor.ReplaceXml(archive, workbookEntry.FullName, workbookXml);
+        }
+
+        private XElement? ReadWorkbookDefinedNames()
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            using var sourcePackage = new MemoryStream(Buffer, Offset, Count, writable: false);
+            using var archive = new ZipArchive(sourcePackage, ZipArchiveMode.Read);
+            var workbookEntry = archive.GetEntry("xl/workbook.xml");
+            if (workbookEntry is null)
+                return null;
+
+            var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
+            var definedNames = workbookXml.Root?.Element(workbookNs + "definedNames");
+            if (definedNames is null)
+                return null;
+
+            var copy = new XElement(definedNames);
+            XlsxWorkbookDefinedNameNormalizer.NormalizeDefinedNamesElement(copy);
+            return XlsxWorkbookDefinedNameNormalizer.ShouldRemoveDefinedNamesElement(copy)
+                ? null
+                : copy;
+        }
+
+        private static void RestorePatchWorkbookDefinedNames(ZipArchive archive, XElement? sourceDefinedNames)
+        {
+            if (sourceDefinedNames is null)
+                return;
+
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var workbookEntry = archive.GetEntry("xl/workbook.xml");
+            if (workbookEntry is null)
+                return;
+
+            var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
+            var root = workbookXml.Root;
+            if (root is null)
+                return;
+
+            var changed = false;
+            var targetDefinedNames = root.Element(workbookNs + "definedNames");
+            if (targetDefinedNames is null)
+            {
+                targetDefinedNames = new XElement(workbookNs + "definedNames");
+                var sheets = root.Element(workbookNs + "sheets");
+                if (sheets is not null)
+                    sheets.AddAfterSelf(targetDefinedNames);
+                else
+                    root.Add(targetDefinedNames);
+                changed = true;
+            }
+
+            var existingKeys = targetDefinedNames
+                .Elements(workbookNs + "definedName")
+                .Select(DefinedNameKey)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var sourceName in sourceDefinedNames.Elements(workbookNs + "definedName"))
+            {
+                var key = DefinedNameKey(sourceName);
+                var existing = targetDefinedNames
+                    .Elements(workbookNs + "definedName")
+                    .FirstOrDefault(element => string.Equals(DefinedNameKey(element), key, StringComparison.OrdinalIgnoreCase));
+                if (existing is not null)
+                {
+                    foreach (var attribute in sourceName.Attributes())
+                    {
+                        if (existing.Attribute(attribute.Name) is not null)
+                            continue;
+
+                        existing.SetAttributeValue(attribute.Name, attribute.Value);
+                        changed = true;
+                    }
+
+                    continue;
+                }
+
+                targetDefinedNames.Add(new XElement(sourceName));
+                existingKeys.Add(key);
+                changed = true;
+            }
+
+            if (changed)
+                XlsxPackageXmlEditor.ReplaceXml(archive, workbookEntry.FullName, workbookXml);
+
+            static string DefinedNameKey(XElement element)
+            {
+                var name = element.Attribute("name")?.Value ?? string.Empty;
+                var localSheetId = element.Attribute("localSheetId")?.Value ?? string.Empty;
+                return $"{name}\u001f{localSheetId}";
+            }
         }
 
         private static void NormalizePatchWorkbookOleSize(ZipArchive archive)

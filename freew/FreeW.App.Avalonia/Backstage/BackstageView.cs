@@ -311,7 +311,7 @@ internal sealed class BackstageView : Window
             _callbacks.DisplayName,
             _callbacks.CurrentPath,
             saveAs: () => { Close(); _callbacks.SaveAs(); },
-            saveAsExtension: ext => { Close(); _callbacks.SaveAsExtension(ext); });
+            saveAsFormat: (ext, filterIndex) => { Close(); _callbacks.SaveAsFormat(ext, filterIndex); });
 
         var content = new StackPanel { Spacing = 20 };
         content.Children.Add(BuildPaneHeader(surface.Title, surface.Description));
@@ -336,7 +336,13 @@ internal sealed class BackstageView : Window
             _callbacks.DisplayName,
             _callbacks.GetPageSettings(),
             print: null,
-            printPreview: null);
+            printPreview: _callbacks.PrintPreview is null
+                ? null
+                : () =>
+                {
+                    Close();
+                    _callbacks.PrintPreview();
+                });
 
         var content = new StackPanel { Spacing = 16 };
         content.Children.Add(BuildPaneHeader(surface.Title, surface.Description));
@@ -391,7 +397,7 @@ internal sealed class BackstageView : Window
             _callbacks.GetFileFormats(),
             exportPdf: () => { Close(); _callbacks.ExportPdf(); },
             exportXps: null,
-            saveAsExtension: ext => { Close(); _callbacks.SaveAsExtension(ext); });
+            saveAsFormat: (ext, filterIndex) => { Close(); _callbacks.SaveAsFormat(ext, filterIndex); });
 
         return BuildActionGroupContent(surface);
 

@@ -266,6 +266,18 @@ public class RibbonEditorCompleteness5BTests
         Assert.True(invoked);
     }
 
+    [Fact]
+    public void Cmd_Layout_InvokesSharedPlannerCallback()
+    {
+        var (ed, _) = MakeSession();
+        var invoked = false;
+        var reg = FreePRibbonCommands.Build(new RibbonStateStore(), ed, onLayoutPicker: () => invoked = true);
+
+        Exec(reg, PresentationDesignCommandPlanner.LayoutCommandId);
+
+        Assert.True(invoked);
+    }
+
     // ── Command: insert table ─────────────────────────────────────────────────────
 
     [Fact]
@@ -442,6 +454,7 @@ public class RibbonEditorCompleteness5BTests
     [InlineData("freep.slide-size-16x9")]
     [InlineData("freep.slide-size-4x3")]
     [InlineData("freep.slide-size-custom")]
+    [InlineData("freep.layout")]
     [InlineData("freep.insert-table-3x3")]
     [InlineData("freep.insert-table-2x2")]
     [InlineData("freep.insert-table-4x4")]

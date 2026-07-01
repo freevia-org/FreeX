@@ -7574,6 +7574,8 @@ public sealed class DocumentView : Control
     public void ToggleItalic() => ToggleRunFlag(f => f.Italic, (f, v) => f with { Italic = v });
     public void ToggleUnderline() => ToggleRunFlag(f => f.Underline, (f, v) => f with { Underline = v });
     public void ToggleStrikethrough() => ToggleRunFlag(f => f.Strikethrough, (f, v) => f with { Strikethrough = v });
+    public void ToggleSmallCaps() => ToggleRunFlag(f => f.SmallCaps, (f, v) => f with { SmallCaps = v });
+    public void ToggleAllCaps() => ToggleRunFlag(f => f.AllCaps, (f, v) => f with { AllCaps = v });
 
     /// <summary>
     /// Toggle superscript on the selection (clears subscript if set; clears superscript if already set).
@@ -7601,6 +7603,16 @@ public sealed class DocumentView : Control
     /// </summary>
     public void SetHighlightColor(string? colorHex) =>
         ApplyRunFormatting(f => f with { HighlightColorHex = string.IsNullOrWhiteSpace(colorHex) ? null : colorHex });
+
+    public void SetCharacterBorder(ParagraphBorder? border) =>
+        ApplyRunFormatting(f => f with { CharacterBorder = border });
+
+    public void SetCharacterShading(string? colorHex, ShadingPattern pattern = ShadingPattern.Clear) =>
+        ApplyRunFormatting(f => f with
+        {
+            CharacterShadingHex = string.IsNullOrWhiteSpace(colorHex) ? null : colorHex,
+            CharacterShadingPattern = string.IsNullOrWhiteSpace(colorHex) ? ShadingPattern.Clear : pattern,
+        });
 
     // ── AV-COMMENT: review-comment insert / delete / resolve + introspection ──────────────────────
     // Model-backed (comments already round-trip through Core.IO). All mutations ride the shared
@@ -8259,6 +8271,24 @@ public sealed class DocumentView : Control
         _bus.CommitUndoGroup("Paragraph Formatting");
     }
 
+    public void ToggleKeepWithNext()
+    {
+        var indices = SelectedParagraphIndices();
+        var enable = indices
+            .Select(i => (Paragraph)_doc.Blocks[i])
+            .Any(p => !p.Formatting.KeepWithNext);
+        FormatSelectedParagraphs(f => f with { KeepWithNext = enable });
+    }
+
+    public void ToggleKeepLinesTogether()
+    {
+        var indices = SelectedParagraphIndices();
+        var enable = indices
+            .Select(i => (Paragraph)_doc.Blocks[i])
+            .Any(p => !p.Formatting.KeepLinesTogether);
+        FormatSelectedParagraphs(f => f with { KeepLinesTogether = enable });
+    }
+
     /// <summary>
     /// Apply the complete set of paragraph-dialog fields (alignment, indents, spacing, line spacing)
     /// to every paragraph spanned by the current selection. All changes are issued as one undoable
@@ -8304,6 +8334,19 @@ public sealed class DocumentView : Control
         _bus.Execute(new SetPageSettingsCommand(settings));
     }
 
+    /// <summary>
+    /// Clone the current page settings, apply a layout mutation, then commit it as one undoable page
+    /// setup command. Used by Layout ribbon commands such as Columns.
+    /// </summary>
+    public void ApplyPageSettings(Action<PageSettings> apply)
+    {
+        ArgumentNullException.ThrowIfNull(apply);
+
+        var settings = _doc.Page.Clone();
+        apply(settings);
+        SetPageSettings(settings);
+    }
+
     /// <summary>Insert a bordered table (with a header row) after the current block. Cells edit on double-click.</summary>
     public void InsertTable(int rows, int columns)
     {
@@ -8330,6 +8373,30 @@ public sealed class DocumentView : Control
 
         var insertAt = Math.Clamp(_caret.Block + 1, 0, _doc.Blocks.Count);
         _bus.Execute(new InsertBlockCommand(insertAt, DocumentOps.CreatePageBreak()));
+    }
+
+    /// <summary>
+    /// Insert a column break after the caret block using the shared model command path.
+    /// </summary>
+    public void InsertColumnBreak()
+    {
+        if (IsEditingLocked)
+            return;
+
+        var insertAt = Math.Clamp(_caret.Block + 1, 0, _doc.Blocks.Count);
+        _bus.Execute(new InsertBlockCommand(insertAt, DocumentOps.CreateColumnBreak()));
+    }
+
+    /// <summary>
+    /// Insert a section break after the caret block, inheriting the current page settings.
+    /// </summary>
+    public void InsertSectionBreak(SectionBreakKind breakKind)
+    {
+        if (IsEditingLocked)
+            return;
+
+        var insertAt = Math.Clamp(_caret.Block + 1, 0, _doc.Blocks.Count);
+        _bus.Execute(new InsertBlockCommand(insertAt, DocumentOps.CreateSectionBreak(breakKind, _doc.Page)));
     }
 
     /// <summary>

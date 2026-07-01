@@ -20,10 +20,13 @@ public sealed class BackstageExportFileTypePlannerTests
         var labels = group.Actions.Select(action => action.Label).ToList();
         labels.Should().ContainInOrder(
             "Word Document (*.docx)",
+            "Strict Open XML Document (*.docx)",
             "Word Macro-Enabled Document (*.docm)",
             "Word Template (*.dotx)",
             "Word Macro-Enabled Template (*.dotm)",
             "Word XML Document (*.xml)",
+            "Word 2003 XML Document (*.xml)",
+            "Web Page, Filtered (*.htm, *.html)",
             "Web Page (*.htm, *.html)",
             "Single File Web Page (*.mht, *.mhtml)",
             "Rich Text Format (*.rtf)",

@@ -248,6 +248,34 @@ public sealed class RendererNeutralDedupPlannerTests
     }
 
     [Fact]
+    public void WpfAndAvaloniaSlideCanvases_UseRendererNeutralChartSeriesStylePlanning()
+    {
+        var wpf = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "SlideCanvas.cs");
+        var avalonia = ReadWorkspaceFile(
+            "freep",
+            "FreeP.App.Rendering.Avalonia",
+            "SlideCanvas.cs");
+
+        foreach (var source in new[] { wpf, avalonia })
+        {
+            source.Should().Contain("ChartRenderPlanner.BuildColumnPrimitives(chart, plot, seriesColors)");
+            source.Should().Contain("ChartRenderPlanner.BuildBarPrimitives(chart, plot, seriesColors)");
+            source.Should().Contain("ChartRenderPlanner.BuildLineSeriesPrimitives(chart, plot, withMarkers, seriesColors)");
+            source.Should().Contain("ChartRenderPlanner.BuildComboOverrideLineSeriesPrimitives(chart, plot, seriesColors)");
+            source.Should().Contain("primitive.Fill");
+            source.Should().Contain("primitive.Stroke");
+            source.Should().Contain("primitive.LineSegments");
+            source.Should().Contain("primitive.Markers");
+            source.Should().NotContain("BuildColumnPrimitives(chart, plot)");
+            source.Should().NotContain("BuildBarPrimitives(chart, plot)");
+            source.Should().NotContain("BuildLineSeriesPrimitives(chart, plot, withMarkers)");
+            source.Should().NotContain("BuildComboOverrideLineSeriesPrimitives(chart, plot)");
+            source.Should().NotContain("dc.DrawEllipse(brush, null, point, 3, 3)");
+            source.Should().NotContain("var pen = new Pen(brush, 1.5)");
+        }
+    }
+
+    [Fact]
     public void WpfAndAvaloniaSlideCanvases_UseRendererNeutralChartLegendPlanning()
     {
         var wpf = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "SlideCanvas.cs");
@@ -266,6 +294,25 @@ public sealed class RendererNeutralDedupPlannerTests
             source.Should().NotContain("legendRight ? plotH / itemH");
             source.Should().NotContain("Point {ci + 1}");
             source.Should().NotContain("chart.Series[si].Name");
+        }
+    }
+
+    [Fact]
+    public void WpfAndAvaloniaSlideCanvases_UseRendererNeutralChartAxisTitlePlanning()
+    {
+        var wpf = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "SlideCanvas.cs");
+        var avalonia = ReadWorkspaceFile(
+            "freep",
+            "FreeP.App.Rendering.Avalonia",
+            "SlideCanvas.cs");
+
+        foreach (var source in new[] { wpf, avalonia })
+        {
+            source.Should().Contain("ChartRenderPlanner.BuildAxisTitlePlans(chart, frame)");
+            source.Should().Contain("DrawChartAxisTitle");
+            source.Should().Contain("ChartAxisTitleOrientation.Horizontal");
+            source.Should().NotContain("CategoryAxis.Title");
+            source.Should().NotContain("ValueAxis.Title");
         }
     }
 

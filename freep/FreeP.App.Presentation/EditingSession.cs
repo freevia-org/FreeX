@@ -189,6 +189,22 @@ public sealed class EditingSession
         CurrentSlideIndex = insertAt;
     }
 
+    public bool SetCurrentSlideLayout(string layoutId)
+    {
+        if (CurrentSlide is null || string.IsNullOrWhiteSpace(layoutId))
+        {
+            return false;
+        }
+
+        if (!Presentation.Layouts.Any(layout => StringComparer.Ordinal.Equals(layout.Id, layoutId)))
+        {
+            return false;
+        }
+
+        Bus.Execute(new SetSlideLayoutCommand(_currentSlideIndex, layoutId));
+        return StringComparer.Ordinal.Equals(CurrentSlide.LayoutId, layoutId);
+    }
+
     /// <summary>Deletes the current slide. Adjusts CurrentSlideIndex after deletion.</summary>
     public void DeleteCurrentSlide()
     {
@@ -906,6 +922,14 @@ public sealed class EditingSession
     /// <summary>Removes the shape-level hyperlink from every selected shape.  Undoable.</summary>
     public void RemoveShapeHyperlink()
         => SetShapeHyperlink(); // null link = remove
+
+    /// <summary>Sets persistent alternative text on every selected shape. Undoable.</summary>
+    public void SetSelectedShapeAlternativeText(string? alternativeText)
+    {
+        if (CurrentSlide is null) return;
+        foreach (var id in _selectedShapeIds)
+            Bus.Execute(new SetShapeAlternativeTextCommand(_currentSlideIndex, id, alternativeText));
+    }
 
     /// <summary>
     /// Returns the shape-level hyperlink of the first selected shape, if any.

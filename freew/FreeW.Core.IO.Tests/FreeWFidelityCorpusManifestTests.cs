@@ -21,8 +21,9 @@ public class FreeWFidelityCorpusManifestTests
     public void Manifest_Rows_Are_Complete_And_Unique()
     {
         var rows = ReadManifest();
+        var corpusRoot = FindRepoDirectory("freew-fidelity-corpus");
 
-        rows.Should().HaveCountGreaterThanOrEqualTo(130);
+        rows.Should().HaveCountGreaterThanOrEqualTo(157);
         rows.Select(row => row.Id).Should().OnlyHaveUniqueItems();
         rows.Select(row => row.File).Should().OnlyHaveUniqueItems();
 
@@ -30,7 +31,9 @@ public class FreeWFidelityCorpusManifestTests
         {
             row.Id.Should().MatchRegex("^[a-z0-9]+(?:-[a-z0-9]+)*$");
             row.File.Should().EndWith(".docx");
-            Path.GetFileName(row.File).Should().Be(row.File);
+            Path.IsPathRooted(row.File).Should().BeFalse();
+            row.File.Replace('\\', '/').Should().Be(row.File);
+            row.File.Split('/').Should().NotContain("..");
             row.Source.Should().NotBeNullOrWhiteSpace();
             row.License.Should().BeOneOf("Apache-2.0", "CC0-1.0", "MIT", "Public-Domain", "local-private");
             row.Notes.Should().NotBeNullOrWhiteSpace();
@@ -46,13 +49,38 @@ public class FreeWFidelityCorpusManifestTests
             if (row.Source.Equals("local", StringComparison.OrdinalIgnoreCase))
             {
                 row.Url.Should().StartWith("local://");
+                row.Url.Should().Be("local://" + row.File);
+                File.Exists(Path.Combine(corpusRoot, row.File)).Should().BeTrue($"{row.Id} should point at a committed or local fixture");
             }
             else
             {
+                Path.GetFileName(row.File).Should().Be(row.File, $"{row.Id} should keep downloaded rows flat under files/");
                 Uri.TryCreate(row.Url, UriKind.Absolute, out var uri).Should().BeTrue();
                 uri!.Scheme.Should().Be(Uri.UriSchemeHttps);
             }
         }
+    }
+
+    [Fact]
+    public void Manifest_Covers_Docx_Files_Present_In_Corpus_Files_Folder()
+    {
+        var corpusRoot = FindRepoDirectory("freew-fidelity-corpus");
+        var filesRoot = Path.Combine(corpusRoot, "files");
+        if (!Directory.Exists(filesRoot))
+            return;
+
+        var manifestFiles = ReadManifest()
+            .Select(row => row.File)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var missing = Directory.GetFiles(filesRoot, "*.docx", System.IO.SearchOption.AllDirectories)
+            .Select(path => Path.GetRelativePath(corpusRoot, path).Replace('\\', '/'))
+            .Where(relativePath =>
+                !manifestFiles.Contains(relativePath) &&
+                !manifestFiles.Contains(relativePath["files/".Length..]))
+            .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        missing.Should().BeEmpty("tracked or local FreeW corpus DOCX files must have manifest provenance rows");
     }
 
     [Fact]
@@ -142,18 +170,28 @@ public class FreeWFidelityCorpusManifestTests
 
     private static string FindRepoFile(params string[] relativeParts)
     {
+        var repoRoot = FindRepoDirectory(relativeParts[0]);
+        var candidate = relativeParts.Skip(1).Aggregate(repoRoot, Path.Combine);
+        if (File.Exists(candidate))
+            return candidate;
+
+        throw new FileNotFoundException($"Could not find {Path.Combine(relativeParts)} from {AppContext.BaseDirectory}.");
+    }
+
+    private static string FindRepoDirectory(params string[] relativeParts)
+    {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
 
         while (directory is not null)
         {
             var candidate = relativeParts.Aggregate(directory.FullName, Path.Combine);
-            if (File.Exists(candidate))
+            if (Directory.Exists(candidate))
                 return candidate;
 
             directory = directory.Parent;
         }
 
-        throw new FileNotFoundException($"Could not find {Path.Combine(relativeParts)} from {AppContext.BaseDirectory}.");
+        throw new DirectoryNotFoundException($"Could not find {Path.Combine(relativeParts)} from {AppContext.BaseDirectory}.");
     }
 
     private sealed record CorpusRow(

@@ -87,6 +87,27 @@ public sealed class WorkbookWindowRegistryTests
     }
 
     [Fact]
+    public void NextWindowTarget_SkipsHiddenWindowsAndWrapsAcrossVisibleWindowsOnly()
+    {
+        var registry = new WorkbookWindowRegistry();
+        var w1 = new TestWorkbookWindow();
+        var w2 = new TestWorkbookWindow();
+        var w3 = new TestWorkbookWindow();
+        registry.Register(w1);
+        registry.Register(w2);
+        registry.Register(w3);
+        registry.Hide(w2);
+
+        registry.NextWindowTarget(w1).Should().BeSameAs(w3);
+        registry.NextWindowTarget(w3).Should().BeSameAs(w1);
+        registry.NextWindowTarget(w2).Should().BeNull("a hidden window is not an active switch-cycle origin");
+
+        registry.SwitchToNextWindow(w1).Should().BeTrue();
+        w3.ActivateCount.Should().Be(1);
+        w2.ActivateCount.Should().Be(0, "Switch Windows must not re-show a hidden window");
+    }
+
+    [Fact]
     public void NextWindowTarget_SingleWindow_HasNoOtherWindow()
     {
         var registry = new WorkbookWindowRegistry();
@@ -94,6 +115,21 @@ public sealed class WorkbookWindowRegistryTests
         registry.Register(w1);
 
         registry.NextWindowTarget(w1).Should().BeNull();
+    }
+
+    [Fact]
+    public void NextWindowTarget_WithOnlyOneVisibleWindow_HasNoOtherWindow()
+    {
+        var registry = new WorkbookWindowRegistry();
+        var w1 = new TestWorkbookWindow();
+        var w2 = new TestWorkbookWindow();
+        registry.Register(w1);
+        registry.Register(w2);
+        registry.Hide(w2);
+
+        registry.NextWindowTarget(w1).Should().BeNull();
+        registry.SwitchToNextWindow(w1).Should().BeFalse();
+        w2.ActivateCount.Should().Be(0);
     }
 
     [Fact]
@@ -110,6 +146,27 @@ public sealed class WorkbookWindowRegistryTests
         registry.PreviousWindowTarget(w1).Should().BeSameAs(w3, "reverse cycling wraps back to the last window");
         registry.PreviousWindowTarget(w2).Should().BeSameAs(w1);
         registry.PreviousWindowTarget(w3).Should().BeSameAs(w2);
+    }
+
+    [Fact]
+    public void PreviousWindowTarget_SkipsHiddenWindowsAndWrapsAcrossVisibleWindowsOnly()
+    {
+        var registry = new WorkbookWindowRegistry();
+        var w1 = new TestWorkbookWindow();
+        var w2 = new TestWorkbookWindow();
+        var w3 = new TestWorkbookWindow();
+        registry.Register(w1);
+        registry.Register(w2);
+        registry.Register(w3);
+        registry.Hide(w2);
+
+        registry.PreviousWindowTarget(w1).Should().BeSameAs(w3);
+        registry.PreviousWindowTarget(w3).Should().BeSameAs(w1);
+        registry.PreviousWindowTarget(w2).Should().BeNull("a hidden window is not an active switch-cycle origin");
+
+        registry.SwitchToPreviousWindow(w1).Should().BeTrue();
+        w3.ActivateCount.Should().Be(1);
+        w2.ActivateCount.Should().Be(0, "Switch Windows must not re-show a hidden window");
     }
 
     [Fact]

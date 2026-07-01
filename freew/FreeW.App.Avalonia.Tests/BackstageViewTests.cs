@@ -103,6 +103,7 @@ public class BackstageViewTests
         source.Should().Contain("_callbacks.OpenFolder(folder)");
         source.Should().Contain("BuildActionGroupContent(surface)");
         source.Should().Contain("BuildSurfaceActionRow(action)");
+        source.Should().Contain("printPreview: _callbacks.PrintPreview is null");
         source.Should().Contain("AvaloniaBackstageChromeStyle BackstageChromeStyle");
         source.Should().Contain("AvaloniaBackstageChrome.CreateContentArea(");
         source.Should().Contain("AvaloniaBackstageChrome.CreateDescribedActionRow(");
@@ -123,6 +124,7 @@ public class BackstageViewTests
         source.Should().NotContain("restrictEditing: null");
         source.Should().NotContain("inspectDocument: null");
         source.Should().NotContain("checkAccessibility: null");
+        source.Should().NotContain("printPreview: null");
 
         sharedSource.Should().Contain("public static class AvaloniaBackstageChrome");
         sharedSource.Should().Contain("public static Border CreateContentArea(");
@@ -208,6 +210,23 @@ public class BackstageViewTests
     }
 
     [Fact]
+    public void Print_pane_surface_enables_preview_and_keeps_direct_print_deferred()
+    {
+        var surface = BackstagePaneSurfacePlanner.BuildPrintPane(
+            "Test.docx",
+            new PageSettings(),
+            print: null,
+            printPreview: () => { });
+
+        surface.DeferredNote.Should().BeNull("preview is now available in the Avalonia shell");
+        var actions = surface.Groups.SelectMany(group => group.Actions).ToList();
+        actions.Single(action => action.AutomationId == "PrintAction_Print")
+            .IsEnabled.Should().BeFalse("native printer selection remains deferred");
+        actions.Where(action => action.AutomationId == "PrintAction_PrintPreview")
+            .Should().OnlyContain(action => action.IsEnabled);
+    }
+
+    [Fact]
     public void Info_safety_planner_produces_Protect_and_Inspect_groups()
     {
         var groups = BackstageInfoSafetyPanePlanner.Build();
@@ -262,6 +281,7 @@ public class BackstageViewTests
         callbacks.GetPageSettings.Should().NotBeNull();
         callbacks.GetCurrentOptions().Should().NotBeNull();
         callbacks.GetDataFolder().Should().NotBeNullOrWhiteSpace();
+        callbacks.PrintPreview.Should().NotBeNull();
     }
 
     [Fact]
@@ -358,7 +378,7 @@ public class BackstageViewTests
             Browse: () => { },
             RecoverUnsaved: () => { },
             SaveAs: () => { },
-            SaveAsExtension: _ => { },
+            SaveAsFormat: (_, _) => { },
             OpenContainingFolder: _ => { },
             ExportPdf: () => { },
             MarkAsFinal: () => { },

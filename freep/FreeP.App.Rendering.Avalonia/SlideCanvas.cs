@@ -766,6 +766,11 @@ public sealed class SlideCanvas : Control
                 ToTextAlignment(label.Alignment));
         }
 
+        foreach (var title in ChartRenderPlanner.BuildAxisTitlePlans(chart, frame))
+        {
+            DrawChartAxisTitle(dc, title);
+        }
+
         foreach (var item in ChartRenderPlanner.BuildLegendItemPlans(chart, frame, chartOp.SeriesColors))
         {
             dc.FillRectangle(ToBrush(item.Fill), ToRect(item.SwatchBounds));
@@ -781,11 +786,12 @@ public sealed class SlideCanvas : Control
         double plotX, double plotY, double plotW, double plotH)
     {
         var plot = new ChartPlanRect(plotX, plotY, plotW, plotH);
-        foreach (var primitive in ChartRenderPlanner.BuildColumnPrimitives(chart, plot))
+        foreach (var primitive in ChartRenderPlanner.BuildColumnPrimitives(chart, plot, seriesColors))
         {
-            var color = GetSeriesColor(chart, primitive.SeriesIndex, primitive.CategoryIndex, seriesColors);
-            var brush = new SolidColorBrush(Color.FromRgb(color.R, color.G, color.B));
-            dc.FillRectangle(brush, ToRect(primitive.Bounds));
+            dc.DrawRectangle(
+                ToBrush(primitive.Fill),
+                primitive.Stroke.HasValue ? ToPen(primitive.Stroke.Value) : null,
+                ToRect(primitive.Bounds));
         }
     }
 
@@ -800,8 +806,8 @@ public sealed class SlideCanvas : Control
         double plotX, double plotY, double plotW, double plotH)
     {
         var plot = new ChartPlanRect(plotX, plotY, plotW, plotH);
-        foreach (var primitive in ChartRenderPlanner.BuildComboOverrideLineSeriesPrimitives(chart, plot))
-            RenderLineSeriesPrimitive(dc, chart, seriesColors, primitive);
+        foreach (var primitive in ChartRenderPlanner.BuildComboOverrideLineSeriesPrimitives(chart, plot, seriesColors))
+            RenderLineSeriesPrimitive(dc, primitive);
     }
 
     private static void RenderBarChart(
@@ -809,11 +815,12 @@ public sealed class SlideCanvas : Control
         double plotX, double plotY, double plotW, double plotH)
     {
         var plot = new ChartPlanRect(plotX, plotY, plotW, plotH);
-        foreach (var primitive in ChartRenderPlanner.BuildBarPrimitives(chart, plot))
+        foreach (var primitive in ChartRenderPlanner.BuildBarPrimitives(chart, plot, seriesColors))
         {
-            var color = GetSeriesColor(chart, primitive.SeriesIndex, primitive.CategoryIndex, seriesColors);
-            var brush = new SolidColorBrush(Color.FromRgb(color.R, color.G, color.B));
-            dc.FillRectangle(brush, ToRect(primitive.Bounds));
+            dc.DrawRectangle(
+                ToBrush(primitive.Fill),
+                primitive.Stroke.HasValue ? ToPen(primitive.Stroke.Value) : null,
+                ToRect(primitive.Bounds));
         }
     }
 
@@ -822,37 +829,25 @@ public sealed class SlideCanvas : Control
         double plotX, double plotY, double plotW, double plotH, bool withMarkers)
     {
         var plot = new ChartPlanRect(plotX, plotY, plotW, plotH);
-        foreach (var primitive in ChartRenderPlanner.BuildLineSeriesPrimitives(chart, plot, withMarkers))
-            RenderLineSeriesPrimitive(dc, chart, seriesColors, primitive);
+        foreach (var primitive in ChartRenderPlanner.BuildLineSeriesPrimitives(chart, plot, withMarkers, seriesColors))
+            RenderLineSeriesPrimitive(dc, primitive);
     }
 
     private static void RenderLineSeriesPrimitive(
         DrawingContext dc,
-        ChartShape chart,
-        IReadOnlyList<SrgbColor> seriesColors,
         ChartLineSeriesPrimitive primitive)
     {
-        var color = GetSeriesColor(chart, primitive.SeriesIndex, 0, seriesColors);
-        var brush = new SolidColorBrush(Color.FromRgb(color.R, color.G, color.B));
-        var pen = new Pen(brush, 1.5);
+        foreach (var segment in primitive.LineSegments)
+            dc.DrawLine(ToPen(segment.Stroke), ToPoint(segment.Start), ToPoint(segment.End));
 
-        Point? previous = null;
-        foreach (var plannedPoint in primitive.Points)
+        foreach (var marker in primitive.Markers)
         {
-            if (!plannedPoint.HasValue)
-            {
-                previous = null;
-                continue;
-            }
-
-            var point = ToPoint(plannedPoint.Value);
-            if (previous.HasValue)
-                dc.DrawLine(pen, previous.Value, point);
-
-            if (primitive.WithMarkers)
-                dc.DrawEllipse(brush, null, point, 3, 3);
-
-            previous = point;
+            dc.DrawEllipse(
+                marker.Fill.HasValue ? ToBrush(marker.Fill.Value) : null,
+                marker.Stroke.HasValue ? ToPen(marker.Stroke.Value) : null,
+                ToPoint(marker.Center),
+                marker.Radius,
+                marker.Radius);
         }
     }
 
@@ -1122,6 +1117,38 @@ public sealed class SlideCanvas : Control
 
     // ── Text ─────────────────────────────────────────────────────────────────
 
+    private static void DrawChartAxisTitle(DrawingContext dc, ChartAxisTitlePlan title)
+    {
+        var label = title.Label;
+        var rect = ToRect(label.Bounds);
+        if (title.Orientation == ChartAxisTitleOrientation.Horizontal)
+        {
+            DrawChartLabel(dc, label.Text, rect, label.IsBold, label.FontSize, ToTextAlignment(label.Alignment));
+            return;
+        }
+
+        double angle = title.Orientation == ChartAxisTitleOrientation.VerticalClockwise
+            ? Math.PI / 2.0
+            : -Math.PI / 2.0;
+        double cx = rect.X + rect.Width * 0.5;
+        double cy = rect.Y + rect.Height * 0.5;
+        using var rotateScope = dc.PushTransform(
+            Matrix.CreateTranslation(-cx, -cy)
+            * Matrix.CreateRotation(angle)
+            * Matrix.CreateTranslation(cx, cy));
+        DrawChartLabel(
+            dc,
+            label.Text,
+            new Rect(
+                rect.X + (rect.Width - rect.Height) * 0.5,
+                rect.Y + (rect.Height - rect.Width) * 0.5,
+                rect.Height,
+                rect.Width),
+            label.IsBold,
+            label.FontSize,
+            ToTextAlignment(label.Alignment));
+    }
+
     private static void RenderText(DrawingContext dc, ResolvedTextLayout text, LayoutRect bounds)
     {
         // Wave 18B: vertical text — rotate the text block around the shape center.
@@ -1179,9 +1206,9 @@ public sealed class SlideCanvas : Control
         {
             var para = text.Paragraphs[placement.ParagraphIndex];
             var ft = formatted[placement.ParagraphIndex];
-            if (!string.IsNullOrEmpty(para.BulletText))
-                DrawBulletAvalonia(dc, para.BulletText, para.BulletFontFamily, para.BulletFontSizePt,
-                    para.BulletColor, placement.X - para.HangingDip, placement.Y);
+            if (placement.Bullet is { } bullet)
+                DrawBulletAvalonia(dc, bullet.Text, bullet.FontFamily, bullet.FontSizePt,
+                    bullet.Color, bullet.X, bullet.Y);
 
             switch (TextLayoutPlanner.PlanParagraphRenderRoute(para, text))
             {
@@ -1231,12 +1258,10 @@ public sealed class SlideCanvas : Control
             var para = text.Paragraphs[placement.ParagraphIndex];
             var ft = formatted[placement.ParagraphIndex];
 
-            // Wave 19A: draw bullet (char or number) to the left of paragraph text.
-            if (!string.IsNullOrEmpty(para.BulletText))
+            if (placement.Bullet is { } bullet)
             {
-                double bulletX = placement.X - para.HangingDip;
-                DrawBulletAvalonia(dc, para.BulletText, para.BulletFontFamily, para.BulletFontSizePt,
-                    para.BulletColor, bulletX, placement.Y);
+                DrawBulletAvalonia(dc, bullet.Text, bullet.FontFamily, bullet.FontSizePt,
+                    bullet.Color, bullet.X, bullet.Y);
             }
 
             switch (TextLayoutPlanner.PlanParagraphRenderRoute(para, text))

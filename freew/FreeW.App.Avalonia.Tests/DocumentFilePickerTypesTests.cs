@@ -24,6 +24,7 @@ public class DocumentFilePickerTypesTests
         var patterns = AllPatterns(types);
         patterns.Should().Contain("*.docx");
         patterns.Should().Contain("*.txt", "the catalog exposes formats beyond .docx");
+        patterns.Should().NotContain("*.pdf", "PDF text import has a dedicated command instead of normal Open");
         patterns.Where(p => p != "*").Distinct().Should().HaveCountGreaterThan(1);
     }
 
@@ -77,6 +78,18 @@ public class DocumentFilePickerTypesTests
 
         types.Select(t => t.Name).Should().BeEquivalentTo(expectedNames);
         AllPatterns(types).Should().Contain("*.docx");
+        AllPatterns(types).Should().NotContain("*.pdf");
+    }
+
+    [Fact]
+    public void Pdf_import_types_are_dedicated_to_explicit_text_import()
+    {
+        var types = DocumentFilePickerTypes.BuildPdfImportTypes();
+
+        types.Should().ContainSingle();
+        types[0].Name.Should().Be("PDF document");
+        types[0].Patterns.Should().Equal("*.pdf");
+        types[0].MimeTypes.Should().Equal("application/pdf");
     }
 
     [Fact]

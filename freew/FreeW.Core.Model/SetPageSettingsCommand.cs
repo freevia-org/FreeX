@@ -12,9 +12,9 @@ namespace FreeW.Core.Model;
 /// </para>
 ///
 /// <para>
-/// Only the properties exposed by the Page Setup dialog (size, margins, orientation) are
-/// copied; advanced properties such as columns, borders, watermarks, and line numbering are
-/// preserved unchanged.
+/// Callers pass a cloned <see cref="PageSettings"/> instance with the desired mutations applied, so
+/// the command copies the full page setup surface and remains suitable for undoable column/layout
+/// changes as well as the Page Setup dialog's geometry changes.
 /// </para>
 /// </summary>
 public sealed class SetPageSettingsCommand(PageSettings settings) : IDocumentCommand
@@ -40,18 +40,39 @@ public sealed class SetPageSettingsCommand(PageSettings settings) : IDocumentCom
     }
 
     /// <summary>
-    /// Copies the page-setup-dialog subset of properties from <paramref name="src"/> into
-    /// <paramref name="dst"/> in-place, leaving all other properties on <paramref name="dst"/>
-    /// untouched.
+    /// Copies the full page setup surface from <paramref name="src"/> into <paramref name="dst"/>
+    /// in-place. Mutable collections are cloned to keep undo snapshots independent.
     /// </summary>
     private static void CopyTo(PageSettings src, PageSettings dst)
     {
-        dst.WidthPt       = src.WidthPt;
-        dst.HeightPt      = src.HeightPt;
-        dst.Landscape     = src.Landscape;
-        dst.MarginLeftPt  = src.MarginLeftPt;
+        dst.WidthPt = src.WidthPt;
+        dst.HeightPt = src.HeightPt;
+        dst.Landscape = src.Landscape;
+        dst.MarginLeftPt = src.MarginLeftPt;
         dst.MarginRightPt = src.MarginRightPt;
-        dst.MarginTopPt   = src.MarginTopPt;
+        dst.MarginTopPt = src.MarginTopPt;
         dst.MarginBottomPt = src.MarginBottomPt;
+        dst.GutterPt = src.GutterPt;
+        dst.HeaderDistancePt = src.HeaderDistancePt;
+        dst.FooterDistancePt = src.FooterDistancePt;
+        dst.MirrorMargins = src.MirrorMargins;
+        dst.ColumnCount = src.ColumnCount;
+        dst.ColumnSpacingPt = src.ColumnSpacingPt;
+        dst.ColumnsLineBetween = src.ColumnsLineBetween;
+        dst.ColumnWidthsPt = src.ColumnWidthsPt is null ? null : new List<double>(src.ColumnWidthsPt);
+        dst.PageBorder = src.PageBorder;
+        dst.Watermark = src.Watermark;
+        dst.LineNumberMode = src.LineNumberMode;
+        dst.LineNumberCountBy = src.LineNumberCountBy;
+        dst.LineNumberStartAt = src.LineNumberStartAt;
+        dst.AutoHyphenation = src.AutoHyphenation;
+        dst.HyphenationZonePt = src.HyphenationZonePt;
+        dst.ConsecutiveHyphenLimit = src.ConsecutiveHyphenLimit;
+        dst.DoNotHyphenateCaps = src.DoNotHyphenateCaps;
+        dst.DefaultTabStopPt = src.DefaultTabStopPt;
+        dst.VerticalAlignment = src.VerticalAlignment;
+        dst.DifferentFirstPage = src.DifferentFirstPage;
+        dst.DifferentOddEvenPages = src.DifferentOddEvenPages;
+        dst.BackgroundColorHex = src.BackgroundColorHex;
     }
 }

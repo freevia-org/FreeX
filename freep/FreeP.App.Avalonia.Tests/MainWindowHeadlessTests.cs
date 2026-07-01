@@ -283,10 +283,15 @@ public sealed class MainWindowHeadlessTests
         var source = File.ReadAllText(FindRepoFile("freep", "FreeP.App.Avalonia", "MainWindow.cs"));
 
         source.Should().Contain("PresentationDesignCommandPlanner.BuiltInPlans");
-        source.Should().Contain("PresentationDesignCommandPlanner.TryApply(Editor, plan, OnCustomSlideSizeRequested)");
+        source.Should().Contain("PresentationDesignCommandPlanner.TryApply(Editor, plan, OnDesignHostRequest)");
+        source.Should().Contain("PresentationDesignCommandPlanner.LayoutPlan");
+        source.Should().Contain("OnLayoutPickerRequested");
+        source.Should().Contain("PresentationDesignCommandPlanner.BuildLayoutPickerPlan(");
+        source.Should().Contain("PresentationDesignCommandPlanner.TryApplyLayoutChoice(");
         source.Should().NotContain("Editor.SetTheme(");
         source.Should().NotContain("Editor.SetSlideSize16x9()");
         source.Should().NotContain("Editor.SetSlideSize4x3()");
+        source.Should().NotContain("new ActionRibbonCommand(() => { })");
     }
 
     [Fact]
@@ -295,7 +300,9 @@ public sealed class MainWindowHeadlessTests
         var source = File.ReadAllText(FindRepoFile("freep", "FreeP.App.Avalonia", "MainWindow.cs"));
 
         source.Should().Contain("PresentationAnimationCommandPlanner.BuiltInPlans");
-        source.Should().Contain("PresentationAnimationCommandPlanner.TryApply(Editor, plan, ctx.SelectedValue)");
+        source.Should().Contain("PresentationAnimationCommandPlanner.TryApply(");
+        source.Should().Contain("OnAnimationPaneRequested");
+        source.Should().Contain("AnimationPanePlanner.BuildTimelinePlan(");
     }
 
     [Fact]
@@ -878,6 +885,84 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task Ribbon_layout_command_routes_through_shared_planner()
+    {
+        var found = false;
+        PresentationDesignCommandPlan? layoutPlan = null;
+        PresentationLayoutPickerPlan? pickerPlan = null;
+        PresentationLayoutChoice? appliedChoice = null;
+        string? currentLayoutId = null;
+        var applied = false;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            window.Editor.Presentation.Layouts.Add(new SlideLayout
+            {
+                Id = "rId2",
+                Name = "Blank",
+                LayoutType = SlideLayoutType.Blank,
+                MasterId = window.Editor.Presentation.Masters[0].Id
+            });
+            var registry = window.BuildCommandRegistry();
+            found = registry.TryGet(PresentationDesignCommandPlanner.LayoutCommandId, out var layout);
+
+            layout!.Execute(RibbonCommandContext.Empty);
+            applied = window.ApplyLayoutChoice("rId2");
+
+            layoutPlan = window.LastLayoutRequestPlan;
+            pickerPlan = window.LastLayoutPickerPlan;
+            appliedChoice = window.LastAppliedLayoutChoice;
+            currentLayoutId = window.Editor.CurrentSlide!.LayoutId;
+        });
+
+        if (!ran) return;
+        found.Should().BeTrue("layout must be registered through the Avalonia registry");
+        layoutPlan.Should().NotBeNull("the command should expose a host callback intent instead of no-oping");
+        layoutPlan!.CommandId.Should().Be(PresentationDesignCommandPlanner.LayoutCommandId);
+        layoutPlan.Intent.Should().Be(PresentationDesignCommandIntentKind.RequestLayoutPicker);
+        pickerPlan.Should().NotBeNull("the host callback should expose concrete shared layout choices");
+        pickerPlan!.Choices.Should().Contain(choice =>
+            choice.LayoutId == "rId2" &&
+            choice.DisplayName == "Blank" &&
+            choice.LayoutType == SlideLayoutType.Blank);
+        applied.Should().BeTrue("Avalonia should be able to apply a shared picker choice");
+        currentLayoutId.Should().Be("rId2");
+        appliedChoice.Should().NotBeNull();
+        appliedChoice!.LayoutId.Should().Be("rId2");
+    }
+
+    [Fact]
+    public async Task Print_command_refreshes_shared_handout_layout_plan()
+    {
+        var found = false;
+        PresentationHandoutLayoutPlan? handoutPlan = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            window.Editor.InsertSlide();
+            window.Editor.InsertSlide();
+            window.Editor.InsertSlide();
+
+            var registry = window.BuildCommandRegistry();
+            found = registry.TryGet(PresentationExportPlanner.PrintCommandId, out var print);
+
+            print!.Execute(RibbonCommandContext.Empty);
+            handoutPlan = window.LastHandoutLayoutPlan;
+        });
+
+        if (!ran) return;
+        found.Should().BeTrue("the Avalonia registry should expose the shared print plan seam");
+        handoutPlan.Should().NotBeNull();
+        handoutPlan!.PrintPlan.CommandId.Should().Be(PresentationExportPlanner.PrintCommandId);
+        handoutPlan.PrintPlan.Layout.Layout.Should().Be(PresentationPrintLayoutKind.Handouts);
+        handoutPlan.PrintPlan.Layout.SlidesPerPage.Should().Be(6);
+        handoutPlan.Pages.Should().ContainSingle();
+        handoutPlan.Pages[0].Slots.Select(slot => slot.SlideNumber).Should().Equal(1, 2, 3, 4);
+    }
+
+    [Fact]
     public async Task Ribbon_transition_commands_route_through_shared_planner()
     {
         var foundFade = false;
@@ -925,6 +1010,7 @@ public sealed class MainWindowHeadlessTests
         AnimationPreset? preset = null;
         int? duration = null;
         int? delay = null;
+        AnimationPaneTimelinePlan? panePlan = null;
 
         var ran = await OnUiThread(() =>
         {
@@ -946,6 +1032,7 @@ public sealed class MainWindowHeadlessTests
             preset = animation.Preset;
             duration = animation.DurationMs;
             delay = animation.DelayMs;
+            panePlan = window.LastAnimationPaneTimelinePlan;
         });
 
         if (!ran) return;
@@ -956,6 +1043,13 @@ public sealed class MainWindowHeadlessTests
         preset.Should().Be(AnimationPreset.Fade);
         duration.Should().Be(1500);
         delay.Should().Be(250);
+        panePlan.Should().NotBeNull();
+        panePlan!.Items.Should().ContainSingle();
+        panePlan.SelectedIndex.Should().Be(0);
+        panePlan.Items[0].EffectText.Should().Be("In: Fade");
+        panePlan.Items[0].DurationMs.Should().Be(1500);
+        panePlan.Items[0].DelayMs.Should().Be(250);
+        panePlan.PreviewIntent.CanExecute.Should().BeTrue();
     }
 
     [Fact]
@@ -1016,13 +1110,55 @@ public sealed class MainWindowHeadlessTests
         commentPlan!.TotalCommentCount.Should().Be(1);
         accessibilityPlan.Should().NotBeNull();
         accessibilityPlan!.Issues.Should().Contain(issue =>
-            issue.ShapeId == 328 && issue.Title == "Alt text needs model support");
+            issue.ShapeId == 328 && issue.Title == "Alt text missing");
         altTextPlan.Should().NotBeNull();
         altTextPlan!.HasSelection.Should().BeTrue();
         altTextPlan.ShapeId.Should().Be(328);
-        altTextPlan.Status.Should().Be(PresentationWorkflowCapabilityStatus.Deferred);
+        altTextPlan.Status.Should().Be(PresentationWorkflowCapabilityStatus.Available);
         proofingPlan.Should().NotBeNull();
         proofingPlan!.Status.Should().Be(PresentationWorkflowCapabilityStatus.RequiresHost);
+    }
+
+    [Fact]
+    public async Task Review_alt_text_apply_routes_through_shared_mutation_plan()
+    {
+        string? altText = null;
+        PresentationAltTextRequestPlan? requestPlan = null;
+        PresentationAccessibilitySummaryPlan? accessibilityPlan = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var shape = new SlideShape
+            {
+                Id = 329,
+                Name = "Product image",
+                Kind = SlideShapeKind.Picture,
+                Picture = new ImagePart(),
+            };
+            window.Editor.CurrentSlide!.Shapes.Add(shape);
+            window.Editor.Select(shape.Id);
+
+            var mutation = window.ApplySelectedShapeAlternativeText("  Product packaging on a white background. ");
+            mutation.Should().Be(new PresentationAltTextMutationPlan(
+                true,
+                0,
+                shape.Id,
+                "Product packaging on a white background.",
+                null));
+
+            altText = shape.AlternativeText;
+            requestPlan = window.LastAltTextRequestPlan;
+            accessibilityPlan = window.LastAccessibilitySummaryPlan;
+        });
+
+        if (!ran) return;
+        altText.Should().Be("Product packaging on a white background.");
+        requestPlan.Should().NotBeNull();
+        requestPlan!.CurrentDescription.Should().Be("Product packaging on a white background.");
+        accessibilityPlan.Should().NotBeNull();
+        accessibilityPlan!.Issues.Should().NotContain(issue =>
+            issue.ShapeId == 329 && issue.Title == "Alt text missing");
     }
 
     [Theory]

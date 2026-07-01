@@ -156,7 +156,7 @@ public sealed class PresentationReviewWorkflowPlannerTests
     }
 
     [Fact]
-    public void BuildAltTextRequestPlan_UsesSelectedShapeButMarksPersistenceDeferred()
+    public void BuildAltTextRequestPlan_UsesSelectedShapePersistentDescription()
     {
         var slide = new Slide { Title = "Intro" };
         slide.Shapes.Add(new SlideShape
@@ -164,7 +164,8 @@ public sealed class PresentationReviewWorkflowPlannerTests
             Id = 7,
             Name = "Sales chart",
             Kind = SlideShapeKind.Chart,
-            Chart = new ChartShape()
+            Chart = new ChartShape(),
+            AlternativeText = "Existing sales chart description."
         });
 
         var plan = PresentationReviewWorkflowPlanner.BuildAltTextRequestPlan(
@@ -177,10 +178,31 @@ public sealed class PresentationReviewWorkflowPlannerTests
             7,
             "Sales chart",
             "Sales chart",
+            "Existing sales chart description.",
             "Quarterly sales by region.",
-            false,
-            PresentationWorkflowCapabilityStatus.Deferred,
-            PresentationReviewWorkflowPlanner.AltTextModelDeferredMessage));
+            true,
+            PresentationWorkflowCapabilityStatus.Available,
+            "Edit the persistent alt-text description for the selected shape."));
+    }
+
+    [Fact]
+    public void BuildAltTextMutationPlan_NormalizesSelectedShapeDescription()
+    {
+        var slide = new Slide { Title = "Intro" };
+        slide.Shapes.Add(new SlideShape { Id = 7, Name = "Sales chart" });
+
+        var plan = PresentationReviewWorkflowPlanner.BuildAltTextMutationPlan(
+            slide,
+            0,
+            7,
+            "  Quarterly sales by region. ");
+
+        plan.Should().Be(new PresentationAltTextMutationPlan(
+            true,
+            0,
+            7,
+            "Quarterly sales by region.",
+            null));
     }
 
     [Fact]
@@ -211,7 +233,7 @@ public sealed class PresentationReviewWorkflowPlannerTests
         plan.CommentCount.Should().Be(1);
         plan.NotesSlideCount.Should().Be(1);
         plan.Issues.Should().Contain(issue => issue.Title == "Missing slide title" && issue.ShapeId == null);
-        plan.Issues.Should().Contain(issue => issue.Title == "Alt text needs model support" && issue.ShapeId == 8);
+        plan.Issues.Should().Contain(issue => issue.Title == "Alt text missing" && issue.ShapeId == 8);
         plan.Issues.Should().Contain(issue => issue.Title == "Hyperlink ScreenTip missing" && issue.ShapeId == 9);
         plan.Actions.Select(action => action.CommandId).Should().Contain(new[]
         {

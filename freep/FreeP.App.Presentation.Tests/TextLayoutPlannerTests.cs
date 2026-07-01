@@ -1,4 +1,5 @@
 using System.IO;
+using Free.Shared.Drawing;
 using FreeP.App.Compositor;
 
 namespace FreeP.App.Compositor.Tests;
@@ -92,6 +93,40 @@ public sealed class TextLayoutPlannerTests
     }
 
     [Fact]
+    public void PlanColumns_BulletedParagraph_PlansBulletSlotInAssignedColumn()
+    {
+        var text = new ResolvedTextLayout
+        {
+            ColumnCount = 2,
+            ColumnSpacingDip = 20,
+            Paragraphs = new[]
+            {
+                Paragraph(),
+                BulletParagraph(indent: 36, hanging: 18)
+            }
+        };
+        var layout = TextLayoutPlanner.GetColumnLayout(text, new LayoutRect(0, 0, 200, 90));
+        var measures = new[]
+        {
+            new TextParagraphMeasure(0, 80, 0, 0),
+            new TextParagraphMeasure(1, 20, 0, 0)
+        };
+
+        var plan = TextLayoutPlanner.PlanColumns(text, layout, measures);
+
+        plan.Paragraphs[1].X.Should().Be(146);
+        plan.Paragraphs[1].MaxWidthDip.Should().BeApproximately(layout.ColumnWidthDip - 36, 0.001);
+        plan.Paragraphs[1].Bullet.HasValue.Should().BeTrue();
+        var bullet = plan.Paragraphs[1].Bullet!.Value;
+        bullet.Text.Should().Be("\u2022");
+        bullet.FontFamily.Should().Be("Aptos");
+        bullet.FontSizePt.Should().Be(14);
+        bullet.Color.Should().Be(new SrgbColor(0x22, 0x33, 0x44));
+        bullet.X.Should().Be(128);
+        bullet.Y.Should().BeApproximately(layout.Area.Y, 0.001);
+    }
+
+    [Fact]
     public void PlanBodyText_BottomAnchor_UsesInsetsIndentAndLineSpacingScale()
     {
         var text = new ResolvedTextLayout
@@ -126,6 +161,39 @@ public sealed class TextLayoutPlannerTests
         plan.Paragraphs[1].X.Should().BeApproximately(27, 0.001);
         plan.Paragraphs[1].Y.Should().BeApproximately(72.5, 0.001);
         plan.Paragraphs[1].MaxWidthDip.Should().BeApproximately(176, 0.001);
+    }
+
+    [Fact]
+    public void PlanBodyText_BulletedParagraph_PlansBulletSlotFromIndentAndHanging()
+    {
+        var text = new ResolvedTextLayout
+        {
+            InsetLeftDip = 5,
+            InsetTopDip = 6,
+            InsetRightDip = 7,
+            InsetBottomDip = 8,
+            Paragraphs = new[]
+            {
+                BulletParagraph(indent: 48, hanging: 24)
+            }
+        };
+
+        var plan = TextLayoutPlanner.PlanBodyText(
+            text,
+            new LayoutRect(10, 20, 200, 100),
+            new[] { new TextParagraphMeasure(0, 20, 0, 0) });
+
+        var placement = plan.Paragraphs.Single();
+        placement.X.Should().Be(63);
+        placement.Y.Should().Be(26);
+        placement.MaxWidthDip.Should().Be(140);
+        placement.Bullet.Should().Be(new TextBulletPlacement(
+            "\u2022",
+            "Aptos",
+            14,
+            new SrgbColor(0x22, 0x33, 0x44),
+            39,
+            26));
     }
 
     [Fact]
@@ -195,6 +263,8 @@ public sealed class TextLayoutPlannerTests
         wpf.Should().Contain("TextLayoutPlanner.PlanBodyText");
         wpf.Should().Contain("TextLayoutPlanner.GetColumnLayout");
         wpf.Should().Contain("TextLayoutPlanner.PlanColumns");
+        wpf.Should().Contain("placement.Bullet");
+        wpf.Should().NotContain("placement.X - para.HangingDip");
         wpf.Should().NotContain("const double DefaultSpacingDip");
         wpf.Should().NotContain("TableCellAnchor.Middle => bounds.Y");
         wpf.Should().NotContain("VerticalAnchor.Middle => bounds.Y");
@@ -204,6 +274,8 @@ public sealed class TextLayoutPlannerTests
         avalonia.Should().Contain("TextLayoutPlanner.PlanBodyText");
         avalonia.Should().Contain("TextLayoutPlanner.GetColumnLayout");
         avalonia.Should().Contain("TextLayoutPlanner.PlanColumns");
+        avalonia.Should().Contain("placement.Bullet");
+        avalonia.Should().NotContain("placement.X - para.HangingDip");
         avalonia.Should().NotContain("const double DefaultSpacingDip");
         avalonia.Should().NotContain("TableCellAnchor.Middle => bounds.Y");
         avalonia.Should().NotContain("VerticalAnchor.Middle => bounds.Y");
@@ -245,6 +317,20 @@ public sealed class TextLayoutPlannerTests
         {
             IndentDip = indent,
             Runs = new[] { new ResolvedRun { Text = text } }
+        };
+    }
+
+    private static ResolvedParagraph BulletParagraph(double indent, double hanging)
+    {
+        return new ResolvedParagraph
+        {
+            IndentDip = indent,
+            HangingDip = hanging,
+            BulletText = "\u2022",
+            BulletFontFamily = "Aptos",
+            BulletFontSizePt = 14,
+            BulletColor = new SrgbColor(0x22, 0x33, 0x44),
+            Runs = new[] { new ResolvedRun { Text = "Item" } }
         };
     }
 

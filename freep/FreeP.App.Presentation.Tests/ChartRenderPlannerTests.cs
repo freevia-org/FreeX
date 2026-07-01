@@ -135,6 +135,74 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void BuildFramePlan_ColumnAxisTitles_ReservesSharedTitleBands()
+    {
+        var chart = new ChartShape { ChartType = ChartType.ColumnClustered };
+        chart.ValueAxis.Title = "Revenue";
+        chart.CategoryAxis.Title = "Quarter";
+
+        var plan = ChartRenderPlanner.BuildFramePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+
+        plan.Plot.Should().Be(new ChartPlanRect(62, 8, 330, 254));
+    }
+
+    [Fact]
+    public void BuildAxisTitlePlans_ColumnChart_PlansVerticalValueAndHorizontalCategoryTitles()
+    {
+        var chart = new ChartShape { ChartType = ChartType.ColumnClustered };
+        chart.ValueAxis.Title = "Revenue";
+        chart.CategoryAxis.Title = "Quarter";
+        var frame = ChartRenderPlanner.BuildFramePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+
+        var titles = ChartRenderPlanner.BuildAxisTitlePlans(chart, frame);
+
+        titles.Should().HaveCount(2);
+        titles[0].Label.Text.Should().Be("Revenue");
+        titles[0].Label.Bounds.Should().Be(new ChartPlanRect(8, 8, 14, 254));
+        titles[0].Label.FontSize.Should().Be(ChartRenderPlanner.AxisTitleFontSize);
+        titles[0].Orientation.Should().Be(ChartAxisTitleOrientation.VerticalCounterclockwise);
+        titles[1].Label.Text.Should().Be("Quarter");
+        titles[1].Label.Bounds.Should().Be(new ChartPlanRect(62, 280, 330, 14));
+        titles[1].Orientation.Should().Be(ChartAxisTitleOrientation.Horizontal);
+    }
+
+    [Fact]
+    public void BuildAxisTitlePlans_BarChart_SwapsTitleOrientationsWithAxes()
+    {
+        var chart = new ChartShape { ChartType = ChartType.BarClustered };
+        chart.ValueAxis.Title = "Revenue";
+        chart.CategoryAxis.Title = "Quarter";
+        var frame = ChartRenderPlanner.BuildFramePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+
+        var titles = ChartRenderPlanner.BuildAxisTitlePlans(chart, frame);
+
+        frame.Plot.Should().Be(new ChartPlanRect(66, 8, 326, 230));
+        titles.Should().HaveCount(2);
+        titles[0].Label.Text.Should().Be("Revenue");
+        titles[0].Label.Bounds.Should().Be(new ChartPlanRect(66, 256, 326, 14));
+        titles[0].Orientation.Should().Be(ChartAxisTitleOrientation.Horizontal);
+        titles[1].Label.Text.Should().Be("Quarter");
+        titles[1].Label.Bounds.Should().Be(new ChartPlanRect(8, 8, 14, 230));
+        titles[1].Orientation.Should().Be(ChartAxisTitleOrientation.VerticalCounterclockwise);
+    }
+
+    [Fact]
+    public void BuildAxisTitlePlans_DeletedAxes_DoNotReserveOrRenderTitles()
+    {
+        var chart = new ChartShape { ChartType = ChartType.ColumnClustered };
+        chart.ValueAxis.Title = "Revenue";
+        chart.ValueAxis.Delete = true;
+        chart.CategoryAxis.Title = "Quarter";
+        chart.CategoryAxis.Delete = true;
+
+        var frame = ChartRenderPlanner.BuildFramePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+        var titles = ChartRenderPlanner.BuildAxisTitlePlans(chart, frame);
+
+        frame.Plot.Should().Be(new ChartPlanRect(48, 8, 344, 268));
+        titles.Should().BeEmpty();
+    }
+
+    [Fact]
     public void BuildLegendItemPlans_BottomLegend_PlansOneItemPerSeries()
     {
         var chart = MakeTwoSeriesChart(ChartType.ColumnClustered);
@@ -198,11 +266,15 @@ public sealed class ChartRenderPlannerTests
         primitives.Should().ContainEquivalentOf(new ChartRectPrimitive(
             SeriesIndex: 0,
             CategoryIndex: 0,
-            Bounds: new ChartPlanRect(30, 80, 19, 20)));
+            Bounds: new ChartPlanRect(30, 80, 19, 20),
+            Fill: new ChartFillPlan(new SrgbColor(0x4F, 0x81, 0xBD), ChartRenderPlanner.RectSeriesFillAlpha),
+            Stroke: null));
         primitives.Should().ContainEquivalentOf(new ChartRectPrimitive(
             SeriesIndex: 1,
             CategoryIndex: 0,
-            Bounds: new ChartPlanRect(50, 40, 19, 60)));
+            Bounds: new ChartPlanRect(50, 40, 19, 60),
+            Fill: new ChartFillPlan(new SrgbColor(0xC0, 0x50, 0x4D), ChartRenderPlanner.RectSeriesFillAlpha),
+            Stroke: null));
     }
 
     [Fact]
@@ -217,11 +289,15 @@ public sealed class ChartRenderPlannerTests
         primitives.Should().ContainEquivalentOf(new ChartRectPrimitive(
             SeriesIndex: 0,
             CategoryIndex: 0,
-            Bounds: new ChartPlanRect(0, 75, 40, 9)));
+            Bounds: new ChartPlanRect(0, 75, 40, 9),
+            Fill: new ChartFillPlan(new SrgbColor(0x4F, 0x81, 0xBD), ChartRenderPlanner.RectSeriesFillAlpha),
+            Stroke: null));
         primitives.Should().ContainEquivalentOf(new ChartRectPrimitive(
             SeriesIndex: 1,
             CategoryIndex: 0,
-            Bounds: new ChartPlanRect(0, 65, 120, 9)));
+            Bounds: new ChartPlanRect(0, 65, 120, 9),
+            Fill: new ChartFillPlan(new SrgbColor(0xC0, 0x50, 0x4D), ChartRenderPlanner.RectSeriesFillAlpha),
+            Stroke: null));
     }
 
     [Fact]
@@ -242,6 +318,51 @@ public sealed class ChartRenderPlannerTests
         primitive.Points[0].Should().Be(new ChartPlanPoint(0, 75));
         primitive.Points[1].Should().BeNull();
         primitive.Points[2].Should().Be(new ChartPlanPoint(200, 25));
+        primitive.LineSegments.Should().BeEmpty();
+        primitive.Markers.Should().HaveCount(2);
+        primitive.Markers[0].Center.Should().Be(new ChartPlanPoint(0, 75));
+        primitive.Markers[0].Radius.Should().Be(ChartRenderPlanner.LineMarkerRadius);
+        primitive.MarkerFill.Should().Be(new ChartFillPlan(
+            new SrgbColor(0x4F, 0x81, 0xBD),
+            ChartRenderPlanner.RectSeriesFillAlpha));
+        primitive.MarkerStroke.Should().Be(new ChartStrokePlan(
+            new SrgbColor(0x4F, 0x81, 0xBD),
+            Alpha: 255,
+            Thickness: ChartRenderPlanner.LineMarkerStrokeThickness));
+    }
+
+    [Fact]
+    public void BuildLineSeriesPrimitives_PlansSharedStrokeSegmentsAndMarkerStyle()
+    {
+        var series = new ChartSeries { Name = "Line" };
+        series.Values.AddRange(new double?[] { 10, 20, 30 });
+        var chart = new ChartShape { ChartType = ChartType.LineMarkers };
+        chart.Categories.AddRange(new[] { "Q1", "Q2", "Q3" });
+        chart.Series.Add(series);
+        var seriesColor = new SrgbColor(0x20, 0x40, 0x60);
+
+        var primitive = ChartRenderPlanner.BuildLineSeriesPrimitives(
+            chart,
+            new ChartPlanRect(0, 0, 200, 100),
+            withMarkers: true,
+            seriesColors: new[] { seriesColor }).Single();
+
+        primitive.Stroke.Should().Be(new ChartStrokePlan(
+            seriesColor,
+            Alpha: 255,
+            Thickness: ChartRenderPlanner.LineSeriesStrokeThickness));
+        primitive.LineSegments.Should().HaveCount(2);
+        primitive.LineSegments[0].Start.Should().Be(new ChartPlanPoint(0, 75));
+        primitive.LineSegments[0].End.Should().Be(new ChartPlanPoint(100, 50));
+        primitive.LineSegments[0].Stroke.Should().Be(primitive.Stroke);
+        primitive.Markers.Should().HaveCount(3);
+        primitive.Markers[0].Fill.Should().Be(new ChartFillPlan(
+            seriesColor,
+            ChartRenderPlanner.RectSeriesFillAlpha));
+        primitive.Markers[0].Stroke.Should().Be(new ChartStrokePlan(
+            seriesColor,
+            Alpha: 255,
+            Thickness: ChartRenderPlanner.LineMarkerStrokeThickness));
     }
 
     [Fact]

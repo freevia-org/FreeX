@@ -83,6 +83,39 @@ public sealed class PptxRoundTripTests : IDisposable
     }
 
     [Fact]
+    public void RoundTrip_ShapeAlternativeText_PreservedInPptxDescr()
+    {
+        var pres = new Presentation();
+        var slide = new Slide();
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 11,
+            Name = "Sales chart",
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            AlternativeText = "Quarterly sales by region.",
+            OffsetXEmu = 914400,
+            OffsetYEmu = 457200,
+            ExtentCxEmu = 2743200,
+            ExtentCyEmu = 1828800
+        });
+        pres.Slides.Add(slide);
+
+        var path = WriteToPptx(pres);
+
+        using (var archive = System.IO.Compression.ZipFile.OpenRead(path))
+        using (var slideStream = archive.GetEntry("ppt/slides/slide1.xml")!.Open())
+        using (var reader = new StreamReader(slideStream))
+        {
+            reader.ReadToEnd().Should().Contain("descr=\"Quarterly sales by region.\"");
+        }
+
+        var reloaded = PptxPackageReader.Read(path);
+        reloaded.Slides[0].Shapes.Single(shape => shape.Id == 11)
+            .AlternativeText.Should().Be("Quarterly sales by region.");
+    }
+
+    [Fact]
     public void RoundTrip_VariousShapeKinds()
     {
         var kinds = new[]

@@ -32,6 +32,9 @@ namespace FreeW.App.Host;
 /// </summary>
 internal sealed class FileCommands
 {
+    private static readonly IReadOnlyList<IDocumentFileAdapter> PdfImportAdapters =
+        DocumentFileAdapterCatalog.CreatePdfImportAdapters();
+
     private readonly Window _window;
     private readonly DocumentView _editor;
     private readonly SisterWpfFileCommandWorkflow _workflow;
@@ -136,6 +139,44 @@ internal sealed class FileCommands
 
     public bool OpenFromFolder(string folderPath) =>
         _workflow.Open("opening another document", () => PromptOpenPath(folderPath), OpenPath);
+
+    /// <summary>
+    /// File &gt; Import PDF (text only). This is deliberately not a normal Open path: PDF extraction is lossy,
+    /// read-only text import, so the result becomes an untitled dirty document that must be saved elsewhere.
+    /// </summary>
+    public bool ImportPdfText() =>
+        _workflow.Open("importing a PDF", PromptPdfImportPath, ImportPdfTextPath);
+
+    /// <summary>
+    /// Dialog-free PDF text import for tests and host integrations. The PDF path is never associated with the
+    /// document or recent-files list because the imported text must be saved to a writable document format.
+    /// </summary>
+    public bool ImportPdfTextPath(string path)
+    {
+        var extension = Path.GetExtension(path);
+        var adapter = DocumentFileFormatResolver.FindOpenAdapter(PdfImportAdapters, extension, out _);
+        if (adapter is null)
+        {
+            ShowError(
+                "Unrecognized PDF import file",
+                new InvalidOperationException($"FreeW can import text only from \".pdf\" files, not \"{extension}\"."));
+            return false;
+        }
+
+        try
+        {
+            using (var fs = File.OpenRead(path))
+                _editor.LoadModel(adapter.Load(fs));
+
+            _workflow.MarkDirtyWithPath(null, () => _editor.CurrentFileName = null);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            ShowError("Could not import PDF text", ex);
+            return false;
+        }
+    }
 
     /// <summary>
     /// Loads a specific path (recent-files click / drag-drop / startup). Does NOT dirty-gate: callers
@@ -281,6 +322,16 @@ internal sealed class FileCommands
     {
         var plan = _persistence.BuildOpenDialogPlan();
         var result = WpfFileDialogService.ShowOpenDialog(_window, plan, initialDirectory: initialDirectory);
+        return result.Chosen ? result.FileName : null;
+    }
+
+    private string? PromptPdfImportPath()
+    {
+        var plan = DocumentFileDialogRequestPlanner.BuildOpenDialogPlan(PdfImportAdapters, "PDF documents");
+        var result = WpfFileDialogService.ShowOpenDialog(
+            _window,
+            plan,
+            title: "Import PDF (text only)");
         return result.Chosen ? result.FileName : null;
     }
 

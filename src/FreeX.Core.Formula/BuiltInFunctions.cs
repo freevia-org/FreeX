@@ -682,6 +682,9 @@ public interface IEvalContext
     /// <summary>Returns the current workbook, or null when no workbook context.</summary>
     Model.Workbook? CurrentWorkbook { get; }
 
+    /// <summary>True when formula date serials should use the workbook's 1904 date system.</summary>
+    bool Uses1904DateSystem => CurrentWorkbook?.Uses1904DateSystem == true;
+
     /// <summary>Returns the formula cell address, or null when evaluating without a host cell.</summary>
     Model.CellAddress? CurrentCellAddress => null;
 

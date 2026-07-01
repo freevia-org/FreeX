@@ -171,7 +171,8 @@ public sealed partial class MainWindow
                     var selectAll = new CheckBox
                     {
                         Content = item.Label,
-                        IsChecked = true,
+                        IsThreeState = true,
+                        IsChecked = item.IsChecked ?? true,
                         FontSize = 12,
                         FontFamily = FormulaBarFontFamily,
                     };
@@ -186,7 +187,7 @@ public sealed partial class MainWindow
                     var box = new CheckBox
                     {
                         Content = item.Label,
-                        IsChecked = true,
+                        IsChecked = item.IsChecked ?? true,
                         Tag = item.Value,
                         FontSize = 12,
                         FontFamily = FormulaBarFontFamily,

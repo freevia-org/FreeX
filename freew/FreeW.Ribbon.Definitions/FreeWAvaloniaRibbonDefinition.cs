@@ -87,6 +87,47 @@ internal static class FreeWAvaloniaRibbonDefinition
         });
 
     /// <summary>AV-REF: References &gt; Insert Caption dropdown — Figure / Table caption labels.</summary>
+    private static RibbonMenu BuildMarginsMenu() =>
+        new(new RibbonMenuItem[]
+        {
+            new("Normal", new RibbonCommandId("freew.page-margins-normal")),
+            new("Narrow", new RibbonCommandId("freew.page-margins-narrow")),
+            new("Wide", new RibbonCommandId("freew.page-margins-wide")),
+            RibbonMenuItem.Separator(),
+            new("Custom Margins...", new RibbonCommandId("freew.custom-margins")),
+        });
+
+    private static RibbonMenu BuildPageSizeMenu() =>
+        new(new RibbonMenuItem[]
+        {
+            new("Letter", new RibbonCommandId("freew.page-size-letter")),
+            new("A4", new RibbonCommandId("freew.page-size-a4")),
+            RibbonMenuItem.Separator(),
+            new("More Paper Sizes...", new RibbonCommandId("freew.more-paper-sizes")),
+        });
+
+    private static RibbonMenu BuildColumnsMenu() =>
+        new(new RibbonMenuItem[]
+        {
+            new("One", new RibbonCommandId("freew.columns-one")),
+            new("Two", new RibbonCommandId("freew.columns-two")),
+            new("Three", new RibbonCommandId("freew.columns-three")),
+            new("Left", new RibbonCommandId("freew.columns-left")),
+            new("Right", new RibbonCommandId("freew.columns-right")),
+        });
+
+    private static RibbonMenu BuildBreaksMenu() =>
+        new(new RibbonMenuItem[]
+        {
+            new("Page Break", new RibbonCommandId("freew.page-break")),
+            new("Column Break", new RibbonCommandId("freew.column-break")),
+            RibbonMenuItem.Separator(),
+            new("Next Page", new RibbonCommandId("freew.section-break-next-page")),
+            new("Continuous", new RibbonCommandId("freew.section-break-continuous")),
+            new("Even Page", new RibbonCommandId("freew.section-break-even-page")),
+            new("Odd Page", new RibbonCommandId("freew.section-break-odd-page")),
+        });
+
     private static RibbonMenu BuildCaptionMenu() =>
         new(new RibbonMenuItem[]
         {
@@ -287,6 +328,7 @@ internal static class FreeWAvaloniaRibbonDefinition
                     g.Button("freew.backstage", "File...");
                     g.Button("freew.new",  "New");
                     g.Button("freew.open", "Open");
+                    g.Button("freew.import-pdf-text", "Import PDF (text only)");
                     g.Button("freew.save", "Save");
                 }))
             .Tab("home", FreeWRibbonText.HomeTab.Label, FreeWRibbonText.HomeTab.KeyTip, tab =>
@@ -316,7 +358,11 @@ internal static class FreeWAvaloniaRibbonDefinition
                     g.Toggle("freew.strikethrough",   FreeWRibbonText.StrikethroughCommand.Label);
                     g.Toggle("freew.superscript",     FreeWRibbonText.SuperscriptCompactCommand.Label);
                     g.Toggle("freew.subscript",       FreeWRibbonText.SubscriptCompactCommand.Label);
+                    g.Toggle("freew.smallcaps",       FreeWRibbonText.SmallCapsCommand.Label);
+                    g.Toggle("freew.allcaps",         FreeWRibbonText.AllCapsCommand.Label);
                     g.Button("freew.highlight",       FreeWRibbonText.HighlightCompactCommand.Label);
+                    g.Button("freew.char-border",     FreeWRibbonText.CharacterBorderCommand.Label);
+                    g.Button("freew.char-shading",    FreeWRibbonText.CharacterShadingCommand.Label);
                     g.Button("freew.grow-font",       FreeWRibbonText.GrowFontCompactCommand.Label);
                     g.Button("freew.shrink-font",     FreeWRibbonText.ShrinkFontCompactCommand.Label);
                     g.Button("freew.clear-formatting", FreeWRibbonText.ClearFormattingCompactCommand.Label);
@@ -362,6 +408,16 @@ internal static class FreeWAvaloniaRibbonDefinition
                     {
                         PreferredLayout = RibbonCommandLayoutKind.Small,
                         Icon = new RibbonCommandIcon(RibbonCommandIconKind.SpaceAfter)
+                    });
+                    g.Button("freew.keep-with-next", "Keep with Next", b => b with
+                    {
+                        PreferredLayout = RibbonCommandLayoutKind.Small,
+                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.TextFunction)
+                    });
+                    g.Button("freew.keep-lines", "Keep Lines Together", b => b with
+                    {
+                        PreferredLayout = RibbonCommandLayoutKind.Small,
+                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.TextFunction)
                     });
                     g.Toggle("freew.formatting-marks", "Show Formatting Marks", t => t with
                     {
@@ -442,13 +498,16 @@ internal static class FreeWAvaloniaRibbonDefinition
                 // AV-PAGE: page-setup group — dialog launcher + quick orientation/margins/size.
                 tab.Group("page-setup", "Page Setup", null, 100, g =>
                 {
-                    g.Button("freew.page-setup-dialog",   "Page Setup…");
-                    g.Button("freew.page-orientation",    "Orientation");
-                    g.Button("freew.page-margins-normal", "Normal Margins");
-                    g.Button("freew.page-margins-narrow", "Narrow Margins");
-                    g.Button("freew.page-margins-wide",   "Wide Margins");
-                    g.Button("freew.page-size-letter",    "Letter");
-                    g.Button("freew.page-size-a4",        "A4");
+                    g.Dropdown("freew.margins", "Margins", BuildMarginsMenu());
+                    g.Button("freew.orientation", "Orientation");
+                    g.Dropdown("freew.size", "Size", BuildPageSizeMenu());
+                    g.Dropdown("freew.columns", "Columns", BuildColumnsMenu());
+                    g.Dropdown("freew.breaks", "Breaks", BuildBreaksMenu());
+                    g.Button("freew.page-setup", "Page Setup...");
+                });
+                tab.Group("preview", "Preview", null, 90, g =>
+                {
+                    g.Button("freew.print-preview", "Print Preview");
                 });
             })
             .Tab("design", "Design", "G", tab =>
@@ -476,16 +535,16 @@ internal static class FreeWAvaloniaRibbonDefinition
             {
                 tab.Group("views", "Views", null, 110, g =>
                 {
-                    g.Button("freew.printlayout", "Print Layout");
-                    g.Button("freew.weblayout",   "Web Layout");
-                    g.Button("freew.draftview",   "Draft");
+                    g.Button("freew.print-layout", "Print Layout");
+                    g.Button("freew.web-layout",   "Web Layout");
+                    g.Button("freew.draft-view",   "Draft");
                 });
                 tab.Group("show", "Show", null, 100, g =>
                 {
                     // AV-VIEW: layout gridlines + ruler toggles (DocumentView render chrome).
-                    g.Toggle("freew.view-ruler",        "Ruler");
-                    g.Toggle("freew.view-gridlines",    "Gridlines");
-                    g.Toggle("freew.navigationpane",    "Navigation Pane");
+                    g.Toggle("freew.ruler",             "Ruler");
+                    g.Toggle("freew.gridlines",         "Gridlines");
+                    g.Toggle("freew.nav-pane",          "Navigation Pane");
                     // AV-VIEW: surface the Reviewing Pane toggle on View as well (also on Review tab).
                     g.Toggle("freew.reviewing-pane",    "Reviewing Pane");
                     g.Toggle("freew.reveal-formatting", "Reveal Formatting");
@@ -554,23 +613,23 @@ internal static class FreeWAvaloniaRibbonDefinition
                 // AV-REF: References-tab depth — TOC, footnotes/endnotes, captions, cross-ref, citations.
                 tab.Group("toc", "Table of Contents", null, 110, g =>
                 {
-                    g.Button("freew.insert-toc", "Table of Contents");
-                    g.Button("freew.update-toc", "Update Table");
+                    g.Button("freew.toc", "Table of Contents");
+                    g.Button("freew.toc-refresh", "Update Table");
                 });
                 tab.Group("footnotes", "Footnotes", null, 100, g =>
                 {
-                    g.Button("freew.insert-footnote", "Insert Footnote");
-                    g.Button("freew.insert-endnote",  "Insert Endnote");
+                    g.Button("freew.footnote", "Insert Footnote");
+                    g.Button("freew.endnote",  "Insert Endnote");
                 });
                 tab.Group("citations", "Citations & Bibliography", null, 90, g =>
                 {
-                    g.Button("freew.insert-citation", "Insert Citation");
-                    g.Button("freew.bibliography",    "Bibliography");
+                    g.Button("freew.citation",     "Insert Citation");
+                    g.Button("freew.bibliography", "Bibliography");
                 });
                 tab.Group("captions", "Captions", null, 80, g =>
                 {
-                    g.Dropdown("freew.insert-caption", "Insert Caption", BuildCaptionMenu());
-                    g.Button("freew.cross-reference",  "Cross-reference");
+                    g.Dropdown("freew.caption", "Insert Caption", BuildCaptionMenu());
+                    g.Button("freew.cross-reference", "Cross-reference");
                 });
             })
             .Tab("mailings", "Mailings", "M", tab =>
@@ -579,23 +638,23 @@ internal static class FreeWAvaloniaRibbonDefinition
                 // Mail-SEND (e-mail merge) is OUT OF SCOPE and intentionally not surfaced.
                 tab.Group("start-merge", "Start Mail Merge", null, 100, g =>
                 {
-                    g.Button("freew.select-recipients", "Select Recipients");
+                    g.Button("freew.merge-data", "Select Recipients");
                 });
                 tab.Group("write-insert", "Write & Insert Fields", null, 90, g =>
                 {
-                    g.Button("freew.address-block", "Address Block");
-                    g.Button("freew.greeting-line", "Greeting Line");
+                    g.Button("freew.merge-address-block", "Address Block");
+                    g.Button("freew.merge-greeting-line", "Greeting Line");
                     g.Button("freew.merge-field",   "Insert Merge Field");
                 });
                 tab.Group("preview-results", "Preview Results", null, 80, g =>
                 {
-                    g.Button("freew.preview-results", "Preview Results");
-                    g.Button("freew.prev-record",     "◀ Previous");
-                    g.Button("freew.next-record",     "Next ▶");
+                    g.Button("freew.merge-preview",          "Preview Results");
+                    g.Button("freew.merge-preview-previous", "◀ Previous");
+                    g.Button("freew.merge-preview-next",     "Next ▶");
                 });
                 tab.Group("finish", "Finish", null, 70, g =>
                 {
-                    g.Button("freew.finish-merge", "Finish & Merge");
+                    g.Button("freew.merge-finish", "Finish & Merge");
                 });
             })
             // ── Table contextual tabs (shown only when caret is in a table cell) ─────────────

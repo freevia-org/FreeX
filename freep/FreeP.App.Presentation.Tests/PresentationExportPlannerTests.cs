@@ -71,6 +71,72 @@ public sealed class PresentationExportPlannerTests
     }
 
     [Fact]
+    public void HandoutLayoutPlan_ThreeSlidesPerPage_AddsPowerPointStyleWritingLines()
+    {
+        var request = new PresentationPrintRequest(
+            PresentationPrintLayoutKind.Handouts,
+            new PresentationSlideRangeRequest(PresentationSlideRangeKind.CustomRange,  StartSlideNumber: 2, EndSlideNumber: 4),
+            HandoutSlidesPerPage: 3);
+
+        var plan = PresentationExportPlanner.BuildHandoutLayoutPlan(
+            request,
+            slideCount: 5,
+            slideWidth: 16,
+            slideHeight: 9);
+
+        plan.PrintPlan.Layout.SlidesPerPage.Should().Be(3);
+        plan.PageWidth.Should().Be(PresentationExportPlanner.DefaultPrintPageWidth);
+        plan.PageHeight.Should().Be(PresentationExportPlanner.DefaultPrintPageHeight);
+        plan.PageCount.Should().Be(1);
+        plan.Pages.Should().ContainSingle();
+        plan.Pages[0].Slots.Select(slot => slot.SlideNumber).Should().Equal(2, 3, 4);
+        plan.Pages[0].Slots.Select(slot => slot.SlideIndex).Should().Equal(1, 2, 3);
+        plan.Pages[0].Slots.Should().OnlyContain(slot => slot.NotesOrLinesBounds != null);
+        plan.Pages[0].Slots.Should().OnlyContain(slot => slot.BlankLineBounds.Count == 5);
+        plan.Pages[0].Slots[0].SlideBounds.Right
+            .Should()
+            .BeLessThan(plan.Pages[0].Slots[0].NotesOrLinesBounds!.Value.Left);
+        plan.Pages[0].Slots[0].SlideBounds.Width.Should().BeGreaterThan(0);
+        plan.Pages[0].Slots[0].SlideBounds.Height.Should().BeGreaterThan(0);
+    }
+
+    [Fact]
+    public void HandoutLayoutPlan_SixSlidesPerPage_PaginatesAndMapsSlidesWithoutNotesLines()
+    {
+        var request = new PresentationPrintRequest(
+            PresentationPrintLayoutKind.Handouts,
+            HandoutSlidesPerPage: 6);
+
+        var plan = PresentationExportPlanner.BuildHandoutLayoutPlan(request, slideCount: 8);
+
+        plan.PrintPlan.Layout.SlidesPerPage.Should().Be(6);
+        plan.PageCount.Should().Be(2);
+        plan.Pages[0].Slots.Should().HaveCount(6);
+        plan.Pages[1].Slots.Should().HaveCount(2);
+        plan.Pages.SelectMany(page => page.Slots).Select(slot => slot.SlideNumber)
+            .Should()
+            .Equal(1, 2, 3, 4, 5, 6, 7, 8);
+        plan.Pages.SelectMany(page => page.Slots).Should().OnlyContain(slot => slot.NotesOrLinesBounds == null);
+        plan.Pages.SelectMany(page => page.Slots).Should().OnlyContain(slot => slot.BlankLineBounds.Count == 0);
+        plan.Pages[0].Slots[0].SlideBounds.Top.Should().BeLessThan(plan.Pages[0].Slots[2].SlideBounds.Top);
+        plan.Pages[0].Slots[0].SlideBounds.Left.Should().BeLessThan(plan.Pages[0].Slots[1].SlideBounds.Left);
+    }
+
+    [Fact]
+    public void HandoutLayoutPlan_NormalizesUnsupportedSlidesPerPageToNearestOption()
+    {
+        var request = new PresentationPrintRequest(
+            PresentationPrintLayoutKind.Handouts,
+            HandoutSlidesPerPage: 8);
+
+        var plan = PresentationExportPlanner.BuildHandoutLayoutPlan(request, slideCount: 9);
+
+        plan.PrintPlan.Layout.SlidesPerPage.Should().Be(9);
+        plan.PageCount.Should().Be(1);
+        plan.Pages[0].Slots.Should().HaveCount(9);
+    }
+
+    [Fact]
     public void SlideRangePlan_NormalizesCurrentAndEmptyDeckRequests()
     {
         var current = PresentationExportPlanner.BuildSlideRangePlan(
