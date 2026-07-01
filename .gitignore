@@ -43,6 +43,9 @@ fidelity-corpus/oracle-generated/
 freew-fidelity-corpus/files/
 freew-fidelity-corpus/runs/
 
+# Local Excel/FreeX UX parity run artifacts.
+tools/ux-parity-runs/
+
 # Generated icon asset exports
 docs/assets/
 docs/icon-audit/*.html
