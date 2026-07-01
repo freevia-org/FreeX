@@ -647,6 +647,18 @@ public sealed partial class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void SheetTabForegroundHarness_HasCoordinateFallbackForHiddenTabUiaNames()
+    {
+        var foregroundSource = WorkspaceFileLocator.ReadAllText("tools", "FreeX.ForegroundCapture", "Program.cs");
+
+        foregroundSource.Should().Contain("\"freex-sheet-tab-context-menu\" => RunFreeXMainWindowPointerScenario(\"freex-sheet-tab-context-menu\", RightClickSheetTabContextMenu())");
+        foregroundSource.Should().Contain("TryOpenExcelSheetTabContextMenu");
+        foregroundSource.Should().Contain("GetSheetTabStripFallbackPoints");
+        foregroundSource.Should().Contain("Captured Microsoft Excel's sheet-tab context menu through guarded tab-strip coordinate fallback");
+        foregroundSource.Should().Contain("Opened the FreeX sheet-tab context menu through guarded tab-strip coordinate fallback");
+    }
+
+    [Fact]
     public void FocusedPivotFieldListTaskPane_TabTraversalIsNotHijackedByWorksheetMovement()
     {
         var selectionSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Selection.cs");

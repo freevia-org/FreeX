@@ -122,7 +122,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             "freex-status-zoom-text-dialog-click" => RunFreeXMainWindowPointerScenario("freex-status-zoom-text-dialog-click", ClickZoomTextExpectDialog()),
             "freex-status-ctrl-alt-zoom-keys" => RunFreeXMainWindowPointerScenario("freex-status-ctrl-alt-zoom-keys", CtrlAltZoomKeysExpectRoundTrip()),
             "freex-status-live-stats-accessibility" => RunFreeXMainWindowPointerScenario("freex-status-live-stats-accessibility", StatusLiveStatsAccessibility(), CreateStatusStatsOptionsOverride),
-            "freex-sheet-tab-context-menu" => RunFreeXMainWindowPointerScenario("freex-sheet-tab-context-menu", RightClickNamedElement("Sheet1", ControlType.TabItem)),
+            "freex-sheet-tab-context-menu" => RunFreeXMainWindowPointerScenario("freex-sheet-tab-context-menu", RightClickSheetTabContextMenu()),
             "freex-sheet-tab-click-select" => RunFreeXMainWindowPointerScenario("freex-sheet-tab-click-select", SheetTabClickSelect()),
             "freex-sheet-tab-double-click-rename" => RunFreeXMainWindowPointerScenario("freex-sheet-tab-double-click-rename", SheetTabDoubleClickRename()),
             "freex-sheet-tab-ctrl-click-grouping" => RunFreeXMainWindowPointerScenario("freex-sheet-tab-ctrl-click-grouping", SheetTabModifierGrouping(NativeMethods.VK_CONTROL, "Ctrl+click", "Sheet3")),
@@ -849,24 +849,13 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                 return BlockedWithGuard(scenario, guard, "before-sheet-tab-context-menu");
             }
 
-            var tab = FindVisibleSheetTabElement(hwnd, "Sheet1");
-            if (tab is null)
-            {
-                return CaptureResult.Blocked(scenario, "uia-target-not-found", "Could not find the visible Excel Sheet1 sheet tab.", options.OutputRoot, "excel", guard);
-            }
-
-            if (!TryRightClickAutomationElement(tab))
-            {
-                return CaptureResult.Blocked(scenario, "uia-target-bounds-invalid", "Excel Sheet1 tab bounds were not usable for a physical right-click.", options.OutputRoot, "excel", guard);
-            }
-
-            var popup = WindowFinder.FindProcessPopup(pid.Value, hwnd.ToInt64(), options.PopupTimeout, 120, 120);
+            var popup = TryOpenExcelSheetTabContextMenu(pid.Value, hwnd, guard, out var openNote);
             if (popup is null)
             {
-                return CaptureResult.Blocked(scenario, "popup-not-found", "Did not detect Excel sheet-tab context menu after a guarded physical right-click on Sheet1.", options.OutputRoot, "excel", guard);
+                return CaptureResult.Blocked(scenario, "popup-not-found", "Did not detect Excel sheet-tab context menu after UIA and coordinate fallback right-click attempts.", options.OutputRoot, "excel", guard);
             }
 
-            return CaptureWindow(scenario, "excel", popup, guard, "complete", "Captured Microsoft Excel's sheet-tab context menu after a physical right-click on Sheet1.");
+            return CaptureWindow(scenario, "excel", popup, guard, "complete", openNote);
         }
         finally
         {
@@ -946,6 +935,59 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             CloseExcel(excel, workbook);
             KillProcess(pid);
         }
+    }
+
+    private WindowInfo? TryOpenExcelSheetTabContextMenu(
+        int processId,
+        IntPtr hwnd,
+        ForegroundGuardResult initialGuard,
+        out string note)
+    {
+        note = string.Empty;
+
+        var tab = FindVisibleSheetTabElement(hwnd, "Sheet1") ?? GetVisibleSheetTabElements(hwnd)
+            .OrderBy(element => element.Current.BoundingRectangle.Left)
+            .FirstOrDefault();
+        if (tab is not null && TryRightClickAutomationElement(tab))
+        {
+            var popup = WindowFinder.FindProcessPopup(processId, hwnd.ToInt64(), options.PopupTimeout, 120, 120);
+            if (popup is not null)
+            {
+                note = "Captured Microsoft Excel's sheet-tab context menu after a physical right-click on a UIA-discovered sheet tab.";
+                return popup;
+            }
+        }
+
+        var window = WindowFinder.GetWindowInfo(hwnd);
+        if (window is null)
+        {
+            note = "Excel main-window bounds were unavailable for sheet-tab coordinate fallback.";
+            return null;
+        }
+
+        var fallbackNotes = new List<string>();
+        foreach (var point in GetSheetTabStripFallbackPoints(window.Bounds))
+        {
+            fallbackNotes.Add($"{point.Note}@{point.X},{point.Y}");
+            var guard = ForegroundGuard.FocusAndVerify(hwnd, processId, "Excel", options.FocusTimeout);
+            if (!guard.Success)
+            {
+                note = $"Excel foreground guard failed before sheet-tab fallback right-click; initial guard success={initialGuard.Success}.";
+                return null;
+            }
+
+            RightClickScreenPoint(point.X, point.Y);
+            Thread.Sleep(options.AfterInputDelay);
+            var popup = WindowFinder.FindProcessPopup(processId, hwnd.ToInt64(), options.PopupTimeout, 120, 120);
+            if (popup is not null)
+            {
+                note = $"Captured Microsoft Excel's sheet-tab context menu through guarded tab-strip coordinate fallback ({point.Note}).";
+                return popup;
+            }
+        }
+
+        note = $"Excel sheet-tab context menu did not open through UIA or coordinate fallbacks: {string.Join("; ", fallbackNotes)}.";
+        return null;
     }
 
     private CaptureResult RunExcelStatusFooterReferenceScenario()
@@ -3188,6 +3230,53 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             return GuardedClickElement(options.Scenario, processId, handle, element, MouseButtonKind.Right);
         };
 
+    private Func<IntPtr, int, WindowInfo, ForegroundGuardResult, CaptureResult?> RightClickSheetTabContextMenu()
+        => (handle, processId, window, guard) =>
+        {
+            var tab = FindVisibleSheetTabElement(handle, "Sheet1") ?? GetVisibleSheetTabElements(handle)
+                .OrderBy(element => element.Current.BoundingRectangle.Left)
+                .FirstOrDefault();
+            if (tab is not null)
+            {
+                var blocked = GuardedClickElement(options.Scenario, processId, handle, tab, MouseButtonKind.Right);
+                if (blocked is not null)
+                {
+                    return blocked;
+                }
+
+                if (WindowFinder.FindProcessPopup(processId, handle.ToInt64(), options.PopupTimeout, 120, 80) is not null)
+                {
+                    _lastResultValidation = "Opened the FreeX sheet-tab context menu by physically right-clicking the UIA-discovered sheet tab.";
+                    return null;
+                }
+            }
+
+            var fallbackNotes = new List<string>();
+            foreach (var point in GetSheetTabStripFallbackPoints(window.Bounds))
+            {
+                fallbackNotes.Add($"{point.Note}@{point.X},{point.Y}");
+                var blocked = GuardedClickPoint(options.Scenario, processId, handle, point.X, point.Y, MouseButtonKind.Right);
+                if (blocked is not null)
+                {
+                    return blocked;
+                }
+
+                if (WindowFinder.FindProcessPopup(processId, handle.ToInt64(), options.PopupTimeout, 120, 80) is not null)
+                {
+                    _lastResultValidation = $"Opened the FreeX sheet-tab context menu through guarded tab-strip coordinate fallback ({point.Note}).";
+                    return null;
+                }
+            }
+
+            return CaptureResult.Blocked(
+                options.Scenario,
+                "sheet-tab-context-menu-not-found",
+                $"Could not open the FreeX sheet-tab context menu through UIA tab lookup or coordinate fallbacks: {string.Join("; ", fallbackNotes)}.",
+                options.OutputRoot,
+                "freex",
+                guard);
+        };
+
     private Func<IntPtr, int, WindowInfo, ForegroundGuardResult, CaptureResult?> DragCellRangeSelectValidated(
         string startCell,
         string endCell)
@@ -4395,6 +4484,25 @@ internal sealed class ScenarioRunner(CaptureOptions options)
         => name.StartsWith("Sheet", StringComparison.Ordinal) &&
            name.Length > "Sheet".Length &&
            name["Sheet".Length..].All(char.IsDigit);
+
+    private static IReadOnlyList<(int X, int Y, string Note)> GetSheetTabStripFallbackPoints(Rectangle windowBounds)
+    {
+        var xOffsets = new[] { 120, 165, 215, 275 };
+        var yOffsets = new[] { 58, 72, 44 };
+        var points = new List<(int X, int Y, string Note)>();
+
+        foreach (var yOffset in yOffsets)
+        {
+            foreach (var xOffset in xOffsets)
+            {
+                var x = windowBounds.Left + Math.Min(Math.Max(xOffset, 24), Math.Max(24, windowBounds.Width - 24));
+                var y = windowBounds.Bottom - Math.Min(Math.Max(yOffset, 24), Math.Max(24, windowBounds.Height - 24));
+                points.Add((x, y, $"left+{xOffset}/bottom-{yOffset}"));
+            }
+        }
+
+        return points;
+    }
 
     private static bool IsVisibleElement(AutomationElement element)
     {
