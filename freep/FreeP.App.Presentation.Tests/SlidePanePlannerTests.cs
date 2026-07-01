@@ -151,6 +151,19 @@ public sealed class SlidePanePlannerTests
     }
 
     [Fact]
+    public void TryApplyAction_Move_UsesSharedSelectionAndCommandRouting()
+    {
+        var editor = CreateEditingSession(3);
+        var action = SlidePanePlanner.PlanMoveAction(3, sourceSlideIndex: 0, targetInsertionIndex: 3);
+
+        SlidePanePlanner.TryApplyAction(editor, action).Should().BeTrue();
+
+        editor.Presentation.Slides.Select(slide => slide.Title)
+            .Should().Equal("Slide 2", "Slide 3", "Slide 1");
+        editor.CurrentSlideIndex.Should().Be(2);
+    }
+
+    [Fact]
     public void TryApplyAction_DisabledAction_DoesNotMutateSlides()
     {
         var editor = CreateEditingSession(1);

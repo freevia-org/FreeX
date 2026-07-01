@@ -23,6 +23,12 @@ public sealed class SlidePanePolicySourceGuardTests
         source.Should().Contain("ContextMenu = BuildSlidePaneContextMenu(entry.SlideIndex)");
         source.Should().Contain("SlidePanePlanner.BuildContextActions(_presentation.Slides.Count, slideIndex)");
         source.Should().Contain("SlidePanePlanner.TryApplyAction(Editor, action)");
+        source.Should().Contain("PointerPressed += OnSlidePaneItemPointerPressed");
+        source.Should().Contain("PointerMoved += OnSlidePaneItemPointerMoved");
+        source.Should().Contain("PointerReleased += OnSlidePaneItemPointerReleased");
+        source.Should().Contain("SlidePanePlanner.HitTestInsertionPoint(");
+        source.Should().Contain("SlidePanePlanner.ComputeInsertionIndicatorOffset(");
+        source.Should().Contain("SlidePanePlanner.PlanMoveAction(");
         source.Should().Contain("SelectSlidePaneItem(Editor.CurrentSlideIndex)");
         source.Should().NotContain("for (int i = 0; i < _presentation.Slides.Count; i++)");
         source.Should().NotContain("Text                = $\"{slideIdx + 1}\"");
@@ -31,6 +37,7 @@ public sealed class SlidePanePolicySourceGuardTests
         source.Should().NotContain("_slidePaneList.SelectedIndex = Editor.CurrentSlideIndex");
         source.Should().NotContain("Editor.DuplicateCurrentSlide();");
         source.Should().NotContain("Editor.DeleteCurrentSlide();");
+        source.Should().NotContain("Editor.MoveSlide(");
     }
 
     private static string FindRepositoryRoot()

@@ -46,12 +46,13 @@ namespace FreeP.App.Avalonia;
 ///   Keyboard: Ctrl+N/O/S/Shift+S, Ctrl+Z/Y
 ///
 /// Deferred to later Avalonia parity: transitions, animations, full platform dialogs,
-///   clipboard (full), drag-reorder thumbnails.
+///   clipboard (full).
 /// </summary>
 public sealed class MainWindow : Window
 {
     private const string DefaultTitle = "FreeP";
     private const int DefaultRecentFilesCap = ApplicationOptionsNormalizer.DefaultRecentFilesCap;
+    private const double SlidePaneAvaloniaSlideItemHeight = 108.0;
     private static readonly SisterAppFileTextSpec FileText = SisterAppFileTextPlanner.Presentation;
 
     private static readonly FilePickerFileType PictureFileType =
@@ -91,6 +92,7 @@ public sealed class MainWindow : Window
 
     private readonly SlideCanvas _slideCanvas;
     private readonly ListBox _slidePaneList;
+    private readonly Border _slidePaneInsertionIndicator;
     private readonly TextBox _notesBox;
     private readonly TextBlock _statusText;
     private Border _layoutPickerHost = null!;
@@ -106,6 +108,10 @@ public sealed class MainWindow : Window
 
     private bool _notesRefreshing;
     private bool _slidePaneRefreshing;
+    private bool _slidePaneIsDragging;
+    private int _slidePaneDragSourceIndex = -1;
+    private int _slidePaneDragTargetIndex = -1;
+    private Point _slidePaneDragStartPoint;
 
     // ── Smoke surface ──────────────────────────────────────────────────────────
 
@@ -117,6 +123,10 @@ public sealed class MainWindow : Window
 
     /// <summary>Current slide index (0-based) — read by the launch-smoke coordinator.</summary>
     internal int CurrentSlideIndex => Editor?.CurrentSlideIndex ?? -1;
+    internal int SlidePaneSlideItemCount => _slidePaneList.Items
+        .OfType<ListBoxItem>()
+        .Count(item => item.Tag is int);
+    internal bool IsSlidePaneInsertionIndicatorVisible => _slidePaneInsertionIndicator.IsVisible;
 
     internal bool IsDirty => _fileWorkflow.IsDirty;
 
@@ -187,6 +197,16 @@ public sealed class MainWindow : Window
             Background  = new SolidColorBrush(Color.FromRgb(0xE0, 0xE0, 0xE0)),
         };
         _slidePaneList.SelectionChanged += OnSlidePaneSelectionChanged;
+
+        _slidePaneInsertionIndicator = new Border
+        {
+            Height              = 2,
+            Background          = new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A)),
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment   = VerticalAlignment.Top,
+            IsHitTestVisible    = false,
+            IsVisible           = false,
+        };
 
         _notesBox = new TextBox
         {
@@ -355,13 +375,20 @@ public sealed class MainWindow : Window
         // Wire interaction after the overlay panel is built.
         WireInteraction(textOverlay);
 
+        var slidePaneHost = new Grid
+        {
+            Width = 180,
+        };
+        slidePaneHost.Children.Add(_slidePaneList);
+        slidePaneHost.Children.Add(_slidePaneInsertionIndicator);
+
         // Left (slide pane) + right split.
         var body = new Grid();
         body.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         body.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        Grid.SetColumn(_slidePaneList, 0);
+        Grid.SetColumn(slidePaneHost, 0);
         Grid.SetColumn(rightGrid,      1);
-        body.Children.Add(_slidePaneList);
+        body.Children.Add(slidePaneHost);
         body.Children.Add(rightGrid);
 
         return body;
@@ -1357,13 +1384,15 @@ public sealed class MainWindow : Window
                     Children = { thumb, label },
                 };
 
-                _slidePaneList.Items.Add(new ListBoxItem
+                var item = new ListBoxItem
                 {
                     Tag         = entry.SlideIndex,
                     Content     = panel,
                     Padding     = new Thickness(2),
                     ContextMenu = BuildSlidePaneContextMenu(entry.SlideIndex),
-                });
+                };
+                WireSlidePaneDragHandlers(item);
+                _slidePaneList.Items.Add(item);
             }
 
             SelectSlidePaneItem(Editor.CurrentSlideIndex);
@@ -1421,6 +1450,115 @@ public sealed class MainWindow : Window
 
         return menu;
     }
+
+    private void WireSlidePaneDragHandlers(ListBoxItem item)
+    {
+        item.PointerPressed += OnSlidePaneItemPointerPressed;
+        item.PointerMoved += OnSlidePaneItemPointerMoved;
+        item.PointerReleased += OnSlidePaneItemPointerReleased;
+        item.PointerCaptureLost += OnSlidePaneItemPointerCaptureLost;
+    }
+
+    private void OnSlidePaneItemPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (sender is not ListBoxItem { Tag: int sourceSlideIndex } item)
+            return;
+
+        var point = e.GetCurrentPoint(item);
+        if (!point.Properties.IsLeftButtonPressed)
+            return;
+
+        _slidePaneDragSourceIndex = sourceSlideIndex;
+        _slidePaneDragTargetIndex = sourceSlideIndex;
+        _slidePaneDragStartPoint = e.GetPosition(item);
+    }
+
+    private void OnSlidePaneItemPointerMoved(object? sender, PointerEventArgs e)
+    {
+        if (sender is not ListBoxItem item || _slidePaneDragSourceIndex < 0)
+            return;
+
+        var point = e.GetCurrentPoint(item);
+        if (!point.Properties.IsLeftButtonPressed)
+            return;
+
+        var itemPosition = e.GetPosition(item);
+        if (!_slidePaneIsDragging && Math.Abs(itemPosition.Y - _slidePaneDragStartPoint.Y) < 5)
+            return;
+
+        if (!_slidePaneIsDragging)
+        {
+            _slidePaneIsDragging = true;
+            e.Pointer.Capture(item);
+        }
+
+        var panePosition = e.GetPosition(_slidePaneList);
+        _slidePaneDragTargetIndex = SlidePanePlanner.HitTestInsertionPoint(
+            GetSlidePaneItemKinds(),
+            panePosition.Y,
+            SlidePaneAvaloniaSlideItemHeight);
+        ShowSlidePaneInsertionIndicator();
+        e.Handled = true;
+    }
+
+    private void OnSlidePaneItemPointerReleased(object? sender, PointerReleasedEventArgs e)
+    {
+        if (!_slidePaneIsDragging)
+        {
+            _slidePaneDragSourceIndex = -1;
+            _slidePaneDragTargetIndex = -1;
+            return;
+        }
+
+        var sourceSlideIndex = _slidePaneDragSourceIndex;
+        var targetInsertionIndex = _slidePaneDragTargetIndex;
+        _slidePaneIsDragging = false;
+        _slidePaneDragSourceIndex = -1;
+        _slidePaneDragTargetIndex = -1;
+        e.Pointer.Capture(null);
+        HideSlidePaneInsertionIndicator();
+
+        TryApplySlidePaneMove(sourceSlideIndex, targetInsertionIndex);
+        e.Handled = true;
+    }
+
+    private void OnSlidePaneItemPointerCaptureLost(object? sender, PointerCaptureLostEventArgs e)
+    {
+        _slidePaneIsDragging = false;
+        _slidePaneDragSourceIndex = -1;
+        _slidePaneDragTargetIndex = -1;
+        HideSlidePaneInsertionIndicator();
+    }
+
+    internal bool TryApplySlidePaneMove(int sourceSlideIndex, int targetInsertionIndex)
+    {
+        var action = SlidePanePlanner.PlanMoveAction(
+            _presentation.Slides.Count,
+            sourceSlideIndex,
+            targetInsertionIndex);
+
+        return SlidePanePlanner.TryApplyAction(Editor, action);
+    }
+
+    private void ShowSlidePaneInsertionIndicator()
+    {
+        var indicatorY = SlidePanePlanner.ComputeInsertionIndicatorOffset(
+            GetSlidePaneItemKinds(),
+            _slidePaneDragTargetIndex,
+            SlidePaneAvaloniaSlideItemHeight);
+
+        _slidePaneInsertionIndicator.Margin = new Thickness(0, indicatorY - 1, 0, 0);
+        _slidePaneInsertionIndicator.IsVisible = true;
+    }
+
+    private void HideSlidePaneInsertionIndicator() =>
+        _slidePaneInsertionIndicator.IsVisible = false;
+
+    private IReadOnlyList<bool> GetSlidePaneItemKinds() =>
+        _slidePaneList.Items
+            .OfType<ListBoxItem>()
+            .Select(item => item.Tag is int)
+            .ToArray();
 
     private void SelectSlidePaneItem(int slideIndex)
     {
