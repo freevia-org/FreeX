@@ -81,6 +81,31 @@ public sealed class SlideCanvasAvaloniaTests
         };
     }
 
+    private static SlideShape MakeMergedTableShape(uint id)
+    {
+        var table = new TableShape();
+        table.ColumnWidthsEmu.Add(DrawingMlCoordinateUnits.EmuPerPixel * 100);
+        table.ColumnWidthsEmu.Add(DrawingMlCoordinateUnits.EmuPerPixel * 100);
+        table.ColumnWidthsEmu.Add(DrawingMlCoordinateUnits.EmuPerPixel * 100);
+
+        var row = new TableRow { HeightEmu = DrawingMlCoordinateUnits.EmuPerPixel * 40 };
+        row.Cells.Add(new TableCell { GridSpan = 2, TextBody = MakeTextBody("Anchor") });
+        row.Cells.Add(new TableCell { HMerge = true });
+        row.Cells.Add(new TableCell { TextBody = MakeTextBody("Right") });
+        table.Rows.Add(row);
+
+        return new SlideShape
+        {
+            Id = id,
+            Kind = SlideShapeKind.Table,
+            OffsetXEmu = 0,
+            OffsetYEmu = 0,
+            ExtentCxEmu = DrawingMlCoordinateUnits.EmuPerPixel * 300,
+            ExtentCyEmu = DrawingMlCoordinateUnits.EmuPerPixel * 40,
+            Table = table,
+        };
+    }
+
     private static string FindRepositoryRoot()
     {
         for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
@@ -185,6 +210,111 @@ public sealed class SlideCanvasAvaloniaTests
     }
 
     [Fact]
+    public async Task TableCellTextEditor_ActivateCommit_UsesSharedPlannerCommand()
+    {
+        EditingSession? editor = null;
+        SlideShape? shape = null;
+
+        await Run(() =>
+        {
+            var presentation = MakePresentation(pres =>
+            {
+                pres.Slides[0].Shapes.Clear();
+                shape = MakeTableShape(11, "Original");
+                pres.Slides[0].Shapes.Add(shape);
+            });
+
+            var bus = new PresentationCommandBus(presentation);
+            editor = new EditingSession(presentation, bus);
+            var canvas = new SlideCanvas { Presentation = presentation, Slide = presentation.Slides[0] };
+            var overlay = new global::Avalonia.Controls.Canvas();
+            var textEditor = new AvaloniaInCanvasTextEditor(canvas, editor, overlay);
+
+            textEditor.ActivateCellEdit(shape!.Id, 0, 0);
+            textEditor.IsCellEditActive.Should().BeTrue();
+            overlay.IsVisible.Should().BeTrue();
+            overlay.IsHitTestVisible.Should().BeTrue();
+
+            var box = overlay.Children.OfType<global::Avalonia.Controls.TextBox>().Single();
+            box.Text = "Changed\nText";
+
+            textEditor.CommitCellEdit();
+        });
+
+        editor!.CanUndo.Should().BeTrue("changed cell text should commit through the shared table-cell command");
+        shape!.Table!.Rows[0].Cells[0].TextBody!.Paragraphs.Should().HaveCount(2);
+        shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs[0].Runs[0].Text.Should().Be("Changed");
+        shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs[1].Runs[0].Text.Should().Be("Text");
+
+        editor.Undo();
+        shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs[0].Runs[0].Text.Should().Be("Original");
+    }
+
+    [Fact]
+    public async Task TableCellTextEditor_Cancel_DiscardsChanges()
+    {
+        EditingSession? editor = null;
+        SlideShape? shape = null;
+
+        await Run(() =>
+        {
+            var presentation = MakePresentation(pres =>
+            {
+                pres.Slides[0].Shapes.Clear();
+                shape = MakeTableShape(12, "Original");
+                pres.Slides[0].Shapes.Add(shape);
+            });
+
+            var bus = new PresentationCommandBus(presentation);
+            editor = new EditingSession(presentation, bus);
+            var canvas = new SlideCanvas { Presentation = presentation, Slide = presentation.Slides[0] };
+            var overlay = new global::Avalonia.Controls.Canvas();
+            var textEditor = new AvaloniaInCanvasTextEditor(canvas, editor, overlay);
+
+            textEditor.ActivateCellEdit(shape!.Id, 0, 0);
+            overlay.Children.OfType<global::Avalonia.Controls.TextBox>().Single().Text = "Discarded";
+
+            textEditor.CancelCellEdit();
+        });
+
+        editor!.CanUndo.Should().BeFalse();
+        shape!.Table!.Rows[0].Cells[0].TextBody!.Paragraphs[0].Runs[0].Text.Should().Be("Original");
+    }
+
+    [Fact]
+    public async Task TableCellTextEditor_DoubleClickContinuationCell_NormalizesToMergeAnchor()
+    {
+        EditingSession? editor = null;
+        SlideShape? shape = null;
+        AvaloniaInCanvasTextEditor? textEditor = null;
+
+        await Run(() =>
+        {
+            var presentation = MakePresentation(pres =>
+            {
+                pres.Slides[0].Shapes.Clear();
+                shape = MakeMergedTableShape(13);
+                pres.Slides[0].Shapes.Add(shape);
+            });
+
+            var bus = new PresentationCommandBus(presentation);
+            editor = new EditingSession(presentation, bus);
+            var canvas = new SlideCanvas { Presentation = presentation, Slide = presentation.Slides[0] };
+            var overlay = new global::Avalonia.Controls.Canvas();
+            textEditor = new AvaloniaInCanvasTextEditor(canvas, editor, overlay);
+
+            var handled = textEditor.TryHandleTableCellPointer(screenX: 150, screenY: 20, clickCount: 2);
+
+            handled.Should().BeTrue();
+            textEditor.IsCellEditActive.Should().BeTrue();
+            editor.ActiveTableCell.Should().Be((0, 0));
+            overlay.Children.OfType<global::Avalonia.Controls.TextBox>().Single().Text.Should().Be("Anchor");
+        });
+
+        textEditor!.ActiveTableShapeId.Should().Be(shape!.Id);
+    }
+
+    [Fact]
     public void TableCellEditAdapter_DelegatesToSharedPlanner()
     {
         var root = FindRepositoryRoot();
@@ -197,6 +327,22 @@ public sealed class SlideCanvasAvaloniaTests
         adapter.Should().Contain("TableCellEditPlanner.PlanSelectedCell");
         adapter.Should().Contain("TableCellEditPlanner.BeginEdit");
         adapter.Should().Contain("TableCellEditPlanner.CommitRichText");
+        adapter.Should().Contain("TableCellEditPlanner.Cancel");
+    }
+
+    [Fact]
+    public void TableCellTextEditor_UsesAvaloniaAdapterForSharedPlannerDecisions()
+    {
+        var root = FindRepositoryRoot();
+        var source = File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "FreeP.App.Rendering.Avalonia",
+            "AvaloniaInCanvasTextEditor.cs"));
+
+        source.Should().Contain("AvaloniaTableCellEditAdapter.BeginEdit");
+        source.Should().Contain("AvaloniaTableCellEditAdapter.CommitRichText");
+        source.Should().Contain("AvaloniaTableCellEditAdapter.Cancel");
     }
 
     // ── 1. Geometry factory round-trip ────────────────────────────────────────
