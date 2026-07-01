@@ -1276,9 +1276,9 @@ public sealed class SlideCanvas : FrameworkElement
         {
             var para = text.Paragraphs[placement.ParagraphIndex];
             var ft = formatted[placement.ParagraphIndex];
-            if (!string.IsNullOrEmpty(para.BulletText))
-                DrawBulletWpf(dc, para.BulletText, para.BulletFontFamily, para.BulletFontSizePt,
-                    para.BulletColor, placement.X - para.HangingDip, placement.Y);
+            if (placement.Bullet is { } bullet)
+                DrawBulletWpf(dc, bullet.Text, bullet.FontFamily, bullet.FontSizePt,
+                    bullet.Color, bullet.X, bullet.Y);
 
             switch (TextLayoutPlanner.PlanParagraphRenderRoute(para, text))
             {
@@ -1330,13 +1330,10 @@ public sealed class SlideCanvas : FrameworkElement
             var para = text.Paragraphs[placement.ParagraphIndex];
             var ft = formatted[placement.ParagraphIndex];
 
-            // Wave 19A: draw bullet (char or number) to the left of the paragraph text.
-            // The bullet sits at textX + indentDip - hangingDip; text starts at textX + indentDip.
-            if (!string.IsNullOrEmpty(para.BulletText))
+            if (placement.Bullet is { } bullet)
             {
-                double bulletX = placement.X - para.HangingDip;
-                DrawBulletWpf(dc, para.BulletText, para.BulletFontFamily, para.BulletFontSizePt,
-                    para.BulletColor, bulletX, placement.Y);
+                DrawBulletWpf(dc, bullet.Text, bullet.FontFamily, bullet.FontSizePt,
+                    bullet.Color, bullet.X, bullet.Y);
             }
 
             switch (TextLayoutPlanner.PlanParagraphRenderRoute(para, text))

@@ -1216,9 +1216,9 @@ public sealed class SlideCanvas : Control
         {
             var para = text.Paragraphs[placement.ParagraphIndex];
             var ft = formatted[placement.ParagraphIndex];
-            if (!string.IsNullOrEmpty(para.BulletText))
-                DrawBulletAvalonia(dc, para.BulletText, para.BulletFontFamily, para.BulletFontSizePt,
-                    para.BulletColor, placement.X - para.HangingDip, placement.Y);
+            if (placement.Bullet is { } bullet)
+                DrawBulletAvalonia(dc, bullet.Text, bullet.FontFamily, bullet.FontSizePt,
+                    bullet.Color, bullet.X, bullet.Y);
 
             switch (TextLayoutPlanner.PlanParagraphRenderRoute(para, text))
             {
@@ -1268,12 +1268,10 @@ public sealed class SlideCanvas : Control
             var para = text.Paragraphs[placement.ParagraphIndex];
             var ft = formatted[placement.ParagraphIndex];
 
-            // Wave 19A: draw bullet (char or number) to the left of paragraph text.
-            if (!string.IsNullOrEmpty(para.BulletText))
+            if (placement.Bullet is { } bullet)
             {
-                double bulletX = placement.X - para.HangingDip;
-                DrawBulletAvalonia(dc, para.BulletText, para.BulletFontFamily, para.BulletFontSizePt,
-                    para.BulletColor, bulletX, placement.Y);
+                DrawBulletAvalonia(dc, bullet.Text, bullet.FontFamily, bullet.FontSizePt,
+                    bullet.Color, bullet.X, bullet.Y);
             }
 
             switch (TextLayoutPlanner.PlanParagraphRenderRoute(para, text))
