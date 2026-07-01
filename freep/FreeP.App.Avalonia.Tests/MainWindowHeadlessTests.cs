@@ -295,7 +295,9 @@ public sealed class MainWindowHeadlessTests
         var source = File.ReadAllText(FindRepoFile("freep", "FreeP.App.Avalonia", "MainWindow.cs"));
 
         source.Should().Contain("PresentationAnimationCommandPlanner.BuiltInPlans");
-        source.Should().Contain("PresentationAnimationCommandPlanner.TryApply(Editor, plan, ctx.SelectedValue)");
+        source.Should().Contain("PresentationAnimationCommandPlanner.TryApply(");
+        source.Should().Contain("OnAnimationPaneRequested");
+        source.Should().Contain("AnimationPanePlanner.BuildTimelinePlan(");
     }
 
     [Fact]
@@ -925,6 +927,7 @@ public sealed class MainWindowHeadlessTests
         AnimationPreset? preset = null;
         int? duration = null;
         int? delay = null;
+        AnimationPaneTimelinePlan? panePlan = null;
 
         var ran = await OnUiThread(() =>
         {
@@ -946,6 +949,7 @@ public sealed class MainWindowHeadlessTests
             preset = animation.Preset;
             duration = animation.DurationMs;
             delay = animation.DelayMs;
+            panePlan = window.LastAnimationPaneTimelinePlan;
         });
 
         if (!ran) return;
@@ -956,6 +960,13 @@ public sealed class MainWindowHeadlessTests
         preset.Should().Be(AnimationPreset.Fade);
         duration.Should().Be(1500);
         delay.Should().Be(250);
+        panePlan.Should().NotBeNull();
+        panePlan!.Items.Should().ContainSingle();
+        panePlan.SelectedIndex.Should().Be(0);
+        panePlan.Items[0].EffectText.Should().Be("In: Fade");
+        panePlan.Items[0].DurationMs.Should().Be(1500);
+        panePlan.Items[0].DelayMs.Should().Be(250);
+        panePlan.PreviewIntent.CanExecute.Should().BeTrue();
     }
 
     [Fact]

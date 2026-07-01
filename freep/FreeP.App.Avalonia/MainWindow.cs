@@ -122,6 +122,7 @@ public sealed class MainWindow : Window
     internal PresentationAccessibilitySummaryPlan? LastAccessibilitySummaryPlan { get; private set; }
     internal PresentationAltTextRequestPlan? LastAltTextRequestPlan { get; private set; }
     internal PresentationProofingRequestPlan? LastProofingRequestPlan { get; private set; }
+    internal AnimationPaneTimelinePlan? LastAnimationPaneTimelinePlan { get; private set; }
 
     // ── Constructors ───────────────────────────────────────────────────────────
 
@@ -458,7 +459,11 @@ public sealed class MainWindow : Window
         foreach (var plan in PresentationAnimationCommandPlanner.BuiltInPlans)
         {
             r.Register(plan.CommandId, new ContextRibbonCommand(ctx =>
-                PresentationAnimationCommandPlanner.TryApply(Editor, plan, ctx.SelectedValue)));
+                PresentationAnimationCommandPlanner.TryApply(
+                    Editor,
+                    plan,
+                    ctx.SelectedValue,
+                    OnAnimationPaneRequested)));
         }
 
         // Slide show
@@ -762,6 +767,21 @@ public sealed class MainWindow : Window
         LastCommentPanePlan = PresentationReviewWorkflowPlanner.BuildCommentPanePlan(
             _presentation.Slides,
             Editor.CurrentSlideIndex);
+    }
+
+    private void OnAnimationPaneRequested(PresentationAnimationCommandPlan plan)
+    {
+        _ = plan;
+        RefreshAnimationPaneTimelinePlan();
+    }
+
+    internal AnimationPaneTimelinePlan RefreshAnimationPaneTimelinePlan(int selectedAnimationIndex = -1)
+    {
+        LastAnimationPaneTimelinePlan = AnimationPanePlanner.BuildTimelinePlan(
+            Editor.CurrentSlide,
+            Editor.SelectedShapeIds,
+            selectedAnimationIndex);
+        return LastAnimationPaneTimelinePlan;
     }
 
     private void RefreshAccessibilitySummaryPlan()

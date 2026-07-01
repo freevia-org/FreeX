@@ -57,6 +57,8 @@ public sealed class AnimationPane : Border
     private readonly StackPanel _listPanel;
     private int _selectedRowIndex = -1;   // -1 = none
 
+    internal AnimationPaneTimelinePlan CurrentTimelinePlanForTest => BuildTimelinePlan();
+
     // ── Construction ──────────────────────────────────────────────────────────────
 
     /// <param name="editor">Active editing session.</param>
@@ -156,8 +158,8 @@ public sealed class AnimationPane : Border
     {
         _listPanel.Children.Clear();
 
-        var animations = _editor.CurrentSlideAnimations;
-        if (animations.Count == 0)
+        var plan = BuildTimelinePlan();
+        if (!plan.HasAnimations)
         {
             _listPanel.Children.Add(new TextBlock
             {
@@ -170,27 +172,25 @@ public sealed class AnimationPane : Border
             return;
         }
 
-        // Clamp selected index to valid range.
-        if (_selectedRowIndex >= animations.Count)
-            _selectedRowIndex = animations.Count - 1;
+        _selectedRowIndex = plan.SelectedIndex;
 
-        for (int i = 0; i < animations.Count; i++)
+        foreach (var item in plan.Items)
         {
-            var row = BuildRow(i, animations[i]);
+            var row = BuildRow(item);
             _listPanel.Children.Add(row);
         }
     }
 
     // ── Row construction ──────────────────────────────────────────────────────────
 
-    private UIElement BuildRow(int index, ShapeAnimation anim)
+    private UIElement BuildRow(AnimationPaneTimelineItemPlan item)
     {
-        bool selected = index == _selectedRowIndex;
+        bool selected = item.IsSelected;
 
         // ── Order number ────────────────────────────────────────────────────────
         var orderLabel = new TextBlock
         {
-            Text              = (index + 1).ToString(),
+            Text              = item.OrderText,
             FontSize          = 11,
             FontWeight        = FontWeights.SemiBold,
             Foreground        = TextBrush,
@@ -201,7 +201,7 @@ public sealed class AnimationPane : Border
         };
 
         // ── Shape name ──────────────────────────────────────────────────────────
-        var shapeName = ResolveShapeName(anim.ShapeId);
+        var shapeName = item.ShapeName;
         var nameLabel = new TextBlock
         {
             Text              = shapeName,
@@ -214,7 +214,7 @@ public sealed class AnimationPane : Border
         };
 
         // ── Effect label (Kind + Preset) ────────────────────────────────────────
-        var effectText = AnimationPanePlanner.FormatEffect(anim);
+        var effectText = item.EffectText;
         var effectLabel = new TextBlock
         {
             Text              = effectText,
@@ -238,10 +238,10 @@ public sealed class AnimationPane : Border
         };
         foreach (var label in AnimationPanePlanner.TriggerLabels)
             triggerCombo.Items.Add(label);
-        triggerCombo.SelectedIndex = AnimationPanePlanner.ToTriggerIndex(anim.Trigger);
+        triggerCombo.SelectedIndex = item.TriggerIndex;
 
         // Capture by value for the closure.
-        int capturedIndex = index;
+        int capturedIndex = item.Index;
         triggerCombo.SelectionChanged += (_, _) =>
         {
             var anims = _editor.CurrentSlideAnimations;
@@ -250,7 +250,7 @@ public sealed class AnimationPane : Border
             if (!AnimationPanePlanner.TryGetTrigger(triggerCombo.SelectedIndex, out var newTrigger))
                 return;
             if (current.Trigger == newTrigger) return;
-            var updated = CloneAnimation(current);
+            var updated = PresentationAnimationCommandPlanner.CloneAnimation(current);
             updated.Trigger = newTrigger;
             _editor.SetAnimation(capturedIndex, updated);
         };
@@ -258,7 +258,7 @@ public sealed class AnimationPane : Border
         // ── Duration field ──────────────────────────────────────────────────────
         var durationBox = new TextBox
         {
-            Text              = AnimationPanePlanner.FormatDuration(anim.DurationMs),
+            Text              = item.DurationText,
             FontSize          = 10,
             Width             = 48,
             VerticalAlignment = VerticalAlignment.Center,
@@ -274,7 +274,7 @@ public sealed class AnimationPane : Border
             var plan = AnimationPanePlanner.BuildDurationEditPlan(durationBox.Text, current.DurationMs);
             if (plan.ShouldUpdate)
             {
-                var updated = CloneAnimation(current);
+                var updated = PresentationAnimationCommandPlanner.CloneAnimation(current);
                 updated.DurationMs = plan.DurationMs;
                 _editor.SetAnimation(capturedIndex, updated);
             }
@@ -296,7 +296,7 @@ public sealed class AnimationPane : Border
             Margin              = new Thickness(1),
             Background          = ButtonBg,
             BorderThickness     = new Thickness(1),
-            IsEnabled           = index > 0,
+            IsEnabled           = item.CanMoveEarlier,
             ToolTip             = "Move earlier",
             VerticalAlignment   = VerticalAlignment.Center,
         };
@@ -320,7 +320,7 @@ public sealed class AnimationPane : Border
             Margin              = new Thickness(1),
             Background          = ButtonBg,
             BorderThickness     = new Thickness(1),
-            IsEnabled           = index < _editor.CurrentSlideAnimations.Count - 1,
+            IsEnabled           = item.CanMoveLater,
             ToolTip             = "Move later",
             VerticalAlignment   = VerticalAlignment.Center,
         };
@@ -392,7 +392,7 @@ public sealed class AnimationPane : Border
         // ── Row border ───────────────────────────────────────────────────────────
         var row = new Border
         {
-            Tag             = index,
+            Tag             = item.Index,
             Background      = selected ? RowSelected : RowNormal,
             BorderBrush     = RowBorder,
             BorderThickness = new Thickness(0, 0, 0, 1),
@@ -429,29 +429,11 @@ public sealed class AnimationPane : Border
 
     // ── Helpers ───────────────────────────────────────────────────────────────────
 
-    /// <summary>Looks up the shape name for <paramref name="shapeId"/> on the current slide.</summary>
-    private string ResolveShapeName(uint shapeId)
-    {
-        var slide = _editor.CurrentSlide;
-        if (slide is null) return $"Shape {shapeId}";
-        var shape = slide.Shapes.FirstOrDefault(s => s.Id == shapeId);
-        return string.IsNullOrWhiteSpace(shape?.Name) ? $"Shape {shapeId}" : shape!.Name;
-    }
-
-    /// <summary>Creates a mutable shallow copy of <paramref name="src"/> for SetAnimation.</summary>
-    private static ShapeAnimation CloneAnimation(ShapeAnimation src)
-        => new ShapeAnimation
-        {
-            ShapeId        = src.ShapeId,
-            Kind           = src.Kind,
-            Preset         = src.Preset,
-            Trigger        = src.Trigger,
-            DelayMs        = src.DelayMs,
-            DurationMs     = src.DurationMs,
-            Direction      = src.Direction,
-            Motion         = src.Motion,        // motion path is shared (read-only in practice)
-            TriggerShapeId = src.TriggerShapeId,
-        };
+    private AnimationPaneTimelinePlan BuildTimelinePlan()
+        => AnimationPanePlanner.BuildTimelinePlan(
+            _editor.CurrentSlide,
+            _editor.SelectedShapeIds,
+            _selectedRowIndex);
 
     // ── Static freeze helper ──────────────────────────────────────────────────────
 
