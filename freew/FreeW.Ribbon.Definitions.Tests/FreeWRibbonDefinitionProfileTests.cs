@@ -266,6 +266,37 @@ public sealed class FreeWRibbonDefinitionProfileTests
     }
 
     [Fact]
+    public void Avalonia_profile_uses_shared_mailings_command_ids()
+    {
+        var avaloniaIds = CommandEntries(FreeWRibbon.Build(FreeWRibbonCapabilities.Avalonia))
+            .Select(entry => entry.CommandId)
+            .ToHashSet(StringComparer.Ordinal);
+
+        avaloniaIds.Should().Contain(new[]
+        {
+            "freew.merge-data",
+            "freew.merge-address-block",
+            "freew.merge-greeting-line",
+            "freew.merge-field",
+            "freew.merge-preview",
+            "freew.merge-preview-previous",
+            "freew.merge-preview-next",
+            "freew.merge-finish",
+        });
+
+        avaloniaIds.Should().NotContain(new[]
+        {
+            "freew.select-recipients",
+            "freew.address-block",
+            "freew.greeting-line",
+            "freew.preview-results",
+            "freew.prev-record",
+            "freew.next-record",
+            "freew.finish-merge",
+        });
+    }
+
+    [Fact]
     public void Checked_in_command_inventory_matches_compiled_profiles()
     {
         var wpf = InventoryLocations(FreeWRibbon.Build(FreeWRibbonCapabilities.Wpf), "WPF");

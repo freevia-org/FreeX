@@ -1000,14 +1000,33 @@ internal static class FreeWAvaloniaRibbonCommands
     /// </summary>
     private static void RegisterMailingsCommands(RibbonCommandRegistry r, MailMergeEngine engine)
     {
-        r.Register("freew.select-recipients", new ActionRibbonCommand(engine.SelectRecipients));
-        r.Register("freew.merge-field",       new ActionRibbonCommand(engine.InsertMergeField));
-        r.Register("freew.address-block",     new ActionRibbonCommand(engine.InsertAddressBlock));
-        r.Register("freew.greeting-line",     new ActionRibbonCommand(engine.InsertGreetingLine));
-        r.Register("freew.preview-results",   new ActionRibbonCommand(engine.TogglePreview));
-        r.Register("freew.next-record",       new ActionRibbonCommand(engine.NextRecord));
-        r.Register("freew.prev-record",       new ActionRibbonCommand(engine.PreviousRecord));
-        r.Register("freew.finish-merge",      new ActionRibbonCommand(() => engine.FinishMerge()));
+        RegisterMailingsAlias(r, "freew.merge-data", new ActionRibbonCommand(engine.SelectRecipients),
+            "freew.select-recipients");
+        r.Register("freew.merge-edit-recipients", new ActionRibbonCommand(engine.SelectRecipients));
+        r.Register("freew.merge-field", new ActionRibbonCommand(engine.InsertMergeField));
+        RegisterMailingsAlias(r, "freew.merge-address-block", new ActionRibbonCommand(engine.InsertAddressBlock),
+            "freew.address-block");
+        RegisterMailingsAlias(r, "freew.merge-greeting-line", new ActionRibbonCommand(engine.InsertGreetingLine),
+            "freew.greeting-line");
+        RegisterMailingsAlias(r, "freew.merge-preview", new ActionRibbonCommand(engine.TogglePreview),
+            "freew.preview-results");
+        RegisterMailingsAlias(r, "freew.merge-preview-next", new ActionRibbonCommand(engine.NextRecord),
+            "freew.next-record");
+        RegisterMailingsAlias(r, "freew.merge-preview-previous", new ActionRibbonCommand(engine.PreviousRecord),
+            "freew.prev-record");
+        RegisterMailingsAlias(r, "freew.merge-finish", new ActionRibbonCommand(() => engine.FinishMerge()),
+            "freew.finish-merge");
+    }
+
+    private static void RegisterMailingsAlias(
+        RibbonCommandRegistry r,
+        string canonicalId,
+        IRibbonCommand command,
+        params string[] aliases)
+    {
+        r.Register(canonicalId, command);
+        foreach (var alias in aliases)
+            r.Register(alias, command);
     }
 
     /// <summary>

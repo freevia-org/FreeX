@@ -624,23 +624,23 @@ internal static class FreeWAvaloniaRibbonDefinition
                 // Mail-SEND (e-mail merge) is OUT OF SCOPE and intentionally not surfaced.
                 tab.Group("start-merge", "Start Mail Merge", null, 100, g =>
                 {
-                    g.Button("freew.select-recipients", "Select Recipients");
+                    g.Button("freew.merge-data", "Select Recipients");
                 });
                 tab.Group("write-insert", "Write & Insert Fields", null, 90, g =>
                 {
-                    g.Button("freew.address-block", "Address Block");
-                    g.Button("freew.greeting-line", "Greeting Line");
+                    g.Button("freew.merge-address-block", "Address Block");
+                    g.Button("freew.merge-greeting-line", "Greeting Line");
                     g.Button("freew.merge-field",   "Insert Merge Field");
                 });
                 tab.Group("preview-results", "Preview Results", null, 80, g =>
                 {
-                    g.Button("freew.preview-results", "Preview Results");
-                    g.Button("freew.prev-record",     "◀ Previous");
-                    g.Button("freew.next-record",     "Next ▶");
+                    g.Button("freew.merge-preview",          "Preview Results");
+                    g.Button("freew.merge-preview-previous", "◀ Previous");
+                    g.Button("freew.merge-preview-next",     "Next ▶");
                 });
                 tab.Group("finish", "Finish", null, 70, g =>
                 {
-                    g.Button("freew.finish-merge", "Finish & Merge");
+                    g.Button("freew.merge-finish", "Finish & Merge");
                 });
             })
             // ── Table contextual tabs (shown only when caret is in a table cell) ─────────────

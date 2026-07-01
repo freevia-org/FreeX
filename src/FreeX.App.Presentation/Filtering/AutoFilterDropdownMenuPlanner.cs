@@ -61,19 +61,22 @@ public static class AutoFilterDropdownMenuPlanner
         {
             new(textProvider.Get("AutoFilter_SortAscending"), AutoFilterMenuEntryKind.SortAscending),
             new(textProvider.Get("AutoFilter_SortDescending"), AutoFilterMenuEntryKind.SortDescending),
-            new(string.Empty, AutoFilterMenuEntryKind.Separator),
+            CreateSeparator(),
             new(textProvider.Format("AutoFilter_ClearFilterFrom", headerText), AutoFilterMenuEntryKind.ClearFilter, isEnabled: hasActiveFilter)
         };
         if (colorOptions.Count > 0)
             entries.Add(new AutoFilterMenuEntry(textProvider.Get("AutoFilter_FilterByColor"), AutoFilterMenuEntryKind.FilterByColor));
         entries.Add(filterEntry);
-        entries.Add(new AutoFilterMenuEntry(string.Empty, AutoFilterMenuEntryKind.Separator));
+        entries.Add(CreateSeparator());
         entries.Add(new AutoFilterMenuEntry(textProvider.Get("AutoFilter_Search"), AutoFilterMenuEntryKind.Search));
-        entries.Add(new AutoFilterMenuEntry(textProvider.Get("AutoFilter_SelectAll"), AutoFilterMenuEntryKind.SelectAll));
-        entries.Add(new AutoFilterMenuEntry(string.Empty, AutoFilterMenuEntryKind.Separator));
+        var checklistEntries = CreateChecklistEntries(sheet, plan, blankDisplayText);
+        entries.Add(new AutoFilterMenuEntry(
+            textProvider.Get("AutoFilter_SelectAll"),
+            AutoFilterMenuEntryKind.SelectAll,
+            isChecked: ComputeSelectAllState(checklistEntries)));
+        entries.Add(CreateSeparator());
 
-        entries.AddRange(CreateChecklistItems(sheet, plan, blankDisplayText)
-            .Select(item => new AutoFilterMenuEntry(item)));
+        entries.AddRange(checklistEntries);
 
         return new AutoFilterMenuPlan(
             headerText,
@@ -81,6 +84,52 @@ public static class AutoFilterDropdownMenuPlanner
             entries,
             colorOptions,
             AutoFilterMenuCatalog.CreateSections(entries, textProvider));
+    }
+
+    private static AutoFilterMenuEntry CreateSeparator() =>
+        new(string.Empty, AutoFilterMenuEntryKind.Separator, isEnabled: false);
+
+    private static IReadOnlyList<AutoFilterMenuEntry> CreateChecklistEntries(
+        Sheet sheet,
+        AutoFilterDropdownPlan plan,
+        string blankDisplayText)
+    {
+        var items = CreateChecklistItems(sheet, plan, blankDisplayText);
+        if (items.Count == 0 || !HasActiveFilter(sheet, plan.Range))
+            return items.Select(item => new AutoFilterMenuEntry(item)).ToList();
+
+        var visibleValues = CollectVisibleFilterValues(sheet, plan);
+        return items
+            .Select(item => new AutoFilterMenuEntry(item with { IsChecked = visibleValues.Contains(item.Value) }))
+            .ToList();
+    }
+
+    private static HashSet<string> CollectVisibleFilterValues(Sheet sheet, AutoFilterDropdownPlan plan)
+    {
+        var values = new HashSet<string>(StringComparer.Ordinal);
+        var filterColumn = plan.Range.Start.Col + plan.FilterColumnOffset;
+        for (var row = plan.Range.Start.Row + 1; row <= plan.Range.End.Row; row++)
+        {
+            if (sheet.FilterHiddenRows.Contains(row))
+                continue;
+
+            values.Add(AutoFilterChecklistPlanner.ToFilterText(sheet.GetValue(row, filterColumn)));
+        }
+
+        return values;
+    }
+
+    private static bool? ComputeSelectAllState(IReadOnlyList<AutoFilterMenuEntry> checklistEntries)
+    {
+        if (checklistEntries.Count == 0)
+            return false;
+
+        var checkedCount = checklistEntries.Count(entry => entry.IsChecked == true);
+        return checkedCount == checklistEntries.Count
+            ? true
+            : checkedCount == 0
+                ? false
+                : null;
     }
 
     private static IReadOnlyList<AutoFilterColorOption> CollectColorOptions(

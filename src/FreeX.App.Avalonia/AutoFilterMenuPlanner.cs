@@ -22,7 +22,8 @@ internal sealed record AutoFilterMenuItem(
     AutoFilterMenuItemKind Kind,
     string Label,
     string Value = "",
-    bool IsEnabled = true);
+    bool IsEnabled = true,
+    bool? IsChecked = null);
 
 /// <summary>The resolved AutoFilter dropdown menu for a column: header plus ordered entries.</summary>
 internal sealed record AutoFilterMenuModel(string Header, IReadOnlyList<AutoFilterMenuItem> Items);
@@ -60,5 +61,6 @@ internal static class AutoFilterMenuPlanner
             },
             entry.Header,
             entry.Value,
-            entry.IsEnabled);
+            entry.IsEnabled,
+            entry.IsChecked);
 }

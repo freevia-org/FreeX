@@ -106,6 +106,38 @@ public sealed class AutoFilterDropdownMenuPlannerTests
     }
 
     [Fact]
+    public void CreateMenuPlan_ReflectsFilteredRowsInChecklistAndSelectAllState()
+    {
+        var sheet = new Sheet(SheetId, "Sheet1");
+        sheet.SetCell(new CellAddress(SheetId, 1, 1), new TextValue("Fruit"));
+        sheet.SetCell(new CellAddress(SheetId, 2, 1), new TextValue("Apple"));
+        sheet.SetCell(new CellAddress(SheetId, 3, 1), new TextValue("Banana"));
+        sheet.SetCell(new CellAddress(SheetId, 4, 1), new TextValue("Cherry"));
+        sheet.FilterHiddenRows.Add(3);
+
+        var plan = new AutoFilterDropdownPlan(
+            new GridRange(
+                new CellAddress(SheetId, 1, 1),
+                new CellAddress(SheetId, 4, 1)),
+            FilterColumnOffset: 0);
+
+        var menu = AutoFilterDropdownMenuPlanner.CreateMenuPlan(sheet, plan, Text, "(Blanks)");
+
+        menu.Entries.Single(entry => entry.Kind == AutoFilterMenuEntryKind.SelectAll)
+            .IsChecked.Should().BeNull();
+        menu.Entries
+            .Where(entry => entry.Kind == AutoFilterMenuEntryKind.ChecklistItem)
+            .ToDictionary(entry => entry.Value, entry => entry.IsChecked)
+            .Should()
+            .BeEquivalentTo(new Dictionary<string, bool?>
+            {
+                ["Apple"] = true,
+                ["Banana"] = false,
+                ["Cherry"] = true
+            });
+    }
+
+    [Fact]
     public void HasActiveFilter_DetectsFilteredDataRowsInsideRange()
     {
         var sheet = CreateSheetWithList();
