@@ -60,6 +60,15 @@ public sealed class ReviewWorkflowAdapterTests
                 true,
                 PresentationWorkflowCapabilityStatus.Available,
                 "Add a persistent alt-text description for the selected shape."));
+            window.LastAltTextPanePlan.Should().BeEquivalentTo(
+                PresentationReviewWorkflowPlanner.BuildAltTextPanePlan(
+                    window.Editor.CurrentSlide,
+                    shape.Id,
+                    proposedDescription: null));
+            window.LastAltTextPanePlan!.CanApply.Should().BeFalse();
+            window.LastAltTextPanePlan.Actions
+                .Single(action => action.CommandId == PresentationReviewWorkflowPlanner.AltTextPaneApplyCommandId)
+                .DisabledReason.Should().Be(PresentationReviewWorkflowPlanner.MissingAltTextDescriptionMessage);
 
             var mutation = window.ApplySelectedShapeAlternativeText(
                 "  Product packaging on a white background. ",
@@ -77,6 +86,13 @@ public sealed class ReviewWorkflowAdapterTests
             shape.IsDecorative.Should().BeFalse();
             window.LastAltTextRequestPlan!.CurrentTitle.Should().Be("Hero packaging photo");
             window.LastAltTextRequestPlan!.CurrentDescription.Should().Be("Product packaging on a white background.");
+            window.LastAltTextPanePlan.Should().BeEquivalentTo(
+                PresentationReviewWorkflowPlanner.BuildAltTextPanePlan(
+                    window.Editor.CurrentSlide,
+                    shape.Id,
+                    "Product packaging on a white background.",
+                    "Hero packaging photo"));
+            window.LastAltTextPanePlan!.CanApply.Should().BeTrue();
             window.LastAccessibilitySummaryPlan!.Issues.Should().NotContain(issue =>
                 issue.ShapeId == shape.Id && issue.Title == "Alt text missing");
             window.LastProofingRequestPlan.Should().NotBeNull();
@@ -109,6 +125,8 @@ public sealed class ReviewWorkflowAdapterTests
 
             window.LastLayoutRequestPlan.Should().Be(PresentationDesignCommandPlanner.LayoutPlan);
             window.LastLayoutPickerPlan.Should().NotBeNull();
+            window.IsLayoutPickerVisible.Should().BeTrue();
+            window.LayoutPickerChoiceButtonCount.Should().Be(2);
             window.LastLayoutPickerPlan!.Choices.Should().Contain(choice =>
                 choice.LayoutId == "rId2" &&
                 choice.DisplayName == "Blank" &&
@@ -119,6 +137,7 @@ public sealed class ReviewWorkflowAdapterTests
                 choice.DisplayOrder == 1);
 
             window.ApplyLayoutChoice("rId2").Should().BeTrue();
+            window.IsLayoutPickerVisible.Should().BeFalse();
             window.Editor.CurrentSlide!.LayoutId.Should().Be("rId2");
             window.LastAppliedLayoutChoice.Should().NotBeNull();
             window.LastAppliedLayoutChoice!.LayoutId.Should().Be("rId2");
@@ -166,12 +185,15 @@ public sealed class ReviewWorkflowAdapterTests
         source.Should().Contain("PresentationReviewWorkflowPlanner.BuildCommentPanePlan(");
         source.Should().Contain("PresentationReviewWorkflowPlanner.BuildAccessibilitySummaryPlan(_presentation)");
         source.Should().Contain("PresentationReviewWorkflowPlanner.BuildAltTextRequestPlan(");
+        source.Should().Contain("PresentationReviewWorkflowPlanner.BuildAltTextPanePlan(");
         source.Should().Contain("PresentationReviewWorkflowPlanner.BuildAltTextMutationPlan(");
         source.Should().Contain("PresentationReviewWorkflowPlanner.BuildProofingRequestPlan(_presentation)");
         source.Should().Contain("LastCommentPanePlan = plan;");
         source.Should().Contain("onLayoutPicker:     () => OpenLayoutPicker()");
         source.Should().Contain("PresentationDesignCommandPlanner.BuildLayoutPickerPlan(");
         source.Should().Contain("PresentationDesignCommandPlanner.TryApplyLayoutChoice(");
+        source.Should().Contain("ShowLayoutPicker(LastLayoutPickerPlan);");
+        source.Should().Contain("BuildLayoutChoiceLabel(choice)");
         source.Should().NotContain("Modern resolved-thread state is not modeled yet.\";");
     }
 

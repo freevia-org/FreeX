@@ -105,11 +105,11 @@ public sealed class PptxPackageRetentionTests
     public static IEnumerable<object[]> SemanticEditCorpusDecks()
     {
         yield return ["04-picture.pptx", new[] { "ppt/media/" }];
-        yield return ["06-charts.pptx", new[] { "ppt/charts/" }];
+        yield return ["06-charts.pptx", new[] { "ppt/charts/", "ppt/embeddings/" }];
         yield return ["14-smartart-live.pptx", new[] { "ppt/diagrams/" }];
         yield return ["15-picture-crop.pptx", new[] { "ppt/media/" }];
-        yield return ["18-chart-types.pptx", new[] { "ppt/charts/" }];
-        yield return ["19-chart-labels.pptx", new[] { "ppt/charts/" }];
+        yield return ["18-chart-types.pptx", new[] { "ppt/charts/", "ppt/embeddings/" }];
+        yield return ["19-chart-labels.pptx", new[] { "ppt/charts/", "ppt/embeddings/" }];
         yield return ["21-comments-notes.pptx", new[] { "ppt/comments/", "ppt/notesSlides/", "ppt/notesMasters/" }];
     }
 

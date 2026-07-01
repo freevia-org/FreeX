@@ -111,6 +111,7 @@ public sealed class DocumentView : Control
     // Fill: IBrush? combines table-style fills (header/band) with per-cell ShadingColorHex.
     // Border: bool = table-level outer border; CellBorder: per-edge override from CellBorders model.
     private readonly List<(Rect Rect, IBrush? Fill, bool Border, CellBorders? CellBorder)> _rects = new();
+    private readonly List<(Rect Rect, string? ShadingHex, ParagraphBorder? Border)> _paragraphDecorations = new();
     private readonly List<(Rect Rect, Bitmap? Image)> _images = new();
     // Floating images collected during layout; rendered separately from inline images with z-order.
     // BehindText=true → drawn before body text (behind); BehindText=false → drawn after (in front).
@@ -2676,6 +2677,7 @@ public sealed class DocumentView : Control
         _placed.Clear();
         _markers.Clear();
         _rects.Clear();
+        _paragraphDecorations.Clear();
         _images.Clear();
         _floatingImages.Clear();
         _floatingShapes.Clear();
@@ -4185,6 +4187,19 @@ public sealed class DocumentView : Control
         // segments are pinned absolutely to their stop positions.
         var x = contentOriginX + (lineHasTabs ? 0.0 : alignOffset);
 
+        if (!string.IsNullOrWhiteSpace(pf.ShadingColorHex) || pf.Border is not null)
+        {
+            const double decorationPad = 2.0;
+            _paragraphDecorations.Add((
+                new Rect(
+                    contentOriginX - decorationPad,
+                    pageSpaceY,
+                    Math.Max(1, effectiveWidth + decorationPad * 2),
+                    lineHeight),
+                pf.ShadingColorHex,
+                pf.Border));
+        }
+
         // AV-TAB: default tab interval for this line (from document page settings).
         var lineDefaultTabPx = Math.Max(1.0, _doc.Page.DefaultTabStopPt) * PxPerPoint;
 
@@ -5191,6 +5206,39 @@ public sealed class DocumentView : Control
         DrawCellEdgeLine(context, borders.Right,  new Point(rect.Right, rect.Top),   new Point(rect.Right, rect.Bottom));
     }
 
+    private void DrawParagraphDecoration(DrawingContext context, Rect rect, string? shadingHex, ParagraphBorder? border)
+    {
+        if (!string.IsNullOrWhiteSpace(shadingHex))
+            context.FillRectangle(BrushFor(shadingHex), rect);
+
+        if (border is null)
+            return;
+
+        var pen = ParagraphBorderPen(border);
+        if (border.Top)
+            context.DrawLine(pen, new Point(rect.Left, rect.Top), new Point(rect.Right, rect.Top));
+        if (border.Bottom || border.BottomOnly)
+            context.DrawLine(pen, new Point(rect.Left, rect.Bottom), new Point(rect.Right, rect.Bottom));
+        if (border.Left && !border.BottomOnly)
+            context.DrawLine(pen, new Point(rect.Left, rect.Top), new Point(rect.Left, rect.Bottom));
+        if (border.Right && !border.BottomOnly)
+            context.DrawLine(pen, new Point(rect.Right, rect.Top), new Point(rect.Right, rect.Bottom));
+    }
+
+    private Pen ParagraphBorderPen(ParagraphBorder border)
+    {
+        DashStyle? dashStyle = border.LineStyle switch
+        {
+            BorderLineStyle.Dashed => new DashStyle([4, 3], 0),
+            BorderLineStyle.Dotted => new DashStyle([1, 2], 0),
+            _ => null,
+        };
+        var width = Math.Max(0.5, border.WidthPt * PxPerPoint);
+        return dashStyle is null
+            ? new Pen(BrushFor(border.ColorHex), width)
+            : new Pen(BrushFor(border.ColorHex), width, dashStyle);
+    }
+
     private void DrawCellEdgeLine(DrawingContext context, CellBorderEdge? edge, Point p1, Point p2)
     {
         if (edge is null) return;
@@ -5368,6 +5416,9 @@ public sealed class DocumentView : Control
         // AV-VIEW: horizontal + vertical ruler strips on the first page (Print Layout only).
         if (_showRuler && _viewMode == DocumentViewMode.PrintLayout)
             DrawRuler(context);
+
+        foreach (var (rect, shadingHex, border) in _paragraphDecorations)
+            DrawParagraphDecoration(context, rect, shadingHex, border);
 
         // Table fills + borders sit beneath the text.
         foreach (var (rect, fill, border, cellBorder) in _rects)
@@ -7842,6 +7893,38 @@ public sealed class DocumentView : Control
     }
 
     /// <summary>
+    /// Appends a reply to the specified top-level comment thread using the shared comment model.
+    /// Undoable. Returns true when the reply was appended.
+    /// </summary>
+    public bool ReplyToComment(int commentId, string text, string author = "", string initials = "")
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return false;
+
+        var topId = DeleteCommentCommand.ResolveTopLevel(_doc, commentId);
+        if (!_doc.Comments.TryGetValue(topId, out var comment))
+            return false;
+
+        var replyId = _doc.NextCommentId();
+        var reply = new Comment(replyId, text, author, initials)
+        {
+            DateXml = DateTimeOffset.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture),
+        };
+
+        _bus.Execute(new AddCommentReplyCommand(topId, reply));
+        return comment.Replies.Any(candidate => candidate.Id == replyId);
+    }
+
+    /// <summary>Replies to the comment thread covering the caret. Returns true when a reply was appended.</summary>
+    public bool ReplyToCommentAtCaret(string text = "Reply")
+    {
+        if (CommentIdAtCaret() is not { } id)
+            return false;
+
+        return ReplyToComment(id, text, RevisionAuthor, DeriveInitials(RevisionAuthor));
+    }
+
+    /// <summary>
     /// Toggles the resolved flag of the comment thread covering the caret/selection. Returns the new
     /// resolved state, or null when the caret is not inside a comment.
     /// </summary>
@@ -7857,6 +7940,48 @@ public sealed class DocumentView : Control
     /// <summary>All top-level review comments in the document, in id order. Replies live on each thread.</summary>
     public IReadOnlyList<Comment> AllComments =>
         _doc.Comments.Values.OrderBy(c => c.Id).ToList();
+
+    /// <summary>Shared planned comment list rows in document order, including anchor positions.</summary>
+    public IReadOnlyList<CommentListItem> PlannedCommentList() =>
+        CommentListPlanner.Build(_doc);
+
+    /// <summary>Moves the caret to the previous comment in document order, wrapping at the start.</summary>
+    public bool PreviousComment() => NavigateComment(direction: -1);
+
+    /// <summary>Moves the caret to the next comment in document order, wrapping at the end.</summary>
+    public bool NextComment() => NavigateComment(direction: 1);
+
+    private bool NavigateComment(int direction)
+    {
+        var target = CommentListPlanner.SelectAdjacent(PlannedCommentList(), CommentIdAtCaret(), direction);
+        return target is not null && MoveCaretToComment(target);
+    }
+
+    private bool MoveCaretToComment(CommentListItem item)
+    {
+        var anchor = item.Anchor;
+        if (anchor.IsTableAnchor)
+        {
+            PlaceCaretInCell(
+                anchor.BlockIndex,
+                anchor.TableRowIndex!.Value,
+                anchor.TableGridColumnIndex!.Value,
+                anchor.TableParagraphIndex!.Value,
+                anchor.Offset);
+            ScrollToCaretRequested?.Invoke();
+            return true;
+        }
+
+        if (anchor.BlockIndex < 0 || anchor.BlockIndex >= _doc.Blocks.Count || _doc.Blocks[anchor.BlockIndex] is not Paragraph)
+            return false;
+
+        _hfCaret = null;
+        MoveCaretToBlock(anchor.BlockIndex, Math.Clamp(anchor.Offset, 0, BlockLength(anchor.BlockIndex)));
+        InvalidateVisual();
+        CaretMoved?.Invoke();
+        ScrollToCaretRequested?.Invoke();
+        return true;
+    }
 
     /// <summary>
     /// The top-level comment threads whose anchored range covers the caret (or selection start), in id
@@ -7874,13 +7999,29 @@ public sealed class DocumentView : Control
     /// </summary>
     private int? CommentIdAtCaret()
     {
+        if (_cellCaret is { } cellCaret && GetCellParagraph(
+                cellCaret.TableBlock,
+                cellCaret.Row,
+                cellCaret.Col,
+                cellCaret.ParaIdx) is { } cellParagraph)
+        {
+            return CommentIdInParagraphAtOffset(cellParagraph, cellCaret.Offset);
+        }
+
         if (_caret.Block < 0 || _caret.Block >= _doc.Blocks.Count || _doc.Blocks[_caret.Block] is not Paragraph paragraph)
             return null;
+
+        return CommentIdInParagraphAtOffset(paragraph, _caret.Offset);
+    }
+
+    private int? CommentIdInParagraphAtOffset(Paragraph paragraph, int offset)
+    {
         var cells = ParaCells(paragraph);
         if (cells.Count == 0)
             return null;
+
         // Probe the cell just before the caret (the char the caret sits after), then the one at the caret.
-        foreach (var probe in new[] { _caret.Offset - 1, _caret.Offset })
+        foreach (var probe in new[] { offset - 1, offset })
         {
             if (probe < 0 || probe >= cells.Count)
                 continue;
@@ -8444,6 +8585,101 @@ public sealed class DocumentView : Control
             .Select(i => (Paragraph)_doc.Blocks[i])
             .Any(p => !p.Formatting.KeepLinesTogether);
         FormatSelectedParagraphs(f => f with { KeepLinesTogether = enable });
+    }
+
+    public void ToggleWidowControl()
+    {
+        var indices = SelectedParagraphIndices();
+        var enable = indices
+            .Select(i => (Paragraph)_doc.Blocks[i])
+            .Any(p => !p.Formatting.WidowControl);
+        FormatSelectedParagraphs(f => f with { WidowControl = enable });
+    }
+
+    public void SetParagraphBorder(ParagraphBorder? border) =>
+        FormatSelectedParagraphs(f => f with { Border = border });
+
+    public void ToggleParagraphBorder(string colorHex = "#000000", double widthPt = 0.5)
+    {
+        var indices = SelectedParagraphIndices();
+        var enable = indices
+            .Select(i => (Paragraph)_doc.Blocks[i])
+            .Any(p => p.Formatting.Border is null);
+        SetParagraphBorder(enable ? new ParagraphBorder(colorHex, widthPt) : null);
+    }
+
+    public void SetParagraphShading(string? colorHex, ShadingPattern pattern = ShadingPattern.Clear) =>
+        FormatSelectedParagraphs(f => f with
+        {
+            ShadingColorHex = string.IsNullOrWhiteSpace(colorHex) ? null : colorHex,
+            ShadingPattern = string.IsNullOrWhiteSpace(colorHex) ? ShadingPattern.Clear : pattern,
+        });
+
+    public void ToggleParagraphShading(string? colorHex = "#FFF2CC")
+    {
+        var indices = SelectedParagraphIndices();
+        var clear = string.IsNullOrWhiteSpace(colorHex)
+            || indices
+                .Select(i => (Paragraph)_doc.Blocks[i])
+                .All(p => string.Equals(p.Formatting.ShadingColorHex, colorHex, StringComparison.OrdinalIgnoreCase));
+        SetParagraphShading(clear ? null : colorHex, ShadingPattern.Clear);
+    }
+
+    public void SetParagraphTabStops(IReadOnlyList<TabStop> tabStops)
+    {
+        ArgumentNullException.ThrowIfNull(tabStops);
+        var normalized = tabStops.ToArray();
+        FormatSelectedParagraphs(f => f with { TabStops = normalized });
+    }
+
+    public bool IsCaretInTable() => CaretTableCell() is not null;
+
+    public void SortSelectedParagraphs(SortKind kind, bool ascending, bool caseSensitive, bool hasHeaderRow)
+    {
+        if (IsEditingLocked)
+            return;
+
+        var indices = SelectedParagraphIndices();
+        if (indices.Count == 0)
+            return;
+
+        var first = indices[0];
+        var last = indices[^1];
+        if (first < 0 || last >= _doc.Blocks.Count)
+            return;
+
+        var paragraphs = new List<Paragraph>();
+        for (var i = first; i <= last; i++)
+            if (_doc.Blocks[i] is Paragraph paragraph)
+                paragraphs.Add(paragraph);
+        if (paragraphs.Count < 2)
+            return;
+
+        var sorted = ParagraphSort.Sort(paragraphs, kind, ascending, caseSensitive, hasHeaderRow);
+        var replacement = new List<Block>(last - first + 1);
+        var nextSorted = 0;
+        for (var i = first; i <= last; i++)
+            replacement.Add(_doc.Blocks[i] is Paragraph ? sorted[nextSorted++] : _doc.Blocks[i]);
+
+        _bus.Execute(new ReplaceBlocksCommand(first, replacement.Count, replacement));
+    }
+
+    public void SortCaretTableRows(SortKind kind, bool ascending, bool caseSensitive, bool hasHeaderRow)
+    {
+        if (IsEditingLocked || _cellCaret is not { } cc)
+            return;
+        if (cc.TableBlock < 0 || cc.TableBlock >= _doc.Blocks.Count ||
+            _doc.Blocks[cc.TableBlock] is not Table table ||
+            table.Rows.Count < 2)
+            return;
+
+        var keyColumn = GridColumnToCellIndex(table.Rows[cc.Row], cc.Col);
+        if (keyColumn < 0)
+            keyColumn = 0;
+
+        var sorted = ParagraphSort.SortRows(table.Rows, keyColumn, kind, ascending, caseSensitive, hasHeaderRow);
+        var replacement = TableLayoutOperations.CopyTableWithRows(table, sorted);
+        _bus.Execute(new ReplaceBlocksCommand(cc.TableBlock, 1, new Block[] { replacement }));
     }
 
     /// <summary>

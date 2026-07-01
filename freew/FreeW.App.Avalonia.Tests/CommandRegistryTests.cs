@@ -5,6 +5,7 @@ using Avalonia;
 using Avalonia.Headless;
 using FreeW.App.Avalonia.Editing;
 using FreeW.App.Avalonia.Ribbon;
+using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
 using Free.Shared.Ribbon;
 
@@ -118,6 +119,12 @@ public sealed class CommandRegistryTests
             "freew.space-after-toggle",
             "freew.keep-with-next",
             "freew.keep-lines",
+            "freew.widow-control",
+            "freew.para-border",
+            "freew.para-shading",
+            "freew.borders-shading",
+            "freew.tabs-dialog",
+            "freew.sort",
             "freew.multilevel-list",
             "freew.multilevel-promote",
             "freew.multilevel-demote",
@@ -156,6 +163,12 @@ public sealed class CommandRegistryTests
             "freew.line-spacing",
             "freew.space-before-toggle",
             "freew.space-after-toggle",
+            "freew.sort",
+            "freew.para-shading",
+            "freew.para-border",
+            "freew.borders-shading",
+            "freew.tabs-dialog",
+            "freew.widow-control",
             "freew.multilevel-list",
             "freew.multilevel-promote",
             "freew.multilevel-demote",
@@ -286,6 +299,93 @@ public sealed class CommandRegistryTests
         paragraph.Formatting.KeepLinesTogether.Should().BeTrue();
         Execute(registry, "freew.keep-lines");
         paragraph.Formatting.KeepLinesTogether.Should().BeFalse();
+
+        Execute(registry, "freew.widow-control");
+        paragraph.Formatting.WidowControl.Should().BeTrue();
+        Execute(registry, "freew.widow-control");
+        paragraph.Formatting.WidowControl.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Paragraph_border_and_shading_commands_apply_model_formatting()
+    {
+        var view = new DocumentView();
+        view.LoadDocument(MakeDoc("Decorated"));
+        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+        var paragraph = (Paragraph)view.Document.Blocks[0];
+
+        Execute(registry, "freew.para-border");
+        paragraph.Formatting.Border.Should().NotBeNull();
+
+        Execute(registry, "freew.para-shading");
+        paragraph.Formatting.ShadingColorHex.Should().Be("#FFF2CC");
+        paragraph.Formatting.ShadingPattern.Should().Be(ShadingPattern.Clear);
+    }
+
+    [Fact]
+    public void Paragraph_dialog_apply_helpers_update_tabs_borders_shading_and_page_border()
+    {
+        var view = new DocumentView();
+        view.LoadDocument(MakeDoc("Dialog apply"));
+
+        TabsDialog.ApplyResult(view, new TabsDialogResult(
+            [new TabStop(144, TabStopAlignment.Right, TabLeader.Dots)],
+            DefaultTabStopPt: 42));
+        var paragraph = (Paragraph)view.Document.Blocks[0];
+        paragraph.Formatting.TabStops.Should().Equal(new TabStop(144, TabStopAlignment.Right, TabLeader.Dots));
+        view.Document.Page.DefaultTabStopPt.Should().Be(42);
+
+        var border = new ParagraphBorder("#C00000", 1.5) { LineStyle = BorderLineStyle.Dashed };
+        var pageBorder = new PageBorder("#0070C0", 2.0) { LineStyle = BorderLineStyle.Double };
+        BordersAndShadingDialog.ApplyResult(view, new BordersAndShadingDialogResult(
+            border,
+            pageBorder,
+            ShadingHex: "#D9EAD3",
+            ShadingPattern: ShadingPattern.Pct25));
+
+        paragraph.Formatting.Border.Should().Be(border);
+        paragraph.Formatting.ShadingColorHex.Should().Be("#D9EAD3");
+        paragraph.Formatting.ShadingPattern.Should().Be(ShadingPattern.Pct25);
+        view.Document.Page.PageBorder.Should().Be(pageBorder);
+    }
+
+    [Fact]
+    public void Dialog_backed_paragraph_commands_route_to_host_callbacks()
+    {
+        var view = new DocumentView();
+        var calls = new List<string>();
+        var callbacks = NoopCallbacks() with
+        {
+            OpenTabsDialog = () => calls.Add("tabs"),
+            OpenBordersAndShadingDialog = () => calls.Add("borders"),
+            OpenSortDialog = () => calls.Add("sort")
+        };
+        var registry = FreeWRibbon.BuildRegistry(view, callbacks);
+
+        Execute(registry, "freew.tabs-dialog");
+        Execute(registry, "freew.borders-shading");
+        Execute(registry, "freew.sort");
+
+        calls.Should().Equal("tabs", "borders", "sort");
+    }
+
+    [Fact]
+    public void Sort_command_fallback_sorts_selected_paragraphs()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("Bravo"));
+        doc.Blocks.Add(new Paragraph("Alpha"));
+        doc.Blocks.Add(new Paragraph("Charlie"));
+        var view = new DocumentView();
+        view.LoadDocument(doc);
+        view.SelectAll();
+
+        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+        Execute(registry, "freew.sort");
+
+        doc.Blocks.OfType<Paragraph>().Select(p => p.PlainText)
+            .Should().Equal("Alpha", "Bravo", "Charlie");
     }
 
     [Fact]

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -351,6 +352,30 @@ public sealed class DocumentViewReviewTests
         countAfterDelete.Should().Be(0, "DeleteCommentAtCaret removes the thread at the caret");
     }
 
+    [Fact]
+    public async Task ResolveComment_registry_command_toggles_the_comment_at_the_caret()
+    {
+        bool resolved = false;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            doc.Blocks.Add(new Paragraph("Hello world"));
+            var view = Build(doc);
+            view.SetSelectionRangePublic(0, 0, 0, 5);
+            var id = view.NewComment("note");
+            view.MoveCaretToBlock(0, 2);
+
+            var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
+            Execute(registry, "freew.resolve-comment");
+
+            resolved = id is { } commentId && view.Document.Comments[commentId].Resolved;
+        });
+
+        if (!ran) return;
+        resolved.Should().BeTrue("the Review > Comments > Resolve command uses the editor comment model");
+    }
+
     // ── Word count ────────────────────────────────────────────────────────────────
 
     [Fact]
@@ -399,6 +424,11 @@ public sealed class DocumentViewReviewTests
             "freew.inspect-document",
             "freew.new-comment",
             "freew.delete-comment",
+            "freew.previous-comment",
+            "freew.next-comment",
+            "freew.reply-comment",
+            "freew.resolve-comment",
+            "freew.show-comments",
         })
         {
             registry.TryGet(new RibbonCommandId(id), out _)
@@ -423,7 +453,9 @@ public sealed class DocumentViewReviewTests
             "freew.track-changes", "freew.reviewing-pane", "freew.statistics",
             "freew.check-accessibility", "freew.accept-this", "freew.reject-this",
             "freew.accept-all", "freew.reject-all", "freew.new-comment",
-            "freew.delete-comment", "freew.mark-as-final", "freew.restrict-editing",
+            "freew.delete-comment", "freew.previous-comment", "freew.next-comment",
+            "freew.reply-comment", "freew.resolve-comment", "freew.show-comments",
+            "freew.mark-as-final", "freew.restrict-editing",
             "freew.inspect-document",
         })
         {
@@ -474,6 +506,33 @@ public sealed class DocumentViewReviewTests
             "mark-final",
             "restrict",
         });
+    }
+
+    [Fact]
+    public void Review_comment_dialog_commands_route_to_host_callbacks()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("Hello") { CommentId = 1 });
+        paragraph.Runs.Add(Run.CommentReference(1));
+        doc.Blocks.Add(paragraph);
+        doc.Comments[1] = new Comment(1, "note", "A", "A");
+
+        var view = new DocumentView();
+        view.LoadDocument(doc);
+        var calls = new List<string>();
+        var callbacks = NoopCallbacks() with
+        {
+            ReplyComment = () => calls.Add("reply"),
+            ShowComments = rows => calls.Add($"show:{rows.Count}"),
+        };
+        var registry = FreeWAvaloniaRibbonCommands.Build(view, callbacks);
+
+        Execute(registry, "freew.reply-comment");
+        Execute(registry, "freew.show-comments");
+
+        calls.Should().Equal("reply", "show:1");
     }
 
     private static RibbonHostCallbacks NoopCallbacks() =>

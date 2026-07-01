@@ -819,6 +819,25 @@ public sealed class SlideCanvasAvaloniaTests
     }
 
     [Fact]
+    public void SlideCanvas_ChartGridLinePen_UsesSharedStrokePlan()
+    {
+        var plan = new ChartMajorGridLinePrimitivePlan(
+            Array.Empty<ChartGridLinePlan>(),
+            new ChartStrokePlan(
+                new SrgbColor(0x12, 0x34, 0x56),
+                Alpha: 0x7F,
+                Thickness: 1.25));
+
+        var pen = SlideCanvas.CreateChartGridLinePen(plan);
+
+        pen.Thickness.Should().Be(1.25);
+        var brush = pen.Brush.Should()
+            .BeOfType<SolidColorBrush>()
+            .Subject;
+        brush.Color.Should().Be(Color.FromArgb(0x7F, 0x12, 0x34, 0x56));
+    }
+
+    [Fact]
     public void CB1_NoSecondarySeriesChart_PrimaryRangeUnchanged_SecondaryRangeFallback()
     {
         // A chart with no secondary series: primary range is as before, secondary fallback = (0,1,1).

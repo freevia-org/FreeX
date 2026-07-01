@@ -1,6 +1,7 @@
 using Free.Shared.Ribbon;
 using FreeW.App.Avalonia.Editing;
 using FreeW.App.Presentation.Dialogs;
+using FreeW.App.Presentation.Ribbon;
 using FreeW.Core.Model;
 using FreeW.Ribbon.Definitions;
 
@@ -81,6 +82,12 @@ internal sealed record RibbonHostCallbacks(
     /// <paramref name="delta"/> to add/subtract from the current scale. One must be non-null.
     /// </summary>
     Action<double?, double> ApplyZoom,
+    /// <summary>Home &gt; Paragraph &gt; Tabs. Optional; registry no-ops when null.</summary>
+    Action? OpenTabsDialog = null,
+    /// <summary>Home &gt; Paragraph &gt; Borders and Shading. Optional; registry no-ops when null.</summary>
+    Action? OpenBordersAndShadingDialog = null,
+    /// <summary>Home/Table Layout &gt; Sort. Optional; registry applies a default text ascending sort when null.</summary>
+    Action? OpenSortDialog = null,
     /// <summary>AV-VIEW: Opens the Zoom dialog (modal); applies the chosen preset/custom zoom on OK.</summary>
     Action? OpenZoomDialog = null,
     /// <summary>Opens the paginated print-preview surface.</summary>
@@ -160,6 +167,10 @@ internal sealed record RibbonHostCallbacks(
     Action? InspectDocument = null,
     /// <summary>AV-REVIEW: Review &gt; Accessibility &gt; Check Accessibility. Optional; registry no-ops when null.</summary>
     Action? CheckAccessibility = null,
+    /// <summary>AV-REVIEW: Review &gt; Comments &gt; Reply. Optional; registry uses a default reply when null.</summary>
+    Action? ReplyComment = null,
+    /// <summary>AV-REVIEW: Review &gt; Comments &gt; Show Comments. Optional; registry no-ops when null.</summary>
+    Action<IReadOnlyList<CommentListItem>>? ShowComments = null,
     /// <summary>FreeW File &gt; Import PDF (text only). Optional; registry no-ops when null.</summary>
     Action? ImportPdfText = null,
     /// <summary>Table Layout &gt; Properties / Cell Margins. Optional; registry no-ops when null.</summary>
