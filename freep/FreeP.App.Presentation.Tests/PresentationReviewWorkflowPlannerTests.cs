@@ -415,6 +415,115 @@ public sealed class PresentationReviewWorkflowPlannerTests
     }
 
     [Fact]
+    public void BuildReadingOrderPlan_DescribesCurrentSlideShapesAndSelectedItem()
+    {
+        var slide = new Slide();
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 5,
+            Name = "Title placeholder",
+            Kind = SlideShapeKind.AutoShape,
+            Text = "Quarterly update",
+            AlternativeTextTitle = "Slide title"
+        });
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 7,
+            Name = "Sales chart",
+            Kind = SlideShapeKind.Chart,
+            Chart = new ChartShape(),
+            AlternativeTextTitle = "Regional sales",
+            AlternativeText = "Quarterly sales by region."
+        });
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 9,
+            Name = "Divider flourish",
+            Kind = SlideShapeKind.Picture,
+            Picture = new ImagePart(),
+            IsDecorative = true,
+            Children =
+            {
+                new SlideShape
+                {
+                    Id = 10,
+                    Name = "Grouped caption",
+                    Kind = SlideShapeKind.AutoShape,
+                    Text = "Internal caption"
+                }
+            }
+        });
+
+        var plan = PresentationReviewWorkflowPlanner.BuildReadingOrderPlan(slide, 2, [7]);
+
+        plan.SlideIndex.Should().Be(2);
+        plan.HasSlide.Should().BeTrue();
+        plan.HasSingleSelectedItem.Should().BeTrue();
+        plan.SelectedShapeId.Should().Be(7);
+        plan.SelectedItemIndex.Should().Be(1);
+        plan.SelectedItem.Should().NotBeNull();
+        plan.Items.Select(item => item.ShapeId).Should().Equal(5u, 7u, 9u, 10u);
+        plan.Items.Select(item => item.ReadingOrderIndex).Should().Equal(0, 1, 2, 3);
+        plan.Items.Select(item => item.NestingDepth).Should().Equal(0, 0, 0, 1);
+        plan.Items[1].Should().Be(new PresentationReadingOrderItemPlan(
+            1,
+            0,
+            7,
+            "Sales chart",
+            SlideShapeKind.Chart,
+            "Chart",
+            "Regional sales",
+            "Quarterly sales by region.",
+            false,
+            "Regional sales: Quarterly sales by region.",
+            true));
+        plan.Items[2].AccessibilitySummary.Should().Be("Decorative");
+        plan.Items[3].AccessibilitySummary.Should().Be("No alt text");
+        plan.Actions.Select(action => action.CommandId).Should().Equal(
+            PresentationReviewWorkflowPlanner.ReadingOrderPaneCommandId,
+            PresentationReviewWorkflowPlanner.ReadingOrderMoveEarlierCommandId,
+            PresentationReviewWorkflowPlanner.ReadingOrderMoveLaterCommandId,
+            PresentationReviewWorkflowPlanner.ReadingOrderSelectItemCommandId);
+        plan.Actions.Single(action => action.CommandId == PresentationReviewWorkflowPlanner.ReadingOrderMoveEarlierCommandId)
+            .Should().Be(new PresentationReviewWorkflowActionPlan(
+                PresentationReviewWorkflowPlanner.ReadingOrderMoveEarlierCommandId,
+                "Move Earlier",
+                PresentationReviewWorkflowIntentKind.MoveReadingOrderEarlier,
+                false,
+                PresentationWorkflowCapabilityStatus.Deferred,
+                PresentationReviewWorkflowPlanner.ReadingOrderReorderDeferredMessage));
+        plan.Actions.Single(action => action.CommandId == PresentationReviewWorkflowPlanner.ReadingOrderSelectItemCommandId)
+            .IsEnabled.Should().BeTrue();
+    }
+
+    [Fact]
+    public void BuildReadingOrderPlan_RequiresExactlyOneSelectedShapeForSelectedItemState()
+    {
+        var slide = new Slide();
+        slide.Shapes.Add(new SlideShape { Id = 7, Name = "Sales chart", Kind = SlideShapeKind.Chart });
+        slide.Shapes.Add(new SlideShape { Id = 8, Name = "Product image", Kind = SlideShapeKind.Picture });
+
+        var multiSelection = PresentationReviewWorkflowPlanner.BuildReadingOrderPlan(slide, 0, [7, 8]);
+        var missingSelection = PresentationReviewWorkflowPlanner.BuildReadingOrderPlan(slide, 0, []);
+        var emptySlide = PresentationReviewWorkflowPlanner.BuildReadingOrderPlan(new Slide(), 0, [7]);
+
+        multiSelection.HasSingleSelectedItem.Should().BeFalse();
+        multiSelection.SelectedItem.Should().BeNull();
+        multiSelection.Actions.Single(action => action.CommandId == PresentationReviewWorkflowPlanner.ReadingOrderMoveLaterCommandId)
+            .DisabledReason.Should().Be(PresentationReviewWorkflowPlanner.MissingReadingOrderSelectionMessage);
+        missingSelection.Actions.Single(action => action.CommandId == PresentationReviewWorkflowPlanner.ReadingOrderMoveEarlierCommandId)
+            .DisabledReason.Should().Be(PresentationReviewWorkflowPlanner.MissingReadingOrderSelectionMessage);
+        emptySlide.Actions.Single(action => action.CommandId == PresentationReviewWorkflowPlanner.ReadingOrderSelectItemCommandId)
+            .Should().Be(new PresentationReviewWorkflowActionPlan(
+                PresentationReviewWorkflowPlanner.ReadingOrderSelectItemCommandId,
+                "Select Item",
+                PresentationReviewWorkflowIntentKind.SelectReadingOrderItem,
+                false,
+                PresentationWorkflowCapabilityStatus.Available,
+                PresentationReviewWorkflowPlanner.EmptyReadingOrderMessage));
+    }
+
+    [Fact]
     public void BuildProofingRequestPlan_CountsEditableTextAndReadOnlyComments()
     {
         var presentation = Presentation.CreateEmpty();

@@ -76,6 +76,7 @@ internal static class FreePRibbonCommands
         Action?             onReviewCommentsPane = null,
         Action?             onReviewAccessibility = null,
         Action?             onReviewAltText = null,
+        Action?             onReviewReadingOrder = null,
         Action?             onReviewProofing = null,
         // Wave 16B: Animation pane toggle.
         Action?             onAnimPane         = null,
@@ -295,6 +296,7 @@ internal static class FreePRibbonCommands
             onReviewCommentsPane,
             onReviewAccessibility,
             onReviewAltText,
+            onReviewReadingOrder,
             onReviewProofing);
 
         return registry;
@@ -448,6 +450,7 @@ internal static class FreePRibbonCommands
         Action? onCommentsPane,
         Action? onAccessibility,
         Action? onAltText,
+        Action? onReadingOrder,
         Action? onProofing)
     {
         registry.Register(
@@ -459,6 +462,9 @@ internal static class FreePRibbonCommands
         registry.Register(
             PresentationReviewWorkflowPlanner.AltTextCommandId,
             new ActionRibbonCommand(() => onAltText?.Invoke()));
+        registry.Register(
+            PresentationReviewWorkflowPlanner.ReadingOrderPaneCommandId,
+            new ActionRibbonCommand(() => onReadingOrder?.Invoke()));
         registry.Register(
             PresentationReviewWorkflowPlanner.ProofingCommandId,
             new ActionRibbonCommand(() => onProofing?.Invoke()));

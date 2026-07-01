@@ -1212,11 +1212,13 @@ public sealed class MainWindowHeadlessTests
         var foundComments = false;
         var foundAccessibility = false;
         var foundAltText = false;
+        var foundReadingOrder = false;
         var foundProofing = false;
         PresentationCommentPanePlan? commentPlan = null;
         PresentationAccessibilitySummaryPlan? accessibilityPlan = null;
         PresentationAltTextRequestPlan? altTextPlan = null;
         PresentationAltTextPanePlan? altTextPanePlan = null;
+        PresentationReadingOrderPlan? readingOrderPlan = null;
         PresentationProofingRequestPlan? proofingPlan = null;
         var commentsPaneVisible = false;
         var commentsPaneCommentCount = 0;
@@ -1246,11 +1248,13 @@ public sealed class MainWindowHeadlessTests
             foundComments = registry.TryGet(PresentationReviewWorkflowPlanner.CommentsPaneCommandId, out var comments);
             foundAccessibility = registry.TryGet(PresentationReviewWorkflowPlanner.AccessibilityCommandId, out var accessibility);
             foundAltText = registry.TryGet(PresentationReviewWorkflowPlanner.AltTextCommandId, out var altText);
+            foundReadingOrder = registry.TryGet(PresentationReviewWorkflowPlanner.ReadingOrderPaneCommandId, out var readingOrder);
             foundProofing = registry.TryGet(PresentationReviewWorkflowPlanner.ProofingCommandId, out var proofing);
 
             comments!.Execute(RibbonCommandContext.Empty);
             accessibility!.Execute(RibbonCommandContext.Empty);
             altText!.Execute(RibbonCommandContext.Empty);
+            readingOrder!.Execute(RibbonCommandContext.Empty);
             proofing!.Execute(RibbonCommandContext.Empty);
 
             commentPlan = window.LastCommentPanePlan;
@@ -1260,6 +1264,7 @@ public sealed class MainWindowHeadlessTests
             accessibilityPlan = window.LastAccessibilitySummaryPlan;
             altTextPlan = window.LastAltTextRequestPlan;
             altTextPanePlan = window.LastAltTextPanePlan;
+            readingOrderPlan = window.LastReadingOrderPlan;
             proofingPlan = window.LastProofingRequestPlan;
         });
 
@@ -1267,6 +1272,7 @@ public sealed class MainWindowHeadlessTests
         foundComments.Should().BeTrue();
         foundAccessibility.Should().BeTrue();
         foundAltText.Should().BeTrue();
+        foundReadingOrder.Should().BeTrue();
         foundProofing.Should().BeTrue();
         commentPlan.Should().NotBeNull();
         commentPlan!.TotalCommentCount.Should().Be(1);
@@ -1292,6 +1298,13 @@ public sealed class MainWindowHeadlessTests
             PresentationReviewWorkflowPlanner.AltTextPaneDecorativeCommandId,
             PresentationReviewWorkflowPlanner.AltTextPaneCloseCommandId
         });
+        readingOrderPlan.Should().NotBeNull();
+        readingOrderPlan!.Items.Should().ContainSingle(item => item.ShapeId == 328);
+        readingOrderPlan.SelectedItem.Should().NotBeNull();
+        readingOrderPlan.SelectedItem!.ShapeId.Should().Be(328);
+        readingOrderPlan.Actions.Single(action =>
+                action.CommandId == PresentationReviewWorkflowPlanner.ReadingOrderMoveEarlierCommandId)
+            .DisabledReason.Should().Be(PresentationReviewWorkflowPlanner.ReadingOrderReorderDeferredMessage);
         proofingPlan.Should().NotBeNull();
         proofingPlan!.Status.Should().Be(PresentationWorkflowCapabilityStatus.RequiresHost);
         commentsPaneVisible.Should().BeTrue("the Avalonia comments command should render a shared-plan-backed pane");

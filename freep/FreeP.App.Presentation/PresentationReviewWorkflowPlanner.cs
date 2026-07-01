@@ -17,6 +17,10 @@ public enum PresentationReviewWorkflowIntentKind
     ApplyAltText,
     ToggleAltTextDecorative,
     CloseAltTextPane,
+    OpenReadingOrderPane,
+    MoveReadingOrderEarlier,
+    MoveReadingOrderLater,
+    SelectReadingOrderItem,
     RunProofing
 }
 
@@ -138,6 +142,34 @@ public sealed record PresentationAccessibilitySummaryPlan(
     IReadOnlyList<PresentationAccessibilityIssueDescriptor> Issues,
     IReadOnlyList<PresentationReviewWorkflowActionPlan> Actions);
 
+public sealed record PresentationReadingOrderItemPlan(
+    int ReadingOrderIndex,
+    int NestingDepth,
+    uint ShapeId,
+    string ShapeName,
+    SlideShapeKind ShapeType,
+    string ShapeTypeLabel,
+    string AlternativeTextTitle,
+    string AlternativeTextDescription,
+    bool IsDecorative,
+    string AccessibilitySummary,
+    bool IsSelected);
+
+public sealed record PresentationReadingOrderPlan(
+    int SlideIndex,
+    bool HasSlide,
+    bool HasSingleSelectedItem,
+    uint? SelectedShapeId,
+    int SelectedItemIndex,
+    IReadOnlyList<PresentationReadingOrderItemPlan> Items,
+    IReadOnlyList<PresentationReviewWorkflowActionPlan> Actions)
+{
+    public PresentationReadingOrderItemPlan? SelectedItem =>
+        SelectedItemIndex >= 0 && SelectedItemIndex < Items.Count
+            ? Items[SelectedItemIndex]
+            : null;
+}
+
 public sealed record PresentationProofingRequestPlan(
     bool CanStart,
     PresentationWorkflowCapabilityStatus Status,
@@ -162,6 +194,10 @@ public static class PresentationReviewWorkflowPlanner
     public const string AltTextPaneCloseCommandId = "freep.review.alt-text.close";
     public const string AltTextTitleFieldId = "title";
     public const string AltTextDescriptionFieldId = "description";
+    public const string ReadingOrderPaneCommandId = "freep.review.reading-order.pane";
+    public const string ReadingOrderMoveEarlierCommandId = "freep.review.reading-order.move-earlier";
+    public const string ReadingOrderMoveLaterCommandId = "freep.review.reading-order.move-later";
+    public const string ReadingOrderSelectItemCommandId = "freep.review.reading-order.select";
     public const string ProofingCommandId = "freep.review.proofing.spelling";
     public const string InsertLinkCommandId = "freep.insert-link";
 
@@ -173,6 +209,12 @@ public static class PresentationReviewWorkflowPlanner
     public const string MissingShapeMessage = "Select a shape before editing alt text.";
     public const string MissingAltTextDescriptionMessage =
         "Alt text description is required unless the object is marked decorative.";
+    public const string MissingReadingOrderSelectionMessage =
+        "Select one shape before changing reading order.";
+    public const string EmptyReadingOrderMessage =
+        "Current slide has no shapes in the reading order.";
+    public const string ReadingOrderReorderDeferredMessage =
+        "Reading order mutation is deferred; this shared plan exposes stable shape order for a visible pane follow-up.";
     public const string ProofingRequiresHostMessage =
         "Proofing needs a host spelling engine; this shared plan owns the searchable FreeP scopes.";
     public const string MissingSlideTitleActionSummary =
@@ -538,6 +580,48 @@ public static class PresentationReviewWorkflowPlanner
             BuildAccessibilityActions());
     }
 
+    public static PresentationReadingOrderPlan BuildReadingOrderPlan(
+        Slide? slide,
+        int slideIndex,
+        IReadOnlyList<uint>? selectedShapeIds)
+    {
+        var singleSelectedShapeId = selectedShapeIds is { Count: 1 }
+            ? selectedShapeIds[0]
+            : (uint?)null;
+        if (slide is null)
+        {
+            return new PresentationReadingOrderPlan(
+                slideIndex,
+                false,
+                false,
+                null,
+                -1,
+                [],
+                BuildReadingOrderActions(hasItems: false, hasSingleSelectedItem: false));
+        }
+
+        var items = EnumerateShapesWithDepth(slide.Shapes)
+            .Select((entry, index) => DescribeReadingOrderItem(
+                entry.Shape,
+                index,
+                entry.Depth,
+                singleSelectedShapeId == entry.Shape.Id))
+            .ToArray();
+        var selectedIndex = singleSelectedShapeId is { } id
+            ? Array.FindIndex(items, item => item.ShapeId == id)
+            : -1;
+        var hasSingleSelectedItem = selectedIndex >= 0;
+
+        return new PresentationReadingOrderPlan(
+            slideIndex,
+            true,
+            hasSingleSelectedItem,
+            hasSingleSelectedItem ? singleSelectedShapeId : null,
+            selectedIndex,
+            items,
+            BuildReadingOrderActions(items.Length > 0, hasSingleSelectedItem));
+    }
+
     public static PresentationProofingRequestPlan BuildProofingRequestPlan(Presentation presentation)
     {
         ArgumentNullException.ThrowIfNull(presentation);
@@ -595,8 +679,51 @@ public static class PresentationReviewWorkflowPlanner
         [
             new(AccessibilityCommandId, "Check Accessibility", PresentationReviewWorkflowIntentKind.CheckAccessibility, true, PresentationWorkflowCapabilityStatus.RequiresHost),
             new(AltTextCommandId, "Alt Text", PresentationReviewWorkflowIntentKind.OpenAltText, true, PresentationWorkflowCapabilityStatus.Available),
+            new(ReadingOrderPaneCommandId, "Reading Order", PresentationReviewWorkflowIntentKind.OpenReadingOrderPane, true, PresentationWorkflowCapabilityStatus.Available),
             new(ProofingCommandId, "Spelling", PresentationReviewWorkflowIntentKind.RunProofing, true, PresentationWorkflowCapabilityStatus.RequiresHost, ProofingRequiresHostMessage),
         ];
+
+    private static IReadOnlyList<PresentationReviewWorkflowActionPlan> BuildReadingOrderActions(
+        bool hasItems,
+        bool hasSingleSelectedItem)
+    {
+        var reorderReason = !hasItems
+            ? EmptyReadingOrderMessage
+            : !hasSingleSelectedItem
+                ? MissingReadingOrderSelectionMessage
+                : ReadingOrderReorderDeferredMessage;
+
+        return
+        [
+            new(
+                ReadingOrderPaneCommandId,
+                "Reading Order",
+                PresentationReviewWorkflowIntentKind.OpenReadingOrderPane,
+                true,
+                PresentationWorkflowCapabilityStatus.Available),
+            new(
+                ReadingOrderMoveEarlierCommandId,
+                "Move Earlier",
+                PresentationReviewWorkflowIntentKind.MoveReadingOrderEarlier,
+                false,
+                PresentationWorkflowCapabilityStatus.Deferred,
+                reorderReason),
+            new(
+                ReadingOrderMoveLaterCommandId,
+                "Move Later",
+                PresentationReviewWorkflowIntentKind.MoveReadingOrderLater,
+                false,
+                PresentationWorkflowCapabilityStatus.Deferred,
+                reorderReason),
+            new(
+                ReadingOrderSelectItemCommandId,
+                "Select Item",
+                PresentationReviewWorkflowIntentKind.SelectReadingOrderItem,
+                hasItems,
+                PresentationWorkflowCapabilityStatus.Available,
+                hasItems ? null : EmptyReadingOrderMessage),
+        ];
+    }
 
     private static IReadOnlyList<PresentationReviewWorkflowActionPlan> BuildAltTextPaneActions(
         bool hasSelection,
@@ -778,12 +905,71 @@ public static class PresentationReviewWorkflowPlanner
             ? $"{shape.Kind} {shape.Id}"
             : shape.Name;
 
+    private static PresentationReadingOrderItemPlan DescribeReadingOrderItem(
+        SlideShape shape,
+        int readingOrderIndex,
+        int nestingDepth,
+        bool isSelected)
+    {
+        var title = NormalizeAltTextTitle(shape.AlternativeTextTitle);
+        var description = NormalizeAltTextDescription(shape.AlternativeText);
+        return new PresentationReadingOrderItemPlan(
+            readingOrderIndex,
+            nestingDepth,
+            shape.Id,
+            DescribeShape(shape),
+            shape.Kind,
+            shape.Kind.ToString(),
+            title,
+            description,
+            shape.IsDecorative,
+            BuildAccessibilitySummary(title, description, shape.IsDecorative),
+            isSelected);
+    }
+
+    private static string BuildAccessibilitySummary(
+        string title,
+        string description,
+        bool isDecorative)
+    {
+        if (isDecorative)
+        {
+            return "Decorative";
+        }
+
+        if (string.IsNullOrWhiteSpace(title) && string.IsNullOrWhiteSpace(description))
+        {
+            return "No alt text";
+        }
+
+        if (!string.IsNullOrWhiteSpace(title) && !string.IsNullOrWhiteSpace(description))
+        {
+            return $"{title}: {description}";
+        }
+
+        return string.IsNullOrWhiteSpace(description) ? title : description;
+    }
+
     private static IEnumerable<SlideShape> EnumerateShapes(IEnumerable<SlideShape> shapes)
     {
         foreach (var shape in shapes)
         {
             yield return shape;
             foreach (var child in EnumerateShapes(shape.Children))
+            {
+                yield return child;
+            }
+        }
+    }
+
+    private static IEnumerable<(SlideShape Shape, int Depth)> EnumerateShapesWithDepth(
+        IEnumerable<SlideShape> shapes,
+        int depth = 0)
+    {
+        foreach (var shape in shapes)
+        {
+            yield return (shape, depth);
+            foreach (var child in EnumerateShapesWithDepth(shape.Children, depth + 1))
             {
                 yield return child;
             }

@@ -69,6 +69,19 @@ public sealed class ReviewWorkflowAdapterTests
             window.LastAltTextPanePlan.Actions
                 .Single(action => action.CommandId == PresentationReviewWorkflowPlanner.AltTextPaneApplyCommandId)
                 .DisabledReason.Should().Be(PresentationReviewWorkflowPlanner.MissingAltTextDescriptionMessage);
+            window.LastReadingOrderPlan.Should().NotBeNull();
+            window.LastReadingOrderPlan!.Items.Select(item => item.ShapeId).Should().Contain(shape.Id);
+            window.LastReadingOrderPlan.SelectedItem.Should().NotBeNull();
+            window.LastReadingOrderPlan.SelectedItem!.ShapeId.Should().Be(shape.Id);
+            window.LastReadingOrderPlan.Actions.Single(action =>
+                    action.CommandId == PresentationReviewWorkflowPlanner.ReadingOrderMoveLaterCommandId)
+                .Should().Be(new PresentationReviewWorkflowActionPlan(
+                    PresentationReviewWorkflowPlanner.ReadingOrderMoveLaterCommandId,
+                    "Move Later",
+                    PresentationReviewWorkflowIntentKind.MoveReadingOrderLater,
+                    false,
+                    PresentationWorkflowCapabilityStatus.Deferred,
+                    PresentationReviewWorkflowPlanner.ReadingOrderReorderDeferredMessage));
 
             var mutation = window.ApplySelectedShapeAlternativeText(
                 "  Product packaging on a white background. ",
@@ -278,12 +291,14 @@ public sealed class ReviewWorkflowAdapterTests
         var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
         var invoked = false;
         var altTextInvoked = false;
+        var readingOrderInvoked = false;
 
         var registry = FreePRibbonCommands.Build(
             new RibbonStateStore(),
             editor,
             onReviewAccessibility: () => invoked = true,
-            onReviewAltText: () => altTextInvoked = true);
+            onReviewAltText: () => altTextInvoked = true,
+            onReviewReadingOrder: () => readingOrderInvoked = true);
 
         registry.TryGet(PresentationReviewWorkflowPlanner.AccessibilityCommandId, out var command)
             .Should()
@@ -294,6 +309,10 @@ public sealed class ReviewWorkflowAdapterTests
         registry.TryGet(PresentationReviewWorkflowPlanner.AltTextCommandId, out var altTextCommand).Should().BeTrue();
         altTextCommand!.Execute(RibbonCommandContext.Empty);
         altTextInvoked.Should().BeTrue();
+        registry.TryGet(PresentationReviewWorkflowPlanner.ReadingOrderPaneCommandId, out var readingOrderCommand)
+            .Should().BeTrue();
+        readingOrderCommand!.Execute(RibbonCommandContext.Empty);
+        readingOrderInvoked.Should().BeTrue();
         registry.TryGet(PresentationReviewWorkflowPlanner.CommentsPaneCommandId, out _).Should().BeTrue();
         registry.TryGet(PresentationReviewWorkflowPlanner.ProofingCommandId, out _).Should().BeTrue();
     }
@@ -312,6 +331,7 @@ public sealed class ReviewWorkflowAdapterTests
         source.Should().Contain("PresentationReviewWorkflowPlanner.BuildAltTextRequestPlan(");
         source.Should().Contain("PresentationReviewWorkflowPlanner.BuildAltTextPanePlan(");
         source.Should().Contain("PresentationReviewWorkflowPlanner.BuildAltTextMutationPlan(");
+        source.Should().Contain("PresentationReviewWorkflowPlanner.BuildReadingOrderPlan(");
         source.Should().Contain("PresentationReviewWorkflowPlanner.BuildProofingRequestPlan(_presentation)");
         source.Should().Contain("LastCommentPanePlan = plan;");
         source.Should().Contain("onLayoutPicker:     () => OpenLayoutPicker()");

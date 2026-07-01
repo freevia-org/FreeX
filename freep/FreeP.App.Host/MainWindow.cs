@@ -139,6 +139,7 @@ public sealed class MainWindow : Window
     internal PresentationAccessibilitySummaryPlan? LastAccessibilitySummaryPlan { get; private set; }
     internal PresentationAltTextRequestPlan? LastAltTextRequestPlan { get; private set; }
     internal PresentationAltTextPanePlan? LastAltTextPanePlan { get; private set; }
+    internal PresentationReadingOrderPlan? LastReadingOrderPlan { get; private set; }
     internal PresentationProofingRequestPlan? LastProofingRequestPlan { get; private set; }
     internal PresentationDesignCommandPlan? LastLayoutRequestPlan { get; private set; }
     internal PresentationLayoutPickerPlan? LastLayoutPickerPlan { get; private set; }
@@ -247,6 +248,7 @@ public sealed class MainWindow : Window
             onReviewCommentsPane: () => ShowReviewCommentsPane(),
             onReviewAccessibility: () => RefreshAccessibilitySummaryPlan(),
             onReviewAltText: () => ShowAltTextPane(),
+            onReviewReadingOrder: () => ShowReadingOrderPane(),
             onReviewProofing: () => RefreshProofingRequestPlan(),
             // Wave 16B: Animation pane toggle.
             onAnimPane:         () => ToggleAnimationPane(),
@@ -315,6 +317,7 @@ public sealed class MainWindow : Window
         Editor.SelectionChanged += (_, _) =>
         {
             RefreshAltTextRequestPlan();
+            RefreshReadingOrderPlan();
             if (IsAltTextPaneVisible)
                 ShowAltTextPane();
         };
@@ -854,6 +857,7 @@ public sealed class MainWindow : Window
             Editor.CurrentSlideIndex);
         RefreshAccessibilitySummaryPlan();
         RefreshAltTextRequestPlan();
+        RefreshReadingOrderPlan();
         RefreshProofingRequestPlan();
     }
 
@@ -888,6 +892,9 @@ public sealed class MainWindow : Window
         if (_altTextPaneHost is not null)
             _altTextPaneHost.Visibility = Visibility.Collapsed;
     }
+
+    internal PresentationReadingOrderPlan ShowReadingOrderPane()
+        => RefreshReadingOrderPlan();
 
     internal void SetAltTextPaneInput(string title, string description, bool isDecorative)
     {
@@ -1005,6 +1012,15 @@ public sealed class MainWindow : Window
         => Editor.SelectedShapeIds.Count == 1
             ? Editor.SelectedShapeIds[0]
             : null;
+
+    private PresentationReadingOrderPlan RefreshReadingOrderPlan()
+    {
+        LastReadingOrderPlan = PresentationReviewWorkflowPlanner.BuildReadingOrderPlan(
+            Editor.CurrentSlide,
+            Editor.CurrentSlideIndex,
+            Editor.SelectedShapeIds);
+        return LastReadingOrderPlan;
+    }
 
     internal PresentationAltTextMutationPlan ApplySelectedShapeAlternativeText(
         string? description,

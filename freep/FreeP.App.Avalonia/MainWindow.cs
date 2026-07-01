@@ -154,6 +154,7 @@ public sealed class MainWindow : Window
     internal PresentationAccessibilitySummaryPlan? LastAccessibilitySummaryPlan { get; private set; }
     internal PresentationAltTextRequestPlan? LastAltTextRequestPlan { get; private set; }
     internal PresentationAltTextPanePlan? LastAltTextPanePlan { get; private set; }
+    internal PresentationReadingOrderPlan? LastReadingOrderPlan { get; private set; }
     internal PresentationProofingRequestPlan? LastProofingRequestPlan { get; private set; }
     internal AnimationPaneTimelinePlan? LastAnimationPaneTimelinePlan { get; private set; }
     internal PresentationDesignCommandPlan? LastLayoutRequestPlan { get; private set; }
@@ -1299,6 +1300,9 @@ public sealed class MainWindow : Window
             PresentationReviewWorkflowPlanner.AltTextCommandId,
             new ActionRibbonCommand(ShowAltTextPane));
         registry.Register(
+            PresentationReviewWorkflowPlanner.ReadingOrderPaneCommandId,
+            new ActionRibbonCommand(() => ShowReadingOrderPane()));
+        registry.Register(
             PresentationReviewWorkflowPlanner.ProofingCommandId,
             new ActionRibbonCommand(RefreshProofingRequestPlan));
         registry.Register(PresentationReviewWorkflowPlanner.AddCommentCommandId, EmptyRibbonCommand.Instance);
@@ -1316,6 +1320,7 @@ public sealed class MainWindow : Window
             Editor.CurrentSlideIndex);
         RefreshAccessibilitySummaryPlan();
         RefreshAltTextRequestPlan();
+        RefreshReadingOrderPlan();
         RefreshProofingRequestPlan();
     }
 
@@ -1479,6 +1484,9 @@ public sealed class MainWindow : Window
             _altTextPaneHost.IsVisible = false;
     }
 
+    internal PresentationReadingOrderPlan ShowReadingOrderPane()
+        => RefreshReadingOrderPlan();
+
     internal void SetAltTextPaneInput(string title, string description, bool isDecorative)
     {
         if (!IsAltTextPaneVisible)
@@ -1594,6 +1602,15 @@ public sealed class MainWindow : Window
         => Editor.SelectedShapeIds.Count == 1
             ? Editor.SelectedShapeIds[0]
             : null;
+
+    private PresentationReadingOrderPlan RefreshReadingOrderPlan()
+    {
+        LastReadingOrderPlan = PresentationReviewWorkflowPlanner.BuildReadingOrderPlan(
+            Editor.CurrentSlide,
+            Editor.CurrentSlideIndex,
+            Editor.SelectedShapeIds);
+        return LastReadingOrderPlan;
+    }
 
     internal PresentationAltTextMutationPlan ApplySelectedShapeAlternativeText(
         string? description,
@@ -2043,6 +2060,7 @@ public sealed class MainWindow : Window
     private void OnEditorSelectionChanged(object? sender, EventArgs e)
     {
         RefreshAltTextRequestPlan();
+        RefreshReadingOrderPlan();
         if (IsAltTextPaneVisible)
             ShowAltTextPane();
     }
