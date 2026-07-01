@@ -1,0 +1,37 @@
+using System.IO;
+
+namespace FreeW.App.Avalonia.Tests;
+
+public sealed class VisualEvidencePageLayoutShotSourceTests
+{
+    [Fact]
+    public void PageLayoutShot_EmitsSharedVisualEvidenceManifestAndTrustChecks()
+    {
+        var source = File.ReadAllText(RepositoryFile("freew", "tools", "FreeW.PageLayoutShot", "Program.cs"));
+        var project = File.ReadAllText(RepositoryFile("freew", "tools", "FreeW.PageLayoutShot", "FreeW.PageLayoutShot.csproj"));
+
+        source.Should().Contain("FreeWVisualEvidencePlanner.WriteManifest(outDir, evidence)");
+        source.Should().Contain("AddAvaloniaEvidence(");
+        source.Should().Contain("FreeWVisualEvidencePlanner.EnsureTrusted(row)");
+        source.Should().Contain("ComputePngPixelStats(");
+        source.Should().Contain("page-composition-print-layout");
+        source.Should().Contain("page-composition-floating-image");
+        source.Should().Contain("HostId: \"avalonia-page-layout-shot\"");
+        project.Should().Contain("FreeW.App.Presentation");
+    }
+
+    private static string RepositoryFile(params string[] parts)
+    {
+        var directory = AppContext.BaseDirectory;
+        while (!string.IsNullOrEmpty(directory))
+        {
+            var candidate = Path.Combine(new[] { directory }.Concat(parts).ToArray());
+            if (File.Exists(candidate))
+                return candidate;
+
+            directory = Directory.GetParent(directory)?.FullName;
+        }
+
+        throw new FileNotFoundException("Could not locate repository file.", Path.Combine(parts));
+    }
+}

@@ -12,6 +12,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\FreeW.Core.Model\FreeW.Core.Model.csproj" />
     <ProjectReference Include="..\..\FreeW.Core.IO\FreeW.Core.IO.csproj" />
+    <ProjectReference Include="..\..\FreeW.App.Presentation\FreeW.App.Presentation.csproj" />
     <ProjectReference Include="..\..\FreeW.App.Host\FreeW.App.Host.csproj" />
   </ItemGroup>
 
