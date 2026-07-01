@@ -328,7 +328,9 @@ public sealed class RendererNeutralDedupPlannerTests
         foreach (var source in new[] { wpf, avalonia })
         {
             source.Should().Contain("ChartRenderPlanner.BuildMajorGridLinePrimitivePlan(chart, frame)");
-            source.Should().Contain("gridLinePlan.Stroke");
+            source.Should().Contain("CreateChartGridLinePen(gridLinePlan)");
+            source.Should().Contain("CreateChartGridLinePen(ChartMajorGridLinePrimitivePlan plan)");
+            source.Should().Contain("ToPen(plan.Stroke)");
             source.Should().Contain("gridLinePlan.GridLines");
             source.Should().NotContain("BuildMajorGridLinePlans(chart, frame)");
             source.Should().NotContain("Color.FromRgb(0xD9, 0xD9, 0xD9)), 0.5");

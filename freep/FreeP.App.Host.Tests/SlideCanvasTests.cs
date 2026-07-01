@@ -1,5 +1,6 @@
 using System.Windows;
 using FreeP.App.Host;
+using FreeP.App.Compositor;
 using FreeP.App.Rendering.Wpf;
 using FreeP.Core.Model;
 
@@ -204,6 +205,26 @@ public sealed class SlideCanvasTests
         // Number of intervals should be 3-7
         int intervals = (int)Math.Round(range / unit);
         intervals.Should().BeInRange(3, 7, "nice axis should have 3-7 gridline intervals");
+    }
+
+    [StaFact]
+    public void SlideCanvas_ChartGridLinePen_UsesSharedStrokePlan()
+    {
+        var plan = new ChartMajorGridLinePrimitivePlan(
+            Array.Empty<ChartGridLinePlan>(),
+            new ChartStrokePlan(
+                new SrgbColor(0x12, 0x34, 0x56),
+                Alpha: 0x7F,
+                Thickness: 1.25));
+
+        var pen = SlideCanvas.CreateChartGridLinePen(plan);
+
+        pen.Thickness.Should().Be(1.25);
+        var brush = pen.Brush.Should()
+            .BeOfType<System.Windows.Media.SolidColorBrush>()
+            .Subject;
+        brush.Color.Should().Be(System.Windows.Media.Color.FromArgb(0x7F, 0x12, 0x34, 0x56));
+        pen.IsFrozen.Should().BeTrue();
     }
 
     // ── BA2: WordArt / text-effects double-draw regression tests ─────────────

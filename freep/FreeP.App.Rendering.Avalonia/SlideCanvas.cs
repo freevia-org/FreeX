@@ -360,6 +360,9 @@ public sealed class SlideCanvas : Control
             fill.Color.G,
             fill.Color.B));
 
+    internal static Pen CreateChartGridLinePen(ChartMajorGridLinePrimitivePlan plan) =>
+        ToPen(plan.Stroke);
+
     private static Pen ToPen(ChartStrokePlan stroke) =>
         new(
             ToBrush(new ChartFillPlan(stroke.Color, stroke.Alpha)),
@@ -672,7 +675,7 @@ public sealed class SlideCanvas : Control
         var gridLinePlan = ChartRenderPlanner.BuildMajorGridLinePrimitivePlan(chart, frame);
         if (gridLinePlan.GridLines.Count > 0)
         {
-            var gridPen = ToPen(gridLinePlan.Stroke);
+            var gridPen = CreateChartGridLinePen(gridLinePlan);
             foreach (var gridLine in gridLinePlan.GridLines)
                 dc.DrawLine(gridPen, ToPoint(gridLine.Start), ToPoint(gridLine.End));
         }
