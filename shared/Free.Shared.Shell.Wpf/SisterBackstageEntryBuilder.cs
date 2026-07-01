@@ -25,6 +25,8 @@ public sealed record SisterBackstageEntrySpec(
 
     public Func<UIElement>? BuildOpenPane { get; init; }
 
+    public Action? ImportPdfText { get; init; }
+
     public Func<UIElement>? BuildSharePane { get; init; }
 
     public Func<UIElement>? BuildSaveAsPane { get; init; }
@@ -73,6 +75,9 @@ public static class SisterBackstageEntryBuilder
         entries.Add(spec.BuildOpenPane is null
             ? BackstageEntry.Command("Open", BackstageIconKind.GetData, spec.Open, iconName: "open")
             : BackstageEntry.Pane("Open", BackstageIconKind.GetData, spec.BuildOpenPane, iconName: "open"));
+
+        if (spec.ImportPdfText is not null)
+            entries.Add(BackstageEntry.Command("Import PDF (text only)", BackstageIconKind.GetData, spec.ImportPdfText, iconName: "open"));
 
         if (spec.BuildSharePane is not null)
             entries.Add(BackstageEntry.Pane("Share", BackstageIconKind.Share, spec.BuildSharePane, iconName: "share"));

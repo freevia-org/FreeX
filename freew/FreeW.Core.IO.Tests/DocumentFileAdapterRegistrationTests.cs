@@ -31,7 +31,6 @@ public class DocumentFileAdapterRegistrationTests
     [InlineData("Web Page", ".htm", true, true, false)]
     [InlineData("MHTML document", ".mhtml", true, true, false)]
     [InlineData("MHTML document", ".mht", true, true, false)]
-    [InlineData("PDF Document", ".pdf", true, false, false)]
     [InlineData("Word 97-2003 Document", ".doc", true, true, false)]
     [InlineData("Word 97-2003 Template", ".dot", true, true, true)]
     [InlineData("OpenDocument Text", ".odt", true, true, false)]
@@ -67,12 +66,27 @@ public class DocumentFileAdapterRegistrationTests
     }
 
     [Fact]
-    public void Catalog_DoesNotRegisterDroppedLegacyFormats()
+    public void Catalog_DoesNotRegisterDroppedLegacyOrExplicitImportFormats()
     {
         var extensions = AllFormats().Select(f => f.Extension.ToLowerInvariant()).ToList();
         extensions.Should().NotContain(".wpd");
         extensions.Should().NotContain(".wps");
         extensions.Should().NotContain(".wri");
+        extensions.Should().NotContain(".pdf", "PDF is a lossy text import command, not a normal Open format");
+    }
+
+    [Fact]
+    public void PdfImportAdapters_ExposePdfOnlyForExplicitImportCommand()
+    {
+        var format = DocumentFileAdapterCatalog.CreatePdfImportAdapters()
+            .SelectMany(a => a.Formats)
+            .Should().ContainSingle()
+            .Subject;
+
+        format.Extension.Should().Be(".pdf");
+        format.CanOpen.Should().BeTrue();
+        format.CanSave.Should().BeFalse();
+        format.OpensAsTemplate.Should().BeFalse();
     }
 
     [Fact]
@@ -80,6 +94,7 @@ public class DocumentFileAdapterRegistrationTests
     {
         var adapters = DocumentFileAdapterCatalog.CreateDefaultAdapters();
         DocumentFileFormatResolver.FindOpenAdapter(adapters, "docx", out _).Should().NotBeNull();
+        DocumentFileFormatResolver.FindOpenAdapter(adapters, ".pdf", out _).Should().BeNull();
         DocumentFileFormatResolver.FindSaveAdapter(adapters, ".txt", out _).Should().NotBeNull();
     }
 }

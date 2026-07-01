@@ -1,5 +1,6 @@
 using System.IO;
 using System.Linq;
+using System.Text;
 using FreeW.Core.Model;
 using UglyToad.PdfPig;
 using UglyToad.PdfPig.Content;
@@ -104,6 +105,49 @@ public static class PdfTextReader
         return false;
     }
 
+    private static IReadOnlyList<Letter> OrderLettersForReading(Page page)
+    {
+        var letters = page.Letters;
+        if (letters == null || letters.Count < 4)
+            return letters ?? [];
+
+        var words = page.GetWords()
+            .Where(word => !string.IsNullOrWhiteSpace(word.Text))
+            .Select(word => new PositionedWord(
+                word.BoundingBox.Left,
+                word.BoundingBox.Right))
+            .OrderBy(word => word.Left)
+            .ToList();
+        if (words.Count < 4)
+            return letters;
+
+        var pageWidth = Math.Max(1, page.Width);
+        var gaps = words
+            .Zip(words.Skip(1), (left, right) => new WordGap(left.Right, right.Left))
+            .Where(gap => gap.Width > pageWidth * 0.10)
+            .OrderByDescending(gap => gap.Width)
+            .ToList();
+        if (gaps.Count == 0)
+            return letters;
+
+        var splitX = (gaps[0].LeftEdge + gaps[0].RightEdge) / 2;
+        var leftWords = words.Where(word => word.CenterX < splitX).ToList();
+        var rightWords = words.Where(word => word.CenterX >= splitX).ToList();
+        if (leftWords.Count < 2 || rightWords.Count < 2)
+            return letters;
+
+        var leftRight = leftWords.Max(word => word.Right);
+        var rightLeft = rightWords.Min(word => word.Left);
+        if (rightLeft - leftRight < pageWidth * 0.08)
+            return letters;
+
+        return letters
+            .OrderBy(letter => letter.GlyphRectangle.BottomLeft.X >= splitX ? 1 : 0)
+            .ThenByDescending(letter => letter.GlyphRectangle.BottomLeft.Y)
+            .ThenBy(letter => letter.GlyphRectangle.BottomLeft.X)
+            .ToList();
+    }
+
     /// <summary>
     /// Groups all letters on <paramref name="page"/> into visual text lines, then groups consecutive
     /// lines into paragraph blocks, and returns the resulting <see cref="Paragraph"/> objects.
@@ -111,7 +155,7 @@ public static class PdfTextReader
     private static List<Paragraph> ExtractPageBlocks(Page page)
     {
         // 1. Collect all letters with geometry.
-        var letters = page.Letters;
+        var letters = OrderLettersForReading(page);
         if (letters == null || letters.Count == 0)
             return [];
 
@@ -347,5 +391,15 @@ public static class PdfTextReader
 
             Text = sb.ToString();
         }
+    }
+
+    private readonly record struct PositionedWord(double Left, double Right)
+    {
+        public double CenterX => (Left + Right) / 2;
+    }
+
+    private readonly record struct WordGap(double LeftEdge, double RightEdge)
+    {
+        public double Width => RightEdge - LeftEdge;
     }
 }

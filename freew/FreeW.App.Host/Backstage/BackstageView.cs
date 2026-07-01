@@ -85,6 +85,7 @@ internal sealed class BackstageView : UserControl
             BuildHomePane = BuildHomePane,
             UseNewPane = true,
             BuildOpenPane = BuildOpenPane,
+            ImportPdfText = backstage.FrameCommand(_actions.ImportPdfText),
             BuildSharePane = BuildSharePane,
             BuildSaveAsPane = BuildSaveAsPane,
             BuildPrintPane = BuildPrintPane,
@@ -94,6 +95,8 @@ internal sealed class BackstageView : UserControl
         };
     }
 
+    // ── Info pane ──────────────────────────────────────────────────────────────
+    // Document path + properties + statistics, an Edit-properties link, plus cheap doc actions.
     private UIElement BuildInfoPane()
     {
         _editor.CommitToModel();
@@ -510,6 +513,7 @@ internal sealed class BackstageView : UserControl
 internal sealed record BackstageActions(
     Action New,
     Action Open,
+    Action ImportPdfText,
     Action<string> OpenPath,
     Action<string> OpenFolder,
     Action Save,

@@ -20,6 +20,8 @@ public class DocumentFileDialogFilterBuilderTests
         filter.Should().EndWith("All files (*.*)|*.*");
         filter.Should().Contain("Word Document (*.docx)|*.docx");
         filter.Should().Contain("Plain text (*.txt)|*.txt");
+        filter.Should().NotContain("*.pdf");
+        filter.Should().NotContain("PDF Document");
     }
 
     [Fact]
@@ -30,6 +32,7 @@ public class DocumentFileDialogFilterBuilderTests
         filter.Should().NotContain("All files");
         filter.Should().NotContain("All supported");
         filter.Should().Contain("Word Document (*.docx)|*.docx");
+        filter.Should().NotContain("*.pdf");
     }
 
     [Fact]
