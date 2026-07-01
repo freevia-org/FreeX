@@ -81,6 +81,12 @@ internal sealed record RibbonHostCallbacks(
     /// <paramref name="delta"/> to add/subtract from the current scale. One must be non-null.
     /// </summary>
     Action<double?, double> ApplyZoom,
+    /// <summary>Home &gt; Paragraph &gt; Tabs. Optional; registry no-ops when null.</summary>
+    Action? OpenTabsDialog = null,
+    /// <summary>Home &gt; Paragraph &gt; Borders and Shading. Optional; registry no-ops when null.</summary>
+    Action? OpenBordersAndShadingDialog = null,
+    /// <summary>Home/Table Layout &gt; Sort. Optional; registry applies a default text ascending sort when null.</summary>
+    Action? OpenSortDialog = null,
     /// <summary>AV-VIEW: Opens the Zoom dialog (modal); applies the chosen preset/custom zoom on OK.</summary>
     Action? OpenZoomDialog = null,
     /// <summary>Opens the paginated print-preview surface.</summary>

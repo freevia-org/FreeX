@@ -142,6 +142,16 @@ public static class TableLayoutOperations
         return true;
     }
 
+    public static Table CopyTableWithRows(Table source, IEnumerable<TableRow> rows)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(rows);
+
+        var copy = CopyTableShell(source);
+        copy.Rows.AddRange(rows);
+        return copy;
+    }
+
     public static Run BuildFormulaRun(
         Table table,
         int rowIndex,

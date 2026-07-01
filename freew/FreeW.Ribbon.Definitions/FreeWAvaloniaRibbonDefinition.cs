@@ -393,11 +393,31 @@ internal static class FreeWAvaloniaRibbonDefinition
                     g.Button("freew.align-center",      "Center");
                     g.Button("freew.align-right",       "Right");
                     g.Button("freew.align-justify",     "Justify");
+                    g.Button("freew.sort", "Sort", b => b with
+                    {
+                        PreferredLayout = RibbonCommandLayoutKind.Small,
+                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.Sort)
+                    });
                     g.ComboBox("freew.line-spacing", "Line and Paragraph Spacing", c => c with
                     {
                         Items = new[] { "1.0", "1.15", "1.5", "2.0" },
                         Icon = new RibbonCommandIcon(RibbonCommandIconKind.LineSpacing),
                         Width = 52
+                    });
+                    g.Button("freew.para-shading", "Shading", b => b with
+                    {
+                        PreferredLayout = RibbonCommandLayoutKind.Small,
+                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.Fill)
+                    });
+                    g.Button("freew.para-border", "Borders", b => b with
+                    {
+                        PreferredLayout = RibbonCommandLayoutKind.Small,
+                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.Border)
+                    });
+                    g.Button("freew.borders-shading", "Borders and Shading...", b => b with
+                    {
+                        PreferredLayout = RibbonCommandLayoutKind.Small,
+                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.Border, RibbonCommandIconAccent.Border)
                     });
                     g.Button("freew.space-before-toggle", "Add Space Before Paragraph", b => b with
                     {
@@ -418,6 +438,16 @@ internal static class FreeWAvaloniaRibbonDefinition
                     {
                         PreferredLayout = RibbonCommandLayoutKind.Small,
                         Icon = new RibbonCommandIcon(RibbonCommandIconKind.TextFunction)
+                    });
+                    g.Button("freew.widow-control", "Widow/Orphan Control", b => b with
+                    {
+                        PreferredLayout = RibbonCommandLayoutKind.Small,
+                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.TextFunction)
+                    });
+                    g.Button("freew.tabs-dialog", "Tabs", b => b with
+                    {
+                        PreferredLayout = RibbonCommandLayoutKind.Small,
+                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.Ruler)
                     });
                     g.Toggle("freew.formatting-marks", "Show Formatting Marks", t => t with
                     {
@@ -765,6 +795,7 @@ internal static class FreeWAvaloniaRibbonDefinition
                     {
                         g.Toggle("freew.table-repeat-header", "Repeat Header Row");
                         g.Button("freew.table-formula", "Formula");
+                        g.Button("freew.sort", "Sort");
                     });
                 })
             // ── AV-PICTAB: Picture Format contextual tab (shown when a floating IMAGE is selected) ──
