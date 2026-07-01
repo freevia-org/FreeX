@@ -486,16 +486,15 @@ public sealed class SlideCanvas : FrameworkElement
         }
 
         // Wave 26: draw outer shadow behind the picture when effects are set.
-        if (pic.Effects is { HasOuterShadow: true })
+        // Route the shadow-direction/blur math through the shared renderer-neutral planner
+        // (ShapeEffectRenderPlanner) so WPF + Avalonia stay in lock-step and we don't duplicate it.
+        var picShadowPlan = ShapeEffectRenderPlanner.PlanOuterEffects(pic.Effects);
+        foreach (var pass in picShadowPlan.ShadowPasses)
         {
-            var fx  = pic.Effects;
-            double rad = fx.OuterShadowDirDeg * Math.PI / 180.0;
-            double dx  = Math.Cos(rad) * fx.OuterShadowDistDip;
-            double dy  = Math.Sin(rad) * fx.OuterShadowDistDip;
             var shadowBrush = new System.Windows.Media.SolidColorBrush(
                 System.Windows.Media.Color.FromArgb(
-                    fx.OuterShadowAlpha, fx.OuterShadowColor.R, fx.OuterShadowColor.G, fx.OuterShadowColor.B));
-            var shadowDest = new Rect(dest.X + dx, dest.Y + dy, dest.Width, dest.Height);
+                    pass.Alpha, pass.Color.R, pass.Color.G, pass.Color.B));
+            var shadowDest = new Rect(dest.X + pass.OffsetX, dest.Y + pass.OffsetY, dest.Width, dest.Height);
             if (pic.HasFrameClip && pic.PictureFrameGeometry == "roundRect")
             {
                 double rx = Math.Min(dest.Width, dest.Height) * 0.18;
