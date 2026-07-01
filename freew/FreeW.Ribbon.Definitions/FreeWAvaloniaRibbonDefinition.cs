@@ -665,7 +665,11 @@ internal static class FreeWAvaloniaRibbonDefinition
                     tab.Group("table-style-options", "Table Style Options", null, 100, g =>
                     {
                         g.Toggle("freew.table-header-row",   "Header Row");
+                        g.Toggle("freew.table-last-row",     "Last Row");
+                        g.Toggle("freew.table-first-column", "First Column");
+                        g.Toggle("freew.table-last-column",  "Last Column");
                         g.Toggle("freew.table-banded-rows",  "Banded Rows");
+                        g.Toggle("freew.table-banded-cols",  "Banded Columns");
                     });
                     tab.Group("table-style", "Table Style", null, 90, g =>
                     {
@@ -683,6 +687,8 @@ internal static class FreeWAvaloniaRibbonDefinition
                         g.Button("freew.table-select-row",   "Select Row");
                         g.Button("freew.table-select-col",   "Select Column");
                         g.Button("freew.table-select-cell",  "Select Cell");
+                        g.Toggle("freew.table-view-gridlines", "View Gridlines");
+                        g.Button("freew.table-properties", "Properties");
                     });
                     tab.Group("table-rows-cols", "Rows & Columns", null, 100, g =>
                     {
@@ -698,6 +704,17 @@ internal static class FreeWAvaloniaRibbonDefinition
                     {
                         g.Button("freew.table-merge-cells", "Merge Cells");
                         g.Button("freew.table-split-cell",  "Split Cell");
+                        g.Button("freew.split-table", "Split Table");
+                    });
+                    tab.Group("table-cell-size", "Cell Size", null, 95, g =>
+                    {
+                        g.Button("freew.table-row-height", "Row Height");
+                        g.Button("freew.table-col-width", "Column Width");
+                        g.Button("freew.table-distribute-rows", "Distribute Rows");
+                        g.Button("freew.table-distribute-cols", "Distribute Columns");
+                        g.Button("freew.table-autofit-contents", "AutoFit Contents");
+                        g.Button("freew.table-autofit-window", "AutoFit Window");
+                        g.Button("freew.table-autofit-fixed", "Fixed Column Width");
                     });
                     // BY2: cell alignment parity with WPF's table-layout Alignment group.
                     // 9 buttons = 3 vertical (Top/Middle/Bottom) × 3 horizontal (Left/Center/Right).
@@ -712,6 +729,15 @@ internal static class FreeWAvaloniaRibbonDefinition
                         g.Button("freew.cell-align-bottom-left",   "Bottom Left");
                         g.Button("freew.cell-align-bottom-center", "Bottom Center");
                         g.Button("freew.cell-align-bottom-right",  "Bottom Right");
+                        g.Button("freew.table-cell-margins", "Cell Margins");
+                        g.Button("freew.cell-text-direction-horizontal", "Horizontal");
+                        g.Button("freew.cell-text-direction-rotate90", "Rotate Text Up");
+                        g.Button("freew.cell-text-direction-rotate270", "Rotate Text Down");
+                    });
+                    tab.Group("table-data", "Data", null, 80, g =>
+                    {
+                        g.Toggle("freew.table-repeat-header", "Repeat Header Row");
+                        g.Button("freew.table-formula", "Formula");
                     });
                 })
             // ── AV-PICTAB: Picture Format contextual tab (shown when a floating IMAGE is selected) ──

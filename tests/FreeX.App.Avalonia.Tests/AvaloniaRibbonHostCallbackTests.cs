@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 
 using FreeX.App.Avalonia.Ribbon;
+using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.Ribbon.Definitions;
 using Free.Shared.Ribbon;
 
@@ -275,6 +276,26 @@ public sealed class AvaloniaRibbonHostCallbackTests
         });
         Assert.True(wired.TryGet(Canonical(commandId), out var command));
         Assert.IsType<ActionRibbonCommand>(command);
+    }
+
+    [Fact]
+    public void ConditionalFormatPopupCatalogRows_AreRealRawCommandIds_AndBindViaExtraCommands()
+    {
+        foreach (var item in ConditionalFormatPresetGalleryPlanner.PopupItems)
+        {
+            Assert.Contains(item.CommandId, AvaloniaExtraCommandIds.RawCanonical);
+
+            var defaults = AvaloniaRibbonComposition.BuildRegistry(() => null, _ => { });
+            Assert.True(defaults.TryGet(Canonical(item.CommandId), out var noOp), $"Conditional-format popup id '{item.CommandId}' is not in the shared definition.");
+            Assert.IsType<EmptyRibbonCommand>(noOp);
+
+            var wired = AvaloniaRibbonComposition.BuildRegistry(() => null, _ => { }, new AvaloniaRibbonHostCallbacks
+            {
+                ExtraCommands = new Dictionary<string, Action> { [item.CommandId] = () => { } },
+            });
+            Assert.True(wired.TryGet(Canonical(item.CommandId), out var command));
+            Assert.IsType<ActionRibbonCommand>(command);
+        }
     }
 
     [Fact]

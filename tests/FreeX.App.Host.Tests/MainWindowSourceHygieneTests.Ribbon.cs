@@ -1,5 +1,6 @@
 using System.IO;
 using FluentAssertions;
+using FreeX.App.Presentation.ConditionalFormatting;
 
 namespace FreeX.App.Host.Tests;
 
@@ -1207,6 +1208,24 @@ public sealed partial class MainWindowSourceHygieneTests
         operationPlannerSource.Should().Contain("TotalCommandTitle: action.TotalCommandTitle");
         operationPlannerSource.Should().Contain("QuickAnalysisTotalsPlanner.BuildPercentTotalEdits(range)");
         operationPlannerSource.Should().Contain("QuickAnalysisTotalsPlanner.BuildRunningTotalEdits(range)");
+    }
+
+    [Fact]
+    public void ConditionalFormattingPopupRows_UseSharedCatalogEvidenceAndGeneratedRibbonMenu()
+    {
+        var homeFormattingSource = DialogSourceTestSupport.ReadHostSources("MainWindow.HomeFormatting.cs");
+        var menuSource = DialogSourceTestSupport.ReadRibbonDefinitionSource("HomeRibbonMenus.g.cs");
+
+        foreach (var item in ConditionalFormatPresetGalleryPlanner.PopupItems)
+            menuSource.Should().Contain($"\"{item.CommandId}\"");
+
+        homeFormattingSource.Should().Contain("PopulateConditionalFormatDataBarGallery");
+        homeFormattingSource.Should().Contain("PopulateConditionalFormatColorScaleGallery");
+        homeFormattingSource.Should().Contain("ConditionalFormatPresetGalleryPlanner.DataBarGroups");
+        homeFormattingSource.Should().Contain("ConditionalFormatPresetGalleryPlanner.ColorScaleGroups");
+        homeFormattingSource.Should().Contain("ConditionalFormatPresetGalleryPlanner.CreateDataBarRule(style, range)");
+        homeFormattingSource.Should().Contain("ConditionalFormatPresetGalleryPlanner.CreateColorScaleRule(style, range)");
+        homeFormattingSource.Should().Contain("ConditionalFormatIconSetCatalog.CreateRule(style, range)");
     }
 
     [Fact]

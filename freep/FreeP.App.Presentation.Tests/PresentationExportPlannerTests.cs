@@ -1,9 +1,31 @@
+using System.Text;
+using Free.Shared.Pdf;
 using FreeP.App.Compositor;
 
 namespace FreeP.App.Compositor.Tests;
 
 public sealed class PresentationExportPlannerTests
 {
+    private static Presentation BuildHandoutDeck(int slideCount)
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides.Clear();
+        for (var i = 1; i <= slideCount; i++)
+        {
+            var slide = new Slide { Title = $"Slide {i}" };
+            slide.Shapes.Add(new SlideShape
+            {
+                Kind = SlideShapeKind.AutoShape,
+                Text = $"Body {i}",
+            });
+            presentation.Slides.Add(slide);
+        }
+
+        presentation.Properties.Title = "Handout Deck";
+        presentation.Properties.Author = "Parity";
+        return presentation;
+    }
+
     [Fact]
     public void PrintLayouts_CoverSlidesNotesAndPowerPointHandoutOptions()
     {
@@ -134,6 +156,76 @@ public sealed class PresentationExportPlannerTests
         plan.PrintPlan.Layout.SlidesPerPage.Should().Be(9);
         plan.PageCount.Should().Be(1);
         plan.Pages[0].Slots.Should().HaveCount(9);
+    }
+
+    [Fact]
+    public void HandoutPdfRenderPlan_ThreeSlidesPerPage_EmitsThumbnailsAndWritingLines()
+    {
+        var request = new PresentationPrintRequest(
+            PresentationPrintLayoutKind.Handouts,
+            new PresentationSlideRangeRequest(PresentationSlideRangeKind.CustomRange, StartSlideNumber: 2, EndSlideNumber: 4),
+            HandoutSlidesPerPage: 3);
+
+        var plan = PresentationHandoutPdfExporter.BuildRenderPlan(
+            BuildHandoutDeck(5),
+            new PresentationHandoutPdfExportRequest(request));
+
+        plan.LayoutPlan.PrintPlan.Layout.SlidesPerPage.Should().Be(3);
+        plan.LayoutPlan.Pages[0].Slots.Select(slot => slot.SlideNumber).Should().Equal(2, 3, 4);
+        plan.Pages.Should().ContainSingle();
+        plan.Pages[0].WidthPoints.Should().Be(PresentationExportPlanner.DefaultPrintPageWidth);
+        plan.Pages[0].HeightPoints.Should().Be(PresentationExportPlanner.DefaultPrintPageHeight);
+
+        var texts = plan.Pages[0].Ops.OfType<PdfText>().Select(text => text.Text).ToList();
+        texts.Should().Contain(["Slide 2", "Slide 3", "Slide 4"]);
+        texts.Should().NotContain("Slide 1");
+        texts.Should().NotContain("Slide 5");
+        plan.Pages[0].Ops.OfType<PdfLine>().Should().HaveCount(15);
+        plan.Pages[0].Ops.OfType<PdfStrokeRect>().Should().HaveCount(3);
+    }
+
+    [Fact]
+    public void HandoutPdfRenderPlan_SixSlidesPerPage_PaginatesSelectedSlidesWithoutWritingLines()
+    {
+        var request = new PresentationPrintRequest(
+            PresentationPrintLayoutKind.Handouts,
+            new PresentationSlideRangeRequest(
+                PresentationSlideRangeKind.SelectedSlides,
+                SelectedSlideNumbers: [8, 1, 4, 4, 2, 9, 7]),
+            HandoutSlidesPerPage: 6);
+
+        var plan = PresentationHandoutPdfExporter.BuildRenderPlan(
+            BuildHandoutDeck(8),
+            new PresentationHandoutPdfExportRequest(request));
+
+        plan.LayoutPlan.PageCount.Should().Be(1);
+        plan.LayoutPlan.Pages[0].Slots.Select(slot => slot.SlideNumber).Should().Equal(1, 2, 4, 7, 8);
+        plan.Pages[0].Ops.OfType<PdfLine>().Should().BeEmpty();
+        plan.Pages[0].Ops.OfType<PdfStrokeRect>().Should().HaveCount(5);
+        plan.Pages[0].Ops.OfType<PdfText>().Select(text => text.Text)
+            .Should()
+            .Contain(["Slide 1", "Slide 2", "Slide 4", "Slide 7", "Slide 8"])
+            .And
+            .NotContain("Slide 3");
+    }
+
+    [Fact]
+    public void HandoutPdfExporter_ProducesPortablePdfBytesAndMetadata()
+    {
+        var bytes = PresentationHandoutPdfExporter.ExportToBytes(
+            BuildHandoutDeck(2),
+            new PresentationHandoutPdfExportRequest(new PresentationPrintRequest(
+                PresentationPrintLayoutKind.Handouts,
+                HandoutSlidesPerPage: 2)));
+
+        bytes.Length.Should().BeGreaterThan(100);
+        Encoding.ASCII.GetString(bytes, 0, 5).Should().Be("%PDF-");
+        Encoding.Latin1.GetString(bytes).Should().Contain("%%EOF");
+
+        var doc = PresentationHandoutPdfExporter.BuildDocument(BuildHandoutDeck(2));
+        doc.Properties!.Creator.Should().Be("FreeP");
+        doc.Properties.Title.Should().Be("Handout Deck");
+        doc.Properties.Author.Should().Be("Parity");
     }
 
     [Fact]

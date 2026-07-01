@@ -22,6 +22,7 @@ using Avalonia.Skia;
 using Avalonia.Threading;
 using FreeW.App.Avalonia;
 using FreeW.App.Avalonia.Editing;
+using FreeW.App.Presentation.DocumentView;
 using FreeW.Core.Model;
 using SkiaSharp;
 
@@ -64,32 +65,42 @@ static int RenderAll(string outDir)
     var webPath   = Path.GetFullPath(Path.Combine(outDir, "freew_web_layout.png"));
     var draftPath = Path.GetFullPath(Path.Combine(outDir, "freew_draft_layout.png"));
     var floatPath = Path.GetFullPath(Path.Combine(outDir, "freew_floating_image.png"));
+    var evidence = new List<FreeWVisualEvidenceRow>();
 
     var rc = RenderMode(DocumentViewMode.PrintLayout, printPath,
         width: 960, height: 3300,
-        label: "Print Layout");
+        label: "Print Layout",
+        scenarioId: "page-composition-print-layout",
+        evidence: evidence);
     if (rc != 0) return rc;
 
     rc = RenderMode(DocumentViewMode.WebLayout, webPath,
         width: 960, height: 2400,
-        label: "Web Layout");
+        label: "Web Layout",
+        scenarioId: "page-composition-web-layout",
+        evidence: evidence);
     if (rc != 0) return rc;
 
     rc = RenderMode(DocumentViewMode.Draft, draftPath,
         width: 960, height: 2400,
-        label: "Draft");
+        label: "Draft",
+        scenarioId: "page-composition-draft",
+        evidence: evidence);
     if (rc != 0) return rc;
 
     // ── FO1: Floating-image render capture ──────────────────────────────────────────────────────────
-    rc = RenderFloatingImageScene(floatPath);
-    return rc;
+    rc = RenderFloatingImageScene(floatPath, evidence);
+    if (rc != 0) return rc;
+
+    FreeWVisualEvidencePlanner.WriteManifest(outDir, evidence);
+    return 0;
 }
 
 /// <summary>
 /// Renders a document containing three floating images (behind-text, in-front, and square-wrap)
 /// to verify the FO1 floating-image render path: correct placement, z-order, and image pixel output.
 /// </summary>
-static int RenderFloatingImageScene(string outPath)
+static int RenderFloatingImageScene(string outPath, List<FreeWVisualEvidenceRow> evidence)
 {
     var doc = BuildFloatingImageDocument();
     var view = new DocumentView();
@@ -111,6 +122,17 @@ static int RenderFloatingImageScene(string outPath)
     if (bytes.Length > 0)
     {
         File.WriteAllBytes(outPath, bytes);
+        AddAvaloniaEvidence(
+            evidence,
+            scenarioId: "page-composition-floating-image",
+            outputPath: outPath,
+            pngBytes: bytes,
+            pixelWidth: 816,
+            pixelHeight: 1400,
+            page: doc.Page,
+            layoutKind: DocumentViewLayoutKind.PrintLayout,
+            captureSource: "avalonia-render-target",
+            viewMode: "PrintLayout");
         Console.WriteLine($"[PageLayoutShot] Floating Image: {bytes.Length:N0} bytes → {outPath}");
         return 0;
     }
@@ -206,7 +228,14 @@ static TextDocument BuildFloatingImageDocument()
     return doc;
 }
 
-static int RenderMode(DocumentViewMode mode, string outPath, int width, int height, string label)
+static int RenderMode(
+    DocumentViewMode mode,
+    string outPath,
+    int width,
+    int height,
+    string label,
+    string scenarioId,
+    List<FreeWVisualEvidenceRow> evidence)
 {
     var doc = BuildMultiPageDocument();
     var view = new DocumentView();
@@ -228,6 +257,17 @@ static int RenderMode(DocumentViewMode mode, string outPath, int width, int heig
     if (bytes.Length > 0)
     {
         File.WriteAllBytes(outPath, bytes);
+        AddAvaloniaEvidence(
+            evidence,
+            scenarioId,
+            outPath,
+            bytes,
+            width,
+            height,
+            doc.Page,
+            LayoutKindFor(mode),
+            captureSource: "avalonia-render-target",
+            viewMode: mode.ToString());
         Console.WriteLine($"[PageLayoutShot] {label}: {bytes.Length:N0} bytes → {outPath}");
         return 0;
     }
@@ -237,12 +277,111 @@ static int RenderMode(DocumentViewMode mode, string outPath, int width, int heig
     if (pngBytes is { Length: > 0 })
     {
         File.WriteAllBytes(outPath, pngBytes);
+        AddAvaloniaEvidence(
+            evidence,
+            scenarioId,
+            outPath,
+            pngBytes,
+            width,
+            height,
+            doc.Page,
+            LayoutKindFor(mode),
+            captureSource: "skia-fallback-placeholder",
+            viewMode: mode.ToString());
         Console.WriteLine($"[PageLayoutShot] {label} (Skia fallback): {pngBytes.Length:N0} bytes → {outPath}");
         return 0;
     }
 
     Console.Error.WriteLine($"[PageLayoutShot] {label}: both encoding paths produced 0 bytes.");
     return 2;
+}
+
+static DocumentViewLayoutKind LayoutKindFor(DocumentViewMode mode) =>
+    mode switch
+    {
+        DocumentViewMode.WebLayout => DocumentViewLayoutKind.WebLayout,
+        DocumentViewMode.Draft => DocumentViewLayoutKind.Draft,
+        _ => DocumentViewLayoutKind.PrintLayout
+    };
+
+static void AddAvaloniaEvidence(
+    List<FreeWVisualEvidenceRow> evidence,
+    string scenarioId,
+    string outputPath,
+    byte[] pngBytes,
+    int pixelWidth,
+    int pixelHeight,
+    PageSettings page,
+    DocumentViewLayoutKind layoutKind,
+    string captureSource,
+    string viewMode)
+{
+    var outputName = Path.GetFileName(outputPath);
+    var stats = ComputePngPixelStats(pngBytes, pixelWidth, pixelHeight);
+    var expectation = FreeWVisualEvidencePlanner.BuildPageExpectation(
+        scenarioId,
+        page,
+        pageNumber: 1,
+        pageCount: 1,
+        outputName: outputName,
+        layoutKind: layoutKind,
+        availableWidthDip: pixelWidth);
+    var row = FreeWVisualEvidencePlanner.BuildEvidenceRow(new FreeWVisualEvidenceCapture(
+        ScenarioId: scenarioId,
+        HostId: "avalonia-page-layout-shot",
+        OutputName: outputName,
+        OutputPath: Path.GetFullPath(outputPath),
+        PixelWidth: stats.Width > 0 ? stats.Width : pixelWidth,
+        PixelHeight: stats.Height > 0 ? stats.Height : pixelHeight,
+        ByteLength: pngBytes.LongLength,
+        PixelStats: stats,
+        PageExpectation: expectation,
+        HostMetadata: new Dictionary<string, string>
+        {
+            ["renderer"] = "FreeW.PageLayoutShot",
+            ["captureSource"] = captureSource,
+            ["viewMode"] = viewMode
+        }));
+    FreeWVisualEvidencePlanner.EnsureTrusted(row);
+    evidence.Add(row);
+}
+
+static FreeWVisualPixelStats ComputePngPixelStats(byte[] pngBytes, int fallbackWidth, int fallbackHeight)
+{
+    using var bitmap = SKBitmap.Decode(pngBytes);
+    if (bitmap is null || bitmap.Width <= 0 || bitmap.Height <= 0)
+    {
+        return FreeWVisualEvidencePlanner.ComputePixelStats(
+            ReadOnlySpan<byte>.Empty,
+            fallbackWidth,
+            fallbackHeight,
+            0,
+            FreeWVisualEvidencePixelFormat.Rgba32);
+    }
+
+    var width = bitmap.Width;
+    var height = bitmap.Height;
+    var stride = width * 4;
+    var pixels = new byte[stride * height];
+    for (var y = 0; y < height; y++)
+    {
+        for (var x = 0; x < width; x++)
+        {
+            var color = bitmap.GetPixel(x, y);
+            var offset = y * stride + x * 4;
+            pixels[offset] = color.Red;
+            pixels[offset + 1] = color.Green;
+            pixels[offset + 2] = color.Blue;
+            pixels[offset + 3] = color.Alpha;
+        }
+    }
+
+    return FreeWVisualEvidencePlanner.ComputePixelStats(
+        pixels,
+        width,
+        height,
+        stride,
+        FreeWVisualEvidencePixelFormat.Rgba32);
 }
 
 static byte[] TryEncodeViaSkia(DocumentView view, int width, int height, string label = "")

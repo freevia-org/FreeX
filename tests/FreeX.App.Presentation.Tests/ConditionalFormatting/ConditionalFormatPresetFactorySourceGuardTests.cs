@@ -1,4 +1,5 @@
 using FluentAssertions;
+using FreeX.App.Presentation.ConditionalFormatting;
 
 namespace FreeX.App.Presentation.Tests.ConditionalFormatting;
 
@@ -73,5 +74,35 @@ public sealed class ConditionalFormatPresetFactorySourceGuardTests
         iconSetPresentationSource.Should().NotContain("UiText.Get(");
         iconSetPresentationSource.Should().Contain("ConditionalFormatIconSet_Category_Directional");
         iconSetPresentationSource.Should().Contain("CreateRule");
+    }
+
+    [Fact]
+    public void ConditionalFormatPopupPseudoRows_AreBackedBySharedCatalogAndPairedHostSurfaces()
+    {
+        var presentationRoot = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Presentation");
+        var repoRoot = Directory.GetParent(presentationRoot)?.Parent?.FullName
+            ?? throw new DirectoryNotFoundException("Could not resolve repository root.");
+
+        var plannerSource = File.ReadAllText(Path.Combine(presentationRoot, "ConditionalFormatting", "ConditionalFormatPresetGalleryPlanner.cs"));
+        var runtimeCatalogSource = File.ReadAllText(Path.Combine(presentationRoot, "Ribbon", "RibbonRuntimeCatalogPlanner.cs"));
+        var hostSource = File.ReadAllText(Path.Combine(repoRoot, "src", "FreeX.App.Host", "MainWindow.HomeFormatting.cs"));
+        var avaloniaMainSource = File.ReadAllText(Path.Combine(repoRoot, "src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var avaloniaRawIdsSource = File.ReadAllText(Path.Combine(repoRoot, "src", "FreeX.App.Avalonia", "Ribbon", "AvaloniaExtraCommandIds.cs"));
+        var homeRibbonMenuSource = File.ReadAllText(Path.Combine(repoRoot, "src", "FreeX.Ribbon.Definitions", "HomeRibbonMenus.g.cs"));
+
+        plannerSource.Should().Contain("public static readonly IReadOnlyList<ConditionalFormatPopupCatalogGroup> PopupGroups");
+        runtimeCatalogSource.Should().Contain("CreateConditionalFormattingPopupSurface()");
+        runtimeCatalogSource.Should().Contain("ConditionalFormatPresetGalleryPlanner.PopupGroups");
+
+        hostSource.Should().Contain("ConditionalFormatPresetGalleryPlanner.DataBarGroups");
+        hostSource.Should().Contain("ConditionalFormatPresetGalleryPlanner.ColorScaleGroups");
+        hostSource.Should().Contain("ConditionalFormatIconSetCatalog.CreateRule(style, range)");
+
+        foreach (var item in ConditionalFormatPresetGalleryPlanner.PopupItems)
+        {
+            homeRibbonMenuSource.Should().Contain($"\"{item.CommandId}\"");
+            avaloniaRawIdsSource.Should().Contain($"\"{item.CommandId}\"");
+            avaloniaMainSource.Should().Contain($"[\"{item.CommandId}\"]");
+        }
     }
 }

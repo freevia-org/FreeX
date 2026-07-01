@@ -7,6 +7,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using FreeW.App.Host;
 using FreeW.App.Host.Editing;
+using FreeW.App.Presentation.DocumentView;
 using FreeW.Core.IO;
 using FreeW.Core.Model;
 
@@ -113,6 +114,7 @@ static int RunComposite(string input, string outDir, int maxPages)
     }
 
     int failures = 0;
+    var evidence = new List<FreeWVisualEvidenceRow>();
 
     foreach (var file in files)
     {
@@ -120,7 +122,7 @@ static int RunComposite(string input, string outDir, int maxPages)
         try
         {
             var doc = DocxReader.Read(file);
-            RenderDocumentComposite(doc, name, outDir, maxPages);
+            RenderDocumentComposite(doc, name, outDir, maxPages, evidence);
         }
         catch (Exception ex)
         {
@@ -129,8 +131,11 @@ static int RunComposite(string input, string outDir, int maxPages)
         }
     }
 
+    if (evidence.Count > 0)
+        FreeWVisualEvidencePlanner.WriteManifest(outDir, evidence);
+
     Console.WriteLine($"rendered {files.Count - failures}/{files.Count} docs into {outDir}");
-    return 0;
+    return failures == 0 ? 0 : 1;
 }
 
 /// <summary>
@@ -147,7 +152,12 @@ static int RunComposite(string input, string outDir, int maxPages)
 /// visual elements we instead call RenderTargetBitmap.Render(element) after Measure+Arrange, which
 /// is the reliable off-screen path and is what WPF's own print/XPS pipeline uses internally.
 /// </summary>
-static void RenderDocumentComposite(TextDocument doc, string name, string outDir, int maxPages)
+static void RenderDocumentComposite(
+    TextDocument doc,
+    string name,
+    string outDir,
+    int maxPages,
+    List<FreeWVisualEvidenceRow> evidence)
 {
     // ── page geometry from model ──────────────────────────────────────────────────────────────────
     var page = doc.Page;
@@ -274,6 +284,9 @@ static void RenderDocumentComposite(TextDocument doc, string name, string outDir
     }
 
     // ═══ Per-page compositing ═════════════════════════════════════════════════════════════════════
+    var hasSyntheticEndnotePage = panel?.PageBoxes.Any(b => b.IsEndnoteSyntheticPage && b.EndnoteIds.Count > 0) == true;
+    var evidencePageCount = pageCount + (hasSyntheticEndnotePage ? 1 : 0);
+
     for (int i = 0; i < pageCount; i++)
     {
         DocumentPage docPage = paginator.GetPage(i);
@@ -282,8 +295,17 @@ static void RenderDocumentComposite(TextDocument doc, string name, string outDir
         // panel. Fall back to the document-level page if the panel didn't build or the box index is
         // out of range (e.g. the body paginator produced more pages than panel boxes).
         PageSettings thisPageSettings = page;
+        string? headerSlotName = null;
+        string? footerSlotName = null;
+        var hasFootnotes = false;
         if (panel is not null && i < panel.PageBoxes.Count)
-            thisPageSettings = panel.PageBoxes[i].PageGeometry;
+        {
+            var pageBox = panel.PageBoxes[i];
+            thisPageSettings = pageBox.PageGeometry;
+            headerSlotName = pageBox.HeaderSlotName;
+            footerSlotName = pageBox.FooterSlotName;
+            hasFootnotes = pageBox.FootnoteIds.Count > 0;
+        }
 
         var (thisPageWDip, thisPageHDip) = PageLayout.PageSizeDip(thisPageSettings);
         var (thisMarginLeft, thisMarginTop, thisMarginRight, thisMarginBottom) =
@@ -427,7 +449,38 @@ static void RenderDocumentComposite(TextDocument doc, string name, string outDir
         }
 
         string outPath = Path.Combine(outDir, $"{name}_p{i + 1}.png");
-        SavePng(bmp, outPath);
+        var byteLength = SavePng(bmp, outPath);
+        var stats = ComputeWpfPixelStats(bmp, "#FFFFFF");
+        var expectation = FreeWVisualEvidencePlanner.BuildPageExpectation(
+            name,
+            thisPageSettings,
+            pageNumber: i + 1,
+            pageCount: evidencePageCount,
+            outputName: Path.GetFileName(outPath),
+            layoutKind: DocumentViewLayoutKind.PrintLayout,
+            availableWidthDip: thisPageWDip,
+            headerSlotName: headerSlotName,
+            footerSlotName: footerSlotName,
+            hasFootnotes: hasFootnotes);
+        var row = FreeWVisualEvidencePlanner.BuildEvidenceRow(new FreeWVisualEvidenceCapture(
+            ScenarioId: name,
+            HostId: "wpf-fidelity-render",
+            OutputName: Path.GetFileName(outPath),
+            OutputPath: Path.GetFullPath(outPath),
+            PixelWidth: thisPixW,
+            PixelHeight: thisPixH,
+            ByteLength: byteLength,
+            PixelStats: stats,
+            PageExpectation: expectation,
+            HostMetadata: new Dictionary<string, string>
+            {
+                ["renderer"] = "FreeW.FidelityRender",
+                ["renderPath"] = "composite",
+                ["documentName"] = name,
+                ["pageIndex"] = i.ToString(System.Globalization.CultureInfo.InvariantCulture)
+            }));
+        FreeWVisualEvidencePlanner.EnsureTrusted(row);
+        evidence.Add(row);
         Console.WriteLine($"ok    {Path.GetFileName(outPath)} ({thisPixW}x{thisPixH}, {pageCount} pages, composite)");
     }
 
@@ -468,7 +521,38 @@ static void RenderDocumentComposite(TextDocument doc, string name, string outDir
             }
 
             string endnotePath = Path.Combine(outDir, $"{name}_p{pageCount + 1}.png");
-            SavePng(bmp, endnotePath);
+            var byteLength = SavePng(bmp, endnotePath);
+            var stats = ComputeWpfPixelStats(bmp, "#FFFFFF");
+            var expectation = FreeWVisualEvidencePlanner.BuildPageExpectation(
+                name,
+                endnoteBox.PageGeometry,
+                pageNumber: pageCount + 1,
+                pageCount: evidencePageCount,
+                outputName: Path.GetFileName(endnotePath),
+                layoutKind: DocumentViewLayoutKind.PrintLayout,
+                availableWidthDip: endnotePageWDip,
+                hasEndnotes: true,
+                isSyntheticPage: true);
+            var row = FreeWVisualEvidencePlanner.BuildEvidenceRow(new FreeWVisualEvidenceCapture(
+                ScenarioId: name,
+                HostId: "wpf-fidelity-render",
+                OutputName: Path.GetFileName(endnotePath),
+                OutputPath: Path.GetFullPath(endnotePath),
+                PixelWidth: endnotePixW,
+                PixelHeight: endnotePixH,
+                ByteLength: byteLength,
+                PixelStats: stats,
+                PageExpectation: expectation,
+                HostMetadata: new Dictionary<string, string>
+                {
+                    ["renderer"] = "FreeW.FidelityRender",
+                    ["renderPath"] = "composite",
+                    ["documentName"] = name,
+                    ["pageIndex"] = pageCount.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    ["syntheticPage"] = "endnotes"
+                }));
+            FreeWVisualEvidencePlanner.EnsureTrusted(row);
+            evidence.Add(row);
             Console.WriteLine($"ok    {Path.GetFileName(endnotePath)} (endnotes page, composite)");
         }
     }
@@ -762,6 +846,7 @@ static int RunBare(string input, string outDir, int maxPages)
     const double pageW = 816;   // 8.5in @ 96dpi
     const double pageH = 1056;  // 11in  @ 96dpi
     int failures = 0;
+    var evidence = new List<FreeWVisualEvidenceRow>();
 
     foreach (var file in files)
     {
@@ -800,7 +885,35 @@ static int RunBare(string input, string outDir, int maxPages)
                 bmp.Render(dv);
 
                 string outPath = Path.Combine(outDir, $"{name}_p{i + 1}.png");
-                SavePng(bmp, outPath);
+                var byteLength = SavePng(bmp, outPath);
+                var stats = ComputeWpfPixelStats(bmp, "#FFFFFF");
+                var expectation = FreeWVisualEvidencePlanner.BuildPageExpectation(
+                    name,
+                    doc.Page,
+                    pageNumber: i + 1,
+                    pageCount: pages,
+                    outputName: Path.GetFileName(outPath),
+                    layoutKind: DocumentViewLayoutKind.PrintLayout,
+                    availableWidthDip: pageW);
+                var row = FreeWVisualEvidencePlanner.BuildEvidenceRow(new FreeWVisualEvidenceCapture(
+                    ScenarioId: name,
+                    HostId: "wpf-fidelity-render",
+                    OutputName: Path.GetFileName(outPath),
+                    OutputPath: Path.GetFullPath(outPath),
+                    PixelWidth: (int)pageW,
+                    PixelHeight: (int)pageH,
+                    ByteLength: byteLength,
+                    PixelStats: stats,
+                    PageExpectation: expectation,
+                    HostMetadata: new Dictionary<string, string>
+                    {
+                        ["renderer"] = "FreeW.FidelityRender",
+                        ["renderPath"] = "bare",
+                        ["documentName"] = name,
+                        ["pageIndex"] = i.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                    }));
+                FreeWVisualEvidencePlanner.EnsureTrusted(row);
+                evidence.Add(row);
                 Console.WriteLine($"ok    {Path.GetFileName(outPath)} ({paginator.PageCount} pages)");
             }
         }
@@ -811,8 +924,11 @@ static int RunBare(string input, string outDir, int maxPages)
         }
     }
 
+    if (evidence.Count > 0)
+        FreeWVisualEvidencePlanner.WriteManifest(outDir, evidence);
+
     Console.WriteLine($"rendered {files.Count - failures}/{files.Count} docs into {outDir}");
-    return 0;
+    return failures == 0 ? 0 : 1;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════════════════════════
@@ -1214,12 +1330,29 @@ static void GenerateF2FlowCorpus(string outDir)
 // Shared helpers
 // ═══════════════════════════════════════════════════════════════════════════════════════════════════
 
-static void SavePng(RenderTargetBitmap bmp, string path)
+static long SavePng(RenderTargetBitmap bmp, string path)
 {
     var enc = new PngBitmapEncoder();
     enc.Frames.Add(BitmapFrame.Create(bmp));
     using FileStream fs = File.Create(path);
     enc.Save(fs);
+    return fs.Length;
+}
+
+static FreeWVisualPixelStats ComputeWpfPixelStats(RenderTargetBitmap bmp, string backgroundColorHex)
+{
+    var width = bmp.PixelWidth;
+    var height = bmp.PixelHeight;
+    var stride = Math.Max(1, width) * 4;
+    var pixels = new byte[stride * Math.Max(1, height)];
+    bmp.CopyPixels(pixels, stride, 0);
+    return FreeWVisualEvidencePlanner.ComputePixelStats(
+        pixels,
+        width,
+        height,
+        stride,
+        FreeWVisualEvidencePixelFormat.Bgra32,
+        backgroundColorHex);
 }
 
 static Color ParseHexColor(string hex, Color fallback)

@@ -15,8 +15,8 @@ namespace FreeP.Core.IO;
 public static class PresentationPdfExporter
 {
     // Widescreen 16:9 slide (PowerPoint default 13.333in x 7.5in) in PDF points (1/72 inch).
-    private const double SlideWidthPt = 960.0;
-    private const double SlideHeightPt = 540.0;
+    public const double DefaultSlideWidthPoints = 960.0;
+    public const double DefaultSlideHeightPoints = 540.0;
     private const double MarginPt = 54.0;
     private const double TitleSize = 32.0;
     private const double BodySize = 18.0;
@@ -56,16 +56,19 @@ public static class PresentationPdfExporter
         return new PdfContentDocument(pages, properties);
     }
 
-    private static PdfContentPage BuildSlidePage(Slide slide)
+    /// <summary>Builds the portable draw-op page for one slide at FreeP's default 16:9 slide size.</summary>
+    public static PdfContentPage BuildSlidePage(Slide slide)
     {
+        ArgumentNullException.ThrowIfNull(slide);
+
         var ops = new List<PdfDrawOp>();
 
         if (TryMapFill(slide.Background, out var background))
-            ops.Add(new PdfFillRect(0, 0, SlideWidthPt, SlideHeightPt, background));
+            ops.Add(new PdfFillRect(0, 0, DefaultSlideWidthPoints, DefaultSlideHeightPoints, background));
 
         // PDF user space has its origin at the bottom-left with y increasing upward, so we lay out from the
         // top down by starting at (height - margin) and decreasing y for each line.
-        var y = SlideHeightPt - MarginPt - TitleSize;
+        var y = DefaultSlideHeightPoints - MarginPt - TitleSize;
         if (!string.IsNullOrEmpty(slide.Title))
             ops.Add(new PdfText(MarginPt, y, TitleSize, PdfFontFace.Bold, PdfColor.Black, OneLine(slide.Title)));
         y -= TitleSize * 1.4;
@@ -85,13 +88,13 @@ public static class PresentationPdfExporter
             foreach (var line in Lines(content))
             {
                 if (y < MarginPt)
-                    return new PdfContentPage(SlideWidthPt, SlideHeightPt, ops); // ran out of room on this slide
+                    return new PdfContentPage(DefaultSlideWidthPoints, DefaultSlideHeightPoints, ops); // ran out of room on this slide
                 ops.Add(new PdfText(MarginPt, y, BodySize, PdfFontFace.Regular, PdfColor.Black, OneLine(line)));
                 y -= BodyLeadingPt;
             }
         }
 
-        return new PdfContentPage(SlideWidthPt, SlideHeightPt, ops);
+        return new PdfContentPage(DefaultSlideWidthPoints, DefaultSlideHeightPoints, ops);
     }
 
     private static ShapeBox? TryAppendShapeGeometry(List<PdfDrawOp> ops, SlideShape shape)
@@ -102,7 +105,7 @@ public static class PresentationPdfExporter
             return null;
 
         var x = EmuToPoints(shape.OffsetXEmu);
-        var y = SlideHeightPt - EmuToPoints(shape.OffsetYEmu) - height;
+        var y = DefaultSlideHeightPoints - EmuToPoints(shape.OffsetYEmu) - height;
 
         if (TryMapFill(shape.Fill, out var fill))
             ops.Add(new PdfFillRect(x, y, width, height, fill));

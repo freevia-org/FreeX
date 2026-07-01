@@ -37,6 +37,76 @@ public sealed class ConditionalFormatPresetGalleryPlannerTests
     }
 
     [Fact]
+    public void PopupGroups_ExposeConditionalFormatPseudoCommandRowsWithSharedBacking()
+    {
+        var pseudoCommandRows = new[]
+        {
+            "Greater Than",
+            "Less Than",
+            "Between",
+            "Equal To",
+            "Text that Contains",
+            "A Date Occurring",
+            "Duplicate Values",
+            "Top 10 Items",
+            "Top 10%",
+            "Bottom 10 Items",
+            "Bottom 10%",
+            "Above Average",
+            "Below Average",
+            "Data Bars",
+            "Color Scales",
+            "3 Arrows",
+            "3 Arrows (Gray)",
+            "4 Arrows",
+            "4 Arrows (Gray)",
+            "5 Arrows",
+            "5 Arrows (Gray)",
+            "3 Traffic Lights",
+            "3 Traffic Lights (Rimmed)",
+            "3 Signs",
+            "3 Symbols",
+            "3 Symbols (Uncircled)",
+            "3 Flags",
+            "4 Traffic Lights",
+            "4 Red To Black",
+            "4 Ratings",
+            "5 Ratings",
+            "5 Quarters",
+            "5 Boxes",
+            "More Rules",
+        };
+
+        var items = ConditionalFormatPresetGalleryPlanner.PopupItems;
+
+        items.Select(item => item.CommandId)
+            .Should()
+            .ContainInOrder(pseudoCommandRows);
+
+        items.Where(item => item.Kind == ConditionalFormatPopupCatalogItemKind.Preset)
+            .Should()
+            .OnlyContain(item => item.Preset != null);
+        items.Where(item => item.Kind == ConditionalFormatPopupCatalogItemKind.IconSetGallery)
+            .Should()
+            .OnlyContain(item => item.IconSetStyle != null);
+        items.Single(item => item.CommandId == "Data Bars").Kind.Should().Be(ConditionalFormatPopupCatalogItemKind.DataBarGallery);
+        items.Single(item => item.CommandId == "Color Scales").Kind.Should().Be(ConditionalFormatPopupCatalogItemKind.ColorScaleGallery);
+        items.Single(item => item.CommandId == "More Rules").Kind.Should().Be(ConditionalFormatPopupCatalogItemKind.RuleDialog);
+    }
+
+    [Fact]
+    public void PopupIconSetRows_MapToSharedIconSetCatalogStyles()
+    {
+        var iconSetItems = ConditionalFormatPresetGalleryPlanner.PopupItems
+            .Where(item => item.Kind == ConditionalFormatPopupCatalogItemKind.IconSetGallery)
+            .ToArray();
+
+        iconSetItems.Select(item => item.IconSetStyle)
+            .Should()
+            .Equal(ConditionalFormatIconSetCatalog.GalleryStyles);
+    }
+
+    [Fact]
     public void CreateDataBarRule_AppliesPresetColorAndFillMode()
     {
         var sheetId = SheetId.New();

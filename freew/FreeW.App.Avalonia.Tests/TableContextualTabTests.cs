@@ -5,6 +5,7 @@ using Avalonia;
 using Avalonia.Headless;
 using FreeW.App.Avalonia.Editing;
 using FreeW.App.Avalonia.Ribbon;
+using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
 using Free.Shared.Ribbon;
 
@@ -63,7 +64,11 @@ public sealed class TableContextualTabTests
         {
             // Table Design
             "freew.table-header-row",
+            "freew.table-last-row",
+            "freew.table-first-column",
+            "freew.table-last-column",
             "freew.table-banded-rows",
+            "freew.table-banded-cols",
             "freew.table-shading",
             "freew.table-borders",
             // Table borders sub-commands
@@ -80,6 +85,8 @@ public sealed class TableContextualTabTests
             "freew.table-select-row",
             "freew.table-select-col",
             "freew.table-select-cell",
+            "freew.table-view-gridlines",
+            "freew.table-properties",
             "freew.table-insert-above",
             "freew.table-insert-below",
             "freew.table-insert-col-left",
@@ -89,6 +96,20 @@ public sealed class TableContextualTabTests
             "freew.table-delete",
             "freew.table-merge-cells",
             "freew.table-split-cell",
+            "freew.split-table",
+            "freew.table-row-height",
+            "freew.table-col-width",
+            "freew.table-distribute-rows",
+            "freew.table-distribute-cols",
+            "freew.table-autofit-contents",
+            "freew.table-autofit-window",
+            "freew.table-autofit-fixed",
+            "freew.table-cell-margins",
+            "freew.cell-text-direction-horizontal",
+            "freew.cell-text-direction-rotate90",
+            "freew.cell-text-direction-rotate270",
+            "freew.table-repeat-header",
+            "freew.table-formula",
         };
 
         foreach (var id in tableCommands)
@@ -137,17 +158,17 @@ public sealed class TableContextualTabTests
     }
 
     [Fact]
-    public void Ribbon_definition_has_at_least_54_commands_after_table_tabs()
+    public void Ribbon_definition_has_at_least_74_commands_after_table_layout_catchup()
     {
-        // Was >= 37 before AV-TBLTAB; we add 17 new ribbon-level controls.
+        // Was >= 54 after AV-TBLTAB; table layout catch-up adds 20 direct controls.
         var definition = FreeWRibbon.BuildDefinition();
         var count = definition.Tabs
             .SelectMany(t => t.Groups)
             .SelectMany(g => g.Controls)
             .Count(c => GetCommandId(c) is not null);
 
-        count.Should().BeGreaterThanOrEqualTo(54,
-            "AV-TBLTAB adds 17 table contextual controls on top of the prior 37");
+        count.Should().BeGreaterThanOrEqualTo(74,
+            "table layout catch-up adds the remaining direct table controls");
     }
 
     // ── Context source ────────────────────────────────────────────────────────
@@ -327,6 +348,147 @@ public sealed class TableContextualTabTests
     }
 
     [Fact]
+    public async Task Table_style_option_catchup_toggles_mutate_formatting_flags()
+    {
+        TableFormatting? formatting = null;
+        var ran = false;
+        try
+        {
+            await Session.Dispatch(() =>
+            {
+                var (view, idx, tbl) = MakeTableView();
+                view.PlaceCaretInCell(idx, row: 0, col: 0, paraIdx: 0, offset: 0);
+                var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
+
+                Execute(registry, "freew.table-last-row");
+                Execute(registry, "freew.table-first-column");
+                Execute(registry, "freew.table-last-column");
+                Execute(registry, "freew.table-banded-cols");
+                Execute(registry, "freew.table-repeat-header");
+
+                formatting = tbl.Formatting;
+                ran = true;
+            }, CancellationToken.None);
+        }
+        catch { return; }
+
+        if (!ran) return;
+        formatting!.LastRow.Should().BeTrue();
+        formatting.FirstColumn.Should().BeTrue();
+        formatting.LastColumn.Should().BeTrue();
+        formatting.BandedColumns.Should().BeTrue();
+        formatting.RepeatHeaderRow.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Table_layout_size_and_text_direction_commands_mutate_model()
+    {
+        AutoFitMode? autoFit = null;
+        double? preferredWidth = null;
+        double? firstColumnWidth = null;
+        CellTextDirection? direction = null;
+        bool? gridlines = null;
+        var ran = false;
+        try
+        {
+            await Session.Dispatch(() =>
+            {
+                var (view, idx, tbl) = MakeTableView();
+                tbl.ColumnWidthsPt.AddRange([60, 120, 180]);
+                view.PlaceCaretInCell(idx, row: 0, col: 1, paraIdx: 0, offset: 0);
+                var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
+
+                Execute(registry, "freew.table-distribute-cols");
+                firstColumnWidth = tbl.ColumnWidthsPt[0];
+                Execute(registry, "freew.table-autofit-window");
+                autoFit = tbl.AutoFit;
+                preferredWidth = tbl.PreferredWidthPt;
+                Execute(registry, "freew.cell-text-direction-rotate90");
+                direction = tbl.Rows[0].Cells[1].TextDirection;
+                Execute(registry, "freew.table-view-gridlines");
+                gridlines = view.ViewTableGridlines;
+                ran = true;
+            }, CancellationToken.None);
+        }
+        catch { return; }
+
+        if (!ran) return;
+        firstColumnWidth!.Value.Should().BeApproximately(120, 0.001);
+        autoFit.Should().Be(AutoFitMode.Window);
+        preferredWidth.Should().Be(TableLayoutOperations.DefaultAutoFitWindowWidthPt);
+        direction.Should().Be(CellTextDirection.Rotate90);
+        gridlines.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Table_properties_command_applies_callback_values()
+    {
+        double? columnWidth = null;
+        TableCellMargins? cellMargins = null;
+        var ran = false;
+        try
+        {
+            await Session.Dispatch(() =>
+            {
+                var (view, idx, tbl) = MakeTableView();
+                view.PlaceCaretInCell(idx, row: 0, col: 1, paraIdx: 0, offset: 0);
+                var callbacks = NoopCallbacks() with
+                {
+                    OpenTablePropertiesDialog = _ => TablePropertyValues()
+                };
+                var registry = FreeWAvaloniaRibbonCommands.Build(view, callbacks);
+
+                Execute(registry, "freew.table-properties");
+
+                columnWidth = tbl.Rows[2].Cells[1].WidthPt;
+                cellMargins = tbl.Rows[0].Cells[1].Margins;
+                ran = true;
+            }, CancellationToken.None);
+        }
+        catch { return; }
+
+        if (!ran) return;
+        columnWidth.Should().Be(144);
+        cellMargins.Should().Be(new TableCellMargins(2, 8, 2, 8));
+    }
+
+    [Fact]
+    public async Task Table_formula_command_inserts_default_formula_field()
+    {
+        Run? formulaRun = null;
+        var ran = false;
+        try
+        {
+            await Session.Dispatch(() =>
+            {
+                var doc = TextDocument.CreateEmpty();
+                doc.Blocks.Clear();
+                var tbl = new Table();
+                tbl.Rows.Add(new TableRow { Cells = { new TableCell("1") } });
+                tbl.Rows.Add(new TableRow { Cells = { new TableCell("2") } });
+                tbl.Rows.Add(new TableRow { Cells = { new TableCell(string.Empty) } });
+                doc.Blocks.Add(tbl);
+                var view = new DocumentView();
+                view.LoadDocument(doc);
+                view.Measure(new Size(800, 4000));
+                view.PlaceCaretInCell(0, row: 2, col: 0, paraIdx: 0, offset: 0);
+
+                var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
+                Execute(registry, "freew.table-formula");
+
+                formulaRun = tbl.Rows[2].Cells[0].Paragraphs[0].Runs.SingleOrDefault(r => r.TableFormula is not null);
+                ran = true;
+            }, CancellationToken.None);
+        }
+        catch { return; }
+
+        if (!ran) return;
+        formulaRun.Should().NotBeNull();
+        formulaRun!.TableFormula!.Expression.Should().Be(TableFormulaDialogPlanner.SumAboveFormula);
+        formulaRun.Text.Should().Be("3");
+    }
+
+    [Fact]
     public async Task SetCellShading_applies_color_to_caret_cell()
     {
         string? shadingAfter = null;
@@ -402,6 +564,17 @@ public sealed class TableContextualTabTests
                 view.SetCellShading("#FF0000");
                 view.ToggleTableHeaderRow();
                 view.ToggleBandedRows();
+                view.ToggleTableLastRow();
+                view.ToggleTableFirstColumn();
+                view.ToggleTableLastColumn();
+                view.ToggleTableBandedColumns();
+                view.ToggleTableRepeatHeaderRow();
+                view.SplitTable();
+                view.DistributeTableRows();
+                view.DistributeTableColumns();
+                view.SetTableAutoFit(AutoFitMode.Contents);
+                view.SetCaretCellTextDirection(CellTextDirection.Rotate270);
+                view.InsertTableFormula(new TableFormulaField("=SUM(ABOVE)"));
 
                 ran = true;
             }, CancellationToken.None);
@@ -564,6 +737,29 @@ public sealed class TableContextualTabTests
         view.Measure(new Size(800, 4000));
         var idx = doc.Blocks.IndexOf(tbl);
         return (view, idx, tbl);
+    }
+
+    private static TablePropertiesValues TablePropertyValues() => new(
+        PreferredWidthPt: 300,
+        Alignment: TableAlignment.Center,
+        TextWrapping: false,
+        IndentFromLeftPt: null,
+        DefaultCellMargins: TableCellMargins.Default,
+        CellSpacingPt: null,
+        RowHeightPt: 36,
+        RowHeightRule: TableRowHeightRule.Exact,
+        AllowRowBreak: true,
+        RepeatHeaderRow: true,
+        ColumnWidthPt: 144,
+        CellPreferredWidthPt: 150,
+        CellVerticalAlignment: TableCellVerticalAlignment.Center,
+        CellMargins: new TableCellMargins(2, 8, 2, 8));
+
+    private static void Execute(RibbonCommandRegistry registry, string id)
+    {
+        registry.TryGet(new RibbonCommandId(id), out var command)
+            .Should().BeTrue($"command '{id}' must be registered");
+        command!.Execute(RibbonCommandContext.Empty);
     }
 
     private static RibbonCommandId? GetCommandId(RibbonControl control) => control switch

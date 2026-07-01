@@ -131,6 +131,46 @@ public sealed class TablePropertiesDialogPlannerTests
         error.Should().Be(TablePropertiesDialogPlanner.ValidationMessage);
     }
 
+    [Fact]
+    public void ApplyValues_AppliesTableRowColumnAndCellFields()
+    {
+        var table = Table.Create(2, 2);
+        var row = table.Rows[0];
+        var cell = row.Cells[1];
+        var values = new TablePropertiesValues(
+            PreferredWidthPt: 300,
+            Alignment: TableAlignment.Right,
+            TextWrapping: true,
+            IndentFromLeftPt: 12,
+            DefaultCellMargins: new TableCellMargins(0, 6, 0, 6),
+            CellSpacingPt: 2,
+            RowHeightPt: 36,
+            RowHeightRule: TableRowHeightRule.Exact,
+            AllowRowBreak: false,
+            RepeatHeaderRow: true,
+            ColumnWidthPt: 120,
+            CellPreferredWidthPt: 140,
+            CellVerticalAlignment: TableCellVerticalAlignment.Center,
+            CellMargins: new TableCellMargins(2, 8, 2, 8));
+
+        TablePropertiesDialogPlanner.ApplyValues(new ModelTableContext(table, row, cell), values);
+
+        table.PreferredWidthPt.Should().Be(300);
+        table.Alignment.Should().Be(TableAlignment.Right);
+        table.TextWrapping.Should().BeTrue();
+        table.IndentFromLeftPt.Should().Be(12);
+        table.DefaultCellMargins.Should().Be(new TableCellMargins(0, 6, 0, 6));
+        table.CellSpacingPt.Should().Be(2);
+        table.Formatting.RepeatHeaderRow.Should().BeTrue();
+        row.HeightPt.Should().Be(36);
+        row.HeightRule.Should().Be(TableRowHeightRule.Exact);
+        row.AllowBreakAcrossPages.Should().BeFalse();
+        table.Rows[1].Cells[1].WidthPt.Should().Be(120);
+        cell.WidthPt.Should().Be(140);
+        cell.VerticalAlignment.Should().Be(TableCellVerticalAlignment.Center);
+        cell.Margins.Should().Be(new TableCellMargins(2, 8, 2, 8));
+    }
+
     private static TablePropertiesDialogInput ValidInput() => new(
         PreferredWidthOn: true,
         PreferredWidthText: "300",

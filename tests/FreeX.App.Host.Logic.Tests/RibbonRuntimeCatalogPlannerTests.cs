@@ -18,6 +18,7 @@ public sealed class RibbonRuntimeCatalogPlannerTests
         surfaces.Select(surface => surface.CommandTitle).Should().Equal(
             "Format as Table",
             "Number Format Dropdown",
+            "Conditional Formatting Popup",
             "Conditional Formatting Data Bars",
             "Conditional Formatting Color Scales",
             "Conditional Formatting Icon Sets",
@@ -31,6 +32,15 @@ public sealed class RibbonRuntimeCatalogPlannerTests
         Surface(surfaces, "Number Format Dropdown").Groups.Select(group => group.Name)
             .Should()
             .Equal("Formats", "Actions");
+
+        Surface(surfaces, "Conditional Formatting Popup").Groups.Select(group => (group.Name, group.Items.Count))
+            .Should()
+            .Equal(
+                ("Highlight Cells Rules", 7),
+                ("Top/Bottom Rules", 6),
+                ("Gallery Families", 2),
+                ("Icon Sets", 18),
+                ("Rules", 5));
 
         Surface(surfaces, "Conditional Formatting Data Bars").Groups.Select(group => (group.Name, group.Items.Count))
             .Should()
@@ -86,6 +96,8 @@ public sealed class RibbonRuntimeCatalogPlannerTests
         Surface(surfaces, "Format as Table").ItemCount.Should().Be(TableStyleGalleryPlanner.GetOptions().Count);
         Surface(surfaces, "Number Format Dropdown").ItemCount.Should()
             .Be(HomeNumberFormatDropdownPlanner.Options.Count);
+        Surface(surfaces, "Conditional Formatting Popup").ItemCount.Should()
+            .Be(ConditionalFormatPresetGalleryPlanner.PopupItems.Count);
         Surface(surfaces, "Conditional Formatting Data Bars").ItemCount.Should()
             .Be(ConditionalFormatPresetGalleryPlanner.DataBarOptions.Count);
         Surface(surfaces, "Conditional Formatting Color Scales").ItemCount.Should()
@@ -116,6 +128,7 @@ public sealed class RibbonRuntimeCatalogPlannerTests
         presentationSource.Should().Contain("namespace FreeX.App.Presentation.Ribbon;");
         presentationSource.Should().Contain("Func<string, string> textProvider");
         presentationSource.Should().Contain("IReadOnlyList<RibbonRuntimeCatalogNumberFormatOption> numberFormatOptions");
+        presentationSource.Should().Contain("ConditionalFormatPresetGalleryPlanner.PopupGroups");
         presentationSource.Should().Contain("PivotStyleGalleryPlanner.BuiltInStyleNames");
         presentationSource.Should().NotContain("namespace FreeX.App.Host");
         presentationSource.Should().NotContain("using System.Windows");
