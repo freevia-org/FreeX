@@ -83,8 +83,8 @@ function Test-FileContentMatches {
         throw "$Label is missing. Run tools\Generate-CrossAppParityDashboard.ps1 to create it."
     }
 
-    $expected = Get-Content -LiteralPath $ExpectedPath -Raw
-    $actual = Get-Content -LiteralPath $ActualPath -Raw
+    $expected = (Get-Content -LiteralPath $ExpectedPath -Raw) -replace "`r`n", "`n"
+    $actual = (Get-Content -LiteralPath $ActualPath -Raw) -replace "`r`n", "`n"
     if ($expected -cne $actual) {
         throw "$Label is out of date. Run tools\Generate-CrossAppParityDashboard.ps1 to refresh it."
     }

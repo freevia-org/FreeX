@@ -232,9 +232,21 @@ public sealed class PresentationReviewWorkflowPlannerTests
         plan.SlideCount.Should().Be(1);
         plan.CommentCount.Should().Be(1);
         plan.NotesSlideCount.Should().Be(1);
-        plan.Issues.Should().Contain(issue => issue.Title == "Missing slide title" && issue.ShapeId == null);
-        plan.Issues.Should().Contain(issue => issue.Title == "Alt text missing" && issue.ShapeId == 8);
-        plan.Issues.Should().Contain(issue => issue.Title == "Hyperlink ScreenTip missing" && issue.ShapeId == 9);
+        var missingTitle = plan.Issues.Single(issue => issue.Title == "Missing slide title" && issue.ShapeId == null);
+        var missingAltText = plan.Issues.Single(issue => issue.Title == "Alt text missing" && issue.ShapeId == 8);
+        var missingScreenTip = plan.Issues.Single(issue => issue.Title == "Hyperlink ScreenTip missing" && issue.ShapeId == 9);
+        missingTitle.Action.Should().Be(new PresentationAccessibilityIssueActionSummary(
+            PresentationReviewWorkflowPlanner.MissingSlideTitleActionSummary,
+            null,
+            false));
+        missingAltText.Action.Should().Be(new PresentationAccessibilityIssueActionSummary(
+            PresentationReviewWorkflowPlanner.MissingAltTextActionSummary,
+            PresentationReviewWorkflowPlanner.AltTextCommandId,
+            true));
+        missingScreenTip.Action.Should().Be(new PresentationAccessibilityIssueActionSummary(
+            PresentationReviewWorkflowPlanner.MissingHyperlinkScreenTipActionSummary,
+            PresentationReviewWorkflowPlanner.InsertLinkCommandId,
+            true));
         plan.Actions.Select(action => action.CommandId).Should().Contain(new[]
         {
             PresentationReviewWorkflowPlanner.AccessibilityCommandId,

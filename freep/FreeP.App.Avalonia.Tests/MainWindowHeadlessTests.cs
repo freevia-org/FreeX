@@ -1109,8 +1109,12 @@ public sealed class MainWindowHeadlessTests
         commentPlan.Should().NotBeNull();
         commentPlan!.TotalCommentCount.Should().Be(1);
         accessibilityPlan.Should().NotBeNull();
-        accessibilityPlan!.Issues.Should().Contain(issue =>
+        var missingAltText = accessibilityPlan!.Issues.Single(issue =>
             issue.ShapeId == 328 && issue.Title == "Alt text missing");
+        missingAltText.Action.Should().Be(new PresentationAccessibilityIssueActionSummary(
+            PresentationReviewWorkflowPlanner.MissingAltTextActionSummary,
+            PresentationReviewWorkflowPlanner.AltTextCommandId,
+            true));
         altTextPlan.Should().NotBeNull();
         altTextPlan!.HasSelection.Should().BeTrue();
         altTextPlan.ShapeId.Should().Be(328);

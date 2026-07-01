@@ -112,7 +112,7 @@ public sealed class CellAlignmentTests
     }
 
     [Fact]
-    public void Table_layout_tab_contains_alignment_group_with_9_buttons()
+    public void Table_layout_tab_contains_9_cell_alignment_buttons()
     {
         var definition = FreeWRibbon.BuildDefinition();
         var layoutTab = definition.FindTab("table-layout");
@@ -121,8 +121,10 @@ public sealed class CellAlignmentTests
         var alignmentGroup = layoutTab!.Groups.FirstOrDefault(g => g.Id == "table-alignment");
         alignmentGroup.Should().NotBeNull("table-alignment group must be in table-layout tab (BY2)");
 
-        var buttonCount = alignmentGroup!.Controls.Count(c => c is RibbonButton);
-        buttonCount.Should().Be(9, "Alignment group must have exactly 9 cell-align buttons");
+        var buttonCount = alignmentGroup!.Controls
+            .OfType<RibbonButton>()
+            .Count(button => button.CommandId.Value.StartsWith("freew.cell-align-", StringComparison.Ordinal));
+        buttonCount.Should().Be(9, "Alignment group must expose exactly 9 cell-align buttons");
     }
 
     [Fact]

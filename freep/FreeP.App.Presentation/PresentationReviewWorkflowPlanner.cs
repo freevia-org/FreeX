@@ -92,7 +92,13 @@ public sealed record PresentationAccessibilityIssueDescriptor(
     int SlideIndex,
     uint? ShapeId,
     string Title,
-    string Detail);
+    string Detail,
+    PresentationAccessibilityIssueActionSummary Action);
+
+public sealed record PresentationAccessibilityIssueActionSummary(
+    string Summary,
+    string? CommandId,
+    bool RequiresShapeSelection);
 
 public sealed record PresentationAccessibilitySummaryPlan(
     int SlideCount,
@@ -122,6 +128,7 @@ public static class PresentationReviewWorkflowPlanner
     public const string AccessibilityCommandId = "freep.review.accessibility.check";
     public const string AltTextCommandId = "freep.review.alt-text";
     public const string ProofingCommandId = "freep.review.proofing.spelling";
+    public const string InsertLinkCommandId = "freep.insert-link";
 
     public const string MissingSlideMessage = "Select a slide before adding a comment.";
     public const string MissingCommentMessage = "Select an existing comment first.";
@@ -131,6 +138,12 @@ public static class PresentationReviewWorkflowPlanner
     public const string MissingShapeMessage = "Select a shape before editing alt text.";
     public const string ProofingRequiresHostMessage =
         "Proofing needs a host spelling engine; this shared plan owns the searchable FreeP scopes.";
+    public const string MissingSlideTitleActionSummary =
+        "Add a concise slide title so screen-reader users can navigate the deck.";
+    public const string MissingAltTextActionSummary =
+        "Select the object and add alt text that describes the informative content.";
+    public const string MissingHyperlinkScreenTipActionSummary =
+        "Edit the hyperlink and add ScreenTip text that explains the destination.";
 
     public static PresentationCommentPanePlan BuildCommentPanePlan(
         IReadOnlyList<Slide> slides,
@@ -361,7 +374,11 @@ public static class PresentationReviewWorkflowPlanner
                     slideIndex,
                     null,
                     "Missing slide title",
-                    "PowerPoint accessibility checks expect each slide to have a meaningful title."));
+                    "PowerPoint accessibility checks expect each slide to have a meaningful title.",
+                    new PresentationAccessibilityIssueActionSummary(
+                        MissingSlideTitleActionSummary,
+                        null,
+                        false)));
             }
 
             foreach (var shape in EnumerateShapes(slide.Shapes))
@@ -375,7 +392,11 @@ public static class PresentationReviewWorkflowPlanner
                         slideIndex,
                         shape.Id,
                         "Alt text missing",
-                        $"{DescribeShape(shape)} should have persistent alt text."));
+                        $"{DescribeShape(shape)} should have persistent alt text.",
+                        new PresentationAccessibilityIssueActionSummary(
+                            MissingAltTextActionSummary,
+                            AltTextCommandId,
+                            true)));
                 }
 
                 if (shape.Hyperlink is not null && string.IsNullOrWhiteSpace(shape.Hyperlink.Tooltip))
@@ -385,7 +406,11 @@ public static class PresentationReviewWorkflowPlanner
                         slideIndex,
                         shape.Id,
                         "Hyperlink ScreenTip missing",
-                        $"{DescribeShape(shape)} has a hyperlink without hover/help text."));
+                        $"{DescribeShape(shape)} has a hyperlink without hover/help text.",
+                        new PresentationAccessibilityIssueActionSummary(
+                            MissingHyperlinkScreenTipActionSummary,
+                            InsertLinkCommandId,
+                            true)));
                 }
             }
         }
