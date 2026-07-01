@@ -8752,6 +8752,18 @@ public sealed class DocumentView : Control
         SetPageSettings(settings);
     }
 
+    public void ToggleDifferentFirstPage() =>
+        ApplyPageSettings(settings => settings.DifferentFirstPage = !settings.DifferentFirstPage);
+
+    public void CyclePageVerticalAlignment() =>
+        ApplyPageSettings(settings => settings.VerticalAlignment = settings.VerticalAlignment switch
+        {
+            PageVerticalAlignment.Top => PageVerticalAlignment.Center,
+            PageVerticalAlignment.Center => PageVerticalAlignment.Bottom,
+            PageVerticalAlignment.Bottom => PageVerticalAlignment.Justified,
+            _ => PageVerticalAlignment.Top,
+        });
+
     /// <summary>Insert a bordered table (with a header row) after the current block. Cells edit on double-click.</summary>
     public void InsertTable(int rows, int columns)
     {
@@ -8762,6 +8774,29 @@ public sealed class DocumentView : Control
         table.Formatting = TableFormatting.Default with { Borders = true, HeaderRow = true };
         var insertAt = Math.Clamp(_caret.Block + 1, 0, _doc.Blocks.Count);
         _bus.Execute(new InsertBlockCommand(insertAt, table));
+    }
+
+    /// <summary>
+    /// Convert the current paragraph to a bordered table, splitting text on tabs when present and commas otherwise.
+    /// </summary>
+    public void ConvertCurrentParagraphToTable()
+    {
+        if (IsEditingLocked || _doc.Blocks.Count == 0)
+            return;
+
+        var block = Math.Clamp(_caret.Block, 0, _doc.Blocks.Count - 1);
+        if (_doc.Blocks[block] is not Paragraph paragraph)
+            return;
+
+        var delimiter = paragraph.PlainText.Contains('\t', StringComparison.Ordinal) ? '\t' : ',';
+        var table = TextTableConvert.TextToTable([paragraph], delimiter);
+        table.Formatting = TableFormatting.Default with { Borders = true };
+        _bus.Execute(new ReplaceBlocksCommand(block, 1, [table]));
+        _cellCaret = (block, 0, 0, 0, 0);
+        _hfCaret = null;
+        _selectionAnchor = _caret = new DocPosition(block, 0);
+        InvalidateLayoutAndVisual();
+        CaretMoved?.Invoke();
     }
 
     // ── AV-INSERT: Insert-tab inserts (page break / picture / shape / text box / symbol) ──────────
@@ -8892,6 +8927,36 @@ public sealed class DocumentView : Control
         InsertObjectRun(Run.FromWordArt(wordArt ?? WordArt.Create("WordArt", WordArtStyle.GradientFill)));
         Focus();
     }
+
+    /// <summary>
+    /// Insert a default inline chart at the caret using the shared chart model/rendering path.
+    /// </summary>
+    public void InsertChart(Chart? chart = null)
+    {
+        InsertObjectRun(Run.FromChart(chart ?? Chart.Create(
+            ChartKind.Column,
+            ["Q1", "Q2", "Q3", "Q4"],
+            [4d, 7d, 5d, 9d],
+            "Series 1",
+            "Chart")));
+        Focus();
+    }
+
+    /// <summary>
+    /// Insert a default inline SmartArt diagram at the caret using the shared SmartArt model/rendering path.
+    /// </summary>
+    public void InsertSmartArt(SmartArt? smartArt = null)
+    {
+        InsertObjectRun(Run.FromSmartArt(smartArt ?? SmartArt.Create(
+            SmartArtKind.Process,
+            ["Plan", "Build", "Review"])));
+        Focus();
+    }
+
+    /// <summary>
+    /// Insert a simple icon glyph through the text/symbol path.
+    /// </summary>
+    public void InsertIcon() => InsertSymbol("\u2605");
 
     /// <summary>
     /// Insert a generic embedded object placeholder at the caret (AV-INSERT-TEXT). FreeW preserves the
