@@ -656,6 +656,8 @@ public sealed partial class MainWindowSourceHygieneTests
         foregroundSource.Should().Contain("GetSheetTabStripFallbackPoints");
         foregroundSource.Should().Contain("Captured Microsoft Excel's sheet-tab context menu through guarded tab-strip coordinate fallback");
         foregroundSource.Should().Contain("Opened the FreeX sheet-tab context menu through guarded tab-strip coordinate fallback");
+        foregroundSource.Should().Contain("TryShowExcelCellCommandBar");
+        foregroundSource.Should().Contain("Cell command-bar context menu fallback");
     }
 
     [Fact]
@@ -665,6 +667,9 @@ public sealed partial class MainWindowSourceHygieneTests
 
         batchSource.Should().Contain("[ValidateSet(\"smoke\", \"core\", \"dialogs\", \"all\")]");
         batchSource.Should().Contain("\"core\" { return $pairs | Where-Object { $_[\"id\"] -in @(\"format-cells-dialog\", \"format-cells-context-dialog\", \"sheet-tab-context-menu\", \"sheet-tab-overflow-activate-dialog\") } }");
+        batchSource.Should().Contain("[switch]$MinimizeForeignForeground");
+        batchSource.Should().Contain("Clear-ForeignForegroundWindow $Scenario");
+        batchSource.Should().Contain("$title.IndexOf(\"Media Player\", [StringComparison]::OrdinalIgnoreCase) -ge 0");
     }
 
     [Fact]

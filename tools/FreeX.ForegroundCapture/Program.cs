@@ -462,10 +462,21 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             RightClickExcelRangeCenter(excel, worksheet, "B2");
             Thread.Sleep(options.AfterInputDelay);
 
+            var usedCommandBarMenuFallback = false;
             var popup = WindowFinder.FindProcessPopup(pid.Value, hwnd.ToInt64(), TimeSpan.FromMilliseconds(1200), 120, 120);
             if (popup is null)
             {
-                return CaptureResult.Blocked(scenario, "context-menu-not-found", "Did not detect foreground Excel worksheet context menu before invoking Format Cells.", options.OutputRoot, "excel", guard);
+                usedCommandBarMenuFallback = TryShowExcelCellCommandBar(excel);
+                if (usedCommandBarMenuFallback)
+                {
+                    Thread.Sleep(options.AfterInputDelay);
+                    popup = WindowFinder.FindProcessPopup(pid.Value, hwnd.ToInt64(), options.PopupTimeout, 120, 120);
+                }
+            }
+
+            if (popup is null)
+            {
+                return CaptureResult.Blocked(scenario, "context-menu-not-found", "Did not detect foreground Excel worksheet context menu before invoking Format Cells after physical right-click and Cell command-bar fallback attempts.", options.OutputRoot, "excel", guard);
             }
 
             var invokedContextFormatCells = TryInvokeProcessMenuItem(pid.Value, "Format Cells");
@@ -498,7 +509,8 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             }
 
             Thread.Sleep(options.AfterDialogDetectedDelay);
-            var route = usedBuiltInDialogFallback ? "Excel built-in xlDialogFormatNumber fallback after the context-menu route was visible" : usedCommandBarFallback ? "Excel built-in FormatCellsDialog command after the context-menu route was visible" : invokedContextFormatCells ? "UI Automation invocation" : "context-menu keyboard mnemonic";
+            var menuRoute = usedCommandBarMenuFallback ? "Cell command-bar context menu fallback" : "physical right-click context menu";
+            var route = usedBuiltInDialogFallback ? $"Excel built-in xlDialogFormatNumber fallback after the {menuRoute} was visible" : usedCommandBarFallback ? $"Excel built-in FormatCellsDialog command after the {menuRoute} was visible" : invokedContextFormatCells ? $"UI Automation invocation from the {menuRoute}" : $"keyboard mnemonic from the {menuRoute}";
             return CaptureWindow(scenario, "excel", dialog, guard, "complete", $"Opened Format Cells through the Excel worksheet context menu via {route}.");
         }
         finally
@@ -5513,6 +5525,24 @@ internal sealed class ScenarioRunner(CaptureOptions options)
         try
         {
             excel.CommandBars.ExecuteMso(commandId);
+            return true;
+        }
+        catch (RuntimeBinderException)
+        {
+            return false;
+        }
+        catch (COMException)
+        {
+            return false;
+        }
+    }
+
+    private static bool TryShowExcelCellCommandBar(dynamic excel)
+    {
+        try
+        {
+            dynamic cellCommandBar = excel.CommandBars["Cell"];
+            cellCommandBar.ShowPopup();
             return true;
         }
         catch (RuntimeBinderException)

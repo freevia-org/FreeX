@@ -10,6 +10,8 @@ param(
 
     [switch]$SkipBuild,
 
+    [switch]$MinimizeForeignForeground,
+
     [ValidateRange(1, 5)]
     [int]$MaxAttempts = 2
 )
@@ -90,6 +92,67 @@ function Resolve-ForegroundCaptureProject {
     }
 
     return (Resolve-Path $project).Path
+}
+
+function Initialize-ForegroundWindowInterop {
+    if ("UxParityForegroundWindow" -as [type]) {
+        return
+    }
+
+    Add-Type @"
+using System;
+using System.Text;
+using System.Runtime.InteropServices;
+
+public static class UxParityForegroundWindow
+{
+    [DllImport("user32.dll")]
+    public static extern IntPtr GetForegroundWindow();
+
+    [DllImport("user32.dll")]
+    public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
+    [DllImport("user32.dll")]
+    public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    public static extern int GetWindowText(IntPtr hWnd, StringBuilder text, int count);
+}
+"@
+}
+
+function Clear-ForeignForegroundWindow {
+    param([string]$Scenario)
+
+    if (-not $MinimizeForeignForeground) {
+        return
+    }
+
+    Initialize-ForegroundWindowInterop
+    $handle = [UxParityForegroundWindow]::GetForegroundWindow()
+    if ($handle -eq [IntPtr]::Zero) {
+        return
+    }
+
+    $titleBuilder = New-Object System.Text.StringBuilder 512
+    [void][UxParityForegroundWindow]::GetWindowText($handle, $titleBuilder, $titleBuilder.Capacity)
+    $title = $titleBuilder.ToString()
+    [uint32]$foregroundProcessId = 0
+    [void][UxParityForegroundWindow]::GetWindowThreadProcessId($handle, [ref]$foregroundProcessId)
+    $process = Get-Process -Id $foregroundProcessId -ErrorAction SilentlyContinue
+    $processName = if ($null -eq $process) { "" } else { $process.ProcessName }
+
+    $knownForegroundBlocker =
+        $processName -eq "ApplicationFrameHost" -and
+        $title.IndexOf("Media Player", [StringComparison]::OrdinalIgnoreCase) -ge 0
+
+    if (-not $knownForegroundBlocker) {
+        return
+    }
+
+    Write-Host "Minimizing known foreground blocker '$title' (PID $foregroundProcessId, $processName) before '$Scenario'."
+    [void][UxParityForegroundWindow]::ShowWindow($handle, 6)
+    Start-Sleep -Milliseconds 250
 }
 
 function Get-ScenarioPairs {
@@ -188,6 +251,8 @@ function Invoke-ForegroundScenario {
         if ($attempt -gt 1) {
             Start-Sleep -Seconds 2
         }
+
+        Clear-ForeignForegroundWindow $Scenario
 
         $arguments = @(
             "run",
