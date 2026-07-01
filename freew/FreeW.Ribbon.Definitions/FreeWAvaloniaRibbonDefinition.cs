@@ -358,7 +358,11 @@ internal static class FreeWAvaloniaRibbonDefinition
                     g.Toggle("freew.strikethrough",   FreeWRibbonText.StrikethroughCommand.Label);
                     g.Toggle("freew.superscript",     FreeWRibbonText.SuperscriptCompactCommand.Label);
                     g.Toggle("freew.subscript",       FreeWRibbonText.SubscriptCompactCommand.Label);
+                    g.Toggle("freew.smallcaps",       FreeWRibbonText.SmallCapsCommand.Label);
+                    g.Toggle("freew.allcaps",         FreeWRibbonText.AllCapsCommand.Label);
                     g.Button("freew.highlight",       FreeWRibbonText.HighlightCompactCommand.Label);
+                    g.Button("freew.char-border",     FreeWRibbonText.CharacterBorderCommand.Label);
+                    g.Button("freew.char-shading",    FreeWRibbonText.CharacterShadingCommand.Label);
                     g.Button("freew.grow-font",       FreeWRibbonText.GrowFontCompactCommand.Label);
                     g.Button("freew.shrink-font",     FreeWRibbonText.ShrinkFontCompactCommand.Label);
                     g.Button("freew.clear-formatting", FreeWRibbonText.ClearFormattingCompactCommand.Label);

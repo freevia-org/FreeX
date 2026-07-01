@@ -96,9 +96,13 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.italic",           new ActionRibbonCommand(editor.ToggleItalic));
         r.Register("freew.underline",        new ActionRibbonCommand(editor.ToggleUnderline));
         r.Register("freew.strikethrough",    new ActionRibbonCommand(editor.ToggleStrikethrough));
+        r.Register("freew.smallcaps",        new ActionRibbonCommand(editor.ToggleSmallCaps));
+        r.Register("freew.allcaps",          new ActionRibbonCommand(editor.ToggleAllCaps));
         r.Register("freew.superscript",      new ActionRibbonCommand(editor.ToggleSuperscript));
         r.Register("freew.subscript",        new ActionRibbonCommand(editor.ToggleSubscript));
         r.Register("freew.highlight",        new ValueRibbonCommand(value => editor.SetHighlightColor(value)));
+        r.Register("freew.char-border",      new ActionRibbonCommand(() => editor.SetCharacterBorder(new ParagraphBorder("#000000", 0.5))));
+        r.Register("freew.char-shading",     new ActionRibbonCommand(() => editor.SetCharacterShading("#FFF2CC")));
         r.Register("freew.grow-font",        new ActionRibbonCommand(editor.GrowFont));
         r.Register("freew.shrink-font",      new ActionRibbonCommand(editor.ShrinkFont));
         r.Register("freew.clear-formatting", new ActionRibbonCommand(editor.ClearFormatting));
