@@ -19,17 +19,18 @@ public static partial class BuiltInFunctions
         RegexOptions.IgnoreCase);
 
     private static ScalarValue Now(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
-        DateTimeValue.FromDateTime(DateTime.Now);
+        new DateTimeValue(DateToSerial(DateTime.Now, ctx.Uses1904DateSystem));
 
     private static ScalarValue Today(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
-        DateTimeValue.FromDateTime(DateTime.Today);
+        new DateTimeValue(DateToSerial(DateTime.Today, ctx.Uses1904DateSystem));
 
     private static ScalarValue Date(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
         if (args[2] is ErrorValue e2) return e2;
-        return MapDateTimeTernaryArgs(args, (year, month, day) => DateScalar(year, ToNumber(month), ToNumber(day)));
+        var uses1904DateSystem = ctx.Uses1904DateSystem;
+        return MapDateTimeTernaryArgs(args, (year, month, day) => DateScalar(year, ToNumber(month), ToNumber(day), uses1904DateSystem));
     }
 
     private static ScalarValue MapDateTimeTernaryArgs(
@@ -65,7 +66,7 @@ public static partial class BuiltInFunctions
     private static ScalarValue DateTimeArgAt(ScalarValue value, int row, int col) =>
         value is RangeValue range ? range.Cells[row, col] : value;
 
-    private static ScalarValue DateScalar(ScalarValue yearValue, double rawMonth, double rawDay)
+    private static ScalarValue DateScalar(ScalarValue yearValue, double rawMonth, double rawDay, bool uses1904DateSystem)
     {
         double rawYear = ToNumber(yearValue);
         if (!double.IsFinite(rawYear) || !double.IsFinite(rawMonth) || !double.IsFinite(rawDay))
@@ -84,41 +85,24 @@ public static partial class BuiltInFunctions
             var dt = new DateTime(year, 1, 1)
                 .AddMonths(month - 1)
                 .AddDays(day - 1);
-            double serial = DateToSerial(dt);
-            if (serial < 1) return ErrorValue.Num;
-            if (year == 1900 && month >= 3 && dt < new DateTime(1900, 3, 1))
+            double serial = DateToSerial(dt, uses1904DateSystem);
+            if (serial < (uses1904DateSystem ? 0 : 1)) return ErrorValue.Num;
+            if (!uses1904DateSystem && year == 1900 && month >= 3 && dt < new DateTime(1900, 3, 1))
                 return new NumberValue(serial + 1);
-            if (year == 1900 && month == 3 && day == 0)
+            if (!uses1904DateSystem && year == 1900 && month == 3 && day == 0)
                 return new NumberValue(60);
-            if (dt == new DateTime(1900, 3, 1) && month < 3)
+            if (!uses1904DateSystem && dt == new DateTime(1900, 3, 1) && month < 3)
                 return new NumberValue(60);
             return new NumberValue(serial);
         }
         catch { return ErrorValue.Num; }
     }
 
-    // OADate range supported by DateTime.FromOADate: -657435.0 to 2958465.0
-    private static bool TryOADateToDateTime(ScalarValue v, out DateTime dt)
+    private static bool TrySerialToDateTime(ScalarValue v, bool uses1904DateSystem, out DateTime dt)
     {
         dt = default;
         var num = ToNumber(v);
-        if (!double.IsFinite(num) || num < 0 || num > 2958465.0)
-            return false;
-        dt = SerialToDate(num);
-        return true;
-    }
-
-    private static DateTime OADateToDateTime(ScalarValue v) =>
-        DateTime.FromOADate(ToNumber(v));
-
-    private static bool TryNonNegativeOADateToDateTime(ScalarValue v, out DateTime dt)
-    {
-        dt = default;
-        var num = ToNumber(v);
-        if (!double.IsFinite(num) || num < 0 || num > 2958465.0)
-            return false;
-        dt = SerialToDate(num);
-        return true;
+        return ExcelDateSystem.TrySerialToDate(num, uses1904DateSystem, out dt);
     }
 
     private static bool TryNonNegativeSerialToTimeParts(ScalarValue v, out int hour, out int minute, out int second)
@@ -139,38 +123,41 @@ public static partial class BuiltInFunctions
     private static ScalarValue Year(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        if (args[0] is RangeValue range) return MapUnaryTextRange(range, YearScalar);
-        return YearScalar(args[0]);
+        var uses1904DateSystem = ctx.Uses1904DateSystem;
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => YearScalar(value, uses1904DateSystem));
+        return YearScalar(args[0], uses1904DateSystem);
     }
 
-    private static ScalarValue YearScalar(ScalarValue value) =>
-        IsExcelFakeLeapDay(value) || IsExcelZeroDate(value)
+    private static ScalarValue YearScalar(ScalarValue value, bool uses1904DateSystem) =>
+        !uses1904DateSystem && (IsExcelFakeLeapDay(value) || IsExcelZeroDate(value))
             ? new NumberValue(1900)
-            : TryOADateToDateTime(value, out var dt) ? new NumberValue(dt.Year) : ErrorValue.Num;
+            : TrySerialToDateTime(value, uses1904DateSystem, out var dt) ? new NumberValue(dt.Year) : ErrorValue.Num;
 
     private static ScalarValue Month(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        if (args[0] is RangeValue range) return MapUnaryTextRange(range, MonthScalar);
-        return MonthScalar(args[0]);
+        var uses1904DateSystem = ctx.Uses1904DateSystem;
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => MonthScalar(value, uses1904DateSystem));
+        return MonthScalar(args[0], uses1904DateSystem);
     }
 
-    private static ScalarValue MonthScalar(ScalarValue value) =>
-        IsExcelFakeLeapDay(value) ? new NumberValue(2)
-        : IsExcelZeroDate(value) ? new NumberValue(1)
-        : TryOADateToDateTime(value, out var dt) ? new NumberValue(dt.Month) : ErrorValue.Num;
+    private static ScalarValue MonthScalar(ScalarValue value, bool uses1904DateSystem) =>
+        !uses1904DateSystem && IsExcelFakeLeapDay(value) ? new NumberValue(2)
+        : !uses1904DateSystem && IsExcelZeroDate(value) ? new NumberValue(1)
+        : TrySerialToDateTime(value, uses1904DateSystem, out var dt) ? new NumberValue(dt.Month) : ErrorValue.Num;
 
     private static ScalarValue Day(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        if (args[0] is RangeValue range) return MapUnaryTextRange(range, DayScalar);
-        return DayScalar(args[0]);
+        var uses1904DateSystem = ctx.Uses1904DateSystem;
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => DayScalar(value, uses1904DateSystem));
+        return DayScalar(args[0], uses1904DateSystem);
     }
 
-    private static ScalarValue DayScalar(ScalarValue value) =>
-        IsExcelFakeLeapDay(value) ? new NumberValue(29)
-        : IsExcelZeroDate(value) ? new NumberValue(0)
-        : TryOADateToDateTime(value, out var dt) ? new NumberValue(dt.Day) : ErrorValue.Num;
+    private static ScalarValue DayScalar(ScalarValue value, bool uses1904DateSystem) =>
+        !uses1904DateSystem && IsExcelFakeLeapDay(value) ? new NumberValue(29)
+        : !uses1904DateSystem && IsExcelZeroDate(value) ? new NumberValue(0)
+        : TrySerialToDateTime(value, uses1904DateSystem, out var dt) ? new NumberValue(dt.Day) : ErrorValue.Num;
 
     private static ScalarValue Hour(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
@@ -207,24 +194,26 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e) return e;
         if (args.Count > 1 && args[1] is ErrorValue returnTypeError) return returnTypeError;
         var returnTypeArg = args.Count > 1 && args[1] is not BlankValue ? args[1] : new NumberValue(1);
-        return MapBinaryMathArgs(args[0], returnTypeArg, WeekdayScalarWithReturnType);
+        var uses1904DateSystem = ctx.Uses1904DateSystem;
+        return MapBinaryMathArgs(args[0], returnTypeArg, (value, returnType) => WeekdayScalarWithReturnType(value, returnType, uses1904DateSystem));
     }
 
-    private static ScalarValue WeekdayScalarWithReturnType(ScalarValue value, ScalarValue returnTypeValue)
+    private static ScalarValue WeekdayScalarWithReturnType(ScalarValue value, ScalarValue returnTypeValue, bool uses1904DateSystem)
     {
         if (value is ErrorValue valueError) return valueError;
         if (returnTypeValue is ErrorValue returnTypeError) return returnTypeError;
         double rawReturnType = ToNumber(returnTypeValue);
         if (!double.IsFinite(rawReturnType)) return ErrorValue.Num;
-        return WeekdayScalar(value, (int)rawReturnType);
+        return WeekdayScalar(value, (int)rawReturnType, uses1904DateSystem);
     }
 
-    private static ScalarValue WeekdayScalar(ScalarValue value, int returnType)
+    private static ScalarValue WeekdayScalar(ScalarValue value, int returnType, bool uses1904DateSystem)
     {
         double rawSerial = ToNumber(value);
-        if (!double.IsFinite(rawSerial) || rawSerial < 0 || rawSerial >= 2958466.0) return ErrorValue.Num;
-        int daySerial = (int)Math.Floor(rawSerial);
-        int dow = ((daySerial - 1) % 7 + 7) % 7; // 0=Sunday...6=Saturday in Excel's 1900 date system
+        if (!ExcelDateSystem.TrySerialToDate(rawSerial, uses1904DateSystem, out var date)) return ErrorValue.Num;
+        int dow = uses1904DateSystem
+            ? (int)date.DayOfWeek
+            : (((int)Math.Floor(rawSerial) - 1) % 7 + 7) % 7; // 0=Sunday...6=Saturday in Excel's 1900 date system
         return returnType switch
         {
             1 => new NumberValue(dow + 1),                     // Sun=1..Sat=7
@@ -239,24 +228,25 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
-        return MapBinaryMathArgs(args[0], args[1], EdateScalar);
+        var uses1904DateSystem = ctx.Uses1904DateSystem;
+        return MapBinaryMathArgs(args[0], args[1], (value, monthsValue) => EdateScalar(value, monthsValue, uses1904DateSystem));
     }
 
-    private static ScalarValue EdateScalar(ScalarValue value, ScalarValue monthsValue)
+    private static ScalarValue EdateScalar(ScalarValue value, ScalarValue monthsValue, bool uses1904DateSystem)
     {
         double rawMonths = ToNumber(monthsValue);
         if (!double.IsFinite(rawMonths) || rawMonths > int.MaxValue || rawMonths < int.MinValue) return ErrorValue.Num;
-        return EdateScalar(value, (int)rawMonths);
+        return EdateScalar(value, (int)rawMonths, uses1904DateSystem);
     }
 
-    private static ScalarValue EdateScalar(ScalarValue value, int months)
+    private static ScalarValue EdateScalar(ScalarValue value, int months, bool uses1904DateSystem)
     {
-        if (IsExcelFakeLeapDay(value)) return EdateFromExcelFakeLeapDay(months);
-        if (!TryOADateToDateTime(value, out var dt)) return ErrorValue.Num;
+        if (!uses1904DateSystem && IsExcelFakeLeapDay(value)) return EdateFromExcelFakeLeapDay(months);
+        if (!TrySerialToDateTime(value, uses1904DateSystem, out var dt)) return ErrorValue.Num;
         try
         {
             var result = dt.AddMonths(months);
-            return new NumberValue(DateToSerial(result));
+            return new NumberValue(DateToSerial(result, uses1904DateSystem));
         }
         catch { return ErrorValue.Num; }
     }
@@ -275,16 +265,17 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
         if (args[2] is ErrorValue e2) return e2;
-        return MapTernaryTextArgs(args[0], args[1], args[2], DatedifScalar);
+        var uses1904DateSystem = ctx.Uses1904DateSystem;
+        return MapTernaryTextArgs(args[0], args[1], args[2], (start, end, unit) => DatedifScalar(start, end, unit, uses1904DateSystem));
     }
 
-    private static ScalarValue DatedifScalar(ScalarValue startValue, ScalarValue endValue, ScalarValue unitValue)
+    private static ScalarValue DatedifScalar(ScalarValue startValue, ScalarValue endValue, ScalarValue unitValue, bool uses1904DateSystem)
     {
         if (startValue is ErrorValue startError) return startError;
         if (endValue is ErrorValue endError) return endError;
         if (unitValue is ErrorValue unitError) return unitError;
-        if (!TryOADateToDateTime(startValue, out var startRaw)) return ErrorValue.Num;
-        if (!TryOADateToDateTime(endValue, out var endRaw)) return ErrorValue.Num;
+        if (!TrySerialToDateTime(startValue, uses1904DateSystem, out var startRaw)) return ErrorValue.Num;
+        if (!TrySerialToDateTime(endValue, uses1904DateSystem, out var endRaw)) return ErrorValue.Num;
         // DATEDIF operates on whole dates — discard any time portion so that
         // e.g. DATEDIF(2024-01-01 23:00, 2024-01-02 01:00, "D") returns 1 (Excel)
         // rather than 0 (TimeSpan.Days would otherwise round toward zero).
@@ -295,11 +286,11 @@ public static partial class BuiltInFunctions
 
         return unit switch
         {
-            "D"  => new NumberValue(DateToSerial(end) - DateToSerial(start)),
+            "D"  => new NumberValue(DateToSerial(end, uses1904DateSystem) - DateToSerial(start, uses1904DateSystem)),
             "M"  => new NumberValue(MonthDiff(start, end)),
             "Y"  => new NumberValue(YearDiff(start, end)),
             "YM" => new NumberValue((int)MonthDiff(start, end) % 12),
-            "YD" => DateDifYD(start, end),
+            "YD" => DateDifYD(start, end, uses1904DateSystem),
             "MD" => DateDifMD(start, end),
             _    => ErrorValue.Value
         };
@@ -320,7 +311,7 @@ public static partial class BuiltInFunctions
         return years;
     }
 
-    private static ScalarValue DateDifYD(DateTime start, DateTime end)
+    private static ScalarValue DateDifYD(DateTime start, DateTime end, bool uses1904DateSystem)
     {
         try
         {
@@ -334,7 +325,7 @@ public static partial class BuiltInFunctions
                 clampedDay = Math.Min(start.Day, DateTime.DaysInMonth(prevYear, start.Month));
                 anchor = new DateTime(prevYear, start.Month, clampedDay);
             }
-            return new NumberValue(DateToSerial(end) - DateToSerial(anchor));
+            return new NumberValue(DateToSerial(end, uses1904DateSystem) - DateToSerial(anchor, uses1904DateSystem));
         }
         catch (ArgumentOutOfRangeException) { return ErrorValue.Num; }
     }
@@ -400,21 +391,28 @@ public static partial class BuiltInFunctions
     private static ScalarValue Datevalue(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        if (args[0] is RangeValue range) return MapUnaryTextRange(range, DatevalueScalar);
-        return DatevalueScalar(args[0]);
+        var uses1904DateSystem = ctx.Uses1904DateSystem;
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => DatevalueScalar(value, uses1904DateSystem));
+        return DatevalueScalar(args[0], uses1904DateSystem);
     }
 
-    private static ScalarValue DatevalueScalar(ScalarValue value)
+    private static ScalarValue DatevalueScalar(ScalarValue value, bool uses1904DateSystem)
     {
         var text = ToText(value);
-        if (TryParseExcelFakeLeapDayValueText(text, CultureInfo.InvariantCulture, out _)) return new NumberValue(60);
+        if (!uses1904DateSystem && TryParseExcelFakeLeapDayValueText(text, CultureInfo.InvariantCulture, out _)) return new NumberValue(60);
         if (!TextHasDateComponent(text)) return ErrorValue.Value;
         if (TryParseMonthYearDateValueText(text, out var monthYearDate))
-            return new NumberValue(DateToSerial(monthYearDate));
+            return DateValueSerialOrNum(monthYearDate, uses1904DateSystem);
         if (DateTime.TryParse(text, System.Globalization.CultureInfo.InvariantCulture,
                 System.Globalization.DateTimeStyles.None, out var dt))
-            return new NumberValue(Math.Floor(DateToSerial(dt)));
+            return DateValueSerialOrNum(dt, uses1904DateSystem);
         return ErrorValue.Value;
+    }
+
+    private static ScalarValue DateValueSerialOrNum(DateTime date, bool uses1904DateSystem)
+    {
+        var serial = Math.Floor(DateToSerial(date, uses1904DateSystem));
+        return serial < (uses1904DateSystem ? 0 : 1) ? ErrorValue.Num : new NumberValue(serial);
     }
 
     private static bool TextHasTimeComponent(string text) =>
@@ -455,25 +453,26 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
-        return MapBinaryMathArgs(args[0], args[1], EomonthScalar);
+        var uses1904DateSystem = ctx.Uses1904DateSystem;
+        return MapBinaryMathArgs(args[0], args[1], (value, monthsValue) => EomonthScalar(value, monthsValue, uses1904DateSystem));
     }
 
-    private static ScalarValue EomonthScalar(ScalarValue value, ScalarValue monthsValue)
+    private static ScalarValue EomonthScalar(ScalarValue value, ScalarValue monthsValue, bool uses1904DateSystem)
     {
         double rawMonths = ToNumber(monthsValue);
         if (!double.IsFinite(rawMonths) || rawMonths > int.MaxValue - 1 || rawMonths < int.MinValue) return ErrorValue.Num;
-        return EomonthScalar(value, (int)rawMonths);
+        return EomonthScalar(value, (int)rawMonths, uses1904DateSystem);
     }
 
-    private static ScalarValue EomonthScalar(ScalarValue value, int months)
+    private static ScalarValue EomonthScalar(ScalarValue value, int months, bool uses1904DateSystem)
     {
-        if (IsExcelFakeLeapDay(value)) return EomonthFromExcelFakeLeapDay(months);
-        if (!TryOADateToDateTime(value, out var dt)) return ErrorValue.Num;
+        if (!uses1904DateSystem && IsExcelFakeLeapDay(value)) return EomonthFromExcelFakeLeapDay(months);
+        if (!TrySerialToDateTime(value, uses1904DateSystem, out var dt)) return ErrorValue.Num;
         try
         {
             var target = dt.AddMonths(months + 1);
             var eomonth = new DateTime(target.Year, target.Month, 1).AddDays(-1);
-            return new NumberValue(DateToSerial(eomonth));
+            return new NumberValue(DateToSerial(eomonth, uses1904DateSystem));
         }
         catch { return ErrorValue.Num; }
     }
@@ -500,10 +499,14 @@ public static partial class BuiltInFunctions
         return targetYear is >= 1 and <= 9999;
     }
 
-    private static ScalarValue ExcelDateSerialFromParts(int year, int month, int day)
+    private static ScalarValue ExcelDateSerialFromParts(int year, int month, int day, bool uses1904DateSystem = false)
     {
-        if (year == 1900 && month == 2 && day == 29) return new NumberValue(60);
-        try { return new NumberValue(DateToSerial(new DateTime(year, month, day))); }
+        if (!uses1904DateSystem && year == 1900 && month == 2 && day == 29) return new NumberValue(60);
+        try
+        {
+            var serial = DateToSerial(new DateTime(year, month, day), uses1904DateSystem);
+            return serial < (uses1904DateSystem ? 0 : 1) ? ErrorValue.Num : new NumberValue(serial);
+        }
         catch { return ErrorValue.Num; }
     }
 
@@ -512,23 +515,24 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e) return e;
         if (args.Count > 1 && args[1] is ErrorValue e1) return e1;
         var returnTypeArg = args.Count > 1 ? args[1] : BlankValue.Instance;
-        return MapBinaryMathArgs(args[0], returnTypeArg, WeeknumScalar);
+        var uses1904DateSystem = ctx.Uses1904DateSystem;
+        return MapBinaryMathArgs(args[0], returnTypeArg, (value, returnType) => WeeknumScalar(value, returnType, uses1904DateSystem));
     }
 
-    private static ScalarValue WeeknumScalar(ScalarValue value, ScalarValue returnTypeValue)
+    private static ScalarValue WeeknumScalar(ScalarValue value, ScalarValue returnTypeValue, bool uses1904DateSystem)
     {
         double rawReturnType = returnTypeValue is not BlankValue ? ToNumber(returnTypeValue) : 1;
         if (!double.IsFinite(rawReturnType)) return ErrorValue.Num;
         int returnType = (int)rawReturnType;
-        return WeeknumScalar(value, returnType);
+        return WeeknumScalar(value, returnType, uses1904DateSystem);
     }
 
-    private static ScalarValue WeeknumScalar(ScalarValue value, int returnType)
+    private static ScalarValue WeeknumScalar(ScalarValue value, int returnType, bool uses1904DateSystem)
     {
-        if (!TryOADateToDateTime(value, out var dt)) return ErrorValue.Num;
+        if (!TrySerialToDateTime(value, uses1904DateSystem, out var dt)) return ErrorValue.Num;
         if (returnType == 21)
-            return new NumberValue(ExcelIsoWeeknum(dt));
-        if (Math.Floor(ToNumber(value)) == 0)
+            return new NumberValue(ExcelIsoWeeknum(dt, uses1904DateSystem));
+        if (!uses1904DateSystem && Math.Floor(ToNumber(value)) == 0)
             return new NumberValue(0);
 
         int firstDay = returnType switch
@@ -544,7 +548,7 @@ public static partial class BuiltInFunctions
         };
         if (firstDay < 0) return ErrorValue.Num;
         var jan1 = new DateTime(dt.Year, 1, 1);
-        int jan1Dow = (ExcelDowToMonIndex(jan1) - firstDay + 7) % 7;
+        int jan1Dow = (ExcelDowToMonIndex(jan1, uses1904DateSystem) - firstDay + 7) % 7;
         int dayOfYear = (dt - jan1).Days;
         return new NumberValue((dayOfYear + jan1Dow) / 7 + 1);
     }
@@ -552,14 +556,15 @@ public static partial class BuiltInFunctions
     private static ScalarValue Isoweeknum(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        if (args[0] is RangeValue range) return MapUnaryTextRange(range, IsoweeknumScalar);
-        return IsoweeknumScalar(args[0]);
+        var uses1904DateSystem = ctx.Uses1904DateSystem;
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => IsoweeknumScalar(value, uses1904DateSystem));
+        return IsoweeknumScalar(args[0], uses1904DateSystem);
     }
 
-    private static ScalarValue IsoweeknumScalar(ScalarValue value)
+    private static ScalarValue IsoweeknumScalar(ScalarValue value, bool uses1904DateSystem)
     {
-        if (!TryOADateToDateTime(value, out var dt)) return ErrorValue.Num;
-        return new NumberValue(ExcelIsoWeeknum(dt));
+        if (!TrySerialToDateTime(value, uses1904DateSystem, out var dt)) return ErrorValue.Num;
+        return new NumberValue(ExcelIsoWeeknum(dt, uses1904DateSystem));
     }
 
     private static ScalarValue Workday(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -567,22 +572,23 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
         if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
-        if (!TryCollectHolidays(args.Count > 2 ? args[2] : null, out var holidays, out var holidayError))
+        var uses1904DateSystem = ctx.Uses1904DateSystem;
+        if (!TryCollectHolidays(args.Count > 2 ? args[2] : null, uses1904DateSystem, out var holidays, out var holidayError))
             return holidayError!;
-        return MapBinaryMathArgs(args[0], args[1], (startDate, daysValue) => WorkdayScalar(startDate, daysValue, holidays));
+        return MapBinaryMathArgs(args[0], args[1], (startDate, daysValue) => WorkdayScalar(startDate, daysValue, holidays, uses1904DateSystem));
     }
 
-    private static ScalarValue WorkdayScalar(ScalarValue startDate, ScalarValue daysValue, HashSet<DateTime> holidays)
+    private static ScalarValue WorkdayScalar(ScalarValue startDate, ScalarValue daysValue, HashSet<DateTime> holidays, bool uses1904DateSystem)
     {
         double rawDays = ToNumber(daysValue);
         if (!double.IsFinite(rawDays)) return ErrorValue.Num;
         if (rawDays < int.MinValue + 1 || rawDays > int.MaxValue) return ErrorValue.Num;
-        return WorkdayScalar(startDate, (int)rawDays, holidays);
+        return WorkdayScalar(startDate, (int)rawDays, holidays, uses1904DateSystem);
     }
 
-    private static ScalarValue WorkdayScalar(ScalarValue startDate, int days, HashSet<DateTime> holidays)
+    private static ScalarValue WorkdayScalar(ScalarValue startDate, int days, HashSet<DateTime> holidays, bool uses1904DateSystem)
     {
-        if (!TryOADateToDateTime(startDate, out var current)) return ErrorValue.Num;
+        if (!TrySerialToDateTime(startDate, uses1904DateSystem, out var current)) return ErrorValue.Num;
         int sign = days < 0 ? -1 : 1;
         int remaining = Math.Abs(days);
         // Skip full weeks when there are no holidays — 5 workdays = 7 calendar days
@@ -595,11 +601,11 @@ public static partial class BuiltInFunctions
         while (remaining > 0)
         {
             current = current.AddDays(sign);
-            if (ExcelDowToMonIndex(current) < 5 &&
+            if (ExcelDowToMonIndex(current, uses1904DateSystem) < 5 &&
                 !holidays.Contains(current.Date))
                 remaining--;
         }
-        return new NumberValue(DateToSerial(current));
+        return new NumberValue(DateToSerial(current, uses1904DateSystem));
     }
 
     private static ScalarValue Networkdays(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -607,23 +613,24 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
         if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
-        if (!TryCollectHolidays(args.Count > 2 ? args[2] : null, out var holidays, out var holidayError))
+        var uses1904DateSystem = ctx.Uses1904DateSystem;
+        if (!TryCollectHolidays(args.Count > 2 ? args[2] : null, uses1904DateSystem, out var holidays, out var holidayError))
             return holidayError!;
-        return MapBinaryMathArgs(args[0], args[1], (startDate, endDate) => NetworkdaysScalar(startDate, endDate, holidays));
+        return MapBinaryMathArgs(args[0], args[1], (startDate, endDate) => NetworkdaysScalar(startDate, endDate, holidays, uses1904DateSystem));
     }
 
-    private static ScalarValue NetworkdaysScalar(ScalarValue startDate, ScalarValue endDate, HashSet<DateTime> holidays)
+    private static ScalarValue NetworkdaysScalar(ScalarValue startDate, ScalarValue endDate, HashSet<DateTime> holidays, bool uses1904DateSystem)
     {
-        if (!TryOADateToDateTime(startDate, out var startRaw)) return ErrorValue.Num;
-        if (!TryOADateToDateTime(endDate, out var endRaw)) return ErrorValue.Num;
+        if (!TrySerialToDateTime(startDate, uses1904DateSystem, out var startRaw)) return ErrorValue.Num;
+        if (!TrySerialToDateTime(endDate, uses1904DateSystem, out var endRaw)) return ErrorValue.Num;
         var startDt = startRaw.Date;
         var endDt   = endRaw.Date;
         int sign = startDt <= endDt ? 1 : -1;
         var lo = startDt <= endDt ? startDt : endDt;
         var hi = startDt <= endDt ? endDt   : startDt;
-        int count = CountExcelWeekdaysInclusive(lo, hi);
+        int count = CountExcelWeekdaysInclusive(lo, hi, uses1904DateSystem);
         foreach (var h in holidays)
-            if (h >= lo && h <= hi && ExcelDowToMonIndex(h) < 5)
+            if (h >= lo && h <= hi && ExcelDowToMonIndex(h, uses1904DateSystem) < 5)
                 count--;
         return new NumberValue(sign * count);
     }
@@ -642,12 +649,12 @@ public static partial class BuiltInFunctions
         return count;
     }
 
-    private static int CountExcelWeekdaysInclusive(DateTime lo, DateTime hi)
+    private static int CountExcelWeekdaysInclusive(DateTime lo, DateTime hi, bool uses1904DateSystem)
     {
         int totalDays = (int)(hi - lo).TotalDays + 1;
         int fullWeeks = totalDays / 7;
         int count = fullWeeks * 5;
-        int startDow = ExcelDowToMonIndex(lo);
+        int startDow = ExcelDowToMonIndex(lo, uses1904DateSystem);
         for (int i = 0; i < totalDays % 7; i++)
         {
             int dow = (startDow + i) % 7;
@@ -660,14 +667,15 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
-        return MapBinaryMathArgs(args[0], args[1], DaysScalar);
+        var uses1904DateSystem = ctx.Uses1904DateSystem;
+        return MapBinaryMathArgs(args[0], args[1], (endDate, startDate) => DaysScalar(endDate, startDate, uses1904DateSystem));
     }
 
-    private static ScalarValue DaysScalar(ScalarValue endDate, ScalarValue startDate)
+    private static ScalarValue DaysScalar(ScalarValue endDate, ScalarValue startDate, bool uses1904DateSystem)
     {
-        if (!TryOADateToDateTime(endDate, out var endDt))   return ErrorValue.Num;
-        if (!TryOADateToDateTime(startDate, out var startDt)) return ErrorValue.Num;
-        return new NumberValue(DateToSerial(endDt) - DateToSerial(startDt));
+        if (!TrySerialToDateTime(endDate, uses1904DateSystem, out var endDt))   return ErrorValue.Num;
+        if (!TrySerialToDateTime(startDate, uses1904DateSystem, out var startDt)) return ErrorValue.Num;
+        return new NumberValue(DateToSerial(endDt, uses1904DateSystem) - DateToSerial(startDt, uses1904DateSystem));
     }
 
     private static ScalarValue Days360(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -676,14 +684,15 @@ public static partial class BuiltInFunctions
         if (args[1] is ErrorValue e1) return e1;
         if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
         var methodArg = args.Count > 2 ? args[2] : BlankValue.Instance;
-        return MapTernaryTextArgs(args[0], args[1], methodArg, Days360Scalar);
+        var uses1904DateSystem = ctx.Uses1904DateSystem;
+        return MapTernaryTextArgs(args[0], args[1], methodArg, (start, end, method) => Days360Scalar(start, end, method, uses1904DateSystem));
     }
 
-    private static ScalarValue Days360Scalar(ScalarValue startDate, ScalarValue endDate, ScalarValue methodValue)
+    private static ScalarValue Days360Scalar(ScalarValue startDate, ScalarValue endDate, ScalarValue methodValue, bool uses1904DateSystem)
     {
         bool european = methodValue is not BlankValue && ToNumber(methodValue) != 0;
-        if (!TryOADateToDateTime(startDate, out var startRaw)) return ErrorValue.Num;
-        if (!TryOADateToDateTime(endDate, out var endRaw)) return ErrorValue.Num;
+        if (!TrySerialToDateTime(startDate, uses1904DateSystem, out var startRaw)) return ErrorValue.Num;
+        if (!TrySerialToDateTime(endDate, uses1904DateSystem, out var endRaw)) return ErrorValue.Num;
         var startDt = startRaw.Date;
         var endDt   = endRaw.Date;
         double days = european ? Days30E360(startDt, endDt) : Days30US360Days360(startDt, endDt);
@@ -696,25 +705,26 @@ public static partial class BuiltInFunctions
         if (args[1] is ErrorValue e1) return e1;
         if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
         var basisArg = args.Count > 2 ? args[2] : BlankValue.Instance;
-        return MapTernaryTextArgs(args[0], args[1], basisArg, YearfracScalar);
+        var uses1904DateSystem = ctx.Uses1904DateSystem;
+        return MapTernaryTextArgs(args[0], args[1], basisArg, (start, end, basis) => YearfracScalar(start, end, basis, uses1904DateSystem));
     }
 
-    private static ScalarValue YearfracScalar(ScalarValue startDate, ScalarValue endDate, ScalarValue basisValue)
+    private static ScalarValue YearfracScalar(ScalarValue startDate, ScalarValue endDate, ScalarValue basisValue, bool uses1904DateSystem)
     {
         double rawBasis = basisValue is not BlankValue ? ToNumber(basisValue) : 0;
         if (!double.IsFinite(rawBasis)) return ErrorValue.Num;
         int basis = (int)rawBasis;
         if (basis < 0 || basis > 4) return ErrorValue.Num;
-        return YearfracScalar(startDate, endDate, basis);
+        return YearfracScalar(startDate, endDate, basis, uses1904DateSystem);
     }
 
-    private static ScalarValue YearfracScalar(ScalarValue startDate, ScalarValue endDate, int basis)
+    private static ScalarValue YearfracScalar(ScalarValue startDate, ScalarValue endDate, int basis, bool uses1904DateSystem)
     {
-        if (!TryOADateToDateTime(startDate, out var startRaw)) return ErrorValue.Num;
-        if (!TryOADateToDateTime(endDate, out var endRaw)) return ErrorValue.Num;
+        if (!TrySerialToDateTime(startDate, uses1904DateSystem, out var startRaw)) return ErrorValue.Num;
+        if (!TrySerialToDateTime(endDate, uses1904DateSystem, out var endRaw)) return ErrorValue.Num;
         var startDt = startRaw.Date;
         var endDt   = endRaw.Date;
-        double totalDays = DateToSerial(endDt) - DateToSerial(startDt);
+        double totalDays = DateToSerial(endDt, uses1904DateSystem) - DateToSerial(startDt, uses1904DateSystem);
         double result = basis switch
         {
             1 => totalDays / ActualActualDenominator(startDt, endDt),
@@ -817,26 +827,31 @@ public static partial class BuiltInFunctions
         _                   => 6 // Sunday
     };
 
-    private static int ExcelDowToMonIndex(DateTime date)
+    private static int ExcelDowToMonIndex(DateTime date, bool uses1904DateSystem = false)
     {
+        if (uses1904DateSystem)
+            return DowToMonIndex(date.DayOfWeek);
+
         int serial = (int)Math.Floor(DateToSerial(date));
         return ExcelDowToMonIndex(serial);
     }
 
     private static int ExcelDowToMonIndex(int serial) => ((serial + 5) % 7 + 7) % 7;
 
-    private static int ExcelIsoWeeknum(DateTime date)
+    private static int ExcelIsoWeeknum(DateTime date, bool uses1904DateSystem = false)
     {
-        int serial = (int)Math.Floor(DateToSerial(date));
-        int dowMon0 = ExcelDowToMonIndex(serial);
+        int serial = (int)Math.Floor(DateToSerial(date, uses1904DateSystem));
+        int dowMon0 = uses1904DateSystem ? DowToMonIndex(date.DayOfWeek) : ExcelDowToMonIndex(serial);
         int thursdaySerial = serial + (3 - dowMon0);
-        int weekYear = SerialToDate(thursdaySerial).Year;
-        int jan4Serial = (int)Math.Floor(DateToSerial(new DateTime(weekYear, 1, 4)));
-        int week1MondaySerial = jan4Serial - ExcelDowToMonIndex(jan4Serial);
+        int weekYear = SerialToDate(thursdaySerial, uses1904DateSystem).Year;
+        int jan4Serial = (int)Math.Floor(DateToSerial(new DateTime(weekYear, 1, 4), uses1904DateSystem));
+        int week1MondaySerial = jan4Serial - (uses1904DateSystem
+            ? DowToMonIndex(new DateTime(weekYear, 1, 4).DayOfWeek)
+            : ExcelDowToMonIndex(jan4Serial));
         return (serial - week1MondaySerial) / 7 + 1;
     }
 
-    private static bool TryCollectHolidays(ScalarValue? arg, out HashSet<DateTime> holidays, out ErrorValue? error)
+    private static bool TryCollectHolidays(ScalarValue? arg, bool uses1904DateSystem, out HashSet<DateTime> holidays, out ErrorValue? error)
     {
         holidays = new HashSet<DateTime>();
         error = null;
@@ -851,7 +866,7 @@ public static partial class BuiltInFunctions
                 }
                 if (TryCellNumber(v, out double serial))
                 {
-                    if (!TryOADateToDateTime(new NumberValue(serial), out var holiday))
+                    if (!TrySerialToDateTime(new NumberValue(serial), uses1904DateSystem, out var holiday))
                     {
                         error = ErrorValue.Num;
                         return false;
@@ -862,7 +877,7 @@ public static partial class BuiltInFunctions
         }
         else if (arg is not null && TryCellNumber(arg, out double s))
         {
-            if (!TryOADateToDateTime(new NumberValue(s), out var holiday))
+            if (!TrySerialToDateTime(new NumberValue(s), uses1904DateSystem, out var holiday))
             {
                 error = ErrorValue.Num;
                 return false;

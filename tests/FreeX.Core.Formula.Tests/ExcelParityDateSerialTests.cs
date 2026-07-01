@@ -92,6 +92,41 @@ public sealed class ExcelParityDateSerialTests
         _eval.Evaluate(formula, Sheet()).Should().Be(new NumberValue(expected));
     }
 
+    [Fact]
+    public void DateFunctions_UseWorkbook1904DateSystem()
+    {
+        var workbook = new Workbook { Uses1904DateSystem = true };
+        var sheet = workbook.AddSheet("S");
+
+        _eval.Evaluate("=DATE(1904,1,1)", sheet, workbook).Should().Be(new NumberValue(0));
+        _eval.Evaluate("=DATE(2024,1,15)", sheet, workbook)
+            .Should().Be(new NumberValue(Serial1904(new DateTime(2024, 1, 15))));
+        _eval.Evaluate("=YEAR(0)", sheet, workbook).Should().Be(new NumberValue(1904));
+        _eval.Evaluate("=MONTH(0)", sheet, workbook).Should().Be(new NumberValue(1));
+        _eval.Evaluate("=DAY(0)", sheet, workbook).Should().Be(new NumberValue(1));
+        _eval.Evaluate("=WEEKDAY(0)", sheet, workbook).Should().Be(new NumberValue(6));
+    }
+
+    [Fact]
+    public void DateOffsetAndDayCountFunctions_UseWorkbook1904DateSystem()
+    {
+        var workbook = new Workbook { Uses1904DateSystem = true };
+        var sheet = workbook.AddSheet("S");
+
+        _eval.Evaluate("=DATEVALUE(\"1904-01-01\")", sheet, workbook).Should().Be(new NumberValue(0));
+        _eval.Evaluate("=DATEVALUE(\"1903-12-31\")", sheet, workbook).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=EDATE(DATE(1904,1,31),1)", sheet, workbook)
+            .Should().Be(new NumberValue(Serial1904(new DateTime(1904, 2, 29))));
+        _eval.Evaluate("=EOMONTH(DATE(1904,1,1),0)", sheet, workbook)
+            .Should().Be(new NumberValue(Serial1904(new DateTime(1904, 1, 31))));
+        _eval.Evaluate("=WORKDAY(DATE(1904,1,1),1)", sheet, workbook)
+            .Should().Be(new NumberValue(Serial1904(new DateTime(1904, 1, 4))));
+        _eval.Evaluate("=NETWORKDAYS(DATE(1904,1,1),DATE(1904,1,4))", sheet, workbook)
+            .Should().Be(new NumberValue(2));
+        _eval.Evaluate("=DAYS(DATE(1904,1,4),DATE(1904,1,1))", sheet, workbook)
+            .Should().Be(new NumberValue(3));
+    }
+
     [Theory]
     [InlineData(1900, 1, 1, 1)]
     [InlineData(1900, 2, 28, 59)]
@@ -371,4 +406,7 @@ public sealed class ExcelParityDateSerialTests
             sheet.SetCell(new CellAddress(sheet.Id, (uint)row, (uint)column), new NumberValue(value));
         return sheet;
     }
+
+    private static double Serial1904(DateTime date) =>
+        (date - new DateTime(1904, 1, 1)).TotalDays;
 }

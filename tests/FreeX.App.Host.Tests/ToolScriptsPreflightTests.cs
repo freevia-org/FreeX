@@ -10,7 +10,8 @@ public sealed class ToolScriptsPreflightTests
     {
         var script = WorkspaceFileLocator.ReadAllText("tools", "Test-ToolScripts.ps1");
 
-        script.Should().Contain("Get-ChildItem -LiteralPath $resolvedScriptDirectory -Filter \"*.ps1\" -File");
+        script.Should().Contain("Get-ChildItem -LiteralPath $resolvedScriptDirectory -Filter \"*.ps1\" -File -Recurse");
+        script.Should().Contain("Test-IsExcludedPath");
         script.Should().Contain("[System.Management.Automation.Language.Parser]::ParseFile");
         script.Should().Contain("PowerShell syntax validation failed");
         script.Should().Contain("preflight scripts must set `$ErrorActionPreference = `\"Stop`\".");
@@ -32,6 +33,24 @@ public sealed class ToolScriptsPreflightTests
         result.ExitCode.Should().NotBe(0);
         result.CombinedOutput.Should().Contain("PowerShell fail-fast validation failed");
         result.NormalizedCombinedOutput.Should().Contain("Test-MissingFailFast.ps1");
+    }
+
+    [Fact]
+    public void ToolScriptsPreflight_FailsWhenNestedPreflightScriptOmitsFailFastMode()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var nestedDirectory = Path.Combine(temp.Path, "nested");
+        Directory.CreateDirectory(nestedDirectory);
+
+        File.WriteAllText(Path.Combine(nestedDirectory, "Test-NestedMissingFailFast.ps1"), "Write-Host \"ok\"");
+
+        var result = PowerShellScriptRunner.RunToolScriptFromTemporaryWorkingDirectory(
+            "Test-ToolScripts.ps1",
+            $"-ScriptDirectory \"{temp.Path}\"");
+
+        result.ExitCode.Should().NotBe(0);
+        result.CombinedOutput.Should().Contain("PowerShell fail-fast validation failed");
+        result.NormalizedCombinedOutput.Should().Contain("Test-NestedMissingFailFast.ps1");
     }
 
     [Fact]

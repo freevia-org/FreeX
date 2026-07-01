@@ -56,6 +56,38 @@ public sealed class WorkbookWindowRegistrySideBySideTests
     }
 
     [Fact]
+    public void Hide_TheSideBySidePrimary_DeactivatesSideBySideAndSynchronousScrolling()
+    {
+        var (registry, windows) = RegisterWindows(3);
+        registry.EnableSideBySide(windows[0], 1920, 1080);
+        registry.SetSynchronousScroll(true);
+
+        registry.Hide(windows[0]).Should().BeTrue();
+
+        registry.IsSideBySideActive.Should().BeFalse();
+        registry.IsSynchronousScrollActive.Should().BeFalse();
+        registry.BroadcastScrollOffset(windows[1], new WorkbookScrollOffset(5, 2));
+        windows[0].SetScrollOffsetCount.Should().Be(0);
+        windows[1].SetScrollOffsetCount.Should().Be(0);
+    }
+
+    [Fact]
+    public void Hide_TheSideBySidePartner_DeactivatesSideBySideAndSynchronousScrolling()
+    {
+        var (registry, windows) = RegisterWindows(3);
+        registry.EnableSideBySide(windows[0], 1920, 1080);
+        registry.SetSynchronousScroll(true);
+
+        registry.Hide(windows[1]).Should().BeTrue();
+
+        registry.IsSideBySideActive.Should().BeFalse();
+        registry.IsSynchronousScrollActive.Should().BeFalse();
+        registry.BroadcastScrollOffset(windows[0], new WorkbookScrollOffset(5, 2));
+        windows[1].SetScrollOffsetCount.Should().Be(0);
+        windows[0].SetScrollOffsetCount.Should().Be(0);
+    }
+
+    [Fact]
     public void SynchronousScroll_CannotBeEnabledWhenSideBySideIsInactive()
     {
         var (registry, _) = RegisterWindows(2);

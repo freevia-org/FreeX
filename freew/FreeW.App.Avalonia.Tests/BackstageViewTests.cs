@@ -378,7 +378,7 @@ public class BackstageViewTests
             Browse: () => { },
             RecoverUnsaved: () => { },
             SaveAs: () => { },
-            SaveAsExtension: _ => { },
+            SaveAsFormat: (_, _) => { },
             OpenContainingFolder: _ => { },
             ExportPdf: () => { },
             MarkAsFinal: () => { },

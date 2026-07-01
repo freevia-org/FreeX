@@ -22,7 +22,7 @@ public static class FileDialogSaveSelectionResolver
         var adapterRows = adapters.ToList();
         var selectedFormat = FindSelectedSaveFormat(adapterRows, getFormats, filterIndex);
         if (selectedFormat is not null &&
-            ExtensionsMatch(selectedFormat.Extension, chosenExtension))
+            AdapterSupportsExtension(selectedFormat.Adapter, getFormats, chosenExtension))
         {
             return selectedFormat.Adapter;
         }
@@ -63,6 +63,13 @@ public static class FileDialogSaveSelectionResolver
             FileDialogFilterBuilder.NormalizeExtension(candidateExtension),
             FileDialogFilterBuilder.NormalizeExtension(chosenExtension),
             StringComparison.OrdinalIgnoreCase);
+
+    private static bool AdapterSupportsExtension<TAdapter>(
+        TAdapter adapter,
+        Func<TAdapter, IEnumerable<FileFormatDescriptor>> getFormats,
+        string chosenExtension)
+        where TAdapter : class =>
+        getFormats(adapter).Any(format => format.CanSave && ExtensionsMatch(format.Extension, chosenExtension));
 
     private sealed record SaveFormatSelection<TAdapter>(TAdapter Adapter, string Extension)
         where TAdapter : class;

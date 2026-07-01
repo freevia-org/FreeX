@@ -205,7 +205,7 @@ public partial class MainWindow
             isEnabled: true,
             UiText.Get("MainWindow_TooltipDescription_OpenAnotherLiveWindowForThisWorkbook"));
 
-        var canSwitchWindows = (_windowRegistry?.Count ?? 1) > 1;
+        var canSwitchWindows = (_windowRegistry?.VisibleCount ?? 1) > 1;
         ApplyRibbonWindowCommandState(
             "Switch Windows",
             canSwitchWindows,

@@ -16,13 +16,18 @@ public static class BackstageSaveAsFileTypePlanner
 
     public static IReadOnlyList<BackstageActionGroup> Build(
         IEnumerable<FileFormatDescriptor> formats,
-        Action<string> saveAsExtension)
+        Action<string> saveAsExtension) =>
+        Build(formats, (extension, _) => saveAsExtension(extension));
+
+    public static IReadOnlyList<BackstageActionGroup> Build(
+        IEnumerable<FileFormatDescriptor> formats,
+        Action<string, int> saveAsFormat)
     {
         ArgumentNullException.ThrowIfNull(formats);
-        ArgumentNullException.ThrowIfNull(saveAsExtension);
+        ArgumentNullException.ThrowIfNull(saveAsFormat);
 
         var rows = BuildRows(formats);
-        return BackstageFileTypeActionPlanner.BuildGroups(rows, FileTypeGroups, saveAsExtension);
+        return BackstageFileTypeActionPlanner.BuildGroups(rows, FileTypeGroups, saveAsFormat);
     }
 
     public static BackstageSaveAsInlinePlan BuildInlinePlan(
@@ -35,7 +40,7 @@ public static class BackstageSaveAsFileTypePlanner
         var rows = BuildRows(formats);
         var choices = BackstageFileTypeActionPlanner
             .BuildChoices(rows)
-            .Select(choice => new BackstageSaveAsFileTypeChoice(choice.Label, choice.PrimaryExtension))
+            .Select(choice => new BackstageSaveAsFileTypeChoice(choice.Label, choice.PrimaryExtension, choice.SaveFilterIndex))
             .ToArray();
 
         var currentExtension = DocumentFileFormatResolver.NormalizeExtension(
@@ -59,19 +64,26 @@ public static class BackstageSaveAsFileTypePlanner
     {
         ArgumentNullException.ThrowIfNull(formats);
 
-        return Collapse(formats.Where(format => format.CanSave && !format.IsLegacy)).ToArray();
+        var saveFormats = formats
+            .Where(format => format.CanSave)
+            .Select((format, index) => new IndexedSaveFormat(
+                format with { Extension = DocumentFileFormatResolver.NormalizeExtension(format.Extension) },
+                index + 1))
+            .Where(format => format.Format.Extension.Length > 0)
+            .ToArray();
+
+        return Collapse(saveFormats.Where(format => !format.Format.IsLegacy)).ToArray();
     }
 
     private static IEnumerable<BackstageFileTypeActionRow<SaveAsFileTypeCategory>> Collapse(
-        IEnumerable<FileFormatDescriptor> formats)
+        IEnumerable<IndexedSaveFormat> formats)
     {
-        var pending = formats
-            .Select(format => format with { Extension = DocumentFileFormatResolver.NormalizeExtension(format.Extension) })
-            .Where(format => format.Extension.Length > 0)
-            .ToList();
+        var pending = formats.ToList();
 
         if (Take(pending, ".docx") is { } docx)
             yield return Row(SaveAsFileTypeCategory.Word, "Word Document", [docx], "Save as FreeW's default editable Word document format.");
+        while (Take(pending, ".docx") is { } duplicateDocx)
+            yield return Row(SaveAsFileTypeCategory.Word, duplicateDocx.Format.FormatName, [duplicateDocx], $"Save as {duplicateDocx.Format.FormatName}.");
         if (Take(pending, ".docm") is { } docm)
             yield return Row(SaveAsFileTypeCategory.Word, "Word Macro-Enabled Document", [docm], "Save an editable macro-enabled Word document package.");
         if (Take(pending, ".dotx") is { } dotx)
@@ -80,10 +92,15 @@ public static class BackstageSaveAsFileTypePlanner
             yield return Row(SaveAsFileTypeCategory.Word, "Word Macro-Enabled Template", [dotm], "Save a reusable macro-enabled Word template.");
         if (Take(pending, ".xml") is { } xml)
             yield return Row(SaveAsFileTypeCategory.Word, "Word XML Document", [xml], "Save as Word's Flat OPC XML document format.");
+        while (Take(pending, ".xml") is { } duplicateXml)
+            yield return Row(SaveAsFileTypeCategory.Word, duplicateXml.Format.FormatName, [duplicateXml], $"Save as {duplicateXml.Format.FormatName}.");
 
-        var html = TakeMany(pending, ".htm", ".html");
-        if (html.Count > 0)
-            yield return Row(SaveAsFileTypeCategory.Web, "Web Page", html, "Save as an editable HTML web page.");
+        var filteredHtml = TakeMany(pending, ".htm", ".html");
+        if (filteredHtml.Count > 0)
+            yield return Row(SaveAsFileTypeCategory.Web, filteredHtml[0].Format.FormatName, filteredHtml, "Save as clean, filtered HTML.");
+        var fullHtml = TakeMany(pending, ".htm", ".html");
+        if (fullHtml.Count > 0)
+            yield return Row(SaveAsFileTypeCategory.Web, fullHtml[0].Format.FormatName, fullHtml, "Save as full HTML with Office round-trip markup.");
         var mhtml = TakeMany(pending, ".mht", ".mhtml");
         if (mhtml.Count > 0)
             yield return Row(SaveAsFileTypeCategory.Web, "Single File Web Page", mhtml, "Save as a single-file MHTML web page.");
@@ -97,12 +114,12 @@ public static class BackstageSaveAsFileTypePlanner
             yield return Row(SaveAsFileTypeCategory.Other, "Log File", [log], "Save as plain text with a .log extension.");
 
         foreach (var format in pending)
-            yield return Row(SaveAsFileTypeCategory.Other, format.FormatName, [format], $"Save as {format.FormatName}.");
+            yield return Row(SaveAsFileTypeCategory.Other, format.Format.FormatName, [format], $"Save as {format.Format.FormatName}.");
     }
 
-    private static FileFormatDescriptor? Take(List<FileFormatDescriptor> formats, string extension)
+    private static IndexedSaveFormat? Take(List<IndexedSaveFormat> formats, string extension)
     {
-        var index = formats.FindIndex(format => string.Equals(format.Extension, extension, StringComparison.OrdinalIgnoreCase));
+        var index = formats.FindIndex(format => string.Equals(format.Format.Extension, extension, StringComparison.OrdinalIgnoreCase));
         if (index < 0)
             return null;
 
@@ -111,9 +128,9 @@ public static class BackstageSaveAsFileTypePlanner
         return format;
     }
 
-    private static IReadOnlyList<FileFormatDescriptor> TakeMany(List<FileFormatDescriptor> formats, params string[] extensions)
+    private static IReadOnlyList<IndexedSaveFormat> TakeMany(List<IndexedSaveFormat> formats, params string[] extensions)
     {
-        var rows = new List<FileFormatDescriptor>();
+        var rows = new List<IndexedSaveFormat>();
         foreach (var extension in extensions)
         {
             if (Take(formats, extension) is { } format)
@@ -126,15 +143,16 @@ public static class BackstageSaveAsFileTypePlanner
     private static BackstageFileTypeActionRow<SaveAsFileTypeCategory> Row(
         SaveAsFileTypeCategory category,
         string displayName,
-        IReadOnlyList<FileFormatDescriptor> formats,
+        IReadOnlyList<IndexedSaveFormat> formats,
         string description)
     {
-        var extensions = formats.Select(format => "*" + format.Extension).ToArray();
+        var extensions = formats.Select(format => "*" + format.Format.Extension).ToArray();
         return new BackstageFileTypeActionRow<SaveAsFileTypeCategory>(
             category,
-            formats[0].Extension,
+            formats[0].Format.Extension,
             $"{displayName} ({string.Join(", ", extensions)})",
-            description);
+            description,
+            formats[0].SaveFilterIndex);
     }
 
     internal enum SaveAsFileTypeCategory
@@ -143,6 +161,8 @@ public static class BackstageSaveAsFileTypePlanner
         Web,
         Other
     }
+
+    private sealed record IndexedSaveFormat(FileFormatDescriptor Format, int SaveFilterIndex);
 }
 
 public sealed record BackstageSaveAsInlinePlan(
@@ -152,4 +172,5 @@ public sealed record BackstageSaveAsInlinePlan(
 
 public sealed record BackstageSaveAsFileTypeChoice(
     string Label,
-    string PrimaryExtension);
+    string PrimaryExtension,
+    int SaveFilterIndex);

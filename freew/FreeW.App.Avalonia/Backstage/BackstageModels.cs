@@ -68,8 +68,8 @@ internal sealed record BackstageCallbacks(
     /// <summary>Trigger a Save-As dialog (format chosen by the user).</summary>
     Action SaveAs,
 
-    /// <summary>Trigger a Save-As targeting a specific file extension (from the planner choice).</summary>
-    Action<string> SaveAsExtension,
+    /// <summary>Trigger a Save-As targeting a specific catalog save format (from the planner choice).</summary>
+    Action<string, int> SaveAsFormat,
 
     /// <summary>Open the folder containing the current file.</summary>
     Action<string> OpenContainingFolder,

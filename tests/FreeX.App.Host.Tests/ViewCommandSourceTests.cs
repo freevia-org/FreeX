@@ -38,6 +38,7 @@ public sealed class ViewCommandSourceTests
         source.Should().Contain("_windowRegistry?.ArrangeVisibleWindows(arrangement, workArea.Width, workArea.Height)");
         source.Should().Contain("RefreshViewWindowCommandState()");
         source.Should().Contain("ApplyLiveWindowCommandState()");
+        source.Should().Contain("var canSwitchWindows = (_windowRegistry?.VisibleCount ?? 1) > 1;");
         source.Should().Contain("MainWindow_TooltipDescription_UnavailableSwitchWindowsRequiresSecondVisibleWindow");
         source.Should().Contain("AutomationProperties.SetHelpText(control, description)");
         source.Should().NotContain("ViewWindowCommandPlanner");
