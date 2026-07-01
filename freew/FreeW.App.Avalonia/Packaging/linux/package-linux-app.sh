@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Assemble a self-contained FreeW Linux distribution tarball from a published
 # .NET runtime directory, following freedesktop / XDG conventions. Mirrors the FreeX
-# packaging script; FreeW opens standard Word .docx files so it relies on the
-# shared-mime-info definition rather than registering a custom MIME type.
+# packaging script; FreeW opens standard Word and OpenDocument files so it
+# relies on shared-mime-info definitions rather than registering custom MIME types.
 #
 # Usage:
 #   package-linux-app.sh --runtime linux-x64 --published <dir> --version 0.1.0 --output <dir>
