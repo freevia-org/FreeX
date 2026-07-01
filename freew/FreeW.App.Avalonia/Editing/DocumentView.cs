@@ -191,6 +191,8 @@ public sealed class DocumentView : Control
     // is collapsed (no selection). Set by the Font dialog on a collapsed-caret apply; consumed
     // and cleared by the next InsertText call.
     private RunFormatting? _pendingRunFmt;
+    private FormatPainterClipboard? _formatPainter;
+    private bool _formatPainterLocked;
     private double _laidOutWidth = -1;
     private double _contentHeight;
     private double _pageLeft;
@@ -7100,6 +7102,9 @@ public sealed class DocumentView : Control
                 ? Cursor.Default
                 : CursorForHandle(HitTestHandle(e.GetPosition(this)));
         }
+
+        if (ApplyFormatPainterToSelection())
+            e.Handled = true;
     }
 
     protected override void OnTextInput(TextInputEventArgs e)
@@ -7125,6 +7130,13 @@ public sealed class DocumentView : Control
 
         if (IsEditingLocked && IsEditingKey(e.Key, ctrl))
         {
+            e.Handled = true;
+            return;
+        }
+
+        if (e.Key == Key.Escape && IsFormatPainterArmed)
+        {
+            CancelFormatPainter();
             e.Handled = true;
             return;
         }
@@ -8740,6 +8752,18 @@ public sealed class DocumentView : Control
         SetPageSettings(settings);
     }
 
+    public void ToggleDifferentFirstPage() =>
+        ApplyPageSettings(settings => settings.DifferentFirstPage = !settings.DifferentFirstPage);
+
+    public void CyclePageVerticalAlignment() =>
+        ApplyPageSettings(settings => settings.VerticalAlignment = settings.VerticalAlignment switch
+        {
+            PageVerticalAlignment.Top => PageVerticalAlignment.Center,
+            PageVerticalAlignment.Center => PageVerticalAlignment.Bottom,
+            PageVerticalAlignment.Bottom => PageVerticalAlignment.Justified,
+            _ => PageVerticalAlignment.Top,
+        });
+
     /// <summary>Insert a bordered table (with a header row) after the current block. Cells edit on double-click.</summary>
     public void InsertTable(int rows, int columns)
     {
@@ -8750,6 +8774,29 @@ public sealed class DocumentView : Control
         table.Formatting = TableFormatting.Default with { Borders = true, HeaderRow = true };
         var insertAt = Math.Clamp(_caret.Block + 1, 0, _doc.Blocks.Count);
         _bus.Execute(new InsertBlockCommand(insertAt, table));
+    }
+
+    /// <summary>
+    /// Convert the current paragraph to a bordered table, splitting text on tabs when present and commas otherwise.
+    /// </summary>
+    public void ConvertCurrentParagraphToTable()
+    {
+        if (IsEditingLocked || _doc.Blocks.Count == 0)
+            return;
+
+        var block = Math.Clamp(_caret.Block, 0, _doc.Blocks.Count - 1);
+        if (_doc.Blocks[block] is not Paragraph paragraph)
+            return;
+
+        var delimiter = paragraph.PlainText.Contains('\t', StringComparison.Ordinal) ? '\t' : ',';
+        var table = TextTableConvert.TextToTable([paragraph], delimiter);
+        table.Formatting = TableFormatting.Default with { Borders = true };
+        _bus.Execute(new ReplaceBlocksCommand(block, 1, [table]));
+        _cellCaret = (block, 0, 0, 0, 0);
+        _hfCaret = null;
+        _selectionAnchor = _caret = new DocPosition(block, 0);
+        InvalidateLayoutAndVisual();
+        CaretMoved?.Invoke();
     }
 
     // ── AV-INSERT: Insert-tab inserts (page break / picture / shape / text box / symbol) ──────────
@@ -8869,6 +8916,62 @@ public sealed class DocumentView : Control
     /// </summary>
     public void InsertTextBox() =>
         InsertShape(Shape.TextBoxWith("Text Box", widthPt: 180, heightPt: 90, fillColorHex: "#DCE6F1"));
+
+    /// <summary>
+    /// Insert inline decorative WordArt at the caret (AV-INSERT-TEXT). The run uses the shared
+    /// <see cref="WordArt"/> model so it round-trips through DOCX and renders via the existing inline
+    /// WordArt layout path.
+    /// </summary>
+    public void InsertWordArt(WordArt? wordArt = null)
+    {
+        InsertObjectRun(Run.FromWordArt(wordArt ?? WordArt.Create("WordArt", WordArtStyle.GradientFill)));
+        Focus();
+    }
+
+    /// <summary>
+    /// Insert a default inline chart at the caret using the shared chart model/rendering path.
+    /// </summary>
+    public void InsertChart(Chart? chart = null)
+    {
+        InsertObjectRun(Run.FromChart(chart ?? Chart.Create(
+            ChartKind.Column,
+            ["Q1", "Q2", "Q3", "Q4"],
+            [4d, 7d, 5d, 9d],
+            "Series 1",
+            "Chart")));
+        Focus();
+    }
+
+    /// <summary>
+    /// Insert a default inline SmartArt diagram at the caret using the shared SmartArt model/rendering path.
+    /// </summary>
+    public void InsertSmartArt(SmartArt? smartArt = null)
+    {
+        InsertObjectRun(Run.FromSmartArt(smartArt ?? SmartArt.Create(
+            SmartArtKind.Process,
+            ["Plan", "Build", "Review"])));
+        Focus();
+    }
+
+    /// <summary>
+    /// Insert a simple icon glyph through the text/symbol path.
+    /// </summary>
+    public void InsertIcon() => InsertSymbol("\u2605");
+
+    /// <summary>
+    /// Insert a generic embedded object placeholder at the caret (AV-INSERT-TEXT). FreeW preserves the
+    /// embedded payload and ProgID in the shared model; live OLE activation is intentionally out of scope.
+    /// </summary>
+    public void InsertEmbeddedObject(EmbeddedObject? embeddedObject = null)
+    {
+        InsertObjectRun(Run.FromEmbeddedObject(embeddedObject ?? SampleEmbeddedObject()));
+        Focus();
+    }
+
+    private static EmbeddedObject SampleEmbeddedObject() =>
+        EmbeddedObject.Create(
+            System.Text.Encoding.UTF8.GetBytes("FreeW embedded object placeholder."),
+            progId: "Package");
 
     /// <summary>
     /// Insert a symbol / special character at the caret as ordinary text (AV-INSERT). Flows through the
@@ -9523,6 +9626,78 @@ public sealed class DocumentView : Control
         Focus();
     }
 
+    /// <summary>
+    /// Toggle complex field-code display across the document, matching Word's Alt+F9 surface.
+    /// </summary>
+    public void ToggleFieldCodes()
+    {
+        var fields = _doc.Blocks
+            .OfType<Paragraph>()
+            .SelectMany(p => p.Runs)
+            .Where(r => r.ComplexField is not null)
+            .ToList();
+        if (fields.Count == 0)
+            return;
+
+        var show = fields.Count(r => r.ComplexField!.ShowCode) * 2 <= fields.Count;
+        foreach (var run in fields)
+            run.ComplexField = run.ComplexField! with { ShowCode = show };
+
+        InvalidateVisual();
+        Focus();
+    }
+
+    /// <summary>
+    /// Refresh the cached display text for simple and recomputable complex fields.
+    /// </summary>
+    public void UpdateFields()
+    {
+        for (var b = 0; b < _doc.Blocks.Count; b++)
+        {
+            if (_doc.Blocks[b] is not Paragraph paragraph)
+                continue;
+
+            for (var r = 0; r < paragraph.Runs.Count; r++)
+            {
+                var run = paragraph.Runs[r];
+                if (run.ComplexField is { } complexField)
+                {
+                    var resolved = ComplexFieldEngine.CanRecompute(complexField)
+                        ? ComplexFieldEngine.Recompute(_doc, b, r)
+                        : ResolveComplexField(complexField, run.Text);
+                    if (!string.IsNullOrEmpty(resolved))
+                        run.Text = resolved;
+                }
+                else if (run.FieldKind != RunFieldKind.None)
+                {
+                    var resolved = ResolveDocumentField(run.FieldKind);
+                    if (!string.IsNullOrEmpty(resolved))
+                        run.Text = resolved;
+                }
+            }
+        }
+
+        if (_doc.Blocks.Any(TableOfContents.IsTocParagraph))
+        {
+            UpdateTableOfContents();
+            return;
+        }
+
+        InvalidateVisual();
+        Focus();
+    }
+
+    private string ResolveComplexField(ComplexField field, string fallback) =>
+        field.Keyword switch
+        {
+            "DATE" or "TIME" => DateTime.Now.ToString("M/d/yyyy", CultureInfo.InvariantCulture),
+            "AUTHOR" => _doc.Properties.Author ?? string.Empty,
+            "TITLE" => _doc.Properties.Title ?? string.Empty,
+            "FILENAME" => string.Empty,
+            "PAGE" or "NUMPAGES" => "1",
+            _ => fallback,
+        };
+
     // Resolve a document-property / date field's cached display text (page-independent fields only).
     // Page/NumPages resolve to "1" as a sensible placeholder; the renderer recomputes paginated fields.
     private string ResolveDocumentField(RunFieldKind kind) => kind switch
@@ -10134,6 +10309,92 @@ public sealed class DocumentView : Control
         if (NormalizedSelection() is null)
             return false;
         DeleteSelection();
+        return true;
+    }
+
+    public bool PastePlainText(string? clipboardText) =>
+        PasteNormalizedText(clipboardText, "Paste Text Only");
+
+    public bool PasteMergeFormatting(string? clipboardText) =>
+        PasteNormalizedText(clipboardText, "Merge Formatting");
+
+    private bool PasteNormalizedText(string? clipboardText, string undoLabel)
+    {
+        if (IsEditingLocked)
+            return false;
+
+        var normalized = PasteText.Normalize(clipboardText);
+        if (normalized.Length == 0)
+            return false;
+
+        var lines = normalized.Split('\n');
+        _bus.BeginUndoGroup();
+        try
+        {
+            InsertText(lines[0]);
+            for (var i = 1; i < lines.Length; i++)
+            {
+                InsertParagraphBreak();
+                if (lines[i].Length > 0)
+                    InsertText(lines[i]);
+            }
+
+            _bus.CommitUndoGroup(undoLabel);
+        }
+        catch
+        {
+            _bus.AbortUndoGroup();
+            throw;
+        }
+
+        Focus();
+        return true;
+    }
+
+    public bool IsFormatPainterArmed => _formatPainter is not null;
+
+    public void ArmFormatPainter(bool locked = false)
+    {
+        if (IsEditingLocked)
+            return;
+
+        var formatting = GetSelectionFormatting();
+        _formatPainter = FormatPainterClipboard.Capture(formatting.Run, formatting.Paragraph);
+        _formatPainterLocked = locked;
+    }
+
+    public void CancelFormatPainter()
+    {
+        _formatPainter = null;
+        _formatPainterLocked = false;
+    }
+
+    public bool ApplyFormatPainterToSelection()
+    {
+        if (_formatPainter is not { } painter || IsEditingLocked || NormalizedSelection() is null)
+            return false;
+
+        _bus.BeginUndoGroup();
+        try
+        {
+            ApplyRunFormatting(painter.ApplyTo);
+            foreach (var index in SelectedParagraphIndices())
+            {
+                if (_doc.Blocks[index] is Paragraph paragraph && IsEditable(paragraph))
+                    _bus.Execute(new SetParagraphFormattingCommand(index, painter.ApplyTo(paragraph.Formatting)));
+            }
+
+            _bus.CommitUndoGroup("Format Painter");
+        }
+        catch
+        {
+            _bus.AbortUndoGroup();
+            throw;
+        }
+
+        if (!_formatPainterLocked)
+            CancelFormatPainter();
+        Focus();
         return true;
     }
 

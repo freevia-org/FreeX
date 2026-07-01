@@ -4,7 +4,9 @@ param(
 
     [string]$Output = "tools/foreground-captures",
 
-    [string]$FreeXExe
+    [string]$FreeXExe,
+
+    [string]$AvaloniaExe
 )
 
 $argsList = @(
@@ -24,4 +26,9 @@ if (-not [string]::IsNullOrWhiteSpace($FreeXExe)) {
     $argsList += @("--freex-exe", $FreeXExe)
 }
 
+if (-not [string]::IsNullOrWhiteSpace($AvaloniaExe)) {
+    $argsList += @("--avalonia-exe", $AvaloniaExe)
+}
+
 dotnet @argsList
+exit $LASTEXITCODE

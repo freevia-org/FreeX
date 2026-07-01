@@ -973,6 +973,40 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task SlidePane_reorder_routes_through_shared_planner()
+    {
+        var moved = false;
+        var slidePaneCount = 0;
+        var currentSlideIndex = -1;
+        var indicatorVisible = true;
+        string[] titles = [];
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            window.Editor.CurrentSlide!.Title = "Slide 1";
+            window.Editor.InsertSlide();
+            window.Editor.CurrentSlide!.Title = "Slide 2";
+            window.Editor.InsertSlide();
+            window.Editor.CurrentSlide!.Title = "Slide 3";
+            window.Editor.SelectSlide(0);
+
+            slidePaneCount = window.SlidePaneSlideItemCount;
+            moved = window.TryApplySlidePaneMove(sourceSlideIndex: 0, targetInsertionIndex: 3);
+            titles = window.Editor.Presentation.Slides.Select(slide => slide.Title).ToArray();
+            currentSlideIndex = window.CurrentSlideIndex;
+            indicatorVisible = window.IsSlidePaneInsertionIndicatorVisible;
+        });
+
+        if (!ran) return;
+        slidePaneCount.Should().Be(3, "the Avalonia slide pane should render one selectable item per slide");
+        moved.Should().BeTrue("drag release should apply the shared move action plan");
+        titles.Should().Equal("Slide 2", "Slide 3", "Slide 1");
+        currentSlideIndex.Should().Be(2, "the moved slide should remain selected after reorder");
+        indicatorVisible.Should().BeFalse("the insertion indicator is only visible during active drag feedback");
+    }
+
+    [Fact]
     public async Task Print_command_refreshes_shared_handout_layout_plan()
     {
         var found = false;
@@ -1104,6 +1138,9 @@ public sealed class MainWindowHeadlessTests
         PresentationAltTextRequestPlan? altTextPlan = null;
         PresentationAltTextPanePlan? altTextPanePlan = null;
         PresentationProofingRequestPlan? proofingPlan = null;
+        var commentsPaneVisible = false;
+        var commentsPaneCommentCount = 0;
+        var commentsPaneActionCount = 0;
 
         var ran = await OnUiThread(() =>
         {
@@ -1137,6 +1174,9 @@ public sealed class MainWindowHeadlessTests
             proofing!.Execute(RibbonCommandContext.Empty);
 
             commentPlan = window.LastCommentPanePlan;
+            commentsPaneVisible = window.IsReviewCommentsPaneVisible;
+            commentsPaneCommentCount = window.ReviewCommentsPaneCommentCount;
+            commentsPaneActionCount = window.ReviewCommentsPaneActionButtonCount;
             accessibilityPlan = window.LastAccessibilitySummaryPlan;
             altTextPlan = window.LastAltTextRequestPlan;
             altTextPanePlan = window.LastAltTextPanePlan;
@@ -1174,6 +1214,9 @@ public sealed class MainWindowHeadlessTests
         });
         proofingPlan.Should().NotBeNull();
         proofingPlan!.Status.Should().Be(PresentationWorkflowCapabilityStatus.RequiresHost);
+        commentsPaneVisible.Should().BeTrue("the Avalonia comments command should render a shared-plan-backed pane");
+        commentsPaneCommentCount.Should().Be(1);
+        commentsPaneActionCount.Should().BeGreaterThanOrEqualTo(6);
     }
 
     [Fact]

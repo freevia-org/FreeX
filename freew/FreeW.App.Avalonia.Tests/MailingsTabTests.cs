@@ -294,14 +294,20 @@ public sealed class MailingsTabTests
 
         var expected = new[]
         {
+            "freew.merge-envelopes",
+            "freew.merge-labels",
             "freew.merge-data",
             "freew.merge-edit-recipients",
+            "freew.merge-filter-sort",
             "freew.merge-address-block",
             "freew.merge-greeting-line",
             "freew.merge-field",
+            "freew.merge-match-fields",
             "freew.merge-preview",
+            "freew.merge-preview-first",
             "freew.merge-preview-previous",
             "freew.merge-preview-next",
+            "freew.merge-preview-last",
             "freew.merge-finish",
             "freew.select-recipients",
             "freew.address-block",
@@ -348,7 +354,7 @@ public sealed class MailingsTabTests
         mailings.Should().NotBeNull();
 
         mailings!.Groups.Select(g => g.Header).Should()
-            .Contain(new[] { "Start Mail Merge", "Write & Insert Fields", "Preview Results", "Finish" });
+            .Contain(new[] { "Create", "Start Mail Merge", "Write & Insert Fields", "Preview Results", "Finish" });
 
         // Mail-SEND is OUT OF SCOPE: no send/e-mail command may appear in the Mailings tab.
         var ids = mailings.Groups.SelectMany(g => g.Controls).Select(c => c.CommandId.Value).ToList();
@@ -369,13 +375,20 @@ public sealed class MailingsTabTests
 
         commandIds.Should().Contain(new[]
         {
+            "freew.merge-envelopes",
+            "freew.merge-labels",
             "freew.merge-data",
+            "freew.merge-edit-recipients",
+            "freew.merge-filter-sort",
             "freew.merge-address-block",
             "freew.merge-greeting-line",
             "freew.merge-field",
+            "freew.merge-match-fields",
             "freew.merge-preview",
+            "freew.merge-preview-first",
             "freew.merge-preview-previous",
             "freew.merge-preview-next",
+            "freew.merge-preview-last",
             "freew.merge-finish",
         });
 
@@ -404,6 +417,14 @@ public sealed class MailingsTabTests
         Execute(registry, "freew.merge-preview-next");
         engine.Session.CurrentIndex.Should().Be(1);
         PlainText(view.Document).Should().Contain("Grace", "executing Next Record previews record 2");
+
+        Execute(registry, "freew.merge-preview-first");
+        engine.Session.CurrentIndex.Should().Be(0);
+        PlainText(view.Document).Should().Contain("Ada", "executing First Record returns to record 1");
+
+        Execute(registry, "freew.merge-preview-last");
+        engine.Session.CurrentIndex.Should().Be(1);
+        PlainText(view.Document).Should().Contain("Grace", "executing Last Record previews the final record");
 
         Execute(registry, "freew.merge-preview-previous");
         engine.Session.CurrentIndex.Should().Be(0);

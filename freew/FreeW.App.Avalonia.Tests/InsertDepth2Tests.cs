@@ -72,7 +72,8 @@ public sealed class InsertDepth2Tests
             "freew.quick-parts.subject", "freew.quick-parts.date", "freew.quick-parts.snippet",
             "freew.equation", "freew.equation.default", "freew.equation.fraction", "freew.equation.script",
             "freew.equation.radical", "freew.equation.integral", "freew.equation.summation",
-            "freew.text-from-file",
+            "freew.insert-file", "freew.text-from-file",
+            "freew.wordart", "freew.object", "freew.update-fields", "freew.toggle-field-codes",
         };
 
         foreach (var id in ids)
@@ -122,7 +123,12 @@ public sealed class InsertDepth2Tests
         Exec(registry, "freew.insert-hyperlink");
         Exec(registry, "freew.insert-bookmark");
         Exec(registry, "freew.quick-parts.snippet");
+        Exec(registry, "freew.insert-file");
         Exec(registry, "freew.text-from-file");
+        Exec(registry, "freew.wordart");
+        Exec(registry, "freew.object");
+        Exec(registry, "freew.update-fields");
+        Exec(registry, "freew.toggle-field-codes");
     }
 
     // ── Hyperlink ──────────────────────────────────────────────────────────────
@@ -344,6 +350,91 @@ public sealed class InsertDepth2Tests
         paras.Count.Should().BeGreaterThanOrEqualTo(3, "each snippet line becomes a paragraph");
         paras[0].PlainText.Should().Be("Line 1");
         paras.Any(p => p.PlainText == "Line 3").Should().BeTrue();
+    }
+
+    [Fact]
+    public void Insert_file_command_uses_text_from_file_callback()
+    {
+        var invoked = 0;
+        var registry = FreeWRibbon.BuildRegistry(MakeView(""),
+            Callbacks(textFromFile: () => invoked++));
+
+        Exec(registry, "freew.insert-file");
+
+        invoked.Should().Be(1, "the WPF-aligned Text from File id must route to the Avalonia shell callback");
+    }
+
+    [Fact]
+    public void Wordart_command_inserts_undoable_model_run()
+    {
+        var view = MakeView("");
+        var registry = FreeWRibbon.BuildRegistry(view, Callbacks());
+
+        Exec(registry, "freew.wordart");
+
+        view.Document.Blocks.OfType<Paragraph>().SelectMany(p => p.Runs)
+            .Any(run => run.WordArt is { Text: "WordArt", Style: WordArtStyle.GradientFill })
+            .Should().BeTrue("the command inserts the default WordArt model run");
+
+        view.Undo();
+        view.Document.Blocks.OfType<Paragraph>().SelectMany(p => p.Runs)
+            .Any(run => run.WordArt is not null).Should().BeFalse("Undo removes the WordArt run");
+    }
+
+    [Fact]
+    public void Object_command_inserts_embedded_object_placeholder()
+    {
+        var view = MakeView("");
+        var registry = FreeWRibbon.BuildRegistry(view, Callbacks());
+
+        Exec(registry, "freew.object");
+
+        var embedded = view.Document.Blocks.OfType<Paragraph>()
+            .SelectMany(p => p.Runs)
+            .SingleOrDefault(run => run.EmbeddedObject is not null)
+            ?.EmbeddedObject;
+
+        embedded.Should().NotBeNull();
+        embedded!.ProgId.Should().Be("Package");
+        embedded.Payload.Should().NotBeEmpty();
+    }
+
+    [Fact]
+    public void Update_fields_refreshes_simple_document_property_fields()
+    {
+        var doc = MakeDoc("");
+        doc.Properties.Author = "Ada";
+        var paragraph = (Paragraph)doc.Blocks[0];
+        paragraph.Runs.Clear();
+        paragraph.Runs.Add(new Run("stale") { FieldKind = RunFieldKind.Author });
+        var view = new DocumentView();
+        view.LoadDocument(doc);
+        var registry = FreeWRibbon.BuildRegistry(view, Callbacks());
+
+        Exec(registry, "freew.update-fields");
+
+        ((Paragraph)view.Document.Blocks[0]).Runs.Single().Text.Should().Be("Ada");
+    }
+
+    [Fact]
+    public void Toggle_field_codes_flips_complex_field_display_state()
+    {
+        var doc = MakeDoc("");
+        var paragraph = (Paragraph)doc.Blocks[0];
+        paragraph.Runs.Clear();
+        paragraph.Runs.Add(new Run("Ada") { ComplexField = new ComplexField(" AUTHOR ") });
+        var view = new DocumentView();
+        view.LoadDocument(doc);
+        var registry = FreeWRibbon.BuildRegistry(view, Callbacks());
+
+        Exec(registry, "freew.toggle-field-codes");
+
+        var field = ((Paragraph)view.Document.Blocks[0]).Runs.Single().ComplexField;
+        field.Should().NotBeNull();
+        field!.ShowCode.Should().BeTrue();
+
+        Exec(registry, "freew.toggle-field-codes");
+        ((Paragraph)view.Document.Blocks[0]).Runs.Single().ComplexField!.ShowCode.Should().BeFalse();
     }
 
     // ── Equation ───────────────────────────────────────────────────────────────

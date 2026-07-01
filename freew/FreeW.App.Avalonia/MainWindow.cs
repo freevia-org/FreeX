@@ -567,6 +567,9 @@ public sealed class MainWindow : Window
             Cut: () => _ = CutAsync(),
             Copy: () => _ = CopyAsync(),
             Paste: () => _ = PasteAsync(),
+            PastePlainText: () => _ = PastePlainTextAsync(),
+            PasteMergeFormatting: () => _ = PasteMergeFormattingAsync(),
+            OpenPasteSpecial: () => _ = OpenPasteSpecialAsync(),
             Backstage: () => _ = ShowBackstageAsync(),
             NewDocument: NewDocument,
             ToggleNavigationPane: ToggleNavigationPane,
@@ -906,6 +909,47 @@ public sealed class MainWindow : Window
         var text = await clipboard.TryGetTextAsync();
         if (!string.IsNullOrEmpty(text))
             _editor.InsertText(text.Replace('\r', ' ').Replace('\n', ' ').Replace('\t', ' '));
+    }
+
+    private async Task PastePlainTextAsync()
+    {
+        var text = await TryGetClipboardTextAsync();
+        if (!_editor.PastePlainText(text))
+            _status.Text = "Clipboard does not contain text.";
+    }
+
+    private async Task PasteMergeFormattingAsync()
+    {
+        var text = await TryGetClipboardTextAsync();
+        if (!_editor.PasteMergeFormatting(text))
+            _status.Text = "Clipboard does not contain text.";
+    }
+
+    private async Task OpenPasteSpecialAsync()
+    {
+        var text = await TryGetClipboardTextAsync();
+        if (PasteText.Normalize(text).Length == 0)
+        {
+            _status.Text = "Clipboard does not contain text.";
+            return;
+        }
+
+        var option = await PasteSpecialDialog.ShowAsync(this);
+        if (option is null)
+            return;
+
+        var pasted = option.Value == PasteSpecialOption.KeepTextOnly
+            ? _editor.PastePlainText(text)
+            : _editor.PasteMergeFormatting(text);
+        if (!pasted)
+            _status.Text = "Clipboard does not contain text.";
+    }
+
+    private async Task<string?> TryGetClipboardTextAsync()
+    {
+        if (TopLevel.GetTopLevel(this)?.Clipboard is not { } clipboard)
+            return null;
+        return await clipboard.TryGetTextAsync();
     }
 
     private async Task OpenAsync()

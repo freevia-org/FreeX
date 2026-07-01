@@ -74,6 +74,86 @@ function Resolve-ScreenshotPath {
     return $Manifest.ScreenshotPath
 }
 
+function Get-ManifestString {
+    param(
+        [Parameter(Mandatory = $true)]$Manifest,
+        [Parameter(Mandatory = $true)][string]$PropertyName
+    )
+
+    if ($null -eq $Manifest -or -not ($Manifest.PSObject.Properties.Name -contains $PropertyName)) {
+        return ""
+    }
+
+    $value = $Manifest.$PropertyName
+    if ($null -eq $value) {
+        return ""
+    }
+
+    return [string]$value
+}
+
+function Get-BlockerCategory {
+    param(
+        [Parameter(Mandatory = $true)][string]$CaptureStatus,
+        [Parameter(Mandatory = $true)][bool]$ScreenshotExists,
+        [Parameter(Mandatory = $true)][bool]$ManifestMatchesTarget,
+        [string]$BlockReason = ""
+    )
+
+    if (-not $ManifestMatchesTarget) {
+        return "manifest-target-mismatch"
+    }
+
+    if ($CaptureStatus -eq "complete" -and $ScreenshotExists) {
+        return "none"
+    }
+
+    if ($CaptureStatus -eq "missing-manifest") {
+        return "missing-manifest"
+    }
+
+    if ($CaptureStatus -eq "complete") {
+        return "manifest-missing-screenshot"
+    }
+
+    if ($BlockReason -match "Excel\.Application COM ProgID is not available") {
+        return "excel-com-unavailable"
+    }
+
+    if ($BlockReason -match "foreground-guard-failed|No foreground window detected") {
+        return "foreground-focus-unavailable"
+    }
+
+    if ($BlockReason -match "popup-not-found") {
+        return "popup-not-found"
+    }
+
+    if ($BlockReason -match "^exception:") {
+        return "scenario-exception"
+    }
+
+    return "blocked-or-incomplete"
+}
+
+function Get-NextCaptureAction {
+    param(
+        [Parameter(Mandatory = $true)][string]$BlockerCategory,
+        [Parameter(Mandatory = $true)][string]$RunnerCommand,
+        [Parameter(Mandatory = $true)][string]$RequiredEnvironment
+    )
+
+    switch ($BlockerCategory) {
+        "none" { return "No action required; retained PNG resolves in the repo." }
+        "missing-manifest" { return "Run $RunnerCommand in $RequiredEnvironment Commit the manifest and PNG, then rerun this generator." }
+        "manifest-missing-screenshot" { return "Rerun $RunnerCommand and commit both the complete manifest and the referenced PNG." }
+        "manifest-target-mismatch" { return "Discard the stale manifest and rerun $RunnerCommand so Scenario and Subject match this target." }
+        "excel-com-unavailable" { return "Rerun $RunnerCommand on a Windows desktop where Microsoft Excel COM is installed and registered." }
+        "foreground-focus-unavailable" { return "Rerun $RunnerCommand from an unlocked interactive desktop where the launched window can become foreground." }
+        "popup-not-found" { return "Rerun $RunnerCommand from foreground; if it still blocks, inspect the UIA/keytip route for the Conditional Formatting popup." }
+        default { return "Rerun $RunnerCommand in $RequiredEnvironment Preserve any blocked manifest with its BlockReason if a real PNG cannot be produced." }
+    }
+}
+
 function Get-CaptureTargetStatus {
     param(
         [Parameter(Mandatory = $true)][string]$Id,
@@ -81,6 +161,9 @@ function Get-CaptureTargetStatus {
         [Parameter(Mandatory = $true)][string]$Scenario,
         [Parameter(Mandatory = $true)][string]$ManifestPath,
         [Parameter(Mandatory = $true)][string]$ExpectedOpenedState,
+        [Parameter(Mandatory = $true)][string]$RunnerCommand,
+        [Parameter(Mandatory = $true)][string]$RequiredEnvironment,
+        [string]$ManifestSubject = "",
         [string]$FallbackEvidencePath = "",
         [string]$FallbackEvidenceNote = ""
     )
@@ -100,18 +183,30 @@ function Get-CaptureTargetStatus {
             subject = $Subject
             scenario = $Scenario
             expectedOpenedState = $ExpectedOpenedState
+            runnerCommand = $RunnerCommand
+            requiredEnvironment = $RequiredEnvironment
             manifestPath = $ManifestPath
             captureStatus = "missing-manifest"
             screenshotPath = ""
             screenshotExists = $false
             retentionStatus = "needs-capture"
             blockReason = "No committed foreground capture manifest exists for this opened-state target."
+            blockerCategory = "missing-manifest"
+            nextCaptureAction = Get-NextCaptureAction -BlockerCategory "missing-manifest" -RunnerCommand $RunnerCommand -RequiredEnvironment $RequiredEnvironment
+            lastAttemptedAtUtc = ""
+            manifestSubject = ""
+            manifestScenario = ""
+            manifestMatchesTarget = $false
             fallbackEvidence = @($fallbackEvidence)
             fallbackEvidenceNote = $FallbackEvidenceNote
         }
     }
 
     $manifest = Get-Content -LiteralPath $resolvedManifestPath -Raw | ConvertFrom-Json
+    $expectedManifestSubject = if ([string]::IsNullOrWhiteSpace($ManifestSubject)) { $Subject } else { $ManifestSubject }
+    $manifestSubject = Get-ManifestString -Manifest $manifest -PropertyName "Subject"
+    $manifestScenario = Get-ManifestString -Manifest $manifest -PropertyName "Scenario"
+    $manifestMatchesTarget = $manifestSubject -eq $expectedManifestSubject -and $manifestScenario -eq $Scenario
     $resolvedScreenshot = Resolve-ScreenshotPath -Manifest $manifest -ManifestPath $resolvedManifestPath
     $screenshotExists = -not [string]::IsNullOrWhiteSpace($resolvedScreenshot) -and
         (Test-Path -LiteralPath (Resolve-RepoPath $resolvedScreenshot) -PathType Leaf -ErrorAction SilentlyContinue)
@@ -131,18 +226,31 @@ function Get-CaptureTargetStatus {
     }
 
     $blockReason = if ([string]::IsNullOrWhiteSpace($manifest.BlockReason)) { "" } else { [string]$manifest.BlockReason }
+    $blockerCategory = Get-BlockerCategory `
+        -CaptureStatus $captureStatus `
+        -ScreenshotExists ([bool]$screenshotExists) `
+        -ManifestMatchesTarget $manifestMatchesTarget `
+        -BlockReason $blockReason
 
     [ordered]@{
         id = $Id
         subject = $Subject
         scenario = $Scenario
         expectedOpenedState = $ExpectedOpenedState
+        runnerCommand = $RunnerCommand
+        requiredEnvironment = $RequiredEnvironment
         manifestPath = ConvertTo-RepoRelativePath $resolvedManifestPath
         captureStatus = $captureStatus
         screenshotPath = $resolvedScreenshot
         screenshotExists = [bool]$screenshotExists
         retentionStatus = $retentionStatus
         blockReason = $blockReason
+        blockerCategory = $blockerCategory
+        nextCaptureAction = Get-NextCaptureAction -BlockerCategory $blockerCategory -RunnerCommand $RunnerCommand -RequiredEnvironment $RequiredEnvironment
+        lastAttemptedAtUtc = Get-ManifestString -Manifest $manifest -PropertyName "CapturedAtUtc"
+        manifestSubject = $manifestSubject
+        manifestScenario = $manifestScenario
+        manifestMatchesTarget = $manifestMatchesTarget
         fallbackEvidence = @($fallbackEvidence)
         fallbackEvidenceNote = $FallbackEvidenceNote
     }
@@ -186,19 +294,26 @@ $captureTargets = @(
         -Subject "excel" `
         -Scenario "excel-conditional-formatting-gallery" `
         -ManifestPath "tools\foreground-captures\excel-conditional-formatting-gallery\excel-conditional-formatting-gallery_manifest.json" `
-        -ExpectedOpenedState "Excel Home > Conditional Formatting opened popup/gallery"
+        -ExpectedOpenedState "Excel Home > Conditional Formatting opened popup/gallery" `
+        -RunnerCommand ".\tools\Invoke-ForegroundCapture.ps1 -Scenario excel-conditional-formatting-gallery" `
+        -RequiredEnvironment "Windows desktop session with Microsoft Excel COM registered and foreground focus allowed."
     Get-CaptureTargetStatus `
         -Id "wpf.conditional-formatting-gallery.opened" `
         -Subject "wpf" `
         -Scenario "freex-conditional-formatting-gallery" `
         -ManifestPath "tools\foreground-captures\freex-conditional-formatting-gallery\freex-conditional-formatting-gallery_manifest.json" `
-        -ExpectedOpenedState "FreeX WPF Home > Conditional Formatting opened popup/gallery"
+        -ExpectedOpenedState "FreeX WPF Home > Conditional Formatting opened popup/gallery" `
+        -RunnerCommand ".\tools\Invoke-ForegroundCapture.ps1 -Scenario freex-conditional-formatting-gallery -FreeXExe <Release FreeX.App.Host.exe>" `
+        -RequiredEnvironment "Windows desktop session with built Release WPF host and foreground focus allowed." `
+        -ManifestSubject "freex"
     Get-CaptureTargetStatus `
         -Id "avalonia.conditional-formatting-gallery.opened" `
         -Subject "avalonia" `
         -Scenario "avalonia-conditional-formatting-gallery" `
         -ManifestPath "tools\foreground-captures\avalonia-conditional-formatting-gallery\avalonia-conditional-formatting-gallery_manifest.json" `
         -ExpectedOpenedState "FreeX Avalonia Home > Conditional Formatting opened popup/gallery" `
+        -RunnerCommand ".\tools\Invoke-ForegroundCapture.ps1 -Scenario avalonia-conditional-formatting-gallery -AvaloniaExe <Release FreeX.exe>" `
+        -RequiredEnvironment "Windows desktop session with built Release Avalonia app and foreground focus allowed." `
         -FallbackEvidencePath "docs\parity\dialog-visual-assets\avalonia-capture\dialog.ConditionalFormatNewRule.png" `
         -FallbackEvidenceNote "Existing Avalonia dialog route evidence is retained for dialog parity, but it is not opened popup/gallery evidence."
 )
@@ -212,6 +327,15 @@ $openedStateStatus = if ($completeOpenedStateTargets -eq $captureTargets.Count) 
 else {
     "needs-paired-opened-state-capture"
 }
+$blockerCategories = @($captureTargets |
+    Group-Object -Property { $_.blockerCategory } |
+    Sort-Object -Property Name |
+    ForEach-Object {
+        [ordered]@{
+            category = [string]$_.Name
+            count = [int]$_.Count
+        }
+    })
 
 $rows = foreach ($row in $conditionalRows) {
     [ordered]@{
@@ -237,6 +361,7 @@ $report = [ordered]@{
         openedStateStatus = $openedStateStatus
     }
     captureTargets = @($captureTargets)
+    blockerCategories = @($blockerCategories)
     rows = @($rows)
 }
 
@@ -249,6 +374,8 @@ $md = New-Object System.Text.StringBuilder
 [void]$md.AppendLine()
 [void]$md.AppendLine("This report retains real opened-state capture evidence for the conditional-format popup/gallery lane. A target only counts as retained when its foreground manifest is complete and the referenced PNG resolves in the repo. Missing or blocked manifests stay visible as blockers; dialog-route fallback evidence is listed separately and is not counted as opened popup/gallery evidence.")
 [void]$md.AppendLine()
+[void]$md.AppendLine("Completion contract: run the target command in a foreground-capable Windows desktop session, commit the resulting manifest and PNG under ``tools/foreground-captures/<scenario>/``, then rerun this generator. A target is complete only when ``CaptureStatus`` is ``complete`` and ``ScreenshotPath`` resolves to a committed PNG; blocked manifests must remain blocked and must not use fallback dialog-route images as opened-state evidence.")
+[void]$md.AppendLine()
 [void]$md.AppendLine("## Summary")
 [void]$md.AppendLine()
 [void]$md.AppendLine("| Metric | Count |")
@@ -259,13 +386,30 @@ $md = New-Object System.Text.StringBuilder
 [void]$md.AppendLine("| Complete opened-state capture targets | $completeOpenedStateTargets |")
 [void]$md.AppendLine("| Missing or incomplete opened-state capture targets | $($captureTargets.Count - $completeOpenedStateTargets) |")
 [void]$md.AppendLine()
+[void]$md.AppendLine("## Blocker Categories")
+[void]$md.AppendLine()
+[void]$md.AppendLine("| Category | Count |")
+[void]$md.AppendLine("|---|---:|")
+foreach ($category in $blockerCategories) {
+    [void]$md.AppendLine("| $(Escape-MarkdownCell $category.category) | $($category.count) |")
+}
+[void]$md.AppendLine()
 [void]$md.AppendLine("## Capture Targets")
 [void]$md.AppendLine()
-[void]$md.AppendLine("| Target | Subject | Scenario | Status | PNG | Blocker |")
-[void]$md.AppendLine("|---|---|---|---|---|---|")
+[void]$md.AppendLine("| Target | Subject | Scenario | Status | Category | Last attempt UTC | PNG | Blocker | Next action |")
+[void]$md.AppendLine("|---|---|---|---|---|---|---|---|---|")
 foreach ($target in $captureTargets) {
     $png = if ($target.screenshotExists) { $target.screenshotPath } else { "" }
-    [void]$md.AppendLine("| $(Escape-MarkdownCell $target.id) | $(Escape-MarkdownCell $target.subject) | $(Escape-MarkdownCell $target.scenario) | $(Escape-MarkdownCell $target.retentionStatus) | $(Escape-MarkdownCell $png) | $(Escape-MarkdownCell $target.blockReason) |")
+    [void]$md.AppendLine("| $(Escape-MarkdownCell $target.id) | $(Escape-MarkdownCell $target.subject) | $(Escape-MarkdownCell $target.scenario) | $(Escape-MarkdownCell $target.retentionStatus) | $(Escape-MarkdownCell $target.blockerCategory) | $(Escape-MarkdownCell $target.lastAttemptedAtUtc) | $(Escape-MarkdownCell $png) | $(Escape-MarkdownCell $target.blockReason) | $(Escape-MarkdownCell $target.nextCaptureAction) |")
+}
+[void]$md.AppendLine()
+[void]$md.AppendLine("## Capture Commands")
+[void]$md.AppendLine()
+[void]$md.AppendLine("| Target | Command | Required environment |")
+[void]$md.AppendLine("|---|---|---|")
+foreach ($target in $captureTargets) {
+    $command = Escape-MarkdownCell $target.runnerCommand
+    [void]$md.AppendLine("| $(Escape-MarkdownCell $target.id) | ``$command`` | $(Escape-MarkdownCell $target.requiredEnvironment) |")
 }
 [void]$md.AppendLine()
 [void]$md.AppendLine("## Classifier Rows")

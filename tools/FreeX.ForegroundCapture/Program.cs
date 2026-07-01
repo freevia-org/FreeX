@@ -99,6 +99,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             "freex-open-dialog" => RunFreeXDialogScenario("freex-open-dialog", "^{F12}", "#32770", "Open"),
             "freex-save-as-dialog" => RunFreeXDialogScenario("freex-save-as-dialog", "{F12}", "#32770", "Save As"),
             "freex-conditional-formatting-gallery" => RunFreeXConditionalFormattingGalleryScenario(),
+            "avalonia-conditional-formatting-gallery" => RunAvaloniaConditionalFormattingGalleryScenario(),
             "freex-format-cells-dialog" => RunFreeXFormatCellsDialogScenario(),
             "freex-format-cells-context-dialog" => RunFreeXFormatCellsContextDialogScenario(),
             // S3 native-dialog continuation scenarios.
@@ -1143,13 +1144,27 @@ internal sealed class ScenarioRunner(CaptureOptions options)
     }
 
     private CaptureResult RunFreeXConditionalFormattingGalleryScenario()
+        => RunDesktopConditionalFormattingGalleryScenario(
+            "freex-conditional-formatting-gallery",
+            "freex",
+            ResolveFreeXExePath);
+
+    private CaptureResult RunAvaloniaConditionalFormattingGalleryScenario()
+        => RunDesktopConditionalFormattingGalleryScenario(
+            "avalonia-conditional-formatting-gallery",
+            "avalonia",
+            ResolveAvaloniaExePath);
+
+    private CaptureResult RunDesktopConditionalFormattingGalleryScenario(
+        string scenario,
+        string subject,
+        Func<string> resolveExePath)
     {
-        const string scenario = "freex-conditional-formatting-gallery";
         Process? process = null;
 
         try
         {
-            var launch = LaunchFreeX(scenario);
+            var launch = LaunchDesktopApp(scenario, subject, resolveExePath());
             if (launch.Result is not null)
             {
                 return launch.Result;
@@ -1161,7 +1176,13 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             var guard = ForegroundGuard.FocusAndVerify(handle, process.Id, "FreeX", options.FocusTimeout);
             if (!guard.Success)
             {
-                return BlockedWithGuard(scenario, guard, "before-input");
+                return CaptureResult.Blocked(
+                    scenario,
+                    "foreground-guard-failed",
+                    "Foreground guard failed during before-input.",
+                    options.OutputRoot,
+                    subject,
+                    guard);
             }
 
             if (!TryOpenRibbonGalleryByText(handle, "Conditional Formatting"))
@@ -1174,10 +1195,10 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             var popup = WindowFinder.FindProcessPopup(process.Id, window.Handle, options.PopupTimeout, 120, 80);
             if (popup is null)
             {
-                return CaptureResult.Blocked(scenario, "popup-not-found", "Did not detect foreground FreeX Conditional Formatting popup after UIA open or Alt,H,L fallback.", options.OutputRoot, "freex", guard);
+                return CaptureResult.Blocked(scenario, "popup-not-found", "Did not detect foreground FreeX Conditional Formatting popup after UIA open or Alt,H,L fallback.", options.OutputRoot, subject, guard);
             }
 
-            return CaptureWindow(scenario, "freex", popup, guard, "complete");
+            return CaptureWindow(scenario, subject, popup, guard, "complete");
         }
         finally
         {
@@ -2041,8 +2062,13 @@ internal sealed class ScenarioRunner(CaptureOptions options)
     }
 
     private (Process? Process, WindowInfo? Window, CaptureResult? Result) LaunchFreeX(string scenario)
+        => LaunchDesktopApp(scenario, "freex", ResolveFreeXExePath());
+
+    private (Process? Process, WindowInfo? Window, CaptureResult? Result) LaunchDesktopApp(
+        string scenario,
+        string subject,
+        string exePath)
     {
-        var exePath = ResolveFreeXExePath();
         var process = Process.Start(new ProcessStartInfo(exePath)
         {
             UseShellExecute = false,
@@ -2051,7 +2077,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
 
         if (process is null)
         {
-            return (null, null, CaptureResult.Blocked(scenario, "launch-failed", $"Failed to launch '{exePath}'.", options.OutputRoot, "freex"));
+            return (null, null, CaptureResult.Blocked(scenario, "launch-failed", $"Failed to launch '{exePath}'.", options.OutputRoot, subject));
         }
 
         var window = WindowFinder.WaitForMainWindow(process.Id, options.LaunchTimeout);
@@ -2062,7 +2088,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                 process.Kill(entireProcessTree: true);
             }
 
-            return (process, null, CaptureResult.Blocked(scenario, "window-not-found", $"FreeX process {process.Id} did not expose a visible main window.", options.OutputRoot, "freex"));
+            return (process, null, CaptureResult.Blocked(scenario, "window-not-found", $"FreeX process {process.Id} did not expose a visible main window.", options.OutputRoot, subject));
         }
 
         return (process, window, null);
@@ -6064,12 +6090,30 @@ internal sealed class ScenarioRunner(CaptureOptions options)
 
         return candidate;
     }
+
+    private string ResolveAvaloniaExePath()
+    {
+        if (!string.IsNullOrWhiteSpace(options.AvaloniaExePath))
+        {
+            return options.AvaloniaExePath;
+        }
+
+        var repoRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".."));
+        var candidate = Path.Combine(repoRoot, "src", "FreeX.App.Avalonia", "bin", "Release", "net10.0", "FreeX.exe");
+        if (!File.Exists(candidate))
+        {
+            throw new FileNotFoundException($"FreeX Avalonia executable was not found. Build Release or pass --avalonia-exe. Expected: {candidate}", candidate);
+        }
+
+        return candidate;
+    }
 }
 
 internal sealed record CaptureOptions(
     string Scenario,
     string OutputRoot,
     string? FreeXExePath,
+    string? AvaloniaExePath,
     bool ShowHelp,
     bool ListSlices,
     string Subject,
@@ -6101,6 +6145,8 @@ internal sealed record CaptureOptions(
           excel-status-footer-reference
           freex-open-dialog
           freex-save-as-dialog
+          freex-conditional-formatting-gallery
+          avalonia-conditional-formatting-gallery
           freex-format-cells-context-dialog
           freex-save-as-dialog-cancel
           freex-save-as-overwrite-prompt
@@ -6143,6 +6189,7 @@ internal sealed record CaptureOptions(
         Options:
           --output <path>       Default: tools/foreground-captures
           --freex-exe <path>    FreeX.App.Host.exe path for FreeX scenarios
+          --avalonia-exe <path> FreeX Avalonia executable path for Avalonia scenarios
         """;
 
     public static CaptureOptions Parse(string[] args)
@@ -6150,6 +6197,7 @@ internal sealed record CaptureOptions(
         var scenario = string.Empty;
         var output = Path.Combine("tools", "foreground-captures");
         string? freexExe = null;
+        string? avaloniaExe = null;
         var showHelp = false;
         var listSlices = false;
 
@@ -6173,6 +6221,9 @@ internal sealed record CaptureOptions(
                 case "--freex-exe" when i + 1 < args.Length:
                     freexExe = args[++i];
                     break;
+                case "--avalonia-exe" when i + 1 < args.Length:
+                    avaloniaExe = args[++i];
+                    break;
             }
         }
 
@@ -6180,14 +6231,30 @@ internal sealed record CaptureOptions(
             scenario,
             Path.GetFullPath(output),
             freexExe,
+            avaloniaExe,
             showHelp,
             listSlices,
-            scenario.StartsWith("excel-", StringComparison.OrdinalIgnoreCase) ? "excel" : "freex",
+            SubjectForScenario(scenario),
             TimeSpan.FromSeconds(20),
             TimeSpan.FromSeconds(5),
             TimeSpan.FromSeconds(6),
             TimeSpan.FromMilliseconds(900),
             TimeSpan.FromMilliseconds(3000));
+    }
+
+    private static string SubjectForScenario(string scenario)
+    {
+        if (scenario.StartsWith("excel-", StringComparison.OrdinalIgnoreCase))
+        {
+            return "excel";
+        }
+
+        if (scenario.StartsWith("avalonia-", StringComparison.OrdinalIgnoreCase))
+        {
+            return "avalonia";
+        }
+
+        return "freex";
     }
 }
 
