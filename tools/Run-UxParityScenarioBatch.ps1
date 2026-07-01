@@ -430,6 +430,79 @@ function Write-ScenarioReport {
     $html | Set-Content -Path $Path -Encoding UTF8
 }
 
+function Write-ScenarioContactSheet {
+    param(
+        [object]$Summary,
+        [string]$Path
+    )
+
+    Add-Type -AssemblyName System.Drawing
+
+    $records = @($Summary["records"])
+    $cellWidth = 640
+    $cellHeight = 430
+    $headerHeight = 72
+    $rowLabelHeight = 30
+    $width = $cellWidth * 2
+    $height = $headerHeight + (($cellHeight + $rowLabelHeight) * [Math]::Max(1, $records.Count))
+
+    $bitmap = New-Object System.Drawing.Bitmap $width, $height
+    $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+    $graphics.Clear([System.Drawing.Color]::White)
+    $graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+
+    $titleFont = New-Object System.Drawing.Font "Segoe UI", 18, ([System.Drawing.FontStyle]::Bold)
+    $headingFont = New-Object System.Drawing.Font "Segoe UI", 12, ([System.Drawing.FontStyle]::Bold)
+    $brush = [System.Drawing.Brushes]::Black
+
+    try {
+        $title = "FreeX / Excel UX $($Summary["suite"]) Pair - $($Summary["runId"])"
+        $graphics.DrawString($title, $titleFont, $brush, 16, 12)
+        $graphics.DrawString("Excel", $headingFont, $brush, 16, 48)
+        $graphics.DrawString("FreeX", $headingFont, $brush, $cellWidth + 16, 48)
+
+        for ($i = 0; $i -lt $records.Count; $i++) {
+            $record = $records[$i]
+            $y = $headerHeight + ($i * ($cellHeight + $rowLabelHeight))
+            $graphics.FillRectangle([System.Drawing.Brushes]::Gainsboro, 0, $y, $width, $rowLabelHeight)
+            $graphics.DrawString([string]$record["id"], $headingFont, $brush, 16, $y + 5)
+
+            foreach ($side in @("excel", "freex")) {
+                $manifest = $record[$side]["manifest"]
+                $imagePath = [string]$manifest["screenshotPath"]
+                $columnX = if ($side -eq "excel") { 14 } else { $cellWidth + 14 }
+                if ([string]::IsNullOrWhiteSpace($imagePath) -or -not (Test-Path $imagePath)) {
+                    continue
+                }
+
+                $image = [System.Drawing.Image]::FromFile((Resolve-Path $imagePath).Path)
+                try {
+                    $maxWidth = $cellWidth - 28
+                    $maxHeight = $cellHeight - 28
+                    $scale = [Math]::Min($maxWidth / $image.Width, $maxHeight / $image.Height)
+                    $drawWidth = [int]($image.Width * $scale)
+                    $drawHeight = [int]($image.Height * $scale)
+                    $drawX = $columnX + [int](($maxWidth - $drawWidth) / 2)
+                    $drawY = $y + $rowLabelHeight + 14 + [int](($maxHeight - $drawHeight) / 2)
+                    $graphics.DrawImage($image, $drawX, $drawY, $drawWidth, $drawHeight)
+                    $graphics.DrawRectangle([System.Drawing.Pens]::LightGray, $drawX, $drawY, $drawWidth, $drawHeight)
+                }
+                finally {
+                    $image.Dispose()
+                }
+            }
+        }
+
+        $bitmap.Save($Path, [System.Drawing.Imaging.ImageFormat]::Png)
+    }
+    finally {
+        $titleFont.Dispose()
+        $headingFont.Dispose()
+        $graphics.Dispose()
+        $bitmap.Dispose()
+    }
+}
+
 $repoRoot = Get-RepoRoot
 if ([string]::IsNullOrWhiteSpace($RunId)) {
     $RunId = Get-Date -Format "yyyyMMdd-HHmmss"
@@ -440,6 +513,7 @@ $runDirectory = Join-Path $runRoot $RunId
 $foregroundOutput = Join-Path $runDirectory "foreground-captures"
 $batchManifestPath = Join-Path $runDirectory "ux-scenario-batch.json"
 $batchReportPath = Join-Path $runDirectory "ux-scenario-report.html"
+$batchContactSheetPath = Join-Path $runDirectory "ux-scenario-contact-sheet.png"
 New-Item -ItemType Directory -Force -Path $foregroundOutput | Out-Null
 
 $freeXPath = Resolve-FreeXExe $repoRoot $FreeXExe -SkipBuild:$SkipBuild
@@ -482,6 +556,7 @@ $blocked = @($recordArray | Where-Object { $_["status"] -eq "blocked" }).Count
 $summary = [ordered]@{
     schemaVersion = 1
     suite = $Suite
+    runId = $RunId
     status = if ($partialCapture -eq 0 -and $blocked -eq 0) { "ready-for-visual-review" } else { "needs-attention" }
     createdAtUtc = [DateTimeOffset]::UtcNow.ToString("o")
     machine = $env:COMPUTERNAME
@@ -496,6 +571,7 @@ $summary = [ordered]@{
     foregroundCaptureProject = $foregroundProject
     outputDirectory = $foregroundOutput
     reportPath = $batchReportPath
+    contactSheetPath = $batchContactSheetPath
     scenarioCount = $recordArray.Count
     pairedCaptureComplete = $pairedCaptureComplete
     partialCapture = $partialCapture
@@ -504,10 +580,12 @@ $summary = [ordered]@{
 }
 
 Write-ScenarioReport $summary $batchReportPath
+Write-ScenarioContactSheet $summary $batchContactSheetPath
 $summary | ConvertTo-Json -Depth 20 | Set-Content -Path $batchManifestPath -Encoding UTF8
 
 Write-Host "UX parity scenario batch manifest: $batchManifestPath"
 Write-Host "UX parity scenario batch report: $batchReportPath"
+Write-Host "UX parity scenario contact sheet: $batchContactSheetPath"
 if ($summary.status -ne "ready-for-visual-review") {
     exit 1
 }

@@ -688,6 +688,10 @@ public sealed partial class MainWindowSourceHygieneTests
         batchSource.Should().Contain("[switch]$MinimizeForeignForeground");
         batchSource.Should().Contain("Clear-ForeignForegroundWindow $Scenario");
         batchSource.Should().Contain("$title.IndexOf(\"Media Player\", [StringComparison]::OrdinalIgnoreCase) -ge 0");
+        batchSource.Should().Contain("function Write-ScenarioContactSheet");
+        batchSource.Should().Contain("$batchContactSheetPath = Join-Path $runDirectory \"ux-scenario-contact-sheet.png\"");
+        batchSource.Should().Contain("contactSheetPath = $batchContactSheetPath");
+        batchSource.Should().Contain("UX parity scenario contact sheet");
     }
 
     [Fact]
