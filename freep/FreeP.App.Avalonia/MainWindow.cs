@@ -98,6 +98,8 @@ public sealed class MainWindow : Window
     private readonly TextBlock _statusText;
     private Border _layoutPickerHost = null!;
     private StackPanel _layoutPickerPanel = null!;
+    private Border _tablePickerHost = null!;
+    private WrapPanel _tablePickerPanel = null!;
     private Border _reviewCommentsPaneHost = null!;
     private StackPanel _reviewCommentsPanePanel = null!;
     private Border _altTextPaneHost = null!;
@@ -158,7 +160,11 @@ public sealed class MainWindow : Window
     internal PresentationHandoutLayoutPlan? LastHandoutLayoutPlan { get; private set; }
     internal PresentationLayoutPickerPlan? LastLayoutPickerPlan { get; private set; }
     internal PresentationLayoutChoice? LastAppliedLayoutChoice { get; private set; }
+    internal TableInsertionPickerPlan? LastTablePickerPlan { get; private set; }
     internal bool IsLayoutPickerVisible => _layoutPickerHost?.IsVisible == true;
+    internal bool IsTablePickerVisible => _tablePickerHost?.IsVisible == true;
+    internal int TablePickerChoiceButtonCount => LastTablePickerPlan?.Choices.Count ?? 0;
+    internal int TablePickerDefaultChoiceCount => LastTablePickerPlan?.Choices.Count(choice => choice.IsDefault) ?? 0;
     internal int LayoutPickerChoiceButtonCount => LastLayoutPickerPlan?.Choices.Count ?? 0;
     internal int LayoutPickerGroupHeaderCount => LastLayoutPickerPlan?.Groups.Count ?? 0;
     internal int LayoutPickerThumbnailPlaceholderCount =>
@@ -318,6 +324,7 @@ public sealed class MainWindow : Window
         rightGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         rightGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         rightGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        rightGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
         // ── Interaction overlay stack ───────────────────────────────────────────
         // A Panel stack: SlideCanvas at the bottom, SelectionAdornerLayer on top (transparent to
@@ -369,6 +376,34 @@ public sealed class MainWindow : Window
                 Content                       = _layoutPickerPanel,
             },
         };
+        _tablePickerPanel = new WrapPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Margin = new Thickness(8),
+        };
+        _tablePickerHost = new Border
+        {
+            Background      = Brushes.White,
+            BorderBrush     = new SolidColorBrush(Color.FromRgb(0xC0, 0xC0, 0xC0)),
+            BorderThickness = new Thickness(0, 1, 0, 0),
+            IsVisible       = false,
+            Child           = new StackPanel
+            {
+                Orientation = Orientation.Vertical,
+                Children =
+                {
+                    new TextBlock
+                    {
+                        Text = TableInsertionPickerPlanner.PickerHeading,
+                        Margin = new Thickness(10, 8, 10, 2),
+                        FontSize = 11,
+                        FontWeight = FontWeight.SemiBold,
+                        Foreground = new SolidColorBrush(Color.FromRgb(0x44, 0x44, 0x44)),
+                    },
+                    _tablePickerPanel,
+                },
+            },
+        };
         _reviewCommentsPanePanel = new StackPanel
         {
             Orientation = Orientation.Vertical,
@@ -391,10 +426,12 @@ public sealed class MainWindow : Window
         _altTextPaneHost = BuildAltTextPaneHost();
         Grid.SetRow(canvasHost, 0);
         Grid.SetRow(_layoutPickerHost, 1);
-        Grid.SetRow(_reviewCommentsPaneHost, 2);
-        Grid.SetRow(_notesBox,  3);
+        Grid.SetRow(_tablePickerHost, 2);
+        Grid.SetRow(_reviewCommentsPaneHost, 3);
+        Grid.SetRow(_notesBox,  4);
         rightGrid.Children.Add(canvasHost);
         rightGrid.Children.Add(_layoutPickerHost);
+        rightGrid.Children.Add(_tablePickerHost);
         rightGrid.Children.Add(_reviewCommentsPaneHost);
         rightGrid.Children.Add(_notesBox);
 
@@ -661,6 +698,12 @@ public sealed class MainWindow : Window
         // Insert objects/text
         foreach (var plan in SlideObjectInsertionPlanner.BuiltInPlans)
         {
+            if (plan.CommandId == SlideObjectInsertionPlanner.Table3x3CommandId)
+            {
+                r.Register(plan.CommandId, new ActionRibbonCommand(OpenTablePicker));
+                continue;
+            }
+
             if (plan.RequiresPicturePayload)
             {
                 r.Register(plan.CommandId, new ActionRibbonCommand(() => _ = InsertPictureFromFileAsync()));
@@ -763,6 +806,67 @@ public sealed class MainWindow : Window
         return applied;
     }
 
+    internal void OpenTablePicker()
+    {
+        LastTablePickerPlan = TableInsertionPickerPlanner.BuildPlan();
+        ShowTablePicker(LastTablePickerPlan);
+        _statusText.Text = $"Table picker: {LastTablePickerPlan.Choices.Count} choices";
+    }
+
+    internal bool ApplyTablePickerChoice(int rows, int columns)
+    {
+        var applied = TableInsertionPickerPlanner.TryApplyChoice(Editor, rows, columns);
+        if (applied)
+        {
+            RefreshSlidePane();
+            RefreshCanvas();
+            UpdateStatus();
+            HideTablePicker();
+        }
+
+        return applied;
+    }
+
+    private void ShowTablePicker(TableInsertionPickerPlan plan)
+    {
+        if (_tablePickerHost is null || _tablePickerPanel is null)
+            return;
+
+        _tablePickerPanel.Children.Clear();
+        foreach (var choice in plan.Choices)
+        {
+            var button = new Button
+            {
+                Tag = choice,
+                Content = choice.IsDefault ? $"{choice.Label} (default)" : choice.Label,
+                Margin = new Thickness(2),
+                Padding = new Thickness(6, 4),
+                MinWidth = 74,
+                BorderBrush = choice.IsDefault
+                    ? new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A))
+                    : new SolidColorBrush(Color.FromRgb(0xC8, 0xC8, 0xC8)),
+                Background = choice.IsDefault
+                    ? new SolidColorBrush(Color.FromRgb(0xFE, 0xF2, 0xEC))
+                    : Brushes.White,
+            };
+            button.Click += (_, _) =>
+            {
+                if (button.Tag is TableInsertionPickerChoice tableChoice)
+                    ApplyTablePickerChoice(tableChoice.Rows, tableChoice.Columns);
+            };
+            _tablePickerPanel.Children.Add(button);
+        }
+
+        HideLayoutPicker();
+        _tablePickerHost.IsVisible = true;
+    }
+
+    private void HideTablePicker()
+    {
+        if (_tablePickerHost is not null)
+            _tablePickerHost.IsVisible = false;
+    }
+
     private void ShowLayoutPicker(PresentationLayoutPickerPlan plan)
     {
         if (_layoutPickerHost is null || _layoutPickerPanel is null)
@@ -808,6 +912,7 @@ public sealed class MainWindow : Window
             _layoutPickerPanel.Children.Add(groupPanel);
         }
 
+        HideTablePicker();
         _layoutPickerHost.IsVisible = true;
     }
 
@@ -1583,6 +1688,7 @@ public sealed class MainWindow : Window
 
         RebuildEditorAndRewireInteraction();
         HideLayoutPicker();
+        HideTablePicker();
         RefreshSlidePane();
         RefreshCanvas();
         RefreshNotesPane();

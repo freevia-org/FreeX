@@ -626,7 +626,6 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Theory]
-    [InlineData("freep.insert-table-3x3", 3, 3)]
     [InlineData("freep.insert-table-2x2", 2, 2)]
     [InlineData("freep.insert-table-4x4", 4, 4)]
     public async Task Ribbon_insert_table_commands_add_expected_table(
@@ -660,6 +659,58 @@ public sealed class MainWindowHeadlessTests
         added.Table.Should().NotBeNull();
         added.Table!.Rows.Should().HaveCount(expectedRows);
         added.Table.ColumnWidthsEmu.Should().HaveCount(expectedColumns);
+    }
+
+    [Fact]
+    public async Task Ribbon_insert_table_command_opens_picker_and_applies_selected_size()
+    {
+        var found = false;
+        var pickerVisibleAfterOpen = false;
+        var pickerChoiceCount = 0;
+        var defaultChoiceCount = 0;
+        var applied = false;
+        var pickerVisibleAfterApply = true;
+        var before = -1;
+        var after = -1;
+        SlideShape? added = null;
+        TableInsertionPickerPlan? pickerPlan = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var registry = window.BuildCommandRegistry();
+            found = registry.TryGet(SlideObjectInsertionPlanner.Table3x3CommandId, out var command);
+            found.Should().BeTrue("the large Table command must be registered");
+
+            before = window.Editor.CurrentSlide!.Shapes.Count;
+            command!.Execute(RibbonCommandContext.Empty);
+            pickerVisibleAfterOpen = window.IsTablePickerVisible;
+            pickerChoiceCount = window.TablePickerChoiceButtonCount;
+            defaultChoiceCount = window.TablePickerDefaultChoiceCount;
+            pickerPlan = window.LastTablePickerPlan;
+            applied = window.ApplyTablePickerChoice(5, 4);
+            pickerVisibleAfterApply = window.IsTablePickerVisible;
+            after = window.Editor.CurrentSlide!.Shapes.Count;
+            added = window.Editor.CurrentSlide!.Shapes.Last();
+        });
+
+        if (!ran) return;
+        found.Should().BeTrue();
+        pickerVisibleAfterOpen.Should().BeTrue("the Avalonia large Table command should show an actual picker surface");
+        pickerChoiceCount.Should().Be(25);
+        defaultChoiceCount.Should().Be(1);
+        pickerPlan.Should().NotBeNull();
+        pickerPlan!.Choices.Should().Contain(choice =>
+            choice.Rows == 5 &&
+            choice.Columns == 4 &&
+            choice.Label == "5 x 4 Table");
+        applied.Should().BeTrue();
+        pickerVisibleAfterApply.Should().BeFalse("the picker should collapse after a table size is selected");
+        after.Should().Be(before + 1);
+        added.Should().NotBeNull();
+        added!.Kind.Should().Be(SlideShapeKind.Table);
+        added.Table!.Rows.Should().HaveCount(5);
+        added.Table.ColumnWidthsEmu.Should().HaveCount(4);
     }
 
     [Theory]
