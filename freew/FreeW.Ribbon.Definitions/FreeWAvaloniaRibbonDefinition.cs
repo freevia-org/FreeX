@@ -505,6 +505,9 @@ internal static class FreeWAvaloniaRibbonDefinition
                 {
                     g.Button("freew.picture",  "Picture");
                     g.Button("freew.shape",    "Shape");
+                    g.Button("freew.smartart", "SmartArt");
+                    g.Button("freew.chart",    "Chart");
+                    g.Button("freew.insert-icon", "Icons");
                     g.Button("freew.text-box", "Text Box");
                 });
                 // AV-INSERT2: Links group — Hyperlink + Bookmark.
@@ -512,8 +515,12 @@ internal static class FreeWAvaloniaRibbonDefinition
                 {
                     g.Button("freew.hyperlink", "Hyperlink");
                     g.Button("freew.insert-hyperlink", "Hyperlink");
+                    g.Button("freew.edit-hyperlink", "Edit Hyperlink");
+                    g.Button("freew.remove-hyperlink", "Remove Hyperlink");
+                    g.Button("freew.hyperlink-tooltip", "ScreenTip");
                     g.Button("freew.bookmark", "Bookmark");
                     g.Button("freew.insert-bookmark",  "Bookmark");
+                    g.Button("freew.link-bookmark", "Link to Bookmark");
                     g.Button("freew.bookmark-manager", "Bookmark Manager");
                 });
                 tab.Group("header-footer", "Header & Footer", null, 94, g =>
@@ -551,7 +558,13 @@ internal static class FreeWAvaloniaRibbonDefinition
                     g.Dropdown("freew.size", "Size", BuildPageSizeMenu());
                     g.Dropdown("freew.columns", "Columns", BuildColumnsMenu());
                     g.Dropdown("freew.breaks", "Breaks", BuildBreaksMenu());
+                    g.Toggle("freew.different-first-page", "Different First Page");
+                    g.Button("freew.page-valign", "Vertical Align");
                     g.Button("freew.page-setup", "Page Setup...");
+                });
+                tab.Group("data", "Data", null, 95, g =>
+                {
+                    g.Button("freew.text-to-table", "Text to Table");
                 });
                 tab.Group("preview", "Preview", null, 90, g =>
                 {

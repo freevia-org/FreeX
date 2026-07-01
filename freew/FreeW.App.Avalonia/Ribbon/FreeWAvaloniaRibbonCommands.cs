@@ -360,6 +360,9 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.section-break-continuous", new ActionRibbonCommand(() => editor.InsertSectionBreak(SectionBreakKind.Continuous)));
         r.Register("freew.section-break-even-page", new ActionRibbonCommand(() => editor.InsertSectionBreak(SectionBreakKind.EvenPage)));
         r.Register("freew.section-break-odd-page", new ActionRibbonCommand(() => editor.InsertSectionBreak(SectionBreakKind.OddPage)));
+        r.Register("freew.different-first-page", new ActionRibbonCommand(editor.ToggleDifferentFirstPage));
+        r.Register("freew.page-valign", new ActionRibbonCommand(editor.CyclePageVerticalAlignment));
+        r.Register("freew.text-to-table", new ActionRibbonCommand(editor.ConvertCurrentParagraphToTable));
 
         // ── View ─────────────────────────────────────────────────────────────
         var printPreviewCommand = new ActionRibbonCommand(callbacks.OpenPrintPreview ?? (() => { }));
@@ -702,8 +705,12 @@ internal static class FreeWAvaloniaRibbonCommands
         // Hyperlink / Bookmark open small dialogs (shell callbacks) that call InsertHyperlink / InsertBookmark.
         r.Register("freew.hyperlink",        new ActionRibbonCommand(callbacks.OpenHyperlinkDialog ?? (() => { })));
         r.Register("freew.insert-hyperlink", new ActionRibbonCommand(callbacks.OpenHyperlinkDialog ?? (() => { })));
+        r.Register("freew.edit-hyperlink", new ActionRibbonCommand(callbacks.OpenHyperlinkDialog ?? (() => { })));
+        r.Register("freew.remove-hyperlink", EmptyRibbonCommand.Instance);
+        r.Register("freew.hyperlink-tooltip", new ActionRibbonCommand(callbacks.OpenHyperlinkDialog ?? (() => { })));
         r.Register("freew.bookmark",         new ActionRibbonCommand(callbacks.OpenBookmarkDialog ?? (() => { })));
         r.Register("freew.insert-bookmark",  new ActionRibbonCommand(callbacks.OpenBookmarkDialog ?? (() => { })));
+        r.Register("freew.link-bookmark",    new ActionRibbonCommand(callbacks.OpenBookmarkDialog ?? (() => { })));
         r.Register("freew.bookmark-manager", new ActionRibbonCommand(callbacks.OpenBookmarkDialog ?? (() => { })));
 
         // ── Cover Page ───────────────────────────────────────────────────────
@@ -745,6 +752,9 @@ internal static class FreeWAvaloniaRibbonCommands
         var textFromFileCommand = new ActionRibbonCommand(callbacks.InsertTextFromFile ?? (() => { }));
         r.Register("freew.insert-file", textFromFileCommand);
         r.Register("freew.text-from-file", textFromFileCommand);
+        r.Register("freew.chart", new ActionRibbonCommand(() => editor.InsertChart()));
+        r.Register("freew.smartart", new ActionRibbonCommand(() => editor.InsertSmartArt()));
+        r.Register("freew.insert-icon", new ActionRibbonCommand(editor.InsertIcon));
         r.Register("freew.wordart", new ActionRibbonCommand(() => editor.InsertWordArt()));
         r.Register("freew.object", new ActionRibbonCommand(() => editor.InsertEmbeddedObject()));
         r.Register("freew.update-fields", new ActionRibbonCommand(editor.UpdateFields));
