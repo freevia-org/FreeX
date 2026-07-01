@@ -463,7 +463,7 @@ public sealed class MainWindow : Window
         // Slide show
         r.Register("freep.slideshow.from-beginning",
             new ActionRibbonCommand(() => StartSlideShow(fromStart: true)));
-        r.Register("freep.slideshow.from-current",
+        r.Register("freep.slideshow.from-current-slide",
             new ActionRibbonCommand(() => StartSlideShow(fromStart: false)));
 
         return r;

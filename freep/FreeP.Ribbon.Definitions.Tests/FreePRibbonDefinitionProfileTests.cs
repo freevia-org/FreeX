@@ -13,7 +13,6 @@ public sealed class FreePRibbonDefinitionProfileTests
     [
         "freep.undo",
         "freep.redo",
-        "freep.slideshow.from-current",
     ];
 
     [Fact]
@@ -152,7 +151,7 @@ public sealed class FreePRibbonDefinitionProfileTests
                 RequiredControl(avalonia, "freep.replace").KeyTip!,
                 RequiredGroup(avalonia, "home", "slideshow").Header,
                 RequiredControl(avalonia, "freep.slideshow.from-beginning").Label,
-                RequiredControl(avalonia, "freep.slideshow.from-current").Label,
+                RequiredControl(avalonia, "freep.slideshow.from-current-slide").Label,
                 avalonia.FindTab("design")!.Header,
                 avalonia.FindTab("design")!.KeyTip!,
                 RequiredGroup(avalonia, "design", "themes").Header,
@@ -553,12 +552,20 @@ public sealed class FreePRibbonDefinitionProfileTests
 
         commands.Values.Select(command => command.GetProperty("surface").GetString())
             .Should()
-            .Contain(["both", "wpf-only", "avalonia-only"]);
+            .Contain(["both", "avalonia-only"]);
         commands.Values.Select(command => command.GetProperty("classification").GetString())
             .Should()
             .Contain(["shared", "platform-only"]);
 
+        root.GetProperty("summary").GetProperty("missingAvalonia").GetInt32()
+            .Should()
+            .Be(0);
+
         root.GetProperty("summary").GetProperty("knownDeferred").GetInt32()
+            .Should()
+            .Be(0);
+
+        root.GetProperty("summary").GetProperty("commandIdAliases").GetInt32()
             .Should()
             .Be(0);
 

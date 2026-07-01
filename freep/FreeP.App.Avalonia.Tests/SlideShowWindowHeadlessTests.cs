@@ -398,7 +398,7 @@ public sealed class SlideShowWindowHeadlessTests
         var sg    = home.Groups.Single(g => g.Id == "slideshow");
         var ids   = sg.Controls.Select(i => i.CommandId.Value).ToList();
         ids.Should().Contain("freep.slideshow.from-beginning");
-        ids.Should().Contain("freep.slideshow.from-current");
+        ids.Should().Contain("freep.slideshow.from-current-slide");
     }
 
     // ── DA2 + DA3: timer tracking ─────────────────────────────────────────────
