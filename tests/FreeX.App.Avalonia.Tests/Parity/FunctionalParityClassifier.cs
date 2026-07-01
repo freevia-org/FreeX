@@ -191,7 +191,7 @@ public static class FunctionalParityClassifier
                 "P3",
                 520,
                 "Font color or border-style choice row is a swatch/menu selection inside a split-button gallery, not an independent command on either host.",
-                "Keep this in the gallery-classification bucket until shared color/border catalogs expose per-choice evidence."));
+                "Treat this as covered by the committed font/border swatch catalog evidence; keep it classified as a pseudo-gallery row unless the binding matrix grows per-choice popup evidence."));
         }
 
         return ToClassifiedRow(row, new ClassificationRule(

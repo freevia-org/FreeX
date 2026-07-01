@@ -72,6 +72,30 @@ function Get-StatusCount {
     return @($Rows | Where-Object { $_.status -eq $Status }).Count
 }
 
+function Get-FreeXNextSlice {
+    param(
+        [Parameter(Mandatory = $true)]$FunctionalMatrix,
+        [Parameter(Mandatory = $true)]$FunctionalClassificationSummary,
+        [Parameter(Mandatory = $true)]$DialogRoutes
+    )
+
+    $realBehaviorGaps = [int](Get-JsonPropertyValue $FunctionalClassificationSummary "real-behavior-gap")
+    $pseudoGalleryItems = [int](Get-JsonPropertyValue $FunctionalClassificationSummary "pseudo-command-gallery-item")
+    $nonClickControlRows = [int](Get-JsonPropertyValue $FunctionalClassificationSummary "non-click-control-inventory-row")
+    $allDialogRoutesCaptured = $DialogRoutes.totalRoutes -eq $DialogRoutes.wpfCaptures -and
+        $DialogRoutes.totalRoutes -eq $DialogRoutes.avaloniaCaptures
+
+    if ($FunctionalMatrix.avaloniaMissing -eq 0 -and $realBehaviorGaps -eq 0 -and $allDialogRoutesCaptured) {
+        return "Command/dialog parity is green; next FreeX evidence gap is conditional-format popup/gallery pairing and classified pseudo-gallery rows ($pseudoGalleryItems), with $nonClickControlRows non-click inventory rows still tracked separately."
+    }
+
+    if ($FunctionalMatrix.avaloniaMissing -gt 0 -or $realBehaviorGaps -gt 0) {
+        return "Resolve generated Avalonia command-binding or real behavior gaps before taking additional evidence slices."
+    }
+
+    return "Refresh paired WPF/Avalonia dialog evidence until every generated dialog route has current captures."
+}
+
 function Test-FileContentMatches {
     param(
         [Parameter(Mandatory = $true)][string]$ExpectedPath,
@@ -107,6 +131,24 @@ try {
     $freep = Read-GeneratedJson "docs\parity\freep-command-parity-inventory.json"
 
     $commandRows = Get-CommandSurfaceRows $commandInventory.commandSurfaceRows
+    $freeXFunctionalMatrix = [ordered]@{
+        totalCommands = [int]$functional.summary.totalCommands
+        parity = [int]$functional.summary.parity
+        avaloniaMissing = [int]$functional.summary.avaloniaMissing
+        wpfMissing = [int]$functional.summary.wpfMissing
+        bothMissing = [int]$functional.summary.bothMissing
+        intentionalLinuxOmissions = [int]$functional.summary.intentionalLinuxOmissions
+        realBehaviorGaps = [int](Get-JsonPropertyValue $functionalClassification.summary "real-behavior-gap")
+        nonClickControlInventoryRows = [int](Get-JsonPropertyValue $functionalClassification.summary "non-click-control-inventory-row")
+        pseudoCommandGalleryItems = [int](Get-JsonPropertyValue $functionalClassification.summary "pseudo-command-gallery-item")
+    }
+    $freeXDialogRoutes = [ordered]@{
+        totalRoutes = [int]$dialogInventory.summary.totalRoutes
+        wpfCaptures = [int]$dialogInventory.summary.wpfCaptures
+        avaloniaCaptures = [int]$dialogInventory.summary.avaloniaCaptures
+        avaloniaHarnessRoutes = [int]$dialogInventory.summary.avaloniaHarnessRoutes
+        sharedOrPresentationBacked = [int]$dialogInventory.summary.sharedOrPresentationBacked
+    }
     $freeX = [ordered]@{
         app = "FreeX"
         commandSurface = [ordered]@{
@@ -116,25 +158,12 @@ try {
             deferred = Get-StatusCount $commandRows "Deferred"
             excluded = Get-StatusCount $commandRows "Excluded"
         }
-        functionalMatrix = [ordered]@{
-            totalCommands = [int]$functional.summary.totalCommands
-            parity = [int]$functional.summary.parity
-            avaloniaMissing = [int]$functional.summary.avaloniaMissing
-            wpfMissing = [int]$functional.summary.wpfMissing
-            bothMissing = [int]$functional.summary.bothMissing
-            intentionalLinuxOmissions = [int]$functional.summary.intentionalLinuxOmissions
-            realBehaviorGaps = [int](Get-JsonPropertyValue $functionalClassification.summary "real-behavior-gap")
-            nonClickControlInventoryRows = [int](Get-JsonPropertyValue $functionalClassification.summary "non-click-control-inventory-row")
-            pseudoCommandGalleryItems = [int](Get-JsonPropertyValue $functionalClassification.summary "pseudo-command-gallery-item")
-        }
-        dialogRoutes = [ordered]@{
-            totalRoutes = [int]$dialogInventory.summary.totalRoutes
-            wpfCaptures = [int]$dialogInventory.summary.wpfCaptures
-            avaloniaCaptures = [int]$dialogInventory.summary.avaloniaCaptures
-            avaloniaHarnessRoutes = [int]$dialogInventory.summary.avaloniaHarnessRoutes
-            sharedOrPresentationBacked = [int]$dialogInventory.summary.sharedOrPresentationBacked
-        }
-        nextSlice = "Font color/border swatch popup parity: expose shared swatch catalogs and paired WPF/Avalonia evidence."
+        functionalMatrix = $freeXFunctionalMatrix
+        dialogRoutes = $freeXDialogRoutes
+        nextSlice = Get-FreeXNextSlice `
+            -FunctionalMatrix $freeXFunctionalMatrix `
+            -FunctionalClassificationSummary $functionalClassification.summary `
+            -DialogRoutes $freeXDialogRoutes
     }
 
     $freeW = [ordered]@{
@@ -200,7 +229,7 @@ try {
         "",
         "| App | Primary evidence | Current generated state | Next slice |",
         "|---|---|---|---|",
-        "| FreeX | Functional matrix, classifier, dialog inventory, command surface | $($freeX.functionalMatrix.totalCommands) functional commands; $($freeX.functionalMatrix.parity) parity; $($freeX.functionalMatrix.avaloniaMissing) Avalonia-missing; $($freeX.functionalMatrix.realBehaviorGaps) real classified binding gaps; $($freeX.dialogRoutes.totalRoutes)/$($freeX.dialogRoutes.totalRoutes) dialog routes captured on WPF and Avalonia | $($freeX.nextSlice) |",
+        "| FreeX | Functional matrix, classifier, dialog inventory, command surface | $($freeX.functionalMatrix.totalCommands) functional commands; $($freeX.functionalMatrix.parity) parity; $($freeX.functionalMatrix.avaloniaMissing) Avalonia-missing; $($freeX.functionalMatrix.realBehaviorGaps) real classified binding gaps; $($freeX.functionalMatrix.pseudoCommandGalleryItems) classified pseudo-gallery rows; $($freeX.dialogRoutes.totalRoutes)/$($freeX.dialogRoutes.totalRoutes) dialog routes captured on WPF and Avalonia | $($freeX.nextSlice) |",
         "| FreeW | Generated command inventory | $($freeW.commandInventory.totalCommands) commands; $($freeW.commandInventory.bothProfiles) shared-profile; $($freeW.commandInventory.actionableMissingWpf) actionable WPF-missing; $($freeW.commandInventory.actionableMissingAvalonia) actionable Avalonia-missing; $($freeW.commandInventory.profileShapeOnly) profile-shape-only; $($freeW.commandInventory.commandIdAliases) command-id aliases; $($freeW.commandInventory.platformOnly) platform-only; $($freeW.commandInventory.deferred) deferred | $($freeW.nextSlice) |",
         "| FreeP | Generated command inventory | $($freeP.commandInventory.totalCommands) commands; $($freeP.commandInventory.bothProfiles) shared-profile; $($freeP.commandInventory.actionableMissingWpf) actionable WPF-missing; $($freeP.commandInventory.actionableMissingAvalonia) actionable Avalonia-missing; $($freeP.commandInventory.platformOnly) platform-only | $($freeP.nextSlice) |",
         "",
