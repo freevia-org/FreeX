@@ -127,6 +127,29 @@ public sealed class ConditionalFormatOpenedStateEvidenceTests
         Assert.Equal(2, categories["foreground-focus-unavailable"]);
     }
 
+    [Fact]
+    public void OpenedStateEvidence_EmitsForegroundOperatorChecklist()
+    {
+        using var document = LoadEvidenceDocument();
+        var checklist = document.RootElement.GetProperty("operatorChecklist")
+            .EnumerateArray()
+            .Select(item => new
+            {
+                Phase = item.GetProperty("phase").GetString(),
+                Command = item.GetProperty("command").GetString(),
+                Purpose = item.GetProperty("purpose").GetString(),
+            })
+            .ToArray();
+
+        Assert.Contains(checklist, item => item.Phase == "build" && item.Command!.Contains("dotnet build", StringComparison.Ordinal));
+        Assert.Contains(checklist, item => item.Phase == "preflight" && item.Command!.Contains("Excel.Application", StringComparison.Ordinal));
+        Assert.Contains(checklist, item => item.Phase == "capture:excel" && item.Command!.Contains("excel-conditional-formatting-gallery", StringComparison.Ordinal));
+        Assert.Contains(checklist, item => item.Phase == "capture:wpf" && item.Command!.Contains("freex-conditional-formatting-gallery", StringComparison.Ordinal));
+        Assert.Contains(checklist, item => item.Phase == "capture:avalonia" && item.Command!.Contains("avalonia-conditional-formatting-gallery", StringComparison.Ordinal));
+        Assert.Contains(checklist, item => item.Phase == "refresh" && item.Command!.Contains("Generate-ConditionalFormatOpenedStateEvidence.ps1 -Check", StringComparison.Ordinal));
+        Assert.All(checklist, item => Assert.False(string.IsNullOrWhiteSpace(item.Purpose)));
+    }
+
     private static JsonDocument LoadEvidenceDocument()
     {
         var path = Path.Combine(

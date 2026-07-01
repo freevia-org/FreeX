@@ -256,6 +256,49 @@ function Get-CaptureTargetStatus {
     }
 }
 
+function New-OperatorChecklistItem {
+    param(
+        [Parameter(Mandatory = $true)][string]$Phase,
+        [Parameter(Mandatory = $true)][string]$Command,
+        [Parameter(Mandatory = $true)][string]$Purpose
+    )
+
+    [ordered]@{
+        phase = $Phase
+        command = $Command
+        purpose = $Purpose
+    }
+}
+
+function Get-OperatorChecklist {
+    param([Parameter(Mandatory = $true)]$CaptureTargets)
+
+    $items = @(
+        New-OperatorChecklistItem `
+            -Phase "build" `
+            -Command "dotnet build FreeX.slnx --configuration Release" `
+            -Purpose "Produces the Release WPF and Avalonia executables referenced by the FreeX capture commands."
+        New-OperatorChecklistItem `
+            -Phase "preflight" `
+            -Command 'Test-Path .\src\FreeX.App.Host\bin\Release\net10.0-windows10.0.19041.0\FreeX.App.Host.exe; Test-Path .\src\FreeX.App.Avalonia\bin\Release\net10.0\FreeX.exe; $excel = New-Object -ComObject Excel.Application; $excel.Quit(); [Runtime.InteropServices.Marshal]::ReleaseComObject($excel) | Out-Null' `
+            -Purpose "Confirms the two FreeX executables resolve and Microsoft Excel COM can start and quit before foreground input."
+    )
+
+    foreach ($target in $CaptureTargets) {
+        $items += New-OperatorChecklistItem `
+            -Phase "capture:$($target.subject)" `
+            -Command $target.runnerCommand `
+            -Purpose "Run from an unlocked foreground desktop; keep blocked manifests if the environment cannot produce a real opened-state PNG."
+    }
+
+    $items += New-OperatorChecklistItem `
+        -Phase "refresh" `
+        -Command ".\tools\Generate-ConditionalFormatOpenedStateEvidence.ps1; .\tools\Generate-ConditionalFormatOpenedStateEvidence.ps1 -Check" `
+        -Purpose "Refreshes and verifies this report after the real manifests and PNGs are committed under tools/foreground-captures/<scenario>/."
+
+    return @($items)
+}
+
 function Test-FileContentMatches {
     param(
         [Parameter(Mandatory = $true)][string]$ExpectedContent,
@@ -336,6 +379,7 @@ $blockerCategories = @($captureTargets |
             count = [int]$_.Count
         }
     })
+$operatorChecklist = Get-OperatorChecklist -CaptureTargets $captureTargets
 
 $rows = foreach ($row in $conditionalRows) {
     [ordered]@{
@@ -362,6 +406,7 @@ $report = [ordered]@{
     }
     captureTargets = @($captureTargets)
     blockerCategories = @($blockerCategories)
+    operatorChecklist = @($operatorChecklist)
     rows = @($rows)
 }
 
@@ -410,6 +455,15 @@ foreach ($target in $captureTargets) {
 foreach ($target in $captureTargets) {
     $command = Escape-MarkdownCell $target.runnerCommand
     [void]$md.AppendLine("| $(Escape-MarkdownCell $target.id) | ``$command`` | $(Escape-MarkdownCell $target.requiredEnvironment) |")
+}
+[void]$md.AppendLine()
+[void]$md.AppendLine("## Operator Checklist")
+[void]$md.AppendLine()
+[void]$md.AppendLine("| Phase | Command | Purpose |")
+[void]$md.AppendLine("|---|---|---|")
+foreach ($item in $operatorChecklist) {
+    $command = Escape-MarkdownCell $item.command
+    [void]$md.AppendLine("| $(Escape-MarkdownCell $item.phase) | ``$command`` | $(Escape-MarkdownCell $item.purpose) |")
 }
 [void]$md.AppendLine()
 [void]$md.AppendLine("## Classifier Rows")
