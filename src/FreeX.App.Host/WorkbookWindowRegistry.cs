@@ -105,6 +105,8 @@ public sealed class WorkbookWindowRegistry
             return false;
 
         _hidden.Add(window);
+        if (IsSideBySideEndpoint(window))
+            DisableSideBySide();
         window.SetWindowVisible(false);
         return true;
     }
@@ -158,15 +160,19 @@ public sealed class WorkbookWindowRegistry
     public IWorkbookWindow? NextWindowTarget(IWorkbookWindow currentWindow)
     {
         ArgumentNullException.ThrowIfNull(currentWindow);
-        if (_windows.Count == 0)
+        var visibleWindows = VisibleWindows.ToList();
+        if (visibleWindows.Count <= 1)
             return null;
 
-        var currentIndex = _windows.IndexOf(currentWindow);
-        var nextIndex = WorkbookWindowOrdering.NextWindowIndex(currentIndex, _windows.Count);
+        var currentIndex = visibleWindows.IndexOf(currentWindow);
+        if (currentIndex < 0)
+            return null;
+
+        var nextIndex = WorkbookWindowOrdering.NextWindowIndex(currentIndex, visibleWindows.Count);
         if (nextIndex == WorkbookWindowOrdering.NoTarget)
             return null;
 
-        var target = _windows[nextIndex];
+        var target = visibleWindows[nextIndex];
         return ReferenceEquals(target, currentWindow) ? null : target;
     }
 
@@ -177,15 +183,19 @@ public sealed class WorkbookWindowRegistry
     public IWorkbookWindow? PreviousWindowTarget(IWorkbookWindow currentWindow)
     {
         ArgumentNullException.ThrowIfNull(currentWindow);
-        if (_windows.Count == 0)
+        var visibleWindows = VisibleWindows.ToList();
+        if (visibleWindows.Count <= 1)
             return null;
 
-        var currentIndex = _windows.IndexOf(currentWindow);
-        var previousIndex = WorkbookWindowOrdering.PreviousWindowIndex(currentIndex, _windows.Count);
+        var currentIndex = visibleWindows.IndexOf(currentWindow);
+        if (currentIndex < 0)
+            return null;
+
+        var previousIndex = WorkbookWindowOrdering.PreviousWindowIndex(currentIndex, visibleWindows.Count);
         if (previousIndex == WorkbookWindowOrdering.NoTarget)
             return null;
 
-        var target = _windows[previousIndex];
+        var target = visibleWindows[previousIndex];
         return ReferenceEquals(target, currentWindow) ? null : target;
     }
 
@@ -360,6 +370,10 @@ public sealed class WorkbookWindowRegistry
             return _sideBySidePrimary;
         return null;
     }
+
+    private bool IsSideBySideEndpoint(IWorkbookWindow window) =>
+        ReferenceEquals(window, _sideBySidePrimary) ||
+        ReferenceEquals(window, _sideBySidePartner);
 
     /// <summary>The next visible window after <paramref name="window"/> in the switch cycle, skipping hidden windows.</summary>
     private IWorkbookWindow? NextVisibleWindow(IWorkbookWindow window)
