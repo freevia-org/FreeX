@@ -950,7 +950,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                     continue;
                 }
 
-                dialog = FindActivateDialogWindow(pid.Value, hwnd.ToInt64(), options.PopupTimeout);
+                dialog = FindActivateSheetListDialogWindow(pid.Value, hwnd.ToInt64(), options.PopupTimeout);
                 if (dialog is not null)
                 {
                     break;
@@ -959,20 +959,18 @@ internal sealed class ScenarioRunner(CaptureOptions options)
 
             if (dialog is null)
             {
-                dialog = TryOpenExcelActivateDialogFromSheetNavCoordinates(pid.Value, hwnd, options.PopupTimeout);
+                dialog = TryOpenExcelActivateSheetListDialogFromSheetNavCoordinates(pid.Value, hwnd, options.PopupTimeout);
             }
 
-            var usedBuiltInDialogFallback = false;
-            if (dialog is null && TryShowExcelBuiltInDialogAsync(excel, XlDialogActivate))
+            var usedWorkbookTabsCommandBarFallback = false;
+            if (dialog is null)
             {
-                usedBuiltInDialogFallback = true;
-                Thread.Sleep(options.AfterInputDelay);
-                dialog = FindActivateDialogWindow(pid.Value, hwnd.ToInt64(), options.PopupTimeout);
+                usedWorkbookTabsCommandBarFallback = TryOpenExcelActivateSheetListDialogFromWorkbookTabsCommandBar(excel, pid.Value, hwnd, options.PopupTimeout, out dialog);
             }
 
             if (dialog is null)
             {
-                return CaptureResult.Blocked(scenario, "dialog-not-found", "Did not detect Excel's Activate dialog after right-clicking UIA sheet-tab navigation candidates, coordinate fallbacks beside the sheet tabs, or the built-in xlDialogActivate dialog.", options.OutputRoot, "excel", guard);
+                return CaptureResult.Blocked(scenario, "dialog-not-found", "Did not detect Excel's sheet-list Activate dialog after right-clicking UIA sheet-tab navigation candidates, coordinate fallbacks beside the sheet tabs, or the Workbook Tabs command-bar More Sheets route. The harness intentionally rejects the built-in xlDialogActivate workbook/window dialog because it lists workbooks such as Book1 instead of worksheets.", options.OutputRoot, "excel", guard);
             }
 
             var dialogHandle = new IntPtr(dialog.Handle);
@@ -982,9 +980,9 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                 return CaptureResult.Blocked(scenario, "foreground-guard-failed", "Excel Activate dialog was detected but could not be foreground-verified.", options.OutputRoot, "excel", dialogGuard);
             }
 
-            var validation = usedBuiltInDialogFallback
-                ? "Captured Microsoft Excel's built-in Activate dialog through xlDialogActivate after this Office UIA tree did not expose a visible sheet-tab navigation right-click target."
-                : "Captured Microsoft Excel's Activate dialog after a physical right-click on the sheet-tab navigation button.";
+            var validation = usedWorkbookTabsCommandBarFallback
+                ? "Captured Microsoft Excel's sheet-list Activate dialog through the Workbook Tabs command-bar More Sheets route after physical sheet-nav attempts did not expose it."
+                : "Captured Microsoft Excel's sheet-list Activate dialog after a physical right-click on the sheet-tab navigation button.";
             return CaptureWindow(scenario, "excel", dialog, dialogGuard, "complete", validation);
         }
         finally
@@ -4696,7 +4694,23 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             TimeSpan.FromMilliseconds(Math.Max(1200, timeout.TotalMilliseconds / 2.0)));
     }
 
-    private static WindowInfo? TryOpenExcelActivateDialogFromSheetNavCoordinates(int processId, IntPtr excelWindowHandle, TimeSpan timeout)
+    private static WindowInfo? FindActivateSheetListDialogWindow(int processId, long ownerHandle, TimeSpan timeout)
+    {
+        var dialog = WindowFinder.FindProcessWindowIncludingChildren(
+            processId,
+            window => IsActivateSheetListDialogWindow(window, ownerHandle),
+            timeout);
+        if (dialog is not null)
+        {
+            return dialog;
+        }
+
+        return WindowFinder.FindForegroundWindow(
+            window => window.ProcessId == processId && IsActivateSheetListDialogWindow(window, ownerHandle),
+            TimeSpan.FromMilliseconds(Math.Max(1200, timeout.TotalMilliseconds / 2.0)));
+    }
+
+    private static WindowInfo? TryOpenExcelActivateSheetListDialogFromSheetNavCoordinates(int processId, IntPtr excelWindowHandle, TimeSpan timeout)
     {
         var tabBounds = GetVisibleSheetTabElements(excelWindowHandle)
             .Select(element => element.Current.BoundingRectangle)
@@ -4712,7 +4726,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
         foreach (var offset in new[] { 18, 36, 54, 72 })
         {
             RightClickScreenPoint((int)(firstTabLeft - offset), (int)centerY);
-            var dialog = FindActivateDialogWindow(processId, excelWindowHandle.ToInt64(), timeout);
+            var dialog = FindActivateSheetListDialogWindow(processId, excelWindowHandle.ToInt64(), timeout);
             if (dialog is not null)
             {
                 return dialog;
@@ -4720,6 +4734,32 @@ internal sealed class ScenarioRunner(CaptureOptions options)
         }
 
         return null;
+    }
+
+    private static bool TryOpenExcelActivateSheetListDialogFromWorkbookTabsCommandBar(
+        dynamic excel,
+        int processId,
+        IntPtr excelWindowHandle,
+        TimeSpan timeout,
+        out WindowInfo? dialog)
+    {
+        dialog = null;
+        if (!TryShowExcelWorkbookTabsCommandBar(excel))
+        {
+            return false;
+        }
+
+        Thread.Sleep(250);
+        if (!TryInvokeProcessMenuItem(processId, "More Sheets") &&
+            !TryInvokeProcessMenuItem(processId, "More...") &&
+            !TryInvokeProcessMenuItem(processId, "More"))
+        {
+            return false;
+        }
+
+        Thread.Sleep(250);
+        dialog = FindActivateSheetListDialogWindow(processId, excelWindowHandle.ToInt64(), timeout);
+        return dialog is not null;
     }
 
     private static bool IsActivateDialogWindow(WindowInfo window, long ownerHandle)
@@ -4737,6 +4777,19 @@ internal sealed class ScenarioRunner(CaptureOptions options)
         }
 
         return WindowContainsSheetActivationList(window);
+    }
+
+    private static bool IsActivateSheetListDialogWindow(WindowInfo window, long ownerHandle)
+    {
+        if (window.Handle == ownerHandle ||
+            window.Bounds.Width < 120 ||
+            window.Bounds.Height < 90)
+        {
+            return false;
+        }
+
+        return window.Title.Contains("Activate", StringComparison.OrdinalIgnoreCase) &&
+            WindowContainsSheetActivationList(window);
     }
 
     private static bool WindowContainsSheetActivationList(WindowInfo window)
@@ -5951,6 +6004,48 @@ internal sealed class ScenarioRunner(CaptureOptions options)
         {
             return false;
         }
+    }
+
+    private static bool TryShowExcelWorkbookTabsCommandBar(dynamic excel)
+    {
+        foreach (var commandBarName in new[] { "Workbook Tabs", "Ply" })
+        {
+            var started = new ManualResetEventSlim(false);
+            var failed = false;
+            var thread = new Thread(() =>
+            {
+                try
+                {
+                    started.Set();
+                    dynamic workbookTabsCommandBar = excel.CommandBars[commandBarName];
+                    workbookTabsCommandBar.ShowPopup();
+                }
+                catch (RuntimeBinderException)
+                {
+                    failed = true;
+                }
+                catch (COMException)
+                {
+                    failed = true;
+                }
+                catch (InvalidOperationException)
+                {
+                    failed = true;
+                }
+            });
+
+            thread.SetApartmentState(ApartmentState.STA);
+            thread.IsBackground = true;
+            thread.Start();
+            started.Wait(TimeSpan.FromMilliseconds(500));
+            Thread.Sleep(250);
+            if (!failed)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static bool TryShowExcelBuiltInDialogAsync(dynamic excel, int dialogId)

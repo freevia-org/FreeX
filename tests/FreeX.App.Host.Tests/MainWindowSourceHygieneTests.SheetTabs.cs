@@ -668,6 +668,14 @@ public sealed partial class MainWindowSourceHygieneTests
         foregroundSource.Should().Contain("OpenFreeXSheetTabContextMenuNearAddButton");
         foregroundSource.Should().Contain("immediately left of the Insert Sheet button");
         foregroundSource.Should().Contain("Opened the FreeX sheet-tab context menu by cycling focus with F6 and pressing Shift+F10");
+        foregroundSource.Should().Contain("FindActivateSheetListDialogWindow");
+        foregroundSource.Should().Contain("IsActivateSheetListDialogWindow");
+        foregroundSource.Should().Contain("WindowContainsSheetActivationList(window)");
+        foregroundSource.Should().Contain("TryOpenExcelActivateSheetListDialogFromWorkbookTabsCommandBar");
+        foregroundSource.Should().Contain("TryShowExcelWorkbookTabsCommandBar");
+        foregroundSource.Should().Contain("\"Workbook Tabs\"");
+        foregroundSource.Should().Contain("\"More Sheets\"");
+        foregroundSource.Should().Contain("The harness intentionally rejects the built-in xlDialogActivate workbook/window dialog");
     }
 
     [Fact]
