@@ -104,6 +104,82 @@ public sealed class ReviewWorkflowAdapterTests
     }
 
     [StaFact]
+    public void MainWindow_AltTextPane_ShowsSharedPlanAndAppliesThroughPane()
+    {
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
+        try
+        {
+            window.ShowAltTextPane();
+
+            window.IsAltTextPaneVisible.Should().BeTrue();
+            window.IsAltTextPaneApplyEnabled.Should().BeFalse();
+            window.AltTextPaneMessage.Should().Be(PresentationReviewWorkflowPlanner.MissingShapeMessage);
+
+            var shape = new SlideShape
+            {
+                Id = 428,
+                Name = "Product image",
+                Kind = SlideShapeKind.Picture,
+                Picture = new ImagePart(),
+                AlternativeTextTitle = "Packaging photo",
+            };
+            window.Editor.CurrentSlide!.Shapes.Add(shape);
+            window.Editor.Select(shape.Id);
+            window.ShowAltTextPane();
+
+            window.AltTextPaneTitleLabel.Should().Be("Title");
+            window.AltTextPaneDescriptionLabel.Should().Be("Description");
+            window.AltTextPaneTitleText.Should().Be("Packaging photo");
+            window.AltTextPaneTitlePlaceholder.Should().Be("Packaging photo");
+            window.AltTextPaneDescriptionPlaceholder.Should().Be(
+                "Describe the selected object for people who cannot see it.");
+            window.IsAltTextPaneDecorativeChecked.Should().BeFalse();
+            window.IsAltTextPaneApplyEnabled.Should().BeFalse();
+            window.LastAltTextPanePlan!.Description.ValidationMessage
+                .Should().Be(PresentationReviewWorkflowPlanner.MissingAltTextDescriptionMessage);
+
+            window.SetAltTextPaneInput("Hero packaging photo", string.Empty, isDecorative: false);
+            window.IsAltTextPaneApplyEnabled.Should().BeFalse();
+            window.SetAltTextPaneInput("  Hero packaging photo  ", "  Product packaging on a white background.  ", isDecorative: false);
+            window.IsAltTextPaneApplyEnabled.Should().BeTrue();
+
+            var mutation = window.ApplyAltTextPane();
+
+            mutation.Should().Be(new PresentationAltTextMutationPlan(
+                true,
+                0,
+                shape.Id,
+                "Hero packaging photo",
+                "Product packaging on a white background.",
+                false,
+                null));
+            shape.AlternativeTextTitle.Should().Be("Hero packaging photo");
+            shape.AlternativeText.Should().Be("Product packaging on a white background.");
+            shape.IsDecorative.Should().BeFalse();
+            window.LastAccessibilitySummaryPlan!.Issues.Should().NotContain(issue =>
+                issue.ShapeId == shape.Id && issue.Title == "Alt text missing");
+
+            window.SetAltTextPaneInput("Ignored title", string.Empty, isDecorative: true);
+            window.IsAltTextPaneApplyEnabled.Should().BeTrue();
+            window.ApplyAltTextPane().Should().Be(new PresentationAltTextMutationPlan(
+                true,
+                0,
+                shape.Id,
+                string.Empty,
+                string.Empty,
+                true,
+                null));
+            shape.IsDecorative.Should().BeTrue();
+            window.HideAltTextPane();
+            window.IsAltTextPaneVisible.Should().BeFalse();
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [StaFact]
     public void MainWindow_LayoutPickerRequest_RecordsSharedDesignPlan()
     {
         var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
@@ -167,11 +243,13 @@ public sealed class ReviewWorkflowAdapterTests
         var presentation = Presentation.CreateEmpty();
         var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
         var invoked = false;
+        var altTextInvoked = false;
 
         var registry = FreePRibbonCommands.Build(
             new RibbonStateStore(),
             editor,
-            onReviewAccessibility: () => invoked = true);
+            onReviewAccessibility: () => invoked = true,
+            onReviewAltText: () => altTextInvoked = true);
 
         registry.TryGet(PresentationReviewWorkflowPlanner.AccessibilityCommandId, out var command)
             .Should()
@@ -179,7 +257,9 @@ public sealed class ReviewWorkflowAdapterTests
 
         command!.Execute(RibbonCommandContext.Empty);
         invoked.Should().BeTrue();
-        registry.TryGet(PresentationReviewWorkflowPlanner.AltTextCommandId, out _).Should().BeTrue();
+        registry.TryGet(PresentationReviewWorkflowPlanner.AltTextCommandId, out var altTextCommand).Should().BeTrue();
+        altTextCommand!.Execute(RibbonCommandContext.Empty);
+        altTextInvoked.Should().BeTrue();
         registry.TryGet(PresentationReviewWorkflowPlanner.CommentsPaneCommandId, out _).Should().BeTrue();
         registry.TryGet(PresentationReviewWorkflowPlanner.ProofingCommandId, out _).Should().BeTrue();
     }

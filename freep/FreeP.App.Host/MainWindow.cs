@@ -120,6 +120,17 @@ public sealed class MainWindow : Window
     private Border  _commentListHost = null!; // collapsible container for _commentListPanel
     private StackPanel _layoutPickerPanel = null!;
     private Border _layoutPickerHost = null!;
+    private Border _altTextPaneHost = null!;
+    private TextBlock _altTextPaneHeading = null!;
+    private TextBlock _altTextPaneMessage = null!;
+    private TextBlock _altTextTitleLabel = null!;
+    private TextBox _altTextTitleBox = null!;
+    private TextBlock _altTextDescriptionLabel = null!;
+    private TextBox _altTextDescriptionBox = null!;
+    private CheckBox _altTextDecorativeCheck = null!;
+    private Button _altTextApplyButton = null!;
+    private Button _altTextCloseButton = null!;
+    private bool _altTextPaneRefreshing;
 
     internal PresentationCommentPanePlan? LastCommentPanePlan { get; private set; }
     internal PresentationAccessibilitySummaryPlan? LastAccessibilitySummaryPlan { get; private set; }
@@ -136,6 +147,16 @@ public sealed class MainWindow : Window
         LastLayoutPickerPlan?.Choices.Sum(choice => choice.ThumbnailPlaceholders.Count) ?? 0;
     internal int LayoutPickerCurrentChoiceCount =>
         LastLayoutPickerPlan?.Choices.Count(choice => choice.Chrome.IsCurrent) ?? 0;
+    internal bool IsAltTextPaneVisible => _altTextPaneHost?.Visibility == Visibility.Visible;
+    internal bool IsAltTextPaneApplyEnabled => _altTextApplyButton?.IsEnabled == true;
+    internal string AltTextPaneTitleLabel => _altTextTitleLabel?.Text ?? string.Empty;
+    internal string AltTextPaneTitleText => _altTextTitleBox?.Text ?? string.Empty;
+    internal string AltTextPaneTitlePlaceholder => LastAltTextPanePlan?.Title.Placeholder ?? string.Empty;
+    internal string AltTextPaneDescriptionLabel => _altTextDescriptionLabel?.Text ?? string.Empty;
+    internal string AltTextPaneDescriptionText => _altTextDescriptionBox?.Text ?? string.Empty;
+    internal string AltTextPaneDescriptionPlaceholder => LastAltTextPanePlan?.Description.Placeholder ?? string.Empty;
+    internal bool IsAltTextPaneDecorativeChecked => _altTextDecorativeCheck?.IsChecked == true;
+    internal string AltTextPaneMessage => _altTextPaneMessage?.Text ?? string.Empty;
 
     // ── Wave 16B: Animation pane (right-side collapsible panel) ──────────────────
     // 16B SEAM START — do not restructure this region (16A/16C may conflict nearby).
@@ -218,7 +239,7 @@ public sealed class MainWindow : Window
             onFindReplace:      () => OpenFindReplaceDialog(),
             onReviewCommentsPane: () => ShowReviewCommentsPane(),
             onReviewAccessibility: () => RefreshAccessibilitySummaryPlan(),
-            onReviewAltText: () => RefreshAltTextRequestPlan(),
+            onReviewAltText: () => ShowAltTextPane(),
             onReviewProofing: () => RefreshProofingRequestPlan(),
             // Wave 16B: Animation pane toggle.
             onAnimPane:         () => ToggleAnimationPane());
@@ -283,7 +304,12 @@ public sealed class MainWindow : Window
 
         Editor.Changed           += () => { _file.MarkDirty(); RefreshCanvas(); UpdateSlideCount(); UpdateTitle(); RefreshReviewWorkflowPlans(); };
         Editor.CurrentSlideChanged += (_, _) => { RefreshCanvas(); RefreshNotesPane(); RefreshCommentPane(); RefreshReviewWorkflowPlans(); };
-        Editor.SelectionChanged += (_, _) => RefreshAltTextRequestPlan();
+        Editor.SelectionChanged += (_, _) =>
+        {
+            RefreshAltTextRequestPlan();
+            if (IsAltTextPaneVisible)
+                ShowAltTextPane();
+        };
 
         // Re-attach editing layer whenever the editor is rebuilt (file open/new).
         // Guard: SlideCanvas is null during initial construction; BuildBody calls
@@ -441,6 +467,8 @@ public sealed class MainWindow : Window
             },
         };
 
+        _altTextPaneHost = BuildAltTextPaneHost();
+
         // Right-side panel: canvas on top, picker/comment strips, notes strip below.
         var rightPanel = new Grid();
         rightPanel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
@@ -472,16 +500,113 @@ public sealed class MainWindow : Window
         var splitter = new Grid();
         splitter.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         splitter.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        splitter.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         splitter.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); // 16B: anim pane
         Grid.SetColumn(SlidePaneHost,  0);
         Grid.SetColumn(rightPanel,     1);
-        Grid.SetColumn(_animPaneHost,  2); // 16B
+        Grid.SetColumn(_altTextPaneHost, 2);
+        Grid.SetColumn(_animPaneHost,  3); // 16B
         splitter.Children.Add(SlidePaneHost);
         splitter.Children.Add(rightPanel);
+        splitter.Children.Add(_altTextPaneHost);
         splitter.Children.Add(_animPaneHost); // 16B
 
         return splitter;
     }
+
+    private Border BuildAltTextPaneHost()
+    {
+        _altTextPaneHeading = new TextBlock
+        {
+            Text = "Alt Text",
+            FontSize = 15,
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(12, 12, 12, 4),
+        };
+        _altTextPaneMessage = new TextBlock
+        {
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)),
+            Margin = new Thickness(12, 0, 12, 8),
+        };
+        _altTextTitleLabel = BuildAltTextPaneLabel();
+        _altTextTitleBox = BuildAltTextPaneTextBox(singleLine: true);
+        _altTextDescriptionLabel = BuildAltTextPaneLabel();
+        _altTextDescriptionBox = BuildAltTextPaneTextBox(singleLine: false);
+        _altTextDecorativeCheck = new CheckBox
+        {
+            Margin = new Thickness(12, 8, 12, 6),
+        };
+        _altTextApplyButton = new Button
+        {
+            MinWidth = 72,
+            Padding = new Thickness(10, 4, 10, 4),
+            Margin = new Thickness(0, 0, 8, 0),
+        };
+        _altTextCloseButton = new Button
+        {
+            MinWidth = 72,
+            Padding = new Thickness(10, 4, 10, 4),
+        };
+
+        _altTextTitleBox.TextChanged += (_, _) => RefreshVisibleAltTextPaneFromFields();
+        _altTextDescriptionBox.TextChanged += (_, _) => RefreshVisibleAltTextPaneFromFields();
+        _altTextDecorativeCheck.Checked += (_, _) => RefreshVisibleAltTextPaneFromFields();
+        _altTextDecorativeCheck.Unchecked += (_, _) => RefreshVisibleAltTextPaneFromFields();
+        _altTextApplyButton.Click += (_, _) => ApplyAltTextPane();
+        _altTextCloseButton.Click += (_, _) => HideAltTextPane();
+
+        var buttons = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Margin = new Thickness(12, 8, 12, 12),
+        };
+        buttons.Children.Add(_altTextApplyButton);
+        buttons.Children.Add(_altTextCloseButton);
+
+        var panel = new StackPanel { Orientation = Orientation.Vertical };
+        panel.Children.Add(_altTextPaneHeading);
+        panel.Children.Add(_altTextPaneMessage);
+        panel.Children.Add(_altTextTitleLabel);
+        panel.Children.Add(_altTextTitleBox);
+        panel.Children.Add(_altTextDescriptionLabel);
+        panel.Children.Add(_altTextDescriptionBox);
+        panel.Children.Add(_altTextDecorativeCheck);
+        panel.Children.Add(buttons);
+
+        var host = new Border
+        {
+            Width = 292,
+            Visibility = Visibility.Collapsed,
+            Background = Brushes.White,
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0xC0, 0xC0, 0xC0)),
+            BorderThickness = new Thickness(1, 0, 0, 0),
+            Child = panel,
+        };
+        _altTextCloseButton.Content = "Close";
+        return host;
+    }
+
+    private static TextBlock BuildAltTextPaneLabel()
+        => new()
+        {
+            FontSize = 12,
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(12, 6, 12, 2),
+        };
+
+    private static TextBox BuildAltTextPaneTextBox(bool singleLine)
+        => new()
+        {
+            AcceptsReturn = !singleLine,
+            TextWrapping = singleLine ? TextWrapping.NoWrap : TextWrapping.Wrap,
+            MinHeight = singleLine ? 28 : 84,
+            MaxHeight = singleLine ? 28 : 120,
+            Margin = new Thickness(12, 0, 12, 4),
+            Padding = new Thickness(6, 4, 6, 4),
+            VerticalScrollBarVisibility = singleLine ? ScrollBarVisibility.Disabled : ScrollBarVisibility.Auto,
+        };
 
     // ── Canvas refresh ────────────────────────────────────────────────────────────
 
@@ -704,27 +829,148 @@ public sealed class MainWindow : Window
 
     private void RefreshAltTextRequestPlan()
     {
-        uint? selectedShapeId = Editor.SelectedShapeIds.Count == 1
-            ? Editor.SelectedShapeIds[0]
-            : null;
+        RefreshAltTextPlans(proposedDescription: null, proposedTitle: null, isDecorative: null);
+        if (IsAltTextPaneVisible && LastAltTextPanePlan is not null)
+            RenderAltTextPane(LastAltTextPanePlan);
+    }
+
+    internal void ShowAltTextPane()
+    {
+        RefreshAltTextPlans(proposedDescription: null, proposedTitle: null, isDecorative: null);
+        if (LastAltTextPanePlan is not null)
+            RenderAltTextPane(LastAltTextPanePlan);
+        _altTextPaneHost.Visibility = Visibility.Visible;
+    }
+
+    internal void HideAltTextPane()
+    {
+        if (_altTextPaneHost is not null)
+            _altTextPaneHost.Visibility = Visibility.Collapsed;
+    }
+
+    internal void SetAltTextPaneInput(string title, string description, bool isDecorative)
+    {
+        if (!IsAltTextPaneVisible)
+            ShowAltTextPane();
+
+        _altTextPaneRefreshing = true;
+        try
+        {
+            _altTextTitleBox.Text = title;
+            _altTextDescriptionBox.Text = description;
+            _altTextDecorativeCheck.IsChecked = isDecorative;
+        }
+        finally
+        {
+            _altTextPaneRefreshing = false;
+        }
+
+        RefreshVisibleAltTextPaneFromFields();
+    }
+
+    internal PresentationAltTextMutationPlan ApplyAltTextPane()
+    {
+        var plan = ApplySelectedShapeAlternativeText(
+            _altTextDescriptionBox.Text,
+            _altTextTitleBox.Text,
+            _altTextDecorativeCheck.IsChecked == true);
+        if (LastAltTextPanePlan is not null)
+            RenderAltTextPane(LastAltTextPanePlan);
+
+        return plan;
+    }
+
+    private void RefreshAltTextPlans(
+        string? proposedDescription,
+        string? proposedTitle,
+        bool? isDecorative)
+    {
+        var selectedShapeId = GetSingleSelectedShapeId();
         LastAltTextRequestPlan = PresentationReviewWorkflowPlanner.BuildAltTextRequestPlan(
             Editor.CurrentSlide,
             selectedShapeId,
-            proposedDescription: null);
+            proposedDescription,
+            proposedTitle,
+            isDecorative);
         LastAltTextPanePlan = PresentationReviewWorkflowPlanner.BuildAltTextPanePlan(
             Editor.CurrentSlide,
             selectedShapeId,
-            proposedDescription: null);
+            proposedDescription,
+            proposedTitle,
+            isDecorative);
     }
+
+    private void RefreshVisibleAltTextPaneFromFields()
+    {
+        if (_altTextPaneRefreshing || !IsAltTextPaneVisible)
+            return;
+
+        RefreshAltTextPlans(
+            _altTextDescriptionBox.Text,
+            _altTextTitleBox.Text,
+            _altTextDecorativeCheck.IsChecked == true);
+        if (LastAltTextPanePlan is not null)
+            RenderAltTextPane(LastAltTextPanePlan);
+    }
+
+    private void RenderAltTextPane(PresentationAltTextPanePlan plan)
+    {
+        _altTextPaneRefreshing = true;
+        try
+        {
+            var applyAction = GetAltTextPaneAction(plan, PresentationReviewWorkflowPlanner.AltTextPaneApplyCommandId);
+            var decorativeAction = GetAltTextPaneAction(plan, PresentationReviewWorkflowPlanner.AltTextPaneDecorativeCommandId);
+            var closeAction = GetAltTextPaneAction(plan, PresentationReviewWorkflowPlanner.AltTextPaneCloseCommandId);
+
+            _altTextPaneHeading.Text = string.IsNullOrWhiteSpace(plan.ShapeName)
+                ? "Alt Text"
+                : $"Alt Text - {plan.ShapeName}";
+            _altTextPaneMessage.Text = plan.Message;
+            _altTextTitleLabel.Text = plan.Title.Label;
+            _altTextDescriptionLabel.Text = plan.Description.Label;
+            SetTextIfChanged(_altTextTitleBox, plan.Title.Value);
+            SetTextIfChanged(_altTextDescriptionBox, plan.Description.Value);
+            _altTextTitleBox.ToolTip = plan.Title.Placeholder;
+            _altTextDescriptionBox.ToolTip = plan.Description.ValidationMessage ?? plan.Description.Placeholder;
+            _altTextTitleBox.IsEnabled = plan.Title.IsEnabled;
+            _altTextDescriptionBox.IsEnabled = plan.Description.IsEnabled;
+            _altTextDecorativeCheck.Content = decorativeAction.Label;
+            _altTextDecorativeCheck.IsEnabled = decorativeAction.IsEnabled;
+            _altTextDecorativeCheck.IsChecked = plan.IsDecorative;
+            _altTextApplyButton.Content = applyAction.Label;
+            _altTextApplyButton.IsEnabled = applyAction.IsEnabled;
+            _altTextApplyButton.ToolTip = applyAction.DisabledReason;
+            _altTextCloseButton.Content = closeAction.Label;
+            _altTextCloseButton.IsEnabled = closeAction.IsEnabled;
+        }
+        finally
+        {
+            _altTextPaneRefreshing = false;
+        }
+    }
+
+    private static PresentationReviewWorkflowActionPlan GetAltTextPaneAction(
+        PresentationAltTextPanePlan plan,
+        string commandId)
+        => plan.Actions.Single(action => action.CommandId == commandId);
+
+    private static void SetTextIfChanged(TextBox textBox, string value)
+    {
+        if (textBox.Text != value)
+            textBox.Text = value;
+    }
+
+    private uint? GetSingleSelectedShapeId()
+        => Editor.SelectedShapeIds.Count == 1
+            ? Editor.SelectedShapeIds[0]
+            : null;
 
     internal PresentationAltTextMutationPlan ApplySelectedShapeAlternativeText(
         string? description,
         string? title = null,
         bool isDecorative = false)
     {
-        uint? selectedShapeId = Editor.SelectedShapeIds.Count == 1
-            ? Editor.SelectedShapeIds[0]
-            : null;
+        uint? selectedShapeId = GetSingleSelectedShapeId();
         var plan = PresentationReviewWorkflowPlanner.BuildAltTextMutationPlan(
             Editor.CurrentSlide,
             Editor.CurrentSlideIndex,

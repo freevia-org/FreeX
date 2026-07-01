@@ -191,6 +191,37 @@ public sealed class FreeWRibbonDefinitionProfileTests
     }
 
     [Fact]
+    public void Home_design_parity_slice_command_ids_are_shared_where_backed()
+    {
+        var wpfIds = CommandEntries(FreeWRibbon.Build(FreeWRibbonCapabilities.Wpf))
+            .Select(entry => entry.CommandId)
+            .ToHashSet(StringComparer.Ordinal);
+        var avaloniaIds = CommandEntries(FreeWRibbon.Build(FreeWRibbonCapabilities.Avalonia))
+            .Select(entry => entry.CommandId)
+            .ToHashSet(StringComparer.Ordinal);
+
+        var sharedIds = new[]
+        {
+            "freew.format-painter",
+            "freew.paste-merge",
+            "freew.paste-plain",
+            "freew.paste-special",
+            "freew.reset-style-set",
+            "freew.undo",
+            "freew.redo",
+            "freew.style-clear",
+            "freew.style-heading2",
+            "freew.style-heading3",
+        };
+
+        foreach (var id in sharedIds)
+        {
+            wpfIds.Should().Contain(id);
+            avaloniaIds.Should().Contain(id);
+        }
+    }
+
+    [Fact]
     public void Avalonia_profile_uses_shared_print_preview_and_view_command_ids()
     {
         var avaloniaIds = CommandEntries(FreeWRibbon.Build(FreeWRibbonCapabilities.Avalonia))

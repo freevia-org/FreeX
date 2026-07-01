@@ -1567,7 +1567,10 @@ internal static class FreeWRibbonCommands
 
         registry.Register("freew.style-normal", new ApplyStyleCommand(editor, 11, bold: false, colorHex: null));
         registry.Register("freew.style-heading1", new ApplyStyleCommand(editor, 16, bold: true, colorHex: "#2F5496"));
+        registry.Register("freew.style-heading2", new ApplyTocStyleCommand(editor, "Heading2"));
+        registry.Register("freew.style-heading3", new ApplyTocStyleCommand(editor, "Heading3"));
         registry.Register("freew.style-title", new ApplyStyleCommand(editor, 28, bold: true, colorHex: null));
+        registry.Register("freew.style-clear", new ActionRibbonCommand(() => { editor.Focus(); editor.SetParagraphStyle(null); }));
 
         // Home > Styles: the styles dropdown. Picking an entry sets the selected paragraph(s)' StyleId
         // (reversible via the bus), then re-renders so the style's run/paragraph formatting resolves.
@@ -1592,6 +1595,8 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.paragraph-spacing", new ApplyParagraphSpacingSetCommand(editor));
         registry.Register("freew.custom-paragraph-spacing", new CustomParagraphSpacingCommand(editor));
         registry.Register("freew.theme-effects", new ApplyEffectSetCommand(editor));
+        registry.Register("freew.undo", new ActionRibbonCommand(() => { if (editor.CanUndo) editor.Undo(); }));
+        registry.Register("freew.redo", new ActionRibbonCommand(() => { if (editor.CanRedo) editor.Redo(); }));
 
         // Layout tab — page settings (applied to the model; honoured by docx save + print).
         registry.Register("freew.orientation", new PageCommand(editor, page =>

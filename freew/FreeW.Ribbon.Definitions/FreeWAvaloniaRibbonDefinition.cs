@@ -581,6 +581,16 @@ internal static class FreeWAvaloniaRibbonDefinition
                 tab.Group("document-formatting", "Document Formatting", null, 100, g =>
                 {
                     g.Dropdown("freew.theme-colors", "Colors", BuildThemeColorsMenu());
+                    g.ComboBox("freew.style-set", "Style Sets", c => c with
+                    {
+                        Items = DocumentStyleSet.Catalog.Select(s => s.Name).ToArray(),
+                        Width = 128
+                    });
+                    g.Button("freew.reset-style-set", "Reset to Default Style Set", b => b with
+                    {
+                        PreferredLayout = RibbonCommandLayoutKind.Small,
+                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.Refresh)
+                    });
                     g.Dropdown("freew.theme-fonts",  "Fonts",  BuildThemeFontsMenu());
                     g.Dropdown("freew.para-spacing", "Paragraph Spacing", BuildParaSpacingMenu());
                 });

@@ -448,10 +448,34 @@ public sealed class FreeWRibbonParityTests
 
         CommandIds(editing!)
             .Should()
-            .Equal("freew.find", "freew.replace", "freew.select");
+            .Equal("freew.undo", "freew.redo", "freew.find", "freew.replace", "freew.select");
+        registry.TryGet("freew.undo", out _).Should().BeTrue();
+        registry.TryGet("freew.redo", out _).Should().BeTrue();
         registry.TryGet("freew.find", out _).Should().BeTrue();
         registry.TryGet("freew.replace", out _).Should().BeTrue();
         registry.TryGet("freew.select", out _).Should().BeTrue();
+    }
+
+    [StaFact]
+    public void HomeStyles_ExposesBackedQuickStyleAndClearStyleCommands()
+    {
+        var definition = FreeWRibbon.Build();
+        var styles = definition.FindTab("home")!.FindGroup("styles");
+        var editor = new DocumentView();
+        var registry = FreeWRibbonCommands.Build(editor, new RibbonStateStore());
+
+        CommandIds(styles!)
+            .Should()
+            .Contain(new[]
+            {
+                "freew.style-heading2",
+                "freew.style-heading3",
+                "freew.style-clear",
+            });
+
+        registry.TryGet("freew.style-heading2", out _).Should().BeTrue();
+        registry.TryGet("freew.style-heading3", out _).Should().BeTrue();
+        registry.TryGet("freew.style-clear", out _).Should().BeTrue();
     }
 
     [StaFact]
