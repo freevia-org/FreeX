@@ -98,10 +98,23 @@ public sealed class CommandRegistryTests
             "freew.clear-formatting",
             "freew.font-color",
             "freew.change-case",
+            "freew.select",
             "freew.select-all",
+            "freew.find",
+            "freew.replace",
+            "freew.find-replace-dialog",
+            "freew.formatting-marks",
             "freew.show-hide-para",
+            "freew.indent-increase",
+            "freew.indent-decrease",
             "freew.increase-indent",
             "freew.decrease-indent",
+            "freew.line-spacing",
+            "freew.space-before-toggle",
+            "freew.space-after-toggle",
+            "freew.multilevel-list",
+            "freew.multilevel-promote",
+            "freew.multilevel-demote",
             "freew.style-heading3",
             "freew.new",
             "freew.zoom-in",
@@ -112,6 +125,162 @@ public sealed class CommandRegistryTests
         foreach (var id in expected)
             registry.TryGet(new RibbonCommandId(id), out _)
                 .Should().BeTrue($"Wave A1 command '{id}' must be registered");
+    }
+
+    [Fact]
+    public void Home_definition_uses_wpf_command_ids_for_editing_and_paragraph_slice()
+    {
+        var home = FreeWRibbon.BuildDefinition().FindTab("home");
+        home.Should().NotBeNull();
+
+        var ids = home!.Groups
+            .SelectMany(group => group.Controls)
+            .SelectMany(CommandIdsIncludingMenus)
+            .Select(id => id.Value)
+            .ToHashSet();
+
+        ids.Should().Contain(new[]
+        {
+            "freew.find",
+            "freew.replace",
+            "freew.select",
+            "freew.formatting-marks",
+            "freew.indent-increase",
+            "freew.indent-decrease",
+            "freew.line-spacing",
+            "freew.space-before-toggle",
+            "freew.space-after-toggle",
+            "freew.multilevel-list",
+            "freew.multilevel-promote",
+            "freew.multilevel-demote",
+        });
+
+        ids.Should().NotContain(new[]
+        {
+            "freew.find-replace-dialog",
+            "freew.select-all",
+            "freew.show-hide-para",
+            "freew.increase-indent",
+            "freew.decrease-indent",
+            "freew.line-spacing-1",
+            "freew.line-spacing-115",
+            "freew.line-spacing-15",
+            "freew.line-spacing-2",
+        });
+    }
+
+    [Fact]
+    public void Find_replace_ids_and_compat_alias_open_same_dialog_callback()
+    {
+        var calls = 0;
+        var registry = FreeWRibbon.BuildRegistry(
+            new DocumentView(),
+            NoopCallbacks() with { OpenFindReplaceDialog = () => calls++ });
+
+        Execute(registry, "freew.find");
+        Execute(registry, "freew.replace");
+        Execute(registry, "freew.find-replace-dialog");
+
+        calls.Should().Be(3, "Find, Replace, and the old Avalonia alias should open the same dialog");
+    }
+
+    [Fact]
+    public void Select_command_and_compat_alias_select_the_whole_document()
+    {
+        var view = new DocumentView();
+        view.LoadDocument(MakeDoc("Select me"));
+        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+
+        Execute(registry, "freew.select");
+        view.SelectedText.Should().Be("Select me");
+
+        view.LoadDocument(MakeDoc("Alias path"));
+        Execute(registry, "freew.select-all");
+        view.SelectedText.Should().Be("Alias path");
+    }
+
+    [Fact]
+    public void Formatting_marks_command_is_stateful_and_keeps_old_alias()
+    {
+        var view = new DocumentView();
+        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+
+        registry.TryGet(new RibbonCommandId("freew.formatting-marks"), out var command)
+            .Should().BeTrue("WPF formatting marks id must be registered");
+        var stateful = command.Should().BeAssignableTo<IRibbonStatefulCommand>().Subject;
+
+        stateful.GetState().IsChecked.Should().BeFalse();
+        stateful.Execute(RibbonCommandContext.Empty);
+        view.ShowParagraphMarks.Should().BeTrue();
+        stateful.GetState().IsChecked.Should().BeTrue();
+
+        Execute(registry, "freew.show-hide-para");
+        view.ShowParagraphMarks.Should().BeFalse("old Avalonia id remains as a compatibility alias");
+    }
+
+    [Fact]
+    public void Line_spacing_combo_and_fixed_aliases_set_multiple_spacing()
+    {
+        var view = new DocumentView();
+        view.LoadDocument(MakeDoc("Spacing"));
+        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+
+        Execute(registry, "freew.line-spacing", RibbonCommandContext.ForSelectedValue("1.5"));
+        var paragraph = (Paragraph)view.Document.Blocks[0];
+        paragraph.Formatting.LineRule.Should().Be(LineSpacingRule.Multiple);
+        paragraph.Formatting.LineSpacing.Should().Be(1.5);
+
+        Execute(registry, "freew.line-spacing-2");
+        paragraph.Formatting.LineSpacing.Should().Be(2.0);
+    }
+
+    [Fact]
+    public void Space_before_after_toggles_apply_wpf_twelve_point_spacing()
+    {
+        var view = new DocumentView();
+        var doc = MakeDoc("Spacing");
+        var paragraph = (Paragraph)doc.Blocks[0];
+        paragraph.Formatting = paragraph.Formatting with
+        {
+            SpaceBeforePt = 0,
+            SpaceBeforeIsSet = true,
+            SpaceAfterPt = 0,
+            SpaceAfterIsSet = true
+        };
+        view.LoadDocument(doc);
+        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+
+        Execute(registry, "freew.space-before-toggle");
+        paragraph.Formatting.SpaceBeforePt.Should().Be(12);
+        paragraph.Formatting.SpaceBeforeIsSet.Should().BeTrue();
+        Execute(registry, "freew.space-before-toggle");
+        paragraph.Formatting.SpaceBeforePt.Should().Be(0);
+
+        Execute(registry, "freew.space-after-toggle");
+        paragraph.Formatting.SpaceAfterPt.Should().Be(12);
+        paragraph.Formatting.SpaceAfterIsSet.Should().BeTrue();
+        Execute(registry, "freew.space-after-toggle");
+        paragraph.Formatting.SpaceAfterPt.Should().Be(0);
+    }
+
+    [Fact]
+    public void Multilevel_list_commands_use_existing_list_level_behavior()
+    {
+        var view = new DocumentView();
+        view.LoadDocument(MakeDoc("Outline"));
+        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+        var paragraph = (Paragraph)view.Document.Blocks[0];
+
+        Execute(registry, "freew.multilevel-list");
+        paragraph.Formatting.ListKind.Should().Be(ListKind.MultiLevel);
+        Execute(registry, "freew.multilevel-list");
+        paragraph.Formatting.ListKind.Should().Be(ListKind.MultiLevel, "the WPF command applies multilevel rather than toggling it off");
+
+        Execute(registry, "freew.multilevel-demote");
+        paragraph.Formatting.ListLevel.Should().Be(1);
+
+        Execute(registry, "freew.multilevel-promote");
+        paragraph.Formatting.ListLevel.Should().Be(0);
     }
 
     [Fact]
@@ -484,6 +653,44 @@ public sealed class CommandRegistryTests
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private static void Execute(
+        RibbonCommandRegistry registry,
+        string id,
+        RibbonCommandContext? context = null)
+    {
+        registry.TryGet(new RibbonCommandId(id), out var command)
+            .Should().BeTrue($"command '{id}' must be registered");
+        command!.Execute(context ?? RibbonCommandContext.Empty);
+    }
+
+    private static IEnumerable<RibbonCommandId> CommandIdsIncludingMenus(RibbonControl control)
+    {
+        if (GetCommandId(control) is { } id && !string.IsNullOrEmpty(id.Value))
+            yield return id;
+
+        var menuIds = control switch
+        {
+            RibbonSplitButton splitButton => MenuCommandIds(splitButton.Menu.Items),
+            RibbonDropdown dropdown => MenuCommandIds(dropdown.Menu.Items),
+            _ => Enumerable.Empty<RibbonCommandId>()
+        };
+
+        foreach (var menuId in menuIds)
+            yield return menuId;
+    }
+
+    private static IEnumerable<RibbonCommandId> MenuCommandIds(IEnumerable<RibbonMenuItem> items)
+    {
+        foreach (var item in items)
+        {
+            if (item.CommandId is { } id && !string.IsNullOrEmpty(id.Value))
+                yield return id;
+
+            foreach (var childId in MenuCommandIds(item.Children))
+                yield return childId;
+        }
+    }
 
     private static RibbonCommandId? GetCommandId(RibbonControl control) => control switch
     {

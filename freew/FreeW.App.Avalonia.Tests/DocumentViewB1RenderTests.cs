@@ -97,6 +97,7 @@ public sealed class DocumentViewB1RenderTests
             {
                 RibbonButton b      => b.CommandId.Value,
                 RibbonToggleButton t => t.CommandId.Value,
+                RibbonComboBox combo => combo.CommandId.Value,
                 _ => null
             })
             .Where(v => v is not null)
@@ -106,9 +107,7 @@ public sealed class DocumentViewB1RenderTests
         ids.Should().Contain("freew.subscript");
         ids.Should().Contain("freew.highlight");
         ids.Should().Contain("freew.align-justify");
-        ids.Should().Contain("freew.line-spacing-1");
-        ids.Should().Contain("freew.line-spacing-15");
-        ids.Should().Contain("freew.line-spacing-2");
+        ids.Should().Contain("freew.line-spacing");
     }
 
     // ── Superscript / Subscript model mutation + render ─────────────────────────

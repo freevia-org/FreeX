@@ -94,6 +94,13 @@ internal static class FreeWAvaloniaRibbonDefinition
             new("Table",  new RibbonCommandId("freew.insert-caption.table")),
         });
 
+    private static RibbonMenu BuildMultilevelListMenu() =>
+        new(new RibbonMenuItem[]
+        {
+            new("Decrease List Level", new RibbonCommandId("freew.multilevel-promote")),
+            new("Increase List Level", new RibbonCommandId("freew.multilevel-demote")),
+        });
+
     /// <summary>
     /// AV-STYLES: Home &gt; Styles gallery dropdown — the full built-in style set (paragraph and character
     /// styles), one item per <see cref="BuiltInStyles.Gallery"/> entry. Each item's command id is
@@ -321,19 +328,46 @@ internal static class FreeWAvaloniaRibbonDefinition
                 {
                     g.Toggle("freew.bullets",           FreeWRibbonText.BulletsCommand.Label);
                     g.Toggle("freew.numbering",         FreeWRibbonText.NumberingCommand.Label);
-                    g.Button("freew.increase-indent",   "→");
-                    g.Button("freew.decrease-indent",   "←");
+                    g.Dropdown("freew.multilevel-list", "Multilevel List", BuildMultilevelListMenu(), d => d with
+                    {
+                        PreferredLayout = RibbonCommandLayoutKind.Small,
+                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.MultilevelList)
+                    });
+                    g.Button("freew.indent-decrease",   "Decrease Indent", b => b with
+                    {
+                        PreferredLayout = RibbonCommandLayoutKind.Small,
+                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.IndentDecrease)
+                    });
+                    g.Button("freew.indent-increase",   "Increase Indent", b => b with
+                    {
+                        PreferredLayout = RibbonCommandLayoutKind.Small,
+                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.IndentIncrease)
+                    });
                     g.Button("freew.align-left",        "Left");
                     g.Button("freew.align-center",      "Center");
                     g.Button("freew.align-right",       "Right");
                     g.Button("freew.align-justify",     "Justify");
-                    g.Button("freew.space-before",      "Space Before");
-                    g.Button("freew.space-after",       "Space After");
-                    g.Button("freew.line-spacing-1",    "1×");
-                    g.Button("freew.line-spacing-115",  "1.15×");
-                    g.Button("freew.line-spacing-15",   "1.5×");
-                    g.Button("freew.line-spacing-2",    "2×");
-                    g.Toggle("freew.show-hide-para",    "¶");
+                    g.ComboBox("freew.line-spacing", "Line and Paragraph Spacing", c => c with
+                    {
+                        Items = new[] { "1.0", "1.15", "1.5", "2.0" },
+                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.LineSpacing),
+                        Width = 52
+                    });
+                    g.Button("freew.space-before-toggle", "Add Space Before Paragraph", b => b with
+                    {
+                        PreferredLayout = RibbonCommandLayoutKind.Small,
+                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.SpaceBefore)
+                    });
+                    g.Button("freew.space-after-toggle", "Add Space After Paragraph", b => b with
+                    {
+                        PreferredLayout = RibbonCommandLayoutKind.Small,
+                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.SpaceAfter)
+                    });
+                    g.Toggle("freew.formatting-marks", "Show Formatting Marks", t => t with
+                    {
+                        PreferredLayout = RibbonCommandLayoutKind.Small,
+                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.FormattingMarks)
+                    });
                     g.Button("freew.paragraph-dialog",  "Paragraph…");
                 });
                 tab.Group("styles", "Styles", null, 75, g =>
@@ -352,8 +386,9 @@ internal static class FreeWAvaloniaRibbonDefinition
                 {
                     g.Button("freew.undo",              "Undo");
                     g.Button("freew.redo",              "Redo");
-                    g.Button("freew.select-all",        "Select All");
-                    g.Button("freew.find-replace-dialog", "Find & Replace");
+                    g.Button("freew.find",              "Find");
+                    g.Button("freew.replace",           "Replace");
+                    g.Button("freew.select",            "Select");
                 });
             })
             .Tab("insert", "Insert", "I", tab =>

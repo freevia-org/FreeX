@@ -119,9 +119,16 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.align-center",     new ActionRibbonCommand(() => editor.SetAlignment(TextAlignment.Center)));
         r.Register("freew.align-right",      new ActionRibbonCommand(() => editor.SetAlignment(TextAlignment.Right)));
         r.Register("freew.align-justify",    new ActionRibbonCommand(() => editor.SetAlignment(TextAlignment.Justify)));
+        r.Register("freew.multilevel-list", new ActionRibbonCommand(() => ApplyMultiLevelList(editor)));
+        r.Register("freew.multilevel-demote", new ActionRibbonCommand(() => ChangeListLevel(editor, demote: true)));
+        r.Register("freew.multilevel-promote", new ActionRibbonCommand(() => ChangeListLevel(editor, demote: false)));
+        r.Register("freew.indent-increase",  new ActionRibbonCommand(editor.IncreaseIndent));
+        r.Register("freew.indent-decrease",  new ActionRibbonCommand(editor.DecreaseIndent));
         r.Register("freew.increase-indent",  new ActionRibbonCommand(editor.IncreaseIndent));
         r.Register("freew.decrease-indent",  new ActionRibbonCommand(editor.DecreaseIndent));
-        r.Register("freew.show-hide-para",   new ActionRibbonCommand(() => editor.ShowParagraphMarks = !editor.ShowParagraphMarks));
+        var formattingMarks = new FormattingMarksCommand(editor);
+        r.Register("freew.formatting-marks", formattingMarks);
+        r.Register("freew.show-hide-para", formattingMarks);
         // Paragraph spacing commands (value = points as an invariant-culture decimal string).
         r.Register("freew.space-before",     new ValueRibbonCommand(value =>
         {
@@ -133,7 +140,11 @@ internal static class FreeWAvaloniaRibbonCommands
             if (double.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var pt))
                 editor.SetSpaceAfter(pt);
         }));
-        // Line-spacing commands — value = multiplier for Multiple, pt for Exact/AtLeast.
+        r.Register("freew.space-before-toggle", new ActionRibbonCommand(() => ToggleSpaceBefore(editor)));
+        r.Register("freew.space-after-toggle", new ActionRibbonCommand(() => ToggleSpaceAfter(editor)));
+        // Line-spacing commands — value = multiplier for Multiple. The fixed ids are compatibility
+        // aliases for older Avalonia controls and are no longer used by the Home ribbon profile.
+        r.Register("freew.line-spacing", new ValueRibbonCommand(value => SetLineSpacing(editor, value)));
         r.Register("freew.line-spacing-1",    new ActionRibbonCommand(() => editor.SetLineSpacing(LineSpacingRule.Multiple, 1.0)));
         r.Register("freew.line-spacing-115",  new ActionRibbonCommand(() => editor.SetLineSpacing(LineSpacingRule.Multiple, 1.15)));
         r.Register("freew.line-spacing-15",   new ActionRibbonCommand(() => editor.SetLineSpacing(LineSpacingRule.Multiple, 1.5)));
@@ -161,7 +172,10 @@ internal static class FreeWAvaloniaRibbonCommands
         // ── Editing ──────────────────────────────────────────────────────────
         r.Register("freew.undo",              new ActionRibbonCommand(editor.Undo));
         r.Register("freew.redo",              new ActionRibbonCommand(editor.Redo));
+        r.Register("freew.select",            new ActionRibbonCommand(editor.SelectAll));
         r.Register("freew.select-all",        new ActionRibbonCommand(editor.SelectAll));
+        r.Register("freew.find",              new ActionRibbonCommand(callbacks.OpenFindReplaceDialog));
+        r.Register("freew.replace",           new ActionRibbonCommand(callbacks.OpenFindReplaceDialog));
         r.Register("freew.find-replace-dialog", new ActionRibbonCommand(callbacks.OpenFindReplaceDialog));
 
         // ── Insert ───────────────────────────────────────────────────────────
@@ -327,6 +341,51 @@ internal static class FreeWAvaloniaRibbonCommands
         RegisterChartSmartArtFormatCommands(r, editor);
 
         return r;
+    }
+
+    private const double ParagraphSpacingTogglePoints = 12.0;
+
+    private static void ApplyMultiLevelList(DocumentView editor)
+    {
+        if (editor.GetCaretFormatting().Paragraph.ListKind != ListKind.MultiLevel)
+            editor.ToggleList(ListKind.MultiLevel);
+    }
+
+    private static void ChangeListLevel(DocumentView editor, bool demote)
+    {
+        if (editor.GetCaretFormatting().Paragraph.ListKind == ListKind.None)
+            return;
+
+        if (demote)
+            editor.IncreaseIndent();
+        else
+            editor.DecreaseIndent();
+    }
+
+    private static void SetLineSpacing(DocumentView editor, string? value)
+    {
+        if (double.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var spacing))
+            editor.SetLineSpacing(LineSpacingRule.Multiple, spacing);
+    }
+
+    private static void ToggleSpaceBefore(DocumentView editor)
+    {
+        var paragraph = editor.GetCaretFormatting().Paragraph;
+        editor.SetSpaceBefore(paragraph.SpaceBeforePt > 0 ? 0 : ParagraphSpacingTogglePoints);
+    }
+
+    private static void ToggleSpaceAfter(DocumentView editor)
+    {
+        var paragraph = editor.GetCaretFormatting().Paragraph;
+        editor.SetSpaceAfter(paragraph.SpaceAfterPt > 0 ? 0 : ParagraphSpacingTogglePoints);
+    }
+
+    private sealed class FormattingMarksCommand(DocumentView editor) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context) =>
+            editor.ShowParagraphMarks = !editor.ShowParagraphMarks;
+
+        public RibbonCommandState GetState() => new(IsChecked: editor.ShowParagraphMarks);
     }
 
     /// <summary>
