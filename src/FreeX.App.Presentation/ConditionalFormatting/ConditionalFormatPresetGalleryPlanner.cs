@@ -23,6 +23,27 @@ public sealed record ConditionalFormatPresetGalleryGroup<TPreset>(
     string CategoryKey,
     IReadOnlyList<TPreset> Options);
 
+public enum ConditionalFormatPopupCatalogItemKind
+{
+    Preset,
+    DataBarGallery,
+    ColorScaleGallery,
+    IconSetGallery,
+    RuleDialog,
+    ClearRules,
+    ManageRules,
+}
+
+public sealed record ConditionalFormatPopupCatalogItem(
+    string CommandId,
+    ConditionalFormatPopupCatalogItemKind Kind,
+    ConditionalFormatPreset? Preset = null,
+    string? IconSetStyle = null);
+
+public sealed record ConditionalFormatPopupCatalogGroup(
+    string Name,
+    IReadOnlyList<ConditionalFormatPopupCatalogItem> Items);
+
 public static class ConditionalFormatPresetGalleryPlanner
 {
     public static readonly IReadOnlyList<ConditionalFormatDataBarPreset> DataBarOptions =
@@ -54,6 +75,71 @@ public static class ConditionalFormatPresetGalleryPlanner
         ColorScale("GreenWhite", "ConditionalFormatColorScale_GreenWhite_Label", ColorScaleTwoColorCategory, "CG", 99, 190, 123, null, null, null, 255, 255, 255),
         ColorScale("WhiteGreen", "ConditionalFormatColorScale_WhiteGreen_Label", ColorScaleTwoColorCategory, "CH", 255, 255, 255, null, null, null, 99, 190, 123)
     ];
+
+    public static readonly IReadOnlyList<ConditionalFormatPopupCatalogGroup> PopupGroups =
+    [
+        new(
+            "Highlight Cells Rules",
+            [
+                PopupPreset("Greater Than", ConditionalFormatPreset.HighlightGreaterThan),
+                PopupPreset("Less Than", ConditionalFormatPreset.HighlightLessThan),
+                PopupPreset("Between", ConditionalFormatPreset.HighlightBetween),
+                PopupPreset("Equal To", ConditionalFormatPreset.HighlightEqualTo),
+                PopupPreset("Text that Contains", ConditionalFormatPreset.HighlightTextContains),
+                PopupPreset("A Date Occurring", ConditionalFormatPreset.HighlightDateOccurring),
+                PopupPreset("Duplicate Values", ConditionalFormatPreset.HighlightDuplicateValues),
+            ]),
+        new(
+            "Top/Bottom Rules",
+            [
+                PopupPreset("Top 10 Items", ConditionalFormatPreset.Top10),
+                PopupPreset("Top 10%", ConditionalFormatPreset.Top10Percent),
+                PopupPreset("Bottom 10 Items", ConditionalFormatPreset.Bottom10Items),
+                PopupPreset("Bottom 10%", ConditionalFormatPreset.Bottom10Percent),
+                PopupPreset("Above Average", ConditionalFormatPreset.AboveAverage),
+                PopupPreset("Below Average", ConditionalFormatPreset.BelowAverage),
+            ]),
+        new(
+            "Gallery Families",
+            [
+                new("Data Bars", ConditionalFormatPopupCatalogItemKind.DataBarGallery),
+                new("Color Scales", ConditionalFormatPopupCatalogItemKind.ColorScaleGallery),
+            ]),
+        new(
+            "Icon Sets",
+            [
+                PopupIconSet("3 Arrows", "3Arrows"),
+                PopupIconSet("3 Arrows (Gray)", "3ArrowsGray"),
+                PopupIconSet("4 Arrows", "4Arrows"),
+                PopupIconSet("4 Arrows (Gray)", "4ArrowsGray"),
+                PopupIconSet("5 Arrows", "5Arrows"),
+                PopupIconSet("5 Arrows (Gray)", "5ArrowsGray"),
+                PopupIconSet("3 Traffic Lights", "3TrafficLights1"),
+                PopupIconSet("3 Traffic Lights (Rimmed)", "3TrafficLights2"),
+                PopupIconSet("3 Signs", "3Signs"),
+                PopupIconSet("3 Symbols", "3Symbols"),
+                PopupIconSet("3 Symbols (Uncircled)", "3Symbols2"),
+                PopupIconSet("3 Flags", "3Flags"),
+                PopupIconSet("4 Traffic Lights", "4TrafficLights"),
+                PopupIconSet("4 Red To Black", "4RedToBlack"),
+                PopupIconSet("4 Ratings", "4Rating"),
+                PopupIconSet("5 Ratings", "5Rating"),
+                PopupIconSet("5 Quarters", "5Quarters"),
+                PopupIconSet("5 Boxes", "5Boxes"),
+            ]),
+        new(
+            "Rules",
+            [
+                new("More Rules", ConditionalFormatPopupCatalogItemKind.RuleDialog),
+                new("New Rule", ConditionalFormatPopupCatalogItemKind.RuleDialog),
+                new("New Formula Rule", ConditionalFormatPopupCatalogItemKind.RuleDialog),
+                new("Clear Rules", ConditionalFormatPopupCatalogItemKind.ClearRules),
+                new("Manage Rules", ConditionalFormatPopupCatalogItemKind.ManageRules),
+            ]),
+    ];
+
+    public static IReadOnlyList<ConditionalFormatPopupCatalogItem> PopupItems =>
+        PopupGroups.SelectMany(group => group.Items).ToArray();
 
     public static IReadOnlyList<ConditionalFormatPresetGalleryGroup<ConditionalFormatDataBarPreset>> DataBarGroups =>
         DataBarOptions
@@ -133,6 +219,16 @@ public static class ConditionalFormatPresetGalleryPlanner
             new RgbColor(minRed, minGreen, minBlue),
             midRed is null || midGreen is null || midBlue is null ? null : new RgbColor(midRed.Value, midGreen.Value, midBlue.Value),
             new RgbColor(maxRed, maxGreen, maxBlue));
+
+    private static ConditionalFormatPopupCatalogItem PopupPreset(
+        string commandId,
+        ConditionalFormatPreset preset) =>
+        new(commandId, ConditionalFormatPopupCatalogItemKind.Preset, preset);
+
+    private static ConditionalFormatPopupCatalogItem PopupIconSet(
+        string commandId,
+        string style) =>
+        new(commandId, ConditionalFormatPopupCatalogItemKind.IconSetGallery, IconSetStyle: style);
 
     private static ConditionalFormatDataBarPreset? FindDataBarOption(string? style)
     {

@@ -134,7 +134,7 @@ try {
             avaloniaHarnessRoutes = [int]$dialogInventory.summary.avaloniaHarnessRoutes
             sharedOrPresentationBacked = [int]$dialogInventory.summary.sharedOrPresentationBacked
         }
-        nextSlice = "AutoFilter/popup parity: enrich the shared popup model and paired WPF/Avalonia evidence."
+        nextSlice = "Font color/border swatch popup parity: expose shared swatch catalogs and paired WPF/Avalonia evidence."
     }
 
     $freeW = [ordered]@{

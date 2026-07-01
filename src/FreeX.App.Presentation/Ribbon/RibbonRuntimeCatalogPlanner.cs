@@ -37,6 +37,7 @@ public static class RibbonRuntimeCatalogPlanner
         [
             CreateFormatAsTableSurface(),
             CreateNumberFormatSurface(numberFormatOptions),
+            CreateConditionalFormattingPopupSurface(),
             CreateConditionalFormattingDataBarSurface(textProvider),
             CreateConditionalFormattingColorScaleSurface(textProvider),
             CreateConditionalFormattingIconSetSurface(textProvider),
@@ -81,6 +82,19 @@ public static class RibbonRuntimeCatalogPlanner
                         .Select(option => option.Label)
                         .ToArray())
             ]);
+
+    private static RibbonRuntimeCatalogSurface CreateConditionalFormattingPopupSurface() =>
+        new(
+            "Home",
+            "Conditional Formatting Popup",
+            "Home",
+            "Conditional Formatting",
+            nameof(ConditionalFormatPresetGalleryPlanner),
+            ConditionalFormatPresetGalleryPlanner.PopupGroups
+                .Select(group => new RibbonRuntimeCatalogGroup(
+                    group.Name,
+                    group.Items.Select(item => item.CommandId).ToArray()))
+                .ToArray());
 
     private static RibbonRuntimeCatalogSurface CreateConditionalFormattingDataBarSurface(Func<string, string> textProvider) =>
         new(
