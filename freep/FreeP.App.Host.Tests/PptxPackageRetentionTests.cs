@@ -30,6 +30,7 @@ public sealed class PptxPackageRetentionTests
         "18-chart-types.pptx",
         "19-chart-labels.pptx",
         "20-columns-gradoutline.pptx",
+        "21-comments-notes.pptx",
     ];
 
     private static readonly string[] WriterOwnedPackagePartPaths =
@@ -109,10 +110,11 @@ public sealed class PptxPackageRetentionTests
         yield return ["15-picture-crop.pptx", new[] { "ppt/media/" }];
         yield return ["18-chart-types.pptx", new[] { "ppt/charts/" }];
         yield return ["19-chart-labels.pptx", new[] { "ppt/charts/" }];
+        yield return ["21-comments-notes.pptx", new[] { "ppt/comments/", "ppt/notesSlides/", "ppt/notesMasters/" }];
     }
 
     [Fact]
-    public void RenderCompareCorpus_TracksExpectedTwentyDecks()
+    public void RenderCompareCorpus_TracksExpectedDecks()
     {
         var corpusDirectory = FindCorpusDirectory();
         Directory.GetFiles(corpusDirectory, "*.pptx")
@@ -182,6 +184,49 @@ public sealed class PptxPackageRetentionTests
         AssertFeaturePackageEntriesStillPresent(sourceArchive, savedArchive, deckName, featurePartPrefixes);
         AssertFeatureContentTypesStillPresent(sourceArchive, savedArchive, deckName, featurePartPrefixes);
         AssertFeatureRelationshipsStillPresent(sourceArchive, savedArchive, deckName, featurePartPrefixes);
+    }
+
+    [Fact]
+    public void RenderCompareCommentsNotesCorpusDeck_SemanticEdit_RetainsModeledNotesCommentsAndPackageParts()
+    {
+        const string deckName = "21-comments-notes.pptx";
+        var sourcePath = Path.Combine(FindCorpusDirectory(), deckName);
+        var loaded = PptxPackageReader.Read(sourcePath);
+        loaded.PackageSnapshot.Should().NotBeNull($"{deckName} must be captured before semantic edits");
+        loaded.Slides.Should().HaveCount(2);
+        loaded.Slides[0].Comments.Should().ContainSingle(comment =>
+            comment.Author == "Alice Reviewer" &&
+            comment.Initials == "AR" &&
+            comment.Text == "Confirm the title before publishing.");
+        loaded.Slides[1].Comments.Should().HaveCount(2);
+        TextBodyText(loaded.Slides[0].Notes).Should().Contain("review workflow");
+        TextBodyText(loaded.Slides[1].Notes).Should().Contain("comment decisions");
+
+        var editShapeName = AddModeledShapeEdit(loaded, deckName);
+
+        using var saved = new MemoryStream();
+        PptxPackageWriter.Write(loaded, saved);
+        var savedBytes = saved.ToArray();
+
+        using var reopenedStream = new MemoryStream(savedBytes);
+        var reopened = PptxPackageReader.Read(reopenedStream);
+        reopened.Slides.Should().HaveCount(2);
+        reopened.Slides[0].Shapes.Should().Contain(shape => shape.Name == editShapeName);
+        reopened.Slides[0].Comments.Should().ContainSingle(comment =>
+            comment.Author == "Alice Reviewer" &&
+            comment.Initials == "AR" &&
+            comment.Text == "Confirm the title before publishing.");
+        reopened.Slides[1].Comments.Select(comment => comment.Author)
+            .Should().Equal("Bob Reviewer", "Alice Reviewer");
+        TextBodyText(reopened.Slides[0].Notes).Should().Contain("package save");
+        TextBodyText(reopened.Slides[1].Notes).Should().Contain("comment decisions");
+
+        using var sourceArchive = ZipFile.OpenRead(sourcePath);
+        using var savedArchive = new ZipArchive(new MemoryStream(savedBytes), ZipArchiveMode.Read);
+        AssertPreservedPackageEntries(sourceArchive, savedArchive, deckName);
+        AssertPreservedContentTypes(sourceArchive, savedArchive, deckName);
+        AssertPreservedRelationships(sourceArchive, savedArchive, deckName);
+        AssertCommentsNotesPackageParts(savedArchive);
     }
 
     [Fact]
@@ -404,6 +449,71 @@ public sealed class PptxPackageRetentionTests
         package.Position = 0;
         return package;
     }
+
+    private static void AssertCommentsNotesPackageParts(ZipArchive archive)
+    {
+        archive.GetEntry("ppt/notesSlides/notesSlide1.xml").Should().NotBeNull();
+        archive.GetEntry("ppt/notesSlides/notesSlide2.xml").Should().NotBeNull();
+        archive.GetEntry("ppt/notesMasters/notesMaster1.xml").Should().NotBeNull();
+        archive.GetEntry("ppt/comments/comment1.xml").Should().NotBeNull();
+        archive.GetEntry("ppt/comments/comment2.xml").Should().NotBeNull();
+        archive.GetEntry("ppt/commentAuthors.xml").Should().NotBeNull();
+
+        ReadText(archive, "ppt/notesSlides/notesSlide1.xml")
+            .Should().Contain("Speaker note: introduce the review workflow.")
+            .And.Contain("package save");
+        ReadText(archive, "ppt/notesSlides/notesSlide2.xml")
+            .Should().Contain("Speaker note: summarize the comment decisions.");
+        ReadText(archive, "ppt/comments/comment1.xml")
+            .Should().Contain("Confirm the title before publishing.");
+        ReadText(archive, "ppt/comments/comment2.xml")
+            .Should().Contain("Add a data source footnote.")
+            .And.Contain("Keep this callout for presenter notes.");
+        ReadText(archive, "ppt/commentAuthors.xml")
+            .Should().Contain("Alice Reviewer")
+            .And.Contain("Bob Reviewer");
+
+        var contentTypes = LoadXml(archive, "[Content_Types].xml");
+        Override(contentTypes, "/ppt/notesSlides/notesSlide1.xml",
+            "application/vnd.openxmlformats-officedocument.presentationml.notesSlide+xml").Should().NotBeNull();
+        Override(contentTypes, "/ppt/notesSlides/notesSlide2.xml",
+            "application/vnd.openxmlformats-officedocument.presentationml.notesSlide+xml").Should().NotBeNull();
+        Override(contentTypes, "/ppt/notesMasters/notesMaster1.xml",
+            "application/vnd.openxmlformats-officedocument.presentationml.notesMaster+xml").Should().NotBeNull();
+        Override(contentTypes, "/ppt/comments/comment1.xml",
+            "application/vnd.openxmlformats-officedocument.presentationml.comments+xml").Should().NotBeNull();
+        Override(contentTypes, "/ppt/comments/comment2.xml",
+            "application/vnd.openxmlformats-officedocument.presentationml.comments+xml").Should().NotBeNull();
+        Override(contentTypes, "/ppt/commentAuthors.xml",
+            "application/vnd.openxmlformats-officedocument.presentationml.commentAuthors+xml").Should().NotBeNull();
+
+        var presRels = LoadXml(archive, "ppt/_rels/presentation.xml.rels");
+        Relationship(presRels,
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesMaster",
+            "notesMasters/notesMaster1.xml").Should().NotBeNull();
+        Relationship(presRels,
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/commentAuthors",
+            "commentAuthors.xml").Should().NotBeNull();
+
+        AssertSlideCommentsNotesRelationships(archive, slideIndex: 1);
+        AssertSlideCommentsNotesRelationships(archive, slideIndex: 2);
+    }
+
+    private static void AssertSlideCommentsNotesRelationships(ZipArchive archive, int slideIndex)
+    {
+        var slideRels = LoadXml(archive, $"ppt/slides/_rels/slide{slideIndex}.xml.rels");
+        Relationship(slideRels,
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesSlide",
+            $"../notesSlides/notesSlide{slideIndex}.xml").Should().NotBeNull();
+        Relationship(slideRels,
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments",
+            $"../comments/comment{slideIndex}.xml").Should().NotBeNull();
+    }
+
+    private static string TextBodyText(TextBody? body) =>
+        body is null
+            ? string.Empty
+            : string.Concat(body.Paragraphs.SelectMany(paragraph => paragraph.Runs.Select(run => run.Text)));
 
     private static string AddModeledShapeEdit(Presentation presentation, string deckName)
     {
