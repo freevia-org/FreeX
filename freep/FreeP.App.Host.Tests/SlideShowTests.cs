@@ -442,6 +442,37 @@ public sealed class SlideShowWindowTests
     }
 
     [StaFact]
+    public void SlideShowWindow_ApplyPresenterToolIntent_UsesSharedPlannerState()
+    {
+        var pres = Presentation.CreateEmpty();
+        var window = new SlideShowWindow(pres, 0);
+        try
+        {
+            var plan = window.ApplyPresenterToolIntent(
+                SlideShowTimingIntent.RecordTimings,
+                SlideShowRecordingMediaIntent.NarrationAndMedia,
+                SlideShowPresenterPointerMode.Pen,
+                "#336699",
+                5,
+                SlideShowInkRetentionDecision.ClearInk);
+
+            plan.Should().BeSameAs(window.PresenterToolPlan);
+            plan.Recording.NarrationCapture.IsDeferred.Should().BeTrue();
+            plan.Recording.MediaCapture.IsDeferred.Should().BeTrue();
+            plan.PointerInk.PointerMode.Should().Be(SlideShowPresenterPointerMode.Pen);
+            plan.PointerInk.InkState.ColorHex.Should().Be("#336699");
+            plan.PointerInk.InkRetentionDecision.Should().Be(SlideShowInkRetentionDecision.ClearInk);
+
+            var state = window.CreatePresenterState(window.PresenterStartedAtUtc.AddSeconds(3));
+            state.ToolPlan.Should().BeSameAs(plan);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [StaFact]
     public void SlideShowWindow_MultipleSlides_AdvanceNavigatesCorrectly()
     {
         var pres = Presentation.CreateEmpty();

@@ -248,21 +248,30 @@ public sealed class SlideShowHostPlannerTests
         state.StartedAtUtc.Should().Be(started);
         state.Elapsed.Should().Be(TimeSpan.FromSeconds(95));
         state.DisplayIntent.Should().BeSameAs(displayIntent);
+        state.ToolPlan.PointerInk.PointerMode.Should().Be(SlideShowPresenterPointerMode.Arrow);
     }
 
     [Fact]
-    public void BuildPresenterState_HandlesEmptyDeckAndClampsNegativeElapsed()
+    public void BuildPresenterState_HandlesEmptyDeckClampsNegativeElapsedAndAcceptsToolPlan()
     {
         var pres = Presentation.CreateEmpty();
         pres.Slides.Clear();
         var controller = new SlideShowController(pres.Slides, startIndex: 0);
         var started = new DateTimeOffset(2026, 7, 1, 10, 0, 0, TimeSpan.Zero);
+        var toolPlan = SlideShowPresenterToolPlanner.BuildPlan(
+            SlideShowTimingIntent.RecordTimings,
+            SlideShowRecordingMediaIntent.NarrationAndMedia,
+            SlideShowPresenterPointerMode.Highlighter,
+            "#ffee00",
+            10,
+            SlideShowInkRetentionDecision.ClearInk);
 
         var state = SlideShowHostPlanner.BuildPresenterState(
             pres,
             controller,
             started,
-            started.AddSeconds(-1));
+            started.AddSeconds(-1),
+            toolPlan: toolPlan);
 
         state.HostState.StatusText.Should().Be(SlideShowHostPlanner.NoSlidesStatusText);
         state.CurrentSlide.Should().BeNull();
@@ -270,6 +279,7 @@ public sealed class SlideShowHostPlannerTests
         state.NotesText.Should().BeEmpty();
         state.Elapsed.Should().Be(TimeSpan.Zero);
         state.DisplayIntent.Should().Be(SlideShowPresenterDisplayIntent.FullScreen);
+        state.ToolPlan.Should().BeSameAs(toolPlan);
     }
 
     [Fact]

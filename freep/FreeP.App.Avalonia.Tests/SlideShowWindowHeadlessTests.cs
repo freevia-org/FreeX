@@ -117,6 +117,37 @@ public sealed class SlideShowWindowHeadlessTests
     }
 
     [Fact]
+    public async Task SlideShowWindow_apply_presenter_tool_intent_uses_shared_planner_state()
+    {
+        SlideShowPresenterToolPlan? plan = null;
+        SlideShowPresenterState? state = null;
+        var ran = await OnUiThread(() =>
+        {
+            var pres = MakePresentation(1);
+            var window = new SlideShowWindow(pres, 0);
+
+            plan = window.ApplyPresenterToolIntent(
+                SlideShowTimingIntent.RecordTimings,
+                SlideShowRecordingMediaIntent.NarrationAndMedia,
+                SlideShowPresenterPointerMode.Highlighter,
+                "#ffee00",
+                8,
+                SlideShowInkRetentionDecision.ClearInk);
+            state = window.CreatePresenterState(window.PresenterStartedAtUtc.AddSeconds(3));
+        });
+
+        if (!ran) return;
+        plan.Should().NotBeNull();
+        plan!.Recording.NarrationCapture.IsDeferred.Should().BeTrue();
+        plan.Recording.MediaCapture.IsDeferred.Should().BeTrue();
+        plan.PointerInk.PointerMode.Should().Be(SlideShowPresenterPointerMode.Highlighter);
+        plan.PointerInk.InkState.ColorHex.Should().Be("#FFEE00");
+        plan.PointerInk.InkRetentionDecision.Should().Be(SlideShowInkRetentionDecision.ClearInk);
+        state.Should().NotBeNull();
+        state!.ToolPlan.Should().BeSameAs(plan);
+    }
+
+    [Fact]
     public async Task SlideShowWindow_advance_past_last_slide_returns_AtEnd()
     {
         AdvanceResult? result = null;

@@ -20,6 +20,7 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("SlideShowHostPlanner.PlanInternalSlideJump(");
         source.Should().Contain("SlideShowHostPlanner.BuildDisplayPlan(");
         source.Should().Contain("SlideShowHostPlanner.BuildPresenterState(");
+        source.Should().Contain("SlideShowPresenterToolPlanner.BuildPlan(");
         source.Should().Contain("SlideShowHostPlanner.MapCanvasPointToSlide(");
         source.Should().Contain("SlideShowHostPlanner.HitTestHyperlink(");
         source.Should().Contain("SlideShowHostPlanner.HitTestTriggerShape(");
@@ -38,6 +39,7 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().NotContain("var result = _controller.Advance();");
         source.Should().NotContain("var result = _controller.Back();");
         source.Should().NotContain("_controller.AdvanceTrigger(");
+        source.Should().NotContain("new SlideShowPresenterToolPlan(");
     }
 
     private static string FindRepositoryRoot()

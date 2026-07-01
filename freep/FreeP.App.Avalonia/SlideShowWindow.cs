@@ -58,6 +58,7 @@ public sealed class SlideShowWindow : Window
     private readonly SlideShowController _controller;
     private readonly DateTimeOffset _presenterStartedAtUtc;
     private readonly DispatcherTimer  _autoAdvanceTimer;
+    private SlideShowPresenterToolPlan _presenterToolPlan = SlideShowPresenterToolPlanner.BuildPlan();
 
     // DA2 + DA3: all per-frame DispatcherTimers created by animation/transition helpers
     // (AnimateOpacity, AnimateTranslate, AnimateRectClip, AnimateScale, AnimateRotate,
@@ -196,6 +197,8 @@ public sealed class SlideShowWindow : Window
 
     public DateTimeOffset PresenterStartedAtUtc => _presenterStartedAtUtc;
 
+    public SlideShowPresenterToolPlan PresenterToolPlan => _presenterToolPlan;
+
     public SlideShowPresenterState CreatePresenterState(
         DateTimeOffset nowUtc,
         SlideShowPresenterDisplayIntent? displayIntent = null) =>
@@ -204,7 +207,26 @@ public sealed class SlideShowWindow : Window
             _controller,
             _presenterStartedAtUtc,
             nowUtc,
-            displayIntent);
+            displayIntent,
+            _presenterToolPlan);
+
+    public SlideShowPresenterToolPlan ApplyPresenterToolIntent(
+        SlideShowTimingIntent timingIntent = SlideShowTimingIntent.None,
+        SlideShowRecordingMediaIntent mediaIntent = SlideShowRecordingMediaIntent.None,
+        SlideShowPresenterPointerMode pointerMode = SlideShowPresenterPointerMode.Arrow,
+        string? inkColorHex = null,
+        double inkThicknessDip = 0,
+        SlideShowInkRetentionDecision inkRetentionDecision = SlideShowInkRetentionDecision.KeepInk)
+    {
+        _presenterToolPlan = SlideShowPresenterToolPlanner.BuildPlan(
+            timingIntent,
+            mediaIntent,
+            pointerMode,
+            inkColorHex,
+            inkThicknessDip,
+            inkRetentionDecision);
+        return _presenterToolPlan;
+    }
 
     /// <summary>Exposes the slide canvas for test assertions (DA1 suppression).</summary>
     internal SlideCanvas CanvasForTest => _slideCanvas;

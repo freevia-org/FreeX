@@ -64,7 +64,8 @@ public sealed record SlideShowPresenterState(
     string NotesText,
     DateTimeOffset StartedAtUtc,
     TimeSpan Elapsed,
-    SlideShowPresenterDisplayIntent DisplayIntent);
+    SlideShowPresenterDisplayIntent DisplayIntent,
+    SlideShowPresenterToolPlan ToolPlan);
 
 public sealed record SlideShowHostCommand
 {
@@ -349,7 +350,8 @@ public static class SlideShowHostPlanner
         SlideShowController controller,
         DateTimeOffset startedAtUtc,
         DateTimeOffset nowUtc,
-        SlideShowPresenterDisplayIntent? displayIntent = null)
+        SlideShowPresenterDisplayIntent? displayIntent = null,
+        SlideShowPresenterToolPlan? toolPlan = null)
     {
         ArgumentNullException.ThrowIfNull(presentation);
         ArgumentNullException.ThrowIfNull(controller);
@@ -372,7 +374,8 @@ public static class SlideShowHostPlanner
             InCanvasTextEditPlanner.ExtractPlainText(currentSlide?.Slide.Notes),
             startedAtUtc,
             elapsed,
-            displayIntent ?? SlideShowPresenterDisplayIntent.FullScreen);
+            displayIntent ?? SlideShowPresenterDisplayIntent.FullScreen,
+            toolPlan ?? SlideShowPresenterToolPlanner.BuildPlan());
     }
 
     public static string FormatStatusText(int currentSlideIndex, int slideCount) =>
