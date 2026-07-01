@@ -802,6 +802,8 @@ internal static class FreeWAvaloniaRibbonCommands
         var footnote = new ActionRibbonCommand(() => editor.InsertFootnote());
         r.Register("freew.footnote", footnote);
         r.Register("freew.insert-footnote", footnote);
+        r.Register("freew.show-notes", new ActionRibbonCommand(editor.ShowNotes));
+        r.Register("freew.footnote-endnote-options", new ActionRibbonCommand(editor.ApplyDefaultFootnoteEndnoteOptions));
 
         var endnote = new ActionRibbonCommand(() => editor.InsertEndnote());
         r.Register("freew.endnote", endnote);
@@ -832,7 +834,17 @@ internal static class FreeWAvaloniaRibbonCommands
         var citation = new ActionRibbonCommand(() => InsertDefaultCitation(editor));
         r.Register("freew.citation", citation);
         r.Register("freew.insert-citation", citation);
+        r.Register("freew.manage-sources", new ActionRibbonCommand(() => editor.ReplaceSources(editor.Document.Sources.ToArray())));
         r.Register("freew.bibliography", new ActionRibbonCommand(editor.InsertBibliography));
+
+        r.Register("freew.tof", new ActionRibbonCommand(() => editor.InsertTableOfFigures()));
+        r.Register("freew.tof-refresh", new ActionRibbonCommand(() => editor.RefreshTableOfFigures()));
+        r.Register("freew.index-mark", new ActionRibbonCommand(() => editor.MarkIndexEntry()));
+        r.Register("freew.index-insert", new ActionRibbonCommand(editor.InsertIndex));
+        r.Register("freew.index-refresh", new ActionRibbonCommand(editor.RefreshIndex));
+        r.Register("freew.mark-citation", new ActionRibbonCommand(() => editor.MarkCitation()));
+        r.Register("freew.table-of-authorities", new ActionRibbonCommand(editor.InsertTableOfAuthorities));
+        r.Register("freew.table-of-authorities-refresh", new ActionRibbonCommand(editor.RefreshTableOfAuthorities));
     }
 
     /// <summary>

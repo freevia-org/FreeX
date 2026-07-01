@@ -630,16 +630,33 @@ internal static class FreeWAvaloniaRibbonDefinition
                 {
                     g.Button("freew.footnote", "Insert Footnote");
                     g.Button("freew.endnote",  "Insert Endnote");
+                    g.Button("freew.show-notes", "Show Notes");
+                    g.Button("freew.footnote-endnote-options", "Footnote/Endnote Options...");
                 });
                 tab.Group("citations", "Citations & Bibliography", null, 90, g =>
                 {
                     g.Button("freew.citation",     "Insert Citation");
+                    g.Button("freew.manage-sources", "Manage Sources");
                     g.Button("freew.bibliography", "Bibliography");
                 });
                 tab.Group("captions", "Captions", null, 80, g =>
                 {
                     g.Dropdown("freew.caption", "Insert Caption", BuildCaptionMenu());
+                    g.Button("freew.tof", "Insert Table of Figures");
+                    g.Button("freew.tof-refresh", "Update Table");
                     g.Button("freew.cross-reference", "Cross-reference");
+                });
+                tab.Group("index", "Index", null, 70, g =>
+                {
+                    g.Button("freew.index-mark", "Mark Entry");
+                    g.Button("freew.index-insert", "Insert Index");
+                    g.Button("freew.index-refresh", "Update Index");
+                });
+                tab.Group("authorities", "Table of Authorities", null, 60, g =>
+                {
+                    g.Button("freew.mark-citation", "Mark Citation");
+                    g.Button("freew.table-of-authorities", "Insert Table of Authorities");
+                    g.Button("freew.table-of-authorities-refresh", "Update Table");
                 });
             })
             .Tab("mailings", "Mailings", "M", tab =>

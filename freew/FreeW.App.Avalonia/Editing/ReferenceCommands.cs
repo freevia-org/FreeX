@@ -73,3 +73,54 @@ internal sealed class SetBookmarkNameCommand(int paragraphIndex, string name) : 
             ? context.Document.Blocks[paragraphIndex] as Paragraph
             : null;
 }
+
+internal sealed class AddIndexEntryCommand(string term) : IDocumentCommand
+{
+    private int _index = -1;
+
+    public string Label => "Mark Index Entry";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        var entry = new IndexEntry(term);
+        if (entry.Term.Length == 0)
+            return;
+
+        _index = context.Document.IndexEntries.Count;
+        context.Document.IndexEntries.Add(entry);
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (_index < 0 || _index >= context.Document.IndexEntries.Count)
+            return;
+
+        context.Document.IndexEntries.RemoveAt(_index);
+        _index = -1;
+    }
+}
+
+internal sealed class AddCitationCommand(Citation citation) : IDocumentCommand
+{
+    private int _index = -1;
+
+    public string Label => "Mark Citation";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        if (citation.LongCitation.Length == 0)
+            return;
+
+        _index = context.Document.Citations.Count;
+        context.Document.Citations.Add(citation);
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (_index < 0 || _index >= context.Document.Citations.Count)
+            return;
+
+        context.Document.Citations.RemoveAt(_index);
+        _index = -1;
+    }
+}

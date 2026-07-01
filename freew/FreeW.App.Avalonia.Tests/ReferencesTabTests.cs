@@ -215,6 +215,85 @@ public sealed class ReferencesTabTests
         view.Document.Blocks.Count.Should().Be(before, "undo removes the whole bibliography block");
     }
 
+    [Fact]
+    public void ReplaceSources_replaces_source_list_and_undo_reverts()
+    {
+        var view = ViewWith();
+        view.Document.Sources.Add(new Source { Tag = "Old", Author = "Old Author", Title = "Old Title", Year = "1999" });
+
+        view.ReplaceSources(new[]
+        {
+            new Source { Tag = "New", Author = "New Author", Title = "New Title", Year = "2026" }
+        });
+
+        view.Document.Sources.Should().ContainSingle().Which.Tag.Should().Be("New");
+        view.Undo();
+        view.Document.Sources.Should().ContainSingle().Which.Tag.Should().Be("Old");
+    }
+
+    [Fact]
+    public void Index_commands_mark_insert_and_refresh_generated_index()
+    {
+        var view = ViewWith(new Paragraph("Beta"));
+
+        view.MarkIndexEntry("Beta");
+        view.InsertIndex();
+        view.MarkIndexEntry("Alpha");
+        view.RefreshIndex();
+
+        view.Document.Blocks.OfType<Paragraph>()
+            .Where(DocumentIndex.IsIndexParagraph)
+            .Select(paragraph => paragraph.PlainText)
+            .Should()
+            .Equal("Index", "Alpha", "Beta");
+        view.Document.Blocks.OfType<Paragraph>()
+            .Count(paragraph => paragraph.StyleId == DocumentIndex.HeadingStyleId)
+            .Should()
+            .Be(1);
+    }
+
+    [Fact]
+    public void Table_of_figures_commands_insert_and_refresh_caption_table()
+    {
+        var view = ViewWith();
+
+        view.InsertCaption(CaptionLabel.Figure, "First");
+        view.InsertTableOfFigures();
+        view.Document.Blocks.Add(Captions.BuildCaption(CaptionLabel.Figure, 2, "Second"));
+        view.RefreshTableOfFigures();
+
+        view.Document.Blocks.OfType<Paragraph>()
+            .Where(TableOfFigures.IsTableOfFiguresParagraph)
+            .Select(paragraph => paragraph.PlainText)
+            .Should()
+            .Equal("Table of Figures", "Figure 1: First", "Figure 2: Second");
+        view.Document.Blocks.OfType<Paragraph>()
+            .Count(paragraph => paragraph.StyleId == TableOfFigures.HeadingStyleId)
+            .Should()
+            .Be(1);
+    }
+
+    [Fact]
+    public void Table_of_authorities_commands_mark_insert_and_refresh_generated_table()
+    {
+        var view = ViewWith(new Paragraph("Brown v. Board"));
+
+        view.MarkCitation("Brown v. Board");
+        view.InsertTableOfAuthorities();
+        view.MarkCitation("Roe v. Wade");
+        view.RefreshTableOfAuthorities();
+
+        view.Document.Blocks.OfType<Paragraph>()
+            .Where(TableOfAuthorities.IsTableOfAuthoritiesParagraph)
+            .Select(paragraph => paragraph.PlainText)
+            .Should()
+            .ContainInOrder("Table of Authorities", "Cases", "Brown v. Board", "Roe v. Wade");
+        view.Document.Blocks.OfType<Paragraph>()
+            .Count(paragraph => paragraph.StyleId == TableOfAuthorities.HeadingStyleId)
+            .Should()
+            .Be(1);
+    }
+
     // ── Registry wiring ─────────────────────────────────────────────────────────────
 
     [Fact]
@@ -233,6 +312,11 @@ public sealed class ReferencesTabTests
             "freew.cross-reference",
             "freew.citation",
             "freew.insert-citation", "freew.bibliography",
+            "freew.show-notes", "freew.footnote-endnote-options",
+            "freew.manage-sources",
+            "freew.tof", "freew.tof-refresh",
+            "freew.index-mark", "freew.index-insert", "freew.index-refresh",
+            "freew.mark-citation", "freew.table-of-authorities", "freew.table-of-authorities-refresh",
         };
 
         foreach (var id in expected)
@@ -270,7 +354,15 @@ public sealed class ReferencesTabTests
         references.Should().NotBeNull();
 
         references!.Groups.Select(g => g.Header).Should()
-            .Contain(new[] { "Table of Contents", "Footnotes", "Citations & Bibliography", "Captions" });
+            .Contain(new[]
+            {
+                "Table of Contents",
+                "Footnotes",
+                "Citations & Bibliography",
+                "Captions",
+                "Index",
+                "Table of Authorities"
+            });
     }
 
     [Fact]
@@ -296,6 +388,17 @@ public sealed class ReferencesTabTests
             "freew.insert-caption.figure",
             "freew.insert-caption.table",
             "freew.cross-reference",
+            "freew.show-notes",
+            "freew.footnote-endnote-options",
+            "freew.manage-sources",
+            "freew.tof",
+            "freew.tof-refresh",
+            "freew.index-mark",
+            "freew.index-insert",
+            "freew.index-refresh",
+            "freew.mark-citation",
+            "freew.table-of-authorities",
+            "freew.table-of-authorities-refresh",
         });
 
         commandIds.Should().NotContain(new[]
@@ -343,6 +446,26 @@ public sealed class ReferencesTabTests
             .Select(paragraph => paragraph.PlainText)
             .Should().Contain(text => text.Contains("Smith", StringComparison.Ordinal),
                 "executing the canonical command inserts an in-text citation");
+
+        var indexView = ViewWith(new Paragraph("Alpha"));
+        var indexRegistry = FreeWRibbon.BuildRegistry(indexView, NoopCallbacks());
+        Execute(indexRegistry, "freew.index-mark");
+        Execute(indexRegistry, "freew.index-insert");
+        indexView.Document.Blocks.OfType<Paragraph>()
+            .Where(DocumentIndex.IsIndexParagraph)
+            .Select(paragraph => paragraph.PlainText)
+            .Should()
+            .Contain("Alpha");
+
+        var authoritiesView = ViewWith(new Paragraph("Brown v. Board"));
+        var authoritiesRegistry = FreeWRibbon.BuildRegistry(authoritiesView, NoopCallbacks());
+        Execute(authoritiesRegistry, "freew.mark-citation");
+        Execute(authoritiesRegistry, "freew.table-of-authorities");
+        authoritiesView.Document.Blocks.OfType<Paragraph>()
+            .Where(TableOfAuthorities.IsTableOfAuthoritiesParagraph)
+            .Select(paragraph => paragraph.PlainText)
+            .Should()
+            .Contain("Brown v. Board");
     }
 
     [Fact]
