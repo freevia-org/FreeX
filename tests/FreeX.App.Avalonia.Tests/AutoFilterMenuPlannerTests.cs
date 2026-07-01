@@ -23,9 +23,9 @@ public sealed class AutoFilterMenuPlannerTests
                 new("Sort A to Z", AutoFilterMenuEntryKind.SortAscending),
                 new("Clear Filter from Region", AutoFilterMenuEntryKind.ClearFilter, isEnabled: false),
                 new("Search", AutoFilterMenuEntryKind.Search),
-                new("Select All", AutoFilterMenuEntryKind.SelectAll),
+                new("Select All", AutoFilterMenuEntryKind.SelectAll, isChecked: null),
                 new("Text Filters", AutoFilterMenuEntryKind.FilterFamily, ["contains:"], "Text Filters"),
-                new(new AutoFilterChecklistItem("West", "west"))
+                new(new AutoFilterChecklistItem("West", "west", IsChecked: false))
             ]);
 
         var model = AutoFilterMenuPlanner.Build(plan);
@@ -40,5 +40,7 @@ public sealed class AutoFilterMenuPlannerTests
             AutoFilterMenuItemKind.ChecklistItem);
         model.Items.Single(item => item.Kind == AutoFilterMenuItemKind.ClearFilter).IsEnabled.Should().BeFalse();
         model.Items.Single(item => item.Kind == AutoFilterMenuItemKind.ChecklistItem).Value.Should().Be("west");
+        model.Items.Single(item => item.Kind == AutoFilterMenuItemKind.SelectAll).IsChecked.Should().BeNull();
+        model.Items.Single(item => item.Kind == AutoFilterMenuItemKind.ChecklistItem).IsChecked.Should().BeFalse();
     }
 }

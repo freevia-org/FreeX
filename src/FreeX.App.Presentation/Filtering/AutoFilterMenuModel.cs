@@ -4,7 +4,7 @@ namespace FreeX.App.Presentation.Filtering;
 
 public sealed record AutoFilterDropdownPlan(GridRange Range, uint FilterColumnOffset);
 
-public sealed record AutoFilterChecklistItem(string DisplayText, string Value);
+public sealed record AutoFilterChecklistItem(string DisplayText, string Value, bool IsChecked = true);
 
 public sealed record AutoFilterMenuPlan(
     string HeaderText,
@@ -48,10 +48,15 @@ public sealed record AutoFilterMenuEntry(
     IReadOnlyList<string> CriteriaSuggestions,
     string Value,
     IReadOnlyList<AutoFilterMenuEntry> Children,
-    bool IsEnabled = true)
+    bool IsEnabled = true,
+    bool? IsChecked = null)
 {
-    public AutoFilterMenuEntry(string header, AutoFilterMenuEntryKind kind, bool isEnabled = true)
-        : this(header, kind, [], header, [], isEnabled)
+    public AutoFilterMenuEntry(
+        string header,
+        AutoFilterMenuEntryKind kind,
+        bool isEnabled = true,
+        bool? isChecked = null)
+        : this(header, kind, [], header, [], isEnabled, isChecked)
     {
     }
 
@@ -59,8 +64,9 @@ public sealed record AutoFilterMenuEntry(
         string header,
         AutoFilterMenuEntryKind kind,
         IReadOnlyList<string> criteriaSuggestions,
-        bool isEnabled = true)
-        : this(header, kind, criteriaSuggestions, header, [], isEnabled)
+        bool isEnabled = true,
+        bool? isChecked = null)
+        : this(header, kind, criteriaSuggestions, header, [], isEnabled, isChecked)
     {
     }
 
@@ -69,13 +75,14 @@ public sealed record AutoFilterMenuEntry(
         AutoFilterMenuEntryKind kind,
         IReadOnlyList<string> criteriaSuggestions,
         string value,
-        bool isEnabled = true)
-        : this(header, kind, criteriaSuggestions, value, [], isEnabled)
+        bool isEnabled = true,
+        bool? isChecked = null)
+        : this(header, kind, criteriaSuggestions, value, [], isEnabled, isChecked)
     {
     }
 
     public AutoFilterMenuEntry(AutoFilterChecklistItem item)
-        : this(item.DisplayText, AutoFilterMenuEntryKind.ChecklistItem, [], item.Value, [])
+        : this(item.DisplayText, AutoFilterMenuEntryKind.ChecklistItem, [], item.Value, [], true, item.IsChecked)
     {
     }
 }
