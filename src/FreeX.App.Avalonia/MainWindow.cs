@@ -18966,7 +18966,7 @@ public sealed partial class MainWindow : Window
             hasFormatCellsDialogActionButtons =
                 HasLaunchSmokeButton(probe.OkButton, "FormatCellsOkButton", "OK") &&
                 HasLaunchSmokeButton(probe.CancelButton, "FormatCellsCancelButton", "Cancel");
-            hasFormatCellsDialogCompactLayout = HasLaunchSmokeCompactDialog(probe.Dialog, width: 560, height: 560, minWidth: 480, minHeight: 500);
+            hasFormatCellsDialogCompactLayout = HasLaunchSmokeCompactDialog(probe.Dialog, width: 690, height: 660, minWidth: 620, minHeight: 560);
         });
 
         var hasSortDialog = false;
@@ -19400,8 +19400,14 @@ public sealed partial class MainWindow : Window
             HasMergeAndCenterButton: _mergeAndCenterButton.Content?.ToString() == "Merge & Center" &&
                 string.Equals(AutomationProperties.GetAutomationId(_mergeAndCenterButton), "HomeMergeAndCenterButton", StringComparison.Ordinal) &&
                 string.Equals(AutomationProperties.GetHelpText(_mergeAndCenterButton), "Merge and center the selected cells.", StringComparison.Ordinal),
-            HasFormulaBoxAutomationName: string.Equals(AutomationProperties.GetName(_formulaBox), "Formula bar", StringComparison.Ordinal),
-            HasFormulaBoxAutomationHelp: string.Equals(AutomationProperties.GetHelpText(_formulaBox), "Edit the active cell value or formula.", StringComparison.Ordinal),
+            HasFormulaBoxAutomationName: string.Equals(
+                AutomationProperties.GetName(_formulaBox),
+                FormulaBarText(FormulaBarChromePlanner.FormulaBox.AutomationNameResourceKey),
+                StringComparison.Ordinal),
+            HasFormulaBoxAutomationHelp: string.Equals(
+                AutomationProperties.GetHelpText(_formulaBox),
+                FormulaBarText(FormulaBarChromePlanner.FormulaBox.HelpTextResourceKey),
+                StringComparison.Ordinal),
             HasFormulaBoxAutomationId: string.Equals(AutomationProperties.GetAutomationId(_formulaBox), "FormulaBox", StringComparison.Ordinal),
             HasStatusTextAutomationName: string.Equals(AutomationProperties.GetName(_statusText), "Status", StringComparison.Ordinal),
             HasStatusTextAutomationHelp: string.Equals(AutomationProperties.GetHelpText(_statusText), "Shows the current workbook status.", StringComparison.Ordinal),

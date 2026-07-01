@@ -310,20 +310,36 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.split",             new ActionRibbonCommand(callbacks.ToggleSplit ?? (() => { })));
 
         // ── Review ───────────────────────────────────────────────────────────
-        r.Register("freew.reviewingpane", new ActionRibbonCommand(callbacks.ToggleReviewingPane));
+        var reviewingPaneCommand = new ActionRibbonCommand(callbacks.ToggleReviewingPane);
+        r.Register("freew.reviewing-pane", reviewingPaneCommand);
+        r.Register("freew.reviewingpane", reviewingPaneCommand);
         // AV-REVIEW: Track Changes toggle (flag only — keystroke-level recording is deferred; turning the
         // current selection into a tracked change is available via DocumentView.MarkSelectionAsRevision).
         r.Register("freew.track-changes", new ActionRibbonCommand(() => editor.ToggleTrackChanges()));
         // Accept / reject — current revision (at/after caret) and all, undoable + re-render.
-        r.Register("freew.accept-change", new ActionRibbonCommand(() => editor.AcceptCurrentRevision()));
-        r.Register("freew.reject-change", new ActionRibbonCommand(() => editor.RejectCurrentRevision()));
+        var acceptCurrentRevisionCommand = new ActionRibbonCommand(() => editor.AcceptCurrentRevision());
+        var rejectCurrentRevisionCommand = new ActionRibbonCommand(() => editor.RejectCurrentRevision());
+        r.Register("freew.accept-this", acceptCurrentRevisionCommand);
+        r.Register("freew.accept-change", acceptCurrentRevisionCommand);
+        r.Register("freew.reject-this", rejectCurrentRevisionCommand);
+        r.Register("freew.reject-change", rejectCurrentRevisionCommand);
         r.Register("freew.accept-all",    new ActionRibbonCommand(() => editor.AcceptAllRevisions()));
         r.Register("freew.reject-all",    new ActionRibbonCommand(() => editor.RejectAllRevisions()));
         // Comments — new comment over the selection / delete the comment at the caret.
         r.Register("freew.new-comment",    new ActionRibbonCommand(() => editor.NewComment()));
         r.Register("freew.delete-comment", new ActionRibbonCommand(() => editor.DeleteCommentAtCaret()));
         // Word Count — opens the modal stats dialog (shell callback; reads DocumentStatistics).
-        r.Register("freew.word-count", new ActionRibbonCommand(callbacks.OpenWordCountDialog));
+        var statisticsCommand = new ActionRibbonCommand(callbacks.OpenWordCountDialog);
+        r.Register("freew.statistics", statisticsCommand);
+        r.Register("freew.word-count", statisticsCommand);
+        r.Register("freew.check-accessibility", new ActionRibbonCommand(callbacks.CheckAccessibility ?? (() => { })));
+        r.Register("freew.inspect-document", new ActionRibbonCommand(callbacks.InspectDocument ?? (() => { })));
+        r.Register("freew.mark-as-final", new ToggleActionCommand(
+            callbacks.MarkAsFinal ?? (() => editor.SetMarkedAsFinal(!editor.IsMarkedAsFinal)),
+            () => editor.IsMarkedAsFinal));
+        r.Register("freew.restrict-editing", new ToggleActionCommand(
+            callbacks.RestrictEditing ?? (() => { }),
+            () => editor.IsProtected));
 
         // ── References (AV-REF) ──────────────────────────────────────────────
         RegisterReferencesCommands(r, editor);
@@ -378,6 +394,13 @@ internal static class FreeWAvaloniaRibbonCommands
     {
         var paragraph = editor.GetCaretFormatting().Paragraph;
         editor.SetSpaceAfter(paragraph.SpaceAfterPt > 0 ? 0 : ParagraphSpacingTogglePoints);
+    }
+
+    private sealed class ToggleActionCommand(Action toggle, Func<bool> isChecked) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context) => toggle();
+
+        public RibbonCommandState GetState() => new(IsChecked: isChecked());
     }
 
     private sealed class FormattingMarksCommand(DocumentView editor) : IRibbonStatefulCommand

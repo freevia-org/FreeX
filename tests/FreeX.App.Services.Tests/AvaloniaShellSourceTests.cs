@@ -4811,8 +4811,10 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("AutomationProperties.SetAutomationId(_selectionStatsText, \"SelectionStatsText\");");
         source.Should().Contain("AutomationProperties.SetName(_selectionStatsText, \"Selection statistics\");");
         source.Should().Contain("AutomationProperties.SetHelpText(_selectionStatsText, \"Shows statistics for the current selection.\");");
-        source.Should().Contain("HasFormulaBoxAutomationName: string.Equals(AutomationProperties.GetName(_formulaBox), \"Formula bar\", StringComparison.Ordinal)");
-        source.Should().Contain("HasFormulaBoxAutomationHelp: string.Equals(AutomationProperties.GetHelpText(_formulaBox), \"Edit the active cell value or formula.\", StringComparison.Ordinal)");
+        source.Should().Contain("HasFormulaBoxAutomationName: string.Equals(");
+        source.Should().Contain("FormulaBarText(FormulaBarChromePlanner.FormulaBox.AutomationNameResourceKey)");
+        source.Should().Contain("HasFormulaBoxAutomationHelp: string.Equals(");
+        source.Should().Contain("FormulaBarText(FormulaBarChromePlanner.FormulaBox.HelpTextResourceKey)");
         source.Should().Contain("HasFormulaBoxAutomationId: string.Equals(AutomationProperties.GetAutomationId(_formulaBox), \"FormulaBox\", StringComparison.Ordinal)");
         source.Should().Contain("HasStatusTextAutomationName: string.Equals(AutomationProperties.GetName(_statusText), \"Status\", StringComparison.Ordinal)");
         source.Should().Contain("HasStatusTextAutomationHelp: string.Equals(AutomationProperties.GetHelpText(_statusText), \"Shows the current workbook status.\", StringComparison.Ordinal)");

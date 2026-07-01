@@ -322,6 +322,7 @@ public sealed class MainWindowHeadlessTests
         ids.Should().Contain("freep.file.open",    "Open command required");
         ids.Should().Contain("freep.file.save",    "Save command required");
         ids.Should().Contain("freep.file.save-as", "Save As command required");
+        ids.Should().Contain(PresentationExportPlanner.ImageExportCommandId, "image export command required");
     }
 
     [Fact]

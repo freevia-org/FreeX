@@ -88,6 +88,19 @@ internal sealed class BackstageView : UserControl
                     .ToArray()),
         };
 
+        var deferredActions = plan.DeferredActions.Where(action => action.IsEnabled).ToArray();
+        if (deferredActions.Length > 0)
+        {
+            groups.Add(new BackstageActionGroup(
+                plan.DeferredGroupHeading,
+                deferredActions
+                    .Select(action => new BackstageActionRow(
+                        action.Label,
+                        action.Description,
+                        _backstage.HideThen(ResolveExportAction(action.CommandId))))
+                    .ToArray()));
+        }
+
         return Panes.BuildActionPane(new BackstageActionPaneSpec(
             plan.Heading,
             plan.Description,
@@ -153,6 +166,7 @@ internal sealed class BackstageView : UserControl
         commandId switch
         {
             PresentationExportPlanner.PdfExportCommandId => _actions.ExportPdf,
+            PresentationExportPlanner.ImageExportCommandId => _actions.ExportImages,
             _ => throw new InvalidOperationException($"Unsupported FreeP export command '{commandId}'."),
         };
 }
@@ -164,6 +178,7 @@ internal sealed record BackstageActions(
     Action Save,
     Action SaveAs,
     Action ExportPdf,
+    Action ExportImages,
     Func<FreePOptions> CurrentOptions,
     Action OnClosed,
     Func<string> DataFolder);

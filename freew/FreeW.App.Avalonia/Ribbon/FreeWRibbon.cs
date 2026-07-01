@@ -135,5 +135,13 @@ internal sealed record RibbonHostCallbacks(
     /// and applies it via <see cref="DocumentView.SetWatermark"/>. Optional (default null); the registry
     /// no-ops when null.
     /// </summary>
-    Action? OpenWatermarkDialog = null);
+    Action? OpenWatermarkDialog = null,
+    /// <summary>AV-REVIEW: Review &gt; Protect &gt; Mark as Final. Optional; registry falls back to model toggle.</summary>
+    Action? MarkAsFinal = null,
+    /// <summary>AV-REVIEW: Review &gt; Protect &gt; Restrict Editing. Optional; registry no-ops when null.</summary>
+    Action? RestrictEditing = null,
+    /// <summary>AV-REVIEW: Review &gt; Inspect &gt; Inspect Document. Optional; registry no-ops when null.</summary>
+    Action? InspectDocument = null,
+    /// <summary>AV-REVIEW: Review &gt; Accessibility &gt; Check Accessibility. Optional; registry no-ops when null.</summary>
+    Action? CheckAccessibility = null);
 

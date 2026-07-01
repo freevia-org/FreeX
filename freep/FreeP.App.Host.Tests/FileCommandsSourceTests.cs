@@ -16,7 +16,11 @@ public sealed class FileCommandsSourceTests
         source.Should().Contain("PresentationFileDialogPlanner.BuildOpenDialogPlan()");
         source.Should().Contain("PresentationFileDialogPlanner.BuildSaveAsDialogPlan(");
         source.Should().Contain("PresentationExportPlanner.BuildPdfExportDialogPlan(");
+        source.Should().Contain("PresentationExportPlanner.ImageExportPickerTitle");
         source.Should().Contain("PresentationImageExportExecutor.Export(");
+        source.Should().Contain("public bool ExportImages()");
+        source.Should().Contain("_getImageExportRange()");
+        source.Should().Contain("new OpenFolderDialog");
         source.Should().Contain("WpfPresentationSlideImageRenderer.RenderSlideToPng");
         source.Should().Contain("PresentationFilePersistenceWorkflow.Open(path)");
         source.Should().Contain("PresentationFilePersistenceWorkflow.Save(path, _getModel())");

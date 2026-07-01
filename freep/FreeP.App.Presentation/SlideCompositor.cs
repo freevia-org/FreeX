@@ -226,7 +226,7 @@ public static class SlideCompositor
                 : presentation.Masters.FirstOrDefault();
 
             text = ResolveTextLayout(shape.TextBody, effectiveAnchor, effectiveDefaultAlign, shape.Placeholder,
-                theme, slideIndex, effectiveClrMap, layoutPh?.TextBody, resolvedMaster?.TextStyles);
+                theme, slideIndex, effectiveClrMap, layoutPh?.TextBody, masterPh?.TextBody, resolvedMaster?.TextStyles);
         }
 
         ops.Add(new DrawOp.Shape
@@ -1020,6 +1020,7 @@ public static class SlideCompositor
         int slideIndex = 0,
         IReadOnlyDictionary<string, string>? effectiveClrMap = null,
         TextBody? layoutBody = null,
+        TextBody? masterBody = null,
         MasterTextStyles? masterTextStyles = null)
     {
         // Determine hard-coded fallback font size and font (last resort only).
@@ -1278,10 +1279,10 @@ public static class SlideCompositor
         }
 
         var insets = TextFrameLayoutPlanner.FromOptionalInsets(
-            PointsToDip(body.InsetLeftPt),
-            PointsToDip(body.InsetTopPt),
-            PointsToDip(body.InsetRightPt),
-            PointsToDip(body.InsetBottomPt),
+            PointsToDip(body.InsetLeftPt ?? layoutBody?.InsetLeftPt ?? masterBody?.InsetLeftPt),
+            PointsToDip(body.InsetTopPt ?? layoutBody?.InsetTopPt ?? masterBody?.InsetTopPt),
+            PointsToDip(body.InsetRightPt ?? layoutBody?.InsetRightPt ?? masterBody?.InsetRightPt),
+            PointsToDip(body.InsetBottomPt ?? layoutBody?.InsetBottomPt ?? masterBody?.InsetBottomPt),
             DefaultInsetHorzDip,
             DefaultInsetVertDip);
 

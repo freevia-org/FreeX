@@ -493,7 +493,12 @@ public sealed class MainWindow : Window
             ShowMailMergeInfo: msg => _status.Text = msg,
             // AV-DESIGN: Page Borders + Custom Watermark dialog launchers (optional callbacks).
             OpenPageBordersDialog: () => _ = OpenPageBordersDialogAsync(),
-            OpenWatermarkDialog:   () => _ = OpenWatermarkDialogAsync());
+            OpenWatermarkDialog:   () => _ = OpenWatermarkDialogAsync(),
+            // AV-REVIEW: route ribbon safety/protect commands through the same Backstage flows.
+            MarkAsFinal: ToggleMarkAsFinal,
+            RestrictEditing: () => _ = OpenRestrictEditingAsync(),
+            InspectDocument: () => _ = InspectDocumentAsync(),
+            CheckAccessibility: () => _ = CheckAccessibilityAsync());
 
         // AV-MAIL: capture the Mailings engine so the shell can drive its two dialog-bound commands
         // (Select Recipients / Insert Merge Field) with async Avalonia dialogs over the same session the

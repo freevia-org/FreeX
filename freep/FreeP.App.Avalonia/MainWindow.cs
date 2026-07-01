@@ -384,6 +384,7 @@ public sealed class MainWindow : Window
         r.Register("freep.file.save",    new ActionRibbonCommand(() => _ = FileSaveAsync()));
         r.Register("freep.file.save-as", new ActionRibbonCommand(() => _ = FileSaveAsAsync()));
         r.Register(PresentationExportPlanner.PdfExportCommandId, new ActionRibbonCommand(() => _ = FileExportPdfAsync()));
+        r.Register(PresentationExportPlanner.ImageExportCommandId, new ActionRibbonCommand(() => _ = FileExportImagesAsync()));
 
         // Slide navigation/management
         r.Register("freep.new-slide",       new ActionRibbonCommand(() => Editor.InsertSlide()));
@@ -673,6 +674,56 @@ public sealed class MainWindow : Window
                 BaseFileName: Path.GetFileNameWithoutExtension(_fileWorkflow.CurrentFileName),
                 SlideRange: range),
             SlideRenderer.RenderToBytes);
+
+    private async Task<bool> FileExportImagesAsync()
+    {
+        if (!StorageProvider.CanPickFolder)
+        {
+            _statusText.Text = SisterAppFileTextPlanner.FormatCommandUnavailable(
+                FileText,
+                PresentationExportPlanner.ImageExportCommandText);
+            return false;
+        }
+
+        var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
+        {
+            Title = PresentationExportPlanner.ImageExportPickerTitle,
+            AllowMultiple = false,
+        });
+
+        var folder = folders.Count == 0 ? null : folders[0];
+        var path = folder?.TryGetLocalPath();
+        if (path is null)
+        {
+            if (folder is not null)
+            {
+                _statusText.Text = SisterAppFileTextPlanner.FormatSelectedFileNotLocalPath(
+                    FileText,
+                    PresentationExportPlanner.ImageExportCommandText);
+            }
+
+            return false;
+        }
+
+        try
+        {
+            FileExportImagesToFolder(path, BuildCurrentSlideImageExportRange());
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(
+                FileText,
+                PresentationExportPlanner.ImageExportCommandText,
+                ex.Message);
+            return false;
+        }
+    }
+
+    private PresentationSlideRangeRequest BuildCurrentSlideImageExportRange() =>
+        new(
+            PresentationSlideRangeKind.CurrentSlide,
+            CurrentSlideNumber: Editor.CurrentSlideIndex + 1);
 
     private void RegisterReviewWorkflowCommands(RibbonCommandRegistry registry)
     {

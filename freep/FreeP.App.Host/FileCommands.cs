@@ -7,6 +7,7 @@ using Free.Shared.Shell.Wpf;
 using FreeP.App.Compositor;
 using FreeP.Core.IO;
 using FreeP.Core.Model;
+using Microsoft.Win32;
 
 namespace FreeP.App.Host;
 
@@ -36,6 +37,7 @@ internal sealed class FileCommands
     private readonly Action<Presentation> _loadModel;
     private readonly SisterWpfFileCommandWorkflow _workflow;
     private readonly FreePOptions _options;
+    private readonly Func<PresentationSlideRangeRequest?> _getImageExportRange;
 
     private static readonly FileOpenDialogPlan OpenDialogPlan =
         PresentationFileDialogPlanner.BuildOpenDialogPlan();
@@ -47,12 +49,14 @@ internal sealed class FileCommands
         Action onChanged,
         FreePOptions? options = null,
         Func<RecentFilesStore>? loadRecentFilesStore = null,
-        IUserMessageService? messageService = null)
+        IUserMessageService? messageService = null,
+        Func<PresentationSlideRangeRequest?>? getImageExportRange = null)
     {
         _window = window;
         _getModel = getModel;
         _loadModel = loadModel;
         _options = options ?? new FreePOptions();
+        _getImageExportRange = getImageExportRange ?? (() => null);
         _workflow = new SisterWpfFileCommandWorkflow(
             "FreeP",
             () => _options.RecentFilesCap,
@@ -139,6 +143,15 @@ internal sealed class FileCommands
     }
 
     /// <summary>
+    /// File &gt; Export &gt; Images. Prompts for a folder, then exports the host-selected slide range.
+    /// </summary>
+    public bool ExportImages()
+    {
+        var outputDirectory = PromptImageExportFolder();
+        return outputDirectory is not null && ExportImagesToFolder(outputDirectory, _getImageExportRange());
+    }
+
+    /// <summary>
     /// Exports one PNG per requested slide to an already chosen folder. The host owns folder picking;
     /// shared code owns PowerPoint-style range policy, naming, and atomic writes.
     /// </summary>
@@ -192,6 +205,25 @@ internal sealed class FileCommands
     {
         var result = WpfFileDialogService.ShowOpenDialog(_window, OpenDialogPlan);
         return result.Chosen ? result.FileName : null;
+    }
+
+    private string? PromptImageExportFolder()
+    {
+        var dialog = new OpenFolderDialog
+        {
+            Title = PresentationExportPlanner.ImageExportPickerTitle,
+            Multiselect = false,
+        };
+
+        var currentDirectory = _workflow.CurrentPath is null
+            ? null
+            : Path.GetDirectoryName(_workflow.CurrentPath);
+        if (!string.IsNullOrWhiteSpace(currentDirectory) && Directory.Exists(currentDirectory))
+            dialog.InitialDirectory = currentDirectory;
+
+        return dialog.ShowDialog(_window) == true && !string.IsNullOrWhiteSpace(dialog.FolderName)
+            ? dialog.FolderName
+            : null;
     }
 
     // ── Host seams (WPF) ─────────────────────────────────────────────────────

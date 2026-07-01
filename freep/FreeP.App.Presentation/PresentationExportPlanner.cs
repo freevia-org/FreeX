@@ -97,6 +97,7 @@ public sealed record PresentationBackstageExportPlan(
     string Heading,
     string Description,
     string FixedLayoutGroupHeading,
+    string DeferredGroupHeading,
     IReadOnlyList<PresentationBackstageExportActionPlan> FixedLayoutActions,
     IReadOnlyList<PresentationBackstageExportActionPlan> DeferredActions);
 
@@ -114,6 +115,8 @@ public static class PresentationExportPlanner
     public const string PrintCommandId = "freep.file.print";
     public const string PdfExportPickerTitle = "Export to PDF";
     public const string PdfExportCommandText = "Export to PDF";
+    public const string ImageExportPickerTitle = "Export Slides as Images";
+    public const string ImageExportCommandText = "Export slides as images";
 
     public static readonly IReadOnlyList<int> HandoutSlidesPerPageOptions = [1, 2, 3, 4, 6, 9];
 
@@ -280,6 +283,7 @@ public static class PresentationExportPlanner
             Heading: "Export",
             Description: "Create a fixed-layout copy for sharing or presenting.",
             FixedLayoutGroupHeading: "Create PDF Copy",
+            DeferredGroupHeading: "Other File Types",
             FixedLayoutActions:
             [
                 ToActionPlan(pdf, "Export to PDF...", pdf.Description),
