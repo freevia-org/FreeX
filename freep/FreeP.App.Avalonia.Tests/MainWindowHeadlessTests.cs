@@ -486,6 +486,35 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task SlidePane_new_slide_affordance_uses_shared_text_and_inserts_slide()
+    {
+        var before = -1;
+        var after = -1;
+        var paneItemsAfter = -1;
+        var clicked = false;
+        var visible = false;
+        string? buttonText = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            before = window.SlideCount;
+            buttonText = window.SlidePaneNewSlideButtonText;
+            visible = window.IsSlidePaneNewSlideButtonVisible;
+            clicked = window.ClickSlidePaneNewSlideAffordanceForTests();
+            after = window.SlideCount;
+            paneItemsAfter = window.SlidePaneSlideItemCount;
+        });
+
+        if (!ran) return;
+        buttonText.Should().Be(SlidePanePlanner.NewSlideButtonText);
+        visible.Should().BeTrue("the Avalonia slide pane should expose the bottom PowerPoint-style add affordance");
+        clicked.Should().BeTrue("the affordance should route to the same slide insertion workflow as the ribbon command");
+        after.Should().Be(before + 1);
+        paneItemsAfter.Should().Be(after, "the slide pane should refresh to include the newly inserted slide");
+    }
+
+    [Fact]
     public async Task DeleteCurrentSlide_decreases_slide_count()
     {
         var before = -1;
