@@ -105,11 +105,11 @@ public static class PdfTextReader
         return false;
     }
 
-    private static IReadOnlyList<Letter> OrderLettersForReading(Page page)
+    private static IReadOnlyList<IReadOnlyList<Letter>> SplitLettersForReading(Page page)
     {
         var letters = page.Letters;
         if (letters == null || letters.Count < 4)
-            return letters ?? [];
+            return [letters ?? []];
 
         var words = page.GetWords()
             .Where(word => !string.IsNullOrWhiteSpace(word.Text))
@@ -119,7 +119,7 @@ public static class PdfTextReader
             .OrderBy(word => word.Left)
             .ToList();
         if (words.Count < 4)
-            return letters;
+            return [letters];
 
         var pageWidth = Math.Max(1, page.Width);
         var gaps = words
@@ -128,24 +128,24 @@ public static class PdfTextReader
             .OrderByDescending(gap => gap.Width)
             .ToList();
         if (gaps.Count == 0)
-            return letters;
+            return [letters];
 
         var splitX = (gaps[0].LeftEdge + gaps[0].RightEdge) / 2;
         var leftWords = words.Where(word => word.CenterX < splitX).ToList();
         var rightWords = words.Where(word => word.CenterX >= splitX).ToList();
         if (leftWords.Count < 2 || rightWords.Count < 2)
-            return letters;
+            return [letters];
 
         var leftRight = leftWords.Max(word => word.Right);
         var rightLeft = rightWords.Min(word => word.Left);
         if (rightLeft - leftRight < pageWidth * 0.08)
-            return letters;
+            return [letters];
 
-        return letters
-            .OrderBy(letter => letter.GlyphRectangle.BottomLeft.X >= splitX ? 1 : 0)
-            .ThenByDescending(letter => letter.GlyphRectangle.BottomLeft.Y)
-            .ThenBy(letter => letter.GlyphRectangle.BottomLeft.X)
-            .ToList();
+        var leftLetters = letters.Where(letter => letter.GlyphRectangle.BottomLeft.X < splitX).ToList();
+        var rightLetters = letters.Where(letter => letter.GlyphRectangle.BottomLeft.X >= splitX).ToList();
+        return leftLetters.Count == 0 || rightLetters.Count == 0
+            ? [letters]
+            : [leftLetters, rightLetters];
     }
 
     /// <summary>
@@ -154,8 +154,15 @@ public static class PdfTextReader
     /// </summary>
     private static List<Paragraph> ExtractPageBlocks(Page page)
     {
+        var result = new List<Paragraph>();
+        foreach (var letters in SplitLettersForReading(page))
+            result.AddRange(ExtractPageBlocks(letters));
+        return result;
+    }
+
+    private static List<Paragraph> ExtractPageBlocks(IReadOnlyList<Letter> letters)
+    {
         // 1. Collect all letters with geometry.
-        var letters = OrderLettersForReading(page);
         if (letters == null || letters.Count == 0)
             return [];
 

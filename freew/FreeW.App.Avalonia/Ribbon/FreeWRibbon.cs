@@ -46,7 +46,6 @@ internal static class FreeWRibbon
 internal sealed record RibbonHostCallbacks(
     Action Open,
     Action Save,
-    Action ImportPdfText,
     Action Cut,
     Action Copy,
     Action Paste,
@@ -146,5 +145,7 @@ internal sealed record RibbonHostCallbacks(
     /// <summary>AV-REVIEW: Review &gt; Inspect &gt; Inspect Document. Optional; registry no-ops when null.</summary>
     Action? InspectDocument = null,
     /// <summary>AV-REVIEW: Review &gt; Accessibility &gt; Check Accessibility. Optional; registry no-ops when null.</summary>
-    Action? CheckAccessibility = null);
+    Action? CheckAccessibility = null,
+    /// <summary>FreeW File &gt; Import PDF (text only). Optional; registry no-ops when null.</summary>
+    Action? ImportPdfText = null);
 

@@ -72,7 +72,7 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.backstage", new ActionRibbonCommand(callbacks.Backstage));
         r.Register("freew.new",       new ActionRibbonCommand(callbacks.NewDocument));
         r.Register("freew.open",      new ActionRibbonCommand(callbacks.Open));
-        r.Register("freew.import-pdf-text", new ActionRibbonCommand(callbacks.ImportPdfText));
+        r.Register("freew.import-pdf-text", new ActionRibbonCommand(callbacks.ImportPdfText ?? (() => { })));
         r.Register("freew.save",      new ActionRibbonCommand(callbacks.Save));
 
         // ── Clipboard ────────────────────────────────────────────────────────

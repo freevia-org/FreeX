@@ -144,23 +144,8 @@ internal sealed class FileCommands
     /// File &gt; Import PDF (text only). This is deliberately not a normal Open path: PDF extraction is lossy,
     /// read-only text import, so the result becomes an untitled dirty document that must be saved elsewhere.
     /// </summary>
-    public bool ImportPdfText()
-    {
-        if (!ConfirmDiscardOrSave("importing a PDF"))
-            return false;
-
-        var dialog = new OpenFileDialog
-        {
-            Title = "Import PDF (text only)",
-            Filter = "PDF document (*.pdf)|*.pdf",
-            DefaultExt = ".pdf",
-            Multiselect = false,
-        };
-        if (dialog.ShowDialog(_window) != true)
-            return false;
-
-        return ImportPdfTextPath(dialog.FileName);
-    }
+    public bool ImportPdfText() =>
+        _workflow.Open("importing a PDF", PromptPdfImportPath, ImportPdfTextPath);
 
     /// <summary>
     /// Dialog-free PDF text import for tests and host integrations. The PDF path is never associated with the
@@ -183,10 +168,7 @@ internal sealed class FileCommands
             using (var fs = File.OpenRead(path))
                 _editor.LoadModel(adapter.Load(fs));
 
-            _state.ClearCurrentFilePath();
-            _state.MarkDirty();
-            _editor.CurrentFileName = null;
-            _onChanged();
+            _workflow.MarkDirtyWithPath(null, () => _editor.CurrentFileName = null);
             return true;
         }
         catch (Exception ex)
@@ -340,6 +322,16 @@ internal sealed class FileCommands
     {
         var plan = _persistence.BuildOpenDialogPlan();
         var result = WpfFileDialogService.ShowOpenDialog(_window, plan, initialDirectory: initialDirectory);
+        return result.Chosen ? result.FileName : null;
+    }
+
+    private string? PromptPdfImportPath()
+    {
+        var plan = DocumentFileDialogRequestPlanner.BuildOpenDialogPlan(PdfImportAdapters, "PDF documents");
+        var result = WpfFileDialogService.ShowOpenDialog(
+            _window,
+            plan,
+            title: "Import PDF (text only)");
         return result.Chosen ? result.FileName : null;
     }
 
