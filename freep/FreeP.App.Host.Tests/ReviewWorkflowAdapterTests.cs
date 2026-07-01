@@ -127,7 +127,18 @@ public sealed class ReviewWorkflowAdapterTests
             window.LastLayoutPickerPlan.Should().NotBeNull();
             window.IsLayoutPickerVisible.Should().BeTrue();
             window.LayoutPickerChoiceButtonCount.Should().Be(2);
-            window.LastLayoutPickerPlan!.Choices.Should().Contain(choice =>
+            window.LayoutPickerGroupHeaderCount.Should().Be(1);
+            window.LayoutPickerThumbnailPlaceholderCount.Should().BeGreaterThan(0);
+            window.LayoutPickerCurrentChoiceCount.Should().Be(1);
+            window.LastLayoutPickerPlan!.Groups.Should().ContainSingle(group =>
+                group.Heading == "Master 1" &&
+                group.Choices.Select(choice => choice.LayoutId).SequenceEqual(new[] { "rId1", "rId2" }));
+            window.LastLayoutPickerPlan.Choices.Single(choice => choice.LayoutId == "rId1").Chrome.State
+                .Should().Be(PresentationLayoutChoiceChromeState.Current);
+            window.LastLayoutPickerPlan.Choices.Single(choice => choice.LayoutId == "rId2").ThumbnailPlaceholders
+                .Should()
+                .ContainSingle(slot => slot.PlaceholderType == PlaceholderType.Title);
+            window.LastLayoutPickerPlan.Choices.Should().Contain(choice =>
                 choice.LayoutId == "rId2" &&
                 choice.DisplayName == "Blank" &&
                 choice.LayoutType == SlideLayoutType.Blank &&
@@ -194,6 +205,8 @@ public sealed class ReviewWorkflowAdapterTests
         source.Should().Contain("PresentationDesignCommandPlanner.TryApplyLayoutChoice(");
         source.Should().Contain("ShowLayoutPicker(LastLayoutPickerPlan);");
         source.Should().Contain("BuildLayoutChoiceLabel(choice)");
+        source.Should().Contain("BuildLayoutChoiceTile(choice)");
+        source.Should().Contain("BuildLayoutThumbnail(choice)");
         source.Should().NotContain("Modern resolved-thread state is not modeled yet.\";");
     }
 

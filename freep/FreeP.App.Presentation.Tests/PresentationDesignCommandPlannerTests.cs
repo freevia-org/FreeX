@@ -80,7 +80,11 @@ public sealed class PresentationDesignCommandPlannerTests
             Id = "rId2",
             Name = "Blank",
             LayoutType = SlideLayoutType.Blank,
-            MasterId = presentation.Masters[0].Id
+            MasterId = presentation.Masters[0].Id,
+            Placeholders =
+            {
+                new SlideShape { Id = 10, Placeholder = new Placeholder { Type = PlaceholderType.Title } },
+            }
         });
 
         var plan = PresentationDesignCommandPlanner.BuildLayoutPickerPlan(
@@ -91,24 +95,32 @@ public sealed class PresentationDesignCommandPlannerTests
         plan.HasCurrentSlide.Should().BeTrue();
         plan.CanApply.Should().BeTrue();
         plan.CurrentLayoutId.Should().Be("rId1");
-        plan.Choices.Should().ContainEquivalentOf(new PresentationLayoutChoice(
-            "rId1",
-            "Title Slide",
-            SlideLayoutType.Title,
-            true,
-            "rId1",
-            "Master 1",
-            0,
-            0));
-        plan.Choices.Should().ContainEquivalentOf(new PresentationLayoutChoice(
-            "rId2",
-            "Blank",
-            SlideLayoutType.Blank,
-            false,
-            "rId1",
-            "Master 1",
-            0,
-            1));
+        plan.Groups.Should().ContainSingle();
+        plan.Groups[0].Heading.Should().Be("Master 1");
+        plan.Groups[0].Choices.Select(choice => choice.LayoutId).Should().Equal("rId1", "rId2");
+        var current = plan.Choices.Single(choice => choice.LayoutId == "rId1");
+        current.DisplayName.Should().Be("Title Slide");
+        current.LayoutType.Should().Be(SlideLayoutType.Title);
+        current.IsCurrent.Should().BeTrue();
+        current.MasterId.Should().Be("rId1");
+        current.MasterDisplayName.Should().Be("Master 1");
+        current.PlaceholderCount.Should().Be(0);
+        current.DisplayOrder.Should().Be(0);
+        current.Chrome.State.Should().Be(PresentationLayoutChoiceChromeState.Current);
+
+        var blank = plan.Choices.Single(choice => choice.LayoutId == "rId2");
+        blank.DisplayName.Should().Be("Blank");
+        blank.LayoutType.Should().Be(SlideLayoutType.Blank);
+        blank.IsCurrent.Should().BeFalse();
+        blank.MasterId.Should().Be("rId1");
+        blank.MasterDisplayName.Should().Be("Master 1");
+        blank.PlaceholderCount.Should().Be(1);
+        blank.DisplayOrder.Should().Be(1);
+        blank.Chrome.State.Should().Be(PresentationLayoutChoiceChromeState.Available);
+        blank.ThumbnailPlaceholders.Should().ContainSingle(slot =>
+            slot.PlaceholderType == PlaceholderType.Title &&
+            slot.Bounds.Width > 0 &&
+            slot.Bounds.Height > 0);
     }
 
     [Fact]
@@ -155,24 +167,23 @@ public sealed class PresentationDesignCommandPlannerTests
 
         plan.Choices.Select(choice => choice.LayoutId).Should().Equal("rId1", "rId2", "rId3");
         plan.Choices.Select(choice => choice.DisplayOrder).Should().Equal(0, 1, 2);
-        plan.Choices[1].Should().Be(new PresentationLayoutChoice(
-            "rId2",
-            "Title Slide",
-            SlideLayoutType.Title,
-            false,
-            "rIdMaster2",
-            "Master 2",
-            2,
-            1));
-        plan.Choices[2].Should().Be(new PresentationLayoutChoice(
-            "rId3",
-            "Two Content",
-            SlideLayoutType.TwoContent,
-            false,
-            "rId1",
-            "Master 1",
-            1,
-            2));
+        plan.Groups.Select(group => group.Heading).Should().Equal("Master 1", "Master 2");
+        plan.Groups[0].Choices.Select(choice => choice.LayoutId).Should().Equal("rId1", "rId3");
+        plan.Groups[1].Choices.Select(choice => choice.LayoutId).Should().Equal("rId2");
+        plan.Choices[1].LayoutId.Should().Be("rId2");
+        plan.Choices[1].DisplayName.Should().Be("Title Slide");
+        plan.Choices[1].LayoutType.Should().Be(SlideLayoutType.Title);
+        plan.Choices[1].MasterId.Should().Be("rIdMaster2");
+        plan.Choices[1].MasterDisplayName.Should().Be("Master 2");
+        plan.Choices[1].PlaceholderCount.Should().Be(2);
+        plan.Choices[1].DisplayOrder.Should().Be(1);
+        plan.Choices[2].LayoutId.Should().Be("rId3");
+        plan.Choices[2].DisplayName.Should().Be("Two Content");
+        plan.Choices[2].LayoutType.Should().Be(SlideLayoutType.TwoContent);
+        plan.Choices[2].MasterId.Should().Be("rId1");
+        plan.Choices[2].MasterDisplayName.Should().Be("Master 1");
+        plan.Choices[2].PlaceholderCount.Should().Be(1);
+        plan.Choices[2].DisplayOrder.Should().Be(2);
     }
 
     [Fact]
@@ -189,6 +200,39 @@ public sealed class PresentationDesignCommandPlannerTests
         plan.CurrentLayoutId.Should().BeNull();
         plan.Choices.Should().ContainSingle();
         plan.Choices[0].IsCurrent.Should().BeFalse();
+        plan.Choices[0].Chrome.State.Should().Be(PresentationLayoutChoiceChromeState.Disabled);
+        plan.Choices[0].Chrome.IsEnabled.Should().BeFalse();
+    }
+
+    [Fact]
+    public void BuildLayoutPickerPlan_AddsFallbackPowerPointStyleThumbnailsForKnownLayouts()
+    {
+        var editor = MakeSession(out var presentation);
+        presentation.Layouts.Add(new SlideLayout
+        {
+            Id = "rId2",
+            LayoutType = SlideLayoutType.TwoContent,
+            MasterId = presentation.Masters[0].Id
+        });
+        presentation.Layouts.Add(new SlideLayout
+        {
+            Id = "rId3",
+            LayoutType = SlideLayoutType.Blank,
+            MasterId = presentation.Masters[0].Id
+        });
+
+        var plan = PresentationDesignCommandPlanner.BuildLayoutPickerPlan(
+            presentation,
+            editor.CurrentSlideIndex);
+
+        var twoContent = plan.Choices.Single(choice => choice.LayoutId == "rId2");
+        twoContent.ThumbnailPlaceholders.Should().HaveCount(3);
+        twoContent.ThumbnailPlaceholders.Select(slot => slot.PlaceholderType)
+            .Should()
+            .Equal(PlaceholderType.Title, PlaceholderType.Body, PlaceholderType.Body);
+        plan.Choices.Single(choice => choice.LayoutId == "rId3").ThumbnailPlaceholders
+            .Should()
+            .BeEmpty("PowerPoint's blank layout thumbnail is intentionally empty");
     }
 
     [Fact]
@@ -207,15 +251,16 @@ public sealed class PresentationDesignCommandPlannerTests
             .Should()
             .BeTrue();
 
-        choice.Should().Be(new PresentationLayoutChoice(
-            "rId2",
-            "Two Content",
-            SlideLayoutType.TwoContent,
-            false,
-            "rId1",
-            "Master 1",
-            0,
-            1));
+        choice.Should().NotBeNull();
+        choice!.LayoutId.Should().Be("rId2");
+        choice.DisplayName.Should().Be("Two Content");
+        choice.LayoutType.Should().Be(SlideLayoutType.TwoContent);
+        choice.IsCurrent.Should().BeFalse();
+        choice.MasterId.Should().Be("rId1");
+        choice.MasterDisplayName.Should().Be("Master 1");
+        choice.PlaceholderCount.Should().Be(0);
+        choice.DisplayOrder.Should().Be(1);
+        choice.Chrome.State.Should().Be(PresentationLayoutChoiceChromeState.Available);
         editor.CurrentSlide!.LayoutId.Should().Be("rId2");
 
         editor.Undo();

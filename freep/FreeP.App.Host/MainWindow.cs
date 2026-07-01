@@ -130,7 +130,12 @@ public sealed class MainWindow : Window
     internal PresentationLayoutPickerPlan? LastLayoutPickerPlan { get; private set; }
     internal PresentationLayoutChoice? LastAppliedLayoutChoice { get; private set; }
     internal bool IsLayoutPickerVisible => _layoutPickerHost?.Visibility == Visibility.Visible;
-    internal int LayoutPickerChoiceButtonCount => _layoutPickerPanel?.Children.Count ?? 0;
+    internal int LayoutPickerChoiceButtonCount => LastLayoutPickerPlan?.Choices.Count ?? 0;
+    internal int LayoutPickerGroupHeaderCount => LastLayoutPickerPlan?.Groups.Count ?? 0;
+    internal int LayoutPickerThumbnailPlaceholderCount =>
+        LastLayoutPickerPlan?.Choices.Sum(choice => choice.ThumbnailPlaceholders.Count) ?? 0;
+    internal int LayoutPickerCurrentChoiceCount =>
+        LastLayoutPickerPlan?.Choices.Count(choice => choice.Chrome.IsCurrent) ?? 0;
 
     // ── Wave 16B: Animation pane (right-side collapsible panel) ──────────────────
     // 16B SEAM START — do not restructure this region (16A/16C may conflict nearby).
@@ -426,7 +431,7 @@ public sealed class MainWindow : Window
             BorderBrush     = new SolidColorBrush(Color.FromRgb(0xC0, 0xC0, 0xC0)),
             BorderThickness = new Thickness(0, 1, 0, 0),
             Background      = Brushes.White,
-            MaxHeight       = 132,
+            MaxHeight       = 220,
             Visibility      = Visibility.Collapsed,
             Child           = new ScrollViewer
             {
@@ -998,23 +1003,43 @@ public sealed class MainWindow : Window
             return;
 
         _layoutPickerPanel.Children.Clear();
-        foreach (var choice in plan.Choices)
+        foreach (var group in plan.Groups)
         {
-            var button = new Button
+            _layoutPickerPanel.Children.Add(new TextBlock
             {
-                Tag = choice.LayoutId,
-                Content = BuildLayoutChoiceLabel(choice),
-                Margin = new Thickness(6, 3, 6, 3),
-                Padding = new Thickness(8, 5, 8, 5),
-                HorizontalContentAlignment = HorizontalAlignment.Left,
-                IsEnabled = plan.CanApply && !choice.IsCurrent,
-            };
-            button.Click += (_, _) =>
+                Text = group.Heading,
+                Margin = new Thickness(10, 8, 10, 2),
+                FontSize = 11,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = new SolidColorBrush(Color.FromRgb(0x44, 0x44, 0x44)),
+            });
+
+            var groupPanel = new WrapPanel
             {
-                if (button.Tag is string layoutId)
-                    ApplyLayoutChoice(layoutId);
+                Orientation = Orientation.Horizontal,
+                Margin = new Thickness(4, 0, 4, 4),
             };
-            _layoutPickerPanel.Children.Add(button);
+
+            foreach (var choice in group.Choices)
+            {
+                var button = new Button
+                {
+                    Tag = choice.LayoutId,
+                    Content = BuildLayoutChoiceTile(choice),
+                    Margin = new Thickness(4),
+                    Padding = new Thickness(0),
+                    HorizontalContentAlignment = HorizontalAlignment.Stretch,
+                    IsEnabled = choice.Chrome.IsEnabled,
+                };
+                button.Click += (_, _) =>
+                {
+                    if (button.Tag is string layoutId)
+                        ApplyLayoutChoice(layoutId);
+                };
+                groupPanel.Children.Add(button);
+            }
+
+            _layoutPickerPanel.Children.Add(groupPanel);
         }
 
         _layoutPickerHost.Visibility = Visibility.Visible;
@@ -1032,6 +1057,102 @@ public sealed class MainWindow : Window
         var placeholders = choice.PlaceholderCount == 1 ? "1 placeholder" : $"{choice.PlaceholderCount} placeholders";
         return $"{currentPrefix}{choice.DisplayName}\n{choice.MasterDisplayName} - {placeholders}";
     }
+
+    private static UIElement BuildLayoutChoiceTile(PresentationLayoutChoice choice)
+    {
+        var (borderBrush, backgroundBrush) = BuildLayoutChoiceBrushes(choice.Chrome);
+        var label = new TextBlock
+        {
+            Text = BuildLayoutChoiceLabel(choice),
+            TextWrapping = TextWrapping.Wrap,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            FontSize = 11,
+            Margin = new Thickness(0, 5, 0, 0),
+            Width = PresentationDesignCommandPlanner.LayoutThumbnailWidthDip,
+        };
+
+        var stack = new StackPanel
+        {
+            Width = PresentationDesignCommandPlanner.LayoutThumbnailWidthDip + 18,
+        };
+        stack.Children.Add(BuildLayoutThumbnail(choice));
+        stack.Children.Add(label);
+
+        if (!string.IsNullOrWhiteSpace(choice.Chrome.BadgeText))
+        {
+            stack.Children.Add(new TextBlock
+            {
+                Text = choice.Chrome.BadgeText,
+                FontSize = 10,
+                Foreground = new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A)),
+                FontWeight = FontWeights.SemiBold,
+                Margin = new Thickness(0, 3, 0, 0),
+            });
+        }
+
+        return new Border
+        {
+            BorderBrush = borderBrush,
+            Background = backgroundBrush,
+            BorderThickness = new Thickness(choice.Chrome.BorderThicknessDip),
+            Padding = new Thickness(8),
+            Child = stack,
+        };
+    }
+
+    private static UIElement BuildLayoutThumbnail(PresentationLayoutChoice choice)
+    {
+        var canvas = new Canvas
+        {
+            Width = PresentationDesignCommandPlanner.LayoutThumbnailWidthDip,
+            Height = PresentationDesignCommandPlanner.LayoutThumbnailHeightDip,
+            Background = Brushes.White,
+        };
+
+        foreach (var placeholder in choice.ThumbnailPlaceholders)
+        {
+            var rect = new System.Windows.Shapes.Rectangle
+            {
+                Width = placeholder.Bounds.Width,
+                Height = placeholder.Bounds.Height,
+                Fill = BuildLayoutPlaceholderFill(placeholder.PlaceholderType),
+                Stroke = new SolidColorBrush(Color.FromRgb(0x99, 0x99, 0x99)),
+                StrokeThickness = 1,
+                RadiusX = 1,
+                RadiusY = 1,
+            };
+            Canvas.SetLeft(rect, placeholder.Bounds.X);
+            Canvas.SetTop(rect, placeholder.Bounds.Y);
+            canvas.Children.Add(rect);
+        }
+
+        return new Border
+        {
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0xD9, 0xD9, 0xD9)),
+            BorderThickness = new Thickness(1),
+            Child = canvas,
+        };
+    }
+
+    private static Brush BuildLayoutPlaceholderFill(PlaceholderType type) =>
+        type is PlaceholderType.Title or PlaceholderType.CenteredTitle or PlaceholderType.SubTitle
+            ? new SolidColorBrush(Color.FromRgb(0xF8, 0xDD, 0xD1))
+            : new SolidColorBrush(Color.FromRgb(0xEA, 0xF1, 0xF6));
+
+    private static (Brush Border, Brush Background) BuildLayoutChoiceBrushes(
+        PresentationLayoutChoiceChrome chrome) =>
+        chrome.State switch
+        {
+            PresentationLayoutChoiceChromeState.Current => (
+                new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A)),
+                new SolidColorBrush(Color.FromRgb(0xFF, 0xF4, 0xEF))),
+            PresentationLayoutChoiceChromeState.Disabled => (
+                new SolidColorBrush(Color.FromRgb(0xA6, 0xA6, 0xA6)),
+                new SolidColorBrush(Color.FromRgb(0xF3, 0xF3, 0xF3))),
+            _ => (
+                new SolidColorBrush(Color.FromRgb(0xD0, 0xD0, 0xD0)),
+                Brushes.White),
+        };
 
     /// <summary>
     /// Opens the <see cref="HyperlinkDialog"/> for the currently selected shape(s).
