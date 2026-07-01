@@ -314,6 +314,24 @@ public sealed class MainWindow : Window
         new WordCountDialog(_editor.ComputeStatistics()).ShowDialog(this);
 
     /// <summary>
+    /// Opens the Avalonia print-preview surface over a snapshot of the current document. Native print
+    /// selection remains deferred, but the preview uses the same paginated renderer as the live editor.
+    /// </summary>
+    private Task OpenPrintPreviewAsync()
+    {
+        try
+        {
+            var snapshot = CloneDocument(_editor.Document);
+            return new PrintPreviewDialog(snapshot, _fileWorkflow.DisplayName).ShowDialog(this);
+        }
+        catch (Exception ex)
+        {
+            _status.Text = SisterAppFileTextPlanner.FormatCommandFailed("Print Preview", ex.Message);
+            return Task.CompletedTask;
+        }
+    }
+
+    /// <summary>
     /// AV-VIEW: Opens the Zoom dialog (modal). Pre-selects the preset matching the current zoom (or the
     /// custom box), and on OK applies the chosen scale through the same <see cref="ApplyZoom(double)"/>
     /// path as the quick zoom commands. Wired to <c>freew.zoom-dialog</c> (View → Zoom group).
@@ -482,6 +500,7 @@ public sealed class MainWindow : Window
                 ApplyZoom(newScale);
             },
             OpenZoomDialog: () => _ = OpenZoomDialogAsync(),
+            OpenPrintPreview: () => _ = OpenPrintPreviewAsync(),
             NewWindow:       OpenNewWindow,
             ToggleSplit:     ToggleSplit,
             // AV-INSERT2: Insert depth 2 dialog launchers (optional callbacks).
@@ -1190,7 +1209,16 @@ public sealed class MainWindow : Window
             RestrictEditing: () => _ = OpenRestrictEditingAsync(),
             InspectDocument: () => _ = InspectDocumentAsync(),
             CheckAccessibility: () => _ = CheckAccessibilityAsync(),
-            OpenOptions: () => _ = OpenOptionsAsync());
+            OpenOptions: () => _ = OpenOptionsAsync(),
+            PrintPreview: () => _ = OpenPrintPreviewAsync());
+
+    private static TextDocument CloneDocument(TextDocument document)
+    {
+        using var buffer = new MemoryStream();
+        DocxWriter.Write(document, buffer);
+        buffer.Position = 0;
+        return DocxReader.Read(buffer);
+    }
 
     private void ToggleMarkAsFinal()
     {

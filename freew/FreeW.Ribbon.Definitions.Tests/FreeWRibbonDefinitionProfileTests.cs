@@ -187,6 +187,22 @@ public sealed class FreeWRibbonDefinitionProfileTests
     }
 
     [Fact]
+    public void Avalonia_profile_uses_shared_print_preview_and_view_command_ids()
+    {
+        var avaloniaIds = CommandEntries(FreeWRibbon.Build(FreeWRibbonCapabilities.Avalonia))
+            .Select(entry => entry.CommandId)
+            .ToHashSet(StringComparer.Ordinal);
+
+        avaloniaIds.Should().Contain("freew.print-preview");
+        avaloniaIds.Should().Contain("freew.print-layout");
+        avaloniaIds.Should().Contain("freew.web-layout");
+        avaloniaIds.Should().Contain("freew.draft-view");
+        avaloniaIds.Should().NotContain("freew.printlayout");
+        avaloniaIds.Should().NotContain("freew.weblayout");
+        avaloniaIds.Should().NotContain("freew.draftview");
+    }
+
+    [Fact]
     public void Checked_in_command_inventory_matches_compiled_profiles()
     {
         var wpf = InventoryLocations(FreeWRibbon.Build(FreeWRibbonCapabilities.Wpf), "WPF");

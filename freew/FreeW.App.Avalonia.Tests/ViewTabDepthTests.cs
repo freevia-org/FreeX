@@ -63,6 +63,9 @@ public sealed class ViewTabDepthTests
 
         foreach (var id in new[]
                  {
+                     "freew.print-preview",
+                     "freew.print-layout", "freew.web-layout", "freew.draft-view",
+                     "freew.printlayout", "freew.weblayout", "freew.draftview",
                      "freew.zoom-dialog", "freew.view-gridlines", "freew.view-ruler",
                      "freew.new-window", "freew.split",
                  })
@@ -79,6 +82,12 @@ public sealed class ViewTabDepthTests
             .Select(c => c.CommandId.Value)
             .ToList();
 
+        ids.Should().Contain("freew.print-layout");
+        ids.Should().Contain("freew.web-layout");
+        ids.Should().Contain("freew.draft-view");
+        ids.Should().NotContain("freew.printlayout");
+        ids.Should().NotContain("freew.weblayout");
+        ids.Should().NotContain("freew.draftview");
         ids.Should().Contain("freew.zoom-dialog");
         ids.Should().Contain("freew.view-gridlines");
         ids.Should().Contain("freew.view-ruler");
@@ -86,6 +95,33 @@ public sealed class ViewTabDepthTests
         ids.Should().Contain("freew.split");
         // Show group must surface the Reviewing Pane toggle on the View tab too.
         ids.Should().Contain("freew.reviewing-pane");
+    }
+
+    [Fact]
+    public void Layout_tab_contains_print_preview_command()
+    {
+        var definition = FreeWRibbon.BuildDefinition();
+        var layoutTab = definition.Tabs.Single(t => t.Id == "layout");
+        var ids = layoutTab.Groups.SelectMany(g => g.Controls)
+            .Select(c => c.CommandId.Value)
+            .ToList();
+
+        ids.Should().Contain("freew.print-preview");
+    }
+
+    [Fact]
+    public void Print_preview_command_invokes_host_callback()
+    {
+        var invoked = false;
+        var callbacks = NoopCallbacks() with { OpenPrintPreview = () => invoked = true };
+        var registry = FreeWRibbon.BuildRegistry(new DocumentView(), callbacks);
+
+        registry.TryGet(new RibbonCommandId("freew.print-preview"), out var command)
+            .Should().BeTrue();
+
+        command!.Execute(RibbonCommandContext.Empty);
+
+        invoked.Should().BeTrue("freew.print-preview must route to the Avalonia host preview surface");
     }
 
     [Fact]

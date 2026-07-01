@@ -291,9 +291,19 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.page-size-a4",        new ActionRibbonCommand(() => callbacks.ApplyPaperSize("a4")));
 
         // ── View ─────────────────────────────────────────────────────────────
-        r.Register("freew.printlayout",       new ActionRibbonCommand(callbacks.SetPrintLayout));
-        r.Register("freew.weblayout",         new ActionRibbonCommand(callbacks.SetWebLayout));
-        r.Register("freew.draftview",         new ActionRibbonCommand(callbacks.SetDraftView));
+        var printPreviewCommand = new ActionRibbonCommand(callbacks.OpenPrintPreview ?? (() => { }));
+        r.Register("freew.print-preview", printPreviewCommand);
+
+        var printLayoutCommand = new ActionRibbonCommand(callbacks.SetPrintLayout);
+        var webLayoutCommand = new ActionRibbonCommand(callbacks.SetWebLayout);
+        var draftViewCommand = new ActionRibbonCommand(callbacks.SetDraftView);
+        r.Register("freew.print-layout", printLayoutCommand);
+        r.Register("freew.web-layout", webLayoutCommand);
+        r.Register("freew.draft-view", draftViewCommand);
+        // Compatibility aliases for older Avalonia definitions/tests that used compact ids.
+        r.Register("freew.printlayout", printLayoutCommand);
+        r.Register("freew.weblayout", webLayoutCommand);
+        r.Register("freew.draftview", draftViewCommand);
         r.Register("freew.navigationpane",    new ActionRibbonCommand(callbacks.ToggleNavigationPane));
         r.Register("freew.reveal-formatting", new ActionRibbonCommand(callbacks.ToggleRevealFormatting));
         r.Register("freew.zoom-in",           new ActionRibbonCommand(() => callbacks.ApplyZoom(null, +0.1)));

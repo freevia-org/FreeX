@@ -450,6 +450,10 @@ internal static class FreeWAvaloniaRibbonDefinition
                     g.Button("freew.page-size-letter",    "Letter");
                     g.Button("freew.page-size-a4",        "A4");
                 });
+                tab.Group("preview", "Preview", null, 90, g =>
+                {
+                    g.Button("freew.print-preview", "Print Preview");
+                });
             })
             .Tab("design", "Design", "G", tab =>
             {
@@ -476,9 +480,9 @@ internal static class FreeWAvaloniaRibbonDefinition
             {
                 tab.Group("views", "Views", null, 110, g =>
                 {
-                    g.Button("freew.printlayout", "Print Layout");
-                    g.Button("freew.weblayout",   "Web Layout");
-                    g.Button("freew.draftview",   "Draft");
+                    g.Button("freew.print-layout", "Print Layout");
+                    g.Button("freew.web-layout",   "Web Layout");
+                    g.Button("freew.draft-view",   "Draft");
                 });
                 tab.Group("show", "Show", null, 100, g =>
                 {

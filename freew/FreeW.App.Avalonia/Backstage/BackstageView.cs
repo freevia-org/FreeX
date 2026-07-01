@@ -336,7 +336,13 @@ internal sealed class BackstageView : Window
             _callbacks.DisplayName,
             _callbacks.GetPageSettings(),
             print: null,
-            printPreview: null);
+            printPreview: _callbacks.PrintPreview is null
+                ? null
+                : () =>
+                {
+                    Close();
+                    _callbacks.PrintPreview();
+                });
 
         var content = new StackPanel { Spacing = 16 };
         content.Children.Add(BuildPaneHeader(surface.Title, surface.Description));
