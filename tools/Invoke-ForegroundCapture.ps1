@@ -31,3 +31,4 @@ if (-not [string]::IsNullOrWhiteSpace($AvaloniaExe)) {
 }
 
 dotnet @argsList
+exit $LASTEXITCODE
