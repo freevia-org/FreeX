@@ -79,6 +79,8 @@ public sealed partial class XlsxFileAdapter
 
             if (patchSucceeded)
             {
+                XlsxNamedRangeMapper.SaveToPackage(workbook, stream, warnings);
+                sourcePackage.RestoreWorkbookDefinedNames(stream);
                 LastSaveDiagnostics = patchDiagnostics;
                 return;
             }
@@ -422,6 +424,7 @@ public sealed partial class XlsxFileAdapter
                 stream,
                 currentModelFingerprint,
                 removeSourceCalcChain: patchDiagnostics.InvalidatesCalcChain);
+            sourcePackage?.RestoreWorkbookDefinedNames(stream);
             stream.Position = stream.Length;
             return;
         }
@@ -433,6 +436,7 @@ public sealed partial class XlsxFileAdapter
             packageStream,
             currentModelFingerprint,
             removeSourceCalcChain: patchDiagnostics.InvalidatesCalcChain);
+        sourcePackage?.RestoreWorkbookDefinedNames(packageStream);
         packageStream.Position = 0;
         packageStream.CopyTo(stream);
         SaveStreamPreparer.TruncateFromCurrentPosition(stream);

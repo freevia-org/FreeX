@@ -52,6 +52,21 @@ public sealed class OdsFormulaConverterTests
         OdsFormulaConverter.ToA1("[$Data.A1]").Should().Be("Data!A1");
     }
 
+    [Theory]
+    [InlineData("[$Data.A1:$Data.B2]", "Data!A1:B2")]
+    [InlineData("[$Data.A1:$Other.B2]", "Data!A1:Other!B2")]
+    [InlineData("[$'Input Data'.A1:$'Output Data'.B2]", "'Input Data'!A1:'Output Data'!B2")]
+    public void ToA1_PreservesRightEndpointSheetWhenCrossSheetRangeEndpointsDiffer(string odf, string expectedA1)
+    {
+        OdsFormulaConverter.ToA1(odf).Should().Be(expectedA1);
+    }
+
+    [Fact]
+    public void ToOdf_EmitsRightEndpointSheetForCrossSheetRange()
+    {
+        OdsFormulaConverter.ToOdf("Data!A1:Other!B2").Should().Be("[$Data.A1:$Other.B2]");
+    }
+
     [Fact]
     public void ToA1_StripsOfNamespacePrefix()
     {

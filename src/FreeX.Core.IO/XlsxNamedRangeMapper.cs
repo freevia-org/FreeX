@@ -1,3 +1,5 @@
+using System.IO.Compression;
+using System.Xml.Linq;
 using ClosedXML.Excel;
 using FreeX.Core.Model;
 
@@ -31,6 +33,58 @@ internal static class XlsxNamedRangeMapper
                 continue;
 
             LoadDefinedNames(xlSheet.DefinedNames, workbook, scopeSheetId: sheet.Id, warnings);
+        }
+    }
+
+    public static void LoadWorkbookDefinedNameFormulasFromPackage(Stream packageStream, Workbook workbook, List<string>? warnings = null)
+    {
+        try
+        {
+            packageStream.Position = 0;
+            using var archive = new ZipArchive(packageStream, ZipArchiveMode.Read, leaveOpen: true);
+            var workbookEntry = archive.GetEntry("xl/workbook.xml");
+            if (workbookEntry is null)
+                return;
+
+            var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            foreach (var definedName in workbookXml.Root?
+                         .Element(workbookNs + "definedNames")?
+                         .Elements(workbookNs + "definedName")
+                     ?? [])
+            {
+                var name = definedName.Attribute("name")?.Value.Trim();
+                if (IsExcelReservedDefinedName(name) ||
+                    workbook.ValidateNamedRangeName(name!) is not null)
+                {
+                    continue;
+                }
+
+                var refersToBody = definedName.Value.Trim();
+                if (refersToBody.StartsWith('='))
+                    refersToBody = refersToBody[1..].Trim();
+                if (string.IsNullOrWhiteSpace(refersToBody) || !IsFormulaExpression(refersToBody))
+                    continue;
+
+                var localSheetIdText = definedName.Attribute("localSheetId")?.Value;
+                if (int.TryParse(localSheetIdText, out var localSheetId))
+                {
+                    if (localSheetId < 0 || localSheetId >= workbook.Sheets.Count)
+                        continue;
+
+                    var sheetId = workbook.Sheets[localSheetId].Id;
+                    if (!workbook.ScopedNamedFormulas.ContainsKey((name!, sheetId)))
+                        workbook.DefineNamedFormula(name!, refersToBody, sheetId);
+                }
+                else
+                {
+                    workbook.NamedFormulas.TryAdd(name!, refersToBody);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            warnings?.Add($"[named-ranges] Workbook defined-name formulas could not be loaded from package XML: {ex.Message}");
         }
     }
 
@@ -161,31 +215,304 @@ internal static class XlsxNamedRangeMapper
     {
         foreach (var (name, range) in workbook.NamedRanges)
         {
-            try
-            {
-                if (IsExcelReservedDefinedName(name))
-                    continue;
+            SaveWorkbookDefinedName(workbook, xlWorkbook, name, range, warnings);
+        }
 
-                var sheet = workbook.GetSheet(range.Start.Sheet);
-                if (sheet is null)
-                    continue;
+        foreach (var (key, range) in workbook.ScopedNamedRanges)
+        {
+            SaveSheetScopedDefinedName(workbook, xlWorkbook, key.Name, key.Sheet, range, warnings);
+        }
 
-                if (!xlWorkbook.TryGetWorksheet(sheet.Name, out _))
-                    continue;
+        foreach (var (name, formulaText) in workbook.NamedFormulas)
+        {
+            SaveWorkbookDefinedName(workbook, xlWorkbook, name, formulaText, warnings);
+        }
 
-                var startA1 = range.Start.ToA1();
-                var endA1 = range.End.ToA1();
-                var address = $"{SheetNameFormatter.QuoteIfNeeded(sheet.Name)}!{startA1}:{endA1}";
-
-                xlWorkbook.DefinedNames.Add(name, address);
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"[XlsxNamedRangeMapper] Skipping named range '{name}': {ex.Message}");
-                warnings?.Add($"[named-range] Named range '{name}' could not be saved and was skipped.");
-            }
+        foreach (var (key, formulaText) in workbook.ScopedNamedFormulas)
+        {
+            SaveSheetScopedDefinedName(workbook, xlWorkbook, key.Name, key.Sheet, formulaText, warnings);
         }
     }
+
+    public static void SaveToPackage(Workbook workbook, Stream packageStream, List<string>? warnings = null)
+    {
+        try
+        {
+            packageStream.Position = 0;
+            using var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true);
+            var workbookEntry = archive.GetEntry("xl/workbook.xml");
+            if (workbookEntry is null)
+                return;
+
+            var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
+            var root = workbookXml.Root;
+            if (root is null)
+                return;
+
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var entries = CreateDefinedNameEntries(workbook).ToList();
+            if (entries.Count == 0)
+                return;
+
+            var definedNames = root.Element(workbookNs + "definedNames");
+            if (definedNames is null)
+            {
+                definedNames = new XElement(workbookNs + "definedNames");
+                InsertDefinedNamesElement(root, workbookNs, definedNames);
+            }
+
+            var existingByKey = definedNames
+                .Elements(workbookNs + "definedName")
+                .GroupBy(DefinedNameKey, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
+
+            var changed = false;
+            foreach (var entry in entries)
+            {
+                var key = DefinedNameKey(entry.Name, entry.LocalSheetId);
+                if (existingByKey.TryGetValue(key, out var existing))
+                {
+                    if (!string.Equals(existing.Value, entry.Text, StringComparison.Ordinal))
+                    {
+                        existing.Value = entry.Text;
+                        changed = true;
+                    }
+                    continue;
+                }
+
+                var element = new XElement(workbookNs + "definedName", new XAttribute("name", entry.Name), entry.Text);
+                if (entry.LocalSheetId is { } localSheetId)
+                    element.SetAttributeValue("localSheetId", localSheetId.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                definedNames.Add(element);
+                existingByKey[key] = element;
+                changed = true;
+            }
+
+            if (changed)
+                XlsxPackageXmlEditor.ReplaceXml(archive, "xl/workbook.xml", workbookXml);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[XlsxNamedRangeMapper] Defined names package post-processing failed: {ex.Message}");
+            warnings?.Add("[defined-names] Defined names could not be post-processed.");
+        }
+    }
+
+    private static IEnumerable<DefinedNameEntry> CreateDefinedNameEntries(Workbook workbook)
+    {
+        foreach (var (name, range) in workbook.NamedRanges)
+        {
+            if (IsExcelReservedDefinedName(name) ||
+                !TryFormatRangeAddress(workbook, range, xlWorkbook: null, out var address))
+                continue;
+
+            yield return new DefinedNameEntry(name, null, address);
+        }
+
+        foreach (var (key, range) in workbook.ScopedNamedRanges)
+        {
+            if (IsExcelReservedDefinedName(key.Name) ||
+                !TryGetLocalSheetId(workbook, key.Sheet, out var localSheetId) ||
+                !TryFormatRangeAddress(workbook, range, xlWorkbook: null, out var address))
+                continue;
+
+            yield return new DefinedNameEntry(key.Name, localSheetId, address);
+        }
+
+        foreach (var (name, formulaText) in workbook.NamedFormulas)
+        {
+            if (IsExcelReservedDefinedName(name) || workbook.ValidateNamedRangeName(name) is not null)
+                continue;
+
+            yield return new DefinedNameEntry(name, null, FormatDefinedNameFormulaForXml(formulaText));
+        }
+
+        foreach (var (key, formulaText) in workbook.ScopedNamedFormulas)
+        {
+            if (IsExcelReservedDefinedName(key.Name) ||
+                workbook.ValidateNamedRangeName(key.Name) is not null ||
+                !TryGetLocalSheetId(workbook, key.Sheet, out var localSheetId))
+                continue;
+
+            yield return new DefinedNameEntry(key.Name, localSheetId, FormatDefinedNameFormulaForXml(formulaText));
+        }
+    }
+
+    private static void InsertDefinedNamesElement(XElement root, XNamespace workbookNs, XElement definedNames)
+    {
+        var sheets = root.Element(workbookNs + "sheets");
+        if (sheets is not null)
+        {
+            sheets.AddAfterSelf(definedNames);
+            return;
+        }
+
+        root.Add(definedNames);
+    }
+
+    private static string DefinedNameKey(XElement element) =>
+        DefinedNameKey(
+            element.Attribute("name")?.Value ?? string.Empty,
+            int.TryParse(element.Attribute("localSheetId")?.Value, out var localSheetId) ? (int?)localSheetId : null);
+
+    private static string DefinedNameKey(string name, int? localSheetId) =>
+        $"{name}\u001f{localSheetId?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty}";
+
+    private static bool TryGetLocalSheetId(Workbook workbook, SheetId scopeSheetId, out int localSheetId)
+    {
+        for (var i = 0; i < workbook.Sheets.Count; i++)
+        {
+            if (!workbook.Sheets[i].Id.Equals(scopeSheetId))
+                continue;
+
+            localSheetId = i;
+            return true;
+        }
+
+        localSheetId = -1;
+        return false;
+    }
+
+    private static void SaveWorkbookDefinedName(
+        Workbook workbook,
+        XLWorkbook xlWorkbook,
+        string name,
+        GridRange range,
+        List<string>? warnings)
+    {
+        try
+        {
+            if (IsExcelReservedDefinedName(name))
+                return;
+
+            if (!TryFormatRangeAddress(workbook, range, xlWorkbook, out var address))
+                return;
+
+            xlWorkbook.DefinedNames.Add(name, address);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[XlsxNamedRangeMapper] Skipping named range '{name}': {ex.Message}");
+            warnings?.Add($"[named-range] Named range '{name}' could not be saved and was skipped.");
+        }
+    }
+
+    private static void SaveSheetScopedDefinedName(
+        Workbook workbook,
+        XLWorkbook xlWorkbook,
+        string name,
+        SheetId scopeSheetId,
+        GridRange range,
+        List<string>? warnings)
+    {
+        try
+        {
+            if (IsExcelReservedDefinedName(name))
+                return;
+
+            var scopeSheet = workbook.GetSheet(scopeSheetId);
+            if (scopeSheet is null || !xlWorkbook.TryGetWorksheet(scopeSheet.Name, out var xlScopeSheet))
+                return;
+
+            if (!TryFormatRangeAddress(workbook, range, xlWorkbook, out var address))
+                return;
+
+            xlScopeSheet.DefinedNames.Add(name, address);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[XlsxNamedRangeMapper] Skipping sheet-scoped named range '{name}': {ex.Message}");
+            warnings?.Add($"[named-range] Sheet-scoped named range '{name}' could not be saved and was skipped.");
+        }
+    }
+
+    private static void SaveWorkbookDefinedName(
+        Workbook workbook,
+        XLWorkbook xlWorkbook,
+        string name,
+        string formulaText,
+        List<string>? warnings)
+    {
+        try
+        {
+            if (IsExcelReservedDefinedName(name))
+                return;
+
+            if (workbook.ValidateNamedRangeName(name) is not null)
+                return;
+
+            xlWorkbook.DefinedNames.Add(name, FormatDefinedNameFormula(formulaText));
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[XlsxNamedRangeMapper] Skipping named formula '{name}': {ex.Message}");
+            warnings?.Add($"[named-formula] Named formula '{name}' could not be saved and was skipped.");
+        }
+    }
+
+    private static void SaveSheetScopedDefinedName(
+        Workbook workbook,
+        XLWorkbook xlWorkbook,
+        string name,
+        SheetId scopeSheetId,
+        string formulaText,
+        List<string>? warnings)
+    {
+        try
+        {
+            if (IsExcelReservedDefinedName(name))
+                return;
+
+            if (workbook.ValidateNamedRangeName(name) is not null)
+                return;
+
+            var scopeSheet = workbook.GetSheet(scopeSheetId);
+            if (scopeSheet is null || !xlWorkbook.TryGetWorksheet(scopeSheet.Name, out var xlScopeSheet))
+                return;
+
+            xlScopeSheet.DefinedNames.Add(name, FormatDefinedNameFormula(formulaText));
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[XlsxNamedRangeMapper] Skipping sheet-scoped named formula '{name}': {ex.Message}");
+            warnings?.Add($"[named-formula] Sheet-scoped named formula '{name}' could not be saved and was skipped.");
+        }
+    }
+
+    private static bool TryFormatRangeAddress(
+        Workbook workbook,
+        GridRange range,
+        XLWorkbook? xlWorkbook,
+        out string address)
+    {
+        address = "";
+
+        var sheet = workbook.GetSheet(range.Start.Sheet);
+        if (sheet is null)
+            return false;
+
+        if (xlWorkbook is not null && !xlWorkbook.TryGetWorksheet(sheet.Name, out _))
+            return false;
+
+        var startA1 = range.Start.ToA1();
+        var endA1 = range.End.ToA1();
+        address = $"{SheetNameFormatter.QuoteIfNeeded(sheet.Name)}!{startA1}:{endA1}";
+        return true;
+    }
+
+    private static string FormatDefinedNameFormula(string formulaText)
+    {
+        var trimmed = formulaText.Trim();
+        return trimmed.StartsWith('=') ? trimmed : "=" + trimmed;
+    }
+
+    private static string FormatDefinedNameFormulaForXml(string formulaText)
+    {
+        var trimmed = formulaText.Trim();
+        return trimmed.StartsWith('=') ? trimmed[1..].Trim() : trimmed;
+    }
+
+    private sealed record DefinedNameEntry(string Name, int? LocalSheetId, string Text);
 
     private static bool IsExcelReservedDefinedName(string? name)
     {

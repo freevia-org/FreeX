@@ -10,20 +10,20 @@ public static partial class BuiltInFunctions
 
     // ── Private helpers ─────────────────────────────────────────────────
 
-    private static DateTime SerialToDate(double serial) =>
-        ExcelDateSystem.SerialToDate(serial);
+    private static DateTime SerialToDate(double serial, bool uses1904DateSystem = false) =>
+        ExcelDateSystem.SerialToDate(serial, uses1904DateSystem);
 
-    private static bool TryGetFinancialDate(double serial, out DateTime date)
+    private static bool TryGetFinancialDate(double serial, out DateTime date, bool uses1904DateSystem = false)
     {
         date = default;
         if (!double.IsFinite(serial) || serial < 0 || serial > 2958465.0)
             return false;
-        date = SerialToDate(serial);
+        date = SerialToDate(serial, uses1904DateSystem);
         return true;
     }
 
-    private static double DateToSerial(DateTime d) =>
-        ExcelDateSystem.DateToSerial(d);
+    private static double DateToSerial(DateTime d, bool uses1904DateSystem = false) =>
+        ExcelDateSystem.DateToSerial(d, uses1904DateSystem);
 
     private static bool IsExcelFakeLeapDay(ScalarValue value)
     {
