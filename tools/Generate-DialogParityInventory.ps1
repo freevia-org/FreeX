@@ -332,12 +332,12 @@ $routes = @(
     @{
         RouteId = "dialog.ShapeEffects"; DisplayName = "Shape Effects"
         Wpf = @("screenshots\draw-object-formatting-tour\freex_draw_object_formatting_shape_effects_dialog.png")
-        Shared = @("src\FreeX.App.Presentation\DrawingUI\ShapeEffectsPlanner.cs")
+        Shared = @("src\FreeX.App.Services\ShapeEffectsPlanner.cs")
     },
     @{
         RouteId = "dialog.ShapeGradient"; DisplayName = "Shape Gradient"
         Wpf = @("screenshots\draw-object-formatting-tour\freex_draw_object_formatting_shape_gradient_dialog.png")
-        Shared = @("src\FreeX.App.Presentation\DrawingUI\ShapeGradientPlanner.cs")
+        Shared = @("src\FreeX.App.Services\ShapeGradientPlanner.cs")
     },
     @{
         RouteId = "dialog.Options"; DisplayName = "Options"
