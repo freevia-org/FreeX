@@ -570,6 +570,8 @@ public sealed class MainWindow : Window
             PastePlainText: () => _ = PastePlainTextAsync(),
             PasteMergeFormatting: () => _ = PasteMergeFormattingAsync(),
             OpenPasteSpecial: () => _ = OpenPasteSpecialAsync(),
+            OpenNewStyleDialog: () => _ = StyleDialog.ShowNewAndApplyAsync(this, _editor),
+            OpenManageStylesDialog: () => _ = ManageStylesDialog.ShowAndApplyAsync(this, _editor),
             Backstage: () => _ = ShowBackstageAsync(),
             NewDocument: NewDocument,
             ToggleNavigationPane: ToggleNavigationPane,

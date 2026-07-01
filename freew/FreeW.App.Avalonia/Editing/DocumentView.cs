@@ -344,6 +344,7 @@ public sealed class DocumentView : Control
     }
 
     public TextDocument Document => _doc;
+    public string? CurrentParagraphStyleId => CurrentParagraph()?.StyleId;
     public bool CanUndo => _bus.CanUndo;
     public bool CanRedo => _bus.CanRedo;
 
@@ -10097,6 +10098,61 @@ public sealed class DocumentView : Control
     {
         ArgumentNullException.ThrowIfNull(styleSet);
         _bus.Execute(new DesignCatalogCommand("Style Set", doc => DocumentStyleSet.Apply(doc, styleSet)));
+    }
+
+    /// <summary>
+    /// Home &gt; Styles &gt; New Style: create a custom paragraph style through the shared
+    /// <see cref="StyleManager"/>, then immediately apply it through the normal paragraph-style path.
+    /// </summary>
+    public DocumentStyle? CreateParagraphStyleAndApply(
+        string name,
+        string? basedOnId,
+        RunFormatting run,
+        ParagraphFormatting paragraph,
+        string? nextStyleId)
+    {
+        if (IsEditingLocked)
+            return null;
+
+        var created = StyleManager.CreateStyle(_doc, name, basedOnId, run, paragraph, nextStyleId);
+        ApplyNamedStyle(created.Id);
+        InvalidateAfterExternalMutation();
+        return created;
+    }
+
+    /// <summary>Home &gt; Styles &gt; Manage Styles: modify a style's catalog entry and redraw style-linked text.</summary>
+    public DocumentStyle? ModifyParagraphStyle(
+        string styleId,
+        RunFormatting run,
+        ParagraphFormatting paragraph,
+        string? basedOnId,
+        string? nextStyleId)
+    {
+        if (IsEditingLocked)
+            return null;
+
+        var updated = StyleManager.ModifyStyle(_doc, styleId,
+            run: run,
+            para: paragraph,
+            basedOnId: basedOnId,
+            clearBasedOn: basedOnId is null,
+            nextStyleId: nextStyleId,
+            clearNext: nextStyleId is null);
+        if (updated is not null)
+            InvalidateAfterExternalMutation();
+        return updated;
+    }
+
+    /// <summary>Home &gt; Styles &gt; Manage Styles: delete a custom style through the shared catalog rules.</summary>
+    public bool DeleteParagraphStyle(string styleId)
+    {
+        if (IsEditingLocked)
+            return false;
+
+        var deleted = StyleManager.DeleteStyle(_doc, styleId);
+        if (deleted)
+            InvalidateAfterExternalMutation();
+        return deleted;
     }
 
     /// <summary>
