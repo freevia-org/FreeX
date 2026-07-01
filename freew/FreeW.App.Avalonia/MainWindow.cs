@@ -314,6 +314,24 @@ public sealed class MainWindow : Window
         new WordCountDialog(_editor.ComputeStatistics()).ShowDialog(this);
 
     /// <summary>
+    /// Opens the Avalonia print-preview surface over a snapshot of the current document. Native print
+    /// selection remains deferred, but the preview uses the same paginated renderer as the live editor.
+    /// </summary>
+    private Task OpenPrintPreviewAsync()
+    {
+        try
+        {
+            var snapshot = CloneDocument(_editor.Document);
+            return new PrintPreviewDialog(snapshot, _fileWorkflow.DisplayName).ShowDialog(this);
+        }
+        catch (Exception ex)
+        {
+            _status.Text = SisterAppFileTextPlanner.FormatCommandFailed("Print Preview", ex.Message);
+            return Task.CompletedTask;
+        }
+    }
+
+    /// <summary>
     /// AV-VIEW: Opens the Zoom dialog (modal). Pre-selects the preset matching the current zoom (or the
     /// custom box), and on OK applies the chosen scale through the same <see cref="ApplyZoom(double)"/>
     /// path as the quick zoom commands. Wired to <c>freew.zoom-dialog</c> (View → Zoom group).
@@ -456,6 +474,7 @@ public sealed class MainWindow : Window
         var callbacks = new RibbonHostCallbacks(
             Open: () => _ = OpenAsync(),
             Save: () => _ = SaveAsync(),
+            ImportPdfText: () => _ = ImportPdfTextAsync(),
             Cut: () => _ = CutAsync(),
             Copy: () => _ = CopyAsync(),
             Paste: () => _ = PasteAsync(),
@@ -482,6 +501,7 @@ public sealed class MainWindow : Window
                 ApplyZoom(newScale);
             },
             OpenZoomDialog: () => _ = OpenZoomDialogAsync(),
+            OpenPrintPreview: () => _ = OpenPrintPreviewAsync(),
             NewWindow:       OpenNewWindow,
             ToggleSplit:     ToggleSplit,
             // AV-INSERT2: Insert depth 2 dialog launchers (optional callbacks).
@@ -826,6 +846,39 @@ public sealed class MainWindow : Window
         {
             _status.Text = SisterAppFileTextPlanner.FormatCommandFailed(SisterAppFileTextPlanner.OpenCommand, ex.Message);
             return Task.FromResult(false);
+        }
+    }
+
+    private async Task ImportPdfTextAsync()
+    {
+        using var file = await AvaloniaFilePickerService.PickSingleOpenFileWithLocalPathAsync(
+            StorageProvider,
+            AvaloniaFilePickerOpenRequest.FromFileTypes(
+                "Import PDF (text only)",
+                DocumentFilePickerTypes.BuildPdfImportTypes()));
+        var path = file?.LocalPath;
+        if (path is null)
+            return;
+
+        if (DocumentFileFormatResolver.FindOpenAdapter(
+                DocumentFileAdapterCatalog.CreatePdfImportAdapters(),
+                Path.GetExtension(path),
+                out _) is not { } adapter)
+        {
+            _status.Text = $"PDF import failed: unsupported file type \"{Path.GetExtension(path)}\".";
+            return;
+        }
+
+        try
+        {
+            using var stream = File.OpenRead(path);
+            LoadDocumentContent(adapter.Load(stream));
+            _fileWorkflow.MarkDirtyWithPath(null);
+            _status.Text = $"Imported PDF text from {Path.GetFileName(path)}";
+        }
+        catch (Exception ex)
+        {
+            _status.Text = $"PDF import failed: {ex.Message}";
         }
     }
 
@@ -1193,7 +1246,16 @@ public sealed class MainWindow : Window
             RestrictEditing: () => _ = OpenRestrictEditingAsync(),
             InspectDocument: () => _ = InspectDocumentAsync(),
             CheckAccessibility: () => _ = CheckAccessibilityAsync(),
-            OpenOptions: () => _ = OpenOptionsAsync());
+            OpenOptions: () => _ = OpenOptionsAsync(),
+            PrintPreview: () => _ = OpenPrintPreviewAsync());
+
+    private static TextDocument CloneDocument(TextDocument document)
+    {
+        using var buffer = new MemoryStream();
+        DocxWriter.Write(document, buffer);
+        buffer.Position = 0;
+        return DocxReader.Read(buffer);
+    }
 
     private void ToggleMarkAsFinal()
     {

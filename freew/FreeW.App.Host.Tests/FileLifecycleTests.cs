@@ -7,6 +7,10 @@ using FreeW.App.Host;
 using FreeW.App.Host.Editing;
 using FreeW.App.Presentation.Options;
 using FreeW.Core.IO;
+using UglyToad.PdfPig.Content;
+using UglyToad.PdfPig.Core;
+using UglyToad.PdfPig.Fonts.Standard14Fonts;
+using UglyToad.PdfPig.Writer;
 using Xunit;
 
 namespace FreeW.App.Host.Tests;
@@ -128,6 +132,22 @@ public sealed class FileLifecycleTests : IDisposable
         Assert.False(file.IsDirty);
         Assert.Equal(path, file.CurrentPath);
         Assert.Equal("Opened", file.DisplayName);
+    }
+
+    [StaFact]
+    public void ImportPdfTextPath_LoadsAsUntitledDirtyDocument()
+    {
+        var (_, editor, file, changeCount, _) = CreateHarness();
+        var path = WritePdf("Imported.pdf", "Imported PDF text");
+
+        var imported = file.ImportPdfTextPath(path);
+
+        Assert.True(imported);
+        Assert.True(file.IsDirty);
+        Assert.Null(file.CurrentPath);
+        Assert.Equal("Untitled", file.DisplayName);
+        Assert.Contains("Imported PDF text", editor.Model.PlainText);
+        Assert.Equal(1, changeCount());
     }
 
     [StaFact]
@@ -255,6 +275,18 @@ public sealed class FileLifecycleTests : IDisposable
         doc.Blocks.Add(new Paragraph(text));
         var path = Path.Combine(_tempDir, name);
         DocxWriter.Write(doc, path);
+        return path;
+    }
+
+    private string WritePdf(string name, string text)
+    {
+        var builder = new PdfDocumentBuilder();
+        var page = builder.AddPage(PageSize.A4);
+        var font = builder.AddStandard14Font(Standard14Font.Helvetica);
+        page.AddText(text, 12, new PdfPoint(50, 700), font);
+
+        var path = Path.Combine(_tempDir, name);
+        File.WriteAllBytes(path, builder.Build());
         return path;
     }
 

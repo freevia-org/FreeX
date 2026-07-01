@@ -130,6 +130,7 @@ internal static class FreePCommandInventory
             SchemaVersion: 1,
             GeneratedBy: "tools/Generate-FreePCommandParityInventory.ps1",
             Source: "freep/FreeP.Ribbon.Definitions FreePRibbon.Build(FreePRibbonCapabilities.Wpf/Avalonia)",
+            Notes: "Raw missing counts preserve one-sided generated profile surface counts. Actionable missing counts exclude platform-only commands so Avalonia shell commands are not reported as WPF or Avalonia implementation gaps.",
             Summary: new InventorySummary(
                 TotalCommands: commands.Length,
                 Both: commands.Count(command => command.Surface == "both"),
@@ -137,6 +138,8 @@ internal static class FreePCommandInventory
                 AvaloniaOnly: commands.Count(command => command.Surface == "avalonia-only"),
                 MissingWpf: commands.Count(command => command.MissingSide == "WPF"),
                 MissingAvalonia: commands.Count(command => command.MissingSide == "Avalonia"),
+                ActionableMissingWpf: commands.Count(command => command.MissingSide == "WPF" && command.Classification != "platform-only"),
+                ActionableMissingAvalonia: commands.Count(command => command.MissingSide == "Avalonia" && command.Classification != "platform-only"),
                 Shared: commands.Count(command => command.Classification == "shared"),
                 AvaloniaGaps: commands.Count(command => command.Classification == "avalonia-gap"),
                 KnownDeferred: commands.Count(command => command.Classification == "known-deferred"),
@@ -320,9 +323,11 @@ internal static class FreePCommandInventoryMarkdown
         builder.AppendLine();
         builder.AppendLine("## Summary");
         builder.AppendLine();
-        builder.AppendLine("| Total | Both | WPF only | Avalonia only | Missing WPF | Missing Avalonia | Shared | Avalonia gaps | Known deferred | Platform-only | Command-id aliases |");
-        builder.AppendLine("|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|");
-        builder.AppendLine($"| {inventory.Summary.TotalCommands} | {inventory.Summary.Both} | {inventory.Summary.WpfOnly} | {inventory.Summary.AvaloniaOnly} | {inventory.Summary.MissingWpf} | {inventory.Summary.MissingAvalonia} | {inventory.Summary.Shared} | {inventory.Summary.AvaloniaGaps} | {inventory.Summary.KnownDeferred} | {inventory.Summary.PlatformOnly} | {inventory.Summary.CommandIdAliases} |");
+        builder.AppendLine(inventory.Notes);
+        builder.AppendLine();
+        builder.AppendLine("| Total | Both | WPF only | Avalonia only | Missing WPF raw | Missing Avalonia raw | Actionable missing WPF | Actionable missing Avalonia | Shared | Avalonia gaps | Known deferred | Platform-only | Command-id aliases |");
+        builder.AppendLine("|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|");
+        builder.AppendLine($"| {inventory.Summary.TotalCommands} | {inventory.Summary.Both} | {inventory.Summary.WpfOnly} | {inventory.Summary.AvaloniaOnly} | {inventory.Summary.MissingWpf} | {inventory.Summary.MissingAvalonia} | {inventory.Summary.ActionableMissingWpf} | {inventory.Summary.ActionableMissingAvalonia} | {inventory.Summary.Shared} | {inventory.Summary.AvaloniaGaps} | {inventory.Summary.KnownDeferred} | {inventory.Summary.PlatformOnly} | {inventory.Summary.CommandIdAliases} |");
         builder.AppendLine();
         builder.AppendLine("## Matrix");
         builder.AppendLine();
@@ -355,6 +360,7 @@ internal sealed record InventoryDocument(
     int SchemaVersion,
     string GeneratedBy,
     string Source,
+    string Notes,
     InventorySummary Summary,
     IReadOnlyList<CommandEntry> Commands);
 
@@ -365,6 +371,8 @@ internal sealed record InventorySummary(
     int AvaloniaOnly,
     int MissingWpf,
     int MissingAvalonia,
+    int ActionableMissingWpf,
+    int ActionableMissingAvalonia,
     int Shared,
     int AvaloniaGaps,
     int KnownDeferred,

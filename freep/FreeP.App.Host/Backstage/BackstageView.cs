@@ -75,36 +75,21 @@ internal sealed class BackstageView : UserControl
     private UIElement BuildExportPane()
     {
         var plan = PresentationExportPlanner.BuildBackstageExportPlan();
-        var groups = new List<BackstageActionGroup>
-        {
-            new(
-                plan.FixedLayoutGroupHeading,
-                plan.FixedLayoutActions
-                    .Where(action => action.IsEnabled)
-                    .Select(action => new BackstageActionRow(
-                        action.Label,
-                        action.Description,
-                        _backstage.HideThen(ResolveExportAction(action.CommandId))))
-                    .ToArray()),
-        };
-
-        var deferredActions = plan.DeferredActions.Where(action => action.IsEnabled).ToArray();
-        if (deferredActions.Length > 0)
-        {
-            groups.Add(new BackstageActionGroup(
+        var additionalGroups = plan.DeferredActions.Where(action => action.IsEnabled)
+            .GroupBy(_ => plan.DeferredGroupHeading)
+            .Select(group => new BackstageActionGroup(
                 plan.DeferredGroupHeading,
-                deferredActions
+                group
                     .Select(action => new BackstageActionRow(
                         action.Label,
                         action.Description,
                         _backstage.HideThen(ResolveExportAction(action.CommandId))))
-                    .ToArray()));
-        }
+                    .ToArray()))
+            .ToArray();
 
-        return Panes.BuildActionPane(new BackstageActionPaneSpec(
-            plan.Heading,
-            plan.Description,
-            groups));
+        return Panes.BuildActionPane(PaneSpecs.BuildExportPaneSpec(
+            _backstage.HideThen(_actions.ExportPdf),
+            additionalGroups: additionalGroups));
     }
 
     private UIElement BuildInfoPane()

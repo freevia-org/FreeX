@@ -8304,6 +8304,19 @@ public sealed class DocumentView : Control
         _bus.Execute(new SetPageSettingsCommand(settings));
     }
 
+    /// <summary>
+    /// Clone the current page settings, apply a layout mutation, then commit it as one undoable page
+    /// setup command. Used by Layout ribbon commands such as Columns.
+    /// </summary>
+    public void ApplyPageSettings(Action<PageSettings> apply)
+    {
+        ArgumentNullException.ThrowIfNull(apply);
+
+        var settings = _doc.Page.Clone();
+        apply(settings);
+        SetPageSettings(settings);
+    }
+
     /// <summary>Insert a bordered table (with a header row) after the current block. Cells edit on double-click.</summary>
     public void InsertTable(int rows, int columns)
     {
@@ -8330,6 +8343,30 @@ public sealed class DocumentView : Control
 
         var insertAt = Math.Clamp(_caret.Block + 1, 0, _doc.Blocks.Count);
         _bus.Execute(new InsertBlockCommand(insertAt, DocumentOps.CreatePageBreak()));
+    }
+
+    /// <summary>
+    /// Insert a column break after the caret block using the shared model command path.
+    /// </summary>
+    public void InsertColumnBreak()
+    {
+        if (IsEditingLocked)
+            return;
+
+        var insertAt = Math.Clamp(_caret.Block + 1, 0, _doc.Blocks.Count);
+        _bus.Execute(new InsertBlockCommand(insertAt, DocumentOps.CreateColumnBreak()));
+    }
+
+    /// <summary>
+    /// Insert a section break after the caret block, inheriting the current page settings.
+    /// </summary>
+    public void InsertSectionBreak(SectionBreakKind breakKind)
+    {
+        if (IsEditingLocked)
+            return;
+
+        var insertAt = Math.Clamp(_caret.Block + 1, 0, _doc.Blocks.Count);
+        _bus.Execute(new InsertBlockCommand(insertAt, DocumentOps.CreateSectionBreak(breakKind, _doc.Page)));
     }
 
     /// <summary>

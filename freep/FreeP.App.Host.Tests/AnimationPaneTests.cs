@@ -308,19 +308,40 @@ public sealed class AnimationPaneTests
         CountAnimationRows(pane).Should().Be(0, "pane should refresh when slide changes");
     }
 
+    [StaFact]
+    public void AnimationPane_ExposesSharedTimelinePlan()
+    {
+        var editor = MakeSessionWithAnimations();
+        editor.Select(20u);
+
+        var pane = new AnimationPane(editor);
+
+        var plan = pane.CurrentTimelinePlanForTest;
+        plan.Items.Should().HaveCount(2);
+        plan.SelectedIndex.Should().Be(1);
+        plan.SelectedItem!.ShapeName.Should().Be("Content Box");
+        plan.SelectedItem.EffectText.Should().Be("In: Fade");
+        plan.SelectedItem.CanMoveEarlier.Should().BeTrue();
+        plan.SelectedItem.CanMoveLater.Should().BeFalse();
+        plan.PreviewIntent.CanExecute.Should().BeTrue();
+    }
+
     [Fact]
     public void AnimationPane_UsesSharedPlannerForPolicy()
     {
         var source = ReadWorkspaceFile("freep", "FreeP.App.Host", "AnimationPane.cs");
 
-        source.Should().Contain("AnimationPanePlanner.FormatEffect(anim)");
+        source.Should().Contain("AnimationPanePlanner.BuildTimelinePlan(");
+        source.Should().Contain("var effectText = item.EffectText");
         source.Should().Contain("AnimationPanePlanner.TriggerLabels");
         source.Should().Contain("AnimationPanePlanner.TryGetTrigger(");
-        source.Should().Contain("AnimationPanePlanner.FormatDuration(anim.DurationMs)");
+        source.Should().Contain("Text              = item.DurationText");
         source.Should().Contain("AnimationPanePlanner.BuildDurationEditPlan(");
         source.Should().NotContain("private static string FormatEffect");
         source.Should().NotContain("private static string FormatDuration");
         source.Should().NotContain("private static bool TryParseDuration");
+        source.Should().NotContain("private string ResolveShapeName");
+        source.Should().NotContain("private static ShapeAnimation CloneAnimation");
         source.Should().NotContain("double.TryParse");
     }
 

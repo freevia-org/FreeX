@@ -90,4 +90,7 @@ internal sealed record BackstageCallbacks(
     Action CheckAccessibility,
 
     /// <summary>Open the FreeW options editor.</summary>
-    Action OpenOptions);
+    Action OpenOptions,
+
+    /// <summary>Open the paginated print-preview surface. Direct native printing remains host-deferred.</summary>
+    Action? PrintPreview = null);

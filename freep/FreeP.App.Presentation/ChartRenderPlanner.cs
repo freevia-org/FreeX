@@ -29,6 +29,13 @@ public enum ChartPlanTextAlignment
     Right
 }
 
+public enum ChartAxisTitleOrientation
+{
+    Horizontal,
+    VerticalCounterclockwise,
+    VerticalClockwise
+}
+
 public readonly record struct ChartFillPlan(SrgbColor Color, byte Alpha);
 
 public readonly record struct ChartStrokePlan(SrgbColor Color, byte Alpha, double Thickness);
@@ -184,6 +191,10 @@ public readonly record struct ChartLegendItemPlan(
     ChartTextPlan Label,
     ChartFillPlan Fill);
 
+public readonly record struct ChartAxisTitlePlan(
+    ChartTextPlan Label,
+    ChartAxisTitleOrientation Orientation);
+
 /// <summary>
 /// Renderer-neutral chart planning helpers shared by the WPF and Avalonia slide canvases.
 /// </summary>
@@ -195,6 +206,8 @@ public static class ChartRenderPlanner
     public const double AxisLabelWidth = 40.0;
     public const double CategoryLabelHeight = 16.0;
     public const double BarCategoryLabelWidth = 44.0;
+    public const double AxisTitleBand = 14.0;
+    public const double AxisTitleFontSize = 7.5;
     public const double GridlinePad = 2.0;
     public const byte AreaFillAlpha = 200;
     public const double ScatterLineThickness = 1.5;
@@ -245,13 +258,23 @@ public static class ChartRenderPlanner
             or ChartRenderFamily.ScatterLike
             or ChartRenderFamily.Radar);
         bool isBar = family == ChartRenderFamily.HorizontalBar;
+        bool hasCategoryAxisTitle = reservesAxes &&
+            !chart.CategoryAxis.Delete &&
+            !string.IsNullOrWhiteSpace(chart.CategoryAxis.Title);
+        bool hasValueAxisTitle = reservesAxes &&
+            !chart.ValueAxis.Delete &&
+            !string.IsNullOrWhiteSpace(chart.ValueAxis.Title);
 
         double plotLeft = bounds.X + Margin
-            + (reservesAxes ? (isBar ? BarCategoryLabelWidth : AxisLabelWidth) : 0);
+            + (reservesAxes ? (isBar ? BarCategoryLabelWidth : AxisLabelWidth) : 0)
+            + (hasValueAxisTitle && !isBar ? AxisTitleBand : 0)
+            + (hasCategoryAxisTitle && isBar ? AxisTitleBand : 0);
         double plotTop = bounds.Y + Margin + titleAreaHeight;
         double plotRight = bounds.X + bounds.Width - Margin - legendAreaWidth;
         double plotBottom = bounds.Y + bounds.Height - Margin - legendAreaHeight
-            - (reservesAxes ? (isBar ? AxisLabelWidth : CategoryLabelHeight) : 0);
+            - (reservesAxes ? (isBar ? AxisLabelWidth : CategoryLabelHeight) : 0)
+            - (hasValueAxisTitle && isBar ? AxisTitleBand : 0)
+            - (hasCategoryAxisTitle && !isBar ? AxisTitleBand : 0);
 
         var plot = new ChartPlanRect(
             plotLeft,
@@ -415,7 +438,7 @@ public static class ChartRenderPlanner
                 double y = plot.Y + renderRow * categoryStep;
                 labels.Add(new ChartTextPlan(
                     chart.Categories[categoryIndex],
-                    new ChartPlanRect(frame.Bounds.X + Margin, y, BarCategoryLabelWidth - 4, categoryStep),
+                    new ChartPlanRect(plot.X - BarCategoryLabelWidth, y, BarCategoryLabelWidth - 4, categoryStep),
                     IsBold: false,
                     FontSize: 6.5,
                     Alignment: ChartPlanTextAlignment.Right));
@@ -472,7 +495,7 @@ public static class ChartRenderPlanner
                 double y = plot.Bottom - plot.Height * tickIndex / steps;
                 labels.Add(new ChartTextPlan(
                     FormatAxisValue(value),
-                    new ChartPlanRect(frame.Bounds.X + Margin, y - 6, AxisLabelWidth - GridlinePad, 12),
+                    new ChartPlanRect(plot.X - AxisLabelWidth, y - 6, AxisLabelWidth - GridlinePad, 12),
                     IsBold: false,
                     FontSize: 6.5,
                     Alignment: ChartPlanTextAlignment.Right));
@@ -480,6 +503,87 @@ public static class ChartRenderPlanner
         }
 
         return labels;
+    }
+
+    public static IReadOnlyList<ChartAxisTitlePlan> BuildAxisTitlePlans(
+        ChartShape chart,
+        ChartFramePlan frame)
+    {
+        if (!frame.HasPlot || frame.IsPie || frame.IsRadar || frame.IsScatterLike)
+            return Array.Empty<ChartAxisTitlePlan>();
+
+        var plans = new List<ChartAxisTitlePlan>(2);
+        var plot = frame.Plot;
+
+        if (!chart.ValueAxis.Delete && !string.IsNullOrWhiteSpace(chart.ValueAxis.Title))
+        {
+            if (frame.IsBar)
+            {
+                plans.Add(new ChartAxisTitlePlan(
+                    new ChartTextPlan(
+                        chart.ValueAxis.Title!,
+                        new ChartPlanRect(
+                            plot.X,
+                            plot.Bottom + CategoryLabelHeight + 2,
+                            plot.Width,
+                            AxisTitleBand),
+                        IsBold: false,
+                        FontSize: AxisTitleFontSize,
+                        Alignment: ChartPlanTextAlignment.Center),
+                    ChartAxisTitleOrientation.Horizontal));
+            }
+            else
+            {
+                plans.Add(new ChartAxisTitlePlan(
+                    new ChartTextPlan(
+                        chart.ValueAxis.Title!,
+                        new ChartPlanRect(
+                            frame.Bounds.X + Margin,
+                            plot.Y,
+                            AxisTitleBand,
+                            plot.Height),
+                        IsBold: false,
+                        FontSize: AxisTitleFontSize,
+                        Alignment: ChartPlanTextAlignment.Center),
+                    ChartAxisTitleOrientation.VerticalCounterclockwise));
+            }
+        }
+
+        if (!chart.CategoryAxis.Delete && !string.IsNullOrWhiteSpace(chart.CategoryAxis.Title))
+        {
+            if (frame.IsBar)
+            {
+                plans.Add(new ChartAxisTitlePlan(
+                    new ChartTextPlan(
+                        chart.CategoryAxis.Title!,
+                        new ChartPlanRect(
+                            frame.Bounds.X + Margin,
+                            plot.Y,
+                            AxisTitleBand,
+                            plot.Height),
+                        IsBold: false,
+                        FontSize: AxisTitleFontSize,
+                        Alignment: ChartPlanTextAlignment.Center),
+                    ChartAxisTitleOrientation.VerticalCounterclockwise));
+            }
+            else
+            {
+                plans.Add(new ChartAxisTitlePlan(
+                    new ChartTextPlan(
+                        chart.CategoryAxis.Title!,
+                        new ChartPlanRect(
+                            plot.X,
+                            plot.Bottom + CategoryLabelHeight + 2,
+                            plot.Width,
+                            AxisTitleBand),
+                        IsBold: false,
+                        FontSize: AxisTitleFontSize,
+                        Alignment: ChartPlanTextAlignment.Center),
+                    ChartAxisTitleOrientation.Horizontal));
+            }
+        }
+
+        return plans;
     }
 
     public static IReadOnlyList<ChartTextPlan> BuildSecondaryValueAxisLabelPlans(

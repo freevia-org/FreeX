@@ -123,6 +123,7 @@ public sealed class MainWindow : Window
     internal PresentationAccessibilitySummaryPlan? LastAccessibilitySummaryPlan { get; private set; }
     internal PresentationAltTextRequestPlan? LastAltTextRequestPlan { get; private set; }
     internal PresentationProofingRequestPlan? LastProofingRequestPlan { get; private set; }
+    internal PresentationDesignCommandPlan? LastLayoutRequestPlan { get; private set; }
 
     // ── Wave 16B: Animation pane (right-side collapsible panel) ──────────────────
     // 16B SEAM START — do not restructure this region (16A/16C may conflict nearby).
@@ -195,6 +196,7 @@ public sealed class MainWindow : Window
             getSlideCanvas:     () => SlideCanvas,
             // Wave 10B: open custom slide-size dialog from Design tab ribbon button.
             onCustomSlideSize:  () => OpenSlideSizeDialog(),
+            onLayoutPicker:     () => OpenLayoutPicker(),
             // Wave 10B: OS-clipboard service for ribbon Copy/Cut/Paste buttons.
             osClipboard:        _osClipboard,
             // Wave 11A: Insert Hyperlink dialog.
@@ -679,6 +681,29 @@ public sealed class MainWindow : Window
             proposedDescription: null);
     }
 
+    internal PresentationAltTextMutationPlan ApplySelectedShapeAlternativeText(string? description)
+    {
+        uint? selectedShapeId = Editor.SelectedShapeIds.Count == 1
+            ? Editor.SelectedShapeIds[0]
+            : null;
+        var plan = PresentationReviewWorkflowPlanner.BuildAltTextMutationPlan(
+            Editor.CurrentSlide,
+            Editor.CurrentSlideIndex,
+            selectedShapeId,
+            description);
+        if (plan.ShouldApply)
+        {
+            Editor.SetSelectedShapeAlternativeText(plan.Description);
+            LastAltTextRequestPlan = PresentationReviewWorkflowPlanner.BuildAltTextRequestPlan(
+                Editor.CurrentSlide,
+                plan.ShapeId,
+                plan.Description);
+            RefreshAccessibilitySummaryPlan();
+        }
+
+        return plan;
+    }
+
     private void RefreshProofingRequestPlan()
     {
         LastProofingRequestPlan =
@@ -895,6 +920,11 @@ public sealed class MainWindow : Window
         if (IsVisible)
             dialog.Owner = this;
         dialog.ShowDialog();
+    }
+
+    internal void OpenLayoutPicker()
+    {
+        LastLayoutRequestPlan = PresentationDesignCommandPlanner.LayoutPlan;
     }
 
     /// <summary>

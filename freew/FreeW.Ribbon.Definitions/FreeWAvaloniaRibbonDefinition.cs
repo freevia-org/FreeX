@@ -87,6 +87,47 @@ internal static class FreeWAvaloniaRibbonDefinition
         });
 
     /// <summary>AV-REF: References &gt; Insert Caption dropdown — Figure / Table caption labels.</summary>
+    private static RibbonMenu BuildMarginsMenu() =>
+        new(new RibbonMenuItem[]
+        {
+            new("Normal", new RibbonCommandId("freew.page-margins-normal")),
+            new("Narrow", new RibbonCommandId("freew.page-margins-narrow")),
+            new("Wide", new RibbonCommandId("freew.page-margins-wide")),
+            RibbonMenuItem.Separator(),
+            new("Custom Margins...", new RibbonCommandId("freew.custom-margins")),
+        });
+
+    private static RibbonMenu BuildPageSizeMenu() =>
+        new(new RibbonMenuItem[]
+        {
+            new("Letter", new RibbonCommandId("freew.page-size-letter")),
+            new("A4", new RibbonCommandId("freew.page-size-a4")),
+            RibbonMenuItem.Separator(),
+            new("More Paper Sizes...", new RibbonCommandId("freew.more-paper-sizes")),
+        });
+
+    private static RibbonMenu BuildColumnsMenu() =>
+        new(new RibbonMenuItem[]
+        {
+            new("One", new RibbonCommandId("freew.columns-one")),
+            new("Two", new RibbonCommandId("freew.columns-two")),
+            new("Three", new RibbonCommandId("freew.columns-three")),
+            new("Left", new RibbonCommandId("freew.columns-left")),
+            new("Right", new RibbonCommandId("freew.columns-right")),
+        });
+
+    private static RibbonMenu BuildBreaksMenu() =>
+        new(new RibbonMenuItem[]
+        {
+            new("Page Break", new RibbonCommandId("freew.page-break")),
+            new("Column Break", new RibbonCommandId("freew.column-break")),
+            RibbonMenuItem.Separator(),
+            new("Next Page", new RibbonCommandId("freew.section-break-next-page")),
+            new("Continuous", new RibbonCommandId("freew.section-break-continuous")),
+            new("Even Page", new RibbonCommandId("freew.section-break-even-page")),
+            new("Odd Page", new RibbonCommandId("freew.section-break-odd-page")),
+        });
+
     private static RibbonMenu BuildCaptionMenu() =>
         new(new RibbonMenuItem[]
         {
@@ -287,6 +328,7 @@ internal static class FreeWAvaloniaRibbonDefinition
                     g.Button("freew.backstage", "File...");
                     g.Button("freew.new",  "New");
                     g.Button("freew.open", "Open");
+                    g.Button("freew.import-pdf-text", "Import PDF (text only)");
                     g.Button("freew.save", "Save");
                 }))
             .Tab("home", FreeWRibbonText.HomeTab.Label, FreeWRibbonText.HomeTab.KeyTip, tab =>
@@ -442,13 +484,16 @@ internal static class FreeWAvaloniaRibbonDefinition
                 // AV-PAGE: page-setup group — dialog launcher + quick orientation/margins/size.
                 tab.Group("page-setup", "Page Setup", null, 100, g =>
                 {
-                    g.Button("freew.page-setup-dialog",   "Page Setup…");
-                    g.Button("freew.page-orientation",    "Orientation");
-                    g.Button("freew.page-margins-normal", "Normal Margins");
-                    g.Button("freew.page-margins-narrow", "Narrow Margins");
-                    g.Button("freew.page-margins-wide",   "Wide Margins");
-                    g.Button("freew.page-size-letter",    "Letter");
-                    g.Button("freew.page-size-a4",        "A4");
+                    g.Dropdown("freew.margins", "Margins", BuildMarginsMenu());
+                    g.Button("freew.orientation", "Orientation");
+                    g.Dropdown("freew.size", "Size", BuildPageSizeMenu());
+                    g.Dropdown("freew.columns", "Columns", BuildColumnsMenu());
+                    g.Dropdown("freew.breaks", "Breaks", BuildBreaksMenu());
+                    g.Button("freew.page-setup", "Page Setup...");
+                });
+                tab.Group("preview", "Preview", null, 90, g =>
+                {
+                    g.Button("freew.print-preview", "Print Preview");
                 });
             })
             .Tab("design", "Design", "G", tab =>
@@ -476,9 +521,9 @@ internal static class FreeWAvaloniaRibbonDefinition
             {
                 tab.Group("views", "Views", null, 110, g =>
                 {
-                    g.Button("freew.printlayout", "Print Layout");
-                    g.Button("freew.weblayout",   "Web Layout");
-                    g.Button("freew.draftview",   "Draft");
+                    g.Button("freew.print-layout", "Print Layout");
+                    g.Button("freew.web-layout",   "Web Layout");
+                    g.Button("freew.draft-view",   "Draft");
                 });
                 tab.Group("show", "Show", null, 100, g =>
                 {
@@ -554,23 +599,23 @@ internal static class FreeWAvaloniaRibbonDefinition
                 // AV-REF: References-tab depth — TOC, footnotes/endnotes, captions, cross-ref, citations.
                 tab.Group("toc", "Table of Contents", null, 110, g =>
                 {
-                    g.Button("freew.insert-toc", "Table of Contents");
-                    g.Button("freew.update-toc", "Update Table");
+                    g.Button("freew.toc", "Table of Contents");
+                    g.Button("freew.toc-refresh", "Update Table");
                 });
                 tab.Group("footnotes", "Footnotes", null, 100, g =>
                 {
-                    g.Button("freew.insert-footnote", "Insert Footnote");
-                    g.Button("freew.insert-endnote",  "Insert Endnote");
+                    g.Button("freew.footnote", "Insert Footnote");
+                    g.Button("freew.endnote",  "Insert Endnote");
                 });
                 tab.Group("citations", "Citations & Bibliography", null, 90, g =>
                 {
-                    g.Button("freew.insert-citation", "Insert Citation");
-                    g.Button("freew.bibliography",    "Bibliography");
+                    g.Button("freew.citation",     "Insert Citation");
+                    g.Button("freew.bibliography", "Bibliography");
                 });
                 tab.Group("captions", "Captions", null, 80, g =>
                 {
-                    g.Dropdown("freew.insert-caption", "Insert Caption", BuildCaptionMenu());
-                    g.Button("freew.cross-reference",  "Cross-reference");
+                    g.Dropdown("freew.caption", "Insert Caption", BuildCaptionMenu());
+                    g.Button("freew.cross-reference", "Cross-reference");
                 });
             })
             .Tab("mailings", "Mailings", "M", tab =>

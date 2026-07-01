@@ -766,6 +766,11 @@ public sealed class SlideCanvas : Control
                 ToTextAlignment(label.Alignment));
         }
 
+        foreach (var title in ChartRenderPlanner.BuildAxisTitlePlans(chart, frame))
+        {
+            DrawChartAxisTitle(dc, title);
+        }
+
         foreach (var item in ChartRenderPlanner.BuildLegendItemPlans(chart, frame, chartOp.SeriesColors))
         {
             dc.FillRectangle(ToBrush(item.Fill), ToRect(item.SwatchBounds));
@@ -1122,6 +1127,38 @@ public sealed class SlideCanvas : Control
 
     // ── Text ─────────────────────────────────────────────────────────────────
 
+    private static void DrawChartAxisTitle(DrawingContext dc, ChartAxisTitlePlan title)
+    {
+        var label = title.Label;
+        var rect = ToRect(label.Bounds);
+        if (title.Orientation == ChartAxisTitleOrientation.Horizontal)
+        {
+            DrawChartLabel(dc, label.Text, rect, label.IsBold, label.FontSize, ToTextAlignment(label.Alignment));
+            return;
+        }
+
+        double angle = title.Orientation == ChartAxisTitleOrientation.VerticalClockwise
+            ? Math.PI / 2.0
+            : -Math.PI / 2.0;
+        double cx = rect.X + rect.Width * 0.5;
+        double cy = rect.Y + rect.Height * 0.5;
+        using var rotateScope = dc.PushTransform(
+            Matrix.CreateTranslation(-cx, -cy)
+            * Matrix.CreateRotation(angle)
+            * Matrix.CreateTranslation(cx, cy));
+        DrawChartLabel(
+            dc,
+            label.Text,
+            new Rect(
+                rect.X + (rect.Width - rect.Height) * 0.5,
+                rect.Y + (rect.Height - rect.Width) * 0.5,
+                rect.Height,
+                rect.Width),
+            label.IsBold,
+            label.FontSize,
+            ToTextAlignment(label.Alignment));
+    }
+
     private static void RenderText(DrawingContext dc, ResolvedTextLayout text, LayoutRect bounds)
     {
         // Wave 18B: vertical text — rotate the text block around the shape center.
@@ -1179,9 +1216,9 @@ public sealed class SlideCanvas : Control
         {
             var para = text.Paragraphs[placement.ParagraphIndex];
             var ft = formatted[placement.ParagraphIndex];
-            if (!string.IsNullOrEmpty(para.BulletText))
-                DrawBulletAvalonia(dc, para.BulletText, para.BulletFontFamily, para.BulletFontSizePt,
-                    para.BulletColor, placement.X - para.HangingDip, placement.Y);
+            if (placement.Bullet is { } bullet)
+                DrawBulletAvalonia(dc, bullet.Text, bullet.FontFamily, bullet.FontSizePt,
+                    bullet.Color, bullet.X, bullet.Y);
 
             switch (TextLayoutPlanner.PlanParagraphRenderRoute(para, text))
             {
@@ -1231,12 +1268,10 @@ public sealed class SlideCanvas : Control
             var para = text.Paragraphs[placement.ParagraphIndex];
             var ft = formatted[placement.ParagraphIndex];
 
-            // Wave 19A: draw bullet (char or number) to the left of paragraph text.
-            if (!string.IsNullOrEmpty(para.BulletText))
+            if (placement.Bullet is { } bullet)
             {
-                double bulletX = placement.X - para.HangingDip;
-                DrawBulletAvalonia(dc, para.BulletText, para.BulletFontFamily, para.BulletFontSizePt,
-                    para.BulletColor, bulletX, placement.Y);
+                DrawBulletAvalonia(dc, bullet.Text, bullet.FontFamily, bullet.FontSizePt,
+                    bullet.Color, bullet.X, bullet.Y);
             }
 
             switch (TextLayoutPlanner.PlanParagraphRenderRoute(para, text))

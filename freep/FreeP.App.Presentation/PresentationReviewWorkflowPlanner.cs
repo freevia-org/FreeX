@@ -74,10 +74,18 @@ public sealed record PresentationAltTextRequestPlan(
     uint? ShapeId,
     string ShapeName,
     string SuggestedTitle,
+    string CurrentDescription,
     string ProposedDescription,
     bool CanApply,
     PresentationWorkflowCapabilityStatus Status,
     string Message);
+
+public sealed record PresentationAltTextMutationPlan(
+    bool ShouldApply,
+    int SlideIndex,
+    uint? ShapeId,
+    string Description,
+    string? ValidationMessage);
 
 public sealed record PresentationAccessibilityIssueDescriptor(
     PresentationAccessibilityIssueSeverity Severity,
@@ -120,8 +128,7 @@ public static class PresentationReviewWorkflowPlanner
     public const string EmptyCommentMessage = "Comment text cannot be empty.";
     public const string ModernCommentStateDeferredMessage =
         "Modern resolved-thread state is not modeled yet.";
-    public const string AltTextModelDeferredMessage =
-        "FreeP shapes do not have a persistent alt-text field yet.";
+    public const string MissingShapeMessage = "Select a shape before editing alt text.";
     public const string ProofingRequiresHostMessage =
         "Proofing needs a host spelling engine; this shared plan owns the searchable FreeP scopes.";
 
@@ -280,22 +287,53 @@ public static class PresentationReviewWorkflowPlanner
                 null,
                 string.Empty,
                 string.Empty,
+                string.Empty,
                 NormalizeText(proposedDescription) ?? string.Empty,
                 false,
-                PresentationWorkflowCapabilityStatus.Deferred,
-                "Select a shape before editing alt text.");
+                PresentationWorkflowCapabilityStatus.Available,
+                MissingShapeMessage);
         }
 
         var suggestedTitle = BuildAltTextSuggestedTitle(shape);
+        var normalizedProposed = NormalizeText(proposedDescription);
         return new PresentationAltTextRequestPlan(
             true,
             shape.Id,
             shape.Name,
             suggestedTitle,
-            NormalizeText(proposedDescription) ?? string.Empty,
-            false,
-            PresentationWorkflowCapabilityStatus.Deferred,
-            AltTextModelDeferredMessage);
+            shape.AlternativeText,
+            normalizedProposed ?? shape.AlternativeText,
+            true,
+            PresentationWorkflowCapabilityStatus.Available,
+            string.IsNullOrEmpty(shape.AlternativeText)
+                ? "Add a persistent alt-text description for the selected shape."
+                : "Edit the persistent alt-text description for the selected shape.");
+    }
+
+    public static PresentationAltTextMutationPlan BuildAltTextMutationPlan(
+        Slide? slide,
+        int slideIndex,
+        uint? selectedShapeId,
+        string? description)
+    {
+        var normalizedDescription = NormalizeAltText(description);
+        var shape = selectedShapeId is { } id ? FindShape(slide?.Shapes, id) : null;
+        if (shape is null)
+        {
+            return new PresentationAltTextMutationPlan(
+                false,
+                slideIndex,
+                null,
+                normalizedDescription,
+                MissingShapeMessage);
+        }
+
+        return new PresentationAltTextMutationPlan(
+            true,
+            slideIndex,
+            shape.Id,
+            normalizedDescription,
+            null);
     }
 
     public static PresentationAccessibilitySummaryPlan BuildAccessibilitySummaryPlan(Presentation presentation)
@@ -330,14 +368,14 @@ public static class PresentationReviewWorkflowPlanner
             {
                 shapeCount++;
 
-                if (NeedsAltText(shape))
+                if (NeedsAltText(shape) && string.IsNullOrWhiteSpace(shape.AlternativeText))
                 {
                     issues.Add(new PresentationAccessibilityIssueDescriptor(
                         PresentationAccessibilityIssueSeverity.Warning,
                         slideIndex,
                         shape.Id,
-                        "Alt text needs model support",
-                        $"{DescribeShape(shape)} should have persistent alt text; the FreeP model cannot store it yet."));
+                        "Alt text missing",
+                        $"{DescribeShape(shape)} should have persistent alt text."));
                 }
 
                 if (shape.Hyperlink is not null && string.IsNullOrWhiteSpace(shape.Hyperlink.Tooltip))
@@ -417,7 +455,7 @@ public static class PresentationReviewWorkflowPlanner
         =>
         [
             new(AccessibilityCommandId, "Check Accessibility", PresentationReviewWorkflowIntentKind.CheckAccessibility, true, PresentationWorkflowCapabilityStatus.RequiresHost),
-            new(AltTextCommandId, "Alt Text", PresentationReviewWorkflowIntentKind.OpenAltText, true, PresentationWorkflowCapabilityStatus.Deferred, AltTextModelDeferredMessage),
+            new(AltTextCommandId, "Alt Text", PresentationReviewWorkflowIntentKind.OpenAltText, true, PresentationWorkflowCapabilityStatus.Available),
             new(ProofingCommandId, "Spelling", PresentationReviewWorkflowIntentKind.RunProofing, true, PresentationWorkflowCapabilityStatus.RequiresHost, ProofingRequiresHostMessage),
         ];
 
@@ -516,6 +554,9 @@ public static class PresentationReviewWorkflowPlanner
         var trimmed = value?.Trim();
         return string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;
     }
+
+    private static string NormalizeAltText(string? value)
+        => NormalizeText(value) ?? string.Empty;
 
     private static string NormalizeInitials(string? initials, string? author)
     {

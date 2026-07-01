@@ -76,6 +76,72 @@ public sealed class FreeWOptionsPlannerTests
     }
 
     [Fact]
+    public void BuildSurface_ExposesGeneralAutoCorrectAndAutoFormatSections()
+    {
+        var options = new FreeWOptions
+        {
+            RecentFilesCap = 9999,
+            AutoCorrectEnabled = false,
+            AutoFormat = AutoFormatOptions.Default with { Hyperlinks = false },
+            AutoCorrect = new AutoCorrectOptions
+            {
+                ReplaceText = true,
+                Replacements = [new AutoCorrectReplacement("teh", "the")],
+            },
+        };
+
+        var surface = OptionsDialogPlanner.BuildSurface(options, "uk-UA");
+
+        surface.Title.Should().Be("FreeW Options");
+        surface.Tabs.Select(tab => tab.Header)
+            .Should().Equal("General", "AutoCorrect", "AutoFormat As You Type");
+        surface.General.UiLanguageHint.Should().Contain("uk-UA");
+        surface.General.FormatChoices.Single().Extension.Should().Be(FreeWOptions.DocxDefaultFormat);
+        surface.AutoCorrect.Toggles.Select(toggle => toggle.Kind)
+            .Should().Contain([
+                OptionsDialogToggleKind.CorrectTwoInitialCapitals,
+                OptionsDialogToggleKind.CapitalizeDayNames,
+                OptionsDialogToggleKind.ReplaceText,
+            ]);
+        surface.AutoCorrect.ReplacementsText.Should().Contain("teh => the");
+        surface.AutoFormat.MasterToggle.Kind.Should().Be(OptionsDialogToggleKind.AutoCorrectEnabled);
+        surface.AutoFormat.MasterToggle.IsChecked.Should().BeFalse();
+        surface.AutoFormat.RuleToggles.Single(toggle => toggle.Kind == OptionsDialogToggleKind.Hyperlinks)
+            .IsChecked.Should().BeFalse();
+
+        options.RecentFilesCap.Should().Be(9999, "planning the surface must not normalize and mutate live options");
+    }
+
+    [Fact]
+    public void TryParseAutoCorrectReplacements_AcceptsArrowAndTabRows()
+    {
+        OptionsDialogPlanner.TryParseAutoCorrectReplacements(
+            "teh => the\r\nadn\tand\r\n",
+            out var replacements,
+            out var errorMessage).Should().BeTrue();
+
+        errorMessage.Should().BeNull();
+        replacements.Should().Equal(
+            new AutoCorrectReplacement("teh", "the"),
+            new AutoCorrectReplacement("adn", "and"));
+    }
+
+    [Theory]
+    [InlineData("teh")]
+    [InlineData(" => the")]
+    [InlineData("teh => ")]
+    public void TryParseAutoCorrectReplacements_RejectsMalformedRows(string text)
+    {
+        OptionsDialogPlanner.TryParseAutoCorrectReplacements(
+            text,
+            out var replacements,
+            out var errorMessage).Should().BeFalse();
+
+        replacements.Should().BeEmpty();
+        errorMessage.Should().Be(OptionsDialogPlanner.ReplacementsValidationMessage);
+    }
+
+    [Fact]
     public void OptionsModelAndPlanner_LiveInPresentationNotWpfHost()
     {
         var repoRoot = FindRepoRoot();

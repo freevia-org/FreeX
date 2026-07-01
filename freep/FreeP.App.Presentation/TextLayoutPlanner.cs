@@ -23,7 +23,27 @@ public readonly record struct TextParagraphPlacement(
     int ColumnIndex,
     double X,
     double Y,
-    double MaxWidthDip);
+    double MaxWidthDip,
+    TextBulletPlacement? Bullet)
+{
+    public TextParagraphPlacement(
+        int paragraphIndex,
+        int columnIndex,
+        double x,
+        double y,
+        double maxWidthDip)
+        : this(paragraphIndex, columnIndex, x, y, maxWidthDip, null)
+    {
+    }
+}
+
+public readonly record struct TextBulletPlacement(
+    string Text,
+    string FontFamily,
+    double FontSizePt,
+    SrgbColor Color,
+    double X,
+    double Y);
 
 public readonly record struct TextColumnLayout(
     TextLayoutArea Area,
@@ -139,7 +159,8 @@ public static class TextLayoutPlanner
                 0,
                 paragraphX,
                 currentY,
-                Math.Max(1, area.Width - resolvedParagraph.IndentDip)));
+                Math.Max(1, area.Width - resolvedParagraph.IndentDip),
+                PlanBulletPlacement(resolvedParagraph, paragraphX, currentY)));
             currentY += (paragraph.HeightDip + paragraph.SpaceAfterDip) * lineSpacingScale;
         }
 
@@ -197,7 +218,8 @@ public static class TextLayoutPlanner
                 column,
                 paragraphX,
                 currentY,
-                Math.Max(1, layout.ColumnWidthDip - resolvedParagraph.IndentDip)));
+                Math.Max(1, layout.ColumnWidthDip - resolvedParagraph.IndentDip),
+                PlanBulletPlacement(resolvedParagraph, paragraphX, currentY)));
             currentY += paragraph.HeightDip + paragraph.SpaceAfterDip;
         }
 
@@ -234,4 +256,21 @@ public static class TextLayoutPlanner
 
     private static bool HasTabCharacters(ResolvedParagraph paragraph) =>
         paragraph.Runs.Any(run => run.Text.Contains('\t'));
+
+    private static TextBulletPlacement? PlanBulletPlacement(
+        ResolvedParagraph paragraph,
+        double paragraphX,
+        double paragraphY)
+    {
+        if (string.IsNullOrEmpty(paragraph.BulletText))
+            return null;
+
+        return new TextBulletPlacement(
+            paragraph.BulletText,
+            paragraph.BulletFontFamily,
+            paragraph.BulletFontSizePt,
+            paragraph.BulletColor,
+            paragraphX - paragraph.HangingDip,
+            paragraphY);
+    }
 }

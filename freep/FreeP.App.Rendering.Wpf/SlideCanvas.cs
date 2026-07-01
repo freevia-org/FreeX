@@ -764,6 +764,11 @@ public sealed class SlideCanvas : FrameworkElement
                 align: ToTextAlignment(label.Alignment));
         }
 
+        foreach (var title in ChartRenderPlanner.BuildAxisTitlePlans(chart, frame))
+        {
+            DrawChartAxisTitle(dc, title);
+        }
+
         foreach (var item in ChartRenderPlanner.BuildLegendItemPlans(chart, frame, chartOp.SeriesColors))
         {
             dc.DrawRectangle(
@@ -1183,6 +1188,34 @@ public sealed class SlideCanvas : FrameworkElement
 
     // ── Text ────────────────────────────────────────────────────────────────────
 
+    private static void DrawChartAxisTitle(DrawingContext dc, ChartAxisTitlePlan title)
+    {
+        var label = title.Label;
+        var rect = ToRect(label.Bounds);
+        if (title.Orientation == ChartAxisTitleOrientation.Horizontal)
+        {
+            DrawChartLabel(dc, label.Text, rect, label.IsBold, label.FontSize, ToTextAlignment(label.Alignment));
+            return;
+        }
+
+        double angle = title.Orientation == ChartAxisTitleOrientation.VerticalClockwise ? 90.0 : -90.0;
+        double cx = rect.X + rect.Width * 0.5;
+        double cy = rect.Y + rect.Height * 0.5;
+        dc.PushTransform(new RotateTransform(angle, cx, cy));
+        DrawChartLabel(
+            dc,
+            label.Text,
+            new Rect(
+                rect.X + (rect.Width - rect.Height) * 0.5,
+                rect.Y + (rect.Height - rect.Width) * 0.5,
+                rect.Height,
+                rect.Width),
+            label.IsBold,
+            label.FontSize,
+            ToTextAlignment(label.Alignment));
+        dc.Pop();
+    }
+
     private static void RenderText(DrawingContext dc, ResolvedTextLayout text, LayoutRect bounds)
     {
         // Wave 18B: vertical text — rotate the text block around the shape center and swap
@@ -1243,9 +1276,9 @@ public sealed class SlideCanvas : FrameworkElement
         {
             var para = text.Paragraphs[placement.ParagraphIndex];
             var ft = formatted[placement.ParagraphIndex];
-            if (!string.IsNullOrEmpty(para.BulletText))
-                DrawBulletWpf(dc, para.BulletText, para.BulletFontFamily, para.BulletFontSizePt,
-                    para.BulletColor, placement.X - para.HangingDip, placement.Y);
+            if (placement.Bullet is { } bullet)
+                DrawBulletWpf(dc, bullet.Text, bullet.FontFamily, bullet.FontSizePt,
+                    bullet.Color, bullet.X, bullet.Y);
 
             switch (TextLayoutPlanner.PlanParagraphRenderRoute(para, text))
             {
@@ -1297,13 +1330,10 @@ public sealed class SlideCanvas : FrameworkElement
             var para = text.Paragraphs[placement.ParagraphIndex];
             var ft = formatted[placement.ParagraphIndex];
 
-            // Wave 19A: draw bullet (char or number) to the left of the paragraph text.
-            // The bullet sits at textX + indentDip - hangingDip; text starts at textX + indentDip.
-            if (!string.IsNullOrEmpty(para.BulletText))
+            if (placement.Bullet is { } bullet)
             {
-                double bulletX = placement.X - para.HangingDip;
-                DrawBulletWpf(dc, para.BulletText, para.BulletFontFamily, para.BulletFontSizePt,
-                    para.BulletColor, bulletX, placement.Y);
+                DrawBulletWpf(dc, bullet.Text, bullet.FontFamily, bullet.FontSizePt,
+                    bullet.Color, bullet.X, bullet.Y);
             }
 
             switch (TextLayoutPlanner.PlanParagraphRenderRoute(para, text))
