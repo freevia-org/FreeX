@@ -1,4 +1,5 @@
 using Free.Shared.IO;
+using Free.Shared.Drawing;
 
 namespace FreeP.App.Compositor;
 
@@ -73,6 +74,26 @@ public sealed record PresentationPrintPlan(
     bool PrintHiddenSlides,
     bool IsImplemented);
 
+public sealed record PresentationHandoutSlideSlot(
+    int PageIndex,
+    int SlotIndex,
+    int SlideIndex,
+    int SlideNumber,
+    LayoutRect SlideBounds,
+    LayoutRect? NotesOrLinesBounds,
+    IReadOnlyList<LayoutRect> BlankLineBounds);
+
+public sealed record PresentationHandoutPagePlan(
+    int PageIndex,
+    IReadOnlyList<PresentationHandoutSlideSlot> Slots);
+
+public sealed record PresentationHandoutLayoutPlan(
+    PresentationPrintPlan PrintPlan,
+    double PageWidth,
+    double PageHeight,
+    int PageCount,
+    IReadOnlyList<PresentationHandoutPagePlan> Pages);
+
 public sealed record PresentationDeferredExportPlan(
     PresentationExportFormat Format,
     string CommandId,
@@ -117,6 +138,10 @@ public static class PresentationExportPlanner
     public const string PdfExportCommandText = "Export to PDF";
     public const string ImageExportPickerTitle = "Export Slides as Images";
     public const string ImageExportCommandText = "Export slides as images";
+    public const double DefaultPrintPageWidth = 612;
+    public const double DefaultPrintPageHeight = 792;
+    public const double DefaultHandoutMargin = 36;
+    public const double DefaultHandoutGutter = 18;
 
     public static readonly IReadOnlyList<int> HandoutSlidesPerPageOptions = [1, 2, 3, 4, 6, 9];
 
@@ -202,6 +227,40 @@ public static class PresentationExportPlanner
             range,
             request.PrintHiddenSlides,
             IsImplemented: false);
+    }
+
+    public static PresentationHandoutLayoutPlan BuildHandoutLayoutPlan(
+        PresentationPrintRequest? request,
+        int slideCount,
+        double slideWidth = 16,
+        double slideHeight = 9,
+        double pageWidth = DefaultPrintPageWidth,
+        double pageHeight = DefaultPrintPageHeight)
+    {
+        request ??= new PresentationPrintRequest(PresentationPrintLayoutKind.Handouts);
+        var handoutRequest = request with
+        {
+            Layout = PresentationPrintLayoutKind.Handouts,
+            HandoutSlidesPerPage = request.Layout == PresentationPrintLayoutKind.Handouts
+                ? request.HandoutSlidesPerPage
+                : null,
+        };
+        var printPlan = BuildPrintPlan(handoutRequest, slideCount);
+        var slidesPerPage = printPlan.Layout.SlidesPerPage;
+        var slideAspect = NormalizeAspectRatio(slideWidth, slideHeight);
+        var pages = BuildHandoutPages(
+            printPlan.SlideRange.SlideNumbers,
+            slidesPerPage,
+            Math.Max(1, pageWidth),
+            Math.Max(1, pageHeight),
+            slideAspect);
+
+        return new PresentationHandoutLayoutPlan(
+            printPlan,
+            Math.Max(1, pageWidth),
+            Math.Max(1, pageHeight),
+            pages.Count,
+            pages);
     }
 
     public static PresentationImageExportPlan BuildImageExportPlan(
@@ -316,6 +375,155 @@ public static class PresentationExportPlanner
             .OrderBy(option => Math.Abs(option - requested.Value))
             .ThenBy(option => option)
             .First();
+    }
+
+    private static IReadOnlyList<PresentationHandoutPagePlan> BuildHandoutPages(
+        IReadOnlyList<int> slideNumbers,
+        int slidesPerPage,
+        double pageWidth,
+        double pageHeight,
+        double slideAspect)
+    {
+        if (slideNumbers.Count == 0)
+            return [];
+
+        var cellCount = slidesPerPage;
+        var cellBounds = BuildHandoutCellBounds(cellCount, pageWidth, pageHeight);
+        var pageCount = (int)Math.Ceiling(slideNumbers.Count / (double)slidesPerPage);
+        var pages = new List<PresentationHandoutPagePlan>(pageCount);
+
+        for (var pageIndex = 0; pageIndex < pageCount; pageIndex++)
+        {
+            var slots = new List<PresentationHandoutSlideSlot>(slidesPerPage);
+            for (var slotIndex = 0; slotIndex < slidesPerPage; slotIndex++)
+            {
+                var rangeIndex = (pageIndex * slidesPerPage) + slotIndex;
+                if (rangeIndex >= slideNumbers.Count)
+                    break;
+
+                var slideNumber = slideNumbers[rangeIndex];
+                var cell = cellBounds[slotIndex];
+                var (slideCell, notesBounds) = SplitHandoutCell(cell, slidesPerPage);
+                var slideBounds = FitAspect(slideCell, slideAspect);
+                var blankLines = notesBounds is null
+                    ? []
+                    : BuildBlankLineBounds(notesBounds.Value);
+
+                slots.Add(new PresentationHandoutSlideSlot(
+                    pageIndex,
+                    slotIndex,
+                    slideNumber - 1,
+                    slideNumber,
+                    slideBounds,
+                    notesBounds,
+                    blankLines));
+            }
+
+            pages.Add(new PresentationHandoutPagePlan(pageIndex, slots));
+        }
+
+        return pages;
+    }
+
+    private static IReadOnlyList<LayoutRect> BuildHandoutCellBounds(
+        int slidesPerPage,
+        double pageWidth,
+        double pageHeight)
+    {
+        var (columns, rows) = slidesPerPage switch
+        {
+            1 => (1, 1),
+            2 => (1, 2),
+            3 => (1, 3),
+            4 => (2, 2),
+            6 => (2, 3),
+            9 => (3, 3),
+            _ => throw new ArgumentOutOfRangeException(nameof(slidesPerPage), slidesPerPage, "Unsupported handout slide count."),
+        };
+
+        var content = GetHandoutContentBounds(pageWidth, pageHeight);
+        var cellWidth = (content.Width - (DefaultHandoutGutter * (columns - 1))) / columns;
+        var cellHeight = (content.Height - (DefaultHandoutGutter * (rows - 1))) / rows;
+        var cells = new List<LayoutRect>(slidesPerPage);
+        for (var row = 0; row < rows; row++)
+        {
+            for (var column = 0; column < columns; column++)
+            {
+                cells.Add(new LayoutRect(
+                    content.X + (column * (cellWidth + DefaultHandoutGutter)),
+                    content.Y + (row * (cellHeight + DefaultHandoutGutter)),
+                    cellWidth,
+                    cellHeight));
+            }
+        }
+
+        return cells;
+    }
+
+    private static LayoutRect GetHandoutContentBounds(double pageWidth, double pageHeight)
+    {
+        var horizontalMargin = Math.Min(DefaultHandoutMargin, pageWidth / 4);
+        var verticalMargin = Math.Min(DefaultHandoutMargin, pageHeight / 4);
+        return new LayoutRect(
+            horizontalMargin,
+            verticalMargin,
+            Math.Max(1, pageWidth - (horizontalMargin * 2)),
+            Math.Max(1, pageHeight - (verticalMargin * 2)));
+    }
+
+    private static (LayoutRect SlideCell, LayoutRect? NotesBounds) SplitHandoutCell(
+        LayoutRect cell,
+        int slidesPerPage)
+    {
+        if (slidesPerPage != 3)
+            return (cell, null);
+
+        var slideWidth = (cell.Width - DefaultHandoutGutter) * 0.58;
+        var notesX = cell.X + slideWidth + DefaultHandoutGutter;
+        return (
+            new LayoutRect(cell.X, cell.Y, slideWidth, cell.Height),
+            new LayoutRect(notesX, cell.Y, Math.Max(1, cell.Right - notesX), cell.Height));
+    }
+
+    private static LayoutRect FitAspect(LayoutRect bounds, double aspect)
+    {
+        var width = bounds.Width;
+        var height = width / aspect;
+        if (height > bounds.Height)
+        {
+            height = bounds.Height;
+            width = height * aspect;
+        }
+
+        return new LayoutRect(
+            bounds.X + ((bounds.Width - width) / 2),
+            bounds.Y + ((bounds.Height - height) / 2),
+            width,
+            height);
+    }
+
+    private static IReadOnlyList<LayoutRect> BuildBlankLineBounds(LayoutRect notesBounds)
+    {
+        const int lineCount = 5;
+        var lines = new List<LayoutRect>(lineCount);
+        var left = notesBounds.X;
+        var rightPadding = Math.Min(8, notesBounds.Width / 5);
+        var width = Math.Max(1, notesBounds.Width - rightPadding);
+        var top = notesBounds.Y + (notesBounds.Height * 0.2);
+        var step = notesBounds.Height * 0.15;
+
+        for (var index = 0; index < lineCount; index++)
+            lines.Add(new LayoutRect(left, top + (step * index), width, 0));
+
+        return lines;
+    }
+
+    private static double NormalizeAspectRatio(double slideWidth, double slideHeight)
+    {
+        if (slideWidth <= 0 || slideHeight <= 0)
+            return 16d / 9d;
+
+        return slideWidth / slideHeight;
     }
 
     private static PresentationDeferredExportPlan BuildDeferredExportPlan(
