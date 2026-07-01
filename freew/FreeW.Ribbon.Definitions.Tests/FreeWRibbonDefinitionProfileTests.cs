@@ -41,7 +41,11 @@ public sealed class FreeWRibbonDefinitionProfileTests
         "freew.shrink-font",
         "freew.superscript",
         "freew.subscript",
+        "freew.smallcaps",
+        "freew.allcaps",
         "freew.highlight",
+        "freew.char-border",
+        "freew.char-shading",
         "freew.clear-formatting",
         "freew.font-color",
         "freew.change-case",
@@ -619,7 +623,11 @@ public sealed class FreeWRibbonDefinitionProfileTests
 
         avaloniaSource.Should().NotContain("g.Toggle(\"freew.superscript\",     \"X");
         avaloniaSource.Should().NotContain("g.Toggle(\"freew.subscript\",       \"X");
+        avaloniaSource.Should().NotContain("g.Toggle(\"freew.smallcaps\",       \"Small Caps\"");
+        avaloniaSource.Should().NotContain("g.Toggle(\"freew.allcaps\",         \"All Caps\"");
         avaloniaSource.Should().NotContain("g.Button(\"freew.highlight\",       \"Highlight\"");
+        avaloniaSource.Should().NotContain("g.Button(\"freew.char-border\",     \"Character Border\"");
+        avaloniaSource.Should().NotContain("g.Button(\"freew.char-shading\",    \"Character Shading\"");
         avaloniaSource.Should().NotContain("g.Button(\"freew.grow-font\",       \"A");
         avaloniaSource.Should().NotContain("g.Button(\"freew.shrink-font\",     \"A");
         avaloniaSource.Should().NotContain("g.Button(\"freew.clear-formatting\", \"Clear\"");
@@ -627,7 +635,11 @@ public sealed class FreeWRibbonDefinitionProfileTests
         avaloniaSource.Should().NotContain("g.Button(\"freew.change-case\",     \"Aa\"");
         avaloniaSource.Should().Contain("FreeWRibbonText.SuperscriptCompactCommand");
         avaloniaSource.Should().Contain("FreeWRibbonText.SubscriptCompactCommand");
+        avaloniaSource.Should().Contain("FreeWRibbonText.SmallCapsCommand");
+        avaloniaSource.Should().Contain("FreeWRibbonText.AllCapsCommand");
         avaloniaSource.Should().Contain("FreeWRibbonText.HighlightCompactCommand");
+        avaloniaSource.Should().Contain("FreeWRibbonText.CharacterBorderCommand");
+        avaloniaSource.Should().Contain("FreeWRibbonText.CharacterShadingCommand");
         avaloniaSource.Should().Contain("FreeWRibbonText.GrowFontCompactCommand");
         avaloniaSource.Should().Contain("FreeWRibbonText.ShrinkFontCompactCommand");
         avaloniaSource.Should().Contain("FreeWRibbonText.ClearFormattingCompactCommand");
@@ -954,7 +966,11 @@ public sealed class FreeWRibbonDefinitionProfileTests
         labels["freew.shrink-font"].Should().Be(Loc.Get("Ribbon_Command_ShrinkFontCompact_Label"));
         labels["freew.superscript"].Should().Be(Loc.Get("Ribbon_Command_SuperscriptCompact_Label"));
         labels["freew.subscript"].Should().Be(Loc.Get("Ribbon_Command_SubscriptCompact_Label"));
+        labels["freew.smallcaps"].Should().Be(Loc.Get("Ribbon_Command_SmallCaps_Label"));
+        labels["freew.allcaps"].Should().Be(Loc.Get("Ribbon_Command_AllCaps_Label"));
         labels["freew.highlight"].Should().Be(Loc.Get("Ribbon_Command_HighlightCompact_Label"));
+        labels["freew.char-border"].Should().Be(Loc.Get("Ribbon_Command_CharacterBorder_Label"));
+        labels["freew.char-shading"].Should().Be(Loc.Get("Ribbon_Command_CharacterShading_Label"));
         labels["freew.clear-formatting"].Should().Be(Loc.Get("Ribbon_Command_ClearFormattingCompact_Label"));
         labels["freew.font-color"].Should().Be(Loc.Get("Ribbon_Command_FontColorDropdown_Label"));
         labels["freew.change-case"].Should().Be(Loc.Get("Ribbon_Command_ChangeCaseCompact_Label"));

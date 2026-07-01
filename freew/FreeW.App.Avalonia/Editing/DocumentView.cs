@@ -7574,6 +7574,8 @@ public sealed class DocumentView : Control
     public void ToggleItalic() => ToggleRunFlag(f => f.Italic, (f, v) => f with { Italic = v });
     public void ToggleUnderline() => ToggleRunFlag(f => f.Underline, (f, v) => f with { Underline = v });
     public void ToggleStrikethrough() => ToggleRunFlag(f => f.Strikethrough, (f, v) => f with { Strikethrough = v });
+    public void ToggleSmallCaps() => ToggleRunFlag(f => f.SmallCaps, (f, v) => f with { SmallCaps = v });
+    public void ToggleAllCaps() => ToggleRunFlag(f => f.AllCaps, (f, v) => f with { AllCaps = v });
 
     /// <summary>
     /// Toggle superscript on the selection (clears subscript if set; clears superscript if already set).
@@ -7601,6 +7603,16 @@ public sealed class DocumentView : Control
     /// </summary>
     public void SetHighlightColor(string? colorHex) =>
         ApplyRunFormatting(f => f with { HighlightColorHex = string.IsNullOrWhiteSpace(colorHex) ? null : colorHex });
+
+    public void SetCharacterBorder(ParagraphBorder? border) =>
+        ApplyRunFormatting(f => f with { CharacterBorder = border });
+
+    public void SetCharacterShading(string? colorHex, ShadingPattern pattern = ShadingPattern.Clear) =>
+        ApplyRunFormatting(f => f with
+        {
+            CharacterShadingHex = string.IsNullOrWhiteSpace(colorHex) ? null : colorHex,
+            CharacterShadingPattern = string.IsNullOrWhiteSpace(colorHex) ? ShadingPattern.Clear : pattern,
+        });
 
     // ── AV-COMMENT: review-comment insert / delete / resolve + introspection ──────────────────────
     // Model-backed (comments already round-trip through Core.IO). All mutations ride the shared

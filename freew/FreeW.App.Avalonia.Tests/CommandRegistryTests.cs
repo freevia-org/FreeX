@@ -93,6 +93,10 @@ public sealed class CommandRegistryTests
         var expected = new[]
         {
             "freew.strikethrough",
+            "freew.smallcaps",
+            "freew.allcaps",
+            "freew.char-border",
+            "freew.char-shading",
             "freew.grow-font",
             "freew.shrink-font",
             "freew.clear-formatting",
@@ -325,6 +329,46 @@ public sealed class CommandRegistryTests
         var para = (Paragraph)view.Document.Blocks[0];
         para.Runs.All(r => r.Formatting.Strikethrough)
             .Should().BeTrue("ToggleStrikethrough should set strikethrough on all selected runs");
+    }
+
+    [Fact]
+    public void Caps_commands_toggle_caps_flags()
+    {
+        var doc = MakeDoc("Caps");
+        var view = new DocumentView();
+        view.LoadDocument(doc);
+        view.SelectAll();
+
+        view.ToggleSmallCaps();
+        view.ToggleAllCaps();
+
+        var para = (Paragraph)view.Document.Blocks[0];
+        para.Runs.All(r => r.Formatting.SmallCaps && r.Formatting.AllCaps)
+            .Should().BeTrue("Small Caps and All Caps should set model run formatting on the selection");
+    }
+
+    [Fact]
+    public void Character_border_and_shading_commands_apply_model_run_formatting()
+    {
+        var doc = MakeDoc("Decorated");
+        var view = new DocumentView();
+        view.LoadDocument(doc);
+        view.SelectAll();
+
+        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+        registry.TryGet(new RibbonCommandId("freew.char-border"), out var borderCommand)
+            .Should().BeTrue("freew.char-border must be registered");
+        registry.TryGet(new RibbonCommandId("freew.char-shading"), out var shadingCommand)
+            .Should().BeTrue("freew.char-shading must be registered");
+
+        borderCommand!.Execute(RibbonCommandContext.Empty);
+        shadingCommand!.Execute(RibbonCommandContext.Empty);
+
+        var para = (Paragraph)view.Document.Blocks[0];
+        para.Runs.All(r => r.Formatting.CharacterBorder is not null)
+            .Should().BeTrue("Character Border should apply run border formatting");
+        para.Runs.All(r => r.Formatting.CharacterShadingHex == "#FFF2CC")
+            .Should().BeTrue("Character Shading should apply run shading formatting");
     }
 
     [Fact]
