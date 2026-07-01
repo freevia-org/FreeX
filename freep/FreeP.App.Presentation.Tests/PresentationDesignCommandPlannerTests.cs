@@ -95,12 +95,100 @@ public sealed class PresentationDesignCommandPlannerTests
             "rId1",
             "Title Slide",
             SlideLayoutType.Title,
-            true));
+            true,
+            "rId1",
+            "Master 1",
+            0,
+            0));
         plan.Choices.Should().ContainEquivalentOf(new PresentationLayoutChoice(
             "rId2",
             "Blank",
             SlideLayoutType.Blank,
-            false));
+            false,
+            "rId1",
+            "Master 1",
+            0,
+            1));
+    }
+
+    [Fact]
+    public void BuildLayoutPickerPlan_PreservesOrderAndMasterEvidenceForDuplicateNamedLayouts()
+    {
+        var editor = MakeSession(out var presentation);
+        var secondMaster = new SlideMaster { Id = "rIdMaster2" };
+        presentation.Masters.Add(secondMaster);
+
+        presentation.Layouts.Add(new SlideLayout
+        {
+            Id = "rId2",
+            Name = "Title Slide",
+            LayoutType = SlideLayoutType.Title,
+            MasterId = secondMaster.Id,
+            Placeholders =
+            {
+                new SlideShape { Id = 10, Placeholder = new Placeholder { Type = PlaceholderType.Title } },
+                new SlideShape { Id = 11, Placeholder = new Placeholder { Type = PlaceholderType.Body } },
+            }
+        });
+        presentation.Layouts.Add(new SlideLayout
+        {
+            Id = "rId3",
+            Name = string.Empty,
+            LayoutType = SlideLayoutType.TwoContent,
+            MasterId = presentation.Masters[0].Id,
+            Placeholders =
+            {
+                new SlideShape { Id = 12, Placeholder = new Placeholder { Type = PlaceholderType.Title } },
+            }
+        });
+        presentation.Layouts.Add(new SlideLayout
+        {
+            Id = "rId3",
+            Name = "Duplicate relationship id",
+            LayoutType = SlideLayoutType.Blank,
+            MasterId = presentation.Masters[0].Id
+        });
+
+        var plan = PresentationDesignCommandPlanner.BuildLayoutPickerPlan(
+            presentation,
+            editor.CurrentSlideIndex);
+
+        plan.Choices.Select(choice => choice.LayoutId).Should().Equal("rId1", "rId2", "rId3");
+        plan.Choices.Select(choice => choice.DisplayOrder).Should().Equal(0, 1, 2);
+        plan.Choices[1].Should().Be(new PresentationLayoutChoice(
+            "rId2",
+            "Title Slide",
+            SlideLayoutType.Title,
+            false,
+            "rIdMaster2",
+            "Master 2",
+            2,
+            1));
+        plan.Choices[2].Should().Be(new PresentationLayoutChoice(
+            "rId3",
+            "Two Content",
+            SlideLayoutType.TwoContent,
+            false,
+            "rId1",
+            "Master 1",
+            1,
+            2));
+    }
+
+    [Fact]
+    public void BuildLayoutPickerPlan_ReportsChoicesButDisablesApplyWithoutCurrentSlide()
+    {
+        var editor = MakeSession(out var presentation);
+
+        var plan = PresentationDesignCommandPlanner.BuildLayoutPickerPlan(
+            presentation,
+            currentSlideIndex: editor.CurrentSlideIndex + presentation.Slides.Count);
+
+        plan.HasCurrentSlide.Should().BeFalse();
+        plan.CanApply.Should().BeFalse();
+        plan.CurrentLayoutId.Should().BeNull();
+        plan.Choices.Should().ContainSingle();
+        plan.Choices[0].IsCurrent.Should().BeFalse();
     }
 
     [Fact]
@@ -123,7 +211,11 @@ public sealed class PresentationDesignCommandPlannerTests
             "rId2",
             "Two Content",
             SlideLayoutType.TwoContent,
-            false));
+            false,
+            "rId1",
+            "Master 1",
+            0,
+            1));
         editor.CurrentSlide!.LayoutId.Should().Be("rId2");
 
         editor.Undo();

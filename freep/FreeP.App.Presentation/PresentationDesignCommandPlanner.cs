@@ -22,7 +22,11 @@ public sealed record PresentationLayoutChoice(
     string LayoutId,
     string DisplayName,
     SlideLayoutType LayoutType,
-    bool IsCurrent);
+    bool IsCurrent,
+    string? MasterId,
+    string MasterDisplayName,
+    int PlaceholderCount,
+    int DisplayOrder);
 
 public sealed record PresentationLayoutPickerPlan(
     string CommandId,
@@ -126,7 +130,11 @@ public static class PresentationDesignCommandPlanner
                 layout.Id,
                 BuildLayoutDisplayName(layout),
                 layout.LayoutType,
-                StringComparer.Ordinal.Equals(layout.Id, currentLayoutId)));
+                StringComparer.Ordinal.Equals(layout.Id, currentLayoutId),
+                layout.MasterId,
+                BuildMasterDisplayName(presentation, layout.MasterId),
+                layout.Placeholders.Count,
+                choices.Count));
         }
 
         return new PresentationLayoutPickerPlan(
@@ -221,5 +229,23 @@ public static class PresentationDesignCommandPlanner
             SlideLayoutType.PictureCaption => "Picture with Caption",
             _ => "Custom Layout",
         };
+    }
+
+    private static string BuildMasterDisplayName(Presentation presentation, string? masterId)
+    {
+        if (string.IsNullOrWhiteSpace(masterId))
+        {
+            return "Unknown Master";
+        }
+
+        for (var i = 0; i < presentation.Masters.Count; i++)
+        {
+            if (StringComparer.Ordinal.Equals(presentation.Masters[i].Id, masterId))
+            {
+                return $"Master {i + 1}";
+            }
+        }
+
+        return "Unknown Master";
     }
 }

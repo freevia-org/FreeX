@@ -87,7 +87,11 @@ public sealed class ReviewWorkflowAdapterTests
                 Id = "rId2",
                 Name = "Blank",
                 LayoutType = SlideLayoutType.Blank,
-                MasterId = window.Editor.Presentation.Masters[0].Id
+                MasterId = window.Editor.Presentation.Masters[0].Id,
+                Placeholders =
+                {
+                    new SlideShape { Id = 211, Placeholder = new Placeholder { Type = PlaceholderType.Title } },
+                }
             });
 
             window.OpenLayoutPicker();
@@ -97,12 +101,18 @@ public sealed class ReviewWorkflowAdapterTests
             window.LastLayoutPickerPlan!.Choices.Should().Contain(choice =>
                 choice.LayoutId == "rId2" &&
                 choice.DisplayName == "Blank" &&
-                choice.LayoutType == SlideLayoutType.Blank);
+                choice.LayoutType == SlideLayoutType.Blank &&
+                choice.MasterId == "rId1" &&
+                choice.MasterDisplayName == "Master 1" &&
+                choice.PlaceholderCount == 1 &&
+                choice.DisplayOrder == 1);
 
             window.ApplyLayoutChoice("rId2").Should().BeTrue();
             window.Editor.CurrentSlide!.LayoutId.Should().Be("rId2");
             window.LastAppliedLayoutChoice.Should().NotBeNull();
             window.LastAppliedLayoutChoice!.LayoutId.Should().Be("rId2");
+            window.LastAppliedLayoutChoice.MasterDisplayName.Should().Be("Master 1");
+            window.LastAppliedLayoutChoice.PlaceholderCount.Should().Be(1);
         }
         finally
         {

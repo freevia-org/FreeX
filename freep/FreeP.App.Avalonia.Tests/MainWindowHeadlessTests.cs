@@ -902,7 +902,11 @@ public sealed class MainWindowHeadlessTests
                 Id = "rId2",
                 Name = "Blank",
                 LayoutType = SlideLayoutType.Blank,
-                MasterId = window.Editor.Presentation.Masters[0].Id
+                MasterId = window.Editor.Presentation.Masters[0].Id,
+                Placeholders =
+                {
+                    new SlideShape { Id = 212, Placeholder = new Placeholder { Type = PlaceholderType.Title } },
+                }
             });
             var registry = window.BuildCommandRegistry();
             found = registry.TryGet(PresentationDesignCommandPlanner.LayoutCommandId, out var layout);
@@ -925,11 +929,17 @@ public sealed class MainWindowHeadlessTests
         pickerPlan!.Choices.Should().Contain(choice =>
             choice.LayoutId == "rId2" &&
             choice.DisplayName == "Blank" &&
-            choice.LayoutType == SlideLayoutType.Blank);
+            choice.LayoutType == SlideLayoutType.Blank &&
+            choice.MasterId == "rId1" &&
+            choice.MasterDisplayName == "Master 1" &&
+            choice.PlaceholderCount == 1 &&
+            choice.DisplayOrder == 1);
         applied.Should().BeTrue("Avalonia should be able to apply a shared picker choice");
         currentLayoutId.Should().Be("rId2");
         appliedChoice.Should().NotBeNull();
         appliedChoice!.LayoutId.Should().Be("rId2");
+        appliedChoice.MasterDisplayName.Should().Be("Master 1");
+        appliedChoice.PlaceholderCount.Should().Be(1);
     }
 
     [Fact]
