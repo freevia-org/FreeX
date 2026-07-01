@@ -218,7 +218,9 @@ public class BackstageViewTests
             print: null,
             printPreview: () => { });
 
-        surface.DeferredNote.Should().BeNull("preview is now available in the Avalonia shell");
+        surface.DeferredNote.Should().Be(
+            BackstageViewTextResources.DirectPrintDeferredNote,
+            "preview is now available in the Avalonia shell, but native printer selection is still deferred");
         var actions = surface.Groups.SelectMany(group => group.Actions).ToList();
         actions.Single(action => action.AutomationId == "PrintAction_Print")
             .IsEnabled.Should().BeFalse("native printer selection remains deferred");
