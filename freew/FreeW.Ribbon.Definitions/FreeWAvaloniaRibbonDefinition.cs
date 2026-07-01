@@ -347,6 +347,14 @@ internal static class FreeWAvaloniaRibbonDefinition
                     {
                         KeyTip = FreeWRibbonText.PasteCommand.KeyTip
                     });
+                    g.Button("freew.format-painter", FreeWRibbonText.FormatPainterCommand.Label, b => b with
+                    {
+                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.FormatPainter),
+                        KeyTip = FreeWRibbonText.FormatPainterCommand.KeyTip
+                    });
+                    g.Icon("freew.paste-plain", FreeWRibbonText.PasteTextOnlyCommand.Label, RibbonCommandIconKind.Paste);
+                    g.Icon("freew.paste-merge", FreeWRibbonText.PasteMergeFormattingCommand.Label, RibbonCommandIconKind.Paste);
+                    g.Icon("freew.paste-special", FreeWRibbonText.PasteSpecialCommand.Label, RibbonCommandIconKind.Paste);
                 });
                 tab.Group("font", FreeWRibbonText.FontGroup.Label, FreeWRibbonText.FontGroup.KeyTip, 90, g =>
                 {
@@ -577,7 +585,9 @@ internal static class FreeWAvaloniaRibbonDefinition
                 {
                     g.Button("freew.print-layout", "Print Layout");
                     g.Button("freew.web-layout",   "Web Layout");
+                    g.Toggle("freew.outline-view", "Outline");
                     g.Button("freew.draft-view",   "Draft");
+                    g.Toggle("freew.paged-edit-view", "Page Edit");
                 });
                 tab.Group("show", "Show", null, 100, g =>
                 {
@@ -614,6 +624,14 @@ internal static class FreeWAvaloniaRibbonDefinition
                 tab.Group("proofing", "Proofing", null, 110, g =>
                 {
                     g.Button("freew.statistics", "Word Count");
+                    g.Toggle("freew.spellcheck-toggle", "Spelling & Grammar");
+                    g.Button("freew.add-to-dictionary", "Add to Dictionary");
+                    g.Button("freew.thesaurus", "Thesaurus");
+                    g.Button("freew.set-proofing-language", "Set Proofing Language");
+                });
+                tab.Group("speech", "Speech", null, 105, g =>
+                {
+                    g.Toggle("freew.read-aloud", "Read Aloud");
                 });
                 // AV-REVIEW: Accessibility group — backed by the same report flow as Backstage safety.
                 tab.Group("accessibility", "Accessibility", null, 92, g =>
@@ -644,6 +662,13 @@ internal static class FreeWAvaloniaRibbonDefinition
                     g.Button("freew.accept-all",    "Accept All");
                     g.Button("freew.reject-this",   "Reject");
                     g.Button("freew.reject-all",    "Reject All");
+                    g.Button("freew.previous-change", "Previous");
+                    g.Button("freew.next-change", "Next");
+                });
+                tab.Group("compare", "Compare", null, 78, g =>
+                {
+                    g.Button("freew.compare", "Compare");
+                    g.Button("freew.combine", "Combine");
                 });
                 // AV-REVIEW: Protect and Inspect groups are wired through host callbacks to the existing
                 // MainWindow/Backstage safety flows.

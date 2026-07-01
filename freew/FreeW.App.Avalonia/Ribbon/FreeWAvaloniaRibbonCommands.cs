@@ -80,6 +80,10 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.cut",   new ActionRibbonCommand(callbacks.Cut));
         r.Register("freew.copy",  new ActionRibbonCommand(callbacks.Copy));
         r.Register("freew.paste", new ActionRibbonCommand(callbacks.Paste));
+        r.Register("freew.paste-plain", new ActionRibbonCommand(callbacks.PastePlainText ?? (() => { })));
+        r.Register("freew.paste-merge", new ActionRibbonCommand(callbacks.PasteMergeFormatting ?? (() => { })));
+        r.Register("freew.paste-special", new ActionRibbonCommand(callbacks.OpenPasteSpecial ?? (() => { })));
+        r.Register("freew.format-painter", new FormatPainterCommand(editor));
 
         // ── Font ─────────────────────────────────────────────────────────────
         r.Register("freew.font-family", new ValueRibbonCommand(value =>
@@ -364,9 +368,17 @@ internal static class FreeWAvaloniaRibbonCommands
         var printLayoutCommand = new ActionRibbonCommand(callbacks.SetPrintLayout);
         var webLayoutCommand = new ActionRibbonCommand(callbacks.SetWebLayout);
         var draftViewCommand = new ActionRibbonCommand(callbacks.SetDraftView);
+        var outlineViewCommand = new ToggleActionCommand(
+            callbacks.SetOutlineView ?? callbacks.SetDraftView,
+            callbacks.IsOutlineViewActive ?? (() => false));
+        var pagedEditViewCommand = new ToggleActionCommand(
+            callbacks.TogglePagedEditView ?? callbacks.SetPrintLayout,
+            callbacks.IsPagedEditViewActive ?? (() => false));
         r.Register("freew.print-layout", printLayoutCommand);
         r.Register("freew.web-layout", webLayoutCommand);
         r.Register("freew.draft-view", draftViewCommand);
+        r.Register("freew.outline-view", outlineViewCommand);
+        r.Register("freew.paged-edit-view", pagedEditViewCommand);
         // Compatibility aliases for older Avalonia definitions/tests that used compact ids.
         r.Register("freew.printlayout", printLayoutCommand);
         r.Register("freew.weblayout", webLayoutCommand);
@@ -414,6 +426,8 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.reject-change", rejectCurrentRevisionCommand);
         r.Register("freew.accept-all",    new ActionRibbonCommand(() => editor.AcceptAllRevisions()));
         r.Register("freew.reject-all",    new ActionRibbonCommand(() => editor.RejectAllRevisions()));
+        r.Register("freew.previous-change", new ActionRibbonCommand(callbacks.PreviousChange ?? (() => { })));
+        r.Register("freew.next-change", new ActionRibbonCommand(callbacks.NextChange ?? (() => { })));
         // Comments — thread navigation/actions over the shared comment model.
         r.Register("freew.new-comment",    new ActionRibbonCommand(() => editor.NewComment()));
         r.Register("freew.delete-comment", new ActionRibbonCommand(() => editor.DeleteCommentAtCaret()));
@@ -428,8 +442,19 @@ internal static class FreeWAvaloniaRibbonCommands
         var statisticsCommand = new ActionRibbonCommand(callbacks.OpenWordCountDialog);
         r.Register("freew.statistics", statisticsCommand);
         r.Register("freew.word-count", statisticsCommand);
+        r.Register("freew.spellcheck-toggle", new ToggleActionCommand(
+            callbacks.ToggleSpellcheck ?? (() => { }),
+            callbacks.IsSpellcheckActive ?? (() => false)));
+        r.Register("freew.add-to-dictionary", new ActionRibbonCommand(callbacks.AddToDictionary ?? (() => { })));
+        r.Register("freew.thesaurus", new ActionRibbonCommand(callbacks.OpenThesaurus ?? (() => { })));
+        r.Register("freew.set-proofing-language", new ActionRibbonCommand(callbacks.SetProofingLanguage ?? (() => { })));
+        r.Register("freew.read-aloud", new ToggleActionCommand(
+            callbacks.ToggleReadAloud ?? (() => { }),
+            callbacks.IsReadAloudActive ?? (() => false)));
         r.Register("freew.check-accessibility", new ActionRibbonCommand(callbacks.CheckAccessibility ?? (() => { })));
         r.Register("freew.inspect-document", new ActionRibbonCommand(callbacks.InspectDocument ?? (() => { })));
+        r.Register("freew.compare", new ActionRibbonCommand(callbacks.CompareDocuments ?? (() => { })));
+        r.Register("freew.combine", new ActionRibbonCommand(callbacks.CombineDocuments ?? (() => { })));
         r.Register("freew.mark-as-final", new ToggleActionCommand(
             callbacks.MarkAsFinal ?? (() => editor.SetMarkedAsFinal(!editor.IsMarkedAsFinal)),
             () => editor.IsMarkedAsFinal));
@@ -571,6 +596,21 @@ internal static class FreeWAvaloniaRibbonCommands
         public void Execute(RibbonCommandContext context) => toggle();
 
         public RibbonCommandState GetState() => new(IsChecked: isChecked());
+    }
+
+    private sealed class FormatPainterCommand(DocumentView editor) : IRibbonCommand
+    {
+        private DateTime _lastExecute = DateTime.MinValue;
+        private const double DoubleClickMs = 500;
+
+        public void Execute(RibbonCommandContext context)
+        {
+            var now = DateTime.UtcNow;
+            var isDoubleClick = (now - _lastExecute).TotalMilliseconds <= DoubleClickMs;
+            _lastExecute = now;
+            editor.ArmFormatPainter(locked: isDoubleClick);
+            editor.Focus();
+        }
     }
 
     private sealed class FormattingMarksCommand(DocumentView editor) : IRibbonStatefulCommand

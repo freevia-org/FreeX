@@ -422,10 +422,13 @@ internal static class FreeWCommandInventory
         ("freew.page-border", "freew.page-borders"),
         ("freew.shape-textbox", "freew.text-box"),
         ("freew.shapes", "freew.shape"),
+        ("freew.split", "freew.split-window"),
         ("freew.split-cell", "freew.table-split-cell"),
         ("freew.table", "freew.insert-table"),
         ("freew.table-insert-col", "freew.table-insert-col-right"),
         ("freew.table-insert-row", "freew.table-insert-below"),
+        ("freew.zoom-in", "freew.zoom-dialog"),
+        ("freew.zoom-out", "freew.zoom-dialog"),
     ];
 
     private static string Surface(bool wpfPresent, bool avaloniaPresent) =>
