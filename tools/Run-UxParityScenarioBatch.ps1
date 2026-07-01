@@ -248,6 +248,122 @@ function Invoke-ForegroundScenario {
     return $result
 }
 
+function ConvertTo-HtmlText {
+    param([object]$Value)
+
+    if ($null -eq $Value) {
+        return ""
+    }
+
+    return [string]$Value `
+        -replace '&', '&amp;' `
+        -replace '<', '&lt;' `
+        -replace '>', '&gt;' `
+        -replace '"', '&quot;' `
+        -replace "'", '&#39;'
+}
+
+function ConvertTo-FileUri {
+    param([string]$Path)
+
+    if ([string]::IsNullOrWhiteSpace($Path) -or -not (Test-Path $Path)) {
+        return $null
+    }
+
+    return (New-Object System.Uri((Resolve-Path $Path).Path)).AbsoluteUri
+}
+
+function New-ImageCellHtml {
+    param([string]$Path)
+
+    $uri = ConvertTo-FileUri $Path
+    if ($null -eq $uri) {
+        return "<span class=""muted"">No screenshot</span>"
+    }
+
+    $label = ConvertTo-HtmlText $Path
+    return "<a href=""$uri""><img src=""$uri"" alt=""$label""></a><div class=""path"">$label</div>"
+}
+
+function Write-ScenarioReport {
+    param(
+        [object]$Summary,
+        [string]$Path
+    )
+
+    $rows = New-Object System.Collections.Generic.List[string]
+    foreach ($record in $Summary["records"]) {
+        $excel = $record["excel"]["manifest"]
+        $freex = $record["freex"]["manifest"]
+        $rows.Add(@"
+<tr>
+  <td>
+    <strong>$(ConvertTo-HtmlText $record["id"])</strong>
+    <div class="muted">$(ConvertTo-HtmlText $record["area"])</div>
+    <div>Status: $(ConvertTo-HtmlText $record["status"])</div>
+    <div>Review: $(ConvertTo-HtmlText $record["comparisonStatus"])</div>
+  </td>
+  <td>
+    <div class="status">$(ConvertTo-HtmlText $excel["captureStatus"])</div>
+    <div class="block">$(ConvertTo-HtmlText $excel["blockReason"])</div>
+    $(New-ImageCellHtml $excel["screenshotPath"])
+  </td>
+  <td>
+    <div class="status">$(ConvertTo-HtmlText $freex["captureStatus"])</div>
+    <div class="block">$(ConvertTo-HtmlText $freex["blockReason"])</div>
+    $(New-ImageCellHtml $freex["screenshotPath"])
+  </td>
+</tr>
+"@)
+    }
+
+    $html = @"
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>FreeX / Excel UX Scenario Batch</title>
+  <style>
+    body { font-family: Segoe UI, Arial, sans-serif; margin: 24px; color: #1f2933; }
+    h1 { font-size: 22px; margin-bottom: 4px; }
+    .summary { margin: 0 0 18px 0; color: #52606d; }
+    table { border-collapse: collapse; width: 100%; table-layout: fixed; }
+    th, td { border: 1px solid #cbd2d9; padding: 10px; vertical-align: top; }
+    th { background: #f5f7fa; text-align: left; }
+    img { max-width: 100%; border: 1px solid #d9e2ec; background: white; }
+    .muted, .path { color: #66788a; font-size: 12px; overflow-wrap: anywhere; }
+    .status { font-weight: 600; margin-bottom: 4px; }
+    .block { color: #9b1c1c; font-size: 12px; margin-bottom: 8px; overflow-wrap: anywhere; }
+  </style>
+</head>
+<body>
+  <h1>FreeX / Excel UX Scenario Batch</h1>
+  <p class="summary">
+    Suite: $(ConvertTo-HtmlText $Summary["suite"]) |
+    Status: $(ConvertTo-HtmlText $Summary["status"]) |
+    Complete: $(ConvertTo-HtmlText $Summary["pairedCaptureComplete"]) |
+    Partial: $(ConvertTo-HtmlText $Summary["partialCapture"]) |
+    Blocked: $(ConvertTo-HtmlText $Summary["blocked"])
+  </p>
+  <table>
+    <thead>
+      <tr>
+        <th>Pair</th>
+        <th>Excel</th>
+        <th>FreeX</th>
+      </tr>
+    </thead>
+    <tbody>
+      $($rows -join "`n")
+    </tbody>
+  </table>
+</body>
+</html>
+"@
+
+    $html | Set-Content -Path $Path -Encoding UTF8
+}
+
 $repoRoot = Get-RepoRoot
 if ([string]::IsNullOrWhiteSpace($RunId)) {
     $RunId = Get-Date -Format "yyyyMMdd-HHmmss"
@@ -257,6 +373,7 @@ $runRoot = Join-Path (Resolve-Path $repoRoot).Path $OutputRoot
 $runDirectory = Join-Path $runRoot $RunId
 $foregroundOutput = Join-Path $runDirectory "foreground-captures"
 $batchManifestPath = Join-Path $runDirectory "ux-scenario-batch.json"
+$batchReportPath = Join-Path $runDirectory "ux-scenario-report.html"
 New-Item -ItemType Directory -Force -Path $foregroundOutput | Out-Null
 
 $freeXPath = Resolve-FreeXExe $repoRoot $FreeXExe -SkipBuild:$SkipBuild
@@ -312,6 +429,7 @@ $summary = [ordered]@{
     freexExe = $freeXPath
     foregroundCaptureProject = $foregroundProject
     outputDirectory = $foregroundOutput
+    reportPath = $batchReportPath
     scenarioCount = $recordArray.Count
     pairedCaptureComplete = $pairedCaptureComplete
     partialCapture = $partialCapture
@@ -319,9 +437,11 @@ $summary = [ordered]@{
     records = $recordArray
 }
 
+Write-ScenarioReport $summary $batchReportPath
 $summary | ConvertTo-Json -Depth 20 | Set-Content -Path $batchManifestPath -Encoding UTF8
 
 Write-Host "UX parity scenario batch manifest: $batchManifestPath"
+Write-Host "UX parity scenario batch report: $batchReportPath"
 if ($summary.status -ne "ready-for-visual-review") {
     exit 1
 }
