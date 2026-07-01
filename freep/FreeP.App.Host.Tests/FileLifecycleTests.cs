@@ -122,6 +122,29 @@ public sealed class FileLifecycleTests : IDisposable
     }
 
     [StaFact]
+    public void BuildHandoutLayoutPlan_UsesSharedPlannerForWpfAdapter()
+    {
+        var (_, file, getModel, _, _) = CreateHarness();
+        getModel().Slides.Add(new Slide { Title = "Two" });
+        getModel().Slides.Add(new Slide { Title = "Three" });
+        getModel().Slides.Add(new Slide { Title = "Four" });
+
+        var plan = file.BuildHandoutLayoutPlan(
+            slidesPerPage: 3,
+            new PresentationSlideRangeRequest(
+                PresentationSlideRangeKind.CustomRange,
+                StartSlideNumber: 2,
+                EndSlideNumber: 4));
+
+        plan.PrintPlan.CommandId.Should().Be(PresentationExportPlanner.PrintCommandId);
+        plan.PrintPlan.Layout.SlidesPerPage.Should().Be(3);
+        plan.Pages.Should().ContainSingle();
+        plan.Pages[0].Slots.Select(slot => slot.SlideNumber).Should().Equal(2, 3, 4);
+        plan.Pages[0].Slots.Should().OnlyContain(slot => slot.NotesOrLinesBounds != null);
+        plan.Pages[0].Slots.Should().OnlyContain(slot => slot.BlankLineBounds.Count == 5);
+    }
+
+    [StaFact]
     public void OpenPath_LoadsPptxFileAndMarksSavedWithPath()
     {
         var (_, file, getModel, _, _) = CreateHarness();

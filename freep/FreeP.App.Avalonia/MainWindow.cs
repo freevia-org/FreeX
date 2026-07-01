@@ -124,6 +124,7 @@ public sealed class MainWindow : Window
     internal PresentationProofingRequestPlan? LastProofingRequestPlan { get; private set; }
     internal AnimationPaneTimelinePlan? LastAnimationPaneTimelinePlan { get; private set; }
     internal PresentationDesignCommandPlan? LastLayoutRequestPlan { get; private set; }
+    internal PresentationHandoutLayoutPlan? LastHandoutLayoutPlan { get; private set; }
 
     // ── Constructors ───────────────────────────────────────────────────────────
 
@@ -387,6 +388,7 @@ public sealed class MainWindow : Window
         r.Register("freep.file.save-as", new ActionRibbonCommand(() => _ = FileSaveAsAsync()));
         r.Register(PresentationExportPlanner.PdfExportCommandId, new ActionRibbonCommand(() => _ = FileExportPdfAsync()));
         r.Register(PresentationExportPlanner.ImageExportCommandId, new ActionRibbonCommand(() => _ = FileExportImagesAsync()));
+        r.Register(PresentationExportPlanner.PrintCommandId, new ActionRibbonCommand(() => RefreshHandoutLayoutPlan()));
 
         // Slide navigation/management
         r.Register("freep.new-slide",       new ActionRibbonCommand(() => Editor.InsertSlide()));
@@ -753,6 +755,19 @@ public sealed class MainWindow : Window
         new(
             PresentationSlideRangeKind.CurrentSlide,
             CurrentSlideNumber: Editor.CurrentSlideIndex + 1);
+
+    internal PresentationHandoutLayoutPlan RefreshHandoutLayoutPlan(int? slidesPerPage = null)
+    {
+        LastHandoutLayoutPlan = PresentationExportPlanner.BuildHandoutLayoutPlan(
+            new PresentationPrintRequest(
+                PresentationPrintLayoutKind.Handouts,
+                HandoutSlidesPerPage: slidesPerPage),
+            _presentation.Slides.Count,
+            _presentation.SlideSizeCxEmu,
+            _presentation.SlideSizeCyEmu);
+        _statusText.Text = "Print handout layout planned";
+        return LastHandoutLayoutPlan;
+    }
 
     private void RegisterReviewWorkflowCommands(RibbonCommandRegistry registry)
     {

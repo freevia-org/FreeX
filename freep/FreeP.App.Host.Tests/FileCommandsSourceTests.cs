@@ -16,9 +16,11 @@ public sealed class FileCommandsSourceTests
         source.Should().Contain("PresentationFileDialogPlanner.BuildOpenDialogPlan()");
         source.Should().Contain("PresentationFileDialogPlanner.BuildSaveAsDialogPlan(");
         source.Should().Contain("PresentationExportPlanner.BuildPdfExportDialogPlan(");
+        source.Should().Contain("PresentationExportPlanner.BuildHandoutLayoutPlan(");
         source.Should().Contain("PresentationExportPlanner.ImageExportPickerTitle");
         source.Should().Contain("PresentationImageExportExecutor.Export(");
         source.Should().Contain("public bool ExportImages()");
+        source.Should().Contain("public PresentationHandoutLayoutPlan BuildHandoutLayoutPlan(");
         source.Should().Contain("_getImageExportRange()");
         source.Should().Contain("new OpenFolderDialog");
         source.Should().Contain("WpfPresentationSlideImageRenderer.RenderSlideToPng");
@@ -42,6 +44,7 @@ public sealed class FileCommandsSourceTests
         source.Should().NotContain("FileCommandMessageBox.ShowError(");
         source.Should().NotContain("PromptSaveChanges(DisplayName, action");
         source.Should().NotContain("ShowFileCommandError(summary, ex");
+        source.Should().NotContain("new PresentationHandoutSlideSlot(");
         source.Should().NotContain("UserMessageButtons.YesNoCancel");
         source.Should().NotContain("UserMessageButtons.Ok");
         source.Should().NotContain("new OpenFileDialog");

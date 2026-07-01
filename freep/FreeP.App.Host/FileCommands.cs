@@ -175,6 +175,25 @@ internal sealed class FileCommands
         }
     }
 
+    /// <summary>
+    /// Builds the shared PowerPoint-style handout page plan. WPF owns native print/preview UI later;
+    /// page slots and range policy stay in the shared presentation planner.
+    /// </summary>
+    public PresentationHandoutLayoutPlan BuildHandoutLayoutPlan(
+        int? slidesPerPage = null,
+        PresentationSlideRangeRequest? range = null)
+    {
+        var presentation = _getModel();
+        return PresentationExportPlanner.BuildHandoutLayoutPlan(
+            new PresentationPrintRequest(
+                PresentationPrintLayoutKind.Handouts,
+                range,
+                HandoutSlidesPerPage: slidesPerPage),
+            presentation.Slides.Count,
+            presentation.SlideSizeCxEmu,
+            presentation.SlideSizeCyEmu);
+    }
+
     /// <summary>Save-before-close gate, called from the window's Closing handler.</summary>
     public bool ConfirmCloseAllowed() => _workflow.ConfirmCloseAllowed();
 

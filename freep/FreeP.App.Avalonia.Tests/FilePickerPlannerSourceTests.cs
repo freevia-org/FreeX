@@ -23,9 +23,13 @@ public sealed class FilePickerPlannerSourceTests
         source.Should().Contain("PresentationFileDialogPlanner.BuildSavePickerPlan(");
         source.Should().Contain("PresentationExportPlanner.PdfExportCommandId");
         source.Should().Contain("PresentationExportPlanner.ImageExportCommandId");
+        source.Should().Contain("PresentationExportPlanner.PrintCommandId");
         source.Should().Contain("PresentationExportPlanner.BuildPdfExportPickerPlan(");
+        source.Should().Contain("PresentationExportPlanner.BuildHandoutLayoutPlan(");
         source.Should().Contain("PresentationPdfExporter.ExportToBytes(_presentation)");
         source.Should().Contain("PresentationImageExportExecutor.Export(");
+        source.Should().Contain("internal PresentationHandoutLayoutPlan RefreshHandoutLayoutPlan(");
+        source.Should().Contain("LastHandoutLayoutPlan");
         source.Should().Contain("PresentationExportPlanner.ImageExportPickerTitle");
         source.Should().Contain("StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions");
         source.Should().Contain("BuildCurrentSlideImageExportRange()");
@@ -64,6 +68,7 @@ public sealed class FilePickerPlannerSourceTests
         source.Should().NotContain("PptxPackageReader.");
         source.Should().NotContain("PptxPackageWriter.");
         source.Should().NotContain("File.Create(");
+        source.Should().NotContain("new PresentationHandoutSlideSlot(");
         project.Should().Contain(@"..\..\shared\Free.Shared.IO\Free.Shared.IO.csproj");
         project.Should().Contain(@"..\..\shared\Free.Shared.Shell.Avalonia\Free.Shared.Shell.Avalonia.csproj");
     }
