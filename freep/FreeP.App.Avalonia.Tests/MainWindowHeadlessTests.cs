@@ -651,6 +651,75 @@ public sealed class MainWindowHeadlessTests
             "Format Painter should apply the source shape fill through EditingSession");
     }
 
+    [Theory]
+    [InlineData("freep.bold", "bold")]
+    [InlineData("freep.italic", "italic")]
+    [InlineData("freep.underline", "underline")]
+    public async Task Ribbon_font_toggle_commands_route_to_editor(
+        string commandId,
+        string property)
+    {
+        var found = false;
+        var isApplied = false;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var registry = window.BuildCommandRegistry();
+            found = registry.TryGet(commandId, out var command);
+            found.Should().BeTrue($"{commandId} must be registered");
+
+            var shape = window.Editor.InsertTextBox("Text");
+            window.Editor.Select(shape.Id);
+
+            command!.Execute(RibbonCommandContext.Empty);
+
+            var run = window.Editor.CurrentSlide!.Shapes
+                .Single(s => s.Id == shape.Id)
+                .TextBody!.Paragraphs[0].Runs[0];
+            isApplied = property switch
+            {
+                "bold" => run.Bold,
+                "italic" => run.Italic,
+                "underline" => run.Underline,
+                _ => throw new ArgumentOutOfRangeException(nameof(property), property, null)
+            };
+        });
+
+        if (!ran) return;
+        found.Should().BeTrue($"{commandId} must be registered");
+        isApplied.Should().BeTrue($"{commandId} should format the selected text shape through EditingSession");
+    }
+
+    [Fact]
+    public async Task Ribbon_font_family_command_routes_selected_value_to_editor()
+    {
+        var found = false;
+        string? fontFamily = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var registry = window.BuildCommandRegistry();
+            found = registry.TryGet("freep.font-family", out var command);
+            found.Should().BeTrue("Font must be registered");
+
+            var shape = window.Editor.InsertTextBox("Text");
+            window.Editor.Select(shape.Id);
+
+            command!.Execute(RibbonCommandContext.ForSelectedValue("Arial"));
+
+            fontFamily = window.Editor.CurrentSlide!.Shapes
+                .Single(s => s.Id == shape.Id)
+                .TextBody!.Paragraphs[0].Runs[0]
+                .FontFamily;
+        });
+
+        if (!ran) return;
+        found.Should().BeTrue("Font must be registered");
+        fontFamily.Should().Be("Arial", "the Avalonia registry should forward the selected font family to EditingSession");
+    }
+
     [Fact]
     public async Task Ribbon_chart_edit_data_command_is_registered_and_noops_without_selected_chart()
     {

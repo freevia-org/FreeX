@@ -391,6 +391,18 @@ public sealed class MainWindow : Window
             Editor.ApplyFormattingToSelection();
         }));
 
+        // Font formatting
+        r.Register("freep.font-family", new ContextRibbonCommand(ctx =>
+        {
+            if (string.IsNullOrEmpty(ctx.SelectedValue))
+                return;
+
+            Editor.SetFontFamilyOnSelection(ctx.SelectedValue);
+        }));
+        r.Register("freep.bold", new ActionRibbonCommand(() => Editor.ToggleBoldOnSelection()));
+        r.Register("freep.italic", new ActionRibbonCommand(() => Editor.ToggleItalicOnSelection()));
+        r.Register("freep.underline", new ActionRibbonCommand(() => Editor.ToggleUnderlineOnSelection()));
+
         foreach (var route in ArrangeCommandRoutes)
         {
             r.Register(route.CommandId, new ActionRibbonCommand(() => route.Execute(Editor)));
