@@ -27,6 +27,7 @@ internal static class FreeWRibbon
                 {
                     g.Button("freew.open", "Open");
                     g.Button("freew.save", "Save");
+                    g.Button("freew.import-pdf-text", "Import PDF (text only)");
                 }))
             .Tab("home", "Home", "H", tab =>
             {
@@ -105,6 +106,7 @@ internal static class FreeWRibbon
         }));
         registry.Register("freew.open", new RelayCommand(callbacks.Open));
         registry.Register("freew.save", new RelayCommand(callbacks.Save));
+        registry.Register("freew.import-pdf-text", new RelayCommand(callbacks.ImportPdfText));
         registry.Register("freew.cut", new RelayCommand(callbacks.Cut));
         registry.Register("freew.copy", new RelayCommand(callbacks.Copy));
         registry.Register("freew.paste", new RelayCommand(callbacks.Paste));
@@ -115,6 +117,7 @@ internal static class FreeWRibbon
 internal sealed record RibbonHostCallbacks(
     Action Open,
     Action Save,
+    Action ImportPdfText,
     Action Cut,
     Action Copy,
     Action Paste);

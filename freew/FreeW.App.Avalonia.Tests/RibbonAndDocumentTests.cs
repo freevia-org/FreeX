@@ -32,14 +32,40 @@ public class RibbonAndDocumentTests
     }
 
     [Fact]
+    public void Ribbon_file_tab_exposes_explicit_pdf_text_import()
+    {
+        var file = FreeWRibbon.BuildDefinition().FindTab("file");
+
+        file.Should().NotBeNull();
+        file!.Groups
+            .SelectMany(group => group.Controls)
+            .Select(CommandIdOf)
+            .Where(id => id is not null)
+            .Select(id => id!.Value.Value)
+            .Should().Contain(new[] { "freew.open", "freew.save", "freew.import-pdf-text" });
+    }
+    [Fact]
     public void Every_ribbon_command_id_is_registered()
     {
         var definition = FreeWRibbon.BuildDefinition();
-        var callbacks = new RibbonHostCallbacks(() => { }, () => { }, () => { }, () => { }, () => { });
+        var callbacks = NoopCallbacks();
         var registry = FreeWRibbon.BuildRegistry(new Editing.DocumentView(), callbacks);
 
         foreach (var id in CommandIds(definition))
             registry.TryGet(id, out _).Should().BeTrue($"command '{id.Value}' should be wired");
+    }
+
+    [Fact]
+    public void Import_pdf_ribbon_command_invokes_host_route()
+    {
+        var invoked = 0;
+        var callbacks = NoopCallbacks() with { ImportPdfText = () => invoked++ };
+        var registry = FreeWRibbon.BuildRegistry(new Editing.DocumentView(), callbacks);
+
+        registry.TryGet(new RibbonCommandId("freew.import-pdf-text"), out var command).Should().BeTrue();
+        command!.Execute(RibbonCommandContext.Empty);
+
+        invoked.Should().Be(1);
     }
 
     [Fact]
@@ -88,4 +114,7 @@ public class RibbonAndDocumentTests
         RibbonGallery g => g.CommandId,
         _ => (RibbonCommandId?)null,
     };
+
+    private static RibbonHostCallbacks NoopCallbacks() =>
+        new(() => { }, () => { }, () => { }, () => { }, () => { }, () => { });
 }

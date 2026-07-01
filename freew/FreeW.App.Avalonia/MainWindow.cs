@@ -117,6 +117,7 @@ public sealed class MainWindow : Window
         var callbacks = new RibbonHostCallbacks(
             Open: () => _ = OpenAsync(),
             Save: () => _ = SaveAsync(),
+            ImportPdfText: () => _ = ImportPdfTextAsync(),
             Cut: () => _ = CutAsync(),
             Copy: () => _ = CopyAsync(),
             Paste: () => _ = PasteAsync());
@@ -340,6 +341,44 @@ public sealed class MainWindow : Window
         catch (Exception ex)
         {
             _status.Text = $"Open failed: {ex.Message}";
+        }
+    }
+
+    private async Task ImportPdfTextAsync()
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "Import PDF (text only)",
+            AllowMultiple = false,
+            FileTypeFilter = [.. DocumentFilePickerTypes.BuildPdfImportTypes()],
+        });
+
+        if (files.Count == 0)
+            return;
+
+        var path = files[0].TryGetLocalPath();
+        if (path is null)
+            return;
+
+        var importAdapters = DocumentFileAdapterCatalog.CreatePdfImportAdapters();
+        var adapter = DocumentFileFormatResolver.FindOpenAdapter(importAdapters, Path.GetExtension(path), out _);
+        if (adapter is null)
+        {
+            _status.Text = $"PDF import failed: unsupported file type \"{Path.GetExtension(path)}\".";
+            return;
+        }
+
+        try
+        {
+            using var stream = File.OpenRead(path);
+            _editor.LoadDocument(adapter.Load(stream));
+            _currentPath = null;
+            Title = "FreeW";
+            _status.Text = $"Imported PDF text from {Path.GetFileName(path)}";
+        }
+        catch (Exception ex)
+        {
+            _status.Text = $"PDF import failed: {ex.Message}";
         }
     }
 
