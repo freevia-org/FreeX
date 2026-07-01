@@ -29,6 +29,8 @@ public sealed partial class MainWindowRibbonKeyTipTests
             harness.HandleKeyTip(Key.F);
             // After the first F the keytip mode must stay active to accept the second F.
             harness.KeyTipScope.Should().NotBe("None");
+            harness.SelectedRibbonTabHeader.Should().Be("Data");
+            harness.ActiveSheetHasAutoFilter.Should().BeFalse("the first F is only the legacy Data > Filter prefix");
             harness.HandleKeyTip(Key.F);
 
             harness.KeyTipScope.Should().Be("None");

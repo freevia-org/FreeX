@@ -36,6 +36,8 @@ public sealed class PageLayoutCommandSourceTests
         source.Should().Contain("ApplyPageMarginsPreset(PageLayoutMarginPreset.Normal)");
         source.Should().Contain("ApplyPageOrientationPreset(PageLayoutOrientationPreset.Portrait)");
         source.Should().Contain("ApplyPagePaperSizePreset(PageLayoutPaperSizePreset.Letter)");
+        source.Should().Contain("ApplyPagePaperSizePreset(PageLayoutPaperSizePreset.B4)");
+        source.Should().Contain("ApplyPagePaperSizePreset(PageLayoutPaperSizePreset.B5)");
         source.Should().Contain("PageLayoutRibbonActionPlanner.PlanMarginsPreset(preset)");
         source.Should().Contain("PageLayoutRibbonActionPlanner.PlanOrientationPreset(preset)");
         source.Should().Contain("PageLayoutRibbonActionPlanner.PlanPaperSizePreset(preset)");
@@ -51,6 +53,8 @@ public sealed class PageLayoutCommandSourceTests
         policySource.Should().Contain("PageLayoutMarginPreset.Wide => WorksheetPageMargins.Wide");
         policySource.Should().Contain("PageLayoutOrientationPreset.Landscape");
         policySource.Should().Contain("PageLayoutPaperSizePreset.Letter => WorksheetPaperSize.Letter");
+        policySource.Should().Contain("PageLayoutPaperSizePreset.B4 => WorksheetPaperSize.B4");
+        policySource.Should().Contain("PageLayoutPaperSizePreset.B5 => WorksheetPaperSize.B5");
         source.Should().Contain("PageLayoutRibbonCommandPlanner.BuildSetBackgroundCommand(sheetId, background)");
         source.Should().Contain("PageLayoutRibbonCommandPlanner.BuildClearBackgroundCommand(sheetId)");
         source.Should().Contain("PageLayoutRibbonCommandPlanner.BuildMarginsCommand(sheetId, margins)");

@@ -281,8 +281,8 @@ public partial class MainWindow
     private void SizeTabloid_Click(object sender, RoutedEventArgs e) => OpenPageSetupFromRibbon(PageLayoutPageSetupOpenSource.ExtendedPaperSize);
     private void SizeA3_Click(object sender, RoutedEventArgs e) => OpenPageSetupFromRibbon(PageLayoutPageSetupOpenSource.ExtendedPaperSize);
     private void SizeA5_Click(object sender, RoutedEventArgs e) => OpenPageSetupFromRibbon(PageLayoutPageSetupOpenSource.ExtendedPaperSize);
-    private void SizeB4_Click(object sender, RoutedEventArgs e) => OpenPageSetupFromRibbon(PageLayoutPageSetupOpenSource.ExtendedPaperSize);
-    private void SizeB5_Click(object sender, RoutedEventArgs e) => OpenPageSetupFromRibbon(PageLayoutPageSetupOpenSource.ExtendedPaperSize);
+    private void SizeB4_Click(object sender, RoutedEventArgs e) => ApplyPagePaperSizePreset(PageLayoutPaperSizePreset.B4);
+    private void SizeB5_Click(object sender, RoutedEventArgs e) => ApplyPagePaperSizePreset(PageLayoutPaperSizePreset.B5);
 
     private void PrintAreaBtn_Click(object sender, RoutedEventArgs e)
     {

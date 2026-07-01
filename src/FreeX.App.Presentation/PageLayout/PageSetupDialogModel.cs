@@ -198,6 +198,7 @@ public static class PageSetupDialogModel
         new(WorksheetPaperSize.Executive, "PageSetup_Executive725X105"),
         new(WorksheetPaperSize.A3,        "PageSetup_A3297X420Mm"),
         new(WorksheetPaperSize.A5,        "PageSetup_A5148X210Mm"),
+        new(WorksheetPaperSize.B4,        "PageSetup_B4257X364Mm"),
         new(WorksheetPaperSize.B5,        "PageSetup_B5176X250Mm"),
     ];
 

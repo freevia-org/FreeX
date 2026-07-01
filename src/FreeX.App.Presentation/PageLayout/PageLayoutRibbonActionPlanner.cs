@@ -105,10 +105,10 @@ public static class PageLayoutRibbonActionPlanner
             PageSetupOpenSource: PageLayoutPageSetupOpenSource.ExtendedPaperSize),
         new("Tabloid", PageLayoutRibbonActionKind.OpenPageSetupDialog,
             PageSetupOpenSource: PageLayoutPageSetupOpenSource.ExtendedPaperSize),
-        new("B4", PageLayoutRibbonActionKind.OpenPageSetupDialog,
-            PageSetupOpenSource: PageLayoutPageSetupOpenSource.ExtendedPaperSize),
-        new("B5", PageLayoutRibbonActionKind.OpenPageSetupDialog,
-            PageSetupOpenSource: PageLayoutPageSetupOpenSource.ExtendedPaperSize),
+        new("B4 (JIS)", PageLayoutRibbonActionKind.ApplyPaperSizePreset,
+            PaperSizePreset: PageLayoutPaperSizePreset.B4),
+        new("B5 (JIS)", PageLayoutRibbonActionKind.ApplyPaperSizePreset,
+            PaperSizePreset: PageLayoutPaperSizePreset.B5),
 
         new("Set Print Area", PageLayoutRibbonActionKind.SetPrintArea),
         new("Clear Print Area", PageLayoutRibbonActionKind.ClearPrintArea),
@@ -157,6 +157,8 @@ public static class PageLayoutRibbonActionPlanner
             {
                 PageLayoutPaperSizePreset.Letter => "RibbonWire_PaperLetter",
                 PageLayoutPaperSizePreset.Legal => "RibbonWire_PaperLegal",
+                PageLayoutPaperSizePreset.B4 => "RibbonWire_PaperB4",
+                PageLayoutPaperSizePreset.B5 => "RibbonWire_PaperB5",
                 _ => "RibbonWire_PaperA4",
             });
 }

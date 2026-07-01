@@ -19,28 +19,13 @@ namespace FreeX.App.Avalonia.Tests.Parity;
 public sealed class FunctionalParityMatrixTests
 {
     /// <summary>
-    /// Canonical ribbon command ids the WPF shell binds that the Avalonia (Linux) shell does NOT bind through
-    /// the canonical ribbon command registry — the documented, intentional Linux omissions. Each entry is one
-    /// of three honest classes (annotated below): genuinely Windows-only features, ids the Avalonia shell
-    /// serves through a NATIVE MENU / parent-button path instead of a per-item ribbon command, and a couple of
-    /// label-alias mismatches. The gate subtracts exactly this set; a guard test asserts every entry is a real
-    /// WPF-handled shared-definition id, so the allowlist can never mask a regression with a stale id.
-    ///
-    /// NOTE on scope: this is a measurement of canonical-ribbon-command-registry binding. An id listed here as
-    /// "served via native menu" IS reachable by the Linux user (e.g. Next/Previous Note, theme submenus, shape
-    /// effects) — it is simply not wired under this canonical id in the ribbon registry. Closing these is a
-    /// matter of re-keying the existing handlers, tracked as follow-up; the allowlist documents the current
-    /// honest state so the gate stays a true no-regression tripwire.
+    /// Canonical ribbon command ids the WPF shell binds that the Avalonia shell intentionally does not bind
+    /// through the canonical ribbon command registry. Keep this set explicit so any future platform-only gap
+    /// must be documented before the no-regression gate can subtract it.
     /// </summary>
     public static readonly IReadOnlySet<string> IntentionalLinuxOmissions = new HashSet<string>(StringComparer.Ordinal)
     {
-        // ─────────────────────────────────────────────────────────────────────────────────────────────
-        // (1) GENUINELY WINDOWS-ONLY
-        // ─────────────────────────────────────────────────────────────────────────────────────────────
-        // JIS B-series paper sizes: the Linux Page Setup wires "B4"/"B5"; the WPF "(JIS)"-suffixed ids are
-        // Win32 PaperKind names with no Linux equivalent.
-        "B4 (JIS)", "B5 (JIS)",
-
+        // No intentional omissions are currently documented.
     };
 
     [Fact]

@@ -47,6 +47,8 @@ public sealed class PageLayoutRibbonActionPlannerTests
         Descriptor("Letter").PaperSizePreset.Should().Be(PageLayoutPaperSizePreset.Letter);
         Descriptor("Legal").PaperSizePreset.Should().Be(PageLayoutPaperSizePreset.Legal);
         Descriptor("A4").PaperSizePreset.Should().Be(PageLayoutPaperSizePreset.A4);
+        Descriptor("B4 (JIS)").PaperSizePreset.Should().Be(PageLayoutPaperSizePreset.B4);
+        Descriptor("B5 (JIS)").PaperSizePreset.Should().Be(PageLayoutPaperSizePreset.B5);
         Descriptor("Insert Page Break").PageBreakAction.Should().Be(PageBreakMenuAction.Insert);
         Descriptor("Remove Page Break").PageBreakAction.Should().Be(PageBreakMenuAction.Remove);
         Descriptor("Reset All Page Breaks").PageBreakAction.Should().Be(PageBreakMenuAction.ResetAll);
@@ -69,6 +71,11 @@ public sealed class PageLayoutRibbonActionPlannerTests
         paperSize.Value.Should().Be(WorksheetPaperSize.Legal);
         paperSize.CommandLabel.Should().Be(PageLayoutRibbonActionPlanner.PaperSizeCommandLabel);
         paperSize.StatusResourceKey.Should().Be("RibbonWire_PaperLegal");
+
+        var b4PaperSize = PageLayoutRibbonActionPlanner.PlanPaperSizePreset(PageLayoutPaperSizePreset.B4);
+        b4PaperSize.Value.Should().Be(WorksheetPaperSize.B4);
+        b4PaperSize.CommandLabel.Should().Be(PageLayoutRibbonActionPlanner.PaperSizeCommandLabel);
+        b4PaperSize.StatusResourceKey.Should().Be("RibbonWire_PaperB4");
     }
 
     private static PageLayoutRibbonActionDescriptor Descriptor(string commandId) =>

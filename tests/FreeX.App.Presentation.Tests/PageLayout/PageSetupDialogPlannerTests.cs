@@ -16,7 +16,8 @@ public sealed class PageSetupDialogPlannerTests
             .Should()
             .Equal(PageSetupDialogModel.PaperSizeChoices);
 
-        PageSetupDialogPlanner.PaperSizeChoices.IndexOf(WorksheetPaperSize.B5).Should().Be(7);
+        PageSetupDialogPlanner.PaperSizeChoices.IndexOf(WorksheetPaperSize.B4).Should().Be(7);
+        PageSetupDialogPlanner.PaperSizeChoices.IndexOf(WorksheetPaperSize.B5).Should().Be(8);
         PageSetupDialogPlanner.PaperSizeChoices.ValueAt(99).Should().Be(WorksheetPaperSize.A4);
         PageSetupDialogPlanner.PrintErrorValueChoices.ValueAt(2).Should().Be(WorksheetPrintErrorValue.Dash);
     }

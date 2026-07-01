@@ -945,6 +945,12 @@
   <data name="PageSetup_Legal85X14" xml:space="preserve">
     <value>Legal (8.5 x 14)</value>
   </data>
+  <data name="PageSetup_B4257X364Mm" xml:space="preserve">
+    <value>B4 (257 x 364 mm)</value>
+  </data>
+  <data name="PageSetup_B5176X250Mm" xml:space="preserve">
+    <value>B5 (176 x 250 mm)</value>
+  </data>
   <data name="PageSetup_Scaling" xml:space="preserve">
     <value>Scaling</value>
   </data>
@@ -2140,6 +2146,12 @@
   </data>
   <data name="RibbonWire_PaperA4" xml:space="preserve">
     <value>Set paper size to A4.</value>
+  </data>
+  <data name="RibbonWire_PaperB4" xml:space="preserve">
+    <value>Set paper size to B4 (JIS).</value>
+  </data>
+  <data name="RibbonWire_PaperB5" xml:space="preserve">
+    <value>Set paper size to B5 (JIS).</value>
   </data>
   <data name="RibbonWire_PrintAreaSet" xml:space="preserve">
     <value>Set print area to the selection.</value>

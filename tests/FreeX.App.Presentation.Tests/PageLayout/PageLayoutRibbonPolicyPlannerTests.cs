@@ -35,6 +35,8 @@ public sealed class PageLayoutRibbonPolicyPlannerTests
     [InlineData(PageLayoutPaperSizePreset.Letter, WorksheetPaperSize.Letter)]
     [InlineData(PageLayoutPaperSizePreset.A4, WorksheetPaperSize.A4)]
     [InlineData(PageLayoutPaperSizePreset.Legal, WorksheetPaperSize.Legal)]
+    [InlineData(PageLayoutPaperSizePreset.B4, WorksheetPaperSize.B4)]
+    [InlineData(PageLayoutPaperSizePreset.B5, WorksheetPaperSize.B5)]
     public void ResolvePaperSize_MapsRibbonPresetToWorksheetPaperSize(
         PageLayoutPaperSizePreset preset,
         WorksheetPaperSize expected)

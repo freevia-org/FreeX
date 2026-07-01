@@ -19,7 +19,9 @@ public enum PageLayoutPaperSizePreset
 {
     Letter,
     A4,
-    Legal
+    Legal,
+    B4,
+    B5
 }
 
 public enum PageLayoutPageSetupOpenSource
@@ -63,6 +65,8 @@ public static class PageLayoutRibbonPolicyPlanner
         {
             PageLayoutPaperSizePreset.Letter => WorksheetPaperSize.Letter,
             PageLayoutPaperSizePreset.Legal => WorksheetPaperSize.Legal,
+            PageLayoutPaperSizePreset.B4 => WorksheetPaperSize.B4,
+            PageLayoutPaperSizePreset.B5 => WorksheetPaperSize.B5,
             _ => WorksheetPaperSize.A4
         };
 
