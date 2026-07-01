@@ -176,7 +176,7 @@ $routes = @(
     },
     @{
         RouteId = "dialog.AutoFilter"; DisplayName = "AutoFilter"
-        Wpf = @("tools\foreground-captures\freex-autofilter\*.png")
+        Wpf = @("screenshots\autofilter-flyout-tour\freex_table_autofilter_dropdown.png", "tools\foreground-captures\freex-autofilter\*.png")
         Shared = @("src\FreeX.App.Presentation\Filtering\AutoFilter*.cs", "src\FreeX.App.Presentation\AutoFilter\*.cs")
     },
     @{

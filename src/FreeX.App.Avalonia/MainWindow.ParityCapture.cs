@@ -12,12 +12,14 @@ using Free.Shared.AppServices;
 using Free.Shared.Ribbon;
 using Free.Shared.Ribbon.Avalonia;
 using Free.Shared.Shell;
+using Free.Shared.Shell.Avalonia;
 using FreeX.App.Avalonia.Dialogs;
 using FreeX.App.Avalonia.Pivot;
 using FreeX.App.Avalonia.Ribbon;
 using FreeX.App.Presentation.Backstage;
 using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.App.Presentation.DrawingUI;
+using FreeX.App.Presentation.Filtering;
 using FreeX.App.Presentation.PivotUI;
 using FreeX.App.Services;
 using FreeX.Core.Calc;
@@ -141,6 +143,7 @@ public sealed partial class MainWindow
         ("dialog.RecommendedPivotTables", async () => { await ShowRecommendedPivotTablesDialogAsync(); }),
         ("dialog.Sort", () => ShowSortDialogAsync()),
         ("dialog.SortOptions", async () => { await ShowSortOptionsDialogAsync(new SortDialogOptions()); }),
+        ("dialog.AutoFilter", () => ShowAutoFilterParityDialogAsync()),
         ("dialog.TextToColumns", () => ShowTextToColumnsParityDialogAsync()),
         ("dialog.AdvancedFilter", () => ShowAdvancedFilterParityDialogAsync()),
         ("dialog.Consolidate", () => ShowConsolidateDialogAsync()),
@@ -510,6 +513,148 @@ public sealed partial class MainWindow
 
     private Task ShowCreateTableParityDialogAsync() =>
         ShowCreateTableDialogAsync("Sheet1!$A$1:$D$5", "TableStyleMedium2");
+
+    private async Task ShowAutoFilterParityDialogAsync()
+    {
+        var previousSelection = _session.SelectedRange;
+        var sheet = _session.ActiveSheet;
+        var fixture = AutoFilterParityFixturePlanner.CreateFixturePlan(
+            _session.Workbook,
+            sheet,
+            InvariantAutoFilterMenuTextProvider.Instance,
+            InvariantAutoFilterMenuTextProvider.BlankDisplayText);
+        _session.SelectRange(new GridRange(fixture.Range.Start, fixture.Range.Start));
+        RefreshShell(_statusText.Text ?? "Ready");
+
+        try
+        {
+            await ShowAutoFilterParityWindowAsync(fixture.MenuPlan);
+        }
+        finally
+        {
+            _session.SelectRange(previousSelection);
+            RefreshShell(_statusText.Text ?? "Ready");
+        }
+    }
+
+    private async Task ShowAutoFilterParityWindowAsync(AutoFilterMenuPlan menuPlan)
+    {
+        var dialog = new Window
+        {
+            Title = UiText.Format("AutoFilter_TitleWithHeader", menuPlan.HeaderText),
+            Width = 312,
+            SizeToContent = SizeToContent.Height,
+            MaxHeight = 560,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ShowInTaskbar = false,
+        };
+        AutomationProperties.SetAutomationId(dialog, "AutoFilterParityDialog");
+        dialog.Content = CreateAutoFilterParityContent(AutoFilterMenuPlanner.Build(menuPlan));
+        await dialog.ShowDialog(this);
+    }
+
+    private Control CreateAutoFilterParityContent(AutoFilterMenuModel model)
+    {
+        var stack = new StackPanel();
+        var checkBoxes = new List<CheckBox>();
+
+        foreach (var item in model.Items)
+        {
+            switch (item.Kind)
+            {
+                case AutoFilterMenuItemKind.SortAscending:
+                case AutoFilterMenuItemKind.SortDescending:
+                case AutoFilterMenuItemKind.ClearFilter:
+                case AutoFilterMenuItemKind.FilterByColor:
+                case AutoFilterMenuItemKind.FilterFamily:
+                case AutoFilterMenuItemKind.FilterFamilyCommand:
+                    stack.Children.Add(CreateAutoFilterParityMenuButton(item.Label, item.IsEnabled));
+                    break;
+                case AutoFilterMenuItemKind.Search:
+                    stack.Children.Add(new TextBox
+                    {
+                        PlaceholderText = item.Label,
+                        Height = 24,
+                        MinHeight = 24,
+                        Margin = new Thickness(0, 2, 0, 4),
+                        FontFamily = FormulaBarFontFamily,
+                    });
+                    break;
+                case AutoFilterMenuItemKind.SelectAll:
+                    stack.Children.Add(new CheckBox
+                    {
+                        Content = item.Label,
+                        IsChecked = true,
+                        Margin = new Thickness(0, 0, 0, 4),
+                        FontSize = 12,
+                        FontFamily = FormulaBarFontFamily,
+                    });
+                    break;
+                case AutoFilterMenuItemKind.ChecklistItem:
+                    var box = new CheckBox
+                    {
+                        Content = item.Label,
+                        IsChecked = true,
+                        Tag = item.Value,
+                        FontSize = 12,
+                        FontFamily = FormulaBarFontFamily,
+                    };
+                    checkBoxes.Add(box);
+                    break;
+                case AutoFilterMenuItemKind.Separator:
+                    AddAutoFilterParitySeparator(stack);
+                    break;
+            }
+        }
+
+        if (checkBoxes.Count > 0)
+        {
+            var checklistPanel = new StackPanel();
+            foreach (var box in checkBoxes)
+                checklistPanel.Children.Add(box);
+            stack.Children.Add(new ScrollViewer { Content = checklistPanel, MaxHeight = 220 });
+        }
+
+        var okButton = new Button { Content = "OK", IsDefault = true };
+        var cancelButton = new Button { Content = UiText.Get("InsertLoc_CancelButton"), IsCancel = true };
+        ApplyDialogButtonChrome(okButton, 72, isDefault: true);
+        ApplyDialogButtonChrome(cancelButton, 72);
+        var buttons = AvaloniaCompactDialogChrome.CreateActionRow([okButton, cancelButton], new Thickness(0, 8, 0, 0));
+
+        var root = new DockPanel { Margin = new Thickness(10), LastChildFill = true };
+        DockPanel.SetDock(buttons, Dock.Bottom);
+        root.Children.Add(buttons);
+        root.Children.Add(new ScrollViewer
+        {
+            Content = stack,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+        });
+        return root;
+    }
+
+    private static Button CreateAutoFilterParityMenuButton(string label, bool isEnabled)
+    {
+        var button = new Button
+        {
+            Content = label,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
+            HorizontalContentAlignment = AvaloniaHorizontalAlignment.Left,
+            Background = Brushes.Transparent,
+            BorderThickness = new Thickness(0),
+            IsEnabled = isEnabled,
+            FontFamily = FormulaBarFontFamily,
+        };
+        return button;
+    }
+
+    private static void AddAutoFilterParitySeparator(StackPanel stack) =>
+        stack.Children.Add(new Border
+        {
+            Height = 1,
+            Background = Brush(0xDA, 0xDC, 0xDF),
+            Margin = new Thickness(0, 3),
+        });
 
     private async Task ShowAdvancedFilterParityDialogAsync()
     {

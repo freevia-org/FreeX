@@ -2585,6 +2585,8 @@ public sealed class AvaloniaShellSourceTests
     {
         var avaloniaCaptureSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
         var wpfCaptureSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Host", "ParityCapture.cs"));
+        var autoFilterFixtureSource = File.ReadAllText(RepositoryFileLocator.Find(
+            "src", "FreeX.App.Presentation", "Filtering", "AutoFilterParityFixturePlanner.cs"));
         var dialogIds = new[]
         {
             "dialog.FormatCells",
@@ -2595,6 +2597,7 @@ public sealed class AvaloniaShellSourceTests
             "dialog.RecommendedPivotTables",
             "dialog.Sort",
             "dialog.SortOptions",
+            "dialog.AutoFilter",
             "dialog.TextToColumns",
             "dialog.AdvancedFilter",
             "dialog.Consolidate",
@@ -2650,6 +2653,15 @@ public sealed class AvaloniaShellSourceTests
             avaloniaCaptureSource.Should().Contain(dialogId);
             wpfCaptureSource.Should().Contain(dialogId);
         }
+
+        avaloniaCaptureSource.Should().Contain("AutoFilterParityFixturePlanner.CreateFixturePlan(");
+        wpfCaptureSource.Should().Contain("AutoFilterParityFixturePlanner.CreateFixturePlan(");
+        avaloniaCaptureSource.Should().NotContain("SeedAutoFilterParityRange");
+        wpfCaptureSource.Should().NotContain("SeedAutoFilterParityRange");
+        avaloniaCaptureSource.Should().NotContain("AutoFilterDropdownMenuPlanner.CreateMenuPlan");
+        wpfCaptureSource.Should().NotContain("AutoFilterDropdownMenuPlanner.CreateMenuPlan");
+        autoFilterFixtureSource.Should().Contain("AutoFilterDropdownMenuPlanner.CreateMenuPlan(");
+        autoFilterFixtureSource.Should().Contain("WorksheetAutoFilterModel(range.ToString(), null)");
 
         // The multi-tab / multi-category dialogs declare an identical, position-ordered tab-name list in
         // each shell, so the comparison runner pairs `dialog.<Name>.<TabName>` one-for-one. The capture

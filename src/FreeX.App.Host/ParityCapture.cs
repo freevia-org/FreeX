@@ -10,6 +10,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using FreeX.App.Presentation.Backstage;
 using FreeX.App.Presentation.DrawingUI;
+using FreeX.App.Presentation.Filtering;
 using FreeX.App.Presentation.PageLayout;
 using FreeX.App.Services;
 using FreeX.Core.Calc;
@@ -492,6 +493,9 @@ internal static class ParityCapture
         CaptureDialog(results, "dialog.SortOptions", outDir, () =>
             new SortOptionsDialog(new SortDialogOptions()));
 
+        CaptureDialog(results, "dialog.AutoFilter", outDir, () =>
+            CreateAutoFilterDialog(workbook, sheet));
+
         CaptureDialog(results, "dialog.TextToColumns", outDir, () =>
             new TextToColumnsDialog(
                 ["North,Widget,120", "South,Gadget,85", "East,Sprocket,200"],
@@ -673,6 +677,16 @@ internal static class ParityCapture
 
     private static Func<string, SheetId?> ResolveSheetId(Workbook workbook) =>
         name => workbook.Sheets.FirstOrDefault(sheet => string.Equals(sheet.Name, name, StringComparison.OrdinalIgnoreCase))?.Id;
+
+    private static AutoFilterDialog CreateAutoFilterDialog(Workbook workbook, Sheet sheet)
+    {
+        var fixture = AutoFilterParityFixturePlanner.CreateFixturePlan(
+            workbook,
+            sheet,
+            AutoFilterMenuResources.TextProvider,
+            AutoFilterMenuResources.BlankDisplayText);
+        return new AutoFilterDialog(fixture.MenuPlan);
+    }
 
     private static WorkbookFileDialogSurfacePlan CreateOpenWorkbookDialogSurfacePlan()
     {
