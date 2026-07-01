@@ -236,15 +236,43 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
-    public void RibbonDefinition_contains_transitions_tab_without_design_or_animations()
+    public void RibbonDefinition_contains_design_and_transitions_tabs_without_animations()
     {
         var definition = FreePRibbonAvalonia.Build();
 
         definition.Tabs.Select(tab => tab.Id)
             .Should()
+            .Contain("design")
+            .And
             .Contain("transitions")
             .And
-            .NotContain(["design", "animations"]);
+            .NotContain("animations");
+    }
+
+    [Fact]
+    public void RibbonDefinition_design_tab_has_planned_design_commands()
+    {
+        var definition = FreePRibbonAvalonia.Build();
+        var design = definition.Tabs.Single(t => t.Id == "design");
+        var commandIds = design.Groups
+            .SelectMany(group => group.Controls)
+            .Where(control => !string.IsNullOrEmpty(control.CommandId.Value))
+            .Select(control => control.CommandId.Value)
+            .ToArray();
+
+        commandIds.Should().Contain(PresentationDesignCommandPlanner.BuiltInPlans.Select(plan => plan.CommandId));
+    }
+
+    [Fact]
+    public void MainWindow_sources_route_design_commands_through_shared_planner()
+    {
+        var source = File.ReadAllText(FindRepoFile("freep", "FreeP.App.Avalonia", "MainWindow.cs"));
+
+        source.Should().Contain("PresentationDesignCommandPlanner.BuiltInPlans");
+        source.Should().Contain("PresentationDesignCommandPlanner.TryApply(Editor, plan, OnCustomSlideSizeRequested)");
+        source.Should().NotContain("Editor.SetTheme(");
+        source.Should().NotContain("Editor.SetSlideSize16x9()");
+        source.Should().NotContain("Editor.SetSlideSize4x3()");
     }
 
     [Fact]
@@ -787,6 +815,42 @@ public sealed class MainWindowHeadlessTests
         if (!ran) return;
         found.Should().BeTrue("the Avalonia chart-data command must be registered");
         after.Should().Be(before, "opening chart data without a selected chart should preserve WPF's no-op behavior");
+    }
+
+    [Fact]
+    public async Task Ribbon_design_commands_route_through_shared_planner()
+    {
+        var foundTheme = false;
+        var foundSlideSize = false;
+        var foundCustom = false;
+        string? themeName = null;
+        long slideWidth = 0;
+        long slideHeight = 0;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var registry = window.BuildCommandRegistry();
+            foundTheme = registry.TryGet("freep.theme.berlin", out var theme);
+            foundSlideSize = registry.TryGet("freep.slide-size-4x3", out var slideSize);
+            foundCustom = registry.TryGet("freep.slide-size-custom", out var customSlideSize);
+
+            theme!.Execute(RibbonCommandContext.Empty);
+            slideSize!.Execute(RibbonCommandContext.Empty);
+            customSlideSize!.Execute(RibbonCommandContext.Empty);
+
+            themeName = window.Editor.Presentation.Theme.Name;
+            slideWidth = window.Editor.Presentation.SlideSizeCxEmu;
+            slideHeight = window.Editor.Presentation.SlideSizeCyEmu;
+        });
+
+        if (!ran) return;
+        foundTheme.Should().BeTrue("theme commands must be registered through the Avalonia registry");
+        foundSlideSize.Should().BeTrue("slide-size commands must be registered through the Avalonia registry");
+        foundCustom.Should().BeTrue("custom slide-size should be exposed as a planner callback intent");
+        themeName.Should().Be("Berlin");
+        slideWidth.Should().Be(PresentationDesignCommandPlanner.SlideSizeStandard4x3CxEmu);
+        slideHeight.Should().Be(PresentationDesignCommandPlanner.SlideSizeStandardCyEmu);
     }
 
     [Fact]

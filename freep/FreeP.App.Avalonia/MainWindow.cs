@@ -441,6 +441,12 @@ public sealed class MainWindow : Window
                 PresentationTransitionCommandPlanner.TryApply(Editor, plan, ctx.SelectedValue)));
         }
 
+        foreach (var plan in PresentationDesignCommandPlanner.BuiltInPlans)
+        {
+            r.Register(plan.CommandId, new ActionRibbonCommand(() =>
+                PresentationDesignCommandPlanner.TryApply(Editor, plan, OnCustomSlideSizeRequested)));
+        }
+
         // Slide show
         r.Register("freep.slideshow.from-beginning",
             new ActionRibbonCommand(() => StartSlideShow(fromStart: true)));
@@ -448,6 +454,15 @@ public sealed class MainWindow : Window
             new ActionRibbonCommand(() => StartSlideShow(fromStart: false)));
 
         return r;
+    }
+
+    private void OnCustomSlideSizeRequested(PresentationDesignCommandPlan plan)
+    {
+        _ = plan;
+        _ = SlideSizeDialogPlanner.BuildInitialState(
+            _presentation.SlideSizeCxEmu,
+            _presentation.SlideSizeCyEmu,
+            SlideSizeDialogUnit.Inches);
     }
 
     private async Task InsertPictureFromFileAsync()

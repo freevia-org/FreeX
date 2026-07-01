@@ -268,32 +268,13 @@ internal static class FreePRibbonCommands
 
         // ── Wave 5B: Design tab — Themes ─────────────────────────────────────────
 
-        registry.Register("freep.theme.office",
-            new ActionRibbonCommand(() => editor.SetTheme(BuiltInThemes.Id.Office)));
-
-        registry.Register("freep.theme.berlin",
-            new ActionRibbonCommand(() => editor.SetTheme(BuiltInThemes.Id.Berlin)));
-
-        registry.Register("freep.theme.facet",
-            new ActionRibbonCommand(() => editor.SetTheme(BuiltInThemes.Id.Facet)));
-
-        registry.Register("freep.theme.ion",
-            new ActionRibbonCommand(() => editor.SetTheme(BuiltInThemes.Id.Ion)));
-
-        registry.Register("freep.theme.slice",
-            new ActionRibbonCommand(() => editor.SetTheme(BuiltInThemes.Id.Slice)));
+        RegisterDesignCommands(registry, editor, onCustomSlideSize);
 
         // ── Wave 5B: Design tab — Slide Size ─────────────────────────────────────
 
-        registry.Register("freep.slide-size-16x9",
-            new ActionRibbonCommand(() => editor.SetSlideSize16x9()));
 
-        registry.Register("freep.slide-size-4x3",
-            new ActionRibbonCommand(() => editor.SetSlideSize4x3()));
 
         // ── Wave 10B: Design tab — Custom Slide Size dialog ───────────────────────
-        registry.Register("freep.slide-size-custom",
-            new ActionRibbonCommand(() => onCustomSlideSize?.Invoke()));
 
         // ── Wave 9B: Chart data editing ───────────────────────────────────────────
         // Enabled only when a chart shape is selected; otherwise silently a no-op.
@@ -443,6 +424,23 @@ internal static class FreePRibbonCommands
     }
 
     // ── Animation helpers ─────────────────────────────────────────────────────────
+
+    private static void RegisterDesignCommands(
+        RibbonCommandRegistry registry,
+        EditingSession editor,
+        Action? onCustomSlideSize)
+    {
+        foreach (var plan in PresentationDesignCommandPlanner.BuiltInPlans)
+        {
+            registry.Register(
+                plan.CommandId,
+                new ActionRibbonCommand(() =>
+                    PresentationDesignCommandPlanner.TryApply(
+                        editor,
+                        plan,
+                        onCustomSlideSize is null ? null : _ => onCustomSlideSize())));
+        }
+    }
 
     private static void RegisterEntranceAnim(
         RibbonCommandRegistry registry,

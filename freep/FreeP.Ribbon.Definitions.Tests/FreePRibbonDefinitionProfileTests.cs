@@ -9,7 +9,6 @@ public sealed class FreePRibbonDefinitionProfileTests
 {
     private static readonly string[] WpfOnlyTabIds =
     [
-        "design",
         "animations",
     ];
 
@@ -31,7 +30,7 @@ public sealed class FreePRibbonDefinitionProfileTests
             .Equal("home", "insert", "design", "transitions", "animations");
         avalonia.Tabs.Select(tab => tab.Id)
             .Should()
-            .Equal("home", "insert", "transitions");
+            .Equal("home", "insert", "design", "transitions");
 
         RibbonDefinitionValidator.Validate(wpf).HasErrors.Should().BeFalse();
         RibbonDefinitionValidator.Validate(avalonia).HasErrors.Should().BeFalse();
@@ -157,6 +156,28 @@ public sealed class FreePRibbonDefinitionProfileTests
                 RequiredGroup(avalonia, "home", "slideshow").Header,
                 RequiredControl(avalonia, "freep.slideshow.from-beginning").Label,
                 RequiredControl(avalonia, "freep.slideshow.from-current").Label,
+                avalonia.FindTab("design")!.Header,
+                avalonia.FindTab("design")!.KeyTip!,
+                RequiredGroup(avalonia, "design", "themes").Header,
+                RequiredGroup(avalonia, "design", "themes").KeyTip!,
+                RequiredGroup(avalonia, "design", "customize").Header,
+                RequiredGroup(avalonia, "design", "customize").KeyTip!,
+                RequiredControl(avalonia, "freep.theme.office").Label,
+                RequiredControl(avalonia, "freep.theme.office").KeyTip!,
+                RequiredControl(avalonia, "freep.theme.berlin").Label,
+                RequiredControl(avalonia, "freep.theme.berlin").KeyTip!,
+                RequiredControl(avalonia, "freep.theme.facet").Label,
+                RequiredControl(avalonia, "freep.theme.facet").KeyTip!,
+                RequiredControl(avalonia, "freep.theme.ion").Label,
+                RequiredControl(avalonia, "freep.theme.ion").KeyTip!,
+                RequiredControl(avalonia, "freep.theme.slice").Label,
+                RequiredControl(avalonia, "freep.theme.slice").KeyTip!,
+                RequiredControl(avalonia, "freep.slide-size-16x9").Label,
+                RequiredControl(avalonia, "freep.slide-size-16x9").KeyTip!,
+                RequiredControl(avalonia, "freep.slide-size-4x3").Label,
+                RequiredControl(avalonia, "freep.slide-size-4x3").KeyTip!,
+                RequiredControl(avalonia, "freep.slide-size-custom").Label,
+                RequiredControl(avalonia, "freep.slide-size-custom").KeyTip!,
             };
         });
 
@@ -229,12 +250,6 @@ public sealed class FreePRibbonDefinitionProfileTests
             var wpf = FreePRibbon.Build(FreePRibbonCapabilities.Wpf);
             var values = new List<string>
             {
-                wpf.FindTab("design")!.Header,
-                wpf.FindTab("design")!.KeyTip!,
-                RequiredGroup(wpf, "design", "themes").Header,
-                RequiredGroup(wpf, "design", "themes").KeyTip!,
-                RequiredGroup(wpf, "design", "customize").Header,
-                RequiredGroup(wpf, "design", "customize").KeyTip!,
                 wpf.FindTab("transitions")!.Header,
                 wpf.FindTab("transitions")!.KeyTip!,
                 RequiredGroup(wpf, "transitions", "transition-gallery").Header,
@@ -253,14 +268,6 @@ public sealed class FreePRibbonDefinitionProfileTests
             };
 
             values.AddRange(ControlText(wpf,
-                "freep.theme.office",
-                "freep.theme.berlin",
-                "freep.theme.facet",
-                "freep.theme.ion",
-                "freep.theme.slice",
-                "freep.slide-size-16x9",
-                "freep.slide-size-4x3",
-                "freep.slide-size-custom",
                 "freep.transition.none",
                 "freep.transition.fade",
                 "freep.transition.push",
@@ -332,6 +339,29 @@ public sealed class FreePRibbonDefinitionProfileTests
 
         unexpectedAvaloniaOnly.Should().BeEmpty(
             "cross-platform content commands should come from the shared FreeP command surface");
+    }
+
+    [Fact]
+    public void Avalonia_profile_exposes_design_commands_as_shared_surface()
+    {
+        var wpfIds = CommandIds(FreePRibbon.Build(FreePRibbonCapabilities.Wpf))
+            .ToHashSet(StringComparer.Ordinal);
+        var avaloniaIds = CommandIds(FreePRibbon.Build(FreePRibbonCapabilities.Avalonia))
+            .ToHashSet(StringComparer.Ordinal);
+        var designIds = new[]
+        {
+            "freep.theme.office",
+            "freep.theme.berlin",
+            "freep.theme.facet",
+            "freep.theme.ion",
+            "freep.theme.slice",
+            "freep.slide-size-16x9",
+            "freep.slide-size-4x3",
+            "freep.slide-size-custom",
+        };
+
+        avaloniaIds.Should().Contain(designIds);
+        designIds.Should().OnlyContain(commandId => wpfIds.Contains(commandId));
     }
 
     [Fact]
