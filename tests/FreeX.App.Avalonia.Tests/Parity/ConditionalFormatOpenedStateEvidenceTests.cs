@@ -49,6 +49,8 @@ public sealed class ConditionalFormatOpenedStateEvidenceTests
                 Subject = target.GetProperty("subject").GetString(),
                 Scenario = target.GetProperty("scenario").GetString(),
                 Status = target.GetProperty("retentionStatus").GetString(),
+                RunnerCommand = target.GetProperty("runnerCommand").GetString(),
+                RequiredEnvironment = target.GetProperty("requiredEnvironment").GetString(),
             })
             .OrderBy(target => target.Id, StringComparer.Ordinal)
             .ToArray();
@@ -58,6 +60,30 @@ public sealed class ConditionalFormatOpenedStateEvidenceTests
         Assert.Contains(targets, target => target.Subject == "wpf" && target.Scenario == "freex-conditional-formatting-gallery");
         Assert.Contains(targets, target => target.Subject == "avalonia" && target.Scenario == "avalonia-conditional-formatting-gallery");
         Assert.All(targets, target => Assert.False(string.IsNullOrWhiteSpace(target.Status)));
+        Assert.All(targets, target => Assert.Contains(target.Scenario!, target.RunnerCommand!, StringComparison.Ordinal));
+        Assert.All(targets, target => Assert.Contains("foreground", target.RequiredEnvironment!, StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void OpenedStateEvidence_DoesNotCountBlockedOrMissingManifests()
+    {
+        using var document = LoadEvidenceDocument();
+        var root = document.RootElement;
+        var targets = root.GetProperty("captureTargets").EnumerateArray().ToArray();
+        var completeTargets = targets.Count(IsCompleteRetainedOpenedStateTarget);
+
+        Assert.Equal(
+            completeTargets,
+            root.GetProperty("summary").GetProperty("completeOpenedStateCaptureTargets").GetInt32());
+        Assert.Equal(
+            targets.Length - completeTargets,
+            root.GetProperty("summary").GetProperty("missingOrIncompleteOpenedStateCaptureTargets").GetInt32());
+
+        foreach (var blocked in targets.Where(target => !IsCompleteRetainedOpenedStateTarget(target)))
+        {
+            Assert.NotEqual("retained-opened-state-capture", blocked.GetProperty("retentionStatus").GetString());
+            Assert.False(blocked.GetProperty("screenshotExists").GetBoolean());
+        }
     }
 
     private static JsonDocument LoadEvidenceDocument()
@@ -69,4 +95,9 @@ public sealed class ConditionalFormatOpenedStateEvidenceTests
             "conditional-format-opened-state-evidence.json");
         return JsonDocument.Parse(File.ReadAllText(path));
     }
+
+    private static bool IsCompleteRetainedOpenedStateTarget(JsonElement target) =>
+        target.GetProperty("captureStatus").GetString() == "complete" &&
+        target.GetProperty("screenshotExists").GetBoolean() &&
+        target.GetProperty("retentionStatus").GetString() == "retained-opened-state-capture";
 }

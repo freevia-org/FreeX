@@ -81,6 +81,8 @@ function Get-CaptureTargetStatus {
         [Parameter(Mandatory = $true)][string]$Scenario,
         [Parameter(Mandatory = $true)][string]$ManifestPath,
         [Parameter(Mandatory = $true)][string]$ExpectedOpenedState,
+        [Parameter(Mandatory = $true)][string]$RunnerCommand,
+        [Parameter(Mandatory = $true)][string]$RequiredEnvironment,
         [string]$FallbackEvidencePath = "",
         [string]$FallbackEvidenceNote = ""
     )
@@ -100,6 +102,8 @@ function Get-CaptureTargetStatus {
             subject = $Subject
             scenario = $Scenario
             expectedOpenedState = $ExpectedOpenedState
+            runnerCommand = $RunnerCommand
+            requiredEnvironment = $RequiredEnvironment
             manifestPath = $ManifestPath
             captureStatus = "missing-manifest"
             screenshotPath = ""
@@ -137,6 +141,8 @@ function Get-CaptureTargetStatus {
         subject = $Subject
         scenario = $Scenario
         expectedOpenedState = $ExpectedOpenedState
+        runnerCommand = $RunnerCommand
+        requiredEnvironment = $RequiredEnvironment
         manifestPath = ConvertTo-RepoRelativePath $resolvedManifestPath
         captureStatus = $captureStatus
         screenshotPath = $resolvedScreenshot
@@ -186,19 +192,25 @@ $captureTargets = @(
         -Subject "excel" `
         -Scenario "excel-conditional-formatting-gallery" `
         -ManifestPath "tools\foreground-captures\excel-conditional-formatting-gallery\excel-conditional-formatting-gallery_manifest.json" `
-        -ExpectedOpenedState "Excel Home > Conditional Formatting opened popup/gallery"
+        -ExpectedOpenedState "Excel Home > Conditional Formatting opened popup/gallery" `
+        -RunnerCommand ".\tools\Invoke-ForegroundCapture.ps1 -Scenario excel-conditional-formatting-gallery" `
+        -RequiredEnvironment "Windows desktop session with Microsoft Excel COM registered and foreground focus allowed."
     Get-CaptureTargetStatus `
         -Id "wpf.conditional-formatting-gallery.opened" `
         -Subject "wpf" `
         -Scenario "freex-conditional-formatting-gallery" `
         -ManifestPath "tools\foreground-captures\freex-conditional-formatting-gallery\freex-conditional-formatting-gallery_manifest.json" `
-        -ExpectedOpenedState "FreeX WPF Home > Conditional Formatting opened popup/gallery"
+        -ExpectedOpenedState "FreeX WPF Home > Conditional Formatting opened popup/gallery" `
+        -RunnerCommand ".\tools\Invoke-ForegroundCapture.ps1 -Scenario freex-conditional-formatting-gallery -FreeXExe <Release FreeX.App.Host.exe>" `
+        -RequiredEnvironment "Windows desktop session with built Release WPF host and foreground focus allowed."
     Get-CaptureTargetStatus `
         -Id "avalonia.conditional-formatting-gallery.opened" `
         -Subject "avalonia" `
         -Scenario "avalonia-conditional-formatting-gallery" `
         -ManifestPath "tools\foreground-captures\avalonia-conditional-formatting-gallery\avalonia-conditional-formatting-gallery_manifest.json" `
         -ExpectedOpenedState "FreeX Avalonia Home > Conditional Formatting opened popup/gallery" `
+        -RunnerCommand ".\tools\Invoke-ForegroundCapture.ps1 -Scenario avalonia-conditional-formatting-gallery -AvaloniaExe <Release FreeX.exe>" `
+        -RequiredEnvironment "Windows desktop session with built Release Avalonia app and foreground focus allowed." `
         -FallbackEvidencePath "docs\parity\dialog-visual-assets\avalonia-capture\dialog.ConditionalFormatNewRule.png" `
         -FallbackEvidenceNote "Existing Avalonia dialog route evidence is retained for dialog parity, but it is not opened popup/gallery evidence."
 )
@@ -249,6 +261,8 @@ $md = New-Object System.Text.StringBuilder
 [void]$md.AppendLine()
 [void]$md.AppendLine("This report retains real opened-state capture evidence for the conditional-format popup/gallery lane. A target only counts as retained when its foreground manifest is complete and the referenced PNG resolves in the repo. Missing or blocked manifests stay visible as blockers; dialog-route fallback evidence is listed separately and is not counted as opened popup/gallery evidence.")
 [void]$md.AppendLine()
+[void]$md.AppendLine("Completion contract: run the target command in a foreground-capable Windows desktop session, commit the resulting manifest and PNG under ``tools/foreground-captures/<scenario>/``, then rerun this generator. A target is complete only when ``CaptureStatus`` is ``complete`` and ``ScreenshotPath`` resolves to a committed PNG; blocked manifests must remain blocked and must not use fallback dialog-route images as opened-state evidence.")
+[void]$md.AppendLine()
 [void]$md.AppendLine("## Summary")
 [void]$md.AppendLine()
 [void]$md.AppendLine("| Metric | Count |")
@@ -266,6 +280,15 @@ $md = New-Object System.Text.StringBuilder
 foreach ($target in $captureTargets) {
     $png = if ($target.screenshotExists) { $target.screenshotPath } else { "" }
     [void]$md.AppendLine("| $(Escape-MarkdownCell $target.id) | $(Escape-MarkdownCell $target.subject) | $(Escape-MarkdownCell $target.scenario) | $(Escape-MarkdownCell $target.retentionStatus) | $(Escape-MarkdownCell $png) | $(Escape-MarkdownCell $target.blockReason) |")
+}
+[void]$md.AppendLine()
+[void]$md.AppendLine("## Capture Commands")
+[void]$md.AppendLine()
+[void]$md.AppendLine("| Target | Command | Required environment |")
+[void]$md.AppendLine("|---|---|---|")
+foreach ($target in $captureTargets) {
+    $command = Escape-MarkdownCell $target.runnerCommand
+    [void]$md.AppendLine("| $(Escape-MarkdownCell $target.id) | ``$command`` | $(Escape-MarkdownCell $target.requiredEnvironment) |")
 }
 [void]$md.AppendLine()
 [void]$md.AppendLine("## Classifier Rows")
