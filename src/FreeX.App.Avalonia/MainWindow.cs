@@ -18966,7 +18966,7 @@ public sealed partial class MainWindow : Window
             hasFormatCellsDialogActionButtons =
                 HasLaunchSmokeButton(probe.OkButton, "FormatCellsOkButton", "OK") &&
                 HasLaunchSmokeButton(probe.CancelButton, "FormatCellsCancelButton", "Cancel");
-            hasFormatCellsDialogCompactLayout = HasLaunchSmokeCompactDialog(probe.Dialog, width: 560, height: 560, minWidth: 480, minHeight: 500);
+            hasFormatCellsDialogCompactLayout = HasLaunchSmokeCompactDialog(probe.Dialog, width: 690, height: 660, minWidth: 620, minHeight: 560);
         });
 
         var hasSortDialog = false;
