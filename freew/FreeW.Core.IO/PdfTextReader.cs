@@ -1,5 +1,6 @@
 using System.IO;
 using System.Linq;
+using System.Text;
 using FreeW.Core.Model;
 using UglyToad.PdfPig;
 using UglyToad.PdfPig.Content;
@@ -46,9 +47,7 @@ public static class PdfTextReader
         {
             foreach (var page in pdf.GetPages())
             {
-                // ContentOrderTextExtractor orders glyphs into a best-effort reading order and inserts line
-                // breaks; far better than the raw Page.Text (which is glyph-storage order) for plain prose.
-                var pageText = ContentOrderTextExtractor.GetText(page);
+                var pageText = ExtractPageText(page);
                 if (string.IsNullOrEmpty(pageText))
                     continue;
 
@@ -62,5 +61,94 @@ public static class PdfTextReader
             document.Blocks.Add(new Paragraph());
 
         return document;
+    }
+
+    private static string ExtractPageText(Page page) =>
+        TryExtractColumnAwareText(page) ?? ContentOrderTextExtractor.GetText(page);
+
+    private static string? TryExtractColumnAwareText(Page page)
+    {
+        var words = page.GetWords()
+            .Where(word => !string.IsNullOrWhiteSpace(word.Text))
+            .Select(word => new PositionedWord(
+                word.Text,
+                word.BoundingBox.Left,
+                word.BoundingBox.Right,
+                word.BoundingBox.Bottom,
+                word.BoundingBox.Top))
+            .OrderBy(word => word.Left)
+            .ToList();
+        if (words.Count < 4)
+            return null;
+
+        var pageWidth = Math.Max(1, page.Width);
+        var gaps = words
+            .Zip(words.Skip(1), (left, right) => new WordGap(left.Right, right.Left))
+            .Where(gap => gap.Width > pageWidth * 0.10)
+            .OrderByDescending(gap => gap.Width)
+            .ToList();
+        if (gaps.Count == 0)
+            return null;
+
+        var splitX = (gaps[0].LeftEdge + gaps[0].RightEdge) / 2;
+        var leftColumn = words.Where(word => word.CenterX < splitX).ToList();
+        var rightColumn = words.Where(word => word.CenterX >= splitX).ToList();
+        if (leftColumn.Count < 2 || rightColumn.Count < 2)
+            return null;
+
+        var leftRight = leftColumn.Max(word => word.Right);
+        var rightLeft = rightColumn.Min(word => word.Left);
+        if (rightLeft - leftRight < pageWidth * 0.08)
+            return null;
+
+        return string.Join("\n", ColumnLines(leftColumn).Concat(ColumnLines(rightColumn)));
+    }
+
+    private static IEnumerable<string> ColumnLines(IReadOnlyList<PositionedWord> words)
+    {
+        var ordered = words
+            .OrderByDescending(word => word.CenterY)
+            .ThenBy(word => word.Left)
+            .ToList();
+        var medianHeight = ordered
+            .Select(word => Math.Max(1, word.Height))
+            .OrderBy(height => height)
+            .ElementAt(ordered.Count / 2);
+        var lineTolerance = Math.Max(2, medianHeight * 0.75);
+        var lines = new List<List<PositionedWord>>();
+
+        foreach (var word in ordered)
+        {
+            var line = lines.FirstOrDefault(existing =>
+                Math.Abs(existing.Average(existingWord => existingWord.CenterY) - word.CenterY) <= lineTolerance);
+            if (line is null)
+                lines.Add([word]);
+            else
+                line.Add(word);
+        }
+
+        foreach (var line in lines.OrderByDescending(line => line.Average(word => word.CenterY)))
+        {
+            var builder = new StringBuilder();
+            foreach (var word in line.OrderBy(word => word.Left))
+            {
+                if (builder.Length > 0)
+                    builder.Append(' ');
+                builder.Append(word.Text);
+            }
+            yield return builder.ToString();
+        }
+    }
+
+    private readonly record struct PositionedWord(string Text, double Left, double Right, double Bottom, double Top)
+    {
+        public double CenterX => (Left + Right) / 2;
+        public double CenterY => (Bottom + Top) / 2;
+        public double Height => Top - Bottom;
+    }
+
+    private readonly record struct WordGap(double LeftEdge, double RightEdge)
+    {
+        public double Width => RightEdge - LeftEdge;
     }
 }

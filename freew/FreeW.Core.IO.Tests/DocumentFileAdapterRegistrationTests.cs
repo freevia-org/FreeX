@@ -24,7 +24,6 @@ public class DocumentFileAdapterRegistrationTests
     [InlineData(".htm", true, true, false)]
     [InlineData(".mhtml", true, true, false)]
     [InlineData(".mht", true, true, false)]
-    [InlineData(".pdf", true, false, false)]
     [InlineData(".doc", true, false, false)]
     [InlineData(".dot", true, false, true)]
     [InlineData(".txt", true, true, false)]
@@ -42,12 +41,27 @@ public class DocumentFileAdapterRegistrationTests
     }
 
     [Fact]
-    public void Catalog_DoesNotRegisterDroppedLegacyFormats()
+    public void Catalog_DoesNotRegisterDroppedLegacyOrExplicitImportFormats()
     {
         var extensions = AllFormats().Select(f => f.Extension.ToLowerInvariant()).ToList();
         extensions.Should().NotContain(".wpd");
         extensions.Should().NotContain(".wps");
         extensions.Should().NotContain(".wri");
+        extensions.Should().NotContain(".pdf", "PDF is a lossy text import command, not a normal Open format");
+    }
+
+    [Fact]
+    public void PdfImportAdapters_ExposePdfOnlyForExplicitImportCommand()
+    {
+        var format = DocumentFileAdapterCatalog.CreatePdfImportAdapters()
+            .SelectMany(a => a.Formats)
+            .Should().ContainSingle()
+            .Subject;
+
+        format.Extension.Should().Be(".pdf");
+        format.CanOpen.Should().BeTrue();
+        format.CanSave.Should().BeFalse();
+        format.OpensAsTemplate.Should().BeFalse();
     }
 
     [Fact]
@@ -55,6 +69,7 @@ public class DocumentFileAdapterRegistrationTests
     {
         var adapters = DocumentFileAdapterCatalog.CreateDefaultAdapters();
         DocumentFileFormatResolver.FindOpenAdapter(adapters, "docx", out _).Should().NotBeNull();
+        DocumentFileFormatResolver.FindOpenAdapter(adapters, ".pdf", out _).Should().BeNull();
         DocumentFileFormatResolver.FindSaveAdapter(adapters, ".txt", out _).Should().NotBeNull();
     }
 }

@@ -77,11 +77,24 @@ public sealed class PdfFileAdapterTests
         act.Should().NotThrow();
     }
 
-    // NOTE (documented poor-input case, no assertion): multi-column PDFs extract poorly. PdfPig's
-    // reading-order detection streams glyphs left-to-right/top-to-bottom and cannot reliably tell that two
-    // side-by-side columns are separate flows, so a two-column page typically interleaves the columns
-    // line-by-line ("col1-line1 col2-line1 col1-line2 ..."). This is an inherent limitation of text-only PDF
-    // import (no layout/column model, no OCR) and is called out in §5.8 rather than worked around here.
+    [Fact]
+    public void Load_TwoColumnPdf_ExtractsColumnsTopToBottom()
+    {
+        var pdfBytes = BuildTwoColumnPdf(
+            ["Left 1", "Left 2", "Left 3"],
+            ["Right 1", "Right 2", "Right 3"]);
+
+        var adapter = new PdfFileAdapter();
+        using var stream = new MemoryStream(pdfBytes);
+        var document = adapter.Load(stream);
+
+        document.Blocks
+            .OfType<Paragraph>()
+            .Select(paragraph => paragraph.PlainText)
+            .Where(text => !string.IsNullOrWhiteSpace(text))
+            .Should()
+            .Equal("Left 1", "Left 2", "Left 3", "Right 1", "Right 2", "Right 3");
+    }
 
     /// <summary>
     /// Builds a one-page PDF whose <paramref name="lines"/> are drawn top-to-bottom with a standard font, and
@@ -101,5 +114,31 @@ public sealed class PdfFileAdapterTests
         }
 
         return builder.Build();
+    }
+
+    private static byte[] BuildTwoColumnPdf(string[] leftLines, string[] rightLines)
+    {
+        var builder = new PdfDocumentBuilder();
+        var page = builder.AddPage(PageSize.A4);
+        var font = builder.AddStandard14Font(Standard14Font.Helvetica);
+
+        AddColumn(page, font, 50, leftLines);
+        AddColumn(page, font, 320, rightLines);
+
+        return builder.Build();
+    }
+
+    private static void AddColumn(
+        PdfPageBuilder page,
+        PdfDocumentBuilder.AddedFont font,
+        int x,
+        IReadOnlyList<string> lines)
+    {
+        var y = 700;
+        foreach (var line in lines)
+        {
+            page.AddText(line, 12, new PdfPoint(x, y), font);
+            y -= 30;
+        }
     }
 }

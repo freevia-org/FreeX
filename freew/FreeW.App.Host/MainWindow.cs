@@ -388,6 +388,7 @@ public sealed class MainWindow : Window
         _backstage = new BackstageView(_editor, _file, new BackstageActions(
             New: () => _file.New(),
             Open: () => _file.Open(),
+            ImportPdfText: () => _file.ImportPdfText(),
             OpenPath: path => _file.OpenPath(path),
             Save: () => _file.Save(),
             SaveAs: () => _file.SaveAs(),

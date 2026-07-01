@@ -83,6 +83,7 @@ internal sealed class BackstageView : UserControl
         yield return BackstageEntry.Pane("Info", RibbonCommandIconKind.Info, BuildInfoPane, iconName: "info");
         yield return BackstageEntry.Command("New", RibbonCommandIconKind.Insert, () => _actions.New(), iconName: "new");
         yield return BackstageEntry.Command("Open", RibbonCommandIconKind.GetData, () => _actions.Open(), iconName: "open");
+        yield return BackstageEntry.Command("Import PDF (text only)", RibbonCommandIconKind.GetData, () => _actions.ImportPdfText(), iconName: "open");
         yield return BackstageEntry.Divider();
         yield return BackstageEntry.Command("Save", RibbonCommandIconKind.Save, () => _actions.Save(), iconName: "save");
         yield return BackstageEntry.Command("Save As", RibbonCommandIconKind.Save, () => _actions.SaveAs(), iconName: "save-as");
@@ -268,6 +269,7 @@ internal sealed class BackstageView : UserControl
 internal sealed record BackstageActions(
     Action New,
     Action Open,
+    Action ImportPdfText,
     Action<string> OpenPath,
     Action Save,
     Action SaveAs,

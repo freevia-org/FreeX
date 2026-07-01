@@ -8,6 +8,10 @@ namespace FreeW.Core.IO;
 /// </summary>
 public static class DocumentFileAdapterCatalog
 {
+    /// <summary>
+    /// Standard editable/importable document formats shown by normal Open and Save flows. Lossy PDF text
+    /// import is intentionally excluded from this list and exposed through <see cref="CreatePdfImportAdapters"/>.
+    /// </summary>
     public static IReadOnlyList<IDocumentFileAdapter> CreateDefaultAdapters() =>
     [
         DocxFileAdapter.Docx(),
@@ -18,8 +22,13 @@ public static class DocumentFileAdapterCatalog
         new RtfFileAdapter(),
         new HtmlFileAdapter(),
         new MhtmlFileAdapter(),
-        new PdfFileAdapter(),
         new LegacyDocFileAdapter(),
         new PlainTextFileAdapter(),
+    ];
+
+    /// <summary>Import-only adapters that need an explicit host command instead of the normal Open dialog.</summary>
+    public static IReadOnlyList<IDocumentFileAdapter> CreatePdfImportAdapters() =>
+    [
+        new PdfFileAdapter(),
     ];
 }
