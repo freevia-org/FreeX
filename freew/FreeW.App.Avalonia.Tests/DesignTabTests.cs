@@ -42,6 +42,16 @@ public sealed class DesignTabTests
         return doc;
     }
 
+    private static void Execute(
+        RibbonCommandRegistry registry,
+        string commandId,
+        RibbonCommandContext? context = null)
+    {
+        registry.TryGet(new RibbonCommandId(commandId), out var command)
+            .Should().BeTrue($"command '{commandId}' must be registered");
+        command!.Execute(context ?? RibbonCommandContext.Empty);
+    }
+
     // ── Themes ────────────────────────────────────────────────────────────────
 
     [Fact]
@@ -126,6 +136,36 @@ public sealed class DesignTabTests
 
         view.Document.DefaultParagraph.LineSpacing.Should().Be(dbl.LineSpacing);
         view.Document.DefaultParagraph.SpaceAfterPt.Should().Be(dbl.SpaceAfterPt);
+    }
+
+    [Fact]
+    public void Style_set_commands_apply_and_reset_built_in_styles()
+    {
+        var view = new DocumentView();
+        view.LoadDocument(MakeDoc());
+        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+
+        Execute(registry, "freew.style-set", RibbonCommandContext.ForSelectedValue("Elegant"));
+        view.Document.DefaultRun.FontFamily.Should().Be("Georgia");
+        view.Document.Styles["Heading1"].Run.FontFamily.Should().Be("Cambria");
+
+        Execute(registry, "freew.reset-style-set");
+        view.Document.DefaultRun.FontFamily.Should().Be(DocumentStyleSet.Default.BodyFont);
+        view.Document.Styles["Heading1"].Run.FontFamily.Should().Be(DocumentStyleSet.Default.HeadingFont);
+    }
+
+    [Fact]
+    public void Undo_reverts_style_set_apply()
+    {
+        var view = new DocumentView();
+        view.LoadDocument(MakeDoc());
+        var before = view.Document.Styles["Heading1"].Run.FontFamily;
+
+        view.ApplyStyleSet(DocumentStyleSet.FindByName("Elegant")!);
+        view.Document.Styles["Heading1"].Run.FontFamily.Should().Be("Cambria");
+
+        view.Undo();
+        view.Document.Styles["Heading1"].Run.FontFamily.Should().Be(before);
     }
 
     [Fact]

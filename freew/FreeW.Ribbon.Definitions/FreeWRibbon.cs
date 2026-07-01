@@ -193,7 +193,10 @@ public static class FreeWRibbon
                     });
                     g.Button("freew.style-normal", "Normal", b => Icon(b, RibbonCommandIconKind.TextBox));
                     g.Button("freew.style-heading1", "Heading 1", b => Icon(b, RibbonCommandIconKind.TextBox));
+                    g.Button("freew.style-heading2", "Heading 2", b => Icon(b, RibbonCommandIconKind.TextBox));
+                    g.Button("freew.style-heading3", "Heading 3", b => Icon(b, RibbonCommandIconKind.TextBox));
                     g.Button("freew.style-title", "Title", b => Icon(b, RibbonCommandIconKind.TextBox));
+                    g.Button("freew.style-clear", "Clear Style", b => Icon(b, RibbonCommandIconKind.Clear));
                     g.Button("freew.new-style", "New Style", b => Icon(b, RibbonCommandIconKind.TextBox));
                     g.Button("freew.manage-styles", "Manage Styles", b => Icon(b, RibbonCommandIconKind.TextBox));
                 });
@@ -203,6 +206,8 @@ public static class FreeWRibbon
                 });
                 tab.Group("editing", "Editing", "E", 75, g =>
                 {
+                    g.Medium("freew.undo", "Undo", RibbonCommandIconKind.Undo);
+                    g.Medium("freew.redo", "Redo", RibbonCommandIconKind.Redo);
                     g.Medium("freew.find", "Find", RibbonCommandIconKind.Search, "F");
                     g.Medium("freew.replace", "Replace", RibbonCommandIconKind.Search, "R");
                     g.Medium("freew.select", "Select", RibbonCommandIconKind.Search, "SL");
