@@ -475,6 +475,16 @@ internal static class FreeWAvaloniaRibbonDefinition
                     // AV-STYLES: full built-in style gallery dropdown + clear-style.
                     g.Dropdown("freew.styles-gallery", "Styles", BuildStylesMenu());
                     g.Button("freew.style-clear", "Clear Style");
+                    g.Button("freew.new-style", "New Style", b => b with
+                    {
+                        PreferredLayout = RibbonCommandLayoutKind.Small,
+                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.Insert)
+                    });
+                    g.Button("freew.manage-styles", "Manage Styles", b => b with
+                    {
+                        PreferredLayout = RibbonCommandLayoutKind.Small,
+                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.Effects)
+                    });
                 });
                 tab.Group("editing", "Editing", null, 70, g =>
                 {

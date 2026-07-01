@@ -186,6 +186,8 @@ internal static class FreeWAvaloniaRibbonCommands
 
         // Clear style — revert the paragraph to the document default (Word's paragraph-level reset).
         r.Register("freew.style-clear", new ActionRibbonCommand(editor.ClearParagraphStyle));
+        r.Register("freew.new-style", new ActionRibbonCommand(callbacks.OpenNewStyleDialog ?? (() => { })));
+        r.Register("freew.manage-styles", new ActionRibbonCommand(callbacks.OpenManageStylesDialog ?? (() => { })));
 
         // ── Editing ──────────────────────────────────────────────────────────
         r.Register("freew.undo",              new ActionRibbonCommand(editor.Undo));

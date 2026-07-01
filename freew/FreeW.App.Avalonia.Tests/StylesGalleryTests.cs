@@ -120,6 +120,8 @@ public sealed class StylesGalleryTests
         }
         registry.TryGet(new RibbonCommandId("freew.style-clear"), out _).Should().BeTrue();
         registry.TryGet(new RibbonCommandId("freew.styles-gallery"), out _).Should().BeTrue();
+        registry.TryGet(new RibbonCommandId("freew.new-style"), out _).Should().BeTrue();
+        registry.TryGet(new RibbonCommandId("freew.manage-styles"), out _).Should().BeTrue();
     }
 
     [Fact]
@@ -134,6 +136,118 @@ public sealed class StylesGalleryTests
         stylesGroup.Controls.OfType<RibbonButton>()
             .Any(b => b.CommandId.Value == "freew.style-clear")
             .Should().BeTrue("Styles group must contain the Clear Style button");
+        stylesGroup.Controls.OfType<RibbonButton>()
+            .Any(b => b.CommandId.Value == "freew.new-style")
+            .Should().BeTrue("Styles group must contain the New Style button");
+        stylesGroup.Controls.OfType<RibbonButton>()
+            .Any(b => b.CommandId.Value == "freew.manage-styles")
+            .Should().BeTrue("Styles group must contain the Manage Styles button");
+    }
+
+    [Fact]
+    public async Task CreateParagraphStyleAndApply_AddsCustomStyle_AndSetsParagraphStyleId()
+    {
+        string? createdId = null;
+        string? styleId = null;
+        bool? bold = null;
+        var ran = await OnUiThread(() =>
+        {
+            var (view, doc) = MakeBodyDoc("Custom body");
+            view.MoveCaretToBlock(0, 0);
+            var created = view.CreateParagraphStyleAndApply(
+                "Callout",
+                basedOnId: "Normal",
+                RunFormatting.Default with { Bold = true },
+                ParagraphFormatting.Default,
+                nextStyleId: "Normal");
+            createdId = created?.Id;
+            styleId = ((Paragraph)doc.Blocks[0]).StyleId;
+            bold = view.GetCaretFormatting().Run.Bold;
+        });
+        if (!ran) return;
+
+        createdId.Should().Be("Callout");
+        styleId.Should().Be("Callout");
+        bold.Should().BeTrue("the newly created style resolves through paragraph formatting");
+    }
+
+    [Fact]
+    public async Task ModifyParagraphStyle_UpdatesResolvedFormatting_ForStyledParagraph()
+    {
+        bool? bold = null;
+        bool? italic = null;
+        var ran = await OnUiThread(() =>
+        {
+            var (view, doc) = MakeBodyDoc("Styled body");
+            view.MoveCaretToBlock(0, 0);
+            var created = view.CreateParagraphStyleAndApply(
+                "Callout",
+                basedOnId: "Normal",
+                RunFormatting.Default with { Bold = true },
+                ParagraphFormatting.Default,
+                nextStyleId: null);
+            view.ModifyParagraphStyle(
+                created!.Id,
+                RunFormatting.Default with { Italic = true },
+                ParagraphFormatting.Default,
+                basedOnId: "Normal",
+                nextStyleId: null);
+            var formatting = view.GetCaretFormatting().Run;
+            bold = formatting.Bold;
+            italic = formatting.Italic;
+            ((Paragraph)doc.Blocks[0]).StyleId.Should().Be(created.Id);
+        });
+        if (!ran) return;
+
+        bold.Should().BeFalse();
+        italic.Should().BeTrue("modifying the catalog should redraw text linked to that style");
+    }
+
+    [Fact]
+    public async Task DeleteParagraphStyle_RemovesCustomStyle_ButRefusesBuiltInStyle()
+    {
+        bool deletedCustom = false;
+        bool deletedBuiltIn = true;
+        bool containsCustom = true;
+        bool containsNormal = false;
+        var ran = await OnUiThread(() =>
+        {
+            var (view, doc) = MakeBodyDoc("Styled body");
+            var created = view.CreateParagraphStyleAndApply(
+                "Temporary",
+                basedOnId: null,
+                RunFormatting.Default,
+                ParagraphFormatting.Default,
+                nextStyleId: null);
+            deletedCustom = view.DeleteParagraphStyle(created!.Id);
+            deletedBuiltIn = view.DeleteParagraphStyle("Normal");
+            containsCustom = doc.Styles.ContainsKey(created.Id);
+            containsNormal = doc.Styles.ContainsKey("Normal");
+        });
+        if (!ran) return;
+
+        deletedCustom.Should().BeTrue();
+        deletedBuiltIn.Should().BeFalse();
+        containsCustom.Should().BeFalse();
+        containsNormal.Should().BeTrue();
+    }
+
+    [Fact]
+    public void ManageStylesRows_SortBuiltInsBeforeCustomStyles_WhenRequested()
+    {
+        var doc = TextDocument.CreateEmpty();
+        var custom = StyleManager.CreateStyle(
+            doc,
+            "Zed Custom",
+            basedOnId: null,
+            RunFormatting.Default,
+            ParagraphFormatting.Default);
+
+        var rows = ManageStylesDialog.BuildRows(doc, ManageStylesSortOrder.ByType);
+
+        rows.Should().Contain(row => row.Id == custom.Id && !row.IsBuiltIn);
+        rows.TakeWhile(row => row.IsBuiltIn).Should().NotBeEmpty();
+        rows.SkipWhile(row => row.IsBuiltIn).Should().OnlyContain(row => !row.IsBuiltIn);
     }
 
     [Fact]

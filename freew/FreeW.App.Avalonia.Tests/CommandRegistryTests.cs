@@ -137,6 +137,8 @@ public sealed class CommandRegistryTests
             "freew.paste-plain",
             "freew.paste-merge",
             "freew.paste-special",
+            "freew.new-style",
+            "freew.manage-styles",
             "freew.style-set",
             "freew.reset-style-set",
         };
