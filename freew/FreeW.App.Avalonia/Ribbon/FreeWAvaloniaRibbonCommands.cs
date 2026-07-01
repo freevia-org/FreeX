@@ -1126,6 +1126,8 @@ internal static class FreeWAvaloniaRibbonCommands
     /// </summary>
     private static void RegisterMailingsCommands(RibbonCommandRegistry r, MailMergeEngine engine)
     {
+        r.Register("freew.merge-envelopes", new ActionRibbonCommand(engine.ApplyDefaultEnvelope));
+        r.Register("freew.merge-labels", new ActionRibbonCommand(engine.ApplyDefaultLabels));
         RegisterMailingsAlias(r, "freew.merge-data", new ActionRibbonCommand(engine.SelectRecipients),
             "freew.select-recipients");
         r.Register("freew.merge-edit-recipients", new ActionRibbonCommand(engine.SelectRecipients));
@@ -1134,12 +1136,16 @@ internal static class FreeWAvaloniaRibbonCommands
             "freew.address-block");
         RegisterMailingsAlias(r, "freew.merge-greeting-line", new ActionRibbonCommand(engine.InsertGreetingLine),
             "freew.greeting-line");
+        r.Register("freew.merge-match-fields", new ActionRibbonCommand(engine.MatchFields));
+        r.Register("freew.merge-filter-sort", new ActionRibbonCommand(engine.FilterSortRecipients));
         RegisterMailingsAlias(r, "freew.merge-preview", new ActionRibbonCommand(engine.TogglePreview),
             "freew.preview-results");
+        r.Register("freew.merge-preview-first", new ActionRibbonCommand(engine.FirstRecord));
         RegisterMailingsAlias(r, "freew.merge-preview-next", new ActionRibbonCommand(engine.NextRecord),
             "freew.next-record");
         RegisterMailingsAlias(r, "freew.merge-preview-previous", new ActionRibbonCommand(engine.PreviousRecord),
             "freew.prev-record");
+        r.Register("freew.merge-preview-last", new ActionRibbonCommand(engine.LastRecord));
         RegisterMailingsAlias(r, "freew.merge-finish", new ActionRibbonCommand(() => engine.FinishMerge()),
             "freew.finish-merge");
     }

@@ -698,21 +698,31 @@ internal static class FreeWAvaloniaRibbonDefinition
             {
                 // AV-MAIL: Mailings-tab — the in-scope mail-merge subset over the portable MailMerge engine.
                 // Mail-SEND (e-mail merge) is OUT OF SCOPE and intentionally not surfaced.
+                tab.Group("create", "Create", null, 110, g =>
+                {
+                    g.Button("freew.merge-envelopes", "Envelopes");
+                    g.Button("freew.merge-labels", "Labels");
+                });
                 tab.Group("start-merge", "Start Mail Merge", null, 100, g =>
                 {
                     g.Button("freew.merge-data", "Select Recipients");
+                    g.Button("freew.merge-edit-recipients", "Edit Recipient List");
+                    g.Button("freew.merge-filter-sort", "Filter & Sort Recipients");
                 });
                 tab.Group("write-insert", "Write & Insert Fields", null, 90, g =>
                 {
                     g.Button("freew.merge-address-block", "Address Block");
                     g.Button("freew.merge-greeting-line", "Greeting Line");
                     g.Button("freew.merge-field",   "Insert Merge Field");
+                    g.Button("freew.merge-match-fields", "Match Fields");
                 });
                 tab.Group("preview-results", "Preview Results", null, 80, g =>
                 {
                     g.Button("freew.merge-preview",          "Preview Results");
+                    g.Button("freew.merge-preview-first",    "First Record");
                     g.Button("freew.merge-preview-previous", "◀ Previous");
                     g.Button("freew.merge-preview-next",     "Next ▶");
+                    g.Button("freew.merge-preview-last",     "Last Record");
                 });
                 tab.Group("finish", "Finish", null, 70, g =>
                 {
