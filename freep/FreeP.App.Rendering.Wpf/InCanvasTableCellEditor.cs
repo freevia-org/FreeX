@@ -78,34 +78,28 @@ public sealed class InCanvasTableCellEditor
         var slide = _editor.CurrentSlide;
         if (slide is null) return;
 
-        var shape = slide.Shapes.FirstOrDefault(s => s.Id == shapeId);
-        if (shape?.Table is null) return;
-        var table = shape.Table;
-
-        if (row < 0 || row >= table.Rows.Count) return;
-        if (col < 0 || col >= table.ColumnWidthsEmu.Count) return;
-        var cell = table.Rows[row].Cells[col];
-        if (cell.HMerge || cell.VMerge) return; // can't edit a continuation cell directly
-
-        _editShapeId = shapeId;
-        _editRow     = row;
-        _editCol     = col;
-        _cellEditActive = true;
-
-        // Get cell rect in slide DIP → screen coords.
-        var cellRect = TableCellHitTester.GetCellRect(shape, row, col);
-        if (cellRect is null) { _cellEditActive = false; return; }
-
-        var xf = _canvas.CurrentTransform;
-        var screenRect = SlideCanvasGeometryPlanner.DipBoundsToScreen(cellRect.Value, xf.Core);
-        var placement = SlideCanvasGeometryPlanner.PlanEditorPlacement(screenRect, 30, 18);
-
-        _cellEditPlan = InCanvasTableCellTextEditPlanner.BeginRichText(
+        var editStart = TableCellEditPlanner.BeginEdit(
             _editor.CurrentSlideIndex,
+            slide,
             shapeId,
             row,
             col,
-            cell.TextBody);
+            _canvas.CurrentTransform.Core,
+            minimumWidth: 30,
+            minimumHeight: 18);
+        if (!editStart.IsReady || editStart.Cell is null || editStart.Placement is null)
+            return;
+
+        var cell = editStart.Cell;
+
+        _editShapeId = shapeId;
+        _editRow     = editStart.Row;
+        _editCol     = editStart.Col;
+        _cellEditActive = true;
+
+        // Use the shared start plan for placement and commit routing.
+        _cellEditPlan = editStart.EditPlanner;
+        var placement = editStart.Placement.Value;
 
         // Determine a fallback font size from the cell's first run.
         double fallbackPt = cell.TextBody?.Paragraphs
@@ -142,7 +136,7 @@ public sealed class InCanvasTableCellEditor
         _cellTextBox.SelectAll();
 
         // Keep active cell in sync.
-        _editor.SetActiveTableCell(row, col);
+        _editor.SetActiveTableCell(editStart.Row, editStart.Col);
     }
 
     /// <summary>Commits the current cell edit (if active) and hides the text box.</summary>
@@ -170,8 +164,7 @@ public sealed class InCanvasTableCellEditor
 
         // Rebuild the full rich TextBody from the FlowDocument.
         var newBody = TextBodyFlowDocumentConverter.FromFlowDocument(doc, cell.TextBody);
-        var decision = editPlan?.CommitRichText(newBody)
-            ?? new InCanvasTextEditDecision(InCanvasTextEditOutcome.Unchanged, null);
+        var decision = TableCellEditPlanner.CommitRichText(editPlan, newBody);
 
         if (decision.Command is not null)
             _editor.Bus.Execute(decision.Command);
@@ -184,7 +177,7 @@ public sealed class InCanvasTableCellEditor
         _overlay.Children.Remove(_cellTextBox);
         _cellTextBox = null;
         _cellEditActive = false;
-        _ = _cellEditPlan?.Cancel();
+        _ = TableCellEditPlanner.Cancel(_cellEditPlan);
         _cellEditPlan = null;
     }
 
@@ -387,16 +380,17 @@ public sealed class InCanvasTableCellEditor
 
         var slide = _editor.CurrentSlide;
         if (slide is null || _editor.Presentation is null) return;
-        if (_editor.SelectedShapeIds.Count == 0) return;
+        var cellState = TableCellEditPlanner.PlanSelectedCell(
+            slide,
+            _editor.SelectedShapeIds,
+            _editor.ActiveTableCell);
+        if (!cellState.CanEditText || cellState.ShapeId is null || cellState.Row is null || cellState.Col is null)
+            return;
 
-        var ac = _editor.ActiveTableCell;
-        if (ac is null) return;
-
-        var selId = _editor.SelectedShapeIds[0];
-        var shape = slide.Shapes.FirstOrDefault(s => s.Id == selId);
+        var shape = slide.Shapes.FirstOrDefault(s => s.Id == cellState.ShapeId.Value);
         if (shape?.Kind != SlideShapeKind.Table) return;
 
-        var cellRect = TableCellHitTester.GetCellRect(shape, ac.Value.Row, ac.Value.Col);
+        var cellRect = TableCellHitTester.GetCellRect(shape, cellState.Row.Value, cellState.Col.Value);
         if (cellRect is null) return;
 
         var xf = _canvas.CurrentTransform;

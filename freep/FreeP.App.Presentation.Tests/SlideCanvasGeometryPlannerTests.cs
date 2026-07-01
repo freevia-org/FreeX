@@ -121,11 +121,22 @@ public sealed class SlideCanvasGeometryPlannerTests
             "FreeP.App.Rendering.Wpf",
             "InCanvasTableCellEditor.cs");
 
-        foreach (var source in new[] { wpfText, avaloniaText, wpfTable })
+        foreach (var source in new[] { wpfText, avaloniaText })
         {
             source.Should().Contain("SlideCanvasGeometryPlanner.PlanEditorPlacement");
             source.Should().NotContain("* xf.Scale + xf.OffsetX");
         }
+
+        wpfTable.Should().NotContain("* xf.Scale + xf.OffsetX");
+        wpfTable.Should().Contain("TableCellEditPlanner.BeginEdit");
+        wpfTable.Should().Contain("TableCellEditPlanner.PlanSelectedCell");
+
+        var avaloniaTable = ReadWorkspaceFile(
+            "freep",
+            "FreeP.App.Rendering.Avalonia",
+            "AvaloniaTableCellEditAdapter.cs");
+        avaloniaTable.Should().Contain("TableCellEditPlanner.BeginEdit");
+        avaloniaTable.Should().Contain("TableCellEditPlanner.PlanSelectedCell");
 
         var wpfAdorner = ReadWorkspaceFile(
             "freep",

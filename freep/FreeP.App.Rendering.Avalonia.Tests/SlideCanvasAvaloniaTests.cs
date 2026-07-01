@@ -61,6 +61,39 @@ public sealed class SlideCanvasAvaloniaTests
         return body;
     }
 
+    private static SlideShape MakeTableShape(uint id, string text)
+    {
+        var table = new TableShape();
+        table.ColumnWidthsEmu.Add(DrawingMlCoordinateUnits.EmuPerPixel * 100);
+        var row = new TableRow { HeightEmu = DrawingMlCoordinateUnits.EmuPerPixel * 40 };
+        row.Cells.Add(new TableCell { TextBody = MakeTextBody(text) });
+        table.Rows.Add(row);
+
+        return new SlideShape
+        {
+            Id = id,
+            Kind = SlideShapeKind.Table,
+            OffsetXEmu = 0,
+            OffsetYEmu = 0,
+            ExtentCxEmu = DrawingMlCoordinateUnits.EmuPerPixel * 100,
+            ExtentCyEmu = DrawingMlCoordinateUnits.EmuPerPixel * 40,
+            Table = table,
+        };
+    }
+
+    private static string FindRepositoryRoot()
+    {
+        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
+             directory is not null;
+             directory = directory.Parent)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "FreeP.slnx")))
+                return directory.FullName;
+        }
+
+        throw new DirectoryNotFoundException("Could not locate repository root from test output directory.");
+    }
+
     [Fact]
     public async Task InCanvasTextEditor_CommitPlainText_UsesSharedPlannerCommand()
     {
@@ -108,6 +141,62 @@ public sealed class SlideCanvasAvaloniaTests
 
         editor.Undo();
         shape.TextBody!.Paragraphs[0].Runs[0].Text.Should().Be("Original");
+    }
+
+    [Fact]
+    public async Task TableCellEditAdapter_UsesSharedPlannerForStateStartAndCommit()
+    {
+        EditingSession? editor = null;
+        SlideShape? shape = null;
+
+        await Run(() =>
+        {
+            var presentation = MakePresentation(pres =>
+            {
+                pres.Slides[0].Shapes.Clear();
+                shape = MakeTableShape(10, "Original");
+                pres.Slides[0].Shapes.Add(shape);
+            });
+
+            var bus = new PresentationCommandBus(presentation);
+            editor = new EditingSession(presentation, bus);
+            editor.Select(shape!.Id);
+            editor.SetActiveTableCell(0, 0);
+
+            var canvas = new SlideCanvas { Presentation = presentation, Slide = presentation.Slides[0] };
+            var state = AvaloniaTableCellEditAdapter.PlanSelectedCell(editor);
+            var startPlan = AvaloniaTableCellEditAdapter.BeginEdit(canvas, editor, shape.Id, 0, 0);
+
+            state.CanEditText.Should().BeTrue();
+            state.CanFormatText.Should().BeTrue();
+            startPlan.IsReady.Should().BeTrue();
+
+            var decision = AvaloniaTableCellEditAdapter.CommitRichText(
+                startPlan.EditPlanner,
+                MakeTextBody("Edited"));
+            decision.Command.Should().NotBeNull();
+            bus.Execute(decision.Command!);
+        });
+
+        shape!.Table!.Rows[0].Cells[0].TextBody!.Paragraphs[0].Runs[0].Text.Should().Be("Edited");
+
+        editor!.Undo();
+        shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs[0].Runs[0].Text.Should().Be("Original");
+    }
+
+    [Fact]
+    public void TableCellEditAdapter_DelegatesToSharedPlanner()
+    {
+        var root = FindRepositoryRoot();
+        var adapter = File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "FreeP.App.Rendering.Avalonia",
+            "AvaloniaTableCellEditAdapter.cs"));
+
+        adapter.Should().Contain("TableCellEditPlanner.PlanSelectedCell");
+        adapter.Should().Contain("TableCellEditPlanner.BeginEdit");
+        adapter.Should().Contain("TableCellEditPlanner.CommitRichText");
     }
 
     // ── 1. Geometry factory round-trip ────────────────────────────────────────
