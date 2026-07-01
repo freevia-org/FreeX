@@ -372,6 +372,12 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.zoom-in",           new ActionRibbonCommand(() => callbacks.ApplyZoom(null, +0.1)));
         r.Register("freew.zoom-out",          new ActionRibbonCommand(() => callbacks.ApplyZoom(null, -0.1)));
         r.Register("freew.zoom-100",          new ActionRibbonCommand(() => callbacks.ApplyZoom(1.0, 0)));
+        r.Register("freew.zoom-one-page",     new ActionRibbonCommand(callbacks.ZoomOnePage ?? (() => { })));
+        r.Register("freew.zoom-page-width",   new ActionRibbonCommand(callbacks.ZoomPageWidth ?? (() => { })));
+        r.Register("freew.zoom-multiple-pages",
+            new ToggleActionCommand(callbacks.ToggleMultiplePages ?? (() => { }), callbacks.IsMultiplePagesActive ?? (() => false)));
+        r.Register("freew.zoom-side-to-side",
+            new ToggleActionCommand(callbacks.ToggleSideToSide ?? (() => { }), callbacks.IsSideToSideActive ?? (() => false)));
         // AV-VIEW: Zoom dialog (presets + custom %) and layout gridlines / ruler toggles.
         // The three Window/Zoom-dialog callbacks are optional on RibbonHostCallbacks (default null so
         // test call sites stay terse); fall back to a safe no-op when the shell didn't supply one.
