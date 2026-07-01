@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.Json;
 using Free.Shared.Ribbon;
 using FreeW.App.Localization;
 
@@ -183,6 +184,61 @@ public sealed class FreeWRibbonDefinitionProfileTests
 
         unexpectedWpfOnly.Should().BeEmpty("every WPF-only ribbon id must have an explicit capability rule");
         unexpectedAvaloniaOnly.Should().BeEmpty("every Avalonia-only ribbon id must have an explicit capability rule");
+    }
+
+    [Fact]
+    public void Checked_in_command_inventory_matches_compiled_profiles()
+    {
+        var wpf = InventoryLocations(FreeWRibbon.Build(FreeWRibbonCapabilities.Wpf), "WPF");
+        var avalonia = InventoryLocations(FreeWRibbon.Build(FreeWRibbonCapabilities.Avalonia), "Avalonia");
+        var commandIds = wpf.Keys.Concat(avalonia.Keys)
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        var both = commandIds.Count(commandId => wpf.ContainsKey(commandId) && avalonia.ContainsKey(commandId));
+        var wpfOnly = commandIds.Count(commandId => wpf.ContainsKey(commandId) && !avalonia.ContainsKey(commandId));
+        var avaloniaOnly = commandIds.Count(commandId => !wpf.ContainsKey(commandId) && avalonia.ContainsKey(commandId));
+
+        using var document = JsonDocument.Parse(ReadRepositoryFile("docs", "parity", "freew-command-inventory.json"));
+        var root = document.RootElement;
+
+        root.GetProperty("schema").GetString().Should().Be("freew.command-inventory.v2");
+        root.GetProperty("generatedBy").GetString().Should().Be("tools/Generate-FreeWCommandInventory.ps1");
+        root.GetProperty("topologySource").GetString().Should().Contain("FreeWRibbon.Build(FreeWRibbonCapabilities.Wpf/Avalonia)");
+        root.GetProperty("sourceLiteralEvidenceNote").GetString().Should().Contain("not behavior proof");
+
+        var summary = root.GetProperty("summary");
+        summary.GetProperty("totalCommands").GetInt32().Should().Be(commandIds.Length);
+        summary.GetProperty("both").GetInt32().Should().Be(both);
+        summary.GetProperty("wpfOnly").GetInt32().Should().Be(wpfOnly);
+        summary.GetProperty("avaloniaOnly").GetInt32().Should().Be(avaloniaOnly);
+        summary.GetProperty("missingWpf").GetInt32().Should().Be(avaloniaOnly);
+        summary.GetProperty("missingAvalonia").GetInt32().Should().Be(wpfOnly);
+
+        var commands = root.GetProperty("commands").EnumerateArray().ToArray();
+        commands.Select(command => command.GetProperty("commandId").GetString()!)
+            .Should()
+            .Equal(commandIds);
+
+        foreach (var command in commands)
+        {
+            var commandId = command.GetProperty("commandId").GetString()!;
+            var wpfPresent = wpf.TryGetValue(commandId, out var wpfLocations);
+            var avaloniaPresent = avalonia.TryGetValue(commandId, out var avaloniaLocations);
+
+            command.GetProperty("wpfPresent").GetBoolean().Should().Be(wpfPresent);
+            command.GetProperty("avaloniaPresent").GetBoolean().Should().Be(avaloniaPresent);
+            command.GetProperty("profileSurface").GetString().Should().Be(ProfileSurface(wpfPresent, avaloniaPresent));
+            command.GetProperty("missingProfile").GetString().Should().Be(MissingProfile(wpfPresent, avaloniaPresent));
+            command.GetProperty("classification").GetString().Should().Be(ProfileClassification(wpfPresent, avaloniaPresent));
+
+            AssertInventoryLocations(command.GetProperty("wpfLocations"), wpfLocations ?? Array.Empty<InventoryLocation>());
+            AssertInventoryLocations(command.GetProperty("avaloniaLocations"), avaloniaLocations ?? Array.Empty<InventoryLocation>());
+        }
+
+        var markdown = ReadRepositoryFile("docs", "parity", "freew-command-inventory.md");
+        markdown.Should().Contain($"| {commandIds.Length} | {both} | {wpfOnly} | {avaloniaOnly} | {avaloniaOnly} | {wpfOnly} |");
+        markdown.Should().Contain("Source literal evidence columns show exact command-id text in source files only; they are not behavior proof and never create rows.");
     }
 
     [Fact]
@@ -962,7 +1018,164 @@ public sealed class FreeWRibbonDefinitionProfileTests
         }
     }
 
+    private static IReadOnlyDictionary<string, IReadOnlyList<InventoryLocation>> InventoryLocations(
+        RibbonDefinition definition,
+        string profile)
+    {
+        var locations = new Dictionary<string, List<InventoryLocation>>(StringComparer.Ordinal);
+        foreach (var tab in definition.Tabs)
+        {
+            foreach (var group in tab.Groups)
+            {
+                foreach (var control in group.Controls)
+                    AddInventoryControl(locations, tab, group, control, profile);
+            }
+        }
+
+        return locations.ToDictionary(
+            pair => pair.Key,
+            pair => (IReadOnlyList<InventoryLocation>)pair.Value
+                .OrderBy(location => location.TabId, StringComparer.Ordinal)
+                .ThenBy(location => location.GroupId, StringComparer.Ordinal)
+                .ThenBy(location => location.Label, StringComparer.Ordinal)
+                .ThenBy(location => location.ControlType, StringComparer.Ordinal)
+                .ThenBy(location => location.Layout, StringComparer.Ordinal)
+                .ToArray(),
+            StringComparer.Ordinal);
+    }
+
+    private static void AddInventoryControl(
+        Dictionary<string, List<InventoryLocation>> locations,
+        RibbonTab tab,
+        RibbonGroup group,
+        RibbonControl control,
+        string profile)
+    {
+        if (!string.IsNullOrEmpty(control.CommandId.Value))
+        {
+            AddInventoryLocation(locations, control.CommandId.Value, new InventoryLocation(
+                profile,
+                tab.Id,
+                tab.Header,
+                group.Id,
+                group.Header,
+                control.Label,
+                control.GetType().Name,
+                control.PreferredLayout.ToString()));
+        }
+
+        foreach (var menuLocation in InventoryMenuLocations(control, tab, group, profile))
+            AddInventoryLocation(locations, menuLocation.CommandId, menuLocation.Location);
+    }
+
+    private static IEnumerable<(string CommandId, InventoryLocation Location)> InventoryMenuLocations(
+        RibbonControl control,
+        RibbonTab tab,
+        RibbonGroup group,
+        string profile)
+    {
+        var menu = control switch
+        {
+            RibbonSplitButton splitButton => splitButton.Menu,
+            RibbonDropdown dropdown => dropdown.Menu,
+            _ => null,
+        };
+
+        if (menu is null)
+            yield break;
+
+        foreach (var item in MenuItems(menu.Items))
+        {
+            if (item.CommandId is null)
+                continue;
+
+            yield return (item.CommandId.Value.Value, new InventoryLocation(
+                profile,
+                tab.Id,
+                tab.Header,
+                group.Id,
+                group.Header,
+                item.Header,
+                "RibbonMenuItem",
+                "Menu"));
+        }
+    }
+
+    private static IEnumerable<RibbonMenuItem> MenuItems(IEnumerable<RibbonMenuItem> items)
+    {
+        foreach (var item in items)
+        {
+            yield return item;
+            foreach (var child in MenuItems(item.Children))
+                yield return child;
+        }
+    }
+
+    private static void AddInventoryLocation(
+        Dictionary<string, List<InventoryLocation>> locations,
+        string commandId,
+        InventoryLocation location)
+    {
+        if (!locations.TryGetValue(commandId, out var existing))
+        {
+            existing = [];
+            locations.Add(commandId, existing);
+        }
+
+        existing.Add(location);
+    }
+
+    private static void AssertInventoryLocations(JsonElement element, IReadOnlyList<InventoryLocation> expected)
+    {
+        element.EnumerateArray()
+            .Select(ReadInventoryLocation)
+            .Should()
+            .Equal(expected);
+    }
+
+    private static InventoryLocation ReadInventoryLocation(JsonElement element) =>
+        new(
+            element.GetProperty("profile").GetString()!,
+            element.GetProperty("tabId").GetString()!,
+            element.GetProperty("tab").GetString()!,
+            element.GetProperty("groupId").GetString()!,
+            element.GetProperty("group").GetString()!,
+            element.GetProperty("label").GetString()!,
+            element.GetProperty("controlType").GetString()!,
+            element.GetProperty("layout").GetString()!);
+
+    private static string ProfileSurface(bool wpfPresent, bool avaloniaPresent) =>
+        wpfPresent && avaloniaPresent
+            ? "both"
+            : wpfPresent
+                ? "wpf-only"
+                : "avalonia-only";
+
+    private static string MissingProfile(bool wpfPresent, bool avaloniaPresent) =>
+        wpfPresent && avaloniaPresent
+            ? "none"
+            : wpfPresent
+                ? "Avalonia"
+                : "WPF";
+
+    private static string ProfileClassification(bool wpfPresent, bool avaloniaPresent) =>
+        wpfPresent && avaloniaPresent
+            ? "shared-profile"
+            : wpfPresent
+                ? "wpf-profile-only"
+                : "avalonia-profile-only";
+
     private sealed record DivergenceRule(string Reason, Func<CommandEntry, bool> IsAllowed);
+
+    private sealed record InventoryLocation(
+        string Profile,
+        string TabId,
+        string Tab,
+        string GroupId,
+        string Group,
+        string Label,
+        string ControlType,
+        string Layout);
 
     private sealed record ClipboardRibbonSurface(
         string HomeHeader,

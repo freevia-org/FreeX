@@ -19,262 +19,433 @@ function Resolve-RepoPath {
     return Join-Path $repoRoot $Path
 }
 
-function Get-RelativePath {
-    param([Parameter(Mandatory = $true)][string]$Path)
-
-    $root = (Resolve-Path -LiteralPath $repoRoot).Path.TrimEnd('\') + '\'
-    $resolved = (Resolve-Path -LiteralPath $Path).Path
-    if ($resolved.ToLowerInvariant().StartsWith($root.ToLowerInvariant())) {
-        return $resolved.Substring($root.Length).Replace('\', '/')
-    }
-
-    return $resolved.Replace('\', '/')
-}
-
-function Get-FreeWCommandIds {
-    param([Parameter(Mandatory = $true)][string]$Path)
-
-    $content = Get-Content -LiteralPath $Path -Raw
-    $matches = [regex]::Matches($content, 'freew\.[A-Za-z0-9_.-]+')
-    $ids = New-Object System.Collections.Generic.HashSet[string] ([StringComparer]::Ordinal)
-
-    foreach ($match in $matches) {
-        $id = $match.Value.TrimEnd('.', '-')
-        if ($id.Length -eq 0) {
-            continue
-        }
-
-        if ($id.Contains('*') -or $id.Contains('<') -or $id.Contains('>')) {
-            continue
-        }
-
-        [void]$ids.Add($id)
-    }
-
-    return @($ids | Sort-Object)
-}
-
-function Get-CommandContext {
-    param(
-        [Parameter(Mandatory = $true)][string]$CommandId,
-        [Parameter(Mandatory = $true)][string[]]$Paths
-    )
-
-    $escaped = [regex]::Escape($CommandId)
-    foreach ($path in $Paths) {
-        $content = Get-Content -LiteralPath $path -Raw
-        $match = [regex]::Match($content, $escaped)
-        if (-not $match.Success) {
-            continue
-        }
-
-        $start = [Math]::Max(0, $match.Index - 240)
-        $length = [Math]::Min($content.Length - $start, $match.Length + 480)
-        return $content.Substring($start, $length)
-    }
-
-    return ""
-}
-
-function Get-KnownClassification {
-    param(
-        [Parameter(Mandatory = $true)][string]$CommandId,
-        [Parameter(Mandatory = $true)][string[]]$Paths
-    )
-
-    $context = Get-CommandContext -CommandId $CommandId -Paths $Paths
-    if ($context -match '(?i)windows-only|win32|platform-only') {
-        return "platform-only"
-    }
-
-    if ($context -match '(?i)deferred|EmptyRibbonCommand|stub button|safe no-op|placeholder') {
-        return "known-deferred"
-    }
-
-    return $null
-}
-
-function Test-SetContains {
-    param(
-        [Parameter(Mandatory = $true)]$Set,
-        [Parameter(Mandatory = $true)][string]$Value
-    )
-
-    return $Set.Contains($Value)
-}
-
-function New-StringSet {
-    param([string[]]$Values)
-
-    $set = New-Object System.Collections.Generic.HashSet[string] ([StringComparer]::Ordinal)
-    foreach ($value in $Values) {
-        [void]$set.Add($value)
-    }
-
-    return $set
-}
-
-function Normalize-GeneratedText {
+function Convert-ToXmlAttribute {
     param([Parameter(Mandatory = $true)][string]$Value)
 
-    return $Value.Replace("`r`n", "`n")
+    return [System.Security.SecurityElement]::Escape($Value)
 }
 
-$wpfDefinitionPath = Resolve-RepoPath "freew\FreeW.Ribbon.Definitions\FreeWRibbon.cs"
-$avaloniaDefinitionPath = Resolve-RepoPath "freew\FreeW.Ribbon.Definitions\FreeWAvaloniaRibbonDefinition.cs"
-$wpfRegistryPath = Resolve-RepoPath "freew\FreeW.App.Host\Ribbon\FreeWRibbonCommands.cs"
-$avaloniaRegistryPath = Resolve-RepoPath "freew\FreeW.App.Avalonia\Ribbon\FreeWAvaloniaRibbonCommands.cs"
+function Test-FileContentMatches {
+    param(
+        [Parameter(Mandatory = $true)][string]$ExpectedPath,
+        [Parameter(Mandatory = $true)][string]$ActualPath,
+        [Parameter(Mandatory = $true)][string]$Label
+    )
 
-$wpfDefinitionIds = New-StringSet ([string[]](Get-FreeWCommandIds $wpfDefinitionPath))
-$avaloniaDefinitionIds = New-StringSet ([string[]](Get-FreeWCommandIds $avaloniaDefinitionPath))
-$wpfRegistryIds = New-StringSet ([string[]](Get-FreeWCommandIds $wpfRegistryPath))
-$avaloniaRegistryIds = New-StringSet ([string[]](Get-FreeWCommandIds $avaloniaRegistryPath))
-
-$allIds = New-Object System.Collections.Generic.HashSet[string] ([StringComparer]::Ordinal)
-foreach ($set in @($wpfDefinitionIds, $avaloniaDefinitionIds, $wpfRegistryIds, $avaloniaRegistryIds)) {
-    foreach ($id in $set) {
-        [void]$allIds.Add($id)
-    }
-}
-
-$metadataPaths = @($wpfDefinitionPath, $avaloniaDefinitionPath, $wpfRegistryPath, $avaloniaRegistryPath)
-$rows = New-Object System.Collections.Generic.List[object]
-
-foreach ($id in ($allIds | Sort-Object)) {
-    $wpfDefined = Test-SetContains $wpfDefinitionIds $id
-    $avaloniaDefined = Test-SetContains $avaloniaDefinitionIds $id
-    $wpfRegistered = Test-SetContains $wpfRegistryIds $id
-    $avaloniaRegistered = Test-SetContains $avaloniaRegistryIds $id
-    $known = Get-KnownClassification -CommandId $id -Paths $metadataPaths
-
-    $status = if ($wpfRegistered -and $avaloniaRegistered) {
-        "both"
-    } elseif ($known -eq "platform-only") {
-        "platform-only"
-    } elseif ($known -eq "known-deferred") {
-        "known-deferred"
-    } elseif ($wpfRegistered -and -not $avaloniaRegistered) {
-        "wpf-only"
-    } elseif (-not $wpfRegistered -and $avaloniaRegistered) {
-        "avalonia-only"
-    } else {
-        "definition-only"
+    if (-not (Test-Path -LiteralPath $ActualPath -PathType Leaf)) {
+        throw "$Label is missing. Run tools\Generate-FreeWCommandInventory.ps1 to create it."
     }
 
-    $note = switch ($status) {
-        "both" { "Registered by both FreeW shells." }
-        "wpf-only" { "Registered by the WPF host registry only." }
-        "avalonia-only" { "Registered by the Avalonia host registry only." }
-        "known-deferred" { "Source metadata marks this command as deferred, placeholder, or safe no-op." }
-        "platform-only" { "Source metadata marks this command as platform-specific." }
-        default { "Declared or mentioned in a FreeW ribbon source, but not registered by either host registry." }
+    $expected = Get-Content -LiteralPath $ExpectedPath -Raw
+    $actual = Get-Content -LiteralPath $ActualPath -Raw
+    if ($expected -cne $actual) {
+        throw "$Label is out of date. Run tools\Generate-FreeWCommandInventory.ps1 to refresh it."
     }
-
-    $rows.Add([pscustomobject]@{
-        commandId = $id
-        status = $status
-        wpf = [pscustomobject]@{
-            defined = $wpfDefined
-            registered = $wpfRegistered
-        }
-        avalonia = [pscustomobject]@{
-            defined = $avaloniaDefined
-            registered = $avaloniaRegistered
-        }
-        note = $note
-    })
 }
-
-function Count-Status {
-    param([string]$Status)
-    return @($rows | Where-Object { $_.status -eq $Status }).Count
-}
-
-$sourceFiles = @(
-    (Get-RelativePath $wpfDefinitionPath),
-    (Get-RelativePath $avaloniaDefinitionPath),
-    (Get-RelativePath $wpfRegistryPath),
-    (Get-RelativePath $avaloniaRegistryPath)
-)
-
-$summary = [pscustomobject]@{
-    totalCommands = $rows.Count
-    both = (Count-Status "both")
-    wpfOnly = (Count-Status "wpf-only")
-    avaloniaOnly = (Count-Status "avalonia-only")
-    knownDeferred = (Count-Status "known-deferred")
-    platformOnly = (Count-Status "platform-only")
-    definitionOnly = (Count-Status "definition-only")
-}
-$rowArray = $rows.ToArray()
-
-$artifact = [pscustomobject]@{
-    schema = "freew.command-inventory.v1"
-    generatedBy = "tools/Generate-FreeWCommandInventory.ps1"
-    sourceFiles = $sourceFiles
-    summary = $summary
-    commands = $rowArray
-}
-
-$json = ($artifact | ConvertTo-Json -Depth 8) + "`n"
-
-$mdLines = New-Object System.Collections.Generic.List[string]
-$mdLines.Add("# FreeW command inventory (WPF vs Avalonia)")
-$mdLines.Add("")
-$mdLines.Add('Generated by `tools/Generate-FreeWCommandInventory.ps1` from FreeW ribbon definitions and command registry sources. Do not edit by hand.')
-$mdLines.Add("")
-$mdLines.Add('This inventory compares command IDs declared or referenced by the FreeW WPF ribbon, the Avalonia ribbon, the WPF command registry, and the Avalonia command registry. `both`, `wpf-only`, and `avalonia-only` are registry classifications. `known-deferred` and `platform-only` are used only when nearby source metadata supports that classification.')
-$mdLines.Add("")
-$mdLines.Add("## Summary")
-$mdLines.Add("")
-$mdLines.Add("| Status | Count |")
-$mdLines.Add("|---|---:|")
-$mdLines.Add("| Both | $($artifact.summary.both) |")
-$mdLines.Add("| WPF-only | $($artifact.summary.wpfOnly) |")
-$mdLines.Add("| Avalonia-only | $($artifact.summary.avaloniaOnly) |")
-$mdLines.Add("| Known/deferred | $($artifact.summary.knownDeferred) |")
-$mdLines.Add("| Platform-only | $($artifact.summary.platformOnly) |")
-$mdLines.Add("| Definition-only | $($artifact.summary.definitionOnly) |")
-$mdLines.Add("| Total | $($artifact.summary.totalCommands) |")
-$mdLines.Add("")
-$mdLines.Add("## Matrix")
-$mdLines.Add("")
-$mdLines.Add("| Command ID | Status | WPF definition | WPF registry | Avalonia definition | Avalonia registry | Notes |")
-$mdLines.Add("|---|---|:---:|:---:|:---:|:---:|---|")
-foreach ($row in $rows) {
-    $wpfDef = if ($row.wpf.defined) { "yes" } else { "" }
-    $wpfReg = if ($row.wpf.registered) { "yes" } else { "" }
-    $avDef = if ($row.avalonia.defined) { "yes" } else { "" }
-    $avReg = if ($row.avalonia.registered) { "yes" } else { "" }
-    $command = "``$($row.commandId)``"
-    $mdLines.Add("| $command | $($row.status) | $wpfDef | $wpfReg | $avDef | $avReg | $($row.note) |")
-}
-$markdown = ($mdLines -join "`n") + "`n"
 
 $resolvedJsonPath = Resolve-RepoPath $JsonPath
 $resolvedMarkdownPath = Resolve-RepoPath $MarkdownPath
+$tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("freex-freew-command-inventory-" + [System.Guid]::NewGuid().ToString("N"))
+$tempJsonPath = Join-Path $tempRoot "freew-command-inventory.json"
+$tempMarkdownPath = Join-Path $tempRoot "freew-command-inventory.md"
 
-if ($Check) {
-    $existingJson = if (Test-Path -LiteralPath $resolvedJsonPath) { Get-Content -LiteralPath $resolvedJsonPath -Raw } else { "" }
-    $existingMarkdown = if (Test-Path -LiteralPath $resolvedMarkdownPath) { Get-Content -LiteralPath $resolvedMarkdownPath -Raw } else { "" }
+New-Item -ItemType Directory -Path $tempRoot | Out-Null
 
-    if ((Normalize-GeneratedText $existingJson) -cne (Normalize-GeneratedText $json)) {
-        throw "FreeW command inventory JSON is out of date. Run tools\Generate-FreeWCommandInventory.ps1 to refresh it."
-    }
+try {
+    $definitionsProject = Convert-ToXmlAttribute (Resolve-RepoPath "freew\FreeW.Ribbon.Definitions\FreeW.Ribbon.Definitions.csproj")
+    $projectPath = Join-Path $tempRoot "FreeW.CommandInventory.Generator.csproj"
+    $programPath = Join-Path $tempRoot "Program.cs"
 
-    if ((Normalize-GeneratedText $existingMarkdown) -cne (Normalize-GeneratedText $markdown)) {
-        throw "FreeW command inventory Markdown is out of date. Run tools\Generate-FreeWCommandInventory.ps1 to refresh it."
-    }
+    [IO.File]::WriteAllText($projectPath, @"
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="$definitionsProject" />
+  </ItemGroup>
+</Project>
+"@)
 
-    Write-Host "FreeW command inventory docs are up to date."
-    return
+    [IO.File]::WriteAllText($programPath, @'
+using System.Text;
+using System.Text.Encodings.Web;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
+using Free.Shared.Ribbon;
+using FreeW.Ribbon.Definitions;
+
+if (args.Length != 3)
+{
+    throw new ArgumentException("Expected repository root, JSON output path, and Markdown output path.");
 }
 
-$jsonDirectory = Split-Path -Parent $resolvedJsonPath
-$markdownDirectory = Split-Path -Parent $resolvedMarkdownPath
-New-Item -ItemType Directory -Path $jsonDirectory -Force | Out-Null
-New-Item -ItemType Directory -Path $markdownDirectory -Force | Out-Null
-[IO.File]::WriteAllText($resolvedJsonPath, $json)
-[IO.File]::WriteAllText($resolvedMarkdownPath, $markdown)
+var inventory = FreeWCommandInventory.Build(args[0]);
+var options = new JsonSerializerOptions
+{
+    WriteIndented = true,
+    Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+    PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+    DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+};
 
-Write-Host "Wrote $JsonPath and $MarkdownPath."
+File.WriteAllText(args[1], JsonSerializer.Serialize(inventory, options) + Environment.NewLine, Encoding.UTF8);
+File.WriteAllText(args[2], FreeWCommandInventoryMarkdown.Build(inventory), Encoding.UTF8);
+
+internal static class FreeWCommandInventory
+{
+    private const string WpfProfile = "WPF";
+    private const string AvaloniaProfile = "Avalonia";
+
+    private static readonly SourceLiteralFile[] SourceFiles =
+    [
+        new("wpfDefinitionSource", "WPF definition source", "freew/FreeW.Ribbon.Definitions/FreeWRibbon.cs"),
+        new("avaloniaDefinitionSource", "Avalonia definition source", "freew/FreeW.Ribbon.Definitions/FreeWAvaloniaRibbonDefinition.cs"),
+        new("wpfRegistrySource", "WPF registry source", "freew/FreeW.App.Host/Ribbon/FreeWRibbonCommands.cs"),
+        new("avaloniaRegistrySource", "Avalonia registry source", "freew/FreeW.App.Avalonia/Ribbon/FreeWAvaloniaRibbonCommands.cs"),
+    ];
+
+    public static InventoryDocument Build(string repoRoot)
+    {
+        var wpf = Collect(FreeWRibbon.Build(FreeWRibbonCapabilities.Wpf), WpfProfile);
+        var avalonia = Collect(FreeWRibbon.Build(FreeWRibbonCapabilities.Avalonia), AvaloniaProfile);
+        var commandIds = wpf.Keys.Concat(avalonia.Keys)
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        var sourceTexts = SourceFiles.ToDictionary(
+            file => file.Id,
+            file => ReadRepositoryFile(repoRoot, file.RelativePath),
+            StringComparer.Ordinal);
+
+        var commands = commandIds.Select(commandId =>
+        {
+            wpf.TryGetValue(commandId, out var wpfLocations);
+            avalonia.TryGetValue(commandId, out var avaloniaLocations);
+            var wpfPresent = wpfLocations is { Count: > 0 };
+            var avaloniaPresent = avaloniaLocations is { Count: > 0 };
+            var sourceLiteralEvidence = new SourceLiteralEvidence(
+                WpfDefinitionSource: ContainsCommandLiteral(sourceTexts["wpfDefinitionSource"], commandId),
+                AvaloniaDefinitionSource: ContainsCommandLiteral(sourceTexts["avaloniaDefinitionSource"], commandId),
+                WpfRegistrySource: ContainsCommandLiteral(sourceTexts["wpfRegistrySource"], commandId),
+                AvaloniaRegistrySource: ContainsCommandLiteral(sourceTexts["avaloniaRegistrySource"], commandId));
+            var classification = Classify(wpfPresent, avaloniaPresent);
+            return new CommandEntry(
+                CommandId: commandId,
+                Label: (wpfLocations ?? avaloniaLocations ?? throw new InvalidOperationException()).First().Label,
+                WpfPresent: wpfPresent,
+                AvaloniaPresent: avaloniaPresent,
+                ProfileSurface: Surface(wpfPresent, avaloniaPresent),
+                MissingProfile: MissingProfile(wpfPresent, avaloniaPresent),
+                Classification: classification.Name,
+                Notes: classification.Notes,
+                WpfLocations: wpfLocations ?? Array.Empty<CommandLocation>(),
+                AvaloniaLocations: avaloniaLocations ?? Array.Empty<CommandLocation>(),
+                SourceLiteralEvidence: sourceLiteralEvidence);
+        }).ToArray();
+
+        return new InventoryDocument(
+            Schema: "freew.command-inventory.v2",
+            SchemaVersion: 2,
+            GeneratedBy: "tools/Generate-FreeWCommandInventory.ps1",
+            TopologySource: "freew/FreeW.Ribbon.Definitions FreeWRibbon.Build(FreeWRibbonCapabilities.Wpf/Avalonia)",
+            SourceLiteralEvidenceNote: "Source literal evidence records exact command-id text in source files only; it is not behavior proof and never creates inventory rows.",
+            SourceLiteralFiles: SourceFiles.Select(file => new SourceLiteralFileEntry(file.Id, file.Label, file.RelativePath)).ToArray(),
+            Summary: new InventorySummary(
+                TotalCommands: commands.Length,
+                Both: commands.Count(command => command.ProfileSurface == "both"),
+                WpfOnly: commands.Count(command => command.ProfileSurface == "wpf-only"),
+                AvaloniaOnly: commands.Count(command => command.ProfileSurface == "avalonia-only"),
+                MissingWpf: commands.Count(command => command.MissingProfile == WpfProfile),
+                MissingAvalonia: commands.Count(command => command.MissingProfile == AvaloniaProfile)),
+            Commands: commands);
+    }
+
+    private static IReadOnlyDictionary<string, IReadOnlyList<CommandLocation>> Collect(RibbonDefinition definition, string profile)
+    {
+        var locations = new Dictionary<string, List<CommandLocation>>(StringComparer.Ordinal);
+        foreach (var tab in definition.Tabs)
+        {
+            foreach (var group in tab.Groups)
+            {
+                foreach (var control in group.Controls)
+                    AddControl(locations, tab, group, control, profile);
+            }
+        }
+
+        return locations.ToDictionary(
+            pair => pair.Key,
+            pair => (IReadOnlyList<CommandLocation>)pair.Value
+                .OrderBy(location => location.TabId, StringComparer.Ordinal)
+                .ThenBy(location => location.GroupId, StringComparer.Ordinal)
+                .ThenBy(location => location.Label, StringComparer.Ordinal)
+                .ThenBy(location => location.ControlType, StringComparer.Ordinal)
+                .ThenBy(location => location.Layout, StringComparer.Ordinal)
+                .ToArray(),
+            StringComparer.Ordinal);
+    }
+
+    private static void AddControl(
+        Dictionary<string, List<CommandLocation>> locations,
+        RibbonTab tab,
+        RibbonGroup group,
+        RibbonControl control,
+        string profile)
+    {
+        if (!string.IsNullOrEmpty(control.CommandId.Value))
+        {
+            AddLocation(locations, control.CommandId.Value, new CommandLocation(
+                Profile: profile,
+                TabId: tab.Id,
+                Tab: tab.Header,
+                GroupId: group.Id,
+                Group: group.Header,
+                Label: control.Label,
+                ControlType: control.GetType().Name,
+                Layout: control.PreferredLayout.ToString()));
+        }
+
+        foreach (var menuLocation in MenuLocations(control, tab, group, profile))
+            AddLocation(locations, menuLocation.CommandId, menuLocation.Location);
+    }
+
+    private static IEnumerable<(string CommandId, CommandLocation Location)> MenuLocations(
+        RibbonControl control,
+        RibbonTab tab,
+        RibbonGroup group,
+        string profile)
+    {
+        var menu = control switch
+        {
+            RibbonSplitButton splitButton => splitButton.Menu,
+            RibbonDropdown dropdown => dropdown.Menu,
+            _ => null,
+        };
+
+        if (menu is null)
+            yield break;
+
+        foreach (var item in MenuItems(menu.Items))
+        {
+            if (item.CommandId is null)
+                continue;
+
+            yield return (item.CommandId.Value.Value, new CommandLocation(
+                Profile: profile,
+                TabId: tab.Id,
+                Tab: tab.Header,
+                GroupId: group.Id,
+                Group: group.Header,
+                Label: item.Header,
+                ControlType: "RibbonMenuItem",
+                Layout: "Menu"));
+        }
+    }
+
+    private static IEnumerable<RibbonMenuItem> MenuItems(IEnumerable<RibbonMenuItem> items)
+    {
+        foreach (var item in items)
+        {
+            yield return item;
+            foreach (var child in MenuItems(item.Children))
+                yield return child;
+        }
+    }
+
+    private static void AddLocation(
+        Dictionary<string, List<CommandLocation>> locations,
+        string commandId,
+        CommandLocation location)
+    {
+        if (!locations.TryGetValue(commandId, out var existing))
+        {
+            existing = [];
+            locations.Add(commandId, existing);
+        }
+
+        existing.Add(location);
+    }
+
+    private static Classification Classify(bool wpfPresent, bool avaloniaPresent) =>
+        (wpfPresent, avaloniaPresent) switch
+        {
+            (true, true) => new Classification("shared-profile", "Command is present in both compiled FreeW ribbon profiles."),
+            (true, false) => new Classification("wpf-profile-only", "Command is present only in the compiled WPF FreeW ribbon profile."),
+            (false, true) => new Classification("avalonia-profile-only", "Command is present only in the compiled Avalonia FreeW ribbon profile."),
+            _ => throw new InvalidOperationException("Command row has no compiled profile location."),
+        };
+
+    private static string Surface(bool wpfPresent, bool avaloniaPresent) =>
+        wpfPresent && avaloniaPresent
+            ? "both"
+            : wpfPresent
+                ? "wpf-only"
+                : "avalonia-only";
+
+    private static string MissingProfile(bool wpfPresent, bool avaloniaPresent) =>
+        wpfPresent && avaloniaPresent
+            ? "none"
+            : wpfPresent
+                ? AvaloniaProfile
+                : WpfProfile;
+
+    private static string ReadRepositoryFile(string repoRoot, string relativePath)
+    {
+        var path = Path.Combine(new[] { repoRoot }.Concat(relativePath.Split('/')).ToArray());
+        return File.Exists(path)
+            ? File.ReadAllText(path)
+            : "";
+    }
+
+    private static bool ContainsCommandLiteral(string source, string commandId) =>
+        Regex.IsMatch(
+            source,
+            $@"(?<![A-Za-z0-9_.-]){Regex.Escape(commandId)}(?![A-Za-z0-9_.-])",
+            RegexOptions.CultureInvariant);
+}
+
+internal static class FreeWCommandInventoryMarkdown
+{
+    public static string Build(InventoryDocument inventory)
+    {
+        var builder = new StringBuilder();
+        builder.AppendLine("# FreeW WPF/Avalonia Command Inventory");
+        builder.AppendLine();
+        builder.AppendLine("Generated by `tools/Generate-FreeWCommandInventory.ps1` from compiled `FreeW.Ribbon.Definitions` profiles. Do not edit by hand.");
+        builder.AppendLine();
+        builder.AppendLine("Rows are created only from `FreeWRibbon.Build(FreeWRibbonCapabilities.Wpf)` and `FreeWRibbon.Build(FreeWRibbonCapabilities.Avalonia)`, including menu children. Source literal evidence columns show exact command-id text in source files only; they are not behavior proof and never create rows.");
+        builder.AppendLine();
+        builder.AppendLine("## Summary");
+        builder.AppendLine();
+        builder.AppendLine("| Total | Both profiles | WPF profile only | Avalonia profile only | Missing WPF profile | Missing Avalonia profile |");
+        builder.AppendLine("|---:|---:|---:|---:|---:|---:|");
+        builder.AppendLine($"| {inventory.Summary.TotalCommands} | {inventory.Summary.Both} | {inventory.Summary.WpfOnly} | {inventory.Summary.AvaloniaOnly} | {inventory.Summary.MissingWpf} | {inventory.Summary.MissingAvalonia} |");
+        builder.AppendLine();
+        builder.AppendLine("## Matrix");
+        builder.AppendLine();
+        builder.AppendLine("| Command ID | Label | WPF profile | Avalonia profile | Missing profile | Classification | WPF locations | Avalonia locations | Source literal evidence | Notes |");
+        builder.AppendLine("|---|---|---:|---:|---|---|---|---|---|---|");
+
+        foreach (var command in inventory.Commands)
+        {
+            builder.AppendLine(
+                $"| `{Escape(command.CommandId)}` | {Escape(command.Label)} | {YesNo(command.WpfPresent)} | {YesNo(command.AvaloniaPresent)} | {Escape(command.MissingProfile)} | {Escape(command.Classification)} | {Escape(Locations(command.WpfLocations))} | {Escape(Locations(command.AvaloniaLocations))} | {Escape(SourceEvidence(command.SourceLiteralEvidence))} | {Escape(command.Notes)} |");
+        }
+
+        return builder.ToString();
+    }
+
+    private static string Locations(IReadOnlyList<CommandLocation> locations) =>
+        locations.Count == 0
+            ? "-"
+            : string.Join("<br>", locations.Select(location => $"{location.TabId}/{location.GroupId} ({location.ControlType}; {location.Layout})"));
+
+    private static string SourceEvidence(SourceLiteralEvidence evidence)
+    {
+        var hits = new List<string>();
+        if (evidence.WpfDefinitionSource)
+            hits.Add("WPF definition source");
+        if (evidence.AvaloniaDefinitionSource)
+            hits.Add("Avalonia definition source");
+        if (evidence.WpfRegistrySource)
+            hits.Add("WPF registry source");
+        if (evidence.AvaloniaRegistrySource)
+            hits.Add("Avalonia registry source");
+
+        return hits.Count == 0 ? "-" : string.Join("<br>", hits);
+    }
+
+    private static string YesNo(bool value) => value ? "Yes" : "No";
+
+    private static string Escape(string value) =>
+        value.Replace("|", "\\|", StringComparison.Ordinal)
+            .Replace("\r", "", StringComparison.Ordinal)
+            .Replace("\n", "<br>", StringComparison.Ordinal);
+}
+
+internal sealed record InventoryDocument(
+    string Schema,
+    int SchemaVersion,
+    string GeneratedBy,
+    string TopologySource,
+    string SourceLiteralEvidenceNote,
+    IReadOnlyList<SourceLiteralFileEntry> SourceLiteralFiles,
+    InventorySummary Summary,
+    IReadOnlyList<CommandEntry> Commands);
+
+internal sealed record SourceLiteralFileEntry(
+    string Id,
+    string Label,
+    string Path);
+
+internal sealed record InventorySummary(
+    int TotalCommands,
+    int Both,
+    int WpfOnly,
+    int AvaloniaOnly,
+    int MissingWpf,
+    int MissingAvalonia);
+
+internal sealed record CommandEntry(
+    string CommandId,
+    string Label,
+    bool WpfPresent,
+    bool AvaloniaPresent,
+    string ProfileSurface,
+    string MissingProfile,
+    string Classification,
+    string Notes,
+    IReadOnlyList<CommandLocation> WpfLocations,
+    IReadOnlyList<CommandLocation> AvaloniaLocations,
+    SourceLiteralEvidence SourceLiteralEvidence);
+
+internal sealed record CommandLocation(
+    string Profile,
+    string TabId,
+    string Tab,
+    string GroupId,
+    string Group,
+    string Label,
+    string ControlType,
+    string Layout);
+
+internal sealed record SourceLiteralEvidence(
+    bool WpfDefinitionSource,
+    bool AvaloniaDefinitionSource,
+    bool WpfRegistrySource,
+    bool AvaloniaRegistrySource);
+
+internal sealed record Classification(string Name, string Notes);
+
+internal sealed record SourceLiteralFile(string Id, string Label, string RelativePath);
+'@)
+
+    & dotnet run --project $projectPath --configuration Release -- $repoRoot $tempJsonPath $tempMarkdownPath
+    if ($LASTEXITCODE -ne 0) {
+        throw "FreeW command inventory generator failed."
+    }
+
+    if ($Check) {
+        Test-FileContentMatches -ExpectedPath $tempJsonPath -ActualPath $resolvedJsonPath -Label $JsonPath
+        Test-FileContentMatches -ExpectedPath $tempMarkdownPath -ActualPath $resolvedMarkdownPath -Label $MarkdownPath
+        Write-Host "FreeW command inventory docs are up to date."
+        return
+    }
+
+    $jsonDirectory = Split-Path -Parent $resolvedJsonPath
+    $markdownDirectory = Split-Path -Parent $resolvedMarkdownPath
+    New-Item -ItemType Directory -Path $jsonDirectory -Force | Out-Null
+    New-Item -ItemType Directory -Path $markdownDirectory -Force | Out-Null
+    Copy-Item -LiteralPath $tempJsonPath -Destination $resolvedJsonPath -Force
+    Copy-Item -LiteralPath $tempMarkdownPath -Destination $resolvedMarkdownPath -Force
+    Write-Host "Wrote $JsonPath and $MarkdownPath."
+}
+finally {
+    if (Test-Path -LiteralPath $tempRoot) {
+        Remove-Item -LiteralPath $tempRoot -Recurse -Force
+    }
+}
