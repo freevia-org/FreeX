@@ -203,6 +203,41 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void BuildMajorGridLinePrimitivePlan_PlansSharedStrokeWithCartesianGridlines()
+    {
+        var chart = MakeTwoSeriesChart(ChartType.ColumnClustered);
+        var frame = ChartRenderPlanner.BuildFramePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+
+        var plan = ChartRenderPlanner.BuildMajorGridLinePrimitivePlan(chart, frame);
+
+        plan.GridLines.Should().HaveCount(6);
+        plan.GridLines[0].Start.Should().Be(new ChartPlanPoint(frame.Plot.X, frame.Plot.Bottom));
+        plan.GridLines[0].End.Should().Be(new ChartPlanPoint(frame.Plot.Right, frame.Plot.Bottom));
+        plan.GridLines[^1].Start.Should().Be(new ChartPlanPoint(frame.Plot.X, frame.Plot.Y));
+        plan.GridLines[^1].End.Should().Be(new ChartPlanPoint(frame.Plot.Right, frame.Plot.Y));
+        plan.Stroke.Should().Be(new ChartStrokePlan(
+            new SrgbColor(0xD9, 0xD9, 0xD9),
+            Alpha: 255,
+            Thickness: 0.5));
+    }
+
+    [Fact]
+    public void BuildMajorGridLinePrimitivePlan_DisabledGridlinesReturnEmptyGeometryButKeepSharedStroke()
+    {
+        var chart = MakeTwoSeriesChart(ChartType.ColumnClustered);
+        chart.ValueAxis.HasMajorGridlines = false;
+        var frame = ChartRenderPlanner.BuildFramePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+
+        var plan = ChartRenderPlanner.BuildMajorGridLinePrimitivePlan(chart, frame);
+
+        plan.GridLines.Should().BeEmpty();
+        plan.Stroke.Should().Be(new ChartStrokePlan(
+            new SrgbColor(0xD9, 0xD9, 0xD9),
+            Alpha: 255,
+            Thickness: 0.5));
+    }
+
+    [Fact]
     public void BuildLegendItemPlans_BottomLegend_PlansOneItemPerSeries()
     {
         var chart = MakeTwoSeriesChart(ChartType.ColumnClustered);

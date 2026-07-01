@@ -669,11 +669,11 @@ public sealed class SlideCanvas : Control
         double plotW = plot.Width;
         double plotH = plot.Height;
 
-        var gridLinePlans = ChartRenderPlanner.BuildMajorGridLinePlans(chart, frame);
-        if (gridLinePlans.Count > 0)
+        var gridLinePlan = ChartRenderPlanner.BuildMajorGridLinePrimitivePlan(chart, frame);
+        if (gridLinePlan.GridLines.Count > 0)
         {
-            var gridPen = new Pen(new SolidColorBrush(Color.FromRgb(0xD9, 0xD9, 0xD9)), 0.5);
-            foreach (var gridLine in gridLinePlans)
+            var gridPen = ToPen(gridLinePlan.Stroke);
+            foreach (var gridLine in gridLinePlan.GridLines)
                 dc.DrawLine(gridPen, ToPoint(gridLine.Start), ToPoint(gridLine.End));
         }
 

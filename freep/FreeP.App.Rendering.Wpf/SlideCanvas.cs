@@ -648,14 +648,11 @@ public sealed class SlideCanvas : FrameworkElement
         double plotH = plot.Height;
 
         // ── Gridlines (drawn before bars so they appear behind) ─────────────────
-        var gridLinePlans = ChartRenderPlanner.BuildMajorGridLinePlans(chart, frame);
-        if (gridLinePlans.Count > 0)
+        var gridLinePlan = ChartRenderPlanner.BuildMajorGridLinePrimitivePlan(chart, frame);
+        if (gridLinePlan.GridLines.Count > 0)
         {
-            var gridPen = new Pen(
-                FreezeBrush(new SolidColorBrush(Color.FromRgb(0xD9, 0xD9, 0xD9))), 0.5);
-            if (gridPen.CanFreeze) gridPen.Freeze();
-
-            foreach (var gridLine in gridLinePlans)
+            var gridPen = ToPen(gridLinePlan.Stroke);
+            foreach (var gridLine in gridLinePlan.GridLines)
                 dc.DrawLine(gridPen, ToPoint(gridLine.Start), ToPoint(gridLine.End));
         }
 

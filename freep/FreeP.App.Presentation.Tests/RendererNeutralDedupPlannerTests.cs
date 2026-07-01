@@ -317,6 +317,25 @@ public sealed class RendererNeutralDedupPlannerTests
     }
 
     [Fact]
+    public void WpfAndAvaloniaSlideCanvases_UseRendererNeutralMajorGridlineStrokePlanning()
+    {
+        var wpf = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "SlideCanvas.cs");
+        var avalonia = ReadWorkspaceFile(
+            "freep",
+            "FreeP.App.Rendering.Avalonia",
+            "SlideCanvas.cs");
+
+        foreach (var source in new[] { wpf, avalonia })
+        {
+            source.Should().Contain("ChartRenderPlanner.BuildMajorGridLinePrimitivePlan(chart, frame)");
+            source.Should().Contain("gridLinePlan.Stroke");
+            source.Should().Contain("gridLinePlan.GridLines");
+            source.Should().NotContain("BuildMajorGridLinePlans(chart, frame)");
+            source.Should().NotContain("Color.FromRgb(0xD9, 0xD9, 0xD9)), 0.5");
+        }
+    }
+
+    [Fact]
     public void WpfAndAvaloniaSlideShowWindows_UseRendererNeutralPlaybackPlanner()
     {
         var wpf = ReadWorkspaceFile("freep", "FreeP.App.Host", "SlideShowWindow.cs");

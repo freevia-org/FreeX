@@ -80,6 +80,10 @@ public readonly record struct ChartFramePlan(
 
 public readonly record struct ChartGridLinePlan(ChartPlanPoint Start, ChartPlanPoint End);
 
+public readonly record struct ChartMajorGridLinePrimitivePlan(
+    IReadOnlyList<ChartGridLinePlan> GridLines,
+    ChartStrokePlan Stroke);
+
 public readonly record struct ChartTextPlan(
     string Text,
     ChartPlanRect Bounds,
@@ -410,15 +414,20 @@ public static class ChartRenderPlanner
 
     public static IReadOnlyList<ChartGridLinePlan> BuildMajorGridLinePlans(
         ChartShape chart,
+        ChartFramePlan frame) =>
+        BuildMajorGridLinePrimitivePlan(chart, frame).GridLines;
+
+    public static ChartMajorGridLinePrimitivePlan BuildMajorGridLinePrimitivePlan(
+        ChartShape chart,
         ChartFramePlan frame)
     {
         if (!frame.HasPlot || frame.IsPie || frame.IsRadar || frame.IsScatterLike || !chart.ValueAxis.HasMajorGridlines)
-            return Array.Empty<ChartGridLinePlan>();
+            return EmptyMajorGridLinePrimitivePlan();
 
         var (minValue, maxValue, majorUnit) = ComputePrimaryValueAxisRange(chart);
         double steps = (maxValue - minValue) / majorUnit;
         if (steps <= 0)
-            return Array.Empty<ChartGridLinePlan>();
+            return EmptyMajorGridLinePrimitivePlan();
 
         var plot = frame.Plot;
         int tickCount = (int)Math.Round(steps);
@@ -441,7 +450,9 @@ public static class ChartRenderPlanner
             }
         }
 
-        return lines;
+        return new ChartMajorGridLinePrimitivePlan(
+            lines,
+            DefaultGridLineStroke());
     }
 
     public static IReadOnlyList<ChartTextPlan> BuildCategoryAxisLabelPlans(
@@ -1725,6 +1736,11 @@ public static class ChartRenderPlanner
             DefaultRadarSpokeStroke(),
             Array.Empty<ChartTextPlan>(),
             Array.Empty<ChartRadarSeriesPrimitive>());
+
+    private static ChartMajorGridLinePrimitivePlan EmptyMajorGridLinePrimitivePlan() =>
+        new(
+            Array.Empty<ChartGridLinePlan>(),
+            DefaultGridLineStroke());
 
     private static ChartStrokePlan DefaultGridLineStroke() =>
         new(new SrgbColor(0xD9, 0xD9, 0xD9), Alpha: 255, Thickness: 0.5);
