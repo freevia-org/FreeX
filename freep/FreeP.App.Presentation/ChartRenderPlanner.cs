@@ -90,12 +90,20 @@ public readonly record struct ChartTextPlan(
 public readonly record struct ChartRectPrimitive(
     int SeriesIndex,
     int CategoryIndex,
-    ChartPlanRect Bounds);
+    ChartPlanRect Bounds,
+    ChartFillPlan Fill,
+    ChartStrokePlan? Stroke);
 
 public readonly record struct ChartLineSeriesPrimitive(
     int SeriesIndex,
     bool WithMarkers,
-    IReadOnlyList<ChartPlanPoint?> Points);
+    IReadOnlyList<ChartPlanPoint?> Points,
+    ChartStrokePlan Stroke,
+    ChartFillPlan MarkerFill,
+    ChartStrokePlan? MarkerStroke,
+    double MarkerRadius,
+    IReadOnlyList<ChartLineSegmentPrimitive> LineSegments,
+    IReadOnlyList<ChartCirclePrimitive> Markers);
 
 public readonly record struct ChartAreaSeriesPrimitive(
     int SeriesIndex,
@@ -210,6 +218,10 @@ public static class ChartRenderPlanner
     public const double AxisTitleFontSize = 7.5;
     public const double GridlinePad = 2.0;
     public const byte AreaFillAlpha = 200;
+    public const byte RectSeriesFillAlpha = 255;
+    public const double LineSeriesStrokeThickness = 1.5;
+    public const double LineMarkerRadius = 3.0;
+    public const double LineMarkerStrokeThickness = 0.75;
     public const double ScatterLineThickness = 1.5;
     public const double ScatterMarkerRadius = 3.5;
     public const double ScatterDataLabelWidth = 40.0;
@@ -240,6 +252,19 @@ public static class ChartRenderPlanner
         int fallbackIndex = Math.Abs(seriesIndex) % FallbackSeriesColors.Length;
         return FallbackSeriesColors[fallbackIndex];
     }
+
+    public static ChartFillPlan ResolveSeriesFill(
+        int seriesIndex,
+        IReadOnlyList<SrgbColor>? seriesColors,
+        byte alpha = RectSeriesFillAlpha) =>
+        new(ResolveSeriesColor(seriesIndex, seriesColors), alpha);
+
+    public static ChartStrokePlan ResolveSeriesStroke(
+        int seriesIndex,
+        IReadOnlyList<SrgbColor>? seriesColors,
+        double thickness = LineSeriesStrokeThickness,
+        byte alpha = 255) =>
+        new(ResolveSeriesColor(seriesIndex, seriesColors), alpha, thickness);
 
     public static ChartFramePlan BuildFramePlan(ChartShape chart, ChartPlanRect bounds)
     {
@@ -655,7 +680,8 @@ public static class ChartRenderPlanner
 
     public static IReadOnlyList<ChartRectPrimitive> BuildColumnPrimitives(
         ChartShape chart,
-        ChartPlanRect plot)
+        ChartPlanRect plot,
+        IReadOnlyList<SrgbColor>? seriesColors = null)
     {
         int categoryCount = Math.Max(1, chart.Categories.Count);
         if (chart.Series.Count == 0 || !plot.HasPositiveArea)
@@ -713,7 +739,9 @@ public static class ChartRenderPlanner
                     primitives.Add(new ChartRectPrimitive(
                         seriesIndex,
                         categoryIndex,
-                        new ChartPlanRect(x, stackedY - height, drawWidth, height)));
+                        new ChartPlanRect(x, stackedY - height, drawWidth, height),
+                        ResolveSeriesFill(seriesIndex, seriesColors),
+                        Stroke: null));
                     stackedY -= height;
                 }
                 else
@@ -723,7 +751,9 @@ public static class ChartRenderPlanner
                     primitives.Add(new ChartRectPrimitive(
                         seriesIndex,
                         categoryIndex,
-                        new ChartPlanRect(x, y, drawWidth, height)));
+                        new ChartPlanRect(x, y, drawWidth, height),
+                        ResolveSeriesFill(seriesIndex, seriesColors),
+                        Stroke: null));
                 }
             }
         }
@@ -733,7 +763,8 @@ public static class ChartRenderPlanner
 
     public static IReadOnlyList<ChartRectPrimitive> BuildBarPrimitives(
         ChartShape chart,
-        ChartPlanRect plot)
+        ChartPlanRect plot,
+        IReadOnlyList<SrgbColor>? seriesColors = null)
     {
         int categoryCount = Math.Max(1, chart.Categories.Count);
         if (chart.Series.Count == 0 || !plot.HasPositiveArea)
@@ -784,7 +815,9 @@ public static class ChartRenderPlanner
                 primitives.Add(new ChartRectPrimitive(
                     seriesIndex,
                     categoryIndex,
-                    new ChartPlanRect(x, y, width, height)));
+                    new ChartPlanRect(x, y, width, height),
+                    ResolveSeriesFill(seriesIndex, seriesColors),
+                    Stroke: null));
 
                 if (stacked)
                     stackedX += width;
@@ -797,7 +830,8 @@ public static class ChartRenderPlanner
     public static IReadOnlyList<ChartLineSeriesPrimitive> BuildLineSeriesPrimitives(
         ChartShape chart,
         ChartPlanRect plot,
-        bool withMarkers)
+        bool withMarkers,
+        IReadOnlyList<SrgbColor>? seriesColors = null)
     {
         int categoryCount = Math.Max(1, chart.Categories.Count);
         if (chart.Series.Count == 0 || !plot.HasPositiveArea)
@@ -835,7 +869,11 @@ public static class ChartRenderPlanner
                 points[categoryIndex] = new ChartPlanPoint(x, y);
             }
 
-            primitives.Add(new ChartLineSeriesPrimitive(seriesIndex, withMarkers, points));
+            primitives.Add(BuildLineSeriesPrimitive(
+                seriesIndex,
+                withMarkers,
+                points,
+                seriesColors));
         }
 
         return primitives;
@@ -843,7 +881,8 @@ public static class ChartRenderPlanner
 
     public static IReadOnlyList<ChartLineSeriesPrimitive> BuildComboOverrideLineSeriesPrimitives(
         ChartShape chart,
-        ChartPlanRect plot)
+        ChartPlanRect plot,
+        IReadOnlyList<SrgbColor>? seriesColors = null)
     {
         int categoryCount = Math.Max(1, chart.Categories.Count);
         if (chart.Series.Count == 0 || !plot.HasPositiveArea)
@@ -884,13 +923,79 @@ public static class ChartRenderPlanner
                 points[categoryIndex] = new ChartPlanPoint(x, y);
             }
 
-            primitives.Add(new ChartLineSeriesPrimitive(
+            primitives.Add(BuildLineSeriesPrimitive(
                 seriesIndex,
                 overrideType == ChartType.LineMarkers,
-                points));
+                points,
+                seriesColors));
         }
 
         return primitives;
+    }
+
+    public static ChartLineSeriesPrimitive BuildLineSeriesPrimitive(
+        int seriesIndex,
+        bool withMarkers,
+        IReadOnlyList<ChartPlanPoint?> points,
+        IReadOnlyList<SrgbColor>? seriesColors = null)
+    {
+        var stroke = ResolveSeriesStroke(seriesIndex, seriesColors);
+        var markerFill = ResolveSeriesFill(seriesIndex, seriesColors);
+        var markerStroke = new ChartStrokePlan(
+            ResolveSeriesColor(seriesIndex, seriesColors),
+            Alpha: 255,
+            Thickness: LineMarkerStrokeThickness);
+        var lineSegments = new List<ChartLineSegmentPrimitive>();
+        var markers = new List<ChartCirclePrimitive>();
+        int? previousPointIndex = null;
+        ChartPlanPoint? previousPoint = null;
+
+        for (int pointIndex = 0; pointIndex < points.Count; pointIndex++)
+        {
+            var point = points[pointIndex];
+            if (!point.HasValue)
+            {
+                previousPointIndex = null;
+                previousPoint = null;
+                continue;
+            }
+
+            if (previousPoint.HasValue && previousPointIndex.HasValue)
+            {
+                lineSegments.Add(new ChartLineSegmentPrimitive(
+                    seriesIndex,
+                    previousPointIndex.Value,
+                    pointIndex,
+                    previousPoint.Value,
+                    point.Value,
+                    stroke));
+            }
+
+            if (withMarkers)
+            {
+                markers.Add(new ChartCirclePrimitive(
+                    seriesIndex,
+                    pointIndex,
+                    point.Value,
+                    LineMarkerRadius,
+                    markerFill,
+                    markerStroke));
+            }
+
+            previousPointIndex = pointIndex;
+            previousPoint = point.Value;
+        }
+
+        return new ChartLineSeriesPrimitive(
+            seriesIndex,
+            withMarkers,
+            points,
+            stroke,
+            markerFill,
+            markerStroke,
+            LineMarkerRadius,
+            lineSegments,
+            markers);
     }
 
     public static IReadOnlyList<ChartAreaSeriesPrimitive> BuildAreaSeriesPrimitives(

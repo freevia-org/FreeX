@@ -786,11 +786,12 @@ public sealed class SlideCanvas : Control
         double plotX, double plotY, double plotW, double plotH)
     {
         var plot = new ChartPlanRect(plotX, plotY, plotW, plotH);
-        foreach (var primitive in ChartRenderPlanner.BuildColumnPrimitives(chart, plot))
+        foreach (var primitive in ChartRenderPlanner.BuildColumnPrimitives(chart, plot, seriesColors))
         {
-            var color = GetSeriesColor(chart, primitive.SeriesIndex, primitive.CategoryIndex, seriesColors);
-            var brush = new SolidColorBrush(Color.FromRgb(color.R, color.G, color.B));
-            dc.FillRectangle(brush, ToRect(primitive.Bounds));
+            dc.DrawRectangle(
+                ToBrush(primitive.Fill),
+                primitive.Stroke.HasValue ? ToPen(primitive.Stroke.Value) : null,
+                ToRect(primitive.Bounds));
         }
     }
 
@@ -805,8 +806,8 @@ public sealed class SlideCanvas : Control
         double plotX, double plotY, double plotW, double plotH)
     {
         var plot = new ChartPlanRect(plotX, plotY, plotW, plotH);
-        foreach (var primitive in ChartRenderPlanner.BuildComboOverrideLineSeriesPrimitives(chart, plot))
-            RenderLineSeriesPrimitive(dc, chart, seriesColors, primitive);
+        foreach (var primitive in ChartRenderPlanner.BuildComboOverrideLineSeriesPrimitives(chart, plot, seriesColors))
+            RenderLineSeriesPrimitive(dc, primitive);
     }
 
     private static void RenderBarChart(
@@ -814,11 +815,12 @@ public sealed class SlideCanvas : Control
         double plotX, double plotY, double plotW, double plotH)
     {
         var plot = new ChartPlanRect(plotX, plotY, plotW, plotH);
-        foreach (var primitive in ChartRenderPlanner.BuildBarPrimitives(chart, plot))
+        foreach (var primitive in ChartRenderPlanner.BuildBarPrimitives(chart, plot, seriesColors))
         {
-            var color = GetSeriesColor(chart, primitive.SeriesIndex, primitive.CategoryIndex, seriesColors);
-            var brush = new SolidColorBrush(Color.FromRgb(color.R, color.G, color.B));
-            dc.FillRectangle(brush, ToRect(primitive.Bounds));
+            dc.DrawRectangle(
+                ToBrush(primitive.Fill),
+                primitive.Stroke.HasValue ? ToPen(primitive.Stroke.Value) : null,
+                ToRect(primitive.Bounds));
         }
     }
 
@@ -827,37 +829,25 @@ public sealed class SlideCanvas : Control
         double plotX, double plotY, double plotW, double plotH, bool withMarkers)
     {
         var plot = new ChartPlanRect(plotX, plotY, plotW, plotH);
-        foreach (var primitive in ChartRenderPlanner.BuildLineSeriesPrimitives(chart, plot, withMarkers))
-            RenderLineSeriesPrimitive(dc, chart, seriesColors, primitive);
+        foreach (var primitive in ChartRenderPlanner.BuildLineSeriesPrimitives(chart, plot, withMarkers, seriesColors))
+            RenderLineSeriesPrimitive(dc, primitive);
     }
 
     private static void RenderLineSeriesPrimitive(
         DrawingContext dc,
-        ChartShape chart,
-        IReadOnlyList<SrgbColor> seriesColors,
         ChartLineSeriesPrimitive primitive)
     {
-        var color = GetSeriesColor(chart, primitive.SeriesIndex, 0, seriesColors);
-        var brush = new SolidColorBrush(Color.FromRgb(color.R, color.G, color.B));
-        var pen = new Pen(brush, 1.5);
+        foreach (var segment in primitive.LineSegments)
+            dc.DrawLine(ToPen(segment.Stroke), ToPoint(segment.Start), ToPoint(segment.End));
 
-        Point? previous = null;
-        foreach (var plannedPoint in primitive.Points)
+        foreach (var marker in primitive.Markers)
         {
-            if (!plannedPoint.HasValue)
-            {
-                previous = null;
-                continue;
-            }
-
-            var point = ToPoint(plannedPoint.Value);
-            if (previous.HasValue)
-                dc.DrawLine(pen, previous.Value, point);
-
-            if (primitive.WithMarkers)
-                dc.DrawEllipse(brush, null, point, 3, 3);
-
-            previous = point;
+            dc.DrawEllipse(
+                marker.Fill.HasValue ? ToBrush(marker.Fill.Value) : null,
+                marker.Stroke.HasValue ? ToPen(marker.Stroke.Value) : null,
+                ToPoint(marker.Center),
+                marker.Radius,
+                marker.Radius);
         }
     }
 
