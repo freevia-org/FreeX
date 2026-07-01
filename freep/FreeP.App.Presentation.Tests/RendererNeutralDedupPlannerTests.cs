@@ -171,6 +171,26 @@ public sealed class RendererNeutralDedupPlannerTests
     }
 
     [Fact]
+    public void WpfAndAvaloniaSlideCanvases_UseSharedTextParagraphRoutePlanner()
+    {
+        var wpf = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "SlideCanvas.cs");
+        var avalonia = ReadWorkspaceFile(
+            "freep",
+            "FreeP.App.Rendering.Avalonia",
+            "SlideCanvas.cs");
+
+        foreach (var source in new[] { wpf, avalonia })
+        {
+            source.Should().Contain("TextLayoutPlanner.PlanParagraphRenderRoute");
+            source.Should().Contain("TextParagraphRenderRoute.Effects");
+            source.Should().Contain("TextParagraphRenderRoute.Tabs");
+            source.Should().NotContain("ParaHasTextEffects(para) || text.WarpPreset");
+            source.Should().NotContain("bool hasTabs");
+            source.Should().NotContain("para.Runs.Any(r => r.Text.Contains('\\t'))");
+        }
+    }
+
+    [Fact]
     public void WpfAndAvaloniaSlideCanvases_UseRendererNeutralPieSlicePlanning()
     {
         var wpf = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "SlideCanvas.cs");

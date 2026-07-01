@@ -1182,17 +1182,20 @@ public sealed class SlideCanvas : Control
             if (!string.IsNullOrEmpty(para.BulletText))
                 DrawBulletAvalonia(dc, para.BulletText, para.BulletFontFamily, para.BulletFontSizePt,
                     para.BulletColor, placement.X - para.HangingDip, placement.Y);
-            bool hasEffects = ParaHasTextEffects(para) || text.WarpPreset is not null;
-            bool hasTabs    = para.Runs.Any(r => r.Text.Contains('\t'));
-            if (hasEffects)
-                RenderParaWithEffects(dc, para, placement.X, placement.Y, bounds, text.WarpPreset);
-            else if (hasTabs)
-                RenderParaWithTabs(dc, para, placement.X, placement.Y, para.TabStops);
-            else
+
+            switch (TextLayoutPlanner.PlanParagraphRenderRoute(para, text))
             {
-                if (para.IndentDip > 0 && ft.MaxTextWidth > 0)
-                    ft.MaxTextWidth = placement.MaxWidthDip;
-                dc.DrawText(ft, new Point(placement.X, placement.Y));
+                case TextParagraphRenderRoute.Effects:
+                    RenderParaWithEffects(dc, para, placement.X, placement.Y, bounds, text.WarpPreset);
+                    break;
+                case TextParagraphRenderRoute.Tabs:
+                    RenderParaWithTabs(dc, para, placement.X, placement.Y, para.TabStops);
+                    break;
+                default:
+                    if (para.IndentDip > 0 && ft.MaxTextWidth > 0)
+                        ft.MaxTextWidth = placement.MaxWidthDip;
+                    dc.DrawText(ft, new Point(placement.X, placement.Y));
+                    break;
             }
         }
     }
@@ -1236,32 +1239,19 @@ public sealed class SlideCanvas : Control
                     para.BulletColor, bulletX, placement.Y);
             }
 
-            // Wave 16A: use geometry-based rendering when any run has text effects or warp is active.
-            // BA2 fix: when effects/warp are active, skip the flat DrawText base pass entirely and
-            // let RenderParaWithEffects draw ALL runs (plain ones at their flat baseline, effect/warp
-            // ones with the appropriate transforms). This prevents each effect/warp run being drawn
-            // twice (flat ghost from DrawText + warped/overlaid copy from RenderParaWithEffects).
-            bool hasEffects = ParaHasTextEffects(para) || text.WarpPreset is not null;
-
-            // Wave 18B: render run-by-run whenever any run contains a tab character so that
-            // BO2 fix: paragraphs with NO explicit tab stops (relying on default ~96 DIP interval)
-            // also go through RenderParaWithTabs instead of plain DrawText (which ignores \t).
-            bool hasTabs = para.Runs.Any(r => r.Text.Contains('\t'));
-
-            if (hasEffects)
+            switch (TextLayoutPlanner.PlanParagraphRenderRoute(para, text))
             {
-                RenderParaWithEffects(dc, para, placement.X, placement.Y, bounds, text.WarpPreset);
-            }
-            else if (hasTabs)
-            {
-                RenderParaWithTabs(dc, para, placement.X, placement.Y, para.TabStops);
-            }
-            else
-            {
-                // Adjust MaxTextWidth to account for indent
-                if (para.IndentDip > 0 && ft.MaxTextWidth > 0)
-                    ft.MaxTextWidth = placement.MaxWidthDip;
-                dc.DrawText(ft, new Point(placement.X, placement.Y));
+                case TextParagraphRenderRoute.Effects:
+                    RenderParaWithEffects(dc, para, placement.X, placement.Y, bounds, text.WarpPreset);
+                    break;
+                case TextParagraphRenderRoute.Tabs:
+                    RenderParaWithTabs(dc, para, placement.X, placement.Y, para.TabStops);
+                    break;
+                default:
+                    if (para.IndentDip > 0 && ft.MaxTextWidth > 0)
+                        ft.MaxTextWidth = placement.MaxWidthDip;
+                    dc.DrawText(ft, new Point(placement.X, placement.Y));
+                    break;
             }
         }
     }
@@ -1481,9 +1471,6 @@ public sealed class SlideCanvas : Control
     }
 
     // ── Text-effects geometry helpers (Wave 16A) ──────────────────────────────
-
-    private static bool ParaHasTextEffects(ResolvedParagraph para) =>
-        para.Runs.Any(r => r.TextFill is not null || r.TextOutline is not null || r.TextShadow is not null);
 
     private static IBrush MakeFillBrushForText(ResolvedFill fill)
     {

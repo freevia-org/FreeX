@@ -142,6 +142,46 @@ public sealed class TextLayoutPlannerTests
     }
 
     [Fact]
+    public void PlanParagraphRenderRoute_UsesPlainRouteForSimpleParagraph()
+    {
+        var text = new ResolvedTextLayout();
+        var paragraph = Paragraph();
+
+        TextLayoutPlanner.PlanParagraphRenderRoute(paragraph, text)
+            .Should().Be(TextParagraphRenderRoute.Plain);
+    }
+
+    [Fact]
+    public void PlanParagraphRenderRoute_UsesTabsRouteForTabCharactersWithoutEffects()
+    {
+        var text = new ResolvedTextLayout();
+        var paragraph = Paragraph("Before\tAfter");
+
+        TextLayoutPlanner.PlanParagraphRenderRoute(paragraph, text)
+            .Should().Be(TextParagraphRenderRoute.Tabs);
+    }
+
+    [Fact]
+    public void PlanParagraphRenderRoute_UsesEffectsRouteForTextEffectsAndWarpBeforeTabs()
+    {
+        var effectParagraph = new ResolvedParagraph
+        {
+            Runs = new[]
+            {
+                new ResolvedRun { Text = "Shadow", TextShadow = new ResolvedRunShadow() }
+            }
+        };
+        var tabAndWarpParagraph = Paragraph("Before\tAfter");
+
+        TextLayoutPlanner.PlanParagraphRenderRoute(effectParagraph, new ResolvedTextLayout())
+            .Should().Be(TextParagraphRenderRoute.Effects);
+        TextLayoutPlanner.PlanParagraphRenderRoute(
+                tabAndWarpParagraph,
+                new ResolvedTextLayout { WarpPreset = "textArchUp" })
+            .Should().Be(TextParagraphRenderRoute.Effects);
+    }
+
+    [Fact]
     public void WpfAndAvaloniaSlideCanvases_DelegateTextLayoutMathToSharedPlanner()
     {
         var wpf = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "SlideCanvas.cs");
@@ -169,11 +209,20 @@ public sealed class TextLayoutPlannerTests
         avalonia.Should().NotContain("VerticalAnchor.Middle => bounds.Y");
     }
 
-    private static ResolvedParagraph Paragraph(double indent = 0) => new()
+    private static ResolvedParagraph Paragraph(double indent = 0) =>
+        Paragraph("P", indent);
+
+    private static ResolvedParagraph Paragraph(string text) =>
+        Paragraph(text, indent: 0);
+
+    private static ResolvedParagraph Paragraph(string text, double indent)
     {
-        IndentDip = indent,
-        Runs = new[] { new ResolvedRun { Text = "P" } }
-    };
+        return new ResolvedParagraph
+        {
+            IndentDip = indent,
+            Runs = new[] { new ResolvedRun { Text = text } }
+        };
+    }
 
     private static string ReadWorkspaceFile(params string[] relativeParts)
     {

@@ -32,6 +32,13 @@ public readonly record struct TextColumnLayout(
     double ColumnWidthDip,
     double LineSpacingScale);
 
+public enum TextParagraphRenderRoute
+{
+    Plain,
+    Tabs,
+    Effects
+}
+
 public sealed record TextBlockLayoutPlan(
     TextLayoutArea Area,
     IReadOnlyList<TextParagraphPlacement> Paragraphs);
@@ -57,6 +64,18 @@ public static class TextLayoutPlanner
 
     public static double GetLineSpacingScale(ResolvedTextLayout text) =>
         1.0 - text.LnSpcReduction;
+
+    public static TextParagraphRenderRoute PlanParagraphRenderRoute(
+        ResolvedParagraph paragraph,
+        ResolvedTextLayout text)
+    {
+        if (text.WarpPreset is not null || HasTextEffects(paragraph))
+            return TextParagraphRenderRoute.Effects;
+
+        return HasTabCharacters(paragraph)
+            ? TextParagraphRenderRoute.Tabs
+            : TextParagraphRenderRoute.Plain;
+    }
 
     public static TextParagraphMeasure CreateParagraphMeasure(
         int paragraphIndex,
@@ -206,4 +225,13 @@ public static class TextLayoutPlanner
             VerticalAnchor.Bottom => area.Y + Math.Max(0, area.Height - totalHeight),
             _ => area.Y
         };
+
+    private static bool HasTextEffects(ResolvedParagraph paragraph) =>
+        paragraph.Runs.Any(run =>
+            run.TextFill is not null ||
+            run.TextOutline is not null ||
+            run.TextShadow is not null);
+
+    private static bool HasTabCharacters(ResolvedParagraph paragraph) =>
+        paragraph.Runs.Any(run => run.Text.Contains('\t'));
 }
