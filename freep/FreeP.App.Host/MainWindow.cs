@@ -118,6 +118,8 @@ public sealed class MainWindow : Window
     private Canvas  _commentOverlay = null!;  // hosts speech-bubble dots over the slide canvas
     private StackPanel _commentListPanel = null!; // shows comment text list below canvas
     private Border  _commentListHost = null!; // collapsible container for _commentListPanel
+    private StackPanel _layoutPickerPanel = null!;
+    private Border _layoutPickerHost = null!;
 
     internal PresentationCommentPanePlan? LastCommentPanePlan { get; private set; }
     internal PresentationAccessibilitySummaryPlan? LastAccessibilitySummaryPlan { get; private set; }
@@ -126,6 +128,8 @@ public sealed class MainWindow : Window
     internal PresentationDesignCommandPlan? LastLayoutRequestPlan { get; private set; }
     internal PresentationLayoutPickerPlan? LastLayoutPickerPlan { get; private set; }
     internal PresentationLayoutChoice? LastAppliedLayoutChoice { get; private set; }
+    internal bool IsLayoutPickerVisible => _layoutPickerHost?.Visibility == Visibility.Visible;
+    internal int LayoutPickerChoiceButtonCount => _layoutPickerPanel?.Children.Count ?? 0;
 
     // ── Wave 16B: Animation pane (right-side collapsible panel) ──────────────────
     // 16B SEAM START — do not restructure this region (16A/16C may conflict nearby).
@@ -307,6 +311,7 @@ public sealed class MainWindow : Window
         RebuildEditor(); // also calls AttachCanvasEditing()
         // 3B: re-bind slide pane to the new Editor on file open/new.
         SlidePaneHost.Child = new SlidePane(Editor);
+        HideLayoutPicker();
         RefreshCanvas();
         UpdateSlideCount();
         RefreshNotesPane();
@@ -414,15 +419,34 @@ public sealed class MainWindow : Window
             Visibility      = Visibility.Collapsed,
         };
 
-        // Right-side panel: canvas on top, comment strip, notes strip below.
+        _layoutPickerPanel = new StackPanel { Orientation = Orientation.Vertical };
+        _layoutPickerHost = new Border
+        {
+            BorderBrush     = new SolidColorBrush(Color.FromRgb(0xC0, 0xC0, 0xC0)),
+            BorderThickness = new Thickness(0, 1, 0, 0),
+            Background      = Brushes.White,
+            MaxHeight       = 132,
+            Visibility      = Visibility.Collapsed,
+            Child           = new ScrollViewer
+            {
+                VerticalScrollBarVisibility   = ScrollBarVisibility.Auto,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                Content                       = _layoutPickerPanel,
+            },
+        };
+
+        // Right-side panel: canvas on top, picker/comment strips, notes strip below.
         var rightPanel = new Grid();
         rightPanel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         rightPanel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         rightPanel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        rightPanel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         Grid.SetRow(_canvasHost,       0);
-        Grid.SetRow(_commentListHost,  1);
-        Grid.SetRow(_notesBox,         2);
+        Grid.SetRow(_layoutPickerHost, 1);
+        Grid.SetRow(_commentListHost,  2);
+        Grid.SetRow(_notesBox,         3);
         rightPanel.Children.Add(_canvasHost);
+        rightPanel.Children.Add(_layoutPickerHost);
         rightPanel.Children.Add(_commentListHost);
         rightPanel.Children.Add(_notesBox);
 
@@ -937,6 +961,7 @@ public sealed class MainWindow : Window
         LastLayoutPickerPlan = PresentationDesignCommandPlanner.BuildLayoutPickerPlan(
             _presentation,
             Editor.CurrentSlideIndex);
+        ShowLayoutPicker(LastLayoutPickerPlan);
     }
 
     internal bool ApplyLayoutChoice(string layoutId)
@@ -950,9 +975,51 @@ public sealed class MainWindow : Window
             LastAppliedLayoutChoice = choice;
             RefreshCanvas();
             UpdateSlideCount();
+            HideLayoutPicker();
         }
 
         return applied;
+    }
+
+    private void ShowLayoutPicker(PresentationLayoutPickerPlan plan)
+    {
+        if (_layoutPickerHost is null || _layoutPickerPanel is null)
+            return;
+
+        _layoutPickerPanel.Children.Clear();
+        foreach (var choice in plan.Choices)
+        {
+            var button = new Button
+            {
+                Tag = choice.LayoutId,
+                Content = BuildLayoutChoiceLabel(choice),
+                Margin = new Thickness(6, 3, 6, 3),
+                Padding = new Thickness(8, 5, 8, 5),
+                HorizontalContentAlignment = HorizontalAlignment.Left,
+                IsEnabled = plan.CanApply && !choice.IsCurrent,
+            };
+            button.Click += (_, _) =>
+            {
+                if (button.Tag is string layoutId)
+                    ApplyLayoutChoice(layoutId);
+            };
+            _layoutPickerPanel.Children.Add(button);
+        }
+
+        _layoutPickerHost.Visibility = Visibility.Visible;
+    }
+
+    private void HideLayoutPicker()
+    {
+        if (_layoutPickerHost is not null)
+            _layoutPickerHost.Visibility = Visibility.Collapsed;
+    }
+
+    private static string BuildLayoutChoiceLabel(PresentationLayoutChoice choice)
+    {
+        var currentPrefix = choice.IsCurrent ? "Current - " : string.Empty;
+        var placeholders = choice.PlaceholderCount == 1 ? "1 placeholder" : $"{choice.PlaceholderCount} placeholders";
+        return $"{currentPrefix}{choice.DisplayName}\n{choice.MasterDisplayName} - {placeholders}";
     }
 
     /// <summary>

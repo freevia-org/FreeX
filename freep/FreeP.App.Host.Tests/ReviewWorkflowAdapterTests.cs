@@ -109,6 +109,8 @@ public sealed class ReviewWorkflowAdapterTests
 
             window.LastLayoutRequestPlan.Should().Be(PresentationDesignCommandPlanner.LayoutPlan);
             window.LastLayoutPickerPlan.Should().NotBeNull();
+            window.IsLayoutPickerVisible.Should().BeTrue();
+            window.LayoutPickerChoiceButtonCount.Should().Be(2);
             window.LastLayoutPickerPlan!.Choices.Should().Contain(choice =>
                 choice.LayoutId == "rId2" &&
                 choice.DisplayName == "Blank" &&
@@ -119,6 +121,7 @@ public sealed class ReviewWorkflowAdapterTests
                 choice.DisplayOrder == 1);
 
             window.ApplyLayoutChoice("rId2").Should().BeTrue();
+            window.IsLayoutPickerVisible.Should().BeFalse();
             window.Editor.CurrentSlide!.LayoutId.Should().Be("rId2");
             window.LastAppliedLayoutChoice.Should().NotBeNull();
             window.LastAppliedLayoutChoice!.LayoutId.Should().Be("rId2");
@@ -172,6 +175,8 @@ public sealed class ReviewWorkflowAdapterTests
         source.Should().Contain("onLayoutPicker:     () => OpenLayoutPicker()");
         source.Should().Contain("PresentationDesignCommandPlanner.BuildLayoutPickerPlan(");
         source.Should().Contain("PresentationDesignCommandPlanner.TryApplyLayoutChoice(");
+        source.Should().Contain("ShowLayoutPicker(LastLayoutPickerPlan);");
+        source.Should().Contain("BuildLayoutChoiceLabel(choice)");
         source.Should().NotContain("Modern resolved-thread state is not modeled yet.\";");
     }
 
