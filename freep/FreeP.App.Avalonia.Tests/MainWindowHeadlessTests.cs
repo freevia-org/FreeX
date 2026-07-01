@@ -973,6 +973,40 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task SlidePane_reorder_routes_through_shared_planner()
+    {
+        var moved = false;
+        var slidePaneCount = 0;
+        var currentSlideIndex = -1;
+        var indicatorVisible = true;
+        string[] titles = [];
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            window.Editor.CurrentSlide!.Title = "Slide 1";
+            window.Editor.InsertSlide();
+            window.Editor.CurrentSlide!.Title = "Slide 2";
+            window.Editor.InsertSlide();
+            window.Editor.CurrentSlide!.Title = "Slide 3";
+            window.Editor.SelectSlide(0);
+
+            slidePaneCount = window.SlidePaneSlideItemCount;
+            moved = window.TryApplySlidePaneMove(sourceSlideIndex: 0, targetInsertionIndex: 3);
+            titles = window.Editor.Presentation.Slides.Select(slide => slide.Title).ToArray();
+            currentSlideIndex = window.CurrentSlideIndex;
+            indicatorVisible = window.IsSlidePaneInsertionIndicatorVisible;
+        });
+
+        if (!ran) return;
+        slidePaneCount.Should().Be(3, "the Avalonia slide pane should render one selectable item per slide");
+        moved.Should().BeTrue("drag release should apply the shared move action plan");
+        titles.Should().Equal("Slide 2", "Slide 3", "Slide 1");
+        currentSlideIndex.Should().Be(2, "the moved slide should remain selected after reorder");
+        indicatorVisible.Should().BeFalse("the insertion indicator is only visible during active drag feedback");
+    }
+
+    [Fact]
     public async Task Print_command_refreshes_shared_handout_layout_plan()
     {
         var found = false;
