@@ -18,6 +18,21 @@ public sealed record PresentationDesignCommandPlan(
     long? SlideSizeCxEmu = null,
     long? SlideSizeCyEmu = null);
 
+public sealed record PresentationLayoutChoice(
+    string LayoutId,
+    string DisplayName,
+    SlideLayoutType LayoutType,
+    bool IsCurrent);
+
+public sealed record PresentationLayoutPickerPlan(
+    string CommandId,
+    string? CurrentLayoutId,
+    bool HasCurrentSlide,
+    IReadOnlyList<PresentationLayoutChoice> Choices)
+{
+    public bool CanApply => HasCurrentSlide && Choices.Count > 0;
+}
+
 public static class PresentationDesignCommandPlanner
 {
     public const string LayoutCommandId = "freep.layout";
@@ -87,6 +102,60 @@ public static class PresentationDesignCommandPlanner
         return false;
     }
 
+    public static PresentationLayoutPickerPlan BuildLayoutPickerPlan(
+        Presentation presentation,
+        int currentSlideIndex)
+    {
+        ArgumentNullException.ThrowIfNull(presentation);
+
+        var currentSlide = currentSlideIndex >= 0 && currentSlideIndex < presentation.Slides.Count
+            ? presentation.Slides[currentSlideIndex]
+            : null;
+        var currentLayoutId = currentSlide?.LayoutId;
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var choices = new List<PresentationLayoutChoice>();
+
+        foreach (var layout in presentation.Layouts)
+        {
+            if (string.IsNullOrWhiteSpace(layout.Id) || !seen.Add(layout.Id))
+            {
+                continue;
+            }
+
+            choices.Add(new PresentationLayoutChoice(
+                layout.Id,
+                BuildLayoutDisplayName(layout),
+                layout.LayoutType,
+                StringComparer.Ordinal.Equals(layout.Id, currentLayoutId)));
+        }
+
+        return new PresentationLayoutPickerPlan(
+            LayoutCommandId,
+            currentLayoutId,
+            currentSlide is not null,
+            choices);
+    }
+
+    public static bool TryApplyLayoutChoice(
+        EditingSession editor,
+        string layoutId,
+        out PresentationLayoutChoice? choice)
+    {
+        ArgumentNullException.ThrowIfNull(editor);
+
+        choice = null;
+        if (string.IsNullOrWhiteSpace(layoutId))
+        {
+            return false;
+        }
+
+        var pickerPlan = BuildLayoutPickerPlan(editor.Presentation, editor.CurrentSlideIndex);
+        choice = pickerPlan.Choices.FirstOrDefault(candidate =>
+            StringComparer.Ordinal.Equals(candidate.LayoutId, layoutId));
+
+        return choice is not null && editor.SetCurrentSlideLayout(choice.LayoutId);
+    }
+
     public static bool TryApply(
         EditingSession editor,
         PresentationDesignCommandPlan plan,
@@ -131,5 +200,26 @@ public static class PresentationDesignCommandPlanner
             default:
                 return false;
         }
+    }
+
+    private static string BuildLayoutDisplayName(SlideLayout layout)
+    {
+        if (!string.IsNullOrWhiteSpace(layout.Name))
+        {
+            return layout.Name;
+        }
+
+        return layout.LayoutType switch
+        {
+            SlideLayoutType.Title => "Title Slide",
+            SlideLayoutType.TitleContent => "Title and Content",
+            SlideLayoutType.TitleOnly => "Title Only",
+            SlideLayoutType.Blank => "Blank",
+            SlideLayoutType.TwoContent => "Two Content",
+            SlideLayoutType.Comparison => "Comparison",
+            SlideLayoutType.ContentCaption => "Content with Caption",
+            SlideLayoutType.PictureCaption => "Picture with Caption",
+            _ => "Custom Layout",
+        };
     }
 }

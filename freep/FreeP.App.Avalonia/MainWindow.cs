@@ -125,6 +125,8 @@ public sealed class MainWindow : Window
     internal AnimationPaneTimelinePlan? LastAnimationPaneTimelinePlan { get; private set; }
     internal PresentationDesignCommandPlan? LastLayoutRequestPlan { get; private set; }
     internal PresentationHandoutLayoutPlan? LastHandoutLayoutPlan { get; private set; }
+    internal PresentationLayoutPickerPlan? LastLayoutPickerPlan { get; private set; }
+    internal PresentationLayoutChoice? LastAppliedLayoutChoice { get; private set; }
 
     // ── Constructors ───────────────────────────────────────────────────────────
 
@@ -507,7 +509,27 @@ public sealed class MainWindow : Window
     private void OnLayoutPickerRequested(PresentationDesignCommandPlan plan)
     {
         LastLayoutRequestPlan = plan;
-        _statusText.Text = "Layout picker requested";
+        LastLayoutPickerPlan = PresentationDesignCommandPlanner.BuildLayoutPickerPlan(
+            _presentation,
+            Editor.CurrentSlideIndex);
+        _statusText.Text = $"Layout picker: {LastLayoutPickerPlan.Choices.Count} choices";
+    }
+
+    internal bool ApplyLayoutChoice(string layoutId)
+    {
+        var applied = PresentationDesignCommandPlanner.TryApplyLayoutChoice(
+            Editor,
+            layoutId,
+            out var choice);
+        if (applied)
+        {
+            LastAppliedLayoutChoice = choice;
+            RefreshSlidePane();
+            RefreshCanvas();
+            UpdateStatus();
+        }
+
+        return applied;
     }
 
     private async Task InsertPictureFromFileAsync()

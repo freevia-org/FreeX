@@ -124,6 +124,8 @@ public sealed class MainWindow : Window
     internal PresentationAltTextRequestPlan? LastAltTextRequestPlan { get; private set; }
     internal PresentationProofingRequestPlan? LastProofingRequestPlan { get; private set; }
     internal PresentationDesignCommandPlan? LastLayoutRequestPlan { get; private set; }
+    internal PresentationLayoutPickerPlan? LastLayoutPickerPlan { get; private set; }
+    internal PresentationLayoutChoice? LastAppliedLayoutChoice { get; private set; }
 
     // ── Wave 16B: Animation pane (right-side collapsible panel) ──────────────────
     // 16B SEAM START — do not restructure this region (16A/16C may conflict nearby).
@@ -925,6 +927,25 @@ public sealed class MainWindow : Window
     internal void OpenLayoutPicker()
     {
         LastLayoutRequestPlan = PresentationDesignCommandPlanner.LayoutPlan;
+        LastLayoutPickerPlan = PresentationDesignCommandPlanner.BuildLayoutPickerPlan(
+            _presentation,
+            Editor.CurrentSlideIndex);
+    }
+
+    internal bool ApplyLayoutChoice(string layoutId)
+    {
+        var applied = PresentationDesignCommandPlanner.TryApplyLayoutChoice(
+            Editor,
+            layoutId,
+            out var choice);
+        if (applied)
+        {
+            LastAppliedLayoutChoice = choice;
+            RefreshCanvas();
+            UpdateSlideCount();
+        }
+
+        return applied;
     }
 
     /// <summary>

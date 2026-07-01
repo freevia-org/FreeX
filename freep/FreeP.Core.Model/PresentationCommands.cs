@@ -204,6 +204,57 @@ public sealed class MoveSlideCommand : IPresentationCommand
 // SHAPE COMMANDS — helpers
 // ════════════════════════════════════════════════════════════════════════════════
 
+/// <summary>
+/// Assigns a slide to an existing presentation layout. Revert restores the prior layout id.
+/// </summary>
+public sealed class SetSlideLayoutCommand : IPresentationCommand
+{
+    private readonly int _slideIndex;
+    private readonly string _newLayoutId;
+    private string? _oldLayoutId;
+
+    public SetSlideLayoutCommand(int slideIndex, string layoutId)
+    {
+        _slideIndex = slideIndex;
+        _newLayoutId = layoutId;
+    }
+
+    public string Label => "Set Slide Layout";
+
+    public bool HasEffect(Presentation p) =>
+        _slideIndex >= 0 &&
+        _slideIndex < p.Slides.Count &&
+        p.Layouts.Any(layout => StringComparer.Ordinal.Equals(layout.Id, _newLayoutId)) &&
+        !StringComparer.Ordinal.Equals(p.Slides[_slideIndex].LayoutId, _newLayoutId);
+
+    public void Apply(Presentation p)
+    {
+        if (_slideIndex < 0 || _slideIndex >= p.Slides.Count)
+        {
+            return;
+        }
+
+        if (!p.Layouts.Any(layout => StringComparer.Ordinal.Equals(layout.Id, _newLayoutId)))
+        {
+            return;
+        }
+
+        var slide = p.Slides[_slideIndex];
+        _oldLayoutId = slide.LayoutId;
+        slide.LayoutId = _newLayoutId;
+    }
+
+    public void Revert(Presentation p)
+    {
+        if (_slideIndex < 0 || _slideIndex >= p.Slides.Count)
+        {
+            return;
+        }
+
+        p.Slides[_slideIndex].LayoutId = _oldLayoutId;
+    }
+}
+
 file static class ShapeHelper
 {
     internal static SlideShape? Find(Presentation p, int slideIndex, uint shapeId)

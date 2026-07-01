@@ -189,6 +189,22 @@ public sealed class EditingSession
         CurrentSlideIndex = insertAt;
     }
 
+    public bool SetCurrentSlideLayout(string layoutId)
+    {
+        if (CurrentSlide is null || string.IsNullOrWhiteSpace(layoutId))
+        {
+            return false;
+        }
+
+        if (!Presentation.Layouts.Any(layout => StringComparer.Ordinal.Equals(layout.Id, layoutId)))
+        {
+            return false;
+        }
+
+        Bus.Execute(new SetSlideLayoutCommand(_currentSlideIndex, layoutId));
+        return StringComparer.Ordinal.Equals(CurrentSlide.LayoutId, layoutId);
+    }
+
     /// <summary>Deletes the current slide. Adjusts CurrentSlideIndex after deletion.</summary>
     public void DeleteCurrentSlide()
     {

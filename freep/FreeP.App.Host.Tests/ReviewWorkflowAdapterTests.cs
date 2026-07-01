@@ -78,9 +78,27 @@ public sealed class ReviewWorkflowAdapterTests
         var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
         try
         {
+            window.Editor.Presentation.Layouts.Add(new SlideLayout
+            {
+                Id = "rId2",
+                Name = "Blank",
+                LayoutType = SlideLayoutType.Blank,
+                MasterId = window.Editor.Presentation.Masters[0].Id
+            });
+
             window.OpenLayoutPicker();
 
             window.LastLayoutRequestPlan.Should().Be(PresentationDesignCommandPlanner.LayoutPlan);
+            window.LastLayoutPickerPlan.Should().NotBeNull();
+            window.LastLayoutPickerPlan!.Choices.Should().Contain(choice =>
+                choice.LayoutId == "rId2" &&
+                choice.DisplayName == "Blank" &&
+                choice.LayoutType == SlideLayoutType.Blank);
+
+            window.ApplyLayoutChoice("rId2").Should().BeTrue();
+            window.Editor.CurrentSlide!.LayoutId.Should().Be("rId2");
+            window.LastAppliedLayoutChoice.Should().NotBeNull();
+            window.LastAppliedLayoutChoice!.LayoutId.Should().Be("rId2");
         }
         finally
         {
@@ -127,7 +145,8 @@ public sealed class ReviewWorkflowAdapterTests
         source.Should().Contain("PresentationReviewWorkflowPlanner.BuildProofingRequestPlan(_presentation)");
         source.Should().Contain("LastCommentPanePlan = plan;");
         source.Should().Contain("onLayoutPicker:     () => OpenLayoutPicker()");
-        source.Should().Contain("LastLayoutRequestPlan = PresentationDesignCommandPlanner.LayoutPlan;");
+        source.Should().Contain("PresentationDesignCommandPlanner.BuildLayoutPickerPlan(");
+        source.Should().Contain("PresentationDesignCommandPlanner.TryApplyLayoutChoice(");
         source.Should().NotContain("Modern resolved-thread state is not modeled yet.\";");
     }
 

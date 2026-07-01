@@ -286,6 +286,8 @@ public sealed class MainWindowHeadlessTests
         source.Should().Contain("PresentationDesignCommandPlanner.TryApply(Editor, plan, OnDesignHostRequest)");
         source.Should().Contain("PresentationDesignCommandPlanner.LayoutPlan");
         source.Should().Contain("OnLayoutPickerRequested");
+        source.Should().Contain("PresentationDesignCommandPlanner.BuildLayoutPickerPlan(");
+        source.Should().Contain("PresentationDesignCommandPlanner.TryApplyLayoutChoice(");
         source.Should().NotContain("Editor.SetTheme(");
         source.Should().NotContain("Editor.SetSlideSize16x9()");
         source.Should().NotContain("Editor.SetSlideSize4x3()");
@@ -887,16 +889,31 @@ public sealed class MainWindowHeadlessTests
     {
         var found = false;
         PresentationDesignCommandPlan? layoutPlan = null;
+        PresentationLayoutPickerPlan? pickerPlan = null;
+        PresentationLayoutChoice? appliedChoice = null;
+        string? currentLayoutId = null;
+        var applied = false;
 
         var ran = await OnUiThread(() =>
         {
             var window = new MainWindow(Array.Empty<string>());
+            window.Editor.Presentation.Layouts.Add(new SlideLayout
+            {
+                Id = "rId2",
+                Name = "Blank",
+                LayoutType = SlideLayoutType.Blank,
+                MasterId = window.Editor.Presentation.Masters[0].Id
+            });
             var registry = window.BuildCommandRegistry();
             found = registry.TryGet(PresentationDesignCommandPlanner.LayoutCommandId, out var layout);
 
             layout!.Execute(RibbonCommandContext.Empty);
+            applied = window.ApplyLayoutChoice("rId2");
 
             layoutPlan = window.LastLayoutRequestPlan;
+            pickerPlan = window.LastLayoutPickerPlan;
+            appliedChoice = window.LastAppliedLayoutChoice;
+            currentLayoutId = window.Editor.CurrentSlide!.LayoutId;
         });
 
         if (!ran) return;
@@ -904,6 +921,15 @@ public sealed class MainWindowHeadlessTests
         layoutPlan.Should().NotBeNull("the command should expose a host callback intent instead of no-oping");
         layoutPlan!.CommandId.Should().Be(PresentationDesignCommandPlanner.LayoutCommandId);
         layoutPlan.Intent.Should().Be(PresentationDesignCommandIntentKind.RequestLayoutPicker);
+        pickerPlan.Should().NotBeNull("the host callback should expose concrete shared layout choices");
+        pickerPlan!.Choices.Should().Contain(choice =>
+            choice.LayoutId == "rId2" &&
+            choice.DisplayName == "Blank" &&
+            choice.LayoutType == SlideLayoutType.Blank);
+        applied.Should().BeTrue("Avalonia should be able to apply a shared picker choice");
+        currentLayoutId.Should().Be("rId2");
+        appliedChoice.Should().NotBeNull();
+        appliedChoice!.LayoutId.Should().Be("rId2");
     }
 
     [Fact]
