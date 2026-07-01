@@ -271,7 +271,15 @@ public static class PptxPackageWriter
 
         // --- 1. [Content_Types].xml ---
         var packageSnapshot = presentation.PackageSnapshot;
-        var ctXml = BuildContentTypesXml(presentation, masters, layouts, mediaExtensions, prvPartCtRemaps, packageSnapshot);
+        var preservedChartWorkbookPaths = FindPreservedChartWorkbookPaths(packageSnapshot, CountChartShapes(presentation));
+        var ctXml = BuildContentTypesXml(
+            presentation,
+            masters,
+            layouts,
+            mediaExtensions,
+            prvPartCtRemaps,
+            packageSnapshot,
+            preservedChartWorkbookPaths);
         WriteEntry(archive, "[Content_Types].xml", ctXml);
 
         // --- 2. Root rels ---
@@ -411,7 +419,7 @@ public static class PptxPackageWriter
             var mediaFileRelIds = WriteSlideMediaFiles(archive, slide, si + 1);
 
             // Write charts into the archive, get back rel-id map
-            var chartRelIds = WriteSlideCharts(archive, slide, ref globalChartIndex);
+            var chartRelIds = WriteSlideCharts(archive, slide, ref globalChartIndex, packageSnapshot);
 
             // Write SmartArt diagram parts (verbatim bytes + rels).
             // Collect already-used relIds so the SmartArt allocator avoids them.
@@ -574,7 +582,7 @@ public static class PptxPackageWriter
         WriteEntry(archive, "ppt/presentation.xml",
             BuildPresentationXml(presentation, sldIdElements, masterRelIds));
 
-        CopyPreservedPackageEntries(archive, packageSnapshot);
+        CopyPreservedPackageEntries(archive, packageSnapshot, preservedChartWorkbookPaths);
     }
 
     // ── [Content_Types].xml ───────────────────────────────────────────────────────
@@ -583,7 +591,8 @@ public static class PptxPackageWriter
         Presentation p, List<SlideMaster> masters, List<SlideLayout> layouts,
         HashSet<string> mediaExtensions,
         Dictionary<string, string>? prvPartPathRemaps = null,
-        PptxPackageSnapshot? packageSnapshot = null)
+        PptxPackageSnapshot? packageSnapshot = null,
+        IReadOnlySet<string>? preservedWriterOwnedPaths = null)
     {
         var CT = OpcMediaTypes.ContentTypesNamespace;
 
@@ -741,7 +750,7 @@ public static class PptxPackageWriter
                 defaults,
                 overrides));
 
-        MergePreservedContentTypes(doc, packageSnapshot);
+        MergePreservedContentTypes(doc, packageSnapshot, preservedWriterOwnedPaths);
         return doc;
     }
 
@@ -3223,7 +3232,10 @@ public static class PptxPackageWriter
     /// Returns (shapeName, relId, chartPartPath) tuples for wiring into slide rels.
     /// </summary>
     private static List<(uint shapeId, string relId, string chartPath)> WriteSlideCharts(
-        ZipArchive archive, Slide slide, ref int globalChartIndex)
+        ZipArchive archive,
+        Slide slide,
+        ref int globalChartIndex,
+        PptxPackageSnapshot? packageSnapshot)
     {
         var result = new List<(uint, string, string)>();
 
@@ -3232,7 +3244,7 @@ public static class PptxPackageWriter
             if (shape.Kind != SlideShapeKind.Chart || shape.Chart is null)
                 continue;
 
-            var chartPath = PptxChartWriter.WriteChartPart(archive, shape.Chart, globalChartIndex);
+            var chartPath = PptxChartWriter.WriteChartPart(archive, shape.Chart, globalChartIndex, packageSnapshot);
             var relId = $"rIdChart{globalChartIndex}";
             result.Add((shape.Id, relId, chartPath));
             globalChartIndex++;
@@ -3816,14 +3828,22 @@ public static class PptxPackageWriter
         WriteEntry(archive, relsPath, rels.ToXDocument());
     }
 
-    private static void MergePreservedContentTypes(XDocument contentTypes, PptxPackageSnapshot? packageSnapshot)
+    private static void MergePreservedContentTypes(
+        XDocument contentTypes,
+        PptxPackageSnapshot? packageSnapshot,
+        IReadOnlySet<string>? preservedWriterOwnedPaths = null)
     {
         if (packageSnapshot is null || !packageSnapshot.TryGetEntry("[Content_Types].xml", out var bytes))
             return;
 
         var sourceTypes = OpcXml.TryLoadXml(bytes);
         if (sourceTypes is not null)
-            OpcMediaTypes.MergePreservedContentTypes(contentTypes, sourceTypes, IsWriterOwnedPath);
+        {
+            OpcMediaTypes.MergePreservedContentTypes(
+                contentTypes,
+                sourceTypes,
+                path => IsWriterOwnedPath(path) && !IsPreservedWriterOwnedPath(path, preservedWriterOwnedPaths));
+        }
     }
 
     private static void MergePreservedRelationships(
@@ -3855,7 +3875,10 @@ public static class PptxPackageWriter
         }
     }
 
-    private static void CopyPreservedPackageEntries(ZipArchive archive, PptxPackageSnapshot? packageSnapshot)
+    private static void CopyPreservedPackageEntries(
+        ZipArchive archive,
+        PptxPackageSnapshot? packageSnapshot,
+        IReadOnlySet<string>? preservedWriterOwnedPaths = null)
     {
         if (packageSnapshot is null)
             return;
@@ -3865,8 +3888,11 @@ public static class PptxPackageWriter
         foreach (var (path, bytes) in packageSnapshot.Entries)
         {
             var normalizedPath = ToZipEntryPath(path);
-            if (copied.Contains(normalizedPath) || IsWriterOwnedPath(normalizedPath))
+            if (copied.Contains(normalizedPath) ||
+                IsWriterOwnedPath(normalizedPath) && !IsPreservedWriterOwnedPath(normalizedPath, preservedWriterOwnedPaths))
+            {
                 continue;
+            }
 
             var entry = archive.CreateEntry(normalizedPath, CompressionLevel.Optimal);
             using var stream = entry.Open();
@@ -3874,6 +3900,68 @@ public static class PptxPackageWriter
             copied.Add(normalizedPath);
         }
     }
+
+    private static HashSet<string> FindPreservedChartWorkbookPaths(PptxPackageSnapshot? packageSnapshot, int chartCount)
+    {
+        var paths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (packageSnapshot is null || chartCount == 0)
+            return paths;
+
+        for (var chartIndex = 1; chartIndex <= chartCount; chartIndex++)
+        {
+            var chartPath = $"ppt/charts/chart{chartIndex}.xml";
+            var relsPath = GetRelationshipPartPath(chartPath);
+            if (!packageSnapshot.TryGetEntry(relsPath, out var relsBytes))
+                continue;
+
+            var relsXml = OpcXml.TryLoadXml(relsBytes);
+            if (relsXml is null)
+                continue;
+
+            foreach (var relationship in OpcRelationships.Load(relsXml))
+            {
+                if (TryResolveChartWorkbookPath(chartPath, relationship, out var workbookPath) &&
+                    packageSnapshot.TryGetEntry(workbookPath, out _))
+                {
+                    paths.Add(ToZipEntryPath(workbookPath));
+                }
+            }
+        }
+
+        return paths;
+    }
+
+    private static int CountChartShapes(Presentation presentation) =>
+        presentation.Slides.Sum(slide =>
+            AllShapes(slide.Shapes).Count(shape => shape.Kind == SlideShapeKind.Chart && shape.Chart is not null));
+
+    internal static bool TryResolveChartWorkbookPath(
+        string chartPath,
+        OpcRelationship relationship,
+        out string workbookPath)
+    {
+        workbookPath = string.Empty;
+        if (relationship.IsExternal ||
+            string.IsNullOrWhiteSpace(relationship.Target) ||
+            !string.Equals(relationship.Type, PackageRelType, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var chartDirectory = GetDirectoryName(chartPath);
+        var resolvedPath = ResolveRelativeZipPath(chartDirectory, relationship.Target);
+        if (!resolvedPath.StartsWith("ppt/embeddings/", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        workbookPath = resolvedPath;
+        return true;
+    }
+
+    private static bool IsPreservedWriterOwnedPath(
+        string path,
+        IReadOnlySet<string>? preservedWriterOwnedPaths) =>
+        preservedWriterOwnedPaths is not null &&
+        preservedWriterOwnedPaths.Contains(ToZipEntryPath(path));
 
     private static bool IsWriterOwnedRelationship(string sourcePartPath, string type, string target, bool external) =>
         WriterOwnedPackageClassifier.IsRegeneratedRelationship(sourcePartPath, type, target, external);

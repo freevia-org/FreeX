@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.IO.Compression;
 using System.Xml.Linq;
+using Free.Shared.Opc;
 using FreeP.Core.Model;
 
 namespace FreeP.Core.IO;
@@ -39,13 +40,18 @@ internal static class PptxChartWriter
     /// </summary>
     /// <returns>The OPC path of the written chart part (e.g. "ppt/charts/chart1.xml").</returns>
     internal static string WriteChartPart(
-        ZipArchive archive, ChartShape chart, int chartIndex)
+        ZipArchive archive,
+        ChartShape chart,
+        int chartIndex,
+        PptxPackageSnapshot? packageSnapshot = null)
     {
         var chartPath = $"ppt/charts/chart{chartIndex}.xml";
 
         // Write chart XML
         var chartDoc = BuildChartDoc(chart);
+        MergePreservedExternalData(chartDoc, packageSnapshot, chartPath);
         WriteEntry(archive, chartPath, chartDoc);
+        WritePreservedWorkbookRelationships(archive, packageSnapshot, chartPath);
 
         return chartPath;
     }
@@ -628,6 +634,54 @@ internal static class PptxChartWriter
         using var writer = System.Xml.XmlWriter.Create(stream, XmlSettings);
         doc.Save(writer);
     }
+
+    private static void MergePreservedExternalData(
+        XDocument chartDoc,
+        PptxPackageSnapshot? packageSnapshot,
+        string chartPath)
+    {
+        var sourceChart = TryReadSnapshotXml(packageSnapshot, chartPath);
+        var sourceExternalData = sourceChart?.Root?.Element(C + "externalData");
+        if (sourceExternalData is null || chartDoc.Root is null)
+            return;
+
+        chartDoc.Root.Element(C + "externalData")?.Remove();
+        chartDoc.Root.Add(new XElement(sourceExternalData));
+    }
+
+    private static void WritePreservedWorkbookRelationships(
+        ZipArchive archive,
+        PptxPackageSnapshot? packageSnapshot,
+        string chartPath)
+    {
+        var relsPath = OpcPathHelper.GetRelationshipPartPath(chartPath);
+        var sourceRels = TryReadSnapshotXml(packageSnapshot, relsPath);
+        if (sourceRels is null)
+            return;
+
+        var workbookRelationships = OpcRelationships.Load(sourceRels)
+            .Where(relationship =>
+                PptxPackageWriter.TryResolveChartWorkbookPath(chartPath, relationship, out var workbookPath) &&
+                packageSnapshot?.TryGetEntry(workbookPath, out _) == true)
+            .ToArray();
+        if (workbookRelationships.Length == 0)
+            return;
+
+        WriteEntry(
+            archive,
+            relsPath,
+            OpcRelationships.CreateDocument(workbookRelationships.Select(relationship =>
+                OpcRelationships.CreateRelationship(
+                    relationship.Id,
+                    relationship.Type,
+                    relationship.Target,
+                    relationship.IsExternal))));
+    }
+
+    private static XDocument? TryReadSnapshotXml(PptxPackageSnapshot? packageSnapshot, string path) =>
+        packageSnapshot is not null && packageSnapshot.TryGetEntry(path, out var bytes)
+            ? OpcXml.TryLoadXml(bytes)
+            : null;
 
     private static XAttribute NsAttr(string prefix, XNamespace ns) =>
         new XAttribute(XNamespace.Xmlns + prefix, ns.NamespaceName);
