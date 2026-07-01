@@ -86,11 +86,11 @@ public partial class MainWindow
                 System.Windows.Media.Color.FromRgb(120, 120, 120)),
             BorderThickness = new System.Windows.Thickness(1),
             MaxDropDownHeight = 220,
-            ToolTip = "Pick from list"
+            ToolTip = UiText.CreateAutomationName(UiText.Get("DataValidation_InCellDropdown"))
         };
         AutomationProperties.SetAutomationId(_validationDropdown, "WorksheetDataValidationDropdown");
-        AutomationProperties.SetName(_validationDropdown, "Data validation list");
-        AutomationProperties.SetHelpText(_validationDropdown, "Pick a permitted value for the active cell.");
+        AutomationProperties.SetName(_validationDropdown, UiText.CreateAutomationName(UiText.Get("DataValidation_InCellDropdown")));
+        AutomationProperties.SetHelpText(_validationDropdown, UiText.CreateAutomationName(UiText.Get("DataValidation_InCellDropdown")));
         _validationDropdown.SelectionChanged += ValidationDropdown_SelectionChanged;
         EditOverlay.Children.Add(_validationDropdown);
     }
@@ -168,7 +168,7 @@ public partial class MainWindow
             }
         };
         AutomationProperties.SetAutomationId(_dvInputMessageBorder, "WorksheetDvInputMessagePopup");
-        AutomationProperties.SetName(_dvInputMessageBorder, "Data validation input message");
+        AutomationProperties.SetName(_dvInputMessageBorder, UiText.CreateAutomationName(UiText.Get("DataValidation_InputMessage")));
         CommentOverlay.Children.Add(_dvInputMessageBorder);
     }
 
