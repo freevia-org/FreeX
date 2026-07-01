@@ -2946,8 +2946,8 @@ public sealed class MacOsAppReadinessPreflightTests
                     AutomationProperties.SetAutomationId(_selectionStatsText, "SelectionStatsText");
                     AutomationProperties.SetName(_selectionStatsText, "Selection statistics");
                     AutomationProperties.SetHelpText(_selectionStatsText, "Shows statistics for the current selection.");
-                    HasFormulaBoxAutomationName: string.Equals(AutomationProperties.GetName(_formulaBox), "Formula bar", StringComparison.Ordinal)
-                    HasFormulaBoxAutomationHelp: string.Equals(AutomationProperties.GetHelpText(_formulaBox), "Edit the active cell value or formula.", StringComparison.Ordinal)
+                    HasFormulaBoxAutomationName: string.Equals(AutomationProperties.GetName(_formulaBox), FormulaBarText(FormulaBarChromePlanner.FormulaBox.AutomationNameResourceKey), StringComparison.Ordinal)
+                    HasFormulaBoxAutomationHelp: string.Equals(AutomationProperties.GetHelpText(_formulaBox), FormulaBarText(FormulaBarChromePlanner.FormulaBox.HelpTextResourceKey), StringComparison.Ordinal)
                     HasFormulaBoxAutomationId: string.Equals(AutomationProperties.GetAutomationId(_formulaBox), "FormulaBox", StringComparison.Ordinal)
                     HasStatusTextAutomationName: string.Equals(AutomationProperties.GetName(_statusText), "Status", StringComparison.Ordinal)
                     HasStatusTextAutomationHelp: string.Equals(AutomationProperties.GetHelpText(_statusText), "Shows the current workbook status.", StringComparison.Ordinal)
