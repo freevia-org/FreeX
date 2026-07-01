@@ -270,6 +270,25 @@ public sealed class RendererNeutralDedupPlannerTests
     }
 
     [Fact]
+    public void WpfAndAvaloniaSlideCanvases_UseRendererNeutralChartAxisTitlePlanning()
+    {
+        var wpf = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "SlideCanvas.cs");
+        var avalonia = ReadWorkspaceFile(
+            "freep",
+            "FreeP.App.Rendering.Avalonia",
+            "SlideCanvas.cs");
+
+        foreach (var source in new[] { wpf, avalonia })
+        {
+            source.Should().Contain("ChartRenderPlanner.BuildAxisTitlePlans(chart, frame)");
+            source.Should().Contain("DrawChartAxisTitle");
+            source.Should().Contain("ChartAxisTitleOrientation.Horizontal");
+            source.Should().NotContain("CategoryAxis.Title");
+            source.Should().NotContain("ValueAxis.Title");
+        }
+    }
+
+    [Fact]
     public void WpfAndAvaloniaSlideShowWindows_UseRendererNeutralPlaybackPlanner()
     {
         var wpf = ReadWorkspaceFile("freep", "FreeP.App.Host", "SlideShowWindow.cs");

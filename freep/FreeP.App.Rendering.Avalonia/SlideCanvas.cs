@@ -766,6 +766,11 @@ public sealed class SlideCanvas : Control
                 ToTextAlignment(label.Alignment));
         }
 
+        foreach (var title in ChartRenderPlanner.BuildAxisTitlePlans(chart, frame))
+        {
+            DrawChartAxisTitle(dc, title);
+        }
+
         foreach (var item in ChartRenderPlanner.BuildLegendItemPlans(chart, frame, chartOp.SeriesColors))
         {
             dc.FillRectangle(ToBrush(item.Fill), ToRect(item.SwatchBounds));
@@ -1121,6 +1126,38 @@ public sealed class SlideCanvas : Control
     }
 
     // ── Text ─────────────────────────────────────────────────────────────────
+
+    private static void DrawChartAxisTitle(DrawingContext dc, ChartAxisTitlePlan title)
+    {
+        var label = title.Label;
+        var rect = ToRect(label.Bounds);
+        if (title.Orientation == ChartAxisTitleOrientation.Horizontal)
+        {
+            DrawChartLabel(dc, label.Text, rect, label.IsBold, label.FontSize, ToTextAlignment(label.Alignment));
+            return;
+        }
+
+        double angle = title.Orientation == ChartAxisTitleOrientation.VerticalClockwise
+            ? Math.PI / 2.0
+            : -Math.PI / 2.0;
+        double cx = rect.X + rect.Width * 0.5;
+        double cy = rect.Y + rect.Height * 0.5;
+        using var rotateScope = dc.PushTransform(
+            Matrix.CreateTranslation(-cx, -cy)
+            * Matrix.CreateRotation(angle)
+            * Matrix.CreateTranslation(cx, cy));
+        DrawChartLabel(
+            dc,
+            label.Text,
+            new Rect(
+                rect.X + (rect.Width - rect.Height) * 0.5,
+                rect.Y + (rect.Height - rect.Width) * 0.5,
+                rect.Height,
+                rect.Width),
+            label.IsBold,
+            label.FontSize,
+            ToTextAlignment(label.Alignment));
+    }
 
     private static void RenderText(DrawingContext dc, ResolvedTextLayout text, LayoutRect bounds)
     {

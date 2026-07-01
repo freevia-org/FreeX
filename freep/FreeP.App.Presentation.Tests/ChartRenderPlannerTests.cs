@@ -135,6 +135,74 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void BuildFramePlan_ColumnAxisTitles_ReservesSharedTitleBands()
+    {
+        var chart = new ChartShape { ChartType = ChartType.ColumnClustered };
+        chart.ValueAxis.Title = "Revenue";
+        chart.CategoryAxis.Title = "Quarter";
+
+        var plan = ChartRenderPlanner.BuildFramePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+
+        plan.Plot.Should().Be(new ChartPlanRect(62, 8, 330, 254));
+    }
+
+    [Fact]
+    public void BuildAxisTitlePlans_ColumnChart_PlansVerticalValueAndHorizontalCategoryTitles()
+    {
+        var chart = new ChartShape { ChartType = ChartType.ColumnClustered };
+        chart.ValueAxis.Title = "Revenue";
+        chart.CategoryAxis.Title = "Quarter";
+        var frame = ChartRenderPlanner.BuildFramePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+
+        var titles = ChartRenderPlanner.BuildAxisTitlePlans(chart, frame);
+
+        titles.Should().HaveCount(2);
+        titles[0].Label.Text.Should().Be("Revenue");
+        titles[0].Label.Bounds.Should().Be(new ChartPlanRect(8, 8, 14, 254));
+        titles[0].Label.FontSize.Should().Be(ChartRenderPlanner.AxisTitleFontSize);
+        titles[0].Orientation.Should().Be(ChartAxisTitleOrientation.VerticalCounterclockwise);
+        titles[1].Label.Text.Should().Be("Quarter");
+        titles[1].Label.Bounds.Should().Be(new ChartPlanRect(62, 280, 330, 14));
+        titles[1].Orientation.Should().Be(ChartAxisTitleOrientation.Horizontal);
+    }
+
+    [Fact]
+    public void BuildAxisTitlePlans_BarChart_SwapsTitleOrientationsWithAxes()
+    {
+        var chart = new ChartShape { ChartType = ChartType.BarClustered };
+        chart.ValueAxis.Title = "Revenue";
+        chart.CategoryAxis.Title = "Quarter";
+        var frame = ChartRenderPlanner.BuildFramePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+
+        var titles = ChartRenderPlanner.BuildAxisTitlePlans(chart, frame);
+
+        frame.Plot.Should().Be(new ChartPlanRect(66, 8, 326, 230));
+        titles.Should().HaveCount(2);
+        titles[0].Label.Text.Should().Be("Revenue");
+        titles[0].Label.Bounds.Should().Be(new ChartPlanRect(66, 256, 326, 14));
+        titles[0].Orientation.Should().Be(ChartAxisTitleOrientation.Horizontal);
+        titles[1].Label.Text.Should().Be("Quarter");
+        titles[1].Label.Bounds.Should().Be(new ChartPlanRect(8, 8, 14, 230));
+        titles[1].Orientation.Should().Be(ChartAxisTitleOrientation.VerticalCounterclockwise);
+    }
+
+    [Fact]
+    public void BuildAxisTitlePlans_DeletedAxes_DoNotReserveOrRenderTitles()
+    {
+        var chart = new ChartShape { ChartType = ChartType.ColumnClustered };
+        chart.ValueAxis.Title = "Revenue";
+        chart.ValueAxis.Delete = true;
+        chart.CategoryAxis.Title = "Quarter";
+        chart.CategoryAxis.Delete = true;
+
+        var frame = ChartRenderPlanner.BuildFramePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+        var titles = ChartRenderPlanner.BuildAxisTitlePlans(chart, frame);
+
+        frame.Plot.Should().Be(new ChartPlanRect(48, 8, 344, 268));
+        titles.Should().BeEmpty();
+    }
+
+    [Fact]
     public void BuildLegendItemPlans_BottomLegend_PlansOneItemPerSeries()
     {
         var chart = MakeTwoSeriesChart(ChartType.ColumnClustered);
