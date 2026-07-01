@@ -435,6 +435,12 @@ public sealed class MainWindow : Window
         r.Register("freep.find", new ActionRibbonCommand(OpenFindDialog));
         r.Register("freep.replace", new ActionRibbonCommand(OpenFindReplaceDialog));
 
+        foreach (var plan in PresentationTransitionCommandPlanner.BuiltInPlans)
+        {
+            r.Register(plan.CommandId, new ContextRibbonCommand(ctx =>
+                PresentationTransitionCommandPlanner.TryApply(Editor, plan, ctx.SelectedValue)));
+        }
+
         // Slide show
         r.Register("freep.slideshow.from-beginning",
             new ActionRibbonCommand(() => StartSlideShow(fromStart: true)));

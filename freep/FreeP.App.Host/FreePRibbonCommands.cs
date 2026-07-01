@@ -175,61 +175,7 @@ internal static class FreePRibbonCommands
 
         // ── Wave 4C: Transitions tab ─────────────────────────────────────────────
 
-        // Transition gallery — set Kind on current slide, preserve other transition properties.
-        RegisterTransitionKind(registry, editor, "freep.transition.none",     TransitionKind.None);
-        RegisterTransitionKind(registry, editor, "freep.transition.fade",     TransitionKind.Fade);
-        RegisterTransitionKind(registry, editor, "freep.transition.push",     TransitionKind.Push);
-        RegisterTransitionKind(registry, editor, "freep.transition.wipe",     TransitionKind.Wipe);
-        RegisterTransitionKind(registry, editor, "freep.transition.split",    TransitionKind.Split);
-        RegisterTransitionKind(registry, editor, "freep.transition.cut",      TransitionKind.Cut);
-        RegisterTransitionKind(registry, editor, "freep.transition.cover",    TransitionKind.Cover);
-        RegisterTransitionKind(registry, editor, "freep.transition.uncover",  TransitionKind.Uncover);
-        RegisterTransitionKind(registry, editor, "freep.transition.blinds",   TransitionKind.Blinds);
-        RegisterTransitionKind(registry, editor, "freep.transition.dissolve", TransitionKind.Dissolve);
-        RegisterTransitionKind(registry, editor, "freep.transition.zoom",     TransitionKind.Zoom);
-        RegisterTransitionKind(registry, editor, "freep.transition.wheel",    TransitionKind.Wheel);
-
-        // Transition timing — Duration combo: 0=500ms, 1=750ms, 2=1000ms, 3=1500ms, 4=2000ms.
-        registry.Register("freep.transition.duration", new ActionRibbonCommand(() =>
-        {
-            // ComboBox selection is not yet fed back via context in Wave 4C; stub.
-            /* STUB: Wave 5 will feed the selected index through RibbonCommandContext */
-        }));
-
-        // Advance on click toggle.
-        registry.Register("freep.transition.advance-on-click",
-            new EditorToggleCommand(stateStore, "freep.transition.advance-on-click", () =>
-            {
-                var t = GetOrCreateTransition(editor);
-                t.AdvanceOnClick = !t.AdvanceOnClick;
-                editor.SetTransition(t);
-            }));
-
-        // Advance after time combo.
-        registry.Register("freep.transition.advance-after", new ActionRibbonCommand(() =>
-        {
-            /* STUB: Wave 5 will wire the selected time value */
-        }));
-
-        // Apply To All — copies the current slide's transition to every slide.
-        registry.Register("freep.transition.apply-all", new ActionRibbonCommand(() =>
-        {
-            var currentTransition = editor.CurrentSlideTransition;
-            var pres = editor.Presentation;
-            for (int i = 0; i < pres.Slides.Count; i++)
-            {
-                // Clone so each slide owns its own object; null clears any existing transition.
-                SlideTransition? copy = currentTransition is null ? null : new SlideTransition
-                {
-                    Kind           = currentTransition.Kind,
-                    Direction      = currentTransition.Direction,
-                    DurationMs     = currentTransition.DurationMs,
-                    AdvanceOnClick = currentTransition.AdvanceOnClick,
-                    AdvanceAfterMs = currentTransition.AdvanceAfterMs,
-                };
-                pres.Slides[i].Transition = copy;
-            }
-        }));
+        RegisterTransitionCommands(registry, stateStore, editor);
 
         // ── Wave 4C: Slide Show buttons ──────────────────────────────────────────
 
@@ -480,41 +426,20 @@ internal static class FreePRibbonCommands
 
     // ── Transition helpers ────────────────────────────────────────────────────────
 
-    /// <summary>
-    /// Returns the current slide's transition if it exists, or a new default one.
-    /// Does NOT call SetTransition — the caller must do so after mutating.
-    /// </summary>
-    private static SlideTransition GetOrCreateTransition(EditingSession editor)
-        => editor.CurrentSlideTransition is not null
-            ? new SlideTransition
-              {
-                  Kind           = editor.CurrentSlideTransition.Kind,
-                  Direction      = editor.CurrentSlideTransition.Direction,
-                  DurationMs     = editor.CurrentSlideTransition.DurationMs,
-                  AdvanceOnClick = editor.CurrentSlideTransition.AdvanceOnClick,
-                  AdvanceAfterMs = editor.CurrentSlideTransition.AdvanceAfterMs,
-              }
-            : new SlideTransition();
-
-    private static void RegisterTransitionKind(
+    private static void RegisterTransitionCommands(
         RibbonCommandRegistry registry,
-        EditingSession        editor,
-        string                id,
-        TransitionKind        kind)
+        RibbonStateStore stateStore,
+        EditingSession editor)
     {
-        registry.Register(id, new ActionRibbonCommand(() =>
+        foreach (var plan in PresentationTransitionCommandPlanner.BuiltInPlans)
         {
-            if (kind == TransitionKind.None)
-            {
-                editor.SetTransition(null);
-            }
-            else
-            {
-                var t = GetOrCreateTransition(editor);
-                t.Kind = kind;
-                editor.SetTransition(t);
-            }
-        }));
+            registry.Register(
+                plan.CommandId,
+                plan.Intent == PresentationTransitionCommandIntentKind.ToggleAdvanceOnClick
+                    ? new TransitionToggleCommand(stateStore, editor, plan)
+                    : new ContextRibbonCommand(ctx =>
+                        PresentationTransitionCommandPlanner.TryApply(editor, plan, ctx.SelectedValue)));
+        }
     }
 
     // ── Animation helpers ─────────────────────────────────────────────────────────
@@ -629,6 +554,39 @@ internal static class FreePRibbonCommands
         public void Execute(RibbonCommandContext context)
         {
             _toggle();
+            _checked = !_checked;
+            _stateStore.SetChecked(_id, _checked);
+        }
+
+        public RibbonCommandState GetState() => new(IsEnabled: true, IsChecked: _checked);
+    }
+
+    private sealed class TransitionToggleCommand : IRibbonStatefulCommand
+    {
+        private readonly RibbonStateStore _stateStore;
+        private readonly EditingSession _editor;
+        private readonly PresentationTransitionCommandPlan _plan;
+        private readonly RibbonCommandId _id;
+        private bool _checked;
+
+        public TransitionToggleCommand(
+            RibbonStateStore stateStore,
+            EditingSession editor,
+            PresentationTransitionCommandPlan plan)
+        {
+            _stateStore = stateStore;
+            _editor = editor;
+            _plan = plan;
+            _id = plan.CommandId;
+        }
+
+        public void Execute(RibbonCommandContext context)
+        {
+            if (!PresentationTransitionCommandPlanner.TryApply(_editor, _plan, context.SelectedValue))
+            {
+                return;
+            }
+
             _checked = !_checked;
             _stateStore.SetChecked(_id, _checked);
         }

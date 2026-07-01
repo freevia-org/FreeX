@@ -236,6 +236,18 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public void RibbonDefinition_contains_transitions_tab_without_design_or_animations()
+    {
+        var definition = FreePRibbonAvalonia.Build();
+
+        definition.Tabs.Select(tab => tab.Id)
+            .Should()
+            .Contain("transitions")
+            .And
+            .NotContain(["design", "animations"]);
+    }
+
+    [Fact]
     public void RibbonDefinition_home_tab_has_file_slides_and_edit_groups()
     {
         var definition = FreePRibbonAvalonia.Build();
@@ -375,6 +387,20 @@ public sealed class MainWindowHeadlessTests
         illustrationIds.Should().Contain("freep.picture", "Picture command required");
         illustrationIds.Should().Contain("freep.shape-rectangle", "Rectangle command required");
         illustrationIds.Should().Contain("freep.shape-ellipse", "Ellipse command required");
+    }
+
+    [Fact]
+    public void RibbonDefinition_transitions_tab_has_planned_transition_commands()
+    {
+        var definition = FreePRibbonAvalonia.Build();
+        var transitions = definition.Tabs.Single(t => t.Id == "transitions");
+        var commandIds = transitions.Groups
+            .SelectMany(group => group.Controls)
+            .Where(control => !string.IsNullOrEmpty(control.CommandId.Value))
+            .Select(control => control.CommandId.Value)
+            .ToArray();
+
+        commandIds.Should().Contain(PresentationTransitionCommandPlanner.BuiltInPlans.Select(plan => plan.CommandId));
     }
 
     // ── Slide management ────────────────────────────────────────────────────────
@@ -761,6 +787,44 @@ public sealed class MainWindowHeadlessTests
         if (!ran) return;
         found.Should().BeTrue("the Avalonia chart-data command must be registered");
         after.Should().Be(before, "opening chart data without a selected chart should preserve WPF's no-op behavior");
+    }
+
+    [Fact]
+    public async Task Ribbon_transition_commands_route_through_shared_planner()
+    {
+        var foundFade = false;
+        var foundDuration = false;
+        var foundApplyAll = false;
+        TransitionKind? firstKind = null;
+        int? firstDuration = null;
+        TransitionKind? secondKind = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            window.Editor.InsertSlide();
+            window.Editor.SelectSlide(0);
+            var registry = window.BuildCommandRegistry();
+            foundFade = registry.TryGet("freep.transition.fade", out var fade);
+            foundDuration = registry.TryGet("freep.transition.duration", out var duration);
+            foundApplyAll = registry.TryGet("freep.transition.apply-all", out var applyAll);
+
+            fade!.Execute(RibbonCommandContext.Empty);
+            duration!.Execute(RibbonCommandContext.ForSelectedValue("1.50s"));
+            applyAll!.Execute(RibbonCommandContext.Empty);
+
+            firstKind = window.Editor.Presentation.Slides[0].Transition?.Kind;
+            firstDuration = window.Editor.Presentation.Slides[0].Transition?.DurationMs;
+            secondKind = window.Editor.Presentation.Slides[1].Transition?.Kind;
+        });
+
+        if (!ran) return;
+        foundFade.Should().BeTrue("Fade must be registered through the Avalonia registry");
+        foundDuration.Should().BeTrue("Duration must be registered through the Avalonia registry");
+        foundApplyAll.Should().BeTrue("Apply To All must be registered through the Avalonia registry");
+        firstKind.Should().Be(TransitionKind.Fade);
+        firstDuration.Should().Be(1500);
+        secondKind.Should().Be(TransitionKind.Fade);
     }
 
     [Theory]

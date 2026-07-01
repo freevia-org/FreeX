@@ -1,3 +1,4 @@
+using System.IO;
 using Free.Shared.Drawing;
 using Free.Shared.Ribbon;
 using FreeP.App.Compositor;
@@ -41,11 +42,11 @@ public class RibbonTransitionsAnimationsTests
         => FreePRibbonCommands.Build(new RibbonStateStore(), editor, onStart, onCurrent);
 
     /// <summary>Executes a registered command by id.</summary>
-    private static void Exec(RibbonCommandRegistry registry, string id)
+    private static void Exec(RibbonCommandRegistry registry, string id, RibbonCommandContext? context = null)
     {
         bool found = registry.TryGet(id, out var cmd);
         Assert.True(found, $"Command '{id}' was not registered.");
-        cmd!.Execute(RibbonCommandContext.Empty);
+        cmd!.Execute(context ?? RibbonCommandContext.Empty);
     }
 
     // ── Ribbon definition structure ────────────────────────────────────────────────
@@ -170,6 +171,42 @@ public class RibbonTransitionsAnimationsTests
         var reg = MakeRegistry(ed);
         Exec(reg, "freep.transition.dissolve");
         Assert.Equal(TransitionKind.Dissolve, ed.CurrentSlideTransition?.Kind);
+    }
+
+    [Fact]
+    public void Cmd_TransitionDuration_UsesRibbonContextSelectedValue()
+    {
+        var (ed, _) = MakeSession();
+        var reg = MakeRegistry(ed);
+        Exec(reg, "freep.transition.fade");
+
+        Exec(reg, "freep.transition.duration", RibbonCommandContext.ForSelectedValue("1.50s"));
+
+        Assert.Equal(TransitionKind.Fade, ed.CurrentSlideTransition?.Kind);
+        Assert.Equal(1500, ed.CurrentSlideTransition?.DurationMs);
+    }
+
+    [Fact]
+    public void Cmd_TransitionAdvanceAfter_UsesRibbonContextSelectedValue()
+    {
+        var (ed, _) = MakeSession();
+        var reg = MakeRegistry(ed);
+        Exec(reg, "freep.transition.fade");
+
+        Exec(reg, "freep.transition.advance-after", RibbonCommandContext.ForSelectedValue("3s"));
+
+        Assert.Equal(3000, ed.CurrentSlideTransition?.AdvanceAfterMs);
+    }
+
+    [Fact]
+    public void FreePRibbonCommands_source_routes_transitions_through_shared_planner()
+    {
+        var source = File.ReadAllText(FindRepoFile("freep", "FreeP.App.Host", "FreePRibbonCommands.cs"));
+
+        Assert.Contains("PresentationTransitionCommandPlanner.BuiltInPlans", source);
+        Assert.Contains("PresentationTransitionCommandPlanner.TryApply", source);
+        Assert.DoesNotContain("RegisterTransitionKind(", source);
+        Assert.DoesNotContain("freep.transition.duration\", new ActionRibbonCommand", source);
     }
 
     // ── Transition Apply To All ────────────────────────────────────────────────────
@@ -421,5 +458,22 @@ public class RibbonTransitionsAnimationsTests
         var reg = MakeRegistry(ed);
         bool found = reg.TryGet(commandId, out _);
         Assert.True(found, $"Command '{commandId}' was not registered.");
+    }
+
+    private static string FindRepoFile(params string[] parts) =>
+        Path.Combine(FindRepoRoot(), Path.Combine(parts));
+
+    private static string FindRepoRoot()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "FreeP.slnx")))
+                return directory.FullName;
+
+            directory = directory.Parent;
+        }
+
+        throw new DirectoryNotFoundException("Could not locate repository root from the test output directory.");
     }
 }

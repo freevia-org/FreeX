@@ -10,7 +10,6 @@ public sealed class FreePRibbonDefinitionProfileTests
     private static readonly string[] WpfOnlyTabIds =
     [
         "design",
-        "transitions",
         "animations",
     ];
 
@@ -32,7 +31,7 @@ public sealed class FreePRibbonDefinitionProfileTests
             .Equal("home", "insert", "design", "transitions", "animations");
         avalonia.Tabs.Select(tab => tab.Id)
             .Should()
-            .Equal("home", "insert");
+            .Equal("home", "insert", "transitions");
 
         RibbonDefinitionValidator.Validate(wpf).HasErrors.Should().BeFalse();
         RibbonDefinitionValidator.Validate(avalonia).HasErrors.Should().BeFalse();
@@ -333,6 +332,37 @@ public sealed class FreePRibbonDefinitionProfileTests
 
         unexpectedAvaloniaOnly.Should().BeEmpty(
             "cross-platform content commands should come from the shared FreeP command surface");
+    }
+
+    [Fact]
+    public void Avalonia_profile_exposes_transition_commands_as_shared_surface()
+    {
+        var wpfIds = CommandIds(FreePRibbon.Build(FreePRibbonCapabilities.Wpf))
+            .ToHashSet(StringComparer.Ordinal);
+        var avaloniaIds = CommandIds(FreePRibbon.Build(FreePRibbonCapabilities.Avalonia))
+            .ToHashSet(StringComparer.Ordinal);
+        var transitionIds = new[]
+        {
+            "freep.transition.none",
+            "freep.transition.fade",
+            "freep.transition.push",
+            "freep.transition.wipe",
+            "freep.transition.split",
+            "freep.transition.cut",
+            "freep.transition.cover",
+            "freep.transition.uncover",
+            "freep.transition.blinds",
+            "freep.transition.dissolve",
+            "freep.transition.zoom",
+            "freep.transition.wheel",
+            "freep.transition.duration",
+            "freep.transition.advance-on-click",
+            "freep.transition.advance-after",
+            "freep.transition.apply-all",
+        };
+
+        avaloniaIds.Should().Contain(transitionIds);
+        transitionIds.Should().OnlyContain(commandId => wpfIds.Contains(commandId));
     }
 
     [Fact]

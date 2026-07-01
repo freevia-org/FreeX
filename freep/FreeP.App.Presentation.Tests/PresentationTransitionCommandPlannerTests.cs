@@ -4,6 +4,12 @@ namespace FreeP.App.Compositor.Tests;
 
 public sealed class PresentationTransitionCommandPlannerTests
 {
+    private static EditingSession MakeSession(out Presentation presentation)
+    {
+        presentation = Presentation.CreateEmpty();
+        return new EditingSession(presentation, new PresentationCommandBus(presentation));
+    }
+
     [Theory]
     [InlineData("freep.transition.none", TransitionKind.None)]
     [InlineData("freep.transition.fade", TransitionKind.Fade)]
@@ -135,6 +141,19 @@ public sealed class PresentationTransitionCommandPlannerTests
             .Should().BeFalse();
     }
 
+    [Theory]
+    [InlineData("(none)")]
+    [InlineData("none")]
+    [InlineData("0s")]
+    public void TryParseAdvanceAfterValue_MapsNoneValuesToZero(string value)
+    {
+        PresentationTransitionCommandPlanner.TryParseAdvanceAfterValue(value, out int ms)
+            .Should()
+            .BeTrue();
+
+        ms.Should().Be(0);
+    }
+
     [Fact]
     public void BuildApplyToAllTransitions_ClonesSourceForEachSlide()
     {
@@ -166,5 +185,94 @@ public sealed class PresentationTransitionCommandPlannerTests
         PresentationTransitionCommandPlanner.BuildApplyToAllTransitions(2, null)
             .Should()
             .Equal(new SlideTransition?[] { null, null });
+    }
+
+    [Fact]
+    public void TryApply_SetKindCommand_UsesSharedKindBuilder()
+    {
+        var editor = MakeSession(out _);
+        PresentationTransitionCommandPlanner.TryPlan("freep.transition.fade", out var plan)
+            .Should()
+            .BeTrue();
+
+        PresentationTransitionCommandPlanner.TryApply(editor, plan).Should().BeTrue();
+
+        editor.CurrentSlideTransition.Should().NotBeNull();
+        editor.CurrentSlideTransition!.Kind.Should().Be(TransitionKind.Fade);
+        editor.CurrentSlideTransition.DurationMs.Should().Be(PresentationTransitionCommandPlanner.DefaultDurationMs);
+    }
+
+    [Fact]
+    public void TryApply_DurationCommand_UsesSelectedRibbonValue()
+    {
+        var editor = MakeSession(out _);
+        editor.SetTransition(new SlideTransition { Kind = TransitionKind.Push });
+        PresentationTransitionCommandPlanner.TryPlan("freep.transition.duration", out var plan)
+            .Should()
+            .BeTrue();
+
+        PresentationTransitionCommandPlanner.TryApply(editor, plan, "1.50s").Should().BeTrue();
+
+        editor.CurrentSlideTransition!.Kind.Should().Be(TransitionKind.Push);
+        editor.CurrentSlideTransition.DurationMs.Should().Be(1500);
+    }
+
+    [Fact]
+    public void TryApply_DurationCommand_RejectsMissingRibbonValue()
+    {
+        var editor = MakeSession(out _);
+        PresentationTransitionCommandPlanner.TryPlan("freep.transition.duration", out var plan)
+            .Should()
+            .BeTrue();
+
+        PresentationTransitionCommandPlanner.TryApply(editor, plan).Should().BeFalse();
+
+        editor.CurrentSlideTransition.Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData("0s")]
+    [InlineData("(none)")]
+    public void TryApply_AdvanceAfterNoneValueClearsAutoAdvance(string selectedValue)
+    {
+        var editor = MakeSession(out _);
+        editor.SetTransition(new SlideTransition
+        {
+            Kind = TransitionKind.Wipe,
+            AdvanceAfterMs = 3000,
+        });
+        PresentationTransitionCommandPlanner.TryPlan("freep.transition.advance-after", out var plan)
+            .Should()
+            .BeTrue();
+
+        PresentationTransitionCommandPlanner.TryApply(editor, plan, selectedValue).Should().BeTrue();
+
+        editor.CurrentSlideTransition!.Kind.Should().Be(TransitionKind.Wipe);
+        editor.CurrentSlideTransition.AdvanceAfterMs.Should().BeNull();
+    }
+
+    [Fact]
+    public void TryApply_ApplyAllCommand_ClonesCurrentTransitionAcrossSlides()
+    {
+        var editor = MakeSession(out var presentation);
+        editor.InsertSlide();
+        editor.SetTransition(new SlideTransition
+        {
+            Kind = TransitionKind.Zoom,
+            RawXml = "<p:transition />",
+            Sound = new TransitionSound { ContentType = "audio/mpeg", RelId = "rId1" },
+        });
+        PresentationTransitionCommandPlanner.TryPlan("freep.transition.apply-all", out var plan)
+            .Should()
+            .BeTrue();
+
+        PresentationTransitionCommandPlanner.TryApply(editor, plan).Should().BeTrue();
+
+        presentation.Slides.Select(slide => slide.Transition?.Kind)
+            .Should()
+            .OnlyContain(kind => kind == TransitionKind.Zoom);
+        presentation.Slides[0].Transition.Should().NotBeSameAs(presentation.Slides[1].Transition);
+        presentation.Slides[1].Transition!.RawXml.Should().Be("<p:transition />");
+        presentation.Slides[1].Transition!.Sound.Should().NotBeNull();
     }
 }

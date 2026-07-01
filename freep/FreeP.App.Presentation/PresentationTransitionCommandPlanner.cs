@@ -101,6 +101,65 @@ public static class PresentationTransitionCommandPlanner
         return false;
     }
 
+    public static bool TryApply(
+        EditingSession editor,
+        PresentationTransitionCommandPlan plan,
+        string? selectedValue = null)
+    {
+        ArgumentNullException.ThrowIfNull(editor);
+        ArgumentNullException.ThrowIfNull(plan);
+
+        switch (plan.Intent)
+        {
+            case PresentationTransitionCommandIntentKind.SetKind:
+                if (plan.Kind is not { } kind)
+                {
+                    return false;
+                }
+
+                editor.SetTransition(BuildTransitionForKind(editor.CurrentSlideTransition, kind));
+                return true;
+
+            case PresentationTransitionCommandIntentKind.SetDuration:
+                if (!TryParseSeconds(selectedValue, allowZero: false, out int durationMs))
+                {
+                    return false;
+                }
+
+                editor.SetTransition(BuildDurationTransition(editor.CurrentSlideTransition, durationMs));
+                return true;
+
+            case PresentationTransitionCommandIntentKind.ToggleAdvanceOnClick:
+                editor.SetTransition(BuildAdvanceOnClickTransition(editor.CurrentSlideTransition));
+                return true;
+
+            case PresentationTransitionCommandIntentKind.SetAdvanceAfter:
+                if (!TryParseAdvanceAfterValue(selectedValue, out int advanceAfterMs))
+                {
+                    return false;
+                }
+
+                editor.SetTransition(BuildAdvanceAfterTransition(
+                    editor.CurrentSlideTransition,
+                    advanceAfterMs == 0 ? null : advanceAfterMs));
+                return true;
+
+            case PresentationTransitionCommandIntentKind.ApplyToAllSlides:
+                var transitions = BuildApplyToAllTransitions(
+                    editor.Presentation.Slides.Count,
+                    editor.CurrentSlideTransition);
+                for (int i = 0; i < transitions.Count; i++)
+                {
+                    editor.Presentation.Slides[i].Transition = transitions[i];
+                }
+
+                return true;
+
+            default:
+                return false;
+        }
+    }
+
     public static SlideTransition? BuildTransitionForKind(
         SlideTransition? currentTransition,
         TransitionKind kind)
@@ -206,6 +265,25 @@ public static class PresentationTransitionCommandPlanner
         }
 
         milliseconds = 0;
+        return false;
+    }
+
+    public static bool TryParseAdvanceAfterValue(string? selectedValue, out int milliseconds)
+    {
+        if (TryParseSeconds(selectedValue, allowZero: true, out milliseconds))
+        {
+            return true;
+        }
+
+        var text = selectedValue?.Trim();
+        if (text is not null &&
+            (StringComparer.OrdinalIgnoreCase.Equals(text, "(none)") ||
+             StringComparer.OrdinalIgnoreCase.Equals(text, "none")))
+        {
+            milliseconds = 0;
+            return true;
+        }
+
         return false;
     }
 
