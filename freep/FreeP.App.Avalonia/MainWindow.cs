@@ -95,6 +95,8 @@ public sealed class MainWindow : Window
     private readonly TextBlock _statusText;
     private Border _layoutPickerHost = null!;
     private StackPanel _layoutPickerPanel = null!;
+    private Border _reviewCommentsPaneHost = null!;
+    private StackPanel _reviewCommentsPanePanel = null!;
 
     // ── Interaction layer (Theme 15) ────────────────────────────────────────────
 
@@ -139,6 +141,9 @@ public sealed class MainWindow : Window
         LastLayoutPickerPlan?.Choices.Sum(choice => choice.ThumbnailPlaceholders.Count) ?? 0;
     internal int LayoutPickerCurrentChoiceCount =>
         LastLayoutPickerPlan?.Choices.Count(choice => choice.Chrome.IsCurrent) ?? 0;
+    internal bool IsReviewCommentsPaneVisible => _reviewCommentsPaneHost?.IsVisible == true;
+    internal int ReviewCommentsPaneCommentCount => LastCommentPanePlan?.Comments.Count ?? 0;
+    internal int ReviewCommentsPaneActionButtonCount => LastCommentPanePlan?.Actions.Count ?? 0;
 
     // ── Constructors ───────────────────────────────────────────────────────────
 
@@ -267,6 +272,7 @@ public sealed class MainWindow : Window
         rightGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         rightGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         rightGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        rightGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
         // ── Interaction overlay stack ───────────────────────────────────────────
         // A Panel stack: SlideCanvas at the bottom, SelectionAdornerLayer on top (transparent to
@@ -318,11 +324,32 @@ public sealed class MainWindow : Window
                 Content                       = _layoutPickerPanel,
             },
         };
+        _reviewCommentsPanePanel = new StackPanel
+        {
+            Orientation = Orientation.Vertical,
+            Spacing     = 6,
+        };
+        _reviewCommentsPaneHost = new Border
+        {
+            Background      = Brushes.White,
+            BorderBrush     = new SolidColorBrush(Color.FromRgb(0xC8, 0xC8, 0xC8)),
+            BorderThickness = new Thickness(0, 1, 0, 0),
+            MaxHeight       = 180,
+            IsVisible       = false,
+            Child           = new ScrollViewer
+            {
+                VerticalScrollBarVisibility   = ScrollBarVisibility.Auto,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                Content                       = _reviewCommentsPanePanel,
+            },
+        };
         Grid.SetRow(canvasHost, 0);
         Grid.SetRow(_layoutPickerHost, 1);
-        Grid.SetRow(_notesBox,  2);
+        Grid.SetRow(_reviewCommentsPaneHost, 2);
+        Grid.SetRow(_notesBox,  3);
         rightGrid.Children.Add(canvasHost);
         rightGrid.Children.Add(_layoutPickerHost);
+        rightGrid.Children.Add(_reviewCommentsPaneHost);
         rightGrid.Children.Add(_notesBox);
 
         // Wire interaction after the overlay panel is built.
@@ -1020,9 +1047,120 @@ public sealed class MainWindow : Window
 
     private void ShowReviewCommentsPane()
     {
-        LastCommentPanePlan = PresentationReviewWorkflowPlanner.BuildCommentPanePlan(
+        var plan = PresentationReviewWorkflowPlanner.BuildCommentPanePlan(
             _presentation.Slides,
             Editor.CurrentSlideIndex);
+        LastCommentPanePlan = plan;
+        ShowReviewCommentsPane(plan);
+    }
+
+    private void ShowReviewCommentsPane(PresentationCommentPanePlan plan)
+    {
+        if (_reviewCommentsPaneHost is null || _reviewCommentsPanePanel is null)
+            return;
+
+        _reviewCommentsPanePanel.Children.Clear();
+        _reviewCommentsPanePanel.Children.Add(BuildReviewCommentsPaneHeader(plan));
+        _reviewCommentsPanePanel.Children.Add(BuildReviewCommentActions(plan.Actions));
+
+        if (plan.Comments.Count == 0)
+        {
+            _reviewCommentsPanePanel.Children.Add(new TextBlock
+            {
+                Text       = "No comments on this slide.",
+                Foreground = new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66)),
+                Margin     = new Thickness(12, 0, 12, 10),
+            });
+        }
+        else
+        {
+            foreach (var comment in plan.Comments)
+                _reviewCommentsPanePanel.Children.Add(BuildReviewCommentCard(comment));
+        }
+
+        _reviewCommentsPaneHost.IsVisible = true;
+    }
+
+    private static Control BuildReviewCommentsPaneHeader(PresentationCommentPanePlan plan)
+        => new TextBlock
+        {
+            Text       = $"Comments - slide {plan.SlideIndex + 1} of {plan.SlideCount} ({plan.TotalCommentCount} total)",
+            FontWeight = FontWeight.SemiBold,
+            Foreground = new SolidColorBrush(Color.FromRgb(0x2D, 0x2D, 0x2D)),
+            Margin     = new Thickness(12, 10, 12, 2),
+        };
+
+    private static Control BuildReviewCommentActions(IReadOnlyList<PresentationReviewWorkflowActionPlan> actions)
+    {
+        var panel = new WrapPanel
+        {
+            Margin = new Thickness(12, 0, 12, 2),
+        };
+
+        foreach (var action in actions)
+        {
+            panel.Children.Add(new Button
+            {
+                Content   = action.Label,
+                IsEnabled = action.IsEnabled,
+                Tag       = action.CommandId,
+                MinWidth  = 88,
+                Margin    = new Thickness(0, 0, 6, 6),
+            });
+        }
+
+        return panel;
+    }
+
+    private static Control BuildReviewCommentCard(PresentationCommentDescriptor comment)
+    {
+        var header = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing     = 6,
+        };
+        header.Children.Add(new Border
+        {
+            Background   = new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A)),
+            CornerRadius = new CornerRadius(3),
+            Padding      = new Thickness(5, 1, 5, 1),
+            Child        = new TextBlock
+            {
+                Text       = string.IsNullOrWhiteSpace(comment.Initials) ? "?" : comment.Initials,
+                FontSize   = 11,
+                Foreground = Brushes.White,
+            },
+        });
+        header.Children.Add(new TextBlock
+        {
+            Text              = string.IsNullOrWhiteSpace(comment.Author) ? "Unknown reviewer" : comment.Author,
+            FontWeight        = FontWeight.SemiBold,
+            VerticalAlignment = VerticalAlignment.Center,
+        });
+
+        var card = new StackPanel
+        {
+            Orientation = Orientation.Vertical,
+            Spacing     = 4,
+        };
+        card.Children.Add(header);
+        card.Children.Add(new TextBlock
+        {
+            Text         = comment.TextPreview,
+            TextWrapping = TextWrapping.Wrap,
+            Foreground   = new SolidColorBrush(Color.FromRgb(0x44, 0x44, 0x44)),
+        });
+
+        return new Border
+        {
+            Background      = new SolidColorBrush(Color.FromRgb(0xFA, 0xFA, 0xFA)),
+            BorderBrush     = new SolidColorBrush(Color.FromRgb(0xE0, 0xE0, 0xE0)),
+            BorderThickness = new Thickness(1),
+            CornerRadius    = new CornerRadius(4),
+            Padding         = new Thickness(10),
+            Margin          = new Thickness(12, 0, 12, 10),
+            Child           = card,
+        };
     }
 
     private void OnAnimationPaneRequested(PresentationAnimationCommandPlan plan)

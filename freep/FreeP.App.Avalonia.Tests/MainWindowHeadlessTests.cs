@@ -1104,6 +1104,9 @@ public sealed class MainWindowHeadlessTests
         PresentationAltTextRequestPlan? altTextPlan = null;
         PresentationAltTextPanePlan? altTextPanePlan = null;
         PresentationProofingRequestPlan? proofingPlan = null;
+        var commentsPaneVisible = false;
+        var commentsPaneCommentCount = 0;
+        var commentsPaneActionCount = 0;
 
         var ran = await OnUiThread(() =>
         {
@@ -1137,6 +1140,9 @@ public sealed class MainWindowHeadlessTests
             proofing!.Execute(RibbonCommandContext.Empty);
 
             commentPlan = window.LastCommentPanePlan;
+            commentsPaneVisible = window.IsReviewCommentsPaneVisible;
+            commentsPaneCommentCount = window.ReviewCommentsPaneCommentCount;
+            commentsPaneActionCount = window.ReviewCommentsPaneActionButtonCount;
             accessibilityPlan = window.LastAccessibilitySummaryPlan;
             altTextPlan = window.LastAltTextRequestPlan;
             altTextPanePlan = window.LastAltTextPanePlan;
@@ -1174,6 +1180,9 @@ public sealed class MainWindowHeadlessTests
         });
         proofingPlan.Should().NotBeNull();
         proofingPlan!.Status.Should().Be(PresentationWorkflowCapabilityStatus.RequiresHost);
+        commentsPaneVisible.Should().BeTrue("the Avalonia comments command should render a shared-plan-backed pane");
+        commentsPaneCommentCount.Should().Be(1);
+        commentsPaneActionCount.Should().BeGreaterThanOrEqualTo(6);
     }
 
     [Fact]
