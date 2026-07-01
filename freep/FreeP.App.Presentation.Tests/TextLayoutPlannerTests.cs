@@ -209,6 +209,30 @@ public sealed class TextLayoutPlannerTests
         avalonia.Should().NotContain("VerticalAnchor.Middle => bounds.Y");
     }
 
+    [Fact]
+    public void WpfAndAvaloniaSlideCanvases_DoNotResolvePlaceholderTextInsetsLocally()
+    {
+        var wpf = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "SlideCanvas.cs");
+        var avalonia = ReadWorkspaceFile(
+            "freep",
+            "FreeP.App.Rendering.Avalonia",
+            "SlideCanvas.cs");
+
+        wpf.Should().Contain("TextLayoutPlanner.GetTextArea");
+        wpf.Should().Contain("TextLayoutPlanner.PlanBodyText");
+        wpf.Should().NotContain("InsetLeftPt");
+        wpf.Should().NotContain("InsetTopPt");
+        wpf.Should().NotContain("InsetRightPt");
+        wpf.Should().NotContain("InsetBottomPt");
+
+        avalonia.Should().Contain("TextLayoutPlanner.GetTextArea");
+        avalonia.Should().Contain("TextLayoutPlanner.PlanBodyText");
+        avalonia.Should().NotContain("InsetLeftPt");
+        avalonia.Should().NotContain("InsetTopPt");
+        avalonia.Should().NotContain("InsetRightPt");
+        avalonia.Should().NotContain("InsetBottomPt");
+    }
+
     private static ResolvedParagraph Paragraph(double indent = 0) =>
         Paragraph("P", indent);
 

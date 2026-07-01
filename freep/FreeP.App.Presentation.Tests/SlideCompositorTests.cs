@@ -2457,6 +2457,73 @@ public sealed class SlideCompositorTests
             "explicit PointColors[1] (green) must be resolved into SeriesColors[1]");
     }
 
+    [Fact]
+    public void Compose_TextPlaceholder_InheritsLayoutPlaceholderTextInsets()
+    {
+        var p = new PresentationModel { Theme = PresentationTheme.CreateDefault() };
+        var master = new SlideMaster { Id = "m1" };
+        var layout = new SlideLayout { Id = "l1", MasterId = "m1" };
+        var layoutTextBody = new TextBody
+        {
+            InsetLeftPt = 21,
+            InsetTopPt = 6,
+            InsetRightPt = 9,
+            InsetBottomPt = 12
+        };
+        layout.Placeholders.Add(new SlideShape
+        {
+            Id = 10,
+            Placeholder = new Placeholder { Type = PlaceholderType.Body, Idx = 1 },
+            TextBody = layoutTextBody
+        });
+        p.Masters.Add(master);
+        p.Layouts.Add(layout);
+
+        var slide = new Slide { LayoutId = "l1" };
+        slide.Shapes.Add(CreateTextPlaceholder(1, PlaceholderType.Body, 1, "Inherited layout insets"));
+        p.Slides.Add(slide);
+
+        var text = SlideCompositor.Compose(p, slide).OfType<DrawOp.Shape>().Single().Text!;
+
+        text.InsetLeftDip.Should().BeApproximately(28.0, 0.001);
+        text.InsetTopDip.Should().BeApproximately(8.0, 0.001);
+        text.InsetRightDip.Should().BeApproximately(12.0, 0.001);
+        text.InsetBottomDip.Should().BeApproximately(16.0, 0.001);
+    }
+
+    [Fact]
+    public void Compose_TextPlaceholder_UsesMasterTextInsetsWhenLayoutDoesNotOverride()
+    {
+        var p = new PresentationModel { Theme = PresentationTheme.CreateDefault() };
+        var master = new SlideMaster { Id = "m1" };
+        master.Placeholders.Add(new SlideShape
+        {
+            Id = 20,
+            Placeholder = new Placeholder { Type = PlaceholderType.Title, Idx = 0 },
+            TextBody = new TextBody
+            {
+                InsetLeftPt = 18,
+                InsetTopPt = 3,
+                InsetRightPt = 15,
+                InsetBottomPt = 6
+            }
+        });
+        var layout = new SlideLayout { Id = "l1", MasterId = "m1" };
+        p.Masters.Add(master);
+        p.Layouts.Add(layout);
+
+        var slide = new Slide { LayoutId = "l1" };
+        slide.Shapes.Add(CreateTextPlaceholder(1, PlaceholderType.Title, 0, "Inherited master insets"));
+        p.Slides.Add(slide);
+
+        var text = SlideCompositor.Compose(p, slide).OfType<DrawOp.Shape>().Single().Text!;
+
+        text.InsetLeftDip.Should().BeApproximately(24.0, 0.001);
+        text.InsetTopDip.Should().BeApproximately(4.0, 0.001);
+        text.InsetRightDip.Should().BeApproximately(20.0, 0.001);
+        text.InsetBottomDip.Should().BeApproximately(8.0, 0.001);
+    }
+
     /// <summary>
     /// BV1 regression: pie chart still gets per-point colors (not regressed by the fix).
     /// </summary>
@@ -2489,5 +2556,31 @@ public sealed class SlideCompositorTests
         // Still two colors — one per slice (regression guard).
         chartOp.SeriesColors.Should().HaveCount(2,
             "pie chart must still expand one color per point (regression guard)");
+    }
+
+    private static SlideShape CreateTextPlaceholder(
+        uint id,
+        PlaceholderType type,
+        int idx,
+        string text)
+    {
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run { Text = text });
+
+        return new SlideShape
+        {
+            Id = id,
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            Placeholder = new Placeholder { Type = type, Idx = idx },
+            OffsetXEmu = 457200,
+            OffsetYEmu = 274320,
+            ExtentCxEmu = 4572000,
+            ExtentCyEmu = 1371600,
+            TextBody = new TextBody
+            {
+                Paragraphs = { paragraph }
+            }
+        };
     }
 }
