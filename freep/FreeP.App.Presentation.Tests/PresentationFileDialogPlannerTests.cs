@@ -87,6 +87,11 @@ public sealed class PresentationFileDialogPlannerTests
             format.IsImplemented);
         formats.Should().Contain(format =>
             format.Format == PresentationExportFormat.ImageSequence &&
+            format.DefaultExtensionWithDot == ".png" &&
+            !format.IsImplemented);
+        formats.Should().Contain(format =>
+            format.Format == PresentationExportFormat.Video &&
+            format.DefaultExtensionWithDot == ".mp4" &&
             !format.IsImplemented);
         formats.Should().Contain(format =>
             format.Format == PresentationExportFormat.Print &&
@@ -99,7 +104,10 @@ public sealed class PresentationFileDialogPlannerTests
             action.IsEnabled);
         backstage.DeferredActions.Select(action => action.Format)
             .Should()
-            .Equal(PresentationExportFormat.ImageSequence, PresentationExportFormat.Print);
+            .Equal(
+                PresentationExportFormat.ImageSequence,
+                PresentationExportFormat.Video,
+                PresentationExportFormat.Print);
     }
 
     [Fact]
