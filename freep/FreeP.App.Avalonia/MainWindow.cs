@@ -124,6 +124,7 @@ public sealed class MainWindow : Window
     internal PresentationCommentPanePlan? LastCommentPanePlan { get; private set; }
     internal PresentationAccessibilitySummaryPlan? LastAccessibilitySummaryPlan { get; private set; }
     internal PresentationAltTextRequestPlan? LastAltTextRequestPlan { get; private set; }
+    internal PresentationAltTextPanePlan? LastAltTextPanePlan { get; private set; }
     internal PresentationProofingRequestPlan? LastProofingRequestPlan { get; private set; }
     internal AnimationPaneTimelinePlan? LastAnimationPaneTimelinePlan { get; private set; }
     internal PresentationDesignCommandPlan? LastLayoutRequestPlan { get; private set; }
@@ -929,6 +930,10 @@ public sealed class MainWindow : Window
             Editor.CurrentSlide,
             selectedShapeId,
             proposedDescription: null);
+        LastAltTextPanePlan = PresentationReviewWorkflowPlanner.BuildAltTextPanePlan(
+            Editor.CurrentSlide,
+            selectedShapeId,
+            proposedDescription: null);
     }
 
     internal PresentationAltTextMutationPlan ApplySelectedShapeAlternativeText(
@@ -950,6 +955,12 @@ public sealed class MainWindow : Window
         {
             Editor.SetSelectedShapeAlternativeText(plan.Description, plan.Title, plan.IsDecorative);
             LastAltTextRequestPlan = PresentationReviewWorkflowPlanner.BuildAltTextRequestPlan(
+                Editor.CurrentSlide,
+                plan.ShapeId,
+                plan.Description,
+                plan.Title,
+                plan.IsDecorative);
+            LastAltTextPanePlan = PresentationReviewWorkflowPlanner.BuildAltTextPanePlan(
                 Editor.CurrentSlide,
                 plan.ShapeId,
                 plan.Description,

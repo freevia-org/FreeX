@@ -14,6 +14,9 @@ public enum PresentationReviewWorkflowIntentKind
     ResolveComment,
     CheckAccessibility,
     OpenAltText,
+    ApplyAltText,
+    ToggleAltTextDecorative,
+    CloseAltTextPane,
     RunProofing
 }
 
@@ -83,6 +86,28 @@ public sealed record PresentationAltTextRequestPlan(
     PresentationWorkflowCapabilityStatus Status,
     string Message);
 
+public sealed record PresentationAltTextPaneFieldPlan(
+    string FieldId,
+    string Label,
+    string Value,
+    string Placeholder,
+    bool IsEnabled,
+    bool IsRequired,
+    string? ValidationMessage);
+
+public sealed record PresentationAltTextPanePlan(
+    bool HasSelection,
+    uint? ShapeId,
+    string ShapeName,
+    string SuggestedTitle,
+    PresentationAltTextPaneFieldPlan Title,
+    PresentationAltTextPaneFieldPlan Description,
+    bool IsDecorative,
+    bool CanApply,
+    PresentationWorkflowCapabilityStatus Status,
+    string Message,
+    IReadOnlyList<PresentationReviewWorkflowActionPlan> Actions);
+
 public sealed record PresentationAltTextMutationPlan(
     bool ShouldApply,
     int SlideIndex,
@@ -132,6 +157,11 @@ public static class PresentationReviewWorkflowPlanner
     public const string ResolveCommentCommandId = "freep.review.comments.resolve";
     public const string AccessibilityCommandId = "freep.review.accessibility.check";
     public const string AltTextCommandId = "freep.review.alt-text";
+    public const string AltTextPaneApplyCommandId = "freep.review.alt-text.apply";
+    public const string AltTextPaneDecorativeCommandId = "freep.review.alt-text.decorative";
+    public const string AltTextPaneCloseCommandId = "freep.review.alt-text.close";
+    public const string AltTextTitleFieldId = "title";
+    public const string AltTextDescriptionFieldId = "description";
     public const string ProofingCommandId = "freep.review.proofing.spelling";
     public const string InsertLinkCommandId = "freep.insert-link";
 
@@ -141,6 +171,8 @@ public static class PresentationReviewWorkflowPlanner
     public const string ModernCommentStateDeferredMessage =
         "Modern resolved-thread state is not modeled yet.";
     public const string MissingShapeMessage = "Select a shape before editing alt text.";
+    public const string MissingAltTextDescriptionMessage =
+        "Alt text description is required unless the object is marked decorative.";
     public const string ProofingRequiresHostMessage =
         "Proofing needs a host spelling engine; this shared plan owns the searchable FreeP scopes.";
     public const string MissingSlideTitleActionSummary =
@@ -345,6 +377,57 @@ public static class PresentationReviewWorkflowPlanner
                 : "Edit the persistent alt-text description for the selected shape.");
     }
 
+    public static PresentationAltTextPanePlan BuildAltTextPanePlan(
+        Slide? slide,
+        uint? selectedShapeId,
+        string? proposedDescription,
+        string? proposedTitle = null,
+        bool? isDecorative = null)
+    {
+        var request = BuildAltTextRequestPlan(
+            slide,
+            selectedShapeId,
+            proposedDescription,
+            proposedTitle,
+            isDecorative);
+        var descriptionValidation = request.HasSelection
+            && !request.IsDecorative
+            && string.IsNullOrWhiteSpace(request.ProposedDescription)
+            ? MissingAltTextDescriptionMessage
+            : null;
+        var canApply = request.HasSelection && descriptionValidation is null;
+
+        var title = new PresentationAltTextPaneFieldPlan(
+            AltTextTitleFieldId,
+            "Title",
+            request.ProposedTitle,
+            request.SuggestedTitle,
+            request.HasSelection && !request.IsDecorative,
+            false,
+            null);
+        var description = new PresentationAltTextPaneFieldPlan(
+            AltTextDescriptionFieldId,
+            "Description",
+            request.ProposedDescription,
+            "Describe the selected object for people who cannot see it.",
+            request.HasSelection && !request.IsDecorative,
+            !request.IsDecorative,
+            descriptionValidation);
+
+        return new PresentationAltTextPanePlan(
+            request.HasSelection,
+            request.ShapeId,
+            request.ShapeName,
+            request.SuggestedTitle,
+            title,
+            description,
+            request.IsDecorative,
+            canApply,
+            request.Status,
+            descriptionValidation ?? request.Message,
+            BuildAltTextPaneActions(request.HasSelection, canApply, descriptionValidation));
+    }
+
     public static PresentationAltTextMutationPlan BuildAltTextMutationPlan(
         Slide? slide,
         int slideIndex,
@@ -513,6 +596,34 @@ public static class PresentationReviewWorkflowPlanner
             new(AccessibilityCommandId, "Check Accessibility", PresentationReviewWorkflowIntentKind.CheckAccessibility, true, PresentationWorkflowCapabilityStatus.RequiresHost),
             new(AltTextCommandId, "Alt Text", PresentationReviewWorkflowIntentKind.OpenAltText, true, PresentationWorkflowCapabilityStatus.Available),
             new(ProofingCommandId, "Spelling", PresentationReviewWorkflowIntentKind.RunProofing, true, PresentationWorkflowCapabilityStatus.RequiresHost, ProofingRequiresHostMessage),
+        ];
+
+    private static IReadOnlyList<PresentationReviewWorkflowActionPlan> BuildAltTextPaneActions(
+        bool hasSelection,
+        bool canApply,
+        string? validationMessage)
+        =>
+        [
+            new(
+                AltTextPaneApplyCommandId,
+                "Apply",
+                PresentationReviewWorkflowIntentKind.ApplyAltText,
+                canApply,
+                PresentationWorkflowCapabilityStatus.Available,
+                canApply ? null : validationMessage ?? MissingShapeMessage),
+            new(
+                AltTextPaneDecorativeCommandId,
+                "Mark as Decorative",
+                PresentationReviewWorkflowIntentKind.ToggleAltTextDecorative,
+                hasSelection,
+                PresentationWorkflowCapabilityStatus.Available,
+                hasSelection ? null : MissingShapeMessage),
+            new(
+                AltTextPaneCloseCommandId,
+                "Close",
+                PresentationReviewWorkflowIntentKind.CloseAltTextPane,
+                true,
+                PresentationWorkflowCapabilityStatus.Available),
         ];
 
     private static PresentationCommentDescriptor DescribeComment(

@@ -221,6 +221,69 @@ public sealed class PresentationReviewWorkflowPlannerTests
     }
 
     [Fact]
+    public void BuildAltTextPanePlan_DescribesFieldsValidationAndHostNeutralActions()
+    {
+        var slide = new Slide { Title = "Intro" };
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 7,
+            Name = "Sales chart",
+            Kind = SlideShapeKind.Chart,
+            Chart = new ChartShape(),
+            AlternativeTextTitle = "Sales summary"
+        });
+
+        var missingDescription = PresentationReviewWorkflowPlanner.BuildAltTextPanePlan(
+            slide,
+            7,
+            proposedDescription: null);
+        var valid = PresentationReviewWorkflowPlanner.BuildAltTextPanePlan(
+            slide,
+            7,
+            "  Quarterly sales by region. ",
+            "  Regional sales chart ");
+        var decorative = PresentationReviewWorkflowPlanner.BuildAltTextPanePlan(
+            slide,
+            7,
+            " ignored ",
+            " ignored ",
+            isDecorative: true);
+
+        missingDescription.Description.Should().Be(new PresentationAltTextPaneFieldPlan(
+            PresentationReviewWorkflowPlanner.AltTextDescriptionFieldId,
+            "Description",
+            string.Empty,
+            "Describe the selected object for people who cannot see it.",
+            true,
+            true,
+            PresentationReviewWorkflowPlanner.MissingAltTextDescriptionMessage));
+        missingDescription.CanApply.Should().BeFalse();
+        missingDescription.Actions.Single(action => action.CommandId == PresentationReviewWorkflowPlanner.AltTextPaneApplyCommandId)
+            .DisabledReason.Should().Be(PresentationReviewWorkflowPlanner.MissingAltTextDescriptionMessage);
+
+        valid.Title.Should().Be(new PresentationAltTextPaneFieldPlan(
+            PresentationReviewWorkflowPlanner.AltTextTitleFieldId,
+            "Title",
+            "Regional sales chart",
+            "Sales summary",
+            true,
+            false,
+            null));
+        valid.Description.Value.Should().Be("Quarterly sales by region.");
+        valid.CanApply.Should().BeTrue();
+        valid.Actions.Select(action => action.CommandId).Should().Equal(
+            PresentationReviewWorkflowPlanner.AltTextPaneApplyCommandId,
+            PresentationReviewWorkflowPlanner.AltTextPaneDecorativeCommandId,
+            PresentationReviewWorkflowPlanner.AltTextPaneCloseCommandId);
+
+        decorative.IsDecorative.Should().BeTrue();
+        decorative.Title.IsEnabled.Should().BeFalse();
+        decorative.Description.IsEnabled.Should().BeFalse();
+        decorative.Description.IsRequired.Should().BeFalse();
+        decorative.CanApply.Should().BeTrue();
+    }
+
+    [Fact]
     public void BuildAltTextMutationPlan_NormalizesTitleDescriptionAndDecorativeState()
     {
         var slide = new Slide { Title = "Intro" };

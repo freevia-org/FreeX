@@ -1083,6 +1083,7 @@ public sealed class MainWindowHeadlessTests
         PresentationCommentPanePlan? commentPlan = null;
         PresentationAccessibilitySummaryPlan? accessibilityPlan = null;
         PresentationAltTextRequestPlan? altTextPlan = null;
+        PresentationAltTextPanePlan? altTextPanePlan = null;
         PresentationProofingRequestPlan? proofingPlan = null;
 
         var ran = await OnUiThread(() =>
@@ -1119,6 +1120,7 @@ public sealed class MainWindowHeadlessTests
             commentPlan = window.LastCommentPanePlan;
             accessibilityPlan = window.LastAccessibilitySummaryPlan;
             altTextPlan = window.LastAltTextRequestPlan;
+            altTextPanePlan = window.LastAltTextPanePlan;
             proofingPlan = window.LastProofingRequestPlan;
         });
 
@@ -1140,6 +1142,17 @@ public sealed class MainWindowHeadlessTests
         altTextPlan!.HasSelection.Should().BeTrue();
         altTextPlan.ShapeId.Should().Be(328);
         altTextPlan.Status.Should().Be(PresentationWorkflowCapabilityStatus.Available);
+        altTextPanePlan.Should().NotBeNull();
+        altTextPanePlan!.ShapeId.Should().Be(328);
+        altTextPanePlan.CanApply.Should().BeFalse();
+        altTextPanePlan.Description.ValidationMessage
+            .Should().Be(PresentationReviewWorkflowPlanner.MissingAltTextDescriptionMessage);
+        altTextPanePlan.Actions.Select(action => action.CommandId).Should().Contain(new[]
+        {
+            PresentationReviewWorkflowPlanner.AltTextPaneApplyCommandId,
+            PresentationReviewWorkflowPlanner.AltTextPaneDecorativeCommandId,
+            PresentationReviewWorkflowPlanner.AltTextPaneCloseCommandId
+        });
         proofingPlan.Should().NotBeNull();
         proofingPlan!.Status.Should().Be(PresentationWorkflowCapabilityStatus.RequiresHost);
     }
@@ -1150,6 +1163,7 @@ public sealed class MainWindowHeadlessTests
         string? altTextTitle = null;
         string? altText = null;
         PresentationAltTextRequestPlan? requestPlan = null;
+        PresentationAltTextPanePlan? panePlan = null;
         PresentationAccessibilitySummaryPlan? accessibilityPlan = null;
 
         var ran = await OnUiThread(() =>
@@ -1180,6 +1194,7 @@ public sealed class MainWindowHeadlessTests
             altTextTitle = shape.AlternativeTextTitle;
             altText = shape.AlternativeText;
             requestPlan = window.LastAltTextRequestPlan;
+            panePlan = window.LastAltTextPanePlan;
             accessibilityPlan = window.LastAccessibilitySummaryPlan;
         });
 
@@ -1189,6 +1204,10 @@ public sealed class MainWindowHeadlessTests
         requestPlan.Should().NotBeNull();
         requestPlan!.CurrentTitle.Should().Be("Hero packaging photo");
         requestPlan!.CurrentDescription.Should().Be("Product packaging on a white background.");
+        panePlan.Should().NotBeNull();
+        panePlan!.CanApply.Should().BeTrue();
+        panePlan.Title.Value.Should().Be("Hero packaging photo");
+        panePlan.Description.Value.Should().Be("Product packaging on a white background.");
         accessibilityPlan.Should().NotBeNull();
         accessibilityPlan!.Issues.Should().NotContain(issue =>
             issue.ShapeId == 329 && issue.Title == "Alt text missing");

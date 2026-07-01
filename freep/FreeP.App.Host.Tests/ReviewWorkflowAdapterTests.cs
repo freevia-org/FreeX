@@ -60,6 +60,15 @@ public sealed class ReviewWorkflowAdapterTests
                 true,
                 PresentationWorkflowCapabilityStatus.Available,
                 "Add a persistent alt-text description for the selected shape."));
+            window.LastAltTextPanePlan.Should().BeEquivalentTo(
+                PresentationReviewWorkflowPlanner.BuildAltTextPanePlan(
+                    window.Editor.CurrentSlide,
+                    shape.Id,
+                    proposedDescription: null));
+            window.LastAltTextPanePlan!.CanApply.Should().BeFalse();
+            window.LastAltTextPanePlan.Actions
+                .Single(action => action.CommandId == PresentationReviewWorkflowPlanner.AltTextPaneApplyCommandId)
+                .DisabledReason.Should().Be(PresentationReviewWorkflowPlanner.MissingAltTextDescriptionMessage);
 
             var mutation = window.ApplySelectedShapeAlternativeText(
                 "  Product packaging on a white background. ",
@@ -77,6 +86,13 @@ public sealed class ReviewWorkflowAdapterTests
             shape.IsDecorative.Should().BeFalse();
             window.LastAltTextRequestPlan!.CurrentTitle.Should().Be("Hero packaging photo");
             window.LastAltTextRequestPlan!.CurrentDescription.Should().Be("Product packaging on a white background.");
+            window.LastAltTextPanePlan.Should().BeEquivalentTo(
+                PresentationReviewWorkflowPlanner.BuildAltTextPanePlan(
+                    window.Editor.CurrentSlide,
+                    shape.Id,
+                    "Product packaging on a white background.",
+                    "Hero packaging photo"));
+            window.LastAltTextPanePlan!.CanApply.Should().BeTrue();
             window.LastAccessibilitySummaryPlan!.Issues.Should().NotContain(issue =>
                 issue.ShapeId == shape.Id && issue.Title == "Alt text missing");
             window.LastProofingRequestPlan.Should().NotBeNull();
@@ -169,6 +185,7 @@ public sealed class ReviewWorkflowAdapterTests
         source.Should().Contain("PresentationReviewWorkflowPlanner.BuildCommentPanePlan(");
         source.Should().Contain("PresentationReviewWorkflowPlanner.BuildAccessibilitySummaryPlan(_presentation)");
         source.Should().Contain("PresentationReviewWorkflowPlanner.BuildAltTextRequestPlan(");
+        source.Should().Contain("PresentationReviewWorkflowPlanner.BuildAltTextPanePlan(");
         source.Should().Contain("PresentationReviewWorkflowPlanner.BuildAltTextMutationPlan(");
         source.Should().Contain("PresentationReviewWorkflowPlanner.BuildProofingRequestPlan(_presentation)");
         source.Should().Contain("LastCommentPanePlan = plan;");
