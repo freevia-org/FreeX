@@ -212,5 +212,9 @@ internal sealed record RibbonHostCallbacks(
     /// <summary>Home &gt; Clipboard &gt; Merge Formatting. Optional; registry no-ops when null.</summary>
     Action? PasteMergeFormatting = null,
     /// <summary>Home &gt; Clipboard &gt; Paste Special. Optional; registry no-ops when null.</summary>
-    Action? OpenPasteSpecial = null);
+    Action? OpenPasteSpecial = null,
+    /// <summary>Home &gt; Styles &gt; New Style. Optional; registry no-ops when null.</summary>
+    Action? OpenNewStyleDialog = null,
+    /// <summary>Home &gt; Styles &gt; Manage Styles. Optional; registry no-ops when null.</summary>
+    Action? OpenManageStylesDialog = null);
 

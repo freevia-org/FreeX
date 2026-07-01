@@ -325,6 +325,57 @@ public sealed class MainWindow : Window
     private Task OpenWordCountDialogAsync() =>
         new WordCountDialog(_editor.ComputeStatistics()).ShowDialog(this);
 
+    private void ToggleSpellCheck()
+    {
+        var enabled = _editor.ToggleSpellCheck();
+        _status.Text = enabled ? "Spelling proofing is on." : "Spelling proofing is off.";
+    }
+
+    private void AddCurrentWordToDictionary()
+    {
+        var word = _editor.CurrentProofingWord;
+        if (word is null)
+        {
+            _status.Text = "Select a word, or place the caret inside one, then choose Add to Dictionary.";
+            _editor.Focus();
+            return;
+        }
+
+        _status.Text = _editor.AddCurrentWordToDictionary()
+            ? $"Added '{word}' to the custom dictionary."
+            : $"'{word}' is already in the custom dictionary.";
+        _editor.Focus();
+    }
+
+    private async Task OpenThesaurusAsync()
+    {
+        var word = _editor.CurrentProofingWord;
+        if (word is null)
+        {
+            _status.Text = "Select a word, or place the caret inside one, then choose Thesaurus.";
+            _editor.Focus();
+            return;
+        }
+
+        await ThesaurusDialog.ShowAsync(this, word, ThesaurusLookup.Instance.Lookup(word));
+        _editor.Focus();
+    }
+
+    private async Task OpenProofingLanguageDialogAsync()
+    {
+        var current = _editor.GetCaretFormatting().Run.LanguageTag;
+        var chosen = await ProofingLanguageDialog.ChooseAsync(this, current);
+        if (chosen is null)
+            return;
+
+        _editor.SetProofingLanguage(chosen);
+        var normalized = ProofingLanguageCatalog.NormalizeTag(chosen);
+        _status.Text = normalized is null
+            ? "Proofing language cleared."
+            : $"Proofing language set to {normalized}.";
+        _editor.Focus();
+    }
+
     private async Task ReplyToCommentAsync()
     {
         if (_editor.CommentsAtCaret.Count == 0)
@@ -570,6 +621,8 @@ public sealed class MainWindow : Window
             PastePlainText: () => _ = PastePlainTextAsync(),
             PasteMergeFormatting: () => _ = PasteMergeFormattingAsync(),
             OpenPasteSpecial: () => _ = OpenPasteSpecialAsync(),
+            OpenNewStyleDialog: () => _ = StyleDialog.ShowNewAndApplyAsync(this, _editor),
+            OpenManageStylesDialog: () => _ = ManageStylesDialog.ShowAndApplyAsync(this, _editor),
             Backstage: () => _ = ShowBackstageAsync(),
             NewDocument: NewDocument,
             ToggleNavigationPane: ToggleNavigationPane,
@@ -621,7 +674,12 @@ public sealed class MainWindow : Window
             InspectDocument: () => _ = InspectDocumentAsync(),
             CheckAccessibility: () => _ = CheckAccessibilityAsync(),
             ReplyComment: () => _ = ReplyToCommentAsync(),
-            ShowComments: rows => _ = ShowCommentsAsync(rows));
+            ShowComments: rows => _ = ShowCommentsAsync(rows),
+            ToggleSpellcheck: ToggleSpellCheck,
+            IsSpellcheckActive: () => _editor.SpellCheckEnabled,
+            AddToDictionary: AddCurrentWordToDictionary,
+            OpenThesaurus: () => _ = OpenThesaurusAsync(),
+            SetProofingLanguage: () => _ = OpenProofingLanguageDialogAsync());
 
         // AV-MAIL: capture the Mailings engine so the shell can drive its two dialog-bound commands
         // (Select Recipients / Insert Merge Field) with async Avalonia dialogs over the same session the

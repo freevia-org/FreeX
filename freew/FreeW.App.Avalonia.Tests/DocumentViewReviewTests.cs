@@ -400,6 +400,73 @@ public sealed class DocumentViewReviewTests
     // ── Command resolution ────────────────────────────────────────────────────────
 
     [Fact]
+    public async Task Proofing_language_applies_to_selected_paragraphs()
+    {
+        string? firstLanguage = null, secondLanguage = null;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            doc.Blocks.Add(new Paragraph("Alpha"));
+            doc.Blocks.Add(new Paragraph("Beta"));
+            var view = Build(doc);
+
+            view.SetSelectionRangePublic(0, 1, 1, 2);
+            view.SetProofingLanguage(" fr-FR ");
+
+            firstLanguage = ((Paragraph)view.Document.Blocks[0]).Runs.Single().Formatting.LanguageTag;
+            secondLanguage = ((Paragraph)view.Document.Blocks[1]).Runs.Single().Formatting.LanguageTag;
+        });
+        if (!ran) return;
+
+        firstLanguage.Should().Be("fr-FR");
+        secondLanguage.Should().Be("fr-FR");
+    }
+
+    [Fact]
+    public async Task Proofing_commands_toggle_state_dictionary_thesaurus_and_language()
+    {
+        bool spellEnabled = true;
+        bool inDictionary = false;
+        bool thesaurusOpened = false;
+        string? language = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            doc.Blocks.Add(new Paragraph("teh example"));
+            var view = Build(doc);
+            view.MoveCaretToBlock(0, 2);
+
+            var callbacks = NoopCallbacks() with
+            {
+                ToggleSpellcheck = () => view.ToggleSpellCheck(),
+                IsSpellcheckActive = () => view.SpellCheckEnabled,
+                AddToDictionary = () => view.AddCurrentWordToDictionary(),
+                OpenThesaurus = () => thesaurusOpened = true,
+                SetProofingLanguage = () => view.SetProofingLanguage("de-DE"),
+            };
+            var registry = FreeWAvaloniaRibbonCommands.Build(view, callbacks);
+
+            Execute(registry, "freew.spellcheck-toggle");
+            Execute(registry, "freew.add-to-dictionary");
+            Execute(registry, "freew.thesaurus");
+            Execute(registry, "freew.set-proofing-language");
+
+            spellEnabled = view.SpellCheckEnabled;
+            inDictionary = view.IsInCustomDictionary("teh");
+            language = ((Paragraph)view.Document.Blocks[0]).Runs.Single().Formatting.LanguageTag;
+        });
+        if (!ran) return;
+
+        spellEnabled.Should().BeFalse();
+        inDictionary.Should().BeTrue();
+        thesaurusOpened.Should().BeTrue();
+        language.Should().Be("de-DE");
+    }
+
+    [Fact]
     public void Review_command_ids_resolve_in_the_registry()
     {
         var view = new DocumentView();
@@ -412,6 +479,10 @@ public sealed class DocumentViewReviewTests
             "freew.reviewingpane",
             "freew.statistics",
             "freew.word-count",
+            "freew.spellcheck-toggle",
+            "freew.add-to-dictionary",
+            "freew.thesaurus",
+            "freew.set-proofing-language",
             "freew.check-accessibility",
             "freew.accept-change",
             "freew.accept-this",
@@ -451,6 +522,8 @@ public sealed class DocumentViewReviewTests
         foreach (var id in new[]
         {
             "freew.track-changes", "freew.reviewing-pane", "freew.statistics",
+            "freew.spellcheck-toggle", "freew.add-to-dictionary",
+            "freew.thesaurus", "freew.set-proofing-language",
             "freew.check-accessibility", "freew.accept-this", "freew.reject-this",
             "freew.accept-all", "freew.reject-all", "freew.new-comment",
             "freew.delete-comment", "freew.previous-comment", "freew.next-comment",

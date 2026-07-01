@@ -61,6 +61,10 @@ public sealed class PreservedObjectInfo
     /// The original mc:Choice Requires token (e.g. "p14", "p15", "p159") captured from the
     /// source file's mc:AlternateContent wrapper. The writer re-emits this verbatim so the
     /// correct namespace prefix is declared on the Choice element.
+    /// mc:AlternateContent permits a SPACE-SEPARATED list of tokens (e.g. "p14 p15") — this
+    /// property holds the full raw value verbatim (do not assume it is a single prefix; split
+    /// on whitespace before treating it as a set of xmlns prefixes). See
+    /// <see cref="McRequiresNsUris"/> for the per-token namespace URI lookup.
     /// Null when <see cref="WasAlternateContent"/> is false or when the token was not present.
     /// EA3 fix: captures the original token instead of hardcoding "p14".
     /// </summary>
@@ -70,9 +74,23 @@ public sealed class PreservedObjectInfo
     /// The namespace URI corresponding to <see cref="McRequiresToken"/>, as declared on
     /// the original mc:Choice element (e.g. "http://schemas.microsoft.com/office/powerpoint/2010/main"
     /// for p14). Needed so the writer can declare the prefix as xmlns:xxx on the wrapper.
-    /// Null when <see cref="McRequiresToken"/> is null.
+    /// Only meaningful when <see cref="McRequiresToken"/> is a SINGLE token; for multi-token
+    /// Requires values, use <see cref="McRequiresNsUris"/> instead (this field holds the URI for
+    /// the first token as a best-effort single-value fallback, kept for back-compat).
+    /// Null when <see cref="McRequiresToken"/> is null or its URI could not be resolved.
     /// </summary>
     public string? McRequiresNsUri { get; set; }
+
+    /// <summary>
+    /// FA2: per-token namespace URI lookup for a (possibly space-separated, multi-token)
+    /// <see cref="McRequiresToken"/> value, e.g. {"p14": ".../2010/main", "p15": ".../2012/main"}.
+    /// Populated on read by resolving each whitespace-separated token in <see cref="McRequiresToken"/>
+    /// against the xmlns declarations in scope on the original mc:Choice element. A token whose URI
+    /// could not be resolved is OMITTED (not stored with a null/placeholder value) — the writer must
+    /// not guess a URI (e.g. must not fall back to the p14 URI for an unrelated prefix).
+    /// Empty when <see cref="WasAlternateContent"/> is false.
+    /// </summary>
+    public Dictionary<string, string> McRequiresNsUris { get; } = new(StringComparer.Ordinal);
 
     // ── Referenced OPC parts ──────────────────────────────────────────────────────
 

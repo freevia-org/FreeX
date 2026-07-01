@@ -193,6 +193,7 @@ public sealed class DocumentView : Control
     private RunFormatting? _pendingRunFmt;
     private FormatPainterClipboard? _formatPainter;
     private bool _formatPainterLocked;
+    private readonly CustomDictionary _customDictionary = new();
     private double _laidOutWidth = -1;
     private double _contentHeight;
     private double _pageLeft;
@@ -344,8 +345,11 @@ public sealed class DocumentView : Control
     }
 
     public TextDocument Document => _doc;
+    public string? CurrentParagraphStyleId => CurrentParagraph()?.StyleId;
     public bool CanUndo => _bus.CanUndo;
     public bool CanRedo => _bus.CanRedo;
+    public bool SpellCheckEnabled { get; private set; } = true;
+    public IReadOnlyList<string> CustomDictionaryWords => _customDictionary.Words;
 
     /// <summary>Raised whenever document protection or Mark-as-Final state changes.</summary>
     public event EventHandler? ProtectionStateChanged;
@@ -5291,8 +5295,14 @@ public sealed class DocumentView : Control
 
     // AV-DESIGN: the model's page border (w:pgBorders) drawn inset just inside the page sheet. Word draws
     // page borders a fixed offset from the page edge (its "Measure from: Edge of page" default is 24pt); we
-    // mirror that with a small inset so the border sits between the chrome edge and the body text.
-    private const double PageBorderInsetDip = 24.0;
+    // mirror that with a small inset so the border sits between the chrome edge and the body text. FreeW's
+    // own DocxWriter.BuildPageBorders emits w:space="24" (POINTS — w:space on w:pgBorders is always measured
+    // in points, never twips/DXA), so the inset here must be 24 points converted to DIP, not 24 raw DIP.
+    private const double PageBorderInsetPt = 24.0;
+
+    // Test-only: exposes the DIP inset so tests can assert it matches 24pt (the writer's w:space) rather
+    // than the raw point value, catching any future re-introduction of a DIP/point mismatch.
+    internal static double PageBorderInsetDip => PageBorderInsetPt * PxPerPoint;
 
     private void DrawPageBorder(DrawingContext context, Rect pageRect)
     {
@@ -5340,6 +5350,11 @@ public sealed class DocumentView : Control
 
         var ft = new FormattedText(
             wm.Text, CultureInfo.CurrentCulture, FlowDirection.LeftToRight, typeface, fontSize, brush);
+
+        // Clip to the page sheet: an un-clipped long watermark string (fontSize floors at 24pt) can extend
+        // past the page rect onto the grey desk / an adjacent page. Word tiles+clips watermarks via a brush
+        // so they never overflow the page — mirror that here with a hard clip to pageRect.
+        using var clip = context.PushClip(pageRect);
 
         var center = pageRect.Center;
         using var _ = context.PushTransform(
@@ -5395,10 +5410,10 @@ public sealed class DocumentView : Control
                 context.FillRectangle(PageShadowBrush, shadowRect);
                 context.FillRectangle(pageFill, pageRect);
                 context.DrawRectangle(null, PageBorderPen, pageRect);
-                // AV-DESIGN: the model's page border (inset just inside the chrome border).
-                DrawPageBorder(context, pageRect);
-                // AV-DESIGN: the watermark draws faintly behind the body text on each page.
+                // AV-DESIGN: layering matches Word — page color, then watermark, then the page border on
+                // top (a solid pgBorders line must not be occluded by the faint watermark behind it).
                 DrawWatermark(context, pageRect);
+                DrawPageBorder(context, pageRect);
             }
         }
         else
@@ -5651,7 +5666,7 @@ public sealed class DocumentView : Control
 
         // AV-FLSEL: draw selection outline + 8 resize handles over the selected floating object.
         if (_selectedFloating is { } selFl)
-            DrawFloatingSelection(context, selFl.Rect);
+            DrawFloatingSelection(context, selFl.Rect, selFl.BlockIndex, selFl.RunIndex, selFl.Kind);
 
         // AV-HFEDIT: the header/footer caret renders independently of the body caret.
         if (IsFocused && _hfCaret is not null && TryGetHfCaretRect(out var hfRect))
@@ -5997,6 +6012,30 @@ public sealed class DocumentView : Control
     private static DocumentFloatPoint ToPlannerPoint(Point point) =>
         new(point.X, point.Y);
 
+    /// <summary>
+    /// Resolves the current RotationAngle/FlipH/FlipV for the floating object at (blockIndex, runIndex,
+    /// kind), so handle geometry, resize, and hit-test can un-rotate/un-flip against the SAME transform
+    /// DrawFloatingShape uses to render it (see ~line 5828: <c>needTransform = RotationAngle != 0 ||
+    /// FlipH || FlipV</c>, flip-then-rotate about the rect centre). Only <see cref="InlineImage"/> and
+    /// <see cref="Shape"/> carry rotation/flip today; every other floating kind (Chart/WordArt/SmartArt/
+    /// Group) has none, so they fall back to the identity (0, false, false) — same as an unrotated image
+    /// or shape.
+    /// </summary>
+    private (double Angle, bool FlipH, bool FlipV) GetFloatRotation(int blockIndex, int runIndex, string kind)
+    {
+        if (blockIndex < 0 || blockIndex >= _doc.Blocks.Count) return (0, false, false);
+        if (_doc.Blocks[blockIndex] is not Paragraph para) return (0, false, false);
+        if (runIndex < 0 || runIndex >= para.Runs.Count) return (0, false, false);
+        var run = para.Runs[runIndex];
+
+        return kind switch
+        {
+            "Image" when run.Image is { } img => (img.RotationAngle, img.FlipH, img.FlipV),
+            "Shape" when run.Shape is { } shape => (shape.RotationAngle, shape.FlipH, shape.FlipV),
+            _ => (0, false, false),
+        };
+    }
+
     private static DocumentFloatingHandle ToPlannerHandle(FloatHandle handle) => handle switch
     {
         FloatHandle.Body => DocumentFloatingHandle.Body,
@@ -6029,11 +6068,12 @@ public sealed class DocumentView : Control
     /// Draws the selection outline (dashed blue rectangle) and 8 resize handles around
     /// the selected floating object's page-space bounding rect.
     /// </summary>
-    private void DrawFloatingSelection(DrawingContext context, Rect rect)
+    private void DrawFloatingSelection(DrawingContext context, Rect rect, int blockIndex, int runIndex, string kind)
     {
         context.DrawRectangle(null, FloatSelectionPen, rect);
 
-        foreach (var (_, hRect) in HandleRects(rect))
+        var (angle, flipH, flipV) = GetFloatRotation(blockIndex, runIndex, kind);
+        foreach (var (_, hRect) in HandleRects(rect, angle, flipH, flipV))
         {
             context.FillRectangle(FloatHandleFill, hRect);
             context.DrawRectangle(null, FloatHandlePen, hRect);
@@ -6047,15 +6087,22 @@ public sealed class DocumentView : Control
 
     /// <summary>
     /// Returns the eight resize-handle squares (corners + edge midpoints) for a selection
-    /// <paramref name="rect"/>, each tagged with the <see cref="FloatHandle"/> it represents.
-    /// Shared by the renderer and the pointer hit-test so the drawn squares and the clickable
-    /// targets never drift apart.
+    /// <paramref name="rect"/>, each tagged with the <see cref="FloatHandle"/> it represents. When
+    /// <paramref name="rotationAngle"/>/<paramref name="flipH"/>/<paramref name="flipV"/> are set, the
+    /// drawn handle positions are carried through the same transform DrawFloatingShape renders with, so
+    /// they track the VISIBLE rotated/flipped corners instead of the plain axis-aligned box. Shared by
+    /// the renderer and the pointer hit-test so the drawn squares and the clickable targets never drift
+    /// apart.
     /// </summary>
-    private static IEnumerable<(FloatHandle Handle, Rect Rect)> HandleRects(Rect rect)
+    private static IEnumerable<(FloatHandle Handle, Rect Rect)> HandleRects(
+        Rect rect, double rotationAngle = 0, bool flipH = false, bool flipV = false)
     {
         foreach (var handle in DocumentViewLayoutPlanner.BuildFloatingHandleRects(
                      ToPlannerRect(rect),
-                     FloatHandleSize))
+                     FloatHandleSize,
+                     rotationAngle,
+                     flipH,
+                     flipV))
             yield return (FromPlannerHandle(handle.Handle), ToAvaloniaRect(handle.Rect));
     }
 
@@ -6068,8 +6115,11 @@ public sealed class DocumentView : Control
     {
         var dict = new Dictionary<FloatHandle, Rect>();
         if (_selectedFloating is { } sel)
-            foreach (var (h, r) in HandleRects(sel.Rect))
+        {
+            var (angle, flipH, flipV) = GetFloatRotation(sel.BlockIndex, sel.RunIndex, sel.Kind);
+            foreach (var (h, r) in HandleRects(sel.Rect, angle, flipH, flipV))
                 dict[h] = r;
+        }
         return dict;
     }
 
@@ -6077,16 +6127,22 @@ public sealed class DocumentView : Control
     /// Hit-tests <paramref name="point"/> against the current selection's handles + body. A handle
     /// hit (within the handle square, padded slightly for easier grabbing) wins; otherwise a point
     /// inside the selection rect is <see cref="FloatHandle.Body"/>; anything else is
-    /// <see cref="FloatHandle.None"/>. No selection → <see cref="FloatHandle.None"/>.
+    /// <see cref="FloatHandle.None"/>. No selection → <see cref="FloatHandle.None"/>. Accounts for the
+    /// selected object's rotation/flip so a click on the visible (rotated/flipped) handle or body
+    /// resolves correctly — see <see cref="DocumentViewLayoutPlanner.HitTestFloatingHandle"/>.
     /// </summary>
     private FloatHandle HitTestHandle(Point point)
     {
         if (_selectedFloating is not { } sel) return FloatHandle.None;
+        var (angle, flipH, flipV) = GetFloatRotation(sel.BlockIndex, sel.RunIndex, sel.Kind);
         return FromPlannerHandle(DocumentViewLayoutPlanner.HitTestFloatingHandle(
             ToPlannerRect(sel.Rect),
             ToPlannerPoint(point),
             FloatHandleSize,
-            hitPaddingDip: 2));
+            hitPaddingDip: 2,
+            angle,
+            flipH,
+            flipV));
     }
 
     /// <summary>The mouse cursor appropriate for hovering a given handle (or moving the body).</summary>
@@ -6105,16 +6161,24 @@ public sealed class DocumentView : Control
     /// drag-start <paramref name="baseRect"/> to the current pointer position. The opposite edge(s)
     /// stay anchored; corners move both dimensions, edges only one. <paramref name="aspect"/> (Shift on
     /// a corner) preserves the base aspect ratio. The result is clamped so width/height never fall below
-    /// <see cref="MinFloatSizePt"/> (converted to px).
+    /// <see cref="MinFloatSizePt"/> (converted to px). When <paramref name="rotationAngle"/>/<paramref
+    /// name="flipH"/>/<paramref name="flipV"/> are set, the pointer is resolved against the object's OWN
+    /// (rotated/flipped) axes rather than the screen axes — see
+    /// <see cref="DocumentViewLayoutPlanner.BuildFloatingResizeRect"/>.
     /// </summary>
-    private static Rect ResizeRect(Rect baseRect, FloatHandle handle, Point pointer, bool aspect)
+    private static Rect ResizeRect(
+        Rect baseRect, FloatHandle handle, Point pointer, bool aspect,
+        double rotationAngle = 0, bool flipH = false, bool flipV = false)
     {
         return ToAvaloniaRect(DocumentViewLayoutPlanner.BuildFloatingResizeRect(
             ToPlannerRect(baseRect),
             ToPlannerHandle(handle),
             ToPlannerPoint(pointer),
             preserveAspect: aspect,
-            minimumSizeDip: MinFloatSizePt * PxPerPoint));
+            minimumSizeDip: MinFloatSizePt * PxPerPoint,
+            rotationAngle,
+            flipH,
+            flipV));
     }
 
     /// <summary>
@@ -6161,7 +6225,11 @@ public sealed class DocumentView : Control
         }
         else
         {
-            _bus.Execute(sizeCmd);
+            // FB4 guard: the anchored top/left edge moved (a top/left handle was dragged), but this
+            // float has no placement to carry the position delta on (non-Image kind with no
+            // FloatingPlacement available). Committing the size-only command here would grow the object
+            // from its ORIGINAL top-left, silently sliding the anchored edge the user dragged instead of
+            // holding it fixed — so skip the commit entirely rather than apply a visually-wrong resize.
         }
 
         InvalidateLayoutAndVisual();
@@ -6237,7 +6305,8 @@ public sealed class DocumentView : Control
         }
         else
         {
-            newRect = ResizeRect(drag.FloatRect, drag.Handle, point, shift);
+            var (angle, flipH, flipV) = GetFloatRotation(sel.BlockIndex, sel.RunIndex, sel.Kind);
+            newRect = ResizeRect(drag.FloatRect, drag.Handle, point, shift, angle, flipH, flipV);
         }
         _selectedFloating = sel with { Rect = newRect };
         InvalidateVisual();
@@ -6265,7 +6334,8 @@ public sealed class DocumentView : Control
         }
         else
         {
-            var newRect = ResizeRect(drag.FloatRect, drag.Handle, releasePoint, shift);
+            var (angle, flipH, flipV) = GetFloatRotation(sel.BlockIndex, sel.RunIndex, sel.Kind);
+            var newRect = ResizeRect(drag.FloatRect, drag.Handle, releasePoint, shift, angle, flipH, flipV);
             if (Math.Abs(newRect.Width - drag.FloatRect.Width) >= 1 ||
                 Math.Abs(newRect.Height - drag.FloatRect.Height) >= 1)
                 CommitFloatResize(sel.BlockIndex, sel.RunIndex, sel.Kind, drag.FloatRect, newRect);
@@ -6370,6 +6440,10 @@ public sealed class DocumentView : Control
         hit = default;
         if (_laidOutWidth < 0) Relayout(FallbackWidth);
 
+        // Rotation/flip are carried on each snapshot (threaded from the model's Image/Shape
+        // RotationAngle/FlipH/FlipV in BuildFloatingObjectSnapshots) and un-applied per-candidate
+        // inside HitTestFloatingObject before the containment test, so a rotated/flipped float's visible
+        // (not axis-aligned) bounds decide the hit and the z-order winner among overlapping floats.
         var winner = DocumentViewLayoutPlanner.HitTestFloatingObject(
             _floatingSnapshots,
             ToPlannerPoint(point));
@@ -7817,6 +7891,53 @@ public sealed class DocumentView : Control
             CharacterShadingHex = string.IsNullOrWhiteSpace(colorHex) ? null : colorHex,
             CharacterShadingPattern = string.IsNullOrWhiteSpace(colorHex) ? ShadingPattern.Clear : pattern,
         });
+
+    public void SetProofingLanguage(string? languageTag)
+    {
+        var indices = SelectedParagraphIndices();
+        if (indices.Count == 0)
+            return;
+
+        var normalizedTag = ProofingLanguageCatalog.NormalizeTag(languageTag);
+        if (indices.Count > 1)
+            _bus.BeginUndoGroup();
+
+        foreach (var blockIndex in indices)
+        {
+            _bus.Execute(new ReplaceParagraphRunsCommand(blockIndex, paragraph =>
+            {
+                var cells = ParaCells(paragraph);
+                for (var i = 0; i < cells.Count; i++)
+                    cells[i] = cells[i] with { Fmt = cells[i].Fmt with { LanguageTag = normalizedTag } };
+                SetRuns(paragraph, cells);
+            }));
+        }
+
+        if (indices.Count > 1)
+            _bus.CommitUndoGroup("Proofing Language");
+    }
+
+    public bool ToggleSpellCheck()
+    {
+        SpellCheckEnabled = !SpellCheckEnabled;
+        InvalidateVisual();
+        return SpellCheckEnabled;
+    }
+
+    public bool AddCurrentWordToDictionary() =>
+        CurrentProofingWord is { } word && _customDictionary.Add(word);
+
+    public bool AddToDictionary(string? word)
+    {
+        var normalized = NormalizeProofingWord(word);
+        return normalized is not null && _customDictionary.Add(normalized);
+    }
+
+    public bool IsInCustomDictionary(string? word) =>
+        NormalizeProofingWord(word) is { } normalized && _customDictionary.Contains(normalized);
+
+    public string? CurrentProofingWord =>
+        NormalizeProofingWord(SelectedText) ?? WordAtCaret();
 
     // ── AV-COMMENT: review-comment insert / delete / resolve + introspection ──────────────────────
     // Model-backed (comments already round-trip through Core.IO). All mutations ride the shared
@@ -10100,6 +10221,61 @@ public sealed class DocumentView : Control
     }
 
     /// <summary>
+    /// Home &gt; Styles &gt; New Style: create a custom paragraph style through the shared
+    /// <see cref="StyleManager"/>, then immediately apply it through the normal paragraph-style path.
+    /// </summary>
+    public DocumentStyle? CreateParagraphStyleAndApply(
+        string name,
+        string? basedOnId,
+        RunFormatting run,
+        ParagraphFormatting paragraph,
+        string? nextStyleId)
+    {
+        if (IsEditingLocked)
+            return null;
+
+        var created = StyleManager.CreateStyle(_doc, name, basedOnId, run, paragraph, nextStyleId);
+        ApplyNamedStyle(created.Id);
+        InvalidateAfterExternalMutation();
+        return created;
+    }
+
+    /// <summary>Home &gt; Styles &gt; Manage Styles: modify a style's catalog entry and redraw style-linked text.</summary>
+    public DocumentStyle? ModifyParagraphStyle(
+        string styleId,
+        RunFormatting run,
+        ParagraphFormatting paragraph,
+        string? basedOnId,
+        string? nextStyleId)
+    {
+        if (IsEditingLocked)
+            return null;
+
+        var updated = StyleManager.ModifyStyle(_doc, styleId,
+            run: run,
+            para: paragraph,
+            basedOnId: basedOnId,
+            clearBasedOn: basedOnId is null,
+            nextStyleId: nextStyleId,
+            clearNext: nextStyleId is null);
+        if (updated is not null)
+            InvalidateAfterExternalMutation();
+        return updated;
+    }
+
+    /// <summary>Home &gt; Styles &gt; Manage Styles: delete a custom style through the shared catalog rules.</summary>
+    public bool DeleteParagraphStyle(string styleId)
+    {
+        if (IsEditingLocked)
+            return false;
+
+        var deleted = StyleManager.DeleteStyle(_doc, styleId);
+        if (deleted)
+            InvalidateAfterExternalMutation();
+        return deleted;
+    }
+
+    /// <summary>
     /// AV-DESIGN: set (or clear) the whole-page background colour (Design &gt; Page Color). A null/empty
     /// value clears it back to the default white sheet; the hex is normalised to "#RRGGBB". Undoable; the
     /// page sheet recolours immediately and round-trips through <c>w:background</c> on save.
@@ -10505,6 +10681,53 @@ public sealed class DocumentView : Control
     }
 
     /// <summary>Cycles text case: lower → Title Case → UPPER → lower.</summary>
+    private string? WordAtCaret()
+    {
+        if (CurrentParagraph() is not { } paragraph || !IsEditable(paragraph))
+            return null;
+
+        var cells = ParaCells(paragraph);
+        if (cells.Count == 0)
+            return null;
+
+        var index = Math.Clamp(_caret.Offset, 0, cells.Count - 1);
+        if (!IsProofingWordChar(cells[index].Ch) && index > 0 && IsProofingWordChar(cells[index - 1].Ch))
+            index--;
+        if (!IsProofingWordChar(cells[index].Ch))
+            return null;
+
+        var start = index;
+        while (start > 0 && IsProofingWordChar(cells[start - 1].Ch))
+            start--;
+        var end = index + 1;
+        while (end < cells.Count && IsProofingWordChar(cells[end].Ch))
+            end++;
+
+        return NormalizeProofingWord(new string(cells.Skip(start).Take(end - start).Select(c => c.Ch).ToArray()));
+    }
+
+    private static string? NormalizeProofingWord(string? word)
+    {
+        if (string.IsNullOrWhiteSpace(word))
+            return null;
+
+        var trimmed = word.Trim();
+        var start = 0;
+        while (start < trimmed.Length && !IsProofingWordChar(trimmed[start]))
+            start++;
+        var end = trimmed.Length - 1;
+        while (end >= start && !IsProofingWordChar(trimmed[end]))
+            end--;
+        if (end < start)
+            return null;
+
+        var normalized = trimmed[start..(end + 1)];
+        return normalized.Any(char.IsWhiteSpace) ? null : normalized;
+    }
+
+    private static bool IsProofingWordChar(char ch) =>
+        char.IsLetter(ch) || ch is '\'' or '-' or '\u2019';
+
     private static string CycleCase(string text)
     {
         if (string.IsNullOrEmpty(text))

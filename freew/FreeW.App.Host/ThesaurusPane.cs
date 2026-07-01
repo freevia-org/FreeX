@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using FreeW.App.Host.Editing;
+using FreeW.App.Presentation.Ribbon;
 
 namespace FreeW.App.Host;
 
@@ -131,7 +132,7 @@ internal sealed class ThesaurusPane
 
     // ── Rendering ────────────────────────────────────────────────────────────────────────────────
 
-    private void PopulateSenses(ThesaurusLookup.ThesaurusEntry entry, string originalWord)
+    private void PopulateSenses(ThesaurusEntry entry, string originalWord)
     {
         foreach (var sense in entry.Senses)
         {

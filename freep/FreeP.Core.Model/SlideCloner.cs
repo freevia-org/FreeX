@@ -251,6 +251,8 @@ public static class SlideCloner
             ObjectKind          = src.ObjectKind,
             RawXml              = src.RawXml,
             WasAlternateContent = src.WasAlternateContent,
+            McRequiresToken     = src.McRequiresToken,
+            McRequiresNsUri     = src.McRequiresNsUri,
         };
         foreach (var kv in src.Parts)
             copy.Parts[kv.Key] = kv.Value;
@@ -260,6 +262,8 @@ public static class SlideCloner
             copy.PartRels[kv.Key] = kv.Value;
         foreach (var kv in src.SlideRels)
             copy.SlideRels[kv.Key] = kv.Value;
+        foreach (var kv in src.McRequiresNsUris)
+            copy.McRequiresNsUris[kv.Key] = kv.Value;
         return copy;
     }
 }

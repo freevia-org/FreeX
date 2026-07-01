@@ -21,6 +21,11 @@ public sealed class SlidePanePolicySourceGuardTests
         source.Should().Contain("Height       = SlidePanePlanner.DefaultThumbnailHeight");
         source.Should().Contain("Tag         = entry.SlideIndex");
         source.Should().Contain("ContextMenu = BuildSlidePaneContextMenu(entry.SlideIndex)");
+        source.Should().Contain("Content                    = SlidePanePlanner.NewSlideButtonText");
+        source.Should().Contain("button.Click += (_, _) => InsertSlideFromSlidePaneAffordance();");
+        source.Should().Contain("slidePaneHost.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });");
+        source.Should().Contain("slidePaneListHost.Children.Add(_slidePaneList);");
+        source.Should().Contain("slidePaneHost.Children.Add(_slidePaneNewSlideButton);");
         source.Should().Contain("SlidePanePlanner.BuildContextActions(_presentation.Slides.Count, slideIndex)");
         source.Should().Contain("SlidePanePlanner.TryApplyAction(Editor, action)");
         source.Should().Contain("PointerPressed += OnSlidePaneItemPointerPressed");
@@ -29,6 +34,7 @@ public sealed class SlidePanePolicySourceGuardTests
         source.Should().Contain("SlidePanePlanner.HitTestInsertionPoint(");
         source.Should().Contain("SlidePanePlanner.ComputeInsertionIndicatorOffset(");
         source.Should().Contain("SlidePanePlanner.PlanMoveAction(");
+        source.Should().Contain("private void InsertSlideFromSlidePaneAffordance()");
         source.Should().Contain("SelectSlidePaneItem(Editor.CurrentSlideIndex)");
         source.Should().NotContain("for (int i = 0; i < _presentation.Slides.Count; i++)");
         source.Should().NotContain("Text                = $\"{slideIdx + 1}\"");
