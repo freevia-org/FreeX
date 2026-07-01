@@ -97,12 +97,6 @@ File.WriteAllText(args[1], FreePCommandInventoryMarkdown.Build(inventory), Encod
 
 internal static class FreePCommandInventory
 {
-    private static readonly IReadOnlyDictionary<string, string> AliasPairs = new Dictionary<string, string>(StringComparer.Ordinal)
-    {
-        ["freep.slideshow.from-current-slide"] = "freep.slideshow.from-current",
-        ["freep.slideshow.from-current"] = "freep.slideshow.from-current-slide",
-    };
-
     public static InventoryDocument Build()
     {
         var wpf = Collect(FreePRibbon.Build(FreePRibbonCapabilities.Wpf), "WPF");
@@ -274,9 +268,6 @@ internal static class FreePCommandInventory
 
         if (wpfPresent && avaloniaPresent)
             return new Classification("shared", "Available in both generated FreeP ribbon profiles.");
-
-        if (AliasPairs.TryGetValue(commandId, out var alias) && allCommandIds.Contains(alias))
-            return new Classification("command-id-alias", $"Profile uses '{alias}' for the opposite surface.");
 
         if (avaloniaPresent && IsAvaloniaShellCommand(commandId))
             return new Classification("platform-only", "Avalonia shell/file command exposed by its generated profile.");

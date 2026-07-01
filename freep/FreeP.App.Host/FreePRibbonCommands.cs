@@ -70,6 +70,10 @@ internal static class FreePRibbonCommands
         // Wave 12B: Find & Replace dialog launchers.
         Action?             onFind             = null,
         Action?             onFindReplace      = null,
+        Action?             onReviewCommentsPane = null,
+        Action?             onReviewAccessibility = null,
+        Action?             onReviewAltText = null,
+        Action?             onReviewProofing = null,
         // Wave 16B: Animation pane toggle.
         Action?             onAnimPane         = null)
     {
@@ -279,6 +283,13 @@ internal static class FreePRibbonCommands
         registry.Register("freep.replace",
             new ActionRibbonCommand(() => onFindReplace?.Invoke()));
 
+        RegisterReviewWorkflowCommands(
+            registry,
+            onReviewCommentsPane,
+            onReviewAccessibility,
+            onReviewAltText,
+            onReviewProofing);
+
         return registry;
     }
 
@@ -393,6 +404,33 @@ internal static class FreePRibbonCommands
     //
     // This region is the ONLY place in this file that references SlideCanvas for 10A.
     // 10B must not add slideCanvas references outside this region.
+
+    private static void RegisterReviewWorkflowCommands(
+        RibbonCommandRegistry registry,
+        Action? onCommentsPane,
+        Action? onAccessibility,
+        Action? onAltText,
+        Action? onProofing)
+    {
+        registry.Register(
+            PresentationReviewWorkflowPlanner.CommentsPaneCommandId,
+            new ActionRibbonCommand(() => onCommentsPane?.Invoke()));
+        registry.Register(
+            PresentationReviewWorkflowPlanner.AccessibilityCommandId,
+            new ActionRibbonCommand(() => onAccessibility?.Invoke()));
+        registry.Register(
+            PresentationReviewWorkflowPlanner.AltTextCommandId,
+            new ActionRibbonCommand(() => onAltText?.Invoke()));
+        registry.Register(
+            PresentationReviewWorkflowPlanner.ProofingCommandId,
+            new ActionRibbonCommand(() => onProofing?.Invoke()));
+        registry.Register(PresentationReviewWorkflowPlanner.AddCommentCommandId, EmptyRibbonCommand.Instance);
+        registry.Register(PresentationReviewWorkflowPlanner.EditCommentCommandId, EmptyRibbonCommand.Instance);
+        registry.Register(PresentationReviewWorkflowPlanner.DeleteCommentCommandId, EmptyRibbonCommand.Instance);
+        registry.Register(PresentationReviewWorkflowPlanner.PreviousCommentCommandId, EmptyRibbonCommand.Instance);
+        registry.Register(PresentationReviewWorkflowPlanner.NextCommentCommandId, EmptyRibbonCommand.Instance);
+        registry.Register(PresentationReviewWorkflowPlanner.ResolveCommentCommandId, EmptyRibbonCommand.Instance);
+    }
 
     /// <summary>
     /// Routes a format action to the active in-canvas RichTextBox editor (shape or table-cell),

@@ -118,6 +118,11 @@ public sealed class MainWindow : Window
 
     internal IReadOnlyList<RecentFileEntry> RecentEntries => _fileWorkflow.RecentEntries;
 
+    internal PresentationCommentPanePlan? LastCommentPanePlan { get; private set; }
+    internal PresentationAccessibilitySummaryPlan? LastAccessibilitySummaryPlan { get; private set; }
+    internal PresentationAltTextRequestPlan? LastAltTextRequestPlan { get; private set; }
+    internal PresentationProofingRequestPlan? LastProofingRequestPlan { get; private set; }
+
     // ── Constructors ───────────────────────────────────────────────────────────
 
     public MainWindow()
@@ -225,6 +230,7 @@ public sealed class MainWindow : Window
 
         Editor.Changed             += OnEditorChanged;
         Editor.CurrentSlideChanged += OnCurrentSlideChanged;
+        Editor.SelectionChanged    += OnEditorSelectionChanged;
     }
 
     private void RebuildEditorAndRewireInteraction()
@@ -434,6 +440,7 @@ public sealed class MainWindow : Window
         r.Register("freep.redo", new ActionRibbonCommand(() => Editor.Redo()));
         r.Register("freep.find", new ActionRibbonCommand(OpenFindDialog));
         r.Register("freep.replace", new ActionRibbonCommand(OpenFindReplaceDialog));
+        RegisterReviewWorkflowCommands(r);
 
         foreach (var plan in PresentationTransitionCommandPlanner.BuiltInPlans)
         {
@@ -456,7 +463,7 @@ public sealed class MainWindow : Window
         // Slide show
         r.Register("freep.slideshow.from-beginning",
             new ActionRibbonCommand(() => StartSlideShow(fromStart: true)));
-        r.Register("freep.slideshow.from-current",
+        r.Register("freep.slideshow.from-current-slide",
             new ActionRibbonCommand(() => StartSlideShow(fromStart: false)));
 
         return r;
@@ -667,6 +674,68 @@ public sealed class MainWindow : Window
                 SlideRange: range),
             SlideRenderer.RenderToBytes);
 
+    private void RegisterReviewWorkflowCommands(RibbonCommandRegistry registry)
+    {
+        registry.Register(
+            PresentationReviewWorkflowPlanner.CommentsPaneCommandId,
+            new ActionRibbonCommand(ShowReviewCommentsPane));
+        registry.Register(
+            PresentationReviewWorkflowPlanner.AccessibilityCommandId,
+            new ActionRibbonCommand(RefreshAccessibilitySummaryPlan));
+        registry.Register(
+            PresentationReviewWorkflowPlanner.AltTextCommandId,
+            new ActionRibbonCommand(RefreshAltTextRequestPlan));
+        registry.Register(
+            PresentationReviewWorkflowPlanner.ProofingCommandId,
+            new ActionRibbonCommand(RefreshProofingRequestPlan));
+        registry.Register(PresentationReviewWorkflowPlanner.AddCommentCommandId, EmptyRibbonCommand.Instance);
+        registry.Register(PresentationReviewWorkflowPlanner.EditCommentCommandId, EmptyRibbonCommand.Instance);
+        registry.Register(PresentationReviewWorkflowPlanner.DeleteCommentCommandId, EmptyRibbonCommand.Instance);
+        registry.Register(PresentationReviewWorkflowPlanner.PreviousCommentCommandId, EmptyRibbonCommand.Instance);
+        registry.Register(PresentationReviewWorkflowPlanner.NextCommentCommandId, EmptyRibbonCommand.Instance);
+        registry.Register(PresentationReviewWorkflowPlanner.ResolveCommentCommandId, EmptyRibbonCommand.Instance);
+    }
+
+    internal void RefreshReviewWorkflowPlans()
+    {
+        LastCommentPanePlan = PresentationReviewWorkflowPlanner.BuildCommentPanePlan(
+            _presentation.Slides,
+            Editor.CurrentSlideIndex);
+        RefreshAccessibilitySummaryPlan();
+        RefreshAltTextRequestPlan();
+        RefreshProofingRequestPlan();
+    }
+
+    private void ShowReviewCommentsPane()
+    {
+        LastCommentPanePlan = PresentationReviewWorkflowPlanner.BuildCommentPanePlan(
+            _presentation.Slides,
+            Editor.CurrentSlideIndex);
+    }
+
+    private void RefreshAccessibilitySummaryPlan()
+    {
+        LastAccessibilitySummaryPlan =
+            PresentationReviewWorkflowPlanner.BuildAccessibilitySummaryPlan(_presentation);
+    }
+
+    private void RefreshAltTextRequestPlan()
+    {
+        uint? selectedShapeId = Editor.SelectedShapeIds.Count == 1
+            ? Editor.SelectedShapeIds[0]
+            : null;
+        LastAltTextRequestPlan = PresentationReviewWorkflowPlanner.BuildAltTextRequestPlan(
+            Editor.CurrentSlide,
+            selectedShapeId,
+            proposedDescription: null);
+    }
+
+    private void RefreshProofingRequestPlan()
+    {
+        LastProofingRequestPlan =
+            PresentationReviewWorkflowPlanner.BuildProofingRequestPlan(_presentation);
+    }
+
     private bool TryLoadPresentationFile(string path)
     {
         try
@@ -722,6 +791,7 @@ public sealed class MainWindow : Window
         RefreshSlidePane();
         RefreshCanvas();
         RefreshNotesPane();
+        RefreshReviewWorkflowPlans();
         UpdateStatus();
     }
 
@@ -911,6 +981,7 @@ public sealed class MainWindow : Window
         _fileWorkflow.MarkDirty();
         RefreshSlidePane();
         RefreshCanvas(); // refresh canvas so shape moves/resizes are reflected immediately
+        RefreshReviewWorkflowPlans();
         UpdateStatus();
     }
 
@@ -923,8 +994,12 @@ public sealed class MainWindow : Window
 
         RefreshCanvas();
         RefreshNotesPane();
+        RefreshReviewWorkflowPlans();
         UpdateStatus();
     }
+
+    private void OnEditorSelectionChanged(object? sender, EventArgs e) =>
+        RefreshAltTextRequestPlan();
 
     // ── Status ─────────────────────────────────────────────────────────────────
 

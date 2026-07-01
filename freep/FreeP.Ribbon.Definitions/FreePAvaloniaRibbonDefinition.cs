@@ -80,7 +80,7 @@ internal static class FreePAvaloniaRibbonDefinition
                 {
                     g.Large("freep.slideshow.from-beginning", FreePRibbonText.SlideShowFromBeginningLabel,
                         RibbonCommandIconKind.Next, FreePRibbonText.SlideShowFromBeginningKeyTip);
-                    g.Large("freep.slideshow.from-current", FreePRibbonText.SlideShowFromCurrentSlideLabel,
+                    g.Large("freep.slideshow.from-current-slide", FreePRibbonText.SlideShowFromCurrentSlideLabel,
                         RibbonCommandIconKind.Next, FreePRibbonText.SlideShowFromCurrentSlideKeyTip);
                 });
             })
