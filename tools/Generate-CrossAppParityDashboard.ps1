@@ -146,9 +146,16 @@ try {
             avaloniaProfileOnly = [int]$freew.summary.avaloniaOnly
             missingWpfProfile = [int]$freew.summary.missingWpf
             missingAvaloniaProfile = [int]$freew.summary.missingAvalonia
-            classifiedRows = $false
+            actionableMissingWpf = [int]$freew.summary.actionableMissingWpf
+            actionableMissingAvalonia = [int]$freew.summary.actionableMissingAvalonia
+            profileShapeOnly = [int]$freew.summary.profileShapeOnly
+            commandIdAliases = [int]$freew.summary.commandIdAliases
+            platformOnly = [int]$freew.summary.platformOnly
+            deferred = [int]$freew.summary.deferred
+            actionableGaps = [int]$freew.summary.actionableGaps
+            classifiedRows = $true
         }
-        nextSlice = "Avalonia Options parity improved; next classify one-sided command rows and deepen Backstage safety/print/export actions."
+        nextSlice = "Use actionable FreeW command rows for product slices; deepen Backstage safety/print/export evidence next."
     }
 
     $freeP = [ordered]@{
@@ -194,7 +201,7 @@ try {
         "| App | Primary evidence | Current generated state | Next slice |",
         "|---|---|---|---|",
         "| FreeX | Functional matrix, classifier, dialog inventory, command surface | $($freeX.functionalMatrix.totalCommands) functional commands; $($freeX.functionalMatrix.parity) parity; $($freeX.functionalMatrix.avaloniaMissing) Avalonia-missing; $($freeX.functionalMatrix.realBehaviorGaps) real classified binding gaps; $($freeX.dialogRoutes.totalRoutes)/$($freeX.dialogRoutes.totalRoutes) dialog routes captured on WPF and Avalonia | $($freeX.nextSlice) |",
-        "| FreeW | Generated command inventory | $($freeW.commandInventory.totalCommands) commands; $($freeW.commandInventory.bothProfiles) shared-profile; $($freeW.commandInventory.wpfProfileOnly) WPF-profile-only; $($freeW.commandInventory.avaloniaProfileOnly) Avalonia-profile-only; classification pending | $($freeW.nextSlice) |",
+        "| FreeW | Generated command inventory | $($freeW.commandInventory.totalCommands) commands; $($freeW.commandInventory.bothProfiles) shared-profile; $($freeW.commandInventory.actionableMissingWpf) actionable WPF-missing; $($freeW.commandInventory.actionableMissingAvalonia) actionable Avalonia-missing; $($freeW.commandInventory.profileShapeOnly) profile-shape-only; $($freeW.commandInventory.commandIdAliases) command-id aliases; $($freeW.commandInventory.platformOnly) platform-only; $($freeW.commandInventory.deferred) deferred | $($freeW.nextSlice) |",
         "| FreeP | Generated command inventory | $($freeP.commandInventory.totalCommands) commands; $($freeP.commandInventory.bothProfiles) shared-profile; $($freeP.commandInventory.actionableMissingWpf) actionable WPF-missing; $($freeP.commandInventory.actionableMissingAvalonia) actionable Avalonia-missing; $($freeP.commandInventory.platformOnly) platform-only | $($freeP.nextSlice) |",
         "",
         "## Source Files",

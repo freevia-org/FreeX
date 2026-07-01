@@ -281,10 +281,16 @@ public sealed class FreeWRibbonDefinitionProfileTests
         using var document = JsonDocument.Parse(ReadRepositoryFile("docs", "parity", "freew-command-inventory.json"));
         var root = document.RootElement;
 
-        root.GetProperty("schema").GetString().Should().Be("freew.command-inventory.v2");
+        root.GetProperty("schema").GetString().Should().Be("freew.command-inventory.v3");
         root.GetProperty("generatedBy").GetString().Should().Be("tools/Generate-FreeWCommandInventory.ps1");
         root.GetProperty("topologySource").GetString().Should().Contain("FreeWRibbon.Build(FreeWRibbonCapabilities.Wpf/Avalonia)");
         root.GetProperty("sourceLiteralEvidenceNote").GetString().Should().Contain("not behavior proof");
+        root.GetProperty("classificationNote").GetString().Should().Contain("profile-shape-only");
+        root.GetProperty("classificationNote").GetString().Should().Contain("actionable-gap");
+        root.GetProperty("classificationRules").EnumerateArray()
+            .Select(rule => rule.GetProperty("name").GetString())
+            .Should()
+            .Equal("shared-profile", "profile-shape-only", "command-id-alias", "platform-only", "deferred", "actionable-gap");
 
         var summary = root.GetProperty("summary");
         summary.GetProperty("totalCommands").GetInt32().Should().Be(commandIds.Length);
@@ -298,6 +304,22 @@ public sealed class FreeWRibbonDefinitionProfileTests
         commands.Select(command => command.GetProperty("commandId").GetString()!)
             .Should()
             .Equal(commandIds);
+        var gapClassificationCounts = commands
+            .GroupBy(command => command.GetProperty("gapClassification").GetString()!, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
+
+        summary.GetProperty("sharedProfile").GetInt32().Should().Be(CountGap(gapClassificationCounts, "shared-profile"));
+        summary.GetProperty("profileShapeOnly").GetInt32().Should().Be(CountGap(gapClassificationCounts, "profile-shape-only"));
+        summary.GetProperty("commandIdAliases").GetInt32().Should().Be(CountGap(gapClassificationCounts, "command-id-alias"));
+        summary.GetProperty("platformOnly").GetInt32().Should().Be(CountGap(gapClassificationCounts, "platform-only"));
+        summary.GetProperty("deferred").GetInt32().Should().Be(CountGap(gapClassificationCounts, "deferred"));
+        summary.GetProperty("actionableGaps").GetInt32().Should().Be(CountGap(gapClassificationCounts, "actionable-gap"));
+        summary.GetProperty("actionableMissingWpf").GetInt32().Should().Be(commands.Count(command =>
+            command.GetProperty("missingProfile").GetString() == "WPF" &&
+            command.GetProperty("gapClassification").GetString() == "actionable-gap"));
+        summary.GetProperty("actionableMissingAvalonia").GetInt32().Should().Be(commands.Count(command =>
+            command.GetProperty("missingProfile").GetString() == "Avalonia" &&
+            command.GetProperty("gapClassification").GetString() == "actionable-gap"));
 
         foreach (var command in commands)
         {
@@ -310,13 +332,26 @@ public sealed class FreeWRibbonDefinitionProfileTests
             command.GetProperty("profileSurface").GetString().Should().Be(ProfileSurface(wpfPresent, avaloniaPresent));
             command.GetProperty("missingProfile").GetString().Should().Be(MissingProfile(wpfPresent, avaloniaPresent));
             command.GetProperty("classification").GetString().Should().Be(ProfileClassification(wpfPresent, avaloniaPresent));
+            command.GetProperty("gapClassification").GetString().Should().NotBeNullOrWhiteSpace();
+            command.GetProperty("gapClassificationRule").GetString().Should().Be(command.GetProperty("gapClassification").GetString());
+            command.GetProperty("notes").GetString().Should().NotBeNullOrWhiteSpace();
 
             AssertInventoryLocations(command.GetProperty("wpfLocations"), wpfLocations ?? Array.Empty<InventoryLocation>());
             AssertInventoryLocations(command.GetProperty("avaloniaLocations"), avaloniaLocations ?? Array.Empty<InventoryLocation>());
         }
 
+        AssertGapClassification(commands, "freew.accept-all", "shared-profile");
+        AssertGapClassification(commands, "freew.font-color.black", "profile-shape-only");
+        AssertGapClassification(commands, "freew.bookmark", "command-id-alias");
+        AssertGapClassification(commands, "freew.about", "platform-only");
+        AssertGapClassification(commands, "freew.cc-checkbox", "deferred");
+        AssertGapClassification(commands, "freew.add-to-dictionary", "actionable-gap");
+
         var markdown = ReadRepositoryFile("docs", "parity", "freew-command-inventory.md");
         markdown.Should().Contain($"| {commandIds.Length} | {both} | {wpfOnly} | {avaloniaOnly} | {avaloniaOnly} | {wpfOnly} |");
+        markdown.Should().Contain("## Classification Rules");
+        markdown.Should().Contain("profile-shape-only");
+        markdown.Should().Contain("actionable-gap");
         markdown.Should().Contain("Source literal evidence columns show exact command-id text in source files only; they are not behavior proof and never create rows.");
     }
 
@@ -1037,6 +1072,20 @@ public sealed class FreeWRibbonDefinitionProfileTests
         }
 
         surface.PageColorMenuHeaders.Should().Equal(FreeWRibbonDefinitionData.PageColors.Select(color => color.Label));
+    }
+
+    private static int CountGap(IReadOnlyDictionary<string, int> counts, string classification) =>
+        counts.TryGetValue(classification, out var count) ? count : 0;
+
+    private static void AssertGapClassification(
+        IReadOnlyList<JsonElement> commands,
+        string commandId,
+        string expectedClassification)
+    {
+        var command = commands.Single(candidate =>
+            candidate.GetProperty("commandId").GetString() == commandId);
+
+        command.GetProperty("gapClassification").GetString().Should().Be(expectedClassification);
     }
 
     private static string ReadRepositoryFile(params string[] relativeParts)
