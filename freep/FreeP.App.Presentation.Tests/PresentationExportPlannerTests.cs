@@ -87,7 +87,7 @@ public sealed class PresentationExportPlannerTests
     }
 
     [Fact]
-    public void DeferredImageAndVideoPlansShareRangePolicy()
+    public void ImageAndVideoPlansShareRangePolicyButOnlyImagesExecute()
     {
         var range = new PresentationSlideRangeRequest(
             PresentationSlideRangeKind.CustomRange,
@@ -100,7 +100,9 @@ public sealed class PresentationExportPlannerTests
         image.Format.Should().Be(PresentationExportFormat.ImageSequence);
         image.CommandId.Should().Be(PresentationExportPlanner.ImageExportCommandId);
         image.DefaultExtensionWithDot.Should().Be(".png");
-        image.IsImplemented.Should().BeFalse();
+        image.IsImplemented.Should().BeTrue();
+        image.WidthPx.Should().Be(PresentationImageExportExecutor.DefaultWidthPx);
+        image.HeightPx.Should().Be(PresentationImageExportExecutor.DefaultHeightPx);
         image.SlideRange.SlideNumbers.Should().Equal(2, 3, 4);
 
         video.Format.Should().Be(PresentationExportFormat.Video);
@@ -108,5 +110,81 @@ public sealed class PresentationExportPlannerTests
         video.DefaultExtensionWithDot.Should().Be(".mp4");
         video.IsImplemented.Should().BeFalse();
         video.SlideRange.SlideNumbers.Should().Equal(image.SlideRange.SlideNumbers);
+    }
+
+    [Fact]
+    public void ImageExportExecutor_ExportsSelectedSlidesWithSharedNamingAndHostRenderCallback()
+    {
+        var outputDirectory = Path.Combine(Path.GetTempPath(), $"freep-image-export-{Guid.NewGuid():N}");
+        try
+        {
+            var presentation = Presentation.CreateEmpty();
+            presentation.Slides.Clear();
+            presentation.Slides.Add(new Slide { Title = "One" });
+            presentation.Slides.Add(new Slide { Title = "Two" });
+            presentation.Slides.Add(new Slide { Title = "Three" });
+            var calls = new List<(int SlideIndex, int Width, int Height)>();
+            var range = new PresentationSlideRangeRequest(
+                PresentationSlideRangeKind.SelectedSlides,
+                SelectedSlideNumbers: [3, 1, 3]);
+
+            var result = PresentationImageExportExecutor.Export(
+                presentation,
+                new PresentationImageExportRequest(
+                    outputDirectory,
+                    BaseFileName: "Quarter Review.pptx",
+                    SlideRange: range,
+                    WidthPx: 320,
+                    HeightPx: 180),
+                (deck, slideIndex, width, height) =>
+                {
+                    deck.Should().BeSameAs(presentation);
+                    calls.Add((slideIndex, width, height));
+                    return [0x89, 0x50, 0x4E, 0x47, (byte)slideIndex];
+                });
+
+            result.Succeeded.Should().BeTrue();
+            result.Plan.CommandId.Should().Be(PresentationExportPlanner.ImageExportCommandId);
+            result.Plan.SlideRange.DisplayName.Should().Be("Slides 1, 3");
+            result.ExportedSlides.Select(s => s.FileName)
+                .Should()
+                .Equal("Quarter Review-slide-01.png", "Quarter Review-slide-03.png");
+            result.ExportedSlides.Select(s => s.SlideIndex).Should().Equal(0, 2);
+            calls.Should().Equal((0, 320, 180), (2, 320, 180));
+            foreach (var exported in result.ExportedSlides)
+                File.ReadAllBytes(exported.Path).Should().HaveCount(5);
+        }
+        finally
+        {
+            if (Directory.Exists(outputDirectory))
+                Directory.Delete(outputDirectory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void ImageExportExecutor_EmptyDeckCreatesNoImagesButReturnsImplementedPlan()
+    {
+        var outputDirectory = Path.Combine(Path.GetTempPath(), $"freep-image-export-empty-{Guid.NewGuid():N}");
+        try
+        {
+            var presentation = Presentation.CreateEmpty();
+            presentation.Slides.Clear();
+
+            var result = PresentationImageExportExecutor.Export(
+                presentation,
+                new PresentationImageExportRequest(outputDirectory),
+                (_, _, _, _) => throw new InvalidOperationException("No slides should render."));
+
+            result.Succeeded.Should().BeTrue();
+            result.Plan.IsImplemented.Should().BeTrue();
+            result.Plan.SlideRange.DisplayName.Should().Be("No slides");
+            result.ExportedSlides.Should().BeEmpty();
+            Directory.EnumerateFiles(outputDirectory).Should().BeEmpty();
+        }
+        finally
+        {
+            if (Directory.Exists(outputDirectory))
+                Directory.Delete(outputDirectory, recursive: true);
+        }
     }
 }

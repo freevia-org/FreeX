@@ -656,6 +656,17 @@ public sealed class MainWindow : Window
         }
     }
 
+    internal PresentationImageExportResult FileExportImagesToFolder(
+        string outputDirectory,
+        PresentationSlideRangeRequest? range = null) =>
+        PresentationImageExportExecutor.Export(
+            _presentation,
+            new PresentationImageExportRequest(
+                outputDirectory,
+                BaseFileName: Path.GetFileNameWithoutExtension(_fileWorkflow.CurrentFileName),
+                SlideRange: range),
+            SlideRenderer.RenderToBytes);
+
     private bool TryLoadPresentationFile(string path)
     {
         try

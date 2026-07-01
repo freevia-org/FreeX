@@ -82,6 +82,17 @@ public sealed record PresentationDeferredExportPlan(
     PresentationSlideRangePlan SlideRange,
     bool IsImplemented);
 
+public sealed record PresentationImageExportPlan(
+    PresentationExportFormat Format,
+    string CommandId,
+    string DisplayName,
+    string Description,
+    string DefaultExtensionWithDot,
+    PresentationSlideRangePlan SlideRange,
+    int WidthPx,
+    int HeightPx,
+    bool IsImplemented);
+
 public sealed record PresentationBackstageExportPlan(
     string Heading,
     string Description,
@@ -128,7 +139,7 @@ public static class PresentationExportPlanner
             "Images",
             "One PNG image per selected slide.",
             ImageExportExtension,
-            IsImplemented: false),
+            IsImplemented: true),
         new(
             PresentationExportFormat.Video,
             VideoExportCommandId,
@@ -190,14 +201,25 @@ public static class PresentationExportPlanner
             IsImplemented: false);
     }
 
-    public static PresentationDeferredExportPlan BuildImageExportPlan(
+    public static PresentationImageExportPlan BuildImageExportPlan(
         PresentationSlideRangeRequest? range,
-        int slideCount) =>
-        BuildDeferredExportPlan(
-            PresentationExportFormat.ImageSequence,
-            range,
-            slideCount,
-            "Planned PNG sequence export; hosts should ask for an output folder before implementation lands.");
+        int slideCount,
+        int widthPx = PresentationImageExportExecutor.DefaultWidthPx,
+        int heightPx = PresentationImageExportExecutor.DefaultHeightPx)
+    {
+        var descriptor = BuildFormatDescriptors().Single(d => d.Format == PresentationExportFormat.ImageSequence);
+
+        return new PresentationImageExportPlan(
+            descriptor.Format,
+            descriptor.CommandId,
+            descriptor.DisplayName,
+            "Exports one PNG image per selected slide using the shared slide-range policy and host render callback.",
+            descriptor.DefaultExtensionWithDot ?? ImageExportExtension,
+            BuildSlideRangePlan(range, slideCount),
+            Math.Max(1, widthPx),
+            Math.Max(1, heightPx),
+            descriptor.IsImplemented);
+    }
 
     public static PresentationDeferredExportPlan BuildVideoExportPlan(
         PresentationSlideRangeRequest? range,

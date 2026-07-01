@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows;
 using Free.Shared.AppServices;
 using Free.Shared.IO;
@@ -133,6 +134,30 @@ internal sealed class FileCommands
         catch (Exception ex)
         {
             ShowError("Could not export the presentation to PDF", ex);
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Exports one PNG per requested slide to an already chosen folder. The host owns folder picking;
+    /// shared code owns PowerPoint-style range policy, naming, and atomic writes.
+    /// </summary>
+    public bool ExportImagesToFolder(string outputDirectory, PresentationSlideRangeRequest? range = null)
+    {
+        try
+        {
+            PresentationImageExportExecutor.Export(
+                _getModel(),
+                new PresentationImageExportRequest(
+                    outputDirectory,
+                    BaseFileName: Path.GetFileNameWithoutExtension(_workflow.CurrentFileName),
+                    SlideRange: range),
+                WpfPresentationSlideImageRenderer.RenderSlideToPng);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            ShowError("Could not export the presentation slides to images", ex);
             return false;
         }
     }

@@ -16,6 +16,8 @@ public sealed class FileCommandsSourceTests
         source.Should().Contain("PresentationFileDialogPlanner.BuildOpenDialogPlan()");
         source.Should().Contain("PresentationFileDialogPlanner.BuildSaveAsDialogPlan(");
         source.Should().Contain("PresentationExportPlanner.BuildPdfExportDialogPlan(");
+        source.Should().Contain("PresentationImageExportExecutor.Export(");
+        source.Should().Contain("WpfPresentationSlideImageRenderer.RenderSlideToPng");
         source.Should().Contain("PresentationFilePersistenceWorkflow.Open(path)");
         source.Should().Contain("PresentationFilePersistenceWorkflow.Save(path, _getModel())");
         source.Should().Contain("WpfFileDialogService.ShowOpenDialog(");
@@ -40,6 +42,23 @@ public sealed class FileCommandsSourceTests
         source.Should().NotContain("UserMessageButtons.Ok");
         source.Should().NotContain("new OpenFileDialog");
         source.Should().NotContain("new SaveFileDialog");
+    }
+
+    [Fact]
+    public void WpfImageExportAdapter_OnlySuppliesSlideCanvasRenderCallback()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            FindRepositoryRoot(),
+            "freep",
+            "FreeP.App.Host",
+            "WpfPresentationSlideImageRenderer.cs"));
+
+        source.Should().Contain("new SlideCanvas");
+        source.Should().Contain("RenderTargetBitmap");
+        source.Should().Contain("PngBitmapEncoder");
+        source.Should().NotContain("BuildSlideRangePlan(");
+        source.Should().NotContain("PresentationExportPlanner.");
+        source.Should().NotContain("File.WriteAllBytes(");
     }
 
     private static string FindRepositoryRoot()

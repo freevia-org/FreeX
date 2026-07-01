@@ -24,6 +24,8 @@ public sealed class FilePickerPlannerSourceTests
         source.Should().Contain("PresentationExportPlanner.PdfExportCommandId");
         source.Should().Contain("PresentationExportPlanner.BuildPdfExportPickerPlan(");
         source.Should().Contain("PresentationPdfExporter.ExportToBytes(_presentation)");
+        source.Should().Contain("PresentationImageExportExecutor.Export(");
+        source.Should().Contain("SlideRenderer.RenderToBytes");
         source.Should().Contain("ExportAtomicWriter.WriteAllBytes(path,");
         source.Should().Contain("PresentationFilePersistenceWorkflow.Open(path)");
         source.Should().Contain("PresentationFilePersistenceWorkflow.Save(path, _presentation)");
