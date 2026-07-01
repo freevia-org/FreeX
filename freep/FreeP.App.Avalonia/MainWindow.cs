@@ -56,6 +56,24 @@ public sealed class MainWindow : Window
             ["*.png", "*.jpg", "*.jpeg", "*.gif", "*.bmp", "*.svg"],
             ["image/png", "image/jpeg", "image/gif", "image/bmp", "image/svg+xml"]);
 
+    private static readonly (string CommandId, Action<EditingSession> Execute)[] ArrangeCommandRoutes =
+    [
+        ("freep.arrange.group", static editor => editor.GroupSelectedShapes()),
+        ("freep.arrange.ungroup", static editor => editor.UngroupSelected()),
+        ("freep.arrange.bring-to-front", static editor => editor.BringToFront()),
+        ("freep.arrange.bring-forward", static editor => editor.BringForward()),
+        ("freep.arrange.send-backward", static editor => editor.SendBackward()),
+        ("freep.arrange.send-to-back", static editor => editor.SendToBack()),
+        ("freep.arrange.align-left", static editor => editor.AlignLeft()),
+        ("freep.arrange.align-center-h", static editor => editor.AlignCenterH()),
+        ("freep.arrange.align-right", static editor => editor.AlignRight()),
+        ("freep.arrange.align-top", static editor => editor.AlignTop()),
+        ("freep.arrange.align-middle", static editor => editor.AlignMiddle()),
+        ("freep.arrange.align-bottom", static editor => editor.AlignBottom()),
+        ("freep.arrange.distribute-h", static editor => editor.DistributeHorizontally()),
+        ("freep.arrange.distribute-v", static editor => editor.DistributeVertically()),
+    ];
+
     // ── Presentation model ─────────────────────────────────────────────────────
 
     private Presentation _presentation = Presentation.CreateEmpty();
@@ -362,6 +380,11 @@ public sealed class MainWindow : Window
         r.Register("freep.new-slide",       new ActionRibbonCommand(() => Editor.InsertSlide()));
         r.Register("freep.duplicate-slide", new ActionRibbonCommand(() => Editor.DuplicateCurrentSlide()));
         r.Register("freep.delete-slide",    new ActionRibbonCommand(() => Editor.DeleteCurrentSlide()));
+
+        foreach (var route in ArrangeCommandRoutes)
+        {
+            r.Register(route.CommandId, new ActionRibbonCommand(() => route.Execute(Editor)));
+        }
 
         // Insert objects/text
         foreach (var plan in SlideObjectInsertionPlanner.BuiltInPlans)

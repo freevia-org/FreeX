@@ -242,6 +242,7 @@ public sealed class MainWindowHeadlessTests
         var home = definition.Tabs.Single(t => t.Id == "home");
         home.Groups.Should().Contain(g => g.Id == "file",   "File group required");
         home.Groups.Should().Contain(g => g.Id == "slides", "Slides group required");
+        home.Groups.Should().Contain(g => g.Id == "arrange", "Arrange group required");
         home.Groups.Should().Contain(g => g.Id == "edit",   "Edit group required");
     }
 
@@ -279,6 +280,35 @@ public sealed class MainWindowHeadlessTests
         var ids  = edit.Controls.Select(i => i.CommandId.Value).ToList();
         ids.Should().Contain("freep.undo", "Undo command required");
         ids.Should().Contain("freep.redo", "Redo command required");
+    }
+
+    [Fact]
+    public void RibbonDefinition_arrange_group_has_shared_command_ids()
+    {
+        var definition = FreePRibbonAvalonia.Build();
+        var home = definition.Tabs.Single(t => t.Id == "home");
+        var arrange = home.Groups.Single(g => g.Id == "arrange");
+        var ids = arrange.Controls
+            .Where(control => !string.IsNullOrEmpty(control.CommandId.Value))
+            .Select(control => control.CommandId.Value)
+            .ToArray();
+
+        ids.Should().Contain([
+            "freep.arrange.group",
+            "freep.arrange.ungroup",
+            "freep.arrange.bring-to-front",
+            "freep.arrange.bring-forward",
+            "freep.arrange.send-backward",
+            "freep.arrange.send-to-back",
+            "freep.arrange.align-left",
+            "freep.arrange.align-center-h",
+            "freep.arrange.align-right",
+            "freep.arrange.align-top",
+            "freep.arrange.align-middle",
+            "freep.arrange.align-bottom",
+            "freep.arrange.distribute-h",
+            "freep.arrange.distribute-v",
+        ]);
     }
 
     [Fact]
@@ -539,6 +569,64 @@ public sealed class MainWindowHeadlessTests
         if (!ran) return;
         found.Should().BeTrue("the Avalonia chart-data command must be registered");
         after.Should().Be(before, "opening chart data without a selected chart should preserve WPF's no-op behavior");
+    }
+
+    [Theory]
+    [InlineData("freep.arrange.group")]
+    [InlineData("freep.arrange.ungroup")]
+    [InlineData("freep.arrange.bring-to-front")]
+    [InlineData("freep.arrange.bring-forward")]
+    [InlineData("freep.arrange.send-backward")]
+    [InlineData("freep.arrange.send-to-back")]
+    [InlineData("freep.arrange.align-left")]
+    [InlineData("freep.arrange.align-center-h")]
+    [InlineData("freep.arrange.align-right")]
+    [InlineData("freep.arrange.align-top")]
+    [InlineData("freep.arrange.align-middle")]
+    [InlineData("freep.arrange.align-bottom")]
+    [InlineData("freep.arrange.distribute-h")]
+    [InlineData("freep.arrange.distribute-v")]
+    public async Task Ribbon_arrange_commands_are_registered(string commandId)
+    {
+        var found = false;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var registry = window.BuildCommandRegistry();
+            found = registry.TryGet(commandId, out _);
+        });
+
+        if (!ran) return;
+        found.Should().BeTrue($"{commandId} must be registered");
+    }
+
+    [Fact]
+    public async Task Ribbon_arrange_bring_to_front_routes_to_editor()
+    {
+        uint selectedId = 0;
+        uint? topShapeId = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var registry = window.BuildCommandRegistry();
+            registry.TryGet("freep.arrange.bring-to-front", out var command)
+                .Should()
+                .BeTrue("Bring to Front must be registered");
+
+            var back = window.Editor.InsertDefaultRectangle();
+            window.Editor.InsertDefaultEllipse();
+            window.Editor.InsertDefaultTextBox();
+            selectedId = back.Id;
+            window.Editor.Select(selectedId);
+
+            command!.Execute(RibbonCommandContext.Empty);
+            topShapeId = window.Editor.CurrentSlide!.Shapes.Last().Id;
+        });
+
+        if (!ran) return;
+        topShapeId.Should().Be(selectedId, "the Avalonia registry should invoke EditingSession.BringToFront");
     }
 
     [Fact]
