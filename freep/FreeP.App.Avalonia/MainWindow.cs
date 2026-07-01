@@ -381,6 +381,16 @@ public sealed class MainWindow : Window
         r.Register("freep.duplicate-slide", new ActionRibbonCommand(() => Editor.DuplicateCurrentSlide()));
         r.Register("freep.delete-slide",    new ActionRibbonCommand(() => Editor.DeleteCurrentSlide()));
 
+        // Clipboard
+        r.Register("freep.copy", new ActionRibbonCommand(() => Editor.CopySelectedShapes()));
+        r.Register("freep.cut", new ActionRibbonCommand(() => Editor.CutSelectedShapes()));
+        r.Register("freep.paste", new ActionRibbonCommand(() => Editor.Paste()));
+        r.Register("freep.format-painter", new ActionRibbonCommand(() =>
+        {
+            Editor.CopyFormatting();
+            Editor.ApplyFormattingToSelection();
+        }));
+
         foreach (var route in ArrangeCommandRoutes)
         {
             r.Register(route.CommandId, new ActionRibbonCommand(() => route.Execute(Editor)));

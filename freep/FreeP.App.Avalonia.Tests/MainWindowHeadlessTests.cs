@@ -242,6 +242,7 @@ public sealed class MainWindowHeadlessTests
         var home = definition.Tabs.Single(t => t.Id == "home");
         home.Groups.Should().Contain(g => g.Id == "file",   "File group required");
         home.Groups.Should().Contain(g => g.Id == "slides", "Slides group required");
+        home.Groups.Should().Contain(g => g.Id == "clipboard", "Clipboard group required");
         home.Groups.Should().Contain(g => g.Id == "arrange", "Arrange group required");
         home.Groups.Should().Contain(g => g.Id == "edit",   "Edit group required");
     }
@@ -269,6 +270,19 @@ public sealed class MainWindowHeadlessTests
         ids.Should().Contain("freep.new-slide",       "New Slide command required");
         ids.Should().Contain("freep.duplicate-slide", "Duplicate Slide command required");
         ids.Should().Contain("freep.delete-slide",    "Delete Slide command required");
+    }
+
+    [Fact]
+    public void RibbonDefinition_clipboard_group_has_shared_clipboard_commands()
+    {
+        var definition = FreePRibbonAvalonia.Build();
+        var home = definition.Tabs.Single(t => t.Id == "home");
+        var clipboard = home.Groups.Single(g => g.Id == "clipboard");
+        var ids = clipboard.Controls.Select(i => i.CommandId.Value).ToList();
+        ids.Should().Contain("freep.paste", "Paste command required");
+        ids.Should().Contain("freep.cut", "Cut command required");
+        ids.Should().Contain("freep.copy", "Copy command required");
+        ids.Should().Contain("freep.format-painter", "Format Painter command required");
     }
 
     [Fact]
@@ -545,6 +559,96 @@ public sealed class MainWindowHeadlessTests
         added!.Kind.Should().Be(SlideShapeKind.Chart);
         added.Chart.Should().NotBeNull();
         added.Chart!.ChartType.Should().Be(expectedChartType);
+    }
+
+    [Fact]
+    public async Task Ribbon_clipboard_copy_then_paste_routes_to_editor()
+    {
+        var foundCopy = false;
+        var foundPaste = false;
+        var before = -1;
+        var after = -1;
+        var canPasteAfterCopy = false;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var registry = window.BuildCommandRegistry();
+            foundCopy = registry.TryGet("freep.copy", out var copy);
+            foundPaste = registry.TryGet("freep.paste", out var paste);
+
+            var shape = window.Editor.InsertDefaultRectangle();
+            window.Editor.Select(shape.Id);
+            copy!.Execute(RibbonCommandContext.Empty);
+            canPasteAfterCopy = window.Editor.CanPaste;
+            before = window.Editor.CurrentSlide!.Shapes.Count;
+            paste!.Execute(RibbonCommandContext.Empty);
+            after = window.Editor.CurrentSlide!.Shapes.Count;
+        });
+
+        if (!ran) return;
+        foundCopy.Should().BeTrue("Copy must be registered");
+        foundPaste.Should().BeTrue("Paste must be registered");
+        canPasteAfterCopy.Should().BeTrue("Copy should populate the shared internal clipboard");
+        after.Should().Be(before + 1, "Paste should clone the copied shape through EditingSession");
+    }
+
+    [Fact]
+    public async Task Ribbon_clipboard_cut_routes_to_editor()
+    {
+        var found = false;
+        var before = -1;
+        var after = -1;
+        var canPasteAfterCut = false;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var registry = window.BuildCommandRegistry();
+            found = registry.TryGet("freep.cut", out var cut);
+
+            var shape = window.Editor.InsertDefaultRectangle();
+            window.Editor.Select(shape.Id);
+            before = window.Editor.CurrentSlide!.Shapes.Count;
+            cut!.Execute(RibbonCommandContext.Empty);
+            after = window.Editor.CurrentSlide!.Shapes.Count;
+            canPasteAfterCut = window.Editor.CanPaste;
+        });
+
+        if (!ran) return;
+        found.Should().BeTrue("Cut must be registered");
+        after.Should().Be(before - 1, "Cut should remove the selected shape through EditingSession");
+        canPasteAfterCut.Should().BeTrue("Cut should leave the shared internal clipboard pasteable");
+    }
+
+    [Fact]
+    public async Task Ribbon_format_painter_routes_to_editor()
+    {
+        var found = false;
+        ShapeFill? targetFill = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var registry = window.BuildCommandRegistry();
+            found = registry.TryGet("freep.format-painter", out var formatPainter);
+
+            var source = window.Editor.InsertDefaultRectangle();
+            var target = window.Editor.InsertDefaultRectangle();
+            var redFill = new ShapeFill.Solid(new ThemeAwareColor(SrgbColor.FromRgb(0xFF0000)));
+            window.Editor.Select(source.Id);
+            window.Editor.SetSelectedFill(redFill);
+            window.Editor.Select(source.Id);
+            window.Editor.Select(target.Id, addToSelection: true);
+
+            formatPainter!.Execute(RibbonCommandContext.Empty);
+            targetFill = window.Editor.CurrentSlide!.Shapes.Single(shape => shape.Id == target.Id).Fill;
+        });
+
+        if (!ran) return;
+        found.Should().BeTrue("Format Painter must be registered");
+        targetFill.Should().BeOfType<ShapeFill.Solid>(
+            "Format Painter should apply the source shape fill through EditingSession");
     }
 
     [Fact]
