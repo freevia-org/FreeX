@@ -997,6 +997,7 @@ public static class PptxPackageReader
             {
                 Id = ParseUint(cNvPr?.Attribute("id")?.Value),
                 Name = cNvPr?.Attribute("name")?.Value ?? string.Empty,
+                AlternativeText = ReadAlternativeText(cNvPr),
                 Kind = SlideShapeKind.Table,
                 OffsetXEmu = offX,
                 OffsetYEmu = offY,
@@ -1026,6 +1027,7 @@ public static class PptxPackageReader
             {
                 Id = ParseUint(cNvPr?.Attribute("id")?.Value),
                 Name = cNvPr?.Attribute("name")?.Value ?? string.Empty,
+                AlternativeText = ReadAlternativeText(cNvPr),
                 Kind = SlideShapeKind.Chart,
                 OffsetXEmu = offX,
                 OffsetYEmu = offY,
@@ -1043,6 +1045,7 @@ public static class PptxPackageReader
             {
                 Id = ParseUint(cNvPr?.Attribute("id")?.Value),
                 Name = cNvPr?.Attribute("name")?.Value ?? string.Empty,
+                AlternativeText = ReadAlternativeText(cNvPr),
                 Kind = SlideShapeKind.SmartArt,
                 OffsetXEmu = offX,
                 OffsetYEmu = offY,
@@ -1067,6 +1070,7 @@ public static class PptxPackageReader
                 {
                     oleShape.Id = ParseUint(cNvPr?.Attribute("id")?.Value);
                     oleShape.Name = cNvPr?.Attribute("name")?.Value ?? string.Empty;
+                    oleShape.AlternativeText = ReadAlternativeText(cNvPr);
                     oleShape.OffsetXEmu = offX;
                     oleShape.OffsetYEmu = offY;
                     oleShape.ExtentCxEmu = extCx;
@@ -1153,6 +1157,7 @@ public static class PptxPackageReader
         {
             Id              = ParseUint(cNvPr?.Attribute("id")?.Value),
             Name            = cNvPr?.Attribute("name")?.Value ?? string.Empty,
+            AlternativeText = ReadAlternativeText(cNvPr),
             Kind            = slideShapeKind,
             OffsetXEmu      = offX,
             OffsetYEmu      = offY,
@@ -1254,6 +1259,7 @@ public static class PptxPackageReader
         {
             Id              = ParseUint(cNvPr?.Attribute("id")?.Value),
             Name            = cNvPr?.Attribute("name")?.Value ?? string.Empty,
+            AlternativeText = ReadAlternativeText(cNvPr),
             Kind            = SlideShapeKind.Ink,
             OffsetXEmu      = offX,
             OffsetYEmu      = offY,
@@ -1843,6 +1849,7 @@ public static class PptxPackageReader
         {
             Id   = ParseUint(cNvPrEl?.Attribute("id")?.Value),
             Name = cNvPrEl?.Attribute("name")?.Value ?? string.Empty,
+            AlternativeText = ReadAlternativeText(cNvPrEl),
             Kind = SlideShapeKind.AutoShape
         };
 
@@ -1879,6 +1886,7 @@ public static class PptxPackageReader
         {
             Id   = ParseUint(cNvPrEl?.Attribute("id")?.Value),
             Name = cNvPrEl?.Attribute("name")?.Value ?? string.Empty,
+            AlternativeText = ReadAlternativeText(cNvPrEl),
             Kind = SlideShapeKind.Group
         };
 
@@ -2035,6 +2043,7 @@ public static class PptxPackageReader
         {
             Id = ParseUint(cNvPr?.Attribute("id")?.Value),
             Name = cNvPr?.Attribute("name")?.Value ?? string.Empty,
+            AlternativeText = ReadAlternativeText(cNvPr),
             Kind = SlideShapeKind.AutoShape
         };
 
@@ -2072,6 +2081,7 @@ public static class PptxPackageReader
         {
             Id = ParseUint(cNvPr?.Attribute("id")?.Value),
             Name = cNvPr?.Attribute("name")?.Value ?? string.Empty,
+            AlternativeText = ReadAlternativeText(cNvPr),
             Kind = SlideShapeKind.Picture
         };
 
@@ -2203,6 +2213,7 @@ public static class PptxPackageReader
         {
             Id = ParseUint(cNvPr?.Attribute("id")?.Value),
             Name = cNvPr?.Attribute("name")?.Value ?? string.Empty,
+            AlternativeText = ReadAlternativeText(cNvPr),
             Kind = SlideShapeKind.Connector
         };
 
@@ -2259,6 +2270,7 @@ public static class PptxPackageReader
         {
             Id = ParseUint(cNvPr?.Attribute("id")?.Value),
             Name = cNvPr?.Attribute("name")?.Value ?? string.Empty,
+            AlternativeText = ReadAlternativeText(cNvPr),
             Kind = SlideShapeKind.Group
         };
 
@@ -3783,6 +3795,9 @@ public static class PptxPackageReader
 
     private static long? ParseLongNullable(string? value) =>
         long.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var v) ? v : null;
+
+    private static string ReadAlternativeText(XElement? cNvPr)
+        => cNvPr?.Attribute("descr")?.Value ?? string.Empty;
 
     private static bool TryParseHex6(string? hex, out SrgbColor color)
     {

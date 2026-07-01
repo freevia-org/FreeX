@@ -907,6 +907,14 @@ public sealed class EditingSession
     public void RemoveShapeHyperlink()
         => SetShapeHyperlink(); // null link = remove
 
+    /// <summary>Sets persistent alternative text on every selected shape. Undoable.</summary>
+    public void SetSelectedShapeAlternativeText(string? alternativeText)
+    {
+        if (CurrentSlide is null) return;
+        foreach (var id in _selectedShapeIds)
+            Bus.Execute(new SetShapeAlternativeTextCommand(_currentSlideIndex, id, alternativeText));
+    }
+
     /// <summary>
     /// Returns the shape-level hyperlink of the first selected shape, if any.
     /// Used to pre-fill the HyperlinkDialog when editing an existing link.

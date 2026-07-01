@@ -1016,13 +1016,55 @@ public sealed class MainWindowHeadlessTests
         commentPlan!.TotalCommentCount.Should().Be(1);
         accessibilityPlan.Should().NotBeNull();
         accessibilityPlan!.Issues.Should().Contain(issue =>
-            issue.ShapeId == 328 && issue.Title == "Alt text needs model support");
+            issue.ShapeId == 328 && issue.Title == "Alt text missing");
         altTextPlan.Should().NotBeNull();
         altTextPlan!.HasSelection.Should().BeTrue();
         altTextPlan.ShapeId.Should().Be(328);
-        altTextPlan.Status.Should().Be(PresentationWorkflowCapabilityStatus.Deferred);
+        altTextPlan.Status.Should().Be(PresentationWorkflowCapabilityStatus.Available);
         proofingPlan.Should().NotBeNull();
         proofingPlan!.Status.Should().Be(PresentationWorkflowCapabilityStatus.RequiresHost);
+    }
+
+    [Fact]
+    public async Task Review_alt_text_apply_routes_through_shared_mutation_plan()
+    {
+        string? altText = null;
+        PresentationAltTextRequestPlan? requestPlan = null;
+        PresentationAccessibilitySummaryPlan? accessibilityPlan = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var shape = new SlideShape
+            {
+                Id = 329,
+                Name = "Product image",
+                Kind = SlideShapeKind.Picture,
+                Picture = new ImagePart(),
+            };
+            window.Editor.CurrentSlide!.Shapes.Add(shape);
+            window.Editor.Select(shape.Id);
+
+            var mutation = window.ApplySelectedShapeAlternativeText("  Product packaging on a white background. ");
+            mutation.Should().Be(new PresentationAltTextMutationPlan(
+                true,
+                0,
+                shape.Id,
+                "Product packaging on a white background.",
+                null));
+
+            altText = shape.AlternativeText;
+            requestPlan = window.LastAltTextRequestPlan;
+            accessibilityPlan = window.LastAccessibilitySummaryPlan;
+        });
+
+        if (!ran) return;
+        altText.Should().Be("Product packaging on a white background.");
+        requestPlan.Should().NotBeNull();
+        requestPlan!.CurrentDescription.Should().Be("Product packaging on a white background.");
+        accessibilityPlan.Should().NotBeNull();
+        accessibilityPlan!.Issues.Should().NotContain(issue =>
+            issue.ShapeId == 329 && issue.Title == "Alt text missing");
     }
 
     [Theory]

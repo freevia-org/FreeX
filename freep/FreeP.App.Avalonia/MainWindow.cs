@@ -781,6 +781,29 @@ public sealed class MainWindow : Window
             proposedDescription: null);
     }
 
+    internal PresentationAltTextMutationPlan ApplySelectedShapeAlternativeText(string? description)
+    {
+        uint? selectedShapeId = Editor.SelectedShapeIds.Count == 1
+            ? Editor.SelectedShapeIds[0]
+            : null;
+        var plan = PresentationReviewWorkflowPlanner.BuildAltTextMutationPlan(
+            Editor.CurrentSlide,
+            Editor.CurrentSlideIndex,
+            selectedShapeId,
+            description);
+        if (plan.ShouldApply)
+        {
+            Editor.SetSelectedShapeAlternativeText(plan.Description);
+            LastAltTextRequestPlan = PresentationReviewWorkflowPlanner.BuildAltTextRequestPlan(
+                Editor.CurrentSlide,
+                plan.ShapeId,
+                plan.Description);
+            RefreshAccessibilitySummaryPlan();
+        }
+
+        return plan;
+    }
+
     private void RefreshProofingRequestPlan()
     {
         LastProofingRequestPlan =
