@@ -95,4 +95,87 @@ public sealed class SlidePanePlannerTests
         SlidePanePlanner.ComputeInsertionIndicatorOffset(layout, 1, slideItemHeight: 100).Should().Be(130);
         SlidePanePlanner.ComputeInsertionIndicatorOffset(layout, 2, slideItemHeight: 100).Should().Be(230);
     }
+
+    [Fact]
+    public void BuildContextActions_ForValidSlide_ReturnsSharedMenuOrderAndTargets()
+    {
+        var actions = SlidePanePlanner.BuildContextActions(slideCount: 3, slideIndex: 1);
+
+        actions.Should().Equal(
+            new SlidePaneActionPlan(SlidePaneActionKind.InsertAfterSlide, "New Slide", 1, 2, true),
+            new SlidePaneActionPlan(SlidePaneActionKind.DuplicateSlide, "Duplicate Slide", 1, 2, true),
+            new SlidePaneActionPlan(SlidePaneActionKind.DeleteSlide, "Delete Slide", 1, 1, true));
+    }
+
+    [Fact]
+    public void BuildContextActions_DisablesInvalidAndSingleSlideDeletes()
+    {
+        var singleSlideActions = SlidePanePlanner.BuildContextActions(slideCount: 1, slideIndex: 0);
+        singleSlideActions.Single(a => a.Kind == SlidePaneActionKind.DeleteSlide).IsEnabled.Should().BeFalse();
+
+        var invalidActions = SlidePanePlanner.BuildContextActions(slideCount: 2, slideIndex: 5);
+        invalidActions.Should().OnlyContain(a => !a.IsEnabled);
+    }
+
+    [Theory]
+    [InlineData(0, 0, false)]
+    [InlineData(0, 1, false)]
+    [InlineData(0, 2, true)]
+    [InlineData(2, 0, true)]
+    [InlineData(2, 3, false)]
+    [InlineData(2, 4, false)]
+    public void PlanMoveAction_EnablesOnlyRealInsertionMoves(
+        int sourceSlideIndex,
+        int targetInsertionIndex,
+        bool expectedEnabled)
+    {
+        var action = SlidePanePlanner.PlanMoveAction(3, sourceSlideIndex, targetInsertionIndex);
+
+        action.Kind.Should().Be(SlidePaneActionKind.MoveSlide);
+        action.SourceSlideIndex.Should().Be(sourceSlideIndex);
+        action.TargetSlideIndex.Should().Be(targetInsertionIndex);
+        action.IsEnabled.Should().Be(expectedEnabled);
+    }
+
+    [Fact]
+    public void TryApplyAction_Duplicate_UsesSharedSelectionAndCommandRouting()
+    {
+        var editor = CreateEditingSession(2);
+        var action = SlidePanePlanner.BuildContextActions(2, 0)
+            .Single(a => a.Kind == SlidePaneActionKind.DuplicateSlide);
+
+        SlidePanePlanner.TryApplyAction(editor, action).Should().BeTrue();
+
+        editor.Presentation.Slides.Should().HaveCount(3);
+        editor.CurrentSlideIndex.Should().Be(1);
+    }
+
+    [Fact]
+    public void TryApplyAction_DisabledAction_DoesNotMutateSlides()
+    {
+        var editor = CreateEditingSession(1);
+        var action = SlidePanePlanner.BuildContextActions(1, 0)
+            .Single(a => a.Kind == SlidePaneActionKind.DeleteSlide);
+
+        SlidePanePlanner.TryApplyAction(editor, action).Should().BeFalse();
+
+        editor.Presentation.Slides.Should().HaveCount(1);
+        editor.CurrentSlideIndex.Should().Be(0);
+    }
+
+    private static EditingSession CreateEditingSession(int slideCount)
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides.Clear();
+        for (var i = 0; i < slideCount; i++)
+        {
+            presentation.Slides.Add(new Slide
+            {
+                Id = $"slide{i + 1}",
+                Title = $"Slide {i + 1}",
+            });
+        }
+
+        return new EditingSession(presentation, new PresentationCommandBus(presentation));
+    }
 }

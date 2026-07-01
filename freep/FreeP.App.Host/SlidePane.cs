@@ -299,31 +299,19 @@ public sealed class SlidePane : Border
     {
         var menu = new ContextMenu();
 
-        var newItem = new MenuItem { Header = SlidePanePlanner.NewSlideMenuText };
-        newItem.Click += (_, _) =>
+        foreach (var action in SlidePanePlanner.BuildContextActions(_editor.Presentation.Slides.Count, index))
         {
-            _editor.SelectSlide(index);
-            _editor.InsertSlide();
-        };
+            if (action.Kind == SlidePaneActionKind.DeleteSlide)
+                menu.Items.Add(new Separator());
 
-        var dupItem = new MenuItem { Header = SlidePanePlanner.DuplicateSlideMenuText };
-        dupItem.Click += (_, _) =>
-        {
-            _editor.SelectSlide(index);
-            _editor.DuplicateCurrentSlide();
-        };
-
-        var delItem = new MenuItem { Header = SlidePanePlanner.DeleteSlideMenuText };
-        delItem.Click += (_, _) =>
-        {
-            _editor.SelectSlide(index);
-            _editor.DeleteCurrentSlide();
-        };
-
-        menu.Items.Add(newItem);
-        menu.Items.Add(dupItem);
-        menu.Items.Add(new Separator());
-        menu.Items.Add(delItem);
+            var item = new MenuItem
+            {
+                Header = action.Text,
+                IsEnabled = action.IsEnabled,
+            };
+            item.Click += (_, _) => SlidePanePlanner.TryApplyAction(_editor, action);
+            menu.Items.Add(item);
+        }
 
         return menu;
     }
@@ -363,12 +351,11 @@ public sealed class SlidePane : Border
             _isDragging = false;
             HideInsertIndicator();
 
-            int from = _dragSourceIndex;
-            int to   = _dragTargetIndex;
-
-            // MoveSlide(from, to): skip no-op moves.
-            if (from >= 0 && to >= 0 && to != from && to != from + 1)
-                _editor.MoveSlide(from, to);
+            var action = SlidePanePlanner.PlanMoveAction(
+                _editor.Presentation.Slides.Count,
+                _dragSourceIndex,
+                _dragTargetIndex);
+            SlidePanePlanner.TryApplyAction(_editor, action);
         }
 
         e.Handled = true;

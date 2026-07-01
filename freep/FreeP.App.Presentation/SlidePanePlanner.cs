@@ -15,6 +15,21 @@ public sealed record SlidePaneEntry(
     string Text,
     int SectionSlideCount = 0);
 
+public enum SlidePaneActionKind
+{
+    InsertAfterSlide,
+    DuplicateSlide,
+    DeleteSlide,
+    MoveSlide,
+}
+
+public sealed record SlidePaneActionPlan(
+    SlidePaneActionKind Kind,
+    string Text,
+    int SourceSlideIndex,
+    int TargetSlideIndex,
+    bool IsEnabled);
+
 public static class SlidePanePlanner
 {
     public const string NewSlideButtonText = "+ New Slide";
@@ -51,6 +66,88 @@ public static class SlidePanePlanner
 
     public static string FormatSlideNumber(int slideIndex) =>
         (slideIndex + 1).ToString(CultureInfo.InvariantCulture);
+
+    public static IReadOnlyList<SlidePaneActionPlan> BuildContextActions(
+        int slideCount,
+        int slideIndex)
+    {
+        var hasTargetSlide = IsValidSlideIndex(slideCount, slideIndex);
+        return
+        [
+            new SlidePaneActionPlan(
+                SlidePaneActionKind.InsertAfterSlide,
+                NewSlideMenuText,
+                slideIndex,
+                slideIndex + 1,
+                hasTargetSlide),
+            new SlidePaneActionPlan(
+                SlidePaneActionKind.DuplicateSlide,
+                DuplicateSlideMenuText,
+                slideIndex,
+                slideIndex + 1,
+                hasTargetSlide),
+            new SlidePaneActionPlan(
+                SlidePaneActionKind.DeleteSlide,
+                DeleteSlideMenuText,
+                slideIndex,
+                slideIndex,
+                hasTargetSlide && slideCount > 1),
+        ];
+    }
+
+    public static SlidePaneActionPlan PlanMoveAction(
+        int slideCount,
+        int sourceSlideIndex,
+        int targetInsertionIndex)
+    {
+        var canMove = IsValidSlideIndex(slideCount, sourceSlideIndex)
+            && targetInsertionIndex >= 0
+            && targetInsertionIndex <= slideCount
+            && targetInsertionIndex != sourceSlideIndex
+            && targetInsertionIndex != sourceSlideIndex + 1;
+
+        return new SlidePaneActionPlan(
+            SlidePaneActionKind.MoveSlide,
+            "Move Slide",
+            sourceSlideIndex,
+            targetInsertionIndex,
+            canMove);
+    }
+
+    public static bool TryApplyAction(EditingSession editor, SlidePaneActionPlan action)
+    {
+        ArgumentNullException.ThrowIfNull(editor);
+        ArgumentNullException.ThrowIfNull(action);
+
+        if (!action.IsEnabled)
+            return false;
+
+        switch (action.Kind)
+        {
+            case SlidePaneActionKind.InsertAfterSlide:
+                editor.SelectSlide(action.SourceSlideIndex);
+                editor.InsertSlide();
+                return true;
+
+            case SlidePaneActionKind.DuplicateSlide:
+                editor.SelectSlide(action.SourceSlideIndex);
+                editor.DuplicateCurrentSlide();
+                return true;
+
+            case SlidePaneActionKind.DeleteSlide:
+                editor.SelectSlide(action.SourceSlideIndex);
+                editor.DeleteCurrentSlide();
+                return true;
+
+            case SlidePaneActionKind.MoveSlide:
+                editor.SelectSlide(action.SourceSlideIndex);
+                editor.MoveSlide(action.SourceSlideIndex, action.TargetSlideIndex);
+                return true;
+
+            default:
+                return false;
+        }
+    }
 
     public static string FormatSectionHeader(string name, int slideCount) =>
         slideCount > 0 ? $"{name}  ({slideCount})" : name;
@@ -173,4 +270,7 @@ public static class SlidePanePlanner
 
         return count;
     }
+
+    private static bool IsValidSlideIndex(int slideCount, int slideIndex) =>
+        slideCount > 0 && slideIndex >= 0 && slideIndex < slideCount;
 }

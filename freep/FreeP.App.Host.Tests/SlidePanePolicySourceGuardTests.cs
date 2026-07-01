@@ -12,6 +12,9 @@ public sealed class SlidePanePolicySourceGuardTests
         source.Should().Contain("SlidePanePlanner.BuildEntries(");
         source.Should().Contain("SlidePanePlanner.HitTestInsertionPoint(");
         source.Should().Contain("SlidePanePlanner.ComputeInsertionIndicatorOffset(");
+        source.Should().Contain("SlidePanePlanner.BuildContextActions(");
+        source.Should().Contain("SlidePanePlanner.PlanMoveAction(");
+        source.Should().Contain("SlidePanePlanner.TryApplyAction(");
         source.Should().Contain("SlidePanePlanner.NewSlideButtonText");
         source.Should().NotContain("new Dictionary<int, PresentationSection>");
         source.Should().NotContain("sectionHeaderBefore");
@@ -19,6 +22,9 @@ public sealed class SlidePanePolicySourceGuardTests
         source.Should().NotContain("runningY + ItemHeight * 0.5");
         source.Should().NotContain("\"+ New Slide\"");
         source.Should().NotContain("\"Duplicate Slide\"");
+        source.Should().NotContain("_editor.DuplicateCurrentSlide();");
+        source.Should().NotContain("_editor.DeleteCurrentSlide();");
+        source.Should().NotContain("_editor.MoveSlide(from, to);");
     }
 
     private static string ReadHostSource(string fileName)

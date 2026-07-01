@@ -751,9 +751,10 @@ public sealed class MainWindow : Window
 
                 _slidePaneList.Items.Add(new ListBoxItem
                 {
-                    Tag     = entry.SlideIndex,
-                    Content = panel,
-                    Padding = new Thickness(2),
+                    Tag         = entry.SlideIndex,
+                    Content     = panel,
+                    Padding     = new Thickness(2),
+                    ContextMenu = BuildSlidePaneContextMenu(entry.SlideIndex),
                 });
             }
 
@@ -790,6 +791,27 @@ public sealed class MainWindow : Window
             Focusable = false,
             IsEnabled = false,
         };
+    }
+
+    private ContextMenu BuildSlidePaneContextMenu(int slideIndex)
+    {
+        var menu = new ContextMenu();
+
+        foreach (var action in SlidePanePlanner.BuildContextActions(_presentation.Slides.Count, slideIndex))
+        {
+            if (action.Kind == SlidePaneActionKind.DeleteSlide)
+                menu.Items.Add(new Separator());
+
+            var item = new MenuItem
+            {
+                Header = action.Text,
+                IsEnabled = action.IsEnabled,
+            };
+            item.Click += (_, _) => SlidePanePlanner.TryApplyAction(Editor, action);
+            menu.Items.Add(item);
+        }
+
+        return menu;
     }
 
     private void SelectSlidePaneItem(int slideIndex)
