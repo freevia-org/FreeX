@@ -51,6 +51,9 @@ public sealed class ConditionalFormatOpenedStateEvidenceTests
                 Status = target.GetProperty("retentionStatus").GetString(),
                 RunnerCommand = target.GetProperty("runnerCommand").GetString(),
                 RequiredEnvironment = target.GetProperty("requiredEnvironment").GetString(),
+                BlockerCategory = target.GetProperty("blockerCategory").GetString(),
+                NextCaptureAction = target.GetProperty("nextCaptureAction").GetString(),
+                ManifestMatchesTarget = target.GetProperty("manifestMatchesTarget").GetBoolean(),
             })
             .OrderBy(target => target.Id, StringComparer.Ordinal)
             .ToArray();
@@ -62,6 +65,9 @@ public sealed class ConditionalFormatOpenedStateEvidenceTests
         Assert.All(targets, target => Assert.False(string.IsNullOrWhiteSpace(target.Status)));
         Assert.All(targets, target => Assert.Contains(target.Scenario!, target.RunnerCommand!, StringComparison.Ordinal));
         Assert.All(targets, target => Assert.Contains("foreground", target.RequiredEnvironment!, StringComparison.OrdinalIgnoreCase));
+        Assert.All(targets, target => Assert.False(string.IsNullOrWhiteSpace(target.BlockerCategory)));
+        Assert.All(targets, target => Assert.False(string.IsNullOrWhiteSpace(target.NextCaptureAction)));
+        Assert.All(targets, target => Assert.True(target.ManifestMatchesTarget));
     }
 
     [Fact]
@@ -86,6 +92,41 @@ public sealed class ConditionalFormatOpenedStateEvidenceTests
         }
     }
 
+    [Fact]
+    public void OpenedStateEvidence_ClassifiesCurrentCaptureBlockers()
+    {
+        using var document = LoadEvidenceDocument();
+        var targets = document.RootElement.GetProperty("captureTargets")
+            .EnumerateArray()
+            .ToDictionary(
+                target => target.GetProperty("id").GetString()!,
+                target => target,
+                StringComparer.Ordinal);
+
+        AssertTargetBlocker(
+            targets["excel.conditional-formatting-gallery.opened"],
+            "excel-com-unavailable",
+            "Microsoft Excel COM");
+        AssertTargetBlocker(
+            targets["wpf.conditional-formatting-gallery.opened"],
+            "foreground-focus-unavailable",
+            "unlocked interactive desktop");
+        AssertTargetBlocker(
+            targets["avalonia.conditional-formatting-gallery.opened"],
+            "foreground-focus-unavailable",
+            "unlocked interactive desktop");
+
+        var categories = document.RootElement.GetProperty("blockerCategories")
+            .EnumerateArray()
+            .ToDictionary(
+                item => item.GetProperty("category").GetString()!,
+                item => item.GetProperty("count").GetInt32(),
+                StringComparer.Ordinal);
+
+        Assert.Equal(1, categories["excel-com-unavailable"]);
+        Assert.Equal(2, categories["foreground-focus-unavailable"]);
+    }
+
     private static JsonDocument LoadEvidenceDocument()
     {
         var path = Path.Combine(
@@ -100,4 +141,18 @@ public sealed class ConditionalFormatOpenedStateEvidenceTests
         target.GetProperty("captureStatus").GetString() == "complete" &&
         target.GetProperty("screenshotExists").GetBoolean() &&
         target.GetProperty("retentionStatus").GetString() == "retained-opened-state-capture";
+
+    private static void AssertTargetBlocker(JsonElement target, string expectedCategory, string expectedActionText)
+    {
+        if (IsCompleteRetainedOpenedStateTarget(target))
+        {
+            return;
+        }
+
+        Assert.Equal(expectedCategory, target.GetProperty("blockerCategory").GetString());
+        Assert.Contains(
+            expectedActionText,
+            target.GetProperty("nextCaptureAction").GetString(),
+            StringComparison.OrdinalIgnoreCase);
+    }
 }
