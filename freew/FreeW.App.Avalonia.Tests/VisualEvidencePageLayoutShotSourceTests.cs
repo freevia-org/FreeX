@@ -19,6 +19,14 @@ public sealed class VisualEvidencePageLayoutShotSourceTests
         source.Should().Contain("page-composition-columns");
         source.Should().Contain("page-composition-border-watermark");
         source.Should().Contain("page-composition-floating-image");
+        source.Should().Contain("backstage-print-preview-fidelity");
+        source.Should().Contain("backstage-pdf-export-fidelity");
+        source.Should().Contain("VisualEvidenceOutputPath(outDir, \"backstage-print-preview-fidelity\", 1)");
+        source.Should().Contain("VisualEvidenceOutputPath(outDir, \"backstage-pdf-export-fidelity\", 2)");
+        source.Should().Contain("viewportOffsetY: 1100");
+        source.Should().Contain("pageNumber: pageNumber");
+        source.Should().Contain("pageCount: pageCount");
+        source.Should().Contain("refusing placeholder fallback for backstage renderer evidence");
         source.Should().Contain("freew_columns_layout.png");
         source.Should().Contain("freew_border_watermark.png");
         source.Should().Contain("FreeWVisualEvidencePlanner.BuildSectionOwnerId");

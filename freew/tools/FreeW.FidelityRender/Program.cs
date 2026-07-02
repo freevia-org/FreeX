@@ -449,7 +449,7 @@ static void RenderDocumentComposite(
             // (see below). Endnotes never appear inline on body pages — they collect at document end.
         }
 
-        string outPath = Path.Combine(outDir, $"{name}_p{i + 1}.png");
+        string outPath = BuildVisualEvidenceOutputPath(outDir, name, i + 1);
         var byteLength = SavePng(bmp, outPath);
         var stats = ComputeWpfPixelStats(bmp, "#FFFFFF");
         var sectionOrdinal = FreeWVisualEvidencePlanner.ResolveSectionOrdinal(doc, thisPageSettings);
@@ -520,7 +520,7 @@ static void RenderDocumentComposite(
                 bmp.Render(enVis);
             }
 
-            string endnotePath = Path.Combine(outDir, $"{name}_p{pageCount + 1}.png");
+            string endnotePath = BuildVisualEvidenceOutputPath(outDir, name, pageCount + 1);
             var byteLength = SavePng(bmp, endnotePath);
             var stats = ComputeWpfPixelStats(bmp, "#FFFFFF");
             var sectionOrdinal = FreeWVisualEvidencePlanner.ResolveSectionOrdinal(doc, endnoteBox.PageGeometry);
@@ -884,7 +884,7 @@ static int RunBare(string input, string outDir, int maxPages)
                 }
                 bmp.Render(dv);
 
-                string outPath = Path.Combine(outDir, $"{name}_p{i + 1}.png");
+                string outPath = BuildVisualEvidenceOutputPath(outDir, name, i + 1);
                 var byteLength = SavePng(bmp, outPath);
                 var stats = ComputeWpfPixelStats(bmp, "#FFFFFF");
                 var sectionOrdinal = FreeWVisualEvidencePlanner.ResolveSectionOrdinal(doc, doc.Page);
@@ -1354,7 +1354,25 @@ static void GenerateF2FlowCorpus(string outDir)
         Console.WriteLine("  wrote f2-comments.docx");
     }
 
-    Console.WriteLine($"\nDone — 10 corpus files written to {outDir}");
+    {
+        var doc = BuildBackstageFixtureDocument(
+            "Backstage Print Preview Fidelity",
+            "This generated document is rendered through FreeW.FidelityRender for the backstage print preview evidence contract.",
+            "Print preview fixed-layout page");
+        DocxWriter.Write(doc, Path.Combine(outDir, "backstage-print-preview-fidelity.docx"));
+        Console.WriteLine("  wrote backstage-print-preview-fidelity.docx");
+    }
+
+    {
+        var doc = BuildBackstageFixtureDocument(
+            "Backstage PDF Export Fidelity",
+            "This generated document is rendered through FreeW.FidelityRender for the backstage PDF export raster evidence contract.",
+            "PDF export fixed-layout page");
+        DocxWriter.Write(doc, Path.Combine(outDir, "backstage-pdf-export-fidelity.docx"));
+        Console.WriteLine("  wrote backstage-pdf-export-fidelity.docx");
+    }
+
+    Console.WriteLine($"\nDone - 12 corpus files written to {outDir}");
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════════════════════════
@@ -1368,6 +1386,28 @@ static int NextSectionRelativePageNumber(Dictionary<int, int> sectionPageCounter
     current++;
     sectionPageCounters[safeOrdinal] = current;
     return current;
+}
+
+static string BuildVisualEvidenceOutputPath(string outDir, string scenarioId, int pageNumber) =>
+    Path.Combine(outDir, FreeWVisualEvidencePlanner.ExpectedOutputName(scenarioId, pageNumber));
+
+static TextDocument BuildBackstageFixtureDocument(string title, string description, string pageLabel)
+{
+    var doc = TextDocument.CreateEmpty();
+    doc.FinalSectionHeadersFooters.Header = new HeaderFooter(title);
+    doc.FinalSectionHeadersFooters.Footer = new HeaderFooter("FreeW visual evidence");
+    doc.Blocks.Clear();
+
+    doc.Blocks.Add(new FreeW.Core.Model.Paragraph(title) { StyleId = "Heading1" });
+    doc.Blocks.Add(new FreeW.Core.Model.Paragraph(description));
+    doc.Blocks.Add(new FreeW.Core.Model.Paragraph("The first two rendered pages are retained as real PNG evidence and normalized through the shared visual evidence manifest."));
+    for (var i = 1; i <= 56; i++)
+    {
+        doc.Blocks.Add(new FreeW.Core.Model.Paragraph(
+            $"{pageLabel} paragraph {i}: body text, pagination, page chrome, and header/footer composition must survive the renderer capture path."));
+    }
+
+    return doc;
 }
 
 static long SavePng(RenderTargetBitmap bmp, string path)
