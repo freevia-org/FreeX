@@ -57,14 +57,15 @@
                         </ListBox>
                     </StackPanel>
 
-                    <StackPanel Grid.Column="1">
+                    <StackPanel Grid.Column="1" Width="330" HorizontalAlignment="Left">
                         <TextBlock Text="{local:Loc Key=FormatCells_Sample}" FontWeight="SemiBold" Margin="0,4,0,2"/>
                         <Border BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}"
                                 BorderThickness="1"
                                 Padding="8"
-                                Margin="0,0,0,10"
-                                Width="346"
-                                HorizontalAlignment="Left">
+                                Width="94"
+                                Height="36"
+                                HorizontalAlignment="Left"
+                                Margin="0,0,0,10">
                             <TextBlock x:Name="NumberPreview" FontWeight="Bold" Text="1234.56"/>
                         </Border>
 
@@ -72,7 +73,6 @@
                                    Text="{local:Loc Key=FormatCells_GeneralFormatDescription}"
                                    TextWrapping="Wrap"
                                    Visibility="Collapsed"
-                                   Width="346"
                                    HorizontalAlignment="Left"
                                    Margin="0,0,0,0"/>
 

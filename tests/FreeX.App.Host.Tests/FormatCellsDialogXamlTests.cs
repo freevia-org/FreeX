@@ -63,7 +63,9 @@ public sealed partial class FormatCellsDialogXamlTests
         xaml.Should().Contain("SystemColors.HighlightBrushKey");
         xaml.Should().Contain("SystemColors.HighlightTextBrushKey");
         xaml.Should().Contain("x:Name=\"NumberPreview\" FontWeight=\"Bold\"");
-        xaml.Should().Contain("Width=\"346\"");
+        xaml.Should().Contain("<StackPanel Grid.Column=\"1\" Width=\"330\" HorizontalAlignment=\"Left\">");
+        xaml.Should().Contain("Width=\"94\"");
+        xaml.Should().Contain("Height=\"36\"");
         xaml.Should().Contain("x:Name=\"NumberGeneralDescription\"");
     }
 
