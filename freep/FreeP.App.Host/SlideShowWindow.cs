@@ -53,6 +53,7 @@ public sealed class SlideShowWindow : Window
     private readonly DateTimeOffset _presenterStartedAtUtc;
     private readonly DispatcherTimer  _autoAdvanceTimer;
     private SlideShowPresenterToolPlan _presenterToolPlan = SlideShowPresenterToolPlanner.BuildPlan();
+    private SlideShowInkExecutionState _inkExecutionState;
 
     // ── Visual tree ───────────────────────────────────────────────────────────────
 
@@ -93,6 +94,9 @@ public sealed class SlideShowWindow : Window
         _presentation = presentation ?? throw new ArgumentNullException(nameof(presentation));
         _controller   = new SlideShowController(presentation.Slides, startIndex);
         _presenterStartedAtUtc = DateTimeOffset.UtcNow;
+        _inkExecutionState = SlideShowInkExecutionPlanner.CreateState(
+            _controller.CurrentSlideIndex,
+            _presenterToolPlan.PointerInk);
 
         // Pre-compute slide DIP dimensions so HitTestHyperlink works even before the first
         // DisplayCurrentSlide call (e.g. in unit tests that construct but don't show the window).
@@ -171,6 +175,7 @@ public sealed class SlideShowWindow : Window
         // ── Event wiring ───────────────────────────────────────────────────────
         KeyDown              += OnKeyDown;
         MouseLeftButtonDown  += OnMouseLeftButtonDown;
+        MouseLeftButtonUp    += OnMouseLeftButtonUp;
         MouseMove            += OnMouseMove;
         Loaded               += (_, _) => { Focus(); DisplayCurrentSlide(animated: false); };
         Closed               += (_, _) => Teardown();
@@ -207,6 +212,8 @@ public sealed class SlideShowWindow : Window
     public IReadOnlyList<SlideShowPresenterWorkflowAction> PresenterWorkflowActions =>
         _presenterToolPlan.WorkflowActions;
 
+    public SlideShowInkExecutionState InkExecutionState => _inkExecutionState;
+
     public SlideShowPresenterState CreatePresenterState(
         DateTimeOffset nowUtc,
         SlideShowPresenterDisplayIntent? displayIntent = null) =>
@@ -233,8 +240,29 @@ public sealed class SlideShowWindow : Window
             inkColorHex,
             inkThicknessDip,
             inkRetentionDecision);
+        _inkExecutionState = SlideShowInkExecutionPlanner.SelectPointerInk(
+            _inkExecutionState,
+            _presenterToolPlan.PointerInk);
         return _presenterToolPlan;
     }
+
+    public SlideShowInkExecutionResult BeginPresenterInkStroke(double canvasX, double canvasY) =>
+        ApplyInkExecution(SlideShowInkExecutionPlanner.Begin(
+            _inkExecutionState,
+            MapPresenterInkPoint(canvasX, canvasY)));
+
+    public SlideShowInkExecutionResult AppendPresenterInkStroke(double canvasX, double canvasY) =>
+        ApplyInkExecution(SlideShowInkExecutionPlanner.Append(
+            _inkExecutionState,
+            MapPresenterInkPoint(canvasX, canvasY)));
+
+    public SlideShowInkExecutionResult EndPresenterInkStroke(double canvasX, double canvasY) =>
+        ApplyInkExecution(SlideShowInkExecutionPlanner.End(
+            _inkExecutionState,
+            MapPresenterInkPoint(canvasX, canvasY)));
+
+    public SlideShowInkExecutionResult ClearPresenterInkStrokes() =>
+        ApplyInkExecution(SlideShowInkExecutionPlanner.ClearCurrentSlide(_inkExecutionState));
 
     // ── Keyboard navigation ───────────────────────────────────────────────────────
 
@@ -250,12 +278,18 @@ public sealed class SlideShowWindow : Window
     private void OnMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
         var slide = _controller.CurrentSlide;
+        var clickPt = e.GetPosition(_slideCanvas);
+        var inkResult = BeginPresenterInkStroke(clickPt.X, clickPt.Y);
+        if (inkResult.IsHandled)
+        {
+            e.Handled = true;
+            return;
+        }
 
         // Check if the click lands on a media shape — toggle play/pause and consume the click
         // so it does NOT also advance the slideshow.
         if (slide is not null && slide.Shapes.Any(s => s.Kind == SlideShapeKind.Media))
         {
-            var clickPt = e.GetPosition(_slideCanvas);
             double cw = _slideCanvas.ActualWidth  > 0 ? _slideCanvas.ActualWidth  : _slideDipW;
             double ch = _slideCanvas.ActualHeight > 0 ? _slideCanvas.ActualHeight : _slideDipH;
             if (_mediaController.TryHandleClick(clickPt.X, clickPt.Y, slide, cw, ch))
@@ -268,7 +302,6 @@ public sealed class SlideShowWindow : Window
         // Check if the click lands on a trigger shape first.
         if (slide is not null && slide.Animations.Any(a => a.TriggerShapeId is not null))
         {
-            var clickPt = e.GetPosition(_slideCanvas);
             var triggerShapeId = HitTestTriggerShape(slide, clickPt.X, clickPt.Y);
             if (triggerShapeId is not null)
             {
@@ -281,7 +314,6 @@ public sealed class SlideShowWindow : Window
         // Check if the click lands on a hyperlinked shape.
         if (slide is not null)
         {
-            var clickPt = e.GetPosition(_slideCanvas);
             var hlink = HitTestHyperlink(slide, clickPt.X, clickPt.Y);
             if (hlink is not null)
             {
@@ -295,13 +327,31 @@ public sealed class SlideShowWindow : Window
         DoAdvance();
     }
 
+    private void OnMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        var pt = e.GetPosition(_slideCanvas);
+        var inkResult = EndPresenterInkStroke(pt.X, pt.Y);
+        e.Handled = inkResult.IsHandled;
+    }
+
     private void OnMouseMove(object sender, MouseEventArgs e)
     {
         var slide = _controller.CurrentSlide;
         if (slide is null) { Cursor = Cursors.Arrow; return; }
         var pt = e.GetPosition(_slideCanvas);
+        if (e.LeftButton == MouseButtonState.Pressed)
+        {
+            var inkResult = AppendPresenterInkStroke(pt.X, pt.Y);
+            if (inkResult.IsHandled)
+            {
+                Cursor = CursorForPresenterInk();
+                e.Handled = true;
+                return;
+            }
+        }
+
         var hlink = HitTestHyperlink(slide, pt.X, pt.Y);
-        Cursor = hlink is not null ? Cursors.Hand : Cursors.Arrow;
+        Cursor = hlink is not null ? Cursors.Hand : CursorForPresenterInk();
     }
 
     // ── Hyperlink hit-testing & activation ─────────────────────────────────────────
@@ -371,6 +421,31 @@ public sealed class SlideShowWindow : Window
         return SlideShowHostPlanner.HitTestTriggerShape(slide, slidePoint);
     }
 
+    private SlideShowInkPoint MapPresenterInkPoint(double canvasX, double canvasY)
+    {
+        var point = SlideShowHostPlanner.MapCanvasPointToSlide(
+            canvasX,
+            canvasY,
+            _slideCanvas.ActualWidth,
+            _slideCanvas.ActualHeight,
+            CurrentSlideMetrics());
+        return new SlideShowInkPoint(point.X, point.Y);
+    }
+
+    private SlideShowInkExecutionResult ApplyInkExecution(SlideShowInkExecutionResult result)
+    {
+        _inkExecutionState = result.State;
+        return result;
+    }
+
+    private Cursor CursorForPresenterInk() =>
+        _inkExecutionState.ActivePointerMode switch
+        {
+            SlideShowPresenterPointerMode.Pen or SlideShowPresenterPointerMode.Highlighter => Cursors.Pen,
+            SlideShowPresenterPointerMode.Eraser => Cursors.Cross,
+            _ => Cursors.Arrow
+        };
+
     /// <summary>
     /// Advances the interactive sequence for <paramref name="triggerShapeId"/> by ONE step,
     /// mirroring how the main sequence advances one click-step at a time.
@@ -434,6 +509,9 @@ public sealed class SlideShowWindow : Window
         var plan = SlideShowHostPlanner.BuildDisplayPlan(_presentation, _controller, animated);
         _slideDipW = plan.Metrics.WidthDip;
         _slideDipH = plan.Metrics.HeightDip;
+        _inkExecutionState = SlideShowInkExecutionPlanner.MoveToSlide(
+            _inkExecutionState,
+            _controller.CurrentSlideIndex);
 
         var slide = plan.Slide;
         if (slide is null) return;
@@ -1088,6 +1166,7 @@ public sealed class SlideShowWindow : Window
 
     private void Teardown()
     {
+        _inkExecutionState = SlideShowInkExecutionPlanner.ApplyRetentionOnExit(_inkExecutionState).State;
         _autoAdvanceTimer.Stop();
         foreach (var sb in _pendingStoryboards)
         {

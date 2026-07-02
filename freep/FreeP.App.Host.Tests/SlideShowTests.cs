@@ -481,6 +481,64 @@ public sealed class SlideShowWindowTests
     }
 
     [StaFact]
+    public void SlideShowWindow_InkExecution_DelegatesStrokeLifecycleToSharedPlanner()
+    {
+        var pres = Presentation.CreateEmpty();
+        var window = new SlideShowWindow(pres, 0);
+        try
+        {
+            window.ApplyPresenterToolIntent(
+                pointerMode: SlideShowPresenterPointerMode.Pen,
+                inkColorHex: "#336699",
+                inkThicknessDip: 5);
+
+            var begin = window.BeginPresenterInkStroke(10, 20);
+            var append = window.AppendPresenterInkStroke(30, 40);
+            var end = window.EndPresenterInkStroke(50, 60);
+
+            begin.IsHandled.Should().BeTrue();
+            begin.Mutations.Single().Kind.Should().Be(SlideShowInkExecutionMutationKind.BeginStroke);
+            append.Mutations.Single().Kind.Should().Be(SlideShowInkExecutionMutationKind.AppendStrokePoint);
+            end.Mutations.Single().Kind.Should().Be(SlideShowInkExecutionMutationKind.CommitStroke);
+            window.InkExecutionState.CommittedStrokes.Should().ContainSingle();
+            var stroke = window.InkExecutionState.CommittedStrokes.Single();
+            stroke.PointerMode.Should().Be(SlideShowPresenterPointerMode.Pen);
+            stroke.InkState.ColorHex.Should().Be("#336699");
+            stroke.Points.Should().Equal(
+                new SlideShowInkPoint(10, 20),
+                new SlideShowInkPoint(30, 40),
+                new SlideShowInkPoint(50, 60));
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [StaFact]
+    public void SlideShowWindow_InkClear_UsesSharedClearPlan()
+    {
+        var pres = Presentation.CreateEmpty();
+        var window = new SlideShowWindow(pres, 0);
+        try
+        {
+            window.ApplyPresenterToolIntent(pointerMode: SlideShowPresenterPointerMode.Highlighter);
+            window.BeginPresenterInkStroke(10, 20);
+            window.EndPresenterInkStroke(30, 40);
+
+            var clear = window.ClearPresenterInkStrokes();
+
+            clear.Mutations.Single().Kind.Should().Be(SlideShowInkExecutionMutationKind.ClearInk);
+            clear.Mutations.Single().AffectedStrokeCount.Should().Be(1);
+            window.InkExecutionState.CommittedStrokes.Should().BeEmpty();
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [StaFact]
     public void SlideShowWindow_MultipleSlides_AdvanceNavigatesCorrectly()
     {
         var pres = Presentation.CreateEmpty();
