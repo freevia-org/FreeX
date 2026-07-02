@@ -51,6 +51,38 @@ public static class FreeWVisualEvidenceDocumentFactory
         return doc;
     }
 
+    public static TextDocument BuildChartSmartArtCompositionDocument()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("Chart and SmartArt Fidelity") { StyleId = "Heading1" });
+        doc.Blocks.Add(new Paragraph(
+            "This shared fixture exercises Word-style chart and SmartArt visual planning: named chart " +
+            "palettes, quick layouts, scatter markers, data labels, axis titles, plot fills, SmartArt " +
+            "layouts, color schemes, styles, and node fill sequences."));
+
+        var chartParagraph = new Paragraph();
+        chartParagraph.Runs.Add(new Run("Column chart with quick-layout annotations: "));
+        chartParagraph.Runs.Add(Run.FromChart(BuildQuickLayoutColumnChart()));
+        doc.Blocks.Add(chartParagraph);
+
+        var scatterParagraph = new Paragraph();
+        scatterParagraph.Runs.Add(new Run("Scatter chart must render marker-only geometry: "));
+        scatterParagraph.Runs.Add(Run.FromChart(BuildMarkerOnlyScatterChart()));
+        doc.Blocks.Add(scatterParagraph);
+
+        var smartArtParagraph = new Paragraph();
+        smartArtParagraph.Runs.Add(new Run("SmartArt process colors and style: "));
+        smartArtParagraph.Runs.Add(Run.FromSmartArt(BuildStyledSmartArt()));
+        doc.Blocks.Add(smartArtParagraph);
+
+        doc.Blocks.Add(new Paragraph(
+            "The same model is rendered by WPF FidelityRender and Avalonia PageLayoutShot, and both " +
+            "emit the shared chart/SmartArt expectation into the visual evidence manifest."));
+
+        return doc;
+    }
+
     private static Table BuildComplexTable()
     {
         var table = new Table
@@ -164,6 +196,43 @@ public static class FreeWVisualEvidenceDocumentFactory
         return chart;
     }
 
+    private static Chart BuildQuickLayoutColumnChart()
+    {
+        var chart = Chart.Create(
+            ChartKind.Column,
+            ["Q1", "Q2", "Q3", "Q4"],
+            [1.4, 1.8, 1.6, 2.2],
+            seriesName: "Revenue",
+            title: "Revenue by quarter");
+        chart.WidthPt = 300;
+        chart.HeightPt = 168;
+        chart.ColorSchemeId = "mono-blue";
+        chart.StyleId = 7;
+        chart.QuickLayoutId = 9;
+        chart.ShowLegend = true;
+        chart.CategoryAxisTitle = "Quarter";
+        chart.ValueAxisTitle = "USD";
+        return chart;
+    }
+
+    private static Chart BuildMarkerOnlyScatterChart()
+    {
+        var chart = Chart.Create(
+            ChartKind.Scatter,
+            ["155", "160", "165", "170"],
+            [52, 58, 62, 66],
+            seriesName: "Sample",
+            title: "Height and weight");
+        chart.WidthPt = 270;
+        chart.HeightPt = 150;
+        chart.ColorSchemeId = "colorful1";
+        chart.StyleId = 4;
+        chart.ShowLegend = false;
+        chart.CategoryAxisTitle = "Height";
+        chart.ValueAxisTitle = "Weight";
+        return chart;
+    }
+
     private static SmartArt BuildFloatingSmartArt()
     {
         var smartArt = SmartArt.Create(SmartArtKind.Process, ["Plan", "Build", "Verify"]);
@@ -174,6 +243,17 @@ public static class FreeWVisualEvidenceDocumentFactory
         smartArt.StyleId = "subtle1";
         smartArt.Placement = Placement(ImageWrapping.Square, xPt: 36, yPt: 210, zOrder: 6);
 
+        return smartArt;
+    }
+
+    private static SmartArt BuildStyledSmartArt()
+    {
+        var smartArt = SmartArt.Create(SmartArtKind.Process, ["Plan", "Build", "Verify"]);
+        smartArt.WidthPt = 300;
+        smartArt.HeightPt = 110;
+        smartArt.LayoutId = "stepup1";
+        smartArt.ColorSchemeId = "accent1";
+        smartArt.StyleId = "intense1";
         return smartArt;
     }
 
