@@ -39,7 +39,7 @@ public static class PresentationNotesPagePreviewPlanner
 
         var slideCount = presentation.Slides.Count;
         var pageBounds = new LayoutRect(0, 0, Math.Max(1, pageWidth), Math.Max(1, pageHeight));
-        var slideBounds = BuildSlideBounds(pageBounds);
+        var slideBounds = BuildSlideBounds(pageBounds, presentation.SlideSizeCxEmu, presentation.SlideSizeCyEmu);
         var notesBounds = BuildNotesBounds(pageBounds, slideBounds);
 
         if (slideCount == 0)
@@ -82,16 +82,17 @@ public static class PresentationNotesPagePreviewPlanner
             SplitNoteLines(notesText, notesBounds.Width));
     }
 
-    private static LayoutRect BuildSlideBounds(LayoutRect pageBounds)
+    private static LayoutRect BuildSlideBounds(LayoutRect pageBounds, long slideWidthEmu, long slideHeightEmu)
     {
         var margin = Math.Min(48, pageBounds.Width / 6);
+        var aspectRatio = ResolveSlideAspectRatio(slideWidthEmu, slideHeightEmu);
         var slideWidth = Math.Max(1, pageBounds.Width - (margin * 2));
-        var slideHeight = slideWidth * 9d / 16d;
+        var slideHeight = slideWidth / aspectRatio;
         var maxSlideHeight = pageBounds.Height * 0.44;
         if (slideHeight > maxSlideHeight)
         {
             slideHeight = maxSlideHeight;
-            slideWidth = slideHeight * 16d / 9d;
+            slideWidth = slideHeight * aspectRatio;
         }
 
         return new LayoutRect(
@@ -99,6 +100,14 @@ public static class PresentationNotesPagePreviewPlanner
             pageBounds.Y + margin,
             slideWidth,
             Math.Max(1, slideHeight));
+    }
+
+    private static double ResolveSlideAspectRatio(long slideWidthEmu, long slideHeightEmu)
+    {
+        if (slideWidthEmu <= 0 || slideHeightEmu <= 0)
+            return 16d / 9d;
+
+        return Math.Clamp((double)slideWidthEmu / slideHeightEmu, 0.1, 10d);
     }
 
     private static LayoutRect BuildNotesBounds(LayoutRect pageBounds, LayoutRect slideBounds)
