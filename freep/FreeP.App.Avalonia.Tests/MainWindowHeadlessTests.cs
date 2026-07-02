@@ -1118,6 +1118,37 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task Notes_page_pdf_refresh_uses_shared_render_plan()
+    {
+        PresentationNotesPagePdfRenderPlan? notesPdfPlan = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            window.Editor.CurrentSlide!.Title = "Opening";
+            window.Editor.CurrentSlide.Notes = MakeTextBody("Opening note");
+            window.Editor.InsertSlide();
+
+            notesPdfPlan = window.RefreshNotesPagePdfRenderPlan(new PresentationSlideRangeRequest(
+                PresentationSlideRangeKind.CurrentSlide,
+                CurrentSlideNumber: 1));
+        });
+
+        if (!ran) return;
+        notesPdfPlan.Should().NotBeNull();
+        notesPdfPlan!.PrintPlan.Layout.Layout.Should().Be(PresentationPrintLayoutKind.NotesPages);
+        notesPdfPlan.PrintPlan.SlideRange.SlideNumbers.Should().Equal(1);
+        notesPdfPlan.PreviewPlans.Should().ContainSingle(preview =>
+            preview.SlideNumber == 1 &&
+            preview.NoteLines.Count == 1 &&
+            preview.NoteLines[0] == "Opening note");
+        notesPdfPlan.Pages.Should().ContainSingle();
+        notesPdfPlan.Pages[0].Ops.OfType<Free.Shared.Pdf.PdfText>().Select(text => text.Text)
+            .Should()
+            .Contain(["Opening", "Opening note"]);
+    }
+
+    [Fact]
     public async Task Video_export_command_records_shared_deferred_plan()
     {
         var found = false;
@@ -1807,5 +1838,18 @@ public sealed class MainWindowHeadlessTests
         source.IndexOf(first, StringComparison.Ordinal)
             .Should()
             .BeLessThan(source.IndexOf(second, StringComparison.Ordinal), $"{first} should appear before {second}");
+    }
+
+    private static TextBody MakeTextBody(params string[] paragraphs)
+    {
+        var body = new TextBody();
+        foreach (var text in paragraphs)
+        {
+            var paragraph = new Paragraph();
+            paragraph.Runs.Add(new Run { Text = text });
+            body.Paragraphs.Add(paragraph);
+        }
+
+        return body;
     }
 }
