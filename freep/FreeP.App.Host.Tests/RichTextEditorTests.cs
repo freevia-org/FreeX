@@ -227,6 +227,12 @@ public sealed class RichTextEditorTests
 
         canvas.TextEditor!.IsActive.Should().BeTrue();
         canvas.TextEditor.ActiveShapeId.Should().Be(shape.Id);
+
+        var box = overlay.Children
+            .OfType<System.Windows.Controls.RichTextBox>()
+            .Single();
+        box.Width.Should().BeApproximately(288, 0.1);
+        box.Height.Should().BeApproximately(144, 0.1);
     }
 
     [StaFact]
