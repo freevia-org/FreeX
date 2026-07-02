@@ -103,6 +103,9 @@ public class BackstageViewTests
         source.Should().Contain("_callbacks.OpenFolder(folder)");
         source.Should().Contain("BuildActionGroupContent(surface)");
         source.Should().Contain("BuildSurfaceActionRow(action)");
+        source.Should().Contain("BuildPrintEvidenceSection(surface.Evidence)");
+        source.Should().Contain("PrintEvidence_");
+        source.Should().Contain("BackstageViewTextResources.EvidenceSection");
         source.Should().Contain("printPreview: _callbacks.PrintPreview is null");
         source.Should().Contain("AvaloniaBackstageChromeStyle BackstageChromeStyle");
         source.Should().Contain("AvaloniaBackstageChrome.CreateContentArea(");
