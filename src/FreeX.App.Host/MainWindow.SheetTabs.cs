@@ -1330,6 +1330,7 @@ public partial class MainWindow
                 return false;
         }
 
+        RebuildSheetTabContextMenu(contextMenu, target.DataContext as SheetTabViewModel);
         MenuKeyTipAssigner.AssignUniqueKeyTips(contextMenu.Items.OfType<MenuItem>());
         contextMenu.Opened -= SheetTabContextMenu_Opened;
         contextMenu.Opened += SheetTabContextMenu_Opened;
@@ -1352,26 +1353,61 @@ public partial class MainWindow
         Keyboard.Focus(firstEnabledItem);
     }
 
-    // Builds the per-tab context menu at load time from the neutral SheetTabContextMenuPlanner so the
+    // Builds the per-tab context menu from the neutral SheetTabContextMenuPlanner so the
     // sheet-tab menu's labels, order, keytips, and enablement are single-sourced with the Avalonia port
-    // instead of hand-authored in XAML. The visible menu (headers, "I/E/R/M/V/P/T/H/U/A/G" keytips,
-    // separators, View Code disabled) is identical to the previous XAML ContextMenu.
+    // instead of hand-authored in XAML. The menu is rebuilt before opening so Excel-like disabled rows
+    // such as Unhide and Ungroup Sheets reflect the current workbook state.
     private void SheetTabChrome_Loaded(object sender, RoutedEventArgs e)
     {
         if (sender is not FrameworkElement element)
             return;
 
-        element.ContextMenu = BuildSheetTabContextMenu();
+        element.ContextMenuOpening -= SheetTabChrome_ContextMenuOpening;
+        element.ContextMenuOpening += SheetTabChrome_ContextMenuOpening;
+        element.ContextMenu = BuildSheetTabContextMenu(element.DataContext as SheetTabViewModel);
     }
 
-    private ContextMenu BuildSheetTabContextMenu()
+    private void SheetTabChrome_ContextMenuOpening(object sender, ContextMenuEventArgs e)
+    {
+        if (sender is not FrameworkElement element ||
+            element.ContextMenu is not { } contextMenu)
+        {
+            return;
+        }
+
+        RebuildSheetTabContextMenu(contextMenu, element.DataContext as SheetTabViewModel);
+    }
+
+    private ContextMenu BuildSheetTabContextMenu(SheetTabViewModel? tab)
     {
         var menu = new ContextMenu();
         menu.Opened += SheetTabContextMenu_Opened;
-        foreach (var command in SheetTabContextMenuPlanner.BuildSheetTabCommands())
-            AddSheetTabContextMenuItem(menu.Items, command);
+        RebuildSheetTabContextMenu(menu, tab);
 
         return menu;
+    }
+
+    private void RebuildSheetTabContextMenu(ContextMenu menu, SheetTabViewModel? tab)
+    {
+        menu.Items.Clear();
+        var state = BuildSheetTabContextMenuState(tab);
+        foreach (var command in SheetTabContextMenuPlanner.BuildSheetTabCommands(state))
+            AddSheetTabContextMenuItem(menu.Items, command);
+    }
+
+    private SheetTabContextMenuState BuildSheetTabContextMenuState(SheetTabViewModel? tab)
+    {
+        var visibleSheetCount = _workbook.Sheets.Count(sheet => !sheet.IsHidden);
+        var hiddenSheetCount = _workbook.Sheets.Count(sheet => sheet.IsHidden);
+        var selectedSheetIsVisible = tab is not null &&
+                                     _workbook.Sheets.Any(sheet => sheet.Id == tab.Id && !sheet.IsHidden);
+
+        return new SheetTabContextMenuState(
+            CanDeleteSheet: selectedSheetIsVisible && visibleSheetCount > 1,
+            CanHideSheet: selectedSheetIsVisible && visibleSheetCount > 1,
+            CanUnhideSheet: hiddenSheetCount > 0,
+            CanSelectAllSheets: visibleSheetCount > 1,
+            CanUngroupSheets: _groupedSheetIds.Count > 1);
     }
 
     private void AddSheetTabContextMenuItem(

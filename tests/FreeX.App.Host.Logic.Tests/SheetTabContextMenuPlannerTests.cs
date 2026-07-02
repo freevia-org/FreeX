@@ -83,6 +83,51 @@ public sealed class SheetTabContextMenuPlannerTests
     }
 
     [Fact]
+    public void BuildSheetTabCommands_DisablesWorkbookStateDependentRowsWithoutHidingThem()
+    {
+        var commands = SheetTabContextMenuPlanner.BuildSheetTabCommands(
+                new SheetTabContextMenuState(
+                    CanDeleteSheet: false,
+                    CanHideSheet: false,
+                    CanUnhideSheet: false,
+                    CanSelectAllSheets: false,
+                    CanUngroupSheets: false))
+            .Where(command => !command.IsSeparator)
+            .ToList();
+
+        commands.Select(command => command.Action).Should().Equal(
+            SheetTabContextMenuAction.InsertSheet,
+            SheetTabContextMenuAction.DeleteSheet,
+            SheetTabContextMenuAction.Rename,
+            SheetTabContextMenuAction.MoveOrCopy,
+            SheetTabContextMenuAction.ViewCode,
+            SheetTabContextMenuAction.ProtectSheet,
+            SheetTabContextMenuAction.TabColor,
+            SheetTabContextMenuAction.Hide,
+            SheetTabContextMenuAction.Unhide,
+            SheetTabContextMenuAction.SelectAllSheets,
+            SheetTabContextMenuAction.UngroupSheets);
+
+        commands.Where(command => command.Action is
+                SheetTabContextMenuAction.DeleteSheet or
+                SheetTabContextMenuAction.ViewCode or
+                SheetTabContextMenuAction.Hide or
+                SheetTabContextMenuAction.Unhide or
+                SheetTabContextMenuAction.SelectAllSheets or
+                SheetTabContextMenuAction.UngroupSheets)
+            .Should()
+            .OnlyContain(command => !command.IsEnabled);
+        commands.Where(command => command.Action is
+                SheetTabContextMenuAction.InsertSheet or
+                SheetTabContextMenuAction.Rename or
+                SheetTabContextMenuAction.MoveOrCopy or
+                SheetTabContextMenuAction.ProtectSheet or
+                SheetTabContextMenuAction.TabColor)
+            .Should()
+            .OnlyContain(command => command.IsEnabled);
+    }
+
+    [Fact]
     public void BuildSheetTabCommands_ReusesCachedDefaultPlan()
     {
         SheetTabContextMenuPlanner.BuildSheetTabCommands()
