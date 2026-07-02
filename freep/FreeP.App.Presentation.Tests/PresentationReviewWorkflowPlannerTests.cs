@@ -47,7 +47,9 @@ public sealed class PresentationReviewWorkflowPlannerTests
             true,
             true,
             false,
-            PresentationCommentThreadStatus.Open));
+            PresentationCommentThreadStatus.Open,
+            true));
+        plan.SelectedComment.Should().BeSameAs(plan.Comments[0]);
 
         Action(PresentationReviewWorkflowPlanner.EditCommentCommandId).IsEnabled.Should().BeTrue();
         Action(PresentationReviewWorkflowPlanner.DeleteCommentCommandId).IsEnabled.Should().BeTrue();
@@ -60,6 +62,28 @@ public sealed class PresentationReviewWorkflowPlannerTests
 
         PresentationReviewWorkflowActionPlan Action(string commandId) =>
             plan.Actions.Single(action => action.CommandId == commandId);
+    }
+
+    [Fact]
+    public void BuildCommentPanePlan_DefaultsToFirstCurrentSlideCommentSelection()
+    {
+        var slides = new[]
+        {
+            new Slide { Title = "Intro" },
+            new Slide { Title = "Review" }
+        };
+        slides[0].Comments.Add(new SlideComment { Author = "Alice", Initials = "AL", Text = "First", Idx = 1 });
+        slides[0].Comments.Add(new SlideComment { Author = "Bob", Initials = "B", Text = "Second", Idx = 2 });
+
+        var plan = PresentationReviewWorkflowPlanner.BuildCommentPanePlan(slides, 0);
+
+        plan.SelectedCommentIndex.Should().Be(0);
+        plan.SelectedComment.Should().BeSameAs(plan.Comments[0]);
+        plan.Comments.Select(comment => comment.IsSelected).Should().Equal(true, false);
+        plan.Actions.Single(action => action.CommandId == PresentationReviewWorkflowPlanner.EditCommentCommandId)
+            .IsEnabled.Should().BeTrue();
+        plan.Actions.Single(action => action.CommandId == PresentationReviewWorkflowPlanner.PreviousCommentCommandId)
+            .DisabledReason.Should().Be("No previous comment.");
     }
 
     [Fact]
@@ -274,7 +298,7 @@ public sealed class PresentationReviewWorkflowPlannerTests
             comment.ResolvedBy == string.Empty);
         PresentationReviewWorkflowPlanner.BuildCommentPanePlan(slides, 0, selectedCommentIndex: null)
             .Actions.Single(action => action.CommandId == PresentationReviewWorkflowPlanner.ReopenCommentCommandId)
-            .DisabledReason.Should().Be(PresentationReviewWorkflowPlanner.MissingCommentMessage);
+            .DisabledReason.Should().Be(PresentationReviewWorkflowPlanner.CommentAlreadyOpenMessage);
     }
 
     [Fact]

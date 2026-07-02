@@ -66,7 +66,8 @@ public sealed record PresentationCommentDescriptor(
     bool CanDelete,
     bool CanResolve,
     bool CanReopen,
-    PresentationCommentThreadStatus ThreadStatus);
+    PresentationCommentThreadStatus ThreadStatus,
+    bool IsSelected);
 
 public sealed record PresentationCommentPanePlan(
     int SlideIndex,
@@ -75,7 +76,13 @@ public sealed record PresentationCommentPanePlan(
     int TotalCommentCount,
     int SelectedCommentIndex,
     IReadOnlyList<PresentationCommentDescriptor> Comments,
-    IReadOnlyList<PresentationReviewWorkflowActionPlan> Actions);
+    IReadOnlyList<PresentationReviewWorkflowActionPlan> Actions)
+{
+    public PresentationCommentDescriptor? SelectedComment =>
+        SelectedCommentIndex >= 0 && SelectedCommentIndex < Comments.Count
+            ? Comments[SelectedCommentIndex]
+            : null;
+}
 
 public sealed record PresentationCommentMutationPlan(
     PresentationReviewWorkflowIntentKind Intent,
@@ -261,7 +268,7 @@ public static class PresentationReviewWorkflowPlanner
         var selected = NormalizeSelectedCommentIndex(slides, slideIndex, selectedCommentIndex);
         var comments = GetSlide(slides, slideIndex)?.Comments ?? [];
         var descriptors = comments
-            .Select((comment, index) => DescribeComment(slideIndex, index, comment))
+            .Select((comment, index) => DescribeComment(slideIndex, index, comment, selected == index))
             .ToArray();
         var total = slides.Sum(slide => slide.Comments.Count);
 
@@ -1082,7 +1089,8 @@ public static class PresentationReviewWorkflowPlanner
     private static PresentationCommentDescriptor DescribeComment(
         int slideIndex,
         int commentIndex,
-        SlideComment comment)
+        SlideComment comment,
+        bool isSelected)
         => new(
             slideIndex,
             commentIndex,
@@ -1097,7 +1105,8 @@ public static class PresentationReviewWorkflowPlanner
             true,
             !comment.IsResolved,
             comment.IsResolved,
-            comment.IsResolved ? PresentationCommentThreadStatus.Resolved : PresentationCommentThreadStatus.Open);
+            comment.IsResolved ? PresentationCommentThreadStatus.Resolved : PresentationCommentThreadStatus.Open,
+            isSelected);
 
     private static SlideComment CloneComment(SlideComment comment)
         => new()
@@ -1128,9 +1137,14 @@ public static class PresentationReviewWorkflowPlanner
         int? selectedCommentIndex)
     {
         var comments = GetSlide(slides, slideIndex)?.Comments;
-        if (comments is null || selectedCommentIndex is not { } index)
+        if (comments is null || comments.Count == 0)
         {
             return null;
+        }
+
+        if (selectedCommentIndex is not { } index)
+        {
+            return 0;
         }
 
         return index >= 0 && index < comments.Count ? index : null;

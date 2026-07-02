@@ -1287,6 +1287,7 @@ public sealed class MainWindowHeadlessTests
         var commentsPaneVisible = false;
         var commentsPaneCommentCount = 0;
         var commentsPaneActionCount = 0;
+        var commentsPaneSelectedCount = 0;
         var readingOrderPaneVisible = false;
         var readingOrderPaneItemCount = 0;
         var readingOrderPaneHeading = string.Empty;
@@ -1349,6 +1350,7 @@ public sealed class MainWindowHeadlessTests
             commentsPaneVisible = window.IsReviewCommentsPaneVisible;
             commentsPaneCommentCount = window.ReviewCommentsPaneCommentCount;
             commentsPaneActionCount = window.ReviewCommentsPaneActionButtonCount;
+            commentsPaneSelectedCount = window.ReviewCommentsPaneSelectedCommentCount;
             accessibilityPlan = window.LastAccessibilitySummaryPlan;
             altTextPlan = window.LastAltTextRequestPlan;
             altTextPanePlan = window.LastAltTextPanePlan;
@@ -1382,10 +1384,12 @@ public sealed class MainWindowHeadlessTests
         commentPlan!.TotalCommentCount.Should().Be(1);
         commentPlan.Comments.Single().Should().Match<PresentationCommentDescriptor>(comment =>
             comment.ThreadStatus == PresentationCommentThreadStatus.Resolved &&
+            comment.IsSelected &&
             !comment.CanResolve &&
             comment.CanReopen);
+        commentPlan.SelectedComment.Should().BeSameAs(commentPlan.Comments[0]);
         commentPlan.Actions.Single(action => action.CommandId == PresentationReviewWorkflowPlanner.ReopenCommentCommandId)
-            .IsEnabled.Should().BeFalse("the comments command does not select a specific thread yet");
+            .IsEnabled.Should().BeTrue("the comments command selects the first current-slide thread through the shared plan");
         accessibilityPlan.Should().NotBeNull();
         var missingAltText = accessibilityPlan!.Issues.Single(issue =>
             issue.ShapeId == 328 && issue.Title == "Alt text missing");
@@ -1439,6 +1443,7 @@ public sealed class MainWindowHeadlessTests
         commentsPaneVisible.Should().BeTrue("the Avalonia comments command should render a shared-plan-backed pane");
         commentsPaneCommentCount.Should().Be(1);
         commentsPaneActionCount.Should().BeGreaterThanOrEqualTo(6);
+        commentsPaneSelectedCount.Should().Be(1);
     }
 
     [Fact]
