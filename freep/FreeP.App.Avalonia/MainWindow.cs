@@ -1419,9 +1419,11 @@ public sealed class MainWindow : Window
             return false;
         }
 
-        var range = new PresentationSlideRangeRequest(
-            PresentationSlideRangeKind.CurrentSlide,
-            CurrentSlideNumber: Editor.CurrentSlideIndex + 1);
+        // Notes-page PDF exports the whole deck (one notes page per slide), matching the WPF
+        // host (FreeP.App.Host/FileCommands.cs ExportNotesPagePdf, range: null -> AllSlides) and
+        // this shell's own slides-PDF export (FileExportPdfAsync above, which also exports the
+        // full deck). Do not narrow this to the current slide only.
+        var range = new PresentationSlideRangeRequest(PresentationSlideRangeKind.AllSlides);
         var exportPlan = PresentationExportPlanner.BuildNotesPagePdfExportPlan(range, _presentation.Slides.Count);
         var request = new PresentationNotesPagePdfExportRequest(new PresentationPrintRequest(
             PresentationPrintLayoutKind.NotesPages,
