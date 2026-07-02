@@ -41,7 +41,8 @@ public sealed class ActivateSheetDialog : DialogWindow
         _sheetList.ItemsSource = targets;
         _sheetList.SelectedItem = selectedTarget;
         _sheetList.SelectionMode = SelectionMode.Single;
-        _sheetList.MinHeight = 260;
+        _sheetList.ItemContainerStyle = CreateSheetListItemStyle();
+        _sheetList.Height = 260;
         AutomationProperties.SetName(_sheetList, UiText.Get("ActivateSheet_ListAutomationName"));
         AutomationProperties.SetAutomationId(_sheetList, "ActivateSheetList");
         AutomationProperties.SetHelpText(_sheetList, UiText.Get("ActivateSheet_ListHelpText"));
@@ -90,6 +91,22 @@ public sealed class ActivateSheetDialog : DialogWindow
     private void FocusInitialKeyboardTarget()
     {
         DialogFocus.Focus(_sheetList);
+    }
+
+    private static Style CreateSheetListItemStyle()
+    {
+        var style = new Style(typeof(ListBoxItem));
+        style.Resources.Add(SystemColors.InactiveSelectionHighlightBrushKey, SystemColors.HighlightBrush);
+        style.Resources.Add(SystemColors.InactiveSelectionHighlightTextBrushKey, SystemColors.HighlightTextBrush);
+        style.Setters.Add(new Setter(Control.PaddingProperty, new Thickness(2, 0, 2, 0)));
+        style.Setters.Add(new Setter(Control.FontSizeProperty, 10.5));
+        style.Setters.Add(new Setter(FrameworkElement.HeightProperty, 13.0));
+        style.Setters.Add(new Setter(Control.FocusVisualStyleProperty, null));
+        var selectedTrigger = new Trigger { Property = ListBoxItem.IsSelectedProperty, Value = true };
+        selectedTrigger.Setters.Add(new Setter(Control.BackgroundProperty, SystemColors.HighlightBrush));
+        selectedTrigger.Setters.Add(new Setter(Control.ForegroundProperty, SystemColors.HighlightTextBrush));
+        style.Triggers.Add(selectedTrigger);
+        return style;
     }
 
     private void UpdateButtonState()

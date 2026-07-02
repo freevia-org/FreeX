@@ -4135,7 +4135,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                 return blocked;
             }
 
-            _lastResultValidation = "Created Sheet2-Sheet18 through physical Insert Sheet button clicks, then physically clicked the visible Scroll Tabs Right overflow navigation button.";
+            _lastResultValidation = "Created Sheet2-Sheet40 through physical Insert Sheet button clicks, then physically clicked the visible Scroll Tabs Right overflow navigation button.";
             return null;
         };
 
@@ -4148,7 +4148,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                 return resizeBlocked;
             }
 
-            var blocked = SeedSheetsWithAddButton(handle, processId, 18);
+            var blocked = SeedSheetsWithAddButton(handle, processId, 40);
             if (blocked is not null)
             {
                 return blocked;
@@ -4203,7 +4203,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                 dialog,
                 guard,
                 "complete",
-                "Created Sheet2-Sheet18 through physical Insert Sheet button clicks, then physically right-clicked the sheet-tab overflow navigation button and captured the foreground Activate Sheet dialog.");
+                "Created Sheet2-Sheet40 through physical Insert Sheet button clicks, then physically right-clicked the sheet-tab overflow navigation button and captured the foreground Activate Sheet dialog.");
         };
 
     private Func<IntPtr, int, WindowInfo, ForegroundGuardResult, CaptureResult?> DragRelative(double startX, double startY, double endX, double endY)
