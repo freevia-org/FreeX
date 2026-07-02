@@ -25,8 +25,8 @@ public sealed partial class AutoFilterDropdownMenuPlannerHostResourceTests
         menu.HeaderText.Should().Be("Fruit");
         menu.FilterKind.Should().Be(AutoFilterMenuFilterKind.Text);
         menu.Entries.Select(entry => entry.Header).Should().ContainInOrder(
-            UiText.Get("AutoFilter_SortAscending"),
-            UiText.Get("AutoFilter_SortDescending"),
+            UiText.Get("AutoFilter_SortAToZ"),
+            UiText.Get("AutoFilter_SortZToA"),
             UiText.Format("AutoFilter_ClearFilterFrom", "Fruit"),
             UiText.Get("AutoFilter_FilterFamily_Text"),
             UiText.Get("AutoFilter_Search"),
@@ -135,12 +135,48 @@ public sealed partial class AutoFilterDropdownMenuPlannerHostResourceTests
             UiText.Get("AutoFilter_SectionFilter"),
             UiText.Get("AutoFilter_SectionSearch"),
             UiText.Get("AutoFilter_SectionValues"));
-        menu.Sections[0].Entries.Select(entry => entry.Header).Should().Equal(UiText.Get("AutoFilter_SortAscending"), UiText.Get("AutoFilter_SortDescending"));
+        menu.Sections[0].Entries.Select(entry => entry.Header).Should().Equal(UiText.Get("AutoFilter_SortAToZ"), UiText.Get("AutoFilter_SortZToA"));
         menu.Sections[1].Entries.Select(entry => entry.Header).Should().Equal(
             UiText.Format("AutoFilter_ClearFilterFrom", "Fruit"),
             UiText.Get("AutoFilter_FilterFamily_Text"));
         menu.Sections[2].Entries.Select(entry => entry.Header).Should().Equal(UiText.Get("AutoFilter_Search"), UiText.Get("AutoFilter_SelectAll"));
         menu.Sections[3].Entries.Select(entry => entry.Header).Should().Equal("Apple", "Banana");
+    }
+
+    [Theory]
+    [InlineData("number", AutoFilterMenuFilterKind.Number, "AutoFilter_SortSmallestToLargest", "AutoFilter_SortLargestToSmallest")]
+    [InlineData("date", AutoFilterMenuFilterKind.Date, "AutoFilter_SortOldestToNewest", "AutoFilter_SortNewestToOldest")]
+    public void CreateMenuPlan_UsesHostLocalizedExcelSortLabelsForTypedColumns(
+        string valueKind,
+        AutoFilterMenuFilterKind expectedFilterKind,
+        string expectedAscendingKey,
+        string expectedDescendingKey)
+    {
+        var sheet = new Sheet(SheetId, "Sheet1");
+        sheet.SetCell(new CellAddress(SheetId, 1, 1), new TextValue("Value"));
+        if (valueKind == "number")
+        {
+            sheet.SetCell(new CellAddress(SheetId, 2, 1), new NumberValue(42));
+            sheet.SetCell(new CellAddress(SheetId, 3, 1), new NumberValue(7));
+        }
+        else
+        {
+            sheet.SetCell(new CellAddress(SheetId, 2, 1), new DateTimeValue(new DateTime(2026, 5, 1).ToOADate()));
+            sheet.SetCell(new CellAddress(SheetId, 3, 1), new DateTimeValue(new DateTime(2026, 6, 1).ToOADate()));
+        }
+
+        var plan = new AutoFilterDropdownPlan(
+            new GridRange(
+                new CellAddress(SheetId, 1, 1),
+                new CellAddress(SheetId, 3, 1)),
+            FilterColumnOffset: 0);
+
+        var menu = CreateMenuPlan(sheet, plan);
+
+        menu.FilterKind.Should().Be(expectedFilterKind);
+        menu.Sections[0].Entries.Select(entry => entry.Header)
+            .Should()
+            .Equal(UiText.Get(expectedAscendingKey), UiText.Get(expectedDescendingKey));
     }
 
     [Fact]

@@ -79,6 +79,50 @@ public sealed class AutoFilterMenuPlannerTests
         AutoFilterMenuPlanner.SelectAllState(updated).Should().BeTrue();
     }
 
+    [Theory]
+    [InlineData("number", AutoFilterMenuFilterKind.Number, "Sort Smallest to Largest", "Sort Largest to Smallest")]
+    [InlineData("date", AutoFilterMenuFilterKind.Date, "Sort Oldest to Newest", "Sort Newest to Oldest")]
+    public void Build_FromSharedTypedColumnPlan_UsesExcelSortLabels(
+        string valueKind,
+        AutoFilterMenuFilterKind expectedFilterKind,
+        string expectedAscending,
+        string expectedDescending)
+    {
+        var workbook = new Workbook("Book");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Value"));
+        if (valueKind == "number")
+        {
+            sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(42));
+            sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new NumberValue(7));
+        }
+        else
+        {
+            sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new DateTimeValue(new DateTime(2026, 5, 1).ToOADate()));
+            sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new DateTimeValue(new DateTime(2026, 6, 1).ToOADate()));
+        }
+
+        var plan = new AutoFilterDropdownPlan(
+            new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 3, 1)),
+            FilterColumnOffset: 0);
+        var menuPlan = AutoFilterDropdownMenuPlanner.CreateMenuPlan(
+            workbook,
+            sheet,
+            plan,
+            InvariantAutoFilterMenuTextProvider.Instance,
+            InvariantAutoFilterMenuTextProvider.BlankDisplayText);
+
+        var model = AutoFilterMenuPlanner.Build(menuPlan);
+
+        model.FilterKind.Should().Be(expectedFilterKind);
+        model.Items.Where(item => item.Kind is AutoFilterMenuItemKind.SortAscending or AutoFilterMenuItemKind.SortDescending)
+            .Select(item => item.Label)
+            .Should()
+            .Equal(expectedAscending, expectedDescending);
+    }
+
     [Fact]
     public void BuildResult_UsesSharedSearchAndCriteriaSemantics()
     {

@@ -839,6 +839,9 @@ public sealed class SlideCanvas : Control
         }
 
         // ── Secondary value axis (right side) ──────────────────────────────────
+        var dataTablePlan = ChartRenderPlanner.BuildDataTablePrimitivePlan(chart, frame, chartOp.SeriesColors);
+        RenderChartDataTable(dc, dataTablePlan);
+
         var secondaryAxisPlan = ChartRenderPlanner.BuildSecondaryValueAxisPrimitivePlan(chart, frame);
         if (secondaryAxisPlan.Ticks.Count > 0 || secondaryAxisPlan.Labels.Count > 0)
         {
@@ -1223,6 +1226,40 @@ public sealed class SlideCanvas : Control
     }
 
     // ── Text ─────────────────────────────────────────────────────────────────
+
+    private static void RenderChartDataTable(
+        DrawingContext dc,
+        ChartDataTablePrimitivePlan plan)
+    {
+        if (!plan.Bounds.HasPositiveArea)
+            return;
+
+        var borderPen = ToPen(plan.BorderStroke);
+        foreach (var border in plan.HorizontalBorders)
+            dc.DrawLine(borderPen, ToPoint(border.Start), ToPoint(border.End));
+        foreach (var border in plan.VerticalBorders)
+            dc.DrawLine(borderPen, ToPoint(border.Start), ToPoint(border.End));
+        foreach (var border in plan.OutlineBorders)
+            dc.DrawLine(borderPen, ToPoint(border.Start), ToPoint(border.End));
+
+        foreach (var cell in plan.Cells)
+        {
+            if (cell.LegendKeyFill.HasValue && cell.LegendKeyBounds.HasValue)
+            {
+                dc.FillRectangle(
+                    ToBrush(cell.LegendKeyFill.Value),
+                    ToRect(cell.LegendKeyBounds.Value));
+            }
+
+            DrawChartLabel(
+                dc,
+                cell.Text,
+                ToRect(cell.Bounds),
+                cell.IsHeader,
+                ChartRenderPlanner.DataTableFontSize,
+                ToTextAlignment(cell.Alignment));
+        }
+    }
 
     private static void DrawChartAxisTitle(DrawingContext dc, ChartAxisTitlePlan title)
     {

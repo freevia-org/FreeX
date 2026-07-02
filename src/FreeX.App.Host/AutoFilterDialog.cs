@@ -109,7 +109,7 @@ public sealed partial class AutoFilterDialog : Window
         Title = UiText.Format("AutoFilter_TitleWithHeader", menuPlan.HeaderText);
         _clearFilterButton.Content = UiText.Format("AutoFilter_ClearFilterFromHeader", menuPlan.HeaderText);
         _clearFilterButton.IsEnabled = FindClearFilterEntry(menuPlan)?.IsEnabled ?? true;
-        SetSortLabels(menuPlan.FilterKind);
+        SetSortLabels(menuPlan);
         ShowFilterFamilyButton(menuPlan.FilterKind);
         var criteriaSuggestions = GetCriteriaSuggestions(menuPlan);
         if (criteriaSuggestions.Count > 0)

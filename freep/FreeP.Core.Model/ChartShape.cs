@@ -87,6 +87,22 @@ public sealed class ChartDataLabels
     public bool HasAny => ShowValue || ShowPercent || ShowCategoryName || ShowSeriesName;
 }
 
+/// <summary>Data table settings for charts that render source values below the plot.</summary>
+public sealed class ChartDataTableSettings
+{
+    /// <summary>Show horizontal row borders in the table.</summary>
+    public bool ShowHorizontalBorder { get; set; } = true;
+
+    /// <summary>Show vertical column borders in the table.</summary>
+    public bool ShowVerticalBorder { get; set; } = true;
+
+    /// <summary>Show the outside border around the table.</summary>
+    public bool ShowOutlineBorder { get; set; } = true;
+
+    /// <summary>Show series legend keys next to the series names.</summary>
+    public bool ShowLegendKeys { get; set; }
+}
+
 /// <summary>A single data series within a <see cref="ChartShape"/>.</summary>
 public sealed class ChartSeries
 {
@@ -200,6 +216,9 @@ public sealed class ChartShape
 
     /// <summary>Chart-level data label configuration. Applies to all series unless overridden per-series.</summary>
     public ChartDataLabels? DataLabels { get; set; }
+
+    /// <summary>Optional data table rendered below supported cartesian charts.</summary>
+    public ChartDataTableSettings? DataTable { get; set; }
 
     /// <summary>Secondary value axis (right side for column/line; top for bar). Present when a combo chart has series on a second axis.</summary>
     public ChartAxis? SecondaryValueAxis { get; set; }

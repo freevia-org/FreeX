@@ -1559,6 +1559,10 @@ public sealed class MainWindowHeadlessTests
         PresentationAltTextPanePlan? altTextPanePlan = null;
         PresentationReadingOrderPlan? readingOrderPlan = null;
         PresentationProofingRequestPlan? proofingPlan = null;
+        PresentationProofingExecutionPlan? proofingExecutionPlan = null;
+        PresentationProofingCorrectionMutationPlan? proofingMutation = null;
+        string? correctedShapeText = null;
+        string? correctedProofingScopeText = null;
         var commentsPaneVisible = false;
         var commentsPaneCommentCount = 0;
         var commentsPaneActionCount = 0;
@@ -1655,6 +1659,18 @@ public sealed class MainWindowHeadlessTests
                 .Select(item => item.ShapeId)
                 .ToArray();
             proofingPlan = window.LastProofingRequestPlan;
+            proofingExecutionPlan = window.LastProofingExecutionPlan;
+            var proofingScope = proofingExecutionPlan!.Scopes.Single(scope =>
+                scope.Kind == PresentationProofingScopeKind.ShapeText);
+            proofingMutation = window.ApplyProofingCorrection(
+                proofingScope,
+                0,
+                "Caption".Length,
+                "Caption corrected");
+            correctedShapeText = caption.Text;
+            correctedProofingScopeText = window.LastProofingExecutionPlan!.Scopes.Single(scope =>
+                    scope.Kind == PresentationProofingScopeKind.ShapeText)
+                .Text;
         });
 
         if (!ran) return;
@@ -1727,7 +1743,26 @@ public sealed class MainWindowHeadlessTests
         readingOrderShapeOrderAfterMove.Should().Equal(329u, 328u);
         readingOrderPaneOrderAfterMove.Should().Equal(329u, 328u);
         proofingPlan.Should().NotBeNull();
-        proofingPlan!.Status.Should().Be(PresentationWorkflowCapabilityStatus.RequiresHost);
+        proofingPlan!.Status.Should().Be(PresentationWorkflowCapabilityStatus.Available);
+        proofingExecutionPlan.Should().NotBeNull();
+        proofingExecutionPlan!.Scopes.Select(scope => scope.Kind).Should().Equal(
+            PresentationProofingScopeKind.ShapeText,
+            PresentationProofingScopeKind.Comment,
+            PresentationProofingScopeKind.CommentReply);
+        proofingExecutionPlan.Scopes.Select(scope => scope.Text).Should().Equal(
+            "Caption",
+            "Use shared review state.",
+            "@Reviewer confirmed.");
+        proofingMutation.Should().Be(new PresentationProofingCorrectionMutationPlan(
+            true,
+            proofingExecutionPlan.Scopes.Single(scope => scope.Kind == PresentationProofingScopeKind.ShapeText),
+            0,
+            "Caption".Length,
+            "Caption corrected",
+            "Caption corrected",
+            null));
+        correctedShapeText.Should().Be("Caption corrected");
+        correctedProofingScopeText.Should().Be("Caption corrected");
         commentsPaneVisible.Should().BeTrue("the Avalonia comments command should render a shared-plan-backed pane");
         commentsPaneCommentCount.Should().Be(1);
         commentsPaneActionCount.Should().BeGreaterThanOrEqualTo(6);

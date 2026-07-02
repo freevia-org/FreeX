@@ -65,7 +65,14 @@ public sealed class InCanvasTextEditor
         _active = true;
         _editPlan = startPlan.EditPlanner;
 
-        var placement = startPlan.Placement.Value;
+        var placement = SlideCanvasGeometryPlanner.PlanEditorPlacement(
+            new SlideScreenRect(
+                startPlan.Placement.Value.Left,
+                startPlan.Placement.Value.Top,
+                startPlan.Placement.Value.Width,
+                startPlan.Placement.Value.Height),
+            minimumWidth: 40,
+            minimumHeight: 20);
 
         double fallbackPt = startPlan.OriginalBody.Paragraphs
             .SelectMany(p => p.Runs)
