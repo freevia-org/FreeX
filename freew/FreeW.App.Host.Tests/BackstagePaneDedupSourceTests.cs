@@ -79,6 +79,7 @@ public sealed class BackstagePaneDedupSourceTests
             source.Should().Contain("ToAccountPaneSpec(surface)");
             source.Should().Contain("HideRecentPane = true");
             source.Should().Contain("BackstagePaneSurfacePlanner.BuildInfoPane(");
+            source.Should().Contain("document: model");
             source.Should().Contain("ToActionGroups(safetySurface.SafetyGroups)");
             source.Should().Contain("MarkAsFinal");
             source.Should().Contain("RestrictEditing");
