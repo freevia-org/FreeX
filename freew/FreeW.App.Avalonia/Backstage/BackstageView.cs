@@ -437,7 +437,8 @@ internal sealed class BackstageView : Window
             markAsFinal: () => { Close(); _callbacks.MarkAsFinal(); },
             restrictEditing: () => { Close(); _callbacks.RestrictEditing(); },
             inspectDocument: () => { Close(); _callbacks.InspectDocument(); },
-            checkAccessibility: () => { Close(); _callbacks.CheckAccessibility(); });
+            checkAccessibility: () => { Close(); _callbacks.CheckAccessibility(); },
+            document: _callbacks.GetDocument());
 
         var content = new StackPanel { Spacing = 16 };
         content.Children.Add(BuildPaneHeader(surface.Title, surface.Description));

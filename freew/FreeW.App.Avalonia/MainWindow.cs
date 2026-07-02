@@ -1811,6 +1811,7 @@ public sealed class MainWindow : Window
             GetPageSettings: () => _editor.Document.Page,
             GetCurrentOptions: () => _options,
             GetDataFolder: ResolveDataFolderLabel,
+            GetDocument: () => _editor.Document,
 
             NewDocument: NewDocument,
             OpenRecent: path =>

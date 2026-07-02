@@ -49,6 +49,9 @@ internal sealed record BackstageCallbacks(
     /// <summary>Current app data folder path or a readable fallback label.</summary>
     Func<string> GetDataFolder,
 
+    /// <summary>Current live document model for Info-pane safety summaries.</summary>
+    Func<TextDocument> GetDocument,
+
     // ── Actions ──────────────────────────────────────────────────────────────
 
     /// <summary>Create a new empty document.</summary>
