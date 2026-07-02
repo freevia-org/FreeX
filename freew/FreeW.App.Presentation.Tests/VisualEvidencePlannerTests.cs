@@ -908,9 +908,54 @@ public sealed class VisualEvidencePlannerTests
             summary.Scenarios.Single(s => s.ScenarioId == "f2-comments").Trust.Passed.Should().BeFalse();
             summary.Trust.Failures.Should().Contain(f =>
                 f.Contains("f2-comments", StringComparison.Ordinal)
-                && f.Contains("expected at least 1", StringComparison.Ordinal));
+                && f.Contains("expected at least 1 trusted output", StringComparison.Ordinal));
             Action act = () => FreeWVisualEvidenceManifestNormalizer.EnsureSummaryTrusted(summary);
             act.Should().Throw<InvalidOperationException>().WithMessage("*f2-comments*");
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void BuildNormalizedSummaryFromFiles_DoesNotInferCoverageFromMissingCaptureFiles()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var wpfDir = Path.Combine(root, "wpf");
+            var row = BuildFileBackedRow(
+                root,
+                FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                "f2-hf-basic",
+                pageNumber: 1,
+                pageCount: 1);
+            File.Delete(Path.Combine(wpfDir, row.OutputName));
+            FreeWVisualEvidencePlanner.WriteManifest(
+                wpfDir,
+                [row],
+                new DateTimeOffset(2026, 7, 1, 12, 0, 0, TimeSpan.Zero));
+
+            var summary = FreeWVisualEvidenceManifestNormalizer.BuildNormalizedSummaryFromFiles(
+                [Path.Combine(wpfDir, FreeWVisualEvidencePlanner.ManifestFileName)],
+                root,
+                [
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        "f2-hf-basic",
+                        1)
+                ]);
+
+            var scenario = summary.Scenarios.Single(s => s.ScenarioId == "f2-hf-basic");
+            scenario.ActualOutputs.Should().Be(1);
+            scenario.TrustedOutputs.Should().Be(0);
+            scenario.Trust.Passed.Should().BeFalse();
+            summary.Trust.Failures.Should().Contain(f =>
+                f.Contains("output file 'wpf/f2-hf-basic_p1.png' does not exist", StringComparison.Ordinal));
+            summary.Trust.Failures.Should().Contain(f =>
+                f.Contains("expected at least 1 trusted output", StringComparison.Ordinal)
+                && f.Contains("found 0", StringComparison.Ordinal));
         }
         finally
         {
@@ -953,11 +998,11 @@ public sealed class VisualEvidencePlannerTests
             summary.Trust.Passed.Should().BeFalse();
             summary.Trust.Failures.Should().Contain(f =>
                 f.Contains("wpf-fidelity-render/backstage-print-preview-fidelity", StringComparison.Ordinal)
-                && f.Contains("expected at least 2", StringComparison.Ordinal)
+                && f.Contains("expected at least 2 trusted output", StringComparison.Ordinal)
                 && f.Contains("found 1", StringComparison.Ordinal));
             summary.Trust.Failures.Should().Contain(f =>
                 f.Contains("avalonia-page-layout-shot/backstage-print-preview-fidelity", StringComparison.Ordinal)
-                && f.Contains("expected at least 2", StringComparison.Ordinal)
+                && f.Contains("expected at least 2 trusted output", StringComparison.Ordinal)
                 && f.Contains("found 0", StringComparison.Ordinal));
         }
         finally
@@ -1425,7 +1470,7 @@ public sealed class VisualEvidencePlannerTests
 
             var json = FreeWVisualEvidenceManifestNormalizer.ToJson(withBaseline);
             using var doc = JsonDocument.Parse(json);
-            doc.RootElement.GetProperty("schemaVersion").GetInt32().Should().Be(7);
+            doc.RootElement.GetProperty("schemaVersion").GetInt32().Should().Be(8);
             var baselineComparison = doc.RootElement.GetProperty("baselineComparisons")[0];
             baselineComparison.GetProperty("status").GetString().Should().Be("passed");
             baselineComparison.GetProperty("baselineId").GetString()
