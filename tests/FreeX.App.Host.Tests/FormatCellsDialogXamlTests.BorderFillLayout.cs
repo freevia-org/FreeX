@@ -165,7 +165,7 @@ public sealed partial class FormatCellsDialogXamlTests
 
         foreach (var expected in new[]
         {
-            "Title=\"Format Cells\" Width=\"700\" Height=\"610\"",
+            "Title=\"Format Cells\" Width=\"620\" Height=\"540\"",
             "x:Name=\"DlgFillPalettePanel\" Columns=\"10\" Rows=\"6\"",
             "x:Name=\"DlgFillPatternColorPalettePanel\" Columns=\"8\" Rows=\"2\"",
             "x:Name=\"DlgFillPatternSamplePreview\"",
