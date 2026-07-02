@@ -1473,6 +1473,15 @@ public sealed class MainWindowHeadlessTests
                 IsResolved = true,
                 ResolvedBy = "Reviewer",
                 ResolvedDateTime = new DateTime(2026, 7, 2, 8, 15, 0, DateTimeKind.Utc),
+                Replies =
+                {
+                    new SlideCommentReply
+                    {
+                        Author = "Nora",
+                        Initials = "NO",
+                        Text = "@Reviewer confirmed.",
+                    }
+                }
             });
             var shape = new SlideShape
             {
@@ -1547,7 +1556,11 @@ public sealed class MainWindowHeadlessTests
             comment.ThreadStatus == PresentationCommentThreadStatus.Resolved &&
             comment.IsSelected &&
             !comment.CanResolve &&
-            comment.CanReopen);
+            comment.CanReopen &&
+            !comment.CanReply &&
+            comment.ReplyCount == 1 &&
+            comment.MentionCount == 1);
+        commentPlan.Comments.Single().Replies.Single().TextPreview.Should().Be("@Reviewer confirmed.");
         commentPlan.SelectedComment.Should().BeSameAs(commentPlan.Comments[0]);
         commentPlan.Actions.Single(action => action.CommandId == PresentationReviewWorkflowPlanner.ReopenCommentCommandId)
             .IsEnabled.Should().BeTrue("the comments command selects the first current-slide thread through the shared plan");
