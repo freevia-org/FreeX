@@ -43,7 +43,8 @@ public sealed class ReviewWorkflowAdapterTests
                 comment.ThreadStatus == PresentationCommentThreadStatus.Resolved &&
                 comment.IsSelected &&
                 !comment.CanResolve &&
-                comment.CanReopen);
+                comment.CanReopen &&
+                !comment.CanReply);
             window.LastCommentPanePlan.SelectedComment.Should().BeSameAs(window.LastCommentPanePlan.Comments[0]);
             window.ReviewCommentSelectedCount.Should().Be(1);
             window.LastCommentPanePlan.Actions.Select(action => action.CommandId)
@@ -188,6 +189,65 @@ public sealed class ReviewWorkflowAdapterTests
             reopened.ResolvedDateTime.Should().BeNull();
             reopened.ResolvedBy.Should().BeEmpty();
             window.LastCommentPanePlan!.Comments.Single().CanResolve.Should().BeTrue();
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [StaFact]
+    public void MainWindow_ReplyToComment_AppliesSharedPlanAndRefreshesPane()
+    {
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
+        try
+        {
+            window.Editor.CurrentSlide!.Comments.Add(new SlideComment
+            {
+                Author = "Reviewer",
+                Initials = "RV",
+                Text = "Needs follow-up.",
+                Idx = 1
+            });
+            window.SetSelectedReviewCommentIndexForTests(0);
+
+            var timestamp = new DateTime(2026, 7, 2, 15, 0, 0, DateTimeKind.Utc);
+            var reply = window.ReplyToSelectedComment(
+                "  @Reviewer fixed in the deck. ",
+                timestamp,
+                "  FreeP User ",
+                null);
+
+            reply.Should().BeEquivalentTo(new PresentationCommentMutationPlan(
+                PresentationReviewWorkflowIntentKind.ReplyComment,
+                true,
+                0,
+                0,
+                new SlideComment
+                {
+                    Author = "Reviewer",
+                    Initials = "RV",
+                    Text = "Needs follow-up.",
+                    Idx = 1,
+                    Replies =
+                    {
+                        new SlideCommentReply
+                        {
+                            Author = "FreeP User",
+                            Initials = "FU",
+                            Text = "@Reviewer fixed in the deck.",
+                            DateTime = timestamp
+                        }
+                    }
+                },
+                null));
+            window.Editor.CurrentSlide.Comments[0].Replies.Should().ContainSingle();
+            window.LastCommentPanePlan!.Comments.Single().Should().Match<PresentationCommentDescriptor>(comment =>
+                comment.ReplyCount == 1 &&
+                comment.MentionCount == 1 &&
+                comment.CanReply);
+            window.LastCommentPanePlan.Comments.Single().Replies.Single().TextPreview
+                .Should().Be("@Reviewer fixed in the deck.");
         }
         finally
         {
@@ -604,6 +664,7 @@ public sealed class ReviewWorkflowAdapterTests
         readingOrderCommand!.Execute(RibbonCommandContext.Empty);
         readingOrderInvoked.Should().BeTrue();
         registry.TryGet(PresentationReviewWorkflowPlanner.CommentsPaneCommandId, out _).Should().BeTrue();
+        registry.TryGet(PresentationReviewWorkflowPlanner.ReplyCommentCommandId, out _).Should().BeTrue();
         registry.TryGet(PresentationReviewWorkflowPlanner.DeleteCommentCommandId, out var deleteCommand).Should().BeTrue();
         deleteCommand!.Execute(RibbonCommandContext.Empty);
         deleteInvoked.Should().BeTrue();

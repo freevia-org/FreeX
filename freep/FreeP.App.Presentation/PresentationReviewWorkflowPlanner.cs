@@ -8,6 +8,7 @@ public enum PresentationReviewWorkflowIntentKind
     ShowCommentsPane,
     AddComment,
     EditComment,
+    ReplyComment,
     DeleteComment,
     PreviousComment,
     NextComment,
@@ -52,6 +53,14 @@ public sealed record PresentationReviewWorkflowActionPlan(
     PresentationWorkflowCapabilityStatus Status,
     string? DisabledReason = null);
 
+public sealed record PresentationCommentReplyDescriptor(
+    int ReplyIndex,
+    string Author,
+    string Initials,
+    string TextPreview,
+    DateTime? Timestamp,
+    int MentionCount);
+
 public sealed record PresentationCommentDescriptor(
     int SlideIndex,
     int CommentIndex,
@@ -63,9 +72,13 @@ public sealed record PresentationCommentDescriptor(
     long Xemu,
     long Yemu,
     bool CanEdit,
+    bool CanReply,
     bool CanDelete,
     bool CanResolve,
     bool CanReopen,
+    int ReplyCount,
+    int MentionCount,
+    IReadOnlyList<PresentationCommentReplyDescriptor> Replies,
     PresentationCommentThreadStatus ThreadStatus,
     bool IsSelected);
 
@@ -208,6 +221,7 @@ public static class PresentationReviewWorkflowPlanner
     public const string CommentsPaneCommandId = "freep.review.comments.pane";
     public const string AddCommentCommandId = "freep.review.comments.add";
     public const string EditCommentCommandId = "freep.review.comments.edit";
+    public const string ReplyCommentCommandId = "freep.review.comments.reply";
     public const string DeleteCommentCommandId = "freep.review.comments.delete";
     public const string PreviousCommentCommandId = "freep.review.comments.previous";
     public const string NextCommentCommandId = "freep.review.comments.next";
@@ -230,6 +244,9 @@ public static class PresentationReviewWorkflowPlanner
     public const string MissingSlideMessage = "Select a slide before adding a comment.";
     public const string MissingCommentMessage = "Select an existing comment first.";
     public const string EmptyCommentMessage = "Comment text cannot be empty.";
+    public const string EmptyCommentReplyMessage = "Reply text cannot be empty.";
+    public const string CannotReplyToResolvedCommentMessage =
+        "Reopen the thread before adding a reply.";
     public const string CommentAlreadyResolvedMessage =
         "Selected comment thread is already resolved.";
     public const string CommentAlreadyOpenMessage =
@@ -366,6 +383,7 @@ public static class PresentationReviewWorkflowPlanner
             Idx = current.Idx,
             AuthorId = current.AuthorId
         };
+        CopyReplies(current, comment);
 
         return new PresentationCommentMutationPlan(
             PresentationReviewWorkflowIntentKind.EditComment,
@@ -392,6 +410,53 @@ public static class PresentationReviewWorkflowPlanner
                 commentIndex,
                 null,
                 null);
+    }
+
+    public static PresentationCommentMutationPlan BuildReplyCommentPlan(
+        IReadOnlyList<Slide> slides,
+        int slideIndex,
+        int commentIndex,
+        string? text,
+        string? author,
+        string? initials,
+        DateTime? timestamp = null)
+    {
+        ArgumentNullException.ThrowIfNull(slides);
+
+        var current = GetComment(slides, slideIndex, commentIndex);
+        if (current is null)
+        {
+            return InvalidMutation(PresentationReviewWorkflowIntentKind.ReplyComment, slideIndex, commentIndex, MissingCommentMessage);
+        }
+
+        if (current.IsResolved)
+        {
+            return InvalidMutation(PresentationReviewWorkflowIntentKind.ReplyComment, slideIndex, commentIndex, CannotReplyToResolvedCommentMessage);
+        }
+
+        var normalizedText = NormalizeText(text);
+        if (normalizedText is null)
+        {
+            return InvalidMutation(PresentationReviewWorkflowIntentKind.ReplyComment, slideIndex, commentIndex, EmptyCommentReplyMessage);
+        }
+
+        var comment = CloneComment(current);
+        var effectiveAuthor = NormalizeText(author) ?? "FreeP User";
+        comment.Replies.Add(new SlideCommentReply
+        {
+            Author = effectiveAuthor,
+            Initials = NormalizeInitials(initials, effectiveAuthor),
+            Text = normalizedText,
+            DateTime = timestamp
+        });
+
+        return new PresentationCommentMutationPlan(
+            PresentationReviewWorkflowIntentKind.ReplyComment,
+            true,
+            slideIndex,
+            commentIndex,
+            comment,
+            null);
     }
 
     public static PresentationCommentMutationPlan BuildResolveCommentPlan(
@@ -488,6 +553,7 @@ public static class PresentationReviewWorkflowPlanner
                 return true;
 
             case PresentationReviewWorkflowIntentKind.EditComment:
+            case PresentationReviewWorkflowIntentKind.ReplyComment:
             case PresentationReviewWorkflowIntentKind.ResolveComment:
             case PresentationReviewWorkflowIntentKind.ReopenComment:
                 if (plan.CommentIndex is not { } commentIndex ||
@@ -537,6 +603,7 @@ public static class PresentationReviewWorkflowPlanner
             PresentationReviewWorkflowIntentKind.DeleteComment when plan.CommentIndex is { } deletedIndex =>
                 Math.Min(Math.Max(deletedIndex, 0), comments.Count - 1),
             PresentationReviewWorkflowIntentKind.EditComment
+            or PresentationReviewWorkflowIntentKind.ReplyComment
             or PresentationReviewWorkflowIntentKind.ResolveComment
             or PresentationReviewWorkflowIntentKind.ReopenComment =>
                 NormalizeSelectedCommentIndex(slides, plan.SlideIndex, plan.CommentIndex ?? previousSelectedCommentIndex),
@@ -906,12 +973,14 @@ public static class PresentationReviewWorkflowPlanner
         var hasNext = TryGetAdjacentComment(slides, slideIndex, selectedCommentIndex, 1, out _);
         var canResolve = selectedComment is not null && !selectedComment.IsResolved;
         var canReopen = selectedComment?.IsResolved == true;
+        var canReply = selectedComment is not null && !selectedComment.IsResolved;
 
         return
         [
             new(CommentsPaneCommandId, "Show Comments", PresentationReviewWorkflowIntentKind.ShowCommentsPane, true, PresentationWorkflowCapabilityStatus.Available),
             new(AddCommentCommandId, "New Comment", PresentationReviewWorkflowIntentKind.AddComment, hasSlide, PresentationWorkflowCapabilityStatus.Available, hasSlide ? null : MissingSlideMessage),
             new(EditCommentCommandId, "Edit Comment", PresentationReviewWorkflowIntentKind.EditComment, hasSelectedComment, PresentationWorkflowCapabilityStatus.Available, hasSelectedComment ? null : MissingCommentMessage),
+            new(ReplyCommentCommandId, "Reply", PresentationReviewWorkflowIntentKind.ReplyComment, canReply, PresentationWorkflowCapabilityStatus.Available, canReply ? null : selectedComment?.IsResolved == true ? CannotReplyToResolvedCommentMessage : MissingCommentMessage),
             new(DeleteCommentCommandId, "Delete Comment", PresentationReviewWorkflowIntentKind.DeleteComment, hasSelectedComment, PresentationWorkflowCapabilityStatus.Available, hasSelectedComment ? null : MissingCommentMessage),
             new(PreviousCommentCommandId, "Previous Comment", PresentationReviewWorkflowIntentKind.PreviousComment, hasPrevious, PresentationWorkflowCapabilityStatus.Available, hasPrevious ? null : "No previous comment."),
             new(NextCommentCommandId, "Next Comment", PresentationReviewWorkflowIntentKind.NextComment, hasNext, PresentationWorkflowCapabilityStatus.Available, hasNext ? null : "No next comment."),
@@ -1118,7 +1187,11 @@ public static class PresentationReviewWorkflowPlanner
         int commentIndex,
         SlideComment comment,
         bool isSelected)
-        => new(
+    {
+        var replies = comment.Replies
+            .Select((reply, index) => DescribeCommentReply(index, reply))
+            .ToArray();
+        return new(
             slideIndex,
             commentIndex,
             comment.Idx,
@@ -1129,14 +1202,31 @@ public static class PresentationReviewWorkflowPlanner
             comment.Xemu,
             comment.Yemu,
             true,
+            !comment.IsResolved,
             true,
             !comment.IsResolved,
             comment.IsResolved,
+            replies.Length,
+            CountMentions(comment.Text) + replies.Sum(reply => reply.MentionCount),
+            replies,
             comment.IsResolved ? PresentationCommentThreadStatus.Resolved : PresentationCommentThreadStatus.Open,
             isSelected);
+    }
+
+    private static PresentationCommentReplyDescriptor DescribeCommentReply(
+        int replyIndex,
+        SlideCommentReply reply)
+        => new(
+            replyIndex,
+            reply.Author,
+            reply.Initials,
+            BuildPreview(reply.Text),
+            reply.DateTime,
+            CountMentions(reply.Text));
 
     private static SlideComment CloneComment(SlideComment comment)
-        => new()
+    {
+        var clone = new SlideComment
         {
             Author = comment.Author,
             Initials = comment.Initials,
@@ -1150,6 +1240,25 @@ public static class PresentationReviewWorkflowPlanner
             Idx = comment.Idx,
             AuthorId = comment.AuthorId,
         };
+        CopyReplies(comment, clone);
+        return clone;
+    }
+
+    private static void CopyReplies(SlideComment source, SlideComment target)
+    {
+        target.Replies.Clear();
+        foreach (var reply in source.Replies)
+        {
+            target.Replies.Add(new SlideCommentReply
+            {
+                AuthorId = reply.AuthorId,
+                Author = reply.Author,
+                Initials = reply.Initials,
+                Text = reply.Text,
+                DateTime = reply.DateTime,
+            });
+        }
+    }
 
     private static PresentationCommentMutationPlan InvalidMutation(
         PresentationReviewWorkflowIntentKind intent,
@@ -1262,6 +1371,12 @@ public static class PresentationReviewWorkflowPlanner
         var normalized = NormalizeText(text) ?? string.Empty;
         return normalized.Length <= 80 ? normalized : normalized[..77] + "...";
     }
+
+    private static int CountMentions(string? text)
+        => string.IsNullOrWhiteSpace(text)
+            ? 0
+            : text.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+                .Count(part => part.Length > 1 && part[0] == '@');
 
     private static string BuildAltTextSuggestedTitle(SlideShape shape)
     {

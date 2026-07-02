@@ -1519,6 +1519,7 @@ public sealed class MainWindow : Window
             new ActionRibbonCommand(RefreshProofingRequestPlan));
         registry.Register(PresentationReviewWorkflowPlanner.AddCommentCommandId, EmptyRibbonCommand.Instance);
         registry.Register(PresentationReviewWorkflowPlanner.EditCommentCommandId, EmptyRibbonCommand.Instance);
+        registry.Register(PresentationReviewWorkflowPlanner.ReplyCommentCommandId, EmptyRibbonCommand.Instance);
         registry.Register(
             PresentationReviewWorkflowPlanner.DeleteCommentCommandId,
             new ActionRibbonCommand(() => DeleteSelectedComment()));
@@ -1600,6 +1601,9 @@ public sealed class MainWindow : Window
 
         foreach (var action in actions)
         {
+            if (action.CommandId == PresentationReviewWorkflowPlanner.ReplyCommentCommandId)
+                continue;
+
             var button = new Button
             {
                 Content   = action.Label,
@@ -1660,6 +1664,41 @@ public sealed class MainWindow : Window
             TextWrapping = TextWrapping.Wrap,
             Foreground   = new SolidColorBrush(Color.FromRgb(0x44, 0x44, 0x44)),
         });
+        foreach (var reply in comment.Replies)
+        {
+            card.Children.Add(new TextBlock
+            {
+                Text         = $"{(string.IsNullOrWhiteSpace(reply.Author) ? "Unknown reviewer" : reply.Author)}: {reply.TextPreview}",
+                TextWrapping = TextWrapping.Wrap,
+                FontSize     = 12,
+                Margin       = new Thickness(18, 0, 0, 0),
+                Foreground   = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)),
+            });
+        }
+        if (comment.IsSelected && comment.CanReply)
+        {
+            var replyInput = new TextBox
+            {
+                PlaceholderText = "Reply",
+                MinWidth        = 180,
+            };
+            var replyButton = new Button
+            {
+                Content = "Reply",
+                MinWidth = 72,
+            };
+            replyButton.Click += (_, _) => ReplyToSelectedComment(replyInput.Text);
+            card.Children.Add(new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing     = 6,
+                Children    =
+                {
+                    replyInput,
+                    replyButton,
+                }
+            });
+        }
 
         var border = new Border
         {
@@ -1725,10 +1764,28 @@ public sealed class MainWindow : Window
             null,
             null);
 
+    internal PresentationCommentMutationPlan ReplyToSelectedComment(
+        string? text,
+        DateTime? timestamp = null,
+        string? author = null,
+        string? initials = null)
+        => ApplySelectedCommentMutation(
+            PresentationReviewWorkflowIntentKind.ReplyComment,
+            null,
+            null,
+            text,
+            timestamp,
+            author,
+            initials);
+
     private PresentationCommentMutationPlan ApplySelectedCommentMutation(
         PresentationReviewWorkflowIntentKind intent,
         DateTime? resolvedAt,
-        string? resolvedBy)
+        string? resolvedBy,
+        string? replyText = null,
+        DateTime? replyTimestamp = null,
+        string? replyAuthor = null,
+        string? replyInitials = null)
     {
         var selected = _selectedCommentIndex;
         var plan = selected is { } selectedIndex
@@ -1746,6 +1803,15 @@ public sealed class MainWindow : Window
                         selectedIndex,
                         resolvedAt ?? DateTime.UtcNow,
                         resolvedBy ?? "FreeP User"),
+                PresentationReviewWorkflowIntentKind.ReplyComment =>
+                    PresentationReviewWorkflowPlanner.BuildReplyCommentPlan(
+                        _presentation.Slides,
+                        Editor.CurrentSlideIndex,
+                        selectedIndex,
+                        replyText,
+                        replyAuthor ?? "FreeP User",
+                        replyInitials,
+                        replyTimestamp ?? DateTime.UtcNow),
                 PresentationReviewWorkflowIntentKind.ReopenComment =>
                     PresentationReviewWorkflowPlanner.BuildReopenCommentPlan(
                         _presentation.Slides,
