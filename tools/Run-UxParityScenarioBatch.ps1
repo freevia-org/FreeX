@@ -5,7 +5,7 @@ param(
 
     [string]$FreeXExe,
 
-    [ValidateSet("smoke", "core", "dialogs", "status", "formula", "all")]
+    [ValidateSet("smoke", "core", "dialogs", "status", "formula", "filtering", "all")]
     [string]$Suite = "smoke",
 
     [switch]$SkipBuild,
@@ -206,6 +206,12 @@ function Get-ScenarioPairs {
             area = "Formula bar and name box"
             excelScenario = "excel-formula-bar-name-box-reference"
             freexScenario = "freex-formula-bar-name-box-reference"
+        },
+        [ordered]@{
+            id = "autofilter-opened-state"
+            area = "Sorting and filtering"
+            excelScenario = "excel-autofilter"
+            freexScenario = "freex-autofilter"
         }
     )
 
@@ -215,6 +221,7 @@ function Get-ScenarioPairs {
         "dialogs" { return $pairs | Where-Object { $_["area"] -in @("Dialogs", "Native file dialogs") } }
         "status" { return $pairs | Where-Object { $_["area"] -eq "Status bar" } }
         "formula" { return $pairs | Where-Object { $_["area"] -eq "Formula bar and name box" } }
+        "filtering" { return $pairs | Where-Object { $_["area"] -eq "Sorting and filtering" } }
         default { return $pairs }
     }
 }

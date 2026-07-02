@@ -127,6 +127,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             "freex-status-ctrl-alt-zoom-keys" => RunFreeXMainWindowPointerScenario("freex-status-ctrl-alt-zoom-keys", CtrlAltZoomKeysExpectRoundTrip()),
             "freex-status-live-stats-accessibility" => RunFreeXMainWindowPointerScenario("freex-status-live-stats-accessibility", StatusLiveStatsAccessibility(), CreateStatusStatsOptionsOverride),
             "freex-formula-bar-name-box-reference" => RunFreeXMainWindowPointerScenario("freex-formula-bar-name-box-reference", FormulaBarNameBoxReference()),
+            "freex-autofilter" => RunFreeXMainWindowPointerScenario("freex-autofilter", FreeXAutoFilterOpenedState()),
             "freex-sheet-tab-context-menu" => RunFreeXMainWindowPointerScenario("freex-sheet-tab-context-menu", RightClickSheetTabContextMenu()),
             "freex-sheet-tab-click-select" => RunFreeXMainWindowPointerScenario("freex-sheet-tab-click-select", SheetTabClickSelect()),
             "freex-sheet-tab-double-click-rename" => RunFreeXMainWindowPointerScenario("freex-sheet-tab-double-click-rename", SheetTabDoubleClickRename()),
@@ -3470,6 +3471,111 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             return null;
         };
 
+    private Func<IntPtr, int, WindowInfo, ForegroundGuardResult, CaptureResult?> FreeXAutoFilterOpenedState()
+        => (handle, processId, _, guard) =>
+        {
+            var resizeBlocked = ResizeForStableForegroundCapture(handle, processId, "after-freex-autofilter-window-resize");
+            if (resizeBlocked is not null)
+            {
+                return resizeBlocked;
+            }
+
+            guard = ForegroundGuard.FocusAndVerify(handle, processId, "FreeX", options.FocusTimeout);
+            if (!guard.Success)
+            {
+                return BlockedWithGuard(options.Scenario, guard, "before-autofilter-seed");
+            }
+
+            if (!TryGetCellBounds(handle, "Cell_A1", out var a1Bounds))
+            {
+                return CaptureResult.Blocked(options.Scenario, "uia-cell-bounds-unavailable", "Could not resolve A1 bounds for AutoFilter setup.", options.OutputRoot, "freex", guard);
+            }
+
+            const string seed =
+                "score\tregion\titem\tamount\r\n" +
+                "1\tEast\tAlpha\t10\r\n" +
+                "2\tWest\tBeta\t20\r\n" +
+                "3\tEast\tGamma\t30\r\n" +
+                "4\tWest\tDelta\t40\r\n" +
+                "\tNorth\tBlank score\t50";
+            var blocked = PasteCellText(handle, processId, a1Bounds, seed);
+            if (blocked is not null)
+            {
+                return blocked;
+            }
+
+            if (!WaitForCellValue(handle, "Cell_D6", "50", TimeSpan.FromSeconds(3), out var d6Value))
+            {
+                return CaptureResult.Blocked(options.Scenario, "autofilter-seed-validation-failed", $"Expected D6 UIA value '50' after seeded paste; observed '{d6Value}'.", options.OutputRoot, "freex", guard);
+            }
+
+            blocked = GuardedClickPoint(options.Scenario, processId, handle, CenterX(a1Bounds), CenterY(a1Bounds), MouseButtonKind.Left);
+            if (blocked is not null)
+            {
+                return blocked;
+            }
+
+            blocked = GuardedKeyChord(options.Scenario, processId, handle, [NativeMethods.VK_CONTROL, NativeMethods.VK_SHIFT], NativeMethods.VK_L, "ctrl-shift-l-autofilter");
+            if (blocked is not null)
+            {
+                return blocked;
+            }
+
+            blocked = GuardedClickPoint(options.Scenario, processId, handle, CenterX(a1Bounds), CenterY(a1Bounds), MouseButtonKind.Left);
+            if (blocked is not null)
+            {
+                return blocked;
+            }
+
+            blocked = GuardedKeyChord(options.Scenario, processId, handle, [NativeMethods.VK_MENU], NativeMethods.VK_DOWN, "alt-down-autofilter");
+            if (blocked is not null)
+            {
+                return blocked;
+            }
+
+            var dialog = FindFreeXAutoFilterDialog(processId, handle.ToInt64(), options.PopupTimeout);
+            if (dialog is null)
+            {
+                blocked = GuardedSendKeys(options.Scenario, processId, handle, "%{DOWN}", "sendkeys-alt-down-autofilter");
+                if (blocked is not null)
+                {
+                    return blocked;
+                }
+
+                dialog = FindFreeXAutoFilterDialog(processId, handle.ToInt64(), TimeSpan.FromMilliseconds(1600));
+            }
+
+            if (dialog is null)
+            {
+                blocked = GuardedClickPoint(
+                    options.Scenario,
+                    processId,
+                    handle,
+                    Math.Max(CenterX(a1Bounds), (int)a1Bounds.Right - 12),
+                    CenterY(a1Bounds),
+                    MouseButtonKind.Left);
+                if (blocked is not null)
+                {
+                    return blocked;
+                }
+
+                dialog = FindFreeXAutoFilterDialog(processId, handle.ToInt64(), options.PopupTimeout);
+            }
+
+            if (dialog is null)
+            {
+                return CaptureResult.Blocked(options.Scenario, "autofilter-dialog-not-found", "Did not detect a foreground FreeX AutoFilter dropdown after Ctrl+Shift+L, Alt+Down, SendKeys Alt+Down fallback, or guarded header-cell dropdown click.", options.OutputRoot, "freex", guard);
+            }
+
+            var validation = WindowHasUiaText(dialog.Handle, "Sort A to Z") &&
+                             WindowHasUiaText(dialog.Handle, "Text Filters") &&
+                             WindowHasUiaText(dialog.Handle, "Select All")
+                ? "Seeded A1:D6 through foreground paste, toggled AutoFilter with Ctrl+Shift+L, opened the score-column dropdown with Alt+Down, and validated the Text Filters checklist surface through UIA."
+                : "Seeded A1:D6 through foreground paste and opened the score-column AutoFilter dropdown with Ctrl+Shift+L then Alt+Down; UIA text validation was incomplete.";
+
+            return CaptureWindow(options.Scenario, "freex", dialog, guard, "complete", validation);
+        };
+
     private CaptureResult? ResizeForStatusStatisticReadback(IntPtr handle, int processId, ForegroundGuardResult guard)
         => ResizeForStableForegroundCapture(handle, processId, "after-status-stat-window-resize");
 
@@ -4451,6 +4557,19 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             }
         }
 
+        return null;
+    }
+
+    private CaptureResult? GuardedSendKeys(string scenario, int processId, IntPtr handle, string keys, string phase)
+    {
+        var guard = ForegroundGuard.FocusAndVerify(handle, processId, "FreeX", options.FocusTimeout);
+        if (!guard.Success)
+        {
+            return BlockedWithGuard(scenario, guard, $"before-{phase}");
+        }
+
+        SendKeys.SendWait(keys);
+        Thread.Sleep(options.AfterInputDelay);
         return null;
     }
 
@@ -5795,6 +5914,17 @@ internal sealed class ScenarioRunner(CaptureOptions options)
         => WindowFinder.FindProcessWindowIncludingChildren(
             processId,
             window => IsExcelDataValidationListPopupWindow(window, ownerHandle),
+            timeout);
+
+    private static WindowInfo? FindFreeXAutoFilterDialog(int processId, long ownerHandle, TimeSpan timeout)
+        => WindowFinder.FindProcessWindowIncludingChildren(
+            processId,
+            window => window.Handle != ownerHandle &&
+                window.Bounds.Width >= 220 &&
+                window.Bounds.Height >= 220 &&
+                (window.Title.Contains("score", StringComparison.OrdinalIgnoreCase) ||
+                 WindowHasUiaText(window.Handle, "Number Filters") ||
+                 WindowHasUiaText(window.Handle, "Select All")),
             timeout);
 
     private static bool IsExcelDataValidationListPopupWindow(WindowInfo window, long ownerHandle)
@@ -7202,8 +7332,10 @@ internal static class NativeMethods
     public const byte VK_CONTROL = 0x11;
     public const byte VK_MENU = 0x12;
     public const byte VK_1 = 0x31;
+    public const byte VK_L = 0x4C;
     public const byte VK_V = 0x56;
     public const byte VK_SHIFT = 0x10;
+    public const byte VK_DOWN = 0x28;
     public const byte VK_OEM_PLUS = 0xBB;
     public const byte VK_OEM_MINUS = 0xBD;
     public static readonly IntPtr HWND_TOPMOST = new(-1);
