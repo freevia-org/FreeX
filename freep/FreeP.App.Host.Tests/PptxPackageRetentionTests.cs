@@ -96,6 +96,8 @@ public sealed class PptxPackageRetentionTests
         "http://example.com/freep/relationships/reviewLink";
     private const string UnknownViewRelType =
         "http://example.com/freep/relationships/viewState";
+    private const string PrinterSettingsRelType =
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/printerSettings";
     private const string UnknownSlideMirrorRelType =
         "http://example.com/freep/relationships/slideMirror";
 
@@ -370,6 +372,65 @@ public sealed class PptxPackageRetentionTests
         reloaded.Slides[0].Shapes.Should().Contain(s => s.Name == "Modeled edit");
     }
 
+    [Fact]
+    public void ReadWriteRead_RetainsViewAndPrintSettingsPackageSemantics()
+    {
+        using var source = BuildPptxWithViewAndPrintSettings();
+        var loaded = PptxPackageReader.Read(source);
+        loaded.PackageSnapshot.Should().NotBeNull();
+        loaded.Slides.Should().HaveCount(1);
+
+        loaded.Slides[0].Shapes.Add(new SlideShape
+        {
+            Id = 78,
+            Name = "Modeled view print edit",
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            OffsetXEmu = 457200,
+            OffsetYEmu = 457200,
+            ExtentCxEmu = 1828800,
+            ExtentCyEmu = 914400,
+        });
+
+        using var saved = new MemoryStream();
+        PptxPackageWriter.Write(loaded, saved);
+        var savedBytes = saved.ToArray();
+
+        using (var archive = new ZipArchive(new MemoryStream(savedBytes), ZipArchiveMode.Read))
+        {
+            var presProps = ReadText(archive, "ppt/presProps.xml");
+            presProps.Should().Contain("freep-print-retain");
+            presProps.Should().Contain("prnWhat=\"handouts3\"");
+            presProps.Should().Contain("frameSlides=\"1\"");
+
+            var viewProps = ReadText(archive, "ppt/viewProps.xml");
+            viewProps.Should().Contain("freep-view-retain");
+            viewProps.Should().Contain("lastView=\"sldSorterView\"");
+            viewProps.Should().Contain("cx=\"12700\"");
+
+            ReadBytes(archive, "ppt/printerSettings/printerSettings1.bin")
+                .Should()
+                .Equal(new byte[] { 0x46, 0x50, 0x50, 0x01 });
+
+            var presPropsRels = LoadXml(archive, "ppt/_rels/presProps.xml.rels");
+            Relationship(
+                presPropsRels,
+                PrinterSettingsRelType,
+                "printerSettings/printerSettings1.bin").Should().NotBeNull();
+
+            var contentTypes = LoadXml(archive, "[Content_Types].xml");
+            Override(
+                contentTypes,
+                "/ppt/printerSettings/printerSettings1.bin",
+                "application/vnd.openxmlformats-officedocument.presentationml.printerSettings").Should().NotBeNull();
+        }
+
+        using var savedRead = new MemoryStream(savedBytes);
+        var reloaded = PptxPackageReader.Read(savedRead);
+        reloaded.Slides.Should().HaveCount(1);
+        reloaded.Slides[0].Shapes.Should().Contain(s => s.Name == "Modeled view print edit");
+    }
+
     private static MemoryStream BuildPptxWithUnmodeledPackageData()
     {
         var presentation = Presentation.CreateEmpty();
@@ -443,6 +504,66 @@ public sealed class PptxPackageRetentionTests
             AddOverride(contentTypes, "/ppt/customData/viewState.bin",
                 "application/vnd.example.freep.viewstate");
             AddDefault(contentTypes, "freex", "application/vnd.example.freep.payload");
+            WriteXml(archive, "[Content_Types].xml", contentTypes);
+        }
+
+        package.Position = 0;
+        return package;
+    }
+
+    private static MemoryStream BuildPptxWithViewAndPrintSettings()
+    {
+        var presentation = Presentation.CreateEmpty();
+        using var basePackage = new MemoryStream();
+        PptxPackageWriter.Write(presentation, basePackage);
+
+        var package = new MemoryStream();
+        package.Write(basePackage.ToArray());
+        package.Position = 0;
+        using (var archive = new ZipArchive(package, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            var presProps = XDocument.Parse("""
+                <p:presentationPr xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+                  <p:prnPr prnWhat="handouts3" clrMode="clr" hiddenSlides="0" frameSlides="1"/>
+                  <p:extLst>
+                    <p:ext uri="{11111111-2222-3333-4444-555555555555}">
+                      <freep:retention xmlns:freep="urn:freep:test">freep-print-retain</freep:retention>
+                    </p:ext>
+                  </p:extLst>
+                </p:presentationPr>
+                """);
+            WriteXml(archive, "ppt/presProps.xml", presProps);
+
+            var viewProps = XDocument.Parse("""
+                <p:viewPr xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" lastView="sldSorterView">
+                  <p:normalViewPr showOutlineIcons="1"/>
+                  <p:gridSpacing cx="12700" cy="12700"/>
+                  <p:extLst>
+                    <p:ext uri="{66666666-7777-8888-9999-AAAAAAAAAAAA}">
+                      <freep:retention xmlns:freep="urn:freep:test">freep-view-retain</freep:retention>
+                    </p:ext>
+                  </p:extLst>
+                </p:viewPr>
+                """);
+            WriteXml(archive, "ppt/viewProps.xml", viewProps);
+
+            WriteBytes(archive, "ppt/printerSettings/printerSettings1.bin", new byte[] { 0x46, 0x50, 0x50, 0x01 });
+
+            var presPropsRels = new XDocument(
+                new XDeclaration("1.0", "UTF-8", "yes"),
+                new XElement(RelsNs + "Relationships"));
+            AddRelationship(
+                presPropsRels,
+                "rIdPrinterSettings",
+                PrinterSettingsRelType,
+                "printerSettings/printerSettings1.bin");
+            WriteXml(archive, "ppt/_rels/presProps.xml.rels", presPropsRels);
+
+            var contentTypes = LoadXml(archive, "[Content_Types].xml");
+            AddOverride(
+                contentTypes,
+                "/ppt/printerSettings/printerSettings1.bin",
+                "application/vnd.openxmlformats-officedocument.presentationml.printerSettings");
             WriteXml(archive, "[Content_Types].xml", contentTypes);
         }
 

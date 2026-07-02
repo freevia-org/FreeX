@@ -336,8 +336,8 @@ public static class PptxPackageWriter
         }
 
         // --- 5. presProps, viewProps, tableStyles ---
-        WriteEntry(archive, "ppt/presProps.xml", BuildPresPropsXml());
-        WriteEntry(archive, "ppt/viewProps.xml", BuildViewPropsXml());
+        WriteEntry(archive, "ppt/presProps.xml", BuildPresPropsXml(packageSnapshot));
+        WriteEntry(archive, "ppt/viewProps.xml", BuildViewPropsXml(packageSnapshot));
         WriteEntry(archive, "ppt/tableStyles.xml", BuildTableStylesXml());
 
         // --- 6. Layouts ---
@@ -1869,15 +1869,19 @@ public static class PptxPackageWriter
 
     // ── Stub XML parts ────────────────────────────────────────────────────────────
 
-    private static XDocument BuildPresPropsXml() =>
-        new XDocument(
-            new XDeclaration("1.0", "UTF-8", "yes"),
-            new XElement(P + "presentationPr", NsAttr("p", P), NsAttr("a", A)));
+    private static XDocument BuildPresPropsXml(PptxPackageSnapshot? packageSnapshot) =>
+        TryReadPreservedXmlPart(packageSnapshot, "ppt/presProps.xml", P + "presentationPr", out var preserved)
+            ? preserved
+            : new XDocument(
+                new XDeclaration("1.0", "UTF-8", "yes"),
+                new XElement(P + "presentationPr", NsAttr("p", P), NsAttr("a", A)));
 
-    private static XDocument BuildViewPropsXml() =>
-        new XDocument(
-            new XDeclaration("1.0", "UTF-8", "yes"),
-            new XElement(P + "viewPr", NsAttr("p", P)));
+    private static XDocument BuildViewPropsXml(PptxPackageSnapshot? packageSnapshot) =>
+        TryReadPreservedXmlPart(packageSnapshot, "ppt/viewProps.xml", P + "viewPr", out var preserved)
+            ? preserved
+            : new XDocument(
+                new XDeclaration("1.0", "UTF-8", "yes"),
+                new XElement(P + "viewPr", NsAttr("p", P)));
 
     private static XDocument BuildTableStylesXml() =>
         new XDocument(
@@ -3987,6 +3991,24 @@ public static class PptxPackageWriter
             stream.Write(bytes, 0, bytes.Length);
             copied.Add(normalizedPath);
         }
+    }
+
+    private static bool TryReadPreservedXmlPart(
+        PptxPackageSnapshot? packageSnapshot,
+        string path,
+        XName expectedRoot,
+        out XDocument document)
+    {
+        document = new XDocument();
+        if (packageSnapshot is null || !packageSnapshot.TryGetEntry(path, out var bytes))
+            return false;
+
+        var preserved = OpcXml.TryLoadXml(bytes);
+        if (preserved?.Root is null || preserved.Root.Name != expectedRoot)
+            return false;
+
+        document = preserved;
+        return true;
     }
 
     private static HashSet<string> FindPreservedChartWorkbookPaths(PptxPackageSnapshot? packageSnapshot, int chartCount)
