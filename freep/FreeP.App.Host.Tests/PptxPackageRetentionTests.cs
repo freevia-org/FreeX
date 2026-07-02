@@ -621,6 +621,111 @@ public sealed class PptxPackageRetentionTests
         ((ShapeOutline.Visible)reloadedDataTable.BorderOutline!).WidthPt.Should().BeApproximately(1.25, 0.001);
     }
 
+    [Fact]
+    public void ReadWriteRead_ChartDataTableGradientBorderOutline_IsPreservedNotReplacedByDefaultGray()
+    {
+        // JA1: a c:dTable/c:spPr/a:ln with an a:gradFill child (gradient border) must survive
+        // read -> write -> read as ShapeOutline.GradientVisible, not be discarded and replaced
+        // by the renderer/writer default gray solid outline.
+        using var source = BuildPptxWithGradientChartDataTableBorder();
+        var loaded = PptxPackageReader.Read(source);
+
+        var chart = loaded.Slides[0].Shapes.Single(shape => shape.Kind == SlideShapeKind.Chart).Chart!;
+        chart.DataTable.Should().NotBeNull();
+        var gradientOutline = chart.DataTable!.BorderOutline.Should().BeOfType<ShapeOutline.GradientVisible>().Subject;
+        gradientOutline.WidthPt.Should().BeApproximately(1.0, 0.001);
+        gradientOutline.Gradient.Stops.Select(s => s.Color.Resolved).Should()
+            .Equal(new SrgbColor(0xFF, 0x00, 0x00), new SrgbColor(0x00, 0x00, 0xFF));
+
+        using var saved = new MemoryStream();
+        PptxPackageWriter.Write(loaded, saved);
+        var savedBytes = saved.ToArray();
+
+        using (var archive = new ZipArchive(new MemoryStream(savedBytes), ZipArchiveMode.Read))
+        {
+            var savedChartXml = LoadXml(archive, "ppt/charts/chart1.xml");
+            var savedDataTable = savedChartXml.Root!
+                .Element(ChartNs + "chart")!
+                .Element(ChartNs + "plotArea")!
+                .Element(ChartNs + "dTable");
+            savedDataTable.Should().NotBeNull();
+            var savedLine = savedDataTable!.Element(ChartNs + "spPr")!.Element(DrawingNs + "ln")!;
+            savedLine.Element(DrawingNs + "gradFill").Should().NotBeNull(
+                "the gradient border must round-trip as a:gradFill, not be collapsed to a:solidFill");
+            savedLine.Element(DrawingNs + "solidFill").Should().BeNull(
+                "a gradient border must not be silently replaced by a solid default gray fill");
+        }
+
+        using var savedRead = new MemoryStream(savedBytes);
+        var reloaded = PptxPackageReader.Read(savedRead);
+        var reloadedDataTable = reloaded.Slides[0].Shapes.Single(shape => shape.Kind == SlideShapeKind.Chart).Chart!.DataTable;
+        reloadedDataTable.Should().NotBeNull();
+        var reloadedGradient = reloadedDataTable!.BorderOutline.Should().BeOfType<ShapeOutline.GradientVisible>().Subject;
+        reloadedGradient.WidthPt.Should().BeApproximately(1.0, 0.001);
+        reloadedGradient.Gradient.Stops.Select(s => s.Color.Resolved).Should()
+            .Equal(new SrgbColor(0xFF, 0x00, 0x00), new SrgbColor(0x00, 0x00, 0xFF));
+    }
+
+    private static MemoryStream BuildPptxWithGradientChartDataTableBorder()
+    {
+        var presentation = new Presentation();
+        var slide = new Slide();
+        var chart = new ChartShape { ChartType = ChartType.ColumnClustered };
+        chart.Categories.AddRange(["East", "West"]);
+        var series = new ChartSeries { Name = "Actual" };
+        series.Values.AddRange([10, 20]);
+        chart.Series.Add(series);
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 101,
+            Name = "Gradient border chart",
+            Kind = SlideShapeKind.Chart,
+            OffsetXEmu = 914400,
+            OffsetYEmu = 914400,
+            ExtentCxEmu = 3657600,
+            ExtentCyEmu = 2743200,
+            Chart = chart,
+        });
+        presentation.Slides.Add(slide);
+
+        using var basePackage = new MemoryStream();
+        PptxPackageWriter.Write(presentation, basePackage);
+
+        var package = new MemoryStream();
+        package.Write(basePackage.ToArray());
+        package.Position = 0;
+        using (var archive = new ZipArchive(package, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            var chartXml = LoadXml(archive, "ppt/charts/chart1.xml");
+            chartXml.Root!
+                .Element(ChartNs + "chart")!
+                .Element(ChartNs + "plotArea")!
+                .Add(new XElement(ChartNs + "dTable",
+                    new XElement(ChartNs + "showHorzBorder", new XAttribute("val", "1")),
+                    new XElement(ChartNs + "showVertBorder", new XAttribute("val", "1")),
+                    new XElement(ChartNs + "showOutline", new XAttribute("val", "1")),
+                    new XElement(ChartNs + "showKeys", new XAttribute("val", "0")),
+                    new XElement(ChartNs + "spPr",
+                        new XElement(DrawingNs + "ln",
+                            new XAttribute("w", DrawingMlUnits.PointsToEmu(1.0)),
+                            new XElement(DrawingNs + "gradFill",
+                                new XElement(DrawingNs + "gsLst",
+                                    new XElement(DrawingNs + "gs",
+                                        new XAttribute("pos", "0"),
+                                        new XElement(DrawingNs + "srgbClr", new XAttribute("val", "FF0000"))),
+                                    new XElement(DrawingNs + "gs",
+                                        new XAttribute("pos", "100000"),
+                                        new XElement(DrawingNs + "srgbClr", new XAttribute("val", "0000FF")))),
+                                new XElement(DrawingNs + "lin",
+                                    new XAttribute("ang", "5400000"),
+                                    new XAttribute("scaled", "0")))))));
+            WriteXml(archive, "ppt/charts/chart1.xml", chartXml);
+        }
+
+        package.Position = 0;
+        return package;
+    }
+
     private static MemoryStream BuildPptxWithUnmodeledPackageData()
     {
         var presentation = Presentation.CreateEmpty();

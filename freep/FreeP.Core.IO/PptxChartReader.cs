@@ -787,10 +787,14 @@ internal static class PptxChartReader
 
     private static ShapeOutline? ReadDataTableBorderOutline(XElement dTableEl, PresentationColorScheme scheme)
     {
-        var outline = PptxColorReader.TryReadOutline(
+        // Preserve every outline kind TryReadOutline can produce, including
+        // ShapeOutline.GradientVisible (a:ln/a:gradFill). Previously only
+        // Visible/None were kept here and a gradient data-table border was
+        // silently discarded, causing it to be replaced by the default gray
+        // outline on round-trip.
+        return PptxColorReader.TryReadOutline(
             dTableEl.Element(C + "spPr")?.Element(A + "ln"),
             scheme);
-        return outline is ShapeOutline.Visible or ShapeOutline.None ? outline : null;
     }
 
     private static bool ParseBoolAttr(XElement? el)
