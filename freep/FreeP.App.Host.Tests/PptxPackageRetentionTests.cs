@@ -561,6 +561,53 @@ public sealed class PptxPackageRetentionTests
         reloadedChart.Series[0].Values.Should().Equal(42, 51);
     }
 
+    [Fact]
+    public void ReadWriteRead_ChartDataTableSettings_RetainsModeledChartPackageSemantics()
+    {
+        using var source = BuildPptxWithChartWorkbookAndUnrelatedPackageData();
+        var loaded = PptxPackageReader.Read(source);
+
+        var chart = loaded.Slides[0].Shapes.Single(shape => shape.Kind == SlideShapeKind.Chart).Chart!;
+        chart.DataTable.Should().NotBeNull("PowerPoint-authored c:dTable settings should import into the shared model");
+        chart.DataTable!.ShowHorizontalBorder.Should().BeTrue();
+        chart.DataTable.ShowVerticalBorder.Should().BeFalse();
+        chart.DataTable.ShowOutlineBorder.Should().BeTrue();
+        chart.DataTable.ShowLegendKeys.Should().BeTrue();
+
+        using var saved = new MemoryStream();
+        PptxPackageWriter.Write(loaded, saved);
+        var savedBytes = saved.ToArray();
+
+        using (var archive = new ZipArchive(new MemoryStream(savedBytes), ZipArchiveMode.Read))
+        {
+            ReadText(archive, "customXml/chartWorkbookPayload.xml")
+                .Should()
+                .Contain("unrelated-retain-me");
+
+            var savedChartXml = LoadXml(archive, "ppt/charts/chart1.xml");
+            var savedPlotArea = savedChartXml.Root!
+                .Element(ChartNs + "chart")!
+                .Element(ChartNs + "plotArea")!;
+            var savedDataTable = savedPlotArea.Element(ChartNs + "dTable");
+            savedDataTable.Should().NotBeNull("saving should write c:dTable back into the chart package part");
+            savedDataTable!.Element(ChartNs + "showHorzBorder")!.Attribute("val")!.Value.Should().Be("1");
+            savedDataTable.Element(ChartNs + "showVertBorder")!.Attribute("val")!.Value.Should().Be("0");
+            savedDataTable.Element(ChartNs + "showOutline")!.Attribute("val")!.Value.Should().Be("1");
+            savedDataTable.Element(ChartNs + "showKeys")!.Attribute("val")!.Value.Should().Be("1");
+            savedPlotArea.Elements().Last(element => element.Name == ChartNs + "valAx" || element.Name == ChartNs + "dTable")
+                .Name.Should().Be(ChartNs + "dTable", "c:dTable should remain after chart axes in the package chart part");
+        }
+
+        using var savedRead = new MemoryStream(savedBytes);
+        var reloaded = PptxPackageReader.Read(savedRead);
+        var reloadedDataTable = reloaded.Slides[0].Shapes.Single(shape => shape.Kind == SlideShapeKind.Chart).Chart!.DataTable;
+        reloadedDataTable.Should().NotBeNull();
+        reloadedDataTable!.ShowHorizontalBorder.Should().BeTrue();
+        reloadedDataTable.ShowVerticalBorder.Should().BeFalse();
+        reloadedDataTable.ShowOutlineBorder.Should().BeTrue();
+        reloadedDataTable.ShowLegendKeys.Should().BeTrue();
+    }
+
     private static MemoryStream BuildPptxWithUnmodeledPackageData()
     {
         var presentation = Presentation.CreateEmpty();
@@ -676,6 +723,14 @@ public sealed class PptxPackageRetentionTests
             chartXml.Root.Add(new XElement(ChartNs + "externalData",
                 new XAttribute(RelsDocNs + "id", "rIdSourceWorkbook"),
                 new XElement(ChartNs + "autoUpdate", new XAttribute("val", "0"))));
+            chartXml.Root!
+                .Element(ChartNs + "chart")!
+                .Element(ChartNs + "plotArea")!
+                .Add(new XElement(ChartNs + "dTable",
+                    new XElement(ChartNs + "showHorzBorder", new XAttribute("val", "1")),
+                    new XElement(ChartNs + "showVertBorder", new XAttribute("val", "0")),
+                    new XElement(ChartNs + "showOutline", new XAttribute("val", "1")),
+                    new XElement(ChartNs + "showKeys", new XAttribute("val", "1"))));
             WriteXml(archive, "ppt/charts/chart1.xml", chartXml);
 
             var chartRels = new XDocument(

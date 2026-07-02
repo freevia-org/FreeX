@@ -102,6 +102,29 @@ public sealed class FunctionalParityMatrixTests
     }
 
     [Fact]
+    public void PrioritizedCommandCleanupRows_RemainBoundInBothHosts()
+    {
+        var wpf = FunctionalParityMatrix.LoadWpfHandlerIds();
+        var rows = FunctionalParityMatrix.Compute(wpf)
+            .ToDictionary(row => row.CommandId, StringComparer.Ordinal);
+
+        var prioritizedRows = new[]
+        {
+            "Copy Diagnostics#CopyDiagnosticsBtn_Click",
+            "Legal Notices#LegalNoticesBtn_Click",
+            "Convert to Comments",
+        };
+
+        foreach (var id in prioritizedRows)
+        {
+            Assert.True(rows.TryGetValue(id, out var row), $"The shared ribbon definition should expose '{id}'.");
+            Assert.True(row.HasWpfHandler, $"WPF should bind the prioritized cleanup command '{id}'.");
+            Assert.True(row.HasAvaloniaHandler, $"Avalonia should bind the prioritized cleanup command '{id}'.");
+            Assert.Equal(FunctionalParityMatrix.ParityStatus.Parity, row.Status);
+        }
+    }
+
+    [Fact]
     public void Classifier_CoversEveryNonParityRow()
     {
         var wpf = FunctionalParityMatrix.LoadWpfHandlerIds();
