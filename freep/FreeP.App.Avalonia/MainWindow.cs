@@ -849,6 +849,7 @@ public sealed class MainWindow : Window
         r.Register("freep.file.save",    new ActionRibbonCommand(() => _ = FileSaveAsync()));
         r.Register("freep.file.save-as", new ActionRibbonCommand(() => _ = FileSaveAsAsync()));
         r.Register(PresentationExportPlanner.PdfExportCommandId, new ActionRibbonCommand(() => _ = FileExportPdfAsync()));
+        r.Register(PresentationExportPlanner.NotesPagePdfExportCommandId, new ActionRibbonCommand(() => _ = FileExportNotesPagePdfAsync()));
         r.Register(PresentationExportPlanner.ImageExportCommandId, new ActionRibbonCommand(() => _ = FileExportImagesAsync()));
         r.Register(PresentationExportPlanner.PrintCommandId, new ActionRibbonCommand(() => RefreshHandoutLayoutPlan()));
         r.Register(PresentationExportPlanner.VideoExportCommandId, new ActionRibbonCommand(() => RefreshVideoExportPlan()));
@@ -1403,6 +1404,67 @@ public sealed class MainWindow : Window
             _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(
                 FileText,
                 PresentationExportPlanner.PdfExportCommandText,
+                ex.Message);
+            return false;
+        }
+    }
+
+    private async Task<bool> FileExportNotesPagePdfAsync()
+    {
+        if (!AvaloniaFilePickerService.CanSave(StorageProvider))
+        {
+            _statusText.Text = SisterAppFileTextPlanner.FormatCommandUnavailable(
+                FileText,
+                PresentationExportPlanner.NotesPagePdfExportCommandText);
+            return false;
+        }
+
+        var range = new PresentationSlideRangeRequest(
+            PresentationSlideRangeKind.CurrentSlide,
+            CurrentSlideNumber: Editor.CurrentSlideIndex + 1);
+        var exportPlan = PresentationExportPlanner.BuildNotesPagePdfExportPlan(range, _presentation.Slides.Count);
+        var request = new PresentationNotesPagePdfExportRequest(new PresentationPrintRequest(
+            PresentationPrintLayoutKind.NotesPages,
+            range));
+        LastNotesPagePdfRenderPlan = PresentationNotesPagePdfExporter.BuildRenderPlan(
+            _presentation,
+            request);
+        if (!exportPlan.CanExecute)
+        {
+            _statusText.Text = exportPlan.DisabledReason ?? PresentationExportPlanner.NotesPagePdfExportCommandText;
+            return false;
+        }
+
+        var plan = PresentationExportPlanner.BuildNotesPagePdfExportPickerPlan(_fileWorkflow.CurrentFileName);
+
+        using var file = await AvaloniaFilePickerService.PickSaveFileWithLocalPathAsync(
+            StorageProvider,
+            AvaloniaFilePickerSaveRequest.FromSavePlan(PresentationExportPlanner.NotesPagePdfExportPickerTitle, plan));
+
+        var path = file?.LocalPath;
+        if (path is null)
+        {
+            if (file is not null)
+            {
+                _statusText.Text = SisterAppFileTextPlanner.FormatSelectedFileNotLocalPath(
+                    FileText,
+                    PresentationExportPlanner.NotesPagePdfExportCommandText);
+            }
+
+            return false;
+        }
+
+        try
+        {
+            ExportAtomicWriter.WriteAllBytes(path, PresentationNotesPagePdfExporter.ExportToBytes(_presentation, request));
+            _statusText.Text = $"Exported {Path.GetFileName(path)}";
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(
+                FileText,
+                PresentationExportPlanner.NotesPagePdfExportCommandText,
                 ex.Message);
             return false;
         }

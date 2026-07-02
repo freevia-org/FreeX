@@ -6,6 +6,7 @@ namespace FreeP.App.Compositor;
 public enum PresentationExportFormat
 {
     Pdf,
+    NotesPagePdf,
     ImageSequence,
     Video,
     Print,
@@ -153,6 +154,17 @@ public sealed record PresentationImageExportPlan(
     int HeightPx,
     bool IsImplemented);
 
+public sealed record PresentationNotesPagePdfExportPlan(
+    PresentationExportFormat Format,
+    string CommandId,
+    string DisplayName,
+    string Description,
+    string DefaultExtensionWithDot,
+    PresentationPrintPlan PrintPlan,
+    bool IsImplemented,
+    bool CanExecute,
+    string? DisabledReason);
+
 public sealed record PresentationBackstageExportPlan(
     string Heading,
     string Description,
@@ -170,11 +182,14 @@ public static class PresentationExportPlanner
     public const string ImageExportExtension = ".png";
     public const string VideoExportExtension = ".mp4";
     public const string PdfExportCommandId = "freep.file.export-pdf";
+    public const string NotesPagePdfExportCommandId = "freep.file.export-notes-page-pdf";
     public const string ImageExportCommandId = "freep.file.export-images";
     public const string VideoExportCommandId = "freep.file.export-video";
     public const string PrintCommandId = "freep.file.print";
     public const string PdfExportPickerTitle = "Export to PDF";
     public const string PdfExportCommandText = "Export to PDF";
+    public const string NotesPagePdfExportPickerTitle = "Export Notes Pages to PDF";
+    public const string NotesPagePdfExportCommandText = "Export notes pages to PDF";
     public const string ImageExportPickerTitle = "Export Slides as Images";
     public const string ImageExportCommandText = "Export slides as images";
     public const string VideoExportPickerTitle = "Export Video";
@@ -203,6 +218,13 @@ public static class PresentationExportPlanner
             PdfExportCommandId,
             "PDF",
             "Fixed-layout PDF copy with one page per slide.",
+            PdfExportExtension,
+            IsImplemented: true),
+        new(
+            PresentationExportFormat.NotesPagePdf,
+            NotesPagePdfExportCommandId,
+            "Notes Page PDF",
+            "Fixed-layout PDF copy with one notes page per selected slide.",
             PdfExportExtension,
             IsImplemented: true),
         new(
@@ -327,6 +349,30 @@ public static class PresentationExportPlanner
             descriptor.IsImplemented);
     }
 
+    public static PresentationNotesPagePdfExportPlan BuildNotesPagePdfExportPlan(
+        PresentationSlideRangeRequest? range,
+        int slideCount)
+    {
+        var descriptor = BuildFormatDescriptors().Single(d => d.Format == PresentationExportFormat.NotesPagePdf);
+        var printPlan = BuildPrintPlan(
+            new PresentationPrintRequest(
+                PresentationPrintLayoutKind.NotesPages,
+                range),
+            slideCount);
+        var canExecute = descriptor.IsImplemented && printPlan.SlideRange.SlideNumbers.Count > 0;
+
+        return new PresentationNotesPagePdfExportPlan(
+            descriptor.Format,
+            descriptor.CommandId,
+            descriptor.DisplayName,
+            "Exports PowerPoint-style notes pages to PDF through the shared notes-page render plan.",
+            descriptor.DefaultExtensionWithDot ?? PdfExportExtension,
+            printPlan,
+            descriptor.IsImplemented,
+            canExecute,
+            canExecute ? null : "Notes-page PDF export requires at least one slide.");
+    }
+
     public static PresentationVideoExportPlan BuildVideoExportPlan(
         PresentationSlideRangeRequest? range,
         int slideCount) =>
@@ -415,10 +461,25 @@ public static class PresentationExportPlanner
             PdfExportExtension,
             preferredFirstExtension: PdfExportExtension);
 
+    public static FileSaveDialogPlan BuildNotesPagePdfExportDialogPlan(string? sourceName) =>
+        FileDialogRequestPlanner.BuildPerFormatSaveDialogPlan(
+            PdfFormats,
+            BuildNotesPagePdfSuggestedFileName(sourceName),
+            PdfExportExtension);
+
+    public static FileSavePickerPlan BuildNotesPagePdfExportPickerPlan(string? sourceName) =>
+        FileDialogRequestPlanner.BuildSavePickerPlan(
+            PdfFormats,
+            BuildNotesPagePdfSuggestedFileName(sourceName),
+            FallbackPresentationName,
+            PdfExportExtension,
+            preferredFirstExtension: PdfExportExtension);
+
     public static PresentationBackstageExportPlan BuildBackstageExportPlan()
     {
         var formats = BuildFormatDescriptors();
         var pdf = formats.Single(format => format.Format == PresentationExportFormat.Pdf);
+        var notesPagePdf = formats.Single(format => format.Format == PresentationExportFormat.NotesPagePdf);
 
         return new PresentationBackstageExportPlan(
             Heading: "Export",
@@ -428,11 +489,23 @@ public static class PresentationExportPlanner
             FixedLayoutActions:
             [
                 ToActionPlan(pdf, "Export to PDF...", pdf.Description),
+                ToActionPlan(notesPagePdf, "Notes Page PDF...", notesPagePdf.Description),
             ],
             DeferredActions: formats
-                .Where(format => format.Format is not PresentationExportFormat.Pdf)
+                .Where(format => format.Format is not PresentationExportFormat.Pdf
+                    and not PresentationExportFormat.NotesPagePdf)
                 .Select(format => ToActionPlan(format, format.DisplayName, format.Description))
                 .ToArray());
+    }
+
+    private static string BuildNotesPagePdfSuggestedFileName(string? sourceName)
+    {
+        var fileName = FileDialogRequestPlanner.BuildSuggestedSaveAsFileName(
+            sourceName,
+            FallbackPresentationName,
+            PdfExportExtension);
+        var baseName = Path.GetFileNameWithoutExtension(fileName);
+        return $"{baseName}-notes{PdfExportExtension}";
     }
 
     private static PresentationPrintLayoutDescriptor NormalizePrintLayout(

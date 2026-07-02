@@ -143,6 +143,37 @@ internal sealed class FileCommands
     }
 
     /// <summary>
+    /// File &gt; Export &gt; Notes Page PDF. Prompts for a target and writes one speaker-notes page per selected slide.
+    /// </summary>
+    public bool ExportNotesPagePdf(PresentationSlideRangeRequest? range = null)
+    {
+        var presentation = _getModel();
+        var exportPlan = PresentationExportPlanner.BuildNotesPagePdfExportPlan(range, presentation.Slides.Count);
+        if (!exportPlan.CanExecute)
+            return false;
+
+        var savePlan = PresentationExportPlanner.BuildNotesPagePdfExportDialogPlan(_workflow.CurrentFileName);
+        var result = WpfFileDialogService.ShowSaveDialog(_window, savePlan);
+        if (!result.Chosen)
+            return false;
+
+        try
+        {
+            var request = new PresentationNotesPagePdfExportRequest(new PresentationPrintRequest(
+                PresentationPrintLayoutKind.NotesPages,
+                range));
+            var bytes = PresentationNotesPagePdfExporter.ExportToBytes(presentation, request);
+            ExportAtomicWriter.WriteAllBytes(result.FileName!, bytes);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            ShowError("Could not export the presentation notes pages to PDF", ex);
+            return false;
+        }
+    }
+
+    /// <summary>
     /// File &gt; Export &gt; Images. Prompts for a folder, then exports the host-selected slide range.
     /// </summary>
     public bool ExportImages()

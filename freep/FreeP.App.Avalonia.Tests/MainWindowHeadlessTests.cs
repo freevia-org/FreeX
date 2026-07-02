@@ -339,6 +339,7 @@ public sealed class MainWindowHeadlessTests
         ids.Should().Contain("freep.file.open",    "Open command required");
         ids.Should().Contain("freep.file.save",    "Save command required");
         ids.Should().Contain("freep.file.save-as", "Save As command required");
+        ids.Should().Contain(PresentationExportPlanner.NotesPagePdfExportCommandId, "notes-page PDF export command required");
         ids.Should().Contain(PresentationExportPlanner.ImageExportCommandId, "image export command required");
         ids.Should().Contain(PresentationExportPlanner.VideoExportCommandId, "video export command required");
     }
@@ -1152,6 +1153,22 @@ public sealed class MainWindowHeadlessTests
         notesPdfPlan.Pages[0].Ops.OfType<Free.Shared.Pdf.PdfText>().Select(text => text.Text)
             .Should()
             .Contain(["Opening", "Opening note"]);
+    }
+
+    [Fact]
+    public async Task Notes_page_pdf_export_command_is_registered_for_native_save_route()
+    {
+        var found = false;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var registry = window.BuildCommandRegistry();
+            found = registry.TryGet(PresentationExportPlanner.NotesPagePdfExportCommandId, out _);
+        });
+
+        if (!ran) return;
+        found.Should().BeTrue("the Avalonia registry should expose the notes-page PDF save route");
     }
 
     [Fact]

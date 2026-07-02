@@ -16,10 +16,14 @@ public sealed class FileCommandsSourceTests
         source.Should().Contain("PresentationFileDialogPlanner.BuildOpenDialogPlan()");
         source.Should().Contain("PresentationFileDialogPlanner.BuildSaveAsDialogPlan(");
         source.Should().Contain("PresentationExportPlanner.BuildPdfExportDialogPlan(");
+        source.Should().Contain("PresentationExportPlanner.BuildNotesPagePdfExportPlan(");
+        source.Should().Contain("PresentationExportPlanner.BuildNotesPagePdfExportDialogPlan(");
         source.Should().Contain("PresentationExportPlanner.BuildHandoutLayoutPlan(");
         source.Should().Contain("PresentationNotesPagePdfExporter.BuildRenderPlan(");
+        source.Should().Contain("PresentationNotesPagePdfExporter.ExportToBytes(");
         source.Should().Contain("PresentationExportPlanner.ImageExportPickerTitle");
         source.Should().Contain("PresentationImageExportExecutor.Export(");
+        source.Should().Contain("public bool ExportNotesPagePdf(");
         source.Should().Contain("public bool ExportImages()");
         source.Should().Contain("public PresentationHandoutLayoutPlan BuildHandoutLayoutPlan(");
         source.Should().Contain("public PresentationNotesPagePdfRenderPlan BuildNotesPagePdfRenderPlan(");

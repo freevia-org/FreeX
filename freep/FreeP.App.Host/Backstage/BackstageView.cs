@@ -75,10 +75,15 @@ internal sealed class BackstageView : UserControl
     private UIElement BuildExportPane()
     {
         var plan = PresentationExportPlanner.BuildBackstageExportPlan();
-        var additionalGroups = plan.DeferredActions.Where(action => action.IsEnabled)
-            .GroupBy(_ => plan.DeferredGroupHeading)
+        var fixedLayoutAdditionalActions = plan.FixedLayoutActions
+            .Where(action => action.CommandId != PresentationExportPlanner.PdfExportCommandId);
+        var additionalGroups = fixedLayoutAdditionalActions
+            .Concat(plan.DeferredActions.Where(action => action.IsEnabled))
+            .GroupBy(action => action.Format is PresentationExportFormat.NotesPagePdf
+                ? plan.FixedLayoutGroupHeading
+                : plan.DeferredGroupHeading)
             .Select(group => new BackstageActionGroup(
-                plan.DeferredGroupHeading,
+                group.Key,
                 group
                     .Select(action => new BackstageActionRow(
                         action.Label,
@@ -151,6 +156,7 @@ internal sealed class BackstageView : UserControl
         commandId switch
         {
             PresentationExportPlanner.PdfExportCommandId => _actions.ExportPdf,
+            PresentationExportPlanner.NotesPagePdfExportCommandId => _actions.ExportNotesPagePdf,
             PresentationExportPlanner.ImageExportCommandId => _actions.ExportImages,
             PresentationExportPlanner.VideoExportCommandId => _actions.ExportVideo,
             _ => throw new InvalidOperationException($"Unsupported FreeP export command '{commandId}'."),
@@ -164,6 +170,7 @@ internal sealed record BackstageActions(
     Action Save,
     Action SaveAs,
     Action ExportPdf,
+    Action ExportNotesPagePdf,
     Action ExportImages,
     Action ExportVideo,
     Func<FreePOptions> CurrentOptions,
