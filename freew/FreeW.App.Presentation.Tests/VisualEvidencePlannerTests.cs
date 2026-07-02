@@ -23,7 +23,9 @@ public sealed class VisualEvidencePlannerTests
             "page-composition-print-layout",
             "page-composition-web-layout",
             "page-composition-draft",
-            "page-composition-floating-image"]);
+            "page-composition-floating-image",
+            "backstage-print-preview-fidelity",
+            "backstage-pdf-export-fidelity"]);
 
         var sectionScenario = FreeWVisualEvidencePlanner.ResolveScenario("f2-section-landscape.docx");
         sectionScenario.ExpectedFeatureTags.Should().Contain(["f2", "section-geometry", "portrait-landscape"]);
@@ -31,6 +33,16 @@ public sealed class VisualEvidencePlannerTests
 
         var floatingScenario = FreeWVisualEvidencePlanner.ResolveScenario("page-composition-floating-image");
         floatingScenario.Composition.ExpectsFloatingObjects.Should().BeTrue();
+
+        var previewScenario = FreeWVisualEvidencePlanner.ResolveScenario("backstage-print-preview-fidelity");
+        previewScenario.ExpectedFeatureTags.Should().Contain(["backstage", "print-preview", "fixed-layout"]);
+        previewScenario.ExpectedOutputNamePattern.Should().Be("backstage-print-preview_p{page}.png");
+        previewScenario.MinimumExpectedOutputs.Should().Be(2);
+
+        var pdfScenario = FreeWVisualEvidencePlanner.ResolveScenario("backstage-pdf-export-fidelity");
+        pdfScenario.ExpectedFeatureTags.Should().Contain(["backstage", "pdf-export", "pdf-rasterized"]);
+        pdfScenario.ExpectedOutputNamePattern.Should().Be("backstage-pdf-export_p{page}.png");
+        pdfScenario.MinimumExpectedOutputs.Should().Be(2);
     }
 
     [Fact]

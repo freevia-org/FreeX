@@ -202,7 +202,7 @@ try {
             actionableGaps = [int]$freew.summary.actionableGaps
             classifiedRows = $true
         }
-        nextSlice = "Backstage safety/print/export planner evidence is deeper; keep closing renderer-edge evidence, especially native-print deferral and PDF/preview fidelity fixtures."
+        nextSlice = "Backstage safety/print/export planner evidence now names native-print deferral plus PDF/preview fidelity fixture contracts; next closeout is running and retaining paired renderer captures for those scenarios."
     }
 
     $freeP = [ordered]@{

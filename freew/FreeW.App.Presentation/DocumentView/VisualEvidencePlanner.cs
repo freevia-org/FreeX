@@ -237,7 +237,23 @@ public static class FreeWVisualEvidencePlanner
             "freew_floating_image.png",
             1,
             DocumentViewLayoutKind.PrintLayout,
-            BodyPrintComposition with { ExpectsFloatingObjects = true })
+            BodyPrintComposition with { ExpectsFloatingObjects = true }),
+        new(
+            "backstage-print-preview-fidelity",
+            "Backstage Print Preview fixed-layout fidelity capture.",
+            ["backstage", "print-preview", "print-layout", "fixed-layout", "page-chrome", "body-text"],
+            "backstage-print-preview_p{page}.png",
+            2,
+            DocumentViewLayoutKind.PrintLayout,
+            BodyPrintComposition),
+        new(
+            "backstage-pdf-export-fidelity",
+            "Backstage PDF export rasterized fixed-layout fidelity capture.",
+            ["backstage", "pdf-export", "pdf-rasterized", "print-layout", "fixed-layout", "body-text"],
+            "backstage-pdf-export_p{page}.png",
+            2,
+            DocumentViewLayoutKind.PrintLayout,
+            BodyPrintComposition)
     ];
 
     private static readonly IReadOnlyDictionary<string, FreeWVisualEvidenceScenario> ScenarioById =

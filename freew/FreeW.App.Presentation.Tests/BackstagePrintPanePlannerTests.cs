@@ -35,6 +35,19 @@ public sealed class BackstagePrintPanePlannerTests
             group.Actions.Any(action => action.Kind == BackstagePrintActionKind.Print && action.Label == "Print") &&
             group.Actions.Any(action => action.Kind == BackstagePrintActionKind.PrintPreview && action.Label == "Print Preview"));
         plan.Groups.Should().Contain(group => group.Heading == "Settings");
+
+        plan.Evidence.Should().Contain(row =>
+            row.Kind == BackstagePrintEvidenceKind.PrintPreviewFidelity &&
+            row.Status == BackstagePrintEvidenceStatus.FixtureReady &&
+            row.FixtureScenarioIds.Contains("backstage-print-preview-fidelity"));
+        plan.Evidence.Should().Contain(row =>
+            row.Kind == BackstagePrintEvidenceKind.PdfExportFidelity &&
+            row.Status == BackstagePrintEvidenceStatus.FixtureReady &&
+            row.FixtureScenarioIds.Contains("backstage-pdf-export-fidelity"));
+        plan.Evidence.Should().Contain(row =>
+            row.Kind == BackstagePrintEvidenceKind.NativePrint &&
+            row.Status == BackstagePrintEvidenceStatus.Deferred &&
+            row.FixtureScenarioIds.Count == 0);
     }
 
     [Fact]
