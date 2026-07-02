@@ -69,6 +69,7 @@ static int RenderAll(string outDir)
     var columnsPath = Path.GetFullPath(Path.Combine(outDir, "freew_columns_layout.png"));
     var borderWatermarkPath = Path.GetFullPath(Path.Combine(outDir, "freew_border_watermark.png"));
     var tableLayoutPath = VisualEvidenceOutputPath(outDir, "table-layout-complex", 1);
+    var drawingObjectsPath = VisualEvidenceOutputPath(outDir, "drawing-objects-complex", 1);
     var printPreviewP1Path = VisualEvidenceOutputPath(outDir, "backstage-print-preview-fidelity", 1);
     var printPreviewP2Path = VisualEvidenceOutputPath(outDir, "backstage-print-preview-fidelity", 2);
     var pdfExportP1Path = VisualEvidenceOutputPath(outDir, "backstage-pdf-export-fidelity", 1);
@@ -118,6 +119,14 @@ static int RenderAll(string outDir)
         scenarioId: "table-layout-complex",
         evidence: evidence,
         documentFactory: FreeWVisualEvidenceDocumentFactory.BuildComplexTableLayoutDocument);
+    if (rc != 0) return rc;
+
+    rc = RenderMode(DocumentViewMode.PrintLayout, drawingObjectsPath,
+        width: 960, height: 1700,
+        label: "Drawing Objects",
+        scenarioId: "drawing-objects-complex",
+        evidence: evidence,
+        documentFactory: FreeWVisualEvidenceDocumentFactory.BuildDrawingObjectsCompositionDocument);
     if (rc != 0) return rc;
 
     // ── FO1: Floating-image render capture ──────────────────────────────────────────────────────────

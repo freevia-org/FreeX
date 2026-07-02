@@ -4688,15 +4688,21 @@ public sealed class DocumentView : RichTextBox
             DocumentFloatingObjectKind.Image when run.Image is { IsFloating: true } image =>
                 BuildFloatingImageVisual(image, snapshot.Rect),
             DocumentFloatingObjectKind.Shape when run.Shape is { IsFloating: true } shape =>
-                BuildFloatingObjectVisual(shape, snapshot.Rect),
+                BuildFloatingDrawingObjectVisual(
+                    DrawingObjectVisualPlanner.BuildVisualPlan(shape, snapshot),
+                    shape),
             DocumentFloatingObjectKind.Chart when run.Chart is { IsFloating: true } chart =>
-                BuildFloatingObjectVisual(chart, snapshot.Rect),
+                BuildFloatingObjectPlaceholderVisual(chart, snapshot.Rect),
             DocumentFloatingObjectKind.SmartArt when run.SmartArt is { IsFloating: true } smartArt =>
-                BuildFloatingObjectVisual(smartArt, snapshot.Rect),
+                BuildFloatingObjectPlaceholderVisual(smartArt, snapshot.Rect),
             DocumentFloatingObjectKind.WordArt when run.WordArt is { IsFloating: true } wordArt =>
-                BuildFloatingObjectVisual(wordArt, snapshot.Rect),
+                BuildFloatingDrawingObjectVisual(
+                    DrawingObjectVisualPlanner.BuildVisualPlan(wordArt, snapshot),
+                    wordArt),
             DocumentFloatingObjectKind.Group when run.DrawingGroup is { } group =>
-                BuildFloatingGroupVisual(group, snapshot.Rect),
+                BuildFloatingGroupVisual(
+                    DrawingObjectVisualPlanner.BuildVisualPlan(group, snapshot),
+                    group),
             _ => null!,
         };
 
@@ -4792,11 +4798,285 @@ public sealed class DocumentView : RichTextBox
         return root;
     }
 
+    private FrameworkElement BuildFloatingDrawingObjectVisual(
+        DrawingObjectVisualPlan plan,
+        object modelObject)
+    {
+        var root = BuildDrawingObjectCoreVisual(plan);
+        root.Tag = modelObject;
+        root.Cursor = Cursors.SizeAll;
+        root.MouseLeftButtonDown += (_, e) =>
+        {
+            var addToMulti = (Keyboard.Modifiers & (ModifierKeys.Shift | ModifierKeys.Control)) != 0;
+            SelectFloatingObject(modelObject, addToMulti);
+            e.Handled = true;
+        };
+
+        return root;
+    }
+
+    private FrameworkElement BuildDrawingObjectCoreVisual(DrawingObjectVisualPlan plan)
+    {
+        var element = plan.Kind switch
+        {
+            DrawingObjectVisualKind.Shape => BuildDrawingShapeVisual(plan),
+            DrawingObjectVisualKind.WordArt => BuildDrawingWordArtVisual(plan),
+            _ => new Canvas { Width = plan.Rect.WidthDip, Height = plan.Rect.HeightDip }
+        };
+
+        element.Width = plan.Rect.WidthDip;
+        element.Height = plan.Rect.HeightDip;
+
+        if (plan.RotationAngle != 0 || plan.FlipH || plan.FlipV)
+        {
+            var group = new System.Windows.Media.TransformGroup();
+            if (plan.FlipH || plan.FlipV)
+                group.Children.Add(new System.Windows.Media.ScaleTransform(
+                    plan.FlipH ? -1 : 1,
+                    plan.FlipV ? -1 : 1,
+                    plan.Rect.WidthDip / 2,
+                    plan.Rect.HeightDip / 2));
+            if (plan.RotationAngle != 0)
+                group.Children.Add(new System.Windows.Media.RotateTransform(
+                    plan.RotationAngle,
+                    plan.Rect.WidthDip / 2,
+                    plan.Rect.HeightDip / 2));
+            element.RenderTransform = group;
+        }
+
+        return element;
+    }
+
+    private FrameworkElement BuildDrawingShapeVisual(DrawingObjectVisualPlan plan)
+    {
+        var widthPx = plan.Rect.WidthDip;
+        var heightPx = plan.Rect.HeightDip;
+        var fill = BuildDrawingFillBrush(plan.Fill);
+        var stroke = BuildDrawingStrokeBrush(plan.Outline);
+        var strokeThickness = plan.Outline.IsVisible
+            ? Math.Max(0.75, plan.Outline.WidthDip)
+            : EffectLineThickness(DocumentEffectSet.FromTheme(_model.Theme));
+        var dashArray = BuildDrawingStrokeDashArray(plan.Outline.DashStyle);
+
+        FrameworkElement element;
+        if (plan.CustomGeometry is { } cg && cg.Segments.Count > 0)
+        {
+            var geo = new System.Windows.Media.StreamGeometry();
+            using (var ctx = geo.Open())
+            {
+                var inFigure = false;
+                var closeFigure = false;
+                System.Windows.Point startPt = default;
+                var linePoints = new List<System.Windows.Point>();
+
+                void FlushFigure()
+                {
+                    if (!inFigure) return;
+                    ctx.BeginFigure(startPt, isFilled: true, isClosed: closeFigure);
+                    foreach (var point in linePoints)
+                        ctx.LineTo(point, isStroked: true, isSmoothJoin: false);
+                    linePoints.Clear();
+                    inFigure = false;
+                    closeFigure = false;
+                }
+
+                foreach (var segment in cg.Segments)
+                {
+                    if (segment.Kind == CustomSegmentKind.MoveTo && segment.Point is not null)
+                    {
+                        FlushFigure();
+                        startPt = new System.Windows.Point(
+                            segment.Point.X / (double)cg.Width * widthPx,
+                            segment.Point.Y / (double)cg.Height * heightPx);
+                        inFigure = true;
+                    }
+                    else if (segment.Kind == CustomSegmentKind.LineTo && segment.Point is not null && inFigure)
+                    {
+                        linePoints.Add(new System.Windows.Point(
+                            segment.Point.X / (double)cg.Width * widthPx,
+                            segment.Point.Y / (double)cg.Height * heightPx));
+                    }
+                    else if (segment.Kind == CustomSegmentKind.Close && inFigure)
+                    {
+                        closeFigure = true;
+                    }
+                }
+
+                FlushFigure();
+            }
+            geo.Freeze();
+            element = new System.Windows.Shapes.Path
+            {
+                Width = widthPx,
+                Height = heightPx,
+                Data = geo,
+                Fill = fill,
+                Stroke = stroke,
+                StrokeThickness = strokeThickness,
+                Stretch = System.Windows.Media.Stretch.None,
+                StrokeDashArray = dashArray
+            };
+        }
+        else if (plan.GeometryKind == DrawingObjectGeometryKind.Ellipse)
+        {
+            element = new System.Windows.Shapes.Ellipse
+            {
+                Width = widthPx,
+                Height = heightPx,
+                Fill = fill,
+                Stroke = stroke,
+                StrokeThickness = strokeThickness,
+                StrokeDashArray = dashArray
+            };
+        }
+        else
+        {
+            var border = new Border
+            {
+                Width = widthPx,
+                Height = heightPx,
+                Background = fill,
+                BorderBrush = stroke,
+                BorderThickness = new Thickness(strokeThickness),
+                CornerRadius = plan.GeometryKind == DrawingObjectGeometryKind.RoundedRectangle
+                    ? new CornerRadius(6)
+                    : new CornerRadius(0)
+            };
+
+            if (plan.Text is { Text.Length: > 0 } text)
+            {
+                var textBlock = new TextBlock
+                {
+                    Text = text.Text,
+                    Margin = new Thickness(4),
+                    TextWrapping = TextWrapping.Wrap,
+                    VerticalAlignment = VerticalAlignment.Top
+                };
+                if (text.Direction == ShapeTextDirection.Rotate90)
+                    textBlock.LayoutTransform = new RotateTransform(90);
+                else if (text.Direction == ShapeTextDirection.Rotate270)
+                    textBlock.LayoutTransform = new RotateTransform(270);
+                border.Child = textBlock;
+            }
+
+            element = border;
+        }
+
+        ApplyDrawingObjectEffects(element, plan.Effects, DocumentEffectSet.FromTheme(_model.Theme));
+        return element;
+    }
+
+    private FrameworkElement BuildDrawingWordArtVisual(DrawingObjectVisualPlan plan)
+    {
+        var wordArt = plan.WordArt!;
+        var (foreground, wpfEffect) = WordArtRenderStyle(wordArt.Style, DocumentEffectSet.FromTheme(_model.Theme));
+        var textBlock = new TextBlock
+        {
+            Text = wordArt.Text,
+            FontSize = wordArt.FontSizeDip,
+            FontWeight = wordArt.Bold ? FontWeights.Bold : FontWeights.Normal,
+            Foreground = foreground,
+            Effect = wpfEffect,
+            TextWrapping = TextWrapping.NoWrap,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        if (wordArt.Warp != WordArtWarp.None)
+            textBlock.FontStyle = wordArt.Warp is WordArtWarp.ArchUp or WordArtWarp.Inflate or WordArtWarp.Wave1
+                ? FontStyles.Normal
+                : FontStyles.Italic;
+
+        return new Border
+        {
+            Width = plan.Rect.WidthDip,
+            Height = plan.Rect.HeightDip,
+            Background = System.Windows.Media.Brushes.Transparent,
+            Child = textBlock
+        };
+    }
+
+    private static System.Windows.Media.Brush BuildDrawingFillBrush(DrawingObjectFillPlan fill)
+    {
+        return fill.Kind switch
+        {
+            DrawingObjectFillKind.Solid when TryParseColor(fill.ColorHex, out var solid) =>
+                new SolidColorBrush(solid),
+            DrawingObjectFillKind.Gradient =>
+                BuildGradientBrush(ShapeFill.LinearGradient(
+                    fill.GradientAngle,
+                    fill.GradientStops
+                        .Select(stop => new FreeW.Core.Model.GradientStop(stop.Position, stop.ColorHex))
+                        .ToArray())),
+            DrawingObjectFillKind.Pattern =>
+                BuildPatternBrush(ShapeFill.Patterned(
+                    fill.PatternPreset ?? "diagCross",
+                    fill.PatternForegroundColorHex,
+                    fill.PatternBackgroundColorHex)),
+            _ => System.Windows.Media.Brushes.Transparent
+        };
+    }
+
+    private static System.Windows.Media.Brush BuildDrawingStrokeBrush(DrawingObjectOutlinePlan outline)
+    {
+        if (outline.IsVisible && TryParseColor(outline.ColorHex, out var color))
+            return new SolidColorBrush(color);
+
+        return new SolidColorBrush(System.Windows.Media.Color.FromRgb(0x80, 0x80, 0x80));
+    }
+
+    private static DoubleCollection? BuildDrawingStrokeDashArray(string? dashStyle)
+    {
+        return dashStyle?.ToLowerInvariant() switch
+        {
+            "dash" => new DoubleCollection { 4, 3 },
+            "sysdot" => new DoubleCollection { 1, 2 },
+            "dashdot" => new DoubleCollection { 4, 2, 1, 2 },
+            _ => null
+        };
+    }
+
+    private static void ApplyDrawingObjectEffects(
+        FrameworkElement element,
+        DrawingObjectEffectsPlan effects,
+        DocumentEffectSet effectSet)
+    {
+        if (effects.HasShadow)
+        {
+            element.Effect = new DropShadowEffect
+            {
+                Color = TryParseColor(effects.ShadowColorHex, out var color) ? color : Colors.Black,
+                Opacity = effects.ShadowOpacity,
+                BlurRadius = effects.ShadowBlurDip,
+                ShadowDepth = effects.ShadowDistanceDip,
+                Direction = effects.ShadowDirectionDegrees,
+                RenderingBias = RenderingBias.Performance
+            };
+        }
+        else if (effects.HasGlow)
+        {
+            element.Effect = new DropShadowEffect
+            {
+                Color = TryParseColor(effects.GlowColorHex, out var color) ? color : Colors.Blue,
+                Opacity = effects.GlowOpacity,
+                BlurRadius = effects.GlowRadiusDip,
+                ShadowDepth = 0,
+                RenderingBias = RenderingBias.Performance
+            };
+        }
+        else
+        {
+            ApplyObjectEffect(element, effectSet);
+        }
+
+        if (effects.HasBevel && element is Border border)
+            border.BorderBrush = new SolidColorBrush(Color.FromRgb(0xE0, 0xE8, 0xFF));
+    }
+
     /// <summary>
-    /// Builds a simple placeholder visual for a floating non-image object (Shape, Chart, SmartArt,
-    /// WordArt) on the overlay canvas. Tagged with the model object for click-selection.
+    /// Builds a simple placeholder visual for scoped-out floating non-image objects (Chart, SmartArt)
+    /// on the overlay canvas. Tagged with the model object for click-selection.
     /// </summary>
-    private FrameworkElement BuildFloatingObjectVisual(object modelObject, DocumentFloatRect rect)
+    private FrameworkElement BuildFloatingObjectPlaceholderVisual(object modelObject, DocumentFloatRect rect)
     {
         var widthPx = rect.WidthDip;
         var heightPx = rect.HeightDip;
@@ -4863,14 +5143,15 @@ public sealed class DocumentView : RichTextBox
         wordArt.FontSizePt * 1.6;
 
     /// <summary>
-    /// Builds a group visual: a container Border sized to the group bounding box, with each child drawn
-    /// as a sub-Border inside a Canvas at its local offset. The group is tagged with the FreeW.Core.Model.DrawingGroup
-    /// model object for click-selection.
+    /// Builds a group visual from the shared drawing-object visual plan. The plan keeps child rects in
+    /// page space for Avalonia and child offsets in group-local space for this nested WPF canvas.
     /// </summary>
-    private FrameworkElement BuildFloatingGroupVisual(FreeW.Core.Model.DrawingGroup group, DocumentFloatRect rect)
+    private FrameworkElement BuildFloatingGroupVisual(
+        DrawingObjectVisualPlan plan,
+        FreeW.Core.Model.DrawingGroup group)
     {
-        var widthPx = rect.WidthDip;
-        var heightPx = rect.HeightDip;
+        var widthPx = plan.Rect.WidthDip;
+        var heightPx = plan.Rect.HeightDip;
 
         var isSelected = _selectedFloatingObjects.Contains(group);
         var borderColor = isSelected
@@ -4884,48 +5165,29 @@ public sealed class DocumentView : RichTextBox
             ClipToBounds = true
         };
 
-        // Draw each child as a placeholder sub-element.
+        var plannedChildren = plan.GroupChildren.ToDictionary(child => child.ChildIndex);
         for (var i = 0; i < group.Children.Count; i++)
         {
-            var child = group.Children[i];
-            var (ox, oy) = i < group.ChildOffsets.Count ? group.ChildOffsets[i] : (0.0, 0.0);
-            var cw = group.ChildWidthPt(i) * PxPerPoint;
-            var ch = group.ChildHeightPt(i) * PxPerPoint;
-
-            var label = child switch
+            FrameworkElement childElement;
+            double offsetX;
+            double offsetY;
+            if (plannedChildren.TryGetValue(i, out var plannedChild))
             {
-                InlineImage => "Image",
-                Shape s => s.Kind.ToString(),
-                Chart c => c.Kind.ToString() + " Chart",
-                SmartArt => "SmartArt",
-                WordArt wa => "WordArt: " + wa.Text,
-                _ => "Object"
-            };
-
-            var tb = new TextBlock
+                childElement = BuildDrawingObjectCoreVisual(plannedChild.Visual);
+                offsetX = plannedChild.OffsetXDip;
+                offsetY = plannedChild.OffsetYDip;
+            }
+            else
             {
-                Text = label,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center,
-                Foreground = System.Windows.Media.Brushes.DimGray,
-                FontSize = Math.Max(7, Math.Min(11, cw / 10)),
-                TextWrapping = TextWrapping.Wrap
-            };
+                var (childOffsetXPt, childOffsetYPt) = i < group.ChildOffsets.Count ? group.ChildOffsets[i] : (0.0, 0.0);
+                childElement = BuildGroupUnsupportedChildPlaceholder(group.Children[i], group.ChildWidthPt(i), group.ChildHeightPt(i));
+                offsetX = childOffsetXPt * PxPerPoint;
+                offsetY = childOffsetYPt * PxPerPoint;
+            }
 
-            var childBorder = new System.Windows.Controls.Border
-            {
-                Width = cw,
-                Height = ch,
-                BorderBrush = System.Windows.Media.Brushes.Gray,
-                BorderThickness = new Thickness(1),
-                Background = new System.Windows.Media.SolidColorBrush(
-                    System.Windows.Media.Color.FromArgb(15, 100, 100, 200)),
-                Child = tb
-            };
-
-            Canvas.SetLeft(childBorder, ox * PxPerPoint);
-            Canvas.SetTop(childBorder, oy * PxPerPoint);
-            innerCanvas.Children.Add(childBorder);
+            Canvas.SetLeft(childElement, offsetX);
+            Canvas.SetTop(childElement, offsetY);
+            innerCanvas.Children.Add(childElement);
         }
 
         var root = new System.Windows.Controls.Border
@@ -4947,6 +5209,37 @@ public sealed class DocumentView : RichTextBox
             e.Handled = true;
         };
         return root;
+    }
+
+    private static FrameworkElement BuildGroupUnsupportedChildPlaceholder(object child, double widthPt, double heightPt)
+    {
+        var widthPx = Math.Max(1, widthPt * PxPerPoint);
+        var heightPx = Math.Max(1, heightPt * PxPerPoint);
+        var label = child switch
+        {
+            InlineImage => "Image",
+            Chart chart => chart.Kind + " Chart",
+            SmartArt => "SmartArt",
+            _ => "Object"
+        };
+
+        return new Border
+        {
+            Width = widthPx,
+            Height = heightPx,
+            BorderBrush = System.Windows.Media.Brushes.Gray,
+            BorderThickness = new Thickness(1),
+            Background = new SolidColorBrush(System.Windows.Media.Color.FromArgb(18, 100, 100, 200)),
+            Child = new TextBlock
+            {
+                Text = label,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                Foreground = System.Windows.Media.Brushes.DimGray,
+                FontSize = Math.Max(7, Math.Min(11, widthPx / 10)),
+                TextWrapping = TextWrapping.Wrap
+            }
+        };
     }
 
     /// <summary>

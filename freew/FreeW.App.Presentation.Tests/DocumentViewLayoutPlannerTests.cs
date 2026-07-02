@@ -751,6 +751,7 @@ public sealed class DocumentViewLayoutPlannerSourceGuardTests
         hostSource.Should().Contain("DocumentViewLayoutPlanner.BuildFloatingOverlaySurfacePlan(");
         hostSource.Should().Contain("DocumentViewLayoutPlanner.BuildFloatingObjectSnapshots(");
         hostSource.Should().Contain("DocumentViewLayoutPlanner.BuildFloatingObjectDrawOrder(");
+        hostSource.Should().Contain("DrawingObjectVisualPlanner.BuildVisualPlan(");
 
         avaloniaSource.Should().Contain("using FreeW.App.Presentation.DocumentView;");
         avaloniaSource.Should().Contain("DocumentViewLayoutPlanner.BuildSurfacePlan(");
@@ -766,6 +767,7 @@ public sealed class DocumentViewLayoutPlannerSourceGuardTests
         avaloniaSource.Should().Contain("DocumentViewLayoutPlanner.BuildFloatingResizeRect(");
         avaloniaSource.Should().Contain("BuildGridlines(");
         avaloniaSource.Should().Contain("DocumentViewLayoutPlanner.BuildRulerTicks(");
+        avaloniaSource.Should().Contain("DrawingObjectVisualPlanner.BuildVisualPlan(");
     }
 
     [Fact]

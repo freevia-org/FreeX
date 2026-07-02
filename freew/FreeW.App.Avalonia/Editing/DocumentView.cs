@@ -4879,10 +4879,7 @@ public sealed class DocumentView : Control
 
                 case DocumentFloatingObjectKind.Shape when run.Shape is { IsFloating: true } shape:
                     _floatingShapes.Add(BuildFloatingShapeData(
-                        shape,
-                        rect,
-                        snapshot.BehindText,
-                        snapshot.ZOrderIndex,
+                        DrawingObjectVisualPlanner.BuildVisualPlan(shape, snapshot),
                         snapshot.BlockIndex,
                         snapshot.RunIndex));
                     break;
@@ -4901,10 +4898,7 @@ public sealed class DocumentView : Control
 
                 case DocumentFloatingObjectKind.WordArt when run.WordArt is { IsFloating: true } wordArt:
                     _floatingWordArts.Add(BuildFloatingWordArtData(
-                        wordArt,
-                        rect,
-                        snapshot.BehindText,
-                        snapshot.ZOrderIndex,
+                        DrawingObjectVisualPlanner.BuildVisualPlan(wordArt, snapshot),
                         snapshot.BlockIndex,
                         snapshot.RunIndex));
                     break;
@@ -4926,40 +4920,30 @@ public sealed class DocumentView : Control
         }
     }
 
-    private FloatingShapeData BuildFloatingShapeData(
-        Shape shape,
-        Rect rect,
-        bool behindText,
-        int zOrder,
+    private static FloatingShapeData BuildFloatingShapeData(
+        DrawingObjectVisualPlan plan,
         int blockIndex = -1,
         int runIndex = -1)
     {
-        IBrush? fillBrush = null;
-        if (shape.ExtendedFill is { } extFill)
+        var rect = ToAvaloniaRect(plan.Rect);
+        IBrush? fillBrush = plan.Fill.Kind switch
         {
-            fillBrush = extFill.Kind switch
-            {
-                ShapeFillKind.NoFill => null,
-                ShapeFillKind.Gradient => BuildAvaloniaGradientBrush(extFill, rect),
-                ShapeFillKind.Pattern => BuildAvaloniaPatternBrush(extFill),
-                _ => ParseSolidBrush(shape.FillColorHex),
-            };
-        }
-        else if (!string.IsNullOrEmpty(shape.FillColorHex))
-        {
-            fillBrush = ParseSolidBrush(shape.FillColorHex);
-        }
+            DrawingObjectFillKind.Solid => ParseSolidBrush(plan.Fill.ColorHex),
+            DrawingObjectFillKind.Gradient => BuildAvaloniaGradientBrush(ToShapeFill(plan.Fill), rect),
+            DrawingObjectFillKind.Pattern => BuildAvaloniaPatternBrush(ToShapeFill(plan.Fill)),
+            _ => null
+        };
 
         Pen? outlinePen = null;
-        if (!string.IsNullOrEmpty(shape.OutlineColorHex))
+        if (plan.Outline.IsVisible)
         {
-            var strokeBrush = ParseSolidBrush(shape.OutlineColorHex);
-            var strokeW = shape.OutlineWidthPt > 0 ? shape.OutlineWidthPt * PxPerPoint : 1.0;
-            DashStyle? dashStyle = shape.OutlineDash?.ToLowerInvariant() switch
+            var strokeBrush = ParseSolidBrush(plan.Outline.ColorHex);
+            var strokeW = plan.Outline.WidthDip > 0 ? plan.Outline.WidthDip : 1.0;
+            DashStyle? dashStyle = plan.Outline.DashStyle?.ToLowerInvariant() switch
             {
                 "dash" => new DashStyle([4, 3], 0),
                 "sysdot" => new DashStyle([1, 2], 0),
-                "dashDot" or "dashdot" => new DashStyle([4, 2, 1, 2], 0),
+                "dashdot" => new DashStyle([4, 2, 1, 2], 0),
                 _ => null,
             };
             outlinePen = dashStyle is not null
@@ -4970,19 +4954,50 @@ public sealed class DocumentView : Control
         return new FloatingShapeData
         {
             Rect = rect,
-            BehindText = behindText,
-            ZOrder = zOrder,
+            BehindText = plan.BehindText,
+            ZOrder = plan.ZOrderIndex,
             BlockIndex = blockIndex,
             RunIndex = runIndex,
-            Kind = shape.Kind,
-            CustomGeo = shape.HasCustomGeometry ? shape.CustomGeometry : null,
+            Kind = ToShapeKind(plan.GeometryKind),
+            CustomGeo = plan.CustomGeometry,
             FillBrush = fillBrush,
             OutlinePen = outlinePen,
-            Text = shape.HasText ? shape.PlainText : null,
-            RotationAngle = shape.RotationAngle,
-            FlipH = shape.FlipH,
-            FlipV = shape.FlipV,
+            Text = plan.Text?.Text,
+            RotationAngle = plan.RotationAngle,
+            FlipH = plan.FlipH,
+            FlipV = plan.FlipV,
         };
+    }
+
+    private static ShapeKind ToShapeKind(DrawingObjectGeometryKind? geometryKind) =>
+        geometryKind switch
+        {
+            DrawingObjectGeometryKind.Ellipse => ShapeKind.Ellipse,
+            DrawingObjectGeometryKind.RoundedRectangle => ShapeKind.RoundedRectangle,
+            DrawingObjectGeometryKind.TextBox => ShapeKind.TextBox,
+            _ => ShapeKind.Rectangle
+        };
+
+    private static ShapeFill ToShapeFill(DrawingObjectFillPlan plan)
+    {
+        if (plan.Kind == DrawingObjectFillKind.Gradient)
+        {
+            return ShapeFill.LinearGradient(
+                plan.GradientAngle,
+                plan.GradientStops
+                    .Select(stop => new FreeW.Core.Model.GradientStop(stop.Position, stop.ColorHex))
+                    .ToArray());
+        }
+
+        if (plan.Kind == DrawingObjectFillKind.Pattern)
+        {
+            return ShapeFill.Patterned(
+                plan.PatternPreset ?? "diagCross",
+                plan.PatternForegroundColorHex,
+                plan.PatternBackgroundColorHex);
+        }
+
+        return ShapeFill.NoFill();
     }
 
     /// <summary>Builds an Avalonia <see cref="LinearGradientBrush"/> from a <see cref="ShapeFill"/> gradient.</summary>
@@ -12302,23 +12317,20 @@ public sealed class DocumentView : Control
     // ── FO3 collection helpers ────────────────────────────────────────────────────────────────────
 
     private static FloatingWordArtData BuildFloatingWordArtData(
-        WordArt wordArt,
-        Rect rect,
-        bool behindText,
-        int zOrder,
+        DrawingObjectVisualPlan plan,
         int blockIndex = -1,
         int runIndex = -1) =>
         new()
         {
-            Rect = rect,
-            BehindText = behindText,
-            ZOrder = zOrder,
+            Rect = ToAvaloniaRect(plan.Rect),
+            BehindText = plan.BehindText,
+            ZOrder = plan.ZOrderIndex,
             BlockIndex = blockIndex,
             RunIndex = runIndex,
-            Text = wordArt.Text,
-            Style = wordArt.Style,
-            FontSizePt = wordArt.FontSizePt,
-            Warp = wordArt.Warp,
+            Text = plan.WordArt?.Text ?? string.Empty,
+            Style = plan.WordArt?.Style ?? WordArtStyle.FillBlue,
+            FontSizePt = (plan.WordArt?.FontSizeDip ?? 48) / PxPerPoint,
+            Warp = plan.WordArt?.Warp ?? WordArtWarp.None,
         };
 
     private static FloatingSmartArtData BuildFloatingSmartArtData(
@@ -12358,13 +12370,18 @@ public sealed class DocumentView : Control
         DocumentFloatingObjectSnapshot snapshot)
     {
         var children = new List<FloatingGroupChildData>();
+        var planChildren = DrawingObjectVisualPlanner.BuildVisualPlan(group, snapshot)
+            .GroupChildren
+            .ToDictionary(child => child.ChildIndex);
         foreach (var childSnapshot in DocumentViewLayoutPlanner.BuildFloatingGroupChildSnapshots(group, snapshot.Rect))
         {
             if (childSnapshot.ChildIndex < 0 || childSnapshot.ChildIndex >= group.Children.Count)
                 continue;
 
             var child = group.Children[childSnapshot.ChildIndex];
-            var childRect = ToAvaloniaRect(childSnapshot.Rect);
+            var childRect = planChildren.TryGetValue(childSnapshot.ChildIndex, out var planChild)
+                ? ToAvaloniaRect(planChild.Visual.Rect)
+                : ToAvaloniaRect(childSnapshot.Rect);
             var childData = new FloatingGroupChildData { Rect = childRect };
 
             switch (childSnapshot.Kind)
@@ -12374,9 +12391,11 @@ public sealed class DocumentView : Control
                     childData.Bitmap = DecodeBitmap(img);
                     break;
 
-                case DocumentFloatingObjectKind.Shape when child is Shape shape:
+                case DocumentFloatingObjectKind.Shape when child is Shape:
+                    if (!planChildren.TryGetValue(childSnapshot.ChildIndex, out var shapePlan))
+                        continue;
                     childData.Kind = FloatingGroupChildData.ChildKind.Shape;
-                    childData.Shape = BuildFloatingShapeData(shape, childRect, snapshot.BehindText, snapshot.ZOrderIndex);
+                    childData.Shape = BuildFloatingShapeData(shapePlan.Visual);
                     break;
 
                 case DocumentFloatingObjectKind.Chart when child is Chart chart:
@@ -12389,9 +12408,11 @@ public sealed class DocumentView : Control
                         chart.Series.Select(s => (s.Name, new List<double>(s.Values))).ToList());
                     break;
 
-                case DocumentFloatingObjectKind.WordArt when child is WordArt wordArt:
+                case DocumentFloatingObjectKind.WordArt when child is WordArt:
+                    if (!planChildren.TryGetValue(childSnapshot.ChildIndex, out var wordArtPlan))
+                        continue;
                     childData.Kind = FloatingGroupChildData.ChildKind.WordArt;
-                    childData.WordArt = BuildFloatingWordArtData(wordArt, childRect, snapshot.BehindText, snapshot.ZOrderIndex);
+                    childData.WordArt = BuildFloatingWordArtData(wordArtPlan.Visual);
                     break;
 
                 case DocumentFloatingObjectKind.SmartArt when child is SmartArt smartArt:

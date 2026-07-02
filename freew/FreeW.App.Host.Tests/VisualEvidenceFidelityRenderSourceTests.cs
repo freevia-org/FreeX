@@ -20,6 +20,8 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
         source.Should().Contain("f2-border-watermark.docx");
         source.Should().Contain("table-layout-complex.docx");
         source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildComplexTableLayoutDocument");
+        source.Should().Contain("drawing-objects-complex.docx");
+        source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildDrawingObjectsCompositionDocument");
         source.Should().Contain("backstage-print-preview-fidelity.docx");
         source.Should().Contain("backstage-pdf-export-fidelity.docx");
         source.Should().Contain("BuildVisualEvidenceOutputPath(outDir, name, i + 1)");

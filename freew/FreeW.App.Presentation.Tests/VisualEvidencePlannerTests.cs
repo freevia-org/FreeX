@@ -23,6 +23,7 @@ public sealed class VisualEvidencePlannerTests
             "f2-tracked-changes",
             "f2-comments",
             "table-layout-complex",
+            "drawing-objects-complex",
             "page-composition-print-layout",
             "page-composition-columns",
             "page-composition-border-watermark",
@@ -60,6 +61,11 @@ public sealed class VisualEvidencePlannerTests
         tableScenario.ExpectedFeatureTags.Should().Contain(["table-layout", "merged-cells", "repeat-header-row"]);
         tableScenario.ExpectedOutputNamePattern.Should().Be("table-layout-complex_p{page}.png");
         tableScenario.Composition.ExpectsTables.Should().BeTrue();
+
+        var drawingScenario = FreeWVisualEvidencePlanner.ResolveScenario("drawing-objects-complex");
+        drawingScenario.ExpectedFeatureTags.Should().Contain(["drawing-objects", "charts", "smartart", "wordart"]);
+        drawingScenario.ExpectedOutputNamePattern.Should().Be("drawing-objects-complex_p{page}.png");
+        drawingScenario.Composition.ExpectsFloatingObjects.Should().BeTrue();
     }
 
     [Fact]
@@ -86,6 +92,24 @@ public sealed class VisualEvidencePlannerTests
         var expected = FreeWVisualEvidenceManifestNormalizer.DefaultExpectedScenarios;
 
         foreach (var scenarioId in FreeWVisualEvidenceManifestNormalizer.TableRendererScenarioIds)
+        {
+            expected.Should().Contain(e =>
+                e.HostId == FreeWVisualEvidenceManifestNormalizer.WpfHostId &&
+                e.ScenarioId == scenarioId &&
+                e.MinimumExpectedOutputs == 1);
+            expected.Should().Contain(e =>
+                e.HostId == FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId &&
+                e.ScenarioId == scenarioId &&
+                e.MinimumExpectedOutputs == 1);
+        }
+    }
+
+    [Fact]
+    public void DefaultExpectedScenarios_RequiresPairedDrawingObjectRendererEvidence()
+    {
+        var expected = FreeWVisualEvidenceManifestNormalizer.DefaultExpectedScenarios;
+
+        foreach (var scenarioId in FreeWVisualEvidenceManifestNormalizer.DrawingObjectRendererScenarioIds)
         {
             expected.Should().Contain(e =>
                 e.HostId == FreeWVisualEvidenceManifestNormalizer.WpfHostId &&
@@ -192,6 +216,39 @@ public sealed class VisualEvidencePlannerTests
     }
 
     [Fact]
+    public void BuildPageExpectation_RecordsSharedDrawingObjectLayout()
+    {
+        var document = FreeWVisualEvidenceDocumentFactory.BuildDrawingObjectsCompositionDocument();
+        var expectation = FreeWVisualEvidencePlanner.BuildPageExpectation(
+            "drawing-objects-complex",
+            document.Page,
+            pageNumber: 1,
+            pageCount: 1,
+            outputName: "drawing-objects-complex_p1.png",
+            availableWidthDip: 960,
+            document: document);
+
+        expectation.Composition.ExpectsFloatingObjects.Should().BeTrue();
+        expectation.DrawingObjects.FloatingObjectCount.Should().Be(5);
+        expectation.DrawingObjects.BehindTextCount.Should().Be(1);
+        expectation.DrawingObjects.InFrontCount.Should().Be(4);
+        expectation.DrawingObjects.HasShapes.Should().BeTrue();
+        expectation.DrawingObjects.HasCharts.Should().BeTrue();
+        expectation.DrawingObjects.HasSmartArt.Should().BeTrue();
+        expectation.DrawingObjects.HasWordArt.Should().BeTrue();
+        expectation.DrawingObjects.HasGroups.Should().BeTrue();
+        expectation.DrawingObjects.HasSquareWrap.Should().BeTrue();
+        expectation.DrawingObjects.HasTopAndBottomWrap.Should().BeTrue();
+        expectation.DrawingObjects.HasZOrder.Should().BeTrue();
+        expectation.DrawingObjects.Objects.Select(o => o.TypeTag).Should().Contain([
+            "Shape",
+            "Chart",
+            "SmartArt",
+            "WordArt",
+            "Group"]);
+    }
+
+    [Fact]
     public void ComputePixelStats_AndTrustGuard_RejectBlankAllBackgroundCapture()
     {
         var blank = new byte[20 * 20 * 4];
@@ -262,7 +319,7 @@ public sealed class VisualEvidencePlannerTests
         using var doc = JsonDocument.Parse(json);
         var root = doc.RootElement;
         root.GetProperty("schemaId").GetString().Should().Be("freew.visual-evidence.v1");
-        root.GetProperty("schemaVersion").GetInt32().Should().Be(3);
+        root.GetProperty("schemaVersion").GetInt32().Should().Be(4);
         root.GetProperty("product").GetString().Should().Be("FreeW");
         root.GetProperty("scenarios").GetArrayLength().Should().Be(1);
         var evidence = root.GetProperty("evidence")[0];
@@ -270,6 +327,8 @@ public sealed class VisualEvidencePlannerTests
         evidence.GetProperty("trust").GetProperty("passed").GetBoolean().Should().BeTrue();
         evidence.GetProperty("pageExpectation").GetProperty("features").GetProperty("section").GetProperty("ownerId")
             .GetString().Should().Be("section-1");
+        evidence.GetProperty("pageExpectation").GetProperty("drawingObjects").GetProperty("floatingObjectCount")
+            .GetInt32().Should().Be(0);
     }
 
     [Fact]
@@ -306,7 +365,7 @@ public sealed class VisualEvidencePlannerTests
                 ],
                 root);
 
-            summary.Trust.Passed.Should().BeTrue();
+            summary.Trust.Passed.Should().BeTrue(string.Join(Environment.NewLine, summary.Trust.Failures));
             summary.Sources.Should().HaveCount(2);
             summary.Scenarios.Should().OnlyContain(s => s.Trust.Passed);
             summary.Evidence.Should().HaveCount(expected.Sum(e => e.MinimumExpectedOutputs));
@@ -739,7 +798,7 @@ public sealed class VisualEvidencePlannerTests
 
             var json = FreeWVisualEvidenceManifestNormalizer.ToJson(withBaseline);
             using var doc = JsonDocument.Parse(json);
-            doc.RootElement.GetProperty("schemaVersion").GetInt32().Should().Be(4);
+            doc.RootElement.GetProperty("schemaVersion").GetInt32().Should().Be(5);
             var baselineComparison = doc.RootElement.GetProperty("baselineComparisons")[0];
             baselineComparison.GetProperty("status").GetString().Should().Be("passed");
             baselineComparison.GetProperty("tolerance").GetProperty("name").GetString()
@@ -830,12 +889,30 @@ public sealed class VisualEvidencePlannerTests
     }
 
     private static TextDocument? DocumentForScenario(string scenarioId) =>
-        string.Equals(
-            FreeWVisualEvidencePlanner.NormalizeScenarioId(scenarioId),
-            "table-layout-complex",
-            StringComparison.OrdinalIgnoreCase)
-            ? FreeWVisualEvidenceDocumentFactory.BuildComplexTableLayoutDocument()
-            : null;
+        FreeWVisualEvidencePlanner.NormalizeScenarioId(scenarioId) switch
+        {
+            "table-layout-complex" => FreeWVisualEvidenceDocumentFactory.BuildComplexTableLayoutDocument(),
+            "drawing-objects-complex" => FreeWVisualEvidenceDocumentFactory.BuildDrawingObjectsCompositionDocument(),
+            "page-composition-floating-image" => BuildFloatingImageDocument(),
+            _ => null
+        };
+
+    private static TextDocument BuildFloatingImageDocument()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("Floating image evidence"));
+        paragraph.Runs.Add(Run.FromImage(new InlineImage([1, 2, 3, 4], widthPt: 96, heightPt: 48)
+        {
+            Wrapping = ImageWrapping.Square,
+            HorizontalOffsetPt = 24,
+            VerticalOffsetPt = 12,
+            ZOrderIndex = 3
+        }));
+        document.Blocks.Add(paragraph);
+        return document;
+    }
 
     private static FreeWVisualPixelStats BuildTrustedStats()
     {
