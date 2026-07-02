@@ -3,7 +3,7 @@ using System.IO;
 using System.Linq;
 using FluentAssertions;
 using Free.Shared.AppServices;
-using FreeW.App.Host;
+using FreeW.App.Presentation.Ribbon;
 using FreeW.Core.Model;
 using Xunit;
 

@@ -1,0 +1,131 @@
+using FreeW.Core.Model;
+
+namespace FreeW.App.Presentation.Ribbon;
+
+public sealed record CrossReferenceTypeChoice(CrossRefType Type, string Label)
+{
+    public override string ToString() => Label;
+}
+
+public sealed record CrossReferenceInsertAsChoice(CrossRefInsertAs InsertAs, string Label)
+{
+    public override string ToString() => Label;
+}
+
+public sealed record CrossReferenceTargetChoice(CrossRefTarget Target, string Label)
+{
+    public override string ToString() => Label;
+}
+
+public sealed record CrossReferenceDialogChoice(
+    CrossRefType Type,
+    CrossRefTarget Target,
+    CrossRefInsertAs InsertAs,
+    bool Hyperlink);
+
+public static class CrossReferenceDialogPlanner
+{
+    public const string Title = "Cross-reference";
+    public const string ReferenceTypeLabel = "Reference type:";
+    public const string InsertReferenceToLabel = "Insert reference to:";
+    public const string TargetLabel = "For which item:";
+    public const string HyperlinkLabel = "Insert as hyperlink";
+    public const string MissingTargetMessage = "Select an item to reference.";
+
+    private static readonly IReadOnlyList<CrossRefType> TypeOrder =
+    [
+        CrossRefType.Heading,
+        CrossRefType.Bookmark,
+        CrossRefType.Figure,
+        CrossRefType.Table,
+        CrossRefType.Footnote,
+        CrossRefType.Endnote,
+        CrossRefType.NumberedItem
+    ];
+
+    public static IReadOnlyList<CrossReferenceTypeChoice> BuildTypeChoices() =>
+        TypeOrder
+            .Select(type => new CrossReferenceTypeChoice(type, LabelForType(type)))
+            .ToArray();
+
+    public static IReadOnlyList<CrossReferenceInsertAsChoice> BuildInsertAsChoices(CrossRefType type) =>
+        CrossReferences.InsertOptions(type)
+            .Select(insertAs => new CrossReferenceInsertAsChoice(insertAs, LabelForInsertAs(insertAs)))
+            .ToArray();
+
+    public static IReadOnlyList<CrossReferenceTargetChoice> BuildTargetChoices(
+        TextDocument document,
+        CrossRefType type)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+
+        return CrossReferences.Targets(document, type)
+            .Select(target => new CrossReferenceTargetChoice(target, target.Display))
+            .ToArray();
+    }
+
+    public static int PreserveInsertAsSelection(
+        IReadOnlyList<CrossReferenceInsertAsChoice> choices,
+        CrossRefInsertAs? previous)
+    {
+        ArgumentNullException.ThrowIfNull(choices);
+
+        if (choices.Count == 0)
+            return -1;
+
+        if (previous is { } value)
+        {
+            for (var i = 0; i < choices.Count; i++)
+            {
+                if (choices[i].InsertAs == value)
+                    return i;
+            }
+        }
+
+        return 0;
+    }
+
+    public static bool TryCreateChoice(
+        TextDocument document,
+        CrossRefType type,
+        CrossRefInsertAs insertAs,
+        int selectedTargetIndex,
+        bool hyperlink,
+        out CrossReferenceDialogChoice? choice)
+    {
+        var targets = BuildTargetChoices(document, type);
+        if (selectedTargetIndex < 0 || selectedTargetIndex >= targets.Count)
+        {
+            choice = null;
+            return false;
+        }
+
+        choice = CreateChoice(type, targets[selectedTargetIndex].Target, insertAs, hyperlink);
+        return true;
+    }
+
+    public static CrossReferenceDialogChoice CreateChoice(
+        CrossRefType type,
+        CrossRefTarget target,
+        CrossRefInsertAs insertAs,
+        bool hyperlink) =>
+        new(type, target, insertAs, hyperlink);
+
+    public static string LabelForType(CrossRefType type) =>
+        type switch
+        {
+            CrossRefType.NumberedItem => "Numbered item",
+            _ => type.ToString()
+        };
+
+    public static string LabelForInsertAs(CrossRefInsertAs insertAs) =>
+        insertAs switch
+        {
+            CrossRefInsertAs.Text => "Text",
+            CrossRefInsertAs.PageNumber => "Page number",
+            CrossRefInsertAs.HeadingNumber => "Heading number",
+            CrossRefInsertAs.AboveBelow => "Above/below",
+            CrossRefInsertAs.ParagraphNumber => "Paragraph number",
+            _ => insertAs.ToString()
+        };
+}

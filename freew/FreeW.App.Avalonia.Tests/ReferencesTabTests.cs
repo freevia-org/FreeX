@@ -1,6 +1,7 @@
 using System.Linq;
 using FreeW.App.Avalonia.Editing;
 using FreeW.App.Avalonia.Ribbon;
+using FreeW.App.Presentation.Ribbon;
 using FreeW.Core.Model;
 using Free.Shared.Ribbon;
 
@@ -437,16 +438,6 @@ public sealed class ReferencesTabTests
             .Select(block => ((Paragraph)block).PlainText)
             .Should().Contain("Second", "executing the canonical refresh updates the TOC in place");
 
-        var citationView = ViewWith(new Paragraph("See "));
-        citationView.Document.Sources.Add(new Source { Tag = "Sm24", Author = "Smith", Title = "A Work", Year = "2024" });
-        var citationRegistry = FreeWRibbon.BuildRegistry(citationView, NoopCallbacks());
-
-        Execute(citationRegistry, "freew.citation");
-        citationView.Document.Blocks.OfType<Paragraph>()
-            .Select(paragraph => paragraph.PlainText)
-            .Should().Contain(text => text.Contains("Smith", StringComparison.Ordinal),
-                "executing the canonical command inserts an in-text citation");
-
         var indexView = ViewWith(new Paragraph("Alpha"));
         var indexRegistry = FreeWRibbon.BuildRegistry(indexView, NoopCallbacks());
         Execute(indexRegistry, "freew.index-mark");
@@ -466,6 +457,80 @@ public sealed class ReferencesTabTests
             .Select(paragraph => paragraph.PlainText)
             .Should()
             .Contain("Brown v. Board");
+    }
+
+    [Fact]
+    public void References_dialog_commands_noop_without_shell_callbacks()
+    {
+        var view = ViewWith(
+            Heading("First", 1),
+            Heading("Second", 1),
+            new Paragraph("See "));
+        view.Document.Sources.Add(new Source { Tag = "Sm24", Author = "Smith", Title = "A Work", Year = "2024" });
+        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+
+        Execute(registry, "freew.cross-reference");
+        Execute(registry, "freew.citation");
+        Execute(registry, "freew.manage-sources");
+
+        view.Document.Blocks.OfType<Paragraph>()
+            .SelectMany(paragraph => paragraph.Runs)
+            .Any(run => run.CrossReference is not null)
+            .Should().BeFalse("dialog-backed cross-reference must not silently choose the first heading");
+        view.Document.Blocks.OfType<Paragraph>()
+            .Select(paragraph => paragraph.PlainText)
+            .Should().NotContain(text => text.Contains("Smith", StringComparison.Ordinal),
+                "dialog-backed citation must not silently choose the first source");
+        view.Document.Sources.Should().ContainSingle().Which.Tag.Should().Be("Sm24");
+    }
+
+    [Fact]
+    public void References_dialog_commands_apply_shell_callback_choices()
+    {
+        var view = ViewWith(
+            Heading("First", 1),
+            Heading("Second", 1),
+            new Paragraph("See "));
+        view.Document.Sources.Add(new Source { Tag = "Sm24", Author = "Smith", Title = "A Work", Year = "2024" });
+        view.Document.Sources.Add(new Source { Tag = "Jo25", Author = "Jones", Title = "Other Work", Year = "2025" });
+
+        var callbacks = NoopCallbacks() with
+        {
+            OpenCrossReferenceDialog = () =>
+            {
+                var targets = CrossReferenceDialogPlanner.BuildTargetChoices(view.Document, CrossRefType.Heading);
+                var choice = CrossReferenceDialogPlanner.CreateChoice(
+                    CrossRefType.Heading,
+                    targets[1].Target,
+                    CrossRefInsertAs.Text,
+                    hyperlink: true);
+                view.InsertCrossReference(choice.Type, choice.Target, choice.InsertAs, choice.Hyperlink);
+            },
+            OpenCitationDialog = () => view.InsertCitation(view.Document.Sources[1]),
+            OpenManageSourcesDialog = () =>
+            {
+                var state = SourceManagementDialogPlanner.BuildInitialState(view.Document.Sources, masterSources: []);
+                var plan = SourceManagementDialogPlanner.AddCurrentSource(
+                    state,
+                    new SourceManagementSourceEntry("Ng26", "Ng", "Planner Work", "2026", string.Empty));
+                var result = SourceManagementDialogPlanner.BuildResult(plan.State);
+                view.ReplaceSources(result.CurrentSources);
+            }
+        };
+        var registry = FreeWRibbon.BuildRegistry(view, callbacks);
+
+        Execute(registry, "freew.cross-reference");
+        Execute(registry, "freew.citation");
+        Execute(registry, "freew.manage-sources");
+
+        var headings = view.Document.Blocks.OfType<Paragraph>().Take(2).ToList();
+        headings[0].BookmarkName.Should().BeNullOrEmpty();
+        headings[1].BookmarkName.Should().NotBeNullOrEmpty("the callback selected the second heading");
+        view.Document.Blocks.OfType<Paragraph>()
+            .Select(paragraph => paragraph.PlainText)
+            .Should().Contain(text => text.Contains("Jones", StringComparison.Ordinal))
+            .And.NotContain(text => text.Contains("Smith", StringComparison.Ordinal));
+        view.Document.Sources.Select(source => source.Tag).Should().Equal("Sm24", "Jo25", "Ng26");
     }
 
     [Fact]

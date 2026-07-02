@@ -325,6 +325,75 @@ public sealed class MainWindow : Window
     private Task OpenWordCountDialogAsync() =>
         new WordCountDialog(_editor.ComputeStatistics()).ShowDialog(this);
 
+    private async Task OpenCrossReferenceDialogAsync()
+    {
+        var dialog = new CrossReferenceDialog(_editor.Document);
+        await dialog.ShowDialog(this);
+        if (dialog.Result is { } result)
+            _editor.InsertCrossReference(result.Type, result.Target, result.InsertAs, result.Hyperlink);
+        _editor.Focus();
+    }
+
+    private async Task OpenCitationDialogAsync()
+    {
+        var source = await PickCitationSourceAsync();
+        if (source is null)
+            return;
+
+        _editor.InsertCitation(source);
+        _editor.Focus();
+    }
+
+    private async Task<Source?> PickCitationSourceAsync()
+    {
+        var sources = _editor.Document.Sources;
+        if (sources.Count > 0)
+        {
+            var picker = new CitationSourcePickerDialog(sources);
+            await picker.ShowDialog(this);
+            if (picker.Pick is null)
+                return null;
+            if (!picker.Pick.AddNew)
+                return picker.Pick.Source;
+        }
+
+        var entryDialog = new SourceEntryDialog();
+        await entryDialog.ShowDialog(this);
+        if (entryDialog.Entry is not { } entry)
+            return null;
+
+        if (!SourceManagementDialogPlanner.TryBuildCitationSource(entry, out var source, out var validation))
+        {
+            if (validation is not null)
+                _status.Text = validation.Message;
+            return null;
+        }
+
+        var nextSources = sources.Select(SourceManagementDialogPlanner.CloneSource).ToList();
+        nextSources.Add(source!);
+        _editor.ReplaceSources(nextSources);
+        return source;
+    }
+
+    private async Task OpenManageSourcesDialogAsync()
+    {
+        var masterStore = MasterSourceStore.Load();
+        var dialog = new ManageSourcesDialog(_editor.Document.Sources, masterStore.ToSources());
+        await dialog.ShowDialog(this);
+        if (dialog.Result is { } result)
+        {
+            _editor.ReplaceSources(result.CurrentSources);
+            MasterSourceStore.Save(CreateMasterSourceStore(result.MasterSources));
+        }
+        _editor.Focus();
+    }
+
+    private static MasterSourceStore CreateMasterSourceStore(IReadOnlyList<Source> sources) =>
+        new()
+        {
+            Sources = sources.Select(SourceRecord.FromSource).ToList()
+        };
+
     private void ToggleSpellCheck()
     {
         var enabled = _editor.ToggleSpellCheck();
@@ -640,6 +709,9 @@ public sealed class MainWindow : Window
             ApplyPaperSize:      ApplyPaperSize,
             InsertPicture:       () => _ = InsertPictureAsync(),
             OpenWordCountDialog: () => _ = OpenWordCountDialogAsync(),
+            OpenCrossReferenceDialog: () => _ = OpenCrossReferenceDialogAsync(),
+            OpenCitationDialog: () => _ = OpenCitationDialogAsync(),
+            OpenManageSourcesDialog: () => _ = OpenManageSourcesDialogAsync(),
             ApplyZoom: (absolute, delta) =>
             {
                 var newScale = absolute.HasValue ? absolute.Value : _zoomScale + delta;
