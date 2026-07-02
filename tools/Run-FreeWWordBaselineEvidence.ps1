@@ -60,16 +60,17 @@ if (-not (Test-Path $wpfManifest) -or -not (Test-Path $avaloniaManifest)) {
 
 $wordAvailable = Test-ComProgIdAvailable $WordApplicationProgId
 if (-not $wordAvailable) {
+    $wordUnavailableReason = "COM ProgID '$WordApplicationProgId' is not registered"
     $skipPath = Join-Path $runRootFull "_word_baseline_skipped.json"
     [ordered]@{
         status = "skipped"
-        reason = "COM ProgID '$WordApplicationProgId' is not registered"
+        reason = $wordUnavailableReason
         allowMissingWord = [bool]$AllowMissingWord
         createdUtc = [DateTimeOffset]::UtcNow.ToString("O")
     } | ConvertTo-Json | Set-Content -Encoding UTF8 $skipPath
 
     if (-not $AllowMissingWord) {
-        Write-Error "Word COM is not available: COM ProgID '$WordApplicationProgId' is not registered. Re-run with -AllowMissingWord to verify the no-Word summary path."
+        Write-Error "Word COM is not available: $wordUnavailableReason. Re-run with -AllowMissingWord to verify the no-Word summary path."
         exit 3
     }
 
@@ -77,6 +78,9 @@ if (-not $wordAvailable) {
         "--run-root", $runRootFull,
         "--manifest", $wpfManifest,
         "--manifest", $avaloniaManifest,
+        "--word-baseline-scope", "generated-corpus",
+        "--baseline-tolerance", "word-png-default",
+        "--word-baseline-unavailable-reason", $wordUnavailableReason,
         "--output-json", $summaryJson,
         "--output-md", $summaryMd)
 
