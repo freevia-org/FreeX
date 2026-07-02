@@ -198,6 +198,42 @@ public static class FreeWVisualEvidenceDocumentFactory
         return doc;
     }
 
+    public static TextDocument BuildWordArtWatermarkStressDocument()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Page.PageBorder = new PageBorder("#1F4E79", 2.25);
+        doc.Page.WatermarkOptions = new WatermarkOptions("CONFIDENTIAL")
+        {
+            FontColorHex = "#A6A6A6",
+            Opacity = 0.32,
+            Layout = WatermarkLayout.Diagonal
+        };
+
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("WordArt And Watermark Stress") { StyleId = "Heading1" });
+        doc.Blocks.Add(new Paragraph(
+            "This shared fixture overlays multiple floating WordArt objects on a diagonal text watermark " +
+            "and a page border so WPF and Avalonia must report the same visual-evidence contract."));
+
+        var anchor = new Paragraph();
+        anchor.Runs.Add(new Run(
+            "WordArt objects should remain visible above the watermark, keep their z-order metadata, " +
+            "and preserve square/in-front wrapping in both renderers. "));
+        anchor.Runs.Add(Run.FromShape(BuildWatermarkStressBackingShape()));
+        anchor.Runs.Add(Run.FromWordArt(BuildPrimaryStressWordArt()));
+        anchor.Runs.Add(Run.FromWordArt(BuildSecondaryStressWordArt()));
+        doc.Blocks.Add(anchor);
+
+        for (var i = 1; i <= 12; i++)
+        {
+            doc.Blocks.Add(new Paragraph(
+                $"Watermark stress paragraph {i}: body text gives the watermark and floating WordArt " +
+                "real page-composition context for visual comparison."));
+        }
+
+        return doc;
+    }
+
     private static Paragraph StyledParagraph(string text, string styleId) =>
         new(text) { StyleId = styleId };
 
@@ -381,6 +417,32 @@ public static class FreeWVisualEvidenceDocumentFactory
             AltText = "Floating WordArt",
             Warp = WordArtWarp.Wave1,
             Placement = Placement(ImageWrapping.InFront, xPt: 300, yPt: 30, zOrder: 8)
+        };
+
+    private static Shape BuildWatermarkStressBackingShape()
+    {
+        var shape = Shape.TextBoxWith("watermark backing layer", widthPt: 170, heightPt: 58, fillColorHex: "#E2F0D9");
+        shape.OutlineColorHex = "#70AD47";
+        shape.OutlineWidthPt = 1.25;
+        shape.Placement = Placement(ImageWrapping.Square, xPt: 60, yPt: 72, zOrder: 2);
+        shape.Effects = new ShapeEffectLst { HasShadow = true, ShadowAlpha = 28000 };
+        return shape;
+    }
+
+    private static WordArt BuildPrimaryStressWordArt() =>
+        new("FreeW CONFIDENTIAL", WordArtStyle.GlowBlue, fontSizePt: 32)
+        {
+            AltText = "Primary WordArt watermark stress",
+            Warp = WordArtWarp.Wave1,
+            Placement = Placement(ImageWrapping.InFront, xPt: 170, yPt: 38, zOrder: 7)
+        };
+
+    private static WordArt BuildSecondaryStressWordArt() =>
+        new("Review Copy", WordArtStyle.FillGold, fontSizePt: 26)
+        {
+            AltText = "Secondary WordArt watermark stress",
+            Warp = WordArtWarp.ArchUp,
+            Placement = Placement(ImageWrapping.Square, xPt: 260, yPt: 142, zOrder: 9)
         };
 
     private static DrawingGroup BuildFloatingGroup()

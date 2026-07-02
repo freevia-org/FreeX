@@ -1175,6 +1175,12 @@ static void GenerateF2FlowCorpus(string outDir)
         Console.WriteLine("  wrote chart-smartart-complex.docx");
     }
 
+    {
+        var doc = FreeWVisualEvidenceDocumentFactory.BuildWordArtWatermarkStressDocument();
+        DocxWriter.Write(doc, Path.Combine(outDir, "wordart-watermark-stress.docx"));
+        Console.WriteLine("  wrote wordart-watermark-stress.docx");
+    }
+
     // ─── 6. Section break with page-size change (portrait → landscape) ───────────────────────────
     // SG: FreeW/OOXML section-break semantics: a SectionBreak on paragraph P describes the section
     // that ENDS at P (the "preceding" section). The FINAL section is described by doc.Page.
@@ -1310,7 +1316,7 @@ static void GenerateF2FlowCorpus(string outDir)
         Console.WriteLine("  wrote backstage-pdf-export-fidelity.docx");
     }
 
-    Console.WriteLine($"\nDone - 15 corpus files written to {outDir}");
+    Console.WriteLine($"\nDone - 16 corpus files written to {outDir}");
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════════════════════════

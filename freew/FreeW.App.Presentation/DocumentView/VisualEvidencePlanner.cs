@@ -403,6 +403,30 @@ public static class FreeWVisualEvidencePlanner
             DocumentViewLayoutKind.PrintLayout,
             BodyPrintComposition with { ExpectsFloatingObjects = true }),
         new(
+            "wordart-watermark-stress",
+            "WordArt over watermark and page-border fidelity capture.",
+            [
+                "drawing-objects",
+                "floating-objects",
+                "print-layout",
+                "body-text",
+                "wordart",
+                "watermark",
+                "page-border",
+                "square-wrap",
+                "in-front",
+                "z-order"
+            ],
+            "wordart-watermark-stress_p{page}.png",
+            1,
+            DocumentViewLayoutKind.PrintLayout,
+            BodyPrintComposition with
+            {
+                ExpectsPageBorder = true,
+                ExpectsWatermark = true,
+                ExpectsFloatingObjects = true
+            }),
+        new(
             "page-composition-print-layout",
             "Avalonia print-layout page composition shot.",
             ["page-composition", "avalonia", "print-layout", "page-chrome", "multi-page", "body-text"],
