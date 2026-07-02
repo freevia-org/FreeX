@@ -107,6 +107,43 @@ public sealed class SlideShowInkExecutionPlannerTests
     }
 
     [Fact]
+    public void BuildOverlayPlan_ReturnsCurrentSlideCommittedActiveAndLaserInk()
+    {
+        var penState = CreateState(SlideShowPresenterPointerMode.Pen, "#AA0000", 4);
+        var committedCurrent = CommitStroke(penState, new SlideShowInkPoint(10, 10), new SlideShowInkPoint(60, 10));
+        var otherSlideStroke = committedCurrent.CommittedStrokes[0] with
+        {
+            SlideIndex = 1,
+            StrokeId = "other-slide"
+        };
+        var active = SlideShowInkExecutionPlanner.Begin(
+            committedCurrent with
+            {
+                CommittedStrokes = committedCurrent.CommittedStrokes.Concat(new[] { otherSlideStroke }).ToArray()
+            },
+            new SlideShowInkPoint(70, 20));
+        var overlay = SlideShowInkExecutionPlanner.BuildOverlayPlan(active.State);
+        var laserState = SlideShowInkExecutionPlanner.SelectPointerInk(
+            active.State,
+            SlideShowPresenterToolPlanner.PlanPointerInk(
+                SlideShowPresenterPointerMode.LaserPointer,
+                "#00FF00",
+                6,
+                SlideShowInkRetentionDecision.KeepInk));
+        var laser = SlideShowInkExecutionPlanner.BuildOverlayPlan(
+            SlideShowInkExecutionPlanner.Begin(laserState, new SlideShowInkPoint(90, 40)).State);
+
+        overlay.HasVisibleInk.Should().BeTrue();
+        overlay.CommittedStrokes.Should().ContainSingle();
+        overlay.CommittedStrokes.Single().StrokeId.Should().NotBe("other-slide");
+        overlay.ActiveStroke.Should().NotBeNull();
+        overlay.LaserOverlayPoint.Should().BeNull();
+        laser.CommittedStrokes.Should().ContainSingle();
+        laser.ActiveStroke.Should().BeNull();
+        laser.LaserOverlayPoint.Should().Be(new SlideShowInkPoint(90, 40));
+    }
+
+    [Fact]
     public void ClearAndRetentionClear_RemoveCommittedInk()
     {
         var state = CreateState(

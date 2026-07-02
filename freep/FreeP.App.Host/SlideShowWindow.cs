@@ -70,6 +70,9 @@ public sealed class SlideShowWindow : Window
     // Media playback overlay: a Canvas layered above _animOverlay; populated per-slide.
     private readonly Canvas _mediaOverlay;
 
+    // Presenter ink overlay: shared-plan-backed strokes and laser pointer above slide content.
+    private readonly Canvas _inkOverlay;
+
     // Manages MediaElement lifecycle for the current slide's media shapes.
     private readonly SlideShowMediaController _mediaController;
 
@@ -158,6 +161,14 @@ public sealed class SlideShowWindow : Window
         };
         stage.Children.Add(_mediaOverlay);
 
+        _inkOverlay = new Canvas
+        {
+            IsHitTestVisible    = false,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment   = VerticalAlignment.Center,
+        };
+        stage.Children.Add(_inkOverlay);
+
         // Media controller: created now; EnterSlide is called per-slide in DisplayCurrentSlide.
         _mediaController = new SlideShowMediaController(_mediaOverlay);
 
@@ -213,6 +224,7 @@ public sealed class SlideShowWindow : Window
         _presenterToolPlan.WorkflowActions;
 
     public SlideShowInkExecutionState InkExecutionState => _inkExecutionState;
+    internal int PresenterInkOverlayVisualCount => _inkOverlay.Children.Count;
 
     public SlideShowPresenterState CreatePresenterState(
         DateTimeOffset nowUtc,
@@ -243,6 +255,7 @@ public sealed class SlideShowWindow : Window
         _inkExecutionState = SlideShowInkExecutionPlanner.SelectPointerInk(
             _inkExecutionState,
             _presenterToolPlan.PointerInk);
+        RefreshInkOverlay();
         return _presenterToolPlan;
     }
 
@@ -435,7 +448,106 @@ public sealed class SlideShowWindow : Window
     private SlideShowInkExecutionResult ApplyInkExecution(SlideShowInkExecutionResult result)
     {
         _inkExecutionState = result.State;
+        RefreshInkOverlay();
         return result;
+    }
+
+    private void RefreshInkOverlay()
+    {
+        _inkOverlay.Children.Clear();
+
+        var plan = SlideShowInkExecutionPlanner.BuildOverlayPlan(_inkExecutionState);
+        var canvasWidth = _slideCanvas.ActualWidth > 0 ? _slideCanvas.ActualWidth : _slideDipW;
+        var canvasHeight = _slideCanvas.ActualHeight > 0 ? _slideCanvas.ActualHeight : _slideDipH;
+        _inkOverlay.Width = canvasWidth;
+        _inkOverlay.Height = canvasHeight;
+
+        foreach (var stroke in plan.CommittedStrokes)
+        {
+            AddInkStroke(stroke, canvasWidth, canvasHeight);
+        }
+
+        if (plan.ActiveStroke is not null)
+        {
+            AddInkStroke(plan.ActiveStroke, canvasWidth, canvasHeight);
+        }
+
+        if (plan.LaserOverlayPoint is not null)
+        {
+            AddLaserOverlay(plan.LaserOverlayPoint, _inkExecutionState.ActiveInkState, canvasWidth, canvasHeight);
+        }
+    }
+
+    private void AddInkStroke(SlideShowInkStroke stroke, double canvasWidth, double canvasHeight)
+    {
+        if (stroke.Points.Count == 0)
+        {
+            return;
+        }
+
+        var scale = InkScale(canvasWidth, canvasHeight);
+        var polyline = new System.Windows.Shapes.Polyline
+        {
+            Stroke = InkBrush(stroke.InkState),
+            StrokeThickness = Math.Max(1, stroke.InkState.ThicknessDip * scale),
+            StrokeStartLineCap = PenLineCap.Round,
+            StrokeEndLineCap = PenLineCap.Round,
+            StrokeLineJoin = PenLineJoin.Round,
+            Opacity = stroke.InkState.Opacity,
+            IsHitTestVisible = false,
+        };
+        foreach (var point in stroke.Points)
+        {
+            polyline.Points.Add(ToCanvasPoint(point, canvasWidth, canvasHeight));
+        }
+
+        _inkOverlay.Children.Add(polyline);
+    }
+
+    private void AddLaserOverlay(
+        SlideShowInkPoint point,
+        SlideShowInkState inkState,
+        double canvasWidth,
+        double canvasHeight)
+    {
+        var scale = InkScale(canvasWidth, canvasHeight);
+        var radius = Math.Max(3, inkState.ThicknessDip * scale);
+        var center = ToCanvasPoint(point, canvasWidth, canvasHeight);
+        var dot = new System.Windows.Shapes.Ellipse
+        {
+            Width = radius * 2,
+            Height = radius * 2,
+            Fill = InkBrush(inkState),
+            Stroke = Brushes.White,
+            StrokeThickness = 1,
+            Opacity = inkState.Opacity,
+            IsHitTestVisible = false,
+        };
+        Canvas.SetLeft(dot, center.X - radius);
+        Canvas.SetTop(dot, center.Y - radius);
+        _inkOverlay.Children.Add(dot);
+    }
+
+    private Point ToCanvasPoint(SlideShowInkPoint point, double canvasWidth, double canvasHeight)
+    {
+        var scaleX = canvasWidth / Math.Max(1, _slideDipW);
+        var scaleY = canvasHeight / Math.Max(1, _slideDipH);
+        return new Point(point.X * scaleX, point.Y * scaleY);
+    }
+
+    private double InkScale(double canvasWidth, double canvasHeight)
+        => Math.Min(canvasWidth / Math.Max(1, _slideDipW), canvasHeight / Math.Max(1, _slideDipH));
+
+    private static Brush InkBrush(SlideShowInkState inkState)
+    {
+        try
+        {
+            return new SolidColorBrush((Color)ColorConverter.ConvertFromString(inkState.ColorHex));
+        }
+        catch (FormatException)
+        {
+            return Brushes.Red;
+        }
     }
 
     private Cursor CursorForPresenterInk() =>
@@ -512,6 +624,7 @@ public sealed class SlideShowWindow : Window
         _inkExecutionState = SlideShowInkExecutionPlanner.MoveToSlide(
             _inkExecutionState,
             _controller.CurrentSlideIndex);
+        RefreshInkOverlay();
 
         var slide = plan.Slide;
         if (slide is null) return;

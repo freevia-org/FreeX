@@ -162,6 +162,7 @@ public sealed class SlideShowWindowHeadlessTests
         SlideShowInkExecutionResult? begin = null;
         SlideShowInkExecutionResult? append = null;
         SlideShowInkExecutionResult? end = null;
+        var overlayVisualCount = -1;
         var ran = await OnUiThread(() =>
         {
             var pres = MakePresentation(1);
@@ -175,6 +176,7 @@ public sealed class SlideShowWindowHeadlessTests
             append = window.AppendPresenterInkStroke(30, 40);
             end = window.EndPresenterInkStroke(50, 60);
             inkState = window.InkExecutionState;
+            overlayVisualCount = window.PresenterInkOverlayVisualCount;
         });
 
         if (!ran) return;
@@ -184,6 +186,7 @@ public sealed class SlideShowWindowHeadlessTests
         begin!.Mutations.Single().Kind.Should().Be(SlideShowInkExecutionMutationKind.BeginStroke);
         append!.Mutations.Single().Kind.Should().Be(SlideShowInkExecutionMutationKind.AppendStrokePoint);
         end!.Mutations.Single().Kind.Should().Be(SlideShowInkExecutionMutationKind.CommitStroke);
+        overlayVisualCount.Should().Be(1);
         inkState.Should().NotBeNull();
         inkState!.CommittedStrokes.Should().ContainSingle();
         var stroke = inkState.CommittedStrokes.Single();
@@ -200,6 +203,7 @@ public sealed class SlideShowWindowHeadlessTests
     {
         SlideShowInkExecutionResult? clear = null;
         SlideShowInkExecutionState? inkState = null;
+        var overlayVisualCount = -1;
         var ran = await OnUiThread(() =>
         {
             var pres = MakePresentation(1);
@@ -210,6 +214,7 @@ public sealed class SlideShowWindowHeadlessTests
 
             clear = window.ClearPresenterInkStrokes();
             inkState = window.InkExecutionState;
+            overlayVisualCount = window.PresenterInkOverlayVisualCount;
         });
 
         if (!ran) return;
@@ -218,6 +223,7 @@ public sealed class SlideShowWindowHeadlessTests
         clear.Mutations.Single().AffectedStrokeCount.Should().Be(1);
         inkState.Should().NotBeNull();
         inkState!.CommittedStrokes.Should().BeEmpty();
+        overlayVisualCount.Should().Be(0);
     }
 
     [Fact]
