@@ -238,6 +238,40 @@ public sealed class ReviewWorkflowAdapterTests
     }
 
     [StaFact]
+    public void MainWindow_TablePickerRequest_ShowsPickerAndAppliesChoice()
+    {
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
+        try
+        {
+            var before = window.Editor.CurrentSlide!.Shapes.Count;
+
+            window.OpenTablePicker();
+
+            window.LastTablePickerPlan.Should().NotBeNull();
+            window.IsTablePickerVisible.Should().BeTrue();
+            window.TablePickerChoiceButtonCount.Should().Be(25);
+            window.TablePickerDefaultChoiceCount.Should().Be(1);
+            window.LastTablePickerPlan!.Choices.Should().Contain(choice =>
+                choice.Rows == 5 &&
+                choice.Columns == 4 &&
+                choice.Label == "5 x 4 Table");
+
+            window.ApplyTablePickerChoice(5, 4).Should().BeTrue();
+
+            window.IsTablePickerVisible.Should().BeFalse();
+            window.Editor.CurrentSlide!.Shapes.Should().HaveCount(before + 1);
+            var table = window.Editor.CurrentSlide.Shapes.Last().Table;
+            table.Should().NotBeNull();
+            table!.Rows.Should().HaveCount(5);
+            table.ColumnWidthsEmu.Should().HaveCount(4);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [StaFact]
     public void FreePRibbonCommands_RegistersSharedReviewWorkflowCommandIds()
     {
         var presentation = Presentation.CreateEmpty();

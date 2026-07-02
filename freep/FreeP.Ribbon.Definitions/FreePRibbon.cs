@@ -86,13 +86,12 @@ public static class FreePRibbon
                 {
                     g.Large("freep.text-box", FreePRibbonText.TextBoxLabel, RibbonCommandIconKind.TextBox, FreePRibbonText.TextBoxKeyTip);
                 });
-                // Wave 5B: Tables group — default 3×3; picker deferral noted.
+                // Tables group: the large Table command opens the host picker; compact fixed-size shortcuts remain direct.
                 tab.Group("tables", FreePRibbonText.TablesGroupLabel, FreePRibbonText.TablesGroupKeyTip, 95, g =>
                 {
                     g.Large("freep.insert-table-3x3", FreePRibbonText.InsertTable3x3Label, RibbonCommandIconKind.Table, FreePRibbonText.InsertTable3x3KeyTip);
                     g.Medium("freep.insert-table-2x2", FreePRibbonText.InsertTable2x2Label, RibbonCommandIconKind.Table, FreePRibbonText.InsertTable2x2KeyTip);
                     g.Medium("freep.insert-table-4x4", FreePRibbonText.InsertTable4x4Label, RibbonCommandIconKind.Table, FreePRibbonText.InsertTable4x4KeyTip);
-                    // NOTE: interactive row/col picker (hover-grid) is deferred to a later wave.
                 });
                 // Wave 5B: Charts group (9B: chart data editing button added).
                 tab.Group("charts", FreePRibbonText.ChartsGroupLabel, FreePRibbonText.ChartsGroupKeyTip, 93, g =>

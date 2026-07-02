@@ -79,7 +79,8 @@ internal static class FreePRibbonCommands
         Action?             onReviewProofing = null,
         // Wave 16B: Animation pane toggle.
         Action?             onAnimPane         = null,
-        Action?             onLayoutPicker     = null)
+        Action?             onLayoutPicker     = null,
+        Action?             onTablePicker      = null)
     {
         var registry = new RibbonCommandRegistry();
 
@@ -96,7 +97,7 @@ internal static class FreePRibbonCommands
 
         // ── Insert shapes ────────────────────────────────────────────────────────
 
-        RegisterSlideObjectInsertionCommands(registry, editor, includePictureCommand: true);
+        RegisterSlideObjectInsertionCommands(registry, editor, includePictureCommand: true, onTablePicker);
 
         // ── Format toggles (stateful) ────────────────────────────────────────────
         //
@@ -302,10 +303,17 @@ internal static class FreePRibbonCommands
     internal static void RegisterSlideObjectInsertionCommands(
         RibbonCommandRegistry registry,
         EditingSession editor,
-        bool includePictureCommand)
+        bool includePictureCommand,
+        Action? onTablePicker = null)
     {
         foreach (var plan in SlideObjectInsertionPlanner.BuiltInPlans)
         {
+            if (plan.CommandId == SlideObjectInsertionPlanner.Table3x3CommandId && onTablePicker is not null)
+            {
+                registry.Register(plan.CommandId, new ActionRibbonCommand(onTablePicker));
+                continue;
+            }
+
             if (plan.RequiresPicturePayload)
             {
                 if (!includePictureCommand)

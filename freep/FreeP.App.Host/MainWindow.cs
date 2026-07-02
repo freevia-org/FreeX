@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -120,6 +121,8 @@ public sealed class MainWindow : Window
     private Border  _commentListHost = null!; // collapsible container for _commentListPanel
     private StackPanel _layoutPickerPanel = null!;
     private Border _layoutPickerHost = null!;
+    private UniformGrid _tablePickerGrid = null!;
+    private Border _tablePickerHost = null!;
     private Border _altTextPaneHost = null!;
     private TextBlock _altTextPaneHeading = null!;
     private TextBlock _altTextPaneMessage = null!;
@@ -140,7 +143,11 @@ public sealed class MainWindow : Window
     internal PresentationDesignCommandPlan? LastLayoutRequestPlan { get; private set; }
     internal PresentationLayoutPickerPlan? LastLayoutPickerPlan { get; private set; }
     internal PresentationLayoutChoice? LastAppliedLayoutChoice { get; private set; }
+    internal TableInsertionPickerPlan? LastTablePickerPlan { get; private set; }
     internal bool IsLayoutPickerVisible => _layoutPickerHost?.Visibility == Visibility.Visible;
+    internal bool IsTablePickerVisible => _tablePickerHost?.Visibility == Visibility.Visible;
+    internal int TablePickerChoiceButtonCount => LastTablePickerPlan?.Choices.Count ?? 0;
+    internal int TablePickerDefaultChoiceCount => LastTablePickerPlan?.Choices.Count(choice => choice.IsDefault) ?? 0;
     internal int LayoutPickerChoiceButtonCount => LastLayoutPickerPlan?.Choices.Count ?? 0;
     internal int LayoutPickerGroupHeaderCount => LastLayoutPickerPlan?.Groups.Count ?? 0;
     internal int LayoutPickerThumbnailPlaceholderCount =>
@@ -242,7 +249,8 @@ public sealed class MainWindow : Window
             onReviewAltText: () => ShowAltTextPane(),
             onReviewProofing: () => RefreshProofingRequestPlan(),
             // Wave 16B: Animation pane toggle.
-            onAnimPane:         () => ToggleAnimationPane());
+            onAnimPane:         () => ToggleAnimationPane(),
+            onTablePicker:      () => OpenTablePicker());
         var ribbon = BuildRibbon(FreePRibbon.Build(), commands, stateStore);
 
         // Body: slide pane + stage.
@@ -344,6 +352,7 @@ public sealed class MainWindow : Window
         // 3B: re-bind slide pane to the new Editor on file open/new.
         SlidePaneHost.Child = new SlidePane(Editor);
         HideLayoutPicker();
+        HideTablePicker();
         RefreshCanvas();
         UpdateSlideCount();
         RefreshNotesPane();
@@ -466,6 +475,35 @@ public sealed class MainWindow : Window
                 Content                       = _layoutPickerPanel,
             },
         };
+        _tablePickerGrid = new UniformGrid
+        {
+            Rows = TableInsertionPickerPlanner.DefaultMaxRows,
+            Columns = TableInsertionPickerPlanner.DefaultMaxColumns,
+            Margin = new Thickness(8),
+        };
+        _tablePickerHost = new Border
+        {
+            BorderBrush     = new SolidColorBrush(Color.FromRgb(0xC0, 0xC0, 0xC0)),
+            BorderThickness = new Thickness(0, 1, 0, 0),
+            Background      = Brushes.White,
+            Visibility      = Visibility.Collapsed,
+            Child           = new StackPanel
+            {
+                Orientation = Orientation.Vertical,
+                Children =
+                {
+                    new TextBlock
+                    {
+                        Text = TableInsertionPickerPlanner.PickerHeading,
+                        Margin = new Thickness(10, 8, 10, 2),
+                        FontSize = 11,
+                        FontWeight = FontWeights.SemiBold,
+                        Foreground = new SolidColorBrush(Color.FromRgb(0x44, 0x44, 0x44)),
+                    },
+                    _tablePickerGrid,
+                },
+            },
+        };
 
         _altTextPaneHost = BuildAltTextPaneHost();
 
@@ -475,12 +513,15 @@ public sealed class MainWindow : Window
         rightPanel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         rightPanel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         rightPanel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        rightPanel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         Grid.SetRow(_canvasHost,       0);
         Grid.SetRow(_layoutPickerHost, 1);
-        Grid.SetRow(_commentListHost,  2);
-        Grid.SetRow(_notesBox,         3);
+        Grid.SetRow(_tablePickerHost,  2);
+        Grid.SetRow(_commentListHost,  3);
+        Grid.SetRow(_notesBox,         4);
         rightPanel.Children.Add(_canvasHost);
         rightPanel.Children.Add(_layoutPickerHost);
+        rightPanel.Children.Add(_tablePickerHost);
         rightPanel.Children.Add(_commentListHost);
         rightPanel.Children.Add(_notesBox);
 
@@ -1243,6 +1284,67 @@ public sealed class MainWindow : Window
         return applied;
     }
 
+    internal void OpenTablePicker()
+    {
+        LastTablePickerPlan = TableInsertionPickerPlanner.BuildPlan();
+        ShowTablePicker(LastTablePickerPlan);
+    }
+
+    internal bool ApplyTablePickerChoice(int rows, int columns)
+    {
+        var applied = TableInsertionPickerPlanner.TryApplyChoice(Editor, rows, columns);
+        if (applied)
+        {
+            RefreshCanvas();
+            UpdateSlideCount();
+            HideTablePicker();
+        }
+
+        return applied;
+    }
+
+    private void ShowTablePicker(TableInsertionPickerPlan plan)
+    {
+        if (_tablePickerHost is null || _tablePickerGrid is null)
+            return;
+
+        _tablePickerGrid.Rows = plan.MaxRows;
+        _tablePickerGrid.Columns = plan.MaxColumns;
+        _tablePickerGrid.Children.Clear();
+        foreach (var choice in plan.Choices)
+        {
+            var button = new Button
+            {
+                Tag = choice,
+                Content = choice.IsDefault ? $"{choice.Label} (default)" : choice.Label,
+                Margin = new Thickness(2),
+                Padding = new Thickness(6, 4, 6, 4),
+                MinWidth = 74,
+                BorderBrush = choice.IsDefault
+                    ? new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A))
+                    : new SolidColorBrush(Color.FromRgb(0xC8, 0xC8, 0xC8)),
+                Background = choice.IsDefault
+                    ? new SolidColorBrush(Color.FromRgb(0xFE, 0xF2, 0xEC))
+                    : Brushes.White,
+            };
+            button.Click += (_, _) =>
+            {
+                if (button.Tag is TableInsertionPickerChoice tableChoice)
+                    ApplyTablePickerChoice(tableChoice.Rows, tableChoice.Columns);
+            };
+            _tablePickerGrid.Children.Add(button);
+        }
+
+        HideLayoutPicker();
+        _tablePickerHost.Visibility = Visibility.Visible;
+    }
+
+    private void HideTablePicker()
+    {
+        if (_tablePickerHost is not null)
+            _tablePickerHost.Visibility = Visibility.Collapsed;
+    }
+
     private void ShowLayoutPicker(PresentationLayoutPickerPlan plan)
     {
         if (_layoutPickerHost is null || _layoutPickerPanel is null)
@@ -1288,6 +1390,7 @@ public sealed class MainWindow : Window
             _layoutPickerPanel.Children.Add(groupPanel);
         }
 
+        HideTablePicker();
         _layoutPickerHost.Visibility = Visibility.Visible;
     }
 
