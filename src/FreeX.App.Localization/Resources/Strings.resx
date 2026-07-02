@@ -798,6 +798,9 @@
   <data name="FormatCells_Sample" xml:space="preserve">
     <value>Sample</value>
   </data>
+  <data name="FormatCells_GeneralFormatDescription" xml:space="preserve">
+    <value>General format cells have no specific number format.</value>
+  </data>
   <data name="FormatCells_Horizontal" xml:space="preserve">
     <value>Horizontal</value>
   </data>

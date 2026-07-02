@@ -24,6 +24,15 @@ public sealed partial class FormatCellsDialogXamlTests
         {
             xaml.Should().Contain($"<TabItem Header=\"{tab}\"");
         }
+
+        var orderedTabs = new[] { "_Number", "_Alignment", "_Font", "_Border", "F_ill", "_Protection" };
+        var previousIndex = -1;
+        foreach (var tab in orderedTabs)
+        {
+            var index = xaml.IndexOf($"<TabItem Header=\"{tab}\"", StringComparison.Ordinal);
+            index.Should().BeGreaterThan(previousIndex);
+            previousIndex = index;
+        }
     }
 
     [Fact]
@@ -31,7 +40,7 @@ public sealed partial class FormatCellsDialogXamlTests
     {
         var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("FormatCellsDialog.xaml");
 
-        foreach (var tab in new[] { "_Number", "_Alignment", "_Font", "F_ill", "_Border", "_Protection" })
+        foreach (var tab in new[] { "_Number", "_Alignment", "_Font", "_Border", "F_ill", "_Protection" })
             xaml.Should().Contain($"<TabItem Header=\"{tab}\"");
 
         xaml.ShouldContainLocalizedAttribute("Content", "_OK");
