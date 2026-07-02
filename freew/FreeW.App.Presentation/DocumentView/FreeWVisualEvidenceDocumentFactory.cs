@@ -1,3 +1,6 @@
+using System.Buffers.Binary;
+using System.IO.Compression;
+using System.Text;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Presentation.DocumentView;
@@ -229,6 +232,52 @@ public static class FreeWVisualEvidenceDocumentFactory
             doc.Blocks.Add(new Paragraph(
                 $"Watermark stress paragraph {i}: body text gives the watermark and floating WordArt " +
                 "real page-composition context for visual comparison."));
+        }
+
+        return doc;
+    }
+
+    public static TextDocument BuildWordArtPictureWatermarkLayoutDocument()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Page.PageBorder = new PageBorder("#1F4E79", 2.25)
+        {
+            LineStyle = BorderLineStyle.Double
+        };
+        doc.Page.ColumnCount = 2;
+        doc.Page.ColumnSpacingPt = 30;
+        doc.Page.ColumnsLineBetween = true;
+        doc.Page.WatermarkOptions = new WatermarkOptions(string.Empty)
+        {
+            ImageBytes = BuildGeneratedWatermarkPngBytes(),
+            ScalePct = 48,
+            Layout = WatermarkLayout.Horizontal,
+            Opacity = 0.38
+        };
+
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("WordArt and Picture Watermark Fidelity") { StyleId = "Heading1" });
+        doc.Blocks.Add(new Paragraph(
+            "This shared fixture stresses page layout, a centered picture watermark, page border, " +
+            "columns, body text, and floating WordArt in one Word-comparable capture."));
+
+        var anchor = new Paragraph();
+        anchor.Runs.Add(new Run(
+            "The decorative WordArt should sit above the text layer while the picture watermark remains " +
+            "behind the body content. "));
+        anchor.Runs.Add(Run.FromWordArt(new WordArt("WATERMARK", WordArtStyle.GradFillMulti, 34)
+        {
+            AltText = "WordArt watermark stress label",
+            Warp = WordArtWarp.ArchUp,
+            Placement = Placement(ImageWrapping.InFront, xPt: 205, yPt: 38, zOrder: 9)
+        }));
+        doc.Blocks.Add(anchor);
+
+        for (var i = 1; i <= 18; i++)
+        {
+            doc.Blocks.Add(new Paragraph(
+                $"Watermark layout paragraph {i}: body text should remain readable across both columns " +
+                "with the generated picture watermark centered behind the text and inside the border."));
         }
 
         return doc;
@@ -479,6 +528,103 @@ public static class FreeWVisualEvidenceDocumentFactory
             VerticalOffsetPt = yPt,
             ZOrderIndex = zOrder
         };
+
+    private static byte[] BuildGeneratedWatermarkPngBytes()
+    {
+        const int width = 120;
+        const int height = 72;
+        var rows = new byte[(1 + width * 4) * height];
+        var offset = 0;
+        for (var y = 0; y < height; y++)
+        {
+            rows[offset++] = 0;
+            for (var x = 0; x < width; x++)
+            {
+                var inFrame = x < 5 || x >= width - 5 || y < 5 || y >= height - 5;
+                var inBand = Math.Abs(y - (height - 1 - x * height / width)) <= 4;
+                var inMark = x is > 22 and < 98 && y is > 24 and < 48 && ((x / 8) + (y / 8)) % 2 == 0;
+
+                byte r = 0;
+                byte g = 0;
+                byte b = 0;
+                byte a = 0;
+                if (inFrame)
+                {
+                    r = 0x1F;
+                    g = 0x4E;
+                    b = 0x79;
+                    a = 0xFF;
+                }
+                else if (inBand)
+                {
+                    r = 0xED;
+                    g = 0x7D;
+                    b = 0x31;
+                    a = 0xE8;
+                }
+                else if (inMark)
+                {
+                    r = 0x70;
+                    g = 0xAD;
+                    b = 0x47;
+                    a = 0xD8;
+                }
+
+                rows[offset++] = r;
+                rows[offset++] = g;
+                rows[offset++] = b;
+                rows[offset++] = a;
+            }
+        }
+
+        using var png = new MemoryStream();
+        png.Write(new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A });
+
+        Span<byte> ihdr = stackalloc byte[13];
+        BinaryPrimitives.WriteInt32BigEndian(ihdr[..4], width);
+        BinaryPrimitives.WriteInt32BigEndian(ihdr.Slice(4, 4), height);
+        ihdr[8] = 8;
+        ihdr[9] = 6;
+        WritePngChunk(png, "IHDR", ihdr);
+
+        using var compressed = new MemoryStream();
+        using (var zlib = new ZLibStream(compressed, CompressionLevel.SmallestSize, leaveOpen: true))
+            zlib.Write(rows);
+        WritePngChunk(png, "IDAT", compressed.ToArray());
+        WritePngChunk(png, "IEND", ReadOnlySpan<byte>.Empty);
+        return png.ToArray();
+    }
+
+    private static void WritePngChunk(Stream stream, string type, ReadOnlySpan<byte> data)
+    {
+        Span<byte> length = stackalloc byte[4];
+        BinaryPrimitives.WriteInt32BigEndian(length, data.Length);
+        stream.Write(length);
+
+        var typeBytes = Encoding.ASCII.GetBytes(type);
+        stream.Write(typeBytes);
+        stream.Write(data);
+
+        var crc = UpdateCrc(0xFFFFFFFF, typeBytes);
+        crc = UpdateCrc(crc, data);
+        crc ^= 0xFFFFFFFF;
+
+        Span<byte> crcBytes = stackalloc byte[4];
+        BinaryPrimitives.WriteUInt32BigEndian(crcBytes, crc);
+        stream.Write(crcBytes);
+    }
+
+    private static uint UpdateCrc(uint crc, ReadOnlySpan<byte> data)
+    {
+        foreach (var b in data)
+        {
+            crc ^= b;
+            for (var i = 0; i < 8; i++)
+                crc = (crc & 1) == 1 ? 0xEDB88320U ^ (crc >> 1) : crc >> 1;
+        }
+
+        return crc;
+    }
 
     private static TableCell HeaderCell(string text, int gridSpan = 1) =>
         Cell(text, gridSpan: gridSpan, shading: "#D9E2F3", customBorder: true);

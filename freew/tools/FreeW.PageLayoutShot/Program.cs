@@ -79,6 +79,7 @@ static int RenderAll(string outDir)
     var drawingObjectsPath = VisualEvidenceOutputPath(outDir, "drawing-objects-complex", 1);
     var chartSmartArtPath = VisualEvidenceOutputPath(outDir, "chart-smartart-complex", 1);
     var wordArtWatermarkPath = VisualEvidenceOutputPath(outDir, "wordart-watermark-stress", 1);
+    var wordArtPictureWatermarkPath = VisualEvidenceOutputPath(outDir, "wordart-picture-watermark-layout", 1);
     var printPreviewP1Path = VisualEvidenceOutputPath(outDir, "backstage-print-preview-fidelity", 1);
     var printPreviewP2Path = VisualEvidenceOutputPath(outDir, "backstage-print-preview-fidelity", 2);
     var pdfExportP1Path = VisualEvidenceOutputPath(outDir, "backstage-pdf-export-fidelity", 1);
@@ -230,6 +231,14 @@ static int RenderAll(string outDir)
         scenarioId: "wordart-watermark-stress",
         evidence: evidence,
         documentFactory: FreeWVisualEvidenceDocumentFactory.BuildWordArtWatermarkStressDocument);
+    if (rc != 0) return rc;
+
+    rc = RenderMode(DocumentViewMode.PrintLayout, wordArtPictureWatermarkPath,
+        width: 960, height: 1700,
+        label: "WordArt + Picture Watermark",
+        scenarioId: "wordart-picture-watermark-layout",
+        evidence: evidence,
+        documentFactory: FreeWVisualEvidenceDocumentFactory.BuildWordArtPictureWatermarkLayoutDocument);
     if (rc != 0) return rc;
 
     // ── FO1: Floating-image render capture ──────────────────────────────────────────────────────────

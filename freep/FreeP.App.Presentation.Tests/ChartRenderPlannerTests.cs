@@ -1,3 +1,4 @@
+using System.Linq;
 using FreeP.App.Compositor;
 using FreeP.Core.Model;
 
@@ -317,8 +318,39 @@ public sealed class ChartRenderPlannerTests
 
         var frame = ChartRenderPlanner.BuildFramePlan(chart, new ChartPlanRect(0, 0, 400, 300));
 
-        frame.Plot.Should().Be(new ChartPlanRect(48, 8, 344, 241));
+        // The plot's left edge is inset by the data table's row-header column width (72) so the
+        // plot's category band and the table's category columns share one left origin/width.
+        frame.Plot.Should().Be(new ChartPlanRect(120, 8, 272, 241));
         ChartRenderPlanner.BuildCategoryAxisLabelPlans(chart, frame).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void BuildFramePlan_DataTableColumnsAlignWithPlotCategoryBand()
+    {
+        var withTable = MakeTwoSeriesChart(ChartType.ColumnClustered);
+        withTable.DataTable = new ChartDataTableSettings();
+        var frameWithTable = ChartRenderPlanner.BuildFramePlan(withTable, new ChartPlanRect(0, 0, 400, 300));
+        var tablePlan = ChartRenderPlanner.BuildDataTablePrimitivePlan(withTable, frameWithTable);
+
+        // The plot's category band (bars/points) starts at plot.X and spans plot.Width/categoryCount
+        // per category. The data table's first category column (ColumnIndex 1, i.e. Q1) must start
+        // at the exact same X and have the exact same width, so it sits directly under category 0's
+        // bar - matching PowerPoint, where each data-table column sits under its category.
+        double plot = frameWithTable.Plot.X;
+        double categoryStep = frameWithTable.Plot.Width / withTable.Categories.Count;
+        var firstCategoryColumn = tablePlan.Cells.Single(cell => cell.RowIndex == 0 && cell.ColumnIndex == 1);
+        // Cell bounds are text-inset by DataTableTextInset on both sides; undo that to compare
+        // the raw column geometry against the plot's category band.
+        double columnLeft = firstCategoryColumn.Bounds.X - ChartRenderPlanner.DataTableTextInset;
+        double columnWidth = firstCategoryColumn.Bounds.Width + 2 * ChartRenderPlanner.DataTableTextInset;
+
+        columnLeft.Should().Be(plot);
+        columnWidth.Should().Be(categoryStep);
+
+        // Without a data table, the plot layout is unchanged (no regression for the common case).
+        var withoutTable = MakeTwoSeriesChart(ChartType.ColumnClustered);
+        var frameWithoutTable = ChartRenderPlanner.BuildFramePlan(withoutTable, new ChartPlanRect(0, 0, 400, 300));
+        frameWithoutTable.Plot.Should().Be(new ChartPlanRect(48, 8, 344, 268));
     }
 
     [Fact]

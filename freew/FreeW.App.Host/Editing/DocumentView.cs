@@ -5504,6 +5504,9 @@ public sealed class DocumentView : RichTextBox
 
     internal static Brush BuildWatermarkBrush(WatermarkOptions options, Color pageColor)
     {
+        if (options.IsPicture)
+            return BuildPictureWatermarkBrush(options, pageColor);
+
         var baseColor = ParseColor(options.FontColorHex, Color.FromRgb(0x80, 0x80, 0x80));
         var alpha = (byte)Math.Clamp((int)Math.Round(options.Opacity * 255), 0, 255);
         var foreground = new SolidColorBrush(Color.FromArgb(alpha, baseColor.R, baseColor.G, baseColor.B));
@@ -5538,6 +5541,45 @@ public sealed class DocumentView : RichTextBox
         var canvas = new Grid { Background = new SolidColorBrush(pageColor) };
         canvas.Children.Add(new System.Windows.Shapes.Rectangle { Fill = visual });
         return new VisualBrush(canvas) { Stretch = Stretch.Fill };
+    }
+
+    private static Brush BuildPictureWatermarkBrush(WatermarkOptions options, Color pageColor)
+    {
+        var source = TryDecodeRaster(options.ImageBytes);
+        if (source is null)
+            return new SolidColorBrush(pageColor);
+
+        var plan = WatermarkVisualPlanner.BuildPictureLayout(
+            options,
+            pageWidthDip: 1,
+            pageHeightDip: 1,
+            sourceWidthDip: source.PixelWidth,
+            sourceHeightDip: source.PixelHeight);
+        if (plan is null)
+            return new SolidColorBrush(pageColor);
+
+        var group = new System.Windows.Media.DrawingGroup();
+        group.Children.Add(new GeometryDrawing(
+            new SolidColorBrush(pageColor),
+            null,
+            new RectangleGeometry(new Rect(0, 0, 1, 1))));
+
+        var imageGroup = new System.Windows.Media.DrawingGroup
+        {
+            Opacity = plan.Opacity
+        };
+        if (Math.Abs(plan.RotationDegrees) > 0.01)
+            imageGroup.Transform = new RotateTransform(plan.RotationDegrees, plan.CenterXDip, plan.CenterYDip);
+
+        imageGroup.Children.Add(new ImageDrawing(
+            source,
+            new Rect(plan.XDip, plan.YDip, plan.WidthDip, plan.HeightDip)));
+        group.Children.Add(imageGroup);
+
+        return new DrawingBrush(group)
+        {
+            Stretch = Stretch.Fill
+        };
     }
 
     /// <summary>Legacy overload — adapts a bare text string to a default <see cref="WatermarkOptions"/>.</summary>

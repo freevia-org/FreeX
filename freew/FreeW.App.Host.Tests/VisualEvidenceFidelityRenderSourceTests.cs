@@ -32,12 +32,26 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
         source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildChartSmartArtCompositionDocument");
         source.Should().Contain("wordart-watermark-stress.docx");
         source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildWordArtWatermarkStressDocument");
+        source.Should().Contain("wordart-picture-watermark-layout.docx");
+        source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildWordArtPictureWatermarkLayoutDocument");
+        source.Should().Contain("RenderPictureWatermark(");
+        source.Should().Contain("WatermarkVisualPlanner.BuildPictureLayout(");
         source.Should().Contain("backstage-print-preview-fidelity.docx");
         source.Should().Contain("backstage-pdf-export-fidelity.docx");
         source.Should().Contain("BuildVisualEvidenceOutputPath(outDir, name, i + 1)");
         source.Should().Contain("FreeWVisualEvidencePlanner.ExpectedOutputName(scenarioId, pageNumber)");
         source.Should().Contain("hostId: \"wpf-fidelity-render\"");
         project.Should().Contain("FreeW.App.Presentation");
+    }
+
+    [Fact]
+    public void WpfDocumentView_RendersPictureWatermarkThroughSharedPlanner()
+    {
+        var source = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Host", "Editing", "DocumentView.cs"));
+
+        source.Should().Contain("BuildPictureWatermarkBrush(");
+        source.Should().Contain("WatermarkVisualPlanner.BuildPictureLayout(");
+        source.Should().Contain("if (options.IsPicture)");
     }
 
     private static string RepositoryFile(params string[] parts)

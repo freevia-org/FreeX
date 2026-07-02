@@ -2,6 +2,11 @@ namespace FreeW.Core.Model.Tests;
 
 public class PageLayoutTests
 {
+    private sealed class CommandContext(TextDocument document) : IDocumentCommandContext
+    {
+        public TextDocument Document { get; } = document;
+    }
+
     [Fact]
     public void PointsToDip_ConvertsAt96Over72()
     {
@@ -106,6 +111,44 @@ public class PageLayoutTests
         clone.BackgroundColorHex = null;
         page.DifferentOddEvenPages.Should().BeTrue();
         page.BackgroundColorHex.Should().Be("#FFEEDD");
+    }
+
+    [Fact]
+    public void SetPageSettingsCommand_CopiesAndRestoresPictureWatermarkOptions()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Page.WatermarkOptions = new WatermarkOptions("OLD")
+        {
+            Opacity = 0.3,
+            ImageBytes = [9, 9, 9],
+            ScalePct = 30
+        };
+        var settings = doc.Page.Clone();
+        settings.WatermarkOptions = new WatermarkOptions(string.Empty)
+        {
+            ImageBytes = [1, 2, 3, 4],
+            ScalePct = 55,
+            Opacity = 0.45,
+            Layout = WatermarkLayout.Horizontal
+        };
+        var command = new SetPageSettingsCommand(settings);
+        var context = new CommandContext(doc);
+
+        command.Apply(context);
+
+        doc.Page.WatermarkOptions.Should().NotBeNull();
+        doc.Page.WatermarkOptions.Should().NotBeSameAs(settings.WatermarkOptions);
+        doc.Page.WatermarkOptions!.ImageBytes.Should().Equal(1, 2, 3, 4);
+        doc.Page.WatermarkOptions.ImageBytes.Should().NotBeSameAs(settings.WatermarkOptions!.ImageBytes);
+        doc.Page.WatermarkOptions.ScalePct.Should().Be(55);
+        doc.Page.WatermarkOptions.Layout.Should().Be(WatermarkLayout.Horizontal);
+
+        command.Revert(context);
+
+        doc.Page.WatermarkOptions.Should().NotBeNull();
+        doc.Page.WatermarkOptions!.Text.Should().Be("OLD");
+        doc.Page.WatermarkOptions.ImageBytes.Should().Equal(9, 9, 9);
+        doc.Page.WatermarkOptions.ScalePct.Should().Be(30);
     }
 
     [Fact]

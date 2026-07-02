@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.IO;
 using System.Text;
 using Avalonia;
 using Avalonia.Controls;
@@ -149,6 +150,8 @@ public sealed class DocumentView : Control
     private readonly List<FloatingWordArtData>  _inlineWordArts  = new();
     private readonly List<FloatingSmartArtData> _inlineSmartArts = new();
     private readonly Dictionary<InlineImage, Bitmap?> _bitmapCache = new();
+    private byte[]? _watermarkBitmapCacheBytes;
+    private Bitmap? _watermarkBitmapCache;
     private readonly List<(Rect Rect, int Block, int Row, int Col)> _cellHits = new();
 
     // ── AV-TBL: in-place table cell caret ─────────────────────────────────────────────────────────
@@ -5422,12 +5425,20 @@ public sealed class DocumentView : Control
             context.DrawRectangle(null, pen, rect.Deflate(new Thickness(widthDip + 1.5)));
     }
 
-    // AV-DESIGN: faint watermark text drawn behind the body on each page. Mirrors Word's Design >
-    // Watermark: a large, low-opacity, optionally 45°-diagonal label centred on the page. Picture
-    // watermarks are deferred (text only) — a picture watermark renders nothing here.
+    // AV-DESIGN: faint watermark drawn behind the body on each page. Mirrors Word's Design >
+    // Watermark: a large, low-opacity, optionally diagonal label or picture centred on the page.
     private void DrawWatermark(DrawingContext context, Rect pageRect)
     {
-        if (_doc.Page.EffectiveWatermark is not { } wm || wm.IsPicture || string.IsNullOrWhiteSpace(wm.Text))
+        if (_doc.Page.EffectiveWatermark is not { } wm)
+            return;
+
+        if (wm.IsPicture)
+        {
+            DrawPictureWatermark(context, pageRect, wm);
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(wm.Text))
             return;
 
         var color = TryParseAvaloniaColor(wm.FontColorHex, out var c) ? c : Color.FromRgb(0x80, 0x80, 0x80);
@@ -5457,6 +5468,68 @@ public sealed class DocumentView : Control
                 : Matrix.Identity)
             * Matrix.CreateTranslation(center.X, center.Y));
         context.DrawText(ft, new Point(0, 0));
+    }
+
+    private void DrawPictureWatermark(DrawingContext context, Rect pageRect, WatermarkOptions wm)
+    {
+        if (wm.ImageBytes is not { Length: > 0 })
+            return;
+
+        var bitmap = DecodeWatermarkBitmap(wm.ImageBytes);
+        if (bitmap is null)
+            return;
+
+        var plan = WatermarkVisualPlanner.BuildPictureLayout(
+            wm,
+            pageRect.Width,
+            pageRect.Height,
+            bitmap.PixelSize.Width,
+            bitmap.PixelSize.Height);
+        if (plan is null)
+            return;
+
+        var rect = new Rect(
+            pageRect.X + plan.XDip,
+            pageRect.Y + plan.YDip,
+            plan.WidthDip,
+            plan.HeightDip);
+
+        using var clip = context.PushClip(pageRect);
+        using var opacity = context.PushOpacity(plan.Opacity);
+        if (Math.Abs(plan.RotationDegrees) > 0.01)
+        {
+            var centerX = pageRect.X + plan.CenterXDip;
+            var centerY = pageRect.Y + plan.CenterYDip;
+            using var transform = context.PushTransform(
+                Matrix.CreateTranslation(-centerX, -centerY)
+                * Matrix.CreateRotation(plan.RotationDegrees * Math.PI / 180.0)
+                * Matrix.CreateTranslation(centerX, centerY));
+            context.DrawImage(bitmap, rect);
+            return;
+        }
+
+        context.DrawImage(bitmap, rect);
+    }
+
+    private Bitmap? DecodeWatermarkBitmap(byte[] imageBytes)
+    {
+        if (ReferenceEquals(_watermarkBitmapCacheBytes, imageBytes))
+            return _watermarkBitmapCache;
+
+        Bitmap? bitmap = null;
+        try
+        {
+            using var stream = new MemoryStream(imageBytes);
+            bitmap = new Bitmap(stream);
+        }
+        catch (Exception)
+        {
+            bitmap = null;
+        }
+
+        _watermarkBitmapCacheBytes = imageBytes;
+        _watermarkBitmapCache = bitmap;
+        return bitmap;
     }
 
     private static IBrush HeaderFill { get; } = new SolidColorBrush(Color.FromRgb(0xDE, 0xE9, 0xF7));

@@ -179,6 +179,45 @@ public sealed class BulletsAutofitTests
     // ─── Indent / hanging ─────────────────────────────────────────────────────
 
     [Fact]
+    public void CharBullet_WithoutOverrides_UsesFirstNonEmptyRunTypographyAfterAutofit()
+    {
+        var body = new TextBody
+        {
+            AutoFit = true,
+            FontScalePPT = 80000
+        };
+        var para = new Paragraph
+        {
+            BulletKind = BulletKind.Char,
+            BulletChar = "\u2022",
+            BulletSizePct = 75000
+        };
+        para.Runs.Add(new Run
+        {
+            Text = string.Empty,
+            FontFamily = "Calibri",
+            FontSizePt = 10,
+            Color = new ThemeAwareColor(new SrgbColor(0x11, 0x11, 0x11))
+        });
+        para.Runs.Add(new Run
+        {
+            Text = "Styled bullet seed",
+            FontFamily = "Aptos Display",
+            FontSizePt = 24,
+            Color = new ThemeAwareColor(new SrgbColor(0x12, 0x34, 0x56))
+        });
+        body.Paragraphs.Add(para);
+
+        var layout = ComposeText(body);
+
+        var resolved = layout.Paragraphs[0];
+        resolved.BulletFontFamily.Should().Be("Aptos Display");
+        resolved.BulletColor.Should().Be(new SrgbColor(0x12, 0x34, 0x56));
+        resolved.BulletFontSizePt.Should().BeApproximately(24 * 0.8 * 0.75, 0.01);
+        resolved.Runs[1].FontSizePt.Should().BeApproximately(24 * 0.8, 0.01);
+    }
+
+    [Fact]
     public void BulletParagraph_MarginLeft_PopulatesIndentDip()
     {
         const double EmuPerDip = 9525.0;

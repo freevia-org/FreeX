@@ -21,7 +21,7 @@ using FreeW.Core.Model;
 //   - output PNGs are named <docname>_pN.png (N = 1-based page index)
 //   - --composite (default) renders the full composite the live app shows:
 //       layer 1: page background colour
-//       layer 1b: watermark (tiled text from BuildWatermarkBrush, rendered via its own RenderTargetBitmap)
+//       layer 1b: watermark (text or picture, rendered via its own RenderTargetBitmap)
 //       layer 2: multi-column FlowDocument body (ApplyColumnLayout applied before paginating)
 //       layer 3: page border drawn around the body
 //       layer 4: floating-object overlay canvas (SyncFloatingObjectsCanvas), composited per-page
@@ -568,6 +568,9 @@ static void RenderDocumentComposite(
 /// </summary>
 static RenderTargetBitmap RenderWatermarkTile(WatermarkOptions options, Color pageColor, int pixW, int pixH)
 {
+    if (options.IsPicture)
+        return RenderPictureWatermark(options, pageColor, pixW, pixH);
+
     var baseColor = ParseHexColor(options.FontColorHex, Color.FromRgb(0x80, 0x80, 0x80));
     var alpha = (byte)Math.Clamp((int)Math.Round(options.Opacity * 255), 0, 255);
     var foreground = new SolidColorBrush(Color.FromArgb(alpha, baseColor.R, baseColor.G, baseColor.B));
@@ -619,6 +622,59 @@ static RenderTargetBitmap RenderWatermarkTile(WatermarkOptions options, Color pa
     }
     pageBmp.Render(pageVis);
     return pageBmp;
+}
+
+static RenderTargetBitmap RenderPictureWatermark(WatermarkOptions options, Color pageColor, int pixW, int pixH)
+{
+    var pageBmp = new RenderTargetBitmap(pixW, pixH, 96, 96, PixelFormats.Pbgra32);
+    var pageVis = new DrawingVisual();
+    var source = TryDecodeWatermarkImage(options.ImageBytes);
+    var plan = source is null
+        ? null
+        : WatermarkVisualPlanner.BuildPictureLayout(
+            options,
+            pixW,
+            pixH,
+            source.PixelWidth,
+            source.PixelHeight);
+
+    using (var dc = pageVis.RenderOpen())
+    {
+        dc.DrawRectangle(new SolidColorBrush(pageColor), null, new Rect(0, 0, pixW, pixH));
+        if (source is not null && plan is not null)
+        {
+            dc.PushOpacity(plan.Opacity);
+            if (Math.Abs(plan.RotationDegrees) > 0.01)
+                dc.PushTransform(new RotateTransform(plan.RotationDegrees, plan.CenterXDip, plan.CenterYDip));
+
+            dc.DrawImage(source, new Rect(plan.XDip, plan.YDip, plan.WidthDip, plan.HeightDip));
+
+            if (Math.Abs(plan.RotationDegrees) > 0.01)
+                dc.Pop();
+            dc.Pop();
+        }
+    }
+
+    pageBmp.Render(pageVis);
+    return pageBmp;
+}
+
+static BitmapSource? TryDecodeWatermarkImage(byte[]? bytes)
+{
+    if (bytes is not { Length: > 0 })
+        return null;
+
+    try
+    {
+        using var stream = new MemoryStream(bytes);
+        var frame = BitmapFrame.Create(stream, BitmapCreateOptions.None, BitmapCacheOption.OnLoad);
+        frame.Freeze();
+        return frame;
+    }
+    catch (Exception)
+    {
+        return null;
+    }
 }
 
 /// <summary>
@@ -1179,6 +1235,12 @@ static void GenerateF2FlowCorpus(string outDir)
         var doc = FreeWVisualEvidenceDocumentFactory.BuildWordArtWatermarkStressDocument();
         DocxWriter.Write(doc, Path.Combine(outDir, "wordart-watermark-stress.docx"));
         Console.WriteLine("  wrote wordart-watermark-stress.docx");
+    }
+
+    {
+        var doc = FreeWVisualEvidenceDocumentFactory.BuildWordArtPictureWatermarkLayoutDocument();
+        DocxWriter.Write(doc, Path.Combine(outDir, "wordart-picture-watermark-layout.docx"));
+        Console.WriteLine("  wrote wordart-picture-watermark-layout.docx");
     }
 
     // ─── 6. Section break with page-size change (portrait → landscape) ───────────────────────────
