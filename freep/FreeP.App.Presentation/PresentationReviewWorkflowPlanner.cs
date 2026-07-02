@@ -181,6 +181,35 @@ public sealed record PresentationAccessibilitySummaryPlan(
     IReadOnlyList<PresentationAccessibilityIssueDescriptor> Issues,
     IReadOnlyList<PresentationReviewWorkflowActionPlan> Actions);
 
+public sealed record PresentationAccessibilityCheckerRowPlan(
+    int RowIndex,
+    PresentationAccessibilityIssueSeverity Severity,
+    string Category,
+    int SlideIndex,
+    string SlideDisplay,
+    uint? ShapeId,
+    string ShapeName,
+    string Title,
+    string Detail,
+    bool IsSelected,
+    string ActionLabel,
+    string? CommandHint,
+    bool ShouldNavigateToSlide,
+    bool ShouldSelectShape);
+
+public sealed record PresentationAccessibilityCheckerPanePlan(
+    int SlideCount,
+    int IssueCount,
+    int SelectedRowIndex,
+    IReadOnlyList<PresentationAccessibilityCheckerRowPlan> Rows,
+    IReadOnlyList<PresentationReviewWorkflowActionPlan> Actions)
+{
+    public PresentationAccessibilityCheckerRowPlan? SelectedRow =>
+        SelectedRowIndex >= 0 && SelectedRowIndex < Rows.Count
+            ? Rows[SelectedRowIndex]
+            : null;
+}
+
 public sealed record PresentationReadingOrderItemPlan(
     int ReadingOrderIndex,
     int NestingDepth,
@@ -896,6 +925,27 @@ public static class PresentationReviewWorkflowPlanner
             BuildAccessibilityActions());
     }
 
+    public static PresentationAccessibilityCheckerPanePlan BuildAccessibilityCheckerPanePlan(
+        Presentation presentation,
+        PresentationAccessibilitySummaryPlan summaryPlan,
+        int? selectedRowIndex = null)
+    {
+        ArgumentNullException.ThrowIfNull(presentation);
+        ArgumentNullException.ThrowIfNull(summaryPlan);
+
+        var selected = NormalizeAccessibilityCheckerSelection(summaryPlan.Issues, selectedRowIndex);
+        var rows = summaryPlan.Issues
+            .Select((issue, rowIndex) => BuildAccessibilityCheckerRow(presentation, issue, rowIndex, rowIndex == selected))
+            .ToArray();
+
+        return new PresentationAccessibilityCheckerPanePlan(
+            summaryPlan.SlideCount,
+            rows.Length,
+            selected,
+            rows,
+            summaryPlan.Actions);
+    }
+
     public static PresentationReadingOrderPlan BuildReadingOrderPlan(
         Slide? slide,
         int slideIndex,
@@ -1171,6 +1221,78 @@ public static class PresentationReviewWorkflowPlanner
             new(ReadingOrderPaneCommandId, "Reading Order", PresentationReviewWorkflowIntentKind.OpenReadingOrderPane, true, PresentationWorkflowCapabilityStatus.Available),
             new(ProofingCommandId, "Spelling", PresentationReviewWorkflowIntentKind.RunProofing, true, PresentationWorkflowCapabilityStatus.Available),
         ];
+
+    private static PresentationAccessibilityCheckerRowPlan BuildAccessibilityCheckerRow(
+        Presentation presentation,
+        PresentationAccessibilityIssueDescriptor issue,
+        int rowIndex,
+        bool isSelected)
+    {
+        var shape = issue.ShapeId is { } shapeId
+            ? FindShape(GetSlide(presentation.Slides, issue.SlideIndex)?.Shapes, shapeId)
+            : null;
+        var category = ClassifyAccessibilityIssue(issue);
+        var actionLabel = BuildAccessibilityCheckerActionLabel(issue);
+
+        return new PresentationAccessibilityCheckerRowPlan(
+            rowIndex,
+            issue.Severity,
+            category,
+            issue.SlideIndex,
+            $"Slide {issue.SlideIndex + 1}",
+            issue.ShapeId,
+            shape?.Name ?? string.Empty,
+            issue.Title,
+            issue.Detail,
+            isSelected,
+            actionLabel,
+            issue.Action.CommandId,
+            true,
+            issue.ShapeId is not null);
+    }
+
+    private static int NormalizeAccessibilityCheckerSelection(
+        IReadOnlyList<PresentationAccessibilityIssueDescriptor> issues,
+        int? selectedRowIndex)
+    {
+        if (issues.Count == 0)
+        {
+            return -1;
+        }
+
+        return selectedRowIndex is { } index && index >= 0 && index < issues.Count
+            ? index
+            : 0;
+    }
+
+    private static string ClassifyAccessibilityIssue(PresentationAccessibilityIssueDescriptor issue)
+    {
+        if (issue.Title == "Missing slide title")
+        {
+            return "Slide title";
+        }
+
+        if (issue.Action.CommandId == AltTextCommandId)
+        {
+            return "Alt text";
+        }
+
+        if (issue.Action.CommandId == InsertLinkCommandId)
+        {
+            return "Hyperlink";
+        }
+
+        return "Accessibility";
+    }
+
+    private static string BuildAccessibilityCheckerActionLabel(PresentationAccessibilityIssueDescriptor issue)
+        => issue.Action.CommandId switch
+        {
+            AltTextCommandId => "Open Alt Text",
+            InsertLinkCommandId => "Edit Hyperlink",
+            _ when issue.ShapeId is null => "Go to Slide",
+            _ => "Select Object"
+        };
 
     private static IReadOnlyList<PresentationReviewWorkflowActionPlan> BuildProofingActions(bool canRun)
         =>

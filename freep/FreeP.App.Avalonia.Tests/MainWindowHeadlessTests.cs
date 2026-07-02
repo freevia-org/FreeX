@@ -1555,6 +1555,7 @@ public sealed class MainWindowHeadlessTests
         var foundReopenComment = false;
         PresentationCommentPanePlan? commentPlan = null;
         PresentationAccessibilitySummaryPlan? accessibilityPlan = null;
+        PresentationAccessibilityCheckerPanePlan? accessibilityCheckerPlan = null;
         PresentationAltTextRequestPlan? altTextPlan = null;
         PresentationAltTextPanePlan? altTextPanePlan = null;
         PresentationReadingOrderPlan? readingOrderPlan = null;
@@ -1567,6 +1568,8 @@ public sealed class MainWindowHeadlessTests
         var commentsPaneCommentCount = 0;
         var commentsPaneActionCount = 0;
         var commentsPaneSelectedCount = 0;
+        var accessibilityCheckerPaneVisible = false;
+        var accessibilityCheckerPaneRowCount = 0;
         var readingOrderPaneVisible = false;
         var readingOrderPaneItemCount = 0;
         var readingOrderPaneHeading = string.Empty;
@@ -1640,6 +1643,9 @@ public sealed class MainWindowHeadlessTests
             commentsPaneActionCount = window.ReviewCommentsPaneActionButtonCount;
             commentsPaneSelectedCount = window.ReviewCommentsPaneSelectedCommentCount;
             accessibilityPlan = window.LastAccessibilitySummaryPlan;
+            accessibilityCheckerPlan = window.LastAccessibilityCheckerPanePlan;
+            accessibilityCheckerPaneVisible = window.IsAccessibilityCheckerPaneVisible;
+            accessibilityCheckerPaneRowCount = window.AccessibilityCheckerPaneRowCount;
             altTextPlan = window.LastAltTextRequestPlan;
             altTextPanePlan = window.LastAltTextPanePlan;
             readingOrderPlan = window.LastReadingOrderPlan;
@@ -1701,6 +1707,13 @@ public sealed class MainWindowHeadlessTests
             PresentationReviewWorkflowPlanner.MissingAltTextActionSummary,
             PresentationReviewWorkflowPlanner.AltTextCommandId,
             true));
+        accessibilityCheckerPlan.Should().NotBeNull();
+        accessibilityCheckerPaneVisible.Should().BeTrue("the Avalonia accessibility command should render a shared-plan-backed pane");
+        accessibilityCheckerPaneRowCount.Should().Be(accessibilityCheckerPlan!.Rows.Count);
+        accessibilityCheckerPlan.Rows.Should().Contain(row =>
+            row.ShapeId == 328 &&
+            row.ActionLabel == "Open Alt Text" &&
+            row.CommandHint == PresentationReviewWorkflowPlanner.AltTextCommandId);
         altTextPlan.Should().NotBeNull();
         altTextPlan!.HasSelection.Should().BeTrue();
         altTextPlan.ShapeId.Should().Be(328);
@@ -1767,6 +1780,81 @@ public sealed class MainWindowHeadlessTests
         commentsPaneCommentCount.Should().Be(1);
         commentsPaneActionCount.Should().BeGreaterThanOrEqualTo(6);
         commentsPaneSelectedCount.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task Accessibility_checker_pane_routes_rows_through_shared_plan()
+    {
+        PresentationAccessibilityCheckerPanePlan? opened = null;
+        PresentationAccessibilityCheckerPanePlan? selectedTitle = null;
+        PresentationAccessibilityCheckerPanePlan? actionedAltText = null;
+        var paneVisible = false;
+        var rowCount = 0;
+        var selectedRowCount = 0;
+        var heading = string.Empty;
+        var titleSlideIndex = -1;
+        var titleSelectionCount = -1;
+        var altTextSlideIndex = -1;
+        uint[] altTextSelection = [];
+        var altTextPaneVisible = false;
+        var altTextPaneMessage = string.Empty;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var firstSlide = window.Editor.CurrentSlide!;
+            firstSlide.Title = "Intro";
+            var shape = new SlideShape
+            {
+                Id = 908,
+                Name = "Product image",
+                Kind = SlideShapeKind.Picture,
+                Picture = new ImagePart(),
+            };
+            firstSlide.Shapes.Add(shape);
+            window.Editor.InsertSlide();
+            window.Editor.CurrentSlide!.Title = string.Empty;
+            window.Editor.SelectSlide(0);
+
+            opened = window.ShowAccessibilityCheckerPane();
+            paneVisible = window.IsAccessibilityCheckerPaneVisible;
+            rowCount = window.AccessibilityCheckerPaneRowCount;
+            selectedRowCount = window.AccessibilityCheckerPaneSelectedRowCount;
+            heading = window.AccessibilityCheckerPaneHeading;
+
+            selectedTitle = window.SelectAccessibilityCheckerRow(1);
+            titleSlideIndex = window.Editor.CurrentSlideIndex;
+            titleSelectionCount = window.Editor.SelectedShapeIds.Count;
+
+            actionedAltText = window.ApplyAccessibilityCheckerRowAction(0);
+            altTextSlideIndex = window.Editor.CurrentSlideIndex;
+            altTextSelection = window.Editor.SelectedShapeIds.ToArray();
+            altTextPaneVisible = window.IsAltTextPaneVisible;
+            altTextPaneMessage = window.AltTextPaneMessage;
+        });
+
+        if (!ran) return;
+        paneVisible.Should().BeTrue();
+        rowCount.Should().Be(2);
+        selectedRowCount.Should().Be(1);
+        heading.Should().Be("Accessibility - 2 issues");
+        opened.Should().NotBeNull();
+        opened!.Rows.Select(row => row.Title).Should().Equal("Alt text missing", "Missing slide title");
+        opened.Rows[0].CommandHint.Should().Be(PresentationReviewWorkflowPlanner.AltTextCommandId);
+        opened.Rows[1].Should().Match<PresentationAccessibilityCheckerRowPlan>(row =>
+            row.Category == "Slide title" &&
+            row.ShouldNavigateToSlide &&
+            !row.ShouldSelectShape);
+        selectedTitle.Should().NotBeNull();
+        selectedTitle!.SelectedRow!.Title.Should().Be("Missing slide title");
+        titleSlideIndex.Should().Be(1);
+        titleSelectionCount.Should().Be(0);
+        actionedAltText.Should().NotBeNull();
+        actionedAltText!.SelectedRow!.CommandHint.Should().Be(PresentationReviewWorkflowPlanner.AltTextCommandId);
+        altTextSlideIndex.Should().Be(0);
+        altTextSelection.Should().Equal(908u);
+        altTextPaneVisible.Should().BeTrue();
+        altTextPaneMessage.Should().Be(PresentationReviewWorkflowPlanner.MissingAltTextDescriptionMessage);
     }
 
     [Fact]
