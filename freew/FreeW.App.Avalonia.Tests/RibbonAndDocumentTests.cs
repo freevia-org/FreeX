@@ -125,6 +125,18 @@ public class RibbonAndDocumentTests
     }
 
     [Fact]
+    public void Avalonia_shell_wires_review_compare_combine_to_model_backed_workflow()
+    {
+        var mainWindow = File.ReadAllText(FindRepoFile("freew", "FreeW.App.Avalonia", "MainWindow.cs"));
+
+        mainWindow.Should().Contain("CompareDocuments: () => _ = CompareDocumentsAsync()");
+        mainWindow.Should().Contain("CombineDocuments: () => _ = CombineDocumentsAsync()");
+        mainWindow.Should().Contain("ReviewCompareCombineWorkflow.ExecuteCompare(");
+        mainWindow.Should().Contain("ReviewCompareCombineWorkflow.ExecuteCombine(");
+        mainWindow.Should().Contain("_fileWorkflow.MarkDirtyWithPath(null);");
+    }
+
+    [Fact]
     public void Sample_document_contains_title_lists_and_a_table()
     {
         var doc = SampleDocument.Create();
