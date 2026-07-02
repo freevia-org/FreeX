@@ -334,6 +334,7 @@ public sealed class MainWindowHeadlessTests
         ids.Should().Contain("freep.file.save",    "Save command required");
         ids.Should().Contain("freep.file.save-as", "Save As command required");
         ids.Should().Contain(PresentationExportPlanner.ImageExportCommandId, "image export command required");
+        ids.Should().Contain(PresentationExportPlanner.VideoExportCommandId, "video export command required");
     }
 
     [Fact]
@@ -1114,6 +1115,37 @@ public sealed class MainWindowHeadlessTests
         handoutPlan.PrintPlan.Layout.SlidesPerPage.Should().Be(6);
         handoutPlan.Pages.Should().ContainSingle();
         handoutPlan.Pages[0].Slots.Select(slot => slot.SlideNumber).Should().Equal(1, 2, 3, 4);
+    }
+
+    [Fact]
+    public async Task Video_export_command_records_shared_deferred_plan()
+    {
+        var found = false;
+        PresentationVideoExportPlan? videoPlan = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            window.Editor.InsertSlide();
+            window.Editor.InsertSlide();
+
+            var registry = window.BuildCommandRegistry();
+            found = registry.TryGet(PresentationExportPlanner.VideoExportCommandId, out var video);
+
+            video!.Execute(RibbonCommandContext.Empty);
+            videoPlan = window.LastVideoExportPlan;
+        });
+
+        if (!ran) return;
+        found.Should().BeTrue("the Avalonia registry should expose the shared video export plan seam");
+        videoPlan.Should().NotBeNull();
+        videoPlan!.CommandId.Should().Be(PresentationExportPlanner.VideoExportCommandId);
+        videoPlan.DefaultExtensionWithDot.Should().Be(PresentationExportPlanner.VideoExportExtension);
+        videoPlan.SlideRange.SlideNumbers.Should().Equal(1, 2, 3);
+        videoPlan.Quality.Quality.Should().Be(PresentationVideoQualityKind.FullHd);
+        videoPlan.EstimatedDuration.Should().Be(TimeSpan.FromSeconds(15));
+        videoPlan.CanExecute.Should().BeFalse();
+        videoPlan.DisabledReason.Should().Be(PresentationExportPlanner.VideoExportDeferredMessage);
     }
 
     [Fact]

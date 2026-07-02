@@ -149,6 +149,7 @@ public sealed class MainWindow : Window
     internal PresentationProofingRequestPlan? LastProofingRequestPlan { get; private set; }
     internal PresentationDesignCommandPlan? LastLayoutRequestPlan { get; private set; }
     internal PresentationNotesPagePreviewPlan? LastNotesPagePreviewPlan { get; private set; }
+    internal PresentationVideoExportPlan? LastVideoExportPlan { get; private set; }
     internal PresentationLayoutPickerPlan? LastLayoutPickerPlan { get; private set; }
     internal PresentationLayoutChoice? LastAppliedLayoutChoice { get; private set; }
     internal TableInsertionPickerPlan? LastTablePickerPlan { get; private set; }
@@ -309,6 +310,7 @@ public sealed class MainWindow : Window
             SaveAs: () => _file.SaveAs(),
             ExportPdf: () => _file.ExportPdf(),
             ExportImages: () => _file.ExportImages(),
+            ExportVideo: () => RefreshVideoExportPlan(),
             CurrentOptions: () => _options,
             OnClosed: () => { },
             DataFolder: ResolveDataFolderLabel));
@@ -943,6 +945,12 @@ public sealed class MainWindow : Window
             Canvas.SetTop(dot,  cy - 7);
             _commentOverlay.Children.Add(dot);
         }
+    }
+
+    internal PresentationVideoExportPlan RefreshVideoExportPlan(PresentationVideoExportRequest? request = null)
+    {
+        LastVideoExportPlan = _file.BuildVideoExportPlan(request);
+        return LastVideoExportPlan;
     }
 
     internal void RefreshReviewWorkflowPlans()

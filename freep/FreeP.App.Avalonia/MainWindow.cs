@@ -166,6 +166,7 @@ public sealed class MainWindow : Window
     internal PresentationDesignCommandPlan? LastLayoutRequestPlan { get; private set; }
     internal PresentationHandoutLayoutPlan? LastHandoutLayoutPlan { get; private set; }
     internal PresentationNotesPagePreviewPlan? LastNotesPagePreviewPlan { get; private set; }
+    internal PresentationVideoExportPlan? LastVideoExportPlan { get; private set; }
     internal PresentationLayoutPickerPlan? LastLayoutPickerPlan { get; private set; }
     internal PresentationLayoutChoice? LastAppliedLayoutChoice { get; private set; }
     internal TableInsertionPickerPlan? LastTablePickerPlan { get; private set; }
@@ -756,6 +757,7 @@ public sealed class MainWindow : Window
         r.Register(PresentationExportPlanner.PdfExportCommandId, new ActionRibbonCommand(() => _ = FileExportPdfAsync()));
         r.Register(PresentationExportPlanner.ImageExportCommandId, new ActionRibbonCommand(() => _ = FileExportImagesAsync()));
         r.Register(PresentationExportPlanner.PrintCommandId, new ActionRibbonCommand(() => RefreshHandoutLayoutPlan()));
+        r.Register(PresentationExportPlanner.VideoExportCommandId, new ActionRibbonCommand(() => RefreshVideoExportPlan()));
 
         // Slide navigation/management
         r.Register("freep.new-slide",       new ActionRibbonCommand(() => Editor.InsertSlide()));
@@ -1384,6 +1386,13 @@ public sealed class MainWindow : Window
             _presentation.SlideSizeCyEmu);
         _statusText.Text = "Print handout layout planned";
         return LastHandoutLayoutPlan;
+    }
+
+    internal PresentationVideoExportPlan RefreshVideoExportPlan(PresentationVideoExportRequest? request = null)
+    {
+        LastVideoExportPlan = PresentationExportPlanner.BuildVideoExportPlan(request, _presentation.Slides.Count);
+        _statusText.Text = LastVideoExportPlan.DisabledReason ?? "Video export planned";
+        return LastVideoExportPlan;
     }
 
     private void RegisterReviewWorkflowCommands(RibbonCommandRegistry registry)

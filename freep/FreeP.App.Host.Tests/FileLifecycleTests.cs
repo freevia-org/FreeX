@@ -145,6 +145,37 @@ public sealed class FileLifecycleTests : IDisposable
     }
 
     [StaFact]
+    public void BuildVideoExportPlan_UsesSharedPlannerForWpfAdapter()
+    {
+        var (_, file, getModel, _, _) = CreateHarness();
+        getModel().Slides.Add(new Slide { Title = "Two" });
+        getModel().Slides.Add(new Slide { Title = "Three" });
+
+        var plan = file.BuildVideoExportPlan(new PresentationVideoExportRequest(
+            new PresentationSlideRangeRequest(
+                PresentationSlideRangeKind.CustomRange,
+                StartSlideNumber: 2,
+                EndSlideNumber: 3),
+            PresentationVideoQualityKind.Hd,
+            SecondsPerSlide: 12,
+            UseRecordedTimings: false,
+            IncludeNarration: false));
+
+        plan.CommandId.Should().Be(PresentationExportPlanner.VideoExportCommandId);
+        plan.DefaultExtensionWithDot.Should().Be(PresentationExportPlanner.VideoExportExtension);
+        plan.SlideRange.SlideNumbers.Should().Equal(2, 3);
+        plan.Quality.Quality.Should().Be(PresentationVideoQualityKind.Hd);
+        plan.Quality.WidthPx.Should().Be(1280);
+        plan.Quality.HeightPx.Should().Be(720);
+        plan.SecondsPerSlide.Should().Be(12);
+        plan.UseRecordedTimings.Should().BeFalse();
+        plan.IncludeNarration.Should().BeFalse();
+        plan.EstimatedDuration.Should().Be(TimeSpan.FromSeconds(24));
+        plan.CanExecute.Should().BeFalse();
+        plan.DisabledReason.Should().Be(PresentationExportPlanner.VideoExportDeferredMessage);
+    }
+
+    [StaFact]
     public void OpenPath_LoadsPptxFileAndMarksSavedWithPath()
     {
         var (_, file, getModel, _, _) = CreateHarness();

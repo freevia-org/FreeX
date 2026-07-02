@@ -358,6 +358,36 @@ public sealed class ReviewWorkflowAdapterTests
     }
 
     [StaFact]
+    public void MainWindow_VideoExportRequest_RecordsSharedDeferredPlan()
+    {
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
+        try
+        {
+            window.Editor.InsertSlide();
+
+            var plan = window.RefreshVideoExportPlan(new PresentationVideoExportRequest(
+                new PresentationSlideRangeRequest(
+                    PresentationSlideRangeKind.SelectedSlides,
+                    SelectedSlideNumbers: [2, 1, 2]),
+                PresentationVideoQualityKind.Standard,
+                SecondsPerSlide: 8));
+
+            window.LastVideoExportPlan.Should().BeSameAs(plan);
+            plan.CommandId.Should().Be(PresentationExportPlanner.VideoExportCommandId);
+            plan.SlideRange.SlideNumbers.Should().Equal(1, 2);
+            plan.Quality.Quality.Should().Be(PresentationVideoQualityKind.Standard);
+            plan.Quality.WidthPx.Should().Be(852);
+            plan.EstimatedDuration.Should().Be(TimeSpan.FromSeconds(16));
+            plan.CanExecute.Should().BeFalse();
+            plan.DisabledReason.Should().Be(PresentationExportPlanner.VideoExportDeferredMessage);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [StaFact]
     public void FreePRibbonCommands_RegistersSharedReviewWorkflowCommandIds()
     {
         var presentation = Presentation.CreateEmpty();

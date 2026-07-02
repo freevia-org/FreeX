@@ -306,7 +306,59 @@ public sealed class PresentationExportPlannerTests
         video.CommandId.Should().Be(PresentationExportPlanner.VideoExportCommandId);
         video.DefaultExtensionWithDot.Should().Be(".mp4");
         video.IsImplemented.Should().BeFalse();
+        video.CanExecute.Should().BeFalse();
+        video.DisabledReason.Should().Be(PresentationExportPlanner.VideoExportDeferredMessage);
+        video.Quality.Quality.Should().Be(PresentationVideoQualityKind.FullHd);
+        video.Quality.WidthPx.Should().Be(1920);
+        video.Quality.HeightPx.Should().Be(1080);
+        video.SecondsPerSlide.Should().Be(PresentationExportPlanner.DefaultVideoSecondsPerSlide);
+        video.UseRecordedTimings.Should().BeTrue();
+        video.IncludeNarration.Should().BeTrue();
+        video.EstimatedDuration.Should().Be(TimeSpan.FromSeconds(15));
         video.SlideRange.SlideNumbers.Should().Equal(image.SlideRange.SlideNumbers);
+    }
+
+    [Fact]
+    public void VideoExportPlan_NormalizesPowerPointWorkflowOptionsAndEmptyDeckState()
+    {
+        var request = new PresentationVideoExportRequest(
+            new PresentationSlideRangeRequest(
+                PresentationSlideRangeKind.SelectedSlides,
+                SelectedSlideNumbers: [5, 2, 2, 99, 1]),
+            PresentationVideoQualityKind.UltraHd,
+            SecondsPerSlide: 0.2,
+            UseRecordedTimings: false,
+            IncludeNarration: false);
+
+        var plan = PresentationExportPlanner.BuildVideoExportPlan(request, slideCount: 5);
+        var empty = PresentationExportPlanner.BuildVideoExportPlan(request, slideCount: 0);
+
+        plan.Format.Should().Be(PresentationExportFormat.Video);
+        plan.CommandId.Should().Be(PresentationExportPlanner.VideoExportCommandId);
+        plan.Description.Should().Contain("PowerPoint-style MP4 export workflow");
+        plan.QualityOptions.Select(option => option.Quality)
+            .Should()
+            .Equal(
+                PresentationVideoQualityKind.UltraHd,
+                PresentationVideoQualityKind.FullHd,
+                PresentationVideoQualityKind.Hd,
+                PresentationVideoQualityKind.Standard);
+        plan.Quality.DisplayName.Should().Be("Ultra HD (4K)");
+        plan.Quality.WidthPx.Should().Be(3840);
+        plan.Quality.HeightPx.Should().Be(2160);
+        plan.SecondsPerSlide.Should().Be(1);
+        plan.UseRecordedTimings.Should().BeFalse();
+        plan.IncludeNarration.Should().BeFalse();
+        plan.SlideRange.SlideNumbers.Should().Equal(1, 2, 5);
+        plan.SlideRange.DisplayName.Should().Be("Slides 1, 2, 5");
+        plan.EstimatedDuration.Should().Be(TimeSpan.FromSeconds(3));
+        plan.IsImplemented.Should().BeFalse();
+        plan.CanExecute.Should().BeFalse();
+        plan.DisabledReason.Should().Be(PresentationExportPlanner.VideoExportDeferredMessage);
+
+        empty.SlideRange.DisplayName.Should().Be("No slides");
+        empty.EstimatedDuration.Should().Be(TimeSpan.Zero);
+        empty.DisabledReason.Should().Be("Video export requires at least one slide.");
     }
 
     [Fact]
