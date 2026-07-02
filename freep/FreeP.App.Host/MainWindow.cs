@@ -707,6 +707,8 @@ public sealed class MainWindow : Window
             MinWidth = 84,
             Padding = new Thickness(10, 4, 10, 4),
         };
+        _readingOrderMoveEarlierButton.Click += (_, _) => ApplyReadingOrderMoveEarlier();
+        _readingOrderMoveLaterButton.Click += (_, _) => ApplyReadingOrderMoveLater();
         _readingOrderPaneItemsPanel = new StackPanel
         {
             Orientation = Orientation.Vertical,
@@ -1001,6 +1003,22 @@ public sealed class MainWindow : Window
         var plan = RefreshReadingOrderPlan();
         RenderReadingOrderPane(plan);
         _readingOrderPaneHost.Visibility = Visibility.Visible;
+        return plan;
+    }
+
+    internal PresentationReadingOrderMutationPlan ApplyReadingOrderMoveEarlier()
+        => ApplyReadingOrderMove(PresentationReviewWorkflowIntentKind.MoveReadingOrderEarlier);
+
+    internal PresentationReadingOrderMutationPlan ApplyReadingOrderMoveLater()
+        => ApplyReadingOrderMove(PresentationReviewWorkflowIntentKind.MoveReadingOrderLater);
+
+    private PresentationReadingOrderMutationPlan ApplyReadingOrderMove(
+        PresentationReviewWorkflowIntentKind intent)
+    {
+        var plan = PresentationReviewWorkflowPlanner.TryApplyReadingOrderMove(Editor, intent);
+        RefreshReadingOrderPlan();
+        if (IsReadingOrderPaneVisible && LastReadingOrderPlan is not null)
+            RenderReadingOrderPane(LastReadingOrderPlan);
         return plan;
     }
 

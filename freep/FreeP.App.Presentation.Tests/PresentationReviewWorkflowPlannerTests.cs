@@ -489,9 +489,17 @@ public sealed class PresentationReviewWorkflowPlannerTests
                 PresentationReviewWorkflowPlanner.ReadingOrderMoveEarlierCommandId,
                 "Move Earlier",
                 PresentationReviewWorkflowIntentKind.MoveReadingOrderEarlier,
-                false,
-                PresentationWorkflowCapabilityStatus.Deferred,
-                PresentationReviewWorkflowPlanner.ReadingOrderReorderDeferredMessage));
+                true,
+                PresentationWorkflowCapabilityStatus.Available,
+                null));
+        plan.Actions.Single(action => action.CommandId == PresentationReviewWorkflowPlanner.ReadingOrderMoveLaterCommandId)
+            .Should().Be(new PresentationReviewWorkflowActionPlan(
+                PresentationReviewWorkflowPlanner.ReadingOrderMoveLaterCommandId,
+                "Move Later",
+                PresentationReviewWorkflowIntentKind.MoveReadingOrderLater,
+                true,
+                PresentationWorkflowCapabilityStatus.Available,
+                null));
         plan.Actions.Single(action => action.CommandId == PresentationReviewWorkflowPlanner.ReadingOrderSelectItemCommandId)
             .IsEnabled.Should().BeTrue();
     }
@@ -521,6 +529,121 @@ public sealed class PresentationReviewWorkflowPlannerTests
                 false,
                 PresentationWorkflowCapabilityStatus.Available,
                 PresentationReviewWorkflowPlanner.EmptyReadingOrderMessage));
+    }
+
+    [Fact]
+    public void BuildReadingOrderPlan_EnablesTopLevelMovesOnlyWhenDirectionIsAvailable()
+    {
+        var slide = new Slide();
+        slide.Shapes.Add(new SlideShape { Id = 1, Name = "Back shape" });
+        slide.Shapes.Add(new SlideShape { Id = 2, Name = "Middle shape" });
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 3,
+            Name = "Group",
+            Kind = SlideShapeKind.Group,
+            Children =
+            {
+                new SlideShape { Id = 4, Name = "Nested child" }
+            }
+        });
+
+        var first = PresentationReviewWorkflowPlanner.BuildReadingOrderPlan(slide, 0, [1]);
+        var middle = PresentationReviewWorkflowPlanner.BuildReadingOrderPlan(slide, 0, [2]);
+        var last = PresentationReviewWorkflowPlanner.BuildReadingOrderPlan(slide, 0, [3]);
+        var nested = PresentationReviewWorkflowPlanner.BuildReadingOrderPlan(slide, 0, [4]);
+
+        Action(first, PresentationReviewWorkflowPlanner.ReadingOrderMoveEarlierCommandId)
+            .Should().Be(new PresentationReviewWorkflowActionPlan(
+                PresentationReviewWorkflowPlanner.ReadingOrderMoveEarlierCommandId,
+                "Move Earlier",
+                PresentationReviewWorkflowIntentKind.MoveReadingOrderEarlier,
+                false,
+                PresentationWorkflowCapabilityStatus.Available,
+                PresentationReviewWorkflowPlanner.ReadingOrderAlreadyEarliestMessage));
+        Action(first, PresentationReviewWorkflowPlanner.ReadingOrderMoveLaterCommandId).IsEnabled.Should().BeTrue();
+        Action(middle, PresentationReviewWorkflowPlanner.ReadingOrderMoveEarlierCommandId).IsEnabled.Should().BeTrue();
+        Action(middle, PresentationReviewWorkflowPlanner.ReadingOrderMoveLaterCommandId).IsEnabled.Should().BeTrue();
+        Action(last, PresentationReviewWorkflowPlanner.ReadingOrderMoveLaterCommandId)
+            .DisabledReason.Should().Be(PresentationReviewWorkflowPlanner.ReadingOrderAlreadyLatestMessage);
+        Action(nested, PresentationReviewWorkflowPlanner.ReadingOrderMoveEarlierCommandId)
+            .Should().Be(new PresentationReviewWorkflowActionPlan(
+                PresentationReviewWorkflowPlanner.ReadingOrderMoveEarlierCommandId,
+                "Move Earlier",
+                PresentationReviewWorkflowIntentKind.MoveReadingOrderEarlier,
+                false,
+                PresentationWorkflowCapabilityStatus.Deferred,
+                PresentationReviewWorkflowPlanner.NestedReadingOrderReorderDeferredMessage));
+        Action(nested, PresentationReviewWorkflowPlanner.ReadingOrderMoveLaterCommandId)
+            .DisabledReason.Should().Be(PresentationReviewWorkflowPlanner.NestedReadingOrderReorderDeferredMessage);
+
+        static PresentationReviewWorkflowActionPlan Action(PresentationReadingOrderPlan plan, string commandId) =>
+            plan.Actions.Single(action => action.CommandId == commandId);
+    }
+
+    [Fact]
+    public void TryApplyReadingOrderMove_MutatesTopLevelShapeOrderAndPreservesChildren()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Shapes.Clear();
+        var first = new SlideShape { Id = 1, Name = "Back shape" };
+        var middle = new SlideShape { Id = 2, Name = "Middle shape" };
+        var group = new SlideShape
+        {
+            Id = 3,
+            Name = "Group",
+            Kind = SlideShapeKind.Group,
+            Children =
+            {
+                new SlideShape { Id = 4, Name = "Nested child" }
+            }
+        };
+        slide.Shapes.Add(first);
+        slide.Shapes.Add(middle);
+        slide.Shapes.Add(group);
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        editor.Select(middle.Id);
+
+        var earlier = PresentationReviewWorkflowPlanner.TryApplyReadingOrderMove(
+            editor,
+            PresentationReviewWorkflowIntentKind.MoveReadingOrderEarlier);
+        var boundary = PresentationReviewWorkflowPlanner.TryApplyReadingOrderMove(
+            editor,
+            PresentationReviewWorkflowIntentKind.MoveReadingOrderEarlier);
+        editor.Select(4);
+        var nested = PresentationReviewWorkflowPlanner.TryApplyReadingOrderMove(
+            editor,
+            PresentationReviewWorkflowIntentKind.MoveReadingOrderLater);
+
+        earlier.Should().Be(new PresentationReadingOrderMutationPlan(
+            PresentationReviewWorkflowIntentKind.MoveReadingOrderEarlier,
+            true,
+            0,
+            middle.Id,
+            1,
+            0,
+            null));
+        slide.Shapes.Select(shape => shape.Id).Should().Equal(2u, 1u, 3u);
+        group.Children.Select(shape => shape.Id).Should().Equal(4u);
+        boundary.Should().Be(new PresentationReadingOrderMutationPlan(
+            PresentationReviewWorkflowIntentKind.MoveReadingOrderEarlier,
+            false,
+            0,
+            middle.Id,
+            -1,
+            -1,
+            PresentationReviewWorkflowPlanner.ReadingOrderAlreadyEarliestMessage));
+        nested.Should().Be(new PresentationReadingOrderMutationPlan(
+            PresentationReviewWorkflowIntentKind.MoveReadingOrderLater,
+            false,
+            0,
+            4,
+            -1,
+            -1,
+            PresentationReviewWorkflowPlanner.NestedReadingOrderReorderDeferredMessage));
+        slide.Shapes.Select(shape => shape.Id).Should().Equal(2u, 1u, 3u);
+        group.Children.Select(shape => shape.Id).Should().Equal(4u);
     }
 
     [Fact]

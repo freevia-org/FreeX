@@ -1261,6 +1261,11 @@ public sealed class MainWindowHeadlessTests
         var readingOrderPaneMessage = string.Empty;
         var readingOrderMoveEarlierEnabled = true;
         string? readingOrderMoveEarlierDisabledReason = null;
+        var readingOrderMoveLaterEnabled = false;
+        string? readingOrderMoveLaterDisabledReason = null;
+        PresentationReadingOrderMutationPlan? readingOrderMove = null;
+        uint[] readingOrderShapeOrderAfterMove = [];
+        uint[] readingOrderPaneOrderAfterMove = [];
 
         var ran = await OnUiThread(() =>
         {
@@ -1279,8 +1284,16 @@ public sealed class MainWindowHeadlessTests
                 Kind = SlideShapeKind.Picture,
                 Picture = new ImagePart(),
             };
+            var caption = new SlideShape
+            {
+                Id = 329,
+                Name = "Caption",
+                Kind = SlideShapeKind.AutoShape,
+                Text = "Caption",
+            };
             window.Editor.CurrentSlide.Shapes.Clear();
             window.Editor.CurrentSlide.Shapes.Add(shape);
+            window.Editor.CurrentSlide.Shapes.Add(caption);
             window.Editor.Select(shape.Id);
 
             var registry = window.BuildCommandRegistry();
@@ -1310,6 +1323,15 @@ public sealed class MainWindowHeadlessTests
             readingOrderPaneMessage = window.ReadingOrderPaneMessage;
             readingOrderMoveEarlierEnabled = window.IsReadingOrderMoveEarlierEnabled;
             readingOrderMoveEarlierDisabledReason = window.ReadingOrderMoveEarlierDisabledReason;
+            readingOrderMoveLaterEnabled = window.IsReadingOrderMoveLaterEnabled;
+            readingOrderMoveLaterDisabledReason = window.ReadingOrderMoveLaterDisabledReason;
+            readingOrderMove = window.ApplyReadingOrderMoveLater();
+            readingOrderShapeOrderAfterMove = window.Editor.CurrentSlide.Shapes
+                .Select(shape => shape.Id)
+                .ToArray();
+            readingOrderPaneOrderAfterMove = window.LastReadingOrderPlan!.Items
+                .Select(item => item.ShapeId)
+                .ToArray();
             proofingPlan = window.LastProofingRequestPlan;
         });
 
@@ -1344,19 +1366,31 @@ public sealed class MainWindowHeadlessTests
             PresentationReviewWorkflowPlanner.AltTextPaneCloseCommandId
         });
         readingOrderPlan.Should().NotBeNull();
-        readingOrderPlan!.Items.Should().ContainSingle(item => item.ShapeId == 328);
+        readingOrderPlan!.Items.Select(item => item.ShapeId).Should().Equal(328u, 329u);
         readingOrderPlan.SelectedItem.Should().NotBeNull();
         readingOrderPlan.SelectedItem!.ShapeId.Should().Be(328);
         readingOrderPlan.Actions.Single(action =>
                 action.CommandId == PresentationReviewWorkflowPlanner.ReadingOrderMoveEarlierCommandId)
-            .DisabledReason.Should().Be(PresentationReviewWorkflowPlanner.ReadingOrderReorderDeferredMessage);
+            .DisabledReason.Should().Be(PresentationReviewWorkflowPlanner.ReadingOrderAlreadyEarliestMessage);
         readingOrderPaneVisible.Should().BeTrue("the Avalonia reading order command should render a shared-plan-backed pane");
-        readingOrderPaneItemCount.Should().Be(1);
-        readingOrderPaneHeading.Should().Be("Reading Order - slide 1 (1 shapes)");
+        readingOrderPaneItemCount.Should().Be(2);
+        readingOrderPaneHeading.Should().Be("Reading Order - slide 1 (2 shapes)");
         readingOrderPaneMessage.Should().Be("Selected: Product image");
         readingOrderMoveEarlierEnabled.Should().BeFalse();
         readingOrderMoveEarlierDisabledReason.Should()
-            .Be(PresentationReviewWorkflowPlanner.ReadingOrderReorderDeferredMessage);
+            .Be(PresentationReviewWorkflowPlanner.ReadingOrderAlreadyEarliestMessage);
+        readingOrderMoveLaterEnabled.Should().BeTrue();
+        readingOrderMoveLaterDisabledReason.Should().BeNull();
+        readingOrderMove.Should().Be(new PresentationReadingOrderMutationPlan(
+            PresentationReviewWorkflowIntentKind.MoveReadingOrderLater,
+            true,
+            0,
+            328,
+            0,
+            1,
+            null));
+        readingOrderShapeOrderAfterMove.Should().Equal(329u, 328u);
+        readingOrderPaneOrderAfterMove.Should().Equal(329u, 328u);
         proofingPlan.Should().NotBeNull();
         proofingPlan!.Status.Should().Be(PresentationWorkflowCapabilityStatus.RequiresHost);
         commentsPaneVisible.Should().BeTrue("the Avalonia comments command should render a shared-plan-backed pane");

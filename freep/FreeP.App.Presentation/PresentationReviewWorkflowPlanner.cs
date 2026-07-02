@@ -170,6 +170,15 @@ public sealed record PresentationReadingOrderPlan(
             : null;
 }
 
+public sealed record PresentationReadingOrderMutationPlan(
+    PresentationReviewWorkflowIntentKind Intent,
+    bool ShouldApply,
+    int SlideIndex,
+    uint? ShapeId,
+    int SourceIndex,
+    int TargetIndex,
+    string? ValidationMessage);
+
 public sealed record PresentationProofingRequestPlan(
     bool CanStart,
     PresentationWorkflowCapabilityStatus Status,
@@ -215,6 +224,12 @@ public static class PresentationReviewWorkflowPlanner
         "Current slide has no shapes in the reading order.";
     public const string ReadingOrderReorderDeferredMessage =
         "Reading order mutation is deferred; this shared plan exposes stable shape order for a visible pane follow-up.";
+    public const string NestedReadingOrderReorderDeferredMessage =
+        "Nested/group child reading-order moves are deferred; select a top-level shape first.";
+    public const string ReadingOrderAlreadyEarliestMessage =
+        "Selected shape is already earliest in the reading order.";
+    public const string ReadingOrderAlreadyLatestMessage =
+        "Selected shape is already latest in the reading order.";
     public const string ProofingRequiresHostMessage =
         "Proofing needs a host spelling engine; this shared plan owns the searchable FreeP scopes.";
     public const string MissingSlideTitleActionSummary =
@@ -619,7 +634,69 @@ public static class PresentationReviewWorkflowPlanner
             hasSingleSelectedItem ? singleSelectedShapeId : null,
             selectedIndex,
             items,
-            BuildReadingOrderActions(items.Length > 0, hasSingleSelectedItem));
+            BuildReadingOrderActions(slide, items, selectedIndex, singleSelectedShapeId));
+    }
+
+    public static PresentationReadingOrderMutationPlan BuildReadingOrderMovePlan(
+        Slide? slide,
+        int slideIndex,
+        IReadOnlyList<uint>? selectedShapeIds,
+        PresentationReviewWorkflowIntentKind intent)
+    {
+        if (intent is not PresentationReviewWorkflowIntentKind.MoveReadingOrderEarlier
+            and not PresentationReviewWorkflowIntentKind.MoveReadingOrderLater)
+        {
+            throw new ArgumentOutOfRangeException(nameof(intent), intent, "Unsupported reading-order move intent.");
+        }
+
+        var plan = BuildReadingOrderPlan(slide, slideIndex, selectedShapeIds);
+        var commandId = intent == PresentationReviewWorkflowIntentKind.MoveReadingOrderEarlier
+            ? ReadingOrderMoveEarlierCommandId
+            : ReadingOrderMoveLaterCommandId;
+        var action = plan.Actions.Single(action => action.CommandId == commandId);
+        if (!action.IsEnabled || slide is null || plan.SelectedShapeId is not { } shapeId)
+        {
+            return new PresentationReadingOrderMutationPlan(
+                intent,
+                false,
+                slideIndex,
+                plan.SelectedShapeId,
+                -1,
+                -1,
+                action.DisabledReason);
+        }
+
+        var sourceIndex = slide.Shapes.FindIndex(shape => shape.Id == shapeId);
+        var targetIndex = intent == PresentationReviewWorkflowIntentKind.MoveReadingOrderEarlier
+            ? sourceIndex - 1
+            : sourceIndex + 1;
+        return new PresentationReadingOrderMutationPlan(
+            intent,
+            true,
+            slideIndex,
+            shapeId,
+            sourceIndex,
+            targetIndex,
+            null);
+    }
+
+    public static PresentationReadingOrderMutationPlan TryApplyReadingOrderMove(
+        EditingSession editor,
+        PresentationReviewWorkflowIntentKind intent)
+    {
+        ArgumentNullException.ThrowIfNull(editor);
+
+        var plan = BuildReadingOrderMovePlan(
+            editor.CurrentSlide,
+            editor.CurrentSlideIndex,
+            editor.SelectedShapeIds,
+            intent);
+        if (plan.ShouldApply)
+        {
+            editor.MoveSelectedShapeInReadingOrder(plan.TargetIndex - plan.SourceIndex);
+        }
+
+        return plan;
     }
 
     public static PresentationProofingRequestPlan BuildProofingRequestPlan(Presentation presentation)
@@ -723,6 +800,120 @@ public static class PresentationReviewWorkflowPlanner
                 PresentationWorkflowCapabilityStatus.Available,
                 hasItems ? null : EmptyReadingOrderMessage),
         ];
+    }
+
+    private static IReadOnlyList<PresentationReviewWorkflowActionPlan> BuildReadingOrderActions(
+        Slide slide,
+        IReadOnlyList<PresentationReadingOrderItemPlan> items,
+        int selectedItemIndex,
+        uint? selectedShapeId)
+    {
+        var hasItems = items.Count > 0;
+        var moveEarlier = BuildReadingOrderMoveAction(
+            slide,
+            items,
+            selectedItemIndex,
+            selectedShapeId,
+            ReadingOrderMoveEarlierCommandId,
+            "Move Earlier",
+            PresentationReviewWorkflowIntentKind.MoveReadingOrderEarlier,
+            offset: -1);
+        var moveLater = BuildReadingOrderMoveAction(
+            slide,
+            items,
+            selectedItemIndex,
+            selectedShapeId,
+            ReadingOrderMoveLaterCommandId,
+            "Move Later",
+            PresentationReviewWorkflowIntentKind.MoveReadingOrderLater,
+            offset: 1);
+
+        return
+        [
+            new(
+                ReadingOrderPaneCommandId,
+                "Reading Order",
+                PresentationReviewWorkflowIntentKind.OpenReadingOrderPane,
+                true,
+                PresentationWorkflowCapabilityStatus.Available),
+            moveEarlier,
+            moveLater,
+            new(
+                ReadingOrderSelectItemCommandId,
+                "Select Item",
+                PresentationReviewWorkflowIntentKind.SelectReadingOrderItem,
+                hasItems,
+                PresentationWorkflowCapabilityStatus.Available,
+                hasItems ? null : EmptyReadingOrderMessage),
+        ];
+    }
+
+    private static PresentationReviewWorkflowActionPlan BuildReadingOrderMoveAction(
+        Slide slide,
+        IReadOnlyList<PresentationReadingOrderItemPlan> items,
+        int selectedItemIndex,
+        uint? selectedShapeId,
+        string commandId,
+        string label,
+        PresentationReviewWorkflowIntentKind intent,
+        int offset)
+    {
+        var disabledReason = GetReadingOrderMoveDisabledReason(
+            slide,
+            items,
+            selectedItemIndex,
+            selectedShapeId,
+            offset);
+
+        return new PresentationReviewWorkflowActionPlan(
+            commandId,
+            label,
+            intent,
+            disabledReason is null,
+            disabledReason == NestedReadingOrderReorderDeferredMessage
+                ? PresentationWorkflowCapabilityStatus.Deferred
+                : PresentationWorkflowCapabilityStatus.Available,
+            disabledReason);
+    }
+
+    private static string? GetReadingOrderMoveDisabledReason(
+        Slide slide,
+        IReadOnlyList<PresentationReadingOrderItemPlan> items,
+        int selectedItemIndex,
+        uint? selectedShapeId,
+        int offset)
+    {
+        if (items.Count == 0)
+        {
+            return EmptyReadingOrderMessage;
+        }
+
+        if (selectedItemIndex < 0 || selectedShapeId is null)
+        {
+            return MissingReadingOrderSelectionMessage;
+        }
+
+        var selectedItem = items[selectedItemIndex];
+        if (selectedItem.NestingDepth > 0)
+        {
+            return NestedReadingOrderReorderDeferredMessage;
+        }
+
+        var topLevelIndex = slide.Shapes.FindIndex(shape => shape.Id == selectedShapeId.Value);
+        if (topLevelIndex < 0)
+        {
+            return NestedReadingOrderReorderDeferredMessage;
+        }
+
+        var targetIndex = topLevelIndex + offset;
+        if (targetIndex < 0)
+        {
+            return ReadingOrderAlreadyEarliestMessage;
+        }
+
+        return targetIndex >= slide.Shapes.Count
+            ? ReadingOrderAlreadyLatestMessage
+            : null;
     }
 
     private static IReadOnlyList<PresentationReviewWorkflowActionPlan> BuildAltTextPaneActions(

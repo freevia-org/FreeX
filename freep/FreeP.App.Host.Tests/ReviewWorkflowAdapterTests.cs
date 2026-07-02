@@ -80,8 +80,8 @@ public sealed class ReviewWorkflowAdapterTests
                     "Move Later",
                     PresentationReviewWorkflowIntentKind.MoveReadingOrderLater,
                     false,
-                    PresentationWorkflowCapabilityStatus.Deferred,
-                    PresentationReviewWorkflowPlanner.ReadingOrderReorderDeferredMessage));
+                    PresentationWorkflowCapabilityStatus.Available,
+                    PresentationReviewWorkflowPlanner.ReadingOrderAlreadyLatestMessage));
 
             var mutation = window.ApplySelectedShapeAlternativeText(
                 "  Product packaging on a white background. ",
@@ -250,14 +250,31 @@ public sealed class ReviewWorkflowAdapterTests
                 item.IsDecorative &&
                 item.AccessibilitySummary == "Decorative");
             window.IsReadingOrderMoveEarlierEnabled.Should().BeFalse();
-            window.IsReadingOrderMoveLaterEnabled.Should().BeFalse();
+            window.IsReadingOrderMoveLaterEnabled.Should().BeTrue();
             window.ReadingOrderMoveEarlierDisabledReason.Should()
-                .Be(PresentationReviewWorkflowPlanner.ReadingOrderReorderDeferredMessage);
-            window.ReadingOrderMoveLaterDisabledReason.Should()
-                .Be(PresentationReviewWorkflowPlanner.ReadingOrderReorderDeferredMessage);
+                .Be(PresentationReviewWorkflowPlanner.ReadingOrderAlreadyEarliestMessage);
+            window.ReadingOrderMoveLaterDisabledReason.Should().BeNull();
             window.LastReadingOrderPlan.Actions.Single(action =>
                     action.CommandId == PresentationReviewWorkflowPlanner.ReadingOrderMoveEarlierCommandId)
-                .Status.Should().Be(PresentationWorkflowCapabilityStatus.Deferred);
+                .Status.Should().Be(PresentationWorkflowCapabilityStatus.Available);
+
+            var mutation = window.ApplyReadingOrderMoveLater();
+
+            mutation.Should().Be(new PresentationReadingOrderMutationPlan(
+                PresentationReviewWorkflowIntentKind.MoveReadingOrderLater,
+                true,
+                0,
+                chart.Id,
+                0,
+                1,
+                null));
+            window.Editor.CurrentSlide.Shapes.Select(shape => shape.Id).Should().Equal(502u, 501u);
+            window.LastReadingOrderPlan!.Items.Select(item => item.ShapeId).Should().Equal(502u, 503u, 501u);
+            window.LastReadingOrderPlan.SelectedItem!.ShapeId.Should().Be(chart.Id);
+            window.IsReadingOrderMoveEarlierEnabled.Should().BeTrue();
+            window.IsReadingOrderMoveLaterEnabled.Should().BeFalse();
+            window.ReadingOrderMoveLaterDisabledReason.Should()
+                .Be(PresentationReviewWorkflowPlanner.ReadingOrderAlreadyLatestMessage);
         }
         finally
         {
