@@ -40,6 +40,7 @@ public sealed record FreeWVisualEvidenceNormalizedRow(
     int PageCount,
     string LayoutKind,
     string ExpectedOutputName,
+    FreeWVisualPageFeatureExpectation PageFeatures,
     FreeWVisualEvidenceTrust Trust);
 
 public sealed record FreeWVisualEvidenceNormalizedSummary(
@@ -54,7 +55,7 @@ public sealed record FreeWVisualEvidenceNormalizedSummary(
 public static class FreeWVisualEvidenceManifestNormalizer
 {
     public const string SummarySchemaId = "freew.visual-evidence-summary.v1";
-    public const int SummarySchemaVersion = 1;
+    public const int SummarySchemaVersion = 2;
     public const string SummaryJsonFileName = "freew_visual_evidence_summary.json";
     public const string SummaryMarkdownFileName = "freew_visual_evidence_summary.md";
     public const string WpfHostId = "wpf-fidelity-render";
@@ -193,13 +194,14 @@ public static class FreeWVisualEvidenceManifestNormalizer
         sb.AppendLine();
         sb.AppendLine("## Evidence");
         sb.AppendLine();
-        sb.AppendLine("| Host | Scenario | Output | Size | Bytes | SHA-256 | Trust |");
-        sb.AppendLine("| --- | --- | --- | ---: | ---: | --- | --- |");
+        sb.AppendLine("| Host | Scenario | Output | Features | Size | Bytes | SHA-256 | Trust |");
+        sb.AppendLine("| --- | --- | --- | --- | ---: | ---: | --- | --- |");
         foreach (var row in summary.Evidence)
         {
             sb.AppendLine(
                 $"| {EscapeMarkdown(row.HostId)} | {EscapeMarkdown(row.ScenarioId)} | " +
                 $"{EscapeMarkdown(row.OutputPath)} | " +
+                $"{EscapeMarkdown(FeatureSummary(row.PageFeatures))} | " +
                 $"{row.PixelWidth.ToString(CultureInfo.InvariantCulture)}x{row.PixelHeight.ToString(CultureInfo.InvariantCulture)} | " +
                 $"{row.ByteLength.ToString(CultureInfo.InvariantCulture)} | `{row.Sha256}` | " +
                 $"{(row.Trust.Passed ? "passed" : "failed")} |");
@@ -294,6 +296,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
             rowFailures.Add("pixel stats dimensions do not match evidence dimensions");
         if (!string.Equals(row.OutputName, row.PageExpectation.ExpectedOutputName, StringComparison.OrdinalIgnoreCase))
             rowFailures.Add($"output name '{row.OutputName}' does not match expected '{row.PageExpectation.ExpectedOutputName}'");
+        ValidateFeatureExpectations(row, rowFailures);
 
         var outputPath = ResolveOutputPath(row.OutputPath, manifestDirectory);
         var relativeOutputPath = NormalizeRelativePath(runRoot, outputPath);
@@ -345,7 +348,26 @@ public static class FreeWVisualEvidenceManifestNormalizer
             row.PageExpectation.PageCount,
             row.PageExpectation.LayoutKind,
             row.PageExpectation.ExpectedOutputName,
+            row.PageExpectation.Features,
             trust);
+    }
+
+    private static void ValidateFeatureExpectations(
+        FreeWVisualEvidenceRow row,
+        List<string> rowFailures)
+    {
+        var composition = row.PageExpectation.Composition;
+        var features = row.PageExpectation.Features;
+        if (composition.ExpectsColumns && features.Columns.Count <= 1)
+            rowFailures.Add("scenario expects multi-column layout but the page expectation records one column");
+        if (composition.ExpectsPageBorder && !features.PageBorder.Present)
+            rowFailures.Add("scenario expects a page border but the page expectation records none");
+        if (composition.ExpectsWatermark && !features.Watermark.Present)
+            rowFailures.Add("scenario expects a watermark but the page expectation records none");
+        if (features.Section.SectionOrdinal <= 0)
+            rowFailures.Add("section ordinal must be positive");
+        if (features.Section.SectionRelativePageNumber <= 0)
+            rowFailures.Add("section-relative page number must be positive");
     }
 
     private static IReadOnlyList<FreeWVisualEvidenceNormalizedScenario> BuildScenarioSummaries(
@@ -432,6 +454,24 @@ public static class FreeWVisualEvidenceManifestNormalizer
     {
         using var stream = File.OpenRead(path);
         return Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant();
+    }
+
+    private static string FeatureSummary(FreeWVisualPageFeatureExpectation features)
+    {
+        var parts = new List<string>
+        {
+            features.Section.OwnerId,
+            features.Columns.Count > 1
+                ? $"{features.Columns.Count.ToString(CultureInfo.InvariantCulture)} columns"
+                : "1 column"
+        };
+
+        if (features.PageBorder.Present)
+            parts.Add("page border");
+        if (features.Watermark.Present)
+            parts.Add("watermark");
+
+        return string.Join(", ", parts);
     }
 
     private static string EscapeMarkdown(string value) =>

@@ -65,6 +65,8 @@ static int RenderAll(string outDir)
     var webPath   = Path.GetFullPath(Path.Combine(outDir, "freew_web_layout.png"));
     var draftPath = Path.GetFullPath(Path.Combine(outDir, "freew_draft_layout.png"));
     var floatPath = Path.GetFullPath(Path.Combine(outDir, "freew_floating_image.png"));
+    var columnsPath = Path.GetFullPath(Path.Combine(outDir, "freew_columns_layout.png"));
+    var borderWatermarkPath = Path.GetFullPath(Path.Combine(outDir, "freew_border_watermark.png"));
     var evidence = new List<FreeWVisualEvidenceRow>();
 
     var rc = RenderMode(DocumentViewMode.PrintLayout, printPath,
@@ -88,12 +90,80 @@ static int RenderAll(string outDir)
         evidence: evidence);
     if (rc != 0) return rc;
 
+    rc = RenderMode(DocumentViewMode.PrintLayout, columnsPath,
+        width: 960, height: 1800,
+        label: "Columns",
+        scenarioId: "page-composition-columns",
+        evidence: evidence,
+        documentFactory: BuildColumnsDocument);
+    if (rc != 0) return rc;
+
+    rc = RenderMode(DocumentViewMode.PrintLayout, borderWatermarkPath,
+        width: 960, height: 1800,
+        label: "Border + Watermark",
+        scenarioId: "page-composition-border-watermark",
+        evidence: evidence,
+        documentFactory: BuildBorderWatermarkDocument);
+    if (rc != 0) return rc;
+
     // ── FO1: Floating-image render capture ──────────────────────────────────────────────────────────
     rc = RenderFloatingImageScene(floatPath, evidence);
     if (rc != 0) return rc;
 
     FreeWVisualEvidencePlanner.WriteManifest(outDir, evidence);
     return 0;
+}
+
+static TextDocument BuildColumnsDocument()
+{
+    var doc = TextDocument.CreateEmpty();
+    doc.Page.ColumnCount = 2;
+    doc.Page.ColumnSpacingPt = 36;
+    doc.Page.ColumnsLineBetween = true;
+    doc.Blocks.Clear();
+
+    var bodyFmt = RunFormatting.Default with { FontSizePt = 12 };
+    void AddPara(string text)
+    {
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run(text, bodyFmt));
+        doc.Blocks.Add(paragraph);
+    }
+
+    AddPara("Two Column Page Composition");
+    AddPara("This capture verifies that the shared visual evidence manifest records multi-column page composition.");
+    for (var i = 1; i <= 24; i++)
+        AddPara($"Column paragraph {i}: the page should flow into two Word-style columns with a visible gutter.");
+
+    return doc;
+}
+
+static TextDocument BuildBorderWatermarkDocument()
+{
+    var doc = TextDocument.CreateEmpty();
+    doc.Page.PageBorder = new PageBorder("#000080", 3.0);
+    doc.Page.WatermarkOptions = new WatermarkOptions("DRAFT")
+    {
+        FontColorHex = "#808080",
+        Opacity = 0.4,
+        Layout = WatermarkLayout.Diagonal,
+    };
+    doc.Blocks.Clear();
+
+    var bodyFmt = RunFormatting.Default with { FontSizePt = 12 };
+    void AddPara(string text)
+    {
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run(text, bodyFmt));
+        doc.Blocks.Add(paragraph);
+    }
+
+    AddPara("Page Border And Watermark");
+    AddPara("This capture verifies page background composition, a visible page border, and a diagonal text watermark.");
+    for (var i = 1; i <= 12; i++)
+        AddPara($"Watermark paragraph {i}: body text should remain visible above the watermark and inside the border.");
+
+    return doc;
 }
 
 /// <summary>
@@ -235,9 +305,10 @@ static int RenderMode(
     int height,
     string label,
     string scenarioId,
-    List<FreeWVisualEvidenceRow> evidence)
+    List<FreeWVisualEvidenceRow> evidence,
+    Func<TextDocument>? documentFactory = null)
 {
-    var doc = BuildMultiPageDocument();
+    var doc = documentFactory?.Invoke() ?? BuildMultiPageDocument();
     var view = new DocumentView();
     view.LoadDocument(doc);
     view.ViewMode = mode;
@@ -316,32 +387,30 @@ static void AddAvaloniaEvidence(
     string captureSource,
     string viewMode)
 {
-    var outputName = Path.GetFileName(outputPath);
     var stats = ComputePngPixelStats(pngBytes, pixelWidth, pixelHeight);
-    var expectation = FreeWVisualEvidencePlanner.BuildPageExpectation(
-        scenarioId,
-        page,
+    var sectionOrdinal = 1;
+    var row = FreeWVisualEvidencePlanner.BuildEvidenceRow(
+        scenarioId: scenarioId,
+        hostId: "avalonia-page-layout-shot",
+        outputPath: outputPath,
+        pixelWidth: stats.Width > 0 ? stats.Width : pixelWidth,
+        pixelHeight: stats.Height > 0 ? stats.Height : pixelHeight,
+        byteLength: pngBytes.LongLength,
+        pixelStats: stats,
+        page: page,
         pageNumber: 1,
         pageCount: 1,
-        outputName: outputName,
         layoutKind: layoutKind,
-        availableWidthDip: pixelWidth);
-    var row = FreeWVisualEvidencePlanner.BuildEvidenceRow(new FreeWVisualEvidenceCapture(
-        ScenarioId: scenarioId,
-        HostId: "avalonia-page-layout-shot",
-        OutputName: outputName,
-        OutputPath: Path.GetFullPath(outputPath),
-        PixelWidth: stats.Width > 0 ? stats.Width : pixelWidth,
-        PixelHeight: stats.Height > 0 ? stats.Height : pixelHeight,
-        ByteLength: pngBytes.LongLength,
-        PixelStats: stats,
-        PageExpectation: expectation,
-        HostMetadata: new Dictionary<string, string>
+        availableWidthDip: pixelWidth,
+        sectionOrdinal: sectionOrdinal,
+        sectionRelativePageNumber: 1,
+        sectionOwnerId: FreeWVisualEvidencePlanner.BuildSectionOwnerId(sectionOrdinal),
+        hostMetadata: new Dictionary<string, string>
         {
             ["renderer"] = "FreeW.PageLayoutShot",
             ["captureSource"] = captureSource,
             ["viewMode"] = viewMode
-        }));
+        });
     FreeWVisualEvidencePlanner.EnsureTrusted(row);
     evidence.Add(row);
 }

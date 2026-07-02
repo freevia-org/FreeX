@@ -17,10 +17,14 @@ public sealed class VisualEvidencePlannerTests
             "f2-hf-oddeven",
             "f2-footnotes",
             "f2-endnotes",
+            "f2-columns",
+            "f2-border-watermark",
             "f2-section-landscape",
             "f2-tracked-changes",
             "f2-comments",
             "page-composition-print-layout",
+            "page-composition-columns",
+            "page-composition-border-watermark",
             "page-composition-web-layout",
             "page-composition-draft",
             "page-composition-floating-image",
@@ -43,6 +47,13 @@ public sealed class VisualEvidencePlannerTests
         pdfScenario.ExpectedFeatureTags.Should().Contain(["backstage", "pdf-export", "pdf-rasterized"]);
         pdfScenario.ExpectedOutputNamePattern.Should().Be("backstage-pdf-export_p{page}.png");
         pdfScenario.MinimumExpectedOutputs.Should().Be(2);
+
+        var columnsScenario = FreeWVisualEvidencePlanner.ResolveScenario("f2-columns");
+        columnsScenario.Composition.ExpectsColumns.Should().BeTrue();
+
+        var borderScenario = FreeWVisualEvidencePlanner.ResolveScenario("f2-border-watermark");
+        borderScenario.Composition.ExpectsPageBorder.Should().BeTrue();
+        borderScenario.Composition.ExpectsWatermark.Should().BeTrue();
     }
 
     [Fact]
@@ -55,7 +66,17 @@ public sealed class VisualEvidencePlannerTests
             MarginLeftPt = 72,
             MarginRightPt = 72,
             MarginTopPt = 72,
-            MarginBottomPt = 72
+            MarginBottomPt = 72,
+            ColumnCount = 2,
+            ColumnSpacingPt = 36,
+            ColumnsLineBetween = true,
+            PageBorder = new PageBorder("#000080", 3),
+            WatermarkOptions = new WatermarkOptions("DRAFT")
+            {
+                FontColorHex = "#808080",
+                Opacity = 0.4,
+                Layout = WatermarkLayout.Diagonal
+            }
         };
 
         var expectation = FreeWVisualEvidencePlanner.BuildPageExpectation(
@@ -65,7 +86,9 @@ public sealed class VisualEvidencePlannerTests
             pageCount: 3,
             outputName: "actual.png",
             headerSlotName: "header",
-            footerSlotName: "footer");
+            footerSlotName: "footer",
+            sectionOrdinal: 2,
+            sectionRelativePageNumber: 1);
 
         expectation.ExpectedOutputName.Should().Be("f2-hf-basic_p2.png");
         expectation.LayoutKind.Should().Be(nameof(DocumentViewLayoutKind.PrintLayout));
@@ -75,6 +98,18 @@ public sealed class VisualEvidencePlannerTests
         expectation.Geometry.PageWidthDip.Should().BeApproximately(816, 0.01);
         expectation.Geometry.ContentWidthDip.Should().BeApproximately(624, 0.01);
         expectation.Geometry.TextAreaHeightDip.Should().BeApproximately(864, 0.01);
+        expectation.Features.Section.OwnerId.Should().Be("section-2");
+        expectation.Features.Section.SectionOrdinal.Should().Be(2);
+        expectation.Features.Section.SectionRelativePageNumber.Should().Be(1);
+        expectation.Features.Columns.Count.Should().Be(2);
+        expectation.Features.Columns.GapDip.Should().BeApproximately(48, 0.01);
+        expectation.Features.Columns.LineBetween.Should().BeTrue();
+        expectation.Features.PageBorder.Present.Should().BeTrue();
+        expectation.Features.PageBorder.ColorHex.Should().Be("#000080");
+        expectation.Features.PageBorder.WidthDip.Should().BeApproximately(4, 0.01);
+        expectation.Features.Watermark.Present.Should().BeTrue();
+        expectation.Features.Watermark.Text.Should().Be("DRAFT");
+        expectation.Features.Watermark.Layout.Should().Be(nameof(WatermarkLayout.Diagonal));
     }
 
     [Fact]
@@ -148,11 +183,14 @@ public sealed class VisualEvidencePlannerTests
         using var doc = JsonDocument.Parse(json);
         var root = doc.RootElement;
         root.GetProperty("schemaId").GetString().Should().Be("freew.visual-evidence.v1");
-        root.GetProperty("schemaVersion").GetInt32().Should().Be(1);
+        root.GetProperty("schemaVersion").GetInt32().Should().Be(2);
         root.GetProperty("product").GetString().Should().Be("FreeW");
         root.GetProperty("scenarios").GetArrayLength().Should().Be(1);
-        root.GetProperty("evidence")[0].GetProperty("scenarioId").GetString().Should().Be("f2-hf-basic");
-        root.GetProperty("evidence")[0].GetProperty("trust").GetProperty("passed").GetBoolean().Should().BeTrue();
+        var evidence = root.GetProperty("evidence")[0];
+        evidence.GetProperty("scenarioId").GetString().Should().Be("f2-hf-basic");
+        evidence.GetProperty("trust").GetProperty("passed").GetBoolean().Should().BeTrue();
+        evidence.GetProperty("pageExpectation").GetProperty("features").GetProperty("section").GetProperty("ownerId")
+            .GetString().Should().Be("section-1");
     }
 
     [Fact]
@@ -309,9 +347,10 @@ public sealed class VisualEvidencePlannerTests
         File.WriteAllBytes(outputPath, bytes);
 
         var stats = BuildTrustedStats();
+        var page = PageForScenario(scenarioId);
         var expectation = FreeWVisualEvidencePlanner.BuildPageExpectation(
             scenarioId,
-            new PageSettings(),
+            page,
             pageNumber,
             pageCount,
             outputName,
@@ -374,5 +413,29 @@ public sealed class VisualEvidencePlannerTests
     {
         using var stream = File.OpenRead(path);
         return Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant();
+    }
+
+    private static PageSettings PageForScenario(string scenarioId)
+    {
+        var page = new PageSettings();
+        if (scenarioId.Contains("columns", StringComparison.OrdinalIgnoreCase))
+        {
+            page.ColumnCount = 2;
+            page.ColumnSpacingPt = 36;
+            page.ColumnsLineBetween = true;
+        }
+
+        if (scenarioId.Contains("border-watermark", StringComparison.OrdinalIgnoreCase))
+        {
+            page.PageBorder = new PageBorder("#000080", 3);
+            page.WatermarkOptions = new WatermarkOptions("DRAFT")
+            {
+                FontColorHex = "#808080",
+                Opacity = 0.4,
+                Layout = WatermarkLayout.Diagonal
+            };
+        }
+
+        return page;
     }
 }

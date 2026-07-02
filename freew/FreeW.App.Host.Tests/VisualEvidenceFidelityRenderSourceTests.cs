@@ -11,10 +11,14 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
         var project = File.ReadAllText(RepositoryFile("freew", "tools", "FreeW.FidelityRender", "FreeW.FidelityRender.csproj"));
 
         source.Should().Contain("FreeWVisualEvidencePlanner.WriteManifest(outDir, evidence)");
-        source.Should().Contain("FreeWVisualEvidencePlanner.BuildPageExpectation(");
+        source.Should().Contain("FreeWVisualEvidencePlanner.BuildEvidenceRow(");
         source.Should().Contain("FreeWVisualEvidencePlanner.EnsureTrusted(row)");
         source.Should().Contain("ComputeWpfPixelStats(");
-        source.Should().Contain("HostId: \"wpf-fidelity-render\"");
+        source.Should().Contain("FreeWVisualEvidencePlanner.ResolveSectionOrdinal");
+        source.Should().Contain("sectionRelativePageNumber");
+        source.Should().Contain("f2-columns.docx");
+        source.Should().Contain("f2-border-watermark.docx");
+        source.Should().Contain("hostId: \"wpf-fidelity-render\"");
         project.Should().Contain("FreeW.App.Presentation");
     }
 
