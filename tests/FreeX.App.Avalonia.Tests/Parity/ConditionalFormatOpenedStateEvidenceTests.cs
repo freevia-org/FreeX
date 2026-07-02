@@ -152,12 +152,12 @@ public sealed class ConditionalFormatOpenedStateEvidenceTests
             "Microsoft Excel COM");
         AssertTargetBlocker(
             targets["wpf.conditional-formatting-gallery.opened"],
-            "app-window-unavailable",
-            "visible main window");
+            "foreground-focus-unavailable",
+            "foreground");
         AssertTargetBlocker(
             targets["avalonia.conditional-formatting-gallery.opened"],
-            "app-window-unavailable",
-            "visible main window");
+            "foreground-focus-unavailable",
+            "foreground");
 
         var categories = document.RootElement.GetProperty("blockerCategories")
             .EnumerateArray()
@@ -167,7 +167,7 @@ public sealed class ConditionalFormatOpenedStateEvidenceTests
                 StringComparer.Ordinal);
 
         Assert.Equal(1, categories["excel-com-unavailable"]);
-        Assert.Equal(2, categories["app-window-unavailable"]);
+        Assert.Equal(2, categories["foreground-focus-unavailable"]);
     }
 
     [Fact]
