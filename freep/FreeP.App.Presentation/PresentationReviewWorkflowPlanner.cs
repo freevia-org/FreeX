@@ -115,6 +115,15 @@ public sealed record PresentationCommentMutationPlan(
     SlideComment? Comment,
     string? ValidationMessage);
 
+public sealed record PresentationCommentNavigationPlan(
+    PresentationReviewWorkflowIntentKind Intent,
+    bool ShouldNavigate,
+    int SourceSlideIndex,
+    int? SourceCommentIndex,
+    int TargetSlideIndex,
+    int TargetCommentIndex,
+    string? DisabledReason);
+
 public sealed record PresentationAltTextRequestPlan(
     bool HasSelection,
     uint? ShapeId,
@@ -709,6 +718,43 @@ public static class PresentationReviewWorkflowPlanner
                 NormalizeSelectedCommentIndex(slides, plan.SlideIndex, plan.CommentIndex ?? previousSelectedCommentIndex),
             _ => NormalizeSelectedCommentIndex(slides, plan.SlideIndex, previousSelectedCommentIndex)
         };
+    }
+
+    public static PresentationCommentNavigationPlan BuildCommentNavigationPlan(
+        IReadOnlyList<Slide> slides,
+        int slideIndex,
+        int? selectedCommentIndex,
+        PresentationReviewWorkflowIntentKind intent)
+    {
+        ArgumentNullException.ThrowIfNull(slides);
+
+        var direction = intent switch
+        {
+            PresentationReviewWorkflowIntentKind.PreviousComment => -1,
+            PresentationReviewWorkflowIntentKind.NextComment => 1,
+            _ => throw new ArgumentOutOfRangeException(nameof(intent), intent, "Use a comment navigation intent.")
+        };
+        var selected = NormalizeSelectedCommentIndex(slides, slideIndex, selectedCommentIndex);
+        if (TryGetAdjacentComment(slides, slideIndex, selected, direction, out var target))
+        {
+            return new PresentationCommentNavigationPlan(
+                intent,
+                true,
+                slideIndex,
+                selected,
+                target.slideIndex,
+                target.commentIndex,
+                null);
+        }
+
+        return new PresentationCommentNavigationPlan(
+            intent,
+            false,
+            slideIndex,
+            selected,
+            slideIndex,
+            selected ?? -1,
+            direction < 0 ? "No previous comment." : "No next comment.");
     }
 
     public static PresentationAltTextRequestPlan BuildAltTextRequestPlan(
@@ -1601,17 +1647,29 @@ public static class PresentationReviewWorkflowPlanner
             return false;
         }
 
-        var current = selectedCommentIndex.HasValue
-            ? Array.FindIndex(flattened, item => item.slideIndex == slideIndex && item.commentIndex == selectedCommentIndex.Value)
-            : Array.FindIndex(flattened, item => item.slideIndex >= slideIndex);
-
-        if (current < 0)
+        int candidate;
+        if (selectedCommentIndex.HasValue)
         {
-            target = default;
-            return false;
+            var current = Array.FindIndex(
+                flattened,
+                item => item.slideIndex == slideIndex && item.commentIndex == selectedCommentIndex.Value);
+            if (current < 0)
+            {
+                target = default;
+                return false;
+            }
+
+            candidate = current + Math.Sign(direction);
+        }
+        else if (direction < 0)
+        {
+            candidate = Array.FindLastIndex(flattened, item => item.slideIndex <= slideIndex);
+        }
+        else
+        {
+            candidate = Array.FindIndex(flattened, item => item.slideIndex >= slideIndex);
         }
 
-        var candidate = current + Math.Sign(direction);
         if (candidate < 0 || candidate >= flattened.Length)
         {
             target = default;

@@ -174,6 +174,7 @@ public sealed class MainWindow : Window
     internal IReadOnlyList<RecentFileEntry> RecentEntries => _fileWorkflow.RecentEntries;
 
     internal PresentationCommentPanePlan? LastCommentPanePlan { get; private set; }
+    internal PresentationCommentNavigationPlan? LastCommentNavigationPlan { get; private set; }
     internal PresentationAccessibilitySummaryPlan? LastAccessibilitySummaryPlan { get; private set; }
     internal PresentationAccessibilityCheckerPanePlan? LastAccessibilityCheckerPanePlan { get; private set; }
     internal PresentationAltTextRequestPlan? LastAltTextRequestPlan { get; private set; }
@@ -1678,8 +1679,12 @@ public sealed class MainWindow : Window
         registry.Register(
             PresentationReviewWorkflowPlanner.DeleteCommentCommandId,
             new ActionRibbonCommand(() => DeleteSelectedComment()));
-        registry.Register(PresentationReviewWorkflowPlanner.PreviousCommentCommandId, EmptyRibbonCommand.Instance);
-        registry.Register(PresentationReviewWorkflowPlanner.NextCommentCommandId, EmptyRibbonCommand.Instance);
+        registry.Register(
+            PresentationReviewWorkflowPlanner.PreviousCommentCommandId,
+            new ActionRibbonCommand(() => NavigateReviewComment(PresentationReviewWorkflowIntentKind.PreviousComment)));
+        registry.Register(
+            PresentationReviewWorkflowPlanner.NextCommentCommandId,
+            new ActionRibbonCommand(() => NavigateReviewComment(PresentationReviewWorkflowIntentKind.NextComment)));
         registry.Register(
             PresentationReviewWorkflowPlanner.ResolveCommentCommandId,
             new ActionRibbonCommand(() => ResolveSelectedComment()));
@@ -1944,6 +1949,14 @@ public sealed class MainWindow : Window
         {
             DeleteSelectedComment();
         }
+        else if (commandId == PresentationReviewWorkflowPlanner.PreviousCommentCommandId)
+        {
+            NavigateReviewComment(PresentationReviewWorkflowIntentKind.PreviousComment);
+        }
+        else if (commandId == PresentationReviewWorkflowPlanner.NextCommentCommandId)
+        {
+            NavigateReviewComment(PresentationReviewWorkflowIntentKind.NextComment);
+        }
     }
 
     internal PresentationCommentPanePlan SetSelectedReviewCommentIndexForTests(int? commentIndex)
@@ -1957,6 +1970,32 @@ public sealed class MainWindow : Window
         _selectedCommentIndex = commentIndex;
         ShowReviewCommentsPane();
         RefreshReviewWorkflowPlans();
+    }
+
+    internal PresentationCommentNavigationPlan NavigateReviewComment(
+        PresentationReviewWorkflowIntentKind intent)
+    {
+        var plan = PresentationReviewWorkflowPlanner.BuildCommentNavigationPlan(
+            _presentation.Slides,
+            Editor.CurrentSlideIndex,
+            _selectedCommentIndex,
+            intent);
+        LastCommentNavigationPlan = plan;
+        if (!plan.ShouldNavigate)
+        {
+            return plan;
+        }
+
+        if (Editor.CurrentSlideIndex != plan.TargetSlideIndex)
+        {
+            Editor.SelectSlide(plan.TargetSlideIndex);
+        }
+
+        _selectedCommentIndex = plan.TargetCommentIndex;
+        ShowReviewCommentsPane();
+        RefreshReviewWorkflowPlans();
+        UpdateStatus();
+        return plan;
     }
 
     internal PresentationCommentMutationPlan DeleteSelectedComment()
