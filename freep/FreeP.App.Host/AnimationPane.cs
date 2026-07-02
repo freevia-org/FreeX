@@ -244,15 +244,11 @@ public sealed class AnimationPane : Border
         int capturedIndex = item.Index;
         triggerCombo.SelectionChanged += (_, _) =>
         {
-            var anims = _editor.CurrentSlideAnimations;
-            if (capturedIndex >= anims.Count) return;
-            var current = anims[capturedIndex];
-            if (!AnimationPanePlanner.TryGetTrigger(triggerCombo.SelectedIndex, out var newTrigger))
-                return;
-            if (current.Trigger == newTrigger) return;
-            var updated = PresentationAnimationCommandPlanner.CloneAnimation(current);
-            updated.Trigger = newTrigger;
-            _editor.SetAnimation(capturedIndex, updated);
+            var plan = AnimationPanePlanner.BuildTriggerMutationPlan(
+                _editor.CurrentSlideAnimations,
+                capturedIndex,
+                triggerCombo.SelectedIndex);
+            AnimationPanePlanner.TryApplyTimingMutation(_editor, plan);
         };
 
         // ── Duration field ──────────────────────────────────────────────────────
@@ -268,21 +264,32 @@ public sealed class AnimationPane : Border
         };
         durationBox.LostFocus += (_, _) =>
         {
-            var anims = _editor.CurrentSlideAnimations;
-            if (capturedIndex >= anims.Count) return;
-            var current = anims[capturedIndex];
-            var plan = AnimationPanePlanner.BuildDurationEditPlan(durationBox.Text, current.DurationMs);
-            if (plan.ShouldUpdate)
-            {
-                var updated = PresentationAnimationCommandPlanner.CloneAnimation(current);
-                updated.DurationMs = plan.DurationMs;
-                _editor.SetAnimation(capturedIndex, updated);
-            }
-            else
-            {
-                // Revert to current value on parse error.
+            var plan = AnimationPanePlanner.BuildDurationMutationPlan(
+                _editor.CurrentSlideAnimations,
+                capturedIndex,
+                durationBox.Text);
+            if (!AnimationPanePlanner.TryApplyTimingMutation(_editor, plan))
                 durationBox.Text = plan.DisplayText;
-            }
+        };
+
+        var delayBox = new TextBox
+        {
+            Text              = item.DelayText,
+            FontSize          = 10,
+            Width             = 48,
+            VerticalAlignment = VerticalAlignment.Center,
+            Padding           = new Thickness(2, 1, 2, 1),
+            Margin            = new Thickness(2, 2, 2, 2),
+            ToolTip           = "Delay (seconds)",
+        };
+        delayBox.LostFocus += (_, _) =>
+        {
+            var plan = AnimationPanePlanner.BuildDelayMutationPlan(
+                _editor.CurrentSlideAnimations,
+                capturedIndex,
+                delayBox.Text);
+            if (!AnimationPanePlanner.TryApplyTimingMutation(_editor, plan))
+                delayBox.Text = plan.DisplayText;
         };
 
         // ── Move up button ──────────────────────────────────────────────────────
@@ -373,6 +380,7 @@ public sealed class AnimationPane : Border
         innerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }); // effect
         innerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });  // trigger
         innerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });  // duration
+        innerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });  // delay
         innerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });  // buttons
 
         Grid.SetColumn(orderLabel,  0);
@@ -380,13 +388,15 @@ public sealed class AnimationPane : Border
         Grid.SetColumn(effectLabel, 2);
         Grid.SetColumn(triggerCombo, 3);
         Grid.SetColumn(durationBox, 4);
-        Grid.SetColumn(btnPanel,    5);
+        Grid.SetColumn(delayBox,    5);
+        Grid.SetColumn(btnPanel,    6);
 
         innerGrid.Children.Add(orderLabel);
         innerGrid.Children.Add(nameLabel);
         innerGrid.Children.Add(effectLabel);
         innerGrid.Children.Add(triggerCombo);
         innerGrid.Children.Add(durationBox);
+        innerGrid.Children.Add(delayBox);
         innerGrid.Children.Add(btnPanel);
 
         // ── Row border ───────────────────────────────────────────────────────────

@@ -1,4 +1,5 @@
 using Free.Shared.Drawing;
+using FreeP.App.Compositor.MathLayout;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor;
@@ -47,6 +48,20 @@ public sealed class ResolvedRun
 
     /// <summary>Resolved glyph shadow — null means no shadow.</summary>
     public ResolvedRunShadow? TextShadow { get; init; }
+
+    // ── Theme 27: OMML math ────────────────────────────────────────────────
+
+    /// <summary>
+    /// When non-null this run represents an OMML math equation.
+    /// The <see cref="MathBox.Container"/> carries the full laid-out math tree
+    /// produced by the shared <see cref="FreeP.App.Compositor.MathLayout.MathLayoutEngine"/>.
+    /// <see cref="Text"/> still carries the flattened plain-text fallback for
+    /// accessibility / find-replace.
+    /// </summary>
+    public MathBox.Container? MathLayout { get; init; }
+
+    /// <summary>True when this run carries a math equation layout.</summary>
+    public bool IsMathRun => MathLayout is not null;
 }
 
 /// <summary>A resolved tab stop with position in DIP.</summary>
@@ -581,6 +596,44 @@ public abstract class DrawOp
         /// already resolved from PointColors[pointIndex] or the default accent palette.
         /// </summary>
         public IReadOnlyList<SrgbColor> SeriesColors { get; init; } = Array.Empty<SrgbColor>();
+    }
+
+    // ── Math draw op (Theme 27) ───────────────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Draw an OMML math equation as a laid-out <see cref="MathBox"/> tree.
+    /// The compositor builds this op when a <see cref="Run"/> carries a
+    /// <see cref="FreeP.Core.Model.MathRunInfo"/>; the raw XML round-trip is NOT
+    /// involved here — it is preserved separately by the IO layer.
+    /// </summary>
+    public sealed class Math : DrawOp
+    {
+        /// <summary>
+        /// Position of the top-left corner of the math expression in DIP (slide coordinates).
+        /// </summary>
+        public double X { get; init; }
+
+        /// <summary>Y position in DIP (slide coordinates).</summary>
+        public double Y { get; init; }
+
+        /// <summary>
+        /// The resolved base font size (in points) used by the layout engine so renderers
+        /// can re-use it when drawing glyph boxes that carry relative sizes.
+        /// (All glyph FontSizePt values are already final in the MathBox tree.)
+        /// </summary>
+        public double BaseFontSizePt { get; init; }
+
+        /// <summary>Resolved text color for drawing all math glyphs.</summary>
+        public SrgbColor Color { get; init; }
+
+        /// <summary>Laid-out math box tree produced by <see cref="MathLayoutEngine"/>.</summary>
+        public MathBox.Container Layout { get; init; } = new();
+
+        /// <summary>
+        /// Plain-text fallback / accessibility string (all m:t values concatenated).
+        /// Not used for rendering but useful for find/replace and screen readers.
+        /// </summary>
+        public string FallbackText { get; init; } = string.Empty;
     }
 }
 

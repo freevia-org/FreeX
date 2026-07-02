@@ -13,7 +13,8 @@ public sealed class SlideObjectInsertionRoutingSourceTests
             "FreeP.App.Host",
             "FreePRibbonCommands.cs"));
 
-        source.Should().Contain("RegisterSlideObjectInsertionCommands(registry, editor, includePictureCommand: true)");
+        source.Should().Contain("RegisterSlideObjectInsertionCommands(registry, editor, includePictureCommand: true, onTablePicker)");
+        source.Should().Contain("SlideObjectInsertionPlanner.Table3x3CommandId && onTablePicker is not null");
         source.Should().Contain("SlideObjectInsertionPlanner.BuiltInPlans");
         source.Should().Contain("WpfFileDialogService.ShowOpenDialog(");
         source.Should().Contain("SlideObjectInsertionPlanner.CreatePicturePayload(bytes, result.FileName)");

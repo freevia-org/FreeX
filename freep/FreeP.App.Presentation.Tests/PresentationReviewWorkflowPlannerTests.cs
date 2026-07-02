@@ -45,16 +45,49 @@ public sealed class PresentationReviewWorkflowPlannerTests
             200,
             true,
             true,
-            false));
+            true,
+            true,
+            false,
+            0,
+            0,
+            [],
+            PresentationCommentThreadStatus.Open,
+            true));
+        plan.SelectedComment.Should().BeSameAs(plan.Comments[0]);
 
         Action(PresentationReviewWorkflowPlanner.EditCommentCommandId).IsEnabled.Should().BeTrue();
         Action(PresentationReviewWorkflowPlanner.DeleteCommentCommandId).IsEnabled.Should().BeTrue();
         Action(PresentationReviewWorkflowPlanner.NextCommentCommandId).IsEnabled.Should().BeTrue();
+        Action(PresentationReviewWorkflowPlanner.ResolveCommentCommandId).IsEnabled.Should().BeTrue();
         Action(PresentationReviewWorkflowPlanner.ResolveCommentCommandId).Status
-            .Should().Be(PresentationWorkflowCapabilityStatus.Deferred);
+            .Should().Be(PresentationWorkflowCapabilityStatus.Available);
+        Action(PresentationReviewWorkflowPlanner.ReopenCommentCommandId).DisabledReason
+            .Should().Be(PresentationReviewWorkflowPlanner.CommentAlreadyOpenMessage);
 
         PresentationReviewWorkflowActionPlan Action(string commandId) =>
             plan.Actions.Single(action => action.CommandId == commandId);
+    }
+
+    [Fact]
+    public void BuildCommentPanePlan_DefaultsToFirstCurrentSlideCommentSelection()
+    {
+        var slides = new[]
+        {
+            new Slide { Title = "Intro" },
+            new Slide { Title = "Review" }
+        };
+        slides[0].Comments.Add(new SlideComment { Author = "Alice", Initials = "AL", Text = "First", Idx = 1 });
+        slides[0].Comments.Add(new SlideComment { Author = "Bob", Initials = "B", Text = "Second", Idx = 2 });
+
+        var plan = PresentationReviewWorkflowPlanner.BuildCommentPanePlan(slides, 0);
+
+        plan.SelectedCommentIndex.Should().Be(0);
+        plan.SelectedComment.Should().BeSameAs(plan.Comments[0]);
+        plan.Comments.Select(comment => comment.IsSelected).Should().Equal(true, false);
+        plan.Actions.Single(action => action.CommandId == PresentationReviewWorkflowPlanner.EditCommentCommandId)
+            .IsEnabled.Should().BeTrue();
+        plan.Actions.Single(action => action.CommandId == PresentationReviewWorkflowPlanner.PreviousCommentCommandId)
+            .DisabledReason.Should().Be("No previous comment.");
     }
 
     [Fact]
@@ -111,13 +144,19 @@ public sealed class PresentationReviewWorkflowPlannerTests
     {
         var slides = new[] { new Slide { Title = "Intro" } };
         slides[0].Comments.Add(new SlideComment { Author = "Alice", Initials = "AL", Text = "Old", Idx = 4 });
+        var resolvedAt = new DateTime(2026, 7, 2, 8, 15, 0, DateTimeKind.Utc);
 
         var emptyAdd = PresentationReviewWorkflowPlanner.BuildAddCommentPlan(
             slides, 0, " ", "Alice", "AL", 0, 0);
         var edit = PresentationReviewWorkflowPlanner.BuildEditCommentPlan(
             slides, 0, 0, " New text ", initials: "AX");
         var delete = PresentationReviewWorkflowPlanner.BuildDeleteCommentPlan(slides, 0, 0);
-        var resolve = PresentationReviewWorkflowPlanner.BuildResolveCommentPlan(slides, 0, 0);
+        var resolve = PresentationReviewWorkflowPlanner.BuildResolveCommentPlan(
+            slides,
+            0,
+            0,
+            resolvedAt,
+            "  Reviewer ");
 
         emptyAdd.Should().Be(new PresentationCommentMutationPlan(
             PresentationReviewWorkflowIntentKind.AddComment,
@@ -146,13 +185,262 @@ public sealed class PresentationReviewWorkflowPlannerTests
             0,
             null,
             null));
-        resolve.Should().Be(new PresentationCommentMutationPlan(
+        resolve.Should().BeEquivalentTo(new PresentationCommentMutationPlan(
             PresentationReviewWorkflowIntentKind.ResolveComment,
+            true,
+            0,
+            0,
+            new SlideComment
+            {
+                Author = "Alice",
+                Initials = "AL",
+                Text = "Old",
+                DateTime = null,
+                IsResolved = true,
+                ResolvedDateTime = resolvedAt,
+                ResolvedBy = "Reviewer",
+                Idx = 4
+            },
+            null));
+    }
+
+    [Fact]
+    public void BuildCommentPanePlan_ModelsResolvedThreadsAndReopenAction()
+    {
+        var slides = new[] { new Slide { Title = "Intro" } };
+        slides[0].Comments.Add(new SlideComment
+        {
+            Author = "Alice",
+            Initials = "AL",
+            Text = "Resolved thread.",
+            Idx = 1,
+            IsResolved = true,
+            ResolvedBy = "Reviewer",
+            ResolvedDateTime = new DateTime(2026, 7, 2, 8, 15, 0, DateTimeKind.Utc)
+        });
+
+        var plan = PresentationReviewWorkflowPlanner.BuildCommentPanePlan(
+            slides,
+            0,
+            selectedCommentIndex: 0);
+        var reopen = PresentationReviewWorkflowPlanner.BuildReopenCommentPlan(slides, 0, 0);
+
+        plan.Comments.Should().ContainSingle().Which.Should().Match<PresentationCommentDescriptor>(comment =>
+            comment.ThreadStatus == PresentationCommentThreadStatus.Resolved &&
+            !comment.CanResolve &&
+            comment.CanReopen);
+        plan.Actions.Single(action => action.CommandId == PresentationReviewWorkflowPlanner.ResolveCommentCommandId)
+            .Should().Be(new PresentationReviewWorkflowActionPlan(
+                PresentationReviewWorkflowPlanner.ResolveCommentCommandId,
+                "Resolve Comment",
+                PresentationReviewWorkflowIntentKind.ResolveComment,
+                false,
+                PresentationWorkflowCapabilityStatus.Available,
+                PresentationReviewWorkflowPlanner.CommentAlreadyResolvedMessage));
+        plan.Actions.Single(action => action.CommandId == PresentationReviewWorkflowPlanner.ReopenCommentCommandId)
+            .Should().Be(new PresentationReviewWorkflowActionPlan(
+                PresentationReviewWorkflowPlanner.ReopenCommentCommandId,
+                "Reopen Comment",
+                PresentationReviewWorkflowIntentKind.ReopenComment,
+                true,
+                PresentationWorkflowCapabilityStatus.Available,
+                null));
+        reopen.Should().BeEquivalentTo(new PresentationCommentMutationPlan(
+            PresentationReviewWorkflowIntentKind.ReopenComment,
+            true,
+            0,
+            0,
+            new SlideComment
+            {
+                Author = "Alice",
+                Initials = "AL",
+                Text = "Resolved thread.",
+                Idx = 1,
+                IsResolved = false,
+                ResolvedDateTime = null,
+                ResolvedBy = string.Empty
+            },
+            null));
+    }
+
+    [Fact]
+    public void BuildCommentPanePlan_DescribesModernReplyChainsAndReplyActionState()
+    {
+        var slides = new[] { new Slide { Title = "Intro" } };
+        slides[0].Comments.Add(new SlideComment
+        {
+            Author = "Alice",
+            Initials = "AL",
+            Text = "Please ask @Nora to review.",
+            Idx = 1,
+            Replies =
+            {
+                new SlideCommentReply
+                {
+                    Author = "Nora",
+                    Initials = "NO",
+                    Text = "@Alice looks good after the chart update.",
+                    DateTime = new DateTime(2026, 7, 2, 10, 0, 0, DateTimeKind.Utc)
+                },
+                new SlideCommentReply
+                {
+                    Author = "Alice",
+                    Initials = "AL",
+                    Text = "Thanks.",
+                }
+            }
+        });
+
+        var plan = PresentationReviewWorkflowPlanner.BuildCommentPanePlan(slides, 0, selectedCommentIndex: 0);
+
+        var comment = plan.Comments.Single();
+        comment.CanReply.Should().BeTrue();
+        comment.ReplyCount.Should().Be(2);
+        comment.MentionCount.Should().Be(2);
+        comment.Replies.Select(reply => reply.TextPreview).Should().Equal(
+            "@Alice looks good after the chart update.",
+            "Thanks.");
+        comment.Replies[0].Should().Be(new PresentationCommentReplyDescriptor(
+            0,
+            "Nora",
+            "NO",
+            "@Alice looks good after the chart update.",
+            new DateTime(2026, 7, 2, 10, 0, 0, DateTimeKind.Utc),
+            1));
+        plan.Actions.Single(action => action.CommandId == PresentationReviewWorkflowPlanner.ReplyCommentCommandId)
+            .Should().Be(new PresentationReviewWorkflowActionPlan(
+                PresentationReviewWorkflowPlanner.ReplyCommentCommandId,
+                "Reply",
+                PresentationReviewWorkflowIntentKind.ReplyComment,
+                true,
+                PresentationWorkflowCapabilityStatus.Available,
+                null));
+    }
+
+    [Fact]
+    public void TryApplyCommentMutationPlan_AppendsReplyAndBlocksResolvedThread()
+    {
+        var slides = new[] { new Slide { Title = "Intro" } };
+        slides[0].Comments.Add(new SlideComment
+        {
+            Author = "Alice",
+            Initials = "AL",
+            Text = "Needs review.",
+            Idx = 1
+        });
+        var timestamp = new DateTime(2026, 7, 2, 11, 0, 0, DateTimeKind.Utc);
+
+        var reply = PresentationReviewWorkflowPlanner.BuildReplyCommentPlan(
+            slides,
+            0,
+            0,
+            "  @Alice fixed. ",
+            "  Nora Reviewer ",
+            null,
+            timestamp);
+
+        PresentationReviewWorkflowPlanner.TryApplyCommentMutationPlan(slides, reply).Should().BeTrue();
+        slides[0].Comments[0].Replies.Should().ContainSingle().Which.Should().BeEquivalentTo(new SlideCommentReply
+        {
+            Author = "Nora Reviewer",
+            Initials = "NR",
+            Text = "@Alice fixed.",
+            DateTime = timestamp
+        });
+        PresentationReviewWorkflowPlanner.NormalizeCommentSelectionAfterMutation(slides, reply, 0)
+            .Should().Be(0);
+
+        slides[0].Comments[0].IsResolved = true;
+        var blocked = PresentationReviewWorkflowPlanner.BuildReplyCommentPlan(
+            slides,
+            0,
+            0,
+            "Cannot add",
+            "Nora",
+            "NO");
+
+        blocked.Should().Be(new PresentationCommentMutationPlan(
+            PresentationReviewWorkflowIntentKind.ReplyComment,
             false,
             0,
             0,
             null,
-            PresentationReviewWorkflowPlanner.ModernCommentStateDeferredMessage));
+            PresentationReviewWorkflowPlanner.CannotReplyToResolvedCommentMessage));
+        PresentationReviewWorkflowPlanner.BuildCommentPanePlan(slides, 0, selectedCommentIndex: 0)
+            .Actions.Single(action => action.CommandId == PresentationReviewWorkflowPlanner.ReplyCommentCommandId)
+            .DisabledReason.Should().Be(PresentationReviewWorkflowPlanner.CannotReplyToResolvedCommentMessage);
+    }
+
+    [Fact]
+    public void TryApplyCommentMutationPlan_ResolvesAndReopensSelectedComment()
+    {
+        var slides = new[] { new Slide { Title = "Intro" } };
+        slides[0].Comments.Add(new SlideComment
+        {
+            Author = "Alice",
+            Initials = "AL",
+            Text = "Resolve me.",
+            Idx = 1
+        });
+        var resolvedAt = new DateTime(2026, 7, 2, 12, 30, 0, DateTimeKind.Utc);
+
+        var resolve = PresentationReviewWorkflowPlanner.BuildResolveCommentPlan(
+            slides,
+            0,
+            0,
+            resolvedAt,
+            "  FreeP User ");
+
+        PresentationReviewWorkflowPlanner.TryApplyCommentMutationPlan(slides, resolve).Should().BeTrue();
+        slides[0].Comments[0].Should().Match<SlideComment>(comment =>
+            comment.IsResolved &&
+            comment.ResolvedDateTime == resolvedAt &&
+            comment.ResolvedBy == "FreeP User" &&
+            comment.Text == "Resolve me.");
+        PresentationReviewWorkflowPlanner.BuildCommentPanePlan(slides, 0, selectedCommentIndex: 0)
+            .Actions.Single(action => action.CommandId == PresentationReviewWorkflowPlanner.ResolveCommentCommandId)
+            .DisabledReason.Should().Be(PresentationReviewWorkflowPlanner.CommentAlreadyResolvedMessage);
+
+        var reopen = PresentationReviewWorkflowPlanner.BuildReopenCommentPlan(slides, 0, 0);
+
+        PresentationReviewWorkflowPlanner.TryApplyCommentMutationPlan(slides, reopen).Should().BeTrue();
+        slides[0].Comments[0].Should().Match<SlideComment>(comment =>
+            !comment.IsResolved &&
+            comment.ResolvedDateTime == null &&
+            comment.ResolvedBy == string.Empty);
+        PresentationReviewWorkflowPlanner.BuildCommentPanePlan(slides, 0, selectedCommentIndex: null)
+            .Actions.Single(action => action.CommandId == PresentationReviewWorkflowPlanner.ReopenCommentCommandId)
+            .DisabledReason.Should().Be(PresentationReviewWorkflowPlanner.CommentAlreadyOpenMessage);
+    }
+
+    [Fact]
+    public void TryApplyCommentMutationPlan_DeletesSelectedCommentAndNormalizesSelection()
+    {
+        var slides = new[] { new Slide { Title = "Intro" } };
+        slides[0].Comments.Add(new SlideComment { Author = "Alice", Initials = "AL", Text = "Keep me.", Idx = 1 });
+        slides[0].Comments.Add(new SlideComment { Author = "Bob", Initials = "B", Text = "Delete me.", Idx = 2 });
+
+        var delete = PresentationReviewWorkflowPlanner.BuildDeleteCommentPlan(slides, 0, 1);
+
+        PresentationReviewWorkflowPlanner.TryApplyCommentMutationPlan(slides, delete).Should().BeTrue();
+        slides[0].Comments.Should().ContainSingle().Which.Text.Should().Be("Keep me.");
+        PresentationReviewWorkflowPlanner.NormalizeCommentSelectionAfterMutation(slides, delete, previousSelectedCommentIndex: 1)
+            .Should().Be(0);
+        PresentationReviewWorkflowPlanner.BuildCommentPanePlan(slides, 0, selectedCommentIndex: 1)
+            .Actions.Single(action => action.CommandId == PresentationReviewWorkflowPlanner.DeleteCommentCommandId)
+            .DisabledReason.Should().Be(PresentationReviewWorkflowPlanner.MissingCommentMessage);
+
+        var invalid = PresentationReviewWorkflowPlanner.BuildDeleteCommentPlan(slides, 0, 5);
+
+        invalid.Should().Be(new PresentationCommentMutationPlan(
+            PresentationReviewWorkflowIntentKind.DeleteComment,
+            false,
+            0,
+            5,
+            null,
+            PresentationReviewWorkflowPlanner.MissingCommentMessage));
+        PresentationReviewWorkflowPlanner.TryApplyCommentMutationPlan(slides, invalid).Should().BeFalse();
+        slides[0].Comments.Should().ContainSingle();
     }
 
     [Fact]
@@ -412,6 +700,238 @@ public sealed class PresentationReviewWorkflowPlannerTests
             PresentationReviewWorkflowPlanner.AltTextCommandId,
             PresentationReviewWorkflowPlanner.ProofingCommandId
         });
+    }
+
+    [Fact]
+    public void BuildReadingOrderPlan_DescribesCurrentSlideShapesAndSelectedItem()
+    {
+        var slide = new Slide();
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 5,
+            Name = "Title placeholder",
+            Kind = SlideShapeKind.AutoShape,
+            Text = "Quarterly update",
+            AlternativeTextTitle = "Slide title"
+        });
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 7,
+            Name = "Sales chart",
+            Kind = SlideShapeKind.Chart,
+            Chart = new ChartShape(),
+            AlternativeTextTitle = "Regional sales",
+            AlternativeText = "Quarterly sales by region."
+        });
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 9,
+            Name = "Divider flourish",
+            Kind = SlideShapeKind.Picture,
+            Picture = new ImagePart(),
+            IsDecorative = true,
+            Children =
+            {
+                new SlideShape
+                {
+                    Id = 10,
+                    Name = "Grouped caption",
+                    Kind = SlideShapeKind.AutoShape,
+                    Text = "Internal caption"
+                }
+            }
+        });
+
+        var plan = PresentationReviewWorkflowPlanner.BuildReadingOrderPlan(slide, 2, [7]);
+
+        plan.SlideIndex.Should().Be(2);
+        plan.HasSlide.Should().BeTrue();
+        plan.HasSingleSelectedItem.Should().BeTrue();
+        plan.SelectedShapeId.Should().Be(7);
+        plan.SelectedItemIndex.Should().Be(1);
+        plan.SelectedItem.Should().NotBeNull();
+        plan.Items.Select(item => item.ShapeId).Should().Equal(5u, 7u, 9u, 10u);
+        plan.Items.Select(item => item.ReadingOrderIndex).Should().Equal(0, 1, 2, 3);
+        plan.Items.Select(item => item.NestingDepth).Should().Equal(0, 0, 0, 1);
+        plan.Items[1].Should().Be(new PresentationReadingOrderItemPlan(
+            1,
+            0,
+            7,
+            "Sales chart",
+            SlideShapeKind.Chart,
+            "Chart",
+            "Regional sales",
+            "Quarterly sales by region.",
+            false,
+            "Regional sales: Quarterly sales by region.",
+            true));
+        plan.Items[2].AccessibilitySummary.Should().Be("Decorative");
+        plan.Items[3].AccessibilitySummary.Should().Be("No alt text");
+        plan.Actions.Select(action => action.CommandId).Should().Equal(
+            PresentationReviewWorkflowPlanner.ReadingOrderPaneCommandId,
+            PresentationReviewWorkflowPlanner.ReadingOrderMoveEarlierCommandId,
+            PresentationReviewWorkflowPlanner.ReadingOrderMoveLaterCommandId,
+            PresentationReviewWorkflowPlanner.ReadingOrderSelectItemCommandId);
+        plan.Actions.Single(action => action.CommandId == PresentationReviewWorkflowPlanner.ReadingOrderMoveEarlierCommandId)
+            .Should().Be(new PresentationReviewWorkflowActionPlan(
+                PresentationReviewWorkflowPlanner.ReadingOrderMoveEarlierCommandId,
+                "Move Earlier",
+                PresentationReviewWorkflowIntentKind.MoveReadingOrderEarlier,
+                true,
+                PresentationWorkflowCapabilityStatus.Available,
+                null));
+        plan.Actions.Single(action => action.CommandId == PresentationReviewWorkflowPlanner.ReadingOrderMoveLaterCommandId)
+            .Should().Be(new PresentationReviewWorkflowActionPlan(
+                PresentationReviewWorkflowPlanner.ReadingOrderMoveLaterCommandId,
+                "Move Later",
+                PresentationReviewWorkflowIntentKind.MoveReadingOrderLater,
+                true,
+                PresentationWorkflowCapabilityStatus.Available,
+                null));
+        plan.Actions.Single(action => action.CommandId == PresentationReviewWorkflowPlanner.ReadingOrderSelectItemCommandId)
+            .IsEnabled.Should().BeTrue();
+    }
+
+    [Fact]
+    public void BuildReadingOrderPlan_RequiresExactlyOneSelectedShapeForSelectedItemState()
+    {
+        var slide = new Slide();
+        slide.Shapes.Add(new SlideShape { Id = 7, Name = "Sales chart", Kind = SlideShapeKind.Chart });
+        slide.Shapes.Add(new SlideShape { Id = 8, Name = "Product image", Kind = SlideShapeKind.Picture });
+
+        var multiSelection = PresentationReviewWorkflowPlanner.BuildReadingOrderPlan(slide, 0, [7, 8]);
+        var missingSelection = PresentationReviewWorkflowPlanner.BuildReadingOrderPlan(slide, 0, []);
+        var emptySlide = PresentationReviewWorkflowPlanner.BuildReadingOrderPlan(new Slide(), 0, [7]);
+
+        multiSelection.HasSingleSelectedItem.Should().BeFalse();
+        multiSelection.SelectedItem.Should().BeNull();
+        multiSelection.Actions.Single(action => action.CommandId == PresentationReviewWorkflowPlanner.ReadingOrderMoveLaterCommandId)
+            .DisabledReason.Should().Be(PresentationReviewWorkflowPlanner.MissingReadingOrderSelectionMessage);
+        missingSelection.Actions.Single(action => action.CommandId == PresentationReviewWorkflowPlanner.ReadingOrderMoveEarlierCommandId)
+            .DisabledReason.Should().Be(PresentationReviewWorkflowPlanner.MissingReadingOrderSelectionMessage);
+        emptySlide.Actions.Single(action => action.CommandId == PresentationReviewWorkflowPlanner.ReadingOrderSelectItemCommandId)
+            .Should().Be(new PresentationReviewWorkflowActionPlan(
+                PresentationReviewWorkflowPlanner.ReadingOrderSelectItemCommandId,
+                "Select Item",
+                PresentationReviewWorkflowIntentKind.SelectReadingOrderItem,
+                false,
+                PresentationWorkflowCapabilityStatus.Available,
+                PresentationReviewWorkflowPlanner.EmptyReadingOrderMessage));
+    }
+
+    [Fact]
+    public void BuildReadingOrderPlan_EnablesTopLevelMovesOnlyWhenDirectionIsAvailable()
+    {
+        var slide = new Slide();
+        slide.Shapes.Add(new SlideShape { Id = 1, Name = "Back shape" });
+        slide.Shapes.Add(new SlideShape { Id = 2, Name = "Middle shape" });
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 3,
+            Name = "Group",
+            Kind = SlideShapeKind.Group,
+            Children =
+            {
+                new SlideShape { Id = 4, Name = "Nested child" }
+            }
+        });
+
+        var first = PresentationReviewWorkflowPlanner.BuildReadingOrderPlan(slide, 0, [1]);
+        var middle = PresentationReviewWorkflowPlanner.BuildReadingOrderPlan(slide, 0, [2]);
+        var last = PresentationReviewWorkflowPlanner.BuildReadingOrderPlan(slide, 0, [3]);
+        var nested = PresentationReviewWorkflowPlanner.BuildReadingOrderPlan(slide, 0, [4]);
+
+        Action(first, PresentationReviewWorkflowPlanner.ReadingOrderMoveEarlierCommandId)
+            .Should().Be(new PresentationReviewWorkflowActionPlan(
+                PresentationReviewWorkflowPlanner.ReadingOrderMoveEarlierCommandId,
+                "Move Earlier",
+                PresentationReviewWorkflowIntentKind.MoveReadingOrderEarlier,
+                false,
+                PresentationWorkflowCapabilityStatus.Available,
+                PresentationReviewWorkflowPlanner.ReadingOrderAlreadyEarliestMessage));
+        Action(first, PresentationReviewWorkflowPlanner.ReadingOrderMoveLaterCommandId).IsEnabled.Should().BeTrue();
+        Action(middle, PresentationReviewWorkflowPlanner.ReadingOrderMoveEarlierCommandId).IsEnabled.Should().BeTrue();
+        Action(middle, PresentationReviewWorkflowPlanner.ReadingOrderMoveLaterCommandId).IsEnabled.Should().BeTrue();
+        Action(last, PresentationReviewWorkflowPlanner.ReadingOrderMoveLaterCommandId)
+            .DisabledReason.Should().Be(PresentationReviewWorkflowPlanner.ReadingOrderAlreadyLatestMessage);
+        Action(nested, PresentationReviewWorkflowPlanner.ReadingOrderMoveEarlierCommandId)
+            .Should().Be(new PresentationReviewWorkflowActionPlan(
+                PresentationReviewWorkflowPlanner.ReadingOrderMoveEarlierCommandId,
+                "Move Earlier",
+                PresentationReviewWorkflowIntentKind.MoveReadingOrderEarlier,
+                false,
+                PresentationWorkflowCapabilityStatus.Deferred,
+                PresentationReviewWorkflowPlanner.NestedReadingOrderReorderDeferredMessage));
+        Action(nested, PresentationReviewWorkflowPlanner.ReadingOrderMoveLaterCommandId)
+            .DisabledReason.Should().Be(PresentationReviewWorkflowPlanner.NestedReadingOrderReorderDeferredMessage);
+
+        static PresentationReviewWorkflowActionPlan Action(PresentationReadingOrderPlan plan, string commandId) =>
+            plan.Actions.Single(action => action.CommandId == commandId);
+    }
+
+    [Fact]
+    public void TryApplyReadingOrderMove_MutatesTopLevelShapeOrderAndPreservesChildren()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Shapes.Clear();
+        var first = new SlideShape { Id = 1, Name = "Back shape" };
+        var middle = new SlideShape { Id = 2, Name = "Middle shape" };
+        var group = new SlideShape
+        {
+            Id = 3,
+            Name = "Group",
+            Kind = SlideShapeKind.Group,
+            Children =
+            {
+                new SlideShape { Id = 4, Name = "Nested child" }
+            }
+        };
+        slide.Shapes.Add(first);
+        slide.Shapes.Add(middle);
+        slide.Shapes.Add(group);
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        editor.Select(middle.Id);
+
+        var earlier = PresentationReviewWorkflowPlanner.TryApplyReadingOrderMove(
+            editor,
+            PresentationReviewWorkflowIntentKind.MoveReadingOrderEarlier);
+        var boundary = PresentationReviewWorkflowPlanner.TryApplyReadingOrderMove(
+            editor,
+            PresentationReviewWorkflowIntentKind.MoveReadingOrderEarlier);
+        editor.Select(4);
+        var nested = PresentationReviewWorkflowPlanner.TryApplyReadingOrderMove(
+            editor,
+            PresentationReviewWorkflowIntentKind.MoveReadingOrderLater);
+
+        earlier.Should().Be(new PresentationReadingOrderMutationPlan(
+            PresentationReviewWorkflowIntentKind.MoveReadingOrderEarlier,
+            true,
+            0,
+            middle.Id,
+            1,
+            0,
+            null));
+        slide.Shapes.Select(shape => shape.Id).Should().Equal(2u, 1u, 3u);
+        group.Children.Select(shape => shape.Id).Should().Equal(4u);
+        boundary.Should().Be(new PresentationReadingOrderMutationPlan(
+            PresentationReviewWorkflowIntentKind.MoveReadingOrderEarlier,
+            false,
+            0,
+            middle.Id,
+            -1,
+            -1,
+            PresentationReviewWorkflowPlanner.ReadingOrderAlreadyEarliestMessage));
+        nested.Should().Be(new PresentationReadingOrderMutationPlan(
+            PresentationReviewWorkflowIntentKind.MoveReadingOrderLater,
+            false,
+            0,
+            4,
+            -1,
+            -1,
+            PresentationReviewWorkflowPlanner.NestedReadingOrderReorderDeferredMessage));
+        slide.Shapes.Select(shape => shape.Id).Should().Equal(2u, 1u, 3u);
+        group.Children.Select(shape => shape.Id).Should().Equal(4u);
     }
 
     [Fact]

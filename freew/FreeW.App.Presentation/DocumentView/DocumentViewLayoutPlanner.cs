@@ -56,6 +56,45 @@ public sealed record DocumentColumnLayoutPlan(
 
 public sealed record DocumentGridlineSegment(double X1, double Y1, double X2, double Y2);
 
+public sealed record DocumentTableCellLayoutPlan(
+    int RowIndex,
+    int CellIndex,
+    int GridColumnIndex,
+    int GridSpan,
+    int RowSpan,
+    bool IsVerticalMergeContinuation,
+    string? ShadingColorHex,
+    bool HasCustomBorders,
+    string TextDirection,
+    string VerticalAlignment,
+    double? PreferredWidthDip,
+    double? HeightDip);
+
+public sealed record DocumentTableLayoutPlan(
+    int TableIndex,
+    int RowCount,
+    int GridColumnCount,
+    bool HasHeaderRow,
+    bool RepeatsHeaderRow,
+    bool HasBandedRows,
+    bool HasBandedColumns,
+    bool HasMergedCells,
+    bool HasVerticalMerges,
+    bool HasCellShading,
+    bool HasCustomCellBorders,
+    bool HasCellMargins,
+    bool HasCellSpacing,
+    bool HasVerticalText,
+    bool HasVerticalAlignment,
+    bool HasPreferredWidths,
+    bool HasNamedStyle,
+    bool HasFloatingTextWrap,
+    string Alignment,
+    string AutoFit,
+    string? TableStyleId,
+    IReadOnlyList<double> ColumnWidthsDip,
+    IReadOnlyList<DocumentTableCellLayoutPlan> Cells);
+
 public sealed record DocumentViewSurfacePlan(
     DocumentViewLayoutKind Kind,
     double PageWidthDip,
@@ -315,6 +354,109 @@ public static class DocumentViewLayoutPlanner
         for (var x = surface.PageLeftDip; x <= surface.PageLeftDip + surface.PageWidthDip + 0.01; x += tickStepDip)
             ticks.Add(x);
         return ticks;
+    }
+
+    public static IReadOnlyList<DocumentTableLayoutPlan> BuildTableLayoutPlans(TextDocument document)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+
+        var plans = new List<DocumentTableLayoutPlan>();
+        for (var blockIndex = 0; blockIndex < document.Blocks.Count; blockIndex++)
+        {
+            if (document.Blocks[blockIndex] is Table table)
+                plans.Add(BuildTableLayoutPlan(table, plans.Count));
+        }
+
+        return plans;
+    }
+
+    public static DocumentTableLayoutPlan BuildTableLayoutPlan(Table table, int tableIndex = 0)
+    {
+        ArgumentNullException.ThrowIfNull(table);
+
+        var rowCount = table.Rows.Count;
+        var gridColumnCount = Math.Max(
+            table.ColumnWidthsPt.Count,
+            table.Rows.Count == 0
+                ? 0
+                : table.Rows.Max(row => row.Cells.Sum(cell => Math.Max(1, cell.GridSpan))));
+        var cells = new List<DocumentTableCellLayoutPlan>();
+        var hasMergedCells = false;
+        var hasVerticalMerges = false;
+        var hasCellShading = false;
+        var hasCustomCellBorders = false;
+        var hasCellMargins = table.DefaultCellMargins is not null;
+        var hasVerticalText = false;
+        var hasVerticalAlignment = false;
+        var hasPreferredWidths = table.PreferredWidthPt is not null || table.ColumnWidthsPt.Count > 0;
+
+        for (var rowIndex = 0; rowIndex < table.Rows.Count; rowIndex++)
+        {
+            var row = table.Rows[rowIndex];
+            var gridColumnIndex = 0;
+            for (var cellIndex = 0; cellIndex < row.Cells.Count; cellIndex++)
+            {
+                var cell = row.Cells[cellIndex];
+                var gridSpan = Math.Max(1, cell.GridSpan);
+                var rowSpan = cell.VerticalMerge == VerticalMergeState.Restart
+                    ? CountVerticalMergeSpan(table, rowIndex, gridColumnIndex)
+                    : 1;
+                var isVerticalContinuation = cell.VerticalMerge == VerticalMergeState.Continue;
+
+                hasMergedCells |= gridSpan > 1 || rowSpan > 1;
+                hasVerticalMerges |= cell.VerticalMerge != VerticalMergeState.None;
+                hasCellShading |= !string.IsNullOrWhiteSpace(cell.ShadingColorHex);
+                hasCustomCellBorders |= cell.Borders is { IsEmpty: false };
+                hasCellMargins |= cell.Margins is not null;
+                hasVerticalText |= cell.TextDirection != CellTextDirection.Horizontal;
+                hasVerticalAlignment |= cell.VerticalAlignment != TableCellVerticalAlignment.Top;
+                hasPreferredWidths |= cell.WidthPt is > 0 || row.HeightPt is > 0;
+
+                cells.Add(new DocumentTableCellLayoutPlan(
+                    rowIndex,
+                    cellIndex,
+                    gridColumnIndex,
+                    gridSpan,
+                    rowSpan,
+                    isVerticalContinuation,
+                    NormalizeHexColorOrNull(cell.ShadingColorHex),
+                    cell.Borders is { IsEmpty: false },
+                    cell.TextDirection.ToString(),
+                    cell.VerticalAlignment.ToString(),
+                    cell.WidthPt is > 0 ? RoundDip(PageLayout.PointsToDip(cell.WidthPt.Value)) : null,
+                    row.HeightPt is > 0 ? RoundDip(PageLayout.PointsToDip(row.HeightPt.Value)) : null));
+
+                gridColumnIndex += gridSpan;
+            }
+        }
+
+        return new DocumentTableLayoutPlan(
+            Math.Max(0, tableIndex),
+            rowCount,
+            gridColumnCount,
+            table.Formatting.HeaderRow,
+            table.Formatting.RepeatHeaderRow,
+            table.Formatting.BandedRows,
+            table.Formatting.BandedColumns,
+            hasMergedCells,
+            hasVerticalMerges,
+            hasCellShading,
+            hasCustomCellBorders,
+            hasCellMargins,
+            table.CellSpacingPt is > 0,
+            hasVerticalText,
+            hasVerticalAlignment,
+            hasPreferredWidths,
+            !string.IsNullOrWhiteSpace(table.TableStyleId),
+            table.TextWrapping,
+            table.Alignment.ToString(),
+            table.AutoFit.ToString(),
+            table.TableStyleId,
+            table.ColumnWidthsPt
+                .Take(Math.Max(0, gridColumnCount))
+                .Select(width => RoundDip(PageLayout.PointsToDip(Math.Max(0, width))))
+                .ToList(),
+            cells);
     }
 
     public static DocumentFloatingObjectPlacementPlan BuildFloatingObjectPlacement(
@@ -1139,6 +1281,55 @@ public static class DocumentViewLayoutPlanner
 
         return modelObject is InlineImage or Shape or Chart or WordArt or SmartArt or DrawingGroup;
     }
+
+    private static int CountVerticalMergeSpan(Table table, int restartRow, int gridColumn)
+    {
+        var span = 1;
+        for (var rowIndex = restartRow + 1; rowIndex < table.Rows.Count; rowIndex++)
+        {
+            var continuation = CellAtGridColumn(table.Rows[rowIndex], gridColumn);
+            if (continuation?.VerticalMerge == VerticalMergeState.Continue)
+                span++;
+            else
+                break;
+        }
+
+        return span;
+    }
+
+    private static TableCell? CellAtGridColumn(TableRow row, int targetGridColumn)
+    {
+        var gridColumn = 0;
+        foreach (var cell in row.Cells)
+        {
+            var span = Math.Max(1, cell.GridSpan);
+            if (targetGridColumn >= gridColumn && targetGridColumn < gridColumn + span)
+                return cell;
+
+            gridColumn += span;
+        }
+
+        return null;
+    }
+
+    private static string? NormalizeHexColorOrNull(string? hex) =>
+        string.IsNullOrWhiteSpace(hex) ? null : NormalizeHexColor(hex);
+
+    private static string NormalizeHexColor(string hex)
+    {
+        var value = hex.Trim();
+        if (value.StartsWith('#'))
+            value = value[1..];
+        if (value.Length == 8)
+            value = value[2..];
+
+        return value.Length == 6
+            ? "#" + value.ToUpperInvariant()
+            : value;
+    }
+
+    private static double RoundDip(double value) =>
+        double.IsFinite(value) ? Math.Round(value, 3, MidpointRounding.AwayFromZero) : 0;
 
     private static DocumentViewSurfacePlan BuildPrintSurfacePlan(
         PageSettings page,

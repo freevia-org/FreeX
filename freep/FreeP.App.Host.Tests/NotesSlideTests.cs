@@ -289,4 +289,31 @@ public sealed class NotesSlideTests : IDisposable
             window.Close();
         }
     }
+
+    [StaFact]
+    public void MainWindow_NotesPaneRefreshesSharedNotesPagePreviewPlan()
+    {
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
+        try
+        {
+            window.LastNotesPagePreviewPlan.Should().NotBeNull();
+            window.LastNotesPagePreviewPlan!.PrintPlan.Layout.Layout
+                .Should().Be(PresentationPrintLayoutKind.NotesPages);
+
+            window.Editor.CurrentSlide!.Title = "Q3 review";
+            window.Editor.SetCurrentSlideNotesText("Call out the launch date.");
+
+            var plan = window.LastNotesPagePreviewPlan;
+            plan.Should().NotBeNull();
+            plan!.SlideNumber.Should().Be(1);
+            plan.SlideTitle.Should().Be("Q3 review");
+            plan.NotesText.Should().Be("Call out the launch date.");
+            plan.HasNotes.Should().BeTrue();
+            plan.PrintPlan.SlideRange.DisplayName.Should().Be("Slide 1");
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
 }

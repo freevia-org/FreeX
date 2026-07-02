@@ -1351,8 +1351,40 @@ public static class PptxPackageReader
         }
     }
 
-    private static void CapturePartBytes(string partPath2, ZipArchive archive, PreservedObjectInfo info)
+    /// <summary>
+    /// Captures a preserved/unknown OPC part's bytes (+ its own .rels, if any) into
+    /// <paramref name="info"/>.
+    ///
+    /// BUG EA5 fix: capture is now TRANSITIVE. A preserved part (e.g. a 3D-model part,
+    /// "ppt/embeddings/model3d/model1.glb") can itself declare a .rels file pointing at a
+    /// SECONDARY part (e.g. an embedded texture/thumbnail). The old implementation captured only
+    /// the part's own bytes and its .rels bytes VERBATIM but never followed the relationship
+    /// targets declared inside that .rels — so the secondary part was never captured, and the
+    /// writer re-emitted the (verbatim) .rels file referencing a target that was never written to
+    /// the output zip. PowerPoint sees the dangling relationship target when it tries to load the
+    /// model part and reports "needs repair".
+    ///
+    /// The fix parses the just-captured .rels XML, resolves each internal (non-External) relationship
+    /// Target relative to this part's own directory (matching OPC part-path resolution: targets in a
+    /// part's .rels are relative to that PART's directory, not the root or the referencing slide),
+    /// and recursively captures each target that hasn't already been captured — walking arbitrarily
+    /// deep (e.g. texture -> texture's own .rels -> further sub-parts) via the same recursive call.
+    /// TargetMode="External" relationships are skipped: they point outside the package (e.g. a URL)
+    /// and are not OPC parts to capture — <see cref="OpcRelationships.Load"/> (not the External-blind
+    /// <c>LoadTargets</c> projection) is used here specifically so IsExternal is available.
+    ///
+    /// <paramref name="visited"/> guards against relationship cycles (a part whose .rels — directly
+    /// or transitively — points back at itself or an ancestor) causing infinite recursion; it is
+    /// seeded with the current part path on entry and shared across the whole recursive walk for a
+    /// given top-level capture.
+    /// </summary>
+    private static void CapturePartBytes(
+        string partPath2, ZipArchive archive, PreservedObjectInfo info,
+        HashSet<string>? visited = null)
     {
+        visited ??= new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (!visited.Add(partPath2)) return; // already visited this path in this walk (cycle guard)
+
         if (info.Parts.ContainsKey(partPath2)) return;
         var bytes = ReadEntryBytes(archive, partPath2);
         if (bytes is null) return;
@@ -1361,11 +1393,36 @@ public static class PptxPackageReader
 
         // Capture rels file for this part if it exists
         var relsPath2 = GetRelationshipPartPath(partPath2);
+        byte[]? relsBytes = null;
         if (!info.PartRels.ContainsKey(partPath2))
         {
-            var relsBytes = ReadEntryBytes(archive, relsPath2);
+            relsBytes = ReadEntryBytes(archive, relsPath2);
             if (relsBytes is not null)
                 info.PartRels[partPath2] = relsBytes;
+        }
+        else
+        {
+            relsBytes = info.PartRels[partPath2];
+        }
+
+        // EA5: recursively follow this part's own .rels targets so transitively-referenced
+        // secondary parts (e.g. a 3D model's texture) are captured too, not just the part itself.
+        // Uses the shared hardened OpcXml.TryLoadXml (DTD/XXE-safe, bounded) rather than a raw
+        // XDocument.Load, consistent with every other XML parse in this reader.
+        if (relsBytes is not null)
+        {
+            var relsDoc = OpcXml.TryLoadXml(relsBytes);
+            if (relsDoc is null) return; // malformed .rels — nothing more we can safely walk
+
+            var partDir = GetDirectoryName(partPath2);
+            foreach (var rel in OpcRelationships.Load(relsDoc))
+            {
+                if (rel.IsExternal) continue; // external targets aren't packaged parts
+                if (string.IsNullOrEmpty(rel.Target)) continue;
+
+                var childPath = ResolveRelativeZipPath(partDir, rel.Target);
+                CapturePartBytes(childPath, archive, info, visited);
+            }
         }
     }
 

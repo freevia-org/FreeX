@@ -10,7 +10,7 @@ namespace FreeP.App.Avalonia;
 internal static class FreePRibbonAvalonia
 {
     public static RibbonDefinition Build() =>
-        AddImageExportCommand(AddChartDataCommand(FreeP.Ribbon.Definitions.FreePRibbon.Build(FreePRibbonCapabilities.Avalonia)));
+        AddVideoExportCommand(AddImageExportCommand(AddChartDataCommand(FreeP.Ribbon.Definitions.FreePRibbon.Build(FreePRibbonCapabilities.Avalonia))));
 
     private static RibbonDefinition AddImageExportCommand(RibbonDefinition definition)
     {
@@ -44,6 +44,44 @@ internal static class FreePRibbonAvalonia
                 PreferredLayout = RibbonCommandLayoutKind.Medium,
                 Icon = new RibbonCommandIcon(RibbonCommandIconKind.Picture),
                 KeyTip = "XI",
+            })
+            .ToArray();
+
+        return group with { Controls = controls };
+    }
+
+    private static RibbonDefinition AddVideoExportCommand(RibbonDefinition definition)
+    {
+        var tabs = definition.Tabs
+            .Select(tab => string.Equals(tab.Id, "home", StringComparison.Ordinal)
+                ? tab with { Groups = tab.Groups.Select(AddVideoExportCommand).ToArray() }
+                : tab)
+            .ToArray();
+
+        return definition with { Tabs = tabs };
+    }
+
+    private static RibbonGroup AddVideoExportCommand(RibbonGroup group)
+    {
+        if (!string.Equals(group.Id, "file", StringComparison.Ordinal)
+            || group.Controls.Any(control => string.Equals(
+                control.CommandId.Value,
+                PresentationExportPlanner.VideoExportCommandId,
+                StringComparison.Ordinal)))
+        {
+            return group;
+        }
+
+        var descriptor = PresentationExportPlanner.BuildFormatDescriptors()
+            .Single(format => format.CommandId == PresentationExportPlanner.VideoExportCommandId);
+        var controls = group.Controls
+            .Append(new RibbonButton(
+                PresentationExportPlanner.VideoExportCommandId,
+                descriptor.DisplayName)
+            {
+                PreferredLayout = RibbonCommandLayoutKind.Medium,
+                Icon = new RibbonCommandIcon(RibbonCommandIconKind.Generic),
+                KeyTip = "XV",
             })
             .ToArray();
 

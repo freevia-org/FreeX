@@ -194,6 +194,31 @@ internal sealed class FileCommands
             presentation.SlideSizeCyEmu);
     }
 
+    /// <summary>
+    /// Builds the shared notes-page PDF render plan. WPF owns native print/export UI later;
+    /// notes-page range, geometry, slide thumbnail placement, and speaker-note drawing stay shared.
+    /// </summary>
+    public PresentationNotesPagePdfRenderPlan BuildNotesPagePdfRenderPlan(
+        PresentationSlideRangeRequest? range = null)
+    {
+        var presentation = _getModel();
+        return PresentationNotesPagePdfExporter.BuildRenderPlan(
+            presentation,
+            new PresentationNotesPagePdfExportRequest(new PresentationPrintRequest(
+                PresentationPrintLayoutKind.NotesPages,
+                range)));
+    }
+
+    /// <summary>
+    /// Builds the shared PowerPoint-style video export workflow plan. WPF owns native encoder/media integration
+    /// later; slide-range, quality, timing, narration, and deferred execution state stay shared.
+    /// </summary>
+    public PresentationVideoExportPlan BuildVideoExportPlan(PresentationVideoExportRequest? request = null)
+    {
+        var presentation = _getModel();
+        return PresentationExportPlanner.BuildVideoExportPlan(request, presentation.Slides.Count);
+    }
+
     /// <summary>Save-before-close gate, called from the window's Closing handler.</summary>
     public bool ConfirmCloseAllowed() => _workflow.ConfirmCloseAllowed();
 

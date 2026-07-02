@@ -6,6 +6,8 @@ using System.Linq;
 using System.Text;
 
 using FreeX.App.Presentation.ConditionalFormatting;
+using FreeX.App.Presentation.Ribbon;
+using FreeX.App.Services;
 
 using Xunit;
 
@@ -151,6 +153,112 @@ public sealed class FunctionalParityMatrixTests
         Assert.Contains(conditionalFormatRows, row => row.MatrixRow.CommandId == "More Rules");
     }
 
+    [Fact]
+    public void Classifier_AccountingSymbolPseudoGalleryRows_AreBackedBySharedNumberFormatCatalog()
+    {
+        var wpf = FunctionalParityMatrix.LoadWpfHandlerIds();
+        var rows = FunctionalParityMatrix.Compute(wpf);
+        var classifications = FunctionalParityClassifier.Classify(rows);
+        var catalogIds = HomeNumberFormatDropdownPlanner.AccountingSymbolOptions
+            .Select(option => option.CommandId)
+            .ToArray();
+
+        var accountingRows = classifications
+            .Where(FunctionalParityClassifier.IsAccountingSymbolGalleryRow)
+            .ToArray();
+
+        Assert.Equal(4, accountingRows.Length);
+        Assert.Equal(catalogIds.OrderBy(id => id, StringComparer.Ordinal), accountingRows
+            .Select(row => row.MatrixRow.CommandId)
+            .OrderBy(id => id, StringComparer.Ordinal));
+        Assert.All(accountingRows, row =>
+        {
+            Assert.Equal(FunctionalParityClassifier.ClassificationKind.PseudoCommandGalleryItem, row.Classification);
+            Assert.Contains(row.MatrixRow.CommandId, catalogIds);
+            Assert.Equal("Use the HomeNumberFormatDropdownPlanner accounting symbol catalog for parity evidence; do not treat this row as a missing WPF command.", row.NextAction);
+        });
+
+        Assert.All(HomeNumberFormatDropdownPlanner.AccountingSymbolOptions, option =>
+            Assert.Equal(option.NumberFormatCode, HomeNumberFormatDropdownPlanner.ResolveAccountingNumberFormatCode(option.Symbol)));
+    }
+
+    [Fact]
+    public void Classifier_FontBorderPseudoGalleryRows_AreBackedByRuntimePopupCatalog()
+    {
+        var wpf = FunctionalParityMatrix.LoadWpfHandlerIds();
+        var rows = FunctionalParityMatrix.Compute(wpf);
+        var classifications = FunctionalParityClassifier.Classify(rows);
+        var catalogIds = HomeFontBorderPopupCatalogPlanner.ClassifiedFontBorderRowsCovered;
+
+        var fontBorderRows = classifications
+            .Where(FunctionalParityClassifier.IsFontBorderGalleryRow)
+            .ToArray();
+
+        Assert.Equal(10, fontBorderRows.Length);
+        Assert.Equal(catalogIds.OrderBy(id => id, StringComparer.Ordinal), fontBorderRows
+            .Select(row => row.MatrixRow.CommandId)
+            .OrderBy(id => id, StringComparer.Ordinal));
+        Assert.All(fontBorderRows, row =>
+        {
+            Assert.Equal(FunctionalParityClassifier.ClassificationKind.PseudoCommandGalleryItem, row.Classification);
+            Assert.Contains(row.MatrixRow.CommandId, catalogIds);
+            Assert.Equal("Use the HomeFontBorderPopupCatalogPlanner evidence; keep it classified as a pseudo-gallery row unless the binding matrix grows per-choice popup evidence.", row.NextAction);
+        });
+    }
+
+    [Fact]
+    public void Classifier_NonClickRows_AreExplicitlyBoundedInventoryNoise()
+    {
+        var wpf = FunctionalParityMatrix.LoadWpfHandlerIds();
+        var rows = FunctionalParityMatrix.Compute(wpf);
+        var classifications = FunctionalParityClassifier.Classify(rows);
+
+        var nonClickRows = classifications
+            .Where(row => row.Classification == FunctionalParityClassifier.ClassificationKind.NonClickControlInventoryRow)
+            .Select(row => row.MatrixRow.CommandId)
+            .OrderBy(id => id, StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Equal(
+            [
+                "About FreeX#AboutBtn_Click",
+                "Check for Updates#CheckForUpdatesBtn_Click",
+                "Feedback#FeedbackBtn_Click",
+                "Font",
+                "Font Size",
+                "Help Online#HelpOnlineBtn_Click",
+                "Number Format",
+                "Scale Height",
+                "Scale Percent",
+                "Scale Width",
+            ],
+            nonClickRows);
+
+        var helpRoutes = classifications
+            .Where(row => row.EvidenceKind == "handler-qualified-help-route")
+            .Select(row => row.MatrixRow.CommandId)
+            .OrderBy(id => id, StringComparer.Ordinal)
+            .ToArray();
+        Assert.Equal(
+            FunctionalParityClassifier.HandlerQualifiedHelpRouteRows.OrderBy(id => id, StringComparer.Ordinal),
+            helpRoutes);
+
+        var editableControls = classifications
+            .Where(row => row.EvidenceKind == "shared-ribbon-combo-box-control")
+            .Select(row => row.MatrixRow.CommandId)
+            .OrderBy(id => id, StringComparer.Ordinal)
+            .ToArray();
+        Assert.Equal(
+            FunctionalParityClassifier.EditableRibbonControlRows.OrderBy(id => id, StringComparer.Ordinal),
+            editableControls);
+        Assert.All(editableControls, id => Assert.Contains(SurfaceCatalog.RibbonCommands, entry =>
+            entry.CommandId == id &&
+            entry.ControlKind == "ComboBox" &&
+            !entry.IsMenuItem));
+
+        Assert.All(helpRoutes, id => Assert.Contains(id, SurfaceCatalog.AvaloniaBoundCanonicalIds));
+    }
+
     private static void WriteJson(IReadOnlyList<FunctionalParityMatrix.Row> rows)
     {
         var total = rows.Count;
@@ -248,6 +356,10 @@ public sealed class FunctionalParityMatrixTests
     {
         int Count(FunctionalParityMatrix.ParityStatus s) => rows.Count(r => r.Status == s);
         var conditionalFormatPopupGalleryRows = classifications.Count(FunctionalParityClassifier.IsConditionalFormattingGalleryRow);
+        var accountingSymbolPopupGalleryRows = classifications.Count(FunctionalParityClassifier.IsAccountingSymbolGalleryRow);
+        var fontBorderPopupGalleryRows = classifications.Count(FunctionalParityClassifier.IsFontBorderGalleryRow);
+        var handlerQualifiedHelpRows = classifications.Count(c => c.EvidenceKind == "handler-qualified-help-route");
+        var sharedRibbonComboBoxRows = classifications.Count(c => c.EvidenceKind == "shared-ribbon-combo-box-control");
 
         var sb = new StringBuilder();
         sb.Append('{').Append('\n');
@@ -262,6 +374,12 @@ public sealed class FunctionalParityMatrixTests
         sb.Append("    \"intentionalLinuxOmissions\": ").Append(IntentionalLinuxOmissions.Count).Append(",\n");
         sb.Append("    \"conditional-format-popup-gallery-row\": ").Append(conditionalFormatPopupGalleryRows).Append(",\n");
         sb.Append("    \"conditional-format-popup-catalog-item\": ").Append(FunctionalParityClassifier.ConditionalFormattingGalleryRows.Count).Append(",\n");
+        sb.Append("    \"accounting-symbol-popup-gallery-row\": ").Append(accountingSymbolPopupGalleryRows).Append(",\n");
+        sb.Append("    \"accounting-symbol-popup-catalog-item\": ").Append(FunctionalParityClassifier.AccountingSymbolRows.Count).Append(",\n");
+        sb.Append("    \"font-border-popup-gallery-row\": ").Append(fontBorderPopupGalleryRows).Append(",\n");
+        sb.Append("    \"font-border-popup-catalog-item\": ").Append(FunctionalParityClassifier.FontAndBorderChoiceRows.Count).Append(",\n");
+        sb.Append("    \"handler-qualified-help-route\": ").Append(handlerQualifiedHelpRows).Append(",\n");
+        sb.Append("    \"shared-ribbon-combo-box-control\": ").Append(sharedRibbonComboBoxRows).Append(",\n");
         for (var i = 0; i < FunctionalParityClassifier.OrderedKinds.Count; i++)
         {
             var kind = FunctionalParityClassifier.OrderedKinds[i];
@@ -314,6 +432,7 @@ public sealed class FunctionalParityMatrixTests
             sb.Append(", \"classification\": ")
               .Append(JsonString(FunctionalParityClassifier.ClassificationName(c.Classification)));
         }
+        sb.Append(", \"evidenceKind\": ").Append(JsonString(c.EvidenceKind));
         sb.Append(", \"priority\": ").Append(JsonString(c.Priority))
           .Append(", \"implementationRank\": ").Append(c.ImplementationRank)
           .Append(", \"rationale\": ").Append(JsonString(c.Rationale))
@@ -327,6 +446,10 @@ public sealed class FunctionalParityMatrixTests
     {
         int Count(FunctionalParityMatrix.ParityStatus s) => rows.Count(r => r.Status == s);
         var conditionalFormatPopupGalleryRows = classifications.Count(FunctionalParityClassifier.IsConditionalFormattingGalleryRow);
+        var accountingSymbolPopupGalleryRows = classifications.Count(FunctionalParityClassifier.IsAccountingSymbolGalleryRow);
+        var fontBorderPopupGalleryRows = classifications.Count(FunctionalParityClassifier.IsFontBorderGalleryRow);
+        var handlerQualifiedHelpRows = classifications.Count(c => c.EvidenceKind == "handler-qualified-help-route");
+        var sharedRibbonComboBoxRows = classifications.Count(c => c.EvidenceKind == "shared-ribbon-combo-box-control");
 
         var sb = new StringBuilder();
         sb.Append("# FreeX functional parity classification dashboard\n\n");
@@ -342,6 +465,12 @@ public sealed class FunctionalParityMatrixTests
         sb.Append("| Intentional Linux omissions | ").Append(IntentionalLinuxOmissions.Count).Append(" |\n");
         sb.Append("| Conditional-format popup/gallery rows backed by runtime catalog | ").Append(conditionalFormatPopupGalleryRows).Append(" |\n");
         sb.Append("| Conditional-format popup runtime catalog items | ").Append(FunctionalParityClassifier.ConditionalFormattingGalleryRows.Count).Append(" |\n");
+        sb.Append("| Accounting-symbol popup/gallery rows backed by shared number-format catalog | ").Append(accountingSymbolPopupGalleryRows).Append(" |\n");
+        sb.Append("| Accounting-symbol shared catalog items | ").Append(FunctionalParityClassifier.AccountingSymbolRows.Count).Append(" |\n");
+        sb.Append("| Font/border popup/gallery rows backed by runtime catalog | ").Append(fontBorderPopupGalleryRows).Append(" |\n");
+        sb.Append("| Font/border popup runtime catalog items | ").Append(FunctionalParityClassifier.FontAndBorderChoiceRows.Count).Append(" |\n");
+        sb.Append("| Handler-qualified Help routes mapped to source/adapter evidence | ").Append(handlerQualifiedHelpRows).Append(" |\n");
+        sb.Append("| Shared ribbon ComboBox controls mapped to control-kind evidence | ").Append(sharedRibbonComboBoxRows).Append(" |\n");
         foreach (var kind in FunctionalParityClassifier.OrderedKinds)
         {
             sb.Append("| ").Append(FunctionalParityClassifier.ClassificationLabel(kind))
@@ -390,8 +519,8 @@ public sealed class FunctionalParityMatrixTests
         sb.Append('\n');
 
         sb.Append("## Row classifications\n\n");
-        sb.Append("| Command | Group | Tab | Status | Classification | Priority | Rationale | Next action |\n");
-        sb.Append("|---|---|---|---|---|---|---|---|\n");
+        sb.Append("| Command | Group | Tab | Status | Classification | Evidence | Priority | Rationale | Next action |\n");
+        sb.Append("|---|---|---|---|---|---|---|---|---|\n");
         foreach (var c in classifications
                      .OrderBy(c => c.MatrixRow.TabHeader, StringComparer.Ordinal)
                      .ThenBy(c => c.MatrixRow.GroupHeader, StringComparer.Ordinal)
@@ -402,6 +531,7 @@ public sealed class FunctionalParityMatrixTests
               .Append(" | ").Append(MdCell(c.MatrixRow.TabHeader))
               .Append(" | ").Append(StatusName(c.MatrixRow.Status))
               .Append(" | ").Append(FunctionalParityClassifier.ClassificationLabel(c.Classification))
+              .Append(" | ").Append(MdCell(c.EvidenceKind))
               .Append(" | ").Append(MdCell(c.Priority))
               .Append(" | ").Append(MdCell(c.Rationale))
               .Append(" | ").Append(MdCell(c.NextAction))
@@ -441,6 +571,7 @@ public sealed class FunctionalParityMatrixTests
             sb.Append("    { \"id\": ").Append(JsonString(c.CommandId))
               .Append(", \"tab\": ").Append(JsonString(c.TabHeader))
               .Append(", \"group\": ").Append(JsonString(c.GroupHeader))
+              .Append(", \"controlKind\": ").Append(JsonString(c.ControlKind))
               .Append(", \"display\": ").Append(JsonString(c.Display))
               .Append(", \"keyTip\": ").Append(c.KeyTip is null ? "null" : JsonString(c.KeyTip))
               .Append(", \"contextual\": ").Append(c.IsContextual ? "true" : "false")

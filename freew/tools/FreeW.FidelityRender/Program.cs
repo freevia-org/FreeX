@@ -286,6 +286,7 @@ static void RenderDocumentComposite(
     // ═══ Per-page compositing ═════════════════════════════════════════════════════════════════════
     var hasSyntheticEndnotePage = panel?.PageBoxes.Any(b => b.IsEndnoteSyntheticPage && b.EndnoteIds.Count > 0) == true;
     var evidencePageCount = pageCount + (hasSyntheticEndnotePage ? 1 : 0);
+    var sectionPageCounters = new Dictionary<int, int>();
 
     for (int i = 0; i < pageCount; i++)
     {
@@ -448,37 +449,37 @@ static void RenderDocumentComposite(
             // (see below). Endnotes never appear inline on body pages — they collect at document end.
         }
 
-        string outPath = Path.Combine(outDir, $"{name}_p{i + 1}.png");
+        string outPath = BuildVisualEvidenceOutputPath(outDir, name, i + 1);
         var byteLength = SavePng(bmp, outPath);
         var stats = ComputeWpfPixelStats(bmp, "#FFFFFF");
-        var expectation = FreeWVisualEvidencePlanner.BuildPageExpectation(
-            name,
-            thisPageSettings,
+        var sectionOrdinal = FreeWVisualEvidencePlanner.ResolveSectionOrdinal(doc, thisPageSettings);
+        var sectionRelativePageNumber = NextSectionRelativePageNumber(sectionPageCounters, sectionOrdinal);
+        var row = FreeWVisualEvidencePlanner.BuildEvidenceRow(
+            scenarioId: name,
+            hostId: "wpf-fidelity-render",
+            outputPath: outPath,
+            pixelWidth: thisPixW,
+            pixelHeight: thisPixH,
+            byteLength: byteLength,
+            pixelStats: stats,
+            page: thisPageSettings,
             pageNumber: i + 1,
             pageCount: evidencePageCount,
-            outputName: Path.GetFileName(outPath),
             layoutKind: DocumentViewLayoutKind.PrintLayout,
             availableWidthDip: thisPageWDip,
             headerSlotName: headerSlotName,
             footerSlotName: footerSlotName,
-            hasFootnotes: hasFootnotes);
-        var row = FreeWVisualEvidencePlanner.BuildEvidenceRow(new FreeWVisualEvidenceCapture(
-            ScenarioId: name,
-            HostId: "wpf-fidelity-render",
-            OutputName: Path.GetFileName(outPath),
-            OutputPath: Path.GetFullPath(outPath),
-            PixelWidth: thisPixW,
-            PixelHeight: thisPixH,
-            ByteLength: byteLength,
-            PixelStats: stats,
-            PageExpectation: expectation,
-            HostMetadata: new Dictionary<string, string>
+            hasFootnotes: hasFootnotes,
+            sectionOrdinal: sectionOrdinal,
+            sectionRelativePageNumber: sectionRelativePageNumber,
+            hostMetadata: new Dictionary<string, string>
             {
                 ["renderer"] = "FreeW.FidelityRender",
                 ["renderPath"] = "composite",
                 ["documentName"] = name,
                 ["pageIndex"] = i.ToString(System.Globalization.CultureInfo.InvariantCulture)
-            }));
+            },
+            document: doc);
         FreeWVisualEvidencePlanner.EnsureTrusted(row);
         evidence.Add(row);
         Console.WriteLine($"ok    {Path.GetFileName(outPath)} ({thisPixW}x{thisPixH}, {pageCount} pages, composite)");
@@ -520,37 +521,37 @@ static void RenderDocumentComposite(
                 bmp.Render(enVis);
             }
 
-            string endnotePath = Path.Combine(outDir, $"{name}_p{pageCount + 1}.png");
+            string endnotePath = BuildVisualEvidenceOutputPath(outDir, name, pageCount + 1);
             var byteLength = SavePng(bmp, endnotePath);
             var stats = ComputeWpfPixelStats(bmp, "#FFFFFF");
-            var expectation = FreeWVisualEvidencePlanner.BuildPageExpectation(
-                name,
-                endnoteBox.PageGeometry,
+            var sectionOrdinal = FreeWVisualEvidencePlanner.ResolveSectionOrdinal(doc, endnoteBox.PageGeometry);
+            var sectionRelativePageNumber = NextSectionRelativePageNumber(sectionPageCounters, sectionOrdinal);
+            var row = FreeWVisualEvidencePlanner.BuildEvidenceRow(
+                scenarioId: name,
+                hostId: "wpf-fidelity-render",
+                outputPath: endnotePath,
+                pixelWidth: endnotePixW,
+                pixelHeight: endnotePixH,
+                byteLength: byteLength,
+                pixelStats: stats,
+                page: endnoteBox.PageGeometry,
                 pageNumber: pageCount + 1,
                 pageCount: evidencePageCount,
-                outputName: Path.GetFileName(endnotePath),
                 layoutKind: DocumentViewLayoutKind.PrintLayout,
                 availableWidthDip: endnotePageWDip,
                 hasEndnotes: true,
-                isSyntheticPage: true);
-            var row = FreeWVisualEvidencePlanner.BuildEvidenceRow(new FreeWVisualEvidenceCapture(
-                ScenarioId: name,
-                HostId: "wpf-fidelity-render",
-                OutputName: Path.GetFileName(endnotePath),
-                OutputPath: Path.GetFullPath(endnotePath),
-                PixelWidth: endnotePixW,
-                PixelHeight: endnotePixH,
-                ByteLength: byteLength,
-                PixelStats: stats,
-                PageExpectation: expectation,
-                HostMetadata: new Dictionary<string, string>
+                isSyntheticPage: true,
+                sectionOrdinal: sectionOrdinal,
+                sectionRelativePageNumber: sectionRelativePageNumber,
+                hostMetadata: new Dictionary<string, string>
                 {
                     ["renderer"] = "FreeW.FidelityRender",
                     ["renderPath"] = "composite",
                     ["documentName"] = name,
                     ["pageIndex"] = pageCount.ToString(System.Globalization.CultureInfo.InvariantCulture),
                     ["syntheticPage"] = "endnotes"
-                }));
+                },
+                document: doc);
             FreeWVisualEvidencePlanner.EnsureTrusted(row);
             evidence.Add(row);
             Console.WriteLine($"ok    {Path.GetFileName(endnotePath)} (endnotes page, composite)");
@@ -871,6 +872,7 @@ static int RunBare(string input, string outDir, int maxPages)
             paginator.PageSize = new Size(pageW, pageH);
             paginator.ComputePageCount();
             int pages = Math.Min(Math.Max(1, paginator.PageCount), maxPages);
+            var sectionPageCounters = new Dictionary<int, int>();
 
             for (int i = 0; i < pages; i++)
             {
@@ -884,34 +886,34 @@ static int RunBare(string input, string outDir, int maxPages)
                 }
                 bmp.Render(dv);
 
-                string outPath = Path.Combine(outDir, $"{name}_p{i + 1}.png");
+                string outPath = BuildVisualEvidenceOutputPath(outDir, name, i + 1);
                 var byteLength = SavePng(bmp, outPath);
                 var stats = ComputeWpfPixelStats(bmp, "#FFFFFF");
-                var expectation = FreeWVisualEvidencePlanner.BuildPageExpectation(
-                    name,
-                    doc.Page,
+                var sectionOrdinal = FreeWVisualEvidencePlanner.ResolveSectionOrdinal(doc, doc.Page);
+                var sectionRelativePageNumber = NextSectionRelativePageNumber(sectionPageCounters, sectionOrdinal);
+                var row = FreeWVisualEvidencePlanner.BuildEvidenceRow(
+                    scenarioId: name,
+                    hostId: "wpf-fidelity-render",
+                    outputPath: outPath,
+                    pixelWidth: (int)pageW,
+                    pixelHeight: (int)pageH,
+                    byteLength: byteLength,
+                    pixelStats: stats,
+                    page: doc.Page,
                     pageNumber: i + 1,
                     pageCount: pages,
-                    outputName: Path.GetFileName(outPath),
                     layoutKind: DocumentViewLayoutKind.PrintLayout,
-                    availableWidthDip: pageW);
-                var row = FreeWVisualEvidencePlanner.BuildEvidenceRow(new FreeWVisualEvidenceCapture(
-                    ScenarioId: name,
-                    HostId: "wpf-fidelity-render",
-                    OutputName: Path.GetFileName(outPath),
-                    OutputPath: Path.GetFullPath(outPath),
-                    PixelWidth: (int)pageW,
-                    PixelHeight: (int)pageH,
-                    ByteLength: byteLength,
-                    PixelStats: stats,
-                    PageExpectation: expectation,
-                    HostMetadata: new Dictionary<string, string>
+                    availableWidthDip: pageW,
+                    sectionOrdinal: sectionOrdinal,
+                    sectionRelativePageNumber: sectionRelativePageNumber,
+                    hostMetadata: new Dictionary<string, string>
                     {
                         ["renderer"] = "FreeW.FidelityRender",
                         ["renderPath"] = "bare",
                         ["documentName"] = name,
                         ["pageIndex"] = i.ToString(System.Globalization.CultureInfo.InvariantCulture)
-                    }));
+                    },
+                    document: doc);
                 FreeWVisualEvidencePlanner.EnsureTrusted(row);
                 evidence.Add(row);
                 Console.WriteLine($"ok    {Path.GetFileName(outPath)} ({paginator.PageCount} pages)");
@@ -1171,6 +1173,56 @@ static void GenerateF2FlowCorpus(string outDir)
         Console.WriteLine("  wrote f2-endnotes.docx");
     }
 
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Page.ColumnCount = 2;
+        doc.Page.ColumnSpacingPt = 36;
+        doc.Page.ColumnsLineBetween = true;
+        doc.Blocks.Clear();
+        doc.Blocks.Add(MP("Two Column Page Composition", "Heading1"));
+        doc.Blocks.Add(MP("This fixture verifies that FreeW records multi-column page ownership in the shared visual evidence manifest."));
+        for (int i = 1; i <= 24; i++)
+            doc.Blocks.Add(MP($"Column paragraph {i}: The page should flow into two balanced Word-style columns with a divider gap."));
+        DocxWriter.Write(doc, Path.Combine(outDir, "f2-columns.docx"));
+        Console.WriteLine("  wrote f2-columns.docx");
+    }
+
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Page.PageBorder = new PageBorder("#000080", 3.0);
+        doc.Page.WatermarkOptions = new WatermarkOptions("DRAFT")
+        {
+            FontColorHex = "#808080",
+            Opacity = 0.4,
+            Layout = WatermarkLayout.Diagonal,
+        };
+        doc.Blocks.Clear();
+        doc.Blocks.Add(MP("Page Border And Watermark", "Heading1"));
+        doc.Blocks.Add(MP("This fixture verifies page background composition, a visible page border, and a diagonal text watermark."));
+        for (int i = 1; i <= 12; i++)
+            doc.Blocks.Add(MP($"Watermark paragraph {i}: Body text should remain visible above the page watermark and inside the border."));
+        DocxWriter.Write(doc, Path.Combine(outDir, "f2-border-watermark.docx"));
+        Console.WriteLine("  wrote f2-border-watermark.docx");
+    }
+
+    {
+        var doc = FreeWVisualEvidenceDocumentFactory.BuildComplexTableLayoutDocument();
+        DocxWriter.Write(doc, Path.Combine(outDir, "table-layout-complex.docx"));
+        Console.WriteLine("  wrote table-layout-complex.docx");
+    }
+
+    {
+        var doc = FreeWVisualEvidenceDocumentFactory.BuildDrawingObjectsCompositionDocument();
+        DocxWriter.Write(doc, Path.Combine(outDir, "drawing-objects-complex.docx"));
+        Console.WriteLine("  wrote drawing-objects-complex.docx");
+    }
+
+    {
+        var doc = FreeWVisualEvidenceDocumentFactory.BuildChartSmartArtCompositionDocument();
+        DocxWriter.Write(doc, Path.Combine(outDir, "chart-smartart-complex.docx"));
+        Console.WriteLine("  wrote chart-smartart-complex.docx");
+    }
+
     // ─── 6. Section break with page-size change (portrait → landscape) ───────────────────────────
     // SG: FreeW/OOXML section-break semantics: a SectionBreak on paragraph P describes the section
     // that ENDS at P (the "preceding" section). The FINAL section is described by doc.Page.
@@ -1323,12 +1375,61 @@ static void GenerateF2FlowCorpus(string outDir)
         Console.WriteLine("  wrote f2-comments.docx");
     }
 
-    Console.WriteLine($"\nDone — 8 corpus files written to {outDir}");
+    {
+        var doc = BuildBackstageFixtureDocument(
+            "Backstage Print Preview Fidelity",
+            "This generated document is rendered through FreeW.FidelityRender for the backstage print preview evidence contract.",
+            "Print preview fixed-layout page");
+        DocxWriter.Write(doc, Path.Combine(outDir, "backstage-print-preview-fidelity.docx"));
+        Console.WriteLine("  wrote backstage-print-preview-fidelity.docx");
+    }
+
+    {
+        var doc = BuildBackstageFixtureDocument(
+            "Backstage PDF Export Fidelity",
+            "This generated document is rendered through FreeW.FidelityRender for the backstage PDF export raster evidence contract.",
+            "PDF export fixed-layout page");
+        DocxWriter.Write(doc, Path.Combine(outDir, "backstage-pdf-export-fidelity.docx"));
+        Console.WriteLine("  wrote backstage-pdf-export-fidelity.docx");
+    }
+
+    Console.WriteLine($"\nDone - 15 corpus files written to {outDir}");
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════════════════════════
 // Shared helpers
 // ═══════════════════════════════════════════════════════════════════════════════════════════════════
+
+static int NextSectionRelativePageNumber(Dictionary<int, int> sectionPageCounters, int sectionOrdinal)
+{
+    var safeOrdinal = Math.Max(1, sectionOrdinal);
+    sectionPageCounters.TryGetValue(safeOrdinal, out var current);
+    current++;
+    sectionPageCounters[safeOrdinal] = current;
+    return current;
+}
+
+static string BuildVisualEvidenceOutputPath(string outDir, string scenarioId, int pageNumber) =>
+    Path.Combine(outDir, FreeWVisualEvidencePlanner.ExpectedOutputName(scenarioId, pageNumber));
+
+static TextDocument BuildBackstageFixtureDocument(string title, string description, string pageLabel)
+{
+    var doc = TextDocument.CreateEmpty();
+    doc.FinalSectionHeadersFooters.Header = new HeaderFooter(title);
+    doc.FinalSectionHeadersFooters.Footer = new HeaderFooter("FreeW visual evidence");
+    doc.Blocks.Clear();
+
+    doc.Blocks.Add(new FreeW.Core.Model.Paragraph(title) { StyleId = "Heading1" });
+    doc.Blocks.Add(new FreeW.Core.Model.Paragraph(description));
+    doc.Blocks.Add(new FreeW.Core.Model.Paragraph("The first two rendered pages are retained as real PNG evidence and normalized through the shared visual evidence manifest."));
+    for (var i = 1; i <= 56; i++)
+    {
+        doc.Blocks.Add(new FreeW.Core.Model.Paragraph(
+            $"{pageLabel} paragraph {i}: body text, pagination, page chrome, and header/footer composition must survive the renderer capture path."));
+    }
+
+    return doc;
+}
 
 static long SavePng(RenderTargetBitmap bmp, string path)
 {

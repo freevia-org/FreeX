@@ -5,6 +5,75 @@ namespace FreeP.App.Compositor.Tests;
 public sealed class InCanvasTextEditPlannerTests
 {
     [Fact]
+    public void BeginShapeEdit_RichText_ReturnsPlacementSnapshotAndPlanner()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Shapes.Clear();
+        var body = MakeBody("Hello");
+        var shape = new SlideShape
+        {
+            Id = 1,
+            OffsetXEmu = 0,
+            OffsetYEmu = 0,
+            ExtentCxEmu = 914400L,
+            ExtentCyEmu = 457200L,
+            TextBody = body,
+        };
+        slide.Shapes.Add(shape);
+        var transform = new SlideTransformCore(2, 10, 20, 960, 540);
+
+        var plan = InCanvasTextEditPlanner.BeginShapeEdit(
+            0,
+            presentation,
+            slide,
+            shape.Id,
+            transform,
+            minimumWidth: 40,
+            minimumHeight: 20,
+            InCanvasTextEditKind.RichText);
+
+        plan.Status.Should().Be(InCanvasTextEditStartStatus.Ready);
+        plan.Kind.Should().Be(InCanvasTextEditKind.RichText);
+        plan.Placement.Should().Be(new InCanvasEditorPlacement(10, 20, 192, 96));
+        plan.OriginalPlainText.Should().Be("Hello");
+        plan.OriginalBody.Should().NotBeSameAs(body);
+        plan.EditPlanner.Should().NotBeNull();
+
+        body.Paragraphs[0].Runs[0].Text = "Mutated after plan";
+        plan.OriginalBody!.Paragraphs[0].Runs[0].Text.Should().Be("Hello");
+
+        var decision = plan.EditPlanner!.CommitRichText(MakeBody("Edited"));
+        decision.Outcome.Should().Be(InCanvasTextEditOutcome.Commit);
+        decision.Command!.Label.Should().Be("Edit Rich Text");
+    }
+
+    [Fact]
+    public void BeginShapeEdit_MissingTextBody_ReturnsDisabledPlan()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Shapes.Clear();
+        slide.Shapes.Add(new SlideShape { Id = 1 });
+
+        var plan = InCanvasTextEditPlanner.BeginShapeEdit(
+            0,
+            presentation,
+            slide,
+            1,
+            SlideTransformCore.Identity,
+            minimumWidth: 40,
+            minimumHeight: 20,
+            InCanvasTextEditKind.PlainText);
+
+        plan.Status.Should().Be(InCanvasTextEditStartStatus.MissingTextBody);
+        plan.IsReady.Should().BeFalse();
+        plan.Placement.Should().BeNull();
+        plan.EditPlanner.Should().BeNull();
+        plan.OriginalPlainText.Should().BeEmpty();
+    }
+
+    [Fact]
     public void CommitPlainText_UnchangedText_ReturnsNoCommand()
     {
         var body = MakeBody("Hello");

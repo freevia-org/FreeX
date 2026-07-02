@@ -307,6 +307,12 @@ public sealed class MainWindowHeadlessTests
         source.Should().Contain("PresentationAnimationCommandPlanner.TryApply(");
         source.Should().Contain("OnAnimationPaneRequested");
         source.Should().Contain("AnimationPanePlanner.BuildTimelinePlan(");
+        source.Should().Contain("ShowAnimationPane()");
+        source.Should().Contain("BuildAnimationPaneItemCard(");
+        source.Should().Contain("AnimationPanePlanner.BuildTriggerMutationPlan(");
+        source.Should().Contain("AnimationPanePlanner.BuildDurationMutationPlan(");
+        source.Should().Contain("AnimationPanePlanner.BuildDelayMutationPlan(");
+        source.Should().Contain("AnimationPanePlanner.TryApplyTimingMutation(");
     }
 
     [Fact]
@@ -334,6 +340,7 @@ public sealed class MainWindowHeadlessTests
         ids.Should().Contain("freep.file.save",    "Save command required");
         ids.Should().Contain("freep.file.save-as", "Save As command required");
         ids.Should().Contain(PresentationExportPlanner.ImageExportCommandId, "image export command required");
+        ids.Should().Contain(PresentationExportPlanner.VideoExportCommandId, "video export command required");
     }
 
     [Fact]
@@ -626,7 +633,6 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Theory]
-    [InlineData("freep.insert-table-3x3", 3, 3)]
     [InlineData("freep.insert-table-2x2", 2, 2)]
     [InlineData("freep.insert-table-4x4", 4, 4)]
     public async Task Ribbon_insert_table_commands_add_expected_table(
@@ -660,6 +666,58 @@ public sealed class MainWindowHeadlessTests
         added.Table.Should().NotBeNull();
         added.Table!.Rows.Should().HaveCount(expectedRows);
         added.Table.ColumnWidthsEmu.Should().HaveCount(expectedColumns);
+    }
+
+    [Fact]
+    public async Task Ribbon_insert_table_command_opens_picker_and_applies_selected_size()
+    {
+        var found = false;
+        var pickerVisibleAfterOpen = false;
+        var pickerChoiceCount = 0;
+        var defaultChoiceCount = 0;
+        var applied = false;
+        var pickerVisibleAfterApply = true;
+        var before = -1;
+        var after = -1;
+        SlideShape? added = null;
+        TableInsertionPickerPlan? pickerPlan = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var registry = window.BuildCommandRegistry();
+            found = registry.TryGet(SlideObjectInsertionPlanner.Table3x3CommandId, out var command);
+            found.Should().BeTrue("the large Table command must be registered");
+
+            before = window.Editor.CurrentSlide!.Shapes.Count;
+            command!.Execute(RibbonCommandContext.Empty);
+            pickerVisibleAfterOpen = window.IsTablePickerVisible;
+            pickerChoiceCount = window.TablePickerChoiceButtonCount;
+            defaultChoiceCount = window.TablePickerDefaultChoiceCount;
+            pickerPlan = window.LastTablePickerPlan;
+            applied = window.ApplyTablePickerChoice(5, 4);
+            pickerVisibleAfterApply = window.IsTablePickerVisible;
+            after = window.Editor.CurrentSlide!.Shapes.Count;
+            added = window.Editor.CurrentSlide!.Shapes.Last();
+        });
+
+        if (!ran) return;
+        found.Should().BeTrue();
+        pickerVisibleAfterOpen.Should().BeTrue("the Avalonia large Table command should show an actual picker surface");
+        pickerChoiceCount.Should().Be(25);
+        defaultChoiceCount.Should().Be(1);
+        pickerPlan.Should().NotBeNull();
+        pickerPlan!.Choices.Should().Contain(choice =>
+            choice.Rows == 5 &&
+            choice.Columns == 4 &&
+            choice.Label == "5 x 4 Table");
+        applied.Should().BeTrue();
+        pickerVisibleAfterApply.Should().BeFalse("the picker should collapse after a table size is selected");
+        after.Should().Be(before + 1);
+        added.Should().NotBeNull();
+        added!.Kind.Should().Be(SlideShapeKind.Table);
+        added.Table!.Rows.Should().HaveCount(5);
+        added.Table.ColumnWidthsEmu.Should().HaveCount(4);
     }
 
     [Theory]
@@ -1066,6 +1124,68 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task Notes_page_pdf_refresh_uses_shared_render_plan()
+    {
+        PresentationNotesPagePdfRenderPlan? notesPdfPlan = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            window.Editor.CurrentSlide!.Title = "Opening";
+            window.Editor.CurrentSlide.Notes = MakeTextBody("Opening note");
+            window.Editor.InsertSlide();
+
+            notesPdfPlan = window.RefreshNotesPagePdfRenderPlan(new PresentationSlideRangeRequest(
+                PresentationSlideRangeKind.CurrentSlide,
+                CurrentSlideNumber: 1));
+        });
+
+        if (!ran) return;
+        notesPdfPlan.Should().NotBeNull();
+        notesPdfPlan!.PrintPlan.Layout.Layout.Should().Be(PresentationPrintLayoutKind.NotesPages);
+        notesPdfPlan.PrintPlan.SlideRange.SlideNumbers.Should().Equal(1);
+        notesPdfPlan.PreviewPlans.Should().ContainSingle(preview =>
+            preview.SlideNumber == 1 &&
+            preview.NoteLines.Count == 1 &&
+            preview.NoteLines[0] == "Opening note");
+        notesPdfPlan.Pages.Should().ContainSingle();
+        notesPdfPlan.Pages[0].Ops.OfType<Free.Shared.Pdf.PdfText>().Select(text => text.Text)
+            .Should()
+            .Contain(["Opening", "Opening note"]);
+    }
+
+    [Fact]
+    public async Task Video_export_command_records_shared_deferred_plan()
+    {
+        var found = false;
+        PresentationVideoExportPlan? videoPlan = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            window.Editor.InsertSlide();
+            window.Editor.InsertSlide();
+
+            var registry = window.BuildCommandRegistry();
+            found = registry.TryGet(PresentationExportPlanner.VideoExportCommandId, out var video);
+
+            video!.Execute(RibbonCommandContext.Empty);
+            videoPlan = window.LastVideoExportPlan;
+        });
+
+        if (!ran) return;
+        found.Should().BeTrue("the Avalonia registry should expose the shared video export plan seam");
+        videoPlan.Should().NotBeNull();
+        videoPlan!.CommandId.Should().Be(PresentationExportPlanner.VideoExportCommandId);
+        videoPlan.DefaultExtensionWithDot.Should().Be(PresentationExportPlanner.VideoExportExtension);
+        videoPlan.SlideRange.SlideNumbers.Should().Equal(1, 2, 3);
+        videoPlan.Quality.Quality.Should().Be(PresentationVideoQualityKind.FullHd);
+        videoPlan.EstimatedDuration.Should().Be(TimeSpan.FromSeconds(15));
+        videoPlan.CanExecute.Should().BeFalse();
+        videoPlan.DisabledReason.Should().Be(PresentationExportPlanner.VideoExportDeferredMessage);
+    }
+
+    [Fact]
     public async Task Ribbon_transition_commands_route_through_shared_planner()
     {
         var foundFade = false;
@@ -1114,11 +1234,18 @@ public sealed class MainWindowHeadlessTests
         int? duration = null;
         int? delay = null;
         AnimationPaneTimelinePlan? panePlan = null;
+        var paneVisible = false;
+        var paneHeading = string.Empty;
+        var paneMessage = string.Empty;
+        var paneRenderedCount = 0;
+        var previewEnabled = false;
+        IReadOnlyList<string> paneRows = [];
 
         var ran = await OnUiThread(() =>
         {
             var window = new MainWindow(Array.Empty<string>());
             var shape = window.Editor.InsertDefaultRectangle();
+            shape.Name = "Hero box";
             window.Editor.Select(shape.Id);
             var registry = window.BuildCommandRegistry();
             foundFade = registry.TryGet("freep.anim.entrance.fade", out var fade);
@@ -1136,6 +1263,12 @@ public sealed class MainWindowHeadlessTests
             duration = animation.DurationMs;
             delay = animation.DelayMs;
             panePlan = window.LastAnimationPaneTimelinePlan;
+            paneVisible = window.IsAnimationPaneVisible;
+            paneHeading = window.AnimationPaneHeading;
+            paneMessage = window.AnimationPaneMessage;
+            paneRenderedCount = window.AnimationPaneRenderedItemCount;
+            previewEnabled = window.IsAnimationPanePreviewEnabled;
+            paneRows = window.AnimationPaneRenderedRows.ToArray();
         });
 
         if (!ran) return;
@@ -1153,6 +1286,148 @@ public sealed class MainWindowHeadlessTests
         panePlan.Items[0].DurationMs.Should().Be(1500);
         panePlan.Items[0].DelayMs.Should().Be(250);
         panePlan.PreviewIntent.CanExecute.Should().BeTrue();
+        paneVisible.Should().BeTrue("the Avalonia animation pane command should show the in-app pane");
+        paneHeading.Should().Be("Animation Pane - slide 1 (1 animations)");
+        paneMessage.Should().Contain("Hero box");
+        paneRenderedCount.Should().Be(1);
+        previewEnabled.Should().BeTrue();
+        paneRows.Should().ContainSingle()
+            .Which.Should().Contain("Hero box - In: Fade")
+            .And.Contain("duration 1.5s")
+            .And.Contain("delay 0.25s")
+            .And.Contain("move earlier unavailable")
+            .And.Contain("move later unavailable");
+    }
+
+    [Fact]
+    public async Task Animation_pane_renders_shared_timeline_rows_and_action_state()
+    {
+        AnimationPaneTimelinePlan? panePlan = null;
+        var paneVisible = false;
+        var paneHeading = string.Empty;
+        var paneMessage = string.Empty;
+        var previewEnabled = false;
+        IReadOnlyList<string> paneRows = [];
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var registry = window.BuildCommandRegistry();
+            registry.TryGet("freep.anim.entrance.fade", out var fade).Should().BeTrue();
+            registry.TryGet("freep.anim.trigger", out var trigger).Should().BeTrue();
+            registry.TryGet("freep.anim.duration", out var duration).Should().BeTrue();
+            registry.TryGet("freep.anim.delay", out var delay).Should().BeTrue();
+            registry.TryGet("freep.anim.pane", out var pane).Should().BeTrue();
+
+            var hero = window.Editor.InsertDefaultRectangle();
+            hero.Name = "Hero box";
+            window.Editor.Select(hero.Id);
+            fade!.Execute(RibbonCommandContext.Empty);
+            duration!.Execute(RibbonCommandContext.ForSelectedValue("0.75s"));
+
+            var caption = window.Editor.InsertDefaultRectangle();
+            caption.Name = "Caption box";
+            window.Editor.Select(caption.Id);
+            fade.Execute(RibbonCommandContext.Empty);
+            trigger!.Execute(RibbonCommandContext.ForSelectedValue("After Previous"));
+            delay!.Execute(RibbonCommandContext.ForSelectedValue("0.50s"));
+
+            pane!.Execute(RibbonCommandContext.Empty);
+
+            panePlan = window.LastAnimationPaneTimelinePlan;
+            paneVisible = window.IsAnimationPaneVisible;
+            paneHeading = window.AnimationPaneHeading;
+            paneMessage = window.AnimationPaneMessage;
+            previewEnabled = window.IsAnimationPanePreviewEnabled;
+            paneRows = window.AnimationPaneRenderedRows.ToArray();
+        });
+
+        if (!ran) return;
+        paneVisible.Should().BeTrue();
+        panePlan.Should().NotBeNull();
+        panePlan!.Items.Should().HaveCount(2);
+        panePlan.SelectedIndex.Should().Be(1);
+        paneHeading.Should().Be("Animation Pane - slide 1 (2 animations)");
+        paneMessage.Should().Contain("Caption box - In: Fade");
+        previewEnabled.Should().BeTrue();
+        paneRows.Should().HaveCount(2);
+        paneRows[0].Should().Contain("1. Hero box - In: Fade")
+            .And.Contain("On Click")
+            .And.Contain("duration 0.75s")
+            .And.Contain("move earlier unavailable")
+            .And.Contain("move later available");
+        paneRows[1].Should().Contain("2. Caption box - In: Fade")
+            .And.Contain("After Previous")
+            .And.Contain("delay 0.5s")
+            .And.Contain("move earlier available")
+            .And.Contain("move later unavailable");
+    }
+
+    [Fact]
+    public async Task Animation_pane_inline_timing_controls_apply_shared_mutation_plans()
+    {
+        var triggerControlCount = 0;
+        var durationControlCount = 0;
+        var delayControlCount = 0;
+        AnimationPaneTimingMutationPlan? triggerPlan = null;
+        AnimationPaneTimingMutationPlan? durationPlan = null;
+        AnimationPaneTimingMutationPlan? delayPlan = null;
+        AnimationPaneTimingMutationPlan? invalidDurationPlan = null;
+        AnimationTrigger? trigger = null;
+        int? durationMs = null;
+        int? delayMs = null;
+        IReadOnlyList<string> paneRows = [];
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var registry = window.BuildCommandRegistry();
+            registry.TryGet("freep.anim.entrance.fade", out var fade).Should().BeTrue();
+
+            var hero = window.Editor.InsertDefaultRectangle();
+            hero.Name = "Hero box";
+            window.Editor.Select(hero.Id);
+            fade!.Execute(RibbonCommandContext.Empty);
+            window.ShowAnimationPane();
+
+            triggerControlCount = window.AnimationPaneTriggerControlCount;
+            durationControlCount = window.AnimationPaneDurationControlCount;
+            delayControlCount = window.AnimationPaneDelayControlCount;
+
+            triggerPlan = window.ApplyAnimationPaneTriggerEditForTests(
+                0,
+                AnimationPanePlanner.ToTriggerIndex(AnimationTrigger.AfterPrevious));
+            durationPlan = window.ApplyAnimationPaneDurationEditForTests(0, "1.25s");
+            delayPlan = window.ApplyAnimationPaneDelayEditForTests(0, "0.40s");
+            invalidDurationPlan = window.ApplyAnimationPaneDurationEditForTests(0, "0");
+
+            var animation = window.Editor.CurrentSlideAnimations.Single();
+            trigger = animation.Trigger;
+            durationMs = animation.DurationMs;
+            delayMs = animation.DelayMs;
+            paneRows = window.AnimationPaneRenderedRows.ToArray();
+        });
+
+        if (!ran) return;
+        triggerControlCount.Should().Be(1);
+        durationControlCount.Should().Be(1);
+        delayControlCount.Should().Be(1);
+        triggerPlan.Should().NotBeNull();
+        triggerPlan!.Kind.Should().Be(AnimationPaneTimingEditKind.Trigger);
+        triggerPlan.ShouldApply.Should().BeTrue();
+        durationPlan.Should().NotBeNull();
+        durationPlan!.Kind.Should().Be(AnimationPaneTimingEditKind.Duration);
+        delayPlan.Should().NotBeNull();
+        delayPlan!.Kind.Should().Be(AnimationPaneTimingEditKind.Delay);
+        invalidDurationPlan.Should().NotBeNull();
+        invalidDurationPlan!.DisabledReason.Should().Be(AnimationPanePlanner.InvalidDurationMessage);
+        trigger.Should().Be(AnimationTrigger.AfterPrevious);
+        durationMs.Should().Be(1250);
+        delayMs.Should().Be(400);
+        paneRows.Should().ContainSingle()
+            .Which.Should().Contain("After Previous")
+            .And.Contain("duration 1.25s")
+            .And.Contain("delay 0.4s");
     }
 
     [Fact]
@@ -1161,15 +1436,30 @@ public sealed class MainWindowHeadlessTests
         var foundComments = false;
         var foundAccessibility = false;
         var foundAltText = false;
+        var foundReadingOrder = false;
         var foundProofing = false;
+        var foundReopenComment = false;
         PresentationCommentPanePlan? commentPlan = null;
         PresentationAccessibilitySummaryPlan? accessibilityPlan = null;
         PresentationAltTextRequestPlan? altTextPlan = null;
         PresentationAltTextPanePlan? altTextPanePlan = null;
+        PresentationReadingOrderPlan? readingOrderPlan = null;
         PresentationProofingRequestPlan? proofingPlan = null;
         var commentsPaneVisible = false;
         var commentsPaneCommentCount = 0;
         var commentsPaneActionCount = 0;
+        var commentsPaneSelectedCount = 0;
+        var readingOrderPaneVisible = false;
+        var readingOrderPaneItemCount = 0;
+        var readingOrderPaneHeading = string.Empty;
+        var readingOrderPaneMessage = string.Empty;
+        var readingOrderMoveEarlierEnabled = true;
+        string? readingOrderMoveEarlierDisabledReason = null;
+        var readingOrderMoveLaterEnabled = false;
+        string? readingOrderMoveLaterDisabledReason = null;
+        PresentationReadingOrderMutationPlan? readingOrderMove = null;
+        uint[] readingOrderShapeOrderAfterMove = [];
+        uint[] readingOrderPaneOrderAfterMove = [];
 
         var ran = await OnUiThread(() =>
         {
@@ -1180,6 +1470,18 @@ public sealed class MainWindowHeadlessTests
                 Initials = "RV",
                 Text = "Use shared review state.",
                 Idx = 1,
+                IsResolved = true,
+                ResolvedBy = "Reviewer",
+                ResolvedDateTime = new DateTime(2026, 7, 2, 8, 15, 0, DateTimeKind.Utc),
+                Replies =
+                {
+                    new SlideCommentReply
+                    {
+                        Author = "Nora",
+                        Initials = "NO",
+                        Text = "@Reviewer confirmed.",
+                    }
+                }
             });
             var shape = new SlideShape
             {
@@ -1188,27 +1490,56 @@ public sealed class MainWindowHeadlessTests
                 Kind = SlideShapeKind.Picture,
                 Picture = new ImagePart(),
             };
+            var caption = new SlideShape
+            {
+                Id = 329,
+                Name = "Caption",
+                Kind = SlideShapeKind.AutoShape,
+                Text = "Caption",
+            };
+            window.Editor.CurrentSlide.Shapes.Clear();
             window.Editor.CurrentSlide.Shapes.Add(shape);
+            window.Editor.CurrentSlide.Shapes.Add(caption);
             window.Editor.Select(shape.Id);
 
             var registry = window.BuildCommandRegistry();
             foundComments = registry.TryGet(PresentationReviewWorkflowPlanner.CommentsPaneCommandId, out var comments);
             foundAccessibility = registry.TryGet(PresentationReviewWorkflowPlanner.AccessibilityCommandId, out var accessibility);
             foundAltText = registry.TryGet(PresentationReviewWorkflowPlanner.AltTextCommandId, out var altText);
+            foundReadingOrder = registry.TryGet(PresentationReviewWorkflowPlanner.ReadingOrderPaneCommandId, out var readingOrder);
             foundProofing = registry.TryGet(PresentationReviewWorkflowPlanner.ProofingCommandId, out var proofing);
+            foundReopenComment = registry.TryGet(PresentationReviewWorkflowPlanner.ReopenCommentCommandId, out _);
 
             comments!.Execute(RibbonCommandContext.Empty);
             accessibility!.Execute(RibbonCommandContext.Empty);
             altText!.Execute(RibbonCommandContext.Empty);
+            readingOrder!.Execute(RibbonCommandContext.Empty);
             proofing!.Execute(RibbonCommandContext.Empty);
 
             commentPlan = window.LastCommentPanePlan;
             commentsPaneVisible = window.IsReviewCommentsPaneVisible;
             commentsPaneCommentCount = window.ReviewCommentsPaneCommentCount;
             commentsPaneActionCount = window.ReviewCommentsPaneActionButtonCount;
+            commentsPaneSelectedCount = window.ReviewCommentsPaneSelectedCommentCount;
             accessibilityPlan = window.LastAccessibilitySummaryPlan;
             altTextPlan = window.LastAltTextRequestPlan;
             altTextPanePlan = window.LastAltTextPanePlan;
+            readingOrderPlan = window.LastReadingOrderPlan;
+            readingOrderPaneVisible = window.IsReadingOrderPaneVisible;
+            readingOrderPaneItemCount = window.ReadingOrderPaneItemCount;
+            readingOrderPaneHeading = window.ReadingOrderPaneHeading;
+            readingOrderPaneMessage = window.ReadingOrderPaneMessage;
+            readingOrderMoveEarlierEnabled = window.IsReadingOrderMoveEarlierEnabled;
+            readingOrderMoveEarlierDisabledReason = window.ReadingOrderMoveEarlierDisabledReason;
+            readingOrderMoveLaterEnabled = window.IsReadingOrderMoveLaterEnabled;
+            readingOrderMoveLaterDisabledReason = window.ReadingOrderMoveLaterDisabledReason;
+            readingOrderMove = window.ApplyReadingOrderMoveLater();
+            readingOrderShapeOrderAfterMove = window.Editor.CurrentSlide.Shapes
+                .Select(shape => shape.Id)
+                .ToArray();
+            readingOrderPaneOrderAfterMove = window.LastReadingOrderPlan!.Items
+                .Select(item => item.ShapeId)
+                .ToArray();
             proofingPlan = window.LastProofingRequestPlan;
         });
 
@@ -1216,9 +1547,23 @@ public sealed class MainWindowHeadlessTests
         foundComments.Should().BeTrue();
         foundAccessibility.Should().BeTrue();
         foundAltText.Should().BeTrue();
+        foundReadingOrder.Should().BeTrue();
         foundProofing.Should().BeTrue();
+        foundReopenComment.Should().BeTrue();
         commentPlan.Should().NotBeNull();
         commentPlan!.TotalCommentCount.Should().Be(1);
+        commentPlan.Comments.Single().Should().Match<PresentationCommentDescriptor>(comment =>
+            comment.ThreadStatus == PresentationCommentThreadStatus.Resolved &&
+            comment.IsSelected &&
+            !comment.CanResolve &&
+            comment.CanReopen &&
+            !comment.CanReply &&
+            comment.ReplyCount == 1 &&
+            comment.MentionCount == 1);
+        commentPlan.Comments.Single().Replies.Single().TextPreview.Should().Be("@Reviewer confirmed.");
+        commentPlan.SelectedComment.Should().BeSameAs(commentPlan.Comments[0]);
+        commentPlan.Actions.Single(action => action.CommandId == PresentationReviewWorkflowPlanner.ReopenCommentCommandId)
+            .IsEnabled.Should().BeTrue("the comments command selects the first current-slide thread through the shared plan");
         accessibilityPlan.Should().NotBeNull();
         var missingAltText = accessibilityPlan!.Issues.Single(issue =>
             issue.ShapeId == 328 && issue.Title == "Alt text missing");
@@ -1241,11 +1586,149 @@ public sealed class MainWindowHeadlessTests
             PresentationReviewWorkflowPlanner.AltTextPaneDecorativeCommandId,
             PresentationReviewWorkflowPlanner.AltTextPaneCloseCommandId
         });
+        readingOrderPlan.Should().NotBeNull();
+        readingOrderPlan!.Items.Select(item => item.ShapeId).Should().Equal(328u, 329u);
+        readingOrderPlan.SelectedItem.Should().NotBeNull();
+        readingOrderPlan.SelectedItem!.ShapeId.Should().Be(328);
+        readingOrderPlan.Actions.Single(action =>
+                action.CommandId == PresentationReviewWorkflowPlanner.ReadingOrderMoveEarlierCommandId)
+            .DisabledReason.Should().Be(PresentationReviewWorkflowPlanner.ReadingOrderAlreadyEarliestMessage);
+        readingOrderPaneVisible.Should().BeTrue("the Avalonia reading order command should render a shared-plan-backed pane");
+        readingOrderPaneItemCount.Should().Be(2);
+        readingOrderPaneHeading.Should().Be("Reading Order - slide 1 (2 shapes)");
+        readingOrderPaneMessage.Should().Be("Selected: Product image");
+        readingOrderMoveEarlierEnabled.Should().BeFalse();
+        readingOrderMoveEarlierDisabledReason.Should()
+            .Be(PresentationReviewWorkflowPlanner.ReadingOrderAlreadyEarliestMessage);
+        readingOrderMoveLaterEnabled.Should().BeTrue();
+        readingOrderMoveLaterDisabledReason.Should().BeNull();
+        readingOrderMove.Should().Be(new PresentationReadingOrderMutationPlan(
+            PresentationReviewWorkflowIntentKind.MoveReadingOrderLater,
+            true,
+            0,
+            328,
+            0,
+            1,
+            null));
+        readingOrderShapeOrderAfterMove.Should().Equal(329u, 328u);
+        readingOrderPaneOrderAfterMove.Should().Equal(329u, 328u);
         proofingPlan.Should().NotBeNull();
         proofingPlan!.Status.Should().Be(PresentationWorkflowCapabilityStatus.RequiresHost);
         commentsPaneVisible.Should().BeTrue("the Avalonia comments command should render a shared-plan-backed pane");
         commentsPaneCommentCount.Should().Be(1);
         commentsPaneActionCount.Should().BeGreaterThanOrEqualTo(6);
+        commentsPaneSelectedCount.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task Review_comment_resolve_reopen_routes_through_shared_mutation_plan()
+    {
+        SlideComment? resolvedComment = null;
+        SlideComment? reopenedComment = null;
+        SlideComment? remainingComment = null;
+        PresentationCommentMutationPlan? resolvePlan = null;
+        PresentationCommentMutationPlan? reopenPlan = null;
+        PresentationCommentMutationPlan? invalidDeletePlan = null;
+        PresentationCommentPanePlan? noSelectionPlan = null;
+        PresentationCommentPanePlan? resolvedPanePlan = null;
+        PresentationCommentPanePlan? reopenedPanePlan = null;
+        PresentationCommentPanePlan? deletedPanePlan = null;
+        PresentationCommentPanePlan? invalidSelectionPanePlan = null;
+        var paneVisible = false;
+        var dirtyAfterDelete = false;
+        var commentCountAfterDelete = -1;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            window.Editor.CurrentSlide!.Comments.Add(new SlideComment
+            {
+                Author = "Reviewer",
+                Initials = "RV",
+                Text = "Close this thread.",
+                Idx = 1
+            });
+
+            var registry = window.BuildCommandRegistry();
+            registry.TryGet(PresentationReviewWorkflowPlanner.ResolveCommentCommandId, out var resolveCommand)
+                .Should().BeTrue();
+            registry.TryGet(PresentationReviewWorkflowPlanner.ReopenCommentCommandId, out var reopenCommand)
+                .Should().BeTrue();
+            registry.TryGet(PresentationReviewWorkflowPlanner.DeleteCommentCommandId, out var deleteCommand)
+                .Should().BeTrue();
+
+            noSelectionPlan = window.ShowReviewCommentsPane();
+            noSelectionPlan.Actions.Single(action =>
+                    action.CommandId == PresentationReviewWorkflowPlanner.ResolveCommentCommandId)
+                .DisabledReason.Should().Be(PresentationReviewWorkflowPlanner.MissingCommentMessage);
+
+            window.SetSelectedReviewCommentIndexForTests(0);
+            resolvePlan = window.ResolveSelectedComment(
+                new DateTime(2026, 7, 2, 14, 0, 0, DateTimeKind.Utc),
+                "  FreeP User ");
+            resolvedComment = window.Editor.CurrentSlide.Comments[0];
+            resolvedPanePlan = window.LastCommentPanePlan;
+
+            reopenPlan = window.ReopenSelectedComment();
+            reopenedComment = window.Editor.CurrentSlide.Comments[0];
+            reopenedPanePlan = window.LastCommentPanePlan;
+
+            resolveCommand!.Execute(RibbonCommandContext.Empty);
+            window.Editor.CurrentSlide.Comments.Add(new SlideComment
+            {
+                Author = "Reviewer",
+                Initials = "RV",
+                Text = "Delete this thread.",
+                Idx = 2
+            });
+            window.SetSelectedReviewCommentIndexForTests(1);
+            deleteCommand!.Execute(RibbonCommandContext.Empty);
+            remainingComment = window.Editor.CurrentSlide.Comments.Single();
+            deletedPanePlan = window.LastCommentPanePlan;
+            dirtyAfterDelete = window.IsDirty;
+            commentCountAfterDelete = window.ReviewCommentsPaneCommentCount;
+
+            invalidSelectionPanePlan = window.SetSelectedReviewCommentIndexForTests(42);
+            invalidDeletePlan = window.DeleteSelectedComment();
+            paneVisible = window.IsReviewCommentsPaneVisible;
+        });
+
+        if (!ran) return;
+        noSelectionPlan.Should().NotBeNull();
+        resolvePlan.Should().NotBeNull();
+        resolvePlan!.ShouldApply.Should().BeTrue();
+        resolvePlan.Intent.Should().Be(PresentationReviewWorkflowIntentKind.ResolveComment);
+        resolvedComment.Should().NotBeNull();
+        resolvedComment!.IsResolved.Should().BeTrue();
+        resolvedComment.ResolvedDateTime.Should().Be(new DateTime(2026, 7, 2, 14, 0, 0, DateTimeKind.Utc));
+        resolvedComment.ResolvedBy.Should().Be("FreeP User");
+        resolvedPanePlan.Should().NotBeNull();
+        resolvedPanePlan!.Comments.Single().CanReopen.Should().BeTrue();
+        resolvedPanePlan.Actions.Single(action =>
+                action.CommandId == PresentationReviewWorkflowPlanner.ResolveCommentCommandId)
+            .DisabledReason.Should().Be(PresentationReviewWorkflowPlanner.CommentAlreadyResolvedMessage);
+        reopenedComment.Should().NotBeNull();
+        reopenedComment!.IsResolved.Should().BeFalse();
+        reopenedComment.ResolvedDateTime.Should().BeNull();
+        reopenedComment.ResolvedBy.Should().BeEmpty();
+        reopenedPanePlan.Should().NotBeNull();
+        reopenedPanePlan!.Comments.Single().CanResolve.Should().BeTrue();
+        reopenPlan.Should().NotBeNull("reopen should refresh the pane to an open-thread state");
+        remainingComment.Should().NotBeNull();
+        remainingComment!.Text.Should().Be("Close this thread.");
+        deletedPanePlan.Should().NotBeNull();
+        deletedPanePlan!.SelectedCommentIndex.Should().Be(0);
+        deletedPanePlan.SelectedComment!.TextPreview.Should().Be("Close this thread.");
+        dirtyAfterDelete.Should().BeTrue();
+        commentCountAfterDelete.Should().Be(1);
+        invalidSelectionPanePlan.Should().NotBeNull();
+        invalidSelectionPanePlan!.Actions.Single(action =>
+                action.CommandId == PresentationReviewWorkflowPlanner.DeleteCommentCommandId)
+            .DisabledReason.Should().Be(PresentationReviewWorkflowPlanner.MissingCommentMessage);
+        invalidDeletePlan.Should().NotBeNull();
+        invalidDeletePlan!.ShouldApply.Should().BeFalse();
+        invalidDeletePlan.ValidationMessage.Should().Be(PresentationReviewWorkflowPlanner.MissingCommentMessage);
+        paneVisible.Should().BeTrue();
     }
 
     [Fact]
@@ -1401,6 +1884,33 @@ public sealed class MainWindowHeadlessTests
         accessibilityPlan.Should().NotBeNull();
         accessibilityPlan!.Issues.Should().NotContain(issue =>
             issue.ShapeId == 329 && issue.Title == "Alt text missing");
+    }
+
+    [Fact]
+    public async Task Notes_pane_refreshes_shared_notes_page_preview_plan()
+    {
+        PresentationNotesPagePreviewPlan? initialPlan = null;
+        PresentationNotesPagePreviewPlan? editedPlan = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            initialPlan = window.LastNotesPagePreviewPlan;
+
+            window.Editor.CurrentSlide!.Title = "Roadmap";
+            window.Editor.SetCurrentSlideNotesText("Mention preview workflow.");
+            editedPlan = window.LastNotesPagePreviewPlan;
+        });
+
+        if (!ran) return;
+        initialPlan.Should().NotBeNull();
+        initialPlan!.PrintPlan.Layout.Layout.Should().Be(PresentationPrintLayoutKind.NotesPages);
+        editedPlan.Should().NotBeNull();
+        editedPlan!.SlideNumber.Should().Be(1);
+        editedPlan.SlideTitle.Should().Be("Roadmap");
+        editedPlan.NotesText.Should().Be("Mention preview workflow.");
+        editedPlan.HasNotes.Should().BeTrue();
+        editedPlan.PrintPlan.SlideRange.DisplayName.Should().Be("Slide 1");
     }
 
     [Theory]
@@ -1630,5 +2140,18 @@ public sealed class MainWindowHeadlessTests
         source.IndexOf(first, StringComparison.Ordinal)
             .Should()
             .BeLessThan(source.IndexOf(second, StringComparison.Ordinal), $"{first} should appear before {second}");
+    }
+
+    private static TextBody MakeTextBody(params string[] paragraphs)
+    {
+        var body = new TextBody();
+        foreach (var text in paragraphs)
+        {
+            var paragraph = new Paragraph();
+            paragraph.Runs.Add(new Run { Text = text });
+            body.Paragraphs.Add(paragraph);
+        }
+
+        return body;
     }
 }

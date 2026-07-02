@@ -1,0 +1,380 @@
+using System;
+using System.Collections.Generic;
+using System.Xml.Linq;
+
+namespace FreeP.App.Compositor.MathLayout;
+
+// ── OMML → MathNode parser (Theme 27) ────────────────────────────────────────
+//
+// Parses raw OMML XML (the m:oMath element, or the a14:m / mc:AlternateContent
+// wrapper that contains it) into a MathNode tree.
+//
+// Namespace: http://schemas.openxmlformats.org/officeDocument/2006/math
+//
+// Only the common constructs are handled explicitly; anything else collapses
+// into a MathNode.Unknown with flattened m:t text.
+
+public static class OmmlParser
+{
+    private static readonly XNamespace M  = "http://schemas.openxmlformats.org/officeDocument/2006/math";
+    private static readonly XNamespace A14 = "http://schemas.microsoft.com/office/drawing/2010/main";
+    private static readonly XNamespace MC  = "http://schemas.openxmlformats.org/markup-compatibility/2006";
+
+    // ── Public entry point ────────────────────────────────────────────────
+
+    /// <summary>
+    /// Parses the raw OMML XML string stored on a <c>MathRunInfo.RawXml</c> into a
+    /// <see cref="MathNode"/> tree.  Returns a <see cref="MathNode.Unknown"/> with the
+    /// plain-text fallback if parsing fails.
+    /// </summary>
+    public static MathNode Parse(string rawXml, string fallbackText)
+    {
+        if (string.IsNullOrWhiteSpace(rawXml))
+            return new MathNode.Unknown(fallbackText);
+
+        try
+        {
+            var root = XElement.Parse(rawXml);
+            // Locate the m:oMath element regardless of the wrapper form.
+            var oMath = LocateOmath(root);
+            if (oMath is null)
+                return new MathNode.Unknown(fallbackText);
+
+            return ParseRow(oMath);
+        }
+        catch
+        {
+            return new MathNode.Unknown(fallbackText);
+        }
+    }
+
+    // ── Locate m:oMath ────────────────────────────────────────────────────
+
+    private static XElement? LocateOmath(XElement root)
+    {
+        // Direct m:oMath root (e.g. the element was already the oMath).
+        if (root.Name == M + "oMath") return root;
+
+        // a14:m wrapper
+        if (root.Name == A14 + "m")
+        {
+            // The a14:m element itself contains m:oMath as a child (or m:oMathPara).
+            return root.Element(M + "oMathPara")?.Element(M + "oMath")
+                ?? root.Element(M + "oMath")
+                ?? root.Descendants(M + "oMath").FirstOrDefault();
+        }
+
+        // mc:AlternateContent wrapper — use mc:Choice
+        if (root.Name == MC + "AlternateContent")
+        {
+            var choice = root.Element(MC + "Choice");
+            return choice?.Descendants(M + "oMath").FirstOrDefault()
+                ?? root.Descendants(M + "oMath").FirstOrDefault();
+        }
+
+        // Fallback: search descendants
+        return root.Descendants(M + "oMath").FirstOrDefault();
+    }
+
+    // ── Row: parse a list of child elements into a Row or single node ─────
+
+    private static MathNode ParseRow(XElement container)
+    {
+        var children = new List<MathNode>();
+        foreach (var child in container.Elements())
+        {
+            var node = ParseElement(child);
+            if (node is not null)
+                children.Add(node);
+        }
+
+        return children.Count == 1
+            ? children[0]
+            : new MathNode.Row(children);
+    }
+
+    // ── Dispatcher ────────────────────────────────────────────────────────
+
+    private static MathNode? ParseElement(XElement el)
+    {
+        var localName = el.Name.LocalName;
+        var ns = el.Name.Namespace;
+
+        if (ns != M) return null;   // ignore non-math namespace elements
+
+        return localName switch
+        {
+            "r"        => ParseRun(el),
+            "f"        => ParseFrac(el),
+            "sSup"     => ParseSup(el),
+            "sSub"     => ParseSub(el),
+            "sSubSup"  => ParseSubSup(el),
+            "rad"      => ParseRad(el),
+            "nary"     => ParseNary(el),
+            "func"     => ParseFunc(el),
+            "d"        => ParseDelim(el),
+            "acc"      => ParseAcc(el),
+            "bar"      => ParseBar(el),
+            "groupChr" => ParseGroupChr(el),
+            "m"        => ParseMatrix(el),
+            "oMathPara"=> ParseRow(el),
+            _          => ParseUnknown(el)
+        };
+    }
+
+    // ── m:r run ──────────────────────────────────────────────────────────
+
+    private static MathNode ParseRun(XElement rEl)
+    {
+        var text = rEl.Element(M + "t")?.Value ?? string.Empty;
+        var rPr  = rEl.Element(M + "rPr");
+
+        // m:nor is a CT_OnOff: presence alone doesn't mean "on". Its m:val must be
+        // read — absent val (bare <m:nor/>), "1", "true", or "on" mean normal/upright;
+        // "0", "false", or "off" mean NOT normal, i.e. keep the default italic style.
+        var norEl = rPr?.Element(M + "nor");
+        bool isItalic = true; // default: italic (no m:nor element at all)
+        if (norEl is not null)
+        {
+            var norVal = norEl.Attribute(M + "val")?.Value;
+            bool norOn = norVal is null or "1" or "true" or "on";
+            isItalic = !norOn;
+        }
+
+        // m:sty attribute: "b", "bi", "i" (italic), "p" (plain/upright)
+        // "p" or "b" → not italic
+        var sty = rPr?.Element(M + "sty")?.Attribute(M + "val")?.Value
+               ?? rPr?.Attribute(M + "sty")?.Value;
+        if (sty is "p" or "b") isItalic = false;
+        else if (sty is "i" or "bi") isItalic = true;
+
+        return new MathNode.Run(text, isItalic);
+    }
+
+    // ── m:f fraction ──────────────────────────────────────────────────────
+
+    private static MathNode ParseFrac(XElement fEl)
+    {
+        var numEl = fEl.Element(M + "num") ?? fEl;
+        var denEl = fEl.Element(M + "den") ?? fEl;
+
+        // Per ECMA-376 §22.1.2.34 (CT_FPr) / §22.1.2.35 (ST_FType): m:type is "bar"
+        // (default), "skw" (skewed), "lin" (linear), or "noBar" (stacked, no bar).
+        // Absent m:fPr, absent m:type, or an unrecognized value all default to Bar.
+        var fPr = fEl.Element(M + "fPr");
+        var typeVal = fPr?.Element(M + "type")?.Attribute(M + "val")?.Value
+                   ?? fPr?.Element(M + "type")?.Value;
+        var fracType = typeVal switch
+        {
+            "skw"   => MathNode.FracType.Skewed,
+            "lin"   => MathNode.FracType.Linear,
+            "noBar" => MathNode.FracType.NoBar,
+            _       => MathNode.FracType.Bar
+        };
+
+        return new MathNode.Frac(
+            ParseRow(numEl),
+            ParseRow(denEl),
+            fracType);
+    }
+
+    // ── m:sSup superscript ────────────────────────────────────────────────
+
+    private static MathNode ParseSup(XElement el)
+    {
+        var eEl   = el.Element(M + "e")   ?? el;
+        var supEl = el.Element(M + "sup") ?? el;
+        return new MathNode.Sup(ParseRow(eEl), ParseRow(supEl));
+    }
+
+    // ── m:sSub subscript ─────────────────────────────────────────────────
+
+    private static MathNode ParseSub(XElement el)
+    {
+        var eEl   = el.Element(M + "e")   ?? el;
+        var subEl = el.Element(M + "sub") ?? el;
+        return new MathNode.Sub(ParseRow(eEl), ParseRow(subEl));
+    }
+
+    // ── m:sSubSup ─────────────────────────────────────────────────────────
+
+    private static MathNode ParseSubSup(XElement el)
+    {
+        var eEl   = el.Element(M + "e")   ?? el;
+        var subEl = el.Element(M + "sub") ?? el;
+        var supEl = el.Element(M + "sup") ?? el;
+        return new MathNode.SubSup(
+            ParseRow(eEl),
+            ParseRow(subEl),
+            ParseRow(supEl));
+    }
+
+    // ── m:rad radical ─────────────────────────────────────────────────────
+
+    private static MathNode ParseRad(XElement el)
+    {
+        // m:deg is optional; when absent or has m:argPr with m:degHide=1 → square root
+        MathNode? degree = null;
+        var degEl = el.Element(M + "deg");
+        if (degEl is not null)
+        {
+            // degHide means the degree is hidden (plain v)
+            var radPr = el.Element(M + "radPr");
+            bool degHide = radPr?.Element(M + "degHide")?.Attribute(M + "val")?.Value is "1" or "true";
+            if (!degHide)
+                degree = ParseRow(degEl);
+        }
+
+        var eEl = el.Element(M + "e") ?? el;
+        return new MathNode.Rad(degree, ParseRow(eEl));
+    }
+
+    // ── m:nary ────────────────────────────────────────────────────────────
+
+    private static MathNode ParseNary(XElement el)
+    {
+        var naryPr = el.Element(M + "naryPr");
+
+        // m:chr is the operator character. Per ECMA-376 §22.1.2.75 (CT_Nary),
+        // when m:chr is absent the default n-ary operator is the integral sign ∫ (U+222B).
+        var chrEl = naryPr?.Element(M + "chr");
+        string opChar = chrEl?.Attribute(M + "val")?.Value
+                     ?? chrEl?.Value
+                     ?? "∫"; // ∫ (integral) — CT_Nary default m:chr
+
+        // m:limLoc: "undOvr" = limits above/below; "subSup" = as scripts.
+        // Per ECMA-376 §22.1.2.66 (CT_LimLoc), the default (element absent) is "subSup".
+        var limLoc = naryPr?.Element(M + "limLoc")?.Attribute(M + "val")?.Value
+                  ?? naryPr?.Element(M + "limLoc")?.Value
+                  ?? "subSup";
+        bool aboveBelow = limLoc == "undOvr";
+
+        MathNode? subLimit = null, supLimit = null;
+        var subEl = el.Element(M + "sub");
+        var supEl = el.Element(M + "sup");
+        if (subEl is not null) subLimit = ParseRow(subEl);
+        if (supEl is not null) supLimit = ParseRow(supEl);
+
+        var eEl = el.Element(M + "e") ?? el;
+        return new MathNode.Nary(opChar, aboveBelow, subLimit, supLimit, ParseRow(eEl));
+    }
+
+    // ── m:func ────────────────────────────────────────────────────────────
+
+    private static MathNode ParseFunc(XElement el)
+    {
+        var fNameEl = el.Element(M + "fName") ?? el;
+        var eEl     = el.Element(M + "e")     ?? el;
+        return new MathNode.Func(ParseRow(fNameEl), ParseRow(eEl));
+    }
+
+    // ── m:d delimiter ─────────────────────────────────────────────────────
+
+    private static MathNode ParseDelim(XElement el)
+    {
+        var dPr = el.Element(M + "dPr");
+
+        // Per ECMA-376 §22.1.2.20 (CT_DPr): when m:begChr / m:endChr is ABSENT the
+        // default brackets are "(" and ")". When the element is PRESENT but its
+        // m:val is explicitly the empty string, that means NO bracket on that side
+        // (e.g. one-sided/piecewise delimiters) — it must not be defaulted to "("/")"
+        // nor overridden to "|"; it stays empty.
+        var begChrEl = dPr?.Element(M + "begChr");
+        string begChr = begChrEl is null
+            ? "("
+            : begChrEl.Attribute(M + "val")?.Value ?? begChrEl.Value;
+
+        var endChrEl = dPr?.Element(M + "endChr");
+        string endChr = endChrEl is null
+            ? ")"
+            : endChrEl.Attribute(M + "val")?.Value ?? endChrEl.Value;
+
+        // Per ECMA-376 §22.1.2.20 (CT_DPr): m:sepChr is the separator glyph drawn
+        // between the m:e children when there are two or more. When ABSENT the
+        // default is ",". When PRESENT with an explicit empty m:val, no separator
+        // glyph is drawn — same explicit-empty semantics as begChr/endChr.
+        var sepChrEl = dPr?.Element(M + "sepChr");
+        string sepChr = sepChrEl is null
+            ? ","
+            : sepChrEl.Attribute(M + "val")?.Value ?? sepChrEl.Value;
+
+        var elements = new List<MathNode>();
+        foreach (var eEl in el.Elements(M + "e"))
+            elements.Add(ParseRow(eEl));
+
+        return new MathNode.Delim(begChr, endChr, elements, sepChr);
+    }
+
+    // ── m:acc accent ──────────────────────────────────────────────────────
+
+    private static MathNode ParseAcc(XElement el)
+    {
+        var accPr = el.Element(M + "accPr");
+        string accChar = accPr?.Element(M + "chr")?.Attribute(M + "val")?.Value
+                      ?? accPr?.Element(M + "chr")?.Value
+                      ?? "^"; // combining circumflex / hat
+
+        var eEl = el.Element(M + "e") ?? el;
+        return new MathNode.Acc(accChar, ParseRow(eEl));
+    }
+
+    // ── m:bar ─────────────────────────────────────────────────────────────
+
+    private static MathNode ParseBar(XElement el)
+    {
+        var barPr = el.Element(M + "barPr");
+        // m:pos: "top" (default) = overline, "bot" = underline
+        bool isOver = barPr?.Element(M + "pos")?.Attribute(M + "val")?.Value is not "bot";
+        var eEl = el.Element(M + "e") ?? el;
+        return new MathNode.Bar(ParseRow(eEl), isOver);
+    }
+
+    // ── m:groupChr ────────────────────────────────────────────────────────
+
+    private static MathNode ParseGroupChr(XElement el)
+    {
+        var grpPr = el.Element(M + "groupChrPr");
+        string grpChar = grpPr?.Element(M + "chr")?.Attribute(M + "val")?.Value
+                      ?? grpPr?.Element(M + "chr")?.Value
+                      ?? "?"; // ? over-brace
+        bool isAbove = grpPr?.Element(M + "pos")?.Attribute(M + "val")?.Value is not "bot";
+        var eEl = el.Element(M + "e") ?? el;
+        return new MathNode.GroupChr(grpChar, ParseRow(eEl), isAbove);
+    }
+
+    // ── m:m matrix ────────────────────────────────────────────────────────
+
+    private static MathNode ParseMatrix(XElement el)
+    {
+        var rows = new List<IReadOnlyList<MathNode>>();
+        foreach (var mrEl in el.Elements(M + "mr"))
+        {
+            var cells = new List<MathNode>();
+            foreach (var eEl in mrEl.Elements(M + "e"))
+                cells.Add(ParseRow(eEl));
+            rows.Add(cells);
+        }
+        return new MathNode.Matrix(rows);
+    }
+
+    // ── Unknown / fallback ────────────────────────────────────────────────
+
+    private static MathNode ParseUnknown(XElement el)
+    {
+        var sb = new System.Text.StringBuilder();
+        foreach (var tEl in el.Descendants(M + "t"))
+            sb.Append(tEl.Value);
+        return new MathNode.Unknown(sb.ToString());
+    }
+
+    // ── Helper: flatten m:t text from an element ──────────────────────────
+
+    internal static string FlattenText(XElement el)
+    {
+        var sb = new System.Text.StringBuilder();
+        foreach (var tEl in el.Descendants(M + "t"))
+            sb.Append(tEl.Value);
+        return sb.ToString();
+    }
+}
+

@@ -7,6 +7,7 @@ using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Free.Shared.Drawing;
 using FreeP.App.Compositor;
+using FreeP.App.Compositor.MathLayout;
 using FreeP.Core.Model;
 
 // Alias to disambiguate from FreeP.Core.Model.GradientStop
@@ -1301,6 +1302,9 @@ public sealed class SlideCanvas : Control
 
             switch (TextLayoutPlanner.PlanParagraphRenderRoute(para, text))
             {
+                case TextParagraphRenderRoute.Math:
+                    RenderParaWithMath(dc, para, placement.X, placement.Y);
+                    break;
                 case TextParagraphRenderRoute.Effects:
                     RenderParaWithEffects(dc, para, placement.X, placement.Y, bounds, text.WarpPreset);
                     break;
@@ -1355,6 +1359,9 @@ public sealed class SlideCanvas : Control
 
             switch (TextLayoutPlanner.PlanParagraphRenderRoute(para, text))
             {
+                case TextParagraphRenderRoute.Math:
+                    RenderParaWithMath(dc, para, placement.X, placement.Y);
+                    break;
                 case TextParagraphRenderRoute.Effects:
                     RenderParaWithEffects(dc, para, placement.X, placement.Y, bounds, text.WarpPreset);
                     break;
@@ -1414,6 +1421,156 @@ public sealed class SlideCanvas : Control
         {
             var ft = BuildSingleRunFormattedTextAt(para.Runs[segment.RunIndex], segment.Text);
             dc.DrawText(ft, new Point(segment.X, startY));
+        }
+    }
+
+    // ── Theme 27: math rendering ────────────────────────────────────────────────
+
+    /// <summary>
+    /// Renders a paragraph that contains OMML math runs using the shared
+    /// <see cref="MathBoxRenderPlanner"/> and Avalonia drawing primitives.
+    ///
+    /// HB4: math and text runs are BASELINE-aligned, not top-aligned (mirrors
+    /// the WPF SlideCanvas for parity). We measure every run's ascent (math box
+    /// Ascent, or FormattedText.Baseline for plain text) to find the line's
+    /// shared baseline, then draw every run's top at (baselineY - runAscent).
+    /// Marked internal (not private) so FreeP.App.Rendering.Avalonia.Tests can call it directly.
+    /// </summary>
+    internal static void RenderParaWithMath(
+        DrawingContext dc,
+        ResolvedParagraph para,
+        double startX, double startY)
+    {
+        // Pass 1: measure each run's ascent to find the line's common baseline.
+        double lineAscent = 0;
+        var formatted = new FormattedText?[para.Runs.Count];
+        for (int i = 0; i < para.Runs.Count; i++)
+        {
+            var run = para.Runs[i];
+            if (run.IsMathRun && run.MathLayout is not null)
+            {
+                lineAscent = Math.Max(lineAscent, run.MathLayout.Metrics.Ascent);
+            }
+            else if (!string.IsNullOrEmpty(run.Text))
+            {
+                var ft = BuildSingleRunFormattedTextAt(run, run.Text);
+                formatted[i] = ft;
+                lineAscent = Math.Max(lineAscent, ft.Baseline);
+            }
+        }
+
+        double baselineY = ComputeBaselineY(startY, lineAscent);
+
+        // Pass 2: draw each run with its top placed so its ascent lands on baselineY.
+        double x = startX;
+        for (int i = 0; i < para.Runs.Count; i++)
+        {
+            var run = para.Runs[i];
+            if (run.IsMathRun && run.MathLayout is not null)
+            {
+                double runY = ComputeRunTopY(baselineY, run.MathLayout.Metrics.Ascent);
+                var mathOps = MathBoxRenderPlanner.Plan(
+                    run.MathLayout, x, runY, run.Color, run.FontFamily);
+                foreach (var op in mathOps)
+                    DrawMathOpAvalonia(dc, op);
+                x += run.MathLayout.Metrics.Width;
+            }
+            else if (!string.IsNullOrEmpty(run.Text))
+            {
+                var ft = formatted[i]!;
+                double runY = ComputeRunTopY(baselineY, ft.Baseline);
+                dc.DrawText(ft, new Point(x, runY));
+                x += ft.Width;
+            }
+        }
+    }
+
+    /// <summary>
+    /// HB4 pure helper: the shared line baseline (in slide-space DIP) given the
+    /// paragraph's top Y and the max ascent across all its runs (text or math).
+    /// Exposed internal so tests can validate the baseline math without needing
+    /// a live DrawingContext. Mirrors FreeP.App.Rendering.Wpf for parity.
+    /// </summary>
+    internal static double ComputeBaselineY(double startY, double lineAscent) => startY + lineAscent;
+
+    /// <summary>
+    /// HB4 pure helper: the top Y at which a run with the given ascent must be
+    /// drawn so its own baseline lands exactly on <paramref name="baselineY"/>.
+    /// </summary>
+    internal static double ComputeRunTopY(double baselineY, double runAscent) => baselineY - runAscent;
+
+    /// <summary>
+    /// Draws a single <see cref="MathDrawOp"/> as Avalonia primitives.
+    /// ALL math layout decisions come from the shared MathBoxRenderPlanner.
+    /// </summary>
+    private static void DrawMathOpAvalonia(DrawingContext dc, MathDrawOp op)
+    {
+        switch (op)
+        {
+            case MathDrawOp.DrawGlyph g:
+            {
+                var typeface = new Typeface(
+                    g.FontFamily,
+                    g.IsItalic ? FontStyle.Italic : FontStyle.Normal,
+                    FontWeight.Normal, FontStretch.Normal);
+                double emPx = g.FontSizePt * (96.0 / 72.0);
+                var brush = new SolidColorBrush(Color.FromRgb(g.Color.R, g.Color.G, g.Color.B));
+                var ft = new FormattedText(g.Text,
+                    System.Globalization.CultureInfo.CurrentUICulture,
+                    FlowDirection.LeftToRight, typeface, emPx, brush);
+                dc.DrawText(ft, new Point(g.X, g.Y));
+                break;
+            }
+
+            case MathDrawOp.DrawHRule hr:
+            {
+                var pen = new Pen(
+                    new SolidColorBrush(Color.FromRgb(hr.Color.R, hr.Color.G, hr.Color.B)),
+                    hr.Thickness);
+                dc.DrawLine(pen, new Point(hr.X, hr.Y), new Point(hr.X + hr.Width, hr.Y));
+                break;
+            }
+
+            case MathDrawOp.DrawBracket br:
+            {
+                double naturalEm = br.ScaledHeight * 0.85;
+                var fontFamily = br.FontFamily.Length > 0 ? br.FontFamily : "Cambria Math";
+                var typeface = new Typeface(fontFamily,
+                    FontStyle.Normal, FontWeight.Normal, FontStretch.Normal);
+                var brush = new SolidColorBrush(Color.FromRgb(br.Color.R, br.Color.G, br.Color.B));
+                var ft = new FormattedText(br.Character,
+                    System.Globalization.CultureInfo.CurrentUICulture,
+                    FlowDirection.LeftToRight, typeface, naturalEm, brush);
+                dc.DrawText(ft, new Point(br.X, br.Y));
+                break;
+            }
+
+            case MathDrawOp.DrawRadical rad:
+            {
+                var pen = new Pen(
+                    new SolidColorBrush(Color.FromRgb(rad.Color.R, rad.Color.G, rad.Color.B)),
+                    rad.OverlineThickness);
+
+                double x0   = rad.X;
+                double x1   = rad.X + rad.SignWidth * 0.25;
+                double x2   = rad.X + rad.SignWidth;
+                double xOvEnd = x2 + rad.OverlineWidth;
+                double yTop  = rad.Y + rad.OverlineThickness / 2.0;
+                double yFoot = rad.Y + rad.Height * 0.85;
+                double yBase = rad.Y + rad.OverlineThickness;
+
+                var geo = new StreamGeometry();
+                using (var ctx = geo.Open())
+                {
+                    ctx.BeginFigure(new Point(x0, yTop + (yFoot - yTop) * 0.4), isFilled: false);
+                    ctx.LineTo(new Point(x1, yFoot));
+                    ctx.LineTo(new Point(x2, yBase));
+                    ctx.LineTo(new Point(xOvEnd, yBase));
+                    ctx.EndFigure(isClosed: false);
+                }
+                dc.DrawGeometry(null, pen, geo);
+                break;
+            }
         }
     }
 

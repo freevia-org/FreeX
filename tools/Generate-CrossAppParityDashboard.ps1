@@ -84,11 +84,23 @@ function Get-FreeXNextSlice {
     $nonClickControlRows = [int](Get-JsonPropertyValue $FunctionalClassificationSummary "non-click-control-inventory-row")
     $conditionalFormatPopupGalleryRows = [int](Get-JsonPropertyValue $FunctionalClassificationSummary "conditional-format-popup-gallery-row")
     $conditionalFormatPopupCatalogItems = [int](Get-JsonPropertyValue $FunctionalClassificationSummary "conditional-format-popup-catalog-item")
+    $accountingSymbolPopupGalleryRows = [int](Get-JsonPropertyValue $FunctionalClassificationSummary "accounting-symbol-popup-gallery-row")
+    $fontBorderPopupGalleryRows = [int](Get-JsonPropertyValue $FunctionalClassificationSummary "font-border-popup-gallery-row")
+    $handlerQualifiedHelpRoutes = [int](Get-JsonPropertyValue $FunctionalClassificationSummary "handler-qualified-help-route")
+    $sharedRibbonComboBoxControls = [int](Get-JsonPropertyValue $FunctionalClassificationSummary "shared-ribbon-combo-box-control")
+    $catalogBackedPseudoGalleryRows = $conditionalFormatPopupGalleryRows + $accountingSymbolPopupGalleryRows + $fontBorderPopupGalleryRows
     $allDialogRoutesCaptured = $DialogRoutes.totalRoutes -eq $DialogRoutes.wpfCaptures -and
         $DialogRoutes.totalRoutes -eq $DialogRoutes.avaloniaCaptures
 
+    if ($FunctionalMatrix.avaloniaMissing -eq 0 -and
+        $realBehaviorGaps -eq 0 -and
+        $allDialogRoutesCaptured -and
+        $catalogBackedPseudoGalleryRows -eq $pseudoGalleryItems) {
+        return "Command/dialog parity is green; all $pseudoGalleryItems pseudo-gallery rows are catalog-backed in classifier evidence ($conditionalFormatPopupGalleryRows conditional-format rows over $conditionalFormatPopupCatalogItems runtime catalog items, $fontBorderPopupGalleryRows font/border rows, and $accountingSymbolPopupGalleryRows accounting-symbol rows). The remaining classifier-noise bucket is $nonClickControlRows non-click inventory rows now split into $handlerQualifiedHelpRoutes handler-qualified Help routes and $sharedRibbonComboBoxControls shared ribbon ComboBox controls; foreground opened-state captures remain environment-blocked."
+    }
+
     if ($FunctionalMatrix.avaloniaMissing -eq 0 -and $realBehaviorGaps -eq 0 -and $allDialogRoutesCaptured) {
-        return "Command/dialog parity is green; conditional-format popup/gallery classifier evidence now links $conditionalFormatPopupGalleryRows rows to $conditionalFormatPopupCatalogItems shared runtime catalog items. Next evidence gap is paired opened-state WPF/Avalonia/Excel captures, while $pseudoGalleryItems total pseudo-gallery rows and $nonClickControlRows non-click inventory rows remain tracked separately."
+        return "Command/dialog parity is green; $catalogBackedPseudoGalleryRows of $pseudoGalleryItems pseudo-gallery rows are catalog-backed in classifier evidence. Continue converting residual pseudo-gallery rows to catalog-backed evidence, then revisit foreground opened-state captures when the environment blocker clears."
     }
 
     if ($FunctionalMatrix.avaloniaMissing -gt 0 -or $realBehaviorGaps -gt 0) {
@@ -145,6 +157,12 @@ try {
         pseudoCommandGalleryItems = [int](Get-JsonPropertyValue $functionalClassification.summary "pseudo-command-gallery-item")
         conditionalFormatPopupGalleryRows = [int](Get-JsonPropertyValue $functionalClassification.summary "conditional-format-popup-gallery-row")
         conditionalFormatPopupCatalogItems = [int](Get-JsonPropertyValue $functionalClassification.summary "conditional-format-popup-catalog-item")
+        accountingSymbolPopupGalleryRows = [int](Get-JsonPropertyValue $functionalClassification.summary "accounting-symbol-popup-gallery-row")
+        accountingSymbolPopupCatalogItems = [int](Get-JsonPropertyValue $functionalClassification.summary "accounting-symbol-popup-catalog-item")
+        fontBorderPopupGalleryRows = [int](Get-JsonPropertyValue $functionalClassification.summary "font-border-popup-gallery-row")
+        fontBorderPopupCatalogItems = [int](Get-JsonPropertyValue $functionalClassification.summary "font-border-popup-catalog-item")
+        handlerQualifiedHelpRoutes = [int](Get-JsonPropertyValue $functionalClassification.summary "handler-qualified-help-route")
+        sharedRibbonComboBoxControls = [int](Get-JsonPropertyValue $functionalClassification.summary "shared-ribbon-combo-box-control")
     }
     $freeXDialogRoutes = [ordered]@{
         totalRoutes = [int]$dialogInventory.summary.totalRoutes
@@ -188,7 +206,7 @@ try {
             actionableGaps = [int]$freew.summary.actionableGaps
             classifiedRows = $true
         }
-        nextSlice = "Use actionable FreeW command rows for product slices; deepen Backstage safety/print/export evidence next."
+        nextSlice = "Backstage print/export planner evidence now has paired WPF/Avalonia renderer contracts for PDF/preview fidelity; missing real captures fail the visual-evidence summary instead of being inferred."
     }
 
     $freeP = [ordered]@{
@@ -205,7 +223,7 @@ try {
             platformOnly = [int]$freep.summary.platformOnly
             commandIdAliases = [int]$freep.summary.commandIdAliases
         }
-        nextSlice = "Layout command routing now has a shared host intent; move to actual picker UI, slide-pane/editing, and workflow evidence depth."
+        nextSlice = "Layout picker, table picker, slide-pane reorder, and the bottom New Slide affordance now have WPF/Avalonia evidence. Continue workflow-depth slices in notes-page preview/rendering, rich inline table/text editing, modern comments/review, and presenter recording/ink execution."
     }
 
     $dashboard = [ordered]@{
@@ -233,7 +251,7 @@ try {
         "",
         "| App | Primary evidence | Current generated state | Next slice |",
         "|---|---|---|---|",
-        "| FreeX | Functional matrix, classifier, dialog inventory, command surface | $($freeX.functionalMatrix.totalCommands) functional commands; $($freeX.functionalMatrix.parity) parity; $($freeX.functionalMatrix.avaloniaMissing) Avalonia-missing; $($freeX.functionalMatrix.realBehaviorGaps) real classified binding gaps; $($freeX.functionalMatrix.pseudoCommandGalleryItems) classified pseudo-gallery rows; $($freeX.functionalMatrix.conditionalFormatPopupGalleryRows) conditional-format popup/gallery rows backed by $($freeX.functionalMatrix.conditionalFormatPopupCatalogItems) runtime catalog items; $($freeX.dialogRoutes.totalRoutes)/$($freeX.dialogRoutes.totalRoutes) dialog routes captured on WPF and Avalonia | $($freeX.nextSlice) |",
+        "| FreeX | Functional matrix, classifier, dialog inventory, command surface | $($freeX.functionalMatrix.totalCommands) functional commands; $($freeX.functionalMatrix.parity) parity; $($freeX.functionalMatrix.avaloniaMissing) Avalonia-missing; $($freeX.functionalMatrix.realBehaviorGaps) real classified binding gaps; $($freeX.functionalMatrix.pseudoCommandGalleryItems) catalog-backed pseudo-gallery rows ($($freeX.functionalMatrix.conditionalFormatPopupGalleryRows) conditional-format, $($freeX.functionalMatrix.fontBorderPopupGalleryRows) font/border, $($freeX.functionalMatrix.accountingSymbolPopupGalleryRows) accounting-symbol); $($freeX.dialogRoutes.totalRoutes)/$($freeX.dialogRoutes.totalRoutes) dialog routes captured on WPF and Avalonia | $($freeX.nextSlice) |",
         "| FreeW | Generated command inventory | $($freeW.commandInventory.totalCommands) commands; $($freeW.commandInventory.bothProfiles) shared-profile; $($freeW.commandInventory.actionableMissingWpf) actionable WPF-missing; $($freeW.commandInventory.actionableMissingAvalonia) actionable Avalonia-missing; $($freeW.commandInventory.profileShapeOnly) profile-shape-only; $($freeW.commandInventory.commandIdAliases) command-id aliases; $($freeW.commandInventory.platformOnly) platform-only; $($freeW.commandInventory.deferred) deferred | $($freeW.nextSlice) |",
         "| FreeP | Generated command inventory | $($freeP.commandInventory.totalCommands) commands; $($freeP.commandInventory.bothProfiles) shared-profile; $($freeP.commandInventory.actionableMissingWpf) actionable WPF-missing; $($freeP.commandInventory.actionableMissingAvalonia) actionable Avalonia-missing; $($freeP.commandInventory.platformOnly) platform-only | $($freeP.nextSlice) |",
         "",

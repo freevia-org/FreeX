@@ -98,8 +98,11 @@ public sealed class MainWindow : Window
     private readonly TextBlock _statusText;
     private Border _layoutPickerHost = null!;
     private StackPanel _layoutPickerPanel = null!;
+    private Border _tablePickerHost = null!;
+    private WrapPanel _tablePickerPanel = null!;
     private Border _reviewCommentsPaneHost = null!;
     private StackPanel _reviewCommentsPanePanel = null!;
+    private int? _selectedCommentIndex;
     private Border _altTextPaneHost = null!;
     private TextBlock _altTextPaneHeading = null!;
     private TextBlock _altTextPaneMessage = null!;
@@ -111,6 +114,22 @@ public sealed class MainWindow : Window
     private Button _altTextApplyButton = null!;
     private Button _altTextCloseButton = null!;
     private bool _altTextPaneRefreshing;
+    private Border _readingOrderPaneHost = null!;
+    private TextBlock _readingOrderPaneHeading = null!;
+    private TextBlock _readingOrderPaneMessage = null!;
+    private StackPanel _readingOrderPaneItemsPanel = null!;
+    private Button _readingOrderMoveEarlierButton = null!;
+    private Button _readingOrderMoveLaterButton = null!;
+    private Border _animationPaneHost = null!;
+    private TextBlock _animationPaneHeading = null!;
+    private TextBlock _animationPaneMessage = null!;
+    private StackPanel _animationPaneItemsPanel = null!;
+    private Button _animationPanePreviewButton = null!;
+    private int _selectedAnimationIndex = -1;
+    private readonly List<string> _animationPaneRenderedRows = new();
+    private int _animationPaneTriggerControlCount;
+    private int _animationPaneDurationControlCount;
+    private int _animationPaneDelayControlCount;
 
     // ── Interaction layer (Theme 15) ────────────────────────────────────────────
 
@@ -152,13 +171,21 @@ public sealed class MainWindow : Window
     internal PresentationAccessibilitySummaryPlan? LastAccessibilitySummaryPlan { get; private set; }
     internal PresentationAltTextRequestPlan? LastAltTextRequestPlan { get; private set; }
     internal PresentationAltTextPanePlan? LastAltTextPanePlan { get; private set; }
+    internal PresentationReadingOrderPlan? LastReadingOrderPlan { get; private set; }
     internal PresentationProofingRequestPlan? LastProofingRequestPlan { get; private set; }
     internal AnimationPaneTimelinePlan? LastAnimationPaneTimelinePlan { get; private set; }
     internal PresentationDesignCommandPlan? LastLayoutRequestPlan { get; private set; }
     internal PresentationHandoutLayoutPlan? LastHandoutLayoutPlan { get; private set; }
+    internal PresentationNotesPagePreviewPlan? LastNotesPagePreviewPlan { get; private set; }
+    internal PresentationNotesPagePdfRenderPlan? LastNotesPagePdfRenderPlan { get; private set; }
+    internal PresentationVideoExportPlan? LastVideoExportPlan { get; private set; }
     internal PresentationLayoutPickerPlan? LastLayoutPickerPlan { get; private set; }
     internal PresentationLayoutChoice? LastAppliedLayoutChoice { get; private set; }
+    internal TableInsertionPickerPlan? LastTablePickerPlan { get; private set; }
     internal bool IsLayoutPickerVisible => _layoutPickerHost?.IsVisible == true;
+    internal bool IsTablePickerVisible => _tablePickerHost?.IsVisible == true;
+    internal int TablePickerChoiceButtonCount => LastTablePickerPlan?.Choices.Count ?? 0;
+    internal int TablePickerDefaultChoiceCount => LastTablePickerPlan?.Choices.Count(choice => choice.IsDefault) ?? 0;
     internal int LayoutPickerChoiceButtonCount => LastLayoutPickerPlan?.Choices.Count ?? 0;
     internal int LayoutPickerGroupHeaderCount => LastLayoutPickerPlan?.Groups.Count ?? 0;
     internal int LayoutPickerThumbnailPlaceholderCount =>
@@ -168,6 +195,7 @@ public sealed class MainWindow : Window
     internal bool IsReviewCommentsPaneVisible => _reviewCommentsPaneHost?.IsVisible == true;
     internal int ReviewCommentsPaneCommentCount => LastCommentPanePlan?.Comments.Count ?? 0;
     internal int ReviewCommentsPaneActionButtonCount => LastCommentPanePlan?.Actions.Count ?? 0;
+    internal int ReviewCommentsPaneSelectedCommentCount => LastCommentPanePlan?.Comments.Count(comment => comment.IsSelected) ?? 0;
     internal bool IsAltTextPaneVisible => _altTextPaneHost?.IsVisible == true;
     internal bool IsAltTextPaneApplyEnabled => _altTextApplyButton?.IsEnabled == true;
     internal string AltTextPaneTitleLabel => _altTextTitleLabel?.Text ?? string.Empty;
@@ -178,6 +206,28 @@ public sealed class MainWindow : Window
     internal string AltTextPaneDescriptionPlaceholder => _altTextDescriptionBox?.PlaceholderText ?? string.Empty;
     internal bool IsAltTextPaneDecorativeChecked => _altTextDecorativeCheck?.IsChecked == true;
     internal string AltTextPaneMessage => _altTextPaneMessage?.Text ?? string.Empty;
+    internal bool IsReadingOrderPaneVisible => _readingOrderPaneHost?.IsVisible == true;
+    internal int ReadingOrderPaneItemCount => LastReadingOrderPlan?.Items.Count ?? 0;
+    internal string ReadingOrderPaneHeading => _readingOrderPaneHeading?.Text ?? string.Empty;
+    internal string ReadingOrderPaneMessage => _readingOrderPaneMessage?.Text ?? string.Empty;
+    internal bool IsReadingOrderMoveEarlierEnabled => _readingOrderMoveEarlierButton?.IsEnabled == true;
+    internal bool IsReadingOrderMoveLaterEnabled => _readingOrderMoveLaterButton?.IsEnabled == true;
+    internal string? ReadingOrderMoveEarlierDisabledReason =>
+        LastReadingOrderPlan?.Actions.SingleOrDefault(action =>
+            action.CommandId == PresentationReviewWorkflowPlanner.ReadingOrderMoveEarlierCommandId)?.DisabledReason;
+    internal string? ReadingOrderMoveLaterDisabledReason =>
+        LastReadingOrderPlan?.Actions.SingleOrDefault(action =>
+            action.CommandId == PresentationReviewWorkflowPlanner.ReadingOrderMoveLaterCommandId)?.DisabledReason;
+    internal bool IsAnimationPaneVisible => _animationPaneHost?.IsVisible == true;
+    internal int AnimationPaneItemCount => LastAnimationPaneTimelinePlan?.Items.Count ?? 0;
+    internal int AnimationPaneRenderedItemCount => _animationPaneItemsPanel?.Children.Count ?? 0;
+    internal string AnimationPaneHeading => _animationPaneHeading?.Text ?? string.Empty;
+    internal string AnimationPaneMessage => _animationPaneMessage?.Text ?? string.Empty;
+    internal bool IsAnimationPanePreviewEnabled => _animationPanePreviewButton?.IsEnabled == true;
+    internal IReadOnlyList<string> AnimationPaneRenderedRows => _animationPaneRenderedRows;
+    internal int AnimationPaneTriggerControlCount => _animationPaneTriggerControlCount;
+    internal int AnimationPaneDurationControlCount => _animationPaneDurationControlCount;
+    internal int AnimationPaneDelayControlCount => _animationPaneDelayControlCount;
 
     // ── Constructors ───────────────────────────────────────────────────────────
 
@@ -318,6 +368,7 @@ public sealed class MainWindow : Window
         rightGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         rightGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         rightGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        rightGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
         // ── Interaction overlay stack ───────────────────────────────────────────
         // A Panel stack: SlideCanvas at the bottom, SelectionAdornerLayer on top (transparent to
@@ -369,6 +420,34 @@ public sealed class MainWindow : Window
                 Content                       = _layoutPickerPanel,
             },
         };
+        _tablePickerPanel = new WrapPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Margin = new Thickness(8),
+        };
+        _tablePickerHost = new Border
+        {
+            Background      = Brushes.White,
+            BorderBrush     = new SolidColorBrush(Color.FromRgb(0xC0, 0xC0, 0xC0)),
+            BorderThickness = new Thickness(0, 1, 0, 0),
+            IsVisible       = false,
+            Child           = new StackPanel
+            {
+                Orientation = Orientation.Vertical,
+                Children =
+                {
+                    new TextBlock
+                    {
+                        Text = TableInsertionPickerPlanner.PickerHeading,
+                        Margin = new Thickness(10, 8, 10, 2),
+                        FontSize = 11,
+                        FontWeight = FontWeight.SemiBold,
+                        Foreground = new SolidColorBrush(Color.FromRgb(0x44, 0x44, 0x44)),
+                    },
+                    _tablePickerPanel,
+                },
+            },
+        };
         _reviewCommentsPanePanel = new StackPanel
         {
             Orientation = Orientation.Vertical,
@@ -389,12 +468,16 @@ public sealed class MainWindow : Window
             },
         };
         _altTextPaneHost = BuildAltTextPaneHost();
+        _readingOrderPaneHost = BuildReadingOrderPaneHost();
+        _animationPaneHost = BuildAnimationPaneHost();
         Grid.SetRow(canvasHost, 0);
         Grid.SetRow(_layoutPickerHost, 1);
-        Grid.SetRow(_reviewCommentsPaneHost, 2);
-        Grid.SetRow(_notesBox,  3);
+        Grid.SetRow(_tablePickerHost, 2);
+        Grid.SetRow(_reviewCommentsPaneHost, 3);
+        Grid.SetRow(_notesBox,  4);
         rightGrid.Children.Add(canvasHost);
         rightGrid.Children.Add(_layoutPickerHost);
+        rightGrid.Children.Add(_tablePickerHost);
         rightGrid.Children.Add(_reviewCommentsPaneHost);
         rightGrid.Children.Add(_notesBox);
 
@@ -422,12 +505,18 @@ public sealed class MainWindow : Window
         body.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         body.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         body.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        body.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        body.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         Grid.SetColumn(slidePaneHost, 0);
         Grid.SetColumn(rightGrid,      1);
         Grid.SetColumn(_altTextPaneHost, 2);
+        Grid.SetColumn(_readingOrderPaneHost, 3);
+        Grid.SetColumn(_animationPaneHost, 4);
         body.Children.Add(slidePaneHost);
         body.Children.Add(rightGrid);
         body.Children.Add(_altTextPaneHost);
+        body.Children.Add(_readingOrderPaneHost);
+        body.Children.Add(_animationPaneHost);
 
         return body;
     }
@@ -536,6 +625,148 @@ public sealed class MainWindow : Window
             Padding = new Thickness(6, 4),
         };
 
+    private Border BuildReadingOrderPaneHost()
+    {
+        _readingOrderPaneHeading = new TextBlock
+        {
+            Text = "Reading Order",
+            FontSize = 15,
+            FontWeight = FontWeight.SemiBold,
+            Margin = new Thickness(12, 12, 12, 4),
+        };
+        _readingOrderPaneMessage = new TextBlock
+        {
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)),
+            Margin = new Thickness(12, 0, 12, 8),
+        };
+        _readingOrderMoveEarlierButton = new Button
+        {
+            MinWidth = 94,
+            Padding = new Thickness(10, 4),
+            Margin = new Thickness(0, 0, 8, 0),
+        };
+        _readingOrderMoveLaterButton = new Button
+        {
+            MinWidth = 84,
+            Padding = new Thickness(10, 4),
+        };
+        _readingOrderMoveEarlierButton.Click += (_, _) => ApplyReadingOrderMoveEarlier();
+        _readingOrderMoveLaterButton.Click += (_, _) => ApplyReadingOrderMoveLater();
+        _readingOrderPaneItemsPanel = new StackPanel
+        {
+            Orientation = Orientation.Vertical,
+        };
+
+        var actionPanel = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Margin = new Thickness(12, 0, 12, 8),
+            Children =
+            {
+                _readingOrderMoveEarlierButton,
+                _readingOrderMoveLaterButton,
+            }
+        };
+
+        var header = new StackPanel
+        {
+            Orientation = Orientation.Vertical,
+            Children =
+            {
+                _readingOrderPaneHeading,
+                _readingOrderPaneMessage,
+                actionPanel,
+            }
+        };
+        DockPanel.SetDock(header, Dock.Top);
+
+        var panel = new DockPanel();
+        panel.Children.Add(header);
+        panel.Children.Add(new ScrollViewer
+        {
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            Content = _readingOrderPaneItemsPanel,
+        });
+
+        return new Border
+        {
+            Width = 320,
+            IsVisible = false,
+            Background = Brushes.White,
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0xC0, 0xC0, 0xC0)),
+            BorderThickness = new Thickness(1, 0, 0, 0),
+            Child = panel,
+        };
+    }
+
+    private Border BuildAnimationPaneHost()
+    {
+        _animationPaneHeading = new TextBlock
+        {
+            Text = "Animation Pane",
+            FontSize = 15,
+            FontWeight = FontWeight.SemiBold,
+            Margin = new Thickness(12, 12, 12, 4),
+        };
+        _animationPaneMessage = new TextBlock
+        {
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)),
+            Margin = new Thickness(12, 0, 12, 8),
+        };
+        _animationPanePreviewButton = new Button
+        {
+            Content = "Preview",
+            MinWidth = 82,
+            Padding = new Thickness(10, 4),
+            Margin = new Thickness(12, 0, 12, 8),
+        };
+        _animationPanePreviewButton.Click += (_, _) =>
+        {
+            if (LastAnimationPaneTimelinePlan?.PreviewIntent.CanExecute == true)
+                StartSlideShow(fromStart: false);
+        };
+
+        _animationPaneItemsPanel = new StackPanel
+        {
+            Orientation = Orientation.Vertical,
+        };
+
+        var header = new StackPanel
+        {
+            Orientation = Orientation.Vertical,
+            Children =
+            {
+                _animationPaneHeading,
+                _animationPaneMessage,
+                _animationPanePreviewButton,
+            }
+        };
+        DockPanel.SetDock(header, Dock.Top);
+
+        var panel = new DockPanel();
+        panel.Children.Add(header);
+        panel.Children.Add(new ScrollViewer
+        {
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            Content = _animationPaneItemsPanel,
+        });
+
+        return new Border
+        {
+            Width = 340,
+            IsVisible = false,
+            Background = Brushes.White,
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0xC0, 0xC0, 0xC0)),
+            BorderThickness = new Thickness(1, 0, 0, 0),
+            Child = panel,
+        };
+    }
+
     // ── Interaction wiring (Theme 15) ───────────────────────────────────────────
 
     private void WireInteraction(Canvas textOverlay)
@@ -620,6 +851,7 @@ public sealed class MainWindow : Window
         r.Register(PresentationExportPlanner.PdfExportCommandId, new ActionRibbonCommand(() => _ = FileExportPdfAsync()));
         r.Register(PresentationExportPlanner.ImageExportCommandId, new ActionRibbonCommand(() => _ = FileExportImagesAsync()));
         r.Register(PresentationExportPlanner.PrintCommandId, new ActionRibbonCommand(() => RefreshHandoutLayoutPlan()));
+        r.Register(PresentationExportPlanner.VideoExportCommandId, new ActionRibbonCommand(() => RefreshVideoExportPlan()));
 
         // Slide navigation/management
         r.Register("freep.new-slide",       new ActionRibbonCommand(() => Editor.InsertSlide()));
@@ -661,6 +893,12 @@ public sealed class MainWindow : Window
         // Insert objects/text
         foreach (var plan in SlideObjectInsertionPlanner.BuiltInPlans)
         {
+            if (plan.CommandId == SlideObjectInsertionPlanner.Table3x3CommandId)
+            {
+                r.Register(plan.CommandId, new ActionRibbonCommand(OpenTablePicker));
+                continue;
+            }
+
             if (plan.RequiresPicturePayload)
             {
                 r.Register(plan.CommandId, new ActionRibbonCommand(() => _ = InsertPictureFromFileAsync()));
@@ -763,6 +1001,67 @@ public sealed class MainWindow : Window
         return applied;
     }
 
+    internal void OpenTablePicker()
+    {
+        LastTablePickerPlan = TableInsertionPickerPlanner.BuildPlan();
+        ShowTablePicker(LastTablePickerPlan);
+        _statusText.Text = $"Table picker: {LastTablePickerPlan.Choices.Count} choices";
+    }
+
+    internal bool ApplyTablePickerChoice(int rows, int columns)
+    {
+        var applied = TableInsertionPickerPlanner.TryApplyChoice(Editor, rows, columns);
+        if (applied)
+        {
+            RefreshSlidePane();
+            RefreshCanvas();
+            UpdateStatus();
+            HideTablePicker();
+        }
+
+        return applied;
+    }
+
+    private void ShowTablePicker(TableInsertionPickerPlan plan)
+    {
+        if (_tablePickerHost is null || _tablePickerPanel is null)
+            return;
+
+        _tablePickerPanel.Children.Clear();
+        foreach (var choice in plan.Choices)
+        {
+            var button = new Button
+            {
+                Tag = choice,
+                Content = choice.IsDefault ? $"{choice.Label} (default)" : choice.Label,
+                Margin = new Thickness(2),
+                Padding = new Thickness(6, 4),
+                MinWidth = 74,
+                BorderBrush = choice.IsDefault
+                    ? new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A))
+                    : new SolidColorBrush(Color.FromRgb(0xC8, 0xC8, 0xC8)),
+                Background = choice.IsDefault
+                    ? new SolidColorBrush(Color.FromRgb(0xFE, 0xF2, 0xEC))
+                    : Brushes.White,
+            };
+            button.Click += (_, _) =>
+            {
+                if (button.Tag is TableInsertionPickerChoice tableChoice)
+                    ApplyTablePickerChoice(tableChoice.Rows, tableChoice.Columns);
+            };
+            _tablePickerPanel.Children.Add(button);
+        }
+
+        HideLayoutPicker();
+        _tablePickerHost.IsVisible = true;
+    }
+
+    private void HideTablePicker()
+    {
+        if (_tablePickerHost is not null)
+            _tablePickerHost.IsVisible = false;
+    }
+
     private void ShowLayoutPicker(PresentationLayoutPickerPlan plan)
     {
         if (_layoutPickerHost is null || _layoutPickerPanel is null)
@@ -808,6 +1107,7 @@ public sealed class MainWindow : Window
             _layoutPickerPanel.Children.Add(groupPanel);
         }
 
+        HideTablePicker();
         _layoutPickerHost.IsVisible = true;
     }
 
@@ -1182,11 +1482,29 @@ public sealed class MainWindow : Window
         return LastHandoutLayoutPlan;
     }
 
+    internal PresentationNotesPagePdfRenderPlan RefreshNotesPagePdfRenderPlan(PresentationSlideRangeRequest? range = null)
+    {
+        LastNotesPagePdfRenderPlan = PresentationNotesPagePdfExporter.BuildRenderPlan(
+            _presentation,
+            new PresentationNotesPagePdfExportRequest(new PresentationPrintRequest(
+                PresentationPrintLayoutKind.NotesPages,
+                range)));
+        _statusText.Text = "Notes page PDF planned";
+        return LastNotesPagePdfRenderPlan;
+    }
+
+    internal PresentationVideoExportPlan RefreshVideoExportPlan(PresentationVideoExportRequest? request = null)
+    {
+        LastVideoExportPlan = PresentationExportPlanner.BuildVideoExportPlan(request, _presentation.Slides.Count);
+        _statusText.Text = LastVideoExportPlan.DisabledReason ?? "Video export planned";
+        return LastVideoExportPlan;
+    }
+
     private void RegisterReviewWorkflowCommands(RibbonCommandRegistry registry)
     {
         registry.Register(
             PresentationReviewWorkflowPlanner.CommentsPaneCommandId,
-            new ActionRibbonCommand(ShowReviewCommentsPane));
+            new ActionRibbonCommand(() => ShowReviewCommentsPane()));
         registry.Register(
             PresentationReviewWorkflowPlanner.AccessibilityCommandId,
             new ActionRibbonCommand(RefreshAccessibilitySummaryPlan));
@@ -1194,33 +1512,48 @@ public sealed class MainWindow : Window
             PresentationReviewWorkflowPlanner.AltTextCommandId,
             new ActionRibbonCommand(ShowAltTextPane));
         registry.Register(
+            PresentationReviewWorkflowPlanner.ReadingOrderPaneCommandId,
+            new ActionRibbonCommand(() => ShowReadingOrderPane()));
+        registry.Register(
             PresentationReviewWorkflowPlanner.ProofingCommandId,
             new ActionRibbonCommand(RefreshProofingRequestPlan));
         registry.Register(PresentationReviewWorkflowPlanner.AddCommentCommandId, EmptyRibbonCommand.Instance);
         registry.Register(PresentationReviewWorkflowPlanner.EditCommentCommandId, EmptyRibbonCommand.Instance);
-        registry.Register(PresentationReviewWorkflowPlanner.DeleteCommentCommandId, EmptyRibbonCommand.Instance);
+        registry.Register(PresentationReviewWorkflowPlanner.ReplyCommentCommandId, EmptyRibbonCommand.Instance);
+        registry.Register(
+            PresentationReviewWorkflowPlanner.DeleteCommentCommandId,
+            new ActionRibbonCommand(() => DeleteSelectedComment()));
         registry.Register(PresentationReviewWorkflowPlanner.PreviousCommentCommandId, EmptyRibbonCommand.Instance);
         registry.Register(PresentationReviewWorkflowPlanner.NextCommentCommandId, EmptyRibbonCommand.Instance);
-        registry.Register(PresentationReviewWorkflowPlanner.ResolveCommentCommandId, EmptyRibbonCommand.Instance);
+        registry.Register(
+            PresentationReviewWorkflowPlanner.ResolveCommentCommandId,
+            new ActionRibbonCommand(() => ResolveSelectedComment()));
+        registry.Register(
+            PresentationReviewWorkflowPlanner.ReopenCommentCommandId,
+            new ActionRibbonCommand(() => ReopenSelectedComment()));
     }
 
     internal void RefreshReviewWorkflowPlans()
     {
         LastCommentPanePlan = PresentationReviewWorkflowPlanner.BuildCommentPanePlan(
             _presentation.Slides,
-            Editor.CurrentSlideIndex);
+            Editor.CurrentSlideIndex,
+            _selectedCommentIndex);
         RefreshAccessibilitySummaryPlan();
         RefreshAltTextRequestPlan();
+        RefreshReadingOrderPlan();
         RefreshProofingRequestPlan();
     }
 
-    private void ShowReviewCommentsPane()
+    internal PresentationCommentPanePlan ShowReviewCommentsPane()
     {
         var plan = PresentationReviewWorkflowPlanner.BuildCommentPanePlan(
             _presentation.Slides,
-            Editor.CurrentSlideIndex);
+            Editor.CurrentSlideIndex,
+            _selectedCommentIndex);
         LastCommentPanePlan = plan;
         ShowReviewCommentsPane(plan);
+        return plan;
     }
 
     private void ShowReviewCommentsPane(PresentationCommentPanePlan plan)
@@ -1259,7 +1592,7 @@ public sealed class MainWindow : Window
             Margin     = new Thickness(12, 10, 12, 2),
         };
 
-    private static Control BuildReviewCommentActions(IReadOnlyList<PresentationReviewWorkflowActionPlan> actions)
+    private Control BuildReviewCommentActions(IReadOnlyList<PresentationReviewWorkflowActionPlan> actions)
     {
         var panel = new WrapPanel
         {
@@ -1268,20 +1601,25 @@ public sealed class MainWindow : Window
 
         foreach (var action in actions)
         {
-            panel.Children.Add(new Button
+            if (action.CommandId == PresentationReviewWorkflowPlanner.ReplyCommentCommandId)
+                continue;
+
+            var button = new Button
             {
                 Content   = action.Label,
                 IsEnabled = action.IsEnabled,
                 Tag       = action.CommandId,
                 MinWidth  = 88,
                 Margin    = new Thickness(0, 0, 6, 6),
-            });
+            };
+            button.Click += (_, _) => ExecuteReviewCommentAction(action.CommandId);
+            panel.Children.Add(button);
         }
 
         return panel;
     }
 
-    private static Control BuildReviewCommentCard(PresentationCommentDescriptor comment)
+    private Control BuildReviewCommentCard(PresentationCommentDescriptor comment)
     {
         var header = new StackPanel
         {
@@ -1306,6 +1644,13 @@ public sealed class MainWindow : Window
             FontWeight        = FontWeight.SemiBold,
             VerticalAlignment = VerticalAlignment.Center,
         });
+        header.Children.Add(new TextBlock
+        {
+            Text              = comment.ThreadStatus == PresentationCommentThreadStatus.Resolved ? "Resolved" : "Open",
+            FontSize          = 11,
+            Foreground        = new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66)),
+            VerticalAlignment = VerticalAlignment.Center,
+        });
 
         var card = new StackPanel
         {
@@ -1319,23 +1664,197 @@ public sealed class MainWindow : Window
             TextWrapping = TextWrapping.Wrap,
             Foreground   = new SolidColorBrush(Color.FromRgb(0x44, 0x44, 0x44)),
         });
-
-        return new Border
+        foreach (var reply in comment.Replies)
         {
-            Background      = new SolidColorBrush(Color.FromRgb(0xFA, 0xFA, 0xFA)),
-            BorderBrush     = new SolidColorBrush(Color.FromRgb(0xE0, 0xE0, 0xE0)),
-            BorderThickness = new Thickness(1),
+            card.Children.Add(new TextBlock
+            {
+                Text         = $"{(string.IsNullOrWhiteSpace(reply.Author) ? "Unknown reviewer" : reply.Author)}: {reply.TextPreview}",
+                TextWrapping = TextWrapping.Wrap,
+                FontSize     = 12,
+                Margin       = new Thickness(18, 0, 0, 0),
+                Foreground   = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)),
+            });
+        }
+        if (comment.IsSelected && comment.CanReply)
+        {
+            var replyInput = new TextBox
+            {
+                PlaceholderText = "Reply",
+                MinWidth        = 180,
+            };
+            var replyButton = new Button
+            {
+                Content = "Reply",
+                MinWidth = 72,
+            };
+            replyButton.Click += (_, _) => ReplyToSelectedComment(replyInput.Text);
+            card.Children.Add(new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing     = 6,
+                Children    =
+                {
+                    replyInput,
+                    replyButton,
+                }
+            });
+        }
+
+        var border = new Border
+        {
+            Background      = new SolidColorBrush(comment.IsSelected ? Color.FromRgb(0xF4, 0xEC, 0xE8) : Color.FromRgb(0xFA, 0xFA, 0xFA)),
+            BorderBrush     = new SolidColorBrush(comment.IsSelected ? Color.FromRgb(0xB7, 0x47, 0x2A) : Color.FromRgb(0xE0, 0xE0, 0xE0)),
+            BorderThickness = new Thickness(comment.IsSelected ? 2 : 1),
             CornerRadius    = new CornerRadius(4),
             Padding         = new Thickness(10),
             Margin          = new Thickness(12, 0, 12, 10),
             Child           = card,
         };
+        border.Cursor = new Cursor(StandardCursorType.Hand);
+        border.PointerPressed += (_, _) => SelectReviewComment(comment.CommentIndex);
+        return border;
+    }
+
+    private void ExecuteReviewCommentAction(string commandId)
+    {
+        if (commandId == PresentationReviewWorkflowPlanner.ResolveCommentCommandId)
+        {
+            ResolveSelectedComment();
+        }
+        else if (commandId == PresentationReviewWorkflowPlanner.ReopenCommentCommandId)
+        {
+            ReopenSelectedComment();
+        }
+        else if (commandId == PresentationReviewWorkflowPlanner.DeleteCommentCommandId)
+        {
+            DeleteSelectedComment();
+        }
+    }
+
+    internal PresentationCommentPanePlan SetSelectedReviewCommentIndexForTests(int? commentIndex)
+    {
+        _selectedCommentIndex = commentIndex;
+        return ShowReviewCommentsPane();
+    }
+
+    private void SelectReviewComment(int commentIndex)
+    {
+        _selectedCommentIndex = commentIndex;
+        ShowReviewCommentsPane();
+        RefreshReviewWorkflowPlans();
+    }
+
+    internal PresentationCommentMutationPlan DeleteSelectedComment()
+        => ApplySelectedCommentMutation(
+            PresentationReviewWorkflowIntentKind.DeleteComment,
+            null,
+            null);
+
+    internal PresentationCommentMutationPlan ResolveSelectedComment(
+        DateTime? resolvedAt = null,
+        string? resolvedBy = null)
+        => ApplySelectedCommentMutation(
+            PresentationReviewWorkflowIntentKind.ResolveComment,
+            resolvedAt,
+            resolvedBy);
+
+    internal PresentationCommentMutationPlan ReopenSelectedComment()
+        => ApplySelectedCommentMutation(
+            PresentationReviewWorkflowIntentKind.ReopenComment,
+            null,
+            null);
+
+    internal PresentationCommentMutationPlan ReplyToSelectedComment(
+        string? text,
+        DateTime? timestamp = null,
+        string? author = null,
+        string? initials = null)
+        => ApplySelectedCommentMutation(
+            PresentationReviewWorkflowIntentKind.ReplyComment,
+            null,
+            null,
+            text,
+            timestamp,
+            author,
+            initials);
+
+    private PresentationCommentMutationPlan ApplySelectedCommentMutation(
+        PresentationReviewWorkflowIntentKind intent,
+        DateTime? resolvedAt,
+        string? resolvedBy,
+        string? replyText = null,
+        DateTime? replyTimestamp = null,
+        string? replyAuthor = null,
+        string? replyInitials = null)
+    {
+        var selected = _selectedCommentIndex;
+        var plan = selected is { } selectedIndex
+            ? intent switch
+            {
+                PresentationReviewWorkflowIntentKind.DeleteComment =>
+                    PresentationReviewWorkflowPlanner.BuildDeleteCommentPlan(
+                        _presentation.Slides,
+                        Editor.CurrentSlideIndex,
+                        selectedIndex),
+                PresentationReviewWorkflowIntentKind.ResolveComment =>
+                    PresentationReviewWorkflowPlanner.BuildResolveCommentPlan(
+                        _presentation.Slides,
+                        Editor.CurrentSlideIndex,
+                        selectedIndex,
+                        resolvedAt ?? DateTime.UtcNow,
+                        resolvedBy ?? "FreeP User"),
+                PresentationReviewWorkflowIntentKind.ReplyComment =>
+                    PresentationReviewWorkflowPlanner.BuildReplyCommentPlan(
+                        _presentation.Slides,
+                        Editor.CurrentSlideIndex,
+                        selectedIndex,
+                        replyText,
+                        replyAuthor ?? "FreeP User",
+                        replyInitials,
+                        replyTimestamp ?? DateTime.UtcNow),
+                PresentationReviewWorkflowIntentKind.ReopenComment =>
+                    PresentationReviewWorkflowPlanner.BuildReopenCommentPlan(
+                        _presentation.Slides,
+                        Editor.CurrentSlideIndex,
+                        selectedIndex),
+                _ => new PresentationCommentMutationPlan(
+                    intent,
+                    false,
+                    Editor.CurrentSlideIndex,
+                    selected,
+                    null,
+                    PresentationReviewWorkflowPlanner.MissingCommentMessage)
+            }
+            : new PresentationCommentMutationPlan(
+                intent,
+                false,
+                Editor.CurrentSlideIndex,
+                selected,
+                null,
+                PresentationReviewWorkflowPlanner.MissingCommentMessage);
+
+        if (PresentationReviewWorkflowPlanner.TryApplyCommentMutationPlan(_presentation.Slides, plan))
+        {
+            _selectedCommentIndex = PresentationReviewWorkflowPlanner.NormalizeCommentSelectionAfterMutation(
+                _presentation.Slides,
+                plan,
+                selected);
+            _fileWorkflow.MarkDirty();
+            ShowReviewCommentsPane();
+            RefreshReviewWorkflowPlans();
+            UpdateStatus();
+        }
+
+        return plan;
     }
 
     private void OnAnimationPaneRequested(PresentationAnimationCommandPlan plan)
     {
         _ = plan;
-        RefreshAnimationPaneTimelinePlan();
+        if (IsAnimationPaneVisible)
+            HideAnimationPane();
+        else
+            ShowAnimationPane();
     }
 
     internal AnimationPaneTimelinePlan RefreshAnimationPaneTimelinePlan(int selectedAnimationIndex = -1)
@@ -1346,6 +1865,310 @@ public sealed class MainWindow : Window
             selectedAnimationIndex);
         return LastAnimationPaneTimelinePlan;
     }
+
+    internal AnimationPaneTimelinePlan ShowAnimationPane(int selectedAnimationIndex = -1)
+    {
+        var plan = RefreshAnimationPaneTimelinePlan(selectedAnimationIndex);
+        RenderAnimationPane(plan);
+        _animationPaneHost.IsVisible = true;
+        return plan;
+    }
+
+    internal void HideAnimationPane()
+    {
+        if (_animationPaneHost is not null)
+            _animationPaneHost.IsVisible = false;
+    }
+
+    private void RefreshVisibleAnimationPane(int selectedAnimationIndex = -1)
+    {
+        if (!IsAnimationPaneVisible)
+            return;
+
+        var plan = RefreshAnimationPaneTimelinePlan(selectedAnimationIndex);
+        RenderAnimationPane(plan);
+    }
+
+    private void RenderAnimationPane(AnimationPaneTimelinePlan plan)
+    {
+        _selectedAnimationIndex = plan.SelectedIndex;
+        _animationPaneHeading.Text =
+            $"Animation Pane - slide {Editor.CurrentSlideIndex + 1} ({plan.Items.Count} animations)";
+        _animationPaneMessage.Text = plan.SelectedItem is { } selected
+            ? $"Selected: {selected.ShapeName} - {selected.EffectText}"
+            : plan.HasAnimations
+                ? "Select an animation row to inspect and reorder it."
+                : "No animations on this slide.";
+        _animationPanePreviewButton.IsEnabled = plan.PreviewIntent.CanExecute;
+        ToolTip.SetTip(_animationPanePreviewButton, plan.PreviewIntent.Description);
+
+        _animationPaneRenderedRows.Clear();
+        _animationPaneItemsPanel.Children.Clear();
+        _animationPaneTriggerControlCount = 0;
+        _animationPaneDurationControlCount = 0;
+        _animationPaneDelayControlCount = 0;
+        if (!plan.HasAnimations)
+        {
+            _animationPaneItemsPanel.Children.Add(new TextBlock
+            {
+                Text = "No animations on this slide.",
+                Foreground = new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66)),
+                Margin = new Thickness(12, 0, 12, 10),
+                TextWrapping = TextWrapping.Wrap,
+            });
+            return;
+        }
+
+        foreach (var item in plan.Items)
+        {
+            _animationPaneRenderedRows.Add(BuildAnimationPaneRowSummary(item));
+            _animationPaneItemsPanel.Children.Add(BuildAnimationPaneItemCard(item));
+        }
+    }
+
+    private Control BuildAnimationPaneItemCard(AnimationPaneTimelineItemPlan item)
+    {
+        var timingLine =
+            $"{item.TriggerText}; duration {item.DurationText}s; delay {item.DelayText}s";
+        var timelineLine =
+            $"Timeline: starts {item.StartText}s, ends {AnimationPanePlanner.FormatDuration(item.EndMs)}s";
+        var actionLine =
+            $"Move earlier: {FormatAvailability(item.CanMoveEarlier)}; move later: {FormatAvailability(item.CanMoveLater)}";
+
+        var triggerCombo = new ComboBox
+        {
+            ItemsSource = AnimationPanePlanner.TriggerLabels,
+            SelectedIndex = item.TriggerIndex,
+            Width = 132,
+            Margin = new Thickness(0, 4, 8, 0),
+            Tag = item.Index,
+        };
+        ToolTip.SetTip(triggerCombo, "Trigger");
+        triggerCombo.SelectionChanged += (_, _) =>
+            ApplyAnimationPaneTriggerEdit(item.Index, triggerCombo.SelectedIndex);
+        _animationPaneTriggerControlCount++;
+
+        var durationBox = new TextBox
+        {
+            Text = item.DurationText,
+            Width = 58,
+            Margin = new Thickness(0, 4, 8, 0),
+            Tag = item.Index,
+        };
+        ToolTip.SetTip(durationBox, "Duration (seconds)");
+        durationBox.LostFocus += (_, _) =>
+        {
+            var plan = ApplyAnimationPaneDurationEdit(item.Index, durationBox.Text ?? string.Empty);
+            if (!plan.ShouldApply)
+                durationBox.Text = plan.DisplayText;
+        };
+        _animationPaneDurationControlCount++;
+
+        var delayBox = new TextBox
+        {
+            Text = item.DelayText,
+            Width = 58,
+            Margin = new Thickness(0, 4, 8, 0),
+            Tag = item.Index,
+        };
+        ToolTip.SetTip(delayBox, "Delay (seconds)");
+        delayBox.LostFocus += (_, _) =>
+        {
+            var plan = ApplyAnimationPaneDelayEdit(item.Index, delayBox.Text ?? string.Empty);
+            if (!plan.ShouldApply)
+                delayBox.Text = plan.DisplayText;
+        };
+        _animationPaneDelayControlCount++;
+
+        var timingControls = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Children =
+            {
+                triggerCombo,
+                durationBox,
+                delayBox,
+            },
+        };
+
+        var moveEarlierButton = new Button
+        {
+            Content = "Earlier",
+            IsEnabled = item.CanMoveEarlier,
+            Padding = new Thickness(8, 3),
+            Margin = new Thickness(0, 6, 6, 0),
+            Tag = item.Index,
+        };
+        moveEarlierButton.Click += (_, _) => MoveAnimationPaneItem(item.Index, -1);
+
+        var moveLaterButton = new Button
+        {
+            Content = "Later",
+            IsEnabled = item.CanMoveLater,
+            Padding = new Thickness(8, 3),
+            Margin = new Thickness(0, 6, 6, 0),
+            Tag = item.Index,
+        };
+        moveLaterButton.Click += (_, _) => MoveAnimationPaneItem(item.Index, 1);
+
+        var actionPanel = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Children =
+            {
+                moveEarlierButton,
+                moveLaterButton,
+            }
+        };
+
+        var panel = new StackPanel
+        {
+            Orientation = Orientation.Vertical,
+            Spacing = 2,
+            Children =
+            {
+                new TextBlock
+                {
+                    Text = $"{item.OrderText}. {item.ShapeName}",
+                    FontWeight = FontWeight.SemiBold,
+                    TextWrapping = TextWrapping.Wrap,
+                },
+                new TextBlock
+                {
+                    Text = item.EffectText,
+                    Foreground = new SolidColorBrush(Color.FromRgb(0x44, 0x44, 0x44)),
+                    TextWrapping = TextWrapping.Wrap,
+                },
+                new TextBlock
+                {
+                    Text = timingLine,
+                    Foreground = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)),
+                    TextWrapping = TextWrapping.Wrap,
+                },
+                timingControls,
+                new TextBlock
+                {
+                    Text = timelineLine,
+                    Foreground = new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66)),
+                    TextWrapping = TextWrapping.Wrap,
+                },
+                new TextBlock
+                {
+                    Text = actionLine,
+                    Foreground = new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66)),
+                    TextWrapping = TextWrapping.Wrap,
+                },
+                actionPanel,
+            }
+        };
+
+        var border = new Border
+        {
+            Background = item.IsSelected
+                ? new SolidColorBrush(Color.FromRgb(0xFF, 0xF6, 0xF2))
+                : new SolidColorBrush(Color.FromRgb(0xFA, 0xFA, 0xFA)),
+            BorderBrush = item.IsSelected
+                ? new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A))
+                : new SolidColorBrush(Color.FromRgb(0xE0, 0xE0, 0xE0)),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(4),
+            Padding = new Thickness(10),
+            Margin = new Thickness(12, 0, 12, 10),
+            Child = panel,
+        };
+        border.Cursor = new Cursor(StandardCursorType.Hand);
+        border.PointerPressed += (_, _) => SelectAnimationPaneItem(item.Index);
+        return border;
+    }
+
+    internal AnimationPaneTimingMutationPlan ApplyAnimationPaneTriggerEditForTests(
+        int animationIndex,
+        int selectedTriggerIndex)
+        => ApplyAnimationPaneTriggerEdit(animationIndex, selectedTriggerIndex);
+
+    internal AnimationPaneTimingMutationPlan ApplyAnimationPaneDurationEditForTests(
+        int animationIndex,
+        string text)
+        => ApplyAnimationPaneDurationEdit(animationIndex, text);
+
+    internal AnimationPaneTimingMutationPlan ApplyAnimationPaneDelayEditForTests(
+        int animationIndex,
+        string text)
+        => ApplyAnimationPaneDelayEdit(animationIndex, text);
+
+    private AnimationPaneTimingMutationPlan ApplyAnimationPaneTriggerEdit(
+        int animationIndex,
+        int selectedTriggerIndex)
+    {
+        var plan = AnimationPanePlanner.BuildTriggerMutationPlan(
+            Editor.CurrentSlideAnimations,
+            animationIndex,
+            selectedTriggerIndex);
+        ApplyAnimationPaneTimingMutation(plan);
+        return plan;
+    }
+
+    private AnimationPaneTimingMutationPlan ApplyAnimationPaneDurationEdit(
+        int animationIndex,
+        string text)
+    {
+        var plan = AnimationPanePlanner.BuildDurationMutationPlan(
+            Editor.CurrentSlideAnimations,
+            animationIndex,
+            text);
+        ApplyAnimationPaneTimingMutation(plan);
+        return plan;
+    }
+
+    private AnimationPaneTimingMutationPlan ApplyAnimationPaneDelayEdit(
+        int animationIndex,
+        string text)
+    {
+        var plan = AnimationPanePlanner.BuildDelayMutationPlan(
+            Editor.CurrentSlideAnimations,
+            animationIndex,
+            text);
+        ApplyAnimationPaneTimingMutation(plan);
+        return plan;
+    }
+
+    private void ApplyAnimationPaneTimingMutation(AnimationPaneTimingMutationPlan plan)
+    {
+        if (AnimationPanePlanner.TryApplyTimingMutation(Editor, plan))
+            RefreshVisibleAnimationPane(_selectedAnimationIndex);
+    }
+
+    private void SelectAnimationPaneItem(int animationIndex)
+    {
+        _selectedAnimationIndex = animationIndex;
+        var animations = Editor.CurrentSlideAnimations;
+        if (animationIndex >= 0 && animationIndex < animations.Count)
+            Editor.Select(animations[animationIndex].ShapeId);
+
+        RefreshVisibleAnimationPane(_selectedAnimationIndex);
+    }
+
+    private void MoveAnimationPaneItem(int animationIndex, int offset)
+    {
+        var intent = AnimationPanePlanner.BuildReorderIntent(
+            animationIndex,
+            Editor.CurrentSlideAnimations.Count,
+            offset);
+        if (!intent.CanMove)
+            return;
+
+        _selectedAnimationIndex = intent.ToIndex;
+        Editor.MoveAnimation(intent.FromIndex, intent.ToIndex);
+        RefreshVisibleAnimationPane(_selectedAnimationIndex);
+    }
+
+    private static string BuildAnimationPaneRowSummary(AnimationPaneTimelineItemPlan item)
+        => $"{item.OrderText}. {item.ShapeName} - {item.EffectText} - {item.TriggerText}; "
+            + $"duration {item.DurationText}s; delay {item.DelayText}s; starts {item.StartText}s; "
+            + $"move earlier {FormatAvailability(item.CanMoveEarlier)}; move later {FormatAvailability(item.CanMoveLater)}";
+
+    private static string FormatAvailability(bool isAvailable)
+        => isAvailable ? "available" : "unavailable";
 
     private void RefreshAccessibilitySummaryPlan()
     {
@@ -1372,6 +2195,30 @@ public sealed class MainWindow : Window
     {
         if (_altTextPaneHost is not null)
             _altTextPaneHost.IsVisible = false;
+    }
+
+    internal PresentationReadingOrderPlan ShowReadingOrderPane()
+    {
+        var plan = RefreshReadingOrderPlan();
+        RenderReadingOrderPane(plan);
+        _readingOrderPaneHost.IsVisible = true;
+        return plan;
+    }
+
+    internal PresentationReadingOrderMutationPlan ApplyReadingOrderMoveEarlier()
+        => ApplyReadingOrderMove(PresentationReviewWorkflowIntentKind.MoveReadingOrderEarlier);
+
+    internal PresentationReadingOrderMutationPlan ApplyReadingOrderMoveLater()
+        => ApplyReadingOrderMove(PresentationReviewWorkflowIntentKind.MoveReadingOrderLater);
+
+    private PresentationReadingOrderMutationPlan ApplyReadingOrderMove(
+        PresentationReviewWorkflowIntentKind intent)
+    {
+        var plan = PresentationReviewWorkflowPlanner.TryApplyReadingOrderMove(Editor, intent);
+        RefreshReadingOrderPlan();
+        if (IsReadingOrderPaneVisible && LastReadingOrderPlan is not null)
+            RenderReadingOrderPane(LastReadingOrderPlan);
+        return plan;
     }
 
     internal void SetAltTextPaneInput(string title, string description, bool isDecorative)
@@ -1479,6 +2326,138 @@ public sealed class MainWindow : Window
         string commandId)
         => plan.Actions.Single(action => action.CommandId == commandId);
 
+    private void RenderReadingOrderPane(PresentationReadingOrderPlan plan)
+    {
+        _readingOrderPaneHeading.Text =
+            $"Reading Order - slide {plan.SlideIndex + 1} ({plan.Items.Count} shapes)";
+        _readingOrderPaneMessage.Text = plan.SelectedItem is { } selected
+            ? $"Selected: {selected.ShapeName}"
+            : plan.Items.Count == 0
+                ? PresentationReviewWorkflowPlanner.EmptyReadingOrderMessage
+                : PresentationReviewWorkflowPlanner.MissingReadingOrderSelectionMessage;
+
+        var moveEarlier = GetReadingOrderAction(
+            plan,
+            PresentationReviewWorkflowPlanner.ReadingOrderMoveEarlierCommandId);
+        var moveLater = GetReadingOrderAction(
+            plan,
+            PresentationReviewWorkflowPlanner.ReadingOrderMoveLaterCommandId);
+        ApplyReadingOrderButtonPlan(_readingOrderMoveEarlierButton, moveEarlier);
+        ApplyReadingOrderButtonPlan(_readingOrderMoveLaterButton, moveLater);
+
+        _readingOrderPaneItemsPanel.Children.Clear();
+        if (plan.Items.Count == 0)
+        {
+            _readingOrderPaneItemsPanel.Children.Add(new TextBlock
+            {
+                Text = PresentationReviewWorkflowPlanner.EmptyReadingOrderMessage,
+                Foreground = new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66)),
+                Margin = new Thickness(12, 0, 12, 10),
+                TextWrapping = TextWrapping.Wrap,
+            });
+            return;
+        }
+
+        foreach (var item in plan.Items)
+            _readingOrderPaneItemsPanel.Children.Add(BuildReadingOrderItemCard(item));
+    }
+
+    private static PresentationReviewWorkflowActionPlan GetReadingOrderAction(
+        PresentationReadingOrderPlan plan,
+        string commandId)
+        => plan.Actions.Single(action => action.CommandId == commandId);
+
+    private static void ApplyReadingOrderButtonPlan(
+        Button button,
+        PresentationReviewWorkflowActionPlan action)
+    {
+        button.Content = action.Label;
+        button.IsEnabled = action.IsEnabled;
+        button.Tag = action.CommandId;
+        ToolTip.SetTip(button, action.DisabledReason);
+    }
+
+    private static Control BuildReadingOrderItemCard(PresentationReadingOrderItemPlan item)
+    {
+        var panel = new StackPanel
+        {
+            Orientation = Orientation.Vertical,
+            Spacing = 2,
+            Children =
+            {
+                new TextBlock
+                {
+                    Text = $"{item.ReadingOrderIndex + 1}. {item.ShapeName}",
+                    FontWeight = FontWeight.SemiBold,
+                    TextWrapping = TextWrapping.Wrap,
+                },
+                new TextBlock
+                {
+                    Text = $"{item.ShapeTypeLabel} - depth {item.NestingDepth}",
+                    Foreground = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)),
+                    TextWrapping = TextWrapping.Wrap,
+                },
+                new TextBlock
+                {
+                    Text = item.AccessibilitySummary,
+                    Foreground = new SolidColorBrush(Color.FromRgb(0x44, 0x44, 0x44)),
+                    TextWrapping = TextWrapping.Wrap,
+                },
+                new TextBlock
+                {
+                    Text = BuildReadingOrderAltTextLine(item),
+                    Foreground = new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66)),
+                    TextWrapping = TextWrapping.Wrap,
+                },
+            }
+        };
+
+        if (item.IsSelected)
+        {
+            panel.Children.Insert(1, new TextBlock
+            {
+                Text = "Selected item",
+                Foreground = new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A)),
+                FontWeight = FontWeight.SemiBold,
+            });
+        }
+
+        return new Border
+        {
+            Background = item.IsSelected
+                ? new SolidColorBrush(Color.FromRgb(0xFF, 0xF6, 0xF2))
+                : new SolidColorBrush(Color.FromRgb(0xFA, 0xFA, 0xFA)),
+            BorderBrush = item.IsSelected
+                ? new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A))
+                : new SolidColorBrush(Color.FromRgb(0xE0, 0xE0, 0xE0)),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(4),
+            Padding = new Thickness(10),
+            Margin = new Thickness(12, 0, 12, 10),
+            Child = panel,
+        };
+    }
+
+    private static string BuildReadingOrderAltTextLine(PresentationReadingOrderItemPlan item)
+    {
+        if (item.IsDecorative)
+            return "Decorative object";
+
+        if (string.IsNullOrWhiteSpace(item.AlternativeTextTitle)
+            && string.IsNullOrWhiteSpace(item.AlternativeTextDescription))
+        {
+            return "Alt text: missing";
+        }
+
+        if (string.IsNullOrWhiteSpace(item.AlternativeTextDescription))
+            return $"Alt text title: {item.AlternativeTextTitle}";
+
+        if (string.IsNullOrWhiteSpace(item.AlternativeTextTitle))
+            return $"Alt text: {item.AlternativeTextDescription}";
+
+        return $"Alt text: {item.AlternativeTextTitle} - {item.AlternativeTextDescription}";
+    }
+
     private static void SetTextIfChanged(TextBox textBox, string value)
     {
         if (textBox.Text != value)
@@ -1489,6 +2468,15 @@ public sealed class MainWindow : Window
         => Editor.SelectedShapeIds.Count == 1
             ? Editor.SelectedShapeIds[0]
             : null;
+
+    private PresentationReadingOrderPlan RefreshReadingOrderPlan()
+    {
+        LastReadingOrderPlan = PresentationReviewWorkflowPlanner.BuildReadingOrderPlan(
+            Editor.CurrentSlide,
+            Editor.CurrentSlideIndex,
+            Editor.SelectedShapeIds);
+        return LastReadingOrderPlan;
+    }
 
     internal PresentationAltTextMutationPlan ApplySelectedShapeAlternativeText(
         string? description,
@@ -1583,6 +2571,7 @@ public sealed class MainWindow : Window
 
         RebuildEditorAndRewireInteraction();
         HideLayoutPicker();
+        HideTablePicker();
         RefreshSlidePane();
         RefreshCanvas();
         RefreshNotesPane();
@@ -1890,6 +2879,9 @@ public sealed class MainWindow : Window
         _notesRefreshing = true;
         try
         {
+            LastNotesPagePreviewPlan = PresentationNotesPagePreviewPlanner.Build(
+                _presentation,
+                Editor.CurrentSlideIndex);
             var notes = Editor.CurrentSlideNotes;
             _notesBox.Text = notes is null
                 ? string.Empty
@@ -1908,6 +2900,9 @@ public sealed class MainWindow : Window
         if (_notesRefreshing)
             return;
         Editor.SetCurrentSlideNotesText(_notesBox.Text);
+        LastNotesPagePreviewPlan = PresentationNotesPagePreviewPlanner.Build(
+            _presentation,
+            Editor.CurrentSlideIndex);
     }
 
     // ── Event handlers ─────────────────────────────────────────────────────────
@@ -1917,12 +2912,17 @@ public sealed class MainWindow : Window
         _fileWorkflow.MarkDirty();
         RefreshSlidePane();
         RefreshCanvas(); // refresh canvas so shape moves/resizes are reflected immediately
+        RefreshNotesPane();
         RefreshReviewWorkflowPlans();
+        RefreshVisibleAnimationPane(_selectedAnimationIndex);
         UpdateStatus();
     }
 
     private void OnCurrentSlideChanged(object? sender, EventArgs e)
     {
+        _selectedCommentIndex = null;
+        _selectedAnimationIndex = -1;
+
         // Sync slide-pane selection without re-triggering OnSlidePaneSelectionChanged.
         _slidePaneRefreshing = true;
         try { SelectSlidePaneItem(Editor.CurrentSlideIndex); }
@@ -1931,14 +2931,17 @@ public sealed class MainWindow : Window
         RefreshCanvas();
         RefreshNotesPane();
         RefreshReviewWorkflowPlans();
+        RefreshVisibleAnimationPane();
         UpdateStatus();
     }
 
     private void OnEditorSelectionChanged(object? sender, EventArgs e)
     {
         RefreshAltTextRequestPlan();
+        RefreshReadingOrderPlan();
         if (IsAltTextPaneVisible)
             ShowAltTextPane();
+        RefreshVisibleAnimationPane();
     }
 
     // ── Status ─────────────────────────────────────────────────────────────────

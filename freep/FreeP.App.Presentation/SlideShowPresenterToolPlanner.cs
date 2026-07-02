@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+
 namespace FreeP.App.Compositor;
 
 public enum SlideShowTimingIntent
@@ -68,9 +70,30 @@ public sealed record SlideShowPointerInkPlan(
     SlideShowInkRetentionDecision InkRetentionDecision,
     string StatusText);
 
+public enum SlideShowPresenterWorkflowActionKind
+{
+    StartElapsedClock,
+    TrackPerSlideTiming,
+    PersistPerSlideTiming,
+    RequestNarrationCapture,
+    RequestMediaCapture,
+    SelectPointerMode,
+    ConfigureInkStroke,
+    ConfigureLaserOverlay,
+    ConfigureEraser,
+    KeepInkOnExit,
+    ClearInkOnExit
+}
+
+public sealed record SlideShowPresenterWorkflowAction(
+    SlideShowPresenterWorkflowActionKind Kind,
+    bool IsDeferred,
+    string StatusText);
+
 public sealed record SlideShowPresenterToolPlan(
     SlideShowRecordingTimingPlan Recording,
-    SlideShowPointerInkPlan PointerInk);
+    SlideShowPointerInkPlan PointerInk,
+    IReadOnlyList<SlideShowPresenterWorkflowAction> WorkflowActions);
 
 public static class SlideShowPresenterToolPlanner
 {
@@ -85,10 +108,16 @@ public static class SlideShowPresenterToolPlanner
         SlideShowPresenterPointerMode pointerMode = SlideShowPresenterPointerMode.Arrow,
         string? inkColorHex = null,
         double inkThicknessDip = 0,
-        SlideShowInkRetentionDecision inkRetentionDecision = SlideShowInkRetentionDecision.KeepInk) =>
-        new(
-            PlanRecordingTiming(timingIntent, mediaIntent),
-            PlanPointerInk(pointerMode, inkColorHex, inkThicknessDip, inkRetentionDecision));
+        SlideShowInkRetentionDecision inkRetentionDecision = SlideShowInkRetentionDecision.KeepInk)
+    {
+        var recording = PlanRecordingTiming(timingIntent, mediaIntent);
+        var pointerInk = PlanPointerInk(pointerMode, inkColorHex, inkThicknessDip, inkRetentionDecision);
+
+        return new(
+            recording,
+            pointerInk,
+            PlanWorkflowActions(recording, pointerInk));
+    }
 
     public static SlideShowRecordingTimingPlan PlanRecordingTiming(
         SlideShowTimingIntent timingIntent,
@@ -134,6 +163,92 @@ public static class SlideShowPresenterToolPlanner
             UsesEraser: pointerMode == SlideShowPresenterPointerMode.Eraser,
             inkRetentionDecision,
             StatusText: FormatPointerStatus(pointerMode, inkRetentionDecision));
+    }
+
+    public static IReadOnlyList<SlideShowPresenterWorkflowAction> PlanWorkflowActions(
+        SlideShowRecordingTimingPlan recording,
+        SlideShowPointerInkPlan pointerInk)
+    {
+        var actions = new List<SlideShowPresenterWorkflowAction>
+        {
+            new(
+                SlideShowPresenterWorkflowActionKind.StartElapsedClock,
+                IsDeferred: false,
+                "Track presenter elapsed time"),
+        };
+
+        if (recording.ShouldTrackPerSlideTimings)
+        {
+            actions.Add(new(
+                SlideShowPresenterWorkflowActionKind.TrackPerSlideTiming,
+                IsDeferred: false,
+                "Track per-slide timing"));
+        }
+
+        if (recording.ShouldPersistTimings)
+        {
+            actions.Add(new(
+                SlideShowPresenterWorkflowActionKind.PersistPerSlideTiming,
+                IsDeferred: false,
+                "Persist recorded timings"));
+        }
+
+        if (recording.IsNarrationRequested)
+        {
+            actions.Add(new(
+                SlideShowPresenterWorkflowActionKind.RequestNarrationCapture,
+                IsDeferred: recording.NarrationCapture.IsDeferred,
+                recording.NarrationCapture.Reason));
+        }
+
+        if (recording.IsMediaCaptureRequested)
+        {
+            actions.Add(new(
+                SlideShowPresenterWorkflowActionKind.RequestMediaCapture,
+                IsDeferred: recording.MediaCapture.IsDeferred,
+                recording.MediaCapture.Reason));
+        }
+
+        actions.Add(new(
+            SlideShowPresenterWorkflowActionKind.SelectPointerMode,
+            IsDeferred: false,
+            pointerInk.PointerMode.ToString()));
+
+        if (pointerInk.UsesInkStroke)
+        {
+            actions.Add(new(
+                SlideShowPresenterWorkflowActionKind.ConfigureInkStroke,
+                IsDeferred: false,
+                $"{pointerInk.InkState.ColorHex}; {pointerInk.InkState.ThicknessDip:0.##} DIP; {pointerInk.InkState.Opacity:0.##} opacity"));
+        }
+        else if (pointerInk.UsesLaserOverlay)
+        {
+            actions.Add(new(
+                SlideShowPresenterWorkflowActionKind.ConfigureLaserOverlay,
+                IsDeferred: false,
+                $"{pointerInk.InkState.ColorHex}; {pointerInk.InkState.ThicknessDip:0.##} DIP"));
+        }
+        else if (pointerInk.UsesEraser)
+        {
+            actions.Add(new(
+                SlideShowPresenterWorkflowActionKind.ConfigureEraser,
+                IsDeferred: false,
+                $"{pointerInk.InkState.ThicknessDip:0.##} DIP"));
+        }
+
+        if (pointerInk.UsesInkStroke || pointerInk.UsesEraser)
+        {
+            actions.Add(new(
+                pointerInk.InkRetentionDecision == SlideShowInkRetentionDecision.ClearInk
+                    ? SlideShowPresenterWorkflowActionKind.ClearInkOnExit
+                    : SlideShowPresenterWorkflowActionKind.KeepInkOnExit,
+                IsDeferred: false,
+                pointerInk.InkRetentionDecision == SlideShowInkRetentionDecision.ClearInk
+                    ? "Clear ink on slideshow exit"
+                    : "Keep ink on slideshow exit"));
+        }
+
+        return actions;
     }
 
     private static SlideShowInkState DefaultInkFor(SlideShowPresenterPointerMode pointerMode) =>

@@ -16,6 +16,7 @@ using System.IO;
 using System.Threading;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Skia;
@@ -65,6 +66,15 @@ static int RenderAll(string outDir)
     var webPath   = Path.GetFullPath(Path.Combine(outDir, "freew_web_layout.png"));
     var draftPath = Path.GetFullPath(Path.Combine(outDir, "freew_draft_layout.png"));
     var floatPath = Path.GetFullPath(Path.Combine(outDir, "freew_floating_image.png"));
+    var columnsPath = Path.GetFullPath(Path.Combine(outDir, "freew_columns_layout.png"));
+    var borderWatermarkPath = Path.GetFullPath(Path.Combine(outDir, "freew_border_watermark.png"));
+    var tableLayoutPath = VisualEvidenceOutputPath(outDir, "table-layout-complex", 1);
+    var drawingObjectsPath = VisualEvidenceOutputPath(outDir, "drawing-objects-complex", 1);
+    var chartSmartArtPath = VisualEvidenceOutputPath(outDir, "chart-smartart-complex", 1);
+    var printPreviewP1Path = VisualEvidenceOutputPath(outDir, "backstage-print-preview-fidelity", 1);
+    var printPreviewP2Path = VisualEvidenceOutputPath(outDir, "backstage-print-preview-fidelity", 2);
+    var pdfExportP1Path = VisualEvidenceOutputPath(outDir, "backstage-pdf-export-fidelity", 1);
+    var pdfExportP2Path = VisualEvidenceOutputPath(outDir, "backstage-pdf-export-fidelity", 2);
     var evidence = new List<FreeWVisualEvidenceRow>();
 
     var rc = RenderMode(DocumentViewMode.PrintLayout, printPath,
@@ -88,12 +98,178 @@ static int RenderAll(string outDir)
         evidence: evidence);
     if (rc != 0) return rc;
 
+    rc = RenderMode(DocumentViewMode.PrintLayout, columnsPath,
+        width: 960, height: 1800,
+        label: "Columns",
+        scenarioId: "page-composition-columns",
+        evidence: evidence,
+        documentFactory: BuildColumnsDocument);
+    if (rc != 0) return rc;
+
+    rc = RenderMode(DocumentViewMode.PrintLayout, borderWatermarkPath,
+        width: 960, height: 1800,
+        label: "Border + Watermark",
+        scenarioId: "page-composition-border-watermark",
+        evidence: evidence,
+        documentFactory: BuildBorderWatermarkDocument);
+    if (rc != 0) return rc;
+
+    rc = RenderMode(DocumentViewMode.PrintLayout, tableLayoutPath,
+        width: 960, height: 1600,
+        label: "Table Layout",
+        scenarioId: "table-layout-complex",
+        evidence: evidence,
+        documentFactory: FreeWVisualEvidenceDocumentFactory.BuildComplexTableLayoutDocument);
+    if (rc != 0) return rc;
+
+    rc = RenderMode(DocumentViewMode.PrintLayout, drawingObjectsPath,
+        width: 960, height: 1700,
+        label: "Drawing Objects",
+        scenarioId: "drawing-objects-complex",
+        evidence: evidence,
+        documentFactory: FreeWVisualEvidenceDocumentFactory.BuildDrawingObjectsCompositionDocument);
+    if (rc != 0) return rc;
+
+    rc = RenderMode(DocumentViewMode.PrintLayout, chartSmartArtPath,
+        width: 960, height: 1700,
+        label: "Chart + SmartArt",
+        scenarioId: "chart-smartart-complex",
+        evidence: evidence,
+        documentFactory: FreeWVisualEvidenceDocumentFactory.BuildChartSmartArtCompositionDocument);
+    if (rc != 0) return rc;
+
     // ── FO1: Floating-image render capture ──────────────────────────────────────────────────────────
     rc = RenderFloatingImageScene(floatPath, evidence);
     if (rc != 0) return rc;
 
+    rc = RenderMode(DocumentViewMode.PrintLayout, printPreviewP1Path,
+        width: 960, height: 1200,
+        label: "Backstage Print Preview p1",
+        scenarioId: "backstage-print-preview-fidelity",
+        evidence: evidence,
+        documentFactory: () => BuildBackstageDocument(
+            "Backstage Print Preview Fidelity",
+            "Avalonia print preview renderer capture"),
+        pageNumber: 1,
+        pageCount: 2);
+    if (rc != 0) return rc;
+
+    rc = RenderMode(DocumentViewMode.PrintLayout, printPreviewP2Path,
+        width: 960, height: 1200,
+        label: "Backstage Print Preview p2",
+        scenarioId: "backstage-print-preview-fidelity",
+        evidence: evidence,
+        documentFactory: () => BuildBackstageDocument(
+            "Backstage Print Preview Fidelity",
+            "Avalonia print preview renderer capture"),
+        pageNumber: 2,
+        pageCount: 2,
+        viewportOffsetY: 1100);
+    if (rc != 0) return rc;
+
+    rc = RenderMode(DocumentViewMode.PrintLayout, pdfExportP1Path,
+        width: 960, height: 1200,
+        label: "Backstage PDF Export p1",
+        scenarioId: "backstage-pdf-export-fidelity",
+        evidence: evidence,
+        documentFactory: () => BuildBackstageDocument(
+            "Backstage PDF Export Fidelity",
+            "Avalonia PDF export raster renderer capture"),
+        pageNumber: 1,
+        pageCount: 2);
+    if (rc != 0) return rc;
+
+    rc = RenderMode(DocumentViewMode.PrintLayout, pdfExportP2Path,
+        width: 960, height: 1200,
+        label: "Backstage PDF Export p2",
+        scenarioId: "backstage-pdf-export-fidelity",
+        evidence: evidence,
+        documentFactory: () => BuildBackstageDocument(
+            "Backstage PDF Export Fidelity",
+            "Avalonia PDF export raster renderer capture"),
+        pageNumber: 2,
+        pageCount: 2,
+        viewportOffsetY: 1100);
+    if (rc != 0) return rc;
+
     FreeWVisualEvidencePlanner.WriteManifest(outDir, evidence);
     return 0;
+}
+
+static TextDocument BuildColumnsDocument()
+{
+    var doc = TextDocument.CreateEmpty();
+    doc.Page.ColumnCount = 2;
+    doc.Page.ColumnSpacingPt = 36;
+    doc.Page.ColumnsLineBetween = true;
+    doc.Blocks.Clear();
+
+    var bodyFmt = RunFormatting.Default with { FontSizePt = 12 };
+    void AddPara(string text)
+    {
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run(text, bodyFmt));
+        doc.Blocks.Add(paragraph);
+    }
+
+    AddPara("Two Column Page Composition");
+    AddPara("This capture verifies that the shared visual evidence manifest records multi-column page composition.");
+    for (var i = 1; i <= 24; i++)
+        AddPara($"Column paragraph {i}: the page should flow into two Word-style columns with a visible gutter.");
+
+    return doc;
+}
+
+static TextDocument BuildBorderWatermarkDocument()
+{
+    var doc = TextDocument.CreateEmpty();
+    doc.Page.PageBorder = new PageBorder("#000080", 3.0);
+    doc.Page.WatermarkOptions = new WatermarkOptions("DRAFT")
+    {
+        FontColorHex = "#808080",
+        Opacity = 0.4,
+        Layout = WatermarkLayout.Diagonal,
+    };
+    doc.Blocks.Clear();
+
+    var bodyFmt = RunFormatting.Default with { FontSizePt = 12 };
+    void AddPara(string text)
+    {
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run(text, bodyFmt));
+        doc.Blocks.Add(paragraph);
+    }
+
+    AddPara("Page Border And Watermark");
+    AddPara("This capture verifies page background composition, a visible page border, and a diagonal text watermark.");
+    for (var i = 1; i <= 12; i++)
+        AddPara($"Watermark paragraph {i}: body text should remain visible above the watermark and inside the border.");
+
+    return doc;
+}
+
+static TextDocument BuildBackstageDocument(string title, string description)
+{
+    var doc = TextDocument.CreateEmpty();
+    doc.FinalSectionHeadersFooters.Header = new HeaderFooter(title);
+    doc.FinalSectionHeadersFooters.Footer = new HeaderFooter("FreeW visual evidence");
+    doc.Blocks.Clear();
+
+    var bodyFmt = RunFormatting.Default with { FontSizePt = 12 };
+    void AddPara(string text)
+    {
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run(text, bodyFmt));
+        doc.Blocks.Add(paragraph);
+    }
+
+    AddPara(title);
+    AddPara(description);
+    AddPara("The first two rendered pages are retained as separate PNG evidence rows for the backstage renderer contract.");
+    for (var i = 1; i <= 56; i++)
+        AddPara($"Backstage renderer paragraph {i}: fixed-layout body text should survive capture, normalization, and trust validation.");
+
+    return doc;
 }
 
 /// <summary>
@@ -132,7 +308,8 @@ static int RenderFloatingImageScene(string outPath, List<FreeWVisualEvidenceRow>
             page: doc.Page,
             layoutKind: DocumentViewLayoutKind.PrintLayout,
             captureSource: "avalonia-render-target",
-            viewMode: "PrintLayout");
+            viewMode: "PrintLayout",
+            document: doc);
         Console.WriteLine($"[PageLayoutShot] Floating Image: {bytes.Length:N0} bytes → {outPath}");
         return 0;
     }
@@ -235,19 +412,46 @@ static int RenderMode(
     int height,
     string label,
     string scenarioId,
-    List<FreeWVisualEvidenceRow> evidence)
+    List<FreeWVisualEvidenceRow> evidence,
+    Func<TextDocument>? documentFactory = null,
+    int pageNumber = 1,
+    int pageCount = 1,
+    double viewportOffsetY = 0)
 {
-    var doc = BuildMultiPageDocument();
+    var doc = documentFactory?.Invoke() ?? BuildMultiPageDocument();
     var view = new DocumentView();
     view.LoadDocument(doc);
     view.ViewMode = mode;
-    view.Measure(new Size(width, height));
-    view.Arrange(new Rect(0, 0, width, height));
-    view.UpdateLayout();
+    Control renderTarget = view;
+    if (viewportOffsetY > 0)
+    {
+        var contentHeight = height + viewportOffsetY;
+        view.Width = width;
+        view.Height = contentHeight;
+        var frame = new Canvas
+        {
+            Width = width,
+            Height = height,
+            ClipToBounds = true,
+            Background = Brushes.Transparent
+        };
+        frame.Children.Add(view);
+        Canvas.SetTop(view, -viewportOffsetY);
+        frame.Measure(new Size(width, height));
+        frame.Arrange(new Rect(0, 0, width, height));
+        frame.UpdateLayout();
+        renderTarget = frame;
+    }
+    else
+    {
+        view.Measure(new Size(width, height));
+        view.Arrange(new Rect(0, 0, width, height));
+        view.UpdateLayout();
+    }
     Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
 
     var bitmap = new RenderTargetBitmap(new PixelSize(width, height), new Vector(96, 96));
-    bitmap.Render(view);
+    bitmap.Render(renderTarget);
 
     Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(outPath)) ?? ".");
     using var stream = new MemoryStream();
@@ -267,13 +471,22 @@ static int RenderMode(
             doc.Page,
             LayoutKindFor(mode),
             captureSource: "avalonia-render-target",
-            viewMode: mode.ToString());
+            viewMode: mode.ToString(),
+            pageNumber: pageNumber,
+            pageCount: pageCount,
+            document: doc);
         Console.WriteLine($"[PageLayoutShot] {label}: {bytes.Length:N0} bytes → {outPath}");
         return 0;
     }
 
+    if (IsBackstageRendererScenario(scenarioId))
+    {
+        Console.Error.WriteLine($"[PageLayoutShot] {label}: Avalonia RenderTargetBitmap produced 0 bytes; refusing placeholder fallback for backstage renderer evidence.");
+        return 2;
+    }
+
     // Fallback: encode via SkiaSharp if the Avalonia encoder produced nothing.
-    var pngBytes = TryEncodeViaSkia(view, width, height, label);
+    var pngBytes = TryEncodeViaSkia(renderTarget, width, height, label);
     if (pngBytes is { Length: > 0 })
     {
         File.WriteAllBytes(outPath, pngBytes);
@@ -287,7 +500,10 @@ static int RenderMode(
             doc.Page,
             LayoutKindFor(mode),
             captureSource: "skia-fallback-placeholder",
-            viewMode: mode.ToString());
+            viewMode: mode.ToString(),
+            pageNumber: pageNumber,
+            pageCount: pageCount,
+            document: doc);
         Console.WriteLine($"[PageLayoutShot] {label} (Skia fallback): {pngBytes.Length:N0} bytes → {outPath}");
         return 0;
     }
@@ -304,6 +520,16 @@ static DocumentViewLayoutKind LayoutKindFor(DocumentViewMode mode) =>
         _ => DocumentViewLayoutKind.PrintLayout
     };
 
+static string VisualEvidenceOutputPath(string outDir, string scenarioId, int pageNumber) =>
+    Path.GetFullPath(Path.Combine(
+        outDir,
+        FreeWVisualEvidencePlanner.ExpectedOutputName(scenarioId, pageNumber)));
+
+static bool IsBackstageRendererScenario(string scenarioId) =>
+    FreeWVisualEvidenceManifestNormalizer.BackstageRendererScenarioIds.Contains(
+        scenarioId,
+        StringComparer.OrdinalIgnoreCase);
+
 static void AddAvaloniaEvidence(
     List<FreeWVisualEvidenceRow> evidence,
     string scenarioId,
@@ -314,34 +540,38 @@ static void AddAvaloniaEvidence(
     PageSettings page,
     DocumentViewLayoutKind layoutKind,
     string captureSource,
-    string viewMode)
+    string viewMode,
+    int pageNumber = 1,
+    int pageCount = 1,
+    TextDocument? document = null)
 {
-    var outputName = Path.GetFileName(outputPath);
     var stats = ComputePngPixelStats(pngBytes, pixelWidth, pixelHeight);
-    var expectation = FreeWVisualEvidencePlanner.BuildPageExpectation(
-        scenarioId,
-        page,
-        pageNumber: 1,
-        pageCount: 1,
-        outputName: outputName,
+    var sectionOrdinal = 1;
+    var row = FreeWVisualEvidencePlanner.BuildEvidenceRow(
+        scenarioId: scenarioId,
+        hostId: "avalonia-page-layout-shot",
+        outputPath: outputPath,
+        pixelWidth: stats.Width > 0 ? stats.Width : pixelWidth,
+        pixelHeight: stats.Height > 0 ? stats.Height : pixelHeight,
+        byteLength: pngBytes.LongLength,
+        pixelStats: stats,
+        page: page,
+        pageNumber: pageNumber,
+        pageCount: pageCount,
         layoutKind: layoutKind,
-        availableWidthDip: pixelWidth);
-    var row = FreeWVisualEvidencePlanner.BuildEvidenceRow(new FreeWVisualEvidenceCapture(
-        ScenarioId: scenarioId,
-        HostId: "avalonia-page-layout-shot",
-        OutputName: outputName,
-        OutputPath: Path.GetFullPath(outputPath),
-        PixelWidth: stats.Width > 0 ? stats.Width : pixelWidth,
-        PixelHeight: stats.Height > 0 ? stats.Height : pixelHeight,
-        ByteLength: pngBytes.LongLength,
-        PixelStats: stats,
-        PageExpectation: expectation,
-        HostMetadata: new Dictionary<string, string>
+        availableWidthDip: pixelWidth,
+        sectionOrdinal: sectionOrdinal,
+        sectionRelativePageNumber: 1,
+        sectionOwnerId: FreeWVisualEvidencePlanner.BuildSectionOwnerId(sectionOrdinal),
+        hostMetadata: new Dictionary<string, string>
         {
             ["renderer"] = "FreeW.PageLayoutShot",
             ["captureSource"] = captureSource,
-            ["viewMode"] = viewMode
-        }));
+            ["viewMode"] = viewMode,
+            ["pageNumber"] = pageNumber.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            ["pageCount"] = pageCount.ToString(System.Globalization.CultureInfo.InvariantCulture)
+        },
+        document: document);
     FreeWVisualEvidencePlanner.EnsureTrusted(row);
     evidence.Add(row);
 }
@@ -384,7 +614,7 @@ static FreeWVisualPixelStats ComputePngPixelStats(byte[] pngBytes, int fallbackW
         FreeWVisualEvidencePixelFormat.Rgba32);
 }
 
-static byte[] TryEncodeViaSkia(DocumentView view, int width, int height, string label = "")
+static byte[] TryEncodeViaSkia(Control view, int width, int height, string label = "")
 {
     try
     {

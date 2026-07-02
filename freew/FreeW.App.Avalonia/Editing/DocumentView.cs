@@ -7,6 +7,7 @@ using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using FreeW.App.Presentation.Dialogs;
 using FreeW.App.Presentation.DocumentView;
+using FreeW.App.Presentation.Links;
 using FreeW.App.Presentation.Ribbon;
 using FreeW.Core.Model;
 using TextAlignment = FreeW.Core.Model.TextAlignment;
@@ -193,6 +194,11 @@ public sealed class DocumentView : Control
     private RunFormatting? _pendingRunFmt;
     private FormatPainterClipboard? _formatPainter;
     private bool _formatPainterLocked;
+    // GB2: backed by a persisted .lex store (mirrors the WPF host's CustomDictionaryStore — same file
+    // location/format, so words added in either shell are available in the other) rather than a plain
+    // in-memory CustomDictionary, so Add-to-Dictionary survives a restart. Loaded once at construction;
+    // best-effort (a failed load/save never blocks editing — see CustomDictionaryStore).
+    private readonly CustomDictionaryStore _customDictionary = CustomDictionaryStore.Load();
     private double _laidOutWidth = -1;
     private double _contentHeight;
     private double _pageLeft;
@@ -347,6 +353,8 @@ public sealed class DocumentView : Control
     public string? CurrentParagraphStyleId => CurrentParagraph()?.StyleId;
     public bool CanUndo => _bus.CanUndo;
     public bool CanRedo => _bus.CanRedo;
+    public bool SpellCheckEnabled { get; private set; } = true;
+    public IReadOnlyList<string> CustomDictionaryWords => _customDictionary.Words;
 
     /// <summary>Raised whenever document protection or Mark-as-Final state changes.</summary>
     public event EventHandler? ProtectionStateChanged;
@@ -2520,6 +2528,18 @@ public sealed class DocumentView : Control
         }
     }
 
+    internal IReadOnlyList<(ChartVisualGeometryKind GeometryKind, IReadOnlyList<string> PaletteHex)> InlineChartVisualPlans
+    {
+        get
+        {
+            if (_laidOutWidth < 0) Relayout(FallbackWidth);
+            return _inlineCharts.Select(c =>
+                (c.GeometryKind, (IReadOnlyList<string>)c.Palette.Select(ToHex).ToList())).ToList();
+        }
+    }
+
+    private static string ToHex(Color color) => $"#{color.R:X2}{color.G:X2}{color.B:X2}";
+
     // ---- PDF export ------------------------------------------------------------------------------
 
     /// <summary>
@@ -4432,6 +4452,47 @@ public sealed class DocumentView : Control
         // TryGetCaretRect can match (Block == tableBlockIndex && Offset == glyphOffset).
         var glyphOffset = 0;
 
+        // AV-TBL5-VRENDER-VMERGE: pre-compute every row's height up front. A vertical-merge Restart
+        // cell needs the TOTAL height of all rows it spans to vertically align its content within the
+        // whole merged region rather than just its own (first) row — that total isn't known yet when
+        // the row loop below reaches the Restart row, since later rows haven't been measured. This
+        // pass mirrors the exact rowHeight computation the main loop performs (same cell wrapping),
+        // so results are identical — just computed early enough to sum across rows.
+        var rowHeights = new double[table.Rows.Count];
+        for (var pr = 0; pr < table.Rows.Count; pr++)
+        {
+            var prRow = table.Rows[pr];
+            var prIsHeader = table.Formatting.HeaderRow && pr == 0;
+            var prRowHeight = Build("Ag", RunFormatting.Default).Height + 2 * pad;
+            var prCol = 0;
+            foreach (var cell in prRow.Cells)
+            {
+                if (prCol >= cols)
+                    break;
+                var prSpan = Math.Clamp(cell.GridSpan <= 0 ? 1 : cell.GridSpan, 1, cols - prCol);
+                double prCellWidth = 0;
+                for (var s = 0; s < prSpan; s++)
+                    prCellWidth += colWidths[prCol + s];
+
+                var prFmt = cell.Paragraphs.Count > 0 && cell.Paragraphs[0].Runs.Count > 0
+                    ? cell.Paragraphs[0].Runs[0].Formatting
+                    : RunFormatting.Default;
+                if (prIsHeader)
+                    prFmt = prFmt with { Bold = true };
+
+                var prInnerW = Math.Max(10, prCellWidth - 2 * pad);
+                var prLines = cell.Paragraphs.Count > 0
+                    ? cell.Paragraphs.SelectMany(p => WrapCellLines(p.PlainText, prFmt, prInnerW)).ToList()
+                    : WrapCellLines(string.Empty, prFmt, prInnerW);
+                var prCellHeight = prLines.Sum(l => l.Height) + 2 * pad;
+                if (prCellHeight > prRowHeight)
+                    prRowHeight = prCellHeight;
+
+                prCol += prSpan;
+            }
+            rowHeights[pr] = prRowHeight;
+        }
+
         for (var r = 0; r < table.Rows.Count; r++)
         {
             var row = table.Rows[r];
@@ -4497,14 +4558,34 @@ public sealed class DocumentView : Control
                 // cellAvailableHeight = row interior height (row height minus top+bottom padding).
                 // contentHeight = sum of this cell's laid-out line heights.
                 // For single-row cells (no rowspan), the available height is the full row interior.
-                // For rowspan cells, a per-row vAlign would require knowing the total merged height
-                // up-front — defer to standard top-anchor to avoid regressing existing rowspan layout.
+                //
+                // AV-TBL5-VRENDER-VMERGE: for a cell that STARTS a vertical merge (Restart), Word
+                // aligns the content within the height of the WHOLE merged span, not just the first
+                // row. Sum the pre-computed heights of every row this cell spans (this row plus each
+                // consecutive VerticalMerge.Continue cell below it at the same grid column) and use
+                // that as the available height instead of the single rowHeight. A non-merged cell
+                // (span 1) is unaffected — cellAvailableHeight still reduces to rowHeight - 2*pad.
+                //
                 // Paginated cells (content split across pages): ReserveContentY treats the row as a
                 // unit so the whole row lands on one page; no per-page split of a single row occurs,
-                // so the vAlign offset is safe to apply without extra pagination logic.
+                // so the vAlign offset is safe to apply without extra pagination logic. If a merged
+                // span crosses a page break, the span-height sum still uses each row's full measured
+                // height (best-effort — matches the existing per-row pagination behavior rather than
+                // clipping the merged region further).
                 var cellLines = cellParas.SelectMany(pl => pl).ToList();
                 var contentHeight = cellLines.Sum(l => l.Height);
-                var cellAvailableHeight = rowHeight - 2 * pad;
+                var mergedSpanHeight = rowHeight;
+                if (cellModel.VerticalMerge == VerticalMergeState.Restart)
+                {
+                    mergedSpanHeight = 0;
+                    for (var mr = r; mr < table.Rows.Count; mr++)
+                    {
+                        if (mr > r && GetCellModelGridCol(table, mr, startCol)?.VerticalMerge != VerticalMergeState.Continue)
+                            break;
+                        mergedSpanHeight += mr == r ? rowHeight : rowHeights[mr];
+                    }
+                }
+                var cellAvailableHeight = mergedSpanHeight - 2 * pad;
                 var vAlignOffset = cellModel.VerticalAlignment switch
                 {
                     TableCellVerticalAlignment.Center =>
@@ -4871,10 +4952,7 @@ public sealed class DocumentView : Control
 
                 case DocumentFloatingObjectKind.Shape when run.Shape is { IsFloating: true } shape:
                     _floatingShapes.Add(BuildFloatingShapeData(
-                        shape,
-                        rect,
-                        snapshot.BehindText,
-                        snapshot.ZOrderIndex,
+                        DrawingObjectVisualPlanner.BuildVisualPlan(shape, snapshot),
                         snapshot.BlockIndex,
                         snapshot.RunIndex));
                     break;
@@ -4893,10 +4971,7 @@ public sealed class DocumentView : Control
 
                 case DocumentFloatingObjectKind.WordArt when run.WordArt is { IsFloating: true } wordArt:
                     _floatingWordArts.Add(BuildFloatingWordArtData(
-                        wordArt,
-                        rect,
-                        snapshot.BehindText,
-                        snapshot.ZOrderIndex,
+                        DrawingObjectVisualPlanner.BuildVisualPlan(wordArt, snapshot),
                         snapshot.BlockIndex,
                         snapshot.RunIndex));
                     break;
@@ -4918,40 +4993,30 @@ public sealed class DocumentView : Control
         }
     }
 
-    private FloatingShapeData BuildFloatingShapeData(
-        Shape shape,
-        Rect rect,
-        bool behindText,
-        int zOrder,
+    private static FloatingShapeData BuildFloatingShapeData(
+        DrawingObjectVisualPlan plan,
         int blockIndex = -1,
         int runIndex = -1)
     {
-        IBrush? fillBrush = null;
-        if (shape.ExtendedFill is { } extFill)
+        var rect = ToAvaloniaRect(plan.Rect);
+        IBrush? fillBrush = plan.Fill.Kind switch
         {
-            fillBrush = extFill.Kind switch
-            {
-                ShapeFillKind.NoFill => null,
-                ShapeFillKind.Gradient => BuildAvaloniaGradientBrush(extFill, rect),
-                ShapeFillKind.Pattern => BuildAvaloniaPatternBrush(extFill),
-                _ => ParseSolidBrush(shape.FillColorHex),
-            };
-        }
-        else if (!string.IsNullOrEmpty(shape.FillColorHex))
-        {
-            fillBrush = ParseSolidBrush(shape.FillColorHex);
-        }
+            DrawingObjectFillKind.Solid => ParseSolidBrush(plan.Fill.ColorHex),
+            DrawingObjectFillKind.Gradient => BuildAvaloniaGradientBrush(ToShapeFill(plan.Fill), rect),
+            DrawingObjectFillKind.Pattern => BuildAvaloniaPatternBrush(ToShapeFill(plan.Fill)),
+            _ => null
+        };
 
         Pen? outlinePen = null;
-        if (!string.IsNullOrEmpty(shape.OutlineColorHex))
+        if (plan.Outline.IsVisible)
         {
-            var strokeBrush = ParseSolidBrush(shape.OutlineColorHex);
-            var strokeW = shape.OutlineWidthPt > 0 ? shape.OutlineWidthPt * PxPerPoint : 1.0;
-            DashStyle? dashStyle = shape.OutlineDash?.ToLowerInvariant() switch
+            var strokeBrush = ParseSolidBrush(plan.Outline.ColorHex);
+            var strokeW = plan.Outline.WidthDip > 0 ? plan.Outline.WidthDip : 1.0;
+            DashStyle? dashStyle = plan.Outline.DashStyle?.ToLowerInvariant() switch
             {
                 "dash" => new DashStyle([4, 3], 0),
                 "sysdot" => new DashStyle([1, 2], 0),
-                "dashDot" or "dashdot" => new DashStyle([4, 2, 1, 2], 0),
+                "dashdot" => new DashStyle([4, 2, 1, 2], 0),
                 _ => null,
             };
             outlinePen = dashStyle is not null
@@ -4962,19 +5027,50 @@ public sealed class DocumentView : Control
         return new FloatingShapeData
         {
             Rect = rect,
-            BehindText = behindText,
-            ZOrder = zOrder,
+            BehindText = plan.BehindText,
+            ZOrder = plan.ZOrderIndex,
             BlockIndex = blockIndex,
             RunIndex = runIndex,
-            Kind = shape.Kind,
-            CustomGeo = shape.HasCustomGeometry ? shape.CustomGeometry : null,
+            Kind = ToShapeKind(plan.GeometryKind),
+            CustomGeo = plan.CustomGeometry,
             FillBrush = fillBrush,
             OutlinePen = outlinePen,
-            Text = shape.HasText ? shape.PlainText : null,
-            RotationAngle = shape.RotationAngle,
-            FlipH = shape.FlipH,
-            FlipV = shape.FlipV,
+            Text = plan.Text?.Text,
+            RotationAngle = plan.RotationAngle,
+            FlipH = plan.FlipH,
+            FlipV = plan.FlipV,
         };
+    }
+
+    private static ShapeKind ToShapeKind(DrawingObjectGeometryKind? geometryKind) =>
+        geometryKind switch
+        {
+            DrawingObjectGeometryKind.Ellipse => ShapeKind.Ellipse,
+            DrawingObjectGeometryKind.RoundedRectangle => ShapeKind.RoundedRectangle,
+            DrawingObjectGeometryKind.TextBox => ShapeKind.TextBox,
+            _ => ShapeKind.Rectangle
+        };
+
+    private static ShapeFill ToShapeFill(DrawingObjectFillPlan plan)
+    {
+        if (plan.Kind == DrawingObjectFillKind.Gradient)
+        {
+            return ShapeFill.LinearGradient(
+                plan.GradientAngle,
+                plan.GradientStops
+                    .Select(stop => new FreeW.Core.Model.GradientStop(stop.Position, stop.ColorHex))
+                    .ToArray());
+        }
+
+        if (plan.Kind == DrawingObjectFillKind.Pattern)
+        {
+            return ShapeFill.Patterned(
+                plan.PatternPreset ?? "diagCross",
+                plan.PatternForegroundColorHex,
+                plan.PatternBackgroundColorHex);
+        }
+
+        return ShapeFill.NoFill();
     }
 
     /// <summary>Builds an Avalonia <see cref="LinearGradientBrush"/> from a <see cref="ShapeFill"/> gradient.</summary>
@@ -7889,6 +7985,101 @@ public sealed class DocumentView : Control
             CharacterShadingPattern = string.IsNullOrWhiteSpace(colorHex) ? ShadingPattern.Clear : pattern,
         });
 
+    /// <summary>
+    /// Set the proofing (spelling/grammar) language on the SELECTED text only — Word applies a proofing
+    /// language change to the selected runs/characters, not the whole paragraph. Mirrors the
+    /// selected-sub-range run-mutation pattern used for character styles (see <see cref="ApplyNamedStyle"/>'s
+    /// multi-paragraph character-style branch and <see cref="ApplyRunFormatting"/>): a single-block
+    /// selection tags just its Start.Offset..End.Offset range; a multi-paragraph selection tags the first
+    /// block from Start.Offset to its end, middle blocks in full, and the last block from its start to
+    /// End.Offset. A collapsed caret (no selection) has no existing text to retag, so — mirroring
+    /// <see cref="ApplyRunFormatting"/>'s BZ5 convention — it stages a pending format for the next typed
+    /// character instead of touching the paragraph.
+    /// </summary>
+    public void SetProofingLanguage(string? languageTag)
+    {
+        var normalizedTag = ProofingLanguageCatalog.NormalizeTag(languageTag);
+        var sel = NormalizedSelection();
+
+        if (sel is { } s && s.Start.Block == s.End.Block)
+        {
+            // Single-block selection: tag only the selected character range.
+            var block = s.Start.Block;
+            if (_doc.Blocks[block] is not Paragraph p0 || !IsEditable(p0))
+                return;
+            var a = s.Start.Offset;
+            var b = s.End.Offset;
+            _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
+            {
+                var live = ParaCells(p);
+                for (var i = Math.Clamp(a, 0, live.Count); i < Math.Clamp(b, 0, live.Count); i++)
+                    live[i] = live[i] with { Fmt = live[i].Fmt with { LanguageTag = normalizedTag } };
+                SetRuns(p, live);
+            }));
+            return;
+        }
+
+        if (sel is { } multi && multi.Start.Block != multi.End.Block)
+        {
+            // Multi-paragraph selection: first block from Start.Offset to its end, middle blocks in
+            // full, last block from its start to End.Offset — only the selected ranges are retagged.
+            _bus.BeginUndoGroup();
+            for (var blockIdx = multi.Start.Block; blockIdx <= multi.End.Block && blockIdx < _doc.Blocks.Count; blockIdx++)
+            {
+                if (_doc.Blocks[blockIdx] is not Paragraph bp || !IsEditable(bp))
+                    continue;
+
+                var a = blockIdx == multi.Start.Block ? multi.Start.Offset : 0;
+                var b = blockIdx == multi.End.Block ? multi.End.Offset : int.MaxValue;
+                var capturedBlock = blockIdx;
+                var capturedA = a;
+                var capturedB = b;
+
+                _bus.Execute(new ReplaceParagraphRunsCommand(capturedBlock, p =>
+                {
+                    var live = ParaCells(p);
+                    var lo = Math.Clamp(capturedA, 0, live.Count);
+                    var hi = Math.Clamp(capturedB, 0, live.Count);
+                    for (var i = lo; i < hi; i++)
+                        live[i] = live[i] with { Fmt = live[i].Fmt with { LanguageTag = normalizedTag } };
+                    SetRuns(p, live);
+                }));
+            }
+            _bus.CommitUndoGroup("Proofing Language");
+            return;
+        }
+
+        // Collapsed caret: no selected text to retag. Stage a pending format for the next typed
+        // character (BZ5 convention), so the proofing language does not spill onto existing text.
+        if (CurrentParagraph() is { } paragraph && IsEditable(paragraph))
+        {
+            var caretFmt = _pendingRunFmt ?? ActiveFormatting(paragraph, _caret.Offset);
+            _pendingRunFmt = caretFmt with { LanguageTag = normalizedTag };
+        }
+    }
+
+    public bool ToggleSpellCheck()
+    {
+        SpellCheckEnabled = !SpellCheckEnabled;
+        InvalidateVisual();
+        return SpellCheckEnabled;
+    }
+
+    public bool AddCurrentWordToDictionary() =>
+        CurrentProofingWord is { } word && _customDictionary.Add(word);
+
+    public bool AddToDictionary(string? word)
+    {
+        var normalized = NormalizeProofingWord(word);
+        return normalized is not null && _customDictionary.Add(normalized);
+    }
+
+    public bool IsInCustomDictionary(string? word) =>
+        NormalizeProofingWord(word) is { } normalized && _customDictionary.Contains(normalized);
+
+    public string? CurrentProofingWord =>
+        NormalizeProofingWord(SelectedText) ?? WordAtCaret();
+
     // ── AV-COMMENT: review-comment insert / delete / resolve + introspection ──────────────────────
     // Model-backed (comments already round-trip through Core.IO). All mutations ride the shared
     // DocumentCommandBus so they are undoable, mirroring the WPF host's InsertComment / DeleteComment /
@@ -9262,13 +9453,10 @@ public sealed class DocumentView : Control
         if (string.IsNullOrWhiteSpace(target))
             return;
 
-        // A leading '#' denotes an internal bookmark anchor; everything else is an external URL.
-        var isInternal = target.StartsWith('#');
-        var url = isInternal ? null : target.Trim();
-        var anchor = isInternal ? target[1..].Trim() : null;
-        if (isInternal && string.IsNullOrEmpty(anchor))
+        if (!HyperlinkTarget.TryParse(target, out var parsedTarget))
             return;
-        var link = new LinkInfo(url, anchor, null);
+
+        var link = new LinkInfo(parsedTarget.Url, parsedTarget.Anchor, null);
 
         var sel = NormalizedSelection();
         // Only a same-paragraph selection can be wrapped in place; a cross-paragraph (or no) selection
@@ -9280,23 +9468,38 @@ public sealed class DocumentView : Control
             var block = s.Start.Block;
             var from = s.Start.Offset;
             var to = s.End.Offset;
+            var newEnd = to;
             _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
             {
                 var cells = ParaCells(p);
                 var lo = Math.Clamp(from, 0, cells.Count);
                 var hi = Math.Clamp(to, 0, cells.Count);
-                for (var i = lo; i < hi; i++)
-                    cells[i] = cells[i] with { Link = link };
+                var selectedText = string.Concat(cells.Skip(lo).Take(hi - lo).Select(c => c.Ch));
+                // Word replaces the selected text with the dialog's Display field when the user changed it;
+                // when it is empty or unchanged, only the Link is (re)tagged and the characters are untouched.
+                if (!string.IsNullOrEmpty(displayText) && !string.Equals(displayText, selectedText, StringComparison.Ordinal))
+                {
+                    var fmt = lo < cells.Count ? cells[lo].Fmt : ActiveFormatting(p, lo);
+                    var replacement = displayText.Select(ch => new Cell(ch, fmt, Link: link)).ToList();
+                    cells.RemoveRange(lo, hi - lo);
+                    cells.InsertRange(lo, replacement);
+                    newEnd = lo + replacement.Count;
+                }
+                else
+                {
+                    for (var i = lo; i < hi; i++)
+                        cells[i] = cells[i] with { Link = link };
+                }
                 SetRuns(p, cells);
             }));
-            _caret = new DocPosition(block, to);
+            _caret = new DocPosition(block, newEnd);
             _selectionAnchor = _caret;
             Focus();
             return;
         }
 
         // No usable selection → insert the display text (or the target itself) as a new hyperlinked run.
-        var text = string.IsNullOrEmpty(displayText) ? (isInternal ? anchor! : url!) : displayText;
+        var text = string.IsNullOrEmpty(displayText) ? parsedTarget.DisplayFallback : displayText;
         if (_hfCaret is not null || _cellCaret is not null)
         {
             // Header/footer and table-cell carets do not carry the body-paragraph hyperlink round-trip;
@@ -9376,6 +9579,127 @@ public sealed class DocumentView : Control
     }
 
     /// <summary>
+    /// AV-LINK: True when the caret sits on an external URL or internal bookmark link.
+    /// </summary>
+    public bool IsCaretOnHyperlink() => HyperlinksAtCaret().Count > 0;
+
+    /// <summary>The current external URL under the caret, or null when the caret is not on an external link.</summary>
+    public string? HyperlinkUrlAtCaret()
+    {
+        var links = HyperlinksAtCaret();
+        return links.Count > 0 ? links[0].Url : null;
+    }
+
+    /// <summary>The current ScreenTip under the caret, or null when no linked ScreenTip exists.</summary>
+    public string? HyperlinkTooltipAtCaret()
+    {
+        var links = HyperlinksAtCaret();
+        return links.Count > 0 ? links[0].Tooltip : null;
+    }
+
+    /// <summary>The bookmark names defined in the document, in document order.</summary>
+    public IReadOnlyList<string> BookmarkNames() =>
+        Bookmarks.List(_doc).Select(b => b.Name).Distinct(StringComparer.Ordinal).ToList();
+
+    /// <summary>
+    /// AV-LINK: Retarget the hyperlink span under the caret, preserving visible text and ScreenTip.
+    /// </summary>
+    public void EditHyperlink(string newTarget) => EditHyperlink(newTarget, newDisplayText: null);
+
+    /// <summary>
+    /// AV-LINK: Retarget the hyperlink span under the caret, preserving its ScreenTip. When
+    /// <paramref name="newDisplayText"/> is non-null, non-empty, and differs from the span's current
+    /// visible text, the span's characters are rewritten to it (Word's Edit Hyperlink dialog applies an
+    /// edited Display-text field); otherwise the existing text is left untouched.
+    /// </summary>
+    public void EditHyperlink(string newTarget, string? newDisplayText)
+    {
+        if (!HyperlinkTarget.TryParse(newTarget, out var parsedTarget)
+            || !TryFindHyperlinkSpanAtCaret(out var block, out var start, out var end, out var current))
+        {
+            return;
+        }
+
+        var next = new LinkInfo(parsedTarget.Url, parsedTarget.Anchor, current.Tooltip);
+
+        if (!string.IsNullOrEmpty(newDisplayText)
+            && _doc.Blocks[block] is Paragraph paragraph
+            && !string.Equals(newDisplayText, SpanText(paragraph, start, end), StringComparison.Ordinal))
+        {
+            var newEnd = end;
+            _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
+            {
+                var cells = ParaCells(p);
+                var lo = Math.Clamp(start, 0, cells.Count);
+                var hi = Math.Clamp(end, lo, cells.Count);
+                var fmt = lo < cells.Count ? cells[lo].Fmt : ActiveFormatting(p, lo);
+                var replacement = newDisplayText.Select(ch => new Cell(ch, fmt, Link: next)).ToList();
+                cells.RemoveRange(lo, hi - lo);
+                cells.InsertRange(lo, replacement);
+                newEnd = lo + replacement.Count;
+                SetRuns(p, cells);
+            }));
+            _caret = new DocPosition(block, newEnd);
+            _selectionAnchor = _caret;
+            Focus();
+            return;
+        }
+
+        ApplyLinkSpan(block, start, end, _ => next);
+    }
+
+    /// <summary>The visible text of paragraph cells [start, end) — used to detect a Display-text edit.</summary>
+    private static string SpanText(Paragraph paragraph, int start, int end)
+    {
+        var cells = ParaCells(paragraph);
+        var lo = Math.Clamp(start, 0, cells.Count);
+        var hi = Math.Clamp(end, lo, cells.Count);
+        return string.Concat(cells.Skip(lo).Take(hi - lo).Select(c => c.Ch));
+    }
+
+    /// <summary>
+    /// AV-LINK: Remove the hyperlink span under the caret while preserving visible text.
+    /// </summary>
+    public void RemoveHyperlink()
+    {
+        if (TryFindHyperlinkSpanAtCaret(out var block, out var start, out var end, out _))
+            ApplyLinkSpan(block, start, end, _ => null);
+    }
+
+    /// <summary>
+    /// AV-LINK: Set or clear the ScreenTip on the hyperlink span under the caret.
+    /// </summary>
+    public void SetHyperlinkTooltip(string? tip)
+    {
+        if (!TryFindHyperlinkSpanAtCaret(out var block, out var start, out var end, out var current))
+            return;
+
+        var tooltip = string.IsNullOrWhiteSpace(tip) ? null : tip.Trim();
+        ApplyLinkSpan(block, start, end, _ => new LinkInfo(current.Url, current.Anchor, tooltip));
+    }
+
+    /// <summary>
+    /// AV-LINK: Link the current selection, or insert the bookmark name at the caret, as an internal link.
+    /// </summary>
+    public void ApplyInternalLink(string anchor)
+    {
+        if (string.IsNullOrWhiteSpace(anchor))
+            return;
+
+        var normalized = anchor.Trim().TrimStart('#').Trim();
+        if (!HyperlinkTarget.TryParse("#" + normalized, out var parsedTarget))
+            return;
+
+        // A non-empty selection keeps its own text (Word links the selection as-is); only fall back to the
+        // bookmark name as display text when there is nothing selected to wrap (mirrors InsertHyperlink's
+        // own no-selection path).
+        var sel = NormalizedSelection();
+        var hasWrappableSelection = sel is { } s && s.Start.Block == s.End.Block && s.End.Offset > s.Start.Offset;
+        var displayText = hasWrappableSelection ? string.Empty : parsedTarget.DisplayFallback;
+        InsertHyperlink(displayText, "#" + parsedTarget.Anchor);
+    }
+
+    /// <summary>
     /// AV-LINK: The hyperlink targets covering the caret (or the current selection), for ribbon-state /
     /// tests. Each entry is <c>(Url, Anchor, Tooltip)</c> with exactly one of Url/Anchor set. Empty when the
     /// caret is not on a hyperlink. Reads the live model so it reflects the latest edit.
@@ -9408,6 +9732,62 @@ public sealed class DocumentView : Control
             if (cells[i].Link is { HasTarget: true } link && seen.Add(link))
                 found.Add((link.Url, link.Anchor, link.Tooltip));
         return found;
+    }
+
+    private bool TryFindHyperlinkSpanAtCaret(out int block, out int start, out int end, out LinkInfo link)
+    {
+        block = _caret.Block;
+        start = 0;
+        end = 0;
+        link = default;
+
+        if (_cellCaret is not null || _hfCaret is not null || CurrentParagraph() is not { } paragraph || !IsEditable(paragraph))
+            return false;
+
+        var cells = ParaCells(paragraph);
+        if (cells.Count == 0)
+            return false;
+
+        var sel = NormalizedSelection();
+        var index = sel is { } s && s.Start.Block == block && s.End.Block == block
+            ? Math.Clamp(s.Start.Offset, 0, cells.Count - 1)
+            : Math.Clamp(_caret.Offset - 1, 0, cells.Count - 1);
+
+        if (cells[index].Link is not { HasTarget: true } current)
+            return false;
+
+        var lo = index;
+        while (lo > 0 && cells[lo - 1].Link == current)
+            lo--;
+
+        var hi = index + 1;
+        while (hi < cells.Count && cells[hi].Link == current)
+            hi++;
+
+        start = lo;
+        end = hi;
+        link = current;
+        return true;
+    }
+
+    private void ApplyLinkSpan(int block, int start, int end, Func<LinkInfo, LinkInfo?> transform)
+    {
+        _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
+        {
+            var cells = ParaCells(p);
+            var lo = Math.Clamp(start, 0, cells.Count);
+            var hi = Math.Clamp(end, lo, cells.Count);
+            for (var i = lo; i < hi; i++)
+            {
+                if (cells[i].Link is { HasTarget: true } link)
+                    cells[i] = cells[i] with { Link = transform(link) };
+            }
+            SetRuns(p, cells);
+        }));
+
+        _caret = new DocPosition(block, Math.Clamp(_caret.Offset, start, end));
+        _selectionAnchor = _caret;
+        Focus();
     }
 
     /// <summary>
@@ -10656,6 +11036,53 @@ public sealed class DocumentView : Control
     }
 
     /// <summary>Cycles text case: lower → Title Case → UPPER → lower.</summary>
+    private string? WordAtCaret()
+    {
+        if (CurrentParagraph() is not { } paragraph || !IsEditable(paragraph))
+            return null;
+
+        var cells = ParaCells(paragraph);
+        if (cells.Count == 0)
+            return null;
+
+        var index = Math.Clamp(_caret.Offset, 0, cells.Count - 1);
+        if (!IsProofingWordChar(cells[index].Ch) && index > 0 && IsProofingWordChar(cells[index - 1].Ch))
+            index--;
+        if (!IsProofingWordChar(cells[index].Ch))
+            return null;
+
+        var start = index;
+        while (start > 0 && IsProofingWordChar(cells[start - 1].Ch))
+            start--;
+        var end = index + 1;
+        while (end < cells.Count && IsProofingWordChar(cells[end].Ch))
+            end++;
+
+        return NormalizeProofingWord(new string(cells.Skip(start).Take(end - start).Select(c => c.Ch).ToArray()));
+    }
+
+    private static string? NormalizeProofingWord(string? word)
+    {
+        if (string.IsNullOrWhiteSpace(word))
+            return null;
+
+        var trimmed = word.Trim();
+        var start = 0;
+        while (start < trimmed.Length && !IsProofingWordChar(trimmed[start]))
+            start++;
+        var end = trimmed.Length - 1;
+        while (end >= start && !IsProofingWordChar(trimmed[end]))
+            end--;
+        if (end < start)
+            return null;
+
+        var normalized = trimmed[start..(end + 1)];
+        return normalized.Any(char.IsWhiteSpace) ? null : normalized;
+    }
+
+    private static bool IsProofingWordChar(char ch) =>
+        char.IsLetter(ch) || ch is '\'' or '-' or '\u2019';
+
     private static string CycleCase(string text)
     {
         if (string.IsNullOrEmpty(text))
@@ -11926,10 +12353,14 @@ public sealed class DocumentView : Control
         public List<string> Categories = [];
         public List<(string? Name, List<double> Values)> Series = [];
         // AV-POLISH: chart annotation fields
+        public ChartVisualGeometryKind GeometryKind;
         public bool    ShowLegend;
+        public bool    ShowGridlines;
+        public bool    PlotAreaFill;
         public bool    ShowDataLabels;
         public string? CategoryAxisTitle;
         public string? ValueAxisTitle;
+        public List<Color> Palette = [];
     }
 
     private sealed class FloatingWordArtData
@@ -11955,8 +12386,12 @@ public sealed class DocumentView : Control
         public int BlockIndex;
         public int RunIndex;
         public SmartArtKind     Kind;
+        public string           LayoutId = "list1";
+        public SmartArtStyle    Style = SmartArtStyle.Default;
         // Flattened node texts (first-level nodes + their children depth-first).
         public List<string>     NodeTexts = [];
+        public List<Color>      NodeFills = [];
+        public Color            NodeTextColor = Colors.White;
     }
 
     private sealed class FloatingGroupChildData
@@ -11988,23 +12423,20 @@ public sealed class DocumentView : Control
     // ── FO3 collection helpers ────────────────────────────────────────────────────────────────────
 
     private static FloatingWordArtData BuildFloatingWordArtData(
-        WordArt wordArt,
-        Rect rect,
-        bool behindText,
-        int zOrder,
+        DrawingObjectVisualPlan plan,
         int blockIndex = -1,
         int runIndex = -1) =>
         new()
         {
-            Rect = rect,
-            BehindText = behindText,
-            ZOrder = zOrder,
+            Rect = ToAvaloniaRect(plan.Rect),
+            BehindText = plan.BehindText,
+            ZOrder = plan.ZOrderIndex,
             BlockIndex = blockIndex,
             RunIndex = runIndex,
-            Text = wordArt.Text,
-            Style = wordArt.Style,
-            FontSizePt = wordArt.FontSizePt,
-            Warp = wordArt.Warp,
+            Text = plan.WordArt?.Text ?? string.Empty,
+            Style = plan.WordArt?.Style ?? WordArtStyle.FillBlue,
+            FontSizePt = (plan.WordArt?.FontSizeDip ?? 48) / PxPerPoint,
+            Warp = plan.WordArt?.Warp ?? WordArtWarp.None,
         };
 
     private static FloatingSmartArtData BuildFloatingSmartArtData(
@@ -12015,8 +12447,7 @@ public sealed class DocumentView : Control
         int blockIndex = -1,
         int runIndex = -1)
     {
-        var texts = new List<string>();
-        FlattenNodes(smartArt.Nodes, texts);
+        var plan = ChartSmartArtVisualPlanner.BuildSmartArtPlan(smartArt);
 
         return new FloatingSmartArtData
         {
@@ -12026,17 +12457,12 @@ public sealed class DocumentView : Control
             BlockIndex = blockIndex,
             RunIndex = runIndex,
             Kind = smartArt.Kind,
-            NodeTexts = texts,
+            LayoutId = plan.LayoutId,
+            Style = plan.Style,
+            NodeTexts = plan.Nodes.Select(n => n.Text).ToList(),
+            NodeFills = plan.Nodes.Select(n => ToAvaloniaChartColor(n.FillHex)).ToList(),
+            NodeTextColor = ToAvaloniaChartColor(plan.ColorScheme.TextHex),
         };
-
-        static void FlattenNodes(IEnumerable<SmartArtNode> nodes, List<string> into)
-        {
-            foreach (var node in nodes)
-            {
-                into.Add(node.Text);
-                FlattenNodes(node.Children, into);
-            }
-        }
     }
 
     private FloatingGroupData BuildFloatingGroupData(
@@ -12044,13 +12470,18 @@ public sealed class DocumentView : Control
         DocumentFloatingObjectSnapshot snapshot)
     {
         var children = new List<FloatingGroupChildData>();
+        var planChildren = DrawingObjectVisualPlanner.BuildVisualPlan(group, snapshot)
+            .GroupChildren
+            .ToDictionary(child => child.ChildIndex);
         foreach (var childSnapshot in DocumentViewLayoutPlanner.BuildFloatingGroupChildSnapshots(group, snapshot.Rect))
         {
             if (childSnapshot.ChildIndex < 0 || childSnapshot.ChildIndex >= group.Children.Count)
                 continue;
 
             var child = group.Children[childSnapshot.ChildIndex];
-            var childRect = ToAvaloniaRect(childSnapshot.Rect);
+            var childRect = planChildren.TryGetValue(childSnapshot.ChildIndex, out var planChild)
+                ? ToAvaloniaRect(planChild.Visual.Rect)
+                : ToAvaloniaRect(childSnapshot.Rect);
             var childData = new FloatingGroupChildData { Rect = childRect };
 
             switch (childSnapshot.Kind)
@@ -12060,9 +12491,11 @@ public sealed class DocumentView : Control
                     childData.Bitmap = DecodeBitmap(img);
                     break;
 
-                case DocumentFloatingObjectKind.Shape when child is Shape shape:
+                case DocumentFloatingObjectKind.Shape when child is Shape:
+                    if (!planChildren.TryGetValue(childSnapshot.ChildIndex, out var shapePlan))
+                        continue;
                     childData.Kind = FloatingGroupChildData.ChildKind.Shape;
-                    childData.Shape = BuildFloatingShapeData(shape, childRect, snapshot.BehindText, snapshot.ZOrderIndex);
+                    childData.Shape = BuildFloatingShapeData(shapePlan.Visual);
                     break;
 
                 case DocumentFloatingObjectKind.Chart when child is Chart chart:
@@ -12075,9 +12508,11 @@ public sealed class DocumentView : Control
                         chart.Series.Select(s => (s.Name, new List<double>(s.Values))).ToList());
                     break;
 
-                case DocumentFloatingObjectKind.WordArt when child is WordArt wordArt:
+                case DocumentFloatingObjectKind.WordArt when child is WordArt:
+                    if (!planChildren.TryGetValue(childSnapshot.ChildIndex, out var wordArtPlan))
+                        continue;
                     childData.Kind = FloatingGroupChildData.ChildKind.WordArt;
-                    childData.WordArt = BuildFloatingWordArtData(wordArt, childRect, snapshot.BehindText, snapshot.ZOrderIndex);
+                    childData.WordArt = BuildFloatingWordArtData(wordArtPlan.Visual);
                     break;
 
                 case DocumentFloatingObjectKind.SmartArt when child is SmartArt smartArt:
@@ -12104,20 +12539,19 @@ public sealed class DocumentView : Control
     }
 
     // Colour palette for chart series — matches Word's default colorful1 scheme.
-    private static readonly Color[] ChartSeriesColors =
-    [
-        Color.FromRgb(0x43, 0x72, 0xC4), // blue
-        Color.FromRgb(0xED, 0x7D, 0x31), // orange
-        Color.FromRgb(0xA9, 0xD1, 0x8E), // green
-        Color.FromRgb(0xFF, 0xC0, 0x00), // gold
-        Color.FromRgb(0x5A, 0x96, 0xC5), // steel blue
-        Color.FromRgb(0x70, 0xAD, 0x47), // lime green
-    ];
-
     private static readonly IBrush ChartFrameFill    = new SolidColorBrush(Color.FromArgb(0xFF, 0xF9, 0xF9, 0xF9));
     private static readonly Pen    ChartFramePen     = new Pen(new SolidColorBrush(Color.FromRgb(0xBB, 0xBB, 0xBB)), 1.0);
     private static readonly IBrush ChartGridlineBrush = new SolidColorBrush(Color.FromArgb(0x40, 0x00, 0x00, 0x00));
     private static readonly IBrush ChartLegendBg    = new SolidColorBrush(Color.FromArgb(0xCC, 0xFF, 0xFF, 0xFF));
+
+    private static Color ToAvaloniaChartColor(string? hex) =>
+        TryParseAvaloniaColor(hex, out var color) ? color : Color.FromRgb(0x44, 0x72, 0xC4);
+
+    private static Color ChartColorAt(FloatingChartData chart, int index) =>
+        chart.Palette.Count > 0 ? chart.Palette[index % chart.Palette.Count] : ToAvaloniaChartColor("#4472C4");
+
+    private static Color SmartArtFillAt(FloatingSmartArtData smartArt, int index) =>
+        smartArt.NodeFills.Count > 0 ? smartArt.NodeFills[index % smartArt.NodeFills.Count] : ToAvaloniaChartColor("#4E81BD");
 
     /// <summary>
     /// Centralised factory for <see cref="FloatingChartData"/> — shared by the floating chart collector,
@@ -12128,30 +12562,7 @@ public sealed class DocumentView : Control
         Chart chart, Rect rect, bool behindText, int zOrder,
         List<(string? Name, List<double> Values)> series)
     {
-        // Resolve effective annotation flags: QuickLayout overrides individual properties.
-        bool showLegend, showDataLabels, showAxisTitles;
-        if (chart.QuickLayoutId > 0 && ChartQuickLayout.FindById(chart.QuickLayoutId) is { } ql)
-        {
-            showLegend     = ql.ShowLegend;
-            showDataLabels = ql.ShowDataLabels;
-            showAxisTitles = ql.ShowAxisTitles;
-        }
-        else if (chart.StyleId > 0 && ChartStyle.FindById(chart.StyleId) is { } st)
-        {
-            showLegend     = chart.ShowLegend; // style does not override ShowLegend
-            showDataLabels = st.ShowDataLabels;
-            showAxisTitles = !string.IsNullOrEmpty(chart.CategoryAxisTitle) ||
-                             !string.IsNullOrEmpty(chart.ValueAxisTitle);
-        }
-        else
-        {
-            showLegend     = chart.ShowLegend;
-            showDataLabels = false;
-            showAxisTitles = !string.IsNullOrEmpty(chart.CategoryAxisTitle) ||
-                             !string.IsNullOrEmpty(chart.ValueAxisTitle);
-        }
-
-        var isPieFamily = chart.Kind is ChartKind.Pie or ChartKind.Doughnut;
+        var plan = ChartSmartArtVisualPlanner.BuildChartPlan(chart);
 
         return new FloatingChartData
         {
@@ -12159,13 +12570,17 @@ public sealed class DocumentView : Control
             BehindText        = behindText,
             ZOrder            = zOrder,
             Kind              = chart.Kind,
-            Title             = chart.Title,
+            GeometryKind      = plan.GeometryKind,
+            Title             = plan.ShowTitle ? chart.Title : null,
             Categories        = new List<string>(chart.Categories),
             Series            = series,
-            ShowLegend        = showLegend,
-            ShowDataLabels    = showDataLabels,
-            CategoryAxisTitle = isPieFamily ? null : (showAxisTitles ? chart.CategoryAxisTitle : null),
-            ValueAxisTitle    = isPieFamily ? null : (showAxisTitles ? chart.ValueAxisTitle    : null),
+            ShowLegend        = plan.ShowLegend,
+            ShowGridlines     = plan.ShowGridlines,
+            PlotAreaFill      = plan.PlotAreaFill,
+            ShowDataLabels    = plan.ShowDataLabels,
+            CategoryAxisTitle = plan.CategoryAxisTitle,
+            ValueAxisTitle    = plan.ValueAxisTitle,
+            Palette           = plan.PaletteHex.Select(ToAvaloniaChartColor).ToList(),
         };
     }
 
@@ -12251,6 +12666,10 @@ public sealed class DocumentView : Control
         if (cd.Series.Count == 0 || plotW < 5 || plotH < 5)
             return;
 
+        if (cd.PlotAreaFill && !isPieFamily)
+            context.FillRectangle(new SolidColorBrush(Color.FromRgb(0xD9, 0xE2, 0xF3)),
+                new Rect(plotLeft, plotTop, plotW, plotH));
+
         // BC3: Compute the axis range for non-pie charts (used for gridline labels and data drawing).
         var (axisMin, axisMax, axisRange) = ComputeAxisRange(cd);
         var zeroFraction = -axisMin / axisRange;
@@ -12261,10 +12680,11 @@ public sealed class DocumentView : Control
         for (var g = 0; g <= gridLines; g++)
         {
             var gy = plotBottom - g * plotH / gridLines;
-            context.DrawLine(gridPen, new Point(plotLeft, gy), new Point(plotRight, gy));
+            if (cd.ShowGridlines || g == 0)
+                context.DrawLine(gridPen, new Point(plotLeft, gy), new Point(plotRight, gy));
 
             // BC1: Draw value-axis tick label in the reserved left strip.
-            if (!isPieFamily)
+            if (!isPieFamily && (cd.ShowGridlines || g == 0))
             {
                 var tickVal = axisMin + (g * axisRange / gridLines);
                 var tickLabel = tickVal.ToString("G3", System.Globalization.CultureInfo.InvariantCulture);
@@ -12286,10 +12706,13 @@ public sealed class DocumentView : Control
                 break;
 
             case ChartKind.Line:
-            case ChartKind.Scatter:
             case ChartKind.Area:
                 DrawChartLines(context, cd, plotLeft, plotTop, plotW, plotH, plotBottom,
                     fillArea: cd.Kind == ChartKind.Area);
+                break;
+
+            case ChartKind.Scatter:
+                DrawChartScatterMarkers(context, cd, plotLeft, plotTop, plotW, plotH, plotBottom);
                 break;
 
             case ChartKind.Pie:
@@ -12412,7 +12835,7 @@ public sealed class DocumentView : Control
 
             foreach (var (lbl, colorIdx) in legendEntries)
             {
-                var color = ChartSeriesColors[colorIdx % ChartSeriesColors.Length];
+                var color = ChartColorAt(cd, colorIdx);
                 var brush = new SolidColorBrush(color);
                 var nameFt = Build(lbl, annotFmt);
                 var entryW = swatchSz + 3 + nameFt.WidthIncludingTrailingWhitespace + 12;
@@ -12635,7 +13058,7 @@ public sealed class DocumentView : Control
         for (var si = 0; si < nSeries; si++)
         {
             var (_, vals) = cd.Series[si];
-            var color = ChartSeriesColors[si % ChartSeriesColors.Length];
+            var color = ChartColorAt(cd, si);
             var brush = new SolidColorBrush(color);
 
             for (var ci = 0; ci < nBars; ci++)
@@ -12715,7 +13138,7 @@ public sealed class DocumentView : Control
             var (_, vals) = cd.Series[si];
             if (vals.Count == 0) continue;
 
-            var color = ChartSeriesColors[si % ChartSeriesColors.Length];
+            var color = ChartColorAt(cd, si);
             var pen   = new Pen(new SolidColorBrush(color), 1.5);
 
             var pts = new List<Point>();
@@ -12747,6 +13170,43 @@ public sealed class DocumentView : Control
             new Point(plotLeft, zeroY), new Point(plotLeft + plotW, zeroY));
     }
 
+    private void DrawChartScatterMarkers(DrawingContext context, FloatingChartData cd,
+        double plotLeft, double plotTop, double plotW, double plotH, double plotBottom)
+    {
+        var xVals = cd.Categories
+            .Select(c => double.TryParse(c, System.Globalization.NumberStyles.Any,
+                System.Globalization.CultureInfo.InvariantCulture, out var v) ? v : double.NaN)
+            .ToList();
+        var xMin = xVals.Where(v => !double.IsNaN(v)).DefaultIfEmpty(1).Min();
+        var xMax = xVals.Where(v => !double.IsNaN(v)).DefaultIfEmpty(1).Max();
+        if (xMax <= xMin) xMax = xMin + 1;
+
+        var yMax = Math.Max(1.0, cd.Series.SelectMany(s => s.Values).DefaultIfEmpty(1).Max());
+
+        double Px(int c)
+        {
+            var x = c < xVals.Count && !double.IsNaN(xVals[c]) ? xVals[c] : c + 1;
+            return plotLeft + (x - xMin) / (xMax - xMin) * plotW;
+        }
+
+        double Py(double value) => plotBottom - plotH * (Math.Max(0, value) / yMax);
+
+        for (var si = 0; si < cd.Series.Count; si++)
+        {
+            var (_, values) = cd.Series[si];
+            var brush = new SolidColorBrush(ChartColorAt(cd, si));
+            for (var ci = 0; ci < values.Count; ci++)
+            {
+                var px = Px(ci);
+                var py = Py(values[ci]);
+                context.DrawEllipse(brush, null, new Point(px, py), 3.5, 3.5);
+            }
+        }
+
+        context.DrawLine(new Pen(ChartGridlineBrush, 1.0),
+            new Point(plotLeft, plotBottom), new Point(plotLeft + plotW, plotBottom));
+    }
+
     private static void DrawChartPie(DrawingContext context, FloatingChartData cd,
         double plotLeft, double plotTop, double plotW, double plotH, bool doughnut)
     {
@@ -12766,7 +13226,7 @@ public sealed class DocumentView : Control
         for (var si = 0; si < vals.Count; si++)
         {
             var sweep     = vals[si] / total * 2 * Math.PI;
-            var color     = ChartSeriesColors[si % ChartSeriesColors.Length];
+            var color     = ChartColorAt(cd, si);
             var brush     = new SolidColorBrush(color);
 
             var geo = new StreamGeometry();
@@ -12901,17 +13361,6 @@ public sealed class DocumentView : Control
     }
 
     // SmartArt node colours per slot (reuses the chart palette for consistency).
-    private static readonly IBrush[] SmartArtNodeFills =
-    [
-        new SolidColorBrush(Color.FromRgb(0x43, 0x72, 0xC4)),
-        new SolidColorBrush(Color.FromRgb(0xED, 0x7D, 0x31)),
-        new SolidColorBrush(Color.FromRgb(0xA9, 0xD1, 0x8E)),
-        new SolidColorBrush(Color.FromRgb(0xFF, 0xC0, 0x00)),
-        new SolidColorBrush(Color.FromRgb(0x5A, 0x96, 0xC5)),
-        new SolidColorBrush(Color.FromRgb(0x70, 0xAD, 0x47)),
-    ];
-
-    private static readonly Pen SmartArtNodePen    = new Pen(Brushes.White, 1.0);
     private static readonly Pen SmartArtConnectPen = new Pen(new SolidColorBrush(Color.FromRgb(0x88, 0x88, 0x88)), 1.0);
 
     /// <summary>
@@ -12956,8 +13405,8 @@ public sealed class DocumentView : Control
             var rootX = rect.X + (rect.Width - rootW) / 2;
             var rootY = areaTop + nodePad;
             var rootRect = new Rect(rootX, rootY, rootW, nodeH);
-            context.FillRectangle(SmartArtNodeFills[0], rootRect);
-            DrawSmartArtNodeText(context, roots.Length > 0 ? roots[0] : string.Empty, rootRect);
+            context.FillRectangle(new SolidColorBrush(SmartArtFillAt(sd, 0)), rootRect);
+            DrawSmartArtNodeText(context, roots.Length > 0 ? roots[0] : string.Empty, rootRect, sd.NodeTextColor);
 
             if (children.Length > 0)
             {
@@ -12981,9 +13430,9 @@ public sealed class DocumentView : Control
                 {
                     var cx = childStartX + ci * (childW + connGap);
                     var childRect = new Rect(cx, childY, childW, nodeH);
-                    var fill = SmartArtNodeFills[(ci + 1) % SmartArtNodeFills.Length];
+                    var fill = new SolidColorBrush(SmartArtFillAt(sd, ci + 1));
                     context.FillRectangle(fill, childRect);
-                    DrawSmartArtNodeText(context, children[ci], childRect);
+                    DrawSmartArtNodeText(context, children[ci], childRect, sd.NodeTextColor);
                     // Vertical drop line from horizontal bus to child.
                     context.DrawLine(SmartArtConnectPen,
                         new Point(cx + childW / 2, childY - connGap),
@@ -13005,9 +13454,9 @@ public sealed class DocumentView : Control
             for (var ni = 0; ni < count; ni++)
             {
                 var nodeRect = new Rect(bx, boxY, boxW, nodeH);
-                var fill = SmartArtNodeFills[ni % SmartArtNodeFills.Length];
+                var fill = new SolidColorBrush(SmartArtFillAt(sd, ni));
                 context.FillRectangle(fill, nodeRect);
-                DrawSmartArtNodeText(context, sd.NodeTexts[ni], nodeRect);
+                DrawSmartArtNodeText(context, sd.NodeTexts[ni], nodeRect, sd.NodeTextColor);
                 bx += boxW;
 
                 // Arrow connector between process nodes.
@@ -13016,7 +13465,7 @@ public sealed class DocumentView : Control
                     var arrowMidY = boxY + nodeH / 2;
                     var arrowX1   = bx + 2;
                     var arrowX2   = arrowX1 + arrowW;
-                    var arrowPen  = new Pen(SmartArtNodeFills[ni % SmartArtNodeFills.Length], 1.5);
+                    var arrowPen  = new Pen(new SolidColorBrush(SmartArtFillAt(sd, ni)), 1.5);
                     context.DrawLine(arrowPen, new Point(arrowX1, arrowMidY), new Point(arrowX2, arrowMidY));
                     // Arrow head.
                     context.DrawLine(arrowPen, new Point(arrowX2, arrowMidY), new Point(arrowX2 - 4, arrowMidY - 3));
@@ -13027,10 +13476,10 @@ public sealed class DocumentView : Control
         }
     }
 
-    private void DrawSmartArtNodeText(DrawingContext context, string text, Rect nodeRect)
+    private void DrawSmartArtNodeText(DrawingContext context, string text, Rect nodeRect, Color textColor)
     {
         if (string.IsNullOrEmpty(text)) return;
-        var fmt = new RunFormatting { FontSizePt = 7.5, ColorHex = "#FFFFFF", Bold = true };
+        var fmt = new RunFormatting { FontSizePt = 7.5, ColorHex = $"#{textColor.R:X2}{textColor.G:X2}{textColor.B:X2}", Bold = true };
         var ft  = Build(text.Length > 12 ? text[..12] + "…" : text, fmt);
         var tx  = nodeRect.X + Math.Max(2, (nodeRect.Width  - ft.WidthIncludingTrailingWhitespace) / 2);
         var ty  = nodeRect.Y + Math.Max(0, (nodeRect.Height - ft.Height) / 2);

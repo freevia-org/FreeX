@@ -26,6 +26,14 @@ public enum PresentationSlideRangeKind
     CustomRange,
 }
 
+public enum PresentationVideoQualityKind
+{
+    UltraHd,
+    FullHd,
+    Hd,
+    Standard,
+}
+
 public sealed record PresentationExportFormatDescriptor(
     PresentationExportFormat Format,
     string CommandId,
@@ -103,6 +111,37 @@ public sealed record PresentationDeferredExportPlan(
     PresentationSlideRangePlan SlideRange,
     bool IsImplemented);
 
+public sealed record PresentationVideoQualityDescriptor(
+    PresentationVideoQualityKind Quality,
+    string DisplayName,
+    int WidthPx,
+    int HeightPx,
+    int PixelsPerSecondHint);
+
+public sealed record PresentationVideoExportRequest(
+    PresentationSlideRangeRequest? SlideRange = null,
+    PresentationVideoQualityKind Quality = PresentationVideoQualityKind.FullHd,
+    double SecondsPerSlide = 5,
+    bool UseRecordedTimings = true,
+    bool IncludeNarration = true);
+
+public sealed record PresentationVideoExportPlan(
+    PresentationExportFormat Format,
+    string CommandId,
+    string DisplayName,
+    string Description,
+    string DefaultExtensionWithDot,
+    PresentationSlideRangePlan SlideRange,
+    PresentationVideoQualityDescriptor Quality,
+    double SecondsPerSlide,
+    bool UseRecordedTimings,
+    bool IncludeNarration,
+    TimeSpan EstimatedDuration,
+    IReadOnlyList<PresentationVideoQualityDescriptor> QualityOptions,
+    bool IsImplemented,
+    bool CanExecute,
+    string? DisabledReason);
+
 public sealed record PresentationImageExportPlan(
     PresentationExportFormat Format,
     string CommandId,
@@ -138,6 +177,11 @@ public static class PresentationExportPlanner
     public const string PdfExportCommandText = "Export to PDF";
     public const string ImageExportPickerTitle = "Export Slides as Images";
     public const string ImageExportCommandText = "Export slides as images";
+    public const string VideoExportPickerTitle = "Export Video";
+    public const string VideoExportCommandText = "Export video";
+    public const string VideoExportDeferredMessage =
+        "MP4 video export planning is available, but encoder, narration, and media capture execution are deferred.";
+    public const double DefaultVideoSecondsPerSlide = 5;
     public const double DefaultPrintPageWidth = 612;
     public const double DefaultPrintPageHeight = 792;
     public const double DefaultHandoutMargin = 36;
@@ -172,7 +216,7 @@ public static class PresentationExportPlanner
             PresentationExportFormat.Video,
             VideoExportCommandId,
             "Video",
-            "MP4 video export with timings and narration is planned but not implemented.",
+            "MP4 video export with slide range, quality, timings, and narration intent.",
             VideoExportExtension,
             IsImplemented: false),
         new(
@@ -283,14 +327,52 @@ public static class PresentationExportPlanner
             descriptor.IsImplemented);
     }
 
-    public static PresentationDeferredExportPlan BuildVideoExportPlan(
+    public static PresentationVideoExportPlan BuildVideoExportPlan(
         PresentationSlideRangeRequest? range,
         int slideCount) =>
-        BuildDeferredExportPlan(
-            PresentationExportFormat.Video,
+        BuildVideoExportPlan(new PresentationVideoExportRequest(range), slideCount);
+
+    public static PresentationVideoExportPlan BuildVideoExportPlan(
+        PresentationVideoExportRequest? request,
+        int slideCount)
+    {
+        request ??= new PresentationVideoExportRequest();
+        var descriptor = BuildFormatDescriptors().Single(d => d.Format == PresentationExportFormat.Video);
+        var range = BuildSlideRangePlan(request.SlideRange, slideCount);
+        var qualityOptions = BuildVideoQualityDescriptors();
+        var quality = qualityOptions.SingleOrDefault(option => option.Quality == request.Quality)
+            ?? qualityOptions.Single(option => option.Quality == PresentationVideoQualityKind.FullHd);
+        var secondsPerSlide = NormalizeSecondsPerSlide(request.SecondsPerSlide);
+        var estimatedDuration = TimeSpan.FromSeconds(range.SlideNumbers.Count * secondsPerSlide);
+        var disabledReason = range.SlideNumbers.Count == 0
+            ? "Video export requires at least one slide."
+            : VideoExportDeferredMessage;
+
+        return new PresentationVideoExportPlan(
+            descriptor.Format,
+            descriptor.CommandId,
+            descriptor.DisplayName,
+            "Plans a PowerPoint-style MP4 export workflow with normalized slide range, output quality, recorded timings, narration intent, and duration estimate.",
+            descriptor.DefaultExtensionWithDot ?? VideoExportExtension,
             range,
-            slideCount,
-            "Planned MP4 export; timings, narration, and encoder integration are deferred.");
+            quality,
+            secondsPerSlide,
+            request.UseRecordedTimings,
+            request.IncludeNarration,
+            estimatedDuration,
+            qualityOptions,
+            descriptor.IsImplemented,
+            CanExecute: descriptor.IsImplemented && range.SlideNumbers.Count > 0,
+            disabledReason);
+    }
+
+    public static IReadOnlyList<PresentationVideoQualityDescriptor> BuildVideoQualityDescriptors() =>
+    [
+        new(PresentationVideoQualityKind.UltraHd, "Ultra HD (4K)", 3840, 2160, 60),
+        new(PresentationVideoQualityKind.FullHd, "Full HD (1080p)", 1920, 1080, 30),
+        new(PresentationVideoQualityKind.Hd, "HD (720p)", 1280, 720, 30),
+        new(PresentationVideoQualityKind.Standard, "Standard (480p)", 852, 480, 24),
+    ];
 
     public static PresentationSlideRangePlan BuildSlideRangePlan(
         PresentationSlideRangeRequest? request,
@@ -524,6 +606,14 @@ public static class PresentationExportPlanner
             return 16d / 9d;
 
         return slideWidth / slideHeight;
+    }
+
+    private static double NormalizeSecondsPerSlide(double secondsPerSlide)
+    {
+        if (double.IsNaN(secondsPerSlide) || double.IsInfinity(secondsPerSlide))
+            return DefaultVideoSecondsPerSlide;
+
+        return Math.Clamp(secondsPerSlide, 1, 60);
     }
 
     private static PresentationDeferredExportPlan BuildDeferredExportPlan(

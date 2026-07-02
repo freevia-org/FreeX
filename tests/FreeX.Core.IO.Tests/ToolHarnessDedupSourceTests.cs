@@ -61,4 +61,19 @@ public sealed class ToolHarnessDedupSourceTests
         chartExamples.Should().NotContain("private static BitmapSource ResizeTo");
         chartExamples.Should().NotContain("private static double ComputeMeanPixelDiff");
     }
+
+    [Fact]
+    public void ForegroundCapture_FollowsDesktopLauncherWindowHandoffs()
+    {
+        var foregroundCapture = TestWorkspaceFiles.ReadRepoText("tools", "FreeX.ForegroundCapture", "Program.cs");
+
+        foregroundCapture.Should().Contain("WindowFinder.WaitForMainWindow(process, exePath, options.LaunchTimeout)");
+        foregroundCapture.Should().Contain("WindowFinder.DescribeLaunchWindowCandidates(process.Id, exePath)");
+        foregroundCapture.Should().Contain("IsLaunchMainWindowCandidate(candidate, process.Id, expectedProcessName, expectedExePath)");
+        foregroundCapture.Should().Contain("IsSameExecutableProcess(candidate.ProcessId, expectedProcessName, expectedExePath)");
+        foregroundCapture.Should().Contain("windowProcessId = window.ProcessId;");
+        foregroundCapture.Should().Contain("ForegroundGuard.FocusAndVerify(handle, windowProcessId.Value, \"FreeX\", options.FocusTimeout)");
+        foregroundCapture.Should().Contain("WindowFinder.FindProcessPopup(windowProcessId.Value, window.Handle, options.PopupTimeout, 120, 80)");
+        foregroundCapture.Should().Contain("Visible window candidates:");
+    }
 }

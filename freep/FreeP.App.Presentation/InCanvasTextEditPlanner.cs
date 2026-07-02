@@ -15,9 +15,30 @@ public enum InCanvasTextEditOutcome
     Commit,
 }
 
+public enum InCanvasTextEditStartStatus
+{
+    Ready,
+    MissingPresentation,
+    MissingSlide,
+    ShapeNotFound,
+    MissingTextBody,
+}
+
 public readonly record struct InCanvasTextEditDecision(
     InCanvasTextEditOutcome Outcome,
     IPresentationCommand? Command);
+
+public sealed record InCanvasTextEditStartPlan(
+    InCanvasTextEditStartStatus Status,
+    uint ShapeId,
+    InCanvasTextEditKind Kind,
+    InCanvasEditorPlacement? Placement,
+    TextBody? OriginalBody,
+    string OriginalPlainText,
+    InCanvasTextEditPlanner? EditPlanner)
+{
+    public bool IsReady => Status == InCanvasTextEditStartStatus.Ready;
+}
 
 /// <summary>
 /// Shared in-canvas text-edit policy for WPF and Avalonia renderers.
@@ -52,6 +73,51 @@ public sealed class InCanvasTextEditPlanner
     public static InCanvasTextEditPlanner BeginRichText(int slideIndex, uint shapeId, TextBody? originalBody) =>
         new(slideIndex, shapeId, originalBody, InCanvasTextEditKind.RichText);
 
+    public static InCanvasTextEditStartPlan BeginShapeEdit(
+        int slideIndex,
+        Presentation? presentation,
+        Slide? slide,
+        uint shapeId,
+        SlideTransformCore transform,
+        double minimumWidth,
+        double minimumHeight,
+        InCanvasTextEditKind kind)
+    {
+        ArgumentNullException.ThrowIfNull(transform);
+        ArgumentOutOfRangeException.ThrowIfNegative(minimumWidth);
+        ArgumentOutOfRangeException.ThrowIfNegative(minimumHeight);
+
+        if (presentation is null)
+            return NotReady(InCanvasTextEditStartStatus.MissingPresentation, shapeId, kind);
+        if (slide is null)
+            return NotReady(InCanvasTextEditStartStatus.MissingSlide, shapeId, kind);
+
+        var shape = slide.Shapes.FirstOrDefault(s => s.Id == shapeId);
+        if (shape is null)
+            return NotReady(InCanvasTextEditStartStatus.ShapeNotFound, shapeId, kind);
+        if (shape.TextBody is null)
+            return NotReady(InCanvasTextEditStartStatus.MissingTextBody, shapeId, kind);
+
+        var screenRect = SlideCanvasGeometryPlanner.ShapeBoundsToScreen(shape, presentation, transform);
+        var placement = SlideCanvasGeometryPlanner.PlanEditorPlacement(
+            screenRect,
+            minimumWidth,
+            minimumHeight);
+        var planner = kind == InCanvasTextEditKind.RichText
+            ? BeginRichText(slideIndex, shapeId, shape.TextBody)
+            : BeginPlainText(slideIndex, shapeId, shape.TextBody);
+        var originalBody = TextBodyModelCloner.CloneTextBody(shape.TextBody);
+
+        return new InCanvasTextEditStartPlan(
+            InCanvasTextEditStartStatus.Ready,
+            shapeId,
+            kind,
+            placement,
+            originalBody,
+            ExtractPlainText(originalBody),
+            planner);
+    }
+
     public InCanvasTextEditDecision Cancel() =>
         new(InCanvasTextEditOutcome.Canceled, null);
 
@@ -82,6 +148,12 @@ public sealed class InCanvasTextEditPlanner
 
     private static string LabelForKind(InCanvasTextEditKind kind) =>
         kind == InCanvasTextEditKind.RichText ? "Edit Rich Text" : "Edit Text";
+
+    private static InCanvasTextEditStartPlan NotReady(
+        InCanvasTextEditStartStatus status,
+        uint shapeId,
+        InCanvasTextEditKind kind) =>
+        new(status, shapeId, kind, null, null, string.Empty, null);
 
     public static string ExtractPlainText(TextBody? body)
     {

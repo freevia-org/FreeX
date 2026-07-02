@@ -327,6 +327,22 @@ public sealed class EditingSession
         Bus.Execute(new ReorderShapeCommand(_currentSlideIndex, id, idx - 1));
     }
 
+    public bool MoveSelectedShapeInReadingOrder(int offset)
+    {
+        if (CurrentSlide is null || _selectedShapeIds.Count != 1) return false;
+        var step = Math.Sign(offset);
+        if (step == 0) return false;
+
+        var shapes = CurrentSlide.Shapes;
+        var id = _selectedShapeIds[0];
+        var idx = shapes.FindIndex(s => s.Id == id);
+        var targetIndex = idx + step;
+        if (idx < 0 || targetIndex < 0 || targetIndex >= shapes.Count) return false;
+
+        Bus.Execute(new ReorderShapeCommand(_currentSlideIndex, id, targetIndex));
+        return true;
+    }
+
     // ── Transition operations ─────────────────────────────────────────────────────
 
     /// <summary>
