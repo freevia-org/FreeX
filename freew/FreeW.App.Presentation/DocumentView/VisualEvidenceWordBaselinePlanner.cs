@@ -80,8 +80,10 @@ public static class FreeWWordBaselineEvidencePlanner
         if (string.Equals(scope, BaselineScopeAll, StringComparison.OrdinalIgnoreCase))
             return true;
 
+        var policy = FreeWVisualBaselineComparisonPlanner.ResolveWordBaselinePolicy(row);
+        var scenarioId = policy.BaselineScenarioId ?? row.ScenarioId;
         return GeneratedCorpusScenarioIds.Contains(
-            FreeWVisualEvidencePlanner.NormalizeScenarioId(row.ScenarioId),
+            FreeWVisualEvidencePlanner.NormalizeScenarioId(scenarioId),
             StringComparer.OrdinalIgnoreCase);
     }
 

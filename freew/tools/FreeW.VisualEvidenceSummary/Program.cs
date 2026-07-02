@@ -137,8 +137,21 @@ static IReadOnlyList<FreeWVisualBaselineComparison> BuildBaselineComparisons(
     var comparisons = new List<FreeWVisualBaselineComparison>();
     foreach (var row in summary.Evidence)
     {
+        var policy = FreeWVisualBaselineComparisonPlanner.ResolveWordBaselinePolicy(row);
         if (!FreeWWordBaselineEvidencePlanner.ShouldCompareToWordBaseline(row, baselineScope))
+        {
+            comparisons.Add(FreeWVisualBaselineComparisonPlanner.BuildSkippedBaselineComparison(
+                row,
+                tolerance,
+                $"scenario '{row.ScenarioId}' is outside Word baseline scope '{baselineScope}'"));
             continue;
+        }
+
+        if (!policy.IsComparable)
+        {
+            comparisons.Add(FreeWVisualBaselineComparisonPlanner.BuildSkippedBaselineComparison(row, tolerance));
+            continue;
+        }
 
         var candidatePaths = FreeWVisualBaselineComparisonPlanner.BuildBaselineCandidateRelativePaths(row);
         var match = FindBaselinePath(baselineRoot, candidatePaths);
