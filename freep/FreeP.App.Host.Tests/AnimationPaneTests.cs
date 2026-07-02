@@ -333,6 +333,9 @@ public sealed class AnimationPaneTests
 
         source.Should().Contain("AnimationPanePlanner.BuildTimelinePlan(");
         source.Should().Contain("var effectText = item.EffectText");
+        source.Should().Contain("item.EffectOptions.Options");
+        source.Should().Contain("AnimationPanePlanner.BuildEffectOptionMutationPlan(");
+        source.Should().Contain("AnimationPanePlanner.TryApplyEffectOptionMutation(");
         source.Should().Contain("AnimationPanePlanner.TriggerLabels");
         source.Should().Contain("Text              = item.DurationText");
         source.Should().Contain("Text              = item.DelayText");

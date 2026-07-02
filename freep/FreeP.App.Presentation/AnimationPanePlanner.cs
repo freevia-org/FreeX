@@ -15,6 +15,27 @@ public enum AnimationPaneTimingEditKind
     Delay,
 }
 
+public sealed record AnimationPaneEffectOptionDescriptor(
+    string Id,
+    string DisplayText,
+    AnimationDirection? Direction,
+    bool IsSelected);
+
+public sealed record AnimationPaneEffectOptionsPlan(
+    bool CanApply,
+    int AnimationIndex,
+    string EffectText,
+    string SelectedOptionText,
+    IReadOnlyList<AnimationPaneEffectOptionDescriptor> Options,
+    string? DisabledReason);
+
+public sealed record AnimationPaneEffectOptionMutationPlan(
+    bool ShouldApply,
+    int AnimationIndex,
+    AnimationDirection? Direction,
+    string DisplayText,
+    string? DisabledReason);
+
 public sealed record AnimationPaneTimingMutationPlan(
     bool ShouldApply,
     int AnimationIndex,
@@ -55,7 +76,8 @@ public sealed record AnimationPaneTimelineItemPlan(
     int EndMs,
     bool CanMoveEarlier,
     bool CanMoveLater,
-    bool IsSelected);
+    bool IsSelected,
+    AnimationPaneEffectOptionsPlan EffectOptions);
 
 public enum AnimationPanePlaybackIntentKind
 {
@@ -81,6 +103,9 @@ public static class AnimationPanePlanner
     public const string InvalidTriggerMessage = "Choose a valid animation trigger.";
     public const string InvalidDurationMessage = "Enter a duration greater than 0 seconds.";
     public const string InvalidDelayMessage = "Enter a delay of 0 seconds or greater.";
+    public const string MissingEffectOptionMessage = "Select an animation to edit effect options.";
+    public const string UnsupportedEffectOptionMessage = "This effect has no shared effect options yet.";
+    public const string InvalidEffectOptionMessage = "Choose a valid effect option.";
 
     private static readonly string[] TriggerLabelValues =
     [
@@ -137,6 +162,7 @@ public static class AnimationPanePlanner
             totalDurationMs = Math.Max(totalDurationMs, endMs);
 
             var triggerIndex = ToTriggerIndex(animation.Trigger);
+            var effectOptions = BuildEffectOptionsPlan(animations, i);
             items.Add(new AnimationPaneTimelineItemPlan(
                 i,
                 (i + 1).ToString(CultureInfo.InvariantCulture),
@@ -157,7 +183,8 @@ public static class AnimationPanePlanner
                 endMs,
                 i > 0,
                 i < animations.Count - 1,
-                i == selectedIndex));
+                i == selectedIndex,
+                effectOptions));
         }
 
         return new AnimationPaneTimelinePlan(
@@ -386,6 +413,98 @@ public static class AnimationPanePlanner
             TryParseDelay(text, out _) ? null : InvalidDelayMessage);
     }
 
+    public static AnimationPaneEffectOptionsPlan BuildEffectOptionsPlan(
+        IReadOnlyList<ShapeAnimation> animations,
+        int animationIndex)
+    {
+        if (!TryGetAnimation(animations, animationIndex, out var animation))
+        {
+            return DisabledEffectOptionsPlan(
+                animationIndex,
+                string.Empty,
+                MissingEffectOptionMessage);
+        }
+
+        var descriptors = BuildSupportedEffectOptions(animation).ToArray();
+        if (descriptors.Length == 0)
+        {
+            return DisabledEffectOptionsPlan(
+                animationIndex,
+                FormatEffect(animation),
+                UnsupportedEffectOptionMessage);
+        }
+
+        var selected = descriptors.FirstOrDefault(option => option.Direction == animation.Direction)
+            ?? descriptors[0];
+        var normalized = descriptors
+            .Select(option => option with { IsSelected = option.Direction == selected.Direction })
+            .ToArray();
+
+        return new AnimationPaneEffectOptionsPlan(
+            true,
+            animationIndex,
+            FormatEffect(animation),
+            selected.DisplayText,
+            normalized,
+            null);
+    }
+
+    public static AnimationPaneEffectOptionMutationPlan BuildEffectOptionMutationPlan(
+        IReadOnlyList<ShapeAnimation> animations,
+        int animationIndex,
+        string optionId)
+    {
+        var optionsPlan = BuildEffectOptionsPlan(animations, animationIndex);
+        if (!optionsPlan.CanApply)
+        {
+            return new AnimationPaneEffectOptionMutationPlan(
+                false,
+                animationIndex,
+                null,
+                string.Empty,
+                optionsPlan.DisabledReason);
+        }
+
+        var option = optionsPlan.Options.FirstOrDefault(candidate =>
+            StringComparer.Ordinal.Equals(candidate.Id, optionId));
+        if (option is null)
+        {
+            return new AnimationPaneEffectOptionMutationPlan(
+                false,
+                animationIndex,
+                optionsPlan.Options.First(option => option.IsSelected).Direction,
+                optionsPlan.SelectedOptionText,
+                InvalidEffectOptionMessage);
+        }
+
+        var animation = animations[animationIndex];
+        return new AnimationPaneEffectOptionMutationPlan(
+            animation.Direction != option.Direction,
+            animationIndex,
+            option.Direction,
+            option.DisplayText,
+            null);
+    }
+
+    public static bool TryApplyEffectOptionMutation(
+        EditingSession editor,
+        AnimationPaneEffectOptionMutationPlan plan)
+    {
+        ArgumentNullException.ThrowIfNull(editor);
+        ArgumentNullException.ThrowIfNull(plan);
+
+        if (!plan.ShouldApply
+            || !TryGetAnimation(editor.CurrentSlideAnimations, plan.AnimationIndex, out var current))
+        {
+            return false;
+        }
+
+        var updated = PresentationAnimationCommandPlanner.CloneAnimation(current);
+        updated.Direction = plan.Direction;
+        editor.SetAnimation(plan.AnimationIndex, updated);
+        return true;
+    }
+
     public static bool TryApplyTimingMutation(
         EditingSession editor,
         AnimationPaneTimingMutationPlan plan)
@@ -470,4 +589,53 @@ public static class AnimationPanePlanner
             0,
             FormatDuration(0, displayCulture),
             disabledReason);
+
+    private static AnimationPaneEffectOptionsPlan DisabledEffectOptionsPlan(
+        int animationIndex,
+        string effectText,
+        string disabledReason)
+        => new(
+            false,
+            animationIndex,
+            effectText,
+            string.Empty,
+            Array.Empty<AnimationPaneEffectOptionDescriptor>(),
+            disabledReason);
+
+    private static IEnumerable<AnimationPaneEffectOptionDescriptor> BuildSupportedEffectOptions(
+        ShapeAnimation animation)
+    {
+        if (animation.Kind == AnimationKind.Motion)
+        {
+            yield break;
+        }
+
+        switch (animation.Preset)
+        {
+            case AnimationPreset.FlyIn:
+            case AnimationPreset.Wipe:
+                yield return EffectOption("from-bottom", "From Bottom", AnimationDirection.FromBottom);
+                yield return EffectOption("from-left", "From Left", AnimationDirection.FromLeft);
+                yield return EffectOption("from-right", "From Right", AnimationDirection.FromRight);
+                yield return EffectOption("from-top", "From Top", AnimationDirection.FromTop);
+                break;
+
+            case AnimationPreset.Zoom:
+                yield return EffectOption("in", "In", AnimationDirection.In);
+                yield return EffectOption("out", "Out", AnimationDirection.Out);
+                break;
+
+            case AnimationPreset.Split:
+            case AnimationPreset.RandomBars:
+                yield return EffectOption("horizontal", "Horizontal", AnimationDirection.Horizontal);
+                yield return EffectOption("vertical", "Vertical", AnimationDirection.Vertical);
+                break;
+        }
+    }
+
+    private static AnimationPaneEffectOptionDescriptor EffectOption(
+        string id,
+        string displayText,
+        AnimationDirection direction)
+        => new(id, displayText, direction, false);
 }
