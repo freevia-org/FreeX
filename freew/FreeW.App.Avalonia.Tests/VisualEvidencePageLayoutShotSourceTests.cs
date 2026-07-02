@@ -36,7 +36,11 @@ public sealed class VisualEvidencePageLayoutShotSourceTests
         source.Should().Contain("VisualEvidenceOutputPath(outDir, \"f2-section-landscape\", 2)");
         source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildSectionGeometryDocument");
         source.Should().Contain("sectionGeometryRenderStatus");
-        source.Should().Contain("avalonia-global-page-surface-no-section-page-break");
+        source.Should().Contain("BuildSectionGeometrySurfacePlans");
+        source.Should().Contain("avalonia-section-page-surface");
+        source.Should().Contain("sectionSurfaceCaptureWidthDip");
+        source.Should().Contain("sectionSurfaceCaptureHeightDip");
+        source.Should().NotContain("avalonia-global-page-surface-no-section-page-break");
         source.Should().Contain("SectionGeometryRendererScenarioIds");
         source.Should().Contain("table-layout-complex");
         source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildComplexTableLayoutDocument");

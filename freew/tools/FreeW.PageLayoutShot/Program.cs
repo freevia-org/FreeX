@@ -524,9 +524,19 @@ static int RenderMode(
     bool hasEndnotes = false,
     bool isSyntheticPage = false)
 {
-    var doc = documentFactory?.Invoke() ?? BuildMultiPageDocument();
-    var sectionGeometryPage = ResolveSectionGeometryPage(scenarioId, doc, pageNumber, pageCount);
+    var sourceDocument = documentFactory?.Invoke() ?? BuildMultiPageDocument();
+    var sectionGeometrySurface = ResolveSectionGeometrySurfacePlan(scenarioId, sourceDocument, pageNumber, pageCount);
+    var sectionGeometryPage = sectionGeometrySurface?.PagePlan
+        ?? ResolveSectionGeometryPage(scenarioId, sourceDocument, pageNumber, pageCount);
+    var doc = sectionGeometrySurface?.Document ?? sourceDocument;
     var evidencePage = sectionGeometryPage?.Page ?? doc.Page;
+    if (sectionGeometrySurface is not null)
+    {
+        width = (int)Math.Max(1, Math.Ceiling(sectionGeometrySurface.CaptureWidthDip));
+        height = (int)Math.Max(1, Math.Ceiling(sectionGeometrySurface.CaptureHeightDip));
+        viewportOffsetY = 0;
+    }
+
     var view = new DocumentView();
     view.LoadDocument(doc);
     view.ViewMode = mode;
@@ -578,7 +588,9 @@ static int RenderMode(
             height,
             evidencePage,
             LayoutKindFor(mode),
-            captureSource: "avalonia-render-target",
+            captureSource: sectionGeometrySurface is null
+                ? "avalonia-render-target"
+                : "avalonia-section-page-surface",
             viewMode: mode.ToString(),
             pageNumber: pageNumber,
             pageCount: pageCount,
@@ -586,6 +598,7 @@ static int RenderMode(
             hasEndnotes: hasEndnotes,
             isSyntheticPage: isSyntheticPage,
             sectionGeometryPage: sectionGeometryPage,
+            sectionGeometrySurfacePlan: sectionGeometrySurface,
             document: doc);
         Console.WriteLine($"[PageLayoutShot] {label}: {bytes.Length:N0} bytes → {outPath}");
         return 0;
@@ -611,7 +624,9 @@ static int RenderMode(
             height,
             evidencePage,
             LayoutKindFor(mode),
-            captureSource: "skia-fallback-placeholder",
+            captureSource: sectionGeometrySurface is null
+                ? "skia-fallback-placeholder"
+                : "skia-fallback-section-page-surface",
             viewMode: mode.ToString(),
             pageNumber: pageNumber,
             pageCount: pageCount,
@@ -619,6 +634,7 @@ static int RenderMode(
             hasEndnotes: hasEndnotes,
             isSyntheticPage: isSyntheticPage,
             sectionGeometryPage: sectionGeometryPage,
+            sectionGeometrySurfacePlan: sectionGeometrySurface,
             document: doc);
         Console.WriteLine($"[PageLayoutShot] {label} (Skia fallback): {pngBytes.Length:N0} bytes → {outPath}");
         return 0;
@@ -663,6 +679,7 @@ static void AddAvaloniaEvidence(
     bool hasEndnotes = false,
     bool isSyntheticPage = false,
     FreeWVisualSectionGeometryPagePlan? sectionGeometryPage = null,
+    FreeWVisualSectionGeometrySurfacePlan? sectionGeometrySurfacePlan = null,
     TextDocument? document = null)
 {
     var stats = ComputePngPixelStats(pngBytes, pixelWidth, pixelHeight);
@@ -682,9 +699,30 @@ static void AddAvaloniaEvidence(
 
     if (sectionGeometryPage is not null)
     {
-        metadata["sectionGeometryEvidence"] = "shared-expectation";
-        metadata["sectionGeometryRenderStatus"] = "avalonia-global-page-surface-no-section-page-break";
+        metadata["sectionGeometryEvidence"] = sectionGeometrySurfacePlan is null
+            ? "shared-expectation"
+            : "shared-page-surface";
+        metadata["sectionGeometryRenderStatus"] = sectionGeometrySurfacePlan is null
+            ? "shared-expectation"
+            : "avalonia-" + sectionGeometrySurfacePlan.RenderStatus;
         metadata["expectedOrientation"] = sectionGeometryPage.Orientation;
+    }
+
+    if (sectionGeometrySurfacePlan is not null)
+    {
+        metadata["sectionSurfaceSourceBlocks"] = string.Join(",", sectionGeometrySurfacePlan.SourceBlockIndexes);
+        metadata["sectionSurfacePageWidthDip"] = PageLayout.PointsToDip(sectionGeometrySurfacePlan.Page.WidthPt)
+            .ToString(System.Globalization.CultureInfo.InvariantCulture);
+        metadata["sectionSurfacePageHeightDip"] = PageLayout.PointsToDip(sectionGeometrySurfacePlan.Page.HeightPt)
+            .ToString(System.Globalization.CultureInfo.InvariantCulture);
+        metadata["sectionSurfaceCaptureWidthDip"] = sectionGeometrySurfacePlan.CaptureWidthDip
+            .ToString(System.Globalization.CultureInfo.InvariantCulture);
+        metadata["sectionSurfaceCaptureHeightDip"] = sectionGeometrySurfacePlan.CaptureHeightDip
+            .ToString(System.Globalization.CultureInfo.InvariantCulture);
+        metadata["sectionSurfacePageLeftDip"] = sectionGeometrySurfacePlan.PageLeftDip
+            .ToString(System.Globalization.CultureInfo.InvariantCulture);
+        metadata["sectionSurfacePageTopDip"] = sectionGeometrySurfacePlan.PageTopDip
+            .ToString(System.Globalization.CultureInfo.InvariantCulture);
     }
 
     var row = FreeWVisualEvidencePlanner.BuildEvidenceRow(
@@ -727,6 +765,24 @@ static FreeWVisualSectionGeometryPagePlan? ResolveSectionGeometryPage(
 
     return FreeWVisualEvidencePlanner
         .BuildSectionGeometryPagePlans(document, pageCount)
+        .FirstOrDefault(page => page.PageNumber == pageNumber);
+}
+
+static FreeWVisualSectionGeometrySurfacePlan? ResolveSectionGeometrySurfacePlan(
+    string scenarioId,
+    TextDocument document,
+    int pageNumber,
+    int pageCount)
+{
+    if (!FreeWVisualEvidenceManifestNormalizer.SectionGeometryRendererScenarioIds.Contains(
+            scenarioId,
+            StringComparer.OrdinalIgnoreCase))
+    {
+        return null;
+    }
+
+    return FreeWVisualEvidencePlanner
+        .BuildSectionGeometrySurfacePlans(document, pageCount)
         .FirstOrDefault(page => page.PageNumber == pageNumber);
 }
 
