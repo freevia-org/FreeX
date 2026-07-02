@@ -85,6 +85,7 @@ internal static class PptxChartReader
             or "bar3DChart" or "line3DChart" or "pie3DChart" or "area3DChart" or "ofPieChart"
             or "stockChart" or "surfaceChart" or "surface3DChart");
         shape.DataLabels = ReadDataLabels(firstChartTypeEl?.Element(C + "dLbls"));
+        shape.DataTable = ReadDataTable(plotArea.Element(C + "dTable"));
 
         // Secondary value axis detection
         // Each plotType element has c:axId refs; if there's a second c:valAx, check which series use it.
@@ -767,6 +768,19 @@ internal static class PptxChartReader
                 "r"        => DataLabelPosition.Right,
                 _          => (DataLabelPosition?)null
             }
+        };
+    }
+
+    private static ChartDataTableSettings? ReadDataTable(XElement? dTableEl)
+    {
+        if (dTableEl is null) return null;
+
+        return new ChartDataTableSettings
+        {
+            ShowHorizontalBorder = ParseBoolAttr(dTableEl.Element(C + "showHorzBorder")),
+            ShowVerticalBorder   = ParseBoolAttr(dTableEl.Element(C + "showVertBorder")),
+            ShowOutlineBorder    = ParseBoolAttr(dTableEl.Element(C + "showOutline")),
+            ShowLegendKeys       = ParseBoolAttr(dTableEl.Element(C + "showKeys")),
         };
     }
 

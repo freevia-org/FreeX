@@ -41,7 +41,8 @@ public sealed class VisualEvidenceBaselinePolicyTests
         candidates.Should().BeEmpty();
         comparison.Status.Should().Be(FreeWVisualBaselineComparisonPlanner.SkippedStatus);
         comparison.Trust.Passed.Should().BeTrue();
-        comparison.BaselinePath.Should().Contain("no direct MS Word PNG baseline mapping");
+        comparison.BaselinePath.Should().BeEmpty();
+        comparison.SkipReason.Should().Contain("no direct MS Word PNG baseline mapping");
     }
 
     [Fact]
@@ -60,6 +61,30 @@ public sealed class VisualEvidenceBaselinePolicyTests
         candidates.Should().Contain([
             "chart-smartart-complex/chart-smartart-complex_p1.png",
             "chart-smartart-complex_p1.png"]);
+    }
+
+    [Fact]
+    public void WordBaselineUnavailableComparison_ReportsCandidatesAndReasonWithoutFailingTrust()
+    {
+        var row = BuildRow(
+            "f2-hf-basic",
+            FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+            "f2-hf-basic_p1.png");
+
+        var comparison = FreeWVisualBaselineComparisonPlanner.BuildWordBaselineUnavailableComparison(
+            row,
+            FreeWVisualBaselineComparisonTolerance.WordPngDefault,
+            "COM ProgID 'Word.Application' is not registered");
+
+        comparison.Status.Should().Be(FreeWVisualBaselineComparisonPlanner.WordBaselineUnavailableStatus);
+        comparison.Trust.Passed.Should().BeTrue();
+        comparison.BaselineScenarioId.Should().Be("f2-hf-basic");
+        comparison.BaselineId.Should().Be("f2-hf-basic/p1/f2-hf-basic_p1.png");
+        comparison.BaselinePath.Should().BeEmpty();
+        comparison.CandidateBaselinePaths.Should().Contain([
+            "f2-hf-basic/f2-hf-basic_p1.png",
+            "f2-hf-basic_p1.png"]);
+        comparison.SkipReason.Should().Contain("Word.Application");
     }
 
     private static FreeWVisualEvidenceNormalizedRow BuildRow(
