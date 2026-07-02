@@ -51,7 +51,7 @@ public static class PivotHeaderActionPlanner
             PivotHeaderMenuAction.MoreSortOptions => PivotHeaderActionPlan.Dialog(PivotHeaderDialogKind.MoreSortOptions),
             PivotHeaderMenuAction.ValueFieldSettings => PivotHeaderActionPlan.Dialog(PivotHeaderDialogKind.ValueFieldSettings),
             PivotHeaderMenuAction.FieldSettings =>
-                PivotHeaderActionPlan.Deferred("Field Settings dialog not yet implemented in the Avalonia shell."),
+                PivotHeaderActionPlan.Deferred("Field Settings dialog not yet implemented in this shell."),
             PivotHeaderMenuAction.ExpandField =>
                 PivotHeaderActionPlan.Deferred("No expand-entire-field command exists in FreeX.Core.Commands yet."),
             PivotHeaderMenuAction.CollapseField =>
