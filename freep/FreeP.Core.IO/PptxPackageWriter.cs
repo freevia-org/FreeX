@@ -293,7 +293,7 @@ public static class PptxPackageWriter
 
         // --- 1. [Content_Types].xml ---
         var packageSnapshot = presentation.PackageSnapshot;
-        var preservedChartWorkbookPaths = FindPreservedChartWorkbookPaths(packageSnapshot, CountChartShapes(presentation));
+        var preservedChartWorkbookPaths = FindPreservedChartWorkbookPaths(packageSnapshot, presentation);
         var ctXml = BuildContentTypesXml(
             presentation,
             masters,
@@ -679,6 +679,14 @@ public static class PptxPackageWriter
                 if (shape.Kind == SlideShapeKind.Chart && shape.Chart is not null)
                 {
                     overrides.Add(Override(CT, $"/ppt/charts/chart{chartGlobalIdx}.xml", ChartCT));
+                    if (shape.Chart.RegenerateWorkbookOnSave)
+                    {
+                        overrides.Add(Override(
+                            CT,
+                            "/" + PptxChartWriter.GetRegeneratedWorkbookPath(chartGlobalIdx),
+                            PptxChartWriter.ChartWorkbookCT));
+                    }
+
                     chartGlobalIdx++;
                 }
             }
@@ -4016,39 +4024,49 @@ public static class PptxPackageWriter
         return true;
     }
 
-    private static HashSet<string> FindPreservedChartWorkbookPaths(PptxPackageSnapshot? packageSnapshot, int chartCount)
+    private static HashSet<string> FindPreservedChartWorkbookPaths(
+        PptxPackageSnapshot? packageSnapshot,
+        Presentation presentation)
     {
         var paths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        if (packageSnapshot is null || chartCount == 0)
+        if (packageSnapshot is null)
             return paths;
 
-        for (var chartIndex = 1; chartIndex <= chartCount; chartIndex++)
+        var chartIndex = 1;
+        foreach (var slide in presentation.Slides)
         {
-            var chartPath = $"ppt/charts/chart{chartIndex}.xml";
-            var relsPath = GetRelationshipPartPath(chartPath);
-            if (!packageSnapshot.TryGetEntry(relsPath, out var relsBytes))
-                continue;
-
-            var relsXml = OpcXml.TryLoadXml(relsBytes);
-            if (relsXml is null)
-                continue;
-
-            foreach (var relationship in OpcRelationships.Load(relsXml))
+            foreach (var shape in AllShapes(slide.Shapes))
             {
-                if (TryResolveChartWorkbookPath(chartPath, relationship, out var workbookPath) &&
-                    packageSnapshot.TryGetEntry(workbookPath, out _))
+                if (shape.Kind != SlideShapeKind.Chart || shape.Chart is null)
+                    continue;
+
+                if (!shape.Chart.RegenerateWorkbookOnSave)
                 {
-                    paths.Add(ToZipEntryPath(workbookPath));
+                    var chartPath = $"ppt/charts/chart{chartIndex}.xml";
+                    var relsPath = GetRelationshipPartPath(chartPath);
+                    if (packageSnapshot.TryGetEntry(relsPath, out var relsBytes))
+                    {
+                        var relsXml = OpcXml.TryLoadXml(relsBytes);
+                        if (relsXml is not null)
+                        {
+                            foreach (var relationship in OpcRelationships.Load(relsXml))
+                            {
+                                if (TryResolveChartWorkbookPath(chartPath, relationship, out var workbookPath) &&
+                                    packageSnapshot.TryGetEntry(workbookPath, out _))
+                                {
+                                    paths.Add(ToZipEntryPath(workbookPath));
+                                }
+                            }
+                        }
+                    }
                 }
+
+                chartIndex++;
             }
         }
 
         return paths;
     }
-
-    private static int CountChartShapes(Presentation presentation) =>
-        presentation.Slides.Sum(slide =>
-            AllShapes(slide.Shapes).Count(shape => shape.Kind == SlideShapeKind.Chart && shape.Chart is not null));
 
     internal static bool TryResolveChartWorkbookPath(
         string chartPath,

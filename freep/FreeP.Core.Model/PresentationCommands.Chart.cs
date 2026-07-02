@@ -16,6 +16,9 @@ file static class ChartHelper
         var shape = p.Slides[slideIndex].Shapes.FirstOrDefault(s => s.Id == shapeId);
         return shape?.Chart;
     }
+
+    internal static void MarkWorkbookDirty(ChartShape chart) =>
+        chart.RegenerateWorkbookOnSave = true;
 }
 
 // ── Cell value ────────────────────────────────────────────────────────────────
@@ -56,6 +59,7 @@ public sealed class SetChartCellValueCommand : IPresentationCommand
         if (_categoryIndex < 0 || _categoryIndex >= values.Count) return;
         _oldValue = values[_categoryIndex] ?? 0.0;
         values[_categoryIndex] = _newValue;
+        ChartHelper.MarkWorkbookDirty(chart);
     }
 
     public void Revert(Presentation p)
@@ -66,6 +70,7 @@ public sealed class SetChartCellValueCommand : IPresentationCommand
         var values = chart.Series[_seriesIndex].Values;
         if (_categoryIndex < 0 || _categoryIndex >= values.Count) return;
         values[_categoryIndex] = _oldValue;
+        ChartHelper.MarkWorkbookDirty(chart);
     }
 }
 
@@ -102,6 +107,7 @@ public sealed class SetChartCategoryLabelCommand : IPresentationCommand
         if (_categoryIndex < 0 || _categoryIndex >= chart.Categories.Count) return;
         _oldLabel                       = chart.Categories[_categoryIndex];
         chart.Categories[_categoryIndex] = _newLabel;
+        ChartHelper.MarkWorkbookDirty(chart);
     }
 
     public void Revert(Presentation p)
@@ -110,6 +116,7 @@ public sealed class SetChartCategoryLabelCommand : IPresentationCommand
         if (chart is null) return;
         if (_categoryIndex < 0 || _categoryIndex >= chart.Categories.Count) return;
         chart.Categories[_categoryIndex] = _oldLabel;
+        ChartHelper.MarkWorkbookDirty(chart);
     }
 }
 
@@ -146,6 +153,7 @@ public sealed class SetChartSeriesNameCommand : IPresentationCommand
         if (_seriesIndex < 0 || _seriesIndex >= chart.Series.Count) return;
         _oldName                      = chart.Series[_seriesIndex].Name;
         chart.Series[_seriesIndex].Name = _newName;
+        ChartHelper.MarkWorkbookDirty(chart);
     }
 
     public void Revert(Presentation p)
@@ -154,6 +162,7 @@ public sealed class SetChartSeriesNameCommand : IPresentationCommand
         if (chart is null) return;
         if (_seriesIndex < 0 || _seriesIndex >= chart.Series.Count) return;
         chart.Series[_seriesIndex].Name = _oldName;
+        ChartHelper.MarkWorkbookDirty(chart);
     }
 }
 
@@ -190,6 +199,7 @@ public sealed class AddChartSeriesCommand : IPresentationCommand
             _added.Values.Add(0.0);
 
         chart.Series.Add(_added);
+        ChartHelper.MarkWorkbookDirty(chart);
     }
 
     public void Revert(Presentation p)
@@ -197,6 +207,7 @@ public sealed class AddChartSeriesCommand : IPresentationCommand
         var chart = ChartHelper.Find(p, _slideIndex, _shapeId);
         if (chart is null || _added is null) return;
         chart.Series.Remove(_added);
+        ChartHelper.MarkWorkbookDirty(chart);
     }
 }
 
@@ -227,6 +238,7 @@ public sealed class RemoveChartSeriesCommand : IPresentationCommand
         if (_seriesIndex < 0 || _seriesIndex >= chart.Series.Count) return;
         _captured = chart.Series[_seriesIndex];
         chart.Series.RemoveAt(_seriesIndex);
+        ChartHelper.MarkWorkbookDirty(chart);
     }
 
     public void Revert(Presentation p)
@@ -235,6 +247,7 @@ public sealed class RemoveChartSeriesCommand : IPresentationCommand
         if (chart is null || _captured is null) return;
         var idx = Math.Clamp(_seriesIndex, 0, chart.Series.Count);
         chart.Series.Insert(idx, _captured);
+        ChartHelper.MarkWorkbookDirty(chart);
     }
 }
 
@@ -267,6 +280,7 @@ public sealed class AddChartCategoryCommand : IPresentationCommand
         chart.Categories.Add(_label);
         foreach (var series in chart.Series)
             series.Values.Add(0.0);
+        ChartHelper.MarkWorkbookDirty(chart);
     }
 
     public void Revert(Presentation p)
@@ -278,6 +292,7 @@ public sealed class AddChartCategoryCommand : IPresentationCommand
         foreach (var series in chart.Series)
             if (series.Values.Count > 0)
                 series.Values.RemoveAt(series.Values.Count - 1);
+        ChartHelper.MarkWorkbookDirty(chart);
     }
 }
 
@@ -317,6 +332,7 @@ public sealed class RemoveChartCategoryCommand : IPresentationCommand
         foreach (var series in chart.Series)
             if (_categoryIndex < series.Values.Count)
                 series.Values.RemoveAt(_categoryIndex);
+        ChartHelper.MarkWorkbookDirty(chart);
     }
 
     public void Revert(Presentation p)
@@ -333,6 +349,7 @@ public sealed class RemoveChartCategoryCommand : IPresentationCommand
             var vi = Math.Clamp(idx, 0, chart.Series[si].Values.Count);
             chart.Series[si].Values.Insert(vi, v);
         }
+        ChartHelper.MarkWorkbookDirty(chart);
     }
 }
 
@@ -362,6 +379,7 @@ public sealed class ReplaceChartDataCommand : IPresentationCommand
     private List<string>        _oldSeriesNames = new();
     private List<List<double?>> _oldValues      = new();
     private List<ChartSeries>   _oldSeries      = new();  // W8: snapshot for FillColor / PointColors
+    private bool                _oldRegenerateWorkbookOnSave;
 
     /// <summary>
     /// Nullable-aware constructor — gaps (null entries) in <paramref name="values"/> are
@@ -412,9 +430,11 @@ public sealed class ReplaceChartDataCommand : IPresentationCommand
             .Select(s => s.Values.ToList())   // ToList() of List<double?> — nulls preserved
             .ToList();
         _oldSeries      = chart.Series.ToList();  // snapshot series references
+        _oldRegenerateWorkbookOnSave = chart.RegenerateWorkbookOnSave;
 
         // Apply new state.
         ApplyForward(chart, _newCategories, _newSeriesNames, _newValues);
+        ChartHelper.MarkWorkbookDirty(chart);
     }
 
     public void Revert(Presentation p)
@@ -426,6 +446,7 @@ public sealed class ReplaceChartDataCommand : IPresentationCommand
         // W6: Restore values with their original nullable shape (gaps stay null).
         // Also restore original Names — ApplyForward mutates Name in place.
         RestoreOriginal(chart, _oldCategories, _oldSeries, _oldSeriesNames, _oldValues);
+        chart.RegenerateWorkbookOnSave = _oldRegenerateWorkbookOnSave;
     }
 
     // ── Forward apply: produce the new data, keeping existing series when possible ─
