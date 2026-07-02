@@ -174,6 +174,7 @@ public sealed class MainWindow : Window
     internal PresentationAltTextPanePlan? LastAltTextPanePlan { get; private set; }
     internal PresentationReadingOrderPlan? LastReadingOrderPlan { get; private set; }
     internal PresentationProofingRequestPlan? LastProofingRequestPlan { get; private set; }
+    internal PresentationProofingExecutionPlan? LastProofingExecutionPlan { get; private set; }
     internal AnimationPaneTimelinePlan? LastAnimationPaneTimelinePlan { get; private set; }
     internal PresentationDesignCommandPlan? LastLayoutRequestPlan { get; private set; }
     internal PresentationHandoutLayoutPlan? LastHandoutLayoutPlan { get; private set; }
@@ -2789,6 +2790,8 @@ public sealed class MainWindow : Window
 
     private void RefreshProofingRequestPlan()
     {
+        LastProofingExecutionPlan =
+            PresentationReviewWorkflowPlanner.BuildProofingExecutionPlan(_presentation);
         LastProofingRequestPlan =
             PresentationReviewWorkflowPlanner.BuildProofingRequestPlan(_presentation);
     }
