@@ -17,9 +17,6 @@ public static class SheetTabContextMenuPlanner
     {
         state ??= SheetTabContextMenuState.Default;
 
-        // The current menu only varies "View Code" (always disabled today); everything else mirrors the
-        // hand-authored XAML which carried no per-tab enablement bindings. The state record is threaded so
-        // future enablement (e.g. CanUnhide) has a single home without reshaping callers.
         if (state == SheetTabContextMenuState.Default)
             return Commands;
 
@@ -33,7 +30,7 @@ public static class SheetTabContextMenuPlanner
 
         return Freeze([
             new("MainWindow_Header_InsertSheet", SheetTabContextMenuAction.InsertSheet, KeyTip: "I", CommandName: "Insert Sheet"),
-            new("MainWindow_Header_DeleteSheet", SheetTabContextMenuAction.DeleteSheet, KeyTip: "E", CommandName: "Delete Sheet"),
+            new("MainWindow_Header_DeleteSheet", SheetTabContextMenuAction.DeleteSheet, KeyTip: "E", CommandName: "Delete Sheet", IsEnabled: state.CanDeleteSheet),
             new("MainWindow_Header_Rename", SheetTabContextMenuAction.Rename, KeyTip: "R", CommandName: "Rename"),
             new("MainWindow_Header_MoveOrCopy", SheetTabContextMenuAction.MoveOrCopy, KeyTip: "M", CommandName: "Move or Copy"),
             SheetTabContextMenuCommand.Separator,
@@ -41,11 +38,11 @@ public static class SheetTabContextMenuPlanner
             new("MainWindow_Header_ProtectSheet", SheetTabContextMenuAction.ProtectSheet, KeyTip: "P", CommandName: "Protect Sheet"),
             new("MainWindow_Header_TabColor", SheetTabContextMenuAction.TabColor, KeyTip: "T", CommandName: "Tab Color"),
             SheetTabContextMenuCommand.Separator,
-            new("MainWindow_Header_Hide", SheetTabContextMenuAction.Hide, KeyTip: "H", CommandName: "Hide"),
-            new("MainWindow_Header_Unhide", SheetTabContextMenuAction.Unhide, KeyTip: "U", CommandName: "Unhide"),
+            new("MainWindow_Header_Hide", SheetTabContextMenuAction.Hide, KeyTip: "H", CommandName: "Hide", IsEnabled: state.CanHideSheet),
+            new("MainWindow_Header_Unhide", SheetTabContextMenuAction.Unhide, KeyTip: "U", CommandName: "Unhide", IsEnabled: state.CanUnhideSheet),
             SheetTabContextMenuCommand.Separator,
-            new("MainWindow_Header_SelectAllSheets", SheetTabContextMenuAction.SelectAllSheets, KeyTip: "A", CommandName: "Select All Sheets"),
-            new("MainWindow_Header_UngroupSheets", SheetTabContextMenuAction.UngroupSheets, KeyTip: "G", CommandName: "Ungroup Sheets")
+            new("MainWindow_Header_SelectAllSheets", SheetTabContextMenuAction.SelectAllSheets, KeyTip: "A", CommandName: "Select All Sheets", IsEnabled: state.CanSelectAllSheets),
+            new("MainWindow_Header_UngroupSheets", SheetTabContextMenuAction.UngroupSheets, KeyTip: "G", CommandName: "Ungroup Sheets", IsEnabled: state.CanUngroupSheets)
         ]);
     }
 
@@ -69,7 +66,12 @@ public sealed record SheetTabContextMenuCommand(
     public string CommandName { get; init; } = CommandName ?? "";
 }
 
-public sealed record SheetTabContextMenuState
+public sealed record SheetTabContextMenuState(
+    bool CanDeleteSheet = true,
+    bool CanHideSheet = true,
+    bool CanUnhideSheet = true,
+    bool CanSelectAllSheets = true,
+    bool CanUngroupSheets = true)
 {
     public static SheetTabContextMenuState Default { get; } = new();
 }

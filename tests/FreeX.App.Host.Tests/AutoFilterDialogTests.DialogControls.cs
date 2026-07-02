@@ -198,6 +198,22 @@ public sealed partial class AutoFilterDialogTests
     }
 
     [Fact]
+    public void DialogControls_ConsumeSharedMenuPlanRowsWithoutOwningPopupPolicy()
+    {
+        var source = ReadAutoFilterDialogSources();
+
+        source.Should().Contain("public AutoFilterDialog(AutoFilterMenuPlan menuPlan)");
+        source.Should().Contain("FindClearFilterEntry(menuPlan)");
+        source.Should().Contain("SetSortLabels(menuPlan)");
+        source.Should().Contain("ShowFilterFamilyButton(menuPlan.FilterKind)");
+        source.Should().Contain("GetCriteriaSuggestions(menuPlan)");
+        source.Should().Contain("GetCriteriaOptions(menuPlan.FilterKind)");
+        source.Should().Contain("ConfigureFilterFamilySubmenu(menuPlan)");
+        source.Should().Contain("PopulateColorChoices(colorOptions)");
+        source.Should().NotContain("AutoFilterMenuEntryPresentation.ForKind");
+    }
+
+    [Fact]
     public void DialogControls_MenuPlanChecklistStateSeedsDialogSelections()
     {
         StaTestRunner.Run(() =>

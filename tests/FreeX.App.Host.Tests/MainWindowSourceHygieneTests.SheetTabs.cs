@@ -644,6 +644,63 @@ public sealed partial class MainWindowSourceHygieneTests
         foregroundSource.Should().Contain("catch (Exception ex) when (ex is InvalidOperationException or ElementNotAvailableException or TimeoutException or COMException)");
         foregroundSource.Should().Contain("\"uia-rangevalue-set-failed\"");
         foregroundSource.Should().Contain("Last UIA candidate was");
+        foregroundSource.Should().Contain("\"excel-status-footer-reference\" => RunExcelStatusFooterReferenceScenario()");
+        foregroundSource.Should().Contain("TryValidateExcelStatusFooterStatisticsViaContextMenu");
+        foregroundSource.Should().Contain("\"Average 5\"");
+        foregroundSource.Should().Contain("\"Sum 20\"");
+        foregroundSource.Should().Contain("status-footer-validation-unavailable");
+    }
+
+    [Fact]
+    public void SheetTabForegroundHarness_HasCoordinateFallbackForHiddenTabUiaNames()
+    {
+        var foregroundSource = WorkspaceFileLocator.ReadAllText("tools", "FreeX.ForegroundCapture", "Program.cs");
+
+        foregroundSource.Should().Contain("\"freex-sheet-tab-context-menu\" => RunFreeXMainWindowPointerScenario(\"freex-sheet-tab-context-menu\", RightClickSheetTabContextMenu())");
+        foregroundSource.Should().Contain("TryOpenExcelSheetTabContextMenu");
+        foregroundSource.Should().Contain("GetSheetTabStripFallbackPoints");
+        foregroundSource.Should().Contain("Captured Microsoft Excel's sheet-tab context menu through guarded tab-strip coordinate fallback");
+        foregroundSource.Should().Contain("Opened the FreeX sheet-tab context menu through guarded tab-strip coordinate fallback");
+        foregroundSource.Should().Contain("TryShowExcelCellCommandBar");
+        foregroundSource.Should().Contain("Cell command-bar context menu fallback");
+        foregroundSource.Should().Contain("TryInvokeAutomationElement(addButton)");
+        foregroundSource.Should().Contain("Visible tabs:");
+        foregroundSource.Should().Contain("FindForegroundWindow(");
+        foregroundSource.Should().Contain("ProcessHasVisibleMenuItems(processId, \"Rename\", \"Move or Copy\", \"Select All Sheets\")");
+        foregroundSource.Should().Contain("Visible menu items after final attempt:");
+        foregroundSource.Should().Contain("GetSheetTabIdentity(element)");
+        foregroundSource.Should().Contain("element.Current.AutomationId");
+        foregroundSource.Should().Contain("OpenFreeXSheetTabContextMenuNearAddButton");
+        foregroundSource.Should().Contain("immediately left of the Insert Sheet button");
+        foregroundSource.Should().Contain("Opened the FreeX sheet-tab context menu by cycling focus with F6 and pressing Shift+F10");
+        foregroundSource.Should().Contain("FindActivateSheetListDialogWindow");
+        foregroundSource.Should().Contain("IsActivateSheetListDialogWindow");
+        foregroundSource.Should().Contain("WindowContainsSheetActivationList(window)");
+        foregroundSource.Should().Contain("TryOpenExcelActivateSheetListDialogFromWorkbookTabsCommandBar");
+        foregroundSource.Should().Contain("TryShowExcelWorkbookTabsCommandBar");
+        foregroundSource.Should().Contain("\"Workbook Tabs\"");
+        foregroundSource.Should().Contain("\"More Sheets\"");
+        foregroundSource.Should().Contain("The harness intentionally rejects the built-in xlDialogActivate workbook/window dialog");
+    }
+
+    [Fact]
+    public void UxParityScenarioBatch_ExposesExpandedCoreSuite()
+    {
+        var batchSource = WorkspaceFileLocator.ReadAllText("tools", "Run-UxParityScenarioBatch.ps1");
+
+        batchSource.Should().Contain("[ValidateSet(\"smoke\", \"core\", \"dialogs\", \"status\", \"all\")]");
+        batchSource.Should().Contain("\"core\" { return $pairs | Where-Object { $_[\"id\"] -in @(\"format-cells-dialog\", \"format-cells-context-dialog\", \"sheet-tab-context-menu\", \"sheet-tab-overflow-activate-dialog\") } }");
+        batchSource.Should().Contain("id = \"status-footer-reference\"");
+        batchSource.Should().Contain("excelScenario = \"excel-status-footer-reference\"");
+        batchSource.Should().Contain("freexScenario = \"freex-status-live-stats-accessibility\"");
+        batchSource.Should().Contain("\"status\" { return $pairs | Where-Object { $_[\"area\"] -eq \"Status bar\" } }");
+        batchSource.Should().Contain("[switch]$MinimizeForeignForeground");
+        batchSource.Should().Contain("Clear-ForeignForegroundWindow $Scenario");
+        batchSource.Should().Contain("$title.IndexOf(\"Media Player\", [StringComparison]::OrdinalIgnoreCase) -ge 0");
+        batchSource.Should().Contain("function Write-ScenarioContactSheet");
+        batchSource.Should().Contain("$batchContactSheetPath = Join-Path $runDirectory \"ux-scenario-contact-sheet.png\"");
+        batchSource.Should().Contain("contactSheetPath = $batchContactSheetPath");
+        batchSource.Should().Contain("UX parity scenario contact sheet");
     }
 
     [Fact]

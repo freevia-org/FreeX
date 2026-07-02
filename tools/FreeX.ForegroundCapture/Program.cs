@@ -125,7 +125,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             "freex-status-zoom-text-dialog-click" => RunFreeXMainWindowPointerScenario("freex-status-zoom-text-dialog-click", ClickZoomTextExpectDialog()),
             "freex-status-ctrl-alt-zoom-keys" => RunFreeXMainWindowPointerScenario("freex-status-ctrl-alt-zoom-keys", CtrlAltZoomKeysExpectRoundTrip()),
             "freex-status-live-stats-accessibility" => RunFreeXMainWindowPointerScenario("freex-status-live-stats-accessibility", StatusLiveStatsAccessibility(), CreateStatusStatsOptionsOverride),
-            "freex-sheet-tab-context-menu" => RunFreeXMainWindowPointerScenario("freex-sheet-tab-context-menu", RightClickNamedElement("Sheet1", ControlType.TabItem)),
+            "freex-sheet-tab-context-menu" => RunFreeXMainWindowPointerScenario("freex-sheet-tab-context-menu", RightClickSheetTabContextMenu()),
             "freex-sheet-tab-click-select" => RunFreeXMainWindowPointerScenario("freex-sheet-tab-click-select", SheetTabClickSelect()),
             "freex-sheet-tab-double-click-rename" => RunFreeXMainWindowPointerScenario("freex-sheet-tab-double-click-rename", SheetTabDoubleClickRename()),
             "freex-sheet-tab-ctrl-click-grouping" => RunFreeXMainWindowPointerScenario("freex-sheet-tab-ctrl-click-grouping", SheetTabModifierGrouping(NativeMethods.VK_CONTROL, "Ctrl+click", "Sheet3")),
@@ -507,10 +507,21 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             RightClickExcelRangeCenter(excel, worksheet, "B2");
             Thread.Sleep(options.AfterInputDelay);
 
+            var usedCommandBarMenuFallback = false;
             var popup = WindowFinder.FindProcessPopup(pid.Value, hwnd.ToInt64(), TimeSpan.FromMilliseconds(1200), 120, 120);
             if (popup is null)
             {
-                return CaptureResult.Blocked(scenario, "context-menu-not-found", "Did not detect foreground Excel worksheet context menu before invoking Format Cells.", options.OutputRoot, "excel", guard);
+                usedCommandBarMenuFallback = TryShowExcelCellCommandBar(excel);
+                if (usedCommandBarMenuFallback)
+                {
+                    Thread.Sleep(options.AfterInputDelay);
+                    popup = WindowFinder.FindProcessPopup(pid.Value, hwnd.ToInt64(), options.PopupTimeout, 120, 120);
+                }
+            }
+
+            if (popup is null)
+            {
+                return CaptureResult.Blocked(scenario, "context-menu-not-found", "Did not detect foreground Excel worksheet context menu before invoking Format Cells after physical right-click and Cell command-bar fallback attempts.", options.OutputRoot, "excel", guard);
             }
 
             var invokedContextFormatCells = TryInvokeProcessMenuItem(pid.Value, "Format Cells");
@@ -543,7 +554,8 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             }
 
             Thread.Sleep(options.AfterDialogDetectedDelay);
-            var route = usedBuiltInDialogFallback ? "Excel built-in xlDialogFormatNumber fallback after the context-menu route was visible" : usedCommandBarFallback ? "Excel built-in FormatCellsDialog command after the context-menu route was visible" : invokedContextFormatCells ? "UI Automation invocation" : "context-menu keyboard mnemonic";
+            var menuRoute = usedCommandBarMenuFallback ? "Cell command-bar context menu fallback" : "physical right-click context menu";
+            var route = usedBuiltInDialogFallback ? $"Excel built-in xlDialogFormatNumber fallback after the {menuRoute} was visible" : usedCommandBarFallback ? $"Excel built-in FormatCellsDialog command after the {menuRoute} was visible" : invokedContextFormatCells ? $"UI Automation invocation from the {menuRoute}" : $"keyboard mnemonic from the {menuRoute}";
             return CaptureWindow(scenario, "excel", dialog, guard, "complete", $"Opened Format Cells through the Excel worksheet context menu via {route}.");
         }
         finally
@@ -894,24 +906,13 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                 return BlockedWithGuard(scenario, guard, "before-sheet-tab-context-menu");
             }
 
-            var tab = FindVisibleSheetTabElement(hwnd, "Sheet1");
-            if (tab is null)
-            {
-                return CaptureResult.Blocked(scenario, "uia-target-not-found", "Could not find the visible Excel Sheet1 sheet tab.", options.OutputRoot, "excel", guard);
-            }
-
-            if (!TryRightClickAutomationElement(tab))
-            {
-                return CaptureResult.Blocked(scenario, "uia-target-bounds-invalid", "Excel Sheet1 tab bounds were not usable for a physical right-click.", options.OutputRoot, "excel", guard);
-            }
-
-            var popup = WindowFinder.FindProcessPopup(pid.Value, hwnd.ToInt64(), options.PopupTimeout, 120, 120);
+            var popup = TryOpenExcelSheetTabContextMenu(pid.Value, hwnd, guard, out var openNote);
             if (popup is null)
             {
-                return CaptureResult.Blocked(scenario, "popup-not-found", "Did not detect Excel sheet-tab context menu after a guarded physical right-click on Sheet1.", options.OutputRoot, "excel", guard);
+                return CaptureResult.Blocked(scenario, "popup-not-found", "Did not detect Excel sheet-tab context menu after UIA and coordinate fallback right-click attempts.", options.OutputRoot, "excel", guard);
             }
 
-            return CaptureWindow(scenario, "excel", popup, guard, "complete", "Captured Microsoft Excel's sheet-tab context menu after a physical right-click on Sheet1.");
+            return CaptureWindow(scenario, "excel", popup, guard, "complete", openNote);
         }
         finally
         {
@@ -949,7 +950,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                     continue;
                 }
 
-                dialog = FindActivateDialogWindow(pid.Value, hwnd.ToInt64(), options.PopupTimeout);
+                dialog = FindActivateSheetListDialogWindow(pid.Value, hwnd.ToInt64(), options.PopupTimeout);
                 if (dialog is not null)
                 {
                     break;
@@ -958,20 +959,18 @@ internal sealed class ScenarioRunner(CaptureOptions options)
 
             if (dialog is null)
             {
-                dialog = TryOpenExcelActivateDialogFromSheetNavCoordinates(pid.Value, hwnd, options.PopupTimeout);
+                dialog = TryOpenExcelActivateSheetListDialogFromSheetNavCoordinates(pid.Value, hwnd, options.PopupTimeout);
             }
 
-            var usedBuiltInDialogFallback = false;
-            if (dialog is null && TryShowExcelBuiltInDialogAsync(excel, XlDialogActivate))
+            var usedWorkbookTabsCommandBarFallback = false;
+            if (dialog is null)
             {
-                usedBuiltInDialogFallback = true;
-                Thread.Sleep(options.AfterInputDelay);
-                dialog = FindActivateDialogWindow(pid.Value, hwnd.ToInt64(), options.PopupTimeout);
+                usedWorkbookTabsCommandBarFallback = TryOpenExcelActivateSheetListDialogFromWorkbookTabsCommandBar(excel, pid.Value, hwnd, options.PopupTimeout, out dialog);
             }
 
             if (dialog is null)
             {
-                return CaptureResult.Blocked(scenario, "dialog-not-found", "Did not detect Excel's Activate dialog after right-clicking UIA sheet-tab navigation candidates, coordinate fallbacks beside the sheet tabs, or the built-in xlDialogActivate dialog.", options.OutputRoot, "excel", guard);
+                return CaptureResult.Blocked(scenario, "dialog-not-found", "Did not detect Excel's sheet-list Activate dialog after right-clicking UIA sheet-tab navigation candidates, coordinate fallbacks beside the sheet tabs, or the Workbook Tabs command-bar More Sheets route. The harness intentionally rejects the built-in xlDialogActivate workbook/window dialog because it lists workbooks such as Book1 instead of worksheets.", options.OutputRoot, "excel", guard);
             }
 
             var dialogHandle = new IntPtr(dialog.Handle);
@@ -981,9 +980,9 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                 return CaptureResult.Blocked(scenario, "foreground-guard-failed", "Excel Activate dialog was detected but could not be foreground-verified.", options.OutputRoot, "excel", dialogGuard);
             }
 
-            var validation = usedBuiltInDialogFallback
-                ? "Captured Microsoft Excel's built-in Activate dialog through xlDialogActivate after this Office UIA tree did not expose a visible sheet-tab navigation right-click target."
-                : "Captured Microsoft Excel's Activate dialog after a physical right-click on the sheet-tab navigation button.";
+            var validation = usedWorkbookTabsCommandBarFallback
+                ? "Captured Microsoft Excel's sheet-list Activate dialog through the Workbook Tabs command-bar More Sheets route after physical sheet-nav attempts did not expose it."
+                : "Captured Microsoft Excel's sheet-list Activate dialog after a physical right-click on the sheet-tab navigation button.";
             return CaptureWindow(scenario, "excel", dialog, dialogGuard, "complete", validation);
         }
         finally
@@ -991,6 +990,59 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             CloseExcel(excel, workbook);
             KillProcess(pid);
         }
+    }
+
+    private WindowInfo? TryOpenExcelSheetTabContextMenu(
+        int processId,
+        IntPtr hwnd,
+        ForegroundGuardResult initialGuard,
+        out string note)
+    {
+        note = string.Empty;
+
+        var tab = FindVisibleSheetTabElement(hwnd, "Sheet1") ?? GetVisibleSheetTabElements(hwnd)
+            .OrderBy(element => element.Current.BoundingRectangle.Left)
+            .FirstOrDefault();
+        if (tab is not null && TryRightClickAutomationElement(tab))
+        {
+            var popup = WindowFinder.FindProcessPopup(processId, hwnd.ToInt64(), options.PopupTimeout, 120, 120);
+            if (popup is not null)
+            {
+                note = "Captured Microsoft Excel's sheet-tab context menu after a physical right-click on a UIA-discovered sheet tab.";
+                return popup;
+            }
+        }
+
+        var window = WindowFinder.GetWindowInfo(hwnd);
+        if (window is null)
+        {
+            note = "Excel main-window bounds were unavailable for sheet-tab coordinate fallback.";
+            return null;
+        }
+
+        var fallbackNotes = new List<string>();
+        foreach (var point in GetSheetTabStripFallbackPoints(window.Bounds))
+        {
+            fallbackNotes.Add($"{point.Note}@{point.X},{point.Y}");
+            var guard = ForegroundGuard.FocusAndVerify(hwnd, processId, "Excel", options.FocusTimeout);
+            if (!guard.Success)
+            {
+                note = $"Excel foreground guard failed before sheet-tab fallback right-click; initial guard success={initialGuard.Success}.";
+                return null;
+            }
+
+            RightClickScreenPoint(point.X, point.Y);
+            Thread.Sleep(options.AfterInputDelay);
+            var popup = WindowFinder.FindProcessPopup(processId, hwnd.ToInt64(), options.PopupTimeout, 120, 120);
+            if (popup is not null)
+            {
+                note = $"Captured Microsoft Excel's sheet-tab context menu through guarded tab-strip coordinate fallback ({point.Note}).";
+                return popup;
+            }
+        }
+
+        note = $"Excel sheet-tab context menu did not open through UIA or coordinate fallbacks: {string.Join("; ", fallbackNotes)}.";
+        return null;
     }
 
     private CaptureResult RunExcelStatusFooterReferenceScenario()
@@ -1013,6 +1065,26 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                 return BlockedWithGuard(scenario, guard, "before-capture");
             }
 
+            var resizeBlocked = ResizeForStableForegroundCapture(hwnd, pid.Value, "after-excel-status-window-resize", "Excel");
+            if (resizeBlocked is not null)
+            {
+                return resizeBlocked;
+            }
+
+            guard = ForegroundGuard.FocusAndVerify(hwnd, pid.Value, "Excel", options.FocusTimeout);
+            if (!guard.Success)
+            {
+                return BlockedWithGuard(scenario, guard, "after-window-resize");
+            }
+
+            if (!TryValidateExcelStatusFooterStatisticsViaContextMenu(pid.Value, hwnd, out var statusReadback))
+            {
+                return CaptureResult.Blocked(scenario, "status-footer-validation-unavailable", $"Could not validate Excel status/footer statistic text through the native status-bar context menu before capture. Last visible text readback: '{statusReadback}'.", options.OutputRoot, "excel", guard);
+            }
+
+            SendKeys.SendWait("{ESC}");
+            Thread.Sleep(options.AfterInputDelay);
+
             var window = WindowFinder.GetWindowInfo(hwnd);
             if (window is null)
             {
@@ -1025,7 +1097,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                 window,
                 guard,
                 "complete",
-                "Excel status/footer reference: workbook values in A1:A4 are selected with DisplayStatusBar enabled so the native footer/status bar can be paired with FreeX S6 captures.");
+                $"Excel status/footer reference: workbook values in A1:A4 are selected with DisplayStatusBar enabled and visible footer statistics validated ({statusReadback}) so the native footer/status bar can be paired with FreeX S6 captures.");
         }
         finally
         {
@@ -2852,7 +2924,8 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                 return BlockedWithGuard(scenario, guard, "before-pointer-input");
             }
 
-            var blocked = action(handle, process.Id, window, guard);
+            var actionWindow = WindowFinder.GetWindowInfo(handle) ?? guard.ForegroundWindow ?? window;
+            var blocked = action(handle, process.Id, actionWindow, guard);
             if (blocked is not null)
             {
                 return blocked;
@@ -3279,6 +3352,9 @@ internal sealed class ScenarioRunner(CaptureOptions options)
         };
 
     private CaptureResult? ResizeForStatusStatisticReadback(IntPtr handle, int processId, ForegroundGuardResult guard)
+        => ResizeForStableForegroundCapture(handle, processId, "after-status-stat-window-resize");
+
+    private CaptureResult? ResizeForStableForegroundCapture(IntPtr handle, int processId, string failureStage, string titleContains = "FreeX")
     {
         var workingArea = Screen.PrimaryScreen?.WorkingArea ?? new Rectangle(0, 0, 1600, 900);
         var width = Math.Min(1600, Math.Max(1200, workingArea.Width));
@@ -3289,10 +3365,10 @@ internal sealed class ScenarioRunner(CaptureOptions options)
         NativeMethods.SetWindowPos(handle, NativeMethods.HWND_NOTOPMOST, x, y, width, height, NativeMethods.SWP_SHOWWINDOW);
         Thread.Sleep(options.AfterInputDelay);
 
-        guard = ForegroundGuard.FocusAndVerify(handle, processId, "FreeX", options.FocusTimeout);
+        var guard = ForegroundGuard.FocusAndVerify(handle, processId, titleContains, options.FocusTimeout);
         return guard.Success
             ? null
-            : BlockedWithGuard(options.Scenario, guard, "after-status-stat-window-resize");
+            : BlockedWithGuard(options.Scenario, guard, failureStage);
     }
 
     private Func<IntPtr, int, WindowInfo, ForegroundGuardResult, CaptureResult?> RightClickNamedElement(string name, ControlType controlType)
@@ -3313,6 +3389,178 @@ internal sealed class ScenarioRunner(CaptureOptions options)
 
             return GuardedClickElement(options.Scenario, processId, handle, element, MouseButtonKind.Right);
         };
+
+    private Func<IntPtr, int, WindowInfo, ForegroundGuardResult, CaptureResult?> RightClickSheetTabContextMenu()
+        => (handle, processId, window, guard) =>
+        {
+            var resizeBlocked = ResizeForStableForegroundCapture(handle, processId, "after-sheet-tab-context-window-resize");
+            if (resizeBlocked is not null)
+            {
+                return resizeBlocked;
+            }
+
+            window = WindowFinder.GetWindowInfo(handle) ?? window;
+            var tab = FindVisibleSheetTabElement(handle, "Sheet1") ?? GetVisibleSheetTabElements(handle)
+                .OrderBy(element => element.Current.BoundingRectangle.Left)
+                .FirstOrDefault();
+            if (tab is not null)
+            {
+                var blocked = GuardedClickElement(options.Scenario, processId, handle, tab, MouseButtonKind.Right);
+                if (blocked is not null)
+                {
+                    return blocked;
+                }
+
+                if (WindowFinder.FindProcessPopup(processId, handle.ToInt64(), options.PopupTimeout, 120, 80) is not null &&
+                    ProcessHasVisibleMenuItems(processId, "Rename", "Move or Copy", "Select All Sheets"))
+                {
+                    _lastResultValidation = "Opened the FreeX sheet-tab context menu by physically right-clicking the UIA-discovered sheet tab.";
+                    return null;
+                }
+
+                SendKeys.SendWait("{ESC}");
+                Thread.Sleep(options.AfterInputDelay);
+
+                blocked = GuardedOpenContextMenuFromFocusedElement(options.Scenario, processId, handle, tab);
+                if (blocked is not null)
+                {
+                    return blocked;
+                }
+
+                if (WindowFinder.FindProcessPopup(processId, handle.ToInt64(), options.PopupTimeout, 120, 80) is not null &&
+                    ProcessHasVisibleMenuItems(processId, "Rename", "Move or Copy", "Select All Sheets"))
+                {
+                    _lastResultValidation = "Opened the FreeX sheet-tab context menu by focusing the UIA-discovered sheet tab and pressing Shift+F10.";
+                    return null;
+                }
+
+                SendKeys.SendWait("{ESC}");
+                Thread.Sleep(options.AfterInputDelay);
+            }
+
+            var addButtonBlocked = OpenFreeXSheetTabContextMenuNearAddButton(processId, handle, out var openedNearAddButton);
+            if (addButtonBlocked is not null)
+            {
+                return addButtonBlocked;
+            }
+
+            if (openedNearAddButton)
+            {
+                _lastResultValidation = "Opened the FreeX sheet-tab context menu by physically right-clicking the Sheet1 tab area immediately left of the Insert Sheet button.";
+                return null;
+            }
+
+            var keyboardBlocked = OpenFreeXSheetTabContextMenuByKeyboardCycle(processId, handle, out var openedByKeyboardCycle);
+            if (keyboardBlocked is not null)
+            {
+                return keyboardBlocked;
+            }
+
+            if (openedByKeyboardCycle)
+            {
+                _lastResultValidation = "Opened the FreeX sheet-tab context menu by cycling focus with F6 and pressing Shift+F10 on the focused sheet tab.";
+                return null;
+            }
+
+            var fallbackNotes = new List<string>();
+            foreach (var point in GetSheetTabStripFallbackPoints(window.Bounds))
+            {
+                fallbackNotes.Add($"{point.Note}@{point.X},{point.Y}");
+                var blocked = GuardedClickPoint(options.Scenario, processId, handle, point.X, point.Y, MouseButtonKind.Right);
+                if (blocked is not null)
+                {
+                    return blocked;
+                }
+
+                if (WindowFinder.FindProcessPopup(processId, handle.ToInt64(), options.PopupTimeout, 120, 80) is not null &&
+                    ProcessHasVisibleMenuItems(processId, "Rename", "Move or Copy", "Select All Sheets"))
+                {
+                    _lastResultValidation = $"Opened the FreeX sheet-tab context menu through guarded tab-strip coordinate fallback ({point.Note}).";
+                    return null;
+                }
+
+                SendKeys.SendWait("{ESC}");
+                Thread.Sleep(options.AfterInputDelay);
+            }
+
+            var visibleMenuItems = DescribeVisibleProcessMenuItems(processId);
+            return CaptureResult.Blocked(
+                options.Scenario,
+                "sheet-tab-context-menu-not-found",
+                $"Could not open the FreeX sheet-tab context menu through UIA tab lookup or coordinate fallbacks: {string.Join("; ", fallbackNotes)}. Visible menu items after final attempt: {visibleMenuItems}.",
+                options.OutputRoot,
+                "freex",
+                guard);
+        };
+
+    private CaptureResult? OpenFreeXSheetTabContextMenuNearAddButton(int processId, IntPtr handle, out bool opened)
+    {
+        opened = false;
+        var addButton = FindSheetAddButton(handle);
+        if (addButton is null)
+        {
+            return null;
+        }
+
+        var bounds = addButton.Current.BoundingRectangle;
+        if (bounds.IsEmpty || bounds.Width < 1 || bounds.Height < 1)
+        {
+            return null;
+        }
+
+        foreach (var xOffset in new[] { 12, 28, 44, 60 })
+        {
+            var x = (int)Math.Max(bounds.Left - xOffset, bounds.Left - 96);
+            var y = (int)(bounds.Top + bounds.Height / 2.0);
+            var blocked = GuardedClickPoint(options.Scenario, processId, handle, x, y, MouseButtonKind.Right);
+            if (blocked is not null)
+            {
+                return blocked;
+            }
+
+            if (WindowFinder.FindProcessPopup(processId, handle.ToInt64(), options.PopupTimeout, 120, 80) is not null &&
+                ProcessHasVisibleMenuItems(processId, "Rename", "Move or Copy", "Select All Sheets"))
+            {
+                opened = true;
+                return null;
+            }
+
+            SendKeys.SendWait("{ESC}");
+            Thread.Sleep(options.AfterInputDelay);
+        }
+
+        return null;
+    }
+
+    private CaptureResult? OpenFreeXSheetTabContextMenuByKeyboardCycle(int processId, IntPtr handle, out bool opened)
+    {
+        opened = false;
+        var guard = ForegroundGuard.FocusAndVerify(handle, processId, "FreeX", options.FocusTimeout);
+        if (!guard.Success)
+        {
+            return BlockedWithGuard(options.Scenario, guard, "before-sheet-tab-keyboard-cycle");
+        }
+
+        for (var attempt = 0; attempt < 8; attempt++)
+        {
+            SendKeys.SendWait("{F6}");
+            Thread.Sleep(120);
+            SendKeys.SendWait("+{F10}");
+            Thread.Sleep(options.AfterInputDelay);
+
+            if (WindowFinder.FindProcessPopup(processId, handle.ToInt64(), options.PopupTimeout, 120, 80) is not null &&
+                ProcessHasVisibleMenuItems(processId, "Rename", "Move or Copy", "Select All Sheets"))
+            {
+                opened = true;
+                return null;
+            }
+
+            SendKeys.SendWait("{ESC}");
+            Thread.Sleep(120);
+        }
+
+        return null;
+    }
 
     private Func<IntPtr, int, WindowInfo, ForegroundGuardResult, CaptureResult?> DragCellRangeSelectValidated(
         string startCell,
@@ -3887,14 +4135,20 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                 return blocked;
             }
 
-            _lastResultValidation = "Created Sheet2-Sheet18 through physical Insert Sheet button clicks, then physically clicked the visible Scroll Tabs Right overflow navigation button.";
+            _lastResultValidation = "Created Sheet2-Sheet40 through physical Insert Sheet button clicks, then physically clicked the visible Scroll Tabs Right overflow navigation button.";
             return null;
         };
 
     private Func<IntPtr, int, WindowInfo, ForegroundGuardResult, CaptureResult?> SheetTabOverflowActivateDialog()
         => (handle, processId, _, _) =>
         {
-            var blocked = SeedSheetsWithAddButton(handle, processId, 18);
+            var resizeBlocked = ResizeForStableForegroundCapture(handle, processId, "after-sheet-tab-overflow-window-resize");
+            if (resizeBlocked is not null)
+            {
+                return resizeBlocked;
+            }
+
+            var blocked = SeedSheetsWithAddButton(handle, processId, 40);
             if (blocked is not null)
             {
                 return blocked;
@@ -3949,7 +4203,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                 dialog,
                 guard,
                 "complete",
-                "Created Sheet2-Sheet18 through physical Insert Sheet button clicks, then physically right-clicked the sheet-tab overflow navigation button and captured the foreground Activate Sheet dialog.");
+                "Created Sheet2-Sheet40 through physical Insert Sheet button clicks, then physically right-clicked the sheet-tab overflow navigation button and captured the foreground Activate Sheet dialog.");
         };
 
     private Func<IntPtr, int, WindowInfo, ForegroundGuardResult, CaptureResult?> DragRelative(double startX, double startY, double endX, double endY)
@@ -4250,10 +4504,17 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                 return CaptureResult.Blocked(options.Scenario, "uia-target-not-found", $"Could not find the Insert Sheet button before creating {sheetName}.", options.OutputRoot, "freex");
             }
 
-            var blocked = GuardedClickElement(options.Scenario, processId, handle, addButton, MouseButtonKind.Left);
-            if (blocked is not null)
+            if (!TryInvokeAutomationElement(addButton))
             {
-                return blocked;
+                var blocked = GuardedClickElement(options.Scenario, processId, handle, addButton, MouseButtonKind.Left);
+                if (blocked is not null)
+                {
+                    return blocked;
+                }
+            }
+            else
+            {
+                Thread.Sleep(options.AfterInputDelay);
             }
 
             var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(2);
@@ -4269,11 +4530,39 @@ internal sealed class ScenarioRunner(CaptureOptions options)
 
             if (FindVisibleSheetTabElement(handle, sheetName) is null)
             {
-                return CaptureResult.Blocked(options.Scenario, "sheet-seed-validation-failed", $"Insert Sheet click did not expose expected tab {sheetName}.", options.OutputRoot, "freex");
+                var visibleTabs = string.Join(", ", GetVisibleSheetTabOrder(handle));
+                return CaptureResult.Blocked(options.Scenario, "sheet-seed-validation-failed", $"Insert Sheet activation did not expose expected tab {sheetName}. Visible tabs: {visibleTabs}.", options.OutputRoot, "freex");
             }
         }
 
         return null;
+    }
+
+    private static bool TryInvokeAutomationElement(AutomationElement element)
+    {
+        try
+        {
+            if (element.TryGetCurrentPattern(InvokePattern.Pattern, out var invokePatternObject) &&
+                invokePatternObject is InvokePattern invoke)
+            {
+                invoke.Invoke();
+                return true;
+            }
+        }
+        catch (COMException)
+        {
+            return false;
+        }
+        catch (ElementNotAvailableException)
+        {
+            return false;
+        }
+        catch (InvalidOperationException)
+        {
+            return false;
+        }
+
+        return false;
     }
 
     private static AutomationElement? FindNamedVisibleElement(IntPtr handle, string name, ControlType? controlType = null)
@@ -4308,7 +4597,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
 
     private static AutomationElement? FindVisibleSheetTabElement(IntPtr handle, string name)
         => GetVisibleSheetTabElements(handle)
-            .Where(element => element.Current.Name.Equals(name, StringComparison.Ordinal))
+            .Where(element => GetSheetTabIdentity(element).Equals(name, StringComparison.Ordinal))
             .OrderByDescending(element => element.Current.BoundingRectangle.Width * element.Current.BoundingRectangle.Height)
             .ThenByDescending(element => element.Current.BoundingRectangle.Top)
             .FirstOrDefault();
@@ -4420,12 +4709,38 @@ internal sealed class ScenarioRunner(CaptureOptions options)
     }
 
     private static WindowInfo? FindActivateDialogWindow(int processId, long ownerHandle, TimeSpan timeout)
-        => WindowFinder.FindProcessWindowIncludingChildren(
+    {
+        var dialog = WindowFinder.FindProcessWindowIncludingChildren(
             processId,
             window => IsActivateDialogWindow(window, ownerHandle),
             timeout);
+        if (dialog is not null)
+        {
+            return dialog;
+        }
 
-    private static WindowInfo? TryOpenExcelActivateDialogFromSheetNavCoordinates(int processId, IntPtr excelWindowHandle, TimeSpan timeout)
+        return WindowFinder.FindForegroundWindow(
+            window => window.ProcessId == processId && IsActivateDialogWindow(window, ownerHandle),
+            TimeSpan.FromMilliseconds(Math.Max(1200, timeout.TotalMilliseconds / 2.0)));
+    }
+
+    private static WindowInfo? FindActivateSheetListDialogWindow(int processId, long ownerHandle, TimeSpan timeout)
+    {
+        var dialog = WindowFinder.FindProcessWindowIncludingChildren(
+            processId,
+            window => IsActivateSheetListDialogWindow(window, ownerHandle),
+            timeout);
+        if (dialog is not null)
+        {
+            return dialog;
+        }
+
+        return WindowFinder.FindForegroundWindow(
+            window => window.ProcessId == processId && IsActivateSheetListDialogWindow(window, ownerHandle),
+            TimeSpan.FromMilliseconds(Math.Max(1200, timeout.TotalMilliseconds / 2.0)));
+    }
+
+    private static WindowInfo? TryOpenExcelActivateSheetListDialogFromSheetNavCoordinates(int processId, IntPtr excelWindowHandle, TimeSpan timeout)
     {
         var tabBounds = GetVisibleSheetTabElements(excelWindowHandle)
             .Select(element => element.Current.BoundingRectangle)
@@ -4441,7 +4756,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
         foreach (var offset in new[] { 18, 36, 54, 72 })
         {
             RightClickScreenPoint((int)(firstTabLeft - offset), (int)centerY);
-            var dialog = FindActivateDialogWindow(processId, excelWindowHandle.ToInt64(), timeout);
+            var dialog = FindActivateSheetListDialogWindow(processId, excelWindowHandle.ToInt64(), timeout);
             if (dialog is not null)
             {
                 return dialog;
@@ -4449,6 +4764,32 @@ internal sealed class ScenarioRunner(CaptureOptions options)
         }
 
         return null;
+    }
+
+    private static bool TryOpenExcelActivateSheetListDialogFromWorkbookTabsCommandBar(
+        dynamic excel,
+        int processId,
+        IntPtr excelWindowHandle,
+        TimeSpan timeout,
+        out WindowInfo? dialog)
+    {
+        dialog = null;
+        if (!TryShowExcelWorkbookTabsCommandBar(excel))
+        {
+            return false;
+        }
+
+        Thread.Sleep(250);
+        if (!TryInvokeProcessMenuItem(processId, "More Sheets") &&
+            !TryInvokeProcessMenuItem(processId, "More...") &&
+            !TryInvokeProcessMenuItem(processId, "More"))
+        {
+            return false;
+        }
+
+        Thread.Sleep(250);
+        dialog = FindActivateSheetListDialogWindow(processId, excelWindowHandle.ToInt64(), timeout);
+        return dialog is not null;
     }
 
     private static bool IsActivateDialogWindow(WindowInfo window, long ownerHandle)
@@ -4466,6 +4807,19 @@ internal sealed class ScenarioRunner(CaptureOptions options)
         }
 
         return WindowContainsSheetActivationList(window);
+    }
+
+    private static bool IsActivateSheetListDialogWindow(WindowInfo window, long ownerHandle)
+    {
+        if (window.Handle == ownerHandle ||
+            window.Bounds.Width < 120 ||
+            window.Bounds.Height < 90)
+        {
+            return false;
+        }
+
+        return window.Title.Contains("Activate", StringComparison.OrdinalIgnoreCase) &&
+            WindowContainsSheetActivationList(window);
     }
 
     private static bool WindowContainsSheetActivationList(WindowInfo window)
@@ -4500,10 +4854,10 @@ internal sealed class ScenarioRunner(CaptureOptions options)
     private static List<string> GetVisibleSheetTabOrder(IntPtr handle)
     {
         return GetVisibleSheetTabElements(handle)
-            .GroupBy(element => element.Current.Name)
+            .GroupBy(GetSheetTabIdentity)
             .Select(group => group.OrderBy(element => element.Current.BoundingRectangle.Width * element.Current.BoundingRectangle.Height).Last())
             .OrderBy(element => element.Current.BoundingRectangle.Left)
-            .Select(element => element.Current.Name)
+            .Select(GetSheetTabIdentity)
             .ToList();
     }
 
@@ -4513,14 +4867,61 @@ internal sealed class ScenarioRunner(CaptureOptions options)
         return root.FindAll(TreeScope.Descendants, Condition.TrueCondition)
             .Cast<AutomationElement>()
             .Where(IsVisibleElement)
-            .Where(element => IsDefaultSheetName(element.Current.Name))
+            .Where(element => IsDefaultSheetName(GetSheetTabIdentity(element)))
             .ToList();
+    }
+
+    private static string GetSheetTabIdentity(AutomationElement element)
+    {
+        try
+        {
+            var name = element.Current.Name ?? string.Empty;
+            if (IsDefaultSheetName(name))
+            {
+                return name;
+            }
+
+            var automationId = element.Current.AutomationId ?? string.Empty;
+            if (IsDefaultSheetName(automationId))
+            {
+                return automationId;
+            }
+
+            return name;
+        }
+        catch (COMException)
+        {
+            return string.Empty;
+        }
+        catch (ElementNotAvailableException)
+        {
+            return string.Empty;
+        }
     }
 
     private static bool IsDefaultSheetName(string name)
         => name.StartsWith("Sheet", StringComparison.Ordinal) &&
            name.Length > "Sheet".Length &&
            name["Sheet".Length..].All(char.IsDigit);
+
+    private static IReadOnlyList<(int X, int Y, string Note)> GetSheetTabStripFallbackPoints(Rectangle windowBounds)
+    {
+        var xOffsets = new[] { 120, 165, 215, 275 };
+        var yOffsets = new[] { 58, 72, 44 };
+        var points = new List<(int X, int Y, string Note)>();
+
+        foreach (var yOffset in yOffsets)
+        {
+            foreach (var xOffset in xOffsets)
+            {
+                var x = windowBounds.Left + Math.Min(Math.Max(xOffset, 24), Math.Max(24, windowBounds.Width - 24));
+                var y = windowBounds.Bottom - Math.Min(Math.Max(yOffset, 24), Math.Max(24, windowBounds.Height - 24));
+                points.Add((x, y, $"left+{xOffset}/bottom-{yOffset}"));
+            }
+        }
+
+        return points;
+    }
 
     private static bool IsVisibleElement(AutomationElement element)
     {
@@ -4935,6 +5336,81 @@ internal sealed class ScenarioRunner(CaptureOptions options)
 
     }
 
+    private static bool TryFindProcessText(int processId, IReadOnlyCollection<string> expectedTexts, out string readback)
+    {
+        readback = string.Empty;
+        try
+        {
+            var names = AutomationElement.RootElement
+                .FindAll(TreeScope.Descendants, Condition.TrueCondition)
+                .Cast<AutomationElement>()
+                .Where(element =>
+                {
+                    try
+                    {
+                        return element.Current.ProcessId == processId && !IsOffscreen(element);
+                    }
+                    catch (COMException)
+                    {
+                        return false;
+                    }
+                    catch (ElementNotAvailableException)
+                    {
+                        return false;
+                    }
+                })
+                .SelectMany(ReadAutomationTextCandidatesSafely)
+                .Where(name => !string.IsNullOrWhiteSpace(name))
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+
+            readback = string.Join("; ", names.Where(name => name.Contains(":", StringComparison.Ordinal)).Take(20));
+            return expectedTexts.All(expected => names.Any(name => name.Contains(expected, StringComparison.OrdinalIgnoreCase)));
+        }
+        catch (COMException)
+        {
+            return false;
+        }
+        catch (ElementNotAvailableException)
+        {
+            return false;
+        }
+    }
+
+    private static bool TryValidateExcelStatusFooterStatisticsViaContextMenu(int processId, IntPtr excelWindowHandle, out string readback)
+    {
+        readback = string.Empty;
+        var window = WindowFinder.GetWindowInfo(excelWindowHandle);
+        if (window is null)
+        {
+            return false;
+        }
+
+        RightClickScreenPoint(window.Bounds.Left + window.Bounds.Width / 2, window.Bounds.Bottom - 12);
+        Thread.Sleep(350);
+        return TryFindProcessText(processId, ["Average 5", "Count 4", "Sum 20"], out readback);
+    }
+
+    private static IEnumerable<string> ReadAutomationTextCandidatesSafely(AutomationElement element)
+    {
+        try
+        {
+            return ReadAutomationTextCandidates(element).ToList();
+        }
+        catch (COMException)
+        {
+            return [];
+        }
+        catch (ElementNotAvailableException)
+        {
+            return [];
+        }
+        catch (InvalidOperationException)
+        {
+            return [];
+        }
+    }
+
     private static string GetElementName(AutomationElement element)
     {
         try
@@ -5294,6 +5770,61 @@ internal sealed class ScenarioRunner(CaptureOptions options)
         return false;
     }
 
+    private static bool ProcessHasVisibleMenuItems(int processId, params string[] expectedNames)
+    {
+        var visibleNames = GetVisibleProcessMenuItemNames(processId)
+            .Select(NormalizeMenuSearchText)
+            .ToList();
+
+        return expectedNames.All(expected =>
+        {
+            var normalizedExpected = NormalizeMenuSearchText(expected);
+            return visibleNames.Any(name => name.Contains(normalizedExpected, StringComparison.OrdinalIgnoreCase));
+        });
+    }
+
+    private static string DescribeVisibleProcessMenuItems(int processId)
+    {
+        var names = GetVisibleProcessMenuItemNames(processId)
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Take(12)
+            .ToArray();
+        return names.Length == 0 ? "<none>" : string.Join(", ", names);
+    }
+
+    private static IReadOnlyList<string> GetVisibleProcessMenuItemNames(int processId)
+    {
+        try
+        {
+            return AutomationElement.RootElement
+                .FindAll(TreeScope.Descendants, new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.MenuItem))
+                .Cast<AutomationElement>()
+                .Where(element => ElementBelongsToProcess(element, processId))
+                .Where(element => !IsOffscreen(element))
+                .Where(element => GetElementArea(element) > 0)
+                .Select(element =>
+                {
+                    try
+                    {
+                        return element.Current.Name ?? string.Empty;
+                    }
+                    catch (ElementNotAvailableException)
+                    {
+                        return string.Empty;
+                    }
+                    catch (COMException)
+                    {
+                        return string.Empty;
+                    }
+                })
+                .ToList();
+        }
+        catch (COMException)
+        {
+            return [];
+        }
+    }
+
     private static double GetElementArea(AutomationElement element)
     {
         try
@@ -5315,7 +5846,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
     {
         try
         {
-            if (element.Current.ProcessId != processId)
+            if (!ElementBelongsToProcess(element, processId))
             {
                 return false;
             }
@@ -5325,6 +5856,22 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             var automationId = NormalizeMenuSearchText(element.Current.AutomationId);
             return name.Contains(expected, StringComparison.OrdinalIgnoreCase) ||
                    automationId.Contains(expected, StringComparison.OrdinalIgnoreCase);
+        }
+        catch (ElementNotAvailableException)
+        {
+            return false;
+        }
+        catch (COMException)
+        {
+            return false;
+        }
+    }
+
+    private static bool ElementBelongsToProcess(AutomationElement element, int processId)
+    {
+        try
+        {
+            return element.Current.ProcessId == processId;
         }
         catch (ElementNotAvailableException)
         {
@@ -5545,6 +6092,66 @@ internal sealed class ScenarioRunner(CaptureOptions options)
         {
             return false;
         }
+    }
+
+    private static bool TryShowExcelCellCommandBar(dynamic excel)
+    {
+        try
+        {
+            dynamic cellCommandBar = excel.CommandBars["Cell"];
+            cellCommandBar.ShowPopup();
+            return true;
+        }
+        catch (RuntimeBinderException)
+        {
+            return false;
+        }
+        catch (COMException)
+        {
+            return false;
+        }
+    }
+
+    private static bool TryShowExcelWorkbookTabsCommandBar(dynamic excel)
+    {
+        foreach (var commandBarName in new[] { "Workbook Tabs", "Ply" })
+        {
+            var started = new ManualResetEventSlim(false);
+            var failed = false;
+            var thread = new Thread(() =>
+            {
+                try
+                {
+                    started.Set();
+                    dynamic workbookTabsCommandBar = excel.CommandBars[commandBarName];
+                    workbookTabsCommandBar.ShowPopup();
+                }
+                catch (RuntimeBinderException)
+                {
+                    failed = true;
+                }
+                catch (COMException)
+                {
+                    failed = true;
+                }
+                catch (InvalidOperationException)
+                {
+                    failed = true;
+                }
+            });
+
+            thread.SetApartmentState(ApartmentState.STA);
+            thread.IsBackground = true;
+            thread.Start();
+            started.Wait(TimeSpan.FromMilliseconds(500));
+            Thread.Sleep(250);
+            if (!failed)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static bool TryShowExcelBuiltInDialogAsync(dynamic excel, int dialogId)

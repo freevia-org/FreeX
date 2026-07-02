@@ -16,6 +16,7 @@ public partial class FormatCellsDialog : Window
 
     private readonly CellStyle _current;
     private readonly bool _initialMergeCells;
+    private readonly string? _numberPreviewText;
     private bool _syncingNumberControls;
     private bool _borderPresetClearRequested;
     private CellBorder? _borderPresetOutline;
@@ -24,10 +25,12 @@ public partial class FormatCellsDialog : Window
     public FormatCellsDialog(
         CellStyle current,
         FormatCellsDialogTab initialTab = FormatCellsDialogTab.Number,
-        bool mergeCells = false)
+        bool mergeCells = false,
+        string? numberPreviewText = null)
     {
         _current = current.Clone();
         _initialMergeCells = mergeCells;
+        _numberPreviewText = string.IsNullOrWhiteSpace(numberPreviewText) ? null : numberPreviewText;
         InitializeComponent();
         Loaded += (_, _) =>
         {
@@ -364,7 +367,7 @@ public enum FormatCellsDialogTab
     Number,
     Alignment,
     Font,
-    Fill,
     Border,
+    Fill,
     Protection
 }

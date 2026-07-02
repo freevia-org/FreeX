@@ -586,9 +586,13 @@ public partial class MainWindow
         if (SheetGrid.SelectedRange is not { } range) return;
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet is null) return;
-        var currentStyle = _workbook.GetStyle(sheet.GetCell(range.Start)?.StyleId ?? StyleId.Default);
+        var selectedCell = sheet.GetCell(range.Start);
+        var currentStyle = _workbook.GetStyle(selectedCell?.StyleId ?? StyleId.Default);
         var mergeCells = CellMergePlanner.IsSelectionMerged(sheet, range);
-        var dlg = new FormatCellsDialog(currentStyle, initialTab, mergeCells) { Owner = this };
+        var numberPreviewText = selectedCell is null
+            ? null
+            : GetAutoFitDisplayText(sheet, selectedCell);
+        var dlg = new FormatCellsDialog(currentStyle, initialTab, mergeCells, numberPreviewText) { Owner = this };
         if (dlg.ShowDialog() != true || dlg.ResultDiff is null) return;
         var mergeContentResolution = MergeCellContentResolution.KeepFirstCell;
         if (dlg.ResultMergeCells == true && !TryResolveMergeContentResolution(range, out mergeContentResolution))
