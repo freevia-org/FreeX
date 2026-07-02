@@ -37,6 +37,34 @@ public sealed class SlideShowInkExecutionPlannerTests
     }
 
     [Fact]
+    public void Append_ManyPoints_ProducesStrokeWithAllPointsInOrder()
+    {
+        // Regression test for a perf bug where Append rebuilt the active stroke's point array
+        // via Concat().ToArray() on every call (O(n) copy per pointer-move => O(n^2) per
+        // stroke). A large point count here is a correctness check that doubles as a guard
+        // against that behavior reappearing (the run must complete quickly, not just produce
+        // the right answer).
+        const int pointCount = 20_000;
+        var state = CreateState(SlideShowPresenterPointerMode.Pen, "#123456", 5);
+
+        var begin = SlideShowInkExecutionPlanner.Begin(state, new SlideShowInkPoint(0, 0));
+        var current = begin.State;
+        var expectedPoints = new List<SlideShowInkPoint> { new(0, 0) };
+
+        for (var i = 1; i < pointCount; i++)
+        {
+            var point = new SlideShowInkPoint(i, i * 2);
+            expectedPoints.Add(point);
+            current = SlideShowInkExecutionPlanner.Append(current, point).State;
+        }
+
+        var end = SlideShowInkExecutionPlanner.End(current);
+
+        end.State.CommittedStrokes.Should().ContainSingle();
+        end.State.CommittedStrokes.Single().Points.Should().Equal(expectedPoints);
+    }
+
+    [Fact]
     public void LaserPointer_ProducesTransientOverlayWithoutCommittedInk()
     {
         var state = CreateState(SlideShowPresenterPointerMode.LaserPointer, "#FF0000", 6);

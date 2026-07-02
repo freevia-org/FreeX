@@ -123,6 +123,24 @@ public static class SlideShowInkExecutionPlanner
 
         if (state.ActiveStroke is not null)
         {
+            // The active stroke's Points list is a growable List<SlideShowInkPoint> while the
+            // stroke is being drawn (see BeginInkStroke), so appending here is amortized O(1)
+            // instead of copying the whole array on every pointer-move (see End for where the
+            // list becomes an immutable, materialized array on commit).
+            if (state.ActiveStroke.Points is List<SlideShowInkPoint> growableActivePoints)
+            {
+                growableActivePoints.Add(point);
+
+                return Handled(
+                    state,
+                    new(
+                        SlideShowInkExecutionMutationKind.AppendStrokePoint,
+                        state.ActiveStroke.StrokeId,
+                        point,
+                        AffectedStrokeCount: 1,
+                        "Append ink stroke point"));
+            }
+
             var updated = state.ActiveStroke with
             {
                 Points = state.ActiveStroke.Points.Concat(new[] { point }).ToArray()
@@ -156,12 +174,27 @@ public static class SlideShowInkExecutionPlanner
 
         if (state.ActiveStroke is not null)
         {
-            var stroke = point is null
-                ? state.ActiveStroke
-                : state.ActiveStroke with
+            if (point is not null)
+            {
+                if (state.ActiveStroke.Points is List<SlideShowInkPoint> growableActivePoints)
                 {
-                    Points = state.ActiveStroke.Points.Concat(new[] { point }).ToArray()
-                };
+                    growableActivePoints.Add(point);
+                }
+                else
+                {
+                    state = state with
+                    {
+                        ActiveStroke = state.ActiveStroke with
+                        {
+                            Points = state.ActiveStroke.Points.Concat(new[] { point }).ToArray()
+                        }
+                    };
+                }
+            }
+
+            // Materialize the (possibly still-growable) points into an immutable array once, at
+            // commit time, so committed strokes never carry a mutable backing list.
+            var stroke = state.ActiveStroke with { Points = state.ActiveStroke.Points.ToArray() };
 
             var committed = state.CommittedStrokes.Concat(new[] { stroke }).ToArray();
             return Handled(
@@ -286,12 +319,14 @@ public static class SlideShowInkExecutionPlanner
         SlideShowInkExecutionState state,
         SlideShowInkPoint point)
     {
+        // Use a growable List<SlideShowInkPoint> for the active stroke's points so Append can
+        // add points in amortized O(1) instead of copying the array on every pointer-move.
         var stroke = new SlideShowInkStroke(
             Guid.NewGuid().ToString("N"),
             state.SlideIndex,
             state.ActivePointerMode,
             state.ActiveInkState,
-            new[] { point });
+            new List<SlideShowInkPoint> { point });
 
         return Handled(
             state with
