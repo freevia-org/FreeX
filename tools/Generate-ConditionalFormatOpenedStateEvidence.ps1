@@ -133,6 +133,10 @@ function Get-BlockerCategory {
         return "popup-not-found"
     }
 
+    if ($BlockReason -match "^(launch-failed|window-not-found):") {
+        return "app-window-unavailable"
+    }
+
     if ($BlockReason -match "^exception:") {
         return "scenario-exception"
     }
@@ -159,6 +163,17 @@ function Get-ManifestValidationErrors {
 
     if (-not $ManifestMatchesTarget) {
         $errors += "manifest-target-mismatch"
+    }
+
+    if (-not ($Manifest.PSObject.Properties.Name -contains "EnvironmentSnapshot") -or $null -eq $Manifest.EnvironmentSnapshot) {
+        $errors += "environment-snapshot-missing"
+    }
+    else {
+        foreach ($propertyName in @("OperatingSystem", "IsWindows", "UserInteractive", "SessionId", "ProcessId", "ProcessArchitecture")) {
+            if (-not ($Manifest.EnvironmentSnapshot.PSObject.Properties.Name -contains $propertyName)) {
+                $errors += "environment-snapshot-$($propertyName.ToLowerInvariant())-missing"
+            }
+        }
     }
 
     if ([string]::IsNullOrWhiteSpace($CaptureStatus)) {
@@ -230,6 +245,7 @@ function Get-NextCaptureAction {
         "manifest-target-mismatch" { return "Discard the stale manifest and rerun $RunnerCommand so Scenario and Subject match this target." }
         "excel-com-unavailable" { return "Rerun $RunnerCommand on a Windows desktop where Microsoft Excel COM is installed and registered." }
         "foreground-focus-unavailable" { return "Rerun $RunnerCommand from an unlocked interactive desktop where the launched window can become foreground." }
+        "app-window-unavailable" { return "Rerun $RunnerCommand after verifying the Release app starts manually in the same desktop session and exposes a visible main window." }
         "popup-not-found" { return "Rerun $RunnerCommand from foreground; if it still blocks, inspect the UIA/keytip route for the Conditional Formatting popup." }
         default { return "Rerun $RunnerCommand in $RequiredEnvironment Preserve any blocked manifest with its BlockReason if a real PNG cannot be produced." }
     }
@@ -280,6 +296,8 @@ function Get-CaptureTargetStatus {
             manifestSubject = ""
             manifestScenario = ""
             manifestMatchesTarget = $false
+            environmentSnapshotStatus = "missing"
+            environmentSummary = ""
             fallbackEvidence = @($fallbackEvidence)
             fallbackEvidenceNote = $FallbackEvidenceNote
         }
@@ -325,6 +343,18 @@ function Get-CaptureTargetStatus {
         -ManifestMatchesTarget $manifestMatchesTarget `
         -BlockReason $blockReason `
         -StructuralManifestErrors $structuralManifestErrors
+    $environmentSnapshotStatus = if (($manifest.PSObject.Properties.Name -contains "EnvironmentSnapshot") -and $null -ne $manifest.EnvironmentSnapshot) {
+        "captured"
+    }
+    else {
+        "missing"
+    }
+    $environmentSummary = if ($environmentSnapshotStatus -eq "captured") {
+        "windows=$($manifest.EnvironmentSnapshot.IsWindows); interactive=$($manifest.EnvironmentSnapshot.UserInteractive); session=$($manifest.EnvironmentSnapshot.SessionId); arch=$($manifest.EnvironmentSnapshot.ProcessArchitecture)"
+    }
+    else {
+        ""
+    }
 
     [ordered]@{
         id = $Id
@@ -347,6 +377,8 @@ function Get-CaptureTargetStatus {
         manifestSubject = $manifestSubject
         manifestScenario = $manifestScenario
         manifestMatchesTarget = $manifestMatchesTarget
+        environmentSnapshotStatus = $environmentSnapshotStatus
+        environmentSummary = $environmentSummary
         fallbackEvidence = @($fallbackEvidence)
         fallbackEvidenceNote = $FallbackEvidenceNote
     }
@@ -517,7 +549,7 @@ $md = New-Object System.Text.StringBuilder
 [void]$md.AppendLine()
 [void]$md.AppendLine("Completion contract: run the target command in a foreground-capable Windows desktop session, commit the resulting manifest and PNG under ``tools/foreground-captures/<scenario>/``, then rerun this generator. A target is complete only when ``CaptureStatus`` is ``complete`` and ``ScreenshotPath`` resolves to a committed PNG; blocked manifests must remain blocked and must not use fallback dialog-route images as opened-state evidence.")
 [void]$md.AppendLine()
-[void]$md.AppendLine("Manifest validation contract: every committed manifest must match the expected Scenario and Subject, carry a known CaptureStatus, and include enough diagnostics for its state. Complete manifests must resolve a PNG; blocked manifests must retain BlockReason and CapturedAtUtc, and foreground guard failures must include ForegroundGuard diagnostics.")
+[void]$md.AppendLine("Manifest validation contract: every committed manifest must match the expected Scenario and Subject, carry a known CaptureStatus, and include enough diagnostics for its state. Complete manifests must resolve a PNG; blocked manifests must retain BlockReason and CapturedAtUtc, every manifest must include EnvironmentSnapshot diagnostics, and foreground guard failures must include ForegroundGuard diagnostics.")
 [void]$md.AppendLine()
 [void]$md.AppendLine("## Summary")
 [void]$md.AppendLine()
@@ -539,8 +571,8 @@ foreach ($category in $blockerCategories) {
 [void]$md.AppendLine()
 [void]$md.AppendLine("## Capture Targets")
 [void]$md.AppendLine()
-[void]$md.AppendLine("| Target | Subject | Scenario | Status | Category | Manifest validation | Last attempt UTC | PNG | Blocker | Next action |")
-[void]$md.AppendLine("|---|---|---|---|---|---|---|---|---|---|")
+[void]$md.AppendLine("| Target | Subject | Scenario | Status | Category | Manifest validation | Environment snapshot | Last attempt UTC | PNG | Blocker | Next action |")
+[void]$md.AppendLine("|---|---|---|---|---|---|---|---|---|---|---|")
 foreach ($target in $captureTargets) {
     $png = if ($target.screenshotExists) { $target.screenshotPath } else { "" }
     $validation = $target.manifestValidationStatus
@@ -548,7 +580,7 @@ foreach ($target in $captureTargets) {
         $validation = "$validation ($($target.manifestValidationErrors -join ', '))"
     }
 
-    [void]$md.AppendLine("| $(Escape-MarkdownCell $target.id) | $(Escape-MarkdownCell $target.subject) | $(Escape-MarkdownCell $target.scenario) | $(Escape-MarkdownCell $target.retentionStatus) | $(Escape-MarkdownCell $target.blockerCategory) | $(Escape-MarkdownCell $validation) | $(Escape-MarkdownCell $target.lastAttemptedAtUtc) | $(Escape-MarkdownCell $png) | $(Escape-MarkdownCell $target.blockReason) | $(Escape-MarkdownCell $target.nextCaptureAction) |")
+    [void]$md.AppendLine("| $(Escape-MarkdownCell $target.id) | $(Escape-MarkdownCell $target.subject) | $(Escape-MarkdownCell $target.scenario) | $(Escape-MarkdownCell $target.retentionStatus) | $(Escape-MarkdownCell $target.blockerCategory) | $(Escape-MarkdownCell $validation) | $(Escape-MarkdownCell $target.environmentSummary) | $(Escape-MarkdownCell $target.lastAttemptedAtUtc) | $(Escape-MarkdownCell $png) | $(Escape-MarkdownCell $target.blockReason) | $(Escape-MarkdownCell $target.nextCaptureAction) |")
 }
 [void]$md.AppendLine()
 [void]$md.AppendLine("## Capture Commands")

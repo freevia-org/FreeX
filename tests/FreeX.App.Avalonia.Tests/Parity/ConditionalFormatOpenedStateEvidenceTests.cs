@@ -55,6 +55,8 @@ public sealed class ConditionalFormatOpenedStateEvidenceTests
                 ManifestValidationStatus = target.GetProperty("manifestValidationStatus").GetString(),
                 NextCaptureAction = target.GetProperty("nextCaptureAction").GetString(),
                 ManifestMatchesTarget = target.GetProperty("manifestMatchesTarget").GetBoolean(),
+                EnvironmentSnapshotStatus = target.GetProperty("environmentSnapshotStatus").GetString(),
+                EnvironmentSummary = target.GetProperty("environmentSummary").GetString(),
             })
             .OrderBy(target => target.Id, StringComparer.Ordinal)
             .ToArray();
@@ -70,6 +72,8 @@ public sealed class ConditionalFormatOpenedStateEvidenceTests
         Assert.All(targets, target => Assert.False(string.IsNullOrWhiteSpace(target.ManifestValidationStatus)));
         Assert.All(targets, target => Assert.False(string.IsNullOrWhiteSpace(target.NextCaptureAction)));
         Assert.All(targets, target => Assert.True(target.ManifestMatchesTarget));
+        Assert.All(targets, target => Assert.Equal("captured", target.EnvironmentSnapshotStatus));
+        Assert.All(targets, target => Assert.Contains("interactive=", target.EnvironmentSummary!, StringComparison.Ordinal));
     }
 
     [Fact]
@@ -119,6 +123,8 @@ public sealed class ConditionalFormatOpenedStateEvidenceTests
 
             Assert.Equal("valid", status.GetString());
             Assert.Empty(errors);
+            Assert.Equal("captured", target.GetProperty("environmentSnapshotStatus").GetString());
+            Assert.False(string.IsNullOrWhiteSpace(target.GetProperty("environmentSummary").GetString()));
         });
 
         foreach (var retained in targets.Where(IsCompleteRetainedOpenedStateTarget))
@@ -146,12 +152,12 @@ public sealed class ConditionalFormatOpenedStateEvidenceTests
             "Microsoft Excel COM");
         AssertTargetBlocker(
             targets["wpf.conditional-formatting-gallery.opened"],
-            "foreground-focus-unavailable",
-            "unlocked interactive desktop");
+            "app-window-unavailable",
+            "visible main window");
         AssertTargetBlocker(
             targets["avalonia.conditional-formatting-gallery.opened"],
-            "foreground-focus-unavailable",
-            "unlocked interactive desktop");
+            "app-window-unavailable",
+            "visible main window");
 
         var categories = document.RootElement.GetProperty("blockerCategories")
             .EnumerateArray()
@@ -161,7 +167,7 @@ public sealed class ConditionalFormatOpenedStateEvidenceTests
                 StringComparer.Ordinal);
 
         Assert.Equal(1, categories["excel-com-unavailable"]);
-        Assert.Equal(2, categories["foreground-focus-unavailable"]);
+        Assert.Equal(2, categories["app-window-unavailable"]);
     }
 
     [Fact]

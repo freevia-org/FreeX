@@ -4963,7 +4963,8 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             window,
             guard,
             null,
-            DateTimeOffset.UtcNow)
+            DateTimeOffset.UtcNow,
+            EnvironmentSnapshot.Capture())
         {
             ResultValidation = resultValidation
         };
@@ -5866,7 +5867,8 @@ internal sealed record CaptureResult(
     WindowInfo? Window,
     ForegroundGuardResult? ForegroundGuard,
     string? BlockReason,
-    DateTimeOffset CapturedAtUtc)
+    DateTimeOffset CapturedAtUtc,
+    EnvironmentSnapshot EnvironmentSnapshot)
 {
     public string? ManifestPath { get; init; }
     public string? ResultValidation { get; init; }
@@ -5890,13 +5892,37 @@ internal sealed record CaptureResult(
             null,
             guard,
             $"{reason}: {message}",
-            DateTimeOffset.UtcNow);
+            DateTimeOffset.UtcNow,
+            EnvironmentSnapshot.Capture());
 
         var scenarioDir = Path.Combine(outputRoot, string.IsNullOrWhiteSpace(scenario) ? "unknown" : scenario);
         Directory.CreateDirectory(scenarioDir);
         var manifestPath = Path.Combine(scenarioDir, $"{(string.IsNullOrWhiteSpace(scenario) ? "unknown" : scenario)}_manifest.json");
         File.WriteAllText(manifestPath, JsonSerializer.Serialize(result with { ManifestPath = manifestPath }, ProgramAccessor.JsonOptions));
         return result with { ManifestPath = manifestPath };
+    }
+}
+
+internal sealed record EnvironmentSnapshot(
+    string OperatingSystem,
+    bool IsWindows,
+    bool UserInteractive,
+    int SessionId,
+    int ProcessId,
+    string ProcessArchitecture,
+    WindowInfo? ForegroundWindowAtCapture)
+{
+    public static EnvironmentSnapshot Capture()
+    {
+        var currentProcess = Process.GetCurrentProcess();
+        return new EnvironmentSnapshot(
+            RuntimeInformation.OSDescription,
+            System.OperatingSystem.IsWindows(),
+            Environment.UserInteractive,
+            currentProcess.SessionId,
+            currentProcess.Id,
+            RuntimeInformation.ProcessArchitecture.ToString(),
+            WindowFinder.GetWindowInfo(NativeMethods.GetForegroundWindow()));
     }
 }
 
