@@ -14,6 +14,12 @@ public sealed class InvariantAutoFilterMenuTextProvider : IAutoFilterMenuTextPro
     {
         "AutoFilter_SortAscending" => "Sort A to Z",
         "AutoFilter_SortDescending" => "Sort Z to A",
+        "AutoFilter_SortAToZ" => "Sort A to Z",
+        "AutoFilter_SortZToA" => "Sort Z to A",
+        "AutoFilter_SortSmallestToLargest" => "Sort Smallest to Largest",
+        "AutoFilter_SortLargestToSmallest" => "Sort Largest to Smallest",
+        "AutoFilter_SortOldestToNewest" => "Sort Oldest to Newest",
+        "AutoFilter_SortNewestToOldest" => "Sort Newest to Oldest",
         "AutoFilter_FilterByColor" => "Filter by Color",
         "AutoFilter_Search" => "Search",
         "AutoFilter_SelectAll" => "(Select All)",

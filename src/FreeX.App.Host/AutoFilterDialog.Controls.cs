@@ -251,6 +251,20 @@ public sealed partial class AutoFilterDialog
             _ => (UiText.Get("AutoFilter_SortAToZ"), UiText.Get("AutoFilter_SortZToA"))
         };
 
+    private void SetSortLabels(AutoFilterMenuPlan menuPlan)
+    {
+        var ascending = menuPlan.Entries.FirstOrDefault(entry => entry.Kind == AutoFilterMenuEntryKind.SortAscending)?.Header;
+        var descending = menuPlan.Entries.FirstOrDefault(entry => entry.Kind == AutoFilterMenuEntryKind.SortDescending)?.Header;
+        if (string.IsNullOrWhiteSpace(ascending) || string.IsNullOrWhiteSpace(descending))
+        {
+            SetSortLabels(menuPlan.FilterKind);
+            return;
+        }
+
+        _sortAscendingButton.Content = ascending;
+        _sortDescendingButton.Content = descending;
+    }
+
     private void SetSortLabels(AutoFilterMenuFilterKind filterKind)
     {
         var labels = GetSortLabels(filterKind);

@@ -53,14 +53,15 @@ public static class AutoFilterDropdownMenuPlanner
             headerText = textProvider.Format("AutoFilter_ColumnHeader", CellAddress.NumberToColumnName(plan.Range.Start.Col + plan.FilterColumnOffset));
 
         var filterKind = DetectFilterKind(sheet, plan);
+        var sortLabels = GetSortLabels(filterKind, textProvider);
         var filterEntry = AutoFilterMenuCatalog.CreateFilterFamilyEntry(filterKind, textProvider);
         var colorOptions = CollectColorOptions(workbook, sheet, plan, textProvider);
 
         var hasActiveFilter = HasActiveFilter(sheet, plan.Range);
         var entries = new List<AutoFilterMenuEntry>
         {
-            new(textProvider.Get("AutoFilter_SortAscending"), AutoFilterMenuEntryKind.SortAscending),
-            new(textProvider.Get("AutoFilter_SortDescending"), AutoFilterMenuEntryKind.SortDescending),
+            new(sortLabels.Ascending, AutoFilterMenuEntryKind.SortAscending),
+            new(sortLabels.Descending, AutoFilterMenuEntryKind.SortDescending),
             CreateSeparator(),
             new(textProvider.Format("AutoFilter_ClearFilterFrom", headerText), AutoFilterMenuEntryKind.ClearFilter, isEnabled: hasActiveFilter)
         };
@@ -88,6 +89,22 @@ public static class AutoFilterDropdownMenuPlanner
 
     private static AutoFilterMenuEntry CreateSeparator() =>
         new(string.Empty, AutoFilterMenuEntryKind.Separator, isEnabled: false);
+
+    private static (string Ascending, string Descending) GetSortLabels(
+        AutoFilterMenuFilterKind filterKind,
+        IAutoFilterMenuTextProvider textProvider) =>
+        filterKind switch
+        {
+            AutoFilterMenuFilterKind.Number => (
+                textProvider.Get("AutoFilter_SortSmallestToLargest"),
+                textProvider.Get("AutoFilter_SortLargestToSmallest")),
+            AutoFilterMenuFilterKind.Date => (
+                textProvider.Get("AutoFilter_SortOldestToNewest"),
+                textProvider.Get("AutoFilter_SortNewestToOldest")),
+            _ => (
+                textProvider.Get("AutoFilter_SortAToZ"),
+                textProvider.Get("AutoFilter_SortZToA"))
+        };
 
     private static IReadOnlyList<AutoFilterMenuEntry> CreateChecklistEntries(
         Sheet sheet,
