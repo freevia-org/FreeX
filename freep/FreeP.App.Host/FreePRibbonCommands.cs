@@ -78,6 +78,8 @@ internal static class FreePRibbonCommands
         Action?             onReviewAltText = null,
         Action?             onReviewReadingOrder = null,
         Action?             onReviewProofing = null,
+        Action?             onResolveComment = null,
+        Action?             onReopenComment = null,
         // Wave 16B: Animation pane toggle.
         Action?             onAnimPane         = null,
         Action?             onLayoutPicker     = null,
@@ -297,7 +299,9 @@ internal static class FreePRibbonCommands
             onReviewAccessibility,
             onReviewAltText,
             onReviewReadingOrder,
-            onReviewProofing);
+            onReviewProofing,
+            onResolveComment,
+            onReopenComment);
 
         return registry;
     }
@@ -451,7 +455,9 @@ internal static class FreePRibbonCommands
         Action? onAccessibility,
         Action? onAltText,
         Action? onReadingOrder,
-        Action? onProofing)
+        Action? onProofing,
+        Action? onResolveComment,
+        Action? onReopenComment)
     {
         registry.Register(
             PresentationReviewWorkflowPlanner.CommentsPaneCommandId,
@@ -473,8 +479,12 @@ internal static class FreePRibbonCommands
         registry.Register(PresentationReviewWorkflowPlanner.DeleteCommentCommandId, EmptyRibbonCommand.Instance);
         registry.Register(PresentationReviewWorkflowPlanner.PreviousCommentCommandId, EmptyRibbonCommand.Instance);
         registry.Register(PresentationReviewWorkflowPlanner.NextCommentCommandId, EmptyRibbonCommand.Instance);
-        registry.Register(PresentationReviewWorkflowPlanner.ResolveCommentCommandId, EmptyRibbonCommand.Instance);
-        registry.Register(PresentationReviewWorkflowPlanner.ReopenCommentCommandId, EmptyRibbonCommand.Instance);
+        registry.Register(
+            PresentationReviewWorkflowPlanner.ResolveCommentCommandId,
+            new ActionRibbonCommand(() => onResolveComment?.Invoke()));
+        registry.Register(
+            PresentationReviewWorkflowPlanner.ReopenCommentCommandId,
+            new ActionRibbonCommand(() => onReopenComment?.Invoke()));
     }
 
     /// <summary>

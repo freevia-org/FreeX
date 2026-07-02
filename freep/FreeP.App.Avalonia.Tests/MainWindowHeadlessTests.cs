@@ -1442,6 +1442,79 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task Review_comment_resolve_reopen_routes_through_shared_mutation_plan()
+    {
+        SlideComment? resolvedComment = null;
+        SlideComment? reopenedComment = null;
+        PresentationCommentMutationPlan? resolvePlan = null;
+        PresentationCommentMutationPlan? reopenPlan = null;
+        PresentationCommentPanePlan? noSelectionPlan = null;
+        PresentationCommentPanePlan? resolvedPanePlan = null;
+        PresentationCommentPanePlan? reopenedPanePlan = null;
+        var paneVisible = false;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            window.Editor.CurrentSlide!.Comments.Add(new SlideComment
+            {
+                Author = "Reviewer",
+                Initials = "RV",
+                Text = "Close this thread.",
+                Idx = 1
+            });
+
+            var registry = window.BuildCommandRegistry();
+            registry.TryGet(PresentationReviewWorkflowPlanner.ResolveCommentCommandId, out var resolveCommand)
+                .Should().BeTrue();
+            registry.TryGet(PresentationReviewWorkflowPlanner.ReopenCommentCommandId, out var reopenCommand)
+                .Should().BeTrue();
+
+            noSelectionPlan = window.ShowReviewCommentsPane();
+            noSelectionPlan.Actions.Single(action =>
+                    action.CommandId == PresentationReviewWorkflowPlanner.ResolveCommentCommandId)
+                .DisabledReason.Should().Be(PresentationReviewWorkflowPlanner.MissingCommentMessage);
+
+            window.SetSelectedReviewCommentIndexForTests(0);
+            resolvePlan = window.ResolveSelectedComment(
+                new DateTime(2026, 7, 2, 14, 0, 0, DateTimeKind.Utc),
+                "  FreeP User ");
+            resolvedComment = window.Editor.CurrentSlide.Comments[0];
+            resolvedPanePlan = window.LastCommentPanePlan;
+
+            reopenPlan = window.ReopenSelectedComment();
+            reopenedComment = window.Editor.CurrentSlide.Comments[0];
+            reopenedPanePlan = window.LastCommentPanePlan;
+
+            resolveCommand!.Execute(RibbonCommandContext.Empty);
+            paneVisible = window.IsReviewCommentsPaneVisible;
+        });
+
+        if (!ran) return;
+        noSelectionPlan.Should().NotBeNull();
+        resolvePlan.Should().NotBeNull();
+        resolvePlan!.ShouldApply.Should().BeTrue();
+        resolvePlan.Intent.Should().Be(PresentationReviewWorkflowIntentKind.ResolveComment);
+        resolvedComment.Should().NotBeNull();
+        resolvedComment!.IsResolved.Should().BeTrue();
+        resolvedComment.ResolvedDateTime.Should().Be(new DateTime(2026, 7, 2, 14, 0, 0, DateTimeKind.Utc));
+        resolvedComment.ResolvedBy.Should().Be("FreeP User");
+        resolvedPanePlan.Should().NotBeNull();
+        resolvedPanePlan!.Comments.Single().CanReopen.Should().BeTrue();
+        resolvedPanePlan.Actions.Single(action =>
+                action.CommandId == PresentationReviewWorkflowPlanner.ResolveCommentCommandId)
+            .DisabledReason.Should().Be(PresentationReviewWorkflowPlanner.CommentAlreadyResolvedMessage);
+        reopenedComment.Should().NotBeNull();
+        reopenedComment!.IsResolved.Should().BeFalse();
+        reopenedComment.ResolvedDateTime.Should().BeNull();
+        reopenedComment.ResolvedBy.Should().BeEmpty();
+        reopenedPanePlan.Should().NotBeNull();
+        reopenedPanePlan!.Comments.Single().CanResolve.Should().BeTrue();
+        reopenPlan.Should().NotBeNull("reopen should refresh the pane to an open-thread state");
+        paneVisible.Should().BeTrue();
+    }
+
+    [Fact]
     public async Task Review_alt_text_pane_shows_shared_ui_and_applies_from_controls()
     {
         var paneVisibleWithoutSelection = false;

@@ -119,6 +119,7 @@ public sealed class MainWindow : Window
     private Canvas  _commentOverlay = null!;  // hosts speech-bubble dots over the slide canvas
     private StackPanel _commentListPanel = null!; // shows comment text list below canvas
     private Border  _commentListHost = null!; // collapsible container for _commentListPanel
+    private int? _selectedCommentIndex;
     private StackPanel _layoutPickerPanel = null!;
     private Border _layoutPickerHost = null!;
     private UniformGrid _tablePickerGrid = null!;
@@ -271,6 +272,8 @@ public sealed class MainWindow : Window
             onReviewAltText: () => ShowAltTextPane(),
             onReviewReadingOrder: () => ShowReadingOrderPane(),
             onReviewProofing: () => RefreshProofingRequestPlan(),
+            onResolveComment: () => ResolveSelectedComment(),
+            onReopenComment: () => ReopenSelectedComment(),
             // Wave 16B: Animation pane toggle.
             onAnimPane:         () => ToggleAnimationPane(),
             onTablePicker:      () => OpenTablePicker());
@@ -335,7 +338,7 @@ public sealed class MainWindow : Window
         Editor  = new EditingSession(_presentation, bus);
 
         Editor.Changed           += () => { _file.MarkDirty(); RefreshCanvas(); RefreshNotesPane(); UpdateSlideCount(); UpdateTitle(); RefreshReviewWorkflowPlans(); };
-        Editor.CurrentSlideChanged += (_, _) => { RefreshCanvas(); RefreshNotesPane(); RefreshCommentPane(); RefreshReviewWorkflowPlans(); };
+        Editor.CurrentSlideChanged += (_, _) => { _selectedCommentIndex = null; RefreshCanvas(); RefreshNotesPane(); RefreshCommentPane(); RefreshReviewWorkflowPlans(); };
         Editor.SelectionChanged += (_, _) =>
         {
             RefreshAltTextRequestPlan();
@@ -805,7 +808,8 @@ public sealed class MainWindow : Window
 
         var plan = PresentationReviewWorkflowPlanner.BuildCommentPanePlan(
             _presentation.Slides,
-            Editor.CurrentSlideIndex);
+            Editor.CurrentSlideIndex,
+            _selectedCommentIndex);
         LastCommentPanePlan = plan;
         var comments = plan.Comments;
 
@@ -883,8 +887,23 @@ public sealed class MainWindow : Window
                     Margin       = new Thickness(16, 2, 6, 6),
                 };
 
-                _commentListPanel.Children.Add(headerPanel);
-                _commentListPanel.Children.Add(bodyText);
+                var card = new StackPanel();
+                card.Children.Add(headerPanel);
+                card.Children.Add(bodyText);
+
+                var isSelected = plan.SelectedCommentIndex == cm.CommentIndex;
+                var cardHost = new Border
+                {
+                    Background      = new SolidColorBrush(isSelected ? Color.FromRgb(0xF4, 0xEC, 0xE8) : Color.FromRgb(0xFA, 0xFA, 0xFA)),
+                    BorderBrush     = new SolidColorBrush(isSelected ? Color.FromRgb(0xB7, 0x47, 0x2A) : Color.FromRgb(0xE0, 0xE0, 0xE0)),
+                    BorderThickness = new Thickness(isSelected ? 2 : 1),
+                    CornerRadius    = new CornerRadius(4),
+                    Margin          = new Thickness(0, 0, 0, 6),
+                    Cursor          = Cursors.Hand,
+                    Child           = card,
+                };
+                cardHost.MouseLeftButtonDown += (_, _) => SelectReviewComment(cm.CommentIndex);
+                _commentListPanel.Children.Add(cardHost);
             }
             _commentListHost.Visibility = Visibility.Visible;
         }
@@ -974,7 +993,8 @@ public sealed class MainWindow : Window
     {
         LastCommentPanePlan = PresentationReviewWorkflowPlanner.BuildCommentPanePlan(
             _presentation.Slides,
-            Editor.CurrentSlideIndex);
+            Editor.CurrentSlideIndex,
+            _selectedCommentIndex);
         RefreshAccessibilitySummaryPlan();
         RefreshAltTextRequestPlan();
         RefreshReadingOrderPlan();
@@ -984,6 +1004,71 @@ public sealed class MainWindow : Window
     private void ShowReviewCommentsPane()
     {
         RefreshCommentPane();
+    }
+
+    internal PresentationCommentPanePlan SetSelectedReviewCommentIndexForTests(int? commentIndex)
+    {
+        _selectedCommentIndex = commentIndex;
+        RefreshCommentPane();
+        return LastCommentPanePlan!;
+    }
+
+    private void SelectReviewComment(int commentIndex)
+    {
+        _selectedCommentIndex = commentIndex;
+        RefreshCommentPane();
+        RefreshReviewWorkflowPlans();
+    }
+
+    internal PresentationCommentMutationPlan ResolveSelectedComment(
+        DateTime? resolvedAt = null,
+        string? resolvedBy = null)
+        => ApplySelectedCommentMutation(
+            PresentationReviewWorkflowIntentKind.ResolveComment,
+            resolvedAt,
+            resolvedBy);
+
+    internal PresentationCommentMutationPlan ReopenSelectedComment()
+        => ApplySelectedCommentMutation(
+            PresentationReviewWorkflowIntentKind.ReopenComment,
+            null,
+            null);
+
+    private PresentationCommentMutationPlan ApplySelectedCommentMutation(
+        PresentationReviewWorkflowIntentKind intent,
+        DateTime? resolvedAt,
+        string? resolvedBy)
+    {
+        var selected = _selectedCommentIndex;
+        var plan = intent == PresentationReviewWorkflowIntentKind.ResolveComment && selected is { } resolveIndex
+            ? PresentationReviewWorkflowPlanner.BuildResolveCommentPlan(
+                _presentation.Slides,
+                Editor.CurrentSlideIndex,
+                resolveIndex,
+                resolvedAt ?? DateTime.UtcNow,
+                resolvedBy ?? "FreeP User")
+            : intent == PresentationReviewWorkflowIntentKind.ReopenComment && selected is { } reopenIndex
+                ? PresentationReviewWorkflowPlanner.BuildReopenCommentPlan(
+                    _presentation.Slides,
+                    Editor.CurrentSlideIndex,
+                    reopenIndex)
+                : new PresentationCommentMutationPlan(
+                    intent,
+                    false,
+                    Editor.CurrentSlideIndex,
+                    selected,
+                    null,
+                    PresentationReviewWorkflowPlanner.MissingCommentMessage);
+
+        if (PresentationReviewWorkflowPlanner.TryApplyCommentMutationPlan(_presentation.Slides, plan))
+        {
+            _file.MarkDirty();
+            RefreshCommentPane();
+            RefreshReviewWorkflowPlans();
+            UpdateTitle();
+        }
+
+        return plan;
     }
 
     private void RefreshAccessibilitySummaryPlan()

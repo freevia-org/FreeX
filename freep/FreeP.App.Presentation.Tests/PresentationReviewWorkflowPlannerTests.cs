@@ -236,6 +236,48 @@ public sealed class PresentationReviewWorkflowPlannerTests
     }
 
     [Fact]
+    public void TryApplyCommentMutationPlan_ResolvesAndReopensSelectedComment()
+    {
+        var slides = new[] { new Slide { Title = "Intro" } };
+        slides[0].Comments.Add(new SlideComment
+        {
+            Author = "Alice",
+            Initials = "AL",
+            Text = "Resolve me.",
+            Idx = 1
+        });
+        var resolvedAt = new DateTime(2026, 7, 2, 12, 30, 0, DateTimeKind.Utc);
+
+        var resolve = PresentationReviewWorkflowPlanner.BuildResolveCommentPlan(
+            slides,
+            0,
+            0,
+            resolvedAt,
+            "  FreeP User ");
+
+        PresentationReviewWorkflowPlanner.TryApplyCommentMutationPlan(slides, resolve).Should().BeTrue();
+        slides[0].Comments[0].Should().Match<SlideComment>(comment =>
+            comment.IsResolved &&
+            comment.ResolvedDateTime == resolvedAt &&
+            comment.ResolvedBy == "FreeP User" &&
+            comment.Text == "Resolve me.");
+        PresentationReviewWorkflowPlanner.BuildCommentPanePlan(slides, 0, selectedCommentIndex: 0)
+            .Actions.Single(action => action.CommandId == PresentationReviewWorkflowPlanner.ResolveCommentCommandId)
+            .DisabledReason.Should().Be(PresentationReviewWorkflowPlanner.CommentAlreadyResolvedMessage);
+
+        var reopen = PresentationReviewWorkflowPlanner.BuildReopenCommentPlan(slides, 0, 0);
+
+        PresentationReviewWorkflowPlanner.TryApplyCommentMutationPlan(slides, reopen).Should().BeTrue();
+        slides[0].Comments[0].Should().Match<SlideComment>(comment =>
+            !comment.IsResolved &&
+            comment.ResolvedDateTime == null &&
+            comment.ResolvedBy == string.Empty);
+        PresentationReviewWorkflowPlanner.BuildCommentPanePlan(slides, 0, selectedCommentIndex: null)
+            .Actions.Single(action => action.CommandId == PresentationReviewWorkflowPlanner.ReopenCommentCommandId)
+            .DisabledReason.Should().Be(PresentationReviewWorkflowPlanner.MissingCommentMessage);
+    }
+
+    [Fact]
     public void BuildAltTextRequestPlan_UsesSelectedShapePersistentMetadata()
     {
         var slide = new Slide { Title = "Intro" };

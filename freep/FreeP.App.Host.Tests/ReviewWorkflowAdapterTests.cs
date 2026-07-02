@@ -128,6 +128,68 @@ public sealed class ReviewWorkflowAdapterTests
     }
 
     [StaFact]
+    public void MainWindow_ResolveAndReopenComment_ApplySharedPlanAndRefreshPane()
+    {
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
+        try
+        {
+            window.Editor.CurrentSlide!.Comments.Add(new SlideComment
+            {
+                Author = "Reviewer",
+                Initials = "RV",
+                Text = "Close this thread.",
+                Idx = 1
+            });
+            window.SetSelectedReviewCommentIndexForTests(0);
+            window.LastCommentPanePlan!.Actions.Single(action =>
+                    action.CommandId == PresentationReviewWorkflowPlanner.ResolveCommentCommandId)
+                .IsEnabled.Should().BeTrue();
+
+            var resolvedAt = new DateTime(2026, 7, 2, 13, 0, 0, DateTimeKind.Utc);
+            var resolve = window.ResolveSelectedComment(resolvedAt, "  FreeP User ");
+
+            resolve.Should().BeEquivalentTo(new PresentationCommentMutationPlan(
+                PresentationReviewWorkflowIntentKind.ResolveComment,
+                true,
+                0,
+                0,
+                new SlideComment
+                {
+                    Author = "Reviewer",
+                    Initials = "RV",
+                    Text = "Close this thread.",
+                    Idx = 1,
+                    IsResolved = true,
+                    ResolvedDateTime = resolvedAt,
+                    ResolvedBy = "FreeP User"
+                },
+                null));
+            var comment = window.Editor.CurrentSlide.Comments[0];
+            comment.IsResolved.Should().BeTrue();
+            comment.ResolvedDateTime.Should().Be(resolvedAt);
+            comment.ResolvedBy.Should().Be("FreeP User");
+            window.LastCommentPanePlan!.Comments.Single().CanReopen.Should().BeTrue();
+            window.LastCommentPanePlan.Actions.Single(action =>
+                    action.CommandId == PresentationReviewWorkflowPlanner.ResolveCommentCommandId)
+                .DisabledReason.Should().Be(PresentationReviewWorkflowPlanner.CommentAlreadyResolvedMessage);
+
+            var reopen = window.ReopenSelectedComment();
+
+            reopen.Intent.Should().Be(PresentationReviewWorkflowIntentKind.ReopenComment);
+            reopen.ShouldApply.Should().BeTrue();
+            var reopened = window.Editor.CurrentSlide.Comments[0];
+            reopened.IsResolved.Should().BeFalse();
+            reopened.ResolvedDateTime.Should().BeNull();
+            reopened.ResolvedBy.Should().BeEmpty();
+            window.LastCommentPanePlan!.Comments.Single().CanResolve.Should().BeTrue();
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [StaFact]
     public void MainWindow_AltTextPane_ShowsSharedPlanAndAppliesThroughPane()
     {
         var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);

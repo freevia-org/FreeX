@@ -451,6 +451,65 @@ public static class PresentationReviewWorkflowPlanner
             null);
     }
 
+    public static bool TryApplyCommentMutationPlan(
+        IReadOnlyList<Slide> slides,
+        PresentationCommentMutationPlan plan)
+    {
+        ArgumentNullException.ThrowIfNull(slides);
+        ArgumentNullException.ThrowIfNull(plan);
+
+        if (!plan.ShouldApply)
+        {
+            return false;
+        }
+
+        var slide = GetSlide(slides, plan.SlideIndex);
+        if (slide is null)
+        {
+            return false;
+        }
+
+        switch (plan.Intent)
+        {
+            case PresentationReviewWorkflowIntentKind.AddComment:
+                if (plan.Comment is null)
+                {
+                    return false;
+                }
+
+                slide.Comments.Add(CloneComment(plan.Comment));
+                return true;
+
+            case PresentationReviewWorkflowIntentKind.EditComment:
+            case PresentationReviewWorkflowIntentKind.ResolveComment:
+            case PresentationReviewWorkflowIntentKind.ReopenComment:
+                if (plan.CommentIndex is not { } commentIndex ||
+                    plan.Comment is null ||
+                    commentIndex < 0 ||
+                    commentIndex >= slide.Comments.Count)
+                {
+                    return false;
+                }
+
+                slide.Comments[commentIndex] = CloneComment(plan.Comment);
+                return true;
+
+            case PresentationReviewWorkflowIntentKind.DeleteComment:
+                if (plan.CommentIndex is not { } deleteIndex ||
+                    deleteIndex < 0 ||
+                    deleteIndex >= slide.Comments.Count)
+                {
+                    return false;
+                }
+
+                slide.Comments.RemoveAt(deleteIndex);
+                return true;
+
+            default:
+                return false;
+        }
+    }
+
     public static PresentationAltTextRequestPlan BuildAltTextRequestPlan(
         Slide? slide,
         uint? selectedShapeId,

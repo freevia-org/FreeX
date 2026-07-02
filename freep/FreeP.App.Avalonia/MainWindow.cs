@@ -102,6 +102,7 @@ public sealed class MainWindow : Window
     private WrapPanel _tablePickerPanel = null!;
     private Border _reviewCommentsPaneHost = null!;
     private StackPanel _reviewCommentsPanePanel = null!;
+    private int? _selectedCommentIndex;
     private Border _altTextPaneHost = null!;
     private TextBlock _altTextPaneHeading = null!;
     private TextBlock _altTextPaneMessage = null!;
@@ -1413,7 +1414,7 @@ public sealed class MainWindow : Window
     {
         registry.Register(
             PresentationReviewWorkflowPlanner.CommentsPaneCommandId,
-            new ActionRibbonCommand(ShowReviewCommentsPane));
+            new ActionRibbonCommand(() => ShowReviewCommentsPane()));
         registry.Register(
             PresentationReviewWorkflowPlanner.AccessibilityCommandId,
             new ActionRibbonCommand(RefreshAccessibilitySummaryPlan));
@@ -1431,28 +1432,35 @@ public sealed class MainWindow : Window
         registry.Register(PresentationReviewWorkflowPlanner.DeleteCommentCommandId, EmptyRibbonCommand.Instance);
         registry.Register(PresentationReviewWorkflowPlanner.PreviousCommentCommandId, EmptyRibbonCommand.Instance);
         registry.Register(PresentationReviewWorkflowPlanner.NextCommentCommandId, EmptyRibbonCommand.Instance);
-        registry.Register(PresentationReviewWorkflowPlanner.ResolveCommentCommandId, EmptyRibbonCommand.Instance);
-        registry.Register(PresentationReviewWorkflowPlanner.ReopenCommentCommandId, EmptyRibbonCommand.Instance);
+        registry.Register(
+            PresentationReviewWorkflowPlanner.ResolveCommentCommandId,
+            new ActionRibbonCommand(() => ResolveSelectedComment()));
+        registry.Register(
+            PresentationReviewWorkflowPlanner.ReopenCommentCommandId,
+            new ActionRibbonCommand(() => ReopenSelectedComment()));
     }
 
     internal void RefreshReviewWorkflowPlans()
     {
         LastCommentPanePlan = PresentationReviewWorkflowPlanner.BuildCommentPanePlan(
             _presentation.Slides,
-            Editor.CurrentSlideIndex);
+            Editor.CurrentSlideIndex,
+            _selectedCommentIndex);
         RefreshAccessibilitySummaryPlan();
         RefreshAltTextRequestPlan();
         RefreshReadingOrderPlan();
         RefreshProofingRequestPlan();
     }
 
-    private void ShowReviewCommentsPane()
+    internal PresentationCommentPanePlan ShowReviewCommentsPane()
     {
         var plan = PresentationReviewWorkflowPlanner.BuildCommentPanePlan(
             _presentation.Slides,
-            Editor.CurrentSlideIndex);
+            Editor.CurrentSlideIndex,
+            _selectedCommentIndex);
         LastCommentPanePlan = plan;
         ShowReviewCommentsPane(plan);
+        return plan;
     }
 
     private void ShowReviewCommentsPane(PresentationCommentPanePlan plan)
@@ -1491,7 +1499,7 @@ public sealed class MainWindow : Window
             Margin     = new Thickness(12, 10, 12, 2),
         };
 
-    private static Control BuildReviewCommentActions(IReadOnlyList<PresentationReviewWorkflowActionPlan> actions)
+    private Control BuildReviewCommentActions(IReadOnlyList<PresentationReviewWorkflowActionPlan> actions)
     {
         var panel = new WrapPanel
         {
@@ -1500,21 +1508,24 @@ public sealed class MainWindow : Window
 
         foreach (var action in actions)
         {
-            panel.Children.Add(new Button
+            var button = new Button
             {
                 Content   = action.Label,
                 IsEnabled = action.IsEnabled,
                 Tag       = action.CommandId,
                 MinWidth  = 88,
                 Margin    = new Thickness(0, 0, 6, 6),
-            });
+            };
+            button.Click += (_, _) => ExecuteReviewCommentAction(action.CommandId);
+            panel.Children.Add(button);
         }
 
         return panel;
     }
 
-    private static Control BuildReviewCommentCard(PresentationCommentDescriptor comment)
+    private Control BuildReviewCommentCard(PresentationCommentDescriptor comment)
     {
+        var isSelected = LastCommentPanePlan?.SelectedCommentIndex == comment.CommentIndex;
         var header = new StackPanel
         {
             Orientation = Orientation.Horizontal,
@@ -1559,16 +1570,95 @@ public sealed class MainWindow : Window
             Foreground   = new SolidColorBrush(Color.FromRgb(0x44, 0x44, 0x44)),
         });
 
-        return new Border
+        var border = new Border
         {
-            Background      = new SolidColorBrush(Color.FromRgb(0xFA, 0xFA, 0xFA)),
-            BorderBrush     = new SolidColorBrush(Color.FromRgb(0xE0, 0xE0, 0xE0)),
-            BorderThickness = new Thickness(1),
+            Background      = new SolidColorBrush(isSelected ? Color.FromRgb(0xF4, 0xEC, 0xE8) : Color.FromRgb(0xFA, 0xFA, 0xFA)),
+            BorderBrush     = new SolidColorBrush(isSelected ? Color.FromRgb(0xB7, 0x47, 0x2A) : Color.FromRgb(0xE0, 0xE0, 0xE0)),
+            BorderThickness = new Thickness(isSelected ? 2 : 1),
             CornerRadius    = new CornerRadius(4),
             Padding         = new Thickness(10),
             Margin          = new Thickness(12, 0, 12, 10),
             Child           = card,
         };
+        border.Cursor = new Cursor(StandardCursorType.Hand);
+        border.PointerPressed += (_, _) => SelectReviewComment(comment.CommentIndex);
+        return border;
+    }
+
+    private void ExecuteReviewCommentAction(string commandId)
+    {
+        if (commandId == PresentationReviewWorkflowPlanner.ResolveCommentCommandId)
+        {
+            ResolveSelectedComment();
+        }
+        else if (commandId == PresentationReviewWorkflowPlanner.ReopenCommentCommandId)
+        {
+            ReopenSelectedComment();
+        }
+    }
+
+    internal PresentationCommentPanePlan SetSelectedReviewCommentIndexForTests(int? commentIndex)
+    {
+        _selectedCommentIndex = commentIndex;
+        return ShowReviewCommentsPane();
+    }
+
+    private void SelectReviewComment(int commentIndex)
+    {
+        _selectedCommentIndex = commentIndex;
+        ShowReviewCommentsPane();
+        RefreshReviewWorkflowPlans();
+    }
+
+    internal PresentationCommentMutationPlan ResolveSelectedComment(
+        DateTime? resolvedAt = null,
+        string? resolvedBy = null)
+        => ApplySelectedCommentMutation(
+            PresentationReviewWorkflowIntentKind.ResolveComment,
+            resolvedAt,
+            resolvedBy);
+
+    internal PresentationCommentMutationPlan ReopenSelectedComment()
+        => ApplySelectedCommentMutation(
+            PresentationReviewWorkflowIntentKind.ReopenComment,
+            null,
+            null);
+
+    private PresentationCommentMutationPlan ApplySelectedCommentMutation(
+        PresentationReviewWorkflowIntentKind intent,
+        DateTime? resolvedAt,
+        string? resolvedBy)
+    {
+        var selected = _selectedCommentIndex;
+        var plan = intent == PresentationReviewWorkflowIntentKind.ResolveComment && selected is { } resolveIndex
+            ? PresentationReviewWorkflowPlanner.BuildResolveCommentPlan(
+                _presentation.Slides,
+                Editor.CurrentSlideIndex,
+                resolveIndex,
+                resolvedAt ?? DateTime.UtcNow,
+                resolvedBy ?? "FreeP User")
+            : intent == PresentationReviewWorkflowIntentKind.ReopenComment && selected is { } reopenIndex
+                ? PresentationReviewWorkflowPlanner.BuildReopenCommentPlan(
+                    _presentation.Slides,
+                    Editor.CurrentSlideIndex,
+                    reopenIndex)
+                : new PresentationCommentMutationPlan(
+                    intent,
+                    false,
+                    Editor.CurrentSlideIndex,
+                    selected,
+                    null,
+                    PresentationReviewWorkflowPlanner.MissingCommentMessage);
+
+        if (PresentationReviewWorkflowPlanner.TryApplyCommentMutationPlan(_presentation.Slides, plan))
+        {
+            _fileWorkflow.MarkDirty();
+            ShowReviewCommentsPane();
+            RefreshReviewWorkflowPlans();
+            UpdateStatus();
+        }
+
+        return plan;
     }
 
     private void OnAnimationPaneRequested(PresentationAnimationCommandPlan plan)
@@ -2335,6 +2425,8 @@ public sealed class MainWindow : Window
 
     private void OnCurrentSlideChanged(object? sender, EventArgs e)
     {
+        _selectedCommentIndex = null;
+
         // Sync slide-pane selection without re-triggering OnSlidePaneSelectionChanged.
         _slidePaneRefreshing = true;
         try { SelectSlidePaneItem(Editor.CurrentSlideIndex); }
