@@ -30,7 +30,43 @@ public readonly record struct HyperlinkTarget(string? Url, string? Anchor)
             return true;
         }
 
-        target = new HyperlinkTarget(trimmed, null);
+        target = new HyperlinkTarget(Normalize(trimmed), null);
         return true;
+    }
+
+    /// <summary>
+    /// Normalizes an external target into a well-formed absolute URI the way Word's AutoFormat does:
+    /// a bare email address (contains '@', no scheme) gets a <c>mailto:</c> prefix; a scheme-less host
+    /// (e.g. <c>www.example.com</c> or <c>example.com</c>) gets an <c>https://</c> prefix (matching the
+    /// seed FreeW's own "new hyperlink" ribbon command already uses, see FreeWRibbonCommands). A value
+    /// that already has a URI scheme (has a ':' before the first '/', '@', or whitespace) is left as-is.
+    /// </summary>
+    private static string Normalize(string trimmed)
+    {
+        if (HasScheme(trimmed))
+            return trimmed;
+
+        if (trimmed.Contains('@') && !trimmed.Contains(' '))
+            return "mailto:" + trimmed;
+
+        return "https://" + trimmed;
+    }
+
+    private static bool HasScheme(string value)
+    {
+        var colon = value.IndexOf(':');
+        if (colon <= 0)
+            return false;
+
+        // Everything before the colon must look like a scheme (letters/digits/+/-/.) — this rules out
+        // "C:\path" style false positives and stray colons inside a scheme-less token.
+        for (var i = 0; i < colon; i++)
+        {
+            var c = value[i];
+            if (!char.IsLetterOrDigit(c) && c != '+' && c != '-' && c != '.')
+                return false;
+        }
+        // A single-letter "scheme" followed by a colon is almost always a Windows drive letter, not a URI.
+        return colon > 1;
     }
 }

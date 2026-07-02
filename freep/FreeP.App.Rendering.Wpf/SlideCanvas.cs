@@ -1469,21 +1469,51 @@ public sealed class SlideCanvas : FrameworkElement
     /// resulting renderer-neutral ops as WPF primitives.
     /// Non-math runs in the same paragraph are drawn with plain FormattedText.
     /// ALL layout is in the shared MathBoxRenderPlanner; only WPF draw calls live here.
+    ///
+    /// HB4: math and text runs are BASELINE-aligned, not top-aligned. We first
+    /// measure every run's ascent (math box Ascent, or FormattedText.Baseline
+    /// for plain text), take the line's shared baseline as the max ascent, then
+    /// draw every run's top at (baselineY - runAscent) so all runs share one
+    /// baseline — matching how a mixed "text + fraction" line is typeset.
+    /// Marked internal (not private) so FreeP.App.Host.Tests can call it directly.
     /// </summary>
-    private static void RenderParaWithMath(
+    internal static void RenderParaWithMath(
         DrawingContext dc,
         ResolvedParagraph para,
         double startX, double startY)
     {
-        double x = startX;
-
-        foreach (var run in para.Runs)
+        // Pass 1: measure each run's ascent to find the line's common baseline.
+        double lineAscent = 0;
+        var formatted = new FormattedText?[para.Runs.Count];
+        for (int i = 0; i < para.Runs.Count; i++)
         {
+            var run = para.Runs[i];
             if (run.IsMathRun && run.MathLayout is not null)
             {
+                lineAscent = Math.Max(lineAscent, run.MathLayout.Metrics.Ascent);
+            }
+            else if (!string.IsNullOrEmpty(run.Text))
+            {
+                var ft = BuildSingleRunFormattedTextAt(run, run.Text);
+                formatted[i] = ft;
+                lineAscent = Math.Max(lineAscent, ft.Baseline);
+            }
+        }
+
+        double baselineY = ComputeBaselineY(startY, lineAscent);
+
+        // Pass 2: draw each run with its top placed so its ascent lands on baselineY.
+        double x = startX;
+        for (int i = 0; i < para.Runs.Count; i++)
+        {
+            var run = para.Runs[i];
+            if (run.IsMathRun && run.MathLayout is not null)
+            {
+                double runY = ComputeRunTopY(baselineY, run.MathLayout.Metrics.Ascent);
+
                 // Plan the math draw ops using the shared engine (renderer-neutral).
                 var mathOps = MathBoxRenderPlanner.Plan(
-                    run.MathLayout, x, startY, run.Color, run.FontFamily);
+                    run.MathLayout, x, runY, run.Color, run.FontFamily);
 
                 foreach (var op in mathOps)
                     DrawMathOpWpf(dc, op);
@@ -1492,13 +1522,28 @@ public sealed class SlideCanvas : FrameworkElement
             }
             else if (!string.IsNullOrEmpty(run.Text))
             {
-                // Plain text run inline with math
-                var ft = BuildSingleRunFormattedTextAt(run, run.Text);
-                dc.DrawText(ft, new Point(x, startY));
+                // Plain text run inline with math, baseline-aligned with it.
+                var ft = formatted[i]!;
+                double runY = ComputeRunTopY(baselineY, ft.Baseline);
+                dc.DrawText(ft, new Point(x, runY));
                 x += ft.Width;
             }
         }
     }
+
+    /// <summary>
+    /// HB4 pure helper: the shared line baseline (in slide-space DIP) given the
+    /// paragraph's top Y and the max ascent across all its runs (text or math).
+    /// Exposed internal so tests can validate the baseline math without needing
+    /// a live DrawingContext.
+    /// </summary>
+    internal static double ComputeBaselineY(double startY, double lineAscent) => startY + lineAscent;
+
+    /// <summary>
+    /// HB4 pure helper: the top Y at which a run with the given ascent must be
+    /// drawn so its own baseline lands exactly on <paramref name="baselineY"/>.
+    /// </summary>
+    internal static double ComputeRunTopY(double baselineY, double runAscent) => baselineY - runAscent;
 
     /// <summary>
     /// Draws a single <see cref="MathDrawOp"/> as WPF primitives.

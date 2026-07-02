@@ -110,7 +110,7 @@ public abstract class MathNode
     /// </summary>
     public sealed class Nary : MathNode
     {
-        /// <summary>The n-ary character glyph, e.g. "?", "?", "?". Default "?".</summary>
+        /// <summary>The n-ary character glyph, e.g. "∫", "∑", "∏". Default "∫" (integral).</summary>
         public string OperatorChar { get; }
 
         /// <summary>True for ?/? style (limits above/below); false for ? style (as scripts).</summary>

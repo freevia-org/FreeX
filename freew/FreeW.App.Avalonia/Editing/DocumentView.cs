@@ -9380,16 +9380,31 @@ public sealed class DocumentView : Control
             var block = s.Start.Block;
             var from = s.Start.Offset;
             var to = s.End.Offset;
+            var newEnd = to;
             _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
             {
                 var cells = ParaCells(p);
                 var lo = Math.Clamp(from, 0, cells.Count);
                 var hi = Math.Clamp(to, 0, cells.Count);
-                for (var i = lo; i < hi; i++)
-                    cells[i] = cells[i] with { Link = link };
+                var selectedText = string.Concat(cells.Skip(lo).Take(hi - lo).Select(c => c.Ch));
+                // Word replaces the selected text with the dialog's Display field when the user changed it;
+                // when it is empty or unchanged, only the Link is (re)tagged and the characters are untouched.
+                if (!string.IsNullOrEmpty(displayText) && !string.Equals(displayText, selectedText, StringComparison.Ordinal))
+                {
+                    var fmt = lo < cells.Count ? cells[lo].Fmt : ActiveFormatting(p, lo);
+                    var replacement = displayText.Select(ch => new Cell(ch, fmt, Link: link)).ToList();
+                    cells.RemoveRange(lo, hi - lo);
+                    cells.InsertRange(lo, replacement);
+                    newEnd = lo + replacement.Count;
+                }
+                else
+                {
+                    for (var i = lo; i < hi; i++)
+                        cells[i] = cells[i] with { Link = link };
+                }
                 SetRuns(p, cells);
             }));
-            _caret = new DocPosition(block, to);
+            _caret = new DocPosition(block, newEnd);
             _selectionAnchor = _caret;
             Focus();
             return;
@@ -9501,7 +9516,15 @@ public sealed class DocumentView : Control
     /// <summary>
     /// AV-LINK: Retarget the hyperlink span under the caret, preserving visible text and ScreenTip.
     /// </summary>
-    public void EditHyperlink(string newTarget)
+    public void EditHyperlink(string newTarget) => EditHyperlink(newTarget, newDisplayText: null);
+
+    /// <summary>
+    /// AV-LINK: Retarget the hyperlink span under the caret, preserving its ScreenTip. When
+    /// <paramref name="newDisplayText"/> is non-null, non-empty, and differs from the span's current
+    /// visible text, the span's characters are rewritten to it (Word's Edit Hyperlink dialog applies an
+    /// edited Display-text field); otherwise the existing text is left untouched.
+    /// </summary>
+    public void EditHyperlink(string newTarget, string? newDisplayText)
     {
         if (!HyperlinkTarget.TryParse(newTarget, out var parsedTarget)
             || !TryFindHyperlinkSpanAtCaret(out var block, out var start, out var end, out var current))
@@ -9510,7 +9533,40 @@ public sealed class DocumentView : Control
         }
 
         var next = new LinkInfo(parsedTarget.Url, parsedTarget.Anchor, current.Tooltip);
+
+        if (!string.IsNullOrEmpty(newDisplayText)
+            && _doc.Blocks[block] is Paragraph paragraph
+            && !string.Equals(newDisplayText, SpanText(paragraph, start, end), StringComparison.Ordinal))
+        {
+            var newEnd = end;
+            _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
+            {
+                var cells = ParaCells(p);
+                var lo = Math.Clamp(start, 0, cells.Count);
+                var hi = Math.Clamp(end, lo, cells.Count);
+                var fmt = lo < cells.Count ? cells[lo].Fmt : ActiveFormatting(p, lo);
+                var replacement = newDisplayText.Select(ch => new Cell(ch, fmt, Link: next)).ToList();
+                cells.RemoveRange(lo, hi - lo);
+                cells.InsertRange(lo, replacement);
+                newEnd = lo + replacement.Count;
+                SetRuns(p, cells);
+            }));
+            _caret = new DocPosition(block, newEnd);
+            _selectionAnchor = _caret;
+            Focus();
+            return;
+        }
+
         ApplyLinkSpan(block, start, end, _ => next);
+    }
+
+    /// <summary>The visible text of paragraph cells [start, end) — used to detect a Display-text edit.</summary>
+    private static string SpanText(Paragraph paragraph, int start, int end)
+    {
+        var cells = ParaCells(paragraph);
+        var lo = Math.Clamp(start, 0, cells.Count);
+        var hi = Math.Clamp(end, lo, cells.Count);
+        return string.Concat(cells.Skip(lo).Take(hi - lo).Select(c => c.Ch));
     }
 
     /// <summary>
@@ -9546,7 +9602,13 @@ public sealed class DocumentView : Control
         if (!HyperlinkTarget.TryParse("#" + normalized, out var parsedTarget))
             return;
 
-        InsertHyperlink(parsedTarget.DisplayFallback, "#" + parsedTarget.Anchor);
+        // A non-empty selection keeps its own text (Word links the selection as-is); only fall back to the
+        // bookmark name as display text when there is nothing selected to wrap (mirrors InsertHyperlink's
+        // own no-selection path).
+        var sel = NormalizedSelection();
+        var hasWrappableSelection = sel is { } s && s.Start.Block == s.End.Block && s.End.Offset > s.Start.Offset;
+        var displayText = hasWrappableSelection ? string.Empty : parsedTarget.DisplayFallback;
+        InsertHyperlink(displayText, "#" + parsedTarget.Anchor);
     }
 
     /// <summary>

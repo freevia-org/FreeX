@@ -129,8 +129,17 @@ public static class OmmlParser
         var text = rEl.Element(M + "t")?.Value ?? string.Empty;
         var rPr  = rEl.Element(M + "rPr");
 
-        // m:nor present → normal/upright (not italic)
-        bool isItalic = rPr?.Element(M + "nor") is null;
+        // m:nor is a CT_OnOff: presence alone doesn't mean "on". Its m:val must be
+        // read — absent val (bare <m:nor/>), "1", "true", or "on" mean normal/upright;
+        // "0", "false", or "off" mean NOT normal, i.e. keep the default italic style.
+        var norEl = rPr?.Element(M + "nor");
+        bool isItalic = true; // default: italic (no m:nor element at all)
+        if (norEl is not null)
+        {
+            var norVal = norEl.Attribute(M + "val")?.Value;
+            bool norOn = norVal is null or "1" or "true" or "on";
+            isItalic = !norOn;
+        }
 
         // m:sty attribute: "b", "bi", "i" (italic), "p" (plain/upright)
         // "p" or "b" → not italic
@@ -210,17 +219,19 @@ public static class OmmlParser
     {
         var naryPr = el.Element(M + "naryPr");
 
-        // m:chr is the operator character; default "?"
+        // m:chr is the operator character. Per ECMA-376 §22.1.2.75 (CT_Nary),
+        // when m:chr is absent the default n-ary operator is the integral sign ∫ (U+222B).
         var chrEl = naryPr?.Element(M + "chr");
         string opChar = chrEl?.Attribute(M + "val")?.Value
                      ?? chrEl?.Value
-                     ?? "?";
+                     ?? "∫"; // ∫ (integral) — CT_Nary default m:chr
 
-        // m:limLoc: "undOvr" = limits above/below (??); "subSup" = as scripts (?)
+        // m:limLoc: "undOvr" = limits above/below; "subSup" = as scripts.
+        // Per ECMA-376 §22.1.2.66 (CT_LimLoc), the default (element absent) is "subSup".
         var limLoc = naryPr?.Element(M + "limLoc")?.Attribute(M + "val")?.Value
                   ?? naryPr?.Element(M + "limLoc")?.Value
-                  ?? "undOvr";
-        bool aboveBelow = limLoc != "subSup";
+                  ?? "subSup";
+        bool aboveBelow = limLoc == "undOvr";
 
         MathNode? subLimit = null, supLimit = null;
         var subEl = el.Element(M + "sub");
@@ -247,17 +258,20 @@ public static class OmmlParser
     {
         var dPr = el.Element(M + "dPr");
 
-        string begChr = dPr?.Element(M + "begChr")?.Attribute(M + "val")?.Value
-                     ?? dPr?.Element(M + "begChr")?.Value
-                     ?? "(";
-        string endChr = dPr?.Element(M + "endChr")?.Attribute(M + "val")?.Value
-                     ?? dPr?.Element(M + "endChr")?.Value
-                     ?? ")";
+        // Per ECMA-376 §22.1.2.20 (CT_DPr): when m:begChr / m:endChr is ABSENT the
+        // default brackets are "(" and ")". When the element is PRESENT but its
+        // m:val is explicitly the empty string, that means NO bracket on that side
+        // (e.g. one-sided/piecewise delimiters) — it must not be defaulted to "("/")"
+        // nor overridden to "|"; it stays empty.
+        var begChrEl = dPr?.Element(M + "begChr");
+        string begChr = begChrEl is null
+            ? "("
+            : begChrEl.Attribute(M + "val")?.Value ?? begChrEl.Value;
 
-        // If begChr / endChr attribute is an empty string, use no bracket.
-        // OOXML uses val="" to mean "no bracket" for cases like |…|.
-        if (begChr == "" && dPr?.Element(M + "begChr") is not null)
-            begChr = "|"; // default to | when explicitly set to empty (fence)
+        var endChrEl = dPr?.Element(M + "endChr");
+        string endChr = endChrEl is null
+            ? ")"
+            : endChrEl.Attribute(M + "val")?.Value ?? endChrEl.Value;
 
         var elements = new List<MathNode>();
         foreach (var eEl in el.Elements(M + "e"))

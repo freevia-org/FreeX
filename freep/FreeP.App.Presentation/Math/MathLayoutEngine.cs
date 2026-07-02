@@ -167,17 +167,25 @@ public static class MathLayoutEngine
         // Script top sits at (baselineFromTop - shiftUp - scriptBox.Metrics.Ascent)
         // → script Y = baselineFromTop - shiftUp - scriptBox.Metrics.Ascent
         double scriptY = baselineFromTop - shiftUp - scriptBox.Metrics.Ascent;
-        if (scriptY < 0) scriptY = 0;
 
-        double totalH = Math.Max(baseBox.Metrics.Height, scriptY + scriptBox.Metrics.Height);
+        // HB3: for a normal-size base, scriptY is negative (the superscript
+        // rises above the base's own top). Rather than clamping it to 0 —
+        // which draws the script too low and never grows the container's
+        // ascent to contain it — shift the WHOLE box down by the deficit so
+        // the baseline stays put and the container grows upward.
+        double deficit = scriptY < 0 ? -scriptY : 0;
+        double baseY = deficit;
+        scriptY += deficit;
+
+        double totalH = Math.Max(baseY + baseBox.Metrics.Height, scriptY + scriptBox.Metrics.Height);
         double totalW = baseBox.Metrics.Width + scriptBox.Metrics.Width + em * 0.03;
 
         var container = new MathBox.Container();
         container.Metrics.Width  = totalW;
         container.Metrics.Height = totalH;
-        container.Metrics.Ascent = baseBox.Metrics.Ascent;
+        container.Metrics.Ascent = baseBox.Metrics.Ascent + deficit;
 
-        baseBox.X = 0; baseBox.Y = 0;
+        baseBox.X = 0; baseBox.Y = baseY;
         scriptBox.X = baseBox.Metrics.Width + em * 0.03;
         scriptBox.Y = scriptY;
 
@@ -200,6 +208,10 @@ public static class MathLayoutEngine
         double shiftDown = em * 0.25;
         double scriptY = baseBox.Metrics.Ascent + shiftDown;
 
+        // HB3 (symmetric case): a deep subscript never needs to shift the
+        // Ascent (the baseline never moves for a sub — only the descent
+        // grows), so folding its bottom extent into totalH via Math.Max
+        // already reports the correct (larger) Descent = totalH - Ascent.
         double totalH = Math.Max(baseBox.Metrics.Height, scriptY + scriptBox.Metrics.Height);
         double totalW = baseBox.Metrics.Width + scriptBox.Metrics.Width + em * 0.03;
 
@@ -232,15 +244,23 @@ public static class MathLayoutEngine
 
         // Sup: top at baseline - 0.40em - supBox.Ascent
         double supY = baseline - em * 0.40 - supBox.Metrics.Ascent;
-        if (supY < 0) supY = 0;
 
         // Sub: top at baseline + 0.25em
         double subY = baseline + em * 0.25;
 
+        // HB3: for a normal-size base, supY is negative (the superscript
+        // rises above the base's own top). Shift the whole box down by the
+        // deficit instead of clamping supY to 0, and grow the container's
+        // Ascent by the same deficit so the baseline stays consistent.
+        double deficit = supY < 0 ? -supY : 0;
+        double baseY = deficit;
+        supY += deficit;
+        subY += deficit;
+
         double scriptX = baseBox.Metrics.Width + em * 0.03;
         double scriptW = Math.Max(subBox.Metrics.Width, supBox.Metrics.Width);
 
-        double totalH = Math.Max(baseBox.Metrics.Height, Math.Max(
+        double totalH = Math.Max(baseY + baseBox.Metrics.Height, Math.Max(
             supY + supBox.Metrics.Height,
             subY + subBox.Metrics.Height));
         double totalW = scriptX + scriptW;
@@ -248,9 +268,9 @@ public static class MathLayoutEngine
         var container = new MathBox.Container();
         container.Metrics.Width  = totalW;
         container.Metrics.Height = totalH;
-        container.Metrics.Ascent = baseline;
+        container.Metrics.Ascent = baseline + deficit;
 
-        baseBox.X = 0; baseBox.Y = 0;
+        baseBox.X = 0; baseBox.Y = baseY;
         supBox.X = scriptX; supBox.Y = supY;
         subBox.X = scriptX; subBox.Y = subY;
 
@@ -369,39 +389,54 @@ public static class MathLayoutEngine
             double opY  = supH;
             double subY = supH + opBox.Metrics.Height + limGap;
 
-            double totalH = supH + opBox.Metrics.Height + subH;
-            double totalW = opColW + em * 0.06 + operandBox.Metrics.Width;
-
             // Math baseline: align operand's baseline with the op's baseline
             double opBaseline = opY + opBox.Metrics.Ascent;
-            double ascent = Math.Max(opBaseline, supH + opBox.Metrics.Ascent);
+
+            // Operand: vertically align its baseline with the operator's baseline
+            double operandY = opBaseline - operandBox.Metrics.Ascent;
+            double operandBottom = operandY + operandBox.Metrics.Height;
+            double operandTop = Math.Min(0, operandY);
+
+            // HB2: fold the operand's full extent (which may rise above the
+            // top row or extend below the last limit row) into totalH so a
+            // tall operand (e.g. a fraction after ? / ?) is never clipped.
+            double stackH = supH + opBox.Metrics.Height + subH;
+            double totalH = Math.Max(stackH, operandBottom) - operandTop;
+            double totalW = opColW + em * 0.06 + operandBox.Metrics.Width;
+
+            // opBaseline == opY + opBox.Metrics.Ascent == supH + opBox.Metrics.Ascent;
+            // shift the ascent up by the same amount the operand rose above the top.
+            double ascent = opBaseline - operandTop;
 
             var c = new MathBox.Container();
             c.Metrics.Width  = totalW;
             c.Metrics.Height = totalH;
-            c.Metrics.Ascent = opBaseline;
+            c.Metrics.Ascent = ascent;
+
+            // If the operand rises above the stack's top (operandTop < 0),
+            // shift every child down by -operandTop so all Y's stay >= 0
+            // while the baseline (Ascent) already accounts for the shift.
+            double shift = -operandTop;
 
             // Sup limit
             if (supLimBox is not null)
             {
-                supLimBox.X = (opColW - supLimBox.Metrics.Width) / 2; supLimBox.Y = 0;
+                supLimBox.X = (opColW - supLimBox.Metrics.Width) / 2; supLimBox.Y = 0 + shift;
                 c.Children.Add(supLimBox);
             }
 
             // Operator
-            opBox.X = (opColW - opBox.Metrics.Width) / 2; opBox.Y = opY;
+            opBox.X = (opColW - opBox.Metrics.Width) / 2; opBox.Y = opY + shift;
             c.Children.Add(opBox);
 
             // Sub limit
             if (subLimBox is not null)
             {
-                subLimBox.X = (opColW - subLimBox.Metrics.Width) / 2; subLimBox.Y = subY;
+                subLimBox.X = (opColW - subLimBox.Metrics.Width) / 2; subLimBox.Y = subY + shift;
                 c.Children.Add(subLimBox);
             }
 
-            // Operand: vertically align its baseline with the operator's baseline
-            double operandY = opBaseline - operandBox.Metrics.Ascent;
-            operandBox.X = opColW + em * 0.06; operandBox.Y = operandY;
+            operandBox.X = opColW + em * 0.06; operandBox.Y = operandY + shift;
             c.Children.Add(operandBox);
 
             return c;
@@ -424,31 +459,46 @@ public static class MathLayoutEngine
 
             double colH = opBox.Metrics.Height;
             double totalW = scriptX + scriptW + em * 0.06 + operandBox.Metrics.Width;
-            double totalH = Math.Max(colH, Math.Max(
+
+            // Operand: vertically align its baseline with the operator's baseline.
+            double operandY = baseline - operandBox.Metrics.Ascent;
+            double operandBottom = operandY + operandBox.Metrics.Height;
+            double operandTop = Math.Min(0, operandY);
+
+            // HB1: fold the operand's full extent into totalH (it was previously
+            // computed from only the operator + limit-script boxes) so a tall
+            // operand (e.g. ? of a fraction) is fully contained, not clipped.
+            double scriptStackH = Math.Max(colH, Math.Max(
                 supLimBox is not null ? supY + supLimBox.Metrics.Height : 0,
                 subLimBox is not null ? subY + subLimBox.Metrics.Height : 0));
+            double totalH = Math.Max(scriptStackH, operandBottom) - operandTop;
+
+            double ascent = baseline - operandTop;
 
             var c = new MathBox.Container();
             c.Metrics.Width  = totalW;
             c.Metrics.Height = totalH;
-            c.Metrics.Ascent = baseline;
+            c.Metrics.Ascent = ascent;
 
-            opBox.X = 0; opBox.Y = 0;
+            // Shift every child down by -operandTop when the operand rises
+            // above the operator/limit column's top (operandTop < 0).
+            double shift = -operandTop;
+
+            opBox.X = 0; opBox.Y = 0 + shift;
             c.Children.Add(opBox);
 
             if (supLimBox is not null)
             {
-                supLimBox.X = scriptX; supLimBox.Y = supY;
+                supLimBox.X = scriptX; supLimBox.Y = supY + shift;
                 c.Children.Add(supLimBox);
             }
             if (subLimBox is not null)
             {
-                subLimBox.X = scriptX; subLimBox.Y = subY;
+                subLimBox.X = scriptX; subLimBox.Y = subY + shift;
                 c.Children.Add(subLimBox);
             }
 
-            double operandY = baseline - operandBox.Metrics.Ascent;
-            operandBox.X = scriptX + scriptW + em * 0.06; operandBox.Y = operandY;
+            operandBox.X = scriptX + scriptW + em * 0.06; operandBox.Y = operandY + shift;
             c.Children.Add(operandBox);
 
             return c;

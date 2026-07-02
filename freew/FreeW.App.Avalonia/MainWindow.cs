@@ -1272,7 +1272,7 @@ public sealed class MainWindow : Window
             title: InsertDialogTextResources.Hyperlink.EditTitle);
         await dialog.ShowDialog(this);
         if (dialog.Address is { } address)
-            _editor.EditHyperlink(address);
+            _editor.EditHyperlink(address, dialog.DisplayText);
         _editor.Focus();
     }
 

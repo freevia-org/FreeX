@@ -104,6 +104,65 @@ public sealed class DocumentViewHyperlinkBookmarkTests
     }
 
     [Fact]
+    public async Task InsertHyperlink_over_selection_with_different_display_text_replaces_the_selected_text()
+    {
+        string? linkedText = null;
+        string? url = null;
+        var ran = await OnUiThread(() =>
+        {
+            var view = Build("Visit click here today");
+            // Select "click here" (offsets 6..17).
+            view.SetSelectionRangePublic(0, 6, 0, 17);
+            view.InsertHyperlink("docs", "https://x.example");
+
+            var p = (Paragraph)view.Document.Blocks[0];
+            var link = p.Runs.FirstOrDefault(r => r.HyperlinkUrl is { Length: > 0 });
+            linkedText = link?.Text;
+            url = link?.HyperlinkUrl;
+        });
+
+        if (!ran) return;
+        linkedText.Should().Be("docs", "Word replaces the selected text with the dialog's Display field when it differs");
+        url.Should().Be("https://x.example");
+    }
+
+    [Fact]
+    public async Task InsertHyperlink_over_selection_with_unchanged_display_text_only_retags_the_link()
+    {
+        string? text = null;
+        var ran = await OnUiThread(() =>
+        {
+            var view = Build("Visit Acme today");
+            view.SetSelectionRangePublic(0, 6, 0, 10); // "Acme"
+            view.InsertHyperlink("Acme", "https://acme.example"); // display text == selection
+
+            var p = (Paragraph)view.Document.Blocks[0];
+            text = p.PlainText;
+        });
+
+        if (!ran) return;
+        text.Should().Be("Visit Acme today", "when the display text matches the selection, only the Link is retagged");
+    }
+
+    [Fact]
+    public async Task InsertHyperlink_over_selection_with_empty_display_text_only_retags_the_link()
+    {
+        string? text = null;
+        var ran = await OnUiThread(() =>
+        {
+            var view = Build("Visit Acme today");
+            view.SetSelectionRangePublic(0, 6, 0, 10); // "Acme"
+            view.InsertHyperlink("", "https://acme.example"); // no display text supplied
+
+            var p = (Paragraph)view.Document.Blocks[0];
+            text = p.PlainText;
+        });
+
+        if (!ran) return;
+        text.Should().Be("Visit Acme today", "an empty display text leaves the selected text untouched");
+    }
+
+    [Fact]
     public async Task InsertHyperlink_is_undoable()
     {
         var beforeHadLink = false;
@@ -319,6 +378,56 @@ public sealed class DocumentViewHyperlinkBookmarkTests
         url.Should().BeNull();
         anchor.Should().Be("TargetBookmark");
         tooltip.Should().Be("Old tip", "retargeting should keep the existing ScreenTip");
+    }
+
+    [Fact]
+    public async Task EditHyperlink_with_changed_display_text_rewrites_the_span_text_and_retargets()
+    {
+        string? text = null;
+        string? url = null;
+        var ran = await OnUiThread(() =>
+        {
+            var view = Build("See Acme site");
+            view.SetSelectionRangePublic(0, 4, 0, 8); // "Acme"
+            view.InsertHyperlink("Acme", "https://old.example");
+            view.MoveCaretToBlock(0, 6);
+
+            view.EditHyperlink("https://new.example", "Acme Corp");
+
+            var p = (Paragraph)view.Document.Blocks[0];
+            var link = p.Runs.FirstOrDefault(r => r.HyperlinkUrl is { Length: > 0 });
+            text = link?.Text;
+            url = link?.HyperlinkUrl;
+        });
+
+        if (!ran) return;
+        text.Should().Be("Acme Corp", "an edited Display field should replace the link span's visible text, matching Word");
+        url.Should().Be("https://new.example");
+    }
+
+    [Fact]
+    public async Task EditHyperlink_with_unchanged_display_text_only_retargets()
+    {
+        string? text = null;
+        string? url = null;
+        var ran = await OnUiThread(() =>
+        {
+            var view = Build("See Acme site");
+            view.SetSelectionRangePublic(0, 4, 0, 8); // "Acme"
+            view.InsertHyperlink("Acme", "https://old.example");
+            view.MoveCaretToBlock(0, 6);
+
+            view.EditHyperlink("https://new.example", "Acme"); // display unchanged
+
+            var p = (Paragraph)view.Document.Blocks[0];
+            var link = p.Runs.FirstOrDefault(r => r.HyperlinkUrl is { Length: > 0 });
+            text = link?.Text;
+            url = link?.HyperlinkUrl;
+        });
+
+        if (!ran) return;
+        text.Should().Be("Acme", "unchanged display text leaves the span's characters untouched");
+        url.Should().Be("https://new.example");
     }
 
     [Fact]
