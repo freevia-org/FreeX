@@ -118,7 +118,10 @@ public static class PresentationNotesPagePdfExporter
 
             if (plan.SlideIndex is { } slideIndex && slideIndex >= 0 && slideIndex < presentation.Slides.Count)
             {
-                var slidePage = PresentationPdfExporter.BuildSlidePage(presentation.Slides[slideIndex]);
+                var slidePage = PresentationPdfExporter.BuildSlidePage(
+                    presentation.Slides[slideIndex],
+                    presentation.SlideSizeCxEmu,
+                    presentation.SlideSizeCyEmu);
                 ops.AddRange(MapSlideOps(slidePage, plan.SlideBounds, plan.PageBounds.Height));
             }
 

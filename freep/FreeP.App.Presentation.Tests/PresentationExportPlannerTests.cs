@@ -139,6 +139,24 @@ public sealed class PresentationExportPlannerTests
     }
 
     [Fact]
+    public void NotesPagePreviewPlan_UsesModeledSlideAspectRatio()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.SlideSizeCxEmu = 9_144_000;
+        presentation.SlideSizeCyEmu = 6_858_000;
+        presentation.Slides[0].Title = "Standard 4:3";
+        presentation.Slides[0].Notes = MakeTextBody("Speaker note");
+
+        var plan = PresentationNotesPagePreviewPlanner.Build(presentation, currentSlideIndex: 0);
+
+        (plan.SlideBounds.Width / plan.SlideBounds.Height)
+            .Should()
+            .BeApproximately(4d / 3d, 0.001, "notes-page thumbnails must match the deck slide size, not always 16:9");
+        plan.NotesBounds.Top.Should().BeGreaterThan(plan.SlideBounds.Bottom);
+        plan.NotesText.Should().Be("Speaker note");
+    }
+
+    [Fact]
     public void NotesPagePreviewPlan_EmptyDeckProducesNoSlidePlan()
     {
         var presentation = Presentation.CreateEmpty();
