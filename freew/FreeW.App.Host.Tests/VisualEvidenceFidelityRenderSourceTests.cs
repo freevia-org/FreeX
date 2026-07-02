@@ -18,6 +18,10 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
         source.Should().Contain("sectionRelativePageNumber");
         source.Should().Contain("f2-columns.docx");
         source.Should().Contain("f2-border-watermark.docx");
+        source.Should().Contain("backstage-print-preview-fidelity.docx");
+        source.Should().Contain("backstage-pdf-export-fidelity.docx");
+        source.Should().Contain("BuildVisualEvidenceOutputPath(outDir, name, i + 1)");
+        source.Should().Contain("FreeWVisualEvidencePlanner.ExpectedOutputName(scenarioId, pageNumber)");
         source.Should().Contain("hostId: \"wpf-fidelity-render\"");
         project.Should().Contain("FreeW.App.Presentation");
     }
