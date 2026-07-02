@@ -7,6 +7,7 @@ using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Free.Shared.Drawing;
 using FreeP.App.Compositor;
+using FreeP.App.Compositor.MathLayout;
 using FreeP.Core.Model;
 
 // Alias to disambiguate from FreeP.Core.Model.GradientStop
@@ -1301,6 +1302,9 @@ public sealed class SlideCanvas : Control
 
             switch (TextLayoutPlanner.PlanParagraphRenderRoute(para, text))
             {
+                case TextParagraphRenderRoute.Math:
+                    RenderParaWithMath(dc, para, placement.X, placement.Y);
+                    break;
                 case TextParagraphRenderRoute.Effects:
                     RenderParaWithEffects(dc, para, placement.X, placement.Y, bounds, text.WarpPreset);
                     break;
@@ -1355,6 +1359,9 @@ public sealed class SlideCanvas : Control
 
             switch (TextLayoutPlanner.PlanParagraphRenderRoute(para, text))
             {
+                case TextParagraphRenderRoute.Math:
+                    RenderParaWithMath(dc, para, placement.X, placement.Y);
+                    break;
                 case TextParagraphRenderRoute.Effects:
                     RenderParaWithEffects(dc, para, placement.X, placement.Y, bounds, text.WarpPreset);
                     break;
@@ -1414,6 +1421,112 @@ public sealed class SlideCanvas : Control
         {
             var ft = BuildSingleRunFormattedTextAt(para.Runs[segment.RunIndex], segment.Text);
             dc.DrawText(ft, new Point(segment.X, startY));
+        }
+    }
+
+    // ── Theme 27: math rendering ────────────────────────────────────────────────
+
+    /// <summary>
+    /// Renders a paragraph that contains OMML math runs using the shared
+    /// <see cref="MathBoxRenderPlanner"/> and Avalonia drawing primitives.
+    /// </summary>
+    private static void RenderParaWithMath(
+        DrawingContext dc,
+        ResolvedParagraph para,
+        double startX, double startY)
+    {
+        double x = startX;
+        foreach (var run in para.Runs)
+        {
+            if (run.IsMathRun && run.MathLayout is not null)
+            {
+                var mathOps = MathBoxRenderPlanner.Plan(
+                    run.MathLayout, x, startY, run.Color, run.FontFamily);
+                foreach (var op in mathOps)
+                    DrawMathOpAvalonia(dc, op);
+                x += run.MathLayout.Metrics.Width;
+            }
+            else if (!string.IsNullOrEmpty(run.Text))
+            {
+                var ft = BuildSingleRunFormattedTextAt(run, run.Text);
+                dc.DrawText(ft, new Point(x, startY));
+                x += ft.Width;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Draws a single <see cref="MathDrawOp"/> as Avalonia primitives.
+    /// ALL math layout decisions come from the shared MathBoxRenderPlanner.
+    /// </summary>
+    private static void DrawMathOpAvalonia(DrawingContext dc, MathDrawOp op)
+    {
+        switch (op)
+        {
+            case MathDrawOp.DrawGlyph g:
+            {
+                var typeface = new Typeface(
+                    g.FontFamily,
+                    g.IsItalic ? FontStyle.Italic : FontStyle.Normal,
+                    FontWeight.Normal, FontStretch.Normal);
+                double emPx = g.FontSizePt * (96.0 / 72.0);
+                var brush = new SolidColorBrush(Color.FromRgb(g.Color.R, g.Color.G, g.Color.B));
+                var ft = new FormattedText(g.Text,
+                    System.Globalization.CultureInfo.CurrentUICulture,
+                    FlowDirection.LeftToRight, typeface, emPx, brush);
+                dc.DrawText(ft, new Point(g.X, g.Y));
+                break;
+            }
+
+            case MathDrawOp.DrawHRule hr:
+            {
+                var pen = new Pen(
+                    new SolidColorBrush(Color.FromRgb(hr.Color.R, hr.Color.G, hr.Color.B)),
+                    hr.Thickness);
+                dc.DrawLine(pen, new Point(hr.X, hr.Y), new Point(hr.X + hr.Width, hr.Y));
+                break;
+            }
+
+            case MathDrawOp.DrawBracket br:
+            {
+                double naturalEm = br.ScaledHeight * 0.85;
+                var fontFamily = br.FontFamily.Length > 0 ? br.FontFamily : "Cambria Math";
+                var typeface = new Typeface(fontFamily,
+                    FontStyle.Normal, FontWeight.Normal, FontStretch.Normal);
+                var brush = new SolidColorBrush(Color.FromRgb(br.Color.R, br.Color.G, br.Color.B));
+                var ft = new FormattedText(br.Character,
+                    System.Globalization.CultureInfo.CurrentUICulture,
+                    FlowDirection.LeftToRight, typeface, naturalEm, brush);
+                dc.DrawText(ft, new Point(br.X, br.Y));
+                break;
+            }
+
+            case MathDrawOp.DrawRadical rad:
+            {
+                var pen = new Pen(
+                    new SolidColorBrush(Color.FromRgb(rad.Color.R, rad.Color.G, rad.Color.B)),
+                    rad.OverlineThickness);
+
+                double x0   = rad.X;
+                double x1   = rad.X + rad.SignWidth * 0.25;
+                double x2   = rad.X + rad.SignWidth;
+                double xOvEnd = x2 + rad.OverlineWidth;
+                double yTop  = rad.Y + rad.OverlineThickness / 2.0;
+                double yFoot = rad.Y + rad.Height * 0.85;
+                double yBase = rad.Y + rad.OverlineThickness;
+
+                var geo = new StreamGeometry();
+                using (var ctx = geo.Open())
+                {
+                    ctx.BeginFigure(new Point(x0, yTop + (yFoot - yTop) * 0.4), isFilled: false);
+                    ctx.LineTo(new Point(x1, yFoot));
+                    ctx.LineTo(new Point(x2, yBase));
+                    ctx.LineTo(new Point(xOvEnd, yBase));
+                    ctx.EndFigure(isClosed: false);
+                }
+                dc.DrawGeometry(null, pen, geo);
+                break;
+            }
         }
     }
 

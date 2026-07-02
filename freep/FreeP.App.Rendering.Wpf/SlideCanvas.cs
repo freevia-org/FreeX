@@ -1,4 +1,5 @@
 using FreeP.App.Compositor;
+using FreeP.App.Compositor.MathLayout;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
@@ -1330,6 +1331,9 @@ public sealed class SlideCanvas : FrameworkElement
 
             switch (TextLayoutPlanner.PlanParagraphRenderRoute(para, text))
             {
+                case TextParagraphRenderRoute.Math:
+                    RenderParaWithMath(dc, para, placement.X, placement.Y);
+                    break;
                 case TextParagraphRenderRoute.Effects:
                     RenderParaWithEffects(dc, para, placement.X, placement.Y, placement.MaxWidthDip, text.Wrap, text.WarpPreset, bounds);
                     break;
@@ -1386,6 +1390,9 @@ public sealed class SlideCanvas : FrameworkElement
 
             switch (TextLayoutPlanner.PlanParagraphRenderRoute(para, text))
             {
+                case TextParagraphRenderRoute.Math:
+                    RenderParaWithMath(dc, para, placement.X, placement.Y);
+                    break;
                 case TextParagraphRenderRoute.Effects:
                     RenderParaWithEffects(dc, para, placement.X, placement.Y, placement.MaxWidthDip, text.Wrap, text.WarpPreset, bounds);
                     break;
@@ -1451,6 +1458,139 @@ public sealed class SlideCanvas : FrameworkElement
         {
             var ft = BuildSingleRunFormattedTextAt(para.Runs[segment.RunIndex], segment.Text);
             dc.DrawText(ft, new Point(segment.X, startY));
+        }
+    }
+
+    // ── Theme 27: math rendering ────────────────────────────────────────────────
+
+    /// <summary>
+    /// Renders a paragraph that contains one or more OMML math runs by calling
+    /// <see cref="MathBoxRenderPlanner.Plan"/> for each math run and drawing the
+    /// resulting renderer-neutral ops as WPF primitives.
+    /// Non-math runs in the same paragraph are drawn with plain FormattedText.
+    /// ALL layout is in the shared MathBoxRenderPlanner; only WPF draw calls live here.
+    /// </summary>
+    private static void RenderParaWithMath(
+        DrawingContext dc,
+        ResolvedParagraph para,
+        double startX, double startY)
+    {
+        double x = startX;
+
+        foreach (var run in para.Runs)
+        {
+            if (run.IsMathRun && run.MathLayout is not null)
+            {
+                // Plan the math draw ops using the shared engine (renderer-neutral).
+                var mathOps = MathBoxRenderPlanner.Plan(
+                    run.MathLayout, x, startY, run.Color, run.FontFamily);
+
+                foreach (var op in mathOps)
+                    DrawMathOpWpf(dc, op);
+
+                x += run.MathLayout.Metrics.Width;
+            }
+            else if (!string.IsNullOrEmpty(run.Text))
+            {
+                // Plain text run inline with math
+                var ft = BuildSingleRunFormattedTextAt(run, run.Text);
+                dc.DrawText(ft, new Point(x, startY));
+                x += ft.Width;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Draws a single <see cref="MathDrawOp"/> as WPF primitives.
+    /// All math layout decisions are already made by <see cref="MathBoxRenderPlanner"/>;
+    /// this method only translates to WPF draw calls.
+    /// </summary>
+    private static void DrawMathOpWpf(DrawingContext dc, MathDrawOp op)
+    {
+        switch (op)
+        {
+            case MathDrawOp.DrawGlyph g:
+            {
+                var typeface = new Typeface(
+                    new FontFamily(g.FontFamily),
+                    g.IsItalic ? FontStyles.Italic : FontStyles.Normal,
+                    FontWeights.Normal,
+                    FontStretches.Normal);
+                double emPx = g.FontSizePt * (96.0 / 72.0);
+                var brush = FreezeBrush(new SolidColorBrush(
+                    Color.FromRgb(g.Color.R, g.Color.G, g.Color.B)));
+                var ft = new FormattedText(
+                    g.Text,
+                    System.Globalization.CultureInfo.CurrentUICulture,
+                    FlowDirection.LeftToRight,
+                    typeface, emPx, brush,
+                    numberSubstitution: null,
+                    textFormattingMode: TextFormattingMode.Display,
+                    pixelsPerDip: 1.0);
+                dc.DrawText(ft, new Point(g.X, g.Y));
+                break;
+            }
+
+            case MathDrawOp.DrawHRule hr:
+            {
+                var pen = new Pen(FreezeBrush(new SolidColorBrush(
+                    Color.FromRgb(hr.Color.R, hr.Color.G, hr.Color.B))), hr.Thickness);
+                if (pen.CanFreeze) pen.Freeze();
+                dc.DrawLine(pen, new Point(hr.X, hr.Y), new Point(hr.X + hr.Width, hr.Y));
+                break;
+            }
+
+            case MathDrawOp.DrawBracket br:
+            {
+                // Scale the bracket character to match the required height.
+                // We draw it as FormattedText scaled via a transform.
+                double naturalEm = br.ScaledHeight * 0.85;
+                var typeface = new Typeface(
+                    new FontFamily(br.FontFamily.Length > 0 ? br.FontFamily : "Cambria Math"),
+                    FontStyles.Normal, FontWeights.Normal, FontStretches.Normal);
+                var brush = FreezeBrush(new SolidColorBrush(
+                    Color.FromRgb(br.Color.R, br.Color.G, br.Color.B)));
+                var ft = new FormattedText(
+                    br.Character,
+                    System.Globalization.CultureInfo.CurrentUICulture,
+                    FlowDirection.LeftToRight,
+                    typeface, naturalEm, brush,
+                    numberSubstitution: null,
+                    textFormattingMode: TextFormattingMode.Display,
+                    pixelsPerDip: 1.0);
+                dc.DrawText(ft, new Point(br.X, br.Y));
+                break;
+            }
+
+            case MathDrawOp.DrawRadical rad:
+            {
+                var pen = new Pen(FreezeBrush(new SolidColorBrush(
+                    Color.FromRgb(rad.Color.R, rad.Color.G, rad.Color.B))),
+                    rad.OverlineThickness);
+                if (pen.CanFreeze) pen.Freeze();
+
+                // Draw the √ check-mark as a path:
+                //   Start at top-left shoulder, down-left to foot, up-right to radicand base-left, then up to overline.
+                double x0 = rad.X;
+                double x1 = rad.X + rad.SignWidth * 0.25;  // foot x
+                double x2 = rad.X + rad.SignWidth;           // right edge of sign = start of overline
+                double xOvEnd = x2 + rad.OverlineWidth;
+                double yTop  = rad.Y + rad.OverlineThickness / 2.0;
+                double yFoot = rad.Y + rad.Height * 0.85;
+                double yBase = rad.Y + rad.OverlineThickness;
+
+                var geo = new StreamGeometry();
+                using (var ctx = geo.Open())
+                {
+                    ctx.BeginFigure(new Point(x0, yTop + (yFoot - yTop) * 0.4), isFilled: false, isClosed: false);
+                    ctx.LineTo(new Point(x1, yFoot), isStroked: true, isSmoothJoin: false);
+                    ctx.LineTo(new Point(x2, yBase), isStroked: true, isSmoothJoin: false);
+                    ctx.LineTo(new Point(xOvEnd, yBase), isStroked: true, isSmoothJoin: false);
+                }
+                geo.Freeze();
+                dc.DrawGeometry(null, pen, geo);
+                break;
+            }
         }
     }
 
