@@ -41,8 +41,11 @@ public sealed class ReviewWorkflowAdapterTests
             window.LastCommentPanePlan!.TotalCommentCount.Should().Be(1);
             window.LastCommentPanePlan.Comments.Single().Should().Match<PresentationCommentDescriptor>(comment =>
                 comment.ThreadStatus == PresentationCommentThreadStatus.Resolved &&
+                comment.IsSelected &&
                 !comment.CanResolve &&
                 comment.CanReopen);
+            window.LastCommentPanePlan.SelectedComment.Should().BeSameAs(window.LastCommentPanePlan.Comments[0]);
+            window.ReviewCommentSelectedCount.Should().Be(1);
             window.LastCommentPanePlan.Actions.Select(action => action.CommandId)
                 .Should()
                 .Contain(new[]
@@ -50,6 +53,9 @@ public sealed class ReviewWorkflowAdapterTests
                     PresentationReviewWorkflowPlanner.CommentsPaneCommandId,
                     PresentationReviewWorkflowPlanner.ReopenCommentCommandId
                 });
+            window.LastCommentPanePlan.Actions.Single(action =>
+                    action.CommandId == PresentationReviewWorkflowPlanner.ReopenCommentCommandId)
+                .IsEnabled.Should().BeTrue();
             window.LastAccessibilitySummaryPlan.Should().NotBeNull();
             var missingAltText = window.LastAccessibilitySummaryPlan!.Issues.Single(issue =>
                 issue.ShapeId == shape.Id && issue.Title == "Alt text missing");

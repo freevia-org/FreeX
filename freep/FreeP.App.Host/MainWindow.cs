@@ -175,6 +175,7 @@ public sealed class MainWindow : Window
     internal string AltTextPaneDescriptionPlaceholder => LastAltTextPanePlan?.Description.Placeholder ?? string.Empty;
     internal bool IsAltTextPaneDecorativeChecked => _altTextDecorativeCheck?.IsChecked == true;
     internal string AltTextPaneMessage => _altTextPaneMessage?.Text ?? string.Empty;
+    internal int ReviewCommentSelectedCount => LastCommentPanePlan?.Comments.Count(comment => comment.IsSelected) ?? 0;
     internal bool IsReadingOrderPaneVisible => _readingOrderPaneHost?.Visibility == Visibility.Visible;
     internal int ReadingOrderPaneItemCount => LastReadingOrderPlan?.Items.Count ?? 0;
     internal string ReadingOrderPaneHeading => _readingOrderPaneHeading?.Text ?? string.Empty;
@@ -891,12 +892,11 @@ public sealed class MainWindow : Window
                 card.Children.Add(headerPanel);
                 card.Children.Add(bodyText);
 
-                var isSelected = plan.SelectedCommentIndex == cm.CommentIndex;
                 var cardHost = new Border
                 {
-                    Background      = new SolidColorBrush(isSelected ? Color.FromRgb(0xF4, 0xEC, 0xE8) : Color.FromRgb(0xFA, 0xFA, 0xFA)),
-                    BorderBrush     = new SolidColorBrush(isSelected ? Color.FromRgb(0xB7, 0x47, 0x2A) : Color.FromRgb(0xE0, 0xE0, 0xE0)),
-                    BorderThickness = new Thickness(isSelected ? 2 : 1),
+                    Background      = new SolidColorBrush(cm.IsSelected ? Color.FromRgb(0xF4, 0xEC, 0xE8) : Color.FromRgb(0xFA, 0xFA, 0xFA)),
+                    BorderBrush     = new SolidColorBrush(cm.IsSelected ? Color.FromRgb(0xB7, 0x47, 0x2A) : Color.FromRgb(0xE0, 0xE0, 0xE0)),
+                    BorderThickness = new Thickness(cm.IsSelected ? 2 : 1),
                     CornerRadius    = new CornerRadius(4),
                     Margin          = new Thickness(0, 0, 0, 6),
                     Cursor          = Cursors.Hand,
@@ -962,17 +962,17 @@ public sealed class MainWindow : Window
             // Speech-bubble: a small orange circle with a tooltip showing author+text.
             var dot = new Border
             {
-                Width           = 14,
-                Height          = 14,
-                CornerRadius    = new CornerRadius(7),
-                Background      = new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A)),
+                Width           = cm.IsSelected ? 18 : 14,
+                Height          = cm.IsSelected ? 18 : 14,
+                CornerRadius    = new CornerRadius(cm.IsSelected ? 9 : 7),
+                Background      = new SolidColorBrush(cm.IsSelected ? Color.FromRgb(0x8F, 0x37, 0x21) : Color.FromRgb(0xB7, 0x47, 0x2A)),
                 BorderBrush     = System.Windows.Media.Brushes.White,
-                BorderThickness = new Thickness(1.5),
+                BorderThickness = new Thickness(cm.IsSelected ? 2.0 : 1.5),
                 ToolTip         = $"{cm.Author}: {cm.TextPreview}",
             };
 
-            Canvas.SetLeft(dot, cx - 7);
-            Canvas.SetTop(dot,  cy - 7);
+            Canvas.SetLeft(dot, cx - (cm.IsSelected ? 9 : 7));
+            Canvas.SetTop(dot,  cy - (cm.IsSelected ? 9 : 7));
             _commentOverlay.Children.Add(dot);
         }
     }

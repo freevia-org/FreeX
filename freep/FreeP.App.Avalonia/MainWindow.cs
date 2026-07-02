@@ -185,6 +185,7 @@ public sealed class MainWindow : Window
     internal bool IsReviewCommentsPaneVisible => _reviewCommentsPaneHost?.IsVisible == true;
     internal int ReviewCommentsPaneCommentCount => LastCommentPanePlan?.Comments.Count ?? 0;
     internal int ReviewCommentsPaneActionButtonCount => LastCommentPanePlan?.Actions.Count ?? 0;
+    internal int ReviewCommentsPaneSelectedCommentCount => LastCommentPanePlan?.Comments.Count(comment => comment.IsSelected) ?? 0;
     internal bool IsAltTextPaneVisible => _altTextPaneHost?.IsVisible == true;
     internal bool IsAltTextPaneApplyEnabled => _altTextApplyButton?.IsEnabled == true;
     internal string AltTextPaneTitleLabel => _altTextTitleLabel?.Text ?? string.Empty;
@@ -1525,7 +1526,6 @@ public sealed class MainWindow : Window
 
     private Control BuildReviewCommentCard(PresentationCommentDescriptor comment)
     {
-        var isSelected = LastCommentPanePlan?.SelectedCommentIndex == comment.CommentIndex;
         var header = new StackPanel
         {
             Orientation = Orientation.Horizontal,
@@ -1572,9 +1572,9 @@ public sealed class MainWindow : Window
 
         var border = new Border
         {
-            Background      = new SolidColorBrush(isSelected ? Color.FromRgb(0xF4, 0xEC, 0xE8) : Color.FromRgb(0xFA, 0xFA, 0xFA)),
-            BorderBrush     = new SolidColorBrush(isSelected ? Color.FromRgb(0xB7, 0x47, 0x2A) : Color.FromRgb(0xE0, 0xE0, 0xE0)),
-            BorderThickness = new Thickness(isSelected ? 2 : 1),
+            Background      = new SolidColorBrush(comment.IsSelected ? Color.FromRgb(0xF4, 0xEC, 0xE8) : Color.FromRgb(0xFA, 0xFA, 0xFA)),
+            BorderBrush     = new SolidColorBrush(comment.IsSelected ? Color.FromRgb(0xB7, 0x47, 0x2A) : Color.FromRgb(0xE0, 0xE0, 0xE0)),
+            BorderThickness = new Thickness(comment.IsSelected ? 2 : 1),
             CornerRadius    = new CornerRadius(4),
             Padding         = new Thickness(10),
             Margin          = new Thickness(12, 0, 12, 10),
