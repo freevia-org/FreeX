@@ -123,6 +123,9 @@ public sealed class ChartTextStyle
 
     /// <summary>Text color, or null to use the chart renderer default.</summary>
     public ThemeAwareColor? Color { get; set; }
+
+    /// <summary>Font family/typeface name from <c>a:latin/@typeface</c>, or null to use the chart renderer default.</summary>
+    public string? FontFamily { get; set; }
 }
 
 /// <summary>A single data series within a <see cref="ChartShape"/>.</summary>

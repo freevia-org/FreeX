@@ -1796,7 +1796,8 @@ public static class PptxPackageReader
             Category = ReadDiagramCategory(root)
         };
 
-        foreach (var label in root.Descendants().Where(e => e.Name.LocalName == "styleLbl"))
+        var styleLabels = root.Elements().Where(e => e.Name.LocalName == "styleLbl").ToList();
+        foreach (var label in styleLabels)
         {
             var name = label.Attribute("name")?.Value;
             if (!string.IsNullOrWhiteSpace(name)
@@ -1804,21 +1805,64 @@ public static class PptxPackageReader
                 metadata.ColorLabels.Add(name);
         }
 
-        foreach (var colorEl in root.Descendants().Where(e =>
-            e.Name.LocalName is "schemeClr" or "srgbClr" or "sysClr"))
+        // KB1 fix: the node FILL cycle must come from the fillClrLst of the node styleLbl
+        // (e.g. name="node0"/"node1"), NOT a flatten of every color in the part. A real
+        // colorsDef also carries linClrLst/txFillClrLst/txLinClrLst/bgFillClrLst under
+        // node and non-node styleLbls (e.g. "lnNode", "trans1D", "bg") — those must never
+        // leak into the node fill palette, even when their resolved RGB happens to be
+        // identical to a fill color's un-shaded siblings (the pre-existing dedup key was
+        // RoleName+Resolved, which is not enough on its own to keep lists separated).
+        var nodeFillList = SelectNodeFillColorList(styleLabels);
+        if (nodeFillList is not null)
         {
-            var color = TryReadSmartArtPaletteColor(colorEl, scheme);
-            if (color is null) continue;
+            foreach (var colorEl in nodeFillList.Elements().Where(e =>
+                e.Name.LocalName is "schemeClr" or "srgbClr" or "sysClr"))
+            {
+                var color = TryReadSmartArtPaletteColor(colorEl, scheme);
+                if (color is null) continue;
 
-            if (!metadata.Palette.Any(existing =>
-                string.Equals(existing.SchemeColor?.RoleName, color.SchemeColor?.RoleName, StringComparison.OrdinalIgnoreCase)
-                && existing.Resolved == color.Resolved))
-                metadata.Palette.Add(color);
+                if (!metadata.Palette.Any(existing =>
+                    string.Equals(existing.SchemeColor?.RoleName, color.SchemeColor?.RoleName, StringComparison.OrdinalIgnoreCase)
+                    && existing.Resolved == color.Resolved))
+                    metadata.Palette.Add(color);
 
-            if (metadata.Palette.Count >= 12) break;
+                if (metadata.Palette.Count >= 12) break;
+            }
         }
 
         return metadata;
+    }
+
+    /// <summary>
+    /// Picks the fillClrLst that supplies the node FILL color cycle for SmartArt shapes.
+    /// PowerPoint's colorsDef labels the diagram-node style with a styleLbl whose name
+    /// starts with "node" (commonly "node0", sometimes "node1" for diagrams with two node
+    /// families). That styleLbl's dgm:fillClrLst is the accent cycle used for node fills;
+    /// linClrLst/txFillClrLst/txLinClrLst/bgFillClrLst on that same (or any other) styleLbl
+    /// are unrelated (line, text, background) and must be ignored here.
+    /// Falls back to the first styleLbl carrying a fillClrLst at all (mirrors PowerPoint's
+    /// own leniency for non-standard/older colorsDef parts), then to null when none exists.
+    /// </summary>
+    private static XElement? SelectNodeFillColorList(IReadOnlyList<XElement> styleLabels)
+    {
+        XElement? FillListOf(XElement label) =>
+            label.Elements().FirstOrDefault(e => e.Name.LocalName == "fillClrLst");
+
+        // Prefer an exact "node0" label (the overwhelmingly common case), then any other
+        // "node*" label (e.g. "node1" for two-family diagrams), then fall back to whatever
+        // styleLbl happens to carry a fillClrLst.
+        var node0 = styleLabels.FirstOrDefault(l =>
+            string.Equals(l.Attribute("name")?.Value, "node0", StringComparison.OrdinalIgnoreCase));
+        if (node0 is not null && FillListOf(node0) is { } node0Fill) return node0Fill;
+
+        var otherNode = styleLabels.FirstOrDefault(l =>
+            (l.Attribute("name")?.Value ?? string.Empty).StartsWith("node", StringComparison.OrdinalIgnoreCase)
+            && FillListOf(l) is not null);
+        if (otherNode is not null) return FillListOf(otherNode);
+
+        return styleLabels.FirstOrDefault(l => FillListOf(l) is not null) is { } anyLabel
+            ? FillListOf(anyLabel)
+            : null;
     }
 
     private static string ReadDiagramTitle(XElement root) =>

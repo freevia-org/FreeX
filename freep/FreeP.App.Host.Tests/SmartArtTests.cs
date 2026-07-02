@@ -1055,6 +1055,134 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
+    public void Reader_SmartArtColorMetadata_NodeFillPalette_IsNotPollutedByLineOrTextColors()
+    {
+        // Mirrors a real "Colorful - Accent Colors" colorsDef: the node0 styleLbl carries
+        // fillClrLst=accent1..accent6, THEN linClrLst=accent1..accent6-with-shade (a
+        // genuinely different resolved color, so the old flatten+dedup did NOT collapse
+        // it), THEN txFillClrLst/txLinClrLst. Only the fillClrLst colors may end up in the
+        // node fill palette (KB1).
+        var dgmNs = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/diagram");
+        var aNs = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main");
+
+        XElement SchemeClr(string accent) => new(aNs + "schemeClr", new XAttribute("val", accent));
+        XElement ShadedSchemeClr(string accent) => new(aNs + "schemeClr",
+            new XAttribute("val", accent),
+            new XElement(aNs + "shade", new XAttribute("val", "50000")));
+
+        var accents = new[] { "accent1", "accent2", "accent3", "accent4", "accent5", "accent6" };
+
+        var colorsXml = new XDocument(new XDeclaration("1.0", "UTF-8", "yes"),
+            new XElement(dgmNs + "colorsDef",
+                new XAttribute(XNamespace.Xmlns + "dgm", dgmNs.NamespaceName),
+                new XAttribute(XNamespace.Xmlns + "a", aNs.NamespaceName),
+                new XAttribute("uniqueId", "urn:smartart:colors:colorful-accent-colors"),
+                new XElement(dgmNs + "title", new XAttribute("val", "Colorful - Accent Colors")),
+                new XElement(dgmNs + "catLst",
+                    new XElement(dgmNs + "cat", new XAttribute("type", "colorful"))),
+                new XElement(dgmNs + "styleLbl",
+                    new XAttribute("name", "node0"),
+                    new XElement(dgmNs + "fillClrLst", accents.Select(SchemeClr)),
+                    new XElement(dgmNs + "linClrLst", accents.Select(ShadedSchemeClr)),
+                    new XElement(dgmNs + "txFillClrLst", new XElement(aNs + "schemeClr", new XAttribute("val", "tx1"))),
+                    new XElement(dgmNs + "txLinClrLst", new XElement(aNs + "schemeClr", new XAttribute("val", "tx1"))))));
+
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/process1",
+            nodes: [("A", "Alpha"), ("B", "Beta"), ("C", "Gamma"), ("D", "Delta"), ("E", "Epsilon"), ("F", "Zeta"), ("G", "Eta")],
+            parOfConnections: [],
+            colorsXml: colorsXml);
+
+        var sa = PptxPackageReader.Read(pptxPath)
+            .Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Colors.Should().NotBeNull();
+        sa.Colors!.Palette.Should().HaveCount(6, "the node fill cycle is fillClrLst's 6 accents, not the 6+ line/text colors too");
+
+        var expectedRoleNames = accents;
+        sa.Colors.Palette.Select(c => c.SchemeColor!.RoleName)
+            .Should().BeEquivalentTo(expectedRoleNames, options => options.WithStrictOrdering(),
+                "node fill palette must be exactly fillClrLst's accent cycle in document order");
+
+        // None of the fill-palette entries carry the linClrLst shade transform: the
+        // resolved color for each accent must equal the plain (unshaded) scheme color,
+        // proving the shaded line-list entries never made it into the fill palette.
+        foreach (var color in sa.Colors.Palette)
+            color.SchemeColor!.Shade.Should().Be(1.0, "fill palette entries must come from fillClrLst, not the shaded linClrLst");
+
+        // node index wraps modulo the fill palette length (6): node 6 (0-based index 6,
+        // the 7th node "Eta") should reuse accent1's color, same as node 0.
+        sa.Colors.Palette[0].SchemeColor!.RoleName.Should().Be("accent1");
+    }
+
+    [Fact]
+    public void Reader_SmartArtColorMetadata_SingleFillColor_IsUniform()
+    {
+        var dgmNs = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/diagram");
+        var aNs = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main");
+
+        var colorsXml = new XDocument(new XDeclaration("1.0", "UTF-8", "yes"),
+            new XElement(dgmNs + "colorsDef",
+                new XAttribute(XNamespace.Xmlns + "dgm", dgmNs.NamespaceName),
+                new XAttribute(XNamespace.Xmlns + "a", aNs.NamespaceName),
+                new XAttribute("uniqueId", "urn:smartart:colors:colorful-accent-colors"),
+                new XElement(dgmNs + "styleLbl",
+                    new XAttribute("name", "node0"),
+                    new XElement(dgmNs + "fillClrLst",
+                        new XElement(aNs + "schemeClr", new XAttribute("val", "accent1"))),
+                    new XElement(dgmNs + "linClrLst",
+                        new XElement(aNs + "schemeClr", new XAttribute("val", "accent1"),
+                            new XElement(aNs + "shade", new XAttribute("val", "50000")))))));
+
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/process1",
+            nodes: [("A", "Alpha"), ("B", "Beta")],
+            parOfConnections: [],
+            colorsXml: colorsXml);
+
+        var sa = PptxPackageReader.Read(pptxPath)
+            .Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Colors.Should().NotBeNull();
+        sa.Colors!.Palette.Should().HaveCount(1, "a single fillClrLst color stays uniform and is not joined by the linClrLst shade");
+        sa.Colors.Palette[0].SchemeColor!.RoleName.Should().Be("accent1");
+        sa.Colors.Palette[0].SchemeColor!.Shade.Should().Be(1.0);
+    }
+
+    [Fact]
+    public void Reader_SmartArtColorMetadata_NoNodeFillList_FallsBackToEmptyPalette()
+    {
+        // A colorsDef with a styleLbl but no fillClrLst at all (e.g. only line/text lists,
+        // or a non-node label like "bg") must not crash and must not surface those
+        // unrelated colors as the node fill palette; the planner already falls back to
+        // theme accents when Palette is empty.
+        var dgmNs = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/diagram");
+        var aNs = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main");
+
+        var colorsXml = new XDocument(new XDeclaration("1.0", "UTF-8", "yes"),
+            new XElement(dgmNs + "colorsDef",
+                new XAttribute(XNamespace.Xmlns + "dgm", dgmNs.NamespaceName),
+                new XAttribute(XNamespace.Xmlns + "a", aNs.NamespaceName),
+                new XAttribute("uniqueId", "urn:smartart:colors:no-fill-list"),
+                new XElement(dgmNs + "styleLbl",
+                    new XAttribute("name", "bg"),
+                    new XElement(dgmNs + "txFillClrLst",
+                        new XElement(aNs + "schemeClr", new XAttribute("val", "tx1"))))));
+
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/process1",
+            nodes: [("A", "Alpha")],
+            parOfConnections: [],
+            colorsXml: colorsXml);
+
+        var sa = PptxPackageReader.Read(pptxPath)
+            .Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Colors.Should().NotBeNull();
+        sa.Colors!.Palette.Should().BeEmpty("no fillClrLst exists anywhere, so the node fill palette must be empty, not populated from txFillClrLst");
+    }
+
+    [Fact]
     public void Reader_ParsesSmartArtData_UnknownFamilyIsUnknown()
     {
         var pptxPath = MakeSmartArtPptxWithNodeTree(

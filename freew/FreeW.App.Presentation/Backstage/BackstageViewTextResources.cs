@@ -11,6 +11,14 @@ public static class BackstageViewTextResources
     public const string FileNameLabel = "File name";
     public const string FormatLabel = "Format";
     public const string DocumentSettingsSection = "Document Settings";
+    public const string EvidenceSection = "Evidence";
+    public const string EvidenceScenariosLabel = "Scenarios";
+    public const string NoEvidenceFixtureScenario = "No fixture scenario";
+    public const string PrintPreviewEvidenceLabel = "Print preview fidelity";
+    public const string PdfExportEvidenceLabel = "PDF export fidelity";
+    public const string NativePrintEvidenceLabel = "Native print";
+    public const string FixtureReadyEvidenceStatus = "Fixture ready";
+    public const string DeferredEvidenceStatus = "Deferred";
     public const string DirectPrintDeferredNote =
         "Note: Print is available in FreeW via Export to PDF (Ctrl+Shift+P). Direct printer output is planned for a future update.";
     public const string CreatePdfSection = "Create PDF/XPS Document";

@@ -163,6 +163,7 @@ public static class SlideCloner
                 Bold       = style.Bold,
                 Italic     = style.Italic,
                 Color      = style.Color,
+                FontFamily = style.FontFamily,
             };
 
     private static ShapeOutline? CloneShapeOutline(ShapeOutline? outline) => outline;

@@ -70,6 +70,9 @@ public sealed class BackstagePaneDedupSourceTests
             source.Should().Contain("BuildPrintPane = BuildPrintPane");
             source.Should().Contain("BackstagePaneSurfacePlanner.BuildPrintPane(");
             source.Should().Contain("SurfaceActionRow(action)");
+            source.Should().Contain("BuildPrintEvidenceSection(surface.Evidence)");
+            source.Should().Contain("BackstageViewTextResources.EvidenceSection");
+            source.Should().Contain("PrintEvidence_");
             source.Should().Contain("PrintPreview");
             source.Should().Contain("BuildAccountPane = BuildAccountPane");
             source.Should().Contain("BackstagePaneSurfacePlanner.BuildAccountPane(");

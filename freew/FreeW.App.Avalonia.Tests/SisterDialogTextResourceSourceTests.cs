@@ -83,6 +83,8 @@ public sealed class SisterDialogTextResourceSourceTests
         source.Should().Contain("BackstagePaneSurfacePlanner.BuildInfoPane(");
         source.Should().Contain("BackstagePaneSurfacePlanner.BuildAccountPane(");
         source.Should().Contain("surface.DeferredNote");
+        source.Should().Contain("BuildPrintEvidenceSection(surface.Evidence)");
+        source.Should().Contain("BackstageViewTextResources.EvidenceSection");
         source.Should().Contain("BackstageViewTextResources.ProductName");
         source.Should().NotContain("Content = \"\u2190 Back\"");
         source.Should().NotContain("AddNavEntry(panel, BackstagePane.Home, \"Home\")");

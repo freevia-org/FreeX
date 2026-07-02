@@ -362,6 +362,8 @@ internal sealed class BackstageView : Window
                 content.Children.Add(BuildSurfaceActionRow(action));
         }
 
+        content.Children.Add(BuildPrintEvidenceSection(surface.Evidence));
+
         if (!string.IsNullOrWhiteSpace(surface.DeferredNote))
         {
             content.Children.Add(AvaloniaBackstageChrome.CreateNote(
@@ -375,6 +377,27 @@ internal sealed class BackstageView : Window
     }
 
     // ── Share pane ────────────────────────────────────────────────────────────
+
+    private static Control BuildPrintEvidenceSection(IReadOnlyList<BackstagePrintEvidenceRow> evidence)
+    {
+        var panel = new StackPanel { Spacing = 6 };
+        panel.Children.Add(BuildSectionHeader(BackstageViewTextResources.EvidenceSection));
+
+        foreach (var row in evidence)
+        {
+            var scenarios = row.FixtureScenarioIds.Count == 0
+                ? BackstageViewTextResources.NoEvidenceFixtureScenario
+                : string.Join(", ", row.FixtureScenarioIds);
+            var note = AvaloniaBackstageChrome.CreateNote(
+                $"{PrintEvidenceKindLabel(row.Kind)} - {PrintEvidenceStatusLabel(row.Status)}\n{row.Description}\n{BackstageViewTextResources.EvidenceScenariosLabel}: {scenarios}",
+                BackstageChromeStyle,
+                margin: new Thickness(0, 0, 0, 4));
+            AutomationProperties.SetAutomationId(note, $"PrintEvidence_{row.Kind}");
+            panel.Children.Add(note);
+        }
+
+        return panel;
+    }
 
     private Control BuildSharePane()
     {
@@ -648,6 +671,21 @@ internal sealed class BackstageView : Window
         if (bytes < 1024 * 1024) return $"{bytes / 1024.0:0.#} KB";
         return $"{bytes / (1024.0 * 1024.0):0.##} MB";
     }
+
+    private static string PrintEvidenceKindLabel(BackstagePrintEvidenceKind kind) => kind switch
+    {
+        BackstagePrintEvidenceKind.PrintPreviewFidelity => BackstageViewTextResources.PrintPreviewEvidenceLabel,
+        BackstagePrintEvidenceKind.PdfExportFidelity => BackstageViewTextResources.PdfExportEvidenceLabel,
+        BackstagePrintEvidenceKind.NativePrint => BackstageViewTextResources.NativePrintEvidenceLabel,
+        _ => kind.ToString()
+    };
+
+    private static string PrintEvidenceStatusLabel(BackstagePrintEvidenceStatus status) => status switch
+    {
+        BackstagePrintEvidenceStatus.FixtureReady => BackstageViewTextResources.FixtureReadyEvidenceStatus,
+        BackstagePrintEvidenceStatus.Deferred => BackstageViewTextResources.DeferredEvidenceStatus,
+        _ => status.ToString()
+    };
 
     private static string SafeEnvironment(Func<string> read)
     {
