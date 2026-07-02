@@ -41,14 +41,62 @@ public enum BackstagePrintEvidenceKind
 public enum BackstagePrintEvidenceStatus
 {
     FixtureReady,
+    HostBacked,
     Deferred
+}
+
+public sealed record BackstageDirectPrintCapability(
+    BackstagePrintEvidenceStatus EvidenceStatus,
+    string FieldValue,
+    string ActionDescription,
+    string EvidenceDescription,
+    string? DeferredNote)
+{
+    public bool IsAvailable => EvidenceStatus == BackstagePrintEvidenceStatus.HostBacked;
+
+    public static BackstageDirectPrintCapability NativeDialogAvailable(
+        string evidenceDescription = "Direct native printer selection is backed by this host.") =>
+        new(
+            BackstagePrintEvidenceStatus.HostBacked,
+            "Available - operating-system printer dialog",
+            "Choose a printer and send the document to print.",
+            Normalize(evidenceDescription, "Direct native printer selection is backed by this host."),
+            DeferredNote: null);
+
+    public static BackstageDirectPrintCapability Deferred(
+        string reason = "Direct native printer selection remains host-specific; use Print Preview or Create PDF for OS printing.") =>
+        CreateDeferred(reason, BackstageViewTextResources.DirectPrintDeferredNote);
+
+    public static BackstageDirectPrintCapability Deferred(string reason, string deferredNote) =>
+        CreateDeferred(reason, deferredNote);
+
+    private static BackstageDirectPrintCapability CreateDeferred(string reason, string deferredNote)
+    {
+        var normalized = Normalize(
+            reason,
+            "Direct native printer selection remains host-specific; use Print Preview or Create PDF for OS printing.");
+        return new(
+            BackstagePrintEvidenceStatus.Deferred,
+            "Deferred - " + normalized,
+            normalized,
+            normalized,
+            Normalize(deferredNote, BackstageViewTextResources.DirectPrintDeferredNote));
+    }
+
+    private static string Normalize(string? value, string fallback) =>
+        string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
 }
 
 public static class BackstagePrintPanePlanner
 {
-    public static BackstagePrintPanePlan Build(string displayName, PageSettings page)
+    public static BackstagePrintPanePlan Build(
+        string displayName,
+        PageSettings page,
+        BackstageDirectPrintCapability? directPrintCapability = null)
     {
         ArgumentNullException.ThrowIfNull(page);
+
+        var directPrint = directPrintCapability ?? BackstageDirectPrintCapability.Deferred();
 
         return new BackstagePrintPanePlan(
             "Print this document using the current page layout and printer settings.",
@@ -58,11 +106,12 @@ public static class BackstagePrintPanePlanner
                 new("Orientation", page.Landscape ? "Landscape" : "Portrait"),
                 new("Margins", FormatMargins(page)),
                 new("Columns", FormatColumns(page)),
+                new("Direct print", directPrint.FieldValue),
             ],
             [
                 new("Print",
                 [
-                    new(BackstagePrintActionKind.Print, "Print", "Choose a printer and send the document to print."),
+                    new(BackstagePrintActionKind.Print, "Print", directPrint.ActionDescription),
                     new(BackstagePrintActionKind.PrintPreview, "Print Preview", "Preview paginated pages before printing."),
                 ]),
                 new("Settings",
@@ -95,8 +144,8 @@ public static class BackstagePrintPanePlanner
                     ]),
                 new(
                     BackstagePrintEvidenceKind.NativePrint,
-                    BackstagePrintEvidenceStatus.Deferred,
-                    "Direct native printer selection remains host-specific; Avalonia keeps Print Preview and PDF export active while disabling direct print.",
+                    directPrint.EvidenceStatus,
+                    directPrint.EvidenceDescription,
                     []),
             ]);
     }

@@ -42,7 +42,7 @@ public sealed class BackstagePaneSurfacePlannerTests
             row.FixtureScenarioIds.Contains("backstage-print-preview-fidelity"));
         surface.Evidence.Should().Contain(row =>
             row.Kind == BackstagePrintEvidenceKind.NativePrint &&
-            row.Status == BackstagePrintEvidenceStatus.Deferred);
+            row.Status == BackstagePrintEvidenceStatus.HostBacked);
 
         var print = surface.Groups.SelectMany(group => group.Actions)
             .Single(action => action.AutomationId == "PrintAction_Print");
@@ -68,9 +68,18 @@ public sealed class BackstagePaneSurfacePlannerTests
             "Draft",
             new PageSettings(),
             print: null,
-            printPreview: () => previewed = true);
+            printPreview: () => previewed = true,
+            directPrintCapability: BackstageDirectPrintCapability.Deferred(
+                "The current Avalonia target exposes no native PrintDialog or printer service; use Print Preview or Create PDF for OS printing."));
 
         surface.DeferredNote.Should().Be(BackstageViewTextResources.DirectPrintDeferredNote);
+        surface.Fields.Should().Contain(row =>
+            row.Label == "Direct print" &&
+            row.Value.Contains("current Avalonia target", StringComparison.Ordinal));
+        surface.Evidence.Should().Contain(row =>
+            row.Kind == BackstagePrintEvidenceKind.NativePrint &&
+            row.Status == BackstagePrintEvidenceStatus.Deferred &&
+            row.Description.Contains("PrintDialog", StringComparison.Ordinal));
 
         var print = surface.Groups.SelectMany(group => group.Actions)
             .Single(action => action.AutomationId == "PrintAction_Print");
@@ -78,6 +87,7 @@ public sealed class BackstagePaneSurfacePlannerTests
             .First(action => action.AutomationId == "PrintAction_PrintPreview");
 
         print.IsEnabled.Should().BeFalse("native printer selection is host-specific and can be deferred independently of preview");
+        print.Description.Should().Contain("Create PDF");
         preview.IsEnabled.Should().BeTrue();
 
         preview.Invoke!();

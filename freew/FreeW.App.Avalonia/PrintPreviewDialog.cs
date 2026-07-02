@@ -18,10 +18,19 @@ internal sealed class PrintPreviewDialog : Window
 {
     private readonly DocumentView _preview = new();
     private readonly TextBlock _pageCount = new();
+    private readonly Func<Task>? _createPdf;
+    private readonly BackstageDirectPrintCapability _directPrintCapability;
 
-    public PrintPreviewDialog(TextDocument document, string displayName)
+    public PrintPreviewDialog(
+        TextDocument document,
+        string displayName,
+        Func<Task>? createPdf = null,
+        BackstageDirectPrintCapability? directPrintCapability = null)
     {
         ArgumentNullException.ThrowIfNull(document);
+
+        _createPdf = createPdf;
+        _directPrintCapability = directPrintCapability ?? BackstageDirectPrintCapability.Deferred();
 
         var titleName = string.IsNullOrWhiteSpace(displayName) ? "Untitled" : displayName;
         Title = $"Print Preview - {titleName}";
@@ -57,7 +66,7 @@ internal sealed class PrintPreviewDialog : Window
             ColumnDefinitions = new ColumnDefinitions("260,*"),
         };
 
-        var summary = BuildSummaryPane(document, displayName);
+        var summary = BuildSummaryPane(document, displayName, _directPrintCapability);
         Grid.SetColumn(summary, 0);
         grid.Children.Add(summary);
 
@@ -86,13 +95,19 @@ internal sealed class PrintPreviewDialog : Window
 
         var printButton = new Button
         {
-            Content = "Print",
-            IsEnabled = false,
+            Content = _directPrintCapability.IsAvailable ? "Print" : BackstageViewTextResources.CreatePdfLabel,
+            IsEnabled = !_directPrintCapability.IsAvailable && _createPdf is not null,
             Margin = new Thickness(12, 8, 6, 8),
             Padding = new Thickness(14, 6),
         };
         AutomationProperties.SetAutomationId(printButton, "PrintPreviewPrintButton");
-        ToolTip.SetTip(printButton, "Native print is not available in the Avalonia shell yet.");
+        ToolTip.SetTip(
+            printButton,
+            _directPrintCapability.IsAvailable
+                ? _directPrintCapability.ActionDescription
+                : _directPrintCapability.DeferredNote ?? _directPrintCapability.ActionDescription);
+        if (!_directPrintCapability.IsAvailable && _createPdf is not null)
+            printButton.Click += async (_, _) => await _createPdf();
         DockPanel.SetDock(printButton, Dock.Left);
         toolbar.Children.Add(printButton);
 
@@ -115,9 +130,12 @@ internal sealed class PrintPreviewDialog : Window
         return toolbar;
     }
 
-    private static Control BuildSummaryPane(TextDocument document, string displayName)
+    private static Control BuildSummaryPane(
+        TextDocument document,
+        string displayName,
+        BackstageDirectPrintCapability directPrintCapability)
     {
-        var plan = BackstagePrintPanePlanner.Build(displayName, document.Page);
+        var plan = BackstagePrintPanePlanner.Build(displayName, document.Page, directPrintCapability);
         var panel = new StackPanel
         {
             Spacing = 10,
@@ -132,7 +150,7 @@ internal sealed class PrintPreviewDialog : Window
         });
         panel.Children.Add(new TextBlock
         {
-            Text = "Preview uses the current paginated layout. Native printer selection is deferred for Avalonia.",
+            Text = $"Preview uses the current paginated layout. {directPrintCapability.ActionDescription}",
             TextWrapping = TextWrapping.Wrap,
             Foreground = new SolidColorBrush(Color.FromRgb(0x5E, 0x67, 0x74)),
         });
