@@ -1,3 +1,4 @@
+using Free.Shared.Ribbon;
 using FreeX.App.Presentation.Filtering;
 
 namespace FreeX.App.Avalonia;
@@ -23,7 +24,11 @@ internal sealed record AutoFilterMenuItem(
     string Label,
     string Value = "",
     bool IsEnabled = true,
-    bool? IsChecked = null);
+    bool? IsChecked = null,
+    RibbonCommandIconKind IconKind = RibbonCommandIconKind.Generic,
+    AutoFilterMenuEntryFocusRole FocusRole = AutoFilterMenuEntryFocusRole.None,
+    bool ShowsContinuation = false,
+    bool ParticipatesInSearch = false);
 
 /// <summary>The resolved AutoFilter dropdown menu for a column: header plus ordered entries.</summary>
 internal sealed record AutoFilterMenuModel(
@@ -126,7 +131,11 @@ internal static class AutoFilterMenuPlanner
             entry.Header,
             entry.Value,
             entry.IsEnabled,
-            entry.IsChecked);
+            entry.IsChecked,
+            entry.Presentation.IconKind,
+            entry.Presentation.FocusRole,
+            entry.Presentation.ShowsContinuation,
+            entry.Presentation.ParticipatesInSearch);
 
     private static IReadOnlyList<AutoFilterCriteriaOption> CreateCriteriaOptions(AutoFilterMenuFilterKind filterKind)
     {
