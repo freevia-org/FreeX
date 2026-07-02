@@ -1322,15 +1322,35 @@ public sealed class SlideCanvas : Control
     // Mirrors the WPF version — greedy paragraph-level assignment across N columns.
     private static void RenderTextCoreColumns(DrawingContext dc, ResolvedTextLayout text, LayoutRect bounds)
     {
-        var columnLayout = TextLayoutPlanner.GetColumnLayout(text, bounds);
-        var formatted = new Dictionary<int, FormattedText>();
-        var measured = new List<TextParagraphMeasure>();
+        var initialColumnLayout = TextLayoutPlanner.GetColumnLayout(text, bounds);
+        var initialMeasured = new List<TextParagraphMeasure>();
 
         for (int i = 0; i < text.Paragraphs.Count; i++)
         {
             var para = text.Paragraphs[i];
             if (para.Runs.Count == 0) continue;
-            var ft = BuildFormattedText(para, columnLayout.ColumnWidthDip, text.Wrap);
+            var ft = BuildFormattedText(para, initialColumnLayout.ColumnWidthDip, text.Wrap);
+            initialMeasured.Add(TextLayoutPlanner.CreateParagraphMeasure(
+                i,
+                ft.Height,
+                para.SpaceBeforePt,
+                para.SpaceAfterPt));
+        }
+
+        var autoFitPlan = TextLayoutPlanner.PlanNormalAutoFitOverflow(
+            text,
+            TextLayoutPlanner.GetAutoFitCapacityHeight(initialColumnLayout),
+            initialMeasured);
+        var renderText = TextLayoutPlanner.ApplyAutoFitPlan(text, autoFitPlan);
+        var columnLayout = TextLayoutPlanner.GetColumnLayout(renderText, bounds, autoFitPlan);
+        var formatted = new Dictionary<int, FormattedText>();
+        var measured = new List<TextParagraphMeasure>();
+
+        for (int i = 0; i < renderText.Paragraphs.Count; i++)
+        {
+            var para = renderText.Paragraphs[i];
+            if (para.Runs.Count == 0) continue;
+            var ft = BuildFormattedText(para, columnLayout.ColumnWidthDip, renderText.Wrap);
             formatted[i] = ft;
             measured.Add(TextLayoutPlanner.CreateParagraphMeasure(
                 i,
@@ -1340,22 +1360,22 @@ public sealed class SlideCanvas : Control
                 columnLayout.LineSpacingScale));
         }
 
-        var plan = TextLayoutPlanner.PlanColumns(text, columnLayout, measured);
+        var plan = TextLayoutPlanner.PlanColumns(renderText, columnLayout, measured);
         foreach (var placement in plan.Paragraphs)
         {
-            var para = text.Paragraphs[placement.ParagraphIndex];
+            var para = renderText.Paragraphs[placement.ParagraphIndex];
             var ft = formatted[placement.ParagraphIndex];
             if (placement.Bullet is { } bullet)
                 DrawBulletAvalonia(dc, bullet.Text, bullet.FontFamily, bullet.FontSizePt,
                     bullet.Color, bullet.X, bullet.Y);
 
-            switch (TextLayoutPlanner.PlanParagraphRenderRoute(para, text))
+            switch (TextLayoutPlanner.PlanParagraphRenderRoute(para, renderText))
             {
                 case TextParagraphRenderRoute.Math:
                     RenderParaWithMath(dc, para, placement.X, placement.Y);
                     break;
                 case TextParagraphRenderRoute.Effects:
-                    RenderParaWithEffects(dc, para, placement.X, placement.Y, bounds, text.WarpPreset);
+                    RenderParaWithEffects(dc, para, placement.X, placement.Y, bounds, renderText.WarpPreset);
                     break;
                 case TextParagraphRenderRoute.Tabs:
                     RenderParaWithTabs(dc, para, placement.X, placement.Y, para.TabStops);
@@ -1379,13 +1399,30 @@ public sealed class SlideCanvas : Control
         }
 
         var area = TextLayoutPlanner.GetTextArea(text, bounds);
-        var formatted = new Dictionary<int, FormattedText>();
-        var measured = new List<TextParagraphMeasure>();
+        var initialMeasured = new List<TextParagraphMeasure>();
         for (int i = 0; i < text.Paragraphs.Count; i++)
         {
             var para = text.Paragraphs[i];
             if (para.Runs.Count == 0) continue;
             var ft = BuildFormattedText(para, area.Width, text.Wrap);
+            initialMeasured.Add(TextLayoutPlanner.CreateParagraphMeasure(
+                i,
+                ft.Height,
+                para.SpaceBeforePt,
+                para.SpaceAfterPt));
+        }
+
+        var autoFitPlan = TextLayoutPlanner.PlanNormalAutoFitOverflow(text, area.Height, initialMeasured);
+        var renderText = TextLayoutPlanner.ApplyAutoFitPlan(text, autoFitPlan);
+        area = TextLayoutPlanner.GetTextArea(renderText, bounds);
+
+        var formatted = new Dictionary<int, FormattedText>();
+        var measured = new List<TextParagraphMeasure>();
+        for (int i = 0; i < renderText.Paragraphs.Count; i++)
+        {
+            var para = renderText.Paragraphs[i];
+            if (para.Runs.Count == 0) continue;
+            var ft = BuildFormattedText(para, area.Width, renderText.Wrap);
             formatted[i] = ft;
             measured.Add(TextLayoutPlanner.CreateParagraphMeasure(
                 i,
@@ -1394,10 +1431,10 @@ public sealed class SlideCanvas : Control
                 para.SpaceAfterPt));
         }
 
-        var plan = TextLayoutPlanner.PlanBodyText(text, bounds, measured);
+        var plan = TextLayoutPlanner.PlanBodyText(renderText, bounds, measured, autoFitPlan);
         foreach (var placement in plan.Paragraphs)
         {
-            var para = text.Paragraphs[placement.ParagraphIndex];
+            var para = renderText.Paragraphs[placement.ParagraphIndex];
             var ft = formatted[placement.ParagraphIndex];
 
             if (placement.Bullet is { } bullet)
@@ -1406,13 +1443,13 @@ public sealed class SlideCanvas : Control
                     bullet.Color, bullet.X, bullet.Y);
             }
 
-            switch (TextLayoutPlanner.PlanParagraphRenderRoute(para, text))
+            switch (TextLayoutPlanner.PlanParagraphRenderRoute(para, renderText))
             {
                 case TextParagraphRenderRoute.Math:
                     RenderParaWithMath(dc, para, placement.X, placement.Y);
                     break;
                 case TextParagraphRenderRoute.Effects:
-                    RenderParaWithEffects(dc, para, placement.X, placement.Y, bounds, text.WarpPreset);
+                    RenderParaWithEffects(dc, para, placement.X, placement.Y, bounds, renderText.WarpPreset);
                     break;
                 case TextParagraphRenderRoute.Tabs:
                     RenderParaWithTabs(dc, para, placement.X, placement.Y, para.TabStops);

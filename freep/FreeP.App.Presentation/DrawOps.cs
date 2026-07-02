@@ -160,9 +160,20 @@ public sealed class ResolvedTextLayout
     // ── Wave 19A: autofit applied ─────────────────────────────────────────────
 
     /// <summary>
-    /// Font scale factor from normAutofit (1.0 = no scaling; 0.625 = 62.5%).
-    /// Already applied to all ResolvedRun.FontSizePt values in the Paragraphs list.
-    /// Carried here only so renderers can skip double-application.
+    /// True when the source body requests PowerPoint normal autofit.
+    /// </summary>
+    public bool AutoFit { get; init; }
+
+    /// <summary>
+    /// True when a cached PowerPoint normAutofit fontScale was present and applied during resolution.
+    /// Cached PowerPoint scale is authoritative; renderers must not apply runtime shrink on top of it.
+    /// </summary>
+    public bool HasStoredFontScale { get; init; }
+
+    /// <summary>
+    /// Font scale factor applied to all resolved run sizes (1.0 = no scaling; 0.625 = 62.5%).
+    /// This starts as the cached PowerPoint normAutofit scale when present and may also carry the
+    /// shared runtime autofit scale after <see cref="TextLayoutPlanner.ApplyAutoFitPlan"/> is used.
     /// </summary>
     public double FontScale { get; init; } = 1.0;
 

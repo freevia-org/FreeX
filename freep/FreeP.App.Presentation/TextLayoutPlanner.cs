@@ -58,6 +58,24 @@ public readonly record struct TextColumnLayout(
     double ColumnWidthDip,
     double LineSpacingScale);
 
+public enum TextAutoFitOverflowMode
+{
+    NoAutoFit,
+    StoredFontScale,
+    Fits,
+    RuntimeShrink
+}
+
+public readonly record struct TextAutoFitOverflowPlan(
+    TextAutoFitOverflowMode Mode,
+    double FontScale,
+    double LineSpacingReduction)
+{
+    public bool AppliesRuntimeShrink =>
+        Mode == TextAutoFitOverflowMode.RuntimeShrink &&
+        (FontScale < 1.0 || LineSpacingReduction > 0.0);
+}
+
 public enum TextParagraphRenderRoute
 {
     Plain,
@@ -83,6 +101,8 @@ public static class TextLayoutPlanner
     public const double DipPerPoint = 96.0 / 72.0;
     public const double DefaultColumnSpacingDip = 48.5;
     public const double DefaultTabStopDip = 96.0;
+    public const double RuntimeAutoFitMinimumFontScale = 0.60;
+    public const double RuntimeAutoFitMaximumLineSpacingReduction = 0.20;
 
     public static double PointsToDip(double points) => points * DipPerPoint;
 
@@ -99,7 +119,126 @@ public static class TextLayoutPlanner
     }
 
     public static double GetLineSpacingScale(ResolvedTextLayout text) =>
-        1.0 - text.LnSpcReduction;
+        GetLineSpacingScale(text, default);
+
+    public static double GetLineSpacingScale(
+        ResolvedTextLayout text,
+        TextAutoFitOverflowPlan autoFitPlan)
+    {
+        double storedScale = 1.0 - Math.Clamp(text.LnSpcReduction, 0.0, 0.95);
+        double runtimeScale = 1.0 - Math.Clamp(autoFitPlan.LineSpacingReduction, 0.0, RuntimeAutoFitMaximumLineSpacingReduction);
+        return Math.Clamp(storedScale * runtimeScale, 0.05, 1.0);
+    }
+
+    public static TextAutoFitOverflowPlan PlanNormalAutoFitOverflow(
+        ResolvedTextLayout text,
+        double textAreaHeightDip,
+        IReadOnlyList<TextParagraphMeasure> paragraphs)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        ArgumentNullException.ThrowIfNull(paragraphs);
+
+        if (!text.AutoFit)
+            return new TextAutoFitOverflowPlan(TextAutoFitOverflowMode.NoAutoFit, 1.0, 0.0);
+
+        if (text.HasStoredFontScale && text.FontScale > 0)
+            return new TextAutoFitOverflowPlan(TextAutoFitOverflowMode.StoredFontScale, 1.0, 0.0);
+
+        double measuredHeight = paragraphs.Sum(p => p.TotalHeightDip);
+        if (textAreaHeightDip <= 0 || measuredHeight <= 0)
+            return new TextAutoFitOverflowPlan(TextAutoFitOverflowMode.Fits, 1.0, 0.0);
+
+        double effectiveHeight = measuredHeight * GetLineSpacingScale(text);
+        if (effectiveHeight <= textAreaHeightDip + 0.5)
+            return new TextAutoFitOverflowPlan(TextAutoFitOverflowMode.Fits, 1.0, 0.0);
+
+        double requiredScale = textAreaHeightDip / effectiveHeight;
+        double fontScale = Math.Clamp(requiredScale, RuntimeAutoFitMinimumFontScale, 1.0);
+        double projectedHeight = effectiveHeight * fontScale;
+        double lineSpacingReduction = 0.0;
+        if (projectedHeight > textAreaHeightDip + 0.5)
+        {
+            double requiredLineScale = textAreaHeightDip / projectedHeight;
+            lineSpacingReduction = Math.Clamp(1.0 - requiredLineScale, 0.0, RuntimeAutoFitMaximumLineSpacingReduction);
+        }
+
+        return new TextAutoFitOverflowPlan(
+            TextAutoFitOverflowMode.RuntimeShrink,
+            fontScale,
+            lineSpacingReduction);
+    }
+
+    public static ResolvedTextLayout ApplyAutoFitPlan(
+        ResolvedTextLayout text,
+        TextAutoFitOverflowPlan plan)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        if (!plan.AppliesRuntimeShrink)
+            return text;
+
+        return new ResolvedTextLayout
+        {
+            Paragraphs = text.Paragraphs
+                .Select(paragraph => ApplyAutoFitPlan(paragraph, plan))
+                .ToArray(),
+            Anchor = text.Anchor,
+            InsetLeftDip = text.InsetLeftDip,
+            InsetRightDip = text.InsetRightDip,
+            InsetTopDip = text.InsetTopDip,
+            InsetBottomDip = text.InsetBottomDip,
+            Wrap = text.Wrap,
+            WarpPreset = text.WarpPreset,
+            VerticalType = text.VerticalType,
+            AutoFit = text.AutoFit,
+            HasStoredFontScale = text.HasStoredFontScale,
+            FontScale = text.FontScale * plan.FontScale,
+            LnSpcReduction = text.LnSpcReduction,
+            ColumnCount = text.ColumnCount,
+            ColumnSpacingDip = text.ColumnSpacingDip
+        };
+    }
+
+    public static ResolvedParagraph ApplyAutoFitPlan(
+        ResolvedParagraph paragraph,
+        TextAutoFitOverflowPlan plan)
+    {
+        ArgumentNullException.ThrowIfNull(paragraph);
+        if (!plan.AppliesRuntimeShrink)
+            return paragraph;
+
+        double scale = plan.FontScale;
+        return new ResolvedParagraph
+        {
+            Runs = paragraph.Runs.Select(run => new ResolvedRun
+            {
+                Text = run.Text,
+                FontFamily = run.FontFamily,
+                FontSizePt = run.FontSizePt * scale,
+                Bold = run.Bold,
+                Italic = run.Italic,
+                Underline = run.Underline,
+                Strikethrough = run.Strikethrough,
+                Color = run.Color,
+                TextFill = run.TextFill,
+                TextOutline = run.TextOutline,
+                TextShadow = run.TextShadow,
+                MathLayout = run.MathLayout
+            }).ToArray(),
+            Align = paragraph.Align,
+            Level = paragraph.Level,
+            BulletKind = paragraph.BulletKind,
+            BulletChar = paragraph.BulletChar,
+            SpaceBeforePt = paragraph.SpaceBeforePt * scale,
+            SpaceAfterPt = paragraph.SpaceAfterPt * scale,
+            TabStops = paragraph.TabStops,
+            BulletText = paragraph.BulletText,
+            BulletColor = paragraph.BulletColor,
+            BulletFontFamily = paragraph.BulletFontFamily,
+            BulletFontSizePt = paragraph.BulletFontSizePt * scale,
+            IndentDip = paragraph.IndentDip,
+            HangingDip = paragraph.HangingDip
+        };
+    }
 
     public static TextParagraphRenderRoute PlanParagraphRenderRoute(
         ResolvedParagraph paragraph,
@@ -158,12 +297,19 @@ public static class TextLayoutPlanner
     public static TextBlockLayoutPlan PlanBodyText(
         ResolvedTextLayout text,
         LayoutRect bounds,
-        IReadOnlyList<TextParagraphMeasure> paragraphs)
+        IReadOnlyList<TextParagraphMeasure> paragraphs) =>
+        PlanBodyText(text, bounds, paragraphs, default);
+
+    public static TextBlockLayoutPlan PlanBodyText(
+        ResolvedTextLayout text,
+        LayoutRect bounds,
+        IReadOnlyList<TextParagraphMeasure> paragraphs,
+        TextAutoFitOverflowPlan autoFitPlan)
     {
         var area = GetTextArea(text, bounds);
         double totalHeight = paragraphs.Sum(p => p.TotalHeightDip);
         double currentY = ComputeStartY(area, totalHeight, text.Anchor);
-        double lineSpacingScale = GetLineSpacingScale(text);
+        double lineSpacingScale = GetLineSpacingScale(text, autoFitPlan);
 
         var placements = new List<TextParagraphPlacement>(paragraphs.Count);
         foreach (var paragraph in paragraphs)
@@ -187,7 +333,13 @@ public static class TextLayoutPlanner
         return new TextBlockLayoutPlan(area, placements);
     }
 
-    public static TextColumnLayout GetColumnLayout(ResolvedTextLayout text, LayoutRect bounds)
+    public static TextColumnLayout GetColumnLayout(ResolvedTextLayout text, LayoutRect bounds) =>
+        GetColumnLayout(text, bounds, default);
+
+    public static TextColumnLayout GetColumnLayout(
+        ResolvedTextLayout text,
+        LayoutRect bounds,
+        TextAutoFitOverflowPlan autoFitPlan)
     {
         var area = GetTextArea(text, bounds);
         int columnCount = Math.Max(1, text.ColumnCount);
@@ -203,8 +355,11 @@ public static class TextLayoutPlanner
             columnCount,
             spacingDip,
             columnWidth,
-            GetLineSpacingScale(text));
+            GetLineSpacingScale(text, autoFitPlan));
     }
+
+    public static double GetAutoFitCapacityHeight(TextColumnLayout layout) =>
+        Math.Max(0, layout.Area.Height) * Math.Max(1, layout.ColumnCount);
 
     public static TextBlockLayoutPlan PlanColumns(
         ResolvedTextLayout text,
