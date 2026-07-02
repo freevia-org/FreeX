@@ -298,6 +298,24 @@ public sealed class RendererNeutralDedupPlannerTests
     }
 
     [Fact]
+    public void WpfAndAvaloniaSlideCanvases_UseRendererNeutralSecondaryValueAxisPlanning()
+    {
+        var wpf = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "SlideCanvas.cs");
+        var avalonia = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Avalonia", "SlideCanvas.cs");
+
+        foreach (var source in new[] { wpf, avalonia })
+        {
+            source.Should().Contain("ChartRenderPlanner.BuildSecondaryValueAxisPrimitivePlan(chart, frame)");
+            source.Should().Contain("CreateChartSecondaryAxisTickPen(secondaryAxisPlan)");
+            source.Should().Contain("CreateChartSecondaryAxisTickPen(ChartSecondaryValueAxisPrimitivePlan plan)");
+            source.Should().Contain("secondaryAxisPlan.Ticks");
+            source.Should().Contain("secondaryAxisPlan.Labels");
+            source.Should().Contain("secondaryAxisPlan.Title");
+            source.Should().NotContain("BuildSecondaryValueAxisLabelPlans(");
+        }
+    }
+
+    [Fact]
     public void WpfAndAvaloniaSlideCanvases_UseRendererNeutralChartAxisTitlePlanning()
     {
         var wpf = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "SlideCanvas.cs");
