@@ -86,6 +86,9 @@ public static class FreeWVisualBaselineComparisonPlanner
         throw new ArgumentException($"Unknown visual baseline tolerance '{name}'. Known tolerances: {known}");
     }
 
+    public static string NormalizeBaselinePath(string value) =>
+        NormalizeManifestPath(value);
+
     public static string BuildBaselineMatchKey(FreeWVisualEvidenceNormalizedRow row)
     {
         ArgumentNullException.ThrowIfNull(row);

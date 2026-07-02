@@ -147,6 +147,106 @@ public sealed class VisualEvidencePlannerTests
     }
 
     [Fact]
+    public void WordBaselineGenerationPlan_CoversBoundedGeneratedCorpus()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var plan = FreeWWordBaselineEvidencePlanner.BuildGenerationPlan(
+                Path.Combine(root, "fixtures"),
+                Path.Combine(root, "word-baseline"));
+
+            plan.WordApplicationProgId.Should().Be("Word.Application");
+            plan.MaxPagesPerDocument.Should().Be(3);
+            plan.ExpectedFixtureCount.Should().Be(15);
+            plan.ExpectedBaselinePngCount.Should().Be(45);
+            plan.Fixtures.Select(f => f.DocumentName).Should().Contain([
+                "f2-hf-basic.docx",
+                "table-layout-complex.docx",
+                "drawing-objects-complex.docx",
+                "chart-smartart-complex.docx",
+                "backstage-print-preview-fidelity.docx",
+                "backstage-pdf-export-fidelity.docx"]);
+            plan.Fixtures.Single(f => f.ScenarioId == "backstage-print-preview-fidelity")
+                .ExpectedBaselinePaths.Should().Contain("backstage-print-preview-fidelity/backstage-print-preview_p1.png");
+            plan.Fixtures.Single(f => f.ScenarioId == "backstage-pdf-export-fidelity")
+                .ExpectedBaselinePaths.Should().Contain("backstage-pdf-export-fidelity/backstage-pdf-export_p1.png");
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void WordBaselineScope_LimitsComparisonsToGeneratedCorpusScenarios()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var generatedCorpusRow = BuildFileBackedRow(
+                root,
+                FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                "f2-hf-basic",
+                pageNumber: 1,
+                pageCount: 1);
+            var avaloniaOnlyRow = BuildFileBackedRow(
+                root,
+                FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                "page-composition-print-layout",
+                pageNumber: 1,
+                pageCount: 1);
+            var manifestDir = Path.Combine(root, "manifest");
+            FreeWVisualEvidencePlanner.WriteManifest(
+                manifestDir,
+                [generatedCorpusRow, avaloniaOnlyRow],
+                new DateTimeOffset(2026, 7, 1, 12, 0, 0, TimeSpan.Zero));
+            var summary = FreeWVisualEvidenceManifestNormalizer.BuildNormalizedSummaryFromFiles(
+                [Path.Combine(manifestDir, FreeWVisualEvidencePlanner.ManifestFileName)],
+                root,
+                [
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        "f2-hf-basic",
+                        1),
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                        "page-composition-print-layout",
+                        1)
+                ]);
+
+            var rows = summary.Evidence;
+            FreeWWordBaselineEvidencePlanner.ShouldCompareToWordBaseline(
+                rows.Single(r => r.ScenarioId == "f2-hf-basic"),
+                FreeWWordBaselineEvidencePlanner.BaselineScopeGeneratedCorpus).Should().BeTrue();
+            FreeWWordBaselineEvidencePlanner.ShouldCompareToWordBaseline(
+                rows.Single(r => r.ScenarioId == "page-composition-print-layout"),
+                FreeWWordBaselineEvidencePlanner.BaselineScopeGeneratedCorpus).Should().BeFalse();
+            rows.Should().OnlyContain(row =>
+                FreeWWordBaselineEvidencePlanner.ShouldCompareToWordBaseline(row, FreeWWordBaselineEvidencePlanner.BaselineScopeAll));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void WordBaselineRunnerScript_GuardsWordComAndAllowsNoWordSummaryPath()
+    {
+        var scriptPath = FindRepoFile("tools", "Run-FreeWWordBaselineEvidence.ps1");
+        var source = File.ReadAllText(scriptPath);
+
+        source.Should().Contain("Test-ComProgIdAvailable");
+        source.Should().Contain("[type]::GetTypeFromProgID($ProgId, $false)");
+        source.Should().Contain("-AllowMissingWord");
+        source.Should().Contain("--word-baseline-scope");
+        source.Should().Contain("generated-corpus");
+        source.Should().Contain("_word_baseline_skipped.json");
+        source.Should().Contain("FreeW.VisualEvidenceSummary.csproj");
+    }
+
+    [Fact]
     public void BuildPageExpectation_UsesSharedGeometryAndExpectedOutputName()
     {
         var page = new PageSettings
@@ -1052,6 +1152,21 @@ public sealed class VisualEvidencePlannerTests
         var root = Path.Combine(Path.GetTempPath(), "FreeWVisualEvidence-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(root);
         return root;
+    }
+
+    private static string FindRepoFile(params string[] segments)
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            var candidate = Path.Combine(new[] { directory.FullName }.Concat(segments).ToArray());
+            if (File.Exists(candidate))
+                return candidate;
+
+            directory = directory.Parent;
+        }
+
+        throw new FileNotFoundException("Could not find repo file: " + string.Join(Path.DirectorySeparatorChar, segments));
     }
 
     private static string ComputeSha256(string path)

@@ -25,7 +25,8 @@ try
     {
         var baselineRoot = Path.GetFullPath(options.WordBaselineDirectory);
         var tolerance = FreeWVisualBaselineComparisonPlanner.ResolveTolerance(options.BaselineToleranceName);
-        var comparisons = BuildBaselineComparisons(summary, runRoot, baselineRoot, tolerance);
+        var baselineScope = FreeWWordBaselineEvidencePlanner.NormalizeBaselineScope(options.BaselineScopeName);
+        var comparisons = BuildBaselineComparisons(summary, runRoot, baselineRoot, tolerance, baselineScope);
         summary = FreeWVisualEvidenceManifestNormalizer.WithBaselineComparisons(summary, comparisons);
     }
 
@@ -86,6 +87,13 @@ static Options Parse(string[] args)
             case "--baseline-tolerance":
                 options.BaselineToleranceName = ReadValue(args, ref i, arg);
                 break;
+            case "--word-baseline-scope":
+            case "--baseline-scope":
+                options.BaselineScopeName = ReadValue(args, ref i, arg);
+                break;
+            case "--word-baseline-generated-corpus-only":
+                options.BaselineScopeName = FreeWWordBaselineEvidencePlanner.BaselineScopeGeneratedCorpus;
+                break;
             case "--manifest":
                 options.ManifestPaths.Add(ReadValue(args, ref i, arg));
                 break;
@@ -114,19 +122,24 @@ static string ReadValue(string[] args, ref int index, string option)
 
 static void PrintUsage()
 {
-    Console.Error.WriteLine("usage: FreeW.VisualEvidenceSummary --run-root <dir> --manifest <manifest.json> [--manifest <manifest.json>] [--word-baseline-dir <dir>] [--baseline-tolerance <name>] [--output-json <path>] [--output-md <path>]");
+    Console.Error.WriteLine("usage: FreeW.VisualEvidenceSummary --run-root <dir> --manifest <manifest.json> [--manifest <manifest.json>] [--word-baseline-dir <dir>] [--baseline-tolerance <name>] [--word-baseline-scope all|generated-corpus] [--output-json <path>] [--output-md <path>]");
     Console.Error.WriteLine("baseline tolerances: " + string.Join(", ", FreeWVisualBaselineComparisonTolerance.BuiltIn.Select(t => t.Name)));
+    Console.Error.WriteLine("baseline scopes: all, generated-corpus");
 }
 
 static IReadOnlyList<FreeWVisualBaselineComparison> BuildBaselineComparisons(
     FreeWVisualEvidenceNormalizedSummary summary,
     string runRoot,
     string baselineRoot,
-    FreeWVisualBaselineComparisonTolerance tolerance)
+    FreeWVisualBaselineComparisonTolerance tolerance,
+    string baselineScope)
 {
     var comparisons = new List<FreeWVisualBaselineComparison>();
     foreach (var row in summary.Evidence)
     {
+        if (!FreeWWordBaselineEvidencePlanner.ShouldCompareToWordBaseline(row, baselineScope))
+            continue;
+
         var candidatePaths = FreeWVisualBaselineComparisonPlanner.BuildBaselineCandidateRelativePaths(row);
         var match = FindBaselinePath(baselineRoot, candidatePaths);
         if (match is null)
@@ -222,6 +235,7 @@ sealed class Options
     public string? OutputMarkdown { get; set; }
     public string? WordBaselineDirectory { get; set; }
     public string? BaselineToleranceName { get; set; }
+    public string? BaselineScopeName { get; set; }
     public bool ShowHelp { get; set; }
     public List<string> ManifestPaths { get; } = [];
 }
