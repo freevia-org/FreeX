@@ -1111,17 +1111,22 @@ public sealed class EditingSession
     public void SetTableCellText(int row, int col, TextBody? newBody)
         => ExecuteTableCommand((si, id) => new SetTableCellTextCommand(si, id, row, col, newBody));
 
-    public TableCellTextFormatPlan PlanActiveTableCellTextFormat(TableCellTextFormatKind kind) =>
+    public TableCellTextFormatPlan PlanActiveTableCellTextFormat(
+        TableCellTextFormatKind kind,
+        (int Start, int End)? selection = null) =>
         TableCellEditPlanner.PlanTextFormat(
             _currentSlideIndex,
             CurrentSlide,
             _selectedShapeIds,
             ActiveTableCell,
-            kind);
+            kind,
+            selection);
 
-    public bool TryApplyActiveTableCellTextFormat(TableCellTextFormatKind kind)
+    public bool TryApplyActiveTableCellTextFormat(
+        TableCellTextFormatKind kind,
+        (int Start, int End)? selection = null)
     {
-        var plan = PlanActiveTableCellTextFormat(kind);
+        var plan = PlanActiveTableCellTextFormat(kind, selection);
         if (plan.Command is null)
             return false;
 

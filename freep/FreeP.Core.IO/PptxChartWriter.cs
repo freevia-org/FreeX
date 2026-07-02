@@ -432,9 +432,20 @@ internal static class PptxChartWriter
             new XElement(C + "idx",   new XAttribute("val", index)),
             new XElement(C + "order", new XAttribute("val", index)));
 
+        // ID2: only address the regenerated workbook's cells when this chart will actually get
+        // one written (RegenerateWorkbookOnSave). A preserved chart keeps whatever c:f its
+        // original XML had (MergePreservedExternalData/roundtrip already carries that through
+        // the cache-only path here) — we must not fabricate a range that points nowhere.
+        var layout = chart.RegenerateWorkbookOnSave ? BuildWorksheetLayout(chart) : (WorksheetLayout?)null;
+        var pointCount = Math.Max(series.Values.Count, Math.Max(series.XValues.Count, series.BubbleSizes.Count));
+        var lastRow = pointCount + 1; // header is row 1, data starts row 2
+
         // Series name
         el.Add(new XElement(C + "tx",
             new XElement(C + "strRef",
+                layout is { } nameLayout && index < nameLayout.ValueColumns.Count
+                    ? new XElement(C + "f", CellRef(nameLayout.ValueColumns[index], 1))
+                    : null,
                 new XElement(C + "strCache",
                     new XElement(C + "ptCount", new XAttribute("val", "1")),
                     new XElement(C + "pt",
@@ -455,6 +466,9 @@ internal static class PptxChartWriter
         {
             el.Add(new XElement(C + "xVal",
                 new XElement(C + "numRef",
+                    layout is { } xLayout && index < xLayout.XColumns.Count
+                        ? new XElement(C + "f", ColumnRangeRef(xLayout.XColumns[index], lastRow))
+                        : null,
                     new XElement(C + "numCache",
                         new XElement(C + "formatCode", "General"),
                         new XElement(C + "ptCount", new XAttribute("val", series.XValues.Count)),
@@ -471,6 +485,9 @@ internal static class PptxChartWriter
         {
             el.Add(new XElement(C + "yVal",
                 new XElement(C + "numRef",
+                    layout is { } yLayout && index < yLayout.ValueColumns.Count
+                        ? new XElement(C + "f", ColumnRangeRef(yLayout.ValueColumns[index], lastRow))
+                        : null,
                     new XElement(C + "numCache",
                         new XElement(C + "formatCode", "General"),
                         new XElement(C + "ptCount", new XAttribute("val", series.Values.Count)),
@@ -487,6 +504,9 @@ internal static class PptxChartWriter
         {
             el.Add(new XElement(C + "bubbleSize",
                 new XElement(C + "numRef",
+                    layout is { } sizeLayout && sizeLayout.BubbleSizeColumns.Count > index
+                        ? new XElement(C + "f", ColumnRangeRef(sizeLayout.BubbleSizeColumns[index], lastRow))
+                        : null,
                     new XElement(C + "numCache",
                         new XElement(C + "formatCode", "General"),
                         new XElement(C + "ptCount", new XAttribute("val", series.BubbleSizes.Count)),
@@ -509,9 +529,17 @@ internal static class PptxChartWriter
             new XElement(C + "idx", new XAttribute("val", index)),
             new XElement(C + "order", new XAttribute("val", index)));
 
+        // ID2: only address the regenerated workbook's cells when one will actually be written
+        // (RegenerateWorkbookOnSave). Preserved charts keep whatever c:f their source XML had.
+        var layout = chart.RegenerateWorkbookOnSave ? BuildWorksheetLayout(chart) : (WorksheetLayout?)null;
+        var lastRow = Math.Max(chart.Categories.Count, series.Values.Count) + 1; // header is row 1
+
         // Series name
         el.Add(new XElement(C + "tx",
             new XElement(C + "strRef",
+                layout is { } nameLayout && index < nameLayout.ValueColumns.Count
+                    ? new XElement(C + "f", CellRef(nameLayout.ValueColumns[index], 1))
+                    : null,
                 new XElement(C + "strCache",
                     new XElement(C + "ptCount", new XAttribute("val", "1")),
                     new XElement(C + "pt",
@@ -545,6 +573,9 @@ internal static class PptxChartWriter
         {
             el.Add(new XElement(C + "cat",
                 new XElement(C + "strRef",
+                    layout is { } catLayout
+                        ? new XElement(C + "f", ColumnRangeRef(catLayout.CategoryColumn, lastRow))
+                        : null,
                     new XElement(C + "strCache",
                         new XElement(C + "ptCount",
                             new XAttribute("val", chart.Categories.Count)),
@@ -559,6 +590,9 @@ internal static class PptxChartWriter
         {
             el.Add(new XElement(C + "val",
                 new XElement(C + "numRef",
+                    layout is { } valLayout && index < valLayout.ValueColumns.Count
+                        ? new XElement(C + "f", ColumnRangeRef(valLayout.ValueColumns[index], lastRow))
+                        : null,
                     new XElement(C + "numCache",
                         new XElement(C + "formatCode", "General"),
                         new XElement(C + "ptCount",
@@ -573,6 +607,20 @@ internal static class PptxChartWriter
         }
 
         return el;
+    }
+
+    // ── c:f formula-range helpers (ID2) ──────────────────────────────────────────
+
+    /// <summary>Builds a single-cell c:f range, e.g. "ChartData!$B$1" (series name header).</summary>
+    private static string CellRef(int oneBasedColumn, int row) =>
+        $"{RegeneratedSheetName}!${ColumnName(oneBasedColumn)}${row.ToString(CultureInfo.InvariantCulture)}";
+
+    /// <summary>Builds a column c:f range from row 2 through <paramref name="lastRow"/>, e.g. "ChartData!$B$2:$B$4".</summary>
+    private static string ColumnRangeRef(int oneBasedColumn, int lastRow)
+    {
+        var col = ColumnName(oneBasedColumn);
+        var effectiveLastRow = Math.Max(lastRow, 2);
+        return $"{RegeneratedSheetName}!${col}$2:${col}${effectiveLastRow.ToString(CultureInfo.InvariantCulture)}";
     }
 
     // ── Axis elements ─────────────────────────────────────────────────────────
@@ -753,7 +801,7 @@ internal static class PptxChartWriter
                 new XAttribute(XNamespace.Xmlns + "r", rel.NamespaceName),
                 new XElement(ss + "sheets",
                     new XElement(ss + "sheet",
-                        new XAttribute("name", "ChartData"),
+                        new XAttribute("name", RegeneratedSheetName),
                         new XAttribute("sheetId", "1"),
                         new XAttribute(rel + "id", "rId1")))));
     }
@@ -806,32 +854,135 @@ internal static class PptxChartWriter
                         new XAttribute("xfId", "0")))));
     }
 
+    /// <summary>
+    /// Regenerated-workbook sheet name. Must match the c:f ranges emitted by
+    /// <see cref="BuildSeriesEl"/>/<see cref="BuildScatterSeriesEl"/> (ID2) and the
+    /// sheet name registered in <see cref="BuildWorkbookXml"/>.
+    /// </summary>
+    private const string RegeneratedSheetName = "ChartData";
+
+    /// <summary>
+    /// ID1: describes, per column role, which 1-based worksheet column a chart element maps to.
+    /// Shared between <see cref="BuildWorksheetXml"/> (which lays the columns out) and the
+    /// c:f range builders in <see cref="BuildSeriesEl"/>/<see cref="BuildScatterSeriesEl"/> (ID2),
+    /// so the cached data and the formula ranges always address the same cells.
+    /// </summary>
+    private readonly record struct WorksheetLayout(
+        bool IsScatterLike,
+        int CategoryColumn,
+        IReadOnlyList<int> XColumns,
+        IReadOnlyList<int> ValueColumns,
+        IReadOnlyList<int> BubbleSizeColumns);
+
+    /// <summary>
+    /// ID1/ID2: computes the worksheet column layout for a chart's regenerated workbook.
+    /// Category charts: col A = categories, cols B.. = one column per series' Y values.
+    /// Scatter charts: two columns per series (X, then Y).
+    /// Bubble charts: three columns per series (X, Y, then bubble size).
+    /// </summary>
+    private static WorksheetLayout BuildWorksheetLayout(ChartShape chart)
+    {
+        bool isBubble  = chart.ChartType == ChartType.Bubble;
+        bool isScatter = chart.ChartType == ChartType.Scatter || isBubble;
+
+        var xColumns     = new List<int>();
+        var valueColumns = new List<int>();
+        var sizeColumns  = new List<int>();
+
+        if (isScatter)
+        {
+            var nextColumn = 1;
+            for (var seriesIndex = 0; seriesIndex < chart.Series.Count; seriesIndex++)
+            {
+                xColumns.Add(nextColumn++);
+                valueColumns.Add(nextColumn++);
+                if (isBubble)
+                    sizeColumns.Add(nextColumn++);
+            }
+
+            return new WorksheetLayout(true, CategoryColumn: 0, xColumns, valueColumns, sizeColumns);
+        }
+
+        // Category charts: col A is categories, cols B.. are series values.
+        for (var seriesIndex = 0; seriesIndex < chart.Series.Count; seriesIndex++)
+            valueColumns.Add(seriesIndex + 2);
+
+        return new WorksheetLayout(false, CategoryColumn: 1, xColumns, valueColumns, sizeColumns);
+    }
+
     private static XDocument BuildWorksheetXml(ChartShape chart)
     {
         XNamespace ss = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         var rows = new List<XElement>();
+        var layout = BuildWorksheetLayout(chart);
 
-        var headerCells = new List<XElement>();
+        if (layout.IsScatterLike)
+        {
+            // Scatter/bubble: X (+ Y, + size) columns per series; header row names each series
+            // over its Y (value) column.
+            var headerCells = new List<XElement>();
+            for (var seriesIndex = 0; seriesIndex < chart.Series.Count; seriesIndex++)
+                headerCells.Add(InlineStringCell(ss, layout.ValueColumns[seriesIndex], 1, chart.Series[seriesIndex].Name));
+            rows.Add(new XElement(ss + "row", new XAttribute("r", "1"), headerCells));
+
+            var pointCount = chart.Series.Count == 0
+                ? 0
+                : chart.Series.Max(series => Math.Max(
+                    series.Values.Count,
+                    Math.Max(series.XValues.Count, series.BubbleSizes.Count)));
+
+            for (var pointIndex = 0; pointIndex < pointCount; pointIndex++)
+            {
+                var cells = new List<XElement>();
+                for (var seriesIndex = 0; seriesIndex < chart.Series.Count; seriesIndex++)
+                {
+                    var series = chart.Series[seriesIndex];
+
+                    if (pointIndex < series.XValues.Count && series.XValues[pointIndex].HasValue)
+                        cells.Add(NumberCell(ss, layout.XColumns[seriesIndex], pointIndex + 2, series.XValues[pointIndex]!.Value));
+
+                    if (pointIndex < series.Values.Count && series.Values[pointIndex].HasValue)
+                        cells.Add(NumberCell(ss, layout.ValueColumns[seriesIndex], pointIndex + 2, series.Values[pointIndex]!.Value));
+
+                    if (layout.BubbleSizeColumns.Count > 0 &&
+                        pointIndex < series.BubbleSizes.Count && series.BubbleSizes[pointIndex].HasValue)
+                        cells.Add(NumberCell(ss, layout.BubbleSizeColumns[seriesIndex], pointIndex + 2, series.BubbleSizes[pointIndex]!.Value));
+                }
+
+                cells.Sort((a, b) => string.CompareOrdinal(a.Attribute("r")?.Value, b.Attribute("r")?.Value));
+                rows.Add(new XElement(ss + "row",
+                    new XAttribute("r", (pointIndex + 2).ToString(CultureInfo.InvariantCulture)),
+                    cells));
+            }
+
+            return new XDocument(
+                new XDeclaration("1.0", "UTF-8", "yes"),
+                new XElement(ss + "worksheet",
+                    new XElement(ss + "sheetData", rows)));
+        }
+
+        // Category charts (bar/line/pie/area/etc.): col A = categories, cols B.. = series values.
+        var catHeaderCells = new List<XElement>();
         for (var seriesIndex = 0; seriesIndex < chart.Series.Count; seriesIndex++)
-            headerCells.Add(InlineStringCell(ss, seriesIndex + 2, 1, chart.Series[seriesIndex].Name));
-        rows.Add(new XElement(ss + "row", new XAttribute("r", "1"), headerCells));
+            catHeaderCells.Add(InlineStringCell(ss, layout.ValueColumns[seriesIndex], 1, chart.Series[seriesIndex].Name));
+        rows.Add(new XElement(ss + "row", new XAttribute("r", "1"), catHeaderCells));
 
-        var pointCount = Math.Max(
+        var catPointCount = Math.Max(
             chart.Categories.Count,
             chart.Series.Count == 0 ? 0 : chart.Series.Max(series => series.Values.Count));
-        for (var pointIndex = 0; pointIndex < pointCount; pointIndex++)
+        for (var pointIndex = 0; pointIndex < catPointCount; pointIndex++)
         {
             var cells = new List<XElement>();
             var category = pointIndex < chart.Categories.Count
                 ? chart.Categories[pointIndex]
                 : string.Empty;
-            cells.Add(InlineStringCell(ss, 1, pointIndex + 2, category));
+            cells.Add(InlineStringCell(ss, layout.CategoryColumn, pointIndex + 2, category));
 
             for (var seriesIndex = 0; seriesIndex < chart.Series.Count; seriesIndex++)
             {
                 var values = chart.Series[seriesIndex].Values;
                 if (pointIndex < values.Count && values[pointIndex].HasValue)
-                    cells.Add(NumberCell(ss, seriesIndex + 2, pointIndex + 2, values[pointIndex]!.Value));
+                    cells.Add(NumberCell(ss, layout.ValueColumns[seriesIndex], pointIndex + 2, values[pointIndex]!.Value));
             }
 
             rows.Add(new XElement(ss + "row",

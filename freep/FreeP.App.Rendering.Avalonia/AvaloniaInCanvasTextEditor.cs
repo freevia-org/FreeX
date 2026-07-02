@@ -46,7 +46,24 @@ public sealed class AvaloniaInCanvasTextEditor
 
     public bool TryApplyActiveTableCellTextFormat(TableCellTextFormatKind kind)
     {
-        var plan = _editor.PlanActiveTableCellTextFormat(kind);
+        // The overlay TextBox's Text uses the same '\n'-joined paragraph convention as
+        // InCanvasTextEditPlanner.ExtractPlainText, so its SelectionStart/SelectionEnd map
+        // directly onto the character-offset range PlanTextFormat expects. A collapsed caret
+        // (SelectionStart == SelectionEnd) is passed through as null, which falls back to the
+        // existing whole-cell behavior.
+        (int Start, int End)? selection = null;
+        bool isWholeCellSelection = true;
+        if (_cellEditActive && _cellTextBox is not null)
+        {
+            int selStart = Math.Min(_cellTextBox.SelectionStart, _cellTextBox.SelectionEnd);
+            int selEnd = Math.Max(_cellTextBox.SelectionStart, _cellTextBox.SelectionEnd);
+            int textLength = _cellTextBox.Text?.Length ?? 0;
+            isWholeCellSelection = selStart == selEnd || (selStart == 0 && selEnd >= textLength);
+            if (selStart != selEnd)
+                selection = (selStart, selEnd);
+        }
+
+        var plan = _editor.PlanActiveTableCellTextFormat(kind, selection);
         if (plan.Command is null)
             return false;
 
@@ -59,7 +76,14 @@ public sealed class AvaloniaInCanvasTextEditor
             plan.Col == _editingCellCol &&
             plan.TargetValue is { } value)
         {
-            ApplyCellOverlayFormat(kind, value);
+            // The overlay TextBox mirrors formatting as whole-control font weight/style, which
+            // cannot represent a mixed/partial-selection result. When the selection spans the
+            // entire cell (or the caret is collapsed, matching the existing whole-cell
+            // convention), mirror the format onto the overlay control. For a genuine partial
+            // sub-range selection, skip mirroring — the overlay can't show "half bold" — the
+            // underlying rich model (committed on close) is authoritative regardless.
+            if (isWholeCellSelection)
+                ApplyCellOverlayFormat(kind, value);
         }
 
         return true;
@@ -270,7 +294,18 @@ public sealed class AvaloniaInCanvasTextEditor
             if (cell is null)
                 return;
 
-            var newBody = InCanvasTextEditPlanner.BuildPlainTextBody(cell.TextBody, newText);
+            // The overlay TextBox only ever shows/edits plain text, but formatting commands
+            // (bold/italic/underline applied while the overlay is open) mutate the rich
+            // TextBody model directly via TryApplyActiveTableCellTextFormat. If the user did
+            // not retype any text (the committed plain text still matches the current rich
+            // model's concatenated text), reuse the rich model as-is instead of rebuilding a
+            // single flattened run from run[0] — rebuilding would silently discard any other
+            // runs' distinct formatting (a data-loss bug). Only fall back to the plain rebuild
+            // when the text itself changed.
+            var currentPlainText = InCanvasTextEditPlanner.ExtractPlainText(cell.TextBody);
+            var newBody = newText == currentPlainText
+                ? SetShapeTextBodyCommand.CloneTextBody(cell.TextBody) ?? InCanvasTextEditPlanner.BuildPlainTextBody(cell.TextBody, newText)
+                : InCanvasTextEditPlanner.BuildPlainTextBody(cell.TextBody, newText);
             var decision = AvaloniaTableCellEditAdapter.CommitRichText(editPlan, newBody);
             if (decision.Command is not null)
                 _editor.Bus.Execute(decision.Command);

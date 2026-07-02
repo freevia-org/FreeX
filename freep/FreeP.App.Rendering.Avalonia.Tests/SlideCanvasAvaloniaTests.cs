@@ -300,6 +300,126 @@ public sealed class SlideCanvasAvaloniaTests
     }
 
     [Fact]
+    public async Task TableCellTextEditor_CommitUnchangedTextAfterFormat_PreservesPerRunFormatting()
+    {
+        // IC1 regression: a cell with mixed runs (plain + italic). Apply Bold via the shared
+        // format path (which mutates the rich model directly), then commit the overlay without
+        // retyping any text. The commit must NOT flatten to a single run copying run[0]'s
+        // formatting — both runs must survive with bold applied and the second run's italic
+        // preserved.
+        SlideShape? shape = null;
+        EditingSession? editor = null;
+
+        await Run(() =>
+        {
+            var presentation = MakePresentation(pres =>
+            {
+                pres.Slides[0].Shapes.Clear();
+                shape = MakeTableShape(20, "Hello");
+                var body = shape!.Table!.Rows[0].Cells[0].TextBody!;
+                body.Paragraphs[0].Runs.Add(new Run { Text = "World", Italic = true, ItalicSet = true });
+                pres.Slides[0].Shapes.Add(shape);
+            });
+
+            var bus = new PresentationCommandBus(presentation);
+            editor = new EditingSession(presentation, bus);
+            var canvas = new SlideCanvas { Presentation = presentation, Slide = presentation.Slides[0] };
+            var overlay = new global::Avalonia.Controls.Canvas();
+            var textEditor = new AvaloniaInCanvasTextEditor(canvas, editor, overlay);
+
+            textEditor.ActivateCellEdit(shape!.Id, 0, 0);
+            var box = overlay.Children.OfType<global::Avalonia.Controls.TextBox>().Single();
+            box.Text.Should().Be("HelloWorld");
+
+            // Apply Bold to the whole cell (collapsed caret / no explicit selection set here —
+            // whole-cell is the documented fallback). This mutates the rich model directly.
+            textEditor.TryApplyActiveTableCellTextFormat(TableCellTextFormatKind.Bold).Should().BeTrue();
+
+            // Commit without retyping — the overlay's Text still equals the model's plain text.
+            textEditor.CommitCellEdit();
+        });
+
+        var runs = shape!.Table!.Rows[0].Cells[0].TextBody!.Paragraphs[0].Runs;
+        runs.Should().HaveCount(2, "the two distinctly-formatted runs must not be flattened into one");
+        runs[0].Text.Should().Be("Hello");
+        runs[1].Text.Should().Be("World");
+        runs[0].Bold.Should().BeTrue();
+        runs[1].Bold.Should().BeTrue();
+        runs[1].Italic.Should().BeTrue("the second run's italic formatting must survive the commit");
+        runs[0].Italic.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task TableCellTextEditor_FormatSubRangeSelection_OnlyFormatsSelectedRunRange()
+    {
+        // IC2 regression: selecting a sub-range within a cell (one word of several) and applying
+        // Bold must only bold the selected characters — runs split at the boundaries, text
+        // integrity preserved, and the rest of the cell left unchanged.
+        SlideShape? shape = null;
+        EditingSession? editor = null;
+
+        await Run(() =>
+        {
+            var presentation = MakePresentation(pres =>
+            {
+                pres.Slides[0].Shapes.Clear();
+                shape = MakeTableShape(21, "one two three");
+                pres.Slides[0].Shapes.Add(shape);
+            });
+
+            var bus = new PresentationCommandBus(presentation);
+            editor = new EditingSession(presentation, bus);
+            var canvas = new SlideCanvas { Presentation = presentation, Slide = presentation.Slides[0] };
+            var overlay = new global::Avalonia.Controls.Canvas();
+            var textEditor = new AvaloniaInCanvasTextEditor(canvas, editor, overlay);
+
+            textEditor.ActivateCellEdit(shape!.Id, 0, 0);
+            var box = overlay.Children.OfType<global::Avalonia.Controls.TextBox>().Single();
+            box.Text.Should().Be("one two three");
+
+            // Select just "two" (offsets 4..7).
+            box.SelectionStart = 4;
+            box.SelectionEnd = 7;
+
+            textEditor.TryApplyActiveTableCellTextFormat(TableCellTextFormatKind.Bold).Should().BeTrue();
+        });
+
+        var runs = shape!.Table!.Rows[0].Cells[0].TextBody!.Paragraphs[0].Runs;
+        string.Concat(runs.Select(r => r.Text)).Should().Be("one two three", "text integrity must be preserved across the split");
+
+        runs.Should().Contain(r => r.Text == "two" && r.Bold, "the selected word must be bold");
+        runs.Where(r => r.Text != "two").Should().OnlyContain(r => !r.Bold, "text outside the selection must be unchanged");
+    }
+
+    [Fact]
+    public void PlanTextFormat_WholeCellSelection_BoldsAllRuns()
+    {
+        // A selection spanning the entire cell text behaves like the whole-cell fallback.
+        var shape = MakeTableShape(22, "abc");
+        var slide = new Slide { Shapes = { shape } };
+
+        var plan = TableCellEditPlanner.PlanTextFormat(
+            0,
+            slide,
+            [shape.Id],
+            (0, 0),
+            TableCellTextFormatKind.Bold,
+            selection: (0, 3));
+
+        plan.Status.Should().Be(TableCellTextFormatStatus.Ready);
+
+        // Apply the command against a presentation containing our shape directly.
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Clear();
+        presentation.Slides[0].Shapes.Add(shape);
+        var bus = new PresentationCommandBus(presentation);
+        bus.Execute(plan.Command!);
+
+        shape.Table!.Rows[0].Cells[0].TextBody!.Paragraphs[0].Runs
+            .Should().OnlyContain(r => r.Bold);
+    }
+
+    [Fact]
     public async Task TableCellTextEditor_Cancel_DiscardsChanges()
     {
         EditingSession? editor = null;
