@@ -238,6 +238,67 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void BuildMajorAxisTickPrimitivePlan_ColumnChart_PlansCategoryAndValueTicks()
+    {
+        var chart = MakeTwoSeriesChart(ChartType.ColumnClustered);
+        var frame = ChartRenderPlanner.BuildFramePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+
+        var plan = ChartRenderPlanner.BuildMajorAxisTickPrimitivePlan(chart, frame);
+
+        plan.CategoryTicks.Should().HaveCount(2);
+        plan.CategoryTicks[0].Start.Should().Be(new ChartPlanPoint(134, frame.Plot.Bottom));
+        plan.CategoryTicks[0].End.Should().Be(new ChartPlanPoint(134, frame.Plot.Bottom + ChartRenderPlanner.AxisMajorTickLength));
+        plan.CategoryTicks[1].Start.Should().Be(new ChartPlanPoint(306, frame.Plot.Bottom));
+        plan.ValueTicks.Should().HaveCount(6);
+        plan.ValueTicks[0].Start.Should().Be(new ChartPlanPoint(frame.Plot.X - ChartRenderPlanner.AxisMajorTickLength, frame.Plot.Bottom));
+        plan.ValueTicks[0].End.Should().Be(new ChartPlanPoint(frame.Plot.X, frame.Plot.Bottom));
+        plan.ValueTicks[^1].Start.Should().Be(new ChartPlanPoint(frame.Plot.X - ChartRenderPlanner.AxisMajorTickLength, frame.Plot.Y));
+        plan.ValueTicks[^1].End.Should().Be(new ChartPlanPoint(frame.Plot.X, frame.Plot.Y));
+        plan.Stroke.Should().Be(new ChartStrokePlan(
+            new SrgbColor(0x7F, 0x7F, 0x7F),
+            Alpha: 255,
+            Thickness: 0.75));
+    }
+
+    [Fact]
+    public void BuildMajorAxisTickPrimitivePlan_BarChart_SwapsCategoryAndValueTickEdges()
+    {
+        var chart = MakeTwoSeriesChart(ChartType.BarClustered);
+        var frame = ChartRenderPlanner.BuildFramePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+
+        var plan = ChartRenderPlanner.BuildMajorAxisTickPrimitivePlan(chart, frame);
+
+        plan.CategoryTicks.Should().HaveCount(2);
+        plan.CategoryTicks[0].Start.Should().Be(new ChartPlanPoint(frame.Plot.X - ChartRenderPlanner.AxisMajorTickLength, 191));
+        plan.CategoryTicks[0].End.Should().Be(new ChartPlanPoint(frame.Plot.X, 191));
+        plan.CategoryTicks[1].Start.Should().Be(new ChartPlanPoint(frame.Plot.X - ChartRenderPlanner.AxisMajorTickLength, 69));
+        plan.ValueTicks.Should().HaveCount(6);
+        plan.ValueTicks[0].Start.Should().Be(new ChartPlanPoint(frame.Plot.X, frame.Plot.Bottom));
+        plan.ValueTicks[0].End.Should().Be(new ChartPlanPoint(frame.Plot.X, frame.Plot.Bottom + ChartRenderPlanner.AxisMajorTickLength));
+        plan.ValueTicks[^1].Start.Should().Be(new ChartPlanPoint(frame.Plot.Right, frame.Plot.Bottom));
+        plan.ValueTicks[^1].End.Should().Be(new ChartPlanPoint(frame.Plot.Right, frame.Plot.Bottom + ChartRenderPlanner.AxisMajorTickLength));
+    }
+
+    [Fact]
+    public void BuildMajorAxisTickPrimitivePlan_DeletedAxesAndNoPlot_ReturnEmptyGeometry()
+    {
+        var chart = MakeTwoSeriesChart(ChartType.ColumnClustered);
+        chart.CategoryAxis.Delete = true;
+        chart.ValueAxis.Delete = true;
+        var frame = ChartRenderPlanner.BuildFramePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+
+        var deletedAxisPlan = ChartRenderPlanner.BuildMajorAxisTickPrimitivePlan(chart, frame);
+        var noPlotPlan = ChartRenderPlanner.BuildMajorAxisTickPrimitivePlan(
+            chart,
+            frame with { Plot = new ChartPlanRect(frame.Plot.X, frame.Plot.Y, 0, frame.Plot.Height) });
+
+        deletedAxisPlan.CategoryTicks.Should().BeEmpty();
+        deletedAxisPlan.ValueTicks.Should().BeEmpty();
+        noPlotPlan.CategoryTicks.Should().BeEmpty();
+        noPlotPlan.ValueTicks.Should().BeEmpty();
+    }
+
+    [Fact]
     public void BuildLegendItemPlans_BottomLegend_PlansOneItemPerSeries()
     {
         var chart = MakeTwoSeriesChart(ChartType.ColumnClustered);

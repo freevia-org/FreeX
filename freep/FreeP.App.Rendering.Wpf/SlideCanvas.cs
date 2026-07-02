@@ -782,6 +782,16 @@ public sealed class SlideCanvas : FrameworkElement
             RenderComboOverrideSeries(dc, chart, chartOp.SeriesColors, plotX, plotY, plotW, plotH);
         }
 
+        var tickPlan = ChartRenderPlanner.BuildMajorAxisTickPrimitivePlan(chart, frame);
+        if (tickPlan.CategoryTicks.Count > 0 || tickPlan.ValueTicks.Count > 0)
+        {
+            var tickPen = CreateChartAxisTickPen(tickPlan);
+            foreach (var tick in tickPlan.CategoryTicks)
+                dc.DrawLine(tickPen, ToPoint(tick.Start), ToPoint(tick.End));
+            foreach (var tick in tickPlan.ValueTicks)
+                dc.DrawLine(tickPen, ToPoint(tick.Start), ToPoint(tick.End));
+        }
+
         // ── Data labels ────────────────────────────────────────────────────────
         foreach (var label in ChartRenderPlanner.BuildDataLabelPlans(chart, plot))
         {
@@ -2323,6 +2333,9 @@ public sealed class SlideCanvas : FrameworkElement
             fill.Color.B)));
 
     internal static Pen CreateChartGridLinePen(ChartMajorGridLinePrimitivePlan plan) =>
+        ToPen(plan.Stroke);
+
+    internal static Pen CreateChartAxisTickPen(ChartMajorAxisTickPrimitivePlan plan) =>
         ToPen(plan.Stroke);
 
     private static Pen ToPen(ChartStrokePlan stroke)
