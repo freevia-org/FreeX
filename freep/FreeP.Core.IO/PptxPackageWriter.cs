@@ -465,7 +465,7 @@ public static class PptxPackageWriter
             var (oleEmbRels, oleImgRels) = WriteSlideOleObjects(archive, slide, si + 1, usedRelIds);
 
             // Wave 25A: preserved modern objects (zoom / ink / 3D / unknown)
-            var (prvRels, prvRelIdPatch) = WriteSlidePreservedObjects(archive, slide, si + 1, usedRelIds);
+            var (prvRels, _) = WriteSlidePreservedObjects(archive, slide, si + 1, usedRelIds);
 
             // Combined shapeId→relId map for shape element building (picture shapes + charts + OLE)
             var mediaById = new Dictionary<uint, string>();
@@ -477,9 +477,12 @@ public static class PptxPackageWriter
             foreach (var (shapeId, embRelId, _, _) in oleEmbRels)  mediaById[shapeId] = embRelId;
             // OLE fallback image rel IDs use synthetic key: shape.Id | 0x40000000
             foreach (var (shapeId, imgRelId, _) in oleImgRels)     mediaById[shapeId | 0x40000000u] = imgRelId;
-            // Wave 25A: preserved object rel-id patch map (HashRelId(shapeId, oldRelId) → newRelId)
+            // EA4: preserved object rel-id patch map, keyed by the FULL (shapeId, oldRelId) pair
+            // (a value-tuple key has correct structural equality — no collision risk, unlike the
+            // old PrvHashRelId packed-uint scheme which only kept the low 8 bits of shapeId).
+            var prvRelIdByShapeAndOldId = new Dictionary<(uint shapeId, string oldRelId), string>();
             foreach (var (sid, oldRelId, newRelId, _, _) in prvRels)
-                mediaById[PrvHashRelId(sid, oldRelId)] = newRelId;
+                prvRelIdByShapeAndOldId[(sid, oldRelId)] = newRelId;
 
             // Fill-blip relId map (shapeId -> relId) for ShapeFill.Picture fills
             var fillBlipById = new Dictionary<uint, string>();
@@ -505,7 +508,7 @@ public static class PptxPackageWriter
             }
 
             // Slide xml — use the owning master's theme color scheme for scheme-color pre-resolution.
-            WriteEntry(archive, slidePath, BuildSlideXml(slide, slideColorScheme, mediaById, smartArtRelIdRemap, hlinkRelIds, presentation.Slides, fillBlipById, transSoundRelId));
+            WriteEntry(archive, slidePath, BuildSlideXml(slide, slideColorScheme, mediaById, smartArtRelIdRemap, hlinkRelIds, presentation.Slides, fillBlipById, transSoundRelId, prvRelIdByShapeAndOldId));
 
             // Slide rels: rId1=layout, images (picture shapes + fill blips), charts, SmartArt, optional notesSlide
             var slideRels = new OpcRelationshipDocument();
@@ -897,7 +900,8 @@ public static class PptxPackageWriter
         Dictionary<string, string>? hlinkRelIds = null,
         List<Slide>? allSlides = null,
         Dictionary<uint, string>? fillBlipById = null,
-        string? transSoundRelId = null)
+        string? transSoundRelId = null,
+        Dictionary<(uint shapeId, string oldRelId), string>? prvRelIdByShapeAndOldId = null)
     {
         return new XDocument(
             new XDeclaration("1.0", "UTF-8", "yes"),
@@ -913,7 +917,7 @@ public static class PptxPackageWriter
                     new XElement(P + "spTree",
                         GrpSpHeader(),
                         slide.Shapes
-                            .Select(s => BuildShapeEl(s, scheme, mediaById, smartArtRelIdRemap, hlinkRelIds, allSlides, fillBlipById))
+                            .Select(s => BuildShapeEl(s, scheme, mediaById, smartArtRelIdRemap, hlinkRelIds, allSlides, fillBlipById, prvRelIdByShapeAndOldId))
                             .OfType<XElement>())),
                 // II2: p:hf is NOT valid on p:sld (CT_Slide schema has no hf element);
                 // it is only valid on slideMaster/slideLayout/handoutMaster/notesMaster.
@@ -1898,12 +1902,13 @@ public static class PptxPackageWriter
         Dictionary<uint, Dictionary<string, string>>? smartArtRelIdRemap = null,
         Dictionary<string, string>? hlinkRelIds = null,
         List<Slide>? allSlides = null,
-        Dictionary<uint, string>? fillBlipById = null) =>
+        Dictionary<uint, string>? fillBlipById = null,
+        Dictionary<(uint shapeId, string oldRelId), string>? prvRelIdByShapeAndOldId = null) =>
         shape.Kind switch
         {
             SlideShapeKind.Picture => BuildPicEl(shape, mediaById),
             SlideShapeKind.Media   => BuildMediaPicEl(shape, mediaById),
-            SlideShapeKind.Group => BuildGrpSpEl(shape, scheme, mediaById, smartArtRelIdRemap, hlinkRelIds, allSlides, fillBlipById),
+            SlideShapeKind.Group => BuildGrpSpEl(shape, scheme, mediaById, smartArtRelIdRemap, hlinkRelIds, allSlides, fillBlipById, prvRelIdByShapeAndOldId),
             SlideShapeKind.Connector => BuildCxnSpEl(shape, scheme, hlinkRelIds, fillBlipById),
             SlideShapeKind.Table when shape.Table is not null => BuildGraphicFrameEl(shape, scheme),
             SlideShapeKind.Chart when shape.Chart is not null => BuildChartGraphicFrameEl(shape, mediaById),
@@ -1916,7 +1921,7 @@ public static class PptxPackageWriter
             // Wave 25A: preserved modern objects — emit verbatim XML with patched rel IDs
             SlideShapeKind.Zoom or SlideShapeKind.Ink or SlideShapeKind.Model3d
                 or SlideShapeKind.PreservedObject when shape.PreservedObject is not null =>
-                    BuildPreservedObjectEl(shape, mediaById),
+                    BuildPreservedObjectEl(shape, prvRelIdByShapeAndOldId),
             _ => BuildSpEl(shape, scheme, hlinkRelIds, allSlides, fillBlipById)
         };
 
@@ -2097,7 +2102,8 @@ public static class PptxPackageWriter
         Dictionary<uint, Dictionary<string, string>>? smartArtRelIdRemap = null,
         Dictionary<string, string>? hlinkRelIds = null,
         List<Slide>? allSlides = null,
-        Dictionary<uint, string>? fillBlipById = null) =>
+        Dictionary<uint, string>? fillBlipById = null,
+        Dictionary<(uint shapeId, string oldRelId), string>? prvRelIdByShapeAndOldId = null) =>
         new XElement(P + "grpSp",
             new XElement(P + "nvGrpSpPr",
                 CnvPr(shape),
@@ -2105,7 +2111,7 @@ public static class PptxPackageWriter
                 new XElement(P + "nvPr")),
             BuildGrpSpPrEl(shape),
             shape.Children
-                .Select(c => BuildShapeEl(c, scheme, mediaById, smartArtRelIdRemap, hlinkRelIds, allSlides, fillBlipById))
+                .Select(c => BuildShapeEl(c, scheme, mediaById, smartArtRelIdRemap, hlinkRelIds, allSlides, fillBlipById, prvRelIdByShapeAndOldId))
                 .OfType<XElement>());
 
     /// <summary>
@@ -3485,24 +3491,11 @@ public static class PptxPackageWriter
     }
 
     /// <summary>
-    /// Compact hash that packs (shapeId, oldRelId) into a uint key for the mediaById dictionary.
-    /// Uses the 0x20000000 bit-range to avoid collisions with OLE (0x40000000) and media (0x80000000) keys.
-    /// </summary>
-    private static uint PrvHashRelId(uint shapeId, string oldRelId)
-    {
-        unchecked
-        {
-            uint h = 2166136261u;
-            foreach (char c in oldRelId) h = (h ^ c) * 16777619u;
-            return (shapeId & 0xFFu) | ((h & 0x1FFFFFu) << 8) | 0x20000000u;
-        }
-    }
-
-    /// <summary>
     /// Writes all OPC parts for preserved modern objects on the slide.
     /// Returns:
     ///   prvRels: (shapeId, oldRelId, newRelId, relType, absoluteTargetPath)
-    ///   relIdPatch: unused (patch happens via PrvHashRelId + mediaById)
+    ///   relIdPatch: unused (patch happens via the collision-free (shapeId, oldRelId) key —
+    ///   see BUG EA4: prvRelIdPatch dictionary built by the caller from prvRels)
     /// </summary>
     private static (
         List<(uint shapeId, string oldRelId, string newRelId, string relType, string targetPath)> prvRels,
@@ -3604,10 +3597,22 @@ public static class PptxPackageWriter
 
     /// <summary>
     /// Builds the slide element for a preserved modern object by re-emitting RawXml
-    /// with rel-id attributes patched to the freshly allocated rIds (via mediaById).
+    /// with rel-id attributes patched to the freshly allocated rIds (via
+    /// <paramref name="prvRelIdByShapeAndOldId"/>).
     /// </summary>
+    /// <param name="prvRelIdByShapeAndOldId">
+    /// BUG EA4 fix: collision-free (shapeId, oldRelId) -&gt; newRelId patch map. The previous
+    /// implementation packed shapeId's LOW 8 BITS together with a 21-bit hash of oldRelId into a
+    /// single uint key shared with the `mediaById` dictionary; two preserved shapes on the same
+    /// slide whose cNvPr ids shared a low byte (e.g. 5 and 261 — 261 &amp; 0xFF == 5) and which both
+    /// referenced the same old rId string (e.g. both "rId2", each to a DIFFERENT media part)
+    /// collided on that packed key, so the second shape's dictionary write silently overwrote the
+    /// first's, cross-wiring one shape's rId to the OTHER shape's media (or leaving a dangling
+    /// reference) — both cause a PowerPoint "needs repair" prompt. The fix keys directly on the
+    /// real (uint shapeId, string oldRelId) tuple — no hashing, no bit-packing, no collisions.
+    /// </param>
     private static XElement? BuildPreservedObjectEl(
-        SlideShape shape, Dictionary<uint, string> mediaById)
+        SlideShape shape, Dictionary<(uint shapeId, string oldRelId), string>? prvRelIdByShapeAndOldId)
     {
         if (shape.PreservedObject is not { } info) return null;
         if (string.IsNullOrWhiteSpace(info.RawXml)) return null;
@@ -3623,9 +3628,9 @@ public static class PptxPackageWriter
                                 .Where(a => a.Name.NamespaceName == rNs)
                                 .ToList())
         {
-            var oldId  = attr.Value;
-            var key    = PrvHashRelId(shape.Id, oldId);
-            if (mediaById.TryGetValue(key, out var newId))
+            var oldId = attr.Value;
+            if (prvRelIdByShapeAndOldId is not null &&
+                prvRelIdByShapeAndOldId.TryGetValue((shape.Id, oldId), out var newId))
                 attr.SetValue(newId);
         }
 
