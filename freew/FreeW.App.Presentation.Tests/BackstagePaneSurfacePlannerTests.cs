@@ -54,6 +54,32 @@ public sealed class BackstagePaneSurfacePlannerTests
     }
 
     [Fact]
+    public void BuildPrintPane_WhenPreviewIsAvailableButNativePrintIsMissing_ExplainsDeferredPrint()
+    {
+        var previewed = false;
+
+        var surface = BackstagePaneSurfacePlanner.BuildPrintPane(
+            "Draft",
+            new PageSettings(),
+            print: null,
+            printPreview: () => previewed = true);
+
+        surface.DeferredNote.Should().Be(BackstageViewTextResources.DirectPrintDeferredNote);
+
+        var print = surface.Groups.SelectMany(group => group.Actions)
+            .Single(action => action.AutomationId == "PrintAction_Print");
+        var preview = surface.Groups.SelectMany(group => group.Actions)
+            .First(action => action.AutomationId == "PrintAction_PrintPreview");
+
+        print.IsEnabled.Should().BeFalse("native printer selection is host-specific and can be deferred independently of preview");
+        preview.IsEnabled.Should().BeTrue();
+
+        preview.Invoke!();
+
+        previewed.Should().BeTrue();
+    }
+
+    [Fact]
     public void BuildPrintPane_DisablesActionsWhenCallbacksAreMissing()
     {
         var surface = BackstagePaneSurfacePlanner.BuildPrintPane(

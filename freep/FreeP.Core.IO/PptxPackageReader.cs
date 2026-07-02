@@ -1113,6 +1113,29 @@ public static class PptxPackageReader
         uri is not null && uri.Contains("model3d", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
+    /// FA2: resolves the namespace URI for EACH whitespace-separated token in a (possibly
+    /// multi-token) mc:Choice Requires value, e.g. "p14 p15" -> {"p14": uri1, "p15": uri2}.
+    /// mc:AlternateContent permits Requires to be a space-separated list of prefixes; treating
+    /// the whole raw string as a single xmlns prefix (as the old code did via
+    /// GetNamespaceOfPrefix(rawRequiresValue)) silently fails for every multi-token value.
+    /// A token whose xmlns declaration cannot be found (not in scope on the Choice element or
+    /// its ancestors) is OMITTED from the result — callers must not guess/substitute a URI for it.
+    /// </summary>
+    private static Dictionary<string, string> ResolveMcRequiresNsUris(XElement mcChoiceEl, string? requiresValue)
+    {
+        var result = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (string.IsNullOrWhiteSpace(requiresValue)) return result;
+
+        foreach (var token in requiresValue.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries))
+        {
+            var uri = mcChoiceEl.GetNamespaceOfPrefix(token)?.NamespaceName;
+            if (!string.IsNullOrEmpty(uri))
+                result[token] = uri;
+        }
+        return result;
+    }
+
+    /// <summary>
     /// Preserves an unknown or modern graphicFrame verbatim, capturing any referenced parts.
     /// </summary>
     private static SlideShape ReadPreservedGraphicFrame(
@@ -1132,17 +1155,22 @@ public static class PptxPackageReader
             _                           => SlideShapeKind.PreservedObject,
         };
 
-        // EA3: capture the original mc:Choice Requires token and its namespace URI so the writer
-        // can re-emit it verbatim (not hardcode "p14").
+        // EA3/FA2: capture the original mc:Choice Requires token(s) and their namespace URI(s) so
+        // the writer can re-emit them verbatim (not hardcode "p14"). Requires may be a
+        // space-separated list of tokens (e.g. "p14 p15") — resolve each one individually.
         string? mcRequiresToken = null;
         string? mcRequiresNsUri = null;
+        Dictionary<string, string>? mcRequiresNsUris = null;
         if (wasAlternateContent && mcChoiceEl is not null)
         {
             mcRequiresToken = mcChoiceEl.Attribute("Requires")?.Value;
             if (mcRequiresToken is not null)
             {
-                // Find the xmlns declaration for that prefix on the Choice element or its ancestors.
-                mcRequiresNsUri = mcChoiceEl.GetNamespaceOfPrefix(mcRequiresToken)?.NamespaceName;
+                mcRequiresNsUris = ResolveMcRequiresNsUris(mcChoiceEl, mcRequiresToken);
+                // Back-compat single-value fallback: only meaningful for a genuinely single token.
+                var tokenParts = mcRequiresToken.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+                if (tokenParts.Length == 1)
+                    mcRequiresNsUris.TryGetValue(tokenParts[0], out mcRequiresNsUri);
             }
         }
 
@@ -1154,6 +1182,9 @@ public static class PptxPackageReader
             McRequiresToken     = mcRequiresToken,
             McRequiresNsUri     = mcRequiresNsUri,
         };
+        if (mcRequiresNsUris is not null)
+            foreach (var kv in mcRequiresNsUris)
+                info.McRequiresNsUris[kv.Key] = kv.Value;
 
         // Capture all referenced parts via the slide's rels
         var slideRels2 = OpcRelationships.LoadTargets(archive, GetRelationshipPartPath(partPath));
@@ -1203,15 +1234,23 @@ public static class PptxPackageReader
 
         var slideRels2 = OpcRelationships.LoadTargets(archive, GetRelationshipPartPath(partPath));
 
-        // EA3: capture original mc:Choice Requires token for round-trip fidelity.
+        // EA3/FA2: capture original mc:Choice Requires token(s) for round-trip fidelity.
+        // Requires may be a space-separated list of tokens (e.g. "p14 p15") — resolve each
+        // one individually rather than treating the whole raw string as a single prefix.
         bool wasAc = originalEl != contentPartEl;
         string? mcRequiresToken = null;
         string? mcRequiresNsUri = null;
+        Dictionary<string, string>? mcRequiresNsUris = null;
         if (wasAc && mcChoiceEl is not null)
         {
             mcRequiresToken = mcChoiceEl.Attribute("Requires")?.Value;
             if (mcRequiresToken is not null)
-                mcRequiresNsUri = mcChoiceEl.GetNamespaceOfPrefix(mcRequiresToken)?.NamespaceName;
+            {
+                mcRequiresNsUris = ResolveMcRequiresNsUris(mcChoiceEl, mcRequiresToken);
+                var tokenParts = mcRequiresToken.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+                if (tokenParts.Length == 1)
+                    mcRequiresNsUris.TryGetValue(tokenParts[0], out mcRequiresNsUri);
+            }
         }
 
         var info = new PreservedObjectInfo
@@ -1222,6 +1261,9 @@ public static class PptxPackageReader
             McRequiresToken     = mcRequiresToken,
             McRequiresNsUri     = mcRequiresNsUri,
         };
+        if (mcRequiresNsUris is not null)
+            foreach (var kv in mcRequiresNsUris)
+                info.McRequiresNsUris[kv.Key] = kv.Value;
 
         // Follow r:id to the InkML part and capture its bytes
         var rId = contentPartEl.Attribute(R + "id")?.Value;

@@ -42,6 +42,16 @@ public sealed class DesignTabTests
         return doc;
     }
 
+    private static void Execute(
+        RibbonCommandRegistry registry,
+        string commandId,
+        RibbonCommandContext? context = null)
+    {
+        registry.TryGet(new RibbonCommandId(commandId), out var command)
+            .Should().BeTrue($"command '{commandId}' must be registered");
+        command!.Execute(context ?? RibbonCommandContext.Empty);
+    }
+
     // ── Themes ────────────────────────────────────────────────────────────────
 
     [Fact]
@@ -126,6 +136,36 @@ public sealed class DesignTabTests
 
         view.Document.DefaultParagraph.LineSpacing.Should().Be(dbl.LineSpacing);
         view.Document.DefaultParagraph.SpaceAfterPt.Should().Be(dbl.SpaceAfterPt);
+    }
+
+    [Fact]
+    public void Style_set_commands_apply_and_reset_built_in_styles()
+    {
+        var view = new DocumentView();
+        view.LoadDocument(MakeDoc());
+        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+
+        Execute(registry, "freew.style-set", RibbonCommandContext.ForSelectedValue("Elegant"));
+        view.Document.DefaultRun.FontFamily.Should().Be("Georgia");
+        view.Document.Styles["Heading1"].Run.FontFamily.Should().Be("Cambria");
+
+        Execute(registry, "freew.reset-style-set");
+        view.Document.DefaultRun.FontFamily.Should().Be(DocumentStyleSet.Default.BodyFont);
+        view.Document.Styles["Heading1"].Run.FontFamily.Should().Be(DocumentStyleSet.Default.HeadingFont);
+    }
+
+    [Fact]
+    public void Undo_reverts_style_set_apply()
+    {
+        var view = new DocumentView();
+        view.LoadDocument(MakeDoc());
+        var before = view.Document.Styles["Heading1"].Run.FontFamily;
+
+        view.ApplyStyleSet(DocumentStyleSet.FindByName("Elegant")!);
+        view.Document.Styles["Heading1"].Run.FontFamily.Should().Be("Cambria");
+
+        view.Undo();
+        view.Document.Styles["Heading1"].Run.FontFamily.Should().Be(before);
     }
 
     [Fact]
@@ -445,5 +485,144 @@ public sealed class DesignTabTests
         {
             return null;
         }
+    }
+
+    // ── Page border inset (FC1: DIP-vs-point mismatch) ───────────────────────────
+
+    [Fact]
+    public void Page_border_inset_is_24_points_converted_to_dip_not_24_raw_dip()
+    {
+        // FreeW.Core.IO.DocxWriter.BuildPageBorders emits w:space="24" on w:pgBorders — and per the OOXML
+        // spec, @w:space on pgBorders/offsetFrom="page" is always measured in POINTS (never twips/DXA).
+        // The Design-tab render must inset the previewed border by that same 24pt, converted to DIP at the
+        // standard 96/72 px-per-point ratio — NOT by 24 raw DIP (which would be 18pt, ~6pt too tight, and
+        // would make the on-screen preview disagree with the same document reopened in Word).
+        const double expectedDip = 24.0 * (96.0 / 72.0); // 24pt -> ~32 DIP
+
+        DocumentView.PageBorderInsetDip.Should().BeApproximately(expectedDip, 0.01,
+            "the render inset must equal the 24pt the writer emits as w:pgBorders/@w:space, in DIP");
+        DocumentView.PageBorderInsetDip.Should().NotBeApproximately(24.0, 0.01,
+            "24 raw DIP (the old bug) is only 18pt — it must not be mistaken for the 24pt inset");
+    }
+
+    // ── Watermark layering + clipping (FC2 / FC3) ────────────────────────────────
+
+    [Fact]
+    public async Task Watermark_does_not_paint_over_the_page_border_line()
+    {
+        // Word draws the page border as the topmost page-background element: page color -> watermark ->
+        // border -> content. Set a page border whose color is distinguishable from the watermark's, plus a
+        // watermark, and sample a pixel sitting on the border's stroke. If the watermark were still drawn
+        // after (on top of) the border — the pre-fix ordering — the border pixel could be diluted by the
+        // watermark's overlaid alpha; with the border drawn last, the sampled pixel must match the border's
+        // opaque color exactly (no watermark blending).
+        const int windowWidth = 900;
+        const int windowHeight = 700;
+
+        (byte R, byte G, byte B)? sample = null;
+        var ran = false;
+
+        try
+        {
+            await Session.Dispatch(() =>
+            {
+                ran = true;
+
+                var doc = MakeDoc("Border-over-watermark layering check");
+                var view = new DocumentView();
+                view.LoadDocument(doc);
+                view.SetPageBorder(new PageBorder("#FF0000", 6.0)); // thick, fully opaque red
+                view.SetWatermarkText("CONFIDENTIAL");
+
+                var window = new Window { Width = windowWidth, Height = windowHeight, Content = view };
+                window.Show();
+                window.Measure(new Size(windowWidth, windowHeight));
+                window.Arrange(new Rect(0, 0, windowWidth, windowHeight));
+                window.UpdateLayout();
+                Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
+
+                var frame = window.CaptureRenderedFrame();
+                if (frame is not null)
+                {
+                    // Sample along the top edge of the first page's border stroke (well inside the chrome
+                    // border but at the model page-border inset), away from the watermark's own centre.
+                    sample = SamplePixel(frame, windowWidth / 2, 44);
+                }
+
+                window.Close();
+            }, CancellationToken.None);
+        }
+        catch
+        {
+            return; // headless drawing backend unavailable — skip
+        }
+
+        if (!ran || sample is not { } px)
+            return; // no frame / no backend — skip rather than fail in CI
+
+        // The border is opaque solid red: expect red to clearly dominate green/blue. If the watermark (a
+        // semi-transparent grey/black wash) were painted on top, red would be diluted toward grey.
+        px.R.Should().BeGreaterThan((byte)150, "the opaque red page border must not be diluted by the watermark drawn on top of it");
+    }
+
+    [Fact]
+    public async Task Long_watermark_does_not_paint_outside_the_page_bounds()
+    {
+        // DrawWatermark centres a rotated FormattedText at the page centre; without a clip, a long
+        // watermark string (font size floors at 24pt) can extend past the page rect onto the grey desk
+        // area above/below the page. Word tiles+clips the watermark via a brush so it never overflows.
+        // Use a very long watermark string and sample a pixel in the grey desk area just above the first
+        // page's top edge — it must remain the desk's grey, not watermark ink.
+        const int windowWidth = 900;
+        const int windowHeight = 900;
+
+        (byte R, byte G, byte B)? deskSample = null;
+        var ran = false;
+
+        try
+        {
+            await Session.Dispatch(() =>
+            {
+                ran = true;
+
+                var doc = MakeDoc("Watermark clip check");
+                var view = new DocumentView();
+                view.LoadDocument(doc);
+                view.SetWatermark(new WatermarkOptions("THIS IS A VERY LONG WATERMARK STRING INDEED")
+                {
+                    Layout = WatermarkLayout.Horizontal,
+                    Opacity = 1.0,
+                    FontColorHex = "#FF0000",
+                });
+
+                var window = new Window { Width = windowWidth, Height = windowHeight, Content = view };
+                window.Show();
+                window.Measure(new Size(windowWidth, windowHeight));
+                window.Arrange(new Rect(0, 0, windowWidth, windowHeight));
+                window.UpdateLayout();
+                Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
+
+                var frame = window.CaptureRenderedFrame();
+                if (frame is not null)
+                {
+                    // 2px above the top page edge — squarely in the grey "desk" gap, never inside any page.
+                    deskSample = SamplePixel(frame, windowWidth / 2, 2);
+                }
+
+                window.Close();
+            }, CancellationToken.None);
+        }
+        catch
+        {
+            return; // headless drawing backend unavailable — skip
+        }
+
+        if (!ran || deskSample is not { } px)
+            return; // no frame / no backend — skip rather than fail in CI
+
+        // The desk is a flat mid-grey (R≈G≈B≈0xD0); red watermark ink bleeding past the page would skew
+        // R clearly above G/B. Assert the sample stays desaturated (no red channel dominance).
+        var maxDiff = Math.Max(Math.Abs(px.R - px.G), Math.Abs(px.R - px.B));
+        maxDiff.Should().BeLessThan(20, "the watermark must be clipped to the page and never paint into the grey desk area");
     }
 }

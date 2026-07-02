@@ -268,76 +268,167 @@ public sealed class ModernObjectsRoundTripTests : IDisposable
         Assert.Contains("image/png", ctXml);
     }
 
-    // ── EA2: reindexed preserved part gets correct Override ──────────────────────
+    // ── FA1 (was EA2): reindexed preserved part gets correct Override ────────────
 
-    [Fact]
-    public void EA2_ReindexedPreservedPart_GetsCorrectOverride()
+    /// <summary>
+    /// Builds a slide with one shape whose PreservedObject references
+    /// "ppt/media/3dModel.glb" (a Model3d preserved object).
+    /// </summary>
+    private static Slide BuildPreservedModel3dSlide(uint shapeId, byte[] glbBytes)
     {
-        // Bug EA2: when a preserved part path collides with an already-written path, it is
-        // reindexed to a fresh path but the content-type Override was keyed to the ORIGINAL
-        // path → the reindexed part had no Override → repair.
-        // We test this by creating two slides with the same OPC part path in their PreservedObjects.
+        var slide = new Slide();
+        var shape = new SlideShape
+        {
+            Id   = shapeId,
+            Kind = SlideShapeKind.Model3d,
+            ExtentCxEmu = 914400, ExtentCyEmu = 914400,
+            PreservedObject = new PreservedObjectInfo
+            {
+                ObjectKind          = PreservedObjectKind.Model3d,
+                RawXml              = "<p:graphicFrame xmlns:p=\"http://schemas.openxmlformats.org/presentationml/2006/main\"/>",
+                WasAlternateContent = false,
+            },
+        };
+        shape.PreservedObject.Parts["ppt/media/3dModel.glb"]            = glbBytes;
+        shape.PreservedObject.PartContentTypes["ppt/media/3dModel.glb"] = "model/gltf-binary";
+        shape.PreservedObject.SlideRels["rId1"] =
+            ("http://schemas.microsoft.com/office/2017/06/relationships/model3d", "ppt/media/3dModel.glb");
+        slide.Shapes.Add(shape);
+        return slide;
+    }
 
+    /// <summary>
+    /// Strengthened FA1 regression test. The ORIGINAL EA2 test only asserted that the
+    /// content-types XML contained the substring "preserved_2_" and "model/gltf-binary" — a
+    /// weak check that passes even if the Override is emitted at a path the writer never
+    /// actually wrote to the zip (which is exactly the FA1 bug: the pre-scan's reindex
+    /// numbering can disagree with WriteSlidePreservedObjects' real per-slide-reset numbering).
+    ///
+    /// This test instead parses [Content_Types].xml properly and asserts, for EVERY Override
+    /// whose PartName looks like a preserved-object media part, that a zip entry ACTUALLY EXISTS
+    /// at that exact path — i.e. the Override always describes a real, written part.
+    /// It also asserts the converse: every preserved-object part written to the zip has a
+    /// matching Override.
+    /// </summary>
+    [Fact]
+    public void FA1_ReindexedPreservedPart_OverrideMatchesActualWrittenZipEntry()
+    {
         var pres = new Presentation();
-
-        // Slide 1: a preserved object with a part at "ppt/media/3dModel.glb"
-        var slide1 = new Slide();
-        var shape1 = new SlideShape
-        {
-            Id   = 1,
-            Kind = SlideShapeKind.Model3d,
-            ExtentCxEmu = 914400, ExtentCyEmu = 914400,
-            PreservedObject = new PreservedObjectInfo
-            {
-                ObjectKind          = PreservedObjectKind.Model3d,
-                RawXml              = "<p:graphicFrame xmlns:p=\"http://schemas.openxmlformats.org/presentationml/2006/main\"/>",
-                WasAlternateContent = false,
-            },
-        };
         var glbBytes = new byte[] { 0x67, 0x6C, 0x54, 0x46 }; // glTF magic
-        shape1.PreservedObject.Parts["ppt/media/3dModel.glb"]            = glbBytes;
-        shape1.PreservedObject.PartContentTypes["ppt/media/3dModel.glb"] = "model/gltf-binary";
-        shape1.PreservedObject.SlideRels["rId1"] =
-            ("http://schemas.microsoft.com/office/2017/06/relationships/model3d", "ppt/media/3dModel.glb");
-        slide1.Shapes.Add(shape1);
+
+        // Two slides, each with a shape whose preserved part resolves to the SAME OPC path.
+        pres.Slides.Add(BuildPreservedModel3dSlide(1, glbBytes));
+        pres.Slides.Add(BuildPreservedModel3dSlide(2, glbBytes));
+
+        AssertContentTypesOverridesMatchWrittenPreservedParts(pres);
+    }
+
+    /// <summary>
+    /// FA1: same as above but with a THIRD slide added. The old buggy pre-scan used a
+    /// "remap once, then skip forever" global guard keyed only on the original path, so once the
+    /// SECOND slide's occurrence claimed the sole remap dictionary entry, a THIRD (or later)
+    /// slide reusing the same original path was silently ignored by the pre-scan — even though
+    /// the real per-slide writer (with its fresh per-slide writtenPaths/partCounter) would still
+    /// reindex or write that third occurrence. A 2-slide case can pass by coincidence; 3+ slides
+    /// exposes the bug for real.
+    /// </summary>
+    [Fact]
+    public void FA1_ThreeSlidesShareOnePath_EveryWrittenPartHasMatchingOverride()
+    {
+        var pres = new Presentation();
+        var glbBytes = new byte[] { 0x67, 0x6C, 0x54, 0x46 };
+
+        pres.Slides.Add(BuildPreservedModel3dSlide(1, glbBytes));
+        pres.Slides.Add(BuildPreservedModel3dSlide(2, glbBytes));
+        pres.Slides.Add(BuildPreservedModel3dSlide(3, glbBytes));
+
+        AssertContentTypesOverridesMatchWrittenPreservedParts(pres);
+    }
+
+    /// <summary>
+    /// FA1: two shapes on the SAME slide both reference the same original path, followed by a
+    /// second slide that reuses the same original path again. Exercises the per-shape AND
+    /// per-slide reset boundaries together.
+    /// </summary>
+    [Fact]
+    public void FA1_TwoShapesOneSlideThenAnotherSlide_EveryWrittenPartHasMatchingOverride()
+    {
+        var pres = new Presentation();
+        var glbBytes = new byte[] { 0x67, 0x6C, 0x54, 0x46 };
+
+        var slide1 = new Slide();
+        slide1.Shapes.Add(BuildPreservedModel3dSlide(1, glbBytes).Shapes[0]);
+        var shape1b = BuildPreservedModel3dSlide(101, glbBytes).Shapes[0];
+        slide1.Shapes.Add(shape1b);
         pres.Slides.Add(slide1);
+        pres.Slides.Add(BuildPreservedModel3dSlide(2, glbBytes));
 
-        // Slide 2: another preserved object that ALSO uses "ppt/media/3dModel.glb" — will be reindexed
-        var slide2 = new Slide();
-        var shape2 = new SlideShape
-        {
-            Id   = 2,
-            Kind = SlideShapeKind.Model3d,
-            ExtentCxEmu = 914400, ExtentCyEmu = 914400,
-            PreservedObject = new PreservedObjectInfo
-            {
-                ObjectKind          = PreservedObjectKind.Model3d,
-                RawXml              = "<p:graphicFrame xmlns:p=\"http://schemas.openxmlformats.org/presentationml/2006/main\"/>",
-                WasAlternateContent = false,
-            },
-        };
-        // Same path — will be reindexed to ppt/media/preserved_2_1.glb
-        shape2.PreservedObject.Parts["ppt/media/3dModel.glb"]            = glbBytes;
-        shape2.PreservedObject.PartContentTypes["ppt/media/3dModel.glb"] = "model/gltf-binary";
-        shape2.PreservedObject.SlideRels["rId1"] =
-            ("http://schemas.microsoft.com/office/2017/06/relationships/model3d", "ppt/media/3dModel.glb");
-        slide2.Shapes.Add(shape2);
-        pres.Slides.Add(slide2);
+        AssertContentTypesOverridesMatchWrittenPreservedParts(pres);
+    }
 
+    /// <summary>
+    /// Writes <paramref name="pres"/> and asserts: (1) every [Content_Types].xml Override whose
+    /// PartName is a preserved-media path (ppt/media/preserved_*.* or ppt/media/3dModel.glb, the
+    /// paths used in these tests) corresponds to an actual zip entry, and (2) every actual
+    /// preserved-media zip entry has a corresponding Override with the expected content type.
+    /// </summary>
+    private static void AssertContentTypesOverridesMatchWrittenPreservedParts(Presentation pres)
+    {
         using var ms = new MemoryStream();
         PptxPackageWriter.Write(pres, ms);
         ms.Position = 0;
 
-        // Verify that [Content_Types].xml has an Override for the reindexed part path
         using var zip = new ZipArchive(ms, ZipArchiveMode.Read, leaveOpen: true);
         var ctEntry = zip.GetEntry("[Content_Types].xml");
         Assert.NotNull(ctEntry);
-        string ctXml;
-        using (var sr = new StreamReader(ctEntry!.Open())) ctXml = sr.ReadToEnd();
+        XDocument ctDoc;
+        using (var s = ctEntry!.Open()) ctDoc = XDocument.Load(s);
 
-        // The reindexed part path (preserved_2_1.glb) must have a content-type Override
-        Assert.Contains("preserved_2_", ctXml); // EA2 fix: reindexed path in content types
-        Assert.Contains("model/gltf-binary", ctXml);
+        XNamespace ct = "http://schemas.openxmlformats.org/package/2006/content-types";
+        bool LooksLikePreservedMediaPath(string partName) =>
+            partName.Contains("/media/preserved_", StringComparison.OrdinalIgnoreCase) ||
+            partName.Contains("/media/3dModel.glb", StringComparison.OrdinalIgnoreCase);
+
+        var overridesForPreservedParts = ctDoc.Root!
+            .Elements(ct + "Override")
+            .Select(e => (PartName: e.Attribute("PartName")!.Value, ContentType: e.Attribute("ContentType")!.Value))
+            .Where(o => LooksLikePreservedMediaPath(o.PartName))
+            .ToList();
+
+        overridesForPreservedParts.Should().NotBeEmpty(
+            "at least one preserved-object media Override should have been emitted");
+
+        // (1) Every Override for a preserved-media path must point at a REAL zip entry.
+        foreach (var (partName, contentType) in overridesForPreservedParts)
+        {
+            var zipPath = partName.TrimStart('/');
+            var entry = zip.GetEntry(zipPath);
+            entry.Should().NotBeNull(
+                $"[Content_Types].xml declares an Override at '{partName}' (content type " +
+                $"'{contentType}') but the writer never actually wrote a zip entry there — " +
+                "this is the FA1 bug: PowerPoint would show a repair prompt for the part that " +
+                "WAS written (with no matching Override) while this phantom Override describes " +
+                "nothing real.");
+        }
+
+        // (2) Every actually-written preserved-media zip entry must have a matching Override.
+        var writtenPreservedEntries = zip.Entries
+            .Where(e => LooksLikePreservedMediaPath(e.FullName))
+            .Select(e => e.FullName)
+            .ToList();
+
+        writtenPreservedEntries.Should().NotBeEmpty("the writer should have written at least one preserved media part");
+
+        var overriddenPaths = new HashSet<string>(
+            overridesForPreservedParts.Select(o => o.PartName.TrimStart('/')),
+            StringComparer.OrdinalIgnoreCase);
+
+        foreach (var writtenPath in writtenPreservedEntries)
+        {
+            overriddenPaths.Should().Contain(writtenPath,
+                $"the writer wrote a preserved-object part at '{writtenPath}' but " +
+                "[Content_Types].xml has no Override for it — PowerPoint would prompt to repair.");
+        }
     }
 
     // ── EA3: mc:AlternateContent Requires token round-trips verbatim ──────────────
@@ -407,6 +498,177 @@ public sealed class ModernObjectsRoundTripTests : IDisposable
         Assert.Contains("Requires=\"p159\"", slideXml);
         // EA3 fix: the prefix "p14" must NOT appear as the Requires token
         Assert.DoesNotContain("Requires=\"p14\"", slideXml);
+    }
+
+    // ── FA2: multi-token mc:Choice Requires must not throw / must produce valid xmlns ──────
+
+    /// <summary>
+    /// Bug FA2: mc:AlternateContent permits Requires to be a SPACE-SEPARATED list of prefixes
+    /// (e.g. Requires="p14 p15"). The old writer did
+    /// `new XAttribute(XNamespace.Xmlns + requiresToken, requiresNsUri)` using the RAW (possibly
+    /// multi-token) string as the xmlns LOCAL NAME — an xmlns local-name containing a space is
+    /// not a legal XML name, so XName/XAttribute construction throws XmlException, and the
+    /// ENTIRE save fails for any preserved object whose original wrapper used a multi-token
+    /// Requires. This test asserts the save no longer throws, and that Requires plus BOTH
+    /// per-token xmlns declarations are preserved on round-trip.
+    /// </summary>
+    [Fact]
+    public void FA2_MultiTokenRequires_WritesWithoutThrowing_AndRoundTripsBothXmlns()
+    {
+        const string p14Uri  = "http://schemas.microsoft.com/office/powerpoint/2010/main";
+        const string p15Uri  = "http://schemas.microsoft.com/office/powerpoint/2012/main";
+        const string shapeXml = """
+            <mc:AlternateContent
+                xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+                xmlns:p14="http://schemas.microsoft.com/office/powerpoint/2010/main"
+                xmlns:p15="http://schemas.microsoft.com/office/powerpoint/2012/main">
+              <mc:Choice Requires="p14 p15"
+                         xmlns:p14="http://schemas.microsoft.com/office/powerpoint/2010/main"
+                         xmlns:p15="http://schemas.microsoft.com/office/powerpoint/2012/main">
+                <p:graphicFrame xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                                xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+                  <p:nvGraphicFramePr>
+                    <p:cNvPr id="70" name="FA2Test"/><p:cNvGraphicFramePr/><p:nvPr/>
+                  </p:nvGraphicFramePr>
+                  <p:xfrm><a:off x="0" y="0"/><a:ext cx="1" cy="1"/></p:xfrm>
+                  <a:graphic>
+                    <a:graphicData uri="http://example.com/test">
+                      <ex:data xmlns:ex="http://example.com/test" value="fa2"/>
+                    </a:graphicData>
+                  </a:graphic>
+                </p:graphicFrame>
+              </mc:Choice>
+              <mc:Fallback>
+                <p:graphicFrame xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                                xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+                  <p:nvGraphicFramePr>
+                    <p:cNvPr id="70" name="FA2Test"/><p:cNvGraphicFramePr/><p:nvPr/>
+                  </p:nvGraphicFramePr>
+                  <p:xfrm><a:off x="0" y="0"/><a:ext cx="1" cy="1"/></p:xfrm>
+                  <a:graphic>
+                    <a:graphicData uri="http://example.com/test"/>
+                  </a:graphic>
+                </p:graphicFrame>
+              </mc:Fallback>
+            </mc:AlternateContent>
+            """;
+
+        var ms1 = BuildPptxWithShapeXml(shapeXml);
+        var pres1 = PptxPackageReader.Read(ms1);
+
+        var shape = pres1.Slides[0].Shapes.FirstOrDefault(s => s.Kind == SlideShapeKind.PreservedObject);
+        shape.Should().NotBeNull();
+        shape!.PreservedObject!.WasAlternateContent.Should().BeTrue();
+        shape.PreservedObject.McRequiresToken.Should().Be("p14 p15",
+            "the raw multi-token Requires value must be captured verbatim");
+
+        // FA2: both tokens' namespace URIs must have been resolved individually on read.
+        shape.PreservedObject.McRequiresNsUris.Should().ContainKey("p14")
+            .WhoseValue.Should().Be(p14Uri);
+        shape.PreservedObject.McRequiresNsUris.Should().ContainKey("p15")
+            .WhoseValue.Should().Be(p15Uri);
+
+        // FA2 core assertion: writing must NOT throw (the old code threw XmlException here
+        // because it tried to declare an xmlns named "p14 p15", which is not a legal XML name).
+        MemoryStream ms2 = null!;
+        var writeAction = () => ms2 = WritePptxToMemory(pres1);
+        writeAction.Should().NotThrow("a multi-token Requires must not crash the save");
+
+        ms2.Position = 0;
+        using var zip = new ZipArchive(ms2, ZipArchiveMode.Read, leaveOpen: true);
+        var slideEntry = zip.Entries.FirstOrDefault(e =>
+            e.FullName.StartsWith("ppt/slides/slide") && e.FullName.EndsWith(".xml"));
+        slideEntry.Should().NotBeNull();
+        string slideXml;
+        using (var sr = new StreamReader(slideEntry!.Open())) slideXml = sr.ReadToEnd();
+
+        // The XML must be well-formed (XDocument.Parse throws on malformed XML / illegal names).
+        XDocument slideDoc = null!;
+        var parseAction = () => slideDoc = XDocument.Parse(slideXml);
+        parseAction.Should().NotThrow("the re-emitted slide XML must be well-formed");
+
+        // Requires attribute preserved verbatim, and BOTH xmlns declarations present.
+        slideXml.Should().Contain("Requires=\"p14 p15\"");
+        slideXml.Should().Contain(p14Uri);
+        slideXml.Should().Contain(p15Uri);
+
+        // Both xmlns prefixes must actually be declared as xmlns attributes (not just appear as
+        // a substring somewhere) — find the mc:Choice element and check its in-scope namespaces.
+        XNamespace mc = "http://schemas.openxmlformats.org/markup-compatibility/2006";
+        var choiceEl = slideDoc!.Descendants(mc + "Choice").FirstOrDefault();
+        choiceEl.Should().NotBeNull("mc:Choice must be re-emitted");
+        choiceEl!.GetNamespaceOfPrefix("p14")?.NamespaceName.Should().Be(p14Uri);
+        choiceEl.GetNamespaceOfPrefix("p15")?.NamespaceName.Should().Be(p15Uri);
+    }
+
+    /// <summary>
+    /// FA2: when a Requires token's namespace URI is UNKNOWN (not resolvable from the source
+    /// document and not one of the well-known MS prefixes), the writer must NOT force the p14
+    /// URI onto it — that would be a wrong/misleading binding. This test uses a fabricated
+    /// unknown prefix ("zzUnknown") with no xmlns declared anywhere in scope, so
+    /// McRequiresNsUris will be empty; the writer should fall back to preserving the element
+    /// verbatim (un-wrapped) rather than emit a broken/incorrect AlternateContent.
+    /// </summary>
+    [Fact]
+    public void FA2_UnknownRequiresToken_DoesNotForcePrefixToP14Uri()
+    {
+        const string shapeXml = """
+            <mc:AlternateContent
+                xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006">
+              <mc:Choice Requires="zzUnknown">
+                <p:graphicFrame xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                                xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+                  <p:nvGraphicFramePr>
+                    <p:cNvPr id="71" name="FA2UnknownTest"/><p:cNvGraphicFramePr/><p:nvPr/>
+                  </p:nvGraphicFramePr>
+                  <p:xfrm><a:off x="0" y="0"/><a:ext cx="1" cy="1"/></p:xfrm>
+                  <a:graphic>
+                    <a:graphicData uri="http://example.com/test">
+                      <ex:data xmlns:ex="http://example.com/test" value="fa2unknown"/>
+                    </a:graphicData>
+                  </a:graphic>
+                </p:graphicFrame>
+              </mc:Choice>
+              <mc:Fallback>
+                <p:graphicFrame xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                                xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+                  <p:nvGraphicFramePr>
+                    <p:cNvPr id="71" name="FA2UnknownTest"/><p:cNvGraphicFramePr/><p:nvPr/>
+                  </p:nvGraphicFramePr>
+                  <p:xfrm><a:off x="0" y="0"/><a:ext cx="1" cy="1"/></p:xfrm>
+                  <a:graphic>
+                    <a:graphicData uri="http://example.com/test"/>
+                  </a:graphic>
+                </p:graphicFrame>
+              </mc:Fallback>
+            </mc:AlternateContent>
+            """;
+
+        var ms1 = BuildPptxWithShapeXml(shapeXml);
+        var pres1 = PptxPackageReader.Read(ms1);
+
+        var shape = pres1.Slides[0].Shapes.FirstOrDefault(s => s.Kind == SlideShapeKind.PreservedObject);
+        shape.Should().NotBeNull();
+        shape!.PreservedObject!.McRequiresToken.Should().Be("zzUnknown");
+        shape.PreservedObject.McRequiresNsUris.Should().NotContainKey("zzUnknown",
+            "an unresolvable prefix must not get a guessed URI on read");
+
+        Action writeAction = () =>
+        {
+            using var ms2 = WritePptxToMemory(pres1);
+            ms2.Position = 0;
+            using var zip = new ZipArchive(ms2, ZipArchiveMode.Read, leaveOpen: true);
+            var slideEntry = zip.Entries.First(e =>
+                e.FullName.StartsWith("ppt/slides/slide") && e.FullName.EndsWith(".xml"));
+            string slideXml;
+            using (var sr = new StreamReader(slideEntry.Open())) slideXml = sr.ReadToEnd();
+
+            // Must not crash and must not fabricate the p14 URI for the "zzUnknown" prefix.
+            var p14Uri = "http://schemas.microsoft.com/office/powerpoint/2010/main";
+            if (slideXml.Contains("zzUnknown"))
+                slideXml.Should().NotContain($"xmlns:zzUnknown=\"{p14Uri}\"");
+        };
+        writeAction.Should().NotThrow("an unknown Requires token must not crash the save");
     }
 
     // ── SlideCloner preserves modern object ───────────────────────────────────

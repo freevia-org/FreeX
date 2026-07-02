@@ -104,6 +104,82 @@ public sealed class ReviewWorkflowAdapterTests
     }
 
     [StaFact]
+    public void MainWindow_AltTextPane_ShowsSharedPlanAndAppliesThroughPane()
+    {
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
+        try
+        {
+            window.ShowAltTextPane();
+
+            window.IsAltTextPaneVisible.Should().BeTrue();
+            window.IsAltTextPaneApplyEnabled.Should().BeFalse();
+            window.AltTextPaneMessage.Should().Be(PresentationReviewWorkflowPlanner.MissingShapeMessage);
+
+            var shape = new SlideShape
+            {
+                Id = 428,
+                Name = "Product image",
+                Kind = SlideShapeKind.Picture,
+                Picture = new ImagePart(),
+                AlternativeTextTitle = "Packaging photo",
+            };
+            window.Editor.CurrentSlide!.Shapes.Add(shape);
+            window.Editor.Select(shape.Id);
+            window.ShowAltTextPane();
+
+            window.AltTextPaneTitleLabel.Should().Be("Title");
+            window.AltTextPaneDescriptionLabel.Should().Be("Description");
+            window.AltTextPaneTitleText.Should().Be("Packaging photo");
+            window.AltTextPaneTitlePlaceholder.Should().Be("Packaging photo");
+            window.AltTextPaneDescriptionPlaceholder.Should().Be(
+                "Describe the selected object for people who cannot see it.");
+            window.IsAltTextPaneDecorativeChecked.Should().BeFalse();
+            window.IsAltTextPaneApplyEnabled.Should().BeFalse();
+            window.LastAltTextPanePlan!.Description.ValidationMessage
+                .Should().Be(PresentationReviewWorkflowPlanner.MissingAltTextDescriptionMessage);
+
+            window.SetAltTextPaneInput("Hero packaging photo", string.Empty, isDecorative: false);
+            window.IsAltTextPaneApplyEnabled.Should().BeFalse();
+            window.SetAltTextPaneInput("  Hero packaging photo  ", "  Product packaging on a white background.  ", isDecorative: false);
+            window.IsAltTextPaneApplyEnabled.Should().BeTrue();
+
+            var mutation = window.ApplyAltTextPane();
+
+            mutation.Should().Be(new PresentationAltTextMutationPlan(
+                true,
+                0,
+                shape.Id,
+                "Hero packaging photo",
+                "Product packaging on a white background.",
+                false,
+                null));
+            shape.AlternativeTextTitle.Should().Be("Hero packaging photo");
+            shape.AlternativeText.Should().Be("Product packaging on a white background.");
+            shape.IsDecorative.Should().BeFalse();
+            window.LastAccessibilitySummaryPlan!.Issues.Should().NotContain(issue =>
+                issue.ShapeId == shape.Id && issue.Title == "Alt text missing");
+
+            window.SetAltTextPaneInput("Ignored title", string.Empty, isDecorative: true);
+            window.IsAltTextPaneApplyEnabled.Should().BeTrue();
+            window.ApplyAltTextPane().Should().Be(new PresentationAltTextMutationPlan(
+                true,
+                0,
+                shape.Id,
+                string.Empty,
+                string.Empty,
+                true,
+                null));
+            shape.IsDecorative.Should().BeTrue();
+            window.HideAltTextPane();
+            window.IsAltTextPaneVisible.Should().BeFalse();
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [StaFact]
     public void MainWindow_LayoutPickerRequest_RecordsSharedDesignPlan()
     {
         var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
@@ -127,7 +203,18 @@ public sealed class ReviewWorkflowAdapterTests
             window.LastLayoutPickerPlan.Should().NotBeNull();
             window.IsLayoutPickerVisible.Should().BeTrue();
             window.LayoutPickerChoiceButtonCount.Should().Be(2);
-            window.LastLayoutPickerPlan!.Choices.Should().Contain(choice =>
+            window.LayoutPickerGroupHeaderCount.Should().Be(1);
+            window.LayoutPickerThumbnailPlaceholderCount.Should().BeGreaterThan(0);
+            window.LayoutPickerCurrentChoiceCount.Should().Be(1);
+            window.LastLayoutPickerPlan!.Groups.Should().ContainSingle(group =>
+                group.Heading == "Master 1" &&
+                group.Choices.Select(choice => choice.LayoutId).SequenceEqual(new[] { "rId1", "rId2" }));
+            window.LastLayoutPickerPlan.Choices.Single(choice => choice.LayoutId == "rId1").Chrome.State
+                .Should().Be(PresentationLayoutChoiceChromeState.Current);
+            window.LastLayoutPickerPlan.Choices.Single(choice => choice.LayoutId == "rId2").ThumbnailPlaceholders
+                .Should()
+                .ContainSingle(slot => slot.PlaceholderType == PlaceholderType.Title);
+            window.LastLayoutPickerPlan.Choices.Should().Contain(choice =>
                 choice.LayoutId == "rId2" &&
                 choice.DisplayName == "Blank" &&
                 choice.LayoutType == SlideLayoutType.Blank &&
@@ -151,16 +238,52 @@ public sealed class ReviewWorkflowAdapterTests
     }
 
     [StaFact]
+    public void MainWindow_TablePickerRequest_ShowsPickerAndAppliesChoice()
+    {
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
+        try
+        {
+            var before = window.Editor.CurrentSlide!.Shapes.Count;
+
+            window.OpenTablePicker();
+
+            window.LastTablePickerPlan.Should().NotBeNull();
+            window.IsTablePickerVisible.Should().BeTrue();
+            window.TablePickerChoiceButtonCount.Should().Be(25);
+            window.TablePickerDefaultChoiceCount.Should().Be(1);
+            window.LastTablePickerPlan!.Choices.Should().Contain(choice =>
+                choice.Rows == 5 &&
+                choice.Columns == 4 &&
+                choice.Label == "5 x 4 Table");
+
+            window.ApplyTablePickerChoice(5, 4).Should().BeTrue();
+
+            window.IsTablePickerVisible.Should().BeFalse();
+            window.Editor.CurrentSlide!.Shapes.Should().HaveCount(before + 1);
+            var table = window.Editor.CurrentSlide.Shapes.Last().Table;
+            table.Should().NotBeNull();
+            table!.Rows.Should().HaveCount(5);
+            table.ColumnWidthsEmu.Should().HaveCount(4);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [StaFact]
     public void FreePRibbonCommands_RegistersSharedReviewWorkflowCommandIds()
     {
         var presentation = Presentation.CreateEmpty();
         var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
         var invoked = false;
+        var altTextInvoked = false;
 
         var registry = FreePRibbonCommands.Build(
             new RibbonStateStore(),
             editor,
-            onReviewAccessibility: () => invoked = true);
+            onReviewAccessibility: () => invoked = true,
+            onReviewAltText: () => altTextInvoked = true);
 
         registry.TryGet(PresentationReviewWorkflowPlanner.AccessibilityCommandId, out var command)
             .Should()
@@ -168,7 +291,9 @@ public sealed class ReviewWorkflowAdapterTests
 
         command!.Execute(RibbonCommandContext.Empty);
         invoked.Should().BeTrue();
-        registry.TryGet(PresentationReviewWorkflowPlanner.AltTextCommandId, out _).Should().BeTrue();
+        registry.TryGet(PresentationReviewWorkflowPlanner.AltTextCommandId, out var altTextCommand).Should().BeTrue();
+        altTextCommand!.Execute(RibbonCommandContext.Empty);
+        altTextInvoked.Should().BeTrue();
         registry.TryGet(PresentationReviewWorkflowPlanner.CommentsPaneCommandId, out _).Should().BeTrue();
         registry.TryGet(PresentationReviewWorkflowPlanner.ProofingCommandId, out _).Should().BeTrue();
     }
@@ -194,6 +319,8 @@ public sealed class ReviewWorkflowAdapterTests
         source.Should().Contain("PresentationDesignCommandPlanner.TryApplyLayoutChoice(");
         source.Should().Contain("ShowLayoutPicker(LastLayoutPickerPlan);");
         source.Should().Contain("BuildLayoutChoiceLabel(choice)");
+        source.Should().Contain("BuildLayoutChoiceTile(choice)");
+        source.Should().Contain("BuildLayoutThumbnail(choice)");
         source.Should().NotContain("Modern resolved-thread state is not modeled yet.\";");
     }
 

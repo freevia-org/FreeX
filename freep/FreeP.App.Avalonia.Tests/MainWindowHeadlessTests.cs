@@ -290,6 +290,8 @@ public sealed class MainWindowHeadlessTests
         source.Should().Contain("PresentationDesignCommandPlanner.TryApplyLayoutChoice(");
         source.Should().Contain("ShowLayoutPicker(LastLayoutPickerPlan);");
         source.Should().Contain("BuildLayoutChoiceLabel(choice)");
+        source.Should().Contain("BuildLayoutChoiceTile(choice)");
+        source.Should().Contain("BuildLayoutThumbnail(choice)");
         source.Should().NotContain("Editor.SetTheme(");
         source.Should().NotContain("Editor.SetSlideSize16x9()");
         source.Should().NotContain("Editor.SetSlideSize4x3()");
@@ -484,6 +486,35 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task SlidePane_new_slide_affordance_uses_shared_text_and_inserts_slide()
+    {
+        var before = -1;
+        var after = -1;
+        var paneItemsAfter = -1;
+        var clicked = false;
+        var visible = false;
+        string? buttonText = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            before = window.SlideCount;
+            buttonText = window.SlidePaneNewSlideButtonText;
+            visible = window.IsSlidePaneNewSlideButtonVisible;
+            clicked = window.ClickSlidePaneNewSlideAffordanceForTests();
+            after = window.SlideCount;
+            paneItemsAfter = window.SlidePaneSlideItemCount;
+        });
+
+        if (!ran) return;
+        buttonText.Should().Be(SlidePanePlanner.NewSlideButtonText);
+        visible.Should().BeTrue("the Avalonia slide pane should expose the bottom PowerPoint-style add affordance");
+        clicked.Should().BeTrue("the affordance should route to the same slide insertion workflow as the ribbon command");
+        after.Should().Be(before + 1);
+        paneItemsAfter.Should().Be(after, "the slide pane should refresh to include the newly inserted slide");
+    }
+
+    [Fact]
     public async Task DeleteCurrentSlide_decreases_slide_count()
     {
         var before = -1;
@@ -595,7 +626,6 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Theory]
-    [InlineData("freep.insert-table-3x3", 3, 3)]
     [InlineData("freep.insert-table-2x2", 2, 2)]
     [InlineData("freep.insert-table-4x4", 4, 4)]
     public async Task Ribbon_insert_table_commands_add_expected_table(
@@ -629,6 +659,58 @@ public sealed class MainWindowHeadlessTests
         added.Table.Should().NotBeNull();
         added.Table!.Rows.Should().HaveCount(expectedRows);
         added.Table.ColumnWidthsEmu.Should().HaveCount(expectedColumns);
+    }
+
+    [Fact]
+    public async Task Ribbon_insert_table_command_opens_picker_and_applies_selected_size()
+    {
+        var found = false;
+        var pickerVisibleAfterOpen = false;
+        var pickerChoiceCount = 0;
+        var defaultChoiceCount = 0;
+        var applied = false;
+        var pickerVisibleAfterApply = true;
+        var before = -1;
+        var after = -1;
+        SlideShape? added = null;
+        TableInsertionPickerPlan? pickerPlan = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var registry = window.BuildCommandRegistry();
+            found = registry.TryGet(SlideObjectInsertionPlanner.Table3x3CommandId, out var command);
+            found.Should().BeTrue("the large Table command must be registered");
+
+            before = window.Editor.CurrentSlide!.Shapes.Count;
+            command!.Execute(RibbonCommandContext.Empty);
+            pickerVisibleAfterOpen = window.IsTablePickerVisible;
+            pickerChoiceCount = window.TablePickerChoiceButtonCount;
+            defaultChoiceCount = window.TablePickerDefaultChoiceCount;
+            pickerPlan = window.LastTablePickerPlan;
+            applied = window.ApplyTablePickerChoice(5, 4);
+            pickerVisibleAfterApply = window.IsTablePickerVisible;
+            after = window.Editor.CurrentSlide!.Shapes.Count;
+            added = window.Editor.CurrentSlide!.Shapes.Last();
+        });
+
+        if (!ran) return;
+        found.Should().BeTrue();
+        pickerVisibleAfterOpen.Should().BeTrue("the Avalonia large Table command should show an actual picker surface");
+        pickerChoiceCount.Should().Be(25);
+        defaultChoiceCount.Should().Be(1);
+        pickerPlan.Should().NotBeNull();
+        pickerPlan!.Choices.Should().Contain(choice =>
+            choice.Rows == 5 &&
+            choice.Columns == 4 &&
+            choice.Label == "5 x 4 Table");
+        applied.Should().BeTrue();
+        pickerVisibleAfterApply.Should().BeFalse("the picker should collapse after a table size is selected");
+        after.Should().Be(before + 1);
+        added.Should().NotBeNull();
+        added!.Kind.Should().Be(SlideShapeKind.Table);
+        added.Table!.Rows.Should().HaveCount(5);
+        added.Table.ColumnWidthsEmu.Should().HaveCount(4);
     }
 
     [Theory]
@@ -897,6 +979,9 @@ public sealed class MainWindowHeadlessTests
         var applied = false;
         var pickerVisibleAfterOpen = false;
         var pickerChoiceButtonCount = 0;
+        var pickerGroupHeaderCount = 0;
+        var pickerThumbnailPlaceholderCount = 0;
+        var pickerCurrentChoiceCount = 0;
         var pickerVisibleAfterApply = true;
 
         var ran = await OnUiThread(() =>
@@ -919,6 +1004,9 @@ public sealed class MainWindowHeadlessTests
             layout!.Execute(RibbonCommandContext.Empty);
             pickerVisibleAfterOpen = window.IsLayoutPickerVisible;
             pickerChoiceButtonCount = window.LayoutPickerChoiceButtonCount;
+            pickerGroupHeaderCount = window.LayoutPickerGroupHeaderCount;
+            pickerThumbnailPlaceholderCount = window.LayoutPickerThumbnailPlaceholderCount;
+            pickerCurrentChoiceCount = window.LayoutPickerCurrentChoiceCount;
             applied = window.ApplyLayoutChoice("rId2");
             pickerVisibleAfterApply = window.IsLayoutPickerVisible;
 
@@ -936,7 +1024,18 @@ public sealed class MainWindowHeadlessTests
         pickerPlan.Should().NotBeNull("the host callback should expose concrete shared layout choices");
         pickerVisibleAfterOpen.Should().BeTrue("the Avalonia command should show an actual picker surface");
         pickerChoiceButtonCount.Should().Be(2);
-        pickerPlan!.Choices.Should().Contain(choice =>
+        pickerGroupHeaderCount.Should().Be(1, "the Avalonia picker should render grouped gallery sections");
+        pickerThumbnailPlaceholderCount.Should().BeGreaterThan(0, "layout choices should render thumbnail placeholder glyphs");
+        pickerCurrentChoiceCount.Should().Be(1, "the current layout should have explicit selected chrome");
+        pickerPlan!.Groups.Should().ContainSingle(group =>
+            group.Heading == "Master 1" &&
+            group.Choices.Select(choice => choice.LayoutId).SequenceEqual(new[] { "rId1", "rId2" }));
+        pickerPlan.Choices.Single(choice => choice.LayoutId == "rId1").Chrome.State
+            .Should().Be(PresentationLayoutChoiceChromeState.Current);
+        pickerPlan.Choices.Single(choice => choice.LayoutId == "rId2").ThumbnailPlaceholders
+            .Should()
+            .ContainSingle(slot => slot.PlaceholderType == PlaceholderType.Title);
+        pickerPlan.Choices.Should().Contain(choice =>
             choice.LayoutId == "rId2" &&
             choice.DisplayName == "Blank" &&
             choice.LayoutType == SlideLayoutType.Blank &&
@@ -951,6 +1050,40 @@ public sealed class MainWindowHeadlessTests
         appliedChoice!.LayoutId.Should().Be("rId2");
         appliedChoice.MasterDisplayName.Should().Be("Master 1");
         appliedChoice.PlaceholderCount.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task SlidePane_reorder_routes_through_shared_planner()
+    {
+        var moved = false;
+        var slidePaneCount = 0;
+        var currentSlideIndex = -1;
+        var indicatorVisible = true;
+        string[] titles = [];
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            window.Editor.CurrentSlide!.Title = "Slide 1";
+            window.Editor.InsertSlide();
+            window.Editor.CurrentSlide!.Title = "Slide 2";
+            window.Editor.InsertSlide();
+            window.Editor.CurrentSlide!.Title = "Slide 3";
+            window.Editor.SelectSlide(0);
+
+            slidePaneCount = window.SlidePaneSlideItemCount;
+            moved = window.TryApplySlidePaneMove(sourceSlideIndex: 0, targetInsertionIndex: 3);
+            titles = window.Editor.Presentation.Slides.Select(slide => slide.Title).ToArray();
+            currentSlideIndex = window.CurrentSlideIndex;
+            indicatorVisible = window.IsSlidePaneInsertionIndicatorVisible;
+        });
+
+        if (!ran) return;
+        slidePaneCount.Should().Be(3, "the Avalonia slide pane should render one selectable item per slide");
+        moved.Should().BeTrue("drag release should apply the shared move action plan");
+        titles.Should().Equal("Slide 2", "Slide 3", "Slide 1");
+        currentSlideIndex.Should().Be(2, "the moved slide should remain selected after reorder");
+        indicatorVisible.Should().BeFalse("the insertion indicator is only visible during active drag feedback");
     }
 
     [Fact]
@@ -1085,6 +1218,9 @@ public sealed class MainWindowHeadlessTests
         PresentationAltTextRequestPlan? altTextPlan = null;
         PresentationAltTextPanePlan? altTextPanePlan = null;
         PresentationProofingRequestPlan? proofingPlan = null;
+        var commentsPaneVisible = false;
+        var commentsPaneCommentCount = 0;
+        var commentsPaneActionCount = 0;
 
         var ran = await OnUiThread(() =>
         {
@@ -1118,6 +1254,9 @@ public sealed class MainWindowHeadlessTests
             proofing!.Execute(RibbonCommandContext.Empty);
 
             commentPlan = window.LastCommentPanePlan;
+            commentsPaneVisible = window.IsReviewCommentsPaneVisible;
+            commentsPaneCommentCount = window.ReviewCommentsPaneCommentCount;
+            commentsPaneActionCount = window.ReviewCommentsPaneActionButtonCount;
             accessibilityPlan = window.LastAccessibilitySummaryPlan;
             altTextPlan = window.LastAltTextRequestPlan;
             altTextPanePlan = window.LastAltTextPanePlan;
@@ -1155,6 +1294,108 @@ public sealed class MainWindowHeadlessTests
         });
         proofingPlan.Should().NotBeNull();
         proofingPlan!.Status.Should().Be(PresentationWorkflowCapabilityStatus.RequiresHost);
+        commentsPaneVisible.Should().BeTrue("the Avalonia comments command should render a shared-plan-backed pane");
+        commentsPaneCommentCount.Should().Be(1);
+        commentsPaneActionCount.Should().BeGreaterThanOrEqualTo(6);
+    }
+
+    [Fact]
+    public async Task Review_alt_text_pane_shows_shared_ui_and_applies_from_controls()
+    {
+        var paneVisibleWithoutSelection = false;
+        var applyEnabledWithoutSelection = true;
+        var paneVisibleWithSelection = false;
+        var titleLabel = string.Empty;
+        var descriptionLabel = string.Empty;
+        var titleText = string.Empty;
+        var titlePlaceholder = string.Empty;
+        var descriptionPlaceholder = string.Empty;
+        var missingDescriptionApplyEnabled = true;
+        var validApplyEnabled = false;
+        var decorativeApplyEnabled = false;
+        string? altTextTitle = null;
+        string? altText = null;
+        var isDecorative = false;
+        PresentationAltTextMutationPlan? metadataMutation = null;
+        PresentationAltTextMutationPlan? decorativeMutation = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var registry = window.BuildCommandRegistry();
+            registry.TryGet(PresentationReviewWorkflowPlanner.AltTextCommandId, out var altTextCommand)
+                .Should().BeTrue();
+
+            altTextCommand!.Execute(RibbonCommandContext.Empty);
+            paneVisibleWithoutSelection = window.IsAltTextPaneVisible;
+            applyEnabledWithoutSelection = window.IsAltTextPaneApplyEnabled;
+            window.AltTextPaneMessage.Should().Be(PresentationReviewWorkflowPlanner.MissingShapeMessage);
+
+            var shape = new SlideShape
+            {
+                Id = 330,
+                Name = "Product image",
+                Kind = SlideShapeKind.Picture,
+                Picture = new ImagePart(),
+                AlternativeTextTitle = "Packaging photo",
+            };
+            window.Editor.CurrentSlide!.Shapes.Add(shape);
+            window.Editor.Select(shape.Id);
+            altTextCommand.Execute(RibbonCommandContext.Empty);
+
+            paneVisibleWithSelection = window.IsAltTextPaneVisible;
+            titleLabel = window.AltTextPaneTitleLabel;
+            descriptionLabel = window.AltTextPaneDescriptionLabel;
+            titleText = window.AltTextPaneTitleText;
+            titlePlaceholder = window.AltTextPaneTitlePlaceholder;
+            descriptionPlaceholder = window.AltTextPaneDescriptionPlaceholder;
+            missingDescriptionApplyEnabled = window.IsAltTextPaneApplyEnabled;
+
+            window.SetAltTextPaneInput("  Hero packaging photo  ", "  Product packaging on a white background.  ", isDecorative: false);
+            validApplyEnabled = window.IsAltTextPaneApplyEnabled;
+            metadataMutation = window.ApplyAltTextPane();
+            altTextTitle = shape.AlternativeTextTitle;
+            altText = shape.AlternativeText;
+
+            window.SetAltTextPaneInput("Ignored title", string.Empty, isDecorative: true);
+            decorativeApplyEnabled = window.IsAltTextPaneApplyEnabled;
+            decorativeMutation = window.ApplyAltTextPane();
+            isDecorative = shape.IsDecorative;
+            window.HideAltTextPane();
+            window.IsAltTextPaneVisible.Should().BeFalse();
+        });
+
+        if (!ran) return;
+        paneVisibleWithoutSelection.Should().BeTrue();
+        applyEnabledWithoutSelection.Should().BeFalse();
+        paneVisibleWithSelection.Should().BeTrue();
+        titleLabel.Should().Be("Title");
+        descriptionLabel.Should().Be("Description");
+        titleText.Should().Be("Packaging photo");
+        titlePlaceholder.Should().Be("Packaging photo");
+        descriptionPlaceholder.Should().Be("Describe the selected object for people who cannot see it.");
+        missingDescriptionApplyEnabled.Should().BeFalse();
+        validApplyEnabled.Should().BeTrue();
+        metadataMutation.Should().Be(new PresentationAltTextMutationPlan(
+            true,
+            0,
+            330,
+            "Hero packaging photo",
+            "Product packaging on a white background.",
+            false,
+            null));
+        altTextTitle.Should().Be("Hero packaging photo");
+        altText.Should().Be("Product packaging on a white background.");
+        decorativeApplyEnabled.Should().BeTrue();
+        decorativeMutation.Should().Be(new PresentationAltTextMutationPlan(
+            true,
+            0,
+            330,
+            string.Empty,
+            string.Empty,
+            true,
+            null));
+        isDecorative.Should().BeTrue();
     }
 
     [Fact]

@@ -24,19 +24,26 @@ public sealed record RibbonRuntimeCatalogNumberFormatOption(
     string Label,
     bool OpensFormatCellsDialog = false);
 
+public sealed record RibbonRuntimeCatalogAccountingSymbolOption(
+    string CommandId,
+    string Label);
+
 public static class RibbonRuntimeCatalogPlanner
 {
     public static IReadOnlyList<RibbonRuntimeCatalogSurface> GetSurfaces(
         Func<string, string> textProvider,
-        IReadOnlyList<RibbonRuntimeCatalogNumberFormatOption> numberFormatOptions)
+        IReadOnlyList<RibbonRuntimeCatalogNumberFormatOption> numberFormatOptions,
+        IReadOnlyList<RibbonRuntimeCatalogAccountingSymbolOption> accountingSymbolOptions)
     {
         ArgumentNullException.ThrowIfNull(textProvider);
         ArgumentNullException.ThrowIfNull(numberFormatOptions);
+        ArgumentNullException.ThrowIfNull(accountingSymbolOptions);
 
         return
         [
             CreateFormatAsTableSurface(),
             CreateNumberFormatSurface(numberFormatOptions),
+            CreateAccountingSymbolSurface(accountingSymbolOptions),
             CreateFontColorPopupSurface(),
             CreateBordersPopupSurface(),
             CreateConditionalFormattingPopupSurface(),
@@ -83,6 +90,20 @@ public static class RibbonRuntimeCatalogPlanner
                         .Where(option => option.OpensFormatCellsDialog)
                         .Select(option => option.Label)
                         .ToArray())
+            ]);
+
+    private static RibbonRuntimeCatalogSurface CreateAccountingSymbolSurface(
+        IReadOnlyList<RibbonRuntimeCatalogAccountingSymbolOption> accountingSymbolOptions) =>
+        new(
+            "Home",
+            "Accounting Symbol Dropdown",
+            "Home",
+            "Accounting/Date/Time",
+            "HomeNumberFormatDropdownPlanner",
+            [
+                new RibbonRuntimeCatalogGroup(
+                    "Symbols",
+                    accountingSymbolOptions.Select(option => option.CommandId).ToArray())
             ]);
 
     private static RibbonRuntimeCatalogSurface CreateFontColorPopupSurface() =>

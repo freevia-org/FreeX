@@ -278,6 +278,18 @@ public class RibbonEditorCompleteness5BTests
         Assert.True(invoked);
     }
 
+    [Fact]
+    public void Cmd_InsertTable3x3_InvokesPickerCallbackWhenHostProvidesWorkflow()
+    {
+        var (ed, _) = MakeSession();
+        var invoked = false;
+        var reg = FreePRibbonCommands.Build(new RibbonStateStore(), ed, onTablePicker: () => invoked = true);
+
+        Exec(reg, SlideObjectInsertionPlanner.Table3x3CommandId);
+
+        Assert.True(invoked);
+    }
+
     // ── Command: insert table ─────────────────────────────────────────────────────
 
     [Fact]

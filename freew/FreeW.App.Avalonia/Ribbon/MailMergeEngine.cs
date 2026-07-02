@@ -1,4 +1,5 @@
 using FreeW.App.Avalonia.Editing;
+using FreeW.App.Presentation.Ribbon;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Avalonia.Ribbon;
@@ -80,6 +81,34 @@ internal sealed class MailMergeEngine
     /// <summary>The field names available from the loaded recipient list (empty when none loaded).</summary>
     public IReadOnlyList<string> AvailableFieldNames =>
         Session.Data?.Header ?? [];
+
+    public void MatchFields()
+    {
+        if (!RequireRecipients("Select recipients first (Mailings > Select Recipients), then match fields."))
+            return;
+
+        Session.Mapping = MailMerge.AutoMatchFields(Session.Data!.Header);
+        ShowInfo("Matched recipient fields automatically.");
+    }
+
+    public void FilterSortRecipients()
+    {
+        if (!RequireRecipients("Select recipients first (Mailings > Select Recipients), then filter and sort."))
+            return;
+
+        var data = Session.Data!;
+        var sortColumn = data.Header.FirstOrDefault();
+        Session.Data = MailMergeRecipientFilterSortPlanner.Apply(
+            data,
+            Enumerable.Range(0, data.Count),
+            sortColumn,
+            ascending: true);
+        Session.Template = null;
+        Session.CurrentIndex = 0;
+        ShowInfo(sortColumn is null
+            ? "Recipient list kept in document order."
+            : $"Recipient list sorted by {sortColumn}.");
+    }
 
     // ── Insert Merge Field ─────────────────────────────────────────────────────────
 
@@ -177,6 +206,12 @@ internal sealed class MailMergeEngine
     /// </summary>
     public void PreviousRecord() => StepRecord(-1);
 
+    /// <summary>Mailings &gt; First Record. Enters preview if needed and shows the first recipient.</summary>
+    public void FirstRecord() => NavigateRecord(MailMergePreviewNavigationAction.First);
+
+    /// <summary>Mailings &gt; Last Record. Enters preview if needed and shows the last recipient.</summary>
+    public void LastRecord() => NavigateRecord(MailMergePreviewNavigationAction.Last);
+
     private void StepRecord(int delta)
     {
         if (!RequirePreviewableData("Select recipients first (Mailings > Select Recipients), then step records."))
@@ -194,6 +229,19 @@ internal sealed class MailMergeEngine
 
         var count = Session.Data!.Count;
         Session.CurrentIndex = Math.Clamp(Session.CurrentIndex + delta, 0, count - 1);
+        RenderPreviewRecord();
+    }
+
+    private void NavigateRecord(MailMergePreviewNavigationAction action)
+    {
+        if (!RequirePreviewableData("Select recipients first (Mailings > Select Recipients), then step records."))
+            return;
+
+        if (!Session.IsPreviewing)
+            Session.Template = _editor.Document;
+
+        var count = Session.Data!.Count;
+        Session.CurrentIndex = MailMergePreviewNavigationPlanner.TargetIndex(action, Session.CurrentIndex, count);
         RenderPreviewRecord();
     }
 
@@ -247,6 +295,47 @@ internal sealed class MailMergeEngine
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────────────────
+
+    /// <summary>Mailings &gt; Envelopes. Apply the default envelope geometry through the undoable page setup path.</summary>
+    public void ApplyDefaultEnvelope()
+    {
+        var plan = MailingsEnvelopeLabelPlanner.PlanEnvelope(MailingsEnvelopeLabelPlanner.DefaultEnvelopeIndex);
+        _editor.ApplyPageSettings(page =>
+        {
+            page.WidthPt = plan.WidthPt;
+            page.HeightPt = plan.HeightPt;
+            page.MarginLeftPt = plan.MarginPt;
+            page.MarginRightPt = plan.MarginPt;
+            page.MarginTopPt = plan.MarginPt;
+            page.MarginBottomPt = plan.MarginPt;
+            page.Landscape = plan.Landscape;
+        });
+        ShowInfo("Applied default envelope page setup.");
+    }
+
+    /// <summary>Mailings &gt; Labels. Apply the default label sheet and insert its label grid.</summary>
+    public void ApplyDefaultLabels()
+    {
+        var plan = MailingsEnvelopeLabelPlanner.PlanLabel(
+            MailingsEnvelopeLabelPlanner.DefaultLabelIndex,
+            customRowsText: null,
+            customColumnsText: null);
+        if (!plan.Success || plan.Result is not { } result)
+            return;
+
+        _editor.ApplyPageSettings(page =>
+        {
+            page.WidthPt = result.PageWidthPt;
+            page.HeightPt = result.PageHeightPt;
+            page.MarginLeftPt = result.MarginPt;
+            page.MarginRightPt = result.MarginPt;
+            page.MarginTopPt = result.MarginPt;
+            page.MarginBottomPt = result.MarginPt;
+            page.Landscape = result.Landscape;
+        });
+        _editor.InsertTable(result.Rows, result.Columns);
+        ShowInfo($"Inserted a {result.Rows} x {result.Columns} label grid.");
+    }
 
     /// <summary>
     /// Build a <see cref="MergeData"/> whose every row carries the composed «AddressBlock» and

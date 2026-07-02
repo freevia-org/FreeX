@@ -38,7 +38,7 @@ public static class BackstagePaneSurfacePlanner
                     action.Description,
                     "PrintAction_" + action.Kind,
                     ResolvePrintAction(action.Kind, print, printPreview))).ToArray())).ToArray(),
-            print is null && printPreview is null ? BackstageViewTextResources.DirectPrintDeferredNote : null);
+            print is null ? BackstageViewTextResources.DirectPrintDeferredNote : null);
     }
 
     public static BackstageInfoPaneSurfaceSpec BuildInfoPane(

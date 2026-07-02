@@ -7,6 +7,7 @@ using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using FreeW.App.Presentation.Dialogs;
 using FreeW.App.Presentation.DocumentView;
+using FreeW.App.Presentation.Links;
 using FreeW.App.Presentation.Ribbon;
 using FreeW.Core.Model;
 using TextAlignment = FreeW.Core.Model.TextAlignment;
@@ -191,6 +192,9 @@ public sealed class DocumentView : Control
     // is collapsed (no selection). Set by the Font dialog on a collapsed-caret apply; consumed
     // and cleared by the next InsertText call.
     private RunFormatting? _pendingRunFmt;
+    private FormatPainterClipboard? _formatPainter;
+    private bool _formatPainterLocked;
+    private readonly CustomDictionary _customDictionary = new();
     private double _laidOutWidth = -1;
     private double _contentHeight;
     private double _pageLeft;
@@ -342,8 +346,11 @@ public sealed class DocumentView : Control
     }
 
     public TextDocument Document => _doc;
+    public string? CurrentParagraphStyleId => CurrentParagraph()?.StyleId;
     public bool CanUndo => _bus.CanUndo;
     public bool CanRedo => _bus.CanRedo;
+    public bool SpellCheckEnabled { get; private set; } = true;
+    public IReadOnlyList<string> CustomDictionaryWords => _customDictionary.Words;
 
     /// <summary>Raised whenever document protection or Mark-as-Final state changes.</summary>
     public event EventHandler? ProtectionStateChanged;
@@ -5289,8 +5296,14 @@ public sealed class DocumentView : Control
 
     // AV-DESIGN: the model's page border (w:pgBorders) drawn inset just inside the page sheet. Word draws
     // page borders a fixed offset from the page edge (its "Measure from: Edge of page" default is 24pt); we
-    // mirror that with a small inset so the border sits between the chrome edge and the body text.
-    private const double PageBorderInsetDip = 24.0;
+    // mirror that with a small inset so the border sits between the chrome edge and the body text. FreeW's
+    // own DocxWriter.BuildPageBorders emits w:space="24" (POINTS — w:space on w:pgBorders is always measured
+    // in points, never twips/DXA), so the inset here must be 24 points converted to DIP, not 24 raw DIP.
+    private const double PageBorderInsetPt = 24.0;
+
+    // Test-only: exposes the DIP inset so tests can assert it matches 24pt (the writer's w:space) rather
+    // than the raw point value, catching any future re-introduction of a DIP/point mismatch.
+    internal static double PageBorderInsetDip => PageBorderInsetPt * PxPerPoint;
 
     private void DrawPageBorder(DrawingContext context, Rect pageRect)
     {
@@ -5338,6 +5351,11 @@ public sealed class DocumentView : Control
 
         var ft = new FormattedText(
             wm.Text, CultureInfo.CurrentCulture, FlowDirection.LeftToRight, typeface, fontSize, brush);
+
+        // Clip to the page sheet: an un-clipped long watermark string (fontSize floors at 24pt) can extend
+        // past the page rect onto the grey desk / an adjacent page. Word tiles+clips watermarks via a brush
+        // so they never overflow the page — mirror that here with a hard clip to pageRect.
+        using var clip = context.PushClip(pageRect);
 
         var center = pageRect.Center;
         using var _ = context.PushTransform(
@@ -5393,10 +5411,10 @@ public sealed class DocumentView : Control
                 context.FillRectangle(PageShadowBrush, shadowRect);
                 context.FillRectangle(pageFill, pageRect);
                 context.DrawRectangle(null, PageBorderPen, pageRect);
-                // AV-DESIGN: the model's page border (inset just inside the chrome border).
-                DrawPageBorder(context, pageRect);
-                // AV-DESIGN: the watermark draws faintly behind the body text on each page.
+                // AV-DESIGN: layering matches Word — page color, then watermark, then the page border on
+                // top (a solid pgBorders line must not be occluded by the faint watermark behind it).
                 DrawWatermark(context, pageRect);
+                DrawPageBorder(context, pageRect);
             }
         }
         else
@@ -5649,7 +5667,7 @@ public sealed class DocumentView : Control
 
         // AV-FLSEL: draw selection outline + 8 resize handles over the selected floating object.
         if (_selectedFloating is { } selFl)
-            DrawFloatingSelection(context, selFl.Rect);
+            DrawFloatingSelection(context, selFl.Rect, selFl.BlockIndex, selFl.RunIndex, selFl.Kind);
 
         // AV-HFEDIT: the header/footer caret renders independently of the body caret.
         if (IsFocused && _hfCaret is not null && TryGetHfCaretRect(out var hfRect))
@@ -5995,6 +6013,30 @@ public sealed class DocumentView : Control
     private static DocumentFloatPoint ToPlannerPoint(Point point) =>
         new(point.X, point.Y);
 
+    /// <summary>
+    /// Resolves the current RotationAngle/FlipH/FlipV for the floating object at (blockIndex, runIndex,
+    /// kind), so handle geometry, resize, and hit-test can un-rotate/un-flip against the SAME transform
+    /// DrawFloatingShape uses to render it (see ~line 5828: <c>needTransform = RotationAngle != 0 ||
+    /// FlipH || FlipV</c>, flip-then-rotate about the rect centre). Only <see cref="InlineImage"/> and
+    /// <see cref="Shape"/> carry rotation/flip today; every other floating kind (Chart/WordArt/SmartArt/
+    /// Group) has none, so they fall back to the identity (0, false, false) — same as an unrotated image
+    /// or shape.
+    /// </summary>
+    private (double Angle, bool FlipH, bool FlipV) GetFloatRotation(int blockIndex, int runIndex, string kind)
+    {
+        if (blockIndex < 0 || blockIndex >= _doc.Blocks.Count) return (0, false, false);
+        if (_doc.Blocks[blockIndex] is not Paragraph para) return (0, false, false);
+        if (runIndex < 0 || runIndex >= para.Runs.Count) return (0, false, false);
+        var run = para.Runs[runIndex];
+
+        return kind switch
+        {
+            "Image" when run.Image is { } img => (img.RotationAngle, img.FlipH, img.FlipV),
+            "Shape" when run.Shape is { } shape => (shape.RotationAngle, shape.FlipH, shape.FlipV),
+            _ => (0, false, false),
+        };
+    }
+
     private static DocumentFloatingHandle ToPlannerHandle(FloatHandle handle) => handle switch
     {
         FloatHandle.Body => DocumentFloatingHandle.Body,
@@ -6027,11 +6069,12 @@ public sealed class DocumentView : Control
     /// Draws the selection outline (dashed blue rectangle) and 8 resize handles around
     /// the selected floating object's page-space bounding rect.
     /// </summary>
-    private void DrawFloatingSelection(DrawingContext context, Rect rect)
+    private void DrawFloatingSelection(DrawingContext context, Rect rect, int blockIndex, int runIndex, string kind)
     {
         context.DrawRectangle(null, FloatSelectionPen, rect);
 
-        foreach (var (_, hRect) in HandleRects(rect))
+        var (angle, flipH, flipV) = GetFloatRotation(blockIndex, runIndex, kind);
+        foreach (var (_, hRect) in HandleRects(rect, angle, flipH, flipV))
         {
             context.FillRectangle(FloatHandleFill, hRect);
             context.DrawRectangle(null, FloatHandlePen, hRect);
@@ -6045,15 +6088,22 @@ public sealed class DocumentView : Control
 
     /// <summary>
     /// Returns the eight resize-handle squares (corners + edge midpoints) for a selection
-    /// <paramref name="rect"/>, each tagged with the <see cref="FloatHandle"/> it represents.
-    /// Shared by the renderer and the pointer hit-test so the drawn squares and the clickable
-    /// targets never drift apart.
+    /// <paramref name="rect"/>, each tagged with the <see cref="FloatHandle"/> it represents. When
+    /// <paramref name="rotationAngle"/>/<paramref name="flipH"/>/<paramref name="flipV"/> are set, the
+    /// drawn handle positions are carried through the same transform DrawFloatingShape renders with, so
+    /// they track the VISIBLE rotated/flipped corners instead of the plain axis-aligned box. Shared by
+    /// the renderer and the pointer hit-test so the drawn squares and the clickable targets never drift
+    /// apart.
     /// </summary>
-    private static IEnumerable<(FloatHandle Handle, Rect Rect)> HandleRects(Rect rect)
+    private static IEnumerable<(FloatHandle Handle, Rect Rect)> HandleRects(
+        Rect rect, double rotationAngle = 0, bool flipH = false, bool flipV = false)
     {
         foreach (var handle in DocumentViewLayoutPlanner.BuildFloatingHandleRects(
                      ToPlannerRect(rect),
-                     FloatHandleSize))
+                     FloatHandleSize,
+                     rotationAngle,
+                     flipH,
+                     flipV))
             yield return (FromPlannerHandle(handle.Handle), ToAvaloniaRect(handle.Rect));
     }
 
@@ -6066,8 +6116,11 @@ public sealed class DocumentView : Control
     {
         var dict = new Dictionary<FloatHandle, Rect>();
         if (_selectedFloating is { } sel)
-            foreach (var (h, r) in HandleRects(sel.Rect))
+        {
+            var (angle, flipH, flipV) = GetFloatRotation(sel.BlockIndex, sel.RunIndex, sel.Kind);
+            foreach (var (h, r) in HandleRects(sel.Rect, angle, flipH, flipV))
                 dict[h] = r;
+        }
         return dict;
     }
 
@@ -6075,16 +6128,22 @@ public sealed class DocumentView : Control
     /// Hit-tests <paramref name="point"/> against the current selection's handles + body. A handle
     /// hit (within the handle square, padded slightly for easier grabbing) wins; otherwise a point
     /// inside the selection rect is <see cref="FloatHandle.Body"/>; anything else is
-    /// <see cref="FloatHandle.None"/>. No selection → <see cref="FloatHandle.None"/>.
+    /// <see cref="FloatHandle.None"/>. No selection → <see cref="FloatHandle.None"/>. Accounts for the
+    /// selected object's rotation/flip so a click on the visible (rotated/flipped) handle or body
+    /// resolves correctly — see <see cref="DocumentViewLayoutPlanner.HitTestFloatingHandle"/>.
     /// </summary>
     private FloatHandle HitTestHandle(Point point)
     {
         if (_selectedFloating is not { } sel) return FloatHandle.None;
+        var (angle, flipH, flipV) = GetFloatRotation(sel.BlockIndex, sel.RunIndex, sel.Kind);
         return FromPlannerHandle(DocumentViewLayoutPlanner.HitTestFloatingHandle(
             ToPlannerRect(sel.Rect),
             ToPlannerPoint(point),
             FloatHandleSize,
-            hitPaddingDip: 2));
+            hitPaddingDip: 2,
+            angle,
+            flipH,
+            flipV));
     }
 
     /// <summary>The mouse cursor appropriate for hovering a given handle (or moving the body).</summary>
@@ -6103,16 +6162,24 @@ public sealed class DocumentView : Control
     /// drag-start <paramref name="baseRect"/> to the current pointer position. The opposite edge(s)
     /// stay anchored; corners move both dimensions, edges only one. <paramref name="aspect"/> (Shift on
     /// a corner) preserves the base aspect ratio. The result is clamped so width/height never fall below
-    /// <see cref="MinFloatSizePt"/> (converted to px).
+    /// <see cref="MinFloatSizePt"/> (converted to px). When <paramref name="rotationAngle"/>/<paramref
+    /// name="flipH"/>/<paramref name="flipV"/> are set, the pointer is resolved against the object's OWN
+    /// (rotated/flipped) axes rather than the screen axes — see
+    /// <see cref="DocumentViewLayoutPlanner.BuildFloatingResizeRect"/>.
     /// </summary>
-    private static Rect ResizeRect(Rect baseRect, FloatHandle handle, Point pointer, bool aspect)
+    private static Rect ResizeRect(
+        Rect baseRect, FloatHandle handle, Point pointer, bool aspect,
+        double rotationAngle = 0, bool flipH = false, bool flipV = false)
     {
         return ToAvaloniaRect(DocumentViewLayoutPlanner.BuildFloatingResizeRect(
             ToPlannerRect(baseRect),
             ToPlannerHandle(handle),
             ToPlannerPoint(pointer),
             preserveAspect: aspect,
-            minimumSizeDip: MinFloatSizePt * PxPerPoint));
+            minimumSizeDip: MinFloatSizePt * PxPerPoint,
+            rotationAngle,
+            flipH,
+            flipV));
     }
 
     /// <summary>
@@ -6159,7 +6226,11 @@ public sealed class DocumentView : Control
         }
         else
         {
-            _bus.Execute(sizeCmd);
+            // FB4 guard: the anchored top/left edge moved (a top/left handle was dragged), but this
+            // float has no placement to carry the position delta on (non-Image kind with no
+            // FloatingPlacement available). Committing the size-only command here would grow the object
+            // from its ORIGINAL top-left, silently sliding the anchored edge the user dragged instead of
+            // holding it fixed — so skip the commit entirely rather than apply a visually-wrong resize.
         }
 
         InvalidateLayoutAndVisual();
@@ -6235,7 +6306,8 @@ public sealed class DocumentView : Control
         }
         else
         {
-            newRect = ResizeRect(drag.FloatRect, drag.Handle, point, shift);
+            var (angle, flipH, flipV) = GetFloatRotation(sel.BlockIndex, sel.RunIndex, sel.Kind);
+            newRect = ResizeRect(drag.FloatRect, drag.Handle, point, shift, angle, flipH, flipV);
         }
         _selectedFloating = sel with { Rect = newRect };
         InvalidateVisual();
@@ -6263,7 +6335,8 @@ public sealed class DocumentView : Control
         }
         else
         {
-            var newRect = ResizeRect(drag.FloatRect, drag.Handle, releasePoint, shift);
+            var (angle, flipH, flipV) = GetFloatRotation(sel.BlockIndex, sel.RunIndex, sel.Kind);
+            var newRect = ResizeRect(drag.FloatRect, drag.Handle, releasePoint, shift, angle, flipH, flipV);
             if (Math.Abs(newRect.Width - drag.FloatRect.Width) >= 1 ||
                 Math.Abs(newRect.Height - drag.FloatRect.Height) >= 1)
                 CommitFloatResize(sel.BlockIndex, sel.RunIndex, sel.Kind, drag.FloatRect, newRect);
@@ -6368,6 +6441,10 @@ public sealed class DocumentView : Control
         hit = default;
         if (_laidOutWidth < 0) Relayout(FallbackWidth);
 
+        // Rotation/flip are carried on each snapshot (threaded from the model's Image/Shape
+        // RotationAngle/FlipH/FlipV in BuildFloatingObjectSnapshots) and un-applied per-candidate
+        // inside HitTestFloatingObject before the containment test, so a rotated/flipped float's visible
+        // (not axis-aligned) bounds decide the hit and the z-order winner among overlapping floats.
         var winner = DocumentViewLayoutPlanner.HitTestFloatingObject(
             _floatingSnapshots,
             ToPlannerPoint(point));
@@ -7100,6 +7177,9 @@ public sealed class DocumentView : Control
                 ? Cursor.Default
                 : CursorForHandle(HitTestHandle(e.GetPosition(this)));
         }
+
+        if (ApplyFormatPainterToSelection())
+            e.Handled = true;
     }
 
     protected override void OnTextInput(TextInputEventArgs e)
@@ -7125,6 +7205,13 @@ public sealed class DocumentView : Control
 
         if (IsEditingLocked && IsEditingKey(e.Key, ctrl))
         {
+            e.Handled = true;
+            return;
+        }
+
+        if (e.Key == Key.Escape && IsFormatPainterArmed)
+        {
+            CancelFormatPainter();
             e.Handled = true;
             return;
         }
@@ -7805,6 +7892,53 @@ public sealed class DocumentView : Control
             CharacterShadingHex = string.IsNullOrWhiteSpace(colorHex) ? null : colorHex,
             CharacterShadingPattern = string.IsNullOrWhiteSpace(colorHex) ? ShadingPattern.Clear : pattern,
         });
+
+    public void SetProofingLanguage(string? languageTag)
+    {
+        var indices = SelectedParagraphIndices();
+        if (indices.Count == 0)
+            return;
+
+        var normalizedTag = ProofingLanguageCatalog.NormalizeTag(languageTag);
+        if (indices.Count > 1)
+            _bus.BeginUndoGroup();
+
+        foreach (var blockIndex in indices)
+        {
+            _bus.Execute(new ReplaceParagraphRunsCommand(blockIndex, paragraph =>
+            {
+                var cells = ParaCells(paragraph);
+                for (var i = 0; i < cells.Count; i++)
+                    cells[i] = cells[i] with { Fmt = cells[i].Fmt with { LanguageTag = normalizedTag } };
+                SetRuns(paragraph, cells);
+            }));
+        }
+
+        if (indices.Count > 1)
+            _bus.CommitUndoGroup("Proofing Language");
+    }
+
+    public bool ToggleSpellCheck()
+    {
+        SpellCheckEnabled = !SpellCheckEnabled;
+        InvalidateVisual();
+        return SpellCheckEnabled;
+    }
+
+    public bool AddCurrentWordToDictionary() =>
+        CurrentProofingWord is { } word && _customDictionary.Add(word);
+
+    public bool AddToDictionary(string? word)
+    {
+        var normalized = NormalizeProofingWord(word);
+        return normalized is not null && _customDictionary.Add(normalized);
+    }
+
+    public bool IsInCustomDictionary(string? word) =>
+        NormalizeProofingWord(word) is { } normalized && _customDictionary.Contains(normalized);
+
+    public string? CurrentProofingWord =>
+        NormalizeProofingWord(SelectedText) ?? WordAtCaret();
 
     // ── AV-COMMENT: review-comment insert / delete / resolve + introspection ──────────────────────
     // Model-backed (comments already round-trip through Core.IO). All mutations ride the shared
@@ -8740,6 +8874,18 @@ public sealed class DocumentView : Control
         SetPageSettings(settings);
     }
 
+    public void ToggleDifferentFirstPage() =>
+        ApplyPageSettings(settings => settings.DifferentFirstPage = !settings.DifferentFirstPage);
+
+    public void CyclePageVerticalAlignment() =>
+        ApplyPageSettings(settings => settings.VerticalAlignment = settings.VerticalAlignment switch
+        {
+            PageVerticalAlignment.Top => PageVerticalAlignment.Center,
+            PageVerticalAlignment.Center => PageVerticalAlignment.Bottom,
+            PageVerticalAlignment.Bottom => PageVerticalAlignment.Justified,
+            _ => PageVerticalAlignment.Top,
+        });
+
     /// <summary>Insert a bordered table (with a header row) after the current block. Cells edit on double-click.</summary>
     public void InsertTable(int rows, int columns)
     {
@@ -8750,6 +8896,29 @@ public sealed class DocumentView : Control
         table.Formatting = TableFormatting.Default with { Borders = true, HeaderRow = true };
         var insertAt = Math.Clamp(_caret.Block + 1, 0, _doc.Blocks.Count);
         _bus.Execute(new InsertBlockCommand(insertAt, table));
+    }
+
+    /// <summary>
+    /// Convert the current paragraph to a bordered table, splitting text on tabs when present and commas otherwise.
+    /// </summary>
+    public void ConvertCurrentParagraphToTable()
+    {
+        if (IsEditingLocked || _doc.Blocks.Count == 0)
+            return;
+
+        var block = Math.Clamp(_caret.Block, 0, _doc.Blocks.Count - 1);
+        if (_doc.Blocks[block] is not Paragraph paragraph)
+            return;
+
+        var delimiter = paragraph.PlainText.Contains('\t', StringComparison.Ordinal) ? '\t' : ',';
+        var table = TextTableConvert.TextToTable([paragraph], delimiter);
+        table.Formatting = TableFormatting.Default with { Borders = true };
+        _bus.Execute(new ReplaceBlocksCommand(block, 1, [table]));
+        _cellCaret = (block, 0, 0, 0, 0);
+        _hfCaret = null;
+        _selectionAnchor = _caret = new DocPosition(block, 0);
+        InvalidateLayoutAndVisual();
+        CaretMoved?.Invoke();
     }
 
     // ── AV-INSERT: Insert-tab inserts (page break / picture / shape / text box / symbol) ──────────
@@ -8869,6 +9038,62 @@ public sealed class DocumentView : Control
     /// </summary>
     public void InsertTextBox() =>
         InsertShape(Shape.TextBoxWith("Text Box", widthPt: 180, heightPt: 90, fillColorHex: "#DCE6F1"));
+
+    /// <summary>
+    /// Insert inline decorative WordArt at the caret (AV-INSERT-TEXT). The run uses the shared
+    /// <see cref="WordArt"/> model so it round-trips through DOCX and renders via the existing inline
+    /// WordArt layout path.
+    /// </summary>
+    public void InsertWordArt(WordArt? wordArt = null)
+    {
+        InsertObjectRun(Run.FromWordArt(wordArt ?? WordArt.Create("WordArt", WordArtStyle.GradientFill)));
+        Focus();
+    }
+
+    /// <summary>
+    /// Insert a default inline chart at the caret using the shared chart model/rendering path.
+    /// </summary>
+    public void InsertChart(Chart? chart = null)
+    {
+        InsertObjectRun(Run.FromChart(chart ?? Chart.Create(
+            ChartKind.Column,
+            ["Q1", "Q2", "Q3", "Q4"],
+            [4d, 7d, 5d, 9d],
+            "Series 1",
+            "Chart")));
+        Focus();
+    }
+
+    /// <summary>
+    /// Insert a default inline SmartArt diagram at the caret using the shared SmartArt model/rendering path.
+    /// </summary>
+    public void InsertSmartArt(SmartArt? smartArt = null)
+    {
+        InsertObjectRun(Run.FromSmartArt(smartArt ?? SmartArt.Create(
+            SmartArtKind.Process,
+            ["Plan", "Build", "Review"])));
+        Focus();
+    }
+
+    /// <summary>
+    /// Insert a simple icon glyph through the text/symbol path.
+    /// </summary>
+    public void InsertIcon() => InsertSymbol("\u2605");
+
+    /// <summary>
+    /// Insert a generic embedded object placeholder at the caret (AV-INSERT-TEXT). FreeW preserves the
+    /// embedded payload and ProgID in the shared model; live OLE activation is intentionally out of scope.
+    /// </summary>
+    public void InsertEmbeddedObject(EmbeddedObject? embeddedObject = null)
+    {
+        InsertObjectRun(Run.FromEmbeddedObject(embeddedObject ?? SampleEmbeddedObject()));
+        Focus();
+    }
+
+    private static EmbeddedObject SampleEmbeddedObject() =>
+        EmbeddedObject.Create(
+            System.Text.Encoding.UTF8.GetBytes("FreeW embedded object placeholder."),
+            progId: "Package");
 
     /// <summary>
     /// Insert a symbol / special character at the caret as ordinary text (AV-INSERT). Flows through the
@@ -9088,13 +9313,10 @@ public sealed class DocumentView : Control
         if (string.IsNullOrWhiteSpace(target))
             return;
 
-        // A leading '#' denotes an internal bookmark anchor; everything else is an external URL.
-        var isInternal = target.StartsWith('#');
-        var url = isInternal ? null : target.Trim();
-        var anchor = isInternal ? target[1..].Trim() : null;
-        if (isInternal && string.IsNullOrEmpty(anchor))
+        if (!HyperlinkTarget.TryParse(target, out var parsedTarget))
             return;
-        var link = new LinkInfo(url, anchor, null);
+
+        var link = new LinkInfo(parsedTarget.Url, parsedTarget.Anchor, null);
 
         var sel = NormalizedSelection();
         // Only a same-paragraph selection can be wrapped in place; a cross-paragraph (or no) selection
@@ -9122,7 +9344,7 @@ public sealed class DocumentView : Control
         }
 
         // No usable selection → insert the display text (or the target itself) as a new hyperlinked run.
-        var text = string.IsNullOrEmpty(displayText) ? (isInternal ? anchor! : url!) : displayText;
+        var text = string.IsNullOrEmpty(displayText) ? parsedTarget.DisplayFallback : displayText;
         if (_hfCaret is not null || _cellCaret is not null)
         {
             // Header/footer and table-cell carets do not carry the body-paragraph hyperlink round-trip;
@@ -9202,6 +9424,80 @@ public sealed class DocumentView : Control
     }
 
     /// <summary>
+    /// AV-LINK: True when the caret sits on an external URL or internal bookmark link.
+    /// </summary>
+    public bool IsCaretOnHyperlink() => HyperlinksAtCaret().Count > 0;
+
+    /// <summary>The current external URL under the caret, or null when the caret is not on an external link.</summary>
+    public string? HyperlinkUrlAtCaret()
+    {
+        var links = HyperlinksAtCaret();
+        return links.Count > 0 ? links[0].Url : null;
+    }
+
+    /// <summary>The current ScreenTip under the caret, or null when no linked ScreenTip exists.</summary>
+    public string? HyperlinkTooltipAtCaret()
+    {
+        var links = HyperlinksAtCaret();
+        return links.Count > 0 ? links[0].Tooltip : null;
+    }
+
+    /// <summary>The bookmark names defined in the document, in document order.</summary>
+    public IReadOnlyList<string> BookmarkNames() =>
+        Bookmarks.List(_doc).Select(b => b.Name).Distinct(StringComparer.Ordinal).ToList();
+
+    /// <summary>
+    /// AV-LINK: Retarget the hyperlink span under the caret, preserving visible text and ScreenTip.
+    /// </summary>
+    public void EditHyperlink(string newTarget)
+    {
+        if (!HyperlinkTarget.TryParse(newTarget, out var parsedTarget)
+            || !TryFindHyperlinkSpanAtCaret(out var block, out var start, out var end, out var current))
+        {
+            return;
+        }
+
+        var next = new LinkInfo(parsedTarget.Url, parsedTarget.Anchor, current.Tooltip);
+        ApplyLinkSpan(block, start, end, _ => next);
+    }
+
+    /// <summary>
+    /// AV-LINK: Remove the hyperlink span under the caret while preserving visible text.
+    /// </summary>
+    public void RemoveHyperlink()
+    {
+        if (TryFindHyperlinkSpanAtCaret(out var block, out var start, out var end, out _))
+            ApplyLinkSpan(block, start, end, _ => null);
+    }
+
+    /// <summary>
+    /// AV-LINK: Set or clear the ScreenTip on the hyperlink span under the caret.
+    /// </summary>
+    public void SetHyperlinkTooltip(string? tip)
+    {
+        if (!TryFindHyperlinkSpanAtCaret(out var block, out var start, out var end, out var current))
+            return;
+
+        var tooltip = string.IsNullOrWhiteSpace(tip) ? null : tip.Trim();
+        ApplyLinkSpan(block, start, end, _ => new LinkInfo(current.Url, current.Anchor, tooltip));
+    }
+
+    /// <summary>
+    /// AV-LINK: Link the current selection, or insert the bookmark name at the caret, as an internal link.
+    /// </summary>
+    public void ApplyInternalLink(string anchor)
+    {
+        if (string.IsNullOrWhiteSpace(anchor))
+            return;
+
+        var normalized = anchor.Trim().TrimStart('#').Trim();
+        if (!HyperlinkTarget.TryParse("#" + normalized, out var parsedTarget))
+            return;
+
+        InsertHyperlink(parsedTarget.DisplayFallback, "#" + parsedTarget.Anchor);
+    }
+
+    /// <summary>
     /// AV-LINK: The hyperlink targets covering the caret (or the current selection), for ribbon-state /
     /// tests. Each entry is <c>(Url, Anchor, Tooltip)</c> with exactly one of Url/Anchor set. Empty when the
     /// caret is not on a hyperlink. Reads the live model so it reflects the latest edit.
@@ -9234,6 +9530,62 @@ public sealed class DocumentView : Control
             if (cells[i].Link is { HasTarget: true } link && seen.Add(link))
                 found.Add((link.Url, link.Anchor, link.Tooltip));
         return found;
+    }
+
+    private bool TryFindHyperlinkSpanAtCaret(out int block, out int start, out int end, out LinkInfo link)
+    {
+        block = _caret.Block;
+        start = 0;
+        end = 0;
+        link = default;
+
+        if (_cellCaret is not null || _hfCaret is not null || CurrentParagraph() is not { } paragraph || !IsEditable(paragraph))
+            return false;
+
+        var cells = ParaCells(paragraph);
+        if (cells.Count == 0)
+            return false;
+
+        var sel = NormalizedSelection();
+        var index = sel is { } s && s.Start.Block == block && s.End.Block == block
+            ? Math.Clamp(s.Start.Offset, 0, cells.Count - 1)
+            : Math.Clamp(_caret.Offset - 1, 0, cells.Count - 1);
+
+        if (cells[index].Link is not { HasTarget: true } current)
+            return false;
+
+        var lo = index;
+        while (lo > 0 && cells[lo - 1].Link == current)
+            lo--;
+
+        var hi = index + 1;
+        while (hi < cells.Count && cells[hi].Link == current)
+            hi++;
+
+        start = lo;
+        end = hi;
+        link = current;
+        return true;
+    }
+
+    private void ApplyLinkSpan(int block, int start, int end, Func<LinkInfo, LinkInfo?> transform)
+    {
+        _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
+        {
+            var cells = ParaCells(p);
+            var lo = Math.Clamp(start, 0, cells.Count);
+            var hi = Math.Clamp(end, lo, cells.Count);
+            for (var i = lo; i < hi; i++)
+            {
+                if (cells[i].Link is { HasTarget: true } link)
+                    cells[i] = cells[i] with { Link = transform(link) };
+            }
+            SetRuns(p, cells);
+        }));
+
+        _caret = new DocPosition(block, Math.Clamp(_caret.Offset, start, end));
+        _selectionAnchor = _caret;
+        Focus();
     }
 
     /// <summary>
@@ -9522,6 +9874,78 @@ public sealed class DocumentView : Control
         InsertObjectRun(run);
         Focus();
     }
+
+    /// <summary>
+    /// Toggle complex field-code display across the document, matching Word's Alt+F9 surface.
+    /// </summary>
+    public void ToggleFieldCodes()
+    {
+        var fields = _doc.Blocks
+            .OfType<Paragraph>()
+            .SelectMany(p => p.Runs)
+            .Where(r => r.ComplexField is not null)
+            .ToList();
+        if (fields.Count == 0)
+            return;
+
+        var show = fields.Count(r => r.ComplexField!.ShowCode) * 2 <= fields.Count;
+        foreach (var run in fields)
+            run.ComplexField = run.ComplexField! with { ShowCode = show };
+
+        InvalidateVisual();
+        Focus();
+    }
+
+    /// <summary>
+    /// Refresh the cached display text for simple and recomputable complex fields.
+    /// </summary>
+    public void UpdateFields()
+    {
+        for (var b = 0; b < _doc.Blocks.Count; b++)
+        {
+            if (_doc.Blocks[b] is not Paragraph paragraph)
+                continue;
+
+            for (var r = 0; r < paragraph.Runs.Count; r++)
+            {
+                var run = paragraph.Runs[r];
+                if (run.ComplexField is { } complexField)
+                {
+                    var resolved = ComplexFieldEngine.CanRecompute(complexField)
+                        ? ComplexFieldEngine.Recompute(_doc, b, r)
+                        : ResolveComplexField(complexField, run.Text);
+                    if (!string.IsNullOrEmpty(resolved))
+                        run.Text = resolved;
+                }
+                else if (run.FieldKind != RunFieldKind.None)
+                {
+                    var resolved = ResolveDocumentField(run.FieldKind);
+                    if (!string.IsNullOrEmpty(resolved))
+                        run.Text = resolved;
+                }
+            }
+        }
+
+        if (_doc.Blocks.Any(TableOfContents.IsTocParagraph))
+        {
+            UpdateTableOfContents();
+            return;
+        }
+
+        InvalidateVisual();
+        Focus();
+    }
+
+    private string ResolveComplexField(ComplexField field, string fallback) =>
+        field.Keyword switch
+        {
+            "DATE" or "TIME" => DateTime.Now.ToString("M/d/yyyy", CultureInfo.InvariantCulture),
+            "AUTHOR" => _doc.Properties.Author ?? string.Empty,
+            "TITLE" => _doc.Properties.Title ?? string.Empty,
+            "FILENAME" => string.Empty,
+            "PAGE" or "NUMPAGES" => "1",
+            _ => fallback,
+        };
 
     // Resolve a document-property / date field's cached display text (page-independent fields only).
     // Page/NumPages resolve to "1" as a sensible placeholder; the renderer recomputes paginated fields.
@@ -9915,6 +10339,71 @@ public sealed class DocumentView : Control
     }
 
     /// <summary>
+    /// AV-DESIGN: apply a Word-style Design &gt; Style Set to the built-in style catalog. Paragraphs retain
+    /// their StyleId links and pick up the new look through normal style resolution.
+    /// </summary>
+    public void ApplyStyleSet(DocumentStyleSet styleSet)
+    {
+        ArgumentNullException.ThrowIfNull(styleSet);
+        _bus.Execute(new DesignCatalogCommand("Style Set", doc => DocumentStyleSet.Apply(doc, styleSet)));
+    }
+
+    /// <summary>
+    /// Home &gt; Styles &gt; New Style: create a custom paragraph style through the shared
+    /// <see cref="StyleManager"/>, then immediately apply it through the normal paragraph-style path.
+    /// </summary>
+    public DocumentStyle? CreateParagraphStyleAndApply(
+        string name,
+        string? basedOnId,
+        RunFormatting run,
+        ParagraphFormatting paragraph,
+        string? nextStyleId)
+    {
+        if (IsEditingLocked)
+            return null;
+
+        var created = StyleManager.CreateStyle(_doc, name, basedOnId, run, paragraph, nextStyleId);
+        ApplyNamedStyle(created.Id);
+        InvalidateAfterExternalMutation();
+        return created;
+    }
+
+    /// <summary>Home &gt; Styles &gt; Manage Styles: modify a style's catalog entry and redraw style-linked text.</summary>
+    public DocumentStyle? ModifyParagraphStyle(
+        string styleId,
+        RunFormatting run,
+        ParagraphFormatting paragraph,
+        string? basedOnId,
+        string? nextStyleId)
+    {
+        if (IsEditingLocked)
+            return null;
+
+        var updated = StyleManager.ModifyStyle(_doc, styleId,
+            run: run,
+            para: paragraph,
+            basedOnId: basedOnId,
+            clearBasedOn: basedOnId is null,
+            nextStyleId: nextStyleId,
+            clearNext: nextStyleId is null);
+        if (updated is not null)
+            InvalidateAfterExternalMutation();
+        return updated;
+    }
+
+    /// <summary>Home &gt; Styles &gt; Manage Styles: delete a custom style through the shared catalog rules.</summary>
+    public bool DeleteParagraphStyle(string styleId)
+    {
+        if (IsEditingLocked)
+            return false;
+
+        var deleted = StyleManager.DeleteStyle(_doc, styleId);
+        if (deleted)
+            InvalidateAfterExternalMutation();
+        return deleted;
+    }
+
+    /// <summary>
     /// AV-DESIGN: set (or clear) the whole-page background colour (Design &gt; Page Color). A null/empty
     /// value clears it back to the default white sheet; the hex is normalised to "#RRGGBB". Undoable; the
     /// page sheet recolours immediately and round-trips through <c>w:background</c> on save.
@@ -10137,6 +10626,92 @@ public sealed class DocumentView : Control
         return true;
     }
 
+    public bool PastePlainText(string? clipboardText) =>
+        PasteNormalizedText(clipboardText, "Paste Text Only");
+
+    public bool PasteMergeFormatting(string? clipboardText) =>
+        PasteNormalizedText(clipboardText, "Merge Formatting");
+
+    private bool PasteNormalizedText(string? clipboardText, string undoLabel)
+    {
+        if (IsEditingLocked)
+            return false;
+
+        var normalized = PasteText.Normalize(clipboardText);
+        if (normalized.Length == 0)
+            return false;
+
+        var lines = normalized.Split('\n');
+        _bus.BeginUndoGroup();
+        try
+        {
+            InsertText(lines[0]);
+            for (var i = 1; i < lines.Length; i++)
+            {
+                InsertParagraphBreak();
+                if (lines[i].Length > 0)
+                    InsertText(lines[i]);
+            }
+
+            _bus.CommitUndoGroup(undoLabel);
+        }
+        catch
+        {
+            _bus.AbortUndoGroup();
+            throw;
+        }
+
+        Focus();
+        return true;
+    }
+
+    public bool IsFormatPainterArmed => _formatPainter is not null;
+
+    public void ArmFormatPainter(bool locked = false)
+    {
+        if (IsEditingLocked)
+            return;
+
+        var formatting = GetSelectionFormatting();
+        _formatPainter = FormatPainterClipboard.Capture(formatting.Run, formatting.Paragraph);
+        _formatPainterLocked = locked;
+    }
+
+    public void CancelFormatPainter()
+    {
+        _formatPainter = null;
+        _formatPainterLocked = false;
+    }
+
+    public bool ApplyFormatPainterToSelection()
+    {
+        if (_formatPainter is not { } painter || IsEditingLocked || NormalizedSelection() is null)
+            return false;
+
+        _bus.BeginUndoGroup();
+        try
+        {
+            ApplyRunFormatting(painter.ApplyTo);
+            foreach (var index in SelectedParagraphIndices())
+            {
+                if (_doc.Blocks[index] is Paragraph paragraph && IsEditable(paragraph))
+                    _bus.Execute(new SetParagraphFormattingCommand(index, painter.ApplyTo(paragraph.Formatting)));
+            }
+
+            _bus.CommitUndoGroup("Format Painter");
+        }
+        catch
+        {
+            _bus.AbortUndoGroup();
+            throw;
+        }
+
+        if (!_formatPainterLocked)
+            CancelFormatPainter();
+        Focus();
+        return true;
+    }
+
     /// <summary>
     /// Returns the next font size on the standard ladder in the given direction (+1 = grow, -1 = shrink).
     /// Clamps to [1, 1638] (Word's limits). Above the ladder top the step is 8pt.
@@ -10234,6 +10809,53 @@ public sealed class DocumentView : Control
     }
 
     /// <summary>Cycles text case: lower → Title Case → UPPER → lower.</summary>
+    private string? WordAtCaret()
+    {
+        if (CurrentParagraph() is not { } paragraph || !IsEditable(paragraph))
+            return null;
+
+        var cells = ParaCells(paragraph);
+        if (cells.Count == 0)
+            return null;
+
+        var index = Math.Clamp(_caret.Offset, 0, cells.Count - 1);
+        if (!IsProofingWordChar(cells[index].Ch) && index > 0 && IsProofingWordChar(cells[index - 1].Ch))
+            index--;
+        if (!IsProofingWordChar(cells[index].Ch))
+            return null;
+
+        var start = index;
+        while (start > 0 && IsProofingWordChar(cells[start - 1].Ch))
+            start--;
+        var end = index + 1;
+        while (end < cells.Count && IsProofingWordChar(cells[end].Ch))
+            end++;
+
+        return NormalizeProofingWord(new string(cells.Skip(start).Take(end - start).Select(c => c.Ch).ToArray()));
+    }
+
+    private static string? NormalizeProofingWord(string? word)
+    {
+        if (string.IsNullOrWhiteSpace(word))
+            return null;
+
+        var trimmed = word.Trim();
+        var start = 0;
+        while (start < trimmed.Length && !IsProofingWordChar(trimmed[start]))
+            start++;
+        var end = trimmed.Length - 1;
+        while (end >= start && !IsProofingWordChar(trimmed[end]))
+            end--;
+        if (end < start)
+            return null;
+
+        var normalized = trimmed[start..(end + 1)];
+        return normalized.Any(char.IsWhiteSpace) ? null : normalized;
+    }
+
+    private static bool IsProofingWordChar(char ch) =>
+        char.IsLetter(ch) || ch is '\'' or '-' or '\u2019';
+
     private static string CycleCase(string text)
     {
         if (string.IsNullOrEmpty(text))

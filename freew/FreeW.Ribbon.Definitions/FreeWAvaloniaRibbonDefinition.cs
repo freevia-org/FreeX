@@ -347,6 +347,14 @@ internal static class FreeWAvaloniaRibbonDefinition
                     {
                         KeyTip = FreeWRibbonText.PasteCommand.KeyTip
                     });
+                    g.Button("freew.format-painter", FreeWRibbonText.FormatPainterCommand.Label, b => b with
+                    {
+                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.FormatPainter),
+                        KeyTip = FreeWRibbonText.FormatPainterCommand.KeyTip
+                    });
+                    g.Icon("freew.paste-plain", FreeWRibbonText.PasteTextOnlyCommand.Label, RibbonCommandIconKind.Paste);
+                    g.Icon("freew.paste-merge", FreeWRibbonText.PasteMergeFormattingCommand.Label, RibbonCommandIconKind.Paste);
+                    g.Icon("freew.paste-special", FreeWRibbonText.PasteSpecialCommand.Label, RibbonCommandIconKind.Paste);
                 });
                 tab.Group("font", FreeWRibbonText.FontGroup.Label, FreeWRibbonText.FontGroup.KeyTip, 90, g =>
                 {
@@ -467,6 +475,16 @@ internal static class FreeWAvaloniaRibbonDefinition
                     // AV-STYLES: full built-in style gallery dropdown + clear-style.
                     g.Dropdown("freew.styles-gallery", "Styles", BuildStylesMenu());
                     g.Button("freew.style-clear", "Clear Style");
+                    g.Button("freew.new-style", "New Style", b => b with
+                    {
+                        PreferredLayout = RibbonCommandLayoutKind.Small,
+                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.Insert)
+                    });
+                    g.Button("freew.manage-styles", "Manage Styles", b => b with
+                    {
+                        PreferredLayout = RibbonCommandLayoutKind.Small,
+                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.Effects)
+                    });
                 });
                 tab.Group("editing", "Editing", null, 70, g =>
                 {
@@ -497,6 +515,9 @@ internal static class FreeWAvaloniaRibbonDefinition
                 {
                     g.Button("freew.picture",  "Picture");
                     g.Button("freew.shape",    "Shape");
+                    g.Button("freew.smartart", "SmartArt");
+                    g.Button("freew.chart",    "Chart");
+                    g.Button("freew.insert-icon", "Icons");
                     g.Button("freew.text-box", "Text Box");
                 });
                 // AV-INSERT2: Links group — Hyperlink + Bookmark.
@@ -504,8 +525,12 @@ internal static class FreeWAvaloniaRibbonDefinition
                 {
                     g.Button("freew.hyperlink", "Hyperlink");
                     g.Button("freew.insert-hyperlink", "Hyperlink");
+                    g.Button("freew.edit-hyperlink", "Edit Hyperlink");
+                    g.Button("freew.remove-hyperlink", "Remove Hyperlink");
+                    g.Button("freew.hyperlink-tooltip", "ScreenTip");
                     g.Button("freew.bookmark", "Bookmark");
                     g.Button("freew.insert-bookmark",  "Bookmark");
+                    g.Button("freew.link-bookmark", "Link to Bookmark");
                     g.Button("freew.bookmark-manager", "Bookmark Manager");
                 });
                 tab.Group("header-footer", "Header & Footer", null, 94, g =>
@@ -519,8 +544,12 @@ internal static class FreeWAvaloniaRibbonDefinition
                 {
                     g.Dropdown("freew.quick-parts", "Quick Parts", BuildQuickPartsMenu());
                     g.Dropdown("freew.drop-cap",    "Drop Cap",    BuildDropCapMenu());
+                    g.Button("freew.insert-file", "Text from File");
+                    g.Button("freew.wordart", "WordArt");
                     g.Button("freew.datetime", "Date & Time");
-                    g.Button("freew.text-from-file", "Text from File");
+                    g.Button("freew.update-fields", "Update Fields");
+                    g.Button("freew.toggle-field-codes", "Toggle Field Codes");
+                    g.Button("freew.object", "Object");
                 });
                 tab.Group("symbols", FreeWRibbonText.SymbolsGroup.Label, null, 92, g =>
                 {
@@ -539,7 +568,13 @@ internal static class FreeWAvaloniaRibbonDefinition
                     g.Dropdown("freew.size", "Size", BuildPageSizeMenu());
                     g.Dropdown("freew.columns", "Columns", BuildColumnsMenu());
                     g.Dropdown("freew.breaks", "Breaks", BuildBreaksMenu());
+                    g.Toggle("freew.different-first-page", "Different First Page");
+                    g.Button("freew.page-valign", "Vertical Align");
                     g.Button("freew.page-setup", "Page Setup...");
+                });
+                tab.Group("data", "Data", null, 95, g =>
+                {
+                    g.Button("freew.text-to-table", "Text to Table");
                 });
                 tab.Group("preview", "Preview", null, 90, g =>
                 {
@@ -556,6 +591,16 @@ internal static class FreeWAvaloniaRibbonDefinition
                 tab.Group("document-formatting", "Document Formatting", null, 100, g =>
                 {
                     g.Dropdown("freew.theme-colors", "Colors", BuildThemeColorsMenu());
+                    g.ComboBox("freew.style-set", "Style Sets", c => c with
+                    {
+                        Items = DocumentStyleSet.Catalog.Select(s => s.Name).ToArray(),
+                        Width = 128
+                    });
+                    g.Button("freew.reset-style-set", "Reset to Default Style Set", b => b with
+                    {
+                        PreferredLayout = RibbonCommandLayoutKind.Small,
+                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.Refresh)
+                    });
                     g.Dropdown("freew.theme-fonts",  "Fonts",  BuildThemeFontsMenu());
                     g.Dropdown("freew.para-spacing", "Paragraph Spacing", BuildParaSpacingMenu());
                 });
@@ -573,7 +618,9 @@ internal static class FreeWAvaloniaRibbonDefinition
                 {
                     g.Button("freew.print-layout", "Print Layout");
                     g.Button("freew.web-layout",   "Web Layout");
+                    g.Toggle("freew.outline-view", "Outline");
                     g.Button("freew.draft-view",   "Draft");
+                    g.Toggle("freew.paged-edit-view", "Page Edit");
                 });
                 tab.Group("show", "Show", null, 100, g =>
                 {
@@ -610,6 +657,14 @@ internal static class FreeWAvaloniaRibbonDefinition
                 tab.Group("proofing", "Proofing", null, 110, g =>
                 {
                     g.Button("freew.statistics", "Word Count");
+                    g.Toggle("freew.spellcheck-toggle", "Spelling & Grammar");
+                    g.Button("freew.add-to-dictionary", "Add to Dictionary");
+                    g.Button("freew.thesaurus", "Thesaurus");
+                    g.Button("freew.set-proofing-language", "Set Proofing Language");
+                });
+                tab.Group("speech", "Speech", null, 105, g =>
+                {
+                    g.Toggle("freew.read-aloud", "Read Aloud");
                 });
                 // AV-REVIEW: Accessibility group — backed by the same report flow as Backstage safety.
                 tab.Group("accessibility", "Accessibility", null, 92, g =>
@@ -640,6 +695,13 @@ internal static class FreeWAvaloniaRibbonDefinition
                     g.Button("freew.accept-all",    "Accept All");
                     g.Button("freew.reject-this",   "Reject");
                     g.Button("freew.reject-all",    "Reject All");
+                    g.Button("freew.previous-change", "Previous");
+                    g.Button("freew.next-change", "Next");
+                });
+                tab.Group("compare", "Compare", null, 78, g =>
+                {
+                    g.Button("freew.compare", "Compare");
+                    g.Button("freew.combine", "Combine");
                 });
                 // AV-REVIEW: Protect and Inspect groups are wired through host callbacks to the existing
                 // MainWindow/Backstage safety flows.
@@ -698,21 +760,31 @@ internal static class FreeWAvaloniaRibbonDefinition
             {
                 // AV-MAIL: Mailings-tab — the in-scope mail-merge subset over the portable MailMerge engine.
                 // Mail-SEND (e-mail merge) is OUT OF SCOPE and intentionally not surfaced.
+                tab.Group("create", "Create", null, 110, g =>
+                {
+                    g.Button("freew.merge-envelopes", "Envelopes");
+                    g.Button("freew.merge-labels", "Labels");
+                });
                 tab.Group("start-merge", "Start Mail Merge", null, 100, g =>
                 {
                     g.Button("freew.merge-data", "Select Recipients");
+                    g.Button("freew.merge-edit-recipients", "Edit Recipient List");
+                    g.Button("freew.merge-filter-sort", "Filter & Sort Recipients");
                 });
                 tab.Group("write-insert", "Write & Insert Fields", null, 90, g =>
                 {
                     g.Button("freew.merge-address-block", "Address Block");
                     g.Button("freew.merge-greeting-line", "Greeting Line");
                     g.Button("freew.merge-field",   "Insert Merge Field");
+                    g.Button("freew.merge-match-fields", "Match Fields");
                 });
                 tab.Group("preview-results", "Preview Results", null, 80, g =>
                 {
                     g.Button("freew.merge-preview",          "Preview Results");
+                    g.Button("freew.merge-preview-first",    "First Record");
                     g.Button("freew.merge-preview-previous", "◀ Previous");
                     g.Button("freew.merge-preview-next",     "Next ▶");
+                    g.Button("freew.merge-preview-last",     "Last Record");
                 });
                 tab.Group("finish", "Finish", null, 70, g =>
                 {

@@ -325,6 +325,57 @@ public sealed class MainWindow : Window
     private Task OpenWordCountDialogAsync() =>
         new WordCountDialog(_editor.ComputeStatistics()).ShowDialog(this);
 
+    private void ToggleSpellCheck()
+    {
+        var enabled = _editor.ToggleSpellCheck();
+        _status.Text = enabled ? "Spelling proofing is on." : "Spelling proofing is off.";
+    }
+
+    private void AddCurrentWordToDictionary()
+    {
+        var word = _editor.CurrentProofingWord;
+        if (word is null)
+        {
+            _status.Text = "Select a word, or place the caret inside one, then choose Add to Dictionary.";
+            _editor.Focus();
+            return;
+        }
+
+        _status.Text = _editor.AddCurrentWordToDictionary()
+            ? $"Added '{word}' to the custom dictionary."
+            : $"'{word}' is already in the custom dictionary.";
+        _editor.Focus();
+    }
+
+    private async Task OpenThesaurusAsync()
+    {
+        var word = _editor.CurrentProofingWord;
+        if (word is null)
+        {
+            _status.Text = "Select a word, or place the caret inside one, then choose Thesaurus.";
+            _editor.Focus();
+            return;
+        }
+
+        await ThesaurusDialog.ShowAsync(this, word, ThesaurusLookup.Instance.Lookup(word));
+        _editor.Focus();
+    }
+
+    private async Task OpenProofingLanguageDialogAsync()
+    {
+        var current = _editor.GetCaretFormatting().Run.LanguageTag;
+        var chosen = await ProofingLanguageDialog.ChooseAsync(this, current);
+        if (chosen is null)
+            return;
+
+        _editor.SetProofingLanguage(chosen);
+        var normalized = ProofingLanguageCatalog.NormalizeTag(chosen);
+        _status.Text = normalized is null
+            ? "Proofing language cleared."
+            : $"Proofing language set to {normalized}.";
+        _editor.Focus();
+    }
+
     private async Task ReplyToCommentAsync()
     {
         if (_editor.CommentsAtCaret.Count == 0)
@@ -567,6 +618,11 @@ public sealed class MainWindow : Window
             Cut: () => _ = CutAsync(),
             Copy: () => _ = CopyAsync(),
             Paste: () => _ = PasteAsync(),
+            PastePlainText: () => _ = PastePlainTextAsync(),
+            PasteMergeFormatting: () => _ = PasteMergeFormattingAsync(),
+            OpenPasteSpecial: () => _ = OpenPasteSpecialAsync(),
+            OpenNewStyleDialog: () => _ = StyleDialog.ShowNewAndApplyAsync(this, _editor),
+            OpenManageStylesDialog: () => _ = ManageStylesDialog.ShowAndApplyAsync(this, _editor),
             Backstage: () => _ = ShowBackstageAsync(),
             NewDocument: NewDocument,
             ToggleNavigationPane: ToggleNavigationPane,
@@ -604,7 +660,10 @@ public sealed class MainWindow : Window
             IsSideToSideActive: () => _sideToSideMode,
             // AV-INSERT2: Insert depth 2 dialog launchers (optional callbacks).
             OpenHyperlinkDialog: () => _ = OpenHyperlinkDialogAsync(),
+            OpenEditHyperlinkDialog: () => _ = OpenEditHyperlinkDialogAsync(),
+            OpenHyperlinkTooltipDialog: () => _ = OpenHyperlinkTooltipDialogAsync(),
             OpenBookmarkDialog:  () => _ = OpenBookmarkDialogAsync(),
+            OpenLinkBookmarkDialog: () => _ = OpenLinkBookmarkDialogAsync(),
             OpenQuickPartDialog: () => _ = OpenQuickPartDialogAsync(),
             InsertTextFromFile:  () => _ = InsertTextFromFileAsync(),
             // AV-MAIL: surface mail-merge info messages in the status bar.
@@ -618,7 +677,12 @@ public sealed class MainWindow : Window
             InspectDocument: () => _ = InspectDocumentAsync(),
             CheckAccessibility: () => _ = CheckAccessibilityAsync(),
             ReplyComment: () => _ = ReplyToCommentAsync(),
-            ShowComments: rows => _ = ShowCommentsAsync(rows));
+            ShowComments: rows => _ = ShowCommentsAsync(rows),
+            ToggleSpellcheck: ToggleSpellCheck,
+            IsSpellcheckActive: () => _editor.SpellCheckEnabled,
+            AddToDictionary: AddCurrentWordToDictionary,
+            OpenThesaurus: () => _ = OpenThesaurusAsync(),
+            SetProofingLanguage: () => _ = OpenProofingLanguageDialogAsync());
 
         // AV-MAIL: capture the Mailings engine so the shell can drive its two dialog-bound commands
         // (Select Recipients / Insert Merge Field) with async Avalonia dialogs over the same session the
@@ -908,6 +972,47 @@ public sealed class MainWindow : Window
             _editor.InsertText(text.Replace('\r', ' ').Replace('\n', ' ').Replace('\t', ' '));
     }
 
+    private async Task PastePlainTextAsync()
+    {
+        var text = await TryGetClipboardTextAsync();
+        if (!_editor.PastePlainText(text))
+            _status.Text = "Clipboard does not contain text.";
+    }
+
+    private async Task PasteMergeFormattingAsync()
+    {
+        var text = await TryGetClipboardTextAsync();
+        if (!_editor.PasteMergeFormatting(text))
+            _status.Text = "Clipboard does not contain text.";
+    }
+
+    private async Task OpenPasteSpecialAsync()
+    {
+        var text = await TryGetClipboardTextAsync();
+        if (PasteText.Normalize(text).Length == 0)
+        {
+            _status.Text = "Clipboard does not contain text.";
+            return;
+        }
+
+        var option = await PasteSpecialDialog.ShowAsync(this);
+        if (option is null)
+            return;
+
+        var pasted = option.Value == PasteSpecialOption.KeepTextOnly
+            ? _editor.PastePlainText(text)
+            : _editor.PasteMergeFormatting(text);
+        if (!pasted)
+            _status.Text = "Clipboard does not contain text.";
+    }
+
+    private async Task<string?> TryGetClipboardTextAsync()
+    {
+        if (TopLevel.GetTopLevel(this)?.Clipboard is not { } clipboard)
+            return null;
+        return await clipboard.TryGetTextAsync();
+    }
+
     private async Task OpenAsync()
     {
         await _fileWorkflow.OpenAsync(
@@ -1150,6 +1255,43 @@ public sealed class MainWindow : Window
     }
 
     /// <summary>
+    /// AV-LINKS: Opens Edit Hyperlink for the link under the caret and retargets it on OK.
+    /// </summary>
+    private async Task OpenEditHyperlinkDialogAsync()
+    {
+        if (!_editor.IsCaretOnHyperlink())
+            return;
+
+        var links = _editor.HyperlinksAtCaret();
+        var target = links.Count > 0
+            ? links[0].Url ?? (links[0].Anchor is { Length: > 0 } anchor ? "#" + anchor : string.Empty)
+            : string.Empty;
+        var dialog = new HyperlinkDialog(
+            initialDisplay: _editor.SelectedText,
+            initialAddress: target,
+            title: InsertDialogTextResources.Hyperlink.EditTitle);
+        await dialog.ShowDialog(this);
+        if (dialog.Address is { } address)
+            _editor.EditHyperlink(address);
+        _editor.Focus();
+    }
+
+    /// <summary>
+    /// AV-LINKS: Opens ScreenTip for the link under the caret and sets or clears it on OK.
+    /// </summary>
+    private async Task OpenHyperlinkTooltipDialogAsync()
+    {
+        if (!_editor.IsCaretOnHyperlink())
+            return;
+
+        var dialog = new ScreenTipDialog(_editor.HyperlinkTooltipAtCaret());
+        await dialog.ShowDialog(this);
+        if (dialog.ScreenTip is { } tip)
+            _editor.SetHyperlinkTooltip(tip);
+        _editor.Focus();
+    }
+
+    /// <summary>
     /// AV-INSERT2: Opens the Bookmark dialog (add at caret / Go To existing). Lists the document's current
     /// bookmark names. Wired to <c>freew.insert-bookmark</c> (Insert → Links).
     /// </summary>
@@ -1165,6 +1307,22 @@ public sealed class MainWindow : Window
             _editor.InsertBookmark(add);
         else if (dialog.GoToName is { } go)
             _editor.GoToBookmark(go);
+        _editor.Focus();
+    }
+
+    /// <summary>
+    /// AV-LINKS: Opens a bookmark picker and links the current selection to the chosen internal target.
+    /// </summary>
+    private async Task OpenLinkBookmarkDialogAsync()
+    {
+        var names = _editor.BookmarkNames();
+        if (names.Count == 0)
+            return;
+
+        var dialog = new LinkBookmarkDialog(names);
+        await dialog.ShowDialog(this);
+        if (dialog.BookmarkName is { } bookmark)
+            _editor.ApplyInternalLink(bookmark);
         _editor.Focus();
     }
 
