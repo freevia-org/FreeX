@@ -354,6 +354,15 @@ public static partial class ChartRenderPlanner
             - (hasValueAxisTitle && isBar ? AxisTitleBand : 0)
             - (hasCategoryAxisTitle && !isBar ? AxisTitleBand : 0);
 
+        // When a data table is present, its row-header column reserves space on the left.
+        // Inset the plot's left edge by that same amount so the plot's category band (bars/points)
+        // and the data table's category columns share one left origin and one per-category width -
+        // i.e. category j's bar/point sits directly above the table's column j, as in PowerPoint.
+        // The header column then occupies the gutter to the left of the (inset) plot, under the
+        // value-axis labels.
+        if (hasDataTable)
+            plotLeft += ComputeDataTableFirstColumnWidth(bounds.Width);
+
         var plot = new ChartPlanRect(
             plotLeft,
             plotTop,
@@ -779,9 +788,13 @@ public static partial class ChartRenderPlanner
         var plot = frame.Plot;
         double boundsY = plot.Bottom + DataTableGap;
         double boundsHeight = ComputeDataTableHeight(chart);
-        var bounds = new ChartPlanRect(plot.X, boundsY, plot.Width, boundsHeight);
-        double firstColumnWidth = Math.Min(DataTableSeriesHeaderWidth, plot.Width * 0.4);
-        double categoryWidth = Math.Max(1, (plot.Width - firstColumnWidth) / categoryCount);
+        // The plot's left edge was already inset (see BuildFramePlan) by the same first-column
+        // width computed here, so the row-header column occupies the gutter immediately to the
+        // left of the plot, and the category columns start at plot.X with the SAME per-category
+        // width as the plot's category band - column j lands directly under category j's bar/point.
+        double firstColumnWidth = ComputeDataTableFirstColumnWidth(frame.Bounds.Width);
+        var bounds = new ChartPlanRect(plot.X - firstColumnWidth, boundsY, firstColumnWidth + plot.Width, boundsHeight);
+        double categoryWidth = Math.Max(1, plot.Width / categoryCount);
 
         var cells = new List<ChartDataTableCellPlan>(rowCount * columnCount);
         for (int columnIndex = 0; columnIndex < columnCount; columnIndex++)
@@ -2051,6 +2064,18 @@ public static partial class ChartRenderPlanner
 
     private static double ComputeDataTableReservedHeight(ChartShape chart) =>
         DataTableGap + ComputeDataTableHeight(chart);
+
+    /// <summary>
+    /// Width of the data table's row-header (series-name) column. The plot's left edge is inset by
+    /// this same width when a data table is present, so the plot's category band and the data
+    /// table's category columns share one left origin and one per-category width (columns sit
+    /// directly under their category's bar/point, as in PowerPoint).
+    /// <paramref name="chartAreaWidth"/> is the overall chart bounds width (not the plot width),
+    /// so the cap is independent of the inset it produces - avoiding a self-referential
+    /// plot-width-depends-on-column-width-depends-on-plot-width cycle.
+    /// </summary>
+    private static double ComputeDataTableFirstColumnWidth(double chartAreaWidth) =>
+        Math.Min(DataTableSeriesHeaderWidth, Math.Max(0, chartAreaWidth) * 0.4);
 
     private static ChartPlanRect InsetDataTableCellText(ChartPlanRect bounds) =>
         new(
