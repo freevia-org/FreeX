@@ -334,9 +334,15 @@ public sealed class AnimationPaneTests
         source.Should().Contain("AnimationPanePlanner.BuildTimelinePlan(");
         source.Should().Contain("var effectText = item.EffectText");
         source.Should().Contain("AnimationPanePlanner.TriggerLabels");
-        source.Should().Contain("AnimationPanePlanner.TryGetTrigger(");
         source.Should().Contain("Text              = item.DurationText");
-        source.Should().Contain("AnimationPanePlanner.BuildDurationEditPlan(");
+        source.Should().Contain("Text              = item.DelayText");
+        source.Should().Contain("AnimationPanePlanner.BuildTriggerMutationPlan(");
+        source.Should().Contain("AnimationPanePlanner.BuildDurationMutationPlan(");
+        source.Should().Contain("AnimationPanePlanner.BuildDelayMutationPlan(");
+        source.Should().Contain("AnimationPanePlanner.TryApplyTimingMutation(");
+        source.Should().NotContain("updated.Trigger =");
+        source.Should().NotContain("updated.DurationMs =");
+        source.Should().NotContain("updated.DelayMs =");
         source.Should().NotContain("private static string FormatEffect");
         source.Should().NotContain("private static string FormatDuration");
         source.Should().NotContain("private static bool TryParseDuration");

@@ -8,6 +8,23 @@ public sealed record AnimationPaneDurationEditPlan(
     int DurationMs,
     string DisplayText);
 
+public enum AnimationPaneTimingEditKind
+{
+    Trigger,
+    Duration,
+    Delay,
+}
+
+public sealed record AnimationPaneTimingMutationPlan(
+    bool ShouldApply,
+    int AnimationIndex,
+    AnimationPaneTimingEditKind Kind,
+    AnimationTrigger Trigger,
+    int DurationMs,
+    int DelayMs,
+    string DisplayText,
+    string? DisabledReason);
+
 public sealed record AnimationPaneTimelinePlan(
     IReadOnlyList<AnimationPaneTimelineItemPlan> Items,
     int SelectedIndex,
@@ -60,6 +77,11 @@ public sealed record AnimationPaneReorderIntent(
 
 public static class AnimationPanePlanner
 {
+    public const string MissingAnimationMessage = "Select an animation to edit timing.";
+    public const string InvalidTriggerMessage = "Choose a valid animation trigger.";
+    public const string InvalidDurationMessage = "Enter a duration greater than 0 seconds.";
+    public const string InvalidDelayMessage = "Enter a delay of 0 seconds or greater.";
+
     private static readonly string[] TriggerLabelValues =
     [
         "On Click",
@@ -224,6 +246,12 @@ public static class AnimationPanePlanner
 
     private static bool TryParseTimingSeconds(string text, bool allowZero, out int ms)
     {
+        text = text.Trim();
+        if (text.EndsWith("s", StringComparison.OrdinalIgnoreCase))
+        {
+            text = text[..^1].Trim();
+        }
+
         if (double.TryParse(
                 text,
                 NumberStyles.Float,
@@ -267,6 +295,118 @@ public static class AnimationPanePlanner
         return new(false, currentDelayMs, FormatDuration(currentDelayMs, displayCulture));
     }
 
+    public static AnimationPaneTimingMutationPlan BuildTriggerMutationPlan(
+        IReadOnlyList<ShapeAnimation> animations,
+        int animationIndex,
+        int selectedTriggerIndex)
+    {
+        if (!TryGetAnimation(animations, animationIndex, out var animation))
+        {
+            return DisabledMutationPlan(
+                animationIndex,
+                AnimationPaneTimingEditKind.Trigger,
+                MissingAnimationMessage);
+        }
+
+        if (!TryGetTrigger(selectedTriggerIndex, out var trigger))
+        {
+            return new AnimationPaneTimingMutationPlan(
+                false,
+                animationIndex,
+                AnimationPaneTimingEditKind.Trigger,
+                animation.Trigger,
+                animation.DurationMs,
+                animation.DelayMs,
+                TriggerLabelValues[ToTriggerIndex(animation.Trigger)],
+                InvalidTriggerMessage);
+        }
+
+        return new AnimationPaneTimingMutationPlan(
+            animation.Trigger != trigger,
+            animationIndex,
+            AnimationPaneTimingEditKind.Trigger,
+            trigger,
+            animation.DurationMs,
+            animation.DelayMs,
+            TriggerLabelValues[ToTriggerIndex(trigger)],
+            null);
+    }
+
+    public static AnimationPaneTimingMutationPlan BuildDurationMutationPlan(
+        IReadOnlyList<ShapeAnimation> animations,
+        int animationIndex,
+        string text,
+        CultureInfo? displayCulture = null)
+    {
+        if (!TryGetAnimation(animations, animationIndex, out var animation))
+        {
+            return DisabledMutationPlan(
+                animationIndex,
+                AnimationPaneTimingEditKind.Duration,
+                MissingAnimationMessage,
+                displayCulture);
+        }
+
+        var editPlan = BuildDurationEditPlan(text, animation.DurationMs, displayCulture);
+        return new AnimationPaneTimingMutationPlan(
+            editPlan.ShouldUpdate,
+            animationIndex,
+            AnimationPaneTimingEditKind.Duration,
+            animation.Trigger,
+            editPlan.DurationMs,
+            animation.DelayMs,
+            editPlan.DisplayText,
+            TryParseDuration(text, out _) ? null : InvalidDurationMessage);
+    }
+
+    public static AnimationPaneTimingMutationPlan BuildDelayMutationPlan(
+        IReadOnlyList<ShapeAnimation> animations,
+        int animationIndex,
+        string text,
+        CultureInfo? displayCulture = null)
+    {
+        if (!TryGetAnimation(animations, animationIndex, out var animation))
+        {
+            return DisabledMutationPlan(
+                animationIndex,
+                AnimationPaneTimingEditKind.Delay,
+                MissingAnimationMessage,
+                displayCulture);
+        }
+
+        var editPlan = BuildDelayEditPlan(text, animation.DelayMs, displayCulture);
+        return new AnimationPaneTimingMutationPlan(
+            editPlan.ShouldUpdate,
+            animationIndex,
+            AnimationPaneTimingEditKind.Delay,
+            animation.Trigger,
+            animation.DurationMs,
+            editPlan.DurationMs,
+            editPlan.DisplayText,
+            TryParseDelay(text, out _) ? null : InvalidDelayMessage);
+    }
+
+    public static bool TryApplyTimingMutation(
+        EditingSession editor,
+        AnimationPaneTimingMutationPlan plan)
+    {
+        ArgumentNullException.ThrowIfNull(editor);
+        ArgumentNullException.ThrowIfNull(plan);
+
+        if (!plan.ShouldApply
+            || !TryGetAnimation(editor.CurrentSlideAnimations, plan.AnimationIndex, out var current))
+        {
+            return false;
+        }
+
+        var updated = PresentationAnimationCommandPlanner.CloneAnimation(current);
+        updated.Trigger = plan.Trigger;
+        updated.DurationMs = plan.DurationMs;
+        updated.DelayMs = plan.DelayMs;
+        editor.SetAnimation(plan.AnimationIndex, updated);
+        return true;
+    }
+
     private static int NormalizeSelectedIndex(
         IReadOnlyList<ShapeAnimation> animations,
         IReadOnlyList<uint>? selectedShapeIds,
@@ -300,4 +440,34 @@ public static class AnimationPanePlanner
             ? $"Shape {shapeId.ToString(CultureInfo.InvariantCulture)}"
             : shape!.Name;
     }
+
+    private static bool TryGetAnimation(
+        IReadOnlyList<ShapeAnimation> animations,
+        int animationIndex,
+        out ShapeAnimation animation)
+    {
+        if (animationIndex >= 0 && animationIndex < animations.Count)
+        {
+            animation = animations[animationIndex];
+            return true;
+        }
+
+        animation = default!;
+        return false;
+    }
+
+    private static AnimationPaneTimingMutationPlan DisabledMutationPlan(
+        int animationIndex,
+        AnimationPaneTimingEditKind kind,
+        string disabledReason,
+        CultureInfo? displayCulture = null)
+        => new(
+            false,
+            animationIndex,
+            kind,
+            AnimationTrigger.OnClick,
+            0,
+            0,
+            FormatDuration(0, displayCulture),
+            disabledReason);
 }
