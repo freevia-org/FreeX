@@ -273,6 +273,7 @@ public sealed class MainWindow : Window
             onReviewAltText: () => ShowAltTextPane(),
             onReviewReadingOrder: () => ShowReadingOrderPane(),
             onReviewProofing: () => RefreshProofingRequestPlan(),
+            onDeleteComment: () => DeleteSelectedComment(),
             onResolveComment: () => ResolveSelectedComment(),
             onReopenComment: () => ReopenSelectedComment(),
             // Wave 16B: Animation pane toggle.
@@ -1020,6 +1021,12 @@ public sealed class MainWindow : Window
         RefreshReviewWorkflowPlans();
     }
 
+    internal PresentationCommentMutationPlan DeleteSelectedComment()
+        => ApplySelectedCommentMutation(
+            PresentationReviewWorkflowIntentKind.DeleteComment,
+            null,
+            null);
+
     internal PresentationCommentMutationPlan ResolveSelectedComment(
         DateTime? resolvedAt = null,
         string? resolvedBy = null)
@@ -1040,28 +1047,48 @@ public sealed class MainWindow : Window
         string? resolvedBy)
     {
         var selected = _selectedCommentIndex;
-        var plan = intent == PresentationReviewWorkflowIntentKind.ResolveComment && selected is { } resolveIndex
-            ? PresentationReviewWorkflowPlanner.BuildResolveCommentPlan(
-                _presentation.Slides,
-                Editor.CurrentSlideIndex,
-                resolveIndex,
-                resolvedAt ?? DateTime.UtcNow,
-                resolvedBy ?? "FreeP User")
-            : intent == PresentationReviewWorkflowIntentKind.ReopenComment && selected is { } reopenIndex
-                ? PresentationReviewWorkflowPlanner.BuildReopenCommentPlan(
-                    _presentation.Slides,
-                    Editor.CurrentSlideIndex,
-                    reopenIndex)
-                : new PresentationCommentMutationPlan(
+        var plan = selected is { } selectedIndex
+            ? intent switch
+            {
+                PresentationReviewWorkflowIntentKind.DeleteComment =>
+                    PresentationReviewWorkflowPlanner.BuildDeleteCommentPlan(
+                        _presentation.Slides,
+                        Editor.CurrentSlideIndex,
+                        selectedIndex),
+                PresentationReviewWorkflowIntentKind.ResolveComment =>
+                    PresentationReviewWorkflowPlanner.BuildResolveCommentPlan(
+                        _presentation.Slides,
+                        Editor.CurrentSlideIndex,
+                        selectedIndex,
+                        resolvedAt ?? DateTime.UtcNow,
+                        resolvedBy ?? "FreeP User"),
+                PresentationReviewWorkflowIntentKind.ReopenComment =>
+                    PresentationReviewWorkflowPlanner.BuildReopenCommentPlan(
+                        _presentation.Slides,
+                        Editor.CurrentSlideIndex,
+                        selectedIndex),
+                _ => new PresentationCommentMutationPlan(
                     intent,
                     false,
                     Editor.CurrentSlideIndex,
                     selected,
                     null,
-                    PresentationReviewWorkflowPlanner.MissingCommentMessage);
+                    PresentationReviewWorkflowPlanner.MissingCommentMessage)
+            }
+            : new PresentationCommentMutationPlan(
+                intent,
+                false,
+                Editor.CurrentSlideIndex,
+                selected,
+                null,
+                PresentationReviewWorkflowPlanner.MissingCommentMessage);
 
         if (PresentationReviewWorkflowPlanner.TryApplyCommentMutationPlan(_presentation.Slides, plan))
         {
+            _selectedCommentIndex = PresentationReviewWorkflowPlanner.NormalizeCommentSelectionAfterMutation(
+                _presentation.Slides,
+                plan,
+                selected);
             _file.MarkDirty();
             RefreshCommentPane();
             RefreshReviewWorkflowPlans();

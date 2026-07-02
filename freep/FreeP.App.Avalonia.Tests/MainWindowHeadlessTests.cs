@@ -1541,12 +1541,18 @@ public sealed class MainWindowHeadlessTests
     {
         SlideComment? resolvedComment = null;
         SlideComment? reopenedComment = null;
+        SlideComment? remainingComment = null;
         PresentationCommentMutationPlan? resolvePlan = null;
         PresentationCommentMutationPlan? reopenPlan = null;
+        PresentationCommentMutationPlan? invalidDeletePlan = null;
         PresentationCommentPanePlan? noSelectionPlan = null;
         PresentationCommentPanePlan? resolvedPanePlan = null;
         PresentationCommentPanePlan? reopenedPanePlan = null;
+        PresentationCommentPanePlan? deletedPanePlan = null;
+        PresentationCommentPanePlan? invalidSelectionPanePlan = null;
         var paneVisible = false;
+        var dirtyAfterDelete = false;
+        var commentCountAfterDelete = -1;
 
         var ran = await OnUiThread(() =>
         {
@@ -1563,6 +1569,8 @@ public sealed class MainWindowHeadlessTests
             registry.TryGet(PresentationReviewWorkflowPlanner.ResolveCommentCommandId, out var resolveCommand)
                 .Should().BeTrue();
             registry.TryGet(PresentationReviewWorkflowPlanner.ReopenCommentCommandId, out var reopenCommand)
+                .Should().BeTrue();
+            registry.TryGet(PresentationReviewWorkflowPlanner.DeleteCommentCommandId, out var deleteCommand)
                 .Should().BeTrue();
 
             noSelectionPlan = window.ShowReviewCommentsPane();
@@ -1582,6 +1590,22 @@ public sealed class MainWindowHeadlessTests
             reopenedPanePlan = window.LastCommentPanePlan;
 
             resolveCommand!.Execute(RibbonCommandContext.Empty);
+            window.Editor.CurrentSlide.Comments.Add(new SlideComment
+            {
+                Author = "Reviewer",
+                Initials = "RV",
+                Text = "Delete this thread.",
+                Idx = 2
+            });
+            window.SetSelectedReviewCommentIndexForTests(1);
+            deleteCommand!.Execute(RibbonCommandContext.Empty);
+            remainingComment = window.Editor.CurrentSlide.Comments.Single();
+            deletedPanePlan = window.LastCommentPanePlan;
+            dirtyAfterDelete = window.IsDirty;
+            commentCountAfterDelete = window.ReviewCommentsPaneCommentCount;
+
+            invalidSelectionPanePlan = window.SetSelectedReviewCommentIndexForTests(42);
+            invalidDeletePlan = window.DeleteSelectedComment();
             paneVisible = window.IsReviewCommentsPaneVisible;
         });
 
@@ -1606,6 +1630,20 @@ public sealed class MainWindowHeadlessTests
         reopenedPanePlan.Should().NotBeNull();
         reopenedPanePlan!.Comments.Single().CanResolve.Should().BeTrue();
         reopenPlan.Should().NotBeNull("reopen should refresh the pane to an open-thread state");
+        remainingComment.Should().NotBeNull();
+        remainingComment!.Text.Should().Be("Close this thread.");
+        deletedPanePlan.Should().NotBeNull();
+        deletedPanePlan!.SelectedCommentIndex.Should().Be(0);
+        deletedPanePlan.SelectedComment!.TextPreview.Should().Be("Close this thread.");
+        dirtyAfterDelete.Should().BeTrue();
+        commentCountAfterDelete.Should().Be(1);
+        invalidSelectionPanePlan.Should().NotBeNull();
+        invalidSelectionPanePlan!.Actions.Single(action =>
+                action.CommandId == PresentationReviewWorkflowPlanner.DeleteCommentCommandId)
+            .DisabledReason.Should().Be(PresentationReviewWorkflowPlanner.MissingCommentMessage);
+        invalidDeletePlan.Should().NotBeNull();
+        invalidDeletePlan!.ShouldApply.Should().BeFalse();
+        invalidDeletePlan.ValidationMessage.Should().Be(PresentationReviewWorkflowPlanner.MissingCommentMessage);
         paneVisible.Should().BeTrue();
     }
 
