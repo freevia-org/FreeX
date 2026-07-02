@@ -302,6 +302,36 @@ public sealed class PresentationReviewWorkflowPlannerTests
     }
 
     [Fact]
+    public void TryApplyCommentMutationPlan_DeletesSelectedCommentAndNormalizesSelection()
+    {
+        var slides = new[] { new Slide { Title = "Intro" } };
+        slides[0].Comments.Add(new SlideComment { Author = "Alice", Initials = "AL", Text = "Keep me.", Idx = 1 });
+        slides[0].Comments.Add(new SlideComment { Author = "Bob", Initials = "B", Text = "Delete me.", Idx = 2 });
+
+        var delete = PresentationReviewWorkflowPlanner.BuildDeleteCommentPlan(slides, 0, 1);
+
+        PresentationReviewWorkflowPlanner.TryApplyCommentMutationPlan(slides, delete).Should().BeTrue();
+        slides[0].Comments.Should().ContainSingle().Which.Text.Should().Be("Keep me.");
+        PresentationReviewWorkflowPlanner.NormalizeCommentSelectionAfterMutation(slides, delete, previousSelectedCommentIndex: 1)
+            .Should().Be(0);
+        PresentationReviewWorkflowPlanner.BuildCommentPanePlan(slides, 0, selectedCommentIndex: 1)
+            .Actions.Single(action => action.CommandId == PresentationReviewWorkflowPlanner.DeleteCommentCommandId)
+            .DisabledReason.Should().Be(PresentationReviewWorkflowPlanner.MissingCommentMessage);
+
+        var invalid = PresentationReviewWorkflowPlanner.BuildDeleteCommentPlan(slides, 0, 5);
+
+        invalid.Should().Be(new PresentationCommentMutationPlan(
+            PresentationReviewWorkflowIntentKind.DeleteComment,
+            false,
+            0,
+            5,
+            null,
+            PresentationReviewWorkflowPlanner.MissingCommentMessage));
+        PresentationReviewWorkflowPlanner.TryApplyCommentMutationPlan(slides, invalid).Should().BeFalse();
+        slides[0].Comments.Should().ContainSingle();
+    }
+
+    [Fact]
     public void BuildAltTextRequestPlan_UsesSelectedShapePersistentMetadata()
     {
         var slide = new Slide { Title = "Intro" };

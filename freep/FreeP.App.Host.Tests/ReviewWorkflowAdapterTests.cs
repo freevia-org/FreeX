@@ -196,6 +196,62 @@ public sealed class ReviewWorkflowAdapterTests
     }
 
     [StaFact]
+    public void MainWindow_DeleteComment_AppliesSharedPlanAndNormalizesSelection()
+    {
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
+        try
+        {
+            window.Editor.CurrentSlide!.Comments.Add(new SlideComment
+            {
+                Author = "Reviewer",
+                Initials = "RV",
+                Text = "Keep this thread.",
+                Idx = 1
+            });
+            window.Editor.CurrentSlide.Comments.Add(new SlideComment
+            {
+                Author = "Reviewer",
+                Initials = "RV",
+                Text = "Delete this thread.",
+                Idx = 2
+            });
+            window.SetSelectedReviewCommentIndexForTests(1);
+            window.LastCommentPanePlan!.Actions.Single(action =>
+                    action.CommandId == PresentationReviewWorkflowPlanner.DeleteCommentCommandId)
+                .IsEnabled.Should().BeTrue();
+
+            var delete = window.DeleteSelectedComment();
+
+            delete.Should().Be(new PresentationCommentMutationPlan(
+                PresentationReviewWorkflowIntentKind.DeleteComment,
+                true,
+                0,
+                1,
+                null,
+                null));
+            window.Editor.CurrentSlide.Comments.Should().ContainSingle().Which.Text.Should().Be("Keep this thread.");
+            window.LastCommentPanePlan!.SelectedCommentIndex.Should().Be(0);
+            window.LastCommentPanePlan.SelectedComment!.TextPreview.Should().Be("Keep this thread.");
+            window.ReviewCommentSelectedCount.Should().Be(1);
+
+            window.SetSelectedReviewCommentIndexForTests(99);
+            window.LastCommentPanePlan!.Actions.Single(action =>
+                    action.CommandId == PresentationReviewWorkflowPlanner.DeleteCommentCommandId)
+                .DisabledReason.Should().Be(PresentationReviewWorkflowPlanner.MissingCommentMessage);
+
+            var invalid = window.DeleteSelectedComment();
+
+            invalid.ShouldApply.Should().BeFalse();
+            invalid.ValidationMessage.Should().Be(PresentationReviewWorkflowPlanner.MissingCommentMessage);
+            window.Editor.CurrentSlide.Comments.Should().ContainSingle();
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [StaFact]
     public void MainWindow_AltTextPane_ShowsSharedPlanAndAppliesThroughPane()
     {
         var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
@@ -524,13 +580,15 @@ public sealed class ReviewWorkflowAdapterTests
         var invoked = false;
         var altTextInvoked = false;
         var readingOrderInvoked = false;
+        var deleteInvoked = false;
 
         var registry = FreePRibbonCommands.Build(
             new RibbonStateStore(),
             editor,
             onReviewAccessibility: () => invoked = true,
             onReviewAltText: () => altTextInvoked = true,
-            onReviewReadingOrder: () => readingOrderInvoked = true);
+            onReviewReadingOrder: () => readingOrderInvoked = true,
+            onDeleteComment: () => deleteInvoked = true);
 
         registry.TryGet(PresentationReviewWorkflowPlanner.AccessibilityCommandId, out var command)
             .Should()
@@ -546,6 +604,9 @@ public sealed class ReviewWorkflowAdapterTests
         readingOrderCommand!.Execute(RibbonCommandContext.Empty);
         readingOrderInvoked.Should().BeTrue();
         registry.TryGet(PresentationReviewWorkflowPlanner.CommentsPaneCommandId, out _).Should().BeTrue();
+        registry.TryGet(PresentationReviewWorkflowPlanner.DeleteCommentCommandId, out var deleteCommand).Should().BeTrue();
+        deleteCommand!.Execute(RibbonCommandContext.Empty);
+        deleteInvoked.Should().BeTrue();
         registry.TryGet(PresentationReviewWorkflowPlanner.ReopenCommentCommandId, out _).Should().BeTrue();
         registry.TryGet(PresentationReviewWorkflowPlanner.ProofingCommandId, out _).Should().BeTrue();
     }

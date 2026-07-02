@@ -517,6 +517,33 @@ public static class PresentationReviewWorkflowPlanner
         }
     }
 
+    public static int? NormalizeCommentSelectionAfterMutation(
+        IReadOnlyList<Slide> slides,
+        PresentationCommentMutationPlan plan,
+        int? previousSelectedCommentIndex = null)
+    {
+        ArgumentNullException.ThrowIfNull(slides);
+        ArgumentNullException.ThrowIfNull(plan);
+
+        var comments = GetSlide(slides, plan.SlideIndex)?.Comments;
+        if (comments is null || comments.Count == 0)
+        {
+            return null;
+        }
+
+        return plan.Intent switch
+        {
+            PresentationReviewWorkflowIntentKind.AddComment => comments.Count - 1,
+            PresentationReviewWorkflowIntentKind.DeleteComment when plan.CommentIndex is { } deletedIndex =>
+                Math.Min(Math.Max(deletedIndex, 0), comments.Count - 1),
+            PresentationReviewWorkflowIntentKind.EditComment
+            or PresentationReviewWorkflowIntentKind.ResolveComment
+            or PresentationReviewWorkflowIntentKind.ReopenComment =>
+                NormalizeSelectedCommentIndex(slides, plan.SlideIndex, plan.CommentIndex ?? previousSelectedCommentIndex),
+            _ => NormalizeSelectedCommentIndex(slides, plan.SlideIndex, previousSelectedCommentIndex)
+        };
+    }
+
     public static PresentationAltTextRequestPlan BuildAltTextRequestPlan(
         Slide? slide,
         uint? selectedShapeId,
