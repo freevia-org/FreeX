@@ -864,6 +864,14 @@ public sealed class MainWindow : Window
                 };
                 headerPanel.Children.Add(badge);
                 headerPanel.Children.Add(authorText);
+                headerPanel.Children.Add(new TextBlock
+                {
+                    Text       = cm.ThreadStatus == PresentationCommentThreadStatus.Resolved ? "Resolved" : "Open",
+                    FontSize   = 10,
+                    Foreground = new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66)),
+                    Margin     = new Thickness(6, 0, 0, 0),
+                    VerticalAlignment = VerticalAlignment.Center,
+                });
 
                 // Comment body text
                 var bodyText = new TextBlock

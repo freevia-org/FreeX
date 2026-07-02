@@ -33,6 +33,15 @@ public sealed class SlideComment
     /// <summary>Creation or modification timestamp. Null if not specified in the source.</summary>
     public DateTime? DateTime { get; set; }
 
+    /// <summary>True when the thread has been resolved in the review workflow.</summary>
+    public bool IsResolved { get; set; }
+
+    /// <summary>Timestamp for the latest resolve action. Null when the thread is open.</summary>
+    public DateTime? ResolvedDateTime { get; set; }
+
+    /// <summary>Reviewer display name for the latest resolve action. Empty when not supplied.</summary>
+    public string ResolvedBy { get; set; } = string.Empty;
+
     // ── Position ──────────────────────────────────────────────────────────────────
 
     /// <summary>Horizontal position from the slide left edge, in EMU (p:pos x=).</summary>

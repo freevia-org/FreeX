@@ -474,6 +474,7 @@ internal static class FreePRibbonCommands
         registry.Register(PresentationReviewWorkflowPlanner.PreviousCommentCommandId, EmptyRibbonCommand.Instance);
         registry.Register(PresentationReviewWorkflowPlanner.NextCommentCommandId, EmptyRibbonCommand.Instance);
         registry.Register(PresentationReviewWorkflowPlanner.ResolveCommentCommandId, EmptyRibbonCommand.Instance);
+        registry.Register(PresentationReviewWorkflowPlanner.ReopenCommentCommandId, EmptyRibbonCommand.Instance);
     }
 
     /// <summary>

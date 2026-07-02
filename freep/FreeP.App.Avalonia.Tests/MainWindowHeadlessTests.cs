@@ -1277,6 +1277,7 @@ public sealed class MainWindowHeadlessTests
         var foundAltText = false;
         var foundReadingOrder = false;
         var foundProofing = false;
+        var foundReopenComment = false;
         PresentationCommentPanePlan? commentPlan = null;
         PresentationAccessibilitySummaryPlan? accessibilityPlan = null;
         PresentationAltTextRequestPlan? altTextPlan = null;
@@ -1307,6 +1308,9 @@ public sealed class MainWindowHeadlessTests
                 Initials = "RV",
                 Text = "Use shared review state.",
                 Idx = 1,
+                IsResolved = true,
+                ResolvedBy = "Reviewer",
+                ResolvedDateTime = new DateTime(2026, 7, 2, 8, 15, 0, DateTimeKind.Utc),
             });
             var shape = new SlideShape
             {
@@ -1333,6 +1337,7 @@ public sealed class MainWindowHeadlessTests
             foundAltText = registry.TryGet(PresentationReviewWorkflowPlanner.AltTextCommandId, out var altText);
             foundReadingOrder = registry.TryGet(PresentationReviewWorkflowPlanner.ReadingOrderPaneCommandId, out var readingOrder);
             foundProofing = registry.TryGet(PresentationReviewWorkflowPlanner.ProofingCommandId, out var proofing);
+            foundReopenComment = registry.TryGet(PresentationReviewWorkflowPlanner.ReopenCommentCommandId, out _);
 
             comments!.Execute(RibbonCommandContext.Empty);
             accessibility!.Execute(RibbonCommandContext.Empty);
@@ -1372,8 +1377,15 @@ public sealed class MainWindowHeadlessTests
         foundAltText.Should().BeTrue();
         foundReadingOrder.Should().BeTrue();
         foundProofing.Should().BeTrue();
+        foundReopenComment.Should().BeTrue();
         commentPlan.Should().NotBeNull();
         commentPlan!.TotalCommentCount.Should().Be(1);
+        commentPlan.Comments.Single().Should().Match<PresentationCommentDescriptor>(comment =>
+            comment.ThreadStatus == PresentationCommentThreadStatus.Resolved &&
+            !comment.CanResolve &&
+            comment.CanReopen);
+        commentPlan.Actions.Single(action => action.CommandId == PresentationReviewWorkflowPlanner.ReopenCommentCommandId)
+            .IsEnabled.Should().BeFalse("the comments command does not select a specific thread yet");
         accessibilityPlan.Should().NotBeNull();
         var missingAltText = accessibilityPlan!.Issues.Single(issue =>
             issue.ShapeId == 328 && issue.Title == "Alt text missing");
