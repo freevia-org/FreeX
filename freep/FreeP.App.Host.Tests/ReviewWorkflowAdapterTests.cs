@@ -127,6 +127,16 @@ public sealed class ReviewWorkflowAdapterTests
             window.LastAccessibilitySummaryPlan!.Issues.Should().NotContain(issue =>
                 issue.ShapeId == shape.Id && issue.Title == "Alt text missing");
             window.LastProofingRequestPlan.Should().NotBeNull();
+            window.LastProofingRequestPlan!.Status.Should().Be(PresentationWorkflowCapabilityStatus.Available);
+            window.LastProofingExecutionPlan.Should().NotBeNull();
+            window.LastProofingExecutionPlan!.Scopes.Select(scope => scope.Kind).Should().Equal(
+                PresentationProofingScopeKind.SlideTitle,
+                PresentationProofingScopeKind.Comment);
+            window.LastProofingExecutionPlan.Scopes.Should().Contain(scope =>
+                scope.Kind == PresentationProofingScopeKind.Comment &&
+                scope.SlideIndex == 0 &&
+                scope.CommentIndex == 0 &&
+                scope.Text == "Use the shared plan.");
         }
         finally
         {
@@ -707,6 +717,7 @@ public sealed class ReviewWorkflowAdapterTests
         var invoked = false;
         var altTextInvoked = false;
         var readingOrderInvoked = false;
+        var proofingInvoked = false;
         var addInvoked = false;
         var editInvoked = false;
         var deleteInvoked = false;
@@ -717,6 +728,7 @@ public sealed class ReviewWorkflowAdapterTests
             onReviewAccessibility: () => invoked = true,
             onReviewAltText: () => altTextInvoked = true,
             onReviewReadingOrder: () => readingOrderInvoked = true,
+            onReviewProofing: () => proofingInvoked = true,
             onAddComment: () => addInvoked = true,
             onEditComment: () => editInvoked = true,
             onDeleteComment: () => deleteInvoked = true);
@@ -746,7 +758,9 @@ public sealed class ReviewWorkflowAdapterTests
         deleteCommand!.Execute(RibbonCommandContext.Empty);
         deleteInvoked.Should().BeTrue();
         registry.TryGet(PresentationReviewWorkflowPlanner.ReopenCommentCommandId, out _).Should().BeTrue();
-        registry.TryGet(PresentationReviewWorkflowPlanner.ProofingCommandId, out _).Should().BeTrue();
+        registry.TryGet(PresentationReviewWorkflowPlanner.ProofingCommandId, out var proofingCommand).Should().BeTrue();
+        proofingCommand!.Execute(RibbonCommandContext.Empty);
+        proofingInvoked.Should().BeTrue();
     }
 
     private static TextBody MakeTextBody(params string[] paragraphs)
@@ -777,6 +791,7 @@ public sealed class ReviewWorkflowAdapterTests
         source.Should().Contain("PresentationReviewWorkflowPlanner.BuildAltTextPanePlan(");
         source.Should().Contain("PresentationReviewWorkflowPlanner.BuildAltTextMutationPlan(");
         source.Should().Contain("PresentationReviewWorkflowPlanner.BuildReadingOrderPlan(");
+        source.Should().Contain("PresentationReviewWorkflowPlanner.BuildProofingExecutionPlan(_presentation)");
         source.Should().Contain("PresentationReviewWorkflowPlanner.BuildProofingRequestPlan(_presentation)");
         source.Should().Contain("LastCommentPanePlan = plan;");
         source.Should().Contain("onLayoutPicker:     () => OpenLayoutPicker()");

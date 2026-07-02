@@ -39,6 +39,16 @@ public enum PresentationCommentThreadStatus
     Resolved
 }
 
+public enum PresentationProofingScopeKind
+{
+    SlideTitle,
+    ShapeText,
+    TableCellText,
+    SpeakerNotes,
+    Comment,
+    CommentReply
+}
+
 public enum PresentationAccessibilityIssueSeverity
 {
     Info,
@@ -216,6 +226,41 @@ public sealed record PresentationProofingRequestPlan(
     int ReadOnlyCommentCount,
     string Message);
 
+public sealed record PresentationProofingScopeDescriptor(
+    PresentationProofingScopeKind Kind,
+    int SlideIndex,
+    uint? ShapeId,
+    int? TableRowIndex,
+    int? TableColumnIndex,
+    int? CommentIndex,
+    int? ReplyIndex,
+    string SourceName,
+    string Text,
+    string Snippet);
+
+public sealed record PresentationProofingIssueMatch(
+    int Start,
+    int Length,
+    string Text,
+    string Message);
+
+public sealed record PresentationProofingIssueDescriptor(
+    PresentationProofingScopeDescriptor Scope,
+    int Start,
+    int Length,
+    string Text,
+    string Message);
+
+public sealed record PresentationProofingExecutionPlan(
+    bool CanRun,
+    PresentationWorkflowCapabilityStatus Status,
+    int ScopeCount,
+    int IssueCount,
+    IReadOnlyList<PresentationProofingScopeDescriptor> Scopes,
+    IReadOnlyList<PresentationProofingIssueDescriptor> Issues,
+    IReadOnlyList<PresentationReviewWorkflowActionPlan> Actions,
+    string Message);
+
 public static class PresentationReviewWorkflowPlanner
 {
     public const string CommentsPaneCommandId = "freep.review.comments.pane";
@@ -268,6 +313,10 @@ public static class PresentationReviewWorkflowPlanner
         "Selected shape is already latest in the reading order.";
     public const string ProofingRequiresHostMessage =
         "Proofing needs a host spelling engine; this shared plan owns the searchable FreeP scopes.";
+    public const string ProofingReadyMessage =
+        "Proofing shared scan prepared searchable FreeP text scopes for a host spelling engine.";
+    public const string ProofingNoTextMessage =
+        "No slide text, notes, or comments are available for proofing.";
     public const string MissingSlideTitleActionSummary =
         "Add a concise slide title so screen-reader users can navigate the deck.";
     public const string MissingAltTextActionSummary =
@@ -933,29 +982,63 @@ public static class PresentationReviewWorkflowPlanner
     {
         ArgumentNullException.ThrowIfNull(presentation);
 
-        int textShapes = 0;
-        int notesSlides = 0;
-        int comments = 0;
-
-        foreach (var slide in presentation.Slides)
-        {
-            comments += slide.Comments.Count;
-            if (slide.Notes is not null && !string.IsNullOrWhiteSpace(TextBodyToPlainText(slide.Notes)))
-            {
-                notesSlides++;
-            }
-
-            textShapes += EnumerateShapes(slide.Shapes)
-                .Count(shape => shape.TextBody is not null && !string.IsNullOrWhiteSpace(shape.PlainText));
-        }
+        var executionPlan = BuildProofingExecutionPlan(presentation);
+        var textShapes = executionPlan.Scopes.Count(scope =>
+            scope.Kind is PresentationProofingScopeKind.SlideTitle
+                or PresentationProofingScopeKind.ShapeText
+                or PresentationProofingScopeKind.TableCellText);
+        var notesSlides = executionPlan.Scopes
+            .Where(scope => scope.Kind == PresentationProofingScopeKind.SpeakerNotes)
+            .Select(scope => scope.SlideIndex)
+            .Distinct()
+            .Count();
+        var comments = executionPlan.Scopes.Count(scope =>
+            scope.Kind is PresentationProofingScopeKind.Comment
+                or PresentationProofingScopeKind.CommentReply);
 
         return new PresentationProofingRequestPlan(
-            textShapes > 0 || notesSlides > 0,
-            PresentationWorkflowCapabilityStatus.RequiresHost,
+            executionPlan.CanRun,
+            executionPlan.Status,
             textShapes,
             notesSlides,
             comments,
-            ProofingRequiresHostMessage);
+            executionPlan.Message);
+    }
+
+    public static PresentationProofingExecutionPlan BuildProofingExecutionPlan(
+        Presentation presentation,
+        Func<PresentationProofingScopeDescriptor, IEnumerable<PresentationProofingIssueMatch>>? scanner = null)
+    {
+        ArgumentNullException.ThrowIfNull(presentation);
+
+        var scopes = EnumerateProofingScopes(presentation).ToArray();
+        var issues = new List<PresentationProofingIssueDescriptor>();
+        if (scanner is not null)
+        {
+            foreach (var scope in scopes)
+            {
+                foreach (var match in scanner(scope))
+                {
+                    issues.Add(new PresentationProofingIssueDescriptor(
+                        scope,
+                        Math.Clamp(match.Start, 0, scope.Text.Length),
+                        Math.Clamp(match.Length, 0, Math.Max(0, scope.Text.Length - Math.Clamp(match.Start, 0, scope.Text.Length))),
+                        match.Text,
+                        match.Message));
+                }
+            }
+        }
+
+        var canRun = scopes.Length > 0;
+        return new PresentationProofingExecutionPlan(
+            canRun,
+            canRun ? PresentationWorkflowCapabilityStatus.Available : PresentationWorkflowCapabilityStatus.Deferred,
+            scopes.Length,
+            issues.Count,
+            scopes,
+            issues,
+            BuildProofingActions(canRun),
+            canRun ? ProofingReadyMessage : ProofingNoTextMessage);
     }
 
     private static IReadOnlyList<PresentationReviewWorkflowActionPlan> BuildCommentActions(
@@ -995,7 +1078,19 @@ public static class PresentationReviewWorkflowPlanner
             new(AccessibilityCommandId, "Check Accessibility", PresentationReviewWorkflowIntentKind.CheckAccessibility, true, PresentationWorkflowCapabilityStatus.RequiresHost),
             new(AltTextCommandId, "Alt Text", PresentationReviewWorkflowIntentKind.OpenAltText, true, PresentationWorkflowCapabilityStatus.Available),
             new(ReadingOrderPaneCommandId, "Reading Order", PresentationReviewWorkflowIntentKind.OpenReadingOrderPane, true, PresentationWorkflowCapabilityStatus.Available),
-            new(ProofingCommandId, "Spelling", PresentationReviewWorkflowIntentKind.RunProofing, true, PresentationWorkflowCapabilityStatus.RequiresHost, ProofingRequiresHostMessage),
+            new(ProofingCommandId, "Spelling", PresentationReviewWorkflowIntentKind.RunProofing, true, PresentationWorkflowCapabilityStatus.Available),
+        ];
+
+    private static IReadOnlyList<PresentationReviewWorkflowActionPlan> BuildProofingActions(bool canRun)
+        =>
+        [
+            new(
+                ProofingCommandId,
+                "Spelling",
+                PresentationReviewWorkflowIntentKind.RunProofing,
+                canRun,
+                canRun ? PresentationWorkflowCapabilityStatus.Available : PresentationWorkflowCapabilityStatus.Deferred,
+                canRun ? null : ProofingNoTextMessage),
         ];
 
     private static IReadOnlyList<PresentationReviewWorkflowActionPlan> BuildReadingOrderActions(
@@ -1458,6 +1553,138 @@ public static class PresentationReviewWorkflowPlanner
             foreach (var child in EnumerateShapes(shape.Children))
             {
                 yield return child;
+            }
+        }
+    }
+
+    private static IEnumerable<PresentationProofingScopeDescriptor> EnumerateProofingScopes(Presentation presentation)
+    {
+        for (int slideIndex = 0; slideIndex < presentation.Slides.Count; slideIndex++)
+        {
+            var slide = presentation.Slides[slideIndex];
+            foreach (var shape in EnumerateShapes(slide.Shapes))
+            {
+                var text = shape.TextBody is null ? null : TextBodyToPlainText(shape.TextBody);
+                if (!string.IsNullOrWhiteSpace(text))
+                {
+                    var isTitle = shape.Placeholder?.Type is PlaceholderType.Title or PlaceholderType.CenteredTitle;
+                    yield return new PresentationProofingScopeDescriptor(
+                        isTitle ? PresentationProofingScopeKind.SlideTitle : PresentationProofingScopeKind.ShapeText,
+                        slideIndex,
+                        shape.Id,
+                        null,
+                        null,
+                        null,
+                        null,
+                        isTitle ? $"Slide {slideIndex + 1} title" : DescribeShape(shape),
+                        text,
+                        BuildPreview(text));
+                }
+
+                foreach (var tableCell in EnumerateTableCellProofingScopes(slideIndex, shape))
+                {
+                    yield return tableCell;
+                }
+            }
+
+            if (slide.Notes is not null)
+            {
+                var notesText = TextBodyToPlainText(slide.Notes);
+                if (!string.IsNullOrWhiteSpace(notesText))
+                {
+                    yield return new PresentationProofingScopeDescriptor(
+                        PresentationProofingScopeKind.SpeakerNotes,
+                        slideIndex,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        $"Slide {slideIndex + 1} speaker notes",
+                        notesText,
+                        BuildPreview(notesText));
+                }
+            }
+
+            for (int commentIndex = 0; commentIndex < slide.Comments.Count; commentIndex++)
+            {
+                var comment = slide.Comments[commentIndex];
+                if (!string.IsNullOrWhiteSpace(comment.Text))
+                {
+                    yield return new PresentationProofingScopeDescriptor(
+                        PresentationProofingScopeKind.Comment,
+                        slideIndex,
+                        null,
+                        null,
+                        null,
+                        commentIndex,
+                        null,
+                        $"Slide {slideIndex + 1} comment {commentIndex + 1}",
+                        comment.Text,
+                        BuildPreview(comment.Text));
+                }
+
+                for (int replyIndex = 0; replyIndex < comment.Replies.Count; replyIndex++)
+                {
+                    var reply = comment.Replies[replyIndex];
+                    if (string.IsNullOrWhiteSpace(reply.Text))
+                    {
+                        continue;
+                    }
+
+                    yield return new PresentationProofingScopeDescriptor(
+                        PresentationProofingScopeKind.CommentReply,
+                        slideIndex,
+                        null,
+                        null,
+                        null,
+                        commentIndex,
+                        replyIndex,
+                        $"Slide {slideIndex + 1} comment {commentIndex + 1} reply {replyIndex + 1}",
+                        reply.Text,
+                        BuildPreview(reply.Text));
+                }
+            }
+        }
+    }
+
+    private static IEnumerable<PresentationProofingScopeDescriptor> EnumerateTableCellProofingScopes(
+        int slideIndex,
+        SlideShape shape)
+    {
+        if (shape.Table is null)
+        {
+            yield break;
+        }
+
+        for (int rowIndex = 0; rowIndex < shape.Table.Rows.Count; rowIndex++)
+        {
+            var row = shape.Table.Rows[rowIndex];
+            for (int columnIndex = 0; columnIndex < row.Cells.Count; columnIndex++)
+            {
+                var cell = row.Cells[columnIndex];
+                if (cell.TextBody is null)
+                {
+                    continue;
+                }
+
+                var text = TextBodyToPlainText(cell.TextBody);
+                if (string.IsNullOrWhiteSpace(text))
+                {
+                    continue;
+                }
+
+                yield return new PresentationProofingScopeDescriptor(
+                    PresentationProofingScopeKind.TableCellText,
+                    slideIndex,
+                    shape.Id,
+                    rowIndex,
+                    columnIndex,
+                    null,
+                    null,
+                    $"{DescribeShape(shape)} cell {rowIndex + 1},{columnIndex + 1}",
+                    text,
+                    BuildPreview(text));
             }
         }
     }

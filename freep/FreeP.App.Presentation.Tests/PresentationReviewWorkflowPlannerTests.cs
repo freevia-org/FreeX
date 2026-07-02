@@ -984,11 +984,132 @@ public sealed class PresentationReviewWorkflowPlannerTests
 
         plan.Should().Be(new PresentationProofingRequestPlan(
             true,
-            PresentationWorkflowCapabilityStatus.RequiresHost,
+            PresentationWorkflowCapabilityStatus.Available,
             2,
             1,
             1,
-            PresentationReviewWorkflowPlanner.ProofingRequiresHostMessage));
+            PresentationReviewWorkflowPlanner.ProofingReadyMessage));
+    }
+
+    [Fact]
+    public void BuildProofingExecutionPlan_EnumeratesSlideTextTablesNotesCommentsAndReplies()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Title = "Intro eror";
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 4,
+            Name = "Body",
+            Text = "Body text"
+        });
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 9,
+            Name = "Results table",
+            Kind = SlideShapeKind.Table,
+            Table = new TableShape
+            {
+                Rows =
+                {
+                    new TableRow
+                    {
+                        Cells =
+                        {
+                            new TableCell { TextBody = TextBody("Table cell") }
+                        }
+                    }
+                }
+            }
+        });
+        slide.Notes = TextBody("Speaker notes");
+        slide.Comments.Add(new SlideComment
+        {
+            Text = "Comment text",
+            Replies =
+            {
+                new SlideCommentReply { Text = "Reply text" }
+            }
+        });
+
+        var plan = PresentationReviewWorkflowPlanner.BuildProofingExecutionPlan(
+            presentation,
+            scope => scope.Text.Contains("eror", StringComparison.Ordinal)
+                ? [new PresentationProofingIssueMatch(
+                    scope.Text.IndexOf("eror", StringComparison.Ordinal),
+                    4,
+                    "eror",
+                    "Possible misspelling.")]
+                : []);
+
+        plan.CanRun.Should().BeTrue();
+        plan.Status.Should().Be(PresentationWorkflowCapabilityStatus.Available);
+        plan.ScopeCount.Should().Be(6);
+        plan.Scopes.Select(scope => scope.Kind).Should().Equal(
+            PresentationProofingScopeKind.SlideTitle,
+            PresentationProofingScopeKind.ShapeText,
+            PresentationProofingScopeKind.TableCellText,
+            PresentationProofingScopeKind.SpeakerNotes,
+            PresentationProofingScopeKind.Comment,
+            PresentationProofingScopeKind.CommentReply);
+        plan.Scopes[0].Should().Match<PresentationProofingScopeDescriptor>(scope =>
+            scope.SlideIndex == 0 &&
+            scope.ShapeId == 1 &&
+            scope.Text == "Intro eror" &&
+            scope.Snippet == "Intro eror");
+        plan.Scopes[1].ShapeId.Should().Be(4);
+        plan.Scopes[2].Should().Match<PresentationProofingScopeDescriptor>(scope =>
+            scope.ShapeId == 9 &&
+            scope.TableRowIndex == 0 &&
+            scope.TableColumnIndex == 0 &&
+            scope.Text == "Table cell");
+        plan.Scopes[4].CommentIndex.Should().Be(0);
+        plan.Scopes[5].Should().Match<PresentationProofingScopeDescriptor>(scope =>
+            scope.CommentIndex == 0 &&
+            scope.ReplyIndex == 0 &&
+            scope.Text == "Reply text");
+        plan.Issues.Should().ContainSingle().Which.Should().Match<PresentationProofingIssueDescriptor>(issue =>
+            issue.Scope.Kind == PresentationProofingScopeKind.SlideTitle &&
+            issue.Start == 6 &&
+            issue.Length == 4 &&
+            issue.Text == "eror");
+        plan.Actions.Single(action => action.CommandId == PresentationReviewWorkflowPlanner.ProofingCommandId)
+            .Should().Be(new PresentationReviewWorkflowActionPlan(
+                PresentationReviewWorkflowPlanner.ProofingCommandId,
+                "Spelling",
+                PresentationReviewWorkflowIntentKind.RunProofing,
+                true,
+                PresentationWorkflowCapabilityStatus.Available,
+                null));
+    }
+
+    [Fact]
+    public void BuildProofingExecutionPlan_NoContentDisablesProofingAction()
+    {
+        var presentation = new Presentation();
+        presentation.Slides.Add(new Slide());
+
+        var plan = PresentationReviewWorkflowPlanner.BuildProofingExecutionPlan(presentation);
+        var request = PresentationReviewWorkflowPlanner.BuildProofingRequestPlan(presentation);
+
+        plan.CanRun.Should().BeFalse();
+        plan.ScopeCount.Should().Be(0);
+        plan.IssueCount.Should().Be(0);
+        plan.Status.Should().Be(PresentationWorkflowCapabilityStatus.Deferred);
+        plan.Actions.Single().Should().Be(new PresentationReviewWorkflowActionPlan(
+            PresentationReviewWorkflowPlanner.ProofingCommandId,
+            "Spelling",
+            PresentationReviewWorkflowIntentKind.RunProofing,
+            false,
+            PresentationWorkflowCapabilityStatus.Deferred,
+            PresentationReviewWorkflowPlanner.ProofingNoTextMessage));
+        request.Should().Be(new PresentationProofingRequestPlan(
+            false,
+            PresentationWorkflowCapabilityStatus.Deferred,
+            0,
+            0,
+            0,
+            PresentationReviewWorkflowPlanner.ProofingNoTextMessage));
     }
 
     private static TextBody TextBody(string text)
