@@ -223,7 +223,7 @@ try {
             platformOnly = [int]$freep.summary.platformOnly
             commandIdAliases = [int]$freep.summary.commandIdAliases
         }
-        nextSlice = "Layout command routing now has a shared host intent; move to actual picker UI, slide-pane/editing, and workflow evidence depth."
+        nextSlice = "Layout picker, table picker, slide-pane reorder, and the bottom New Slide affordance now have WPF/Avalonia evidence. Continue workflow-depth slices in notes-page preview/rendering, rich inline table/text editing, modern comments/review, and presenter recording/ink execution."
     }
 
     $dashboard = [ordered]@{

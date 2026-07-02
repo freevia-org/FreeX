@@ -159,6 +159,7 @@ public sealed class MainWindow : Window
     internal AnimationPaneTimelinePlan? LastAnimationPaneTimelinePlan { get; private set; }
     internal PresentationDesignCommandPlan? LastLayoutRequestPlan { get; private set; }
     internal PresentationHandoutLayoutPlan? LastHandoutLayoutPlan { get; private set; }
+    internal PresentationNotesPagePreviewPlan? LastNotesPagePreviewPlan { get; private set; }
     internal PresentationLayoutPickerPlan? LastLayoutPickerPlan { get; private set; }
     internal PresentationLayoutChoice? LastAppliedLayoutChoice { get; private set; }
     internal TableInsertionPickerPlan? LastTablePickerPlan { get; private set; }
@@ -2013,6 +2014,9 @@ public sealed class MainWindow : Window
         _notesRefreshing = true;
         try
         {
+            LastNotesPagePreviewPlan = PresentationNotesPagePreviewPlanner.Build(
+                _presentation,
+                Editor.CurrentSlideIndex);
             var notes = Editor.CurrentSlideNotes;
             _notesBox.Text = notes is null
                 ? string.Empty
@@ -2031,6 +2035,9 @@ public sealed class MainWindow : Window
         if (_notesRefreshing)
             return;
         Editor.SetCurrentSlideNotesText(_notesBox.Text);
+        LastNotesPagePreviewPlan = PresentationNotesPagePreviewPlanner.Build(
+            _presentation,
+            Editor.CurrentSlideIndex);
     }
 
     // ── Event handlers ─────────────────────────────────────────────────────────
@@ -2040,6 +2047,7 @@ public sealed class MainWindow : Window
         _fileWorkflow.MarkDirty();
         RefreshSlidePane();
         RefreshCanvas(); // refresh canvas so shape moves/resizes are reflected immediately
+        RefreshNotesPane();
         RefreshReviewWorkflowPlans();
         UpdateStatus();
     }
