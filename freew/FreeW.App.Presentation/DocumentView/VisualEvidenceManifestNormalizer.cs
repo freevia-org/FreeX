@@ -84,7 +84,8 @@ public static class FreeWVisualEvidenceManifestNormalizer
     ];
     public static IReadOnlyList<string> DrawingObjectRendererScenarioIds { get; } =
     [
-        "drawing-objects-complex"
+        "drawing-objects-complex",
+        "wordart-watermark-stress"
     ];
     public static IReadOnlyList<string> ChartSmartArtRendererScenarioIds { get; } =
     [
