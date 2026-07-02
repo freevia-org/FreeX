@@ -95,6 +95,24 @@ public readonly record struct ChartSecondaryValueAxisPrimitivePlan(
     ChartStrokePlan TickStroke,
     ChartAxisTitlePlan? Title);
 
+public readonly record struct ChartDataTableCellPlan(
+    int RowIndex,
+    int ColumnIndex,
+    string Text,
+    ChartPlanRect Bounds,
+    bool IsHeader,
+    ChartPlanTextAlignment Alignment,
+    ChartPlanRect? LegendKeyBounds,
+    ChartFillPlan? LegendKeyFill);
+
+public readonly record struct ChartDataTablePrimitivePlan(
+    ChartPlanRect Bounds,
+    IReadOnlyList<ChartDataTableCellPlan> Cells,
+    IReadOnlyList<ChartGridLinePlan> HorizontalBorders,
+    IReadOnlyList<ChartGridLinePlan> VerticalBorders,
+    IReadOnlyList<ChartGridLinePlan> OutlineBorders,
+    ChartStrokePlan BorderStroke);
+
 public readonly record struct ChartTextPlan(
     string Text,
     ChartPlanRect Bounds,
@@ -234,6 +252,13 @@ public static partial class ChartRenderPlanner
     public const double GridlinePad = 2.0;
     public const double AxisMajorTickLength = 4.0;
     public const double SecondaryAxisTitleGap = 2.0;
+    public const double DataTableGap = 4.0;
+    public const double DataTableHeaderHeight = 13.0;
+    public const double DataTableRowHeight = 13.0;
+    public const double DataTableSeriesHeaderWidth = 72.0;
+    public const double DataTableFontSize = 6.5;
+    public const double DataTableLegendKeySize = 6.0;
+    public const double DataTableTextInset = 2.0;
     public const byte AreaFillAlpha = 200;
     public const byte RectSeriesFillAlpha = 255;
     public const double LineSeriesStrokeThickness = 1.5;
@@ -314,6 +339,10 @@ public static partial class ChartRenderPlanner
         double secondaryAxisAreaWidth = hasSecondaryValueAxis
             ? AxisLabelWidth + (hasSecondaryValueAxisTitle ? SecondaryAxisTitleGap + AxisTitleBand : 0)
             : 0;
+        bool hasDataTable = HasSupportedDataTable(chart, family);
+        double categoryBandHeight = hasDataTable
+            ? ComputeDataTableReservedHeight(chart)
+            : CategoryLabelHeight;
         double plotLeft = bounds.X + Margin
             + (reservesAxes ? (isBar ? BarCategoryLabelWidth : AxisLabelWidth) : 0)
             + (hasValueAxisTitle && !isBar ? AxisTitleBand : 0)
@@ -321,7 +350,7 @@ public static partial class ChartRenderPlanner
         double plotTop = bounds.Y + Margin + titleAreaHeight;
         double plotRight = bounds.X + bounds.Width - Margin - legendAreaWidth - secondaryAxisAreaWidth;
         double plotBottom = bounds.Y + bounds.Height - Margin - legendAreaHeight
-            - (reservesAxes ? (isBar ? AxisLabelWidth : CategoryLabelHeight) : 0)
+            - (reservesAxes ? (isBar ? AxisLabelWidth : categoryBandHeight) : 0)
             - (hasValueAxisTitle && isBar ? AxisTitleBand : 0)
             - (hasCategoryAxisTitle && !isBar ? AxisTitleBand : 0);
 
@@ -498,6 +527,8 @@ public static partial class ChartRenderPlanner
         ChartFramePlan frame)
     {
         if (!frame.HasPlot || frame.IsPie || frame.IsRadar || frame.IsScatterLike || chart.Categories.Count == 0)
+            return Array.Empty<ChartTextPlan>();
+        if (ShouldPlanDataTable(chart, frame))
             return Array.Empty<ChartTextPlan>();
 
         var labels = new List<ChartTextPlan>(chart.Categories.Count);
@@ -712,12 +743,15 @@ public static partial class ChartRenderPlanner
             }
             else
             {
+                double categoryTitleOffset = ShouldPlanDataTable(chart, frame)
+                    ? ComputeDataTableReservedHeight(chart) + 2
+                    : CategoryLabelHeight + 2;
                 plans.Add(new ChartAxisTitlePlan(
                     new ChartTextPlan(
                         chart.CategoryAxis.Title!,
                         new ChartPlanRect(
                             plot.X,
-                            plot.Bottom + CategoryLabelHeight + 2,
+                            plot.Bottom + categoryTitleOffset,
                             plot.Width,
                             AxisTitleBand),
                         IsBold: false,
@@ -728,6 +762,117 @@ public static partial class ChartRenderPlanner
         }
 
         return plans;
+    }
+
+    public static ChartDataTablePrimitivePlan BuildDataTablePrimitivePlan(
+        ChartShape chart,
+        ChartFramePlan frame,
+        IReadOnlyList<SrgbColor>? seriesColors = null)
+    {
+        if (!ShouldPlanDataTable(chart, frame))
+            return EmptyDataTablePrimitivePlan();
+
+        var settings = chart.DataTable!;
+        int categoryCount = chart.Categories.Count;
+        int rowCount = chart.Series.Count + 1;
+        int columnCount = categoryCount + 1;
+        var plot = frame.Plot;
+        double boundsY = plot.Bottom + DataTableGap;
+        double boundsHeight = ComputeDataTableHeight(chart);
+        var bounds = new ChartPlanRect(plot.X, boundsY, plot.Width, boundsHeight);
+        double firstColumnWidth = Math.Min(DataTableSeriesHeaderWidth, plot.Width * 0.4);
+        double categoryWidth = Math.Max(1, (plot.Width - firstColumnWidth) / categoryCount);
+
+        var cells = new List<ChartDataTableCellPlan>(rowCount * columnCount);
+        for (int columnIndex = 0; columnIndex < columnCount; columnIndex++)
+        {
+            double x = columnIndex == 0
+                ? bounds.X
+                : bounds.X + firstColumnWidth + (columnIndex - 1) * categoryWidth;
+            double width = columnIndex == 0 ? firstColumnWidth : categoryWidth;
+            string text = columnIndex == 0 ? string.Empty : chart.Categories[columnIndex - 1];
+            var cellBounds = new ChartPlanRect(x, bounds.Y, width, DataTableHeaderHeight);
+            cells.Add(new ChartDataTableCellPlan(
+                RowIndex: 0,
+                ColumnIndex: columnIndex,
+                Text: text,
+                Bounds: InsetDataTableCellText(cellBounds),
+                IsHeader: true,
+                Alignment: columnIndex == 0 ? ChartPlanTextAlignment.Left : ChartPlanTextAlignment.Center,
+                LegendKeyBounds: null,
+                LegendKeyFill: null));
+        }
+
+        for (int seriesIndex = 0; seriesIndex < chart.Series.Count; seriesIndex++)
+        {
+            var series = chart.Series[seriesIndex];
+            double rowY = bounds.Y + DataTableHeaderHeight + seriesIndex * DataTableRowHeight;
+            var keyFill = settings.ShowLegendKeys
+                ? ResolveSeriesFill(seriesIndex, seriesColors)
+                : (ChartFillPlan?)null;
+            var seriesCellBounds = new ChartPlanRect(bounds.X, rowY, firstColumnWidth, DataTableRowHeight);
+            ChartPlanRect? keyBounds = keyFill.HasValue
+                ? new ChartPlanRect(
+                    seriesCellBounds.X + DataTableTextInset,
+                    seriesCellBounds.Y + (seriesCellBounds.Height - DataTableLegendKeySize) / 2.0,
+                    DataTableLegendKeySize,
+                    DataTableLegendKeySize)
+                : null;
+            cells.Add(new ChartDataTableCellPlan(
+                RowIndex: seriesIndex + 1,
+                ColumnIndex: 0,
+                Text: series.Name,
+                Bounds: keyBounds.HasValue
+                    ? new ChartPlanRect(
+                        keyBounds.Value.Right + DataTableTextInset,
+                        seriesCellBounds.Y,
+                        Math.Max(0, seriesCellBounds.Right - keyBounds.Value.Right - 2 * DataTableTextInset),
+                        seriesCellBounds.Height)
+                    : InsetDataTableCellText(seriesCellBounds),
+                IsHeader: false,
+                Alignment: ChartPlanTextAlignment.Left,
+                LegendKeyBounds: keyBounds,
+                LegendKeyFill: keyFill));
+
+            for (int categoryIndex = 0; categoryIndex < categoryCount; categoryIndex++)
+            {
+                string text = categoryIndex < series.Values.Count && series.Values[categoryIndex].HasValue
+                    ? FormatAxisValue(series.Values[categoryIndex]!.Value)
+                    : string.Empty;
+                var cellBounds = new ChartPlanRect(
+                    bounds.X + firstColumnWidth + categoryIndex * categoryWidth,
+                    rowY,
+                    categoryWidth,
+                    DataTableRowHeight);
+                cells.Add(new ChartDataTableCellPlan(
+                    RowIndex: seriesIndex + 1,
+                    ColumnIndex: categoryIndex + 1,
+                    Text: text,
+                    Bounds: InsetDataTableCellText(cellBounds),
+                    IsHeader: false,
+                    Alignment: ChartPlanTextAlignment.Center,
+                    LegendKeyBounds: null,
+                    LegendKeyFill: null));
+            }
+        }
+
+        var horizontalBorders = settings.ShowHorizontalBorder
+            ? BuildDataTableHorizontalBorders(bounds, rowCount)
+            : Array.Empty<ChartGridLinePlan>();
+        var verticalBorders = settings.ShowVerticalBorder
+            ? BuildDataTableVerticalBorders(bounds, firstColumnWidth, categoryWidth, categoryCount)
+            : Array.Empty<ChartGridLinePlan>();
+        var outlineBorders = settings.ShowOutlineBorder
+            ? BuildOutlineBorders(bounds)
+            : Array.Empty<ChartGridLinePlan>();
+
+        return new ChartDataTablePrimitivePlan(
+            bounds,
+            cells,
+            horizontalBorders,
+            verticalBorders,
+            outlineBorders,
+            DefaultDataTableBorderStroke());
     }
 
     public static IReadOnlyList<ChartTextPlan> BuildSecondaryValueAxisLabelPlans(
@@ -1879,11 +2024,100 @@ public static partial class ChartRenderPlanner
             DefaultAxisTickStroke(),
             Title: null);
 
+    private static ChartDataTablePrimitivePlan EmptyDataTablePrimitivePlan() =>
+        new(
+            new ChartPlanRect(0, 0, 0, 0),
+            Array.Empty<ChartDataTableCellPlan>(),
+            Array.Empty<ChartGridLinePlan>(),
+            Array.Empty<ChartGridLinePlan>(),
+            Array.Empty<ChartGridLinePlan>(),
+            DefaultDataTableBorderStroke());
+
+    private static bool HasSupportedDataTable(
+        ChartShape chart,
+        ChartRenderFamily family) =>
+        chart.DataTable is not null &&
+        chart.Categories.Count > 0 &&
+        chart.Series.Count > 0 &&
+        family == ChartRenderFamily.Cartesian;
+
+    private static bool ShouldPlanDataTable(
+        ChartShape chart,
+        ChartFramePlan frame) =>
+        frame.HasPlot && HasSupportedDataTable(chart, frame.Family);
+
+    private static double ComputeDataTableHeight(ChartShape chart) =>
+        DataTableHeaderHeight + Math.Max(1, chart.Series.Count) * DataTableRowHeight;
+
+    private static double ComputeDataTableReservedHeight(ChartShape chart) =>
+        DataTableGap + ComputeDataTableHeight(chart);
+
+    private static ChartPlanRect InsetDataTableCellText(ChartPlanRect bounds) =>
+        new(
+            bounds.X + DataTableTextInset,
+            bounds.Y,
+            Math.Max(0, bounds.Width - 2 * DataTableTextInset),
+            bounds.Height);
+
+    private static IReadOnlyList<ChartGridLinePlan> BuildDataTableHorizontalBorders(
+        ChartPlanRect bounds,
+        int rowCount)
+    {
+        var borders = new List<ChartGridLinePlan>(rowCount + 1);
+        for (int rowIndex = 0; rowIndex <= rowCount; rowIndex++)
+        {
+            double y = rowIndex == 0
+                ? bounds.Y
+                : bounds.Y + DataTableHeaderHeight + (rowIndex - 1) * DataTableRowHeight;
+            borders.Add(new ChartGridLinePlan(
+                new ChartPlanPoint(bounds.X, y),
+                new ChartPlanPoint(bounds.Right, y)));
+        }
+
+        return borders;
+    }
+
+    private static IReadOnlyList<ChartGridLinePlan> BuildDataTableVerticalBorders(
+        ChartPlanRect bounds,
+        double firstColumnWidth,
+        double categoryWidth,
+        int categoryCount)
+    {
+        var borders = new List<ChartGridLinePlan>(categoryCount + 2);
+        borders.Add(new ChartGridLinePlan(
+            new ChartPlanPoint(bounds.X, bounds.Y),
+            new ChartPlanPoint(bounds.X, bounds.Bottom)));
+        borders.Add(new ChartGridLinePlan(
+            new ChartPlanPoint(bounds.X + firstColumnWidth, bounds.Y),
+            new ChartPlanPoint(bounds.X + firstColumnWidth, bounds.Bottom)));
+
+        for (int categoryIndex = 1; categoryIndex <= categoryCount; categoryIndex++)
+        {
+            double x = bounds.X + firstColumnWidth + categoryIndex * categoryWidth;
+            borders.Add(new ChartGridLinePlan(
+                new ChartPlanPoint(x, bounds.Y),
+                new ChartPlanPoint(x, bounds.Bottom)));
+        }
+
+        return borders;
+    }
+
+    private static IReadOnlyList<ChartGridLinePlan> BuildOutlineBorders(ChartPlanRect bounds) =>
+    [
+        new(new ChartPlanPoint(bounds.X, bounds.Y), new ChartPlanPoint(bounds.Right, bounds.Y)),
+        new(new ChartPlanPoint(bounds.Right, bounds.Y), new ChartPlanPoint(bounds.Right, bounds.Bottom)),
+        new(new ChartPlanPoint(bounds.Right, bounds.Bottom), new ChartPlanPoint(bounds.X, bounds.Bottom)),
+        new(new ChartPlanPoint(bounds.X, bounds.Bottom), new ChartPlanPoint(bounds.X, bounds.Y))
+    ];
+
     private static ChartStrokePlan DefaultGridLineStroke() =>
         new(new SrgbColor(0xD9, 0xD9, 0xD9), Alpha: 255, Thickness: 0.5);
 
     private static ChartStrokePlan DefaultAxisTickStroke() =>
         new(new SrgbColor(0x7F, 0x7F, 0x7F), Alpha: 255, Thickness: 0.75);
+
+    private static ChartStrokePlan DefaultDataTableBorderStroke() =>
+        new(new SrgbColor(0xB7, 0xB7, 0xB7), Alpha: 255, Thickness: 0.5);
 
     private static ChartStrokePlan DefaultRadarSpokeStroke() =>
         new(new SrgbColor(0xC0, 0xC0, 0xC0), Alpha: 255, Thickness: 0.5);
