@@ -24,6 +24,15 @@ public sealed partial class FormatCellsDialogXamlTests
         {
             xaml.Should().Contain($"<TabItem Header=\"{tab}\"");
         }
+
+        var orderedTabs = new[] { "_Number", "_Alignment", "_Font", "_Border", "F_ill", "_Protection" };
+        var previousIndex = -1;
+        foreach (var tab in orderedTabs)
+        {
+            var index = xaml.IndexOf($"<TabItem Header=\"{tab}\"", StringComparison.Ordinal);
+            index.Should().BeGreaterThan(previousIndex);
+            previousIndex = index;
+        }
     }
 
     [Fact]
@@ -31,7 +40,7 @@ public sealed partial class FormatCellsDialogXamlTests
     {
         var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("FormatCellsDialog.xaml");
 
-        foreach (var tab in new[] { "_Number", "_Alignment", "_Font", "F_ill", "_Border", "_Protection" })
+        foreach (var tab in new[] { "_Number", "_Alignment", "_Font", "_Border", "F_ill", "_Protection" })
             xaml.Should().Contain($"<TabItem Header=\"{tab}\"");
 
         xaml.ShouldContainLocalizedAttribute("Content", "_OK");
@@ -40,6 +49,33 @@ public sealed partial class FormatCellsDialogXamlTests
         xaml.Should().Contain("AutomationProperties.AutomationId=\"FormatCellsCancelButton\"");
         xaml.Should().Contain("IsDefault=\"True\"");
         xaml.Should().Contain("IsCancel=\"True\"");
+    }
+
+    [Fact]
+    public void FormatCellsDialog_NumberTab_UsesExcelLikePaneDensityAndSelectionChrome()
+    {
+        var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("FormatCellsDialog.xaml");
+
+        xaml.Should().Contain("x:Name=\"NumberCategoryList\" Height=\"278\"");
+        xaml.Should().Contain("FocusVisualStyle=\"{x:Null}\"");
+        xaml.Should().Contain("<Setter Property=\"FocusVisualStyle\" Value=\"{x:Null}\"/>");
+        xaml.Should().Contain("<ControlTemplate TargetType=\"{x:Type ListBoxItem}\">");
+        xaml.Should().Contain("SystemColors.HighlightBrushKey");
+        xaml.Should().Contain("SystemColors.HighlightTextBrushKey");
+        xaml.Should().Contain("x:Name=\"NumberPreview\" FontWeight=\"Bold\"");
+        xaml.Should().Contain("<StackPanel Grid.Column=\"1\" Width=\"330\" HorizontalAlignment=\"Left\">");
+        xaml.Should().Contain("Width=\"94\"");
+        xaml.Should().Contain("Height=\"36\"");
+        xaml.Should().Contain("x:Name=\"NumberGeneralDescription\"");
+    }
+
+    [Fact]
+    public void FormatCellsDialog_ActionButtons_UseCompactExcelLikeSpacing()
+    {
+        var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("FormatCellsDialog.xaml");
+
+        xaml.Should().Contain("Width=\"74\" Height=\"24\" Margin=\"5,0,0,0\" IsDefault=\"True\"");
+        xaml.Should().Contain("Width=\"74\" Height=\"24\" Margin=\"8,0,0,0\" IsCancel=\"True\"");
     }
 
     [Fact]

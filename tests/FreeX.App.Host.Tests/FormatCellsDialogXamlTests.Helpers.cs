@@ -17,9 +17,10 @@ public sealed partial class FormatCellsDialogXamlTests
 {
     private static FormatCellsDialog ShowDialogForTest(
         CellStyle current,
-        FormatCellsDialogTab initialTab = FormatCellsDialogTab.Number)
+        FormatCellsDialogTab initialTab = FormatCellsDialogTab.Number,
+        string? numberPreviewText = null)
     {
-        var dialog = new FormatCellsDialog(current, initialTab);
+        var dialog = new FormatCellsDialog(current, initialTab, numberPreviewText: numberPreviewText);
         dialog.Show();
         PumpDispatcher();
         return dialog;

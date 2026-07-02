@@ -38,6 +38,10 @@ public sealed class HomeCellsCommandSourceTests
         source.Should().Contain("ApplyStyleDiff(new StyleDiff(Locked: !style.Locked))");
         source.Should().Contain("private void FormatCellsMenuItem_Click(object sender, RoutedEventArgs e) => OpenFormatCellsDialog();");
         source.Should().Contain("private void OpenFormatCellsDialog(FormatCellsDialogTab initialTab = FormatCellsDialogTab.Number)");
+        source.Should().Contain("var selectedCell = sheet.GetCell(range.Start);");
+        source.Should().Contain("var numberPreviewText = selectedCell is null");
+        source.Should().Contain(": GetAutoFitDisplayText(sheet, selectedCell);");
+        source.Should().Contain("new FormatCellsDialog(currentStyle, initialTab, mergeCells, numberPreviewText)");
         source.Should().Contain("CellMergePlanner.IsSelectionMerged(sheet, range)");
         source.Should().Contain("dlg.ResultMergeCells == true && !TryResolveMergeContentResolution(range, out mergeContentResolution)");
         source.Should().Contain("MergeCellContentResolution mergeContentResolution = MergeCellContentResolution.KeepFirstCell");
