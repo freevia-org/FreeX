@@ -4,7 +4,7 @@
         xmlns:local="clr-namespace:FreeX.App.Host"
         Title="{local:Loc Key=FormatCells_FormatCells}" Width="620" Height="540"
         WindowStartupLocation="CenterOwner" ResizeMode="NoResize">
-    <Grid Margin="12">
+    <Grid Margin="10">
         <Grid.RowDefinitions>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
@@ -21,8 +21,40 @@
 
                     <StackPanel Grid.Column="0" Margin="0,0,12,0">
                         <Label Content="{local:Loc Key=FormatCells_Category}" Target="{Binding ElementName=NumberCategoryList}" Padding="0" Margin="0,4,0,2"/>
-                        <ListBox x:Name="NumberCategoryList" Height="330"
-                                 SelectionChanged="NumberCategoryList_SelectionChanged"/>
+                        <ListBox x:Name="NumberCategoryList" Height="278"
+                                 FocusVisualStyle="{x:Null}"
+                                 SelectionChanged="NumberCategoryList_SelectionChanged">
+                            <ListBox.ItemContainerStyle>
+                                <Style TargetType="{x:Type ListBoxItem}">
+                                    <Setter Property="Padding" Value="2,0,2,0"/>
+                                    <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+                                    <Setter Property="Background" Value="Transparent"/>
+                                    <Setter Property="Template">
+                                        <Setter.Value>
+                                            <ControlTemplate TargetType="{x:Type ListBoxItem}">
+                                                <Border x:Name="ItemChrome"
+                                                        Background="{TemplateBinding Background}"
+                                                        Padding="{TemplateBinding Padding}">
+                                                    <ContentPresenter/>
+                                                </Border>
+                                                <ControlTemplate.Triggers>
+                                                    <Trigger Property="IsSelected" Value="True">
+                                                        <Setter TargetName="ItemChrome" Property="Background" Value="{DynamicResource {x:Static SystemColors.HighlightBrushKey}}"/>
+                                                        <Setter Property="Foreground" Value="{DynamicResource {x:Static SystemColors.HighlightTextBrushKey}}"/>
+                                                    </Trigger>
+                                                </ControlTemplate.Triggers>
+                                            </ControlTemplate>
+                                        </Setter.Value>
+                                    </Setter>
+                                    <Style.Triggers>
+                                        <Trigger Property="IsSelected" Value="True">
+                                            <Setter Property="Background" Value="{DynamicResource {x:Static SystemColors.HighlightBrushKey}}"/>
+                                            <Setter Property="Foreground" Value="{DynamicResource {x:Static SystemColors.HighlightTextBrushKey}}"/>
+                                        </Trigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </ListBox.ItemContainerStyle>
+                        </ListBox>
                     </StackPanel>
 
                     <StackPanel Grid.Column="1">
@@ -30,7 +62,9 @@
                         <Border BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}"
                                 BorderThickness="1"
                                 Padding="8"
-                                Margin="0,0,0,10">
+                                Margin="0,0,0,10"
+                                Width="346"
+                                HorizontalAlignment="Left">
                             <TextBlock x:Name="NumberPreview" FontWeight="Bold" Text="1234.56"/>
                         </Border>
 
@@ -38,6 +72,8 @@
                                    Text="{local:Loc Key=FormatCells_GeneralFormatDescription}"
                                    TextWrapping="Wrap"
                                    Visibility="Collapsed"
+                                   Width="346"
+                                   HorizontalAlignment="Left"
                                    Margin="0,0,0,0"/>
 
                         <StackPanel x:Name="NumberTypePanel">
@@ -403,9 +439,9 @@
         </TabControl>
 
         <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
-            <Button Content="{local:Loc Key=Common_Ok}"     Width="70" Height="26" Margin="4,0" IsDefault="True" Click="OkButton_Click"
+            <Button Content="{local:Loc Key=Common_Ok}"     Width="74" Height="24" Margin="5,0,0,0" IsDefault="True" Click="OkButton_Click"
                     AutomationProperties.AutomationId="FormatCellsOkButton"/>
-            <Button Content="{local:Loc Key=Common_Cancel}" Width="70" Height="26" Margin="4,0" IsCancel="True"
+            <Button Content="{local:Loc Key=Common_Cancel}" Width="74" Height="24" Margin="8,0,0,0" IsCancel="True"
                     AutomationProperties.AutomationId="FormatCellsCancelButton"/>
         </StackPanel>
     </Grid>
