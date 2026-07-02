@@ -203,4 +203,10 @@ public sealed class ChartShape
 
     /// <summary>Secondary value axis (right side for column/line; top for bar). Present when a combo chart has series on a second axis.</summary>
     public ChartAxis? SecondaryValueAxis { get; set; }
+
+    /// <summary>
+    /// True when modeled chart data changed after package load and the writer should emit
+    /// fresh cached data/workbook sidecar instead of preserving the source chart workbook.
+    /// </summary>
+    public bool RegenerateWorkbookOnSave { get; set; }
 }

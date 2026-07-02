@@ -117,6 +117,7 @@ public static class SlideCloner
             Legend       = src.Legend,
             CategoryAxis = CloneChartAxis(src.CategoryAxis),
             ValueAxis    = CloneChartAxis(src.ValueAxis),
+            RegenerateWorkbookOnSave = src.RegenerateWorkbookOnSave,
         };
 
         foreach (var c in src.Categories)

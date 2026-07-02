@@ -66,6 +66,18 @@ public sealed class ChartDataCommandTests
     }
 
     [Fact]
+    public void SetChartCellValue_Apply_MarksChartWorkbookForRegeneration()
+    {
+        var (p, bus, id) = MakeChartPresentation();
+        var chart = p.Slides[0].Shapes[0].Chart!;
+
+        chart.RegenerateWorkbookOnSave.Should().BeFalse();
+        bus.Execute(new SetChartCellValueCommand(0, id, seriesIndex: 0, categoryIndex: 1, value: 999.0));
+
+        chart.RegenerateWorkbookOnSave.Should().BeTrue();
+    }
+
+    [Fact]
     public void SetChartCellValue_Revert_RestoresOldValue()
     {
         var (p, bus, id) = MakeChartPresentation();
@@ -282,6 +294,25 @@ public sealed class ChartDataCommandTests
         chart.Series.Should().HaveCount(2);
         chart.Series[0].Name.Should().Be("Sales");
         chart.Series[0].Values[0].Should().Be(100.0);
+    }
+
+    [Fact]
+    public void ReplaceChartData_Revert_RestoresPreviousWorkbookRegenerationFlag()
+    {
+        var (p, bus, id) = MakeChartPresentation();
+        var chart = p.Slides[0].Shapes[0].Chart!;
+
+        chart.RegenerateWorkbookOnSave.Should().BeFalse();
+        bus.Execute(new ReplaceChartDataCommand(
+            0, id,
+            new[] { "X" },
+            new[] { "S" },
+            new[] { new[] { 1.0 } }.Select(v => (IEnumerable<double>)v)));
+        chart.RegenerateWorkbookOnSave.Should().BeTrue();
+
+        bus.Undo();
+
+        chart.RegenerateWorkbookOnSave.Should().BeFalse();
     }
 
     // ════════════════════════════════════════════════════════════════════════════════

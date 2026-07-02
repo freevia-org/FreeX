@@ -24,6 +24,10 @@ internal static class PptxChartWriter
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart";
     internal const string ChartCT =
         "application/vnd.openxmlformats-officedocument.drawingml.chart+xml";
+    internal const string ChartWorkbookCT =
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+    private const string PackageRelType =
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/package";
 
     // ── OOXML write settings (UTF-8 no BOM, indented) ────────────────────────
     private static readonly System.Xml.XmlWriterSettings XmlSettings = new()
@@ -49,12 +53,25 @@ internal static class PptxChartWriter
 
         // Write chart XML
         var chartDoc = BuildChartDoc(chart);
+        if (chart.RegenerateWorkbookOnSave)
+        {
+            const string workbookRelId = "rIdWorkbook1";
+            AddExternalData(chartDoc, workbookRelId);
+            WriteEntry(archive, chartPath, chartDoc);
+            WriteRegeneratedWorkbook(archive, chart, GetRegeneratedWorkbookPath(chartIndex));
+            WriteRegeneratedWorkbookRelationship(archive, chartPath, workbookRelId, chartIndex);
+            return chartPath;
+        }
+
         MergePreservedExternalData(chartDoc, packageSnapshot, chartPath);
         WriteEntry(archive, chartPath, chartDoc);
         WritePreservedWorkbookRelationships(archive, packageSnapshot, chartPath);
 
         return chartPath;
     }
+
+    internal static string GetRegeneratedWorkbookPath(int chartIndex) =>
+        $"ppt/embeddings/chartWorkbook{chartIndex}.xlsx";
 
     // ── chart.xml ────────────────────────────────────────────────────────────
 
@@ -633,6 +650,228 @@ internal static class PptxChartWriter
         using var stream = entry.Open();
         using var writer = System.Xml.XmlWriter.Create(stream, XmlSettings);
         doc.Save(writer);
+    }
+
+    private static void WriteBytes(ZipArchive archive, string path, byte[] bytes)
+    {
+        var entry = archive.CreateEntry(path, CompressionLevel.Optimal);
+        using var stream = entry.Open();
+        stream.Write(bytes, 0, bytes.Length);
+    }
+
+    private static void AddExternalData(XDocument chartDoc, string workbookRelId)
+    {
+        if (chartDoc.Root is null)
+            return;
+
+        chartDoc.Root.Element(C + "externalData")?.Remove();
+        chartDoc.Root.Add(new XElement(C + "externalData",
+            new XAttribute(R + "id", workbookRelId),
+            new XElement(C + "autoUpdate", new XAttribute("val", "0"))));
+    }
+
+    private static void WriteRegeneratedWorkbook(
+        ZipArchive archive,
+        ChartShape chart,
+        string workbookPath)
+    {
+        using var workbookStream = new MemoryStream();
+        using (var workbookArchive = new ZipArchive(workbookStream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            WriteEntry(workbookArchive, "[Content_Types].xml", BuildWorkbookContentTypes());
+            WriteEntry(workbookArchive, "_rels/.rels", BuildWorkbookRootRels());
+            WriteEntry(workbookArchive, "xl/workbook.xml", BuildWorkbookXml());
+            WriteEntry(workbookArchive, "xl/_rels/workbook.xml.rels", BuildWorkbookRels());
+            WriteEntry(workbookArchive, "xl/styles.xml", BuildWorkbookStylesXml());
+            WriteEntry(workbookArchive, "xl/worksheets/sheet1.xml", BuildWorksheetXml(chart));
+        }
+
+        WriteBytes(archive, workbookPath, workbookStream.ToArray());
+    }
+
+    private static void WriteRegeneratedWorkbookRelationship(
+        ZipArchive archive,
+        string chartPath,
+        string workbookRelId,
+        int chartIndex)
+    {
+        var workbookPath = GetRegeneratedWorkbookPath(chartIndex);
+        var relationship = OpcRelationships.CreateRelationship(
+            workbookRelId,
+            PackageRelType,
+            $"../embeddings/{workbookPath.Split('/').Last()}",
+            false);
+
+        WriteEntry(
+            archive,
+            OpcPathHelper.GetRelationshipPartPath(chartPath),
+            OpcRelationships.CreateDocument(new[] { relationship }));
+    }
+
+    private static XDocument BuildWorkbookContentTypes()
+    {
+        var ct = OpcMediaTypes.ContentTypesNamespace;
+        return new XDocument(
+            new XDeclaration("1.0", "UTF-8", "yes"),
+            new XElement(ct + "Types",
+                new XElement(ct + "Default",
+                    new XAttribute("Extension", "rels"),
+                    new XAttribute("ContentType", OpcMediaTypes.RelationshipsContentType)),
+                new XElement(ct + "Default",
+                    new XAttribute("Extension", "xml"),
+                    new XAttribute("ContentType", "application/xml")),
+                new XElement(ct + "Override",
+                    new XAttribute("PartName", "/xl/workbook.xml"),
+                    new XAttribute("ContentType", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml")),
+                new XElement(ct + "Override",
+                    new XAttribute("PartName", "/xl/worksheets/sheet1.xml"),
+                    new XAttribute("ContentType", "application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml")),
+                new XElement(ct + "Override",
+                    new XAttribute("PartName", "/xl/styles.xml"),
+                    new XAttribute("ContentType", "application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"))));
+    }
+
+    private static XDocument BuildWorkbookRootRels()
+    {
+        XNamespace rels = "http://schemas.openxmlformats.org/package/2006/relationships";
+        return new XDocument(
+            new XDeclaration("1.0", "UTF-8", "yes"),
+            new XElement(rels + "Relationships",
+                new XElement(rels + "Relationship",
+                    new XAttribute("Id", "rId1"),
+                    new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument"),
+                    new XAttribute("Target", "xl/workbook.xml"))));
+    }
+
+    private static XDocument BuildWorkbookXml()
+    {
+        XNamespace ss = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace rel = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        return new XDocument(
+            new XDeclaration("1.0", "UTF-8", "yes"),
+            new XElement(ss + "workbook",
+                new XAttribute(XNamespace.Xmlns + "r", rel.NamespaceName),
+                new XElement(ss + "sheets",
+                    new XElement(ss + "sheet",
+                        new XAttribute("name", "ChartData"),
+                        new XAttribute("sheetId", "1"),
+                        new XAttribute(rel + "id", "rId1")))));
+    }
+
+    private static XDocument BuildWorkbookRels()
+    {
+        XNamespace rels = "http://schemas.openxmlformats.org/package/2006/relationships";
+        return new XDocument(
+            new XDeclaration("1.0", "UTF-8", "yes"),
+            new XElement(rels + "Relationships",
+                new XElement(rels + "Relationship",
+                    new XAttribute("Id", "rId1"),
+                    new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet"),
+                    new XAttribute("Target", "worksheets/sheet1.xml")),
+                new XElement(rels + "Relationship",
+                    new XAttribute("Id", "rId2"),
+                    new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles"),
+                    new XAttribute("Target", "styles.xml"))));
+    }
+
+    private static XDocument BuildWorkbookStylesXml()
+    {
+        XNamespace ss = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        return new XDocument(
+            new XDeclaration("1.0", "UTF-8", "yes"),
+            new XElement(ss + "styleSheet",
+                new XElement(ss + "fonts",
+                    new XAttribute("count", "1"),
+                    new XElement(ss + "font")),
+                new XElement(ss + "fills",
+                    new XAttribute("count", "1"),
+                    new XElement(ss + "fill")),
+                new XElement(ss + "borders",
+                    new XAttribute("count", "1"),
+                    new XElement(ss + "border")),
+                new XElement(ss + "cellStyleXfs",
+                    new XAttribute("count", "1"),
+                    new XElement(ss + "xf",
+                        new XAttribute("numFmtId", "0"),
+                        new XAttribute("fontId", "0"),
+                        new XAttribute("fillId", "0"),
+                        new XAttribute("borderId", "0"))),
+                new XElement(ss + "cellXfs",
+                    new XAttribute("count", "1"),
+                    new XElement(ss + "xf",
+                        new XAttribute("numFmtId", "0"),
+                        new XAttribute("fontId", "0"),
+                        new XAttribute("fillId", "0"),
+                        new XAttribute("borderId", "0"),
+                        new XAttribute("xfId", "0")))));
+    }
+
+    private static XDocument BuildWorksheetXml(ChartShape chart)
+    {
+        XNamespace ss = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var rows = new List<XElement>();
+
+        var headerCells = new List<XElement>();
+        for (var seriesIndex = 0; seriesIndex < chart.Series.Count; seriesIndex++)
+            headerCells.Add(InlineStringCell(ss, seriesIndex + 2, 1, chart.Series[seriesIndex].Name));
+        rows.Add(new XElement(ss + "row", new XAttribute("r", "1"), headerCells));
+
+        var pointCount = Math.Max(
+            chart.Categories.Count,
+            chart.Series.Count == 0 ? 0 : chart.Series.Max(series => series.Values.Count));
+        for (var pointIndex = 0; pointIndex < pointCount; pointIndex++)
+        {
+            var cells = new List<XElement>();
+            var category = pointIndex < chart.Categories.Count
+                ? chart.Categories[pointIndex]
+                : string.Empty;
+            cells.Add(InlineStringCell(ss, 1, pointIndex + 2, category));
+
+            for (var seriesIndex = 0; seriesIndex < chart.Series.Count; seriesIndex++)
+            {
+                var values = chart.Series[seriesIndex].Values;
+                if (pointIndex < values.Count && values[pointIndex].HasValue)
+                    cells.Add(NumberCell(ss, seriesIndex + 2, pointIndex + 2, values[pointIndex]!.Value));
+            }
+
+            rows.Add(new XElement(ss + "row",
+                new XAttribute("r", (pointIndex + 2).ToString(CultureInfo.InvariantCulture)),
+                cells));
+        }
+
+        return new XDocument(
+            new XDeclaration("1.0", "UTF-8", "yes"),
+            new XElement(ss + "worksheet",
+                new XElement(ss + "sheetData", rows)));
+    }
+
+    private static XElement InlineStringCell(XNamespace ss, int column, int row, string value) =>
+        new XElement(ss + "c",
+            new XAttribute("r", CellReference(column, row)),
+            new XAttribute("t", "inlineStr"),
+            new XElement(ss + "is",
+                new XElement(ss + "t", value)));
+
+    private static XElement NumberCell(XNamespace ss, int column, int row, double value) =>
+        new XElement(ss + "c",
+            new XAttribute("r", CellReference(column, row)),
+            new XElement(ss + "v", value.ToString("G", CultureInfo.InvariantCulture)));
+
+    private static string CellReference(int column, int row) =>
+        ColumnName(column) + row.ToString(CultureInfo.InvariantCulture);
+
+    private static string ColumnName(int oneBasedColumn)
+    {
+        var column = oneBasedColumn;
+        var name = string.Empty;
+        while (column > 0)
+        {
+            column--;
+            name = (char)('A' + column % 26) + name;
+            column /= 26;
+        }
+
+        return name;
     }
 
     private static void MergePreservedExternalData(
