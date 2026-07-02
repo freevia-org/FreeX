@@ -113,6 +113,12 @@ public sealed class MainWindow : Window
     private Button _altTextApplyButton = null!;
     private Button _altTextCloseButton = null!;
     private bool _altTextPaneRefreshing;
+    private Border _readingOrderPaneHost = null!;
+    private TextBlock _readingOrderPaneHeading = null!;
+    private TextBlock _readingOrderPaneMessage = null!;
+    private StackPanel _readingOrderPaneItemsPanel = null!;
+    private Button _readingOrderMoveEarlierButton = null!;
+    private Button _readingOrderMoveLaterButton = null!;
 
     // ── Interaction layer (Theme 15) ────────────────────────────────────────────
 
@@ -186,6 +192,18 @@ public sealed class MainWindow : Window
     internal string AltTextPaneDescriptionPlaceholder => _altTextDescriptionBox?.PlaceholderText ?? string.Empty;
     internal bool IsAltTextPaneDecorativeChecked => _altTextDecorativeCheck?.IsChecked == true;
     internal string AltTextPaneMessage => _altTextPaneMessage?.Text ?? string.Empty;
+    internal bool IsReadingOrderPaneVisible => _readingOrderPaneHost?.IsVisible == true;
+    internal int ReadingOrderPaneItemCount => LastReadingOrderPlan?.Items.Count ?? 0;
+    internal string ReadingOrderPaneHeading => _readingOrderPaneHeading?.Text ?? string.Empty;
+    internal string ReadingOrderPaneMessage => _readingOrderPaneMessage?.Text ?? string.Empty;
+    internal bool IsReadingOrderMoveEarlierEnabled => _readingOrderMoveEarlierButton?.IsEnabled == true;
+    internal bool IsReadingOrderMoveLaterEnabled => _readingOrderMoveLaterButton?.IsEnabled == true;
+    internal string? ReadingOrderMoveEarlierDisabledReason =>
+        LastReadingOrderPlan?.Actions.SingleOrDefault(action =>
+            action.CommandId == PresentationReviewWorkflowPlanner.ReadingOrderMoveEarlierCommandId)?.DisabledReason;
+    internal string? ReadingOrderMoveLaterDisabledReason =>
+        LastReadingOrderPlan?.Actions.SingleOrDefault(action =>
+            action.CommandId == PresentationReviewWorkflowPlanner.ReadingOrderMoveLaterCommandId)?.DisabledReason;
 
     // ── Constructors ───────────────────────────────────────────────────────────
 
@@ -426,6 +444,7 @@ public sealed class MainWindow : Window
             },
         };
         _altTextPaneHost = BuildAltTextPaneHost();
+        _readingOrderPaneHost = BuildReadingOrderPaneHost();
         Grid.SetRow(canvasHost, 0);
         Grid.SetRow(_layoutPickerHost, 1);
         Grid.SetRow(_tablePickerHost, 2);
@@ -461,12 +480,15 @@ public sealed class MainWindow : Window
         body.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         body.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         body.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        body.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         Grid.SetColumn(slidePaneHost, 0);
         Grid.SetColumn(rightGrid,      1);
         Grid.SetColumn(_altTextPaneHost, 2);
+        Grid.SetColumn(_readingOrderPaneHost, 3);
         body.Children.Add(slidePaneHost);
         body.Children.Add(rightGrid);
         body.Children.Add(_altTextPaneHost);
+        body.Children.Add(_readingOrderPaneHost);
 
         return body;
     }
@@ -574,6 +596,81 @@ public sealed class MainWindow : Window
             Margin = new Thickness(12, 0, 12, 4),
             Padding = new Thickness(6, 4),
         };
+
+    private Border BuildReadingOrderPaneHost()
+    {
+        _readingOrderPaneHeading = new TextBlock
+        {
+            Text = "Reading Order",
+            FontSize = 15,
+            FontWeight = FontWeight.SemiBold,
+            Margin = new Thickness(12, 12, 12, 4),
+        };
+        _readingOrderPaneMessage = new TextBlock
+        {
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)),
+            Margin = new Thickness(12, 0, 12, 8),
+        };
+        _readingOrderMoveEarlierButton = new Button
+        {
+            MinWidth = 94,
+            Padding = new Thickness(10, 4),
+            Margin = new Thickness(0, 0, 8, 0),
+        };
+        _readingOrderMoveLaterButton = new Button
+        {
+            MinWidth = 84,
+            Padding = new Thickness(10, 4),
+        };
+        _readingOrderPaneItemsPanel = new StackPanel
+        {
+            Orientation = Orientation.Vertical,
+        };
+
+        var actionPanel = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Margin = new Thickness(12, 0, 12, 8),
+            Children =
+            {
+                _readingOrderMoveEarlierButton,
+                _readingOrderMoveLaterButton,
+            }
+        };
+
+        var header = new StackPanel
+        {
+            Orientation = Orientation.Vertical,
+            Children =
+            {
+                _readingOrderPaneHeading,
+                _readingOrderPaneMessage,
+                actionPanel,
+            }
+        };
+        DockPanel.SetDock(header, Dock.Top);
+
+        var panel = new DockPanel();
+        panel.Children.Add(header);
+        panel.Children.Add(new ScrollViewer
+        {
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            Content = _readingOrderPaneItemsPanel,
+        });
+
+        return new Border
+        {
+            Width = 320,
+            IsVisible = false,
+            Background = Brushes.White,
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0xC0, 0xC0, 0xC0)),
+            BorderThickness = new Thickness(1, 0, 0, 0),
+            Child = panel,
+        };
+    }
 
     // ── Interaction wiring (Theme 15) ───────────────────────────────────────────
 
@@ -1486,7 +1583,12 @@ public sealed class MainWindow : Window
     }
 
     internal PresentationReadingOrderPlan ShowReadingOrderPane()
-        => RefreshReadingOrderPlan();
+    {
+        var plan = RefreshReadingOrderPlan();
+        RenderReadingOrderPane(plan);
+        _readingOrderPaneHost.IsVisible = true;
+        return plan;
+    }
 
     internal void SetAltTextPaneInput(string title, string description, bool isDecorative)
     {
@@ -1592,6 +1694,138 @@ public sealed class MainWindow : Window
         PresentationAltTextPanePlan plan,
         string commandId)
         => plan.Actions.Single(action => action.CommandId == commandId);
+
+    private void RenderReadingOrderPane(PresentationReadingOrderPlan plan)
+    {
+        _readingOrderPaneHeading.Text =
+            $"Reading Order - slide {plan.SlideIndex + 1} ({plan.Items.Count} shapes)";
+        _readingOrderPaneMessage.Text = plan.SelectedItem is { } selected
+            ? $"Selected: {selected.ShapeName}"
+            : plan.Items.Count == 0
+                ? PresentationReviewWorkflowPlanner.EmptyReadingOrderMessage
+                : PresentationReviewWorkflowPlanner.MissingReadingOrderSelectionMessage;
+
+        var moveEarlier = GetReadingOrderAction(
+            plan,
+            PresentationReviewWorkflowPlanner.ReadingOrderMoveEarlierCommandId);
+        var moveLater = GetReadingOrderAction(
+            plan,
+            PresentationReviewWorkflowPlanner.ReadingOrderMoveLaterCommandId);
+        ApplyReadingOrderButtonPlan(_readingOrderMoveEarlierButton, moveEarlier);
+        ApplyReadingOrderButtonPlan(_readingOrderMoveLaterButton, moveLater);
+
+        _readingOrderPaneItemsPanel.Children.Clear();
+        if (plan.Items.Count == 0)
+        {
+            _readingOrderPaneItemsPanel.Children.Add(new TextBlock
+            {
+                Text = PresentationReviewWorkflowPlanner.EmptyReadingOrderMessage,
+                Foreground = new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66)),
+                Margin = new Thickness(12, 0, 12, 10),
+                TextWrapping = TextWrapping.Wrap,
+            });
+            return;
+        }
+
+        foreach (var item in plan.Items)
+            _readingOrderPaneItemsPanel.Children.Add(BuildReadingOrderItemCard(item));
+    }
+
+    private static PresentationReviewWorkflowActionPlan GetReadingOrderAction(
+        PresentationReadingOrderPlan plan,
+        string commandId)
+        => plan.Actions.Single(action => action.CommandId == commandId);
+
+    private static void ApplyReadingOrderButtonPlan(
+        Button button,
+        PresentationReviewWorkflowActionPlan action)
+    {
+        button.Content = action.Label;
+        button.IsEnabled = action.IsEnabled;
+        button.Tag = action.CommandId;
+        ToolTip.SetTip(button, action.DisabledReason);
+    }
+
+    private static Control BuildReadingOrderItemCard(PresentationReadingOrderItemPlan item)
+    {
+        var panel = new StackPanel
+        {
+            Orientation = Orientation.Vertical,
+            Spacing = 2,
+            Children =
+            {
+                new TextBlock
+                {
+                    Text = $"{item.ReadingOrderIndex + 1}. {item.ShapeName}",
+                    FontWeight = FontWeight.SemiBold,
+                    TextWrapping = TextWrapping.Wrap,
+                },
+                new TextBlock
+                {
+                    Text = $"{item.ShapeTypeLabel} - depth {item.NestingDepth}",
+                    Foreground = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)),
+                    TextWrapping = TextWrapping.Wrap,
+                },
+                new TextBlock
+                {
+                    Text = item.AccessibilitySummary,
+                    Foreground = new SolidColorBrush(Color.FromRgb(0x44, 0x44, 0x44)),
+                    TextWrapping = TextWrapping.Wrap,
+                },
+                new TextBlock
+                {
+                    Text = BuildReadingOrderAltTextLine(item),
+                    Foreground = new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66)),
+                    TextWrapping = TextWrapping.Wrap,
+                },
+            }
+        };
+
+        if (item.IsSelected)
+        {
+            panel.Children.Insert(1, new TextBlock
+            {
+                Text = "Selected item",
+                Foreground = new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A)),
+                FontWeight = FontWeight.SemiBold,
+            });
+        }
+
+        return new Border
+        {
+            Background = item.IsSelected
+                ? new SolidColorBrush(Color.FromRgb(0xFF, 0xF6, 0xF2))
+                : new SolidColorBrush(Color.FromRgb(0xFA, 0xFA, 0xFA)),
+            BorderBrush = item.IsSelected
+                ? new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A))
+                : new SolidColorBrush(Color.FromRgb(0xE0, 0xE0, 0xE0)),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(4),
+            Padding = new Thickness(10),
+            Margin = new Thickness(12, 0, 12, 10),
+            Child = panel,
+        };
+    }
+
+    private static string BuildReadingOrderAltTextLine(PresentationReadingOrderItemPlan item)
+    {
+        if (item.IsDecorative)
+            return "Decorative object";
+
+        if (string.IsNullOrWhiteSpace(item.AlternativeTextTitle)
+            && string.IsNullOrWhiteSpace(item.AlternativeTextDescription))
+        {
+            return "Alt text: missing";
+        }
+
+        if (string.IsNullOrWhiteSpace(item.AlternativeTextDescription))
+            return $"Alt text title: {item.AlternativeTextTitle}";
+
+        if (string.IsNullOrWhiteSpace(item.AlternativeTextTitle))
+            return $"Alt text: {item.AlternativeTextDescription}";
+
+        return $"Alt text: {item.AlternativeTextTitle} - {item.AlternativeTextDescription}";
+    }
 
     private static void SetTextIfChanged(TextBox textBox, string value)
     {

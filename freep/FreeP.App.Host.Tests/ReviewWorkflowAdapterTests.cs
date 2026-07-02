@@ -193,6 +193,79 @@ public sealed class ReviewWorkflowAdapterTests
     }
 
     [StaFact]
+    public void MainWindow_ReadingOrderCommand_ShowsSharedPlanBackedPane()
+    {
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
+        try
+        {
+            var chart = new SlideShape
+            {
+                Id = 501,
+                Name = "Sales chart",
+                Kind = SlideShapeKind.Chart,
+                Chart = new ChartShape(),
+                AlternativeTextTitle = "Regional sales",
+                AlternativeText = "Quarterly sales by region.",
+            };
+            var group = new SlideShape
+            {
+                Id = 502,
+                Name = "Grouped layout",
+                Kind = SlideShapeKind.Group,
+                Children =
+                {
+                    new SlideShape
+                    {
+                        Id = 503,
+                        Name = "Decorative flourish",
+                        Kind = SlideShapeKind.Picture,
+                        Picture = new ImagePart(),
+                        IsDecorative = true,
+                    }
+                }
+            };
+            window.Editor.CurrentSlide!.Shapes.Clear();
+            window.Editor.CurrentSlide!.Shapes.Add(chart);
+            window.Editor.CurrentSlide.Shapes.Add(group);
+            window.Editor.Select(chart.Id);
+
+            var registry = FreePRibbonCommands.Build(
+                new RibbonStateStore(),
+                window.Editor,
+                onReviewReadingOrder: () => window.ShowReadingOrderPane());
+            registry.TryGet(PresentationReviewWorkflowPlanner.ReadingOrderPaneCommandId, out var command)
+                .Should().BeTrue();
+
+            command!.Execute(RibbonCommandContext.Empty);
+
+            window.IsReadingOrderPaneVisible.Should().BeTrue();
+            window.ReadingOrderPaneItemCount.Should().Be(3);
+            window.ReadingOrderPaneHeading.Should().Be("Reading Order - slide 1 (3 shapes)");
+            window.ReadingOrderPaneMessage.Should().Be("Selected: Sales chart");
+            window.LastReadingOrderPlan.Should().NotBeNull();
+            window.LastReadingOrderPlan!.SelectedItem.Should().NotBeNull();
+            window.LastReadingOrderPlan.SelectedItem!.ShapeId.Should().Be(chart.Id);
+            window.LastReadingOrderPlan.Items.Single(item => item.ShapeId == 503).Should().Match<PresentationReadingOrderItemPlan>(item =>
+                item.NestingDepth == 1 &&
+                item.IsDecorative &&
+                item.AccessibilitySummary == "Decorative");
+            window.IsReadingOrderMoveEarlierEnabled.Should().BeFalse();
+            window.IsReadingOrderMoveLaterEnabled.Should().BeFalse();
+            window.ReadingOrderMoveEarlierDisabledReason.Should()
+                .Be(PresentationReviewWorkflowPlanner.ReadingOrderReorderDeferredMessage);
+            window.ReadingOrderMoveLaterDisabledReason.Should()
+                .Be(PresentationReviewWorkflowPlanner.ReadingOrderReorderDeferredMessage);
+            window.LastReadingOrderPlan.Actions.Single(action =>
+                    action.CommandId == PresentationReviewWorkflowPlanner.ReadingOrderMoveEarlierCommandId)
+                .Status.Should().Be(PresentationWorkflowCapabilityStatus.Deferred);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [StaFact]
     public void MainWindow_LayoutPickerRequest_RecordsSharedDesignPlan()
     {
         var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);

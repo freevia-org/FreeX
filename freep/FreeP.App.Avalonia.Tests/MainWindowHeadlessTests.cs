@@ -1223,6 +1223,12 @@ public sealed class MainWindowHeadlessTests
         var commentsPaneVisible = false;
         var commentsPaneCommentCount = 0;
         var commentsPaneActionCount = 0;
+        var readingOrderPaneVisible = false;
+        var readingOrderPaneItemCount = 0;
+        var readingOrderPaneHeading = string.Empty;
+        var readingOrderPaneMessage = string.Empty;
+        var readingOrderMoveEarlierEnabled = true;
+        string? readingOrderMoveEarlierDisabledReason = null;
 
         var ran = await OnUiThread(() =>
         {
@@ -1241,6 +1247,7 @@ public sealed class MainWindowHeadlessTests
                 Kind = SlideShapeKind.Picture,
                 Picture = new ImagePart(),
             };
+            window.Editor.CurrentSlide.Shapes.Clear();
             window.Editor.CurrentSlide.Shapes.Add(shape);
             window.Editor.Select(shape.Id);
 
@@ -1265,6 +1272,12 @@ public sealed class MainWindowHeadlessTests
             altTextPlan = window.LastAltTextRequestPlan;
             altTextPanePlan = window.LastAltTextPanePlan;
             readingOrderPlan = window.LastReadingOrderPlan;
+            readingOrderPaneVisible = window.IsReadingOrderPaneVisible;
+            readingOrderPaneItemCount = window.ReadingOrderPaneItemCount;
+            readingOrderPaneHeading = window.ReadingOrderPaneHeading;
+            readingOrderPaneMessage = window.ReadingOrderPaneMessage;
+            readingOrderMoveEarlierEnabled = window.IsReadingOrderMoveEarlierEnabled;
+            readingOrderMoveEarlierDisabledReason = window.ReadingOrderMoveEarlierDisabledReason;
             proofingPlan = window.LastProofingRequestPlan;
         });
 
@@ -1305,6 +1318,13 @@ public sealed class MainWindowHeadlessTests
         readingOrderPlan.Actions.Single(action =>
                 action.CommandId == PresentationReviewWorkflowPlanner.ReadingOrderMoveEarlierCommandId)
             .DisabledReason.Should().Be(PresentationReviewWorkflowPlanner.ReadingOrderReorderDeferredMessage);
+        readingOrderPaneVisible.Should().BeTrue("the Avalonia reading order command should render a shared-plan-backed pane");
+        readingOrderPaneItemCount.Should().Be(1);
+        readingOrderPaneHeading.Should().Be("Reading Order - slide 1 (1 shapes)");
+        readingOrderPaneMessage.Should().Be("Selected: Product image");
+        readingOrderMoveEarlierEnabled.Should().BeFalse();
+        readingOrderMoveEarlierDisabledReason.Should()
+            .Be(PresentationReviewWorkflowPlanner.ReadingOrderReorderDeferredMessage);
         proofingPlan.Should().NotBeNull();
         proofingPlan!.Status.Should().Be(PresentationWorkflowCapabilityStatus.RequiresHost);
         commentsPaneVisible.Should().BeTrue("the Avalonia comments command should render a shared-plan-backed pane");
