@@ -4,9 +4,11 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Headless;
 using FreeW.App.Avalonia.Editing;
 using FreeW.App.Avalonia.Ribbon;
+using FreeW.App.Presentation.Shell;
 using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
 using Free.Shared.Ribbon;
@@ -70,7 +72,7 @@ public sealed class ViewTabDepthTests
                      "freew.zoom-multiple-pages", "freew.zoom-side-to-side",
                      "freew.zoom-dialog", "freew.gridlines", "freew.ruler", "freew.nav-pane",
                      "freew.view-gridlines", "freew.view-ruler", "freew.navigationpane",
-                     "freew.new-window", "freew.split",
+                     "freew.new-window", "freew.split", "freew.split-window",
                  })
             registry.TryGet(new RibbonCommandId(id), out _)
                 .Should().BeTrue($"AV-VIEW command '{id}' must be registered");
@@ -161,6 +163,101 @@ public sealed class ViewTabDepthTests
 
         multiplePagesState.GetState().IsChecked.Should().BeTrue();
         sideToSideState.GetState().IsChecked.Should().BeTrue();
+    }
+
+    [Fact]
+    public void View_split_toggle_is_stateful_and_has_wpf_id_alias()
+    {
+        var split = false;
+        var callbacks = NoopCallbacks() with
+        {
+            ToggleSplit = () => split = !split,
+            IsSplitActive = () => split,
+        };
+        var registry = FreeWRibbon.BuildRegistry(new DocumentView(), callbacks);
+
+        registry.TryGet(new RibbonCommandId("freew.split"), out var splitCommand)
+            .Should().BeTrue();
+        registry.TryGet(new RibbonCommandId("freew.split-window"), out var splitWindowCommand)
+            .Should().BeTrue();
+        splitWindowCommand.Should().BeSameAs(splitCommand);
+
+        var state = (IRibbonStatefulCommand)splitCommand!;
+        state.GetState().IsChecked.Should().BeFalse();
+
+        splitCommand!.Execute(RibbonCommandContext.Empty);
+
+        state.GetState().IsChecked.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task MainWindow_split_preview_uses_live_editor_and_read_only_snapshot()
+    {
+        FreeWViewDepthMode mode = FreeWViewDepthMode.LiveEditor;
+        bool showsLiveBefore = false;
+        bool showsLiveDuringSplit = true;
+        bool hasSplitGrid = false;
+        bool hasSnapshotScroller = false;
+        string? limitation = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            showsLiveBefore = window.IsWorkspaceShowingLiveEditor;
+
+            window.ToggleSplit();
+
+            mode = window.ViewDepthMode;
+            showsLiveDuringSplit = window.IsWorkspaceShowingLiveEditor;
+            limitation = window.ViewDepthLimitation;
+            hasSplitGrid = window.WorkspaceContentForTests is Grid;
+            if (window.WorkspaceContentForTests is Grid grid)
+                hasSnapshotScroller = grid.Children.OfType<ScrollViewer>().Any();
+        });
+
+        if (!ran) return;
+        showsLiveBefore.Should().BeTrue();
+        mode.Should().Be(FreeWViewDepthMode.SplitPreview);
+        showsLiveDuringSplit.Should().BeFalse();
+        hasSplitGrid.Should().BeTrue();
+        hasSnapshotScroller.Should().BeTrue();
+        limitation.Should().Contain("read-only");
+    }
+
+    [Fact]
+    public async Task MainWindow_page_preview_modes_are_mutually_exclusive_and_restore_live_editor()
+    {
+        FreeWViewDepthMode afterMultiple = FreeWViewDepthMode.LiveEditor;
+        FreeWViewDepthMode afterSideToSide = FreeWViewDepthMode.LiveEditor;
+        bool multipleActiveAfterSideToSide = true;
+        bool sideToSideActive = false;
+        bool liveAfterSecondToggle = false;
+        string? sideToSideLimitation = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+
+            window.ToggleMultiplePages();
+            afterMultiple = window.ViewDepthMode;
+
+            window.ToggleSideToSide();
+            afterSideToSide = window.ViewDepthMode;
+            multipleActiveAfterSideToSide = window.IsMultiplePagesPreviewActive;
+            sideToSideActive = window.IsSideToSidePreviewActive;
+            sideToSideLimitation = window.ViewDepthLimitation;
+
+            window.ToggleSideToSide();
+            liveAfterSecondToggle = window.IsWorkspaceShowingLiveEditor;
+        });
+
+        if (!ran) return;
+        afterMultiple.Should().Be(FreeWViewDepthMode.MultiplePagesPreview);
+        afterSideToSide.Should().Be(FreeWViewDepthMode.SideToSidePreview);
+        multipleActiveAfterSideToSide.Should().BeFalse();
+        sideToSideActive.Should().BeTrue();
+        sideToSideLimitation.Should().Contain("horizontal page turning remains deferred");
+        liveAfterSecondToggle.Should().BeTrue();
     }
 
     [Fact]

@@ -413,7 +413,9 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.view-ruler",        rulerCommand);
         // AV-VIEW: Window group — new window + split (shell callbacks; may note "deferred" in the status bar).
         r.Register("freew.new-window",        new ActionRibbonCommand(callbacks.NewWindow ?? (() => { })));
-        r.Register("freew.split",             new ActionRibbonCommand(callbacks.ToggleSplit ?? (() => { })));
+        var splitCommand = new ToggleActionCommand(callbacks.ToggleSplit ?? (() => { }), callbacks.IsSplitActive ?? (() => false));
+        r.Register("freew.split",             splitCommand);
+        r.Register("freew.split-window",      splitCommand);
 
         // ── Review ───────────────────────────────────────────────────────────
         var reviewingPaneCommand = new ActionRibbonCommand(callbacks.ToggleReviewingPane);

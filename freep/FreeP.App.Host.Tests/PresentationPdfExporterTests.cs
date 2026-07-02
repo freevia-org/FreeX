@@ -125,6 +125,48 @@ public class PresentationPdfExporterTests
     }
 
     [Fact]
+    public void BuildDocument_UsesModeledSlideSizeForPageAndGeometry()
+    {
+        var deck = Presentation.CreateEmpty();
+        deck.Slides.Clear();
+        deck.SlideSizeCxEmu = DrawingMlCoordinateUnits.PointsToEmu(576);
+        deck.SlideSizeCyEmu = DrawingMlCoordinateUnits.PointsToEmu(432);
+
+        var slide = new Slide
+        {
+            Background = new ShapeFill.Solid(SrgbColor.FromRgb(0xFFFFFF)),
+        };
+        slide.Shapes.Add(new SlideShape
+        {
+            OffsetXEmu = DrawingMlCoordinateUnits.PointsToEmu(72),
+            OffsetYEmu = DrawingMlCoordinateUnits.PointsToEmu(90),
+            ExtentCxEmu = DrawingMlCoordinateUnits.PointsToEmu(144),
+            ExtentCyEmu = DrawingMlCoordinateUnits.PointsToEmu(72),
+            Text = "Custom size",
+        });
+        deck.Slides.Add(slide);
+
+        var page = PresentationPdfExporter.BuildDocument(deck).Pages[0];
+
+        page.WidthPoints.Should().Be(576);
+        page.HeightPoints.Should().Be(432);
+        page.Ops.OfType<PdfFillRect>().Should().Contain(fill =>
+            fill.X == 0 &&
+            fill.Y == 0 &&
+            fill.Width == 576 &&
+            fill.Height == 432);
+        page.Ops.OfType<PdfStrokeRect>().Should().Contain(stroke =>
+            stroke.X == 72 &&
+            stroke.Y == 270 &&
+            stroke.Width == 144 &&
+            stroke.Height == 72);
+        page.Ops.OfType<PdfText>().Should().Contain(text =>
+            text.X == 80 &&
+            text.Y == 316 &&
+            text.Text == "Custom size");
+    }
+
+    [Fact]
     public void TitleOp_IsBold()
     {
         var doc = PresentationPdfExporter.BuildDocument(SampleDeck());
