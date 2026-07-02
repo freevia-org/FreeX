@@ -84,6 +84,11 @@ public readonly record struct ChartMajorGridLinePrimitivePlan(
     IReadOnlyList<ChartGridLinePlan> GridLines,
     ChartStrokePlan Stroke);
 
+public readonly record struct ChartMajorAxisTickPrimitivePlan(
+    IReadOnlyList<ChartGridLinePlan> CategoryTicks,
+    IReadOnlyList<ChartGridLinePlan> ValueTicks,
+    ChartStrokePlan Stroke);
+
 public readonly record struct ChartTextPlan(
     string Text,
     ChartPlanRect Bounds,
@@ -221,6 +226,7 @@ public static class ChartRenderPlanner
     public const double AxisTitleBand = 14.0;
     public const double AxisTitleFontSize = 7.5;
     public const double GridlinePad = 2.0;
+    public const double AxisMajorTickLength = 4.0;
     public const byte AreaFillAlpha = 200;
     public const byte RectSeriesFillAlpha = 255;
     public const double LineSeriesStrokeThickness = 1.5;
@@ -455,6 +461,26 @@ public static class ChartRenderPlanner
             DefaultGridLineStroke());
     }
 
+    public static ChartMajorAxisTickPrimitivePlan BuildMajorAxisTickPrimitivePlan(
+        ChartShape chart,
+        ChartFramePlan frame)
+    {
+        if (!frame.HasPlot || frame.IsPie || frame.IsRadar || frame.IsScatterLike)
+            return EmptyMajorAxisTickPrimitivePlan();
+
+        var categoryTicks = chart.CategoryAxis.Delete
+            ? Array.Empty<ChartGridLinePlan>()
+            : BuildCategoryAxisTickPlans(chart, frame);
+        var valueTicks = chart.ValueAxis.Delete
+            ? Array.Empty<ChartGridLinePlan>()
+            : BuildValueAxisTickPlans(chart, frame);
+
+        return new ChartMajorAxisTickPrimitivePlan(
+            categoryTicks,
+            valueTicks,
+            DefaultAxisTickStroke());
+    }
+
     public static IReadOnlyList<ChartTextPlan> BuildCategoryAxisLabelPlans(
         ChartShape chart,
         ChartFramePlan frame)
@@ -539,6 +565,76 @@ public static class ChartRenderPlanner
         }
 
         return labels;
+    }
+
+    private static IReadOnlyList<ChartGridLinePlan> BuildCategoryAxisTickPlans(
+        ChartShape chart,
+        ChartFramePlan frame)
+    {
+        if (chart.Categories.Count == 0)
+            return Array.Empty<ChartGridLinePlan>();
+
+        var plot = frame.Plot;
+        var ticks = new List<ChartGridLinePlan>(chart.Categories.Count);
+        if (frame.IsBar)
+        {
+            int categoryCount = chart.Categories.Count;
+            double categoryStep = plot.Height / Math.Max(1, categoryCount);
+            for (int categoryIndex = 0; categoryIndex < categoryCount; categoryIndex++)
+            {
+                int renderRow = categoryCount - 1 - categoryIndex;
+                double y = plot.Y + renderRow * categoryStep + categoryStep / 2.0;
+                ticks.Add(new ChartGridLinePlan(
+                    new ChartPlanPoint(plot.X - AxisMajorTickLength, y),
+                    new ChartPlanPoint(plot.X, y)));
+            }
+        }
+        else
+        {
+            double categoryStep = plot.Width / Math.Max(1, chart.Categories.Count);
+            for (int categoryIndex = 0; categoryIndex < chart.Categories.Count; categoryIndex++)
+            {
+                double x = plot.X + categoryIndex * categoryStep + categoryStep / 2.0;
+                ticks.Add(new ChartGridLinePlan(
+                    new ChartPlanPoint(x, plot.Bottom),
+                    new ChartPlanPoint(x, plot.Bottom + AxisMajorTickLength)));
+            }
+        }
+
+        return ticks;
+    }
+
+    private static IReadOnlyList<ChartGridLinePlan> BuildValueAxisTickPlans(
+        ChartShape chart,
+        ChartFramePlan frame)
+    {
+        var (minValue, maxValue, majorUnit) = ComputePrimaryValueAxisRange(chart);
+        double steps = (maxValue - minValue) / majorUnit;
+        if (steps <= 0)
+            return Array.Empty<ChartGridLinePlan>();
+
+        var plot = frame.Plot;
+        int tickCount = (int)Math.Round(steps);
+        var ticks = new List<ChartGridLinePlan>(tickCount + 1);
+        for (int tickIndex = 0; tickIndex <= tickCount; tickIndex++)
+        {
+            if (frame.IsBar)
+            {
+                double x = plot.X + plot.Width * tickIndex / steps;
+                ticks.Add(new ChartGridLinePlan(
+                    new ChartPlanPoint(x, plot.Bottom),
+                    new ChartPlanPoint(x, plot.Bottom + AxisMajorTickLength)));
+            }
+            else
+            {
+                double y = plot.Bottom - plot.Height * tickIndex / steps;
+                ticks.Add(new ChartGridLinePlan(
+                    new ChartPlanPoint(plot.X - AxisMajorTickLength, y),
+                    new ChartPlanPoint(plot.X, y)));
+            }
+        }
+
+        return ticks;
     }
 
     public static IReadOnlyList<ChartAxisTitlePlan> BuildAxisTitlePlans(
@@ -1742,8 +1838,17 @@ public static class ChartRenderPlanner
             Array.Empty<ChartGridLinePlan>(),
             DefaultGridLineStroke());
 
+    private static ChartMajorAxisTickPrimitivePlan EmptyMajorAxisTickPrimitivePlan() =>
+        new(
+            Array.Empty<ChartGridLinePlan>(),
+            Array.Empty<ChartGridLinePlan>(),
+            DefaultAxisTickStroke());
+
     private static ChartStrokePlan DefaultGridLineStroke() =>
         new(new SrgbColor(0xD9, 0xD9, 0xD9), Alpha: 255, Thickness: 0.5);
+
+    private static ChartStrokePlan DefaultAxisTickStroke() =>
+        new(new SrgbColor(0x7F, 0x7F, 0x7F), Alpha: 255, Thickness: 0.75);
 
     private static ChartStrokePlan DefaultRadarSpokeStroke() =>
         new(new SrgbColor(0xC0, 0xC0, 0xC0), Alpha: 255, Thickness: 0.5);

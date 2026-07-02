@@ -338,6 +338,28 @@ public sealed class RendererNeutralDedupPlannerTests
     }
 
     [Fact]
+    public void WpfAndAvaloniaSlideCanvases_UseRendererNeutralMajorAxisTickPlanning()
+    {
+        var wpf = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "SlideCanvas.cs");
+        var avalonia = ReadWorkspaceFile(
+            "freep",
+            "FreeP.App.Rendering.Avalonia",
+            "SlideCanvas.cs");
+
+        foreach (var source in new[] { wpf, avalonia })
+        {
+            source.Should().Contain("ChartRenderPlanner.BuildMajorAxisTickPrimitivePlan(chart, frame)");
+            source.Should().Contain("CreateChartAxisTickPen(tickPlan)");
+            source.Should().Contain("CreateChartAxisTickPen(ChartMajorAxisTickPrimitivePlan plan)");
+            source.Should().Contain("tickPlan.CategoryTicks");
+            source.Should().Contain("tickPlan.ValueTicks");
+            source.Should().Contain("ToPen(plan.Stroke)");
+            source.Should().NotContain("AxisMajorTickLength");
+            source.Should().NotContain("Color.FromRgb(0x7F, 0x7F, 0x7F)), 0.75");
+        }
+    }
+
+    [Fact]
     public void WpfAndAvaloniaSlideShowWindows_UseRendererNeutralPlaybackPlanner()
     {
         var wpf = ReadWorkspaceFile("freep", "FreeP.App.Host", "SlideShowWindow.cs");

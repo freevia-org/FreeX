@@ -386,6 +386,9 @@ public sealed class SlideCanvas : Control
     internal static Pen CreateChartGridLinePen(ChartMajorGridLinePrimitivePlan plan) =>
         ToPen(plan.Stroke);
 
+    internal static Pen CreateChartAxisTickPen(ChartMajorAxisTickPrimitivePlan plan) =>
+        ToPen(plan.Stroke);
+
     private static Pen ToPen(ChartStrokePlan stroke) =>
         new(
             ToBrush(new ChartFillPlan(stroke.Color, stroke.Alpha)),
@@ -814,6 +817,16 @@ public sealed class SlideCanvas : Control
         if (hasOverrideSeries && !isPie && !isBar && !isRadar && !isScatterLike)
         {
             RenderComboOverrideSeries(dc, chart, chartOp.SeriesColors, plotLeft, plotTop, plotW, plotH);
+        }
+
+        var tickPlan = ChartRenderPlanner.BuildMajorAxisTickPrimitivePlan(chart, frame);
+        if (tickPlan.CategoryTicks.Count > 0 || tickPlan.ValueTicks.Count > 0)
+        {
+            var tickPen = CreateChartAxisTickPen(tickPlan);
+            foreach (var tick in tickPlan.CategoryTicks)
+                dc.DrawLine(tickPen, ToPoint(tick.Start), ToPoint(tick.End));
+            foreach (var tick in tickPlan.ValueTicks)
+                dc.DrawLine(tickPen, ToPoint(tick.Start), ToPoint(tick.End));
         }
 
         // ── Data labels ────────────────────────────────────────────────────────
