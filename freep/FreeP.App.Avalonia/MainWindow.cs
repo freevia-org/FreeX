@@ -174,6 +174,7 @@ public sealed class MainWindow : Window
     internal IReadOnlyList<RecentFileEntry> RecentEntries => _fileWorkflow.RecentEntries;
 
     internal PresentationCommentPanePlan? LastCommentPanePlan { get; private set; }
+    internal PresentationCommentNavigationPlan? LastCommentNavigationPlan { get; private set; }
     internal PresentationAccessibilitySummaryPlan? LastAccessibilitySummaryPlan { get; private set; }
     internal PresentationAccessibilityCheckerPanePlan? LastAccessibilityCheckerPanePlan { get; private set; }
     internal PresentationAltTextRequestPlan? LastAltTextRequestPlan { get; private set; }
@@ -1678,8 +1679,12 @@ public sealed class MainWindow : Window
         registry.Register(
             PresentationReviewWorkflowPlanner.DeleteCommentCommandId,
             new ActionRibbonCommand(() => DeleteSelectedComment()));
-        registry.Register(PresentationReviewWorkflowPlanner.PreviousCommentCommandId, EmptyRibbonCommand.Instance);
-        registry.Register(PresentationReviewWorkflowPlanner.NextCommentCommandId, EmptyRibbonCommand.Instance);
+        registry.Register(
+            PresentationReviewWorkflowPlanner.PreviousCommentCommandId,
+            new ActionRibbonCommand(() => NavigateReviewComment(PresentationReviewWorkflowIntentKind.PreviousComment)));
+        registry.Register(
+            PresentationReviewWorkflowPlanner.NextCommentCommandId,
+            new ActionRibbonCommand(() => NavigateReviewComment(PresentationReviewWorkflowIntentKind.NextComment)));
         registry.Register(
             PresentationReviewWorkflowPlanner.ResolveCommentCommandId,
             new ActionRibbonCommand(() => ResolveSelectedComment()));
@@ -1944,6 +1949,14 @@ public sealed class MainWindow : Window
         {
             DeleteSelectedComment();
         }
+        else if (commandId == PresentationReviewWorkflowPlanner.PreviousCommentCommandId)
+        {
+            NavigateReviewComment(PresentationReviewWorkflowIntentKind.PreviousComment);
+        }
+        else if (commandId == PresentationReviewWorkflowPlanner.NextCommentCommandId)
+        {
+            NavigateReviewComment(PresentationReviewWorkflowIntentKind.NextComment);
+        }
     }
 
     internal PresentationCommentPanePlan SetSelectedReviewCommentIndexForTests(int? commentIndex)
@@ -1957,6 +1970,32 @@ public sealed class MainWindow : Window
         _selectedCommentIndex = commentIndex;
         ShowReviewCommentsPane();
         RefreshReviewWorkflowPlans();
+    }
+
+    internal PresentationCommentNavigationPlan NavigateReviewComment(
+        PresentationReviewWorkflowIntentKind intent)
+    {
+        var plan = PresentationReviewWorkflowPlanner.BuildCommentNavigationPlan(
+            _presentation.Slides,
+            Editor.CurrentSlideIndex,
+            _selectedCommentIndex,
+            intent);
+        LastCommentNavigationPlan = plan;
+        if (!plan.ShouldNavigate)
+        {
+            return plan;
+        }
+
+        if (Editor.CurrentSlideIndex != plan.TargetSlideIndex)
+        {
+            Editor.SelectSlide(plan.TargetSlideIndex);
+        }
+
+        _selectedCommentIndex = plan.TargetCommentIndex;
+        ShowReviewCommentsPane();
+        RefreshReviewWorkflowPlans();
+        UpdateStatus();
+        return plan;
     }
 
     internal PresentationCommentMutationPlan DeleteSelectedComment()
@@ -3200,7 +3239,7 @@ public sealed class MainWindow : Window
         }
     }
 
-    private static ListBoxItem BuildSlidePaneSectionHeader(SlidePaneEntry entry)
+    private ListBoxItem BuildSlidePaneSectionHeader(SlidePaneEntry entry)
     {
         var label = new TextBlock
         {
@@ -3220,16 +3259,32 @@ public sealed class MainWindow : Window
                 Padding    = new Thickness(10, 4),
                 Child      = label,
             },
-            Padding   = new Thickness(0),
-            Margin    = new Thickness(0, 6, 0, 2),
-            Focusable = false,
-            IsEnabled = false,
+            Padding     = new Thickness(0),
+            Margin      = new Thickness(0, 6, 0, 2),
+            Focusable   = false,
+            ContextMenu = BuildSlidePaneSectionContextMenu(entry),
         };
     }
 
     private ContextMenu BuildSlidePaneContextMenu(int slideIndex)
     {
         var menu = new ContextMenu();
+
+        foreach (var action in SlideSectionPlanner.BuildSlideContextActions(
+                     _presentation.Slides,
+                     _presentation.Sections,
+                     slideIndex))
+        {
+            var item = new MenuItem
+            {
+                Header = action.Text,
+                IsEnabled = action.IsEnabled,
+            };
+            item.Click += async (_, _) => await ApplySlideSectionActionAsync(action);
+            menu.Items.Add(item);
+        }
+
+        menu.Items.Add(new Separator());
 
         foreach (var action in SlidePanePlanner.BuildContextActions(_presentation.Slides.Count, slideIndex))
         {
@@ -3246,6 +3301,126 @@ public sealed class MainWindow : Window
         }
 
         return menu;
+    }
+
+    private ContextMenu BuildSlidePaneSectionContextMenu(SlidePaneEntry entry)
+    {
+        var menu = new ContextMenu();
+
+        foreach (var action in SlideSectionPlanner.BuildSectionHeaderActions(
+                     _presentation.Sections,
+                     entry.SectionIndex,
+                     entry.SlideIndex))
+        {
+            if (action.Kind == SlideSectionActionKind.RemoveSection)
+                menu.Items.Add(new Separator());
+
+            var item = new MenuItem
+            {
+                Header = action.Text,
+                IsEnabled = action.IsEnabled,
+            };
+            item.Click += async (_, _) => await ApplySlideSectionActionAsync(action);
+            menu.Items.Add(item);
+        }
+
+        return menu;
+    }
+
+    private async Task ApplySlideSectionActionAsync(SlideSectionActionPlan action)
+    {
+        if (!action.IsEnabled)
+            return;
+
+        switch (action.Kind)
+        {
+            case SlideSectionActionKind.AddSection:
+            {
+                var name = await PromptSectionNameAsync("Add Section", action.SuggestedName);
+                if (name is not null)
+                    Editor.AddSectionAtSlide(action.SlideIndex, name);
+                break;
+            }
+
+            case SlideSectionActionKind.RenameSection:
+            {
+                var name = await PromptSectionNameAsync("Rename Section", action.SuggestedName);
+                if (name is not null)
+                    Editor.RenameSection(action.SectionIndex, name);
+                break;
+            }
+
+            case SlideSectionActionKind.RemoveSection:
+                Editor.RemoveSection(action.SectionIndex);
+                break;
+
+            case SlideSectionActionKind.RemoveAllSections:
+                Editor.RemoveAllSections();
+                break;
+        }
+    }
+
+    private async Task<string?> PromptSectionNameAsync(string title, string initialName)
+    {
+        var textBox = new TextBox
+        {
+            Text = initialName,
+            MinWidth = 260,
+            Margin = new Thickness(0, 0, 0, 12),
+        };
+
+        var ok = new Button
+        {
+            Content = "OK",
+            Width = 76,
+            Margin = new Thickness(0, 0, 8, 0),
+        };
+        var cancel = new Button
+        {
+            Content = "Cancel",
+            Width = 76,
+        };
+
+        var buttons = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Children = { ok, cancel },
+        };
+
+        var panel = new StackPanel
+        {
+            Margin = new Thickness(14),
+            Children =
+            {
+                new TextBlock
+                {
+                    Text = "Section name:",
+                    Margin = new Thickness(0, 0, 0, 4),
+                },
+                textBox,
+                buttons,
+            },
+        };
+
+        var dialog = new Window
+        {
+            Title = title,
+            Content = panel,
+            SizeToContent = SizeToContent.WidthAndHeight,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            CanResize = false,
+        };
+
+        ok.Click += (_, _) => dialog.Close(textBox.Text);
+        cancel.Click += (_, _) => dialog.Close(null);
+        dialog.Opened += (_, _) =>
+        {
+            textBox.Focus();
+            textBox.SelectAll();
+        };
+
+        return await dialog.ShowDialog<string?>(this);
     }
 
     private void WireSlidePaneDragHandlers(ListBoxItem item)

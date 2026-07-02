@@ -148,6 +148,7 @@ public sealed class MainWindow : Window
     private Button _readingOrderMoveLaterButton = null!;
 
     internal PresentationCommentPanePlan? LastCommentPanePlan { get; private set; }
+    internal PresentationCommentNavigationPlan? LastCommentNavigationPlan { get; private set; }
     internal PresentationAccessibilitySummaryPlan? LastAccessibilitySummaryPlan { get; private set; }
     internal PresentationAccessibilityCheckerPanePlan? LastAccessibilityCheckerPanePlan { get; private set; }
     internal PresentationAltTextRequestPlan? LastAltTextRequestPlan { get; private set; }
@@ -188,6 +189,7 @@ public sealed class MainWindow : Window
         LastAccessibilityCheckerPanePlan?.Rows.Count(row => row.IsSelected) ?? 0;
     internal string AccessibilityCheckerPaneHeading => _accessibilityCheckerPaneHeading?.Text ?? string.Empty;
     internal string AccessibilityCheckerPaneMessage => _accessibilityCheckerPaneMessage?.Text ?? string.Empty;
+    internal bool IsDirty => _file.IsDirty;
     internal int ReviewCommentSelectedCount => LastCommentPanePlan?.Comments.Count(comment => comment.IsSelected) ?? 0;
     internal bool IsReadingOrderPaneVisible => _readingOrderPaneHost?.Visibility == Visibility.Visible;
     internal int ReadingOrderPaneItemCount => LastReadingOrderPlan?.Items.Count ?? 0;
@@ -289,6 +291,8 @@ public sealed class MainWindow : Window
             onAddComment: () => AddComment("New comment"),
             onEditComment: () => EditSelectedComment(GetSelectedCommentText()),
             onDeleteComment: () => DeleteSelectedComment(),
+            onPreviousComment: () => NavigateReviewComment(PresentationReviewWorkflowIntentKind.PreviousComment),
+            onNextComment: () => NavigateReviewComment(PresentationReviewWorkflowIntentKind.NextComment),
             onResolveComment: () => ResolveSelectedComment(),
             onReopenComment: () => ReopenSelectedComment(),
             // Wave 16B: Animation pane toggle.
@@ -1180,6 +1184,32 @@ public sealed class MainWindow : Window
         _selectedCommentIndex = commentIndex;
         RefreshCommentPane();
         RefreshReviewWorkflowPlans();
+    }
+
+    internal PresentationCommentNavigationPlan NavigateReviewComment(
+        PresentationReviewWorkflowIntentKind intent)
+    {
+        var plan = PresentationReviewWorkflowPlanner.BuildCommentNavigationPlan(
+            _presentation.Slides,
+            Editor.CurrentSlideIndex,
+            _selectedCommentIndex,
+            intent);
+        LastCommentNavigationPlan = plan;
+        if (!plan.ShouldNavigate)
+        {
+            return plan;
+        }
+
+        if (Editor.CurrentSlideIndex != plan.TargetSlideIndex)
+        {
+            Editor.SelectSlide(plan.TargetSlideIndex);
+        }
+
+        _selectedCommentIndex = plan.TargetCommentIndex;
+        RefreshCommentPane();
+        RefreshReviewWorkflowPlans();
+        UpdateSlideCount();
+        return plan;
     }
 
     internal PresentationCommentMutationPlan DeleteSelectedComment()

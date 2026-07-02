@@ -96,6 +96,7 @@ public class BackstageViewTests
         source.Should().Contain("BackstagePaneSurfacePlanner.BuildInfoPane(");
         source.Should().Contain("BackstagePaneSurfacePlanner.BuildAccountPane(");
         source.Should().Contain("ApplicationOptionsSummaryPlanner.Build(");
+        source.Should().Contain("document: _callbacks.GetDocument()");
         source.Should().Contain("_callbacks.MarkAsFinal()");
         source.Should().Contain("_callbacks.RestrictEditing()");
         source.Should().Contain("_callbacks.InspectDocument()");
@@ -332,6 +333,7 @@ public class BackstageViewTests
         callbacks.GetDataFolder().Should().NotBeNullOrWhiteSpace();
         callbacks.DirectPrintCapability.Should().NotBeNull();
         callbacks.DirectPrintCapability!.IsAvailable.Should().BeFalse();
+        callbacks.GetDocument().Should().NotBeNull();
         callbacks.PrintPreview.Should().NotBeNull();
     }
 
@@ -435,6 +437,7 @@ public class BackstageViewTests
             GetPageSettings: () => new PageSettings(),
             GetCurrentOptions: () => new FreeWOptions(),
             GetDataFolder: () => @"C:\AppData\FreeW",
+            GetDocument: () => new TextDocument(),
             NewDocument: () => { },
             OpenRecent: _ => { },
             OpenFolder: _ => { },

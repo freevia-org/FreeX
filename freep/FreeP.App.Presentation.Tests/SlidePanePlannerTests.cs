@@ -39,9 +39,9 @@ public sealed class SlidePanePlannerTests
         var entries = SlidePanePlanner.BuildEntries(slides, new[] { intro, body });
 
         entries.Should().Equal(
-            new SlidePaneEntry(SlidePaneEntryKind.SectionHeader, 0, "Intro  (1)", 1),
+            new SlidePaneEntry(SlidePaneEntryKind.SectionHeader, 0, "Intro  (1)", 1, 0),
             new SlidePaneEntry(SlidePaneEntryKind.Slide, 0, "1"),
-            new SlidePaneEntry(SlidePaneEntryKind.SectionHeader, 1, "Body  (2)", 2),
+            new SlidePaneEntry(SlidePaneEntryKind.SectionHeader, 1, "Body  (2)", 2, 1),
             new SlidePaneEntry(SlidePaneEntryKind.Slide, 1, "2"),
             new SlidePaneEntry(SlidePaneEntryKind.Slide, 2, "3"));
     }
@@ -64,9 +64,26 @@ public sealed class SlidePanePlannerTests
 
         entries.Should().Equal(
             new SlidePaneEntry(SlidePaneEntryKind.Slide, 0, "1"),
-            new SlidePaneEntry(SlidePaneEntryKind.SectionHeader, 1, "Mixed  (2)", 2),
+            new SlidePaneEntry(SlidePaneEntryKind.SectionHeader, 1, "Mixed  (2)", 2, 0),
             new SlidePaneEntry(SlidePaneEntryKind.Slide, 1, "2"),
             new SlidePaneEntry(SlidePaneEntryKind.Slide, 2, "3"));
+    }
+
+    [Fact]
+    public void BuildEntries_CarriesSectionIndexForHeaderActions()
+    {
+        var slides = new[]
+        {
+            new Slide { Id = "rId2" },
+            new Slide { Id = "rId3" },
+        };
+        var section = new PresentationSection { Name = "Intro" };
+        section.SlideIds.Add("rId2");
+
+        var entries = SlidePanePlanner.BuildEntries(slides, new[] { section });
+
+        entries[0].Kind.Should().Be(SlidePaneEntryKind.SectionHeader);
+        entries[0].SectionIndex.Should().Be(0);
     }
 
     [Fact]
@@ -174,6 +191,158 @@ public sealed class SlidePanePlannerTests
 
         editor.Presentation.Slides.Should().HaveCount(1);
         editor.CurrentSlideIndex.Should().Be(0);
+    }
+
+    [Fact]
+    public void SectionPlanner_NormalizesBlankNamesToUntitledSection()
+    {
+        SlideSectionPlanner.NormalizeSectionName("  \t ").Should().Be(SlideSectionPlanner.DefaultSectionName);
+        SlideSectionPlanner.NormalizeSectionName("  Q1\r\nPlan  ").Should().Be("Q1 Plan");
+    }
+
+    [Fact]
+    public void SectionPlanner_BuildsAddAndHeaderActions()
+    {
+        var editor = CreateEditingSession(2);
+        var section = new PresentationSection { Name = "Intro" };
+        section.SlideIds.Add("slide1");
+        editor.Presentation.Sections.Add(section);
+
+        SlideSectionPlanner.BuildSlideContextActions(
+                editor.Presentation.Slides,
+                editor.Presentation.Sections,
+                slideIndex: 1)
+            .Should().Equal(new SlideSectionActionPlan(
+                SlideSectionActionKind.AddSection,
+                SlideSectionPlanner.AddSectionMenuText,
+                1,
+                -1,
+                true,
+                SlideSectionPlanner.DefaultSectionName));
+
+        SlideSectionPlanner.BuildSectionHeaderActions(editor.Presentation.Sections, 0, 0)
+            .Select(action => action.Kind)
+            .Should().Equal(
+                SlideSectionActionKind.RenameSection,
+                SlideSectionActionKind.RemoveSection,
+                SlideSectionActionKind.RemoveAllSections);
+    }
+
+    [Fact]
+    public void AddSectionAtSlide_SplitsExistingSectionAndUsesSlideIds()
+    {
+        var editor = CreateEditingSession(3);
+        var section = new PresentationSection { Name = "Deck" };
+        section.SlideIds.AddRange(new[] { "slide1", "slide2", "slide3" });
+        editor.Presentation.Sections.Add(section);
+
+        editor.AddSectionAtSlide(1, "  Part Two  ").Should().BeTrue();
+
+        editor.Presentation.Sections.Select(s => s.Name).Should().Equal("Deck", "Part Two");
+        editor.Presentation.Sections[0].SlideIds.Should().Equal("slide1");
+        editor.Presentation.Sections[1].SlideIds.Should().Equal("slide2", "slide3");
+    }
+
+    [Fact]
+    public void RenameSection_BlankName_UsesUntitledSectionAndIsUndoable()
+    {
+        var editor = CreateEditingSession(2);
+        var section = new PresentationSection { Name = "Intro" };
+        section.SlideIds.Add("slide1");
+        editor.Presentation.Sections.Add(section);
+
+        editor.RenameSection(0, "   ").Should().BeTrue();
+
+        editor.Presentation.Sections[0].Name.Should().Be(SlideSectionPlanner.DefaultSectionName);
+
+        editor.Undo();
+        editor.Presentation.Sections[0].Name.Should().Be("Intro");
+    }
+
+    [Fact]
+    public void RemoveSection_KeepsSlidesAndMergesIntoPreviousSection()
+    {
+        var editor = CreateEditingSession(4);
+        var intro = new PresentationSection { Name = "Intro" };
+        intro.SlideIds.AddRange(new[] { "slide1", "slide2" });
+        var body = new PresentationSection { Name = "Body" };
+        body.SlideIds.AddRange(new[] { "slide3", "slide4" });
+        editor.Presentation.Sections.Add(intro);
+        editor.Presentation.Sections.Add(body);
+
+        editor.RemoveSection(1).Should().BeTrue();
+
+        editor.Presentation.Slides.Should().HaveCount(4);
+        editor.Presentation.Sections.Should().ContainSingle();
+        editor.Presentation.Sections[0].Name.Should().Be("Intro");
+        editor.Presentation.Sections[0].SlideIds.Should().Equal("slide1", "slide2", "slide3", "slide4");
+    }
+
+    [Fact]
+    public void RemoveFirstSection_KeepsSlidesAndLeavesThemUnsectioned()
+    {
+        var editor = CreateEditingSession(3);
+        var intro = new PresentationSection { Name = "Intro" };
+        intro.SlideIds.Add("slide1");
+        var body = new PresentationSection { Name = "Body" };
+        body.SlideIds.AddRange(new[] { "slide2", "slide3" });
+        editor.Presentation.Sections.Add(intro);
+        editor.Presentation.Sections.Add(body);
+
+        editor.RemoveSection(0).Should().BeTrue();
+
+        editor.Presentation.Slides.Should().HaveCount(3);
+        editor.Presentation.Sections.Should().ContainSingle();
+        editor.Presentation.Sections[0].Name.Should().Be("Body");
+        editor.Presentation.Sections[0].SlideIds.Should().Equal("slide2", "slide3");
+    }
+
+    [Fact]
+    public void RenameAndRemoveSection_UseHeaderOriginalIndexAfterPruningStaleSections()
+    {
+        var editor = CreateEditingSession(2);
+        var stale = new PresentationSection { Name = "Stale" };
+        stale.SlideIds.Add("missing-slide");
+        var live = new PresentationSection { Name = "Live" };
+        live.SlideIds.AddRange(new[] { "slide1", "slide2" });
+        editor.Presentation.Sections.Add(stale);
+        editor.Presentation.Sections.Add(live);
+
+        var header = SlidePanePlanner.BuildEntries(
+                editor.Presentation.Slides,
+                editor.Presentation.Sections)
+            .Single(entry => entry.Kind == SlidePaneEntryKind.SectionHeader);
+        header.SectionIndex.Should().Be(1);
+
+        editor.RenameSection(header.SectionIndex, "Renamed").Should().BeTrue();
+        editor.Presentation.Sections.Should().ContainSingle();
+        editor.Presentation.Sections[0].Name.Should().Be("Renamed");
+
+        var removeEditor = CreateEditingSession(2);
+        var removeStale = new PresentationSection { Name = "Stale" };
+        removeStale.SlideIds.Add("missing-slide");
+        var removeLive = new PresentationSection { Name = "Live" };
+        removeLive.SlideIds.AddRange(new[] { "slide1", "slide2" });
+        removeEditor.Presentation.Sections.Add(removeStale);
+        removeEditor.Presentation.Sections.Add(removeLive);
+
+        removeEditor.RemoveSection(header.SectionIndex).Should().BeTrue();
+        removeEditor.Presentation.Sections.Should().BeEmpty();
+        removeEditor.Presentation.Slides.Should().HaveCount(2);
+    }
+
+    [Fact]
+    public void RemoveAllSections_ClearsOnlySectionMetadata()
+    {
+        var editor = CreateEditingSession(2);
+        var section = new PresentationSection { Name = "Intro" };
+        section.SlideIds.AddRange(new[] { "slide1", "slide2" });
+        editor.Presentation.Sections.Add(section);
+
+        editor.RemoveAllSections().Should().BeTrue();
+
+        editor.Presentation.Slides.Should().HaveCount(2);
+        editor.Presentation.Sections.Should().BeEmpty();
     }
 
     private static EditingSession CreateEditingSession(int slideCount)

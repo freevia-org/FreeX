@@ -108,7 +108,8 @@ internal sealed class BackstageView : UserControl
             _backstage.HideThen(_actions.MarkAsFinal),
             _backstage.HideThen(_actions.RestrictEditing),
             _backstage.HideThen(_actions.InspectDocument),
-            _backstage.HideThen(_actions.CheckAccessibility));
+            _backstage.HideThen(_actions.CheckAccessibility),
+            document: model);
 
         return Panes.BuildInfoPane(SisterBackstageInfoPanePlanner.Build(new SisterBackstageInfoPaneContext(
             DocumentKindLabel: "Document",

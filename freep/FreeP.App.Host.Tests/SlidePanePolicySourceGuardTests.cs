@@ -16,6 +16,12 @@ public sealed class SlidePanePolicySourceGuardTests
         source.Should().Contain("SlidePanePlanner.PlanMoveAction(");
         source.Should().Contain("SlidePanePlanner.TryApplyAction(");
         source.Should().Contain("SlidePanePlanner.NewSlideButtonText");
+        source.Should().Contain("SlideSectionPlanner.BuildSlideContextActions(");
+        source.Should().Contain("SlideSectionPlanner.BuildSectionHeaderActions(");
+        source.Should().Contain("_editor.AddSectionAtSlide(action.SlideIndex, name)");
+        source.Should().Contain("_editor.RenameSection(action.SectionIndex, name)");
+        source.Should().Contain("_editor.RemoveSection(action.SectionIndex)");
+        source.Should().Contain("_editor.RemoveAllSections()");
         source.Should().NotContain("new Dictionary<int, PresentationSection>");
         source.Should().NotContain("sectionHeaderBefore");
         source.Should().NotContain("const double SectionHeaderHeight");

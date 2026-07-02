@@ -106,6 +106,80 @@ public sealed class PresentationReviewWorkflowPlannerTests
     }
 
     [Fact]
+    public void BuildCommentNavigationPlan_TargetsAdjacentThreadsAcrossSlides()
+    {
+        var slides = new[]
+        {
+            new Slide { Title = "Intro" },
+            new Slide { Title = "Empty" },
+            new Slide { Title = "Review" }
+        };
+        slides[0].Comments.Add(new SlideComment { Author = "Alice", Text = "First", Idx = 1 });
+        slides[0].Comments.Add(new SlideComment { Author = "Bob", Text = "Second", Idx = 2 });
+        slides[2].Comments.Add(new SlideComment { Author = "Nora", Text = "Third", Idx = 1 });
+
+        var sameSlideNext = PresentationReviewWorkflowPlanner.BuildCommentNavigationPlan(
+            slides,
+            0,
+            0,
+            PresentationReviewWorkflowIntentKind.NextComment);
+        var crossSlideNext = PresentationReviewWorkflowPlanner.BuildCommentNavigationPlan(
+            slides,
+            0,
+            1,
+            PresentationReviewWorkflowIntentKind.NextComment);
+        var previousAcrossEmptySlide = PresentationReviewWorkflowPlanner.BuildCommentNavigationPlan(
+            slides,
+            1,
+            null,
+            PresentationReviewWorkflowIntentKind.PreviousComment);
+        var nextAcrossEmptySlide = PresentationReviewWorkflowPlanner.BuildCommentNavigationPlan(
+            slides,
+            1,
+            null,
+            PresentationReviewWorkflowIntentKind.NextComment);
+        var noNext = PresentationReviewWorkflowPlanner.BuildCommentNavigationPlan(
+            slides,
+            2,
+            0,
+            PresentationReviewWorkflowIntentKind.NextComment);
+        var middlePane = PresentationReviewWorkflowPlanner.BuildCommentPanePlan(slides, 1);
+
+        sameSlideNext.Should().Be(new PresentationCommentNavigationPlan(
+            PresentationReviewWorkflowIntentKind.NextComment,
+            true,
+            0,
+            0,
+            0,
+            1,
+            null));
+        crossSlideNext.Should().Be(new PresentationCommentNavigationPlan(
+            PresentationReviewWorkflowIntentKind.NextComment,
+            true,
+            0,
+            1,
+            2,
+            0,
+            null));
+        previousAcrossEmptySlide.TargetSlideIndex.Should().Be(0);
+        previousAcrossEmptySlide.TargetCommentIndex.Should().Be(1);
+        nextAcrossEmptySlide.TargetSlideIndex.Should().Be(2);
+        nextAcrossEmptySlide.TargetCommentIndex.Should().Be(0);
+        noNext.Should().Be(new PresentationCommentNavigationPlan(
+            PresentationReviewWorkflowIntentKind.NextComment,
+            false,
+            2,
+            0,
+            2,
+            0,
+            "No next comment."));
+        middlePane.Actions.Single(action => action.CommandId == PresentationReviewWorkflowPlanner.PreviousCommentCommandId)
+            .IsEnabled.Should().BeTrue();
+        middlePane.Actions.Single(action => action.CommandId == PresentationReviewWorkflowPlanner.NextCommentCommandId)
+            .IsEnabled.Should().BeTrue();
+    }
+
+    [Fact]
     public void BuildAddCommentPlan_ValidatesAndCreatesCommentPayload()
     {
         var slides = new[] { new Slide { Title = "Intro" } };

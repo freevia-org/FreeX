@@ -146,6 +146,34 @@ public sealed class BackstagePaneSurfacePlannerTests
     }
 
     [Fact]
+    public void BuildInfoPane_UsesDocumentStateForSafetyActionText()
+    {
+        var document = new TextDocument
+        {
+            MarkedAsFinal = true,
+            Protection = new ProtectionSettings(ProtectionMode.TrackChangesOnly),
+        };
+        document.Properties.Author = "Ada";
+
+        var surface = BackstagePaneSurfacePlanner.BuildInfoPane(
+            [new BackstageFieldRow("Document", "Plan.docx")],
+            markAsFinal: static () => { },
+            restrictEditing: static () => { },
+            inspectDocument: static () => { },
+            checkAccessibility: static () => { },
+            document: document);
+
+        var actions = surface.SafetyGroups.SelectMany(group => group.Actions).ToArray();
+
+        actions.Single(action => action.AutomationId == "InfoAction_MarkAsFinal")
+            .Label.Should().Be("Edit Anyway");
+        actions.Single(action => action.AutomationId == "InfoAction_RestrictEditing")
+            .Description.Should().Contain("Tracked changes only");
+        actions.Single(action => action.AutomationId == "InfoAction_InspectDocument")
+            .Description.Should().Contain("1 metadata item");
+    }
+
+    [Fact]
     public void BuildAccountPane_ReturnsAccountRowsAndOptionsAction()
     {
         var openedOptions = false;
