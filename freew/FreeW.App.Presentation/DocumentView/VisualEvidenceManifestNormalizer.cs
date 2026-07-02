@@ -139,6 +139,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
         }
 
         var scenarios = BuildScenarioSummaries(rows, expected, expectedByKey, failures);
+        ValidateBackstageRendererPairs(rows, failures);
         var summaryTrust = new FreeWVisualEvidenceTrust(failures.Count == 0, failures);
         return new FreeWVisualEvidenceNormalizedSummary(
             SummarySchemaId,
@@ -499,6 +500,114 @@ public static class FreeWVisualEvidenceManifestNormalizer
 
         return scenarios;
     }
+
+    private static void ValidateBackstageRendererPairs(
+        IReadOnlyList<FreeWVisualEvidenceNormalizedRow> rows,
+        List<string> failures)
+    {
+        foreach (var scenarioId in BackstageRendererScenarioIds)
+        {
+            var wpfRows = RowsForHostScenario(rows, WpfHostId, scenarioId);
+            var avaloniaRows = RowsForHostScenario(rows, AvaloniaHostId, scenarioId);
+            if (wpfRows.Count == 0 || avaloniaRows.Count == 0)
+                continue;
+
+            ValidateUniquePages(scenarioId, WpfHostId, wpfRows, failures);
+            ValidateUniquePages(scenarioId, AvaloniaHostId, avaloniaRows, failures);
+
+            var wpfPages = wpfRows.Select(r => r.PageNumber).Distinct().Order().ToList();
+            var avaloniaPages = avaloniaRows.Select(r => r.PageNumber).Distinct().Order().ToList();
+            var missingAvaloniaPages = wpfPages.Except(avaloniaPages).ToList();
+            var missingWpfPages = avaloniaPages.Except(wpfPages).ToList();
+            if (missingAvaloniaPages.Count > 0)
+            {
+                failures.Add(
+                    $"backstage renderer pair '{scenarioId}' is missing Avalonia page(s): {FormatPages(missingAvaloniaPages)}");
+            }
+
+            if (missingWpfPages.Count > 0)
+            {
+                failures.Add(
+                    $"backstage renderer pair '{scenarioId}' is missing WPF page(s): {FormatPages(missingWpfPages)}");
+            }
+
+            foreach (var pageNumber in wpfPages.Intersect(avaloniaPages))
+            {
+                var wpf = wpfRows.SingleOrDefault(r => r.PageNumber == pageNumber);
+                var avalonia = avaloniaRows.SingleOrDefault(r => r.PageNumber == pageNumber);
+                if (wpf is null || avalonia is null)
+                    continue;
+
+                ValidateRendererPairRow(scenarioId, pageNumber, wpf, avalonia, failures);
+            }
+        }
+    }
+
+    private static List<FreeWVisualEvidenceNormalizedRow> RowsForHostScenario(
+        IReadOnlyList<FreeWVisualEvidenceNormalizedRow> rows,
+        string hostId,
+        string scenarioId) =>
+        rows
+            .Where(r => string.Equals(r.HostId, hostId, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(r.ScenarioId, scenarioId, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+    private static void ValidateUniquePages(
+        string scenarioId,
+        string hostId,
+        IReadOnlyList<FreeWVisualEvidenceNormalizedRow> rows,
+        List<string> failures)
+    {
+        foreach (var group in rows.GroupBy(r => r.PageNumber).Where(g => g.Count() > 1))
+        {
+            failures.Add(
+                $"{hostId}/{scenarioId}: duplicate page {group.Key.ToString(CultureInfo.InvariantCulture)} evidence rows: " +
+                string.Join(", ", group.Select(r => r.OutputName).OrderBy(n => n, StringComparer.OrdinalIgnoreCase)));
+        }
+    }
+
+    private static void ValidateRendererPairRow(
+        string scenarioId,
+        int pageNumber,
+        FreeWVisualEvidenceNormalizedRow wpf,
+        FreeWVisualEvidenceNormalizedRow avalonia,
+        List<string> failures)
+    {
+        var pairName = $"backstage renderer pair '{scenarioId}' page {pageNumber.ToString(CultureInfo.InvariantCulture)}";
+        if (wpf.PageCount != avalonia.PageCount)
+        {
+            failures.Add(
+                $"{pairName} page counts differ: WPF {wpf.PageCount.ToString(CultureInfo.InvariantCulture)}, Avalonia {avalonia.PageCount.ToString(CultureInfo.InvariantCulture)}");
+        }
+
+        if (wpf.PixelWidth != avalonia.PixelWidth || wpf.PixelHeight != avalonia.PixelHeight)
+        {
+            failures.Add(
+                $"{pairName} dimensions differ: WPF {FormatSize(wpf.PixelWidth, wpf.PixelHeight)}, Avalonia {FormatSize(avalonia.PixelWidth, avalonia.PixelHeight)}");
+        }
+
+        if (!string.Equals(wpf.LayoutKind, avalonia.LayoutKind, StringComparison.OrdinalIgnoreCase))
+        {
+            failures.Add(
+                $"{pairName} layout kinds differ: WPF '{wpf.LayoutKind}', Avalonia '{avalonia.LayoutKind}'");
+        }
+
+        if (!string.Equals(wpf.ExpectedOutputName, avalonia.ExpectedOutputName, StringComparison.OrdinalIgnoreCase))
+        {
+            failures.Add(
+                $"{pairName} expected output names differ: WPF '{wpf.ExpectedOutputName}', Avalonia '{avalonia.ExpectedOutputName}'");
+        }
+    }
+
+    private static string FormatPages(IEnumerable<int> pageNumbers) =>
+        string.Join(
+            ", ",
+            pageNumbers
+                .Order()
+                .Select(p => "p" + p.ToString(CultureInfo.InvariantCulture)));
+
+    private static string FormatSize(int width, int height) =>
+        width.ToString(CultureInfo.InvariantCulture) + "x" + height.ToString(CultureInfo.InvariantCulture);
 
     private static string ScenarioKey(string hostId, string scenarioId) =>
         string.Concat(hostId, "\u001f", scenarioId);
