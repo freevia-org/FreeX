@@ -588,8 +588,14 @@ public sealed class MainWindowSheetTabKeyboardTests
         xaml.Should().NotContain("<ContextMenu Opened=\"SheetTabContextMenu_XamlOpened\">");
         xaml.Should().Contain("Loaded=\"SheetTabChrome_Loaded\"");
         source.Should().Contain("private void SheetTabChrome_Loaded(object sender, RoutedEventArgs e)");
-        source.Should().Contain("element.ContextMenu = BuildSheetTabContextMenu();");
-        source.Should().Contain("SheetTabContextMenuPlanner.BuildSheetTabCommands()");
+        source.Should().Contain("element.ContextMenuOpening += SheetTabChrome_ContextMenuOpening;");
+        source.Should().Contain("element.ContextMenu = BuildSheetTabContextMenu(element.DataContext as SheetTabViewModel);");
+        source.Should().Contain("private void SheetTabChrome_ContextMenuOpening(object sender, ContextMenuEventArgs e)");
+        source.Should().Contain("private void RebuildSheetTabContextMenu(ContextMenu menu, SheetTabViewModel? tab)");
+        source.Should().Contain("SheetTabContextMenuPlanner.BuildSheetTabCommands(state)");
+        source.Should().Contain("private SheetTabContextMenuState BuildSheetTabContextMenuState(SheetTabViewModel? tab)");
+        source.Should().Contain("CanUnhideSheet: hiddenSheetCount > 0");
+        source.Should().Contain("CanUngroupSheets: _groupedSheetIds.Count > 1");
         source.Should().Contain("RibbonTooltip.SetKeyTip(menuItem, command.KeyTip)");
         source.Should().Contain("RibbonMetadata.SetCommandName(menuItem, command.CommandName)");
         source.Should().Contain("menu.Opened += SheetTabContextMenu_Opened;");
