@@ -43,6 +43,7 @@ public sealed record FreeWVisualBaselineComparisonMetrics(
     int ComparedWidth,
     int ComparedHeight,
     long ComparedPixels,
+    long ChangedPixels,
     int ChangedPixelDeltaThreshold,
     double MeanAbsoluteChannelDelta,
     double MeanAbsoluteGrayscaleDelta,
@@ -54,13 +55,18 @@ public sealed record FreeWVisualBaselineComparison(
     string ScenarioId,
     int PageNumber,
     string OutputName,
+    string BaselineScenarioId,
     string MatchKey,
     string BaselinePath,
     IReadOnlyList<string> CandidateBaselinePaths,
     string Status,
+    string SkipReason,
     FreeWVisualBaselineComparisonTolerance Tolerance,
     FreeWVisualBaselineComparisonMetrics? Metrics,
-    FreeWVisualEvidenceTrust Trust);
+    FreeWVisualEvidenceTrust Trust)
+{
+    public string BaselineId => MatchKey;
+}
 
 public sealed record FreeWVisualWordBaselinePolicy(
     bool IsComparable,
@@ -74,6 +80,7 @@ public static class FreeWVisualBaselineComparisonPlanner
     public const string PassedStatus = "passed";
     public const string FailedStatus = "failed";
     public const string SkippedStatus = "skipped";
+    public const string WordBaselineUnavailableStatus = "word-baseline-unavailable";
 
     private static readonly IReadOnlyDictionary<string, string> BaselineScenarioAliases =
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
@@ -202,6 +209,35 @@ public static class FreeWVisualBaselineComparisonPlanner
             failure);
     }
 
+    public static FreeWVisualBaselineComparison BuildWordBaselineUnavailableComparison(
+        FreeWVisualEvidenceNormalizedRow row,
+        FreeWVisualBaselineComparisonTolerance? tolerance = null,
+        string? reasonOverride = null)
+    {
+        ArgumentNullException.ThrowIfNull(row);
+
+        var policy = ResolveWordBaselinePolicy(row);
+        var candidatePaths = BuildBaselineCandidateRelativePaths(row);
+        var reason = string.IsNullOrWhiteSpace(reasonOverride)
+            ? "MS Word baseline PNG generation was unavailable for this run"
+            : reasonOverride.Trim();
+        return new FreeWVisualBaselineComparison(
+            row.EvidenceId,
+            row.HostId,
+            row.ScenarioId,
+            Math.Max(1, row.PageNumber),
+            row.OutputName,
+            policy.BaselineScenarioId ?? row.ScenarioId,
+            BuildBaselineMatchKey(row),
+            string.Empty,
+            candidatePaths,
+            WordBaselineUnavailableStatus,
+            reason,
+            tolerance ?? FreeWVisualBaselineComparisonTolerance.WordPngDefault,
+            Metrics: null,
+            new FreeWVisualEvidenceTrust(true, []));
+    }
+
     public static FreeWVisualBaselineComparison BuildSkippedBaselineComparison(
         FreeWVisualEvidenceNormalizedRow row,
         FreeWVisualBaselineComparisonTolerance? tolerance = null,
@@ -224,10 +260,12 @@ public static class FreeWVisualBaselineComparisonPlanner
             row.ScenarioId,
             Math.Max(1, row.PageNumber),
             row.OutputName,
+            policy.BaselineScenarioId ?? row.ScenarioId,
             BuildBaselineMatchKey(row),
-            reason,
-            [],
+            string.Empty,
+            BuildBaselineCandidateRelativePaths(row),
             SkippedStatus,
+            reason,
             tolerance ?? FreeWVisualBaselineComparisonTolerance.WordPngDefault,
             Metrics: null,
             new FreeWVisualEvidenceTrust(true, []));
@@ -296,10 +334,12 @@ public static class FreeWVisualBaselineComparisonPlanner
             row.ScenarioId,
             row.PageNumber,
             row.OutputName,
+            ResolveWordBaselinePolicy(row).BaselineScenarioId ?? row.ScenarioId,
             BuildBaselineMatchKey(row),
             NormalizeManifestPath(baselinePath),
             candidatePaths,
             trust.Passed ? PassedStatus : FailedStatus,
+            string.Empty,
             tolerance,
             metrics,
             trust);
@@ -336,6 +376,7 @@ public static class FreeWVisualBaselineComparisonPlanner
                 sourceHeight,
                 DimensionsMatch(actualWidth, actualHeight, sourceWidth, sourceHeight),
                 baselineResized,
+                0,
                 0,
                 0,
                 0,
@@ -390,6 +431,7 @@ public static class FreeWVisualBaselineComparisonPlanner
             comparedWidth,
             comparedHeight,
             compared,
+            changed,
             threshold,
             RoundMetric(channelDelta / (denominator * 3.0)),
             RoundMetric(grayscaleDelta / denominator),
@@ -444,10 +486,12 @@ public static class FreeWVisualBaselineComparisonPlanner
             row.ScenarioId,
             row.PageNumber,
             row.OutputName,
+            ResolveWordBaselinePolicy(row).BaselineScenarioId ?? row.ScenarioId,
             BuildBaselineMatchKey(row),
             baselinePath,
             candidatePaths,
             status,
+            failure,
             tolerance,
             Metrics: null,
             new FreeWVisualEvidenceTrust(false, [failure]));

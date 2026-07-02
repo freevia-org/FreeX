@@ -128,6 +128,74 @@ public sealed class RendererNeutralDedupPlannerTests
     }
 
     [Fact]
+    public void PictureRenderPlanner_NoCropUsesFullSourceAndDestinationBounds()
+    {
+        var picture = new DrawOp.Picture
+        {
+            DestDip = new LayoutRect(10, 20, 300, 200)
+        };
+
+        var plan = PictureRenderPlanner.Plan(picture, pixelWidth: 640, pixelHeight: 480);
+
+        plan.DestinationDip.Should().Be(new LayoutRect(10, 20, 300, 200));
+        plan.SourceRectPixels.Should().Be(new PictureSourceRectPixels(0, 0, 640, 480));
+        plan.HasCrop.Should().BeFalse();
+        plan.HasPixelEffects.Should().BeFalse();
+        plan.HasAlphaOpacity.Should().BeFalse();
+        plan.HasOuterEffects.Should().BeFalse();
+    }
+
+    [Fact]
+    public void PictureRenderPlanner_CropSourceRectangleRoundsAndClamps()
+    {
+        var picture = new DrawOp.Picture
+        {
+            CropLeft = 1.5,
+            CropTop = -0.2,
+            CropRight = 0.9,
+            CropBottom = 1.5
+        };
+
+        var plan = PictureRenderPlanner.Plan(picture, pixelWidth: 20, pixelHeight: 10);
+
+        plan.SourceRectPixels.Should().Be(new PictureSourceRectPixels(19, 0, 1, 1));
+        plan.HasCrop.Should().BeTrue();
+    }
+
+    [Fact]
+    public void PictureRenderPlanner_PlansColorEffectsAlphaAndOuterEffectOrder()
+    {
+        var picture = new DrawOp.Picture
+        {
+            Brightness = 0.2,
+            Contrast = -0.1,
+            AlphaModPct = 0.42,
+            Effects = new ResolvedShapeEffects
+            {
+                HasOuterShadow = true,
+                OuterShadowColor = new SrgbColor(1, 2, 3),
+                OuterShadowAlpha = 128,
+                OuterShadowDistDip = 4,
+                OuterShadowDirDeg = 0
+            }
+        };
+
+        var plan = PictureRenderPlanner.Plan(picture, pixelWidth: 100, pixelHeight: 50);
+
+        plan.ColorEffects.HasPixelEffects.Should().BeTrue();
+        plan.AlphaOpacity.Should().BeApproximately(0.42, 0.0001);
+        plan.HasAlphaOpacity.Should().BeTrue();
+        plan.HasOuterEffects.Should().BeTrue();
+        plan.OuterEffects.ShadowPasses.Should().NotBeEmpty();
+        plan.PhaseOrder.Should().Equal(
+            PictureRenderPhase.OuterEffects,
+            PictureRenderPhase.PixelColorEffects,
+            PictureRenderPhase.AlphaOpacity,
+            PictureRenderPhase.ImageBody);
+        plan.AlphaAppliesToImageBody.Should().BeTrue();
+    }
+
+    [Fact]
     public void WpfAndAvaloniaSlideCanvases_UseRendererNeutralShapeAndWarpPlanners()
     {
         var wpf = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "SlideCanvas.cs");
@@ -152,7 +220,7 @@ public sealed class RendererNeutralDedupPlannerTests
     }
 
     [Fact]
-    public void WpfAndAvaloniaSlideCanvases_UseRendererNeutralPictureColorEffectPlanner()
+    public void WpfAndAvaloniaSlideCanvases_UseRendererNeutralPictureRenderPlanner()
     {
         var wpf = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "SlideCanvas.cs");
         var avalonia = ReadWorkspaceFile(
@@ -162,9 +230,11 @@ public sealed class RendererNeutralDedupPlannerTests
 
         foreach (var source in new[] { wpf, avalonia })
         {
-            source.Should().Contain("PictureColorEffectPlanner.Plan");
+            source.Should().Contain("PictureRenderPlanner.Plan(pic");
             source.Should().Contain("PictureColorEffectPlanner.ApplyToBgra32");
             source.Should().NotContain("0.2126 * r + 0.7152 * g + 0.0722 * b");
+            source.Should().NotContain("Math.Round(pic.CropLeft");
+            source.Should().NotContain("visW = 1.0 - pic.CropLeft");
             source.Should().NotContain("pic.Brightness ?? 0");
             source.Should().NotContain("pic.Contrast  ?? 0");
         }

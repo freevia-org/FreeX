@@ -452,31 +452,26 @@ public sealed class SlideCanvas : FrameworkElement
             return;
         }
 
+        var plan = PictureRenderPlanner.Plan(pic, bitmap.PixelWidth, bitmap.PixelHeight);
+
         // 18A: apply crop via CroppedBitmap (source sub-rect)
-        if (pic.HasCrop)
+        if (plan.HasCrop)
         {
-            int pw = bitmap.PixelWidth;
-            int ph = bitmap.PixelHeight;
-            int x  = (int)Math.Round(pic.CropLeft   * pw);
-            int y  = (int)Math.Round(pic.CropTop    * ph);
-            int w  = (int)Math.Round((1.0 - pic.CropLeft - pic.CropRight)  * pw);
-            int h  = (int)Math.Round((1.0 - pic.CropTop  - pic.CropBottom) * ph);
-            // Clamp to valid pixel dimensions
-            x = Math.Max(0, Math.Min(x, pw - 1));
-            y = Math.Max(0, Math.Min(y, ph - 1));
-            w = Math.Max(1, Math.Min(w, pw - x));
-            h = Math.Max(1, Math.Min(h, ph - y));
-            var cropped = new CroppedBitmap(bitmap, new Int32Rect(x, y, w, h));
+            var source = plan.SourceRectPixels;
+            var cropped = new CroppedBitmap(
+                bitmap,
+                new Int32Rect(source.X, source.Y, source.Width, source.Height));
             if (cropped.CanFreeze) cropped.Freeze();
             bitmap = cropped;
         }
 
         // 18A: apply colour effects (grayscale, brightness/contrast, biLevel)
-        var effectPlan = PictureColorEffectPlanner.Plan(pic);
+        var effectPlan = plan.ColorEffects;
         if (effectPlan.HasPixelEffects)
             bitmap = ApplyColorEffectsWpf(bitmap, effectPlan);
 
-        var dest = new Rect(pic.DestDip.X, pic.DestDip.Y, pic.DestDip.Width, pic.DestDip.Height);
+        var destination = plan.DestinationDip;
+        var dest = new Rect(destination.X, destination.Y, destination.Width, destination.Height);
 
         bool hasRotation = pic.RotationDeg != 0;
         if (hasRotation)
@@ -489,8 +484,7 @@ public sealed class SlideCanvas : FrameworkElement
         // Wave 26: draw outer shadow behind the picture when effects are set.
         // Route the shadow-direction/blur math through the shared renderer-neutral planner
         // (ShapeEffectRenderPlanner) so WPF + Avalonia stay in lock-step and we don't duplicate it.
-        var picShadowPlan = ShapeEffectRenderPlanner.PlanOuterEffects(pic.Effects);
-        foreach (var pass in picShadowPlan.ShadowPasses)
+        foreach (var pass in plan.OuterEffects.ShadowPasses)
         {
             var shadowBrush = new System.Windows.Media.SolidColorBrush(
                 System.Windows.Media.Color.FromArgb(
@@ -508,9 +502,9 @@ public sealed class SlideCanvas : FrameworkElement
         }
 
         // 18A: apply alpha opacity layer if needed
-        bool hasAlpha = pic.AlphaModPct.HasValue && pic.AlphaModPct.Value < 1.0;
+        bool hasAlpha = plan.HasAlphaOpacity;
         if (hasAlpha)
-            dc.PushOpacity(Math.Max(0, Math.Min(1, pic.AlphaModPct!.Value)));
+            dc.PushOpacity(plan.AlphaOpacity);
 
         // Wave 26: clip to frame geometry when a non-rect preset is specified.
         bool hasFrameClip = pic.HasFrameClip;
