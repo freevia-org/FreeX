@@ -310,6 +310,87 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void BuildFramePlan_DataTable_ReservesBottomTableBand()
+    {
+        var chart = MakeTwoSeriesChart(ChartType.ColumnClustered);
+        chart.DataTable = new ChartDataTableSettings();
+
+        var frame = ChartRenderPlanner.BuildFramePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+
+        frame.Plot.Should().Be(new ChartPlanRect(48, 8, 344, 241));
+        ChartRenderPlanner.BuildCategoryAxisLabelPlans(chart, frame).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void BuildDataTablePrimitivePlan_PlansHeadersSeriesRowsKeysAndBorders()
+    {
+        var chart = MakeTwoSeriesChart(ChartType.ColumnClustered);
+        chart.DataTable = new ChartDataTableSettings { ShowLegendKeys = true };
+        var colors = new[]
+        {
+            new SrgbColor(0x11, 0x22, 0x33),
+            new SrgbColor(0x44, 0x55, 0x66)
+        };
+        var frame = ChartRenderPlanner.BuildFramePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+
+        var plan = ChartRenderPlanner.BuildDataTablePrimitivePlan(chart, frame, colors);
+
+        plan.Bounds.Should().Be(new ChartPlanRect(48, 253, 344, 39));
+        plan.Cells.Should().HaveCount(9);
+        plan.Cells.Should().Contain(cell =>
+            cell.RowIndex == 0 &&
+            cell.ColumnIndex == 1 &&
+            cell.Text == "Q1" &&
+            cell.Bounds == new ChartPlanRect(122, 253, 132, 13) &&
+            cell.IsHeader);
+        plan.Cells.Should().Contain(cell =>
+            cell.RowIndex == 1 &&
+            cell.ColumnIndex == 0 &&
+            cell.Text == "Actual" &&
+            cell.Bounds == new ChartPlanRect(58, 266, 60, 13) &&
+            cell.LegendKeyBounds == new ChartPlanRect(50, 269.5, 6, 6) &&
+            cell.LegendKeyFill == new ChartFillPlan(colors[0], Alpha: 255));
+        plan.Cells.Should().Contain(cell =>
+            cell.RowIndex == 2 &&
+            cell.ColumnIndex == 2 &&
+            cell.Text == "40" &&
+            cell.Bounds == new ChartPlanRect(258, 279, 132, 13));
+        plan.HorizontalBorders.Should().HaveCount(4);
+        plan.VerticalBorders.Should().HaveCount(4);
+        plan.OutlineBorders.Should().HaveCount(4);
+        plan.BorderStroke.Should().Be(new ChartStrokePlan(
+            new SrgbColor(0xB7, 0xB7, 0xB7),
+            Alpha: 255,
+            Thickness: 0.5));
+    }
+
+    [Fact]
+    public void BuildDataTablePrimitivePlan_UnsupportedFamiliesAndDisabledBordersReturnExpectedPlan()
+    {
+        var pie = MakeTwoSeriesChart(ChartType.Pie);
+        pie.DataTable = new ChartDataTableSettings();
+        var pieFrame = ChartRenderPlanner.BuildFramePlan(pie, new ChartPlanRect(0, 0, 400, 300));
+
+        ChartRenderPlanner.BuildDataTablePrimitivePlan(pie, pieFrame).Cells.Should().BeEmpty();
+
+        var column = MakeTwoSeriesChart(ChartType.ColumnClustered);
+        column.DataTable = new ChartDataTableSettings
+        {
+            ShowHorizontalBorder = false,
+            ShowVerticalBorder = false,
+            ShowOutlineBorder = false,
+        };
+        var columnFrame = ChartRenderPlanner.BuildFramePlan(column, new ChartPlanRect(0, 0, 400, 300));
+
+        var plan = ChartRenderPlanner.BuildDataTablePrimitivePlan(column, columnFrame);
+
+        plan.Cells.Should().NotBeEmpty();
+        plan.HorizontalBorders.Should().BeEmpty();
+        plan.VerticalBorders.Should().BeEmpty();
+        plan.OutlineBorders.Should().BeEmpty();
+    }
+
+    [Fact]
     public void BuildSecondaryValueAxisPrimitivePlan_PlansRightTicksLabelsAndClockwiseTitle()
     {
         var chart = MakeSecondaryAxisChart();
