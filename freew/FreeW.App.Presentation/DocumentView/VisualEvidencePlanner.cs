@@ -427,6 +427,31 @@ public static class FreeWVisualEvidencePlanner
                 ExpectsFloatingObjects = true
             }),
         new(
+            "wordart-picture-watermark-layout",
+            "WordArt, picture watermark, page-layout stress fidelity capture.",
+            [
+                "wordart-watermark-layout",
+                "drawing-objects",
+                "wordart",
+                "picture-watermark",
+                "watermark",
+                "page-border",
+                "columns",
+                "print-layout",
+                "body-text",
+                "in-front"
+            ],
+            "wordart-picture-watermark-layout_p{page}.png",
+            1,
+            DocumentViewLayoutKind.PrintLayout,
+            BodyPrintComposition with
+            {
+                ExpectsColumns = true,
+                ExpectsPageBorder = true,
+                ExpectsWatermark = true,
+                ExpectsFloatingObjects = true
+            }),
+        new(
             "page-composition-print-layout",
             "Avalonia print-layout page composition shot.",
             ["page-composition", "avalonia", "print-layout", "page-chrome", "multi-page", "body-text"],
