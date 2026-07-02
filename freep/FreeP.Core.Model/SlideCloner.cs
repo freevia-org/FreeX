@@ -117,6 +117,7 @@ public static class SlideCloner
             Legend       = src.Legend,
             CategoryAxis = CloneChartAxis(src.CategoryAxis),
             ValueAxis    = CloneChartAxis(src.ValueAxis),
+            DataTable    = src.DataTable is null ? null : CloneChartDataTableSettings(src.DataTable),
             RegenerateWorkbookOnSave = src.RegenerateWorkbookOnSave,
         };
 
@@ -142,6 +143,14 @@ public static class SlideCloner
 
         return copy;
     }
+
+    private static ChartDataTableSettings CloneChartDataTableSettings(ChartDataTableSettings settings) => new()
+    {
+        ShowHorizontalBorder = settings.ShowHorizontalBorder,
+        ShowVerticalBorder   = settings.ShowVerticalBorder,
+        ShowOutlineBorder    = settings.ShowOutlineBorder,
+        ShowLegendKeys       = settings.ShowLegendKeys,
+    };
 
     private static ChartAxis CloneChartAxis(ChartAxis a) => new()
     {
