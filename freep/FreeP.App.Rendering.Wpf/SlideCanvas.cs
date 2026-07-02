@@ -1212,14 +1212,17 @@ public sealed class SlideCanvas : FrameworkElement
 
     private static void DrawChartLabel(
         DrawingContext dc, string text, Rect rect,
-        bool isBold, double fontSize, TextAlignment align)
+        bool isBold, double fontSize, TextAlignment align,
+        bool isItalic = false,
+        SrgbColor? textColor = null)
     {
         if (string.IsNullOrWhiteSpace(text)) return;
         if (rect.Width <= 0 || rect.Height <= 0) return;
 
+        var color = textColor ?? new SrgbColor(0x40, 0x40, 0x40);
         var typeface = new Typeface(
             new FontFamily("Calibri"),
-            FontStyles.Normal,
+            isItalic ? FontStyles.Italic : FontStyles.Normal,
             isBold ? FontWeights.Bold : FontWeights.Normal,
             FontStretches.Normal);
 
@@ -1229,7 +1232,7 @@ public sealed class SlideCanvas : FrameworkElement
             FlowDirection.LeftToRight,
             typeface,
             fontSize * (96.0 / 72.0),
-            FreezeBrush(new SolidColorBrush(Color.FromRgb(0x40, 0x40, 0x40))),
+            FreezeBrush(new SolidColorBrush(Color.FromRgb(color.R, color.G, color.B))),
             numberSubstitution: null,
             textFormattingMode: TextFormattingMode.Display,
             pixelsPerDip: 1.0)
@@ -1274,9 +1277,11 @@ public sealed class SlideCanvas : FrameworkElement
                 dc,
                 cell.Text,
                 ToRect(cell.Bounds),
-                cell.IsHeader,
-                ChartRenderPlanner.DataTableFontSize,
-                ToTextAlignment(cell.Alignment));
+                cell.IsBold,
+                cell.FontSize,
+                ToTextAlignment(cell.Alignment),
+                cell.IsItalic,
+                cell.TextColor);
         }
     }
 

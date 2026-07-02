@@ -151,7 +151,19 @@ public static class SlideCloner
         ShowOutlineBorder    = settings.ShowOutlineBorder,
         ShowLegendKeys       = settings.ShowLegendKeys,
         BorderOutline        = CloneShapeOutline(settings.BorderOutline),
+        TextStyle            = CloneChartTextStyle(settings.TextStyle),
     };
+
+    private static ChartTextStyle? CloneChartTextStyle(ChartTextStyle? style) =>
+        style is null
+            ? null
+            : new ChartTextStyle
+            {
+                FontSizePt = style.FontSizePt,
+                Bold       = style.Bold,
+                Italic     = style.Italic,
+                Color      = style.Color,
+            };
 
     private static ShapeOutline? CloneShapeOutline(ShapeOutline? outline) => outline;
 

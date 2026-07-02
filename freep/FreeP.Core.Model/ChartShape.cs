@@ -104,6 +104,25 @@ public sealed class ChartDataTableSettings
 
     /// <summary>Optional border line style from <c>c:dTable/c:spPr/a:ln</c>.</summary>
     public ShapeOutline? BorderOutline { get; set; }
+
+    /// <summary>Optional default text properties from <c>c:dTable/c:txPr/a:p/a:pPr/a:defRPr</c>.</summary>
+    public ChartTextStyle? TextStyle { get; set; }
+}
+
+/// <summary>Small chart text style subset shared by chart labels, data tables, and render planners.</summary>
+public sealed class ChartTextStyle
+{
+    /// <summary>Font size in points, or null to use the chart renderer default.</summary>
+    public double? FontSizePt { get; set; }
+
+    /// <summary>Explicit bold state. Null means inherit/use renderer default.</summary>
+    public bool? Bold { get; set; }
+
+    /// <summary>Explicit italic state. Null means inherit/use renderer default.</summary>
+    public bool? Italic { get; set; }
+
+    /// <summary>Text color, or null to use the chart renderer default.</summary>
+    public ThemeAwareColor? Color { get; set; }
 }
 
 /// <summary>A single data series within a <see cref="ChartShape"/>.</summary>

@@ -782,6 +782,7 @@ internal static class PptxChartReader
             ShowOutlineBorder    = ParseBoolAttr(dTableEl.Element(C + "showOutline")),
             ShowLegendKeys       = ParseBoolAttr(dTableEl.Element(C + "showKeys")),
             BorderOutline        = ReadDataTableBorderOutline(dTableEl, scheme),
+            TextStyle            = ReadDataTableTextStyle(dTableEl, scheme),
         };
     }
 
@@ -792,6 +793,47 @@ internal static class PptxChartReader
             scheme);
         return outline is ShapeOutline.Visible or ShapeOutline.None ? outline : null;
     }
+
+    private static ChartTextStyle? ReadDataTableTextStyle(XElement dTableEl, PresentationColorScheme scheme)
+    {
+        var defRPr = dTableEl
+            .Element(C + "txPr")
+            ?.Element(A + "p")
+            ?.Element(A + "pPr")
+            ?.Element(A + "defRPr");
+        if (defRPr is null)
+            return null;
+
+        double? fontSizePt = null;
+        if (int.TryParse(defRPr.Attribute("sz")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var sz)
+            && sz > 0)
+        {
+            fontSizePt = sz / 100.0;
+        }
+
+        bool? bold = ParseNullableBoolAttr(defRPr.Attribute("b")?.Value);
+        bool? italic = ParseNullableBoolAttr(defRPr.Attribute("i")?.Value);
+        var color = PptxColorReader.TryReadColor(defRPr.Element(A + "solidFill"), scheme);
+
+        return fontSizePt.HasValue || bold.HasValue || italic.HasValue || color is not null
+            ? new ChartTextStyle
+            {
+                FontSizePt = fontSizePt,
+                Bold       = bold,
+                Italic     = italic,
+                Color      = color,
+            }
+            : null;
+    }
+
+    private static bool? ParseNullableBoolAttr(string? value) =>
+        value switch
+        {
+            null => null,
+            "1" or "true" => true,
+            "0" or "false" => false,
+            _ => null
+        };
 
     private static bool ParseBoolAttr(XElement? el)
     {
