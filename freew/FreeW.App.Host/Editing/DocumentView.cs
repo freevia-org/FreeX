@@ -8813,6 +8813,7 @@ public sealed class DocumentView : RichTextBox
     /// the render reflects the gallery choice without mutating the model's own toggle fields.
     /// </summary>
     private readonly record struct ChartRenderSettings(
+        ChartVisualGeometryKind GeometryKind,
         bool ShowTitle,
         bool ShowLegend,
         bool ShowGridlines,
@@ -8820,52 +8821,27 @@ public sealed class DocumentView : RichTextBox
         bool ShowMarkers,
         bool ShowDataLabels,
         bool ShowAxisTitles,
+        string? CategoryAxisTitle,
+        string? ValueAxisTitle,
         Color[] Palette);
 
     /// <summary>Resolves the effective render settings for a chart from its three gallery ids.</summary>
     private static ChartRenderSettings ResolveChartRenderSettings(Chart chart)
     {
-        // Color scheme → palette.
-        // Trim the id before lookup so trailing whitespace from XML parsing never causes a miss.
-        var schemeId = chart.ColorSchemeId?.Trim();
-        var scheme = (!string.IsNullOrEmpty(schemeId) ? ChartColorScheme.FindById(schemeId) : null)
-                     ?? ChartColorScheme.Default;
-        var palette = scheme.Colors.Select(hex => ParseHexColor(hex)).ToArray();
-
-        // Chart style → visual treatment
-        var style = (chart.StyleId > 0 ? ChartStyle.FindById(chart.StyleId) : null)
-                    ?? ChartStyle.Default;
-
-        // Quick layout → element visibility (overrides model toggles when set)
-        bool showTitle, showLegend, showAxisTitles;
-        bool showGridlines = style.ShowGridlines;
-        bool showDataLabels = style.ShowDataLabels;
-        if (chart.QuickLayoutId > 0 && ChartQuickLayout.FindById(chart.QuickLayoutId) is { } ql)
-        {
-            showTitle = ql.ShowTitle && !string.IsNullOrEmpty(chart.Title);
-            showLegend = ql.ShowLegend && chart.Series.Count > 0;
-            showGridlines = ql.ShowGridlines;
-            showDataLabels = ql.ShowDataLabels;
-            showAxisTitles = ql.ShowAxisTitles;
-        }
-        else
-        {
-            showTitle = !string.IsNullOrEmpty(chart.Title);
-            showLegend = (chart.ShowLegend || chart.Series.Count > 1) && chart.Series.Count > 0;
-            // Show axis titles whenever the chart model carries them (regardless of quick layout).
-            showAxisTitles = !string.IsNullOrEmpty(chart.CategoryAxisTitle)
-                          || !string.IsNullOrEmpty(chart.ValueAxisTitle);
-        }
+        var plan = ChartSmartArtVisualPlanner.BuildChartPlan(chart);
 
         return new ChartRenderSettings(
-            ShowTitle: showTitle,
-            ShowLegend: showLegend,
-            ShowGridlines: showGridlines,
-            PlotAreaFill: style.PlotAreaFill,
-            ShowMarkers: style.ShowMarkers,
-            ShowDataLabels: showDataLabels,
-            ShowAxisTitles: showAxisTitles,
-            Palette: palette);
+            plan.GeometryKind,
+            plan.ShowTitle,
+            plan.ShowLegend,
+            plan.ShowGridlines,
+            plan.PlotAreaFill,
+            plan.ShowMarkers,
+            plan.ShowDataLabels,
+            plan.ShowAxisTitles,
+            plan.CategoryAxisTitle,
+            plan.ValueAxisTitle,
+            plan.PaletteHex.Select(ParseHexColor).ToArray());
     }
 
     /// <summary>Parse a #RRGGBB hex colour string to a WPF Color, falling back to the Office blue.</summary>
@@ -8919,11 +8895,11 @@ public sealed class DocumentView : RichTextBox
         // These are added to the root DockPanel before the plot so they dock outside the plot area.
         var isPie = chart.Kind is ChartKind.Pie or ChartKind.Doughnut;
         var showAxisTitles = !isPie && settings.ShowAxisTitles;
-        if (showAxisTitles && !string.IsNullOrEmpty(chart.ValueAxisTitle))
+        if (showAxisTitles && !string.IsNullOrEmpty(settings.ValueAxisTitle))
         {
             var valueLabel = new TextBlock
             {
-                Text = chart.ValueAxisTitle,
+                Text = settings.ValueAxisTitle,
                 FontSize = 9,
                 Foreground = new SolidColorBrush(Color.FromRgb(0x59, 0x59, 0x59)),
                 HorizontalAlignment = HorizontalAlignment.Center,
@@ -8933,11 +8909,11 @@ public sealed class DocumentView : RichTextBox
             DockPanel.SetDock(valueHost, Dock.Left);
             root.Children.Add(valueHost);
         }
-        if (showAxisTitles && !string.IsNullOrEmpty(chart.CategoryAxisTitle))
+        if (showAxisTitles && !string.IsNullOrEmpty(settings.CategoryAxisTitle))
         {
             var catLabel = new TextBlock
             {
-                Text = chart.CategoryAxisTitle,
+                Text = settings.CategoryAxisTitle,
                 FontSize = 9,
                 Foreground = new SolidColorBrush(Color.FromRgb(0x59, 0x59, 0x59)),
                 HorizontalAlignment = HorizontalAlignment.Center,
@@ -9400,23 +9376,8 @@ public sealed class DocumentView : RichTextBox
         var heightPx = smartArt.HeightPt * PxPerPoint;
         var strokeThickness = EffectLineThickness(effectSet);
 
-        // Resolve gallery presets (fall back to catalog defaults when ids are null).
-        var colorScheme = (smartArt.ColorSchemeId is not null
-            ? SmartArtColorScheme.FindById(smartArt.ColorSchemeId)
-            : null) ?? SmartArtColorScheme.Default;
-        var style = (smartArt.StyleId is not null
-            ? SmartArtStyle.FindById(smartArt.StyleId)
-            : null) ?? SmartArtStyle.Default;
-
-        // Determine effective layout id: explicit LayoutId overrides Kind-derived default.
-        var layoutId = smartArt.LayoutId ?? smartArt.Kind switch
-        {
-            SmartArtKind.Process => "process1",
-            SmartArtKind.Hierarchy => "hierarchy1",
-            _ => "list1"
-        };
-
-        var content = SmartArtRenderer.Build(smartArt.Nodes, layoutId, colorScheme, style, strokeThickness);
+        var plan = ChartSmartArtVisualPlanner.BuildSmartArtPlan(smartArt);
+        var content = SmartArtRenderer.Build(smartArt, plan, strokeThickness);
 
         var element = new Border
         {
