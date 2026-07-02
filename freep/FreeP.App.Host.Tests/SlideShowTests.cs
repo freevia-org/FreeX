@@ -462,6 +462,14 @@ public sealed class SlideShowWindowTests
             plan.PointerInk.PointerMode.Should().Be(SlideShowPresenterPointerMode.Pen);
             plan.PointerInk.InkState.ColorHex.Should().Be("#336699");
             plan.PointerInk.InkRetentionDecision.Should().Be(SlideShowInkRetentionDecision.ClearInk);
+            window.PresenterWorkflowActions.Should().BeSameAs(plan.WorkflowActions);
+            window.PresenterWorkflowActions.Should().Contain(action =>
+                action.Kind == SlideShowPresenterWorkflowActionKind.RequestNarrationCapture &&
+                action.IsDeferred);
+            window.PresenterWorkflowActions.Should().Contain(action =>
+                action.Kind == SlideShowPresenterWorkflowActionKind.ConfigureInkStroke);
+            window.PresenterWorkflowActions.Should().Contain(action =>
+                action.Kind == SlideShowPresenterWorkflowActionKind.ClearInkOnExit);
 
             var state = window.CreatePresenterState(window.PresenterStartedAtUtc.AddSeconds(3));
             state.ToolPlan.Should().BeSameAs(plan);

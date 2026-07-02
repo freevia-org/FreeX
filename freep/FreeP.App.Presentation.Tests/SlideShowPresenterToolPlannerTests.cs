@@ -89,4 +89,38 @@ public sealed class SlideShowPresenterToolPlannerTests
         plan.PointerInk.InkState.ColorHex.Should().Be("#123456");
         plan.PointerInk.InkRetentionDecision.Should().Be(SlideShowInkRetentionDecision.KeepInk);
     }
+
+    [Fact]
+    public void BuildPlan_EmitsSharedWorkflowActionsForRecordingAndInkExecutionIntent()
+    {
+        var plan = SlideShowPresenterToolPlanner.BuildPlan(
+            SlideShowTimingIntent.RecordTimings,
+            SlideShowRecordingMediaIntent.NarrationAndMedia,
+            SlideShowPresenterPointerMode.Highlighter,
+            "#ffee00",
+            8,
+            SlideShowInkRetentionDecision.ClearInk);
+
+        plan.WorkflowActions.Select(action => action.Kind).Should().Equal(
+            new[]
+            {
+                SlideShowPresenterWorkflowActionKind.StartElapsedClock,
+                SlideShowPresenterWorkflowActionKind.TrackPerSlideTiming,
+                SlideShowPresenterWorkflowActionKind.PersistPerSlideTiming,
+                SlideShowPresenterWorkflowActionKind.RequestNarrationCapture,
+                SlideShowPresenterWorkflowActionKind.RequestMediaCapture,
+                SlideShowPresenterWorkflowActionKind.SelectPointerMode,
+                SlideShowPresenterWorkflowActionKind.ConfigureInkStroke,
+                SlideShowPresenterWorkflowActionKind.ClearInkOnExit,
+            });
+        plan.WorkflowActions
+            .Where(action => action.IsDeferred)
+            .Select(action => action.Kind)
+            .Should().Equal(
+                SlideShowPresenterWorkflowActionKind.RequestNarrationCapture,
+                SlideShowPresenterWorkflowActionKind.RequestMediaCapture);
+        plan.WorkflowActions.Single(action =>
+                action.Kind == SlideShowPresenterWorkflowActionKind.ConfigureInkStroke)
+            .StatusText.Should().Contain("#FFEE00");
+    }
 }

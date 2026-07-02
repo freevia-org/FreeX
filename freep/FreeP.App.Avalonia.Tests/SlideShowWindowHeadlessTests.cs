@@ -144,7 +144,15 @@ public sealed class SlideShowWindowHeadlessTests
         plan.PointerInk.InkState.ColorHex.Should().Be("#FFEE00");
         plan.PointerInk.InkRetentionDecision.Should().Be(SlideShowInkRetentionDecision.ClearInk);
         state.Should().NotBeNull();
-        state!.ToolPlan.Should().BeSameAs(plan);
+        plan.WorkflowActions.Should().BeSameAs(state!.ToolPlan.WorkflowActions);
+        plan.WorkflowActions.Should().Contain(action =>
+            action.Kind == SlideShowPresenterWorkflowActionKind.RequestNarrationCapture &&
+            action.IsDeferred);
+        plan.WorkflowActions.Should().Contain(action =>
+            action.Kind == SlideShowPresenterWorkflowActionKind.ConfigureInkStroke);
+        plan.WorkflowActions.Should().Contain(action =>
+            action.Kind == SlideShowPresenterWorkflowActionKind.ClearInkOnExit);
+        state.ToolPlan.Should().BeSameAs(plan);
     }
 
     [Fact]
