@@ -1,5 +1,6 @@
 using System.IO;
 using System.Reflection;
+using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -247,23 +248,48 @@ public sealed partial class FormatCellsDialogXamlTests
                 var decimals = GetControl<TextBox>(dialog, "NumberDecimalPlacesBox");
                 var symbols = GetControl<ComboBox>(dialog, "NumberSymbolCombo");
                 var negatives = GetControl<ListBox>(dialog, "NumberNegativeNumbersList");
+                var generalDescription = GetControl<TextBlock>(dialog, "NumberGeneralDescription");
+                var typePanel = GetControl<StackPanel>(dialog, "NumberTypePanel");
+                var decimalPanel = GetControl<StackPanel>(dialog, "NumberDecimalPlacesPanel");
+                var symbolPanel = GetControl<StackPanel>(dialog, "NumberSymbolPanel");
+                var negativePanel = GetControl<StackPanel>(dialog, "NumberNegativeNumbersPanel");
 
                 categories.SelectedItem = "General";
+                generalDescription.Visibility.Should().Be(Visibility.Visible);
+                typePanel.Visibility.Should().Be(Visibility.Collapsed);
+                decimalPanel.Visibility.Should().Be(Visibility.Collapsed);
+                symbolPanel.Visibility.Should().Be(Visibility.Collapsed);
+                negativePanel.Visibility.Should().Be(Visibility.Collapsed);
                 decimals.IsEnabled.Should().BeFalse();
                 symbols.IsEnabled.Should().BeFalse();
                 negatives.IsEnabled.Should().BeFalse();
 
                 categories.SelectedItem = "Number";
+                generalDescription.Visibility.Should().Be(Visibility.Collapsed);
+                typePanel.Visibility.Should().Be(Visibility.Visible);
+                decimalPanel.Visibility.Should().Be(Visibility.Visible);
+                symbolPanel.Visibility.Should().Be(Visibility.Collapsed);
+                negativePanel.Visibility.Should().Be(Visibility.Visible);
                 decimals.IsEnabled.Should().BeTrue();
                 symbols.IsEnabled.Should().BeFalse();
                 negatives.IsEnabled.Should().BeTrue();
 
                 categories.SelectedItem = "Currency";
+                generalDescription.Visibility.Should().Be(Visibility.Collapsed);
+                typePanel.Visibility.Should().Be(Visibility.Visible);
+                decimalPanel.Visibility.Should().Be(Visibility.Visible);
+                symbolPanel.Visibility.Should().Be(Visibility.Visible);
+                negativePanel.Visibility.Should().Be(Visibility.Visible);
                 decimals.IsEnabled.Should().BeTrue();
                 symbols.IsEnabled.Should().BeTrue();
                 negatives.IsEnabled.Should().BeTrue();
 
                 categories.SelectedItem = "Accounting";
+                generalDescription.Visibility.Should().Be(Visibility.Collapsed);
+                typePanel.Visibility.Should().Be(Visibility.Visible);
+                decimalPanel.Visibility.Should().Be(Visibility.Visible);
+                symbolPanel.Visibility.Should().Be(Visibility.Visible);
+                negativePanel.Visibility.Should().Be(Visibility.Collapsed);
                 decimals.IsEnabled.Should().BeTrue();
                 symbols.IsEnabled.Should().BeTrue();
                 negatives.IsEnabled.Should().BeFalse();
@@ -271,6 +297,11 @@ public sealed partial class FormatCellsDialogXamlTests
                 foreach (var category in new[] { "Date", "Time", "Fraction", "Text", "Special", "Custom" })
                 {
                     categories.SelectedItem = category;
+                    generalDescription.Visibility.Should().Be(Visibility.Collapsed);
+                    typePanel.Visibility.Should().Be(Visibility.Visible);
+                    decimalPanel.Visibility.Should().Be(Visibility.Collapsed);
+                    symbolPanel.Visibility.Should().Be(Visibility.Collapsed);
+                    negativePanel.Visibility.Should().Be(Visibility.Collapsed);
                     decimals.IsEnabled.Should().BeFalse();
                     symbols.IsEnabled.Should().BeFalse();
                     negatives.IsEnabled.Should().BeFalse();
@@ -279,6 +310,11 @@ public sealed partial class FormatCellsDialogXamlTests
                 foreach (var category in new[] { "Percentage", "Scientific" })
                 {
                     categories.SelectedItem = category;
+                    generalDescription.Visibility.Should().Be(Visibility.Collapsed);
+                    typePanel.Visibility.Should().Be(Visibility.Visible);
+                    decimalPanel.Visibility.Should().Be(Visibility.Visible);
+                    symbolPanel.Visibility.Should().Be(Visibility.Collapsed);
+                    negativePanel.Visibility.Should().Be(Visibility.Collapsed);
                     decimals.IsEnabled.Should().BeTrue();
                     symbols.IsEnabled.Should().BeFalse();
                     negatives.IsEnabled.Should().BeFalse();

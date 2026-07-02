@@ -1,4 +1,5 @@
 using FreeX.App.Services;
+using System.Windows;
 
 namespace FreeX.App.Host;
 
@@ -53,6 +54,12 @@ public partial class FormatCellsDialog
             return;
 
         var availability = FormatCellsNumberControlPlanner.Plan(category);
+
+        NumberGeneralDescription.Visibility = category is "General" ? Visibility.Visible : Visibility.Collapsed;
+        NumberTypePanel.Visibility = category is "General" ? Visibility.Collapsed : Visibility.Visible;
+        NumberDecimalPlacesPanel.Visibility = availability.UsesDecimals ? Visibility.Visible : Visibility.Collapsed;
+        NumberSymbolPanel.Visibility = availability.UsesSymbol ? Visibility.Visible : Visibility.Collapsed;
+        NumberNegativeNumbersPanel.Visibility = availability.UsesNegativeOptions ? Visibility.Visible : Visibility.Collapsed;
 
         NumberDecimalPlacesBox.IsEnabled = availability.UsesDecimals;
         NumberSymbolCombo.IsEnabled = availability.UsesSymbol;
