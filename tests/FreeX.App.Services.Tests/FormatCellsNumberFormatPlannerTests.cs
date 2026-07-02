@@ -6,16 +6,19 @@ namespace FreeX.App.Services.Tests;
 public sealed class FormatCellsNumberFormatPlannerTests
 {
     [Theory]
-    [InlineData("Number", true, false, true, true)]
-    [InlineData("Currency", true, true, true, true)]
-    [InlineData("Accounting", true, true, false, true)]
-    [InlineData("Percentage", true, false, false, true)]
-    [InlineData("Scientific", true, false, false, true)]
-    [InlineData("Date", false, false, false, false)]
-    [InlineData("Custom", false, false, false, false)]
-    [InlineData(null, false, false, false, false)]
+    [InlineData("General", false, true, false, false, false, false)]
+    [InlineData("Number", true, false, true, false, true, true)]
+    [InlineData("Currency", true, false, true, true, true, true)]
+    [InlineData("Accounting", true, false, true, true, false, true)]
+    [InlineData("Percentage", true, false, true, false, false, true)]
+    [InlineData("Scientific", true, false, true, false, false, true)]
+    [InlineData("Date", true, false, false, false, false, false)]
+    [InlineData("Custom", true, false, false, false, false, false)]
+    [InlineData(null, false, false, false, false, false, false)]
     public void ControlPlanner_MatchesExcelNumberCategoryControlAvailability(
         string? category,
+        bool showsType,
+        bool showsGeneralDescription,
         bool usesDecimals,
         bool usesSymbol,
         bool usesNegativeOptions,
@@ -24,6 +27,8 @@ public sealed class FormatCellsNumberFormatPlannerTests
         FormatCellsNumberControlPlanner.Plan(category)
             .Should()
             .Be(new FormatCellsNumberControlAvailability(
+                showsType,
+                showsGeneralDescription,
                 usesDecimals,
                 usesSymbol,
                 usesNegativeOptions,
