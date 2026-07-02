@@ -101,6 +101,9 @@ public sealed class ChartDataTableSettings
 
     /// <summary>Show series legend keys next to the series names.</summary>
     public bool ShowLegendKeys { get; set; }
+
+    /// <summary>Optional border line style from <c>c:dTable/c:spPr/a:ln</c>.</summary>
+    public ShapeOutline? BorderOutline { get; set; }
 }
 
 /// <summary>A single data series within a <see cref="ChartShape"/>.</summary>

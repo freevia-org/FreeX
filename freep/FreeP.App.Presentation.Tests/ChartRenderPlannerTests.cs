@@ -397,6 +397,24 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void BuildDataTablePrimitivePlan_UsesModeledPowerPointBorderStroke()
+    {
+        var chart = MakeTwoSeriesChart(ChartType.ColumnClustered);
+        chart.DataTable = new ChartDataTableSettings
+        {
+            BorderOutline = new ShapeOutline.Visible(new SrgbColor(0x12, 0x34, 0x56), widthPt: 1.25)
+        };
+        var frame = ChartRenderPlanner.BuildFramePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+
+        var plan = ChartRenderPlanner.BuildDataTablePrimitivePlan(chart, frame);
+
+        plan.BorderStroke.Should().Be(new ChartStrokePlan(
+            new SrgbColor(0x12, 0x34, 0x56),
+            Alpha: 255,
+            Thickness: 1.25));
+    }
+
+    [Fact]
     public void BuildDataTablePrimitivePlan_UnsupportedFamiliesAndDisabledBordersReturnExpectedPlan()
     {
         var pie = MakeTwoSeriesChart(ChartType.Pie);
