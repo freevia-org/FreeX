@@ -528,6 +528,13 @@ public sealed class ReviewWorkflowAdapterTests
                         Kind = SlideShapeKind.Picture,
                         Picture = new ImagePart(),
                         IsDecorative = true,
+                    },
+                    new SlideShape
+                    {
+                        Id = 504,
+                        Name = "Grouped label",
+                        Kind = SlideShapeKind.AutoShape,
+                        Text = "Grouped label",
                     }
                 }
             };
@@ -546,8 +553,8 @@ public sealed class ReviewWorkflowAdapterTests
             command!.Execute(RibbonCommandContext.Empty);
 
             window.IsReadingOrderPaneVisible.Should().BeTrue();
-            window.ReadingOrderPaneItemCount.Should().Be(3);
-            window.ReadingOrderPaneHeading.Should().Be("Reading Order - slide 1 (3 shapes)");
+            window.ReadingOrderPaneItemCount.Should().Be(4);
+            window.ReadingOrderPaneHeading.Should().Be("Reading Order - slide 1 (4 shapes)");
             window.ReadingOrderPaneMessage.Should().Be("Selected: Sales chart");
             window.LastReadingOrderPlan.Should().NotBeNull();
             window.LastReadingOrderPlan!.SelectedItem.Should().NotBeNull();
@@ -576,9 +583,33 @@ public sealed class ReviewWorkflowAdapterTests
                 1,
                 null));
             window.Editor.CurrentSlide.Shapes.Select(shape => shape.Id).Should().Equal(502u, 501u);
-            window.LastReadingOrderPlan!.Items.Select(item => item.ShapeId).Should().Equal(502u, 503u, 501u);
+            window.LastReadingOrderPlan!.Items.Select(item => item.ShapeId).Should().Equal(502u, 503u, 504u, 501u);
             window.LastReadingOrderPlan.SelectedItem!.ShapeId.Should().Be(chart.Id);
             window.IsReadingOrderMoveEarlierEnabled.Should().BeTrue();
+            window.IsReadingOrderMoveLaterEnabled.Should().BeFalse();
+            window.ReadingOrderMoveLaterDisabledReason.Should()
+                .Be(PresentationReviewWorkflowPlanner.ReadingOrderAlreadyLatestMessage);
+
+            window.Editor.Select(503);
+            window.ShowReadingOrderPane();
+            window.IsReadingOrderMoveEarlierEnabled.Should().BeFalse();
+            window.ReadingOrderMoveEarlierDisabledReason.Should()
+                .Be(PresentationReviewWorkflowPlanner.ReadingOrderAlreadyEarliestMessage);
+            window.IsReadingOrderMoveLaterEnabled.Should().BeTrue();
+
+            var nestedMutation = window.ApplyReadingOrderMoveLater();
+
+            nestedMutation.Should().Be(new PresentationReadingOrderMutationPlan(
+                PresentationReviewWorkflowIntentKind.MoveReadingOrderLater,
+                true,
+                0,
+                503,
+                0,
+                1,
+                null));
+            group.Children.Select(shape => shape.Id).Should().Equal(504u, 503u);
+            window.LastReadingOrderPlan!.Items.Select(item => item.ShapeId).Should().Equal(502u, 504u, 503u, 501u);
+            window.LastReadingOrderPlan.SelectedItem!.ShapeId.Should().Be(503);
             window.IsReadingOrderMoveLaterEnabled.Should().BeFalse();
             window.ReadingOrderMoveLaterDisabledReason.Should()
                 .Be(PresentationReviewWorkflowPlanner.ReadingOrderAlreadyLatestMessage);

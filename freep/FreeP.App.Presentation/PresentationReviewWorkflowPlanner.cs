@@ -272,6 +272,11 @@ public sealed record PresentationProofingCorrectionMutationPlan(
 
 public static class PresentationReviewWorkflowPlanner
 {
+    private sealed record ReadingOrderMoveTarget(
+        int SourceIndex,
+        int TargetIndex,
+        int SiblingCount);
+
     public const string CommentsPaneCommandId = "freep.review.comments.pane";
     public const string AddCommentCommandId = "freep.review.comments.add";
     public const string EditCommentCommandId = "freep.review.comments.edit";
@@ -962,17 +967,27 @@ public static class PresentationReviewWorkflowPlanner
                 action.DisabledReason);
         }
 
-        var sourceIndex = slide.Shapes.FindIndex(shape => shape.Id == shapeId);
-        var targetIndex = intent == PresentationReviewWorkflowIntentKind.MoveReadingOrderEarlier
-            ? sourceIndex - 1
-            : sourceIndex + 1;
+        var offset = intent == PresentationReviewWorkflowIntentKind.MoveReadingOrderEarlier ? -1 : 1;
+        var moveTarget = FindReadingOrderMoveTarget(slide, shapeId, offset);
+        if (moveTarget is null)
+        {
+            return new PresentationReadingOrderMutationPlan(
+                intent,
+                false,
+                slideIndex,
+                shapeId,
+                -1,
+                -1,
+                ReadingOrderReorderDeferredMessage);
+        }
+
         return new PresentationReadingOrderMutationPlan(
             intent,
             true,
             slideIndex,
             shapeId,
-            sourceIndex,
-            targetIndex,
+            moveTarget.SourceIndex,
+            moveTarget.TargetIndex,
             null);
     }
 
@@ -1279,9 +1294,7 @@ public static class PresentationReviewWorkflowPlanner
             label,
             intent,
             disabledReason is null,
-            disabledReason == NestedReadingOrderReorderDeferredMessage
-                ? PresentationWorkflowCapabilityStatus.Deferred
-                : PresentationWorkflowCapabilityStatus.Available,
+            PresentationWorkflowCapabilityStatus.Available,
             disabledReason);
     }
 
@@ -1302,25 +1315,18 @@ public static class PresentationReviewWorkflowPlanner
             return MissingReadingOrderSelectionMessage;
         }
 
-        var selectedItem = items[selectedItemIndex];
-        if (selectedItem.NestingDepth > 0)
+        var moveTarget = FindReadingOrderMoveTarget(slide, selectedShapeId.Value, offset);
+        if (moveTarget is null)
         {
-            return NestedReadingOrderReorderDeferredMessage;
+            return ReadingOrderReorderDeferredMessage;
         }
 
-        var topLevelIndex = slide.Shapes.FindIndex(shape => shape.Id == selectedShapeId.Value);
-        if (topLevelIndex < 0)
-        {
-            return NestedReadingOrderReorderDeferredMessage;
-        }
-
-        var targetIndex = topLevelIndex + offset;
-        if (targetIndex < 0)
+        if (moveTarget.TargetIndex < 0)
         {
             return ReadingOrderAlreadyEarliestMessage;
         }
 
-        return targetIndex >= slide.Shapes.Count
+        return moveTarget.TargetIndex >= moveTarget.SiblingCount
             ? ReadingOrderAlreadyLatestMessage
             : null;
     }
@@ -1894,6 +1900,63 @@ public static class PresentationReviewWorkflowPlanner
                 yield return child;
             }
         }
+    }
+
+    private static ReadingOrderMoveTarget? FindReadingOrderMoveTarget(
+        Slide slide,
+        uint shapeId,
+        int offset)
+    {
+        var siblings = FindContainingShapeList(slide.Shapes, shapeId);
+        if (siblings is null)
+        {
+            return null;
+        }
+
+        var sourceIndex = FindShapeIndex(siblings, shapeId);
+        if (sourceIndex < 0)
+        {
+            return null;
+        }
+
+        return new ReadingOrderMoveTarget(
+            sourceIndex,
+            sourceIndex + offset,
+            siblings.Count);
+    }
+
+    private static IReadOnlyList<SlideShape>? FindContainingShapeList(
+        IReadOnlyList<SlideShape> shapes,
+        uint shapeId)
+    {
+        if (FindShapeIndex(shapes, shapeId) >= 0)
+        {
+            return shapes;
+        }
+
+        foreach (var shape in shapes)
+        {
+            var childShapes = FindContainingShapeList(shape.Children, shapeId);
+            if (childShapes is not null)
+            {
+                return childShapes;
+            }
+        }
+
+        return null;
+    }
+
+    private static int FindShapeIndex(IReadOnlyList<SlideShape> shapes, uint shapeId)
+    {
+        for (var index = 0; index < shapes.Count; index++)
+        {
+            if (shapes[index].Id == shapeId)
+            {
+                return index;
+            }
+        }
+
+        return -1;
     }
 
     private static SlideShape? FindShape(IEnumerable<SlideShape>? shapes, uint shapeId)
