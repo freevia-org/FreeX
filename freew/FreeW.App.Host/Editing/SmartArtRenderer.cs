@@ -4,6 +4,7 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using System.Windows.Media.Effects;
 using System.Windows.Shapes;
+using FreeW.App.Presentation.DocumentView;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Host.Editing;
@@ -20,6 +21,12 @@ internal static class SmartArtRenderer
     /// Build the content element for a SmartArt diagram given its nodes, resolved layout/color/style ids.
     /// Returns a <see cref="FrameworkElement"/> sized to fill the outer Border (which carries the Tag).
     /// </summary>
+    public static FrameworkElement Build(
+        SmartArt smartArt,
+        SmartArtVisualPlan plan,
+        double strokeThickness) =>
+        Build(smartArt.Nodes, plan.LayoutId, plan.ColorScheme, plan.Style, strokeThickness);
+
     public static FrameworkElement Build(
         IReadOnlyList<SmartArtNode> nodes,
         string layoutId,

@@ -2528,6 +2528,18 @@ public sealed class DocumentView : Control
         }
     }
 
+    internal IReadOnlyList<(ChartVisualGeometryKind GeometryKind, IReadOnlyList<string> PaletteHex)> InlineChartVisualPlans
+    {
+        get
+        {
+            if (_laidOutWidth < 0) Relayout(FallbackWidth);
+            return _inlineCharts.Select(c =>
+                (c.GeometryKind, (IReadOnlyList<string>)c.Palette.Select(ToHex).ToList())).ToList();
+        }
+    }
+
+    private static string ToHex(Color color) => $"#{color.R:X2}{color.G:X2}{color.B:X2}";
+
     // ---- PDF export ------------------------------------------------------------------------------
 
     /// <summary>
@@ -12255,10 +12267,14 @@ public sealed class DocumentView : Control
         public List<string> Categories = [];
         public List<(string? Name, List<double> Values)> Series = [];
         // AV-POLISH: chart annotation fields
+        public ChartVisualGeometryKind GeometryKind;
         public bool    ShowLegend;
+        public bool    ShowGridlines;
+        public bool    PlotAreaFill;
         public bool    ShowDataLabels;
         public string? CategoryAxisTitle;
         public string? ValueAxisTitle;
+        public List<Color> Palette = [];
     }
 
     private sealed class FloatingWordArtData
@@ -12284,8 +12300,12 @@ public sealed class DocumentView : Control
         public int BlockIndex;
         public int RunIndex;
         public SmartArtKind     Kind;
+        public string           LayoutId = "list1";
+        public SmartArtStyle    Style = SmartArtStyle.Default;
         // Flattened node texts (first-level nodes + their children depth-first).
         public List<string>     NodeTexts = [];
+        public List<Color>      NodeFills = [];
+        public Color            NodeTextColor = Colors.White;
     }
 
     private sealed class FloatingGroupChildData
@@ -12341,8 +12361,7 @@ public sealed class DocumentView : Control
         int blockIndex = -1,
         int runIndex = -1)
     {
-        var texts = new List<string>();
-        FlattenNodes(smartArt.Nodes, texts);
+        var plan = ChartSmartArtVisualPlanner.BuildSmartArtPlan(smartArt);
 
         return new FloatingSmartArtData
         {
@@ -12352,17 +12371,12 @@ public sealed class DocumentView : Control
             BlockIndex = blockIndex,
             RunIndex = runIndex,
             Kind = smartArt.Kind,
-            NodeTexts = texts,
+            LayoutId = plan.LayoutId,
+            Style = plan.Style,
+            NodeTexts = plan.Nodes.Select(n => n.Text).ToList(),
+            NodeFills = plan.Nodes.Select(n => ToAvaloniaChartColor(n.FillHex)).ToList(),
+            NodeTextColor = ToAvaloniaChartColor(plan.ColorScheme.TextHex),
         };
-
-        static void FlattenNodes(IEnumerable<SmartArtNode> nodes, List<string> into)
-        {
-            foreach (var node in nodes)
-            {
-                into.Add(node.Text);
-                FlattenNodes(node.Children, into);
-            }
-        }
     }
 
     private FloatingGroupData BuildFloatingGroupData(
@@ -12439,20 +12453,19 @@ public sealed class DocumentView : Control
     }
 
     // Colour palette for chart series — matches Word's default colorful1 scheme.
-    private static readonly Color[] ChartSeriesColors =
-    [
-        Color.FromRgb(0x43, 0x72, 0xC4), // blue
-        Color.FromRgb(0xED, 0x7D, 0x31), // orange
-        Color.FromRgb(0xA9, 0xD1, 0x8E), // green
-        Color.FromRgb(0xFF, 0xC0, 0x00), // gold
-        Color.FromRgb(0x5A, 0x96, 0xC5), // steel blue
-        Color.FromRgb(0x70, 0xAD, 0x47), // lime green
-    ];
-
     private static readonly IBrush ChartFrameFill    = new SolidColorBrush(Color.FromArgb(0xFF, 0xF9, 0xF9, 0xF9));
     private static readonly Pen    ChartFramePen     = new Pen(new SolidColorBrush(Color.FromRgb(0xBB, 0xBB, 0xBB)), 1.0);
     private static readonly IBrush ChartGridlineBrush = new SolidColorBrush(Color.FromArgb(0x40, 0x00, 0x00, 0x00));
     private static readonly IBrush ChartLegendBg    = new SolidColorBrush(Color.FromArgb(0xCC, 0xFF, 0xFF, 0xFF));
+
+    private static Color ToAvaloniaChartColor(string? hex) =>
+        TryParseAvaloniaColor(hex, out var color) ? color : Color.FromRgb(0x44, 0x72, 0xC4);
+
+    private static Color ChartColorAt(FloatingChartData chart, int index) =>
+        chart.Palette.Count > 0 ? chart.Palette[index % chart.Palette.Count] : ToAvaloniaChartColor("#4472C4");
+
+    private static Color SmartArtFillAt(FloatingSmartArtData smartArt, int index) =>
+        smartArt.NodeFills.Count > 0 ? smartArt.NodeFills[index % smartArt.NodeFills.Count] : ToAvaloniaChartColor("#4E81BD");
 
     /// <summary>
     /// Centralised factory for <see cref="FloatingChartData"/> — shared by the floating chart collector,
@@ -12463,30 +12476,7 @@ public sealed class DocumentView : Control
         Chart chart, Rect rect, bool behindText, int zOrder,
         List<(string? Name, List<double> Values)> series)
     {
-        // Resolve effective annotation flags: QuickLayout overrides individual properties.
-        bool showLegend, showDataLabels, showAxisTitles;
-        if (chart.QuickLayoutId > 0 && ChartQuickLayout.FindById(chart.QuickLayoutId) is { } ql)
-        {
-            showLegend     = ql.ShowLegend;
-            showDataLabels = ql.ShowDataLabels;
-            showAxisTitles = ql.ShowAxisTitles;
-        }
-        else if (chart.StyleId > 0 && ChartStyle.FindById(chart.StyleId) is { } st)
-        {
-            showLegend     = chart.ShowLegend; // style does not override ShowLegend
-            showDataLabels = st.ShowDataLabels;
-            showAxisTitles = !string.IsNullOrEmpty(chart.CategoryAxisTitle) ||
-                             !string.IsNullOrEmpty(chart.ValueAxisTitle);
-        }
-        else
-        {
-            showLegend     = chart.ShowLegend;
-            showDataLabels = false;
-            showAxisTitles = !string.IsNullOrEmpty(chart.CategoryAxisTitle) ||
-                             !string.IsNullOrEmpty(chart.ValueAxisTitle);
-        }
-
-        var isPieFamily = chart.Kind is ChartKind.Pie or ChartKind.Doughnut;
+        var plan = ChartSmartArtVisualPlanner.BuildChartPlan(chart);
 
         return new FloatingChartData
         {
@@ -12494,13 +12484,17 @@ public sealed class DocumentView : Control
             BehindText        = behindText,
             ZOrder            = zOrder,
             Kind              = chart.Kind,
-            Title             = chart.Title,
+            GeometryKind      = plan.GeometryKind,
+            Title             = plan.ShowTitle ? chart.Title : null,
             Categories        = new List<string>(chart.Categories),
             Series            = series,
-            ShowLegend        = showLegend,
-            ShowDataLabels    = showDataLabels,
-            CategoryAxisTitle = isPieFamily ? null : (showAxisTitles ? chart.CategoryAxisTitle : null),
-            ValueAxisTitle    = isPieFamily ? null : (showAxisTitles ? chart.ValueAxisTitle    : null),
+            ShowLegend        = plan.ShowLegend,
+            ShowGridlines     = plan.ShowGridlines,
+            PlotAreaFill      = plan.PlotAreaFill,
+            ShowDataLabels    = plan.ShowDataLabels,
+            CategoryAxisTitle = plan.CategoryAxisTitle,
+            ValueAxisTitle    = plan.ValueAxisTitle,
+            Palette           = plan.PaletteHex.Select(ToAvaloniaChartColor).ToList(),
         };
     }
 
@@ -12586,6 +12580,10 @@ public sealed class DocumentView : Control
         if (cd.Series.Count == 0 || plotW < 5 || plotH < 5)
             return;
 
+        if (cd.PlotAreaFill && !isPieFamily)
+            context.FillRectangle(new SolidColorBrush(Color.FromRgb(0xD9, 0xE2, 0xF3)),
+                new Rect(plotLeft, plotTop, plotW, plotH));
+
         // BC3: Compute the axis range for non-pie charts (used for gridline labels and data drawing).
         var (axisMin, axisMax, axisRange) = ComputeAxisRange(cd);
         var zeroFraction = -axisMin / axisRange;
@@ -12596,10 +12594,11 @@ public sealed class DocumentView : Control
         for (var g = 0; g <= gridLines; g++)
         {
             var gy = plotBottom - g * plotH / gridLines;
-            context.DrawLine(gridPen, new Point(plotLeft, gy), new Point(plotRight, gy));
+            if (cd.ShowGridlines || g == 0)
+                context.DrawLine(gridPen, new Point(plotLeft, gy), new Point(plotRight, gy));
 
             // BC1: Draw value-axis tick label in the reserved left strip.
-            if (!isPieFamily)
+            if (!isPieFamily && (cd.ShowGridlines || g == 0))
             {
                 var tickVal = axisMin + (g * axisRange / gridLines);
                 var tickLabel = tickVal.ToString("G3", System.Globalization.CultureInfo.InvariantCulture);
@@ -12621,10 +12620,13 @@ public sealed class DocumentView : Control
                 break;
 
             case ChartKind.Line:
-            case ChartKind.Scatter:
             case ChartKind.Area:
                 DrawChartLines(context, cd, plotLeft, plotTop, plotW, plotH, plotBottom,
                     fillArea: cd.Kind == ChartKind.Area);
+                break;
+
+            case ChartKind.Scatter:
+                DrawChartScatterMarkers(context, cd, plotLeft, plotTop, plotW, plotH, plotBottom);
                 break;
 
             case ChartKind.Pie:
@@ -12747,7 +12749,7 @@ public sealed class DocumentView : Control
 
             foreach (var (lbl, colorIdx) in legendEntries)
             {
-                var color = ChartSeriesColors[colorIdx % ChartSeriesColors.Length];
+                var color = ChartColorAt(cd, colorIdx);
                 var brush = new SolidColorBrush(color);
                 var nameFt = Build(lbl, annotFmt);
                 var entryW = swatchSz + 3 + nameFt.WidthIncludingTrailingWhitespace + 12;
@@ -12970,7 +12972,7 @@ public sealed class DocumentView : Control
         for (var si = 0; si < nSeries; si++)
         {
             var (_, vals) = cd.Series[si];
-            var color = ChartSeriesColors[si % ChartSeriesColors.Length];
+            var color = ChartColorAt(cd, si);
             var brush = new SolidColorBrush(color);
 
             for (var ci = 0; ci < nBars; ci++)
@@ -13050,7 +13052,7 @@ public sealed class DocumentView : Control
             var (_, vals) = cd.Series[si];
             if (vals.Count == 0) continue;
 
-            var color = ChartSeriesColors[si % ChartSeriesColors.Length];
+            var color = ChartColorAt(cd, si);
             var pen   = new Pen(new SolidColorBrush(color), 1.5);
 
             var pts = new List<Point>();
@@ -13082,6 +13084,43 @@ public sealed class DocumentView : Control
             new Point(plotLeft, zeroY), new Point(plotLeft + plotW, zeroY));
     }
 
+    private void DrawChartScatterMarkers(DrawingContext context, FloatingChartData cd,
+        double plotLeft, double plotTop, double plotW, double plotH, double plotBottom)
+    {
+        var xVals = cd.Categories
+            .Select(c => double.TryParse(c, System.Globalization.NumberStyles.Any,
+                System.Globalization.CultureInfo.InvariantCulture, out var v) ? v : double.NaN)
+            .ToList();
+        var xMin = xVals.Where(v => !double.IsNaN(v)).DefaultIfEmpty(1).Min();
+        var xMax = xVals.Where(v => !double.IsNaN(v)).DefaultIfEmpty(1).Max();
+        if (xMax <= xMin) xMax = xMin + 1;
+
+        var yMax = Math.Max(1.0, cd.Series.SelectMany(s => s.Values).DefaultIfEmpty(1).Max());
+
+        double Px(int c)
+        {
+            var x = c < xVals.Count && !double.IsNaN(xVals[c]) ? xVals[c] : c + 1;
+            return plotLeft + (x - xMin) / (xMax - xMin) * plotW;
+        }
+
+        double Py(double value) => plotBottom - plotH * (Math.Max(0, value) / yMax);
+
+        for (var si = 0; si < cd.Series.Count; si++)
+        {
+            var (_, values) = cd.Series[si];
+            var brush = new SolidColorBrush(ChartColorAt(cd, si));
+            for (var ci = 0; ci < values.Count; ci++)
+            {
+                var px = Px(ci);
+                var py = Py(values[ci]);
+                context.DrawEllipse(brush, null, new Point(px, py), 3.5, 3.5);
+            }
+        }
+
+        context.DrawLine(new Pen(ChartGridlineBrush, 1.0),
+            new Point(plotLeft, plotBottom), new Point(plotLeft + plotW, plotBottom));
+    }
+
     private static void DrawChartPie(DrawingContext context, FloatingChartData cd,
         double plotLeft, double plotTop, double plotW, double plotH, bool doughnut)
     {
@@ -13101,7 +13140,7 @@ public sealed class DocumentView : Control
         for (var si = 0; si < vals.Count; si++)
         {
             var sweep     = vals[si] / total * 2 * Math.PI;
-            var color     = ChartSeriesColors[si % ChartSeriesColors.Length];
+            var color     = ChartColorAt(cd, si);
             var brush     = new SolidColorBrush(color);
 
             var geo = new StreamGeometry();
@@ -13236,17 +13275,6 @@ public sealed class DocumentView : Control
     }
 
     // SmartArt node colours per slot (reuses the chart palette for consistency).
-    private static readonly IBrush[] SmartArtNodeFills =
-    [
-        new SolidColorBrush(Color.FromRgb(0x43, 0x72, 0xC4)),
-        new SolidColorBrush(Color.FromRgb(0xED, 0x7D, 0x31)),
-        new SolidColorBrush(Color.FromRgb(0xA9, 0xD1, 0x8E)),
-        new SolidColorBrush(Color.FromRgb(0xFF, 0xC0, 0x00)),
-        new SolidColorBrush(Color.FromRgb(0x5A, 0x96, 0xC5)),
-        new SolidColorBrush(Color.FromRgb(0x70, 0xAD, 0x47)),
-    ];
-
-    private static readonly Pen SmartArtNodePen    = new Pen(Brushes.White, 1.0);
     private static readonly Pen SmartArtConnectPen = new Pen(new SolidColorBrush(Color.FromRgb(0x88, 0x88, 0x88)), 1.0);
 
     /// <summary>
@@ -13291,8 +13319,8 @@ public sealed class DocumentView : Control
             var rootX = rect.X + (rect.Width - rootW) / 2;
             var rootY = areaTop + nodePad;
             var rootRect = new Rect(rootX, rootY, rootW, nodeH);
-            context.FillRectangle(SmartArtNodeFills[0], rootRect);
-            DrawSmartArtNodeText(context, roots.Length > 0 ? roots[0] : string.Empty, rootRect);
+            context.FillRectangle(new SolidColorBrush(SmartArtFillAt(sd, 0)), rootRect);
+            DrawSmartArtNodeText(context, roots.Length > 0 ? roots[0] : string.Empty, rootRect, sd.NodeTextColor);
 
             if (children.Length > 0)
             {
@@ -13316,9 +13344,9 @@ public sealed class DocumentView : Control
                 {
                     var cx = childStartX + ci * (childW + connGap);
                     var childRect = new Rect(cx, childY, childW, nodeH);
-                    var fill = SmartArtNodeFills[(ci + 1) % SmartArtNodeFills.Length];
+                    var fill = new SolidColorBrush(SmartArtFillAt(sd, ci + 1));
                     context.FillRectangle(fill, childRect);
-                    DrawSmartArtNodeText(context, children[ci], childRect);
+                    DrawSmartArtNodeText(context, children[ci], childRect, sd.NodeTextColor);
                     // Vertical drop line from horizontal bus to child.
                     context.DrawLine(SmartArtConnectPen,
                         new Point(cx + childW / 2, childY - connGap),
@@ -13340,9 +13368,9 @@ public sealed class DocumentView : Control
             for (var ni = 0; ni < count; ni++)
             {
                 var nodeRect = new Rect(bx, boxY, boxW, nodeH);
-                var fill = SmartArtNodeFills[ni % SmartArtNodeFills.Length];
+                var fill = new SolidColorBrush(SmartArtFillAt(sd, ni));
                 context.FillRectangle(fill, nodeRect);
-                DrawSmartArtNodeText(context, sd.NodeTexts[ni], nodeRect);
+                DrawSmartArtNodeText(context, sd.NodeTexts[ni], nodeRect, sd.NodeTextColor);
                 bx += boxW;
 
                 // Arrow connector between process nodes.
@@ -13351,7 +13379,7 @@ public sealed class DocumentView : Control
                     var arrowMidY = boxY + nodeH / 2;
                     var arrowX1   = bx + 2;
                     var arrowX2   = arrowX1 + arrowW;
-                    var arrowPen  = new Pen(SmartArtNodeFills[ni % SmartArtNodeFills.Length], 1.5);
+                    var arrowPen  = new Pen(new SolidColorBrush(SmartArtFillAt(sd, ni)), 1.5);
                     context.DrawLine(arrowPen, new Point(arrowX1, arrowMidY), new Point(arrowX2, arrowMidY));
                     // Arrow head.
                     context.DrawLine(arrowPen, new Point(arrowX2, arrowMidY), new Point(arrowX2 - 4, arrowMidY - 3));
@@ -13362,10 +13390,10 @@ public sealed class DocumentView : Control
         }
     }
 
-    private void DrawSmartArtNodeText(DrawingContext context, string text, Rect nodeRect)
+    private void DrawSmartArtNodeText(DrawingContext context, string text, Rect nodeRect, Color textColor)
     {
         if (string.IsNullOrEmpty(text)) return;
-        var fmt = new RunFormatting { FontSizePt = 7.5, ColorHex = "#FFFFFF", Bold = true };
+        var fmt = new RunFormatting { FontSizePt = 7.5, ColorHex = $"#{textColor.R:X2}{textColor.G:X2}{textColor.B:X2}", Bold = true };
         var ft  = Build(text.Length > 12 ? text[..12] + "…" : text, fmt);
         var tx  = nodeRect.X + Math.Max(2, (nodeRect.Width  - ft.WidthIncludingTrailingWhitespace) / 2);
         var ty  = nodeRect.Y + Math.Max(0, (nodeRect.Height - ft.Height) / 2);
