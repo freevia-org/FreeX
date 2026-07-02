@@ -1,5 +1,6 @@
 using FluentAssertions;
 
+using Free.Shared.Ribbon;
 using FreeX.App.Presentation.Filtering;
 using FreeX.Core.Model;
 
@@ -57,6 +58,55 @@ public sealed class AutoFilterDropdownMenuPlannerTests
             AutoFilterMenuSectionKind.FilterCommands,
             AutoFilterMenuSectionKind.Search,
             AutoFilterMenuSectionKind.Checklist);
+    }
+
+    [Fact]
+    public void CreateMenuPlan_CarriesSharedRowPresentationForIconsFocusAndContinuations()
+    {
+        var workbook = new Workbook("Book");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(Address(sheet, 1, 1), new TextValue("Region"));
+        sheet.SetCell(Address(sheet, 2, 1), new TextValue("West"));
+        var fillStyle = CellStyle.Default.Clone();
+        fillStyle.FillColor = new CellColor(0x21, 0x73, 0x46);
+        sheet.GetCell(2, 1)!.StyleId = workbook.RegisterStyle(fillStyle);
+
+        var plan = new AutoFilterDropdownPlan(
+            new GridRange(Address(sheet, 1, 1), Address(sheet, 2, 1)),
+            FilterColumnOffset: 0);
+
+        var menu = AutoFilterDropdownMenuPlanner.CreateMenuPlan(workbook, sheet, plan, Text, "(Blanks)");
+
+        menu.Entries.Single(entry => entry.Kind == AutoFilterMenuEntryKind.SortAscending)
+            .Presentation.Should().Be(new AutoFilterMenuEntryPresentation(
+                RibbonCommandIconKind.SortAscending,
+                AutoFilterMenuEntryFocusRole.Command));
+        menu.Entries.Single(entry => entry.Kind == AutoFilterMenuEntryKind.SortDescending)
+            .Presentation.IconKind.Should().Be(RibbonCommandIconKind.SortDescending);
+        menu.Entries.Single(entry => entry.Kind == AutoFilterMenuEntryKind.ClearFilter)
+            .Presentation.IconKind.Should().Be(RibbonCommandIconKind.Clear);
+        menu.Entries.Single(entry => entry.Kind == AutoFilterMenuEntryKind.FilterByColor)
+            .Presentation.Should().Be(new AutoFilterMenuEntryPresentation(
+                RibbonCommandIconKind.Color,
+                AutoFilterMenuEntryFocusRole.Command,
+                ShowsContinuation: true));
+        menu.Entries.Single(entry => entry.Kind == AutoFilterMenuEntryKind.FilterFamily)
+            .Presentation.Should().Be(new AutoFilterMenuEntryPresentation(
+                RibbonCommandIconKind.Filter,
+                AutoFilterMenuEntryFocusRole.Submenu,
+                ShowsContinuation: true));
+        menu.Entries.Single(entry => entry.Kind == AutoFilterMenuEntryKind.Search)
+            .Presentation.Should().Be(new AutoFilterMenuEntryPresentation(
+                RibbonCommandIconKind.Search,
+                AutoFilterMenuEntryFocusRole.SearchBox,
+                ParticipatesInSearch: true));
+        menu.Entries.Single(entry => entry.Kind == AutoFilterMenuEntryKind.SelectAll)
+            .Presentation.FocusRole.Should().Be(AutoFilterMenuEntryFocusRole.TriStateSelectAll);
+        menu.Entries.Single(entry => entry.Kind == AutoFilterMenuEntryKind.ChecklistItem)
+            .Presentation.Should().Be(new AutoFilterMenuEntryPresentation(
+                RibbonCommandIconKind.CheckBox,
+                AutoFilterMenuEntryFocusRole.ChecklistItem,
+                ParticipatesInSearch: true));
     }
 
     [Theory]
