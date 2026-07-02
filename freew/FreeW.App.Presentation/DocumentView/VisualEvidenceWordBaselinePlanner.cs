@@ -38,6 +38,7 @@ public static class FreeWWordBaselineEvidencePlanner
         "drawing-objects-complex",
         "wordart-watermark-stress",
         "chart-smartart-complex",
+        "wordart-picture-watermark-layout",
         "f2-section-landscape",
         "f2-tracked-changes",
         "f2-comments",

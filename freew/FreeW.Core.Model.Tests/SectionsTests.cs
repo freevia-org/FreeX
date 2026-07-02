@@ -63,6 +63,13 @@ public class SectionsTests
             ColumnWidthsPt = [108.0, 144.0, 180.0],
             PageBorder = new PageBorder("#123456", 2.5),
             Watermark = "DRAFT",
+            WatermarkOptions = new WatermarkOptions(string.Empty)
+            {
+                ImageBytes = [1, 2, 3, 4],
+                ScalePct = 55,
+                Opacity = 0.45,
+                Layout = WatermarkLayout.Horizontal
+            },
             LineNumberMode = LineNumberMode.Continuous,
             LineNumberCountBy = 5,
             AutoHyphenation = true,
@@ -91,6 +98,13 @@ public class SectionsTests
         clone.ColumnWidthsPt.Should().NotBeSameAs(original.ColumnWidthsPt); // deep copy
         clone.PageBorder.Should().Be(new PageBorder("#123456", 2.5));
         clone.Watermark.Should().Be("DRAFT");
+        clone.WatermarkOptions.Should().NotBeNull();
+        clone.WatermarkOptions.Should().NotBeSameAs(original.WatermarkOptions);
+        clone.WatermarkOptions!.ImageBytes.Should().Equal(1, 2, 3, 4);
+        clone.WatermarkOptions.ImageBytes.Should().NotBeSameAs(original.WatermarkOptions!.ImageBytes);
+        clone.WatermarkOptions.ScalePct.Should().Be(55);
+        clone.WatermarkOptions.Opacity.Should().BeApproximately(0.45, 0.001);
+        clone.WatermarkOptions.Layout.Should().Be(WatermarkLayout.Horizontal);
         clone.LineNumberMode.Should().Be(LineNumberMode.Continuous);
         clone.LineNumberCountBy.Should().Be(5);
         clone.AutoHyphenation.Should().BeTrue();

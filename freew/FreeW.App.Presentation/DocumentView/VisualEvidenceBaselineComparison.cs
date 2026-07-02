@@ -88,6 +88,8 @@ public static class FreeWVisualBaselineComparisonPlanner
             "table-layout-complex",
             "drawing-objects-complex",
             "chart-smartart-complex",
+            "wordart-watermark-stress",
+            "wordart-picture-watermark-layout",
             "backstage-print-preview-fidelity",
             "backstage-pdf-export-fidelity"
         };

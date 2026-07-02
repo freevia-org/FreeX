@@ -87,6 +87,10 @@ public static class FreeWVisualEvidenceManifestNormalizer
         "drawing-objects-complex",
         "wordart-watermark-stress"
     ];
+    public static IReadOnlyList<string> WordArtWatermarkRendererScenarioIds { get; } =
+    [
+        "wordart-picture-watermark-layout"
+    ];
     public static IReadOnlyList<string> ChartSmartArtRendererScenarioIds { get; } =
     [
         "chart-smartart-complex"
@@ -404,6 +408,17 @@ public static class FreeWVisualEvidenceManifestNormalizer
                     scenario.ScenarioId,
                     scenario.MinimumExpectedOutputs));
             }
+            else if (WordArtWatermarkRendererScenarioIds.Contains(scenario.ScenarioId, StringComparer.OrdinalIgnoreCase))
+            {
+                expected.Add(new FreeWVisualEvidenceExpectedScenario(
+                    WpfHostId,
+                    scenario.ScenarioId,
+                    scenario.MinimumExpectedOutputs));
+                expected.Add(new FreeWVisualEvidenceExpectedScenario(
+                    AvaloniaHostId,
+                    scenario.ScenarioId,
+                    scenario.MinimumExpectedOutputs));
+            }
             else if (ChartSmartArtRendererScenarioIds.Contains(scenario.ScenarioId, StringComparer.OrdinalIgnoreCase))
             {
                 expected.Add(new FreeWVisualEvidenceExpectedScenario(
@@ -532,6 +547,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
         if (composition.ExpectsFloatingObjects && row.PageExpectation.DrawingObjects.FloatingObjectCount <= 0)
             rowFailures.Add("scenario expects floating objects but the page expectation records none");
         ValidateTableFeatureTags(row, rowFailures);
+        ValidateWatermarkFeatureTags(row, rowFailures);
         ValidateDrawingObjectFeatureTags(row, rowFailures);
         ValidateChartSmartArtFeatureTags(row, rowFailures);
         if (features.Section.SectionOrdinal <= 0)
@@ -571,6 +587,16 @@ public static class FreeWVisualEvidenceManifestNormalizer
             rowFailures.Add("table-layout evidence expects vertical text but the table plan records none");
         if (tags.Contains("named-table-style", StringComparer.OrdinalIgnoreCase) && !tables.HasNamedStyle)
             rowFailures.Add("table-layout evidence expects a named table style but the table plan records none");
+    }
+
+    private static void ValidateWatermarkFeatureTags(
+        FreeWVisualEvidenceRow row,
+        List<string> rowFailures)
+    {
+        var tags = row.ExpectedFeatureTags;
+        var watermark = row.PageExpectation.Features.Watermark;
+        if (tags.Contains("picture-watermark", StringComparer.OrdinalIgnoreCase) && !watermark.IsPicture)
+            rowFailures.Add("evidence expects a picture watermark but the page expectation records a text watermark");
     }
 
     private static void ValidateDrawingObjectFeatureTags(
