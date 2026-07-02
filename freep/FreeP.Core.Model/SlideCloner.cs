@@ -150,7 +150,10 @@ public static class SlideCloner
         ShowVerticalBorder   = settings.ShowVerticalBorder,
         ShowOutlineBorder    = settings.ShowOutlineBorder,
         ShowLegendKeys       = settings.ShowLegendKeys,
+        BorderOutline        = CloneShapeOutline(settings.BorderOutline),
     };
+
+    private static ShapeOutline? CloneShapeOutline(ShapeOutline? outline) => outline;
 
     private static ChartAxis CloneChartAxis(ChartAxis a) => new()
     {

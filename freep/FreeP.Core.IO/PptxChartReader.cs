@@ -85,7 +85,7 @@ internal static class PptxChartReader
             or "bar3DChart" or "line3DChart" or "pie3DChart" or "area3DChart" or "ofPieChart"
             or "stockChart" or "surfaceChart" or "surface3DChart");
         shape.DataLabels = ReadDataLabels(firstChartTypeEl?.Element(C + "dLbls"));
-        shape.DataTable = ReadDataTable(plotArea.Element(C + "dTable"));
+        shape.DataTable = ReadDataTable(plotArea.Element(C + "dTable"), scheme);
 
         // Secondary value axis detection
         // Each plotType element has c:axId refs; if there's a second c:valAx, check which series use it.
@@ -771,7 +771,7 @@ internal static class PptxChartReader
         };
     }
 
-    private static ChartDataTableSettings? ReadDataTable(XElement? dTableEl)
+    private static ChartDataTableSettings? ReadDataTable(XElement? dTableEl, PresentationColorScheme scheme)
     {
         if (dTableEl is null) return null;
 
@@ -781,7 +781,16 @@ internal static class PptxChartReader
             ShowVerticalBorder   = ParseBoolAttr(dTableEl.Element(C + "showVertBorder")),
             ShowOutlineBorder    = ParseBoolAttr(dTableEl.Element(C + "showOutline")),
             ShowLegendKeys       = ParseBoolAttr(dTableEl.Element(C + "showKeys")),
+            BorderOutline        = ReadDataTableBorderOutline(dTableEl, scheme),
         };
+    }
+
+    private static ShapeOutline? ReadDataTableBorderOutline(XElement dTableEl, PresentationColorScheme scheme)
+    {
+        var outline = PptxColorReader.TryReadOutline(
+            dTableEl.Element(C + "spPr")?.Element(A + "ln"),
+            scheme);
+        return outline is ShapeOutline.Visible or ShapeOutline.None ? outline : null;
     }
 
     private static bool ParseBoolAttr(XElement? el)
