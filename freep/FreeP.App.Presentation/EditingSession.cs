@@ -243,6 +243,59 @@ public sealed class EditingSession
         CurrentSlideIndex = index;
     }
 
+    public bool AddSectionAtCurrentSlide(string? name = null) =>
+        AddSectionAtSlide(CurrentSlideIndex, name);
+
+    public bool AddSectionAtSlide(int slideIndex, string? name = null)
+    {
+        var nextSections = SlideSectionPlanner.PlanAddSection(
+            Presentation.Slides,
+            Presentation.Sections,
+            slideIndex,
+            name);
+        if (nextSections is null)
+            return false;
+
+        Bus.Execute(new ReplaceSlideSectionsCommand(nextSections));
+        return true;
+    }
+
+    public bool RenameSection(int sectionIndex, string? name)
+    {
+        var nextSections = SlideSectionPlanner.PlanRenameSection(
+            Presentation.Slides,
+            Presentation.Sections,
+            sectionIndex,
+            name);
+        if (nextSections is null)
+            return false;
+
+        Bus.Execute(new ReplaceSlideSectionsCommand(nextSections));
+        return true;
+    }
+
+    public bool RemoveSection(int sectionIndex)
+    {
+        var nextSections = SlideSectionPlanner.PlanRemoveSection(
+            Presentation.Slides,
+            Presentation.Sections,
+            sectionIndex);
+        if (nextSections is null)
+            return false;
+
+        Bus.Execute(new ReplaceSlideSectionsCommand(nextSections));
+        return true;
+    }
+
+    public bool RemoveAllSections()
+    {
+        if (Presentation.Sections.Count == 0)
+            return false;
+
+        Bus.Execute(new ReplaceSlideSectionsCommand(SlideSectionPlanner.PlanRemoveAllSections()));
+        return true;
+    }
+
     // ── Shape operations (operate on current slide) ───────────────────────────────
 
     /// <summary>Adds a shape to the current slide.</summary>

@@ -133,7 +133,7 @@ public sealed class SlidePane : Border
         {
             if (entry.Kind == SlidePaneEntryKind.SectionHeader)
             {
-                _stack.Children.Add(BuildSectionHeader(entry.Text));
+                _stack.Children.Add(BuildSectionHeader(entry));
                 continue;
             }
 
@@ -149,11 +149,11 @@ public sealed class SlidePane : Border
     /// Builds a non-interactive section-header row showing the section name and slide count.
     /// Wave 11B.
     /// </summary>
-    private static Border BuildSectionHeader(string text)
+    private Border BuildSectionHeader(SlidePaneEntry entry)
     {
         var label = new TextBlock
         {
-            Text                = text,
+            Text                = entry.Text,
             FontSize            = 11,
             FontWeight          = FontWeights.SemiBold,
             Foreground          = SectionHeaderFg,
@@ -166,7 +166,8 @@ public sealed class SlidePane : Border
             Background      = SectionHeaderBg,
             Padding         = new Thickness(10, 4, 10, 4),
             Margin          = new Thickness(0, 6, 0, 2),
-            IsHitTestVisible = false,
+            Tag             = entry.SectionIndex,
+            ContextMenu     = BuildSectionContextMenu(entry),
             Child           = label,
         };
     }
@@ -299,6 +300,22 @@ public sealed class SlidePane : Border
     {
         var menu = new ContextMenu();
 
+        foreach (var action in SlideSectionPlanner.BuildSlideContextActions(
+                     _editor.Presentation.Slides,
+                     _editor.Presentation.Sections,
+                     index))
+        {
+            var item = new MenuItem
+            {
+                Header = action.Text,
+                IsEnabled = action.IsEnabled,
+            };
+            item.Click += (_, _) => ApplySectionAction(action);
+            menu.Items.Add(item);
+        }
+
+        menu.Items.Add(new Separator());
+
         foreach (var action in SlidePanePlanner.BuildContextActions(_editor.Presentation.Slides.Count, index))
         {
             if (action.Kind == SlidePaneActionKind.DeleteSlide)
@@ -314,6 +331,123 @@ public sealed class SlidePane : Border
         }
 
         return menu;
+    }
+
+    private ContextMenu BuildSectionContextMenu(SlidePaneEntry entry)
+    {
+        var menu = new ContextMenu();
+
+        foreach (var action in SlideSectionPlanner.BuildSectionHeaderActions(
+                     _editor.Presentation.Sections,
+                     entry.SectionIndex,
+                     entry.SlideIndex))
+        {
+            if (action.Kind == SlideSectionActionKind.RemoveSection)
+                menu.Items.Add(new Separator());
+
+            var item = new MenuItem
+            {
+                Header = action.Text,
+                IsEnabled = action.IsEnabled,
+            };
+            item.Click += (_, _) => ApplySectionAction(action);
+            menu.Items.Add(item);
+        }
+
+        return menu;
+    }
+
+    private void ApplySectionAction(SlideSectionActionPlan action)
+    {
+        if (!action.IsEnabled)
+            return;
+
+        switch (action.Kind)
+        {
+            case SlideSectionActionKind.AddSection:
+            {
+                var name = PromptSectionName("Add Section", action.SuggestedName);
+                if (name is not null)
+                    _editor.AddSectionAtSlide(action.SlideIndex, name);
+                break;
+            }
+
+            case SlideSectionActionKind.RenameSection:
+            {
+                var name = PromptSectionName("Rename Section", action.SuggestedName);
+                if (name is not null)
+                    _editor.RenameSection(action.SectionIndex, name);
+                break;
+            }
+
+            case SlideSectionActionKind.RemoveSection:
+                _editor.RemoveSection(action.SectionIndex);
+                break;
+
+            case SlideSectionActionKind.RemoveAllSections:
+                _editor.RemoveAllSections();
+                break;
+        }
+    }
+
+    private string? PromptSectionName(string title, string initialName)
+    {
+        var textBox = new TextBox
+        {
+            Text = initialName,
+            MinWidth = 260,
+            Margin = new Thickness(0, 0, 0, 12),
+        };
+
+        var ok = new Button
+        {
+            Content = "OK",
+            Width = 76,
+            IsDefault = true,
+            Margin = new Thickness(0, 0, 8, 0),
+        };
+        var cancel = new Button
+        {
+            Content = "Cancel",
+            Width = 76,
+            IsCancel = true,
+        };
+
+        var buttons = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Right,
+        };
+        buttons.Children.Add(ok);
+        buttons.Children.Add(cancel);
+
+        var panel = new StackPanel { Margin = new Thickness(14) };
+        panel.Children.Add(new TextBlock
+        {
+            Text = "Section name:",
+            Margin = new Thickness(0, 0, 0, 4),
+        });
+        panel.Children.Add(textBox);
+        panel.Children.Add(buttons);
+
+        var dialog = new Window
+        {
+            Title = title,
+            Content = panel,
+            SizeToContent = SizeToContent.WidthAndHeight,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ResizeMode = ResizeMode.NoResize,
+            Owner = Window.GetWindow(this),
+        };
+
+        ok.Click += (_, _) => dialog.DialogResult = true;
+        dialog.Loaded += (_, _) =>
+        {
+            textBox.Focus();
+            textBox.SelectAll();
+        };
+
+        return dialog.ShowDialog() == true ? textBox.Text : null;
     }
 
     // ── Drag-to-reorder ───────────────────────────────────────────────────────────

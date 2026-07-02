@@ -13,7 +13,8 @@ public sealed record SlidePaneEntry(
     SlidePaneEntryKind Kind,
     int SlideIndex,
     string Text,
-    int SectionSlideCount = 0);
+    int SectionSlideCount = 0,
+    int SectionIndex = -1);
 
 public enum SlidePaneActionKind
 {
@@ -223,8 +224,9 @@ public static class SlidePanePlanner
         for (var i = 0; i < slides.Count; i++)
             slideIndexById[slides[i].Id] = i;
 
-        foreach (var section in sections)
+        for (var sectionIndex = 0; sectionIndex < sections.Count; sectionIndex++)
         {
+            var section = sections[sectionIndex];
             var firstIndex = FindFirstSectionSlideIndex(section, slideIndexById);
             if (firstIndex < 0 || headers.ContainsKey(firstIndex))
                 continue;
@@ -234,7 +236,8 @@ public static class SlidePanePlanner
                 SlidePaneEntryKind.SectionHeader,
                 SlideIndex: firstIndex,
                 Text: FormatSectionHeader(section.Name, count),
-                SectionSlideCount: count);
+                SectionSlideCount: count,
+                SectionIndex: sectionIndex);
         }
 
         return headers;

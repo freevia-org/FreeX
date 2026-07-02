@@ -17,6 +17,7 @@ public sealed class SlidePanePolicySourceGuardTests
         source.Should().Contain("SlidePaneEntryKind.SectionHeader");
         source.Should().Contain("BuildSlidePaneSectionHeader(entry)");
         source.Should().Contain("Text                = entry.Text");
+        source.Should().Contain("ContextMenu = BuildSlidePaneSectionContextMenu(entry)");
         source.Should().Contain("Width        = SlidePanePlanner.DefaultThumbnailWidth");
         source.Should().Contain("Height       = SlidePanePlanner.DefaultThumbnailHeight");
         source.Should().Contain("Tag         = entry.SlideIndex");
@@ -28,6 +29,12 @@ public sealed class SlidePanePolicySourceGuardTests
         source.Should().Contain("slidePaneHost.Children.Add(_slidePaneNewSlideButton);");
         source.Should().Contain("SlidePanePlanner.BuildContextActions(_presentation.Slides.Count, slideIndex)");
         source.Should().Contain("SlidePanePlanner.TryApplyAction(Editor, action)");
+        source.Should().Contain("SlideSectionPlanner.BuildSlideContextActions(");
+        source.Should().Contain("SlideSectionPlanner.BuildSectionHeaderActions(");
+        source.Should().Contain("Editor.AddSectionAtSlide(action.SlideIndex, name)");
+        source.Should().Contain("Editor.RenameSection(action.SectionIndex, name)");
+        source.Should().Contain("Editor.RemoveSection(action.SectionIndex)");
+        source.Should().Contain("Editor.RemoveAllSections()");
         source.Should().Contain("PointerPressed += OnSlidePaneItemPointerPressed");
         source.Should().Contain("PointerMoved += OnSlidePaneItemPointerMoved");
         source.Should().Contain("PointerReleased += OnSlidePaneItemPointerReleased");
