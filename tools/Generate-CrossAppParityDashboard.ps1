@@ -86,6 +86,8 @@ function Get-FreeXNextSlice {
     $conditionalFormatPopupCatalogItems = [int](Get-JsonPropertyValue $FunctionalClassificationSummary "conditional-format-popup-catalog-item")
     $accountingSymbolPopupGalleryRows = [int](Get-JsonPropertyValue $FunctionalClassificationSummary "accounting-symbol-popup-gallery-row")
     $fontBorderPopupGalleryRows = [int](Get-JsonPropertyValue $FunctionalClassificationSummary "font-border-popup-gallery-row")
+    $handlerQualifiedHelpRoutes = [int](Get-JsonPropertyValue $FunctionalClassificationSummary "handler-qualified-help-route")
+    $sharedRibbonComboBoxControls = [int](Get-JsonPropertyValue $FunctionalClassificationSummary "shared-ribbon-combo-box-control")
     $catalogBackedPseudoGalleryRows = $conditionalFormatPopupGalleryRows + $accountingSymbolPopupGalleryRows + $fontBorderPopupGalleryRows
     $allDialogRoutesCaptured = $DialogRoutes.totalRoutes -eq $DialogRoutes.wpfCaptures -and
         $DialogRoutes.totalRoutes -eq $DialogRoutes.avaloniaCaptures
@@ -94,7 +96,7 @@ function Get-FreeXNextSlice {
         $realBehaviorGaps -eq 0 -and
         $allDialogRoutesCaptured -and
         $catalogBackedPseudoGalleryRows -eq $pseudoGalleryItems) {
-        return "Command/dialog parity is green; all $pseudoGalleryItems pseudo-gallery rows are catalog-backed in classifier evidence ($conditionalFormatPopupGalleryRows conditional-format rows over $conditionalFormatPopupCatalogItems runtime catalog items, $fontBorderPopupGalleryRows font/border rows, and $accountingSymbolPopupGalleryRows accounting-symbol rows). The remaining classifier-noise bucket is $nonClickControlRows non-click inventory rows; foreground opened-state captures remain environment-blocked."
+        return "Command/dialog parity is green; all $pseudoGalleryItems pseudo-gallery rows are catalog-backed in classifier evidence ($conditionalFormatPopupGalleryRows conditional-format rows over $conditionalFormatPopupCatalogItems runtime catalog items, $fontBorderPopupGalleryRows font/border rows, and $accountingSymbolPopupGalleryRows accounting-symbol rows). The remaining classifier-noise bucket is $nonClickControlRows non-click inventory rows now split into $handlerQualifiedHelpRoutes handler-qualified Help routes and $sharedRibbonComboBoxControls shared ribbon ComboBox controls; foreground opened-state captures remain environment-blocked."
     }
 
     if ($FunctionalMatrix.avaloniaMissing -eq 0 -and $realBehaviorGaps -eq 0 -and $allDialogRoutesCaptured) {
@@ -159,6 +161,8 @@ try {
         accountingSymbolPopupCatalogItems = [int](Get-JsonPropertyValue $functionalClassification.summary "accounting-symbol-popup-catalog-item")
         fontBorderPopupGalleryRows = [int](Get-JsonPropertyValue $functionalClassification.summary "font-border-popup-gallery-row")
         fontBorderPopupCatalogItems = [int](Get-JsonPropertyValue $functionalClassification.summary "font-border-popup-catalog-item")
+        handlerQualifiedHelpRoutes = [int](Get-JsonPropertyValue $functionalClassification.summary "handler-qualified-help-route")
+        sharedRibbonComboBoxControls = [int](Get-JsonPropertyValue $functionalClassification.summary "shared-ribbon-combo-box-control")
     }
     $freeXDialogRoutes = [ordered]@{
         totalRoutes = [int]$dialogInventory.summary.totalRoutes
