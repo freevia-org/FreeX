@@ -127,6 +127,7 @@ public sealed class MainWindow : Window
     private Button _animationPanePreviewButton = null!;
     private int _selectedAnimationIndex = -1;
     private readonly List<string> _animationPaneRenderedRows = new();
+    private int _animationPaneEffectOptionControlCount;
     private int _animationPaneTriggerControlCount;
     private int _animationPaneDurationControlCount;
     private int _animationPaneDelayControlCount;
@@ -225,6 +226,7 @@ public sealed class MainWindow : Window
     internal string AnimationPaneMessage => _animationPaneMessage?.Text ?? string.Empty;
     internal bool IsAnimationPanePreviewEnabled => _animationPanePreviewButton?.IsEnabled == true;
     internal IReadOnlyList<string> AnimationPaneRenderedRows => _animationPaneRenderedRows;
+    internal int AnimationPaneEffectOptionControlCount => _animationPaneEffectOptionControlCount;
     internal int AnimationPaneTriggerControlCount => _animationPaneTriggerControlCount;
     internal int AnimationPaneDurationControlCount => _animationPaneDurationControlCount;
     internal int AnimationPaneDelayControlCount => _animationPaneDelayControlCount;
@@ -2115,6 +2117,7 @@ public sealed class MainWindow : Window
 
         _animationPaneRenderedRows.Clear();
         _animationPaneItemsPanel.Children.Clear();
+        _animationPaneEffectOptionControlCount = 0;
         _animationPaneTriggerControlCount = 0;
         _animationPaneDurationControlCount = 0;
         _animationPaneDelayControlCount = 0;
@@ -2145,6 +2148,43 @@ public sealed class MainWindow : Window
             $"Timeline: starts {item.StartText}s, ends {AnimationPanePlanner.FormatDuration(item.EndMs)}s";
         var actionLine =
             $"Move earlier: {FormatAvailability(item.CanMoveEarlier)}; move later: {FormatAvailability(item.CanMoveLater)}";
+        var effectOptionItems = item.EffectOptions.Options
+            .Select(option => option.DisplayText)
+            .ToArray();
+        var selectedEffectOptionIndex = item.EffectOptions.Options
+            .Select((option, index) => (option, index))
+            .FirstOrDefault(pair => pair.option.IsSelected)
+            .index;
+
+        var effectOptionCombo = new ComboBox
+        {
+            ItemsSource = effectOptionItems,
+            SelectedIndex = selectedEffectOptionIndex,
+            Width = 118,
+            Margin = new Thickness(0, 4, 8, 0),
+            Tag = item.Index,
+            IsEnabled = item.EffectOptions.CanApply,
+            IsVisible = item.EffectOptions.Options.Count > 0,
+        };
+        ToolTip.SetTip(
+            effectOptionCombo,
+            item.EffectOptions.CanApply
+                ? "Effect options"
+                : item.EffectOptions.DisabledReason);
+        effectOptionCombo.SelectionChanged += (_, _) =>
+        {
+            if (effectOptionCombo.SelectedIndex < 0
+                || effectOptionCombo.SelectedIndex >= item.EffectOptions.Options.Count)
+            {
+                return;
+            }
+
+            ApplyAnimationPaneEffectOptionEdit(
+                item.Index,
+                item.EffectOptions.Options[effectOptionCombo.SelectedIndex].Id);
+        };
+        if (item.EffectOptions.Options.Count > 0)
+            _animationPaneEffectOptionControlCount++;
 
         var triggerCombo = new ComboBox
         {
@@ -2196,6 +2236,7 @@ public sealed class MainWindow : Window
             Orientation = Orientation.Horizontal,
             Children =
             {
+                effectOptionCombo,
                 triggerCombo,
                 durationBox,
                 delayBox,
@@ -2307,6 +2348,24 @@ public sealed class MainWindow : Window
         string text)
         => ApplyAnimationPaneDelayEdit(animationIndex, text);
 
+    internal AnimationPaneEffectOptionMutationPlan ApplyAnimationPaneEffectOptionEditForTests(
+        int animationIndex,
+        string optionId)
+        => ApplyAnimationPaneEffectOptionEdit(animationIndex, optionId);
+
+    private AnimationPaneEffectOptionMutationPlan ApplyAnimationPaneEffectOptionEdit(
+        int animationIndex,
+        string optionId)
+    {
+        var plan = AnimationPanePlanner.BuildEffectOptionMutationPlan(
+            Editor.CurrentSlideAnimations,
+            animationIndex,
+            optionId);
+        if (AnimationPanePlanner.TryApplyEffectOptionMutation(Editor, plan))
+            RefreshVisibleAnimationPane(_selectedAnimationIndex);
+        return plan;
+    }
+
     private AnimationPaneTimingMutationPlan ApplyAnimationPaneTriggerEdit(
         int animationIndex,
         int selectedTriggerIndex)
@@ -2374,9 +2433,14 @@ public sealed class MainWindow : Window
     }
 
     private static string BuildAnimationPaneRowSummary(AnimationPaneTimelineItemPlan item)
-        => $"{item.OrderText}. {item.ShapeName} - {item.EffectText} - {item.TriggerText}; "
+        => $"{item.OrderText}. {item.ShapeName} - {item.EffectText}{FormatEffectOptions(item.EffectOptions)} - {item.TriggerText}; "
             + $"duration {item.DurationText}s; delay {item.DelayText}s; starts {item.StartText}s; "
             + $"move earlier {FormatAvailability(item.CanMoveEarlier)}; move later {FormatAvailability(item.CanMoveLater)}";
+
+    private static string FormatEffectOptions(AnimationPaneEffectOptionsPlan plan)
+        => plan.CanApply
+            ? $" ({plan.SelectedOptionText})"
+            : string.Empty;
 
     private static string FormatAvailability(bool isAvailable)
         => isAvailable ? "available" : "unavailable";

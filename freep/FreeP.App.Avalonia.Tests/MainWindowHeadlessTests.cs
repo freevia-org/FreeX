@@ -309,6 +309,8 @@ public sealed class MainWindowHeadlessTests
         source.Should().Contain("AnimationPanePlanner.BuildTimelinePlan(");
         source.Should().Contain("ShowAnimationPane()");
         source.Should().Contain("BuildAnimationPaneItemCard(");
+        source.Should().Contain("AnimationPanePlanner.BuildEffectOptionMutationPlan(");
+        source.Should().Contain("AnimationPanePlanner.TryApplyEffectOptionMutation(");
         source.Should().Contain("AnimationPanePlanner.BuildTriggerMutationPlan(");
         source.Should().Contain("AnimationPanePlanner.BuildDurationMutationPlan(");
         source.Should().Contain("AnimationPanePlanner.BuildDelayMutationPlan(");
@@ -1489,6 +1491,57 @@ public sealed class MainWindowHeadlessTests
             .Which.Should().Contain("After Previous")
             .And.Contain("duration 1.25s")
             .And.Contain("delay 0.4s");
+    }
+
+    [Fact]
+    public async Task Animation_pane_effect_option_controls_apply_shared_mutation_plans()
+    {
+        var effectOptionControlCount = 0;
+        AnimationPaneEffectOptionsPlan? optionsPlan = null;
+        AnimationPaneEffectOptionMutationPlan? mutationPlan = null;
+        AnimationPaneEffectOptionMutationPlan? invalidPlan = null;
+        AnimationDirection? direction = null;
+        IReadOnlyList<string> paneRows = [];
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var registry = window.BuildCommandRegistry();
+            registry.TryGet("freep.anim.entrance.fly-in", out var flyIn).Should().BeTrue();
+
+            var hero = window.Editor.InsertDefaultRectangle();
+            hero.Name = "Hero box";
+            window.Editor.Select(hero.Id);
+            flyIn!.Execute(RibbonCommandContext.Empty);
+            window.ShowAnimationPane();
+
+            effectOptionControlCount = window.AnimationPaneEffectOptionControlCount;
+            optionsPlan = window.LastAnimationPaneTimelinePlan!.Items[0].EffectOptions;
+            mutationPlan = window.ApplyAnimationPaneEffectOptionEditForTests(0, "from-left");
+            invalidPlan = window.ApplyAnimationPaneEffectOptionEditForTests(0, "sideways");
+
+            direction = window.Editor.CurrentSlideAnimations.Single().Direction;
+            paneRows = window.AnimationPaneRenderedRows.ToArray();
+        });
+
+        if (!ran) return;
+        effectOptionControlCount.Should().Be(1);
+        optionsPlan.Should().NotBeNull();
+        optionsPlan!.CanApply.Should().BeTrue();
+        optionsPlan.Options.Select(option => option.Id).Should().Equal(
+            "from-bottom",
+            "from-left",
+            "from-right",
+            "from-top");
+        mutationPlan.Should().NotBeNull();
+        mutationPlan!.ShouldApply.Should().BeTrue();
+        mutationPlan.Direction.Should().Be(AnimationDirection.FromLeft);
+        invalidPlan.Should().NotBeNull();
+        invalidPlan!.DisabledReason.Should().Be(AnimationPanePlanner.InvalidEffectOptionMessage);
+        direction.Should().Be(AnimationDirection.FromLeft);
+        paneRows.Should().ContainSingle()
+            .Which.Should().Contain("Hero box - In: FlyIn (From Left)")
+            .And.Contain("duration 0.5s");
     }
 
     [Fact]
