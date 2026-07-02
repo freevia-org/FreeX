@@ -309,6 +309,8 @@ public sealed class MainWindowHeadlessTests
         source.Should().Contain("AnimationPanePlanner.BuildTimelinePlan(");
         source.Should().Contain("ShowAnimationPane()");
         source.Should().Contain("BuildAnimationPaneItemCard(");
+        source.Should().Contain("AnimationPanePlanner.BuildEffectOptionMutationPlan(");
+        source.Should().Contain("AnimationPanePlanner.TryApplyEffectOptionMutation(");
         source.Should().Contain("AnimationPanePlanner.BuildTriggerMutationPlan(");
         source.Should().Contain("AnimationPanePlanner.BuildDurationMutationPlan(");
         source.Should().Contain("AnimationPanePlanner.BuildDelayMutationPlan(");
@@ -339,6 +341,7 @@ public sealed class MainWindowHeadlessTests
         ids.Should().Contain("freep.file.open",    "Open command required");
         ids.Should().Contain("freep.file.save",    "Save command required");
         ids.Should().Contain("freep.file.save-as", "Save As command required");
+        ids.Should().Contain(PresentationExportPlanner.NotesPagePdfExportCommandId, "notes-page PDF export command required");
         ids.Should().Contain(PresentationExportPlanner.ImageExportCommandId, "image export command required");
         ids.Should().Contain(PresentationExportPlanner.VideoExportCommandId, "video export command required");
     }
@@ -886,6 +889,50 @@ public sealed class MainWindowHeadlessTests
         isApplied.Should().BeTrue($"{commandId} should format the selected text shape through EditingSession");
     }
 
+    [Theory]
+    [InlineData("freep.bold", "bold")]
+    [InlineData("freep.italic", "italic")]
+    [InlineData("freep.underline", "underline")]
+    public async Task Ribbon_font_toggle_commands_route_to_active_table_cell(
+        string commandId,
+        string property)
+    {
+        var found = false;
+        var isApplied = false;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var registry = window.BuildCommandRegistry();
+            found = registry.TryGet(commandId, out var command);
+            found.Should().BeTrue($"{commandId} must be registered");
+
+            var shape = window.Editor.InsertTable(1, 1);
+            var body = new TextBody { Wrap = true };
+            var paragraph = new Paragraph();
+            paragraph.Runs.Add(new Run { Text = "Cell" });
+            body.Paragraphs.Add(paragraph);
+            shape.Table!.Rows[0].Cells[0].TextBody = body;
+            window.Editor.Select(shape.Id);
+            window.Editor.SetActiveTableCell(0, 0);
+
+            command!.Execute(RibbonCommandContext.Empty);
+
+            var run = shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs[0].Runs[0];
+            isApplied = property switch
+            {
+                "bold" => run.Bold,
+                "italic" => run.Italic,
+                "underline" => run.Underline,
+                _ => throw new ArgumentOutOfRangeException(nameof(property), property, null)
+            };
+        });
+
+        if (!ran) return;
+        found.Should().BeTrue($"{commandId} must be registered");
+        isApplied.Should().BeTrue($"{commandId} should format the active table cell through the shared planner");
+    }
+
     [Fact]
     public async Task Ribbon_font_family_command_routes_selected_value_to_editor()
     {
@@ -1152,6 +1199,22 @@ public sealed class MainWindowHeadlessTests
         notesPdfPlan.Pages[0].Ops.OfType<Free.Shared.Pdf.PdfText>().Select(text => text.Text)
             .Should()
             .Contain(["Opening", "Opening note"]);
+    }
+
+    [Fact]
+    public async Task Notes_page_pdf_export_command_is_registered_for_native_save_route()
+    {
+        var found = false;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var registry = window.BuildCommandRegistry();
+            found = registry.TryGet(PresentationExportPlanner.NotesPagePdfExportCommandId, out _);
+        });
+
+        if (!ran) return;
+        found.Should().BeTrue("the Avalonia registry should expose the notes-page PDF save route");
     }
 
     [Fact]
@@ -1431,6 +1494,57 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task Animation_pane_effect_option_controls_apply_shared_mutation_plans()
+    {
+        var effectOptionControlCount = 0;
+        AnimationPaneEffectOptionsPlan? optionsPlan = null;
+        AnimationPaneEffectOptionMutationPlan? mutationPlan = null;
+        AnimationPaneEffectOptionMutationPlan? invalidPlan = null;
+        AnimationDirection? direction = null;
+        IReadOnlyList<string> paneRows = [];
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var registry = window.BuildCommandRegistry();
+            registry.TryGet("freep.anim.entrance.fly-in", out var flyIn).Should().BeTrue();
+
+            var hero = window.Editor.InsertDefaultRectangle();
+            hero.Name = "Hero box";
+            window.Editor.Select(hero.Id);
+            flyIn!.Execute(RibbonCommandContext.Empty);
+            window.ShowAnimationPane();
+
+            effectOptionControlCount = window.AnimationPaneEffectOptionControlCount;
+            optionsPlan = window.LastAnimationPaneTimelinePlan!.Items[0].EffectOptions;
+            mutationPlan = window.ApplyAnimationPaneEffectOptionEditForTests(0, "from-left");
+            invalidPlan = window.ApplyAnimationPaneEffectOptionEditForTests(0, "sideways");
+
+            direction = window.Editor.CurrentSlideAnimations.Single().Direction;
+            paneRows = window.AnimationPaneRenderedRows.ToArray();
+        });
+
+        if (!ran) return;
+        effectOptionControlCount.Should().Be(1);
+        optionsPlan.Should().NotBeNull();
+        optionsPlan!.CanApply.Should().BeTrue();
+        optionsPlan.Options.Select(option => option.Id).Should().Equal(
+            "from-bottom",
+            "from-left",
+            "from-right",
+            "from-top");
+        mutationPlan.Should().NotBeNull();
+        mutationPlan!.ShouldApply.Should().BeTrue();
+        mutationPlan.Direction.Should().Be(AnimationDirection.FromLeft);
+        invalidPlan.Should().NotBeNull();
+        invalidPlan!.DisabledReason.Should().Be(AnimationPanePlanner.InvalidEffectOptionMessage);
+        direction.Should().Be(AnimationDirection.FromLeft);
+        paneRows.Should().ContainSingle()
+            .Which.Should().Contain("Hero box - In: FlyIn (From Left)")
+            .And.Contain("duration 0.5s");
+    }
+
+    [Fact]
     public async Task Ribbon_review_workflow_commands_refresh_shared_adapter_state()
     {
         var foundComments = false;
@@ -1473,6 +1587,15 @@ public sealed class MainWindowHeadlessTests
                 IsResolved = true,
                 ResolvedBy = "Reviewer",
                 ResolvedDateTime = new DateTime(2026, 7, 2, 8, 15, 0, DateTimeKind.Utc),
+                Replies =
+                {
+                    new SlideCommentReply
+                    {
+                        Author = "Nora",
+                        Initials = "NO",
+                        Text = "@Reviewer confirmed.",
+                    }
+                }
             });
             var shape = new SlideShape
             {
@@ -1547,7 +1670,11 @@ public sealed class MainWindowHeadlessTests
             comment.ThreadStatus == PresentationCommentThreadStatus.Resolved &&
             comment.IsSelected &&
             !comment.CanResolve &&
-            comment.CanReopen);
+            comment.CanReopen &&
+            !comment.CanReply &&
+            comment.ReplyCount == 1 &&
+            comment.MentionCount == 1);
+        commentPlan.Comments.Single().Replies.Single().TextPreview.Should().Be("@Reviewer confirmed.");
         commentPlan.SelectedComment.Should().BeSameAs(commentPlan.Comments[0]);
         commentPlan.Actions.Single(action => action.CommandId == PresentationReviewWorkflowPlanner.ReopenCommentCommandId)
             .IsEnabled.Should().BeTrue("the comments command selects the first current-slide thread through the shared plan");
@@ -1605,6 +1732,72 @@ public sealed class MainWindowHeadlessTests
         commentsPaneCommentCount.Should().Be(1);
         commentsPaneActionCount.Should().BeGreaterThanOrEqualTo(6);
         commentsPaneSelectedCount.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task Review_comment_add_edit_routes_through_shared_mutation_plan()
+    {
+        SlideComment? addedComment = null;
+        SlideComment? editedComment = null;
+        PresentationCommentMutationPlan? addPlan = null;
+        PresentationCommentMutationPlan? editPlan = null;
+        PresentationCommentPanePlan? addedPanePlan = null;
+        PresentationCommentPanePlan? editedPanePlan = null;
+        var dirtyAfterEdit = false;
+        var registryAddCount = -1;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var registry = window.BuildCommandRegistry();
+            registry.TryGet(PresentationReviewWorkflowPlanner.AddCommentCommandId, out var addCommand)
+                .Should().BeTrue();
+            registry.TryGet(PresentationReviewWorkflowPlanner.EditCommentCommandId, out var editCommand)
+                .Should().BeTrue();
+
+            addPlan = window.AddComment(
+                "  Add execution evidence. ",
+                new DateTime(2026, 7, 2, 16, 30, 0, DateTimeKind.Utc),
+                "  FreeP User ",
+                null,
+                120,
+                240);
+            addedComment = window.Editor.CurrentSlide!.Comments.Single();
+            addedPanePlan = window.LastCommentPanePlan;
+
+            editPlan = window.EditSelectedComment("  Edited execution evidence. ", "Reviewer", "RV");
+            editedComment = window.Editor.CurrentSlide.Comments.Single();
+            editedPanePlan = window.LastCommentPanePlan;
+            dirtyAfterEdit = window.IsDirty;
+
+            addCommand!.Execute(RibbonCommandContext.Empty);
+            registryAddCount = window.Editor.CurrentSlide.Comments.Count;
+            editCommand!.Execute(RibbonCommandContext.Empty);
+        });
+
+        if (!ran) return;
+        addPlan.Should().NotBeNull();
+        addPlan!.Intent.Should().Be(PresentationReviewWorkflowIntentKind.AddComment);
+        addPlan.ShouldApply.Should().BeTrue();
+        addedComment.Should().NotBeNull();
+        addedComment!.Text.Should().Be("Add execution evidence.");
+        addedComment.Author.Should().Be("FreeP User");
+        addedComment.Initials.Should().Be("FU");
+        addedComment.Xemu.Should().Be(120);
+        addedComment.Yemu.Should().Be(240);
+        addedPanePlan.Should().NotBeNull();
+        addedPanePlan!.SelectedCommentIndex.Should().Be(0);
+        editPlan.Should().NotBeNull();
+        editPlan!.Intent.Should().Be(PresentationReviewWorkflowIntentKind.EditComment);
+        editPlan.ShouldApply.Should().BeTrue();
+        editedComment.Should().NotBeNull();
+        editedComment!.Text.Should().Be("Edited execution evidence.");
+        editedComment.Author.Should().Be("Reviewer");
+        editedComment.Initials.Should().Be("RV");
+        editedPanePlan.Should().NotBeNull();
+        editedPanePlan!.SelectedComment!.TextPreview.Should().Be("Edited execution evidence.");
+        dirtyAfterEdit.Should().BeTrue();
+        registryAddCount.Should().Be(2);
     }
 
     [Fact]

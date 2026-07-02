@@ -42,6 +42,9 @@ public sealed class SlideComment
     /// <summary>Reviewer display name for the latest resolve action. Empty when not supplied.</summary>
     public string ResolvedBy { get; set; } = string.Empty;
 
+    /// <summary>Modern-comment style replies attached to this thread.</summary>
+    public List<SlideCommentReply> Replies { get; } = new();
+
     // ── Position ──────────────────────────────────────────────────────────────────
 
     /// <summary>Horizontal position from the slide left edge, in EMU (p:pos x=).</summary>
@@ -58,4 +61,17 @@ public sealed class SlideComment
     /// Set by the reader; recalculated from list position on write.
     /// </summary>
     public int Idx { get; set; }
+}
+
+public sealed class SlideCommentReply
+{
+    public int AuthorId { get; set; }
+
+    public string Author { get; set; } = string.Empty;
+
+    public string Initials { get; set; } = string.Empty;
+
+    public string Text { get; set; } = string.Empty;
+
+    public DateTime? DateTime { get; set; }
 }

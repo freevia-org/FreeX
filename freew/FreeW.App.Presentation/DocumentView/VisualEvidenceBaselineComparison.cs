@@ -62,12 +62,35 @@ public sealed record FreeWVisualBaselineComparison(
     FreeWVisualBaselineComparisonMetrics? Metrics,
     FreeWVisualEvidenceTrust Trust);
 
+public sealed record FreeWVisualWordBaselinePolicy(
+    bool IsComparable,
+    string? BaselineScenarioId,
+    string SkipReason);
+
 public static class FreeWVisualBaselineComparisonPlanner
 {
     public const string MissingBaselineStatus = "missing-baseline";
     public const string DecodeFailedStatus = "decode-failed";
     public const string PassedStatus = "passed";
     public const string FailedStatus = "failed";
+    public const string SkippedStatus = "skipped";
+
+    private static readonly IReadOnlyDictionary<string, string> BaselineScenarioAliases =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["page-composition-columns"] = "f2-columns",
+            ["page-composition-border-watermark"] = "f2-border-watermark"
+        };
+
+    private static readonly IReadOnlySet<string> DirectWordBaselineScenarioIds =
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "table-layout-complex",
+            "drawing-objects-complex",
+            "chart-smartart-complex",
+            "backstage-print-preview-fidelity",
+            "backstage-pdf-export-fidelity"
+        };
 
     public static FreeWVisualBaselineComparisonTolerance ResolveTolerance(string? name)
     {
@@ -86,24 +109,36 @@ public static class FreeWVisualBaselineComparisonPlanner
         throw new ArgumentException($"Unknown visual baseline tolerance '{name}'. Known tolerances: {known}");
     }
 
+    public static string NormalizeBaselinePath(string value) =>
+        NormalizeManifestPath(value);
+
     public static string BuildBaselineMatchKey(FreeWVisualEvidenceNormalizedRow row)
     {
         ArgumentNullException.ThrowIfNull(row);
 
+        var policy = ResolveWordBaselinePolicy(row);
+        var scenarioId = policy.BaselineScenarioId ?? row.ScenarioId;
+        var outputName = ExpectedBaselineOutputName(row, scenarioId);
         return string.Join(
             '/',
-            NormalizeCandidateSegment(row.ScenarioId),
+            NormalizeCandidateSegment(scenarioId),
             "p" + Math.Max(1, row.PageNumber).ToString(CultureInfo.InvariantCulture),
-            NormalizeCandidateSegment(row.OutputName, keepExtension: true));
+            NormalizeCandidateSegment(outputName, keepExtension: true));
     }
 
     public static IReadOnlyList<string> BuildBaselineCandidateRelativePaths(FreeWVisualEvidenceNormalizedRow row)
     {
         ArgumentNullException.ThrowIfNull(row);
 
-        var scenario = NormalizeCandidateSegment(row.ScenarioId);
+        var policy = ResolveWordBaselinePolicy(row);
+        if (!policy.IsComparable || string.IsNullOrWhiteSpace(policy.BaselineScenarioId))
+            return [];
+
+        var scenario = NormalizeCandidateSegment(policy.BaselineScenarioId);
         var outputName = NormalizeCandidateSegment(row.OutputName, keepExtension: true);
-        var expectedOutputName = NormalizeCandidateSegment(row.ExpectedOutputName, keepExtension: true);
+        var expectedOutputName = NormalizeCandidateSegment(
+            ExpectedBaselineOutputName(row, policy.BaselineScenarioId),
+            keepExtension: true);
         var candidates = new List<string>();
 
         AddCandidate(candidates, scenario, outputName);
@@ -117,6 +152,33 @@ public static class FreeWVisualBaselineComparisonPlanner
         return candidates
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
+    }
+
+    public static FreeWVisualWordBaselinePolicy ResolveWordBaselinePolicy(FreeWVisualEvidenceNormalizedRow row)
+    {
+        ArgumentNullException.ThrowIfNull(row);
+
+        if (BaselineScenarioAliases.TryGetValue(row.ScenarioId, out var baselineScenarioId))
+        {
+            return new FreeWVisualWordBaselinePolicy(
+                IsComparable: true,
+                BaselineScenarioId: baselineScenarioId,
+                SkipReason: string.Empty);
+        }
+
+        if (row.ScenarioId.StartsWith("f2-", StringComparison.OrdinalIgnoreCase)
+            || DirectWordBaselineScenarioIds.Contains(row.ScenarioId))
+        {
+            return new FreeWVisualWordBaselinePolicy(
+                IsComparable: true,
+                BaselineScenarioId: row.ScenarioId,
+                SkipReason: string.Empty);
+        }
+
+        return new FreeWVisualWordBaselinePolicy(
+            IsComparable: false,
+            BaselineScenarioId: null,
+            SkipReason: $"scenario '{row.ScenarioId}' has no direct MS Word PNG baseline mapping");
     }
 
     public static FreeWVisualBaselineComparison BuildMissingBaselineComparison(
@@ -136,6 +198,37 @@ public static class FreeWVisualBaselineComparisonPlanner
             MissingBaselineStatus,
             tolerance ?? FreeWVisualBaselineComparisonTolerance.WordPngDefault,
             failure);
+    }
+
+    public static FreeWVisualBaselineComparison BuildSkippedBaselineComparison(
+        FreeWVisualEvidenceNormalizedRow row,
+        FreeWVisualBaselineComparisonTolerance? tolerance = null,
+        string? reasonOverride = null)
+    {
+        ArgumentNullException.ThrowIfNull(row);
+
+        var policy = ResolveWordBaselinePolicy(row);
+        var reason = reasonOverride;
+        if (string.IsNullOrWhiteSpace(reason))
+        {
+            reason = string.IsNullOrWhiteSpace(policy.SkipReason)
+                ? $"scenario '{row.ScenarioId}' was intentionally skipped for MS Word baseline comparison"
+                : policy.SkipReason;
+        }
+
+        return new FreeWVisualBaselineComparison(
+            row.EvidenceId,
+            row.HostId,
+            row.ScenarioId,
+            Math.Max(1, row.PageNumber),
+            row.OutputName,
+            BuildBaselineMatchKey(row),
+            reason,
+            [],
+            SkippedStatus,
+            tolerance ?? FreeWVisualBaselineComparisonTolerance.WordPngDefault,
+            Metrics: null,
+            new FreeWVisualEvidenceTrust(true, []));
     }
 
     public static FreeWVisualBaselineComparison BuildDecodeFailure(
@@ -367,6 +460,22 @@ public static class FreeWVisualBaselineComparisonPlanner
             ? outputName
             : string.Concat(scenario, "/", outputName);
         candidates.Add(NormalizeManifestPath(candidate));
+    }
+
+    private static string ExpectedBaselineOutputName(FreeWVisualEvidenceNormalizedRow row, string scenarioId)
+    {
+        try
+        {
+            return FreeWVisualEvidencePlanner.ExpectedOutputName(
+                scenarioId,
+                Math.Max(1, row.PageNumber));
+        }
+        catch (ArgumentException)
+        {
+            return string.IsNullOrWhiteSpace(row.ExpectedOutputName)
+                ? row.OutputName
+                : row.ExpectedOutputName;
+        }
     }
 
     private static string NormalizeCandidateSegment(string value, bool keepExtension = false)

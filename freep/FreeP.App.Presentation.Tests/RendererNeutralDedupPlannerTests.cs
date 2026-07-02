@@ -298,6 +298,24 @@ public sealed class RendererNeutralDedupPlannerTests
     }
 
     [Fact]
+    public void WpfAndAvaloniaSlideCanvases_UseRendererNeutralSecondaryValueAxisPlanning()
+    {
+        var wpf = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "SlideCanvas.cs");
+        var avalonia = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Avalonia", "SlideCanvas.cs");
+
+        foreach (var source in new[] { wpf, avalonia })
+        {
+            source.Should().Contain("ChartRenderPlanner.BuildSecondaryValueAxisPrimitivePlan(chart, frame)");
+            source.Should().Contain("CreateChartSecondaryAxisTickPen(secondaryAxisPlan)");
+            source.Should().Contain("CreateChartSecondaryAxisTickPen(ChartSecondaryValueAxisPrimitivePlan plan)");
+            source.Should().Contain("secondaryAxisPlan.Ticks");
+            source.Should().Contain("secondaryAxisPlan.Labels");
+            source.Should().Contain("secondaryAxisPlan.Title");
+            source.Should().NotContain("BuildSecondaryValueAxisLabelPlans(");
+        }
+    }
+
+    [Fact]
     public void WpfAndAvaloniaSlideCanvases_UseRendererNeutralChartAxisTitlePlanning()
     {
         var wpf = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "SlideCanvas.cs");
@@ -334,6 +352,28 @@ public sealed class RendererNeutralDedupPlannerTests
             source.Should().Contain("gridLinePlan.GridLines");
             source.Should().NotContain("BuildMajorGridLinePlans(chart, frame)");
             source.Should().NotContain("Color.FromRgb(0xD9, 0xD9, 0xD9)), 0.5");
+        }
+    }
+
+    [Fact]
+    public void WpfAndAvaloniaSlideCanvases_UseRendererNeutralMajorAxisTickPlanning()
+    {
+        var wpf = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "SlideCanvas.cs");
+        var avalonia = ReadWorkspaceFile(
+            "freep",
+            "FreeP.App.Rendering.Avalonia",
+            "SlideCanvas.cs");
+
+        foreach (var source in new[] { wpf, avalonia })
+        {
+            source.Should().Contain("ChartRenderPlanner.BuildMajorAxisTickPrimitivePlan(chart, frame)");
+            source.Should().Contain("CreateChartAxisTickPen(tickPlan)");
+            source.Should().Contain("CreateChartAxisTickPen(ChartMajorAxisTickPrimitivePlan plan)");
+            source.Should().Contain("tickPlan.CategoryTicks");
+            source.Should().Contain("tickPlan.ValueTicks");
+            source.Should().Contain("ToPen(plan.Stroke)");
+            source.Should().NotContain("AxisMajorTickLength");
+            source.Should().NotContain("Color.FromRgb(0x7F, 0x7F, 0x7F)), 0.75");
         }
     }
 

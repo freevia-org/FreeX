@@ -1,0 +1,61 @@
+namespace FreeX.App.Presentation.PivotUI;
+
+public enum PivotHeaderActionRouteKind
+{
+    None,
+    CommandFactory,
+    Dialog,
+    Deferred
+}
+
+public enum PivotHeaderDialogKind
+{
+    None,
+    LabelFilter,
+    ValueFilter,
+    MoreSortOptions,
+    ValueFieldSettings
+}
+
+public sealed record PivotHeaderActionPlan(
+    PivotHeaderActionRouteKind RouteKind,
+    PivotHeaderDialogKind DialogKind = PivotHeaderDialogKind.None,
+    string? DeferredReason = null)
+{
+    public static PivotHeaderActionPlan None { get; } = new(PivotHeaderActionRouteKind.None);
+
+    public static PivotHeaderActionPlan CommandFactory { get; } =
+        new(PivotHeaderActionRouteKind.CommandFactory);
+
+    public static PivotHeaderActionPlan Dialog(PivotHeaderDialogKind dialogKind) =>
+        new(PivotHeaderActionRouteKind.Dialog, dialogKind);
+
+    public static PivotHeaderActionPlan Deferred(string reason) =>
+        new(PivotHeaderActionRouteKind.Deferred, DeferredReason: reason);
+}
+
+/// <summary>
+/// Shared routing for PivotTable header-dropdown actions. Menu construction stays in
+/// <see cref="PivotHeaderDropdownMenuBuilder"/>, command construction stays in each host, and this planner
+/// owns the cross-host decision of whether a menu action is a direct command, an in-app dialog, a no-op, or
+/// still unsupported.
+/// </summary>
+public static class PivotHeaderActionPlanner
+{
+    public static PivotHeaderActionPlan Plan(PivotHeaderMenuAction action) =>
+        action switch
+        {
+            PivotHeaderMenuAction.Separator => PivotHeaderActionPlan.None,
+            PivotHeaderMenuAction.LabelFilter => PivotHeaderActionPlan.Dialog(PivotHeaderDialogKind.LabelFilter),
+            PivotHeaderMenuAction.ValueFilter => PivotHeaderActionPlan.Dialog(PivotHeaderDialogKind.ValueFilter),
+            PivotHeaderMenuAction.MoreSortOptions => PivotHeaderActionPlan.Dialog(PivotHeaderDialogKind.MoreSortOptions),
+            PivotHeaderMenuAction.ValueFieldSettings => PivotHeaderActionPlan.Dialog(PivotHeaderDialogKind.ValueFieldSettings),
+            PivotHeaderMenuAction.FieldSettings =>
+                PivotHeaderActionPlan.Deferred("Field Settings dialog not yet implemented in the Avalonia shell."),
+            PivotHeaderMenuAction.ExpandField =>
+                PivotHeaderActionPlan.Deferred("No expand-entire-field command exists in FreeX.Core.Commands yet."),
+            PivotHeaderMenuAction.CollapseField =>
+                PivotHeaderActionPlan.Deferred("No collapse-entire-field command exists in FreeX.Core.Commands yet."),
+            _ => PivotHeaderActionPlan.CommandFactory,
+        };
+}

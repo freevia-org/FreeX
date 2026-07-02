@@ -46,7 +46,11 @@ public sealed class PresentationReviewWorkflowPlannerTests
             true,
             true,
             true,
+            true,
             false,
+            0,
+            0,
+            [],
             PresentationCommentThreadStatus.Open,
             true));
         plan.SelectedComment.Should().BeSameAs(plan.Comments[0]);
@@ -133,6 +137,42 @@ public sealed class PresentationReviewWorkflowPlannerTests
                 Idx = 1
             },
             null));
+    }
+
+    [Fact]
+    public void TryApplyCommentMutationPlan_AddAndEdit_NormalizesSelection()
+    {
+        var slides = new[] { new Slide { Title = "Intro" } };
+        var add = PresentationReviewWorkflowPlanner.BuildAddCommentPlan(
+            slides,
+            0,
+            " Add parity evidence. ",
+            "FreeP User",
+            null,
+            120,
+            240);
+
+        var added = PresentationReviewWorkflowPlanner.TryApplyCommentMutationPlan(slides, add);
+        var selectionAfterAdd = PresentationReviewWorkflowPlanner.NormalizeCommentSelectionAfterMutation(slides, add);
+        var edit = PresentationReviewWorkflowPlanner.BuildEditCommentPlan(
+            slides,
+            0,
+            0,
+            " Edited parity evidence. ",
+            initials: "FP");
+        var edited = PresentationReviewWorkflowPlanner.TryApplyCommentMutationPlan(slides, edit);
+        var selectionAfterEdit = PresentationReviewWorkflowPlanner.NormalizeCommentSelectionAfterMutation(slides, edit);
+
+        added.Should().BeTrue();
+        selectionAfterAdd.Should().Be(0);
+        edited.Should().BeTrue();
+        selectionAfterEdit.Should().Be(0);
+        slides[0].Comments.Should().ContainSingle().Which.Should().Match<SlideComment>(comment =>
+            comment.Text == "Edited parity evidence." &&
+            comment.Author == "FreeP User" &&
+            comment.Initials == "FP" &&
+            comment.Xemu == 120 &&
+            comment.Yemu == 240);
     }
 
     [Fact]
@@ -257,6 +297,114 @@ public sealed class PresentationReviewWorkflowPlannerTests
                 ResolvedBy = string.Empty
             },
             null));
+    }
+
+    [Fact]
+    public void BuildCommentPanePlan_DescribesModernReplyChainsAndReplyActionState()
+    {
+        var slides = new[] { new Slide { Title = "Intro" } };
+        slides[0].Comments.Add(new SlideComment
+        {
+            Author = "Alice",
+            Initials = "AL",
+            Text = "Please ask @Nora to review.",
+            Idx = 1,
+            Replies =
+            {
+                new SlideCommentReply
+                {
+                    Author = "Nora",
+                    Initials = "NO",
+                    Text = "@Alice looks good after the chart update.",
+                    DateTime = new DateTime(2026, 7, 2, 10, 0, 0, DateTimeKind.Utc)
+                },
+                new SlideCommentReply
+                {
+                    Author = "Alice",
+                    Initials = "AL",
+                    Text = "Thanks.",
+                }
+            }
+        });
+
+        var plan = PresentationReviewWorkflowPlanner.BuildCommentPanePlan(slides, 0, selectedCommentIndex: 0);
+
+        var comment = plan.Comments.Single();
+        comment.CanReply.Should().BeTrue();
+        comment.ReplyCount.Should().Be(2);
+        comment.MentionCount.Should().Be(2);
+        comment.Replies.Select(reply => reply.TextPreview).Should().Equal(
+            "@Alice looks good after the chart update.",
+            "Thanks.");
+        comment.Replies[0].Should().Be(new PresentationCommentReplyDescriptor(
+            0,
+            "Nora",
+            "NO",
+            "@Alice looks good after the chart update.",
+            new DateTime(2026, 7, 2, 10, 0, 0, DateTimeKind.Utc),
+            1));
+        plan.Actions.Single(action => action.CommandId == PresentationReviewWorkflowPlanner.ReplyCommentCommandId)
+            .Should().Be(new PresentationReviewWorkflowActionPlan(
+                PresentationReviewWorkflowPlanner.ReplyCommentCommandId,
+                "Reply",
+                PresentationReviewWorkflowIntentKind.ReplyComment,
+                true,
+                PresentationWorkflowCapabilityStatus.Available,
+                null));
+    }
+
+    [Fact]
+    public void TryApplyCommentMutationPlan_AppendsReplyAndBlocksResolvedThread()
+    {
+        var slides = new[] { new Slide { Title = "Intro" } };
+        slides[0].Comments.Add(new SlideComment
+        {
+            Author = "Alice",
+            Initials = "AL",
+            Text = "Needs review.",
+            Idx = 1
+        });
+        var timestamp = new DateTime(2026, 7, 2, 11, 0, 0, DateTimeKind.Utc);
+
+        var reply = PresentationReviewWorkflowPlanner.BuildReplyCommentPlan(
+            slides,
+            0,
+            0,
+            "  @Alice fixed. ",
+            "  Nora Reviewer ",
+            null,
+            timestamp);
+
+        PresentationReviewWorkflowPlanner.TryApplyCommentMutationPlan(slides, reply).Should().BeTrue();
+        slides[0].Comments[0].Replies.Should().ContainSingle().Which.Should().BeEquivalentTo(new SlideCommentReply
+        {
+            Author = "Nora Reviewer",
+            Initials = "NR",
+            Text = "@Alice fixed.",
+            DateTime = timestamp
+        });
+        PresentationReviewWorkflowPlanner.NormalizeCommentSelectionAfterMutation(slides, reply, 0)
+            .Should().Be(0);
+
+        slides[0].Comments[0].IsResolved = true;
+        var blocked = PresentationReviewWorkflowPlanner.BuildReplyCommentPlan(
+            slides,
+            0,
+            0,
+            "Cannot add",
+            "Nora",
+            "NO");
+
+        blocked.Should().Be(new PresentationCommentMutationPlan(
+            PresentationReviewWorkflowIntentKind.ReplyComment,
+            false,
+            0,
+            0,
+            null,
+            PresentationReviewWorkflowPlanner.CannotReplyToResolvedCommentMessage));
+        PresentationReviewWorkflowPlanner.BuildCommentPanePlan(slides, 0, selectedCommentIndex: 0)
+            .Actions.Single(action => action.CommandId == PresentationReviewWorkflowPlanner.ReplyCommentCommandId)
+            .DisabledReason.Should().Be(PresentationReviewWorkflowPlanner.CannotReplyToResolvedCommentMessage);
     }
 
     [Fact]

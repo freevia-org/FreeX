@@ -44,6 +44,51 @@ public sealed class AvaloniaInCanvasTextEditor
     /// <summary>The id of the table shape currently being edited, or 0 if not active.</summary>
     public uint ActiveTableShapeId => _editingTableShapeId;
 
+    public bool TryApplyActiveTableCellTextFormat(TableCellTextFormatKind kind)
+    {
+        // The overlay TextBox's Text uses the same '\n'-joined paragraph convention as
+        // InCanvasTextEditPlanner.ExtractPlainText, so its SelectionStart/SelectionEnd map
+        // directly onto the character-offset range PlanTextFormat expects. A collapsed caret
+        // (SelectionStart == SelectionEnd) is passed through as null, which falls back to the
+        // existing whole-cell behavior.
+        (int Start, int End)? selection = null;
+        bool isWholeCellSelection = true;
+        if (_cellEditActive && _cellTextBox is not null)
+        {
+            int selStart = Math.Min(_cellTextBox.SelectionStart, _cellTextBox.SelectionEnd);
+            int selEnd = Math.Max(_cellTextBox.SelectionStart, _cellTextBox.SelectionEnd);
+            int textLength = _cellTextBox.Text?.Length ?? 0;
+            isWholeCellSelection = selStart == selEnd || (selStart == 0 && selEnd >= textLength);
+            if (selStart != selEnd)
+                selection = (selStart, selEnd);
+        }
+
+        var plan = _editor.PlanActiveTableCellTextFormat(kind, selection);
+        if (plan.Command is null)
+            return false;
+
+        _editor.Bus.Execute(plan.Command);
+
+        if (_cellEditActive &&
+            _cellTextBox is not null &&
+            plan.ShapeId == _editingTableShapeId &&
+            plan.Row == _editingCellRow &&
+            plan.Col == _editingCellCol &&
+            plan.TargetValue is { } value)
+        {
+            // The overlay TextBox mirrors formatting as whole-control font weight/style, which
+            // cannot represent a mixed/partial-selection result. When the selection spans the
+            // entire cell (or the caret is collapsed, matching the existing whole-cell
+            // convention), mirror the format onto the overlay control. For a genuine partial
+            // sub-range selection, skip mirroring — the overlay can't show "half bold" — the
+            // underlying rich model (committed on close) is authoritative regardless.
+            if (isWholeCellSelection)
+                ApplyCellOverlayFormat(kind, value);
+        }
+
+        return true;
+    }
+
     public AvaloniaInCanvasTextEditor(SlideCanvas canvas, EditingSession editor, Panel overlay)
     {
         _canvas = canvas ?? throw new ArgumentNullException(nameof(canvas));
@@ -249,7 +294,18 @@ public sealed class AvaloniaInCanvasTextEditor
             if (cell is null)
                 return;
 
-            var newBody = InCanvasTextEditPlanner.BuildPlainTextBody(cell.TextBody, newText);
+            // The overlay TextBox only ever shows/edits plain text, but formatting commands
+            // (bold/italic/underline applied while the overlay is open) mutate the rich
+            // TextBody model directly via TryApplyActiveTableCellTextFormat. If the user did
+            // not retype any text (the committed plain text still matches the current rich
+            // model's concatenated text), reuse the rich model as-is instead of rebuilding a
+            // single flattened run from run[0] — rebuilding would silently discard any other
+            // runs' distinct formatting (a data-loss bug). Only fall back to the plain rebuild
+            // when the text itself changed.
+            var currentPlainText = InCanvasTextEditPlanner.ExtractPlainText(cell.TextBody);
+            var newBody = newText == currentPlainText
+                ? SetShapeTextBodyCommand.CloneTextBody(cell.TextBody) ?? InCanvasTextEditPlanner.BuildPlainTextBody(cell.TextBody, newText)
+                : InCanvasTextEditPlanner.BuildPlainTextBody(cell.TextBody, newText);
             var decision = AvaloniaTableCellEditAdapter.CommitRichText(editPlan, newBody);
             if (decision.Command is not null)
                 _editor.Bus.Execute(decision.Command);
@@ -447,5 +503,29 @@ public sealed class AvaloniaInCanvasTextEditor
     {
         _overlay.IsVisible = _overlay.Children.Count > 0;
         _overlay.IsHitTestVisible = _active || _cellEditActive;
+    }
+
+    private void ApplyCellOverlayFormat(TableCellTextFormatKind kind, bool value)
+    {
+        if (_cellTextBox is null)
+            return;
+
+        switch (kind)
+        {
+            case TableCellTextFormatKind.Bold:
+                _cellTextBox.FontWeight = value ? FontWeight.Bold : FontWeight.Normal;
+                break;
+            case TableCellTextFormatKind.Italic:
+                _cellTextBox.FontStyle = value ? FontStyle.Italic : FontStyle.Normal;
+                break;
+            case TableCellTextFormatKind.Underline:
+                _cellTextBox.Classes.Set("freep-table-cell-underline", value);
+                _cellTextBox.BorderThickness = value
+                    ? new Thickness(1.5, 1.5, 1.5, 3.0)
+                    : new Thickness(1.5);
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(kind), kind, null);
+        }
     }
 }

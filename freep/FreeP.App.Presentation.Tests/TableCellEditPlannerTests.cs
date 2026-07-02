@@ -99,6 +99,134 @@ public sealed class TableCellEditPlannerTests
         shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs[0].Runs[0].Text.Should().Be("Anchor");
     }
 
+    [Theory]
+    [InlineData(TableCellTextFormatKind.Bold)]
+    [InlineData(TableCellTextFormatKind.Italic)]
+    [InlineData(TableCellTextFormatKind.Underline)]
+    public void PlanTextFormat_ContinuationCell_BuildsUndoableRunFormatCommand(TableCellTextFormatKind kind)
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Shapes.Clear();
+        var shape = MakeMergedTableShape();
+        var body = shape.Table!.Rows[0].Cells[0].TextBody!;
+        body.Paragraphs[0].Runs.Add(new Run { Text = " suffix", Bold = true, Italic = true, Underline = true });
+        slide.Shapes.Add(shape);
+
+        var plan = TableCellEditPlanner.PlanTextFormat(
+            slideIndex: 0,
+            slide,
+            [shape.Id],
+            activeCell: (0, 1),
+            kind);
+
+        plan.Status.Should().Be(TableCellTextFormatStatus.Ready);
+        plan.ShapeId.Should().Be(shape.Id);
+        plan.Row.Should().Be(0);
+        plan.Col.Should().Be(0);
+        plan.TargetValue.Should().BeTrue();
+        plan.Command.Should().NotBeNull();
+
+        var bus = new PresentationCommandBus(presentation);
+        bus.Execute(plan.Command!);
+
+        var runs = shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs[0].Runs;
+        runs.Should().HaveCount(2);
+        runs.Should().OnlyContain(run => ReadFormat(run, kind));
+        if (kind == TableCellTextFormatKind.Bold)
+            runs.Should().OnlyContain(run => run.BoldSet);
+        if (kind == TableCellTextFormatKind.Italic)
+            runs.Should().OnlyContain(run => run.ItalicSet);
+
+        bus.Undo();
+        ReadFormat(shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs[0].Runs[0], kind).Should().BeFalse();
+    }
+
+    [Fact]
+    public void PlanTextFormat_SubRangeSelection_SplitsRunsAndFormatsOnlySelection()
+    {
+        var shape = MakeMergedTableShape();
+        var body = shape.Table!.Rows[0].Cells[0].TextBody!;
+        body.Paragraphs[0].Runs.Clear();
+        body.Paragraphs[0].Runs.Add(new Run { Text = "one two three" });
+        var slide = new Slide { Shapes = { shape } };
+
+        // Select "two" (offsets 4..7) within the single-run cell text "one two three".
+        var plan = TableCellEditPlanner.PlanTextFormat(
+            0,
+            slide,
+            [shape.Id],
+            (0, 0),
+            TableCellTextFormatKind.Bold,
+            selection: (4, 7));
+
+        plan.Status.Should().Be(TableCellTextFormatStatus.Ready);
+        plan.TargetValue.Should().BeTrue();
+
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Clear();
+        presentation.Slides[0].Shapes.Add(shape);
+        var realBus = new PresentationCommandBus(presentation);
+        realBus.Execute(plan.Command!);
+
+        var runs = shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs[0].Runs;
+        string.Concat(runs.Select(r => r.Text)).Should().Be("one two three");
+        runs.Should().Contain(r => r.Text == "two" && r.Bold);
+        runs.Where(r => r.Text != "two").Should().OnlyContain(r => !r.Bold);
+
+        realBus.Undo();
+        var undoneRuns = shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs[0].Runs;
+        string.Concat(undoneRuns.Select(r => r.Text)).Should().Be("one two three");
+        undoneRuns.Should().OnlyContain(r => !r.Bold);
+    }
+
+    [Fact]
+    public void PlanTextFormat_CollapsedSelection_FallsBackToWholeCell()
+    {
+        var shape = MakeMergedTableShape();
+        var body = shape.Table!.Rows[0].Cells[0].TextBody!;
+        body.Paragraphs[0].Runs.Clear();
+        body.Paragraphs[0].Runs.Add(new Run { Text = "abc" });
+        var slide = new Slide { Shapes = { shape } };
+
+        var plan = TableCellEditPlanner.PlanTextFormat(
+            0,
+            slide,
+            [shape.Id],
+            (0, 0),
+            TableCellTextFormatKind.Bold,
+            selection: (2, 2));
+
+        plan.Status.Should().Be(TableCellTextFormatStatus.Ready);
+
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Clear();
+        presentation.Slides[0].Shapes.Add(shape);
+        var bus = new PresentationCommandBus(presentation);
+        bus.Execute(plan.Command!);
+
+        shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs[0].Runs
+            .Should().OnlyContain(r => r.Bold);
+    }
+
+    [Fact]
+    public void PlanTextFormat_AllRunsAlreadyFormatted_TogglesOff()
+    {
+        var shape = MakeMergedTableShape();
+        foreach (var run in shape.Table!.Rows[0].Cells[0].TextBody!.Paragraphs.SelectMany(p => p.Runs))
+            run.Underline = true;
+
+        var plan = TableCellEditPlanner.PlanTextFormat(
+            0,
+            new Slide { Shapes = { shape } },
+            [shape.Id],
+            (0, 0),
+            TableCellTextFormatKind.Underline);
+
+        plan.Status.Should().Be(TableCellTextFormatStatus.Ready);
+        plan.TargetValue.Should().BeFalse();
+    }
+
     [Fact]
     public void BeginEdit_OutOfRangeCell_ReturnsDisabledPlan()
     {
@@ -153,4 +281,12 @@ public sealed class TableCellEditPlannerTests
     }
 
     private static long ToEmu(double dip) => (long)Math.Round(dip * EmuPerDip);
+
+    private static bool ReadFormat(Run run, TableCellTextFormatKind kind) => kind switch
+    {
+        TableCellTextFormatKind.Bold => run.Bold,
+        TableCellTextFormatKind.Italic => run.Italic,
+        TableCellTextFormatKind.Underline => run.Underline,
+        _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
+    };
 }

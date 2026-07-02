@@ -78,6 +78,8 @@ internal static class FreePRibbonCommands
         Action?             onReviewAltText = null,
         Action?             onReviewReadingOrder = null,
         Action?             onReviewProofing = null,
+        Action?             onAddComment = null,
+        Action?             onEditComment = null,
         Action?             onDeleteComment = null,
         Action?             onResolveComment = null,
         Action?             onReopenComment = null,
@@ -115,16 +117,19 @@ internal static class FreePRibbonCommands
         registry.Register("freep.bold", new EditorToggleCommand(stateStore, "freep.bold", () =>
         {
             if (RouteToActiveRichEditor(getSlideCanvas?.Invoke(), e => e.ApplyBold(), e => e.ApplyBold())) return;
+            if (editor.ToggleBoldOnActiveTableCell()) return;
             editor.ToggleBoldOnSelection();
         }));
         registry.Register("freep.italic", new EditorToggleCommand(stateStore, "freep.italic", () =>
         {
             if (RouteToActiveRichEditor(getSlideCanvas?.Invoke(), e => e.ApplyItalic(), e => e.ApplyItalic())) return;
+            if (editor.ToggleItalicOnActiveTableCell()) return;
             editor.ToggleItalicOnSelection();
         }));
         registry.Register("freep.underline", new EditorToggleCommand(stateStore, "freep.underline", () =>
         {
             if (RouteToActiveRichEditor(getSlideCanvas?.Invoke(), e => e.ApplyUnderline(), e => e.ApplyUnderline())) return;
+            if (editor.ToggleUnderlineOnActiveTableCell()) return;
             editor.ToggleUnderlineOnSelection();
         }));
 
@@ -301,6 +306,8 @@ internal static class FreePRibbonCommands
             onReviewAltText,
             onReviewReadingOrder,
             onReviewProofing,
+            onAddComment,
+            onEditComment,
             onDeleteComment,
             onResolveComment,
             onReopenComment);
@@ -458,6 +465,8 @@ internal static class FreePRibbonCommands
         Action? onAltText,
         Action? onReadingOrder,
         Action? onProofing,
+        Action? onAddComment,
+        Action? onEditComment,
         Action? onDeleteComment,
         Action? onResolveComment,
         Action? onReopenComment)
@@ -477,8 +486,13 @@ internal static class FreePRibbonCommands
         registry.Register(
             PresentationReviewWorkflowPlanner.ProofingCommandId,
             new ActionRibbonCommand(() => onProofing?.Invoke()));
-        registry.Register(PresentationReviewWorkflowPlanner.AddCommentCommandId, EmptyRibbonCommand.Instance);
-        registry.Register(PresentationReviewWorkflowPlanner.EditCommentCommandId, EmptyRibbonCommand.Instance);
+        registry.Register(
+            PresentationReviewWorkflowPlanner.AddCommentCommandId,
+            new ActionRibbonCommand(() => onAddComment?.Invoke()));
+        registry.Register(
+            PresentationReviewWorkflowPlanner.EditCommentCommandId,
+            new ActionRibbonCommand(() => onEditComment?.Invoke()));
+        registry.Register(PresentationReviewWorkflowPlanner.ReplyCommentCommandId, EmptyRibbonCommand.Instance);
         registry.Register(
             PresentationReviewWorkflowPlanner.DeleteCommentCommandId,
             new ActionRibbonCommand(() => onDeleteComment?.Invoke()));

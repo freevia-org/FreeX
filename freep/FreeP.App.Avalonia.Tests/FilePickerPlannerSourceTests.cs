@@ -22,12 +22,21 @@ public sealed class FilePickerPlannerSourceTests
         source.Should().Contain("PresentationFileDialogPlanner.BuildOpenPickerPlan()");
         source.Should().Contain("PresentationFileDialogPlanner.BuildSavePickerPlan(");
         source.Should().Contain("PresentationExportPlanner.PdfExportCommandId");
+        source.Should().Contain("PresentationExportPlanner.NotesPagePdfExportCommandId");
         source.Should().Contain("PresentationExportPlanner.ImageExportCommandId");
         source.Should().Contain("PresentationExportPlanner.VideoExportCommandId");
         source.Should().Contain("PresentationExportPlanner.PrintCommandId");
         source.Should().Contain("PresentationExportPlanner.BuildPdfExportPickerPlan(");
+        source.Should().Contain("PresentationExportPlanner.BuildNotesPagePdfExportPlan(");
+        source.Should().Contain("PresentationExportPlanner.BuildNotesPagePdfExportPickerPlan(");
+        // IA1 regression guard: notes-page PDF export must cover the whole deck (AllSlides), the
+        // same as the WPF host (FreeP.App.Host/FileCommands.cs ExportNotesPagePdf, range: null ->
+        // AllSlides) and this shell's own slides-PDF export. It must not be narrowed back down to
+        // only the current slide.
+        source.Should().Contain("var range = new PresentationSlideRangeRequest(PresentationSlideRangeKind.AllSlides);");
         source.Should().Contain("PresentationExportPlanner.BuildHandoutLayoutPlan(");
         source.Should().Contain("PresentationNotesPagePdfExporter.BuildRenderPlan(");
+        source.Should().Contain("PresentationNotesPagePdfExporter.ExportToBytes(_presentation, request)");
         source.Should().Contain("PresentationExportPlanner.BuildVideoExportPlan(");
         source.Should().Contain("PresentationPdfExporter.ExportToBytes(_presentation)");
         source.Should().Contain("PresentationImageExportExecutor.Export(");
@@ -50,6 +59,7 @@ public sealed class FilePickerPlannerSourceTests
         source.Should().Contain("AvaloniaFilePickerOpenRequest.FromDescriptors(FileText.OpenPickerTitle, plan.FileTypes)");
         source.Should().Contain("AvaloniaFilePickerSaveRequest.FromSavePlan(FileText.SavePickerTitle, plan)");
         source.Should().Contain("AvaloniaFilePickerSaveRequest.FromSavePlan(PresentationExportPlanner.PdfExportPickerTitle, plan)");
+        source.Should().Contain("AvaloniaFilePickerSaveRequest.FromSavePlan(PresentationExportPlanner.NotesPagePdfExportPickerTitle, plan)");
         source.Should().Contain("SisterAppFileTextPlanner.Presentation");
         source.Should().Contain("PresentationFileTextResources.PictureFileTypeName");
         source.Should().Contain("AvaloniaFilePickerTypeAdapter.CreateFileType(");

@@ -84,6 +84,17 @@ public readonly record struct ChartMajorGridLinePrimitivePlan(
     IReadOnlyList<ChartGridLinePlan> GridLines,
     ChartStrokePlan Stroke);
 
+public readonly record struct ChartMajorAxisTickPrimitivePlan(
+    IReadOnlyList<ChartGridLinePlan> CategoryTicks,
+    IReadOnlyList<ChartGridLinePlan> ValueTicks,
+    ChartStrokePlan Stroke);
+
+public readonly record struct ChartSecondaryValueAxisPrimitivePlan(
+    IReadOnlyList<ChartTextPlan> Labels,
+    IReadOnlyList<ChartGridLinePlan> Ticks,
+    ChartStrokePlan TickStroke,
+    ChartAxisTitlePlan? Title);
+
 public readonly record struct ChartTextPlan(
     string Text,
     ChartPlanRect Bounds,
@@ -210,7 +221,7 @@ public readonly record struct ChartAxisTitlePlan(
 /// <summary>
 /// Renderer-neutral chart planning helpers shared by the WPF and Avalonia slide canvases.
 /// </summary>
-public static class ChartRenderPlanner
+public static partial class ChartRenderPlanner
 {
     public const double Margin = 8.0;
     public const double TitleHeight = 18.0;
@@ -221,6 +232,8 @@ public static class ChartRenderPlanner
     public const double AxisTitleBand = 14.0;
     public const double AxisTitleFontSize = 7.5;
     public const double GridlinePad = 2.0;
+    public const double AxisMajorTickLength = 4.0;
+    public const double SecondaryAxisTitleGap = 2.0;
     public const byte AreaFillAlpha = 200;
     public const byte RectSeriesFillAlpha = 255;
     public const double LineSeriesStrokeThickness = 1.5;
@@ -293,13 +306,20 @@ public static class ChartRenderPlanner
         bool hasValueAxisTitle = reservesAxes &&
             !chart.ValueAxis.Delete &&
             !string.IsNullOrWhiteSpace(chart.ValueAxis.Title);
-
+        bool hasSecondaryValueAxis = reservesAxes &&
+            !isBar &&
+            chart.SecondaryValueAxis is { Delete: false };
+        bool hasSecondaryValueAxisTitle = hasSecondaryValueAxis &&
+            !string.IsNullOrWhiteSpace(chart.SecondaryValueAxis?.Title);
+        double secondaryAxisAreaWidth = hasSecondaryValueAxis
+            ? AxisLabelWidth + (hasSecondaryValueAxisTitle ? SecondaryAxisTitleGap + AxisTitleBand : 0)
+            : 0;
         double plotLeft = bounds.X + Margin
             + (reservesAxes ? (isBar ? BarCategoryLabelWidth : AxisLabelWidth) : 0)
             + (hasValueAxisTitle && !isBar ? AxisTitleBand : 0)
             + (hasCategoryAxisTitle && isBar ? AxisTitleBand : 0);
         double plotTop = bounds.Y + Margin + titleAreaHeight;
-        double plotRight = bounds.X + bounds.Width - Margin - legendAreaWidth;
+        double plotRight = bounds.X + bounds.Width - Margin - legendAreaWidth - secondaryAxisAreaWidth;
         double plotBottom = bounds.Y + bounds.Height - Margin - legendAreaHeight
             - (reservesAxes ? (isBar ? AxisLabelWidth : CategoryLabelHeight) : 0)
             - (hasValueAxisTitle && isBar ? AxisTitleBand : 0)
@@ -310,7 +330,6 @@ public static class ChartRenderPlanner
             plotTop,
             plotRight - plotLeft,
             plotBottom - plotTop);
-
         ChartPlanRect? titleBounds = chart.Title is not null
             ? new ChartPlanRect(
                 bounds.X + Margin,
@@ -318,7 +337,6 @@ public static class ChartRenderPlanner
                 bounds.Width - 2 * Margin,
                 TitleHeight)
             : null;
-
         return new ChartFramePlan(
             bounds,
             plot,
@@ -455,6 +473,26 @@ public static class ChartRenderPlanner
             DefaultGridLineStroke());
     }
 
+    public static ChartMajorAxisTickPrimitivePlan BuildMajorAxisTickPrimitivePlan(
+        ChartShape chart,
+        ChartFramePlan frame)
+    {
+        if (!frame.HasPlot || frame.IsPie || frame.IsRadar || frame.IsScatterLike)
+            return EmptyMajorAxisTickPrimitivePlan();
+
+        var categoryTicks = chart.CategoryAxis.Delete
+            ? Array.Empty<ChartGridLinePlan>()
+            : BuildCategoryAxisTickPlans(chart, frame);
+        var valueTicks = chart.ValueAxis.Delete
+            ? Array.Empty<ChartGridLinePlan>()
+            : BuildValueAxisTickPlans(chart, frame);
+
+        return new ChartMajorAxisTickPrimitivePlan(
+            categoryTicks,
+            valueTicks,
+            DefaultAxisTickStroke());
+    }
+
     public static IReadOnlyList<ChartTextPlan> BuildCategoryAxisLabelPlans(
         ChartShape chart,
         ChartFramePlan frame)
@@ -539,6 +577,76 @@ public static class ChartRenderPlanner
         }
 
         return labels;
+    }
+
+    private static IReadOnlyList<ChartGridLinePlan> BuildCategoryAxisTickPlans(
+        ChartShape chart,
+        ChartFramePlan frame)
+    {
+        if (chart.Categories.Count == 0)
+            return Array.Empty<ChartGridLinePlan>();
+
+        var plot = frame.Plot;
+        var ticks = new List<ChartGridLinePlan>(chart.Categories.Count);
+        if (frame.IsBar)
+        {
+            int categoryCount = chart.Categories.Count;
+            double categoryStep = plot.Height / Math.Max(1, categoryCount);
+            for (int categoryIndex = 0; categoryIndex < categoryCount; categoryIndex++)
+            {
+                int renderRow = categoryCount - 1 - categoryIndex;
+                double y = plot.Y + renderRow * categoryStep + categoryStep / 2.0;
+                ticks.Add(new ChartGridLinePlan(
+                    new ChartPlanPoint(plot.X - AxisMajorTickLength, y),
+                    new ChartPlanPoint(plot.X, y)));
+            }
+        }
+        else
+        {
+            double categoryStep = plot.Width / Math.Max(1, chart.Categories.Count);
+            for (int categoryIndex = 0; categoryIndex < chart.Categories.Count; categoryIndex++)
+            {
+                double x = plot.X + categoryIndex * categoryStep + categoryStep / 2.0;
+                ticks.Add(new ChartGridLinePlan(
+                    new ChartPlanPoint(x, plot.Bottom),
+                    new ChartPlanPoint(x, plot.Bottom + AxisMajorTickLength)));
+            }
+        }
+
+        return ticks;
+    }
+
+    private static IReadOnlyList<ChartGridLinePlan> BuildValueAxisTickPlans(
+        ChartShape chart,
+        ChartFramePlan frame)
+    {
+        var (minValue, maxValue, majorUnit) = ComputePrimaryValueAxisRange(chart);
+        double steps = (maxValue - minValue) / majorUnit;
+        if (steps <= 0)
+            return Array.Empty<ChartGridLinePlan>();
+
+        var plot = frame.Plot;
+        int tickCount = (int)Math.Round(steps);
+        var ticks = new List<ChartGridLinePlan>(tickCount + 1);
+        for (int tickIndex = 0; tickIndex <= tickCount; tickIndex++)
+        {
+            if (frame.IsBar)
+            {
+                double x = plot.X + plot.Width * tickIndex / steps;
+                ticks.Add(new ChartGridLinePlan(
+                    new ChartPlanPoint(x, plot.Bottom),
+                    new ChartPlanPoint(x, plot.Bottom + AxisMajorTickLength)));
+            }
+            else
+            {
+                double y = plot.Bottom - plot.Height * tickIndex / steps;
+                ticks.Add(new ChartGridLinePlan(
+                    new ChartPlanPoint(plot.X - AxisMajorTickLength, y),
+                    new ChartPlanPoint(plot.X, y)));
+            }
+        }
+
+        return ticks;
     }
 
     public static IReadOnlyList<ChartAxisTitlePlan> BuildAxisTitlePlans(
@@ -627,66 +735,82 @@ public static class ChartRenderPlanner
         ChartPlanRect plot,
         double boundsRight)
     {
-        if (chart.SecondaryValueAxis is null || !plot.HasPositiveArea)
-            return Array.Empty<ChartTextPlan>();
+        var frame = new ChartFramePlan(
+            new ChartPlanRect(0, 0, boundsRight + AxisLabelWidth + Margin, plot.Bottom + Margin),
+            plot,
+            TitleBounds: null,
+            HasLegend: false,
+            LegendRight: false,
+            LegendAreaWidth: 0,
+            LegendAreaHeight: 0,
+            ChartRenderFamily.Cartesian);
 
-        double secondaryMin = 0;
-        double secondaryMax = 0;
-        foreach (var series in chart.Series)
+        return BuildSecondaryValueAxisPrimitivePlan(chart, frame).Labels;
+    }
+
+    public static ChartSecondaryValueAxisPrimitivePlan BuildSecondaryValueAxisPrimitivePlan(
+        ChartShape chart,
+        ChartFramePlan frame)
+    {
+        if (chart.SecondaryValueAxis is null ||
+            chart.SecondaryValueAxis.Delete ||
+            !frame.HasPlot ||
+            frame.IsPie ||
+            frame.IsRadar ||
+            frame.IsScatterLike ||
+            frame.IsBar)
         {
-            if (!series.OnSecondaryAxis)
-                continue;
-
-            foreach (var value in series.Values)
-            {
-                if (!value.HasValue)
-                    continue;
-
-                secondaryMin = Math.Min(secondaryMin, value.Value);
-                secondaryMax = Math.Max(secondaryMax, value.Value);
-            }
+            return EmptySecondaryValueAxisPrimitivePlan();
         }
 
-        double axisMin = chart.SecondaryValueAxis.Min ?? (secondaryMin >= 0 ? 0 : secondaryMin);
-        double axisMax = chart.SecondaryValueAxis.Max ?? secondaryMax;
-        if (axisMax <= axisMin)
-            axisMax = axisMin + 1;
-
-        double range = axisMax - axisMin;
-        double rawUnit = range / 4.0;
-        double magnitude = Math.Pow(10, Math.Floor(Math.Log10(Math.Max(rawUnit, 1e-9))));
-        double normalized = rawUnit / magnitude;
-        double niceMultiplier = normalized < 1.5
-            ? 1.0
-            : normalized < 2.25
-                ? 2.0
-                : normalized < 3.75
-                    ? 2.5
-                    : normalized < 7.5
-                        ? 5.0
-                        : 10.0;
-        double majorUnit = niceMultiplier * magnitude;
-        double niceMax = Math.Ceiling(axisMax / majorUnit) * majorUnit;
-        double niceMin = axisMin >= 0 ? 0 : Math.Floor(axisMin / majorUnit) * majorUnit;
+        var (niceMin, niceMax, majorUnit) = ComputeSecondaryValueAxisRange(chart);
         double steps = (niceMax - niceMin) / majorUnit;
         if (steps <= 0)
-            return Array.Empty<ChartTextPlan>();
+            return EmptySecondaryValueAxisPrimitivePlan();
 
         int tickCount = (int)Math.Round(steps);
+        var plot = frame.Plot;
         var labels = new List<ChartTextPlan>(tickCount + 1);
+        var ticks = new List<ChartGridLinePlan>(tickCount + 1);
+        double labelX = plot.Right + AxisMajorTickLength + GridlinePad;
+        double labelWidth = Math.Max(1, AxisLabelWidth - AxisMajorTickLength - GridlinePad);
         for (int tickIndex = 0; tickIndex <= tickCount; tickIndex++)
         {
             double value = niceMin + majorUnit * tickIndex;
             double y = plot.Bottom - plot.Height * tickIndex / steps;
+            ticks.Add(new ChartGridLinePlan(
+                new ChartPlanPoint(plot.Right, y),
+                new ChartPlanPoint(plot.Right + AxisMajorTickLength, y)));
             labels.Add(new ChartTextPlan(
                 FormatAxisValue(value),
-                new ChartPlanRect(boundsRight + 2, y - 6, AxisLabelWidth, 12),
+                new ChartPlanRect(labelX, y - 6, labelWidth, 12),
                 IsBold: false,
                 FontSize: 6.5,
                 Alignment: ChartPlanTextAlignment.Left));
         }
 
-        return labels;
+        ChartAxisTitlePlan? title = null;
+        if (!string.IsNullOrWhiteSpace(chart.SecondaryValueAxis.Title))
+        {
+            title = new ChartAxisTitlePlan(
+                new ChartTextPlan(
+                    chart.SecondaryValueAxis.Title!,
+                    new ChartPlanRect(
+                        plot.Right + AxisLabelWidth + SecondaryAxisTitleGap,
+                        plot.Y,
+                        AxisTitleBand,
+                        plot.Height),
+                    IsBold: false,
+                    FontSize: AxisTitleFontSize,
+                    Alignment: ChartPlanTextAlignment.Center),
+                ChartAxisTitleOrientation.VerticalClockwise);
+        }
+
+        return new ChartSecondaryValueAxisPrimitivePlan(
+            labels,
+            ticks,
+            DefaultAxisTickStroke(),
+            title);
     }
 
     public static IReadOnlyList<ChartRectPrimitive> BuildColumnPrimitives(
@@ -1742,8 +1866,24 @@ public static class ChartRenderPlanner
             Array.Empty<ChartGridLinePlan>(),
             DefaultGridLineStroke());
 
+    private static ChartMajorAxisTickPrimitivePlan EmptyMajorAxisTickPrimitivePlan() =>
+        new(
+            Array.Empty<ChartGridLinePlan>(),
+            Array.Empty<ChartGridLinePlan>(),
+            DefaultAxisTickStroke());
+
+    private static ChartSecondaryValueAxisPrimitivePlan EmptySecondaryValueAxisPrimitivePlan() =>
+        new(
+            Array.Empty<ChartTextPlan>(),
+            Array.Empty<ChartGridLinePlan>(),
+            DefaultAxisTickStroke(),
+            Title: null);
+
     private static ChartStrokePlan DefaultGridLineStroke() =>
         new(new SrgbColor(0xD9, 0xD9, 0xD9), Alpha: 255, Thickness: 0.5);
+
+    private static ChartStrokePlan DefaultAxisTickStroke() =>
+        new(new SrgbColor(0x7F, 0x7F, 0x7F), Alpha: 255, Thickness: 0.75);
 
     private static ChartStrokePlan DefaultRadarSpokeStroke() =>
         new(new SrgbColor(0xC0, 0xC0, 0xC0), Alpha: 255, Thickness: 0.5);

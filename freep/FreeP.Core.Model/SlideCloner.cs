@@ -117,6 +117,7 @@ public static class SlideCloner
             Legend       = src.Legend,
             CategoryAxis = CloneChartAxis(src.CategoryAxis),
             ValueAxis    = CloneChartAxis(src.ValueAxis),
+            RegenerateWorkbookOnSave = src.RegenerateWorkbookOnSave,
         };
 
         foreach (var c in src.Categories)
@@ -151,20 +152,37 @@ public static class SlideCloner
         Delete            = a.Delete,
     };
 
-    private static SlideComment CloneComment(SlideComment c) => new()
+    private static SlideComment CloneComment(SlideComment c)
     {
-        AuthorId = c.AuthorId,
-        Author   = c.Author,
-        Initials = c.Initials,
-        Text     = c.Text,
-        DateTime = c.DateTime,
-        IsResolved       = c.IsResolved,
-        ResolvedDateTime = c.ResolvedDateTime,
-        ResolvedBy       = c.ResolvedBy,
-        Xemu     = c.Xemu,
-        Yemu     = c.Yemu,
-        Idx      = c.Idx,
-    };
+        var clone = new SlideComment
+        {
+            AuthorId = c.AuthorId,
+            Author   = c.Author,
+            Initials = c.Initials,
+            Text     = c.Text,
+            DateTime = c.DateTime,
+            IsResolved       = c.IsResolved,
+            ResolvedDateTime = c.ResolvedDateTime,
+            ResolvedBy       = c.ResolvedBy,
+            Xemu     = c.Xemu,
+            Yemu     = c.Yemu,
+            Idx      = c.Idx,
+        };
+
+        foreach (var reply in c.Replies)
+        {
+            clone.Replies.Add(new SlideCommentReply
+            {
+                AuthorId = reply.AuthorId,
+                Author = reply.Author,
+                Initials = reply.Initials,
+                Text = reply.Text,
+                DateTime = reply.DateTime,
+            });
+        }
+
+        return clone;
+    }
 
     private static SlideTransition CloneTransition(SlideTransition t) => new()
     {

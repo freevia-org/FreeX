@@ -68,8 +68,16 @@ static int RenderAll(string outDir)
     var floatPath = Path.GetFullPath(Path.Combine(outDir, "freew_floating_image.png"));
     var columnsPath = Path.GetFullPath(Path.Combine(outDir, "freew_columns_layout.png"));
     var borderWatermarkPath = Path.GetFullPath(Path.Combine(outDir, "freew_border_watermark.png"));
+    var footnotesP1Path = VisualEvidenceOutputPath(outDir, "f2-footnotes", 1);
+    var footnotesP2Path = VisualEvidenceOutputPath(outDir, "f2-footnotes", 2);
+    var endnotesP1Path = VisualEvidenceOutputPath(outDir, "f2-endnotes", 1);
+    var endnotesP2Path = VisualEvidenceOutputPath(outDir, "f2-endnotes", 2);
+    var endnotesP3Path = VisualEvidenceOutputPath(outDir, "f2-endnotes", 3);
+    var sectionLandscapeP1Path = VisualEvidenceOutputPath(outDir, "f2-section-landscape", 1);
+    var sectionLandscapeP2Path = VisualEvidenceOutputPath(outDir, "f2-section-landscape", 2);
     var tableLayoutPath = VisualEvidenceOutputPath(outDir, "table-layout-complex", 1);
     var drawingObjectsPath = VisualEvidenceOutputPath(outDir, "drawing-objects-complex", 1);
+    var chartSmartArtPath = VisualEvidenceOutputPath(outDir, "chart-smartart-complex", 1);
     var printPreviewP1Path = VisualEvidenceOutputPath(outDir, "backstage-print-preview-fidelity", 1);
     var printPreviewP2Path = VisualEvidenceOutputPath(outDir, "backstage-print-preview-fidelity", 2);
     var pdfExportP1Path = VisualEvidenceOutputPath(outDir, "backstage-pdf-export-fidelity", 1);
@@ -113,6 +121,84 @@ static int RenderAll(string outDir)
         documentFactory: BuildBorderWatermarkDocument);
     if (rc != 0) return rc;
 
+    rc = RenderMode(DocumentViewMode.PrintLayout, footnotesP1Path,
+        width: 960, height: 1200,
+        label: "F2 Footnotes p1",
+        scenarioId: "f2-footnotes",
+        evidence: evidence,
+        documentFactory: FreeWVisualEvidenceDocumentFactory.BuildFootnotePlacementDocument,
+        pageNumber: 1,
+        pageCount: 2,
+        hasFootnotes: true);
+    if (rc != 0) return rc;
+
+    rc = RenderMode(DocumentViewMode.PrintLayout, footnotesP2Path,
+        width: 960, height: 1200,
+        label: "F2 Footnotes p2",
+        scenarioId: "f2-footnotes",
+        evidence: evidence,
+        documentFactory: FreeWVisualEvidenceDocumentFactory.BuildFootnotePlacementDocument,
+        pageNumber: 2,
+        pageCount: 2,
+        viewportOffsetY: 1100,
+        hasFootnotes: true);
+    if (rc != 0) return rc;
+
+    rc = RenderMode(DocumentViewMode.PrintLayout, endnotesP1Path,
+        width: 960, height: 1200,
+        label: "F2 Endnotes p1",
+        scenarioId: "f2-endnotes",
+        evidence: evidence,
+        documentFactory: FreeWVisualEvidenceDocumentFactory.BuildEndnotePlacementDocument,
+        pageNumber: 1,
+        pageCount: 3);
+    if (rc != 0) return rc;
+
+    rc = RenderMode(DocumentViewMode.PrintLayout, endnotesP2Path,
+        width: 960, height: 1200,
+        label: "F2 Endnotes p2",
+        scenarioId: "f2-endnotes",
+        evidence: evidence,
+        documentFactory: FreeWVisualEvidenceDocumentFactory.BuildEndnotePlacementDocument,
+        pageNumber: 2,
+        pageCount: 3,
+        viewportOffsetY: 1100);
+    if (rc != 0) return rc;
+
+    rc = RenderMode(DocumentViewMode.PrintLayout, endnotesP3Path,
+        width: 960, height: 1200,
+        label: "F2 Endnotes p3",
+        scenarioId: "f2-endnotes",
+        evidence: evidence,
+        documentFactory: FreeWVisualEvidenceDocumentFactory.BuildEndnotePlacementDocument,
+        pageNumber: 3,
+        pageCount: 3,
+        viewportOffsetY: 2200,
+        hasEndnotes: true,
+        isSyntheticPage: true);
+    if (rc != 0) return rc;
+
+    rc = RenderMode(DocumentViewMode.PrintLayout, sectionLandscapeP1Path,
+        width: 1160, height: 1200,
+        label: "F2 Section Landscape p1",
+        scenarioId: "f2-section-landscape",
+        evidence: evidence,
+        documentFactory: FreeWVisualEvidenceDocumentFactory.BuildSectionGeometryDocument,
+        pageNumber: 1,
+        pageCount: 2);
+    if (rc != 0) return rc;
+
+    rc = RenderMode(DocumentViewMode.PrintLayout, sectionLandscapeP2Path,
+        width: 1160, height: 1000,
+        label: "F2 Section Landscape p2",
+        scenarioId: "f2-section-landscape",
+        evidence: evidence,
+        documentFactory: FreeWVisualEvidenceDocumentFactory.BuildSectionGeometryDocument,
+        pageNumber: 2,
+        pageCount: 2,
+        viewportOffsetY: 300);
+    if (rc != 0) return rc;
+
     rc = RenderMode(DocumentViewMode.PrintLayout, tableLayoutPath,
         width: 960, height: 1600,
         label: "Table Layout",
@@ -127,6 +213,14 @@ static int RenderAll(string outDir)
         scenarioId: "drawing-objects-complex",
         evidence: evidence,
         documentFactory: FreeWVisualEvidenceDocumentFactory.BuildDrawingObjectsCompositionDocument);
+    if (rc != 0) return rc;
+
+    rc = RenderMode(DocumentViewMode.PrintLayout, chartSmartArtPath,
+        width: 960, height: 1700,
+        label: "Chart + SmartArt",
+        scenarioId: "chart-smartart-complex",
+        evidence: evidence,
+        documentFactory: FreeWVisualEvidenceDocumentFactory.BuildChartSmartArtCompositionDocument);
     if (rc != 0) return rc;
 
     // ── FO1: Floating-image render capture ──────────────────────────────────────────────────────────
@@ -407,9 +501,14 @@ static int RenderMode(
     Func<TextDocument>? documentFactory = null,
     int pageNumber = 1,
     int pageCount = 1,
-    double viewportOffsetY = 0)
+    double viewportOffsetY = 0,
+    bool hasFootnotes = false,
+    bool hasEndnotes = false,
+    bool isSyntheticPage = false)
 {
     var doc = documentFactory?.Invoke() ?? BuildMultiPageDocument();
+    var sectionGeometryPage = ResolveSectionGeometryPage(scenarioId, doc, pageNumber, pageCount);
+    var evidencePage = sectionGeometryPage?.Page ?? doc.Page;
     var view = new DocumentView();
     view.LoadDocument(doc);
     view.ViewMode = mode;
@@ -459,12 +558,16 @@ static int RenderMode(
             bytes,
             width,
             height,
-            doc.Page,
+            evidencePage,
             LayoutKindFor(mode),
             captureSource: "avalonia-render-target",
             viewMode: mode.ToString(),
             pageNumber: pageNumber,
             pageCount: pageCount,
+            hasFootnotes: hasFootnotes,
+            hasEndnotes: hasEndnotes,
+            isSyntheticPage: isSyntheticPage,
+            sectionGeometryPage: sectionGeometryPage,
             document: doc);
         Console.WriteLine($"[PageLayoutShot] {label}: {bytes.Length:N0} bytes → {outPath}");
         return 0;
@@ -488,12 +591,16 @@ static int RenderMode(
             pngBytes,
             width,
             height,
-            doc.Page,
+            evidencePage,
             LayoutKindFor(mode),
             captureSource: "skia-fallback-placeholder",
             viewMode: mode.ToString(),
             pageNumber: pageNumber,
             pageCount: pageCount,
+            hasFootnotes: hasFootnotes,
+            hasEndnotes: hasEndnotes,
+            isSyntheticPage: isSyntheticPage,
+            sectionGeometryPage: sectionGeometryPage,
             document: doc);
         Console.WriteLine($"[PageLayoutShot] {label} (Skia fallback): {pngBytes.Length:N0} bytes → {outPath}");
         return 0;
@@ -534,10 +641,34 @@ static void AddAvaloniaEvidence(
     string viewMode,
     int pageNumber = 1,
     int pageCount = 1,
+    bool hasFootnotes = false,
+    bool hasEndnotes = false,
+    bool isSyntheticPage = false,
+    FreeWVisualSectionGeometryPagePlan? sectionGeometryPage = null,
     TextDocument? document = null)
 {
     var stats = ComputePngPixelStats(pngBytes, pixelWidth, pixelHeight);
-    var sectionOrdinal = 1;
+    var sectionOrdinal = sectionGeometryPage?.SectionOrdinal
+        ?? (document is null ? 1 : FreeWVisualEvidencePlanner.ResolveSectionOrdinal(document, page));
+    var sectionRelativePageNumber = sectionGeometryPage?.SectionRelativePageNumber ?? 1;
+    var sectionOwnerId = sectionGeometryPage?.SectionOwnerId
+        ?? FreeWVisualEvidencePlanner.BuildSectionOwnerId(sectionOrdinal);
+    var metadata = new Dictionary<string, string>
+    {
+        ["renderer"] = "FreeW.PageLayoutShot",
+        ["captureSource"] = captureSource,
+        ["viewMode"] = viewMode,
+        ["pageNumber"] = pageNumber.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        ["pageCount"] = pageCount.ToString(System.Globalization.CultureInfo.InvariantCulture)
+    };
+
+    if (sectionGeometryPage is not null)
+    {
+        metadata["sectionGeometryEvidence"] = "shared-expectation";
+        metadata["sectionGeometryRenderStatus"] = "avalonia-global-page-surface-no-section-page-break";
+        metadata["expectedOrientation"] = sectionGeometryPage.Orientation;
+    }
+
     var row = FreeWVisualEvidencePlanner.BuildEvidenceRow(
         scenarioId: scenarioId,
         hostId: "avalonia-page-layout-shot",
@@ -551,20 +682,34 @@ static void AddAvaloniaEvidence(
         pageCount: pageCount,
         layoutKind: layoutKind,
         availableWidthDip: pixelWidth,
+        hasFootnotes: hasFootnotes,
+        hasEndnotes: hasEndnotes,
+        isSyntheticPage: isSyntheticPage,
         sectionOrdinal: sectionOrdinal,
-        sectionRelativePageNumber: 1,
-        sectionOwnerId: FreeWVisualEvidencePlanner.BuildSectionOwnerId(sectionOrdinal),
-        hostMetadata: new Dictionary<string, string>
-        {
-            ["renderer"] = "FreeW.PageLayoutShot",
-            ["captureSource"] = captureSource,
-            ["viewMode"] = viewMode,
-            ["pageNumber"] = pageNumber.ToString(System.Globalization.CultureInfo.InvariantCulture),
-            ["pageCount"] = pageCount.ToString(System.Globalization.CultureInfo.InvariantCulture)
-        },
+        sectionRelativePageNumber: sectionRelativePageNumber,
+        sectionOwnerId: sectionOwnerId,
+        hostMetadata: metadata,
         document: document);
     FreeWVisualEvidencePlanner.EnsureTrusted(row);
     evidence.Add(row);
+}
+
+static FreeWVisualSectionGeometryPagePlan? ResolveSectionGeometryPage(
+    string scenarioId,
+    TextDocument document,
+    int pageNumber,
+    int pageCount)
+{
+    if (!FreeWVisualEvidenceManifestNormalizer.SectionGeometryRendererScenarioIds.Contains(
+            scenarioId,
+            StringComparer.OrdinalIgnoreCase))
+    {
+        return null;
+    }
+
+    return FreeWVisualEvidencePlanner
+        .BuildSectionGeometryPagePlans(document, pageCount)
+        .FirstOrDefault(page => page.PageNumber == pageNumber);
 }
 
 static FreeWVisualPixelStats ComputePngPixelStats(byte[] pngBytes, int fallbackWidth, int fallbackHeight)

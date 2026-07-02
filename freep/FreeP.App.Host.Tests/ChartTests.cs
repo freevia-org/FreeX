@@ -1,4 +1,6 @@
 using System.IO;
+using System.IO.Compression;
+using System.Xml.Linq;
 using Free.Shared.Drawing;
 using FreeP.App.Compositor;
 using FreeP.Core.IO;
@@ -547,6 +549,201 @@ public sealed class ChartTests : IDisposable
         outerRadii[serCount - 1].Should().BeApproximately(rOut, 1e-9,
             "the outermost ring of the last series must reach rOut");
     }
+
+    // ── ID1/ID2: regenerated-workbook column layout + c:f formula ranges ────
+
+    [Fact]
+    public void RegeneratedWorkbook_ScatterChart_WritesXAndYColumns()
+    {
+        var chart = BuildScatterChart();
+        chart.RegenerateWorkbookOnSave = true;
+        var pres = BuildPresWithChart(chart);
+        var path = WriteToPptx(pres);
+
+        using var archive = ZipFile.OpenRead(path);
+        var sheetXml = LoadWorkbookSheetXml(archive, chartIndex: 1);
+
+        // X values (1, 2, 3) must appear — not an empty column A.
+        sheetXml.Should().Contain(">1<");
+        sheetXml.Should().Contain(">2<");
+        sheetXml.Should().Contain(">3<");
+        // Y values (10, 20, 15) must also appear.
+        sheetXml.Should().Contain(">10<");
+        sheetXml.Should().Contain(">20<");
+        sheetXml.Should().Contain(">15<");
+    }
+
+    [Fact]
+    public void RegeneratedWorkbook_BubbleChart_WritesXYAndSizeColumns()
+    {
+        var chart = BuildBubbleChart();
+        chart.RegenerateWorkbookOnSave = true;
+        var pres = BuildPresWithChart(chart);
+        var path = WriteToPptx(pres);
+
+        using var archive = ZipFile.OpenRead(path);
+        var sheetDoc = LoadWorkbookSheetDoc(archive, chartIndex: 1);
+        var cellValues = ExtractCellValues(sheetDoc);
+
+        // X values (1, 3, 5), Y values (2, 4, 1), sizes (5, 15, 10) must all be present.
+        foreach (var expected in new[] { "1", "3", "5", "2", "4", "10", "15" })
+            cellValues.Should().Contain(expected, $"expected value '{expected}' to appear in the regenerated bubble workbook");
+
+        // Three distinct columns are used for the single series (X, Y, size).
+        var columns = cellValues.Count == 0
+            ? new HashSet<string>()
+            : sheetDoc.Descendants().Where(e => e.Name.LocalName == "c")
+                .Select(c => new string(c.Attribute("r")!.Value.TakeWhile(char.IsLetter).ToArray()))
+                .ToHashSet();
+        columns.Should().HaveCount(3, "bubble chart with one series should use 3 columns (X, Y, size)");
+    }
+
+    [Fact]
+    public void RegeneratedWorkbook_CategoryChart_UnchangedLayout()
+    {
+        // Regression: category charts must keep categories in col A and series values in cols B+.
+        var chart = BuildColumnChart();
+        chart.RegenerateWorkbookOnSave = true;
+        var pres = BuildPresWithChart(chart);
+        var path = WriteToPptx(pres);
+
+        using var archive = ZipFile.OpenRead(path);
+        var sheetDoc = LoadWorkbookSheetDoc(archive, chartIndex: 1);
+
+        var rowTwo = sheetDoc.Descendants().First(e => e.Name.LocalName == "row" && e.Attribute("r")?.Value == "2");
+        var cellA2 = rowTwo.Elements().First(c => c.Attribute("r")?.Value == "A2");
+        cellA2.Attribute("t")?.Value.Should().Be("inlineStr", "col A must still hold the category label");
+        cellA2.Descendants().First(e => e.Name.LocalName == "t").Value.Should().Be("Q1");
+    }
+
+    [Fact]
+    public void RegeneratedChart_CategorySeries_HasCFormulaRanges()
+    {
+        var chart = BuildColumnChart(); // 2 series, 3 categories
+        chart.RegenerateWorkbookOnSave = true;
+        var pres = BuildPresWithChart(chart);
+        var path = WriteToPptx(pres);
+
+        using var archive = ZipFile.OpenRead(path);
+        var chartDoc = LoadChartXml(archive, chartIndex: 1);
+
+        var series = chartDoc.Descendants(ChartNs + "ser").ToList();
+        series.Should().HaveCount(2);
+
+        foreach (var ser in series)
+        {
+            var catF = ser.Element(ChartNs + "cat")?.Element(ChartNs + "strRef")?.Element(ChartNs + "f");
+            catF.Should().NotBeNull("c:cat/c:strRef requires a c:f formula range");
+            catF!.Value.Should().Be("ChartData!$A$2:$A$4");
+
+            var valF = ser.Element(ChartNs + "val")?.Element(ChartNs + "numRef")?.Element(ChartNs + "f");
+            valF.Should().NotBeNull("c:val/c:numRef requires a c:f formula range");
+        }
+
+        // Series 0 -> col B, Series 1 -> col C.
+        series[0].Element(ChartNs + "val")!.Element(ChartNs + "numRef")!.Element(ChartNs + "f")!.Value
+            .Should().Be("ChartData!$B$2:$B$4");
+        series[1].Element(ChartNs + "val")!.Element(ChartNs + "numRef")!.Element(ChartNs + "f")!.Value
+            .Should().Be("ChartData!$C$2:$C$4");
+    }
+
+    [Fact]
+    public void RegeneratedChart_ScatterSeries_HasXValYValFormulaRanges()
+    {
+        var chart = BuildScatterChart(); // 1 series, 3 points
+        chart.RegenerateWorkbookOnSave = true;
+        var pres = BuildPresWithChart(chart);
+        var path = WriteToPptx(pres);
+
+        using var archive = ZipFile.OpenRead(path);
+        var chartDoc = LoadChartXml(archive, chartIndex: 1);
+        var ser = chartDoc.Descendants(ChartNs + "ser").Single();
+
+        var xValF = ser.Element(ChartNs + "xVal")?.Element(ChartNs + "numRef")?.Element(ChartNs + "f");
+        var yValF = ser.Element(ChartNs + "yVal")?.Element(ChartNs + "numRef")?.Element(ChartNs + "f");
+        xValF.Should().NotBeNull("c:xVal/c:numRef requires a c:f formula range");
+        yValF.Should().NotBeNull("c:yVal/c:numRef requires a c:f formula range");
+
+        // X in col A, Y in col B for the single series (matches the workbook layout).
+        xValF!.Value.Should().Be("ChartData!$A$2:$A$4");
+        yValF!.Value.Should().Be("ChartData!$B$2:$B$4");
+    }
+
+    [Fact]
+    public void RegeneratedChart_BubbleSeries_HasBubbleSizeFormulaRange()
+    {
+        var chart = BuildBubbleChart(); // 1 series, 3 points
+        chart.RegenerateWorkbookOnSave = true;
+        var pres = BuildPresWithChart(chart);
+        var path = WriteToPptx(pres);
+
+        using var archive = ZipFile.OpenRead(path);
+        var chartDoc = LoadChartXml(archive, chartIndex: 1);
+        var ser = chartDoc.Descendants(ChartNs + "ser").Single();
+
+        var sizeF = ser.Element(ChartNs + "bubbleSize")?.Element(ChartNs + "numRef")?.Element(ChartNs + "f");
+        sizeF.Should().NotBeNull("c:bubbleSize/c:numRef requires a c:f formula range");
+        sizeF!.Value.Should().Be("ChartData!$C$2:$C$4");
+    }
+
+    [Fact]
+    public void PreservedChart_DoesNotFabricateCFormulaRange()
+    {
+        // A chart that is NOT flagged for regeneration (no packageSnapshot either, e.g. a
+        // freshly-authored chart with cached data only) must not get a c:f pointing at a
+        // workbook that was never written.
+        var chart = BuildColumnChart();
+        chart.RegenerateWorkbookOnSave.Should().BeFalse("default/preserved charts must not regenerate");
+        var pres = BuildPresWithChart(chart);
+        var path = WriteToPptx(pres);
+
+        using var archive = ZipFile.OpenRead(path);
+        var chartDoc = LoadChartXml(archive, chartIndex: 1);
+        var ser = chartDoc.Descendants(ChartNs + "ser").First();
+
+        ser.Element(ChartNs + "val")?.Element(ChartNs + "numRef")?.Element(ChartNs + "f")
+            .Should().BeNull("without a regenerated workbook there is nothing for a fabricated c:f to address");
+
+        archive.Entries.Should().NotContain(e => e.FullName.StartsWith("ppt/embeddings/"),
+            "no workbook should be written when RegenerateWorkbookOnSave is false and there's no source snapshot");
+    }
+
+    // ── ID1/ID2 helpers ───────────────────────────────────────────────────────
+
+    private static readonly XNamespace ChartNs =
+        "http://schemas.openxmlformats.org/drawingml/2006/chart";
+    private static readonly XNamespace SheetNs =
+        "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+    private static XDocument LoadChartXml(ZipArchive archive, int chartIndex)
+    {
+        var entry = archive.GetEntry($"ppt/charts/chart{chartIndex}.xml")
+            ?? throw new FileNotFoundException($"chart{chartIndex}.xml not found");
+        using var stream = entry.Open();
+        return XDocument.Load(stream);
+    }
+
+    private static XDocument LoadWorkbookSheetDoc(ZipArchive archive, int chartIndex)
+    {
+        var workbookEntry = archive.GetEntry($"ppt/embeddings/chartWorkbook{chartIndex}.xlsx")
+            ?? throw new FileNotFoundException($"chartWorkbook{chartIndex}.xlsx not found");
+        using var workbookStream = workbookEntry.Open();
+        using var workbookMemory = new MemoryStream();
+        workbookStream.CopyTo(workbookMemory);
+        workbookMemory.Position = 0;
+
+        using var workbookArchive = new ZipArchive(workbookMemory, ZipArchiveMode.Read);
+        var sheetEntry = workbookArchive.GetEntry("xl/worksheets/sheet1.xml")
+            ?? throw new FileNotFoundException("xl/worksheets/sheet1.xml not found in embedded workbook");
+        using var sheetStream = sheetEntry.Open();
+        return XDocument.Load(sheetStream);
+    }
+
+    private static string LoadWorkbookSheetXml(ZipArchive archive, int chartIndex) =>
+        LoadWorkbookSheetDoc(archive, chartIndex).ToString(SaveOptions.DisableFormatting);
+
+    private static List<string> ExtractCellValues(XDocument sheetDoc) =>
+        sheetDoc.Descendants(SheetNs + "v").Select(v => v.Value).ToList();
 
     // ── Helpers for new chart types ──────────────────────────────────────────
 

@@ -100,6 +100,10 @@ public sealed class PptxPackageRetentionTests
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/printerSettings";
     private const string UnknownSlideMirrorRelType =
         "http://example.com/freep/relationships/slideMirror";
+    private const string PackageRelType =
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/package";
+    private const string SpreadsheetWorkbookContentType =
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
     public static IEnumerable<object[]> CorpusDecks() =>
         ExpectedCorpusDeckNames.Select(name => new object[] { name });
@@ -486,6 +490,77 @@ public sealed class PptxPackageRetentionTests
         reloaded.Slides[0].Shapes.Should().Contain(s => s.Name == "Modeled view print edit");
     }
 
+    [Fact]
+    public void ReadWriteRead_ChartDataSemanticEdit_RegeneratesChartWorkbookAndKeepsUnrelatedPackageParts()
+    {
+        using var source = BuildPptxWithChartWorkbookAndUnrelatedPackageData();
+        var loaded = PptxPackageReader.Read(source);
+        loaded.PackageSnapshot.Should().NotBeNull();
+        var chartShape = loaded.Slides[0].Shapes.Single(shape => shape.Kind == SlideShapeKind.Chart);
+        chartShape.Chart.Should().NotBeNull();
+        chartShape.Chart!.RegenerateWorkbookOnSave.Should().BeFalse();
+
+        new ReplaceChartDataCommand(
+            slideIndex: 0,
+            shapeId: chartShape.Id,
+            categories: ["East", "West"],
+            seriesNames: ["Actual"],
+            values: [new double?[] { 42, 51 }]).Apply(loaded);
+
+        chartShape.Chart.RegenerateWorkbookOnSave.Should().BeTrue();
+
+        using var saved = new MemoryStream();
+        PptxPackageWriter.Write(loaded, saved);
+        var savedBytes = saved.ToArray();
+
+        using (var archive = new ZipArchive(new MemoryStream(savedBytes), ZipArchiveMode.Read))
+        {
+            ReadText(archive, "customXml/chartWorkbookPayload.xml")
+                .Should()
+                .Contain("unrelated-retain-me");
+            archive.GetEntry("ppt/embeddings/sourceWorkbook.xlsx").Should().BeNull(
+                "a chart data edit must not carry forward the stale source workbook sidecar");
+
+            var chartXml = LoadXml(archive, "ppt/charts/chart1.xml");
+            chartXml.ToString(SaveOptions.DisableFormatting).Should().Contain("East");
+            chartXml.ToString(SaveOptions.DisableFormatting).Should().Contain("42");
+            var externalData = chartXml.Root!.Element(ChartNs + "externalData");
+            externalData.Should().NotBeNull("the edited chart should point at a regenerated workbook sidecar");
+            externalData!.Attribute(RelsDocNs + "id")!.Value.Should().Be("rIdWorkbook1");
+
+            var chartRels = LoadXml(archive, "ppt/charts/_rels/chart1.xml.rels");
+            Relationship(chartRels, PackageRelType, "../embeddings/chartWorkbook1.xlsx").Should().NotBeNull();
+
+            var contentTypes = LoadXml(archive, "[Content_Types].xml");
+            Override(
+                contentTypes,
+                "/ppt/embeddings/chartWorkbook1.xlsx",
+                SpreadsheetWorkbookContentType).Should().NotBeNull();
+            Override(
+                contentTypes,
+                "/customXml/chartWorkbookPayload.xml",
+                "application/vnd.example.freep.chart-workbook-payload+xml").Should().NotBeNull();
+
+            using var workbookArchive = new ZipArchive(
+                new MemoryStream(ReadBytes(archive, "ppt/embeddings/chartWorkbook1.xlsx")),
+                ZipArchiveMode.Read);
+            var sheetXml = LoadXml(workbookArchive, "xl/worksheets/sheet1.xml")
+                .ToString(SaveOptions.DisableFormatting);
+            sheetXml.Should().Contain("Actual");
+            sheetXml.Should().Contain("East");
+            sheetXml.Should().Contain("42");
+            sheetXml.Should().Contain("51");
+        }
+
+        using var savedRead = new MemoryStream(savedBytes);
+        var reloaded = PptxPackageReader.Read(savedRead);
+        var reloadedChart = reloaded.Slides[0].Shapes.Single(shape => shape.Kind == SlideShapeKind.Chart).Chart!;
+        reloadedChart.Categories.Should().Equal("East", "West");
+        reloadedChart.Series.Should().ContainSingle();
+        reloadedChart.Series[0].Name.Should().Be("Actual");
+        reloadedChart.Series[0].Values.Should().Equal(42, 51);
+    }
+
     private static MemoryStream BuildPptxWithUnmodeledPackageData()
     {
         var presentation = Presentation.CreateEmpty();
@@ -559,6 +634,82 @@ public sealed class PptxPackageRetentionTests
             AddOverride(contentTypes, "/ppt/customData/viewState.bin",
                 "application/vnd.example.freep.viewstate");
             AddDefault(contentTypes, "freex", "application/vnd.example.freep.payload");
+            WriteXml(archive, "[Content_Types].xml", contentTypes);
+        }
+
+        package.Position = 0;
+        return package;
+    }
+
+    private static MemoryStream BuildPptxWithChartWorkbookAndUnrelatedPackageData()
+    {
+        var presentation = new Presentation();
+        var slide = new Slide();
+        var chart = new ChartShape { ChartType = ChartType.ColumnClustered };
+        chart.Categories.AddRange(["Old East", "Old West"]);
+        var series = new ChartSeries { Name = "Old Actual" };
+        series.Values.AddRange([10, 20]);
+        chart.Series.Add(series);
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 101,
+            Name = "Workbook chart",
+            Kind = SlideShapeKind.Chart,
+            OffsetXEmu = 914400,
+            OffsetYEmu = 914400,
+            ExtentCxEmu = 3657600,
+            ExtentCyEmu = 2743200,
+            Chart = chart,
+        });
+        presentation.Slides.Add(slide);
+
+        using var basePackage = new MemoryStream();
+        PptxPackageWriter.Write(presentation, basePackage);
+
+        var package = new MemoryStream();
+        package.Write(basePackage.ToArray());
+        package.Position = 0;
+        using (var archive = new ZipArchive(package, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            var chartXml = LoadXml(archive, "ppt/charts/chart1.xml");
+            chartXml.Root!.Element(ChartNs + "externalData")?.Remove();
+            chartXml.Root.Add(new XElement(ChartNs + "externalData",
+                new XAttribute(RelsDocNs + "id", "rIdSourceWorkbook"),
+                new XElement(ChartNs + "autoUpdate", new XAttribute("val", "0"))));
+            WriteXml(archive, "ppt/charts/chart1.xml", chartXml);
+
+            var chartRels = new XDocument(
+                new XDeclaration("1.0", "UTF-8", "yes"),
+                new XElement(RelsNs + "Relationships"));
+            AddRelationship(
+                chartRels,
+                "rIdSourceWorkbook",
+                PackageRelType,
+                "../embeddings/sourceWorkbook.xlsx");
+            WriteXml(archive, "ppt/charts/_rels/chart1.xml.rels", chartRels);
+            WriteBytes(archive, "ppt/embeddings/sourceWorkbook.xlsx", Encoding.UTF8.GetBytes("stale workbook bytes"));
+
+            WriteText(
+                archive,
+                "customXml/chartWorkbookPayload.xml",
+                """<payload xmlns="urn:freep:test">unrelated-retain-me</payload>""");
+            var presRels = LoadXml(archive, "ppt/_rels/presentation.xml.rels");
+            AddRelationship(
+                presRels,
+                "rIdChartWorkbookPayload",
+                CustomXmlRelType,
+                "../customXml/chartWorkbookPayload.xml");
+            WriteXml(archive, "ppt/_rels/presentation.xml.rels", presRels);
+
+            var contentTypes = LoadXml(archive, "[Content_Types].xml");
+            AddOverride(
+                contentTypes,
+                "/ppt/embeddings/sourceWorkbook.xlsx",
+                SpreadsheetWorkbookContentType);
+            AddOverride(
+                contentTypes,
+                "/customXml/chartWorkbookPayload.xml",
+                "application/vnd.example.freep.chart-workbook-payload+xml");
             WriteXml(archive, "[Content_Types].xml", contentTypes);
         }
 
@@ -1081,6 +1232,10 @@ public sealed class PptxPackageRetentionTests
 
     private static readonly XNamespace RelsNs =
         "http://schemas.openxmlformats.org/package/2006/relationships";
+    private static readonly XNamespace RelsDocNs =
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+    private static readonly XNamespace ChartNs =
+        "http://schemas.openxmlformats.org/drawingml/2006/chart";
     private static readonly XNamespace ContentTypesNs =
         "http://schemas.openxmlformats.org/package/2006/content-types";
     private static XElement? Relationship(XDocument doc, string type, string target) =>

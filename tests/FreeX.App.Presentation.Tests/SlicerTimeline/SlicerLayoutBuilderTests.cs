@@ -296,6 +296,20 @@ public sealed class SlicerLayoutBuilderTests
     }
 
     [Fact]
+    public void Build_WithCaption_CaptionRectStopsBeforeHeaderIcons()
+    {
+        var layout = SlicerLayoutBuilder.Build(
+            new SlicerModel { Name = "S", Caption = "A Very Long Region Caption", ShowCaption = true },
+            ["A"],
+            Bounds);
+
+        layout.CaptionRect.Left.Should().BeGreaterThan(layout.HeaderRect.Left);
+        layout.CaptionRect.Right.Should().BeLessThan(layout.MultiSelectIconRect.Left);
+        layout.CaptionRect.Top.Should().Be(layout.HeaderRect.Top);
+        layout.CaptionRect.Bottom.Should().Be(layout.HeaderRect.Bottom);
+    }
+
+    [Fact]
     public void BuildFull_ShowCaptionFalse_IconRectsAreEmpty()
     {
         var slicer = new SlicerModel { Name = "S", Caption = "Region", ShowCaption = false };

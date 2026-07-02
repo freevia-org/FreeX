@@ -1113,62 +1113,14 @@ static void GenerateF2FlowCorpus(string outDir)
 
     // ─── 4. Footnotes ────────────────────────────────────────────────────────────────────────────
     {
-        var doc = TextDocument.CreateEmpty();
-        doc.Blocks.Clear();
-        doc.Blocks.Add(MP("Footnotes Test", "Heading1"));
-        doc.Blocks.Add(MP("This tests whether footnote content appears at the foot of each page."));
-
-        var p1 = new FreeW.Core.Model.Paragraph();
-        p1.Runs.Add(new FreeW.Core.Model.Run("This sentence has a footnote reference"));
-        p1.Runs.Add(new FreeW.Core.Model.Run(string.Empty) { FootnoteId = 1 });
-        p1.Runs.Add(new FreeW.Core.Model.Run(". The footnote content should appear at the bottom of this page."));
-        doc.Blocks.Add(p1);
-        doc.Footnotes[1] = new Footnote(1, "Footnote 1: This is first footnote content. Should appear at bottom of page 1 with a separator rule.");
-
-        for (int i = 1; i <= 22; i++)
-            doc.Blocks.Add(MP($"Filler paragraph {i}: Lorem ipsum dolor sit amet consectetur adipiscing."));
-
-        var p2 = new FreeW.Core.Model.Paragraph();
-        p2.Runs.Add(new FreeW.Core.Model.Run("This sentence on page 2 has a second footnote reference"));
-        p2.Runs.Add(new FreeW.Core.Model.Run(string.Empty) { FootnoteId = 2 });
-        p2.Runs.Add(new FreeW.Core.Model.Run(". The second footnote should be at the bottom of page 2."));
-        doc.Blocks.Add(p2);
-        doc.Footnotes[2] = new Footnote(2, "Footnote 2: Second footnote content. Should appear at the bottom of page 2.");
-
-        for (int i = 1; i <= 20; i++)
-            doc.Blocks.Add(MP($"More filler {i}: Additional content to ensure footnote reference is on page 2."));
-
+        var doc = FreeWVisualEvidenceDocumentFactory.BuildFootnotePlacementDocument();
         DocxWriter.Write(doc, Path.Combine(outDir, "f2-footnotes.docx"));
         Console.WriteLine("  wrote f2-footnotes.docx");
     }
 
     // ─── 5. Endnotes ─────────────────────────────────────────────────────────────────────────────
     {
-        var doc = TextDocument.CreateEmpty();
-        doc.Blocks.Clear();
-        doc.Blocks.Add(MP("Endnotes Test", "Heading1"));
-        doc.Blocks.Add(MP("This tests whether endnote content appears at the end of the document."));
-
-        var p1 = new FreeW.Core.Model.Paragraph();
-        p1.Runs.Add(new FreeW.Core.Model.Run("First sentence with an endnote reference"));
-        p1.Runs.Add(new FreeW.Core.Model.Run(string.Empty) { EndnoteId = 1 });
-        p1.Runs.Add(new FreeW.Core.Model.Run(". Endnotes should collect at the document end."));
-        doc.Blocks.Add(p1);
-        doc.Endnotes[1] = new Endnote(1, "Endnote 1: This content should appear at the very end of the document, after all body text.");
-
-        for (int i = 1; i <= 20; i++)
-            doc.Blocks.Add(MP($"Body paragraph {i}: Endnote references collect at document end."));
-
-        var p2 = new FreeW.Core.Model.Paragraph();
-        p2.Runs.Add(new FreeW.Core.Model.Run("Second sentence with another endnote reference"));
-        p2.Runs.Add(new FreeW.Core.Model.Run(string.Empty) { EndnoteId = 2 });
-        p2.Runs.Add(new FreeW.Core.Model.Run(". Both endnotes should appear together at the end."));
-        doc.Blocks.Add(p2);
-        doc.Endnotes[2] = new Endnote(2, "Endnote 2: This is the second endnote. Both endnotes should be listed together at the document end.");
-
-        for (int i = 1; i <= 20; i++)
-            doc.Blocks.Add(MP($"More body content {i}: Additional text before the endnotes section."));
-
+        var doc = FreeWVisualEvidenceDocumentFactory.BuildEndnotePlacementDocument();
         DocxWriter.Write(doc, Path.Combine(outDir, "f2-endnotes.docx"));
         Console.WriteLine("  wrote f2-endnotes.docx");
     }
@@ -1217,6 +1169,12 @@ static void GenerateF2FlowCorpus(string outDir)
         Console.WriteLine("  wrote drawing-objects-complex.docx");
     }
 
+    {
+        var doc = FreeWVisualEvidenceDocumentFactory.BuildChartSmartArtCompositionDocument();
+        DocxWriter.Write(doc, Path.Combine(outDir, "chart-smartart-complex.docx"));
+        Console.WriteLine("  wrote chart-smartart-complex.docx");
+    }
+
     // ─── 6. Section break with page-size change (portrait → landscape) ───────────────────────────
     // SG: FreeW/OOXML section-break semantics: a SectionBreak on paragraph P describes the section
     // that ENDS at P (the "preceding" section). The FINAL section is described by doc.Page.
@@ -1224,42 +1182,7 @@ static void GenerateF2FlowCorpus(string outDir)
     //   • sectionMarker.SectionBreak.Page = portrait settings  (section 1, which ends at the marker)
     //   • doc.Page = landscape settings                        (section 2 = final section)
     {
-        var doc = TextDocument.CreateEmpty();
-        doc.Blocks.Clear();
-        doc.Blocks.Add(MP("Section 1: Portrait (8.5 x 11 in)", "Heading1"));
-        doc.Blocks.Add(MP("This section is portrait. The page is taller than wide. A next-page section break below this paragraph should switch to landscape."));
-        for (int i = 1; i <= 4; i++)
-            doc.Blocks.Add(MP($"Portrait section paragraph {i}: Standard letter-size portrait page."));
-
-        // Marker paragraph ends section 1.  Its SectionBreak.Page carries section 1's (portrait) geometry.
-        var sectionMarker = MP("[ End of Portrait Section ]");
-        var portraitPage = new PageSettings
-        {
-            WidthPt        = 612,  // 8.5in portrait
-            HeightPt       = 792,  // 11in portrait
-            Landscape      = false,
-            MarginLeftPt   = 72,
-            MarginRightPt  = 72,
-            MarginTopPt    = 72,
-            MarginBottomPt = 72,
-        };
-        sectionMarker.SectionBreak = new FreeW.Core.Model.Section(portraitPage, SectionBreakKind.NextPage);
-        doc.Blocks.Add(sectionMarker);
-
-        // Section 2 (final section): landscape — described by doc.Page.
-        doc.Page.WidthPt        = 792;  // 11in landscape (wider)
-        doc.Page.HeightPt       = 612;  // 8.5in landscape (shorter — swapped)
-        doc.Page.Landscape      = true;
-        doc.Page.MarginLeftPt   = 72;
-        doc.Page.MarginRightPt  = 72;
-        doc.Page.MarginTopPt    = 72;
-        doc.Page.MarginBottomPt = 72;
-
-        doc.Blocks.Add(MP("Section 2: Landscape (11 x 8.5 in)", "Heading1"));
-        doc.Blocks.Add(MP("This section should be landscape. If the section break rendered correctly the page is now wider than tall, and this text spans a wider line length. The page geometry changed from portrait (8.5x11) to landscape (11x8.5)."));
-        for (int i = 1; i <= 4; i++)
-            doc.Blocks.Add(MP($"Landscape section paragraph {i}: Page is now wider than tall."));
-
+        var doc = FreeWVisualEvidenceDocumentFactory.BuildSectionGeometryDocument();
         DocxWriter.Write(doc, Path.Combine(outDir, "f2-section-landscape.docx"));
         Console.WriteLine("  wrote f2-section-landscape.docx");
     }
@@ -1387,7 +1310,7 @@ static void GenerateF2FlowCorpus(string outDir)
         Console.WriteLine("  wrote backstage-pdf-export-fidelity.docx");
     }
 
-    Console.WriteLine($"\nDone - 14 corpus files written to {outDir}");
+    Console.WriteLine($"\nDone - 15 corpus files written to {outDir}");
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════════════════════════

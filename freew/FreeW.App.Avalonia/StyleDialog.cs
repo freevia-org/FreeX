@@ -5,40 +5,15 @@ using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using FreeW.App.Avalonia.Editing;
+using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Avalonia;
 
-internal sealed record StyleDefinition(
-    string Name,
-    string? BasedOnId,
-    RunFormatting Run,
-    ParagraphFormatting Paragraph,
-    string? NextStyleId);
-
 internal sealed class StyleDialog : Window
 {
-    private static readonly (string Label, string? Hex)[] Colors =
-    [
-        ("Automatic", null),
-        ("Black", "#000000"),
-        ("Dark Red", "#C00000"),
-        ("Red", "#FF0000"),
-        ("Blue accent", "#2F5496"),
-        ("Blue", "#0070C0"),
-        ("Green", "#00B050"),
-        ("Purple", "#7030A0"),
-        ("Grey", "#7F7F7F"),
-    ];
-
-    private static readonly (string Label, double Size)[] Sizes =
-    [
-        ("(default)", 0), ("8", 8), ("9", 9), ("10", 10), ("11", 11), ("12", 12),
-        ("14", 14), ("16", 16), ("18", 18), ("24", 24), ("28", 28), ("36", 36),
-    ];
-
-    private readonly IReadOnlyList<(string Label, string Id)> _basedOnEntries;
-    private readonly IReadOnlyList<(string Label, string Id)> _nextEntries;
+    private readonly IReadOnlyList<KeyValuePair<string, string>> _basedOnEntries;
+    private readonly IReadOnlyList<KeyValuePair<string, string>> _nextEntries;
     private readonly TextBox _name = new() { MinWidth = 280 };
     private readonly ComboBox _basedOn = new() { MinWidth = 280 };
     private readonly ComboBox _nextStyle = new() { MinWidth = 280 };
@@ -70,23 +45,23 @@ internal sealed class StyleDialog : Window
 
         _seedRun = seedRun;
         _seedParagraph = seedParagraph;
-        _basedOnEntries = BuildStyleEntries("(none)", styleNamesById);
-        _nextEntries = BuildStyleEntries("(same style)", styleNamesById);
+        _basedOnEntries = StyleDialogPlanner.BuildStyleOptions(styleNamesById, "(none)");
+        _nextEntries = StyleDialogPlanner.BuildStyleOptions(styleNamesById, "(same style)");
 
         _name.Text = fixedName ?? string.Empty;
         _name.IsReadOnly = fixedName is not null;
-        _basedOn.ItemsSource = _basedOnEntries.Select(e => e.Label).ToArray();
+        _basedOn.ItemsSource = _basedOnEntries.Select(e => e.Key).ToArray();
         _basedOn.SelectedIndex = IndexOfId(_basedOnEntries, defaultBasedOnId);
-        _nextStyle.ItemsSource = _nextEntries.Select(e => e.Label).ToArray();
+        _nextStyle.ItemsSource = _nextEntries.Select(e => e.Key).ToArray();
         _nextStyle.SelectedIndex = IndexOfId(_nextEntries, defaultNextStyleId);
         _bold.IsChecked = seedRun.Bold;
         _italic.IsChecked = seedRun.Italic;
         _underline.IsChecked = seedRun.Underline;
-        _size.ItemsSource = Sizes.Select(s => s.Label).ToArray();
-        _size.SelectedIndex = IndexOfSize(seedRun.FontSizePt);
-        _color.ItemsSource = Colors.Select(c => c.Label).ToArray();
-        _color.SelectedIndex = IndexOfColor(seedRun.ColorHex);
-        _alignment.ItemsSource = new[] { "Left", "Center", "Right", "Justify" };
+        _size.ItemsSource = StyleDialogPlanner.FontSizes.Select(s => s.Label).ToArray();
+        _size.SelectedIndex = StyleDialogPlanner.IndexOfSize(seedRun.FontSizePt);
+        _color.ItemsSource = StyleDialogPlanner.Colors.Select(c => c.Label).ToArray();
+        _color.SelectedIndex = StyleDialogPlanner.IndexOfColor(seedRun.ColorHex);
+        _alignment.ItemsSource = StyleDialogPlanner.AlignmentLabels.ToArray();
         _alignment.SelectedIndex = (int)seedParagraph.Alignment;
 
         var effects = new StackPanel { Orientation = Orientation.Horizontal };
@@ -121,21 +96,21 @@ internal sealed class StyleDialog : Window
         };
     }
 
-    public static Task<StyleDefinition?> AskNewAsync(
+    public static Task<StyleDefinitionResult?> AskNewAsync(
         Window owner,
         IReadOnlyDictionary<string, string> styleNamesById,
         string? defaultBasedOnId) =>
         new StyleDialog("New Style", styleNamesById, fixedName: null, defaultBasedOnId,
             RunFormatting.Default, ParagraphFormatting.Default, defaultNextStyleId: null)
-            .ShowDialog<StyleDefinition?>(owner);
+            .ShowDialog<StyleDefinitionResult?>(owner);
 
-    public static Task<StyleDefinition?> AskModifyAsync(
+    public static Task<StyleDefinitionResult?> AskModifyAsync(
         Window owner,
         IReadOnlyDictionary<string, string> styleNamesById,
         DocumentStyle existing) =>
         new StyleDialog($"Modify Style - {existing.Name}", styleNamesById, fixedName: existing.Name,
             existing.BasedOnStyleId, existing.Run, existing.Paragraph, existing.NextStyleId)
-            .ShowDialog<StyleDefinition?>(owner);
+            .ShowDialog<StyleDefinitionResult?>(owner);
 
     public static async Task ShowNewAndApplyAsync(Window owner, DocumentView editor)
     {
@@ -153,37 +128,33 @@ internal sealed class StyleDialog : Window
     }
 
     internal static IReadOnlyDictionary<string, string> StyleNamesById(TextDocument document) =>
-        document.Styles.ToDictionary(kv => kv.Key, kv => kv.Value.Name);
+        document.Styles.ToDictionary(kv => kv.Key, kv => kv.Value.Name, StringComparer.Ordinal);
 
     private void Accept()
     {
-        var styleName = _name.Text?.Trim() ?? string.Empty;
-        if (styleName.Length == 0)
+        var input = new StyleDialogInput(
+            _name.Text,
+            SelectedId(_basedOnEntries, _basedOn.SelectedIndex),
+            SelectedId(_nextEntries, _nextStyle.SelectedIndex),
+            _bold.IsChecked == true,
+            _italic.IsChecked == true,
+            _underline.IsChecked == true,
+            _size.SelectedIndex,
+            _color.SelectedIndex,
+            _alignment.SelectedIndex);
+
+        if (!StyleDialogPlanner.TryBuildDefinition(
+                input,
+                _seedRun,
+                _seedParagraph,
+                out var result,
+                out var validation))
         {
-            ShowStatus("Please enter a style name.");
+            ShowStatus(StyleDialogPlanner.ValidationMessageFor(validation));
             return;
         }
 
-        var size = Sizes[Math.Max(0, _size.SelectedIndex)].Size;
-        var run = _seedRun with
-        {
-            Bold = _bold.IsChecked == true,
-            Italic = _italic.IsChecked == true,
-            Underline = _underline.IsChecked == true,
-            FontSizePt = size > 0 ? size : null,
-            ColorHex = Colors[Math.Max(0, _color.SelectedIndex)].Hex,
-        };
-        var paragraph = _seedParagraph with
-        {
-            Alignment = (FreeW.Core.Model.TextAlignment)Math.Max(0, _alignment.SelectedIndex),
-        };
-
-        Close(new StyleDefinition(
-            styleName,
-            SelectedId(_basedOnEntries, _basedOn.SelectedIndex),
-            run,
-            paragraph,
-            SelectedId(_nextEntries, _nextStyle.SelectedIndex)));
+        Close(result);
     }
 
     private void ShowStatus(string message)
@@ -192,51 +163,16 @@ internal sealed class StyleDialog : Window
         _status.IsVisible = true;
     }
 
-    private static IReadOnlyList<(string Label, string Id)> BuildStyleEntries(
-        string emptyLabel,
-        IReadOnlyDictionary<string, string> styleNamesById)
-    {
-        var entries = new List<(string Label, string Id)> { (emptyLabel, string.Empty) };
-        entries.AddRange(styleNamesById
-            .OrderBy(kv => kv.Value, StringComparer.OrdinalIgnoreCase)
-            .Select(kv => (kv.Value, kv.Key)));
-        return entries;
-    }
+    private static string? SelectedId(IReadOnlyList<KeyValuePair<string, string>> entries, int index) =>
+        index > 0 && index < entries.Count ? entries[index].Value : null;
 
-    private static string? SelectedId(IReadOnlyList<(string Label, string Id)> entries, int index) =>
-        index > 0 && index < entries.Count ? entries[index].Id : null;
-
-    private static int IndexOfId(IReadOnlyList<(string Label, string Id)> entries, string? id)
+    private static int IndexOfId(IReadOnlyList<KeyValuePair<string, string>> entries, string? id)
     {
         if (string.IsNullOrEmpty(id))
             return 0;
         for (var i = 1; i < entries.Count; i++)
         {
-            if (entries[i].Id == id)
-                return i;
-        }
-        return 0;
-    }
-
-    private static int IndexOfSize(double? sizePt)
-    {
-        if (sizePt is not { } pt)
-            return 0;
-        for (var i = 0; i < Sizes.Length; i++)
-        {
-            if (Math.Abs(Sizes[i].Size - pt) < 0.01)
-                return i;
-        }
-        return 0;
-    }
-
-    private static int IndexOfColor(string? hex)
-    {
-        if (hex is null)
-            return 0;
-        for (var i = 0; i < Colors.Length; i++)
-        {
-            if (string.Equals(Colors[i].Hex, hex, StringComparison.OrdinalIgnoreCase))
+            if (entries[i].Value == id)
                 return i;
         }
         return 0;
@@ -270,24 +206,15 @@ internal sealed class StyleDialog : Window
     }
 }
 
-internal enum ManageStylesSortOrder
-{
-    Alphabetical,
-    ByType,
-    ByUse,
-}
-
 internal sealed class ManageStylesDialog : Window
 {
-    private sealed record StyleRow(string Id, string Display, bool IsBuiltIn);
-
     private readonly TextDocument _document;
     private readonly ListBox _styles = new() { MinHeight = 220, MinWidth = 320 };
     private readonly ComboBox _sortOrder = new() { MinWidth = 180 };
     private readonly Button _apply;
     private readonly Button _modify;
     private readonly Button _delete;
-    private readonly List<StyleRow> _rows = [];
+    private readonly List<StyleDialogRow> _rows = [];
 
     private ManageStylesDialog(TextDocument document, string? preselectStyleId)
     {
@@ -356,7 +283,7 @@ internal sealed class ManageStylesDialog : Window
             }
         };
 
-        RebuildList(ManageStylesSortOrder.Alphabetical, preselectStyleId);
+        RebuildList(StyleDialogSortOrder.Alphabetical, preselectStyleId);
     }
 
     public static async Task ShowAndApplyAsync(Window owner, DocumentView editor)
@@ -396,30 +323,13 @@ internal sealed class ManageStylesDialog : Window
         }
     }
 
-    internal static List<(string Id, string Display, bool IsBuiltIn)> BuildRows(TextDocument document, ManageStylesSortOrder order)
-    {
-        var all = document.Styles.Values
-            .Select(style => (
-                style.Id,
-                StyleManager.IsBuiltIn(style.Id) ? $"{style.Name}  (built-in)" : style.Name,
-                StyleManager.IsBuiltIn(style.Id)));
+    internal static IReadOnlyList<StyleDialogRow> BuildRows(TextDocument document, StyleDialogSortOrder order) =>
+        StyleDialogPlanner.BuildRows(document, order);
 
-        return order switch
-        {
-            ManageStylesSortOrder.ByType => all
-                .OrderBy(row => row.Item3 ? 0 : 1)
-                .ThenBy(row => row.Item2, StringComparer.OrdinalIgnoreCase)
-                .ToList(),
-            _ => all
-                .OrderBy(row => row.Item2, StringComparer.OrdinalIgnoreCase)
-                .ToList(),
-        };
-    }
-
-    private void RebuildList(ManageStylesSortOrder order, string? selectedStyleId)
+    private void RebuildList(StyleDialogSortOrder order, string? selectedStyleId)
     {
         _rows.Clear();
-        _rows.AddRange(BuildRows(_document, order).Select(row => new StyleRow(row.Id, row.Display, row.IsBuiltIn)));
+        _rows.AddRange(BuildRows(_document, order));
         _styles.ItemsSource = _rows.Select(row => row.Display).ToArray();
 
         var index = _rows.FindIndex(row => row.Id == selectedStyleId);
@@ -427,14 +337,14 @@ internal sealed class ManageStylesDialog : Window
         SyncButtons();
     }
 
-    private ManageStylesSortOrder SelectedOrder() => _sortOrder.SelectedIndex switch
+    private StyleDialogSortOrder SelectedOrder() => _sortOrder.SelectedIndex switch
     {
-        1 => ManageStylesSortOrder.ByType,
-        2 => ManageStylesSortOrder.ByUse,
-        _ => ManageStylesSortOrder.Alphabetical,
+        1 => StyleDialogSortOrder.ByType,
+        2 => StyleDialogSortOrder.ByUse,
+        _ => StyleDialogSortOrder.Alphabetical,
     };
 
-    private StyleRow? SelectedRow() =>
+    private StyleDialogRow? SelectedRow() =>
         _styles.SelectedIndex >= 0 && _styles.SelectedIndex < _rows.Count ? _rows[_styles.SelectedIndex] : null;
 
     private void SyncButtons()
@@ -451,11 +361,4 @@ internal sealed class ManageStylesDialog : Window
         button.Click += click;
         return button;
     }
-}
-
-internal abstract record ManageStyleAction
-{
-    public sealed record Apply(string StyleId) : ManageStyleAction;
-    public sealed record Modify(string StyleId) : ManageStyleAction;
-    public sealed record Delete(string StyleId) : ManageStyleAction;
 }

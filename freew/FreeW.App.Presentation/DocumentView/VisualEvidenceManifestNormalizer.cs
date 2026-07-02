@@ -43,6 +43,7 @@ public sealed record FreeWVisualEvidenceNormalizedRow(
     FreeWVisualPageFeatureExpectation PageFeatures,
     FreeWVisualTableExpectation Tables,
     FreeWVisualDrawingObjectExpectation DrawingObjects,
+    FreeWVisualChartSmartArtExpectation ChartSmartArt,
     FreeWVisualEvidenceTrust Trust);
 
 public sealed record FreeWVisualEvidenceNormalizedSummary(
@@ -58,7 +59,7 @@ public sealed record FreeWVisualEvidenceNormalizedSummary(
 public static class FreeWVisualEvidenceManifestNormalizer
 {
     public const string SummarySchemaId = "freew.visual-evidence-summary.v1";
-    public const int SummarySchemaVersion = 5;
+    public const int SummarySchemaVersion = 6;
     public const string SummaryJsonFileName = "freew_visual_evidence_summary.json";
     public const string SummaryMarkdownFileName = "freew_visual_evidence_summary.md";
     public const string WpfHostId = "wpf-fidelity-render";
@@ -68,6 +69,15 @@ public static class FreeWVisualEvidenceManifestNormalizer
         "backstage-print-preview-fidelity",
         "backstage-pdf-export-fidelity"
     ];
+    public static IReadOnlyList<string> NoteRendererScenarioIds { get; } =
+    [
+        "f2-footnotes",
+        "f2-endnotes"
+    ];
+    public static IReadOnlyList<string> SectionGeometryRendererScenarioIds { get; } =
+    [
+        "f2-section-landscape"
+    ];
     public static IReadOnlyList<string> TableRendererScenarioIds { get; } =
     [
         "table-layout-complex"
@@ -75,6 +85,10 @@ public static class FreeWVisualEvidenceManifestNormalizer
     public static IReadOnlyList<string> DrawingObjectRendererScenarioIds { get; } =
     [
         "drawing-objects-complex"
+    ];
+    public static IReadOnlyList<string> ChartSmartArtRendererScenarioIds { get; } =
+    [
+        "chart-smartart-complex"
     ];
 
     public static IReadOnlyList<FreeWVisualEvidenceExpectedScenario> DefaultExpectedScenarios { get; } =
@@ -150,6 +164,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
 
         var scenarios = BuildScenarioSummaries(rows, expected, expectedByKey, failures);
         ValidateBackstageRendererPairs(rows, failures);
+        ValidateSectionGeometryRendererPairs(rows, failures);
         var summaryTrust = new FreeWVisualEvidenceTrust(failures.Count == 0, failures);
         return new FreeWVisualEvidenceNormalizedSummary(
             SummarySchemaId,
@@ -319,7 +334,29 @@ public static class FreeWVisualEvidenceManifestNormalizer
         var expected = new List<FreeWVisualEvidenceExpectedScenario>();
         foreach (var scenario in FreeWVisualEvidencePlanner.Scenarios)
         {
-            if (scenario.ScenarioId.StartsWith("f2-", StringComparison.OrdinalIgnoreCase))
+            if (NoteRendererScenarioIds.Contains(scenario.ScenarioId, StringComparer.OrdinalIgnoreCase))
+            {
+                expected.Add(new FreeWVisualEvidenceExpectedScenario(
+                    WpfHostId,
+                    scenario.ScenarioId,
+                    scenario.MinimumExpectedOutputs));
+                expected.Add(new FreeWVisualEvidenceExpectedScenario(
+                    AvaloniaHostId,
+                    scenario.ScenarioId,
+                    scenario.MinimumExpectedOutputs));
+            }
+            else if (SectionGeometryRendererScenarioIds.Contains(scenario.ScenarioId, StringComparer.OrdinalIgnoreCase))
+            {
+                expected.Add(new FreeWVisualEvidenceExpectedScenario(
+                    WpfHostId,
+                    scenario.ScenarioId,
+                    scenario.MinimumExpectedOutputs));
+                expected.Add(new FreeWVisualEvidenceExpectedScenario(
+                    AvaloniaHostId,
+                    scenario.ScenarioId,
+                    scenario.MinimumExpectedOutputs));
+            }
+            else if (scenario.ScenarioId.StartsWith("f2-", StringComparison.OrdinalIgnoreCase))
             {
                 expected.Add(new FreeWVisualEvidenceExpectedScenario(
                     WpfHostId,
@@ -356,6 +393,17 @@ public static class FreeWVisualEvidenceManifestNormalizer
                     scenario.MinimumExpectedOutputs));
             }
             else if (DrawingObjectRendererScenarioIds.Contains(scenario.ScenarioId, StringComparer.OrdinalIgnoreCase))
+            {
+                expected.Add(new FreeWVisualEvidenceExpectedScenario(
+                    WpfHostId,
+                    scenario.ScenarioId,
+                    scenario.MinimumExpectedOutputs));
+                expected.Add(new FreeWVisualEvidenceExpectedScenario(
+                    AvaloniaHostId,
+                    scenario.ScenarioId,
+                    scenario.MinimumExpectedOutputs));
+            }
+            else if (ChartSmartArtRendererScenarioIds.Contains(scenario.ScenarioId, StringComparer.OrdinalIgnoreCase))
             {
                 expected.Add(new FreeWVisualEvidenceExpectedScenario(
                     WpfHostId,
@@ -462,6 +510,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
             row.PageExpectation.Features,
             row.PageExpectation.Tables,
             row.PageExpectation.DrawingObjects,
+            row.PageExpectation.ChartSmartArt,
             trust);
     }
 
@@ -483,6 +532,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
             rowFailures.Add("scenario expects floating objects but the page expectation records none");
         ValidateTableFeatureTags(row, rowFailures);
         ValidateDrawingObjectFeatureTags(row, rowFailures);
+        ValidateChartSmartArtFeatureTags(row, rowFailures);
         if (features.Section.SectionOrdinal <= 0)
             rowFailures.Add("section ordinal must be positive");
         if (features.Section.SectionRelativePageNumber <= 0)
@@ -553,6 +603,45 @@ public static class FreeWVisualEvidenceManifestNormalizer
             rowFailures.Add("drawing-object evidence expects top-and-bottom wrapping but the object plan records none");
         if (tags.Contains("z-order", StringComparer.OrdinalIgnoreCase) && !objects.HasZOrder)
             rowFailures.Add("drawing-object evidence expects z-order depth but the object plan records a single layer");
+    }
+
+    private static void ValidateChartSmartArtFeatureTags(
+        FreeWVisualEvidenceRow row,
+        List<string> rowFailures)
+    {
+        var tags = row.ExpectedFeatureTags;
+        var chartSmartArt = row.PageExpectation.ChartSmartArt;
+        if (!tags.Contains("chart-smartart", StringComparer.OrdinalIgnoreCase))
+            return;
+
+        if (tags.Contains("charts", StringComparer.OrdinalIgnoreCase) && chartSmartArt.ChartCount <= 0)
+            rowFailures.Add("chart/SmartArt evidence expects charts but the page expectation records none");
+        if (tags.Contains("smartart", StringComparer.OrdinalIgnoreCase) && chartSmartArt.SmartArtCount <= 0)
+            rowFailures.Add("chart/SmartArt evidence expects SmartArt but the page expectation records none");
+        if (tags.Contains("chart-palette", StringComparer.OrdinalIgnoreCase) && !chartSmartArt.HasChartPalette)
+            rowFailures.Add("chart/SmartArt evidence expects chart palettes but the chart plan records none");
+        if (tags.Contains("quick-layout", StringComparer.OrdinalIgnoreCase) && !chartSmartArt.HasChartQuickLayout)
+            rowFailures.Add("chart/SmartArt evidence expects a chart quick layout but the chart plan records none");
+        if (tags.Contains("scatter-markers", StringComparer.OrdinalIgnoreCase) && !chartSmartArt.HasMarkerOnlyScatter)
+            rowFailures.Add("chart/SmartArt evidence expects marker-only scatter geometry but the chart plan records none");
+        if (tags.Contains("chart-legend", StringComparer.OrdinalIgnoreCase) && !chartSmartArt.HasLegend)
+            rowFailures.Add("chart/SmartArt evidence expects chart legends but the chart plan records none");
+        if (tags.Contains("chart-gridlines", StringComparer.OrdinalIgnoreCase) && !chartSmartArt.HasGridlines)
+            rowFailures.Add("chart/SmartArt evidence expects chart gridlines but the chart plan records none");
+        if (tags.Contains("data-labels", StringComparer.OrdinalIgnoreCase) && !chartSmartArt.HasDataLabels)
+            rowFailures.Add("chart/SmartArt evidence expects chart data labels but the chart plan records none");
+        if (tags.Contains("axis-titles", StringComparer.OrdinalIgnoreCase) && !chartSmartArt.HasAxisTitles)
+            rowFailures.Add("chart/SmartArt evidence expects chart axis titles but the chart plan records none");
+        if (tags.Contains("plot-area-fill", StringComparer.OrdinalIgnoreCase) && !chartSmartArt.HasPlotAreaFill)
+            rowFailures.Add("chart/SmartArt evidence expects chart plot-area fill but the chart plan records none");
+        if (tags.Contains("smartart-layout", StringComparer.OrdinalIgnoreCase) && !chartSmartArt.HasSmartArtLayout)
+            rowFailures.Add("chart/SmartArt evidence expects SmartArt layout metadata but the SmartArt plan records none");
+        if (tags.Contains("smartart-colors", StringComparer.OrdinalIgnoreCase) && !chartSmartArt.HasSmartArtColorScheme)
+            rowFailures.Add("chart/SmartArt evidence expects SmartArt color scheme metadata but the SmartArt plan records none");
+        if (tags.Contains("smartart-style", StringComparer.OrdinalIgnoreCase) && !chartSmartArt.HasSmartArtStyle)
+            rowFailures.Add("chart/SmartArt evidence expects SmartArt style metadata but the SmartArt plan records none");
+        if (chartSmartArt.SmartArtCount > 0 && chartSmartArt.SmartArtNodeCount <= 0)
+            rowFailures.Add("chart/SmartArt evidence includes SmartArt but records no nodes");
     }
 
     private static IReadOnlyList<FreeWVisualEvidenceNormalizedScenario> BuildScenarioSummaries(
@@ -645,7 +734,51 @@ public static class FreeWVisualEvidenceManifestNormalizer
                 if (wpf is null || avalonia is null)
                     continue;
 
-                ValidateRendererPairRow(scenarioId, pageNumber, wpf, avalonia, failures);
+                ValidateRendererPairRow("backstage renderer pair", scenarioId, pageNumber, wpf, avalonia, failures);
+            }
+        }
+    }
+
+    private static void ValidateSectionGeometryRendererPairs(
+        IReadOnlyList<FreeWVisualEvidenceNormalizedRow> rows,
+        List<string> failures)
+    {
+        foreach (var scenarioId in SectionGeometryRendererScenarioIds)
+        {
+            var wpfRows = RowsForHostScenario(rows, WpfHostId, scenarioId);
+            var avaloniaRows = RowsForHostScenario(rows, AvaloniaHostId, scenarioId);
+            if (wpfRows.Count == 0 || avaloniaRows.Count == 0)
+                continue;
+
+            ValidateUniquePages(scenarioId, WpfHostId, wpfRows, failures);
+            ValidateUniquePages(scenarioId, AvaloniaHostId, avaloniaRows, failures);
+
+            var wpfPages = wpfRows.Select(r => r.PageNumber).Distinct().Order().ToList();
+            var avaloniaPages = avaloniaRows.Select(r => r.PageNumber).Distinct().Order().ToList();
+            var requiredPages = RequiredScenarioPages(scenarioId);
+            var missingAvaloniaPages = requiredPages.Except(avaloniaPages).ToList();
+            var missingWpfPages = requiredPages.Except(wpfPages).ToList();
+            if (missingAvaloniaPages.Count > 0)
+            {
+                failures.Add(
+                    $"section-geometry renderer pair '{scenarioId}' is missing Avalonia page(s): {FormatPages(missingAvaloniaPages)}");
+            }
+
+            if (missingWpfPages.Count > 0)
+            {
+                failures.Add(
+                    $"section-geometry renderer pair '{scenarioId}' is missing WPF page(s): {FormatPages(missingWpfPages)}");
+            }
+
+            foreach (var pageNumber in wpfPages.Intersect(avaloniaPages))
+            {
+                var wpf = wpfRows.SingleOrDefault(r => r.PageNumber == pageNumber);
+                var avalonia = avaloniaRows.SingleOrDefault(r => r.PageNumber == pageNumber);
+                if (wpf is null || avalonia is null)
+                    continue;
+
+                ValidateRendererPairRow("section-geometry renderer pair", scenarioId, pageNumber, wpf, avalonia, failures);
+                ValidateSectionPairRow(scenarioId, pageNumber, wpf, avalonia, failures);
             }
         }
     }
@@ -680,13 +813,14 @@ public static class FreeWVisualEvidenceManifestNormalizer
     }
 
     private static void ValidateRendererPairRow(
+        string pairLabel,
         string scenarioId,
         int pageNumber,
         FreeWVisualEvidenceNormalizedRow wpf,
         FreeWVisualEvidenceNormalizedRow avalonia,
         List<string> failures)
     {
-        var pairName = $"backstage renderer pair '{scenarioId}' page {pageNumber.ToString(CultureInfo.InvariantCulture)}";
+        var pairName = $"{pairLabel} '{scenarioId}' page {pageNumber.ToString(CultureInfo.InvariantCulture)}";
         if (!string.Equals(wpf.LayoutKind, avalonia.LayoutKind, StringComparison.OrdinalIgnoreCase))
         {
             failures.Add(
@@ -697,6 +831,33 @@ public static class FreeWVisualEvidenceManifestNormalizer
         {
             failures.Add(
                 $"{pairName} expected output names differ: WPF '{wpf.ExpectedOutputName}', Avalonia '{avalonia.ExpectedOutputName}'");
+        }
+    }
+
+    private static void ValidateSectionPairRow(
+        string scenarioId,
+        int pageNumber,
+        FreeWVisualEvidenceNormalizedRow wpf,
+        FreeWVisualEvidenceNormalizedRow avalonia,
+        List<string> failures)
+    {
+        var pairName = $"section-geometry renderer pair '{scenarioId}' page {pageNumber.ToString(CultureInfo.InvariantCulture)}";
+        if (wpf.PageFeatures.Section.SectionOrdinal != avalonia.PageFeatures.Section.SectionOrdinal)
+        {
+            failures.Add(
+                $"{pairName} section ordinals differ: WPF '{wpf.PageFeatures.Section.SectionOrdinal.ToString(CultureInfo.InvariantCulture)}', Avalonia '{avalonia.PageFeatures.Section.SectionOrdinal.ToString(CultureInfo.InvariantCulture)}'");
+        }
+
+        if (wpf.PageFeatures.Section.SectionRelativePageNumber != avalonia.PageFeatures.Section.SectionRelativePageNumber)
+        {
+            failures.Add(
+                $"{pairName} section-relative page numbers differ: WPF '{wpf.PageFeatures.Section.SectionRelativePageNumber.ToString(CultureInfo.InvariantCulture)}', Avalonia '{avalonia.PageFeatures.Section.SectionRelativePageNumber.ToString(CultureInfo.InvariantCulture)}'");
+        }
+
+        if (!string.Equals(wpf.PageFeatures.Section.OwnerId, avalonia.PageFeatures.Section.OwnerId, StringComparison.OrdinalIgnoreCase))
+        {
+            failures.Add(
+                $"{pairName} section owner ids differ: WPF '{wpf.PageFeatures.Section.OwnerId}', Avalonia '{avalonia.PageFeatures.Section.OwnerId}'");
         }
     }
 
@@ -767,6 +928,12 @@ public static class FreeWVisualEvidenceManifestNormalizer
             parts.Add(
                 $"{row.DrawingObjects.FloatingObjectCount.ToString(CultureInfo.InvariantCulture)} drawing object(s), " +
                 $"{row.DrawingObjects.BehindTextCount.ToString(CultureInfo.InvariantCulture)} behind text");
+        }
+        if (row.ChartSmartArt.ChartCount > 0 || row.ChartSmartArt.SmartArtCount > 0)
+        {
+            parts.Add(
+                $"{row.ChartSmartArt.ChartCount.ToString(CultureInfo.InvariantCulture)} chart(s), " +
+                $"{row.ChartSmartArt.SmartArtCount.ToString(CultureInfo.InvariantCulture)} SmartArt");
         }
 
         return string.Join(", ", parts);

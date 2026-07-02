@@ -127,6 +127,7 @@ public sealed class MainWindow : Window
     private Button _animationPanePreviewButton = null!;
     private int _selectedAnimationIndex = -1;
     private readonly List<string> _animationPaneRenderedRows = new();
+    private int _animationPaneEffectOptionControlCount;
     private int _animationPaneTriggerControlCount;
     private int _animationPaneDurationControlCount;
     private int _animationPaneDelayControlCount;
@@ -225,6 +226,7 @@ public sealed class MainWindow : Window
     internal string AnimationPaneMessage => _animationPaneMessage?.Text ?? string.Empty;
     internal bool IsAnimationPanePreviewEnabled => _animationPanePreviewButton?.IsEnabled == true;
     internal IReadOnlyList<string> AnimationPaneRenderedRows => _animationPaneRenderedRows;
+    internal int AnimationPaneEffectOptionControlCount => _animationPaneEffectOptionControlCount;
     internal int AnimationPaneTriggerControlCount => _animationPaneTriggerControlCount;
     internal int AnimationPaneDurationControlCount => _animationPaneDurationControlCount;
     internal int AnimationPaneDelayControlCount => _animationPaneDelayControlCount;
@@ -849,6 +851,7 @@ public sealed class MainWindow : Window
         r.Register("freep.file.save",    new ActionRibbonCommand(() => _ = FileSaveAsync()));
         r.Register("freep.file.save-as", new ActionRibbonCommand(() => _ = FileSaveAsAsync()));
         r.Register(PresentationExportPlanner.PdfExportCommandId, new ActionRibbonCommand(() => _ = FileExportPdfAsync()));
+        r.Register(PresentationExportPlanner.NotesPagePdfExportCommandId, new ActionRibbonCommand(() => _ = FileExportNotesPagePdfAsync()));
         r.Register(PresentationExportPlanner.ImageExportCommandId, new ActionRibbonCommand(() => _ = FileExportImagesAsync()));
         r.Register(PresentationExportPlanner.PrintCommandId, new ActionRibbonCommand(() => RefreshHandoutLayoutPlan()));
         r.Register(PresentationExportPlanner.VideoExportCommandId, new ActionRibbonCommand(() => RefreshVideoExportPlan()));
@@ -881,9 +884,24 @@ public sealed class MainWindow : Window
 
             Editor.SetFontFamilyOnSelection(ctx.SelectedValue);
         }));
-        r.Register("freep.bold", new ActionRibbonCommand(() => Editor.ToggleBoldOnSelection()));
-        r.Register("freep.italic", new ActionRibbonCommand(() => Editor.ToggleItalicOnSelection()));
-        r.Register("freep.underline", new ActionRibbonCommand(() => Editor.ToggleUnderlineOnSelection()));
+        r.Register("freep.bold", new ActionRibbonCommand(() =>
+        {
+            if (_textEditor?.TryApplyActiveTableCellTextFormat(TableCellTextFormatKind.Bold) == true) return;
+            if (Editor.ToggleBoldOnActiveTableCell()) return;
+            Editor.ToggleBoldOnSelection();
+        }));
+        r.Register("freep.italic", new ActionRibbonCommand(() =>
+        {
+            if (_textEditor?.TryApplyActiveTableCellTextFormat(TableCellTextFormatKind.Italic) == true) return;
+            if (Editor.ToggleItalicOnActiveTableCell()) return;
+            Editor.ToggleItalicOnSelection();
+        }));
+        r.Register("freep.underline", new ActionRibbonCommand(() =>
+        {
+            if (_textEditor?.TryApplyActiveTableCellTextFormat(TableCellTextFormatKind.Underline) == true) return;
+            if (Editor.ToggleUnderlineOnActiveTableCell()) return;
+            Editor.ToggleUnderlineOnSelection();
+        }));
 
         foreach (var route in ArrangeCommandRoutes)
         {
@@ -1408,6 +1426,69 @@ public sealed class MainWindow : Window
         }
     }
 
+    private async Task<bool> FileExportNotesPagePdfAsync()
+    {
+        if (!AvaloniaFilePickerService.CanSave(StorageProvider))
+        {
+            _statusText.Text = SisterAppFileTextPlanner.FormatCommandUnavailable(
+                FileText,
+                PresentationExportPlanner.NotesPagePdfExportCommandText);
+            return false;
+        }
+
+        // Notes-page PDF exports the whole deck (one notes page per slide), matching the WPF
+        // host (FreeP.App.Host/FileCommands.cs ExportNotesPagePdf, range: null -> AllSlides) and
+        // this shell's own slides-PDF export (FileExportPdfAsync above, which also exports the
+        // full deck). Do not narrow this to the current slide only.
+        var range = new PresentationSlideRangeRequest(PresentationSlideRangeKind.AllSlides);
+        var exportPlan = PresentationExportPlanner.BuildNotesPagePdfExportPlan(range, _presentation.Slides.Count);
+        var request = new PresentationNotesPagePdfExportRequest(new PresentationPrintRequest(
+            PresentationPrintLayoutKind.NotesPages,
+            range));
+        LastNotesPagePdfRenderPlan = PresentationNotesPagePdfExporter.BuildRenderPlan(
+            _presentation,
+            request);
+        if (!exportPlan.CanExecute)
+        {
+            _statusText.Text = exportPlan.DisabledReason ?? PresentationExportPlanner.NotesPagePdfExportCommandText;
+            return false;
+        }
+
+        var plan = PresentationExportPlanner.BuildNotesPagePdfExportPickerPlan(_fileWorkflow.CurrentFileName);
+
+        using var file = await AvaloniaFilePickerService.PickSaveFileWithLocalPathAsync(
+            StorageProvider,
+            AvaloniaFilePickerSaveRequest.FromSavePlan(PresentationExportPlanner.NotesPagePdfExportPickerTitle, plan));
+
+        var path = file?.LocalPath;
+        if (path is null)
+        {
+            if (file is not null)
+            {
+                _statusText.Text = SisterAppFileTextPlanner.FormatSelectedFileNotLocalPath(
+                    FileText,
+                    PresentationExportPlanner.NotesPagePdfExportCommandText);
+            }
+
+            return false;
+        }
+
+        try
+        {
+            ExportAtomicWriter.WriteAllBytes(path, PresentationNotesPagePdfExporter.ExportToBytes(_presentation, request));
+            _statusText.Text = $"Exported {Path.GetFileName(path)}";
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(
+                FileText,
+                PresentationExportPlanner.NotesPagePdfExportCommandText,
+                ex.Message);
+            return false;
+        }
+    }
+
     internal PresentationImageExportResult FileExportImagesToFolder(
         string outputDirectory,
         PresentationSlideRangeRequest? range = null) =>
@@ -1517,8 +1598,13 @@ public sealed class MainWindow : Window
         registry.Register(
             PresentationReviewWorkflowPlanner.ProofingCommandId,
             new ActionRibbonCommand(RefreshProofingRequestPlan));
-        registry.Register(PresentationReviewWorkflowPlanner.AddCommentCommandId, EmptyRibbonCommand.Instance);
-        registry.Register(PresentationReviewWorkflowPlanner.EditCommentCommandId, EmptyRibbonCommand.Instance);
+        registry.Register(
+            PresentationReviewWorkflowPlanner.AddCommentCommandId,
+            new ActionRibbonCommand(() => AddComment("New comment")));
+        registry.Register(
+            PresentationReviewWorkflowPlanner.EditCommentCommandId,
+            new ActionRibbonCommand(() => EditSelectedComment(GetSelectedCommentText())));
+        registry.Register(PresentationReviewWorkflowPlanner.ReplyCommentCommandId, EmptyRibbonCommand.Instance);
         registry.Register(
             PresentationReviewWorkflowPlanner.DeleteCommentCommandId,
             new ActionRibbonCommand(() => DeleteSelectedComment()));
@@ -1562,6 +1648,7 @@ public sealed class MainWindow : Window
 
         _reviewCommentsPanePanel.Children.Clear();
         _reviewCommentsPanePanel.Children.Add(BuildReviewCommentsPaneHeader(plan));
+        _reviewCommentsPanePanel.Children.Add(BuildAddCommentInput());
         _reviewCommentsPanePanel.Children.Add(BuildReviewCommentActions(plan.Actions));
 
         if (plan.Comments.Count == 0)
@@ -1600,6 +1687,9 @@ public sealed class MainWindow : Window
 
         foreach (var action in actions)
         {
+            if (action.CommandId == PresentationReviewWorkflowPlanner.ReplyCommentCommandId)
+                continue;
+
             var button = new Button
             {
                 Content   = action.Label,
@@ -1613,6 +1703,33 @@ public sealed class MainWindow : Window
         }
 
         return panel;
+    }
+
+    private Control BuildAddCommentInput()
+    {
+        var input = new TextBox
+        {
+            PlaceholderText = "Comment",
+            MinWidth = 180,
+        };
+        var button = new Button
+        {
+            Content = "New Comment",
+            MinWidth = 96,
+        };
+        button.Click += (_, _) => AddComment(input.Text);
+
+        return new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 6,
+            Margin = new Thickness(12, 6, 12, 8),
+            Children =
+            {
+                input,
+                button,
+            }
+        };
     }
 
     private Control BuildReviewCommentCard(PresentationCommentDescriptor comment)
@@ -1660,6 +1777,65 @@ public sealed class MainWindow : Window
             TextWrapping = TextWrapping.Wrap,
             Foreground   = new SolidColorBrush(Color.FromRgb(0x44, 0x44, 0x44)),
         });
+        if (comment.IsSelected && comment.CanEdit)
+        {
+            var editInput = new TextBox
+            {
+                Text = GetCommentText(comment.CommentIndex) ?? comment.TextPreview,
+                MinWidth = 180,
+            };
+            var editButton = new Button
+            {
+                Content = "Save",
+                MinWidth = 72,
+            };
+            editButton.Click += (_, _) => EditSelectedComment(editInput.Text);
+            card.Children.Add(new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 6,
+                Children =
+                {
+                    editInput,
+                    editButton,
+                }
+            });
+        }
+        foreach (var reply in comment.Replies)
+        {
+            card.Children.Add(new TextBlock
+            {
+                Text         = $"{(string.IsNullOrWhiteSpace(reply.Author) ? "Unknown reviewer" : reply.Author)}: {reply.TextPreview}",
+                TextWrapping = TextWrapping.Wrap,
+                FontSize     = 12,
+                Margin       = new Thickness(18, 0, 0, 0),
+                Foreground   = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)),
+            });
+        }
+        if (comment.IsSelected && comment.CanReply)
+        {
+            var replyInput = new TextBox
+            {
+                PlaceholderText = "Reply",
+                MinWidth        = 180,
+            };
+            var replyButton = new Button
+            {
+                Content = "Reply",
+                MinWidth = 72,
+            };
+            replyButton.Click += (_, _) => ReplyToSelectedComment(replyInput.Text);
+            card.Children.Add(new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing     = 6,
+                Children    =
+                {
+                    replyInput,
+                    replyButton,
+                }
+            });
+        }
 
         var border = new Border
         {
@@ -1678,7 +1854,15 @@ public sealed class MainWindow : Window
 
     private void ExecuteReviewCommentAction(string commandId)
     {
-        if (commandId == PresentationReviewWorkflowPlanner.ResolveCommentCommandId)
+        if (commandId == PresentationReviewWorkflowPlanner.AddCommentCommandId)
+        {
+            AddComment("New comment");
+        }
+        else if (commandId == PresentationReviewWorkflowPlanner.EditCommentCommandId)
+        {
+            EditSelectedComment(GetSelectedCommentText());
+        }
+        else if (commandId == PresentationReviewWorkflowPlanner.ResolveCommentCommandId)
         {
             ResolveSelectedComment();
         }
@@ -1711,6 +1895,36 @@ public sealed class MainWindow : Window
             null,
             null);
 
+    internal PresentationCommentMutationPlan AddComment(
+        string? text,
+        DateTime? timestamp = null,
+        string? author = null,
+        string? initials = null,
+        long xemu = 0,
+        long yemu = 0)
+        => ApplySelectedCommentMutation(
+            PresentationReviewWorkflowIntentKind.AddComment,
+            null,
+            null,
+            addText: text,
+            addTimestamp: timestamp,
+            addAuthor: author,
+            addInitials: initials,
+            addXemu: xemu,
+            addYemu: yemu);
+
+    internal PresentationCommentMutationPlan EditSelectedComment(
+        string? text,
+        string? author = null,
+        string? initials = null)
+        => ApplySelectedCommentMutation(
+            PresentationReviewWorkflowIntentKind.EditComment,
+            null,
+            null,
+            editText: text,
+            editAuthor: author,
+            editInitials: initials);
+
     internal PresentationCommentMutationPlan ResolveSelectedComment(
         DateTime? resolvedAt = null,
         string? resolvedBy = null)
@@ -1725,15 +1939,60 @@ public sealed class MainWindow : Window
             null,
             null);
 
+    internal PresentationCommentMutationPlan ReplyToSelectedComment(
+        string? text,
+        DateTime? timestamp = null,
+        string? author = null,
+        string? initials = null)
+        => ApplySelectedCommentMutation(
+            PresentationReviewWorkflowIntentKind.ReplyComment,
+            null,
+            null,
+            text,
+            timestamp,
+            author,
+            initials);
+
     private PresentationCommentMutationPlan ApplySelectedCommentMutation(
         PresentationReviewWorkflowIntentKind intent,
         DateTime? resolvedAt,
-        string? resolvedBy)
+        string? resolvedBy,
+        string? replyText = null,
+        DateTime? replyTimestamp = null,
+        string? replyAuthor = null,
+        string? replyInitials = null,
+        string? addText = null,
+        DateTime? addTimestamp = null,
+        string? addAuthor = null,
+        string? addInitials = null,
+        long addXemu = 0,
+        long addYemu = 0,
+        string? editText = null,
+        string? editAuthor = null,
+        string? editInitials = null)
     {
         var selected = _selectedCommentIndex;
-        var plan = selected is { } selectedIndex
+        var plan = intent == PresentationReviewWorkflowIntentKind.AddComment
+            ? PresentationReviewWorkflowPlanner.BuildAddCommentPlan(
+                _presentation.Slides,
+                Editor.CurrentSlideIndex,
+                addText,
+                addAuthor ?? "FreeP User",
+                addInitials,
+                addXemu,
+                addYemu,
+                addTimestamp ?? DateTime.UtcNow)
+            : selected is { } selectedIndex
             ? intent switch
             {
+                PresentationReviewWorkflowIntentKind.EditComment =>
+                    PresentationReviewWorkflowPlanner.BuildEditCommentPlan(
+                        _presentation.Slides,
+                        Editor.CurrentSlideIndex,
+                        selectedIndex,
+                        editText,
+                        editAuthor,
+                        editInitials),
                 PresentationReviewWorkflowIntentKind.DeleteComment =>
                     PresentationReviewWorkflowPlanner.BuildDeleteCommentPlan(
                         _presentation.Slides,
@@ -1746,6 +2005,15 @@ public sealed class MainWindow : Window
                         selectedIndex,
                         resolvedAt ?? DateTime.UtcNow,
                         resolvedBy ?? "FreeP User"),
+                PresentationReviewWorkflowIntentKind.ReplyComment =>
+                    PresentationReviewWorkflowPlanner.BuildReplyCommentPlan(
+                        _presentation.Slides,
+                        Editor.CurrentSlideIndex,
+                        selectedIndex,
+                        replyText,
+                        replyAuthor ?? "FreeP User",
+                        replyInitials,
+                        replyTimestamp ?? DateTime.UtcNow),
                 PresentationReviewWorkflowIntentKind.ReopenComment =>
                     PresentationReviewWorkflowPlanner.BuildReopenCommentPlan(
                         _presentation.Slides,
@@ -1780,6 +2048,17 @@ public sealed class MainWindow : Window
         }
 
         return plan;
+    }
+
+    private string? GetSelectedCommentText()
+        => _selectedCommentIndex is { } index ? GetCommentText(index) : null;
+
+    private string? GetCommentText(int commentIndex)
+    {
+        var comments = Editor.CurrentSlide?.Comments;
+        return comments is not null && commentIndex >= 0 && commentIndex < comments.Count
+            ? comments[commentIndex].Text
+            : null;
     }
 
     private void OnAnimationPaneRequested(PresentationAnimationCommandPlan plan)
@@ -1838,6 +2117,7 @@ public sealed class MainWindow : Window
 
         _animationPaneRenderedRows.Clear();
         _animationPaneItemsPanel.Children.Clear();
+        _animationPaneEffectOptionControlCount = 0;
         _animationPaneTriggerControlCount = 0;
         _animationPaneDurationControlCount = 0;
         _animationPaneDelayControlCount = 0;
@@ -1868,6 +2148,43 @@ public sealed class MainWindow : Window
             $"Timeline: starts {item.StartText}s, ends {AnimationPanePlanner.FormatDuration(item.EndMs)}s";
         var actionLine =
             $"Move earlier: {FormatAvailability(item.CanMoveEarlier)}; move later: {FormatAvailability(item.CanMoveLater)}";
+        var effectOptionItems = item.EffectOptions.Options
+            .Select(option => option.DisplayText)
+            .ToArray();
+        var selectedEffectOptionIndex = item.EffectOptions.Options
+            .Select((option, index) => (option, index))
+            .FirstOrDefault(pair => pair.option.IsSelected)
+            .index;
+
+        var effectOptionCombo = new ComboBox
+        {
+            ItemsSource = effectOptionItems,
+            SelectedIndex = selectedEffectOptionIndex,
+            Width = 118,
+            Margin = new Thickness(0, 4, 8, 0),
+            Tag = item.Index,
+            IsEnabled = item.EffectOptions.CanApply,
+            IsVisible = item.EffectOptions.Options.Count > 0,
+        };
+        ToolTip.SetTip(
+            effectOptionCombo,
+            item.EffectOptions.CanApply
+                ? "Effect options"
+                : item.EffectOptions.DisabledReason);
+        effectOptionCombo.SelectionChanged += (_, _) =>
+        {
+            if (effectOptionCombo.SelectedIndex < 0
+                || effectOptionCombo.SelectedIndex >= item.EffectOptions.Options.Count)
+            {
+                return;
+            }
+
+            ApplyAnimationPaneEffectOptionEdit(
+                item.Index,
+                item.EffectOptions.Options[effectOptionCombo.SelectedIndex].Id);
+        };
+        if (item.EffectOptions.Options.Count > 0)
+            _animationPaneEffectOptionControlCount++;
 
         var triggerCombo = new ComboBox
         {
@@ -1919,6 +2236,7 @@ public sealed class MainWindow : Window
             Orientation = Orientation.Horizontal,
             Children =
             {
+                effectOptionCombo,
                 triggerCombo,
                 durationBox,
                 delayBox,
@@ -2030,6 +2348,24 @@ public sealed class MainWindow : Window
         string text)
         => ApplyAnimationPaneDelayEdit(animationIndex, text);
 
+    internal AnimationPaneEffectOptionMutationPlan ApplyAnimationPaneEffectOptionEditForTests(
+        int animationIndex,
+        string optionId)
+        => ApplyAnimationPaneEffectOptionEdit(animationIndex, optionId);
+
+    private AnimationPaneEffectOptionMutationPlan ApplyAnimationPaneEffectOptionEdit(
+        int animationIndex,
+        string optionId)
+    {
+        var plan = AnimationPanePlanner.BuildEffectOptionMutationPlan(
+            Editor.CurrentSlideAnimations,
+            animationIndex,
+            optionId);
+        if (AnimationPanePlanner.TryApplyEffectOptionMutation(Editor, plan))
+            RefreshVisibleAnimationPane(_selectedAnimationIndex);
+        return plan;
+    }
+
     private AnimationPaneTimingMutationPlan ApplyAnimationPaneTriggerEdit(
         int animationIndex,
         int selectedTriggerIndex)
@@ -2097,9 +2433,14 @@ public sealed class MainWindow : Window
     }
 
     private static string BuildAnimationPaneRowSummary(AnimationPaneTimelineItemPlan item)
-        => $"{item.OrderText}. {item.ShapeName} - {item.EffectText} - {item.TriggerText}; "
+        => $"{item.OrderText}. {item.ShapeName} - {item.EffectText}{FormatEffectOptions(item.EffectOptions)} - {item.TriggerText}; "
             + $"duration {item.DurationText}s; delay {item.DelayText}s; starts {item.StartText}s; "
             + $"move earlier {FormatAvailability(item.CanMoveEarlier)}; move later {FormatAvailability(item.CanMoveLater)}";
+
+    private static string FormatEffectOptions(AnimationPaneEffectOptionsPlan plan)
+        => plan.CanApply
+            ? $" ({plan.SelectedOptionText})"
+            : string.Empty;
 
     private static string FormatAvailability(bool isAvailable)
         => isAvailable ? "available" : "unavailable";

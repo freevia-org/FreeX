@@ -5,6 +5,7 @@ using Avalonia;
 using Avalonia.Headless;
 using FreeW.App.Avalonia.Editing;
 using FreeW.App.Avalonia.Ribbon;
+using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
 using Free.Shared.Ribbon;
 
@@ -125,7 +126,7 @@ public sealed class StylesGalleryTests
     }
 
     [Fact]
-    public void Styles_group_exposes_gallery_dropdown_and_clear_button()
+    public void Styles_group_exposes_gallery_clear_new_and_manage_controls()
     {
         var definition = FreeWRibbon.BuildDefinition();
         var stylesGroup = definition.FindTab("home")!.Groups.First(g => g.Id == "styles");
@@ -243,11 +244,30 @@ public sealed class StylesGalleryTests
             RunFormatting.Default,
             ParagraphFormatting.Default);
 
-        var rows = ManageStylesDialog.BuildRows(doc, ManageStylesSortOrder.ByType);
+        var rows = ManageStylesDialog.BuildRows(doc, StyleDialogSortOrder.ByType);
 
         rows.Should().Contain(row => row.Id == custom.Id && !row.IsBuiltIn);
         rows.TakeWhile(row => row.IsBuiltIn).Should().NotBeEmpty();
         rows.SkipWhile(row => row.IsBuiltIn).Should().OnlyContain(row => !row.IsBuiltIn);
+    }
+
+    [Fact]
+    public void New_and_manage_style_commands_execute_host_callbacks()
+    {
+        var calls = new List<string>();
+        var callbacks = NoopCallbacks() with
+        {
+            OpenNewStyleDialog = () => calls.Add("new"),
+            OpenManageStylesDialog = () => calls.Add("manage"),
+        };
+        var registry = FreeWRibbon.BuildRegistry(new DocumentView(), callbacks);
+
+        registry.TryGet(new RibbonCommandId("freew.new-style"), out var newStyle).Should().BeTrue();
+        registry.TryGet(new RibbonCommandId("freew.manage-styles"), out var manageStyles).Should().BeTrue();
+        newStyle!.Execute(RibbonCommandContext.Empty);
+        manageStyles!.Execute(RibbonCommandContext.Empty);
+
+        calls.Should().Equal("new", "manage");
     }
 
     [Fact]
@@ -499,6 +519,89 @@ public sealed class StylesGalleryTests
         });
         if (!ran) return;
         allBold.Should().BeTrue("single-block Strong apply must still bold the selection");
+    }
+
+    // ---- New Style / Manage Styles backing -----------------------------------------------
+
+    [Fact]
+    public async Task CreateParagraphStyleAndApply_AddsCustomStyle_AppliesIt_AndUndoRevertsBoth()
+    {
+        string? createdId = null;
+        string? appliedStyleId = null;
+        bool presentBeforeUndo = false;
+        bool presentAfterUndo = true;
+        string? styleAfterUndo = "sentinel";
+
+        var ran = await OnUiThread(() =>
+        {
+            var (view, doc) = MakeBodyDoc("Custom heading");
+            view.MoveCaretToBlock(0, 0);
+
+            var created = view.CreateParagraphStyleAndApply(
+                "Callout",
+                basedOnId: "Normal",
+                RunFormatting.Default with { Bold = true, FontSizePt = 16 },
+                ParagraphFormatting.Default,
+                nextStyleId: "Normal");
+
+            createdId = created?.Id;
+            appliedStyleId = ((Paragraph)doc.Blocks[0]).StyleId;
+            presentBeforeUndo = createdId is not null && doc.Styles.ContainsKey(createdId);
+
+            view.Undo();
+            presentAfterUndo = createdId is not null && doc.Styles.ContainsKey(createdId);
+            styleAfterUndo = ((Paragraph)doc.Blocks[0]).StyleId;
+        });
+        if (!ran) return;
+
+        createdId.Should().Be("Callout");
+        appliedStyleId.Should().Be("Callout");
+        presentBeforeUndo.Should().BeTrue();
+        presentAfterUndo.Should().BeFalse("undo must remove the created catalog entry");
+        styleAfterUndo.Should().BeNull("undo must also revert the immediate style apply");
+    }
+
+    [Fact]
+    public async Task ManageStyleHelpers_ModifyAndDeleteCustomStyles_WithUndo()
+    {
+        bool modifiedBold = false;
+        bool boldAfterUndo = true;
+        bool deleted = false;
+        bool restoredAfterUndo = false;
+
+        var ran = await OnUiThread(() =>
+        {
+            var (view, doc) = MakeBodyDoc("Managed");
+            var custom = StyleManager.CreateStyle(
+                doc,
+                "Callout",
+                null,
+                RunFormatting.Default,
+                ParagraphFormatting.Default);
+
+            view.ModifyParagraphStyle(
+                custom.Id,
+                RunFormatting.Default with { Bold = true },
+                ParagraphFormatting.Default with { Alignment = TextAlignment.Center },
+                basedOnId: "Normal",
+                nextStyleId: "Normal").Should().NotBeNull();
+            modifiedBold = doc.Styles[custom.Id].Run.Bold;
+
+            view.Undo();
+            boldAfterUndo = doc.Styles[custom.Id].Run.Bold;
+
+            view.DeleteParagraphStyle(custom.Id).Should().BeTrue();
+            deleted = !doc.Styles.ContainsKey(custom.Id);
+
+            view.Undo();
+            restoredAfterUndo = doc.Styles.ContainsKey(custom.Id);
+        });
+        if (!ran) return;
+
+        modifiedBold.Should().BeTrue("Modify Style must mutate the catalog through StyleManager");
+        boldAfterUndo.Should().BeFalse("undo must restore the previous style definition");
+        deleted.Should().BeTrue("Delete Style must remove custom styles");
+        restoredAfterUndo.Should().BeTrue("undo must restore deleted custom styles");
     }
 
     /// <summary>

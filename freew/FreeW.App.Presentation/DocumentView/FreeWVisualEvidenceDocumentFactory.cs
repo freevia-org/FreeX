@@ -4,6 +4,121 @@ namespace FreeW.App.Presentation.DocumentView;
 
 public static class FreeWVisualEvidenceDocumentFactory
 {
+    public static TextDocument BuildFootnotePlacementDocument()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(StyledParagraph("Footnotes Test", "Heading1"));
+        doc.Blocks.Add(new Paragraph("This tests whether footnote content appears at the foot of each page."));
+
+        var p1 = new Paragraph();
+        p1.Runs.Add(new Run("This sentence has a footnote reference"));
+        p1.Runs.Add(Run.FootnoteReference(1));
+        p1.Runs.Add(new Run(". The footnote content should appear at the bottom of this page."));
+        doc.Blocks.Add(p1);
+        doc.Footnotes[1] = new Footnote(
+            1,
+            "Footnote 1: This is first footnote content. Should appear at bottom of page 1 with a separator rule.");
+
+        for (var i = 1; i <= 22; i++)
+            doc.Blocks.Add(new Paragraph($"Filler paragraph {i}: Lorem ipsum dolor sit amet consectetur adipiscing."));
+
+        var p2 = new Paragraph();
+        p2.Runs.Add(new Run("This sentence on page 2 has a second footnote reference"));
+        p2.Runs.Add(Run.FootnoteReference(2));
+        p2.Runs.Add(new Run(". The second footnote should be at the bottom of page 2."));
+        doc.Blocks.Add(p2);
+        doc.Footnotes[2] = new Footnote(
+            2,
+            "Footnote 2: Second footnote content. Should appear at the bottom of page 2.");
+
+        for (var i = 1; i <= 20; i++)
+            doc.Blocks.Add(new Paragraph($"More filler {i}: Additional content to ensure footnote reference is on page 2."));
+
+        return doc;
+    }
+
+    public static TextDocument BuildEndnotePlacementDocument()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(StyledParagraph("Endnotes Test", "Heading1"));
+        doc.Blocks.Add(new Paragraph("This tests whether endnote content appears at the end of the document."));
+
+        var p1 = new Paragraph();
+        p1.Runs.Add(new Run("First sentence with an endnote reference"));
+        p1.Runs.Add(Run.EndnoteReference(1));
+        p1.Runs.Add(new Run(". Endnotes should collect at the document end."));
+        doc.Blocks.Add(p1);
+        doc.Endnotes[1] = new Endnote(
+            1,
+            "Endnote 1: This content should appear at the very end of the document, after all body text.");
+
+        for (var i = 1; i <= 20; i++)
+            doc.Blocks.Add(new Paragraph($"Body paragraph {i}: Endnote references collect at document end."));
+
+        var p2 = new Paragraph();
+        p2.Runs.Add(new Run("Second sentence with another endnote reference"));
+        p2.Runs.Add(Run.EndnoteReference(2));
+        p2.Runs.Add(new Run(". Both endnotes should appear together at the end."));
+        doc.Blocks.Add(p2);
+        doc.Endnotes[2] = new Endnote(
+            2,
+            "Endnote 2: This is the second endnote. Both endnotes should be listed together at the document end.");
+
+        for (var i = 1; i <= 20; i++)
+            doc.Blocks.Add(new Paragraph($"More body content {i}: Additional text before the endnotes section."));
+
+        return doc;
+    }
+
+    public static TextDocument BuildSectionGeometryDocument()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(StyledParagraph("Section 1: Portrait (8.5 x 11 in)", "Heading1"));
+        doc.Blocks.Add(new Paragraph(
+            "This section is portrait. The page is taller than wide. A next-page section break below " +
+            "this paragraph should switch to landscape."));
+
+        for (var i = 1; i <= 4; i++)
+            doc.Blocks.Add(new Paragraph($"Portrait section paragraph {i}: Standard letter-size portrait page."));
+
+        var sectionMarker = new Paragraph("[ End of Portrait Section ]")
+        {
+            SectionBreak = new Section(
+                new PageSettings
+                {
+                    WidthPt = 612,
+                    HeightPt = 792,
+                    Landscape = false,
+                    MarginLeftPt = 72,
+                    MarginRightPt = 72,
+                    MarginTopPt = 72,
+                    MarginBottomPt = 72
+                },
+                SectionBreakKind.NextPage)
+        };
+        doc.Blocks.Add(sectionMarker);
+
+        doc.Page.WidthPt = 792;
+        doc.Page.HeightPt = 612;
+        doc.Page.Landscape = true;
+        doc.Page.MarginLeftPt = 72;
+        doc.Page.MarginRightPt = 72;
+        doc.Page.MarginTopPt = 72;
+        doc.Page.MarginBottomPt = 72;
+
+        doc.Blocks.Add(StyledParagraph("Section 2: Landscape (11 x 8.5 in)", "Heading1"));
+        doc.Blocks.Add(new Paragraph(
+            "This section should be landscape. If the section break rendered correctly the page is now " +
+            "wider than tall, and this text spans a wider line length."));
+        for (var i = 1; i <= 4; i++)
+            doc.Blocks.Add(new Paragraph($"Landscape section paragraph {i}: Page is now wider than tall."));
+
+        return doc;
+    }
+
     public static TextDocument BuildComplexTableLayoutDocument()
     {
         var doc = TextDocument.CreateEmpty();
@@ -50,6 +165,41 @@ public static class FreeWVisualEvidenceDocumentFactory
 
         return doc;
     }
+
+    public static TextDocument BuildChartSmartArtCompositionDocument()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("Chart and SmartArt Fidelity") { StyleId = "Heading1" });
+        doc.Blocks.Add(new Paragraph(
+            "This shared fixture exercises Word-style chart and SmartArt visual planning: named chart " +
+            "palettes, quick layouts, scatter markers, data labels, axis titles, plot fills, SmartArt " +
+            "layouts, color schemes, styles, and node fill sequences."));
+
+        var chartParagraph = new Paragraph();
+        chartParagraph.Runs.Add(new Run("Column chart with quick-layout annotations: "));
+        chartParagraph.Runs.Add(Run.FromChart(BuildQuickLayoutColumnChart()));
+        doc.Blocks.Add(chartParagraph);
+
+        var scatterParagraph = new Paragraph();
+        scatterParagraph.Runs.Add(new Run("Scatter chart must render marker-only geometry: "));
+        scatterParagraph.Runs.Add(Run.FromChart(BuildMarkerOnlyScatterChart()));
+        doc.Blocks.Add(scatterParagraph);
+
+        var smartArtParagraph = new Paragraph();
+        smartArtParagraph.Runs.Add(new Run("SmartArt process colors and style: "));
+        smartArtParagraph.Runs.Add(Run.FromSmartArt(BuildStyledSmartArt()));
+        doc.Blocks.Add(smartArtParagraph);
+
+        doc.Blocks.Add(new Paragraph(
+            "The same model is rendered by WPF FidelityRender and Avalonia PageLayoutShot, and both " +
+            "emit the shared chart/SmartArt expectation into the visual evidence manifest."));
+
+        return doc;
+    }
+
+    private static Paragraph StyledParagraph(string text, string styleId) =>
+        new(text) { StyleId = styleId };
 
     private static Table BuildComplexTable()
     {
@@ -164,6 +314,43 @@ public static class FreeWVisualEvidenceDocumentFactory
         return chart;
     }
 
+    private static Chart BuildQuickLayoutColumnChart()
+    {
+        var chart = Chart.Create(
+            ChartKind.Column,
+            ["Q1", "Q2", "Q3", "Q4"],
+            [1.4, 1.8, 1.6, 2.2],
+            seriesName: "Revenue",
+            title: "Revenue by quarter");
+        chart.WidthPt = 300;
+        chart.HeightPt = 168;
+        chart.ColorSchemeId = "mono-blue";
+        chart.StyleId = 7;
+        chart.QuickLayoutId = 9;
+        chart.ShowLegend = true;
+        chart.CategoryAxisTitle = "Quarter";
+        chart.ValueAxisTitle = "USD";
+        return chart;
+    }
+
+    private static Chart BuildMarkerOnlyScatterChart()
+    {
+        var chart = Chart.Create(
+            ChartKind.Scatter,
+            ["155", "160", "165", "170"],
+            [52, 58, 62, 66],
+            seriesName: "Sample",
+            title: "Height and weight");
+        chart.WidthPt = 270;
+        chart.HeightPt = 150;
+        chart.ColorSchemeId = "colorful1";
+        chart.StyleId = 4;
+        chart.ShowLegend = false;
+        chart.CategoryAxisTitle = "Height";
+        chart.ValueAxisTitle = "Weight";
+        return chart;
+    }
+
     private static SmartArt BuildFloatingSmartArt()
     {
         var smartArt = SmartArt.Create(SmartArtKind.Process, ["Plan", "Build", "Verify"]);
@@ -174,6 +361,17 @@ public static class FreeWVisualEvidenceDocumentFactory
         smartArt.StyleId = "subtle1";
         smartArt.Placement = Placement(ImageWrapping.Square, xPt: 36, yPt: 210, zOrder: 6);
 
+        return smartArt;
+    }
+
+    private static SmartArt BuildStyledSmartArt()
+    {
+        var smartArt = SmartArt.Create(SmartArtKind.Process, ["Plan", "Build", "Verify"]);
+        smartArt.WidthPt = 300;
+        smartArt.HeightPt = 110;
+        smartArt.LayoutId = "stepup1";
+        smartArt.ColorSchemeId = "accent1";
+        smartArt.StyleId = "intense1";
         return smartArt;
     }
 

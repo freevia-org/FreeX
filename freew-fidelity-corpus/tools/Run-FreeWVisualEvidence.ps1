@@ -3,39 +3,77 @@
     Generate local FreeW WPF + Avalonia visual evidence and retain normalized summaries.
 
 .DESCRIPTION
-    This no-Word runner creates the F2 DOCX fixture set under an ignored run folder, renders WPF
-    evidence with FreeW.FidelityRender in composite mode, renders Avalonia page-layout evidence
-    with FreeW.PageLayoutShot, validates both raw visual evidence manifests through the shared
-    FreeW.App.Presentation normalizer, and writes small stable JSON/Markdown summaries.
+    This runner creates the F2 DOCX fixture set under an ignored run folder, renders WPF evidence
+    with FreeW.FidelityRender in composite mode, renders Avalonia page-layout evidence with
+    FreeW.PageLayoutShot, validates both raw visual evidence manifests through the shared
+    FreeW.App.Presentation normalizer, and writes small stable JSON/Markdown summaries. By
+    default it does not require Word; pass -WordBaselineDir to compare both renderers against a
+    pre-captured MS Word PNG baseline, or pass -IncludeWordBaseline to generate that Word baseline
+    from the same DOCX fixtures before normalization.
 
     Bulky DOCX/PNG/raw-manifest artifacts stay under freew-fidelity-corpus/runs/.
 
 .EXAMPLE
     pwsh freew-fidelity-corpus/tools/Run-FreeWVisualEvidence.ps1 -OutDir freew-fidelity-corpus/runs/visual-evidence-smoke
+
+.EXAMPLE
+    pwsh freew-fidelity-corpus/tools/Run-FreeWVisualEvidence.ps1 -OutDir freew-fidelity-corpus/runs/visual-evidence-word -WordBaselineDir freew-fidelity-corpus/runs/word-baseline -BaselineTolerance word-png-default
+
+.EXAMPLE
+    pwsh freew-fidelity-corpus/tools/Run-FreeWVisualEvidence.ps1 -OutDir freew-fidelity-corpus/runs/visual-evidence-word -IncludeWordBaseline
 #>
 [CmdletBinding()]
 param(
     [string]$OutDir,
     [string]$Configuration = 'Release',
-    [int]$MaxPages = 6
+    [int]$MaxPages = 6,
+    [string]$WordBaselineDir,
+    [switch]$IncludeWordBaseline,
+    [string]$BaselineTolerance = 'word-png-default'
 )
 
 $ErrorActionPreference = 'Stop'
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = (Resolve-Path (Join-Path $scriptDir '..\..')).Path
 
+function Resolve-RepositoryPath {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path
+    )
+
+    if ([IO.Path]::IsPathRooted($Path)) {
+        $candidate = $Path
+    }
+    else {
+        $candidate = Join-Path $repoRoot $Path
+    }
+
+    return $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($candidate)
+}
+
 if (-not $OutDir) {
     $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
     $OutDir = Join-Path $scriptDir "..\runs\visual-evidence-$stamp"
 }
 
-if ([IO.Path]::IsPathRooted($OutDir)) {
-    $runRoot = $OutDir
+$runRoot = Resolve-RepositoryPath $OutDir
+$wordBaselineRoot = $null
+$wordBaselineRenderRoot = $null
+if ($IncludeWordBaseline) {
+    $wordBaselineRenderRoot = if ([string]::IsNullOrWhiteSpace($WordBaselineDir)) {
+        Join-Path $runRoot 'word-baseline'
+    }
+    else {
+        Resolve-RepositoryPath $WordBaselineDir
+    }
+    $wordBaselineRoot = Join-Path $wordBaselineRenderRoot 'word'
 }
-else {
-    $runRoot = Join-Path $repoRoot $OutDir
+elseif (-not [string]::IsNullOrWhiteSpace($WordBaselineDir)) {
+    $wordBaselineRoot = Resolve-RepositoryPath $WordBaselineDir
+    if (-not (Test-Path -LiteralPath $wordBaselineRoot -PathType Container)) {
+        throw "Word baseline directory does not exist: $wordBaselineRoot"
+    }
 }
-$runRoot = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($runRoot)
 
 $fixtureDir = Join-Path $runRoot 'fixtures\f2'
 $wpfDir = Join-Path $runRoot 'wpf'
@@ -46,6 +84,7 @@ $summaryMarkdown = Join-Path $runRoot 'freew_visual_evidence_summary.md'
 $fidelityProject = Join-Path $repoRoot 'freew\tools\FreeW.FidelityRender\FreeW.FidelityRender.csproj'
 $pageShotProject = Join-Path $repoRoot 'freew\tools\FreeW.PageLayoutShot\FreeW.PageLayoutShot.csproj'
 $summaryProject = Join-Path $repoRoot 'freew\tools\FreeW.VisualEvidenceSummary\FreeW.VisualEvidenceSummary.csproj'
+$wordBaselineScript = Join-Path $repoRoot 'freew-fidelity-corpus\tools\Render-WordBaseline.ps1'
 
 function Invoke-DotNetStep {
     param(
@@ -56,6 +95,26 @@ function Invoke-DotNetStep {
     Write-Host ""
     Write-Host "== $Label ==" -ForegroundColor Cyan
     & dotnet @Arguments
+    if ($LASTEXITCODE -ne 0) {
+        throw "$Label failed with exit code $LASTEXITCODE"
+    }
+}
+
+function Invoke-PowerShellStep {
+    param(
+        [Parameter(Mandatory = $true)][string]$Label,
+        [Parameter(Mandatory = $true)][string]$ScriptPath,
+        [Parameter(Mandatory = $true)][string[]]$Arguments
+    )
+
+    $powerShell = Get-Command powershell.exe -ErrorAction SilentlyContinue
+    if (-not $powerShell) {
+        throw "$Label requires powershell.exe because MS Word COM automation is Windows-only."
+    }
+
+    Write-Host ""
+    Write-Host "== $Label ==" -ForegroundColor Cyan
+    & $powerShell.Path -NoProfile -ExecutionPolicy Bypass -File $ScriptPath @Arguments
     if ($LASTEXITCODE -ne 0) {
         throw "$Label failed with exit code $LASTEXITCODE"
     }
@@ -72,6 +131,17 @@ Invoke-DotNetStep 'Generate F2 DOCX fixtures' @(
     '--',
     '--generate-f2-corpus', $fixtureDir
 )
+
+if ($IncludeWordBaseline) {
+    Invoke-PowerShellStep 'Render MS Word baseline PNGs' $wordBaselineScript @(
+        '-FilesDir', $fixtureDir,
+        '-OutDir', $wordBaselineRenderRoot
+    )
+
+    if (-not (Test-Path -LiteralPath $wordBaselineRoot -PathType Container)) {
+        throw "Word baseline renderer did not produce the expected PNG directory: $wordBaselineRoot"
+    }
+}
 
 Invoke-DotNetStep 'Render WPF visual evidence (composite)' @(
     'run',
@@ -101,7 +171,7 @@ if (-not (Test-Path $avaloniaManifest)) {
     throw "Avalonia visual evidence manifest was not produced: $avaloniaManifest"
 }
 
-Invoke-DotNetStep 'Validate and normalize combined visual evidence' @(
+$summaryArgs = @(
     'run',
     '--project', $summaryProject,
     '-c', $Configuration,
@@ -113,8 +183,21 @@ Invoke-DotNetStep 'Validate and normalize combined visual evidence' @(
     '--output-md', $summaryMarkdown
 )
 
+if ($wordBaselineRoot) {
+    $summaryArgs += @(
+        '--word-baseline-dir', $wordBaselineRoot,
+        '--baseline-tolerance', $BaselineTolerance
+    )
+}
+
+Invoke-DotNetStep 'Validate and normalize combined visual evidence' $summaryArgs
+
 Write-Host ""
 Write-Host "Visual evidence run complete." -ForegroundColor Green
 Write-Host "Run root: $runRoot"
+if ($wordBaselineRoot) {
+    Write-Host "Word baseline directory: $wordBaselineRoot"
+    Write-Host "Baseline tolerance: $BaselineTolerance"
+}
 Write-Host "Summary JSON: $summaryJson"
 Write-Host "Summary Markdown: $summaryMarkdown"

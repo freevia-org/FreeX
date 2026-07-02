@@ -2354,9 +2354,8 @@ internal static class FreeWRibbonCommands
             if (def is null)
                 return;
 
-            var created = StyleManager.CreateStyle(editor.Model, def.Name, def.BasedOnId, def.Run, def.Paragraph, def.NextStyleId);
             editor.Focus();
-            editor.SetParagraphStyle(created.Id);
+            editor.CreateParagraphStyleAndApply(def.Name, def.BasedOnId, def.Run, def.Paragraph, def.NextStyleId);
         }
     }
 
@@ -2384,8 +2383,7 @@ internal static class FreeWRibbonCommands
                         return;
 
                     case ManageStyleAction.Delete del:
-                        StyleManager.DeleteStyle(editor.Model, del.StyleId);
-                        editor.RefreshStyles();
+                        editor.DeleteParagraphStyle(del.StyleId);
                         continue; // reopen the list so the user sees the removal
 
                     case ManageStyleAction.Modify mod:
@@ -2394,11 +2392,7 @@ internal static class FreeWRibbonCommands
                         var def = StyleDialog.AskModify(owner, StyleNamesById(editor.Model), existing);
                         if (def is null)
                             continue;
-                        StyleManager.ModifyStyle(editor.Model, mod.StyleId,
-                            run: def.Run, para: def.Paragraph, basedOnId: def.BasedOnId,
-                            clearBasedOn: def.BasedOnId is null,
-                            nextStyleId: def.NextStyleId, clearNext: def.NextStyleId is null);
-                        editor.RefreshStyles();
+                        editor.ModifyParagraphStyle(mod.StyleId, def.Run, def.Paragraph, def.BasedOnId, def.NextStyleId);
                         continue;
                 }
             }
@@ -2407,7 +2401,7 @@ internal static class FreeWRibbonCommands
 
     // The document's style catalog as id -> display name, for the dialogs' based-on / style lists.
     private static IReadOnlyDictionary<string, string> StyleNamesById(TextDocument model) =>
-        model.Styles.ToDictionary(kv => kv.Key, kv => kv.Value.Name);
+        model.Styles.ToDictionary(kv => kv.Key, kv => kv.Value.Name, StringComparer.Ordinal);
 
     // Design > Document Formatting: apply a built-in document theme. The selected name may arrive from
     // a combo value, older host context, or a WPF menu item header; all resolve to the same catalog entry.

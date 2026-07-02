@@ -66,6 +66,8 @@ public sealed class AnimationPanePlannerTests
             CanMoveLater = true,
             IsSelected = true,
         });
+        plan.Items[1].EffectOptions.CanApply.Should().BeFalse();
+        plan.Items[1].EffectOptions.DisabledReason.Should().Be(AnimationPanePlanner.UnsupportedEffectOptionMessage);
         plan.Items[2].Should().BeEquivalentTo(new
         {
             Index = 2,
@@ -343,6 +345,117 @@ public sealed class AnimationPanePlannerTests
         editor.CurrentSlideAnimations[0].DelayMs.Should().Be(250);
         editor.Undo();
         editor.CurrentSlideAnimations[0].DelayMs.Should().Be(0);
+    }
+
+    [Fact]
+    public void BuildEffectOptionsPlan_ProjectsSupportedDirectionVariants()
+    {
+        var slide = new Slide();
+        slide.Animations.Add(new ShapeAnimation
+        {
+            ShapeId = 10u,
+            Kind = AnimationKind.Entrance,
+            Preset = AnimationPreset.FlyIn,
+            Direction = AnimationDirection.FromLeft,
+        });
+
+        var plan = AnimationPanePlanner.BuildEffectOptionsPlan(slide.Animations, 0);
+
+        plan.Should().BeEquivalentTo(new
+        {
+            CanApply = true,
+            AnimationIndex = 0,
+            EffectText = "In: FlyIn",
+            SelectedOptionText = "From Left",
+            DisabledReason = (string?)null,
+        });
+        plan.Options.Should().Equal(
+            new AnimationPaneEffectOptionDescriptor("from-bottom", "From Bottom", AnimationDirection.FromBottom, false),
+            new AnimationPaneEffectOptionDescriptor("from-left", "From Left", AnimationDirection.FromLeft, true),
+            new AnimationPaneEffectOptionDescriptor("from-right", "From Right", AnimationDirection.FromRight, false),
+            new AnimationPaneEffectOptionDescriptor("from-top", "From Top", AnimationDirection.FromTop, false));
+    }
+
+    [Theory]
+    [InlineData(AnimationPreset.Wipe, "from-top", AnimationDirection.FromTop)]
+    [InlineData(AnimationPreset.Zoom, "out", AnimationDirection.Out)]
+    [InlineData(AnimationPreset.Split, "vertical", AnimationDirection.Vertical)]
+    [InlineData(AnimationPreset.RandomBars, "horizontal", AnimationDirection.Horizontal)]
+    public void BuildEffectOptionMutationPlan_MapsSupportedOptionIds(
+        AnimationPreset preset,
+        string optionId,
+        AnimationDirection expectedDirection)
+    {
+        var slide = new Slide();
+        slide.Animations.Add(new ShapeAnimation
+        {
+            ShapeId = 10u,
+            Kind = AnimationKind.Entrance,
+            Preset = preset,
+        });
+
+        var plan = AnimationPanePlanner.BuildEffectOptionMutationPlan(
+            slide.Animations,
+            0,
+            optionId);
+
+        plan.ShouldApply.Should().BeTrue();
+        plan.Direction.Should().Be(expectedDirection);
+        plan.DisabledReason.Should().BeNull();
+    }
+
+    [Fact]
+    public void BuildEffectOptionMutationPlan_DisablesMissingUnsupportedAndInvalidOptions()
+    {
+        var slide = new Slide();
+        slide.Animations.Add(new ShapeAnimation { Preset = AnimationPreset.Fade });
+        slide.Animations.Add(new ShapeAnimation
+        {
+            Preset = AnimationPreset.Wipe,
+            Direction = AnimationDirection.FromBottom,
+        });
+
+        AnimationPanePlanner.BuildEffectOptionMutationPlan(slide.Animations, 9, "from-left")
+            .DisabledReason
+            .Should()
+            .Be(AnimationPanePlanner.MissingEffectOptionMessage);
+        AnimationPanePlanner.BuildEffectOptionMutationPlan(slide.Animations, 0, "from-left")
+            .DisabledReason
+            .Should()
+            .Be(AnimationPanePlanner.UnsupportedEffectOptionMessage);
+        AnimationPanePlanner.BuildEffectOptionMutationPlan(slide.Animations, 1, "sideways")
+            .DisabledReason
+            .Should()
+            .Be(AnimationPanePlanner.InvalidEffectOptionMessage);
+        AnimationPanePlanner.BuildEffectOptionMutationPlan(slide.Animations, 1, "from-bottom")
+            .ShouldApply
+            .Should()
+            .BeFalse("the current effect option is already selected");
+    }
+
+    [Fact]
+    public void TryApplyEffectOptionMutation_UpdatesSelectedAnimation()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var shapeId = presentation.Slides[0].Shapes[0].Id;
+        presentation.Slides[0].Animations.Add(new ShapeAnimation
+        {
+            ShapeId = shapeId,
+            Kind = AnimationKind.Entrance,
+            Preset = AnimationPreset.Wipe,
+            Direction = AnimationDirection.FromBottom,
+        });
+        var plan = AnimationPanePlanner.BuildEffectOptionMutationPlan(
+            editor.CurrentSlideAnimations,
+            0,
+            "from-left");
+
+        AnimationPanePlanner.TryApplyEffectOptionMutation(editor, plan).Should().BeTrue();
+
+        editor.CurrentSlideAnimations[0].Direction.Should().Be(AnimationDirection.FromLeft);
+        editor.Undo();
+        editor.CurrentSlideAnimations[0].Direction.Should().Be(AnimationDirection.FromBottom);
     }
 
     private static Slide CreateSlideWithTimelineAnimations()

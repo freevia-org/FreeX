@@ -84,6 +84,30 @@ stable relative paths, scenario IDs, host IDs, dimensions, byte lengths, SHA-256
 and trust status. Keep the entire run folder local; do not commit generated images, DOCX files, PDFs,
 or raw absolute-path manifests.
 
+When MS Word is available on the machine, the same runner can generate PNG baselines from the
+generated DOCX fixtures and then compare both WPF and Avalonia outputs against Word in one manifest:
+
+```powershell
+pwsh freew-fidelity-corpus/tools/Run-FreeWVisualEvidence.ps1 `
+  -OutDir freew-fidelity-corpus/runs/visual-evidence-word `
+  -IncludeWordBaseline
+```
+
+When MS Word PNG baselines have already been captured, pass their PNG folder directly:
+
+```powershell
+pwsh freew-fidelity-corpus/tools/Run-FreeWVisualEvidence.ps1 `
+  -OutDir freew-fidelity-corpus/runs/visual-evidence-word `
+  -WordBaselineDir freew-fidelity-corpus/runs/word-baseline `
+  -BaselineTolerance word-png-default
+```
+
+The baseline folder may contain PNGs either under `<scenario>/<output>.png` or directly at the root
+using the same output names emitted by the visual evidence runner. The shared comparison policy maps
+comparable Avalonia page-composition rows to their F2 Word baselines, skips unmapped rows such as
+draft/web layout truthfully, and fails the normalized summary for missing or out-of-tolerance Word
+baselines.
+
 **Visual vs MS Word / LibreOffice:** run on a machine that has MS Word (preferred) or LibreOffice installed:
 
 ```powershell

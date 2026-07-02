@@ -30,9 +30,9 @@ public static class PresentationNotesPagePdfExporter
 
     private const double SlideBorderWidth = 0.5;
     private const double NotesBorderWidth = 0.5;
-    private const double NotesFontSize = 12;
+    internal const double NotesFontSize = 12;
     private const double PlaceholderFontSize = 12;
-    private const double NotesInset = 10;
+    internal const double NotesInset = 10;
     private const double NotesLeading = 16;
 
     public static byte[] ExportToBytes(
@@ -76,7 +76,7 @@ public static class PresentationNotesPagePdfExporter
             return new PresentationNotesPagePdfRenderPlan(
                 printPlan,
                 [emptyPlan],
-                [BuildNotesPage(presentation, emptyPlan)]);
+                BuildNotesPages(presentation, emptyPlan).ToArray());
         }
 
         var previewPlans = printPlan.SlideRange.SlideNumbers
@@ -86,45 +86,71 @@ public static class PresentationNotesPagePdfExporter
                 pageWidth,
                 pageHeight))
             .ToArray();
-        var pages = previewPlans.Select(plan => BuildNotesPage(presentation, plan)).ToArray();
+        var pages = previewPlans.SelectMany(plan => BuildNotesPages(presentation, plan)).ToArray();
         return new PresentationNotesPagePdfRenderPlan(printPlan, previewPlans, pages);
     }
 
-    private static PdfContentPage BuildNotesPage(
+    /// <summary>
+    /// Builds one notes page for <paramref name="plan"/>'s slide, plus as many continuation pages
+    /// as needed when the speaker notes overflow the notes box. PowerPoint's own notes-page export
+    /// continues overflowing notes onto additional pages rather than silently dropping them, so
+    /// each continuation page repeats the slide thumbnail and notes-box border for context and
+    /// resumes the note text where the previous page left off.
+    /// </summary>
+    private static IEnumerable<PdfContentPage> BuildNotesPages(
         Presentation presentation,
         PresentationNotesPagePreviewPlan plan)
     {
-        var ops = new List<PdfDrawOp>
-        {
-            new PdfFillRect(
-                0,
-                0,
-                plan.PageBounds.Width,
-                plan.PageBounds.Height,
-                PageBackground),
-        };
+        var remainingLines = plan.NoteLines;
+        var isFirstPage = true;
 
-        if (plan.SlideIndex is { } slideIndex && slideIndex >= 0 && slideIndex < presentation.Slides.Count)
+        do
         {
-            var slidePage = PresentationPdfExporter.BuildSlidePage(presentation.Slides[slideIndex]);
-            ops.AddRange(MapSlideOps(slidePage, plan.SlideBounds, plan.PageBounds.Height));
+            var ops = new List<PdfDrawOp>
+            {
+                new PdfFillRect(
+                    0,
+                    0,
+                    plan.PageBounds.Width,
+                    plan.PageBounds.Height,
+                    PageBackground),
+            };
+
+            if (plan.SlideIndex is { } slideIndex && slideIndex >= 0 && slideIndex < presentation.Slides.Count)
+            {
+                var slidePage = PresentationPdfExporter.BuildSlidePage(presentation.Slides[slideIndex]);
+                ops.AddRange(MapSlideOps(slidePage, plan.SlideBounds, plan.PageBounds.Height));
+            }
+
+            ops.Add(ToPdfStrokeRect(plan.SlideBounds, plan.PageBounds.Height, SlideBorder, SlideBorderWidth));
+            ops.Add(ToPdfStrokeRect(plan.NotesBounds, plan.PageBounds.Height, NotesBorder, NotesBorderWidth));
+
+            var showPlaceholder = isFirstPage && remainingLines.Count == 0;
+            remainingLines = AppendNotesText(ops, plan, remainingLines, showPlaceholder);
+
+            yield return new PdfContentPage(plan.PageBounds.Width, plan.PageBounds.Height, ops);
+            isFirstPage = false;
         }
-
-        ops.Add(ToPdfStrokeRect(plan.SlideBounds, plan.PageBounds.Height, SlideBorder, SlideBorderWidth));
-        ops.Add(ToPdfStrokeRect(plan.NotesBounds, plan.PageBounds.Height, NotesBorder, NotesBorderWidth));
-        AppendNotesText(ops, plan);
-
-        return new PdfContentPage(plan.PageBounds.Width, plan.PageBounds.Height, ops);
+        while (remainingLines.Count > 0);
     }
 
-    private static void AppendNotesText(List<PdfDrawOp> ops, PresentationNotesPagePreviewPlan plan)
+    /// <summary>
+    /// Draws as many lines from <paramref name="lines"/> as fit in the notes box and returns the
+    /// lines that did not fit, so the caller can continue them onto a following page instead of
+    /// dropping them.
+    /// </summary>
+    private static IReadOnlyList<string> AppendNotesText(
+        List<PdfDrawOp> ops,
+        PresentationNotesPagePreviewPlan plan,
+        IReadOnlyList<string> lines,
+        bool showPlaceholder)
     {
         var top = plan.PageBounds.Height - plan.NotesBounds.Top - NotesInset - NotesFontSize;
         var bottom = plan.PageBounds.Height - plan.NotesBounds.Bottom + NotesInset;
         if (top < bottom)
-            return;
+            return [];
 
-        if (plan.NoteLines.Count == 0)
+        if (showPlaceholder)
         {
             ops.Add(new PdfText(
                 plan.NotesBounds.Left + NotesInset,
@@ -133,15 +159,16 @@ public static class PresentationNotesPagePdfExporter
                 PdfFontFace.Regular,
                 PlaceholderText,
                 plan.PlaceholderText));
-            return;
+            return [];
         }
 
         var y = top;
-        foreach (var line in plan.NoteLines)
+        for (var index = 0; index < lines.Count; index++)
         {
             if (y < bottom)
-                break;
+                return lines.Skip(index).ToArray();
 
+            var line = lines[index];
             ops.Add(new PdfText(
                 plan.NotesBounds.Left + NotesInset,
                 y,
@@ -151,6 +178,8 @@ public static class PresentationNotesPagePdfExporter
                 string.IsNullOrWhiteSpace(line) ? " " : line));
             y -= NotesLeading;
         }
+
+        return [];
     }
 
     private static IEnumerable<PdfDrawOp> MapSlideOps(

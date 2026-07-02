@@ -386,6 +386,12 @@ public sealed class SlideCanvas : Control
     internal static Pen CreateChartGridLinePen(ChartMajorGridLinePrimitivePlan plan) =>
         ToPen(plan.Stroke);
 
+    internal static Pen CreateChartAxisTickPen(ChartMajorAxisTickPrimitivePlan plan) =>
+        ToPen(plan.Stroke);
+
+    internal static Pen CreateChartSecondaryAxisTickPen(ChartSecondaryValueAxisPrimitivePlan plan) =>
+        ToPen(plan.TickStroke);
+
     private static Pen ToPen(ChartStrokePlan stroke) =>
         new(
             ToBrush(new ChartFillPlan(stroke.Color, stroke.Alpha)),
@@ -743,9 +749,6 @@ public sealed class SlideCanvas : Control
         bool isBar = frame.IsBar;
         bool isScatterLike = frame.IsScatterLike;
         bool isRadar = frame.IsRadar;
-        double legendAreaW = frame.LegendAreaWidth;
-        double margin = ChartRenderPlanner.Margin;
-
         if (chart.Title is not null)
             DrawChartLabel(dc, chart.Title,
                 ToRect(frame.TitleBounds!.Value),
@@ -816,6 +819,16 @@ public sealed class SlideCanvas : Control
             RenderComboOverrideSeries(dc, chart, chartOp.SeriesColors, plotLeft, plotTop, plotW, plotH);
         }
 
+        var tickPlan = ChartRenderPlanner.BuildMajorAxisTickPrimitivePlan(chart, frame);
+        if (tickPlan.CategoryTicks.Count > 0 || tickPlan.ValueTicks.Count > 0)
+        {
+            var tickPen = CreateChartAxisTickPen(tickPlan);
+            foreach (var tick in tickPlan.CategoryTicks)
+                dc.DrawLine(tickPen, ToPoint(tick.Start), ToPoint(tick.End));
+            foreach (var tick in tickPlan.ValueTicks)
+                dc.DrawLine(tickPen, ToPoint(tick.Start), ToPoint(tick.End));
+        }
+
         // ── Data labels ────────────────────────────────────────────────────────
         foreach (var label in ChartRenderPlanner.BuildDataLabelPlans(chart, plot))
         {
@@ -826,12 +839,13 @@ public sealed class SlideCanvas : Control
         }
 
         // ── Secondary value axis (right side) ──────────────────────────────────
-        if (chart.SecondaryValueAxis is not null && !isPie && !isRadar && !isScatterLike && !isBar)
+        var secondaryAxisPlan = ChartRenderPlanner.BuildSecondaryValueAxisPrimitivePlan(chart, frame);
+        if (secondaryAxisPlan.Ticks.Count > 0 || secondaryAxisPlan.Labels.Count > 0)
         {
-            foreach (var label in ChartRenderPlanner.BuildSecondaryValueAxisLabelPlans(
-                chart,
-                plot,
-                bounds.X + bounds.Width - legendAreaW - margin))
+            var secondaryTickPen = CreateChartSecondaryAxisTickPen(secondaryAxisPlan);
+            foreach (var tick in secondaryAxisPlan.Ticks)
+                dc.DrawLine(secondaryTickPen, ToPoint(tick.Start), ToPoint(tick.End));
+            foreach (var label in secondaryAxisPlan.Labels)
             {
                 DrawChartLabel(dc, label.Text, ToRect(label.Bounds),
                     label.IsBold,
@@ -839,6 +853,9 @@ public sealed class SlideCanvas : Control
                     ToTextAlignment(label.Alignment));
             }
         }
+
+        if (secondaryAxisPlan.Title is { } secondaryAxisTitle)
+            DrawChartAxisTitle(dc, secondaryAxisTitle);
 
         foreach (var label in ChartRenderPlanner.BuildCategoryAxisLabelPlans(chart, frame))
         {
