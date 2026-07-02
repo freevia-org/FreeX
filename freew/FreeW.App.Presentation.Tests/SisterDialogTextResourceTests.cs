@@ -61,6 +61,10 @@ public sealed class SisterDialogTextResourceTests
             .Should().Equal("Home", "Open", "Save As", "Print", "Share", "Export", "Info", "Account");
         BackstageViewTextResources.Home.Description
             .Should().Be("Start with a new document or reopen a recent file.");
+        BackstageViewTextResources.EvidenceSection.Should().Be("Evidence");
+        BackstageViewTextResources.PrintPreviewEvidenceLabel.Should().Be("Print preview fidelity");
+        BackstageViewTextResources.PdfExportEvidenceLabel.Should().Be("PDF export fidelity");
+        BackstageViewTextResources.FixtureReadyEvidenceStatus.Should().Be("Fixture ready");
         BackstageViewTextResources.DirectPrintDeferredNote
             .Should().Contain("Direct printer output is planned");
     }

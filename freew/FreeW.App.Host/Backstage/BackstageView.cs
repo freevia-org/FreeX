@@ -176,6 +176,8 @@ internal sealed class BackstageView : UserControl
                 panel.Children.Add(SurfaceActionRow(action));
         }
 
+        panel.Children.Add(BuildPrintEvidenceSection(surface.Evidence));
+
         if (!string.IsNullOrWhiteSpace(surface.DeferredNote))
         {
             panel.Children.Add(new TextBlock
@@ -189,6 +191,30 @@ internal sealed class BackstageView : UserControl
         }
 
         return Kit.Scroll(panel);
+    }
+
+    private static UIElement BuildPrintEvidenceSection(IReadOnlyList<BackstagePrintEvidenceRow> evidence)
+    {
+        var panel = new StackPanel { Margin = new Thickness(0, 8, 0, 0) };
+        panel.Children.Add(Kit.SubHeading(BackstageViewTextResources.EvidenceSection));
+
+        foreach (var row in evidence)
+        {
+            var scenarios = row.FixtureScenarioIds.Count == 0
+                ? BackstageViewTextResources.NoEvidenceFixtureScenario
+                : string.Join(", ", row.FixtureScenarioIds);
+            var text = new TextBlock
+            {
+                Text = $"{PrintEvidenceKindLabel(row.Kind)} - {PrintEvidenceStatusLabel(row.Status)}\n{row.Description}\n{BackstageViewTextResources.EvidenceScenariosLabel}: {scenarios}",
+                Foreground = Kit.Muted,
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 0, 0, 8)
+            };
+            text.SetCurrentValue(System.Windows.Automation.AutomationProperties.AutomationIdProperty, $"PrintEvidence_{row.Kind}");
+            panel.Children.Add(text);
+        }
+
+        return panel;
     }
 
     private UIElement BuildOpenPane()
@@ -333,6 +359,21 @@ internal sealed class BackstageView : UserControl
 
         return Panes.BuildAccountPane(ToAccountPaneSpec(surface));
     }
+
+    private static string PrintEvidenceKindLabel(BackstagePrintEvidenceKind kind) => kind switch
+    {
+        BackstagePrintEvidenceKind.PrintPreviewFidelity => BackstageViewTextResources.PrintPreviewEvidenceLabel,
+        BackstagePrintEvidenceKind.PdfExportFidelity => BackstageViewTextResources.PdfExportEvidenceLabel,
+        BackstagePrintEvidenceKind.NativePrint => BackstageViewTextResources.NativePrintEvidenceLabel,
+        _ => kind.ToString()
+    };
+
+    private static string PrintEvidenceStatusLabel(BackstagePrintEvidenceStatus status) => status switch
+    {
+        BackstagePrintEvidenceStatus.FixtureReady => BackstageViewTextResources.FixtureReadyEvidenceStatus,
+        BackstagePrintEvidenceStatus.Deferred => BackstageViewTextResources.DeferredEvidenceStatus,
+        _ => status.ToString()
+    };
 
     private BackstageOpenPaneSurfaceSpec BuildOpenSurface(string? filter) =>
         BackstagePaneSurfacePlanner.BuildOpenPane(
