@@ -82,9 +82,9 @@ public static class FreeWViewDepthPlanner
             IsMultiplePagesActive: true,
             IsSideToSideActive: false,
             UsesReadOnlySnapshot: true,
-            PagesAcross: 1,
-            StatusText: "Multiple Pages view active: read-only paginated preview.",
-            Limitation: "Editing is disabled while the Avalonia Multiple Pages preview is active."),
+            PagesAcross: 2,
+            StatusText: "Multiple Pages view active: read-only multi-page-fit preview.",
+            Limitation: "Editing is disabled while the Multiple Pages preview is active; responsive editable page grids remain deferred."),
         FreeWViewDepthMode.SideToSidePreview => new FreeWViewDepthPlan(
             mode,
             FreeWViewDepthSurfaceKind.ReadOnlyPagePreview,
@@ -122,7 +122,7 @@ public static class FreeWViewDepthPlanner
             return 1.0;
         }
 
-        var pagesAcross = mode == FreeWViewDepthMode.SideToSidePreview ? 2 : 1;
+        var pagesAcross = Build(mode).PagesAcross;
         var interPageGap = pagesAcross > 1 ? 24 * (pagesAcross - 1) : 0;
         var horizontalChrome = mode == FreeWViewDepthMode.SplitPreview ? 48 : 96;
         var verticalChrome = mode == FreeWViewDepthMode.SplitPreview ? 32 : 72;

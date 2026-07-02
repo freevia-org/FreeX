@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows.Controls;
 using System.Windows.Documents;
 using Free.Shared.Ribbon;
@@ -297,6 +298,28 @@ public sealed class PageViewModesTests
 
     // ── Split snapshot building ──────────────────────────────────────────────────────────────────
 
+    [Fact]
+    public void WpfHost_RoutesViewDepthStateThroughSharedPlanner()
+    {
+        var source = File.ReadAllText(FindRepoFile(
+            "freew",
+            "FreeW.App.Host",
+            "MainWindow.cs"));
+
+        source.Should().Contain("private FreeWViewDepthPlan _viewDepthPlan = FreeWViewDepthPlanner.Build(FreeWViewDepthMode.LiveEditor);");
+        source.Should().Contain("FreeWViewDepthPlanner.Plan(CurrentViewDepthState(), FreeWViewDepthCommand.ToggleMultiplePages)");
+        source.Should().Contain("FreeWViewDepthPlanner.Plan(CurrentViewDepthState(), FreeWViewDepthCommand.ToggleSideToSide)");
+        source.Should().Contain("FreeWViewDepthPlanner.Plan(CurrentViewDepthState(), FreeWViewDepthCommand.ToggleSplit)");
+        source.Should().Contain("var pagesAcross = plan.PagesAcross > 1 ? plan.PagesAcross : 0;");
+        source.Should().Contain("SyncViewDepthRibbonState()");
+        source.Should().Contain("isMultiplePagesActive: () => _viewDepthPlan.IsMultiplePagesActive");
+        source.Should().Contain("isSideToSideActive: () => _viewDepthPlan.IsSideToSideActive");
+        source.Should().Contain("isSplitWindowActive: () => _viewDepthPlan.IsSplitActive");
+        source.Should().NotContain("private bool _multiplePagesMode;");
+        source.Should().NotContain("private bool _sideToSideMode;");
+        source.Should().NotContain("private bool _splitWindowMode;");
+    }
+
     [StaFact]
     public void SplitSnapshot_BuildPaginatedDocument_DoesNotThrowAndPreservesContent()
     {
@@ -329,5 +352,21 @@ public sealed class PageViewModesTests
         view.CommitToModel();
         view.Model.Blocks.Count.Should().Be(blocksBefore,
             "building the split snapshot must not mutate the editor model");
+    }
+
+    private static string FindRepoFile(params string[] parts) =>
+        Path.Combine(FindRepoRoot(), Path.Combine(parts));
+
+    private static string FindRepoRoot()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "FreeW.slnx")))
+                return directory.FullName;
+            directory = directory.Parent;
+        }
+
+        throw new DirectoryNotFoundException("Could not locate repository root from the test output directory.");
     }
 }

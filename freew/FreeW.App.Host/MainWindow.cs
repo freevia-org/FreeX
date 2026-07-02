@@ -196,18 +196,15 @@ public sealed class MainWindow : Window
     private ToggleButton _webLayoutSwitch = null!;
     private ToggleButton _draftSwitch = null!;
 
-    // Multiple Pages / Side to Side: read-only paginated overlay modes. When active the workspace child
-    // is swapped from the live editor (_workspace.Child = _workspaceGrid) to an embedded DocumentViewer
-    // fed by PrintLayout.BuildPaginatedSource. Re-entering Print Layout / Web Layout / Draft restores the
-    // editor. The two modes are mutually exclusive; Side to Side forces 2 pages across.
-    private bool _multiplePagesMode;
-    private bool _sideToSideMode;
+    // Multiple Pages / Side to Side / Split share the same host-neutral view-depth policy as Avalonia.
+    // The WPF realization remains host-thin: DocumentViewer for paginated previews and GridSplitter plus
+    // FlowDocumentScrollViewer for the split snapshot.
+    private FreeWViewDepthPlan _viewDepthPlan = FreeWViewDepthPlanner.Build(FreeWViewDepthMode.LiveEditor);
     private DocumentViewer? _paginatedViewer;     // the overlay DocumentViewer (non-null while active)
     private UIElement? _workspaceGridChild;        // saved workspace child so restore is reversible
 
     // Split Window: a GridSplitter divides the workspace into a top live-editor pane and a bottom
     // read-only FlowDocumentScrollViewer snapshot. Toggling off restores the single editor.
-    private bool _splitWindowMode;
     private Grid? _splitGrid;                      // the split host grid (non-null while active)
     private System.Windows.Threading.DispatcherTimer? _splitDebounceTimer; // ~300 ms refresh gate
 
@@ -312,11 +309,11 @@ public sealed class MainWindow : Window
             onToggleRuler: ToggleRulers,
             isRulerVisible: () => _rulersVisible,
             onToggleMultiplePages: ToggleMultiplePages,
-            isMultiplePagesActive: () => _multiplePagesMode,
+            isMultiplePagesActive: () => _viewDepthPlan.IsMultiplePagesActive,
             onToggleSideToSide: ToggleSideToSide,
-            isSideToSideActive: () => _sideToSideMode,
+            isSideToSideActive: () => _viewDepthPlan.IsSideToSideActive,
             onToggleSplitWindow: ToggleSplitWindow,
-            isSplitWindowActive: () => _splitWindowMode,
+            isSplitWindowActive: () => _viewDepthPlan.IsSplitActive,
             onHelpOnline: () => OpenExternalHelpLink(FreeWAppInfo.HelpUrl, "Help Online"),
             onFeedback: () => OpenExternalHelpLink(FreeWAppInfo.FeedbackUrl, "Feedback"),
             onCopyDiagnostics: CopyDiagnostics,
@@ -2096,7 +2093,7 @@ public sealed class MainWindow : Window
 
         // Multiple Pages / Side to Side overlay the workspace child with a read-only DocumentViewer;
         // switching back to any live editor mode must restore the workspaceGrid first.
-        if (_multiplePagesMode || _sideToSideMode)
+        if (_viewDepthPlan.IsMultiplePagesActive || _viewDepthPlan.IsSideToSideActive)
             ExitPaginatedView();
 
         // PagedEdit also swaps the workspace child; switching to any print-family mode exits it,
@@ -2174,53 +2171,59 @@ public sealed class MainWindow : Window
     /// the viewer reflects the latest content, then swaps the workspace child from the workspaceGrid to
     /// a full-window <see cref="DocumentViewer"/> backed by <see cref="PrintLayout.BuildPaginatedSource"/>.
     /// </summary>
-    private void ToggleMultiplePages()
-    {
-        if (_multiplePagesMode)
-        {
-            ExitPaginatedView();
-            return;
-        }
-
-        // Side to Side and Multiple Pages are mutually exclusive.
-        if (_sideToSideMode)
-            ExitPaginatedView();
-
-        _multiplePagesMode = true;
-        EnterPaginatedView(pagesAcross: 0); // 0 = DocumentViewer default layout
-        _stateStore.SetChecked("freew.zoom-multiple-pages", true);
-        _stateStore.SetChecked("freew.zoom-side-to-side", false);
-    }
+    private void ToggleMultiplePages() =>
+        ApplyViewDepthPlan(FreeWViewDepthPlanner.Plan(CurrentViewDepthState(), FreeWViewDepthCommand.ToggleMultiplePages));
 
     /// <summary>
     /// Enters (or exits) the Side to Side paginated overlay — same as Multiple Pages but the viewer
-    /// is zoomed to show 2 pages across, emulating Word's side-by-side page movement.
+    /// is zoomed to fit two pages. True horizontal page-turn navigation remains a renderer follow-up.
     /// </summary>
-    private void ToggleSideToSide()
+    private void ToggleSideToSide() =>
+        ApplyViewDepthPlan(FreeWViewDepthPlanner.Plan(CurrentViewDepthState(), FreeWViewDepthCommand.ToggleSideToSide));
+
+    private FreeWViewDepthState CurrentViewDepthState() => new(_viewDepthPlan.Mode);
+
+    private void ApplyViewDepthPlan(FreeWViewDepthPlan plan)
     {
-        if (_sideToSideMode)
+        if (_viewDepthPlan.IsSplitActive && plan.SurfaceKind != FreeWViewDepthSurfaceKind.SplitEditorWithReadOnlyPreview)
+            ExitSplitView(resetPlan: false);
+
+        if ((_viewDepthPlan.IsMultiplePagesActive || _viewDepthPlan.IsSideToSideActive) &&
+            plan.SurfaceKind != FreeWViewDepthSurfaceKind.ReadOnlyPagePreview)
         {
-            ExitPaginatedView();
-            return;
+            ExitPaginatedView(resetPlan: false);
+        }
+        else if ((_viewDepthPlan.IsMultiplePagesActive || _viewDepthPlan.IsSideToSideActive) &&
+                 plan.SurfaceKind == FreeWViewDepthSurfaceKind.ReadOnlyPagePreview &&
+                 plan.Mode != _viewDepthPlan.Mode)
+        {
+            ExitPaginatedView(resetPlan: false);
         }
 
-        // Multiple Pages and Side to Side are mutually exclusive.
-        if (_multiplePagesMode)
-            ExitPaginatedView();
+        _viewDepthPlan = plan;
 
-        _sideToSideMode = true;
-        EnterPaginatedView(pagesAcross: 2);
-        _stateStore.SetChecked("freew.zoom-multiple-pages", false);
-        _stateStore.SetChecked("freew.zoom-side-to-side", true);
+        switch (plan.SurfaceKind)
+        {
+            case FreeWViewDepthSurfaceKind.LiveEditor:
+                break;
+            case FreeWViewDepthSurfaceKind.SplitEditorWithReadOnlyPreview:
+                EnterSplitView();
+                break;
+            case FreeWViewDepthSurfaceKind.ReadOnlyPagePreview:
+                EnterPaginatedView(plan);
+                break;
+        }
+
+        SyncViewDepthRibbonState();
     }
 
     /// <summary>
     /// Builds a <see cref="DocumentViewer"/> backed by <see cref="PrintLayout.BuildPaginatedSource"/>
     /// and swaps it in as the workspace child, hiding the live workspaceGrid. The editor is committed to
-    /// the model first so the view reflects the latest content. <paramref name="pagesAcross"/> = 2 gives
-    /// Side-to-Side layout; 0 leaves the DocumentViewer at its default (all pages in one column).
+    /// the model first so the view reflects the latest content. Side-to-Side applies the shared plan's
+    /// two-page fit intent; other preview modes leave DocumentViewer at its default page flow.
     /// </summary>
-    private void EnterPaginatedView(int pagesAcross)
+    private void EnterPaginatedView(FreeWViewDepthPlan plan)
     {
         // Commit so the paginated view reflects the latest edits.
         _editor.CommitToModel();
@@ -2232,7 +2235,9 @@ public sealed class MainWindow : Window
             Document = source
         };
 
-        // For Side to Side: apply a zoom factor that fits 2 pages side-by-side in the current viewport.
+        var pagesAcross = plan.PagesAcross > 1 ? plan.PagesAcross : 0;
+
+        // For two-page-fit preview modes: apply a zoom factor that fits 2 pages side-by-side in the current viewport.
         // DocumentViewer exposes no explicit "pages across" property — we approximate it by halving the
         // page-width zoom factor so both pages are simultaneously visible in the viewport.
         if (pagesAcross == 2)
@@ -2251,17 +2256,16 @@ public sealed class MainWindow : Window
     /// Restores the live workspaceGrid as the workspace child, dismissing the paginated overlay and
     /// clearing both the Multiple Pages and Side to Side flags.
     /// </summary>
-    private void ExitPaginatedView()
+    private void ExitPaginatedView(bool resetPlan = true)
     {
         if (_workspaceGridChild is not null)
             _workspace.Child = _workspaceGridChild;
 
         _paginatedViewer = null;
         _workspaceGridChild = null;
-        _multiplePagesMode = false;
-        _sideToSideMode = false;
-        _stateStore.SetChecked("freew.zoom-multiple-pages", false);
-        _stateStore.SetChecked("freew.zoom-side-to-side", false);
+        if (resetPlan)
+            _viewDepthPlan = FreeWViewDepthPlanner.Build(FreeWViewDepthMode.LiveEditor);
+        SyncViewDepthRibbonState();
     }
 
     // ── PagedEdit ────────────────────────────────────────────────────────────────────────────────
@@ -2293,8 +2297,8 @@ public sealed class MainWindow : Window
             return;
 
         // Leave any overlay modes that also swap the workspace child.
-        if (_multiplePagesMode || _sideToSideMode)
-            ExitPaginatedView();
+        if (_viewDepthPlan.Mode != FreeWViewDepthMode.LiveEditor)
+            ApplyViewDepthPlan(FreeWViewDepthPlanner.Build(FreeWViewDepthMode.LiveEditor));
         if (_outlineMode)
             ToggleOutlineView();
 
@@ -2350,16 +2354,11 @@ public sealed class MainWindow : Window
     /// contains the original workspaceGrid (top), a <see cref="GridSplitter"/> (middle), and a read-only
     /// <see cref="FlowDocumentScrollViewer"/> snapshot (bottom). When exiting, restores the original child.
     /// </summary>
-    private void ToggleSplitWindow()
+    private void ToggleSplitWindow() =>
+        ApplyViewDepthPlan(FreeWViewDepthPlanner.Plan(CurrentViewDepthState(), FreeWViewDepthCommand.ToggleSplit));
+
+    private void EnterSplitView()
     {
-        if (_splitWindowMode)
-        {
-            ExitSplitView();
-            return;
-        }
-
-        _splitWindowMode = true;
-
         // Commit so the initial snapshot reflects the latest edits.
         _editor.CommitToModel();
 
@@ -2397,7 +2396,7 @@ public sealed class MainWindow : Window
         _splitGrid = splitGrid;
         _workspace.Child = splitGrid;
 
-        _stateStore.SetChecked("freew.split-window", true);
+        SyncViewDepthRibbonState();
     }
 
     /// <summary>
@@ -2420,12 +2419,13 @@ public sealed class MainWindow : Window
     /// <summary>
     /// Exits the split-window view, restoring the original workspace child (the workspaceGrid + editor).
     /// </summary>
-    private void ExitSplitView()
+    private void ExitSplitView(bool resetPlan = true)
     {
         if (_splitGrid is null)
         {
-            _splitWindowMode = false;
-            _stateStore.SetChecked("freew.split-window", false);
+            if (resetPlan)
+                _viewDepthPlan = FreeWViewDepthPlanner.Build(FreeWViewDepthMode.LiveEditor);
+            SyncViewDepthRibbonState();
             return;
         }
 
@@ -2435,13 +2435,21 @@ public sealed class MainWindow : Window
         _workspace.Child = originalChild;
 
         _splitGrid = null;
-        _splitWindowMode = false;
 
         // Stop the debounce timer if it is still running.
         _splitDebounceTimer?.Stop();
         _splitDebounceTimer = null;
 
-        _stateStore.SetChecked("freew.split-window", false);
+        if (resetPlan)
+            _viewDepthPlan = FreeWViewDepthPlanner.Build(FreeWViewDepthMode.LiveEditor);
+        SyncViewDepthRibbonState();
+    }
+
+    private void SyncViewDepthRibbonState()
+    {
+        _stateStore.SetChecked("freew.zoom-multiple-pages", _viewDepthPlan.IsMultiplePagesActive);
+        _stateStore.SetChecked("freew.zoom-side-to-side", _viewDepthPlan.IsSideToSideActive);
+        _stateStore.SetChecked("freew.split-window", _viewDepthPlan.IsSplitActive);
     }
 
     /// <summary>
@@ -2451,7 +2459,7 @@ public sealed class MainWindow : Window
     /// </summary>
     private void ScheduleSplitPaneRefresh()
     {
-        if (!_splitWindowMode || _splitGrid is null)
+        if (!_viewDepthPlan.IsSplitActive || _splitGrid is null)
             return;
 
         // Restart the debounce timer on every TextChanged.
@@ -2481,7 +2489,7 @@ public sealed class MainWindow : Window
     /// </summary>
     private void RefreshSplitSnapshot()
     {
-        if (!_splitWindowMode || _splitGrid is null || _splitGrid.Children.Count < 3)
+        if (!_viewDepthPlan.IsSplitActive || _splitGrid is null || _splitGrid.Children.Count < 3)
             return;
 
         _editor.CommitToModel();

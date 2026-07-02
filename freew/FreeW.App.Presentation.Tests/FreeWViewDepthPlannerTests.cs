@@ -20,6 +20,7 @@ public sealed class FreeWViewDepthPlannerTests
         multiple.IsSplitActive.Should().BeFalse();
         multiple.IsMultiplePagesActive.Should().BeTrue();
         multiple.IsSideToSideActive.Should().BeFalse();
+        multiple.PagesAcross.Should().Be(2);
 
         sideToSide.IsSplitActive.Should().BeFalse();
         sideToSide.IsMultiplePagesActive.Should().BeFalse();
@@ -40,6 +41,29 @@ public sealed class FreeWViewDepthPlannerTests
     }
 
     [Fact]
+    public void Restore_live_editor_clears_all_view_depth_state_from_every_mode()
+    {
+        foreach (var mode in new[]
+                 {
+                     FreeWViewDepthMode.SplitPreview,
+                     FreeWViewDepthMode.MultiplePagesPreview,
+                     FreeWViewDepthMode.SideToSidePreview,
+                 })
+        {
+            var plan = FreeWViewDepthPlanner.Plan(
+                new FreeWViewDepthState(mode),
+                FreeWViewDepthCommand.RestoreLiveEditor);
+
+            plan.Mode.Should().Be(FreeWViewDepthMode.LiveEditor);
+            plan.SurfaceKind.Should().Be(FreeWViewDepthSurfaceKind.LiveEditor);
+            plan.IsSplitActive.Should().BeFalse();
+            plan.IsMultiplePagesActive.Should().BeFalse();
+            plan.IsSideToSideActive.Should().BeFalse();
+            plan.UsesReadOnlySnapshot.Should().BeFalse();
+        }
+    }
+
+    [Fact]
     public void Preview_plans_are_explicit_about_read_only_limitations()
     {
         var split = FreeWViewDepthPlanner.Build(FreeWViewDepthMode.SplitPreview);
@@ -55,9 +79,15 @@ public sealed class FreeWViewDepthPlannerTests
     }
 
     [Fact]
-    public void Side_to_side_preview_scale_accounts_for_two_pages()
+    public void Multi_page_preview_scale_accounts_for_two_page_fit()
     {
-        var onePage = FreeWViewDepthPlanner.BuildPreviewScale(
+        var live = FreeWViewDepthPlanner.BuildPreviewScale(
+            FreeWViewDepthMode.LiveEditor,
+            viewportWidthDip: 1200,
+            viewportHeightDip: 800,
+            pageWidthDip: 600,
+            pageHeightDip: 800);
+        var multiplePages = FreeWViewDepthPlanner.BuildPreviewScale(
             FreeWViewDepthMode.MultiplePagesPreview,
             viewportWidthDip: 1200,
             viewportHeightDip: 800,
@@ -70,7 +100,8 @@ public sealed class FreeWViewDepthPlannerTests
             pageWidthDip: 600,
             pageHeightDip: 800);
 
-        sideToSide.Should().BeLessThan(onePage);
+        multiplePages.Should().BeLessThan(live);
+        sideToSide.Should().Be(multiplePages);
         sideToSide.Should().BeGreaterThan(0);
     }
 }
