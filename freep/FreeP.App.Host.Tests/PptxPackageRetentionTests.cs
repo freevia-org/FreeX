@@ -373,6 +373,61 @@ public sealed class PptxPackageRetentionTests
     }
 
     [Fact]
+    public void ReadWriteRead_SemanticEditRetainsPresentationScopedCustomXmlPackageParts()
+    {
+        using var source = BuildPptxWithPresentationScopedCustomXml();
+        var loaded = PptxPackageReader.Read(source);
+        loaded.PackageSnapshot.Should().NotBeNull();
+        loaded.Slides.Should().HaveCount(1);
+
+        loaded.Slides[0].Shapes.Add(new SlideShape
+        {
+            Id = 79,
+            Name = "Modeled presentation custom XML edit",
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            OffsetXEmu = 685800,
+            OffsetYEmu = 685800,
+            ExtentCxEmu = 1828800,
+            ExtentCyEmu = 914400,
+        });
+
+        using var saved = new MemoryStream();
+        PptxPackageWriter.Write(loaded, saved);
+        var savedBytes = saved.ToArray();
+
+        using (var archive = new ZipArchive(new MemoryStream(savedBytes), ZipArchiveMode.Read))
+        {
+            ReadText(archive, "customXml/item2.xml").Should().Contain("presentation-scoped-retain-me");
+            ReadText(archive, "customXml/itemProps2.xml").Should().Contain("{22222222-2222-2222-2222-222222222222}");
+            ReadText(archive, "customXml/item2.freexmeta").Should().Be("presentation custom xml payload");
+
+            var presRels = LoadXml(archive, "ppt/_rels/presentation.xml.rels");
+            Relationship(presRels, CustomXmlRelType, "../customXml/item2.xml").Should().NotBeNull();
+
+            var itemRels = LoadXml(archive, "customXml/_rels/item2.xml.rels");
+            Relationship(
+                itemRels,
+                "http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXmlProps",
+                "itemProps2.xml").Should().NotBeNull();
+            Relationship(
+                itemRels,
+                "http://example.com/freep/relationships/customXmlPayload",
+                "item2.freexmeta").Should().NotBeNull();
+
+            var contentTypes = LoadXml(archive, "[Content_Types].xml");
+            Override(contentTypes, "/customXml/itemProps2.xml",
+                "application/vnd.openxmlformats-officedocument.customXmlProperties+xml").Should().NotBeNull();
+            Default(contentTypes, "freexmeta", "application/vnd.example.freep.customxml-payload").Should().NotBeNull();
+        }
+
+        using var savedRead = new MemoryStream(savedBytes);
+        var reloaded = PptxPackageReader.Read(savedRead);
+        reloaded.Slides.Should().HaveCount(1);
+        reloaded.Slides[0].Shapes.Should().Contain(s => s.Name == "Modeled presentation custom XML edit");
+    }
+
+    [Fact]
     public void ReadWriteRead_RetainsViewAndPrintSettingsPackageSemantics()
     {
         using var source = BuildPptxWithViewAndPrintSettings();
@@ -504,6 +559,51 @@ public sealed class PptxPackageRetentionTests
             AddOverride(contentTypes, "/ppt/customData/viewState.bin",
                 "application/vnd.example.freep.viewstate");
             AddDefault(contentTypes, "freex", "application/vnd.example.freep.payload");
+            WriteXml(archive, "[Content_Types].xml", contentTypes);
+        }
+
+        package.Position = 0;
+        return package;
+    }
+
+    private static MemoryStream BuildPptxWithPresentationScopedCustomXml()
+    {
+        var presentation = Presentation.CreateEmpty();
+        using var basePackage = new MemoryStream();
+        PptxPackageWriter.Write(presentation, basePackage);
+
+        var package = new MemoryStream();
+        package.Write(basePackage.ToArray());
+        package.Position = 0;
+        using (var archive = new ZipArchive(package, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            WriteText(archive, "customXml/item2.xml",
+                """<bag xmlns="urn:freep:test">presentation-scoped-retain-me</bag>""");
+            WriteText(archive, "customXml/itemProps2.xml",
+                """<ds:datastoreItem ds:itemID="{22222222-2222-2222-2222-222222222222}" xmlns:ds="http://schemas.openxmlformats.org/officeDocument/2006/customXml"/>""");
+            WriteText(archive, "customXml/item2.freexmeta", "presentation custom xml payload");
+
+            var presRels = LoadXml(archive, "ppt/_rels/presentation.xml.rels");
+            AddRelationship(presRels, "rIdPresentationCustomXml", CustomXmlRelType, "../customXml/item2.xml");
+            WriteXml(archive, "ppt/_rels/presentation.xml.rels", presRels);
+
+            var itemRels = new XDocument(
+                new XDeclaration("1.0", "UTF-8", "yes"),
+                new XElement(RelsNs + "Relationships",
+                    new XElement(RelsNs + "Relationship",
+                        new XAttribute("Id", "rIdProps"),
+                        new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXmlProps"),
+                        new XAttribute("Target", "itemProps2.xml")),
+                    new XElement(RelsNs + "Relationship",
+                        new XAttribute("Id", "rIdPayload"),
+                        new XAttribute("Type", "http://example.com/freep/relationships/customXmlPayload"),
+                        new XAttribute("Target", "item2.freexmeta"))));
+            WriteXml(archive, "customXml/_rels/item2.xml.rels", itemRels);
+
+            var contentTypes = LoadXml(archive, "[Content_Types].xml");
+            AddOverride(contentTypes, "/customXml/itemProps2.xml",
+                "application/vnd.openxmlformats-officedocument.customXmlProperties+xml");
+            AddDefault(contentTypes, "freexmeta", "application/vnd.example.freep.customxml-payload");
             WriteXml(archive, "[Content_Types].xml", contentTypes);
         }
 
