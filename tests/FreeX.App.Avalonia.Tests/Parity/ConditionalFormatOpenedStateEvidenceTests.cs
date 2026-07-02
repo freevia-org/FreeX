@@ -52,6 +52,7 @@ public sealed class ConditionalFormatOpenedStateEvidenceTests
                 RunnerCommand = target.GetProperty("runnerCommand").GetString(),
                 RequiredEnvironment = target.GetProperty("requiredEnvironment").GetString(),
                 BlockerCategory = target.GetProperty("blockerCategory").GetString(),
+                ManifestValidationStatus = target.GetProperty("manifestValidationStatus").GetString(),
                 NextCaptureAction = target.GetProperty("nextCaptureAction").GetString(),
                 ManifestMatchesTarget = target.GetProperty("manifestMatchesTarget").GetBoolean(),
             })
@@ -66,6 +67,7 @@ public sealed class ConditionalFormatOpenedStateEvidenceTests
         Assert.All(targets, target => Assert.Contains(target.Scenario!, target.RunnerCommand!, StringComparison.Ordinal));
         Assert.All(targets, target => Assert.Contains("foreground", target.RequiredEnvironment!, StringComparison.OrdinalIgnoreCase));
         Assert.All(targets, target => Assert.False(string.IsNullOrWhiteSpace(target.BlockerCategory)));
+        Assert.All(targets, target => Assert.False(string.IsNullOrWhiteSpace(target.ManifestValidationStatus)));
         Assert.All(targets, target => Assert.False(string.IsNullOrWhiteSpace(target.NextCaptureAction)));
         Assert.All(targets, target => Assert.True(target.ManifestMatchesTarget));
     }
@@ -89,6 +91,41 @@ public sealed class ConditionalFormatOpenedStateEvidenceTests
         {
             Assert.NotEqual("retained-opened-state-capture", blocked.GetProperty("retentionStatus").GetString());
             Assert.False(blocked.GetProperty("screenshotExists").GetBoolean());
+        }
+    }
+
+    [Fact]
+    public void OpenedStateEvidence_ValidatesCommittedCaptureManifests()
+    {
+        using var document = LoadEvidenceDocument();
+        var targets = document.RootElement.GetProperty("captureTargets")
+            .EnumerateArray()
+            .ToArray();
+
+        Assert.All(targets, target =>
+        {
+            var errors = target.GetProperty("manifestValidationErrors")
+                .EnumerateArray()
+                .Select(error => error.GetString())
+                .ToArray();
+
+            Assert.True(target.TryGetProperty("manifestValidationStatus", out var status));
+            if (target.GetProperty("captureStatus").GetString() == "missing-manifest")
+            {
+                Assert.Equal("missing", status.GetString());
+                Assert.Contains("manifest-file-missing", errors);
+                return;
+            }
+
+            Assert.Equal("valid", status.GetString());
+            Assert.Empty(errors);
+        });
+
+        foreach (var retained in targets.Where(IsCompleteRetainedOpenedStateTarget))
+        {
+            Assert.True(retained.GetProperty("manifestMatchesTarget").GetBoolean());
+            Assert.Equal("valid", retained.GetProperty("manifestValidationStatus").GetString());
+            Assert.False(string.IsNullOrWhiteSpace(retained.GetProperty("screenshotPath").GetString()));
         }
     }
 
@@ -142,7 +179,7 @@ public sealed class ConditionalFormatOpenedStateEvidenceTests
             .ToArray();
 
         Assert.Contains(checklist, item => item.Phase == "build" && item.Command!.Contains("dotnet build", StringComparison.Ordinal));
-        Assert.Contains(checklist, item => item.Phase == "preflight" && item.Command!.Contains("Excel.Application", StringComparison.Ordinal));
+        Assert.Contains(checklist, item => item.Phase == "preflight" && item.Command!.Contains("Invoke-ForegroundCapture.ps1 -EnvironmentPreflight", StringComparison.Ordinal));
         Assert.Contains(checklist, item => item.Phase == "capture:excel" && item.Command!.Contains("excel-conditional-formatting-gallery", StringComparison.Ordinal));
         Assert.Contains(checklist, item => item.Phase == "capture:wpf" && item.Command!.Contains("freex-conditional-formatting-gallery", StringComparison.Ordinal));
         Assert.Contains(checklist, item => item.Phase == "capture:avalonia" && item.Command!.Contains("avalonia-conditional-formatting-gallery", StringComparison.Ordinal));

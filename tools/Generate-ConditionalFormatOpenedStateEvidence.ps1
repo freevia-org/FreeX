@@ -97,11 +97,16 @@ function Get-BlockerCategory {
         [Parameter(Mandatory = $true)][string]$CaptureStatus,
         [Parameter(Mandatory = $true)][bool]$ScreenshotExists,
         [Parameter(Mandatory = $true)][bool]$ManifestMatchesTarget,
-        [string]$BlockReason = ""
+        [string]$BlockReason = "",
+        [string[]]$StructuralManifestErrors = @()
     )
 
     if (-not $ManifestMatchesTarget) {
         return "manifest-target-mismatch"
+    }
+
+    if ($StructuralManifestErrors.Count -gt 0) {
+        return "manifest-invalid"
     }
 
     if ($CaptureStatus -eq "complete" -and $ScreenshotExists) {
@@ -135,6 +140,81 @@ function Get-BlockerCategory {
     return "blocked-or-incomplete"
 }
 
+function Get-ManifestValidationErrors {
+    param(
+        [Parameter(Mandatory = $true)]$Manifest,
+        [Parameter(Mandatory = $true)][bool]$ManifestExists,
+        [Parameter(Mandatory = $true)][bool]$ManifestMatchesTarget,
+        [Parameter(Mandatory = $true)][string]$CaptureStatus,
+        [Parameter(Mandatory = $true)][bool]$ScreenshotExists,
+        [string]$ScreenshotPath = "",
+        [string]$BlockReason = ""
+    )
+
+    $errors = @()
+
+    if (-not $ManifestExists) {
+        return @("manifest-file-missing")
+    }
+
+    if (-not $ManifestMatchesTarget) {
+        $errors += "manifest-target-mismatch"
+    }
+
+    if ([string]::IsNullOrWhiteSpace($CaptureStatus)) {
+        $errors += "capture-status-missing"
+    }
+    elseif ($CaptureStatus -notin @("complete", "blocked")) {
+        $errors += "capture-status-unknown"
+    }
+
+    if ($CaptureStatus -eq "complete") {
+        if ([string]::IsNullOrWhiteSpace($ScreenshotPath)) {
+            $errors += "screenshot-path-missing"
+        }
+        elseif (-not $ScreenshotExists) {
+            $errors += "screenshot-file-missing"
+        }
+    }
+    elseif ($CaptureStatus -eq "blocked") {
+        if ([string]::IsNullOrWhiteSpace($BlockReason)) {
+            $errors += "block-reason-missing"
+        }
+
+        $capturedAtUtc = Get-ManifestString -Manifest $Manifest -PropertyName "CapturedAtUtc"
+        if ([string]::IsNullOrWhiteSpace($capturedAtUtc)) {
+            $errors += "captured-at-utc-missing"
+        }
+
+        if ($BlockReason -match "foreground-guard-failed") {
+            if (-not ($Manifest.PSObject.Properties.Name -contains "ForegroundGuard") -or $null -eq $Manifest.ForegroundGuard) {
+                $errors += "foreground-guard-diagnostics-missing"
+            }
+            else {
+                $guardReason = Get-ManifestString -Manifest $Manifest.ForegroundGuard -PropertyName "Reason"
+                if ([string]::IsNullOrWhiteSpace($guardReason)) {
+                    $errors += "foreground-guard-reason-missing"
+                }
+            }
+        }
+    }
+
+    return @($errors)
+}
+
+function Get-StructuralManifestErrors {
+    param([string[]]$ManifestValidationErrors)
+
+    return @($ManifestValidationErrors | Where-Object {
+            $_ -notin @(
+                "manifest-file-missing",
+                "manifest-target-mismatch",
+                "screenshot-path-missing",
+                "screenshot-file-missing"
+            )
+        })
+}
+
 function Get-NextCaptureAction {
     param(
         [Parameter(Mandatory = $true)][string]$BlockerCategory,
@@ -145,6 +225,7 @@ function Get-NextCaptureAction {
     switch ($BlockerCategory) {
         "none" { return "No action required; retained PNG resolves in the repo." }
         "missing-manifest" { return "Run $RunnerCommand in $RequiredEnvironment Commit the manifest and PNG, then rerun this generator." }
+        "manifest-invalid" { return "Inspect the committed manifest diagnostics, then rerun $RunnerCommand in $RequiredEnvironment Preserve the blocked manifest if the environment still cannot produce a real PNG." }
         "manifest-missing-screenshot" { return "Rerun $RunnerCommand and commit both the complete manifest and the referenced PNG." }
         "manifest-target-mismatch" { return "Discard the stale manifest and rerun $RunnerCommand so Scenario and Subject match this target." }
         "excel-com-unavailable" { return "Rerun $RunnerCommand on a Windows desktop where Microsoft Excel COM is installed and registered." }
@@ -192,6 +273,8 @@ function Get-CaptureTargetStatus {
             retentionStatus = "needs-capture"
             blockReason = "No committed foreground capture manifest exists for this opened-state target."
             blockerCategory = "missing-manifest"
+            manifestValidationStatus = "missing"
+            manifestValidationErrors = @("manifest-file-missing")
             nextCaptureAction = Get-NextCaptureAction -BlockerCategory "missing-manifest" -RunnerCommand $RunnerCommand -RequiredEnvironment $RequiredEnvironment
             lastAttemptedAtUtc = ""
             manifestSubject = ""
@@ -226,11 +309,22 @@ function Get-CaptureTargetStatus {
     }
 
     $blockReason = if ([string]::IsNullOrWhiteSpace($manifest.BlockReason)) { "" } else { [string]$manifest.BlockReason }
+    $manifestValidationErrors = Get-ManifestValidationErrors `
+        -Manifest $manifest `
+        -ManifestExists $true `
+        -ManifestMatchesTarget $manifestMatchesTarget `
+        -CaptureStatus $captureStatus `
+        -ScreenshotPath $resolvedScreenshot `
+        -ScreenshotExists ([bool]$screenshotExists) `
+        -BlockReason $blockReason
+    $structuralManifestErrors = Get-StructuralManifestErrors -ManifestValidationErrors $manifestValidationErrors
+    $manifestValidationStatus = if ($manifestValidationErrors.Count -eq 0) { "valid" } else { "invalid" }
     $blockerCategory = Get-BlockerCategory `
         -CaptureStatus $captureStatus `
         -ScreenshotExists ([bool]$screenshotExists) `
         -ManifestMatchesTarget $manifestMatchesTarget `
-        -BlockReason $blockReason
+        -BlockReason $blockReason `
+        -StructuralManifestErrors $structuralManifestErrors
 
     [ordered]@{
         id = $Id
@@ -246,6 +340,8 @@ function Get-CaptureTargetStatus {
         retentionStatus = $retentionStatus
         blockReason = $blockReason
         blockerCategory = $blockerCategory
+        manifestValidationStatus = $manifestValidationStatus
+        manifestValidationErrors = @($manifestValidationErrors)
         nextCaptureAction = Get-NextCaptureAction -BlockerCategory $blockerCategory -RunnerCommand $RunnerCommand -RequiredEnvironment $RequiredEnvironment
         lastAttemptedAtUtc = Get-ManifestString -Manifest $manifest -PropertyName "CapturedAtUtc"
         manifestSubject = $manifestSubject
@@ -280,8 +376,8 @@ function Get-OperatorChecklist {
             -Purpose "Produces the Release WPF and Avalonia executables referenced by the FreeX capture commands."
         New-OperatorChecklistItem `
             -Phase "preflight" `
-            -Command 'Test-Path .\src\FreeX.App.Host\bin\Release\net10.0-windows10.0.19041.0\FreeX.App.Host.exe; Test-Path .\src\FreeX.App.Avalonia\bin\Release\net10.0\FreeX.exe; $excel = New-Object -ComObject Excel.Application; $excel.Quit(); [Runtime.InteropServices.Marshal]::ReleaseComObject($excel) | Out-Null' `
-            -Purpose "Confirms the two FreeX executables resolve and Microsoft Excel COM can start and quit before foreground input."
+            -Command ".\tools\Invoke-ForegroundCapture.ps1 -EnvironmentPreflight" `
+            -Purpose "Emits machine-readable readiness diagnostics for Windows foreground focus, Release executables, and Microsoft Excel COM before foreground input."
     )
 
     foreach ($target in $CaptureTargets) {
@@ -421,6 +517,8 @@ $md = New-Object System.Text.StringBuilder
 [void]$md.AppendLine()
 [void]$md.AppendLine("Completion contract: run the target command in a foreground-capable Windows desktop session, commit the resulting manifest and PNG under ``tools/foreground-captures/<scenario>/``, then rerun this generator. A target is complete only when ``CaptureStatus`` is ``complete`` and ``ScreenshotPath`` resolves to a committed PNG; blocked manifests must remain blocked and must not use fallback dialog-route images as opened-state evidence.")
 [void]$md.AppendLine()
+[void]$md.AppendLine("Manifest validation contract: every committed manifest must match the expected Scenario and Subject, carry a known CaptureStatus, and include enough diagnostics for its state. Complete manifests must resolve a PNG; blocked manifests must retain BlockReason and CapturedAtUtc, and foreground guard failures must include ForegroundGuard diagnostics.")
+[void]$md.AppendLine()
 [void]$md.AppendLine("## Summary")
 [void]$md.AppendLine()
 [void]$md.AppendLine("| Metric | Count |")
@@ -441,11 +539,16 @@ foreach ($category in $blockerCategories) {
 [void]$md.AppendLine()
 [void]$md.AppendLine("## Capture Targets")
 [void]$md.AppendLine()
-[void]$md.AppendLine("| Target | Subject | Scenario | Status | Category | Last attempt UTC | PNG | Blocker | Next action |")
-[void]$md.AppendLine("|---|---|---|---|---|---|---|---|---|")
+[void]$md.AppendLine("| Target | Subject | Scenario | Status | Category | Manifest validation | Last attempt UTC | PNG | Blocker | Next action |")
+[void]$md.AppendLine("|---|---|---|---|---|---|---|---|---|---|")
 foreach ($target in $captureTargets) {
     $png = if ($target.screenshotExists) { $target.screenshotPath } else { "" }
-    [void]$md.AppendLine("| $(Escape-MarkdownCell $target.id) | $(Escape-MarkdownCell $target.subject) | $(Escape-MarkdownCell $target.scenario) | $(Escape-MarkdownCell $target.retentionStatus) | $(Escape-MarkdownCell $target.blockerCategory) | $(Escape-MarkdownCell $target.lastAttemptedAtUtc) | $(Escape-MarkdownCell $png) | $(Escape-MarkdownCell $target.blockReason) | $(Escape-MarkdownCell $target.nextCaptureAction) |")
+    $validation = $target.manifestValidationStatus
+    if ($target.manifestValidationErrors.Count -gt 0) {
+        $validation = "$validation ($($target.manifestValidationErrors -join ', '))"
+    }
+
+    [void]$md.AppendLine("| $(Escape-MarkdownCell $target.id) | $(Escape-MarkdownCell $target.subject) | $(Escape-MarkdownCell $target.scenario) | $(Escape-MarkdownCell $target.retentionStatus) | $(Escape-MarkdownCell $target.blockerCategory) | $(Escape-MarkdownCell $validation) | $(Escape-MarkdownCell $target.lastAttemptedAtUtc) | $(Escape-MarkdownCell $png) | $(Escape-MarkdownCell $target.blockReason) | $(Escape-MarkdownCell $target.nextCaptureAction) |")
 }
 [void]$md.AppendLine()
 [void]$md.AppendLine("## Capture Commands")
