@@ -645,6 +645,130 @@ public sealed class PptxPackageRetentionTests
     }
 
     [Fact]
+    public void ReadWriteRead_ChartDataTableTextStyleFontFamily_RoundTripsAndIsNotDroppedToCalibri()
+    {
+        // KA1: c:dTable/c:txPr/a:defRPr/a:latin typeface="Georgia" must be captured into
+        // ChartTextStyle.FontFamily and re-emitted on save, instead of being silently
+        // dropped (which previously caused the data table to always render/save in the
+        // renderer's hardcoded "Calibri" default).
+        using var source = BuildPptxWithChartDataTableFontFamily("Georgia");
+        var loaded = PptxPackageReader.Read(source);
+
+        var chart = loaded.Slides[0].Shapes.Single(shape => shape.Kind == SlideShapeKind.Chart).Chart!;
+        chart.DataTable.Should().NotBeNull();
+        chart.DataTable!.TextStyle.Should().NotBeNull();
+        chart.DataTable.TextStyle!.FontFamily.Should().Be("Georgia");
+
+        using var saved = new MemoryStream();
+        PptxPackageWriter.Write(loaded, saved);
+        var savedBytes = saved.ToArray();
+
+        using (var archive = new ZipArchive(new MemoryStream(savedBytes), ZipArchiveMode.Read))
+        {
+            var savedChartXml = LoadXml(archive, "ppt/charts/chart1.xml");
+            var savedDefRPr = savedChartXml.Root!
+                .Element(ChartNs + "chart")!
+                .Element(ChartNs + "plotArea")!
+                .Element(ChartNs + "dTable")!
+                .Element(ChartNs + "txPr")!
+                .Element(DrawingNs + "p")!
+                .Element(DrawingNs + "pPr")!
+                .Element(DrawingNs + "defRPr")!;
+            savedDefRPr.Element(DrawingNs + "latin").Should().NotBeNull(
+                "the data-table font family must round-trip as a:latin, not be dropped on save");
+            savedDefRPr.Element(DrawingNs + "latin")!.Attribute("typeface")!.Value.Should().Be("Georgia");
+        }
+
+        using var savedRead = new MemoryStream(savedBytes);
+        var reloaded = PptxPackageReader.Read(savedRead);
+        var reloadedDataTable = reloaded.Slides[0].Shapes.Single(shape => shape.Kind == SlideShapeKind.Chart).Chart!.DataTable;
+        reloadedDataTable.Should().NotBeNull();
+        reloadedDataTable!.TextStyle.Should().NotBeNull();
+        reloadedDataTable.TextStyle!.FontFamily.Should().Be("Georgia");
+    }
+
+    [Fact]
+    public void ReadWriteRead_ChartDataTableTextStyleWithoutLatin_FontFamilyIsNullNotDefaulted()
+    {
+        // No a:latin present on the source defRPr → FontFamily should stay null (unset),
+        // not be defaulted to anything — the renderer default only applies at draw time.
+        using var source = BuildPptxWithChartDataTableFontFamily(fontFamily: null);
+        var loaded = PptxPackageReader.Read(source);
+
+        var chart = loaded.Slides[0].Shapes.Single(shape => shape.Kind == SlideShapeKind.Chart).Chart!;
+        chart.DataTable.Should().NotBeNull();
+        chart.DataTable!.TextStyle.Should().NotBeNull();
+        chart.DataTable.TextStyle!.FontFamily.Should().BeNull();
+
+        using var saved = new MemoryStream();
+        PptxPackageWriter.Write(loaded, saved);
+
+        using var savedRead = new MemoryStream(saved.ToArray());
+        var reloaded = PptxPackageReader.Read(savedRead);
+        var reloadedDataTable = reloaded.Slides[0].Shapes.Single(shape => shape.Kind == SlideShapeKind.Chart).Chart!.DataTable;
+        reloadedDataTable.Should().NotBeNull();
+        reloadedDataTable!.TextStyle.Should().NotBeNull();
+        reloadedDataTable.TextStyle!.FontFamily.Should().BeNull();
+    }
+
+    private static MemoryStream BuildPptxWithChartDataTableFontFamily(string? fontFamily)
+    {
+        var presentation = new Presentation();
+        var slide = new Slide();
+        var chart = new ChartShape { ChartType = ChartType.ColumnClustered };
+        chart.Categories.AddRange(["East", "West"]);
+        var series = new ChartSeries { Name = "Actual" };
+        series.Values.AddRange([10, 20]);
+        chart.Series.Add(series);
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 101,
+            Name = "Font family chart",
+            Kind = SlideShapeKind.Chart,
+            OffsetXEmu = 914400,
+            OffsetYEmu = 914400,
+            ExtentCxEmu = 3657600,
+            ExtentCyEmu = 2743200,
+            Chart = chart,
+        });
+        presentation.Slides.Add(slide);
+
+        using var basePackage = new MemoryStream();
+        PptxPackageWriter.Write(presentation, basePackage);
+
+        var package = new MemoryStream();
+        package.Write(basePackage.ToArray());
+        package.Position = 0;
+        using (var archive = new ZipArchive(package, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            var chartXml = LoadXml(archive, "ppt/charts/chart1.xml");
+            var defRPr = new XElement(DrawingNs + "defRPr",
+                new XAttribute("sz", "875"));
+            if (fontFamily is not null)
+                defRPr.Add(new XElement(DrawingNs + "latin", new XAttribute("typeface", fontFamily)));
+
+            chartXml.Root!
+                .Element(ChartNs + "chart")!
+                .Element(ChartNs + "plotArea")!
+                .Add(new XElement(ChartNs + "dTable",
+                    new XElement(ChartNs + "showHorzBorder", new XAttribute("val", "1")),
+                    new XElement(ChartNs + "showVertBorder", new XAttribute("val", "1")),
+                    new XElement(ChartNs + "showOutline", new XAttribute("val", "1")),
+                    new XElement(ChartNs + "showKeys", new XAttribute("val", "0")),
+                    new XElement(ChartNs + "txPr",
+                        new XElement(DrawingNs + "bodyPr"),
+                        new XElement(DrawingNs + "lstStyle"),
+                        new XElement(DrawingNs + "p",
+                            new XElement(DrawingNs + "pPr", defRPr),
+                            new XElement(DrawingNs + "endParaRPr")))));
+            WriteXml(archive, "ppt/charts/chart1.xml", chartXml);
+        }
+
+        package.Position = 0;
+        return package;
+    }
+
+    [Fact]
     public void ReadWriteRead_ChartDataTableGradientBorderOutline_IsPreservedNotReplacedByDefaultGray()
     {
         // JA1: a c:dTable/c:spPr/a:ln with an a:gradFill child (gradient border) must survive

@@ -818,14 +818,16 @@ internal static class PptxChartReader
         bool? bold = ParseNullableBoolAttr(defRPr.Attribute("b")?.Value);
         bool? italic = ParseNullableBoolAttr(defRPr.Attribute("i")?.Value);
         var color = PptxColorReader.TryReadColor(defRPr.Element(A + "solidFill"), scheme);
+        string? fontFamily = defRPr.Element(A + "latin")?.Attribute("typeface")?.Value;
 
-        return fontSizePt.HasValue || bold.HasValue || italic.HasValue || color is not null
+        return fontSizePt.HasValue || bold.HasValue || italic.HasValue || color is not null || fontFamily is not null
             ? new ChartTextStyle
             {
                 FontSizePt = fontSizePt,
                 Bold       = bold,
                 Italic     = italic,
                 Color      = color,
+                FontFamily = fontFamily,
             }
             : null;
     }

@@ -1214,14 +1214,15 @@ public sealed class SlideCanvas : FrameworkElement
         DrawingContext dc, string text, Rect rect,
         bool isBold, double fontSize, TextAlignment align,
         bool isItalic = false,
-        SrgbColor? textColor = null)
+        SrgbColor? textColor = null,
+        string? fontFamily = null)
     {
         if (string.IsNullOrWhiteSpace(text)) return;
         if (rect.Width <= 0 || rect.Height <= 0) return;
 
         var color = textColor ?? new SrgbColor(0x40, 0x40, 0x40);
         var typeface = new Typeface(
-            new FontFamily("Calibri"),
+            new FontFamily(fontFamily ?? "Calibri"),
             isItalic ? FontStyles.Italic : FontStyles.Normal,
             isBold ? FontWeights.Bold : FontWeights.Normal,
             FontStretches.Normal);
@@ -1281,7 +1282,8 @@ public sealed class SlideCanvas : FrameworkElement
                 cell.FontSize,
                 ToTextAlignment(cell.Alignment),
                 cell.IsItalic,
-                cell.TextColor);
+                cell.TextColor,
+                cell.FontFamily);
         }
     }
 

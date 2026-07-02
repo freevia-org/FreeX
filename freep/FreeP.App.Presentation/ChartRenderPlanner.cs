@@ -99,7 +99,8 @@ public readonly record struct ChartDataTableTextPlan(
     bool IsBold,
     bool IsItalic,
     double FontSize,
-    SrgbColor Color);
+    SrgbColor Color,
+    string? FontFamily);
 
 public readonly record struct ChartDataTableCellPlan(
     int RowIndex,
@@ -113,7 +114,8 @@ public readonly record struct ChartDataTableCellPlan(
     SrgbColor TextColor,
     ChartPlanTextAlignment Alignment,
     ChartPlanRect? LegendKeyBounds,
-    ChartFillPlan? LegendKeyFill);
+    ChartFillPlan? LegendKeyFill,
+    string? FontFamily);
 
 public readonly record struct ChartDataTablePrimitivePlan(
     ChartPlanRect Bounds,
@@ -829,7 +831,8 @@ public static partial class ChartRenderPlanner
                 TextColor: headerTextStyle.Color,
                 Alignment: columnIndex == 0 ? ChartPlanTextAlignment.Left : ChartPlanTextAlignment.Center,
                 LegendKeyBounds: null,
-                LegendKeyFill: null));
+                LegendKeyFill: null,
+                FontFamily: headerTextStyle.FontFamily));
         }
 
         for (int seriesIndex = 0; seriesIndex < chart.Series.Count; seriesIndex++)
@@ -865,7 +868,8 @@ public static partial class ChartRenderPlanner
                 TextColor: bodyTextStyle.Color,
                 Alignment: ChartPlanTextAlignment.Left,
                 LegendKeyBounds: keyBounds,
-                LegendKeyFill: keyFill));
+                LegendKeyFill: keyFill,
+                FontFamily: bodyTextStyle.FontFamily));
 
             for (int categoryIndex = 0; categoryIndex < categoryCount; categoryIndex++)
             {
@@ -889,7 +893,8 @@ public static partial class ChartRenderPlanner
                     TextColor: bodyTextStyle.Color,
                     Alignment: ChartPlanTextAlignment.Center,
                     LegendKeyBounds: null,
-                    LegendKeyFill: null));
+                    LegendKeyFill: null,
+                    FontFamily: bodyTextStyle.FontFamily));
             }
         }
 
@@ -2189,7 +2194,8 @@ public static partial class ChartRenderPlanner
             settings.TextStyle?.Bold ?? defaultBold,
             settings.TextStyle?.Italic ?? false,
             settings.TextStyle?.FontSizePt ?? DataTableFontSize,
-            settings.TextStyle?.Color?.Resolved ?? new SrgbColor(0x40, 0x40, 0x40));
+            settings.TextStyle?.Color?.Resolved ?? new SrgbColor(0x40, 0x40, 0x40),
+            settings.TextStyle?.FontFamily);
 
     private static ChartStrokePlan DefaultRadarSpokeStroke() =>
         new(new SrgbColor(0xC0, 0xC0, 0xC0), Alpha: 255, Thickness: 0.5);
