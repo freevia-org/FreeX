@@ -497,9 +497,11 @@ public sealed class SlideShowWindowTests
             var end = window.EndPresenterInkStroke(50, 60);
 
             begin.IsHandled.Should().BeTrue();
+            window.PresenterInkOverlayVisualCount.Should().Be(1);
             begin.Mutations.Single().Kind.Should().Be(SlideShowInkExecutionMutationKind.BeginStroke);
             append.Mutations.Single().Kind.Should().Be(SlideShowInkExecutionMutationKind.AppendStrokePoint);
             end.Mutations.Single().Kind.Should().Be(SlideShowInkExecutionMutationKind.CommitStroke);
+            window.PresenterInkOverlayVisualCount.Should().Be(1);
             window.InkExecutionState.CommittedStrokes.Should().ContainSingle();
             var stroke = window.InkExecutionState.CommittedStrokes.Single();
             stroke.PointerMode.Should().Be(SlideShowPresenterPointerMode.Pen);
@@ -531,6 +533,7 @@ public sealed class SlideShowWindowTests
             clear.Mutations.Single().Kind.Should().Be(SlideShowInkExecutionMutationKind.ClearInk);
             clear.Mutations.Single().AffectedStrokeCount.Should().Be(1);
             window.InkExecutionState.CommittedStrokes.Should().BeEmpty();
+            window.PresenterInkOverlayVisualCount.Should().Be(0);
         }
         finally
         {
