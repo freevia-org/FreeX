@@ -26,7 +26,13 @@ internal sealed record AutoFilterMenuItem(
     bool? IsChecked = null);
 
 /// <summary>The resolved AutoFilter dropdown menu for a column: header plus ordered entries.</summary>
-internal sealed record AutoFilterMenuModel(string Header, IReadOnlyList<AutoFilterMenuItem> Items);
+internal sealed record AutoFilterMenuModel(
+    string Header,
+    AutoFilterMenuFilterKind FilterKind,
+    IReadOnlyList<AutoFilterMenuItem> Items,
+    IReadOnlyList<AutoFilterCriteriaOption> CriteriaOptions,
+    IReadOnlyList<string> CriteriaSuggestions,
+    IReadOnlyList<AutoFilterColorOption> ColorOptions);
 
 /// <summary>
 /// UI-free planner that builds the AutoFilter dropdown menu model for a column from canonical filter
@@ -41,8 +47,66 @@ internal static class AutoFilterMenuPlanner
 
         return new AutoFilterMenuModel(
             plan.HeaderText,
-            plan.Entries.Select(ToMenuItem).ToList());
+            plan.FilterKind,
+            plan.Entries.Select(ToMenuItem).ToList(),
+            CreateCriteriaOptions(plan.FilterKind),
+            AutoFilterDialogCriteriaPlanner.GetCriteriaSuggestions(plan),
+            plan.ColorOptions ?? []);
     }
+
+    public static IReadOnlyList<AutoFilterDialogItem> CreateDialogItems(AutoFilterMenuModel model) =>
+        model.Items
+            .Where(item => item.Kind == AutoFilterMenuItemKind.ChecklistItem)
+            .Select(item => new AutoFilterDialogItem(item.Label, item.Value, item.IsChecked ?? true))
+            .ToList();
+
+    public static IReadOnlyList<AutoFilterDialogItem> FilterItems(
+        IEnumerable<AutoFilterDialogItem> items,
+        string? searchText) =>
+        AutoFilterDialogCriteriaPlanner.FilterItems(items, searchText);
+
+    public static IReadOnlyList<AutoFilterDialogItem> SetSelectionForSearch(
+        IEnumerable<AutoFilterDialogItem> items,
+        string? searchText,
+        bool isSelected) =>
+        AutoFilterDialogCriteriaPlanner.SetSelectionForSearch(items, searchText, isSelected);
+
+    public static bool? SelectAllState(IEnumerable<AutoFilterDialogItem> items)
+    {
+        var materialized = items.ToList();
+        if (materialized.Count == 0)
+            return false;
+
+        var selectedCount = materialized.Count(item => item.IsSelected);
+        return selectedCount == materialized.Count
+            ? true
+            : selectedCount == 0
+                ? false
+                : null;
+    }
+
+    public static AutoFilterDialogResult BuildResult(
+        IEnumerable<AutoFilterDialogItem> items,
+        string? searchText,
+        string? criteriaText,
+        AutoFilterColorFilter? colorFilter = null,
+        bool addCurrentSelectionToFilter = false) =>
+        AutoFilterDialogCriteriaPlanner.BuildResult(
+            AutoFilterSortDirection.None,
+            items,
+            searchText,
+            criteriaText,
+            colorFilter,
+            addCurrentSelectionToFilter);
+
+    public static string BuildCriteriaText(AutoFilterCriteriaOption option, string? value) =>
+        AutoFilterDialogCriteriaPlanner.BuildCriteriaText(option, value);
+
+    public static bool RequiresSecondCriteriaValue(AutoFilterCriteriaOption option) =>
+        AutoFilterDialogCriteriaPlanner.IsBetweenOption(option);
+
+    public static bool RequiresCountCriteriaValue(AutoFilterCriteriaOption option) =>
+        AutoFilterDialogCriteriaPlanner.IsTopBottomOption(option);
 
     private static AutoFilterMenuItem ToMenuItem(AutoFilterMenuEntry entry) =>
         new(
@@ -63,4 +127,19 @@ internal static class AutoFilterMenuPlanner
             entry.Value,
             entry.IsEnabled,
             entry.IsChecked);
+
+    private static IReadOnlyList<AutoFilterCriteriaOption> CreateCriteriaOptions(AutoFilterMenuFilterKind filterKind)
+    {
+        var descriptors = AutoFilterMenuCatalog.GetCriteriaDescriptors(filterKind);
+        var options = new List<AutoFilterCriteriaOption>(descriptors.Count);
+        foreach (var descriptor in descriptors)
+        {
+            options.Add(new AutoFilterCriteriaOption(
+                UiText.Get(descriptor.ResourceKey),
+                descriptor.CriteriaPrefix,
+                descriptor.RequiresValue));
+        }
+
+        return options;
+    }
 }
