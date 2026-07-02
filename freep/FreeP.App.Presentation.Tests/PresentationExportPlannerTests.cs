@@ -26,6 +26,28 @@ public sealed class PresentationExportPlannerTests
         return presentation;
     }
 
+    private static Presentation BuildNotesDeck()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides.Clear();
+        for (var i = 1; i <= 3; i++)
+        {
+            var slide = new Slide { Title = $"Slide {i}" };
+            slide.Shapes.Add(new SlideShape
+            {
+                Kind = SlideShapeKind.AutoShape,
+                Text = $"Body {i}",
+            });
+            presentation.Slides.Add(slide);
+        }
+
+        presentation.Slides[0].Notes = MakeTextBody("Opening note.");
+        presentation.Slides[2].Notes = MakeTextBody("First closing note.", "Second closing note.");
+        presentation.Properties.Title = "Notes Deck";
+        presentation.Properties.Author = "Parity";
+        return presentation;
+    }
+
     [Fact]
     public void PrintLayouts_CoverSlidesNotesAndPowerPointHandoutOptions()
     {
@@ -264,6 +286,85 @@ public sealed class PresentationExportPlannerTests
         var doc = PresentationHandoutPdfExporter.BuildDocument(BuildHandoutDeck(2));
         doc.Properties!.Creator.Should().Be("FreeP");
         doc.Properties.Title.Should().Be("Handout Deck");
+        doc.Properties.Author.Should().Be("Parity");
+    }
+
+    [Fact]
+    public void NotesPagePdfRenderPlan_SelectedSlides_UsesSharedPreviewGeometryAndSpeakerNotes()
+    {
+        var request = new PresentationPrintRequest(
+            PresentationPrintLayoutKind.NotesPages,
+            new PresentationSlideRangeRequest(
+                PresentationSlideRangeKind.SelectedSlides,
+                SelectedSlideNumbers: [3, 1, 3]));
+
+        var plan = PresentationNotesPagePdfExporter.BuildRenderPlan(
+            BuildNotesDeck(),
+            new PresentationNotesPagePdfExportRequest(request));
+
+        plan.PrintPlan.Layout.Layout.Should().Be(PresentationPrintLayoutKind.NotesPages);
+        plan.PrintPlan.SlideRange.SlideNumbers.Should().Equal(1, 3);
+        plan.PreviewPlans.Select(preview => preview.SlideNumber).Should().Equal(1, 3);
+        plan.Pages.Should().HaveCount(2);
+        plan.Pages.Should().OnlyContain(page =>
+            page.WidthPoints == PresentationExportPlanner.DefaultPrintPageWidth &&
+            page.HeightPoints == PresentationExportPlanner.DefaultPrintPageHeight);
+
+        var firstPageText = plan.Pages[0].Ops.OfType<PdfText>().Select(text => text.Text).ToList();
+        firstPageText.Should().Contain(["Slide 1", "Body 1", "Opening note."]);
+        firstPageText.Should().NotContain("Slide 2");
+        plan.Pages[0].Ops.OfType<PdfStrokeRect>().Should().HaveCount(2);
+
+        var secondPageText = plan.Pages[1].Ops.OfType<PdfText>().Select(text => text.Text).ToList();
+        secondPageText.Should().Contain(["Slide 3", "First closing note.", "Second closing note."]);
+        secondPageText.Should().NotContain("Slide 1");
+        plan.Pages[1].Ops.OfType<PdfStrokeRect>().Should().HaveCount(2);
+    }
+
+    [Fact]
+    public void NotesPagePdfRenderPlan_EmptyNotesAndEmptyDeck_EmitPowerPointShapedPlaceholderPages()
+    {
+        var deck = BuildNotesDeck();
+
+        var slideWithoutNotes = PresentationNotesPagePdfExporter.BuildRenderPlan(
+            deck,
+            new PresentationNotesPagePdfExportRequest(new PresentationPrintRequest(
+                PresentationPrintLayoutKind.NotesPages,
+                new PresentationSlideRangeRequest(
+                    PresentationSlideRangeKind.CurrentSlide,
+                    CurrentSlideNumber: 2))));
+
+        slideWithoutNotes.PreviewPlans.Should().ContainSingle(preview =>
+            preview.SlideNumber == 2 &&
+            !preview.HasNotes);
+        slideWithoutNotes.Pages[0].Ops.OfType<PdfText>().Select(text => text.Text)
+            .Should()
+            .Contain(PresentationNotesPagePreviewPlanner.EmptyNotesPlaceholder);
+
+        var empty = Presentation.CreateEmpty();
+        empty.Slides.Clear();
+        var emptyPlan = PresentationNotesPagePdfExporter.BuildRenderPlan(empty);
+
+        emptyPlan.PrintPlan.SlideRange.DisplayName.Should().Be("No slides");
+        emptyPlan.PreviewPlans.Should().ContainSingle(preview => !preview.HasSlide);
+        emptyPlan.Pages.Should().ContainSingle();
+        emptyPlan.Pages[0].Ops.OfType<PdfText>().Select(text => text.Text)
+            .Should()
+            .Contain(PresentationNotesPagePreviewPlanner.EmptyNotesPlaceholder);
+    }
+
+    [Fact]
+    public void NotesPagePdfExporter_ProducesPortablePdfBytesAndMetadata()
+    {
+        var bytes = PresentationNotesPagePdfExporter.ExportToBytes(BuildNotesDeck());
+
+        bytes.Length.Should().BeGreaterThan(100);
+        Encoding.ASCII.GetString(bytes, 0, 5).Should().Be("%PDF-");
+        Encoding.Latin1.GetString(bytes).Should().Contain("%%EOF");
+
+        var doc = PresentationNotesPagePdfExporter.BuildDocument(BuildNotesDeck());
+        doc.Properties!.Creator.Should().Be("FreeP");
+        doc.Properties.Title.Should().Be("Notes Deck");
         doc.Properties.Author.Should().Be("Parity");
     }
 
