@@ -44,6 +44,27 @@ public sealed class AvaloniaInCanvasTextEditor
     /// <summary>The id of the table shape currently being edited, or 0 if not active.</summary>
     public uint ActiveTableShapeId => _editingTableShapeId;
 
+    public bool TryApplyActiveTableCellTextFormat(TableCellTextFormatKind kind)
+    {
+        var plan = _editor.PlanActiveTableCellTextFormat(kind);
+        if (plan.Command is null)
+            return false;
+
+        _editor.Bus.Execute(plan.Command);
+
+        if (_cellEditActive &&
+            _cellTextBox is not null &&
+            plan.ShapeId == _editingTableShapeId &&
+            plan.Row == _editingCellRow &&
+            plan.Col == _editingCellCol &&
+            plan.TargetValue is { } value)
+        {
+            ApplyCellOverlayFormat(kind, value);
+        }
+
+        return true;
+    }
+
     public AvaloniaInCanvasTextEditor(SlideCanvas canvas, EditingSession editor, Panel overlay)
     {
         _canvas = canvas ?? throw new ArgumentNullException(nameof(canvas));
@@ -447,5 +468,29 @@ public sealed class AvaloniaInCanvasTextEditor
     {
         _overlay.IsVisible = _overlay.Children.Count > 0;
         _overlay.IsHitTestVisible = _active || _cellEditActive;
+    }
+
+    private void ApplyCellOverlayFormat(TableCellTextFormatKind kind, bool value)
+    {
+        if (_cellTextBox is null)
+            return;
+
+        switch (kind)
+        {
+            case TableCellTextFormatKind.Bold:
+                _cellTextBox.FontWeight = value ? FontWeight.Bold : FontWeight.Normal;
+                break;
+            case TableCellTextFormatKind.Italic:
+                _cellTextBox.FontStyle = value ? FontStyle.Italic : FontStyle.Normal;
+                break;
+            case TableCellTextFormatKind.Underline:
+                _cellTextBox.Classes.Set("freep-table-cell-underline", value);
+                _cellTextBox.BorderThickness = value
+                    ? new Thickness(1.5, 1.5, 1.5, 3.0)
+                    : new Thickness(1.5);
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(kind), kind, null);
+        }
     }
 }

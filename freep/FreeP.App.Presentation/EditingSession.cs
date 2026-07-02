@@ -1111,6 +1111,33 @@ public sealed class EditingSession
     public void SetTableCellText(int row, int col, TextBody? newBody)
         => ExecuteTableCommand((si, id) => new SetTableCellTextCommand(si, id, row, col, newBody));
 
+    public TableCellTextFormatPlan PlanActiveTableCellTextFormat(TableCellTextFormatKind kind) =>
+        TableCellEditPlanner.PlanTextFormat(
+            _currentSlideIndex,
+            CurrentSlide,
+            _selectedShapeIds,
+            ActiveTableCell,
+            kind);
+
+    public bool TryApplyActiveTableCellTextFormat(TableCellTextFormatKind kind)
+    {
+        var plan = PlanActiveTableCellTextFormat(kind);
+        if (plan.Command is null)
+            return false;
+
+        Bus.Execute(plan.Command);
+        return true;
+    }
+
+    public bool ToggleBoldOnActiveTableCell() =>
+        TryApplyActiveTableCellTextFormat(TableCellTextFormatKind.Bold);
+
+    public bool ToggleItalicOnActiveTableCell() =>
+        TryApplyActiveTableCellTextFormat(TableCellTextFormatKind.Italic);
+
+    public bool ToggleUnderlineOnActiveTableCell() =>
+        TryApplyActiveTableCellTextFormat(TableCellTextFormatKind.Underline);
+
     // ── Row / column insert and delete ────────────────────────────────────────────
 
     /// <summary>Inserts a row above the active cell's row. Undoable.</summary>

@@ -115,16 +115,19 @@ internal static class FreePRibbonCommands
         registry.Register("freep.bold", new EditorToggleCommand(stateStore, "freep.bold", () =>
         {
             if (RouteToActiveRichEditor(getSlideCanvas?.Invoke(), e => e.ApplyBold(), e => e.ApplyBold())) return;
+            if (editor.ToggleBoldOnActiveTableCell()) return;
             editor.ToggleBoldOnSelection();
         }));
         registry.Register("freep.italic", new EditorToggleCommand(stateStore, "freep.italic", () =>
         {
             if (RouteToActiveRichEditor(getSlideCanvas?.Invoke(), e => e.ApplyItalic(), e => e.ApplyItalic())) return;
+            if (editor.ToggleItalicOnActiveTableCell()) return;
             editor.ToggleItalicOnSelection();
         }));
         registry.Register("freep.underline", new EditorToggleCommand(stateStore, "freep.underline", () =>
         {
             if (RouteToActiveRichEditor(getSlideCanvas?.Invoke(), e => e.ApplyUnderline(), e => e.ApplyUnderline())) return;
+            if (editor.ToggleUnderlineOnActiveTableCell()) return;
             editor.ToggleUnderlineOnSelection();
         }));
 

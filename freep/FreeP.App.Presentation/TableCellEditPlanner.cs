@@ -13,6 +13,25 @@ public enum TableCellEditStartStatus
     MissingCellBounds,
 }
 
+public enum TableCellTextFormatKind
+{
+    Bold,
+    Italic,
+    Underline,
+}
+
+public enum TableCellTextFormatStatus
+{
+    Ready,
+    MissingSlide,
+    ShapeNotFound,
+    NotTable,
+    MissingActiveCell,
+    CellOutOfRange,
+    MissingTextBody,
+    NoTextRuns,
+}
+
 public sealed record TableCellEditState(
     uint? ShapeId,
     int? Row,
@@ -58,6 +77,18 @@ public sealed record TableCellEditStartPlan(
     InCanvasTableCellTextEditPlanner? EditPlanner)
 {
     public bool IsReady => Status == TableCellEditStartStatus.Ready;
+}
+
+public sealed record TableCellTextFormatPlan(
+    TableCellTextFormatStatus Status,
+    uint? ShapeId,
+    int? Row,
+    int? Col,
+    TableCellTextFormatKind Kind,
+    bool? TargetValue,
+    IPresentationCommand? Command)
+{
+    public bool IsReady => Status == TableCellTextFormatStatus.Ready && Command is not null;
 }
 
 public static class TableCellEditPlanner
@@ -191,12 +222,97 @@ public static class TableCellEditPlanner
         editPlanner?.Cancel()
         ?? new InCanvasTextEditDecision(InCanvasTextEditOutcome.Canceled, null);
 
+    public static TableCellTextFormatPlan PlanTextFormat(
+        int slideIndex,
+        Slide? slide,
+        IReadOnlyList<uint> selectedShapeIds,
+        (int Row, int Col)? activeCell,
+        TableCellTextFormatKind kind)
+    {
+        ArgumentNullException.ThrowIfNull(selectedShapeIds);
+
+        if (slide is null)
+            return DisabledFormat(TableCellTextFormatStatus.MissingSlide, kind);
+        if (selectedShapeIds.Count == 0)
+            return DisabledFormat(TableCellTextFormatStatus.ShapeNotFound, kind);
+
+        var shape = slide.Shapes.FirstOrDefault(s => s.Id == selectedShapeIds[0]);
+        if (shape is null)
+            return DisabledFormat(TableCellTextFormatStatus.ShapeNotFound, kind);
+        if (shape.Kind != SlideShapeKind.Table || shape.Table is null)
+            return DisabledFormat(TableCellTextFormatStatus.NotTable, kind, shape.Id);
+        if (activeCell is not { } requested)
+            return DisabledFormat(TableCellTextFormatStatus.MissingActiveCell, kind, shape.Id);
+
+        var normalized = NormalizeCell(shape.Table, requested.Row, requested.Col);
+        if (normalized is null)
+            return DisabledFormat(TableCellTextFormatStatus.CellOutOfRange, kind, shape.Id);
+
+        var (row, col, cell) = normalized.Value;
+        if (cell.TextBody is null)
+            return DisabledFormat(TableCellTextFormatStatus.MissingTextBody, kind, shape.Id, row, col);
+
+        var runs = cell.TextBody.Paragraphs.SelectMany(p => p.Runs).ToList();
+        if (runs.Count == 0)
+            return DisabledFormat(TableCellTextFormatStatus.NoTextRuns, kind, shape.Id, row, col);
+
+        bool targetValue = !runs.All(run => GetRunFormat(run, kind));
+        var editedBody = TextBodyModelCloner.CloneTextBody(cell.TextBody)!;
+        foreach (var run in editedBody.Paragraphs.SelectMany(p => p.Runs))
+            SetRunFormat(run, kind, targetValue);
+
+        return new TableCellTextFormatPlan(
+            TableCellTextFormatStatus.Ready,
+            shape.Id,
+            row,
+            col,
+            kind,
+            targetValue,
+            new SetTableCellTextCommand(slideIndex, shape.Id, row, col, editedBody));
+    }
+
     private static TableCellEditStartPlan NotReady(
         TableCellEditStartStatus status,
         uint shapeId,
         int row,
         int col) =>
         new(status, shapeId, row, col, null, null, null, null, null);
+
+    private static TableCellTextFormatPlan DisabledFormat(
+        TableCellTextFormatStatus status,
+        TableCellTextFormatKind kind,
+        uint? shapeId = null,
+        int? row = null,
+        int? col = null) =>
+        new(status, shapeId, row, col, kind, null, null);
+
+    private static bool GetRunFormat(Run run, TableCellTextFormatKind kind) => kind switch
+    {
+        TableCellTextFormatKind.Bold => run.Bold,
+        TableCellTextFormatKind.Italic => run.Italic,
+        TableCellTextFormatKind.Underline => run.Underline,
+        _ => false,
+    };
+
+    private static void SetRunFormat(Run run, TableCellTextFormatKind kind, bool value)
+    {
+        switch (kind)
+        {
+            case TableCellTextFormatKind.Bold:
+                run.Bold = value;
+                run.BoldSet = true;
+                break;
+            case TableCellTextFormatKind.Italic:
+                run.Italic = value;
+                run.ItalicSet = true;
+                break;
+            case TableCellTextFormatKind.Underline:
+                run.Underline = value;
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(kind), kind, null);
+        }
+    }
 
     private static (int Row, int Col, TableCell Cell)? NormalizeCell(
         TableShape table,

@@ -253,6 +253,53 @@ public sealed class SlideCanvasAvaloniaTests
     }
 
     [Fact]
+    public async Task TableCellTextEditor_FormatActiveOverlay_UsesSharedPlanAndMirrorsTextBox()
+    {
+        SlideShape? shape = null;
+        var overlayBold = false;
+        var overlayItalic = false;
+        var overlayUnderlineClass = false;
+        var overlayUnderlineBorder = false;
+
+        await Run(() =>
+        {
+            var presentation = MakePresentation(pres =>
+            {
+                pres.Slides[0].Shapes.Clear();
+                shape = MakeTableShape(14, "Original");
+                pres.Slides[0].Shapes.Add(shape);
+            });
+
+            var bus = new PresentationCommandBus(presentation);
+            var editor = new EditingSession(presentation, bus);
+            var canvas = new SlideCanvas { Presentation = presentation, Slide = presentation.Slides[0] };
+            var overlay = new global::Avalonia.Controls.Canvas();
+            var textEditor = new AvaloniaInCanvasTextEditor(canvas, editor, overlay);
+
+            textEditor.ActivateCellEdit(shape!.Id, 0, 0);
+            var box = overlay.Children.OfType<global::Avalonia.Controls.TextBox>().Single();
+
+            textEditor.TryApplyActiveTableCellTextFormat(TableCellTextFormatKind.Bold).Should().BeTrue();
+            textEditor.TryApplyActiveTableCellTextFormat(TableCellTextFormatKind.Italic).Should().BeTrue();
+            textEditor.TryApplyActiveTableCellTextFormat(TableCellTextFormatKind.Underline).Should().BeTrue();
+
+            overlayBold = box.FontWeight == FontWeight.Bold;
+            overlayItalic = box.FontStyle == FontStyle.Italic;
+            overlayUnderlineClass = box.Classes.Contains("freep-table-cell-underline");
+            overlayUnderlineBorder = box.BorderThickness.Bottom == 3.0;
+        });
+
+        var run = shape!.Table!.Rows[0].Cells[0].TextBody!.Paragraphs[0].Runs[0];
+        run.Bold.Should().BeTrue();
+        run.Italic.Should().BeTrue();
+        run.Underline.Should().BeTrue();
+        overlayBold.Should().BeTrue();
+        overlayItalic.Should().BeTrue();
+        overlayUnderlineClass.Should().BeTrue();
+        overlayUnderlineBorder.Should().BeTrue();
+    }
+
+    [Fact]
     public async Task TableCellTextEditor_Cancel_DiscardsChanges()
     {
         EditingSession? editor = null;
@@ -345,6 +392,7 @@ public sealed class SlideCanvasAvaloniaTests
         source.Should().Contain("AvaloniaTableCellEditAdapter.BeginEdit");
         source.Should().Contain("AvaloniaTableCellEditAdapter.CommitRichText");
         source.Should().Contain("AvaloniaTableCellEditAdapter.Cancel");
+        source.Should().Contain("TryApplyActiveTableCellTextFormat");
     }
 
     // ── 1. Geometry factory round-trip ────────────────────────────────────────
