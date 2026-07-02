@@ -5,7 +5,7 @@ param(
 
     [string]$FreeXExe,
 
-    [ValidateSet("smoke", "core", "dialogs", "status", "formula", "filtering", "all")]
+    [ValidateSet("smoke", "core", "dialogs", "status", "formula", "filtering", "grid", "all")]
     [string]$Suite = "smoke",
 
     [switch]$SkipBuild,
@@ -212,6 +212,18 @@ function Get-ScenarioPairs {
             area = "Sorting and filtering"
             excelScenario = "excel-autofilter"
             freexScenario = "freex-autofilter"
+        },
+        [ordered]@{
+            id = "grid-row-column-resize"
+            area = "Grid pointer mechanics"
+            comparisonMode = "freex-only"
+            freexScenario = "freex-grid-row-column-resize"
+        },
+        [ordered]@{
+            id = "grid-wheel-scroll"
+            area = "Grid pointer mechanics"
+            comparisonMode = "freex-only"
+            freexScenario = "freex-grid-wheel-scroll"
         }
     )
 
@@ -222,7 +234,32 @@ function Get-ScenarioPairs {
         "status" { return $pairs | Where-Object { $_["area"] -eq "Status bar" } }
         "formula" { return $pairs | Where-Object { $_["area"] -eq "Formula bar and name box" } }
         "filtering" { return $pairs | Where-Object { $_["area"] -eq "Sorting and filtering" } }
+        "grid" { return $pairs | Where-Object { $_["area"] -eq "Grid pointer mechanics" } }
         default { return $pairs }
+    }
+}
+
+function New-NotRequiredScenarioResult {
+    param(
+        [string]$Scenario,
+        [string]$Reason
+    )
+
+    return [ordered]@{
+        exitCode = 0
+        output = $Reason
+        manifest = [ordered]@{
+            scenario = $Scenario
+            captureStatus = "not-required"
+            captureMode = "not-required"
+            screenshotPath = $null
+            continuationScreenshotPath = $null
+            resultValidation = $Reason
+            blockReason = $null
+            manifestPath = $null
+        }
+        attempts = 0
+        attemptHistory = @()
     }
 }
 
@@ -429,6 +466,7 @@ function Write-ScenarioReport {
     Suite: $(ConvertTo-HtmlText $Summary["suite"]) |
     Status: $(ConvertTo-HtmlText $Summary["status"]) |
     Complete: $(ConvertTo-HtmlText $Summary["pairedCaptureComplete"]) |
+    FreeX-only complete: $(ConvertTo-HtmlText $Summary["freexCaptureComplete"]) |
     Partial: $(ConvertTo-HtmlText $Summary["partialCapture"]) |
     Blocked: $(ConvertTo-HtmlText $Summary["blocked"])
   </p>
@@ -544,12 +582,24 @@ $records = New-Object System.Collections.Generic.List[object]
 
 foreach ($pair in $pairs) {
     Write-Host "Running UX parity pair '$($pair["id"])'..."
-    $excel = Invoke-ForegroundScenario $foregroundProject $pair["excelScenario"] $foregroundOutput $freeXPath -NoBuild:$SkipBuild -MaxAttempts $MaxAttempts
+    $comparisonMode = if ($pair.Contains("comparisonMode")) { [string]$pair["comparisonMode"] } else { "paired" }
+    $excel = if ($comparisonMode -eq "freex-only") {
+        New-NotRequiredScenarioResult "excel-not-required" "Excel capture is not required for this FreeX-only foreground evidence scenario; run the matching Excel scenario separately when COM is available."
+    }
+    else {
+        Invoke-ForegroundScenario $foregroundProject $pair["excelScenario"] $foregroundOutput $freeXPath -NoBuild:$SkipBuild -MaxAttempts $MaxAttempts
+    }
     $freex = Invoke-ForegroundScenario $foregroundProject $pair["freexScenario"] $foregroundOutput $freeXPath -NoBuild:$SkipBuild -MaxAttempts $MaxAttempts
 
     $excelStatus = $excel["manifest"]["captureStatus"]
     $freexStatus = $freex["manifest"]["captureStatus"]
-    $pairStatus = if ($excelStatus -eq "complete" -and $freexStatus -eq "complete") {
+    $pairStatus = if ($comparisonMode -eq "freex-only" -and $freexStatus -eq "complete") {
+        "freex-capture-complete"
+    }
+    elseif ($comparisonMode -eq "freex-only") {
+        "blocked"
+    }
+    elseif ($excelStatus -eq "complete" -and $freexStatus -eq "complete") {
         "paired-capture-complete"
     }
     elseif ($excelStatus -eq "complete" -or $freexStatus -eq "complete") {
@@ -562,8 +612,9 @@ foreach ($pair in $pairs) {
     $records.Add([ordered]@{
         id = $pair["id"]
         area = $pair["area"]
+        comparisonMode = $comparisonMode
         status = $pairStatus
-        comparisonStatus = if ($pairStatus -eq "paired-capture-complete") { "needs-human-visual-review" } else { "needs-rerun-or-harness-fix" }
+        comparisonStatus = if ($pairStatus -eq "paired-capture-complete") { "needs-human-visual-review" } elseif ($pairStatus -eq "freex-capture-complete") { "needs-freeX-workflow-review" } else { "needs-rerun-or-harness-fix" }
         excel = $excel
         freex = $freex
     })
@@ -571,6 +622,7 @@ foreach ($pair in $pairs) {
 
 $recordArray = @($records.ToArray())
 $pairedCaptureComplete = @($recordArray | Where-Object { $_["status"] -eq "paired-capture-complete" }).Count
+$freexCaptureComplete = @($recordArray | Where-Object { $_["status"] -eq "freex-capture-complete" }).Count
 $partialCapture = @($recordArray | Where-Object { $_["status"] -eq "partial-capture" }).Count
 $blocked = @($recordArray | Where-Object { $_["status"] -eq "blocked" }).Count
 
@@ -595,6 +647,7 @@ $summary = [ordered]@{
     contactSheetPath = $batchContactSheetPath
     scenarioCount = $recordArray.Count
     pairedCaptureComplete = $pairedCaptureComplete
+    freexCaptureComplete = $freexCaptureComplete
     partialCapture = $partialCapture
     blocked = $blocked
     records = $recordArray
