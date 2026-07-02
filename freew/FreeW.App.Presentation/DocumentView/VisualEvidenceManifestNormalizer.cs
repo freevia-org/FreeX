@@ -50,12 +50,13 @@ public sealed record FreeWVisualEvidenceNormalizedSummary(
     IReadOnlyList<FreeWVisualEvidenceExpectedScenario> ExpectedScenarios,
     IReadOnlyList<FreeWVisualEvidenceNormalizedScenario> Scenarios,
     IReadOnlyList<FreeWVisualEvidenceNormalizedRow> Evidence,
+    IReadOnlyList<FreeWVisualBaselineComparison> BaselineComparisons,
     FreeWVisualEvidenceTrust Trust);
 
 public static class FreeWVisualEvidenceManifestNormalizer
 {
     public const string SummarySchemaId = "freew.visual-evidence-summary.v1";
-    public const int SummarySchemaVersion = 2;
+    public const int SummarySchemaVersion = 3;
     public const string SummaryJsonFileName = "freew_visual_evidence_summary.json";
     public const string SummaryMarkdownFileName = "freew_visual_evidence_summary.md";
     public const string WpfHostId = "wpf-fidelity-render";
@@ -153,6 +154,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
                 .ThenBy(r => r.PageNumber)
                 .ThenBy(r => r.OutputName, StringComparer.OrdinalIgnoreCase)
                 .ToList(),
+            [],
             summaryTrust);
     }
 
@@ -172,6 +174,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
         sb.AppendLine($"Schema: `{summary.SchemaId}` v{summary.SchemaVersion.ToString(CultureInfo.InvariantCulture)}");
         sb.AppendLine($"Trust: {(summary.Trust.Passed ? "passed" : "failed")}");
         sb.AppendLine($"Evidence rows: {summary.Evidence.Count.ToString(CultureInfo.InvariantCulture)}");
+        sb.AppendLine($"Baseline comparisons: {summary.BaselineComparisons.Count.ToString(CultureInfo.InvariantCulture)}");
         sb.AppendLine();
 
         if (summary.Trust.Failures.Count > 0)
@@ -212,7 +215,66 @@ public static class FreeWVisualEvidenceManifestNormalizer
                 $"{(row.Trust.Passed ? "passed" : "failed")} |");
         }
 
+        if (summary.BaselineComparisons.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine("## Word Baseline Comparison");
+            sb.AppendLine();
+            sb.AppendLine("| Host | Scenario | Output | Baseline | Status | Size | Mean Channel Delta | Mean Gray Delta | Changed Pixels | Tolerance |");
+            sb.AppendLine("| --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | --- |");
+            foreach (var comparison in summary.BaselineComparisons)
+            {
+                var metrics = comparison.Metrics;
+                var size = metrics is null
+                    ? "-"
+                    : $"{metrics.ActualWidth.ToString(CultureInfo.InvariantCulture)}x{metrics.ActualHeight.ToString(CultureInfo.InvariantCulture)} vs {metrics.BaselineWidth.ToString(CultureInfo.InvariantCulture)}x{metrics.BaselineHeight.ToString(CultureInfo.InvariantCulture)}{(metrics.BaselineResized ? " resized" : string.Empty)}";
+                var meanChannel = metrics?.MeanAbsoluteChannelDelta.ToString("0.####", CultureInfo.InvariantCulture) ?? "-";
+                var meanGray = metrics?.MeanAbsoluteGrayscaleDelta.ToString("0.####", CultureInfo.InvariantCulture) ?? "-";
+                var changed = metrics is null
+                    ? "-"
+                    : metrics.ChangedPixelRatio.ToString("P3", CultureInfo.InvariantCulture);
+
+                sb.AppendLine(
+                    $"| {EscapeMarkdown(comparison.HostId)} | {EscapeMarkdown(comparison.ScenarioId)} | " +
+                    $"{EscapeMarkdown(comparison.OutputName)} | " +
+                    $"{EscapeMarkdown(string.IsNullOrWhiteSpace(comparison.BaselinePath) ? string.Join(", ", comparison.CandidateBaselinePaths) : comparison.BaselinePath)} | " +
+                    $"{EscapeMarkdown(comparison.Status)} | " +
+                    $"{EscapeMarkdown(size)} | {meanChannel} | {meanGray} | {changed} | " +
+                    $"{EscapeMarkdown(comparison.Tolerance.Name)} |");
+            }
+        }
+
         return sb.ToString();
+    }
+
+    public static FreeWVisualEvidenceNormalizedSummary WithBaselineComparisons(
+        FreeWVisualEvidenceNormalizedSummary summary,
+        IReadOnlyList<FreeWVisualBaselineComparison> baselineComparisons)
+    {
+        ArgumentNullException.ThrowIfNull(summary);
+        ArgumentNullException.ThrowIfNull(baselineComparisons);
+
+        var ordered = baselineComparisons
+            .OrderBy(c => c.HostId, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(c => c.ScenarioId, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(c => c.PageNumber)
+            .ThenBy(c => c.OutputName, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var failures = summary.Trust.Failures.ToList();
+        foreach (var comparison in ordered.Where(c => !c.Trust.Passed))
+        {
+            foreach (var failure in comparison.Trust.Failures)
+            {
+                failures.Add(
+                    $"{comparison.HostId}/{comparison.ScenarioId}/{comparison.OutputName}: {failure}");
+            }
+        }
+
+        return summary with
+        {
+            BaselineComparisons = ordered,
+            Trust = new FreeWVisualEvidenceTrust(failures.Count == 0, failures)
+        };
     }
 
     public static void WriteSummaryFiles(

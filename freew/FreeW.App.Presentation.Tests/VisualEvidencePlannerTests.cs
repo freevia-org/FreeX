@@ -369,6 +369,176 @@ public sealed class VisualEvidencePlannerTests
         }
     }
 
+    [Fact]
+    public void ComputeBaselineComparisonMetrics_EvaluatesNamedTolerance()
+    {
+        var baseline = BuildBgraPixels(2, 2, (10, 10, 10));
+        var actual = baseline.ToArray();
+        actual[2] = 30;
+
+        var metrics = FreeWVisualBaselineComparisonPlanner.ComputeMetrics(
+            actual,
+            actualWidth: 2,
+            actualHeight: 2,
+            actualStride: 8,
+            FreeWVisualEvidencePixelFormat.Bgra32,
+            baseline,
+            baselineWidth: 2,
+            baselineHeight: 2,
+            baselineStride: 8,
+            FreeWVisualEvidencePixelFormat.Bgra32,
+            changedPixelDeltaThreshold: 8);
+
+        metrics.DimensionsMatch.Should().BeTrue();
+        metrics.BaselineResized.Should().BeFalse();
+        metrics.ComparedPixels.Should().Be(4);
+        metrics.MeanAbsoluteChannelDelta.Should().BeApproximately(1.6667, 0.0001);
+        metrics.MeanAbsoluteGrayscaleDelta.Should().BeApproximately(1.495, 0.0001);
+        metrics.ChangedPixelRatio.Should().Be(0.25);
+
+        var strict = new FreeWVisualBaselineComparisonTolerance(
+            "unit-strict",
+            ChangedPixelDeltaThreshold: 8,
+            MaxMeanAbsoluteChannelDelta: 5,
+            MaxMeanAbsoluteGrayscaleDelta: 5,
+            MaxChangedPixelRatio: 0.10,
+            RequireDimensionMatch: true);
+        var strictTrust = FreeWVisualBaselineComparisonPlanner.EvaluateTolerance(metrics, strict);
+
+        strictTrust.Passed.Should().BeFalse();
+        strictTrust.Failures.Should().Contain(f =>
+            f.Contains("changed pixel ratio", StringComparison.Ordinal)
+            && f.Contains("unit-strict", StringComparison.Ordinal));
+
+        var lenient = strict with { Name = "unit-lenient", MaxChangedPixelRatio = 0.25 };
+        FreeWVisualBaselineComparisonPlanner.EvaluateTolerance(metrics, lenient)
+            .Passed.Should().BeTrue();
+    }
+
+    [Fact]
+    public void BuildMissingBaselineComparison_FailsSummaryTrustTruthfully()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var wpfDir = Path.Combine(root, "wpf");
+            var row = BuildFileBackedRow(
+                root,
+                FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                "f2-hf-basic",
+                pageNumber: 1,
+                pageCount: 1);
+            FreeWVisualEvidencePlanner.WriteManifest(
+                wpfDir,
+                [row],
+                new DateTimeOffset(2026, 7, 1, 12, 0, 0, TimeSpan.Zero));
+            var summary = FreeWVisualEvidenceManifestNormalizer.BuildNormalizedSummaryFromFiles(
+                [Path.Combine(wpfDir, FreeWVisualEvidencePlanner.ManifestFileName)],
+                root,
+                [
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        "f2-hf-basic",
+                        1)
+                ]);
+
+            var comparison = FreeWVisualBaselineComparisonPlanner.BuildMissingBaselineComparison(
+                summary.Evidence.Single());
+            var withBaseline = FreeWVisualEvidenceManifestNormalizer.WithBaselineComparisons(
+                summary,
+                [comparison]);
+
+            withBaseline.Trust.Passed.Should().BeFalse();
+            withBaseline.BaselineComparisons.Single().Status.Should().Be(
+                FreeWVisualBaselineComparisonPlanner.MissingBaselineStatus);
+            withBaseline.BaselineComparisons.Single().CandidateBaselinePaths.Should().Contain([
+                "f2-hf-basic/f2-hf-basic_p1.png",
+                "f2-hf-basic_p1.png"]);
+            withBaseline.Trust.Failures.Should().Contain(f =>
+                f.Contains("missing Word baseline PNG", StringComparison.Ordinal)
+                && f.Contains("f2-hf-basic/p1/f2-hf-basic_p1.png", StringComparison.Ordinal));
+            Action act = () => FreeWVisualEvidenceManifestNormalizer.EnsureSummaryTrusted(withBaseline);
+            act.Should().Throw<InvalidOperationException>().WithMessage("*missing Word baseline PNG*");
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void WithBaselineComparisons_SerializesJsonAndMarkdownSummary()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var wpfDir = Path.Combine(root, "wpf");
+            var row = BuildFileBackedRow(
+                root,
+                FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                "f2-hf-basic",
+                pageNumber: 1,
+                pageCount: 1);
+            FreeWVisualEvidencePlanner.WriteManifest(
+                wpfDir,
+                [row],
+                new DateTimeOffset(2026, 7, 1, 12, 0, 0, TimeSpan.Zero));
+            var summary = FreeWVisualEvidenceManifestNormalizer.BuildNormalizedSummaryFromFiles(
+                [Path.Combine(wpfDir, FreeWVisualEvidencePlanner.ManifestFileName)],
+                root,
+                [
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        "f2-hf-basic",
+                        1)
+                ]);
+            var normalizedRow = summary.Evidence.Single();
+            var pixels = BuildBgraPixels(2, 2, (24, 48, 72));
+            var comparison = FreeWVisualBaselineComparisonPlanner.BuildBaselineComparison(
+                normalizedRow,
+                "f2-hf-basic/f2-hf-basic_p1.png",
+                FreeWVisualBaselineComparisonPlanner.BuildBaselineCandidateRelativePaths(normalizedRow),
+                FreeWVisualBaselineComparisonTolerance.WordPngDefault,
+                pixels,
+                actualWidth: 2,
+                actualHeight: 2,
+                actualStride: 8,
+                FreeWVisualEvidencePixelFormat.Bgra32,
+                pixels,
+                baselineWidth: 2,
+                baselineHeight: 2,
+                baselineStride: 8,
+                FreeWVisualEvidencePixelFormat.Bgra32);
+
+            var withBaseline = FreeWVisualEvidenceManifestNormalizer.WithBaselineComparisons(
+                summary,
+                [comparison]);
+
+            withBaseline.Trust.Passed.Should().BeTrue();
+            withBaseline.BaselineComparisons.Single().Status.Should().Be(
+                FreeWVisualBaselineComparisonPlanner.PassedStatus);
+
+            var json = FreeWVisualEvidenceManifestNormalizer.ToJson(withBaseline);
+            using var doc = JsonDocument.Parse(json);
+            doc.RootElement.GetProperty("schemaVersion").GetInt32().Should().Be(3);
+            var baselineComparison = doc.RootElement.GetProperty("baselineComparisons")[0];
+            baselineComparison.GetProperty("status").GetString().Should().Be("passed");
+            baselineComparison.GetProperty("tolerance").GetProperty("name").GetString()
+                .Should().Be("word-png-default");
+            baselineComparison.GetProperty("metrics").GetProperty("meanAbsoluteChannelDelta")
+                .GetDouble().Should().Be(0);
+
+            var markdown = FreeWVisualEvidenceManifestNormalizer.ToMarkdown(withBaseline);
+            markdown.Should().Contain("Word Baseline Comparison");
+            markdown.Should().Contain("word-png-default");
+            markdown.Should().Contain("0.000 %");
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
     private static FreeWVisualEvidenceRow BuildRow(
         FreeWVisualPixelStats stats,
         long byteLength,
@@ -438,6 +608,18 @@ public sealed class VisualEvidencePlannerTests
 
     private static FreeWVisualPixelStats BuildTrustedStats()
     {
+        var pixels = BuildTrustedPixels();
+
+        return FreeWVisualEvidencePlanner.ComputePixelStats(
+            pixels,
+            width: 20,
+            height: 20,
+            stride: 20 * 4,
+            FreeWVisualEvidencePixelFormat.Bgra32);
+    }
+
+    private static byte[] BuildTrustedPixels()
+    {
         var pixels = new byte[20 * 20 * 4];
         for (var y = 0; y < 20; y++)
         {
@@ -460,12 +642,24 @@ public sealed class VisualEvidencePlannerTests
             }
         }
 
-        return FreeWVisualEvidencePlanner.ComputePixelStats(
-            pixels,
-            width: 20,
-            height: 20,
-            stride: 20 * 4,
-            FreeWVisualEvidencePixelFormat.Bgra32);
+        return pixels;
+    }
+
+    private static byte[] BuildBgraPixels(
+        int width,
+        int height,
+        (byte R, byte G, byte B) color)
+    {
+        var pixels = new byte[width * height * 4];
+        for (var i = 0; i < pixels.Length; i += 4)
+        {
+            pixels[i + 0] = color.B;
+            pixels[i + 1] = color.G;
+            pixels[i + 2] = color.R;
+            pixels[i + 3] = 255;
+        }
+
+        return pixels;
     }
 
     private static string CreateTempRoot()
