@@ -37,6 +37,12 @@ public sealed class BackstagePaneSurfacePlannerTests
         surface.Fields.Should().Contain(row => row.Label == "Document" && row.Value == "Agenda");
         surface.Fields.Should().Contain(row => row.Label == "Paper" && row.Value == "8.5\" x 11\"");
         surface.Groups.Select(group => group.Heading).Should().Equal("Print", "Settings");
+        surface.Evidence.Should().Contain(row =>
+            row.Kind == BackstagePrintEvidenceKind.PrintPreviewFidelity &&
+            row.FixtureScenarioIds.Contains("backstage-print-preview-fidelity"));
+        surface.Evidence.Should().Contain(row =>
+            row.Kind == BackstagePrintEvidenceKind.NativePrint &&
+            row.Status == BackstagePrintEvidenceStatus.Deferred);
 
         var print = surface.Groups.SelectMany(group => group.Actions)
             .Single(action => action.AutomationId == "PrintAction_Print");

@@ -38,6 +38,7 @@ public static class BackstagePaneSurfacePlanner
                     action.Description,
                     "PrintAction_" + action.Kind,
                     ResolvePrintAction(action.Kind, print, printPreview))).ToArray())).ToArray(),
+            plan.Evidence,
             print is null ? BackstageViewTextResources.DirectPrintDeferredNote : null);
     }
 
@@ -296,6 +297,7 @@ public sealed record BackstagePrintPaneSurfaceSpec(
     string Description,
     IReadOnlyList<BackstageFieldRow> Fields,
     IReadOnlyList<BackstageSurfaceActionGroup> Groups,
+    IReadOnlyList<BackstagePrintEvidenceRow> Evidence,
     string? DeferredNote);
 
 public sealed record BackstageInfoPaneSurfaceSpec(
