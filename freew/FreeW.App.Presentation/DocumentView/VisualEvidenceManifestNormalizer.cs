@@ -20,6 +20,7 @@ public sealed record FreeWVisualEvidenceNormalizedScenario(
     string ScenarioId,
     int MinimumExpectedOutputs,
     int ActualOutputs,
+    int TrustedOutputs,
     bool Expected,
     FreeWVisualEvidenceTrust Trust);
 
@@ -59,7 +60,7 @@ public sealed record FreeWVisualEvidenceNormalizedSummary(
 public static class FreeWVisualEvidenceManifestNormalizer
 {
     public const string SummarySchemaId = "freew.visual-evidence-summary.v1";
-    public const int SummarySchemaVersion = 7;
+    public const int SummarySchemaVersion = 8;
     public const string SummaryJsonFileName = "freew_visual_evidence_summary.json";
     public const string SummaryMarkdownFileName = "freew_visual_evidence_summary.md";
     public const string WpfHostId = "wpf-fidelity-render";
@@ -219,13 +220,14 @@ public static class FreeWVisualEvidenceManifestNormalizer
 
         sb.AppendLine("## Scenario Coverage");
         sb.AppendLine();
-        sb.AppendLine("| Host | Scenario | Outputs | Minimum | Trust |");
-        sb.AppendLine("| --- | --- | ---: | ---: | --- |");
+        sb.AppendLine("| Host | Scenario | Outputs | Trusted | Minimum | Trust |");
+        sb.AppendLine("| --- | --- | ---: | ---: | ---: | --- |");
         foreach (var scenario in summary.Scenarios)
         {
             sb.AppendLine(
                 $"| {EscapeMarkdown(scenario.HostId)} | {EscapeMarkdown(scenario.ScenarioId)} | " +
                 $"{scenario.ActualOutputs.ToString(CultureInfo.InvariantCulture)} | " +
+                $"{scenario.TrustedOutputs.ToString(CultureInfo.InvariantCulture)} | " +
                 $"{scenario.MinimumExpectedOutputs.ToString(CultureInfo.InvariantCulture)} | " +
                 $"{(scenario.Trust.Passed ? "passed" : "failed")} |");
         }
@@ -701,10 +703,11 @@ public static class FreeWVisualEvidenceManifestNormalizer
                 .ToList();
             var expectedScenario = expectedByKey.TryGetValue(key, out var item) ? item : null;
             var minimumExpectedOutputs = expectedScenario?.MinimumExpectedOutputs ?? 0;
-            if (expectedScenario is not null && scenarioRows.Count < minimumExpectedOutputs)
+            var trustedOutputs = scenarioRows.Count(r => r.Trust.Passed);
+            if (expectedScenario is not null && trustedOutputs < minimumExpectedOutputs)
             {
                 scenarioFailures.Add(
-                    $"expected at least {minimumExpectedOutputs.ToString(CultureInfo.InvariantCulture)} output(s), found {scenarioRows.Count.ToString(CultureInfo.InvariantCulture)}");
+                    $"expected at least {minimumExpectedOutputs.ToString(CultureInfo.InvariantCulture)} trusted output(s), found {trustedOutputs.ToString(CultureInfo.InvariantCulture)}");
             }
 
             if (scenarioFailures.Count > 0)
@@ -718,6 +721,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
                 scenarioId,
                 minimumExpectedOutputs,
                 scenarioRows.Count,
+                trustedOutputs,
                 expectedScenario is not null,
                 new FreeWVisualEvidenceTrust(scenarioFailures.Count == 0, scenarioFailures)));
         }
@@ -731,8 +735,8 @@ public static class FreeWVisualEvidenceManifestNormalizer
     {
         foreach (var scenarioId in BackstageRendererScenarioIds)
         {
-            var wpfRows = RowsForHostScenario(rows, WpfHostId, scenarioId);
-            var avaloniaRows = RowsForHostScenario(rows, AvaloniaHostId, scenarioId);
+            var wpfRows = TrustedRowsForHostScenario(rows, WpfHostId, scenarioId);
+            var avaloniaRows = TrustedRowsForHostScenario(rows, AvaloniaHostId, scenarioId);
             if (wpfRows.Count == 0 || avaloniaRows.Count == 0)
                 continue;
 
@@ -774,8 +778,8 @@ public static class FreeWVisualEvidenceManifestNormalizer
     {
         foreach (var scenarioId in SectionGeometryRendererScenarioIds)
         {
-            var wpfRows = RowsForHostScenario(rows, WpfHostId, scenarioId);
-            var avaloniaRows = RowsForHostScenario(rows, AvaloniaHostId, scenarioId);
+            var wpfRows = TrustedRowsForHostScenario(rows, WpfHostId, scenarioId);
+            var avaloniaRows = TrustedRowsForHostScenario(rows, AvaloniaHostId, scenarioId);
             if (wpfRows.Count == 0 || avaloniaRows.Count == 0)
                 continue;
 
@@ -818,13 +822,14 @@ public static class FreeWVisualEvidenceManifestNormalizer
         return Enumerable.Range(1, minimumOutputs).ToList();
     }
 
-    private static List<FreeWVisualEvidenceNormalizedRow> RowsForHostScenario(
+    private static List<FreeWVisualEvidenceNormalizedRow> TrustedRowsForHostScenario(
         IReadOnlyList<FreeWVisualEvidenceNormalizedRow> rows,
         string hostId,
         string scenarioId) =>
         rows
             .Where(r => string.Equals(r.HostId, hostId, StringComparison.OrdinalIgnoreCase)
                 && string.Equals(r.ScenarioId, scenarioId, StringComparison.OrdinalIgnoreCase))
+            .Where(r => r.Trust.Passed)
             .ToList();
 
     private static void ValidateUniquePages(
