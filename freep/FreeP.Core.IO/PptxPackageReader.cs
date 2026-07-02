@@ -2970,7 +2970,11 @@ public static class PptxPackageReader
             body.Wrap = bodyPr.Attribute("wrap")?.Value != "none";
             var normAf = bodyPr.Element(A + "normAutofit");
             var spAf   = bodyPr.Element(A + "spAutoFit");
-            body.AutoFit = normAf is not null || spAf is not null;
+            body.AutoFitKind = normAf is not null
+                ? TextAutoFitKind.Normal
+                : spAf is not null
+                    ? TextAutoFitKind.Shape
+                    : TextAutoFitKind.None;
             // Wave 19A: parse cached normAutofit scaling values
             if (normAf is not null)
             {

@@ -2837,15 +2837,25 @@ public static class PptxPackageWriter
         if (body.InsetRightPt.HasValue) bodyPr.Add(new XAttribute("rIns", DrawingMlUnits.PointsToEmu(body.InsetRightPt.Value)));
         if (body.InsetTopPt.HasValue) bodyPr.Add(new XAttribute("tIns", DrawingMlUnits.PointsToEmu(body.InsetTopPt.Value)));
         if (body.InsetBottomPt.HasValue) bodyPr.Add(new XAttribute("bIns", DrawingMlUnits.PointsToEmu(body.InsetBottomPt.Value)));
-        // Wave 19A: write normAutofit with cached fontScale/lnSpcReduction
-        if (body.AutoFit)
+        // Wave 19A / LA1: re-emit the ORIGINAL autofit element kind so an spAutoFit shape
+        // round-trips as spAutoFit (never rewritten as normAutofit) and vice versa.
+        switch (body.AutoFitKind)
         {
-            var nafEl = new XElement(A + "normAutofit");
-            if (body.FontScalePPT.HasValue && body.FontScalePPT.Value > 0)
-                nafEl.Add(new XAttribute("fontScale", body.FontScalePPT.Value));
-            if (body.LnSpcReductionPPT.HasValue && body.LnSpcReductionPPT.Value > 0)
-                nafEl.Add(new XAttribute("lnSpcReduction", body.LnSpcReductionPPT.Value));
-            bodyPr.Add(nafEl);
+            case TextAutoFitKind.Normal:
+                var nafEl = new XElement(A + "normAutofit");
+                if (body.FontScalePPT.HasValue && body.FontScalePPT.Value > 0)
+                    nafEl.Add(new XAttribute("fontScale", body.FontScalePPT.Value));
+                if (body.LnSpcReductionPPT.HasValue && body.LnSpcReductionPPT.Value > 0)
+                    nafEl.Add(new XAttribute("lnSpcReduction", body.LnSpcReductionPPT.Value));
+                bodyPr.Add(nafEl);
+                break;
+            case TextAutoFitKind.Shape:
+                bodyPr.Add(new XElement(A + "spAutoFit"));
+                break;
+            case TextAutoFitKind.None:
+            default:
+                // No element written for None, matching prior behavior for AutoFit=false.
+                break;
         }
 
         // Wave 16A: warp preset + adjust guides (BA4)

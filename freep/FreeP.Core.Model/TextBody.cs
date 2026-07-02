@@ -24,6 +24,24 @@ public sealed class TabStop
     public TabStopAlignment Alignment { get; set; } = TabStopAlignment.Left;
 }
 
+// ── Text autofit ────────────────────────────────────────────────────────────────
+
+/// <summary>
+/// Which <c>a:bodyPr</c> autofit child element is present, corresponding to the
+/// mutually-exclusive OOXML choices for text-frame autofit behavior.
+/// </summary>
+public enum TextAutoFitKind
+{
+    /// <summary>No autofit element (or explicit <c>a:noAutofit</c>): text may overflow/clip.</summary>
+    None = 0,
+
+    /// <summary><c>a:normAutofit</c>: shrink the TEXT (font size / line spacing) to fit the fixed box.</summary>
+    Normal = 1,
+
+    /// <summary><c>a:spAutoFit</c>: grow the SHAPE to fit its text; the text itself is never shrunk.</summary>
+    Shape = 2
+}
+
 // ── Vertical text orientation ──────────────────────────────────────────────────
 
 /// <summary>
@@ -370,8 +388,25 @@ public sealed class TextBody
     /// <summary>True if text should wrap within the bounding box (default). False for no-wrap.</summary>
     public bool Wrap { get; set; } = true;
 
-    /// <summary>True if the shape auto-fits (resizes) to its text content (<c>a:spAutoFit</c>).</summary>
-    public bool AutoFit { get; set; }
+    /// <summary>
+    /// Which autofit mode is set on this text body — <see cref="TextAutoFitKind.Normal"/>
+    /// (<c>a:normAutofit</c>, shrink text to fit), <see cref="TextAutoFitKind.Shape"/>
+    /// (<c>a:spAutoFit</c>, grow shape to fit text), or <see cref="TextAutoFitKind.None"/>
+    /// (<c>a:noAutofit</c> or absent).
+    /// </summary>
+    public TextAutoFitKind AutoFitKind { get; set; }
+
+    /// <summary>
+    /// Back-compat convenience: true when <see cref="AutoFitKind"/> is <see cref="TextAutoFitKind.Normal"/>
+    /// (PowerPoint "shrink text on overflow"). Setting this to true/false maps to Normal/None;
+    /// use <see cref="AutoFitKind"/> directly to distinguish <see cref="TextAutoFitKind.Shape"/>
+    /// (<c>a:spAutoFit</c>, "resize shape to fit text") from the shrink-text behavior.
+    /// </summary>
+    public bool AutoFit
+    {
+        get => AutoFitKind == TextAutoFitKind.Normal;
+        set => AutoFitKind = value ? TextAutoFitKind.Normal : TextAutoFitKind.None;
+    }
 
     // ── Wave 19A: normAutofit cached scaling ──────────────────────────────────
 

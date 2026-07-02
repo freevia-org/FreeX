@@ -335,6 +335,72 @@ public sealed class TextLayoutPlannerTests
         plan.LineSpacingReduction.Should().BeLessThanOrEqualTo(TextLayoutPlanner.RuntimeAutoFitMaximumLineSpacingReduction);
     }
 
+    // ─── LA1: normAutofit (shrink) vs spAutoFit (grow shape) must not conflate ────
+
+    /// <summary>
+    /// LA1: a:spAutoFit (AutoFitKind.Shape) means "grow the SHAPE to fit text" — the text
+    /// itself must never be runtime-shrunk. Before the fix, any AutoFit=true box without a
+    /// cached font scale (including spAutoFit boxes) went through the shrink-to-fit path.
+    /// </summary>
+    [Fact]
+    public void PlanNormalAutoFitOverflow_SpAutoFitShape_OverflowingText_DoesNotShrink()
+    {
+        var text = new ResolvedTextLayout
+        {
+            AutoFitKind = TextAutoFitKind.Shape,
+            Paragraphs = new[] { BulletParagraph(indent: 36, hanging: 18) }
+        };
+
+        var plan = TextLayoutPlanner.PlanNormalAutoFitOverflow(
+            text,
+            textAreaHeightDip: 40,
+            new[] { new TextParagraphMeasure(0, 100, 0, 0) });
+
+        plan.Mode.Should().Be(TextAutoFitOverflowMode.NoAutoFit,
+            "LA1: spAutoFit grows the shape; it must never trigger the text runtime-shrink path");
+        plan.FontScale.Should().Be(1.0);
+        plan.LineSpacingReduction.Should().Be(0.0);
+        TextLayoutPlanner.ApplyAutoFitPlan(text, plan).Should().BeSameAs(text,
+            "no shrink should be applied for an spAutoFit (Shape) box even when text overflows");
+    }
+
+    /// <summary>LA1 control: a normAutofit (AutoFitKind.Normal) box with overflow still shrinks.</summary>
+    [Fact]
+    public void PlanNormalAutoFitOverflow_NormAutofitKind_OverflowingText_StillShrinks()
+    {
+        var text = new ResolvedTextLayout
+        {
+            AutoFitKind = TextAutoFitKind.Normal,
+            Paragraphs = new[] { BulletParagraph(indent: 36, hanging: 18) }
+        };
+
+        var plan = TextLayoutPlanner.PlanNormalAutoFitOverflow(
+            text,
+            textAreaHeightDip: 80,
+            new[] { new TextParagraphMeasure(0, 100, 0, 0) });
+        var scaled = TextLayoutPlanner.ApplyAutoFitPlan(text, plan);
+
+        plan.Mode.Should().Be(TextAutoFitOverflowMode.RuntimeShrink);
+        plan.FontScale.Should().BeLessThan(1.0);
+        scaled.Should().NotBeSameAs(text);
+        scaled.Paragraphs[0].Runs[0].FontSizePt.Should().BeLessThan(18.0);
+    }
+
+    /// <summary>LA1: AutoFitKind.None (no autofit / a:noAutofit) never shrinks, same as before.</summary>
+    [Fact]
+    public void PlanNormalAutoFitOverflow_NoneKind_DoesNotShrink()
+    {
+        var text = new ResolvedTextLayout { AutoFitKind = TextAutoFitKind.None };
+
+        var plan = TextLayoutPlanner.PlanNormalAutoFitOverflow(
+            text,
+            textAreaHeightDip: 40,
+            new[] { new TextParagraphMeasure(0, 100, 0, 0) });
+
+        plan.Mode.Should().Be(TextAutoFitOverflowMode.NoAutoFit);
+        TextLayoutPlanner.ApplyAutoFitPlan(text, plan).Should().BeSameAs(text);
+    }
+
     [Fact]
     public void PlanParagraphRenderRoute_UsesPlainRouteForSimpleParagraph()
     {

@@ -180,6 +180,7 @@ public sealed class ModelUnitTests
         tb.Anchor.Should().BeNull("default anchor is unset so the compositor can inherit from the layout/master");
         tb.Wrap.Should().BeTrue();
         tb.AutoFit.Should().BeFalse();
+        tb.AutoFitKind.Should().Be(TextAutoFitKind.None);
     }
 
     [Fact]

@@ -401,8 +401,119 @@ public sealed class BulletsAutofitTests
 
         var rtBody = p2.Slides[0].Shapes[0].TextBody!;
         rtBody.AutoFit.Should().BeTrue();
+        rtBody.AutoFitKind.Should().Be(TextAutoFitKind.Normal);
         rtBody.FontScalePPT.Should().Be(62500);
         rtBody.LnSpcReductionPPT.Should().Be(20000);
+    }
+
+    // ─── LA1: normAutofit vs spAutoFit vs noAutofit must not conflate ─────────
+
+    /// <summary>
+    /// LA1: a shape with <c>a:spAutoFit</c> (grow shape to fit text) must round-trip as
+    /// <c>a:spAutoFit</c> — NOT be silently rewritten as <c>a:normAutofit</c> (shrink text)
+    /// on save. Before the fix, the single AutoFit bool collapsed both modes and the writer
+    /// always re-emitted normAutofit for AutoFit=true, permanently changing shape behavior.
+    /// </summary>
+    [Fact]
+    public void LA1_SpAutoFit_RoundTrips_AsSpAutoFit_NotNormAutofit()
+    {
+        var body = new TextBody { AutoFitKind = TextAutoFitKind.Shape };
+        var para = new Paragraph();
+        para.Runs.Add(new Run { Text = "Grows the shape", FontSizePt = 18 });
+        body.Paragraphs.Add(para);
+
+        var p = MakePresentation();
+        p.Slides[0].Shapes.Clear();
+        p.Slides[0].Shapes.Add(MakeShapeWithText(body));
+
+        using var ms = new System.IO.MemoryStream();
+        FreeP.Core.IO.PptxPackageWriter.Write(p, ms);
+        var bytes = ms.ToArray();
+
+        // Inspect the raw written XML: must contain a:spAutoFit, must NOT contain a:normAutofit.
+        using var zip = new System.IO.Compression.ZipArchive(
+            new System.IO.MemoryStream(bytes), System.IO.Compression.ZipArchiveMode.Read);
+        var slideEntry = zip.Entries.FirstOrDefault(e =>
+            e.FullName.StartsWith("ppt/slides/slide", StringComparison.OrdinalIgnoreCase) &&
+            e.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase));
+        slideEntry.Should().NotBeNull("slide XML entry must exist in the PPTX");
+        using var entryStream = slideEntry!.Open();
+        var doc = System.Xml.Linq.XDocument.Load(entryStream);
+        System.Xml.Linq.XNamespace a = "http://schemas.openxmlformats.org/drawingml/2006/main";
+        var bodyPr = doc.Descendants(a + "bodyPr").FirstOrDefault();
+        bodyPr.Should().NotBeNull();
+
+        bodyPr!.Element(a + "spAutoFit").Should().NotBeNull(
+            "LA1: an spAutoFit shape must be written back out as a:spAutoFit");
+        bodyPr.Element(a + "normAutofit").Should().BeNull(
+            "LA1: an spAutoFit shape must NEVER be rewritten as a:normAutofit on save");
+
+        // Re-read: must still be Shape.
+        ms.Position = 0;
+        var p2 = FreeP.Core.IO.PptxPackageReader.Read(ms);
+        var rtBody = p2.Slides[0].Shapes[0].TextBody!;
+        rtBody.AutoFitKind.Should().Be(TextAutoFitKind.Shape);
+        rtBody.AutoFit.Should().BeFalse("AutoFit back-compat bool only reflects Normal, not Shape");
+    }
+
+    /// <summary>LA1: a:normAutofit still round-trips as a:normAutofit (Normal), not Shape.</summary>
+    [Fact]
+    public void LA1_NormAutofit_RoundTrips_AsNormAutofit_Kind()
+    {
+        var body = new TextBody { AutoFitKind = TextAutoFitKind.Normal, FontScalePPT = 80000 };
+        var para = new Paragraph();
+        para.Runs.Add(new Run { Text = "Shrinks the text", FontSizePt = 18 });
+        body.Paragraphs.Add(para);
+
+        var p = MakePresentation();
+        p.Slides[0].Shapes.Clear();
+        p.Slides[0].Shapes.Add(MakeShapeWithText(body));
+
+        using var ms = new System.IO.MemoryStream();
+        FreeP.Core.IO.PptxPackageWriter.Write(p, ms);
+        var bytes = ms.ToArray();
+
+        using var zip = new System.IO.Compression.ZipArchive(
+            new System.IO.MemoryStream(bytes), System.IO.Compression.ZipArchiveMode.Read);
+        var slideEntry = zip.Entries.First(e =>
+            e.FullName.StartsWith("ppt/slides/slide", StringComparison.OrdinalIgnoreCase) &&
+            e.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase));
+        using var entryStream = slideEntry.Open();
+        var doc = System.Xml.Linq.XDocument.Load(entryStream);
+        System.Xml.Linq.XNamespace a = "http://schemas.openxmlformats.org/drawingml/2006/main";
+        var bodyPr = doc.Descendants(a + "bodyPr").First();
+
+        bodyPr.Element(a + "normAutofit").Should().NotBeNull();
+        bodyPr.Element(a + "spAutoFit").Should().BeNull();
+
+        ms.Position = 0;
+        var p2 = FreeP.Core.IO.PptxPackageReader.Read(ms);
+        var rtBody = p2.Slides[0].Shapes[0].TextBody!;
+        rtBody.AutoFitKind.Should().Be(TextAutoFitKind.Normal);
+        rtBody.AutoFit.Should().BeTrue();
+    }
+
+    /// <summary>LA1: no autofit element present (or explicit a:noAutofit) reads back as None.</summary>
+    [Fact]
+    public void LA1_NoAutofit_RoundTrips_AsNoneKind()
+    {
+        var body = new TextBody { AutoFitKind = TextAutoFitKind.None };
+        var para = new Paragraph();
+        para.Runs.Add(new Run { Text = "No autofit", FontSizePt = 18 });
+        body.Paragraphs.Add(para);
+
+        var p = MakePresentation();
+        p.Slides[0].Shapes.Clear();
+        p.Slides[0].Shapes.Add(MakeShapeWithText(body));
+
+        using var ms = new System.IO.MemoryStream();
+        FreeP.Core.IO.PptxPackageWriter.Write(p, ms);
+        ms.Position = 0;
+        var p2 = FreeP.Core.IO.PptxPackageReader.Read(ms);
+
+        var rtBody = p2.Slides[0].Shapes[0].TextBody!;
+        rtBody.AutoFitKind.Should().Be(TextAutoFitKind.None);
+        rtBody.AutoFit.Should().BeFalse();
     }
 
     // ─── BU1: explicit buNone suppresses inherited bullet ─────────────────────

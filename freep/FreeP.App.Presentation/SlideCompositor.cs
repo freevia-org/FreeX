@@ -1333,7 +1333,7 @@ public static class SlideCompositor
             WarpPreset = body.WarpPreset,   // Wave 16A
             WarpAdjusts = body.WarpAdjusts.ToArray(),
             VerticalType = body.VerticalType,  // Wave 18B
-            AutoFit = body.AutoFit,
+            AutoFitKind = body.AutoFitKind,
             HasStoredFontScale = hasStoredFontScale,
             FontScale = fontScale,            // Wave 19A
             LnSpcReduction = lnSpcReduc,      // Wave 19A

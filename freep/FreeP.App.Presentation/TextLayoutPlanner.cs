@@ -138,7 +138,10 @@ public static class TextLayoutPlanner
         ArgumentNullException.ThrowIfNull(text);
         ArgumentNullException.ThrowIfNull(paragraphs);
 
-        if (!text.AutoFit)
+        // LA1: only a:normAutofit shrinks TEXT to fit a fixed box. a:spAutoFit (Shape) grows the
+        // SHAPE to fit text instead — the text itself must never be runtime-shrunk for it. Treat
+        // both "no autofit" and "shape autofit" as NoAutoFit for the purposes of this text-shrink planner.
+        if (text.AutoFitKind != TextAutoFitKind.Normal)
             return new TextAutoFitOverflowPlan(TextAutoFitOverflowMode.NoAutoFit, 1.0, 0.0);
 
         if (text.HasStoredFontScale && text.FontScale > 0)
@@ -190,7 +193,7 @@ public static class TextLayoutPlanner
             WarpPreset = text.WarpPreset,
             WarpAdjusts = text.WarpAdjusts,
             VerticalType = text.VerticalType,
-            AutoFit = text.AutoFit,
+            AutoFitKind = text.AutoFitKind,
             HasStoredFontScale = text.HasStoredFontScale,
             FontScale = text.FontScale * plan.FontScale,
             LnSpcReduction = text.LnSpcReduction,

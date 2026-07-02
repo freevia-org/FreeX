@@ -166,9 +166,23 @@ public sealed class ResolvedTextLayout
     // ── Wave 19A: autofit applied ─────────────────────────────────────────────
 
     /// <summary>
-    /// True when the source body requests PowerPoint normal autofit.
+    /// Which autofit mode the source body requested — see <see cref="TextAutoFitKind"/>.
+    /// <see cref="TextAutoFitKind.Normal"/> = shrink text to fit (a:normAutofit);
+    /// <see cref="TextAutoFitKind.Shape"/> = grow shape to fit text (a:spAutoFit), text is never shrunk;
+    /// <see cref="TextAutoFitKind.None"/> = no autofit.
     /// </summary>
-    public bool AutoFit { get; init; }
+    public TextAutoFitKind AutoFitKind { get; init; }
+
+    /// <summary>
+    /// Back-compat convenience: true when <see cref="AutoFitKind"/> is <see cref="TextAutoFitKind.Normal"/>
+    /// (PowerPoint "shrink text on overflow"). Does NOT cover <see cref="TextAutoFitKind.Shape"/>
+    /// (a:spAutoFit) — check <see cref="AutoFitKind"/> directly to distinguish the two.
+    /// </summary>
+    public bool AutoFit
+    {
+        get => AutoFitKind == TextAutoFitKind.Normal;
+        init => AutoFitKind = value ? TextAutoFitKind.Normal : TextAutoFitKind.None;
+    }
 
     /// <summary>
     /// True when a cached PowerPoint normAutofit fontScale was present and applied during resolution.

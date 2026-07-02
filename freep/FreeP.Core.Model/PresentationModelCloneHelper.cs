@@ -95,7 +95,7 @@ internal static class PresentationModelCloneHelper
             InsetTopPt = source.InsetTopPt,
             InsetBottomPt = source.InsetBottomPt,
             Wrap = source.Wrap,
-            AutoFit = source.AutoFit,
+            AutoFitKind = source.AutoFitKind,
             FontScalePPT = source.FontScalePPT,
             LnSpcReductionPPT = source.LnSpcReductionPPT,
             LstStyle = CloneTextStyleLevels(source.LstStyle),
