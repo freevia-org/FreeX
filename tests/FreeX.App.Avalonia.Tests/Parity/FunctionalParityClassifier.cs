@@ -27,6 +27,7 @@ public static class FunctionalParityClassifier
     public sealed record ClassifiedRow(
         FunctionalParityMatrix.Row MatrixRow,
         ClassificationKind Classification,
+        string EvidenceKind,
         string Priority,
         int ImplementationRank,
         string Rationale,
@@ -34,6 +35,7 @@ public static class FunctionalParityClassifier
 
     private sealed record ClassificationRule(
         ClassificationKind Classification,
+        string EvidenceKind,
         string Priority,
         int ImplementationRank,
         string Rationale,
@@ -53,25 +55,37 @@ public static class FunctionalParityClassifier
 
             ["Copy Diagnostics#CopyDiagnosticsBtn_Click"] = new(
                 ClassificationKind.RealBehaviorGap,
+                "missing-functional-binding",
                 "P1",
                 1,
                 "The shared Help ribbon exposes this as a real diagnostic action, but the functional binding matrix has no counted WPF/Avalonia route for it.",
                 "Introduce a shared Help diagnostic command descriptor, bind it through both host command catalogs, and refresh the WPF handler snapshot."),
             ["Legal Notices#LegalNoticesBtn_Click"] = new(
                 ClassificationKind.RealBehaviorGap,
+                "missing-functional-binding",
                 "P2",
                 2,
                 "Legal notices exist in both hosts through other surfaces, but the shared Help ribbon command is not counted as a functional binding.",
                 "Route the Help ribbon command through the shared Legal Notices action and include it in both binding inventories."),
             ["Convert to Comments"] = new(
                 ClassificationKind.RealBehaviorGap,
+                "missing-functional-binding",
                 "P2",
                 3,
                 "WPF has a live Convert Notes to Comments handler, but the cross-host functional matrix does not count a paired Avalonia command binding.",
                 "Add the Avalonia Review ribbon route through the shared comments command model, then refresh the matrix inputs."),
         };
 
-    private static readonly IReadOnlySet<string> NonClickControlRows = new HashSet<string>(StringComparer.Ordinal)
+    public static IReadOnlySet<string> HandlerQualifiedHelpRouteRows { get; } =
+        new HashSet<string>(StringComparer.Ordinal)
+        {
+            "Help Online#HelpOnlineBtn_Click",
+            "Feedback#FeedbackBtn_Click",
+            "Check for Updates#CheckForUpdatesBtn_Click",
+            "About FreeX#AboutBtn_Click",
+        };
+
+    public static IReadOnlySet<string> EditableRibbonControlRows { get; } = new HashSet<string>(StringComparer.Ordinal)
     {
         "Font",
         "Font Size",
@@ -111,20 +125,22 @@ public static class FunctionalParityClassifier
         if (ExactRules.TryGetValue(row.CommandId, out var exact))
             return ToClassifiedRow(row, exact);
 
-        if (NonClickControlRows.Contains(row.CommandId))
+        if (EditableRibbonControlRows.Contains(row.CommandId))
         {
             return ToClassifiedRow(row, new ClassificationRule(
                 ClassificationKind.NonClickControlInventoryRow,
+                "shared-ribbon-combo-box-control",
                 "P3",
                 400,
-                "Editable ribbon control driven through selection/text-change events instead of a Click handler, so the binding matrix overstates this as missing.",
-                "Keep this classified unless the matrix grows a first-class control-binding signal for combo boxes."));
+                "Shared ribbon definition exposes this as a ComboBox control; WPF commits it through selection/text-change paths instead of a Click handler, so the binding matrix overstates this as missing.",
+                "Keep this classified against the shared ribbon ComboBox surface unless the matrix grows a first-class control-binding signal."));
         }
 
         if (AccountingSymbolRows.Contains(row.CommandId))
         {
             return ToClassifiedRow(row, new ClassificationRule(
                 ClassificationKind.PseudoCommandGalleryItem,
+                "shared-number-format-symbol-catalog",
                 "P3",
                 500,
                 "Accounting currency child entry is published by the shared number-format symbol catalog under the accounting split button, not as a standalone WPF Click-handler command id.",
@@ -135,6 +151,7 @@ public static class FunctionalParityClassifier
         {
             return ToClassifiedRow(row, new ClassificationRule(
                 ClassificationKind.PseudoCommandGalleryItem,
+                "conditional-format-popup-runtime-catalog",
                 "P3",
                 510,
                 "Conditional-format menu/gallery entry is populated or routed through gallery planners and shared preset handlers, not one stable WPF handler id per visible choice.",
@@ -145,6 +162,7 @@ public static class FunctionalParityClassifier
         {
             return ToClassifiedRow(row, new ClassificationRule(
                 ClassificationKind.PseudoCommandGalleryItem,
+                "font-border-popup-runtime-catalog",
                 "P3",
                 520,
                 "Font color or border-style choice row is a runtime swatch/menu selection inside a split-button gallery, not an independent command on either host.",
@@ -153,6 +171,7 @@ public static class FunctionalParityClassifier
 
         return ToClassifiedRow(row, new ClassificationRule(
             ClassificationKind.RealBehaviorGap,
+            "unexplained-binding-row",
             row.Status == FunctionalParityMatrix.ParityStatus.AvaloniaMissing ? "P0" : "P1",
             row.Status == FunctionalParityMatrix.ParityStatus.AvaloniaMissing ? 0 : 100,
             "No classifier rule explains this non-parity binding row.",
@@ -211,11 +230,12 @@ public static class FunctionalParityClassifier
 
     private static ClassificationRule InventoryRoute(string rationale) => new(
         ClassificationKind.NonClickControlInventoryRow,
+        "handler-qualified-help-route",
         "P3",
         300,
         rationale,
-        "Keep behavior tests on the concrete Help route; do not prioritize this as product work unless the binding inventory source changes.");
+        "Keep this mapped to the concrete Help handler and Avalonia Help adapter unless the binding inventory source starts reading handler-qualified WPF routes.");
 
     private static ClassifiedRow ToClassifiedRow(FunctionalParityMatrix.Row row, ClassificationRule rule)
-        => new(row, rule.Classification, rule.Priority, rule.ImplementationRank, rule.Rationale, rule.NextAction);
+        => new(row, rule.Classification, rule.EvidenceKind, rule.Priority, rule.ImplementationRank, rule.Rationale, rule.NextAction);
 }

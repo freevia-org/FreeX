@@ -30,6 +30,7 @@ public static class SurfaceCatalog
         string TabId,
         string GroupHeader,
         string GroupId,
+        string ControlKind,
         string Display,
         string? KeyTip,
         bool IsContextual,
@@ -130,20 +131,32 @@ public static class SurfaceCatalog
                 {
                     entries.Add(new RibbonCommandEntry(
                         control.CommandId.Value, tab.Header, tab.Id, group.Header, group.Id,
-                        control.Label, control.KeyTip, isContextual, IsMenuItem: false));
+                        ControlKindName(control), control.Label, control.KeyTip, isContextual, IsMenuItem: false));
                 }
 
                 foreach (var (menuId, menuLabel, menuKeyTip) in EnumerateMenuItems(control))
                 {
                     entries.Add(new RibbonCommandEntry(
                         menuId, tab.Header, tab.Id, group.Header, group.Id,
-                        menuLabel, menuKeyTip, isContextual, IsMenuItem: true));
+                        "MenuItem", menuLabel, menuKeyTip, isContextual, IsMenuItem: true));
                 }
             }
         }
 
         return entries;
     }
+
+    private static string ControlKindName(RibbonControl control) => control switch
+    {
+        RibbonComboBox => "ComboBox",
+        RibbonCheckBox => "CheckBox",
+        RibbonToggleButton => "ToggleButton",
+        RibbonSplitButton => "SplitButton",
+        RibbonDropdown => "Dropdown",
+        RibbonGallery => "Gallery",
+        RibbonLabel => "Label",
+        _ => "Button",
+    };
 
     private static IEnumerable<(string Id, string Label, string? KeyTip)> EnumerateMenuItems(RibbonControl control)
     {
