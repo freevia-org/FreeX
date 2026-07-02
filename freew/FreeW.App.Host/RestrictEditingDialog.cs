@@ -1,46 +1,28 @@
 using System.Windows;
 using System.Windows.Controls;
-using FreeW.Core.IO;
+using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Host;
 
 /// <summary>
-/// Word's "Restrict Editing" pane (Review &gt; Protect &gt; Restrict Editing). Lets the user choose
-/// "Allow only this type of editing in the document": No changes (Read only), Tracked changes,
-/// Comments, or Filling in forms — and start enforcing it, or stop protection. Maps directly onto a
-/// <see cref="ProtectionSettings"/> that the writer persists as word/settings.xml's w:documentProtection
-/// and the host enforces on the live editor.
-///
-/// <para>An optional password can be entered when starting protection. The password is hashed using the
-/// OOXML legacy SHA-1 algorithm (via <see cref="ProtectionPasswordHelper"/>) and stored in the model so
-/// it persists through docx save/load and is honoured by Microsoft Word. When a password is stored,
-/// "Stop Protection" asks for it before removing protection.</para>
-///
-/// <para>Returns a <see cref="ProtectionSettings"/> (with or without a password hash) when the user
-/// acted, or null if cancelled.</para>
+/// Word's "Restrict Editing" pane (Review &gt; Protect &gt; Restrict Editing). The host owns only the
+/// WPF controls; shared mode, password, and stop-protection decisions live in
+/// <see cref="RestrictEditingDialogPlanner"/>.
 /// </summary>
 internal sealed class RestrictEditingDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
-    // Radio options in display order, paired with the mode each enforces.
-    private static readonly (string Label, ProtectionMode Mode)[] Options =
-    [
-        ("No changes (Read only)", ProtectionMode.ReadOnly),
-        ("Tracked changes", ProtectionMode.TrackChangesOnly),
-        ("Comments", ProtectionMode.CommentsOnly),
-        ("Filling in forms", ProtectionMode.FillingForms)
-    ];
-
     private readonly RadioButton[] _radios;
     private readonly PasswordBox _passwordBox;
     private readonly PasswordBox _confirmBox;
     private readonly ProtectionSettings _currentProtection;
+    private readonly RestrictEditingDialogPlan _plan;
     private ProtectionSettings? _result;
 
     private RestrictEditingDialog(Window? owner, ProtectionSettings current)
     {
         Owner = owner;
-        Title = "Restrict Editing";
+        Title = RestrictEditingDialogPlanner.Title;
         Width = 360;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -48,76 +30,71 @@ internal sealed class RestrictEditingDialog : Free.Shared.Ribbon.Wpf.DialogWindo
         ShowInTaskbar = false;
 
         _currentProtection = current;
+        _plan = RestrictEditingDialogPlanner.BuildPlan(current);
         _passwordBox = new PasswordBox { MinWidth = 180 };
         _confirmBox = new PasswordBox { MinWidth = 180 };
 
         var panel = new StackPanel { Margin = new Thickness(14) };
         panel.Children.Add(new TextBlock
         {
-            Text = "Allow only this type of editing in the document:",
+            Text = RestrictEditingDialogPlanner.RestrictionPrompt,
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 8)
         });
 
-        _radios = new RadioButton[Options.Length];
-        for (var i = 0; i < Options.Length; i++)
+        _radios = new RadioButton[RestrictEditingDialogPlanner.ModeOptions.Count];
+        for (var i = 0; i < RestrictEditingDialogPlanner.ModeOptions.Count; i++)
         {
-            var (label, mode) = Options[i];
+            var option = RestrictEditingDialogPlanner.ModeOptions[i];
             _radios[i] = new RadioButton
             {
-                Content = label,
+                Content = option.Label,
                 Margin = new Thickness(0, 3, 0, 3),
-                // Seed from the current mode; default to the first option (Read only) when unprotected.
-                IsChecked = current.Mode == ProtectionMode.None ? i == 0 : current.Mode == mode
+                IsChecked = i == _plan.SelectedModeIndex
             };
             panel.Children.Add(_radios[i]);
         }
 
-        // Password entry (optional) — only relevant for Start Enforcing. Not shown when already protected.
-        if (!current.IsProtected)
+        if (_plan.ShowStartPasswordFields)
         {
             panel.Children.Add(new Separator { Margin = new Thickness(0, 10, 0, 6) });
             panel.Children.Add(new TextBlock
             {
-                Text = "Optional password (leave blank for no password):",
+                Text = RestrictEditingDialogPlanner.OptionalPasswordPrompt,
                 TextWrapping = TextWrapping.Wrap,
                 Margin = new Thickness(0, 0, 0, 4)
             });
-            panel.Children.Add(new TextBlock { Text = "Password:", Margin = new Thickness(0, 0, 0, 2) });
+            panel.Children.Add(new TextBlock { Text = RestrictEditingDialogPlanner.PasswordLabel, Margin = new Thickness(0, 0, 0, 2) });
             panel.Children.Add(_passwordBox);
-            panel.Children.Add(new TextBlock { Text = "Confirm:", Margin = new Thickness(0, 4, 0, 2) });
+            panel.Children.Add(new TextBlock { Text = RestrictEditingDialogPlanner.ConfirmLabel, Margin = new Thickness(0, 4, 0, 2) });
             panel.Children.Add(_confirmBox);
         }
 
-        // Two action rows. "Start Enforcing Protection" applies the chosen mode; "Stop Protection"
-        // clears it (enabled only while protected). Cancel closes without changing anything.
         var enforce = new Button
         {
-            Content = "Start Enforcing Protection",
+            Content = RestrictEditingDialogPlanner.StartButtonText,
             MinWidth = 200,
             Margin = new Thickness(0, 14, 0, 4),
             HorizontalAlignment = HorizontalAlignment.Left,
-            IsEnabled = !current.IsProtected
+            IsEnabled = _plan.CanStartProtection
         };
         enforce.Click += (_, _) => Enforce();
         panel.Children.Add(enforce);
 
         var stop = new Button
         {
-            Content = "Stop Protection",
+            Content = RestrictEditingDialogPlanner.StopButtonText,
             MinWidth = 180,
             Margin = new Thickness(0, 0, 0, 4),
             HorizontalAlignment = HorizontalAlignment.Left,
-            IsEnabled = current.IsProtected
+            IsEnabled = _plan.CanStopProtection
         };
         stop.Click += (_, _) => StopProtection();
         panel.Children.Add(stop);
 
-        // Shared Cancel row (IsCancel button so Esc closes). OK is suppressed — the two action buttons
-        // above are the commit gestures, matching Word's pane.
         var cancel = new Button
         {
-            Content = "Cancel",
+            Content = RestrictEditingDialogPlanner.CancelButtonText,
             MinWidth = 72,
             IsCancel = true,
             Margin = new Thickness(0, 8, 0, 0),
@@ -131,49 +108,58 @@ internal sealed class RestrictEditingDialog : Free.Shared.Ribbon.Wpf.DialogWindo
 
     private void Enforce()
     {
-        // Validate passwords match (if a password was entered).
-        var password = _passwordBox.Password;
-        var confirm = _confirmBox.Password;
-        if (password != confirm)
+        if (!RestrictEditingDialogPlanner.TryCreateStartSettings(
+            SelectedMode(),
+            _passwordBox.Password,
+            _confirmBox.Password,
+            out var settings,
+            out var validationMessage))
         {
-            DialogMessageHelper.ShowWarning(this, "The passwords do not match. Please re-enter.", Title);
+            DialogMessageHelper.ShowWarning(this, validationMessage, Title);
             _passwordBox.Focus();
             return;
         }
 
-        ProtectionMode mode = ProtectionMode.ReadOnly;
-        for (var i = 0; i < _radios.Length; i++)
-        {
-            if (_radios[i].IsChecked == true)
-            {
-                mode = Options[i].Mode;
-                break;
-            }
-        }
-
-        _result = string.IsNullOrEmpty(password)
-            ? new ProtectionSettings(mode)
-            : ProtectionPasswordHelper.CreateWithPassword(mode, password);
+        _result = settings;
         Close();
     }
 
     private void StopProtection()
     {
-        // If the current protection has a password, require the user to enter it.
         if (_currentProtection.HasPassword)
         {
-            var pw = PasswordPromptDialog.Ask(Owner, "Stop Protection", "Enter the password to remove protection:");
+            var pw = PasswordPromptDialog.Ask(Owner, "Stop Protection", RestrictEditingDialogPlanner.StopPasswordPrompt);
             if (pw is null)
-                return; // cancelled
-            if (!ProtectionPasswordHelper.VerifyPassword(_currentProtection, pw))
+                return;
+
+            if (!RestrictEditingDialogPlanner.TryCreateStopSettings(
+                _currentProtection,
+                pw,
+                out var settings,
+                out var validationMessage))
             {
-                DialogMessageHelper.ShowWarning(this, "Incorrect password. Protection has not been removed.", Title);
+                DialogMessageHelper.ShowWarning(this, validationMessage, Title);
                 return;
             }
+
+            _result = settings;
+            Close();
+            return;
         }
 
-        _result = ProtectionSettings.Unprotected;
+        RestrictEditingDialogPlanner.TryCreateStopSettings(_currentProtection, null, out _result, out _);
         Close();
+    }
+
+    private ProtectionMode SelectedMode()
+    {
+        for (var i = 0; i < _radios.Length; i++)
+        {
+            if (_radios[i].IsChecked == true)
+                return RestrictEditingDialogPlanner.ModeOptions[i].Mode;
+        }
+
+        return ProtectionMode.ReadOnly;
     }
 
     /// <summary>

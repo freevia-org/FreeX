@@ -4,6 +4,7 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Free.Shared.Shell.Avalonia;
+using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Avalonia;
@@ -16,69 +17,184 @@ internal sealed record InspectorRemovalChoice(bool Comments, bool Revisions, boo
 internal sealed class RestrictEditingDialog : Window
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
-    private static readonly IReadOnlyList<ModeChoice> Choices =
-    [
-        new("No protection", ProtectionMode.None),
-        new("Read-only (no changes)", ProtectionMode.ReadOnly),
-        new("Track changes only", ProtectionMode.TrackChangesOnly),
-    ];
-
-    private readonly ComboBox _modeBox = new() { Width = 210 };
+    private readonly ProtectionSettings _currentProtection;
+    private readonly RestrictEditingDialogPlan _plan;
+    private readonly RadioButton[] _radios;
+    private readonly TextBox _passwordBox = CreatePasswordBox();
+    private readonly TextBox _confirmBox = CreatePasswordBox();
+    private readonly TextBox _stopPasswordBox = CreatePasswordBox();
+    private readonly TextBlock _validation = new();
 
     public ProtectionSettings? Result { get; private set; }
 
     public RestrictEditingDialog(ProtectionSettings current)
     {
-        Title = "Restrict Editing";
-        Width = 320;
+        _currentProtection = current;
+        _plan = RestrictEditingDialogPlanner.BuildPlan(current);
+
+        Title = RestrictEditingDialogPlanner.Title;
+        Width = 380;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         CanResize = false;
         ShowInTaskbar = false;
 
-        _modeBox.ItemsSource = Choices;
-        _modeBox.SelectedIndex = Math.Max(0, Choices.ToList().FindIndex(choice => choice.Mode == current.Mode));
-        AvaloniaCompactDialogChrome.ApplyComboBox(_modeBox, DialogChromeStyle);
-
-        var grid = new Grid
+        var body = new StackPanel
         {
-            Margin = new Thickness(16, 16, 16, 0),
-            ColumnDefinitions = new ColumnDefinitions("Auto,*"),
+            Margin = new Thickness(16, 14, 16, 0),
+            Spacing = 6,
         };
-        grid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
 
-        var label = new TextBlock
+        body.Children.Add(new TextBlock
         {
-            Text = "Editing restrictions:",
-            Margin = new Thickness(0, 4, 12, 4),
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-        Grid.SetRow(label, 0);
-        Grid.SetColumn(label, 0);
-        Grid.SetRow(_modeBox, 0);
-        Grid.SetColumn(_modeBox, 1);
-        grid.Children.Add(label);
-        grid.Children.Add(_modeBox);
+            Text = RestrictEditingDialogPlanner.RestrictionPrompt,
+            TextWrapping = TextWrapping.Wrap,
+        });
 
-        var ok = new Button { Content = "OK", IsDefault = true };
-        AvaloniaCompactDialogChrome.ApplyButton(ok, DialogChromeStyle, minWidth: 72, isDefault: true);
-        ok.Click += (_, _) =>
+        _radios = new RadioButton[RestrictEditingDialogPlanner.ModeOptions.Count];
+        for (var i = 0; i < RestrictEditingDialogPlanner.ModeOptions.Count; i++)
         {
-            Result = new ProtectionSettings(((_modeBox.SelectedItem as ModeChoice) ?? Choices[0]).Mode);
-            Close();
+            var option = RestrictEditingDialogPlanner.ModeOptions[i];
+            var radio = new RadioButton
+            {
+                Content = option.Label,
+                GroupName = "RestrictEditingMode",
+                IsChecked = i == _plan.SelectedModeIndex,
+                IsEnabled = _plan.CanStartProtection,
+            };
+            AvaloniaCompactDialogChrome.ApplyRadioButton(radio, DialogChromeStyle);
+            _radios[i] = radio;
+            body.Children.Add(radio);
+        }
+
+        body.Children.Add(new TextBlock
+        {
+            Text = _plan.StatusText,
+            Foreground = Brushes.Gray,
+            FontSize = 11,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 4, 0, 0),
+        });
+
+        if (_plan.ShowStartPasswordFields)
+        {
+            body.Children.Add(new Separator { Margin = new Thickness(0, 6, 0, 2) });
+            body.Children.Add(new TextBlock
+            {
+                Text = RestrictEditingDialogPlanner.OptionalPasswordPrompt,
+                TextWrapping = TextWrapping.Wrap,
+            });
+            AddPasswordField(body, RestrictEditingDialogPlanner.PasswordLabel, _passwordBox);
+            AddPasswordField(body, RestrictEditingDialogPlanner.ConfirmLabel, _confirmBox);
+        }
+
+        if (_plan.ShowStopPasswordField)
+        {
+            body.Children.Add(new Separator { Margin = new Thickness(0, 6, 0, 2) });
+            AddPasswordField(body, RestrictEditingDialogPlanner.StopPasswordPrompt, _stopPasswordBox);
+        }
+
+        AvaloniaCompactDialogChrome.ApplyValidationStatus(_validation, DialogChromeStyle, new Thickness(0, 4, 0, 0));
+        body.Children.Add(_validation);
+
+        var start = new Button
+        {
+            Content = RestrictEditingDialogPlanner.StartButtonText,
+            IsDefault = _plan.CanStartProtection,
+            IsEnabled = _plan.CanStartProtection,
         };
-        var cancel = new Button { Content = "Cancel", IsCancel = true };
+        AvaloniaCompactDialogChrome.ApplyButton(start, DialogChromeStyle, minWidth: 190, isDefault: _plan.CanStartProtection);
+        start.Click += (_, _) => StartProtection();
+
+        var stop = new Button
+        {
+            Content = RestrictEditingDialogPlanner.StopButtonText,
+            IsDefault = !_plan.CanStartProtection,
+            IsEnabled = _plan.CanStopProtection,
+        };
+        AvaloniaCompactDialogChrome.ApplyButton(stop, DialogChromeStyle, minWidth: 150, isDefault: !_plan.CanStartProtection);
+        stop.Click += (_, _) => StopProtection();
+
+        var cancel = new Button { Content = RestrictEditingDialogPlanner.CancelButtonText, IsCancel = true };
         AvaloniaCompactDialogChrome.ApplyButton(cancel, DialogChromeStyle, minWidth: 72);
         cancel.Click += (_, _) => Close();
 
-        var buttons = AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(16, 12, 16, 14));
+        var buttons = AvaloniaCompactDialogChrome.CreateActionRow([start, stop, cancel], new Thickness(16, 12, 16, 14));
         DockPanel.SetDock(buttons, Dock.Bottom);
-        Content = new DockPanel { LastChildFill = true, Children = { buttons, grid } };
+        Content = new DockPanel { LastChildFill = true, Children = { buttons, body } };
     }
 
-    private sealed record ModeChoice(string Label, ProtectionMode Mode)
+    private void StartProtection()
     {
-        public override string ToString() => Label;
+        if (!RestrictEditingDialogPlanner.TryCreateStartSettings(
+            SelectedMode(),
+            _passwordBox.Text,
+            _confirmBox.Text,
+            out var settings,
+            out var validationMessage))
+        {
+            ShowValidation(validationMessage);
+            _passwordBox.Focus();
+            return;
+        }
+
+        Result = settings;
+        Close();
+    }
+
+    private void StopProtection()
+    {
+        if (!RestrictEditingDialogPlanner.TryCreateStopSettings(
+            _currentProtection,
+            _stopPasswordBox.Text,
+            out var settings,
+            out var validationMessage))
+        {
+            ShowValidation(validationMessage);
+            _stopPasswordBox.Focus();
+            return;
+        }
+
+        Result = settings;
+        Close();
+    }
+
+    private ProtectionMode SelectedMode()
+    {
+        for (var i = 0; i < _radios.Length; i++)
+        {
+            if (_radios[i].IsChecked == true)
+                return RestrictEditingDialogPlanner.ModeOptions[i].Mode;
+        }
+
+        return ProtectionMode.ReadOnly;
+    }
+
+    private void ShowValidation(string? message)
+    {
+        _validation.Text = message;
+        _validation.IsVisible = !string.IsNullOrWhiteSpace(message);
+    }
+
+    private static TextBox CreatePasswordBox()
+    {
+        var box = new TextBox
+        {
+            Width = 190,
+            PasswordChar = '*',
+        };
+        AvaloniaCompactDialogChrome.ApplyTextBox(box, DialogChromeStyle);
+        return box;
+    }
+
+    private static void AddPasswordField(Panel body, string label, TextBox box)
+    {
+        body.Children.Add(new TextBlock
+        {
+            Text = label,
+            Margin = new Thickness(0, 2, 0, 0),
+        });
+        body.Children.Add(box);
     }
 }
 

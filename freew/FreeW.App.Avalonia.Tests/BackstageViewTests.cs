@@ -410,6 +410,18 @@ public class BackstageViewTests
         source.Should().Contain("DocumentInspector.Inspect(_editor.Document)");
         source.Should().Contain("AccessibilityChecker.Check(_editor.Document)");
         source.Should().NotContain("DefaultRecentFilesCap");
+
+        var safetySource = File.ReadAllText(FindRepoFile(
+            "freew",
+            "FreeW.App.Avalonia",
+            "SafetyDialogs.cs"));
+        safetySource.Should().Contain("using FreeW.App.Presentation.Dialogs;");
+        safetySource.Should().Contain("RestrictEditingDialogPlanner.BuildPlan(current)");
+        safetySource.Should().Contain("RestrictEditingDialogPlanner.ModeOptions");
+        safetySource.Should().Contain("RestrictEditingDialogPlanner.TryCreateStartSettings(");
+        safetySource.Should().Contain("RestrictEditingDialogPlanner.TryCreateStopSettings(");
+        safetySource.Should().Contain("RestrictEditingDialogPlanner.StartButtonText");
+        safetySource.Should().Contain("RestrictEditingDialogPlanner.StopButtonText");
     }
 
     // ── Helpers ────────────────────────────────────────────────────────────────
