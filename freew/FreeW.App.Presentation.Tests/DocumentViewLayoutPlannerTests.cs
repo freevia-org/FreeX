@@ -104,6 +104,38 @@ public sealed class DocumentViewLayoutPlannerTests
     }
 
     [Fact]
+    public void BuildTableLayoutPlans_RecordsSharedWordTableContracts()
+    {
+        var document = FreeWVisualEvidenceDocumentFactory.BuildComplexTableLayoutDocument();
+
+        var plan = DocumentViewLayoutPlanner.BuildTableLayoutPlans(document).Single();
+
+        plan.RowCount.Should().Be(5);
+        plan.GridColumnCount.Should().Be(4);
+        plan.HasHeaderRow.Should().BeTrue();
+        plan.RepeatsHeaderRow.Should().BeTrue();
+        plan.HasBandedRows.Should().BeTrue();
+        plan.HasMergedCells.Should().BeTrue();
+        plan.HasVerticalMerges.Should().BeTrue();
+        plan.HasCellShading.Should().BeTrue();
+        plan.HasCustomCellBorders.Should().BeTrue();
+        plan.HasCellMargins.Should().BeTrue();
+        plan.HasCellSpacing.Should().BeTrue();
+        plan.HasVerticalText.Should().BeTrue();
+        plan.HasVerticalAlignment.Should().BeTrue();
+        plan.HasPreferredWidths.Should().BeTrue();
+        plan.HasNamedStyle.Should().BeTrue();
+        plan.Alignment.Should().Be(nameof(TableAlignment.Center));
+        plan.AutoFit.Should().Be(nameof(AutoFitMode.Fixed));
+        plan.TableStyleId.Should().Be("GridTable4");
+        plan.ColumnWidthsDip.Should().HaveCount(4);
+        plan.Cells.Should().Contain(cell => cell.GridSpan == 2);
+        plan.Cells.Should().Contain(cell => cell.RowSpan == 2);
+        plan.Cells.Should().Contain(cell => cell.IsVerticalMergeContinuation);
+        plan.Cells.Should().Contain(cell => cell.TextDirection == nameof(CellTextDirection.Rotate90));
+    }
+
+    [Fact]
     public void BuildGridlinesAndRulerTicks_ArePageSpacePlans()
     {
         var page = new PageSettings

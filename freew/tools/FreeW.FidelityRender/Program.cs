@@ -478,7 +478,8 @@ static void RenderDocumentComposite(
                 ["renderPath"] = "composite",
                 ["documentName"] = name,
                 ["pageIndex"] = i.ToString(System.Globalization.CultureInfo.InvariantCulture)
-            });
+            },
+            document: doc);
         FreeWVisualEvidencePlanner.EnsureTrusted(row);
         evidence.Add(row);
         Console.WriteLine($"ok    {Path.GetFileName(outPath)} ({thisPixW}x{thisPixH}, {pageCount} pages, composite)");
@@ -549,7 +550,8 @@ static void RenderDocumentComposite(
                     ["documentName"] = name,
                     ["pageIndex"] = pageCount.ToString(System.Globalization.CultureInfo.InvariantCulture),
                     ["syntheticPage"] = "endnotes"
-                });
+                },
+                document: doc);
             FreeWVisualEvidencePlanner.EnsureTrusted(row);
             evidence.Add(row);
             Console.WriteLine($"ok    {Path.GetFileName(endnotePath)} (endnotes page, composite)");
@@ -910,7 +912,8 @@ static int RunBare(string input, string outDir, int maxPages)
                         ["renderPath"] = "bare",
                         ["documentName"] = name,
                         ["pageIndex"] = i.ToString(System.Globalization.CultureInfo.InvariantCulture)
-                    });
+                    },
+                    document: doc);
                 FreeWVisualEvidencePlanner.EnsureTrusted(row);
                 evidence.Add(row);
                 Console.WriteLine($"ok    {Path.GetFileName(outPath)} ({paginator.PageCount} pages)");
@@ -1202,6 +1205,12 @@ static void GenerateF2FlowCorpus(string outDir)
         Console.WriteLine("  wrote f2-border-watermark.docx");
     }
 
+    {
+        var doc = FreeWVisualEvidenceDocumentFactory.BuildComplexTableLayoutDocument();
+        DocxWriter.Write(doc, Path.Combine(outDir, "table-layout-complex.docx"));
+        Console.WriteLine("  wrote table-layout-complex.docx");
+    }
+
     // ─── 6. Section break with page-size change (portrait → landscape) ───────────────────────────
     // SG: FreeW/OOXML section-break semantics: a SectionBreak on paragraph P describes the section
     // that ENDS at P (the "preceding" section). The FINAL section is described by doc.Page.
@@ -1372,7 +1381,7 @@ static void GenerateF2FlowCorpus(string outDir)
         Console.WriteLine("  wrote backstage-pdf-export-fidelity.docx");
     }
 
-    Console.WriteLine($"\nDone - 12 corpus files written to {outDir}");
+    Console.WriteLine($"\nDone - 13 corpus files written to {outDir}");
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════════════════════════

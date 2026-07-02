@@ -22,6 +22,7 @@ public sealed record FreeWVisualEvidenceScenario(
 public sealed record FreeWVisualCompositionExpectation(
     bool ExpectsPageChrome,
     bool ExpectsBodyText,
+    bool ExpectsTables,
     bool ExpectsHeadersFooters,
     bool ExpectsFootnotes,
     bool ExpectsEndnotes,
@@ -79,6 +80,28 @@ public sealed record FreeWVisualPageFeatureExpectation(
     FreeWVisualPageBorderExpectation PageBorder,
     FreeWVisualWatermarkExpectation Watermark);
 
+public sealed record FreeWVisualTableExpectation(
+    int TableCount,
+    int TotalRows,
+    int TotalCells,
+    int MaxGridColumnCount,
+    bool HasHeaderRow,
+    bool RepeatsHeaderRow,
+    bool HasBandedRows,
+    bool HasBandedColumns,
+    bool HasMergedCells,
+    bool HasVerticalMerges,
+    bool HasCellShading,
+    bool HasCustomCellBorders,
+    bool HasCellMargins,
+    bool HasCellSpacing,
+    bool HasVerticalText,
+    bool HasVerticalAlignment,
+    bool HasPreferredWidths,
+    bool HasNamedStyle,
+    bool HasFloatingTextWrap,
+    IReadOnlyList<DocumentTableLayoutPlan> Tables);
+
 public sealed record FreeWVisualPageExpectation(
     int PageNumber,
     int PageCount,
@@ -87,6 +110,7 @@ public sealed record FreeWVisualPageExpectation(
     FreeWVisualGeometryExpectation Geometry,
     FreeWVisualCompositionExpectation Composition,
     FreeWVisualPageFeatureExpectation Features,
+    FreeWVisualTableExpectation Tables,
     string? HeaderSlotName,
     string? FooterSlotName,
     bool HasFootnotes,
@@ -160,13 +184,14 @@ public static class FreeWVisualEvidencePlanner
 {
     public const string ManifestFileName = "freew_visual_evidence_manifest.json";
     public const string SchemaId = "freew.visual-evidence.v1";
-    public const int SchemaVersion = 2;
+    public const int SchemaVersion = 3;
 
     private const int MaxTrackedColorCount = 4096;
 
     private static readonly FreeWVisualCompositionExpectation BodyPrintComposition = new(
         ExpectsPageChrome: true,
         ExpectsBodyText: true,
+        ExpectsTables: false,
         ExpectsHeadersFooters: false,
         ExpectsFootnotes: false,
         ExpectsEndnotes: false,
@@ -260,6 +285,29 @@ public static class FreeWVisualEvidencePlanner
             1,
             DocumentViewLayoutKind.PrintLayout,
             BodyPrintComposition with { ExpectsComments = true }),
+        new(
+            "table-layout-complex",
+            "Complex Word-style table layout fidelity capture.",
+            [
+                "table-layout",
+                "tables",
+                "print-layout",
+                "body-text",
+                "merged-cells",
+                "vertical-merge",
+                "repeat-header-row",
+                "banded-rows",
+                "cell-shading",
+                "cell-borders",
+                "cell-margins",
+                "cell-spacing",
+                "vertical-text",
+                "named-table-style"
+            ],
+            "table-layout-complex_p{page}.png",
+            1,
+            DocumentViewLayoutKind.PrintLayout,
+            BodyPrintComposition with { ExpectsTables = true }),
         new(
             "page-composition-print-layout",
             "Avalonia print-layout page composition shot.",
@@ -383,7 +431,8 @@ public static class FreeWVisualEvidencePlanner
         bool isSyntheticPage = false,
         int? sectionOrdinal = null,
         int? sectionRelativePageNumber = null,
-        string? sectionOwnerId = null)
+        string? sectionOwnerId = null,
+        TextDocument? document = null)
     {
         ArgumentNullException.ThrowIfNull(page);
 
@@ -415,6 +464,7 @@ public static class FreeWVisualEvidencePlanner
             sectionOrdinal,
             sectionRelativePageNumber,
             sectionOwnerId);
+        var tables = BuildTableExpectation(document);
 
         var expectedOutputName = ExpectedOutputName(scenario.ScenarioId, pageNumber, outputName);
         return new FreeWVisualPageExpectation(
@@ -425,6 +475,7 @@ public static class FreeWVisualEvidencePlanner
             geometry,
             scenario.Composition,
             features,
+            tables,
             headerSlotName,
             footerSlotName,
             hasFootnotes,
@@ -556,7 +607,8 @@ public static class FreeWVisualEvidencePlanner
         int? sectionRelativePageNumber = null,
         string? sectionOwnerId = null,
         IReadOnlyDictionary<string, string>? hostMetadata = null,
-        FreeWVisualEvidenceTrustThresholds? thresholds = null)
+        FreeWVisualEvidenceTrustThresholds? thresholds = null,
+        TextDocument? document = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(hostId);
         ArgumentException.ThrowIfNullOrWhiteSpace(outputPath);
@@ -579,7 +631,8 @@ public static class FreeWVisualEvidencePlanner
             isSyntheticPage,
             sectionOrdinal,
             sectionRelativePageNumber,
-            sectionOwnerId);
+            sectionOwnerId,
+            document);
         var capture = new FreeWVisualEvidenceCapture(
             ScenarioId: scenarioId,
             HostId: hostId,
@@ -628,6 +681,38 @@ public static class FreeWVisualEvidencePlanner
         }
 
         return new FreeWVisualEvidenceTrust(failures.Count == 0, failures);
+    }
+
+    public static FreeWVisualTableExpectation BuildTableExpectation(TextDocument? document)
+    {
+        if (document is null)
+            return EmptyTableExpectation;
+
+        var tables = DocumentViewLayoutPlanner.BuildTableLayoutPlans(document);
+        if (tables.Count == 0)
+            return EmptyTableExpectation;
+
+        return new FreeWVisualTableExpectation(
+            TableCount: tables.Count,
+            TotalRows: tables.Sum(table => table.RowCount),
+            TotalCells: tables.Sum(table => table.Cells.Count),
+            MaxGridColumnCount: tables.Max(table => table.GridColumnCount),
+            HasHeaderRow: tables.Any(table => table.HasHeaderRow),
+            RepeatsHeaderRow: tables.Any(table => table.RepeatsHeaderRow),
+            HasBandedRows: tables.Any(table => table.HasBandedRows),
+            HasBandedColumns: tables.Any(table => table.HasBandedColumns),
+            HasMergedCells: tables.Any(table => table.HasMergedCells),
+            HasVerticalMerges: tables.Any(table => table.HasVerticalMerges),
+            HasCellShading: tables.Any(table => table.HasCellShading),
+            HasCustomCellBorders: tables.Any(table => table.HasCustomCellBorders),
+            HasCellMargins: tables.Any(table => table.HasCellMargins),
+            HasCellSpacing: tables.Any(table => table.HasCellSpacing),
+            HasVerticalText: tables.Any(table => table.HasVerticalText),
+            HasVerticalAlignment: tables.Any(table => table.HasVerticalAlignment),
+            HasPreferredWidths: tables.Any(table => table.HasPreferredWidths),
+            HasNamedStyle: tables.Any(table => table.HasNamedStyle),
+            HasFloatingTextWrap: tables.Any(table => table.HasFloatingTextWrap),
+            Tables: tables);
     }
 
     public static void EnsureTrusted(FreeWVisualEvidenceRow row)
@@ -788,6 +873,28 @@ public static class FreeWVisualEvidencePlanner
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         WriteIndented = true
     };
+
+    private static FreeWVisualTableExpectation EmptyTableExpectation { get; } = new(
+        TableCount: 0,
+        TotalRows: 0,
+        TotalCells: 0,
+        MaxGridColumnCount: 0,
+        HasHeaderRow: false,
+        RepeatsHeaderRow: false,
+        HasBandedRows: false,
+        HasBandedColumns: false,
+        HasMergedCells: false,
+        HasVerticalMerges: false,
+        HasCellShading: false,
+        HasCustomCellBorders: false,
+        HasCellMargins: false,
+        HasCellSpacing: false,
+        HasVerticalText: false,
+        HasVerticalAlignment: false,
+        HasPreferredWidths: false,
+        HasNamedStyle: false,
+        HasFloatingTextWrap: false,
+        Tables: []);
 
     private static double RoundDip(double value) =>
         double.IsFinite(value) ? Math.Round(value, 3, MidpointRounding.AwayFromZero) : 0;

@@ -68,6 +68,7 @@ static int RenderAll(string outDir)
     var floatPath = Path.GetFullPath(Path.Combine(outDir, "freew_floating_image.png"));
     var columnsPath = Path.GetFullPath(Path.Combine(outDir, "freew_columns_layout.png"));
     var borderWatermarkPath = Path.GetFullPath(Path.Combine(outDir, "freew_border_watermark.png"));
+    var tableLayoutPath = VisualEvidenceOutputPath(outDir, "table-layout-complex", 1);
     var printPreviewP1Path = VisualEvidenceOutputPath(outDir, "backstage-print-preview-fidelity", 1);
     var printPreviewP2Path = VisualEvidenceOutputPath(outDir, "backstage-print-preview-fidelity", 2);
     var pdfExportP1Path = VisualEvidenceOutputPath(outDir, "backstage-pdf-export-fidelity", 1);
@@ -109,6 +110,14 @@ static int RenderAll(string outDir)
         scenarioId: "page-composition-border-watermark",
         evidence: evidence,
         documentFactory: BuildBorderWatermarkDocument);
+    if (rc != 0) return rc;
+
+    rc = RenderMode(DocumentViewMode.PrintLayout, tableLayoutPath,
+        width: 960, height: 1600,
+        label: "Table Layout",
+        scenarioId: "table-layout-complex",
+        evidence: evidence,
+        documentFactory: FreeWVisualEvidenceDocumentFactory.BuildComplexTableLayoutDocument);
     if (rc != 0) return rc;
 
     // ── FO1: Floating-image render capture ──────────────────────────────────────────────────────────
@@ -281,7 +290,8 @@ static int RenderFloatingImageScene(string outPath, List<FreeWVisualEvidenceRow>
             page: doc.Page,
             layoutKind: DocumentViewLayoutKind.PrintLayout,
             captureSource: "avalonia-render-target",
-            viewMode: "PrintLayout");
+            viewMode: "PrintLayout",
+            document: doc);
         Console.WriteLine($"[PageLayoutShot] Floating Image: {bytes.Length:N0} bytes → {outPath}");
         return 0;
     }
@@ -445,7 +455,8 @@ static int RenderMode(
             captureSource: "avalonia-render-target",
             viewMode: mode.ToString(),
             pageNumber: pageNumber,
-            pageCount: pageCount);
+            pageCount: pageCount,
+            document: doc);
         Console.WriteLine($"[PageLayoutShot] {label}: {bytes.Length:N0} bytes → {outPath}");
         return 0;
     }
@@ -473,7 +484,8 @@ static int RenderMode(
             captureSource: "skia-fallback-placeholder",
             viewMode: mode.ToString(),
             pageNumber: pageNumber,
-            pageCount: pageCount);
+            pageCount: pageCount,
+            document: doc);
         Console.WriteLine($"[PageLayoutShot] {label} (Skia fallback): {pngBytes.Length:N0} bytes → {outPath}");
         return 0;
     }
@@ -512,7 +524,8 @@ static void AddAvaloniaEvidence(
     string captureSource,
     string viewMode,
     int pageNumber = 1,
-    int pageCount = 1)
+    int pageCount = 1,
+    TextDocument? document = null)
 {
     var stats = ComputePngPixelStats(pngBytes, pixelWidth, pixelHeight);
     var sectionOrdinal = 1;
@@ -539,7 +552,8 @@ static void AddAvaloniaEvidence(
             ["viewMode"] = viewMode,
             ["pageNumber"] = pageNumber.ToString(System.Globalization.CultureInfo.InvariantCulture),
             ["pageCount"] = pageCount.ToString(System.Globalization.CultureInfo.InvariantCulture)
-        });
+        },
+        document: document);
     FreeWVisualEvidencePlanner.EnsureTrusted(row);
     evidence.Add(row);
 }

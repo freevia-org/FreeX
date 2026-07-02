@@ -41,6 +41,7 @@ public sealed record FreeWVisualEvidenceNormalizedRow(
     string LayoutKind,
     string ExpectedOutputName,
     FreeWVisualPageFeatureExpectation PageFeatures,
+    FreeWVisualTableExpectation Tables,
     FreeWVisualEvidenceTrust Trust);
 
 public sealed record FreeWVisualEvidenceNormalizedSummary(
@@ -56,7 +57,7 @@ public sealed record FreeWVisualEvidenceNormalizedSummary(
 public static class FreeWVisualEvidenceManifestNormalizer
 {
     public const string SummarySchemaId = "freew.visual-evidence-summary.v1";
-    public const int SummarySchemaVersion = 3;
+    public const int SummarySchemaVersion = 4;
     public const string SummaryJsonFileName = "freew_visual_evidence_summary.json";
     public const string SummaryMarkdownFileName = "freew_visual_evidence_summary.md";
     public const string WpfHostId = "wpf-fidelity-render";
@@ -65,6 +66,10 @@ public static class FreeWVisualEvidenceManifestNormalizer
     [
         "backstage-print-preview-fidelity",
         "backstage-pdf-export-fidelity"
+    ];
+    public static IReadOnlyList<string> TableRendererScenarioIds { get; } =
+    [
+        "table-layout-complex"
     ];
 
     public static IReadOnlyList<FreeWVisualEvidenceExpectedScenario> DefaultExpectedScenarios { get; } =
@@ -210,7 +215,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
             sb.AppendLine(
                 $"| {EscapeMarkdown(row.HostId)} | {EscapeMarkdown(row.ScenarioId)} | " +
                 $"{EscapeMarkdown(row.OutputPath)} | " +
-                $"{EscapeMarkdown(FeatureSummary(row.PageFeatures))} | " +
+                $"{EscapeMarkdown(FeatureSummary(row))} | " +
                 $"{row.PixelWidth.ToString(CultureInfo.InvariantCulture)}x{row.PixelHeight.ToString(CultureInfo.InvariantCulture)} | " +
                 $"{row.ByteLength.ToString(CultureInfo.InvariantCulture)} | `{row.Sha256}` | " +
                 $"{(row.Trust.Passed ? "passed" : "failed")} |");
@@ -334,6 +339,17 @@ public static class FreeWVisualEvidenceManifestNormalizer
                     scenario.ScenarioId,
                     scenario.MinimumExpectedOutputs));
             }
+            else if (TableRendererScenarioIds.Contains(scenario.ScenarioId, StringComparer.OrdinalIgnoreCase))
+            {
+                expected.Add(new FreeWVisualEvidenceExpectedScenario(
+                    WpfHostId,
+                    scenario.ScenarioId,
+                    scenario.MinimumExpectedOutputs));
+                expected.Add(new FreeWVisualEvidenceExpectedScenario(
+                    AvaloniaHostId,
+                    scenario.ScenarioId,
+                    scenario.MinimumExpectedOutputs));
+            }
         }
 
         return expected;
@@ -428,6 +444,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
             row.PageExpectation.LayoutKind,
             row.PageExpectation.ExpectedOutputName,
             row.PageExpectation.Features,
+            row.PageExpectation.Tables,
             trust);
     }
 
@@ -443,10 +460,46 @@ public static class FreeWVisualEvidenceManifestNormalizer
             rowFailures.Add("scenario expects a page border but the page expectation records none");
         if (composition.ExpectsWatermark && !features.Watermark.Present)
             rowFailures.Add("scenario expects a watermark but the page expectation records none");
+        if (composition.ExpectsTables && row.PageExpectation.Tables.TableCount <= 0)
+            rowFailures.Add("scenario expects table layout but the page expectation records no tables");
+        ValidateTableFeatureTags(row, rowFailures);
         if (features.Section.SectionOrdinal <= 0)
             rowFailures.Add("section ordinal must be positive");
         if (features.Section.SectionRelativePageNumber <= 0)
             rowFailures.Add("section-relative page number must be positive");
+    }
+
+    private static void ValidateTableFeatureTags(
+        FreeWVisualEvidenceRow row,
+        List<string> rowFailures)
+    {
+        var tags = row.ExpectedFeatureTags;
+        var tables = row.PageExpectation.Tables;
+        if (!tags.Contains("table-layout", StringComparer.OrdinalIgnoreCase))
+            return;
+
+        if (tables.TableCount <= 0)
+            rowFailures.Add("table-layout evidence must include at least one table plan");
+        if (tags.Contains("merged-cells", StringComparer.OrdinalIgnoreCase) && !tables.HasMergedCells)
+            rowFailures.Add("table-layout evidence expects merged cells but the table plan records none");
+        if (tags.Contains("vertical-merge", StringComparer.OrdinalIgnoreCase) && !tables.HasVerticalMerges)
+            rowFailures.Add("table-layout evidence expects vertical merges but the table plan records none");
+        if (tags.Contains("repeat-header-row", StringComparer.OrdinalIgnoreCase) && !tables.RepeatsHeaderRow)
+            rowFailures.Add("table-layout evidence expects repeated header rows but the table plan records none");
+        if (tags.Contains("banded-rows", StringComparer.OrdinalIgnoreCase) && !tables.HasBandedRows)
+            rowFailures.Add("table-layout evidence expects banded rows but the table plan records none");
+        if (tags.Contains("cell-shading", StringComparer.OrdinalIgnoreCase) && !tables.HasCellShading)
+            rowFailures.Add("table-layout evidence expects cell shading but the table plan records none");
+        if (tags.Contains("cell-borders", StringComparer.OrdinalIgnoreCase) && !tables.HasCustomCellBorders)
+            rowFailures.Add("table-layout evidence expects custom cell borders but the table plan records none");
+        if (tags.Contains("cell-margins", StringComparer.OrdinalIgnoreCase) && !tables.HasCellMargins)
+            rowFailures.Add("table-layout evidence expects cell margins but the table plan records none");
+        if (tags.Contains("cell-spacing", StringComparer.OrdinalIgnoreCase) && !tables.HasCellSpacing)
+            rowFailures.Add("table-layout evidence expects cell spacing but the table plan records none");
+        if (tags.Contains("vertical-text", StringComparer.OrdinalIgnoreCase) && !tables.HasVerticalText)
+            rowFailures.Add("table-layout evidence expects vertical text but the table plan records none");
+        if (tags.Contains("named-table-style", StringComparer.OrdinalIgnoreCase) && !tables.HasNamedStyle)
+            rowFailures.Add("table-layout evidence expects a named table style but the table plan records none");
     }
 
     private static IReadOnlyList<FreeWVisualEvidenceNormalizedScenario> BuildScenarioSummaries(
@@ -643,8 +696,9 @@ public static class FreeWVisualEvidenceManifestNormalizer
         return Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant();
     }
 
-    private static string FeatureSummary(FreeWVisualPageFeatureExpectation features)
+    private static string FeatureSummary(FreeWVisualEvidenceNormalizedRow row)
     {
+        var features = row.PageFeatures;
         var parts = new List<string>
         {
             features.Section.OwnerId,
@@ -657,6 +711,12 @@ public static class FreeWVisualEvidenceManifestNormalizer
             parts.Add("page border");
         if (features.Watermark.Present)
             parts.Add("watermark");
+        if (row.Tables.TableCount > 0)
+        {
+            parts.Add(
+                $"{row.Tables.TableCount.ToString(CultureInfo.InvariantCulture)} table(s), " +
+                $"{row.Tables.MaxGridColumnCount.ToString(CultureInfo.InvariantCulture)} grid column(s)");
+        }
 
         return string.Join(", ", parts);
     }

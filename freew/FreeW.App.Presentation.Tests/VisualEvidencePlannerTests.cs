@@ -22,6 +22,7 @@ public sealed class VisualEvidencePlannerTests
             "f2-section-landscape",
             "f2-tracked-changes",
             "f2-comments",
+            "table-layout-complex",
             "page-composition-print-layout",
             "page-composition-columns",
             "page-composition-border-watermark",
@@ -54,6 +55,11 @@ public sealed class VisualEvidencePlannerTests
         var borderScenario = FreeWVisualEvidencePlanner.ResolveScenario("f2-border-watermark");
         borderScenario.Composition.ExpectsPageBorder.Should().BeTrue();
         borderScenario.Composition.ExpectsWatermark.Should().BeTrue();
+
+        var tableScenario = FreeWVisualEvidencePlanner.ResolveScenario("table-layout-complex");
+        tableScenario.ExpectedFeatureTags.Should().Contain(["table-layout", "merged-cells", "repeat-header-row"]);
+        tableScenario.ExpectedOutputNamePattern.Should().Be("table-layout-complex_p{page}.png");
+        tableScenario.Composition.ExpectsTables.Should().BeTrue();
     }
 
     [Fact]
@@ -71,6 +77,24 @@ public sealed class VisualEvidencePlannerTests
                 e.HostId == FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId &&
                 e.ScenarioId == scenarioId &&
                 e.MinimumExpectedOutputs == 2);
+        }
+    }
+
+    [Fact]
+    public void DefaultExpectedScenarios_RequiresPairedTableRendererEvidence()
+    {
+        var expected = FreeWVisualEvidenceManifestNormalizer.DefaultExpectedScenarios;
+
+        foreach (var scenarioId in FreeWVisualEvidenceManifestNormalizer.TableRendererScenarioIds)
+        {
+            expected.Should().Contain(e =>
+                e.HostId == FreeWVisualEvidenceManifestNormalizer.WpfHostId &&
+                e.ScenarioId == scenarioId &&
+                e.MinimumExpectedOutputs == 1);
+            expected.Should().Contain(e =>
+                e.HostId == FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId &&
+                e.ScenarioId == scenarioId &&
+                e.MinimumExpectedOutputs == 1);
         }
     }
 
@@ -128,6 +152,43 @@ public sealed class VisualEvidencePlannerTests
         expectation.Features.Watermark.Present.Should().BeTrue();
         expectation.Features.Watermark.Text.Should().Be("DRAFT");
         expectation.Features.Watermark.Layout.Should().Be(nameof(WatermarkLayout.Diagonal));
+    }
+
+    [Fact]
+    public void BuildPageExpectation_RecordsSharedComplexTableLayout()
+    {
+        var document = FreeWVisualEvidenceDocumentFactory.BuildComplexTableLayoutDocument();
+        var expectation = FreeWVisualEvidencePlanner.BuildPageExpectation(
+            "table-layout-complex",
+            document.Page,
+            pageNumber: 1,
+            pageCount: 1,
+            outputName: "table-layout-complex_p1.png",
+            document: document);
+
+        expectation.Composition.ExpectsTables.Should().BeTrue();
+        expectation.Tables.TableCount.Should().Be(1);
+        expectation.Tables.TotalRows.Should().Be(5);
+        expectation.Tables.MaxGridColumnCount.Should().Be(4);
+        expectation.Tables.HasHeaderRow.Should().BeTrue();
+        expectation.Tables.RepeatsHeaderRow.Should().BeTrue();
+        expectation.Tables.HasBandedRows.Should().BeTrue();
+        expectation.Tables.HasMergedCells.Should().BeTrue();
+        expectation.Tables.HasVerticalMerges.Should().BeTrue();
+        expectation.Tables.HasCellShading.Should().BeTrue();
+        expectation.Tables.HasCustomCellBorders.Should().BeTrue();
+        expectation.Tables.HasCellMargins.Should().BeTrue();
+        expectation.Tables.HasCellSpacing.Should().BeTrue();
+        expectation.Tables.HasVerticalText.Should().BeTrue();
+        expectation.Tables.HasVerticalAlignment.Should().BeTrue();
+        expectation.Tables.HasPreferredWidths.Should().BeTrue();
+        expectation.Tables.HasNamedStyle.Should().BeTrue();
+        expectation.Tables.Tables.Single().TableStyleId.Should().Be("GridTable4");
+        expectation.Tables.Tables.Single().ColumnWidthsDip.Should().HaveCount(4);
+        expectation.Tables.Tables.Single().Cells.Should().Contain(cell =>
+            cell.GridSpan == 2 && cell.RowSpan == 1);
+        expectation.Tables.Tables.Single().Cells.Should().Contain(cell =>
+            cell.RowSpan == 2 && cell.IsVerticalMergeContinuation == false);
     }
 
     [Fact]
@@ -201,7 +262,7 @@ public sealed class VisualEvidencePlannerTests
         using var doc = JsonDocument.Parse(json);
         var root = doc.RootElement;
         root.GetProperty("schemaId").GetString().Should().Be("freew.visual-evidence.v1");
-        root.GetProperty("schemaVersion").GetInt32().Should().Be(2);
+        root.GetProperty("schemaVersion").GetInt32().Should().Be(3);
         root.GetProperty("product").GetString().Should().Be("FreeW");
         root.GetProperty("scenarios").GetArrayLength().Should().Be(1);
         var evidence = root.GetProperty("evidence")[0];
@@ -667,7 +728,7 @@ public sealed class VisualEvidencePlannerTests
 
             var json = FreeWVisualEvidenceManifestNormalizer.ToJson(withBaseline);
             using var doc = JsonDocument.Parse(json);
-            doc.RootElement.GetProperty("schemaVersion").GetInt32().Should().Be(3);
+            doc.RootElement.GetProperty("schemaVersion").GetInt32().Should().Be(4);
             var baselineComparison = doc.RootElement.GetProperty("baselineComparisons")[0];
             baselineComparison.GetProperty("status").GetString().Should().Be("passed");
             baselineComparison.GetProperty("tolerance").GetProperty("name").GetString()
@@ -732,14 +793,16 @@ public sealed class VisualEvidencePlannerTests
         File.WriteAllBytes(outputPath, bytes);
 
         var stats = BuildTrustedStats(pixelWidth, pixelHeight);
-        var page = PageForScenario(scenarioId);
+        var document = DocumentForScenario(scenarioId);
+        var page = document?.Page ?? PageForScenario(scenarioId);
         var expectation = FreeWVisualEvidencePlanner.BuildPageExpectation(
             scenarioId,
             page,
             pageNumber,
             pageCount,
             outputName,
-            scenario.LayoutKind);
+            scenario.LayoutKind,
+            document: document);
         var capture = new FreeWVisualEvidenceCapture(
             ScenarioId: scenarioId,
             HostId: hostId,
@@ -754,6 +817,14 @@ public sealed class VisualEvidencePlannerTests
 
         return FreeWVisualEvidencePlanner.BuildEvidenceRow(capture);
     }
+
+    private static TextDocument? DocumentForScenario(string scenarioId) =>
+        string.Equals(
+            FreeWVisualEvidencePlanner.NormalizeScenarioId(scenarioId),
+            "table-layout-complex",
+            StringComparison.OrdinalIgnoreCase)
+            ? FreeWVisualEvidenceDocumentFactory.BuildComplexTableLayoutDocument()
+            : null;
 
     private static FreeWVisualPixelStats BuildTrustedStats()
     {
