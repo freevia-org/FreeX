@@ -40,10 +40,13 @@ public static class PresentationPdfExporter
 
         var pages = new List<PdfContentPage>(Math.Max(presentation.Slides.Count, 1));
         if (presentation.Slides.Count == 0)
-            pages.Add(BuildSlidePage(new Slide())); // a valid PDF always has at least one page
+            pages.Add(BuildSlidePage(
+                new Slide(),
+                presentation.SlideSizeCxEmu,
+                presentation.SlideSizeCyEmu)); // a valid PDF always has at least one page
         else
             foreach (var slide in presentation.Slides)
-                pages.Add(BuildSlidePage(slide));
+                pages.Add(BuildSlidePage(slide, presentation.SlideSizeCxEmu, presentation.SlideSizeCyEmu));
 
         var p = presentation.Properties;
         var properties = new PdfDocumentProperties(
@@ -58,17 +61,30 @@ public static class PresentationPdfExporter
 
     /// <summary>Builds the portable draw-op page for one slide at FreeP's default 16:9 slide size.</summary>
     public static PdfContentPage BuildSlidePage(Slide slide)
+        => BuildSlidePage(slide, slideWidthPoints: DefaultSlideWidthPoints, slideHeightPoints: DefaultSlideHeightPoints);
+
+    /// <summary>Builds the portable draw-op page for one slide at the presentation's modeled slide size.</summary>
+    public static PdfContentPage BuildSlidePage(Slide slide, long slideWidthEmu, long slideHeightEmu)
+        => BuildSlidePage(
+            slide,
+            slideWidthPoints: slideWidthEmu > 0 ? EmuToPoints(slideWidthEmu) : DefaultSlideWidthPoints,
+            slideHeightPoints: slideHeightEmu > 0 ? EmuToPoints(slideHeightEmu) : DefaultSlideHeightPoints);
+
+    private static PdfContentPage BuildSlidePage(
+        Slide slide,
+        double slideWidthPoints,
+        double slideHeightPoints)
     {
         ArgumentNullException.ThrowIfNull(slide);
 
         var ops = new List<PdfDrawOp>();
 
         if (TryMapFill(slide.Background, out var background))
-            ops.Add(new PdfFillRect(0, 0, DefaultSlideWidthPoints, DefaultSlideHeightPoints, background));
+            ops.Add(new PdfFillRect(0, 0, slideWidthPoints, slideHeightPoints, background));
 
         // PDF user space has its origin at the bottom-left with y increasing upward, so we lay out from the
         // top down by starting at (height - margin) and decreasing y for each line.
-        var y = DefaultSlideHeightPoints - MarginPt - TitleSize;
+        var y = slideHeightPoints - MarginPt - TitleSize;
         if (!string.IsNullOrEmpty(slide.Title))
             ops.Add(new PdfText(MarginPt, y, TitleSize, PdfFontFace.Bold, PdfColor.Black, OneLine(slide.Title)));
         y -= TitleSize * 1.4;
@@ -76,7 +92,7 @@ public static class PresentationPdfExporter
         // Skip placeholder shapes (title already rendered above; body placeholders have no freestanding text).
         foreach (var shape in slide.Shapes.Where(s => s.Placeholder is null))
         {
-            var shapeBox = TryAppendShapeGeometry(ops, shape);
+            var shapeBox = TryAppendShapeGeometry(ops, shape, slideHeightPoints);
             var content = !string.IsNullOrEmpty(shape.Text) ? shape.Text : $"[{shape.Kind}]";
 
             if (shapeBox is { } box)
@@ -88,16 +104,16 @@ public static class PresentationPdfExporter
             foreach (var line in Lines(content))
             {
                 if (y < MarginPt)
-                    return new PdfContentPage(DefaultSlideWidthPoints, DefaultSlideHeightPoints, ops); // ran out of room on this slide
+                    return new PdfContentPage(slideWidthPoints, slideHeightPoints, ops); // ran out of room on this slide
                 ops.Add(new PdfText(MarginPt, y, BodySize, PdfFontFace.Regular, PdfColor.Black, OneLine(line)));
                 y -= BodyLeadingPt;
             }
         }
 
-        return new PdfContentPage(DefaultSlideWidthPoints, DefaultSlideHeightPoints, ops);
+        return new PdfContentPage(slideWidthPoints, slideHeightPoints, ops);
     }
 
-    private static ShapeBox? TryAppendShapeGeometry(List<PdfDrawOp> ops, SlideShape shape)
+    private static ShapeBox? TryAppendShapeGeometry(List<PdfDrawOp> ops, SlideShape shape, double slideHeightPoints)
     {
         var width = EmuToPoints(shape.ExtentCxEmu);
         var height = EmuToPoints(shape.ExtentCyEmu);
@@ -105,7 +121,7 @@ public static class PresentationPdfExporter
             return null;
 
         var x = EmuToPoints(shape.OffsetXEmu);
-        var y = DefaultSlideHeightPoints - EmuToPoints(shape.OffsetYEmu) - height;
+        var y = slideHeightPoints - EmuToPoints(shape.OffsetYEmu) - height;
 
         if (TryMapFill(shape.Fill, out var fill))
             ops.Add(new PdfFillRect(x, y, width, height, fill));
