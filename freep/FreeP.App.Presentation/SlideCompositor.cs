@@ -1232,9 +1232,10 @@ public static class SlideCompositor
 
             // Build bullet text and per-paragraph indent info.
             string bulletText = string.Empty;
-            SrgbColor bulletColor = resolvedRuns.Count > 0 ? resolvedRuns[0].Color : SrgbColor.Black;
-            string bulletFontFamily = resolvedRuns.Count > 0 ? resolvedRuns[0].FontFamily : fallbackFont;
-            double bulletFontSizePt = resolvedRuns.Count > 0 ? resolvedRuns[0].FontSizePt : (fallbackFontSizePt * fontScale);
+            var bulletSeedRun = SelectBulletSeedRun(resolvedRuns);
+            SrgbColor bulletColor = bulletSeedRun?.Color ?? SrgbColor.Black;
+            string bulletFontFamily = bulletSeedRun?.FontFamily ?? fallbackFont;
+            double bulletFontSizePt = bulletSeedRun?.FontSizePt ?? (fallbackFontSizePt * fontScale);
             double indentDip = 0.0;
             double hangingDip = 0.0;
 
@@ -1361,6 +1362,10 @@ public static class SlideCompositor
             _                            => $"{n}."
         };
     }
+
+    private static ResolvedRun? SelectBulletSeedRun(IReadOnlyList<ResolvedRun> runs) =>
+        runs.FirstOrDefault(run => run.Text.Length > 0)
+        ?? runs.FirstOrDefault();
 
     private static string ToRoman(int n, bool upper)
     {
