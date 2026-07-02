@@ -127,6 +127,13 @@ static IReadOnlyList<FreeWVisualBaselineComparison> BuildBaselineComparisons(
     var comparisons = new List<FreeWVisualBaselineComparison>();
     foreach (var row in summary.Evidence)
     {
+        var policy = FreeWVisualBaselineComparisonPlanner.ResolveWordBaselinePolicy(row);
+        if (!policy.IsComparable)
+        {
+            comparisons.Add(FreeWVisualBaselineComparisonPlanner.BuildSkippedBaselineComparison(row, tolerance));
+            continue;
+        }
+
         var candidatePaths = FreeWVisualBaselineComparisonPlanner.BuildBaselineCandidateRelativePaths(row);
         var match = FindBaselinePath(baselineRoot, candidatePaths);
         if (match is null)
