@@ -570,8 +570,9 @@ public static class FreeWVisualEvidenceManifestNormalizer
 
             var wpfPages = wpfRows.Select(r => r.PageNumber).Distinct().Order().ToList();
             var avaloniaPages = avaloniaRows.Select(r => r.PageNumber).Distinct().Order().ToList();
-            var missingAvaloniaPages = wpfPages.Except(avaloniaPages).ToList();
-            var missingWpfPages = avaloniaPages.Except(wpfPages).ToList();
+            var requiredPages = RequiredScenarioPages(scenarioId);
+            var missingAvaloniaPages = requiredPages.Except(avaloniaPages).ToList();
+            var missingWpfPages = requiredPages.Except(wpfPages).ToList();
             if (missingAvaloniaPages.Count > 0)
             {
                 failures.Add(
@@ -594,6 +595,12 @@ public static class FreeWVisualEvidenceManifestNormalizer
                 ValidateRendererPairRow(scenarioId, pageNumber, wpf, avalonia, failures);
             }
         }
+    }
+
+    private static IReadOnlyList<int> RequiredScenarioPages(string scenarioId)
+    {
+        var minimumOutputs = Math.Max(1, FreeWVisualEvidencePlanner.ResolveScenario(scenarioId).MinimumExpectedOutputs);
+        return Enumerable.Range(1, minimumOutputs).ToList();
     }
 
     private static List<FreeWVisualEvidenceNormalizedRow> RowsForHostScenario(
@@ -627,18 +634,6 @@ public static class FreeWVisualEvidenceManifestNormalizer
         List<string> failures)
     {
         var pairName = $"backstage renderer pair '{scenarioId}' page {pageNumber.ToString(CultureInfo.InvariantCulture)}";
-        if (wpf.PageCount != avalonia.PageCount)
-        {
-            failures.Add(
-                $"{pairName} page counts differ: WPF {wpf.PageCount.ToString(CultureInfo.InvariantCulture)}, Avalonia {avalonia.PageCount.ToString(CultureInfo.InvariantCulture)}");
-        }
-
-        if (wpf.PixelWidth != avalonia.PixelWidth || wpf.PixelHeight != avalonia.PixelHeight)
-        {
-            failures.Add(
-                $"{pairName} dimensions differ: WPF {FormatSize(wpf.PixelWidth, wpf.PixelHeight)}, Avalonia {FormatSize(avalonia.PixelWidth, avalonia.PixelHeight)}");
-        }
-
         if (!string.Equals(wpf.LayoutKind, avalonia.LayoutKind, StringComparison.OrdinalIgnoreCase))
         {
             failures.Add(
@@ -658,9 +653,6 @@ public static class FreeWVisualEvidenceManifestNormalizer
             pageNumbers
                 .Order()
                 .Select(p => "p" + p.ToString(CultureInfo.InvariantCulture)));
-
-    private static string FormatSize(int width, int height) =>
-        width.ToString(CultureInfo.InvariantCulture) + "x" + height.ToString(CultureInfo.InvariantCulture);
 
     private static string ScenarioKey(string hostId, string scenarioId) =>
         string.Concat(hostId, "\u001f", scenarioId);

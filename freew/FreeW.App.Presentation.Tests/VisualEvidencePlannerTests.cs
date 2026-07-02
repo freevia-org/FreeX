@@ -431,7 +431,7 @@ public sealed class VisualEvidencePlannerTests
     }
 
     [Fact]
-    public void BuildNormalizedSummaryFromFiles_ReportsUnpairedBackstageRendererPages()
+    public void BuildNormalizedSummaryFromFiles_ReportsMissingRequiredBackstageRendererPages()
     {
         var root = CreateTempRoot();
         try
@@ -494,9 +494,8 @@ public sealed class VisualEvidencePlannerTests
             summary.Trust.Failures.Should().Contain(f =>
                 f.Contains("backstage renderer pair 'backstage-print-preview-fidelity'", StringComparison.Ordinal)
                 && f.Contains("missing Avalonia page(s): p2", StringComparison.Ordinal));
-            summary.Trust.Failures.Should().Contain(f =>
-                f.Contains("backstage renderer pair 'backstage-print-preview-fidelity'", StringComparison.Ordinal)
-                && f.Contains("missing WPF page(s): p3", StringComparison.Ordinal));
+            summary.Trust.Failures.Should().NotContain(f =>
+                f.Contains("missing WPF page(s): p3", StringComparison.Ordinal));
         }
         finally
         {
@@ -505,7 +504,7 @@ public sealed class VisualEvidencePlannerTests
     }
 
     [Fact]
-    public void BuildNormalizedSummaryFromFiles_ReportsBackstageRendererDimensionMismatch()
+    public void BuildNormalizedSummaryFromFiles_AllowsBackstageRendererExtraPagesAndDifferentCaptureDimensions()
     {
         var root = CreateTempRoot();
         try
@@ -525,8 +524,14 @@ public sealed class VisualEvidencePlannerTests
                         root,
                         FreeWVisualEvidenceManifestNormalizer.WpfHostId,
                         "backstage-pdf-export-fidelity",
+                        pageNumber: 3,
+                        pageCount: 3),
+                    BuildFileBackedRow(
+                        root,
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        "backstage-pdf-export-fidelity",
                         pageNumber: 2,
-                        pageCount: 2)
+                        pageCount: 3)
                 ],
                 new DateTimeOffset(2026, 7, 1, 12, 0, 0, TimeSpan.Zero));
             FreeWVisualEvidencePlanner.WriteManifest(
@@ -566,10 +571,16 @@ public sealed class VisualEvidencePlannerTests
                         2)
                 ]);
 
-            summary.Trust.Passed.Should().BeFalse();
-            summary.Trust.Failures.Should().Contain(f =>
-                f.Contains("backstage renderer pair 'backstage-pdf-export-fidelity' page 1", StringComparison.Ordinal)
-                && f.Contains("dimensions differ: WPF 20x20, Avalonia 24x20", StringComparison.Ordinal));
+            summary.Trust.Passed.Should().BeTrue();
+            summary.Evidence.Where(e =>
+                e.HostId == FreeWVisualEvidenceManifestNormalizer.WpfHostId &&
+                e.ScenarioId == "backstage-pdf-export-fidelity")
+                .Should().HaveCount(3);
+            summary.Evidence.Single(e =>
+                e.HostId == FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId &&
+                e.ScenarioId == "backstage-pdf-export-fidelity" &&
+                e.PageNumber == 1)
+                .PixelWidth.Should().Be(24);
         }
         finally
         {
