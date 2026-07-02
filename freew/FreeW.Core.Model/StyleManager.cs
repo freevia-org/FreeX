@@ -11,10 +11,10 @@ namespace FreeW.Core.Model;
 public static class StyleManager
 {
     /// <summary>
-    /// The built-in style ids that <see cref="DeleteStyle"/> refuses to remove. These are the styles
-    /// seeded by <c>TextDocument.AddBuiltInStyles</c> (Normal, the Heading ranks, Title, Subtitle,
-    /// Quote) plus the helper-seeded Caption / Index / Table-of-Figures styles. Guarding them keeps the
-    /// built-in catalog intact so existing documents and the outline/heading tooling keep resolving.
+    /// Built-in style ids that are guarded even though they are not (yet) part of
+    /// <see cref="BuiltInStyles.Gallery"/> — the Caption / Index / Table-of-Figures styles the outline
+    /// and TOC/TOF tooling seed directly. Guarding them keeps the built-in catalog intact so existing
+    /// documents and that tooling keep resolving.
     /// </summary>
     public static readonly IReadOnlySet<string> BuiltInStyleIds = new HashSet<string>(StringComparer.Ordinal)
     {
@@ -26,18 +26,33 @@ public static class StyleManager
         "TableOfFiguresHeading", "TableOfFiguresEntry",
     };
 
-    /// <summary>True when <paramref name="styleId"/> names a guarded built-in style (see <see cref="BuiltInStyleIds"/>).</summary>
+    /// <summary>
+    /// True when <paramref name="styleId"/> names a guarded built-in style: either listed explicitly in
+    /// <see cref="BuiltInStyleIds"/>, or present in the authoritative <see cref="BuiltInStyles.Gallery"/>
+    /// (every style the app can seed via Home &gt; Styles, e.g. Strong, Emphasis, NoSpacing,
+    /// ListParagraph, IntenseQuote). Deriving from the gallery means this can never drift out of sync
+    /// with what the app actually offers as a built-in — Word never allows deleting any of these, and
+    /// deleting one here would silently strip formatting from any content still referencing its id.
+    /// </summary>
     public static bool IsBuiltIn(string styleId) =>
-        styleId is not null && BuiltInStyleIds.Contains(styleId);
+        styleId is not null && (BuiltInStyleIds.Contains(styleId) || BuiltInStyles.Find(styleId) is not null);
 
     /// <summary>
     /// Create a new custom paragraph style from <paramref name="name"/>, give it a collision-free id
     /// derived from the name, add it to <paramref name="doc"/>'s catalog, and return it. The id is the
     /// name with non-alphanumeric characters removed; if that is empty or already taken (by a built-in
     /// or a previously created style) a numeric suffix (<c>2</c>, <c>3</c>, …) is appended until unique.
+    /// The display <see cref="DocumentStyle.Name"/> is likewise disambiguated (case-insensitively, Word's
+    /// own comparison for style names) against every existing style's name — Word does not allow two
+    /// styles to share a display name (styles.xml would carry two identical <c>w:name</c> values, which
+    /// Word treats as invalid and collapses on load) — so a name colliding with an existing style (built-in
+    /// or custom) gets a " 2", " 3", … suffix appended until unique, mirroring the id's own disambiguation.
     /// </summary>
     /// <param name="doc">The document whose <see cref="TextDocument.Styles"/> catalog is extended.</param>
-    /// <param name="name">The human-readable style name (e.g. "My Heading"); trimmed, must be non-empty.</param>
+    /// <param name="name">
+    /// The human-readable style name (e.g. "My Heading"); trimmed, must be non-empty. The style's actual
+    /// stored name may differ from this if it collides with an existing style's name (see remarks above).
+    /// </param>
     /// <param name="basedOnId">
     /// The id of the style this one inherits from, or null for none. Ignored when it does not name an
     /// existing style, so a stale based-on never produces a dangling reference in the catalog.
@@ -65,6 +80,7 @@ public static class StyleManager
             throw new ArgumentException("Style name must be non-empty.", nameof(name));
 
         var id = GenerateUniqueId(doc, trimmed);
+        var uniqueName = GenerateUniqueName(doc, trimmed);
         var basedOn = basedOnId is { Length: > 0 } && doc.Styles.ContainsKey(basedOnId) ? basedOnId : null;
         // A next-style may point at an existing style or at the new style itself (Word allows a style to
         // chain to itself, e.g. a body style whose follow-on is the same style). Anything else is dropped.
@@ -75,7 +91,7 @@ public static class StyleManager
         var style = new DocumentStyle
         {
             Id = id,
-            Name = trimmed,
+            Name = uniqueName,
             BasedOnStyleId = basedOn,
             NextStyleId = next,
             Run = run,
@@ -154,7 +170,7 @@ public static class StyleManager
 
     /// <summary>
     /// Remove the custom style <paramref name="styleId"/> from the catalog. Returns false (and removes nothing)
-    /// when the id is a guarded built-in (see <see cref="BuiltInStyleIds"/>) or is not present. Returns
+    /// when the id is a guarded built-in (see <see cref="IsBuiltIn"/>) or is not present. Returns
     /// true when a custom style was removed. Paragraphs still referencing the removed id fall back to the
     /// document default formatting (an unknown StyleId resolves to nothing), mirroring Word.
     /// </summary>
@@ -190,5 +206,33 @@ public static class StyleManager
             if (!doc.Styles.ContainsKey(candidate))
                 return candidate;
         }
+    }
+
+    // Disambiguate the display name against every existing style's Name (case-insensitively — Word treats
+    // style names as case-insensitively unique), appending " 2", " 3", … until unique. Word itself uses this
+    // same "<name> N" convention (e.g. pasting a style from another document that already has "Heading 1
+    // Char" produces "Heading 1 Char 2"), so this mirrors real Word behaviour rather than inventing a
+    // FreeW-only convention.
+    private static string GenerateUniqueName(TextDocument doc, string name)
+    {
+        if (!NameInUse(doc, name))
+            return name;
+
+        for (var n = 2; ; n++)
+        {
+            var candidate = name + " " + n.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            if (!NameInUse(doc, candidate))
+                return candidate;
+        }
+    }
+
+    private static bool NameInUse(TextDocument doc, string name)
+    {
+        foreach (var style in doc.Styles.Values)
+        {
+            if (string.Equals(style.Name, name, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+        return false;
     }
 }

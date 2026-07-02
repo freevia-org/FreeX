@@ -194,7 +194,11 @@ public sealed class DocumentView : Control
     private RunFormatting? _pendingRunFmt;
     private FormatPainterClipboard? _formatPainter;
     private bool _formatPainterLocked;
-    private readonly CustomDictionary _customDictionary = new();
+    // GB2: backed by a persisted .lex store (mirrors the WPF host's CustomDictionaryStore — same file
+    // location/format, so words added in either shell are available in the other) rather than a plain
+    // in-memory CustomDictionary, so Add-to-Dictionary survives a restart. Loaded once at construction;
+    // best-effort (a failed load/save never blocks editing — see CustomDictionaryStore).
+    private readonly CustomDictionaryStore _customDictionary = CustomDictionaryStore.Load();
     private double _laidOutWidth = -1;
     private double _contentHeight;
     private double _pageLeft;
@@ -7893,29 +7897,77 @@ public sealed class DocumentView : Control
             CharacterShadingPattern = string.IsNullOrWhiteSpace(colorHex) ? ShadingPattern.Clear : pattern,
         });
 
+    /// <summary>
+    /// Set the proofing (spelling/grammar) language on the SELECTED text only — Word applies a proofing
+    /// language change to the selected runs/characters, not the whole paragraph. Mirrors the
+    /// selected-sub-range run-mutation pattern used for character styles (see <see cref="ApplyNamedStyle"/>'s
+    /// multi-paragraph character-style branch and <see cref="ApplyRunFormatting"/>): a single-block
+    /// selection tags just its Start.Offset..End.Offset range; a multi-paragraph selection tags the first
+    /// block from Start.Offset to its end, middle blocks in full, and the last block from its start to
+    /// End.Offset. A collapsed caret (no selection) has no existing text to retag, so — mirroring
+    /// <see cref="ApplyRunFormatting"/>'s BZ5 convention — it stages a pending format for the next typed
+    /// character instead of touching the paragraph.
+    /// </summary>
     public void SetProofingLanguage(string? languageTag)
     {
-        var indices = SelectedParagraphIndices();
-        if (indices.Count == 0)
-            return;
-
         var normalizedTag = ProofingLanguageCatalog.NormalizeTag(languageTag);
-        if (indices.Count > 1)
-            _bus.BeginUndoGroup();
+        var sel = NormalizedSelection();
 
-        foreach (var blockIndex in indices)
+        if (sel is { } s && s.Start.Block == s.End.Block)
         {
-            _bus.Execute(new ReplaceParagraphRunsCommand(blockIndex, paragraph =>
+            // Single-block selection: tag only the selected character range.
+            var block = s.Start.Block;
+            if (_doc.Blocks[block] is not Paragraph p0 || !IsEditable(p0))
+                return;
+            var a = s.Start.Offset;
+            var b = s.End.Offset;
+            _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
             {
-                var cells = ParaCells(paragraph);
-                for (var i = 0; i < cells.Count; i++)
-                    cells[i] = cells[i] with { Fmt = cells[i].Fmt with { LanguageTag = normalizedTag } };
-                SetRuns(paragraph, cells);
+                var live = ParaCells(p);
+                for (var i = Math.Clamp(a, 0, live.Count); i < Math.Clamp(b, 0, live.Count); i++)
+                    live[i] = live[i] with { Fmt = live[i].Fmt with { LanguageTag = normalizedTag } };
+                SetRuns(p, live);
             }));
+            return;
         }
 
-        if (indices.Count > 1)
+        if (sel is { } multi && multi.Start.Block != multi.End.Block)
+        {
+            // Multi-paragraph selection: first block from Start.Offset to its end, middle blocks in
+            // full, last block from its start to End.Offset — only the selected ranges are retagged.
+            _bus.BeginUndoGroup();
+            for (var blockIdx = multi.Start.Block; blockIdx <= multi.End.Block && blockIdx < _doc.Blocks.Count; blockIdx++)
+            {
+                if (_doc.Blocks[blockIdx] is not Paragraph bp || !IsEditable(bp))
+                    continue;
+
+                var a = blockIdx == multi.Start.Block ? multi.Start.Offset : 0;
+                var b = blockIdx == multi.End.Block ? multi.End.Offset : int.MaxValue;
+                var capturedBlock = blockIdx;
+                var capturedA = a;
+                var capturedB = b;
+
+                _bus.Execute(new ReplaceParagraphRunsCommand(capturedBlock, p =>
+                {
+                    var live = ParaCells(p);
+                    var lo = Math.Clamp(capturedA, 0, live.Count);
+                    var hi = Math.Clamp(capturedB, 0, live.Count);
+                    for (var i = lo; i < hi; i++)
+                        live[i] = live[i] with { Fmt = live[i].Fmt with { LanguageTag = normalizedTag } };
+                    SetRuns(p, live);
+                }));
+            }
             _bus.CommitUndoGroup("Proofing Language");
+            return;
+        }
+
+        // Collapsed caret: no selected text to retag. Stage a pending format for the next typed
+        // character (BZ5 convention), so the proofing language does not spill onto existing text.
+        if (CurrentParagraph() is { } paragraph && IsEditable(paragraph))
+        {
+            var caretFmt = _pendingRunFmt ?? ActiveFormatting(paragraph, _caret.Offset);
+            _pendingRunFmt = caretFmt with { LanguageTag = normalizedTag };
+        }
     }
 
     public bool ToggleSpellCheck()
