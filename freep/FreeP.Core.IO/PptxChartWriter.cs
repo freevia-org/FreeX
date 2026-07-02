@@ -218,6 +218,8 @@ internal static class PptxChartWriter
                 axPos: "r", crosses: "max");
         }
 
+        var dataTableEl = BuildDataTableEl(chart.DataTable);
+
         return new XElement(C + "plotArea",
             primaryChartTypeEl,
             secondaryChartTypeEl,
@@ -225,7 +227,8 @@ internal static class PptxChartWriter
             catAxEl,
             valAxEl,
             secCatAxEl,
-            secValAxEl);
+            secValAxEl,
+            dataTableEl);
     }
 
     /// <summary>Dispatches to the correct chart-type builder using the given axId pair.</summary>
@@ -393,6 +396,17 @@ internal static class PptxChartWriter
             el.Add(new XElement(C + "showPercent", new XAttribute("val", "1")));
 
         return el;
+    }
+
+    private static XElement? BuildDataTableEl(ChartDataTableSettings? dataTable)
+    {
+        if (dataTable is null) return null;
+
+        return new XElement(C + "dTable",
+            new XElement(C + "showHorzBorder", new XAttribute("val", BoolValue(dataTable.ShowHorizontalBorder))),
+            new XElement(C + "showVertBorder", new XAttribute("val", BoolValue(dataTable.ShowVerticalBorder))),
+            new XElement(C + "showOutline",    new XAttribute("val", BoolValue(dataTable.ShowOutlineBorder))),
+            new XElement(C + "showKeys",       new XAttribute("val", BoolValue(dataTable.ShowLegendKeys))));
     }
 
     /// <summary>
@@ -1010,6 +1024,8 @@ internal static class PptxChartWriter
 
     private static string CellReference(int column, int row) =>
         ColumnName(column) + row.ToString(CultureInfo.InvariantCulture);
+
+    private static string BoolValue(bool value) => value ? "1" : "0";
 
     private static string ColumnName(int oneBasedColumn)
     {
