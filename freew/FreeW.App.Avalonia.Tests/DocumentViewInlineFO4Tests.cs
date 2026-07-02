@@ -10,6 +10,7 @@ using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Threading;
 using FreeW.App.Avalonia.Editing;
+using FreeW.App.Presentation.DocumentView;
 using FreeW.Core.Model;
 using SkiaSharp;
 
@@ -202,6 +203,40 @@ public sealed class DocumentViewInlineFO4Tests
     }
 
     [Fact]
+    public async Task Inline_scatter_chart_uses_marker_only_plan_and_named_palette()
+    {
+        ChartVisualGeometryKind geometry = ChartVisualGeometryKind.Lines;
+        string? firstColor = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            var para = new Paragraph();
+            var chart = Chart.Create(ChartKind.Scatter, ["155", "160", "165"], [52.0, 58.0, 63.0], "Sample");
+            chart.ColorSchemeId = "colorful2";
+            para.Runs.Add(new Run(string.Empty, RunFormatting.Default) { Chart = chart });
+            doc.Blocks.Add(para);
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 2000));
+            var plans = view.InlineChartVisualPlans;
+            if (plans.Count > 0)
+            {
+                geometry = plans[0].GeometryKind;
+                firstColor = plans[0].PaletteHex[0];
+            }
+        });
+
+        if (!ran) return;
+        geometry.Should().Be(ChartVisualGeometryKind.MarkerOnly,
+            "scatter charts should not use the connected line geometry path");
+        firstColor.Should().Be("#ED7D31",
+            "Avalonia should consume the shared named chart palette");
+    }
+
+    [Fact]
     public async Task Inline_chart_title_preserved()
     {
         string? title = null;
@@ -217,6 +252,25 @@ public sealed class DocumentViewInlineFO4Tests
 
         if (!ran) return;
         title.Should().Be("Revenue", "chart title must be preserved for inline charts");
+    }
+
+    [Fact]
+    public async Task Inline_chart_quick_layout_can_suppress_title()
+    {
+        string? title = "kept";
+        var ran = await OnUiThread(() =>
+        {
+            var doc = DocWithInlineChart(ChartKind.Column, title: "Revenue");
+            ((Paragraph)doc.Blocks[0]).Runs[0].Chart!.QuickLayoutId = 1;
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 2000));
+            var rects = view.InlineChartRects;
+            if (rects.Count > 0) title = rects[0].Title;
+        });
+
+        if (!ran) return;
+        title.Should().BeNull("Avalonia should consume the shared chart plan's title visibility");
     }
 
     [Fact]

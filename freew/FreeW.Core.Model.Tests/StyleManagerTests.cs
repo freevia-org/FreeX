@@ -268,4 +268,127 @@ public class StyleManagerTests
         StyleManager.DeleteStyle(doc, styleId).Should().BeFalse();
         doc.Styles.Should().ContainKey(styleId);
     }
+
+    // ── GA1: the built-in guard must cover every style BuiltInStyles.Gallery can seed ──────────────
+    // Regression coverage: BuiltInStyleIds used to be a hand-maintained subset that omitted NoSpacing,
+    // ListParagraph, IntenseQuote and the character styles (Strong, Emphasis, SubtleEmphasis,
+    // IntenseEmphasis), so IsBuiltIn/DeleteStyle let the user delete them and any content still
+    // referencing the deleted styleId silently lost its formatting. Word never allows deleting these.
+
+    [Theory]
+    [InlineData("Strong")]
+    [InlineData("Emphasis")]
+    [InlineData("SubtleEmphasis")]
+    [InlineData("IntenseEmphasis")]
+    [InlineData("NoSpacing")]
+    [InlineData("ListParagraph")]
+    [InlineData("IntenseQuote")]
+    [InlineData("Normal")]
+    [InlineData("Heading1")]
+    public void IsBuiltIn_TrueForEveryGalleryStyle_PreviouslyOmittedOrCovered(string styleId)
+    {
+        StyleManager.IsBuiltIn(styleId).Should().BeTrue($"'{styleId}' is seeded by BuiltInStyles.Gallery");
+    }
+
+    [Theory]
+    [InlineData("Strong")]
+    [InlineData("Emphasis")]
+    [InlineData("SubtleEmphasis")]
+    [InlineData("IntenseEmphasis")]
+    [InlineData("NoSpacing")]
+    [InlineData("ListParagraph")]
+    [InlineData("IntenseQuote")]
+    [InlineData("Normal")]
+    [InlineData("Heading1")]
+    public void DeleteStyle_RefusesEveryGalleryStyle_PreviouslyDeletable(string styleId)
+    {
+        var doc = TextDocument.CreateEmpty();
+        BuiltInStyles.EnsureSeeded(doc, styleId); // ensure present regardless of default seeding
+        doc.Styles.Should().ContainKey(styleId);
+
+        StyleManager.DeleteStyle(doc, styleId).Should().BeFalse(
+            $"'{styleId}' is a genuine Word built-in and must never be deletable");
+        doc.Styles.Should().ContainKey(styleId);
+    }
+
+    [Fact]
+    public void IsBuiltIn_IsTrueForEveryStyleInBuiltInStylesGallery()
+    {
+        // Drift guard: whatever BuiltInStyles.Gallery seeds as a built-in, the delete-guard must protect.
+        // This fails automatically if a new gallery style is ever added without updating the guard logic.
+        foreach (var descriptor in BuiltInStyles.Gallery)
+            StyleManager.IsBuiltIn(descriptor.Id).Should().BeTrue(
+                $"gallery style '{descriptor.Id}' must be treated as built-in");
+    }
+
+    [Fact]
+    public void DeleteStyle_ACustomStyle_IsStillDeletable()
+    {
+        var doc = TextDocument.CreateEmpty();
+        var created = StyleManager.CreateStyle(doc, "My Custom Style", null, RunFormatting.Default, ParagraphFormatting.Default);
+
+        StyleManager.IsBuiltIn(created.Id).Should().BeFalse();
+        StyleManager.DeleteStyle(doc, created.Id).Should().BeTrue();
+        doc.Styles.Should().NotContainKey(created.Id);
+    }
+
+    // ── GA3: CreateStyle must not allow a duplicate display name ───────────────────────────────────
+    // Regression coverage: CreateStyle used to only disambiguate the styleId, not the display Name, so
+    // creating a style named "Heading 1" (colliding with the built-in "Heading1"/"Heading 1") produced a
+    // distinct id but a duplicate w:name — which Word treats as invalid / merges on load.
+
+    [Fact]
+    public void CreateStyle_DisambiguatesName_OnCollisionWithBuiltInDisplayName()
+    {
+        var doc = TextDocument.CreateEmpty();
+
+        var style = StyleManager.CreateStyle(doc, "Heading 1", null, RunFormatting.Default, ParagraphFormatting.Default);
+
+        style.Name.Should().NotBe("Heading 1");
+        style.Name.Should().Be("Heading 1 2");
+        doc.Styles.Values.Count(s => string.Equals(s.Name, style.Name, StringComparison.OrdinalIgnoreCase))
+            .Should().Be(1);
+        doc.Styles["Heading1"].Name.Should().Be("Heading 1"); // built-in untouched
+    }
+
+    [Fact]
+    public void CreateStyle_DisambiguatesName_CaseInsensitively_OnCollisionWithCustomStyle()
+    {
+        var doc = TextDocument.CreateEmpty();
+        StyleManager.CreateStyle(doc, "Callout", null, RunFormatting.Default, ParagraphFormatting.Default);
+
+        // Same name, different case — Word treats style names as case-insensitively unique.
+        var second = StyleManager.CreateStyle(doc, "CALLOUT", null, RunFormatting.Default, ParagraphFormatting.Default);
+
+        second.Name.Should().Be("CALLOUT 2");
+        doc.Styles.Values.Select(s => s.Name.ToUpperInvariant())
+            .Count(n => n == "CALLOUT" || n == "CALLOUT 2")
+            .Should().Be(2);
+    }
+
+    [Fact]
+    public void CreateStyle_DisambiguatesName_AcrossRepeatedCollisions()
+    {
+        var doc = TextDocument.CreateEmpty();
+        var a = StyleManager.CreateStyle(doc, "Callout", null, RunFormatting.Default, ParagraphFormatting.Default);
+        var b = StyleManager.CreateStyle(doc, "Callout", null, RunFormatting.Default, ParagraphFormatting.Default);
+        var c = StyleManager.CreateStyle(doc, "Callout", null, RunFormatting.Default, ParagraphFormatting.Default);
+
+        a.Name.Should().Be("Callout");
+        b.Name.Should().Be("Callout 2");
+        c.Name.Should().Be("Callout 3");
+        // No two styles share a name (no duplicate w:name would be emitted).
+        doc.Styles.Values.Select(s => s.Name).Distinct(StringComparer.OrdinalIgnoreCase).Count()
+            .Should().Be(doc.Styles.Count);
+    }
+
+    [Fact]
+    public void CreateStyle_NoNameCollision_KeepsNameUnchanged()
+    {
+        var doc = TextDocument.CreateEmpty();
+
+        var style = StyleManager.CreateStyle(doc, "Totally Unique Name", null, RunFormatting.Default, ParagraphFormatting.Default);
+
+        style.Name.Should().Be("Totally Unique Name");
+    }
 }

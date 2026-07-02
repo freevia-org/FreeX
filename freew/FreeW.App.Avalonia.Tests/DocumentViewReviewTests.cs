@@ -399,10 +399,13 @@ public sealed class DocumentViewReviewTests
 
     // ── Command resolution ────────────────────────────────────────────────────────
 
+    // GB1: a multi-paragraph selection tags only the SELECTED sub-ranges — the first block from its
+    // start offset to its end, the last block from its start to the end offset — leaving the
+    // unselected characters in each spanned paragraph untouched (mirrors Word's per-run semantics).
     [Fact]
-    public async Task Proofing_language_applies_to_selected_paragraphs()
+    public async Task Proofing_language_applies_only_to_the_selected_range_across_paragraphs()
     {
-        string? firstLanguage = null, secondLanguage = null;
+        string? firstParaText = null, secondParaText = null;
         var ran = await OnUiThread(() =>
         {
             var doc = TextDocument.CreateEmpty();
@@ -411,17 +414,49 @@ public sealed class DocumentViewReviewTests
             doc.Blocks.Add(new Paragraph("Beta"));
             var view = Build(doc);
 
+            // Select "lpha" (offset 1..end) in block 0 and "Be" (offset 0..2) in block 1.
             view.SetSelectionRangePublic(0, 1, 1, 2);
             view.SetProofingLanguage(" fr-FR ");
 
-            firstLanguage = ((Paragraph)view.Document.Blocks[0]).Runs.Single().Formatting.LanguageTag;
-            secondLanguage = ((Paragraph)view.Document.Blocks[1]).Runs.Single().Formatting.LanguageTag;
+            firstParaText = DumpLanguageTags((Paragraph)view.Document.Blocks[0]);
+            secondParaText = DumpLanguageTags((Paragraph)view.Document.Blocks[1]);
         });
         if (!ran) return;
 
-        firstLanguage.Should().Be("fr-FR");
-        secondLanguage.Should().Be("fr-FR");
+        // "A" stays untagged; "lpha" becomes fr-FR.
+        firstParaText.Should().Be("A:|lpha:fr-FR");
+        // "Be" becomes fr-FR; "ta" stays untagged.
+        secondParaText.Should().Be("Be:fr-FR|ta:");
     }
+
+    // GB1: a selection wholly within a single paragraph tags only that sub-range, leaving the rest of
+    // the paragraph's language tag unchanged.
+    [Fact]
+    public async Task Proofing_language_applies_only_to_a_single_block_sub_range()
+    {
+        string? runsDump = null;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            doc.Blocks.Add(new Paragraph("Hello world"));
+            var view = Build(doc);
+
+            // Select offsets 5..10 (" worl" — the middle sub-range) and tag it French.
+            view.SetSelectionRangePublic(0, 5, 0, 10);
+            view.SetProofingLanguage("fr-FR");
+
+            runsDump = DumpLanguageTags((Paragraph)view.Document.Blocks[0]);
+        });
+        if (!ran) return;
+
+        runsDump.Should().Be("Hello:| worl:fr-FR|d:");
+    }
+
+    // Helper: renders each Run's text alongside its resolved LanguageTag (empty when null), so a test
+    // can assert exactly which characters were retagged without depending on Cell-splitting internals.
+    private static string DumpLanguageTags(Paragraph paragraph) =>
+        string.Join("|", paragraph.Runs.Select(r => $"{r.Text}:{r.Formatting.LanguageTag}"));
 
     [Fact]
     public async Task Proofing_commands_toggle_state_dictionary_thesaurus_and_language()
@@ -450,8 +485,15 @@ public sealed class DocumentViewReviewTests
             var registry = FreeWAvaloniaRibbonCommands.Build(view, callbacks);
 
             Execute(registry, "freew.spellcheck-toggle");
+            // Add-to-Dictionary reads the word AT THE CARET, so it must run while the caret is still
+            // collapsed inside "teh" (before the selection below is made for the proofing-language check).
             Execute(registry, "freew.add-to-dictionary");
             Execute(registry, "freew.thesaurus");
+
+            // GB1: SetProofingLanguage now retags only the SELECTED range (a collapsed caret stages a
+            // pending format instead of touching existing text) — select the whole paragraph so this
+            // wiring test can still observe the tag land on the model.
+            view.SetSelectionRangePublic(0, 0, 0, "teh example".Length);
             Execute(registry, "freew.set-proofing-language");
 
             spellEnabled = view.SpellCheckEnabled;

@@ -104,6 +104,65 @@ public sealed class DocumentViewHyperlinkBookmarkTests
     }
 
     [Fact]
+    public async Task InsertHyperlink_over_selection_with_different_display_text_replaces_the_selected_text()
+    {
+        string? linkedText = null;
+        string? url = null;
+        var ran = await OnUiThread(() =>
+        {
+            var view = Build("Visit click here today");
+            // Select "click here" (offsets 6..17).
+            view.SetSelectionRangePublic(0, 6, 0, 17);
+            view.InsertHyperlink("docs", "https://x.example");
+
+            var p = (Paragraph)view.Document.Blocks[0];
+            var link = p.Runs.FirstOrDefault(r => r.HyperlinkUrl is { Length: > 0 });
+            linkedText = link?.Text;
+            url = link?.HyperlinkUrl;
+        });
+
+        if (!ran) return;
+        linkedText.Should().Be("docs", "Word replaces the selected text with the dialog's Display field when it differs");
+        url.Should().Be("https://x.example");
+    }
+
+    [Fact]
+    public async Task InsertHyperlink_over_selection_with_unchanged_display_text_only_retags_the_link()
+    {
+        string? text = null;
+        var ran = await OnUiThread(() =>
+        {
+            var view = Build("Visit Acme today");
+            view.SetSelectionRangePublic(0, 6, 0, 10); // "Acme"
+            view.InsertHyperlink("Acme", "https://acme.example"); // display text == selection
+
+            var p = (Paragraph)view.Document.Blocks[0];
+            text = p.PlainText;
+        });
+
+        if (!ran) return;
+        text.Should().Be("Visit Acme today", "when the display text matches the selection, only the Link is retagged");
+    }
+
+    [Fact]
+    public async Task InsertHyperlink_over_selection_with_empty_display_text_only_retags_the_link()
+    {
+        string? text = null;
+        var ran = await OnUiThread(() =>
+        {
+            var view = Build("Visit Acme today");
+            view.SetSelectionRangePublic(0, 6, 0, 10); // "Acme"
+            view.InsertHyperlink("", "https://acme.example"); // no display text supplied
+
+            var p = (Paragraph)view.Document.Blocks[0];
+            text = p.PlainText;
+        });
+
+        if (!ran) return;
+        text.Should().Be("Visit Acme today", "an empty display text leaves the selected text untouched");
+    }
+
+    [Fact]
     public async Task InsertHyperlink_is_undoable()
     {
         var beforeHadLink = false;
@@ -285,6 +344,161 @@ public sealed class DocumentViewHyperlinkBookmarkTests
 
         if (!ran) return;
         url.Should().Be("https://acme.example");
+    }
+
+    [Fact]
+    public async Task EditHyperlink_retargets_the_link_under_the_caret_and_preserves_text_and_screentip()
+    {
+        string? text = null;
+        string? url = null;
+        string? anchor = null;
+        string? tooltip = null;
+        var isOnLink = false;
+        var ran = await OnUiThread(() =>
+        {
+            var view = Build("See Acme site");
+            view.SetSelectionRangePublic(0, 4, 0, 8); // "Acme"
+            view.InsertHyperlink("Acme", "https://old.example");
+            view.MoveCaretToBlock(0, 6);
+            view.SetHyperlinkTooltip("Old tip");
+
+            isOnLink = view.IsCaretOnHyperlink();
+            view.EditHyperlink("#TargetBookmark");
+
+            var link = ((Paragraph)view.Document.Blocks[0]).Runs.First(r => r.HyperlinkAnchor == "TargetBookmark");
+            text = link.Text;
+            url = link.HyperlinkUrl;
+            anchor = link.HyperlinkAnchor;
+            tooltip = link.HyperlinkTooltip;
+        });
+
+        if (!ran) return;
+        isOnLink.Should().BeTrue();
+        text.Should().Be("Acme");
+        url.Should().BeNull();
+        anchor.Should().Be("TargetBookmark");
+        tooltip.Should().Be("Old tip", "retargeting should keep the existing ScreenTip");
+    }
+
+    [Fact]
+    public async Task EditHyperlink_with_changed_display_text_rewrites_the_span_text_and_retargets()
+    {
+        string? text = null;
+        string? url = null;
+        var ran = await OnUiThread(() =>
+        {
+            var view = Build("See Acme site");
+            view.SetSelectionRangePublic(0, 4, 0, 8); // "Acme"
+            view.InsertHyperlink("Acme", "https://old.example");
+            view.MoveCaretToBlock(0, 6);
+
+            view.EditHyperlink("https://new.example", "Acme Corp");
+
+            var p = (Paragraph)view.Document.Blocks[0];
+            var link = p.Runs.FirstOrDefault(r => r.HyperlinkUrl is { Length: > 0 });
+            text = link?.Text;
+            url = link?.HyperlinkUrl;
+        });
+
+        if (!ran) return;
+        text.Should().Be("Acme Corp", "an edited Display field should replace the link span's visible text, matching Word");
+        url.Should().Be("https://new.example");
+    }
+
+    [Fact]
+    public async Task EditHyperlink_with_unchanged_display_text_only_retargets()
+    {
+        string? text = null;
+        string? url = null;
+        var ran = await OnUiThread(() =>
+        {
+            var view = Build("See Acme site");
+            view.SetSelectionRangePublic(0, 4, 0, 8); // "Acme"
+            view.InsertHyperlink("Acme", "https://old.example");
+            view.MoveCaretToBlock(0, 6);
+
+            view.EditHyperlink("https://new.example", "Acme"); // display unchanged
+
+            var p = (Paragraph)view.Document.Blocks[0];
+            var link = p.Runs.FirstOrDefault(r => r.HyperlinkUrl is { Length: > 0 });
+            text = link?.Text;
+            url = link?.HyperlinkUrl;
+        });
+
+        if (!ran) return;
+        text.Should().Be("Acme", "unchanged display text leaves the span's characters untouched");
+        url.Should().Be("https://new.example");
+    }
+
+    [Fact]
+    public async Task RemoveHyperlink_clears_the_link_under_the_caret_but_keeps_visible_text()
+    {
+        var plainText = "";
+        var hasLink = true;
+        var ran = await OnUiThread(() =>
+        {
+            var view = Build("See Acme site");
+            view.SetSelectionRangePublic(0, 4, 0, 8); // "Acme"
+            view.InsertHyperlink("Acme", "https://old.example");
+            view.MoveCaretToBlock(0, 6);
+
+            view.RemoveHyperlink();
+
+            var paragraph = (Paragraph)view.Document.Blocks[0];
+            plainText = paragraph.PlainText;
+            hasLink = paragraph.Runs.Any(r => r.HyperlinkUrl is { Length: > 0 } || r.HyperlinkAnchor is { Length: > 0 });
+        });
+
+        if (!ran) return;
+        plainText.Should().Be("See Acme site");
+        hasLink.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task SetHyperlinkTooltip_sets_and_clears_the_link_screentip()
+    {
+        string? afterSet = null;
+        string? afterClear = "still set";
+        var ran = await OnUiThread(() =>
+        {
+            var view = Build("See Acme site");
+            view.SetSelectionRangePublic(0, 4, 0, 8); // "Acme"
+            view.InsertHyperlink("Acme", "https://old.example");
+            view.MoveCaretToBlock(0, 6);
+
+            view.SetHyperlinkTooltip("Screen tip");
+            afterSet = view.HyperlinkTooltipAtCaret();
+            view.SetHyperlinkTooltip(" ");
+            afterClear = view.HyperlinkTooltipAtCaret();
+        });
+
+        if (!ran) return;
+        afterSet.Should().Be("Screen tip");
+        afterClear.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task ApplyInternalLink_wraps_selection_with_bookmark_anchor()
+    {
+        string? anchor = null;
+        IReadOnlyList<string>? bookmarkNames = null;
+        var ran = await OnUiThread(() =>
+        {
+            var view = Build("Jump target", "Target");
+            view.MoveCaretToBlock(1, 0);
+            view.InsertBookmark("Target1");
+            bookmarkNames = view.BookmarkNames();
+
+            view.SetSelectionRangePublic(0, 0, 0, 4);
+            view.ApplyInternalLink("Target1");
+
+            anchor = ((Paragraph)view.Document.Blocks[0]).Runs
+                .FirstOrDefault(r => r.Text == "Jump")?.HyperlinkAnchor;
+        });
+
+        if (!ran) return;
+        bookmarkNames.Should().Contain("Target1");
+        anchor.Should().Be("Target1");
     }
 
     [Fact]

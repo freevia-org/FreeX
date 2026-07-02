@@ -431,6 +431,150 @@ public sealed class ModernObjectsRoundTripTests : IDisposable
         }
     }
 
+    // ── EA4: preserved-object rId patch-map collision (packed-uint key) ──────────
+
+    /// <summary>
+    /// Bug EA4: the old <c>PrvHashRelId(shapeId, oldRelId)</c> packed only the LOW 8 BITS of
+    /// shapeId together with a 21-bit hash of oldRelId into a single uint key shared with the
+    /// mediaById dictionary. Two preserved shapes on the SAME slide whose cNvPr ids share a low
+    /// byte (5 and 261 — 261 &amp; 0xFF == 5) and which both reference the same OLD rId string
+    /// (here "rId2", each to a DIFFERENT media part) collided on that packed key: the second
+    /// shape's write silently overwrote the first's, so BuildPreservedObjectEl rewrote one
+    /// shape's rId to the OTHER shape's media (cross-wired) — a dangling/cross-wired reference
+    /// that makes PowerPoint prompt to repair. The fix keys the patch map directly on the real
+    /// (uint shapeId, string oldRelId) tuple, so no collision is possible.
+    ///
+    /// This test builds two Model3d preserved shapes (ids 5 and 261) each with RawXml containing
+    /// an r:id="rId2" attribute and a SlideRels["rId2"] entry pointing at its OWN distinct glb
+    /// part, writes the presentation, and asserts that after write, shape 5's rewritten r:id
+    /// resolves (via the slide .rels) to shape 5's own glb bytes and shape 261's resolves to its
+    /// own glb bytes — not cross-wired.
+    /// </summary>
+    [Fact]
+    public void EA4_TwoPreservedShapesSharingLowByteIdAndOldRid_DoNotCrossWireRelIds()
+    {
+        const string model3dRelType = "http://schemas.microsoft.com/office/2017/06/relationships/model3d";
+
+        var glbBytesShape5   = new byte[] { 0x67, 0x6C, 0x54, 0x46, 0x01 }; // glTF magic + marker byte
+        var glbBytesShape261 = new byte[] { 0x67, 0x6C, 0x54, 0x46, 0x02 }; // glTF magic + different marker
+
+        static SlideShape BuildShape(uint shapeId, string oldRelId, string glbPath, byte[] glbBytes)
+        {
+            var info = new PreservedObjectInfo
+            {
+                ObjectKind          = PreservedObjectKind.Model3d,
+                RawXml              =
+                    $"<p:graphicFrame xmlns:p=\"http://schemas.openxmlformats.org/presentationml/2006/main\" " +
+                    $"xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\" " +
+                    $"xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\">" +
+                    $"<p:nvGraphicFramePr><p:cNvPr id=\"{shapeId}\" name=\"Model{shapeId}\"/>" +
+                    $"<p:cNvGraphicFramePr/><p:nvPr/></p:nvGraphicFramePr>" +
+                    $"<p:xfrm><a:off x=\"0\" y=\"0\"/><a:ext cx=\"914400\" cy=\"914400\"/></p:xfrm>" +
+                    $"<a:graphic><a:graphicData uri=\"http://schemas.microsoft.com/office/drawing/2017/model3d\">" +
+                    $"<am3d:model3d xmlns:am3d=\"http://schemas.microsoft.com/office/drawing/2017/model3d\" " +
+                    $"r:id=\"{oldRelId}\"/></a:graphicData></a:graphic></p:graphicFrame>",
+                WasAlternateContent = false,
+            };
+            info.Parts[glbPath]            = glbBytes;
+            info.PartContentTypes[glbPath] = "model/gltf-binary";
+            info.SlideRels[oldRelId]       = (model3dRelType, glbPath);
+
+            return new SlideShape
+            {
+                Id              = shapeId,
+                Kind            = SlideShapeKind.Model3d,
+                ExtentCxEmu     = 914400,
+                ExtentCyEmu     = 914400,
+                PreservedObject = info,
+            };
+        }
+
+        var slide = new Slide();
+        var shape5   = BuildShape(5,   "rId2", "ppt/media/model5.glb",   glbBytesShape5);
+        var shape261 = BuildShape(261, "rId2", "ppt/media/model261.glb", glbBytesShape261);
+        slide.Shapes.Add(shape5);
+        slide.Shapes.Add(shape261);
+
+        var pres = new Presentation();
+        pres.Slides.Add(slide);
+
+        using var ms = WritePptxToMemory(pres);
+        using var zip = new ZipArchive(ms, ZipArchiveMode.Read, leaveOpen: true);
+
+        // Load slide1.xml and slide1.xml.rels
+        var slideEntry = zip.GetEntry("ppt/slides/slide1.xml");
+        Assert.NotNull(slideEntry);
+        XDocument slideDoc;
+        using (var s = slideEntry!.Open()) slideDoc = XDocument.Load(s);
+
+        var relsEntry = zip.GetEntry("ppt/slides/_rels/slide1.xml.rels");
+        Assert.NotNull(relsEntry);
+        XDocument relsDoc;
+        using (var s = relsEntry!.Open()) relsDoc = XDocument.Load(s);
+
+        XNamespace pkgRelsNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        var relTargetById = relsDoc.Root!.Elements(pkgRelsNs + "Relationship")
+            .ToDictionary(
+                e => e.Attribute("Id")!.Value,
+                e => e.Attribute("Target")!.Value);
+
+        // Find the two am3d:model3d elements (one per cNvPr id) and read their (rewritten) r:id.
+        XNamespace r = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace p = "http://schemas.openxmlformats.org/presentationml/2006/main";
+
+        string GetRewrittenRelIdFor(uint shapeId)
+        {
+            var gf = slideDoc.Descendants(p + "graphicFrame")
+                .FirstOrDefault(g => g.Descendants(p + "cNvPr")
+                    .Any(c => c.Attribute("id")?.Value == shapeId.ToString()));
+            Assert.NotNull(gf);
+            var idAttr = gf!.Descendants()
+                .SelectMany(e => e.Attributes())
+                .FirstOrDefault(a => a.Name.NamespaceName == r.NamespaceName);
+            Assert.NotNull(idAttr);
+            return idAttr!.Value;
+        }
+
+        var relId5   = GetRewrittenRelIdFor(5);
+        var relId261 = GetRewrittenRelIdFor(261);
+
+        // The two shapes must have been allocated DIFFERENT fresh rIds (if the collision bug were
+        // present, the underlying map corruption could manifest in various ways, but the key
+        // observable symptom is that each rewritten rId must resolve to the shape's OWN media).
+        Assert.True(relTargetById.ContainsKey(relId5), $"rewritten rId '{relId5}' for shape 5 must exist in slide rels");
+        Assert.True(relTargetById.ContainsKey(relId261), $"rewritten rId '{relId261}' for shape 261 must exist in slide rels");
+
+        var target5   = relTargetById[relId5];
+        var target261 = relTargetById[relId261];
+
+        target5.Should().Contain("model5.glb", "shape 5's rewritten rId must resolve to shape 5's OWN media, not shape 261's");
+        target261.Should().Contain("model261.glb", "shape 261's rewritten rId must resolve to shape 261's OWN media, not shape 5's");
+
+        // Cross-wiring guard: neither shape's target should point at the OTHER shape's media.
+        target5.Should().NotContain("model261.glb", "shape 5 must not be cross-wired to shape 261's media");
+        target261.Should().NotContain("model5.glb", "shape 261 must not be cross-wired to shape 5's media");
+
+        // Also verify the actual bytes at the resolved zip paths are the shape's own bytes.
+        string ResolveZipPath(string relTarget) =>
+            relTarget.TrimStart('.', '/') is var t && t.StartsWith("media/") ? $"ppt/{t}" : t;
+
+        var entry5   = zip.GetEntry(ResolveZipPath(target5));
+        var entry261 = zip.GetEntry(ResolveZipPath(target261));
+        Assert.NotNull(entry5);
+        Assert.NotNull(entry261);
+
+        byte[] ReadAll(ZipArchiveEntry e)
+        {
+            using var es = e.Open();
+            using var msOut = new MemoryStream();
+            es.CopyTo(msOut);
+            return msOut.ToArray();
+        }
+
+        ReadAll(entry5!).Should().BeEquivalentTo(glbBytesShape5, "shape 5's media bytes must be its own, not shape 261's");
+        ReadAll(entry261!).Should().BeEquivalentTo(glbBytesShape261, "shape 261's media bytes must be its own, not shape 5's");
+    }
+
     // ── EA3: mc:AlternateContent Requires token round-trips verbatim ──────────────
 
     [Fact]
@@ -669,6 +813,353 @@ public sealed class ModernObjectsRoundTripTests : IDisposable
                 slideXml.Should().NotContain($"xmlns:zzUnknown=\"{p14Uri}\"");
         };
         writeAction.Should().NotThrow("an unknown Requires token must not crash the save");
+    }
+
+    // ── EA4: preserved-object rId patch-map collision ─────────────────────────
+
+    /// <summary>
+    /// Bug EA4: the writer packed (shapeId, oldRelId) into a single uint key using only the LOW 8
+    /// BITS of shapeId plus a 21-bit hash of oldRelId. Two preserved shapes on the SAME SLIDE whose
+    /// cNvPr ids share a low byte (5 and 261 -&gt; 261 &amp; 0xFF == 5) and which both reference the
+    /// same OLD rId string internally ("rId2", each to a DIFFERENT media part) collide on that
+    /// packed key — the second shape's write overwrites the first's, so one shape's rId gets
+    /// patched to the wrong (or a stale) new rId, cross-wiring its media reference. This test builds
+    /// exactly that scenario and asserts each shape resolves to its OWN media after round-trip.
+    /// </summary>
+    [Fact]
+    public void EA4_TwoPreservedShapesSharingLowByteAndOldRid_DoNotCrossWireMedia()
+    {
+        const string unknownUri = "http://example.com/ea4/test";
+        const string relType = "http://example.com/ea4/rel";
+
+        // Shape A: cNvPr id = 5, references local "rId2" -> media part A.
+        string ShapeXml(uint id, string label) => $"""
+            <p:graphicFrame xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                            xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+                            xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+              <p:nvGraphicFramePr>
+                <p:cNvPr id="{id}" name="EA4-{label}"/>
+                <p:cNvGraphicFramePr/>
+                <p:nvPr/>
+              </p:nvGraphicFramePr>
+              <p:xfrm>
+                <a:off x="0" y="0"/>
+                <a:ext cx="914400" cy="914400"/>
+              </p:xfrm>
+              <a:graphic>
+                <a:graphicData uri="{unknownUri}">
+                  <ex:data xmlns:ex="{unknownUri}" r:id="rId2"/>
+                </a:graphicData>
+              </a:graphic>
+            </p:graphicFrame>
+            """;
+
+        var mediaA = new byte[] { 0xAA, 0x01 };
+        var mediaB = new byte[] { 0xBB, 0x02, 0x02 };
+
+        var ms1 = BuildPptxWithTwoShapesSharingOldRid(
+            ShapeXml(5, "A"), ShapeXml(261, "B"),
+            relType,
+            mediaAPath: "ppt/media/ea4MediaA.bin", mediaABytes: mediaA,
+            mediaBPath: "ppt/media/ea4MediaB.bin", mediaBBytes: mediaB);
+
+        var pres1 = PptxPackageReader.Read(ms1);
+        var slide1 = pres1.Slides[0];
+        var shapeA1 = slide1.Shapes.First(s => s.Id == 5);
+        var shapeB1 = slide1.Shapes.First(s => s.Id == 261);
+        shapeA1.PreservedObject.Should().NotBeNull();
+        shapeB1.PreservedObject.Should().NotBeNull();
+
+        // Write, then re-read the output package to verify no cross-wiring.
+        var ms2 = WritePptxToMemory(pres1);
+        ms2.Position = 0;
+
+        using var zip = new ZipArchive(ms2, ZipArchiveMode.Read, leaveOpen: true);
+        var slideEntry = zip.Entries.First(e =>
+            e.FullName.StartsWith("ppt/slides/slide") && e.FullName.EndsWith(".xml"));
+        string slideXml;
+        using (var sr = new StreamReader(slideEntry.Open())) slideXml = sr.ReadToEnd();
+        var slideDoc = XDocument.Parse(slideXml);
+
+        var slideRelsEntry = zip.Entries.First(e =>
+            e.FullName.StartsWith("ppt/slides/_rels/slide") && e.FullName.EndsWith(".rels"));
+        string slideRelsXml;
+        using (var sr = new StreamReader(slideRelsEntry.Open())) slideRelsXml = sr.ReadToEnd();
+        var relsDoc = XDocument.Parse(slideRelsXml);
+
+        XNamespace rNs  = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace relsNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        string ResolveMediaBytesForShape(uint shapeId)
+        {
+            var cNvPr = slideDoc.Descendants().First(e =>
+                e.Name.LocalName == "cNvPr" && e.Attribute("id")?.Value == shapeId.ToString());
+            var exData = cNvPr.Parent!.Parent!.Descendants().First(e => e.Name.LocalName == "data");
+            var newRid = exData.Attribute(rNs + "id")!.Value;
+
+            var relEl = relsDoc.Root!.Elements(relsNs + "Relationship")
+                .First(e => e.Attribute("Id")!.Value == newRid);
+            var target = relEl.Attribute("Target")!.Value;
+            var targetPath = target.TrimStart('.', '/');
+            targetPath = "ppt/" + targetPath[(targetPath.IndexOf("media/", StringComparison.Ordinal))..];
+
+            var entry = zip.GetEntry(targetPath);
+            entry.Should().NotBeNull($"resolved media part '{targetPath}' for shape {shapeId} must exist in the output zip");
+            using var es = entry!.Open();
+            using var msOut = new MemoryStream();
+            es.CopyTo(msOut);
+            return Convert.ToBase64String(msOut.ToArray());
+        }
+
+        var bytesForA = ResolveMediaBytesForShape(5);
+        var bytesForB = ResolveMediaBytesForShape(261);
+
+        bytesForA.Should().Be(Convert.ToBase64String(mediaA),
+            "shape 5 (cNvPr id 5) must resolve to its OWN media part A, not shape 261's media");
+        bytesForB.Should().Be(Convert.ToBase64String(mediaB),
+            "shape 261 (cNvPr id 261, 261 & 0xFF == 5) must resolve to its OWN media part B, " +
+            "not shape 5's media — this is the EA4 cross-wiring bug when it regresses");
+    }
+
+    /// <summary>
+    /// Builds a minimal PPTX whose slide has TWO preserved (PreservedObject) shapes, cNvPr ids 5
+    /// and 261 (261 &amp; 0xFF == 5, the EA4 collision precondition), each with
+    /// <see cref="PreservedObjectInfo.SlideRels"/> keyed on the literal OLD id string "rId2" but
+    /// pointing at its OWN distinct media part.
+    ///
+    /// Real OPC .rels files are flat per-part and cannot contain two relationships both literally
+    /// named "rId2" resolving to different targets, so this scenario cannot be expressed as a single
+    /// hand-rolled slide.xml.rels — it arises in practice from PreservedObjectInfo.SlideRels being
+    /// captured PER-SHAPE (each shape's own "rId2" usage is captured independently by
+    /// CaptureReferencedParts) whenever two DIFFERENT shapes on a slide each happen to reference an
+    /// rId with the same string value. To reproduce that deterministically and directly test the
+    /// writer's patch-map keying (the actual site of the EA4 bug), this helper constructs the two
+    /// SlideShape/PreservedObjectInfo objects directly in-memory (bypassing the XML reader) with the
+    /// colliding old-rid string "rId2" set explicitly on both, then runs them through the real
+    /// writer.
+    /// </summary>
+    private static MemoryStream BuildPptxWithTwoShapesSharingOldRid(
+        string shapeAXml, string shapeBXml,
+        string relType,
+        string mediaAPath, byte[] mediaABytes,
+        string mediaBPath, byte[] mediaBBytes)
+    {
+        // Build directly via the in-memory model + writer, then re-read, so both shapes'
+        // PreservedObject.SlideRels literally key on the OLD id string "rId2" for both shapes —
+        // reproducing the exact writer-side collision precondition without fighting OPC's
+        // one-rId-one-target invariant in a hand-rolled .rels file.
+        var pres = new Presentation();
+        var slide = new Slide();
+
+        SlideShape MakeShape(uint id, string rawXml, string mediaPath, byte[] mediaBytes)
+        {
+            var info = new PreservedObjectInfo
+            {
+                ObjectKind = PreservedObjectKind.Unknown,
+                RawXml     = rawXml,
+            };
+            info.Parts[mediaPath] = mediaBytes;
+            info.PartContentTypes[mediaPath] = "application/octet-stream";
+            // Both shapes capture the SAME old rId string "rId2" pointing at their OWN distinct
+            // media part — this is the exact EA4 collision precondition.
+            info.SlideRels["rId2"] = (relType, mediaPath);
+
+            return new SlideShape
+            {
+                Id              = id,
+                Kind            = SlideShapeKind.PreservedObject,
+                ExtentCxEmu     = 914400,
+                ExtentCyEmu     = 914400,
+                PreservedObject = info,
+            };
+        }
+
+        slide.Shapes.Add(MakeShape(5, shapeAXml, mediaAPath, mediaABytes));
+        slide.Shapes.Add(MakeShape(261, shapeBXml, mediaBPath, mediaBBytes));
+        pres.Slides.Add(slide);
+
+        return WritePptxToMemory(pres);
+    }
+
+    // ── EA5: preserved-part capture is transitive (no dangling .rels targets) ────
+
+    /// <summary>
+    /// Bug EA5: the reader captured a preserved part's bytes plus its OWN .rels bytes, but never
+    /// followed the relationship targets DECLARED INSIDE that .rels to capture the further parts
+    /// they reference. A 3D-model part (e.g. "ppt/model3d/model1.glb") commonly has its own .rels
+    /// pointing at a secondary part such as an embedded texture — the old code left that texture
+    /// uncaptured, yet the writer still re-emitted the model's .rels VERBATIM (still referencing
+    /// the texture's original path) — so the OUTPUT package had a relationship pointing at a part
+    /// that was never written, which PowerPoint reports as needing repair.
+    ///
+    /// This test builds a preserved Model3d graphicFrame referencing "ppt/model3d/model1.glb",
+    /// gives that part its OWN .rels with a relationship to a secondary texture part
+    /// ("ppt/model3d/textures/texture1.png"), reads it, writes it back out, and asserts:
+    ///  1. the texture part exists in the output zip,
+    ///  2. its content type is declared (either a Default extension entry or an Override),
+    ///  3. the model part's re-emitted .rels still resolves to a target that actually exists in
+    ///     the output zip (no dangling reference).
+    /// </summary>
+    [Fact]
+    public void EA5_TransitivePartCapture_TextureReferencedByModelRels_IsCapturedAndWritten_NoDanglingRefs()
+    {
+        const string model3dRelType = "http://schemas.microsoft.com/office/2017/06/relationships/model3d";
+        const string textureRelType = "http://schemas.microsoft.com/office/2017/06/relationships/model3dTexture";
+
+        const string modelPartPath   = "ppt/model3d/model1.glb";
+        const string texturePartPath = "ppt/model3d/textures/texture1.png";
+
+        var glbBytes     = new byte[] { 0x67, 0x6C, 0x54, 0x46, 0x02, 0x00 }; // glTF magic
+        var textureBytes = MinPng;
+
+        const string model3dXml = """
+            <p:graphicFrame xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                            xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+                            xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+              <p:nvGraphicFramePr>
+                <p:cNvPr id="80" name="EA5 3D Model"/>
+                <p:cNvGraphicFramePr/>
+                <p:nvPr/>
+              </p:nvGraphicFramePr>
+              <p:xfrm>
+                <a:off x="914400" y="457200"/>
+                <a:ext cx="2743200" cy="2743200"/>
+              </p:xfrm>
+              <a:graphic>
+                <a:graphicData uri="http://schemas.microsoft.com/office/drawing/2017/model3d">
+                  <am3d:model3d xmlns:am3d="http://schemas.microsoft.com/office/drawing/2017/model3d"
+                                r:id="rIdModel1"/>
+                </a:graphicData>
+              </a:graphic>
+            </p:graphicFrame>
+            """;
+
+        var ms1 = BuildPptxWithShapeXml(model3dXml,
+            extraParts: new()
+            {
+                [modelPartPath] = (glbBytes, "model/gltf-binary"),
+            },
+            extraRels: new()
+            {
+                ["rIdModel1"] = (model3dRelType, "../model3d/model1.glb"),
+            });
+
+        // Inject the model part's OWN .rels (pointing at the secondary texture part) and the
+        // texture bytes themselves — BuildPptxWithShapeXml only wires up the SLIDE's rels, so we
+        // add the model-part-level .rels and the texture part directly here.
+        using (var zip = new ZipArchive(ms1, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            var textureEntry = zip.CreateEntry(texturePartPath, CompressionLevel.Optimal);
+            using (var s = textureEntry.Open()) s.Write(textureBytes, 0, textureBytes.Length);
+
+            const string modelRelsPath = "ppt/model3d/_rels/model1.glb.rels";
+            var modelRelsDoc = new XDocument(
+                new XDeclaration("1.0", "UTF-8", "yes"),
+                new XElement(XNamespace.Get("http://schemas.openxmlformats.org/package/2006/relationships") + "Relationships",
+                    new XElement(XNamespace.Get("http://schemas.openxmlformats.org/package/2006/relationships") + "Relationship",
+                        new XAttribute("Id", "rIdTexture1"),
+                        new XAttribute("Type", textureRelType),
+                        new XAttribute("Target", "textures/texture1.png"))));
+            var modelRelsEntry = zip.CreateEntry(modelRelsPath, CompressionLevel.Optimal);
+            using (var sw = new StreamWriter(modelRelsEntry.Open())) modelRelsDoc.Save(sw);
+        }
+        ms1.Position = 0;
+
+        // Read
+        var pres1 = PptxPackageReader.Read(ms1);
+        var m3d = pres1.Slides[0].Shapes.FirstOrDefault(s => s.Kind == SlideShapeKind.Model3d);
+        m3d.Should().NotBeNull("the 3D model graphicFrame should not be silently dropped");
+        m3d!.PreservedObject.Should().NotBeNull();
+
+        // EA5 core assertion (read side): the texture part referenced by the model's OWN .rels
+        // must have been captured transitively, not just the model part itself.
+        m3d.PreservedObject!.Parts.Should().ContainKey(texturePartPath,
+            "EA5: the texture part referenced by the model part's own .rels must be captured transitively");
+        m3d.PreservedObject.Parts[texturePartPath].Should().BeEquivalentTo(textureBytes,
+            "the captured texture bytes must match the original texture part");
+        m3d.PreservedObject.PartContentTypes.Should().ContainKey(texturePartPath,
+            "a content type must be recorded for the transitively captured texture part");
+
+        // Write back out
+        var ms2 = WritePptxToMemory(pres1);
+        using var zip2 = new ZipArchive(ms2, ZipArchiveMode.Read, leaveOpen: true);
+
+        // (1) The texture part must exist somewhere in the output zip (path may have been
+        // reindexed if it collided with an existing part, but it must exist SOMEWHERE).
+        var writtenModelEntry = zip2.Entries.FirstOrDefault(e =>
+            e.FullName.Equals(modelPartPath, StringComparison.OrdinalIgnoreCase) ||
+            e.FullName.Contains("preserved_", StringComparison.OrdinalIgnoreCase) && e.FullName.EndsWith(".glb"));
+        writtenModelEntry.Should().NotBeNull("the model part itself must be written to the output zip");
+
+        // Find the model part's own .rels in the output (at whatever path the model part landed).
+        var modelRelsOutEntry = zip2.Entries.FirstOrDefault(e =>
+            e.FullName.EndsWith(".rels") && e.FullName.Contains("model", StringComparison.OrdinalIgnoreCase));
+        modelRelsOutEntry.Should().NotBeNull("the model part's .rels must be re-emitted");
+
+        XDocument modelRelsOutDoc;
+        using (var s = modelRelsOutEntry!.Open()) modelRelsOutDoc = XDocument.Load(s);
+        XNamespace relsNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        var textureRel = modelRelsOutDoc.Root!.Elements(relsNs + "Relationship")
+            .FirstOrDefault(e => e.Attribute("Type")?.Value == textureRelType);
+        textureRel.Should().NotBeNull("the model's re-emitted .rels must still declare the texture relationship");
+
+        // (2)+(3) Resolve the texture relationship's target relative to the model part's directory
+        // and assert it exists in the output zip (no dangling reference) — the whole point of EA5.
+        var modelDirInOutput = writtenModelEntry!.FullName.Contains('/')
+            ? writtenModelEntry.FullName[..writtenModelEntry.FullName.LastIndexOf('/')]
+            : string.Empty;
+        var textureTarget = textureRel!.Attribute("Target")!.Value;
+
+        string ResolveRelative(string baseDir, string target)
+        {
+            var combined = string.IsNullOrEmpty(baseDir) ? target : $"{baseDir}/{target}";
+            var segments = combined.Split('/');
+            var stack = new List<string>();
+            foreach (var seg in segments)
+            {
+                if (seg is "" or ".") continue;
+                if (seg == "..") { if (stack.Count > 0) stack.RemoveAt(stack.Count - 1); continue; }
+                stack.Add(seg);
+            }
+            return string.Join("/", stack);
+        }
+
+        var resolvedTexturePath = ResolveRelative(modelDirInOutput, textureTarget);
+        var textureOutEntry = zip2.GetEntry(resolvedTexturePath);
+        textureOutEntry.Should().NotBeNull(
+            $"EA5: the model's .rels declares a relationship to '{textureTarget}' (resolved to " +
+            $"'{resolvedTexturePath}') but no such part exists in the output zip — this is exactly " +
+            "the dangling-reference bug that makes PowerPoint prompt to repair.");
+
+        byte[] textureOutBytes;
+        using (var es = textureOutEntry!.Open())
+        using (var msOut = new MemoryStream())
+        {
+            es.CopyTo(msOut);
+            textureOutBytes = msOut.ToArray();
+        }
+        textureOutBytes.Should().BeEquivalentTo(textureBytes, "the texture bytes must survive the round-trip");
+
+        // (2) Content type must be declared for the texture part's actual written path (Default
+        // extension entry OR an Override) — otherwise PowerPoint still can't load it correctly.
+        var ctEntry = zip2.GetEntry("[Content_Types].xml");
+        ctEntry.Should().NotBeNull();
+        XDocument ctDoc;
+        using (var s = ctEntry!.Open()) ctDoc = XDocument.Load(s);
+        XNamespace ct = "http://schemas.openxmlformats.org/package/2006/content-types";
+
+        var textureExt = resolvedTexturePath.Contains('.')
+            ? resolvedTexturePath[(resolvedTexturePath.LastIndexOf('.') + 1)..]
+            : string.Empty;
+        var hasDefaultForExt = ctDoc.Root!.Elements(ct + "Default")
+            .Any(e => string.Equals(e.Attribute("Extension")?.Value, textureExt, StringComparison.OrdinalIgnoreCase));
+        var hasOverrideForPath = ctDoc.Root!.Elements(ct + "Override")
+            .Any(e => (e.Attribute("PartName")?.Value ?? "").TrimStart('/')
+                .Equals(resolvedTexturePath, StringComparison.OrdinalIgnoreCase));
+
+        (hasDefaultForExt || hasOverrideForPath).Should().BeTrue(
+            $"the texture part at '{resolvedTexturePath}' must have a declared content type " +
+            "(Default extension entry or Override) in [Content_Types].xml");
     }
 
     // ── SlideCloner preserves modern object ───────────────────────────────────

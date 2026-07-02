@@ -12,11 +12,16 @@ public enum PresentationReviewWorkflowIntentKind
     PreviousComment,
     NextComment,
     ResolveComment,
+    ReopenComment,
     CheckAccessibility,
     OpenAltText,
     ApplyAltText,
     ToggleAltTextDecorative,
     CloseAltTextPane,
+    OpenReadingOrderPane,
+    MoveReadingOrderEarlier,
+    MoveReadingOrderLater,
+    SelectReadingOrderItem,
     RunProofing
 }
 
@@ -25,6 +30,12 @@ public enum PresentationWorkflowCapabilityStatus
     Available,
     RequiresHost,
     Deferred
+}
+
+public enum PresentationCommentThreadStatus
+{
+    Open,
+    Resolved
 }
 
 public enum PresentationAccessibilityIssueSeverity
@@ -53,7 +64,10 @@ public sealed record PresentationCommentDescriptor(
     long Yemu,
     bool CanEdit,
     bool CanDelete,
-    bool CanResolve);
+    bool CanResolve,
+    bool CanReopen,
+    PresentationCommentThreadStatus ThreadStatus,
+    bool IsSelected);
 
 public sealed record PresentationCommentPanePlan(
     int SlideIndex,
@@ -62,7 +76,13 @@ public sealed record PresentationCommentPanePlan(
     int TotalCommentCount,
     int SelectedCommentIndex,
     IReadOnlyList<PresentationCommentDescriptor> Comments,
-    IReadOnlyList<PresentationReviewWorkflowActionPlan> Actions);
+    IReadOnlyList<PresentationReviewWorkflowActionPlan> Actions)
+{
+    public PresentationCommentDescriptor? SelectedComment =>
+        SelectedCommentIndex >= 0 && SelectedCommentIndex < Comments.Count
+            ? Comments[SelectedCommentIndex]
+            : null;
+}
 
 public sealed record PresentationCommentMutationPlan(
     PresentationReviewWorkflowIntentKind Intent,
@@ -138,6 +158,43 @@ public sealed record PresentationAccessibilitySummaryPlan(
     IReadOnlyList<PresentationAccessibilityIssueDescriptor> Issues,
     IReadOnlyList<PresentationReviewWorkflowActionPlan> Actions);
 
+public sealed record PresentationReadingOrderItemPlan(
+    int ReadingOrderIndex,
+    int NestingDepth,
+    uint ShapeId,
+    string ShapeName,
+    SlideShapeKind ShapeType,
+    string ShapeTypeLabel,
+    string AlternativeTextTitle,
+    string AlternativeTextDescription,
+    bool IsDecorative,
+    string AccessibilitySummary,
+    bool IsSelected);
+
+public sealed record PresentationReadingOrderPlan(
+    int SlideIndex,
+    bool HasSlide,
+    bool HasSingleSelectedItem,
+    uint? SelectedShapeId,
+    int SelectedItemIndex,
+    IReadOnlyList<PresentationReadingOrderItemPlan> Items,
+    IReadOnlyList<PresentationReviewWorkflowActionPlan> Actions)
+{
+    public PresentationReadingOrderItemPlan? SelectedItem =>
+        SelectedItemIndex >= 0 && SelectedItemIndex < Items.Count
+            ? Items[SelectedItemIndex]
+            : null;
+}
+
+public sealed record PresentationReadingOrderMutationPlan(
+    PresentationReviewWorkflowIntentKind Intent,
+    bool ShouldApply,
+    int SlideIndex,
+    uint? ShapeId,
+    int SourceIndex,
+    int TargetIndex,
+    string? ValidationMessage);
+
 public sealed record PresentationProofingRequestPlan(
     bool CanStart,
     PresentationWorkflowCapabilityStatus Status,
@@ -155,6 +212,7 @@ public static class PresentationReviewWorkflowPlanner
     public const string PreviousCommentCommandId = "freep.review.comments.previous";
     public const string NextCommentCommandId = "freep.review.comments.next";
     public const string ResolveCommentCommandId = "freep.review.comments.resolve";
+    public const string ReopenCommentCommandId = "freep.review.comments.reopen";
     public const string AccessibilityCommandId = "freep.review.accessibility.check";
     public const string AltTextCommandId = "freep.review.alt-text";
     public const string AltTextPaneApplyCommandId = "freep.review.alt-text.apply";
@@ -162,17 +220,35 @@ public static class PresentationReviewWorkflowPlanner
     public const string AltTextPaneCloseCommandId = "freep.review.alt-text.close";
     public const string AltTextTitleFieldId = "title";
     public const string AltTextDescriptionFieldId = "description";
+    public const string ReadingOrderPaneCommandId = "freep.review.reading-order.pane";
+    public const string ReadingOrderMoveEarlierCommandId = "freep.review.reading-order.move-earlier";
+    public const string ReadingOrderMoveLaterCommandId = "freep.review.reading-order.move-later";
+    public const string ReadingOrderSelectItemCommandId = "freep.review.reading-order.select";
     public const string ProofingCommandId = "freep.review.proofing.spelling";
     public const string InsertLinkCommandId = "freep.insert-link";
 
     public const string MissingSlideMessage = "Select a slide before adding a comment.";
     public const string MissingCommentMessage = "Select an existing comment first.";
     public const string EmptyCommentMessage = "Comment text cannot be empty.";
-    public const string ModernCommentStateDeferredMessage =
-        "Modern resolved-thread state is not modeled yet.";
+    public const string CommentAlreadyResolvedMessage =
+        "Selected comment thread is already resolved.";
+    public const string CommentAlreadyOpenMessage =
+        "Selected comment thread is already open.";
     public const string MissingShapeMessage = "Select a shape before editing alt text.";
     public const string MissingAltTextDescriptionMessage =
         "Alt text description is required unless the object is marked decorative.";
+    public const string MissingReadingOrderSelectionMessage =
+        "Select one shape before changing reading order.";
+    public const string EmptyReadingOrderMessage =
+        "Current slide has no shapes in the reading order.";
+    public const string ReadingOrderReorderDeferredMessage =
+        "Reading order mutation is deferred; this shared plan exposes stable shape order for a visible pane follow-up.";
+    public const string NestedReadingOrderReorderDeferredMessage =
+        "Nested/group child reading-order moves are deferred; select a top-level shape first.";
+    public const string ReadingOrderAlreadyEarliestMessage =
+        "Selected shape is already earliest in the reading order.";
+    public const string ReadingOrderAlreadyLatestMessage =
+        "Selected shape is already latest in the reading order.";
     public const string ProofingRequiresHostMessage =
         "Proofing needs a host spelling engine; this shared plan owns the searchable FreeP scopes.";
     public const string MissingSlideTitleActionSummary =
@@ -192,7 +268,7 @@ public static class PresentationReviewWorkflowPlanner
         var selected = NormalizeSelectedCommentIndex(slides, slideIndex, selectedCommentIndex);
         var comments = GetSlide(slides, slideIndex)?.Comments ?? [];
         var descriptors = comments
-            .Select((comment, index) => DescribeComment(slideIndex, index, comment))
+            .Select((comment, index) => DescribeComment(slideIndex, index, comment, selected == index))
             .ToArray();
         var total = slides.Sum(slide => slide.Comments.Count);
 
@@ -236,6 +312,9 @@ public static class PresentationReviewWorkflowPlanner
             Initials = NormalizeInitials(initials, author),
             Text = normalizedText,
             DateTime = timestamp,
+            IsResolved = false,
+            ResolvedDateTime = null,
+            ResolvedBy = string.Empty,
             Xemu = Math.Max(0, xemu),
             Yemu = Math.Max(0, yemu),
             Idx = slide.Comments.Count + 1
@@ -279,6 +358,9 @@ public static class PresentationReviewWorkflowPlanner
             Initials = NormalizeText(initials) ?? current.Initials,
             Text = normalizedText,
             DateTime = current.DateTime,
+            IsResolved = current.IsResolved,
+            ResolvedDateTime = current.ResolvedDateTime,
+            ResolvedBy = current.ResolvedBy,
             Xemu = current.Xemu,
             Yemu = current.Yemu,
             Idx = current.Idx,
@@ -315,13 +397,151 @@ public static class PresentationReviewWorkflowPlanner
     public static PresentationCommentMutationPlan BuildResolveCommentPlan(
         IReadOnlyList<Slide> slides,
         int slideIndex,
+        int commentIndex,
+        DateTime? resolvedAt = null,
+        string? resolvedBy = null)
+    {
+        ArgumentNullException.ThrowIfNull(slides);
+
+        var current = GetComment(slides, slideIndex, commentIndex);
+        if (current is null)
+        {
+            return InvalidMutation(PresentationReviewWorkflowIntentKind.ResolveComment, slideIndex, commentIndex, MissingCommentMessage);
+        }
+
+        if (current.IsResolved)
+        {
+            return InvalidMutation(PresentationReviewWorkflowIntentKind.ResolveComment, slideIndex, commentIndex, CommentAlreadyResolvedMessage);
+        }
+
+        var comment = CloneComment(current);
+        comment.IsResolved = true;
+        comment.ResolvedDateTime = resolvedAt;
+        comment.ResolvedBy = NormalizeText(resolvedBy) ?? string.Empty;
+        return new PresentationCommentMutationPlan(
+            PresentationReviewWorkflowIntentKind.ResolveComment,
+            true,
+            slideIndex,
+            commentIndex,
+            comment,
+            null);
+    }
+
+    public static PresentationCommentMutationPlan BuildReopenCommentPlan(
+        IReadOnlyList<Slide> slides,
+        int slideIndex,
         int commentIndex)
     {
         ArgumentNullException.ThrowIfNull(slides);
 
-        return GetComment(slides, slideIndex, commentIndex) is null
-            ? InvalidMutation(PresentationReviewWorkflowIntentKind.ResolveComment, slideIndex, commentIndex, MissingCommentMessage)
-            : InvalidMutation(PresentationReviewWorkflowIntentKind.ResolveComment, slideIndex, commentIndex, ModernCommentStateDeferredMessage);
+        var current = GetComment(slides, slideIndex, commentIndex);
+        if (current is null)
+        {
+            return InvalidMutation(PresentationReviewWorkflowIntentKind.ReopenComment, slideIndex, commentIndex, MissingCommentMessage);
+        }
+
+        if (!current.IsResolved)
+        {
+            return InvalidMutation(PresentationReviewWorkflowIntentKind.ReopenComment, slideIndex, commentIndex, CommentAlreadyOpenMessage);
+        }
+
+        var comment = CloneComment(current);
+        comment.IsResolved = false;
+        comment.ResolvedDateTime = null;
+        comment.ResolvedBy = string.Empty;
+        return new PresentationCommentMutationPlan(
+            PresentationReviewWorkflowIntentKind.ReopenComment,
+            true,
+            slideIndex,
+            commentIndex,
+            comment,
+            null);
+    }
+
+    public static bool TryApplyCommentMutationPlan(
+        IReadOnlyList<Slide> slides,
+        PresentationCommentMutationPlan plan)
+    {
+        ArgumentNullException.ThrowIfNull(slides);
+        ArgumentNullException.ThrowIfNull(plan);
+
+        if (!plan.ShouldApply)
+        {
+            return false;
+        }
+
+        var slide = GetSlide(slides, plan.SlideIndex);
+        if (slide is null)
+        {
+            return false;
+        }
+
+        switch (plan.Intent)
+        {
+            case PresentationReviewWorkflowIntentKind.AddComment:
+                if (plan.Comment is null)
+                {
+                    return false;
+                }
+
+                slide.Comments.Add(CloneComment(plan.Comment));
+                return true;
+
+            case PresentationReviewWorkflowIntentKind.EditComment:
+            case PresentationReviewWorkflowIntentKind.ResolveComment:
+            case PresentationReviewWorkflowIntentKind.ReopenComment:
+                if (plan.CommentIndex is not { } commentIndex ||
+                    plan.Comment is null ||
+                    commentIndex < 0 ||
+                    commentIndex >= slide.Comments.Count)
+                {
+                    return false;
+                }
+
+                slide.Comments[commentIndex] = CloneComment(plan.Comment);
+                return true;
+
+            case PresentationReviewWorkflowIntentKind.DeleteComment:
+                if (plan.CommentIndex is not { } deleteIndex ||
+                    deleteIndex < 0 ||
+                    deleteIndex >= slide.Comments.Count)
+                {
+                    return false;
+                }
+
+                slide.Comments.RemoveAt(deleteIndex);
+                return true;
+
+            default:
+                return false;
+        }
+    }
+
+    public static int? NormalizeCommentSelectionAfterMutation(
+        IReadOnlyList<Slide> slides,
+        PresentationCommentMutationPlan plan,
+        int? previousSelectedCommentIndex = null)
+    {
+        ArgumentNullException.ThrowIfNull(slides);
+        ArgumentNullException.ThrowIfNull(plan);
+
+        var comments = GetSlide(slides, plan.SlideIndex)?.Comments;
+        if (comments is null || comments.Count == 0)
+        {
+            return null;
+        }
+
+        return plan.Intent switch
+        {
+            PresentationReviewWorkflowIntentKind.AddComment => comments.Count - 1,
+            PresentationReviewWorkflowIntentKind.DeleteComment when plan.CommentIndex is { } deletedIndex =>
+                Math.Min(Math.Max(deletedIndex, 0), comments.Count - 1),
+            PresentationReviewWorkflowIntentKind.EditComment
+            or PresentationReviewWorkflowIntentKind.ResolveComment
+            or PresentationReviewWorkflowIntentKind.ReopenComment =>
+                NormalizeSelectedCommentIndex(slides, plan.SlideIndex, plan.CommentIndex ?? previousSelectedCommentIndex),
+            _ => NormalizeSelectedCommentIndex(slides, plan.SlideIndex, previousSelectedCommentIndex)
+        };
     }
 
     public static PresentationAltTextRequestPlan BuildAltTextRequestPlan(
@@ -538,6 +758,110 @@ public static class PresentationReviewWorkflowPlanner
             BuildAccessibilityActions());
     }
 
+    public static PresentationReadingOrderPlan BuildReadingOrderPlan(
+        Slide? slide,
+        int slideIndex,
+        IReadOnlyList<uint>? selectedShapeIds)
+    {
+        var singleSelectedShapeId = selectedShapeIds is { Count: 1 }
+            ? selectedShapeIds[0]
+            : (uint?)null;
+        if (slide is null)
+        {
+            return new PresentationReadingOrderPlan(
+                slideIndex,
+                false,
+                false,
+                null,
+                -1,
+                [],
+                BuildReadingOrderActions(hasItems: false, hasSingleSelectedItem: false));
+        }
+
+        var items = EnumerateShapesWithDepth(slide.Shapes)
+            .Select((entry, index) => DescribeReadingOrderItem(
+                entry.Shape,
+                index,
+                entry.Depth,
+                singleSelectedShapeId == entry.Shape.Id))
+            .ToArray();
+        var selectedIndex = singleSelectedShapeId is { } id
+            ? Array.FindIndex(items, item => item.ShapeId == id)
+            : -1;
+        var hasSingleSelectedItem = selectedIndex >= 0;
+
+        return new PresentationReadingOrderPlan(
+            slideIndex,
+            true,
+            hasSingleSelectedItem,
+            hasSingleSelectedItem ? singleSelectedShapeId : null,
+            selectedIndex,
+            items,
+            BuildReadingOrderActions(slide, items, selectedIndex, singleSelectedShapeId));
+    }
+
+    public static PresentationReadingOrderMutationPlan BuildReadingOrderMovePlan(
+        Slide? slide,
+        int slideIndex,
+        IReadOnlyList<uint>? selectedShapeIds,
+        PresentationReviewWorkflowIntentKind intent)
+    {
+        if (intent is not PresentationReviewWorkflowIntentKind.MoveReadingOrderEarlier
+            and not PresentationReviewWorkflowIntentKind.MoveReadingOrderLater)
+        {
+            throw new ArgumentOutOfRangeException(nameof(intent), intent, "Unsupported reading-order move intent.");
+        }
+
+        var plan = BuildReadingOrderPlan(slide, slideIndex, selectedShapeIds);
+        var commandId = intent == PresentationReviewWorkflowIntentKind.MoveReadingOrderEarlier
+            ? ReadingOrderMoveEarlierCommandId
+            : ReadingOrderMoveLaterCommandId;
+        var action = plan.Actions.Single(action => action.CommandId == commandId);
+        if (!action.IsEnabled || slide is null || plan.SelectedShapeId is not { } shapeId)
+        {
+            return new PresentationReadingOrderMutationPlan(
+                intent,
+                false,
+                slideIndex,
+                plan.SelectedShapeId,
+                -1,
+                -1,
+                action.DisabledReason);
+        }
+
+        var sourceIndex = slide.Shapes.FindIndex(shape => shape.Id == shapeId);
+        var targetIndex = intent == PresentationReviewWorkflowIntentKind.MoveReadingOrderEarlier
+            ? sourceIndex - 1
+            : sourceIndex + 1;
+        return new PresentationReadingOrderMutationPlan(
+            intent,
+            true,
+            slideIndex,
+            shapeId,
+            sourceIndex,
+            targetIndex,
+            null);
+    }
+
+    public static PresentationReadingOrderMutationPlan TryApplyReadingOrderMove(
+        EditingSession editor,
+        PresentationReviewWorkflowIntentKind intent)
+    {
+        ArgumentNullException.ThrowIfNull(editor);
+
+        var plan = BuildReadingOrderMovePlan(
+            editor.CurrentSlide,
+            editor.CurrentSlideIndex,
+            editor.SelectedShapeIds,
+            intent);
+        if (plan.ShouldApply)
+        {
+            editor.MoveSelectedShapeInReadingOrder(plan.TargetIndex - plan.SourceIndex);
+        }
+
+        return plan;
+    }
+
     public static PresentationProofingRequestPlan BuildProofingRequestPlan(Presentation presentation)
     {
         ArgumentNullException.ThrowIfNull(presentation);
@@ -575,8 +899,13 @@ public static class PresentationReviewWorkflowPlanner
     {
         var hasSlide = GetSlide(slides, slideIndex) is not null;
         var hasSelectedComment = selectedCommentIndex.HasValue;
+        var selectedComment = selectedCommentIndex is { } index
+            ? GetComment(slides, slideIndex, index)
+            : null;
         var hasPrevious = TryGetAdjacentComment(slides, slideIndex, selectedCommentIndex, -1, out _);
         var hasNext = TryGetAdjacentComment(slides, slideIndex, selectedCommentIndex, 1, out _);
+        var canResolve = selectedComment is not null && !selectedComment.IsResolved;
+        var canReopen = selectedComment?.IsResolved == true;
 
         return
         [
@@ -586,7 +915,8 @@ public static class PresentationReviewWorkflowPlanner
             new(DeleteCommentCommandId, "Delete Comment", PresentationReviewWorkflowIntentKind.DeleteComment, hasSelectedComment, PresentationWorkflowCapabilityStatus.Available, hasSelectedComment ? null : MissingCommentMessage),
             new(PreviousCommentCommandId, "Previous Comment", PresentationReviewWorkflowIntentKind.PreviousComment, hasPrevious, PresentationWorkflowCapabilityStatus.Available, hasPrevious ? null : "No previous comment."),
             new(NextCommentCommandId, "Next Comment", PresentationReviewWorkflowIntentKind.NextComment, hasNext, PresentationWorkflowCapabilityStatus.Available, hasNext ? null : "No next comment."),
-            new(ResolveCommentCommandId, "Resolve Comment", PresentationReviewWorkflowIntentKind.ResolveComment, false, PresentationWorkflowCapabilityStatus.Deferred, totalCommentCount == 0 ? MissingCommentMessage : ModernCommentStateDeferredMessage),
+            new(ResolveCommentCommandId, "Resolve Comment", PresentationReviewWorkflowIntentKind.ResolveComment, canResolve, PresentationWorkflowCapabilityStatus.Available, canResolve ? null : selectedComment?.IsResolved == true ? CommentAlreadyResolvedMessage : MissingCommentMessage),
+            new(ReopenCommentCommandId, "Reopen Comment", PresentationReviewWorkflowIntentKind.ReopenComment, canReopen, PresentationWorkflowCapabilityStatus.Available, canReopen ? null : selectedComment is null ? MissingCommentMessage : CommentAlreadyOpenMessage),
         ];
     }
 
@@ -595,8 +925,165 @@ public static class PresentationReviewWorkflowPlanner
         [
             new(AccessibilityCommandId, "Check Accessibility", PresentationReviewWorkflowIntentKind.CheckAccessibility, true, PresentationWorkflowCapabilityStatus.RequiresHost),
             new(AltTextCommandId, "Alt Text", PresentationReviewWorkflowIntentKind.OpenAltText, true, PresentationWorkflowCapabilityStatus.Available),
+            new(ReadingOrderPaneCommandId, "Reading Order", PresentationReviewWorkflowIntentKind.OpenReadingOrderPane, true, PresentationWorkflowCapabilityStatus.Available),
             new(ProofingCommandId, "Spelling", PresentationReviewWorkflowIntentKind.RunProofing, true, PresentationWorkflowCapabilityStatus.RequiresHost, ProofingRequiresHostMessage),
         ];
+
+    private static IReadOnlyList<PresentationReviewWorkflowActionPlan> BuildReadingOrderActions(
+        bool hasItems,
+        bool hasSingleSelectedItem)
+    {
+        var reorderReason = !hasItems
+            ? EmptyReadingOrderMessage
+            : !hasSingleSelectedItem
+                ? MissingReadingOrderSelectionMessage
+                : ReadingOrderReorderDeferredMessage;
+
+        return
+        [
+            new(
+                ReadingOrderPaneCommandId,
+                "Reading Order",
+                PresentationReviewWorkflowIntentKind.OpenReadingOrderPane,
+                true,
+                PresentationWorkflowCapabilityStatus.Available),
+            new(
+                ReadingOrderMoveEarlierCommandId,
+                "Move Earlier",
+                PresentationReviewWorkflowIntentKind.MoveReadingOrderEarlier,
+                false,
+                PresentationWorkflowCapabilityStatus.Deferred,
+                reorderReason),
+            new(
+                ReadingOrderMoveLaterCommandId,
+                "Move Later",
+                PresentationReviewWorkflowIntentKind.MoveReadingOrderLater,
+                false,
+                PresentationWorkflowCapabilityStatus.Deferred,
+                reorderReason),
+            new(
+                ReadingOrderSelectItemCommandId,
+                "Select Item",
+                PresentationReviewWorkflowIntentKind.SelectReadingOrderItem,
+                hasItems,
+                PresentationWorkflowCapabilityStatus.Available,
+                hasItems ? null : EmptyReadingOrderMessage),
+        ];
+    }
+
+    private static IReadOnlyList<PresentationReviewWorkflowActionPlan> BuildReadingOrderActions(
+        Slide slide,
+        IReadOnlyList<PresentationReadingOrderItemPlan> items,
+        int selectedItemIndex,
+        uint? selectedShapeId)
+    {
+        var hasItems = items.Count > 0;
+        var moveEarlier = BuildReadingOrderMoveAction(
+            slide,
+            items,
+            selectedItemIndex,
+            selectedShapeId,
+            ReadingOrderMoveEarlierCommandId,
+            "Move Earlier",
+            PresentationReviewWorkflowIntentKind.MoveReadingOrderEarlier,
+            offset: -1);
+        var moveLater = BuildReadingOrderMoveAction(
+            slide,
+            items,
+            selectedItemIndex,
+            selectedShapeId,
+            ReadingOrderMoveLaterCommandId,
+            "Move Later",
+            PresentationReviewWorkflowIntentKind.MoveReadingOrderLater,
+            offset: 1);
+
+        return
+        [
+            new(
+                ReadingOrderPaneCommandId,
+                "Reading Order",
+                PresentationReviewWorkflowIntentKind.OpenReadingOrderPane,
+                true,
+                PresentationWorkflowCapabilityStatus.Available),
+            moveEarlier,
+            moveLater,
+            new(
+                ReadingOrderSelectItemCommandId,
+                "Select Item",
+                PresentationReviewWorkflowIntentKind.SelectReadingOrderItem,
+                hasItems,
+                PresentationWorkflowCapabilityStatus.Available,
+                hasItems ? null : EmptyReadingOrderMessage),
+        ];
+    }
+
+    private static PresentationReviewWorkflowActionPlan BuildReadingOrderMoveAction(
+        Slide slide,
+        IReadOnlyList<PresentationReadingOrderItemPlan> items,
+        int selectedItemIndex,
+        uint? selectedShapeId,
+        string commandId,
+        string label,
+        PresentationReviewWorkflowIntentKind intent,
+        int offset)
+    {
+        var disabledReason = GetReadingOrderMoveDisabledReason(
+            slide,
+            items,
+            selectedItemIndex,
+            selectedShapeId,
+            offset);
+
+        return new PresentationReviewWorkflowActionPlan(
+            commandId,
+            label,
+            intent,
+            disabledReason is null,
+            disabledReason == NestedReadingOrderReorderDeferredMessage
+                ? PresentationWorkflowCapabilityStatus.Deferred
+                : PresentationWorkflowCapabilityStatus.Available,
+            disabledReason);
+    }
+
+    private static string? GetReadingOrderMoveDisabledReason(
+        Slide slide,
+        IReadOnlyList<PresentationReadingOrderItemPlan> items,
+        int selectedItemIndex,
+        uint? selectedShapeId,
+        int offset)
+    {
+        if (items.Count == 0)
+        {
+            return EmptyReadingOrderMessage;
+        }
+
+        if (selectedItemIndex < 0 || selectedShapeId is null)
+        {
+            return MissingReadingOrderSelectionMessage;
+        }
+
+        var selectedItem = items[selectedItemIndex];
+        if (selectedItem.NestingDepth > 0)
+        {
+            return NestedReadingOrderReorderDeferredMessage;
+        }
+
+        var topLevelIndex = slide.Shapes.FindIndex(shape => shape.Id == selectedShapeId.Value);
+        if (topLevelIndex < 0)
+        {
+            return NestedReadingOrderReorderDeferredMessage;
+        }
+
+        var targetIndex = topLevelIndex + offset;
+        if (targetIndex < 0)
+        {
+            return ReadingOrderAlreadyEarliestMessage;
+        }
+
+        return targetIndex >= slide.Shapes.Count
+            ? ReadingOrderAlreadyLatestMessage
+            : null;
+    }
 
     private static IReadOnlyList<PresentationReviewWorkflowActionPlan> BuildAltTextPaneActions(
         bool hasSelection,
@@ -629,7 +1116,8 @@ public static class PresentationReviewWorkflowPlanner
     private static PresentationCommentDescriptor DescribeComment(
         int slideIndex,
         int commentIndex,
-        SlideComment comment)
+        SlideComment comment,
+        bool isSelected)
         => new(
             slideIndex,
             commentIndex,
@@ -642,7 +1130,26 @@ public static class PresentationReviewWorkflowPlanner
             comment.Yemu,
             true,
             true,
-            false);
+            !comment.IsResolved,
+            comment.IsResolved,
+            comment.IsResolved ? PresentationCommentThreadStatus.Resolved : PresentationCommentThreadStatus.Open,
+            isSelected);
+
+    private static SlideComment CloneComment(SlideComment comment)
+        => new()
+        {
+            Author = comment.Author,
+            Initials = comment.Initials,
+            Text = comment.Text,
+            DateTime = comment.DateTime,
+            IsResolved = comment.IsResolved,
+            ResolvedDateTime = comment.ResolvedDateTime,
+            ResolvedBy = comment.ResolvedBy,
+            Xemu = comment.Xemu,
+            Yemu = comment.Yemu,
+            Idx = comment.Idx,
+            AuthorId = comment.AuthorId,
+        };
 
     private static PresentationCommentMutationPlan InvalidMutation(
         PresentationReviewWorkflowIntentKind intent,
@@ -657,9 +1164,14 @@ public static class PresentationReviewWorkflowPlanner
         int? selectedCommentIndex)
     {
         var comments = GetSlide(slides, slideIndex)?.Comments;
-        if (comments is null || selectedCommentIndex is not { } index)
+        if (comments is null || comments.Count == 0)
         {
             return null;
+        }
+
+        if (selectedCommentIndex is not { } index)
+        {
+            return 0;
         }
 
         return index >= 0 && index < comments.Count ? index : null;
@@ -778,12 +1290,71 @@ public static class PresentationReviewWorkflowPlanner
             ? $"{shape.Kind} {shape.Id}"
             : shape.Name;
 
+    private static PresentationReadingOrderItemPlan DescribeReadingOrderItem(
+        SlideShape shape,
+        int readingOrderIndex,
+        int nestingDepth,
+        bool isSelected)
+    {
+        var title = NormalizeAltTextTitle(shape.AlternativeTextTitle);
+        var description = NormalizeAltTextDescription(shape.AlternativeText);
+        return new PresentationReadingOrderItemPlan(
+            readingOrderIndex,
+            nestingDepth,
+            shape.Id,
+            DescribeShape(shape),
+            shape.Kind,
+            shape.Kind.ToString(),
+            title,
+            description,
+            shape.IsDecorative,
+            BuildAccessibilitySummary(title, description, shape.IsDecorative),
+            isSelected);
+    }
+
+    private static string BuildAccessibilitySummary(
+        string title,
+        string description,
+        bool isDecorative)
+    {
+        if (isDecorative)
+        {
+            return "Decorative";
+        }
+
+        if (string.IsNullOrWhiteSpace(title) && string.IsNullOrWhiteSpace(description))
+        {
+            return "No alt text";
+        }
+
+        if (!string.IsNullOrWhiteSpace(title) && !string.IsNullOrWhiteSpace(description))
+        {
+            return $"{title}: {description}";
+        }
+
+        return string.IsNullOrWhiteSpace(description) ? title : description;
+    }
+
     private static IEnumerable<SlideShape> EnumerateShapes(IEnumerable<SlideShape> shapes)
     {
         foreach (var shape in shapes)
         {
             yield return shape;
             foreach (var child in EnumerateShapes(shape.Children))
+            {
+                yield return child;
+            }
+        }
+    }
+
+    private static IEnumerable<(SlideShape Shape, int Depth)> EnumerateShapesWithDepth(
+        IEnumerable<SlideShape> shapes,
+        int depth = 0)
+    {
+        foreach (var shape in shapes)
+        {
+            yield return (shape, depth);
+            foreach (var child in EnumerateShapesWithDepth(shape.Children, depth + 1))
             {
                 yield return child;
             }

@@ -660,7 +660,10 @@ public sealed class MainWindow : Window
             IsSideToSideActive: () => _sideToSideMode,
             // AV-INSERT2: Insert depth 2 dialog launchers (optional callbacks).
             OpenHyperlinkDialog: () => _ = OpenHyperlinkDialogAsync(),
+            OpenEditHyperlinkDialog: () => _ = OpenEditHyperlinkDialogAsync(),
+            OpenHyperlinkTooltipDialog: () => _ = OpenHyperlinkTooltipDialogAsync(),
             OpenBookmarkDialog:  () => _ = OpenBookmarkDialogAsync(),
+            OpenLinkBookmarkDialog: () => _ = OpenLinkBookmarkDialogAsync(),
             OpenQuickPartDialog: () => _ = OpenQuickPartDialogAsync(),
             InsertTextFromFile:  () => _ = InsertTextFromFileAsync(),
             // AV-MAIL: surface mail-merge info messages in the status bar.
@@ -1252,6 +1255,43 @@ public sealed class MainWindow : Window
     }
 
     /// <summary>
+    /// AV-LINKS: Opens Edit Hyperlink for the link under the caret and retargets it on OK.
+    /// </summary>
+    private async Task OpenEditHyperlinkDialogAsync()
+    {
+        if (!_editor.IsCaretOnHyperlink())
+            return;
+
+        var links = _editor.HyperlinksAtCaret();
+        var target = links.Count > 0
+            ? links[0].Url ?? (links[0].Anchor is { Length: > 0 } anchor ? "#" + anchor : string.Empty)
+            : string.Empty;
+        var dialog = new HyperlinkDialog(
+            initialDisplay: _editor.SelectedText,
+            initialAddress: target,
+            title: InsertDialogTextResources.Hyperlink.EditTitle);
+        await dialog.ShowDialog(this);
+        if (dialog.Address is { } address)
+            _editor.EditHyperlink(address, dialog.DisplayText);
+        _editor.Focus();
+    }
+
+    /// <summary>
+    /// AV-LINKS: Opens ScreenTip for the link under the caret and sets or clears it on OK.
+    /// </summary>
+    private async Task OpenHyperlinkTooltipDialogAsync()
+    {
+        if (!_editor.IsCaretOnHyperlink())
+            return;
+
+        var dialog = new ScreenTipDialog(_editor.HyperlinkTooltipAtCaret());
+        await dialog.ShowDialog(this);
+        if (dialog.ScreenTip is { } tip)
+            _editor.SetHyperlinkTooltip(tip);
+        _editor.Focus();
+    }
+
+    /// <summary>
     /// AV-INSERT2: Opens the Bookmark dialog (add at caret / Go To existing). Lists the document's current
     /// bookmark names. Wired to <c>freew.insert-bookmark</c> (Insert → Links).
     /// </summary>
@@ -1267,6 +1307,22 @@ public sealed class MainWindow : Window
             _editor.InsertBookmark(add);
         else if (dialog.GoToName is { } go)
             _editor.GoToBookmark(go);
+        _editor.Focus();
+    }
+
+    /// <summary>
+    /// AV-LINKS: Opens a bookmark picker and links the current selection to the chosen internal target.
+    /// </summary>
+    private async Task OpenLinkBookmarkDialogAsync()
+    {
+        var names = _editor.BookmarkNames();
+        if (names.Count == 0)
+            return;
+
+        var dialog = new LinkBookmarkDialog(names);
+        await dialog.ShowDialog(this);
+        if (dialog.BookmarkName is { } bookmark)
+            _editor.ApplyInternalLink(bookmark);
         _editor.Focus();
     }
 

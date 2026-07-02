@@ -37,6 +37,12 @@ public sealed class BackstagePaneSurfacePlannerTests
         surface.Fields.Should().Contain(row => row.Label == "Document" && row.Value == "Agenda");
         surface.Fields.Should().Contain(row => row.Label == "Paper" && row.Value == "8.5\" x 11\"");
         surface.Groups.Select(group => group.Heading).Should().Equal("Print", "Settings");
+        surface.Evidence.Should().Contain(row =>
+            row.Kind == BackstagePrintEvidenceKind.PrintPreviewFidelity &&
+            row.FixtureScenarioIds.Contains("backstage-print-preview-fidelity"));
+        surface.Evidence.Should().Contain(row =>
+            row.Kind == BackstagePrintEvidenceKind.NativePrint &&
+            row.Status == BackstagePrintEvidenceStatus.Deferred);
 
         var print = surface.Groups.SelectMany(group => group.Actions)
             .Single(action => action.AutomationId == "PrintAction_Print");
@@ -50,6 +56,32 @@ public sealed class BackstagePaneSurfacePlannerTests
         preview.Invoke!();
 
         printed.Should().BeTrue();
+        previewed.Should().BeTrue();
+    }
+
+    [Fact]
+    public void BuildPrintPane_WhenPreviewIsAvailableButNativePrintIsMissing_ExplainsDeferredPrint()
+    {
+        var previewed = false;
+
+        var surface = BackstagePaneSurfacePlanner.BuildPrintPane(
+            "Draft",
+            new PageSettings(),
+            print: null,
+            printPreview: () => previewed = true);
+
+        surface.DeferredNote.Should().Be(BackstageViewTextResources.DirectPrintDeferredNote);
+
+        var print = surface.Groups.SelectMany(group => group.Actions)
+            .Single(action => action.AutomationId == "PrintAction_Print");
+        var preview = surface.Groups.SelectMany(group => group.Actions)
+            .First(action => action.AutomationId == "PrintAction_PrintPreview");
+
+        print.IsEnabled.Should().BeFalse("native printer selection is host-specific and can be deferred independently of preview");
+        preview.IsEnabled.Should().BeTrue();
+
+        preview.Invoke!();
+
         previewed.Should().BeTrue();
     }
 

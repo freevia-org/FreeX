@@ -75,26 +75,29 @@ public sealed class AvaloniaInCanvasTextEditor
         if (slide is null || _editor.Presentation is null)
             return;
 
-        var shape = slide.Shapes.FirstOrDefault(s => s.Id == shapeId);
-        if (shape?.TextBody is null)
+        var startPlan = InCanvasTextEditPlanner.BeginShapeEdit(
+            _editor.CurrentSlideIndex,
+            _editor.Presentation,
+            slide,
+            shapeId,
+            _canvas.CurrentTransform,
+            minimumWidth: 40,
+            minimumHeight: 20,
+            InCanvasTextEditKind.PlainText);
+        if (!startPlan.IsReady || startPlan.Placement is null)
             return;
 
         _editingShapeId = shapeId;
         _active = true;
-        _editPlan = InCanvasTextEditPlanner.BeginPlainText(
-            _editor.CurrentSlideIndex,
-            shapeId,
-            shape.TextBody);
+        _editPlan = startPlan.EditPlanner;
 
-        var xf = _canvas.CurrentTransform;
-        var screenRect = SlideCanvasGeometryPlanner.ShapeBoundsToScreen(shape, _editor.Presentation, xf);
-        var placement = SlideCanvasGeometryPlanner.PlanEditorPlacement(screenRect, 40, 20);
+        var placement = startPlan.Placement.Value;
 
         _textBox = new TextBox
         {
             AcceptsReturn = true,
             TextWrapping = global::Avalonia.Media.TextWrapping.Wrap,
-            Text = _editPlan.OriginalPlainText,
+            Text = startPlan.OriginalPlainText,
             MinWidth = placement.Width,
             MinHeight = placement.Height,
             Width = placement.Width,

@@ -145,6 +145,64 @@ public sealed class FileLifecycleTests : IDisposable
     }
 
     [StaFact]
+    public void BuildNotesPagePdfRenderPlan_UsesSharedExporterForWpfAdapter()
+    {
+        var (_, file, getModel, _, _) = CreateHarness();
+        getModel().Slides[0].Title = "Opening";
+        getModel().Slides[0].Notes = MakeTextBody("Welcome speaker note.");
+        getModel().Slides.Add(new Slide { Title = "Appendix" });
+
+        var plan = file.BuildNotesPagePdfRenderPlan(new PresentationSlideRangeRequest(
+            PresentationSlideRangeKind.CurrentSlide,
+            CurrentSlideNumber: 1));
+
+        plan.PrintPlan.CommandId.Should().Be(PresentationExportPlanner.PrintCommandId);
+        plan.PrintPlan.Layout.Layout.Should().Be(PresentationPrintLayoutKind.NotesPages);
+        plan.PrintPlan.SlideRange.SlideNumbers.Should().Equal(1);
+        plan.PreviewPlans.Should().ContainSingle(preview =>
+            preview.SlideNumber == 1 &&
+            preview.NoteLines.Count == 1 &&
+            preview.NoteLines[0] == "Welcome speaker note.");
+        plan.Pages.Should().ContainSingle();
+        plan.Pages[0].Ops.OfType<Free.Shared.Pdf.PdfText>().Select(text => text.Text)
+            .Should()
+            .Contain(["Opening", "Welcome speaker note."])
+            .And
+            .NotContain("Appendix");
+    }
+
+    [StaFact]
+    public void BuildVideoExportPlan_UsesSharedPlannerForWpfAdapter()
+    {
+        var (_, file, getModel, _, _) = CreateHarness();
+        getModel().Slides.Add(new Slide { Title = "Two" });
+        getModel().Slides.Add(new Slide { Title = "Three" });
+
+        var plan = file.BuildVideoExportPlan(new PresentationVideoExportRequest(
+            new PresentationSlideRangeRequest(
+                PresentationSlideRangeKind.CustomRange,
+                StartSlideNumber: 2,
+                EndSlideNumber: 3),
+            PresentationVideoQualityKind.Hd,
+            SecondsPerSlide: 12,
+            UseRecordedTimings: false,
+            IncludeNarration: false));
+
+        plan.CommandId.Should().Be(PresentationExportPlanner.VideoExportCommandId);
+        plan.DefaultExtensionWithDot.Should().Be(PresentationExportPlanner.VideoExportExtension);
+        plan.SlideRange.SlideNumbers.Should().Equal(2, 3);
+        plan.Quality.Quality.Should().Be(PresentationVideoQualityKind.Hd);
+        plan.Quality.WidthPx.Should().Be(1280);
+        plan.Quality.HeightPx.Should().Be(720);
+        plan.SecondsPerSlide.Should().Be(12);
+        plan.UseRecordedTimings.Should().BeFalse();
+        plan.IncludeNarration.Should().BeFalse();
+        plan.EstimatedDuration.Should().Be(TimeSpan.FromSeconds(24));
+        plan.CanExecute.Should().BeFalse();
+        plan.DisabledReason.Should().Be(PresentationExportPlanner.VideoExportDeferredMessage);
+    }
+
+    [StaFact]
     public void OpenPath_LoadsPptxFileAndMarksSavedWithPath()
     {
         var (_, file, getModel, _, _) = CreateHarness();
@@ -261,6 +319,19 @@ public sealed class FileLifecycleTests : IDisposable
         prompt.Title.Should().Be("FreeP");
         prompt.Buttons.Should().Be(UserMessageButtons.YesNoCancel);
         prompt.Icon.Should().Be(UserMessageIcon.Warning);
+    }
+
+    private static TextBody MakeTextBody(params string[] paragraphs)
+    {
+        var body = new TextBody();
+        foreach (var text in paragraphs)
+        {
+            var paragraph = new Paragraph();
+            paragraph.Runs.Add(new Run { Text = text });
+            body.Paragraphs.Add(paragraph);
+        }
+
+        return body;
     }
 
     private static FileCommands GetFileCommands(MainWindow window)

@@ -1179,6 +1179,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
         Func<string> resolveExePath)
     {
         Process? process = null;
+        int? windowProcessId = null;
 
         try
         {
@@ -1190,8 +1191,9 @@ internal sealed class ScenarioRunner(CaptureOptions options)
 
             process = launch.Process!;
             var window = launch.Window!;
+            windowProcessId = window.ProcessId;
             var handle = new IntPtr(window.Handle);
-            var guard = ForegroundGuard.FocusAndVerify(handle, process.Id, "FreeX", options.FocusTimeout);
+            var guard = ForegroundGuard.FocusAndVerify(handle, windowProcessId.Value, "FreeX", options.FocusTimeout);
             if (!guard.Success)
             {
                 return CaptureResult.Blocked(
@@ -1210,7 +1212,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
 
             Thread.Sleep(options.AfterInputDelay);
 
-            var popup = WindowFinder.FindProcessPopup(process.Id, window.Handle, options.PopupTimeout, 120, 80);
+            var popup = WindowFinder.FindProcessPopup(windowProcessId.Value, window.Handle, options.PopupTimeout, 120, 80);
             if (popup is null)
             {
                 return CaptureResult.Blocked(scenario, "popup-not-found", "Did not detect foreground FreeX Conditional Formatting popup after UIA open or Alt,H,L fallback.", options.OutputRoot, subject, guard);
@@ -1223,6 +1225,13 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             if (process is { HasExited: false })
             {
                 process.Kill(entireProcessTree: true);
+            }
+
+            if (windowProcessId.HasValue &&
+                process is not null &&
+                windowProcessId.Value != process.Id)
+            {
+                KillProcess(windowProcessId);
             }
         }
     }
@@ -2098,15 +2107,16 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             return (null, null, CaptureResult.Blocked(scenario, "launch-failed", $"Failed to launch '{exePath}'.", options.OutputRoot, subject));
         }
 
-        var window = WindowFinder.WaitForMainWindow(process.Id, options.LaunchTimeout);
+        var window = WindowFinder.WaitForMainWindow(process, exePath, options.LaunchTimeout);
         if (window is null)
         {
+            var diagnostics = WindowFinder.DescribeLaunchWindowCandidates(process.Id, exePath);
             if (!process.HasExited)
             {
                 process.Kill(entireProcessTree: true);
             }
 
-            return (process, null, CaptureResult.Blocked(scenario, "window-not-found", $"FreeX process {process.Id} did not expose a visible main window.", options.OutputRoot, subject));
+            return (process, null, CaptureResult.Blocked(scenario, "window-not-found", $"FreeX process {process.Id} did not expose a visible main window. {diagnostics}", options.OutputRoot, subject));
         }
 
         return (process, window, null);
@@ -5439,7 +5449,8 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             window,
             guard,
             null,
-            DateTimeOffset.UtcNow)
+            DateTimeOffset.UtcNow,
+            EnvironmentSnapshot.Capture())
         {
             ResultValidation = resultValidation
         };
@@ -6473,7 +6484,8 @@ internal sealed record CaptureResult(
     WindowInfo? Window,
     ForegroundGuardResult? ForegroundGuard,
     string? BlockReason,
-    DateTimeOffset CapturedAtUtc)
+    DateTimeOffset CapturedAtUtc,
+    EnvironmentSnapshot EnvironmentSnapshot)
 {
     public string? ManifestPath { get; init; }
     public string? ResultValidation { get; init; }
@@ -6497,13 +6509,37 @@ internal sealed record CaptureResult(
             null,
             guard,
             $"{reason}: {message}",
-            DateTimeOffset.UtcNow);
+            DateTimeOffset.UtcNow,
+            EnvironmentSnapshot.Capture());
 
         var scenarioDir = Path.Combine(outputRoot, string.IsNullOrWhiteSpace(scenario) ? "unknown" : scenario);
         Directory.CreateDirectory(scenarioDir);
         var manifestPath = Path.Combine(scenarioDir, $"{(string.IsNullOrWhiteSpace(scenario) ? "unknown" : scenario)}_manifest.json");
         File.WriteAllText(manifestPath, JsonSerializer.Serialize(result with { ManifestPath = manifestPath }, ProgramAccessor.JsonOptions));
         return result with { ManifestPath = manifestPath };
+    }
+}
+
+internal sealed record EnvironmentSnapshot(
+    string OperatingSystem,
+    bool IsWindows,
+    bool UserInteractive,
+    int SessionId,
+    int ProcessId,
+    string ProcessArchitecture,
+    WindowInfo? ForegroundWindowAtCapture)
+{
+    public static EnvironmentSnapshot Capture()
+    {
+        var currentProcess = Process.GetCurrentProcess();
+        return new EnvironmentSnapshot(
+            RuntimeInformation.OSDescription,
+            System.OperatingSystem.IsWindows(),
+            Environment.UserInteractive,
+            currentProcess.SessionId,
+            currentProcess.Id,
+            RuntimeInformation.ProcessArchitecture.ToString(),
+            WindowFinder.GetWindowInfo(NativeMethods.GetForegroundWindow()));
     }
 }
 
@@ -6616,6 +6652,50 @@ internal static class WindowFinder
         return null;
     }
 
+    public static WindowInfo? WaitForMainWindow(Process process, string exePath, TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        var expectedProcessName = Path.GetFileNameWithoutExtension(exePath);
+        var expectedExePath = Path.GetFullPath(exePath);
+        while (DateTime.UtcNow < deadline)
+        {
+            var window = EnumerateVisibleWindows()
+                .Where(candidate => IsLaunchMainWindowCandidate(candidate, process.Id, expectedProcessName, expectedExePath))
+                .OrderByDescending(candidate => candidate.ProcessId == process.Id)
+                .ThenByDescending(candidate => candidate.Bounds.Width * candidate.Bounds.Height)
+                .FirstOrDefault();
+
+            if (window is not null)
+            {
+                return window;
+            }
+
+            Thread.Sleep(150);
+        }
+
+        return null;
+    }
+
+    public static string DescribeLaunchWindowCandidates(int launcherProcessId, string exePath)
+    {
+        var expectedProcessName = Path.GetFileNameWithoutExtension(exePath);
+        var expectedExePath = Path.GetFullPath(exePath);
+        var candidates = EnumerateVisibleWindows()
+            .Where(candidate =>
+                candidate.ProcessId == launcherProcessId ||
+                IsSameExecutableProcess(candidate.ProcessId, expectedProcessName, expectedExePath) ||
+                candidate.Title.Contains("FreeX", StringComparison.OrdinalIgnoreCase))
+            .OrderBy(candidate => candidate.ProcessId == launcherProcessId ? 0 : 1)
+            .ThenByDescending(candidate => candidate.Bounds.Width * candidate.Bounds.Height)
+            .Take(8)
+            .Select(candidate => $"pid={candidate.ProcessId}, title='{candidate.Title}', class='{candidate.ClassName}', bounds={candidate.Bounds.Width}x{candidate.Bounds.Height}")
+            .ToArray();
+
+        return candidates.Length == 0
+            ? "No visible direct, same-executable, or FreeX-titled windows were found."
+            : $"Visible window candidates: {string.Join("; ", candidates)}.";
+    }
+
     public static WindowInfo? FindOwnedOrForegroundPopup(int processId, string className, TimeSpan timeout)
     {
         var deadline = DateTime.UtcNow + timeout;
@@ -6644,6 +6724,58 @@ internal static class WindowFinder
         }
 
         return null;
+    }
+
+    private static bool IsLaunchMainWindowCandidate(
+        WindowInfo candidate,
+        int launcherProcessId,
+        string expectedProcessName,
+        string expectedExePath)
+    {
+        if (candidate.Title.Length == 0)
+        {
+            return false;
+        }
+
+        if (candidate.ProcessId == launcherProcessId)
+        {
+            return true;
+        }
+
+        if (!candidate.Title.Contains("FreeX", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return IsSameExecutableProcess(candidate.ProcessId, expectedProcessName, expectedExePath);
+    }
+
+    private static bool IsSameExecutableProcess(int processId, string expectedProcessName, string expectedExePath)
+    {
+        try
+        {
+            using var candidateProcess = Process.GetProcessById(processId);
+            if (candidateProcess.ProcessName.Equals(expectedProcessName, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            var candidatePath = candidateProcess.MainModule?.FileName;
+            return !string.IsNullOrWhiteSpace(candidatePath) &&
+                Path.GetFullPath(candidatePath).Equals(expectedExePath, StringComparison.OrdinalIgnoreCase);
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+        catch (InvalidOperationException)
+        {
+            return false;
+        }
+        catch (System.ComponentModel.Win32Exception)
+        {
+            return false;
+        }
     }
 
     public static WindowInfo? FindProcessWindow(int processId, string className, string titleContains, TimeSpan timeout)

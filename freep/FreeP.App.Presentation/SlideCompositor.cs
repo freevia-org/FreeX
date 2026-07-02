@@ -1174,6 +1174,15 @@ public static class SlideCompositor
                     };
                 }
 
+                // Theme 27: OMML math — call the shared MathLayoutEngine to produce the box tree.
+                // The engine is framework-free; WPF + Avalonia renderers walk the resulting box tree.
+                FreeP.App.Compositor.MathLayout.MathBox.Container? mathLayout = null;
+                if (run.Math is not null)
+                {
+                    var mathNode = FreeP.App.Compositor.MathLayout.OmmlParser.Parse(run.Math.RawXml, resolvedText);
+                    mathLayout = FreeP.App.Compositor.MathLayout.MathLayoutEngine.Layout(mathNode, fontFamily, fontSizePt);
+                }
+
                 resolvedRuns.Add(new ResolvedRun
                 {
                     Text          = resolvedText,
@@ -1187,6 +1196,7 @@ public static class SlideCompositor
                     TextFill      = resolvedTextFill,
                     TextOutline   = resolvedTextOutline,
                     TextShadow    = resolvedTextShadow,
+                    MathLayout    = mathLayout,
                 });
             }
 

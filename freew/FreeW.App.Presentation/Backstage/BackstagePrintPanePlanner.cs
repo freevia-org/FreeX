@@ -7,7 +7,8 @@ namespace FreeW.App.Presentation.Backstage;
 public sealed record BackstagePrintPanePlan(
     string Description,
     IReadOnlyList<BackstageFieldRow> Fields,
-    IReadOnlyList<BackstagePrintActionGroup> Groups);
+    IReadOnlyList<BackstagePrintActionGroup> Groups,
+    IReadOnlyList<BackstagePrintEvidenceRow> Evidence);
 
 public sealed record BackstagePrintActionGroup(
     string Heading,
@@ -22,6 +23,25 @@ public enum BackstagePrintActionKind
 {
     Print,
     PrintPreview
+}
+
+public sealed record BackstagePrintEvidenceRow(
+    BackstagePrintEvidenceKind Kind,
+    BackstagePrintEvidenceStatus Status,
+    string Description,
+    IReadOnlyList<string> FixtureScenarioIds);
+
+public enum BackstagePrintEvidenceKind
+{
+    PrintPreviewFidelity,
+    PdfExportFidelity,
+    NativePrint
+}
+
+public enum BackstagePrintEvidenceStatus
+{
+    FixtureReady,
+    Deferred
 }
 
 public static class BackstagePrintPanePlanner
@@ -49,6 +69,35 @@ public static class BackstagePrintPanePlanner
                 [
                     new(BackstagePrintActionKind.PrintPreview, "Preview Current Layout", "Review pages with headers, footers, margins, columns, and page breaks applied."),
                 ]),
+            ],
+            [
+                new(
+                    BackstagePrintEvidenceKind.PrintPreviewFidelity,
+                    BackstagePrintEvidenceStatus.FixtureReady,
+                    "Print Preview uses the paginated print-layout renderer; retained evidence must include paired WPF/Avalonia visual summary rows for the named scenarios.",
+                    [
+                        "backstage-print-preview-fidelity",
+                        "page-composition-print-layout",
+                        "f2-hf-basic",
+                        "f2-footnotes",
+                        "f2-section-landscape",
+                    ]),
+                new(
+                    BackstagePrintEvidenceKind.PdfExportFidelity,
+                    BackstagePrintEvidenceStatus.FixtureReady,
+                    "PDF export evidence is anchored by rasterized fixed-layout output scenarios; missing paired WPF/Avalonia rows fail the visual summary contract.",
+                    [
+                        "backstage-pdf-export-fidelity",
+                        "page-composition-print-layout",
+                        "f2-hf-basic",
+                        "f2-footnotes",
+                        "f2-section-landscape",
+                    ]),
+                new(
+                    BackstagePrintEvidenceKind.NativePrint,
+                    BackstagePrintEvidenceStatus.Deferred,
+                    "Direct native printer selection remains host-specific; Avalonia keeps Print Preview and PDF export active while disabling direct print.",
+                    []),
             ]);
     }
 

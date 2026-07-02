@@ -199,6 +199,9 @@ public sealed class SlideShowWindow : Window
 
     public SlideShowPresenterToolPlan PresenterToolPlan => _presenterToolPlan;
 
+    public IReadOnlyList<SlideShowPresenterWorkflowAction> PresenterWorkflowActions =>
+        _presenterToolPlan.WorkflowActions;
+
     public SlideShowPresenterState CreatePresenterState(
         DateTimeOffset nowUtc,
         SlideShowPresenterDisplayIntent? displayIntent = null) =>

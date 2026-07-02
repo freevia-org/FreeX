@@ -34,7 +34,13 @@ public sealed class InsertDepth2Tests
     // Minimal callbacks for the required (non-optional) RibbonHostCallbacks fields; optional AV-INSERT2
     // launchers can be supplied per test.
     private static RibbonHostCallbacks Callbacks(
-        Action? hyperlink = null, Action? bookmark = null, Action? quickPart = null, Action? textFromFile = null) =>
+        Action? hyperlink = null,
+        Action? editHyperlink = null,
+        Action? hyperlinkTooltip = null,
+        Action? bookmark = null,
+        Action? linkBookmark = null,
+        Action? quickPart = null,
+        Action? textFromFile = null) =>
         new(
             Open: () => { }, Save: () => { }, Cut: () => { }, Copy: () => { }, Paste: () => { },
             Backstage: () => { }, NewDocument: () => { }, ToggleNavigationPane: () => { },
@@ -44,7 +50,10 @@ public sealed class InsertDepth2Tests
             ToggleOrientation: () => { }, ApplyMarginPreset: _ => { }, ApplyPaperSize: _ => { },
             InsertPicture: () => { }, OpenWordCountDialog: () => { }, ApplyZoom: (_, _) => { },
             OpenHyperlinkDialog: hyperlink,
+            OpenEditHyperlinkDialog: editHyperlink,
+            OpenHyperlinkTooltipDialog: hyperlinkTooltip,
             OpenBookmarkDialog: bookmark,
+            OpenLinkBookmarkDialog: linkBookmark,
             OpenQuickPartDialog: quickPart,
             InsertTextFromFile: textFromFile);
 
@@ -66,6 +75,7 @@ public sealed class InsertDepth2Tests
         {
             "freew.hyperlink", "freew.bookmark", "freew.bookmark-manager",
             "freew.insert-hyperlink", "freew.insert-bookmark",
+            "freew.edit-hyperlink", "freew.remove-hyperlink", "freew.hyperlink-tooltip", "freew.link-bookmark",
             "freew.cover-page", "freew.cover-page.default", "freew.cover-page.banded", "freew.cover-page.motion",
             "freew.drop-cap", "freew.drop-cap.dropped", "freew.drop-cap.in-margin", "freew.drop-cap.none",
             "freew.quick-parts", "freew.quick-parts.title", "freew.quick-parts.author",
@@ -114,14 +124,21 @@ public sealed class InsertDepth2Tests
             InsertPicture: () => { }, OpenWordCountDialog: () => { }, ApplyZoom: (_, _) => { });
 
         callbacks.OpenHyperlinkDialog.Should().BeNull();
+        callbacks.OpenEditHyperlinkDialog.Should().BeNull();
+        callbacks.OpenHyperlinkTooltipDialog.Should().BeNull();
         callbacks.OpenBookmarkDialog.Should().BeNull();
+        callbacks.OpenLinkBookmarkDialog.Should().BeNull();
         callbacks.OpenQuickPartDialog.Should().BeNull();
         callbacks.InsertTextFromFile.Should().BeNull();
 
         // Executing the dialog-driven commands with null callbacks must not throw.
         var registry = FreeWRibbon.BuildRegistry(MakeView(), callbacks);
         Exec(registry, "freew.insert-hyperlink");
+        Exec(registry, "freew.edit-hyperlink");
+        Exec(registry, "freew.remove-hyperlink");
+        Exec(registry, "freew.hyperlink-tooltip");
         Exec(registry, "freew.insert-bookmark");
+        Exec(registry, "freew.link-bookmark");
         Exec(registry, "freew.quick-parts.snippet");
         Exec(registry, "freew.insert-file");
         Exec(registry, "freew.text-from-file");
@@ -163,6 +180,51 @@ public sealed class InsertDepth2Tests
     }
 
     [Fact]
+    public void Edit_hyperlink_command_routes_to_callback()
+    {
+        var view = MakeView("");
+        view.InsertHyperlink("Link", "https://old.example");
+        view.MoveCaretToBlockForTest(0, 2);
+        var registry = FreeWRibbon.BuildRegistry(view,
+            Callbacks(editHyperlink: () => view.EditHyperlink("https://new.example")));
+
+        Exec(registry, "freew.edit-hyperlink");
+
+        ((Paragraph)view.Document.Blocks[0]).Runs.Should()
+            .Contain(run => run.HyperlinkUrl == "https://new.example");
+    }
+
+    [Fact]
+    public void Remove_hyperlink_command_clears_link_but_keeps_text()
+    {
+        var view = MakeView("");
+        view.InsertHyperlink("Link", "https://old.example");
+        view.MoveCaretToBlockForTest(0, 2);
+        var registry = FreeWRibbon.BuildRegistry(view, Callbacks());
+
+        Exec(registry, "freew.remove-hyperlink");
+
+        var para = (Paragraph)view.Document.Blocks[0];
+        para.PlainText.Should().Be("Link");
+        para.Runs.Should().OnlyContain(run => run.HyperlinkUrl == null && run.HyperlinkAnchor == null);
+    }
+
+    [Fact]
+    public void Hyperlink_tooltip_command_routes_to_callback()
+    {
+        var view = MakeView("");
+        view.InsertHyperlink("Link", "https://old.example");
+        view.MoveCaretToBlockForTest(0, 2);
+        var registry = FreeWRibbon.BuildRegistry(view,
+            Callbacks(hyperlinkTooltip: () => view.SetHyperlinkTooltip("Screen tip")));
+
+        Exec(registry, "freew.hyperlink-tooltip");
+
+        ((Paragraph)view.Document.Blocks[0]).Runs.Should()
+            .Contain(run => run.HyperlinkTooltip == "Screen tip");
+    }
+
+    [Fact]
     public void Insert_hyperlink_is_undoable()
     {
         var view = MakeView("");
@@ -200,6 +262,21 @@ public sealed class InsertDepth2Tests
         Exec(registry, commandId);
 
         Bookmarks.List(view.Document).Should().Contain(b => b.Name == commandId.Replace('.', '-'));
+    }
+
+    [Fact]
+    public void Link_bookmark_command_routes_to_callback()
+    {
+        var view = MakeView("Jump target");
+        view.InsertBookmark("Target1");
+        view.SetSelectionRangePublic(0, 0, 0, 4);
+        var registry = FreeWRibbon.BuildRegistry(view,
+            Callbacks(linkBookmark: () => view.ApplyInternalLink("Target1")));
+
+        Exec(registry, "freew.link-bookmark");
+
+        ((Paragraph)view.Document.Blocks[0]).Runs.Should()
+            .Contain(run => run.Text == "Jump" && run.HyperlinkAnchor == "Target1");
     }
 
     [Fact]

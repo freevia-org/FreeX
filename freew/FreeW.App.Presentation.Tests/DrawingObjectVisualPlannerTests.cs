@@ -1,0 +1,126 @@
+using FreeW.App.Presentation.DocumentView;
+
+namespace FreeW.App.Presentation.Tests;
+
+public sealed class DrawingObjectVisualPlannerTests
+{
+    [Fact]
+    public void ShapePlan_RecordsGeometryFillOutlineTextEffectsAndTransform()
+    {
+        var shape = Shape.TextBoxWith("Planner text", widthPt: 150, heightPt: 72, fillColorHex: "#E2F0D9");
+        shape.ExtendedFill = ShapeFill.LinearGradient(
+            5400000,
+            new GradientStop(0, "#4472C4"),
+            new GradientStop(100000, "#FFFFFF"));
+        shape.OutlineColorHex = "#548235";
+        shape.OutlineWidthPt = 1.5;
+        shape.OutlineDash = "dash";
+        shape.RotationAngle = 15;
+        shape.FlipH = true;
+        shape.Effects = new ShapeEffectLst
+        {
+            HasShadow = true,
+            ShadowAlpha = 35000,
+            HasGlow = true,
+            GlowColorHex = "ED7D31"
+        };
+
+        var plan = DrawingObjectVisualPlanner.BuildVisualPlan(
+            shape,
+            new DocumentFloatingObjectSnapshot(
+                DocumentFloatingObjectKind.Shape,
+                BlockIndex: 1,
+                RunIndex: 2,
+                new DocumentFloatRect(10, 20, 200, 96),
+                BehindText: false,
+                ZOrderIndex: 7,
+                ImageWrapping.Square,
+                RotationAngle: shape.RotationAngle,
+                FlipH: shape.FlipH,
+                FlipV: shape.FlipV));
+
+        plan.Kind.Should().Be(DrawingObjectVisualKind.Shape);
+        plan.GeometryKind.Should().Be(DrawingObjectGeometryKind.TextBox);
+        plan.Fill.Kind.Should().Be(DrawingObjectFillKind.Gradient);
+        plan.Fill.GradientStops.Should().HaveCount(2);
+        plan.Outline.IsVisible.Should().BeTrue();
+        plan.Outline.ColorHex.Should().Be("#548235");
+        plan.Outline.WidthDip.Should().BeApproximately(2.0, 0.01);
+        plan.Outline.DashStyle.Should().Be("dash");
+        plan.Text.Should().Be(new DrawingObjectTextPlan("Planner text", ShapeTextDirection.Horizontal));
+        plan.Effects.HasShadow.Should().BeTrue();
+        plan.Effects.HasGlow.Should().BeTrue();
+        plan.Effects.Summary.Should().Contain("shadow");
+        plan.Effects.Summary.Should().Contain("glow");
+        plan.RotationAngle.Should().Be(15);
+        plan.FlipH.Should().BeTrue();
+        plan.Wrapping.Should().Be(ImageWrapping.Square);
+        plan.ZOrderIndex.Should().Be(7);
+    }
+
+    [Fact]
+    public void WordArtPlan_RecordsTextStyleWarpAndPlacementMetadata()
+    {
+        var wordArt = new WordArt("Shared WordArt", WordArtStyle.GlowBlue, fontSizePt: 30)
+        {
+            Warp = WordArtWarp.Wave1
+        };
+
+        var plan = DrawingObjectVisualPlanner.BuildVisualPlan(
+            wordArt,
+            new DocumentFloatingObjectSnapshot(
+                DocumentFloatingObjectKind.WordArt,
+                BlockIndex: 0,
+                RunIndex: 1,
+                new DocumentFloatRect(40, 60, 240, 64),
+                BehindText: false,
+                ZOrderIndex: 9,
+                ImageWrapping.InFront));
+
+        plan.Kind.Should().Be(DrawingObjectVisualKind.WordArt);
+        plan.WordArt.Should().NotBeNull();
+        plan.WordArt!.Text.Should().Be("Shared WordArt");
+        plan.WordArt.Style.Should().Be(WordArtStyle.GlowBlue);
+        plan.WordArt.Warp.Should().Be(WordArtWarp.Wave1);
+        plan.WordArt.FontSizeDip.Should().BeApproximately(40, 0.01);
+        plan.WordArt.FillColorHex.Should().Be("#4472C4");
+        plan.Wrapping.Should().Be(ImageWrapping.InFront);
+        plan.ZOrderIndex.Should().Be(9);
+    }
+
+    [Fact]
+    public void GroupPlan_RecordsShapeAndWordArtChildrenWithLocalOffsets()
+    {
+        var group = new DrawingGroup
+        {
+            WidthPt = 180,
+            HeightPt = 90
+        };
+        group.Children.Add(new Shape(ShapeKind.Ellipse, widthPt: 72, heightPt: 36, fillColorHex: "#CFE2F3"));
+        group.ChildOffsets.Add((9, 6));
+        group.Children.Add(new WordArt("Group", WordArtStyle.FillGold, fontSizePt: 20));
+        group.ChildOffsets.Add((72, 12));
+
+        var plan = DrawingObjectVisualPlanner.BuildVisualPlan(
+            group,
+            new DocumentFloatingObjectSnapshot(
+                DocumentFloatingObjectKind.Group,
+                BlockIndex: 2,
+                RunIndex: 3,
+                new DocumentFloatRect(100, 200, 240, 120),
+                BehindText: false,
+                ZOrderIndex: 11,
+                ImageWrapping.Square));
+
+        plan.Kind.Should().Be(DrawingObjectVisualKind.Group);
+        plan.GroupChildren.Should().HaveCount(2);
+        plan.GroupChildren[0].OffsetXDip.Should().BeApproximately(12, 0.01);
+        plan.GroupChildren[0].OffsetYDip.Should().BeApproximately(8, 0.01);
+        plan.GroupChildren[0].Visual.Kind.Should().Be(DrawingObjectVisualKind.Shape);
+        plan.GroupChildren[0].Visual.GeometryKind.Should().Be(DrawingObjectGeometryKind.Ellipse);
+        plan.GroupChildren[0].Visual.Rect.XDip.Should().BeApproximately(112, 0.01);
+        plan.GroupChildren[1].OffsetXDip.Should().BeApproximately(96, 0.01);
+        plan.GroupChildren[1].Visual.Kind.Should().Be(DrawingObjectVisualKind.WordArt);
+        plan.GroupChildren[1].Visual.WordArt!.Text.Should().Be("Group");
+    }
+}

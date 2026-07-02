@@ -49,29 +49,29 @@ public sealed class InCanvasTextEditor
         if (slide is null || _editor.Presentation is null)
             return;
 
-        var shape = slide.Shapes.FirstOrDefault(s => s.Id == shapeId);
-        if (shape?.TextBody is null)
+        var startPlan = InCanvasTextEditPlanner.BeginShapeEdit(
+            _editor.CurrentSlideIndex,
+            _editor.Presentation,
+            slide,
+            shapeId,
+            _canvas.CurrentTransform.Core,
+            minimumWidth: 40,
+            minimumHeight: 20,
+            InCanvasTextEditKind.RichText);
+        if (!startPlan.IsReady || startPlan.Placement is null || startPlan.OriginalBody is null)
             return;
 
         _editingShapeId = shapeId;
         _active = true;
-        _editPlan = InCanvasTextEditPlanner.BeginRichText(
-            _editor.CurrentSlideIndex,
-            shapeId,
-            shape.TextBody);
+        _editPlan = startPlan.EditPlanner;
 
-        var xf = _canvas.CurrentTransform;
-        var screenRect = SlideCanvasGeometryPlanner.ShapeBoundsToScreen(
-            shape,
-            _editor.Presentation,
-            xf.Core);
-        var placement = SlideCanvasGeometryPlanner.PlanEditorPlacement(screenRect, 40, 20);
+        var placement = startPlan.Placement.Value;
 
-        double fallbackPt = shape.TextBody.Paragraphs
+        double fallbackPt = startPlan.OriginalBody.Paragraphs
             .SelectMany(p => p.Runs)
             .FirstOrDefault(r => r.FontSizePt.HasValue)?.FontSizePt ?? 14.0;
 
-        var doc = TextBodyFlowDocumentConverter.ToFlowDocument(shape.TextBody, fallbackPt);
+        var doc = TextBodyFlowDocumentConverter.ToFlowDocument(startPlan.OriginalBody, fallbackPt);
 
         _richBox = new RichTextBox(doc)
         {

@@ -152,6 +152,7 @@ internal sealed class BackstageView : UserControl
         {
             PresentationExportPlanner.PdfExportCommandId => _actions.ExportPdf,
             PresentationExportPlanner.ImageExportCommandId => _actions.ExportImages,
+            PresentationExportPlanner.VideoExportCommandId => _actions.ExportVideo,
             _ => throw new InvalidOperationException($"Unsupported FreeP export command '{commandId}'."),
         };
 }
@@ -164,6 +165,7 @@ internal sealed record BackstageActions(
     Action SaveAs,
     Action ExportPdf,
     Action ExportImages,
+    Action ExportVideo,
     Func<FreePOptions> CurrentOptions,
     Action OnClosed,
     Func<string> DataFolder);

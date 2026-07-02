@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -118,8 +119,11 @@ public sealed class MainWindow : Window
     private Canvas  _commentOverlay = null!;  // hosts speech-bubble dots over the slide canvas
     private StackPanel _commentListPanel = null!; // shows comment text list below canvas
     private Border  _commentListHost = null!; // collapsible container for _commentListPanel
+    private int? _selectedCommentIndex;
     private StackPanel _layoutPickerPanel = null!;
     private Border _layoutPickerHost = null!;
+    private UniformGrid _tablePickerGrid = null!;
+    private Border _tablePickerHost = null!;
     private Border _altTextPaneHost = null!;
     private TextBlock _altTextPaneHeading = null!;
     private TextBlock _altTextPaneMessage = null!;
@@ -131,16 +135,30 @@ public sealed class MainWindow : Window
     private Button _altTextApplyButton = null!;
     private Button _altTextCloseButton = null!;
     private bool _altTextPaneRefreshing;
+    private Border _readingOrderPaneHost = null!;
+    private TextBlock _readingOrderPaneHeading = null!;
+    private TextBlock _readingOrderPaneMessage = null!;
+    private StackPanel _readingOrderPaneItemsPanel = null!;
+    private Button _readingOrderMoveEarlierButton = null!;
+    private Button _readingOrderMoveLaterButton = null!;
 
     internal PresentationCommentPanePlan? LastCommentPanePlan { get; private set; }
     internal PresentationAccessibilitySummaryPlan? LastAccessibilitySummaryPlan { get; private set; }
     internal PresentationAltTextRequestPlan? LastAltTextRequestPlan { get; private set; }
     internal PresentationAltTextPanePlan? LastAltTextPanePlan { get; private set; }
+    internal PresentationReadingOrderPlan? LastReadingOrderPlan { get; private set; }
     internal PresentationProofingRequestPlan? LastProofingRequestPlan { get; private set; }
     internal PresentationDesignCommandPlan? LastLayoutRequestPlan { get; private set; }
+    internal PresentationNotesPagePreviewPlan? LastNotesPagePreviewPlan { get; private set; }
+    internal PresentationNotesPagePdfRenderPlan? LastNotesPagePdfRenderPlan { get; private set; }
+    internal PresentationVideoExportPlan? LastVideoExportPlan { get; private set; }
     internal PresentationLayoutPickerPlan? LastLayoutPickerPlan { get; private set; }
     internal PresentationLayoutChoice? LastAppliedLayoutChoice { get; private set; }
+    internal TableInsertionPickerPlan? LastTablePickerPlan { get; private set; }
     internal bool IsLayoutPickerVisible => _layoutPickerHost?.Visibility == Visibility.Visible;
+    internal bool IsTablePickerVisible => _tablePickerHost?.Visibility == Visibility.Visible;
+    internal int TablePickerChoiceButtonCount => LastTablePickerPlan?.Choices.Count ?? 0;
+    internal int TablePickerDefaultChoiceCount => LastTablePickerPlan?.Choices.Count(choice => choice.IsDefault) ?? 0;
     internal int LayoutPickerChoiceButtonCount => LastLayoutPickerPlan?.Choices.Count ?? 0;
     internal int LayoutPickerGroupHeaderCount => LastLayoutPickerPlan?.Groups.Count ?? 0;
     internal int LayoutPickerThumbnailPlaceholderCount =>
@@ -157,6 +175,19 @@ public sealed class MainWindow : Window
     internal string AltTextPaneDescriptionPlaceholder => LastAltTextPanePlan?.Description.Placeholder ?? string.Empty;
     internal bool IsAltTextPaneDecorativeChecked => _altTextDecorativeCheck?.IsChecked == true;
     internal string AltTextPaneMessage => _altTextPaneMessage?.Text ?? string.Empty;
+    internal int ReviewCommentSelectedCount => LastCommentPanePlan?.Comments.Count(comment => comment.IsSelected) ?? 0;
+    internal bool IsReadingOrderPaneVisible => _readingOrderPaneHost?.Visibility == Visibility.Visible;
+    internal int ReadingOrderPaneItemCount => LastReadingOrderPlan?.Items.Count ?? 0;
+    internal string ReadingOrderPaneHeading => _readingOrderPaneHeading?.Text ?? string.Empty;
+    internal string ReadingOrderPaneMessage => _readingOrderPaneMessage?.Text ?? string.Empty;
+    internal bool IsReadingOrderMoveEarlierEnabled => _readingOrderMoveEarlierButton?.IsEnabled == true;
+    internal bool IsReadingOrderMoveLaterEnabled => _readingOrderMoveLaterButton?.IsEnabled == true;
+    internal string? ReadingOrderMoveEarlierDisabledReason =>
+        LastReadingOrderPlan?.Actions.SingleOrDefault(action =>
+            action.CommandId == PresentationReviewWorkflowPlanner.ReadingOrderMoveEarlierCommandId)?.DisabledReason;
+    internal string? ReadingOrderMoveLaterDisabledReason =>
+        LastReadingOrderPlan?.Actions.SingleOrDefault(action =>
+            action.CommandId == PresentationReviewWorkflowPlanner.ReadingOrderMoveLaterCommandId)?.DisabledReason;
 
     // ── Wave 16B: Animation pane (right-side collapsible panel) ──────────────────
     // 16B SEAM START — do not restructure this region (16A/16C may conflict nearby).
@@ -240,9 +271,14 @@ public sealed class MainWindow : Window
             onReviewCommentsPane: () => ShowReviewCommentsPane(),
             onReviewAccessibility: () => RefreshAccessibilitySummaryPlan(),
             onReviewAltText: () => ShowAltTextPane(),
+            onReviewReadingOrder: () => ShowReadingOrderPane(),
             onReviewProofing: () => RefreshProofingRequestPlan(),
+            onDeleteComment: () => DeleteSelectedComment(),
+            onResolveComment: () => ResolveSelectedComment(),
+            onReopenComment: () => ReopenSelectedComment(),
             // Wave 16B: Animation pane toggle.
-            onAnimPane:         () => ToggleAnimationPane());
+            onAnimPane:         () => ToggleAnimationPane(),
+            onTablePicker:      () => OpenTablePicker());
         var ribbon = BuildRibbon(FreePRibbon.Build(), commands, stateStore);
 
         // Body: slide pane + stage.
@@ -280,6 +316,7 @@ public sealed class MainWindow : Window
             SaveAs: () => _file.SaveAs(),
             ExportPdf: () => _file.ExportPdf(),
             ExportImages: () => _file.ExportImages(),
+            ExportVideo: () => RefreshVideoExportPlan(),
             CurrentOptions: () => _options,
             OnClosed: () => { },
             DataFolder: ResolveDataFolderLabel));
@@ -302,11 +339,12 @@ public sealed class MainWindow : Window
         var bus = new PresentationCommandBus(_presentation);
         Editor  = new EditingSession(_presentation, bus);
 
-        Editor.Changed           += () => { _file.MarkDirty(); RefreshCanvas(); UpdateSlideCount(); UpdateTitle(); RefreshReviewWorkflowPlans(); };
-        Editor.CurrentSlideChanged += (_, _) => { RefreshCanvas(); RefreshNotesPane(); RefreshCommentPane(); RefreshReviewWorkflowPlans(); };
+        Editor.Changed           += () => { _file.MarkDirty(); RefreshCanvas(); RefreshNotesPane(); UpdateSlideCount(); UpdateTitle(); RefreshReviewWorkflowPlans(); };
+        Editor.CurrentSlideChanged += (_, _) => { _selectedCommentIndex = null; RefreshCanvas(); RefreshNotesPane(); RefreshCommentPane(); RefreshReviewWorkflowPlans(); };
         Editor.SelectionChanged += (_, _) =>
         {
             RefreshAltTextRequestPlan();
+            RefreshReadingOrderPlan();
             if (IsAltTextPaneVisible)
                 ShowAltTextPane();
         };
@@ -344,6 +382,7 @@ public sealed class MainWindow : Window
         // 3B: re-bind slide pane to the new Editor on file open/new.
         SlidePaneHost.Child = new SlidePane(Editor);
         HideLayoutPicker();
+        HideTablePicker();
         RefreshCanvas();
         UpdateSlideCount();
         RefreshNotesPane();
@@ -431,6 +470,9 @@ public sealed class MainWindow : Window
         {
             if (_notesRefreshing) return;
             Editor.SetCurrentSlideNotesText(_notesBox.Text);
+            LastNotesPagePreviewPlan = PresentationNotesPagePreviewPlanner.Build(
+                _presentation,
+                Editor.CurrentSlideIndex);
         };
 
         // Wave 11B: comment list pane — a collapsible strip above the notes pane.
@@ -466,6 +508,35 @@ public sealed class MainWindow : Window
                 Content                       = _layoutPickerPanel,
             },
         };
+        _tablePickerGrid = new UniformGrid
+        {
+            Rows = TableInsertionPickerPlanner.DefaultMaxRows,
+            Columns = TableInsertionPickerPlanner.DefaultMaxColumns,
+            Margin = new Thickness(8),
+        };
+        _tablePickerHost = new Border
+        {
+            BorderBrush     = new SolidColorBrush(Color.FromRgb(0xC0, 0xC0, 0xC0)),
+            BorderThickness = new Thickness(0, 1, 0, 0),
+            Background      = Brushes.White,
+            Visibility      = Visibility.Collapsed,
+            Child           = new StackPanel
+            {
+                Orientation = Orientation.Vertical,
+                Children =
+                {
+                    new TextBlock
+                    {
+                        Text = TableInsertionPickerPlanner.PickerHeading,
+                        Margin = new Thickness(10, 8, 10, 2),
+                        FontSize = 11,
+                        FontWeight = FontWeights.SemiBold,
+                        Foreground = new SolidColorBrush(Color.FromRgb(0x44, 0x44, 0x44)),
+                    },
+                    _tablePickerGrid,
+                },
+            },
+        };
 
         _altTextPaneHost = BuildAltTextPaneHost();
 
@@ -475,12 +546,15 @@ public sealed class MainWindow : Window
         rightPanel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         rightPanel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         rightPanel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        rightPanel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         Grid.SetRow(_canvasHost,       0);
         Grid.SetRow(_layoutPickerHost, 1);
-        Grid.SetRow(_commentListHost,  2);
-        Grid.SetRow(_notesBox,         3);
+        Grid.SetRow(_tablePickerHost,  2);
+        Grid.SetRow(_commentListHost,  3);
+        Grid.SetRow(_notesBox,         4);
         rightPanel.Children.Add(_canvasHost);
         rightPanel.Children.Add(_layoutPickerHost);
+        rightPanel.Children.Add(_tablePickerHost);
         rightPanel.Children.Add(_commentListHost);
         rightPanel.Children.Add(_notesBox);
 
@@ -497,18 +571,23 @@ public sealed class MainWindow : Window
         // AnimationPane itself is created lazily on first show (ToggleAnimationPane).
         // END 16B SEAM
 
+        _readingOrderPaneHost = BuildReadingOrderPaneHost();
+
         var splitter = new Grid();
         splitter.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         splitter.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        splitter.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         splitter.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         splitter.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); // 16B: anim pane
         Grid.SetColumn(SlidePaneHost,  0);
         Grid.SetColumn(rightPanel,     1);
         Grid.SetColumn(_altTextPaneHost, 2);
-        Grid.SetColumn(_animPaneHost,  3); // 16B
+        Grid.SetColumn(_readingOrderPaneHost, 3);
+        Grid.SetColumn(_animPaneHost,  4); // 16B
         splitter.Children.Add(SlidePaneHost);
         splitter.Children.Add(rightPanel);
         splitter.Children.Add(_altTextPaneHost);
+        splitter.Children.Add(_readingOrderPaneHost);
         splitter.Children.Add(_animPaneHost); // 16B
 
         return splitter;
@@ -608,6 +687,73 @@ public sealed class MainWindow : Window
             VerticalScrollBarVisibility = singleLine ? ScrollBarVisibility.Disabled : ScrollBarVisibility.Auto,
         };
 
+    private Border BuildReadingOrderPaneHost()
+    {
+        _readingOrderPaneHeading = new TextBlock
+        {
+            Text = "Reading Order",
+            FontSize = 15,
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(12, 12, 12, 4),
+        };
+        _readingOrderPaneMessage = new TextBlock
+        {
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)),
+            Margin = new Thickness(12, 0, 12, 8),
+        };
+        _readingOrderMoveEarlierButton = new Button
+        {
+            MinWidth = 94,
+            Padding = new Thickness(10, 4, 10, 4),
+            Margin = new Thickness(0, 0, 8, 0),
+        };
+        _readingOrderMoveLaterButton = new Button
+        {
+            MinWidth = 84,
+            Padding = new Thickness(10, 4, 10, 4),
+        };
+        _readingOrderMoveEarlierButton.Click += (_, _) => ApplyReadingOrderMoveEarlier();
+        _readingOrderMoveLaterButton.Click += (_, _) => ApplyReadingOrderMoveLater();
+        _readingOrderPaneItemsPanel = new StackPanel
+        {
+            Orientation = Orientation.Vertical,
+        };
+
+        var actionPanel = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Margin = new Thickness(12, 0, 12, 8),
+        };
+        actionPanel.Children.Add(_readingOrderMoveEarlierButton);
+        actionPanel.Children.Add(_readingOrderMoveLaterButton);
+
+        var panel = new DockPanel();
+        var header = new StackPanel { Orientation = Orientation.Vertical };
+        header.Children.Add(_readingOrderPaneHeading);
+        header.Children.Add(_readingOrderPaneMessage);
+        header.Children.Add(actionPanel);
+        DockPanel.SetDock(header, Dock.Top);
+        panel.Children.Add(header);
+        panel.Children.Add(new ScrollViewer
+        {
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            Content = _readingOrderPaneItemsPanel,
+        });
+
+        return new Border
+        {
+            Width = 320,
+            Visibility = Visibility.Collapsed,
+            Background = Brushes.White,
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0xC0, 0xC0, 0xC0)),
+            BorderThickness = new Thickness(1, 0, 0, 0),
+            Child = panel,
+        };
+    }
+
     // ── Canvas refresh ────────────────────────────────────────────────────────────
 
     private void RefreshCanvas()
@@ -630,6 +776,9 @@ public sealed class MainWindow : Window
         _notesRefreshing = true;
         try
         {
+            LastNotesPagePreviewPlan = PresentationNotesPagePreviewPlanner.Build(
+                _presentation,
+                Editor.CurrentSlideIndex);
             var notes = Editor.CurrentSlideNotes;
             if (notes is null)
             {
@@ -661,7 +810,8 @@ public sealed class MainWindow : Window
 
         var plan = PresentationReviewWorkflowPlanner.BuildCommentPanePlan(
             _presentation.Slides,
-            Editor.CurrentSlideIndex);
+            Editor.CurrentSlideIndex,
+            _selectedCommentIndex);
         LastCommentPanePlan = plan;
         var comments = plan.Comments;
 
@@ -720,6 +870,14 @@ public sealed class MainWindow : Window
                 };
                 headerPanel.Children.Add(badge);
                 headerPanel.Children.Add(authorText);
+                headerPanel.Children.Add(new TextBlock
+                {
+                    Text       = cm.ThreadStatus == PresentationCommentThreadStatus.Resolved ? "Resolved" : "Open",
+                    FontSize   = 10,
+                    Foreground = new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66)),
+                    Margin     = new Thickness(6, 0, 0, 0),
+                    VerticalAlignment = VerticalAlignment.Center,
+                });
 
                 // Comment body text
                 var bodyText = new TextBlock
@@ -731,8 +889,22 @@ public sealed class MainWindow : Window
                     Margin       = new Thickness(16, 2, 6, 6),
                 };
 
-                _commentListPanel.Children.Add(headerPanel);
-                _commentListPanel.Children.Add(bodyText);
+                var card = new StackPanel();
+                card.Children.Add(headerPanel);
+                card.Children.Add(bodyText);
+
+                var cardHost = new Border
+                {
+                    Background      = new SolidColorBrush(cm.IsSelected ? Color.FromRgb(0xF4, 0xEC, 0xE8) : Color.FromRgb(0xFA, 0xFA, 0xFA)),
+                    BorderBrush     = new SolidColorBrush(cm.IsSelected ? Color.FromRgb(0xB7, 0x47, 0x2A) : Color.FromRgb(0xE0, 0xE0, 0xE0)),
+                    BorderThickness = new Thickness(cm.IsSelected ? 2 : 1),
+                    CornerRadius    = new CornerRadius(4),
+                    Margin          = new Thickness(0, 0, 0, 6),
+                    Cursor          = Cursors.Hand,
+                    Child           = card,
+                };
+                cardHost.MouseLeftButtonDown += (_, _) => SelectReviewComment(cm.CommentIndex);
+                _commentListPanel.Children.Add(cardHost);
             }
             _commentListHost.Visibility = Visibility.Visible;
         }
@@ -791,34 +963,139 @@ public sealed class MainWindow : Window
             // Speech-bubble: a small orange circle with a tooltip showing author+text.
             var dot = new Border
             {
-                Width           = 14,
-                Height          = 14,
-                CornerRadius    = new CornerRadius(7),
-                Background      = new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A)),
+                Width           = cm.IsSelected ? 18 : 14,
+                Height          = cm.IsSelected ? 18 : 14,
+                CornerRadius    = new CornerRadius(cm.IsSelected ? 9 : 7),
+                Background      = new SolidColorBrush(cm.IsSelected ? Color.FromRgb(0x8F, 0x37, 0x21) : Color.FromRgb(0xB7, 0x47, 0x2A)),
                 BorderBrush     = System.Windows.Media.Brushes.White,
-                BorderThickness = new Thickness(1.5),
+                BorderThickness = new Thickness(cm.IsSelected ? 2.0 : 1.5),
                 ToolTip         = $"{cm.Author}: {cm.TextPreview}",
             };
 
-            Canvas.SetLeft(dot, cx - 7);
-            Canvas.SetTop(dot,  cy - 7);
+            Canvas.SetLeft(dot, cx - (cm.IsSelected ? 9 : 7));
+            Canvas.SetTop(dot,  cy - (cm.IsSelected ? 9 : 7));
             _commentOverlay.Children.Add(dot);
         }
+    }
+
+    internal PresentationVideoExportPlan RefreshVideoExportPlan(PresentationVideoExportRequest? request = null)
+    {
+        LastVideoExportPlan = _file.BuildVideoExportPlan(request);
+        return LastVideoExportPlan;
+    }
+
+    internal PresentationNotesPagePdfRenderPlan RefreshNotesPagePdfRenderPlan(PresentationSlideRangeRequest? range = null)
+    {
+        LastNotesPagePdfRenderPlan = _file.BuildNotesPagePdfRenderPlan(range);
+        return LastNotesPagePdfRenderPlan;
     }
 
     internal void RefreshReviewWorkflowPlans()
     {
         LastCommentPanePlan = PresentationReviewWorkflowPlanner.BuildCommentPanePlan(
             _presentation.Slides,
-            Editor.CurrentSlideIndex);
+            Editor.CurrentSlideIndex,
+            _selectedCommentIndex);
         RefreshAccessibilitySummaryPlan();
         RefreshAltTextRequestPlan();
+        RefreshReadingOrderPlan();
         RefreshProofingRequestPlan();
     }
 
     private void ShowReviewCommentsPane()
     {
         RefreshCommentPane();
+    }
+
+    internal PresentationCommentPanePlan SetSelectedReviewCommentIndexForTests(int? commentIndex)
+    {
+        _selectedCommentIndex = commentIndex;
+        RefreshCommentPane();
+        return LastCommentPanePlan!;
+    }
+
+    private void SelectReviewComment(int commentIndex)
+    {
+        _selectedCommentIndex = commentIndex;
+        RefreshCommentPane();
+        RefreshReviewWorkflowPlans();
+    }
+
+    internal PresentationCommentMutationPlan DeleteSelectedComment()
+        => ApplySelectedCommentMutation(
+            PresentationReviewWorkflowIntentKind.DeleteComment,
+            null,
+            null);
+
+    internal PresentationCommentMutationPlan ResolveSelectedComment(
+        DateTime? resolvedAt = null,
+        string? resolvedBy = null)
+        => ApplySelectedCommentMutation(
+            PresentationReviewWorkflowIntentKind.ResolveComment,
+            resolvedAt,
+            resolvedBy);
+
+    internal PresentationCommentMutationPlan ReopenSelectedComment()
+        => ApplySelectedCommentMutation(
+            PresentationReviewWorkflowIntentKind.ReopenComment,
+            null,
+            null);
+
+    private PresentationCommentMutationPlan ApplySelectedCommentMutation(
+        PresentationReviewWorkflowIntentKind intent,
+        DateTime? resolvedAt,
+        string? resolvedBy)
+    {
+        var selected = _selectedCommentIndex;
+        var plan = selected is { } selectedIndex
+            ? intent switch
+            {
+                PresentationReviewWorkflowIntentKind.DeleteComment =>
+                    PresentationReviewWorkflowPlanner.BuildDeleteCommentPlan(
+                        _presentation.Slides,
+                        Editor.CurrentSlideIndex,
+                        selectedIndex),
+                PresentationReviewWorkflowIntentKind.ResolveComment =>
+                    PresentationReviewWorkflowPlanner.BuildResolveCommentPlan(
+                        _presentation.Slides,
+                        Editor.CurrentSlideIndex,
+                        selectedIndex,
+                        resolvedAt ?? DateTime.UtcNow,
+                        resolvedBy ?? "FreeP User"),
+                PresentationReviewWorkflowIntentKind.ReopenComment =>
+                    PresentationReviewWorkflowPlanner.BuildReopenCommentPlan(
+                        _presentation.Slides,
+                        Editor.CurrentSlideIndex,
+                        selectedIndex),
+                _ => new PresentationCommentMutationPlan(
+                    intent,
+                    false,
+                    Editor.CurrentSlideIndex,
+                    selected,
+                    null,
+                    PresentationReviewWorkflowPlanner.MissingCommentMessage)
+            }
+            : new PresentationCommentMutationPlan(
+                intent,
+                false,
+                Editor.CurrentSlideIndex,
+                selected,
+                null,
+                PresentationReviewWorkflowPlanner.MissingCommentMessage);
+
+        if (PresentationReviewWorkflowPlanner.TryApplyCommentMutationPlan(_presentation.Slides, plan))
+        {
+            _selectedCommentIndex = PresentationReviewWorkflowPlanner.NormalizeCommentSelectionAfterMutation(
+                _presentation.Slides,
+                plan,
+                selected);
+            _file.MarkDirty();
+            RefreshCommentPane();
+            RefreshReviewWorkflowPlans();
+            UpdateTitle();
+        }
+
+        return plan;
     }
 
     private void RefreshAccessibilitySummaryPlan()
@@ -846,6 +1123,30 @@ public sealed class MainWindow : Window
     {
         if (_altTextPaneHost is not null)
             _altTextPaneHost.Visibility = Visibility.Collapsed;
+    }
+
+    internal PresentationReadingOrderPlan ShowReadingOrderPane()
+    {
+        var plan = RefreshReadingOrderPlan();
+        RenderReadingOrderPane(plan);
+        _readingOrderPaneHost.Visibility = Visibility.Visible;
+        return plan;
+    }
+
+    internal PresentationReadingOrderMutationPlan ApplyReadingOrderMoveEarlier()
+        => ApplyReadingOrderMove(PresentationReviewWorkflowIntentKind.MoveReadingOrderEarlier);
+
+    internal PresentationReadingOrderMutationPlan ApplyReadingOrderMoveLater()
+        => ApplyReadingOrderMove(PresentationReviewWorkflowIntentKind.MoveReadingOrderLater);
+
+    private PresentationReadingOrderMutationPlan ApplyReadingOrderMove(
+        PresentationReviewWorkflowIntentKind intent)
+    {
+        var plan = PresentationReviewWorkflowPlanner.TryApplyReadingOrderMove(Editor, intent);
+        RefreshReadingOrderPlan();
+        if (IsReadingOrderPaneVisible && LastReadingOrderPlan is not null)
+            RenderReadingOrderPane(LastReadingOrderPlan);
+        return plan;
     }
 
     internal void SetAltTextPaneInput(string title, string description, bool isDecorative)
@@ -954,6 +1255,140 @@ public sealed class MainWindow : Window
         string commandId)
         => plan.Actions.Single(action => action.CommandId == commandId);
 
+    private void RenderReadingOrderPane(PresentationReadingOrderPlan plan)
+    {
+        _readingOrderPaneHeading.Text =
+            $"Reading Order - slide {plan.SlideIndex + 1} ({plan.Items.Count} shapes)";
+        _readingOrderPaneMessage.Text = plan.SelectedItem is { } selected
+            ? $"Selected: {selected.ShapeName}"
+            : plan.Items.Count == 0
+                ? PresentationReviewWorkflowPlanner.EmptyReadingOrderMessage
+                : PresentationReviewWorkflowPlanner.MissingReadingOrderSelectionMessage;
+
+        var moveEarlier = GetReadingOrderAction(
+            plan,
+            PresentationReviewWorkflowPlanner.ReadingOrderMoveEarlierCommandId);
+        var moveLater = GetReadingOrderAction(
+            plan,
+            PresentationReviewWorkflowPlanner.ReadingOrderMoveLaterCommandId);
+        ApplyReadingOrderButtonPlan(_readingOrderMoveEarlierButton, moveEarlier);
+        ApplyReadingOrderButtonPlan(_readingOrderMoveLaterButton, moveLater);
+
+        _readingOrderPaneItemsPanel.Children.Clear();
+        if (plan.Items.Count == 0)
+        {
+            _readingOrderPaneItemsPanel.Children.Add(new TextBlock
+            {
+                Text = PresentationReviewWorkflowPlanner.EmptyReadingOrderMessage,
+                Foreground = new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66)),
+                Margin = new Thickness(12, 0, 12, 10),
+                TextWrapping = TextWrapping.Wrap,
+            });
+            return;
+        }
+
+        foreach (var item in plan.Items)
+            _readingOrderPaneItemsPanel.Children.Add(BuildReadingOrderItemCard(item));
+    }
+
+    private static PresentationReviewWorkflowActionPlan GetReadingOrderAction(
+        PresentationReadingOrderPlan plan,
+        string commandId)
+        => plan.Actions.Single(action => action.CommandId == commandId);
+
+    private static void ApplyReadingOrderButtonPlan(
+        Button button,
+        PresentationReviewWorkflowActionPlan action)
+    {
+        button.Content = action.Label;
+        button.IsEnabled = action.IsEnabled;
+        button.ToolTip = action.DisabledReason;
+        button.Tag = action.CommandId;
+    }
+
+    private static UIElement BuildReadingOrderItemCard(PresentationReadingOrderItemPlan item)
+    {
+        var title = new TextBlock
+        {
+            Text = $"{item.ReadingOrderIndex + 1}. {item.ShapeName}",
+            FontWeight = FontWeights.SemiBold,
+            TextWrapping = TextWrapping.Wrap,
+        };
+        var metadata = new TextBlock
+        {
+            Text = $"{item.ShapeTypeLabel} - depth {item.NestingDepth}",
+            Foreground = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)),
+            TextWrapping = TextWrapping.Wrap,
+        };
+        var accessibility = new TextBlock
+        {
+            Text = item.AccessibilitySummary,
+            Foreground = new SolidColorBrush(Color.FromRgb(0x44, 0x44, 0x44)),
+            TextWrapping = TextWrapping.Wrap,
+        };
+        var altText = new TextBlock
+        {
+            Text = BuildReadingOrderAltTextLine(item),
+            Foreground = new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66)),
+            TextWrapping = TextWrapping.Wrap,
+        };
+
+        var panel = new StackPanel
+        {
+            Orientation = Orientation.Vertical,
+        };
+        panel.Children.Add(title);
+        panel.Children.Add(metadata);
+        panel.Children.Add(accessibility);
+        panel.Children.Add(altText);
+
+        if (item.IsSelected)
+        {
+            panel.Children.Insert(1, new TextBlock
+            {
+                Text = "Selected item",
+                Foreground = new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A)),
+                FontWeight = FontWeights.SemiBold,
+                Margin = new Thickness(0, 2, 0, 0),
+            });
+        }
+
+        return new Border
+        {
+            Background = item.IsSelected
+                ? new SolidColorBrush(Color.FromRgb(0xFF, 0xF6, 0xF2))
+                : new SolidColorBrush(Color.FromRgb(0xFA, 0xFA, 0xFA)),
+            BorderBrush = item.IsSelected
+                ? new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A))
+                : new SolidColorBrush(Color.FromRgb(0xE0, 0xE0, 0xE0)),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(4),
+            Padding = new Thickness(10),
+            Margin = new Thickness(12, 0, 12, 10),
+            Child = panel,
+        };
+    }
+
+    private static string BuildReadingOrderAltTextLine(PresentationReadingOrderItemPlan item)
+    {
+        if (item.IsDecorative)
+            return "Decorative object";
+
+        if (string.IsNullOrWhiteSpace(item.AlternativeTextTitle)
+            && string.IsNullOrWhiteSpace(item.AlternativeTextDescription))
+        {
+            return "Alt text: missing";
+        }
+
+        if (string.IsNullOrWhiteSpace(item.AlternativeTextDescription))
+            return $"Alt text title: {item.AlternativeTextTitle}";
+
+        if (string.IsNullOrWhiteSpace(item.AlternativeTextTitle))
+            return $"Alt text: {item.AlternativeTextDescription}";
+
+        return $"Alt text: {item.AlternativeTextTitle} - {item.AlternativeTextDescription}";
+    }
+
     private static void SetTextIfChanged(TextBox textBox, string value)
     {
         if (textBox.Text != value)
@@ -964,6 +1399,15 @@ public sealed class MainWindow : Window
         => Editor.SelectedShapeIds.Count == 1
             ? Editor.SelectedShapeIds[0]
             : null;
+
+    private PresentationReadingOrderPlan RefreshReadingOrderPlan()
+    {
+        LastReadingOrderPlan = PresentationReviewWorkflowPlanner.BuildReadingOrderPlan(
+            Editor.CurrentSlide,
+            Editor.CurrentSlideIndex,
+            Editor.SelectedShapeIds);
+        return LastReadingOrderPlan;
+    }
 
     internal PresentationAltTextMutationPlan ApplySelectedShapeAlternativeText(
         string? description,
@@ -1243,6 +1687,67 @@ public sealed class MainWindow : Window
         return applied;
     }
 
+    internal void OpenTablePicker()
+    {
+        LastTablePickerPlan = TableInsertionPickerPlanner.BuildPlan();
+        ShowTablePicker(LastTablePickerPlan);
+    }
+
+    internal bool ApplyTablePickerChoice(int rows, int columns)
+    {
+        var applied = TableInsertionPickerPlanner.TryApplyChoice(Editor, rows, columns);
+        if (applied)
+        {
+            RefreshCanvas();
+            UpdateSlideCount();
+            HideTablePicker();
+        }
+
+        return applied;
+    }
+
+    private void ShowTablePicker(TableInsertionPickerPlan plan)
+    {
+        if (_tablePickerHost is null || _tablePickerGrid is null)
+            return;
+
+        _tablePickerGrid.Rows = plan.MaxRows;
+        _tablePickerGrid.Columns = plan.MaxColumns;
+        _tablePickerGrid.Children.Clear();
+        foreach (var choice in plan.Choices)
+        {
+            var button = new Button
+            {
+                Tag = choice,
+                Content = choice.IsDefault ? $"{choice.Label} (default)" : choice.Label,
+                Margin = new Thickness(2),
+                Padding = new Thickness(6, 4, 6, 4),
+                MinWidth = 74,
+                BorderBrush = choice.IsDefault
+                    ? new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A))
+                    : new SolidColorBrush(Color.FromRgb(0xC8, 0xC8, 0xC8)),
+                Background = choice.IsDefault
+                    ? new SolidColorBrush(Color.FromRgb(0xFE, 0xF2, 0xEC))
+                    : Brushes.White,
+            };
+            button.Click += (_, _) =>
+            {
+                if (button.Tag is TableInsertionPickerChoice tableChoice)
+                    ApplyTablePickerChoice(tableChoice.Rows, tableChoice.Columns);
+            };
+            _tablePickerGrid.Children.Add(button);
+        }
+
+        HideLayoutPicker();
+        _tablePickerHost.Visibility = Visibility.Visible;
+    }
+
+    private void HideTablePicker()
+    {
+        if (_tablePickerHost is not null)
+            _tablePickerHost.Visibility = Visibility.Collapsed;
+    }
+
     private void ShowLayoutPicker(PresentationLayoutPickerPlan plan)
     {
         if (_layoutPickerHost is null || _layoutPickerPanel is null)
@@ -1288,6 +1793,7 @@ public sealed class MainWindow : Window
             _layoutPickerPanel.Children.Add(groupPanel);
         }
 
+        HideTablePicker();
         _layoutPickerHost.Visibility = Visibility.Visible;
     }
 

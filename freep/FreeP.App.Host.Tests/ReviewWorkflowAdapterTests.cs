@@ -19,6 +19,9 @@ public sealed class ReviewWorkflowAdapterTests
                 Initials = "RV",
                 Text = "Use the shared plan.",
                 Idx = 1,
+                IsResolved = true,
+                ResolvedBy = "Reviewer",
+                ResolvedDateTime = new DateTime(2026, 7, 2, 8, 15, 0, DateTimeKind.Utc),
             });
 
             var shape = new SlideShape
@@ -36,9 +39,23 @@ public sealed class ReviewWorkflowAdapterTests
 
             window.LastCommentPanePlan.Should().NotBeNull();
             window.LastCommentPanePlan!.TotalCommentCount.Should().Be(1);
+            window.LastCommentPanePlan.Comments.Single().Should().Match<PresentationCommentDescriptor>(comment =>
+                comment.ThreadStatus == PresentationCommentThreadStatus.Resolved &&
+                comment.IsSelected &&
+                !comment.CanResolve &&
+                comment.CanReopen);
+            window.LastCommentPanePlan.SelectedComment.Should().BeSameAs(window.LastCommentPanePlan.Comments[0]);
+            window.ReviewCommentSelectedCount.Should().Be(1);
             window.LastCommentPanePlan.Actions.Select(action => action.CommandId)
                 .Should()
-                .Contain(PresentationReviewWorkflowPlanner.CommentsPaneCommandId);
+                .Contain(new[]
+                {
+                    PresentationReviewWorkflowPlanner.CommentsPaneCommandId,
+                    PresentationReviewWorkflowPlanner.ReopenCommentCommandId
+                });
+            window.LastCommentPanePlan.Actions.Single(action =>
+                    action.CommandId == PresentationReviewWorkflowPlanner.ReopenCommentCommandId)
+                .IsEnabled.Should().BeTrue();
             window.LastAccessibilitySummaryPlan.Should().NotBeNull();
             var missingAltText = window.LastAccessibilitySummaryPlan!.Issues.Single(issue =>
                 issue.ShapeId == shape.Id && issue.Title == "Alt text missing");
@@ -69,6 +86,19 @@ public sealed class ReviewWorkflowAdapterTests
             window.LastAltTextPanePlan.Actions
                 .Single(action => action.CommandId == PresentationReviewWorkflowPlanner.AltTextPaneApplyCommandId)
                 .DisabledReason.Should().Be(PresentationReviewWorkflowPlanner.MissingAltTextDescriptionMessage);
+            window.LastReadingOrderPlan.Should().NotBeNull();
+            window.LastReadingOrderPlan!.Items.Select(item => item.ShapeId).Should().Contain(shape.Id);
+            window.LastReadingOrderPlan.SelectedItem.Should().NotBeNull();
+            window.LastReadingOrderPlan.SelectedItem!.ShapeId.Should().Be(shape.Id);
+            window.LastReadingOrderPlan.Actions.Single(action =>
+                    action.CommandId == PresentationReviewWorkflowPlanner.ReadingOrderMoveLaterCommandId)
+                .Should().Be(new PresentationReviewWorkflowActionPlan(
+                    PresentationReviewWorkflowPlanner.ReadingOrderMoveLaterCommandId,
+                    "Move Later",
+                    PresentationReviewWorkflowIntentKind.MoveReadingOrderLater,
+                    false,
+                    PresentationWorkflowCapabilityStatus.Available,
+                    PresentationReviewWorkflowPlanner.ReadingOrderAlreadyLatestMessage));
 
             var mutation = window.ApplySelectedShapeAlternativeText(
                 "  Product packaging on a white background. ",
@@ -96,6 +126,124 @@ public sealed class ReviewWorkflowAdapterTests
             window.LastAccessibilitySummaryPlan!.Issues.Should().NotContain(issue =>
                 issue.ShapeId == shape.Id && issue.Title == "Alt text missing");
             window.LastProofingRequestPlan.Should().NotBeNull();
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [StaFact]
+    public void MainWindow_ResolveAndReopenComment_ApplySharedPlanAndRefreshPane()
+    {
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
+        try
+        {
+            window.Editor.CurrentSlide!.Comments.Add(new SlideComment
+            {
+                Author = "Reviewer",
+                Initials = "RV",
+                Text = "Close this thread.",
+                Idx = 1
+            });
+            window.SetSelectedReviewCommentIndexForTests(0);
+            window.LastCommentPanePlan!.Actions.Single(action =>
+                    action.CommandId == PresentationReviewWorkflowPlanner.ResolveCommentCommandId)
+                .IsEnabled.Should().BeTrue();
+
+            var resolvedAt = new DateTime(2026, 7, 2, 13, 0, 0, DateTimeKind.Utc);
+            var resolve = window.ResolveSelectedComment(resolvedAt, "  FreeP User ");
+
+            resolve.Should().BeEquivalentTo(new PresentationCommentMutationPlan(
+                PresentationReviewWorkflowIntentKind.ResolveComment,
+                true,
+                0,
+                0,
+                new SlideComment
+                {
+                    Author = "Reviewer",
+                    Initials = "RV",
+                    Text = "Close this thread.",
+                    Idx = 1,
+                    IsResolved = true,
+                    ResolvedDateTime = resolvedAt,
+                    ResolvedBy = "FreeP User"
+                },
+                null));
+            var comment = window.Editor.CurrentSlide.Comments[0];
+            comment.IsResolved.Should().BeTrue();
+            comment.ResolvedDateTime.Should().Be(resolvedAt);
+            comment.ResolvedBy.Should().Be("FreeP User");
+            window.LastCommentPanePlan!.Comments.Single().CanReopen.Should().BeTrue();
+            window.LastCommentPanePlan.Actions.Single(action =>
+                    action.CommandId == PresentationReviewWorkflowPlanner.ResolveCommentCommandId)
+                .DisabledReason.Should().Be(PresentationReviewWorkflowPlanner.CommentAlreadyResolvedMessage);
+
+            var reopen = window.ReopenSelectedComment();
+
+            reopen.Intent.Should().Be(PresentationReviewWorkflowIntentKind.ReopenComment);
+            reopen.ShouldApply.Should().BeTrue();
+            var reopened = window.Editor.CurrentSlide.Comments[0];
+            reopened.IsResolved.Should().BeFalse();
+            reopened.ResolvedDateTime.Should().BeNull();
+            reopened.ResolvedBy.Should().BeEmpty();
+            window.LastCommentPanePlan!.Comments.Single().CanResolve.Should().BeTrue();
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [StaFact]
+    public void MainWindow_DeleteComment_AppliesSharedPlanAndNormalizesSelection()
+    {
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
+        try
+        {
+            window.Editor.CurrentSlide!.Comments.Add(new SlideComment
+            {
+                Author = "Reviewer",
+                Initials = "RV",
+                Text = "Keep this thread.",
+                Idx = 1
+            });
+            window.Editor.CurrentSlide.Comments.Add(new SlideComment
+            {
+                Author = "Reviewer",
+                Initials = "RV",
+                Text = "Delete this thread.",
+                Idx = 2
+            });
+            window.SetSelectedReviewCommentIndexForTests(1);
+            window.LastCommentPanePlan!.Actions.Single(action =>
+                    action.CommandId == PresentationReviewWorkflowPlanner.DeleteCommentCommandId)
+                .IsEnabled.Should().BeTrue();
+
+            var delete = window.DeleteSelectedComment();
+
+            delete.Should().Be(new PresentationCommentMutationPlan(
+                PresentationReviewWorkflowIntentKind.DeleteComment,
+                true,
+                0,
+                1,
+                null,
+                null));
+            window.Editor.CurrentSlide.Comments.Should().ContainSingle().Which.Text.Should().Be("Keep this thread.");
+            window.LastCommentPanePlan!.SelectedCommentIndex.Should().Be(0);
+            window.LastCommentPanePlan.SelectedComment!.TextPreview.Should().Be("Keep this thread.");
+            window.ReviewCommentSelectedCount.Should().Be(1);
+
+            window.SetSelectedReviewCommentIndexForTests(99);
+            window.LastCommentPanePlan!.Actions.Single(action =>
+                    action.CommandId == PresentationReviewWorkflowPlanner.DeleteCommentCommandId)
+                .DisabledReason.Should().Be(PresentationReviewWorkflowPlanner.MissingCommentMessage);
+
+            var invalid = window.DeleteSelectedComment();
+
+            invalid.ShouldApply.Should().BeFalse();
+            invalid.ValidationMessage.Should().Be(PresentationReviewWorkflowPlanner.MissingCommentMessage);
+            window.Editor.CurrentSlide.Comments.Should().ContainSingle();
         }
         finally
         {
@@ -180,6 +328,96 @@ public sealed class ReviewWorkflowAdapterTests
     }
 
     [StaFact]
+    public void MainWindow_ReadingOrderCommand_ShowsSharedPlanBackedPane()
+    {
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
+        try
+        {
+            var chart = new SlideShape
+            {
+                Id = 501,
+                Name = "Sales chart",
+                Kind = SlideShapeKind.Chart,
+                Chart = new ChartShape(),
+                AlternativeTextTitle = "Regional sales",
+                AlternativeText = "Quarterly sales by region.",
+            };
+            var group = new SlideShape
+            {
+                Id = 502,
+                Name = "Grouped layout",
+                Kind = SlideShapeKind.Group,
+                Children =
+                {
+                    new SlideShape
+                    {
+                        Id = 503,
+                        Name = "Decorative flourish",
+                        Kind = SlideShapeKind.Picture,
+                        Picture = new ImagePart(),
+                        IsDecorative = true,
+                    }
+                }
+            };
+            window.Editor.CurrentSlide!.Shapes.Clear();
+            window.Editor.CurrentSlide!.Shapes.Add(chart);
+            window.Editor.CurrentSlide.Shapes.Add(group);
+            window.Editor.Select(chart.Id);
+
+            var registry = FreePRibbonCommands.Build(
+                new RibbonStateStore(),
+                window.Editor,
+                onReviewReadingOrder: () => window.ShowReadingOrderPane());
+            registry.TryGet(PresentationReviewWorkflowPlanner.ReadingOrderPaneCommandId, out var command)
+                .Should().BeTrue();
+
+            command!.Execute(RibbonCommandContext.Empty);
+
+            window.IsReadingOrderPaneVisible.Should().BeTrue();
+            window.ReadingOrderPaneItemCount.Should().Be(3);
+            window.ReadingOrderPaneHeading.Should().Be("Reading Order - slide 1 (3 shapes)");
+            window.ReadingOrderPaneMessage.Should().Be("Selected: Sales chart");
+            window.LastReadingOrderPlan.Should().NotBeNull();
+            window.LastReadingOrderPlan!.SelectedItem.Should().NotBeNull();
+            window.LastReadingOrderPlan.SelectedItem!.ShapeId.Should().Be(chart.Id);
+            window.LastReadingOrderPlan.Items.Single(item => item.ShapeId == 503).Should().Match<PresentationReadingOrderItemPlan>(item =>
+                item.NestingDepth == 1 &&
+                item.IsDecorative &&
+                item.AccessibilitySummary == "Decorative");
+            window.IsReadingOrderMoveEarlierEnabled.Should().BeFalse();
+            window.IsReadingOrderMoveLaterEnabled.Should().BeTrue();
+            window.ReadingOrderMoveEarlierDisabledReason.Should()
+                .Be(PresentationReviewWorkflowPlanner.ReadingOrderAlreadyEarliestMessage);
+            window.ReadingOrderMoveLaterDisabledReason.Should().BeNull();
+            window.LastReadingOrderPlan.Actions.Single(action =>
+                    action.CommandId == PresentationReviewWorkflowPlanner.ReadingOrderMoveEarlierCommandId)
+                .Status.Should().Be(PresentationWorkflowCapabilityStatus.Available);
+
+            var mutation = window.ApplyReadingOrderMoveLater();
+
+            mutation.Should().Be(new PresentationReadingOrderMutationPlan(
+                PresentationReviewWorkflowIntentKind.MoveReadingOrderLater,
+                true,
+                0,
+                chart.Id,
+                0,
+                1,
+                null));
+            window.Editor.CurrentSlide.Shapes.Select(shape => shape.Id).Should().Equal(502u, 501u);
+            window.LastReadingOrderPlan!.Items.Select(item => item.ShapeId).Should().Equal(502u, 503u, 501u);
+            window.LastReadingOrderPlan.SelectedItem!.ShapeId.Should().Be(chart.Id);
+            window.IsReadingOrderMoveEarlierEnabled.Should().BeTrue();
+            window.IsReadingOrderMoveLaterEnabled.Should().BeFalse();
+            window.ReadingOrderMoveLaterDisabledReason.Should()
+                .Be(PresentationReviewWorkflowPlanner.ReadingOrderAlreadyLatestMessage);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [StaFact]
     public void MainWindow_LayoutPickerRequest_RecordsSharedDesignPlan()
     {
         var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
@@ -238,18 +476,119 @@ public sealed class ReviewWorkflowAdapterTests
     }
 
     [StaFact]
+    public void MainWindow_TablePickerRequest_ShowsPickerAndAppliesChoice()
+    {
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
+        try
+        {
+            var before = window.Editor.CurrentSlide!.Shapes.Count;
+
+            window.OpenTablePicker();
+
+            window.LastTablePickerPlan.Should().NotBeNull();
+            window.IsTablePickerVisible.Should().BeTrue();
+            window.TablePickerChoiceButtonCount.Should().Be(25);
+            window.TablePickerDefaultChoiceCount.Should().Be(1);
+            window.LastTablePickerPlan!.Choices.Should().Contain(choice =>
+                choice.Rows == 5 &&
+                choice.Columns == 4 &&
+                choice.Label == "5 x 4 Table");
+
+            window.ApplyTablePickerChoice(5, 4).Should().BeTrue();
+
+            window.IsTablePickerVisible.Should().BeFalse();
+            window.Editor.CurrentSlide!.Shapes.Should().HaveCount(before + 1);
+            var table = window.Editor.CurrentSlide.Shapes.Last().Table;
+            table.Should().NotBeNull();
+            table!.Rows.Should().HaveCount(5);
+            table.ColumnWidthsEmu.Should().HaveCount(4);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [StaFact]
+    public void MainWindow_VideoExportRequest_RecordsSharedDeferredPlan()
+    {
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
+        try
+        {
+            window.Editor.InsertSlide();
+
+            var plan = window.RefreshVideoExportPlan(new PresentationVideoExportRequest(
+                new PresentationSlideRangeRequest(
+                    PresentationSlideRangeKind.SelectedSlides,
+                    SelectedSlideNumbers: [2, 1, 2]),
+                PresentationVideoQualityKind.Standard,
+                SecondsPerSlide: 8));
+
+            window.LastVideoExportPlan.Should().BeSameAs(plan);
+            plan.CommandId.Should().Be(PresentationExportPlanner.VideoExportCommandId);
+            plan.SlideRange.SlideNumbers.Should().Equal(1, 2);
+            plan.Quality.Quality.Should().Be(PresentationVideoQualityKind.Standard);
+            plan.Quality.WidthPx.Should().Be(852);
+            plan.EstimatedDuration.Should().Be(TimeSpan.FromSeconds(16));
+            plan.CanExecute.Should().BeFalse();
+            plan.DisabledReason.Should().Be(PresentationExportPlanner.VideoExportDeferredMessage);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [StaFact]
+    public void MainWindow_NotesPagePdfRequest_RecordsSharedRenderPlan()
+    {
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
+        try
+        {
+            window.Editor.CurrentSlide!.Title = "Opening";
+            window.Editor.CurrentSlide.Notes = MakeTextBody("Opening note");
+            window.Editor.InsertSlide();
+
+            var plan = window.RefreshNotesPagePdfRenderPlan(new PresentationSlideRangeRequest(
+                PresentationSlideRangeKind.CurrentSlide,
+                CurrentSlideNumber: 1));
+
+            window.LastNotesPagePdfRenderPlan.Should().BeSameAs(plan);
+            plan.PrintPlan.CommandId.Should().Be(PresentationExportPlanner.PrintCommandId);
+            plan.PrintPlan.Layout.Layout.Should().Be(PresentationPrintLayoutKind.NotesPages);
+            plan.PrintPlan.SlideRange.SlideNumbers.Should().Equal(1);
+            plan.PreviewPlans.Should().ContainSingle(preview =>
+                preview.SlideNumber == 1 &&
+                preview.NoteLines.Count == 1 &&
+                preview.NoteLines[0] == "Opening note");
+            plan.Pages.Should().ContainSingle();
+            plan.Pages[0].Ops.OfType<Free.Shared.Pdf.PdfText>().Select(text => text.Text)
+                .Should()
+                .Contain(["Opening", "Opening note"]);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [StaFact]
     public void FreePRibbonCommands_RegistersSharedReviewWorkflowCommandIds()
     {
         var presentation = Presentation.CreateEmpty();
         var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
         var invoked = false;
         var altTextInvoked = false;
+        var readingOrderInvoked = false;
+        var deleteInvoked = false;
 
         var registry = FreePRibbonCommands.Build(
             new RibbonStateStore(),
             editor,
             onReviewAccessibility: () => invoked = true,
-            onReviewAltText: () => altTextInvoked = true);
+            onReviewAltText: () => altTextInvoked = true,
+            onReviewReadingOrder: () => readingOrderInvoked = true,
+            onDeleteComment: () => deleteInvoked = true);
 
         registry.TryGet(PresentationReviewWorkflowPlanner.AccessibilityCommandId, out var command)
             .Should()
@@ -260,8 +599,29 @@ public sealed class ReviewWorkflowAdapterTests
         registry.TryGet(PresentationReviewWorkflowPlanner.AltTextCommandId, out var altTextCommand).Should().BeTrue();
         altTextCommand!.Execute(RibbonCommandContext.Empty);
         altTextInvoked.Should().BeTrue();
+        registry.TryGet(PresentationReviewWorkflowPlanner.ReadingOrderPaneCommandId, out var readingOrderCommand)
+            .Should().BeTrue();
+        readingOrderCommand!.Execute(RibbonCommandContext.Empty);
+        readingOrderInvoked.Should().BeTrue();
         registry.TryGet(PresentationReviewWorkflowPlanner.CommentsPaneCommandId, out _).Should().BeTrue();
+        registry.TryGet(PresentationReviewWorkflowPlanner.DeleteCommentCommandId, out var deleteCommand).Should().BeTrue();
+        deleteCommand!.Execute(RibbonCommandContext.Empty);
+        deleteInvoked.Should().BeTrue();
+        registry.TryGet(PresentationReviewWorkflowPlanner.ReopenCommentCommandId, out _).Should().BeTrue();
         registry.TryGet(PresentationReviewWorkflowPlanner.ProofingCommandId, out _).Should().BeTrue();
+    }
+
+    private static TextBody MakeTextBody(params string[] paragraphs)
+    {
+        var body = new TextBody();
+        foreach (var text in paragraphs)
+        {
+            var paragraph = new Paragraph();
+            paragraph.Runs.Add(new Run { Text = text });
+            body.Paragraphs.Add(paragraph);
+        }
+
+        return body;
     }
 
     [Fact]
@@ -278,6 +638,7 @@ public sealed class ReviewWorkflowAdapterTests
         source.Should().Contain("PresentationReviewWorkflowPlanner.BuildAltTextRequestPlan(");
         source.Should().Contain("PresentationReviewWorkflowPlanner.BuildAltTextPanePlan(");
         source.Should().Contain("PresentationReviewWorkflowPlanner.BuildAltTextMutationPlan(");
+        source.Should().Contain("PresentationReviewWorkflowPlanner.BuildReadingOrderPlan(");
         source.Should().Contain("PresentationReviewWorkflowPlanner.BuildProofingRequestPlan(_presentation)");
         source.Should().Contain("LastCommentPanePlan = plan;");
         source.Should().Contain("onLayoutPicker:     () => OpenLayoutPicker()");

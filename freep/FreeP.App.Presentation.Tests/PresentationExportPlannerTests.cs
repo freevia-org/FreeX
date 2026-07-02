@@ -26,6 +26,28 @@ public sealed class PresentationExportPlannerTests
         return presentation;
     }
 
+    private static Presentation BuildNotesDeck()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides.Clear();
+        for (var i = 1; i <= 3; i++)
+        {
+            var slide = new Slide { Title = $"Slide {i}" };
+            slide.Shapes.Add(new SlideShape
+            {
+                Kind = SlideShapeKind.AutoShape,
+                Text = $"Body {i}",
+            });
+            presentation.Slides.Add(slide);
+        }
+
+        presentation.Slides[0].Notes = MakeTextBody("Opening note.");
+        presentation.Slides[2].Notes = MakeTextBody("First closing note.", "Second closing note.");
+        presentation.Properties.Title = "Notes Deck";
+        presentation.Properties.Author = "Parity";
+        return presentation;
+    }
+
     [Fact]
     public void PrintLayouts_CoverSlidesNotesAndPowerPointHandoutOptions()
     {
@@ -90,6 +112,45 @@ public sealed class PresentationExportPlannerTests
         plan.Layout.IsHandout.Should().BeFalse();
         plan.SlideRange.SlideNumbers.Should().Equal(3, 4, 5);
         plan.SlideRange.DisplayName.Should().Be("Slides 3-5");
+    }
+
+    [Fact]
+    public void NotesPagePreviewPlan_UsesCurrentSlideNotesPageRangeAndGeometry()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides.Clear();
+        presentation.Slides.Add(new Slide { Title = "Opening" });
+        presentation.Slides.Add(new Slide { Title = "Financial review" });
+        presentation.Slides[1].Notes = MakeTextBody("Mention revenue growth.", "Pause for questions.");
+
+        var plan = PresentationNotesPagePreviewPlanner.Build(presentation, currentSlideIndex: 1);
+
+        plan.PrintPlan.Layout.Layout.Should().Be(PresentationPrintLayoutKind.NotesPages);
+        plan.PrintPlan.SlideRange.SlideNumbers.Should().Equal(2);
+        plan.SlideIndex.Should().Be(1);
+        plan.SlideNumber.Should().Be(2);
+        plan.SlideTitle.Should().Be("Financial review");
+        plan.HasNotes.Should().BeTrue();
+        plan.NotesText.Should().Be($"Mention revenue growth.{Environment.NewLine}Pause for questions.");
+        plan.NoteLines.Should().Equal("Mention revenue growth.", "Pause for questions.");
+        plan.SlideBounds.Top.Should().BeGreaterThan(plan.PageBounds.Top);
+        plan.NotesBounds.Top.Should().BeGreaterThan(plan.SlideBounds.Bottom);
+        plan.NotesBounds.Bottom.Should().BeLessThanOrEqualTo(plan.PageBounds.Bottom);
+    }
+
+    [Fact]
+    public void NotesPagePreviewPlan_EmptyDeckProducesNoSlidePlan()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides.Clear();
+
+        var plan = PresentationNotesPagePreviewPlanner.Build(presentation, currentSlideIndex: 4);
+
+        plan.HasSlide.Should().BeFalse();
+        plan.HasNotes.Should().BeFalse();
+        plan.SlideTitle.Should().Be(PresentationNotesPagePreviewPlanner.EmptyDeckTitle);
+        plan.PrintPlan.SlideRange.DisplayName.Should().Be("No slides");
+        plan.NoteLines.Should().BeEmpty();
     }
 
     [Fact]
@@ -229,6 +290,85 @@ public sealed class PresentationExportPlannerTests
     }
 
     [Fact]
+    public void NotesPagePdfRenderPlan_SelectedSlides_UsesSharedPreviewGeometryAndSpeakerNotes()
+    {
+        var request = new PresentationPrintRequest(
+            PresentationPrintLayoutKind.NotesPages,
+            new PresentationSlideRangeRequest(
+                PresentationSlideRangeKind.SelectedSlides,
+                SelectedSlideNumbers: [3, 1, 3]));
+
+        var plan = PresentationNotesPagePdfExporter.BuildRenderPlan(
+            BuildNotesDeck(),
+            new PresentationNotesPagePdfExportRequest(request));
+
+        plan.PrintPlan.Layout.Layout.Should().Be(PresentationPrintLayoutKind.NotesPages);
+        plan.PrintPlan.SlideRange.SlideNumbers.Should().Equal(1, 3);
+        plan.PreviewPlans.Select(preview => preview.SlideNumber).Should().Equal(1, 3);
+        plan.Pages.Should().HaveCount(2);
+        plan.Pages.Should().OnlyContain(page =>
+            page.WidthPoints == PresentationExportPlanner.DefaultPrintPageWidth &&
+            page.HeightPoints == PresentationExportPlanner.DefaultPrintPageHeight);
+
+        var firstPageText = plan.Pages[0].Ops.OfType<PdfText>().Select(text => text.Text).ToList();
+        firstPageText.Should().Contain(["Slide 1", "Body 1", "Opening note."]);
+        firstPageText.Should().NotContain("Slide 2");
+        plan.Pages[0].Ops.OfType<PdfStrokeRect>().Should().HaveCount(2);
+
+        var secondPageText = plan.Pages[1].Ops.OfType<PdfText>().Select(text => text.Text).ToList();
+        secondPageText.Should().Contain(["Slide 3", "First closing note.", "Second closing note."]);
+        secondPageText.Should().NotContain("Slide 1");
+        plan.Pages[1].Ops.OfType<PdfStrokeRect>().Should().HaveCount(2);
+    }
+
+    [Fact]
+    public void NotesPagePdfRenderPlan_EmptyNotesAndEmptyDeck_EmitPowerPointShapedPlaceholderPages()
+    {
+        var deck = BuildNotesDeck();
+
+        var slideWithoutNotes = PresentationNotesPagePdfExporter.BuildRenderPlan(
+            deck,
+            new PresentationNotesPagePdfExportRequest(new PresentationPrintRequest(
+                PresentationPrintLayoutKind.NotesPages,
+                new PresentationSlideRangeRequest(
+                    PresentationSlideRangeKind.CurrentSlide,
+                    CurrentSlideNumber: 2))));
+
+        slideWithoutNotes.PreviewPlans.Should().ContainSingle(preview =>
+            preview.SlideNumber == 2 &&
+            !preview.HasNotes);
+        slideWithoutNotes.Pages[0].Ops.OfType<PdfText>().Select(text => text.Text)
+            .Should()
+            .Contain(PresentationNotesPagePreviewPlanner.EmptyNotesPlaceholder);
+
+        var empty = Presentation.CreateEmpty();
+        empty.Slides.Clear();
+        var emptyPlan = PresentationNotesPagePdfExporter.BuildRenderPlan(empty);
+
+        emptyPlan.PrintPlan.SlideRange.DisplayName.Should().Be("No slides");
+        emptyPlan.PreviewPlans.Should().ContainSingle(preview => !preview.HasSlide);
+        emptyPlan.Pages.Should().ContainSingle();
+        emptyPlan.Pages[0].Ops.OfType<PdfText>().Select(text => text.Text)
+            .Should()
+            .Contain(PresentationNotesPagePreviewPlanner.EmptyNotesPlaceholder);
+    }
+
+    [Fact]
+    public void NotesPagePdfExporter_ProducesPortablePdfBytesAndMetadata()
+    {
+        var bytes = PresentationNotesPagePdfExporter.ExportToBytes(BuildNotesDeck());
+
+        bytes.Length.Should().BeGreaterThan(100);
+        Encoding.ASCII.GetString(bytes, 0, 5).Should().Be("%PDF-");
+        Encoding.Latin1.GetString(bytes).Should().Contain("%%EOF");
+
+        var doc = PresentationNotesPagePdfExporter.BuildDocument(BuildNotesDeck());
+        doc.Properties!.Creator.Should().Be("FreeP");
+        doc.Properties.Title.Should().Be("Notes Deck");
+        doc.Properties.Author.Should().Be("Parity");
+    }
+
+    [Fact]
     public void SlideRangePlan_NormalizesCurrentAndEmptyDeckRequests()
     {
         var current = PresentationExportPlanner.BuildSlideRangePlan(
@@ -267,7 +407,59 @@ public sealed class PresentationExportPlannerTests
         video.CommandId.Should().Be(PresentationExportPlanner.VideoExportCommandId);
         video.DefaultExtensionWithDot.Should().Be(".mp4");
         video.IsImplemented.Should().BeFalse();
+        video.CanExecute.Should().BeFalse();
+        video.DisabledReason.Should().Be(PresentationExportPlanner.VideoExportDeferredMessage);
+        video.Quality.Quality.Should().Be(PresentationVideoQualityKind.FullHd);
+        video.Quality.WidthPx.Should().Be(1920);
+        video.Quality.HeightPx.Should().Be(1080);
+        video.SecondsPerSlide.Should().Be(PresentationExportPlanner.DefaultVideoSecondsPerSlide);
+        video.UseRecordedTimings.Should().BeTrue();
+        video.IncludeNarration.Should().BeTrue();
+        video.EstimatedDuration.Should().Be(TimeSpan.FromSeconds(15));
         video.SlideRange.SlideNumbers.Should().Equal(image.SlideRange.SlideNumbers);
+    }
+
+    [Fact]
+    public void VideoExportPlan_NormalizesPowerPointWorkflowOptionsAndEmptyDeckState()
+    {
+        var request = new PresentationVideoExportRequest(
+            new PresentationSlideRangeRequest(
+                PresentationSlideRangeKind.SelectedSlides,
+                SelectedSlideNumbers: [5, 2, 2, 99, 1]),
+            PresentationVideoQualityKind.UltraHd,
+            SecondsPerSlide: 0.2,
+            UseRecordedTimings: false,
+            IncludeNarration: false);
+
+        var plan = PresentationExportPlanner.BuildVideoExportPlan(request, slideCount: 5);
+        var empty = PresentationExportPlanner.BuildVideoExportPlan(request, slideCount: 0);
+
+        plan.Format.Should().Be(PresentationExportFormat.Video);
+        plan.CommandId.Should().Be(PresentationExportPlanner.VideoExportCommandId);
+        plan.Description.Should().Contain("PowerPoint-style MP4 export workflow");
+        plan.QualityOptions.Select(option => option.Quality)
+            .Should()
+            .Equal(
+                PresentationVideoQualityKind.UltraHd,
+                PresentationVideoQualityKind.FullHd,
+                PresentationVideoQualityKind.Hd,
+                PresentationVideoQualityKind.Standard);
+        plan.Quality.DisplayName.Should().Be("Ultra HD (4K)");
+        plan.Quality.WidthPx.Should().Be(3840);
+        plan.Quality.HeightPx.Should().Be(2160);
+        plan.SecondsPerSlide.Should().Be(1);
+        plan.UseRecordedTimings.Should().BeFalse();
+        plan.IncludeNarration.Should().BeFalse();
+        plan.SlideRange.SlideNumbers.Should().Equal(1, 2, 5);
+        plan.SlideRange.DisplayName.Should().Be("Slides 1, 2, 5");
+        plan.EstimatedDuration.Should().Be(TimeSpan.FromSeconds(3));
+        plan.IsImplemented.Should().BeFalse();
+        plan.CanExecute.Should().BeFalse();
+        plan.DisabledReason.Should().Be(PresentationExportPlanner.VideoExportDeferredMessage);
+
+        empty.SlideRange.DisplayName.Should().Be("No slides");
+        empty.EstimatedDuration.Should().Be(TimeSpan.Zero);
+        empty.DisabledReason.Should().Be("Video export requires at least one slide.");
     }
 
     [Fact]
@@ -344,5 +536,18 @@ public sealed class PresentationExportPlannerTests
             if (Directory.Exists(outputDirectory))
                 Directory.Delete(outputDirectory, recursive: true);
         }
+    }
+
+    private static TextBody MakeTextBody(params string[] paragraphs)
+    {
+        var body = new TextBody();
+        foreach (var text in paragraphs)
+        {
+            var paragraph = new Paragraph();
+            paragraph.Runs.Add(new Run { Text = text });
+            body.Paragraphs.Add(paragraph);
+        }
+
+        return body;
     }
 }

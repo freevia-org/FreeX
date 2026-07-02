@@ -1,3 +1,4 @@
+using System.Linq;
 using Free.Shared.Drawing;
 using FreeP.Core.Model;
 
@@ -61,7 +62,13 @@ public enum TextParagraphRenderRoute
 {
     Plain,
     Tabs,
-    Effects
+    Effects,
+    /// <summary>
+    /// The paragraph contains one or more OMML math runs.
+    /// The renderer should call <see cref="FreeP.App.Compositor.Math.MathBoxRenderPlanner.Plan"/>
+    /// for each math run and draw the resulting operations inline.
+    /// </summary>
+    Math
 }
 
 public sealed record TextBlockLayoutPlan(
@@ -98,6 +105,10 @@ public static class TextLayoutPlanner
         ResolvedParagraph paragraph,
         ResolvedTextLayout text)
     {
+        // Theme 27: OMML math runs — render inline using MathBoxRenderPlanner.
+        if (paragraph.Runs.Any(r => r.IsMathRun))
+            return TextParagraphRenderRoute.Math;
+
         if (text.WarpPreset is not null || HasTextEffects(paragraph))
             return TextParagraphRenderRoute.Effects;
 

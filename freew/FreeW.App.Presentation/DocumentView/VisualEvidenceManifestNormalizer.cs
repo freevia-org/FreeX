@@ -40,6 +40,9 @@ public sealed record FreeWVisualEvidenceNormalizedRow(
     int PageCount,
     string LayoutKind,
     string ExpectedOutputName,
+    FreeWVisualPageFeatureExpectation PageFeatures,
+    FreeWVisualTableExpectation Tables,
+    FreeWVisualDrawingObjectExpectation DrawingObjects,
     FreeWVisualEvidenceTrust Trust);
 
 public sealed record FreeWVisualEvidenceNormalizedSummary(
@@ -49,16 +52,30 @@ public sealed record FreeWVisualEvidenceNormalizedSummary(
     IReadOnlyList<FreeWVisualEvidenceExpectedScenario> ExpectedScenarios,
     IReadOnlyList<FreeWVisualEvidenceNormalizedScenario> Scenarios,
     IReadOnlyList<FreeWVisualEvidenceNormalizedRow> Evidence,
+    IReadOnlyList<FreeWVisualBaselineComparison> BaselineComparisons,
     FreeWVisualEvidenceTrust Trust);
 
 public static class FreeWVisualEvidenceManifestNormalizer
 {
     public const string SummarySchemaId = "freew.visual-evidence-summary.v1";
-    public const int SummarySchemaVersion = 1;
+    public const int SummarySchemaVersion = 5;
     public const string SummaryJsonFileName = "freew_visual_evidence_summary.json";
     public const string SummaryMarkdownFileName = "freew_visual_evidence_summary.md";
     public const string WpfHostId = "wpf-fidelity-render";
     public const string AvaloniaHostId = "avalonia-page-layout-shot";
+    public static IReadOnlyList<string> BackstageRendererScenarioIds { get; } =
+    [
+        "backstage-print-preview-fidelity",
+        "backstage-pdf-export-fidelity"
+    ];
+    public static IReadOnlyList<string> TableRendererScenarioIds { get; } =
+    [
+        "table-layout-complex"
+    ];
+    public static IReadOnlyList<string> DrawingObjectRendererScenarioIds { get; } =
+    [
+        "drawing-objects-complex"
+    ];
 
     public static IReadOnlyList<FreeWVisualEvidenceExpectedScenario> DefaultExpectedScenarios { get; } =
         BuildDefaultExpectedScenarios();
@@ -132,6 +149,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
         }
 
         var scenarios = BuildScenarioSummaries(rows, expected, expectedByKey, failures);
+        ValidateBackstageRendererPairs(rows, failures);
         var summaryTrust = new FreeWVisualEvidenceTrust(failures.Count == 0, failures);
         return new FreeWVisualEvidenceNormalizedSummary(
             SummarySchemaId,
@@ -147,6 +165,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
                 .ThenBy(r => r.PageNumber)
                 .ThenBy(r => r.OutputName, StringComparer.OrdinalIgnoreCase)
                 .ToList(),
+            [],
             summaryTrust);
     }
 
@@ -166,6 +185,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
         sb.AppendLine($"Schema: `{summary.SchemaId}` v{summary.SchemaVersion.ToString(CultureInfo.InvariantCulture)}");
         sb.AppendLine($"Trust: {(summary.Trust.Passed ? "passed" : "failed")}");
         sb.AppendLine($"Evidence rows: {summary.Evidence.Count.ToString(CultureInfo.InvariantCulture)}");
+        sb.AppendLine($"Baseline comparisons: {summary.BaselineComparisons.Count.ToString(CultureInfo.InvariantCulture)}");
         sb.AppendLine();
 
         if (summary.Trust.Failures.Count > 0)
@@ -193,19 +213,79 @@ public static class FreeWVisualEvidenceManifestNormalizer
         sb.AppendLine();
         sb.AppendLine("## Evidence");
         sb.AppendLine();
-        sb.AppendLine("| Host | Scenario | Output | Size | Bytes | SHA-256 | Trust |");
-        sb.AppendLine("| --- | --- | --- | ---: | ---: | --- | --- |");
+        sb.AppendLine("| Host | Scenario | Output | Features | Size | Bytes | SHA-256 | Trust |");
+        sb.AppendLine("| --- | --- | --- | --- | ---: | ---: | --- | --- |");
         foreach (var row in summary.Evidence)
         {
             sb.AppendLine(
                 $"| {EscapeMarkdown(row.HostId)} | {EscapeMarkdown(row.ScenarioId)} | " +
                 $"{EscapeMarkdown(row.OutputPath)} | " +
+                $"{EscapeMarkdown(FeatureSummary(row))} | " +
                 $"{row.PixelWidth.ToString(CultureInfo.InvariantCulture)}x{row.PixelHeight.ToString(CultureInfo.InvariantCulture)} | " +
                 $"{row.ByteLength.ToString(CultureInfo.InvariantCulture)} | `{row.Sha256}` | " +
                 $"{(row.Trust.Passed ? "passed" : "failed")} |");
         }
 
+        if (summary.BaselineComparisons.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine("## Word Baseline Comparison");
+            sb.AppendLine();
+            sb.AppendLine("| Host | Scenario | Output | Baseline | Status | Size | Mean Channel Delta | Mean Gray Delta | Changed Pixels | Tolerance |");
+            sb.AppendLine("| --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | --- |");
+            foreach (var comparison in summary.BaselineComparisons)
+            {
+                var metrics = comparison.Metrics;
+                var size = metrics is null
+                    ? "-"
+                    : $"{metrics.ActualWidth.ToString(CultureInfo.InvariantCulture)}x{metrics.ActualHeight.ToString(CultureInfo.InvariantCulture)} vs {metrics.BaselineWidth.ToString(CultureInfo.InvariantCulture)}x{metrics.BaselineHeight.ToString(CultureInfo.InvariantCulture)}{(metrics.BaselineResized ? " resized" : string.Empty)}";
+                var meanChannel = metrics?.MeanAbsoluteChannelDelta.ToString("0.####", CultureInfo.InvariantCulture) ?? "-";
+                var meanGray = metrics?.MeanAbsoluteGrayscaleDelta.ToString("0.####", CultureInfo.InvariantCulture) ?? "-";
+                var changed = metrics is null
+                    ? "-"
+                    : metrics.ChangedPixelRatio.ToString("P3", CultureInfo.InvariantCulture);
+
+                sb.AppendLine(
+                    $"| {EscapeMarkdown(comparison.HostId)} | {EscapeMarkdown(comparison.ScenarioId)} | " +
+                    $"{EscapeMarkdown(comparison.OutputName)} | " +
+                    $"{EscapeMarkdown(string.IsNullOrWhiteSpace(comparison.BaselinePath) ? string.Join(", ", comparison.CandidateBaselinePaths) : comparison.BaselinePath)} | " +
+                    $"{EscapeMarkdown(comparison.Status)} | " +
+                    $"{EscapeMarkdown(size)} | {meanChannel} | {meanGray} | {changed} | " +
+                    $"{EscapeMarkdown(comparison.Tolerance.Name)} |");
+            }
+        }
+
         return sb.ToString();
+    }
+
+    public static FreeWVisualEvidenceNormalizedSummary WithBaselineComparisons(
+        FreeWVisualEvidenceNormalizedSummary summary,
+        IReadOnlyList<FreeWVisualBaselineComparison> baselineComparisons)
+    {
+        ArgumentNullException.ThrowIfNull(summary);
+        ArgumentNullException.ThrowIfNull(baselineComparisons);
+
+        var ordered = baselineComparisons
+            .OrderBy(c => c.HostId, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(c => c.ScenarioId, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(c => c.PageNumber)
+            .ThenBy(c => c.OutputName, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var failures = summary.Trust.Failures.ToList();
+        foreach (var comparison in ordered.Where(c => !c.Trust.Passed))
+        {
+            foreach (var failure in comparison.Trust.Failures)
+            {
+                failures.Add(
+                    $"{comparison.HostId}/{comparison.ScenarioId}/{comparison.OutputName}: {failure}");
+            }
+        }
+
+        return summary with
+        {
+            BaselineComparisons = ordered,
+            Trust = new FreeWVisualEvidenceTrust(failures.Count == 0, failures)
+        };
     }
 
     public static void WriteSummaryFiles(
@@ -253,6 +333,39 @@ public static class FreeWVisualEvidenceManifestNormalizer
                     scenario.ScenarioId,
                     scenario.MinimumExpectedOutputs));
             }
+            else if (BackstageRendererScenarioIds.Contains(scenario.ScenarioId, StringComparer.OrdinalIgnoreCase))
+            {
+                expected.Add(new FreeWVisualEvidenceExpectedScenario(
+                    WpfHostId,
+                    scenario.ScenarioId,
+                    scenario.MinimumExpectedOutputs));
+                expected.Add(new FreeWVisualEvidenceExpectedScenario(
+                    AvaloniaHostId,
+                    scenario.ScenarioId,
+                    scenario.MinimumExpectedOutputs));
+            }
+            else if (TableRendererScenarioIds.Contains(scenario.ScenarioId, StringComparer.OrdinalIgnoreCase))
+            {
+                expected.Add(new FreeWVisualEvidenceExpectedScenario(
+                    WpfHostId,
+                    scenario.ScenarioId,
+                    scenario.MinimumExpectedOutputs));
+                expected.Add(new FreeWVisualEvidenceExpectedScenario(
+                    AvaloniaHostId,
+                    scenario.ScenarioId,
+                    scenario.MinimumExpectedOutputs));
+            }
+            else if (DrawingObjectRendererScenarioIds.Contains(scenario.ScenarioId, StringComparer.OrdinalIgnoreCase))
+            {
+                expected.Add(new FreeWVisualEvidenceExpectedScenario(
+                    WpfHostId,
+                    scenario.ScenarioId,
+                    scenario.MinimumExpectedOutputs));
+                expected.Add(new FreeWVisualEvidenceExpectedScenario(
+                    AvaloniaHostId,
+                    scenario.ScenarioId,
+                    scenario.MinimumExpectedOutputs));
+            }
         }
 
         return expected;
@@ -294,6 +407,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
             rowFailures.Add("pixel stats dimensions do not match evidence dimensions");
         if (!string.Equals(row.OutputName, row.PageExpectation.ExpectedOutputName, StringComparison.OrdinalIgnoreCase))
             rowFailures.Add($"output name '{row.OutputName}' does not match expected '{row.PageExpectation.ExpectedOutputName}'");
+        ValidateFeatureExpectations(row, rowFailures);
 
         var outputPath = ResolveOutputPath(row.OutputPath, manifestDirectory);
         var relativeOutputPath = NormalizeRelativePath(runRoot, outputPath);
@@ -345,7 +459,100 @@ public static class FreeWVisualEvidenceManifestNormalizer
             row.PageExpectation.PageCount,
             row.PageExpectation.LayoutKind,
             row.PageExpectation.ExpectedOutputName,
+            row.PageExpectation.Features,
+            row.PageExpectation.Tables,
+            row.PageExpectation.DrawingObjects,
             trust);
+    }
+
+    private static void ValidateFeatureExpectations(
+        FreeWVisualEvidenceRow row,
+        List<string> rowFailures)
+    {
+        var composition = row.PageExpectation.Composition;
+        var features = row.PageExpectation.Features;
+        if (composition.ExpectsColumns && features.Columns.Count <= 1)
+            rowFailures.Add("scenario expects multi-column layout but the page expectation records one column");
+        if (composition.ExpectsPageBorder && !features.PageBorder.Present)
+            rowFailures.Add("scenario expects a page border but the page expectation records none");
+        if (composition.ExpectsWatermark && !features.Watermark.Present)
+            rowFailures.Add("scenario expects a watermark but the page expectation records none");
+        if (composition.ExpectsTables && row.PageExpectation.Tables.TableCount <= 0)
+            rowFailures.Add("scenario expects table layout but the page expectation records no tables");
+        if (composition.ExpectsFloatingObjects && row.PageExpectation.DrawingObjects.FloatingObjectCount <= 0)
+            rowFailures.Add("scenario expects floating objects but the page expectation records none");
+        ValidateTableFeatureTags(row, rowFailures);
+        ValidateDrawingObjectFeatureTags(row, rowFailures);
+        if (features.Section.SectionOrdinal <= 0)
+            rowFailures.Add("section ordinal must be positive");
+        if (features.Section.SectionRelativePageNumber <= 0)
+            rowFailures.Add("section-relative page number must be positive");
+    }
+
+    private static void ValidateTableFeatureTags(
+        FreeWVisualEvidenceRow row,
+        List<string> rowFailures)
+    {
+        var tags = row.ExpectedFeatureTags;
+        var tables = row.PageExpectation.Tables;
+        if (!tags.Contains("table-layout", StringComparer.OrdinalIgnoreCase))
+            return;
+
+        if (tables.TableCount <= 0)
+            rowFailures.Add("table-layout evidence must include at least one table plan");
+        if (tags.Contains("merged-cells", StringComparer.OrdinalIgnoreCase) && !tables.HasMergedCells)
+            rowFailures.Add("table-layout evidence expects merged cells but the table plan records none");
+        if (tags.Contains("vertical-merge", StringComparer.OrdinalIgnoreCase) && !tables.HasVerticalMerges)
+            rowFailures.Add("table-layout evidence expects vertical merges but the table plan records none");
+        if (tags.Contains("repeat-header-row", StringComparer.OrdinalIgnoreCase) && !tables.RepeatsHeaderRow)
+            rowFailures.Add("table-layout evidence expects repeated header rows but the table plan records none");
+        if (tags.Contains("banded-rows", StringComparer.OrdinalIgnoreCase) && !tables.HasBandedRows)
+            rowFailures.Add("table-layout evidence expects banded rows but the table plan records none");
+        if (tags.Contains("cell-shading", StringComparer.OrdinalIgnoreCase) && !tables.HasCellShading)
+            rowFailures.Add("table-layout evidence expects cell shading but the table plan records none");
+        if (tags.Contains("cell-borders", StringComparer.OrdinalIgnoreCase) && !tables.HasCustomCellBorders)
+            rowFailures.Add("table-layout evidence expects custom cell borders but the table plan records none");
+        if (tags.Contains("cell-margins", StringComparer.OrdinalIgnoreCase) && !tables.HasCellMargins)
+            rowFailures.Add("table-layout evidence expects cell margins but the table plan records none");
+        if (tags.Contains("cell-spacing", StringComparer.OrdinalIgnoreCase) && !tables.HasCellSpacing)
+            rowFailures.Add("table-layout evidence expects cell spacing but the table plan records none");
+        if (tags.Contains("vertical-text", StringComparer.OrdinalIgnoreCase) && !tables.HasVerticalText)
+            rowFailures.Add("table-layout evidence expects vertical text but the table plan records none");
+        if (tags.Contains("named-table-style", StringComparer.OrdinalIgnoreCase) && !tables.HasNamedStyle)
+            rowFailures.Add("table-layout evidence expects a named table style but the table plan records none");
+    }
+
+    private static void ValidateDrawingObjectFeatureTags(
+        FreeWVisualEvidenceRow row,
+        List<string> rowFailures)
+    {
+        var tags = row.ExpectedFeatureTags;
+        var objects = row.PageExpectation.DrawingObjects;
+        if (!tags.Contains("drawing-objects", StringComparer.OrdinalIgnoreCase))
+            return;
+
+        if (objects.FloatingObjectCount <= 0)
+            rowFailures.Add("drawing-object evidence must include at least one floating object plan");
+        if (tags.Contains("shapes", StringComparer.OrdinalIgnoreCase) && !objects.HasShapes)
+            rowFailures.Add("drawing-object evidence expects shapes but the object plan records none");
+        if (tags.Contains("charts", StringComparer.OrdinalIgnoreCase) && !objects.HasCharts)
+            rowFailures.Add("drawing-object evidence expects charts but the object plan records none");
+        if (tags.Contains("smartart", StringComparer.OrdinalIgnoreCase) && !objects.HasSmartArt)
+            rowFailures.Add("drawing-object evidence expects SmartArt but the object plan records none");
+        if (tags.Contains("wordart", StringComparer.OrdinalIgnoreCase) && !objects.HasWordArt)
+            rowFailures.Add("drawing-object evidence expects WordArt but the object plan records none");
+        if (tags.Contains("drawing-groups", StringComparer.OrdinalIgnoreCase) && !objects.HasGroups)
+            rowFailures.Add("drawing-object evidence expects drawing groups but the object plan records none");
+        if (tags.Contains("behind-text", StringComparer.OrdinalIgnoreCase) && objects.BehindTextCount <= 0)
+            rowFailures.Add("drawing-object evidence expects behind-text objects but the object plan records none");
+        if (tags.Contains("in-front", StringComparer.OrdinalIgnoreCase) && objects.InFrontCount <= 0)
+            rowFailures.Add("drawing-object evidence expects in-front objects but the object plan records none");
+        if (tags.Contains("square-wrap", StringComparer.OrdinalIgnoreCase) && !objects.HasSquareWrap)
+            rowFailures.Add("drawing-object evidence expects square wrapping but the object plan records none");
+        if (tags.Contains("top-bottom-wrap", StringComparer.OrdinalIgnoreCase) && !objects.HasTopAndBottomWrap)
+            rowFailures.Add("drawing-object evidence expects top-and-bottom wrapping but the object plan records none");
+        if (tags.Contains("z-order", StringComparer.OrdinalIgnoreCase) && !objects.HasZOrder)
+            rowFailures.Add("drawing-object evidence expects z-order depth but the object plan records a single layer");
     }
 
     private static IReadOnlyList<FreeWVisualEvidenceNormalizedScenario> BuildScenarioSummaries(
@@ -400,6 +607,106 @@ public static class FreeWVisualEvidenceManifestNormalizer
         return scenarios;
     }
 
+    private static void ValidateBackstageRendererPairs(
+        IReadOnlyList<FreeWVisualEvidenceNormalizedRow> rows,
+        List<string> failures)
+    {
+        foreach (var scenarioId in BackstageRendererScenarioIds)
+        {
+            var wpfRows = RowsForHostScenario(rows, WpfHostId, scenarioId);
+            var avaloniaRows = RowsForHostScenario(rows, AvaloniaHostId, scenarioId);
+            if (wpfRows.Count == 0 || avaloniaRows.Count == 0)
+                continue;
+
+            ValidateUniquePages(scenarioId, WpfHostId, wpfRows, failures);
+            ValidateUniquePages(scenarioId, AvaloniaHostId, avaloniaRows, failures);
+
+            var wpfPages = wpfRows.Select(r => r.PageNumber).Distinct().Order().ToList();
+            var avaloniaPages = avaloniaRows.Select(r => r.PageNumber).Distinct().Order().ToList();
+            var requiredPages = RequiredScenarioPages(scenarioId);
+            var missingAvaloniaPages = requiredPages.Except(avaloniaPages).ToList();
+            var missingWpfPages = requiredPages.Except(wpfPages).ToList();
+            if (missingAvaloniaPages.Count > 0)
+            {
+                failures.Add(
+                    $"backstage renderer pair '{scenarioId}' is missing Avalonia page(s): {FormatPages(missingAvaloniaPages)}");
+            }
+
+            if (missingWpfPages.Count > 0)
+            {
+                failures.Add(
+                    $"backstage renderer pair '{scenarioId}' is missing WPF page(s): {FormatPages(missingWpfPages)}");
+            }
+
+            foreach (var pageNumber in wpfPages.Intersect(avaloniaPages))
+            {
+                var wpf = wpfRows.SingleOrDefault(r => r.PageNumber == pageNumber);
+                var avalonia = avaloniaRows.SingleOrDefault(r => r.PageNumber == pageNumber);
+                if (wpf is null || avalonia is null)
+                    continue;
+
+                ValidateRendererPairRow(scenarioId, pageNumber, wpf, avalonia, failures);
+            }
+        }
+    }
+
+    private static IReadOnlyList<int> RequiredScenarioPages(string scenarioId)
+    {
+        var minimumOutputs = Math.Max(1, FreeWVisualEvidencePlanner.ResolveScenario(scenarioId).MinimumExpectedOutputs);
+        return Enumerable.Range(1, minimumOutputs).ToList();
+    }
+
+    private static List<FreeWVisualEvidenceNormalizedRow> RowsForHostScenario(
+        IReadOnlyList<FreeWVisualEvidenceNormalizedRow> rows,
+        string hostId,
+        string scenarioId) =>
+        rows
+            .Where(r => string.Equals(r.HostId, hostId, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(r.ScenarioId, scenarioId, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+    private static void ValidateUniquePages(
+        string scenarioId,
+        string hostId,
+        IReadOnlyList<FreeWVisualEvidenceNormalizedRow> rows,
+        List<string> failures)
+    {
+        foreach (var group in rows.GroupBy(r => r.PageNumber).Where(g => g.Count() > 1))
+        {
+            failures.Add(
+                $"{hostId}/{scenarioId}: duplicate page {group.Key.ToString(CultureInfo.InvariantCulture)} evidence rows: " +
+                string.Join(", ", group.Select(r => r.OutputName).OrderBy(n => n, StringComparer.OrdinalIgnoreCase)));
+        }
+    }
+
+    private static void ValidateRendererPairRow(
+        string scenarioId,
+        int pageNumber,
+        FreeWVisualEvidenceNormalizedRow wpf,
+        FreeWVisualEvidenceNormalizedRow avalonia,
+        List<string> failures)
+    {
+        var pairName = $"backstage renderer pair '{scenarioId}' page {pageNumber.ToString(CultureInfo.InvariantCulture)}";
+        if (!string.Equals(wpf.LayoutKind, avalonia.LayoutKind, StringComparison.OrdinalIgnoreCase))
+        {
+            failures.Add(
+                $"{pairName} layout kinds differ: WPF '{wpf.LayoutKind}', Avalonia '{avalonia.LayoutKind}'");
+        }
+
+        if (!string.Equals(wpf.ExpectedOutputName, avalonia.ExpectedOutputName, StringComparison.OrdinalIgnoreCase))
+        {
+            failures.Add(
+                $"{pairName} expected output names differ: WPF '{wpf.ExpectedOutputName}', Avalonia '{avalonia.ExpectedOutputName}'");
+        }
+    }
+
+    private static string FormatPages(IEnumerable<int> pageNumbers) =>
+        string.Join(
+            ", ",
+            pageNumbers
+                .Order()
+                .Select(p => "p" + p.ToString(CultureInfo.InvariantCulture)));
+
     private static string ScenarioKey(string hostId, string scenarioId) =>
         string.Concat(hostId, "\u001f", scenarioId);
 
@@ -432,6 +739,37 @@ public static class FreeWVisualEvidenceManifestNormalizer
     {
         using var stream = File.OpenRead(path);
         return Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant();
+    }
+
+    private static string FeatureSummary(FreeWVisualEvidenceNormalizedRow row)
+    {
+        var features = row.PageFeatures;
+        var parts = new List<string>
+        {
+            features.Section.OwnerId,
+            features.Columns.Count > 1
+                ? $"{features.Columns.Count.ToString(CultureInfo.InvariantCulture)} columns"
+                : "1 column"
+        };
+
+        if (features.PageBorder.Present)
+            parts.Add("page border");
+        if (features.Watermark.Present)
+            parts.Add("watermark");
+        if (row.Tables.TableCount > 0)
+        {
+            parts.Add(
+                $"{row.Tables.TableCount.ToString(CultureInfo.InvariantCulture)} table(s), " +
+                $"{row.Tables.MaxGridColumnCount.ToString(CultureInfo.InvariantCulture)} grid column(s)");
+        }
+        if (row.DrawingObjects.FloatingObjectCount > 0)
+        {
+            parts.Add(
+                $"{row.DrawingObjects.FloatingObjectCount.ToString(CultureInfo.InvariantCulture)} drawing object(s), " +
+                $"{row.DrawingObjects.BehindTextCount.ToString(CultureInfo.InvariantCulture)} behind text");
+        }
+
+        return string.Join(", ", parts);
     }
 
     private static string EscapeMarkdown(string value) =>

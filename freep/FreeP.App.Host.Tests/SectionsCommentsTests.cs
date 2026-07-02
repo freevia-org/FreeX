@@ -148,6 +148,9 @@ public sealed class SectionsCommentsTests : IDisposable
             Initials = "AL",
             Text     = "Please update this chart.",
             DateTime = dt,
+            IsResolved = true,
+            ResolvedDateTime = dt.AddMinutes(5),
+            ResolvedBy = "Reviewer",
             Xemu     = 914400,
             Yemu     = 457200,
             Idx      = 1,
@@ -157,6 +160,9 @@ public sealed class SectionsCommentsTests : IDisposable
         cm.Initials.Should().Be("AL");
         cm.Text.Should().Be("Please update this chart.");
         cm.DateTime.Should().Be(dt);
+        cm.IsResolved.Should().BeTrue();
+        cm.ResolvedDateTime.Should().Be(dt.AddMinutes(5));
+        cm.ResolvedBy.Should().Be("Reviewer");
         cm.Xemu.Should().Be(914400);
         cm.Yemu.Should().Be(457200);
         cm.Idx.Should().Be(1);

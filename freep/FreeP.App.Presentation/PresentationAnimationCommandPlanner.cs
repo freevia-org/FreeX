@@ -102,7 +102,7 @@ public static class PresentationAnimationCommandPlanner
             case PresentationAnimationCommandIntentKind.SetDuration:
                 return TryApplyToSelectedShapeAnimation(editor, animation =>
                 {
-                    if (!PresentationTransitionCommandPlanner.TryParseSeconds(selectedValue, allowZero: false, out int durationMs))
+                    if (!AnimationPanePlanner.TryParseDuration(selectedValue ?? string.Empty, out int durationMs))
                     {
                         return null;
                     }
@@ -115,7 +115,7 @@ public static class PresentationAnimationCommandPlanner
             case PresentationAnimationCommandIntentKind.SetDelay:
                 return TryApplyToSelectedShapeAnimation(editor, animation =>
                 {
-                    if (!PresentationTransitionCommandPlanner.TryParseSeconds(selectedValue, allowZero: true, out int delayMs))
+                    if (!AnimationPanePlanner.TryParseDelay(selectedValue ?? string.Empty, out int delayMs))
                     {
                         return null;
                     }

@@ -17,10 +17,12 @@ public sealed class FileCommandsSourceTests
         source.Should().Contain("PresentationFileDialogPlanner.BuildSaveAsDialogPlan(");
         source.Should().Contain("PresentationExportPlanner.BuildPdfExportDialogPlan(");
         source.Should().Contain("PresentationExportPlanner.BuildHandoutLayoutPlan(");
+        source.Should().Contain("PresentationNotesPagePdfExporter.BuildRenderPlan(");
         source.Should().Contain("PresentationExportPlanner.ImageExportPickerTitle");
         source.Should().Contain("PresentationImageExportExecutor.Export(");
         source.Should().Contain("public bool ExportImages()");
         source.Should().Contain("public PresentationHandoutLayoutPlan BuildHandoutLayoutPlan(");
+        source.Should().Contain("public PresentationNotesPagePdfRenderPlan BuildNotesPagePdfRenderPlan(");
         source.Should().Contain("_getImageExportRange()");
         source.Should().Contain("new OpenFolderDialog");
         source.Should().Contain("WpfPresentationSlideImageRenderer.RenderSlideToPng");

@@ -22,9 +22,13 @@ public sealed record FreeWVisualEvidenceScenario(
 public sealed record FreeWVisualCompositionExpectation(
     bool ExpectsPageChrome,
     bool ExpectsBodyText,
+    bool ExpectsTables,
     bool ExpectsHeadersFooters,
     bool ExpectsFootnotes,
     bool ExpectsEndnotes,
+    bool ExpectsColumns,
+    bool ExpectsPageBorder,
+    bool ExpectsWatermark,
     bool ExpectsFloatingObjects,
     bool ExpectsTrackedChanges,
     bool ExpectsComments,
@@ -45,6 +49,74 @@ public sealed record FreeWVisualGeometryExpectation(
     double DeskPaddingDip,
     double PageGapDip);
 
+public sealed record FreeWVisualSectionExpectation(
+    string OwnerId,
+    int SectionOrdinal,
+    int SectionRelativePageNumber);
+
+public sealed record FreeWVisualColumnExpectation(
+    int Count,
+    double WidthDip,
+    double GapDip,
+    bool LineBetween,
+    IReadOnlyList<double> WidthsDip);
+
+public sealed record FreeWVisualPageBorderExpectation(
+    bool Present,
+    string? ColorHex,
+    double WidthDip);
+
+public sealed record FreeWVisualWatermarkExpectation(
+    bool Present,
+    string? Text,
+    string? Layout,
+    string? FontColorHex,
+    double Opacity,
+    bool IsPicture);
+
+public sealed record FreeWVisualPageFeatureExpectation(
+    FreeWVisualSectionExpectation Section,
+    FreeWVisualColumnExpectation Columns,
+    FreeWVisualPageBorderExpectation PageBorder,
+    FreeWVisualWatermarkExpectation Watermark);
+
+public sealed record FreeWVisualTableExpectation(
+    int TableCount,
+    int TotalRows,
+    int TotalCells,
+    int MaxGridColumnCount,
+    bool HasHeaderRow,
+    bool RepeatsHeaderRow,
+    bool HasBandedRows,
+    bool HasBandedColumns,
+    bool HasMergedCells,
+    bool HasVerticalMerges,
+    bool HasCellShading,
+    bool HasCustomCellBorders,
+    bool HasCellMargins,
+    bool HasCellSpacing,
+    bool HasVerticalText,
+    bool HasVerticalAlignment,
+    bool HasPreferredWidths,
+    bool HasNamedStyle,
+    bool HasFloatingTextWrap,
+    IReadOnlyList<DocumentTableLayoutPlan> Tables);
+
+public sealed record FreeWVisualDrawingObjectExpectation(
+    int FloatingObjectCount,
+    int BehindTextCount,
+    int InFrontCount,
+    bool HasImages,
+    bool HasShapes,
+    bool HasCharts,
+    bool HasSmartArt,
+    bool HasWordArt,
+    bool HasGroups,
+    bool HasSquareWrap,
+    bool HasTopAndBottomWrap,
+    bool HasZOrder,
+    IReadOnlyList<DocumentFloatingObjectSnapshot> Objects);
+
 public sealed record FreeWVisualPageExpectation(
     int PageNumber,
     int PageCount,
@@ -52,6 +124,9 @@ public sealed record FreeWVisualPageExpectation(
     string ExpectedOutputName,
     FreeWVisualGeometryExpectation Geometry,
     FreeWVisualCompositionExpectation Composition,
+    FreeWVisualPageFeatureExpectation Features,
+    FreeWVisualTableExpectation Tables,
+    FreeWVisualDrawingObjectExpectation DrawingObjects,
     string? HeaderSlotName,
     string? FooterSlotName,
     bool HasFootnotes,
@@ -125,16 +200,20 @@ public static class FreeWVisualEvidencePlanner
 {
     public const string ManifestFileName = "freew_visual_evidence_manifest.json";
     public const string SchemaId = "freew.visual-evidence.v1";
-    public const int SchemaVersion = 1;
+    public const int SchemaVersion = 4;
 
     private const int MaxTrackedColorCount = 4096;
 
     private static readonly FreeWVisualCompositionExpectation BodyPrintComposition = new(
         ExpectsPageChrome: true,
         ExpectsBodyText: true,
+        ExpectsTables: false,
         ExpectsHeadersFooters: false,
         ExpectsFootnotes: false,
         ExpectsEndnotes: false,
+        ExpectsColumns: false,
+        ExpectsPageBorder: false,
+        ExpectsWatermark: false,
         ExpectsFloatingObjects: false,
         ExpectsTrackedChanges: false,
         ExpectsComments: false,
@@ -183,6 +262,22 @@ public static class FreeWVisualEvidencePlanner
             DocumentViewLayoutKind.PrintLayout,
             BodyPrintComposition with { ExpectsEndnotes = true }),
         new(
+            "f2-columns",
+            "F2 multi-column page composition.",
+            ["f2", "page-composition", "print-layout", "columns", "multi-column", "body-text"],
+            "f2-columns_p{page}.png",
+            1,
+            DocumentViewLayoutKind.PrintLayout,
+            BodyPrintComposition with { ExpectsColumns = true }),
+        new(
+            "f2-border-watermark",
+            "F2 page border and watermark composition.",
+            ["f2", "page-composition", "print-layout", "page-border", "watermark", "body-text"],
+            "f2-border-watermark_p{page}.png",
+            1,
+            DocumentViewLayoutKind.PrintLayout,
+            BodyPrintComposition with { ExpectsPageBorder = true, ExpectsWatermark = true }),
+        new(
             "f2-section-landscape",
             "F2 section-break page geometry change.",
             ["f2", "page-composition", "print-layout", "section-geometry", "portrait-landscape", "body-text"],
@@ -207,6 +302,52 @@ public static class FreeWVisualEvidencePlanner
             DocumentViewLayoutKind.PrintLayout,
             BodyPrintComposition with { ExpectsComments = true }),
         new(
+            "table-layout-complex",
+            "Complex Word-style table layout fidelity capture.",
+            [
+                "table-layout",
+                "tables",
+                "print-layout",
+                "body-text",
+                "merged-cells",
+                "vertical-merge",
+                "repeat-header-row",
+                "banded-rows",
+                "cell-shading",
+                "cell-borders",
+                "cell-margins",
+                "cell-spacing",
+                "vertical-text",
+                "named-table-style"
+            ],
+            "table-layout-complex_p{page}.png",
+            1,
+            DocumentViewLayoutKind.PrintLayout,
+            BodyPrintComposition with { ExpectsTables = true }),
+        new(
+            "drawing-objects-complex",
+            "Complex Word-style drawing-object fidelity capture.",
+            [
+                "drawing-objects",
+                "floating-objects",
+                "print-layout",
+                "body-text",
+                "shapes",
+                "charts",
+                "smartart",
+                "wordart",
+                "drawing-groups",
+                "square-wrap",
+                "top-bottom-wrap",
+                "behind-text",
+                "in-front",
+                "z-order"
+            ],
+            "drawing-objects-complex_p{page}.png",
+            1,
+            DocumentViewLayoutKind.PrintLayout,
+            BodyPrintComposition with { ExpectsFloatingObjects = true }),
+        new(
             "page-composition-print-layout",
             "Avalonia print-layout page composition shot.",
             ["page-composition", "avalonia", "print-layout", "page-chrome", "multi-page", "body-text"],
@@ -214,6 +355,22 @@ public static class FreeWVisualEvidencePlanner
             1,
             DocumentViewLayoutKind.PrintLayout,
             BodyPrintComposition),
+        new(
+            "page-composition-columns",
+            "Avalonia multi-column print-layout composition shot.",
+            ["page-composition", "avalonia", "print-layout", "columns", "multi-column", "body-text"],
+            "freew_columns_layout.png",
+            1,
+            DocumentViewLayoutKind.PrintLayout,
+            BodyPrintComposition with { ExpectsColumns = true }),
+        new(
+            "page-composition-border-watermark",
+            "Avalonia page border and watermark composition shot.",
+            ["page-composition", "avalonia", "print-layout", "page-border", "watermark", "body-text"],
+            "freew_border_watermark.png",
+            1,
+            DocumentViewLayoutKind.PrintLayout,
+            BodyPrintComposition with { ExpectsPageBorder = true, ExpectsWatermark = true }),
         new(
             "page-composition-web-layout",
             "Avalonia web-layout page composition shot.",
@@ -237,7 +394,23 @@ public static class FreeWVisualEvidencePlanner
             "freew_floating_image.png",
             1,
             DocumentViewLayoutKind.PrintLayout,
-            BodyPrintComposition with { ExpectsFloatingObjects = true })
+            BodyPrintComposition with { ExpectsFloatingObjects = true }),
+        new(
+            "backstage-print-preview-fidelity",
+            "Backstage Print Preview fixed-layout fidelity capture.",
+            ["backstage", "print-preview", "print-layout", "fixed-layout", "page-chrome", "body-text"],
+            "backstage-print-preview_p{page}.png",
+            2,
+            DocumentViewLayoutKind.PrintLayout,
+            BodyPrintComposition),
+        new(
+            "backstage-pdf-export-fidelity",
+            "Backstage PDF export rasterized fixed-layout fidelity capture.",
+            ["backstage", "pdf-export", "pdf-rasterized", "print-layout", "fixed-layout", "body-text"],
+            "backstage-pdf-export_p{page}.png",
+            2,
+            DocumentViewLayoutKind.PrintLayout,
+            BodyPrintComposition)
     ];
 
     private static readonly IReadOnlyDictionary<string, FreeWVisualEvidenceScenario> ScenarioById =
@@ -294,7 +467,11 @@ public static class FreeWVisualEvidencePlanner
         string? footerSlotName = null,
         bool hasFootnotes = false,
         bool hasEndnotes = false,
-        bool isSyntheticPage = false)
+        bool isSyntheticPage = false,
+        int? sectionOrdinal = null,
+        int? sectionRelativePageNumber = null,
+        string? sectionOwnerId = null,
+        TextDocument? document = null)
     {
         ArgumentNullException.ThrowIfNull(page);
 
@@ -319,6 +496,15 @@ public static class FreeWVisualEvidencePlanner
             RoundDip(surface.TextAreaHeightDip),
             RoundDip(surface.DeskPaddingDip),
             RoundDip(surface.PageGapDip));
+        var features = BuildPageFeatures(
+            page,
+            kind,
+            metrics.ContentWidthDip,
+            sectionOrdinal,
+            sectionRelativePageNumber,
+            sectionOwnerId);
+        var tables = BuildTableExpectation(document);
+        var drawingObjects = BuildDrawingObjectExpectation(document, surface, features.Columns.Count);
 
         var expectedOutputName = ExpectedOutputName(scenario.ScenarioId, pageNumber, outputName);
         return new FreeWVisualPageExpectation(
@@ -328,12 +514,93 @@ public static class FreeWVisualEvidencePlanner
             expectedOutputName,
             geometry,
             scenario.Composition,
+            features,
+            tables,
+            drawingObjects,
             headerSlotName,
             footerSlotName,
             hasFootnotes,
             hasEndnotes,
             isSyntheticPage);
     }
+
+    public static FreeWVisualPageFeatureExpectation BuildPageFeatures(
+        PageSettings page,
+        DocumentViewLayoutKind layoutKind = DocumentViewLayoutKind.PrintLayout,
+        double? contentWidthDip = null,
+        int? sectionOrdinal = null,
+        int? sectionRelativePageNumber = null,
+        string? sectionOwnerId = null)
+    {
+        ArgumentNullException.ThrowIfNull(page);
+
+        var metrics = DocumentViewLayoutPlanner.BuildPageMetrics(page);
+        var contentWidth = contentWidthDip is > 0 ? contentWidthDip.Value : metrics.ContentWidthDip;
+        var columns = DocumentViewLayoutPlanner.BuildColumnPlan(
+            page,
+            contentWidth,
+            usePageColumns: layoutKind == DocumentViewLayoutKind.PrintLayout);
+        var widths = Enumerable
+            .Repeat(RoundDip(columns.WidthDip), Math.Max(1, columns.Count))
+            .ToList();
+        var safeSectionOrdinal = Math.Max(1, sectionOrdinal ?? 1);
+        var section = new FreeWVisualSectionExpectation(
+            string.IsNullOrWhiteSpace(sectionOwnerId)
+                ? BuildSectionOwnerId(safeSectionOrdinal)
+                : sectionOwnerId,
+            safeSectionOrdinal,
+            Math.Max(1, sectionRelativePageNumber ?? 1));
+        var border = page.PageBorder is { } pageBorder
+            ? new FreeWVisualPageBorderExpectation(
+                true,
+                NormalizeHexColor(pageBorder.ColorHex),
+                RoundDip(PageLayout.PointsToDip(Math.Max(0, pageBorder.WidthPt))))
+            : new FreeWVisualPageBorderExpectation(false, null, 0);
+        var watermark = page.EffectiveWatermark is { } wm
+            ? new FreeWVisualWatermarkExpectation(
+                true,
+                wm.Text,
+                wm.Layout.ToString(),
+                NormalizeHexColor(wm.FontColorHex),
+                Math.Clamp(wm.Opacity, 0, 1),
+                wm.IsPicture)
+            : new FreeWVisualWatermarkExpectation(false, null, null, null, 0, false);
+
+        return new FreeWVisualPageFeatureExpectation(
+            section,
+            new FreeWVisualColumnExpectation(
+                columns.Count,
+                RoundDip(columns.WidthDip),
+                RoundDip(columns.GapDip),
+                columns.LineBetween,
+                widths),
+            border,
+            watermark);
+    }
+
+    public static int ResolveSectionOrdinal(TextDocument document, PageSettings page)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        ArgumentNullException.ThrowIfNull(page);
+
+        var sections = document.Sections;
+        for (var i = 0; i < sections.Count; i++)
+        {
+            if (ReferenceEquals(sections[i].Page, page))
+                return i + 1;
+        }
+
+        for (var i = 0; i < sections.Count; i++)
+        {
+            if (PageSettingsMatch(sections[i].Page, page))
+                return i + 1;
+        }
+
+        return 1;
+    }
+
+    public static string BuildSectionOwnerId(int sectionOrdinal) =>
+        "section-" + Math.Max(1, sectionOrdinal).ToString(CultureInfo.InvariantCulture);
 
     public static FreeWVisualEvidenceRow BuildEvidenceRow(
         FreeWVisualEvidenceCapture capture,
@@ -357,6 +624,69 @@ public static class FreeWVisualEvidencePlanner
             PageExpectation: capture.PageExpectation,
             Trust: trust,
             HostMetadata: capture.HostMetadata);
+    }
+
+    public static FreeWVisualEvidenceRow BuildEvidenceRow(
+        string scenarioId,
+        string hostId,
+        string outputPath,
+        int pixelWidth,
+        int pixelHeight,
+        long byteLength,
+        FreeWVisualPixelStats pixelStats,
+        PageSettings page,
+        int pageNumber,
+        int pageCount,
+        DocumentViewLayoutKind? layoutKind = null,
+        double? availableWidthDip = null,
+        string? headerSlotName = null,
+        string? footerSlotName = null,
+        bool hasFootnotes = false,
+        bool hasEndnotes = false,
+        bool isSyntheticPage = false,
+        int? sectionOrdinal = null,
+        int? sectionRelativePageNumber = null,
+        string? sectionOwnerId = null,
+        IReadOnlyDictionary<string, string>? hostMetadata = null,
+        FreeWVisualEvidenceTrustThresholds? thresholds = null,
+        TextDocument? document = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(hostId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(outputPath);
+        ArgumentNullException.ThrowIfNull(pixelStats);
+        ArgumentNullException.ThrowIfNull(page);
+
+        var outputName = Path.GetFileName(outputPath);
+        var expectation = BuildPageExpectation(
+            scenarioId,
+            page,
+            pageNumber,
+            pageCount,
+            outputName,
+            layoutKind,
+            availableWidthDip,
+            headerSlotName,
+            footerSlotName,
+            hasFootnotes,
+            hasEndnotes,
+            isSyntheticPage,
+            sectionOrdinal,
+            sectionRelativePageNumber,
+            sectionOwnerId,
+            document);
+        var capture = new FreeWVisualEvidenceCapture(
+            ScenarioId: scenarioId,
+            HostId: hostId,
+            OutputName: outputName,
+            OutputPath: Path.GetFullPath(outputPath),
+            PixelWidth: pixelWidth,
+            PixelHeight: pixelHeight,
+            ByteLength: byteLength,
+            PixelStats: pixelStats,
+            PageExpectation: expectation,
+            HostMetadata: hostMetadata ?? new Dictionary<string, string>());
+
+        return BuildEvidenceRow(capture, thresholds);
     }
 
     public static FreeWVisualEvidenceTrust EvaluateTrust(
@@ -392,6 +722,70 @@ public static class FreeWVisualEvidencePlanner
         }
 
         return new FreeWVisualEvidenceTrust(failures.Count == 0, failures);
+    }
+
+    public static FreeWVisualTableExpectation BuildTableExpectation(TextDocument? document)
+    {
+        if (document is null)
+            return EmptyTableExpectation;
+
+        var tables = DocumentViewLayoutPlanner.BuildTableLayoutPlans(document);
+        if (tables.Count == 0)
+            return EmptyTableExpectation;
+
+        return new FreeWVisualTableExpectation(
+            TableCount: tables.Count,
+            TotalRows: tables.Sum(table => table.RowCount),
+            TotalCells: tables.Sum(table => table.Cells.Count),
+            MaxGridColumnCount: tables.Max(table => table.GridColumnCount),
+            HasHeaderRow: tables.Any(table => table.HasHeaderRow),
+            RepeatsHeaderRow: tables.Any(table => table.RepeatsHeaderRow),
+            HasBandedRows: tables.Any(table => table.HasBandedRows),
+            HasBandedColumns: tables.Any(table => table.HasBandedColumns),
+            HasMergedCells: tables.Any(table => table.HasMergedCells),
+            HasVerticalMerges: tables.Any(table => table.HasVerticalMerges),
+            HasCellShading: tables.Any(table => table.HasCellShading),
+            HasCustomCellBorders: tables.Any(table => table.HasCustomCellBorders),
+            HasCellMargins: tables.Any(table => table.HasCellMargins),
+            HasCellSpacing: tables.Any(table => table.HasCellSpacing),
+            HasVerticalText: tables.Any(table => table.HasVerticalText),
+            HasVerticalAlignment: tables.Any(table => table.HasVerticalAlignment),
+            HasPreferredWidths: tables.Any(table => table.HasPreferredWidths),
+            HasNamedStyle: tables.Any(table => table.HasNamedStyle),
+            HasFloatingTextWrap: tables.Any(table => table.HasFloatingTextWrap),
+            Tables: tables);
+    }
+
+    public static FreeWVisualDrawingObjectExpectation BuildDrawingObjectExpectation(
+        TextDocument? document,
+        DocumentViewSurfacePlan surface,
+        int columnCount)
+    {
+        ArgumentNullException.ThrowIfNull(surface);
+
+        if (document is null)
+            return EmptyDrawingObjectExpectation;
+
+        var objects = DocumentViewLayoutPlanner
+            .BuildFloatingObjectSnapshots(document, surface, Math.Max(1, columnCount))
+            .ToList();
+        if (objects.Count == 0)
+            return EmptyDrawingObjectExpectation;
+
+        return new FreeWVisualDrawingObjectExpectation(
+            FloatingObjectCount: objects.Count,
+            BehindTextCount: objects.Count(o => o.BehindText),
+            InFrontCount: objects.Count(o => !o.BehindText),
+            HasImages: objects.Any(o => o.Kind == DocumentFloatingObjectKind.Image),
+            HasShapes: objects.Any(o => o.Kind == DocumentFloatingObjectKind.Shape),
+            HasCharts: objects.Any(o => o.Kind == DocumentFloatingObjectKind.Chart),
+            HasSmartArt: objects.Any(o => o.Kind == DocumentFloatingObjectKind.SmartArt),
+            HasWordArt: objects.Any(o => o.Kind == DocumentFloatingObjectKind.WordArt),
+            HasGroups: objects.Any(o => o.Kind == DocumentFloatingObjectKind.Group),
+            HasSquareWrap: objects.Any(o => o.Wrapping == ImageWrapping.Square),
+            HasTopAndBottomWrap: objects.Any(o => o.Wrapping == ImageWrapping.TopAndBottom),
+            HasZOrder: objects.Select(o => o.ZOrderIndex).Distinct().Count() > 1,
+            Objects: objects);
     }
 
     public static void EnsureTrusted(FreeWVisualEvidenceRow row)
@@ -553,6 +947,43 @@ public static class FreeWVisualEvidencePlanner
         WriteIndented = true
     };
 
+    private static FreeWVisualTableExpectation EmptyTableExpectation { get; } = new(
+        TableCount: 0,
+        TotalRows: 0,
+        TotalCells: 0,
+        MaxGridColumnCount: 0,
+        HasHeaderRow: false,
+        RepeatsHeaderRow: false,
+        HasBandedRows: false,
+        HasBandedColumns: false,
+        HasMergedCells: false,
+        HasVerticalMerges: false,
+        HasCellShading: false,
+        HasCustomCellBorders: false,
+        HasCellMargins: false,
+        HasCellSpacing: false,
+        HasVerticalText: false,
+        HasVerticalAlignment: false,
+        HasPreferredWidths: false,
+        HasNamedStyle: false,
+        HasFloatingTextWrap: false,
+        Tables: []);
+
+    private static FreeWVisualDrawingObjectExpectation EmptyDrawingObjectExpectation { get; } = new(
+        FloatingObjectCount: 0,
+        BehindTextCount: 0,
+        InFrontCount: 0,
+        HasImages: false,
+        HasShapes: false,
+        HasCharts: false,
+        HasSmartArt: false,
+        HasWordArt: false,
+        HasGroups: false,
+        HasSquareWrap: false,
+        HasTopAndBottomWrap: false,
+        HasZOrder: false,
+        Objects: []);
+
     private static double RoundDip(double value) =>
         double.IsFinite(value) ? Math.Round(value, 3, MidpointRounding.AwayFromZero) : 0;
 
@@ -586,4 +1017,13 @@ public static class FreeWVisualEvidencePlanner
 
     private static string ToHex(int rgb) =>
         "#" + (rgb & 0xFFFFFF).ToString("X6", CultureInfo.InvariantCulture);
+
+    private static bool PageSettingsMatch(PageSettings left, PageSettings right) =>
+        Math.Abs(left.WidthPt - right.WidthPt) < 0.001
+        && Math.Abs(left.HeightPt - right.HeightPt) < 0.001
+        && Math.Abs(left.MarginLeftPt - right.MarginLeftPt) < 0.001
+        && Math.Abs(left.MarginTopPt - right.MarginTopPt) < 0.001
+        && Math.Abs(left.MarginRightPt - right.MarginRightPt) < 0.001
+        && Math.Abs(left.MarginBottomPt - right.MarginBottomPt) < 0.001
+        && left.Landscape == right.Landscape;
 }

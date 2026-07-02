@@ -76,10 +76,15 @@ internal static class FreePRibbonCommands
         Action?             onReviewCommentsPane = null,
         Action?             onReviewAccessibility = null,
         Action?             onReviewAltText = null,
+        Action?             onReviewReadingOrder = null,
         Action?             onReviewProofing = null,
+        Action?             onDeleteComment = null,
+        Action?             onResolveComment = null,
+        Action?             onReopenComment = null,
         // Wave 16B: Animation pane toggle.
         Action?             onAnimPane         = null,
-        Action?             onLayoutPicker     = null)
+        Action?             onLayoutPicker     = null,
+        Action?             onTablePicker      = null)
     {
         var registry = new RibbonCommandRegistry();
 
@@ -96,7 +101,7 @@ internal static class FreePRibbonCommands
 
         // ── Insert shapes ────────────────────────────────────────────────────────
 
-        RegisterSlideObjectInsertionCommands(registry, editor, includePictureCommand: true);
+        RegisterSlideObjectInsertionCommands(registry, editor, includePictureCommand: true, onTablePicker);
 
         // ── Format toggles (stateful) ────────────────────────────────────────────
         //
@@ -294,7 +299,11 @@ internal static class FreePRibbonCommands
             onReviewCommentsPane,
             onReviewAccessibility,
             onReviewAltText,
-            onReviewProofing);
+            onReviewReadingOrder,
+            onReviewProofing,
+            onDeleteComment,
+            onResolveComment,
+            onReopenComment);
 
         return registry;
     }
@@ -302,10 +311,17 @@ internal static class FreePRibbonCommands
     internal static void RegisterSlideObjectInsertionCommands(
         RibbonCommandRegistry registry,
         EditingSession editor,
-        bool includePictureCommand)
+        bool includePictureCommand,
+        Action? onTablePicker = null)
     {
         foreach (var plan in SlideObjectInsertionPlanner.BuiltInPlans)
         {
+            if (plan.CommandId == SlideObjectInsertionPlanner.Table3x3CommandId && onTablePicker is not null)
+            {
+                registry.Register(plan.CommandId, new ActionRibbonCommand(onTablePicker));
+                continue;
+            }
+
             if (plan.RequiresPicturePayload)
             {
                 if (!includePictureCommand)
@@ -440,7 +456,11 @@ internal static class FreePRibbonCommands
         Action? onCommentsPane,
         Action? onAccessibility,
         Action? onAltText,
-        Action? onProofing)
+        Action? onReadingOrder,
+        Action? onProofing,
+        Action? onDeleteComment,
+        Action? onResolveComment,
+        Action? onReopenComment)
     {
         registry.Register(
             PresentationReviewWorkflowPlanner.CommentsPaneCommandId,
@@ -452,14 +472,24 @@ internal static class FreePRibbonCommands
             PresentationReviewWorkflowPlanner.AltTextCommandId,
             new ActionRibbonCommand(() => onAltText?.Invoke()));
         registry.Register(
+            PresentationReviewWorkflowPlanner.ReadingOrderPaneCommandId,
+            new ActionRibbonCommand(() => onReadingOrder?.Invoke()));
+        registry.Register(
             PresentationReviewWorkflowPlanner.ProofingCommandId,
             new ActionRibbonCommand(() => onProofing?.Invoke()));
         registry.Register(PresentationReviewWorkflowPlanner.AddCommentCommandId, EmptyRibbonCommand.Instance);
         registry.Register(PresentationReviewWorkflowPlanner.EditCommentCommandId, EmptyRibbonCommand.Instance);
-        registry.Register(PresentationReviewWorkflowPlanner.DeleteCommentCommandId, EmptyRibbonCommand.Instance);
+        registry.Register(
+            PresentationReviewWorkflowPlanner.DeleteCommentCommandId,
+            new ActionRibbonCommand(() => onDeleteComment?.Invoke()));
         registry.Register(PresentationReviewWorkflowPlanner.PreviousCommentCommandId, EmptyRibbonCommand.Instance);
         registry.Register(PresentationReviewWorkflowPlanner.NextCommentCommandId, EmptyRibbonCommand.Instance);
-        registry.Register(PresentationReviewWorkflowPlanner.ResolveCommentCommandId, EmptyRibbonCommand.Instance);
+        registry.Register(
+            PresentationReviewWorkflowPlanner.ResolveCommentCommandId,
+            new ActionRibbonCommand(() => onResolveComment?.Invoke()));
+        registry.Register(
+            PresentationReviewWorkflowPlanner.ReopenCommentCommandId,
+            new ActionRibbonCommand(() => onReopenComment?.Invoke()));
     }
 
     /// <summary>

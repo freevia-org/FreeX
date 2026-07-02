@@ -1,0 +1,420 @@
+using System.Globalization;
+
+namespace FreeW.App.Presentation.DocumentView;
+
+public sealed record FreeWVisualBaselineComparisonTolerance(
+    string Name,
+    int ChangedPixelDeltaThreshold,
+    double MaxMeanAbsoluteChannelDelta,
+    double MaxMeanAbsoluteGrayscaleDelta,
+    double MaxChangedPixelRatio,
+    bool RequireDimensionMatch)
+{
+    public static FreeWVisualBaselineComparisonTolerance WordPngDefault { get; } = new(
+        Name: "word-png-default",
+        ChangedPixelDeltaThreshold: 8,
+        MaxMeanAbsoluteChannelDelta: 3.0,
+        MaxMeanAbsoluteGrayscaleDelta: 3.0,
+        MaxChangedPixelRatio: 0.02,
+        RequireDimensionMatch: true);
+
+    public static FreeWVisualBaselineComparisonTolerance WordPngResizedLenient { get; } = new(
+        Name: "word-png-resized-lenient",
+        ChangedPixelDeltaThreshold: 16,
+        MaxMeanAbsoluteChannelDelta: 8.0,
+        MaxMeanAbsoluteGrayscaleDelta: 8.0,
+        MaxChangedPixelRatio: 0.10,
+        RequireDimensionMatch: false);
+
+    public static IReadOnlyList<FreeWVisualBaselineComparisonTolerance> BuiltIn { get; } =
+    [
+        WordPngDefault,
+        WordPngResizedLenient
+    ];
+}
+
+public sealed record FreeWVisualBaselineComparisonMetrics(
+    int ActualWidth,
+    int ActualHeight,
+    int BaselineWidth,
+    int BaselineHeight,
+    bool DimensionsMatch,
+    bool BaselineResized,
+    int ComparedWidth,
+    int ComparedHeight,
+    long ComparedPixels,
+    int ChangedPixelDeltaThreshold,
+    double MeanAbsoluteChannelDelta,
+    double MeanAbsoluteGrayscaleDelta,
+    double ChangedPixelRatio);
+
+public sealed record FreeWVisualBaselineComparison(
+    string EvidenceId,
+    string HostId,
+    string ScenarioId,
+    int PageNumber,
+    string OutputName,
+    string MatchKey,
+    string BaselinePath,
+    IReadOnlyList<string> CandidateBaselinePaths,
+    string Status,
+    FreeWVisualBaselineComparisonTolerance Tolerance,
+    FreeWVisualBaselineComparisonMetrics? Metrics,
+    FreeWVisualEvidenceTrust Trust);
+
+public static class FreeWVisualBaselineComparisonPlanner
+{
+    public const string MissingBaselineStatus = "missing-baseline";
+    public const string DecodeFailedStatus = "decode-failed";
+    public const string PassedStatus = "passed";
+    public const string FailedStatus = "failed";
+
+    public static FreeWVisualBaselineComparisonTolerance ResolveTolerance(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return FreeWVisualBaselineComparisonTolerance.WordPngDefault;
+
+        foreach (var tolerance in FreeWVisualBaselineComparisonTolerance.BuiltIn)
+        {
+            if (string.Equals(tolerance.Name, name.Trim(), StringComparison.OrdinalIgnoreCase))
+                return tolerance;
+        }
+
+        var known = string.Join(
+            ", ",
+            FreeWVisualBaselineComparisonTolerance.BuiltIn.Select(t => t.Name));
+        throw new ArgumentException($"Unknown visual baseline tolerance '{name}'. Known tolerances: {known}");
+    }
+
+    public static string BuildBaselineMatchKey(FreeWVisualEvidenceNormalizedRow row)
+    {
+        ArgumentNullException.ThrowIfNull(row);
+
+        return string.Join(
+            '/',
+            NormalizeCandidateSegment(row.ScenarioId),
+            "p" + Math.Max(1, row.PageNumber).ToString(CultureInfo.InvariantCulture),
+            NormalizeCandidateSegment(row.OutputName, keepExtension: true));
+    }
+
+    public static IReadOnlyList<string> BuildBaselineCandidateRelativePaths(FreeWVisualEvidenceNormalizedRow row)
+    {
+        ArgumentNullException.ThrowIfNull(row);
+
+        var scenario = NormalizeCandidateSegment(row.ScenarioId);
+        var outputName = NormalizeCandidateSegment(row.OutputName, keepExtension: true);
+        var expectedOutputName = NormalizeCandidateSegment(row.ExpectedOutputName, keepExtension: true);
+        var candidates = new List<string>();
+
+        AddCandidate(candidates, scenario, outputName);
+        AddCandidate(candidates, string.Empty, outputName);
+        if (!string.Equals(expectedOutputName, outputName, StringComparison.OrdinalIgnoreCase))
+        {
+            AddCandidate(candidates, scenario, expectedOutputName);
+            AddCandidate(candidates, string.Empty, expectedOutputName);
+        }
+
+        return candidates
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    public static FreeWVisualBaselineComparison BuildMissingBaselineComparison(
+        FreeWVisualEvidenceNormalizedRow row,
+        FreeWVisualBaselineComparisonTolerance? tolerance = null)
+    {
+        ArgumentNullException.ThrowIfNull(row);
+
+        var candidatePaths = BuildBaselineCandidateRelativePaths(row);
+        var matchKey = BuildBaselineMatchKey(row);
+        var failure = "missing Word baseline PNG for match key '" + matchKey
+            + "'; searched " + string.Join(", ", candidatePaths);
+        return BuildFailure(
+            row,
+            baselinePath: string.Empty,
+            candidatePaths,
+            MissingBaselineStatus,
+            tolerance ?? FreeWVisualBaselineComparisonTolerance.WordPngDefault,
+            failure);
+    }
+
+    public static FreeWVisualBaselineComparison BuildDecodeFailure(
+        FreeWVisualEvidenceNormalizedRow row,
+        string baselinePath,
+        IReadOnlyList<string> candidatePaths,
+        FreeWVisualBaselineComparisonTolerance tolerance,
+        string failure)
+    {
+        ArgumentNullException.ThrowIfNull(row);
+        ArgumentException.ThrowIfNullOrWhiteSpace(failure);
+
+        return BuildFailure(
+            row,
+            NormalizeManifestPath(baselinePath),
+            candidatePaths,
+            DecodeFailedStatus,
+            tolerance,
+            failure);
+    }
+
+    public static FreeWVisualBaselineComparison BuildBaselineComparison(
+        FreeWVisualEvidenceNormalizedRow row,
+        string baselinePath,
+        IReadOnlyList<string> candidatePaths,
+        FreeWVisualBaselineComparisonTolerance tolerance,
+        ReadOnlySpan<byte> actualPixels,
+        int actualWidth,
+        int actualHeight,
+        int actualStride,
+        FreeWVisualEvidencePixelFormat actualFormat,
+        ReadOnlySpan<byte> baselinePixels,
+        int baselineWidth,
+        int baselineHeight,
+        int baselineStride,
+        FreeWVisualEvidencePixelFormat baselineFormat,
+        int? baselineSourceWidth = null,
+        int? baselineSourceHeight = null,
+        bool baselineResized = false)
+    {
+        ArgumentNullException.ThrowIfNull(row);
+        ArgumentNullException.ThrowIfNull(tolerance);
+
+        var metrics = ComputeMetrics(
+            actualPixels,
+            actualWidth,
+            actualHeight,
+            actualStride,
+            actualFormat,
+            baselinePixels,
+            baselineWidth,
+            baselineHeight,
+            baselineStride,
+            baselineFormat,
+            tolerance.ChangedPixelDeltaThreshold,
+            baselineSourceWidth,
+            baselineSourceHeight,
+            baselineResized);
+        var trust = EvaluateTolerance(metrics, tolerance);
+        return new FreeWVisualBaselineComparison(
+            row.EvidenceId,
+            row.HostId,
+            row.ScenarioId,
+            row.PageNumber,
+            row.OutputName,
+            BuildBaselineMatchKey(row),
+            NormalizeManifestPath(baselinePath),
+            candidatePaths,
+            trust.Passed ? PassedStatus : FailedStatus,
+            tolerance,
+            metrics,
+            trust);
+    }
+
+    public static FreeWVisualBaselineComparisonMetrics ComputeMetrics(
+        ReadOnlySpan<byte> actualPixels,
+        int actualWidth,
+        int actualHeight,
+        int actualStride,
+        FreeWVisualEvidencePixelFormat actualFormat,
+        ReadOnlySpan<byte> baselinePixels,
+        int baselineWidth,
+        int baselineHeight,
+        int baselineStride,
+        FreeWVisualEvidencePixelFormat baselineFormat,
+        int changedPixelDeltaThreshold,
+        int? baselineSourceWidth = null,
+        int? baselineSourceHeight = null,
+        bool baselineResized = false)
+    {
+        var sourceWidth = Math.Max(0, baselineSourceWidth ?? baselineWidth);
+        var sourceHeight = Math.Max(0, baselineSourceHeight ?? baselineHeight);
+        var comparedWidth = Math.Min(Math.Max(0, actualWidth), Math.Max(0, baselineWidth));
+        var comparedHeight = Math.Min(Math.Max(0, actualHeight), Math.Max(0, baselineHeight));
+        var threshold = Math.Max(0, changedPixelDeltaThreshold);
+
+        if (actualStride <= 0 || baselineStride <= 0 || actualPixels.IsEmpty || baselinePixels.IsEmpty)
+        {
+            return new FreeWVisualBaselineComparisonMetrics(
+                Math.Max(0, actualWidth),
+                Math.Max(0, actualHeight),
+                sourceWidth,
+                sourceHeight,
+                DimensionsMatch(actualWidth, actualHeight, sourceWidth, sourceHeight),
+                baselineResized,
+                0,
+                0,
+                0,
+                threshold,
+                0,
+                0,
+                0);
+        }
+
+        long compared = 0;
+        long changed = 0;
+        double channelDelta = 0;
+        double grayscaleDelta = 0;
+
+        for (var y = 0; y < comparedHeight; y++)
+        {
+            var actualRow = y * actualStride;
+            var baselineRow = y * baselineStride;
+            if (actualRow < 0 || baselineRow < 0)
+                break;
+
+            for (var x = 0; x < comparedWidth; x++)
+            {
+                var actualOffset = actualRow + x * 4;
+                var baselineOffset = baselineRow + x * 4;
+                if (actualOffset + 3 >= actualPixels.Length || baselineOffset + 3 >= baselinePixels.Length)
+                    break;
+
+                var actual = ReadRgb(actualPixels, actualOffset, actualFormat);
+                var baseline = ReadRgb(baselinePixels, baselineOffset, baselineFormat);
+                var dr = Math.Abs(actual.R - baseline.R);
+                var dg = Math.Abs(actual.G - baseline.G);
+                var db = Math.Abs(actual.B - baseline.B);
+                var maxDelta = Math.Max(dr, Math.Max(dg, db));
+
+                channelDelta += dr + dg + db;
+                grayscaleDelta += Math.Abs(ToGrayscale(actual) - ToGrayscale(baseline));
+                compared++;
+                if (maxDelta > threshold)
+                    changed++;
+            }
+        }
+
+        var denominator = Math.Max(1, compared);
+        return new FreeWVisualBaselineComparisonMetrics(
+            Math.Max(0, actualWidth),
+            Math.Max(0, actualHeight),
+            sourceWidth,
+            sourceHeight,
+            DimensionsMatch(actualWidth, actualHeight, sourceWidth, sourceHeight),
+            baselineResized,
+            comparedWidth,
+            comparedHeight,
+            compared,
+            threshold,
+            RoundMetric(channelDelta / (denominator * 3.0)),
+            RoundMetric(grayscaleDelta / denominator),
+            RoundRatio((double)changed / denominator));
+    }
+
+    public static FreeWVisualEvidenceTrust EvaluateTolerance(
+        FreeWVisualBaselineComparisonMetrics metrics,
+        FreeWVisualBaselineComparisonTolerance tolerance)
+    {
+        ArgumentNullException.ThrowIfNull(metrics);
+        ArgumentNullException.ThrowIfNull(tolerance);
+
+        var failures = new List<string>();
+        if (metrics.ComparedPixels <= 0)
+            failures.Add("baseline comparison has no comparable pixels");
+        if (tolerance.RequireDimensionMatch && !metrics.DimensionsMatch)
+        {
+            failures.Add(
+                $"baseline dimensions {metrics.BaselineWidth.ToString(CultureInfo.InvariantCulture)}x{metrics.BaselineHeight.ToString(CultureInfo.InvariantCulture)} do not match evidence dimensions {metrics.ActualWidth.ToString(CultureInfo.InvariantCulture)}x{metrics.ActualHeight.ToString(CultureInfo.InvariantCulture)}");
+        }
+        if (metrics.MeanAbsoluteChannelDelta > tolerance.MaxMeanAbsoluteChannelDelta)
+        {
+            failures.Add(
+                $"mean absolute channel delta {FormatMetric(metrics.MeanAbsoluteChannelDelta)} exceeds tolerance '{tolerance.Name}' maximum {FormatMetric(tolerance.MaxMeanAbsoluteChannelDelta)}");
+        }
+        if (metrics.MeanAbsoluteGrayscaleDelta > tolerance.MaxMeanAbsoluteGrayscaleDelta)
+        {
+            failures.Add(
+                $"mean absolute grayscale delta {FormatMetric(metrics.MeanAbsoluteGrayscaleDelta)} exceeds tolerance '{tolerance.Name}' maximum {FormatMetric(tolerance.MaxMeanAbsoluteGrayscaleDelta)}");
+        }
+        if (metrics.ChangedPixelRatio > tolerance.MaxChangedPixelRatio)
+        {
+            failures.Add(
+                $"changed pixel ratio {FormatPercent(metrics.ChangedPixelRatio)} exceeds tolerance '{tolerance.Name}' maximum {FormatPercent(tolerance.MaxChangedPixelRatio)}");
+        }
+
+        return new FreeWVisualEvidenceTrust(failures.Count == 0, failures);
+    }
+
+    private static FreeWVisualBaselineComparison BuildFailure(
+        FreeWVisualEvidenceNormalizedRow row,
+        string baselinePath,
+        IReadOnlyList<string> candidatePaths,
+        string status,
+        FreeWVisualBaselineComparisonTolerance tolerance,
+        string failure)
+    {
+        return new FreeWVisualBaselineComparison(
+            row.EvidenceId,
+            row.HostId,
+            row.ScenarioId,
+            row.PageNumber,
+            row.OutputName,
+            BuildBaselineMatchKey(row),
+            baselinePath,
+            candidatePaths,
+            status,
+            tolerance,
+            Metrics: null,
+            new FreeWVisualEvidenceTrust(false, [failure]));
+    }
+
+    private static void AddCandidate(List<string> candidates, string scenario, string outputName)
+    {
+        if (string.IsNullOrWhiteSpace(outputName))
+            return;
+
+        var candidate = string.IsNullOrWhiteSpace(scenario)
+            ? outputName
+            : string.Concat(scenario, "/", outputName);
+        candidates.Add(NormalizeManifestPath(candidate));
+    }
+
+    private static string NormalizeCandidateSegment(string value, bool keepExtension = false)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return "unknown";
+
+        var trimmed = value.Trim();
+        var fileName = keepExtension
+            ? Path.GetFileName(trimmed)
+            : Path.GetFileNameWithoutExtension(trimmed);
+        if (string.IsNullOrWhiteSpace(fileName))
+            return "unknown";
+
+        return fileName.Replace('\\', '_').Replace('/', '_');
+    }
+
+    private static string NormalizeManifestPath(string value) =>
+        string.IsNullOrWhiteSpace(value)
+            ? string.Empty
+            : value.Replace('\\', '/');
+
+    private static (int R, int G, int B) ReadRgb(
+        ReadOnlySpan<byte> pixels,
+        int offset,
+        FreeWVisualEvidencePixelFormat format)
+    {
+        if (format == FreeWVisualEvidencePixelFormat.Bgra32)
+            return (pixels[offset + 2], pixels[offset + 1], pixels[offset]);
+
+        return (pixels[offset], pixels[offset + 1], pixels[offset + 2]);
+    }
+
+    private static double ToGrayscale((int R, int G, int B) rgb) =>
+        rgb.R * 0.299 + rgb.G * 0.587 + rgb.B * 0.114;
+
+    private static bool DimensionsMatch(int actualWidth, int actualHeight, int baselineWidth, int baselineHeight) =>
+        actualWidth == baselineWidth && actualHeight == baselineHeight && actualWidth > 0 && actualHeight > 0;
+
+    private static double RoundMetric(double value) =>
+        double.IsFinite(value) ? Math.Round(value, 4, MidpointRounding.AwayFromZero) : 0;
+
+    private static double RoundRatio(double value) =>
+        double.IsFinite(value) ? Math.Round(value, 6, MidpointRounding.AwayFromZero) : 0;
+
+    private static string FormatMetric(double value) =>
+        value.ToString("0.####", CultureInfo.InvariantCulture);
+
+    private static string FormatPercent(double value) =>
+        value.ToString("P3", CultureInfo.InvariantCulture);
+}
