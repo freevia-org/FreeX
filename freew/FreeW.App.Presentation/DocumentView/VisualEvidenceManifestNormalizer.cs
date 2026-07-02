@@ -42,6 +42,7 @@ public sealed record FreeWVisualEvidenceNormalizedRow(
     string ExpectedOutputName,
     FreeWVisualPageFeatureExpectation PageFeatures,
     FreeWVisualTableExpectation Tables,
+    FreeWVisualDrawingObjectExpectation DrawingObjects,
     FreeWVisualEvidenceTrust Trust);
 
 public sealed record FreeWVisualEvidenceNormalizedSummary(
@@ -57,7 +58,7 @@ public sealed record FreeWVisualEvidenceNormalizedSummary(
 public static class FreeWVisualEvidenceManifestNormalizer
 {
     public const string SummarySchemaId = "freew.visual-evidence-summary.v1";
-    public const int SummarySchemaVersion = 4;
+    public const int SummarySchemaVersion = 5;
     public const string SummaryJsonFileName = "freew_visual_evidence_summary.json";
     public const string SummaryMarkdownFileName = "freew_visual_evidence_summary.md";
     public const string WpfHostId = "wpf-fidelity-render";
@@ -70,6 +71,10 @@ public static class FreeWVisualEvidenceManifestNormalizer
     public static IReadOnlyList<string> TableRendererScenarioIds { get; } =
     [
         "table-layout-complex"
+    ];
+    public static IReadOnlyList<string> DrawingObjectRendererScenarioIds { get; } =
+    [
+        "drawing-objects-complex"
     ];
 
     public static IReadOnlyList<FreeWVisualEvidenceExpectedScenario> DefaultExpectedScenarios { get; } =
@@ -350,6 +355,17 @@ public static class FreeWVisualEvidenceManifestNormalizer
                     scenario.ScenarioId,
                     scenario.MinimumExpectedOutputs));
             }
+            else if (DrawingObjectRendererScenarioIds.Contains(scenario.ScenarioId, StringComparer.OrdinalIgnoreCase))
+            {
+                expected.Add(new FreeWVisualEvidenceExpectedScenario(
+                    WpfHostId,
+                    scenario.ScenarioId,
+                    scenario.MinimumExpectedOutputs));
+                expected.Add(new FreeWVisualEvidenceExpectedScenario(
+                    AvaloniaHostId,
+                    scenario.ScenarioId,
+                    scenario.MinimumExpectedOutputs));
+            }
         }
 
         return expected;
@@ -445,6 +461,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
             row.PageExpectation.ExpectedOutputName,
             row.PageExpectation.Features,
             row.PageExpectation.Tables,
+            row.PageExpectation.DrawingObjects,
             trust);
     }
 
@@ -462,7 +479,10 @@ public static class FreeWVisualEvidenceManifestNormalizer
             rowFailures.Add("scenario expects a watermark but the page expectation records none");
         if (composition.ExpectsTables && row.PageExpectation.Tables.TableCount <= 0)
             rowFailures.Add("scenario expects table layout but the page expectation records no tables");
+        if (composition.ExpectsFloatingObjects && row.PageExpectation.DrawingObjects.FloatingObjectCount <= 0)
+            rowFailures.Add("scenario expects floating objects but the page expectation records none");
         ValidateTableFeatureTags(row, rowFailures);
+        ValidateDrawingObjectFeatureTags(row, rowFailures);
         if (features.Section.SectionOrdinal <= 0)
             rowFailures.Add("section ordinal must be positive");
         if (features.Section.SectionRelativePageNumber <= 0)
@@ -500,6 +520,39 @@ public static class FreeWVisualEvidenceManifestNormalizer
             rowFailures.Add("table-layout evidence expects vertical text but the table plan records none");
         if (tags.Contains("named-table-style", StringComparer.OrdinalIgnoreCase) && !tables.HasNamedStyle)
             rowFailures.Add("table-layout evidence expects a named table style but the table plan records none");
+    }
+
+    private static void ValidateDrawingObjectFeatureTags(
+        FreeWVisualEvidenceRow row,
+        List<string> rowFailures)
+    {
+        var tags = row.ExpectedFeatureTags;
+        var objects = row.PageExpectation.DrawingObjects;
+        if (!tags.Contains("drawing-objects", StringComparer.OrdinalIgnoreCase))
+            return;
+
+        if (objects.FloatingObjectCount <= 0)
+            rowFailures.Add("drawing-object evidence must include at least one floating object plan");
+        if (tags.Contains("shapes", StringComparer.OrdinalIgnoreCase) && !objects.HasShapes)
+            rowFailures.Add("drawing-object evidence expects shapes but the object plan records none");
+        if (tags.Contains("charts", StringComparer.OrdinalIgnoreCase) && !objects.HasCharts)
+            rowFailures.Add("drawing-object evidence expects charts but the object plan records none");
+        if (tags.Contains("smartart", StringComparer.OrdinalIgnoreCase) && !objects.HasSmartArt)
+            rowFailures.Add("drawing-object evidence expects SmartArt but the object plan records none");
+        if (tags.Contains("wordart", StringComparer.OrdinalIgnoreCase) && !objects.HasWordArt)
+            rowFailures.Add("drawing-object evidence expects WordArt but the object plan records none");
+        if (tags.Contains("drawing-groups", StringComparer.OrdinalIgnoreCase) && !objects.HasGroups)
+            rowFailures.Add("drawing-object evidence expects drawing groups but the object plan records none");
+        if (tags.Contains("behind-text", StringComparer.OrdinalIgnoreCase) && objects.BehindTextCount <= 0)
+            rowFailures.Add("drawing-object evidence expects behind-text objects but the object plan records none");
+        if (tags.Contains("in-front", StringComparer.OrdinalIgnoreCase) && objects.InFrontCount <= 0)
+            rowFailures.Add("drawing-object evidence expects in-front objects but the object plan records none");
+        if (tags.Contains("square-wrap", StringComparer.OrdinalIgnoreCase) && !objects.HasSquareWrap)
+            rowFailures.Add("drawing-object evidence expects square wrapping but the object plan records none");
+        if (tags.Contains("top-bottom-wrap", StringComparer.OrdinalIgnoreCase) && !objects.HasTopAndBottomWrap)
+            rowFailures.Add("drawing-object evidence expects top-and-bottom wrapping but the object plan records none");
+        if (tags.Contains("z-order", StringComparer.OrdinalIgnoreCase) && !objects.HasZOrder)
+            rowFailures.Add("drawing-object evidence expects z-order depth but the object plan records a single layer");
     }
 
     private static IReadOnlyList<FreeWVisualEvidenceNormalizedScenario> BuildScenarioSummaries(
@@ -708,6 +761,12 @@ public static class FreeWVisualEvidenceManifestNormalizer
             parts.Add(
                 $"{row.Tables.TableCount.ToString(CultureInfo.InvariantCulture)} table(s), " +
                 $"{row.Tables.MaxGridColumnCount.ToString(CultureInfo.InvariantCulture)} grid column(s)");
+        }
+        if (row.DrawingObjects.FloatingObjectCount > 0)
+        {
+            parts.Add(
+                $"{row.DrawingObjects.FloatingObjectCount.ToString(CultureInfo.InvariantCulture)} drawing object(s), " +
+                $"{row.DrawingObjects.BehindTextCount.ToString(CultureInfo.InvariantCulture)} behind text");
         }
 
         return string.Join(", ", parts);

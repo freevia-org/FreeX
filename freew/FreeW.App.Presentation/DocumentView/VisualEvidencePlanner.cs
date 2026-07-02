@@ -102,6 +102,21 @@ public sealed record FreeWVisualTableExpectation(
     bool HasFloatingTextWrap,
     IReadOnlyList<DocumentTableLayoutPlan> Tables);
 
+public sealed record FreeWVisualDrawingObjectExpectation(
+    int FloatingObjectCount,
+    int BehindTextCount,
+    int InFrontCount,
+    bool HasImages,
+    bool HasShapes,
+    bool HasCharts,
+    bool HasSmartArt,
+    bool HasWordArt,
+    bool HasGroups,
+    bool HasSquareWrap,
+    bool HasTopAndBottomWrap,
+    bool HasZOrder,
+    IReadOnlyList<DocumentFloatingObjectSnapshot> Objects);
+
 public sealed record FreeWVisualPageExpectation(
     int PageNumber,
     int PageCount,
@@ -111,6 +126,7 @@ public sealed record FreeWVisualPageExpectation(
     FreeWVisualCompositionExpectation Composition,
     FreeWVisualPageFeatureExpectation Features,
     FreeWVisualTableExpectation Tables,
+    FreeWVisualDrawingObjectExpectation DrawingObjects,
     string? HeaderSlotName,
     string? FooterSlotName,
     bool HasFootnotes,
@@ -184,7 +200,7 @@ public static class FreeWVisualEvidencePlanner
 {
     public const string ManifestFileName = "freew_visual_evidence_manifest.json";
     public const string SchemaId = "freew.visual-evidence.v1";
-    public const int SchemaVersion = 3;
+    public const int SchemaVersion = 4;
 
     private const int MaxTrackedColorCount = 4096;
 
@@ -308,6 +324,29 @@ public static class FreeWVisualEvidencePlanner
             1,
             DocumentViewLayoutKind.PrintLayout,
             BodyPrintComposition with { ExpectsTables = true }),
+        new(
+            "drawing-objects-complex",
+            "Complex Word-style drawing-object fidelity capture.",
+            [
+                "drawing-objects",
+                "floating-objects",
+                "print-layout",
+                "body-text",
+                "shapes",
+                "charts",
+                "smartart",
+                "wordart",
+                "drawing-groups",
+                "square-wrap",
+                "top-bottom-wrap",
+                "behind-text",
+                "in-front",
+                "z-order"
+            ],
+            "drawing-objects-complex_p{page}.png",
+            1,
+            DocumentViewLayoutKind.PrintLayout,
+            BodyPrintComposition with { ExpectsFloatingObjects = true }),
         new(
             "page-composition-print-layout",
             "Avalonia print-layout page composition shot.",
@@ -465,6 +504,7 @@ public static class FreeWVisualEvidencePlanner
             sectionRelativePageNumber,
             sectionOwnerId);
         var tables = BuildTableExpectation(document);
+        var drawingObjects = BuildDrawingObjectExpectation(document, surface, features.Columns.Count);
 
         var expectedOutputName = ExpectedOutputName(scenario.ScenarioId, pageNumber, outputName);
         return new FreeWVisualPageExpectation(
@@ -476,6 +516,7 @@ public static class FreeWVisualEvidencePlanner
             scenario.Composition,
             features,
             tables,
+            drawingObjects,
             headerSlotName,
             footerSlotName,
             hasFootnotes,
@@ -715,6 +756,38 @@ public static class FreeWVisualEvidencePlanner
             Tables: tables);
     }
 
+    public static FreeWVisualDrawingObjectExpectation BuildDrawingObjectExpectation(
+        TextDocument? document,
+        DocumentViewSurfacePlan surface,
+        int columnCount)
+    {
+        ArgumentNullException.ThrowIfNull(surface);
+
+        if (document is null)
+            return EmptyDrawingObjectExpectation;
+
+        var objects = DocumentViewLayoutPlanner
+            .BuildFloatingObjectSnapshots(document, surface, Math.Max(1, columnCount))
+            .ToList();
+        if (objects.Count == 0)
+            return EmptyDrawingObjectExpectation;
+
+        return new FreeWVisualDrawingObjectExpectation(
+            FloatingObjectCount: objects.Count,
+            BehindTextCount: objects.Count(o => o.BehindText),
+            InFrontCount: objects.Count(o => !o.BehindText),
+            HasImages: objects.Any(o => o.Kind == DocumentFloatingObjectKind.Image),
+            HasShapes: objects.Any(o => o.Kind == DocumentFloatingObjectKind.Shape),
+            HasCharts: objects.Any(o => o.Kind == DocumentFloatingObjectKind.Chart),
+            HasSmartArt: objects.Any(o => o.Kind == DocumentFloatingObjectKind.SmartArt),
+            HasWordArt: objects.Any(o => o.Kind == DocumentFloatingObjectKind.WordArt),
+            HasGroups: objects.Any(o => o.Kind == DocumentFloatingObjectKind.Group),
+            HasSquareWrap: objects.Any(o => o.Wrapping == ImageWrapping.Square),
+            HasTopAndBottomWrap: objects.Any(o => o.Wrapping == ImageWrapping.TopAndBottom),
+            HasZOrder: objects.Select(o => o.ZOrderIndex).Distinct().Count() > 1,
+            Objects: objects);
+    }
+
     public static void EnsureTrusted(FreeWVisualEvidenceRow row)
     {
         ArgumentNullException.ThrowIfNull(row);
@@ -895,6 +968,21 @@ public static class FreeWVisualEvidencePlanner
         HasNamedStyle: false,
         HasFloatingTextWrap: false,
         Tables: []);
+
+    private static FreeWVisualDrawingObjectExpectation EmptyDrawingObjectExpectation { get; } = new(
+        FloatingObjectCount: 0,
+        BehindTextCount: 0,
+        InFrontCount: 0,
+        HasImages: false,
+        HasShapes: false,
+        HasCharts: false,
+        HasSmartArt: false,
+        HasWordArt: false,
+        HasGroups: false,
+        HasSquareWrap: false,
+        HasTopAndBottomWrap: false,
+        HasZOrder: false,
+        Objects: []);
 
     private static double RoundDip(double value) =>
         double.IsFinite(value) ? Math.Round(value, 3, MidpointRounding.AwayFromZero) : 0;

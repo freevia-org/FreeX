@@ -21,6 +21,8 @@ public sealed class VisualEvidencePageLayoutShotSourceTests
         source.Should().Contain("page-composition-floating-image");
         source.Should().Contain("table-layout-complex");
         source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildComplexTableLayoutDocument");
+        source.Should().Contain("drawing-objects-complex");
+        source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildDrawingObjectsCompositionDocument");
         source.Should().Contain("backstage-print-preview-fidelity");
         source.Should().Contain("backstage-pdf-export-fidelity");
         source.Should().Contain("VisualEvidenceOutputPath(outDir, \"backstage-print-preview-fidelity\", 1)");

@@ -21,6 +21,35 @@ public static class FreeWVisualEvidenceDocumentFactory
 
         return doc;
     }
+    public static TextDocument BuildDrawingObjectsCompositionDocument()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("Drawing Object Fidelity") { StyleId = "Heading1" });
+        doc.Blocks.Add(new Paragraph(
+            "This shared fixture exercises Word-style drawing object composition: floating shapes, charts, " +
+            "SmartArt, WordArt, grouping, wrap modes, behind-text layering, in-front layering, and z-order."));
+
+        var anchor = new Paragraph();
+        anchor.Runs.Add(new Run(
+            "The drawing objects in this paragraph should retain their shared placement metadata while " +
+            "WPF and Avalonia renderers emit a common visual-evidence manifest. "));
+        anchor.Runs.Add(Run.FromShape(BuildFloatingShape()));
+        anchor.Runs.Add(Run.FromChart(BuildFloatingChart()));
+        anchor.Runs.Add(Run.FromSmartArt(BuildFloatingSmartArt()));
+        anchor.Runs.Add(Run.FromWordArt(BuildFloatingWordArt()));
+        anchor.Runs.Add(Run.FromDrawingGroup(BuildFloatingGroup()));
+        doc.Blocks.Add(anchor);
+
+        for (var i = 1; i <= 10; i++)
+        {
+            doc.Blocks.Add(new Paragraph(
+                $"Drawing object body paragraph {i}: surrounding text gives square and top-and-bottom " +
+                "wrap modes real layout context for comparison."));
+        }
+
+        return doc;
+    }
 
     private static Table BuildComplexTable()
     {
@@ -106,6 +135,90 @@ public static class FreeWVisualEvidenceDocumentFactory
 
         return table;
     }
+
+    private static Shape BuildFloatingShape()
+    {
+        var shape = Shape.TextBoxWith("Behind text box\nwith shadow", widthPt: 150, heightPt: 60, fillColorHex: "#D9EAD3");
+        shape.OutlineColorHex = "#38761D";
+        shape.OutlineWidthPt = 1.5;
+        shape.Placement = Placement(ImageWrapping.Behind, xPt: 18, yPt: 12, zOrder: 1);
+        shape.Effects = new ShapeEffectLst { HasShadow = true, ShadowAlpha = 35000 };
+        return shape;
+    }
+
+    private static Chart BuildFloatingChart()
+    {
+        var chart = Chart.Create(
+            ChartKind.Column,
+            ["Q1", "Q2", "Q3", "Q4"],
+            [1.2, 1.7, 1.4, 2.1],
+            seriesName: "Revenue",
+            title: "Quarterly revenue");
+        chart.WidthPt = 210;
+        chart.HeightPt = 126;
+        chart.ShowLegend = true;
+        chart.CategoryAxisTitle = "Quarter";
+        chart.ValueAxisTitle = "USD";
+        chart.Placement = Placement(ImageWrapping.TopAndBottom, xPt: 210, yPt: 120, zOrder: 4);
+
+        return chart;
+    }
+
+    private static SmartArt BuildFloatingSmartArt()
+    {
+        var smartArt = SmartArt.Create(SmartArtKind.Process, ["Plan", "Build", "Verify"]);
+        smartArt.WidthPt = 216;
+        smartArt.HeightPt = 90;
+        smartArt.LayoutId = "process1";
+        smartArt.ColorSchemeId = "colorful1";
+        smartArt.StyleId = "subtle1";
+        smartArt.Placement = Placement(ImageWrapping.Square, xPt: 36, yPt: 210, zOrder: 6);
+
+        return smartArt;
+    }
+
+    private static WordArt BuildFloatingWordArt() =>
+        new("FreeW", WordArtStyle.GlowBlue, fontSizePt: 30)
+        {
+            AltText = "Floating WordArt",
+            Warp = WordArtWarp.Wave1,
+            Placement = Placement(ImageWrapping.InFront, xPt: 300, yPt: 30, zOrder: 8)
+        };
+
+    private static DrawingGroup BuildFloatingGroup()
+    {
+        var group = new DrawingGroup
+        {
+            WidthPt = 180,
+            HeightPt = 82,
+            Placement = Placement(ImageWrapping.Square, xPt: 280, yPt: 260, zOrder: 10)
+        };
+        group.Children.Add(new Shape(ShapeKind.Ellipse, 82, 50)
+        {
+            FillColorHex = "#CFE2F3",
+            OutlineColorHex = "#1155CC",
+            Effects = new ShapeEffectLst { HasGlow = true, GlowColorHex = "4472C4", GlowRad = 63500 }
+        });
+        group.ChildOffsets.Add((0, 16));
+        group.Children.Add(new WordArt("Group", WordArtStyle.FillGold, 22));
+        group.ChildOffsets.Add((70, 8));
+        return group;
+    }
+
+    private static FloatingPlacement Placement(
+        ImageWrapping wrapping,
+        double xPt,
+        double yPt,
+        int zOrder) =>
+        new()
+        {
+            Wrapping = wrapping,
+            HorizontalAnchor = HorizontalAnchor.Margin,
+            VerticalAnchor = VerticalAnchor.Paragraph,
+            HorizontalOffsetPt = xPt,
+            VerticalOffsetPt = yPt,
+            ZOrderIndex = zOrder
+        };
 
     private static TableCell HeaderCell(string text, int gridSpan = 1) =>
         Cell(text, gridSpan: gridSpan, shading: "#D9E2F3", customBorder: true);
