@@ -10,7 +10,23 @@ public sealed class HomeFontBorderPopupCatalogTests
     {
         var surfaces = RibbonRuntimeCatalogPlanner.GetSurfaces(
             static key => key,
-            [new RibbonRuntimeCatalogNumberFormatOption("General")]);
+            [new RibbonRuntimeCatalogNumberFormatOption("General")],
+            [
+                new("Accounting Number Format US Dollar", "US Dollar ($)"),
+                new("Accounting Number Format Euro", "Euro (EUR)"),
+                new("Accounting Number Format British Pound", "British Pound (GBP)"),
+                new("Accounting Number Format Japanese Yen", "Japanese Yen (JPY)"),
+            ]);
+
+        surfaces.Single(surface => surface.CommandTitle == "Accounting Symbol Dropdown")
+            .Groups.SelectMany(group => group.Items)
+            .Should()
+            .Contain([
+                "Accounting Number Format US Dollar",
+                "Accounting Number Format Euro",
+                "Accounting Number Format British Pound",
+                "Accounting Number Format Japanese Yen",
+            ]);
 
         surfaces.Single(surface => surface.CommandTitle == "Font Color Popup")
             .Groups.SelectMany(group => group.Items)

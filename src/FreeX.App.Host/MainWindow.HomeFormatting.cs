@@ -921,7 +921,7 @@ public partial class MainWindow
         if (string.IsNullOrEmpty(symbol))
             symbol = "$";
 
-        ApplyStyleDiff(new StyleDiff(NumberFormat: $"_({symbol}* #,##0.00_);_({symbol}* (#,##0.00);_({symbol}* \"-\"??_);_(@_)"));
+        ApplyStyleDiff(new StyleDiff(NumberFormat: HomeNumberFormatDropdownPlanner.ResolveAccountingNumberFormatCode(symbol)));
     }
 
     private void MoreAccountingFormatsMenuItem_Click(object sender, RoutedEventArgs e) =>
