@@ -42,6 +42,12 @@ public sealed class SmartArtLayoutTests
         return data;
     }
 
+    private static SrgbColor SolidFill(SlideShape shape) =>
+        ((ShapeFill.Solid)shape.Fill!).Color.Resolved;
+
+    private static SrgbColor SolidDrawFill(DrawOp op) =>
+        ((ResolvedFill.Solid)((DrawOp.Shape)op).Fill).Color;
+
     // ── Family classification tests ───────────────────────────────────────────────
 
     [Theory]
@@ -105,6 +111,35 @@ public sealed class SmartArtLayoutTests
 
         var texts = boxes.Select(b => b.TextBody?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text ?? "");
         texts.Should().BeEquivalentTo(new[] { "Alpha", "Beta", "Gamma" });
+    }
+
+    [Fact]
+    public void LayoutEngine_UsesSmartArtColorMetadataPaletteForLiveBoxes()
+    {
+        var data = MakeData(SmartArtFamily.Process, "Alpha", "Beta");
+        var colors = new SmartArtColorMetadata
+        {
+            UniqueId = "urn:smartart:colors:colorful-accent",
+            Title = "Colorful Accent"
+        };
+        colors.Palette.Add(new ThemeAwareColor(SrgbColor.FromRgb(0x990000)));
+        colors.Palette.Add(new ThemeAwareColor(SrgbColor.FromRgb(0x009900)));
+
+        var quickStyle = new SmartArtQuickStyleMetadata
+        {
+            UniqueId = "urn:smartart:style:moderate-effect",
+            Title = "Moderate Effect"
+        };
+
+        var shapes = SmartArtLayoutEngine.Layout(
+            data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme(),
+            quickStyle: quickStyle,
+            colors: colors)!;
+
+        var boxes = shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.RoundedRectangle).ToList();
+        boxes.Should().HaveCount(2);
+        SolidFill(boxes[0]).Should().Be(ThemeColorTransform.ApplyTint(SrgbColor.FromRgb(0x990000), 0.88));
+        SolidFill(boxes[1]).Should().Be(ThemeColorTransform.ApplyTint(SrgbColor.FromRgb(0x009900), 0.88));
     }
 
     [Fact]
@@ -284,6 +319,47 @@ public sealed class SmartArtLayoutTests
         ops.Should().HaveCountGreaterThan(1, "live layout must produce shape ops");
         ops.Skip(1).Should().AllBeOfType<DrawOp.Shape>("all live shapes are DrawOp.Shape");
         ops.Should().HaveCount(6, "background + 3 boxes + 2 connectors");
+    }
+
+    [Fact]
+    public void Compositor_LiveLayout_UsesSharedSmartArtStylePlan()
+    {
+        var data = MakeData(SmartArtFamily.Process, "Step 1", "Step 2");
+        var smart = new SmartArtShape { Data = data };
+        smart.QuickStyle = new SmartArtQuickStyleMetadata
+        {
+            UniqueId = "urn:smartart:style:intense-effect",
+            Title = "Intense Effect"
+        };
+        smart.Colors = new SmartArtColorMetadata
+        {
+            UniqueId = "urn:smartart:colors:colorful-accent",
+            Title = "Colorful Accent"
+        };
+        smart.Colors.Palette.Add(new ThemeAwareColor(SrgbColor.FromRgb(0x203864)));
+        smart.Colors.Palette.Add(new ThemeAwareColor(SrgbColor.FromRgb(0x70AD47)));
+
+        var container = new SlideShape
+        {
+            Id          = 51,
+            Kind        = SlideShapeKind.SmartArt,
+            OffsetXEmu  = FrameX,
+            OffsetYEmu  = FrameY,
+            ExtentCxEmu = FrameCx,
+            ExtentCyEmu = FrameCy,
+            SmartArt    = smart
+        };
+
+        var pres = PresentationModel.CreateEmpty();
+        pres.Slides[0].Shapes.Clear();
+        pres.Slides[0].Shapes.Add(container);
+
+        var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
+        var shapeOps = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
+
+        shapeOps.Should().HaveCount(3, "two live boxes plus one connector");
+        SolidDrawFill(shapeOps[0]).Should().Be(ThemeColorTransform.ApplyShade(SrgbColor.FromRgb(0x203864), 0.72));
+        SolidDrawFill(shapeOps[2]).Should().Be(ThemeColorTransform.ApplyShade(SrgbColor.FromRgb(0x70AD47), 0.72));
     }
 
     [Fact]

@@ -673,7 +673,9 @@ public sealed class SmartArtTests : IDisposable
     private string MakeSmartArtPptxWithNodeTree(
         string layoutUniqueId,
         (string id, string text)[] nodes,
-        (string srcId, string destId)[] parOfConnections)
+        (string srcId, string destId)[] parOfConnections,
+        XDocument? quickStyleXml = null,
+        XDocument? colorsXml = null)
     {
         var path = Path.Combine(_tempDir, $"smartart_tree_{Guid.NewGuid():N}.pptx");
 
@@ -725,8 +727,8 @@ public sealed class SmartArtTests : IDisposable
                 new XAttribute(XNamespace.Xmlns + "dgm", dgmNs.NamespaceName),
                 new XAttribute("uniqueId", layoutUniqueId)));
 
-        var qsXml     = new XDocument(new XDeclaration("1.0", "UTF-8", "yes"), new XElement(dgmNs + "styleDef",   new XAttribute(XNamespace.Xmlns + "dgm", dgmNs.NamespaceName)));
-        var colorsXml = new XDocument(new XDeclaration("1.0", "UTF-8", "yes"), new XElement(dgmNs + "colorsDef", new XAttribute(XNamespace.Xmlns + "dgm", dgmNs.NamespaceName)));
+        var qsXml = quickStyleXml ?? new XDocument(new XDeclaration("1.0", "UTF-8", "yes"), new XElement(dgmNs + "styleDef",   new XAttribute(XNamespace.Xmlns + "dgm", dgmNs.NamespaceName)));
+        var colorsPartXml = colorsXml ?? new XDocument(new XDeclaration("1.0", "UTF-8", "yes"), new XElement(dgmNs + "colorsDef", new XAttribute(XNamespace.Xmlns + "dgm", dgmNs.NamespaceName)));
 
         // Minimal dsp:drawing (empty spTree)
         var dspXml = new XDocument(new XDeclaration("1.0", "UTF-8", "yes"),
@@ -914,7 +916,7 @@ public sealed class SmartArtTests : IDisposable
         WriteXml("ppt/diagrams/data1.xml",       dataXml);
         WriteXml("ppt/diagrams/layout1.xml",     layoutXml);
         WriteXml("ppt/diagrams/quickStyle1.xml", qsXml);
-        WriteXml("ppt/diagrams/colors1.xml",     colorsXml);
+        WriteXml("ppt/diagrams/colors1.xml",     colorsPartXml);
         WriteXml("ppt/diagrams/drawing1.xml",    dspXml);
 
         WriteEntry("ppt/diagrams/_rels/data1.xml.rels", MakeRels(pkgNs,
@@ -993,6 +995,63 @@ public sealed class SmartArtTests : IDisposable
             .Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
 
         sa.Data!.Family.Should().Be(SmartArtFamily.List);
+    }
+
+    [Fact]
+    public void Reader_ParsesSmartArtQuickStyleAndColorsMetadata()
+    {
+        var dgmNs = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/diagram");
+        var aNs = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main");
+
+        var quickStyleXml = new XDocument(new XDeclaration("1.0", "UTF-8", "yes"),
+            new XElement(dgmNs + "styleDef",
+                new XAttribute(XNamespace.Xmlns + "dgm", dgmNs.NamespaceName),
+                new XAttribute("uniqueId", "urn:smartart:style:intense-effect"),
+                new XElement(dgmNs + "title", new XAttribute("val", "Intense Effect")),
+                new XElement(dgmNs + "catLst",
+                    new XElement(dgmNs + "cat", new XAttribute("type", "3D"))),
+                new XElement(dgmNs + "styleLbl", new XAttribute("name", "node0"))));
+
+        var colorsXml = new XDocument(new XDeclaration("1.0", "UTF-8", "yes"),
+            new XElement(dgmNs + "colorsDef",
+                new XAttribute(XNamespace.Xmlns + "dgm", dgmNs.NamespaceName),
+                new XAttribute(XNamespace.Xmlns + "a", aNs.NamespaceName),
+                new XAttribute("uniqueId", "urn:smartart:colors:colorful-accent"),
+                new XElement(dgmNs + "title", new XAttribute("val", "Colorful Accent")),
+                new XElement(dgmNs + "catLst",
+                    new XElement(dgmNs + "cat", new XAttribute("type", "colorful"))),
+                new XElement(dgmNs + "styleLbl",
+                    new XAttribute("name", "node0"),
+                    new XElement(dgmNs + "fillClrLst",
+                        new XElement(aNs + "schemeClr", new XAttribute("val", "accent3")),
+                        new XElement(aNs + "srgbClr", new XAttribute("val", "8844CC"))))));
+
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/process1",
+            nodes: [("A", "Alpha"), ("B", "Beta")],
+            parOfConnections: [],
+            quickStyleXml: quickStyleXml,
+            colorsXml: colorsXml);
+
+        var sa = PptxPackageReader.Read(pptxPath)
+            .Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.QuickStyle.Should().NotBeNull();
+        sa.QuickStyle!.UniqueId.Should().Be("urn:smartart:style:intense-effect");
+        sa.QuickStyle.Title.Should().Be("Intense Effect");
+        sa.QuickStyle.Category.Should().Be("3D");
+        sa.QuickStyle.StyleLabels.Should().Contain("node0");
+
+        sa.Colors.Should().NotBeNull();
+        sa.Colors!.UniqueId.Should().Be("urn:smartart:colors:colorful-accent");
+        sa.Colors.Title.Should().Be("Colorful Accent");
+        sa.Colors.Category.Should().Be("colorful");
+        sa.Colors.ColorLabels.Should().Contain("node0");
+        sa.Colors.Palette.Should().HaveCount(2);
+        sa.Colors.Palette[0].SchemeColor!.RoleName.Should().Be("accent3");
+        sa.Colors.Palette[1].Resolved.Should().Be(SrgbColor.FromRgb(0x8844CC));
+        sa.Parts["ppt/diagrams/quickStyle1.xml"].Bytes.Should().NotBeEmpty();
+        sa.Parts["ppt/diagrams/colors1.xml"].Bytes.Should().NotBeEmpty();
     }
 
     [Fact]

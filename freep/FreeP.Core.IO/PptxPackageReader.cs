@@ -1596,6 +1596,16 @@ public static class PptxPackageReader
             // Graceful degradation: Data stays null, compositor will use cached fallback
         }
 
+        try
+        {
+            smart.QuickStyle = ReadSmartArtQuickStyleMetadata(smart);
+            smart.Colors = ReadSmartArtColorMetadata(smart, scheme);
+        }
+        catch
+        {
+            // Style/color metadata is advisory only; raw diagram parts stay preserved.
+        }
+
         return smart;
     }
 
@@ -1736,6 +1746,149 @@ public static class PptxPackageReader
             "bin"  => "application/vnd.ms-office.activeX+xml",
             _      => "application/octet-stream"
         };
+
+    private static SmartArtQuickStyleMetadata? ReadSmartArtQuickStyleMetadata(SmartArtShape smart)
+    {
+        var entry = smart.Parts.Values.FirstOrDefault(p =>
+            p.ContentType.Contains("diagramStyle", StringComparison.OrdinalIgnoreCase)
+            || p.PartPath.Contains("quickStyle", StringComparison.OrdinalIgnoreCase));
+        if (entry is null) return null;
+
+        using var ms = new MemoryStream(entry.Bytes);
+        var doc = OpcXml.LoadXml(ms);
+        var root = doc.Root;
+        if (root is null) return null;
+
+        var metadata = new SmartArtQuickStyleMetadata
+        {
+            UniqueId = root.Attribute("uniqueId")?.Value ?? string.Empty,
+            Title = ReadDiagramTitle(root),
+            Category = ReadDiagramCategory(root)
+        };
+
+        foreach (var label in root.Descendants().Where(e => e.Name.LocalName == "styleLbl"))
+        {
+            var name = label.Attribute("name")?.Value;
+            if (!string.IsNullOrWhiteSpace(name)
+                && !metadata.StyleLabels.Contains(name, StringComparer.OrdinalIgnoreCase))
+                metadata.StyleLabels.Add(name);
+        }
+
+        return metadata;
+    }
+
+    private static SmartArtColorMetadata? ReadSmartArtColorMetadata(SmartArtShape smart, PresentationColorScheme scheme)
+    {
+        var entry = smart.Parts.Values.FirstOrDefault(p =>
+            p.ContentType.Contains("diagramColors", StringComparison.OrdinalIgnoreCase)
+            || p.PartPath.Contains("colors", StringComparison.OrdinalIgnoreCase));
+        if (entry is null) return null;
+
+        using var ms = new MemoryStream(entry.Bytes);
+        var doc = OpcXml.LoadXml(ms);
+        var root = doc.Root;
+        if (root is null) return null;
+
+        var metadata = new SmartArtColorMetadata
+        {
+            UniqueId = root.Attribute("uniqueId")?.Value ?? string.Empty,
+            Title = ReadDiagramTitle(root),
+            Category = ReadDiagramCategory(root)
+        };
+
+        foreach (var label in root.Descendants().Where(e => e.Name.LocalName == "styleLbl"))
+        {
+            var name = label.Attribute("name")?.Value;
+            if (!string.IsNullOrWhiteSpace(name)
+                && !metadata.ColorLabels.Contains(name, StringComparer.OrdinalIgnoreCase))
+                metadata.ColorLabels.Add(name);
+        }
+
+        foreach (var colorEl in root.Descendants().Where(e =>
+            e.Name.LocalName is "schemeClr" or "srgbClr" or "sysClr"))
+        {
+            var color = TryReadSmartArtPaletteColor(colorEl, scheme);
+            if (color is null) continue;
+
+            if (!metadata.Palette.Any(existing =>
+                string.Equals(existing.SchemeColor?.RoleName, color.SchemeColor?.RoleName, StringComparison.OrdinalIgnoreCase)
+                && existing.Resolved == color.Resolved))
+                metadata.Palette.Add(color);
+
+            if (metadata.Palette.Count >= 12) break;
+        }
+
+        return metadata;
+    }
+
+    private static string ReadDiagramTitle(XElement root) =>
+        root.Descendants()
+            .FirstOrDefault(e => e.Name.LocalName == "title")
+            ?.Attribute("val")?.Value
+        ?? string.Empty;
+
+    private static string ReadDiagramCategory(XElement root) =>
+        root.Descendants()
+            .FirstOrDefault(e => e.Name.LocalName == "cat")
+            ?.Attribute("type")?.Value
+        ?? string.Empty;
+
+    private static ThemeAwareColor? TryReadSmartArtPaletteColor(XElement colorEl, PresentationColorScheme scheme)
+    {
+        if (colorEl.Name.LocalName == "srgbClr")
+        {
+            var rgb = ParseHexColor(colorEl.Attribute("val")?.Value);
+            return rgb.HasValue ? new ThemeAwareColor(rgb.Value) : null;
+        }
+
+        if (colorEl.Name.LocalName == "sysClr")
+        {
+            var rgb = ParseHexColor(colorEl.Attribute("lastClr")?.Value);
+            return rgb.HasValue ? new ThemeAwareColor(rgb.Value) : null;
+        }
+
+        if (colorEl.Name.LocalName != "schemeClr") return null;
+
+        var roleName = colorEl.Attribute("val")?.Value;
+        if (!PptxColorReader.TryMapSchemeColor(roleName, out var slot))
+            return null;
+
+        var lumMod = ReadDiagramColorPercentage(colorEl, "lumMod") ?? 1.0;
+        var lumOff = ReadDiagramColorPercentage(colorEl, "lumOff") ?? 0.0;
+        var tint = ReadDiagramColorPercentage(colorEl, "tint") ?? 1.0;
+        var shade = ReadDiagramColorPercentage(colorEl, "shade") ?? 1.0;
+
+        var resolved = ThemeColorTransform.Apply(scheme[slot], lumMod, lumOff, tint, shade);
+        return new ThemeAwareColor(resolved, new SchemeColorRef
+        {
+            RoleName = roleName?.Trim(),
+            Slot = slot,
+            LumMod = lumMod,
+            LumOff = lumOff,
+            Tint = tint,
+            Shade = shade
+        });
+    }
+
+    private static double? ReadDiagramColorPercentage(XElement colorEl, string localName)
+    {
+        var raw = colorEl.Elements().FirstOrDefault(e => e.Name.LocalName == localName)?.Attribute("val")?.Value;
+        if (!double.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
+            return null;
+        return Math.Clamp(value / 100000.0, 0.0, 1.0);
+    }
+
+    private static SrgbColor? ParseHexColor(string? hex)
+    {
+        if (string.IsNullOrWhiteSpace(hex)) return null;
+        hex = hex.Trim().TrimStart('#');
+        if (hex.Length != 6) return null;
+
+        if (!byte.TryParse(hex[..2], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var r)) return null;
+        if (!byte.TryParse(hex.Substring(2, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var g)) return null;
+        if (!byte.TryParse(hex.Substring(4, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var b)) return null;
+        return new SrgbColor(r, g, b);
+    }
 
     /// <summary>
     /// Theme 17: Parses the SmartArtData model (node tree + family) from the verbatim

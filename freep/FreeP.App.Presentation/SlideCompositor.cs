@@ -763,7 +763,9 @@ public static class SlideCompositor
                 smart.Data,
                 shape.OffsetXEmu, shape.OffsetYEmu,
                 shape.ExtentCxEmu, shape.ExtentCyEmu,
-                theme, effectiveClrMap);
+                theme, effectiveClrMap,
+                smart.QuickStyle,
+                smart.Colors);
 
             if (liveShapes is not null)
             {

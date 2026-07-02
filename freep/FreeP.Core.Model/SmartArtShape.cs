@@ -79,6 +79,38 @@ public sealed class DiagramPart
 }
 
 /// <summary>
+/// Bounded metadata parsed from a SmartArt quickStyle diagram part.
+/// Raw quickStyle bytes remain preserved in <see cref="SmartArtShape.Parts"/>.
+/// </summary>
+public sealed class SmartArtQuickStyleMetadata
+{
+    public string UniqueId { get; set; } = string.Empty;
+
+    public string Title { get; set; } = string.Empty;
+
+    public string Category { get; set; } = string.Empty;
+
+    public List<string> StyleLabels { get; } = new();
+}
+
+/// <summary>
+/// Bounded metadata parsed from a SmartArt colors diagram part.
+/// Raw colors bytes remain preserved in <see cref="SmartArtShape.Parts"/>.
+/// </summary>
+public sealed class SmartArtColorMetadata
+{
+    public string UniqueId { get; set; } = string.Empty;
+
+    public string Title { get; set; } = string.Empty;
+
+    public string Category { get; set; } = string.Empty;
+
+    public List<string> ColorLabels { get; } = new();
+
+    public List<ThemeAwareColor> Palette { get; } = new();
+}
+
+/// <summary>
 /// Payload for a SmartArt graphic (SlideShapeKind.SmartArt).
 ///
 /// SmartArt is stored as a p:graphicFrame whose graphicData URI is the diagram namespace
@@ -100,6 +132,16 @@ public sealed class SmartArtShape
     /// runs the <see cref="SmartArtLayoutEngine"/> instead of the cached drawing.
     /// </summary>
     public SmartArtData? Data { get; set; }
+
+    /// <summary>
+    /// Parsed quickStyle hints from the SmartArt qs part. Null when absent/unreadable.
+    /// </summary>
+    public SmartArtQuickStyleMetadata? QuickStyle { get; set; }
+
+    /// <summary>
+    /// Parsed color-style hints from the SmartArt cs part. Null when absent/unreadable.
+    /// </summary>
+    public SmartArtColorMetadata? Colors { get; set; }
 
     // ── Fallback rendering ─────────────────────────────────────────────────────────
 

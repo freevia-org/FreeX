@@ -19,7 +19,7 @@ namespace FreeP.App.Compositor;
 ///
 /// Returns null for <see cref="SmartArtFamily.Unknown"/> → compositor falls back to cached drawing.
 ///
-/// Colors: node fills cycle through theme accent1–6.  Text is white on dark fills, black on light.
+/// Colors: node fills/outlines/text are assigned by <see cref="SmartArtStylePlanner"/>.
 /// Connectors: simple line/straight-arrow shapes using <see cref="DrawingShapeKind.Line"/>.
 /// </summary>
 public static class SmartArtLayoutEngine
@@ -56,7 +56,9 @@ public static class SmartArtLayoutEngine
         SmartArtData data,
         long frameXEmu, long frameYEmu, long frameCxEmu, long frameCyEmu,
         PresentationTheme theme,
-        IReadOnlyDictionary<string, string>? effectiveClrMap = null)
+        IReadOnlyDictionary<string, string>? effectiveClrMap = null,
+        SmartArtQuickStyleMetadata? quickStyle = null,
+        SmartArtColorMetadata? colors = null)
     {
         ArgumentNullException.ThrowIfNull(data);
         ArgumentNullException.ThrowIfNull(theme);
@@ -72,15 +74,14 @@ public static class SmartArtLayoutEngine
             return null;
         }
 
-        // Build accent color palette from the theme
-        var palette = BuildPalette(theme, effectiveClrMap);
+        var stylePlan = SmartArtStylePlanner.Build(data.Family, quickStyle, colors, theme, effectiveClrMap);
 
         return data.Family switch
         {
-            SmartArtFamily.Process   => LayoutProcess  (nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, palette),
-            SmartArtFamily.List      => LayoutList      (nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, palette),
-            SmartArtFamily.Cycle     => LayoutCycle     (nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, palette),
-            SmartArtFamily.Hierarchy => LayoutHierarchy (data,  frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, palette),
+            SmartArtFamily.Process   => LayoutProcess  (nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan),
+            SmartArtFamily.List      => LayoutList      (nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan),
+            SmartArtFamily.Cycle     => LayoutCycle     (nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan),
+            SmartArtFamily.Hierarchy => LayoutHierarchy (data,  frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan),
             _                        => null
         };
     }
@@ -115,40 +116,14 @@ public static class SmartArtLayoutEngine
 
     // ── Color palette ──────────────────────────────────────────────────────────────────────────
 
-    private static SrgbColor[] BuildPalette(PresentationTheme theme, IReadOnlyDictionary<string, string>? clrMap)
-    {
-        var slots = new[]
-        {
-            ThemeColorSlot.Accent1, ThemeColorSlot.Accent2, ThemeColorSlot.Accent3,
-            ThemeColorSlot.Accent4, ThemeColorSlot.Accent5, ThemeColorSlot.Accent6
-        };
-        return slots.Select(s =>
-        {
-            var raw = theme.ColorScheme[s];
-            // Apply clrMap remapping if present (for dk/lt remapping)
-            return raw;
-        }).ToArray();
-    }
-
-    private static SrgbColor NodeFill(int index, SrgbColor[] palette) =>
-        palette[index % palette.Length];
-
-    /// <summary>Picks white text for dark fills, black for light.</summary>
-    private static SrgbColor NodeTextColor(SrgbColor fill)
-    {
-        // Relative luminance (sRGB approximate)
-        double lum = 0.2126 * fill.R / 255.0 + 0.7152 * fill.G / 255.0 + 0.0722 * fill.B / 255.0;
-        return lum < 0.5 ? SrgbColor.White : SrgbColor.Black;
-    }
-
     // ── Shape builder helpers ──────────────────────────────────────────────────────────────────
 
     private static SlideShape MakeBox(
-        uint id, string text, SrgbColor fill, SrgbColor textColor,
+        uint id, string text, SmartArtNodeStyle style,
         long x, long y, long cx, long cy,
         double fontSizePt = NodeFontSizePt)
     {
-        var run = new Run { Text = text, Color = new ThemeAwareColor(textColor), Bold = true, FontSizePt = fontSizePt };
+        var run = new Run { Text = text, Color = style.Text, Bold = true, FontSizePt = fontSizePt };
         var para = new Paragraph();
         para.Runs.Add(run);
         para.Align = TextAlign.Center;
@@ -167,13 +142,13 @@ public static class SmartArtLayoutEngine
             OffsetYEmu    = y,
             ExtentCxEmu   = cx,
             ExtentCyEmu   = cy,
-            Fill          = new ShapeFill.Solid(new ThemeAwareColor(fill)),
-            Outline       = new ShapeOutline.Visible(new ThemeAwareColor(SrgbColor.White), 1.0),
+            Fill          = new ShapeFill.Solid(style.Fill),
+            Outline       = new ShapeOutline.Visible(style.Outline, style.OutlineWidthPt),
             TextBody      = body
         };
     }
 
-    private static SlideShape MakeConnector(uint id, long x1, long y1, long x2, long y2)
+    private static SlideShape MakeConnector(uint id, long x1, long y1, long x2, long y2, SmartArtConnectorStyle style)
     {
         // Represent connector as a straight line from center-right of left box to center-left of right box
         // We use a Line shape; position is bounding box of the line, FlipH/V encode direction
@@ -200,7 +175,7 @@ public static class SmartArtLayoutEngine
             ExtentCyEmu   = cy,
             FlipH         = flipH,
             FlipV         = flipV,
-            Outline       = new ShapeOutline.Visible(new ThemeAwareColor(new SrgbColor(0x70, 0x70, 0x70)), 1.5)
+            Outline       = new ShapeOutline.Visible(style.Outline, style.WidthPt)
         };
     }
 
@@ -212,7 +187,7 @@ public static class SmartArtLayoutEngine
     private static IReadOnlyList<SlideShape> LayoutProcess(
         List<SmartArtNode> nodes,
         long fx, long fy, long fcx, long fcy,
-        SrgbColor[] palette)
+        SmartArtStylePlan stylePlan)
     {
         int n = nodes.Count;
         var shapes = new List<SlideShape>();
@@ -249,16 +224,15 @@ public static class SmartArtLayoutEngine
 
         for (int i = 0; i < n; i++)
         {
-            var fill = NodeFill(i, palette);
-            var textClr = NodeTextColor(fill);
-            shapes.Add(MakeBox(idCounter++, nodes[i].Text, fill, textClr, curX, topY, boxW, boxH));
+            var nodeStyle = stylePlan.GetNodeStyle(i, nodes[i].Level, SmartArtFamily.Process);
+            shapes.Add(MakeBox(idCounter++, nodes[i].Text, nodeStyle, curX, topY, boxW, boxH));
 
             if (i < n - 1)
             {
                 // Arrow connector from right edge of box to left edge of next box
                 long connX = curX + boxW + gap / 2;
                 long connY = topY + boxH / 2;
-                shapes.Add(MakeConnector(idCounter++, connX, connY, connX + connectorW, connY));
+                shapes.Add(MakeConnector(idCounter++, connX, connY, connX + connectorW, connY, stylePlan.Connector));
             }
 
             curX += boxW + gap + connectorW;
@@ -275,7 +249,7 @@ public static class SmartArtLayoutEngine
     private static IReadOnlyList<SlideShape> LayoutList(
         List<SmartArtNode> nodes,
         long fx, long fy, long fcx, long fcy,
-        SrgbColor[] palette)
+        SmartArtStylePlan stylePlan)
     {
         int n = nodes.Count;
         var shapes = new List<SlideShape>();
@@ -294,9 +268,8 @@ public static class SmartArtLayoutEngine
 
         for (int i = 0; i < n; i++)
         {
-            var fill    = NodeFill(i, palette);
-            var textClr = NodeTextColor(fill);
-            shapes.Add(MakeBox(idCounter++, nodes[i].Text, fill, textClr, leftX, curY, boxW, boxH));
+            var nodeStyle = stylePlan.GetNodeStyle(i, nodes[i].Level, SmartArtFamily.List);
+            shapes.Add(MakeBox(idCounter++, nodes[i].Text, nodeStyle, leftX, curY, boxW, boxH));
             curY += boxH + gapY;
         }
 
@@ -311,7 +284,7 @@ public static class SmartArtLayoutEngine
     private static IReadOnlyList<SlideShape> LayoutCycle(
         List<SmartArtNode> nodes,
         long fx, long fy, long fcx, long fcy,
-        SrgbColor[] palette)
+        SmartArtStylePlan stylePlan)
     {
         int n = nodes.Count;
         var shapes = new List<SlideShape>();
@@ -358,9 +331,8 @@ public static class SmartArtLayoutEngine
 
             centers[i] = (bx, by);
 
-            var fill    = NodeFill(i, palette);
-            var textClr = NodeTextColor(fill);
-            shapes.Add(MakeBox(idCounter++, nodes[i].Text, fill, textClr, left, top, boxW, boxH));
+            var nodeStyle = stylePlan.GetNodeStyle(i, nodes[i].Level, SmartArtFamily.Cycle);
+            shapes.Add(MakeBox(idCounter++, nodes[i].Text, nodeStyle, left, top, boxW, boxH));
         }
 
         // Arrow connectors: from edge of each box to edge of next box (clockwise)
@@ -371,7 +343,7 @@ public static class SmartArtLayoutEngine
             var (bx, by) = centers[j];
 
             // Midpoint offset toward center
-            shapes.Add(MakeConnector(idCounter++, (long)ax, (long)ay, (long)bx, (long)by));
+            shapes.Add(MakeConnector(idCounter++, (long)ax, (long)ay, (long)bx, (long)by, stylePlan.Connector));
         }
 
         return shapes;
@@ -386,7 +358,7 @@ public static class SmartArtLayoutEngine
     private static IReadOnlyList<SlideShape> LayoutHierarchy(
         SmartArtData data,
         long fx, long fy, long fcx, long fcy,
-        SrgbColor[] palette)
+        SmartArtStylePlan stylePlan)
     {
         var shapes = new List<SlideShape>();
         if (data.Nodes.Count == 0) return shapes;
@@ -428,7 +400,7 @@ public static class SmartArtLayoutEngine
             long rootSlotW = (long)((double)rootWidth / treeMaxWidth * availW);
 
             RenderNode(root, 0, 0, rootWidth, curX, startY, rootSlotW, boxW, boxH, gapX, gapY,
-                shapes, palette, ref idCounter, parentCenterX: -1, parentBottomY: -1);
+                shapes, stylePlan, ref idCounter, parentCenterX: -1, parentBottomY: -1);
 
             curX += rootSlotW;
         }
@@ -450,7 +422,7 @@ public static class SmartArtLayoutEngine
         long startX, long levelY, long availW,
         long boxW, long boxH, long gapX, long gapY,
         List<SlideShape> shapes,
-        SrgbColor[] palette,
+        SmartArtStylePlan stylePlan,
         ref uint idCounter,
         long parentCenterX, long parentBottomY)
     {
@@ -462,9 +434,8 @@ public static class SmartArtLayoutEngine
         long boxX = startX + (slotW - nodeBoxW) / 2;
         long boxY = levelY;
 
-        var fill    = NodeFill(node.Level, palette);
-        var textClr = NodeTextColor(fill);
-        shapes.Add(MakeBox(idCounter++, node.Text, fill, textClr, boxX, boxY, nodeBoxW, boxH,
+        var nodeStyle = stylePlan.GetNodeStyle(0, node.Level, SmartArtFamily.Hierarchy);
+        shapes.Add(MakeBox(idCounter++, node.Text, nodeStyle, boxX, boxY, nodeBoxW, boxH,
             node.Level == 0 ? NodeFontSizeLargePt : NodeFontSizePt));
 
         long boxCenterX = boxX + nodeBoxW / 2;
@@ -474,7 +445,7 @@ public static class SmartArtLayoutEngine
         // Connector from parent bottom-center to this box top-center
         if (parentCenterX >= 0 && parentBottomY >= 0)
         {
-            shapes.Add(MakeConnector(idCounter++, parentCenterX, parentBottomY, boxCenterX, boxTopY));
+            shapes.Add(MakeConnector(idCounter++, parentCenterX, parentBottomY, boxCenterX, boxTopY, stylePlan.Connector));
         }
 
         // Lay out children
@@ -499,7 +470,7 @@ public static class SmartArtLayoutEngine
                     0, childWidth,
                     childCurX, childLevelY, childSlotW,
                     boxW, boxH, gapX, gapY,
-                    shapes, palette, ref idCounter,
+                    shapes, stylePlan, ref idCounter,
                     parentCenterX: boxCenterX,
                     parentBottomY: boxBottomY);
 
