@@ -530,9 +530,16 @@ internal static class PptxChartWriter
         var fill = style.Color is not null
             ? new XElement(A + "solidFill", BuildColorEl(style.Color))
             : null;
-        return attrs.Count == 0 && fill is null
+
+        // CT_TextCharacterProperties child order (ECMA-376): ln → fill group →
+        // effectLst → a:latin/ea/cs → hlinkClick. a:latin goes AFTER the fill group.
+        var latin = style.FontFamily is not null
+            ? new XElement(A + "latin", new XAttribute("typeface", style.FontFamily))
+            : null;
+
+        return attrs.Count == 0 && fill is null && latin is null
             ? null
-            : new XElement(A + "defRPr", attrs, fill);
+            : new XElement(A + "defRPr", attrs, fill, latin);
     }
 
     private static string ToDashStr(OutlineDash dash) => dash switch

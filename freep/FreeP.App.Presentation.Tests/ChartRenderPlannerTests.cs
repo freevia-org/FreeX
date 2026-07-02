@@ -441,6 +441,38 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void BuildDataTablePrimitivePlan_UsesModeledFontFamily()
+    {
+        var chart = MakeTwoSeriesChart(ChartType.ColumnClustered);
+        chart.DataTable = new ChartDataTableSettings
+        {
+            TextStyle = new ChartTextStyle
+            {
+                FontFamily = "Georgia"
+            }
+        };
+        var frame = ChartRenderPlanner.BuildFramePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+
+        var plan = ChartRenderPlanner.BuildDataTablePrimitivePlan(chart, frame);
+
+        plan.Cells.Should().NotBeEmpty();
+        plan.Cells.Should().OnlyContain(cell => cell.FontFamily == "Georgia");
+    }
+
+    [Fact]
+    public void BuildDataTablePrimitivePlan_NoFontFamilySet_CellsHaveNullFontFamily()
+    {
+        var chart = MakeTwoSeriesChart(ChartType.ColumnClustered);
+        chart.DataTable = new ChartDataTableSettings();
+        var frame = ChartRenderPlanner.BuildFramePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+
+        var plan = ChartRenderPlanner.BuildDataTablePrimitivePlan(chart, frame);
+
+        plan.Cells.Should().NotBeEmpty();
+        plan.Cells.Should().OnlyContain(cell => cell.FontFamily == null);
+    }
+
+    [Fact]
     public void BuildDataTablePrimitivePlan_UnsupportedFamiliesAndDisabledBordersReturnExpectedPlan()
     {
         var pie = MakeTwoSeriesChart(ChartType.Pie);
