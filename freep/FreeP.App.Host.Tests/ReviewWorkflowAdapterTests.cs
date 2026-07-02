@@ -405,6 +405,39 @@ public sealed class ReviewWorkflowAdapterTests
     }
 
     [StaFact]
+    public void MainWindow_NotesPagePdfRequest_RecordsSharedRenderPlan()
+    {
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
+        try
+        {
+            window.Editor.CurrentSlide!.Title = "Opening";
+            window.Editor.CurrentSlide.Notes = MakeTextBody("Opening note");
+            window.Editor.InsertSlide();
+
+            var plan = window.RefreshNotesPagePdfRenderPlan(new PresentationSlideRangeRequest(
+                PresentationSlideRangeKind.CurrentSlide,
+                CurrentSlideNumber: 1));
+
+            window.LastNotesPagePdfRenderPlan.Should().BeSameAs(plan);
+            plan.PrintPlan.CommandId.Should().Be(PresentationExportPlanner.PrintCommandId);
+            plan.PrintPlan.Layout.Layout.Should().Be(PresentationPrintLayoutKind.NotesPages);
+            plan.PrintPlan.SlideRange.SlideNumbers.Should().Equal(1);
+            plan.PreviewPlans.Should().ContainSingle(preview =>
+                preview.SlideNumber == 1 &&
+                preview.NoteLines.Count == 1 &&
+                preview.NoteLines[0] == "Opening note");
+            plan.Pages.Should().ContainSingle();
+            plan.Pages[0].Ops.OfType<Free.Shared.Pdf.PdfText>().Select(text => text.Text)
+                .Should()
+                .Contain(["Opening", "Opening note"]);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [StaFact]
     public void FreePRibbonCommands_RegistersSharedReviewWorkflowCommandIds()
     {
         var presentation = Presentation.CreateEmpty();
@@ -435,6 +468,19 @@ public sealed class ReviewWorkflowAdapterTests
         readingOrderInvoked.Should().BeTrue();
         registry.TryGet(PresentationReviewWorkflowPlanner.CommentsPaneCommandId, out _).Should().BeTrue();
         registry.TryGet(PresentationReviewWorkflowPlanner.ProofingCommandId, out _).Should().BeTrue();
+    }
+
+    private static TextBody MakeTextBody(params string[] paragraphs)
+    {
+        var body = new TextBody();
+        foreach (var text in paragraphs)
+        {
+            var paragraph = new Paragraph();
+            paragraph.Runs.Add(new Run { Text = text });
+            body.Paragraphs.Add(paragraph);
+        }
+
+        return body;
     }
 
     [Fact]

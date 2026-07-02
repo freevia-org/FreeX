@@ -166,6 +166,7 @@ public sealed class MainWindow : Window
     internal PresentationDesignCommandPlan? LastLayoutRequestPlan { get; private set; }
     internal PresentationHandoutLayoutPlan? LastHandoutLayoutPlan { get; private set; }
     internal PresentationNotesPagePreviewPlan? LastNotesPagePreviewPlan { get; private set; }
+    internal PresentationNotesPagePdfRenderPlan? LastNotesPagePdfRenderPlan { get; private set; }
     internal PresentationVideoExportPlan? LastVideoExportPlan { get; private set; }
     internal PresentationLayoutPickerPlan? LastLayoutPickerPlan { get; private set; }
     internal PresentationLayoutChoice? LastAppliedLayoutChoice { get; private set; }
@@ -1388,6 +1389,17 @@ public sealed class MainWindow : Window
             _presentation.SlideSizeCyEmu);
         _statusText.Text = "Print handout layout planned";
         return LastHandoutLayoutPlan;
+    }
+
+    internal PresentationNotesPagePdfRenderPlan RefreshNotesPagePdfRenderPlan(PresentationSlideRangeRequest? range = null)
+    {
+        LastNotesPagePdfRenderPlan = PresentationNotesPagePdfExporter.BuildRenderPlan(
+            _presentation,
+            new PresentationNotesPagePdfExportRequest(new PresentationPrintRequest(
+                PresentationPrintLayoutKind.NotesPages,
+                range)));
+        _statusText.Text = "Notes page PDF planned";
+        return LastNotesPagePdfRenderPlan;
     }
 
     internal PresentationVideoExportPlan RefreshVideoExportPlan(PresentationVideoExportRequest? request = null)

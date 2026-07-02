@@ -149,6 +149,7 @@ public sealed class MainWindow : Window
     internal PresentationProofingRequestPlan? LastProofingRequestPlan { get; private set; }
     internal PresentationDesignCommandPlan? LastLayoutRequestPlan { get; private set; }
     internal PresentationNotesPagePreviewPlan? LastNotesPagePreviewPlan { get; private set; }
+    internal PresentationNotesPagePdfRenderPlan? LastNotesPagePdfRenderPlan { get; private set; }
     internal PresentationVideoExportPlan? LastVideoExportPlan { get; private set; }
     internal PresentationLayoutPickerPlan? LastLayoutPickerPlan { get; private set; }
     internal PresentationLayoutChoice? LastAppliedLayoutChoice { get; private set; }
@@ -953,6 +954,12 @@ public sealed class MainWindow : Window
     {
         LastVideoExportPlan = _file.BuildVideoExportPlan(request);
         return LastVideoExportPlan;
+    }
+
+    internal PresentationNotesPagePdfRenderPlan RefreshNotesPagePdfRenderPlan(PresentationSlideRangeRequest? range = null)
+    {
+        LastNotesPagePdfRenderPlan = _file.BuildNotesPagePdfRenderPlan(range);
+        return LastNotesPagePdfRenderPlan;
     }
 
     internal void RefreshReviewWorkflowPlans()
