@@ -707,7 +707,7 @@ public sealed partial class MainWindowSourceHygieneTests
     {
         var batchSource = WorkspaceFileLocator.ReadAllText("tools", "Run-UxParityScenarioBatch.ps1");
 
-        batchSource.Should().Contain("[ValidateSet(\"smoke\", \"core\", \"dialogs\", \"status\", \"formula\", \"filtering\", \"all\")]");
+        batchSource.Should().Contain("[ValidateSet(\"smoke\", \"core\", \"dialogs\", \"status\", \"formula\", \"filtering\", \"grid\", \"all\")]");
         batchSource.Should().Contain("\"core\" { return $pairs | Where-Object { $_[\"id\"] -in @(\"format-cells-dialog\", \"format-cells-context-dialog\", \"sheet-tab-context-menu\", \"sheet-tab-overflow-activate-dialog\") } }");
         batchSource.Should().Contain("id = \"status-footer-reference\"");
         batchSource.Should().Contain("excelScenario = \"excel-status-footer-reference\"");
@@ -717,6 +717,13 @@ public sealed partial class MainWindowSourceHygieneTests
         batchSource.Should().Contain("excelScenario = \"excel-autofilter\"");
         batchSource.Should().Contain("freexScenario = \"freex-autofilter\"");
         batchSource.Should().Contain("\"filtering\" { return $pairs | Where-Object { $_[\"area\"] -eq \"Sorting and filtering\" } }");
+        batchSource.Should().Contain("comparisonMode = \"freex-only\"");
+        batchSource.Should().Contain("freexScenario = \"freex-grid-row-column-resize\"");
+        batchSource.Should().Contain("freexScenario = \"freex-grid-wheel-scroll\"");
+        batchSource.Should().Contain("\"grid\" { return $pairs | Where-Object { $_[\"area\"] -eq \"Grid pointer mechanics\" } }");
+        batchSource.Should().Contain("function New-NotRequiredScenarioResult");
+        batchSource.Should().Contain("\"freex-capture-complete\"");
+        batchSource.Should().Contain("freexCaptureComplete = $freexCaptureComplete");
         batchSource.Should().Contain("[switch]$MinimizeForeignForeground");
         batchSource.Should().Contain("Clear-ForeignForegroundWindow $Scenario");
         batchSource.Should().Contain("$title.IndexOf(\"Media Player\", [StringComparison]::OrdinalIgnoreCase) -ge 0");
