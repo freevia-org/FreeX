@@ -10,7 +10,7 @@ namespace FreeP.App.Avalonia;
 internal static class FreePRibbonAvalonia
 {
     public static RibbonDefinition Build() =>
-        AddVideoExportCommand(AddImageExportCommand(AddChartDataCommand(FreeP.Ribbon.Definitions.FreePRibbon.Build(FreePRibbonCapabilities.Avalonia))));
+        AddVideoExportCommand(AddNotesPagePdfExportCommand(AddImageExportCommand(AddChartDataCommand(FreeP.Ribbon.Definitions.FreePRibbon.Build(FreePRibbonCapabilities.Avalonia)))));
 
     private static RibbonDefinition AddImageExportCommand(RibbonDefinition definition)
     {
@@ -82,6 +82,44 @@ internal static class FreePRibbonAvalonia
                 PreferredLayout = RibbonCommandLayoutKind.Medium,
                 Icon = new RibbonCommandIcon(RibbonCommandIconKind.Generic),
                 KeyTip = "XV",
+            })
+            .ToArray();
+
+        return group with { Controls = controls };
+    }
+
+    private static RibbonDefinition AddNotesPagePdfExportCommand(RibbonDefinition definition)
+    {
+        var tabs = definition.Tabs
+            .Select(tab => string.Equals(tab.Id, "home", StringComparison.Ordinal)
+                ? tab with { Groups = tab.Groups.Select(AddNotesPagePdfExportCommand).ToArray() }
+                : tab)
+            .ToArray();
+
+        return definition with { Tabs = tabs };
+    }
+
+    private static RibbonGroup AddNotesPagePdfExportCommand(RibbonGroup group)
+    {
+        if (!string.Equals(group.Id, "file", StringComparison.Ordinal)
+            || group.Controls.Any(control => string.Equals(
+                control.CommandId.Value,
+                PresentationExportPlanner.NotesPagePdfExportCommandId,
+                StringComparison.Ordinal)))
+        {
+            return group;
+        }
+
+        var descriptor = PresentationExportPlanner.BuildFormatDescriptors()
+            .Single(format => format.CommandId == PresentationExportPlanner.NotesPagePdfExportCommandId);
+        var controls = group.Controls
+            .Append(new RibbonButton(
+                PresentationExportPlanner.NotesPagePdfExportCommandId,
+                descriptor.DisplayName)
+            {
+                PreferredLayout = RibbonCommandLayoutKind.Medium,
+                Icon = new RibbonCommandIcon(RibbonCommandIconKind.Print),
+                KeyTip = "XN",
             })
             .ToArray();
 

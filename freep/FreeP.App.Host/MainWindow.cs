@@ -315,6 +315,7 @@ public sealed class MainWindow : Window
             Save: () => _file.Save(),
             SaveAs: () => _file.SaveAs(),
             ExportPdf: () => _file.ExportPdf(),
+            ExportNotesPagePdf: () => _file.ExportNotesPagePdf(),
             ExportImages: () => _file.ExportImages(),
             ExportVideo: () => RefreshVideoExportPlan(),
             CurrentOptions: () => _options,
