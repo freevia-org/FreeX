@@ -406,8 +406,43 @@ internal static class PptxChartWriter
             new XElement(C + "showHorzBorder", new XAttribute("val", BoolValue(dataTable.ShowHorizontalBorder))),
             new XElement(C + "showVertBorder", new XAttribute("val", BoolValue(dataTable.ShowVerticalBorder))),
             new XElement(C + "showOutline",    new XAttribute("val", BoolValue(dataTable.ShowOutlineBorder))),
-            new XElement(C + "showKeys",       new XAttribute("val", BoolValue(dataTable.ShowLegendKeys))));
+            new XElement(C + "showKeys",       new XAttribute("val", BoolValue(dataTable.ShowLegendKeys))),
+            BuildDataTableShapePropertiesEl(dataTable.BorderOutline));
     }
+
+    private static XElement? BuildDataTableShapePropertiesEl(ShapeOutline? outline)
+    {
+        var line = BuildDataTableOutlineEl(outline);
+        return line is null ? null : new XElement(C + "spPr", line);
+    }
+
+    private static XElement? BuildDataTableOutlineEl(ShapeOutline? outline) =>
+        outline switch
+        {
+            null => null,
+            ShapeOutline.None => new XElement(A + "ln", new XElement(A + "noFill")),
+            ShapeOutline.Visible v => new XElement(A + "ln",
+                new XAttribute("w", DrawingMlUnits.PointsToEmu(v.WidthPt)),
+                new XElement(A + "solidFill", BuildColorEl(v.Color)),
+                v.Dash != OutlineDash.Solid
+                    ? new XElement(A + "prstDash", new XAttribute("val", ToDashStr(v.Dash)))
+                    : null),
+            _ => null
+        };
+
+    private static string ToDashStr(OutlineDash dash) => dash switch
+    {
+        OutlineDash.Dash => "dash",
+        OutlineDash.Dot => "dot",
+        OutlineDash.DashDot => "dashDot",
+        OutlineDash.LongDash => "lgDash",
+        OutlineDash.LongDashDot => "lgDashDot",
+        OutlineDash.LongDashDotDot => "lgDashDotDot",
+        OutlineDash.SystemDash => "sysDash",
+        OutlineDash.SystemDot => "sysDot",
+        OutlineDash.SystemDashDot => "sysDashDot",
+        _ => "solid"
+    };
 
     /// <summary>
     /// CA3: Returns a valid dLblPos value for the given chart type, or null to suppress the element.

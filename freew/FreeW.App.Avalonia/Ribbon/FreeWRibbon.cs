@@ -231,5 +231,11 @@ internal sealed record RibbonHostCallbacks(
     /// <summary>Home &gt; Styles &gt; New Style. Optional; registry no-ops when null.</summary>
     Action? OpenNewStyleDialog = null,
     /// <summary>Home &gt; Styles &gt; Manage Styles. Optional; registry no-ops when null.</summary>
-    Action? OpenManageStylesDialog = null);
+    Action? OpenManageStylesDialog = null,
+    /// <summary>References &gt; Cross-reference. Optional; registry no-ops when null.</summary>
+    Action? OpenCrossReferenceDialog = null,
+    /// <summary>References &gt; Insert Citation. Optional; registry no-ops when null.</summary>
+    Action? OpenCitationDialog = null,
+    /// <summary>References &gt; Manage Sources. Optional; registry no-ops when null.</summary>
+    Action? OpenManageSourcesDialog = null);
 
