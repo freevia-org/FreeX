@@ -59,6 +59,43 @@ public sealed class AutoFilterDropdownMenuPlannerTests
             AutoFilterMenuSectionKind.Checklist);
     }
 
+    [Theory]
+    [InlineData("number", AutoFilterMenuFilterKind.Number, "Sort Smallest to Largest", "Sort Largest to Smallest")]
+    [InlineData("date", AutoFilterMenuFilterKind.Date, "Sort Oldest to Newest", "Sort Newest to Oldest")]
+    public void CreateMenuPlan_UsesExcelSortLabelsForDetectedValueType(
+        string valueKind,
+        AutoFilterMenuFilterKind expectedFilterKind,
+        string expectedAscending,
+        string expectedDescending)
+    {
+        var sheet = new Sheet(SheetId, "Sheet1");
+        sheet.SetCell(new CellAddress(SheetId, 1, 1), new TextValue("Value"));
+        if (valueKind == "number")
+        {
+            sheet.SetCell(new CellAddress(SheetId, 2, 1), new NumberValue(42));
+            sheet.SetCell(new CellAddress(SheetId, 3, 1), new NumberValue(7));
+        }
+        else
+        {
+            sheet.SetCell(new CellAddress(SheetId, 2, 1), new DateTimeValue(new DateTime(2026, 5, 1).ToOADate()));
+            sheet.SetCell(new CellAddress(SheetId, 3, 1), new DateTimeValue(new DateTime(2026, 6, 1).ToOADate()));
+        }
+
+        var plan = new AutoFilterDropdownPlan(
+            new GridRange(
+                new CellAddress(SheetId, 1, 1),
+                new CellAddress(SheetId, 3, 1)),
+            FilterColumnOffset: 0);
+
+        var menu = AutoFilterDropdownMenuPlanner.CreateMenuPlan(sheet, plan, Text, "(Blanks)");
+
+        menu.FilterKind.Should().Be(expectedFilterKind);
+        menu.Entries.Where(entry => entry.Kind is AutoFilterMenuEntryKind.SortAscending or AutoFilterMenuEntryKind.SortDescending)
+            .Select(entry => entry.Header)
+            .Should()
+            .Equal(expectedAscending, expectedDescending);
+    }
+
     [Fact]
     public void SharedCriteriaCatalog_PreservesSuggestionsAndDialogPrefixes()
     {
@@ -183,6 +220,12 @@ public sealed class AutoFilterDropdownMenuPlannerTests
         {
             "AutoFilter_SortAscending" => "Sort A to Z",
             "AutoFilter_SortDescending" => "Sort Z to A",
+            "AutoFilter_SortAToZ" => "Sort A to Z",
+            "AutoFilter_SortZToA" => "Sort Z to A",
+            "AutoFilter_SortSmallestToLargest" => "Sort Smallest to Largest",
+            "AutoFilter_SortLargestToSmallest" => "Sort Largest to Smallest",
+            "AutoFilter_SortOldestToNewest" => "Sort Oldest to Newest",
+            "AutoFilter_SortNewestToOldest" => "Sort Newest to Oldest",
             "AutoFilter_FilterByColor" => "Filter by Color",
             "AutoFilter_Search" => "Search",
             "AutoFilter_SelectAll" => "(Select All)",
