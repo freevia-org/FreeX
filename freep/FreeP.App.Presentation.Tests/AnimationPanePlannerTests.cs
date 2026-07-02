@@ -191,6 +191,7 @@ public sealed class AnimationPanePlannerTests
 
     [Theory]
     [InlineData("0.75", 750)]
+    [InlineData("0.75s", 750)]
     [InlineData("1.2345", 1234)]
     public void TryParseDuration_AcceptsPositiveInvariantSeconds(
         string text,
@@ -240,6 +241,108 @@ public sealed class AnimationPanePlannerTests
         var plan = AnimationPanePlanner.BuildDelayEditPlan("0", 250, Invariant);
 
         plan.Should().Be(new AnimationPaneDurationEditPlan(true, 0, "0"));
+    }
+
+    [Fact]
+    public void BuildTimingMutationPlans_ProjectTriggerDurationAndDelayEdits()
+    {
+        var slide = CreateSlideWithTimelineAnimations();
+
+        var trigger = AnimationPanePlanner.BuildTriggerMutationPlan(
+            slide.Animations,
+            1,
+            AnimationPanePlanner.ToTriggerIndex(AnimationTrigger.AfterPrevious));
+        var duration = AnimationPanePlanner.BuildDurationMutationPlan(
+            slide.Animations,
+            1,
+            "1.75s",
+            Invariant);
+        var delay = AnimationPanePlanner.BuildDelayMutationPlan(
+            slide.Animations,
+            1,
+            "0.50s",
+            Invariant);
+
+        trigger.Should().Be(new AnimationPaneTimingMutationPlan(
+            true,
+            1,
+            AnimationPaneTimingEditKind.Trigger,
+            AnimationTrigger.AfterPrevious,
+            1000,
+            250,
+            "After Previous",
+            null));
+        duration.Should().Be(new AnimationPaneTimingMutationPlan(
+            true,
+            1,
+            AnimationPaneTimingEditKind.Duration,
+            AnimationTrigger.WithPrevious,
+            1750,
+            250,
+            "1.75",
+            null));
+        delay.Should().Be(new AnimationPaneTimingMutationPlan(
+            true,
+            1,
+            AnimationPaneTimingEditKind.Delay,
+            AnimationTrigger.WithPrevious,
+            1000,
+            500,
+            "0.5",
+            null));
+    }
+
+    [Fact]
+    public void BuildTimingMutationPlans_DisableInvalidOrNoOpEdits()
+    {
+        var slide = CreateSlideWithTimelineAnimations();
+
+        AnimationPanePlanner.BuildTriggerMutationPlan(slide.Animations, 9, 0)
+            .DisabledReason
+            .Should()
+            .Be(AnimationPanePlanner.MissingAnimationMessage);
+        AnimationPanePlanner.BuildTriggerMutationPlan(slide.Animations, 0, 9)
+            .DisabledReason
+            .Should()
+            .Be(AnimationPanePlanner.InvalidTriggerMessage);
+        AnimationPanePlanner.BuildDurationMutationPlan(slide.Animations, 0, "0", Invariant)
+            .DisabledReason
+            .Should()
+            .Be(AnimationPanePlanner.InvalidDurationMessage);
+        AnimationPanePlanner.BuildDelayMutationPlan(slide.Animations, 0, "bad", Invariant)
+            .DisabledReason
+            .Should()
+            .Be(AnimationPanePlanner.InvalidDelayMessage);
+        AnimationPanePlanner.BuildDelayMutationPlan(slide.Animations, 0, "0", Invariant)
+            .ShouldApply
+            .Should()
+            .BeFalse("the current delay is already zero");
+    }
+
+    [Fact]
+    public void TryApplyTimingMutation_UpdatesSelectedAnimation()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var shapeId = presentation.Slides[0].Shapes[0].Id;
+        presentation.Slides[0].Animations.Add(new ShapeAnimation
+        {
+            ShapeId = shapeId,
+            Trigger = AnimationTrigger.OnClick,
+            DurationMs = 500,
+            DelayMs = 0,
+        });
+        var plan = AnimationPanePlanner.BuildDelayMutationPlan(
+            editor.CurrentSlideAnimations,
+            0,
+            "0.25",
+            Invariant);
+
+        AnimationPanePlanner.TryApplyTimingMutation(editor, plan).Should().BeTrue();
+
+        editor.CurrentSlideAnimations[0].DelayMs.Should().Be(250);
+        editor.Undo();
+        editor.CurrentSlideAnimations[0].DelayMs.Should().Be(0);
     }
 
     private static Slide CreateSlideWithTimelineAnimations()

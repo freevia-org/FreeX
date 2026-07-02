@@ -127,6 +127,9 @@ public sealed class MainWindow : Window
     private Button _animationPanePreviewButton = null!;
     private int _selectedAnimationIndex = -1;
     private readonly List<string> _animationPaneRenderedRows = new();
+    private int _animationPaneTriggerControlCount;
+    private int _animationPaneDurationControlCount;
+    private int _animationPaneDelayControlCount;
 
     // ── Interaction layer (Theme 15) ────────────────────────────────────────────
 
@@ -222,6 +225,9 @@ public sealed class MainWindow : Window
     internal string AnimationPaneMessage => _animationPaneMessage?.Text ?? string.Empty;
     internal bool IsAnimationPanePreviewEnabled => _animationPanePreviewButton?.IsEnabled == true;
     internal IReadOnlyList<string> AnimationPaneRenderedRows => _animationPaneRenderedRows;
+    internal int AnimationPaneTriggerControlCount => _animationPaneTriggerControlCount;
+    internal int AnimationPaneDurationControlCount => _animationPaneDurationControlCount;
+    internal int AnimationPaneDelayControlCount => _animationPaneDelayControlCount;
 
     // ── Constructors ───────────────────────────────────────────────────────────
 
@@ -1832,6 +1838,9 @@ public sealed class MainWindow : Window
 
         _animationPaneRenderedRows.Clear();
         _animationPaneItemsPanel.Children.Clear();
+        _animationPaneTriggerControlCount = 0;
+        _animationPaneDurationControlCount = 0;
+        _animationPaneDelayControlCount = 0;
         if (!plan.HasAnimations)
         {
             _animationPaneItemsPanel.Children.Add(new TextBlock
@@ -1859,6 +1868,62 @@ public sealed class MainWindow : Window
             $"Timeline: starts {item.StartText}s, ends {AnimationPanePlanner.FormatDuration(item.EndMs)}s";
         var actionLine =
             $"Move earlier: {FormatAvailability(item.CanMoveEarlier)}; move later: {FormatAvailability(item.CanMoveLater)}";
+
+        var triggerCombo = new ComboBox
+        {
+            ItemsSource = AnimationPanePlanner.TriggerLabels,
+            SelectedIndex = item.TriggerIndex,
+            Width = 132,
+            Margin = new Thickness(0, 4, 8, 0),
+            Tag = item.Index,
+        };
+        ToolTip.SetTip(triggerCombo, "Trigger");
+        triggerCombo.SelectionChanged += (_, _) =>
+            ApplyAnimationPaneTriggerEdit(item.Index, triggerCombo.SelectedIndex);
+        _animationPaneTriggerControlCount++;
+
+        var durationBox = new TextBox
+        {
+            Text = item.DurationText,
+            Width = 58,
+            Margin = new Thickness(0, 4, 8, 0),
+            Tag = item.Index,
+        };
+        ToolTip.SetTip(durationBox, "Duration (seconds)");
+        durationBox.LostFocus += (_, _) =>
+        {
+            var plan = ApplyAnimationPaneDurationEdit(item.Index, durationBox.Text ?? string.Empty);
+            if (!plan.ShouldApply)
+                durationBox.Text = plan.DisplayText;
+        };
+        _animationPaneDurationControlCount++;
+
+        var delayBox = new TextBox
+        {
+            Text = item.DelayText,
+            Width = 58,
+            Margin = new Thickness(0, 4, 8, 0),
+            Tag = item.Index,
+        };
+        ToolTip.SetTip(delayBox, "Delay (seconds)");
+        delayBox.LostFocus += (_, _) =>
+        {
+            var plan = ApplyAnimationPaneDelayEdit(item.Index, delayBox.Text ?? string.Empty);
+            if (!plan.ShouldApply)
+                delayBox.Text = plan.DisplayText;
+        };
+        _animationPaneDelayControlCount++;
+
+        var timingControls = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Children =
+            {
+                triggerCombo,
+                durationBox,
+                delayBox,
+            },
+        };
 
         var moveEarlierButton = new Button
         {
@@ -1914,6 +1979,7 @@ public sealed class MainWindow : Window
                     Foreground = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)),
                     TextWrapping = TextWrapping.Wrap,
                 },
+                timingControls,
                 new TextBlock
                 {
                     Text = timelineLine,
@@ -1947,6 +2013,63 @@ public sealed class MainWindow : Window
         border.Cursor = new Cursor(StandardCursorType.Hand);
         border.PointerPressed += (_, _) => SelectAnimationPaneItem(item.Index);
         return border;
+    }
+
+    internal AnimationPaneTimingMutationPlan ApplyAnimationPaneTriggerEditForTests(
+        int animationIndex,
+        int selectedTriggerIndex)
+        => ApplyAnimationPaneTriggerEdit(animationIndex, selectedTriggerIndex);
+
+    internal AnimationPaneTimingMutationPlan ApplyAnimationPaneDurationEditForTests(
+        int animationIndex,
+        string text)
+        => ApplyAnimationPaneDurationEdit(animationIndex, text);
+
+    internal AnimationPaneTimingMutationPlan ApplyAnimationPaneDelayEditForTests(
+        int animationIndex,
+        string text)
+        => ApplyAnimationPaneDelayEdit(animationIndex, text);
+
+    private AnimationPaneTimingMutationPlan ApplyAnimationPaneTriggerEdit(
+        int animationIndex,
+        int selectedTriggerIndex)
+    {
+        var plan = AnimationPanePlanner.BuildTriggerMutationPlan(
+            Editor.CurrentSlideAnimations,
+            animationIndex,
+            selectedTriggerIndex);
+        ApplyAnimationPaneTimingMutation(plan);
+        return plan;
+    }
+
+    private AnimationPaneTimingMutationPlan ApplyAnimationPaneDurationEdit(
+        int animationIndex,
+        string text)
+    {
+        var plan = AnimationPanePlanner.BuildDurationMutationPlan(
+            Editor.CurrentSlideAnimations,
+            animationIndex,
+            text);
+        ApplyAnimationPaneTimingMutation(plan);
+        return plan;
+    }
+
+    private AnimationPaneTimingMutationPlan ApplyAnimationPaneDelayEdit(
+        int animationIndex,
+        string text)
+    {
+        var plan = AnimationPanePlanner.BuildDelayMutationPlan(
+            Editor.CurrentSlideAnimations,
+            animationIndex,
+            text);
+        ApplyAnimationPaneTimingMutation(plan);
+        return plan;
+    }
+
+    private void ApplyAnimationPaneTimingMutation(AnimationPaneTimingMutationPlan plan)
+    {
+        if (AnimationPanePlanner.TryApplyTimingMutation(Editor, plan))
+            RefreshVisibleAnimationPane(_selectedAnimationIndex);
     }
 
     private void SelectAnimationPaneItem(int animationIndex)

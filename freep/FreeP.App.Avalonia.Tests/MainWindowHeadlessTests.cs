@@ -309,6 +309,10 @@ public sealed class MainWindowHeadlessTests
         source.Should().Contain("AnimationPanePlanner.BuildTimelinePlan(");
         source.Should().Contain("ShowAnimationPane()");
         source.Should().Contain("BuildAnimationPaneItemCard(");
+        source.Should().Contain("AnimationPanePlanner.BuildTriggerMutationPlan(");
+        source.Should().Contain("AnimationPanePlanner.BuildDurationMutationPlan(");
+        source.Should().Contain("AnimationPanePlanner.BuildDelayMutationPlan(");
+        source.Should().Contain("AnimationPanePlanner.TryApplyTimingMutation(");
     }
 
     [Fact]
@@ -1357,6 +1361,73 @@ public sealed class MainWindowHeadlessTests
             .And.Contain("delay 0.5s")
             .And.Contain("move earlier available")
             .And.Contain("move later unavailable");
+    }
+
+    [Fact]
+    public async Task Animation_pane_inline_timing_controls_apply_shared_mutation_plans()
+    {
+        var triggerControlCount = 0;
+        var durationControlCount = 0;
+        var delayControlCount = 0;
+        AnimationPaneTimingMutationPlan? triggerPlan = null;
+        AnimationPaneTimingMutationPlan? durationPlan = null;
+        AnimationPaneTimingMutationPlan? delayPlan = null;
+        AnimationPaneTimingMutationPlan? invalidDurationPlan = null;
+        AnimationTrigger? trigger = null;
+        int? durationMs = null;
+        int? delayMs = null;
+        IReadOnlyList<string> paneRows = [];
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var registry = window.BuildCommandRegistry();
+            registry.TryGet("freep.anim.entrance.fade", out var fade).Should().BeTrue();
+
+            var hero = window.Editor.InsertDefaultRectangle();
+            hero.Name = "Hero box";
+            window.Editor.Select(hero.Id);
+            fade!.Execute(RibbonCommandContext.Empty);
+            window.ShowAnimationPane();
+
+            triggerControlCount = window.AnimationPaneTriggerControlCount;
+            durationControlCount = window.AnimationPaneDurationControlCount;
+            delayControlCount = window.AnimationPaneDelayControlCount;
+
+            triggerPlan = window.ApplyAnimationPaneTriggerEditForTests(
+                0,
+                AnimationPanePlanner.ToTriggerIndex(AnimationTrigger.AfterPrevious));
+            durationPlan = window.ApplyAnimationPaneDurationEditForTests(0, "1.25s");
+            delayPlan = window.ApplyAnimationPaneDelayEditForTests(0, "0.40s");
+            invalidDurationPlan = window.ApplyAnimationPaneDurationEditForTests(0, "0");
+
+            var animation = window.Editor.CurrentSlideAnimations.Single();
+            trigger = animation.Trigger;
+            durationMs = animation.DurationMs;
+            delayMs = animation.DelayMs;
+            paneRows = window.AnimationPaneRenderedRows.ToArray();
+        });
+
+        if (!ran) return;
+        triggerControlCount.Should().Be(1);
+        durationControlCount.Should().Be(1);
+        delayControlCount.Should().Be(1);
+        triggerPlan.Should().NotBeNull();
+        triggerPlan!.Kind.Should().Be(AnimationPaneTimingEditKind.Trigger);
+        triggerPlan.ShouldApply.Should().BeTrue();
+        durationPlan.Should().NotBeNull();
+        durationPlan!.Kind.Should().Be(AnimationPaneTimingEditKind.Duration);
+        delayPlan.Should().NotBeNull();
+        delayPlan!.Kind.Should().Be(AnimationPaneTimingEditKind.Delay);
+        invalidDurationPlan.Should().NotBeNull();
+        invalidDurationPlan!.DisabledReason.Should().Be(AnimationPanePlanner.InvalidDurationMessage);
+        trigger.Should().Be(AnimationTrigger.AfterPrevious);
+        durationMs.Should().Be(1250);
+        delayMs.Should().Be(400);
+        paneRows.Should().ContainSingle()
+            .Which.Should().Contain("After Previous")
+            .And.Contain("duration 1.25s")
+            .And.Contain("delay 0.4s");
     }
 
     [Fact]
