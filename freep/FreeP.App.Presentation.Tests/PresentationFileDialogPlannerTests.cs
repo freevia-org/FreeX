@@ -73,6 +73,15 @@ public sealed class PresentationFileDialogPlannerTests
         pickerPlan.DefaultExtensionWithDot.Should().Be(".pdf");
         pickerPlan.DefaultExtensionWithoutDot.Should().Be("pdf");
         pickerPlan.FileTypes.Select(fileType => fileType.DisplayName).Should().Equal("PDF documents");
+
+        var notesPlan = PresentationExportPlanner.BuildNotesPagePdfExportDialogPlan("Quarterly Review.pptx");
+        notesPlan.SuggestedFileName.Should().Be("Quarterly Review-notes.pdf");
+        notesPlan.DefaultExtensionWithDot.Should().Be(".pdf");
+        notesPlan.DefaultExtensionWithoutDot.Should().Be("pdf");
+
+        var notesPickerPlan = PresentationExportPlanner.BuildNotesPagePdfExportPickerPlan("Quarterly Review.pptx");
+        notesPickerPlan.SuggestedFileName.Should().Be("Quarterly Review-notes.pdf");
+        notesPickerPlan.FileTypes.Select(fileType => fileType.DisplayName).Should().Equal("PDF documents");
     }
 
     [Fact]
@@ -83,6 +92,11 @@ public sealed class PresentationFileDialogPlannerTests
         formats.Should().ContainSingle(format =>
             format.Format == PresentationExportFormat.Pdf &&
             format.CommandId == PresentationExportPlanner.PdfExportCommandId &&
+            format.DefaultExtensionWithDot == ".pdf" &&
+            format.IsImplemented);
+        formats.Should().ContainSingle(format =>
+            format.Format == PresentationExportFormat.NotesPagePdf &&
+            format.CommandId == PresentationExportPlanner.NotesPagePdfExportCommandId &&
             format.DefaultExtensionWithDot == ".pdf" &&
             format.IsImplemented);
         formats.Should().Contain(format =>
@@ -102,6 +116,10 @@ public sealed class PresentationFileDialogPlannerTests
         backstage.FixedLayoutActions.Should().ContainSingle(action =>
             action.Format == PresentationExportFormat.Pdf &&
             action.CommandId == PresentationExportPlanner.PdfExportCommandId &&
+            action.IsEnabled);
+        backstage.FixedLayoutActions.Should().ContainSingle(action =>
+            action.Format == PresentationExportFormat.NotesPagePdf &&
+            action.CommandId == PresentationExportPlanner.NotesPagePdfExportCommandId &&
             action.IsEnabled);
         backstage.DeferredActions.Should().ContainSingle(action =>
             action.Format == PresentationExportFormat.ImageSequence &&

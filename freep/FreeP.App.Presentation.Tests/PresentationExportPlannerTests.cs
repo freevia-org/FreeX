@@ -322,6 +322,39 @@ public sealed class PresentationExportPlannerTests
     }
 
     [Fact]
+    public void NotesPagePdfExportPlan_ExposesSharedCommandAndCurrentSlideRange()
+    {
+        var plan = PresentationExportPlanner.BuildNotesPagePdfExportPlan(
+            new PresentationSlideRangeRequest(
+                PresentationSlideRangeKind.CurrentSlide,
+                CurrentSlideNumber: 2),
+            slideCount: 3);
+
+        plan.Format.Should().Be(PresentationExportFormat.NotesPagePdf);
+        plan.CommandId.Should().Be(PresentationExportPlanner.NotesPagePdfExportCommandId);
+        plan.DisplayName.Should().Be("Notes Page PDF");
+        plan.DefaultExtensionWithDot.Should().Be(PresentationExportPlanner.PdfExportExtension);
+        plan.PrintPlan.Layout.Layout.Should().Be(PresentationPrintLayoutKind.NotesPages);
+        plan.PrintPlan.SlideRange.SlideNumbers.Should().Equal(2);
+        plan.IsImplemented.Should().BeTrue();
+        plan.CanExecute.Should().BeTrue();
+        plan.DisabledReason.Should().BeNull();
+    }
+
+    [Fact]
+    public void NotesPagePdfExportPlan_EmptyDeckDisablesExecutionButPreservesIntent()
+    {
+        var plan = PresentationExportPlanner.BuildNotesPagePdfExportPlan(null, slideCount: 0);
+
+        plan.CommandId.Should().Be(PresentationExportPlanner.NotesPagePdfExportCommandId);
+        plan.PrintPlan.Layout.Layout.Should().Be(PresentationPrintLayoutKind.NotesPages);
+        plan.PrintPlan.SlideRange.DisplayName.Should().Be("No slides");
+        plan.IsImplemented.Should().BeTrue();
+        plan.CanExecute.Should().BeFalse();
+        plan.DisabledReason.Should().Be("Notes-page PDF export requires at least one slide.");
+    }
+
+    [Fact]
     public void NotesPagePdfRenderPlan_EmptyNotesAndEmptyDeck_EmitPowerPointShapedPlaceholderPages()
     {
         var deck = BuildNotesDeck();
