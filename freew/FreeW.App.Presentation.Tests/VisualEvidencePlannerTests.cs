@@ -370,6 +370,153 @@ public sealed class VisualEvidencePlannerTests
     }
 
     [Fact]
+    public void BuildNormalizedSummaryFromFiles_ReportsUnpairedBackstageRendererPages()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var wpfDir = Path.Combine(root, "wpf");
+            var avaloniaDir = Path.Combine(root, "avalonia");
+            FreeWVisualEvidencePlanner.WriteManifest(
+                wpfDir,
+                [
+                    BuildFileBackedRow(
+                        root,
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        "backstage-print-preview-fidelity",
+                        pageNumber: 1,
+                        pageCount: 3),
+                    BuildFileBackedRow(
+                        root,
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        "backstage-print-preview-fidelity",
+                        pageNumber: 2,
+                        pageCount: 3)
+                ],
+                new DateTimeOffset(2026, 7, 1, 12, 0, 0, TimeSpan.Zero));
+            FreeWVisualEvidencePlanner.WriteManifest(
+                avaloniaDir,
+                [
+                    BuildFileBackedRow(
+                        root,
+                        FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                        "backstage-print-preview-fidelity",
+                        pageNumber: 1,
+                        pageCount: 3),
+                    BuildFileBackedRow(
+                        root,
+                        FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                        "backstage-print-preview-fidelity",
+                        pageNumber: 3,
+                        pageCount: 3)
+                ],
+                new DateTimeOffset(2026, 7, 1, 12, 0, 0, TimeSpan.Zero));
+
+            var summary = FreeWVisualEvidenceManifestNormalizer.BuildNormalizedSummaryFromFiles(
+                [
+                    Path.Combine(wpfDir, FreeWVisualEvidencePlanner.ManifestFileName),
+                    Path.Combine(avaloniaDir, FreeWVisualEvidencePlanner.ManifestFileName)
+                ],
+                root,
+                [
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        "backstage-print-preview-fidelity",
+                        2),
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                        "backstage-print-preview-fidelity",
+                        2)
+                ]);
+
+            summary.Trust.Passed.Should().BeFalse();
+            summary.Trust.Failures.Should().Contain(f =>
+                f.Contains("backstage renderer pair 'backstage-print-preview-fidelity'", StringComparison.Ordinal)
+                && f.Contains("missing Avalonia page(s): p2", StringComparison.Ordinal));
+            summary.Trust.Failures.Should().Contain(f =>
+                f.Contains("backstage renderer pair 'backstage-print-preview-fidelity'", StringComparison.Ordinal)
+                && f.Contains("missing WPF page(s): p3", StringComparison.Ordinal));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void BuildNormalizedSummaryFromFiles_ReportsBackstageRendererDimensionMismatch()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var wpfDir = Path.Combine(root, "wpf");
+            var avaloniaDir = Path.Combine(root, "avalonia");
+            FreeWVisualEvidencePlanner.WriteManifest(
+                wpfDir,
+                [
+                    BuildFileBackedRow(
+                        root,
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        "backstage-pdf-export-fidelity",
+                        pageNumber: 1,
+                        pageCount: 2),
+                    BuildFileBackedRow(
+                        root,
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        "backstage-pdf-export-fidelity",
+                        pageNumber: 2,
+                        pageCount: 2)
+                ],
+                new DateTimeOffset(2026, 7, 1, 12, 0, 0, TimeSpan.Zero));
+            FreeWVisualEvidencePlanner.WriteManifest(
+                avaloniaDir,
+                [
+                    BuildFileBackedRow(
+                        root,
+                        FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                        "backstage-pdf-export-fidelity",
+                        pageNumber: 1,
+                        pageCount: 2,
+                        pixelWidth: 24,
+                        pixelHeight: 20),
+                    BuildFileBackedRow(
+                        root,
+                        FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                        "backstage-pdf-export-fidelity",
+                        pageNumber: 2,
+                        pageCount: 2)
+                ],
+                new DateTimeOffset(2026, 7, 1, 12, 0, 0, TimeSpan.Zero));
+
+            var summary = FreeWVisualEvidenceManifestNormalizer.BuildNormalizedSummaryFromFiles(
+                [
+                    Path.Combine(wpfDir, FreeWVisualEvidencePlanner.ManifestFileName),
+                    Path.Combine(avaloniaDir, FreeWVisualEvidencePlanner.ManifestFileName)
+                ],
+                root,
+                [
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        "backstage-pdf-export-fidelity",
+                        2),
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                        "backstage-pdf-export-fidelity",
+                        2)
+                ]);
+
+            summary.Trust.Passed.Should().BeFalse();
+            summary.Trust.Failures.Should().Contain(f =>
+                f.Contains("backstage renderer pair 'backstage-pdf-export-fidelity' page 1", StringComparison.Ordinal)
+                && f.Contains("dimensions differ: WPF 20x20, Avalonia 24x20", StringComparison.Ordinal));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public void ComputeBaselineComparisonMetrics_EvaluatesNamedTolerance()
     {
         var baseline = BuildBgraPixels(2, 2, (10, 10, 10));
@@ -570,7 +717,9 @@ public sealed class VisualEvidencePlannerTests
         string hostId,
         string scenarioId,
         int pageNumber,
-        int pageCount)
+        int pageCount,
+        int pixelWidth = 20,
+        int pixelHeight = 20)
     {
         var scenario = FreeWVisualEvidencePlanner.ResolveScenario(scenarioId);
         var outputName = FreeWVisualEvidencePlanner.ExpectedOutputName(scenarioId, pageNumber);
@@ -582,7 +731,7 @@ public sealed class VisualEvidencePlannerTests
         var bytes = Enumerable.Range(0, 2_048).Select(i => (byte)(i % 251)).ToArray();
         File.WriteAllBytes(outputPath, bytes);
 
-        var stats = BuildTrustedStats();
+        var stats = BuildTrustedStats(pixelWidth, pixelHeight);
         var page = PageForScenario(scenarioId);
         var expectation = FreeWVisualEvidencePlanner.BuildPageExpectation(
             scenarioId,
@@ -618,14 +767,31 @@ public sealed class VisualEvidencePlannerTests
             FreeWVisualEvidencePixelFormat.Bgra32);
     }
 
+    private static FreeWVisualPixelStats BuildTrustedStats(int width, int height)
+    {
+        var pixels = BuildTrustedPixels(width, height);
+
+        return FreeWVisualEvidencePlanner.ComputePixelStats(
+            pixels,
+            width: width,
+            height: height,
+            stride: width * 4,
+            FreeWVisualEvidencePixelFormat.Bgra32);
+    }
+
     private static byte[] BuildTrustedPixels()
     {
-        var pixels = new byte[20 * 20 * 4];
-        for (var y = 0; y < 20; y++)
+        return BuildTrustedPixels(20, 20);
+    }
+
+    private static byte[] BuildTrustedPixels(int width, int height)
+    {
+        var pixels = new byte[width * height * 4];
+        for (var y = 0; y < height; y++)
         {
-            for (var x = 0; x < 20; x++)
+            for (var x = 0; x < width; x++)
             {
-                var offset = (y * 20 + x) * 4;
+                var offset = (y * width + x) * 4;
                 if (x is >= 2 and <= 17 && y is >= 8 and <= 12)
                 {
                     pixels[offset + 0] = (byte)(x % 3 == 0 ? 32 : 0);
