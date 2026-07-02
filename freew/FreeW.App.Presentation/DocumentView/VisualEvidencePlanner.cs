@@ -64,6 +64,25 @@ public sealed record FreeWVisualSectionGeometryPagePlan(
     string SectionOwnerId,
     string Orientation);
 
+public sealed record FreeWVisualSectionGeometrySurfacePlan(
+    FreeWVisualSectionGeometryPagePlan PagePlan,
+    TextDocument Document,
+    IReadOnlyList<int> SourceBlockIndexes,
+    double CaptureWidthDip,
+    double CaptureHeightDip,
+    double PageLeftDip,
+    double PageTopDip,
+    string RenderStatus)
+{
+    public int PageNumber => PagePlan.PageNumber;
+    public int PageCount => PagePlan.PageCount;
+    public PageSettings Page => PagePlan.Page;
+    public int SectionOrdinal => PagePlan.SectionOrdinal;
+    public int SectionRelativePageNumber => PagePlan.SectionRelativePageNumber;
+    public string SectionOwnerId => PagePlan.SectionOwnerId;
+    public string Orientation => PagePlan.Orientation;
+}
+
 public sealed record FreeWVisualColumnExpectation(
     int Count,
     double WidthDip,
@@ -231,6 +250,7 @@ public static class FreeWVisualEvidencePlanner
     public const string ManifestFileName = "freew_visual_evidence_manifest.json";
     public const string SchemaId = "freew.visual-evidence.v1";
     public const int SchemaVersion = 5;
+    public const string SectionGeometryPageSurfaceRenderStatus = "section-page-surface";
 
     private const int MaxTrackedColorCount = 4096;
 
@@ -422,6 +442,31 @@ public static class FreeWVisualEvidencePlanner
             DocumentViewLayoutKind.PrintLayout,
             BodyPrintComposition with
             {
+                ExpectsPageBorder = true,
+                ExpectsWatermark = true,
+                ExpectsFloatingObjects = true
+            }),
+        new(
+            "wordart-picture-watermark-layout",
+            "WordArt, picture watermark, page-layout stress fidelity capture.",
+            [
+                "wordart-watermark-layout",
+                "drawing-objects",
+                "wordart",
+                "picture-watermark",
+                "watermark",
+                "page-border",
+                "columns",
+                "print-layout",
+                "body-text",
+                "in-front"
+            ],
+            "wordart-picture-watermark-layout_p{page}.png",
+            1,
+            DocumentViewLayoutKind.PrintLayout,
+            BodyPrintComposition with
+            {
+                ExpectsColumns = true,
                 ExpectsPageBorder = true,
                 ExpectsWatermark = true,
                 ExpectsFloatingObjects = true
@@ -711,6 +756,52 @@ public static class FreeWVisualEvidencePlanner
                     Orientation: pageSection.PageSettings.Landscape ? "landscape" : "portrait");
             })
             .ToList();
+    }
+
+    public static IReadOnlyList<FreeWVisualSectionGeometrySurfacePlan> BuildSectionGeometrySurfacePlans(
+        TextDocument document,
+        int pageCount,
+        DocumentViewLayoutOptions? options = null)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+
+        options ??= DocumentViewLayoutOptions.AvaloniaDefault;
+        var safePageCount = Math.Max(1, pageCount);
+        var assignments = BuildSectionBreakPageAssignments(document, safePageCount);
+        var pagePlans = BuildSectionGeometryPagePlans(document, safePageCount, assignments);
+        var surfacePlans = new List<FreeWVisualSectionGeometrySurfacePlan>(pagePlans.Count);
+
+        foreach (var pagePlan in pagePlans)
+        {
+            var pageIndex = pagePlan.PageNumber - 1;
+            var sourceBlockIndexes = assignments
+                .Select((assignedPage, blockIndex) => new { assignedPage, blockIndex })
+                .Where(item => item.assignedPage == pageIndex)
+                .Select(item => item.blockIndex)
+                .ToList();
+            if (sourceBlockIndexes.Count == 0 && document.Blocks.Count > 0)
+                sourceBlockIndexes.Add(Math.Clamp(pageIndex, 0, document.Blocks.Count - 1));
+
+            var captureWidth = Math.Ceiling(PageLayout.PointsToDip(pagePlan.Page.WidthPt) + options.DeskPaddingDip * 2);
+            var surface = DocumentViewLayoutPlanner.BuildSurfacePlan(
+                pagePlan.Page,
+                DocumentViewLayoutKind.PrintLayout,
+                captureWidth,
+                options);
+            var captureHeight = Math.Ceiling(surface.PageTopDip(0) + surface.PageHeightDip + surface.DeskPaddingDip);
+
+            surfacePlans.Add(new FreeWVisualSectionGeometrySurfacePlan(
+                pagePlan,
+                BuildSectionGeometrySurfaceDocument(document, pagePlan.Page, sourceBlockIndexes),
+                sourceBlockIndexes,
+                captureWidth,
+                captureHeight,
+                surface.PageLeftDip,
+                surface.PageTopDip(0),
+                SectionGeometryPageSurfaceRenderStatus));
+        }
+
+        return surfacePlans;
     }
 
     public static FreeWVisualEvidenceRow BuildEvidenceRow(
@@ -1229,6 +1320,72 @@ public static class FreeWVisualEvidencePlanner
 
     private static string ToHex(int rgb) =>
         "#" + (rgb & 0xFFFFFF).ToString("X6", CultureInfo.InvariantCulture);
+
+    private static TextDocument BuildSectionGeometrySurfaceDocument(
+        TextDocument source,
+        PageSettings page,
+        IReadOnlyList<int> sourceBlockIndexes)
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        CopyDocumentShell(source, document);
+        CopyPageSettings(page, document.Page);
+
+        foreach (var blockIndex in sourceBlockIndexes)
+        {
+            if (blockIndex >= 0 && blockIndex < source.Blocks.Count)
+                document.Blocks.Add(DocumentMerge.CloneBlock(source.Blocks[blockIndex]));
+        }
+
+        if (document.Blocks.Count == 0)
+            document.Blocks.Add(new Paragraph());
+
+        return document;
+    }
+
+    private static void CopyDocumentShell(TextDocument source, TextDocument target)
+    {
+        target.DefaultRun = source.DefaultRun;
+        target.DefaultParagraph = source.DefaultParagraph;
+        target.Styles.Clear();
+        foreach (var (id, style) in source.Styles)
+            target.Styles[id] = style;
+    }
+
+    private static void CopyPageSettings(PageSettings source, PageSettings target)
+    {
+        var copy = source.Clone();
+        target.WidthPt = copy.WidthPt;
+        target.HeightPt = copy.HeightPt;
+        target.MarginLeftPt = copy.MarginLeftPt;
+        target.MarginRightPt = copy.MarginRightPt;
+        target.MarginTopPt = copy.MarginTopPt;
+        target.MarginBottomPt = copy.MarginBottomPt;
+        target.Landscape = copy.Landscape;
+        target.GutterPt = copy.GutterPt;
+        target.HeaderDistancePt = copy.HeaderDistancePt;
+        target.FooterDistancePt = copy.FooterDistancePt;
+        target.MirrorMargins = copy.MirrorMargins;
+        target.ColumnCount = copy.ColumnCount;
+        target.ColumnSpacingPt = copy.ColumnSpacingPt;
+        target.ColumnsLineBetween = copy.ColumnsLineBetween;
+        target.ColumnWidthsPt = copy.ColumnWidthsPt is null ? null : new List<double>(copy.ColumnWidthsPt);
+        target.PageBorder = copy.PageBorder;
+        target.Watermark = copy.Watermark;
+        target.WatermarkOptions = PageSettings.CloneWatermarkOptions(copy.WatermarkOptions);
+        target.LineNumberMode = copy.LineNumberMode;
+        target.LineNumberCountBy = copy.LineNumberCountBy;
+        target.LineNumberStartAt = copy.LineNumberStartAt;
+        target.AutoHyphenation = copy.AutoHyphenation;
+        target.HyphenationZonePt = copy.HyphenationZonePt;
+        target.ConsecutiveHyphenLimit = copy.ConsecutiveHyphenLimit;
+        target.DoNotHyphenateCaps = copy.DoNotHyphenateCaps;
+        target.DefaultTabStopPt = copy.DefaultTabStopPt;
+        target.VerticalAlignment = copy.VerticalAlignment;
+        target.DifferentFirstPage = copy.DifferentFirstPage;
+        target.DifferentOddEvenPages = copy.DifferentOddEvenPages;
+        target.BackgroundColorHex = copy.BackgroundColorHex;
+    }
 
     private static bool PageSettingsMatch(PageSettings left, PageSettings right) =>
         Math.Abs(left.WidthPt - right.WidthPt) < 0.001

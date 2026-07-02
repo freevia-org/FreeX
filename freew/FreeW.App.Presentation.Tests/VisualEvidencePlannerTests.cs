@@ -26,6 +26,7 @@ public sealed class VisualEvidencePlannerTests
             "drawing-objects-complex",
             "chart-smartart-complex",
             "wordart-watermark-stress",
+            "wordart-picture-watermark-layout",
             "page-composition-print-layout",
             "page-composition-columns",
             "page-composition-border-watermark",
@@ -86,6 +87,21 @@ public sealed class VisualEvidencePlannerTests
         wordArtWatermarkScenario.Composition.ExpectsFloatingObjects.Should().BeTrue();
         wordArtWatermarkScenario.Composition.ExpectsWatermark.Should().BeTrue();
         wordArtWatermarkScenario.Composition.ExpectsPageBorder.Should().BeTrue();
+
+        var pictureWatermarkScenario = FreeWVisualEvidencePlanner.ResolveScenario("wordart-picture-watermark-layout");
+        pictureWatermarkScenario.ExpectedFeatureTags.Should().Contain([
+            "wordart-watermark-layout",
+            "wordart",
+            "picture-watermark",
+            "watermark",
+            "page-border",
+            "columns",
+            "in-front"]);
+        pictureWatermarkScenario.ExpectedOutputNamePattern.Should().Be("wordart-picture-watermark-layout_p{page}.png");
+        pictureWatermarkScenario.Composition.ExpectsWatermark.Should().BeTrue();
+        pictureWatermarkScenario.Composition.ExpectsColumns.Should().BeTrue();
+        pictureWatermarkScenario.Composition.ExpectsPageBorder.Should().BeTrue();
+        pictureWatermarkScenario.Composition.ExpectsFloatingObjects.Should().BeTrue();
     }
 
     [Fact]
@@ -199,6 +215,41 @@ public sealed class VisualEvidencePlannerTests
     }
 
     [Fact]
+    public void SharedSectionGeometrySurfacePlans_BuildPageSizedSectionSlices()
+    {
+        var document = FreeWVisualEvidenceDocumentFactory.BuildSectionGeometryDocument();
+
+        var surfacePlans = FreeWVisualEvidencePlanner.BuildSectionGeometrySurfacePlans(document, pageCount: 2);
+
+        surfacePlans.Should().HaveCount(2);
+        surfacePlans[0].RenderStatus.Should().Be(FreeWVisualEvidencePlanner.SectionGeometryPageSurfaceRenderStatus);
+        surfacePlans[0].Orientation.Should().Be("portrait");
+        surfacePlans[0].SourceBlockIndexes.Should().Equal(0, 1, 2, 3, 4, 5, 6);
+        surfacePlans[0].Document.Page.WidthPt.Should().Be(612);
+        surfacePlans[0].Document.Page.HeightPt.Should().Be(792);
+        surfacePlans[0].Document.Page.Landscape.Should().BeFalse();
+        surfacePlans[0].CaptureWidthDip.Should().BeApproximately(864, 0.01);
+        surfacePlans[0].CaptureHeightDip.Should().BeApproximately(1104, 0.01);
+
+        surfacePlans[1].Orientation.Should().Be("landscape");
+        surfacePlans[1].SourceBlockIndexes.Should().Equal(7, 8, 9, 10, 11, 12);
+        surfacePlans[1].Document.Page.WidthPt.Should().Be(792);
+        surfacePlans[1].Document.Page.HeightPt.Should().Be(612);
+        surfacePlans[1].Document.Page.Landscape.Should().BeTrue();
+        surfacePlans[1].CaptureWidthDip.Should().BeApproximately(1104, 0.01);
+        surfacePlans[1].CaptureHeightDip.Should().BeApproximately(864, 0.01);
+        surfacePlans[1].Document.Blocks.OfType<Paragraph>().First().PlainText.Should().Contain("Section 2");
+
+        foreach (var plan in surfacePlans)
+        {
+            plan.Document.Blocks
+                .OfType<Paragraph>()
+                .Should()
+                .OnlyContain(paragraph => paragraph.SectionBreak == null);
+        }
+    }
+
+    [Fact]
     public void DefaultExpectedScenarios_RequiresPairedBackstageRendererEvidence()
     {
         var expected = FreeWVisualEvidenceManifestNormalizer.DefaultExpectedScenarios;
@@ -307,6 +358,24 @@ public sealed class VisualEvidencePlannerTests
     }
 
     [Fact]
+    public void DefaultExpectedScenarios_RequiresPairedWordArtWatermarkRendererEvidence()
+    {
+        var expected = FreeWVisualEvidenceManifestNormalizer.DefaultExpectedScenarios;
+
+        foreach (var scenarioId in FreeWVisualEvidenceManifestNormalizer.WordArtWatermarkRendererScenarioIds)
+        {
+            expected.Should().Contain(e =>
+                e.HostId == FreeWVisualEvidenceManifestNormalizer.WpfHostId &&
+                e.ScenarioId == scenarioId &&
+                e.MinimumExpectedOutputs == 1);
+            expected.Should().Contain(e =>
+                e.HostId == FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId &&
+                e.ScenarioId == scenarioId &&
+                e.MinimumExpectedOutputs == 1);
+        }
+    }
+
+    [Fact]
     public void WordBaselineGenerationPlan_CoversBoundedGeneratedCorpus()
     {
         var root = CreateTempRoot();
@@ -318,14 +387,15 @@ public sealed class VisualEvidencePlannerTests
 
             plan.WordApplicationProgId.Should().Be("Word.Application");
             plan.MaxPagesPerDocument.Should().Be(3);
-            plan.ExpectedFixtureCount.Should().Be(16);
-            plan.ExpectedBaselinePngCount.Should().Be(48);
+            plan.ExpectedFixtureCount.Should().Be(17);
+            plan.ExpectedBaselinePngCount.Should().Be(51);
             plan.Fixtures.Select(f => f.DocumentName).Should().Contain([
                 "f2-hf-basic.docx",
                 "table-layout-complex.docx",
                 "drawing-objects-complex.docx",
                 "chart-smartart-complex.docx",
                 "wordart-watermark-stress.docx",
+                "wordart-picture-watermark-layout.docx",
                 "backstage-print-preview-fidelity.docx",
                 "backstage-pdf-export-fidelity.docx"]);
             plan.Fixtures.Single(f => f.ScenarioId == "backstage-print-preview-fidelity")
@@ -594,6 +664,64 @@ public sealed class VisualEvidencePlannerTests
         expectation.DrawingObjects.HasSquareWrap.Should().BeTrue();
         expectation.DrawingObjects.HasZOrder.Should().BeTrue();
         expectation.DrawingObjects.Objects.Count(o => o.TypeTag == "WordArt").Should().Be(2);
+    }
+
+    [Fact]
+    public void BuildPageExpectation_RecordsSharedWordArtPictureWatermarkLayout()
+    {
+        var document = FreeWVisualEvidenceDocumentFactory.BuildWordArtPictureWatermarkLayoutDocument();
+        var expectation = FreeWVisualEvidencePlanner.BuildPageExpectation(
+            "wordart-picture-watermark-layout",
+            document.Page,
+            pageNumber: 1,
+            pageCount: 1,
+            outputName: "wordart-picture-watermark-layout_p1.png",
+            availableWidthDip: 960,
+            document: document);
+
+        expectation.Composition.ExpectsColumns.Should().BeTrue();
+        expectation.Composition.ExpectsPageBorder.Should().BeTrue();
+        expectation.Composition.ExpectsWatermark.Should().BeTrue();
+        expectation.Composition.ExpectsFloatingObjects.Should().BeTrue();
+        expectation.Features.Columns.Count.Should().Be(2);
+        expectation.Features.Columns.LineBetween.Should().BeTrue();
+        expectation.Features.PageBorder.Present.Should().BeTrue();
+        expectation.Features.PageBorder.ColorHex.Should().Be("#1F4E79");
+        expectation.Features.Watermark.Present.Should().BeTrue();
+        expectation.Features.Watermark.IsPicture.Should().BeTrue();
+        expectation.Features.Watermark.Layout.Should().Be(nameof(WatermarkLayout.Horizontal));
+        expectation.Features.Watermark.Opacity.Should().BeApproximately(0.38, 0.001);
+        expectation.DrawingObjects.FloatingObjectCount.Should().Be(1);
+        expectation.DrawingObjects.InFrontCount.Should().Be(1);
+        expectation.DrawingObjects.HasWordArt.Should().BeTrue();
+        expectation.DrawingObjects.Objects.Single().Kind.Should().Be(DocumentFloatingObjectKind.WordArt);
+    }
+
+    [Fact]
+    public void PictureWatermarkLayoutPlanner_CentersScalesAndClampsOpacity()
+    {
+        var options = new WatermarkOptions(string.Empty)
+        {
+            ImageBytes = [1, 2, 3],
+            ScalePct = 40,
+            Layout = WatermarkLayout.Diagonal,
+            Opacity = 1.25
+        };
+
+        var plan = WatermarkVisualPlanner.BuildPictureLayout(
+            options,
+            pageWidthDip: 1000,
+            pageHeightDip: 800,
+            sourceWidthDip: 200,
+            sourceHeightDip: 100);
+
+        plan.Should().NotBeNull();
+        plan!.WidthDip.Should().BeApproximately(400, 0.001);
+        plan.HeightDip.Should().BeApproximately(200, 0.001);
+        plan.XDip.Should().BeApproximately(300, 0.001);
+        plan.YDip.Should().BeApproximately(300, 0.001);
+        plan.Opacity.Should().Be(1);
+        plan.RotationDegrees.Should().Be(-45);
     }
 
     [Fact]
@@ -1336,6 +1464,7 @@ public sealed class VisualEvidencePlannerTests
             "drawing-objects-complex" => FreeWVisualEvidenceDocumentFactory.BuildDrawingObjectsCompositionDocument(),
             "chart-smartart-complex" => FreeWVisualEvidenceDocumentFactory.BuildChartSmartArtCompositionDocument(),
             "wordart-watermark-stress" => FreeWVisualEvidenceDocumentFactory.BuildWordArtWatermarkStressDocument(),
+            "wordart-picture-watermark-layout" => FreeWVisualEvidenceDocumentFactory.BuildWordArtPictureWatermarkLayoutDocument(),
             "f2-section-landscape" => FreeWVisualEvidenceDocumentFactory.BuildSectionGeometryDocument(),
             "page-composition-floating-image" => BuildFloatingImageDocument(),
             _ => null

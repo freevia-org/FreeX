@@ -36,7 +36,11 @@ public sealed class VisualEvidencePageLayoutShotSourceTests
         source.Should().Contain("VisualEvidenceOutputPath(outDir, \"f2-section-landscape\", 2)");
         source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildSectionGeometryDocument");
         source.Should().Contain("sectionGeometryRenderStatus");
-        source.Should().Contain("avalonia-global-page-surface-no-section-page-break");
+        source.Should().Contain("BuildSectionGeometrySurfacePlans");
+        source.Should().Contain("avalonia-section-page-surface");
+        source.Should().Contain("sectionSurfaceCaptureWidthDip");
+        source.Should().Contain("sectionSurfaceCaptureHeightDip");
+        source.Should().NotContain("avalonia-global-page-surface-no-section-page-break");
         source.Should().Contain("SectionGeometryRendererScenarioIds");
         source.Should().Contain("table-layout-complex");
         source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildComplexTableLayoutDocument");
@@ -46,6 +50,8 @@ public sealed class VisualEvidencePageLayoutShotSourceTests
         source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildChartSmartArtCompositionDocument");
         source.Should().Contain("wordart-watermark-stress");
         source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildWordArtWatermarkStressDocument");
+        source.Should().Contain("wordart-picture-watermark-layout");
+        source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildWordArtPictureWatermarkLayoutDocument");
         source.Should().Contain("backstage-print-preview-fidelity");
         source.Should().Contain("backstage-pdf-export-fidelity");
         source.Should().Contain("VisualEvidenceOutputPath(outDir, \"backstage-print-preview-fidelity\", 1)");
@@ -59,6 +65,17 @@ public sealed class VisualEvidencePageLayoutShotSourceTests
         source.Should().Contain("FreeWVisualEvidencePlanner.BuildSectionOwnerId");
         source.Should().Contain("hostId: \"avalonia-page-layout-shot\"");
         project.Should().Contain("FreeW.App.Presentation");
+    }
+
+    [Fact]
+    public void AvaloniaDocumentView_RendersPictureWatermarkThroughSharedPlanner()
+    {
+        var source = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs"));
+
+        source.Should().Contain("DrawPictureWatermark(context, pageRect, wm)");
+        source.Should().Contain("WatermarkVisualPlanner.BuildPictureLayout(");
+        source.Should().Contain("context.PushOpacity(plan.Opacity)");
+        source.Should().NotContain("wm.IsPicture || string.IsNullOrWhiteSpace(wm.Text)");
     }
 
     private static string RepositoryFile(params string[] parts)

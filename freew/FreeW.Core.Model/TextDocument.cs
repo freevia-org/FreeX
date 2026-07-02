@@ -2351,6 +2351,7 @@ public sealed class PageSettings
         ColumnWidthsPt = ColumnWidthsPt is null ? null : new List<double>(ColumnWidthsPt),
         PageBorder = PageBorder,
         Watermark = Watermark,
+        WatermarkOptions = CloneWatermarkOptions(WatermarkOptions),
         LineNumberMode = LineNumberMode,
         LineNumberCountBy = LineNumberCountBy,
         LineNumberStartAt = LineNumberStartAt,
@@ -2364,6 +2365,14 @@ public sealed class PageSettings
         DifferentOddEvenPages = DifferentOddEvenPages,
         BackgroundColorHex = BackgroundColorHex
     };
+
+    public static WatermarkOptions? CloneWatermarkOptions(WatermarkOptions? options) =>
+        options is null
+            ? null
+            : options with
+            {
+                ImageBytes = options.ImageBytes is null ? null : (byte[])options.ImageBytes.Clone()
+            };
 }
 
 /// <summary>

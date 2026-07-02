@@ -62,6 +62,7 @@ public sealed class SetPageSettingsCommand(PageSettings settings) : IDocumentCom
         dst.ColumnWidthsPt = src.ColumnWidthsPt is null ? null : new List<double>(src.ColumnWidthsPt);
         dst.PageBorder = src.PageBorder;
         dst.Watermark = src.Watermark;
+        dst.WatermarkOptions = PageSettings.CloneWatermarkOptions(src.WatermarkOptions);
         dst.LineNumberMode = src.LineNumberMode;
         dst.LineNumberCountBy = src.LineNumberCountBy;
         dst.LineNumberStartAt = src.LineNumberStartAt;
