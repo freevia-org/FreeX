@@ -411,6 +411,48 @@ public class RibbonEditorCompleteness5BTests
         Assert.Null(ex);
     }
 
+    [Theory]
+    [InlineData("freep.bold", TableCellTextFormatKind.Bold)]
+    [InlineData("freep.italic", TableCellTextFormatKind.Italic)]
+    [InlineData("freep.underline", TableCellTextFormatKind.Underline)]
+    public void Cmd_FontToggle_WithActiveTableCell_UsesSharedTableCellPlan(
+        string commandId,
+        TableCellTextFormatKind kind)
+    {
+        var (ed, pres) = MakeSession();
+        var body = new TextBody { Wrap = true };
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run { Text = "Cell" });
+        body.Paragraphs.Add(paragraph);
+        var table = new TableShape();
+        table.ColumnWidthsEmu.Add(DrawingMlCoordinateUnits.EmuPerInch);
+        var row = new TableRow { HeightEmu = DrawingMlCoordinateUnits.EmuPerInch / 2 };
+        row.Cells.Add(new TableCell { TextBody = body });
+        table.Rows.Add(row);
+        var shape = new SlideShape
+        {
+            Id = 400,
+            Kind = SlideShapeKind.Table,
+            Table = table,
+            ExtentCxEmu = DrawingMlCoordinateUnits.EmuPerInch,
+            ExtentCyEmu = DrawingMlCoordinateUnits.EmuPerInch / 2,
+        };
+        pres.Slides[0].Shapes.Add(shape);
+        ed.Select(shape.Id);
+        ed.SetActiveTableCell(0, 0);
+
+        Exec(MakeRegistry(ed), commandId);
+
+        var run = shape.Table!.Rows[0].Cells[0].TextBody!.Paragraphs[0].Runs[0];
+        Assert.True(kind switch
+        {
+            TableCellTextFormatKind.Bold => run.Bold,
+            TableCellTextFormatKind.Italic => run.Italic,
+            TableCellTextFormatKind.Underline => run.Underline,
+            _ => false,
+        });
+    }
+
     // ── Command: Format Painter ───────────────────────────────────────────────────
 
     [Fact]

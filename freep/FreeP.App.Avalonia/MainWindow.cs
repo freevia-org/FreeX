@@ -882,9 +882,24 @@ public sealed class MainWindow : Window
 
             Editor.SetFontFamilyOnSelection(ctx.SelectedValue);
         }));
-        r.Register("freep.bold", new ActionRibbonCommand(() => Editor.ToggleBoldOnSelection()));
-        r.Register("freep.italic", new ActionRibbonCommand(() => Editor.ToggleItalicOnSelection()));
-        r.Register("freep.underline", new ActionRibbonCommand(() => Editor.ToggleUnderlineOnSelection()));
+        r.Register("freep.bold", new ActionRibbonCommand(() =>
+        {
+            if (_textEditor?.TryApplyActiveTableCellTextFormat(TableCellTextFormatKind.Bold) == true) return;
+            if (Editor.ToggleBoldOnActiveTableCell()) return;
+            Editor.ToggleBoldOnSelection();
+        }));
+        r.Register("freep.italic", new ActionRibbonCommand(() =>
+        {
+            if (_textEditor?.TryApplyActiveTableCellTextFormat(TableCellTextFormatKind.Italic) == true) return;
+            if (Editor.ToggleItalicOnActiveTableCell()) return;
+            Editor.ToggleItalicOnSelection();
+        }));
+        r.Register("freep.underline", new ActionRibbonCommand(() =>
+        {
+            if (_textEditor?.TryApplyActiveTableCellTextFormat(TableCellTextFormatKind.Underline) == true) return;
+            if (Editor.ToggleUnderlineOnActiveTableCell()) return;
+            Editor.ToggleUnderlineOnSelection();
+        }));
 
         foreach (var route in ArrangeCommandRoutes)
         {

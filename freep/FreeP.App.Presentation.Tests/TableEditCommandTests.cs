@@ -721,6 +721,29 @@ public sealed class TableEditCommandTests
     }
 
     [Fact]
+    public void EditingSession_ToggleActiveTableCellFormatting_UsesSharedPlanAndUndo()
+    {
+        var sess = MakeSession(out var shape);
+        shape.Table!.Rows[0].Cells[0].TextBody = MakeBody("Cell");
+        sess.SetActiveTableCell(0, 0);
+
+        var plan = sess.PlanActiveTableCellTextFormat(TableCellTextFormatKind.Bold);
+        plan.Status.Should().Be(TableCellTextFormatStatus.Ready);
+        plan.TargetValue.Should().BeTrue();
+
+        sess.ToggleBoldOnActiveTableCell().Should().BeTrue();
+
+        var run = shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs[0].Runs[0];
+        run.Bold.Should().BeTrue();
+        run.BoldSet.Should().BeTrue();
+
+        sess.Undo();
+        run = shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs[0].Runs[0];
+        run.Bold.Should().BeFalse();
+        run.BoldSet.Should().BeFalse();
+    }
+
+    [Fact]
     public void EditingSession_InsertRowBelow_GrowsGrid()
     {
         var sess = MakeSession(out var shape, 2, 2);

@@ -887,6 +887,50 @@ public sealed class MainWindowHeadlessTests
         isApplied.Should().BeTrue($"{commandId} should format the selected text shape through EditingSession");
     }
 
+    [Theory]
+    [InlineData("freep.bold", "bold")]
+    [InlineData("freep.italic", "italic")]
+    [InlineData("freep.underline", "underline")]
+    public async Task Ribbon_font_toggle_commands_route_to_active_table_cell(
+        string commandId,
+        string property)
+    {
+        var found = false;
+        var isApplied = false;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var registry = window.BuildCommandRegistry();
+            found = registry.TryGet(commandId, out var command);
+            found.Should().BeTrue($"{commandId} must be registered");
+
+            var shape = window.Editor.InsertTable(1, 1);
+            var body = new TextBody { Wrap = true };
+            var paragraph = new Paragraph();
+            paragraph.Runs.Add(new Run { Text = "Cell" });
+            body.Paragraphs.Add(paragraph);
+            shape.Table!.Rows[0].Cells[0].TextBody = body;
+            window.Editor.Select(shape.Id);
+            window.Editor.SetActiveTableCell(0, 0);
+
+            command!.Execute(RibbonCommandContext.Empty);
+
+            var run = shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs[0].Runs[0];
+            isApplied = property switch
+            {
+                "bold" => run.Bold,
+                "italic" => run.Italic,
+                "underline" => run.Underline,
+                _ => throw new ArgumentOutOfRangeException(nameof(property), property, null)
+            };
+        });
+
+        if (!ran) return;
+        found.Should().BeTrue($"{commandId} must be registered");
+        isApplied.Should().BeTrue($"{commandId} should format the active table cell through the shared planner");
+    }
+
     [Fact]
     public async Task Ribbon_font_family_command_routes_selected_value_to_editor()
     {
