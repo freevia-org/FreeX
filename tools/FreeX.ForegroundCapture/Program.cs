@@ -96,6 +96,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             "excel-sheet-tab-context-menu" => RunExcelSheetTabContextMenuScenario(),
             "excel-sheet-tab-overflow-activate-dialog" => RunExcelSheetTabOverflowActivateDialogScenario(),
             "excel-status-footer-reference" => RunExcelStatusFooterReferenceScenario(),
+            "excel-formula-bar-name-box-reference" => RunExcelFormulaBarNameBoxReferenceScenario(),
             "freex-open-dialog" => RunFreeXDialogScenario("freex-open-dialog", "^{F12}", "#32770", "Open"),
             "freex-save-as-dialog" => RunFreeXDialogScenario("freex-save-as-dialog", "{F12}", "#32770", "Save As"),
             "freex-conditional-formatting-gallery" => RunFreeXConditionalFormattingGalleryScenario(),
@@ -125,6 +126,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             "freex-status-zoom-text-dialog-click" => RunFreeXMainWindowPointerScenario("freex-status-zoom-text-dialog-click", ClickZoomTextExpectDialog()),
             "freex-status-ctrl-alt-zoom-keys" => RunFreeXMainWindowPointerScenario("freex-status-ctrl-alt-zoom-keys", CtrlAltZoomKeysExpectRoundTrip()),
             "freex-status-live-stats-accessibility" => RunFreeXMainWindowPointerScenario("freex-status-live-stats-accessibility", StatusLiveStatsAccessibility(), CreateStatusStatsOptionsOverride),
+            "freex-formula-bar-name-box-reference" => RunFreeXMainWindowPointerScenario("freex-formula-bar-name-box-reference", FormulaBarNameBoxReference()),
             "freex-sheet-tab-context-menu" => RunFreeXMainWindowPointerScenario("freex-sheet-tab-context-menu", RightClickSheetTabContextMenu()),
             "freex-sheet-tab-click-select" => RunFreeXMainWindowPointerScenario("freex-sheet-tab-click-select", SheetTabClickSelect()),
             "freex-sheet-tab-double-click-rename" => RunFreeXMainWindowPointerScenario("freex-sheet-tab-double-click-rename", SheetTabDoubleClickRename()),
@@ -1098,6 +1100,66 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                 guard,
                 "complete",
                 $"Excel status/footer reference: workbook values in A1:A4 are selected with DisplayStatusBar enabled and visible footer statistics validated ({statusReadback}) so the native footer/status bar can be paired with FreeX S6 captures.");
+        }
+        finally
+        {
+            CloseExcel(excel, workbook);
+            KillProcess(pid);
+        }
+    }
+
+    private CaptureResult RunExcelFormulaBarNameBoxReferenceScenario()
+    {
+        const string scenario = "excel-formula-bar-name-box-reference";
+        dynamic? excel = null;
+        dynamic? workbook = null;
+        int? pid = null;
+
+        try
+        {
+            (excel, workbook) = CreateExcel();
+            PrepareExcelFormulaBarNameBoxWorkbook(excel);
+
+            var hwnd = new IntPtr((int)excel.Hwnd);
+            pid = NativeMethods.GetProcessId(hwnd);
+            var guard = ForegroundGuard.FocusAndVerify(hwnd, pid.Value, "Excel", options.FocusTimeout);
+            if (!guard.Success)
+            {
+                return BlockedWithGuard(scenario, guard, "before-capture");
+            }
+
+            var resizeBlocked = ResizeForStableForegroundCapture(hwnd, pid.Value, "after-excel-formula-bar-window-resize", "Excel");
+            if (resizeBlocked is not null)
+            {
+                return resizeBlocked;
+            }
+
+            guard = ForegroundGuard.FocusAndVerify(hwnd, pid.Value, "Excel", options.FocusTimeout);
+            if (!guard.Success)
+            {
+                return BlockedWithGuard(scenario, guard, "after-window-resize");
+            }
+
+            dynamic worksheet = excel.ActiveSheet;
+            var formula = (string)worksheet.Range["B4"].Formula;
+            if (!formula.Equals("=B2-B3", StringComparison.OrdinalIgnoreCase))
+            {
+                return CaptureResult.Blocked(scenario, "formula-seed-validation-failed", $"Expected Excel B4 formula '=B2-B3'; observed '{formula}'.", options.OutputRoot, "excel", guard);
+            }
+
+            var window = WindowFinder.GetWindowInfo(hwnd);
+            if (window is null)
+            {
+                return CaptureResult.Blocked(scenario, "window-info-unavailable", "Could not resolve the foreground Excel window bounds.", options.OutputRoot, "excel", guard);
+            }
+
+            return CaptureWindow(
+                scenario,
+                "excel",
+                window,
+                guard,
+                "complete",
+                "Excel formula bar/name box reference: B4 is selected on a seeded formula worksheet and the formula bar should show '=B2-B3' with the name box showing B4.");
         }
         finally
         {
@@ -3351,6 +3413,63 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             return null;
         };
 
+    private Func<IntPtr, int, WindowInfo, ForegroundGuardResult, CaptureResult?> FormulaBarNameBoxReference()
+        => (handle, processId, _, guard) =>
+        {
+            var resizeBlocked = ResizeForStableForegroundCapture(handle, processId, "after-freex-formula-bar-window-resize");
+            if (resizeBlocked is not null)
+            {
+                return resizeBlocked;
+            }
+
+            guard = ForegroundGuard.FocusAndVerify(handle, processId, "FreeX", options.FocusTimeout);
+            if (!guard.Success)
+            {
+                return BlockedWithGuard(options.Scenario, guard, "before-formula-seed");
+            }
+
+            if (!TryGetCellBounds(handle, "Cell_A1", out var a1Bounds) ||
+                !TryGetCellBounds(handle, "Cell_B4", out var b4Bounds))
+            {
+                return CaptureResult.Blocked(options.Scenario, "uia-cell-bounds-unavailable", "Could not resolve A1 and B4 bounds for formula bar/name box setup.", options.OutputRoot, "freex", guard);
+            }
+
+            const string seed = "Metric\tValue\r\nRevenue\t120\r\nCost\t45\r\nProfit\t=B2-B3";
+            var blocked = PasteCellText(handle, processId, a1Bounds, seed);
+            if (blocked is not null)
+            {
+                return blocked;
+            }
+
+            if (!WaitForCellValue(handle, "Cell_B4", "=B2-B3", TimeSpan.FromSeconds(3), out var b4Value))
+            {
+                return CaptureResult.Blocked(options.Scenario, "formula-cell-validation-failed", $"Expected B4 UIA value to retain formula text '=B2-B3' after paste; observed '{b4Value}'.", options.OutputRoot, "freex", guard);
+            }
+
+            blocked = GuardedClickPoint(options.Scenario, processId, handle, CenterX(b4Bounds), CenterY(b4Bounds), MouseButtonKind.Left);
+            if (blocked is not null)
+            {
+                return blocked;
+            }
+
+            Thread.Sleep(options.AfterInputDelay);
+
+            if (!TryGetAutomationElementText(handle, "CellAddressBox", out var nameBox) ||
+                !nameBox.Contains("B4", StringComparison.OrdinalIgnoreCase))
+            {
+                return CaptureResult.Blocked(options.Scenario, "name-box-validation-failed", $"Expected Name Box AutomationId 'CellAddressBox' to show B4 after selecting B4; observed '{nameBox}'.", options.OutputRoot, "freex", guard);
+            }
+
+            if (!TryGetAutomationElementText(handle, "FormulaBar", out var formulaBar) ||
+                !formulaBar.Equals("=B2-B3", StringComparison.OrdinalIgnoreCase))
+            {
+                return CaptureResult.Blocked(options.Scenario, "formula-bar-validation-failed", $"Expected Formula Bar AutomationId 'FormulaBar' to show '=B2-B3' after selecting B4; observed '{formulaBar}'.", options.OutputRoot, "freex", guard);
+            }
+
+            _lastResultValidation = "Seeded A1:B4 through foreground paste, selected B4, and validated Name Box 'B4' plus Formula Bar '=B2-B3' through UIA before capture.";
+            return null;
+        };
+
     private CaptureResult? ResizeForStatusStatisticReadback(IntPtr handle, int processId, ForegroundGuardResult guard)
         => ResizeForStableForegroundCapture(handle, processId, "after-status-stat-window-resize");
 
@@ -5271,6 +5390,43 @@ internal sealed class ScenarioRunner(CaptureOptions options)
         return !string.IsNullOrWhiteSpace(name);
     }
 
+    private static bool TryGetAutomationElementText(IntPtr handle, string automationId, out string text)
+    {
+        text = string.Empty;
+        var element = FindVisibleElementByAutomationId(handle, automationId) ?? FindElementByAutomationId(handle, automationId);
+        if (element is null)
+        {
+            return false;
+        }
+
+        var candidates = new List<string>();
+        if (element.TryGetCurrentPattern(ValuePattern.Pattern, out var valuePatternObject) &&
+            valuePatternObject is ValuePattern valuePattern)
+        {
+            candidates.Add(valuePattern.Current.Value ?? string.Empty);
+        }
+
+        if (element.TryGetCurrentPattern(TextPattern.Pattern, out var textPatternObject) &&
+            textPatternObject is TextPattern textPattern)
+        {
+            candidates.Add(textPattern.DocumentRange.GetText(256).TrimEnd('\r', '\n'));
+        }
+
+        candidates.Add(element.Current.Name ?? string.Empty);
+        candidates.Add(element.Current.HelpText ?? string.Empty);
+
+        foreach (var candidate in candidates)
+        {
+            if (!string.IsNullOrWhiteSpace(candidate))
+            {
+                text = candidate.Trim();
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private static bool TryGetAutomationElementNameOrVisibleText(IntPtr handle, string automationId, string expectedName, out string name)
     {
         var lastCandidate = string.Empty;
@@ -5512,6 +5668,23 @@ internal sealed class ScenarioRunner(CaptureOptions options)
         worksheet.Range["A3"].Value2 = 6;
         worksheet.Range["A4"].Value2 = 8;
         worksheet.Range["A1:A4"].Select();
+        excel.ActiveWindow.Zoom = 100;
+    }
+
+    private static void PrepareExcelFormulaBarNameBoxWorkbook(dynamic excel)
+    {
+        excel.DisplayFormulaBar = true;
+        dynamic worksheet = excel.ActiveSheet;
+        worksheet.Range["A1"].Value2 = "Metric";
+        worksheet.Range["B1"].Value2 = "Value";
+        worksheet.Range["A2"].Value2 = "Revenue";
+        worksheet.Range["B2"].Value2 = 120;
+        worksheet.Range["A3"].Value2 = "Cost";
+        worksheet.Range["B3"].Value2 = 45;
+        worksheet.Range["A4"].Value2 = "Profit";
+        worksheet.Range["B4"].Formula = "=B2-B3";
+        worksheet.Range["A:B"].EntireColumn.AutoFit();
+        worksheet.Range["B4"].Select();
         excel.ActiveWindow.Zoom = 100;
     }
 
@@ -6344,6 +6517,7 @@ internal sealed record CaptureOptions(
           excel-sheet-tab-context-menu
           excel-sheet-tab-overflow-activate-dialog
           excel-status-footer-reference
+          excel-formula-bar-name-box-reference
           freex-open-dialog
           freex-save-as-dialog
           freex-conditional-formatting-gallery
@@ -6371,6 +6545,7 @@ internal sealed record CaptureOptions(
           freex-status-zoom-text-dialog-click
           freex-status-ctrl-alt-zoom-keys
           freex-status-live-stats-accessibility
+          freex-formula-bar-name-box-reference
           freex-sheet-tab-context-menu
           freex-sheet-tab-click-select
           freex-sheet-tab-double-click-rename
