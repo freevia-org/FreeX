@@ -892,6 +892,8 @@ public sealed class MainWindow : Window
                 var card = new StackPanel();
                 card.Children.Add(headerPanel);
                 card.Children.Add(bodyText);
+                AddReplyRows(card, cm);
+                AddReplyInput(card, cm);
 
                 var cardHost = new Border
                 {
@@ -912,6 +914,48 @@ public sealed class MainWindow : Window
         {
             _commentListHost.Visibility = Visibility.Collapsed;
         }
+    }
+
+    private void AddReplyRows(StackPanel card, PresentationCommentDescriptor cm)
+    {
+        foreach (var reply in cm.Replies)
+        {
+            var row = new TextBlock
+            {
+                Text = $"{(string.IsNullOrWhiteSpace(reply.Author) ? "Unknown reviewer" : reply.Author)}: {reply.TextPreview}",
+                FontSize = 10,
+                TextWrapping = TextWrapping.Wrap,
+                Foreground = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)),
+                Margin = new Thickness(26, 0, 6, 4),
+            };
+            card.Children.Add(row);
+        }
+    }
+
+    private void AddReplyInput(StackPanel card, PresentationCommentDescriptor cm)
+    {
+        if (!cm.IsSelected || !cm.CanReply)
+            return;
+
+        var row = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Margin = new Thickness(16, 0, 6, 6),
+        };
+        var input = new System.Windows.Controls.TextBox
+        {
+            MinWidth = 180,
+            Margin = new Thickness(0, 0, 6, 0),
+        };
+        var button = new System.Windows.Controls.Button
+        {
+            Content = "Reply",
+            MinWidth = 58,
+        };
+        button.Click += (_, _) => ReplyToSelectedComment(input.Text);
+        row.Children.Add(input);
+        row.Children.Add(button);
+        card.Children.Add(row);
     }
 
     private void OnCommentOverlayLoaded(object sender, RoutedEventArgs e)
@@ -1041,10 +1085,28 @@ public sealed class MainWindow : Window
             null,
             null);
 
+    internal PresentationCommentMutationPlan ReplyToSelectedComment(
+        string? text,
+        DateTime? timestamp = null,
+        string? author = null,
+        string? initials = null)
+        => ApplySelectedCommentMutation(
+            PresentationReviewWorkflowIntentKind.ReplyComment,
+            null,
+            null,
+            text,
+            timestamp,
+            author,
+            initials);
+
     private PresentationCommentMutationPlan ApplySelectedCommentMutation(
         PresentationReviewWorkflowIntentKind intent,
         DateTime? resolvedAt,
-        string? resolvedBy)
+        string? resolvedBy,
+        string? replyText = null,
+        DateTime? replyTimestamp = null,
+        string? replyAuthor = null,
+        string? replyInitials = null)
     {
         var selected = _selectedCommentIndex;
         var plan = selected is { } selectedIndex
@@ -1062,6 +1124,15 @@ public sealed class MainWindow : Window
                         selectedIndex,
                         resolvedAt ?? DateTime.UtcNow,
                         resolvedBy ?? "FreeP User"),
+                PresentationReviewWorkflowIntentKind.ReplyComment =>
+                    PresentationReviewWorkflowPlanner.BuildReplyCommentPlan(
+                        _presentation.Slides,
+                        Editor.CurrentSlideIndex,
+                        selectedIndex,
+                        replyText,
+                        replyAuthor ?? "FreeP User",
+                        replyInitials,
+                        replyTimestamp ?? DateTime.UtcNow),
                 PresentationReviewWorkflowIntentKind.ReopenComment =>
                     PresentationReviewWorkflowPlanner.BuildReopenCommentPlan(
                         _presentation.Slides,

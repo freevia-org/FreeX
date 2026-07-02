@@ -4452,6 +4452,47 @@ public sealed class DocumentView : Control
         // TryGetCaretRect can match (Block == tableBlockIndex && Offset == glyphOffset).
         var glyphOffset = 0;
 
+        // AV-TBL5-VRENDER-VMERGE: pre-compute every row's height up front. A vertical-merge Restart
+        // cell needs the TOTAL height of all rows it spans to vertically align its content within the
+        // whole merged region rather than just its own (first) row — that total isn't known yet when
+        // the row loop below reaches the Restart row, since later rows haven't been measured. This
+        // pass mirrors the exact rowHeight computation the main loop performs (same cell wrapping),
+        // so results are identical — just computed early enough to sum across rows.
+        var rowHeights = new double[table.Rows.Count];
+        for (var pr = 0; pr < table.Rows.Count; pr++)
+        {
+            var prRow = table.Rows[pr];
+            var prIsHeader = table.Formatting.HeaderRow && pr == 0;
+            var prRowHeight = Build("Ag", RunFormatting.Default).Height + 2 * pad;
+            var prCol = 0;
+            foreach (var cell in prRow.Cells)
+            {
+                if (prCol >= cols)
+                    break;
+                var prSpan = Math.Clamp(cell.GridSpan <= 0 ? 1 : cell.GridSpan, 1, cols - prCol);
+                double prCellWidth = 0;
+                for (var s = 0; s < prSpan; s++)
+                    prCellWidth += colWidths[prCol + s];
+
+                var prFmt = cell.Paragraphs.Count > 0 && cell.Paragraphs[0].Runs.Count > 0
+                    ? cell.Paragraphs[0].Runs[0].Formatting
+                    : RunFormatting.Default;
+                if (prIsHeader)
+                    prFmt = prFmt with { Bold = true };
+
+                var prInnerW = Math.Max(10, prCellWidth - 2 * pad);
+                var prLines = cell.Paragraphs.Count > 0
+                    ? cell.Paragraphs.SelectMany(p => WrapCellLines(p.PlainText, prFmt, prInnerW)).ToList()
+                    : WrapCellLines(string.Empty, prFmt, prInnerW);
+                var prCellHeight = prLines.Sum(l => l.Height) + 2 * pad;
+                if (prCellHeight > prRowHeight)
+                    prRowHeight = prCellHeight;
+
+                prCol += prSpan;
+            }
+            rowHeights[pr] = prRowHeight;
+        }
+
         for (var r = 0; r < table.Rows.Count; r++)
         {
             var row = table.Rows[r];
@@ -4517,14 +4558,34 @@ public sealed class DocumentView : Control
                 // cellAvailableHeight = row interior height (row height minus top+bottom padding).
                 // contentHeight = sum of this cell's laid-out line heights.
                 // For single-row cells (no rowspan), the available height is the full row interior.
-                // For rowspan cells, a per-row vAlign would require knowing the total merged height
-                // up-front — defer to standard top-anchor to avoid regressing existing rowspan layout.
+                //
+                // AV-TBL5-VRENDER-VMERGE: for a cell that STARTS a vertical merge (Restart), Word
+                // aligns the content within the height of the WHOLE merged span, not just the first
+                // row. Sum the pre-computed heights of every row this cell spans (this row plus each
+                // consecutive VerticalMerge.Continue cell below it at the same grid column) and use
+                // that as the available height instead of the single rowHeight. A non-merged cell
+                // (span 1) is unaffected — cellAvailableHeight still reduces to rowHeight - 2*pad.
+                //
                 // Paginated cells (content split across pages): ReserveContentY treats the row as a
                 // unit so the whole row lands on one page; no per-page split of a single row occurs,
-                // so the vAlign offset is safe to apply without extra pagination logic.
+                // so the vAlign offset is safe to apply without extra pagination logic. If a merged
+                // span crosses a page break, the span-height sum still uses each row's full measured
+                // height (best-effort — matches the existing per-row pagination behavior rather than
+                // clipping the merged region further).
                 var cellLines = cellParas.SelectMany(pl => pl).ToList();
                 var contentHeight = cellLines.Sum(l => l.Height);
-                var cellAvailableHeight = rowHeight - 2 * pad;
+                var mergedSpanHeight = rowHeight;
+                if (cellModel.VerticalMerge == VerticalMergeState.Restart)
+                {
+                    mergedSpanHeight = 0;
+                    for (var mr = r; mr < table.Rows.Count; mr++)
+                    {
+                        if (mr > r && GetCellModelGridCol(table, mr, startCol)?.VerticalMerge != VerticalMergeState.Continue)
+                            break;
+                        mergedSpanHeight += mr == r ? rowHeight : rowHeights[mr];
+                    }
+                }
+                var cellAvailableHeight = mergedSpanHeight - 2 * pad;
                 var vAlignOffset = cellModel.VerticalAlignment switch
                 {
                     TableCellVerticalAlignment.Center =>

@@ -529,4 +529,158 @@ public sealed class CellAlignmentTests
         centerY.Should().BeApproximately(topY, 0.5,
             "When the cell is the tallest (fills the row), Center offset clamps to 0 — same as Top");
     }
+
+    // ── AV-TBL5-VRENDER-VMERGE: vertical alignment within a vertical-merge (rowspan) span ─────────
+
+    /// <summary>
+    /// Builds a 3-row, 2-column table where column 0 is vertically merged across all 3 rows
+    /// (row 0 = Restart, rows 1-2 = Continue) with a single short line of content and the requested
+    /// vertical alignment. Column 1 has progressively taller content per row so each row's own
+    /// height differs from the total merged-span height, making the bug (aligning within row 0 alone
+    /// vs. the whole 3-row span) observable.
+    /// </summary>
+    private static (DocumentView View, int TableBlockIdx, Table Tbl) MakeVerticalMergeTable(
+        TableCellVerticalAlignment mergedCellVAlign)
+    {
+        var doc = TextDocument.CreateEmpty();
+        var tbl = Table.Create(3, 2);
+
+        // Column 0: vertical merge across rows 0-2. Only the Restart cell (row 0) carries content;
+        // Continue cells are visually absorbed into it (Word semantics).
+        var restartCell = new TableCell("Hi") { VerticalMerge = VerticalMergeState.Restart, VerticalAlignment = mergedCellVAlign };
+        tbl.Rows[0].Cells[0] = restartCell;
+        tbl.Rows[1].Cells[0] = new TableCell(string.Empty) { VerticalMerge = VerticalMergeState.Continue };
+        tbl.Rows[2].Cells[0] = new TableCell(string.Empty) { VerticalMerge = VerticalMergeState.Continue };
+
+        // Column 1: each row has different paragraph counts so total merged-span height (sum of all
+        // 3 rows) is well above any single row's own height.
+        var right0 = new TableCell();
+        right0.Paragraphs.Clear();
+        right0.Paragraphs.Add(new Paragraph("R0 Line 1"));
+        right0.Paragraphs.Add(new Paragraph("R0 Line 2"));
+        tbl.Rows[0].Cells[1] = right0;
+
+        var right1 = new TableCell();
+        right1.Paragraphs.Clear();
+        right1.Paragraphs.Add(new Paragraph("R1 Line 1"));
+        right1.Paragraphs.Add(new Paragraph("R1 Line 2"));
+        right1.Paragraphs.Add(new Paragraph("R1 Line 3"));
+        tbl.Rows[1].Cells[1] = right1;
+
+        var right2 = new TableCell();
+        right2.Paragraphs.Clear();
+        right2.Paragraphs.Add(new Paragraph("R2 Line 1"));
+        right2.Paragraphs.Add(new Paragraph("R2 Line 2"));
+        right2.Paragraphs.Add(new Paragraph("R2 Line 3"));
+        tbl.Rows[2].Cells[1] = right2;
+
+        doc.Blocks.Add(tbl);
+        var view = new DocumentView();
+        view.LoadDocument(doc);
+        view.Measure(new Size(800, 4000));
+        var idx = doc.Blocks.IndexOf(tbl);
+        return (view, idx, tbl);
+    }
+
+    [Fact]
+    public async Task VerticalMerge_Center_ContentCentersWithinFullSpan_NotJustFirstRow()
+    {
+        // The bug: cellAvailableHeight used only row 0's height, so Center offset was computed
+        // against row 0 alone. The fix sums all 3 spanned rows' heights. Center-within-the-full-span
+        // must place the content strictly lower than Center-within-row-0-alone would.
+        double centerY = -1, row0OnlyCenterApprox = -1;
+        var ran = await OnUiThread(() =>
+        {
+            var (view, idx, _) = MakeVerticalMergeTable(TableCellVerticalAlignment.Center);
+            view.PlaceCaretInCell(idx, 0, 0, 0, 0);
+            centerY = view.CaretTop;
+
+            // Reference: a single-row table (row 0's content/height alone) with the same Center
+            // alignment and same short content — this is what the pre-fix (buggy) Y would resolve to.
+            var doc = TextDocument.CreateEmpty();
+            var tbl = Table.Create(1, 2);
+            var cell = new TableCell("Hi") { VerticalAlignment = TableCellVerticalAlignment.Center };
+            tbl.Rows[0].Cells[0] = cell;
+            var right0 = new TableCell();
+            right0.Paragraphs.Clear();
+            right0.Paragraphs.Add(new Paragraph("R0 Line 1"));
+            right0.Paragraphs.Add(new Paragraph("R0 Line 2"));
+            tbl.Rows[0].Cells[1] = right0;
+            doc.Blocks.Add(tbl);
+            var refView = new DocumentView();
+            refView.LoadDocument(doc);
+            refView.Measure(new Size(800, 4000));
+            var refIdx = doc.Blocks.IndexOf(tbl);
+            refView.PlaceCaretInCell(refIdx, 0, 0, 0, 0);
+            row0OnlyCenterApprox = refView.CaretTop;
+        });
+        if (!ran) return;
+        centerY.Should().BeGreaterThan(row0OnlyCenterApprox,
+            "Center within the full 3-row merged span must place content lower than centering within row 0 alone");
+    }
+
+    [Fact]
+    public async Task VerticalMerge_Bottom_ContentNearBottomOfFullSpan()
+    {
+        // Bottom-aligned content in the merged cell must sit lower than Center-aligned content in
+        // the same merged cell (both measured against the full 3-row span).
+        double centerY = -1, bottomY = -1;
+        var ran = await OnUiThread(() =>
+        {
+            var (viewCenter, idxCenter, _) = MakeVerticalMergeTable(TableCellVerticalAlignment.Center);
+            viewCenter.PlaceCaretInCell(idxCenter, 0, 0, 0, 0);
+            centerY = viewCenter.CaretTop;
+
+            var (viewBottom, idxBottom, _) = MakeVerticalMergeTable(TableCellVerticalAlignment.Bottom);
+            viewBottom.PlaceCaretInCell(idxBottom, 0, 0, 0, 0);
+            bottomY = viewBottom.CaretTop;
+        });
+        if (!ran) return;
+        bottomY.Should().BeGreaterThan(centerY,
+            "Bottom-aligned content in a vertical-merge span must sit lower than Center-aligned content in the same span");
+    }
+
+    [Fact]
+    public async Task VerticalMerge_Top_IsUnaffectedByMergedSpanHeight()
+    {
+        // Top alignment (offset 0) must be identical whether or not the merged-span-height fix is
+        // applied — content always starts at rowPageSpaceY + pad for the Restart row.
+        double topMergedY = -1, topSingleRowY = -1;
+        var ran = await OnUiThread(() =>
+        {
+            var (viewMerged, idxMerged, _) = MakeVerticalMergeTable(TableCellVerticalAlignment.Top);
+            viewMerged.PlaceCaretInCell(idxMerged, 0, 0, 0, 0);
+            topMergedY = viewMerged.CaretTop;
+
+            var (viewSingle, idxSingle, _) = MakeTallRowTable(TableCellVerticalAlignment.Top);
+            viewSingle.PlaceCaretInCell(idxSingle, 0, 1, 0, 0);
+            topSingleRowY = viewSingle.CaretTop;
+        });
+        if (!ran) return;
+        topMergedY.Should().BeApproximately(topSingleRowY, 0.5,
+            "Top alignment is unaffected by the merged-span-height fix (offset is always 0)");
+    }
+
+    [Fact]
+    public async Task NonMergedCell_Center_StillCentersWithinOwnRowOnly_NoRegression()
+    {
+        // A non-merged (span 1) cell must be unaffected by the vertical-merge fix: Center still
+        // centers within its own row's height, exactly as MakeTallRowTable already verifies. This
+        // re-asserts no regression using the same table shape as the vertical-merge test (2 columns,
+        // tall neighbor) but without any VerticalMerge flag set.
+        double topY = -1, centerY = -1;
+        var ran = await OnUiThread(() =>
+        {
+            var (viewTop, idxTop, _) = MakeTallRowTable(TableCellVerticalAlignment.Top);
+            viewTop.PlaceCaretInCell(idxTop, 0, 1, 0, 0);
+            topY = viewTop.CaretTop;
+
+            var (viewCenter, idxCenter, _) = MakeTallRowTable(TableCellVerticalAlignment.Center);
+            viewCenter.PlaceCaretInCell(idxCenter, 0, 1, 0, 0);
+            centerY = viewCenter.CaretTop;
+        });
+        if (!ran) return;
+        centerY.Should().BeGreaterThan(topY,
+            "Non-merged cell Center alignment must still center within its own row (no regression)");
+    }
 }

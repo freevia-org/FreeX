@@ -127,6 +127,9 @@ public sealed class MainWindow : Window
     private Button _animationPanePreviewButton = null!;
     private int _selectedAnimationIndex = -1;
     private readonly List<string> _animationPaneRenderedRows = new();
+    private int _animationPaneTriggerControlCount;
+    private int _animationPaneDurationControlCount;
+    private int _animationPaneDelayControlCount;
 
     // ── Interaction layer (Theme 15) ────────────────────────────────────────────
 
@@ -222,6 +225,9 @@ public sealed class MainWindow : Window
     internal string AnimationPaneMessage => _animationPaneMessage?.Text ?? string.Empty;
     internal bool IsAnimationPanePreviewEnabled => _animationPanePreviewButton?.IsEnabled == true;
     internal IReadOnlyList<string> AnimationPaneRenderedRows => _animationPaneRenderedRows;
+    internal int AnimationPaneTriggerControlCount => _animationPaneTriggerControlCount;
+    internal int AnimationPaneDurationControlCount => _animationPaneDurationControlCount;
+    internal int AnimationPaneDelayControlCount => _animationPaneDelayControlCount;
 
     // ── Constructors ───────────────────────────────────────────────────────────
 
@@ -1513,6 +1519,7 @@ public sealed class MainWindow : Window
             new ActionRibbonCommand(RefreshProofingRequestPlan));
         registry.Register(PresentationReviewWorkflowPlanner.AddCommentCommandId, EmptyRibbonCommand.Instance);
         registry.Register(PresentationReviewWorkflowPlanner.EditCommentCommandId, EmptyRibbonCommand.Instance);
+        registry.Register(PresentationReviewWorkflowPlanner.ReplyCommentCommandId, EmptyRibbonCommand.Instance);
         registry.Register(
             PresentationReviewWorkflowPlanner.DeleteCommentCommandId,
             new ActionRibbonCommand(() => DeleteSelectedComment()));
@@ -1594,6 +1601,9 @@ public sealed class MainWindow : Window
 
         foreach (var action in actions)
         {
+            if (action.CommandId == PresentationReviewWorkflowPlanner.ReplyCommentCommandId)
+                continue;
+
             var button = new Button
             {
                 Content   = action.Label,
@@ -1654,6 +1664,41 @@ public sealed class MainWindow : Window
             TextWrapping = TextWrapping.Wrap,
             Foreground   = new SolidColorBrush(Color.FromRgb(0x44, 0x44, 0x44)),
         });
+        foreach (var reply in comment.Replies)
+        {
+            card.Children.Add(new TextBlock
+            {
+                Text         = $"{(string.IsNullOrWhiteSpace(reply.Author) ? "Unknown reviewer" : reply.Author)}: {reply.TextPreview}",
+                TextWrapping = TextWrapping.Wrap,
+                FontSize     = 12,
+                Margin       = new Thickness(18, 0, 0, 0),
+                Foreground   = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)),
+            });
+        }
+        if (comment.IsSelected && comment.CanReply)
+        {
+            var replyInput = new TextBox
+            {
+                PlaceholderText = "Reply",
+                MinWidth        = 180,
+            };
+            var replyButton = new Button
+            {
+                Content = "Reply",
+                MinWidth = 72,
+            };
+            replyButton.Click += (_, _) => ReplyToSelectedComment(replyInput.Text);
+            card.Children.Add(new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing     = 6,
+                Children    =
+                {
+                    replyInput,
+                    replyButton,
+                }
+            });
+        }
 
         var border = new Border
         {
@@ -1719,10 +1764,28 @@ public sealed class MainWindow : Window
             null,
             null);
 
+    internal PresentationCommentMutationPlan ReplyToSelectedComment(
+        string? text,
+        DateTime? timestamp = null,
+        string? author = null,
+        string? initials = null)
+        => ApplySelectedCommentMutation(
+            PresentationReviewWorkflowIntentKind.ReplyComment,
+            null,
+            null,
+            text,
+            timestamp,
+            author,
+            initials);
+
     private PresentationCommentMutationPlan ApplySelectedCommentMutation(
         PresentationReviewWorkflowIntentKind intent,
         DateTime? resolvedAt,
-        string? resolvedBy)
+        string? resolvedBy,
+        string? replyText = null,
+        DateTime? replyTimestamp = null,
+        string? replyAuthor = null,
+        string? replyInitials = null)
     {
         var selected = _selectedCommentIndex;
         var plan = selected is { } selectedIndex
@@ -1740,6 +1803,15 @@ public sealed class MainWindow : Window
                         selectedIndex,
                         resolvedAt ?? DateTime.UtcNow,
                         resolvedBy ?? "FreeP User"),
+                PresentationReviewWorkflowIntentKind.ReplyComment =>
+                    PresentationReviewWorkflowPlanner.BuildReplyCommentPlan(
+                        _presentation.Slides,
+                        Editor.CurrentSlideIndex,
+                        selectedIndex,
+                        replyText,
+                        replyAuthor ?? "FreeP User",
+                        replyInitials,
+                        replyTimestamp ?? DateTime.UtcNow),
                 PresentationReviewWorkflowIntentKind.ReopenComment =>
                     PresentationReviewWorkflowPlanner.BuildReopenCommentPlan(
                         _presentation.Slides,
@@ -1832,6 +1904,9 @@ public sealed class MainWindow : Window
 
         _animationPaneRenderedRows.Clear();
         _animationPaneItemsPanel.Children.Clear();
+        _animationPaneTriggerControlCount = 0;
+        _animationPaneDurationControlCount = 0;
+        _animationPaneDelayControlCount = 0;
         if (!plan.HasAnimations)
         {
             _animationPaneItemsPanel.Children.Add(new TextBlock
@@ -1859,6 +1934,62 @@ public sealed class MainWindow : Window
             $"Timeline: starts {item.StartText}s, ends {AnimationPanePlanner.FormatDuration(item.EndMs)}s";
         var actionLine =
             $"Move earlier: {FormatAvailability(item.CanMoveEarlier)}; move later: {FormatAvailability(item.CanMoveLater)}";
+
+        var triggerCombo = new ComboBox
+        {
+            ItemsSource = AnimationPanePlanner.TriggerLabels,
+            SelectedIndex = item.TriggerIndex,
+            Width = 132,
+            Margin = new Thickness(0, 4, 8, 0),
+            Tag = item.Index,
+        };
+        ToolTip.SetTip(triggerCombo, "Trigger");
+        triggerCombo.SelectionChanged += (_, _) =>
+            ApplyAnimationPaneTriggerEdit(item.Index, triggerCombo.SelectedIndex);
+        _animationPaneTriggerControlCount++;
+
+        var durationBox = new TextBox
+        {
+            Text = item.DurationText,
+            Width = 58,
+            Margin = new Thickness(0, 4, 8, 0),
+            Tag = item.Index,
+        };
+        ToolTip.SetTip(durationBox, "Duration (seconds)");
+        durationBox.LostFocus += (_, _) =>
+        {
+            var plan = ApplyAnimationPaneDurationEdit(item.Index, durationBox.Text ?? string.Empty);
+            if (!plan.ShouldApply)
+                durationBox.Text = plan.DisplayText;
+        };
+        _animationPaneDurationControlCount++;
+
+        var delayBox = new TextBox
+        {
+            Text = item.DelayText,
+            Width = 58,
+            Margin = new Thickness(0, 4, 8, 0),
+            Tag = item.Index,
+        };
+        ToolTip.SetTip(delayBox, "Delay (seconds)");
+        delayBox.LostFocus += (_, _) =>
+        {
+            var plan = ApplyAnimationPaneDelayEdit(item.Index, delayBox.Text ?? string.Empty);
+            if (!plan.ShouldApply)
+                delayBox.Text = plan.DisplayText;
+        };
+        _animationPaneDelayControlCount++;
+
+        var timingControls = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Children =
+            {
+                triggerCombo,
+                durationBox,
+                delayBox,
+            },
+        };
 
         var moveEarlierButton = new Button
         {
@@ -1914,6 +2045,7 @@ public sealed class MainWindow : Window
                     Foreground = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)),
                     TextWrapping = TextWrapping.Wrap,
                 },
+                timingControls,
                 new TextBlock
                 {
                     Text = timelineLine,
@@ -1947,6 +2079,63 @@ public sealed class MainWindow : Window
         border.Cursor = new Cursor(StandardCursorType.Hand);
         border.PointerPressed += (_, _) => SelectAnimationPaneItem(item.Index);
         return border;
+    }
+
+    internal AnimationPaneTimingMutationPlan ApplyAnimationPaneTriggerEditForTests(
+        int animationIndex,
+        int selectedTriggerIndex)
+        => ApplyAnimationPaneTriggerEdit(animationIndex, selectedTriggerIndex);
+
+    internal AnimationPaneTimingMutationPlan ApplyAnimationPaneDurationEditForTests(
+        int animationIndex,
+        string text)
+        => ApplyAnimationPaneDurationEdit(animationIndex, text);
+
+    internal AnimationPaneTimingMutationPlan ApplyAnimationPaneDelayEditForTests(
+        int animationIndex,
+        string text)
+        => ApplyAnimationPaneDelayEdit(animationIndex, text);
+
+    private AnimationPaneTimingMutationPlan ApplyAnimationPaneTriggerEdit(
+        int animationIndex,
+        int selectedTriggerIndex)
+    {
+        var plan = AnimationPanePlanner.BuildTriggerMutationPlan(
+            Editor.CurrentSlideAnimations,
+            animationIndex,
+            selectedTriggerIndex);
+        ApplyAnimationPaneTimingMutation(plan);
+        return plan;
+    }
+
+    private AnimationPaneTimingMutationPlan ApplyAnimationPaneDurationEdit(
+        int animationIndex,
+        string text)
+    {
+        var plan = AnimationPanePlanner.BuildDurationMutationPlan(
+            Editor.CurrentSlideAnimations,
+            animationIndex,
+            text);
+        ApplyAnimationPaneTimingMutation(plan);
+        return plan;
+    }
+
+    private AnimationPaneTimingMutationPlan ApplyAnimationPaneDelayEdit(
+        int animationIndex,
+        string text)
+    {
+        var plan = AnimationPanePlanner.BuildDelayMutationPlan(
+            Editor.CurrentSlideAnimations,
+            animationIndex,
+            text);
+        ApplyAnimationPaneTimingMutation(plan);
+        return plan;
+    }
+
+    private void ApplyAnimationPaneTimingMutation(AnimationPaneTimingMutationPlan plan)
+    {
+        if (AnimationPanePlanner.TryApplyTimingMutation(Editor, plan))
+            RefreshVisibleAnimationPane(_selectedAnimationIndex);
     }
 
     private void SelectAnimationPaneItem(int animationIndex)
