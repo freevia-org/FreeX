@@ -123,7 +123,7 @@ public sealed class SlideCanvasGeometryPlannerTests
 
         foreach (var source in new[] { wpfText, avaloniaText })
         {
-            source.Should().Contain("SlideCanvasGeometryPlanner.PlanEditorPlacement");
+            source.Should().Contain("InCanvasTextEditPlanner.BeginShapeEdit");
             source.Should().NotContain("* xf.Scale + xf.OffsetX");
         }
 
