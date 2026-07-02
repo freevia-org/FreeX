@@ -407,7 +407,8 @@ internal static class PptxChartWriter
             new XElement(C + "showVertBorder", new XAttribute("val", BoolValue(dataTable.ShowVerticalBorder))),
             new XElement(C + "showOutline",    new XAttribute("val", BoolValue(dataTable.ShowOutlineBorder))),
             new XElement(C + "showKeys",       new XAttribute("val", BoolValue(dataTable.ShowLegendKeys))),
-            BuildDataTableShapePropertiesEl(dataTable.BorderOutline));
+            BuildDataTableShapePropertiesEl(dataTable.BorderOutline),
+            BuildDataTableTextPropertiesEl(dataTable.TextStyle));
     }
 
     private static XElement? BuildDataTableShapePropertiesEl(ShapeOutline? outline)
@@ -497,6 +498,41 @@ internal static class PptxChartWriter
         }
 
         return new XElement(A + "gradFill", gsLst, kindEl);
+    }
+
+    private static XElement? BuildDataTableTextPropertiesEl(ChartTextStyle? style)
+    {
+        var defRPr = BuildDataTableDefaultRunPropertiesEl(style);
+        if (defRPr is null)
+            return null;
+
+        return new XElement(C + "txPr",
+            new XElement(A + "bodyPr"),
+            new XElement(A + "lstStyle"),
+            new XElement(A + "p",
+                new XElement(A + "pPr", defRPr),
+                new XElement(A + "endParaRPr")));
+    }
+
+    private static XElement? BuildDataTableDefaultRunPropertiesEl(ChartTextStyle? style)
+    {
+        if (style is null)
+            return null;
+
+        var attrs = new List<XAttribute>();
+        if (style.FontSizePt.HasValue)
+            attrs.Add(new XAttribute("sz", (int)Math.Round(style.FontSizePt.Value * 100)));
+        if (style.Bold.HasValue)
+            attrs.Add(new XAttribute("b", style.Bold.Value ? "1" : "0"));
+        if (style.Italic.HasValue)
+            attrs.Add(new XAttribute("i", style.Italic.Value ? "1" : "0"));
+
+        var fill = style.Color is not null
+            ? new XElement(A + "solidFill", BuildColorEl(style.Color))
+            : null;
+        return attrs.Count == 0 && fill is null
+            ? null
+            : new XElement(A + "defRPr", attrs, fill);
     }
 
     private static string ToDashStr(OutlineDash dash) => dash switch

@@ -95,12 +95,22 @@ public readonly record struct ChartSecondaryValueAxisPrimitivePlan(
     ChartStrokePlan TickStroke,
     ChartAxisTitlePlan? Title);
 
+public readonly record struct ChartDataTableTextPlan(
+    bool IsBold,
+    bool IsItalic,
+    double FontSize,
+    SrgbColor Color);
+
 public readonly record struct ChartDataTableCellPlan(
     int RowIndex,
     int ColumnIndex,
     string Text,
     ChartPlanRect Bounds,
     bool IsHeader,
+    bool IsBold,
+    bool IsItalic,
+    double FontSize,
+    SrgbColor TextColor,
     ChartPlanTextAlignment Alignment,
     ChartPlanRect? LegendKeyBounds,
     ChartFillPlan? LegendKeyFill);
@@ -782,6 +792,8 @@ public static partial class ChartRenderPlanner
             return EmptyDataTablePrimitivePlan();
 
         var settings = chart.DataTable!;
+        var headerTextStyle = ResolveDataTableTextStyle(settings, defaultBold: true);
+        var bodyTextStyle = ResolveDataTableTextStyle(settings, defaultBold: false);
         int categoryCount = chart.Categories.Count;
         int rowCount = chart.Series.Count + 1;
         int columnCount = categoryCount + 1;
@@ -811,6 +823,10 @@ public static partial class ChartRenderPlanner
                 Text: text,
                 Bounds: InsetDataTableCellText(cellBounds),
                 IsHeader: true,
+                IsBold: headerTextStyle.IsBold,
+                IsItalic: headerTextStyle.IsItalic,
+                FontSize: headerTextStyle.FontSize,
+                TextColor: headerTextStyle.Color,
                 Alignment: columnIndex == 0 ? ChartPlanTextAlignment.Left : ChartPlanTextAlignment.Center,
                 LegendKeyBounds: null,
                 LegendKeyFill: null));
@@ -843,6 +859,10 @@ public static partial class ChartRenderPlanner
                         seriesCellBounds.Height)
                     : InsetDataTableCellText(seriesCellBounds),
                 IsHeader: false,
+                IsBold: bodyTextStyle.IsBold,
+                IsItalic: bodyTextStyle.IsItalic,
+                FontSize: bodyTextStyle.FontSize,
+                TextColor: bodyTextStyle.Color,
                 Alignment: ChartPlanTextAlignment.Left,
                 LegendKeyBounds: keyBounds,
                 LegendKeyFill: keyFill));
@@ -863,6 +883,10 @@ public static partial class ChartRenderPlanner
                     Text: text,
                     Bounds: InsetDataTableCellText(cellBounds),
                     IsHeader: false,
+                    IsBold: bodyTextStyle.IsBold,
+                    IsItalic: bodyTextStyle.IsItalic,
+                    FontSize: bodyTextStyle.FontSize,
+                    TextColor: bodyTextStyle.Color,
                     Alignment: ChartPlanTextAlignment.Center,
                     LegendKeyBounds: null,
                     LegendKeyFill: null));
@@ -2157,6 +2181,15 @@ public static partial class ChartRenderPlanner
                 Thickness: visible.WidthPt),
             _ => DefaultDataTableBorderStroke()
         };
+
+    private static ChartDataTableTextPlan ResolveDataTableTextStyle(
+        ChartDataTableSettings settings,
+        bool defaultBold) =>
+        new(
+            settings.TextStyle?.Bold ?? defaultBold,
+            settings.TextStyle?.Italic ?? false,
+            settings.TextStyle?.FontSizePt ?? DataTableFontSize,
+            settings.TextStyle?.Color?.Resolved ?? new SrgbColor(0x40, 0x40, 0x40));
 
     private static ChartStrokePlan DefaultRadarSpokeStroke() =>
         new(new SrgbColor(0xC0, 0xC0, 0xC0), Alpha: 255, Thickness: 0.5);

@@ -577,6 +577,12 @@ public sealed class PptxPackageRetentionTests
         chart.DataTable.BorderOutline.Should().BeOfType<ShapeOutline.Visible>()
             .Which.Color.Resolved.Should().Be(new SrgbColor(0x12, 0x34, 0x56));
         ((ShapeOutline.Visible)chart.DataTable.BorderOutline!).WidthPt.Should().BeApproximately(1.25, 0.001);
+        chart.DataTable.TextStyle.Should().NotBeNull();
+        chart.DataTable.TextStyle!.FontSizePt.Should().Be(8.75);
+        chart.DataTable.TextStyle.Bold.Should().BeTrue();
+        chart.DataTable.TextStyle.Italic.Should().BeTrue();
+        chart.DataTable.TextStyle.Color.Should().NotBeNull();
+        chart.DataTable.TextStyle.Color!.Resolved.Should().Be(new SrgbColor(0x22, 0x44, 0x66));
 
         using var saved = new MemoryStream();
         PptxPackageWriter.Write(loaded, saved);
@@ -604,6 +610,17 @@ public sealed class PptxPackageRetentionTests
                 .Element(DrawingNs + "srgbClr")!
                 .Attribute("val")!
                 .Value.Should().Be("123456");
+            var savedDefRPr = savedDataTable.Element(ChartNs + "txPr")!
+                .Element(DrawingNs + "p")!
+                .Element(DrawingNs + "pPr")!
+                .Element(DrawingNs + "defRPr")!;
+            savedDefRPr.Attribute("sz")!.Value.Should().Be("875");
+            savedDefRPr.Attribute("b")!.Value.Should().Be("1");
+            savedDefRPr.Attribute("i")!.Value.Should().Be("1");
+            savedDefRPr.Element(DrawingNs + "solidFill")!
+                .Element(DrawingNs + "srgbClr")!
+                .Attribute("val")!
+                .Value.Should().Be("224466");
             savedPlotArea.Elements().Last(element => element.Name == ChartNs + "valAx" || element.Name == ChartNs + "dTable")
                 .Name.Should().Be(ChartNs + "dTable", "c:dTable should remain after chart axes in the package chart part");
         }
@@ -619,6 +636,12 @@ public sealed class PptxPackageRetentionTests
         reloadedDataTable.BorderOutline.Should().BeOfType<ShapeOutline.Visible>()
             .Which.Color.Resolved.Should().Be(new SrgbColor(0x12, 0x34, 0x56));
         ((ShapeOutline.Visible)reloadedDataTable.BorderOutline!).WidthPt.Should().BeApproximately(1.25, 0.001);
+        reloadedDataTable.TextStyle.Should().NotBeNull();
+        reloadedDataTable.TextStyle!.FontSizePt.Should().Be(8.75);
+        reloadedDataTable.TextStyle.Bold.Should().BeTrue();
+        reloadedDataTable.TextStyle.Italic.Should().BeTrue();
+        reloadedDataTable.TextStyle.Color.Should().NotBeNull();
+        reloadedDataTable.TextStyle.Color!.Resolved.Should().Be(new SrgbColor(0x22, 0x44, 0x66));
     }
 
     [Fact]
@@ -853,7 +876,19 @@ public sealed class PptxPackageRetentionTests
                         new XElement(DrawingNs + "ln",
                             new XAttribute("w", DrawingMlUnits.PointsToEmu(1.25)),
                             new XElement(DrawingNs + "solidFill",
-                                new XElement(DrawingNs + "srgbClr", new XAttribute("val", "123456")))))));
+                                new XElement(DrawingNs + "srgbClr", new XAttribute("val", "123456"))))),
+                    new XElement(ChartNs + "txPr",
+                        new XElement(DrawingNs + "bodyPr"),
+                        new XElement(DrawingNs + "lstStyle"),
+                        new XElement(DrawingNs + "p",
+                            new XElement(DrawingNs + "pPr",
+                                new XElement(DrawingNs + "defRPr",
+                                    new XAttribute("sz", "875"),
+                                    new XAttribute("b", "1"),
+                                    new XAttribute("i", "1"),
+                                    new XElement(DrawingNs + "solidFill",
+                                        new XElement(DrawingNs + "srgbClr", new XAttribute("val", "224466"))))),
+                            new XElement(DrawingNs + "endParaRPr")))));
             WriteXml(archive, "ppt/charts/chart1.xml", chartXml);
 
             var chartRels = new XDocument(

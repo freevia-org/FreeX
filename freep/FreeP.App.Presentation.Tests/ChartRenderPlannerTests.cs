@@ -415,6 +415,32 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void BuildDataTablePrimitivePlan_UsesModeledPowerPointTextStyle()
+    {
+        var chart = MakeTwoSeriesChart(ChartType.ColumnClustered);
+        chart.DataTable = new ChartDataTableSettings
+        {
+            TextStyle = new ChartTextStyle
+            {
+                FontSizePt = 8.75,
+                Bold = true,
+                Italic = true,
+                Color = new ThemeAwareColor(new SrgbColor(0x22, 0x44, 0x66))
+            }
+        };
+        var frame = ChartRenderPlanner.BuildFramePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+
+        var plan = ChartRenderPlanner.BuildDataTablePrimitivePlan(chart, frame);
+
+        plan.Cells.Should().NotBeEmpty();
+        plan.Cells.Should().OnlyContain(cell =>
+            cell.FontSize == 8.75 &&
+            cell.IsBold &&
+            cell.IsItalic &&
+            cell.TextColor == new SrgbColor(0x22, 0x44, 0x66));
+    }
+
+    [Fact]
     public void BuildDataTablePrimitivePlan_UnsupportedFamiliesAndDisabledBordersReturnExpectedPlan()
     {
         var pie = MakeTwoSeriesChart(ChartType.Pie);
