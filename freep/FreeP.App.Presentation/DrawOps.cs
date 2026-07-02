@@ -152,6 +152,12 @@ public sealed class ResolvedTextLayout
     public string? WarpPreset { get; init; }
 
     /// <summary>
+    /// Preserved WordArt warp adjust guide values from the source text body.
+    /// </summary>
+    public IReadOnlyList<(string Name, string Formula)> WarpAdjusts { get; init; } =
+        Array.Empty<(string Name, string Formula)>();
+
+    /// <summary>
     /// Text orientation for this body.  Renderers rotate the text block accordingly.
     /// <see cref="TextVerticalType.Horizontal"/> = no extra rotation (default).
     /// </summary>

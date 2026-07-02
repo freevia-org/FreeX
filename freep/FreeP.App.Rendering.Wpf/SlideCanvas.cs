@@ -1408,7 +1408,7 @@ public sealed class SlideCanvas : FrameworkElement
                     RenderParaWithMath(dc, para, placement.X, placement.Y);
                     break;
                 case TextParagraphRenderRoute.Effects:
-                    RenderParaWithEffects(dc, para, placement.X, placement.Y, placement.MaxWidthDip, renderText.Wrap, renderText.WarpPreset, bounds);
+                    RenderParaWithEffects(dc, para, placement.X, placement.Y, placement.MaxWidthDip, renderText.Wrap, renderText, bounds);
                     break;
                 case TextParagraphRenderRoute.Tabs:
                     RenderParaWithTabs(dc, para, placement.X, placement.Y, para.TabStops);
@@ -1485,7 +1485,7 @@ public sealed class SlideCanvas : FrameworkElement
                     RenderParaWithMath(dc, para, placement.X, placement.Y);
                     break;
                 case TextParagraphRenderRoute.Effects:
-                    RenderParaWithEffects(dc, para, placement.X, placement.Y, placement.MaxWidthDip, renderText.Wrap, renderText.WarpPreset, bounds);
+                    RenderParaWithEffects(dc, para, placement.X, placement.Y, placement.MaxWidthDip, renderText.Wrap, renderText, bounds);
                     break;
                 case TextParagraphRenderRoute.Tabs:
                     RenderParaWithTabs(dc, para, placement.X, placement.Y, para.TabStops);
@@ -1900,116 +1900,54 @@ public sealed class SlideCanvas : FrameworkElement
         double x, double y,
         double maxWidth,
         bool wrap,
-        string? warpPreset,
+        ResolvedTextLayout text,
         LayoutRect shapeBounds)
     {
-        // Build per-run FormattedText objects and accumulate geometry per run
-        // so each run can have independent fill/outline/shadow.
         int pos = 0;
-        var sb = new System.Text.StringBuilder();
-        foreach (var r in para.Runs) sb.Append(r.Text);
-        string fullText = sb.Length == 0 ? " " : sb.ToString();
-
-        // Build a full paragraph FormattedText for layout/measurement (same as BuildFormattedText)
-        var ft = BuildFormattedText(para, maxWidth, wrap);
-        double paraW = ft.Width;
-        double paraH = ft.Height;
-
-        // Warp offset function: returns a Y offset at fractional horizontal position t ∈ [0,1]
-        // relative to the shape bounds.
-        bool hasWarp = WordArtWarpPlanner.ComputeYOffset(warpPreset, 0, shapeBounds).HasValue;
-
-        pos = 0;
         foreach (var run in para.Runs)
         {
             int len = run.Text.Length;
-            bool hasEffects = run.TextFill is not null || run.TextOutline is not null || run.TextShadow is not null;
 
-            // BA2 fix: plain runs are no longer drawn by an outer DrawText pass, so draw them here
-            // at their flat baseline (no warp, solid-color fill, no outline).
             var runFt2 = BuildSingleRunFormattedText(run, wrap ? maxWidth : 0);
             double runOffX = ComputeRunOffsetX(para, run, pos, maxWidth, wrap);
             double drawX = x + runOffX;
-            double drawY = y;
 
-            if (!hasEffects && !hasWarp)
-            {
-                // Plain run: draw at flat baseline with solid run colour and no outline.
-                var plainGeo = runFt2.BuildGeometry(new Point(drawX, drawY));
-                if (plainGeo is not null)
-                {
-                    var plainBrush = FreezeBrush(new SolidColorBrush(
-                        Color.FromRgb(run.Color.R, run.Color.G, run.Color.B)));
-                    dc.DrawGeometry(plainBrush, null, plainGeo);
-                }
-                pos += len;
-                continue;
-            }
-
-            // Build geometry for this run's span within the full FormattedText
-            // by building a per-run FormattedText at the run's character offset.
-            // Strategy: build a FormattedText with only this run's text, positioned
-            // to match where it would appear in the full paragraph.
             var runFt = runFt2;   // already built above
 
-            if (hasWarp)
+            double progress = shapeBounds.Width > 0 ? (drawX - shapeBounds.X) / shapeBounds.Width : 0;
+            var plan = TextRunEffectRenderPlanner.Plan(
+                run,
+                new LayoutRect(drawX, y, runFt.Width, runFt.Height),
+                progress,
+                shapeBounds,
+                text);
+            var geo = runFt.BuildGeometry(new Point(plan.GlyphBoundsDip.X, plan.GlyphBoundsDip.Y));
+
+            foreach (var pass in plan.Passes)
             {
-                double t = shapeBounds.Width > 0 ? (drawX - shapeBounds.X) / shapeBounds.Width : 0;
-                drawY += WordArtWarpPlanner.ComputeYOffset(warpPreset, t, shapeBounds) ?? 0;
-            }
-
-            var geo = runFt.BuildGeometry(new Point(drawX, drawY));
-
-            // 1. Shadow (draw behind)
-            if (run.TextShadow is { } ts)
-            {
-                double rad = ts.DirDeg * Math.PI / 180.0;
-                double dx  = Math.Cos(rad) * ts.DistDip;
-                double dy  = Math.Sin(rad) * ts.DistDip;
-                var shadowBrush = new SolidColorBrush(Color.FromArgb(ts.Alpha, ts.Color.R, ts.Color.G, ts.Color.B));
-                if (shadowBrush.CanFreeze) shadowBrush.Freeze();
-
-                if (ts.BlurDip > 0.5)
+                switch (pass)
                 {
-                    int passes = Math.Min(3, (int)Math.Ceiling(ts.BlurDip / 1.5));
-                    for (int pi = 1; pi <= passes; pi++)
+                    case TextRunEffectPass.Shadow shadow:
                     {
-                        double spread = ts.BlurDip * pi / passes;
-                        byte passAlpha = (byte)(ts.Alpha / (passes + 1));
-                        var passBrush = new SolidColorBrush(Color.FromArgb(passAlpha, ts.Color.R, ts.Color.G, ts.Color.B));
-                        if (passBrush.CanFreeze) passBrush.Freeze();
-                        for (int ox = -1; ox <= 1; ox++)
-                        for (int oy = -1; oy <= 1; oy++)
-                        {
-                            if (ox == 0 && oy == 0) continue;
-                            dc.PushTransform(new TranslateTransform(dx + ox * spread, dy + oy * spread));
-                            dc.DrawGeometry(passBrush, null, geo);
-                            dc.Pop();
-                        }
+                        var shadowBrush = new SolidColorBrush(Color.FromArgb(shadow.Alpha, shadow.Color.R, shadow.Color.G, shadow.Color.B));
+                        if (shadowBrush.CanFreeze) shadowBrush.Freeze();
+                        dc.PushTransform(new TranslateTransform(shadow.OffsetX, shadow.OffsetY));
+                        dc.DrawGeometry(shadowBrush, null, geo);
+                        dc.Pop();
+                        break;
                     }
+                    case TextRunEffectPass.Fill fill:
+                    {
+                        var geoRect = geo.Bounds;
+                        var r2 = new Rect(geoRect.X, geoRect.Y, Math.Max(1, geoRect.Width), Math.Max(1, geoRect.Height));
+                        dc.DrawGeometry(MakeFillBrushForText(fill.FillBrush, r2), null, geo);
+                        break;
+                    }
+                    case TextRunEffectPass.Outline outline:
+                        dc.DrawGeometry(null, MakePen(outline.OutlinePen), geo);
+                        break;
                 }
-                dc.PushTransform(new TranslateTransform(dx, dy));
-                dc.DrawGeometry(shadowBrush, null, geo);
-                dc.Pop();
             }
-
-            // 2. Glyph fill
-            Brush fillBrush;
-            if (run.TextFill is not null)
-            {
-                var geoRect = geo.Bounds;
-                var r2 = new Rect(geoRect.X, geoRect.Y, Math.Max(1, geoRect.Width), Math.Max(1, geoRect.Height));
-                fillBrush = MakeFillBrushForText(run.TextFill, r2);
-            }
-            else
-            {
-                fillBrush = FreezeBrush(new SolidColorBrush(Color.FromRgb(run.Color.R, run.Color.G, run.Color.B)));
-            }
-
-            // 3. Outline pen
-            Pen? outlinePen = run.TextOutline is not null ? MakePen(run.TextOutline) : null;
-
-            dc.DrawGeometry(fillBrush, outlinePen, geo);
 
             pos += len;
         }

@@ -266,6 +266,137 @@ public sealed class WordArtTests : IDisposable
         textOp.Text!.WarpPreset.Should().Be("textWave1");
     }
 
+    [Fact]
+    public void Compositor_WarpAdjusts_PropagatedToResolvedTextLayout()
+    {
+        var p = MakePres();
+        p.Slides[0].Shapes.Clear();
+
+        var tb = new TextBody { WarpPreset = "textArchUp" };
+        tb.WarpAdjusts.Add(("adj1", "val 30000"));
+        tb.Paragraphs.Add(new Paragraph { Runs = { new Run { Text = "Warp" } } });
+
+        p.Slides[0].Shapes.Add(new SlideShape
+        {
+            Id = 1,
+            OffsetXEmu = 100000, OffsetYEmu = 100000,
+            ExtentCxEmu = 3000000, ExtentCyEmu = 1000000,
+            TextBody = tb
+        });
+
+        var ops = SlideCompositor.Compose(p, p.Slides[0]);
+        var textOp = ops.OfType<DrawOp.Shape>().Single(s => s.Text is not null);
+
+        textOp.Text!.WarpAdjusts.Should().ContainSingle()
+            .Which.Should().Be(("adj1", "val 30000"));
+    }
+
+    [Fact]
+    public void TextRunEffectRenderPlanner_OrdersShadowFillOutlinePasses()
+    {
+        var run = new ResolvedRun
+        {
+            Text = "Plan",
+            Color = new SrgbColor(10, 20, 30),
+            TextShadow = new ResolvedRunShadow
+            {
+                Color = new SrgbColor(1, 2, 3),
+                Alpha = 180,
+                DistDip = 4,
+                DirDeg = 0
+            },
+            TextOutline = new ResolvedOutline.Visible(
+                new SrgbColor(40, 50, 60),
+                widthDip: 2,
+                OutlineDash.Solid)
+        };
+
+        var plan = TextRunEffectRenderPlanner.Plan(
+            run,
+            new LayoutRect(10, 20, 40, 12),
+            horizontalProgress: 0.25,
+            new LayoutRect(0, 0, 200, 100),
+            new ResolvedTextLayout());
+
+        plan.Passes.Should().HaveCount(3);
+        plan.Passes[0].Should().BeOfType<TextRunEffectPass.Shadow>();
+        plan.Passes[1].Should().BeOfType<TextRunEffectPass.Fill>();
+        plan.Passes[2].Should().BeOfType<TextRunEffectPass.Outline>();
+    }
+
+    [Fact]
+    public void TextRunEffectRenderPlanner_ShadowPassCarriesOffsetAlphaAndBlurMetadata()
+    {
+        var run = new ResolvedRun
+        {
+            Text = "Shadow",
+            Color = SrgbColor.Black,
+            TextShadow = new ResolvedRunShadow
+            {
+                Color = new SrgbColor(1, 2, 3),
+                Alpha = 160,
+                BlurDip = 3,
+                DistDip = 8,
+                DirDeg = 0
+            }
+        };
+
+        var plan = TextRunEffectRenderPlanner.Plan(
+            run,
+            new LayoutRect(0, 0, 60, 20),
+            horizontalProgress: 0,
+            new LayoutRect(0, 0, 200, 100),
+            new ResolvedTextLayout());
+
+        var shadows = plan.Passes.OfType<TextRunEffectPass.Shadow>().ToArray();
+        shadows.Should().HaveCount(17);
+        shadows[^1].OffsetX.Should().BeApproximately(8, 0.001);
+        shadows[^1].OffsetY.Should().BeApproximately(0, 0.001);
+        shadows[^1].Alpha.Should().Be(160);
+        shadows[^1].BlurDip.Should().Be(3);
+        shadows[^1].IsBlurPass.Should().BeFalse();
+        shadows[0].IsBlurPass.Should().BeTrue();
+        shadows[0].SpreadDip.Should().BeGreaterThan(0);
+    }
+
+    [Fact]
+    public void TextRunEffectRenderPlanner_WarpAdjustInfluencesYOffset()
+    {
+        var run = new ResolvedRun { Text = "Warp", Color = SrgbColor.Black };
+        var bounds = new LayoutRect(0, 0, 200, 100);
+        var layout = new ResolvedTextLayout
+        {
+            WarpPreset = "textArchUp",
+            WarpAdjusts = new[] { ("adj1", "val 25000") }
+        };
+
+        var plan = TextRunEffectRenderPlanner.Plan(
+            run,
+            new LayoutRect(10, 20, 40, 12),
+            horizontalProgress: 0.5,
+            bounds,
+            layout);
+
+        plan.WarpYOffsetDip.Should().BeApproximately(-17.5, 0.001);
+        plan.GlyphBoundsDip.Y.Should().BeApproximately(2.5, 0.001);
+    }
+
+    [Fact]
+    public void WpfAndAvaloniaSlideCanvases_UseSharedTextRunEffectRenderPlanner()
+    {
+        var wpf = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "SlideCanvas.cs");
+        var avalonia = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Avalonia", "SlideCanvas.cs");
+
+        foreach (var source in new[] { wpf, avalonia })
+        {
+            source.Should().Contain("TextRunEffectRenderPlanner.Plan(");
+            source.Should().NotContain("TextShadow is { } ts");
+            source.Should().NotContain("DirDeg * Math.PI");
+            source.Should().NotContain("BlurDip / 1.5");
+            source.Should().NotContain("WordArtWarpPlanner.ComputeYOffset(warpPreset");
+        }
+    }
+
     // ─── SlideCloner ─────────────────────────────────────────────────────────
 
     [Fact]
@@ -528,5 +659,26 @@ public sealed class WordArtTests : IDisposable
 
         tb.WarpPreset.Should().Be("textWave1");
         tb.WarpAdjusts.Should().BeEmpty("no custom guides — avLst is empty");
+    }
+
+    private static string ReadWorkspaceFile(params string[] relativeParts)
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            var parts = new string[relativeParts.Length + 1];
+            parts[0] = directory.FullName;
+            relativeParts.CopyTo(parts, 1);
+
+            var candidate = Path.Combine(parts);
+            if (File.Exists(candidate))
+                return File.ReadAllText(candidate);
+
+            directory = directory.Parent;
+        }
+
+        throw new FileNotFoundException(
+            "Could not locate workspace file.",
+            Path.Combine(relativeParts));
     }
 }

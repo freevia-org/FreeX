@@ -870,7 +870,9 @@ public static class SlideCompositor
             InsetRightDip = insets.Right,
             InsetTopDip   = insets.Top,
             InsetBottomDip = insets.Bottom,
-            Wrap          = body.Wrap
+            Wrap          = body.Wrap,
+            WarpPreset    = body.WarpPreset,
+            WarpAdjusts   = body.WarpAdjusts.ToArray()
         };
     }
 
@@ -1329,6 +1331,7 @@ public static class SlideCompositor
             InsetBottomDip = insets.Bottom,
             Wrap = body.Wrap,
             WarpPreset = body.WarpPreset,   // Wave 16A
+            WarpAdjusts = body.WarpAdjusts.ToArray(),
             VerticalType = body.VerticalType,  // Wave 18B
             AutoFit = body.AutoFit,
             HasStoredFontScale = hasStoredFontScale,

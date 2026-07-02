@@ -188,6 +188,7 @@ public static class TextLayoutPlanner
             InsetBottomDip = text.InsetBottomDip,
             Wrap = text.Wrap,
             WarpPreset = text.WarpPreset,
+            WarpAdjusts = text.WarpAdjusts,
             VerticalType = text.VerticalType,
             AutoFit = text.AutoFit,
             HasStoredFontScale = text.HasStoredFontScale,
