@@ -35,6 +35,7 @@ public sealed record SlicerLayoutModel(
     bool HasActiveFilter,
     LayoutRect Bounds,
     LayoutRect HeaderRect,
+    LayoutRect CaptionRect,
     LayoutRect BodyRect,
     IReadOnlyList<SlicerTileLayout> Tiles,
     int TotalItemCount,
@@ -107,6 +108,7 @@ public static class SlicerLayoutBuilder
 
         var tiles = BuildTiles(slicer, items, selected, bounds);
         var (multiSelectRect, clearFilterRect) = BuildHeaderIconRects(headerRect, slicer.ShowCaption);
+        var captionRect = BuildCaptionRect(headerRect, multiSelectRect);
 
         return new SlicerLayoutModel(
             Name: slicer.Name,
@@ -115,6 +117,7 @@ public static class SlicerLayoutBuilder
             HasActiveFilter: hasActiveFilter,
             Bounds: bounds,
             HeaderRect: headerRect,
+            CaptionRect: captionRect,
             BodyRect: bodyRect,
             Tiles: tiles,
             TotalItemCount: items.Count,
@@ -152,6 +155,7 @@ public static class SlicerLayoutBuilder
         var tiles = BuildFullTiles(slicer, items, selected, bounds, showCaption);
         var visibleCount = tiles.Count;
         var (multiSelectRect, clearFilterRect) = BuildHeaderIconRects(headerRect, showCaption);
+        var captionRect = BuildCaptionRect(headerRect, multiSelectRect);
 
         return new SlicerLayoutModel(
             Name: slicer.Name,
@@ -160,6 +164,7 @@ public static class SlicerLayoutBuilder
             HasActiveFilter: hasActiveFilter,
             Bounds: bounds,
             HeaderRect: headerRect,
+            CaptionRect: captionRect,
             BodyRect: bodyRect,
             Tiles: tiles,
             TotalItemCount: items.Count,
@@ -376,6 +381,24 @@ public static class SlicerLayoutBuilder
         var multiSelectLeft = clearFilterLeft - HeaderIconGap - HeaderIconSize;
         var multiSelectRect = new LayoutRect(multiSelectLeft, iconY, HeaderIconSize, HeaderIconSize);
         return (multiSelectRect, clearFilterRect);
+    }
+
+    private static LayoutRect BuildCaptionRect(LayoutRect headerRect, LayoutRect firstIconRect)
+    {
+        if (headerRect.Height <= 0 || headerRect.Width <= 0)
+            return new LayoutRect(headerRect.X, headerRect.Y, 0, 0);
+
+        const double CaptionPaddingLeft = 6;
+        const double CaptionIconGap = 4;
+        var right = firstIconRect.Width > 0
+            ? Math.Max(headerRect.Left + CaptionPaddingLeft, firstIconRect.Left - CaptionIconGap)
+            : headerRect.Right - CaptionPaddingLeft;
+
+        return new LayoutRect(
+            headerRect.Left + CaptionPaddingLeft,
+            headerRect.Top,
+            Math.Max(0, right - headerRect.Left - CaptionPaddingLeft),
+            headerRect.Height);
     }
 
     private static string? NullIfEmpty(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;

@@ -455,4 +455,17 @@ public sealed class TimelineLayoutBuilderTests
             layout.ClearFilterIconRect.Left,
             because: "dropdown label must not overlap the clear-filter icon");
     }
+
+    [Fact]
+    public void Build_HeaderCaptionRect_StopsBeforeDropdownAndClearFilterChrome()
+    {
+        var layout = TimelineLayoutBuilder.Build(
+            Timeline(selStart: "2024-03-01", selEnd: "2024-06-30"),
+            Bounds);
+
+        layout.CaptionRect.Left.Should().BeGreaterThan(layout.HeaderRect.Left);
+        layout.CaptionRect.Right.Should().BeLessThan(layout.GranularityDropdownRect.Left);
+        layout.CaptionRect.Top.Should().Be(layout.HeaderRect.Top);
+        layout.CaptionRect.Bottom.Should().Be(layout.HeaderRect.Bottom);
+    }
 }

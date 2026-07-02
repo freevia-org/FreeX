@@ -507,13 +507,22 @@ public sealed partial class MainWindow
         if (_isOpening || _isSaving)
             return;
 
-        // Label/Value filters open an in-app dialog (the command factory defers them).
-        if (TryOpenPivotFieldFilter(pivot, headers, target, action))
+        var actionPlan = PivotHeaderActionPlanner.Plan(action);
+        if (actionPlan.RouteKind == PivotHeaderActionRouteKind.None)
             return;
 
-        // Value Field Settings + More Sort Options open per-field dialogs (also deferred by the factory).
-        if (TryOpenPivotFieldSettings(pivot, headers, target, action))
+        if (actionPlan.RouteKind == PivotHeaderActionRouteKind.Deferred)
+        {
+            ShowEditIssue(actionPlan.DeferredReason ?? UiText.Get("PivotLoc_ActionNotAvailableYet"));
             return;
+        }
+
+        if (actionPlan.RouteKind == PivotHeaderActionRouteKind.Dialog &&
+            (TryOpenPivotFieldFilter(pivot, headers, target, action) ||
+             TryOpenPivotFieldSettings(pivot, headers, target, action)))
+        {
+            return;
+        }
 
         var result = PivotHeaderMenuCommandFactory.Create(
             _session.ActiveSheet.Id, pivot, headers, target, action, validator);

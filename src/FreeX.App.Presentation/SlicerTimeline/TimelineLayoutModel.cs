@@ -73,6 +73,7 @@ public sealed record TimelineLayoutModel(
     TimelineGranularity Granularity,
     LayoutRect Bounds,
     LayoutRect HeaderRect,
+    LayoutRect CaptionRect,
     LayoutRect DateLabelRect,
     LayoutRect YearBannerRect,
     LayoutRect TickLabelRect,
@@ -244,6 +245,7 @@ public static class TimelineLayoutBuilder
 
         var hasActiveFilter = HasActiveFilter(timeline);
         var (granDropdownRect, clearFilterRect) = BuildHeaderChromeRects(headerRect, hasActiveFilter);
+        var captionRect = BuildCaptionRect(headerRect, granDropdownRect, clearFilterRect);
 
         return new TimelineLayoutModel(
             Name: timeline.Name,
@@ -254,6 +256,7 @@ public static class TimelineLayoutBuilder
             Granularity: granularity,
             Bounds: bounds,
             HeaderRect: headerRect,
+            CaptionRect: captionRect,
             DateLabelRect: dateLabelRect,
             YearBannerRect: yearBannerRect,
             TickLabelRect: tickLabelRect,
@@ -309,6 +312,38 @@ public static class TimelineLayoutBuilder
             : new LayoutRect(headerRect.Right, headerRect.Top, 0, 0); // too narrow to show
 
         return (dropdownRect, clearFilterRect);
+    }
+
+    private static LayoutRect BuildCaptionRect(
+        LayoutRect headerRect,
+        LayoutRect dropdownRect,
+        LayoutRect clearFilterRect)
+    {
+        if (headerRect.Height <= 0 || headerRect.Width <= 0)
+            return new LayoutRect(headerRect.X, headerRect.Y, 0, 0);
+
+        const double CaptionPaddingLeft = 6;
+        const double CaptionChromeGap = 4;
+        var firstChromeLeft = FirstChromeLeft(dropdownRect, clearFilterRect);
+        var right = firstChromeLeft is { } left
+            ? Math.Max(headerRect.Left + CaptionPaddingLeft, left - CaptionChromeGap)
+            : headerRect.Right - CaptionPaddingLeft;
+
+        return new LayoutRect(
+            headerRect.Left + CaptionPaddingLeft,
+            headerRect.Top,
+            Math.Max(0, right - headerRect.Left - CaptionPaddingLeft),
+            headerRect.Height);
+    }
+
+    private static double? FirstChromeLeft(LayoutRect dropdownRect, LayoutRect clearFilterRect)
+    {
+        double? left = null;
+        if (dropdownRect.Width > 0)
+            left = dropdownRect.Left;
+        if (clearFilterRect.Width > 0)
+            left = left is { } current ? Math.Min(current, clearFilterRect.Left) : clearFilterRect.Left;
+        return left;
     }
 
     // Computes the visible window [windowStart, windowEnd) from the OOXML scrollPosition and
