@@ -79,7 +79,7 @@ public static class PresentationNotesPagePreviewPlanner
             pageBounds,
             slideBounds,
             notesBounds,
-            SplitNoteLines(notesText));
+            SplitNoteLines(notesText, notesBounds.Width));
     }
 
     private static LayoutRect BuildSlideBounds(LayoutRect pageBounds)
@@ -125,13 +125,90 @@ public static class PresentationNotesPagePreviewPlanner
             body.Paragraphs.Select(paragraph => string.Concat(paragraph.Runs.Select(run => run.Text))));
     }
 
-    private static IReadOnlyList<string> SplitNoteLines(string notesText) =>
-        string.IsNullOrWhiteSpace(notesText)
-            ? []
-            : notesText
-                .Replace("\r\n", "\n", StringComparison.Ordinal)
-                .Replace('\r', '\n')
-                .Split('\n')
-                .Select(line => line.TrimEnd())
-                .ToArray();
+    /// <summary>
+    /// Average width, in points, of one Helvetica glyph at font-size 1 (a conservative
+    /// approximation since the portable PDF writer has no real font-metrics table). Used only to
+    /// decide word-wrap break points; it deliberately over-estimates slightly so wrapped lines
+    /// never run past the notes-box width in the rendered PDF.
+    /// </summary>
+    private const double AverageGlyphWidthPerFontSize = 0.55;
+
+    private static IReadOnlyList<string> SplitNoteLines(
+        string notesText,
+        double notesBoxWidth,
+        double fontSize = PresentationNotesPagePdfExporter.NotesFontSize,
+        double inset = PresentationNotesPagePdfExporter.NotesInset)
+    {
+        if (string.IsNullOrWhiteSpace(notesText))
+            return [];
+
+        var paragraphs = notesText
+            .Replace("\r\n", "\n", StringComparison.Ordinal)
+            .Replace('\r', '\n')
+            .Split('\n')
+            .Select(line => line.TrimEnd());
+
+        var maxWidth = Math.Max(1, notesBoxWidth - (2 * inset));
+        var maxChars = Math.Max(1, (int)(maxWidth / Math.Max(0.01, fontSize * AverageGlyphWidthPerFontSize)));
+
+        var lines = new List<string>();
+        foreach (var paragraph in paragraphs)
+            lines.AddRange(WrapParagraph(paragraph, maxChars));
+
+        return lines;
+    }
+
+    /// <summary>
+    /// Breaks one paragraph into lines that each fit within <paramref name="maxChars"/>,
+    /// wrapping at word boundaries. A single word longer than <paramref name="maxChars"/> is
+    /// hard-broken so it never overruns the notes box width.
+    /// </summary>
+    private static IReadOnlyList<string> WrapParagraph(string paragraph, int maxChars)
+    {
+        if (paragraph.Length == 0)
+            return [string.Empty];
+
+        if (paragraph.Length <= maxChars)
+            return [paragraph];
+
+        var words = paragraph.Split(' ');
+        var lines = new List<string>();
+        var current = new System.Text.StringBuilder();
+
+        foreach (var word in words)
+        {
+            var candidateWord = word;
+            while (candidateWord.Length > maxChars)
+            {
+                if (current.Length > 0)
+                {
+                    lines.Add(current.ToString());
+                    current.Clear();
+                }
+
+                lines.Add(candidateWord[..maxChars]);
+                candidateWord = candidateWord[maxChars..];
+            }
+
+            var separatorLength = current.Length > 0 ? 1 : 0;
+            if (current.Length + separatorLength + candidateWord.Length > maxChars)
+            {
+                if (current.Length > 0)
+                    lines.Add(current.ToString());
+                current.Clear();
+                current.Append(candidateWord);
+            }
+            else
+            {
+                if (current.Length > 0)
+                    current.Append(' ');
+                current.Append(candidateWord);
+            }
+        }
+
+        if (current.Length > 0)
+            lines.Add(current.ToString());
+
+        return lines.Count == 0 ? [string.Empty] : lines;
+    }
 }

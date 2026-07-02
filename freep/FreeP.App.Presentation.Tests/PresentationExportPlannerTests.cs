@@ -322,6 +322,36 @@ public sealed class PresentationExportPlannerTests
     }
 
     [Fact]
+    public void NotesPagePdfRenderPlan_AllSlidesRange_ExportsOneNotesPagePerSlideForWholeDeck()
+    {
+        // IA1: the Avalonia notes-page PDF export must cover the whole deck (AllSlides), matching
+        // the WPF host, which passes no range (null) to FileCommands.ExportNotesPagePdf and so
+        // defaults to AllSlides via PresentationExportPlanner.BuildSlideRangePlan. Both requests
+        // must therefore produce the same number of pages for the same deck.
+        var deck = BuildNotesDeck();
+
+        var allSlidesPlan = PresentationNotesPagePdfExporter.BuildRenderPlan(
+            deck,
+            new PresentationNotesPagePdfExportRequest(new PresentationPrintRequest(
+                PresentationPrintLayoutKind.NotesPages,
+                new PresentationSlideRangeRequest(PresentationSlideRangeKind.AllSlides))));
+
+        var wpfHostEquivalentPlan = PresentationNotesPagePdfExporter.BuildRenderPlan(
+            deck,
+            new PresentationNotesPagePdfExportRequest(new PresentationPrintRequest(
+                PresentationPrintLayoutKind.NotesPages,
+                SlideRange: null)));
+
+        allSlidesPlan.PreviewPlans.Should().HaveCount(deck.Slides.Count);
+        allSlidesPlan.PreviewPlans.Select(preview => preview.SlideNumber).Should().Equal(1, 2, 3);
+        allSlidesPlan.Pages.Should().HaveCount(deck.Slides.Count);
+
+        allSlidesPlan.PrintPlan.SlideRange.SlideNumbers
+            .Should().Equal(wpfHostEquivalentPlan.PrintPlan.SlideRange.SlideNumbers);
+        allSlidesPlan.Pages.Should().HaveCount(wpfHostEquivalentPlan.Pages.Count);
+    }
+
+    [Fact]
     public void NotesPagePdfExportPlan_ExposesSharedCommandAndCurrentSlideRange()
     {
         var plan = PresentationExportPlanner.BuildNotesPagePdfExportPlan(
@@ -384,6 +414,70 @@ public sealed class PresentationExportPlannerTests
         emptyPlan.Pages[0].Ops.OfType<PdfText>().Select(text => text.Text)
             .Should()
             .Contain(PresentationNotesPagePreviewPlanner.EmptyNotesPlaceholder);
+    }
+
+    [Fact]
+    public void NotesPagePdfRenderPlan_LongSingleLine_WrapsToNotesBoxWidthWithoutOverrunning()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides.Clear();
+        presentation.Slides.Add(new Slide { Title = "Roadmap" });
+        var longLine = string.Join(
+            " ",
+            Enumerable.Range(1, 40).Select(i => $"word{i}"));
+        presentation.Slides[0].Notes = MakeTextBody(longLine);
+
+        var plan = PresentationNotesPagePreviewPlanner.Build(presentation, currentSlideIndex: 0);
+
+        plan.NoteLines.Count.Should().BeGreaterThan(1, "a long single line must be wrapped into multiple lines");
+        plan.NoteLines.Should().OnlyContain(line => line.Length > 0);
+        foreach (var line in plan.NoteLines)
+        {
+            var estimatedWidth = line.Length * 12 * 0.55;
+            estimatedWidth.Should().BeLessThanOrEqualTo(
+                plan.NotesBounds.Width,
+                "each wrapped line must fit within the notes box width, not overrun the right edge");
+        }
+
+        // Re-joining the wrapped lines must reproduce every original word (no silent word loss).
+        string.Join(" ", plan.NoteLines).Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .Should().Equal(longLine.Split(' '));
+    }
+
+    [Fact]
+    public void NotesPagePdfRenderPlan_VeryLongNotes_ContinuesOverflowOntoASubsequentPage()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides.Clear();
+        presentation.Slides.Add(new Slide { Title = "Deep dive" });
+        var paragraphs = Enumerable.Range(1, 60)
+            .Select(i => $"Speaker note line number {i} with enough words to be realistic.")
+            .ToArray();
+        presentation.Slides[0].Notes = MakeTextBody(paragraphs);
+
+        var renderPlan = PresentationNotesPagePdfExporter.BuildRenderPlan(presentation);
+
+        renderPlan.PreviewPlans.Should().ContainSingle();
+        var noteLines = renderPlan.PreviewPlans[0].NoteLines;
+        noteLines.Count.Should().Be(60, "each paragraph fits on one line at this length, so no extra wrap lines are expected");
+
+        // The notes box cannot hold 60 lines, so the export must continue onto a following page
+        // instead of silently dropping the remaining lines (PowerPoint continues overflow notes
+        // onto additional pages).
+        renderPlan.Pages.Count.Should().BeGreaterThan(1, "overflowing notes must continue onto a subsequent page, not be dropped");
+
+        var allPageText = renderPlan.Pages
+            .SelectMany(page => page.Ops.OfType<PdfText>())
+            .Select(text => text.Text)
+            .ToList();
+
+        allPageText.Should().Contain("Speaker note line number 1 with enough words to be realistic.");
+        allPageText.Should().Contain(
+            "Speaker note line number 60 with enough words to be realistic.",
+            "the last note line must appear on a continuation page rather than being dropped");
+
+        // Every page for this slide's notes repeats the slide thumbnail/border for context.
+        renderPlan.Pages.Should().OnlyContain(page => page.Ops.OfType<PdfStrokeRect>().Count() == 2);
     }
 
     [Fact]
