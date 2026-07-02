@@ -15,6 +15,7 @@ using FreeW.App.Avalonia.Backstage;
 using FreeW.App.Avalonia.Editing;
 using FreeW.App.Avalonia.Pdf;
 using FreeW.App.Avalonia.Ribbon;
+using FreeW.App.Presentation.Backstage;
 using FreeW.App.Presentation.Dialogs;
 using FreeW.App.Presentation.Options;
 using FreeW.App.Presentation.Ribbon;
@@ -34,6 +35,10 @@ public sealed class MainWindow : Window
             FreeWFileTextResources.PdfFileTypeName,
             ["*.pdf"],
             ["application/pdf"]);
+
+    private static readonly BackstageDirectPrintCapability AvaloniaDirectPrintCapability =
+        BackstageDirectPrintCapability.Deferred(
+            "The current Avalonia target exposes no native PrintDialog or printer service; use Print Preview or Create PDF for OS printing.");
 
     private readonly DocumentPersistenceWorkflow _documentPersistence = new();
     private readonly DocumentView _editor = new();
@@ -594,7 +599,11 @@ public sealed class MainWindow : Window
         try
         {
             var snapshot = CloneDocument(_editor.Document);
-            return new PrintPreviewDialog(snapshot, _fileWorkflow.DisplayName).ShowDialog(this);
+            return new PrintPreviewDialog(
+                snapshot,
+                _fileWorkflow.DisplayName,
+                ExportPdfAsync,
+                AvaloniaDirectPrintCapability).ShowDialog(this);
         }
         catch (Exception ex)
         {
@@ -1833,6 +1842,7 @@ public sealed class MainWindow : Window
             InspectDocument: () => _ = InspectDocumentAsync(),
             CheckAccessibility: () => _ = CheckAccessibilityAsync(),
             OpenOptions: () => _ = OpenOptionsAsync(),
+            DirectPrintCapability: AvaloniaDirectPrintCapability,
             PrintPreview: () => _ = OpenPrintPreviewAsync());
 
     private static TextDocument CloneDocument(TextDocument document)

@@ -1,4 +1,5 @@
 using Free.Shared.AppServices;
+using FreeW.App.Presentation.Backstage;
 using FreeW.App.Presentation.Options;
 using FreeW.Core.IO;
 using FreeW.Core.Model;
@@ -91,6 +92,12 @@ internal sealed record BackstageCallbacks(
 
     /// <summary>Open the FreeW options editor.</summary>
     Action OpenOptions,
+
+    /// <summary>Host capability/status for direct native print.</summary>
+    BackstageDirectPrintCapability? DirectPrintCapability = null,
+
+    /// <summary>Open the host native print surface when the Avalonia target supplies one.</summary>
+    Action? Print = null,
 
     /// <summary>Open the paginated print-preview surface. Direct native printing remains host-deferred.</summary>
     Action? PrintPreview = null);

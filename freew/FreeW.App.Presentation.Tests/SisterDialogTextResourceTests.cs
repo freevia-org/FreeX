@@ -65,7 +65,8 @@ public sealed class SisterDialogTextResourceTests
         BackstageViewTextResources.PrintPreviewEvidenceLabel.Should().Be("Print preview fidelity");
         BackstageViewTextResources.PdfExportEvidenceLabel.Should().Be("PDF export fidelity");
         BackstageViewTextResources.FixtureReadyEvidenceStatus.Should().Be("Fixture ready");
+        BackstageViewTextResources.HostBackedEvidenceStatus.Should().Be("Host backed");
         BackstageViewTextResources.DirectPrintDeferredNote
-            .Should().Contain("Direct printer output is planned");
+            .Should().Contain("Create PDF");
     }
 }

@@ -332,17 +332,19 @@ internal sealed class BackstageView : Window
 
     private Control BuildPrintPane()
     {
+        var printCapability = _callbacks.DirectPrintCapability ?? BackstageDirectPrintCapability.Deferred();
         var surface = BackstagePaneSurfacePlanner.BuildPrintPane(
             _callbacks.DisplayName,
             _callbacks.GetPageSettings(),
-            print: null,
+            print: _callbacks.Print,
             printPreview: _callbacks.PrintPreview is null
                 ? null
                 : () =>
                 {
                     Close();
                     _callbacks.PrintPreview();
-                });
+                },
+            directPrintCapability: printCapability);
 
         var content = new StackPanel { Spacing = 16 };
         content.Children.Add(BuildPaneHeader(surface.Title, surface.Description));
@@ -354,7 +356,7 @@ internal sealed class BackstageView : Window
             AddDetailRow(fieldGrid, field.Label, field.Value, $"PrintField_{field.Label}");
         content.Children.Add(fieldGrid);
 
-        // Print action groups — all disabled (real print is a deferred parity item)
+        // Print action groups are enabled or disabled by the shared capability/callback policy.
         foreach (var group in surface.Groups)
         {
             content.Children.Add(BuildSectionHeader(group.Heading));
@@ -683,6 +685,7 @@ internal sealed class BackstageView : Window
     private static string PrintEvidenceStatusLabel(BackstagePrintEvidenceStatus status) => status switch
     {
         BackstagePrintEvidenceStatus.FixtureReady => BackstageViewTextResources.FixtureReadyEvidenceStatus,
+        BackstagePrintEvidenceStatus.HostBacked => BackstageViewTextResources.HostBackedEvidenceStatus,
         BackstagePrintEvidenceStatus.Deferred => BackstageViewTextResources.DeferredEvidenceStatus,
         _ => status.ToString()
     };

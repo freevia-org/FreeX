@@ -29,6 +29,7 @@ public sealed class BackstagePrintPanePlannerTests
         plan.Fields.Should().Contain(row => row.Label == "Orientation" && row.Value == "Landscape");
         plan.Fields.Should().Contain(row => row.Label == "Margins" && row.Value.Contains("Bottom 1.25\"", StringComparison.Ordinal));
         plan.Fields.Should().Contain(row => row.Label == "Columns" && row.Value == "2 (spacing 0.5\")");
+        plan.Fields.Should().Contain(row => row.Label == "Direct print" && row.Value.StartsWith("Deferred -", StringComparison.Ordinal));
 
         plan.Groups.Should().Contain(group =>
             group.Heading == "Print" &&
@@ -48,6 +49,27 @@ public sealed class BackstagePrintPanePlannerTests
             row.Kind == BackstagePrintEvidenceKind.NativePrint &&
             row.Status == BackstagePrintEvidenceStatus.Deferred &&
             row.FixtureScenarioIds.Count == 0);
+    }
+
+    [Fact]
+    public void Build_WithNativePrintCapability_MarksDirectPrintHostBacked()
+    {
+        var plan = BackstagePrintPanePlanner.Build(
+            "Agenda",
+            new PageSettings(),
+            BackstageDirectPrintCapability.NativeDialogAvailable(
+                "WPF opens System.Windows.Controls.PrintDialog and prints the page-settings-aware paginator."));
+
+        plan.Fields.Should().Contain(row =>
+            row.Label == "Direct print" &&
+            row.Value == "Available - operating-system printer dialog");
+        plan.Groups.SelectMany(group => group.Actions)
+            .Single(action => action.Kind == BackstagePrintActionKind.Print)
+            .Description.Should().Be("Choose a printer and send the document to print.");
+        plan.Evidence.Should().Contain(row =>
+            row.Kind == BackstagePrintEvidenceKind.NativePrint &&
+            row.Status == BackstagePrintEvidenceStatus.HostBacked &&
+            row.Description.Contains("PrintDialog", StringComparison.Ordinal));
     }
 
     [Fact]

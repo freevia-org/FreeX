@@ -371,6 +371,7 @@ internal sealed class BackstageView : UserControl
     private static string PrintEvidenceStatusLabel(BackstagePrintEvidenceStatus status) => status switch
     {
         BackstagePrintEvidenceStatus.FixtureReady => BackstageViewTextResources.FixtureReadyEvidenceStatus,
+        BackstagePrintEvidenceStatus.HostBacked => BackstageViewTextResources.HostBackedEvidenceStatus,
         BackstagePrintEvidenceStatus.Deferred => BackstageViewTextResources.DeferredEvidenceStatus,
         _ => status.ToString()
     };

@@ -23,9 +23,15 @@ public static class BackstagePaneSurfacePlanner
         string displayName,
         PageSettings page,
         Action? print,
-        Action? printPreview)
+        Action? printPreview,
+        BackstageDirectPrintCapability? directPrintCapability = null)
     {
-        var plan = BackstagePrintPanePlanner.Build(displayName, page);
+        var effectiveDirectPrintCapability = directPrintCapability
+            ?? (print is null
+                ? BackstageDirectPrintCapability.Deferred()
+                : BackstageDirectPrintCapability.NativeDialogAvailable(
+                    "Direct native print is backed by the current host callback."));
+        var plan = BackstagePrintPanePlanner.Build(displayName, page, effectiveDirectPrintCapability);
 
         return new BackstagePrintPaneSurfaceSpec(
             BackstageViewTextResources.Print.Title,
@@ -39,7 +45,7 @@ public static class BackstagePaneSurfacePlanner
                     "PrintAction_" + action.Kind,
                     ResolvePrintAction(action.Kind, print, printPreview))).ToArray())).ToArray(),
             plan.Evidence,
-            print is null ? BackstageViewTextResources.DirectPrintDeferredNote : null);
+            effectiveDirectPrintCapability.DeferredNote);
     }
 
     public static BackstageInfoPaneSurfaceSpec BuildInfoPane(

@@ -2,7 +2,11 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading;
+using Avalonia.Automation;
+using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Interactivity;
+using Avalonia.LogicalTree;
 using Free.Shared.Shell;
 using FreeW.App.Avalonia.Backstage;
 using FreeW.App.Presentation.Backstage;
@@ -106,7 +110,9 @@ public class BackstageViewTests
         source.Should().Contain("BuildPrintEvidenceSection(surface.Evidence)");
         source.Should().Contain("PrintEvidence_");
         source.Should().Contain("BackstageViewTextResources.EvidenceSection");
-        source.Should().Contain("printPreview: _callbacks.PrintPreview is null");
+        source.Should().Contain("var printCapability = _callbacks.DirectPrintCapability");
+        source.Should().Contain("print: _callbacks.Print");
+        source.Should().Contain("directPrintCapability: printCapability");
         source.Should().Contain("AvaloniaBackstageChromeStyle BackstageChromeStyle");
         source.Should().Contain("AvaloniaBackstageChrome.CreateContentArea(");
         source.Should().Contain("AvaloniaBackstageChrome.CreateDescribedActionRow(");
@@ -127,6 +133,7 @@ public class BackstageViewTests
         source.Should().NotContain("restrictEditing: null");
         source.Should().NotContain("inspectDocument: null");
         source.Should().NotContain("checkAccessibility: null");
+        source.Should().NotContain("print: null");
         source.Should().NotContain("printPreview: null");
 
         sharedSource.Should().Contain("public static class AvaloniaBackstageChrome");
@@ -219,16 +226,53 @@ public class BackstageViewTests
             "Test.docx",
             new PageSettings(),
             print: null,
-            printPreview: () => { });
+            printPreview: () => { },
+            directPrintCapability: BackstageDirectPrintCapability.Deferred(
+                "The current Avalonia target exposes no native PrintDialog or printer service; use Print Preview or Create PDF for OS printing."));
 
         surface.DeferredNote.Should().Be(
             BackstageViewTextResources.DirectPrintDeferredNote,
-            "preview is now available in the Avalonia shell, but native printer selection is still deferred");
+            "preview and PDF export are available in the Avalonia shell, but native printer selection is not exposed by the target");
+        surface.Fields.Should().Contain(row =>
+            row.Label == "Direct print" &&
+            row.Value.Contains("current Avalonia target", StringComparison.Ordinal));
         var actions = surface.Groups.SelectMany(group => group.Actions).ToList();
         actions.Single(action => action.AutomationId == "PrintAction_Print")
             .IsEnabled.Should().BeFalse("native printer selection remains deferred");
+        actions.Single(action => action.AutomationId == "PrintAction_Print")
+            .Description.Should().Contain("Create PDF");
         actions.Where(action => action.AutomationId == "PrintAction_PrintPreview")
             .Should().OnlyContain(action => action.IsEnabled);
+    }
+
+    [Fact]
+    public async Task PrintPreviewDialog_uses_backed_create_pdf_fallback_when_native_print_is_deferred()
+    {
+        var exported = false;
+
+        await Session.Dispatch(() =>
+        {
+            var document = TextDocument.CreateEmpty();
+            var dialog = new PrintPreviewDialog(
+                document,
+                "Test.docx",
+                createPdf: () =>
+                {
+                    exported = true;
+                    return Task.CompletedTask;
+                },
+                directPrintCapability: BackstageDirectPrintCapability.Deferred(
+                    "The current Avalonia target exposes no native PrintDialog or printer service; use Print Preview or Create PDF for OS printing."));
+
+            var button = FindControl<Button>(dialog, "PrintPreviewPrintButton");
+            button.Content.Should().Be(BackstageViewTextResources.CreatePdfLabel);
+            button.IsEnabled.Should().BeTrue();
+            ToolTip.GetTip(button)!.ToString().Should().Contain("Direct printer output is not available");
+
+            button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        }, CancellationToken.None);
+
+        exported.Should().BeTrue();
     }
 
     [Fact]
@@ -286,6 +330,8 @@ public class BackstageViewTests
         callbacks.GetPageSettings.Should().NotBeNull();
         callbacks.GetCurrentOptions().Should().NotBeNull();
         callbacks.GetDataFolder().Should().NotBeNullOrWhiteSpace();
+        callbacks.DirectPrintCapability.Should().NotBeNull();
+        callbacks.DirectPrintCapability!.IsAvailable.Should().BeFalse();
         callbacks.PrintPreview.Should().NotBeNull();
     }
 
@@ -391,6 +437,19 @@ public class BackstageViewTests
             InspectDocument: () => { },
             CheckAccessibility: () => { },
             OpenOptions: () => { });
+
+    private static T FindControl<T>(Control root, string automationId)
+        where T : Control
+    {
+        if (root is T typedRoot && AutomationProperties.GetAutomationId(typedRoot) == automationId)
+            return typedRoot;
+
+        var found = root.GetLogicalDescendants()
+            .OfType<T>()
+            .FirstOrDefault(control => AutomationProperties.GetAutomationId(control) == automationId);
+        found.Should().NotBeNull($"control '{automationId}' should exist");
+        return found!;
+    }
 
     private static string FindRepoFile(params string[] parts) =>
         Path.Combine(FindRepoRoot(), Path.Combine(parts));

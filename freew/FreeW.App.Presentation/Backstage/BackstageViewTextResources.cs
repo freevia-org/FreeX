@@ -18,9 +18,10 @@ public static class BackstageViewTextResources
     public const string PdfExportEvidenceLabel = "PDF export fidelity";
     public const string NativePrintEvidenceLabel = "Native print";
     public const string FixtureReadyEvidenceStatus = "Fixture ready";
+    public const string HostBackedEvidenceStatus = "Host backed";
     public const string DeferredEvidenceStatus = "Deferred";
     public const string DirectPrintDeferredNote =
-        "Note: Print is available in FreeW via Export to PDF (Ctrl+Shift+P). Direct printer output is planned for a future update.";
+        "Note: Direct printer output is not available in the current host. Use Print Preview to review layout or Create PDF (Ctrl+Shift+P) to print through the operating system.";
     public const string CreatePdfSection = "Create PDF/XPS Document";
     public const string CreatePdfLabel = "Create PDF";
     public const string CreatePdfDescription = "Publish a fixed-layout PDF copy for sharing or printing.";
