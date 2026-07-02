@@ -74,7 +74,7 @@ public static class BackstagePrintPanePlanner
                 new(
                     BackstagePrintEvidenceKind.PrintPreviewFidelity,
                     BackstagePrintEvidenceStatus.FixtureReady,
-                    "Print Preview uses the paginated print-layout renderer and is covered by named visual evidence scenarios.",
+                    "Print Preview uses the paginated print-layout renderer; retained evidence must include paired WPF/Avalonia visual summary rows for the named scenarios.",
                     [
                         "backstage-print-preview-fidelity",
                         "page-composition-print-layout",
@@ -85,7 +85,7 @@ public static class BackstagePrintPanePlanner
                 new(
                     BackstagePrintEvidenceKind.PdfExportFidelity,
                     BackstagePrintEvidenceStatus.FixtureReady,
-                    "PDF export evidence is anchored by rasterized fixed-layout output scenarios so PDF pages can be compared against preview captures.",
+                    "PDF export evidence is anchored by rasterized fixed-layout output scenarios; missing paired WPF/Avalonia rows fail the visual summary contract.",
                     [
                         "backstage-pdf-export-fidelity",
                         "page-composition-print-layout",

@@ -206,7 +206,7 @@ try {
             actionableGaps = [int]$freew.summary.actionableGaps
             classifiedRows = $true
         }
-        nextSlice = "Backstage safety/print/export planner evidence now names native-print deferral plus PDF/preview fidelity fixture contracts; next closeout is running and retaining paired renderer captures for those scenarios."
+        nextSlice = "Backstage print/export planner evidence now has paired WPF/Avalonia renderer contracts for PDF/preview fidelity; missing real captures fail the visual-evidence summary instead of being inferred."
     }
 
     $freeP = [ordered]@{

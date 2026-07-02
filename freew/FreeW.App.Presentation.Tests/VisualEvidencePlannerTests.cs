@@ -57,6 +57,24 @@ public sealed class VisualEvidencePlannerTests
     }
 
     [Fact]
+    public void DefaultExpectedScenarios_RequiresPairedBackstageRendererEvidence()
+    {
+        var expected = FreeWVisualEvidenceManifestNormalizer.DefaultExpectedScenarios;
+
+        foreach (var scenarioId in FreeWVisualEvidenceManifestNormalizer.BackstageRendererScenarioIds)
+        {
+            expected.Should().Contain(e =>
+                e.HostId == FreeWVisualEvidenceManifestNormalizer.WpfHostId &&
+                e.ScenarioId == scenarioId &&
+                e.MinimumExpectedOutputs == 2);
+            expected.Should().Contain(e =>
+                e.HostId == FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId &&
+                e.ScenarioId == scenarioId &&
+                e.MinimumExpectedOutputs == 2);
+        }
+    }
+
+    [Fact]
     public void BuildPageExpectation_UsesSharedGeometryAndExpectedOutputName()
     {
         var page = new PageSettings
@@ -296,6 +314,54 @@ public sealed class VisualEvidencePlannerTests
                 && f.Contains("expected at least 1", StringComparison.Ordinal));
             Action act = () => FreeWVisualEvidenceManifestNormalizer.EnsureSummaryTrusted(summary);
             act.Should().Throw<InvalidOperationException>().WithMessage("*f2-comments*");
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void BuildNormalizedSummaryFromFiles_ReportsMissingBackstageRendererPair()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var wpfDir = Path.Combine(root, "wpf");
+            var row = BuildFileBackedRow(
+                root,
+                FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                "backstage-print-preview-fidelity",
+                pageNumber: 1,
+                pageCount: 2);
+            FreeWVisualEvidencePlanner.WriteManifest(
+                wpfDir,
+                [row],
+                new DateTimeOffset(2026, 7, 1, 12, 0, 0, TimeSpan.Zero));
+
+            var summary = FreeWVisualEvidenceManifestNormalizer.BuildNormalizedSummaryFromFiles(
+                [Path.Combine(wpfDir, FreeWVisualEvidencePlanner.ManifestFileName)],
+                root,
+                [
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        "backstage-print-preview-fidelity",
+                        2),
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                        "backstage-print-preview-fidelity",
+                        2)
+                ]);
+
+            summary.Trust.Passed.Should().BeFalse();
+            summary.Trust.Failures.Should().Contain(f =>
+                f.Contains("wpf-fidelity-render/backstage-print-preview-fidelity", StringComparison.Ordinal)
+                && f.Contains("expected at least 2", StringComparison.Ordinal)
+                && f.Contains("found 1", StringComparison.Ordinal));
+            summary.Trust.Failures.Should().Contain(f =>
+                f.Contains("avalonia-page-layout-shot/backstage-print-preview-fidelity", StringComparison.Ordinal)
+                && f.Contains("expected at least 2", StringComparison.Ordinal)
+                && f.Contains("found 0", StringComparison.Ordinal));
         }
         finally
         {

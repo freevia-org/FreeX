@@ -60,6 +60,11 @@ public static class FreeWVisualEvidenceManifestNormalizer
     public const string SummaryMarkdownFileName = "freew_visual_evidence_summary.md";
     public const string WpfHostId = "wpf-fidelity-render";
     public const string AvaloniaHostId = "avalonia-page-layout-shot";
+    public static IReadOnlyList<string> BackstageRendererScenarioIds { get; } =
+    [
+        "backstage-print-preview-fidelity",
+        "backstage-pdf-export-fidelity"
+    ];
 
     public static IReadOnlyList<FreeWVisualEvidenceExpectedScenario> DefaultExpectedScenarios { get; } =
         BuildDefaultExpectedScenarios();
@@ -250,6 +255,17 @@ public static class FreeWVisualEvidenceManifestNormalizer
             }
             else if (scenario.ExpectedFeatureTags.Contains("avalonia", StringComparer.OrdinalIgnoreCase))
             {
+                expected.Add(new FreeWVisualEvidenceExpectedScenario(
+                    AvaloniaHostId,
+                    scenario.ScenarioId,
+                    scenario.MinimumExpectedOutputs));
+            }
+            else if (BackstageRendererScenarioIds.Contains(scenario.ScenarioId, StringComparer.OrdinalIgnoreCase))
+            {
+                expected.Add(new FreeWVisualEvidenceExpectedScenario(
+                    WpfHostId,
+                    scenario.ScenarioId,
+                    scenario.MinimumExpectedOutputs));
                 expected.Add(new FreeWVisualEvidenceExpectedScenario(
                     AvaloniaHostId,
                     scenario.ScenarioId,
