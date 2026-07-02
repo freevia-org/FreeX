@@ -739,6 +739,116 @@ public sealed class PresentationReviewWorkflowPlannerTests
     }
 
     [Fact]
+    public void BuildAccessibilityCheckerPanePlan_ProjectsOrderedIssuesIntoSelectableRows()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var first = presentation.Slides[0];
+        first.Title = string.Empty;
+        first.Shapes.Add(new SlideShape
+        {
+            Id = 8,
+            Name = "Product image",
+            Kind = SlideShapeKind.Picture,
+            Picture = new ImagePart()
+        });
+        first.Shapes.Add(new SlideShape
+        {
+            Id = 9,
+            Name = "Website link",
+            Hyperlink = new Hyperlink { Url = "https://example.test" }
+        });
+        presentation.Slides.Add(new Slide { Title = "Second slide" });
+
+        var summary = PresentationReviewWorkflowPlanner.BuildAccessibilitySummaryPlan(presentation);
+        var plan = PresentationReviewWorkflowPlanner.BuildAccessibilityCheckerPanePlan(
+            presentation,
+            summary,
+            selectedRowIndex: 1);
+
+        plan.SlideCount.Should().Be(2);
+        plan.IssueCount.Should().Be(3);
+        plan.SelectedRowIndex.Should().Be(1);
+        plan.SelectedRow.Should().BeSameAs(plan.Rows[1]);
+        plan.Rows.Select(row => row.Title).Should().Equal(
+            "Missing slide title",
+            "Alt text missing",
+            "Hyperlink ScreenTip missing");
+        plan.Rows.Select(row => row.IsSelected).Should().Equal(false, true, false);
+        plan.Rows[0].Should().Be(new PresentationAccessibilityCheckerRowPlan(
+            0,
+            PresentationAccessibilityIssueSeverity.Warning,
+            "Slide title",
+            0,
+            "Slide 1",
+            null,
+            string.Empty,
+            "Missing slide title",
+            "PowerPoint accessibility checks expect each slide to have a meaningful title.",
+            false,
+            "Go to Slide",
+            null,
+            true,
+            false));
+        plan.Rows[1].Should().Be(new PresentationAccessibilityCheckerRowPlan(
+            1,
+            PresentationAccessibilityIssueSeverity.Warning,
+            "Alt text",
+            0,
+            "Slide 1",
+            8,
+            "Product image",
+            "Alt text missing",
+            "Product image should have persistent alt text.",
+            true,
+            "Open Alt Text",
+            PresentationReviewWorkflowPlanner.AltTextCommandId,
+            true,
+            true));
+        plan.Rows[2].Should().Be(new PresentationAccessibilityCheckerRowPlan(
+            2,
+            PresentationAccessibilityIssueSeverity.Info,
+            "Hyperlink",
+            0,
+            "Slide 1",
+            9,
+            "Website link",
+            "Hyperlink ScreenTip missing",
+            "Website link has a hyperlink without hover/help text.",
+            false,
+            "Edit Hyperlink",
+            PresentationReviewWorkflowPlanner.InsertLinkCommandId,
+            true,
+            true));
+    }
+
+    [Fact]
+    public void BuildAccessibilityCheckerPanePlan_NormalizesSelectionAndKeepsEmptyState()
+    {
+        var clean = Presentation.CreateEmpty();
+        clean.Slides[0].Title = "Intro";
+        var emptySummary = PresentationReviewWorkflowPlanner.BuildAccessibilitySummaryPlan(clean);
+        var empty = PresentationReviewWorkflowPlanner.BuildAccessibilityCheckerPanePlan(
+            clean,
+            emptySummary,
+            selectedRowIndex: 2);
+
+        empty.SelectedRowIndex.Should().Be(-1);
+        empty.SelectedRow.Should().BeNull();
+        empty.Rows.Should().BeEmpty();
+
+        var dirty = Presentation.CreateEmpty();
+        dirty.Slides[0].Title = string.Empty;
+        var dirtySummary = PresentationReviewWorkflowPlanner.BuildAccessibilitySummaryPlan(dirty);
+        var normalized = PresentationReviewWorkflowPlanner.BuildAccessibilityCheckerPanePlan(
+            dirty,
+            dirtySummary,
+            selectedRowIndex: 99);
+
+        normalized.SelectedRowIndex.Should().Be(0);
+        normalized.SelectedRow.Should().BeSameAs(normalized.Rows[0]);
+    }
+
+    [Fact]
     public void BuildReadingOrderPlan_DescribesCurrentSlideShapesAndSelectedItem()
     {
         var slide = new Slide();

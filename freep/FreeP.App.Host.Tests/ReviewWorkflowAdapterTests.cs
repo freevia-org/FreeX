@@ -145,6 +145,60 @@ public sealed class ReviewWorkflowAdapterTests
     }
 
     [StaFact]
+    public void MainWindow_AccessibilityCheckerPane_RendersSharedPlanAndRoutesRows()
+    {
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
+        try
+        {
+            var firstSlide = window.Editor.CurrentSlide!;
+            firstSlide.Title = "Intro";
+            var shape = new SlideShape
+            {
+                Id = 808,
+                Name = "Product image",
+                Kind = SlideShapeKind.Picture,
+                Picture = new ImagePart()
+            };
+            firstSlide.Shapes.Add(shape);
+            window.Editor.InsertSlide();
+            window.Editor.CurrentSlide!.Title = string.Empty;
+            window.Editor.SelectSlide(0);
+
+            var opened = window.ShowAccessibilityCheckerPane();
+
+            window.IsAccessibilityCheckerPaneVisible.Should().BeTrue();
+            window.AccessibilityCheckerPaneRowCount.Should().Be(2);
+            window.AccessibilityCheckerPaneSelectedRowCount.Should().Be(1);
+            window.AccessibilityCheckerPaneHeading.Should().Be("Accessibility - 2 issues");
+            opened.Rows.Select(row => row.Title).Should().Equal("Alt text missing", "Missing slide title");
+            opened.Rows[0].CommandHint.Should().Be(PresentationReviewWorkflowPlanner.AltTextCommandId);
+            opened.Rows[1].Should().Match<PresentationAccessibilityCheckerRowPlan>(row =>
+                row.Category == "Slide title" &&
+                row.ShouldNavigateToSlide &&
+                !row.ShouldSelectShape);
+
+            var selectedTitle = window.SelectAccessibilityCheckerRow(1);
+
+            window.Editor.CurrentSlideIndex.Should().Be(1);
+            window.Editor.SelectedShapeIds.Should().BeEmpty();
+            selectedTitle.SelectedRow.Should().NotBeNull();
+            selectedTitle.SelectedRow!.Title.Should().Be("Missing slide title");
+
+            var actionedAltText = window.ApplyAccessibilityCheckerRowAction(0);
+
+            window.Editor.CurrentSlideIndex.Should().Be(0);
+            window.Editor.SelectedShapeIds.Should().Equal(shape.Id);
+            window.IsAltTextPaneVisible.Should().BeTrue();
+            window.AltTextPaneMessage.Should().Be(PresentationReviewWorkflowPlanner.MissingAltTextDescriptionMessage);
+            actionedAltText.SelectedRow!.CommandHint.Should().Be(PresentationReviewWorkflowPlanner.AltTextCommandId);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [StaFact]
     public void MainWindow_ApplyProofingCorrection_UsesSharedMutationAndRefreshesPlans()
     {
         var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
