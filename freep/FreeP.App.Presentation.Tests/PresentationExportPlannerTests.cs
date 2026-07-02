@@ -93,6 +93,45 @@ public sealed class PresentationExportPlannerTests
     }
 
     [Fact]
+    public void NotesPagePreviewPlan_UsesCurrentSlideNotesPageRangeAndGeometry()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides.Clear();
+        presentation.Slides.Add(new Slide { Title = "Opening" });
+        presentation.Slides.Add(new Slide { Title = "Financial review" });
+        presentation.Slides[1].Notes = MakeTextBody("Mention revenue growth.", "Pause for questions.");
+
+        var plan = PresentationNotesPagePreviewPlanner.Build(presentation, currentSlideIndex: 1);
+
+        plan.PrintPlan.Layout.Layout.Should().Be(PresentationPrintLayoutKind.NotesPages);
+        plan.PrintPlan.SlideRange.SlideNumbers.Should().Equal(2);
+        plan.SlideIndex.Should().Be(1);
+        plan.SlideNumber.Should().Be(2);
+        plan.SlideTitle.Should().Be("Financial review");
+        plan.HasNotes.Should().BeTrue();
+        plan.NotesText.Should().Be($"Mention revenue growth.{Environment.NewLine}Pause for questions.");
+        plan.NoteLines.Should().Equal("Mention revenue growth.", "Pause for questions.");
+        plan.SlideBounds.Top.Should().BeGreaterThan(plan.PageBounds.Top);
+        plan.NotesBounds.Top.Should().BeGreaterThan(plan.SlideBounds.Bottom);
+        plan.NotesBounds.Bottom.Should().BeLessThanOrEqualTo(plan.PageBounds.Bottom);
+    }
+
+    [Fact]
+    public void NotesPagePreviewPlan_EmptyDeckProducesNoSlidePlan()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides.Clear();
+
+        var plan = PresentationNotesPagePreviewPlanner.Build(presentation, currentSlideIndex: 4);
+
+        plan.HasSlide.Should().BeFalse();
+        plan.HasNotes.Should().BeFalse();
+        plan.SlideTitle.Should().Be(PresentationNotesPagePreviewPlanner.EmptyDeckTitle);
+        plan.PrintPlan.SlideRange.DisplayName.Should().Be("No slides");
+        plan.NoteLines.Should().BeEmpty();
+    }
+
+    [Fact]
     public void HandoutLayoutPlan_ThreeSlidesPerPage_AddsPowerPointStyleWritingLines()
     {
         var request = new PresentationPrintRequest(
@@ -344,5 +383,18 @@ public sealed class PresentationExportPlannerTests
             if (Directory.Exists(outputDirectory))
                 Directory.Delete(outputDirectory, recursive: true);
         }
+    }
+
+    private static TextBody MakeTextBody(params string[] paragraphs)
+    {
+        var body = new TextBody();
+        foreach (var text in paragraphs)
+        {
+            var paragraph = new Paragraph();
+            paragraph.Runs.Add(new Run { Text = text });
+            body.Paragraphs.Add(paragraph);
+        }
+
+        return body;
     }
 }

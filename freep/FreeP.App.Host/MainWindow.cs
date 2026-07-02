@@ -142,6 +142,7 @@ public sealed class MainWindow : Window
     internal PresentationReadingOrderPlan? LastReadingOrderPlan { get; private set; }
     internal PresentationProofingRequestPlan? LastProofingRequestPlan { get; private set; }
     internal PresentationDesignCommandPlan? LastLayoutRequestPlan { get; private set; }
+    internal PresentationNotesPagePreviewPlan? LastNotesPagePreviewPlan { get; private set; }
     internal PresentationLayoutPickerPlan? LastLayoutPickerPlan { get; private set; }
     internal PresentationLayoutChoice? LastAppliedLayoutChoice { get; private set; }
     internal TableInsertionPickerPlan? LastTablePickerPlan { get; private set; }
@@ -312,7 +313,7 @@ public sealed class MainWindow : Window
         var bus = new PresentationCommandBus(_presentation);
         Editor  = new EditingSession(_presentation, bus);
 
-        Editor.Changed           += () => { _file.MarkDirty(); RefreshCanvas(); UpdateSlideCount(); UpdateTitle(); RefreshReviewWorkflowPlans(); };
+        Editor.Changed           += () => { _file.MarkDirty(); RefreshCanvas(); RefreshNotesPane(); UpdateSlideCount(); UpdateTitle(); RefreshReviewWorkflowPlans(); };
         Editor.CurrentSlideChanged += (_, _) => { RefreshCanvas(); RefreshNotesPane(); RefreshCommentPane(); RefreshReviewWorkflowPlans(); };
         Editor.SelectionChanged += (_, _) =>
         {
@@ -443,6 +444,9 @@ public sealed class MainWindow : Window
         {
             if (_notesRefreshing) return;
             Editor.SetCurrentSlideNotesText(_notesBox.Text);
+            LastNotesPagePreviewPlan = PresentationNotesPagePreviewPlanner.Build(
+                _presentation,
+                Editor.CurrentSlideIndex);
         };
 
         // Wave 11B: comment list pane — a collapsible strip above the notes pane.
@@ -674,6 +678,9 @@ public sealed class MainWindow : Window
         _notesRefreshing = true;
         try
         {
+            LastNotesPagePreviewPlan = PresentationNotesPagePreviewPlanner.Build(
+                _presentation,
+                Editor.CurrentSlideIndex);
             var notes = Editor.CurrentSlideNotes;
             if (notes is null)
             {

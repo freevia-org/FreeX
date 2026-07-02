@@ -1467,6 +1467,33 @@ public sealed class MainWindowHeadlessTests
             issue.ShapeId == 329 && issue.Title == "Alt text missing");
     }
 
+    [Fact]
+    public async Task Notes_pane_refreshes_shared_notes_page_preview_plan()
+    {
+        PresentationNotesPagePreviewPlan? initialPlan = null;
+        PresentationNotesPagePreviewPlan? editedPlan = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            initialPlan = window.LastNotesPagePreviewPlan;
+
+            window.Editor.CurrentSlide!.Title = "Roadmap";
+            window.Editor.SetCurrentSlideNotesText("Mention preview workflow.");
+            editedPlan = window.LastNotesPagePreviewPlan;
+        });
+
+        if (!ran) return;
+        initialPlan.Should().NotBeNull();
+        initialPlan!.PrintPlan.Layout.Layout.Should().Be(PresentationPrintLayoutKind.NotesPages);
+        editedPlan.Should().NotBeNull();
+        editedPlan!.SlideNumber.Should().Be(1);
+        editedPlan.SlideTitle.Should().Be("Roadmap");
+        editedPlan.NotesText.Should().Be("Mention preview workflow.");
+        editedPlan.HasNotes.Should().BeTrue();
+        editedPlan.PrintPlan.SlideRange.DisplayName.Should().Be("Slide 1");
+    }
+
     [Theory]
     [InlineData("freep.layout")]
     [InlineData("freep.find")]
