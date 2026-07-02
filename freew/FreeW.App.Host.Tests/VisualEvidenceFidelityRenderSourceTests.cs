@@ -16,6 +16,10 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
         source.Should().Contain("ComputeWpfPixelStats(");
         source.Should().Contain("FreeWVisualEvidencePlanner.ResolveSectionOrdinal");
         source.Should().Contain("sectionRelativePageNumber");
+        source.Should().Contain("f2-footnotes.docx");
+        source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildFootnotePlacementDocument");
+        source.Should().Contain("f2-endnotes.docx");
+        source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildEndnotePlacementDocument");
         source.Should().Contain("f2-columns.docx");
         source.Should().Contain("f2-border-watermark.docx");
         source.Should().Contain("table-layout-complex.docx");

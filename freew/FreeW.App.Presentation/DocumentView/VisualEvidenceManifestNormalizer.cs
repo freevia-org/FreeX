@@ -69,6 +69,11 @@ public static class FreeWVisualEvidenceManifestNormalizer
         "backstage-print-preview-fidelity",
         "backstage-pdf-export-fidelity"
     ];
+    public static IReadOnlyList<string> NoteRendererScenarioIds { get; } =
+    [
+        "f2-footnotes",
+        "f2-endnotes"
+    ];
     public static IReadOnlyList<string> TableRendererScenarioIds { get; } =
     [
         "table-layout-complex"
@@ -324,7 +329,18 @@ public static class FreeWVisualEvidenceManifestNormalizer
         var expected = new List<FreeWVisualEvidenceExpectedScenario>();
         foreach (var scenario in FreeWVisualEvidencePlanner.Scenarios)
         {
-            if (scenario.ScenarioId.StartsWith("f2-", StringComparison.OrdinalIgnoreCase))
+            if (NoteRendererScenarioIds.Contains(scenario.ScenarioId, StringComparer.OrdinalIgnoreCase))
+            {
+                expected.Add(new FreeWVisualEvidenceExpectedScenario(
+                    WpfHostId,
+                    scenario.ScenarioId,
+                    scenario.MinimumExpectedOutputs));
+                expected.Add(new FreeWVisualEvidenceExpectedScenario(
+                    AvaloniaHostId,
+                    scenario.ScenarioId,
+                    scenario.MinimumExpectedOutputs));
+            }
+            else if (scenario.ScenarioId.StartsWith("f2-", StringComparison.OrdinalIgnoreCase))
             {
                 expected.Add(new FreeWVisualEvidenceExpectedScenario(
                     WpfHostId,
