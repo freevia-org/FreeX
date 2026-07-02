@@ -21,7 +21,18 @@ try
     var summary = FreeWVisualEvidenceManifestNormalizer.BuildNormalizedSummaryFromFiles(
         options.ManifestPaths,
         runRoot);
-    if (!string.IsNullOrWhiteSpace(options.WordBaselineDirectory))
+    if (!string.IsNullOrWhiteSpace(options.WordBaselineUnavailableReason))
+    {
+        var tolerance = FreeWVisualBaselineComparisonPlanner.ResolveTolerance(options.BaselineToleranceName);
+        var baselineScope = FreeWWordBaselineEvidencePlanner.NormalizeBaselineScope(options.BaselineScopeName);
+        var comparisons = BuildUnavailableBaselineComparisons(
+            summary,
+            tolerance,
+            baselineScope,
+            options.WordBaselineUnavailableReason);
+        summary = FreeWVisualEvidenceManifestNormalizer.WithBaselineComparisons(summary, comparisons);
+    }
+    else if (!string.IsNullOrWhiteSpace(options.WordBaselineDirectory))
     {
         var baselineRoot = Path.GetFullPath(options.WordBaselineDirectory);
         var tolerance = FreeWVisualBaselineComparisonPlanner.ResolveTolerance(options.BaselineToleranceName);
@@ -39,6 +50,7 @@ try
     {
         Console.WriteLine($"baseline comparisons: {summary.BaselineComparisons.Count}");
         Console.WriteLine($"baseline tolerance: {summary.BaselineComparisons[0].Tolerance.Name}");
+        Console.WriteLine("baseline statuses: " + FormatStatusCounts(summary.BaselineComparisons));
     }
     Console.WriteLine($"trust: {(summary.Trust.Passed ? "passed" : "failed")}");
 
@@ -91,6 +103,10 @@ static Options Parse(string[] args)
             case "--baseline-scope":
                 options.BaselineScopeName = ReadValue(args, ref i, arg);
                 break;
+            case "--word-baseline-unavailable-reason":
+            case "--baseline-unavailable-reason":
+                options.WordBaselineUnavailableReason = ReadValue(args, ref i, arg);
+                break;
             case "--word-baseline-generated-corpus-only":
                 options.BaselineScopeName = FreeWWordBaselineEvidencePlanner.BaselineScopeGeneratedCorpus;
                 break;
@@ -122,9 +138,43 @@ static string ReadValue(string[] args, ref int index, string option)
 
 static void PrintUsage()
 {
-    Console.Error.WriteLine("usage: FreeW.VisualEvidenceSummary --run-root <dir> --manifest <manifest.json> [--manifest <manifest.json>] [--word-baseline-dir <dir>] [--baseline-tolerance <name>] [--word-baseline-scope all|generated-corpus] [--output-json <path>] [--output-md <path>]");
+    Console.Error.WriteLine("usage: FreeW.VisualEvidenceSummary --run-root <dir> --manifest <manifest.json> [--manifest <manifest.json>] [--word-baseline-dir <dir> | --word-baseline-unavailable-reason <reason>] [--baseline-tolerance <name>] [--word-baseline-scope all|generated-corpus] [--output-json <path>] [--output-md <path>]");
     Console.Error.WriteLine("baseline tolerances: " + string.Join(", ", FreeWVisualBaselineComparisonTolerance.BuiltIn.Select(t => t.Name)));
     Console.Error.WriteLine("baseline scopes: all, generated-corpus");
+}
+
+static IReadOnlyList<FreeWVisualBaselineComparison> BuildUnavailableBaselineComparisons(
+    FreeWVisualEvidenceNormalizedSummary summary,
+    FreeWVisualBaselineComparisonTolerance tolerance,
+    string baselineScope,
+    string unavailableReason)
+{
+    var comparisons = new List<FreeWVisualBaselineComparison>();
+    foreach (var row in summary.Evidence)
+    {
+        var policy = FreeWVisualBaselineComparisonPlanner.ResolveWordBaselinePolicy(row);
+        if (!FreeWWordBaselineEvidencePlanner.ShouldCompareToWordBaseline(row, baselineScope))
+        {
+            comparisons.Add(FreeWVisualBaselineComparisonPlanner.BuildSkippedBaselineComparison(
+                row,
+                tolerance,
+                $"scenario '{row.ScenarioId}' is outside Word baseline scope '{baselineScope}'"));
+            continue;
+        }
+
+        if (!policy.IsComparable)
+        {
+            comparisons.Add(FreeWVisualBaselineComparisonPlanner.BuildSkippedBaselineComparison(row, tolerance));
+            continue;
+        }
+
+        comparisons.Add(FreeWVisualBaselineComparisonPlanner.BuildWordBaselineUnavailableComparison(
+            row,
+            tolerance,
+            unavailableReason));
+    }
+
+    return comparisons;
 }
 
 static IReadOnlyList<FreeWVisualBaselineComparison> BuildBaselineComparisons(
@@ -241,12 +291,21 @@ static DecodedPng DecodePng(string path, int? targetWidth = null, int? targetHei
     return new DecodedPng(width, height, normalized.RowBytes, normalized.Bytes.ToArray());
 }
 
+static string FormatStatusCounts(IReadOnlyList<FreeWVisualBaselineComparison> comparisons) =>
+    string.Join(
+        ", ",
+        comparisons
+            .GroupBy(c => c.Status, StringComparer.OrdinalIgnoreCase)
+            .OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
+            .Select(g => $"{g.Key}={g.Count()}"));
+
 sealed class Options
 {
     public string? RunRoot { get; set; }
     public string? OutputJson { get; set; }
     public string? OutputMarkdown { get; set; }
     public string? WordBaselineDirectory { get; set; }
+    public string? WordBaselineUnavailableReason { get; set; }
     public string? BaselineToleranceName { get; set; }
     public string? BaselineScopeName { get; set; }
     public bool ShowHelp { get; set; }

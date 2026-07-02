@@ -59,7 +59,7 @@ public sealed record FreeWVisualEvidenceNormalizedSummary(
 public static class FreeWVisualEvidenceManifestNormalizer
 {
     public const string SummarySchemaId = "freew.visual-evidence-summary.v1";
-    public const int SummarySchemaVersion = 6;
+    public const int SummarySchemaVersion = 7;
     public const string SummaryJsonFileName = "freew_visual_evidence_summary.json";
     public const string SummaryMarkdownFileName = "freew_visual_evidence_summary.md";
     public const string WpfHostId = "wpf-fidelity-render";
@@ -251,8 +251,10 @@ public static class FreeWVisualEvidenceManifestNormalizer
             sb.AppendLine();
             sb.AppendLine("## Word Baseline Comparison");
             sb.AppendLine();
-            sb.AppendLine("| Host | Scenario | Output | Baseline | Status | Size | Mean Channel Delta | Mean Gray Delta | Changed Pixels | Tolerance |");
-            sb.AppendLine("| --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | --- |");
+            sb.AppendLine($"Status counts: {EscapeMarkdown(FormatBaselineStatusCounts(summary.BaselineComparisons))}");
+            sb.AppendLine();
+            sb.AppendLine("| Host | Scenario | Output | Baseline ID | Baseline Path | Status | Size | Mean Channel Delta | Mean Gray Delta | Changed Pixels | Tolerance | Limits | Notes |");
+            sb.AppendLine("| --- | --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | --- | --- | --- |");
             foreach (var comparison in summary.BaselineComparisons)
             {
                 var metrics = comparison.Metrics;
@@ -261,17 +263,17 @@ public static class FreeWVisualEvidenceManifestNormalizer
                     : $"{metrics.ActualWidth.ToString(CultureInfo.InvariantCulture)}x{metrics.ActualHeight.ToString(CultureInfo.InvariantCulture)} vs {metrics.BaselineWidth.ToString(CultureInfo.InvariantCulture)}x{metrics.BaselineHeight.ToString(CultureInfo.InvariantCulture)}{(metrics.BaselineResized ? " resized" : string.Empty)}";
                 var meanChannel = metrics?.MeanAbsoluteChannelDelta.ToString("0.####", CultureInfo.InvariantCulture) ?? "-";
                 var meanGray = metrics?.MeanAbsoluteGrayscaleDelta.ToString("0.####", CultureInfo.InvariantCulture) ?? "-";
-                var changed = metrics is null
-                    ? "-"
-                    : metrics.ChangedPixelRatio.ToString("P3", CultureInfo.InvariantCulture);
 
                 sb.AppendLine(
                     $"| {EscapeMarkdown(comparison.HostId)} | {EscapeMarkdown(comparison.ScenarioId)} | " +
                     $"{EscapeMarkdown(comparison.OutputName)} | " +
-                    $"{EscapeMarkdown(string.IsNullOrWhiteSpace(comparison.BaselinePath) ? string.Join(", ", comparison.CandidateBaselinePaths) : comparison.BaselinePath)} | " +
+                    $"{EscapeMarkdown(comparison.BaselineId)} | " +
+                    $"{EscapeMarkdown(FormatBaselinePath(comparison))} | " +
                     $"{EscapeMarkdown(comparison.Status)} | " +
-                    $"{EscapeMarkdown(size)} | {meanChannel} | {meanGray} | {changed} | " +
-                    $"{EscapeMarkdown(comparison.Tolerance.Name)} |");
+                    $"{EscapeMarkdown(size)} | {meanChannel} | {meanGray} | {FormatChangedPixels(metrics)} | " +
+                    $"{EscapeMarkdown(comparison.Tolerance.Name)} | " +
+                    $"{EscapeMarkdown(FormatToleranceLimits(comparison.Tolerance))} | " +
+                    $"{EscapeMarkdown(FormatComparisonNotes(comparison))} |");
             }
         }
 
@@ -964,6 +966,65 @@ public static class FreeWVisualEvidenceManifestNormalizer
         }
 
         return string.Join(", ", parts);
+    }
+
+    private static string FormatBaselineStatusCounts(
+        IReadOnlyList<FreeWVisualBaselineComparison> comparisons) =>
+        string.Join(
+            ", ",
+            comparisons
+                .GroupBy(c => c.Status, StringComparer.OrdinalIgnoreCase)
+                .OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
+                .Select(g => $"{g.Key}={g.Count().ToString(CultureInfo.InvariantCulture)}"));
+
+    private static string FormatBaselinePath(FreeWVisualBaselineComparison comparison)
+    {
+        if (!string.IsNullOrWhiteSpace(comparison.BaselinePath))
+            return comparison.BaselinePath;
+
+        if (comparison.CandidateBaselinePaths.Count > 0)
+            return string.Join(", ", comparison.CandidateBaselinePaths);
+
+        return "-";
+    }
+
+    private static string FormatChangedPixels(FreeWVisualBaselineComparisonMetrics? metrics)
+    {
+        if (metrics is null)
+            return "-";
+
+        return string.Concat(
+            metrics.ChangedPixels.ToString(CultureInfo.InvariantCulture),
+            "/",
+            metrics.ComparedPixels.ToString(CultureInfo.InvariantCulture),
+            " (",
+            metrics.ChangedPixelRatio.ToString("P3", CultureInfo.InvariantCulture),
+            ")");
+    }
+
+    private static string FormatToleranceLimits(FreeWVisualBaselineComparisonTolerance tolerance) =>
+        string.Concat(
+            "pixel delta > ",
+            tolerance.ChangedPixelDeltaThreshold.ToString(CultureInfo.InvariantCulture),
+            "; mean <= ",
+            tolerance.MaxMeanAbsoluteChannelDelta.ToString("0.####", CultureInfo.InvariantCulture),
+            "; gray <= ",
+            tolerance.MaxMeanAbsoluteGrayscaleDelta.ToString("0.####", CultureInfo.InvariantCulture),
+            "; changed <= ",
+            tolerance.MaxChangedPixelRatio.ToString("P3", CultureInfo.InvariantCulture),
+            "; dimensions ",
+            tolerance.RequireDimensionMatch ? "must match" : "may resize");
+
+    private static string FormatComparisonNotes(FreeWVisualBaselineComparison comparison)
+    {
+        var notes = new List<string>();
+        if (!string.IsNullOrWhiteSpace(comparison.SkipReason))
+            notes.Add(comparison.SkipReason);
+        notes.AddRange(comparison.Trust.Failures);
+
+        return notes.Count == 0
+            ? "-"
+            : string.Join("; ", notes.Distinct(StringComparer.OrdinalIgnoreCase));
     }
 
     private static string EscapeMarkdown(string value) =>

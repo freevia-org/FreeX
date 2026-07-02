@@ -473,6 +473,7 @@ public sealed class VisualEvidencePlannerTests
         source.Should().Contain("-AllowMissingWord");
         source.Should().Contain("--word-baseline-scope");
         source.Should().Contain("generated-corpus");
+        source.Should().Contain("--word-baseline-unavailable-reason");
         source.Should().Contain("_word_baseline_skipped.json");
         source.Should().Contain("FreeW.VisualEvidenceSummary.csproj");
     }
@@ -1229,6 +1230,7 @@ public sealed class VisualEvidencePlannerTests
         metrics.DimensionsMatch.Should().BeTrue();
         metrics.BaselineResized.Should().BeFalse();
         metrics.ComparedPixels.Should().Be(4);
+        metrics.ChangedPixels.Should().Be(1);
         metrics.MeanAbsoluteChannelDelta.Should().BeApproximately(1.6667, 0.0001);
         metrics.MeanAbsoluteGrayscaleDelta.Should().BeApproximately(1.495, 0.0001);
         metrics.ChangedPixelRatio.Should().Be(0.25);
@@ -1288,14 +1290,80 @@ public sealed class VisualEvidencePlannerTests
             withBaseline.Trust.Passed.Should().BeFalse();
             withBaseline.BaselineComparisons.Single().Status.Should().Be(
                 FreeWVisualBaselineComparisonPlanner.MissingBaselineStatus);
+            withBaseline.BaselineComparisons.Single().BaselineId.Should().Be(
+                "f2-hf-basic/p1/f2-hf-basic_p1.png");
+            withBaseline.BaselineComparisons.Single().BaselinePath.Should().BeEmpty();
             withBaseline.BaselineComparisons.Single().CandidateBaselinePaths.Should().Contain([
                 "f2-hf-basic/f2-hf-basic_p1.png",
                 "f2-hf-basic_p1.png"]);
+            withBaseline.BaselineComparisons.Single().SkipReason.Should().Contain(
+                "missing Word baseline PNG");
             withBaseline.Trust.Failures.Should().Contain(f =>
                 f.Contains("missing Word baseline PNG", StringComparison.Ordinal)
                 && f.Contains("f2-hf-basic/p1/f2-hf-basic_p1.png", StringComparison.Ordinal));
             Action act = () => FreeWVisualEvidenceManifestNormalizer.EnsureSummaryTrusted(withBaseline);
             act.Should().Throw<InvalidOperationException>().WithMessage("*missing Word baseline PNG*");
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void BuildUnavailableBaselineComparison_KeepsNoWordSummaryTrusted()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var wpfDir = Path.Combine(root, "wpf");
+            var row = BuildFileBackedRow(
+                root,
+                FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                "f2-hf-basic",
+                pageNumber: 1,
+                pageCount: 1);
+            FreeWVisualEvidencePlanner.WriteManifest(
+                wpfDir,
+                [row],
+                new DateTimeOffset(2026, 7, 1, 12, 0, 0, TimeSpan.Zero));
+            var summary = FreeWVisualEvidenceManifestNormalizer.BuildNormalizedSummaryFromFiles(
+                [Path.Combine(wpfDir, FreeWVisualEvidencePlanner.ManifestFileName)],
+                root,
+                [
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        "f2-hf-basic",
+                        1)
+                ]);
+
+            var comparison = FreeWVisualBaselineComparisonPlanner.BuildWordBaselineUnavailableComparison(
+                summary.Evidence.Single(),
+                FreeWVisualBaselineComparisonTolerance.WordPngDefault,
+                "COM ProgID 'Word.Application' is not registered");
+            var withBaseline = FreeWVisualEvidenceManifestNormalizer.WithBaselineComparisons(
+                summary,
+                [comparison]);
+
+            withBaseline.Trust.Passed.Should().BeTrue();
+            var unavailable = withBaseline.BaselineComparisons.Single();
+            unavailable.Status.Should().Be(FreeWVisualBaselineComparisonPlanner.WordBaselineUnavailableStatus);
+            unavailable.Metrics.Should().BeNull();
+            unavailable.SkipReason.Should().Contain("Word.Application");
+            unavailable.CandidateBaselinePaths.Should().Contain("f2-hf-basic/f2-hf-basic_p1.png");
+
+            var json = FreeWVisualEvidenceManifestNormalizer.ToJson(withBaseline);
+            using var doc = JsonDocument.Parse(json);
+            var baselineComparison = doc.RootElement.GetProperty("baselineComparisons")[0];
+            baselineComparison.GetProperty("status").GetString()
+                .Should().Be("word-baseline-unavailable");
+            baselineComparison.GetProperty("skipReason").GetString()
+                .Should().Contain("Word.Application");
+
+            var markdown = FreeWVisualEvidenceManifestNormalizer.ToMarkdown(withBaseline);
+            markdown.Should().Contain("Status counts: word-baseline-unavailable=1");
+            markdown.Should().Contain("COM ProgID 'Word.Application' is not registered");
+            markdown.Should().Contain("f2-hf-basic/f2-hf-basic_p1.png");
         }
         finally
         {
@@ -1357,17 +1425,27 @@ public sealed class VisualEvidencePlannerTests
 
             var json = FreeWVisualEvidenceManifestNormalizer.ToJson(withBaseline);
             using var doc = JsonDocument.Parse(json);
-            doc.RootElement.GetProperty("schemaVersion").GetInt32().Should().Be(6);
+            doc.RootElement.GetProperty("schemaVersion").GetInt32().Should().Be(7);
             var baselineComparison = doc.RootElement.GetProperty("baselineComparisons")[0];
             baselineComparison.GetProperty("status").GetString().Should().Be("passed");
+            baselineComparison.GetProperty("baselineId").GetString()
+                .Should().Be("f2-hf-basic/p1/f2-hf-basic_p1.png");
+            baselineComparison.GetProperty("baselineScenarioId").GetString()
+                .Should().Be("f2-hf-basic");
             baselineComparison.GetProperty("tolerance").GetProperty("name").GetString()
                 .Should().Be("word-png-default");
+            baselineComparison.GetProperty("metrics").GetProperty("changedPixels")
+                .GetInt64().Should().Be(0);
             baselineComparison.GetProperty("metrics").GetProperty("meanAbsoluteChannelDelta")
                 .GetDouble().Should().Be(0);
 
             var markdown = FreeWVisualEvidenceManifestNormalizer.ToMarkdown(withBaseline);
             markdown.Should().Contain("Word Baseline Comparison");
+            markdown.Should().Contain("Status counts: passed=1");
+            markdown.Should().Contain("f2-hf-basic/p1/f2-hf-basic_p1.png");
             markdown.Should().Contain("word-png-default");
+            markdown.Should().Contain("pixel delta > 8");
+            markdown.Should().Contain("0/4 (0.000 %)");
             markdown.Should().Contain("0.000 %");
         }
         finally
