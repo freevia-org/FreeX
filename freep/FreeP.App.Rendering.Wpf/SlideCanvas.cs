@@ -692,9 +692,6 @@ public sealed class SlideCanvas : FrameworkElement
         bool isBar = frame.IsBar;
         bool isScatterLike = frame.IsScatterLike;
         bool isRadar = frame.IsRadar;
-        double legendAreaW = frame.LegendAreaWidth;
-        double margin = ChartRenderPlanner.Margin;
-
         // Title
         if (chart.Title is not null)
         {
@@ -802,12 +799,13 @@ public sealed class SlideCanvas : FrameworkElement
         }
 
         // ── Secondary value axis (right side) ──────────────────────────────────
-        if (chart.SecondaryValueAxis is not null && !isPie && !isRadar && !isScatterLike && !isBar)
+        var secondaryAxisPlan = ChartRenderPlanner.BuildSecondaryValueAxisPrimitivePlan(chart, frame);
+        if (secondaryAxisPlan.Ticks.Count > 0 || secondaryAxisPlan.Labels.Count > 0)
         {
-            foreach (var label in ChartRenderPlanner.BuildSecondaryValueAxisLabelPlans(
-                chart,
-                plot,
-                bounds.X + bounds.Width - legendAreaW - margin))
+            var secondaryTickPen = CreateChartSecondaryAxisTickPen(secondaryAxisPlan);
+            foreach (var tick in secondaryAxisPlan.Ticks)
+                dc.DrawLine(secondaryTickPen, ToPoint(tick.Start), ToPoint(tick.End));
+            foreach (var label in secondaryAxisPlan.Labels)
             {
                 DrawChartLabel(dc, label.Text, ToRect(label.Bounds),
                     isBold: label.IsBold,
@@ -815,6 +813,9 @@ public sealed class SlideCanvas : FrameworkElement
                     align: ToTextAlignment(label.Alignment));
             }
         }
+
+        if (secondaryAxisPlan.Title is { } secondaryAxisTitle)
+            DrawChartAxisTitle(dc, secondaryAxisTitle);
 
         // ── Axis labels ────────────────────────────────────────────────────────
         foreach (var label in ChartRenderPlanner.BuildCategoryAxisLabelPlans(chart, frame))
@@ -2337,6 +2338,9 @@ public sealed class SlideCanvas : FrameworkElement
 
     internal static Pen CreateChartAxisTickPen(ChartMajorAxisTickPrimitivePlan plan) =>
         ToPen(plan.Stroke);
+
+    internal static Pen CreateChartSecondaryAxisTickPen(ChartSecondaryValueAxisPrimitivePlan plan) =>
+        ToPen(plan.TickStroke);
 
     private static Pen ToPen(ChartStrokePlan stroke)
     {
