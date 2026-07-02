@@ -24,6 +24,7 @@ public sealed class VisualEvidencePlannerTests
             "f2-comments",
             "table-layout-complex",
             "drawing-objects-complex",
+            "chart-smartart-complex",
             "page-composition-print-layout",
             "page-composition-columns",
             "page-composition-border-watermark",
@@ -66,6 +67,11 @@ public sealed class VisualEvidencePlannerTests
         drawingScenario.ExpectedFeatureTags.Should().Contain(["drawing-objects", "charts", "smartart", "wordart"]);
         drawingScenario.ExpectedOutputNamePattern.Should().Be("drawing-objects-complex_p{page}.png");
         drawingScenario.Composition.ExpectsFloatingObjects.Should().BeTrue();
+
+        var chartSmartArtScenario = FreeWVisualEvidencePlanner.ResolveScenario("chart-smartart-complex");
+        chartSmartArtScenario.ExpectedFeatureTags.Should().Contain(["chart-smartart", "chart-palette", "scatter-markers", "smartart-style"]);
+        chartSmartArtScenario.ExpectedOutputNamePattern.Should().Be("chart-smartart-complex_p{page}.png");
+        chartSmartArtScenario.MinimumExpectedOutputs.Should().Be(1);
     }
 
     [Fact]
@@ -110,6 +116,24 @@ public sealed class VisualEvidencePlannerTests
         var expected = FreeWVisualEvidenceManifestNormalizer.DefaultExpectedScenarios;
 
         foreach (var scenarioId in FreeWVisualEvidenceManifestNormalizer.DrawingObjectRendererScenarioIds)
+        {
+            expected.Should().Contain(e =>
+                e.HostId == FreeWVisualEvidenceManifestNormalizer.WpfHostId &&
+                e.ScenarioId == scenarioId &&
+                e.MinimumExpectedOutputs == 1);
+            expected.Should().Contain(e =>
+                e.HostId == FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId &&
+                e.ScenarioId == scenarioId &&
+                e.MinimumExpectedOutputs == 1);
+        }
+    }
+
+    [Fact]
+    public void DefaultExpectedScenarios_RequiresPairedChartSmartArtRendererEvidence()
+    {
+        var expected = FreeWVisualEvidenceManifestNormalizer.DefaultExpectedScenarios;
+
+        foreach (var scenarioId in FreeWVisualEvidenceManifestNormalizer.ChartSmartArtRendererScenarioIds)
         {
             expected.Should().Contain(e =>
                 e.HostId == FreeWVisualEvidenceManifestNormalizer.WpfHostId &&
@@ -249,6 +273,41 @@ public sealed class VisualEvidencePlannerTests
     }
 
     [Fact]
+    public void BuildPageExpectation_RecordsSharedChartSmartArtPlans()
+    {
+        var document = FreeWVisualEvidenceDocumentFactory.BuildChartSmartArtCompositionDocument();
+        var expectation = FreeWVisualEvidencePlanner.BuildPageExpectation(
+            "chart-smartart-complex",
+            document.Page,
+            pageNumber: 1,
+            pageCount: 1,
+            outputName: "chart-smartart-complex_p1.png",
+            document: document);
+
+        expectation.ChartSmartArt.ChartCount.Should().Be(2);
+        expectation.ChartSmartArt.SmartArtCount.Should().Be(1);
+        expectation.ChartSmartArt.HasChartPalette.Should().BeTrue();
+        expectation.ChartSmartArt.HasChartQuickLayout.Should().BeTrue();
+        expectation.ChartSmartArt.HasMarkerOnlyScatter.Should().BeTrue();
+        expectation.ChartSmartArt.HasLegend.Should().BeTrue();
+        expectation.ChartSmartArt.HasGridlines.Should().BeTrue();
+        expectation.ChartSmartArt.HasDataLabels.Should().BeTrue();
+        expectation.ChartSmartArt.HasAxisTitles.Should().BeTrue();
+        expectation.ChartSmartArt.HasPlotAreaFill.Should().BeTrue();
+        expectation.ChartSmartArt.HasSmartArtLayout.Should().BeTrue();
+        expectation.ChartSmartArt.HasSmartArtColorScheme.Should().BeTrue();
+        expectation.ChartSmartArt.HasSmartArtStyle.Should().BeTrue();
+        expectation.ChartSmartArt.SmartArtNodeCount.Should().Be(3);
+        expectation.ChartSmartArt.DistinctSmartArtFillCount.Should().BeGreaterThan(1);
+        expectation.ChartSmartArt.Charts.Should().Contain(plan =>
+            plan.Kind == ChartKind.Scatter &&
+            plan.GeometryKind == ChartVisualGeometryKind.MarkerOnly);
+        expectation.ChartSmartArt.SmartArts.Single().LayoutId.Should().Be("stepup1");
+        expectation.ChartSmartArt.SmartArts.Single().Nodes.Select(node => node.FillHex)
+            .Should().ContainInOrder("#1F3864", "#2F5496", "#4E81BD");
+    }
+
+    [Fact]
     public void ComputePixelStats_AndTrustGuard_RejectBlankAllBackgroundCapture()
     {
         var blank = new byte[20 * 20 * 4];
@@ -319,7 +378,7 @@ public sealed class VisualEvidencePlannerTests
         using var doc = JsonDocument.Parse(json);
         var root = doc.RootElement;
         root.GetProperty("schemaId").GetString().Should().Be("freew.visual-evidence.v1");
-        root.GetProperty("schemaVersion").GetInt32().Should().Be(4);
+        root.GetProperty("schemaVersion").GetInt32().Should().Be(5);
         root.GetProperty("product").GetString().Should().Be("FreeW");
         root.GetProperty("scenarios").GetArrayLength().Should().Be(1);
         var evidence = root.GetProperty("evidence")[0];
@@ -798,7 +857,7 @@ public sealed class VisualEvidencePlannerTests
 
             var json = FreeWVisualEvidenceManifestNormalizer.ToJson(withBaseline);
             using var doc = JsonDocument.Parse(json);
-            doc.RootElement.GetProperty("schemaVersion").GetInt32().Should().Be(5);
+            doc.RootElement.GetProperty("schemaVersion").GetInt32().Should().Be(6);
             var baselineComparison = doc.RootElement.GetProperty("baselineComparisons")[0];
             baselineComparison.GetProperty("status").GetString().Should().Be("passed");
             baselineComparison.GetProperty("tolerance").GetProperty("name").GetString()
@@ -893,6 +952,7 @@ public sealed class VisualEvidencePlannerTests
         {
             "table-layout-complex" => FreeWVisualEvidenceDocumentFactory.BuildComplexTableLayoutDocument(),
             "drawing-objects-complex" => FreeWVisualEvidenceDocumentFactory.BuildDrawingObjectsCompositionDocument(),
+            "chart-smartart-complex" => FreeWVisualEvidenceDocumentFactory.BuildChartSmartArtCompositionDocument(),
             "page-composition-floating-image" => BuildFloatingImageDocument(),
             _ => null
         };

@@ -1217,6 +1217,12 @@ static void GenerateF2FlowCorpus(string outDir)
         Console.WriteLine("  wrote drawing-objects-complex.docx");
     }
 
+    {
+        var doc = FreeWVisualEvidenceDocumentFactory.BuildChartSmartArtCompositionDocument();
+        DocxWriter.Write(doc, Path.Combine(outDir, "chart-smartart-complex.docx"));
+        Console.WriteLine("  wrote chart-smartart-complex.docx");
+    }
+
     // ─── 6. Section break with page-size change (portrait → landscape) ───────────────────────────
     // SG: FreeW/OOXML section-break semantics: a SectionBreak on paragraph P describes the section
     // that ENDS at P (the "preceding" section). The FINAL section is described by doc.Page.
@@ -1387,7 +1393,7 @@ static void GenerateF2FlowCorpus(string outDir)
         Console.WriteLine("  wrote backstage-pdf-export-fidelity.docx");
     }
 
-    Console.WriteLine($"\nDone - 14 corpus files written to {outDir}");
+    Console.WriteLine($"\nDone - 15 corpus files written to {outDir}");
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════════════════════════

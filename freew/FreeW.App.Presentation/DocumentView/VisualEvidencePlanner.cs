@@ -117,6 +117,25 @@ public sealed record FreeWVisualDrawingObjectExpectation(
     bool HasZOrder,
     IReadOnlyList<DocumentFloatingObjectSnapshot> Objects);
 
+public sealed record FreeWVisualChartSmartArtExpectation(
+    int ChartCount,
+    int SmartArtCount,
+    bool HasChartPalette,
+    bool HasChartQuickLayout,
+    bool HasMarkerOnlyScatter,
+    bool HasLegend,
+    bool HasGridlines,
+    bool HasDataLabels,
+    bool HasAxisTitles,
+    bool HasPlotAreaFill,
+    bool HasSmartArtLayout,
+    bool HasSmartArtColorScheme,
+    bool HasSmartArtStyle,
+    int SmartArtNodeCount,
+    int DistinctSmartArtFillCount,
+    IReadOnlyList<ChartVisualPlan> Charts,
+    IReadOnlyList<SmartArtVisualPlan> SmartArts);
+
 public sealed record FreeWVisualPageExpectation(
     int PageNumber,
     int PageCount,
@@ -127,6 +146,7 @@ public sealed record FreeWVisualPageExpectation(
     FreeWVisualPageFeatureExpectation Features,
     FreeWVisualTableExpectation Tables,
     FreeWVisualDrawingObjectExpectation DrawingObjects,
+    FreeWVisualChartSmartArtExpectation ChartSmartArt,
     string? HeaderSlotName,
     string? FooterSlotName,
     bool HasFootnotes,
@@ -200,7 +220,7 @@ public static class FreeWVisualEvidencePlanner
 {
     public const string ManifestFileName = "freew_visual_evidence_manifest.json";
     public const string SchemaId = "freew.visual-evidence.v1";
-    public const int SchemaVersion = 4;
+    public const int SchemaVersion = 5;
 
     private const int MaxTrackedColorCount = 4096;
 
@@ -324,6 +344,31 @@ public static class FreeWVisualEvidencePlanner
             1,
             DocumentViewLayoutKind.PrintLayout,
             BodyPrintComposition with { ExpectsTables = true }),
+        new(
+            "chart-smartart-complex",
+            "Complex Word-style chart and SmartArt fidelity capture.",
+            [
+                "chart-smartart",
+                "charts",
+                "smartart",
+                "print-layout",
+                "body-text",
+                "chart-palette",
+                "quick-layout",
+                "scatter-markers",
+                "chart-legend",
+                "chart-gridlines",
+                "data-labels",
+                "axis-titles",
+                "plot-area-fill",
+                "smartart-layout",
+                "smartart-colors",
+                "smartart-style"
+            ],
+            "chart-smartart-complex_p{page}.png",
+            1,
+            DocumentViewLayoutKind.PrintLayout,
+            BodyPrintComposition),
         new(
             "drawing-objects-complex",
             "Complex Word-style drawing-object fidelity capture.",
@@ -505,6 +550,7 @@ public static class FreeWVisualEvidencePlanner
             sectionOwnerId);
         var tables = BuildTableExpectation(document);
         var drawingObjects = BuildDrawingObjectExpectation(document, surface, features.Columns.Count);
+        var chartSmartArt = BuildChartSmartArtExpectation(document);
 
         var expectedOutputName = ExpectedOutputName(scenario.ScenarioId, pageNumber, outputName);
         return new FreeWVisualPageExpectation(
@@ -517,6 +563,7 @@ public static class FreeWVisualEvidencePlanner
             features,
             tables,
             drawingObjects,
+            chartSmartArt,
             headerSlotName,
             footerSlotName,
             hasFootnotes,
@@ -788,6 +835,56 @@ public static class FreeWVisualEvidencePlanner
             Objects: objects);
     }
 
+    public static FreeWVisualChartSmartArtExpectation BuildChartSmartArtExpectation(TextDocument? document)
+    {
+        if (document is null)
+            return EmptyChartSmartArtExpectation;
+
+        var chartModels = EnumerateRuns(document)
+            .Select(run => run.Chart)
+            .Where(chart => chart is not null)
+            .Cast<Chart>()
+            .ToList();
+        var smartArtModels = EnumerateRuns(document)
+            .Select(run => run.SmartArt)
+            .Where(smartArt => smartArt is not null)
+            .Cast<SmartArt>()
+            .ToList();
+
+        if (chartModels.Count == 0 && smartArtModels.Count == 0)
+            return EmptyChartSmartArtExpectation;
+
+        var charts = chartModels
+            .Select(ChartSmartArtVisualPlanner.BuildChartPlan)
+            .ToList();
+        var smartArts = smartArtModels
+            .Select(ChartSmartArtVisualPlanner.BuildSmartArtPlan)
+            .ToList();
+        var smartArtNodeCount = smartArts.Sum(plan => plan.Nodes.Count);
+
+        return new FreeWVisualChartSmartArtExpectation(
+            ChartCount: charts.Count,
+            SmartArtCount: smartArts.Count,
+            HasChartPalette: charts.Any(plan => plan.PaletteHex.Count > 0),
+            HasChartQuickLayout: chartModels.Any(chart => chart.QuickLayoutId > 0),
+            HasMarkerOnlyScatter: charts.Any(plan => plan.GeometryKind == ChartVisualGeometryKind.MarkerOnly),
+            HasLegend: charts.Any(plan => plan.ShowLegend),
+            HasGridlines: charts.Any(plan => plan.ShowGridlines),
+            HasDataLabels: charts.Any(plan => plan.ShowDataLabels),
+            HasAxisTitles: charts.Any(plan => plan.ShowAxisTitles),
+            HasPlotAreaFill: charts.Any(plan => plan.PlotAreaFill),
+            HasSmartArtLayout: smartArts.Any(plan => !string.IsNullOrWhiteSpace(plan.LayoutId)),
+            HasSmartArtColorScheme: smartArts.Any(plan => !string.IsNullOrWhiteSpace(plan.ColorScheme.Id)),
+            HasSmartArtStyle: smartArts.Any(plan => !string.IsNullOrWhiteSpace(plan.Style.Id)),
+            SmartArtNodeCount: smartArtNodeCount,
+            DistinctSmartArtFillCount: smartArts
+                .SelectMany(plan => plan.Nodes.Select(node => node.FillHex))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Count(),
+            Charts: charts,
+            SmartArts: smartArts);
+    }
+
     public static void EnsureTrusted(FreeWVisualEvidenceRow row)
     {
         ArgumentNullException.ThrowIfNull(row);
@@ -983,6 +1080,57 @@ public static class FreeWVisualEvidencePlanner
         HasTopAndBottomWrap: false,
         HasZOrder: false,
         Objects: []);
+
+    private static FreeWVisualChartSmartArtExpectation EmptyChartSmartArtExpectation { get; } = new(
+        ChartCount: 0,
+        SmartArtCount: 0,
+        HasChartPalette: false,
+        HasChartQuickLayout: false,
+        HasMarkerOnlyScatter: false,
+        HasLegend: false,
+        HasGridlines: false,
+        HasDataLabels: false,
+        HasAxisTitles: false,
+        HasPlotAreaFill: false,
+        HasSmartArtLayout: false,
+        HasSmartArtColorScheme: false,
+        HasSmartArtStyle: false,
+        SmartArtNodeCount: 0,
+        DistinctSmartArtFillCount: 0,
+        Charts: [],
+        SmartArts: []);
+
+    private static IEnumerable<Run> EnumerateRuns(TextDocument document)
+    {
+        foreach (var paragraph in EnumerateParagraphs(document))
+        {
+            foreach (var run in paragraph.Runs)
+                yield return run;
+        }
+    }
+
+    private static IEnumerable<Paragraph> EnumerateParagraphs(TextDocument document)
+    {
+        foreach (var block in document.Blocks)
+        {
+            switch (block)
+            {
+                case Paragraph paragraph:
+                    yield return paragraph;
+                    break;
+                case Table table:
+                    foreach (var row in table.Rows)
+                    {
+                        foreach (var cell in row.Cells)
+                        {
+                            foreach (var paragraph in cell.Paragraphs)
+                                yield return paragraph;
+                        }
+                    }
+                    break;
+            }
+        }
+    }
 
     private static double RoundDip(double value) =>
         double.IsFinite(value) ? Math.Round(value, 3, MidpointRounding.AwayFromZero) : 0;

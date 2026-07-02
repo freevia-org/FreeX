@@ -43,6 +43,7 @@ public sealed record FreeWVisualEvidenceNormalizedRow(
     FreeWVisualPageFeatureExpectation PageFeatures,
     FreeWVisualTableExpectation Tables,
     FreeWVisualDrawingObjectExpectation DrawingObjects,
+    FreeWVisualChartSmartArtExpectation ChartSmartArt,
     FreeWVisualEvidenceTrust Trust);
 
 public sealed record FreeWVisualEvidenceNormalizedSummary(
@@ -58,7 +59,7 @@ public sealed record FreeWVisualEvidenceNormalizedSummary(
 public static class FreeWVisualEvidenceManifestNormalizer
 {
     public const string SummarySchemaId = "freew.visual-evidence-summary.v1";
-    public const int SummarySchemaVersion = 5;
+    public const int SummarySchemaVersion = 6;
     public const string SummaryJsonFileName = "freew_visual_evidence_summary.json";
     public const string SummaryMarkdownFileName = "freew_visual_evidence_summary.md";
     public const string WpfHostId = "wpf-fidelity-render";
@@ -75,6 +76,10 @@ public static class FreeWVisualEvidenceManifestNormalizer
     public static IReadOnlyList<string> DrawingObjectRendererScenarioIds { get; } =
     [
         "drawing-objects-complex"
+    ];
+    public static IReadOnlyList<string> ChartSmartArtRendererScenarioIds { get; } =
+    [
+        "chart-smartart-complex"
     ];
 
     public static IReadOnlyList<FreeWVisualEvidenceExpectedScenario> DefaultExpectedScenarios { get; } =
@@ -366,6 +371,17 @@ public static class FreeWVisualEvidenceManifestNormalizer
                     scenario.ScenarioId,
                     scenario.MinimumExpectedOutputs));
             }
+            else if (ChartSmartArtRendererScenarioIds.Contains(scenario.ScenarioId, StringComparer.OrdinalIgnoreCase))
+            {
+                expected.Add(new FreeWVisualEvidenceExpectedScenario(
+                    WpfHostId,
+                    scenario.ScenarioId,
+                    scenario.MinimumExpectedOutputs));
+                expected.Add(new FreeWVisualEvidenceExpectedScenario(
+                    AvaloniaHostId,
+                    scenario.ScenarioId,
+                    scenario.MinimumExpectedOutputs));
+            }
         }
 
         return expected;
@@ -462,6 +478,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
             row.PageExpectation.Features,
             row.PageExpectation.Tables,
             row.PageExpectation.DrawingObjects,
+            row.PageExpectation.ChartSmartArt,
             trust);
     }
 
@@ -483,6 +500,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
             rowFailures.Add("scenario expects floating objects but the page expectation records none");
         ValidateTableFeatureTags(row, rowFailures);
         ValidateDrawingObjectFeatureTags(row, rowFailures);
+        ValidateChartSmartArtFeatureTags(row, rowFailures);
         if (features.Section.SectionOrdinal <= 0)
             rowFailures.Add("section ordinal must be positive");
         if (features.Section.SectionRelativePageNumber <= 0)
@@ -553,6 +571,45 @@ public static class FreeWVisualEvidenceManifestNormalizer
             rowFailures.Add("drawing-object evidence expects top-and-bottom wrapping but the object plan records none");
         if (tags.Contains("z-order", StringComparer.OrdinalIgnoreCase) && !objects.HasZOrder)
             rowFailures.Add("drawing-object evidence expects z-order depth but the object plan records a single layer");
+    }
+
+    private static void ValidateChartSmartArtFeatureTags(
+        FreeWVisualEvidenceRow row,
+        List<string> rowFailures)
+    {
+        var tags = row.ExpectedFeatureTags;
+        var chartSmartArt = row.PageExpectation.ChartSmartArt;
+        if (!tags.Contains("chart-smartart", StringComparer.OrdinalIgnoreCase))
+            return;
+
+        if (tags.Contains("charts", StringComparer.OrdinalIgnoreCase) && chartSmartArt.ChartCount <= 0)
+            rowFailures.Add("chart/SmartArt evidence expects charts but the page expectation records none");
+        if (tags.Contains("smartart", StringComparer.OrdinalIgnoreCase) && chartSmartArt.SmartArtCount <= 0)
+            rowFailures.Add("chart/SmartArt evidence expects SmartArt but the page expectation records none");
+        if (tags.Contains("chart-palette", StringComparer.OrdinalIgnoreCase) && !chartSmartArt.HasChartPalette)
+            rowFailures.Add("chart/SmartArt evidence expects chart palettes but the chart plan records none");
+        if (tags.Contains("quick-layout", StringComparer.OrdinalIgnoreCase) && !chartSmartArt.HasChartQuickLayout)
+            rowFailures.Add("chart/SmartArt evidence expects a chart quick layout but the chart plan records none");
+        if (tags.Contains("scatter-markers", StringComparer.OrdinalIgnoreCase) && !chartSmartArt.HasMarkerOnlyScatter)
+            rowFailures.Add("chart/SmartArt evidence expects marker-only scatter geometry but the chart plan records none");
+        if (tags.Contains("chart-legend", StringComparer.OrdinalIgnoreCase) && !chartSmartArt.HasLegend)
+            rowFailures.Add("chart/SmartArt evidence expects chart legends but the chart plan records none");
+        if (tags.Contains("chart-gridlines", StringComparer.OrdinalIgnoreCase) && !chartSmartArt.HasGridlines)
+            rowFailures.Add("chart/SmartArt evidence expects chart gridlines but the chart plan records none");
+        if (tags.Contains("data-labels", StringComparer.OrdinalIgnoreCase) && !chartSmartArt.HasDataLabels)
+            rowFailures.Add("chart/SmartArt evidence expects chart data labels but the chart plan records none");
+        if (tags.Contains("axis-titles", StringComparer.OrdinalIgnoreCase) && !chartSmartArt.HasAxisTitles)
+            rowFailures.Add("chart/SmartArt evidence expects chart axis titles but the chart plan records none");
+        if (tags.Contains("plot-area-fill", StringComparer.OrdinalIgnoreCase) && !chartSmartArt.HasPlotAreaFill)
+            rowFailures.Add("chart/SmartArt evidence expects chart plot-area fill but the chart plan records none");
+        if (tags.Contains("smartart-layout", StringComparer.OrdinalIgnoreCase) && !chartSmartArt.HasSmartArtLayout)
+            rowFailures.Add("chart/SmartArt evidence expects SmartArt layout metadata but the SmartArt plan records none");
+        if (tags.Contains("smartart-colors", StringComparer.OrdinalIgnoreCase) && !chartSmartArt.HasSmartArtColorScheme)
+            rowFailures.Add("chart/SmartArt evidence expects SmartArt color scheme metadata but the SmartArt plan records none");
+        if (tags.Contains("smartart-style", StringComparer.OrdinalIgnoreCase) && !chartSmartArt.HasSmartArtStyle)
+            rowFailures.Add("chart/SmartArt evidence expects SmartArt style metadata but the SmartArt plan records none");
+        if (chartSmartArt.SmartArtCount > 0 && chartSmartArt.SmartArtNodeCount <= 0)
+            rowFailures.Add("chart/SmartArt evidence includes SmartArt but records no nodes");
     }
 
     private static IReadOnlyList<FreeWVisualEvidenceNormalizedScenario> BuildScenarioSummaries(
@@ -767,6 +824,12 @@ public static class FreeWVisualEvidenceManifestNormalizer
             parts.Add(
                 $"{row.DrawingObjects.FloatingObjectCount.ToString(CultureInfo.InvariantCulture)} drawing object(s), " +
                 $"{row.DrawingObjects.BehindTextCount.ToString(CultureInfo.InvariantCulture)} behind text");
+        }
+        if (row.ChartSmartArt.ChartCount > 0 || row.ChartSmartArt.SmartArtCount > 0)
+        {
+            parts.Add(
+                $"{row.ChartSmartArt.ChartCount.ToString(CultureInfo.InvariantCulture)} chart(s), " +
+                $"{row.ChartSmartArt.SmartArtCount.ToString(CultureInfo.InvariantCulture)} SmartArt");
         }
 
         return string.Join(", ", parts);
