@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.Json;
 using FreeW.Core.Model;
+using FreeW.App.Presentation.Ribbon;
 
 namespace FreeW.App.Presentation.DocumentView;
 
@@ -53,6 +54,15 @@ public sealed record FreeWVisualSectionExpectation(
     string OwnerId,
     int SectionOrdinal,
     int SectionRelativePageNumber);
+
+public sealed record FreeWVisualSectionGeometryPagePlan(
+    int PageNumber,
+    int PageCount,
+    PageSettings Page,
+    int SectionOrdinal,
+    int SectionRelativePageNumber,
+    string SectionOwnerId,
+    string Orientation);
 
 public sealed record FreeWVisualColumnExpectation(
     int Count,
@@ -649,6 +659,36 @@ public static class FreeWVisualEvidencePlanner
     public static string BuildSectionOwnerId(int sectionOrdinal) =>
         "section-" + Math.Max(1, sectionOrdinal).ToString(CultureInfo.InvariantCulture);
 
+    public static IReadOnlyList<FreeWVisualSectionGeometryPagePlan> BuildSectionGeometryPagePlans(
+        TextDocument document,
+        int pageCount,
+        IReadOnlyList<int>? blockPageAssignments = null)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+
+        var safePageCount = Math.Max(1, pageCount);
+        var assignments = blockPageAssignments ?? BuildSectionBreakPageAssignments(document, safePageCount);
+        var pageSections = HeaderFooterPagePlanner.MapPagesToSections(
+            document,
+            assignments,
+            safePageCount);
+
+        return pageSections
+            .Select((pageSection, index) =>
+            {
+                var sectionOrdinal = pageSection.SectionIndex + 1;
+                return new FreeWVisualSectionGeometryPagePlan(
+                    PageNumber: index + 1,
+                    PageCount: safePageCount,
+                    Page: pageSection.PageSettings,
+                    SectionOrdinal: sectionOrdinal,
+                    SectionRelativePageNumber: pageSection.SectionRelativePageNumber,
+                    SectionOwnerId: BuildSectionOwnerId(sectionOrdinal),
+                    Orientation: pageSection.PageSettings.Landscape ? "landscape" : "portrait");
+            })
+            .ToList();
+    }
+
     public static FreeWVisualEvidenceRow BuildEvidenceRow(
         FreeWVisualEvidenceCapture capture,
         FreeWVisualEvidenceTrustThresholds? thresholds = null)
@@ -1174,4 +1214,23 @@ public static class FreeWVisualEvidencePlanner
         && Math.Abs(left.MarginRightPt - right.MarginRightPt) < 0.001
         && Math.Abs(left.MarginBottomPt - right.MarginBottomPt) < 0.001
         && left.Landscape == right.Landscape;
+
+    private static int[] BuildSectionBreakPageAssignments(TextDocument document, int pageCount)
+    {
+        var assignments = new int[document.Blocks.Count];
+        var pageIndex = 0;
+        for (var blockIndex = 0; blockIndex < document.Blocks.Count; blockIndex++)
+        {
+            assignments[blockIndex] = Math.Clamp(pageIndex, 0, Math.Max(0, pageCount - 1));
+            if (document.Blocks[blockIndex] is Paragraph { SectionBreak: { } section }
+                && section.BreakKind is SectionBreakKind.NextPage
+                    or SectionBreakKind.EvenPage
+                    or SectionBreakKind.OddPage)
+            {
+                pageIndex++;
+            }
+        }
+
+        return assignments;
+    }
 }

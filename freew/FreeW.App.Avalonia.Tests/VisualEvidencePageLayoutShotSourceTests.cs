@@ -31,6 +31,13 @@ public sealed class VisualEvidencePageLayoutShotSourceTests
         source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildEndnotePlacementDocument");
         source.Should().Contain("hasEndnotes: true");
         source.Should().Contain("isSyntheticPage: true");
+        source.Should().Contain("f2-section-landscape");
+        source.Should().Contain("VisualEvidenceOutputPath(outDir, \"f2-section-landscape\", 1)");
+        source.Should().Contain("VisualEvidenceOutputPath(outDir, \"f2-section-landscape\", 2)");
+        source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildSectionGeometryDocument");
+        source.Should().Contain("sectionGeometryRenderStatus");
+        source.Should().Contain("avalonia-global-page-surface-no-section-page-break");
+        source.Should().Contain("SectionGeometryRendererScenarioIds");
         source.Should().Contain("table-layout-complex");
         source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildComplexTableLayoutDocument");
         source.Should().Contain("drawing-objects-complex");
