@@ -478,6 +478,72 @@ public sealed class ReviewWorkflowAdapterTests
     }
 
     [StaFact]
+    public void MainWindow_NextPreviousComment_NavigateThroughSharedPlan()
+    {
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
+        try
+        {
+            window.Editor.CurrentSlide!.Comments.Add(new SlideComment
+            {
+                Author = "Reviewer",
+                Initials = "RV",
+                Text = "First thread.",
+                Idx = 1
+            });
+            window.Editor.CurrentSlide.Comments.Add(new SlideComment
+            {
+                Author = "Reviewer",
+                Initials = "RV",
+                Text = "Second thread.",
+                Idx = 2
+            });
+            window.Editor.InsertSlide();
+            window.Editor.InsertSlide();
+            window.Editor.CurrentSlide!.Comments.Add(new SlideComment
+            {
+                Author = "Reviewer",
+                Initials = "RV",
+                Text = "Third thread.",
+                Idx = 1
+            });
+            window.Editor.SelectSlide(0);
+            window.SetSelectedReviewCommentIndexForTests(0);
+            var dirtyBeforeNavigation = window.IsDirty;
+
+            var sameSlideNext = window.NavigateReviewComment(PresentationReviewWorkflowIntentKind.NextComment);
+            var slideAfterSameSlideNext = window.Editor.CurrentSlideIndex;
+            var selectedAfterSameSlideNext = window.LastCommentPanePlan!.SelectedComment!.TextPreview;
+            var crossSlideNext = window.NavigateReviewComment(PresentationReviewWorkflowIntentKind.NextComment);
+            var slideAfterCrossSlideNext = window.Editor.CurrentSlideIndex;
+            var selectedAfterCrossSlideNext = window.LastCommentPanePlan!.SelectedComment!.TextPreview;
+            var previousAcrossEmptySlide = window.NavigateReviewComment(PresentationReviewWorkflowIntentKind.PreviousComment);
+            var slideAfterPrevious = window.Editor.CurrentSlideIndex;
+            var selectedAfterPrevious = window.LastCommentPanePlan!.SelectedComment!.TextPreview;
+
+            sameSlideNext.ShouldNavigate.Should().BeTrue();
+            sameSlideNext.TargetSlideIndex.Should().Be(0);
+            sameSlideNext.TargetCommentIndex.Should().Be(1);
+            slideAfterSameSlideNext.Should().Be(0);
+            selectedAfterSameSlideNext.Should().Be("Second thread.");
+            crossSlideNext.ShouldNavigate.Should().BeTrue();
+            crossSlideNext.TargetSlideIndex.Should().Be(2);
+            crossSlideNext.TargetCommentIndex.Should().Be(0);
+            slideAfterCrossSlideNext.Should().Be(2);
+            selectedAfterCrossSlideNext.Should().Be("Third thread.");
+            previousAcrossEmptySlide.ShouldNavigate.Should().BeTrue();
+            previousAcrossEmptySlide.TargetSlideIndex.Should().Be(0);
+            previousAcrossEmptySlide.TargetCommentIndex.Should().Be(1);
+            slideAfterPrevious.Should().Be(0);
+            selectedAfterPrevious.Should().Be("Second thread.");
+            window.IsDirty.Should().Be(dirtyBeforeNavigation, "comment navigation should not change document dirty state");
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [StaFact]
     public void MainWindow_AltTextPane_ShowsSharedPlanAndAppliesThroughPane()
     {
         var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
@@ -841,6 +907,8 @@ public sealed class ReviewWorkflowAdapterTests
         var addInvoked = false;
         var editInvoked = false;
         var deleteInvoked = false;
+        var previousInvoked = false;
+        var nextInvoked = false;
 
         var registry = FreePRibbonCommands.Build(
             new RibbonStateStore(),
@@ -851,7 +919,9 @@ public sealed class ReviewWorkflowAdapterTests
             onReviewProofing: () => proofingInvoked = true,
             onAddComment: () => addInvoked = true,
             onEditComment: () => editInvoked = true,
-            onDeleteComment: () => deleteInvoked = true);
+            onDeleteComment: () => deleteInvoked = true,
+            onPreviousComment: () => previousInvoked = true,
+            onNextComment: () => nextInvoked = true);
 
         registry.TryGet(PresentationReviewWorkflowPlanner.AccessibilityCommandId, out var command)
             .Should()
@@ -877,6 +947,12 @@ public sealed class ReviewWorkflowAdapterTests
         registry.TryGet(PresentationReviewWorkflowPlanner.DeleteCommentCommandId, out var deleteCommand).Should().BeTrue();
         deleteCommand!.Execute(RibbonCommandContext.Empty);
         deleteInvoked.Should().BeTrue();
+        registry.TryGet(PresentationReviewWorkflowPlanner.PreviousCommentCommandId, out var previousCommand).Should().BeTrue();
+        previousCommand!.Execute(RibbonCommandContext.Empty);
+        previousInvoked.Should().BeTrue();
+        registry.TryGet(PresentationReviewWorkflowPlanner.NextCommentCommandId, out var nextCommand).Should().BeTrue();
+        nextCommand!.Execute(RibbonCommandContext.Empty);
+        nextInvoked.Should().BeTrue();
         registry.TryGet(PresentationReviewWorkflowPlanner.ReopenCommentCommandId, out _).Should().BeTrue();
         registry.TryGet(PresentationReviewWorkflowPlanner.ProofingCommandId, out var proofingCommand).Should().BeTrue();
         proofingCommand!.Execute(RibbonCommandContext.Empty);

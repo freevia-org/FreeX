@@ -81,6 +81,8 @@ internal static class FreePRibbonCommands
         Action?             onAddComment = null,
         Action?             onEditComment = null,
         Action?             onDeleteComment = null,
+        Action?             onPreviousComment = null,
+        Action?             onNextComment = null,
         Action?             onResolveComment = null,
         Action?             onReopenComment = null,
         // Wave 16B: Animation pane toggle.
@@ -309,6 +311,8 @@ internal static class FreePRibbonCommands
             onAddComment,
             onEditComment,
             onDeleteComment,
+            onPreviousComment,
+            onNextComment,
             onResolveComment,
             onReopenComment);
 
@@ -468,6 +472,8 @@ internal static class FreePRibbonCommands
         Action? onAddComment,
         Action? onEditComment,
         Action? onDeleteComment,
+        Action? onPreviousComment,
+        Action? onNextComment,
         Action? onResolveComment,
         Action? onReopenComment)
     {
@@ -496,8 +502,12 @@ internal static class FreePRibbonCommands
         registry.Register(
             PresentationReviewWorkflowPlanner.DeleteCommentCommandId,
             new ActionRibbonCommand(() => onDeleteComment?.Invoke()));
-        registry.Register(PresentationReviewWorkflowPlanner.PreviousCommentCommandId, EmptyRibbonCommand.Instance);
-        registry.Register(PresentationReviewWorkflowPlanner.NextCommentCommandId, EmptyRibbonCommand.Instance);
+        registry.Register(
+            PresentationReviewWorkflowPlanner.PreviousCommentCommandId,
+            new ActionRibbonCommand(() => onPreviousComment?.Invoke()));
+        registry.Register(
+            PresentationReviewWorkflowPlanner.NextCommentCommandId,
+            new ActionRibbonCommand(() => onNextComment?.Invoke()));
         registry.Register(
             PresentationReviewWorkflowPlanner.ResolveCommentCommandId,
             new ActionRibbonCommand(() => onResolveComment?.Invoke()));

@@ -2035,6 +2035,82 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task Review_comment_next_previous_commands_navigate_through_shared_plan()
+    {
+        PresentationCommentNavigationPlan? sameSlideNext = null;
+        PresentationCommentNavigationPlan? crossSlideNext = null;
+        PresentationCommentNavigationPlan? previousAcrossEmptySlide = null;
+        PresentationCommentPanePlan? finalPanePlan = null;
+        var foundPrevious = false;
+        var foundNext = false;
+        var finalSlideIndex = -1;
+        var dirtyBeforeNavigation = false;
+        var dirtyAfterNavigation = false;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            window.Editor.CurrentSlide!.Comments.Add(new SlideComment
+            {
+                Author = "Reviewer",
+                Initials = "RV",
+                Text = "First thread.",
+                Idx = 1
+            });
+            window.Editor.CurrentSlide.Comments.Add(new SlideComment
+            {
+                Author = "Reviewer",
+                Initials = "RV",
+                Text = "Second thread.",
+                Idx = 2
+            });
+            window.Editor.InsertSlide();
+            window.Editor.InsertSlide();
+            window.Editor.CurrentSlide!.Comments.Add(new SlideComment
+            {
+                Author = "Reviewer",
+                Initials = "RV",
+                Text = "Third thread.",
+                Idx = 1
+            });
+            window.Editor.SelectSlide(0);
+            window.SetSelectedReviewCommentIndexForTests(0);
+            dirtyBeforeNavigation = window.IsDirty;
+
+            var registry = window.BuildCommandRegistry();
+            foundPrevious = registry.TryGet(PresentationReviewWorkflowPlanner.PreviousCommentCommandId, out var previousCommand);
+            foundNext = registry.TryGet(PresentationReviewWorkflowPlanner.NextCommentCommandId, out var nextCommand);
+
+            nextCommand!.Execute(RibbonCommandContext.Empty);
+            sameSlideNext = window.LastCommentNavigationPlan;
+            nextCommand.Execute(RibbonCommandContext.Empty);
+            crossSlideNext = window.LastCommentNavigationPlan;
+            previousCommand!.Execute(RibbonCommandContext.Empty);
+            previousAcrossEmptySlide = window.LastCommentNavigationPlan;
+            finalPanePlan = window.LastCommentPanePlan;
+            finalSlideIndex = window.Editor.CurrentSlideIndex;
+            dirtyAfterNavigation = window.IsDirty;
+        });
+
+        if (!ran) return;
+        foundPrevious.Should().BeTrue();
+        foundNext.Should().BeTrue();
+        sameSlideNext.Should().NotBeNull();
+        sameSlideNext!.TargetSlideIndex.Should().Be(0);
+        sameSlideNext.TargetCommentIndex.Should().Be(1);
+        crossSlideNext.Should().NotBeNull();
+        crossSlideNext!.TargetSlideIndex.Should().Be(2);
+        crossSlideNext.TargetCommentIndex.Should().Be(0);
+        previousAcrossEmptySlide.Should().NotBeNull();
+        previousAcrossEmptySlide!.TargetSlideIndex.Should().Be(0);
+        previousAcrossEmptySlide.TargetCommentIndex.Should().Be(1);
+        finalSlideIndex.Should().Be(0);
+        finalPanePlan.Should().NotBeNull();
+        finalPanePlan!.SelectedComment!.TextPreview.Should().Be("Second thread.");
+        dirtyAfterNavigation.Should().Be(dirtyBeforeNavigation, "comment navigation should not change document dirty state");
+    }
+
+    [Fact]
     public async Task Review_alt_text_pane_shows_shared_ui_and_applies_from_controls()
     {
         var paneVisibleWithoutSelection = false;
