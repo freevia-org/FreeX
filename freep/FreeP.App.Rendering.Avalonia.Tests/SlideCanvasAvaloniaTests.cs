@@ -154,6 +154,8 @@ public sealed class SlideCanvasAvaloniaTests
             overlay.Children.Should().ContainSingle();
 
             var box = overlay.Children[0].Should().BeOfType<global::Avalonia.Controls.TextBox>().Subject;
+            box.Width.Should().BeApproximately(288, 0.1);
+            box.Height.Should().BeApproximately(144, 0.1);
             box.Text = "Changed\nText";
 
             textEditor.Commit();
