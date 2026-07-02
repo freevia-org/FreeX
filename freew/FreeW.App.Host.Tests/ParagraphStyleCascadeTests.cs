@@ -101,4 +101,31 @@ public sealed class ParagraphStyleCascadeTests
         var wpf = view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>().First();
         Assert.Equal(4 * PxPerPoint, wpf.Margin.Bottom, 1);
     }
+
+    [StaFact]
+    public void CreateParagraphStyleAndApply_AddsStyle_AppliesIt_AndUndoRevertsBoth()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("styled text"));
+
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        var created = view.CreateParagraphStyleAndApply(
+            "Callout",
+            basedOnId: "Normal",
+            RunFormatting.Default with { Bold = true, FontSizePt = 16 },
+            ParagraphFormatting.Default,
+            nextStyleId: "Normal");
+
+        Assert.NotNull(created);
+        Assert.Equal("Callout", created.Id);
+        Assert.True(view.Model.Styles.ContainsKey("Callout"));
+        Assert.Equal("Callout", ((Paragraph)view.Model.Blocks[0]).StyleId);
+
+        Assert.True(view.Commands.Undo());
+        Assert.False(view.Model.Styles.ContainsKey("Callout"));
+        Assert.Null(((Paragraph)view.Model.Blocks[0]).StyleId);
+    }
 }

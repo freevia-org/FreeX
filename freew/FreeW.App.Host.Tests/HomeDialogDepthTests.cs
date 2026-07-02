@@ -1,6 +1,7 @@
 using System.Linq;
 using Free.Shared.Ribbon;
 using FreeW.App.Host.Editing;
+using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
 using Xunit;
 
@@ -204,15 +205,15 @@ public sealed class HomeDialogDepthTests
         para.Formatting.ListStartOverride.Should().BeNull("plain paragraphs are not multilevel lists");
     }
 
-    // ── 5. ManageStylesSortOrder enum exists and BuildRows can be tested ─────
+    // ── 5. StyleDialogSortOrder enum exists and BuildRows can be tested ─────
 
     [Fact]
-    public void ManageStylesSortOrder_EnumHasThreeValues()
+    public void StyleDialogSortOrder_EnumHasThreeValues()
     {
-        var values = Enum.GetValues<ManageStylesSortOrder>();
-        values.Should().Contain(ManageStylesSortOrder.Alphabetical);
-        values.Should().Contain(ManageStylesSortOrder.ByType);
-        values.Should().Contain(ManageStylesSortOrder.ByUse);
+        var values = Enum.GetValues<StyleDialogSortOrder>();
+        values.Should().Contain(StyleDialogSortOrder.Alphabetical);
+        values.Should().Contain(StyleDialogSortOrder.ByType);
+        values.Should().Contain(StyleDialogSortOrder.ByUse);
     }
 
     // ── 6. New command ids are present in the ribbon definition ──────────────

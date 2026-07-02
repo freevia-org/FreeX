@@ -145,6 +145,34 @@ public class DocumentCommandBusTests
     }
 
     [Fact]
+    public void StyleCatalogCommand_CapturesCatalogSnapshot_ForUndoRedo()
+    {
+        var doc = TextDocument.CreateEmpty();
+        var bus = new DocumentCommandBus(new Context(doc));
+        var originalCount = doc.Styles.Count;
+
+        bus.Execute(new StyleCatalogCommand("New Style", model =>
+            StyleManager.CreateStyle(
+                model,
+                "Callout",
+                "Normal",
+                RunFormatting.Default with { Bold = true },
+                ParagraphFormatting.Default)));
+
+        var created = doc.Styles.Values.Single(style => style.Name == "Callout");
+        created.Run.Bold.Should().BeTrue();
+        doc.Styles.Should().HaveCount(originalCount + 1);
+
+        bus.Undo().Should().BeTrue();
+        doc.Styles.Should().HaveCount(originalCount);
+        doc.Styles.Should().NotContainKey(created.Id);
+
+        bus.Redo().Should().BeTrue();
+        doc.Styles.Should().ContainKey(created.Id);
+        doc.Styles[created.Id].Run.Bold.Should().BeTrue();
+    }
+
+    [Fact]
     public void InsertBlock_Table_Execute_Undo_Redo()
     {
         var (doc, bus) = New();
