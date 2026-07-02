@@ -885,7 +885,7 @@ public static partial class ChartRenderPlanner
             horizontalBorders,
             verticalBorders,
             outlineBorders,
-            DefaultDataTableBorderStroke());
+            ResolveDataTableBorderStroke(settings));
     }
 
     public static IReadOnlyList<ChartTextPlan> BuildSecondaryValueAxisLabelPlans(
@@ -2143,6 +2143,20 @@ public static partial class ChartRenderPlanner
 
     private static ChartStrokePlan DefaultDataTableBorderStroke() =>
         new(new SrgbColor(0xB7, 0xB7, 0xB7), Alpha: 255, Thickness: 0.5);
+
+    private static ChartStrokePlan ResolveDataTableBorderStroke(ChartDataTableSettings settings) =>
+        settings.BorderOutline switch
+        {
+            ShapeOutline.None => new ChartStrokePlan(
+                new SrgbColor(0xB7, 0xB7, 0xB7),
+                Alpha: 0,
+                Thickness: 0.5),
+            ShapeOutline.Visible visible => new ChartStrokePlan(
+                visible.Color.Resolved,
+                Alpha: 255,
+                Thickness: visible.WidthPt),
+            _ => DefaultDataTableBorderStroke()
+        };
 
     private static ChartStrokePlan DefaultRadarSpokeStroke() =>
         new(new SrgbColor(0xC0, 0xC0, 0xC0), Alpha: 255, Thickness: 0.5);

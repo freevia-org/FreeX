@@ -2,6 +2,7 @@ using System.Linq;
 
 using FluentAssertions;
 
+using Free.Shared.Ribbon;
 using FreeX.App.Avalonia;
 using FreeX.App.Presentation.Filtering;
 using FreeX.Core.Model;
@@ -48,6 +49,16 @@ public sealed class AutoFilterMenuPlannerTests
         model.Items.Single(item => item.Kind == AutoFilterMenuItemKind.ChecklistItem).Value.Should().Be("west");
         model.Items.Single(item => item.Kind == AutoFilterMenuItemKind.SelectAll).IsChecked.Should().BeNull();
         model.Items.Single(item => item.Kind == AutoFilterMenuItemKind.ChecklistItem).IsChecked.Should().BeFalse();
+        model.Items.Single(item => item.Kind == AutoFilterMenuItemKind.SortAscending)
+            .IconKind.Should().Be(RibbonCommandIconKind.SortAscending);
+        model.Items.Single(item => item.Kind == AutoFilterMenuItemKind.Search)
+            .FocusRole.Should().Be(AutoFilterMenuEntryFocusRole.SearchBox);
+        model.Items.Single(item => item.Kind == AutoFilterMenuItemKind.SelectAll)
+            .FocusRole.Should().Be(AutoFilterMenuEntryFocusRole.TriStateSelectAll);
+        model.Items.Single(item => item.Kind == AutoFilterMenuItemKind.ChecklistItem)
+            .ParticipatesInSearch.Should().BeTrue();
+        model.Items.Single(item => item.Kind == AutoFilterMenuItemKind.FilterFamily)
+            .ShowsContinuation.Should().BeTrue();
         model.CriteriaSuggestions.Should().Equal("contains:", "blank");
         model.CriteriaOptions.Should().Contain(option => option.CriteriaPrefix == "contains:");
         model.ColorOptions.Should().ContainSingle(option => option.Kind == AutoFilterColorFilterKind.CellFillColor);
@@ -77,6 +88,44 @@ public sealed class AutoFilterMenuPlannerTests
         filtered.Select(item => item.Value).Should().Equal("west");
         updated.Single(item => item.Value == "west").IsSelected.Should().BeTrue();
         AutoFilterMenuPlanner.SelectAllState(updated).Should().BeTrue();
+    }
+
+    [Fact]
+    public void Build_FromSharedPlan_PreservesExcelPopupKeyboardAndSelectionRoles()
+    {
+        var plan = new AutoFilterMenuPlan(
+            "Status",
+            AutoFilterMenuFilterKind.Text,
+            [
+                new("Sort A to Z", AutoFilterMenuEntryKind.SortAscending),
+                new("Text Filters", AutoFilterMenuEntryKind.FilterFamily, ["contains:"], "Text Filters"),
+                new("Search", AutoFilterMenuEntryKind.Search),
+                new("Select All", AutoFilterMenuEntryKind.SelectAll, isChecked: null),
+                new(new AutoFilterChecklistItem("Open", "Open", IsChecked: true)),
+                new(new AutoFilterChecklistItem("Closed", "Closed", IsChecked: false))
+            ]);
+
+        var model = AutoFilterMenuPlanner.Build(plan);
+
+        model.Items.Select(item => (item.Kind, item.FocusRole)).Should().ContainInOrder(
+            (AutoFilterMenuItemKind.SortAscending, AutoFilterMenuEntryFocusRole.Command),
+            (AutoFilterMenuItemKind.FilterFamily, AutoFilterMenuEntryFocusRole.Submenu),
+            (AutoFilterMenuItemKind.Search, AutoFilterMenuEntryFocusRole.SearchBox),
+            (AutoFilterMenuItemKind.SelectAll, AutoFilterMenuEntryFocusRole.TriStateSelectAll),
+            (AutoFilterMenuItemKind.ChecklistItem, AutoFilterMenuEntryFocusRole.ChecklistItem),
+            (AutoFilterMenuItemKind.ChecklistItem, AutoFilterMenuEntryFocusRole.ChecklistItem));
+        model.Items.Single(item => item.Kind == AutoFilterMenuItemKind.FilterFamily)
+            .IconKind.Should().Be(RibbonCommandIconKind.Filter);
+        model.Items.Single(item => item.Kind == AutoFilterMenuItemKind.FilterFamily)
+            .ShowsContinuation.Should().BeTrue();
+        model.Items.Where(item => item.ParticipatesInSearch)
+            .Select(item => item.Kind)
+            .Should()
+            .Equal(
+                AutoFilterMenuItemKind.Search,
+                AutoFilterMenuItemKind.SelectAll,
+                AutoFilterMenuItemKind.ChecklistItem,
+                AutoFilterMenuItemKind.ChecklistItem);
     }
 
     [Theory]

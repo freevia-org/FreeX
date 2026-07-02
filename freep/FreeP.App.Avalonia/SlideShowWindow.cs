@@ -59,6 +59,7 @@ public sealed class SlideShowWindow : Window
     private readonly DateTimeOffset _presenterStartedAtUtc;
     private readonly DispatcherTimer  _autoAdvanceTimer;
     private SlideShowPresenterToolPlan _presenterToolPlan = SlideShowPresenterToolPlanner.BuildPlan();
+    private SlideShowInkExecutionState _inkExecutionState;
 
     // DA2 + DA3: all per-frame DispatcherTimers created by animation/transition helpers
     // (AnimateOpacity, AnimateTranslate, AnimateRectClip, AnimateScale, AnimateRotate,
@@ -99,6 +100,9 @@ public sealed class SlideShowWindow : Window
         _presentation = presentation ?? throw new ArgumentNullException(nameof(presentation));
         _controller   = new SlideShowController(presentation.Slides, startIndex);
         _presenterStartedAtUtc = DateTimeOffset.UtcNow;
+        _inkExecutionState = SlideShowInkExecutionPlanner.CreateState(
+            _controller.CurrentSlideIndex,
+            _presenterToolPlan.PointerInk);
 
         // Pre-compute slide DIP dimensions.
         var metrics = SlideShowHostPlanner.BuildSlideMetrics(
@@ -168,6 +172,7 @@ public sealed class SlideShowWindow : Window
         KeyDown             += OnKeyDown;
         PointerPressed      += OnPointerPressed;
         PointerMoved        += OnPointerMoved;
+        PointerReleased     += OnPointerReleased;
         Opened              += (_, _) => { Focus(); DisplayCurrentSlide(animated: false); };
         Closed              += (_, _) => Teardown();
     }
@@ -202,6 +207,8 @@ public sealed class SlideShowWindow : Window
     public IReadOnlyList<SlideShowPresenterWorkflowAction> PresenterWorkflowActions =>
         _presenterToolPlan.WorkflowActions;
 
+    public SlideShowInkExecutionState InkExecutionState => _inkExecutionState;
+
     public SlideShowPresenterState CreatePresenterState(
         DateTimeOffset nowUtc,
         SlideShowPresenterDisplayIntent? displayIntent = null) =>
@@ -228,8 +235,29 @@ public sealed class SlideShowWindow : Window
             inkColorHex,
             inkThicknessDip,
             inkRetentionDecision);
+        _inkExecutionState = SlideShowInkExecutionPlanner.SelectPointerInk(
+            _inkExecutionState,
+            _presenterToolPlan.PointerInk);
         return _presenterToolPlan;
     }
+
+    public SlideShowInkExecutionResult BeginPresenterInkStroke(double canvasX, double canvasY) =>
+        ApplyInkExecution(SlideShowInkExecutionPlanner.Begin(
+            _inkExecutionState,
+            MapPresenterInkPoint(canvasX, canvasY)));
+
+    public SlideShowInkExecutionResult AppendPresenterInkStroke(double canvasX, double canvasY) =>
+        ApplyInkExecution(SlideShowInkExecutionPlanner.Append(
+            _inkExecutionState,
+            MapPresenterInkPoint(canvasX, canvasY)));
+
+    public SlideShowInkExecutionResult EndPresenterInkStroke(double canvasX, double canvasY) =>
+        ApplyInkExecution(SlideShowInkExecutionPlanner.End(
+            _inkExecutionState,
+            MapPresenterInkPoint(canvasX, canvasY)));
+
+    public SlideShowInkExecutionResult ClearPresenterInkStrokes() =>
+        ApplyInkExecution(SlideShowInkExecutionPlanner.ClearCurrentSlide(_inkExecutionState));
 
     /// <summary>Exposes the slide canvas for test assertions (DA1 suppression).</summary>
     internal SlideCanvas CanvasForTest => _slideCanvas;
@@ -251,11 +279,17 @@ public sealed class SlideShowWindow : Window
             return;
 
         var slide = _controller.CurrentSlide;
+        var pt = e.GetPosition(_slideCanvas);
+        var inkResult = BeginPresenterInkStroke(pt.X, pt.Y);
+        if (inkResult.IsHandled)
+        {
+            e.Handled = true;
+            return;
+        }
 
         // Check for trigger shape click.
         if (slide is not null && slide.Animations.Any(a => a.TriggerShapeId is not null))
         {
-            var pt = e.GetPosition(_slideCanvas);
             var triggerShapeId = HitTestTriggerShape(slide, pt.X, pt.Y);
             if (triggerShapeId is not null)
             {
@@ -268,7 +302,6 @@ public sealed class SlideShowWindow : Window
         // Check for hyperlink click.
         if (slide is not null)
         {
-            var pt    = e.GetPosition(_slideCanvas);
             var hlink = HitTestHyperlink(slide, pt.X, pt.Y);
             if (hlink is not null)
             {
@@ -287,8 +320,26 @@ public sealed class SlideShowWindow : Window
         var slide = _controller.CurrentSlide;
         if (slide is null) { Cursor = Cursor.Default; return; }
         var pt    = e.GetPosition(_slideCanvas);
+        if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+        {
+            var inkResult = AppendPresenterInkStroke(pt.X, pt.Y);
+            if (inkResult.IsHandled)
+            {
+                Cursor = CursorForPresenterInk();
+                e.Handled = true;
+                return;
+            }
+        }
+
         var hlink = HitTestHyperlink(slide, pt.X, pt.Y);
-        Cursor = hlink is not null ? new Cursor(StandardCursorType.Hand) : Cursor.Default;
+        Cursor = hlink is not null ? new Cursor(StandardCursorType.Hand) : CursorForPresenterInk();
+    }
+
+    private void OnPointerReleased(object? sender, PointerReleasedEventArgs e)
+    {
+        var pt = e.GetPosition(_slideCanvas);
+        var inkResult = EndPresenterInkStroke(pt.X, pt.Y);
+        e.Handled = inkResult.IsHandled;
     }
 
     // ── Hyperlink hit-testing & activation ─────────────────────────────────────────
@@ -351,6 +402,32 @@ public sealed class SlideShowWindow : Window
         return SlideShowHostPlanner.HitTestTriggerShape(slide, slidePoint);
     }
 
+    private SlideShowInkPoint MapPresenterInkPoint(double canvasX, double canvasY)
+    {
+        var point = SlideShowHostPlanner.MapCanvasPointToSlide(
+            canvasX,
+            canvasY,
+            _slideCanvas.Bounds.Width,
+            _slideCanvas.Bounds.Height,
+            CurrentSlideMetrics());
+        return new SlideShowInkPoint(point.X, point.Y);
+    }
+
+    private SlideShowInkExecutionResult ApplyInkExecution(SlideShowInkExecutionResult result)
+    {
+        _inkExecutionState = result.State;
+        return result;
+    }
+
+    private Cursor CursorForPresenterInk() =>
+        _inkExecutionState.ActivePointerMode switch
+        {
+            SlideShowPresenterPointerMode.Pen or SlideShowPresenterPointerMode.Highlighter =>
+                new Cursor(StandardCursorType.Cross),
+            SlideShowPresenterPointerMode.Eraser => new Cursor(StandardCursorType.Cross),
+            _ => Cursor.Default
+        };
+
     private void PlayTriggerGroup(uint triggerShapeId)
     {
         ApplyHostCommand(SlideShowHostPlanner.PlanTrigger(_controller, triggerShapeId));
@@ -407,6 +484,9 @@ public sealed class SlideShowWindow : Window
         var plan = SlideShowHostPlanner.BuildDisplayPlan(_presentation, _controller, animated);
         _slideDipW = plan.Metrics.WidthDip;
         _slideDipH = plan.Metrics.HeightDip;
+        _inkExecutionState = SlideShowInkExecutionPlanner.MoveToSlide(
+            _inkExecutionState,
+            _controller.CurrentSlideIndex);
 
         var slide = plan.Slide;
         if (slide is null) return;
@@ -1152,6 +1232,7 @@ public sealed class SlideShowWindow : Window
 
     private void Teardown()
     {
+        _inkExecutionState = SlideShowInkExecutionPlanner.ApplyRetentionOnExit(_inkExecutionState).State;
         _autoAdvanceTimer.Stop();
         // DA3: stop ALL per-frame animation/transition timers so they don't keep
         // ticking against the closed window's canvas.  A running DispatcherTimer is

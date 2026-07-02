@@ -21,6 +21,13 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("SlideShowHostPlanner.BuildDisplayPlan(");
         source.Should().Contain("SlideShowHostPlanner.BuildPresenterState(");
         source.Should().Contain("SlideShowPresenterToolPlanner.BuildPlan(");
+        source.Should().Contain("SlideShowInkExecutionPlanner.CreateState(");
+        source.Should().Contain("SlideShowInkExecutionPlanner.SelectPointerInk(");
+        source.Should().Contain("SlideShowInkExecutionPlanner.Begin(");
+        source.Should().Contain("SlideShowInkExecutionPlanner.Append(");
+        source.Should().Contain("SlideShowInkExecutionPlanner.End(");
+        source.Should().Contain("SlideShowInkExecutionPlanner.ClearCurrentSlide(");
+        source.Should().Contain("SlideShowInkExecutionPlanner.ApplyRetentionOnExit(");
         source.Should().Contain("SlideShowHostPlanner.MapCanvasPointToSlide(");
         source.Should().Contain("SlideShowHostPlanner.HitTestHyperlink(");
         source.Should().Contain("SlideShowHostPlanner.HitTestTriggerShape(");

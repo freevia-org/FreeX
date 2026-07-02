@@ -3,6 +3,7 @@ using System.IO.Compression;
 using System.Text;
 using System.Xml.Linq;
 using Free.Shared.Opc;
+using FreeP.Core.Model;
 
 namespace FreeP.App.Host.Tests;
 
@@ -573,6 +574,9 @@ public sealed class PptxPackageRetentionTests
         chart.DataTable.ShowVerticalBorder.Should().BeFalse();
         chart.DataTable.ShowOutlineBorder.Should().BeTrue();
         chart.DataTable.ShowLegendKeys.Should().BeTrue();
+        chart.DataTable.BorderOutline.Should().BeOfType<ShapeOutline.Visible>()
+            .Which.Color.Resolved.Should().Be(new SrgbColor(0x12, 0x34, 0x56));
+        ((ShapeOutline.Visible)chart.DataTable.BorderOutline!).WidthPt.Should().BeApproximately(1.25, 0.001);
 
         using var saved = new MemoryStream();
         PptxPackageWriter.Write(loaded, saved);
@@ -594,6 +598,12 @@ public sealed class PptxPackageRetentionTests
             savedDataTable.Element(ChartNs + "showVertBorder")!.Attribute("val")!.Value.Should().Be("0");
             savedDataTable.Element(ChartNs + "showOutline")!.Attribute("val")!.Value.Should().Be("1");
             savedDataTable.Element(ChartNs + "showKeys")!.Attribute("val")!.Value.Should().Be("1");
+            var savedLine = savedDataTable.Element(ChartNs + "spPr")!.Element(DrawingNs + "ln")!;
+            savedLine.Attribute("w")!.Value.Should().Be(DrawingMlUnits.PointsToEmu(1.25).ToString());
+            savedLine.Element(DrawingNs + "solidFill")!
+                .Element(DrawingNs + "srgbClr")!
+                .Attribute("val")!
+                .Value.Should().Be("123456");
             savedPlotArea.Elements().Last(element => element.Name == ChartNs + "valAx" || element.Name == ChartNs + "dTable")
                 .Name.Should().Be(ChartNs + "dTable", "c:dTable should remain after chart axes in the package chart part");
         }
@@ -606,6 +616,9 @@ public sealed class PptxPackageRetentionTests
         reloadedDataTable.ShowVerticalBorder.Should().BeFalse();
         reloadedDataTable.ShowOutlineBorder.Should().BeTrue();
         reloadedDataTable.ShowLegendKeys.Should().BeTrue();
+        reloadedDataTable.BorderOutline.Should().BeOfType<ShapeOutline.Visible>()
+            .Which.Color.Resolved.Should().Be(new SrgbColor(0x12, 0x34, 0x56));
+        ((ShapeOutline.Visible)reloadedDataTable.BorderOutline!).WidthPt.Should().BeApproximately(1.25, 0.001);
     }
 
     private static MemoryStream BuildPptxWithUnmodeledPackageData()
@@ -730,7 +743,12 @@ public sealed class PptxPackageRetentionTests
                     new XElement(ChartNs + "showHorzBorder", new XAttribute("val", "1")),
                     new XElement(ChartNs + "showVertBorder", new XAttribute("val", "0")),
                     new XElement(ChartNs + "showOutline", new XAttribute("val", "1")),
-                    new XElement(ChartNs + "showKeys", new XAttribute("val", "1"))));
+                    new XElement(ChartNs + "showKeys", new XAttribute("val", "1")),
+                    new XElement(ChartNs + "spPr",
+                        new XElement(DrawingNs + "ln",
+                            new XAttribute("w", DrawingMlUnits.PointsToEmu(1.25)),
+                            new XElement(DrawingNs + "solidFill",
+                                new XElement(DrawingNs + "srgbClr", new XAttribute("val", "123456")))))));
             WriteXml(archive, "ppt/charts/chart1.xml", chartXml);
 
             var chartRels = new XDocument(
@@ -1291,6 +1309,8 @@ public sealed class PptxPackageRetentionTests
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
     private static readonly XNamespace ChartNs =
         "http://schemas.openxmlformats.org/drawingml/2006/chart";
+    private static readonly XNamespace DrawingNs =
+        "http://schemas.openxmlformats.org/drawingml/2006/main";
     private static readonly XNamespace ContentTypesNs =
         "http://schemas.openxmlformats.org/package/2006/content-types";
     private static XElement? Relationship(XDocument doc, string type, string target) =>

@@ -156,6 +156,71 @@ public sealed class SlideShowWindowHeadlessTests
     }
 
     [Fact]
+    public async Task SlideShowWindow_InkExecution_delegates_stroke_lifecycle_to_shared_planner()
+    {
+        SlideShowInkExecutionState? inkState = null;
+        SlideShowInkExecutionResult? begin = null;
+        SlideShowInkExecutionResult? append = null;
+        SlideShowInkExecutionResult? end = null;
+        var ran = await OnUiThread(() =>
+        {
+            var pres = MakePresentation(1);
+            var window = new SlideShowWindow(pres, 0);
+            window.ApplyPresenterToolIntent(
+                pointerMode: SlideShowPresenterPointerMode.Highlighter,
+                inkColorHex: "#ffee00",
+                inkThicknessDip: 8);
+
+            begin = window.BeginPresenterInkStroke(10, 20);
+            append = window.AppendPresenterInkStroke(30, 40);
+            end = window.EndPresenterInkStroke(50, 60);
+            inkState = window.InkExecutionState;
+        });
+
+        if (!ran) return;
+        begin.Should().NotBeNull();
+        append.Should().NotBeNull();
+        end.Should().NotBeNull();
+        begin!.Mutations.Single().Kind.Should().Be(SlideShowInkExecutionMutationKind.BeginStroke);
+        append!.Mutations.Single().Kind.Should().Be(SlideShowInkExecutionMutationKind.AppendStrokePoint);
+        end!.Mutations.Single().Kind.Should().Be(SlideShowInkExecutionMutationKind.CommitStroke);
+        inkState.Should().NotBeNull();
+        inkState!.CommittedStrokes.Should().ContainSingle();
+        var stroke = inkState.CommittedStrokes.Single();
+        stroke.PointerMode.Should().Be(SlideShowPresenterPointerMode.Highlighter);
+        stroke.InkState.ColorHex.Should().Be("#FFEE00");
+        stroke.Points.Should().Equal(
+            new SlideShowInkPoint(10, 20),
+            new SlideShowInkPoint(30, 40),
+            new SlideShowInkPoint(50, 60));
+    }
+
+    [Fact]
+    public async Task SlideShowWindow_InkClear_uses_shared_clear_plan()
+    {
+        SlideShowInkExecutionResult? clear = null;
+        SlideShowInkExecutionState? inkState = null;
+        var ran = await OnUiThread(() =>
+        {
+            var pres = MakePresentation(1);
+            var window = new SlideShowWindow(pres, 0);
+            window.ApplyPresenterToolIntent(pointerMode: SlideShowPresenterPointerMode.Pen);
+            window.BeginPresenterInkStroke(10, 20);
+            window.EndPresenterInkStroke(30, 40);
+
+            clear = window.ClearPresenterInkStrokes();
+            inkState = window.InkExecutionState;
+        });
+
+        if (!ran) return;
+        clear.Should().NotBeNull();
+        clear!.Mutations.Single().Kind.Should().Be(SlideShowInkExecutionMutationKind.ClearInk);
+        clear.Mutations.Single().AffectedStrokeCount.Should().Be(1);
+        inkState.Should().NotBeNull();
+        inkState!.CommittedStrokes.Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task SlideShowWindow_advance_past_last_slide_returns_AtEnd()
     {
         AdvanceResult? result = null;
