@@ -215,6 +215,41 @@ public sealed class VisualEvidencePlannerTests
     }
 
     [Fact]
+    public void SharedSectionGeometrySurfacePlans_BuildPageSizedSectionSlices()
+    {
+        var document = FreeWVisualEvidenceDocumentFactory.BuildSectionGeometryDocument();
+
+        var surfacePlans = FreeWVisualEvidencePlanner.BuildSectionGeometrySurfacePlans(document, pageCount: 2);
+
+        surfacePlans.Should().HaveCount(2);
+        surfacePlans[0].RenderStatus.Should().Be(FreeWVisualEvidencePlanner.SectionGeometryPageSurfaceRenderStatus);
+        surfacePlans[0].Orientation.Should().Be("portrait");
+        surfacePlans[0].SourceBlockIndexes.Should().Equal(0, 1, 2, 3, 4, 5, 6);
+        surfacePlans[0].Document.Page.WidthPt.Should().Be(612);
+        surfacePlans[0].Document.Page.HeightPt.Should().Be(792);
+        surfacePlans[0].Document.Page.Landscape.Should().BeFalse();
+        surfacePlans[0].CaptureWidthDip.Should().BeApproximately(864, 0.01);
+        surfacePlans[0].CaptureHeightDip.Should().BeApproximately(1104, 0.01);
+
+        surfacePlans[1].Orientation.Should().Be("landscape");
+        surfacePlans[1].SourceBlockIndexes.Should().Equal(7, 8, 9, 10, 11, 12);
+        surfacePlans[1].Document.Page.WidthPt.Should().Be(792);
+        surfacePlans[1].Document.Page.HeightPt.Should().Be(612);
+        surfacePlans[1].Document.Page.Landscape.Should().BeTrue();
+        surfacePlans[1].CaptureWidthDip.Should().BeApproximately(1104, 0.01);
+        surfacePlans[1].CaptureHeightDip.Should().BeApproximately(864, 0.01);
+        surfacePlans[1].Document.Blocks.OfType<Paragraph>().First().PlainText.Should().Contain("Section 2");
+
+        foreach (var plan in surfacePlans)
+        {
+            plan.Document.Blocks
+                .OfType<Paragraph>()
+                .Should()
+                .OnlyContain(paragraph => paragraph.SectionBreak == null);
+        }
+    }
+
+    [Fact]
     public void DefaultExpectedScenarios_RequiresPairedBackstageRendererEvidence()
     {
         var expected = FreeWVisualEvidenceManifestNormalizer.DefaultExpectedScenarios;
