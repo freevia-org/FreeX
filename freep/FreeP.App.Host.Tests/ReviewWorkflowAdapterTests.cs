@@ -19,6 +19,9 @@ public sealed class ReviewWorkflowAdapterTests
                 Initials = "RV",
                 Text = "Use the shared plan.",
                 Idx = 1,
+                IsResolved = true,
+                ResolvedBy = "Reviewer",
+                ResolvedDateTime = new DateTime(2026, 7, 2, 8, 15, 0, DateTimeKind.Utc),
             });
 
             var shape = new SlideShape
@@ -36,9 +39,17 @@ public sealed class ReviewWorkflowAdapterTests
 
             window.LastCommentPanePlan.Should().NotBeNull();
             window.LastCommentPanePlan!.TotalCommentCount.Should().Be(1);
+            window.LastCommentPanePlan.Comments.Single().Should().Match<PresentationCommentDescriptor>(comment =>
+                comment.ThreadStatus == PresentationCommentThreadStatus.Resolved &&
+                !comment.CanResolve &&
+                comment.CanReopen);
             window.LastCommentPanePlan.Actions.Select(action => action.CommandId)
                 .Should()
-                .Contain(PresentationReviewWorkflowPlanner.CommentsPaneCommandId);
+                .Contain(new[]
+                {
+                    PresentationReviewWorkflowPlanner.CommentsPaneCommandId,
+                    PresentationReviewWorkflowPlanner.ReopenCommentCommandId
+                });
             window.LastAccessibilitySummaryPlan.Should().NotBeNull();
             var missingAltText = window.LastAccessibilitySummaryPlan!.Issues.Single(issue =>
                 issue.ShapeId == shape.Id && issue.Title == "Alt text missing");
@@ -467,6 +478,7 @@ public sealed class ReviewWorkflowAdapterTests
         readingOrderCommand!.Execute(RibbonCommandContext.Empty);
         readingOrderInvoked.Should().BeTrue();
         registry.TryGet(PresentationReviewWorkflowPlanner.CommentsPaneCommandId, out _).Should().BeTrue();
+        registry.TryGet(PresentationReviewWorkflowPlanner.ReopenCommentCommandId, out _).Should().BeTrue();
         registry.TryGet(PresentationReviewWorkflowPlanner.ProofingCommandId, out _).Should().BeTrue();
     }
 

@@ -45,13 +45,18 @@ public sealed class PresentationReviewWorkflowPlannerTests
             200,
             true,
             true,
-            false));
+            true,
+            false,
+            PresentationCommentThreadStatus.Open));
 
         Action(PresentationReviewWorkflowPlanner.EditCommentCommandId).IsEnabled.Should().BeTrue();
         Action(PresentationReviewWorkflowPlanner.DeleteCommentCommandId).IsEnabled.Should().BeTrue();
         Action(PresentationReviewWorkflowPlanner.NextCommentCommandId).IsEnabled.Should().BeTrue();
+        Action(PresentationReviewWorkflowPlanner.ResolveCommentCommandId).IsEnabled.Should().BeTrue();
         Action(PresentationReviewWorkflowPlanner.ResolveCommentCommandId).Status
-            .Should().Be(PresentationWorkflowCapabilityStatus.Deferred);
+            .Should().Be(PresentationWorkflowCapabilityStatus.Available);
+        Action(PresentationReviewWorkflowPlanner.ReopenCommentCommandId).DisabledReason
+            .Should().Be(PresentationReviewWorkflowPlanner.CommentAlreadyOpenMessage);
 
         PresentationReviewWorkflowActionPlan Action(string commandId) =>
             plan.Actions.Single(action => action.CommandId == commandId);
@@ -111,13 +116,19 @@ public sealed class PresentationReviewWorkflowPlannerTests
     {
         var slides = new[] { new Slide { Title = "Intro" } };
         slides[0].Comments.Add(new SlideComment { Author = "Alice", Initials = "AL", Text = "Old", Idx = 4 });
+        var resolvedAt = new DateTime(2026, 7, 2, 8, 15, 0, DateTimeKind.Utc);
 
         var emptyAdd = PresentationReviewWorkflowPlanner.BuildAddCommentPlan(
             slides, 0, " ", "Alice", "AL", 0, 0);
         var edit = PresentationReviewWorkflowPlanner.BuildEditCommentPlan(
             slides, 0, 0, " New text ", initials: "AX");
         var delete = PresentationReviewWorkflowPlanner.BuildDeleteCommentPlan(slides, 0, 0);
-        var resolve = PresentationReviewWorkflowPlanner.BuildResolveCommentPlan(slides, 0, 0);
+        var resolve = PresentationReviewWorkflowPlanner.BuildResolveCommentPlan(
+            slides,
+            0,
+            0,
+            resolvedAt,
+            "  Reviewer ");
 
         emptyAdd.Should().Be(new PresentationCommentMutationPlan(
             PresentationReviewWorkflowIntentKind.AddComment,
@@ -146,13 +157,82 @@ public sealed class PresentationReviewWorkflowPlannerTests
             0,
             null,
             null));
-        resolve.Should().Be(new PresentationCommentMutationPlan(
+        resolve.Should().BeEquivalentTo(new PresentationCommentMutationPlan(
             PresentationReviewWorkflowIntentKind.ResolveComment,
-            false,
+            true,
             0,
             0,
-            null,
-            PresentationReviewWorkflowPlanner.ModernCommentStateDeferredMessage));
+            new SlideComment
+            {
+                Author = "Alice",
+                Initials = "AL",
+                Text = "Old",
+                DateTime = null,
+                IsResolved = true,
+                ResolvedDateTime = resolvedAt,
+                ResolvedBy = "Reviewer",
+                Idx = 4
+            },
+            null));
+    }
+
+    [Fact]
+    public void BuildCommentPanePlan_ModelsResolvedThreadsAndReopenAction()
+    {
+        var slides = new[] { new Slide { Title = "Intro" } };
+        slides[0].Comments.Add(new SlideComment
+        {
+            Author = "Alice",
+            Initials = "AL",
+            Text = "Resolved thread.",
+            Idx = 1,
+            IsResolved = true,
+            ResolvedBy = "Reviewer",
+            ResolvedDateTime = new DateTime(2026, 7, 2, 8, 15, 0, DateTimeKind.Utc)
+        });
+
+        var plan = PresentationReviewWorkflowPlanner.BuildCommentPanePlan(
+            slides,
+            0,
+            selectedCommentIndex: 0);
+        var reopen = PresentationReviewWorkflowPlanner.BuildReopenCommentPlan(slides, 0, 0);
+
+        plan.Comments.Should().ContainSingle().Which.Should().Match<PresentationCommentDescriptor>(comment =>
+            comment.ThreadStatus == PresentationCommentThreadStatus.Resolved &&
+            !comment.CanResolve &&
+            comment.CanReopen);
+        plan.Actions.Single(action => action.CommandId == PresentationReviewWorkflowPlanner.ResolveCommentCommandId)
+            .Should().Be(new PresentationReviewWorkflowActionPlan(
+                PresentationReviewWorkflowPlanner.ResolveCommentCommandId,
+                "Resolve Comment",
+                PresentationReviewWorkflowIntentKind.ResolveComment,
+                false,
+                PresentationWorkflowCapabilityStatus.Available,
+                PresentationReviewWorkflowPlanner.CommentAlreadyResolvedMessage));
+        plan.Actions.Single(action => action.CommandId == PresentationReviewWorkflowPlanner.ReopenCommentCommandId)
+            .Should().Be(new PresentationReviewWorkflowActionPlan(
+                PresentationReviewWorkflowPlanner.ReopenCommentCommandId,
+                "Reopen Comment",
+                PresentationReviewWorkflowIntentKind.ReopenComment,
+                true,
+                PresentationWorkflowCapabilityStatus.Available,
+                null));
+        reopen.Should().BeEquivalentTo(new PresentationCommentMutationPlan(
+            PresentationReviewWorkflowIntentKind.ReopenComment,
+            true,
+            0,
+            0,
+            new SlideComment
+            {
+                Author = "Alice",
+                Initials = "AL",
+                Text = "Resolved thread.",
+                Idx = 1,
+                IsResolved = false,
+                ResolvedDateTime = null,
+                ResolvedBy = string.Empty
+            },
+            null));
     }
 
     [Fact]

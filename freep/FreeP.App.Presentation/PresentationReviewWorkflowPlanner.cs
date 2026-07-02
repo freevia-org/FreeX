@@ -12,6 +12,7 @@ public enum PresentationReviewWorkflowIntentKind
     PreviousComment,
     NextComment,
     ResolveComment,
+    ReopenComment,
     CheckAccessibility,
     OpenAltText,
     ApplyAltText,
@@ -29,6 +30,12 @@ public enum PresentationWorkflowCapabilityStatus
     Available,
     RequiresHost,
     Deferred
+}
+
+public enum PresentationCommentThreadStatus
+{
+    Open,
+    Resolved
 }
 
 public enum PresentationAccessibilityIssueSeverity
@@ -57,7 +64,9 @@ public sealed record PresentationCommentDescriptor(
     long Yemu,
     bool CanEdit,
     bool CanDelete,
-    bool CanResolve);
+    bool CanResolve,
+    bool CanReopen,
+    PresentationCommentThreadStatus ThreadStatus);
 
 public sealed record PresentationCommentPanePlan(
     int SlideIndex,
@@ -196,6 +205,7 @@ public static class PresentationReviewWorkflowPlanner
     public const string PreviousCommentCommandId = "freep.review.comments.previous";
     public const string NextCommentCommandId = "freep.review.comments.next";
     public const string ResolveCommentCommandId = "freep.review.comments.resolve";
+    public const string ReopenCommentCommandId = "freep.review.comments.reopen";
     public const string AccessibilityCommandId = "freep.review.accessibility.check";
     public const string AltTextCommandId = "freep.review.alt-text";
     public const string AltTextPaneApplyCommandId = "freep.review.alt-text.apply";
@@ -213,8 +223,10 @@ public static class PresentationReviewWorkflowPlanner
     public const string MissingSlideMessage = "Select a slide before adding a comment.";
     public const string MissingCommentMessage = "Select an existing comment first.";
     public const string EmptyCommentMessage = "Comment text cannot be empty.";
-    public const string ModernCommentStateDeferredMessage =
-        "Modern resolved-thread state is not modeled yet.";
+    public const string CommentAlreadyResolvedMessage =
+        "Selected comment thread is already resolved.";
+    public const string CommentAlreadyOpenMessage =
+        "Selected comment thread is already open.";
     public const string MissingShapeMessage = "Select a shape before editing alt text.";
     public const string MissingAltTextDescriptionMessage =
         "Alt text description is required unless the object is marked decorative.";
@@ -293,6 +305,9 @@ public static class PresentationReviewWorkflowPlanner
             Initials = NormalizeInitials(initials, author),
             Text = normalizedText,
             DateTime = timestamp,
+            IsResolved = false,
+            ResolvedDateTime = null,
+            ResolvedBy = string.Empty,
             Xemu = Math.Max(0, xemu),
             Yemu = Math.Max(0, yemu),
             Idx = slide.Comments.Count + 1
@@ -336,6 +351,9 @@ public static class PresentationReviewWorkflowPlanner
             Initials = NormalizeText(initials) ?? current.Initials,
             Text = normalizedText,
             DateTime = current.DateTime,
+            IsResolved = current.IsResolved,
+            ResolvedDateTime = current.ResolvedDateTime,
+            ResolvedBy = current.ResolvedBy,
             Xemu = current.Xemu,
             Yemu = current.Yemu,
             Idx = current.Idx,
@@ -372,13 +390,65 @@ public static class PresentationReviewWorkflowPlanner
     public static PresentationCommentMutationPlan BuildResolveCommentPlan(
         IReadOnlyList<Slide> slides,
         int slideIndex,
+        int commentIndex,
+        DateTime? resolvedAt = null,
+        string? resolvedBy = null)
+    {
+        ArgumentNullException.ThrowIfNull(slides);
+
+        var current = GetComment(slides, slideIndex, commentIndex);
+        if (current is null)
+        {
+            return InvalidMutation(PresentationReviewWorkflowIntentKind.ResolveComment, slideIndex, commentIndex, MissingCommentMessage);
+        }
+
+        if (current.IsResolved)
+        {
+            return InvalidMutation(PresentationReviewWorkflowIntentKind.ResolveComment, slideIndex, commentIndex, CommentAlreadyResolvedMessage);
+        }
+
+        var comment = CloneComment(current);
+        comment.IsResolved = true;
+        comment.ResolvedDateTime = resolvedAt;
+        comment.ResolvedBy = NormalizeText(resolvedBy) ?? string.Empty;
+        return new PresentationCommentMutationPlan(
+            PresentationReviewWorkflowIntentKind.ResolveComment,
+            true,
+            slideIndex,
+            commentIndex,
+            comment,
+            null);
+    }
+
+    public static PresentationCommentMutationPlan BuildReopenCommentPlan(
+        IReadOnlyList<Slide> slides,
+        int slideIndex,
         int commentIndex)
     {
         ArgumentNullException.ThrowIfNull(slides);
 
-        return GetComment(slides, slideIndex, commentIndex) is null
-            ? InvalidMutation(PresentationReviewWorkflowIntentKind.ResolveComment, slideIndex, commentIndex, MissingCommentMessage)
-            : InvalidMutation(PresentationReviewWorkflowIntentKind.ResolveComment, slideIndex, commentIndex, ModernCommentStateDeferredMessage);
+        var current = GetComment(slides, slideIndex, commentIndex);
+        if (current is null)
+        {
+            return InvalidMutation(PresentationReviewWorkflowIntentKind.ReopenComment, slideIndex, commentIndex, MissingCommentMessage);
+        }
+
+        if (!current.IsResolved)
+        {
+            return InvalidMutation(PresentationReviewWorkflowIntentKind.ReopenComment, slideIndex, commentIndex, CommentAlreadyOpenMessage);
+        }
+
+        var comment = CloneComment(current);
+        comment.IsResolved = false;
+        comment.ResolvedDateTime = null;
+        comment.ResolvedBy = string.Empty;
+        return new PresentationCommentMutationPlan(
+            PresentationReviewWorkflowIntentKind.ReopenComment,
+            true,
+            slideIndex,
+            commentIndex,
+            comment,
+            null);
     }
 
     public static PresentationAltTextRequestPlan BuildAltTextRequestPlan(
@@ -736,8 +806,13 @@ public static class PresentationReviewWorkflowPlanner
     {
         var hasSlide = GetSlide(slides, slideIndex) is not null;
         var hasSelectedComment = selectedCommentIndex.HasValue;
+        var selectedComment = selectedCommentIndex is { } index
+            ? GetComment(slides, slideIndex, index)
+            : null;
         var hasPrevious = TryGetAdjacentComment(slides, slideIndex, selectedCommentIndex, -1, out _);
         var hasNext = TryGetAdjacentComment(slides, slideIndex, selectedCommentIndex, 1, out _);
+        var canResolve = selectedComment is not null && !selectedComment.IsResolved;
+        var canReopen = selectedComment?.IsResolved == true;
 
         return
         [
@@ -747,7 +822,8 @@ public static class PresentationReviewWorkflowPlanner
             new(DeleteCommentCommandId, "Delete Comment", PresentationReviewWorkflowIntentKind.DeleteComment, hasSelectedComment, PresentationWorkflowCapabilityStatus.Available, hasSelectedComment ? null : MissingCommentMessage),
             new(PreviousCommentCommandId, "Previous Comment", PresentationReviewWorkflowIntentKind.PreviousComment, hasPrevious, PresentationWorkflowCapabilityStatus.Available, hasPrevious ? null : "No previous comment."),
             new(NextCommentCommandId, "Next Comment", PresentationReviewWorkflowIntentKind.NextComment, hasNext, PresentationWorkflowCapabilityStatus.Available, hasNext ? null : "No next comment."),
-            new(ResolveCommentCommandId, "Resolve Comment", PresentationReviewWorkflowIntentKind.ResolveComment, false, PresentationWorkflowCapabilityStatus.Deferred, totalCommentCount == 0 ? MissingCommentMessage : ModernCommentStateDeferredMessage),
+            new(ResolveCommentCommandId, "Resolve Comment", PresentationReviewWorkflowIntentKind.ResolveComment, canResolve, PresentationWorkflowCapabilityStatus.Available, canResolve ? null : selectedComment?.IsResolved == true ? CommentAlreadyResolvedMessage : MissingCommentMessage),
+            new(ReopenCommentCommandId, "Reopen Comment", PresentationReviewWorkflowIntentKind.ReopenComment, canReopen, PresentationWorkflowCapabilityStatus.Available, canReopen ? null : selectedComment is null ? MissingCommentMessage : CommentAlreadyOpenMessage),
         ];
     }
 
@@ -960,7 +1036,25 @@ public static class PresentationReviewWorkflowPlanner
             comment.Yemu,
             true,
             true,
-            false);
+            !comment.IsResolved,
+            comment.IsResolved,
+            comment.IsResolved ? PresentationCommentThreadStatus.Resolved : PresentationCommentThreadStatus.Open);
+
+    private static SlideComment CloneComment(SlideComment comment)
+        => new()
+        {
+            Author = comment.Author,
+            Initials = comment.Initials,
+            Text = comment.Text,
+            DateTime = comment.DateTime,
+            IsResolved = comment.IsResolved,
+            ResolvedDateTime = comment.ResolvedDateTime,
+            ResolvedBy = comment.ResolvedBy,
+            Xemu = comment.Xemu,
+            Yemu = comment.Yemu,
+            Idx = comment.Idx,
+            AuthorId = comment.AuthorId,
+        };
 
     private static PresentationCommentMutationPlan InvalidMutation(
         PresentationReviewWorkflowIntentKind intent,

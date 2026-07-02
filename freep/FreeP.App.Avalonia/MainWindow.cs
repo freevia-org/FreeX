@@ -1432,6 +1432,7 @@ public sealed class MainWindow : Window
         registry.Register(PresentationReviewWorkflowPlanner.PreviousCommentCommandId, EmptyRibbonCommand.Instance);
         registry.Register(PresentationReviewWorkflowPlanner.NextCommentCommandId, EmptyRibbonCommand.Instance);
         registry.Register(PresentationReviewWorkflowPlanner.ResolveCommentCommandId, EmptyRibbonCommand.Instance);
+        registry.Register(PresentationReviewWorkflowPlanner.ReopenCommentCommandId, EmptyRibbonCommand.Instance);
     }
 
     internal void RefreshReviewWorkflowPlans()
@@ -1535,6 +1536,13 @@ public sealed class MainWindow : Window
         {
             Text              = string.IsNullOrWhiteSpace(comment.Author) ? "Unknown reviewer" : comment.Author,
             FontWeight        = FontWeight.SemiBold,
+            VerticalAlignment = VerticalAlignment.Center,
+        });
+        header.Children.Add(new TextBlock
+        {
+            Text              = comment.ThreadStatus == PresentationCommentThreadStatus.Resolved ? "Resolved" : "Open",
+            FontSize          = 11,
+            Foreground        = new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66)),
             VerticalAlignment = VerticalAlignment.Center,
         });
 
