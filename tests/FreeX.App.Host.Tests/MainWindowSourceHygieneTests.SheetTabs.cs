@@ -652,6 +652,25 @@ public sealed partial class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void AutoFilterForegroundHarness_PairsExcelAndFreeXOpenedState()
+    {
+        var foregroundSource = WorkspaceFileLocator.ReadAllText("tools", "FreeX.ForegroundCapture", "Program.cs");
+
+        foregroundSource.Should().Contain("\"excel-autofilter\" => RunExcelAutoFilterScenario()");
+        foregroundSource.Should().Contain("\"freex-autofilter\" => RunFreeXMainWindowPointerScenario(\"freex-autofilter\", FreeXAutoFilterOpenedState())");
+        foregroundSource.Should().Contain("Seeded A1:D6 through foreground paste");
+        foregroundSource.Should().Contain("NativeMethods.VK_L");
+        foregroundSource.Should().Contain("NativeMethods.VK_DOWN");
+        foregroundSource.Should().Contain("GuardedSendKeys(options.Scenario, processId, handle, \"%{DOWN}\", \"sendkeys-alt-down-autofilter\")");
+        foregroundSource.Should().Contain("guarded header-cell dropdown click");
+        foregroundSource.Should().Contain("FindFreeXAutoFilterDialog(processId, handle.ToInt64(), options.PopupTimeout)");
+        foregroundSource.Should().Contain("WindowHasUiaText(dialog.Handle, \"Sort A to Z\")");
+        foregroundSource.Should().Contain("WindowHasUiaText(dialog.Handle, \"Text Filters\")");
+        foregroundSource.Should().Contain("WindowHasUiaText(dialog.Handle, \"Select All\")");
+        foregroundSource.Should().Contain("autofilter-dialog-not-found");
+    }
+
+    [Fact]
     public void SheetTabForegroundHarness_HasCoordinateFallbackForHiddenTabUiaNames()
     {
         var foregroundSource = WorkspaceFileLocator.ReadAllText("tools", "FreeX.ForegroundCapture", "Program.cs");
@@ -688,12 +707,16 @@ public sealed partial class MainWindowSourceHygieneTests
     {
         var batchSource = WorkspaceFileLocator.ReadAllText("tools", "Run-UxParityScenarioBatch.ps1");
 
-        batchSource.Should().Contain("[ValidateSet(\"smoke\", \"core\", \"dialogs\", \"status\", \"all\")]");
+        batchSource.Should().Contain("[ValidateSet(\"smoke\", \"core\", \"dialogs\", \"status\", \"formula\", \"filtering\", \"all\")]");
         batchSource.Should().Contain("\"core\" { return $pairs | Where-Object { $_[\"id\"] -in @(\"format-cells-dialog\", \"format-cells-context-dialog\", \"sheet-tab-context-menu\", \"sheet-tab-overflow-activate-dialog\") } }");
         batchSource.Should().Contain("id = \"status-footer-reference\"");
         batchSource.Should().Contain("excelScenario = \"excel-status-footer-reference\"");
         batchSource.Should().Contain("freexScenario = \"freex-status-live-stats-accessibility\"");
         batchSource.Should().Contain("\"status\" { return $pairs | Where-Object { $_[\"area\"] -eq \"Status bar\" } }");
+        batchSource.Should().Contain("id = \"autofilter-opened-state\"");
+        batchSource.Should().Contain("excelScenario = \"excel-autofilter\"");
+        batchSource.Should().Contain("freexScenario = \"freex-autofilter\"");
+        batchSource.Should().Contain("\"filtering\" { return $pairs | Where-Object { $_[\"area\"] -eq \"Sorting and filtering\" } }");
         batchSource.Should().Contain("[switch]$MinimizeForeignForeground");
         batchSource.Should().Contain("Clear-ForeignForegroundWindow $Scenario");
         batchSource.Should().Contain("$title.IndexOf(\"Media Player\", [StringComparison]::OrdinalIgnoreCase) -ge 0");
