@@ -1,7 +1,9 @@
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Interop;
 using Free.Shared.Shell.Wpf;
 using FreeX.App.Presentation.SheetUI;
 using FreeX.Core.Model;
@@ -10,27 +12,36 @@ namespace FreeX.App.Host;
 
 public sealed class ActivateSheetDialog : DialogWindow
 {
+    private const double DialogWidth = 352;
+    private const double DialogHeight = 380;
+    private const double ExcelButtonWidth = 90;
+    private const int GwlExStyle = -20;
+    private const int WsExContextHelp = 0x00000400;
+
     private readonly ListBox _sheetList = new();
-    private readonly Button _okButton = new() { Content = UiText.Ok, Width = 72 };
-    private readonly Button _cancelButton = new() { Content = UiText.Cancel, Width = 72 };
+    private readonly Button _okButton = new() { Content = UiText.Ok, Width = ExcelButtonWidth };
+    private readonly Button _cancelButton = new() { Content = UiText.Cancel, Width = ExcelButtonWidth };
 
     public ActivateSheetDialogResult Result { get; private set; }
 
     public ActivateSheetDialog(Workbook workbook, SheetId activeSheetId)
     {
         var targets = SheetDialogPlanner.BuildActivateSheetTargets(workbook);
-        var selectedTarget = SheetDialogPlanner.FindInitialActivateSheetTarget(targets, activeSheetId);
+        var selectedTarget = targets.Count == 0
+            ? null
+            : targets[0];
         Result = SheetDialogPlanner.CreateActivateSheetResult(selectedTarget?.SheetId ?? activeSheetId);
 
         Title = UiText.Get("ActivateSheet_Title");
-        Width = 280;
-        Height = 330;
+        Width = DialogWidth;
+        Height = DialogHeight;
         ResizeMode = ResizeMode.NoResize;
+        SourceInitialized += (_, _) => ApplyContextHelpButtonStyle();
 
         _sheetList.ItemsSource = targets;
         _sheetList.SelectedItem = selectedTarget;
         _sheetList.SelectionMode = SelectionMode.Single;
-        _sheetList.MinHeight = 210;
+        _sheetList.MinHeight = 260;
         AutomationProperties.SetName(_sheetList, UiText.Get("ActivateSheet_ListAutomationName"));
         AutomationProperties.SetAutomationId(_sheetList, "ActivateSheetList");
         AutomationProperties.SetHelpText(_sheetList, UiText.Get("ActivateSheet_ListHelpText"));
@@ -52,11 +63,28 @@ public sealed class ActivateSheetDialog : DialogWindow
 
     private UIElement CreateContent()
     {
-        var stack = new StackPanel { Margin = new Thickness(16) };
-        _sheetList.Margin = new Thickness(0, 0, 0, 14);
-        stack.Children.Add(_sheetList);
-        stack.Children.Add(DialogButtonRowFactory.Create(_okButton, _cancelButton));
-        return stack;
+        var grid = new Grid { Margin = new Thickness(10, 8, 10, 10) };
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+        var label = new Label
+        {
+            Content = UiText.Get("ActivateSheet_Title") + ":",
+            Target = _sheetList,
+            Padding = new Thickness(0),
+            Margin = new Thickness(0, 0, 0, 4)
+        };
+        grid.Children.Add(label);
+
+        _sheetList.Margin = new Thickness(0, 0, 0, 16);
+        Grid.SetRow(_sheetList, 1);
+        grid.Children.Add(_sheetList);
+
+        var buttons = DialogButtonRowFactory.Create(_okButton, _cancelButton);
+        Grid.SetRow(buttons, 2);
+        grid.Children.Add(buttons);
+        return grid;
     }
 
     private void FocusInitialKeyboardTarget()
@@ -85,4 +113,35 @@ public sealed class ActivateSheetDialog : DialogWindow
             e.Handled = true;
     }
 
+    private void ApplyContextHelpButtonStyle()
+    {
+        var handle = new WindowInteropHelper(this).Handle;
+        if (handle == IntPtr.Zero)
+            return;
+
+        var style = GetWindowLongPtr(handle, GwlExStyle);
+        SetWindowLongPtr(handle, GwlExStyle, new IntPtr(style.ToInt64() | WsExContextHelp));
+    }
+
+    private static IntPtr GetWindowLongPtr(IntPtr handle, int index) =>
+        IntPtr.Size == 8
+            ? GetWindowLongPtr64(handle, index)
+            : new IntPtr(GetWindowLong32(handle, index));
+
+    private static IntPtr SetWindowLongPtr(IntPtr handle, int index, IntPtr value) =>
+        IntPtr.Size == 8
+            ? SetWindowLongPtr64(handle, index, value)
+            : new IntPtr(SetWindowLong32(handle, index, value.ToInt32()));
+
+    [DllImport("user32.dll", EntryPoint = "GetWindowLong", SetLastError = true)]
+    private static extern int GetWindowLong32(IntPtr handle, int index);
+
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongPtr", SetLastError = true)]
+    private static extern IntPtr GetWindowLongPtr64(IntPtr handle, int index);
+
+    [DllImport("user32.dll", EntryPoint = "SetWindowLong", SetLastError = true)]
+    private static extern int SetWindowLong32(IntPtr handle, int index, int value);
+
+    [DllImport("user32.dll", EntryPoint = "SetWindowLongPtr", SetLastError = true)]
+    private static extern IntPtr SetWindowLongPtr64(IntPtr handle, int index, IntPtr value);
 }
