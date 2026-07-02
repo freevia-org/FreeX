@@ -440,13 +440,15 @@ public sealed class SlideCanvas : Control
         }
         catch { return; }
 
-        var dest = new Rect(pic.DestDip.X, pic.DestDip.Y, pic.DestDip.Width, pic.DestDip.Height);
+        var plan = PictureRenderPlanner.Plan(pic, bitmap.PixelSize.Width, bitmap.PixelSize.Height);
+        var destination = plan.DestinationDip;
+        var dest = new Rect(destination.X, destination.Y, destination.Width, destination.Height);
 
         // 18A: colour effects — produce a modified bitmap via pixel manipulation.
         // BN1: ApplyColorEffectsAvalonia returns null when GDI+/libgdiplus is unavailable;
         //      in that case we keep the original uneffected bitmap so the picture isn't blank.
         IImage renderBitmap = bitmap;
-        var effectPlan = PictureColorEffectPlanner.Plan(pic);
+        var effectPlan = plan.ColorEffects;
         if (effectPlan.HasPixelEffects)
             renderBitmap = ApplyColorEffectsAvalonia(bitmap, effectPlan) ?? (IImage)bitmap;
 
@@ -467,8 +469,7 @@ public sealed class SlideCanvas : Control
         // Wave 26: draw outer shadow behind the picture when effects are set.
         // Route the shadow-direction/blur math through the shared renderer-neutral planner
         // (ShapeEffectRenderPlanner) so WPF + Avalonia stay in lock-step and we don't duplicate it.
-        var picShadowPlan = ShapeEffectRenderPlanner.PlanOuterEffects(pic.Effects);
-        foreach (var pass in picShadowPlan.ShadowPasses)
+        foreach (var pass in plan.OuterEffects.ShadowPasses)
         {
             var shadowBrush = new SolidColorBrush(
                 Color.FromArgb(pass.Alpha, pass.Color.R, pass.Color.G, pass.Color.B));
@@ -489,8 +490,8 @@ public sealed class SlideCanvas : Control
         }
 
         // 18A: alpha opacity
-        if (pic.AlphaModPct.HasValue && pic.AlphaModPct.Value < 1.0)
-            alphaScope = dc.PushOpacity(Math.Max(0, Math.Min(1, pic.AlphaModPct.Value)));
+        if (plan.HasAlphaOpacity)
+            alphaScope = dc.PushOpacity(plan.AlphaOpacity);
 
         // Wave 26: build clip geometry for non-rect frame presets.
         IDisposable? clipScope = null;
@@ -515,27 +516,14 @@ public sealed class SlideCanvas : Control
             clipScope = dc.PushGeometryClip(clipGeom);
         }
 
-        // 18A: crop — expand the dest rect to show only the cropped sub-region of the image.
-        // We do this by scaling the dest rect outward so that the uncropped image region maps to
-        // exactly dest. No clip is needed; the shape bounds act as a natural clip.
-        if (pic.HasCrop)
+        // 18A: crop from the shared renderer-neutral source rectangle.
+        if (plan.HasCrop)
         {
-            // The visible fraction in each dimension
-            double visW = 1.0 - pic.CropLeft - pic.CropRight;
-            double visH = 1.0 - pic.CropTop  - pic.CropBottom;
-            if (visW > 0 && visH > 0)
-            {
-                // Full image rendered into expanded rect so that the visible portion fills dest
-                double fullW = dest.Width  / visW;
-                double fullH = dest.Height / visH;
-                double offX  = dest.X - pic.CropLeft  * fullW;
-                double offY  = dest.Y - pic.CropTop   * fullH;
-                var expandedDest = new Rect(offX, offY, fullW, fullH);
-
-                // Clip to dest so the cropped-off margins aren't visible
-                using var cropClip = pic.HasFrameClip ? null : (IDisposable?)dc.PushClip(dest);
-                dc.DrawImage(renderBitmap, expandedDest);
-            }
+            var source = plan.SourceRectPixels;
+            dc.DrawImage(
+                renderBitmap,
+                new Rect(source.X, source.Y, source.Width, source.Height),
+                dest);
         }
         else
         {
