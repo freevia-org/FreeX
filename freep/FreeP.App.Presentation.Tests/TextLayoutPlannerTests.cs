@@ -210,6 +210,132 @@ public sealed class TextLayoutPlannerTests
     }
 
     [Fact]
+    public void PlanNormalAutoFitOverflow_AutoFitFalse_DoesNotShrink()
+    {
+        var text = new ResolvedTextLayout { AutoFit = false };
+
+        var plan = TextLayoutPlanner.PlanNormalAutoFitOverflow(
+            text,
+            textAreaHeightDip: 40,
+            new[] { new TextParagraphMeasure(0, 100, 0, 0) });
+
+        plan.Mode.Should().Be(TextAutoFitOverflowMode.NoAutoFit);
+        plan.FontScale.Should().Be(1.0);
+        plan.LineSpacingReduction.Should().Be(0.0);
+        TextLayoutPlanner.ApplyAutoFitPlan(text, plan).Should().BeSameAs(text);
+    }
+
+    [Fact]
+    public void PlanNormalAutoFitOverflow_StoredFontScaleWinsWithoutRuntimeDoubleScale()
+    {
+        var text = new ResolvedTextLayout
+        {
+            AutoFit = true,
+            HasStoredFontScale = true,
+            FontScale = 0.625,
+            Paragraphs = new[] { Paragraph("Cached") }
+        };
+
+        var plan = TextLayoutPlanner.PlanNormalAutoFitOverflow(
+            text,
+            textAreaHeightDip: 40,
+            new[] { new TextParagraphMeasure(0, 100, 0, 0) });
+
+        plan.Mode.Should().Be(TextAutoFitOverflowMode.StoredFontScale);
+        plan.FontScale.Should().Be(1.0);
+        plan.LineSpacingReduction.Should().Be(0.0);
+        TextLayoutPlanner.ApplyAutoFitPlan(text, plan).Should().BeSameAs(text);
+    }
+
+    [Fact]
+    public void PlanNormalAutoFitOverflow_OverflowingAutoFitWithoutCacheShrinks()
+    {
+        var text = new ResolvedTextLayout
+        {
+            AutoFit = true,
+            Paragraphs = new[] { BulletParagraph(indent: 36, hanging: 18) }
+        };
+
+        var plan = TextLayoutPlanner.PlanNormalAutoFitOverflow(
+            text,
+            textAreaHeightDip: 80,
+            new[] { new TextParagraphMeasure(0, 100, 0, 0) });
+        var scaled = TextLayoutPlanner.ApplyAutoFitPlan(text, plan);
+
+        plan.Mode.Should().Be(TextAutoFitOverflowMode.RuntimeShrink);
+        plan.FontScale.Should().BeApproximately(0.8, 0.001);
+        plan.FontScale.Should().BeLessThan(1.0);
+        plan.FontScale.Should().BeGreaterThanOrEqualTo(TextLayoutPlanner.RuntimeAutoFitMinimumFontScale);
+        scaled.Should().NotBeSameAs(text);
+        scaled.Paragraphs[0].Runs[0].FontSizePt.Should().BeApproximately(18.0 * 0.8, 0.001);
+        scaled.Paragraphs[0].BulletFontSizePt.Should().BeApproximately(14.0 * 0.8, 0.001);
+        scaled.FontScale.Should().BeApproximately(0.8, 0.001);
+    }
+
+    [Fact]
+    public void PlanNormalAutoFitOverflow_NonOverflowingAutoFitWithoutCacheDoesNotEnlarge()
+    {
+        var text = new ResolvedTextLayout
+        {
+            AutoFit = true,
+            Paragraphs = new[] { Paragraph("Fits") }
+        };
+
+        var plan = TextLayoutPlanner.PlanNormalAutoFitOverflow(
+            text,
+            textAreaHeightDip: 120,
+            new[] { new TextParagraphMeasure(0, 80, 0, 0) });
+
+        plan.Mode.Should().Be(TextAutoFitOverflowMode.Fits);
+        plan.FontScale.Should().Be(1.0);
+        plan.LineSpacingReduction.Should().Be(0.0);
+        TextLayoutPlanner.ApplyAutoFitPlan(text, plan).Should().BeSameAs(text);
+    }
+
+    [Fact]
+    public void PlanNormalAutoFitOverflow_MultiColumnCapacityDoesNotShrinkTextThatFitsAcrossColumns()
+    {
+        var text = new ResolvedTextLayout
+        {
+            AutoFit = true,
+            ColumnCount = 2,
+            Paragraphs = new[] { Paragraph("Column 1"), Paragraph("Column 2") }
+        };
+        var layout = TextLayoutPlanner.GetColumnLayout(text, new LayoutRect(0, 0, 300, 100));
+
+        var plan = TextLayoutPlanner.PlanNormalAutoFitOverflow(
+            text,
+            TextLayoutPlanner.GetAutoFitCapacityHeight(layout),
+            new[]
+            {
+                new TextParagraphMeasure(0, 80, 0, 0),
+                new TextParagraphMeasure(1, 80, 0, 0)
+            });
+
+        TextLayoutPlanner.GetAutoFitCapacityHeight(layout)
+            .Should().BeApproximately(layout.Area.Height * layout.ColumnCount, 0.001);
+        plan.Mode.Should().Be(TextAutoFitOverflowMode.Fits);
+        plan.FontScale.Should().Be(1.0);
+        TextLayoutPlanner.ApplyAutoFitPlan(text, plan).Should().BeSameAs(text);
+    }
+
+    [Fact]
+    public void PlanNormalAutoFitOverflow_ExtremeOverflowUsesMinimumScaleAndLineReduction()
+    {
+        var text = new ResolvedTextLayout { AutoFit = true };
+
+        var plan = TextLayoutPlanner.PlanNormalAutoFitOverflow(
+            text,
+            textAreaHeightDip: 50,
+            new[] { new TextParagraphMeasure(0, 100, 0, 0) });
+
+        plan.Mode.Should().Be(TextAutoFitOverflowMode.RuntimeShrink);
+        plan.FontScale.Should().Be(TextLayoutPlanner.RuntimeAutoFitMinimumFontScale);
+        plan.LineSpacingReduction.Should().BeGreaterThan(0.0);
+        plan.LineSpacingReduction.Should().BeLessThanOrEqualTo(TextLayoutPlanner.RuntimeAutoFitMaximumLineSpacingReduction);
+    }
+
+    [Fact]
     public void PlanParagraphRenderRoute_UsesPlainRouteForSimpleParagraph()
     {
         var text = new ResolvedTextLayout();
@@ -373,8 +499,12 @@ public sealed class TextLayoutPlannerTests
         wpf.Should().Contain("TextLayoutPlanner.PlanBodyText");
         wpf.Should().Contain("TextLayoutPlanner.GetColumnLayout");
         wpf.Should().Contain("TextLayoutPlanner.PlanColumns");
+        wpf.Should().Contain("TextLayoutPlanner.PlanNormalAutoFitOverflow");
+        wpf.Should().Contain("TextLayoutPlanner.ApplyAutoFitPlan");
+        wpf.Should().Contain("TextLayoutPlanner.GetAutoFitCapacityHeight");
         wpf.Should().Contain("TextLayoutPlanner.PlanTabStops");
         wpf.Should().Contain("placement.Bullet");
+        wpf.Should().NotContain("FontScalePPT");
         wpf.Should().NotContain("placement.X - para.HangingDip");
         wpf.Should().NotContain("const double DefaultSpacingDip");
         wpf.Should().NotContain("const double DefaultTabDip");
@@ -387,8 +517,12 @@ public sealed class TextLayoutPlannerTests
         avalonia.Should().Contain("TextLayoutPlanner.PlanBodyText");
         avalonia.Should().Contain("TextLayoutPlanner.GetColumnLayout");
         avalonia.Should().Contain("TextLayoutPlanner.PlanColumns");
+        avalonia.Should().Contain("TextLayoutPlanner.PlanNormalAutoFitOverflow");
+        avalonia.Should().Contain("TextLayoutPlanner.ApplyAutoFitPlan");
+        avalonia.Should().Contain("TextLayoutPlanner.GetAutoFitCapacityHeight");
         avalonia.Should().Contain("TextLayoutPlanner.PlanTabStops");
         avalonia.Should().Contain("placement.Bullet");
+        avalonia.Should().NotContain("FontScalePPT");
         avalonia.Should().NotContain("placement.X - para.HangingDip");
         avalonia.Should().NotContain("const double DefaultSpacingDip");
         avalonia.Should().NotContain("const double DefaultTabDip");

@@ -1070,8 +1070,9 @@ public static class SlideCompositor
         };
 
         // Wave 19A: compute normAutofit scale — divide by 100000 (OOXML unit).
-        double fontScale    = body.FontScalePPT.HasValue && body.FontScalePPT.Value > 0
-            ? body.FontScalePPT.Value / 100000.0 : 1.0;
+        bool hasStoredFontScale = body.FontScalePPT.HasValue && body.FontScalePPT.Value > 0;
+        double fontScale    = hasStoredFontScale
+            ? body.FontScalePPT!.Value / 100000.0 : 1.0;
         double lnSpcReduc   = body.LnSpcReductionPPT.HasValue && body.LnSpcReductionPPT.Value > 0
             ? body.LnSpcReductionPPT.Value / 100000.0 : 0.0;
 
@@ -1329,6 +1330,8 @@ public static class SlideCompositor
             Wrap = body.Wrap,
             WarpPreset = body.WarpPreset,   // Wave 16A
             VerticalType = body.VerticalType,  // Wave 18B
+            AutoFit = body.AutoFit,
+            HasStoredFontScale = hasStoredFontScale,
             FontScale = fontScale,            // Wave 19A
             LnSpcReduction = lnSpcReduc,      // Wave 19A
             // Wave 22B: text columns

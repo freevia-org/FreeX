@@ -260,6 +260,9 @@ public sealed class BulletsAutofitTests
         // 18 * 0.625 = 11.25
         layout.Paragraphs[0].Runs[0].FontSizePt
             .Should().BeApproximately(18.0 * 0.625, 0.01);
+        layout.AutoFit.Should().BeTrue();
+        layout.HasStoredFontScale.Should().BeTrue();
+        layout.FontScale.Should().BeApproximately(0.625, 0.001);
     }
 
     [Fact]
@@ -292,6 +295,24 @@ public sealed class BulletsAutofitTests
         var layout = ComposeText(body);
 
         layout.Paragraphs[0].Runs[0].FontSizePt.Should().BeApproximately(24.0, 0.01);
+        layout.FontScale.Should().BeApproximately(1.0, 0.001);
+        layout.AutoFit.Should().BeFalse();
+        layout.HasStoredFontScale.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Autofit_WithoutCachedFontScale_CarriesRuntimePlannerMetadataWithoutPreScaling()
+    {
+        var body = new TextBody { AutoFit = true };
+        var para = new Paragraph();
+        para.Runs.Add(new Run { Text = "Runtime planner candidate", FontSizePt = 24.0 });
+        body.Paragraphs.Add(para);
+
+        var layout = ComposeText(body);
+
+        layout.Paragraphs[0].Runs[0].FontSizePt.Should().BeApproximately(24.0, 0.01);
+        layout.AutoFit.Should().BeTrue();
+        layout.HasStoredFontScale.Should().BeFalse();
         layout.FontScale.Should().BeApproximately(1.0, 0.001);
     }
 
