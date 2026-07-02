@@ -535,6 +535,8 @@ public sealed class DocumentViewReviewTests
             "freew.mark-as-final",
             "freew.restrict-editing",
             "freew.inspect-document",
+            "freew.compare",
+            "freew.combine",
             "freew.new-comment",
             "freew.delete-comment",
             "freew.previous-comment",
@@ -571,7 +573,7 @@ public sealed class DocumentViewReviewTests
             "freew.delete-comment", "freew.previous-comment", "freew.next-comment",
             "freew.reply-comment", "freew.resolve-comment", "freew.show-comments",
             "freew.mark-as-final", "freew.restrict-editing",
-            "freew.inspect-document",
+            "freew.inspect-document", "freew.compare", "freew.combine",
         })
         {
             ids.Should().Contain(id, $"Review tab must declare '{id}'");
@@ -621,6 +623,23 @@ public sealed class DocumentViewReviewTests
             "mark-final",
             "restrict",
         });
+    }
+
+    [Fact]
+    public void Review_compare_commands_route_to_host_callbacks()
+    {
+        var calls = new List<string>();
+        var callbacks = NoopCallbacks() with
+        {
+            CompareDocuments = () => calls.Add("compare"),
+            CombineDocuments = () => calls.Add("combine"),
+        };
+        var registry = FreeWAvaloniaRibbonCommands.Build(new DocumentView(), callbacks);
+
+        Execute(registry, "freew.compare");
+        Execute(registry, "freew.combine");
+
+        calls.Should().Equal("compare", "combine");
     }
 
     [Fact]

@@ -445,6 +445,110 @@ public sealed class MainWindow : Window
         _editor.Focus();
     }
 
+    private async Task CompareDocumentsAsync()
+    {
+        var originalPath = await PromptReviewDocumentPathAsync("Compare: pick the ORIGINAL document");
+        if (originalPath is null)
+            return;
+
+        var prompt = ReviewCompareCombineWorkflow.BuildComparePrompt(
+            _editor.Document,
+            _fileWorkflow.CurrentFileName,
+            Environment.UserName);
+        var picked = await CompareDocumentsDialog.ShowAsync(this, originalPath, prompt);
+        if (picked is null)
+            return;
+
+        try
+        {
+            var original = OpenReviewDocument(picked.OriginalFilePath, "Compare documents");
+            var compared = ReviewCompareCombineWorkflow.ExecuteCompare(
+                new CompareDocumentsExecutionInput(
+                    original,
+                    _editor.Document,
+                    picked.Author,
+                    ReviewCompareCombineWorkflow.CreateRevisionDateXml(DateTimeOffset.UtcNow),
+                    picked.Settings));
+            LoadReviewResult(compared, $"Compared with {Path.GetFileName(picked.OriginalFilePath)}.");
+        }
+        catch (Exception ex)
+        {
+            _status.Text = $"Could not compare the documents: {ex.Message}";
+        }
+
+        _editor.Focus();
+    }
+
+    private async Task CombineDocumentsAsync()
+    {
+        var originalPath = await PromptReviewDocumentPathAsync("Combine: pick the ORIGINAL document");
+        if (originalPath is null)
+            return;
+
+        var reviewerBPath = await PromptReviewDocumentPathAsync("Combine: pick Reviewer B's revised document");
+        if (reviewerBPath is null)
+            return;
+
+        var prompt = ReviewCompareCombineWorkflow.BuildCombinePrompt(
+            _editor.Document,
+            _fileWorkflow.CurrentFileName,
+            Environment.UserName,
+            ReviewCompareCombineWorkflow.DefaultReviewerB);
+        var picked = await CombineDocumentsDialog.ShowAsync(this, originalPath, reviewerBPath, prompt);
+        if (picked is null)
+            return;
+
+        try
+        {
+            var original = OpenReviewDocument(picked.OriginalFilePath, "Combine documents");
+            var reviewerB = OpenReviewDocument(picked.ReviewerBFilePath, "Combine documents");
+            var combined = ReviewCompareCombineWorkflow.ExecuteCombine(
+                new CombineDocumentsExecutionInput(
+                    original,
+                    _editor.Document,
+                    picked.AuthorA,
+                    reviewerB,
+                    picked.AuthorB,
+                    ReviewCompareCombineWorkflow.CreateRevisionDateXml(DateTimeOffset.UtcNow)));
+            LoadReviewResult(combined, $"Combined with {Path.GetFileName(picked.ReviewerBFilePath)}.");
+        }
+        catch (Exception ex)
+        {
+            _status.Text = $"Could not combine the documents: {ex.Message}";
+        }
+
+        _editor.Focus();
+    }
+
+    private async Task<string?> PromptReviewDocumentPathAsync(string title)
+    {
+        using var file = await AvaloniaFilePickerService.PickSingleOpenFileWithLocalPathAsync(
+            StorageProvider,
+            AvaloniaFilePickerOpenRequest.FromFileTypes(
+                title,
+                DocumentFilePickerTypes.BuildOpenTypes(_documentPersistence.Adapters)));
+        return file?.LocalPath;
+    }
+
+    private TextDocument OpenReviewDocument(string path, string commandName)
+    {
+        if (!_documentPersistence.CanOpenPath(path))
+        {
+            throw new InvalidOperationException(SisterAppFileTextPlanner.FormatUnsupportedFileType(
+                commandName,
+                Path.GetExtension(path)));
+        }
+
+        return _documentPersistence.Open(path).Document;
+    }
+
+    private void LoadReviewResult(TextDocument document, string statusText)
+    {
+        LoadDocumentContent(document);
+        _fileWorkflow.MarkDirtyWithPath(null);
+        _status.Text = statusText;
+    }
+
     private async Task ReplyToCommentAsync()
     {
         if (_editor.CommentsAtCaret.Count == 0)
@@ -754,7 +858,9 @@ public sealed class MainWindow : Window
             IsSpellcheckActive: () => _editor.SpellCheckEnabled,
             AddToDictionary: AddCurrentWordToDictionary,
             OpenThesaurus: () => _ = OpenThesaurusAsync(),
-            SetProofingLanguage: () => _ = OpenProofingLanguageDialogAsync());
+            SetProofingLanguage: () => _ = OpenProofingLanguageDialogAsync(),
+            CompareDocuments: () => _ = CompareDocumentsAsync(),
+            CombineDocuments: () => _ = CombineDocumentsAsync());
 
         // AV-MAIL: capture the Mailings engine so the shell can drive its two dialog-bound commands
         // (Select Recipients / Insert Merge Field) with async Avalonia dialogs over the same session the
