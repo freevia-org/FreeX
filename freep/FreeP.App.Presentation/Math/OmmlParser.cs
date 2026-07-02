@@ -157,9 +157,25 @@ public static class OmmlParser
     {
         var numEl = fEl.Element(M + "num") ?? fEl;
         var denEl = fEl.Element(M + "den") ?? fEl;
+
+        // Per ECMA-376 §22.1.2.34 (CT_FPr) / §22.1.2.35 (ST_FType): m:type is "bar"
+        // (default), "skw" (skewed), "lin" (linear), or "noBar" (stacked, no bar).
+        // Absent m:fPr, absent m:type, or an unrecognized value all default to Bar.
+        var fPr = fEl.Element(M + "fPr");
+        var typeVal = fPr?.Element(M + "type")?.Attribute(M + "val")?.Value
+                   ?? fPr?.Element(M + "type")?.Value;
+        var fracType = typeVal switch
+        {
+            "skw"   => MathNode.FracType.Skewed,
+            "lin"   => MathNode.FracType.Linear,
+            "noBar" => MathNode.FracType.NoBar,
+            _       => MathNode.FracType.Bar
+        };
+
         return new MathNode.Frac(
             ParseRow(numEl),
-            ParseRow(denEl));
+            ParseRow(denEl),
+            fracType);
     }
 
     // ── m:sSup superscript ────────────────────────────────────────────────
@@ -273,11 +289,20 @@ public static class OmmlParser
             ? ")"
             : endChrEl.Attribute(M + "val")?.Value ?? endChrEl.Value;
 
+        // Per ECMA-376 §22.1.2.20 (CT_DPr): m:sepChr is the separator glyph drawn
+        // between the m:e children when there are two or more. When ABSENT the
+        // default is ",". When PRESENT with an explicit empty m:val, no separator
+        // glyph is drawn — same explicit-empty semantics as begChr/endChr.
+        var sepChrEl = dPr?.Element(M + "sepChr");
+        string sepChr = sepChrEl is null
+            ? ","
+            : sepChrEl.Attribute(M + "val")?.Value ?? sepChrEl.Value;
+
         var elements = new List<MathNode>();
         foreach (var eEl in el.Elements(M + "e"))
             elements.Add(ParseRow(eEl));
 
-        return new MathNode.Delim(begChr, endChr, elements);
+        return new MathNode.Delim(begChr, endChr, elements, sepChr);
     }
 
     // ── m:acc accent ──────────────────────────────────────────────────────

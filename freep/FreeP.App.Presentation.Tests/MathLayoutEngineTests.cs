@@ -188,4 +188,108 @@ public sealed class MathLayoutEngineTests
         (baseBox.Y + baseBox.Metrics.Ascent).Should().BeApproximately(box.Metrics.Ascent, 0.01,
             "the base's own baseline (Y + its ascent) must line up with the container's reported Ascent");
     }
+
+    // ── HA4: m:d sepChr — separator glyph between multiple delimiter elements ──
+
+    private static IEnumerable<MathBox> AllGlyphs(MathBox box)
+    {
+        if (box is MathBox.Glyph g) yield return g;
+        if (box is MathBox.Container c)
+            foreach (var child in c.Children)
+                foreach (var g2 in AllGlyphs(child))
+                    yield return g2;
+    }
+
+    [Fact]
+    public void Delim_TwoElements_ExplicitPipeSepChr_RendersPipeBetweenElements()
+    {
+        var delim = new MathNode.Delim("{", "}", new MathNode[] { Run("x"), Run("P(x)") }, sepChar: "|");
+        var box = MathLayoutEngine.Layout(delim, "Cambria Math", FontSizePt);
+
+        var glyphs = AllGlyphs(box).Cast<MathBox.Glyph>().ToList();
+        glyphs.Should().Contain(g => g.Text == "|", "the explicit m:sepChr=\"|\" must be rendered between the two m:e elements");
+    }
+
+    [Fact]
+    public void Delim_TwoElements_DefaultSepChr_RendersComma()
+    {
+        var delim = new MathNode.Delim("(", ")", new MathNode[] { Run("x"), Run("y") });
+        var box = MathLayoutEngine.Layout(delim, "Cambria Math", FontSizePt);
+
+        var glyphs = AllGlyphs(box).Cast<MathBox.Glyph>().ToList();
+        glyphs.Should().Contain(g => g.Text == ",", "the default (absent) m:sepChr is \",\" per ECMA-376 §22.1.2.20");
+    }
+
+    [Fact]
+    public void Delim_SingleElement_NoSeparatorGlyph()
+    {
+        var delim = new MathNode.Delim("(", ")", new MathNode[] { Run("x") });
+        var box = MathLayoutEngine.Layout(delim, "Cambria Math", FontSizePt);
+
+        var glyphs = AllGlyphs(box).Cast<MathBox.Glyph>().ToList();
+        glyphs.Should().NotContain(g => g.Text == ",", "a single m:e must never get a separator glyph");
+    }
+
+    [Fact]
+    public void Delim_TwoElements_ExplicitEmptySepChr_NoSeparatorGlyph()
+    {
+        var delim = new MathNode.Delim("(", ")", new MathNode[] { Run("x"), Run("y") }, sepChar: "");
+        var box = MathLayoutEngine.Layout(delim, "Cambria Math", FontSizePt);
+
+        var glyphs = AllGlyphs(box).Cast<MathBox.Glyph>().ToList();
+        glyphs.Should().NotContain(g => g.Text == ",");
+        glyphs.Should().HaveCount(2, "only the two element glyphs should render, no separator");
+    }
+
+    // ── HA6: m:f fPr/type — fraction bar style ──────────────────────────────
+
+    [Fact]
+    public void Frac_DefaultBarType_RendersHRule_Unchanged()
+    {
+        var frac = new MathNode.Frac(Run("1"), Run("2")); // default FracType.Bar
+        var box = MathLayoutEngine.Layout(frac, "Cambria Math", FontSizePt);
+
+        var container = (MathBox.Container)box.Children[0];
+        container.Children.Should().ContainSingle(b => b is MathBox.HRule,
+            "the default bar fraction must still draw exactly one HRule (no regression)");
+    }
+
+    [Fact]
+    public void Frac_NoBarType_HasNoHRule_ButKeepsStackedNumDen()
+    {
+        var frac = new MathNode.Frac(Run("n"), Run("k"), MathNode.FracType.NoBar);
+        var box = MathLayoutEngine.Layout(frac, "Cambria Math", FontSizePt);
+
+        var container = (MathBox.Container)box.Children[0];
+        container.Children.Should().NotContain(b => b is MathBox.HRule,
+            "noBar (binomial style) must not draw a bar line");
+        container.Children.Should().HaveCount(2, "noBar still stacks exactly numerator + denominator, no bar");
+    }
+
+    [Fact]
+    public void Frac_LinearType_RendersSlashGlyph_NotStacked()
+    {
+        var frac = new MathNode.Frac(Run("a"), Run("b"), MathNode.FracType.Linear);
+        var box = MathLayoutEngine.Layout(frac, "Cambria Math", FontSizePt);
+
+        var container = (MathBox.Container)box.Children[0];
+        container.Children.Should().NotContain(b => b is MathBox.HRule,
+            "linear fractions render inline with a slash, not a bar");
+
+        var glyphs = AllGlyphs(container).Cast<MathBox.Glyph>().ToList();
+        glyphs.Should().Contain(g => g.Text == "/", "the linear form must include a slash glyph");
+    }
+
+    [Fact]
+    public void Frac_SkewedType_DoesNotRenderAsBarFraction()
+    {
+        // HA6: full skew layout isn't implemented; at minimum it must not fall back
+        // to the bar-fraction rendering (approximated as the linear a/b form instead).
+        var frac = new MathNode.Frac(Run("a"), Run("b"), MathNode.FracType.Skewed);
+        var box = MathLayoutEngine.Layout(frac, "Cambria Math", FontSizePt);
+
+        var container = (MathBox.Container)box.Children[0];
+        container.Children.Should().NotContain(b => b is MathBox.HRule,
+            "skw must never render as a bar fraction");
+    }
 }

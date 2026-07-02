@@ -140,4 +140,80 @@ public sealed class OmmlParserTests
         var run = Assert.IsType<MathNode.Run>(node);
         Assert.True(run.IsItalic);
     }
+
+    // ── HA4: m:d sepChr (separator between multiple m:e children) ─────────
+
+    [Fact]
+    public void Delim_WithTwoElements_NoSepChr_DefaultsToComma()
+    {
+        var node = Parse("<m:d><m:e><m:r><m:t>x</m:t></m:r></m:e><m:e><m:r><m:t>y</m:t></m:r></m:e></m:d>");
+
+        var delim = Assert.IsType<MathNode.Delim>(node);
+        Assert.Equal(",", delim.SepChar);
+        Assert.Equal(2, delim.Elements.Count);
+    }
+
+    [Fact]
+    public void Delim_WithTwoElements_ExplicitSepChr_UsesThatChar()
+    {
+        var node = Parse("<m:d><m:dPr><m:sepChr m:val=\"|\"/></m:dPr><m:e><m:r><m:t>x</m:t></m:r></m:e><m:e><m:r><m:t>P(x)</m:t></m:r></m:e></m:d>");
+
+        var delim = Assert.IsType<MathNode.Delim>(node);
+        Assert.Equal("|", delim.SepChar);
+    }
+
+    [Fact]
+    public void Delim_WithExplicitEmptySepChr_HasNoSeparatorGlyph()
+    {
+        var node = Parse("<m:d><m:dPr><m:sepChr m:val=\"\"/></m:dPr><m:e><m:r><m:t>x</m:t></m:r></m:e><m:e><m:r><m:t>y</m:t></m:r></m:e></m:d>");
+
+        var delim = Assert.IsType<MathNode.Delim>(node);
+        Assert.Equal(string.Empty, delim.SepChar);
+    }
+
+    [Fact]
+    public void Delim_WithSingleElement_SepCharIrrelevant_LayoutHasNoSeparator()
+    {
+        // Single m:e: even with a default (absent) sepChr, no separator should ever
+        // be rendered — the layout test (MathLayoutEngineTests) asserts the box tree;
+        // here we just confirm the parser still produces exactly one element.
+        var node = Parse("<m:d><m:e><m:r><m:t>x</m:t></m:r></m:e></m:d>");
+
+        var delim = Assert.IsType<MathNode.Delim>(node);
+        Assert.Single(delim.Elements);
+        Assert.Equal(",", delim.SepChar); // parsed default, but layout must not draw it
+    }
+
+    // ── HA6: m:f fPr/type (fraction bar style) ─────────────────────────────
+
+    [Fact]
+    public void Frac_WithNoFPr_DefaultsToBar()
+    {
+        var node = Parse("<m:f><m:num><m:r><m:t>1</m:t></m:r></m:num><m:den><m:r><m:t>2</m:t></m:r></m:den></m:f>");
+
+        var frac = Assert.IsType<MathNode.Frac>(node);
+        Assert.Equal(MathNode.FracType.Bar, frac.Type);
+    }
+
+    [Theory]
+    [InlineData("bar", MathNode.FracType.Bar)]
+    [InlineData("skw", MathNode.FracType.Skewed)]
+    [InlineData("lin", MathNode.FracType.Linear)]
+    [InlineData("noBar", MathNode.FracType.NoBar)]
+    public void Frac_WithExplicitType_MapsToEnum(string val, MathNode.FracType expected)
+    {
+        var node = Parse($"<m:f><m:fPr><m:type m:val=\"{val}\"/></m:fPr><m:num><m:r><m:t>1</m:t></m:r></m:num><m:den><m:r><m:t>2</m:t></m:r></m:den></m:f>");
+
+        var frac = Assert.IsType<MathNode.Frac>(node);
+        Assert.Equal(expected, frac.Type);
+    }
+
+    [Fact]
+    public void Frac_WithUnknownType_DefaultsToBar()
+    {
+        var node = Parse("<m:f><m:fPr><m:type m:val=\"bogus\"/></m:fPr><m:num><m:r><m:t>1</m:t></m:r></m:num><m:den><m:r><m:t>2</m:t></m:r></m:den></m:f>");
+
+        var frac = Assert.IsType<MathNode.Frac>(node);
+        Assert.Equal(MathNode.FracType.Bar, frac.Type);
+    }
 }

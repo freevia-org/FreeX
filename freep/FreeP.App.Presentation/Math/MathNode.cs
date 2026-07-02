@@ -41,17 +41,39 @@ public abstract class MathNode
     // ── Fraction ────────────────────────────────────────────────────────────
 
     /// <summary>
+    /// The fraction bar style: <c>m:fPr/m:type</c> per ECMA-376 §22.1.2.34 (CT_FPr) /
+    /// §22.1.2.35 (ST_FType).
+    /// </summary>
+    public enum FracType
+    {
+        /// <summary>"bar" (default) — numerator over denominator with a horizontal bar.</summary>
+        Bar,
+        /// <summary>"skw" — skewed: a compact diagonal fraction.</summary>
+        Skewed,
+        /// <summary>"lin" — linear: numerator, slash, denominator inline on the baseline.</summary>
+        Linear,
+        /// <summary>"noBar" — stacked numerator over denominator with no bar (binomial style).</summary>
+        NoBar
+    }
+
+    /// <summary>
     /// Fraction: <c>m:f</c> with <c>m:num</c> and <c>m:den</c>.
-    /// Rendered as numerator over denominator with a horizontal bar.
+    /// Rendered per <see cref="Type"/> (default: numerator over denominator with a
+    /// horizontal bar).
     /// </summary>
     public sealed class Frac : MathNode
     {
         public MathNode Numerator { get; }
         public MathNode Denominator { get; }
-        public Frac(MathNode numerator, MathNode denominator)
+
+        /// <summary>The fraction bar style (m:fPr/m:type). Default <see cref="FracType.Bar"/>.</summary>
+        public FracType Type { get; }
+
+        public Frac(MathNode numerator, MathNode denominator, FracType type = FracType.Bar)
         {
             Numerator = numerator;
             Denominator = denominator;
+            Type = type;
         }
     }
 
@@ -147,22 +169,31 @@ public abstract class MathNode
     // ── Delimiter ────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// <c>m:d</c> — delimiter with auto-sized brackets around comma-separated children.
-    /// Default brackets: "(" and ")".
+    /// <c>m:d</c> — delimiter with auto-sized brackets around separator-separated children.
+    /// Default brackets: "(" and ")". Default separator (m:sepChr): ",".
     /// </summary>
     public sealed class Delim : MathNode
     {
         public string BegChar { get; }
         public string EndChar { get; }
 
+        /// <summary>
+        /// The separator glyph drawn between consecutive <see cref="Elements"/> when
+        /// there are two or more (per ECMA-376 §22.1.2.20 CT_DPr m:sepChr).
+        /// Default (element absent) is ",". An explicit empty value means no
+        /// separator glyph is drawn. Irrelevant when there is a single element.
+        /// </summary>
+        public string SepChar { get; }
+
         /// <summary>The inner expressions (one per m:e child).</summary>
         public IReadOnlyList<MathNode> Elements { get; }
 
-        public Delim(string begChar, string endChar, IReadOnlyList<MathNode> elements)
+        public Delim(string begChar, string endChar, IReadOnlyList<MathNode> elements, string sepChar = ",")
         {
             BegChar = begChar;
             EndChar = endChar;
             Elements = elements;
+            SepChar = sepChar;
         }
     }
 

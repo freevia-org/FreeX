@@ -87,6 +87,24 @@ public static class MathLayoutEngine
 
     private static MathBox LayoutFrac(MathNode.Frac frac, string fontFamily, double fontSizePt)
     {
+        return frac.Type switch
+        {
+            MathNode.FracType.Linear => LayoutFracLinear(frac, fontFamily, fontSizePt),
+            // HA6: a full skewed (diagonal) layout is not implemented; approximate
+            // "skw" as the linear a/b form rather than rendering it as a bar fraction.
+            MathNode.FracType.Skewed => LayoutFracLinear(frac, fontFamily, fontSizePt),
+            MathNode.FracType.NoBar  => LayoutFracStacked(frac, fontFamily, fontSizePt, drawBar: false),
+            _                        => LayoutFracStacked(frac, fontFamily, fontSizePt, drawBar: true),
+        };
+    }
+
+    /// <summary>
+    /// Stacked fraction layout used for both "bar" (default) and "noBar" (binomial)
+    /// types: numerator over denominator, centered on the math axis. "bar" additionally
+    /// draws the horizontal rule; "noBar" omits it but keeps identical spacing/centering.
+    /// </summary>
+    private static MathBox LayoutFracStacked(MathNode.Frac frac, string fontFamily, double fontSizePt, bool drawBar)
+    {
         double em = Em(fontSizePt);
         double childSizePt = fontSizePt * 0.85; // numerator/denominator slightly smaller
 
@@ -96,7 +114,7 @@ public static class MathLayoutEngine
         // Fraction bar is on the math axis = 0.45 em above baseline
         double mathAxisAboveBaseline = em * 0.45;
         double barThickness = em * 0.07;
-        double gap = em * 0.10; // gap between bar and num/den
+        double gap = em * 0.10; // gap between bar (or bar's would-be position) and num/den
 
         // Position numerator so its bottom sits gap above the bar
         // Bar center = mathAxisAboveBaseline above baseline
@@ -108,6 +126,9 @@ public static class MathLayoutEngine
         //   denY = barY + barThickness + gap
         //   total height = denY + denBox.Metrics.Height
         //   baseline position from top = barY + barThickness / 2 + mathAxisAboveBaseline
+        //
+        // "noBar" keeps this exact geometry (so num/den centering and spacing is
+        // unchanged) — it only skips adding the HRule child.
 
         double barY  = numBox.Metrics.Height + gap;
         double denY  = barY + barThickness + gap;
@@ -131,20 +152,66 @@ public static class MathLayoutEngine
         numBox.X = numX; numBox.Y = 0;
         container.Children.Add(numBox);
 
-        // Fraction bar
-        var bar = new MathBox.HRule
+        // Fraction bar (omitted for "noBar" — binomial-coefficient style)
+        if (drawBar)
         {
-            X = 0, Y = barY,
-            LineWidth = totalW,
-            Thickness = barThickness
-        };
-        bar.Metrics.Width  = totalW;
-        bar.Metrics.Height = barThickness;
-        bar.Metrics.Ascent = 0;
-        container.Children.Add(bar);
+            var bar = new MathBox.HRule
+            {
+                X = 0, Y = barY,
+                LineWidth = totalW,
+                Thickness = barThickness
+            };
+            bar.Metrics.Width  = totalW;
+            bar.Metrics.Height = barThickness;
+            bar.Metrics.Ascent = 0;
+            container.Children.Add(bar);
+        }
 
         // Denominator
         denBox.X = denX; denBox.Y = denY;
+        container.Children.Add(denBox);
+
+        return container;
+    }
+
+    /// <summary>
+    /// Linear fraction layout ("lin", and the "skw" approximation): numerator,
+    /// slash, denominator, all inline on the baseline — not stacked.
+    /// </summary>
+    private static MathBox LayoutFracLinear(MathNode.Frac frac, string fontFamily, double fontSizePt)
+    {
+        double em = Em(fontSizePt);
+        double gap = em * 0.08;
+
+        var numBox   = LayoutNode(frac.Numerator, fontFamily, fontSizePt);
+        var slashBox = MakeGlyph("/", fontFamily, fontSizePt, isItalic: false);
+        var denBox   = LayoutNode(frac.Denominator, fontFamily, fontSizePt);
+
+        // Common baseline = max ascent across the three inline boxes
+        double ascent = Math.Max(numBox.Metrics.Ascent, Math.Max(slashBox.Metrics.Ascent, denBox.Metrics.Ascent));
+
+        double totalW = numBox.Metrics.Width + gap + slashBox.Metrics.Width + gap + denBox.Metrics.Width;
+        double totalH = Math.Max(
+            (ascent - numBox.Metrics.Ascent) + numBox.Metrics.Height,
+            Math.Max(
+                (ascent - slashBox.Metrics.Ascent) + slashBox.Metrics.Height,
+                (ascent - denBox.Metrics.Ascent) + denBox.Metrics.Height));
+
+        var container = new MathBox.Container();
+        container.Metrics.Width  = totalW;
+        container.Metrics.Height = totalH;
+        container.Metrics.Ascent = ascent;
+
+        double x = 0;
+        numBox.X = x; numBox.Y = ascent - numBox.Metrics.Ascent;
+        container.Children.Add(numBox);
+        x += numBox.Metrics.Width + gap;
+
+        slashBox.X = x; slashBox.Y = ascent - slashBox.Metrics.Ascent;
+        container.Children.Add(slashBox);
+        x += slashBox.Metrics.Width + gap;
+
+        denBox.X = x; denBox.Y = ascent - denBox.Metrics.Ascent;
         container.Children.Add(denBox);
 
         return container;
@@ -540,8 +607,15 @@ public static class MathLayoutEngine
     {
         double em = Em(fontSizePt);
 
-        // Layout inner elements separated by small comma gap
-        double commaGap = em * 0.15;
+        // Per ECMA-376 §22.1.2.20 (CT_DPr), m:sepChr is only meaningful when there
+        // are two or more m:e children; a single element never gets a separator,
+        // and an explicit empty sepChr suppresses the glyph (elements still abut
+        // with the same gap, just no visible character between them).
+        bool hasSeparator = delim.Elements.Count > 1 && !string.IsNullOrEmpty(delim.SepChar);
+        MathBox? MakeSep() => hasSeparator ? MakeGlyph(delim.SepChar, fontFamily, fontSizePt, isItalic: false) : null;
+
+        // Layout inner elements separated by a small gap (matching the separator glyph, if any)
+        double sepGap = em * 0.15;
         var innerBoxes = new List<MathBox>();
         foreach (var el in delim.Elements)
             innerBoxes.Add(LayoutNode(el, fontFamily, fontSizePt));
@@ -554,8 +628,20 @@ public static class MathLayoutEngine
             innerH = Math.Max(innerH, b.Metrics.Height);
             innerAscent = Math.Max(innerAscent, b.Metrics.Ascent);
         }
+        // Pre-measure separator glyphs (if any) so they can influence innerH/innerAscent
+        // the same way the content boxes do (sized/baselined like the content).
+        MathBox? sepSample = MakeSep();
+        if (sepSample is not null)
+        {
+            innerH = Math.Max(innerH, sepSample.Metrics.Height);
+            innerAscent = Math.Max(innerAscent, sepSample.Metrics.Ascent);
+        }
+        // Per-gap width between consecutive elements: a bare gap when there's no
+        // separator glyph, or gap + glyph + gap when there is one (glyph flanked
+        // symmetrically, matching the placement loop below exactly).
+        double gapWidth = hasSeparator ? sepGap * 2 + sepSample!.Metrics.Width : sepGap;
         if (innerBoxes.Count > 1)
-            innerW += commaGap * (innerBoxes.Count - 1);
+            innerW += gapWidth * (innerBoxes.Count - 1);
 
         // Brackets scale to inner height * 1.10
         double bracketH = innerH * 1.10;
@@ -589,13 +675,18 @@ public static class MathLayoutEngine
             c.Children.Add(b);
             x += b.Metrics.Width;
 
-            // Comma separator between elements
+            // Separator glyph between elements (m:sepChr; default ",", suppressed when
+            // there's only one element or the value is explicitly empty).
             if (i < innerBoxes.Count - 1)
             {
-                var comma = MakeGlyph(",", fontFamily, fontSizePt, isItalic: false);
-                comma.X = x; comma.Y = innerTop + (innerAscent - comma.Metrics.Ascent);
-                c.Children.Add(comma);
-                x += commaGap;
+                x += sepGap;
+                if (hasSeparator)
+                {
+                    var sep = MakeGlyph(delim.SepChar, fontFamily, fontSizePt, isItalic: false);
+                    sep.X = x; sep.Y = innerTop + (innerAscent - sep.Metrics.Ascent);
+                    c.Children.Add(sep);
+                    x += sep.Metrics.Width + sepGap;
+                }
             }
         }
 
