@@ -1182,42 +1182,7 @@ static void GenerateF2FlowCorpus(string outDir)
     //   • sectionMarker.SectionBreak.Page = portrait settings  (section 1, which ends at the marker)
     //   • doc.Page = landscape settings                        (section 2 = final section)
     {
-        var doc = TextDocument.CreateEmpty();
-        doc.Blocks.Clear();
-        doc.Blocks.Add(MP("Section 1: Portrait (8.5 x 11 in)", "Heading1"));
-        doc.Blocks.Add(MP("This section is portrait. The page is taller than wide. A next-page section break below this paragraph should switch to landscape."));
-        for (int i = 1; i <= 4; i++)
-            doc.Blocks.Add(MP($"Portrait section paragraph {i}: Standard letter-size portrait page."));
-
-        // Marker paragraph ends section 1.  Its SectionBreak.Page carries section 1's (portrait) geometry.
-        var sectionMarker = MP("[ End of Portrait Section ]");
-        var portraitPage = new PageSettings
-        {
-            WidthPt        = 612,  // 8.5in portrait
-            HeightPt       = 792,  // 11in portrait
-            Landscape      = false,
-            MarginLeftPt   = 72,
-            MarginRightPt  = 72,
-            MarginTopPt    = 72,
-            MarginBottomPt = 72,
-        };
-        sectionMarker.SectionBreak = new FreeW.Core.Model.Section(portraitPage, SectionBreakKind.NextPage);
-        doc.Blocks.Add(sectionMarker);
-
-        // Section 2 (final section): landscape — described by doc.Page.
-        doc.Page.WidthPt        = 792;  // 11in landscape (wider)
-        doc.Page.HeightPt       = 612;  // 8.5in landscape (shorter — swapped)
-        doc.Page.Landscape      = true;
-        doc.Page.MarginLeftPt   = 72;
-        doc.Page.MarginRightPt  = 72;
-        doc.Page.MarginTopPt    = 72;
-        doc.Page.MarginBottomPt = 72;
-
-        doc.Blocks.Add(MP("Section 2: Landscape (11 x 8.5 in)", "Heading1"));
-        doc.Blocks.Add(MP("This section should be landscape. If the section break rendered correctly the page is now wider than tall, and this text spans a wider line length. The page geometry changed from portrait (8.5x11) to landscape (11x8.5)."));
-        for (int i = 1; i <= 4; i++)
-            doc.Blocks.Add(MP($"Landscape section paragraph {i}: Page is now wider than tall."));
-
+        var doc = FreeWVisualEvidenceDocumentFactory.BuildSectionGeometryDocument();
         DocxWriter.Write(doc, Path.Combine(outDir, "f2-section-landscape.docx"));
         Console.WriteLine("  wrote f2-section-landscape.docx");
     }

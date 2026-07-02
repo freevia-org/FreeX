@@ -72,6 +72,53 @@ public static class FreeWVisualEvidenceDocumentFactory
         return doc;
     }
 
+    public static TextDocument BuildSectionGeometryDocument()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(StyledParagraph("Section 1: Portrait (8.5 x 11 in)", "Heading1"));
+        doc.Blocks.Add(new Paragraph(
+            "This section is portrait. The page is taller than wide. A next-page section break below " +
+            "this paragraph should switch to landscape."));
+
+        for (var i = 1; i <= 4; i++)
+            doc.Blocks.Add(new Paragraph($"Portrait section paragraph {i}: Standard letter-size portrait page."));
+
+        var sectionMarker = new Paragraph("[ End of Portrait Section ]")
+        {
+            SectionBreak = new Section(
+                new PageSettings
+                {
+                    WidthPt = 612,
+                    HeightPt = 792,
+                    Landscape = false,
+                    MarginLeftPt = 72,
+                    MarginRightPt = 72,
+                    MarginTopPt = 72,
+                    MarginBottomPt = 72
+                },
+                SectionBreakKind.NextPage)
+        };
+        doc.Blocks.Add(sectionMarker);
+
+        doc.Page.WidthPt = 792;
+        doc.Page.HeightPt = 612;
+        doc.Page.Landscape = true;
+        doc.Page.MarginLeftPt = 72;
+        doc.Page.MarginRightPt = 72;
+        doc.Page.MarginTopPt = 72;
+        doc.Page.MarginBottomPt = 72;
+
+        doc.Blocks.Add(StyledParagraph("Section 2: Landscape (11 x 8.5 in)", "Heading1"));
+        doc.Blocks.Add(new Paragraph(
+            "This section should be landscape. If the section break rendered correctly the page is now " +
+            "wider than tall, and this text spans a wider line length."));
+        for (var i = 1; i <= 4; i++)
+            doc.Blocks.Add(new Paragraph($"Landscape section paragraph {i}: Page is now wider than tall."));
+
+        return doc;
+    }
+
     public static TextDocument BuildComplexTableLayoutDocument()
     {
         var doc = TextDocument.CreateEmpty();

@@ -22,6 +22,8 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
         source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildEndnotePlacementDocument");
         source.Should().Contain("f2-columns.docx");
         source.Should().Contain("f2-border-watermark.docx");
+        source.Should().Contain("f2-section-landscape.docx");
+        source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildSectionGeometryDocument");
         source.Should().Contain("table-layout-complex.docx");
         source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildComplexTableLayoutDocument");
         source.Should().Contain("drawing-objects-complex.docx");

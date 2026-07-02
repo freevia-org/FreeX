@@ -132,6 +132,65 @@ public sealed class VisualEvidencePlannerTests
     }
 
     [Fact]
+    public void SharedSectionGeometryFactory_BuildsMixedPortraitLandscapeContract()
+    {
+        var document = FreeWVisualEvidenceDocumentFactory.BuildSectionGeometryDocument();
+
+        document.Sections.Should().HaveCount(2);
+        document.Sections[0].Page.Landscape.Should().BeFalse();
+        document.Sections[0].Page.WidthPt.Should().Be(612);
+        document.Sections[0].Page.HeightPt.Should().Be(792);
+        document.Sections[1].Page.Should().BeSameAs(document.Page);
+        document.Sections[1].Page.Landscape.Should().BeTrue();
+        document.Sections[1].Page.WidthPt.Should().Be(792);
+        document.Sections[1].Page.HeightPt.Should().Be(612);
+
+        var pages = FreeWVisualEvidencePlanner.BuildSectionGeometryPagePlans(document, pageCount: 2);
+
+        pages.Should().HaveCount(2);
+        pages[0].PageNumber.Should().Be(1);
+        pages[0].SectionOrdinal.Should().Be(1);
+        pages[0].SectionOwnerId.Should().Be("section-1");
+        pages[0].Orientation.Should().Be("portrait");
+        pages[0].Page.Should().BeSameAs(document.Sections[0].Page);
+        pages[1].PageNumber.Should().Be(2);
+        pages[1].SectionOrdinal.Should().Be(2);
+        pages[1].SectionOwnerId.Should().Be("section-2");
+        pages[1].Orientation.Should().Be("landscape");
+        pages[1].Page.Should().BeSameAs(document.Page);
+
+        var portraitExpectation = FreeWVisualEvidencePlanner.BuildPageExpectation(
+            "f2-section-landscape",
+            pages[0].Page,
+            pages[0].PageNumber,
+            pages[0].PageCount,
+            "f2-section-landscape_p1.png",
+            sectionOrdinal: pages[0].SectionOrdinal,
+            sectionRelativePageNumber: pages[0].SectionRelativePageNumber,
+            sectionOwnerId: pages[0].SectionOwnerId,
+            document: document);
+        var landscapeExpectation = FreeWVisualEvidencePlanner.BuildPageExpectation(
+            "f2-section-landscape",
+            pages[1].Page,
+            pages[1].PageNumber,
+            pages[1].PageCount,
+            "f2-section-landscape_p2.png",
+            sectionOrdinal: pages[1].SectionOrdinal,
+            sectionRelativePageNumber: pages[1].SectionRelativePageNumber,
+            sectionOwnerId: pages[1].SectionOwnerId,
+            document: document);
+
+        portraitExpectation.Composition.ExpectsSectionGeometryChange.Should().BeTrue();
+        portraitExpectation.Geometry.PageWidthDip.Should().BeApproximately(816, 0.01);
+        portraitExpectation.Geometry.PageHeightDip.Should().BeApproximately(1056, 0.01);
+        portraitExpectation.Features.Section.SectionOrdinal.Should().Be(1);
+        landscapeExpectation.Geometry.PageWidthDip.Should().BeApproximately(1056, 0.01);
+        landscapeExpectation.Geometry.PageHeightDip.Should().BeApproximately(816, 0.01);
+        landscapeExpectation.Features.Section.SectionOrdinal.Should().Be(2);
+        landscapeExpectation.Features.Section.OwnerId.Should().Be("section-2");
+    }
+
+    [Fact]
     public void DefaultExpectedScenarios_RequiresPairedBackstageRendererEvidence()
     {
         var expected = FreeWVisualEvidenceManifestNormalizer.DefaultExpectedScenarios;
@@ -155,6 +214,24 @@ public sealed class VisualEvidencePlannerTests
         var expected = FreeWVisualEvidenceManifestNormalizer.DefaultExpectedScenarios;
 
         foreach (var scenarioId in FreeWVisualEvidenceManifestNormalizer.NoteRendererScenarioIds)
+        {
+            expected.Should().Contain(e =>
+                e.HostId == FreeWVisualEvidenceManifestNormalizer.WpfHostId &&
+                e.ScenarioId == scenarioId &&
+                e.MinimumExpectedOutputs == FreeWVisualEvidencePlanner.ResolveScenario(scenarioId).MinimumExpectedOutputs);
+            expected.Should().Contain(e =>
+                e.HostId == FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId &&
+                e.ScenarioId == scenarioId &&
+                e.MinimumExpectedOutputs == FreeWVisualEvidencePlanner.ResolveScenario(scenarioId).MinimumExpectedOutputs);
+        }
+    }
+
+    [Fact]
+    public void DefaultExpectedScenarios_RequiresPairedSectionGeometryEvidence()
+    {
+        var expected = FreeWVisualEvidenceManifestNormalizer.DefaultExpectedScenarios;
+
+        foreach (var scenarioId in FreeWVisualEvidenceManifestNormalizer.SectionGeometryRendererScenarioIds)
         {
             expected.Should().Contain(e =>
                 e.HostId == FreeWVisualEvidenceManifestNormalizer.WpfHostId &&
@@ -797,6 +874,89 @@ public sealed class VisualEvidencePlannerTests
     }
 
     [Fact]
+    public void BuildNormalizedSummaryFromFiles_ValidatesPairedSectionGeometryMetadata()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var wpfDir = Path.Combine(root, "wpf");
+            var avaloniaDir = Path.Combine(root, "avalonia");
+            var wpfRows = new[]
+            {
+                BuildFileBackedRow(
+                    root,
+                    FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                    "f2-section-landscape",
+                    pageNumber: 1,
+                    pageCount: 2),
+                BuildFileBackedRow(
+                    root,
+                    FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                    "f2-section-landscape",
+                    pageNumber: 2,
+                    pageCount: 2)
+            };
+            var avaloniaP1 = BuildFileBackedRow(
+                root,
+                FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                "f2-section-landscape",
+                pageNumber: 1,
+                pageCount: 2);
+            var avaloniaP2 = BuildFileBackedRow(
+                root,
+                FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                "f2-section-landscape",
+                pageNumber: 2,
+                pageCount: 2);
+            var badAvaloniaP2 = avaloniaP2 with
+            {
+                PageExpectation = avaloniaP2.PageExpectation with
+                {
+                    Features = avaloniaP2.PageExpectation.Features with
+                    {
+                        Section = new FreeWVisualSectionExpectation("section-1", 1, 1)
+                    }
+                }
+            };
+
+            FreeWVisualEvidencePlanner.WriteManifest(
+                wpfDir,
+                wpfRows,
+                new DateTimeOffset(2026, 7, 1, 12, 0, 0, TimeSpan.Zero));
+            FreeWVisualEvidencePlanner.WriteManifest(
+                avaloniaDir,
+                [avaloniaP1, badAvaloniaP2],
+                new DateTimeOffset(2026, 7, 1, 12, 0, 0, TimeSpan.Zero));
+
+            var summary = FreeWVisualEvidenceManifestNormalizer.BuildNormalizedSummaryFromFiles(
+                [
+                    Path.Combine(wpfDir, FreeWVisualEvidencePlanner.ManifestFileName),
+                    Path.Combine(avaloniaDir, FreeWVisualEvidencePlanner.ManifestFileName)
+                ],
+                root,
+                [
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        "f2-section-landscape",
+                        2),
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                        "f2-section-landscape",
+                        2)
+                ]);
+
+            summary.Trust.Passed.Should().BeFalse();
+            summary.Trust.Failures.Should().Contain(f =>
+                f.Contains("section-geometry renderer pair 'f2-section-landscape' page 2", StringComparison.Ordinal)
+                && f.Contains("section ordinals differ", StringComparison.Ordinal));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public void BuildNormalizedSummaryFromFiles_AllowsBackstageRendererExtraPagesAndDifferentCaptureDimensions()
     {
         var root = CreateTempRoot();
@@ -1098,7 +1258,12 @@ public sealed class VisualEvidencePlannerTests
 
         var stats = BuildTrustedStats(pixelWidth, pixelHeight);
         var document = DocumentForScenario(scenarioId);
-        var page = document?.Page ?? PageForScenario(scenarioId);
+        var sectionPage = document is not null
+            ? FreeWVisualEvidencePlanner
+                .BuildSectionGeometryPagePlans(document, pageCount)
+                .FirstOrDefault(page => page.PageNumber == pageNumber)
+            : null;
+        var page = sectionPage?.Page ?? document?.Page ?? PageForScenario(scenarioId);
         var expectation = FreeWVisualEvidencePlanner.BuildPageExpectation(
             scenarioId,
             page,
@@ -1106,6 +1271,9 @@ public sealed class VisualEvidencePlannerTests
             pageCount,
             outputName,
             scenario.LayoutKind,
+            sectionOrdinal: sectionPage?.SectionOrdinal,
+            sectionRelativePageNumber: sectionPage?.SectionRelativePageNumber,
+            sectionOwnerId: sectionPage?.SectionOwnerId,
             document: document);
         var capture = new FreeWVisualEvidenceCapture(
             ScenarioId: scenarioId,
@@ -1130,6 +1298,7 @@ public sealed class VisualEvidencePlannerTests
             "table-layout-complex" => FreeWVisualEvidenceDocumentFactory.BuildComplexTableLayoutDocument(),
             "drawing-objects-complex" => FreeWVisualEvidenceDocumentFactory.BuildDrawingObjectsCompositionDocument(),
             "chart-smartart-complex" => FreeWVisualEvidenceDocumentFactory.BuildChartSmartArtCompositionDocument(),
+            "f2-section-landscape" => FreeWVisualEvidenceDocumentFactory.BuildSectionGeometryDocument(),
             "page-composition-floating-image" => BuildFloatingImageDocument(),
             _ => null
         };

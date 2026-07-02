@@ -74,6 +74,10 @@ public static class FreeWVisualEvidenceManifestNormalizer
         "f2-footnotes",
         "f2-endnotes"
     ];
+    public static IReadOnlyList<string> SectionGeometryRendererScenarioIds { get; } =
+    [
+        "f2-section-landscape"
+    ];
     public static IReadOnlyList<string> TableRendererScenarioIds { get; } =
     [
         "table-layout-complex"
@@ -160,6 +164,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
 
         var scenarios = BuildScenarioSummaries(rows, expected, expectedByKey, failures);
         ValidateBackstageRendererPairs(rows, failures);
+        ValidateSectionGeometryRendererPairs(rows, failures);
         var summaryTrust = new FreeWVisualEvidenceTrust(failures.Count == 0, failures);
         return new FreeWVisualEvidenceNormalizedSummary(
             SummarySchemaId,
@@ -330,6 +335,17 @@ public static class FreeWVisualEvidenceManifestNormalizer
         foreach (var scenario in FreeWVisualEvidencePlanner.Scenarios)
         {
             if (NoteRendererScenarioIds.Contains(scenario.ScenarioId, StringComparer.OrdinalIgnoreCase))
+            {
+                expected.Add(new FreeWVisualEvidenceExpectedScenario(
+                    WpfHostId,
+                    scenario.ScenarioId,
+                    scenario.MinimumExpectedOutputs));
+                expected.Add(new FreeWVisualEvidenceExpectedScenario(
+                    AvaloniaHostId,
+                    scenario.ScenarioId,
+                    scenario.MinimumExpectedOutputs));
+            }
+            else if (SectionGeometryRendererScenarioIds.Contains(scenario.ScenarioId, StringComparer.OrdinalIgnoreCase))
             {
                 expected.Add(new FreeWVisualEvidenceExpectedScenario(
                     WpfHostId,
@@ -718,7 +734,51 @@ public static class FreeWVisualEvidenceManifestNormalizer
                 if (wpf is null || avalonia is null)
                     continue;
 
-                ValidateRendererPairRow(scenarioId, pageNumber, wpf, avalonia, failures);
+                ValidateRendererPairRow("backstage renderer pair", scenarioId, pageNumber, wpf, avalonia, failures);
+            }
+        }
+    }
+
+    private static void ValidateSectionGeometryRendererPairs(
+        IReadOnlyList<FreeWVisualEvidenceNormalizedRow> rows,
+        List<string> failures)
+    {
+        foreach (var scenarioId in SectionGeometryRendererScenarioIds)
+        {
+            var wpfRows = RowsForHostScenario(rows, WpfHostId, scenarioId);
+            var avaloniaRows = RowsForHostScenario(rows, AvaloniaHostId, scenarioId);
+            if (wpfRows.Count == 0 || avaloniaRows.Count == 0)
+                continue;
+
+            ValidateUniquePages(scenarioId, WpfHostId, wpfRows, failures);
+            ValidateUniquePages(scenarioId, AvaloniaHostId, avaloniaRows, failures);
+
+            var wpfPages = wpfRows.Select(r => r.PageNumber).Distinct().Order().ToList();
+            var avaloniaPages = avaloniaRows.Select(r => r.PageNumber).Distinct().Order().ToList();
+            var requiredPages = RequiredScenarioPages(scenarioId);
+            var missingAvaloniaPages = requiredPages.Except(avaloniaPages).ToList();
+            var missingWpfPages = requiredPages.Except(wpfPages).ToList();
+            if (missingAvaloniaPages.Count > 0)
+            {
+                failures.Add(
+                    $"section-geometry renderer pair '{scenarioId}' is missing Avalonia page(s): {FormatPages(missingAvaloniaPages)}");
+            }
+
+            if (missingWpfPages.Count > 0)
+            {
+                failures.Add(
+                    $"section-geometry renderer pair '{scenarioId}' is missing WPF page(s): {FormatPages(missingWpfPages)}");
+            }
+
+            foreach (var pageNumber in wpfPages.Intersect(avaloniaPages))
+            {
+                var wpf = wpfRows.SingleOrDefault(r => r.PageNumber == pageNumber);
+                var avalonia = avaloniaRows.SingleOrDefault(r => r.PageNumber == pageNumber);
+                if (wpf is null || avalonia is null)
+                    continue;
+
+                ValidateRendererPairRow("section-geometry renderer pair", scenarioId, pageNumber, wpf, avalonia, failures);
+                ValidateSectionPairRow(scenarioId, pageNumber, wpf, avalonia, failures);
             }
         }
     }
@@ -753,13 +813,14 @@ public static class FreeWVisualEvidenceManifestNormalizer
     }
 
     private static void ValidateRendererPairRow(
+        string pairLabel,
         string scenarioId,
         int pageNumber,
         FreeWVisualEvidenceNormalizedRow wpf,
         FreeWVisualEvidenceNormalizedRow avalonia,
         List<string> failures)
     {
-        var pairName = $"backstage renderer pair '{scenarioId}' page {pageNumber.ToString(CultureInfo.InvariantCulture)}";
+        var pairName = $"{pairLabel} '{scenarioId}' page {pageNumber.ToString(CultureInfo.InvariantCulture)}";
         if (!string.Equals(wpf.LayoutKind, avalonia.LayoutKind, StringComparison.OrdinalIgnoreCase))
         {
             failures.Add(
@@ -770,6 +831,33 @@ public static class FreeWVisualEvidenceManifestNormalizer
         {
             failures.Add(
                 $"{pairName} expected output names differ: WPF '{wpf.ExpectedOutputName}', Avalonia '{avalonia.ExpectedOutputName}'");
+        }
+    }
+
+    private static void ValidateSectionPairRow(
+        string scenarioId,
+        int pageNumber,
+        FreeWVisualEvidenceNormalizedRow wpf,
+        FreeWVisualEvidenceNormalizedRow avalonia,
+        List<string> failures)
+    {
+        var pairName = $"section-geometry renderer pair '{scenarioId}' page {pageNumber.ToString(CultureInfo.InvariantCulture)}";
+        if (wpf.PageFeatures.Section.SectionOrdinal != avalonia.PageFeatures.Section.SectionOrdinal)
+        {
+            failures.Add(
+                $"{pairName} section ordinals differ: WPF '{wpf.PageFeatures.Section.SectionOrdinal.ToString(CultureInfo.InvariantCulture)}', Avalonia '{avalonia.PageFeatures.Section.SectionOrdinal.ToString(CultureInfo.InvariantCulture)}'");
+        }
+
+        if (wpf.PageFeatures.Section.SectionRelativePageNumber != avalonia.PageFeatures.Section.SectionRelativePageNumber)
+        {
+            failures.Add(
+                $"{pairName} section-relative page numbers differ: WPF '{wpf.PageFeatures.Section.SectionRelativePageNumber.ToString(CultureInfo.InvariantCulture)}', Avalonia '{avalonia.PageFeatures.Section.SectionRelativePageNumber.ToString(CultureInfo.InvariantCulture)}'");
+        }
+
+        if (!string.Equals(wpf.PageFeatures.Section.OwnerId, avalonia.PageFeatures.Section.OwnerId, StringComparison.OrdinalIgnoreCase))
+        {
+            failures.Add(
+                $"{pairName} section owner ids differ: WPF '{wpf.PageFeatures.Section.OwnerId}', Avalonia '{avalonia.PageFeatures.Section.OwnerId}'");
         }
     }
 
