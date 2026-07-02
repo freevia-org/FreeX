@@ -1112,6 +1112,155 @@ public sealed class PresentationReviewWorkflowPlannerTests
             PresentationReviewWorkflowPlanner.ProofingNoTextMessage));
     }
 
+    [Fact]
+    public void TryApplyProofingCorrection_UpdatesAllNormalizedProofingScopes()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Title = "Intro eror deck";
+        var body = new SlideShape
+        {
+            Id = 4,
+            Name = "Body",
+            Text = "Body eror text"
+        };
+        var table = new SlideShape
+        {
+            Id = 9,
+            Name = "Results table",
+            Kind = SlideShapeKind.Table,
+            Table = new TableShape
+            {
+                Rows =
+                {
+                    new TableRow
+                    {
+                        Cells =
+                        {
+                            new TableCell { TextBody = TextBody("Table eror cell") }
+                        }
+                    }
+                }
+            }
+        };
+        slide.Shapes.Add(body);
+        slide.Shapes.Add(table);
+        slide.Notes = TextBody("Speaker eror notes");
+        slide.Comments.Add(new SlideComment
+        {
+            Text = "Comment eror text",
+            Replies =
+            {
+                new SlideCommentReply { Text = "Reply eror text" }
+            }
+        });
+
+        var scopes = PresentationReviewWorkflowPlanner.BuildProofingExecutionPlan(presentation).Scopes;
+
+        var title = ApplyCorrection(presentation, scopes, PresentationProofingScopeKind.SlideTitle);
+        var shape = ApplyCorrection(presentation, scopes, PresentationProofingScopeKind.ShapeText);
+        var cell = ApplyCorrection(presentation, scopes, PresentationProofingScopeKind.TableCellText);
+        var notes = ApplyCorrection(presentation, scopes, PresentationProofingScopeKind.SpeakerNotes);
+        var comment = ApplyCorrection(presentation, scopes, PresentationProofingScopeKind.Comment);
+        var reply = ApplyCorrection(presentation, scopes, PresentationProofingScopeKind.CommentReply);
+
+        title.UpdatedText.Should().Be("Intro error deck");
+        shape.UpdatedText.Should().Be("Body error text");
+        cell.UpdatedText.Should().Be("Table error cell");
+        notes.UpdatedText.Should().Be("Speaker error notes");
+        comment.UpdatedText.Should().Be("Comment error text");
+        reply.UpdatedText.Should().Be("Reply error text");
+        slide.Title.Should().Be("Intro error deck");
+        body.Text.Should().Be("Body error text");
+        table.Table!.Rows[0].Cells[0].TextBody.Should().NotBeNull();
+        TextBodyPlainText(table.Table.Rows[0].Cells[0].TextBody!).Should().Be("Table error cell");
+        TextBodyPlainText(slide.Notes!).Should().Be("Speaker error notes");
+        slide.Comments[0].Text.Should().Be("Comment error text");
+        slide.Comments[0].Replies[0].Text.Should().Be("Reply error text");
+    }
+
+    [Fact]
+    public void TryApplyProofingCorrection_InvalidScopeRangeOrReplacement_NoOpsWithValidationMessage()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Title = "Intro eror deck";
+        var titleScope = PresentationReviewWorkflowPlanner.BuildProofingExecutionPlan(presentation)
+            .Scopes
+            .Single(scope => scope.Kind == PresentationProofingScopeKind.SlideTitle);
+        var missingSlideScope = titleScope with { SlideIndex = 4 };
+
+        var missingSlide = PresentationReviewWorkflowPlanner.TryApplyProofingCorrection(
+            presentation,
+            missingSlideScope,
+            6,
+            4,
+            "error");
+        var invalidRange = PresentationReviewWorkflowPlanner.TryApplyProofingCorrection(
+            presentation,
+            titleScope,
+            40,
+            4,
+            "error");
+        var emptyReplacement = PresentationReviewWorkflowPlanner.TryApplyProofingCorrection(
+            presentation,
+            titleScope,
+            6,
+            4,
+            string.Empty);
+
+        missingSlide.Should().Be(new PresentationProofingCorrectionMutationPlan(
+            false,
+            missingSlideScope,
+            6,
+            4,
+            "error",
+            null,
+            PresentationReviewWorkflowPlanner.ProofingCorrectionMissingSlideMessage));
+        invalidRange.Should().Be(new PresentationProofingCorrectionMutationPlan(
+            false,
+            titleScope,
+            40,
+            4,
+            "error",
+            null,
+            PresentationReviewWorkflowPlanner.ProofingCorrectionInvalidRangeMessage));
+        emptyReplacement.Should().Be(new PresentationProofingCorrectionMutationPlan(
+            false,
+            titleScope,
+            6,
+            4,
+            string.Empty,
+            null,
+            PresentationReviewWorkflowPlanner.ProofingCorrectionEmptyReplacementMessage));
+        slide.Title.Should().Be("Intro eror deck");
+    }
+
+    private static PresentationProofingCorrectionMutationPlan ApplyCorrection(
+        Presentation presentation,
+        IReadOnlyList<PresentationProofingScopeDescriptor> scopes,
+        PresentationProofingScopeKind kind)
+    {
+        var scope = scopes.Single(s => s.Kind == kind);
+        var start = scope.Text.IndexOf("eror", StringComparison.Ordinal);
+        var plan = PresentationReviewWorkflowPlanner.TryApplyProofingCorrection(
+            presentation,
+            scope,
+            start,
+            4,
+            "error");
+
+        plan.Should().Be(new PresentationProofingCorrectionMutationPlan(
+            true,
+            scope,
+            start,
+            4,
+            "error",
+            scope.Text.Replace("eror", "error", StringComparison.Ordinal),
+            null));
+        return plan;
+    }
+
     private static TextBody TextBody(string text)
     {
         var body = new TextBody();
@@ -1120,4 +1269,7 @@ public sealed class PresentationReviewWorkflowPlannerTests
         body.Paragraphs.Add(paragraph);
         return body;
     }
+
+    private static string TextBodyPlainText(TextBody textBody)
+        => string.Join("\n", textBody.Paragraphs.Select(p => string.Concat(p.Runs.Select(r => r.Text))));
 }

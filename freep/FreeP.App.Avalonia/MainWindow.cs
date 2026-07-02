@@ -2788,6 +2788,30 @@ public sealed class MainWindow : Window
         return plan;
     }
 
+    internal PresentationProofingCorrectionMutationPlan ApplyProofingCorrection(
+        PresentationProofingScopeDescriptor scope,
+        int start,
+        int length,
+        string? replacement)
+    {
+        var plan = PresentationReviewWorkflowPlanner.TryApplyProofingCorrection(
+            _presentation,
+            scope,
+            start,
+            length,
+            replacement);
+        if (plan.ShouldApply)
+        {
+            _fileWorkflow.MarkDirty();
+            RefreshCanvas();
+            RefreshNotesPane();
+            RefreshReviewWorkflowPlans();
+            UpdateStatus();
+        }
+
+        return plan;
+    }
+
     private void RefreshProofingRequestPlan()
     {
         LastProofingExecutionPlan =
