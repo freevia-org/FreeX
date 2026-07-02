@@ -188,7 +188,7 @@ try {
             actionableGaps = [int]$freew.summary.actionableGaps
             classifiedRows = $true
         }
-        nextSlice = "Use actionable FreeW command rows for product slices; deepen Backstage safety/print/export evidence next."
+        nextSlice = "Backstage safety/print/export planner evidence is deeper; keep closing renderer-edge evidence, especially native-print deferral and PDF/preview fidelity fixtures."
     }
 
     $freeP = [ordered]@{
