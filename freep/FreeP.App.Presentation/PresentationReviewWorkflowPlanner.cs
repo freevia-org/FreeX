@@ -261,6 +261,15 @@ public sealed record PresentationProofingExecutionPlan(
     IReadOnlyList<PresentationReviewWorkflowActionPlan> Actions,
     string Message);
 
+public sealed record PresentationProofingCorrectionMutationPlan(
+    bool ShouldApply,
+    PresentationProofingScopeDescriptor Scope,
+    int Start,
+    int Length,
+    string Replacement,
+    string? UpdatedText,
+    string? ValidationMessage);
+
 public static class PresentationReviewWorkflowPlanner
 {
     public const string CommentsPaneCommandId = "freep.review.comments.pane";
@@ -317,6 +326,14 @@ public static class PresentationReviewWorkflowPlanner
         "Proofing shared scan prepared searchable FreeP text scopes for a host spelling engine.";
     public const string ProofingNoTextMessage =
         "No slide text, notes, or comments are available for proofing.";
+    public const string ProofingCorrectionMissingSlideMessage =
+        "Proofing correction target slide was not found.";
+    public const string ProofingCorrectionMissingScopeMessage =
+        "Proofing correction target scope was not found.";
+    public const string ProofingCorrectionInvalidRangeMessage =
+        "Proofing correction range is outside the target text.";
+    public const string ProofingCorrectionEmptyReplacementMessage =
+        "Enter a replacement before applying the proofing correction.";
     public const string MissingSlideTitleActionSummary =
         "Add a concise slide title so screen-reader users can navigate the deck.";
     public const string MissingAltTextActionSummary =
@@ -1041,6 +1058,65 @@ public static class PresentationReviewWorkflowPlanner
             canRun ? ProofingReadyMessage : ProofingNoTextMessage);
     }
 
+    public static PresentationProofingCorrectionMutationPlan TryApplyProofingCorrection(
+        Presentation presentation,
+        PresentationProofingScopeDescriptor scope,
+        int start,
+        int length,
+        string? replacement)
+    {
+        ArgumentNullException.ThrowIfNull(presentation);
+        ArgumentNullException.ThrowIfNull(scope);
+
+        var normalizedReplacement = replacement ?? string.Empty;
+        if (normalizedReplacement.Length == 0)
+        {
+            return new PresentationProofingCorrectionMutationPlan(
+                false,
+                scope,
+                start,
+                length,
+                normalizedReplacement,
+                null,
+                ProofingCorrectionEmptyReplacementMessage);
+        }
+
+        if (!TryGetProofingScopeText(presentation, scope, out var text, out var apply, out var validationMessage))
+        {
+            return new PresentationProofingCorrectionMutationPlan(
+                false,
+                scope,
+                start,
+                length,
+                normalizedReplacement,
+                null,
+                validationMessage);
+        }
+
+        if (start < 0 || length <= 0 || start > text.Length || length > text.Length - start)
+        {
+            return new PresentationProofingCorrectionMutationPlan(
+                false,
+                scope,
+                start,
+                length,
+                normalizedReplacement,
+                null,
+                ProofingCorrectionInvalidRangeMessage);
+        }
+
+        var updatedText = ReplaceTextRange(text, start, length, normalizedReplacement);
+        apply(updatedText);
+        return new PresentationProofingCorrectionMutationPlan(
+            true,
+            scope,
+            start,
+            length,
+            normalizedReplacement,
+            updatedText,
+            null);
+    }
+
     private static IReadOnlyList<PresentationReviewWorkflowActionPlan> BuildCommentActions(
         IReadOnlyList<Slide> slides,
         int slideIndex,
@@ -1688,6 +1764,123 @@ public static class PresentationReviewWorkflowPlanner
             }
         }
     }
+
+    private static bool TryGetProofingScopeText(
+        Presentation presentation,
+        PresentationProofingScopeDescriptor scope,
+        out string text,
+        out Action<string> apply,
+        out string validationMessage)
+    {
+        text = string.Empty;
+        apply = _ => { };
+        validationMessage = ProofingCorrectionMissingScopeMessage;
+
+        var slide = GetSlide(presentation.Slides, scope.SlideIndex);
+        if (slide is null)
+        {
+            validationMessage = ProofingCorrectionMissingSlideMessage;
+            return false;
+        }
+
+        switch (scope.Kind)
+        {
+            case PresentationProofingScopeKind.SlideTitle:
+            case PresentationProofingScopeKind.ShapeText:
+            {
+                if (scope.ShapeId is not { } shapeId)
+                    return false;
+
+                var shape = FindShape(slide.Shapes, shapeId);
+                if (shape?.TextBody is null)
+                    return false;
+
+                text = TextBodyToPlainText(shape.TextBody);
+                apply = updatedText => shape.TextBody =
+                    InCanvasTextEditPlanner.BuildPlainTextBody(shape.TextBody, updatedText);
+                return true;
+            }
+
+            case PresentationProofingScopeKind.TableCellText:
+            {
+                if (scope.ShapeId is not { } shapeId ||
+                    scope.TableRowIndex is not { } rowIndex ||
+                    scope.TableColumnIndex is not { } columnIndex)
+                {
+                    return false;
+                }
+
+                var shape = FindShape(slide.Shapes, shapeId);
+                if (shape?.Table is null ||
+                    rowIndex < 0 ||
+                    rowIndex >= shape.Table.Rows.Count ||
+                    columnIndex < 0 ||
+                    columnIndex >= shape.Table.Rows[rowIndex].Cells.Count)
+                {
+                    return false;
+                }
+
+                var cell = shape.Table.Rows[rowIndex].Cells[columnIndex];
+                if (cell.TextBody is null)
+                    return false;
+
+                text = TextBodyToPlainText(cell.TextBody);
+                apply = updatedText => cell.TextBody =
+                    InCanvasTextEditPlanner.BuildPlainTextBody(cell.TextBody, updatedText);
+                return true;
+            }
+
+            case PresentationProofingScopeKind.SpeakerNotes:
+            {
+                if (slide.Notes is null)
+                    return false;
+
+                text = TextBodyToPlainText(slide.Notes);
+                apply = updatedText => slide.Notes =
+                    InCanvasTextEditPlanner.BuildPlainTextBody(slide.Notes, updatedText);
+                return true;
+            }
+
+            case PresentationProofingScopeKind.Comment:
+            {
+                if (scope.CommentIndex is not { } commentIndex ||
+                    commentIndex < 0 ||
+                    commentIndex >= slide.Comments.Count)
+                {
+                    return false;
+                }
+
+                var comment = slide.Comments[commentIndex];
+                text = comment.Text;
+                apply = updatedText => comment.Text = updatedText;
+                return true;
+            }
+
+            case PresentationProofingScopeKind.CommentReply:
+            {
+                if (scope.CommentIndex is not { } commentIndex ||
+                    scope.ReplyIndex is not { } replyIndex ||
+                    commentIndex < 0 ||
+                    commentIndex >= slide.Comments.Count ||
+                    replyIndex < 0 ||
+                    replyIndex >= slide.Comments[commentIndex].Replies.Count)
+                {
+                    return false;
+                }
+
+                var reply = slide.Comments[commentIndex].Replies[replyIndex];
+                text = reply.Text;
+                apply = updatedText => reply.Text = updatedText;
+                return true;
+            }
+
+            default:
+                return false;
+        }
+    }
+
+    private static string ReplaceTextRange(string text, int start, int length, string replacement)
+        => string.Concat(text.AsSpan(0, start), replacement, text.AsSpan(start + length));
 
     private static IEnumerable<(SlideShape Shape, int Depth)> EnumerateShapesWithDepth(
         IEnumerable<SlideShape> shapes,

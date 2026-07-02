@@ -145,6 +145,41 @@ public sealed class ReviewWorkflowAdapterTests
     }
 
     [StaFact]
+    public void MainWindow_ApplyProofingCorrection_UsesSharedMutationAndRefreshesPlans()
+    {
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
+        try
+        {
+            window.Editor.CurrentSlide!.Title = "Intro eror deck";
+            window.RefreshReviewWorkflowPlans();
+            var scope = window.LastProofingExecutionPlan!.Scopes.Single(s =>
+                s.Kind == PresentationProofingScopeKind.SlideTitle);
+            var start = scope.Text.IndexOf("eror", StringComparison.Ordinal);
+
+            var mutation = window.ApplyProofingCorrection(scope, start, 4, "error");
+
+            mutation.Should().Be(new PresentationProofingCorrectionMutationPlan(
+                true,
+                scope,
+                start,
+                4,
+                "error",
+                "Intro error deck",
+                null));
+            window.Editor.CurrentSlide.Title.Should().Be("Intro error deck");
+            window.LastProofingRequestPlan.Should().NotBeNull();
+            window.LastProofingExecutionPlan.Should().NotBeNull();
+            window.LastProofingExecutionPlan!.Scopes.Single(s =>
+                    s.Kind == PresentationProofingScopeKind.SlideTitle)
+                .Text.Should().Be("Intro error deck");
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [StaFact]
     public void MainWindow_AddAndEditComment_ApplySharedPlanAndRefreshPane()
     {
         var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);

@@ -1560,6 +1560,9 @@ public sealed class MainWindowHeadlessTests
         PresentationReadingOrderPlan? readingOrderPlan = null;
         PresentationProofingRequestPlan? proofingPlan = null;
         PresentationProofingExecutionPlan? proofingExecutionPlan = null;
+        PresentationProofingCorrectionMutationPlan? proofingMutation = null;
+        string? correctedShapeText = null;
+        string? correctedProofingScopeText = null;
         var commentsPaneVisible = false;
         var commentsPaneCommentCount = 0;
         var commentsPaneActionCount = 0;
@@ -1657,6 +1660,17 @@ public sealed class MainWindowHeadlessTests
                 .ToArray();
             proofingPlan = window.LastProofingRequestPlan;
             proofingExecutionPlan = window.LastProofingExecutionPlan;
+            var proofingScope = proofingExecutionPlan!.Scopes.Single(scope =>
+                scope.Kind == PresentationProofingScopeKind.ShapeText);
+            proofingMutation = window.ApplyProofingCorrection(
+                proofingScope,
+                0,
+                "Caption".Length,
+                "Caption corrected");
+            correctedShapeText = caption.Text;
+            correctedProofingScopeText = window.LastProofingExecutionPlan!.Scopes.Single(scope =>
+                    scope.Kind == PresentationProofingScopeKind.ShapeText)
+                .Text;
         });
 
         if (!ran) return;
@@ -1739,6 +1753,16 @@ public sealed class MainWindowHeadlessTests
             "Caption",
             "Use shared review state.",
             "@Reviewer confirmed.");
+        proofingMutation.Should().Be(new PresentationProofingCorrectionMutationPlan(
+            true,
+            proofingExecutionPlan.Scopes.Single(scope => scope.Kind == PresentationProofingScopeKind.ShapeText),
+            0,
+            "Caption".Length,
+            "Caption corrected",
+            "Caption corrected",
+            null));
+        correctedShapeText.Should().Be("Caption corrected");
+        correctedProofingScopeText.Should().Be("Caption corrected");
         commentsPaneVisible.Should().BeTrue("the Avalonia comments command should render a shared-plan-backed pane");
         commentsPaneCommentCount.Should().Be(1);
         commentsPaneActionCount.Should().BeGreaterThanOrEqualTo(6);
