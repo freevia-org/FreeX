@@ -94,8 +94,10 @@ internal sealed record RibbonHostCallbacks(
     Action? OpenPrintPreview = null,
     /// <summary>AV-VIEW: Opens a second window on the same document (or status note if unsupported).</summary>
     Action? NewWindow = null,
-    /// <summary>AV-VIEW: Toggle the split view (or status note if unsupported / deferred).</summary>
+    /// <summary>AV-VIEW: Toggle the split preview.</summary>
     Action? ToggleSplit = null,
+    /// <summary>AV-VIEW: Whether the split preview is active.</summary>
+    Func<bool>? IsSplitActive = null,
     /// <summary>AV-VIEW: Fit the whole page in the current viewport.</summary>
     Action? ZoomOnePage = null,
     /// <summary>AV-VIEW: Fit the page width in the current viewport.</summary>

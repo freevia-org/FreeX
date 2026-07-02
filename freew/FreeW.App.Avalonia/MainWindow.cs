@@ -58,9 +58,15 @@ public sealed class MainWindow : Window
     private Border? _findBar;
     private FindReplaceDialog? _findReplaceDialog;
     private ScrollViewer? _scroller;
+    private readonly Border _workspace = new()
+    {
+        Background = new SolidColorBrush(Color.FromRgb(0xE6, 0xE6, 0xE6)),
+    };
+    private Control? _liveWorkspaceContent;
+    private Grid? _splitPreviewGrid;
+    private Control? _splitPreviewSnapshot;
+    private FreeWViewDepthPlan _viewDepthPlan = FreeWViewDepthPlanner.Build(FreeWViewDepthMode.LiveEditor);
     private double _zoomScale = 1.0;
-    private bool _multiplePagesMode;
-    private bool _sideToSideMode;
     private bool _suppressEditorDirty;
     private bool _closingConfirmed;
 
@@ -136,8 +142,9 @@ public sealed class MainWindow : Window
         DockPanel.SetDock(_revealPane, Dock.Right);
         workArea.Children.Add(_revealPane);
 
-        var workspace = new Border { Background = new SolidColorBrush(Color.FromRgb(0xE6, 0xE6, 0xE6)), Child = _scroller };
-        workArea.Children.Add(workspace);
+        _liveWorkspaceContent = _scroller;
+        _workspace.Child = _scroller;
+        workArea.Children.Add(_workspace);
 
         _editor.DocumentChanged += OnEditorDocumentChanged;
         _editor.DocumentChanged += () => { if (_navPane.IsVisible) _navPane.Refresh(); };
@@ -201,6 +208,14 @@ public sealed class MainWindow : Window
     /// Exposes the reveal-formatting pane for tests that need to inspect its state headlessly.
     /// </summary>
     internal RevealFormattingPane RevealPane => _revealPane;
+
+    internal FreeWViewDepthMode ViewDepthMode => _viewDepthPlan.Mode;
+    internal bool IsSplitPreviewActive => _viewDepthPlan.IsSplitActive;
+    internal bool IsMultiplePagesPreviewActive => _viewDepthPlan.IsMultiplePagesActive;
+    internal bool IsSideToSidePreviewActive => _viewDepthPlan.IsSideToSideActive;
+    internal string? ViewDepthLimitation => _viewDepthPlan.Limitation;
+    internal Control? WorkspaceContentForTests => _workspace.Child as Control;
+    internal bool IsWorkspaceShowingLiveEditor => ReferenceEquals(_workspace.Child, _liveWorkspaceContent);
 
     /// <summary>
     /// Show or hide the navigation pane and refresh its heading list when making it visible.
@@ -632,13 +647,11 @@ public sealed class MainWindow : Window
 
     /// <summary>
     /// AV-VIEW: Window → Split. A true split-pane (two scroll regions over one document) is a larger
-    /// surface than this wave; the command is wired and discoverable but reports the feature as deferred
-    /// in the status bar rather than pretending to act. Wired to <c>freew.split</c>.
+    /// surface than this slice. The top pane remains the live editor; the bottom pane is a
+    /// read-only paginated snapshot, so the command is backed without pretending to offer dual live editing.
     /// </summary>
-    private void ToggleSplit()
-    {
-        _status.Text = "Split view is not yet available in the Avalonia shell (deferred).";
-    }
+    internal void ToggleSplit() =>
+        ApplyViewDepthPlan(FreeWViewDepthPlanner.Plan(CurrentViewDepthState(), FreeWViewDepthCommand.ToggleSplit));
 
     private void ZoomToOnePage()
     {
@@ -654,26 +667,155 @@ public sealed class MainWindow : Window
         _editor.Focus();
     }
 
-    private void ToggleMultiplePages()
-    {
-        _multiplePagesMode = !_multiplePagesMode;
-        if (_multiplePagesMode)
-            _sideToSideMode = false;
+    internal void ToggleMultiplePages() =>
+        ApplyViewDepthPlan(FreeWViewDepthPlanner.Plan(CurrentViewDepthState(), FreeWViewDepthCommand.ToggleMultiplePages));
 
-        _status.Text = _multiplePagesMode
-            ? "Multiple Pages view is not yet available in the Avalonia shell (deferred)."
-            : "Multiple Pages view is off.";
+    internal void ToggleSideToSide() =>
+        ApplyViewDepthPlan(FreeWViewDepthPlanner.Plan(CurrentViewDepthState(), FreeWViewDepthCommand.ToggleSideToSide));
+
+    private FreeWViewDepthState CurrentViewDepthState() => new(_viewDepthPlan.Mode);
+
+    private void ApplyViewDepthPlan(FreeWViewDepthPlan plan, bool updateStatus = true)
+    {
+        switch (plan.SurfaceKind)
+        {
+            case FreeWViewDepthSurfaceKind.LiveEditor:
+                RestoreLiveWorkspace();
+                break;
+            case FreeWViewDepthSurfaceKind.SplitEditorWithReadOnlyPreview:
+                EnterSplitPreview(plan);
+                break;
+            case FreeWViewDepthSurfaceKind.ReadOnlyPagePreview:
+                EnterReadOnlyPagePreview(plan);
+                break;
+        }
+
+        _viewDepthPlan = plan;
+        if (updateStatus)
+            _status.Text = plan.StatusText;
     }
 
-    private void ToggleSideToSide()
+    private void RestoreLiveWorkspace()
     {
-        _sideToSideMode = !_sideToSideMode;
-        if (_sideToSideMode)
-            _multiplePagesMode = false;
+        if (_splitPreviewGrid is not null && _liveWorkspaceContent is not null)
+        {
+            _splitPreviewGrid.Children.Remove(_liveWorkspaceContent);
+            _splitPreviewGrid.Children.Clear();
+        }
 
-        _status.Text = _sideToSideMode
-            ? "Side to Side view is not yet available in the Avalonia shell (deferred)."
-            : "Side to Side view is off.";
+        _splitPreviewGrid = null;
+        _splitPreviewSnapshot = null;
+
+        if (_liveWorkspaceContent is not null && !ReferenceEquals(_workspace.Child, _liveWorkspaceContent))
+            _workspace.Child = _liveWorkspaceContent;
+    }
+
+    private void EnterSplitPreview(FreeWViewDepthPlan plan)
+    {
+        RestoreLiveWorkspace();
+        if (_liveWorkspaceContent is null)
+            return;
+
+        var splitGrid = new Grid
+        {
+            RowDefinitions =
+            {
+                new RowDefinition { Height = new GridLength(1, GridUnitType.Star) },
+                new RowDefinition { Height = new GridLength(5) },
+                new RowDefinition { Height = new GridLength(1, GridUnitType.Star) },
+            },
+        };
+
+        _workspace.Child = null;
+        Grid.SetRow(_liveWorkspaceContent, 0);
+        splitGrid.Children.Add(_liveWorkspaceContent);
+
+        var splitter = new GridSplitter
+        {
+            Height = 5,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Center,
+            Background = new SolidColorBrush(Color.FromRgb(0xC8, 0xC8, 0xC8)),
+            ResizeDirection = GridResizeDirection.Rows,
+        };
+        Grid.SetRow(splitter, 1);
+        splitGrid.Children.Add(splitter);
+
+        _splitPreviewSnapshot = BuildReadOnlyPagePreviewSurface(plan, compact: true);
+        Grid.SetRow(_splitPreviewSnapshot, 2);
+        splitGrid.Children.Add(_splitPreviewSnapshot);
+
+        _splitPreviewGrid = splitGrid;
+        _workspace.Child = splitGrid;
+        _editor.Focus();
+    }
+
+    private void EnterReadOnlyPagePreview(FreeWViewDepthPlan plan)
+    {
+        RestoreLiveWorkspace();
+        _workspace.Child = BuildReadOnlyPagePreviewSurface(plan, compact: false);
+    }
+
+    private void RefreshSplitPreviewSnapshot()
+    {
+        if (!_viewDepthPlan.IsSplitActive || _splitPreviewGrid is null || _splitPreviewSnapshot is null)
+            return;
+
+        var replacement = BuildReadOnlyPagePreviewSurface(_viewDepthPlan, compact: true);
+        var index = _splitPreviewGrid.Children.IndexOf(_splitPreviewSnapshot);
+        if (index < 0)
+            return;
+
+        Grid.SetRow(replacement, 2);
+        _splitPreviewGrid.Children.RemoveAt(index);
+        _splitPreviewGrid.Children.Insert(index, replacement);
+        _splitPreviewSnapshot = replacement;
+    }
+
+    private Control BuildReadOnlyPagePreviewSurface(FreeWViewDepthPlan plan, bool compact)
+    {
+        var snapshot = new DocumentView
+        {
+            Focusable = false,
+            IsHitTestVisible = false,
+            ViewMode = DocumentViewMode.PrintLayout,
+            ShowGridlines = _editor.ShowGridlines,
+            ViewTableGridlines = _editor.ViewTableGridlines,
+            ShowRuler = _editor.ShowRuler && !compact,
+        };
+        snapshot.LoadDocument(CloneDocument(_editor.Document));
+
+        var (pageWidthDip, pageHeightDip) = PageLayout.PageSizeDip(_editor.Document.Page);
+        var (viewportWidth, viewportHeight) = GetWorkspaceViewportSize(compact);
+        var scale = FreeWViewDepthPlanner.BuildPreviewScale(
+            plan.Mode,
+            viewportWidth,
+            viewportHeight,
+            pageWidthDip,
+            pageHeightDip);
+
+        return new ScrollViewer
+        {
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            Padding = compact ? new Thickness(24, 12) : new Thickness(48, 24),
+            Content = new LayoutTransformControl
+            {
+                LayoutTransform = new ScaleTransform(scale, scale),
+                Child = snapshot,
+            },
+        };
+    }
+
+    private (double Width, double Height) GetWorkspaceViewportSize(bool compact)
+    {
+        var bounds = compact && _scroller is not null ? _scroller.Bounds : _workspace.Bounds;
+        var width = bounds.Width > 0 ? bounds.Width : Width;
+        var height = bounds.Height > 0 ? bounds.Height : Height;
+        if (compact)
+            height /= 2;
+
+        return (Math.Max(1, width), Math.Max(1, height));
     }
 
     private (double PageWidthFactor, double TextWidthFactor, double WholePageFactor) ComputeZoomFitFactors()
@@ -828,12 +970,13 @@ public sealed class MainWindow : Window
             OpenPrintPreview: () => _ = OpenPrintPreviewAsync(),
             NewWindow:       OpenNewWindow,
             ToggleSplit:     ToggleSplit,
+            IsSplitActive:   () => _viewDepthPlan.IsSplitActive,
             ZoomOnePage:     ZoomToOnePage,
             ZoomPageWidth:   ZoomToPageWidth,
             ToggleMultiplePages: ToggleMultiplePages,
-            IsMultiplePagesActive: () => _multiplePagesMode,
+            IsMultiplePagesActive: () => _viewDepthPlan.IsMultiplePagesActive,
             ToggleSideToSide: ToggleSideToSide,
-            IsSideToSideActive: () => _sideToSideMode,
+            IsSideToSideActive: () => _viewDepthPlan.IsSideToSideActive,
             // AV-INSERT2: Insert depth 2 dialog launchers (optional callbacks).
             OpenHyperlinkDialog: () => _ = OpenHyperlinkDialogAsync(),
             OpenEditHyperlinkDialog: () => _ = OpenEditHyperlinkDialogAsync(),
@@ -997,7 +1140,12 @@ public sealed class MainWindow : Window
 
     private void SetViewMode(DocumentViewMode mode)
     {
+        if (_viewDepthPlan.IsMultiplePagesActive || _viewDepthPlan.IsSideToSideActive)
+            ApplyViewDepthPlan(FreeWViewDepthPlanner.Build(FreeWViewDepthMode.LiveEditor), updateStatus: false);
+
         _editor.ViewMode = mode;
+        if (_viewDepthPlan.IsSplitActive)
+            RefreshSplitPreviewSnapshot();
         _editor.Focus();
     }
 
@@ -1590,6 +1738,7 @@ public sealed class MainWindow : Window
 
     private void LoadDocumentContent(TextDocument document)
     {
+        ApplyViewDepthPlan(FreeWViewDepthPlanner.Build(FreeWViewDepthMode.LiveEditor), updateStatus: false);
         _suppressEditorDirty = true;
         try
         {
@@ -1606,6 +1755,7 @@ public sealed class MainWindow : Window
         if (!_suppressEditorDirty)
             _fileWorkflow.MarkDirty();
 
+        RefreshSplitPreviewSnapshot();
         UpdateStatus();
     }
 
