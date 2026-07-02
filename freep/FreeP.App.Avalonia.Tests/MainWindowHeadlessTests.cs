@@ -1682,6 +1682,72 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task Review_comment_add_edit_routes_through_shared_mutation_plan()
+    {
+        SlideComment? addedComment = null;
+        SlideComment? editedComment = null;
+        PresentationCommentMutationPlan? addPlan = null;
+        PresentationCommentMutationPlan? editPlan = null;
+        PresentationCommentPanePlan? addedPanePlan = null;
+        PresentationCommentPanePlan? editedPanePlan = null;
+        var dirtyAfterEdit = false;
+        var registryAddCount = -1;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var registry = window.BuildCommandRegistry();
+            registry.TryGet(PresentationReviewWorkflowPlanner.AddCommentCommandId, out var addCommand)
+                .Should().BeTrue();
+            registry.TryGet(PresentationReviewWorkflowPlanner.EditCommentCommandId, out var editCommand)
+                .Should().BeTrue();
+
+            addPlan = window.AddComment(
+                "  Add execution evidence. ",
+                new DateTime(2026, 7, 2, 16, 30, 0, DateTimeKind.Utc),
+                "  FreeP User ",
+                null,
+                120,
+                240);
+            addedComment = window.Editor.CurrentSlide!.Comments.Single();
+            addedPanePlan = window.LastCommentPanePlan;
+
+            editPlan = window.EditSelectedComment("  Edited execution evidence. ", "Reviewer", "RV");
+            editedComment = window.Editor.CurrentSlide.Comments.Single();
+            editedPanePlan = window.LastCommentPanePlan;
+            dirtyAfterEdit = window.IsDirty;
+
+            addCommand!.Execute(RibbonCommandContext.Empty);
+            registryAddCount = window.Editor.CurrentSlide.Comments.Count;
+            editCommand!.Execute(RibbonCommandContext.Empty);
+        });
+
+        if (!ran) return;
+        addPlan.Should().NotBeNull();
+        addPlan!.Intent.Should().Be(PresentationReviewWorkflowIntentKind.AddComment);
+        addPlan.ShouldApply.Should().BeTrue();
+        addedComment.Should().NotBeNull();
+        addedComment!.Text.Should().Be("Add execution evidence.");
+        addedComment.Author.Should().Be("FreeP User");
+        addedComment.Initials.Should().Be("FU");
+        addedComment.Xemu.Should().Be(120);
+        addedComment.Yemu.Should().Be(240);
+        addedPanePlan.Should().NotBeNull();
+        addedPanePlan!.SelectedCommentIndex.Should().Be(0);
+        editPlan.Should().NotBeNull();
+        editPlan!.Intent.Should().Be(PresentationReviewWorkflowIntentKind.EditComment);
+        editPlan.ShouldApply.Should().BeTrue();
+        editedComment.Should().NotBeNull();
+        editedComment!.Text.Should().Be("Edited execution evidence.");
+        editedComment.Author.Should().Be("Reviewer");
+        editedComment.Initials.Should().Be("RV");
+        editedPanePlan.Should().NotBeNull();
+        editedPanePlan!.SelectedComment!.TextPreview.Should().Be("Edited execution evidence.");
+        dirtyAfterEdit.Should().BeTrue();
+        registryAddCount.Should().Be(2);
+    }
+
+    [Fact]
     public async Task Review_comment_resolve_reopen_routes_through_shared_mutation_plan()
     {
         SlideComment? resolvedComment = null;

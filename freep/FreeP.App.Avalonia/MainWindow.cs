@@ -1596,8 +1596,12 @@ public sealed class MainWindow : Window
         registry.Register(
             PresentationReviewWorkflowPlanner.ProofingCommandId,
             new ActionRibbonCommand(RefreshProofingRequestPlan));
-        registry.Register(PresentationReviewWorkflowPlanner.AddCommentCommandId, EmptyRibbonCommand.Instance);
-        registry.Register(PresentationReviewWorkflowPlanner.EditCommentCommandId, EmptyRibbonCommand.Instance);
+        registry.Register(
+            PresentationReviewWorkflowPlanner.AddCommentCommandId,
+            new ActionRibbonCommand(() => AddComment("New comment")));
+        registry.Register(
+            PresentationReviewWorkflowPlanner.EditCommentCommandId,
+            new ActionRibbonCommand(() => EditSelectedComment(GetSelectedCommentText())));
         registry.Register(PresentationReviewWorkflowPlanner.ReplyCommentCommandId, EmptyRibbonCommand.Instance);
         registry.Register(
             PresentationReviewWorkflowPlanner.DeleteCommentCommandId,
@@ -1642,6 +1646,7 @@ public sealed class MainWindow : Window
 
         _reviewCommentsPanePanel.Children.Clear();
         _reviewCommentsPanePanel.Children.Add(BuildReviewCommentsPaneHeader(plan));
+        _reviewCommentsPanePanel.Children.Add(BuildAddCommentInput());
         _reviewCommentsPanePanel.Children.Add(BuildReviewCommentActions(plan.Actions));
 
         if (plan.Comments.Count == 0)
@@ -1698,6 +1703,33 @@ public sealed class MainWindow : Window
         return panel;
     }
 
+    private Control BuildAddCommentInput()
+    {
+        var input = new TextBox
+        {
+            PlaceholderText = "Comment",
+            MinWidth = 180,
+        };
+        var button = new Button
+        {
+            Content = "New Comment",
+            MinWidth = 96,
+        };
+        button.Click += (_, _) => AddComment(input.Text);
+
+        return new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 6,
+            Margin = new Thickness(12, 6, 12, 8),
+            Children =
+            {
+                input,
+                button,
+            }
+        };
+    }
+
     private Control BuildReviewCommentCard(PresentationCommentDescriptor comment)
     {
         var header = new StackPanel
@@ -1743,6 +1775,30 @@ public sealed class MainWindow : Window
             TextWrapping = TextWrapping.Wrap,
             Foreground   = new SolidColorBrush(Color.FromRgb(0x44, 0x44, 0x44)),
         });
+        if (comment.IsSelected && comment.CanEdit)
+        {
+            var editInput = new TextBox
+            {
+                Text = GetCommentText(comment.CommentIndex) ?? comment.TextPreview,
+                MinWidth = 180,
+            };
+            var editButton = new Button
+            {
+                Content = "Save",
+                MinWidth = 72,
+            };
+            editButton.Click += (_, _) => EditSelectedComment(editInput.Text);
+            card.Children.Add(new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 6,
+                Children =
+                {
+                    editInput,
+                    editButton,
+                }
+            });
+        }
         foreach (var reply in comment.Replies)
         {
             card.Children.Add(new TextBlock
@@ -1796,7 +1852,15 @@ public sealed class MainWindow : Window
 
     private void ExecuteReviewCommentAction(string commandId)
     {
-        if (commandId == PresentationReviewWorkflowPlanner.ResolveCommentCommandId)
+        if (commandId == PresentationReviewWorkflowPlanner.AddCommentCommandId)
+        {
+            AddComment("New comment");
+        }
+        else if (commandId == PresentationReviewWorkflowPlanner.EditCommentCommandId)
+        {
+            EditSelectedComment(GetSelectedCommentText());
+        }
+        else if (commandId == PresentationReviewWorkflowPlanner.ResolveCommentCommandId)
         {
             ResolveSelectedComment();
         }
@@ -1828,6 +1892,36 @@ public sealed class MainWindow : Window
             PresentationReviewWorkflowIntentKind.DeleteComment,
             null,
             null);
+
+    internal PresentationCommentMutationPlan AddComment(
+        string? text,
+        DateTime? timestamp = null,
+        string? author = null,
+        string? initials = null,
+        long xemu = 0,
+        long yemu = 0)
+        => ApplySelectedCommentMutation(
+            PresentationReviewWorkflowIntentKind.AddComment,
+            null,
+            null,
+            addText: text,
+            addTimestamp: timestamp,
+            addAuthor: author,
+            addInitials: initials,
+            addXemu: xemu,
+            addYemu: yemu);
+
+    internal PresentationCommentMutationPlan EditSelectedComment(
+        string? text,
+        string? author = null,
+        string? initials = null)
+        => ApplySelectedCommentMutation(
+            PresentationReviewWorkflowIntentKind.EditComment,
+            null,
+            null,
+            editText: text,
+            editAuthor: author,
+            editInitials: initials);
 
     internal PresentationCommentMutationPlan ResolveSelectedComment(
         DateTime? resolvedAt = null,
@@ -1864,12 +1958,39 @@ public sealed class MainWindow : Window
         string? replyText = null,
         DateTime? replyTimestamp = null,
         string? replyAuthor = null,
-        string? replyInitials = null)
+        string? replyInitials = null,
+        string? addText = null,
+        DateTime? addTimestamp = null,
+        string? addAuthor = null,
+        string? addInitials = null,
+        long addXemu = 0,
+        long addYemu = 0,
+        string? editText = null,
+        string? editAuthor = null,
+        string? editInitials = null)
     {
         var selected = _selectedCommentIndex;
-        var plan = selected is { } selectedIndex
+        var plan = intent == PresentationReviewWorkflowIntentKind.AddComment
+            ? PresentationReviewWorkflowPlanner.BuildAddCommentPlan(
+                _presentation.Slides,
+                Editor.CurrentSlideIndex,
+                addText,
+                addAuthor ?? "FreeP User",
+                addInitials,
+                addXemu,
+                addYemu,
+                addTimestamp ?? DateTime.UtcNow)
+            : selected is { } selectedIndex
             ? intent switch
             {
+                PresentationReviewWorkflowIntentKind.EditComment =>
+                    PresentationReviewWorkflowPlanner.BuildEditCommentPlan(
+                        _presentation.Slides,
+                        Editor.CurrentSlideIndex,
+                        selectedIndex,
+                        editText,
+                        editAuthor,
+                        editInitials),
                 PresentationReviewWorkflowIntentKind.DeleteComment =>
                     PresentationReviewWorkflowPlanner.BuildDeleteCommentPlan(
                         _presentation.Slides,
@@ -1925,6 +2046,17 @@ public sealed class MainWindow : Window
         }
 
         return plan;
+    }
+
+    private string? GetSelectedCommentText()
+        => _selectedCommentIndex is { } index ? GetCommentText(index) : null;
+
+    private string? GetCommentText(int commentIndex)
+    {
+        var comments = Editor.CurrentSlide?.Comments;
+        return comments is not null && commentIndex >= 0 && commentIndex < comments.Count
+            ? comments[commentIndex].Text
+            : null;
     }
 
     private void OnAnimationPaneRequested(PresentationAnimationCommandPlan plan)

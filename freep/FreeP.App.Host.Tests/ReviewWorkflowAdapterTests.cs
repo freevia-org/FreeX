@@ -135,6 +135,73 @@ public sealed class ReviewWorkflowAdapterTests
     }
 
     [StaFact]
+    public void MainWindow_AddAndEditComment_ApplySharedPlanAndRefreshPane()
+    {
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
+        try
+        {
+            var timestamp = new DateTime(2026, 7, 2, 16, 0, 0, DateTimeKind.Utc);
+
+            var add = window.AddComment(
+                "  Add execution evidence. ",
+                timestamp,
+                "  FreeP User ",
+                null,
+                120,
+                240);
+
+            add.Should().BeEquivalentTo(new PresentationCommentMutationPlan(
+                PresentationReviewWorkflowIntentKind.AddComment,
+                true,
+                0,
+                null,
+                new SlideComment
+                {
+                    Author = "FreeP User",
+                    Initials = "FU",
+                    Text = "Add execution evidence.",
+                    DateTime = timestamp,
+                    Xemu = 120,
+                    Yemu = 240,
+                    Idx = 1
+                },
+                null));
+            window.Editor.CurrentSlide!.Comments.Should().ContainSingle();
+            window.LastCommentPanePlan!.SelectedCommentIndex.Should().Be(0);
+            window.LastCommentPanePlan.SelectedComment!.TextPreview.Should().Be("Add execution evidence.");
+
+            var edit = window.EditSelectedComment(
+                "  Edited execution evidence. ",
+                "Reviewer",
+                "RV");
+
+            edit.Should().BeEquivalentTo(new PresentationCommentMutationPlan(
+                PresentationReviewWorkflowIntentKind.EditComment,
+                true,
+                0,
+                0,
+                new SlideComment
+                {
+                    Author = "Reviewer",
+                    Initials = "RV",
+                    Text = "Edited execution evidence.",
+                    DateTime = timestamp,
+                    Xemu = 120,
+                    Yemu = 240,
+                    Idx = 1
+                },
+                null));
+            window.Editor.CurrentSlide.Comments.Single().Text.Should().Be("Edited execution evidence.");
+            window.LastCommentPanePlan!.SelectedComment!.TextPreview.Should().Be("Edited execution evidence.");
+            window.ReviewCommentSelectedCount.Should().Be(1);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [StaFact]
     public void MainWindow_ResolveAndReopenComment_ApplySharedPlanAndRefreshPane()
     {
         var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
@@ -640,6 +707,8 @@ public sealed class ReviewWorkflowAdapterTests
         var invoked = false;
         var altTextInvoked = false;
         var readingOrderInvoked = false;
+        var addInvoked = false;
+        var editInvoked = false;
         var deleteInvoked = false;
 
         var registry = FreePRibbonCommands.Build(
@@ -648,6 +717,8 @@ public sealed class ReviewWorkflowAdapterTests
             onReviewAccessibility: () => invoked = true,
             onReviewAltText: () => altTextInvoked = true,
             onReviewReadingOrder: () => readingOrderInvoked = true,
+            onAddComment: () => addInvoked = true,
+            onEditComment: () => editInvoked = true,
             onDeleteComment: () => deleteInvoked = true);
 
         registry.TryGet(PresentationReviewWorkflowPlanner.AccessibilityCommandId, out var command)
@@ -664,6 +735,12 @@ public sealed class ReviewWorkflowAdapterTests
         readingOrderCommand!.Execute(RibbonCommandContext.Empty);
         readingOrderInvoked.Should().BeTrue();
         registry.TryGet(PresentationReviewWorkflowPlanner.CommentsPaneCommandId, out _).Should().BeTrue();
+        registry.TryGet(PresentationReviewWorkflowPlanner.AddCommentCommandId, out var addCommand).Should().BeTrue();
+        addCommand!.Execute(RibbonCommandContext.Empty);
+        addInvoked.Should().BeTrue();
+        registry.TryGet(PresentationReviewWorkflowPlanner.EditCommentCommandId, out var editCommand).Should().BeTrue();
+        editCommand!.Execute(RibbonCommandContext.Empty);
+        editInvoked.Should().BeTrue();
         registry.TryGet(PresentationReviewWorkflowPlanner.ReplyCommentCommandId, out _).Should().BeTrue();
         registry.TryGet(PresentationReviewWorkflowPlanner.DeleteCommentCommandId, out var deleteCommand).Should().BeTrue();
         deleteCommand!.Execute(RibbonCommandContext.Empty);

@@ -78,6 +78,8 @@ internal static class FreePRibbonCommands
         Action?             onReviewAltText = null,
         Action?             onReviewReadingOrder = null,
         Action?             onReviewProofing = null,
+        Action?             onAddComment = null,
+        Action?             onEditComment = null,
         Action?             onDeleteComment = null,
         Action?             onResolveComment = null,
         Action?             onReopenComment = null,
@@ -304,6 +306,8 @@ internal static class FreePRibbonCommands
             onReviewAltText,
             onReviewReadingOrder,
             onReviewProofing,
+            onAddComment,
+            onEditComment,
             onDeleteComment,
             onResolveComment,
             onReopenComment);
@@ -461,6 +465,8 @@ internal static class FreePRibbonCommands
         Action? onAltText,
         Action? onReadingOrder,
         Action? onProofing,
+        Action? onAddComment,
+        Action? onEditComment,
         Action? onDeleteComment,
         Action? onResolveComment,
         Action? onReopenComment)
@@ -480,8 +486,12 @@ internal static class FreePRibbonCommands
         registry.Register(
             PresentationReviewWorkflowPlanner.ProofingCommandId,
             new ActionRibbonCommand(() => onProofing?.Invoke()));
-        registry.Register(PresentationReviewWorkflowPlanner.AddCommentCommandId, EmptyRibbonCommand.Instance);
-        registry.Register(PresentationReviewWorkflowPlanner.EditCommentCommandId, EmptyRibbonCommand.Instance);
+        registry.Register(
+            PresentationReviewWorkflowPlanner.AddCommentCommandId,
+            new ActionRibbonCommand(() => onAddComment?.Invoke()));
+        registry.Register(
+            PresentationReviewWorkflowPlanner.EditCommentCommandId,
+            new ActionRibbonCommand(() => onEditComment?.Invoke()));
         registry.Register(PresentationReviewWorkflowPlanner.ReplyCommentCommandId, EmptyRibbonCommand.Instance);
         registry.Register(
             PresentationReviewWorkflowPlanner.DeleteCommentCommandId,

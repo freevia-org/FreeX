@@ -140,6 +140,42 @@ public sealed class PresentationReviewWorkflowPlannerTests
     }
 
     [Fact]
+    public void TryApplyCommentMutationPlan_AddAndEdit_NormalizesSelection()
+    {
+        var slides = new[] { new Slide { Title = "Intro" } };
+        var add = PresentationReviewWorkflowPlanner.BuildAddCommentPlan(
+            slides,
+            0,
+            " Add parity evidence. ",
+            "FreeP User",
+            null,
+            120,
+            240);
+
+        var added = PresentationReviewWorkflowPlanner.TryApplyCommentMutationPlan(slides, add);
+        var selectionAfterAdd = PresentationReviewWorkflowPlanner.NormalizeCommentSelectionAfterMutation(slides, add);
+        var edit = PresentationReviewWorkflowPlanner.BuildEditCommentPlan(
+            slides,
+            0,
+            0,
+            " Edited parity evidence. ",
+            initials: "FP");
+        var edited = PresentationReviewWorkflowPlanner.TryApplyCommentMutationPlan(slides, edit);
+        var selectionAfterEdit = PresentationReviewWorkflowPlanner.NormalizeCommentSelectionAfterMutation(slides, edit);
+
+        added.Should().BeTrue();
+        selectionAfterAdd.Should().Be(0);
+        edited.Should().BeTrue();
+        selectionAfterEdit.Should().Be(0);
+        slides[0].Comments.Should().ContainSingle().Which.Should().Match<SlideComment>(comment =>
+            comment.Text == "Edited parity evidence." &&
+            comment.Author == "FreeP User" &&
+            comment.Initials == "FP" &&
+            comment.Xemu == 120 &&
+            comment.Yemu == 240);
+    }
+
+    [Fact]
     public void BuildCommentMutationPlans_RejectInvalidOrModernOnlyRequests()
     {
         var slides = new[] { new Slide { Title = "Intro" } };
