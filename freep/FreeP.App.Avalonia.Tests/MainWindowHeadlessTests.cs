@@ -307,6 +307,8 @@ public sealed class MainWindowHeadlessTests
         source.Should().Contain("PresentationAnimationCommandPlanner.TryApply(");
         source.Should().Contain("OnAnimationPaneRequested");
         source.Should().Contain("AnimationPanePlanner.BuildTimelinePlan(");
+        source.Should().Contain("ShowAnimationPane()");
+        source.Should().Contain("BuildAnimationPaneItemCard(");
     }
 
     [Fact]
@@ -1228,11 +1230,18 @@ public sealed class MainWindowHeadlessTests
         int? duration = null;
         int? delay = null;
         AnimationPaneTimelinePlan? panePlan = null;
+        var paneVisible = false;
+        var paneHeading = string.Empty;
+        var paneMessage = string.Empty;
+        var paneRenderedCount = 0;
+        var previewEnabled = false;
+        IReadOnlyList<string> paneRows = [];
 
         var ran = await OnUiThread(() =>
         {
             var window = new MainWindow(Array.Empty<string>());
             var shape = window.Editor.InsertDefaultRectangle();
+            shape.Name = "Hero box";
             window.Editor.Select(shape.Id);
             var registry = window.BuildCommandRegistry();
             foundFade = registry.TryGet("freep.anim.entrance.fade", out var fade);
@@ -1250,6 +1259,12 @@ public sealed class MainWindowHeadlessTests
             duration = animation.DurationMs;
             delay = animation.DelayMs;
             panePlan = window.LastAnimationPaneTimelinePlan;
+            paneVisible = window.IsAnimationPaneVisible;
+            paneHeading = window.AnimationPaneHeading;
+            paneMessage = window.AnimationPaneMessage;
+            paneRenderedCount = window.AnimationPaneRenderedItemCount;
+            previewEnabled = window.IsAnimationPanePreviewEnabled;
+            paneRows = window.AnimationPaneRenderedRows.ToArray();
         });
 
         if (!ran) return;
@@ -1267,6 +1282,81 @@ public sealed class MainWindowHeadlessTests
         panePlan.Items[0].DurationMs.Should().Be(1500);
         panePlan.Items[0].DelayMs.Should().Be(250);
         panePlan.PreviewIntent.CanExecute.Should().BeTrue();
+        paneVisible.Should().BeTrue("the Avalonia animation pane command should show the in-app pane");
+        paneHeading.Should().Be("Animation Pane - slide 1 (1 animations)");
+        paneMessage.Should().Contain("Hero box");
+        paneRenderedCount.Should().Be(1);
+        previewEnabled.Should().BeTrue();
+        paneRows.Should().ContainSingle()
+            .Which.Should().Contain("Hero box - In: Fade")
+            .And.Contain("duration 1.5s")
+            .And.Contain("delay 0.25s")
+            .And.Contain("move earlier unavailable")
+            .And.Contain("move later unavailable");
+    }
+
+    [Fact]
+    public async Task Animation_pane_renders_shared_timeline_rows_and_action_state()
+    {
+        AnimationPaneTimelinePlan? panePlan = null;
+        var paneVisible = false;
+        var paneHeading = string.Empty;
+        var paneMessage = string.Empty;
+        var previewEnabled = false;
+        IReadOnlyList<string> paneRows = [];
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var registry = window.BuildCommandRegistry();
+            registry.TryGet("freep.anim.entrance.fade", out var fade).Should().BeTrue();
+            registry.TryGet("freep.anim.trigger", out var trigger).Should().BeTrue();
+            registry.TryGet("freep.anim.duration", out var duration).Should().BeTrue();
+            registry.TryGet("freep.anim.delay", out var delay).Should().BeTrue();
+            registry.TryGet("freep.anim.pane", out var pane).Should().BeTrue();
+
+            var hero = window.Editor.InsertDefaultRectangle();
+            hero.Name = "Hero box";
+            window.Editor.Select(hero.Id);
+            fade!.Execute(RibbonCommandContext.Empty);
+            duration!.Execute(RibbonCommandContext.ForSelectedValue("0.75s"));
+
+            var caption = window.Editor.InsertDefaultRectangle();
+            caption.Name = "Caption box";
+            window.Editor.Select(caption.Id);
+            fade.Execute(RibbonCommandContext.Empty);
+            trigger!.Execute(RibbonCommandContext.ForSelectedValue("After Previous"));
+            delay!.Execute(RibbonCommandContext.ForSelectedValue("0.50s"));
+
+            pane!.Execute(RibbonCommandContext.Empty);
+
+            panePlan = window.LastAnimationPaneTimelinePlan;
+            paneVisible = window.IsAnimationPaneVisible;
+            paneHeading = window.AnimationPaneHeading;
+            paneMessage = window.AnimationPaneMessage;
+            previewEnabled = window.IsAnimationPanePreviewEnabled;
+            paneRows = window.AnimationPaneRenderedRows.ToArray();
+        });
+
+        if (!ran) return;
+        paneVisible.Should().BeTrue();
+        panePlan.Should().NotBeNull();
+        panePlan!.Items.Should().HaveCount(2);
+        panePlan.SelectedIndex.Should().Be(1);
+        paneHeading.Should().Be("Animation Pane - slide 1 (2 animations)");
+        paneMessage.Should().Contain("Caption box - In: Fade");
+        previewEnabled.Should().BeTrue();
+        paneRows.Should().HaveCount(2);
+        paneRows[0].Should().Contain("1. Hero box - In: Fade")
+            .And.Contain("On Click")
+            .And.Contain("duration 0.75s")
+            .And.Contain("move earlier unavailable")
+            .And.Contain("move later available");
+        paneRows[1].Should().Contain("2. Caption box - In: Fade")
+            .And.Contain("After Previous")
+            .And.Contain("delay 0.5s")
+            .And.Contain("move earlier available")
+            .And.Contain("move later unavailable");
     }
 
     [Fact]

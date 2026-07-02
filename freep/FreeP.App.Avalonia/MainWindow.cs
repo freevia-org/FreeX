@@ -120,6 +120,13 @@ public sealed class MainWindow : Window
     private StackPanel _readingOrderPaneItemsPanel = null!;
     private Button _readingOrderMoveEarlierButton = null!;
     private Button _readingOrderMoveLaterButton = null!;
+    private Border _animationPaneHost = null!;
+    private TextBlock _animationPaneHeading = null!;
+    private TextBlock _animationPaneMessage = null!;
+    private StackPanel _animationPaneItemsPanel = null!;
+    private Button _animationPanePreviewButton = null!;
+    private int _selectedAnimationIndex = -1;
+    private readonly List<string> _animationPaneRenderedRows = new();
 
     // ── Interaction layer (Theme 15) ────────────────────────────────────────────
 
@@ -208,6 +215,13 @@ public sealed class MainWindow : Window
     internal string? ReadingOrderMoveLaterDisabledReason =>
         LastReadingOrderPlan?.Actions.SingleOrDefault(action =>
             action.CommandId == PresentationReviewWorkflowPlanner.ReadingOrderMoveLaterCommandId)?.DisabledReason;
+    internal bool IsAnimationPaneVisible => _animationPaneHost?.IsVisible == true;
+    internal int AnimationPaneItemCount => LastAnimationPaneTimelinePlan?.Items.Count ?? 0;
+    internal int AnimationPaneRenderedItemCount => _animationPaneItemsPanel?.Children.Count ?? 0;
+    internal string AnimationPaneHeading => _animationPaneHeading?.Text ?? string.Empty;
+    internal string AnimationPaneMessage => _animationPaneMessage?.Text ?? string.Empty;
+    internal bool IsAnimationPanePreviewEnabled => _animationPanePreviewButton?.IsEnabled == true;
+    internal IReadOnlyList<string> AnimationPaneRenderedRows => _animationPaneRenderedRows;
 
     // ── Constructors ───────────────────────────────────────────────────────────
 
@@ -449,6 +463,7 @@ public sealed class MainWindow : Window
         };
         _altTextPaneHost = BuildAltTextPaneHost();
         _readingOrderPaneHost = BuildReadingOrderPaneHost();
+        _animationPaneHost = BuildAnimationPaneHost();
         Grid.SetRow(canvasHost, 0);
         Grid.SetRow(_layoutPickerHost, 1);
         Grid.SetRow(_tablePickerHost, 2);
@@ -485,14 +500,17 @@ public sealed class MainWindow : Window
         body.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         body.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         body.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        body.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         Grid.SetColumn(slidePaneHost, 0);
         Grid.SetColumn(rightGrid,      1);
         Grid.SetColumn(_altTextPaneHost, 2);
         Grid.SetColumn(_readingOrderPaneHost, 3);
+        Grid.SetColumn(_animationPaneHost, 4);
         body.Children.Add(slidePaneHost);
         body.Children.Add(rightGrid);
         body.Children.Add(_altTextPaneHost);
         body.Children.Add(_readingOrderPaneHost);
+        body.Children.Add(_animationPaneHost);
 
         return body;
     }
@@ -670,6 +688,71 @@ public sealed class MainWindow : Window
         return new Border
         {
             Width = 320,
+            IsVisible = false,
+            Background = Brushes.White,
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0xC0, 0xC0, 0xC0)),
+            BorderThickness = new Thickness(1, 0, 0, 0),
+            Child = panel,
+        };
+    }
+
+    private Border BuildAnimationPaneHost()
+    {
+        _animationPaneHeading = new TextBlock
+        {
+            Text = "Animation Pane",
+            FontSize = 15,
+            FontWeight = FontWeight.SemiBold,
+            Margin = new Thickness(12, 12, 12, 4),
+        };
+        _animationPaneMessage = new TextBlock
+        {
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)),
+            Margin = new Thickness(12, 0, 12, 8),
+        };
+        _animationPanePreviewButton = new Button
+        {
+            Content = "Preview",
+            MinWidth = 82,
+            Padding = new Thickness(10, 4),
+            Margin = new Thickness(12, 0, 12, 8),
+        };
+        _animationPanePreviewButton.Click += (_, _) =>
+        {
+            if (LastAnimationPaneTimelinePlan?.PreviewIntent.CanExecute == true)
+                StartSlideShow(fromStart: false);
+        };
+
+        _animationPaneItemsPanel = new StackPanel
+        {
+            Orientation = Orientation.Vertical,
+        };
+
+        var header = new StackPanel
+        {
+            Orientation = Orientation.Vertical,
+            Children =
+            {
+                _animationPaneHeading,
+                _animationPaneMessage,
+                _animationPanePreviewButton,
+            }
+        };
+        DockPanel.SetDock(header, Dock.Top);
+
+        var panel = new DockPanel();
+        panel.Children.Add(header);
+        panel.Children.Add(new ScrollViewer
+        {
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            Content = _animationPaneItemsPanel,
+        });
+
+        return new Border
+        {
+            Width = 340,
             IsVisible = false,
             Background = Brushes.White,
             BorderBrush = new SolidColorBrush(Color.FromRgb(0xC0, 0xC0, 0xC0)),
@@ -1664,7 +1747,10 @@ public sealed class MainWindow : Window
     private void OnAnimationPaneRequested(PresentationAnimationCommandPlan plan)
     {
         _ = plan;
-        RefreshAnimationPaneTimelinePlan();
+        if (IsAnimationPaneVisible)
+            HideAnimationPane();
+        else
+            ShowAnimationPane();
     }
 
     internal AnimationPaneTimelinePlan RefreshAnimationPaneTimelinePlan(int selectedAnimationIndex = -1)
@@ -1675,6 +1761,193 @@ public sealed class MainWindow : Window
             selectedAnimationIndex);
         return LastAnimationPaneTimelinePlan;
     }
+
+    internal AnimationPaneTimelinePlan ShowAnimationPane(int selectedAnimationIndex = -1)
+    {
+        var plan = RefreshAnimationPaneTimelinePlan(selectedAnimationIndex);
+        RenderAnimationPane(plan);
+        _animationPaneHost.IsVisible = true;
+        return plan;
+    }
+
+    internal void HideAnimationPane()
+    {
+        if (_animationPaneHost is not null)
+            _animationPaneHost.IsVisible = false;
+    }
+
+    private void RefreshVisibleAnimationPane(int selectedAnimationIndex = -1)
+    {
+        if (!IsAnimationPaneVisible)
+            return;
+
+        var plan = RefreshAnimationPaneTimelinePlan(selectedAnimationIndex);
+        RenderAnimationPane(plan);
+    }
+
+    private void RenderAnimationPane(AnimationPaneTimelinePlan plan)
+    {
+        _selectedAnimationIndex = plan.SelectedIndex;
+        _animationPaneHeading.Text =
+            $"Animation Pane - slide {Editor.CurrentSlideIndex + 1} ({plan.Items.Count} animations)";
+        _animationPaneMessage.Text = plan.SelectedItem is { } selected
+            ? $"Selected: {selected.ShapeName} - {selected.EffectText}"
+            : plan.HasAnimations
+                ? "Select an animation row to inspect and reorder it."
+                : "No animations on this slide.";
+        _animationPanePreviewButton.IsEnabled = plan.PreviewIntent.CanExecute;
+        ToolTip.SetTip(_animationPanePreviewButton, plan.PreviewIntent.Description);
+
+        _animationPaneRenderedRows.Clear();
+        _animationPaneItemsPanel.Children.Clear();
+        if (!plan.HasAnimations)
+        {
+            _animationPaneItemsPanel.Children.Add(new TextBlock
+            {
+                Text = "No animations on this slide.",
+                Foreground = new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66)),
+                Margin = new Thickness(12, 0, 12, 10),
+                TextWrapping = TextWrapping.Wrap,
+            });
+            return;
+        }
+
+        foreach (var item in plan.Items)
+        {
+            _animationPaneRenderedRows.Add(BuildAnimationPaneRowSummary(item));
+            _animationPaneItemsPanel.Children.Add(BuildAnimationPaneItemCard(item));
+        }
+    }
+
+    private Control BuildAnimationPaneItemCard(AnimationPaneTimelineItemPlan item)
+    {
+        var timingLine =
+            $"{item.TriggerText}; duration {item.DurationText}s; delay {item.DelayText}s";
+        var timelineLine =
+            $"Timeline: starts {item.StartText}s, ends {AnimationPanePlanner.FormatDuration(item.EndMs)}s";
+        var actionLine =
+            $"Move earlier: {FormatAvailability(item.CanMoveEarlier)}; move later: {FormatAvailability(item.CanMoveLater)}";
+
+        var moveEarlierButton = new Button
+        {
+            Content = "Earlier",
+            IsEnabled = item.CanMoveEarlier,
+            Padding = new Thickness(8, 3),
+            Margin = new Thickness(0, 6, 6, 0),
+            Tag = item.Index,
+        };
+        moveEarlierButton.Click += (_, _) => MoveAnimationPaneItem(item.Index, -1);
+
+        var moveLaterButton = new Button
+        {
+            Content = "Later",
+            IsEnabled = item.CanMoveLater,
+            Padding = new Thickness(8, 3),
+            Margin = new Thickness(0, 6, 6, 0),
+            Tag = item.Index,
+        };
+        moveLaterButton.Click += (_, _) => MoveAnimationPaneItem(item.Index, 1);
+
+        var actionPanel = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Children =
+            {
+                moveEarlierButton,
+                moveLaterButton,
+            }
+        };
+
+        var panel = new StackPanel
+        {
+            Orientation = Orientation.Vertical,
+            Spacing = 2,
+            Children =
+            {
+                new TextBlock
+                {
+                    Text = $"{item.OrderText}. {item.ShapeName}",
+                    FontWeight = FontWeight.SemiBold,
+                    TextWrapping = TextWrapping.Wrap,
+                },
+                new TextBlock
+                {
+                    Text = item.EffectText,
+                    Foreground = new SolidColorBrush(Color.FromRgb(0x44, 0x44, 0x44)),
+                    TextWrapping = TextWrapping.Wrap,
+                },
+                new TextBlock
+                {
+                    Text = timingLine,
+                    Foreground = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)),
+                    TextWrapping = TextWrapping.Wrap,
+                },
+                new TextBlock
+                {
+                    Text = timelineLine,
+                    Foreground = new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66)),
+                    TextWrapping = TextWrapping.Wrap,
+                },
+                new TextBlock
+                {
+                    Text = actionLine,
+                    Foreground = new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66)),
+                    TextWrapping = TextWrapping.Wrap,
+                },
+                actionPanel,
+            }
+        };
+
+        var border = new Border
+        {
+            Background = item.IsSelected
+                ? new SolidColorBrush(Color.FromRgb(0xFF, 0xF6, 0xF2))
+                : new SolidColorBrush(Color.FromRgb(0xFA, 0xFA, 0xFA)),
+            BorderBrush = item.IsSelected
+                ? new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A))
+                : new SolidColorBrush(Color.FromRgb(0xE0, 0xE0, 0xE0)),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(4),
+            Padding = new Thickness(10),
+            Margin = new Thickness(12, 0, 12, 10),
+            Child = panel,
+        };
+        border.Cursor = new Cursor(StandardCursorType.Hand);
+        border.PointerPressed += (_, _) => SelectAnimationPaneItem(item.Index);
+        return border;
+    }
+
+    private void SelectAnimationPaneItem(int animationIndex)
+    {
+        _selectedAnimationIndex = animationIndex;
+        var animations = Editor.CurrentSlideAnimations;
+        if (animationIndex >= 0 && animationIndex < animations.Count)
+            Editor.Select(animations[animationIndex].ShapeId);
+
+        RefreshVisibleAnimationPane(_selectedAnimationIndex);
+    }
+
+    private void MoveAnimationPaneItem(int animationIndex, int offset)
+    {
+        var intent = AnimationPanePlanner.BuildReorderIntent(
+            animationIndex,
+            Editor.CurrentSlideAnimations.Count,
+            offset);
+        if (!intent.CanMove)
+            return;
+
+        _selectedAnimationIndex = intent.ToIndex;
+        Editor.MoveAnimation(intent.FromIndex, intent.ToIndex);
+        RefreshVisibleAnimationPane(_selectedAnimationIndex);
+    }
+
+    private static string BuildAnimationPaneRowSummary(AnimationPaneTimelineItemPlan item)
+        => $"{item.OrderText}. {item.ShapeName} - {item.EffectText} - {item.TriggerText}; "
+            + $"duration {item.DurationText}s; delay {item.DelayText}s; starts {item.StartText}s; "
+            + $"move earlier {FormatAvailability(item.CanMoveEarlier)}; move later {FormatAvailability(item.CanMoveLater)}";
+
+    private static string FormatAvailability(bool isAvailable)
+        => isAvailable ? "available" : "unavailable";
 
     private void RefreshAccessibilitySummaryPlan()
     {
@@ -2420,12 +2693,14 @@ public sealed class MainWindow : Window
         RefreshCanvas(); // refresh canvas so shape moves/resizes are reflected immediately
         RefreshNotesPane();
         RefreshReviewWorkflowPlans();
+        RefreshVisibleAnimationPane(_selectedAnimationIndex);
         UpdateStatus();
     }
 
     private void OnCurrentSlideChanged(object? sender, EventArgs e)
     {
         _selectedCommentIndex = null;
+        _selectedAnimationIndex = -1;
 
         // Sync slide-pane selection without re-triggering OnSlidePaneSelectionChanged.
         _slidePaneRefreshing = true;
@@ -2435,6 +2710,7 @@ public sealed class MainWindow : Window
         RefreshCanvas();
         RefreshNotesPane();
         RefreshReviewWorkflowPlans();
+        RefreshVisibleAnimationPane();
         UpdateStatus();
     }
 
@@ -2444,6 +2720,7 @@ public sealed class MainWindow : Window
         RefreshReadingOrderPlan();
         if (IsAltTextPaneVisible)
             ShowAltTextPane();
+        RefreshVisibleAnimationPane();
     }
 
     // ── Status ─────────────────────────────────────────────────────────────────
