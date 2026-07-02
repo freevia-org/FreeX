@@ -19,6 +19,18 @@ public sealed class VisualEvidencePageLayoutShotSourceTests
         source.Should().Contain("page-composition-columns");
         source.Should().Contain("page-composition-border-watermark");
         source.Should().Contain("page-composition-floating-image");
+        source.Should().Contain("f2-footnotes");
+        source.Should().Contain("VisualEvidenceOutputPath(outDir, \"f2-footnotes\", 1)");
+        source.Should().Contain("VisualEvidenceOutputPath(outDir, \"f2-footnotes\", 2)");
+        source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildFootnotePlacementDocument");
+        source.Should().Contain("hasFootnotes: true");
+        source.Should().Contain("f2-endnotes");
+        source.Should().Contain("VisualEvidenceOutputPath(outDir, \"f2-endnotes\", 1)");
+        source.Should().Contain("VisualEvidenceOutputPath(outDir, \"f2-endnotes\", 2)");
+        source.Should().Contain("VisualEvidenceOutputPath(outDir, \"f2-endnotes\", 3)");
+        source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildEndnotePlacementDocument");
+        source.Should().Contain("hasEndnotes: true");
+        source.Should().Contain("isSyntheticPage: true");
         source.Should().Contain("table-layout-complex");
         source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildComplexTableLayoutDocument");
         source.Should().Contain("drawing-objects-complex");

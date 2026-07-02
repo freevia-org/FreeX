@@ -68,6 +68,11 @@ static int RenderAll(string outDir)
     var floatPath = Path.GetFullPath(Path.Combine(outDir, "freew_floating_image.png"));
     var columnsPath = Path.GetFullPath(Path.Combine(outDir, "freew_columns_layout.png"));
     var borderWatermarkPath = Path.GetFullPath(Path.Combine(outDir, "freew_border_watermark.png"));
+    var footnotesP1Path = VisualEvidenceOutputPath(outDir, "f2-footnotes", 1);
+    var footnotesP2Path = VisualEvidenceOutputPath(outDir, "f2-footnotes", 2);
+    var endnotesP1Path = VisualEvidenceOutputPath(outDir, "f2-endnotes", 1);
+    var endnotesP2Path = VisualEvidenceOutputPath(outDir, "f2-endnotes", 2);
+    var endnotesP3Path = VisualEvidenceOutputPath(outDir, "f2-endnotes", 3);
     var tableLayoutPath = VisualEvidenceOutputPath(outDir, "table-layout-complex", 1);
     var drawingObjectsPath = VisualEvidenceOutputPath(outDir, "drawing-objects-complex", 1);
     var chartSmartArtPath = VisualEvidenceOutputPath(outDir, "chart-smartart-complex", 1);
@@ -112,6 +117,63 @@ static int RenderAll(string outDir)
         scenarioId: "page-composition-border-watermark",
         evidence: evidence,
         documentFactory: BuildBorderWatermarkDocument);
+    if (rc != 0) return rc;
+
+    rc = RenderMode(DocumentViewMode.PrintLayout, footnotesP1Path,
+        width: 960, height: 1200,
+        label: "F2 Footnotes p1",
+        scenarioId: "f2-footnotes",
+        evidence: evidence,
+        documentFactory: FreeWVisualEvidenceDocumentFactory.BuildFootnotePlacementDocument,
+        pageNumber: 1,
+        pageCount: 2,
+        hasFootnotes: true);
+    if (rc != 0) return rc;
+
+    rc = RenderMode(DocumentViewMode.PrintLayout, footnotesP2Path,
+        width: 960, height: 1200,
+        label: "F2 Footnotes p2",
+        scenarioId: "f2-footnotes",
+        evidence: evidence,
+        documentFactory: FreeWVisualEvidenceDocumentFactory.BuildFootnotePlacementDocument,
+        pageNumber: 2,
+        pageCount: 2,
+        viewportOffsetY: 1100,
+        hasFootnotes: true);
+    if (rc != 0) return rc;
+
+    rc = RenderMode(DocumentViewMode.PrintLayout, endnotesP1Path,
+        width: 960, height: 1200,
+        label: "F2 Endnotes p1",
+        scenarioId: "f2-endnotes",
+        evidence: evidence,
+        documentFactory: FreeWVisualEvidenceDocumentFactory.BuildEndnotePlacementDocument,
+        pageNumber: 1,
+        pageCount: 3);
+    if (rc != 0) return rc;
+
+    rc = RenderMode(DocumentViewMode.PrintLayout, endnotesP2Path,
+        width: 960, height: 1200,
+        label: "F2 Endnotes p2",
+        scenarioId: "f2-endnotes",
+        evidence: evidence,
+        documentFactory: FreeWVisualEvidenceDocumentFactory.BuildEndnotePlacementDocument,
+        pageNumber: 2,
+        pageCount: 3,
+        viewportOffsetY: 1100);
+    if (rc != 0) return rc;
+
+    rc = RenderMode(DocumentViewMode.PrintLayout, endnotesP3Path,
+        width: 960, height: 1200,
+        label: "F2 Endnotes p3",
+        scenarioId: "f2-endnotes",
+        evidence: evidence,
+        documentFactory: FreeWVisualEvidenceDocumentFactory.BuildEndnotePlacementDocument,
+        pageNumber: 3,
+        pageCount: 3,
+        viewportOffsetY: 2200,
+        hasEndnotes: true,
+        isSyntheticPage: true);
     if (rc != 0) return rc;
 
     rc = RenderMode(DocumentViewMode.PrintLayout, tableLayoutPath,
@@ -416,7 +478,10 @@ static int RenderMode(
     Func<TextDocument>? documentFactory = null,
     int pageNumber = 1,
     int pageCount = 1,
-    double viewportOffsetY = 0)
+    double viewportOffsetY = 0,
+    bool hasFootnotes = false,
+    bool hasEndnotes = false,
+    bool isSyntheticPage = false)
 {
     var doc = documentFactory?.Invoke() ?? BuildMultiPageDocument();
     var view = new DocumentView();
@@ -474,6 +539,9 @@ static int RenderMode(
             viewMode: mode.ToString(),
             pageNumber: pageNumber,
             pageCount: pageCount,
+            hasFootnotes: hasFootnotes,
+            hasEndnotes: hasEndnotes,
+            isSyntheticPage: isSyntheticPage,
             document: doc);
         Console.WriteLine($"[PageLayoutShot] {label}: {bytes.Length:N0} bytes → {outPath}");
         return 0;
@@ -503,6 +571,9 @@ static int RenderMode(
             viewMode: mode.ToString(),
             pageNumber: pageNumber,
             pageCount: pageCount,
+            hasFootnotes: hasFootnotes,
+            hasEndnotes: hasEndnotes,
+            isSyntheticPage: isSyntheticPage,
             document: doc);
         Console.WriteLine($"[PageLayoutShot] {label} (Skia fallback): {pngBytes.Length:N0} bytes → {outPath}");
         return 0;
@@ -543,6 +614,9 @@ static void AddAvaloniaEvidence(
     string viewMode,
     int pageNumber = 1,
     int pageCount = 1,
+    bool hasFootnotes = false,
+    bool hasEndnotes = false,
+    bool isSyntheticPage = false,
     TextDocument? document = null)
 {
     var stats = ComputePngPixelStats(pngBytes, pixelWidth, pixelHeight);
@@ -560,6 +634,9 @@ static void AddAvaloniaEvidence(
         pageCount: pageCount,
         layoutKind: layoutKind,
         availableWidthDip: pixelWidth,
+        hasFootnotes: hasFootnotes,
+        hasEndnotes: hasEndnotes,
+        isSyntheticPage: isSyntheticPage,
         sectionOrdinal: sectionOrdinal,
         sectionRelativePageNumber: 1,
         sectionOwnerId: FreeWVisualEvidencePlanner.BuildSectionOwnerId(sectionOrdinal),

@@ -54,6 +54,12 @@ public sealed class VisualEvidencePlannerTests
         var columnsScenario = FreeWVisualEvidencePlanner.ResolveScenario("f2-columns");
         columnsScenario.Composition.ExpectsColumns.Should().BeTrue();
 
+        var footnoteScenario = FreeWVisualEvidencePlanner.ResolveScenario("f2-footnotes");
+        footnoteScenario.Composition.ExpectsFootnotes.Should().BeTrue();
+
+        var endnoteScenario = FreeWVisualEvidencePlanner.ResolveScenario("f2-endnotes");
+        endnoteScenario.Composition.ExpectsEndnotes.Should().BeTrue();
+
         var borderScenario = FreeWVisualEvidencePlanner.ResolveScenario("f2-border-watermark");
         borderScenario.Composition.ExpectsPageBorder.Should().BeTrue();
         borderScenario.Composition.ExpectsWatermark.Should().BeTrue();
@@ -75,6 +81,57 @@ public sealed class VisualEvidencePlannerTests
     }
 
     [Fact]
+    public void SharedNotePlacementFactories_BuildF2NoteContracts()
+    {
+        var footnotes = FreeWVisualEvidenceDocumentFactory.BuildFootnotePlacementDocument();
+        var endnotes = FreeWVisualEvidenceDocumentFactory.BuildEndnotePlacementDocument();
+
+        footnotes.Footnotes.Keys.Should().BeEquivalentTo([1, 2]);
+        footnotes.Endnotes.Should().BeEmpty();
+        footnotes.Blocks
+            .OfType<Paragraph>()
+            .SelectMany(p => p.Runs)
+            .Where(r => r.FootnoteId is not null)
+            .Select(r => r.FootnoteId!.Value)
+            .Should().ContainInOrder(1, 2);
+
+        endnotes.Endnotes.Keys.Should().BeEquivalentTo([1, 2]);
+        endnotes.Footnotes.Should().BeEmpty();
+        endnotes.Blocks
+            .OfType<Paragraph>()
+            .SelectMany(p => p.Runs)
+            .Where(r => r.EndnoteId is not null)
+            .Select(r => r.EndnoteId!.Value)
+            .Should().ContainInOrder(1, 2);
+
+        var footnoteExpectation = FreeWVisualEvidencePlanner.BuildPageExpectation(
+            "f2-footnotes",
+            footnotes.Page,
+            pageNumber: 1,
+            pageCount: 2,
+            outputName: "f2-footnotes_p1.png",
+            hasFootnotes: true,
+            document: footnotes);
+        footnoteExpectation.ExpectedOutputName.Should().Be("f2-footnotes_p1.png");
+        footnoteExpectation.HasFootnotes.Should().BeTrue();
+        footnoteExpectation.Composition.ExpectsFootnotes.Should().BeTrue();
+
+        var endnoteExpectation = FreeWVisualEvidencePlanner.BuildPageExpectation(
+            "f2-endnotes",
+            endnotes.Page,
+            pageNumber: 3,
+            pageCount: 3,
+            outputName: "f2-endnotes_p3.png",
+            hasEndnotes: true,
+            isSyntheticPage: true,
+            document: endnotes);
+        endnoteExpectation.ExpectedOutputName.Should().Be("f2-endnotes_p3.png");
+        endnoteExpectation.HasEndnotes.Should().BeTrue();
+        endnoteExpectation.IsSyntheticPage.Should().BeTrue();
+        endnoteExpectation.Composition.ExpectsEndnotes.Should().BeTrue();
+    }
+
+    [Fact]
     public void DefaultExpectedScenarios_RequiresPairedBackstageRendererEvidence()
     {
         var expected = FreeWVisualEvidenceManifestNormalizer.DefaultExpectedScenarios;
@@ -89,6 +146,24 @@ public sealed class VisualEvidencePlannerTests
                 e.HostId == FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId &&
                 e.ScenarioId == scenarioId &&
                 e.MinimumExpectedOutputs == 2);
+        }
+    }
+
+    [Fact]
+    public void DefaultExpectedScenarios_RequiresPairedNoteRendererEvidence()
+    {
+        var expected = FreeWVisualEvidenceManifestNormalizer.DefaultExpectedScenarios;
+
+        foreach (var scenarioId in FreeWVisualEvidenceManifestNormalizer.NoteRendererScenarioIds)
+        {
+            expected.Should().Contain(e =>
+                e.HostId == FreeWVisualEvidenceManifestNormalizer.WpfHostId &&
+                e.ScenarioId == scenarioId &&
+                e.MinimumExpectedOutputs == FreeWVisualEvidencePlanner.ResolveScenario(scenarioId).MinimumExpectedOutputs);
+            expected.Should().Contain(e =>
+                e.HostId == FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId &&
+                e.ScenarioId == scenarioId &&
+                e.MinimumExpectedOutputs == FreeWVisualEvidencePlanner.ResolveScenario(scenarioId).MinimumExpectedOutputs);
         }
     }
 
@@ -1050,6 +1125,8 @@ public sealed class VisualEvidencePlannerTests
     private static TextDocument? DocumentForScenario(string scenarioId) =>
         FreeWVisualEvidencePlanner.NormalizeScenarioId(scenarioId) switch
         {
+            "f2-footnotes" => FreeWVisualEvidenceDocumentFactory.BuildFootnotePlacementDocument(),
+            "f2-endnotes" => FreeWVisualEvidenceDocumentFactory.BuildEndnotePlacementDocument(),
             "table-layout-complex" => FreeWVisualEvidenceDocumentFactory.BuildComplexTableLayoutDocument(),
             "drawing-objects-complex" => FreeWVisualEvidenceDocumentFactory.BuildDrawingObjectsCompositionDocument(),
             "chart-smartart-complex" => FreeWVisualEvidenceDocumentFactory.BuildChartSmartArtCompositionDocument(),
