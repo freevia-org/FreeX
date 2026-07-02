@@ -273,6 +273,8 @@ public sealed class MainWindow : Window
             onReviewAltText: () => ShowAltTextPane(),
             onReviewReadingOrder: () => ShowReadingOrderPane(),
             onReviewProofing: () => RefreshProofingRequestPlan(),
+            onAddComment: () => AddComment("New comment"),
+            onEditComment: () => EditSelectedComment(GetSelectedCommentText()),
             onDeleteComment: () => DeleteSelectedComment(),
             onResolveComment: () => ResolveSelectedComment(),
             onReopenComment: () => ReopenSelectedComment(),
@@ -842,6 +844,7 @@ public sealed class MainWindow : Window
 
         // ── List pane ──────────────────────────────────────────────────────────
         _commentListPanel.Children.Clear();
+        AddCommentInput(_commentListPanel);
         if (comments.Count > 0)
         {
             foreach (var cm in comments)
@@ -893,6 +896,7 @@ public sealed class MainWindow : Window
                 var card = new StackPanel();
                 card.Children.Add(headerPanel);
                 card.Children.Add(bodyText);
+                AddEditCommentInput(card, cm);
                 AddReplyRows(card, cm);
                 AddReplyInput(card, cm);
 
@@ -915,6 +919,58 @@ public sealed class MainWindow : Window
         {
             _commentListHost.Visibility = Visibility.Collapsed;
         }
+    }
+
+    private void AddCommentInput(Panel host)
+    {
+        var input = new TextBox
+        {
+            MinWidth = 220,
+            Margin = new Thickness(0, 0, 6, 0)
+        };
+        var button = new Button
+        {
+            Content = "New Comment",
+            MinWidth = 96
+        };
+        button.Click += (_, _) => AddComment(input.Text);
+
+        var row = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Margin = new Thickness(0, 0, 0, 8)
+        };
+        row.Children.Add(input);
+        row.Children.Add(button);
+        host.Children.Add(row);
+    }
+
+    private void AddEditCommentInput(StackPanel card, PresentationCommentDescriptor cm)
+    {
+        if (!cm.IsSelected || !cm.CanEdit)
+            return;
+
+        var input = new TextBox
+        {
+            Text = GetCommentText(cm.CommentIndex) ?? cm.TextPreview,
+            MinWidth = 220,
+            Margin = new Thickness(16, 0, 6, 6)
+        };
+        var button = new Button
+        {
+            Content = "Save",
+            MinWidth = 72,
+            Margin = new Thickness(0, 0, 6, 6)
+        };
+        button.Click += (_, _) => EditSelectedComment(input.Text);
+
+        var row = new StackPanel
+        {
+            Orientation = Orientation.Horizontal
+        };
+        row.Children.Add(input);
+        row.Children.Add(button);
+        card.Children.Add(row);
     }
 
     private void AddReplyRows(StackPanel card, PresentationCommentDescriptor cm)
@@ -1072,6 +1128,36 @@ public sealed class MainWindow : Window
             null,
             null);
 
+    internal PresentationCommentMutationPlan AddComment(
+        string? text,
+        DateTime? timestamp = null,
+        string? author = null,
+        string? initials = null,
+        long xemu = 0,
+        long yemu = 0)
+        => ApplySelectedCommentMutation(
+            PresentationReviewWorkflowIntentKind.AddComment,
+            null,
+            null,
+            addText: text,
+            addTimestamp: timestamp,
+            addAuthor: author,
+            addInitials: initials,
+            addXemu: xemu,
+            addYemu: yemu);
+
+    internal PresentationCommentMutationPlan EditSelectedComment(
+        string? text,
+        string? author = null,
+        string? initials = null)
+        => ApplySelectedCommentMutation(
+            PresentationReviewWorkflowIntentKind.EditComment,
+            null,
+            null,
+            editText: text,
+            editAuthor: author,
+            editInitials: initials);
+
     internal PresentationCommentMutationPlan ResolveSelectedComment(
         DateTime? resolvedAt = null,
         string? resolvedBy = null)
@@ -1107,12 +1193,39 @@ public sealed class MainWindow : Window
         string? replyText = null,
         DateTime? replyTimestamp = null,
         string? replyAuthor = null,
-        string? replyInitials = null)
+        string? replyInitials = null,
+        string? addText = null,
+        DateTime? addTimestamp = null,
+        string? addAuthor = null,
+        string? addInitials = null,
+        long addXemu = 0,
+        long addYemu = 0,
+        string? editText = null,
+        string? editAuthor = null,
+        string? editInitials = null)
     {
         var selected = _selectedCommentIndex;
-        var plan = selected is { } selectedIndex
+        var plan = intent == PresentationReviewWorkflowIntentKind.AddComment
+            ? PresentationReviewWorkflowPlanner.BuildAddCommentPlan(
+                _presentation.Slides,
+                Editor.CurrentSlideIndex,
+                addText,
+                addAuthor ?? "FreeP User",
+                addInitials,
+                addXemu,
+                addYemu,
+                addTimestamp ?? DateTime.UtcNow)
+            : selected is { } selectedIndex
             ? intent switch
             {
+                PresentationReviewWorkflowIntentKind.EditComment =>
+                    PresentationReviewWorkflowPlanner.BuildEditCommentPlan(
+                        _presentation.Slides,
+                        Editor.CurrentSlideIndex,
+                        selectedIndex,
+                        editText,
+                        editAuthor,
+                        editInitials),
                 PresentationReviewWorkflowIntentKind.DeleteComment =>
                     PresentationReviewWorkflowPlanner.BuildDeleteCommentPlan(
                         _presentation.Slides,
@@ -1168,6 +1281,17 @@ public sealed class MainWindow : Window
         }
 
         return plan;
+    }
+
+    private string? GetSelectedCommentText()
+        => _selectedCommentIndex is { } index ? GetCommentText(index) : null;
+
+    private string? GetCommentText(int commentIndex)
+    {
+        var comments = Editor.CurrentSlide?.Comments;
+        return comments is not null && commentIndex >= 0 && commentIndex < comments.Count
+            ? comments[commentIndex].Text
+            : null;
     }
 
     private void RefreshAccessibilitySummaryPlan()
