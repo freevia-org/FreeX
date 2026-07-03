@@ -38,6 +38,11 @@ public sealed record BackstagePrintEvidenceRequirement(
     string ScenarioId,
     int MinimumExpectedOutputs);
 
+public sealed record BackstagePrintEvidenceReadiness(
+    BackstagePrintEvidenceStatus Status,
+    string Description,
+    IReadOnlyList<string> Failures);
+
 public enum BackstagePrintEvidenceKind
 {
     PrintPreviewFidelity,
@@ -117,11 +122,18 @@ public static class BackstagePrintPanePlanner
     public static BackstagePrintPanePlan Build(
         string displayName,
         PageSettings page,
-        BackstageDirectPrintCapability? directPrintCapability = null)
+        BackstageDirectPrintCapability? directPrintCapability = null,
+        FreeWVisualEvidenceNormalizedSummary? visualEvidenceSummary = null)
     {
         ArgumentNullException.ThrowIfNull(page);
 
         var directPrint = directPrintCapability ?? BackstageDirectPrintCapability.Deferred();
+        var printPreviewReadiness = BuildEvidenceReadiness(
+            BackstagePrintEvidenceKind.PrintPreviewFidelity,
+            visualEvidenceSummary);
+        var pdfExportReadiness = BuildEvidenceReadiness(
+            BackstagePrintEvidenceKind.PdfExportFidelity,
+            visualEvidenceSummary);
 
         return new BackstagePrintPanePlan(
             "Print this document using the current page layout and printer settings.",
@@ -147,14 +159,14 @@ public static class BackstagePrintPanePlanner
             [
                 new(
                     BackstagePrintEvidenceKind.PrintPreviewFidelity,
-                    BackstagePrintEvidenceStatus.FixtureReady,
-                    "Print Preview uses the paginated print-layout renderer; retained evidence must satisfy the host/scenario rows required by the visual summary contract.",
+                    printPreviewReadiness.Status,
+                    printPreviewReadiness.Description,
                     PrintPreviewFixtureScenarioIds,
                     BuildEvidenceRequirements(BackstagePrintEvidenceKind.PrintPreviewFidelity)),
                 new(
                     BackstagePrintEvidenceKind.PdfExportFidelity,
-                    BackstagePrintEvidenceStatus.FixtureReady,
-                    "PDF export evidence is anchored by rasterized fixed-layout output scenarios; retained evidence must satisfy the host/scenario rows required by the visual summary contract.",
+                    pdfExportReadiness.Status,
+                    pdfExportReadiness.Description,
                     PdfExportFixtureScenarioIds,
                     BuildEvidenceRequirements(BackstagePrintEvidenceKind.PdfExportFidelity)),
                 new(
@@ -164,6 +176,84 @@ public static class BackstagePrintPanePlanner
                     [],
                     []),
             ]);
+    }
+
+    public static BackstagePrintEvidenceReadiness BuildEvidenceReadiness(
+        BackstagePrintEvidenceKind kind,
+        FreeWVisualEvidenceNormalizedSummary? visualEvidenceSummary)
+    {
+        var fixtureDescription = kind switch
+        {
+            BackstagePrintEvidenceKind.PrintPreviewFidelity =>
+                "Print Preview uses the paginated print-layout renderer; retained evidence must satisfy the host/scenario rows required by the visual summary contract.",
+            BackstagePrintEvidenceKind.PdfExportFidelity =>
+                "PDF export evidence is anchored by rasterized fixed-layout output scenarios; retained evidence must satisfy the host/scenario rows required by the visual summary contract.",
+            _ => "No visual evidence readiness contract is required for this print action."
+        };
+
+        var requirements = BuildEvidenceRequirements(kind);
+        if (requirements.Count == 0)
+        {
+            return new BackstagePrintEvidenceReadiness(
+                BackstagePrintEvidenceStatus.Deferred,
+                fixtureDescription,
+                []);
+        }
+
+        if (visualEvidenceSummary is null)
+        {
+            return new BackstagePrintEvidenceReadiness(
+                BackstagePrintEvidenceStatus.FixtureReady,
+                fixtureDescription,
+                []);
+        }
+
+        var failures = new List<string>();
+        foreach (var requirement in requirements)
+        {
+            var scenario = visualEvidenceSummary.Scenarios.SingleOrDefault(candidate =>
+                string.Equals(candidate.HostId, requirement.HostId, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(candidate.ScenarioId, requirement.ScenarioId, StringComparison.OrdinalIgnoreCase));
+
+            if (scenario is null)
+            {
+                failures.Add(
+                    $"{requirement.HostId}/{requirement.ScenarioId}: missing normalized scenario row");
+                continue;
+            }
+
+            if (scenario.TrustedOutputs < requirement.MinimumExpectedOutputs)
+            {
+                failures.Add(
+                    $"{requirement.HostId}/{requirement.ScenarioId}: expected at least {requirement.MinimumExpectedOutputs.ToString(CultureInfo.InvariantCulture)} trusted output(s), found {scenario.TrustedOutputs.ToString(CultureInfo.InvariantCulture)}");
+            }
+
+            failures.AddRange(scenario.Trust.Failures.Select(failure =>
+                $"{requirement.HostId}/{requirement.ScenarioId}: {failure}"));
+        }
+
+        var scenarioIds = requirements
+            .Select(requirement => requirement.ScenarioId)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        failures.AddRange(visualEvidenceSummary.Trust.Failures
+            .Where(failure => scenarioIds.Any(scenarioId =>
+                failure.Contains(scenarioId, StringComparison.OrdinalIgnoreCase)))
+            .Select(failure => "summary: " + failure));
+
+        if (failures.Count == 0)
+        {
+            return new BackstagePrintEvidenceReadiness(
+                BackstagePrintEvidenceStatus.HostBacked,
+                "Real WPF and Avalonia captures satisfy the visual summary contract for " +
+                string.Join(", ", scenarioIds) + ".",
+                []);
+        }
+
+        return new BackstagePrintEvidenceReadiness(
+            BackstagePrintEvidenceStatus.Deferred,
+            "Real WPF/Avalonia captures are not ready: " + string.Join("; ", failures.Distinct(StringComparer.OrdinalIgnoreCase)),
+            failures.Distinct(StringComparer.OrdinalIgnoreCase).ToArray());
     }
 
     public static IReadOnlyList<BackstagePrintEvidenceRequirement> BuildEvidenceRequirements(
