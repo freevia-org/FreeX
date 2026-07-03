@@ -6540,10 +6540,19 @@ internal static class FreeWRibbonCommands
             var mergeState = new MergeState();
             var owner = Window.GetWindow(editor);
             CollectFillInAndAskAnswers(template, mergeState, owner);
+            var finishPlan = MailMergeFinishPlanner.PlanNewDocumentAllRecords(data.Count);
+            if (!finishPlan.Success)
+            {
+                DialogMessageHelper.ShowInfo(
+                    Window.GetWindow(editor),
+                    "Select recipients first (Mailings > Select Recipients), then Finish & Merge.",
+                    "Mail Merge");
+                return;
+            }
 
             // Augment every row with the composed «AddressBlock» and «GreetingLine» values so composite
             // placeholders in the template resolve correctly across every record.
-            var augmentedRows = data.Rows.Select(r => session.AugmentRow(r)).ToList();
+            var augmentedRows = finishPlan.RowIndexes.Select(index => session.AugmentRow(data.Rows[index])).ToList();
             var augmentedData = new MergeData(data.Header,
                 augmentedRows.Select(r =>
                     (IReadOnlyList<string>)data.Header.Select(h => r.TryGetValue(h, out var v) ? v : string.Empty).ToList())
