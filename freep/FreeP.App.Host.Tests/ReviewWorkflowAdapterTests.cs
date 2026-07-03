@@ -62,6 +62,11 @@ public sealed class ReviewWorkflowAdapterTests
             window.LastCommentPanePlan!.TotalCommentCount.Should().Be(1);
             window.LastCommentPanePlan.Comments.Single().Should().Match<PresentationCommentDescriptor>(comment =>
                 comment.ThreadStatus == PresentationCommentThreadStatus.Resolved &&
+                comment.ThreadStatusLabel == "Resolved" &&
+                comment.ThreadStatusSummary == "Resolved by Reviewer" &&
+                comment.ResolvedByDisplayName == "Reviewer" &&
+                comment.InitialsBadgeText == "RV" &&
+                comment.AuthorIdentityKey == "REVIEWER|RV" &&
                 comment.IsSelected &&
                 !comment.CanResolve &&
                 comment.CanReopen &&
@@ -484,9 +489,18 @@ public sealed class ReviewWorkflowAdapterTests
             window.LastCommentPanePlan!.Comments.Single().Should().Match<PresentationCommentDescriptor>(comment =>
                 comment.ReplyCount == 1 &&
                 comment.MentionCount == 1 &&
+                comment.ReplySummary == "1 reply" &&
+                comment.MentionSummary == "1 mention" &&
+                comment.ThreadStatusSummary == "Open - 1 reply" &&
                 comment.CanReply);
             window.LastCommentPanePlan.Comments.Single().Replies.Single().TextPreview
                 .Should().Be("@Reviewer fixed in the deck.");
+            window.LastCommentPanePlan.Comments.Single().Replies.Single().Should().Match<PresentationCommentReplyDescriptor>(reply =>
+                reply.AuthorDisplayName == "FreeP User" &&
+                reply.InitialsBadgeText == "FU" &&
+                reply.AuthorIdentityKey == "FREEP USER|FU" &&
+                reply.ReplyLabel == "Reply 1" &&
+                reply.MentionSummary == "1 mention");
         }
         finally
         {
@@ -1101,6 +1115,10 @@ public sealed class ReviewWorkflowAdapterTests
         source.Should().Contain("PresentationReviewWorkflowPlanner.BuildProofingExecutionPlan(_presentation)");
         source.Should().Contain("PresentationReviewWorkflowPlanner.BuildProofingRequestPlan(_presentation)");
         source.Should().Contain("LastCommentPanePlan = plan;");
+        source.Should().Contain("cm.AuthorDisplayName");
+        source.Should().Contain("cm.InitialsBadgeText");
+        source.Should().Contain("cm.ThreadStatusLabel");
+        source.Should().Contain("reply.AuthorDisplayName");
         source.Should().Contain("onLayoutPicker:     () => OpenLayoutPicker()");
         source.Should().Contain("PresentationDesignCommandPlanner.BuildLayoutPickerPlan(");
         source.Should().Contain("PresentationDesignCommandPlanner.TryApplyLayoutChoice(");
