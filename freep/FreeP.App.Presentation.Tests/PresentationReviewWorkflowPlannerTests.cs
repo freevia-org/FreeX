@@ -1389,6 +1389,55 @@ public sealed class PresentationReviewWorkflowPlannerTests
     }
 
     [Fact]
+    public void TryApplyReadingOrderSelection_SelectsTopLevelAndNestedPaneItems()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Shapes.Clear();
+        slide.Shapes.Add(new SlideShape { Id = 1, Name = "Title" });
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 2,
+            Name = "Group",
+            Kind = SlideShapeKind.Group,
+            Children =
+            {
+                new SlideShape { Id = 3, Name = "Nested child" },
+                new SlideShape { Id = 4, Name = "Nested sibling" }
+            }
+        });
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+
+        var nested = PresentationReviewWorkflowPlanner.TryApplyReadingOrderSelection(editor, 4);
+        var topLevel = PresentationReviewWorkflowPlanner.TryApplyReadingOrderSelection(editor, 1);
+        var missing = PresentationReviewWorkflowPlanner.TryApplyReadingOrderSelection(editor, 99);
+
+        nested.Should().Be(new PresentationReadingOrderSelectionPlan(
+            PresentationReviewWorkflowIntentKind.SelectReadingOrderItem,
+            true,
+            0,
+            4,
+            3,
+            null));
+        topLevel.Should().Be(new PresentationReadingOrderSelectionPlan(
+            PresentationReviewWorkflowIntentKind.SelectReadingOrderItem,
+            true,
+            0,
+            1,
+            0,
+            null));
+        editor.SelectedShapeIds.Should().Equal(1u);
+        missing.Should().Be(new PresentationReadingOrderSelectionPlan(
+            PresentationReviewWorkflowIntentKind.SelectReadingOrderItem,
+            false,
+            0,
+            99,
+            -1,
+            PresentationReviewWorkflowPlanner.ReadingOrderItemNotFoundMessage));
+        editor.SelectedShapeIds.Should().Equal(1u);
+    }
+
+    [Fact]
     public void BuildProofingRequestPlan_CountsEditableTextAndReadOnlyComments()
     {
         var presentation = Presentation.CreateEmpty();

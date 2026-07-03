@@ -1608,8 +1608,11 @@ public sealed class MainWindowHeadlessTests
         var proofingPaneCorrectionEnabled = false;
         var proofingPaneHeading = string.Empty;
         PresentationReadingOrderMutationPlan? readingOrderMove = null;
+        PresentationReadingOrderSelectionPlan? readingOrderSelection = null;
         uint[] readingOrderShapeOrderAfterMove = [];
         uint[] readingOrderPaneOrderAfterMove = [];
+        uint[] readingOrderSelectionAfterPaneSelect = [];
+        string readingOrderPaneMessageAfterSelect = string.Empty;
 
         var ran = await OnUiThread(() =>
         {
@@ -1693,6 +1696,9 @@ public sealed class MainWindowHeadlessTests
             readingOrderPaneOrderAfterMove = window.LastReadingOrderPlan!.Items
                 .Select(item => item.ShapeId)
                 .ToArray();
+            readingOrderSelection = window.ApplyReadingOrderSelectItem(caption.Id);
+            readingOrderSelectionAfterPaneSelect = window.Editor.SelectedShapeIds.ToArray();
+            readingOrderPaneMessageAfterSelect = window.ReadingOrderPaneMessage;
             proofingPlan = window.LastProofingRequestPlan;
             proofingExecutionPlan = window.LastProofingExecutionPlan;
             proofingPanePlan = window.LastProofingPanePlan;
@@ -1784,6 +1790,15 @@ public sealed class MainWindowHeadlessTests
             null));
         readingOrderShapeOrderAfterMove.Should().Equal(329u, 328u);
         readingOrderPaneOrderAfterMove.Should().Equal(329u, 328u);
+        readingOrderSelection.Should().Be(new PresentationReadingOrderSelectionPlan(
+            PresentationReviewWorkflowIntentKind.SelectReadingOrderItem,
+            true,
+            0,
+            329,
+            0,
+            null));
+        readingOrderSelectionAfterPaneSelect.Should().Equal(329u);
+        readingOrderPaneMessageAfterSelect.Should().Be("Selected: Caption");
         proofingPlan.Should().NotBeNull();
         proofingPlan!.Status.Should().Be(PresentationWorkflowCapabilityStatus.Available);
         proofingExecutionPlan.Should().NotBeNull();

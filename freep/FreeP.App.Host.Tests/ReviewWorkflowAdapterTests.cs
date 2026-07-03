@@ -789,6 +789,22 @@ public sealed class ReviewWorkflowAdapterTests
             window.IsReadingOrderMoveLaterEnabled.Should().BeFalse();
             window.ReadingOrderMoveLaterDisabledReason.Should()
                 .Be(PresentationReviewWorkflowPlanner.ReadingOrderAlreadyLatestMessage);
+
+            var selection = window.ApplyReadingOrderSelectItem(504);
+
+            selection.Should().Be(new PresentationReadingOrderSelectionPlan(
+                PresentationReviewWorkflowIntentKind.SelectReadingOrderItem,
+                true,
+                0,
+                504,
+                1,
+                null));
+            window.Editor.SelectedShapeIds.Should().Equal(504u);
+            window.LastReadingOrderPlan!.SelectedItem.Should().NotBeNull();
+            window.LastReadingOrderPlan.SelectedItem!.ShapeId.Should().Be(504);
+            window.ReadingOrderPaneMessage.Should().Be("Selected: Grouped label");
+            window.IsReadingOrderMoveEarlierEnabled.Should().BeFalse();
+            window.IsReadingOrderMoveLaterEnabled.Should().BeTrue();
         }
         finally
         {
