@@ -738,7 +738,8 @@ public sealed class ChartRenderPlannerTests
             LineStyle = new ChartLineStyle
             {
                 Color = new ThemeAwareColor(new SrgbColor(0x11, 0x22, 0x33)),
-                WidthPt = 2.25
+                WidthPt = 2.25,
+                Dash = OutlineDash.DashDot
             },
             MarkerStyle = new ChartMarkerStyle
             {
@@ -770,7 +771,7 @@ public sealed class ChartRenderPlannerTests
             new ChartPlanRect(0, 0, 100, 100),
             withMarkers: true).Single();
 
-        primitive.Stroke.Should().Be(new ChartStrokePlan(new SrgbColor(0x11, 0x22, 0x33), Alpha: 255, Thickness: 3.0));
+        primitive.Stroke.Should().Be(new ChartStrokePlan(new SrgbColor(0x11, 0x22, 0x33), Alpha: 255, Thickness: 3.0, Dash: OutlineDash.DashDot));
         primitive.LineSegments[0].Stroke.Should().Be(primitive.Stroke);
         primitive.MarkerRadius.Should().BeApproximately(6.0, 0.0001);
         primitive.MarkerFill.Should().Be(new ChartFillPlan(new SrgbColor(0xAA, 0xBB, 0xCC), Alpha: 255));

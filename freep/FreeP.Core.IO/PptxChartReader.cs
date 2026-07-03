@@ -713,11 +713,28 @@ internal static class PptxChartReader
         if (solidFill is not null)
             style.Color = PptxColorReader.TryReadColor(solidFill, scheme);
 
+        style.Dash = ReadLineDash(lnEl.Element(A + "prstDash")?.Attribute("val")?.Value);
+
         if (long.TryParse(lnEl.Attribute("w")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var widthEmu) && widthEmu > 0)
             style.WidthPt = DrawingMlUnits.EmuToPoints(widthEmu);
 
         return style;
     }
+
+    private static OutlineDash ReadLineDash(string? value) =>
+        value?.ToLowerInvariant() switch
+        {
+            "dash" => OutlineDash.Dash,
+            "dot" => OutlineDash.Dot,
+            "dashdot" => OutlineDash.DashDot,
+            "lgdash" => OutlineDash.LongDash,
+            "lgdashdot" => OutlineDash.LongDashDot,
+            "lgdashdotdot" => OutlineDash.LongDashDotDot,
+            "sysdash" => OutlineDash.SystemDash,
+            "sysdot" => OutlineDash.SystemDot,
+            "sysdashdot" => OutlineDash.SystemDashDot,
+            _ => OutlineDash.Solid
+        };
 
     private static ChartMarkerStyle? ReadMarkerStyle(XElement? markerEl, PresentationColorScheme scheme)
     {

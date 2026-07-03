@@ -810,6 +810,9 @@ internal static class PptxChartWriter
         else if (style.Color is not null)
             line.Add(new XElement(A + "solidFill", BuildColorEl(style.Color)));
 
+        if (style.Dash != OutlineDash.Solid)
+            line.Add(new XElement(A + "prstDash", new XAttribute("val", ToDashStr(style.Dash))));
+
         return line;
     }
 
