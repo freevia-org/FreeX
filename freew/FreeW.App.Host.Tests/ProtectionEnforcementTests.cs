@@ -1,4 +1,5 @@
 using FreeW.App.Host.Editing;
+using FreeW.App.Presentation.DocumentView;
 using FreeW.Core.Model;
 using Xunit;
 
@@ -20,6 +21,25 @@ public sealed class ProtectionEnforcementTests
         view.LoadModel(doc);
         return view;
     }
+
+    private static DocumentView LoadWithComment()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("Body") { CommentId = 0 });
+        paragraph.Runs.Add(Run.CommentReference(0));
+        doc.Blocks.Add(paragraph);
+        doc.Comments[0] = new Comment(0, "note", "A", "A");
+
+        var view = new DocumentView();
+        view.LoadModel(doc);
+        view.CaretPosition = view.Document.Blocks.FirstBlock!.ContentStart;
+        return view;
+    }
+
+    private static string PlainText(DocumentView view) =>
+        view.Model.Paragraphs.First().PlainText;
 
     [StaFact]
     public void NoChangesProtection_MakesEditorReadOnly_AndStopRestoresEditing()
@@ -49,18 +69,73 @@ public sealed class ProtectionEnforcementTests
         // Tracked-changes protection keeps the surface editable but forces tracking on.
         view.IsReadOnly.Should().BeFalse();
         view.TrackChangesEnabled.Should().BeTrue();
+        view.GetRestrictEditingDecision(RestrictEditingOperationKind.BodyTextEdit)
+            .RequiresTrackedChanges.Should().BeTrue();
+
+        view.InsertText("X");
+        PlainText(view).Should().Contain("X");
     }
 
     [StaFact]
-    public void CommentsAndFormsProtection_LockTypingSurface()
+    public void CommentsOnlyProtection_AllowsCommentWorkflow_ButBlocksBodyTypingAndFormatting()
     {
         var view = Load();
 
         view.SetProtection(ProtectionMode.CommentsOnly);
         view.IsReadOnly.Should().BeTrue();
+        view.RestrictEditingPolicy.IsCommentWorkflowAllowed.Should().BeTrue();
+
+        view.InsertText("X");
+        PlainText(view).Should().Be("Body");
+
+        view.ApplyFontFormatting(new RunFormatting { Bold = true });
+        ((Paragraph)view.Model.Blocks[0]).Runs[0].Formatting.Bold.Should().BeFalse();
+
+        view.InsertComment("review", "Ann", "A");
+        view.Model.Comments.Should().HaveCount(1);
+    }
+
+    [StaFact]
+    public void CommentsOnlyProtection_AllowsReplyResolveAndDelete()
+    {
+        var view = LoadWithComment();
+
+        view.SetProtection(ProtectionMode.CommentsOnly);
+
+        view.ReplyToCommentAtCaret("reply", "Bob", "B").Should().BeTrue();
+        view.Model.Comments[0].Replies.Should().ContainSingle();
+        view.ToggleResolveCommentAtCaret().Should().BeTrue();
+        view.Model.Comments[0].Resolved.Should().BeTrue();
+        view.DeleteCommentAtCaret().Should().BeTrue();
+        view.Model.Comments.Should().BeEmpty();
+    }
+
+    [StaFact]
+    public void FillingFormsProtection_BlocksNormalBodyEdits_AndReportsFormOnlyPolicy()
+    {
+        var view = Load();
 
         view.SetProtection(ProtectionMode.FillingForms);
         view.IsReadOnly.Should().BeTrue();
+        view.RestrictEditingPolicy.IsFormFieldEditingOnly.Should().BeTrue();
+        view.GetRestrictEditingDecision(RestrictEditingOperationKind.FormFieldEdit)
+            .IsAllowed.Should().BeTrue();
+        view.GetRestrictEditingDecision(RestrictEditingOperationKind.BodyTextEdit)
+            .BlockReason.Should().Be(RestrictEditingBlockReason.FillingForms);
+
+        view.InsertText("X");
+        PlainText(view).Should().Be("Body");
+    }
+
+    [StaFact]
+    public void ReadOnlyProtection_BlocksCommentInsertion()
+    {
+        var view = Load();
+
+        view.SetProtection(ProtectionMode.ReadOnly);
+        view.InsertComment("review", "Ann", "A");
+
+        view.Model.Comments.Should().BeEmpty();
     }
 
     [StaFact]

@@ -1,0 +1,97 @@
+using FreeW.App.Presentation.DocumentView;
+
+namespace FreeW.App.Presentation.Tests;
+
+public sealed class RestrictEditingEnforcementPolicyTests
+{
+    [Theory]
+    [InlineData(RestrictEditingOperationKind.BodyTextEdit)]
+    [InlineData(RestrictEditingOperationKind.BodyTextDelete)]
+    [InlineData(RestrictEditingOperationKind.BodyFormatting)]
+    [InlineData(RestrictEditingOperationKind.CommentInsert)]
+    [InlineData(RestrictEditingOperationKind.CommentReply)]
+    [InlineData(RestrictEditingOperationKind.CommentResolve)]
+    [InlineData(RestrictEditingOperationKind.CommentDelete)]
+    [InlineData(RestrictEditingOperationKind.FormFieldEdit)]
+    public void Unprotected_document_allows_normal_operations(RestrictEditingOperationKind operation)
+    {
+        var policy = RestrictEditingEnforcementPolicy.From(ProtectionSettings.Unprotected, isMarkedAsFinal: false);
+
+        var decision = policy.DecisionFor(operation);
+
+        decision.IsAllowed.Should().BeTrue();
+        decision.RequiresTrackedChanges.Should().BeFalse();
+        decision.BlockReason.Should().Be(RestrictEditingBlockReason.None);
+    }
+
+    [Theory]
+    [InlineData(RestrictEditingOperationKind.BodyTextEdit)]
+    [InlineData(RestrictEditingOperationKind.BodyFormatting)]
+    [InlineData(RestrictEditingOperationKind.CommentInsert)]
+    [InlineData(RestrictEditingOperationKind.FormFieldEdit)]
+    public void Mark_as_final_blocks_document_mutations_until_cleared(RestrictEditingOperationKind operation)
+    {
+        var policy = RestrictEditingEnforcementPolicy.From(ProtectionSettings.Unprotected, isMarkedAsFinal: true);
+
+        var decision = policy.DecisionFor(operation);
+
+        decision.IsAllowed.Should().BeFalse();
+        decision.BlockReason.Should().Be(RestrictEditingBlockReason.MarkedAsFinal);
+        policy.IsBodyEditingLocked.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Read_only_protection_blocks_body_format_comments_and_forms()
+    {
+        var policy = Policy(ProtectionMode.ReadOnly);
+
+        policy.DecisionFor(RestrictEditingOperationKind.BodyTextEdit).IsAllowed.Should().BeFalse();
+        policy.DecisionFor(RestrictEditingOperationKind.BodyFormatting).IsAllowed.Should().BeFalse();
+        policy.DecisionFor(RestrictEditingOperationKind.CommentInsert).IsAllowed.Should().BeFalse();
+        policy.DecisionFor(RestrictEditingOperationKind.FormFieldEdit).IsAllowed.Should().BeFalse();
+        policy.IsBodyEditingLocked.Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData(RestrictEditingOperationKind.BodyTextEdit)]
+    [InlineData(RestrictEditingOperationKind.BodyTextDelete)]
+    [InlineData(RestrictEditingOperationKind.BodyFormatting)]
+    public void Track_changes_only_allows_body_edits_only_as_tracked_changes(RestrictEditingOperationKind operation)
+    {
+        var policy = Policy(ProtectionMode.TrackChangesOnly);
+
+        var decision = policy.DecisionFor(operation);
+
+        decision.IsAllowed.Should().BeTrue();
+        decision.RequiresTrackedChanges.Should().BeTrue();
+        policy.ShouldForceTrackChanges.Should().BeTrue();
+        policy.IsBodyEditingLocked.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Comments_only_allows_comment_workflow_and_blocks_body_or_form_edits()
+    {
+        var policy = Policy(ProtectionMode.CommentsOnly);
+
+        policy.IsCommentWorkflowAllowed.Should().BeTrue();
+        policy.DecisionFor(RestrictEditingOperationKind.BodyTextEdit).BlockReason
+            .Should().Be(RestrictEditingBlockReason.CommentsOnly);
+        policy.DecisionFor(RestrictEditingOperationKind.BodyFormatting).IsAllowed.Should().BeFalse();
+        policy.DecisionFor(RestrictEditingOperationKind.FormFieldEdit).IsAllowed.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Filling_forms_allows_only_form_field_edits()
+    {
+        var policy = Policy(ProtectionMode.FillingForms);
+
+        policy.DecisionFor(RestrictEditingOperationKind.FormFieldEdit).IsAllowed.Should().BeTrue();
+        policy.DecisionFor(RestrictEditingOperationKind.BodyTextEdit).BlockReason
+            .Should().Be(RestrictEditingBlockReason.FillingForms);
+        policy.DecisionFor(RestrictEditingOperationKind.CommentInsert).IsAllowed.Should().BeFalse();
+        policy.IsFormFieldEditingOnly.Should().BeTrue();
+    }
+
+    private static RestrictEditingEnforcementPolicy Policy(ProtectionMode mode) =>
+        RestrictEditingEnforcementPolicy.From(new ProtectionSettings(mode), isMarkedAsFinal: false);
+}

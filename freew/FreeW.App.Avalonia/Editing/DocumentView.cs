@@ -381,9 +381,16 @@ public sealed class DocumentView : Control
     public bool IsMarkedAsFinal => _doc.MarkedAsFinal;
 
     /// <summary>True when free typing/editing should be blocked by final/protection state.</summary>
-    public bool IsEditingLocked =>
-        _doc.MarkedAsFinal ||
-        _doc.Protection.Mode is ProtectionMode.ReadOnly or ProtectionMode.CommentsOnly or ProtectionMode.FillingForms;
+    public bool IsEditingLocked => RestrictEditingPolicy.IsBodyEditingLocked;
+
+    public RestrictEditingEnforcementPolicy RestrictEditingPolicy =>
+        RestrictEditingEnforcementPolicy.From(_doc.Protection, _doc.MarkedAsFinal);
+
+    public RestrictEditingEnforcementDecision GetRestrictEditingDecision(RestrictEditingOperationKind operation) =>
+        RestrictEditingPolicy.DecisionFor(operation);
+
+    private bool AllowsRestrictEditingOperation(RestrictEditingOperationKind operation) =>
+        RestrictEditingPolicy.Allows(operation);
 
     public void LoadDocument(TextDocument document)
     {
@@ -399,7 +406,7 @@ public sealed class DocumentView : Control
         _hfCaret = null; // AV-HFEDIT: clear header/footer caret on document load
         _selectedFloating = null; // AV-PICTAB: clear float selection on document load
         _floatDragState   = null;
-        if (_doc.Protection.Mode == ProtectionMode.TrackChangesOnly)
+        if (RestrictEditingPolicy.ShouldForceTrackChanges)
             TrackChangesEnabled = true;
         RaiseFloatingSelectionChangedIfIdentityChanged();
         InvalidateLayoutAndVisual();
@@ -437,7 +444,7 @@ public sealed class DocumentView : Control
             return;
 
         _doc.Protection = settings;
-        if (_doc.Protection.Mode == ProtectionMode.TrackChangesOnly)
+        if (RestrictEditingPolicy.ShouldForceTrackChanges)
             TrackChangesEnabled = true;
         OnProtectionStateChanged();
     }
@@ -8378,6 +8385,9 @@ public sealed class DocumentView : Control
     /// </summary>
     public int? AddComment(string text, string author = "", string initials = "")
     {
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.CommentInsert))
+            return null;
+
         if (string.IsNullOrWhiteSpace(text))
             return null;
 
@@ -8398,7 +8408,7 @@ public sealed class DocumentView : Control
             endOffset = int.MaxValue;
         }
 
-        if (block < 0 || block >= _doc.Blocks.Count || _doc.Blocks[block] is not Paragraph paragraph || !IsEditable(paragraph))
+        if (block < 0 || block >= _doc.Blocks.Count || _doc.Blocks[block] is not Paragraph paragraph || !IsPlainTextEditable(paragraph))
             return null;
 
         // Nothing to anchor to (empty paragraph) → no comment.
@@ -8426,6 +8436,9 @@ public sealed class DocumentView : Control
     /// </summary>
     public bool DeleteComment(int commentId)
     {
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.CommentDelete))
+            return false;
+
         var topId = DeleteCommentCommand.ResolveTopLevel(_doc, commentId);
         if (!_doc.Comments.ContainsKey(topId))
             return false;
@@ -8443,6 +8456,9 @@ public sealed class DocumentView : Control
     /// </summary>
     public bool SetCommentResolved(int commentId, bool resolved)
     {
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.CommentResolve))
+            return false;
+
         var topId = DeleteCommentCommand.ResolveTopLevel(_doc, commentId);
         if (!_doc.Comments.ContainsKey(topId))
             return false;
@@ -8456,6 +8472,9 @@ public sealed class DocumentView : Control
     /// </summary>
     public bool ReplyToComment(int commentId, string text, string author = "", string initials = "")
     {
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.CommentReply))
+            return false;
+
         if (string.IsNullOrWhiteSpace(text))
             return false;
 
@@ -8488,6 +8507,9 @@ public sealed class DocumentView : Control
     /// </summary>
     public bool? ToggleResolveCommentAtCaret()
     {
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.CommentResolve))
+            return null;
+
         if (CommentIdAtCaret() is not { } id || !_doc.Comments.TryGetValue(id, out var comment))
             return null;
         var newState = !comment.Resolved;
