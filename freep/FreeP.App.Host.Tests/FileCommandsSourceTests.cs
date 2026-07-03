@@ -16,6 +16,9 @@ public sealed class FileCommandsSourceTests
         source.Should().Contain("PresentationFileDialogPlanner.BuildOpenDialogPlan()");
         source.Should().Contain("PresentationFileDialogPlanner.BuildSaveAsDialogPlan(");
         source.Should().Contain("PresentationExportPlanner.BuildPdfExportDialogPlan(");
+        source.Should().Contain("PresentationRasterPdfExporter.ExportToBytes(");
+        source.Should().Contain("WpfPresentationSlideImageRenderer.RenderSlideToPng");
+        source.Should().Contain("WpfRasterPdfWriter.WriteToBytes");
         source.Should().Contain("PresentationExportPlanner.BuildNotesPagePdfExportPlan(");
         source.Should().Contain("PresentationExportPlanner.BuildNotesPagePdfExportDialogPlan(");
         source.Should().Contain("PresentationExportPlanner.BuildHandoutLayoutPlan(");
@@ -29,7 +32,6 @@ public sealed class FileCommandsSourceTests
         source.Should().Contain("public PresentationNotesPagePdfRenderPlan BuildNotesPagePdfRenderPlan(");
         source.Should().Contain("_getImageExportRange()");
         source.Should().Contain("new OpenFolderDialog");
-        source.Should().Contain("WpfPresentationSlideImageRenderer.RenderSlideToPng");
         source.Should().Contain("PresentationFilePersistenceWorkflow.Open(path)");
         source.Should().Contain("PresentationFilePersistenceWorkflow.Save(path, _getModel())");
         source.Should().Contain("WpfFileDialogService.ShowOpenDialog(");
@@ -42,6 +44,7 @@ public sealed class FileCommandsSourceTests
         source.Should().NotContain("FileDialogRequestPlanner.");
         source.Should().NotContain("FileDialogFilterBuilder.BuildPerFormatFilter(Formats)");
         source.Should().NotContain("FileDialogFilterBuilder.GetDefaultExtension(Formats)");
+        source.Should().NotContain("PresentationPdfExporter.ExportToBytes(_getModel())");
         source.Should().NotContain("FxpFormat.");
         source.Should().NotContain("PptxPackageReader.");
         source.Should().NotContain("PptxPackageWriter.");
