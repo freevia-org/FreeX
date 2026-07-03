@@ -52,6 +52,40 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().NotContain("stroke.InkState.ThicknessDip * scale");
     }
 
+    [Fact]
+    public void AvaloniaSlideShowWindow_ExecutesAnimationStepsThroughSharedPlaybackPlans()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            FindRepositoryRoot(),
+            "freep",
+            "FreeP.App.Avalonia",
+            "SlideShowWindow.cs"));
+
+        source.Should().Contain("case SlideShowHostCommandKind.PlayAnimationStep when command.Step is not null:");
+        source.Should().Contain("PlayAnimationStep(command.Step);");
+        source.Should().Contain("private void PlayAnimationStep(AnimationStep step)");
+        source.Should().Contain("foreach (var plan in SlideShowPlaybackPlanner.PlanAnimationStep(step))");
+        source.Should().Contain("PlayShapeAnimation(element, plan, onReveal: () =>");
+        source.Should().Contain("PlayFallbackAnimation(SlideShowPlaybackPlanner.PlanFallbackAnimation(anim, plan.DelayMs));");
+
+        source.Should().Contain("case SlideShowShapeAnimationEffectKind.Appear:");
+        source.Should().Contain("AppearEffect(element, plan.DelayMs, CompleteReveal(plan, onReveal));");
+        source.Should().Contain("case SlideShowShapeAnimationEffectKind.Fade:");
+        source.Should().Contain("FadeEffect(element, plan, onReveal);");
+        source.Should().Contain("case SlideShowShapeAnimationEffectKind.FlyIn:");
+        source.Should().Contain("FlyInEffect(element, plan, onReveal);");
+        source.Should().Contain("case SlideShowShapeAnimationEffectKind.Wipe:");
+        source.Should().Contain("WipeEffect(element, plan, onReveal);");
+        source.Should().Contain("case SlideShowShapeAnimationEffectKind.Zoom:");
+        source.Should().Contain("ZoomEffect(element, plan, onReveal);");
+        source.Should().Contain("case SlideShowShapeAnimationEffectKind.Pulse:");
+        source.Should().Contain("PulseEffect(element, plan);");
+        source.Should().Contain("case SlideShowShapeAnimationEffectKind.Spin:");
+        source.Should().Contain("SpinEffect(element, plan);");
+        source.Should().Contain("MotionPathEffect(element, plan, onReveal);");
+        source.Should().Contain("AnimateOpacity(_slideCanvas, plan.FromOpacity, plan.FlashOpacity, plan.DurationMs / 2");
+    }
+
     private static string FindRepositoryRoot()
     {
         for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
