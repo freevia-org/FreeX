@@ -231,12 +231,12 @@ public sealed class ReferencesTabTests
     public void InsertCitation_inserts_intext_citation_at_caret()
     {
         var view = ViewWith(new Paragraph("See here "));
-        var source = new Source { Tag = "Sm24", Author = "Smith", Title = "A Work", Year = "2024" };
+        var source = new Source { Tag = "Do24", Author = "Jane Q. Doe", Title = "A Work", Year = "2024" };
 
         view.InsertCitation(source);
 
-        ((Paragraph)view.Document.Blocks[0]).PlainText.Should().Contain("Smith",
-            "an in-text citation referencing the source is inserted as text");
+        ((Paragraph)view.Document.Blocks[0]).PlainText.Should().Contain("(Doe, 2024)",
+            "the Avalonia editor should inherit shared in-text citation formatting");
     }
 
     [Fact]

@@ -33,6 +33,82 @@ public class CitationsTests
         Citations.FormatInText(new Source()).Should().Be("(Unknown)");
     }
 
+    [Theory]
+    [InlineData(CitationStyle.Apa, "(Smith, 2020)")]
+    [InlineData(CitationStyle.Harvard, "(Smith, 2020)")]
+    [InlineData(CitationStyle.Gost, "(Smith, 2020)")]
+    [InlineData(CitationStyle.Iso690, "(Smith, 2020)")]
+    public void FormatInText_LastFirstPersonalAuthor_UsesFamilyNameForAuthorDateStyles(
+        CitationStyle style,
+        string expected)
+    {
+        var source = new Source { Author = "Smith, John", Year = "2020" };
+
+        Citations.FormatInText(source, style).Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData(CitationStyle.Chicago)]
+    [InlineData(CitationStyle.Turabian)]
+    public void FormatInText_LastFirstPersonalAuthor_UsesFamilyNameForChicagoLikeStyles(CitationStyle style)
+    {
+        var source = new Source { Author = "Smith, John", Year = "2020" };
+
+        Citations.FormatInText(source, style).Should().Be("(Smith 2020)");
+    }
+
+    [Fact]
+    public void FormatInText_FirstMiddleLastPersonalAuthor_UsesFamilyName()
+    {
+        var source = new Source { Author = "Jane Q. Doe", Year = "2020" };
+
+        Citations.FormatInText(source, CitationStyle.Apa).Should().Be("(Doe, 2020)");
+    }
+
+    [Fact]
+    public void FormatInText_TwoPersonalAuthors_UsesFamilyNamesJoinedByAmpersand()
+    {
+        var source = new Source { Author = "Jane Q. Doe; Alex Smith", Year = "2020" };
+
+        Citations.FormatInText(source, CitationStyle.Apa).Should().Be("(Doe & Smith, 2020)");
+        Citations.FormatInText(source, CitationStyle.Mla).Should().Be("(Doe & Smith)");
+    }
+
+    [Fact]
+    public void FormatInText_ThreePersonalAuthors_UsesFirstFamilyNameEtAl()
+    {
+        var source = new Source { Author = "Jane Q. Doe; Alex Smith; Priya Patel", Year = "2020" };
+
+        Citations.FormatInText(source, CitationStyle.Apa).Should().Be("(Doe et al., 2020)");
+        Citations.FormatInText(source, CitationStyle.Mla).Should().Be("(Doe et al.)");
+    }
+
+    [Theory]
+    [InlineData(CitationStyle.Ieee)]
+    [InlineData(CitationStyle.Vancouver)]
+    public void FormatInText_NumericStylesWithoutPosition_BracketDisplayAuthor(CitationStyle style)
+    {
+        var source = new Source { Author = "Jane Q. Doe", Year = "2020" };
+
+        Citations.FormatInText(source, style).Should().Be("[Doe]");
+    }
+
+    [Fact]
+    public void FormatInText_CorporateAuthor_RemainsUnchanged()
+    {
+        var source = new Source { Author = "World Health Organization", Year = "2020" };
+
+        Citations.FormatInText(source, CitationStyle.Apa).Should().Be("(World Health Organization, 2020)");
+    }
+
+    [Fact]
+    public void FormatInText_AmbiguousAcronymAuthors_RemainUnchanged()
+    {
+        var source = new Source { Author = "NASA; ESA", Year = "2020" };
+
+        Citations.FormatInText(source, CitationStyle.Apa).Should().Be("(NASA; ESA, 2020)");
+    }
+
     [Fact]
     public void FormatBibliographyEntry_AllFields_ProducesAuthorYearTitlePublisher()
     {

@@ -170,7 +170,7 @@ public static class Citations
     {
         ArgumentNullException.ThrowIfNull(source);
 
-        var author = source.Author?.Trim() ?? string.Empty;
+        var author = FormatInTextAuthor(source.Author);
         var year = source.Year?.Trim() ?? string.Empty;
 
         string inner;
@@ -221,6 +221,225 @@ public static class Citations
         var tag = source.Tag?.Trim() ?? string.Empty;
         return tag.Length > 0 ? tag : "Unknown";
     }
+
+    private static string FormatInTextAuthor(string? author)
+    {
+        var trimmed = author?.Trim() ?? string.Empty;
+        if (trimmed.Length == 0)
+            return string.Empty;
+
+        var authors = trimmed.Split(';', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        if (authors.Length == 0)
+            return string.Empty;
+
+        var familyNames = new List<string>(authors.Length);
+        foreach (var value in authors)
+        {
+            if (!TryGetPersonalFamilyName(value, out var familyName))
+                return trimmed;
+
+            familyNames.Add(familyName);
+        }
+
+        return familyNames.Count switch
+        {
+            1 => familyNames[0],
+            2 => $"{familyNames[0]} & {familyNames[1]}",
+            _ => $"{familyNames[0]} et al."
+        };
+    }
+
+    private static bool TryGetPersonalFamilyName(string author, out string familyName)
+    {
+        familyName = string.Empty;
+        var trimmed = author.Trim();
+        if (trimmed.Length == 0 || LooksCorporateOrAmbiguous(trimmed))
+            return false;
+
+        var commaIndex = trimmed.IndexOf(',');
+        if (commaIndex >= 0)
+        {
+            var commaFamilyName = trimmed[..commaIndex].Trim();
+            if (!IsFamilyNameCandidate(commaFamilyName))
+                return false;
+
+            familyName = TrimOuterNamePunctuation(commaFamilyName);
+            return true;
+        }
+
+        var tokens = trimmed.Split(' ', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        if (tokens.Length == 1)
+        {
+            if (!IsFamilyNameCandidate(tokens[0]))
+                return false;
+
+            familyName = TrimOuterNamePunctuation(tokens[0]);
+            return true;
+        }
+
+        if (tokens.Length > 5)
+            return false;
+
+        var familyTokenIndex = tokens.Length - 1;
+        if (IsNameSuffix(tokens[familyTokenIndex]) && familyTokenIndex > 0)
+            familyTokenIndex--;
+
+        if (!IsFamilyNameCandidate(tokens[familyTokenIndex]))
+            return false;
+
+        for (var i = 0; i < familyTokenIndex; i++)
+        {
+            if (!IsGivenNameToken(tokens[i]))
+                return false;
+        }
+
+        familyName = TrimOuterNamePunctuation(tokens[familyTokenIndex]);
+        return true;
+    }
+
+    private static bool LooksCorporateOrAmbiguous(string author)
+    {
+        if (author.Contains('&', StringComparison.Ordinal) ||
+            author.Contains('/', StringComparison.Ordinal) ||
+            author.Any(char.IsDigit))
+        {
+            return true;
+        }
+
+        foreach (var token in SplitNameWords(author))
+        {
+            if (CorporateAuthorTerms.Contains(token) || token.Equals("and", StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+
+        return false;
+    }
+
+    private static bool IsFamilyNameCandidate(string value)
+    {
+        var trimmed = TrimOuterNamePunctuation(value);
+        if (trimmed.Length == 0)
+            return false;
+
+        foreach (var token in SplitNameWords(trimmed))
+        {
+            if (CorporateAuthorTerms.Contains(token) || !IsNameWordToken(token, allowInitial: false))
+                return false;
+        }
+
+        return true;
+    }
+
+    private static bool IsGivenNameToken(string value)
+    {
+        var trimmed = TrimOuterNamePunctuation(value);
+        return trimmed.Length > 0 &&
+            !CorporateAuthorTerms.Contains(trimmed) &&
+            IsNameWordToken(trimmed, allowInitial: true);
+    }
+
+    private static bool IsNameWordToken(string value, bool allowInitial)
+    {
+        var sawLetter = false;
+        var sawLowercase = false;
+        foreach (var c in value)
+        {
+            if (char.IsLetter(c))
+            {
+                sawLetter = true;
+                sawLowercase |= char.IsLower(c);
+                continue;
+            }
+
+            if (c is '-' or '\'' || allowInitial && c == '.')
+                continue;
+
+            return false;
+        }
+
+        if (!sawLetter)
+            return false;
+
+        return allowInitial || value.Length == 1 || sawLowercase || !value.All(c => !char.IsLetter(c) || char.IsUpper(c));
+    }
+
+    private static bool IsNameSuffix(string value)
+    {
+        var trimmed = TrimOuterNamePunctuation(value);
+        return NameSuffixes.Contains(trimmed);
+    }
+
+    private static IEnumerable<string> SplitNameWords(string value) =>
+        value.Split(NameWordSeparators, StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+
+    private static string TrimOuterNamePunctuation(string value) =>
+        value.Trim().Trim('.', ',');
+
+    private static readonly char[] NameWordSeparators =
+    [
+        ' ', '\t', '\r', '\n', '.', ',', ';', ':', '-', '_', '/', '\\', '&', '(', ')', '[', ']'
+    ];
+
+    private static readonly HashSet<string> CorporateAuthorTerms = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "academy",
+        "administration",
+        "agency",
+        "association",
+        "bank",
+        "board",
+        "bureau",
+        "center",
+        "centre",
+        "college",
+        "committee",
+        "company",
+        "corp",
+        "corporation",
+        "council",
+        "department",
+        "division",
+        "federal",
+        "foundation",
+        "fund",
+        "government",
+        "group",
+        "health",
+        "inc",
+        "institute",
+        "international",
+        "laboratory",
+        "labs",
+        "library",
+        "ltd",
+        "llc",
+        "ministry",
+        "museum",
+        "national",
+        "nations",
+        "office",
+        "organization",
+        "organisation",
+        "press",
+        "project",
+        "research",
+        "school",
+        "sciences",
+        "society",
+        "staff",
+        "team",
+        "university",
+        "world"
+    };
+
+    private static readonly HashSet<string> NameSuffixes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "jr",
+        "sr",
+        "ii",
+        "iii",
+        "iv"
+    };
 
     /// <summary>
     /// Formats a numbered in-text citation marker. For <see cref="CitationStyle.Ieee"/> this is the
