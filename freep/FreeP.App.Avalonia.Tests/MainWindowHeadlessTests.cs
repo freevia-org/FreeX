@@ -1408,9 +1408,9 @@ public sealed class MainWindowHeadlessTests
             "Frame slides",
             "Print comments and ink markup");
         renderedLayoutRows.Should().HaveCount(printPlan.LayoutChoices.Count);
-        renderedLayoutRows.Should().Contain(row => row.StartsWith("Selected: 3 Slides", StringComparison.Ordinal));
+        renderedLayoutRows.Should().Contain(row => row.StartsWith("Selected: Handouts (3 slides per page)", StringComparison.Ordinal));
         renderedRangeRows.Should().HaveCount(printPlan.RangeChoices.Count);
-        renderedRangeRows.Should().Contain(row => row.StartsWith("Selected Slides", StringComparison.Ordinal));
+        renderedRangeRows.Should().Contain(row => row.StartsWith("Selected: Selected Slides", StringComparison.Ordinal));
         renderedRangeRows.Should().Contain(row => row.Contains("Custom Range", StringComparison.Ordinal));
         renderedRowCount.Should().BeGreaterThan(renderedOptionLines.Count);
         printPlan.NativePrinterDialogDeferred.Should().BeTrue();
