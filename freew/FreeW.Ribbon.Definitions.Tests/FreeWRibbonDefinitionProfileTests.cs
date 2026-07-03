@@ -332,6 +332,7 @@ public sealed class FreeWRibbonDefinitionProfileTests
             "freew.merge-preview-previous",
             "freew.merge-preview-next",
             "freew.merge-finish",
+            "freew.merge-email",
         });
 
         avaloniaIds.Should().NotContain(new[]

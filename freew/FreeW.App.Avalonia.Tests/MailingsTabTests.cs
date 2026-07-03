@@ -11,9 +11,9 @@ namespace FreeW.App.Avalonia.Tests;
 /// <summary>
 /// AV-MAIL: tests for the Mailings tab — the in-scope mail-merge subset over the portable
 /// <see cref="MailMerge"/> engine: Select Recipients (load CSV), Insert Merge Field, Address Block /
-/// Greeting Line insertion, Preview Results (record-1 values + Next/Previous stepping), and Finish &amp;
-/// Merge (merge to a new in-memory document). Mail-SEND is out of scope and intentionally not tested /
-/// wired. Pure-model — no headless Avalonia backend required.
+/// Greeting Line insertion, Preview Results (record-1 values + Next/Previous stepping), Finish &amp;
+/// Merge (merge to a new in-memory document), and Send E-mail Messages planning. Pure-model — no
+/// headless Avalonia backend required.
 /// </summary>
 public sealed class MailingsTabTests
 {
@@ -294,6 +294,31 @@ public sealed class MailingsTabTests
         PlainText(view.Document).Should().Contain("«FirstName»", "the document is unchanged");
     }
 
+    [Fact]
+    public void PlanEmailMerge_records_delivery_intent_without_sending_or_mutating_document()
+    {
+        var info = new List<string>();
+        var view = ViewWith(new Paragraph("Dear «FirstName»"));
+        var engine = new MailMergeEngine(view, Callbacks(infoSink: info));
+        engine.LoadRecipientsCsv("FirstName,Email\nAda,ada@example.test\nGrace,");
+        var before = PlainText(view.Document);
+        var intent = new MailMergeEmailDeliveryIntent(
+            "Email",
+            "Newsletter",
+            MailMergeEmailOutputFormat.MessageBody,
+            MailMergeEmailBodyFormat.Html,
+            MailMergeEmailRecordScope.AllRecords);
+
+        var plan = engine.PlanEmailMerge(intent);
+
+        plan.Should().NotBeNull();
+        plan!.DeliverableRecordIndexes.Should().Equal(0);
+        plan.Warnings.Should().Contain(message => message.Contains("Record 2"));
+        engine.LastEmailPlan.Should().BeSameAs(plan);
+        PlainText(view.Document).Should().Be(before, "planning an e-mail merge does not alter the document");
+        info.Should().ContainSingle().Which.Should().Contain("no messages were sent");
+    }
+
     // ── Registry wiring ─────────────────────────────────────────────────────────────────
 
     [Fact]
@@ -333,6 +358,7 @@ public sealed class MailingsTabTests
             "freew.merge-preview-next",
             "freew.merge-preview-last",
             "freew.merge-finish",
+            "freew.merge-email",
             "freew.select-recipients",
             "freew.address-block",
             "freew.greeting-line",
@@ -371,7 +397,7 @@ public sealed class MailingsTabTests
     }
 
     [Fact]
-    public void Mailings_tab_definition_exposes_groups_and_no_mail_send()
+    public void Mailings_tab_definition_exposes_groups_and_email_merge_plan_command()
     {
         var definition = FreeWRibbon.BuildDefinition();
         var mailings = definition.FindTab("mailings");
@@ -380,10 +406,9 @@ public sealed class MailingsTabTests
         mailings!.Groups.Select(g => g.Header).Should()
             .Contain(new[] { "Create", "Start Mail Merge", "Write & Insert Fields", "Preview Results", "Finish" });
 
-        // Mail-SEND is OUT OF SCOPE: no send/e-mail command may appear in the Mailings tab.
         var ids = mailings.Groups.SelectMany(g => g.Controls).Select(c => c.CommandId.Value).ToList();
-        ids.Should().NotContain(id => id.Contains("send") || id.Contains("email") || id.Contains("e-mail"),
-            "mail-send (e-mail merge) is out of scope and must not be wired");
+        ids.Should().Contain("freew.merge-email",
+            "Send E-mail Messages is a plan-only mail-merge exposure command");
     }
 
     [Fact]
@@ -429,6 +454,7 @@ public sealed class MailingsTabTests
             "freew.merge-preview-next",
             "freew.merge-preview-last",
             "freew.merge-finish",
+            "freew.merge-email",
         });
 
         commandIds.Should().NotContain(new[]

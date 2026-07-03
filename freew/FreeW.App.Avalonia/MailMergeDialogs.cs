@@ -4,6 +4,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Free.Shared.Shell.Avalonia;
 using FreeW.App.Presentation.Ribbon;
+using FreeW.Core.Model;
 
 namespace FreeW.App.Avalonia;
 
@@ -11,7 +12,7 @@ namespace FreeW.App.Avalonia;
 /// AV-MAIL: modal dialogs for the Mailings tab — a recipient-list (CSV) editor and a merge-field-name
 /// picker. Both are thin, dependency-free Avalonia windows that return their result (or <c>null</c> on
 /// cancel) so the ribbon glue (<see cref="Ribbon.MailMergeEngine"/>) stays UI-agnostic and testable.
-/// Mail-SEND is out of scope; these only gather a recipient list and a field name.
+/// Send E-mail Messages planning is included here, but no messages are sent.
 /// </summary>
 internal static class MailMergeDialogs
 {
@@ -148,6 +149,82 @@ internal static class MailMergeDialogs
         grid.Children.Add(freeText);
         grid.Children.Add(buttons);
         dialog.Content = grid;
+
+        await dialog.ShowDialog(owner);
+        return result;
+    }
+
+    public static async Task<MailMergeEmailDeliveryIntent?> AskEmailMergeDeliveryAsync(
+        Window owner,
+        MergeData data,
+        int currentRecordIndex,
+        IReadOnlyList<int> selectedRecordIndexes)
+    {
+        var dialogPlan = MailMergeEmailDeliveryPlanner.CreateDialogPlan(data, currentRecordIndex, selectedRecordIndexes);
+        var dialog = CreateDialog("Send E-mail Messages", 430, 315);
+
+        var fieldCombo = new ComboBox
+        {
+            ItemsSource = dialogPlan.RecipientAddressFields,
+            SelectedItem = dialogPlan.RecipientAddressField,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+        };
+        AvaloniaCompactDialogChrome.ApplyComboBox(fieldCombo, DialogChromeStyle);
+
+        var subjectBox = CreateTextBox(dialogPlan.Subject, "Subject line");
+        var outputCombo = CreateChoiceCombo(dialogPlan.OutputFormats.Select(choice => choice.Label), dialogPlan.OutputFormatIndex);
+        var bodyCombo = CreateChoiceCombo(dialogPlan.BodyFormats.Select(choice => choice.Label), dialogPlan.BodyFormatIndex);
+        var scopeCombo = CreateChoiceCombo(dialogPlan.RecordScopes.Select(choice => choice.Label), dialogPlan.RecordScopeIndex);
+        var validation = new TextBlock
+        {
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = Brushes.Gray,
+            Margin = new Thickness(0, 2, 0, 8),
+        };
+
+        MailMergeEmailDeliveryIntent? result = null;
+        Button? okButton = null;
+
+        MailMergeEmailDeliveryIntent CurrentIntent() =>
+            MailMergeEmailDeliveryPlanner.CreateIntent(
+                fieldCombo.SelectedItem as string ?? dialogPlan.RecipientAddressField,
+                subjectBox.Text,
+                outputCombo.SelectedIndex,
+                bodyCombo.SelectedIndex,
+                scopeCombo.SelectedIndex,
+                currentRecordIndex,
+                selectedRecordIndexes);
+
+        void RefreshValidation()
+        {
+            var plan = MailMerge.CreateEmailDeliveryPlan(data, CurrentIntent());
+            var messages = MailMergeEmailDeliveryPlanner.GetValidationMessages(plan);
+            validation.Text = messages.Count == 0
+                ? "Ready to prepare an e-mail merge plan. No messages will be sent."
+                : string.Join(Environment.NewLine, messages);
+            if (okButton is not null)
+                okButton.IsEnabled = plan.Errors.Count == 0;
+        }
+
+        fieldCombo.SelectionChanged += (_, _) => RefreshValidation();
+        subjectBox.TextChanged += (_, _) => RefreshValidation();
+        outputCombo.SelectionChanged += (_, _) => RefreshValidation();
+        bodyCombo.SelectionChanged += (_, _) => RefreshValidation();
+        scopeCombo.SelectionChanged += (_, _) => RefreshValidation();
+
+        var content = CreateForm(
+            ("To field:", (Control)fieldCombo),
+            ("Subject:", subjectBox),
+            ("Output:", outputCombo),
+            ("Body format:", bodyCombo),
+            ("Send records:", scopeCombo),
+            ("Validation:", validation));
+
+        AddActions(dialog, content, () =>
+        {
+            result = CurrentIntent();
+        }, ok => okButton = ok);
+        RefreshValidation();
 
         await dialog.ShowDialog(owner);
         return result;
@@ -304,6 +381,19 @@ internal static class MailMergeDialogs
         return combo;
     }
 
+    private static ComboBox CreateChoiceCombo(IEnumerable<string> labels, int selectedIndex)
+    {
+        var items = labels.ToArray();
+        var combo = new ComboBox
+        {
+            ItemsSource = items,
+            SelectedIndex = items.Length == 0 ? -1 : Math.Clamp(selectedIndex, 0, items.Length - 1),
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+        };
+        AvaloniaCompactDialogChrome.ApplyComboBox(combo, DialogChromeStyle);
+        return combo;
+    }
+
     private static Grid CreateForm(params (string Label, Control Control)[] rows)
     {
         var grid = new Grid
@@ -335,10 +425,15 @@ internal static class MailMergeDialogs
         return grid;
     }
 
-    private static void AddActions(Window dialog, Control content, Action onOk)
+    private static void AddActions(
+        Window dialog,
+        Control content,
+        Action onOk,
+        Action<Button>? configureOk = null)
     {
         var ok = new Button { Content = "OK", IsDefault = true, MinWidth = 72 };
         AvaloniaCompactDialogChrome.ApplyButton(ok, DialogChromeStyle, minWidth: 72, isDefault: true);
+        configureOk?.Invoke(ok);
         ok.Click += (_, _) =>
         {
             onOk();

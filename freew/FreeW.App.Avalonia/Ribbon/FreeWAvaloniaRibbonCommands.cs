@@ -1227,8 +1227,7 @@ internal static class FreeWAvaloniaRibbonCommands
     /// in-scope subset is: Select Recipients (load a CSV recipient list), Insert Merge Field (insert a
     /// «Field» placeholder at the caret), Address Block / Greeting Line (insert the composite placeholders),
     /// Preview Results (toggle a live preview of record 1) with Next / Previous record stepping, and
-    /// Finish &amp; Merge (merge to a new in-memory document). Mail-SEND (e-mail merge) is OUT OF SCOPE and
-    /// intentionally not wired.
+    /// Finish &amp; Merge (merge to a new in-memory document), and Send E-mail Messages planning (no delivery).
     ///
     /// <para>
     /// A single <see cref="MailMergeSession"/> is captured by every command (so they share the loaded data,
@@ -1284,6 +1283,7 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.merge-preview-last", new ActionRibbonCommand(engine.LastRecord));
         RegisterMailingsAlias(r, "freew.merge-finish", new ActionRibbonCommand(() => engine.FinishMerge()),
             "freew.finish-merge");
+        r.Register("freew.merge-email", new ActionRibbonCommand(() => engine.PlanEmailMerge()));
     }
 
     private static void RegisterMailingsAlias(

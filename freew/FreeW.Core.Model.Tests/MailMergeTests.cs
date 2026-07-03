@@ -184,6 +184,91 @@ public class MailMergeTests
     }
 
     [Fact]
+    public void SuggestEmailAddressField_PrefersCommonEmailHeaders()
+    {
+        MailMerge.SuggestEmailAddressField(["Name", "E-mail Address", "City"])
+            .Should().Be("E-mail Address");
+    }
+
+    [Fact]
+    public void CreateEmailDeliveryPlan_AllRecords_ValidatesDeliverableRows()
+    {
+        var data = new MergeData(
+            ["Name", "Email"],
+            [["Ada", "ada@example.test"], ["Grace", ""], ["Linus", "linus@example.test"]]);
+        var intent = new MailMergeEmailDeliveryIntent(
+            "Email",
+            "Newsletter",
+            MailMergeEmailOutputFormat.MessageBody,
+            MailMergeEmailBodyFormat.Html,
+            MailMergeEmailRecordScope.AllRecords);
+
+        var plan = MailMerge.CreateEmailDeliveryPlan(data, intent);
+
+        plan.IsReady.Should().BeTrue();
+        plan.RecordIndexes.Should().Equal(0, 1, 2);
+        plan.DeliverableRecordIndexes.Should().Equal(0, 2);
+        plan.Warnings.Should().ContainSingle().Which.Should().Contain("Record 2");
+    }
+
+    [Fact]
+    public void CreateEmailDeliveryPlan_CurrentRecord_ClampsToRecipientRange()
+    {
+        var data = new MergeData(["Email"], [["a@example.test"], ["b@example.test"]]);
+        var intent = new MailMergeEmailDeliveryIntent(
+            "Email",
+            "Subject",
+            MailMergeEmailOutputFormat.Attachment,
+            MailMergeEmailBodyFormat.PlainText,
+            MailMergeEmailRecordScope.CurrentRecord,
+            CurrentRecordIndex: 99);
+
+        var plan = MailMerge.CreateEmailDeliveryPlan(data, intent);
+
+        plan.RecordIndexes.Should().Equal(1);
+        plan.DeliverableRecordIndexes.Should().Equal(1);
+        plan.Intent.OutputFormat.Should().Be(MailMergeEmailOutputFormat.Attachment);
+        plan.Intent.BodyFormat.Should().Be(MailMergeEmailBodyFormat.PlainText);
+    }
+
+    [Fact]
+    public void CreateEmailDeliveryPlan_SelectedRecords_DeduplicatesAndWarnsForInvalidIndexes()
+    {
+        var data = new MergeData(["Email"], [["a@example.test"], ["b@example.test"], ["c@example.test"]]);
+        var intent = new MailMergeEmailDeliveryIntent(
+            "Email",
+            "Subject",
+            MailMergeEmailOutputFormat.MessageBody,
+            MailMergeEmailBodyFormat.Html,
+            MailMergeEmailRecordScope.SelectedRecords,
+            SelectedRecordIndexes: [2, 0, 2, 5]);
+
+        var plan = MailMerge.CreateEmailDeliveryPlan(data, intent);
+
+        plan.RecordIndexes.Should().Equal(2, 0);
+        plan.DeliverableRecordIndexes.Should().Equal(2, 0);
+        plan.Warnings.Should().Contain(message => message.Contains("outside the recipient list"));
+    }
+
+    [Fact]
+    public void CreateEmailDeliveryPlan_MissingEmailField_IsBlockingValidation()
+    {
+        var data = new MergeData(["Name"], [["Ada"]]);
+        var intent = new MailMergeEmailDeliveryIntent(
+            "Email",
+            "",
+            MailMergeEmailOutputFormat.MessageBody,
+            MailMergeEmailBodyFormat.Html,
+            MailMergeEmailRecordScope.AllRecords);
+
+        var plan = MailMerge.CreateEmailDeliveryPlan(data, intent);
+
+        plan.IsReady.Should().BeFalse();
+        plan.Errors.Should().Contain(message => message.Contains("not in the recipient data source"));
+        plan.Warnings.Should().Contain("Subject line is blank.");
+    }
+
+    [Fact]
     public void FromCsv_ParsesHeaderAndRows()
     {
         const string csv = "First,Last\nAda,Lovelace\nGrace,Hopper";

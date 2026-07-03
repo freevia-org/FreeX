@@ -813,7 +813,7 @@ internal static class FreeWAvaloniaRibbonDefinition
             .Tab("mailings", "Mailings", "M", tab =>
             {
                 // AV-MAIL: Mailings-tab — the in-scope mail-merge subset over the portable MailMerge engine.
-                // Mail-SEND (e-mail merge) is OUT OF SCOPE and intentionally not surfaced.
+                // Send E-mail Messages is exposed as a plan-only command; no mail is sent.
                 tab.Group("create", "Create", null, 110, g =>
                 {
                     g.Button("freew.merge-envelopes", "Envelopes");
@@ -851,6 +851,7 @@ internal static class FreeWAvaloniaRibbonDefinition
                 tab.Group("merge-finish", "Finish", null, 70, g =>
                 {
                     g.Button("freew.merge-finish", "Finish & Merge");
+                    g.Button("freew.merge-email", "Send E-mail Messages");
                 });
             })
             // ── Table contextual tabs (shown only when caret is in a table cell) ─────────────
