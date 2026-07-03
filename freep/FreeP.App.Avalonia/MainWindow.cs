@@ -284,6 +284,7 @@ public sealed class MainWindow : Window
     internal int ReviewCommentsPaneCommentCount => LastCommentPanePlan?.Comments.Count ?? 0;
     internal int ReviewCommentsPaneActionButtonCount => LastCommentPanePlan?.Actions.Count ?? 0;
     internal int ReviewCommentsPaneSelectedCommentCount => LastCommentPanePlan?.Comments.Count(comment => comment.IsSelected) ?? 0;
+    internal string ReviewCommentsPaneSummary => LastCommentPanePlan?.DeckSummaryLabel ?? string.Empty;
     internal bool IsAltTextPaneVisible => _altTextPaneHost?.IsVisible == true;
     internal bool IsAltTextPaneApplyEnabled => _altTextApplyButton?.IsEnabled == true;
     internal string AltTextPaneTitleLabel => _altTextTitleLabel?.Text ?? string.Empty;
@@ -3025,7 +3026,7 @@ public sealed class MainWindow : Window
     private static Control BuildReviewCommentsPaneHeader(PresentationCommentPanePlan plan)
         => new TextBlock
         {
-            Text       = $"Comments - slide {plan.SlideIndex + 1} of {plan.SlideCount} ({plan.TotalCommentCount} total)",
+            Text       = $"Comments - {plan.CurrentSlideSummaryLabel} | {plan.DeckSummaryLabel}",
             FontWeight = FontWeight.SemiBold,
             Foreground = new SolidColorBrush(Color.FromRgb(0x2D, 0x2D, 0x2D)),
             Margin     = new Thickness(12, 10, 12, 2),

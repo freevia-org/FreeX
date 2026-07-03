@@ -32,6 +32,12 @@ public sealed class PresentationReviewWorkflowPlannerTests
         plan.SlideCount.Should().Be(2);
         plan.SlideCommentCount.Should().Be(1);
         plan.TotalCommentCount.Should().Be(2);
+        plan.OpenThreadCount.Should().Be(2);
+        plan.ResolvedThreadCount.Should().Be(0);
+        plan.TotalReplyCount.Should().Be(0);
+        plan.TotalMentionCount.Should().Be(0);
+        plan.CurrentSlideSummaryLabel.Should().Be("Slide 1: 1 thread");
+        plan.DeckSummaryLabel.Should().Be("2 threads: 2 open threads, 0 resolved threads, 0 replies, 0 mentions");
         plan.SelectedCommentIndex.Should().Be(0);
         plan.Comments.Should().ContainSingle().Which.Should().Be(new PresentationCommentDescriptor(
             0,
@@ -427,7 +433,7 @@ public sealed class PresentationReviewWorkflowPlannerTests
     [Fact]
     public void BuildCommentPanePlan_DescribesModernReplyChainsAndReplyActionState()
     {
-        var slides = new[] { new Slide { Title = "Intro" } };
+        var slides = new[] { new Slide { Title = "Intro" }, new Slide { Title = "Wrap-up" } };
         slides[0].Comments.Add(new SlideComment
         {
             Author = "Alice",
@@ -456,9 +462,24 @@ public sealed class PresentationReviewWorkflowPlannerTests
                 }
             }
         });
+        slides[1].Comments.Add(new SlideComment
+        {
+            Author = "Nora",
+            Initials = "NO",
+            Text = "Resolved follow-up for @Alice.",
+            IsResolved = true,
+            ResolvedBy = "Nora",
+            Idx = 1
+        });
 
         var plan = PresentationReviewWorkflowPlanner.BuildCommentPanePlan(slides, 0, selectedCommentIndex: 0);
 
+        plan.TotalCommentCount.Should().Be(2);
+        plan.OpenThreadCount.Should().Be(1);
+        plan.ResolvedThreadCount.Should().Be(1);
+        plan.TotalReplyCount.Should().Be(2);
+        plan.TotalMentionCount.Should().Be(3);
+        plan.DeckSummaryLabel.Should().Be("2 threads: 1 open thread, 1 resolved thread, 2 replies, 3 mentions");
         var comment = plan.Comments.Single();
         comment.ModernAnchorKind.Should().Be("unknownAnchor");
         comment.AnchorSummary.Should().Be("unknown anchor at 1200,2400 EMU");

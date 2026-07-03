@@ -146,6 +146,10 @@ public sealed record PresentationCommentPanePlan(
     int SlideCount,
     int SlideCommentCount,
     int TotalCommentCount,
+    int OpenThreadCount,
+    int ResolvedThreadCount,
+    int TotalReplyCount,
+    int TotalMentionCount,
     int SelectedCommentIndex,
     IReadOnlyList<PresentationCommentDescriptor> Comments,
     IReadOnlyList<PresentationReviewWorkflowActionPlan> Actions)
@@ -154,6 +158,22 @@ public sealed record PresentationCommentPanePlan(
         SelectedCommentIndex >= 0 && SelectedCommentIndex < Comments.Count
             ? Comments[SelectedCommentIndex]
             : null;
+
+    public string DeckSummaryLabel
+    {
+        get
+        {
+            var threadSummary = PresentationCommentMetadataPolicy.BuildCountSummary(TotalCommentCount, "thread");
+            var openSummary = PresentationCommentMetadataPolicy.BuildCountSummary(OpenThreadCount, "open thread");
+            var resolvedSummary = PresentationCommentMetadataPolicy.BuildCountSummary(ResolvedThreadCount, "resolved thread");
+            var replySummary = PresentationCommentMetadataPolicy.BuildCountSummary(TotalReplyCount, "reply");
+            var mentionSummary = PresentationCommentMetadataPolicy.BuildCountSummary(TotalMentionCount, "mention");
+            return $"{threadSummary}: {openSummary}, {resolvedSummary}, {replySummary}, {mentionSummary}";
+        }
+    }
+
+    public string CurrentSlideSummaryLabel =>
+        $"Slide {SlideIndex + 1}: {PresentationCommentMetadataPolicy.BuildCountSummary(SlideCommentCount, "thread")}";
 }
 
 public sealed record PresentationCommentMutationPlan(
@@ -577,13 +597,23 @@ public static class PresentationReviewWorkflowPlanner
         var descriptors = comments
             .Select((comment, index) => DescribeComment(slideIndex, index, comment, selected == index))
             .ToArray();
-        var total = slides.Sum(slide => slide.Comments.Count);
+        var deckComments = slides.SelectMany(slide => slide.Comments).ToArray();
+        var total = deckComments.Length;
+        var open = deckComments.Count(comment => !comment.IsResolved);
+        var resolved = deckComments.Count(comment => comment.IsResolved);
+        var replies = deckComments.Sum(comment => comment.Replies.Count);
+        var mentions = deckComments.Sum(comment =>
+            CountMentions(comment.Text) + comment.Replies.Sum(reply => CountMentions(reply.Text)));
 
         return new PresentationCommentPanePlan(
             slideIndex,
             slides.Count,
             comments.Count,
             total,
+            open,
+            resolved,
+            replies,
+            mentions,
             selected ?? -1,
             descriptors,
             BuildCommentActions(slides, slideIndex, selected, total));

@@ -203,6 +203,7 @@ public sealed class MainWindow : Window
     internal string AccessibilityCheckerPaneMessage => _accessibilityCheckerPaneMessage?.Text ?? string.Empty;
     internal bool IsDirty => _file.IsDirty;
     internal int ReviewCommentSelectedCount => LastCommentPanePlan?.Comments.Count(comment => comment.IsSelected) ?? 0;
+    internal string ReviewCommentPaneSummary => LastCommentPanePlan?.DeckSummaryLabel ?? string.Empty;
     internal bool IsReadingOrderPaneVisible => _readingOrderPaneHost?.Visibility == Visibility.Visible;
     internal int ReadingOrderPaneItemCount => LastReadingOrderPlan?.Items.Count ?? 0;
     internal string ReadingOrderPaneHeading => _readingOrderPaneHeading?.Text ?? string.Empty;
@@ -1000,6 +1001,7 @@ public sealed class MainWindow : Window
 
         // ── List pane ──────────────────────────────────────────────────────────
         _commentListPanel.Children.Clear();
+        AddCommentPaneSummary(_commentListPanel, plan);
         AddCommentInput(_commentListPanel);
         if (comments.Count > 0)
         {
@@ -1075,6 +1077,18 @@ public sealed class MainWindow : Window
         {
             _commentListHost.Visibility = Visibility.Collapsed;
         }
+    }
+
+    private static void AddCommentPaneSummary(Panel host, PresentationCommentPanePlan plan)
+    {
+        host.Children.Add(new TextBlock
+        {
+            Text = $"{plan.CurrentSlideSummaryLabel} | {plan.DeckSummaryLabel}",
+            FontSize = 11,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = new SolidColorBrush(Color.FromRgb(0x44, 0x44, 0x44)),
+            Margin = new Thickness(0, 0, 0, 6),
+        });
     }
 
     private void AddCommentInput(Panel host)
