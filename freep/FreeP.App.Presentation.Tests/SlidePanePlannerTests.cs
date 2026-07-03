@@ -283,6 +283,62 @@ public sealed class SlidePanePlannerTests
     }
 
     [Fact]
+    public void SectionPlanner_BuildsSharedExecutionPlanForPromptedActions()
+    {
+        var editor = CreateEditingSession(2);
+        var addAction = SlideSectionPlanner.BuildSlideContextActions(
+                editor.Presentation.Slides,
+                editor.Presentation.Sections,
+                slideIndex: 1)
+            .Single();
+
+        var execution = SlideSectionPlanner.BuildExecutionPlan(addAction);
+
+        execution.Kind.Should().Be(SlideSectionActionKind.AddSection);
+        execution.IsEnabled.Should().BeTrue();
+        execution.RequiresNamePrompt.Should().BeTrue();
+        execution.PromptTitle.Should().Be(SlideSectionPlanner.AddSectionMenuText);
+        execution.SuggestedName.Should().Be(SlideSectionPlanner.DefaultSectionName);
+        execution.SlideIndex.Should().Be(1);
+    }
+
+    [Fact]
+    public void SectionPlanner_TryApplyAction_UsesSharedExecutionForAddRenameAndRemove()
+    {
+        var editor = CreateEditingSession(3);
+
+        var addExecution = SlideSectionPlanner.BuildExecutionPlan(
+            SlideSectionPlanner.BuildSlideContextActions(
+                    editor.Presentation.Slides,
+                    editor.Presentation.Sections,
+                    slideIndex: 1)
+                .Single());
+
+        SlideSectionPlanner.TryApplyAction(editor, addExecution)
+            .Should().BeFalse("prompted actions require the host-provided name");
+        SlideSectionPlanner.TryApplyAction(editor, addExecution, "  Part Two  ").Should().BeTrue();
+        editor.Presentation.Sections.Should().ContainSingle();
+        editor.Presentation.Sections[0].Name.Should().Be("Part Two");
+
+        var renameExecution = SlideSectionPlanner.BuildExecutionPlan(
+            SlideSectionPlanner.BuildSectionHeaderActions(editor.Presentation.Sections, 0, 1)
+                .Single(action => action.Kind == SlideSectionActionKind.RenameSection));
+
+        renameExecution.RequiresNamePrompt.Should().BeTrue();
+        renameExecution.PromptTitle.Should().Be(SlideSectionPlanner.RenameSectionMenuText);
+        SlideSectionPlanner.TryApplyAction(editor, renameExecution, "  Renamed  ").Should().BeTrue();
+        editor.Presentation.Sections[0].Name.Should().Be("Renamed");
+
+        var removeExecution = SlideSectionPlanner.BuildExecutionPlan(
+            SlideSectionPlanner.BuildSectionHeaderActions(editor.Presentation.Sections, 0, 1)
+                .Single(action => action.Kind == SlideSectionActionKind.RemoveSection));
+
+        removeExecution.RequiresNamePrompt.Should().BeFalse();
+        SlideSectionPlanner.TryApplyAction(editor, removeExecution).Should().BeTrue();
+        editor.Presentation.Sections.Should().BeEmpty();
+    }
+
+    [Fact]
     public void AddSectionAtSlide_SplitsExistingSectionAndUsesSlideIds()
     {
         var editor = CreateEditingSession(3);
