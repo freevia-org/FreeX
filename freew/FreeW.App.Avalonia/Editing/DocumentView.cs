@@ -10,6 +10,7 @@ using FreeW.App.Presentation.Dialogs;
 using FreeW.App.Presentation.DocumentView;
 using FreeW.App.Presentation.Links;
 using FreeW.App.Presentation.Ribbon;
+using FreeW.App.Presentation.Shell;
 using FreeW.Core.Model;
 using TextAlignment = FreeW.Core.Model.TextAlignment;
 
@@ -92,6 +93,8 @@ public sealed class DocumentView : Control
     private const double SubYLowerFraction = 0.33;
 
     private DocumentViewMode _viewMode = DocumentViewMode.PrintLayout;
+    private DocumentViewDepthLayoutPlan _viewDepthLayout =
+        DocumentViewDepthLayoutPlanner.Build(FreeWViewDepthMode.LiveEditor);
     private bool _showParagraphMarks;
     // AV-VIEW: layout-gridlines overlay (faint grid behind text) + ruler strip (top horizontal +
     // left vertical with tick marks and margin markers). Both are view-only chrome — they never
@@ -318,9 +321,20 @@ public sealed class DocumentView : Control
             if (_viewMode == value)
                 return;
             _viewMode = value;
+            _viewDepthLayout = DocumentViewDepthLayoutPlanner.Build(FreeWViewDepthMode.LiveEditor);
             InvalidateLayoutAndVisual();
             ViewModeChanged?.Invoke();
         }
+    }
+
+    internal DocumentViewDepthLayoutPlan ViewDepthLayout => _viewDepthLayout;
+
+    internal void ApplyViewDepthLayout(DocumentViewDepthLayoutPlan layout)
+    {
+        ArgumentNullException.ThrowIfNull(layout);
+
+        _viewDepthLayout = layout;
+        InvalidateVisual();
     }
 
     public sealed record CellEditRequest(int Block, int Row, int Col, string Text);

@@ -1,3 +1,4 @@
+using FreeW.App.Presentation.DocumentView;
 using FreeW.App.Presentation.Shell;
 
 namespace FreeW.App.Presentation.Tests;
@@ -21,11 +22,17 @@ public sealed class FreeWViewDepthPlannerTests
         multiple.IsMultiplePagesActive.Should().BeTrue();
         multiple.IsSideToSideActive.Should().BeFalse();
         multiple.PagesAcross.Should().Be(2);
+        multiple.Layout.PageFlow.Should().Be(DocumentViewDepthPageFlow.MultiplePagesGrid);
+        multiple.Layout.PageRows.Should().Be(2);
+        multiple.Layout.PreferredVisiblePageCount.Should().Be(4);
 
         sideToSide.IsSplitActive.Should().BeFalse();
         sideToSide.IsMultiplePagesActive.Should().BeFalse();
         sideToSide.IsSideToSideActive.Should().BeTrue();
         sideToSide.PagesAcross.Should().Be(2);
+        sideToSide.Layout.PageFlow.Should().Be(DocumentViewDepthPageFlow.SideToSideHorizontal);
+        sideToSide.Layout.PageRows.Should().Be(1);
+        sideToSide.Layout.UsesHorizontalPageFlow.Should().BeTrue();
     }
 
     [Fact]
@@ -75,11 +82,11 @@ public sealed class FreeWViewDepthPlannerTests
         sideToSide.UsesReadOnlySnapshot.Should().BeTrue();
         split.Limitation.Should().Contain("read-only");
         multiple.Limitation.Should().Contain("Editing is disabled");
-        sideToSide.Limitation.Should().Contain("horizontal page turning remains deferred");
+        sideToSide.Limitation.Should().Contain("Animated horizontal page turning remains deferred");
     }
 
     [Fact]
-    public void Multi_page_preview_scale_accounts_for_two_page_fit()
+    public void Preview_scale_accounts_for_page_grid_and_side_to_side_fit()
     {
         var live = FreeWViewDepthPlanner.BuildPreviewScale(
             FreeWViewDepthMode.LiveEditor,
@@ -101,7 +108,65 @@ public sealed class FreeWViewDepthPlannerTests
             pageHeightDip: 800);
 
         multiplePages.Should().BeLessThan(live);
-        sideToSide.Should().Be(multiplePages);
+        sideToSide.Should().BeGreaterThan(multiplePages);
         sideToSide.Should().BeGreaterThan(0);
+    }
+
+    [Fact]
+    public void Shared_layout_policy_distinguishes_multiple_pages_from_side_to_side()
+    {
+        var multiple = FreeWViewDepthPlanner.Build(FreeWViewDepthMode.MultiplePagesPreview).Layout;
+        var sideToSide = FreeWViewDepthPlanner.Build(FreeWViewDepthMode.SideToSidePreview).Layout;
+
+        multiple.PageFlow.Should().Be(DocumentViewDepthPageFlow.MultiplePagesGrid);
+        multiple.PagesAcross.Should().Be(2);
+        multiple.PageRows.Should().Be(2);
+        multiple.ZoomIntent.Should().Be(DocumentViewDepthZoomIntent.FitPagesAcross);
+        multiple.UsesHorizontalPageFlow.Should().BeFalse();
+
+        sideToSide.PageFlow.Should().Be(DocumentViewDepthPageFlow.SideToSideHorizontal);
+        sideToSide.PagesAcross.Should().Be(2);
+        sideToSide.PageRows.Should().Be(1);
+        sideToSide.PreferredVisiblePageCount.Should().Be(2);
+        sideToSide.ZoomIntent.Should().Be(DocumentViewDepthZoomIntent.FitPagesAcross);
+        sideToSide.UsesHorizontalPageFlow.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Shared_viewport_plan_exposes_required_page_span_for_renderers()
+    {
+        var multiple = FreeWViewDepthPlanner.Build(FreeWViewDepthMode.MultiplePagesPreview).Layout;
+        var sideToSide = FreeWViewDepthPlanner.Build(FreeWViewDepthMode.SideToSidePreview).Layout;
+
+        var multipleViewport = DocumentViewDepthLayoutPlanner.BuildViewportPlan(
+            multiple,
+            viewportWidthDip: 1400,
+            viewportHeightDip: 1000,
+            pageWidthDip: 600,
+            pageHeightDip: 800);
+        var sideViewport = DocumentViewDepthLayoutPlanner.BuildViewportPlan(
+            sideToSide,
+            viewportWidthDip: 1400,
+            viewportHeightDip: 1000,
+            pageWidthDip: 600,
+            pageHeightDip: 800);
+
+        multipleViewport.RequiredPageSpanWidthDip.Should().Be(1224);
+        multipleViewport.RequiredPageSpanHeightDip.Should().Be(1624);
+        sideViewport.RequiredPageSpanWidthDip.Should().Be(1224);
+        sideViewport.RequiredPageSpanHeightDip.Should().Be(800);
+        sideViewport.Scale.Should().BeGreaterThan(multipleViewport.Scale);
+    }
+
+    [Fact]
+    public void Document_viewer_zoom_uses_pages_across_from_shared_layout()
+    {
+        var sideToSide = FreeWViewDepthPlanner.Build(FreeWViewDepthMode.SideToSidePreview).Layout;
+        var live = FreeWViewDepthPlanner.Build(FreeWViewDepthMode.LiveEditor).Layout;
+
+        DocumentViewDepthLayoutPlanner.BuildDocumentViewerZoomPercent(sideToSide, pageWidthZoomFactor: 1.2)
+            .Should().Be(60);
+        DocumentViewDepthLayoutPlanner.BuildDocumentViewerZoomPercent(live, pageWidthZoomFactor: 1.2)
+            .Should().Be(120);
     }
 }
