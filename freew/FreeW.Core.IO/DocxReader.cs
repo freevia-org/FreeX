@@ -1985,6 +1985,20 @@ public static class DocxReader
             return;
         }
 
+        // A w:drawing whose anchor references a wpg:wgp group element is a floating drawing group.
+        // Must be checked BEFORE ReadWordArt/ReadShape because wpg:wgp contains nested wps:wsp children
+        // and those readers use Descendants() to find a candidate object.
+        var drawingGroup = ReadDrawingGroup(r, archive, imageRelationships);
+        if (drawingGroup is not null)
+        {
+            var groupRun = Run.FromDrawingGroup(drawingGroup);
+            groupRun.HyperlinkUrl = hyperlinkUrl;
+            groupRun.HyperlinkAnchor = hyperlinkAnchor;
+            ApplyRevision(groupRun);
+            paragraph.Runs.Add(groupRun);
+            return;
+        }
+
         // A w:drawing wrapping a wps:wsp text box whose run a:rPr carries DrawingML text effects is WordArt.
         // Checked BEFORE ReadShape because a WordArt text box is also a wps:wsp (so the shape reader would
         // otherwise claim it); the text effects on the run's a:rPr are what distinguish the two.
@@ -1998,20 +2012,6 @@ public static class DocxReader
             wordArtRun.CommentId = commentId;
             ApplyRevision(wordArtRun);
             paragraph.Runs.Add(wordArtRun);
-            return;
-        }
-
-        // A w:drawing whose anchor references a wpg:wgp group element is a floating drawing group.
-        // Must be checked BEFORE ReadShape because wpg:wgp contains wps:wsp children and ReadShape
-        // uses Descendants() which would otherwise match those nested wps:wsp elements.
-        var drawingGroup = ReadDrawingGroup(r);
-        if (drawingGroup is not null)
-        {
-            var groupRun = Run.FromDrawingGroup(drawingGroup);
-            groupRun.HyperlinkUrl = hyperlinkUrl;
-            groupRun.HyperlinkAnchor = hyperlinkAnchor;
-            ApplyRevision(groupRun);
-            paragraph.Runs.Add(groupRun);
             return;
         }
 
@@ -4504,7 +4504,10 @@ public static class DocxReader
     /// <c>wps:wsp</c> child's <c>wp:docPr/@name</c> ("GroupChild:Type:…"). Returns null when the run
     /// does not carry a wpg:wgp element.
     /// </summary>
-    private static DrawingGroup? ReadDrawingGroup(XElement run)
+    private static DrawingGroup? ReadDrawingGroup(
+        XElement run,
+        ZipArchive archive,
+        IReadOnlyDictionary<string, string> imageRelationships)
     {
         var drawing = run.Element(W + "drawing");
         var anchor = drawing?.Element(Wp + "anchor");
@@ -4540,6 +4543,7 @@ public static class DocxReader
             var cw = EmuToPoints(ext?.Attribute("cx")?.Value ?? "36");
             var ch = EmuToPoints(ext?.Attribute("cy")?.Value ?? "36");
 
+            var fakeRun = BuildGroupChildRun(wsp, childDocPr, cw, ch);
             object? child = null;
             if (name.StartsWith("GroupChild:Image", StringComparison.Ordinal))
             {
@@ -4548,12 +4552,13 @@ public static class DocxReader
             }
             else if (name.StartsWith("GroupChild:Shape:", StringComparison.Ordinal))
             {
-                var kindStr = name["GroupChild:Shape:".Length..];
-                var kind = Enum.TryParse<ShapeKind>(kindStr, out var k) ? k : ShapeKind.Rectangle;
-                child = new Shape(kind, cw, ch)
+                child = ReadShape(fakeRun, archive, imageRelationships);
+                if (child is null)
                 {
-                    Placement = new FloatingPlacement { Wrapping = group.Placement.Wrapping }
-                };
+                    var kindStr = name["GroupChild:Shape:".Length..];
+                    var kind = Enum.TryParse<ShapeKind>(kindStr, out var k) ? k : ShapeKind.Rectangle;
+                    child = new Shape(kind, cw, ch);
+                }
             }
             else if (name.StartsWith("GroupChild:Chart:", StringComparison.Ordinal))
             {
@@ -4569,12 +4574,14 @@ public static class DocxReader
             {
                 var styleStr = name["GroupChild:WordArt:".Length..];
                 var style = Enum.TryParse<WordArtStyle>(styleStr, out var s) ? s : WordArtStyle.FillBlue;
-                child = new WordArt { Style = style, Text = "WordArt", FontSizePt = 36 };
+                child = ReadWordArt(fakeRun) ?? new WordArt { Style = style, Text = "WordArt", FontSizePt = 36 };
             }
             else
             {
-                // Unknown child type — create a placeholder shape.
-                child = new Shape(ShapeKind.Rectangle, cw, ch);
+                // Unknown child type — try the rich shape/WordArt readers before falling back to a rectangle.
+                child = ReadWordArt(fakeRun)
+                    ?? (object?)ReadShape(fakeRun, archive, imageRelationships)
+                    ?? new Shape(ShapeKind.Rectangle, cw, ch);
             }
 
             if (child is not null)
@@ -4585,6 +4592,21 @@ public static class DocxReader
         }
 
         return group.Children.Count >= 2 ? group : null;
+    }
+
+    private static XElement BuildGroupChildRun(XElement wsp, XElement? childDocPr, double widthPt, double heightPt)
+    {
+        return new XElement(W + "r",
+            new XElement(W + "drawing",
+                new XElement(Wp + "inline",
+                    new XElement(Wp + "extent",
+                        new XAttribute("cx", PointsToEmu(widthPt)),
+                        new XAttribute("cy", PointsToEmu(heightPt))),
+                    childDocPr is null ? null : new XElement(childDocPr),
+                    new XElement(A + "graphic",
+                        new XElement(A + "graphicData",
+                            new XAttribute("uri", Wps.NamespaceName),
+                            new XElement(wsp))))));
     }
 
     /// <summary>

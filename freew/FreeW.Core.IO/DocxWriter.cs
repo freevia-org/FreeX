@@ -3774,9 +3774,9 @@ public static class DocxWriter
 
     /// <summary>
     /// Builds the <c>w:drawing/wp:anchor</c> for a <see cref="DrawingGroup"/>, emitting the group as
-    /// <c>wpg:wgp</c> inside <c>a:graphicData[uri=wpg]</c>. Each child is rendered as a simple shape
-    /// placeholder (<c>wps:wsp</c> with a preset-geometry fill) positioned by a child-local <c>a:xfrm</c>
-    /// offset relative to the group origin. Groups are always floating (no inline path).
+    /// <c>wpg:wgp</c> inside <c>a:graphicData[uri=wpg]</c>. Shape and WordArt children reuse their normal
+    /// DrawingML <c>wps:wsp</c> bodies with a group-local <c>a:xfrm</c>, while unsupported child kinds remain
+    /// lightweight placeholders. Groups are always floating (no inline path).
     /// </summary>
     private static XElement BuildDrawingGroupDrawing(DrawingGroup group, IdAllocator ids)
     {
@@ -3816,28 +3816,14 @@ public static class DocxWriter
                 _ => "GroupChild:Unknown"
             };
 
-            var childDocPr = new XElement(Wp + "docPr",
-                new XAttribute("id", ids.NextShapeDrawingId()),
-                new XAttribute("name", childName));
-
-            var spPr = new XElement(Wps + "spPr",
-                xfrm,
-                new XElement(A + "prstGeom",
-                    new XAttribute("prst", "rect"),
-                    new XElement(A + "avLst")),
-                new XElement(A + "solidFill",
-                    new XElement(A + "srgbClr",
-                        new XAttribute("val", "C0C0C0"))));
-
-            var wsp = new XElement(Wps + "wsp",
-                new XAttribute(XNamespace.Xmlns + "wps", Wps.NamespaceName),
-                childDocPr,
-                new XElement(Wps + "cNvSpPr",
-                    new XElement(A + "spLocks",
-                        new XAttribute("noChangeArrowheads", 1))),
-                spPr);
-
-            children.Add(wsp);
+            children.Add(child switch
+            {
+                Shape shape => BuildDrawingGroupShapeChild(shape, xfrm, childName, ids),
+                WordArt wordArt => BuildDrawingGroupWordArtChild(wordArt, xfrm, childName, ids),
+                _ => BuildDrawingGroupPlaceholderChild(xfrm, new XElement(Wp + "docPr",
+                    new XAttribute("id", ids.NextShapeDrawingId()),
+                    new XAttribute("name", childName)))
+            });
         }
 
         var grpSpPr = new XElement(Wpg + "grpSpPr",
@@ -3864,6 +3850,73 @@ public static class DocxWriter
                 wgp));
 
         return BuildAnchorContainer(cx, cy, docPr, graphic, group.Placement);
+    }
+
+    private static XElement BuildDrawingGroupShapeChild(
+        Shape shape,
+        XElement xfrm,
+        string childName,
+        IdAllocator ids)
+    {
+        var drawing = BuildShapeDrawing(shape, ids);
+        return BuildDrawingGroupRichWspChild(drawing, xfrm, childName);
+    }
+
+    private static XElement BuildDrawingGroupWordArtChild(
+        WordArt wordArt,
+        XElement xfrm,
+        string childName,
+        IdAllocator ids)
+    {
+        var drawing = BuildWordArtDrawing(wordArt, ids);
+        return BuildDrawingGroupRichWspChild(drawing, xfrm, childName);
+    }
+
+    private static XElement BuildDrawingGroupRichWspChild(
+        XElement drawing,
+        XElement xfrm,
+        string childName)
+    {
+        var wsp = new XElement(drawing.Descendants(Wps + "wsp").First());
+        var childDocPr = new XElement(drawing.Descendants(Wp + "docPr").First());
+        childDocPr.SetAttributeValue("name", childName);
+
+        ReplaceChildTransform(wsp, xfrm);
+        wsp.AddFirst(childDocPr);
+        return wsp;
+    }
+
+    private static XElement BuildDrawingGroupPlaceholderChild(XElement xfrm, XElement childDocPr)
+    {
+        var spPr = new XElement(Wps + "spPr",
+            xfrm,
+            new XElement(A + "prstGeom",
+                new XAttribute("prst", "rect"),
+                new XElement(A + "avLst")),
+            new XElement(A + "solidFill",
+                new XElement(A + "srgbClr",
+                    new XAttribute("val", "C0C0C0"))));
+
+        return new XElement(Wps + "wsp",
+            new XAttribute(XNamespace.Xmlns + "wps", Wps.NamespaceName),
+            childDocPr,
+            new XElement(Wps + "cNvSpPr",
+                new XElement(A + "spLocks",
+                    new XAttribute("noChangeArrowheads", 1))),
+            spPr);
+    }
+
+    private static void ReplaceChildTransform(XElement wsp, XElement xfrm)
+    {
+        var spPr = wsp.Element(Wps + "spPr");
+        if (spPr is null)
+            return;
+
+        var current = spPr.Element(A + "xfrm");
+        if (current is null)
+            spPr.AddFirst(new XElement(xfrm));
+        else
+            current.ReplaceWith(new XElement(xfrm));
     }
 
     /// <summary>
