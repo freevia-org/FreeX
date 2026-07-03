@@ -11424,14 +11424,13 @@ public sealed class DocumentView : RichTextBox
         ArgumentNullException.ThrowIfNull(options);
         // Capture the user's in-progress edits before mutating the model out from under the view.
         CommitToModel();
-        TableOfAuthorities.EnsureStyles(_model);
 
         // Insert at the caret's block (the table reads as front-/back-matter); fall back to the document end.
         var index = CaretBlockIndex();
         if (index < 0 || index > _model.Blocks.Count)
             index = _model.Blocks.Count;
 
-        InsertTableOfAuthoritiesAt(index, options);
+        ApplyTableOfAuthoritiesPlan(TableOfAuthoritiesRegionPlanner.BuildInsertPlan(_model, index, options));
     }
 
     /// <summary>
@@ -11443,42 +11442,23 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     public void RefreshTableOfAuthorities()
     {
-        CommitToModel();
-        TableOfAuthorities.EnsureStyles(_model);
-
-        var first = -1;
-        for (var i = 0; i < _model.Blocks.Count; i++)
-        {
-            if (TableOfAuthorities.IsTableOfAuthoritiesParagraph(_model.Blocks[i]))
-            {
-                first = i;
-                break;
-            }
-        }
-
-        var insertAt = first >= 0 ? first : _model.Blocks.Count;
-
-        var indices = new List<int>();
-        for (var i = 0; i < _model.Blocks.Count; i++)
-        {
-            if (TableOfAuthorities.IsTableOfAuthoritiesParagraph(_model.Blocks[i]))
-                indices.Add(i);
-        }
-        for (var i = indices.Count - 1; i >= 0; i--)
-            _commands.Execute(new DeleteParagraphCommand(indices[i]));
-
-        InsertTableOfAuthoritiesAt(insertAt);
+        RefreshTableOfAuthorities(ToaOptions.Default);
     }
 
-    // Insert the freshly built Table of Authorities paragraphs starting at block index `at`, one reversible
-    // InsertParagraphCommand each (kept in order). The bus's Changed event redraws.
-    private void InsertTableOfAuthoritiesAt(int at, ToaOptions? options = null)
+    public void RefreshTableOfAuthorities(ToaOptions options)
     {
-        var entries = options is not null && !ReferenceEquals(options, ToaOptions.Default)
-            ? TableOfAuthorities.Build(_model, options)
-            : TableOfAuthorities.Build(_model);
-        var index = Math.Clamp(at, 0, _model.Blocks.Count);
-        foreach (var paragraph in entries)
+        ArgumentNullException.ThrowIfNull(options);
+        CommitToModel();
+        ApplyTableOfAuthoritiesPlan(TableOfAuthoritiesRegionPlanner.BuildRefreshPlan(_model, options));
+    }
+
+    private void ApplyTableOfAuthoritiesPlan(TableOfAuthoritiesRegionPlan plan)
+    {
+        foreach (var deleteIndex in plan.DeleteIndicesDescending)
+            _commands.Execute(new DeleteParagraphCommand(deleteIndex));
+
+        var index = Math.Clamp(plan.InsertIndex, 0, _model.Blocks.Count);
+        foreach (var paragraph in plan.Paragraphs)
             _commands.Execute(new InsertParagraphCommand(index++, paragraph));
     }
 
