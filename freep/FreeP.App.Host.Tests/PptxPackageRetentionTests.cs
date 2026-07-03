@@ -239,6 +239,186 @@ public sealed class PptxPackageRetentionTests
     }
 
     [Fact]
+    public void RenderCompareChartLabelsCorpus_ChartDataSemanticEdit_RegeneratesOnlyEditedWorkbookAndPreservesNeighborFormulaRanges()
+    {
+        const string deckName = "19-chart-labels.pptx";
+        var sourcePath = Path.Combine(FindCorpusDirectory(), deckName);
+        byte[] sourceChart1Workbook;
+        byte[] sourceChart2Workbook;
+        byte[] sourceChart3Workbook;
+
+        using (var sourceArchive = ZipFile.OpenRead(sourcePath))
+        {
+            sourceChart1Workbook = ReadBytes(sourceArchive, "ppt/embeddings/Microsoft_Excel_Worksheet.xlsx");
+            sourceChart2Workbook = ReadBytes(sourceArchive, "ppt/embeddings/Microsoft_Excel_Worksheet1.xlsx");
+            sourceChart3Workbook = ReadBytes(sourceArchive, "ppt/embeddings/Microsoft_Excel_Worksheet2.xlsx");
+        }
+
+        var loaded = PptxPackageReader.Read(sourcePath);
+        loaded.PackageSnapshot.Should().NotBeNull($"{deckName} must be captured before chart data edits");
+        loaded.Slides.Should().HaveCount(3);
+
+        var chartShapes = loaded.Slides
+            .SelectMany((slide, slideIndex) => slide.Shapes
+                .Where(shape => shape.Kind == SlideShapeKind.Chart)
+                .Select(shape => (SlideIndex: slideIndex, Shape: shape)))
+            .ToArray();
+        chartShapes.Should().HaveCount(3);
+        chartShapes.Should().OnlyContain(shape => shape.Shape.Chart != null);
+        chartShapes[0].Shape.Chart!.SourcePartPath.Should().Be("ppt/charts/chart1.xml");
+        chartShapes[1].Shape.Chart!.SourcePartPath.Should().Be("ppt/charts/chart2.xml");
+        chartShapes[2].Shape.Chart!.SourcePartPath.Should().Be("ppt/charts/chart3.xml");
+
+        AssertChartFormulaReferences(
+            chartShapes[0].Shape.Chart!,
+            ("Sheet1!$B$1", "Sheet1!$A$2:$A$5", "Sheet1!$B$2:$B$5"),
+            ("Sheet1!$C$1", "Sheet1!$A$2:$A$5", "Sheet1!$C$2:$C$5"),
+            ("Sheet1!$D$1", "Sheet1!$A$2:$A$5", "Sheet1!$D$2:$D$5"));
+        AssertChartFormulaReferences(
+            chartShapes[1].Shape.Chart!,
+            ("Sheet1!$B$1", "Sheet1!$A$2:$A$5", "Sheet1!$B$2:$B$5"));
+        AssertChartFormulaReferences(
+            chartShapes[2].Shape.Chart!,
+            ("Sheet1!$B$1", "Sheet1!$A$2:$A$5", "Sheet1!$B$2:$B$5"),
+            ("Sheet1!$D$1", "Sheet1!$A$2:$A$5", "Sheet1!$D$2:$D$5"),
+            ("Sheet1!$C$1", "Sheet1!$A$2:$A$5", "Sheet1!$C$2:$C$5"));
+
+        chartShapes[0].Shape.Chart!.RegenerateWorkbookOnSave.Should().BeFalse();
+        chartShapes[1].Shape.Chart!.RegenerateWorkbookOnSave.Should().BeFalse();
+        chartShapes[2].Shape.Chart!.RegenerateWorkbookOnSave.Should().BeFalse();
+
+        new ReplaceChartDataCommand(
+            slideIndex: chartShapes[1].SlideIndex,
+            shapeId: chartShapes[1].Shape.Id,
+            categories: ["Edited Jan", "Edited Feb", "Edited Mar"],
+            seriesNames: ["Edited Actual", "Edited Forecast"],
+            values:
+            [
+                new double?[] { 111, 222, 333 },
+                new double?[] { 444, 555, 666 },
+            ]).Apply(loaded);
+
+        chartShapes[0].Shape.Chart!.RegenerateWorkbookOnSave.Should().BeFalse();
+        chartShapes[1].Shape.Chart!.RegenerateWorkbookOnSave.Should().BeTrue();
+        chartShapes[2].Shape.Chart!.RegenerateWorkbookOnSave.Should().BeFalse();
+
+        using var saved = new MemoryStream();
+        PptxPackageWriter.Write(loaded, saved);
+        var savedBytes = saved.ToArray();
+
+        using (var archive = new ZipArchive(new MemoryStream(savedBytes), ZipArchiveMode.Read))
+        {
+            ReadBytes(archive, "ppt/embeddings/Microsoft_Excel_Worksheet.xlsx")
+                .Should()
+                .Equal(sourceChart1Workbook, "the first unedited PowerPoint-authored workbook should stay byte-for-byte");
+            sourceChart2Workbook.Should().NotBeEmpty("the edited chart starts with an authored PowerPoint workbook sidecar");
+            archive.GetEntry("ppt/embeddings/Microsoft_Excel_Worksheet1.xlsx").Should().BeNull(
+                "the edited chart should drop its stale authored workbook sidecar");
+            ReadBytes(archive, "ppt/embeddings/Microsoft_Excel_Worksheet2.xlsx")
+                .Should()
+                .Equal(sourceChart3Workbook, "the third unedited PowerPoint-authored workbook should stay byte-for-byte");
+            archive.GetEntry("ppt/embeddings/chartWorkbook2.xlsx").Should().NotBeNull(
+                "the edited second chart should receive a regenerated workbook at its writer-owned chart index");
+
+            var chart1Xml = LoadXml(archive, "ppt/charts/chart1.xml");
+            var chart1Text = chart1Xml.ToString(SaveOptions.DisableFormatting);
+            chart1Text.Should().Contain("Sheet1!$B$1");
+            chart1Text.Should().Contain("Sheet1!$A$2:$A$5");
+            chart1Text.Should().Contain("Sheet1!$B$2:$B$5");
+            chart1Text.Should().Contain("Sheet1!$C$1");
+            chart1Text.Should().Contain("Sheet1!$C$2:$C$5");
+            chart1Text.Should().Contain("Sheet1!$D$1");
+            chart1Text.Should().Contain("Sheet1!$D$2:$D$5");
+            chart1Xml.Root!.Element(ChartNs + "externalData")!.Attribute(RelsDocNs + "id")!.Value
+                .Should().Be("rId1");
+            var chart1Rels = LoadXml(archive, "ppt/charts/_rels/chart1.xml.rels");
+            Relationship(chart1Rels, PackageRelType, "../embeddings/Microsoft_Excel_Worksheet.xlsx")
+                .Should().NotBeNull();
+
+            var chart2Xml = LoadXml(archive, "ppt/charts/chart2.xml");
+            var chart2Text = chart2Xml.ToString(SaveOptions.DisableFormatting);
+            chart2Text.Should().Contain("Edited Jan");
+            chart2Text.Should().Contain("Edited Actual");
+            chart2Text.Should().Contain("Edited Forecast");
+            chart2Text.Should().Contain("ChartData!$A$2:$A$4");
+            chart2Text.Should().Contain("ChartData!$B$1");
+            chart2Text.Should().Contain("ChartData!$B$2:$B$4");
+            chart2Text.Should().Contain("ChartData!$C$1");
+            chart2Text.Should().Contain("ChartData!$C$2:$C$4");
+            chart2Text.Should().NotContain("Sheet1!$B$1",
+                "edited chart formulas should point at regenerated ChartData ranges");
+            chart2Xml.Root!.Element(ChartNs + "externalData")!.Attribute(RelsDocNs + "id")!.Value
+                .Should().Be("rIdWorkbook1");
+            var chart2Rels = LoadXml(archive, "ppt/charts/_rels/chart2.xml.rels");
+            Relationship(chart2Rels, PackageRelType, "../embeddings/chartWorkbook2.xlsx").Should().NotBeNull();
+
+            var chart3Xml = LoadXml(archive, "ppt/charts/chart3.xml");
+            var chart3Text = chart3Xml.ToString(SaveOptions.DisableFormatting);
+            chart3Text.Should().Contain("Sheet1!$B$1");
+            chart3Text.Should().Contain("Sheet1!$A$2:$A$5");
+            chart3Text.Should().Contain("Sheet1!$B$2:$B$5");
+            chart3Text.Should().Contain("Sheet1!$D$1");
+            chart3Text.Should().Contain("Sheet1!$D$2:$D$5");
+            chart3Text.Should().Contain("Sheet1!$C$1");
+            chart3Text.Should().Contain("Sheet1!$C$2:$C$5");
+            chart3Xml.Root!.Element(ChartNs + "externalData")!.Attribute(RelsDocNs + "id")!.Value
+                .Should().Be("rId1");
+            var chart3Rels = LoadXml(archive, "ppt/charts/_rels/chart3.xml.rels");
+            Relationship(chart3Rels, PackageRelType, "../embeddings/Microsoft_Excel_Worksheet2.xlsx")
+                .Should().NotBeNull();
+
+            var contentTypes = LoadXml(archive, "[Content_Types].xml");
+            Default(contentTypes, "xlsx", SpreadsheetWorkbookContentType).Should().NotBeNull();
+            Override(contentTypes, "/ppt/embeddings/chartWorkbook2.xlsx", SpreadsheetWorkbookContentType)
+                .Should().NotBeNull();
+
+            using var regeneratedWorkbook = new ZipArchive(
+                new MemoryStream(ReadBytes(archive, "ppt/embeddings/chartWorkbook2.xlsx")),
+                ZipArchiveMode.Read);
+            var regeneratedSheet = LoadXml(regeneratedWorkbook, "xl/worksheets/sheet1.xml")
+                .ToString(SaveOptions.DisableFormatting);
+            regeneratedSheet.Should().Contain("Edited Actual");
+            regeneratedSheet.Should().Contain("Edited Forecast");
+            regeneratedSheet.Should().Contain("Edited Jan");
+            regeneratedSheet.Should().Contain("Edited Feb");
+            regeneratedSheet.Should().Contain("Edited Mar");
+            regeneratedSheet.Should().Contain("111");
+            regeneratedSheet.Should().Contain("222");
+            regeneratedSheet.Should().Contain("333");
+            regeneratedSheet.Should().Contain("444");
+            regeneratedSheet.Should().Contain("555");
+            regeneratedSheet.Should().Contain("666");
+        }
+
+        var reloaded = PptxPackageReader.Read(new MemoryStream(savedBytes));
+        var reloadedCharts = reloaded.Slides
+            .SelectMany(slide => slide.Shapes)
+            .Where(shape => shape.Kind == SlideShapeKind.Chart)
+            .Select(shape => shape.Chart!)
+            .ToArray();
+        reloadedCharts.Should().HaveCount(3);
+        AssertChartFormulaReferences(
+            reloadedCharts[0],
+            ("Sheet1!$B$1", "Sheet1!$A$2:$A$5", "Sheet1!$B$2:$B$5"),
+            ("Sheet1!$C$1", "Sheet1!$A$2:$A$5", "Sheet1!$C$2:$C$5"),
+            ("Sheet1!$D$1", "Sheet1!$A$2:$A$5", "Sheet1!$D$2:$D$5"));
+        AssertChartFormulaReferences(
+            reloadedCharts[1],
+            ("ChartData!$B$1", "ChartData!$A$2:$A$4", "ChartData!$B$2:$B$4"),
+            ("ChartData!$C$1", "ChartData!$A$2:$A$4", "ChartData!$C$2:$C$4"));
+        reloadedCharts[1].Categories.Should().Equal("Edited Jan", "Edited Feb", "Edited Mar");
+        reloadedCharts[1].Series[0].Name.Should().Be("Edited Actual");
+        reloadedCharts[1].Series[0].Values.Should().Equal(111, 222, 333);
+        reloadedCharts[1].Series[1].Name.Should().Be("Edited Forecast");
+        reloadedCharts[1].Series[1].Values.Should().Equal(444, 555, 666);
+        AssertChartFormulaReferences(
+            reloadedCharts[2],
+            ("Sheet1!$B$1", "Sheet1!$A$2:$A$5", "Sheet1!$B$2:$B$5"),
+            ("Sheet1!$D$1", "Sheet1!$A$2:$A$5", "Sheet1!$D$2:$D$5"),
+            ("Sheet1!$C$1", "Sheet1!$A$2:$A$5", "Sheet1!$C$2:$C$5"));
+    }
+
+    [Fact]
     public void CoreProperties_RoundTripThroughPptxPackage()
     {
         var presentation = Presentation.CreateEmpty();
@@ -2508,6 +2688,19 @@ public sealed class PptxPackageRetentionTests
         doc.Root?.Elements(ContentTypesNs + "Default").FirstOrDefault(o =>
             o.Attribute("Extension")?.Value == extension &&
             o.Attribute("ContentType")?.Value == contentType);
+
+    private static void AssertChartFormulaReferences(
+        ChartShape chart,
+        params (string SeriesName, string Category, string Values)[] expected)
+    {
+        chart.Series.Should().HaveCount(expected.Length);
+        for (var i = 0; i < expected.Length; i++)
+        {
+            chart.Series[i].FormulaReferences.SeriesName.Should().Be(expected[i].SeriesName);
+            chart.Series[i].FormulaReferences.Category.Should().Be(expected[i].Category);
+            chart.Series[i].FormulaReferences.Values.Should().Be(expected[i].Values);
+        }
+    }
 
     private static void AddRelationship(XDocument doc, string id, string type, string target, bool external = false)
     {
