@@ -10,6 +10,7 @@ using System.Windows.Media.Imaging;
 using Free.Shared.Ribbon;
 using FreeW.App.Host.Editing;
 using FreeW.App.Presentation.Dialogs;
+using FreeW.App.Presentation.DocumentView;
 using FreeW.App.Presentation.Ribbon;
 using FreeW.Core.IO;
 using FreeW.Core.Model;
@@ -1268,7 +1269,7 @@ internal static class FreeWRibbonCommands
 
         // Review tab — Tracking display controls: Display for Review and Show Markup per-category toggles.
         //
-        // Display for Review exposes a dropdown backed by DocumentView.MarkupDisplayMode. The root button
+        // Display for Review exposes a dropdown backed by ReviewDisplayMode. The root button
         // always reflects the current mode. No Markup and Original are now implemented — each hides the
         // opposite set of revision runs using a visually-transparent technique that keeps every run in
         // the WPF tree so CommitToModel can round-trip text + RevisionMarker safely.
@@ -4838,7 +4839,7 @@ internal static class FreeWRibbonCommands
         public RibbonCommandState GetState() => new(IsEnabled: true, IsChecked: editor.TrackChangesEnabled);
     }
 
-    // Review > Tracking > Display for Review: exposes the MarkupDisplayMode dropdown. The root button
+    // Review > Tracking > Display for Review: exposes the ReviewDisplayMode dropdown. The root button
     // and the "All Markup" menu item both set AllMarkup mode; No Markup and Original are now implemented
     // using a transparent-run technique that keeps every revision run in the WPF tree so CommitToModel
     // can round-trip text + RevisionMarker safely (data-loss risk is closed).
@@ -4847,12 +4848,12 @@ internal static class FreeWRibbonCommands
         public void Execute(RibbonCommandContext context)
         {
             editor.Focus();
-            editor.ApplyDisplayForReview(DocumentView.MarkupDisplayMode.AllMarkup);
+            editor.ApplyDisplayForReview(ReviewDisplayMode.AllMarkup);
         }
 
         // The root button IsChecked is true when in All Markup (the default), matching Word's convention.
         public RibbonCommandState GetState() =>
-            new(IsEnabled: true, IsChecked: editor.DisplayForReview == DocumentView.MarkupDisplayMode.AllMarkup);
+            new(IsEnabled: true, IsChecked: editor.DisplayForReview == ReviewDisplayMode.AllMarkup);
     }
 
     // Review > Tracking > Display for Review > Simple Markup: inline rendering identical to No Markup
@@ -4864,11 +4865,11 @@ internal static class FreeWRibbonCommands
         public void Execute(RibbonCommandContext context)
         {
             editor.Focus();
-            editor.ApplyDisplayForReview(DocumentView.MarkupDisplayMode.SimpleMarkup);
+            editor.ApplyDisplayForReview(ReviewDisplayMode.SimpleMarkup);
         }
 
         public RibbonCommandState GetState() =>
-            new(IsEnabled: true, IsChecked: editor.DisplayForReview == DocumentView.MarkupDisplayMode.SimpleMarkup);
+            new(IsEnabled: true, IsChecked: editor.DisplayForReview == ReviewDisplayMode.SimpleMarkup);
     }
 
     // Review > Tracking > Display for Review > No Markup: insertions shown as plain text; deleted runs
@@ -4879,11 +4880,11 @@ internal static class FreeWRibbonCommands
         public void Execute(RibbonCommandContext context)
         {
             editor.Focus();
-            editor.ApplyDisplayForReview(DocumentView.MarkupDisplayMode.NoMarkup);
+            editor.ApplyDisplayForReview(ReviewDisplayMode.NoMarkup);
         }
 
         public RibbonCommandState GetState() =>
-            new(IsEnabled: true, IsChecked: editor.DisplayForReview == DocumentView.MarkupDisplayMode.NoMarkup);
+            new(IsEnabled: true, IsChecked: editor.DisplayForReview == ReviewDisplayMode.NoMarkup);
     }
 
     // Review > Tracking > Display for Review > Original: deleted runs shown as plain text; inserted runs
@@ -4893,11 +4894,11 @@ internal static class FreeWRibbonCommands
         public void Execute(RibbonCommandContext context)
         {
             editor.Focus();
-            editor.ApplyDisplayForReview(DocumentView.MarkupDisplayMode.Original);
+            editor.ApplyDisplayForReview(ReviewDisplayMode.Original);
         }
 
         public RibbonCommandState GetState() =>
-            new(IsEnabled: true, IsChecked: editor.DisplayForReview == DocumentView.MarkupDisplayMode.Original);
+            new(IsEnabled: true, IsChecked: editor.DisplayForReview == ReviewDisplayMode.Original);
     }
 
     // Review > Tracking > Show Markup > Insertions and Deletions: a stateful toggle. OFF suppresses

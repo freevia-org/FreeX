@@ -9,6 +9,7 @@ using FluentAssertions;
 using FreeW.App.Avalonia;
 using FreeW.App.Avalonia.Editing;
 using FreeW.App.Avalonia.Ribbon;
+using FreeW.App.Presentation.DocumentView;
 using FreeW.Core.Model;
 using Free.Shared.Ribbon;
 using Xunit;
@@ -67,6 +68,44 @@ public sealed class DocumentViewReviewTests
         {
             Revision = RevisionKind.Deleted,
             RevisionAuthor = "Ann",
+        });
+        doc.Blocks.Add(p);
+        return doc;
+    }
+
+    private static TextDocument DocWithInsertionAndDeletion()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var p = new Paragraph();
+        p.Runs.Add(new Run("Keep ", RunFormatting.Default));
+        p.Runs.Add(new Run("added", RunFormatting.Default) { Revision = RevisionKind.Inserted, RevisionAuthor = "Ann" });
+        p.Runs.Add(new Run(" ", RunFormatting.Default));
+        p.Runs.Add(new Run("gone", RunFormatting.Default) { Revision = RevisionKind.Deleted, RevisionAuthor = "Bob" });
+        doc.Blocks.Add(p);
+        return doc;
+    }
+
+    private static TextDocument DocWithComment()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var p = new Paragraph();
+        p.Runs.Add(new Run("note", RunFormatting.Default) { CommentId = 1 });
+        p.Runs.Add(Run.CommentReference(1));
+        doc.Blocks.Add(p);
+        doc.Comments[1] = new Comment(1, "comment", "Ann", "A");
+        return doc;
+    }
+
+    private static TextDocument DocWithFormatRevision()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var p = new Paragraph();
+        p.Runs.Add(new Run("bold", RunFormatting.Default with { Bold = true })
+        {
+            FormatRevision = new FormatRevision(RunFormatting.Default, "Ann", "2024-01-01T00:00:00Z")
         });
         doc.Blocks.Add(p);
         return doc;
@@ -313,6 +352,147 @@ public sealed class DocumentViewReviewTests
     }
 
     // ── Comments via ribbon-backed methods ────────────────────────────────────────
+
+    [Fact]
+    public async Task DisplayForReview_Defaults_to_all_markup_policy()
+    {
+        ReviewDisplayMode mode = ReviewDisplayMode.NoMarkup;
+        ReviewDisplayPolicy policy = default;
+        var ran = await OnUiThread(() =>
+        {
+            var view = Build(DocWithInsertionAndDeletion());
+            mode = view.DisplayForReview;
+            policy = view.CurrentReviewDisplayPolicy;
+        });
+        if (!ran) return;
+
+        mode.Should().Be(ReviewDisplayMode.AllMarkup);
+        policy.Should().Be(ReviewDisplayPolicy.Default);
+    }
+
+    [Fact]
+    public async Task DisplayForReview_AllMarkup_shows_and_styles_insertions_and_deletions()
+    {
+        bool insertedVisible = false, deletedVisible = false, insertedStyled = false, deletedStyled = false;
+        var ran = await OnUiThread(() =>
+        {
+            var view = Build(DocWithInsertionAndDeletion());
+            var glyphs = view.ReviewGlyphsForTest;
+            insertedVisible = glyphs.Any(g => g.Revision == RevisionKind.Inserted);
+            deletedVisible = glyphs.Any(g => g.Revision == RevisionKind.Deleted);
+            insertedStyled = glyphs.Any(g => g.Revision == RevisionKind.Inserted && g.IsRevisionStyled);
+            deletedStyled = glyphs.Any(g => g.Revision == RevisionKind.Deleted && g.IsRevisionStyled);
+        });
+        if (!ran) return;
+
+        insertedVisible.Should().BeTrue();
+        deletedVisible.Should().BeTrue();
+        insertedStyled.Should().BeTrue();
+        deletedStyled.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task DisplayForReview_NoMarkup_hides_deleted_text_without_losing_revision_data()
+    {
+        bool insertedVisible = false, deletedVisible = true, insertedStyled = true;
+        bool modelStillHasDeletion = false;
+        var ran = await OnUiThread(() =>
+        {
+            var view = Build(DocWithInsertionAndDeletion());
+            view.ApplyDisplayForReview(ReviewDisplayMode.NoMarkup);
+
+            var glyphs = view.ReviewGlyphsForTest;
+            insertedVisible = glyphs.Any(g => g.Revision == RevisionKind.Inserted);
+            deletedVisible = glyphs.Any(g => g.Revision == RevisionKind.Deleted);
+            insertedStyled = glyphs.Any(g => g.Revision == RevisionKind.Inserted && g.IsRevisionStyled);
+            modelStillHasDeletion = HasDeletion(view);
+        });
+        if (!ran) return;
+
+        insertedVisible.Should().BeTrue("No Markup shows final inserted text");
+        deletedVisible.Should().BeFalse("No Markup hides deleted text visually");
+        insertedStyled.Should().BeFalse("No Markup removes inline revision styling");
+        modelStillHasDeletion.Should().BeTrue("hidden deleted runs remain in the document model");
+    }
+
+    [Fact]
+    public async Task DisplayForReview_Original_hides_inserted_text_without_losing_revision_data()
+    {
+        bool insertedVisible = true, deletedVisible = false, deletedStyled = true;
+        bool modelStillHasInsertion = false;
+        var ran = await OnUiThread(() =>
+        {
+            var view = Build(DocWithInsertionAndDeletion());
+            view.ApplyDisplayForReview(ReviewDisplayMode.Original);
+
+            var glyphs = view.ReviewGlyphsForTest;
+            insertedVisible = glyphs.Any(g => g.Revision == RevisionKind.Inserted);
+            deletedVisible = glyphs.Any(g => g.Revision == RevisionKind.Deleted);
+            deletedStyled = glyphs.Any(g => g.Revision == RevisionKind.Deleted && g.IsRevisionStyled);
+            modelStillHasInsertion = HasInsertion(view);
+        });
+        if (!ran) return;
+
+        insertedVisible.Should().BeFalse("Original hides inserted text visually");
+        deletedVisible.Should().BeTrue("Original shows the original deleted text");
+        deletedStyled.Should().BeFalse("Original removes inline revision styling");
+        modelStillHasInsertion.Should().BeTrue("hidden inserted runs remain in the document model");
+    }
+
+    [Fact]
+    public async Task DisplayForReview_SimpleMarkup_uses_final_inline_text_and_change_bar()
+    {
+        bool insertedVisible = false, deletedVisible = true, insertedStyled = true;
+        int changeBars = 0;
+        var ran = await OnUiThread(() =>
+        {
+            var view = Build(DocWithInsertionAndDeletion());
+            view.ApplyDisplayForReview(ReviewDisplayMode.SimpleMarkup);
+
+            var glyphs = view.ReviewGlyphsForTest;
+            insertedVisible = glyphs.Any(g => g.Revision == RevisionKind.Inserted);
+            deletedVisible = glyphs.Any(g => g.Revision == RevisionKind.Deleted);
+            insertedStyled = glyphs.Any(g => g.Revision == RevisionKind.Inserted && g.IsRevisionStyled);
+            changeBars = view.SimpleMarkupChangeBarsForTest.Count;
+        });
+        if (!ran) return;
+
+        insertedVisible.Should().BeTrue();
+        deletedVisible.Should().BeFalse();
+        insertedStyled.Should().BeFalse();
+        changeBars.Should().BeGreaterThan(0, "Simple Markup shows a paragraph-level change-bar cue");
+    }
+
+    [Fact]
+    public async Task ShowMarkup_toggles_hide_visual_chrome_but_preserve_model_data()
+    {
+        bool revisionStyled = true, commentHighlighted = true, commentAnchorPreserved = false;
+        bool formattingHighlighted = true, formatRevisionPreserved = false;
+        var ran = await OnUiThread(() =>
+        {
+            var reviewView = Build(DocWithInsertionAndDeletion());
+            reviewView.ApplyShowMarkupInsertionsAndDeletions(false);
+            revisionStyled = reviewView.ReviewGlyphsForTest.Any(g => g.IsRevisionStyled);
+
+            var commentView = Build(DocWithComment());
+            commentView.ApplyShowMarkupComments(false);
+            commentHighlighted = commentView.CommentHighlightGlyphsForTest.Count > 0;
+            commentAnchorPreserved = commentView.CommentAnchorGlyphs().Count > 0
+                && ((Paragraph)commentView.Document.Blocks[0]).Runs.Any(r => r.CommentId == 1);
+
+            var formatView = Build(DocWithFormatRevision());
+            formatView.ApplyShowMarkupFormatting(false);
+            formattingHighlighted = formatView.ReviewGlyphsForTest.Any(g => g.IsFormatRevisionHighlighted);
+            formatRevisionPreserved = ((Paragraph)formatView.Document.Blocks[0]).Runs[0].FormatRevision is not null;
+        });
+        if (!ran) return;
+
+        revisionStyled.Should().BeFalse();
+        commentHighlighted.Should().BeFalse();
+        commentAnchorPreserved.Should().BeTrue();
+        formattingHighlighted.Should().BeFalse();
+        formatRevisionPreserved.Should().BeTrue();
+    }
 
     [Fact]
     public async Task NewComment_adds_a_comment_over_the_selection()
@@ -626,6 +806,15 @@ public sealed class DocumentViewReviewTests
         foreach (var id in new[]
         {
             "freew.track-changes",
+            "freew.display-for-review",
+            "freew.display-for-review-all-markup",
+            "freew.display-for-review-simple-markup",
+            "freew.display-for-review-no-markup",
+            "freew.display-for-review-original",
+            "freew.show-markup",
+            "freew.show-markup-insertions-deletions",
+            "freew.show-markup-comments",
+            "freew.show-markup-formatting",
             "freew.reviewing-pane",
             "freew.reviewingpane",
             "freew.statistics",
@@ -661,6 +850,27 @@ public sealed class DocumentViewReviewTests
     }
 
     [Fact]
+    public void Review_display_markup_commands_update_editor_state()
+    {
+        var view = new DocumentView();
+        var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
+
+        Execute(registry, "freew.display-for-review-no-markup");
+        Execute(registry, "freew.show-markup-comments");
+
+        view.DisplayForReview.Should().Be(ReviewDisplayMode.NoMarkup);
+        view.ShowMarkupComments.Should().BeFalse();
+
+        registry.TryGet(new RibbonCommandId("freew.display-for-review-no-markup"), out var displayCommand)
+            .Should().BeTrue();
+        (displayCommand as IRibbonStatefulCommand)!.GetState().IsChecked.Should().BeTrue();
+
+        registry.TryGet(new RibbonCommandId("freew.show-markup-comments"), out var commentsCommand)
+            .Should().BeTrue();
+        (commentsCommand as IRibbonStatefulCommand)!.GetState().IsChecked.Should().BeFalse();
+    }
+
+    [Fact]
     public void Review_command_ids_are_declared_in_the_ribbon_definition()
     {
         var definition = FreeWRibbon.BuildDefinition();
@@ -675,6 +885,7 @@ public sealed class DocumentViewReviewTests
         foreach (var id in new[]
         {
             "freew.track-changes", "freew.reviewing-pane", "freew.statistics",
+            "freew.display-for-review", "freew.show-markup",
             "freew.spellcheck-toggle", "freew.add-to-dictionary",
             "freew.thesaurus", "freew.set-proofing-language",
             "freew.check-accessibility", "freew.accept-this", "freew.reject-this",

@@ -37,6 +37,23 @@ internal static class FreeWAvaloniaRibbonDefinition
             .Select(fc => new RibbonMenuItem(fc.Label, new RibbonCommandId(fc.CommandId)))
             .ToArray());
 
+    private static RibbonMenu BuildDisplayForReviewMenu() =>
+        new(new RibbonMenuItem[]
+        {
+            new("All Markup", new RibbonCommandId("freew.display-for-review-all-markup")),
+            new("Simple Markup", new RibbonCommandId("freew.display-for-review-simple-markup")),
+            new("No Markup", new RibbonCommandId("freew.display-for-review-no-markup")),
+            new("Original", new RibbonCommandId("freew.display-for-review-original")),
+        });
+
+    private static RibbonMenu BuildShowMarkupMenu() =>
+        new(new RibbonMenuItem[]
+        {
+            new("Insertions and Deletions", new RibbonCommandId("freew.show-markup-insertions-deletions")),
+            new("Comments", new RibbonCommandId("freew.show-markup-comments")),
+            new("Formatting", new RibbonCommandId("freew.show-markup-formatting")),
+        });
+
     // AV-PICTAB: wrap-mode menu shared by the Picture / Drawing Format "Wrap Text" dropdown.
     // <paramref name="prefix"/> is "image" or "shape" so the command ids match the WPF host
     // (freew.image-wrap-* / freew.shape-wrap-*).
@@ -687,6 +704,8 @@ internal static class FreeWAvaloniaRibbonDefinition
                 {
                     g.Toggle("freew.track-changes", "Track Changes");
                     g.Toggle("freew.reviewing-pane", "Reviewing Pane");
+                    g.Dropdown("freew.display-for-review", "All Markup", BuildDisplayForReviewMenu());
+                    g.Dropdown("freew.show-markup", "Show Markup", BuildShowMarkupMenu());
                 });
                 // AV-REVIEW: Changes group — accept / reject (current + all).
                 tab.Group("changes", "Changes", null, 80, g =>

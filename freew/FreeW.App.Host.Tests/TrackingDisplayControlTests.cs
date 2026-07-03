@@ -1,5 +1,6 @@
 using System.Linq;
 using FreeW.App.Host.Editing;
+using FreeW.App.Presentation.DocumentView;
 
 namespace FreeW.App.Host.Tests;
 
@@ -35,8 +36,9 @@ public sealed class TrackingDisplayControlTests
     public void DefaultState_DisplayForReview_IsAllMarkup()
     {
         var view = new DocumentView();
-        view.DisplayForReview.Should().Be(DocumentView.MarkupDisplayMode.AllMarkup,
+        view.DisplayForReview.Should().Be(ReviewDisplayMode.AllMarkup,
             "default must preserve current all-markup rendering");
+        view.CurrentReviewDisplayPolicy.Should().Be(ReviewDisplayPolicy.Default);
     }
 
     // ── Round-trip safety — revisions ─────────────────────────────────────────────────────────
@@ -177,7 +179,7 @@ public sealed class TrackingDisplayControlTests
         view.LoadModel(doc);
 
         // Setting the only implemented mode is a no-op; model must survive.
-        view.DisplayForReview = DocumentView.MarkupDisplayMode.AllMarkup;
+        view.DisplayForReview = ReviewDisplayMode.AllMarkup;
         view.CommitToModel();
 
         view.Model.PlainText.Should().Be("hello");
@@ -198,7 +200,7 @@ public sealed class TrackingDisplayControlTests
         view.LoadModel(doc);
 
         // Act: switch to No Markup (deletions become invisible) and commit.
-        view.ApplyDisplayForReview(DocumentView.MarkupDisplayMode.NoMarkup);
+        view.ApplyDisplayForReview(ReviewDisplayMode.NoMarkup);
         view.CommitToModel();
 
         // Assert: the deleted run must still be in the model with kind/author/date/text intact.
@@ -225,7 +227,7 @@ public sealed class TrackingDisplayControlTests
         view.LoadModel(doc);
 
         // Act: switch to Original (insertions become invisible) and commit.
-        view.ApplyDisplayForReview(DocumentView.MarkupDisplayMode.Original);
+        view.ApplyDisplayForReview(ReviewDisplayMode.Original);
         view.CommitToModel();
 
         // Assert: the inserted run must still be in the model with kind/author/date/text intact.
@@ -252,9 +254,9 @@ public sealed class TrackingDisplayControlTests
         view.LoadModel(doc);
 
         // Act: cycle through modes and return to AllMarkup.
-        view.ApplyDisplayForReview(DocumentView.MarkupDisplayMode.NoMarkup);
-        view.ApplyDisplayForReview(DocumentView.MarkupDisplayMode.Original);
-        view.ApplyDisplayForReview(DocumentView.MarkupDisplayMode.AllMarkup);
+        view.ApplyDisplayForReview(ReviewDisplayMode.NoMarkup);
+        view.ApplyDisplayForReview(ReviewDisplayMode.Original);
+        view.ApplyDisplayForReview(ReviewDisplayMode.AllMarkup);
         view.CommitToModel();
 
         // Assert: both revision runs survived every mode transition.
@@ -341,7 +343,7 @@ public sealed class TrackingDisplayControlTests
         view.LoadModel(doc);
 
         // Act: switch to Simple Markup (deletions hidden, same as No Markup inline path) and commit.
-        view.ApplyDisplayForReview(DocumentView.MarkupDisplayMode.SimpleMarkup);
+        view.ApplyDisplayForReview(ReviewDisplayMode.SimpleMarkup);
         view.CommitToModel();
 
         // Assert: the deleted run must still be in the model with kind/author/date/text intact.
@@ -368,7 +370,7 @@ public sealed class TrackingDisplayControlTests
         view.LoadModel(doc);
 
         // Act: Simple Markup shows insertions as plain text (same as No Markup); round-trip must hold.
-        view.ApplyDisplayForReview(DocumentView.MarkupDisplayMode.SimpleMarkup);
+        view.ApplyDisplayForReview(ReviewDisplayMode.SimpleMarkup);
         view.CommitToModel();
 
         // Assert: the inserted run is present with kind/author/date/text intact.
@@ -420,7 +422,7 @@ public sealed class TrackingDisplayControlTests
 
         var view = new DocumentView();
         // Use Simple Markup so the inline path is exercised and RevisionMarker is in the WPF tree.
-        view.ApplyDisplayForReview(DocumentView.MarkupDisplayMode.SimpleMarkup);
+        view.ApplyDisplayForReview(ReviewDisplayMode.SimpleMarkup);
         view.LoadModel(doc);
 
         var wpfDoc = view.Document!;
@@ -443,7 +445,7 @@ public sealed class TrackingDisplayControlTests
         doc.Blocks.Add(para);
 
         var view = new DocumentView();
-        view.ApplyDisplayForReview(DocumentView.MarkupDisplayMode.SimpleMarkup);
+        view.ApplyDisplayForReview(ReviewDisplayMode.SimpleMarkup);
         view.LoadModel(doc);
 
         var wpfDoc = view.Document!;
@@ -468,7 +470,7 @@ public sealed class TrackingDisplayControlTests
         doc.Blocks.Add(changed);
 
         var view = new DocumentView();
-        view.ApplyDisplayForReview(DocumentView.MarkupDisplayMode.SimpleMarkup);
+        view.ApplyDisplayForReview(ReviewDisplayMode.SimpleMarkup);
         view.LoadModel(doc);
 
         var wpfDoc = view.Document!;

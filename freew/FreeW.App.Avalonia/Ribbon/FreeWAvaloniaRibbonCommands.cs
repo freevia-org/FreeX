@@ -1,6 +1,7 @@
 using System.Globalization;
 using FreeW.App.Avalonia.Editing;
 using FreeW.App.Presentation.Dialogs;
+using FreeW.App.Presentation.DocumentView;
 using FreeW.App.Presentation.Ribbon;
 using FreeW.Core.Model;
 using FreeW.Ribbon.Definitions;
@@ -424,6 +425,16 @@ internal static class FreeWAvaloniaRibbonCommands
         // AV-REVIEW: Track Changes toggle (flag only — keystroke-level recording is deferred; turning the
         // current selection into a tracked change is available via DocumentView.MarkSelectionAsRevision).
         r.Register("freew.track-changes", new ActionRibbonCommand(() => editor.ToggleTrackChanges()));
+        var displayAllMarkup = new DisplayForReviewCommand(editor, ReviewDisplayMode.AllMarkup);
+        r.Register("freew.display-for-review", displayAllMarkup);
+        r.Register("freew.display-for-review-all-markup", displayAllMarkup);
+        r.Register("freew.display-for-review-simple-markup", new DisplayForReviewCommand(editor, ReviewDisplayMode.SimpleMarkup));
+        r.Register("freew.display-for-review-no-markup", new DisplayForReviewCommand(editor, ReviewDisplayMode.NoMarkup));
+        r.Register("freew.display-for-review-original", new DisplayForReviewCommand(editor, ReviewDisplayMode.Original));
+        r.Register("freew.show-markup", EmptyRibbonCommand.Instance);
+        r.Register("freew.show-markup-insertions-deletions", new ShowMarkupInsertionsDeletionsCommand(editor));
+        r.Register("freew.show-markup-comments", new ShowMarkupCommentsCommand(editor));
+        r.Register("freew.show-markup-formatting", new ShowMarkupFormattingCommand(editor));
         // Accept / reject — current revision (at/after caret) and all, undoable + re-render.
         var acceptCurrentRevisionCommand = new ActionRibbonCommand(() => editor.AcceptCurrentRevision());
         var rejectCurrentRevisionCommand = new ActionRibbonCommand(() => editor.RejectCurrentRevision());
@@ -812,6 +823,41 @@ internal static class FreeWAvaloniaRibbonCommands
         Add(r, editor, "freew.cell-align-bottom-left",    TableCellVerticalAlignment.Bottom, TextAlignment.Left);
         Add(r, editor, "freew.cell-align-bottom-center",  TableCellVerticalAlignment.Bottom, TextAlignment.Center);
         Add(r, editor, "freew.cell-align-bottom-right",   TableCellVerticalAlignment.Bottom, TextAlignment.Right);
+    }
+
+    private sealed class DisplayForReviewCommand(DocumentView editor, ReviewDisplayMode mode) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context) => editor.ApplyDisplayForReview(mode);
+
+        public RibbonCommandState GetState() =>
+            new(IsEnabled: true, IsChecked: editor.DisplayForReview == mode);
+    }
+
+    private sealed class ShowMarkupInsertionsDeletionsCommand(DocumentView editor) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context) =>
+            editor.ApplyShowMarkupInsertionsAndDeletions(!editor.ShowMarkupInsertionsAndDeletions);
+
+        public RibbonCommandState GetState() =>
+            new(IsEnabled: true, IsChecked: editor.ShowMarkupInsertionsAndDeletions);
+    }
+
+    private sealed class ShowMarkupCommentsCommand(DocumentView editor) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context) =>
+            editor.ApplyShowMarkupComments(!editor.ShowMarkupComments);
+
+        public RibbonCommandState GetState() =>
+            new(IsEnabled: true, IsChecked: editor.ShowMarkupComments);
+    }
+
+    private sealed class ShowMarkupFormattingCommand(DocumentView editor) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context) =>
+            editor.ApplyShowMarkupFormatting(!editor.ShowMarkupFormatting);
+
+        public RibbonCommandState GetState() =>
+            new(IsEnabled: true, IsChecked: editor.ShowMarkupFormatting);
     }
 
     private sealed class TablePropertiesCommand(DocumentView editor, RibbonHostCallbacks callbacks) : IRibbonCommand

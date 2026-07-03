@@ -4207,14 +4207,11 @@ public sealed class DocumentView : RichTextBox
 
     private void Render()
     {
-        // Expose the current file name, Show Markup flags, and Display for Review mode to the static
+        // Expose the current file name and Review display policy to the static
         // run builders for this render pass. Same [ThreadStatic] pattern as _renderFileName: set here,
         // read in BuildRun, never persisted beyond the Render() call.
         _renderFileName = CurrentFileName;
-        _renderShowInsertionsAndDeletions = ShowMarkupInsertionsAndDeletions;
-        _renderShowComments = ShowMarkupComments;
-        _renderDisplayForReview = DisplayForReview;
-        _renderShowFormatting = ShowMarkupFormatting;
+        _renderReviewDisplayPolicy = CurrentReviewDisplayPolicy;
         var flow = new FlowDocument { PagePadding = new Thickness(0) };
         flow.FontFamily = new FontFamily(_model.DefaultRun.FontFamily ?? "Calibri");
         flow.FontSize = (_model.DefaultRun.FontSizePt ?? 11) * PxPerPoint;
@@ -4644,7 +4641,7 @@ public sealed class DocumentView : RichTextBox
     // Markup removes the overlay; switching in invalidates it so it repaints against the new Document.
     private void SyncChangeBarAdorner()
     {
-        var enabled = DisplayForReview == MarkupDisplayMode.SimpleMarkup;
+        var enabled = CurrentReviewDisplayPolicy.ShouldShowSimpleMarkupChangeBar;
         var layer = AdornerLayer.GetAdornerLayer(this);
         if (layer is null)
         {
@@ -7078,41 +7075,18 @@ public sealed class DocumentView : RichTextBox
             // RevisionMarker is ALWAYS written regardless of display mode.
             AddMarker(wpf, m => m with { Revision = new RevisionMarker(run.Revision, run.RevisionAuthor, run.RevisionDateXml) });
 
-            switch (_renderDisplayForReview)
+            var decision = _renderReviewDisplayPolicy.RevisionDecision(run.Revision);
+            if (decision.IsRevisionStylingApplied)
             {
-                case MarkupDisplayMode.AllMarkup:
-                    if (_renderShowInsertionsAndDeletions)
-                    {
-                        wpf.Foreground = new SolidColorBrush(RevisionColor);
-                        decorations.Add(run.Revision == RevisionKind.Deleted
-                            ? TextDecorations.Strikethrough[0]
-                            : TextDecorations.Underline[0]);
-                    }
-                    break;
-
-                case MarkupDisplayMode.SimpleMarkup:
-                case MarkupDisplayMode.NoMarkup:
-                    // SimpleMarkup reuses the No Markup inline path: insertions plain, deletions hidden.
-                    // The change bar (visible only in SimpleMarkup) is painted by ChangeBarAdorner; no
-                    // inline chrome is added here. Insertions: plain text — no further action needed.
-                    // Deletions: visually hidden — transparent foreground, near-zero size so the glyph
-                    // doesn't paint and takes up no space, but the run stays in the tree so CommitToModel
-                    // recovers its text and RevisionMarker without any special handling.
-                    if (run.Revision == RevisionKind.Deleted)
-                    {
-                        wpf.Foreground = Brushes.Transparent;
-                        wpf.FontSize = 0.015; // near-zero, not literal zero (WPF clamps at a minimum)
-                    }
-                    break;
-
-                case MarkupDisplayMode.Original:
-                    // Deletions: plain text. Insertions: hidden (same invisible technique).
-                    if (run.Revision == RevisionKind.Inserted)
-                    {
-                        wpf.Foreground = Brushes.Transparent;
-                        wpf.FontSize = 0.015;
-                    }
-                    break;
+                wpf.Foreground = new SolidColorBrush(RevisionColor);
+                decorations.Add(decision.IsDeletionDecorationApplied
+                    ? TextDecorations.Strikethrough[0]
+                    : TextDecorations.Underline[0]);
+            }
+            else if (!decision.IsTextVisible)
+            {
+                wpf.Foreground = Brushes.Transparent;
+                wpf.FontSize = 0.015; // near-zero, not literal zero (WPF clamps at a minimum)
             }
         }
 
@@ -7122,7 +7096,7 @@ public sealed class DocumentView : RichTextBox
         if (run.FormatRevision is { } fmtRev)
         {
             AddMarker(wpf, m => m with { FormatRevision = new FormatRevisionMarker(fmtRev) });
-            if (_renderShowFormatting)
+            if (_renderReviewDisplayPolicy.ShouldHighlightFormattingChanges)
             {
                 // A dotted underline (via a custom TextDecoration with a DashStyle) in the revision
                 // colour distinguishes format-only revisions from insertion/deletion revisions.
@@ -7249,7 +7223,7 @@ public sealed class DocumentView : RichTextBox
         // The CommentMarker tag is ALWAYS set so CommitToModel can round-trip the comment id safely.
         // The background highlight and tooltip are suppressed when Show Markup > Comments is OFF.
         AddMarker(wpf, m => m with { Comment = new CommentMarker(commentId, IsReference: false) });
-        if (_renderShowComments)
+        if (_renderReviewDisplayPolicy.ShouldHighlightComments)
         {
             document.Comments.TryGetValue(commentId, out var comment);
             // Resolved comments render with a muted grey highlight; open comments keep the review yellow.
@@ -10929,10 +10903,8 @@ public sealed class DocumentView : RichTextBox
     ///   invisible. Same round-trip guarantee via RevisionMarker.</description></item>
     /// </list>
     /// </summary>
-    public enum MarkupDisplayMode { AllMarkup, SimpleMarkup, NoMarkup, Original }
-
     /// <summary>Current Display for Review setting. Defaults to All Markup (today's behaviour).</summary>
-    public MarkupDisplayMode DisplayForReview { get; set; } = MarkupDisplayMode.AllMarkup;
+    public ReviewDisplayMode DisplayForReview { get; set; } = ReviewDisplayMode.AllMarkup;
 
     /// <summary>
     /// When false, revision colour and strikethrough/underline decoration are suppressed in the
@@ -10957,17 +10929,14 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     public bool ShowMarkupFormatting { get; set; } = true;
 
-    // [ThreadStatic] fields used by the static BuildRun family to read the above flags during a render
+    public ReviewDisplayPolicy CurrentReviewDisplayPolicy =>
+        new(DisplayForReview, ShowMarkupInsertionsAndDeletions, ShowMarkupComments, ShowMarkupFormatting);
+
+    // [ThreadStatic] fields used by the static BuildRun family to read the above policy during a render
     // pass — same pattern as _renderFileName (set in Render(), read in static helpers, never escapes
     // the render call).
     [ThreadStatic]
-    private static bool _renderShowInsertionsAndDeletions;
-    [ThreadStatic]
-    private static bool _renderShowComments;
-    [ThreadStatic]
-    private static MarkupDisplayMode _renderDisplayForReview;
-    [ThreadStatic]
-    private static bool _renderShowFormatting;
+    private static ReviewDisplayPolicy _renderReviewDisplayPolicy;
 
     /// <summary>
     /// Apply a change to the Show Markup Insertions/Deletions flag and re-render so the updated
@@ -10996,7 +10965,7 @@ public sealed class DocumentView : RichTextBox
     /// The round-trip invariant is maintained: every revision run stays in the WPF tree in every
     /// mode, carrying its <see cref="RevisionMarker"/> tag; only colour/decoration/visibility change.
     /// </summary>
-    public void ApplyDisplayForReview(MarkupDisplayMode mode)
+    public void ApplyDisplayForReview(ReviewDisplayMode mode)
     {
         CommitToModel();
         DisplayForReview = mode;
@@ -12635,7 +12604,7 @@ public sealed class DocumentView : RichTextBox
     /// <summary>
     /// Draws a thin vertical bar in the left margin beside every paragraph in the WPF tree that
     /// contains at least one tracked-change run (insertion, deletion, or format revision). Used
-    /// exclusively in <see cref="MarkupDisplayMode.SimpleMarkup"/>, where the inline rendering
+    /// exclusively in <see cref="ReviewDisplayMode.SimpleMarkup"/>, where the inline rendering
     /// shows the final form (No Markup path) and this bar is the only visible cue that a change
     /// exists. The overlay is hit-test transparent and repaints on layout/scroll, mirroring the
     /// pattern of <see cref="FormattingMarksAdorner"/> and <see cref="LineNumberAdorner"/>.
