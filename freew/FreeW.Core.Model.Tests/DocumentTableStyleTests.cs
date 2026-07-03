@@ -121,6 +121,16 @@ public class DocumentTableStyleTests
     }
 
     [Fact]
+    public void TableBanding_BodyRowZero_IsFirstBandWithOrWithoutHeader()
+    {
+        TableBanding.IsBandedBodyRow(rowIndex: 0, hasHeaderRow: false).Should().BeTrue();
+        TableBanding.IsBandedBodyRow(rowIndex: 1, hasHeaderRow: false).Should().BeFalse();
+        TableBanding.IsBandedBodyRow(rowIndex: 0, hasHeaderRow: true).Should().BeFalse();
+        TableBanding.IsBandedBodyRow(rowIndex: 1, hasHeaderRow: true).Should().BeTrue();
+        TableBanding.IsBandedBodyRow(rowIndex: 2, hasHeaderRow: true).Should().BeFalse();
+    }
+
+    [Fact]
     public void ResolveCellStyle_PlainTableGrid_ReturnsNoFillNoBold()
     {
         var style = DocumentTableStyle.FindById("TableGrid")!;

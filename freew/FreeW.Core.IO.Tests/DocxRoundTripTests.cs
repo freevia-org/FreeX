@@ -1078,6 +1078,29 @@ public class DocxRoundTripTests
     }
 
     [Fact]
+    public void Table_BandedRows_EmitsFirstBodyRowBanding()
+    {
+        var doc = new TextDocument();
+        var table = Table.Create(3, 1);
+        table.Rows[0].Cells[0] = new TableCell("Head");
+        table.Rows[1].Cells[0] = new TableCell("Body 1");
+        table.Rows[2].Cells[0] = new TableCell("Body 2");
+        table.Formatting = TableFormatting.Default with { HeaderRow = true, BandedRows = true };
+        doc.Blocks.Add(table);
+
+        var xml = WriteDocumentXml(doc);
+        var ns = XNamespace.Get("http://schemas.openxmlformats.org/wordprocessingml/2006/main");
+        var rows = xml.Descendants(ns + "tbl").Single().Elements(ns + "tr").ToList();
+
+        rows[1].Descendants(ns + "shd")
+            .Any(shd => shd.Attribute(ns + "fill")?.Value == "F2F2F2")
+            .Should().BeTrue("Word band 1 starts on the first body row");
+        rows[2].Descendants(ns + "shd")
+            .Any(shd => shd.Attribute(ns + "fill")?.Value == "F2F2F2")
+            .Should().BeFalse("the second body row is the alternate unfilled band");
+    }
+
+    [Fact]
     public void Table_HeaderRowCell_InlineImage_RoundTrips()
     {
         // Regression: a header-row cell's runs are re-rendered bold via BoldHeaderParagraph, which clones

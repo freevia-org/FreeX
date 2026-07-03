@@ -136,6 +136,36 @@ public sealed class DocumentViewLayoutPlannerTests
     }
 
     [Fact]
+    public void BuildTablePaginationPlan_RepeatsHeaderAndKeepsRowsTogetherAcrossPages()
+    {
+        var document = FreeWVisualEvidenceDocumentFactory.BuildTablePaginationRepeatHeaderDocument();
+
+        var plan = DocumentViewLayoutPlanner.BuildTableLayoutPlans(document).Single();
+        var pagination = plan.Pagination;
+
+        pagination.EstimatedPageCount.Should().Be(2);
+        pagination.RepeatsHeaderRows.Should().BeTrue();
+        pagination.HeaderRowIndexes.Should().Equal(0);
+        pagination.HasKeepTogetherRows.Should().BeTrue();
+        pagination.Rows.Should().Contain(row =>
+            row.RowIndex == 4
+            && row.KeepTogether
+            && row.AssignedPageNumber == 1);
+        pagination.Rows.Should().Contain(row =>
+            row.RowIndex == 1
+            && row.IsBandedBodyRow);
+        pagination.Rows.Should().Contain(row =>
+            row.RowIndex == 2
+            && !row.IsBandedBodyRow);
+        pagination.Pages.Should().HaveCount(2);
+        pagination.Pages[0].IncludesRepeatedHeader.Should().BeFalse();
+        pagination.Pages[0].SourceRowIndexes.Should().StartWith(0);
+        pagination.Pages[1].IncludesRepeatedHeader.Should().BeTrue();
+        pagination.Pages[1].RepeatedHeaderRowIndexes.Should().Equal(0);
+        pagination.Pages[1].KeepTogetherRowIndexes.Should().Contain(7);
+    }
+
+    [Fact]
     public void BuildGridlinesAndRulerTicks_ArePageSpacePlans()
     {
         var page = new PageSettings

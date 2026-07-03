@@ -1220,6 +1220,12 @@ static void GenerateF2FlowCorpus(string outDir)
     }
 
     {
+        var doc = FreeWVisualEvidenceDocumentFactory.BuildTablePaginationRepeatHeaderDocument();
+        DocxWriter.Write(doc, Path.Combine(outDir, "table-pagination-repeat-header.docx"));
+        Console.WriteLine("  wrote table-pagination-repeat-header.docx");
+    }
+
+    {
         var doc = FreeWVisualEvidenceDocumentFactory.BuildDrawingObjectsCompositionDocument();
         DocxWriter.Write(doc, Path.Combine(outDir, "drawing-objects-complex.docx"));
         Console.WriteLine("  wrote drawing-objects-complex.docx");

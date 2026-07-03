@@ -330,7 +330,7 @@ public sealed record DocumentTableStyle(
         // Banded rows: alternate odd/even body rows.
         if (fmt.BandedRows)
         {
-            var bodyIndex = fmt.HeaderRow ? rowIndex - 1 : rowIndex;
+            var bodyIndex = TableBanding.BodyRowIndex(rowIndex, fmt.HeaderRow);
             if (bodyIndex >= 0)
                 return bodyIndex % 2 == 0 ? BandedRowOdd?.FillHex : BandedRowEven?.FillHex;
         }
@@ -361,7 +361,7 @@ public sealed record DocumentTableStyle(
         // Banded rows.
         if (fmt.BandedRows)
         {
-            var bodyIndex = fmt.HeaderRow ? rowIndex - 1 : rowIndex;
+            var bodyIndex = TableBanding.BodyRowIndex(rowIndex, fmt.HeaderRow);
             if (bodyIndex >= 0)
             {
                 var band = bodyIndex % 2 == 0 ? BandedRowOdd : BandedRowEven;
