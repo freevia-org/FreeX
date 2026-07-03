@@ -939,6 +939,63 @@ internal static class FreeWAvaloniaRibbonDefinition
                     });
                 })
             // ── AV-PICTAB: Picture Format contextual tab (shown when a floating IMAGE is selected) ──
+            .ContextualTab("header-footer-design", "Design",
+                new RibbonTabContext("header-footer", "Header & Footer Tools", RibbonContextColor.Purple),
+                tab =>
+                {
+                    tab.Group("hf-header-footer", "Header & Footer", null, 120, g =>
+                    {
+                        g.Dropdown("freew.hf-edit-header", "Edit Header", new RibbonMenu(new[]
+                        {
+                            new RibbonMenuItem("Default Header", new RibbonCommandId("freew.hf-edit-header")),
+                            new RibbonMenuItem("First-Page Header", new RibbonCommandId("freew.hf-edit-first-header")),
+                            new RibbonMenuItem("Even-Page Header", new RibbonCommandId("freew.hf-edit-even-header")),
+                        }));
+                        g.Dropdown("freew.hf-edit-footer", "Edit Footer", new RibbonMenu(new[]
+                        {
+                            new RibbonMenuItem("Default Footer", new RibbonCommandId("freew.hf-edit-footer")),
+                            new RibbonMenuItem("First-Page Footer", new RibbonCommandId("freew.hf-edit-first-footer")),
+                            new RibbonMenuItem("Even-Page Footer", new RibbonCommandId("freew.hf-edit-even-footer")),
+                        }));
+                    });
+                    tab.Group("hf-insert", "Insert", null, 110, g =>
+                    {
+                        g.Dropdown("freew.hf-insert-page-number", "Page Number", new RibbonMenu(new[]
+                        {
+                            new RibbonMenuItem("In Header", new RibbonCommandId("freew.hf-insert-page-number")),
+                            new RibbonMenuItem("In Footer", new RibbonCommandId("freew.hf-insert-page-number-footer")),
+                        }));
+                        g.Button("freew.hf-insert-datetime", "Date && Time");
+                        g.Button("freew.hf-insert-field", "Document Info");
+                    });
+                    tab.Group("hf-navigation", "Navigation", null, 100, g =>
+                    {
+                        g.Button("freew.hf-go-to-header", "Go to Header");
+                        g.Button("freew.hf-go-to-footer", "Go to Footer");
+                    });
+                    tab.Group("hf-options", "Options", null, 90, g =>
+                    {
+                        g.Toggle("freew.hf-different-first-page", "Different First Page");
+                        g.Toggle("freew.hf-different-odd-even", "Different Odd && Even Pages");
+                    });
+                    tab.Group("hf-position", "Position", null, 80, g =>
+                    {
+                        g.ComboBox("freew.hf-header-from-top", "Header from Top", c => c with
+                        {
+                            Items = new[] { "0", "18", "36", "54", "72" },
+                            Width = 80
+                        });
+                        g.ComboBox("freew.hf-footer-from-bottom", "Footer from Bottom", c => c with
+                        {
+                            Items = new[] { "0", "18", "36", "54", "72" },
+                            Width = 80
+                        });
+                    });
+                    tab.Group("hf-close", "Close", null, 70, g =>
+                    {
+                        g.Button("freew.hf-close", "Close Header and Footer");
+                    });
+                })
             .ContextualTab("picture-format", "Picture Format",
                 new RibbonTabContext(capabilities.PictureContextKey, "Picture Tools", RibbonContextColor.Orange),
                 tab =>

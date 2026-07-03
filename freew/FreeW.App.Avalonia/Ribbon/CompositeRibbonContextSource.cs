@@ -43,6 +43,7 @@ internal sealed class CompositeRibbonContextSource : IRibbonContextSource
     private static readonly string[] AllKeys =
     [
         TableRibbonContextSource.TableContextKey,
+        HeaderFooterRibbonContextSource.HeaderFooterContextKey,
         FloatingRibbonContextSource.PictureContextKey,
         FloatingRibbonContextSource.DrawingContextKey,
         FloatingRibbonContextSource.ChartContextKey,

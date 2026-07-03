@@ -230,6 +230,7 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.header", new ActionRibbonCommand(editor.EnsureHeader));
         r.Register("freew.footer", new ActionRibbonCommand(editor.EnsureFooter));
         r.Register("freew.datetime", new ActionRibbonCommand(() => editor.InsertField(RunFieldKind.Date)));
+        RegisterHeaderFooterCommands(r, editor);
 
         // ── Insert depth 2 (AV-INSERT2) ──────────────────────────────────────
         RegisterInsertDepth2Commands(r, editor, callbacks);
@@ -552,6 +553,37 @@ internal static class FreeWAvaloniaRibbonCommands
     {
         var page = editor.Document.Page;
         callbacks.ApplyPaperSize(IsPaper(page, 612.0, 792.0) ? "a4" : "letter");
+    }
+
+    private static void RegisterHeaderFooterCommands(RibbonCommandRegistry r, DocumentView editor)
+    {
+        r.Register("freew.hf-edit-header", new ActionRibbonCommand(() => editor.EditHeaderFooterSlot("header")));
+        r.Register("freew.hf-edit-footer", new ActionRibbonCommand(() => editor.EditHeaderFooterSlot("footer")));
+        r.Register("freew.hf-edit-first-header", new ActionRibbonCommand(() => editor.EditHeaderFooterSlot("first-header")));
+        r.Register("freew.hf-edit-first-footer", new ActionRibbonCommand(() => editor.EditHeaderFooterSlot("first-footer")));
+        r.Register("freew.hf-edit-even-header", new ActionRibbonCommand(() => editor.EditHeaderFooterSlot("even-header")));
+        r.Register("freew.hf-edit-even-footer", new ActionRibbonCommand(() => editor.EditHeaderFooterSlot("even-footer")));
+
+        r.Register("freew.hf-go-to-header", new ActionRibbonCommand(() => editor.EditHeaderFooterSlot("header")));
+        r.Register("freew.hf-go-to-footer", new ActionRibbonCommand(() => editor.EditHeaderFooterSlot("footer")));
+        r.Register("freew.hf-close", new ActionRibbonCommand(editor.CloseHeaderFooterEditing));
+
+        r.Register("freew.hf-different-first-page", new ActionRibbonCommand(editor.ToggleDifferentFirstPage));
+        r.Register("freew.hf-different-odd-even", new ActionRibbonCommand(editor.ToggleDifferentOddEvenPages));
+
+        r.Register("freew.hf-header-from-top", new ValueRibbonCommand(value => SetHeaderFooterDistance(value, editor.SetHeaderDistance)));
+        r.Register("freew.hf-footer-from-bottom", new ValueRibbonCommand(value => SetHeaderFooterDistance(value, editor.SetFooterDistance)));
+
+        r.Register("freew.hf-insert-page-number", new ActionRibbonCommand(() => editor.InsertHeaderFooterPageNumber(footer: false)));
+        r.Register("freew.hf-insert-page-number-footer", new ActionRibbonCommand(() => editor.InsertHeaderFooterPageNumber(footer: true)));
+        r.Register("freew.hf-insert-datetime", new ActionRibbonCommand(editor.InsertHeaderFooterDateTime));
+        r.Register("freew.hf-insert-field", new ActionRibbonCommand(editor.InsertHeaderFooterDocumentInfo));
+    }
+
+    private static void SetHeaderFooterDistance(string? value, Action<double> apply)
+    {
+        if (double.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var points))
+            apply(points);
     }
 
     private enum ColumnsPreset
