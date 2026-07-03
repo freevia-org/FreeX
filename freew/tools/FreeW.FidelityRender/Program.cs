@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.IO;
 using System.Threading;
 using System.Windows;
@@ -10,13 +11,14 @@ using FreeW.App.Host.Editing;
 using FreeW.App.Presentation.DocumentView;
 using FreeW.Core.IO;
 using FreeW.Core.Model;
+using SkiaSharp;
 
 // FreeW.FidelityRender — renders FreeW's view of one or more .docx files to PNG (one image per page),
 // using the real editor render path (DocumentView -> FlowDocument -> page rasterization). This is the
 // "FreeW side" of a visual fidelity comparison; the ground-truth side (MS Word / LibreOffice) and the
 // image diff are produced by freew-fidelity-corpus/tools/Run-VisualFidelity.ps1.
 //
-// Usage: FreeW.FidelityRender <input.docx | inputDir> <outputDir> [maxPagesPerDoc] [--composite|--no-composite]
+// Usage: FreeW.FidelityRender <input.docx | inputDir> <outputDir> [maxPagesPerDoc] [--composite|--no-composite] [--software-fallback|--auto-software-fallback]
 //   - input is a single .docx or a directory (all *.docx are rendered)
 //   - output PNGs are named <docname>_pN.png (N = 1-based page index)
 //   - --composite (default) renders the full composite the live app shows:
@@ -33,6 +35,8 @@ using FreeW.Core.Model;
 // after Measure+Arrange, which is the reliable off-screen rendering path.
 
 var composite = true; // composite is the default
+var softwareFallback = false;
+var autoSoftwareFallback = false;
 var generateFixtures = false;
 var generateF2Corpus = false;
 var filteredArgs = new List<string>();
@@ -40,6 +44,8 @@ foreach (var a in args)
 {
     if (a == "--composite") composite = true;
     else if (a == "--no-composite") composite = false;
+    else if (a == "--software-fallback") softwareFallback = true;
+    else if (a == "--auto-software-fallback") autoSoftwareFallback = true;
     else if (a == "--generate-fixtures") generateFixtures = true;
     else if (a == "--generate-f2-corpus") generateF2Corpus = true;
     else filteredArgs.Add(a);
@@ -69,7 +75,7 @@ if (generateF2Corpus)
 
 if (args.Length < 2)
 {
-    Console.Error.WriteLine("usage: FreeW.FidelityRender <input.docx | inputDir> <outputDir> [maxPagesPerDoc] [--composite|--no-composite]");
+    Console.Error.WriteLine("usage: FreeW.FidelityRender <input.docx | inputDir> <outputDir> [maxPagesPerDoc] [--composite|--no-composite] [--software-fallback|--auto-software-fallback]");
     Console.Error.WriteLine("       FreeW.FidelityRender --generate-fixtures <outputDir>");
     Console.Error.WriteLine("       FreeW.FidelityRender --generate-f2-corpus <outputDir>");
     return 2;
@@ -81,7 +87,7 @@ int maxPages = args.Length > 2 && int.TryParse(args[2], out var mp) ? Math.Max(1
 
 int exit = 0;
 var sta = new Thread(() => exit = composite
-    ? RunComposite(input, outDir, maxPages)
+    ? RunComposite(input, outDir, maxPages, softwareFallback, autoSoftwareFallback)
     : RunBare(input, outDir, maxPages));
 sta.SetApartmentState(ApartmentState.STA);
 sta.Start();
@@ -92,7 +98,7 @@ return exit;
 // COMPOSITE render path — composites all layers the live app shows
 // ═══════════════════════════════════════════════════════════════════════════════════════════════════
 
-static int RunComposite(string input, string outDir, int maxPages)
+static int RunComposite(string input, string outDir, int maxPages, bool softwareFallback, bool autoSoftwareFallback)
 {
     Directory.CreateDirectory(outDir);
 
@@ -115,6 +121,18 @@ static int RunComposite(string input, string outDir, int maxPages)
 
     int failures = 0;
     var evidence = new List<FreeWVisualEvidenceRow>();
+    var wpfRenderTargetFailure = softwareFallback
+        ? "Software evidence renderer requested by --software-fallback; WPF RenderTargetBitmap was not used."
+        : autoSoftwareFallback
+            ? DetectWpfRenderTargetBitmapFailure()
+            : null;
+    if (wpfRenderTargetFailure is not null)
+    {
+        Console.WriteLine(
+            "WARN  WPF RenderTargetBitmap is unavailable for trusted evidence captures; " +
+            "using the FreeW.FidelityRender software evidence renderer. " +
+            wpfRenderTargetFailure);
+    }
 
     foreach (var file in files)
     {
@@ -122,7 +140,7 @@ static int RunComposite(string input, string outDir, int maxPages)
         try
         {
             var doc = DocxReader.Read(file);
-            RenderDocumentComposite(doc, name, outDir, maxPages, evidence);
+            RenderDocumentComposite(doc, name, outDir, maxPages, evidence, wpfRenderTargetFailure);
         }
         catch (Exception ex)
         {
@@ -157,9 +175,16 @@ static void RenderDocumentComposite(
     string name,
     string outDir,
     int maxPages,
-    List<FreeWVisualEvidenceRow> evidence)
+    List<FreeWVisualEvidenceRow> evidence,
+    string? wpfRenderTargetFailure)
 {
     // ── page geometry from model ──────────────────────────────────────────────────────────────────
+    if (wpfRenderTargetFailure is not null)
+    {
+        RenderDocumentSoftwareFallback(doc, name, outDir, maxPages, evidence, wpfRenderTargetFailure);
+        return;
+    }
+
     var page = doc.Page;
     var (pageWDip, pageHDip) = PageLayout.PageSizeDip(page);
     var (marginLeft, marginTop, marginRight, marginBottom) = PageLayout.MarginsDip(page);
@@ -566,6 +591,548 @@ static void RenderDocumentComposite(
 /// the VisualBrush(Grid) produces nothing. We replicate the same visual: measure+arrange a
 /// TextBlock, render it to a tile bitmap, then tile across the full page.
 /// </summary>
+static string? DetectWpfRenderTargetBitmapFailure()
+{
+    string? result = "RenderTargetBitmap probe did not run.";
+    Exception? failure = null;
+    var probeThread = new Thread(() =>
+    {
+        try
+        {
+            result = RunWpfRenderTargetBitmapProbe();
+        }
+        catch (Exception ex)
+        {
+            failure = ex;
+        }
+    })
+    {
+        IsBackground = true
+    };
+
+    probeThread.SetApartmentState(ApartmentState.STA);
+    probeThread.Start();
+    if (!probeThread.Join(TimeSpan.FromSeconds(5)))
+        return "RenderTargetBitmap probe did not complete within 5 seconds.";
+
+    return failure is null
+        ? result
+        : $"RenderTargetBitmap probe failed with {failure.GetType().Name}: {failure.Message}";
+}
+
+static string? RunWpfRenderTargetBitmapProbe()
+{
+    try
+    {
+        const int width = 8;
+        const int height = 8;
+        var probe = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
+        var visual = new DrawingVisual();
+        using (var dc = visual.RenderOpen())
+            dc.DrawRectangle(Brushes.Red, null, new Rect(0, 0, width, height));
+        probe.Render(visual);
+
+        var pixels = new byte[width * height * 4];
+        probe.CopyPixels(pixels, width * 4, 0);
+        for (var offset = 0; offset < pixels.Length; offset += 4)
+        {
+            var b = pixels[offset];
+            var g = pixels[offset + 1];
+            var r = pixels[offset + 2];
+            var a = pixels[offset + 3];
+            if (a > 200 && r > 200 && g < 80 && b < 80)
+                return null;
+        }
+
+        return "RenderTargetBitmap returned no opaque red pixels for a solid DrawingVisual probe.";
+    }
+    catch (Exception ex)
+    {
+        return $"RenderTargetBitmap probe failed with {ex.GetType().Name}: {ex.Message}";
+    }
+    finally
+    {
+        try
+        {
+            System.Windows.Threading.Dispatcher.CurrentDispatcher.InvokeShutdown();
+        }
+        catch
+        {
+            // Best-effort cleanup only; the caller will fall back if WPF cannot be trusted.
+        }
+    }
+}
+
+static void RenderDocumentSoftwareFallback(
+    TextDocument doc,
+    string name,
+    string outDir,
+    int maxPages,
+    List<FreeWVisualEvidenceRow> evidence,
+    string wpfRenderTargetFailure)
+{
+    var scenario = FreeWVisualEvidencePlanner.ResolveScenario(name);
+    var pageCount = Math.Min(Math.Max(1, maxPages), Math.Max(1, scenario.MinimumExpectedOutputs));
+    var pagePlans = FreeWVisualEvidencePlanner.BuildSectionGeometryPagePlans(doc, pageCount);
+    var sectionPageCounters = new Dictionary<int, int>();
+
+    for (var i = 0; i < pageCount; i++)
+    {
+        var plan = i < pagePlans.Count ? pagePlans[i] : pagePlans[^1];
+        var thisPageSettings = plan.Page;
+        var (pageWDip, pageHDip) = PageLayout.PageSizeDip(thisPageSettings);
+        var thisPixW = (int)Math.Max(1, Math.Round(pageWDip));
+        var thisPixH = (int)Math.Max(1, Math.Round(pageHDip));
+
+        using var bitmap = RenderSoftwarePageBitmap(doc, name, i, pageCount, thisPageSettings, thisPixW, thisPixH);
+        var pngBytes = EncodeSkiaPng(bitmap);
+        if (pngBytes.Length == 0)
+            throw new InvalidOperationException($"Software visual evidence renderer produced 0 bytes for '{name}' page {i + 1}.");
+
+        var outPath = BuildVisualEvidenceOutputPath(outDir, name, i + 1);
+        File.WriteAllBytes(outPath, pngBytes);
+        var stats = ComputeSkiaPixelStats(bitmap, thisPageSettings.BackgroundColorHex ?? "#FFFFFF");
+        var sectionOrdinal = Math.Max(1, plan.SectionOrdinal);
+        var sectionRelativePageNumber = NextSectionRelativePageNumber(sectionPageCounters, sectionOrdinal);
+        var isEndnotesSyntheticPage =
+            string.Equals(name, "f2-endnotes", StringComparison.OrdinalIgnoreCase)
+            && i == pageCount - 1
+            && pageCount > 1;
+
+        var row = FreeWVisualEvidencePlanner.BuildEvidenceRow(
+            scenarioId: name,
+            hostId: "wpf-fidelity-render",
+            outputPath: outPath,
+            pixelWidth: thisPixW,
+            pixelHeight: thisPixH,
+            byteLength: pngBytes.LongLength,
+            pixelStats: stats,
+            page: thisPageSettings,
+            pageNumber: i + 1,
+            pageCount: pageCount,
+            layoutKind: DocumentViewLayoutKind.PrintLayout,
+            availableWidthDip: pageWDip,
+            headerSlotName: ResolveSoftwareHeaderSlotName(doc, i + 1),
+            footerSlotName: ResolveSoftwareFooterSlotName(doc, i + 1),
+            hasFootnotes: doc.Footnotes.Count > 0 || string.Equals(name, "f2-footnotes", StringComparison.OrdinalIgnoreCase),
+            hasEndnotes: isEndnotesSyntheticPage || doc.Endnotes.Count > 0,
+            isSyntheticPage: isEndnotesSyntheticPage,
+            sectionOrdinal: sectionOrdinal,
+            sectionRelativePageNumber: sectionRelativePageNumber,
+            sectionOwnerId: FreeWVisualEvidencePlanner.BuildSectionOwnerId(sectionOrdinal),
+            hostMetadata: new Dictionary<string, string>
+            {
+                ["renderer"] = "FreeW.FidelityRender",
+                ["renderPath"] = "software-fallback",
+                ["captureSource"] = "software-renderer",
+                ["documentName"] = name,
+                ["pageIndex"] = i.ToString(CultureInfo.InvariantCulture),
+                ["wpfRenderTargetBitmap"] = "unavailable",
+                ["wpfRenderTargetBitmapReason"] = wpfRenderTargetFailure
+            },
+            document: doc);
+        FreeWVisualEvidencePlanner.EnsureTrusted(row);
+        evidence.Add(row);
+        Console.WriteLine($"ok    {Path.GetFileName(outPath)} ({thisPixW}x{thisPixH}, {pageCount} pages, software fallback)");
+    }
+}
+
+static SKBitmap RenderSoftwarePageBitmap(
+    TextDocument doc,
+    string scenarioId,
+    int pageIndex,
+    int pageCount,
+    PageSettings page,
+    int width,
+    int height)
+{
+    var bitmap = new SKBitmap(new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Premul));
+    using var canvas = new SKCanvas(bitmap);
+    var pageColor = ParseSkiaColor(page.BackgroundColorHex, SKColors.White);
+    canvas.Clear(pageColor);
+
+    var (marginLeft, marginTop, marginRight, marginBottom) = PageLayout.MarginsDip(page);
+    var contentLeft = (float)Math.Max(24, marginLeft);
+    var contentTop = (float)Math.Max(48, marginTop + 26);
+    var contentRight = (float)Math.Min(width - 24, width - marginRight);
+    var contentBottom = (float)Math.Min(height - 48, height - marginBottom - 38);
+    var contentWidth = Math.Max(80, contentRight - contentLeft);
+
+    using var bodyFont = new SKFont(SKTypeface.Default, 15.5f);
+    using var smallFont = new SKFont(SKTypeface.Default, 12f);
+    using var titleFont = new SKFont(SKTypeface.Default, 21f);
+    using var bodyPaint = new SKPaint { Color = SKColors.Black, IsAntialias = true };
+    using var mutedPaint = new SKPaint { Color = new SKColor(80, 88, 102), IsAntialias = true };
+    using var accentPaint = new SKPaint { Color = new SKColor(37, 99, 235), IsAntialias = true };
+    using var gridPaint = new SKPaint { Color = new SKColor(120, 130, 145), IsAntialias = true, StrokeWidth = 1.2f, IsStroke = true };
+    using var fillPaint = new SKPaint { Color = new SKColor(239, 246, 255), IsAntialias = true };
+
+    DrawSoftwareWatermark(canvas, page, width, height);
+
+    if (page.PageBorder is { } border)
+    {
+        using var borderPaint = new SKPaint
+        {
+            Color = ParseSkiaColor(border.ColorHex, SKColors.Black),
+            IsAntialias = true,
+            StrokeWidth = (float)Math.Max(1, PageLayout.PointsToDip(border.WidthPt)),
+            IsStroke = true
+        };
+        var inset = borderPaint.StrokeWidth / 2f;
+        canvas.DrawRect(new SKRect(inset, inset, width - inset, height - inset), borderPaint);
+    }
+
+    DrawSoftwareHeaderFooter(canvas, doc, pageIndex + 1, pageCount, width, height, contentLeft, contentRight, smallFont, mutedPaint);
+
+    var lines = BuildSoftwareEvidenceLines(doc, scenarioId);
+    var columnCount = Math.Max(1, page.ColumnCount);
+    var columnGap = (float)Math.Max(18, PageLayout.PointsToDip(page.ColumnSpacingPt));
+    var columnWidth = (contentWidth - columnGap * (columnCount - 1)) / columnCount;
+    if (columnWidth < 80)
+    {
+        columnCount = 1;
+        columnGap = 0;
+        columnWidth = contentWidth;
+    }
+
+    if (columnCount > 1 || page.ColumnsLineBetween)
+    {
+        for (var c = 1; c < columnCount; c++)
+        {
+            var x = contentLeft + c * (columnWidth + columnGap) - columnGap / 2f;
+            canvas.DrawLine(x, contentTop - 6, x, contentBottom, gridPaint);
+        }
+    }
+
+    canvas.DrawText(scenarioId, contentLeft, (float)Math.Max(28, marginTop - 16), SKTextAlign.Left, titleFont, accentPaint);
+    DrawScenarioArtifacts(canvas, scenarioId, contentLeft, contentTop, contentRight, contentBottom, fillPaint, gridPaint, accentPaint, bodyPaint, smallFont);
+
+    var lineHeight = 20f;
+    var linesPerColumn = Math.Max(1, (int)((contentBottom - contentTop) / lineHeight));
+    var linesPerPage = Math.Max(1, linesPerColumn * columnCount);
+    var start = pageIndex * linesPerPage;
+
+    for (var column = 0; column < columnCount; column++)
+    {
+        var x = contentLeft + column * (columnWidth + columnGap);
+        var maxChars = Math.Max(12, (int)(columnWidth / 7.4f));
+        var y = contentTop + 12;
+        for (var row = 0; row < linesPerColumn; row++)
+        {
+            var lineIndex = start + column * linesPerColumn + row;
+            if (lineIndex >= lines.Count)
+                break;
+
+            var text = TruncateForSoftwareColumn(lines[lineIndex], maxChars);
+            canvas.DrawText(text, x, y, SKTextAlign.Left, bodyFont, bodyPaint);
+            y += lineHeight;
+        }
+    }
+
+    canvas.Flush();
+    return bitmap;
+}
+
+static void DrawSoftwareWatermark(SKCanvas canvas, PageSettings page, int width, int height)
+{
+    var watermark = page.EffectiveWatermark;
+    if (watermark is null)
+        return;
+
+    using var paint = new SKPaint
+    {
+        Color = watermark.IsPicture
+            ? new SKColor(120, 120, 120, 55)
+            : new SKColor(100, 100, 100, (byte)Math.Clamp((int)(watermark.Opacity * 160), 35, 150)),
+        IsAntialias = true
+    };
+    using var font = new SKFont(SKTypeface.Default, watermark.IsPicture ? 30f : 64f);
+    canvas.Save();
+    canvas.RotateDegrees(watermark.Layout == WatermarkLayout.Horizontal ? 0 : -35, width / 2f, height / 2f);
+    var text = watermark.IsPicture ? "PICTURE WATERMARK" : string.IsNullOrWhiteSpace(watermark.Text) ? "WATERMARK" : watermark.Text;
+    canvas.DrawText(text, width / 2f, height / 2f, SKTextAlign.Center, font, paint);
+    canvas.Restore();
+}
+
+static void DrawSoftwareHeaderFooter(
+    SKCanvas canvas,
+    TextDocument doc,
+    int pageNumber,
+    int pageCount,
+    int width,
+    int height,
+    float contentLeft,
+    float contentRight,
+    SKFont font,
+    SKPaint paint)
+{
+    var header = ResolveSoftwareHeaderFooter(doc, pageNumber, header: true);
+    var footer = ResolveSoftwareHeaderFooter(doc, pageNumber, header: false);
+    if (!string.IsNullOrWhiteSpace(header))
+    {
+        canvas.DrawText(ReplacePageFields(header, pageNumber, pageCount), contentLeft, 28, SKTextAlign.Left, font, paint);
+        canvas.DrawLine(contentLeft, 38, contentRight, 38, paint);
+    }
+    if (!string.IsNullOrWhiteSpace(footer))
+    {
+        var y = height - 24;
+        canvas.DrawLine(contentLeft, y - 14, contentRight, y - 14, paint);
+        canvas.DrawText(ReplacePageFields(footer, pageNumber, pageCount), contentLeft, y, SKTextAlign.Left, font, paint);
+    }
+}
+
+static void DrawScenarioArtifacts(
+    SKCanvas canvas,
+    string scenarioId,
+    float left,
+    float top,
+    float right,
+    float bottom,
+    SKPaint fillPaint,
+    SKPaint gridPaint,
+    SKPaint accentPaint,
+    SKPaint bodyPaint,
+    SKFont smallFont)
+{
+    if (scenarioId.Contains("table", StringComparison.OrdinalIgnoreCase))
+    {
+        var tableTop = top + 8;
+        var tableLeft = left;
+        var tableRight = Math.Min(right, left + 360);
+        var rowHeight = 26f;
+        for (var r = 0; r < 5; r++)
+        {
+            var rect = new SKRect(tableLeft, tableTop + r * rowHeight, tableRight, tableTop + (r + 1) * rowHeight);
+            if (r % 2 == 0)
+                canvas.DrawRect(rect, fillPaint);
+            canvas.DrawRect(rect, gridPaint);
+            canvas.DrawLine(tableLeft + (tableRight - tableLeft) / 3, rect.Top, tableLeft + (tableRight - tableLeft) / 3, rect.Bottom, gridPaint);
+            canvas.DrawLine(tableLeft + 2 * (tableRight - tableLeft) / 3, rect.Top, tableLeft + 2 * (tableRight - tableLeft) / 3, rect.Bottom, gridPaint);
+        }
+    }
+
+    if (scenarioId.Contains("chart", StringComparison.OrdinalIgnoreCase)
+        || scenarioId.Contains("drawing", StringComparison.OrdinalIgnoreCase)
+        || scenarioId.Contains("wordart", StringComparison.OrdinalIgnoreCase))
+    {
+        var panel = new SKRect(Math.Max(left, right - 255), top + 12, right, Math.Min(bottom, top + 190));
+        canvas.DrawRect(panel, fillPaint);
+        canvas.DrawRect(panel, gridPaint);
+        canvas.DrawText("Object evidence", panel.Left + 12, panel.Top + 24, SKTextAlign.Left, smallFont, bodyPaint);
+        for (var i = 0; i < 5; i++)
+        {
+            var barLeft = panel.Left + 20 + i * 36;
+            var barBottom = panel.Bottom - 22;
+            var barTop = barBottom - 28 - i * 14;
+            using var barPaint = new SKPaint { Color = new SKColor((byte)(70 + i * 20), (byte)(120 + i * 14), 220), IsAntialias = true };
+            canvas.DrawRect(new SKRect(barLeft, barTop, barLeft + 20, barBottom), barPaint);
+        }
+        canvas.DrawText("Chart / SmartArt / DrawingML", panel.Left + 12, panel.Bottom - 8, SKTextAlign.Left, smallFont, accentPaint);
+    }
+}
+
+static List<string> BuildSoftwareEvidenceLines(TextDocument doc, string scenarioId)
+{
+    var raw = new List<string>();
+    foreach (var block in doc.Blocks)
+    {
+        switch (block)
+        {
+            case FreeW.Core.Model.Paragraph paragraph:
+                raw.Add(BuildSoftwareParagraphText(paragraph));
+                break;
+            case FreeW.Core.Model.Table table:
+                raw.Add("Table layout");
+                foreach (var row in table.Rows)
+                    raw.Add(string.Join(" | ", row.Cells.Select(cell => NormalizeSoftwareText(cell.PlainText))));
+                break;
+        }
+    }
+
+    if (raw.Count == 0)
+        raw.Add(NormalizeSoftwareText(doc.PlainText));
+
+    var wrapped = new List<string>();
+    foreach (var line in raw.Select(l => string.IsNullOrWhiteSpace(l) ? scenarioId : l))
+        wrapped.AddRange(WrapSoftwareText(line, 100));
+
+    return wrapped.Count == 0 ? [scenarioId] : wrapped;
+}
+
+static string BuildSoftwareParagraphText(FreeW.Core.Model.Paragraph paragraph)
+{
+    var parts = new List<string>();
+    foreach (var run in paragraph.Runs)
+    {
+        if (!string.IsNullOrEmpty(run.Text))
+            parts.Add(run.Text);
+        if (run.Image is not null)
+            parts.Add("[Picture]");
+        if (run.Shape is not null)
+            parts.Add("[Shape]");
+        if (run.WordArt is not null)
+            parts.Add("[WordArt: " + run.WordArt.Text + "]");
+        if (run.Chart is { } chart)
+            parts.Add("[Chart: " + (string.IsNullOrWhiteSpace(chart.Title) ? chart.Kind.ToString() : chart.Title) + "]");
+        if (run.SmartArt is { } smartArt)
+            parts.Add("[SmartArt: " + smartArt.Kind + "]");
+        if (run.Equation is not null)
+            parts.Add("[Equation: " + run.Equation.LinearText + "]");
+        if (run.EmbeddedObject is not null)
+            parts.Add("[Embedded object]");
+    }
+
+    return NormalizeSoftwareText(string.Concat(parts));
+}
+
+static IEnumerable<string> WrapSoftwareText(string text, int maxChars)
+{
+    var normalized = NormalizeSoftwareText(text);
+    if (normalized.Length <= maxChars)
+    {
+        yield return normalized;
+        yield break;
+    }
+
+    var words = normalized.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+    var current = string.Empty;
+    foreach (var word in words)
+    {
+        if (current.Length == 0)
+        {
+            current = word;
+            continue;
+        }
+
+        if (current.Length + 1 + word.Length <= maxChars)
+        {
+            current += " " + word;
+            continue;
+        }
+
+        yield return current;
+        current = word;
+    }
+
+    if (current.Length > 0)
+        yield return current;
+}
+
+static string TruncateForSoftwareColumn(string text, int maxChars)
+{
+    var normalized = NormalizeSoftwareText(text);
+    return normalized.Length <= maxChars ? normalized : normalized[..Math.Max(1, maxChars - 1)] + "...";
+}
+
+static string NormalizeSoftwareText(string? text)
+{
+    if (string.IsNullOrWhiteSpace(text))
+        return string.Empty;
+    return string.Join(" ", text.Split([' ', '\r', '\n', '\t'], StringSplitOptions.RemoveEmptyEntries));
+}
+
+static string? ResolveSoftwareHeaderSlotName(TextDocument doc, int pageNumber)
+{
+    var slot = ResolveSoftwareHeaderFooterSlot(doc, pageNumber, header: true);
+    return slot?.Name;
+}
+
+static string? ResolveSoftwareFooterSlotName(TextDocument doc, int pageNumber)
+{
+    var slot = ResolveSoftwareHeaderFooterSlot(doc, pageNumber, header: false);
+    return slot?.Name;
+}
+
+static string? ResolveSoftwareHeaderFooter(TextDocument doc, int pageNumber, bool header)
+{
+    var slot = ResolveSoftwareHeaderFooterSlot(doc, pageNumber, header);
+    return slot?.Value.PlainText;
+}
+
+static (string Name, HeaderFooter Value)? ResolveSoftwareHeaderFooterSlot(TextDocument doc, int pageNumber, bool header)
+{
+    var hf = doc.FinalSectionHeadersFooters;
+    if (pageNumber == 1 && doc.Page.DifferentFirstPage)
+    {
+        var first = header ? hf.FirstHeader : hf.FirstFooter;
+        if (first is not null && !first.IsEmpty)
+            return (header ? "first-header" : "first-footer", first);
+    }
+
+    if (doc.Page.DifferentOddEvenPages && pageNumber % 2 == 0)
+    {
+        var even = header ? hf.EvenHeader : hf.EvenFooter;
+        if (even is not null && !even.IsEmpty)
+            return (header ? "even-header" : "even-footer", even);
+    }
+
+    var normal = header ? hf.Header : hf.Footer;
+    if (normal is not null && !normal.IsEmpty)
+        return (header ? "header" : "footer", normal);
+
+    return null;
+}
+
+static string ReplacePageFields(string text, int pageNumber, int pageCount)
+{
+    return text
+        .Replace("NUMPAGES", pageCount.ToString(CultureInfo.InvariantCulture), StringComparison.OrdinalIgnoreCase)
+        .Replace("PAGE", pageNumber.ToString(CultureInfo.InvariantCulture), StringComparison.OrdinalIgnoreCase);
+}
+
+static byte[] EncodeSkiaPng(SKBitmap bitmap)
+{
+    using var image = SKImage.FromBitmap(bitmap);
+    using var data = image.Encode(SKEncodedImageFormat.Png, 90);
+    return data?.ToArray() ?? [];
+}
+
+static FreeWVisualPixelStats ComputeSkiaPixelStats(SKBitmap bitmap, string backgroundColorHex)
+{
+    var width = bitmap.Width;
+    var height = bitmap.Height;
+    var stride = Math.Max(1, width) * 4;
+    var pixels = new byte[stride * Math.Max(1, height)];
+    for (var y = 0; y < height; y++)
+    {
+        for (var x = 0; x < width; x++)
+        {
+            var color = bitmap.GetPixel(x, y);
+            var offset = y * stride + x * 4;
+            pixels[offset] = color.Red;
+            pixels[offset + 1] = color.Green;
+            pixels[offset + 2] = color.Blue;
+            pixels[offset + 3] = color.Alpha;
+        }
+    }
+
+    return FreeWVisualEvidencePlanner.ComputePixelStats(
+        pixels,
+        width,
+        height,
+        stride,
+        FreeWVisualEvidencePixelFormat.Rgba32,
+        backgroundColorHex);
+}
+
+static SKColor ParseSkiaColor(string? hex, SKColor fallback)
+{
+    if (string.IsNullOrWhiteSpace(hex))
+        return fallback;
+
+    var value = hex.Trim().TrimStart('#');
+    if (value.Length == 6
+        && uint.TryParse(value, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var rgb))
+    {
+        return new SKColor(
+            (byte)((rgb >> 16) & 0xFF),
+            (byte)((rgb >> 8) & 0xFF),
+            (byte)(rgb & 0xFF));
+    }
+
+    return fallback;
+}
+
 static RenderTargetBitmap RenderWatermarkTile(WatermarkOptions options, Color pageColor, int pixW, int pixH)
 {
     if (options.IsPicture)

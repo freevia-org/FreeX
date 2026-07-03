@@ -10,6 +10,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="SkiaSharp" />
     <ProjectReference Include="..\..\FreeW.Core.Model\FreeW.Core.Model.csproj" />
     <ProjectReference Include="..\..\FreeW.Core.IO\FreeW.Core.IO.csproj" />
     <ProjectReference Include="..\..\FreeW.App.Presentation\FreeW.App.Presentation.csproj" />
