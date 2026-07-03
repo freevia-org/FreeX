@@ -6352,6 +6352,15 @@ public partial class MainWindow
                 pageSetupDialog.Show();
                 await Task.Delay(350);
                 pageSetupDialog.UpdateLayout();
+                await CaptureWindowElementForScreenshotTourAsync(pageSetupDialog, outputDir, "freex_page_layout_setup_dialog");
+                captures.Add(CreatePageLayoutSetupCapture(
+                    "page-setup-dialog",
+                    "freex_page_layout_setup_dialog",
+                    "Page Setup dialog default Page tab shows the initial orientation-focused state used by the Page Setup command.",
+                    "Page Setup",
+                    "RenderTargetBitmap-page-setup-dialog-window",
+                    []));
+
                 await CaptureWindowElementForScreenshotTourAsync(pageSetupDialog, outputDir, "freex_page_layout_setup_dialog_page_tab");
                 captures.Add(CreatePageLayoutSetupCapture(
                     "page-setup-dialog-page-tab",
@@ -6369,6 +6378,18 @@ public partial class MainWindow
                     "page-setup-dialog-margins-tab",
                     "freex_page_layout_setup_dialog_margins_tab",
                     "Page Setup dialog Margins tab shows left/right/top/bottom, header/footer margins, and center-on-page options.",
+                    "Page Setup",
+                    "RenderTargetBitmap-page-setup-dialog-window",
+                    []));
+
+                pageSetupDialog.PageSetupTabs.SelectedIndex = 2;
+                await Task.Delay(250);
+                pageSetupDialog.UpdateLayout();
+                await CaptureWindowElementForScreenshotTourAsync(pageSetupDialog, outputDir, "freex_page_layout_setup_dialog_header_footer_tab");
+                captures.Add(CreatePageLayoutSetupCapture(
+                    "page-setup-dialog-header-footer-tab",
+                    "freex_page_layout_setup_dialog_header_footer_tab",
+                    "Page Setup dialog Header/Footer tab shows header/footer presets, preview panes, and scale/alignment options.",
                     "Page Setup",
                     "RenderTargetBitmap-page-setup-dialog-window",
                     []));
@@ -10773,7 +10794,7 @@ public partial class MainWindow
             [
                 "Page Layout ribbon baseline with Page Setup, Scale to Fit, and Sheet Options groups visible.",
                 "Margins, Orientation, Size, Print Area, Breaks, and Background menu surfaces.",
-                "Page Setup dialog Page, Margins, and Sheet tabs, including Print Titles fields.",
+                "Page Setup dialog default Page state plus Page, Margins, Header/Footer, and Sheet tabs, including Print Titles fields.",
                 "Scale to Fit field state and Sheet Options print/display checkbox state.",
                 "Draw Arrange representative Selection Pane dialog surface."
             ],
