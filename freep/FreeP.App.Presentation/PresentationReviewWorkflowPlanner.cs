@@ -2349,7 +2349,7 @@ public static class PresentationReviewWorkflowPlanner
                 slideContext,
                 "Summarize the key headers, values, and takeaway."),
             SlideShapeKind.Picture => BuildAltTextSentence(
-                BuildAltTextReference("Picture", NormalizeText(shape.Name)),
+                BuildPictureAltTextReference(shape),
                 slideContext,
                 "Describe the important visual details and context."),
             SlideShapeKind.Media => BuildAltTextSentence(
@@ -2410,6 +2410,81 @@ public static class PresentationReviewWorkflowPlanner
     private static string BuildAltTextReference(string kind, string? name)
         => name is null ? kind : $"{kind} \"{name}\"";
 
+    private static string BuildPictureAltTextReference(SlideShape shape)
+    {
+        var reference = BuildAltTextReference("Picture", NormalizeText(shape.Name));
+        var details = BuildPictureAltTextDetails(shape).ToArray();
+        return details.Length == 0 ? reference : $"{reference} ({string.Join(", ", details)})";
+    }
+
+    private static IEnumerable<string> BuildPictureAltTextDetails(SlideShape shape)
+    {
+        if (NormalizePictureContentType(shape.Picture?.ContentType) is { } contentType)
+        {
+            yield return $"{contentType} image";
+        }
+
+        if (shape.PictureFormat is { } format)
+        {
+            if (format.HasCrop)
+            {
+                yield return "cropped";
+            }
+
+            if (format.Grayscale)
+            {
+                yield return "grayscale effect";
+            }
+
+            if (format.BiLevelThreshold.HasValue)
+            {
+                yield return "black-and-white threshold effect";
+            }
+
+            if (format.Brightness.HasValue || format.Contrast.HasValue)
+            {
+                yield return "brightness or contrast adjustment";
+            }
+
+            if (format.AlphaModPct is { } alpha && alpha < 1.0)
+            {
+                yield return "transparency adjustment";
+            }
+        }
+
+        if (NormalizePictureFrame(shape.PictureFrameGeometry) is { } frame)
+        {
+            yield return $"{frame} frame";
+        }
+    }
+
+    private static string? NormalizePictureContentType(string? contentType)
+    {
+        var normalized = NormalizeText(contentType)?.ToLowerInvariant();
+        return normalized switch
+        {
+            "image/png" => "PNG",
+            "image/jpeg" or "image/jpg" => "JPEG",
+            "image/gif" => "GIF",
+            "image/svg+xml" => "SVG",
+            "image/wmf" or "image/x-wmf" => "WMF",
+            "image/emf" or "image/x-emf" => "EMF",
+            _ => null
+        };
+    }
+
+    private static string? NormalizePictureFrame(string? frame)
+    {
+        var normalized = NormalizeText(frame);
+        return normalized switch
+        {
+            null or "" or "rect" => null,
+            "roundRect" => "rounded-rectangle",
+            "ellipse" => "oval",
+            _ => normalized
+        };
+    }
+
     private static string BuildTableAltTextReference(SlideShape shape)
     {
         var table = shape.Table;
@@ -2423,8 +2498,56 @@ public static class PresentationReviewWorkflowPlanner
         var dimensions = rowCount > 0 && columnCount > 0
             ? $" with {rowCount} rows and {columnCount} columns"
             : string.Empty;
-        return $"{BuildAltTextReference("Table", NormalizeText(shape.Name))}{dimensions}";
+        var details = BuildTableAltTextDetails(table).ToArray();
+        var detailSuffix = details.Length == 0 ? string.Empty : $", {string.Join(", ", details)}";
+        return $"{BuildAltTextReference("Table", NormalizeText(shape.Name))}{dimensions}{detailSuffix}";
     }
+
+    private static IEnumerable<string> BuildTableAltTextDetails(TableShape table)
+    {
+        if (table.Rows.Count == 0)
+        {
+            yield break;
+        }
+
+        var firstRowCells = GetTableRowCellText(table.Rows[0]).Take(3).ToArray();
+        if (firstRowCells.Length > 0)
+        {
+            var firstRowLabel = table.Flags.FirstRow ? "headers" : "first row";
+            yield return $"{firstRowLabel} {FormatAltTextInlineList(firstRowCells)}";
+        }
+
+        var sampleRow = table.Rows
+            .Skip(1)
+            .Select(row => GetTableRowCellText(row).Take(3).ToArray())
+            .FirstOrDefault(cells => cells.Length > 0);
+        if (sampleRow is { Length: > 0 })
+        {
+            yield return $"sample row {FormatAltTextInlineList(sampleRow)}";
+        }
+    }
+
+    private static IEnumerable<string> GetTableRowCellText(TableRow row)
+        => row.Cells
+            .Where(cell => !cell.HMerge && !cell.VMerge)
+            .Select(cell => NormalizeText(GetPlainText(cell.TextBody)))
+            .Where(text => text is not null)
+            .Select(text => BuildPreview(text!));
+
+    private static string GetPlainText(TextBody? body)
+        => body is null
+            ? string.Empty
+            : string.Join(" ", body.Paragraphs.Select(p => string.Concat(p.Runs.Select(r => r.Text))));
+
+    private static string FormatAltTextInlineList(IReadOnlyList<string> values)
+        => values.Count switch
+        {
+            0 => string.Empty,
+            1 => $"\"{values[0]}\"",
+            2 => $"\"{values[0]}\" and \"{values[1]}\"",
+            _ => string.Join(", ", values.Take(values.Count - 1).Select(value => $"\"{value}\""))
+                + $", and \"{values[^1]}\""
+        };
 
     private static bool NeedsAltText(SlideShape shape)
         => shape.Kind is SlideShapeKind.Picture
