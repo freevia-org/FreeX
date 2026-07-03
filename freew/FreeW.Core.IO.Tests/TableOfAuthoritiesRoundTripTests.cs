@@ -112,4 +112,25 @@ public class TableOfAuthoritiesRoundTripTests
             "Statutes",
             "42 U.S.C. § 1983");
     }
+
+    [Fact]
+    public void TableOfAuthoritiesEntryTabLeader_SurvivesRoundTrip()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var p = new Paragraph();
+        p.Runs.Add(Run.CitationMark(new Citation("Legal Services Corp. v. Velazquez", CitationCategory.Cases)));
+        doc.Blocks.Add(p);
+        doc.Blocks.AddRange(TableOfAuthorities.Build(doc, new ToaOptions { TabLeader = ToaTabLeader.Dashes }));
+
+        var reopened = RoundTrip(doc);
+
+        reopened.Blocks.OfType<Paragraph>()
+            .Single(paragraph => paragraph.StyleId == TableOfAuthorities.EntryStyleId)
+            .Formatting.TabStops.Should().Equal(
+                new TabStop(
+                    TableOfAuthorities.DefaultEntryRightTabStopPt,
+                    TabStopAlignment.Right,
+                    TabLeader.Dashes));
+    }
 }

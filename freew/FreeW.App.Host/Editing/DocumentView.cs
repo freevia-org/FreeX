@@ -6252,7 +6252,9 @@ public sealed class DocumentView : RichTextBox
                 break;
             case WpfRun { Tag: CitationMarker citationMarker }:
                 // A hidden Mark Citation (TA) field round-trips as a textless citation-mark run.
-                modelParagraph.Runs.Add(ModelRun.CitationMark(citationMarker.Citation));
+                var citationRun = ModelRun.CitationMark(citationMarker.Citation);
+                citationRun.Formatting = citationMarker.Formatting;
+                modelParagraph.Runs.Add(citationRun);
                 break;
             case WpfRun { Tag: EndnoteMarker endnoteMarker }:
                 modelParagraph.Runs.Add(ModelRun.EndnoteReference(endnoteMarker.EndnoteId));
@@ -7453,7 +7455,7 @@ public sealed class DocumentView : RichTextBox
         // Word's hidden citation mark). The tag lets ReadInline recover the citation on commit so the mark
         // survives an edit/commit cycle (mirroring the page-break/comment-anchor markers).
         if (run.Citation is { } citationMark)
-            return new WpfRun(string.Empty) { Tag = new CitationMarker(citationMark) };
+            return new WpfRun(string.Empty) { Tag = new CitationMarker(citationMark, run.Formatting) };
 
         // A manual page break renders as an empty, tagged run; the containing paragraph carries the actual
         // BreakPageBefore (set in BuildParagraph). The tag lets ReadInline recover it on commit so the break
@@ -8085,7 +8087,7 @@ public sealed class DocumentView : RichTextBox
     /// citation it records. Mirrors how <see cref="FootnoteMarker"/>/<see cref="PageBreakMarker"/> preserve
     /// their marks across an edit/commit cycle.
     /// </summary>
-    private sealed record CitationMarker(Citation Citation);
+    private sealed record CitationMarker(Citation Citation, RunFormatting Formatting);
 
     /// <summary>Carried on a manual page-break WPF run's Tag so CommitToModel can round-trip it.</summary>
     private sealed record PageBreakMarker;

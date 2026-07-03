@@ -10516,16 +10516,22 @@ public sealed class DocumentView : Control
         Focus();
     }
 
-    public void InsertTableOfAuthorities()
+    public void InsertTableOfAuthorities() => InsertTableOfAuthorities(ToaOptions.Default);
+
+    public void InsertTableOfAuthorities(ToaOptions options)
     {
+        ArgumentNullException.ThrowIfNull(options);
         TableOfAuthorities.EnsureStyles(_doc);
-        InsertGeneratedReferenceBlocks(TableOfAuthorities.Build(_doc), "Insert Table of Authorities", Math.Clamp(_caret.Block, 0, _doc.Blocks.Count));
+        InsertGeneratedReferenceBlocks(TableOfAuthorities.Build(_doc, options), "Insert Table of Authorities", Math.Clamp(_caret.Block, 0, _doc.Blocks.Count));
     }
 
-    public void RefreshTableOfAuthorities()
+    public void RefreshTableOfAuthorities() => RefreshTableOfAuthorities(ToaOptions.Default);
+
+    public void RefreshTableOfAuthorities(ToaOptions options)
     {
+        ArgumentNullException.ThrowIfNull(options);
         TableOfAuthorities.EnsureStyles(_doc);
-        RefreshGeneratedReferenceBlocks(TableOfAuthorities.IsTableOfAuthoritiesParagraph, () => TableOfAuthorities.Build(_doc), "Update Table of Authorities");
+        RefreshGeneratedReferenceBlocks(TableOfAuthorities.IsTableOfAuthoritiesParagraph, () => TableOfAuthorities.Build(_doc, options), "Update Table of Authorities");
     }
 
     public void ShowNotes()

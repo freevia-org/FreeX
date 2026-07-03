@@ -80,6 +80,32 @@ public sealed class MarkCitationEditorTests
     }
 
     [StaFact]
+    public void InsertTableOfAuthorities_WithOptions_CarriesLeaderThroughWpfHost()
+    {
+        var model = TextDocument.CreateEmpty();
+        model.Blocks.Clear();
+        var mark = Run.CitationMark(new Citation("Formatted Case", CitationCategory.Cases));
+        mark.Formatting = new RunFormatting { Bold = true };
+        model.Blocks.Add(new Paragraph { Runs = { mark } });
+        var view = new DocumentView();
+        view.LoadModel(model);
+
+        view.InsertTableOfAuthorities(new ToaOptions
+        {
+            KeepOriginalFormatting = true,
+            TabLeader = ToaTabLeader.Underline
+        });
+        view.CommitToModel();
+
+        var entry = view.Model.Blocks.OfType<Paragraph>()
+            .Single(p => p.StyleId == TableOfAuthorities.EntryStyleId);
+        entry.Formatting.TabStops.Should().ContainSingle()
+            .Which.Leader.Should().Be(TabLeader.Underline);
+        entry.PlainText.Should().Be("Formatted Case");
+        entry.Runs.Single().Formatting.Bold.Should().BeTrue();
+    }
+
+    [StaFact]
     public void RefreshTableOfAuthorities_ReplacesThePriorRegionInPlaceWithoutDuplicating()
     {
         var view = LoadedView(out _);

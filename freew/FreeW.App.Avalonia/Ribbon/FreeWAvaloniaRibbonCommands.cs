@@ -987,7 +987,14 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.index-insert", new ActionRibbonCommand(editor.InsertIndex));
         r.Register("freew.index-refresh", new ActionRibbonCommand(editor.RefreshIndex));
         r.Register("freew.mark-citation", new ActionRibbonCommand(() => editor.MarkCitation()));
-        r.Register("freew.table-of-authorities", new ActionRibbonCommand(editor.InsertTableOfAuthorities));
+        r.Register("freew.table-of-authorities", new ActionRibbonCommand(() =>
+        {
+            var options = callbacks.OpenTableOfAuthoritiesDialog?.Invoke();
+            if (options is null && callbacks.OpenTableOfAuthoritiesDialog is not null)
+                return;
+
+            editor.InsertTableOfAuthorities(options ?? ToaOptions.Default);
+        }));
         r.Register("freew.table-of-authorities-refresh", new ActionRibbonCommand(editor.RefreshTableOfAuthorities));
     }
 

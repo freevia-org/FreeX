@@ -89,6 +89,12 @@ public sealed class ToaOptions
 /// </summary>
 public static class TableOfAuthorities
 {
+    /// <summary>
+    /// Default right-tab position for generated entries when the caller only supplies an enumerable of
+    /// citations. It matches the writable width of Word's default letter page (8.5in page, 1in margins).
+    /// </summary>
+    public const double DefaultEntryRightTabStopPt = 468;
+
     /// <summary>Style id of the table's "Table of Authorities" heading paragraph.</summary>
     public const string HeadingStyleId = "TableOfAuthoritiesHeading";
 
@@ -133,7 +139,7 @@ public static class TableOfAuthorities
     public static IReadOnlyList<Paragraph> Build(TextDocument document)
     {
         ArgumentNullException.ThrowIfNull(document);
-        return Build(CollectCitations(document), ToaOptions.Default);
+        return Build(document, ToaOptions.Default);
     }
 
     /// <summary>
@@ -168,7 +174,16 @@ public static class TableOfAuthorities
             }
         }
 
-        return Build(allCitations, options, occurrenceCounts);
+        var formatting = options.KeepOriginalFormatting
+            ? CollectFirstCitationFormatting(document)
+            : null;
+
+        return Build(
+            allCitations,
+            options,
+            occurrenceCounts,
+            EntryRightTabStopPt(document.Page),
+            formatting);
     }
 
     /// <summary>
@@ -202,7 +217,12 @@ public static class TableOfAuthorities
     public static IReadOnlyList<Paragraph> Build(IEnumerable<Citation> citations)
     {
         ArgumentNullException.ThrowIfNull(citations);
-        return Build(citations, ToaOptions.Default, occurrenceCounts: null);
+        return Build(
+            citations,
+            ToaOptions.Default,
+            occurrenceCounts: null,
+            DefaultEntryRightTabStopPt,
+            sourceFormatting: null);
     }
 
     /// <summary>
@@ -217,14 +237,21 @@ public static class TableOfAuthorities
     {
         ArgumentNullException.ThrowIfNull(citations);
         ArgumentNullException.ThrowIfNull(options);
-        return Build(citations, options, occurrenceCounts: null);
+        return Build(
+            citations,
+            options,
+            occurrenceCounts: null,
+            DefaultEntryRightTabStopPt,
+            sourceFormatting: null);
     }
 
     // Core builder shared by all public overloads.
     private static IReadOnlyList<Paragraph> Build(
         IEnumerable<Citation> citations,
         ToaOptions options,
-        Dictionary<(string Long, CitationCategory Cat), int>? occurrenceCounts)
+        Dictionary<(string Long, CitationCategory Cat), int>? occurrenceCounts,
+        double entryRightTabStopPt,
+        Dictionary<(string Long, CitationCategory Cat), RunFormatting>? sourceFormatting)
     {
         var paragraphs = new List<Paragraph>
         {
@@ -268,12 +295,70 @@ public static class TableOfAuthorities
                         text = entry + " passim";
                 }
 
-                paragraphs.Add(new Paragraph(text) { StyleId = EntryStyleId });
+                RunFormatting? runFormatting = null;
+                sourceFormatting?.TryGetValue((entry, category), out runFormatting);
+                paragraphs.Add(CreateEntryParagraph(text, options, entryRightTabStopPt, runFormatting));
             }
         }
 
         return paragraphs;
     }
+
+    private static Paragraph CreateEntryParagraph(
+        string text,
+        ToaOptions options,
+        double entryRightTabStopPt,
+        RunFormatting? sourceFormatting)
+    {
+        var paragraph = new Paragraph(text)
+        {
+            StyleId = EntryStyleId,
+            Formatting = ParagraphFormatting.Default with
+            {
+                TabStops =
+                [
+                    new TabStop(
+                        Math.Max(0, entryRightTabStopPt),
+                        TabStopAlignment.Right,
+                        ToTabLeader(options.TabLeader))
+                ]
+            }
+        };
+
+        if (sourceFormatting is not null && paragraph.Runs.Count > 0)
+            paragraph.Runs[0].Formatting = sourceFormatting;
+
+        return paragraph;
+    }
+
+    private static Dictionary<(string Long, CitationCategory Cat), RunFormatting> CollectFirstCitationFormatting(
+        TextDocument document)
+    {
+        var formatting = new Dictionary<(string Long, CitationCategory Cat), RunFormatting>();
+        foreach (var paragraph in document.Blocks.OfType<Paragraph>())
+        {
+            foreach (var run in paragraph.Runs)
+            {
+                if (run.Citation is not { } citation || citation.LongCitation.Length == 0)
+                    continue;
+
+                formatting.TryAdd((citation.LongCitation, citation.Category), run.Formatting);
+            }
+        }
+
+        return formatting;
+    }
+
+    private static double EntryRightTabStopPt(PageSettings page) =>
+        Math.Max(0, page.WidthPt - page.MarginLeftPt - page.MarginRightPt);
+
+    private static TabLeader ToTabLeader(ToaTabLeader leader) => leader switch
+    {
+        ToaTabLeader.Dashes => TabLeader.Dashes,
+        ToaTabLeader.Underline => TabLeader.Underline,
+        ToaTabLeader.None => TabLeader.None,
+        _ => TabLeader.Dots
+    };
 
     /// <summary>
     /// True when <paramref name="styleId"/> is one of the Table of Authorities styles produced by
