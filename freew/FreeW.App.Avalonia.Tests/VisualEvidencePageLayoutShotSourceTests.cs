@@ -42,6 +42,13 @@ public sealed class VisualEvidencePageLayoutShotSourceTests
         source.Should().Contain("sectionSurfaceCaptureHeightDip");
         source.Should().NotContain("avalonia-global-page-surface-no-section-page-break");
         source.Should().Contain("SectionGeometryRendererScenarioIds");
+        source.Should().Contain("f2-tracked-changes");
+        source.Should().Contain("VisualEvidenceOutputPath(outDir, \"f2-tracked-changes\", 1)");
+        source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildTrackedChangesReviewDocument");
+        source.Should().Contain("f2-comments");
+        source.Should().Contain("VisualEvidenceOutputPath(outDir, \"f2-comments\", 1)");
+        source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildCommentsReviewDocument");
+        source.Should().Contain("ReviewRendererScenarioIds");
         source.Should().Contain("table-layout-complex");
         source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildComplexTableLayoutDocument");
         source.Should().Contain("drawing-objects-complex");
@@ -60,6 +67,7 @@ public sealed class VisualEvidencePageLayoutShotSourceTests
         source.Should().Contain("pageNumber: pageNumber");
         source.Should().Contain("pageCount: pageCount");
         source.Should().Contain("refusing placeholder fallback for backstage renderer evidence");
+        source.Should().Contain("refusing placeholder fallback for review renderer evidence");
         source.Should().Contain("freew_columns_layout.png");
         source.Should().Contain("freew_border_watermark.png");
         source.Should().Contain("FreeWVisualEvidencePlanner.BuildSectionOwnerId");
