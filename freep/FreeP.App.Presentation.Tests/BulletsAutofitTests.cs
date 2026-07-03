@@ -218,6 +218,109 @@ public sealed class BulletsAutofitTests
     }
 
     [Fact]
+    public void CharBullet_WithParagraphFollowTextSources_OverridesInheritedBulletTypography()
+    {
+        var p = MakePresentation();
+        var textStyles = p.Masters[0].TextStyles ??= new MasterTextStyles();
+        textStyles.OtherStyle[0] = new TextStyleLevel
+        {
+            BulletKind = BulletKind.Char,
+            BulletChar = "\u2022",
+            BulletFontFamily = "Wingdings",
+            BulletColor = new ThemeAwareColor(new SrgbColor(0xFF, 0x00, 0x00)),
+            BulletSizePct = 75000
+        };
+
+        var body = new TextBody();
+        var para = new Paragraph
+        {
+            BulletColorFollowsText = true,
+            BulletSizeFollowsText = true,
+            BulletFontFollowsText = true
+        };
+        para.Runs.Add(new Run
+        {
+            Text = string.Empty,
+            FontFamily = "Calibri",
+            FontSizePt = 9,
+            Color = new ThemeAwareColor(new SrgbColor(0x11, 0x11, 0x11))
+        });
+        para.Runs.Add(new Run
+        {
+            Text = "Follow text bullet",
+            FontFamily = "Aptos Display",
+            FontSizePt = 22,
+            Color = new ThemeAwareColor(new SrgbColor(0x12, 0x34, 0x56))
+        });
+        body.Paragraphs.Add(para);
+
+        var layout = ComposeText(body, p);
+
+        var resolved = layout.Paragraphs[0];
+        resolved.BulletText.Should().Be("\u2022");
+        resolved.BulletFontFamily.Should().Be("Aptos Display");
+        resolved.BulletColor.Should().Be(new SrgbColor(0x12, 0x34, 0x56));
+        resolved.BulletFontSizePt.Should().BeApproximately(22.0, 0.01);
+    }
+
+    [Fact]
+    public void CharBullet_WithAbsolutePointSize_UsesExactSizeBeforeStoredAutofitScale()
+    {
+        var body = new TextBody
+        {
+            AutoFit = true,
+            FontScalePPT = 80000
+        };
+        var para = new Paragraph
+        {
+            BulletKind = BulletKind.Char,
+            BulletChar = "\u2022",
+            BulletSizePt = 10.0
+        };
+        para.Runs.Add(new Run { Text = "Absolute bullet", FontSizePt = 24 });
+        body.Paragraphs.Add(para);
+
+        var layout = ComposeText(body);
+
+        layout.Paragraphs[0].BulletFontSizePt.Should().BeApproximately(8.0, 0.01);
+        layout.Paragraphs[0].Runs[0].FontSizePt.Should().BeApproximately(24 * 0.8, 0.01);
+    }
+
+    [Fact]
+    public void LevelTwoStyle_BulletAbsoluteAndFollowTextFields_ApplyToLevelOneParagraph()
+    {
+        var p = MakePresentation();
+        var textStyles = p.Masters[0].TextStyles ??= new MasterTextStyles();
+        textStyles.OtherStyle[1] = new TextStyleLevel
+        {
+            BulletKind = BulletKind.Char,
+            BulletChar = "\u25B8",
+            BulletSizePt = 11.0,
+            BulletColorFollowsText = true,
+            BulletFontFollowsText = true
+        };
+
+        var body = new TextBody();
+        var para = new Paragraph { Level = 1 };
+        para.Runs.Add(new Run
+        {
+            Text = "Level two",
+            FontFamily = "Aptos",
+            FontSizePt = 20,
+            Color = new ThemeAwareColor(new SrgbColor(0x44, 0x55, 0x66))
+        });
+        body.Paragraphs.Add(para);
+
+        var layout = ComposeText(body, p);
+
+        var resolved = layout.Paragraphs[0];
+        resolved.BulletText.Should().Be("\u25B8");
+        resolved.BulletFontSizePt.Should().BeApproximately(11.0, 0.01);
+        resolved.BulletFontFamily.Should().Be("Aptos");
+        resolved.BulletColor.Should().Be(new SrgbColor(0x44, 0x55, 0x66));
+    }
+
+    [Fact]
     public void BulletParagraph_MarginLeft_PopulatesIndentDip()
     {
         const double EmuPerDip = 9525.0;
@@ -348,6 +451,88 @@ public sealed class BulletsAutofitTests
         roundTripped.BulletChar.Should().Be("►");
         roundTripped.MarginLeftEmu.Should().Be(457200L);
         roundTripped.IndentEmu.Should().Be(-228600L);
+    }
+
+    [Fact]
+    public void RoundTrip_BulletTypographySources_PreservedAcrossWriteRead()
+    {
+        var body = new TextBody
+        {
+            LstStyle = new TextStyleLevels()
+        };
+        body.LstStyle[1] = new TextStyleLevel
+        {
+            BulletKind = BulletKind.Char,
+            BulletChar = "\u25B8",
+            BulletColorFollowsText = true,
+            BulletSizePt = 13.5,
+            BulletFontFollowsText = true
+        };
+
+        var para = new Paragraph
+        {
+            BulletKind = BulletKind.Char,
+            BulletChar = "\u2022",
+            BulletColorFollowsText = true,
+            BulletSizeFollowsText = true,
+            BulletFontFollowsText = true
+        };
+        para.Runs.Add(new Run { Text = "Bullet typography sources", FontSizePt = 18 });
+        body.Paragraphs.Add(para);
+
+        var p = MakePresentation();
+        p.Slides[0].Shapes.Clear();
+        p.Slides[0].Shapes.Add(MakeShapeWithText(body));
+
+        using var ms = new System.IO.MemoryStream();
+        FreeP.Core.IO.PptxPackageWriter.Write(p, ms);
+        ms.Position = 0;
+        var p2 = FreeP.Core.IO.PptxPackageReader.Read(ms);
+
+        var rtBody = p2.Slides[0].Shapes[0].TextBody!;
+        var rtPara = rtBody.Paragraphs[0];
+        rtPara.BulletColorFollowsText.Should().BeTrue();
+        rtPara.BulletSizeFollowsText.Should().BeTrue();
+        rtPara.BulletFontFollowsText.Should().BeTrue();
+        rtPara.BulletColor.Should().BeNull();
+        rtPara.BulletSizePct.Should().BeNull();
+        rtPara.BulletSizePt.Should().BeNull();
+        rtPara.BulletFontFamily.Should().BeNull();
+
+        var rtLevel = rtBody.LstStyle![1]!;
+        rtLevel.BulletKind.Should().Be(BulletKind.Char);
+        rtLevel.BulletChar.Should().Be("\u25B8");
+        rtLevel.BulletColorFollowsText.Should().BeTrue();
+        rtLevel.BulletSizePt.Should().BeApproximately(13.5, 0.001);
+        rtLevel.BulletFontFollowsText.Should().BeTrue();
+    }
+
+    [Fact]
+    public void RoundTrip_ParagraphBulletSizePoints_PreservedAcrossWriteRead()
+    {
+        var body = new TextBody();
+        var para = new Paragraph
+        {
+            BulletKind = BulletKind.Char,
+            BulletChar = "\u2022",
+            BulletSizePt = 12.25
+        };
+        para.Runs.Add(new Run { Text = "Absolute bullet size", FontSizePt = 18 });
+        body.Paragraphs.Add(para);
+
+        var p = MakePresentation();
+        p.Slides[0].Shapes.Clear();
+        p.Slides[0].Shapes.Add(MakeShapeWithText(body));
+
+        using var ms = new System.IO.MemoryStream();
+        FreeP.Core.IO.PptxPackageWriter.Write(p, ms);
+        ms.Position = 0;
+        var p2 = FreeP.Core.IO.PptxPackageReader.Read(ms);
+
+        var rt = p2.Slides[0].Shapes[0].TextBody!.Paragraphs[0];
+        rt.BulletSizePt.Should().BeApproximately(12.25, 0.001);
+        rt.BulletSizePct.Should().BeNull();
+        rt.BulletSizeFollowsText.Should().BeFalse();
     }
 
     [Fact]
@@ -732,6 +917,9 @@ public sealed class BulletsAutofitTests
             BulletChar    = "•",
             SpaceBeforePt = 6.0,
             SpaceAfterPt  = 3.0,
+            BulletColorFollowsText = true,
+            BulletSizeFollowsText = true,
+            BulletFontFollowsText = true,
         };
         para.Runs.Add(new Run { Text = "Bullet with spacing", FontSizePt = 18 });
         body.Paragraphs.Add(para);
@@ -760,15 +948,24 @@ public sealed class BulletsAutofitTests
         var childNames = pPr!.Elements().Select(e => e.Name.LocalName).ToList();
         var spcBefIdx = childNames.IndexOf("spcBef");
         var spcAftIdx = childNames.IndexOf("spcAft");
+        var buClrTxIdx = childNames.IndexOf("buClrTx");
+        var buSzTxIdx = childNames.IndexOf("buSzTx");
+        var buFontTxIdx = childNames.IndexOf("buFontTx");
         var buCharIdx = childNames.IndexOf("buChar");
 
         spcBefIdx.Should().BeGreaterThanOrEqualTo(0, "a:spcBef must be present");
         spcAftIdx.Should().BeGreaterThanOrEqualTo(0, "a:spcAft must be present");
+        buClrTxIdx.Should().BeGreaterThanOrEqualTo(0, "a:buClrTx must be present");
+        buSzTxIdx.Should().BeGreaterThanOrEqualTo(0, "a:buSzTx must be present");
+        buFontTxIdx.Should().BeGreaterThanOrEqualTo(0, "a:buFontTx must be present");
         buCharIdx.Should().BeGreaterThanOrEqualTo(0, "a:buChar must be present");
-        spcBefIdx.Should().BeLessThan(buCharIdx,
-            "BU2: a:spcBef must come BEFORE a:buChar per CT_TextParagraphProperties schema order");
-        spcAftIdx.Should().BeLessThan(buCharIdx,
-            "BU2: a:spcAft must come BEFORE a:buChar per CT_TextParagraphProperties schema order");
+        spcBefIdx.Should().BeLessThan(buClrTxIdx,
+            "BU2: a:spcBef must come BEFORE bullet source elements per CT_TextParagraphProperties schema order");
+        spcAftIdx.Should().BeLessThan(buClrTxIdx,
+            "BU2: a:spcAft must come BEFORE bullet source elements per CT_TextParagraphProperties schema order");
+        buClrTxIdx.Should().BeLessThan(buSzTxIdx, "bullet color source must precede bullet size source");
+        buSzTxIdx.Should().BeLessThan(buFontTxIdx, "bullet size source must precede bullet font source");
+        buFontTxIdx.Should().BeLessThan(buCharIdx, "bullet font source must precede bullet character");
         spcBefIdx.Should().BeLessThan(spcAftIdx,
             "a:spcBef must come before a:spcAft");
     }

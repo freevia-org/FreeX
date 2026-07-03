@@ -752,15 +752,44 @@ public static class PptxPackageReader
         }
 
         // Wave 19A: extended bullet style fields
-        var buClrL = lvlEl.Element(A + "buClr");
-        if (buClrL is not null)
+        if (lvlEl.Element(A + "buClrTx") is not null)
+        {
+            level.BulletColorFollowsText = true;
+            level.BulletColor = null;
+        }
+        else if (lvlEl.Element(A + "buClr") is { } buClrL)
+        {
             level.BulletColor = PptxColorReader.TryReadColor(buClrL, scheme);
-        var buSzPctL = lvlEl.Element(A + "buSzPct");
-        if (buSzPctL is not null && int.TryParse(buSzPctL.Attribute("val")?.Value, out var szPctL))
+        }
+
+        if (lvlEl.Element(A + "buSzTx") is not null)
+        {
+            level.BulletSizeFollowsText = true;
+            level.BulletSizePt = null;
+            level.BulletSizePct = null;
+        }
+        else if (lvlEl.Element(A + "buSzPts") is { } buSzPtsL &&
+                 int.TryParse(buSzPtsL.Attribute("val")?.Value, out var szPtsL) &&
+                 szPtsL > 0)
+        {
+            level.BulletSizePt = szPtsL / 100.0;
+            level.BulletSizePct = null;
+        }
+        else if (lvlEl.Element(A + "buSzPct") is { } buSzPctL &&
+                 int.TryParse(buSzPctL.Attribute("val")?.Value, out var szPctL))
+        {
             level.BulletSizePct = szPctL;
-        var buFontL = lvlEl.Element(A + "buFont");
-        if (buFontL is not null)
+        }
+
+        if (lvlEl.Element(A + "buFontTx") is not null)
+        {
+            level.BulletFontFollowsText = true;
+            level.BulletFontFamily = null;
+        }
+        else if (lvlEl.Element(A + "buFont") is { } buFontL)
+        {
             level.BulletFontFamily = buFontL.Attribute("typeface")?.Value;
+        }
 
         // a:defRPr — default run properties
         var defRPr = lvlEl.Element(A + "defRPr");
@@ -3323,15 +3352,44 @@ public static class PptxPackageReader
             // Wave 19A: marL/indent/buClr/buSzPct/buFont
             if (ParseLongNullable(pPr.Attribute("marL")?.Value) is { } paraMarL) para.MarginLeftEmu = paraMarL;
             if (ParseLongNullable(pPr.Attribute("indent")?.Value) is { } paraInd) para.IndentEmu = paraInd;
-            var buClr = pPr.Element(A + "buClr");
-            if (buClr is not null)
+            if (pPr.Element(A + "buClrTx") is not null)
+            {
+                para.BulletColorFollowsText = true;
+                para.BulletColor = null;
+            }
+            else if (pPr.Element(A + "buClr") is { } buClr)
+            {
                 para.BulletColor = PptxColorReader.TryReadColor(buClr, scheme);
-            var buSzPct = pPr.Element(A + "buSzPct");
-            if (buSzPct is not null && int.TryParse(buSzPct.Attribute("val")?.Value, out var szPct))
+            }
+
+            if (pPr.Element(A + "buSzTx") is not null)
+            {
+                para.BulletSizeFollowsText = true;
+                para.BulletSizePt = null;
+                para.BulletSizePct = null;
+            }
+            else if (pPr.Element(A + "buSzPts") is { } buSzPts &&
+                     int.TryParse(buSzPts.Attribute("val")?.Value, out var szPts) &&
+                     szPts > 0)
+            {
+                para.BulletSizePt = szPts / 100.0;
+                para.BulletSizePct = null;
+            }
+            else if (pPr.Element(A + "buSzPct") is { } buSzPct &&
+                     int.TryParse(buSzPct.Attribute("val")?.Value, out var szPct))
+            {
                 para.BulletSizePct = szPct;
-            var buFont = pPr.Element(A + "buFont");
-            if (buFont is not null)
+            }
+
+            if (pPr.Element(A + "buFontTx") is not null)
+            {
+                para.BulletFontFollowsText = true;
+                para.BulletFontFamily = null;
+            }
+            else if (pPr.Element(A + "buFont") is { } buFont)
+            {
                 para.BulletFontFamily = buFont.Attribute("typeface")?.Value;
+            }
 
             var spcBef = pPr.Element(A + "spcBef")?.Element(A + "spcPts")?.Attribute("val")?.Value;
             if (!string.IsNullOrWhiteSpace(spcBef) && int.TryParse(spcBef, out var sb))

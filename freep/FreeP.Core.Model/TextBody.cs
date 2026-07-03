@@ -353,6 +353,12 @@ public sealed class Paragraph
     public ThemeAwareColor? BulletColor { get; set; }
 
     /// <summary>
+    /// True when <c>a:buClrTx</c> is present. This explicitly makes the bullet color follow
+    /// the first non-empty run and blocks inherited bullet color overrides.
+    /// </summary>
+    public bool BulletColorFollowsText { get; set; }
+
+    /// <summary>
     /// Bullet size as a percentage of the run font size, from <c>a:buSzPct val=</c>.
     /// Stored as 1000ths-of-a-percent per OOXML (e.g. 100000 = 100%).
     /// Null = 100% (same size as text).
@@ -360,10 +366,28 @@ public sealed class Paragraph
     public int? BulletSizePct { get; set; }
 
     /// <summary>
+    /// Absolute bullet size in points from <c>a:buSzPts val=</c>. The OOXML value is stored
+    /// in hundredths of a point; this model stores points.
+    /// </summary>
+    public double? BulletSizePt { get; set; }
+
+    /// <summary>
+    /// True when <c>a:buSzTx</c> is present. This explicitly makes the bullet size follow
+    /// the first non-empty run and blocks inherited bullet size overrides.
+    /// </summary>
+    public bool BulletSizeFollowsText { get; set; }
+
+    /// <summary>
     /// Override font for the bullet glyph, from <c>a:buFont typeface=</c>.
     /// Null = same font as the first run in the paragraph.
     /// </summary>
     public string? BulletFontFamily { get; set; }
+
+    /// <summary>
+    /// True when <c>a:buFontTx</c> is present. This explicitly makes the bullet font follow
+    /// the first non-empty run and blocks inherited bullet font overrides.
+    /// </summary>
+    public bool BulletFontFollowsText { get; set; }
 
     /// <summary>The text runs that make up this paragraph, in order.</summary>
     public List<Run> Runs { get; } = new();

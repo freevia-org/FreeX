@@ -2031,20 +2031,22 @@ public static class PptxPackageWriter
         if (level.MarginLeftEmu.HasValue) el.Add(new XAttribute("marL", level.MarginLeftEmu.Value));
         if (level.IndentEmu.HasValue)     el.Add(new XAttribute("indent", level.IndentEmu.Value));
 
+        AddBulletTypographyProperties(
+            el,
+            level.BulletColor,
+            level.BulletColorFollowsText,
+            level.BulletSizePct,
+            level.BulletSizePt,
+            level.BulletSizeFollowsText,
+            level.BulletFontFamily,
+            level.BulletFontFollowsText);
+
         // Bullet (Wave 19A: extended round-trip)
         switch (level.BulletKind)
         {
             case BulletKind.None:
                 el.Add(new XElement(A + "buNone")); break;
             case BulletKind.Char:
-                if (level.BulletColor is not null)
-                {
-                    // Preserve the original scheme/sRGB color reference via the shared helper
-                    // (BU4: previously always emitted srgbClr, losing schemeClr theme linkage).
-                    el.Add(new XElement(A + "buClr", BuildColorEl(level.BulletColor)));
-                }
-                if (level.BulletSizePct.HasValue) el.Add(new XElement(A + "buSzPct", new XAttribute("val", level.BulletSizePct.Value)));
-                if (!string.IsNullOrEmpty(level.BulletFontFamily)) el.Add(new XElement(A + "buFont", new XAttribute("typeface", level.BulletFontFamily)));
                 el.Add(new XElement(A + "buChar", new XAttribute("char", level.BulletChar ?? "•"))); break;
             case BulletKind.Auto:
                 var lvlAutoNumTypeStr = level.AutoNumType switch
@@ -2089,6 +2091,59 @@ public static class PptxPackageWriter
     }
 
     // ── theme.xml ────────────────────────────────────────────────────────────────
+
+    private static bool AddBulletTypographyProperties(
+        XElement parent,
+        ThemeAwareColor? color,
+        bool colorFollowsText,
+        int? sizePct,
+        double? sizePt,
+        bool sizeFollowsText,
+        string? fontFamily,
+        bool fontFollowsText)
+    {
+        var wrote = false;
+
+        if (colorFollowsText)
+        {
+            parent.Add(new XElement(A + "buClrTx"));
+            wrote = true;
+        }
+        else if (color is not null)
+        {
+            parent.Add(new XElement(A + "buClr", BuildColorEl(color)));
+            wrote = true;
+        }
+
+        if (sizeFollowsText)
+        {
+            parent.Add(new XElement(A + "buSzTx"));
+            wrote = true;
+        }
+        else if (sizePt.HasValue && sizePt.Value > 0)
+        {
+            parent.Add(new XElement(A + "buSzPts", new XAttribute("val", (int)Math.Round(sizePt.Value * 100))));
+            wrote = true;
+        }
+        else if (sizePct.HasValue)
+        {
+            parent.Add(new XElement(A + "buSzPct", new XAttribute("val", sizePct.Value)));
+            wrote = true;
+        }
+
+        if (fontFollowsText)
+        {
+            parent.Add(new XElement(A + "buFontTx"));
+            wrote = true;
+        }
+        else if (!string.IsNullOrEmpty(fontFamily))
+        {
+            parent.Add(new XElement(A + "buFont", new XAttribute("typeface", fontFamily)));
+            wrote = true;
+        }
+
+        return wrote;
+    }
 
     private static XDocument BuildThemeXml(PresentationTheme theme)
     {
@@ -3191,21 +3246,24 @@ public static class PptxPackageWriter
             hasPPr = true;
         }
 
+        if (AddBulletTypographyProperties(
+                pPr,
+                para.BulletColor,
+                para.BulletColorFollowsText,
+                para.BulletSizePct,
+                para.BulletSizePt,
+                para.BulletSizeFollowsText,
+                para.BulletFontFamily,
+                para.BulletFontFollowsText))
+        {
+            hasPPr = true;
+        }
+
         switch (para.BulletKind)
         {
             case BulletKind.None:
                 pPr.Add(new XElement(A + "buNone")); hasPPr = true; break;
             case BulletKind.Char:
-                // Write buClr/buSzPct/buFont when set (Wave 19A)
-                if (para.BulletColor is not null)
-                {
-                    // Preserve the original scheme/sRGB color reference via the shared helper
-                    // (BU4: previously always emitted srgbClr, losing schemeClr theme linkage).
-                    pPr.Add(new XElement(A + "buClr", BuildColorEl(para.BulletColor)));
-                    hasPPr = true;
-                }
-                if (para.BulletSizePct.HasValue) { pPr.Add(new XElement(A + "buSzPct", new XAttribute("val", para.BulletSizePct.Value))); hasPPr = true; }
-                if (!string.IsNullOrEmpty(para.BulletFontFamily)) { pPr.Add(new XElement(A + "buFont", new XAttribute("typeface", para.BulletFontFamily))); hasPPr = true; }
                 pPr.Add(new XElement(A + "buChar", new XAttribute("char", para.BulletChar ?? "•"))); hasPPr = true; break;
             case BulletKind.Auto:
                 var autoNumTypeStr = para.AutoNumType switch
