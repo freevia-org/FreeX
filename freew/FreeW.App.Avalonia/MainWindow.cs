@@ -1052,6 +1052,8 @@ public sealed class MainWindow : Window
             new ActionRibbonCommand(() => _ = SelectRecipientsAsync()));
         registry.Register(new RibbonCommandId("freew.merge-field"),
             new ActionRibbonCommand(() => _ = InsertMergeFieldAsync()));
+        registry.Register(new RibbonCommandId("freew.merge-email"),
+            new ActionRibbonCommand(() => _ = PlanEmailMergeAsync()));
         registry.Register(new RibbonCommandId("freew.merge-rule-if"),
             new ActionRibbonCommand(() => _ = InsertMergeRuleIfAsync()));
         registry.Register(new RibbonCommandId("freew.merge-rule-skip-record-if"),
@@ -1118,6 +1120,28 @@ public sealed class MainWindow : Window
         if (string.IsNullOrWhiteSpace(name))
             return;
         _mailMerge.InsertMergeFieldNamed(name);
+        _editor.Focus();
+    }
+
+    private async Task PlanEmailMergeAsync()
+    {
+        if (_mailMerge is null)
+            return;
+        if (_mailMerge.Session.Data is not { Count: > 0 } data)
+        {
+            _mailMerge.PlanEmailMerge();
+            return;
+        }
+
+        var intent = await MailMergeDialogs.AskEmailMergeDeliveryAsync(
+            this,
+            data,
+            _mailMerge.Session.CurrentIndex,
+            Array.Empty<int>());
+        if (intent is null)
+            return;
+
+        _mailMerge.PlanEmailMerge(intent);
         _editor.Focus();
     }
 

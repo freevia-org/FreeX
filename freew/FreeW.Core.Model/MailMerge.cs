@@ -811,6 +811,56 @@ public enum MailMergeOutputMode
     Directory
 }
 
+/// <summary>Where an e-mail merge should place the merged document content. Planning only; no mail is sent.</summary>
+public enum MailMergeEmailOutputFormat
+{
+    MessageBody,
+    Attachment
+}
+
+/// <summary>The body format requested for an e-mail merge delivery plan. Planning only; no mail is sent.</summary>
+public enum MailMergeEmailBodyFormat
+{
+    Html,
+    PlainText
+}
+
+/// <summary>The recipient records a planned e-mail merge should target.</summary>
+public enum MailMergeEmailRecordScope
+{
+    AllRecords,
+    CurrentRecord,
+    SelectedRecords
+}
+
+/// <summary>
+/// User intent for Word-style Send E-mail Messages. This is a delivery plan only: FreeW records the
+/// chosen recipient field, subject, format and record range but does not send mail or require Outlook.
+/// </summary>
+public sealed record MailMergeEmailDeliveryIntent(
+    string RecipientAddressField,
+    string Subject,
+    MailMergeEmailOutputFormat OutputFormat,
+    MailMergeEmailBodyFormat BodyFormat,
+    MailMergeEmailRecordScope RecordScope,
+    int CurrentRecordIndex = 0,
+    IReadOnlyList<int>? SelectedRecordIndexes = null);
+
+/// <summary>
+/// Validated e-mail merge plan derived from a <see cref="MailMergeEmailDeliveryIntent"/> and recipient
+/// data. Errors block a useful plan; warnings describe risky but inspectable choices such as blank
+/// subjects or records without an e-mail address. No message delivery happens here.
+/// </summary>
+public sealed record MailMergeEmailDeliveryPlan(
+    MailMergeEmailDeliveryIntent Intent,
+    IReadOnlyList<int> RecordIndexes,
+    IReadOnlyList<int> DeliverableRecordIndexes,
+    IReadOnlyList<string> Errors,
+    IReadOnlyList<string> Warnings)
+{
+    public bool IsReady => Errors.Count == 0;
+}
+
 /// <summary>
 /// Pure, deterministic mail-merge helpers over the FreeW document model. A merge field is the literal
 /// text <c>«FieldName»</c> — the field name wrapped in guillemets (U+00AB «, U+00BB ») — carried inside
@@ -852,6 +902,19 @@ public static class MailMerge
     /// row index. Stored as a constant so it round-trips through the document as plain text.
     /// </summary>
     public const string MergeSequenceNumberField = "Merge Sequence #";
+
+    private static readonly string[] EmailFieldSynonyms =
+    [
+        "email",
+        "emailaddress",
+        "emailaddr",
+        "eaddress",
+        "mail",
+        "recipientemail",
+        "recipientaddress",
+        "to",
+        "toaddress"
+    ];
 
     // ── Canonical synonyms for each role used by AutoMatchFields (case-insensitive) ────────────────
     private static readonly Dictionary<FieldRole, string[]> RoleSynonyms = new()
@@ -900,6 +963,101 @@ public static class MailMerge
         return mapping;
 
         static string Normalize(string s) => s.Trim().Replace("_", " ");
+    }
+
+    /// <summary>
+    /// Pick the best recipient e-mail column from a data-source header using common Word/mail-merge names.
+    /// Returns <c>null</c> when no likely e-mail column exists.
+    /// </summary>
+    public static string? SuggestEmailAddressField(IReadOnlyList<string> header)
+    {
+        ArgumentNullException.ThrowIfNull(header);
+
+        foreach (var column in header)
+        {
+            var normalized = NormalizeEmailHeader(column);
+            if (EmailFieldSynonyms.Any(s => s.Equals(normalized, StringComparison.OrdinalIgnoreCase)))
+                return column;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Validate and materialize a Word-style e-mail merge delivery plan. The returned plan is an exposure
+    /// artifact only: it identifies intended recipients and warnings but never sends mail.
+    /// </summary>
+    public static MailMergeEmailDeliveryPlan CreateEmailDeliveryPlan(
+        MergeData data,
+        MailMergeEmailDeliveryIntent intent)
+    {
+        ArgumentNullException.ThrowIfNull(data);
+        ArgumentNullException.ThrowIfNull(intent);
+
+        var errors = new List<string>();
+        var warnings = new List<string>();
+
+        var recipientField = (intent.RecipientAddressField ?? string.Empty).Trim();
+        var normalizedIntent = intent with
+        {
+            RecipientAddressField = recipientField,
+            Subject = intent.Subject?.Trim() ?? string.Empty,
+            CurrentRecordIndex = Math.Max(0, intent.CurrentRecordIndex),
+            SelectedRecordIndexes = intent.SelectedRecordIndexes?.ToArray() ?? []
+        };
+
+        if (!Enum.IsDefined(typeof(MailMergeEmailOutputFormat), normalizedIntent.OutputFormat))
+            errors.Add("Choose a valid e-mail output format.");
+        if (!Enum.IsDefined(typeof(MailMergeEmailBodyFormat), normalizedIntent.BodyFormat))
+            errors.Add("Choose a valid e-mail body format.");
+        if (!Enum.IsDefined(typeof(MailMergeEmailRecordScope), normalizedIntent.RecordScope))
+            errors.Add("Choose a valid recipient record range.");
+
+        if (data.Count == 0)
+            errors.Add("Recipient data source has no records.");
+
+        var hasRecipientField = false;
+        if (recipientField.Length == 0)
+        {
+            errors.Add("Choose a recipient e-mail address field.");
+        }
+        else
+        {
+            hasRecipientField = data.Header.Any(h => h.Equals(recipientField, StringComparison.OrdinalIgnoreCase));
+            if (!hasRecipientField)
+                errors.Add($"Recipient e-mail address field '{recipientField}' is not in the recipient data source.");
+        }
+
+        if (normalizedIntent.Subject.Length == 0)
+            warnings.Add("Subject line is blank.");
+
+        var recordIndexes = ResolveEmailRecordIndexes(data, normalizedIntent, warnings);
+        if (recordIndexes.Count == 0)
+            errors.Add("No recipient records are selected for the e-mail merge.");
+
+        var deliverableIndexes = new List<int>();
+        if (hasRecipientField)
+        {
+            foreach (var index in recordIndexes)
+            {
+                var row = data.Rows[index];
+                var address = row.TryGetValue(recipientField, out var value) ? value : string.Empty;
+                if (string.IsNullOrWhiteSpace(address))
+                    warnings.Add($"Record {index + 1} has no e-mail address in '{recipientField}'.");
+                else
+                    deliverableIndexes.Add(index);
+            }
+
+            if (recordIndexes.Count > 0 && deliverableIndexes.Count == 0)
+                errors.Add($"No selected records have an e-mail address in '{recipientField}'.");
+        }
+
+        return new MailMergeEmailDeliveryPlan(
+            normalizedIntent,
+            recordIndexes,
+            deliverableIndexes,
+            errors,
+            warnings);
     }
 
     /// <summary>
@@ -1437,6 +1595,56 @@ public static class MailMerge
 
     private static string Lookup(IReadOnlyDictionary<string, string> row, string name) =>
         row.TryGetValue(name, out var value) ? value ?? string.Empty : string.Empty;
+
+    private static IReadOnlyList<int> ResolveEmailRecordIndexes(
+        MergeData data,
+        MailMergeEmailDeliveryIntent intent,
+        List<string> warnings)
+    {
+        if (data.Count == 0)
+            return [];
+
+        return intent.RecordScope switch
+        {
+            MailMergeEmailRecordScope.AllRecords => Enumerable.Range(0, data.Count).ToArray(),
+            MailMergeEmailRecordScope.CurrentRecord => [Math.Clamp(intent.CurrentRecordIndex, 0, data.Count - 1)],
+            MailMergeEmailRecordScope.SelectedRecords => ResolveSelectedEmailRecordIndexes(data, intent, warnings),
+            _ => []
+        };
+    }
+
+    private static IReadOnlyList<int> ResolveSelectedEmailRecordIndexes(
+        MergeData data,
+        MailMergeEmailDeliveryIntent intent,
+        List<string> warnings)
+    {
+        var selected = intent.SelectedRecordIndexes ?? [];
+        var valid = new List<int>();
+        var seen = new HashSet<int>();
+
+        foreach (var index in selected)
+        {
+            if (index < 0 || index >= data.Count)
+            {
+                warnings.Add($"Selected record index {index} is outside the recipient list.");
+                continue;
+            }
+
+            if (seen.Add(index))
+                valid.Add(index);
+        }
+
+        return valid;
+    }
+
+    private static string NormalizeEmailHeader(string value)
+    {
+        var chars = value
+            .Where(char.IsLetterOrDigit)
+            .Select(char.ToLowerInvariant)
+            .ToArray();
+        return new string(chars);
+    }
 
     private static void ScanBlock(Block block, Action<string> scan)
     {

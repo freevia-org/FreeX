@@ -882,7 +882,8 @@ public sealed class FreeWRibbonParityTests
                 "freew.merge-preview-next",
                 "freew.merge-preview-last",
                 // Finish group
-                "freew.merge-finish");
+                "freew.merge-finish",
+                "freew.merge-email");
         Labels(mailings)
             .Should()
             .Equal(
@@ -902,7 +903,8 @@ public sealed class FreeWRibbonParityTests
                 "Previous Record",
                 "Next Record",
                 "Last Record",
-                "Finish & Merge");
+                "Finish & Merge",
+                "Send E-mail Messages");
 
         var startMailMerge = mailings.Groups.Single(g => g.Id == "merge-data").Controls
             .OfType<RibbonDropdown>()

@@ -167,7 +167,7 @@ docx reader/writer; unsupported renderings are noted under [Known limitations](#
 - **Read Aloud** (Review > Speech) — local, in-box text-to-speech (`System.Speech`) that reads from the caret to the end of the document, paragraph by paragraph (table cells included); robust when no voice is installed.
 
 ### Mailings
-- **Mail merge**: `«Field»` placeholders, CSV data source, insert field, preview record (next/prev), Finish & Merge (records concatenated, page-broken).
+- **Mail merge**: `«Field»` placeholders, CSV data source, insert field, preview record (next/prev), Finish & Merge (records concatenated, page-broken), and Send E-mail Messages planning/validation (no mail is sent).
 
 ### Content & navigation
 - **Content controls** (`w:sdt`): plain-text, rich-text (`w:richText`), clickable checkbox (`w14:checkbox`),

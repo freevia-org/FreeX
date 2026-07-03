@@ -1851,6 +1851,7 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.merge-preview-next", new NavigateMergePreviewCommand(editor, mergeSession, MailMergePreviewNavigationAction.Next));
         registry.Register("freew.merge-preview-last", new NavigateMergePreviewCommand(editor, mergeSession, MailMergePreviewNavigationAction.Last));
         registry.Register("freew.merge-finish", new FinishMergeCommand(editor, mergeSession));
+        registry.Register("freew.merge-email", new EmailMergeCommand(editor, mergeSession));
         // Filter & Sort: refines the active session's MergeData (include/exclude rows, sort column/direction)
         // without touching the merge template. No-ops gracefully when there is no active session or data.
         registry.Register("freew.merge-filter-sort", new FilterSortRecipientsCommand(editor, mergeSession));
@@ -6627,6 +6628,171 @@ internal static class FreeWRibbonCommands
                     }
                 }
             }
+        }
+    }
+
+    // Mailings > Send E-mail Messages: gather Word-style e-mail merge delivery intent and show the
+    // validated plan. This never sends mail and does not require Outlook/cloud integration.
+    private sealed class EmailMergeCommand(DocumentView editor, MailMergeSession session) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            if (session.Data is not { Count: > 0 } data)
+            {
+                DialogMessageHelper.ShowInfo(
+                    Window.GetWindow(editor),
+                    "Select recipients first (Mailings > Select Recipients), then Send E-mail Messages.",
+                    "Mail Merge");
+                return;
+            }
+
+            var owner = Window.GetWindow(editor);
+            var intent = EmailMergeDialog.Ask(owner, data, session.CurrentIndex, []);
+            if (intent is null)
+                return;
+
+            var plan = MailMerge.CreateEmailDeliveryPlan(data, intent);
+            DialogMessageHelper.ShowInfo(owner, MailMergeEmailDeliveryPlanner.FormatStatus(plan), "Mail Merge");
+            editor.Focus();
+        }
+    }
+
+    private static class EmailMergeDialog
+    {
+        public static MailMergeEmailDeliveryIntent? Ask(
+            Window? owner,
+            MergeData data,
+            int currentRecordIndex,
+            IReadOnlyList<int> selectedRecordIndexes)
+        {
+            var dialogPlan = MailMergeEmailDeliveryPlanner.CreateDialogPlan(data, currentRecordIndex, selectedRecordIndexes);
+            MailMergeEmailDeliveryIntent? result = null;
+            var dialog = new Window
+            {
+                Title = "Send E-mail Messages",
+                SizeToContent = SizeToContent.WidthAndHeight,
+                ResizeMode = ResizeMode.NoResize,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Owner = owner,
+                ShowInTaskbar = false
+            };
+
+            var toCombo = new System.Windows.Controls.ComboBox { MinWidth = 220 };
+            foreach (var field in dialogPlan.RecipientAddressFields)
+                toCombo.Items.Add(field);
+            toCombo.SelectedItem = dialogPlan.RecipientAddressField;
+            if (toCombo.SelectedIndex < 0 && toCombo.Items.Count > 0)
+                toCombo.SelectedIndex = 0;
+
+            var subjectBox = new System.Windows.Controls.TextBox { MinWidth = 220, Text = dialogPlan.Subject };
+            var outputCombo = CreateChoiceCombo(dialogPlan.OutputFormats.Select(choice => choice.Label), dialogPlan.OutputFormatIndex);
+            var bodyCombo = CreateChoiceCombo(dialogPlan.BodyFormats.Select(choice => choice.Label), dialogPlan.BodyFormatIndex);
+            var scopeCombo = CreateChoiceCombo(dialogPlan.RecordScopes.Select(choice => choice.Label), dialogPlan.RecordScopeIndex);
+            var validation = new System.Windows.Controls.TextBlock
+            {
+                TextWrapping = TextWrapping.Wrap,
+                MaxWidth = 300,
+                Foreground = Brushes.DimGray,
+                Margin = new Thickness(0, 2, 0, 8)
+            };
+
+            var ok = new System.Windows.Controls.Button
+            {
+                Content = "OK",
+                IsDefault = true,
+                MinWidth = 72,
+                Margin = new Thickness(0, 0, 8, 0)
+            };
+            var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
+
+            MailMergeEmailDeliveryIntent CurrentIntent() =>
+                MailMergeEmailDeliveryPlanner.CreateIntent(
+                    toCombo.SelectedItem?.ToString() ?? dialogPlan.RecipientAddressField,
+                    subjectBox.Text,
+                    outputCombo.SelectedIndex,
+                    bodyCombo.SelectedIndex,
+                    scopeCombo.SelectedIndex,
+                    currentRecordIndex,
+                    selectedRecordIndexes);
+
+            void RefreshValidation()
+            {
+                var plan = MailMerge.CreateEmailDeliveryPlan(data, CurrentIntent());
+                var messages = MailMergeEmailDeliveryPlanner.GetValidationMessages(plan);
+                validation.Text = messages.Count == 0
+                    ? "Ready to prepare an e-mail merge plan. No messages will be sent."
+                    : string.Join(Environment.NewLine, messages);
+                ok.IsEnabled = plan.Errors.Count == 0;
+            }
+
+            toCombo.SelectionChanged += (_, _) => RefreshValidation();
+            subjectBox.TextChanged += (_, _) => RefreshValidation();
+            outputCombo.SelectionChanged += (_, _) => RefreshValidation();
+            bodyCombo.SelectionChanged += (_, _) => RefreshValidation();
+            scopeCombo.SelectionChanged += (_, _) => RefreshValidation();
+
+            ok.Click += (_, _) =>
+            {
+                result = CurrentIntent();
+                dialog.DialogResult = true;
+            };
+
+            var grid = new Grid { Margin = new Thickness(14), MinWidth = 360 };
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            for (var i = 0; i < 7; i++)
+                grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+            AddRow(grid, 0, "To field:", toCombo);
+            AddRow(grid, 1, "Subject:", subjectBox);
+            AddRow(grid, 2, "Output:", outputCombo);
+            AddRow(grid, 3, "Body format:", bodyCombo);
+            AddRow(grid, 4, "Send records:", scopeCombo);
+            AddRow(grid, 5, "Validation:", validation);
+
+            var buttons = new System.Windows.Controls.StackPanel
+            {
+                Orientation = System.Windows.Controls.Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                Margin = new Thickness(0, 8, 0, 0)
+            };
+            buttons.Children.Add(ok);
+            buttons.Children.Add(cancel);
+            Grid.SetRow(buttons, 6);
+            Grid.SetColumnSpan(buttons, 2);
+            grid.Children.Add(buttons);
+
+            dialog.Content = grid;
+            RefreshValidation();
+            return dialog.ShowDialog() == true ? result : null;
+        }
+
+        private static System.Windows.Controls.ComboBox CreateChoiceCombo(IEnumerable<string> labels, int selectedIndex)
+        {
+            var combo = new System.Windows.Controls.ComboBox { MinWidth = 220 };
+            foreach (var label in labels)
+                combo.Items.Add(label);
+            combo.SelectedIndex = combo.Items.Count == 0 ? -1 : Math.Clamp(selectedIndex, 0, combo.Items.Count - 1);
+            return combo;
+        }
+
+        private static void AddRow(Grid grid, int row, string label, UIElement control)
+        {
+            var text = new System.Windows.Controls.TextBlock
+            {
+                Text = label,
+                Margin = new Thickness(0, 0, 8, 8),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            if (control is FrameworkElement element)
+                element.Margin = new Thickness(0, 0, 0, 8);
+
+            Grid.SetRow(text, row);
+            Grid.SetColumn(text, 0);
+            Grid.SetRow(control, row);
+            Grid.SetColumn(control, 1);
+            grid.Children.Add(text);
+            grid.Children.Add(control);
         }
     }
 

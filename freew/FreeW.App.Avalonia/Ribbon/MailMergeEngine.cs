@@ -18,8 +18,7 @@ namespace FreeW.App.Avalonia.Ribbon;
 /// </para>
 ///
 /// <para>
-/// <b>Mail-SEND (e-mail merge) is OUT OF SCOPE</b> — this glue only merges to a new in-memory document
-/// (Finish &amp; Merge); nothing here sends mail.
+/// Send E-mail Messages is plan-only: this glue validates delivery intent, but nothing here sends mail.
 /// </para>
 /// </summary>
 internal sealed class MailMergeEngine
@@ -35,6 +34,9 @@ internal sealed class MailMergeEngine
 
     /// <summary>The shared session (recipient data + mapping + preview state). Exposed for tests.</summary>
     public MailMergeSession Session { get; } = new();
+
+    /// <summary>The most recent plan produced by Send E-mail Messages. Exposed for tests/status only.</summary>
+    public MailMergeEmailDeliveryPlan? LastEmailPlan { get; private set; }
 
     // ── Select Recipients ────────────────────────────────────────────────────────
 
@@ -423,7 +425,7 @@ internal sealed class MailMergeEngine
     /// «AddressBlock» / «GreetingLine» placeholders and conditional rules are resolved per record.
     /// No-ops (with an info message) when no recipients are loaded.
     ///
-    /// <para>This merges to a document only — it does NOT send e-mail (mail-send is out of scope).</para>
+    /// <para>This command still merges to a document only; Send E-mail Messages is handled by PlanEmailMerge.</para>
     /// </summary>
     public TextDocument? FinishMerge()
     {
@@ -458,6 +460,25 @@ internal sealed class MailMergeEngine
             ? $"Merged {merged.Count} record(s) into a single document ({skipped} skipped)."
             : $"Merged {merged.Count} record(s) into a single document.");
         return combined;
+    }
+
+    /// <summary>
+    /// Mailings &gt; Send E-mail Messages. Builds and validates an e-mail merge delivery plan only; no
+    /// messages are sent and no external mail client is required.
+    /// </summary>
+    public MailMergeEmailDeliveryPlan? PlanEmailMerge(MailMergeEmailDeliveryIntent? intent = null)
+    {
+        if (Session.Data is not { Count: > 0 } data)
+        {
+            ShowInfo("Select recipients first (Mailings > Select Recipients), then Send E-mail Messages.");
+            return null;
+        }
+
+        intent ??= MailMergeEmailDeliveryPlanner.CreateDefaultIntent(data, Session.CurrentIndex);
+        var plan = MailMerge.CreateEmailDeliveryPlan(data, intent);
+        LastEmailPlan = plan;
+        ShowInfo(MailMergeEmailDeliveryPlanner.FormatStatus(plan));
+        return plan;
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────────────────
