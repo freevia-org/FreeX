@@ -1219,10 +1219,11 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
-    public async Task Video_export_command_records_shared_deferred_plan()
+    public async Task Video_export_command_records_shared_frame_package()
     {
         var found = false;
         PresentationVideoExportPlan? videoPlan = null;
+        PresentationVideoFramePackage? videoPackage = null;
 
         var ran = await OnUiThread(() =>
         {
@@ -1235,11 +1236,23 @@ public sealed class MainWindowHeadlessTests
 
             video!.Execute(RibbonCommandContext.Empty);
             videoPlan = window.LastVideoExportPlan;
+            videoPackage = window.LastVideoFramePackage;
         });
 
         if (!ran) return;
-        found.Should().BeTrue("the Avalonia registry should expose the shared video export plan seam");
+        found.Should().BeTrue("the Avalonia registry should expose the shared video frame package seam");
+        videoPackage.Should().NotBeNull();
         videoPlan.Should().NotBeNull();
+        videoPackage!.Plan.ExportPlan.Should().BeSameAs(videoPlan);
+        videoPackage.Plan.DeferredCapabilities.Should().Contain(PresentationVideoFramePackageExecutor.Mp4EncoderDeferred);
+        videoPackage.Frames.Select(frame => frame.FileName)
+            .Should()
+            .Equal(
+                "frames/slide-01-frame-0001.png",
+                "frames/slide-02-frame-0002.png",
+                "frames/slide-03-frame-0003.png");
+        videoPackage.Frames.Should().OnlyContain(frame => frame.WidthPx == 1920 && frame.HeightPx == 1080);
+        videoPackage.Bytes.Length.Should().BeGreaterThan(100);
         videoPlan!.CommandId.Should().Be(PresentationExportPlanner.VideoExportCommandId);
         videoPlan.DefaultExtensionWithDot.Should().Be(PresentationExportPlanner.VideoExportExtension);
         videoPlan.SlideRange.SlideNumbers.Should().Equal(1, 2, 3);

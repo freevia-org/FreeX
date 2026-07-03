@@ -167,6 +167,7 @@ public sealed class MainWindow : Window
     internal PresentationNotesPagePdfRenderPlan? LastNotesPagePdfRenderPlan { get; private set; }
     internal PresentationPrintOutputPackage? LastPrintOutputPackage { get; private set; }
     internal PresentationVideoExportPlan? LastVideoExportPlan { get; private set; }
+    internal PresentationVideoFramePackage? LastVideoFramePackage { get; private set; }
     internal PresentationLayoutPickerPlan? LastLayoutPickerPlan { get; private set; }
     internal PresentationLayoutChoice? LastAppliedLayoutChoice { get; private set; }
     internal TableInsertionPickerPlan? LastTablePickerPlan { get; private set; }
@@ -353,7 +354,7 @@ public sealed class MainWindow : Window
             ExportPdf: () => _file.ExportPdf(),
             ExportNotesPagePdf: () => _file.ExportNotesPagePdf(),
             ExportImages: () => _file.ExportImages(),
-            ExportVideo: () => RefreshVideoExportPlan(),
+            ExportVideo: () => RefreshVideoFramePackage(),
             CurrentOptions: () => _options,
             OnClosed: () => { },
             DataFolder: ResolveDataFolderLabel));
@@ -1212,6 +1213,13 @@ public sealed class MainWindow : Window
     {
         LastVideoExportPlan = _file.BuildVideoExportPlan(request);
         return LastVideoExportPlan;
+    }
+
+    internal PresentationVideoFramePackage RefreshVideoFramePackage(PresentationVideoExportRequest? request = null)
+    {
+        LastVideoFramePackage = _file.BuildVideoFramePackage(request);
+        LastVideoExportPlan = LastVideoFramePackage.Plan.ExportPlan;
+        return LastVideoFramePackage;
     }
 
     internal PresentationNotesPagePdfRenderPlan RefreshNotesPagePdfRenderPlan(PresentationSlideRangeRequest? range = null)

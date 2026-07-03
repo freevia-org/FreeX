@@ -75,6 +75,8 @@ internal sealed class FileCommands
 
     public PresentationPrintOutputPackage? LastPrintOutputPackage { get; private set; }
 
+    public PresentationVideoFramePackage? LastVideoFramePackage { get; private set; }
+
     public void MarkDirty()
     {
         _workflow.MarkDirty();
@@ -261,8 +263,20 @@ internal sealed class FileCommands
     }
 
     /// <summary>
-    /// Builds the shared PowerPoint-style video export workflow plan. WPF owns native encoder/media integration
-    /// later; slide-range, quality, timing, narration, and deferred execution state stay shared.
+    /// Builds the shared PowerPoint-style video frame package. WPF owns native encoder/media integration
+    /// later; slide-range, quality, timing, narration intent, and MP4-deferred state stay shared.
+    /// </summary>
+    public PresentationVideoFramePackage BuildVideoFramePackage(PresentationVideoExportRequest? request = null)
+    {
+        LastVideoFramePackage = PresentationVideoFramePackageExecutor.BuildPackage(
+            _getModel(),
+            request,
+            WpfPresentationSlideImageRenderer.RenderSlideToPng);
+        return LastVideoFramePackage;
+    }
+
+    /// <summary>
+    /// Builds the shared PowerPoint-style video export workflow plan without rendering frames.
     /// </summary>
     public PresentationVideoExportPlan BuildVideoExportPlan(PresentationVideoExportRequest? request = null)
     {

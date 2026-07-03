@@ -226,6 +226,34 @@ public sealed class FileLifecycleTests : IDisposable
     }
 
     [StaFact]
+    public void BuildVideoFramePackage_UsesSharedExecutorForWpfAdapter()
+    {
+        var (_, file, getModel, _, _) = CreateHarness();
+        getModel().Slides[0].Title = "Opening";
+        getModel().Slides.Add(new Slide { Title = "Close" });
+
+        var package = file.BuildVideoFramePackage(new PresentationVideoExportRequest(
+            new PresentationSlideRangeRequest(
+                PresentationSlideRangeKind.CurrentSlide,
+                CurrentSlideNumber: 1),
+            PresentationVideoQualityKind.Standard,
+            SecondsPerSlide: 3,
+            UseRecordedTimings: false,
+            IncludeNarration: false));
+
+        file.LastVideoFramePackage.Should().BeSameAs(package);
+        package.Plan.ExportPlan.CommandId.Should().Be(PresentationExportPlanner.VideoExportCommandId);
+        package.Plan.ExportPlan.IsImplemented.Should().BeFalse();
+        package.Plan.ExportPlan.CanExecute.Should().BeFalse();
+        package.Plan.DeferredCapabilities.Should().Contain(PresentationVideoFramePackageExecutor.Mp4EncoderDeferred);
+        package.Frames.Should().ContainSingle();
+        package.Frames[0].FileName.Should().Be("frames/slide-01-frame-0001.png");
+        package.Frames[0].WidthPx.Should().Be(852);
+        package.Frames[0].HeightPx.Should().Be(480);
+        package.Bytes.Length.Should().BeGreaterThan(100);
+    }
+
+    [StaFact]
     public void OpenPath_LoadsPptxFileAndMarksSavedWithPath()
     {
         var (_, file, getModel, _, _) = CreateHarness();
