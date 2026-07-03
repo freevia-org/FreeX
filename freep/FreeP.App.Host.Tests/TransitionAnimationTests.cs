@@ -712,6 +712,67 @@ public class TransitionAnimationTests
         Assert.NotEqual(1, anim.DurationMs);
     }
 
+    /// <summary>
+    /// AF2: real PowerPoint can put a preset effect's start offset on the behavior cTn, not
+    /// the outer withEffect cTn. Import must preserve that DelayMs without mistaking the p:set
+    /// sentinel timing for the animation behavior.
+    /// </summary>
+    [Fact]
+    public void Import_RealPowerPoint_PresetAnimation_DelayMs_ReadFromCBhvr()
+    {
+        const string presNs = "http://schemas.openxmlformats.org/presentationml/2006/main";
+        XNamespace pNs = presNs;
+
+        var buildPar = new XElement(pNs + "par",
+            new XElement(pNs + "cTn",
+                new XAttribute("presetClass", "entr"),
+                new XAttribute("presetID", "1"),
+                new XAttribute("presetSubtype", "0"),
+                new XAttribute("fill", "hold"),
+                new XAttribute("grpId", "0"),
+                new XAttribute("nodeType", "withEffect"),
+                new XElement(pNs + "stCondLst",
+                    new XElement(pNs + "cond", new XAttribute("delay", "indefinite"))),
+                new XElement(pNs + "childTnLst",
+                    new XElement(pNs + "par",
+                        new XElement(pNs + "cTn",
+                            new XAttribute("fill", "hold"),
+                            new XElement(pNs + "stCondLst",
+                                new XElement(pNs + "cond", new XAttribute("delay", "0"))),
+                            new XElement(pNs + "childTnLst",
+                                new XElement(pNs + "animEffect",
+                                    new XElement(pNs + "cBhvr",
+                                        new XElement(pNs + "cTn",
+                                            new XAttribute("dur", "2000"),
+                                            new XElement(pNs + "stCondLst",
+                                                new XElement(pNs + "cond", new XAttribute("delay", "750")))),
+                                        new XElement(pNs + "tgtEl",
+                                            new XElement(pNs + "spTgt",
+                                                new XAttribute("spid", "1"))))),
+                                new XElement(pNs + "set",
+                                    new XElement(pNs + "cBhvr",
+                                        new XElement(pNs + "cTn",
+                                            new XAttribute("dur", "1"),
+                                            new XAttribute("fill", "hold"),
+                                            new XElement(pNs + "stCondLst",
+                                                new XElement(pNs + "cond", new XAttribute("delay", "0")))),
+                                        new XElement(pNs + "tgtEl",
+                                            new XElement(pNs + "spTgt",
+                                                new XAttribute("spid", "1")))))))))));
+
+        var timingEl = BuildMinimalTimingWithBuildPar(pNs, buildPar);
+        var pptxBytes = BuildMinimalPptxWithTiming(timingEl);
+        using var ms = new MemoryStream(pptxBytes);
+
+        var loaded = PptxPackageReader.Read(ms);
+
+        Assert.Single(loaded.Slides[0].Animations);
+        var anim = loaded.Slides[0].Animations[0];
+        Assert.Equal(AnimationTrigger.OnClick, anim.Trigger);
+        Assert.Equal(750, anim.DelayMs);
+        Assert.Equal(2000, anim.DurationMs);
+    }
+
     // ── AF1 test helpers ─────────────────────────────────────────────────────────────
 
     /// <summary>Wraps a build-par in the minimal p:timing tree ReadAnimations expects.</summary>
