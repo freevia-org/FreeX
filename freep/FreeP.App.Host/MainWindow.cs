@@ -2375,8 +2375,7 @@ public sealed class MainWindow : Window
     // ── Chart data editing (Wave 9B) ──────────────────────────────────────────────
 
     /// <summary>
-    /// Opens the <see cref="ChartDataDialog"/> for the currently selected chart.
-    /// If the selection is empty or the selected shape is not a chart, does nothing.
+    /// Builds the playback route for a stored custom show without opening a window.
     /// </summary>
     internal bool TryBuildCustomSlideShowRoute(
         string? customShowName,
@@ -2403,6 +2402,10 @@ public sealed class MainWindow : Window
         return true;
     }
 
+    /// <summary>
+    /// Opens the <see cref="ChartDataDialog"/> for the currently selected chart.
+    /// If the selection is empty or the selected shape is not a chart, does nothing.
+    /// </summary>
     internal void OpenChartDataDialog()
     {
         if (Editor.SelectedChart is null) return;
