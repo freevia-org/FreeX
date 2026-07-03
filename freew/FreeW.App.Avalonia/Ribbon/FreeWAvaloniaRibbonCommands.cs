@@ -435,6 +435,7 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.show-markup-insertions-deletions", new ShowMarkupInsertionsDeletionsCommand(editor));
         r.Register("freew.show-markup-comments", new ShowMarkupCommentsCommand(editor));
         r.Register("freew.show-markup-formatting", new ShowMarkupFormattingCommand(editor));
+        r.Register("freew.show-markup-balloons", new ShowMarkupBalloonsCommand(editor, callbacks));
         // Accept / reject — current revision (at/after caret) and all, undoable + re-render.
         var acceptCurrentRevisionCommand = new ActionRibbonCommand(() => editor.AcceptCurrentRevision());
         var rejectCurrentRevisionCommand = new ActionRibbonCommand(() => editor.RejectCurrentRevision());
@@ -858,6 +859,23 @@ internal static class FreeWAvaloniaRibbonCommands
 
         public RibbonCommandState GetState() =>
             new(IsEnabled: true, IsChecked: editor.ShowMarkupFormatting);
+    }
+
+    private sealed class ShowMarkupBalloonsCommand(DocumentView editor, RibbonHostCallbacks callbacks) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            if (callbacks.ToggleReviewBalloons is { } toggle)
+            {
+                toggle();
+                return;
+            }
+
+            editor.ApplyShowMarkupBalloons(!editor.ShowMarkupBalloons);
+        }
+
+        public RibbonCommandState GetState() =>
+            new(IsEnabled: true, IsChecked: callbacks.IsReviewBalloonsActive?.Invoke() ?? editor.ShowMarkupBalloons);
     }
 
     private sealed class TablePropertiesCommand(DocumentView editor, RibbonHostCallbacks callbacks) : IRibbonCommand

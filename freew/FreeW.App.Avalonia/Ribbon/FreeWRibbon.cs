@@ -239,5 +239,9 @@ internal sealed record RibbonHostCallbacks(
     /// <summary>References &gt; Insert Citation. Optional; registry no-ops when null.</summary>
     Action? OpenCitationDialog = null,
     /// <summary>References &gt; Manage Sources. Optional; registry no-ops when null.</summary>
-    Action? OpenManageSourcesDialog = null);
+    Action? OpenManageSourcesDialog = null,
+    /// <summary>AV-REVIEW: Review &gt; Show Markup &gt; Show Revisions in Balloons. Optional; registry toggles editor state when null.</summary>
+    Action? ToggleReviewBalloons = null,
+    /// <summary>AV-REVIEW: Whether the Review Balloons strip is visible.</summary>
+    Func<bool>? IsReviewBalloonsActive = null);
 

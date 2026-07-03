@@ -52,6 +52,8 @@ internal static class FreeWAvaloniaRibbonDefinition
             new("Insertions and Deletions", new RibbonCommandId("freew.show-markup-insertions-deletions")),
             new("Comments", new RibbonCommandId("freew.show-markup-comments")),
             new("Formatting", new RibbonCommandId("freew.show-markup-formatting")),
+            RibbonMenuItem.Separator(),
+            new("Show Revisions in Balloons", new RibbonCommandId("freew.show-markup-balloons")),
         });
 
     // AV-PICTAB: wrap-mode menu shared by the Picture / Drawing Format "Wrap Text" dropdown.

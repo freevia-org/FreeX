@@ -8686,6 +8686,8 @@ public sealed class DocumentView : Control
 
     public bool ShowMarkupFormatting { get; private set; } = true;
 
+    public bool ShowMarkupBalloons { get; private set; }
+
     public ReviewDisplayPolicy CurrentReviewDisplayPolicy =>
         new(DisplayForReview, ShowMarkupInsertionsAndDeletions, ShowMarkupComments, ShowMarkupFormatting);
 
@@ -8710,6 +8712,12 @@ public sealed class DocumentView : Control
     public void ApplyShowMarkupFormatting(bool show)
     {
         ShowMarkupFormatting = show;
+        InvalidateLayoutAndVisual();
+    }
+
+    public void ApplyShowMarkupBalloons(bool show)
+    {
+        ShowMarkupBalloons = show;
         InvalidateLayoutAndVisual();
     }
 

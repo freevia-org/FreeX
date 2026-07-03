@@ -59,6 +59,7 @@ public sealed class MainWindow : Window
     private readonly AutosaveAdapter _autosave;
     private readonly NavigationPane _navPane;
     private readonly ReviewingPane _reviewingPane;
+    private readonly ReviewBalloonsPane _reviewBalloonsPane;
     private readonly RevealFormattingPane _revealPane;
     private Border? _findBar;
     private FindReplaceDialog? _findReplaceDialog;
@@ -115,6 +116,7 @@ public sealed class MainWindow : Window
         _autosave = new AutosaveAdapter(_editor, _fileWorkflow.Workflow);
         _navPane = new NavigationPane(_editor);
         _reviewingPane = new ReviewingPane(_editor);
+        _reviewBalloonsPane = new ReviewBalloonsPane(_editor);
         _revealPane = new RevealFormattingPane(_editor);
 
         var ribbon = BuildRibbon();
@@ -144,6 +146,9 @@ public sealed class MainWindow : Window
         DockPanel.SetDock(_reviewingPane, Dock.Right);
         workArea.Children.Add(_reviewingPane);
 
+        DockPanel.SetDock(_reviewBalloonsPane, Dock.Right);
+        workArea.Children.Add(_reviewBalloonsPane);
+
         DockPanel.SetDock(_revealPane, Dock.Right);
         workArea.Children.Add(_revealPane);
 
@@ -154,6 +159,7 @@ public sealed class MainWindow : Window
         _editor.DocumentChanged += OnEditorDocumentChanged;
         _editor.DocumentChanged += () => { if (_navPane.IsVisible) _navPane.Refresh(); };
         _editor.DocumentChanged += () => { if (_reviewingPane.IsVisible) _reviewingPane.Refresh(); };
+        _editor.DocumentChanged += () => { if (_reviewBalloonsPane.IsVisible) _reviewBalloonsPane.Refresh(); };
         _editor.DocumentChanged += () => { if (_revealPane.IsVisible) _revealPane.Refresh(); };
         _editor.ScrollToCaretRequested += ScrollCaretIntoView;
         _editor.CaretMoved += UpdateStatus;
@@ -209,6 +215,8 @@ public sealed class MainWindow : Window
     /// </summary>
     internal ReviewingPane ReviewingPane => _reviewingPane;
 
+    internal ReviewBalloonsPane ReviewBalloonsPane => _reviewBalloonsPane;
+
     /// <summary>
     /// Exposes the reveal-formatting pane for tests that need to inspect its state headlessly.
     /// </summary>
@@ -242,6 +250,19 @@ public sealed class MainWindow : Window
         _reviewingPane.IsVisible = !_reviewingPane.IsVisible;
         if (_reviewingPane.IsVisible)
             _reviewingPane.Refresh();
+    }
+
+    /// <summary>
+    /// Show or hide the compact review balloon strip backed by comments and revisions.
+    /// Wired to <c>freew.show-markup-balloons</c>.
+    /// </summary>
+    internal void ToggleReviewBalloons()
+    {
+        var show = !_reviewBalloonsPane.IsVisible;
+        _reviewBalloonsPane.IsVisible = show;
+        _editor.ApplyShowMarkupBalloons(show);
+        if (show)
+            _reviewBalloonsPane.Refresh();
     }
 
     /// <summary>
@@ -1012,7 +1033,9 @@ public sealed class MainWindow : Window
             OpenThesaurus: () => _ = OpenThesaurusAsync(),
             SetProofingLanguage: () => _ = OpenProofingLanguageDialogAsync(),
             CompareDocuments: () => _ = CompareDocumentsAsync(),
-            CombineDocuments: () => _ = CombineDocumentsAsync());
+            CombineDocuments: () => _ = CombineDocumentsAsync(),
+            ToggleReviewBalloons: ToggleReviewBalloons,
+            IsReviewBalloonsActive: () => _reviewBalloonsPane.IsVisible);
 
         // AV-MAIL: capture the Mailings engine so the shell can drive its two dialog-bound commands
         // (Select Recipients / Insert Merge Field) with async Avalonia dialogs over the same session the
