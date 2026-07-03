@@ -939,7 +939,9 @@ public sealed class DocumentViewReviewTests
 
             var view = Build(doc);
             var pane = new ReviewBalloonsPane(view);
+            pane.Height = 420;
             pane.Measure(new Size(260, 420));
+            pane.Arrange(new Rect(0, 0, 260, 420));
             pane.Refresh();
 
             layouts = pane.LayoutsForTest;
@@ -949,7 +951,8 @@ public sealed class DocumentViewReviewTests
 
         layouts.Should().HaveCount(2);
         layouts.Select(layout => layout.Source.KindLabel).Should().Equal("Comment", "Inserted");
-        layouts.Select(layout => layout.BalloonY).Should().Equal(8, 72);
+        layouts.Select(layout => layout.BalloonY).Should().Equal(77, 287);
+        layouts.Should().OnlyContain(layout => layout.BalloonMidY == layout.LeaderStartY);
         layouts.Should().OnlyContain(layout => layout.LeaderEndX == layout.BalloonX);
         layouts.Should().OnlyContain(layout => layout.LeaderEndY == layout.BalloonMidY);
         layouts.Select(layout => layout.LeaderStartY).Should().BeInAscendingOrder();

@@ -1,4 +1,6 @@
 using System.Linq;
+using System.Windows.Controls;
+using System.Windows.Shapes;
 using FreeW.App.Host.Editing;
 using FreeW.App.Presentation.Ribbon;
 using FreeW.Core.Model;
@@ -115,6 +117,31 @@ public sealed class ThesaurusAndBalloonsTests
         // We have 2 revisions + 1 comment = 3 balloons, so at least 9 children.
         canvas.Children.Count.Should().BeGreaterThanOrEqualTo(3 * 3,
             "each balloon contributes at least a leader line, a rectangle, and a header label");
+    }
+
+    [StaFact]
+    public void BalloonOverlay_Enable_UsesSharedViewportAnchoredCollisionLayout()
+    {
+        var editor = MakeEditorWithRevisions();
+        var overlay = new BalloonOverlay(editor);
+
+        overlay.Enable();
+
+        var canvas = (Canvas)overlay.Visual;
+        var leaders = canvas.Children.OfType<Line>().ToArray();
+        var rectangles = canvas.Children.OfType<Rectangle>().ToArray();
+        var balloonTops = rectangles.Select(Canvas.GetTop).ToArray();
+
+        leaders.Should().HaveCount(3);
+        rectangles.Should().HaveCount(3);
+        balloonTops.Should().BeInAscendingOrder();
+        balloonTops[0].Should().BeGreaterThan(80, "balloons should track their viewport anchors instead of always starting at the top gap");
+        balloonTops.Zip(balloonTops.Skip(1), (previous, next) => next - previous)
+            .Should().OnlyContain(delta => delta >= 64);
+        leaders.Select(leader => leader.Y1).Should().BeInAscendingOrder();
+
+        for (var i = 0; i < rectangles.Length; i++)
+            leaders[i].Y2.Should().BeApproximately(balloonTops[i] + 28, 0.001);
     }
 
     /// <summary>
