@@ -1083,10 +1083,35 @@ internal static class ParityCapture
             "Captured from FreeX.App.Host --parity-capture WorkbookFileDialogSurfacePlanner direct surface at 640x420");
     }
 
+    internal static BitmapSource RenderWorkbookFileDialogSurfaceForTest(WorkbookFileDialogSurfacePlan plan) =>
+        RenderWorkbookFileDialogSurface(plan);
+
     private static BitmapSource RenderWorkbookFileDialogSurface(WorkbookFileDialogSurfacePlan plan)
     {
-        var content = CreateWorkbookFileDialogSurfaceContent(plan);
-        return RenderWorkbookFileDialogContent(content);
+        Window? dialog = null;
+        try
+        {
+            dialog = CreateWorkbookFileDialogSurface(plan);
+            dialog.WindowStartupLocation = WindowStartupLocation.Manual;
+            dialog.ShowInTaskbar = false;
+            dialog.ShowActivated = false;
+            dialog.Left = -10000;
+            dialog.Top = -10000;
+            dialog.Show();
+            PumpDispatcher();
+            dialog.UpdateLayout();
+            PumpDispatcher();
+
+            return RenderDialog(
+                dialog,
+                WorkbookFileDialogSurfacePlanner.Width,
+                WorkbookFileDialogSurfacePlanner.Height);
+        }
+        finally
+        {
+            try { dialog?.Close(); } catch { /* best-effort teardown */ }
+            PumpDispatcher();
+        }
     }
 
     private static BitmapSource RenderWorkbookFileDialogContent(FrameworkElement content)
@@ -1275,6 +1300,9 @@ internal static class ParityCapture
             return;
         results.Add(new SurfaceResult(surfaceId, kind, surfaceId + ".png", false, note));
     }
+
+    internal static bool HasVisiblePixelsForTest(BitmapSource bitmap) =>
+        HasVisiblePixels(bitmap);
 
     private static bool HasVisiblePixels(BitmapSource bitmap)
     {
