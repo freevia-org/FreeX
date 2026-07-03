@@ -88,7 +88,7 @@ public sealed record FreeWVisualBaselineTriageItem(
 public static class FreeWVisualEvidenceManifestNormalizer
 {
     public const string SummarySchemaId = "freew.visual-evidence-summary.v1";
-    public const int SummarySchemaVersion = 14;
+    public const int SummarySchemaVersion = 15;
     public const string SummaryJsonFileName = "freew_visual_evidence_summary.json";
     public const string SummaryMarkdownFileName = "freew_visual_evidence_summary.md";
     public const string WpfHostId = "wpf-fidelity-render";
@@ -991,7 +991,33 @@ public static class FreeWVisualEvidenceManifestNormalizer
             rowFailures.Add(
                 $"backstage renderer evidence for host '{row.HostId}' must use capture source '{string.Join("' or '", expectedCaptureSources)}', found '{captureSource}'");
         }
+
+        var expectedWorkflow = ExpectedBackstageWorkflow(row.ScenarioId);
+        if (expectedWorkflow is null)
+            return;
+
+        if (!row.HostMetadata.TryGetValue("backstageWorkflow", out var workflow)
+            || string.IsNullOrWhiteSpace(workflow))
+        {
+            rowFailures.Add(
+                $"backstage renderer evidence for scenario '{row.ScenarioId}' must declare backstageWorkflow '{expectedWorkflow}'");
+            return;
+        }
+
+        if (!string.Equals(workflow, expectedWorkflow, StringComparison.OrdinalIgnoreCase))
+        {
+            rowFailures.Add(
+                $"backstage renderer evidence for scenario '{row.ScenarioId}' must use backstageWorkflow '{expectedWorkflow}', found '{workflow}'");
+        }
     }
+
+    private static string? ExpectedBackstageWorkflow(string scenarioId) =>
+        scenarioId switch
+        {
+            "backstage-print-preview-fidelity" => "print-preview",
+            "backstage-pdf-export-fidelity" => "pdf-export",
+            _ => null
+        };
 
     private static IReadOnlyList<FreeWVisualEvidenceNormalizedScenario> BuildScenarioSummaries(
         IReadOnlyList<FreeWVisualEvidenceNormalizedRow> rows,

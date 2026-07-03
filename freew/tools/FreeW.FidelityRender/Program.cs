@@ -497,14 +497,11 @@ static void RenderDocumentComposite(
             hasFootnotes: hasFootnotes,
             sectionOrdinal: sectionOrdinal,
             sectionRelativePageNumber: sectionRelativePageNumber,
-            hostMetadata: new Dictionary<string, string>
-            {
-                ["renderer"] = "FreeW.FidelityRender",
-                ["renderPath"] = "composite",
-                ["captureSource"] = "wpf-composite-renderer",
-                ["documentName"] = name,
-                ["pageIndex"] = i.ToString(System.Globalization.CultureInfo.InvariantCulture)
-            },
+            hostMetadata: BuildHostMetadata(
+                name,
+                renderPath: "composite",
+                captureSource: "wpf-composite-renderer",
+                pageIndex: i.ToString(System.Globalization.CultureInfo.InvariantCulture)),
             document: doc);
         FreeWVisualEvidencePlanner.EnsureTrusted(row);
         evidence.Add(row);
@@ -722,16 +719,16 @@ static void RenderDocumentSoftwareFallback(
             sectionOrdinal: sectionOrdinal,
             sectionRelativePageNumber: sectionRelativePageNumber,
             sectionOwnerId: FreeWVisualEvidencePlanner.BuildSectionOwnerId(sectionOrdinal),
-            hostMetadata: new Dictionary<string, string>
-            {
-                ["renderer"] = "FreeW.FidelityRender",
-                ["renderPath"] = "software-fallback",
-                ["captureSource"] = "software-renderer",
-                ["documentName"] = name,
-                ["pageIndex"] = i.ToString(CultureInfo.InvariantCulture),
-                ["wpfRenderTargetBitmap"] = "unavailable",
-                ["wpfRenderTargetBitmapReason"] = wpfRenderTargetFailure
-            },
+            hostMetadata: BuildHostMetadata(
+                name,
+                renderPath: "software-fallback",
+                captureSource: "software-renderer",
+                pageIndex: i.ToString(CultureInfo.InvariantCulture),
+                extra: new Dictionary<string, string>
+                {
+                    ["wpfRenderTargetBitmap"] = "unavailable",
+                    ["wpfRenderTargetBitmapReason"] = wpfRenderTargetFailure
+                }),
             document: doc);
         FreeWVisualEvidencePlanner.EnsureTrusted(row);
         evidence.Add(row);
@@ -1882,6 +1879,42 @@ static int NextSectionRelativePageNumber(Dictionary<int, int> sectionPageCounter
 
 static string BuildVisualEvidenceOutputPath(string outDir, string scenarioId, int pageNumber) =>
     Path.Combine(outDir, FreeWVisualEvidencePlanner.ExpectedOutputName(scenarioId, pageNumber));
+
+static Dictionary<string, string> BuildHostMetadata(
+    string documentName,
+    string renderPath,
+    string captureSource,
+    string pageIndex,
+    IReadOnlyDictionary<string, string>? extra = null)
+{
+    var metadata = new Dictionary<string, string>
+    {
+        ["renderer"] = "FreeW.FidelityRender",
+        ["renderPath"] = renderPath,
+        ["captureSource"] = captureSource,
+        ["documentName"] = documentName,
+        ["pageIndex"] = pageIndex
+    };
+
+    if (BackstageWorkflowForScenario(documentName) is { } backstageWorkflow)
+        metadata["backstageWorkflow"] = backstageWorkflow;
+
+    if (extra is not null)
+    {
+        foreach (var (key, value) in extra)
+            metadata[key] = value;
+    }
+
+    return metadata;
+}
+
+static string? BackstageWorkflowForScenario(string scenarioId) =>
+    scenarioId switch
+    {
+        "backstage-print-preview-fidelity" => "print-preview",
+        "backstage-pdf-export-fidelity" => "pdf-export",
+        _ => null
+    };
 
 static TextDocument BuildBackstageFixtureDocument(string title, string description, string pageLabel)
 {
