@@ -16359,12 +16359,12 @@ public sealed partial class MainWindow : Window
         var dialog = new Window
         {
             Title = "Data Table",
-            Width = 380,
-            Height = 260,
-            MinWidth = 380,
-            MinHeight = 260,
-            MaxWidth = 380,
-            MaxHeight = 260,
+            Width = 360,
+            Height = 210,
+            MinWidth = 360,
+            MinHeight = 210,
+            MaxWidth = 360,
+            MaxHeight = 210,
             CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
@@ -16373,19 +16373,9 @@ public sealed partial class MainWindow : Window
         };
         AutomationProperties.SetAutomationId(dialog, "DataTableCompactDialog");
 
-        var rangeText = new TextBlock
-        {
-            Text = $"Table range: {FormatRangeReference(_session.SelectedRange)}",
-            Foreground = HeaderForeground,
-            TextWrapping = TextWrapping.Wrap,
-        };
-        AutomationProperties.SetName(rangeText, "Data Table range");
-        AutomationProperties.SetAutomationId(rangeText, "DataTableRangeSummaryText");
-        AutomationProperties.SetHelpText(rangeText, "Shows the selected range used for the Data Table.");
-
         var rowInputBox = new TextBox
         {
-            MinWidth = 240,
+            MinWidth = 220,
         };
         ApplyDataToolsTextBoxChrome(rowInputBox);
         AutomationProperties.SetName(rowInputBox, "Row input cell");
@@ -16394,7 +16384,7 @@ public sealed partial class MainWindow : Window
 
         var columnInputBox = new TextBox
         {
-            MinWidth = 240,
+            MinWidth = 220,
         };
         ApplyDataToolsTextBoxChrome(columnInputBox);
         AutomationProperties.SetName(columnInputBox, "Column input cell");
@@ -16405,6 +16395,7 @@ public sealed partial class MainWindow : Window
         {
             Foreground = Brush(143, 74, 18),
             TextWrapping = TextWrapping.Wrap,
+            IsVisible = false,
         };
         AutomationProperties.SetName(errorText, "Data Table validation");
         AutomationProperties.SetAutomationId(errorText, "DataTableErrorText");
@@ -16446,8 +16437,9 @@ public sealed partial class MainWindow : Window
         {
             var planResult = CreatePlan();
             errorText.Text = planResult.IsReady
-                ? planResult.StatusText
+                ? string.Empty
                 : FormatDataTablePlanError(planResult);
+            errorText.IsVisible = !planResult.IsReady && !string.IsNullOrWhiteSpace(errorText.Text);
         }
 
         void Accept()
@@ -16456,6 +16448,7 @@ public sealed partial class MainWindow : Window
             if (!planResult.IsReady || planResult.Plan is null)
             {
                 errorText.Text = FormatDataTablePlanError(planResult);
+                errorText.IsVisible = true;
                 FocusDataTableErrorField(planResult.Status, rowInputBox, columnInputBox);
                 return;
             }
@@ -16496,7 +16489,6 @@ public sealed partial class MainWindow : Window
         };
         DockPanel.SetDock(buttonRow, Dock.Bottom);
 
-        RefreshPlanStatus();
         dialog.Content = new DockPanel
         {
             Margin = new Thickness(16),
@@ -16508,7 +16500,6 @@ public sealed partial class MainWindow : Window
                     Spacing = 10,
                     Children =
                     {
-                        rangeText,
                         CreateDataTableField("Row input cell", rowInputBox),
                         CreateDataTableField("Column input cell", columnInputBox),
                         errorText,

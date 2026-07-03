@@ -2761,6 +2761,12 @@ public sealed class AvaloniaShellSourceTests
         nextMethodIndex.Should().BeGreaterThan(handlerIndex);
         var routeSource = normalizedSource[handlerIndex..nextMethodIndex];
 
+        routeSource.Should().Contain("Width = 360,");
+        routeSource.Should().Contain("Height = 210,");
+        routeSource.Should().Contain("MinWidth = 360,");
+        routeSource.Should().Contain("MaxHeight = 210,");
+        routeSource.Should().NotContain("DataTableRangeSummaryText");
+        routeSource.Should().NotContain("Table range:");
         routeSource.Should().NotContain("new OneVariableDataTableCommand");
         routeSource.Should().NotContain("new TwoVariableDataTableCommand");
         routeSource.Should().NotContain("new DataTableDialog");
@@ -3240,8 +3246,6 @@ public sealed class AvaloniaShellSourceTests
             "AutomationProperties.SetName(summaryButton, \"Summary Report\");",
             "AutomationProperties.SetHelpText(summaryButton, \"Create a scenario summary report sheet.\");",
             "AutomationProperties.SetHelpText(closeButton, \"Close Scenario Manager.\");",
-            "AutomationProperties.SetName(rangeText, \"Data Table range\");",
-            "AutomationProperties.SetHelpText(rangeText, \"Shows the selected range used for the Data Table.\");",
             "AutomationProperties.SetName(errorText, \"Data Table validation\");",
             "AutomationProperties.SetHelpText(errorText, \"Shows Data Table readiness and validation messages.\");",
             "AutomationProperties.SetName(sourceRangeText, \"Forecast source range\");",
