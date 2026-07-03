@@ -912,6 +912,9 @@ public sealed class VisualEvidencePlannerTests
         expectation.DrawingObjects.Effects.ShapeEffectObjectCount.Should().Be(1);
         expectation.DrawingObjects.Effects.ImageEffectObjectCount.Should().Be(1);
         expectation.DrawingObjects.Effects.WordArtEffectObjectCount.Should().Be(1);
+        expectation.DrawingObjects.Effects.PlannedGroupChildEffectObjectCount.Should().Be(1);
+        expectation.DrawingObjects.Effects.PlannedGroupChildShapeEffectObjectCount.Should().Be(1);
+        expectation.DrawingObjects.Effects.PlannedGroupChildWordArtEffectObjectCount.Should().Be(0);
         expectation.DrawingObjects.Effects.HasShadow.Should().BeTrue();
         expectation.DrawingObjects.Effects.HasGlow.Should().BeTrue();
         expectation.DrawingObjects.Effects.HasReflection.Should().BeTrue();
@@ -920,6 +923,8 @@ public sealed class VisualEvidencePlannerTests
             "Shape:shadow",
             "Image:shadow+glow+reflection+artistic:GlowDiffused",
             "WordArt:glow"]);
+        expectation.DrawingObjects.Effects.PlannedGroupChildEffectSummaries.Should().Contain(
+            "GroupChild0:Shape:glow");
     }
 
     [Fact]
@@ -1119,7 +1124,7 @@ public sealed class VisualEvidencePlannerTests
         using var doc = JsonDocument.Parse(json);
         var root = doc.RootElement;
         root.GetProperty("schemaId").GetString().Should().Be("freew.visual-evidence.v1");
-        root.GetProperty("schemaVersion").GetInt32().Should().Be(7);
+        root.GetProperty("schemaVersion").GetInt32().Should().Be(8);
         root.GetProperty("product").GetString().Should().Be("FreeW");
         root.GetProperty("scenarios").GetArrayLength().Should().Be(1);
         var evidence = root.GetProperty("evidence")[0];
@@ -1190,6 +1195,7 @@ public sealed class VisualEvidencePlannerTests
             var markdown = FreeWVisualEvidenceManifestNormalizer.ToMarkdown(summary);
             markdown.Should().Contain("Scenario Coverage");
             markdown.Should().Contain("avalonia-page-layout-shot");
+            markdown.Should().Contain("1 planned grouped child effect object(s): GroupChild0:Shape:glow");
         }
         finally
         {
@@ -2272,7 +2278,7 @@ public sealed class VisualEvidencePlannerTests
 
             var json = FreeWVisualEvidenceManifestNormalizer.ToJson(withBaseline);
             using var doc = JsonDocument.Parse(json);
-            doc.RootElement.GetProperty("schemaVersion").GetInt32().Should().Be(12);
+            doc.RootElement.GetProperty("schemaVersion").GetInt32().Should().Be(13);
             var triageItem = doc.RootElement.GetProperty("wordBaselineTriage")[0];
             triageItem.GetProperty("status").GetString().Should().Be("passed");
             triageItem.GetProperty("triageStatus").GetString().Should().Be("within-tolerance");
