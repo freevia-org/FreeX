@@ -39,6 +39,13 @@ public sealed class VisualEvidenceRunnerScriptTests
         source.Should().Contain("'--word-baseline-dir', $wordBaselineRoot");
         source.Should().Contain("'--baseline-tolerance', $BaselineTolerance");
         source.Should().Contain("Invoke-DotNetStep 'Validate and normalize combined visual evidence' $summaryArgs");
+        source.Should().Contain("Assert-BackstageEvidenceReadiness $summaryJson");
+        source.Should().Contain("backstage-print-preview-fidelity");
+        source.Should().Contain("backstage-pdf-export-fidelity");
+        source.Should().Contain("wpf-fidelity-render");
+        source.Should().Contain("avalonia-page-layout-shot");
+        source.Should().Contain("Backstage evidence readiness failed");
+        source.Should().Contain("Backstage evidence readiness: trusted required rows=");
     }
 
     private static string RepositoryFile(params string[] parts)

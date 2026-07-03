@@ -120,6 +120,63 @@ function Invoke-PowerShellStep {
     }
 }
 
+function Assert-BackstageEvidenceReadiness {
+    param(
+        [Parameter(Mandatory = $true)][string]$SummaryJsonPath
+    )
+
+    if (-not (Test-Path -LiteralPath $SummaryJsonPath -PathType Leaf)) {
+        throw "Backstage evidence readiness cannot be checked because the summary JSON is missing: $SummaryJsonPath"
+    }
+
+    $summary = Get-Content -LiteralPath $SummaryJsonPath -Raw | ConvertFrom-Json
+    $readinessRows = @($summary.backstagePrintEvidenceReadiness)
+    $requiredScenarios = @(
+        'backstage-print-preview-fidelity',
+        'backstage-pdf-export-fidelity'
+    )
+    $requiredHosts = @(
+        'wpf-fidelity-render',
+        'avalonia-page-layout-shot'
+    )
+    $requiredPages = @(1, 2)
+    $failures = New-Object System.Collections.Generic.List[string]
+    $trustedCount = 0
+
+    foreach ($scenarioId in $requiredScenarios) {
+        foreach ($hostId in $requiredHosts) {
+            foreach ($pageNumber in $requiredPages) {
+                $match = @($readinessRows | Where-Object {
+                    $_.scenarioId -eq $scenarioId -and
+                    $_.hostId -eq $hostId -and
+                    [int]$_.pageNumber -eq $pageNumber
+                })
+
+                if ($match.Count -eq 0) {
+                    $failures.Add("$scenarioId/$hostId/p${pageNumber}: missing backstage readiness row")
+                    continue
+                }
+
+                $row = $match[0]
+                if ($row.status -ne 'trusted') {
+                    $output = if ([string]::IsNullOrWhiteSpace([string]$row.outputSummary)) { '-' } else { [string]$row.outputSummary }
+                    $notes = if ([string]::IsNullOrWhiteSpace([string]$row.notes)) { 'no notes' } else { [string]$row.notes }
+                    $failures.Add("$scenarioId/$hostId/p${pageNumber}: status '$($row.status)' output '$output' notes '$notes'")
+                    continue
+                }
+
+                $trustedCount++
+            }
+        }
+    }
+
+    if ($failures.Count -gt 0) {
+        throw "Backstage evidence readiness failed:`n - $($failures -join "`n - ")"
+    }
+
+    Write-Host "Backstage evidence readiness: trusted required rows=$trustedCount"
+}
+
 New-Item -ItemType Directory -Force $fixtureDir | Out-Null
 New-Item -ItemType Directory -Force $wpfDir | Out-Null
 New-Item -ItemType Directory -Force $avaloniaDir | Out-Null
@@ -191,6 +248,7 @@ if ($wordBaselineRoot) {
 }
 
 Invoke-DotNetStep 'Validate and normalize combined visual evidence' $summaryArgs
+Assert-BackstageEvidenceReadiness $summaryJson
 
 Write-Host ""
 Write-Host "Visual evidence run complete." -ForegroundColor Green
