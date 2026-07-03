@@ -1952,6 +1952,75 @@ public sealed class PresentationReviewWorkflowPlannerTests
     }
 
     [Fact]
+    public void BuildProofingPanePlan_FlagsSentenceStartCapitalizationWithSingleLetterCorrection()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 4,
+            Name = "Caption",
+            Text = "intro starts. next sentence! already correct? no"
+        });
+
+        var execution = PresentationReviewWorkflowPlanner.BuildProofingExecutionPlan(presentation);
+        var plan = PresentationReviewWorkflowPlanner.BuildProofingPanePlan(execution);
+        var row = plan.SelectedRow!;
+
+        execution.Issues.Should().HaveCount(4);
+        execution.Issues.Select(issue => issue.Text).Should().Equal("i", "n", "a", "n");
+        execution.Issues.Select(issue => issue.Message).Should().OnlyContain(message =>
+            message == "Sentence should start with a capital letter.");
+        row.Should().Match<PresentationProofingIssueRowPlan>(issue =>
+            issue.Start == 0 &&
+            issue.Length == 1 &&
+            issue.Text == "i" &&
+            issue.SuggestedReplacement == "I" &&
+            issue.CorrectionAction.IsEnabled);
+
+        var mutation = PresentationReviewWorkflowPlanner.TryApplyProofingCorrection(
+            presentation,
+            row.Scope,
+            row.Start,
+            row.Length,
+            row.SuggestedReplacement);
+
+        mutation.Should().Be(new PresentationProofingCorrectionMutationPlan(
+            true,
+            row.Scope,
+            0,
+            1,
+            "I",
+            "Intro starts. next sentence! already correct? no",
+            null));
+        slide.Shapes.Single(shape => shape.Id == 4).Text
+            .Should().Be("Intro starts. next sentence! already correct? no");
+    }
+
+    [Fact]
+    public void BuildProofingExecutionPlan_SentenceStartCapitalizationAvoidsExistingCapsDecimalsUrlsAndEmails()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 4,
+            Name = "Caption",
+            Text = "Already capped. 3.14 stays. Visit https://example.com/path. www.example.com works. Email user@example.com now."
+        });
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 5,
+            Name = "Link",
+            Text = "https://example.com/path. Next stays capped."
+        });
+
+        var execution = PresentationReviewWorkflowPlanner.BuildProofingExecutionPlan(presentation);
+
+        execution.Issues.Should().BeEmpty();
+    }
+
+    [Fact]
     public void BuildProofingPanePlan_AppliesCorrectionAndNormalizesSelectionAfterRefresh()
     {
         var presentation = Presentation.CreateEmpty();

@@ -2072,7 +2072,7 @@ public sealed class MainWindowHeadlessTests
                 Id = 329,
                 Name = "Caption",
                 Kind = SlideShapeKind.AutoShape,
-                Text = "Caption eror",
+                Text = "caption text",
             };
             window.Editor.CurrentSlide.Shapes.Clear();
             window.Editor.CurrentSlide.Shapes.Add(shape);
@@ -2247,7 +2247,7 @@ public sealed class MainWindowHeadlessTests
             PresentationProofingScopeKind.Comment,
             PresentationProofingScopeKind.CommentReply);
         proofingExecutionPlan.Scopes.Select(scope => scope.Text).Should().Equal(
-            "Caption eror",
+            "caption text",
             "Use shared review state.",
             "@Reviewer confirmed.");
         proofingPanePlan.Should().NotBeNull();
@@ -2256,17 +2256,17 @@ public sealed class MainWindowHeadlessTests
         proofingPaneSelectedCount.Should().Be(1);
         proofingPaneCorrectionEnabled.Should().BeTrue();
         proofingPaneHeading.Should().Be("Spelling - 1 issues");
-        proofingPanePlan!.SelectedRow!.SuggestedReplacement.Should().Be("error");
+        proofingPanePlan!.SelectedRow!.SuggestedReplacement.Should().Be("C");
         proofingMutation.Should().Be(new PresentationProofingCorrectionMutationPlan(
             true,
             proofingExecutionPlan.Scopes.Single(scope => scope.Kind == PresentationProofingScopeKind.ShapeText),
-            "Caption eror".IndexOf("eror", StringComparison.Ordinal),
-            "eror".Length,
-            "error",
-            "Caption error",
+            0,
+            1,
+            "C",
+            "Caption text",
             null));
-        correctedShapeText.Should().Be("Caption error");
-        correctedProofingScopeText.Should().Be("Caption error");
+        correctedShapeText.Should().Be("Caption text");
+        correctedProofingScopeText.Should().Be("Caption text");
         commentsPaneVisible.Should().BeTrue("the Avalonia comments command should render a shared-plan-backed pane");
         commentsPaneCommentCount.Should().Be(1);
         commentsPaneActionCount.Should().BeGreaterThanOrEqualTo(6);
