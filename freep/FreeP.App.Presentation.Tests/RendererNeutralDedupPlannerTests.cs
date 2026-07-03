@@ -203,17 +203,24 @@ public sealed class RendererNeutralDedupPlannerTests
             "freep",
             "FreeP.App.Rendering.Avalonia",
             "SlideCanvas.cs");
+        var textEffectPlanner = ReadWorkspaceFile(
+            "freep",
+            "FreeP.App.Presentation",
+            "TextRunEffectRenderPlanner.cs");
 
         foreach (var source in new[] { wpf, avalonia })
         {
             source.Should().Contain("ShapeTransformPlanner.PlanShapeTransform");
             source.Should().Contain("ShapeEffectRenderPlanner.PlanOuterEffects");
-            source.Should().Contain("WordArtWarpPlanner.ComputeYOffset");
+            source.Should().Contain("TextRunEffectRenderPlanner");
             source.Should().NotContain("BuildWarpYFunc");
             source.Should().NotContain("OuterShadowDirDeg * Math.PI");
             source.Should().NotContain("OuterShadowBlurDip / 2");
             source.Should().NotContain("GlowRadiusDip / 2");
         }
+
+        textEffectPlanner.Should().Contain("WordArtWarpPlanner.ComputeYOffset");
+        textEffectPlanner.Should().Contain("ResolvedRunShadow");
 
         wpf.Should().NotContain("BuildShapeTransform");
         avalonia.Should().NotContain("BuildShapeMatrix");

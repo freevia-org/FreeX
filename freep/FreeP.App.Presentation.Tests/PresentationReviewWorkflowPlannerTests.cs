@@ -813,6 +813,102 @@ public sealed class PresentationReviewWorkflowPlannerTests
     }
 
     [Fact]
+    public void BuildAccessibilitySummaryPlan_FlagsTableDiagnosticsWithSharedActionSummaries()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Title = string.Empty;
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 8,
+            Name = "Product image",
+            Kind = SlideShapeKind.Picture,
+            Picture = new ImagePart()
+        });
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 9,
+            Name = "Website link",
+            Hyperlink = new Hyperlink { Url = "https://example.test" }
+        });
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 10,
+            Name = "Results table",
+            Kind = SlideShapeKind.Table,
+            Table = new TableShape
+            {
+                Rows =
+                {
+                    new TableRow
+                    {
+                        Cells =
+                        {
+                            new TableCell { TextBody = TextBody("Region"), GridSpan = 2 },
+                            new TableCell { HMerge = true }
+                        }
+                    },
+                    new TableRow
+                    {
+                        Cells =
+                        {
+                            new TableCell { TextBody = TextBody("North") },
+                            new TableCell { TextBody = TextBody("42") }
+                        }
+                    }
+                }
+            }
+        });
+
+        var plan = PresentationReviewWorkflowPlanner.BuildAccessibilitySummaryPlan(presentation);
+
+        plan.Issues.Select(issue => issue.Title).Should().Equal(
+            "Missing slide title",
+            "Alt text missing",
+            "Hyperlink ScreenTip missing",
+            "Table header row missing",
+            "Merged or split table cells");
+        var missingTitle = plan.Issues.Single(issue => issue.Title == "Missing slide title");
+        var missingAltText = plan.Issues.Single(issue => issue.Title == "Alt text missing");
+        var missingScreenTip = plan.Issues.Single(issue => issue.Title == "Hyperlink ScreenTip missing");
+        var missingHeader = plan.Issues.Single(issue => issue.Title == "Table header row missing");
+        var mergedCells = plan.Issues.Single(issue => issue.Title == "Merged or split table cells");
+
+        missingTitle.Should().Match<PresentationAccessibilityIssueDescriptor>(issue =>
+            issue.SlideIndex == 0 &&
+            issue.ShapeId == null &&
+            issue.Severity == PresentationAccessibilityIssueSeverity.Warning);
+        missingAltText.Should().Match<PresentationAccessibilityIssueDescriptor>(issue =>
+            issue.SlideIndex == 0 &&
+            issue.ShapeId == 8 &&
+            issue.Severity == PresentationAccessibilityIssueSeverity.Warning);
+        missingScreenTip.Should().Match<PresentationAccessibilityIssueDescriptor>(issue =>
+            issue.SlideIndex == 0 &&
+            issue.ShapeId == 9 &&
+            issue.Severity == PresentationAccessibilityIssueSeverity.Info);
+        missingHeader.Should().Be(new PresentationAccessibilityIssueDescriptor(
+            PresentationAccessibilityIssueSeverity.Warning,
+            0,
+            10,
+            "Table header row missing",
+            "Results table does not mark the first row as a header row.",
+            new PresentationAccessibilityIssueActionSummary(
+                PresentationReviewWorkflowPlanner.MissingTableHeaderRowActionSummary,
+                null,
+                true)));
+        mergedCells.Should().Be(new PresentationAccessibilityIssueDescriptor(
+            PresentationAccessibilityIssueSeverity.Warning,
+            0,
+            10,
+            "Merged or split table cells",
+            "Results table contains merged or split cells that can make table reading order ambiguous.",
+            new PresentationAccessibilityIssueActionSummary(
+                PresentationReviewWorkflowPlanner.MergedTableCellsActionSummary,
+                null,
+                true)));
+    }
+
+    [Fact]
     public void BuildAccessibilityCheckerPanePlan_ProjectsOrderedIssuesIntoSelectableRows()
     {
         var presentation = Presentation.CreateEmpty();
@@ -893,6 +989,67 @@ public sealed class PresentationReviewWorkflowPlannerTests
             PresentationReviewWorkflowPlanner.InsertLinkCommandId,
             true,
             true));
+    }
+
+    [Fact]
+    public void BuildAccessibilityCheckerPanePlan_ProjectsTableDiagnosticsAsSelectableRows()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Title = "Intro";
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 12,
+            Name = "Milestone table",
+            Kind = SlideShapeKind.Table,
+            Table = new TableShape
+            {
+                Flags = new TableStyleFlags { FirstRow = false },
+                Rows =
+                {
+                    new TableRow
+                    {
+                        Cells =
+                        {
+                            new TableCell { TextBody = TextBody("Milestone"), RowSpan = 2 },
+                            new TableCell { TextBody = TextBody("Owner") }
+                        }
+                    },
+                    new TableRow
+                    {
+                        Cells =
+                        {
+                            new TableCell { VMerge = true },
+                            new TableCell { TextBody = TextBody("Design") }
+                        }
+                    }
+                }
+            }
+        });
+
+        var summary = PresentationReviewWorkflowPlanner.BuildAccessibilitySummaryPlan(presentation);
+        var plan = PresentationReviewWorkflowPlanner.BuildAccessibilityCheckerPanePlan(
+            presentation,
+            summary,
+            selectedRowIndex: 1);
+
+        plan.Rows.Select(row => row.Title).Should().Equal(
+            "Table header row missing",
+            "Merged or split table cells");
+        plan.Rows.Should().AllSatisfy(row =>
+        {
+            row.Category.Should().Be("Table");
+            row.SlideIndex.Should().Be(0);
+            row.SlideDisplay.Should().Be("Slide 1");
+            row.ShapeId.Should().Be(12);
+            row.ShapeName.Should().Be("Milestone table");
+            row.ActionLabel.Should().Be("Select Object");
+            row.CommandHint.Should().BeNull();
+            row.ShouldNavigateToSlide.Should().BeTrue();
+            row.ShouldSelectShape.Should().BeTrue();
+        });
+        plan.SelectedRowIndex.Should().Be(1);
+        plan.SelectedRow.Should().BeSameAs(plan.Rows[1]);
     }
 
     [Fact]

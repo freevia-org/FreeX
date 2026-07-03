@@ -383,6 +383,10 @@ public static class PresentationReviewWorkflowPlanner
         "Select the object and add alt text that describes the informative content.";
     public const string MissingHyperlinkScreenTipActionSummary =
         "Edit the hyperlink and add ScreenTip text that explains the destination.";
+    public const string MissingTableHeaderRowActionSummary =
+        "Select the table and enable the header row option so assistive technology can identify column headings.";
+    public const string MergedTableCellsActionSummary =
+        "Review merged or split cells and simplify the table structure or add clear text cues.";
 
     public static PresentationCommentPanePlan BuildCommentPanePlan(
         IReadOnlyList<Slide> slides,
@@ -959,6 +963,8 @@ public static class PresentationReviewWorkflowPlanner
                             InsertLinkCommandId,
                             true)));
                 }
+
+                AddTableAccessibilityIssues(issues, slideIndex, shape);
             }
         }
 
@@ -1326,6 +1332,12 @@ public static class PresentationReviewWorkflowPlanner
         if (issue.Action.CommandId == InsertLinkCommandId)
         {
             return "Hyperlink";
+        }
+
+        if (issue.Title == "Table header row missing"
+            || issue.Title == "Merged or split table cells")
+        {
+            return "Table";
         }
 
         return "Accessibility";
@@ -1756,6 +1768,53 @@ public static class PresentationReviewWorkflowPlanner
             or SlideShapeKind.Model3d
             or SlideShapeKind.Zoom
             or SlideShapeKind.PreservedObject;
+
+    private static void AddTableAccessibilityIssues(
+        List<PresentationAccessibilityIssueDescriptor> issues,
+        int slideIndex,
+        SlideShape shape)
+    {
+        if (shape.Table is not { } table || !HasTableCells(table))
+        {
+            return;
+        }
+
+        if (!table.Flags.FirstRow)
+        {
+            issues.Add(new PresentationAccessibilityIssueDescriptor(
+                PresentationAccessibilityIssueSeverity.Warning,
+                slideIndex,
+                shape.Id,
+                "Table header row missing",
+                $"{DescribeShape(shape)} does not mark the first row as a header row.",
+                new PresentationAccessibilityIssueActionSummary(
+                    MissingTableHeaderRowActionSummary,
+                    null,
+                    true)));
+        }
+
+        if (HasMergedTableCells(table))
+        {
+            issues.Add(new PresentationAccessibilityIssueDescriptor(
+                PresentationAccessibilityIssueSeverity.Warning,
+                slideIndex,
+                shape.Id,
+                "Merged or split table cells",
+                $"{DescribeShape(shape)} contains merged or split cells that can make table reading order ambiguous.",
+                new PresentationAccessibilityIssueActionSummary(
+                    MergedTableCellsActionSummary,
+                    null,
+                    true)));
+        }
+    }
+
+    private static bool HasTableCells(TableShape table)
+        => table.Rows.Any(row => row.Cells.Count > 0);
+
+    private static bool HasMergedTableCells(TableShape table)
+        => table.Rows
+            .SelectMany(row => row.Cells)
+            .Any(cell => cell.GridSpan > 1 || cell.RowSpan > 1 || cell.HMerge || cell.VMerge);
 
     private static string DescribeShape(SlideShape shape)
         => string.IsNullOrWhiteSpace(shape.Name)

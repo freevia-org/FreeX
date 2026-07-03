@@ -20,6 +20,16 @@ public sealed record SlideShowInkExecutionState(
     IReadOnlyList<SlideShowInkStroke> CommittedStrokes,
     SlideShowInkPoint? LaserOverlayPoint);
 
+public sealed record SlideShowInkOverlayPlan(
+    int SlideIndex,
+    IReadOnlyList<SlideShowInkStroke> CommittedStrokes,
+    SlideShowInkStroke? ActiveStroke,
+    SlideShowInkPoint? LaserOverlayPoint)
+{
+    public bool HasVisibleInk =>
+        CommittedStrokes.Count > 0 || ActiveStroke is not null || LaserOverlayPoint is not null;
+}
+
 public enum SlideShowInkExecutionMutationKind
 {
     None,
@@ -93,6 +103,19 @@ public static class SlideShowInkExecutionPlanner
             ActiveStroke = null,
             LaserOverlayPoint = null,
         };
+    }
+
+    public static SlideShowInkOverlayPlan BuildOverlayPlan(SlideShowInkExecutionState state)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+
+        return new SlideShowInkOverlayPlan(
+            state.SlideIndex,
+            state.CommittedStrokes
+                .Where(stroke => stroke.SlideIndex == state.SlideIndex)
+                .ToArray(),
+            state.ActiveStroke?.SlideIndex == state.SlideIndex ? state.ActiveStroke : null,
+            state.LaserOverlayPoint);
     }
 
     public static SlideShowInkExecutionResult Begin(

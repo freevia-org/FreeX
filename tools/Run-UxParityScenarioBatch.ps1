@@ -5,7 +5,7 @@ param(
 
     [string]$FreeXExe,
 
-    [ValidateSet("smoke", "core", "dialogs", "status", "formula", "filtering", "grid", "all")]
+    [ValidateSet("smoke", "core", "dialogs", "status", "formula", "filtering", "grid", "native-output", "all")]
     [string]$Suite = "smoke",
 
     [switch]$SkipBuild,
@@ -184,6 +184,36 @@ function Get-ScenarioPairs {
             freexScenario = "freex-save-as-dialog"
         },
         [ordered]@{
+            id = "save-as-invalid-path"
+            area = "Native output dialogs"
+            comparisonMode = "freex-only"
+            freexScenario = "freex-save-as-invalid-path"
+        },
+        [ordered]@{
+            id = "export-pdf-save-dialog-cancel"
+            area = "Native output dialogs"
+            comparisonMode = "freex-only"
+            freexScenario = "freex-export-pdf-save-dialog-cancel"
+        },
+        [ordered]@{
+            id = "export-overwrite-prompt"
+            area = "Native output dialogs"
+            comparisonMode = "freex-only"
+            freexScenario = "freex-export-overwrite-prompt"
+        },
+        [ordered]@{
+            id = "export-xps-accept"
+            area = "Native output dialogs"
+            comparisonMode = "freex-only"
+            freexScenario = "freex-export-xps-accept"
+        },
+        [ordered]@{
+            id = "native-print-dialog"
+            area = "Native output dialogs"
+            comparisonMode = "freex-only"
+            freexScenario = "freex-native-print-dialog"
+        },
+        [ordered]@{
             id = "sheet-tab-context-menu"
             area = "Sheet tabs"
             excelScenario = "excel-sheet-tab-context-menu"
@@ -235,6 +265,7 @@ function Get-ScenarioPairs {
         "formula" { return $pairs | Where-Object { $_["area"] -eq "Formula bar and name box" } }
         "filtering" { return $pairs | Where-Object { $_["area"] -eq "Sorting and filtering" } }
         "grid" { return $pairs | Where-Object { $_["area"] -eq "Grid pointer mechanics" } }
+        "native-output" { return $pairs | Where-Object { $_["area"] -in @("Native file dialogs", "Native output dialogs") } }
         default { return $pairs }
     }
 }

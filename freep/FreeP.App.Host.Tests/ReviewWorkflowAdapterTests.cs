@@ -24,6 +24,26 @@ public sealed class ReviewWorkflowAdapterTests
                 ResolvedDateTime = new DateTime(2026, 7, 2, 8, 15, 0, DateTimeKind.Utc),
             });
 
+            var table = new SlideShape
+            {
+                Id = 426,
+                Name = "Results table",
+                Kind = SlideShapeKind.Table,
+                Table = new TableShape
+                {
+                    Rows =
+                    {
+                        new TableRow
+                        {
+                            Cells =
+                            {
+                                new TableCell(),
+                                new TableCell()
+                            }
+                        }
+                    }
+                }
+            };
             var shape = new SlideShape
             {
                 Id = 427,
@@ -32,6 +52,7 @@ public sealed class ReviewWorkflowAdapterTests
                 Picture = new ImagePart(),
                 AlternativeTextTitle = "Packaging photo",
             };
+            window.Editor.CurrentSlide.Shapes.Add(table);
             window.Editor.CurrentSlide.Shapes.Add(shape);
             window.Editor.Select(shape.Id);
 
@@ -64,6 +85,10 @@ public sealed class ReviewWorkflowAdapterTests
                 PresentationReviewWorkflowPlanner.MissingAltTextActionSummary,
                 PresentationReviewWorkflowPlanner.AltTextCommandId,
                 true));
+            window.LastAccessibilitySummaryPlan.Issues.Should().Contain(issue =>
+                issue.ShapeId == table.Id &&
+                issue.Title == "Table header row missing" &&
+                issue.Action.Summary == PresentationReviewWorkflowPlanner.MissingTableHeaderRowActionSummary);
             window.LastAltTextRequestPlan.Should().NotBeNull();
             window.LastAltTextRequestPlan!.Should().Be(new PresentationAltTextRequestPlan(
                 true,

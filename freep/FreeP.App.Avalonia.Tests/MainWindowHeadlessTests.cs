@@ -2221,6 +2221,26 @@ public sealed class MainWindowHeadlessTests
         var ran = await OnUiThread(() =>
         {
             var window = new MainWindow(Array.Empty<string>());
+            var table = new SlideShape
+            {
+                Id = 328,
+                Name = "Results table",
+                Kind = SlideShapeKind.Table,
+                Table = new TableShape
+                {
+                    Rows =
+                    {
+                        new TableRow
+                        {
+                            Cells =
+                            {
+                                new TableCell(),
+                                new TableCell()
+                            }
+                        }
+                    }
+                }
+            };
             var shape = new SlideShape
             {
                 Id = 329,
@@ -2228,6 +2248,7 @@ public sealed class MainWindowHeadlessTests
                 Kind = SlideShapeKind.Picture,
                 Picture = new ImagePart(),
             };
+            window.Editor.CurrentSlide!.Shapes.Add(table);
             window.Editor.CurrentSlide!.Shapes.Add(shape);
             window.Editor.Select(shape.Id);
 
@@ -2263,6 +2284,10 @@ public sealed class MainWindowHeadlessTests
         accessibilityPlan.Should().NotBeNull();
         accessibilityPlan!.Issues.Should().NotContain(issue =>
             issue.ShapeId == 329 && issue.Title == "Alt text missing");
+        accessibilityPlan.Issues.Should().Contain(issue =>
+            issue.ShapeId == 328 &&
+            issue.Title == "Table header row missing" &&
+            issue.Action.Summary == PresentationReviewWorkflowPlanner.MissingTableHeaderRowActionSummary);
     }
 
     [Fact]
