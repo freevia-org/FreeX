@@ -27,11 +27,13 @@ public static class PresentationNotesPagePdfExporter
     private static readonly PdfColor NotesBorder = new(0xB8, 0xB8, 0xB8);
     private static readonly PdfColor NotesText = new(0x20, 0x20, 0x20);
     private static readonly PdfColor PlaceholderText = new(0x78, 0x78, 0x78);
+    private static readonly PdfColor HeaderFooterText = new(0x55, 0x55, 0x55);
 
     private const double SlideBorderWidth = 0.5;
     private const double NotesBorderWidth = 0.5;
     internal const double NotesFontSize = 12;
     private const double PlaceholderFontSize = 12;
+    private const double HeaderFooterFontSize = 9;
     internal const double NotesInset = 10;
     private const double NotesLeading = 16;
 
@@ -127,6 +129,7 @@ public static class PresentationNotesPagePdfExporter
 
             ops.Add(ToPdfStrokeRect(plan.SlideBounds, plan.PageBounds.Height, SlideBorder, SlideBorderWidth));
             ops.Add(ToPdfStrokeRect(plan.NotesBounds, plan.PageBounds.Height, NotesBorder, NotesBorderWidth));
+            AppendHeaderFooterPlaceholders(ops, plan);
 
             var showPlaceholder = isFirstPage && remainingLines.Count == 0;
             remainingLines = AppendNotesText(ops, plan, remainingLines, showPlaceholder);
@@ -183,6 +186,25 @@ public static class PresentationNotesPagePdfExporter
         }
 
         return [];
+    }
+
+    private static void AppendHeaderFooterPlaceholders(
+        List<PdfDrawOp> ops,
+        PresentationNotesPagePreviewPlan plan)
+    {
+        foreach (var placeholder in plan.HeaderFooterPlaceholders)
+        {
+            if (!placeholder.IsVisible || string.IsNullOrWhiteSpace(placeholder.Text))
+                continue;
+
+            ops.Add(new PdfText(
+                placeholder.Bounds.Left,
+                plan.PageBounds.Height - placeholder.Bounds.Top - HeaderFooterFontSize,
+                HeaderFooterFontSize,
+                PdfFontFace.Regular,
+                HeaderFooterText,
+                placeholder.Text));
+        }
     }
 
     private static IEnumerable<PdfDrawOp> MapSlideOps(

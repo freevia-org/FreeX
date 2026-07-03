@@ -256,6 +256,13 @@ public static class FreePRibbon
                     g.MediumToggle("freep.view.show.guides", FreePRibbonText.ViewGuidesCommand.Label,
                         RibbonCommandIconKind.Align, FreePRibbonText.ViewGuidesCommand.KeyTip);
                 });
+                tab.Group("zoom", FreePRibbonText.ViewZoomGroup.Label, FreePRibbonText.ViewZoomGroup.KeyTip, 90, g =>
+                {
+                    g.Large("freep.view.zoom", FreePRibbonText.ViewZoomCommand.Label,
+                        RibbonCommandIconKind.Zoom, FreePRibbonText.ViewZoomCommand.KeyTip);
+                    g.Medium("freep.view.fit-to-window", FreePRibbonText.ViewFitToWindowCommand.Label,
+                        RibbonCommandIconKind.Scale, FreePRibbonText.ViewFitToWindowCommand.KeyTip);
+                });
             })
             .Build();
     }

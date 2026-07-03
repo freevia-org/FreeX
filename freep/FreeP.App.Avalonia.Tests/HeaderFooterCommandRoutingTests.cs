@@ -106,14 +106,50 @@ public sealed class HeaderFooterCommandRoutingTests
         snapToShapes.Should().BeFalse();
     }
 
+    [Fact]
+    public async Task View_zoom_commands_update_window_and_canvas_zoom_state()
+    {
+        PresentationViewZoomState windowStateAfterZoom = default;
+        PresentationViewZoomState canvasStateAfterZoom = default;
+        PresentationViewZoomState windowStateAfterFit = default;
+        PresentationViewZoomState canvasStateAfterFit = default;
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var registry = window.BuildCommandRegistry();
+
+            Execute(
+                registry,
+                PresentationViewZoomPlanner.ZoomCommandId,
+                RibbonCommandContext.ForSelectedValue("175%"));
+            windowStateAfterZoom = window.ViewZoomStateForTests;
+            canvasStateAfterZoom = window.SlideCanvasViewZoomStateForTests;
+
+            Execute(registry, PresentationViewZoomPlanner.FitToWindowCommandId);
+            windowStateAfterFit = window.ViewZoomStateForTests;
+            canvasStateAfterFit = window.SlideCanvasViewZoomStateForTests;
+        });
+
+        if (!ran) return;
+        windowStateAfterZoom.Mode.Should().Be(PresentationViewZoomMode.Percent);
+        windowStateAfterZoom.ZoomPercent.Should().Be(175);
+        canvasStateAfterZoom.Should().Be(windowStateAfterZoom);
+        windowStateAfterFit.Mode.Should().Be(PresentationViewZoomMode.FitToWindow);
+        windowStateAfterFit.ZoomPercent.Should().Be(175);
+        canvasStateAfterFit.Should().Be(windowStateAfterFit);
+    }
+
     private static Task<bool> OnUiThread(Action action) =>
         Session.Dispatch(action, CancellationToken.None)
             .ContinueWith(task => task.Exception is null, CancellationToken.None);
 
-    private static void Execute(RibbonCommandRegistry registry, string commandId)
+    private static void Execute(
+        RibbonCommandRegistry registry,
+        string commandId,
+        RibbonCommandContext? context = null)
     {
         registry.TryGet(commandId, out var command).Should().BeTrue();
-        command!.Execute(RibbonCommandContext.Empty);
+        command!.Execute(context ?? RibbonCommandContext.Empty);
     }
 
     private static SlideShape FooterShape(string text)

@@ -110,7 +110,7 @@ public sealed class DialogVisualEvidenceSummaryTests
         result.ExitCode.Should().Be(0, result.CombinedOutput);
         result.Output.Should().Contain("WPF captured manifest surfaces with committed PNGs: 1");
         result.Output.Should().Contain("Paired captured surface ids: 1");
-        result.Output.Should().Contain("Additional Avalonia captured surface ids needing WPF pair: 1");
+        result.Output.Should().Contain("Avalonia-manifest-only screenshot surface ids needing WPF manifest pair: 1");
         result.Output.Should().Contain("Nonblank PNG check failures: 0");
         result.Output.Should().Contain("Paired dimension mismatches: 1");
 
