@@ -114,6 +114,40 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
+    public void Process_ParOfChain_RendersAllNodesInConnectionOrder()
+    {
+        var root = new SmartArtNode { ModelId = "n1", Text = "Plan", Level = 0 };
+        var design = new SmartArtNode { ModelId = "n2", Text = "Design", Level = 1 };
+        var build = new SmartArtNode { ModelId = "n3", Text = "Build", Level = 2 };
+        var test = new SmartArtNode { ModelId = "n4", Text = "Test", Level = 3 };
+        var deploy = new SmartArtNode { ModelId = "n5", Text = "Deploy", Level = 4 };
+        root.Children.Add(design);
+        design.Children.Add(build);
+        build.Children.Add(test);
+        test.Children.Add(deploy);
+
+        var data = new SmartArtData
+        {
+            Family = SmartArtFamily.Process,
+            LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/process1"
+        };
+        data.Nodes.Add(root);
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme())!;
+
+        var boxes = shapes
+            .Where(s => s.AutoShapeKind == DrawingShapeKind.RoundedRectangle)
+            .OrderBy(s => s.OffsetXEmu)
+            .ToList();
+        var texts = boxes.Select(b => b.TextBody?.Paragraphs.First().Runs.First().Text).ToList();
+
+        boxes.Should().HaveCount(5, "process parOf chains from live SmartArt data represent visible ordered steps");
+        texts.Should().Equal("Plan", "Design", "Build", "Test", "Deploy");
+        shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.Line)
+            .Should().HaveCount(4, "five ordered process nodes need one connector between each pair");
+    }
+
+    [Fact]
     public void LayoutEngine_UsesSmartArtColorMetadataPaletteForLiveBoxes()
     {
         var data = MakeData(SmartArtFamily.Process, "Alpha", "Beta");

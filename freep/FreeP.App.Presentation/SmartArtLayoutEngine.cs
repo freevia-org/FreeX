@@ -90,7 +90,7 @@ public static class SmartArtLayoutEngine
 
     /// <summary>
     /// Flattens the tree to a display-order list.
-    /// For Process/List/Cycle: returns top-level nodes only (level 0).
+    /// For Process/List/Cycle: returns every visible node in connection/tree order.
     /// For Hierarchy: returns all nodes recursively (the layout engine handles tree structure).
     /// </summary>
     private static List<SmartArtNode> FlattenNodes(SmartArtData data)
@@ -101,17 +101,20 @@ public static class SmartArtLayoutEngine
             return data.Nodes.ToList();
         }
 
-        // For other families: prefer top-level nodes; if empty fallback to all
-        var topLevel = data.Nodes.ToList();
-        if (topLevel.Count == 0)
-        {
-            // Flatten all nodes breadth-first
-            var all = new List<SmartArtNode>();
-            void Collect(SmartArtNode n) { all.Add(n); foreach (var c in n.Children) Collect(c); }
-            foreach (var r in data.Nodes) Collect(r);
-            return all;
-        }
-        return topLevel;
+        // Process SmartArt in PowerPoint-authored/live corpus files can encode sequencing
+        // as a parOf chain instead of root-level siblings. Treat that tree as display order
+        // for flat families so descendants are not dropped from the live render plan.
+        var all = new List<SmartArtNode>();
+        foreach (var root in data.Nodes)
+            CollectPreOrder(root, all);
+        return all;
+    }
+
+    private static void CollectPreOrder(SmartArtNode node, List<SmartArtNode> output)
+    {
+        output.Add(node);
+        foreach (var child in node.Children)
+            CollectPreOrder(child, output);
     }
 
     // ── Color palette ──────────────────────────────────────────────────────────────────────────

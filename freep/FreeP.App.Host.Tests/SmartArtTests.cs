@@ -948,6 +948,41 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
+    public void Compositor_LiveProcessSmartArt_ParOfChainRendersEveryStep()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/process1",
+            nodes:
+            [
+                ("n1", "Plan"),
+                ("n2", "Design"),
+                ("n3", "Build"),
+                ("n4", "Test"),
+                ("n5", "Deploy")
+            ],
+            parOfConnections:
+            [
+                ("n1", "n2"),
+                ("n2", "n3"),
+                ("n3", "n4"),
+                ("n4", "n5")
+            ]);
+
+        var pres = PptxPackageReader.Read(pptxPath);
+        var sa = pres.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.Process);
+        sa.Data.Nodes.Should().ContainSingle("the process chain is rooted at the first step");
+        sa.Data.Nodes[0].Children.Should().ContainSingle().Which.Text.Should().Be("Design");
+
+        var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
+        var liveShapes = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
+
+        liveShapes.Should().HaveCount(9, "five process boxes plus four connectors should render from live data");
+    }
+
+    [Fact]
     public void Reader_ParsesSmartArtData_HierarchyWithChildren()
     {
         // root "R" has two children "C1", "C2" via parOf connections
