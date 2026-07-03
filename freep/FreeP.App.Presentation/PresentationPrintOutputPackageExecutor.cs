@@ -258,19 +258,15 @@ public static class PresentationPrintOutputPackageExecutor
         foreach (var previewPlan in previewPlans)
         {
             var slideNumber = previewPlan.SlideNumber ?? 0;
-            var renderedPageCount = PresentationNotesPagePdfExporter.CountRenderedPages(previewPlan);
-            for (var index = 0; index < renderedPageCount; index++)
+            foreach (var renderedPage in previewPlan.RenderPages)
             {
-                var isContinuation = index > 0;
                 pages.Add(new PresentationPrintPreviewPage(
                     pages.Count,
                     pages.Count + 1,
                     PresentationPrintPreviewPageKind.NotesPage,
                     slideNumber > 0 ? [slideNumber] : [],
-                    isContinuation ? $"Slide {slideNumber} notes continued" : $"Slide {slideNumber} notes",
-                    isContinuation
-                        ? $"Notes continuation page for slide {slideNumber}"
-                        : $"Notes page for slide {slideNumber}"));
+                    renderedPage.ThumbnailLabel,
+                    renderedPage.Detail));
             }
         }
 
