@@ -773,6 +773,14 @@ static bool IsReviewRendererScenario(string scenarioId) =>
         scenarioId,
         StringComparer.OrdinalIgnoreCase);
 
+static string BackstageWorkflowForScenario(string scenarioId) =>
+    scenarioId switch
+    {
+        "backstage-print-preview-fidelity" => "print-preview",
+        "backstage-pdf-export-fidelity" => "pdf-export",
+        _ => throw new InvalidOperationException($"Unsupported backstage visual evidence scenario: {scenarioId}")
+    };
+
 static void AddAvaloniaEvidence(
     List<FreeWVisualEvidenceRow> evidence,
     string scenarioId,
@@ -818,6 +826,9 @@ static void AddAvaloniaEvidence(
             : "avalonia-" + sectionGeometrySurfacePlan.RenderStatus;
         metadata["expectedOrientation"] = sectionGeometryPage.Orientation;
     }
+
+    if (IsBackstageRendererScenario(scenarioId))
+        metadata["backstageWorkflow"] = BackstageWorkflowForScenario(scenarioId);
 
     if (sectionGeometrySurfacePlan is not null)
     {
