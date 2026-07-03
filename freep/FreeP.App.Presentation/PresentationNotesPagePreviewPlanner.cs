@@ -84,7 +84,7 @@ public static class PresentationNotesPagePreviewPlanner
             pageBounds,
             slideBounds,
             notesBounds,
-            SplitNoteLines(notesText, notesBounds.Width));
+            SplitNoteLines(slide.Notes, notesBounds.Width));
     }
 
     public static double ResolveNotesPageWidthPoints(Presentation presentation, double? pageWidth = null)
@@ -160,6 +160,105 @@ public static class PresentationNotesPagePreviewPlanner
             body.Paragraphs.Select(paragraph => string.Concat(paragraph.Runs.Select(run => run.Text))));
     }
 
+    private sealed record NoteParagraph(string Text, string Prefix, string ContinuationPrefix);
+
+    private static IReadOnlyList<NoteParagraph> ExtractNoteParagraphs(TextBody? body)
+    {
+        if (body is null || body.Paragraphs.Count == 0)
+            return [];
+
+        var counters = new int[9];
+        var result = new List<NoteParagraph>(body.Paragraphs.Count);
+        foreach (var paragraph in body.Paragraphs)
+        {
+            var prefix = BuildParagraphPrefix(paragraph, counters);
+            var text = string.Concat(paragraph.Runs.Select(run => run.Text));
+            var levelIndent = new string(' ', Math.Clamp(paragraph.Level, 0, 8) * 2);
+            result.Add(new NoteParagraph(
+                text,
+                levelIndent + prefix,
+                new string(' ', levelIndent.Length + prefix.Length)));
+        }
+
+        return result;
+    }
+
+    private static string BuildParagraphPrefix(Paragraph paragraph, int[] counters)
+    {
+        var level = Math.Clamp(paragraph.Level, 0, counters.Length - 1);
+        for (var i = level + 1; i < counters.Length; i++)
+            counters[i] = 0;
+
+        return paragraph.BulletKind switch
+        {
+            BulletKind.Char => $"{(string.IsNullOrEmpty(paragraph.BulletChar) ? "\u2022" : paragraph.BulletChar)} ",
+            BulletKind.Auto => $"{BuildAutoNumberText(paragraph, counters, level)} ",
+            _ => string.Empty,
+        };
+    }
+
+    private static string BuildAutoNumberText(Paragraph paragraph, int[] counters, int level)
+    {
+        if (counters[level] == 0)
+            counters[level] = Math.Max(1, paragraph.AutoNumStartAt);
+        else
+            counters[level]++;
+
+        var value = counters[level];
+        return paragraph.AutoNumType switch
+        {
+            AutoNumType.ArabicParenR => $"{value})",
+            AutoNumType.ArabicParenBoth => $"({value})",
+            AutoNumType.RomanUcPeriod => $"{ToRoman(value).ToUpperInvariant()}.",
+            AutoNumType.RomanLcPeriod => $"{ToRoman(value).ToLowerInvariant()}.",
+            AutoNumType.RomanUcParenR => $"{ToRoman(value).ToUpperInvariant()})",
+            AutoNumType.RomanLcParenR => $"{ToRoman(value).ToLowerInvariant()})",
+            AutoNumType.AlphaUcPeriod => $"{ToAlpha(value).ToUpperInvariant()}.",
+            AutoNumType.AlphaLcPeriod => $"{ToAlpha(value).ToLowerInvariant()}.",
+            AutoNumType.AlphaUcParenR => $"{ToAlpha(value).ToUpperInvariant()})",
+            AutoNumType.AlphaLcParenR => $"{ToAlpha(value).ToLowerInvariant()})",
+            AutoNumType.AlphaUcParenBoth => $"({ToAlpha(value).ToUpperInvariant()})",
+            AutoNumType.AlphaLcParenBoth => $"({ToAlpha(value).ToLowerInvariant()})",
+            _ => $"{value}.",
+        };
+    }
+
+    private static string ToAlpha(int value)
+    {
+        value = Math.Max(1, value);
+        var chars = new Stack<char>();
+        while (value > 0)
+        {
+            value--;
+            chars.Push((char)('A' + (value % 26)));
+            value /= 26;
+        }
+
+        return new string(chars.ToArray());
+    }
+
+    private static string ToRoman(int value)
+    {
+        value = Math.Clamp(value, 1, 3999);
+        var map = new (int Value, string Text)[]
+        {
+            (1000, "M"), (900, "CM"), (500, "D"), (400, "CD"),
+            (100, "C"), (90, "XC"), (50, "L"), (40, "XL"),
+            (10, "X"), (9, "IX"), (5, "V"), (4, "IV"), (1, "I"),
+        };
+        var result = new System.Text.StringBuilder();
+        foreach (var (number, text) in map)
+        {
+            while (value >= number)
+            {
+                result.Append(text);
+                value -= number;
+            }
+        }
+
+        return result.ToString();
+    }
+
     /// <summary>
     /// Average width, in points, of one Helvetica glyph at font-size 1 (a conservative
     /// approximation since the portable PDF writer has no real font-metrics table). Used only to
@@ -169,26 +268,37 @@ public static class PresentationNotesPagePreviewPlanner
     private const double AverageGlyphWidthPerFontSize = 0.55;
 
     private static IReadOnlyList<string> SplitNoteLines(
-        string notesText,
+        TextBody? notes,
         double notesBoxWidth,
         double fontSize = PresentationNotesPagePdfExporter.NotesFontSize,
         double inset = PresentationNotesPagePdfExporter.NotesInset)
     {
-        if (string.IsNullOrWhiteSpace(notesText))
+        var paragraphs = ExtractNoteParagraphs(notes);
+        if (paragraphs.Count == 0 || paragraphs.All(paragraph => string.IsNullOrWhiteSpace(paragraph.Text)))
             return [];
-
-        var paragraphs = notesText
-            .Replace("\r\n", "\n", StringComparison.Ordinal)
-            .Replace('\r', '\n')
-            .Split('\n')
-            .Select(line => line.TrimEnd());
 
         var maxWidth = Math.Max(1, notesBoxWidth - (2 * inset));
         var maxChars = Math.Max(1, (int)(maxWidth / Math.Max(0.01, fontSize * AverageGlyphWidthPerFontSize)));
 
         var lines = new List<string>();
         foreach (var paragraph in paragraphs)
-            lines.AddRange(WrapParagraph(paragraph, maxChars));
+        {
+            var logicalLines = paragraph.Text
+                .Replace("\r\n", "\n", StringComparison.Ordinal)
+                .Replace('\r', '\n')
+                .Split('\n')
+                .Select(line => line.TrimEnd())
+                .ToArray();
+
+            for (var index = 0; index < logicalLines.Length; index++)
+            {
+                var prefix = index == 0 ? paragraph.Prefix : paragraph.ContinuationPrefix;
+                lines.AddRange(WrapParagraph(
+                    prefix + logicalLines[index],
+                    maxChars,
+                    paragraph.ContinuationPrefix));
+            }
+        }
 
         return lines;
     }
@@ -198,7 +308,10 @@ public static class PresentationNotesPagePreviewPlanner
     /// wrapping at word boundaries. A single word longer than <paramref name="maxChars"/> is
     /// hard-broken so it never overruns the notes box width.
     /// </summary>
-    private static IReadOnlyList<string> WrapParagraph(string paragraph, int maxChars)
+    private static IReadOnlyList<string> WrapParagraph(
+        string paragraph,
+        int maxChars,
+        string continuationPrefix = "")
     {
         if (paragraph.Length == 0)
             return [string.Empty];
@@ -231,6 +344,11 @@ public static class PresentationNotesPagePreviewPlanner
                 if (current.Length > 0)
                     lines.Add(current.ToString());
                 current.Clear();
+                if (!string.IsNullOrEmpty(continuationPrefix) &&
+                    candidateWord.Length + continuationPrefix.Length <= maxChars)
+                {
+                    current.Append(continuationPrefix);
+                }
                 current.Append(candidateWord);
             }
             else
