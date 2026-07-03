@@ -133,7 +133,7 @@ public sealed class InCanvasTableCellEditor
 
         _overlay.Children.Add(_cellTextBox);
         _cellTextBox.Focus();
-        _cellTextBox.SelectAll();
+        ApplyInitialSelection(_cellTextBox, editStart.InitialSelection);
 
         // Keep active cell in sync.
         _editor.SetActiveTableCell(editStart.Row, editStart.Col);
@@ -368,6 +368,17 @@ public sealed class InCanvasTableCellEditor
     }
 
     // ── Cell highlight overlay ─────────────────────────────────────────────────
+
+    private static void ApplyInitialSelection(RichTextBox textBox, InCanvasEditorTextSelection selection)
+    {
+        if (selection.IsCollapsed)
+        {
+            textBox.CaretPosition = textBox.Document.ContentStart;
+            return;
+        }
+
+        textBox.SelectAll();
+    }
 
     private void RefreshHighlight()
     {

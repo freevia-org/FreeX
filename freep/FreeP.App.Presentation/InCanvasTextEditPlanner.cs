@@ -37,6 +37,13 @@ public readonly record struct InCanvasTextEditDecision(
     InCanvasTextEditOutcome Outcome,
     IPresentationCommand? Command);
 
+public readonly record struct InCanvasEditorTextSelection(
+    int Start,
+    int End)
+{
+    public bool IsCollapsed => Start == End;
+}
+
 public sealed record InCanvasShapeTextFormatPlan(
     InCanvasShapeTextFormatStatus Status,
     uint ShapeId,

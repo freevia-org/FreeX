@@ -89,6 +89,16 @@ public sealed class CanvasEditingTests
 
     // ── ShapeHitTester ────────────────────────────────────────────────────────────
 
+    [Fact]
+    public void InCanvasTableCellEditor_ProjectsSharedInitialSelectionPlan()
+    {
+        var source = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "InCanvasTableCellEditor.cs");
+
+        source.Should().Contain("TableCellEditPlanner.BeginEdit");
+        source.Should().Contain("ApplyInitialSelection(_cellTextBox, editStart.InitialSelection)");
+        source.Should().Contain("RichTextBox");
+    }
+
     private static (Presentation pres, Slide slide, SlideShape shape1, SlideShape shape2) MakeTestSlide()
     {
         var pres  = Presentation.CreateEmpty();

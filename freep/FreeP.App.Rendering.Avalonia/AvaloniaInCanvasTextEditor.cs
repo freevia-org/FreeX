@@ -356,7 +356,7 @@ public sealed class AvaloniaInCanvasTextEditor
         RefreshTableCellHighlight();
         UpdateOverlayState();
         _cellTextBox.Focus();
-        _cellTextBox.SelectAll();
+        ApplyInitialSelection(_cellTextBox, startPlan.InitialSelection);
     }
 
     /// <summary>Commits the current text edit, if active, to the command bus and hides the overlay.</summary>
@@ -689,6 +689,13 @@ public sealed class AvaloniaInCanvasTextEditor
         return (
             selStart == selEnd || (selStart == 0 && selEnd >= textLength),
             selStart != selEnd ? (selStart, selEnd) : null);
+    }
+
+    private static void ApplyInitialSelection(TextBox textBox, InCanvasEditorTextSelection selection)
+    {
+        int textLength = textBox.Text?.Length ?? 0;
+        textBox.SelectionStart = Math.Clamp(selection.Start, 0, textLength);
+        textBox.SelectionEnd = Math.Clamp(selection.End, 0, textLength);
     }
 
     private bool IsCurrentShapePlan(InCanvasShapeTextFormatPlan plan) =>

@@ -269,6 +269,7 @@ public sealed class SlideCanvasAvaloniaTests
             state.CanEditText.Should().BeTrue();
             state.CanFormatText.Should().BeTrue();
             startPlan.IsReady.Should().BeTrue();
+            startPlan.InitialSelection.Should().Be(new InCanvasEditorTextSelection(0, "Original".Length));
 
             var decision = AvaloniaTableCellEditAdapter.CommitRichText(
                 startPlan.EditPlanner,
@@ -310,6 +311,8 @@ public sealed class SlideCanvasAvaloniaTests
             overlay.IsHitTestVisible.Should().BeTrue();
 
             var box = overlay.Children.OfType<global::Avalonia.Controls.TextBox>().Single();
+            box.SelectionStart.Should().Be(0);
+            box.SelectionEnd.Should().Be("Original".Length);
             box.Text = "Changed\nText";
 
             textEditor.CommitCellEdit();
@@ -707,6 +710,7 @@ public sealed class SlideCanvasAvaloniaTests
         source.Should().Contain("AvaloniaTableCellEditAdapter.PlanFontFamily");
         source.Should().Contain("AvaloniaTableCellEditAdapter.PlanFontSize");
         source.Should().Contain("AvaloniaTableCellEditAdapter.PlanColor");
+        source.Should().Contain("ApplyInitialSelection(_cellTextBox, startPlan.InitialSelection)");
         source.Should().NotContain("_editor.PlanActiveTableCell");
         source.Should().Contain("TryApplyActiveTableCellTextFormat");
     }
