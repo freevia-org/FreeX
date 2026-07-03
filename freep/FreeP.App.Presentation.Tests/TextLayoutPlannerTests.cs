@@ -156,11 +156,38 @@ public sealed class TextLayoutPlannerTests
 
         plan.Area.Should().Be(new TextLayoutArea(15, 26, 188, 86));
         plan.Paragraphs.Should().HaveCount(2);
-        plan.Paragraphs[0].Should().Be(new TextParagraphPlacement(0, 0, 15, 35, 188));
+        plan.Paragraphs[0].Should().Be(new TextParagraphPlacement(0, 0, 15, 55, 188));
         plan.Paragraphs[1].ParagraphIndex.Should().Be(1);
         plan.Paragraphs[1].X.Should().BeApproximately(27, 0.001);
-        plan.Paragraphs[1].Y.Should().BeApproximately(72.5, 0.001);
+        plan.Paragraphs[1].Y.Should().BeApproximately(92.5, 0.001);
         plan.Paragraphs[1].MaxWidthDip.Should().BeApproximately(176, 0.001);
+    }
+
+    [Fact]
+    public void PlanBodyText_RuntimeAutoFitLineSpacingReduction_AnchorsFromReducedHeight()
+    {
+        var text = new ResolvedTextLayout
+        {
+            Anchor = VerticalAnchor.Middle,
+            InsetLeftDip = 0,
+            InsetTopDip = 0,
+            InsetRightDip = 0,
+            InsetBottomDip = 0,
+            Paragraphs = new[] { Paragraph("Shrink") }
+        };
+        var autoFitPlan = new TextAutoFitOverflowPlan(
+            TextAutoFitOverflowMode.RuntimeShrink,
+            FontScale: 1.0,
+            LineSpacingReduction: 0.20);
+
+        var plan = TextLayoutPlanner.PlanBodyText(
+            text,
+            new LayoutRect(0, 0, 200, 100),
+            new[] { new TextParagraphMeasure(0, 100, 0, 0) },
+            autoFitPlan);
+
+        plan.Paragraphs.Should().ContainSingle()
+            .Which.Y.Should().BeApproximately(10.0, 0.001);
     }
 
     [Fact]
