@@ -1838,13 +1838,17 @@ public sealed class MainWindowHeadlessTests
     {
         PresentationAccessibilityCheckerPanePlan? opened = null;
         PresentationAccessibilityCheckerPanePlan? selectedTitle = null;
+        PresentationAccessibilityCheckerPanePlan? actionedTitle = null;
         PresentationAccessibilityCheckerPanePlan? actionedAltText = null;
+        PresentationSlideTitleMutationPlan? titleMutation = null;
         var paneVisible = false;
         var rowCount = 0;
         var selectedRowCount = 0;
         var heading = string.Empty;
         var titleSlideIndex = -1;
         var titleSelectionCount = -1;
+        var titleAfterAction = string.Empty;
+        var dirtyAfterTitle = false;
         var altTextSlideIndex = -1;
         uint[] altTextSelection = [];
         var altTextPaneVisible = false;
@@ -1877,6 +1881,11 @@ public sealed class MainWindowHeadlessTests
             titleSlideIndex = window.Editor.CurrentSlideIndex;
             titleSelectionCount = window.Editor.SelectedShapeIds.Count;
 
+            actionedTitle = window.ApplyAccessibilityCheckerRowAction(1);
+            titleAfterAction = window.Editor.CurrentSlide?.Title ?? string.Empty;
+            titleMutation = window.LastSlideTitleMutationPlan;
+            dirtyAfterTitle = window.IsDirty;
+
             actionedAltText = window.ApplyAccessibilityCheckerRowAction(0);
             altTextSlideIndex = window.Editor.CurrentSlideIndex;
             altTextSelection = window.Editor.SelectedShapeIds.ToArray();
@@ -1894,12 +1903,24 @@ public sealed class MainWindowHeadlessTests
         opened.Rows[0].CommandHint.Should().Be(PresentationReviewWorkflowPlanner.AltTextCommandId);
         opened.Rows[1].Should().Match<PresentationAccessibilityCheckerRowPlan>(row =>
             row.Category == "Slide title" &&
+            row.ActionLabel == "Set Slide Title" &&
+            row.CommandHint == PresentationReviewWorkflowPlanner.SetSlideTitleCommandId &&
             row.ShouldNavigateToSlide &&
             !row.ShouldSelectShape);
         selectedTitle.Should().NotBeNull();
         selectedTitle!.SelectedRow!.Title.Should().Be("Missing slide title");
         titleSlideIndex.Should().Be(1);
         titleSelectionCount.Should().Be(0);
+        actionedTitle.Should().NotBeNull();
+        actionedTitle!.Rows.Select(row => row.Title).Should().Equal("Alt text missing");
+        titleAfterAction.Should().Be("Slide 2");
+        titleMutation.Should().Be(new PresentationSlideTitleMutationPlan(
+            true,
+            1,
+            "Slide 2",
+            "Slide 2",
+            null));
+        dirtyAfterTitle.Should().BeTrue();
         actionedAltText.Should().NotBeNull();
         actionedAltText!.SelectedRow!.CommandHint.Should().Be(PresentationReviewWorkflowPlanner.AltTextCommandId);
         altTextSlideIndex.Should().Be(0);
