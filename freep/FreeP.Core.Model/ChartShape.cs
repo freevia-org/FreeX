@@ -199,6 +199,36 @@ public sealed class ChartPointStyle
     public ChartMarkerStyle? Marker { get; set; }
 }
 
+/// <summary>Authored workbook formula references for a chart series.</summary>
+public sealed class ChartSeriesFormulaReferences
+{
+    /// <summary>Formula backing the series name (<c>c:tx/c:strRef/c:f</c>).</summary>
+    public string? SeriesName { get; set; }
+
+    /// <summary>Formula backing category labels (<c>c:cat/c:strRef|numRef/c:f</c>).</summary>
+    public string? Category { get; set; }
+
+    /// <summary>Formula backing category-chart values (<c>c:val/c:numRef/c:f</c>).</summary>
+    public string? Values { get; set; }
+
+    /// <summary>Formula backing scatter/bubble X values (<c>c:xVal/c:numRef/c:f</c>).</summary>
+    public string? XValues { get; set; }
+
+    /// <summary>Formula backing scatter/bubble Y values (<c>c:yVal/c:numRef/c:f</c>).</summary>
+    public string? YValues { get; set; }
+
+    /// <summary>Formula backing bubble sizes (<c>c:bubbleSize/c:numRef/c:f</c>).</summary>
+    public string? BubbleSizes { get; set; }
+
+    public bool HasAny =>
+        SeriesName is not null ||
+        Category is not null ||
+        Values is not null ||
+        XValues is not null ||
+        YValues is not null ||
+        BubbleSizes is not null;
+}
+
 /// <summary>A single data series within a <see cref="ChartShape"/>.</summary>
 public sealed class ChartSeries
 {
@@ -251,6 +281,12 @@ public sealed class ChartSeries
     /// the render style for this series (e.g. Line vs ColumnClustered).
     /// </summary>
     public ChartType? OverrideChartType { get; set; }
+
+    /// <summary>
+    /// Source workbook formulas/ranges from OOXML <c>c:f</c> nodes. Preserved charts
+    /// write these back; edited charts replace them with regenerated workbook ranges.
+    /// </summary>
+    public ChartSeriesFormulaReferences FormulaReferences { get; } = new();
 }
 
 /// <summary>Configuration for one chart axis (category or value).</summary>

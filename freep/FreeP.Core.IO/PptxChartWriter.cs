@@ -603,10 +603,10 @@ internal static class PptxChartWriter
 
         // Series name
         el.Add(new XElement(C + "tx",
-            new XElement(C + "strRef",
-                layout is { } nameLayout && index < nameLayout.ValueColumns.Count
-                    ? new XElement(C + "f", CellRef(nameLayout.ValueColumns[index], 1))
-                    : null,
+                new XElement(C + "strRef",
+                BuildFormulaEl(layout is { } nameLayout && index < nameLayout.ValueColumns.Count
+                    ? CellRef(nameLayout.ValueColumns[index], 1)
+                    : series.FormulaReferences.SeriesName),
                 new XElement(C + "strCache",
                     new XElement(C + "ptCount", new XAttribute("val", "1")),
                     new XElement(C + "pt",
@@ -633,8 +633,8 @@ internal static class PptxChartWriter
             el.Add(new XElement(C + "xVal",
                 new XElement(C + "numRef",
                     layout is { } xLayout && index < xLayout.XColumns.Count
-                        ? new XElement(C + "f", ColumnRangeRef(xLayout.XColumns[index], lastRow))
-                        : null,
+                        ? BuildFormulaEl(ColumnRangeRef(xLayout.XColumns[index], lastRow))
+                        : BuildFormulaEl(series.FormulaReferences.XValues),
                     new XElement(C + "numCache",
                         new XElement(C + "formatCode", "General"),
                         new XElement(C + "ptCount", new XAttribute("val", series.XValues.Count)),
@@ -652,8 +652,8 @@ internal static class PptxChartWriter
             el.Add(new XElement(C + "yVal",
                 new XElement(C + "numRef",
                     layout is { } yLayout && index < yLayout.ValueColumns.Count
-                        ? new XElement(C + "f", ColumnRangeRef(yLayout.ValueColumns[index], lastRow))
-                        : null,
+                        ? BuildFormulaEl(ColumnRangeRef(yLayout.ValueColumns[index], lastRow))
+                        : BuildFormulaEl(series.FormulaReferences.YValues),
                     new XElement(C + "numCache",
                         new XElement(C + "formatCode", "General"),
                         new XElement(C + "ptCount", new XAttribute("val", series.Values.Count)),
@@ -671,8 +671,8 @@ internal static class PptxChartWriter
             el.Add(new XElement(C + "bubbleSize",
                 new XElement(C + "numRef",
                     layout is { } sizeLayout && sizeLayout.BubbleSizeColumns.Count > index
-                        ? new XElement(C + "f", ColumnRangeRef(sizeLayout.BubbleSizeColumns[index], lastRow))
-                        : null,
+                        ? BuildFormulaEl(ColumnRangeRef(sizeLayout.BubbleSizeColumns[index], lastRow))
+                        : BuildFormulaEl(series.FormulaReferences.BubbleSizes),
                     new XElement(C + "numCache",
                         new XElement(C + "formatCode", "General"),
                         new XElement(C + "ptCount", new XAttribute("val", series.BubbleSizes.Count)),
@@ -702,10 +702,10 @@ internal static class PptxChartWriter
 
         // Series name
         el.Add(new XElement(C + "tx",
-            new XElement(C + "strRef",
-                layout is { } nameLayout && index < nameLayout.ValueColumns.Count
-                    ? new XElement(C + "f", CellRef(nameLayout.ValueColumns[index], 1))
-                    : null,
+                new XElement(C + "strRef",
+                BuildFormulaEl(layout is { } nameLayout && index < nameLayout.ValueColumns.Count
+                    ? CellRef(nameLayout.ValueColumns[index], 1)
+                    : series.FormulaReferences.SeriesName),
                 new XElement(C + "strCache",
                     new XElement(C + "ptCount", new XAttribute("val", "1")),
                     new XElement(C + "pt",
@@ -732,8 +732,8 @@ internal static class PptxChartWriter
             el.Add(new XElement(C + "cat",
                 new XElement(C + "strRef",
                     layout is { } catLayout
-                        ? new XElement(C + "f", ColumnRangeRef(catLayout.CategoryColumn, lastRow))
-                        : null,
+                        ? BuildFormulaEl(ColumnRangeRef(catLayout.CategoryColumn, lastRow))
+                        : BuildFormulaEl(series.FormulaReferences.Category),
                     new XElement(C + "strCache",
                         new XElement(C + "ptCount",
                             new XAttribute("val", chart.Categories.Count)),
@@ -749,8 +749,8 @@ internal static class PptxChartWriter
             el.Add(new XElement(C + "val",
                 new XElement(C + "numRef",
                     layout is { } valLayout && index < valLayout.ValueColumns.Count
-                        ? new XElement(C + "f", ColumnRangeRef(valLayout.ValueColumns[index], lastRow))
-                        : null,
+                        ? BuildFormulaEl(ColumnRangeRef(valLayout.ValueColumns[index], lastRow))
+                        : BuildFormulaEl(series.FormulaReferences.Values),
                     new XElement(C + "numCache",
                         new XElement(C + "formatCode", "General"),
                         new XElement(C + "ptCount",
@@ -911,6 +911,11 @@ internal static class PptxChartWriter
     /// <summary>Builds a single-cell c:f range, e.g. "ChartData!$B$1" (series name header).</summary>
     private static string CellRef(int oneBasedColumn, int row) =>
         $"{RegeneratedSheetName}!${ColumnName(oneBasedColumn)}${row.ToString(CultureInfo.InvariantCulture)}";
+
+    private static XElement? BuildFormulaEl(string? formula) =>
+        string.IsNullOrWhiteSpace(formula)
+            ? null
+            : new XElement(C + "f", formula);
 
     /// <summary>Builds a column c:f range from row 2 through <paramref name="lastRow"/>, e.g. "ChartData!$B$2:$B$4".</summary>
     private static string ColumnRangeRef(int oneBasedColumn, int lastRow)

@@ -432,12 +432,18 @@ internal static class PptxChartReader
             // X values (c:xVal)
             var xValEl = serEl.Element(C + "xVal");
             if (xValEl is not null)
+            {
+                series.FormulaReferences.XValues = ReadFormula(xValEl.Element(C + "numRef"));
                 ReadValues(xValEl, series.XValues);
+            }
 
             // Y values (c:yVal)
             var yValEl = serEl.Element(C + "yVal");
             if (yValEl is not null)
+            {
+                series.FormulaReferences.YValues = ReadFormula(yValEl.Element(C + "numRef"));
                 ReadValues(yValEl, series.Values);
+            }
 
             ReadPointStyles(serEl, scheme, series);
 
@@ -480,17 +486,26 @@ internal static class PptxChartReader
             // X values (c:xVal)
             var xValEl = serEl.Element(C + "xVal");
             if (xValEl is not null)
+            {
+                series.FormulaReferences.XValues = ReadFormula(xValEl.Element(C + "numRef"));
                 ReadValues(xValEl, series.XValues);
+            }
 
             // Y values (c:yVal)
             var yValEl = serEl.Element(C + "yVal");
             if (yValEl is not null)
+            {
+                series.FormulaReferences.YValues = ReadFormula(yValEl.Element(C + "numRef"));
                 ReadValues(yValEl, series.Values);
+            }
 
             // Bubble sizes (c:bubbleSize)
             var sizeEl = serEl.Element(C + "bubbleSize");
             if (sizeEl is not null)
+            {
+                series.FormulaReferences.BubbleSizes = ReadFormula(sizeEl.Element(C + "numRef"));
                 ReadValues(sizeEl, series.BubbleSizes);
+            }
 
             ReadPointStyles(serEl, scheme, series);
 
@@ -518,6 +533,7 @@ internal static class PptxChartReader
         var txEl = serEl.Element(C + "tx");
         if (txEl is not null)
         {
+            series.FormulaReferences.SeriesName = ReadFormula(txEl.Element(C + "strRef"));
             var nameV = txEl.Element(C + "strRef")
                 ?.Element(C + "strCache")
                 ?.Elements(C + "pt").FirstOrDefault()
@@ -565,6 +581,7 @@ internal static class PptxChartReader
             var txEl = serEl.Element(C + "tx");
             if (txEl is not null)
             {
+                series.FormulaReferences.SeriesName = ReadFormula(txEl.Element(C + "strRef"));
                 var nameV = txEl.Element(C + "strRef")
                     ?.Element(C + "strCache")
                     ?.Elements(C + "pt").FirstOrDefault()
@@ -603,11 +620,17 @@ internal static class PptxChartReader
                 if (catEl is not null)
                     ReadCategories(catEl, shape.Categories);
             }
+            var seriesCatEl = serEl.Element(C + "cat") ?? serEl.Element(C + "xVal");
+            if (seriesCatEl is not null)
+                series.FormulaReferences.Category = ReadCategoryFormula(seriesCatEl);
 
             // Values (c:val or c:yVal)
             var valEl = serEl.Element(C + "val") ?? serEl.Element(C + "yVal");
             if (valEl is not null)
+            {
+                series.FormulaReferences.Values = ReadFormula(valEl.Element(C + "numRef"));
                 ReadValues(valEl, series.Values);
+            }
 
             // Per-point colors (c:dPt) — mainly used by pie/doughnut charts
             foreach (var dptEl in serEl.Elements(C + "dPt"))
@@ -785,6 +808,16 @@ internal static class PptxChartReader
             "x" => ChartMarkerSymbol.X,
             _ => null
         };
+
+    private static string? ReadCategoryFormula(XElement catEl) =>
+        ReadFormula(catEl.Element(C + "strRef")) ??
+        ReadFormula(catEl.Element(C + "numRef"));
+
+    private static string? ReadFormula(XElement? refEl)
+    {
+        var value = refEl?.Element(C + "f")?.Value;
+        return string.IsNullOrWhiteSpace(value) ? null : value;
+    }
 
     private static void ReadCategories(XElement catEl, List<string> categories)
     {
