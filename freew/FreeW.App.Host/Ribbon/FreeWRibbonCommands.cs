@@ -4437,7 +4437,7 @@ internal static class FreeWRibbonCommands
                 return null;
             if (!SourceManagementDialogPlanner.TryBuildCitationSource(entry, out var source, out _))
                 return null;
-            return editor.AddSource(source!.Tag, source.Author, source.Title, source.Year, source.Publisher);
+            return editor.AddSource(source!);
         }
     }
 
@@ -5561,17 +5561,17 @@ internal static class FreeWRibbonCommands
 
     }
 
-    // A small modal form capturing a source's tag/author/title/year/publisher. Returns the entry, or
-    // null if cancelled. When editing an existing source, type-specific fields not shown here are
-    // preserved by the caller.
+    // A small modal form capturing a Word-style source type plus the fields for that type. Returns the
+    // entry, or null if cancelled.
     private static class NewSourceDialog
     {
         public static SourceManagementSourceEntry? Ask(Window? owner, Source? source = null)
         {
-            var fieldPlans = SourceManagementDialogPlanner.BuildEntryFieldPlans(source);
-            var fields = fieldPlans.ToDictionary(
-                plan => plan.Field,
-                plan => NewField(plan.Text));
+            var typeChoices = SourceManagementDialogPlanner.BuildSourceTypeChoices();
+            var entry = SourceManagementDialogPlanner.ProjectEntry(source);
+            var fields = SourceManagementDialogPlanner
+                .BuildEntryFieldPlans(entry)
+                .ToDictionary(plan => plan.Field, plan => NewField(plan.Text));
 
             SourceManagementSourceEntry? result = null;
             var dialog = new Window
@@ -5586,12 +5586,48 @@ internal static class FreeWRibbonCommands
                 ShowInTaskbar = false
             };
 
+            var typeBox = new System.Windows.Controls.ComboBox
+            {
+                ItemsSource = typeChoices,
+                DisplayMemberPath = nameof(SourceManagementSourceTypeChoice.Label),
+                SelectedIndex = SourceManagementDialogPlanner.SourceTypeSelectedIndex(entry.Type),
+                MinWidth = 320,
+                Margin = new Thickness(0, 0, 0, 10)
+            };
+            var fieldPanel = new System.Windows.Controls.StackPanel();
+
+            SourceType SelectedType() =>
+                typeBox.SelectedItem is SourceManagementSourceTypeChoice choice
+                    ? choice.Type
+                    : SourceType.Book;
+
+            SourceManagementSourceEntry CurrentEntry() =>
+                SourceManagementDialogPlanner.CreateEntry(
+                    SelectedType(),
+                    fields.ToDictionary(pair => pair.Key, pair => (string?)pair.Value.Text));
+
+            void RefreshFields()
+            {
+                fieldPanel.Children.Clear();
+                foreach (var plan in SourceManagementDialogPlanner.BuildEntryFieldPlans(CurrentEntry()))
+                {
+                    if (!fields.TryGetValue(plan.Field, out var box))
+                    {
+                        box = NewField(plan.Text);
+                        fields[plan.Field] = box;
+                    }
+
+                    AddRow(fieldPanel, plan.Label, box);
+                }
+            }
+
+            typeBox.SelectionChanged += (_, _) => RefreshFields();
+
             var ok = new System.Windows.Controls.Button { Content = "OK", IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
             var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
             ok.Click += (_, _) =>
             {
-                result = SourceManagementDialogPlanner.CreateEntry(
-                    fields.ToDictionary(pair => pair.Key, pair => (string?)pair.Value.Text));
+                result = CurrentEntry();
                 dialog.DialogResult = true;
             };
 
@@ -5605,22 +5641,24 @@ internal static class FreeWRibbonCommands
             buttons.Children.Add(cancel);
 
             var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(16) };
-            foreach (var plan in fieldPlans)
-                AddRow(panel, plan.Label, fields[plan.Field]);
+            AddRow(panel, SourceManagementDialogPlanner.SourceTypeLabel, typeBox);
+            panel.Children.Add(fieldPanel);
             panel.Children.Add(buttons);
             dialog.Content = panel;
 
-            fields[SourceManagementSourceField.Author].Focus();
+            RefreshFields();
+            if (fields.TryGetValue(SourceManagementSourceField.Author, out var authorField))
+                authorField.Focus();
             return dialog.ShowDialog() == true ? result : null;
         }
 
         private static System.Windows.Controls.TextBox NewField(string? value = null) =>
             new() { Text = value ?? string.Empty, MinWidth = 320, Margin = new Thickness(0, 0, 0, 10) };
 
-        private static void AddRow(System.Windows.Controls.Panel panel, string label, System.Windows.Controls.TextBox box)
+        private static void AddRow(System.Windows.Controls.Panel panel, string label, System.Windows.Controls.Control control)
         {
             panel.Children.Add(new System.Windows.Controls.TextBlock { Text = label, Margin = new Thickness(0, 0, 0, 4) });
-            panel.Children.Add(box);
+            panel.Children.Add(control);
         }
     }
 
