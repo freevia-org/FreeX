@@ -1519,7 +1519,7 @@ public sealed partial class MainWindow
         try
         {
             RenderWindowWithCapturedTitleBarToPng(this, ParityCaptureWindowWidth, ParityCaptureWindowHeight, Path.Combine(outputDirectory, pngName));
-            return new ParitySurfaceResult(surfaceId, kind, pngName, Captured: true, "");
+            return ParityCaptureOutputGuard.ResultForPng(surfaceId, kind, outputDirectory, pngName);
         }
         catch (Exception ex)
         {
@@ -1537,7 +1537,7 @@ public sealed partial class MainWindow
                 ParityCaptureWindowWidth,
                 ParityCaptureWindowHeight,
                 Path.Combine(outputDirectory, pngName));
-            return new ParitySurfaceResult(surfaceId, ParitySurfaceKind.Backstage, pngName, Captured: true, "");
+            return ParityCaptureOutputGuard.ResultForPng(surfaceId, ParitySurfaceKind.Backstage, outputDirectory, pngName);
         }
         catch (Exception ex)
         {
@@ -1585,7 +1585,7 @@ public sealed partial class MainWindow
             var width = (int)Math.Ceiling(dialog.Bounds.Width > 0 ? dialog.Bounds.Width : dialog.Width);
             var height = (int)Math.Ceiling(dialog.Bounds.Height > 0 ? dialog.Bounds.Height : dialog.Height);
             RenderVisualToPng(dialog, width, height, Path.Combine(outputDirectory, pngName));
-            result = new ParitySurfaceResult(surfaceId, kind, pngName, Captured: true, "");
+            result = ParityCaptureOutputGuard.ResultForPng(surfaceId, kind, outputDirectory, pngName);
         }
         catch (Exception ex)
         {
@@ -1697,7 +1697,7 @@ public sealed partial class MainWindow
             var width = (int)Math.Ceiling(dialog.Bounds.Width > 0 ? dialog.Bounds.Width : dialog.Width);
             var height = (int)Math.Ceiling(dialog.Bounds.Height > 0 ? dialog.Bounds.Height : dialog.Height);
             RenderVisualToPng(dialog, width, height, Path.Combine(outputDirectory, pngName));
-            return new ParitySurfaceResult(surfaceId, kind, pngName, Captured: true, "");
+            return ParityCaptureOutputGuard.ResultForPng(surfaceId, kind, outputDirectory, pngName);
         }
         catch (Exception ex)
         {

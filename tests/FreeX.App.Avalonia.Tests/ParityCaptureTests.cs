@@ -20,6 +20,51 @@ public sealed class ParityCaptureTests
         HeadlessUnitTestSession.GetOrStartForAssembly(typeof(RibbonHeadlessApp).Assembly);
 
     [Fact]
+    public void ParityCaptureOutputGuard_RejectsMissingEmptyAndNonPngOutputs()
+    {
+        var outputDirectory = Path.Combine(
+            Path.GetTempPath(),
+            "freex-parity-output-guard-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            Directory.CreateDirectory(outputDirectory);
+
+            var missing = ParityCaptureOutputGuard.ResultForPng(
+                "dialog.Missing",
+                ParitySurfaceKind.Dialog,
+                outputDirectory,
+                "missing.png");
+            missing.Captured.Should().BeFalse();
+            missing.Note.Should().Contain("not written");
+
+            var emptyPath = Path.Combine(outputDirectory, "empty.png");
+            File.WriteAllBytes(emptyPath, []);
+            var empty = ParityCaptureOutputGuard.ResultForPng(
+                "dialog.Empty",
+                ParitySurfaceKind.Dialog,
+                outputDirectory,
+                "empty.png");
+            empty.Captured.Should().BeFalse();
+            empty.Note.Should().Contain("empty");
+
+            var textPath = Path.Combine(outputDirectory, "not-png.png");
+            File.WriteAllText(textPath, "not a png");
+            var nonPng = ParityCaptureOutputGuard.ResultForPng(
+                "dialog.NotPng",
+                ParitySurfaceKind.Dialog,
+                outputDirectory,
+                "not-png.png");
+            nonPng.Captured.Should().BeFalse();
+            nonPng.Note.Should().Contain("PNG signature");
+        }
+        finally
+        {
+            TryDeleteDirectory(outputDirectory);
+        }
+    }
+
+    [Fact]
     public async Task CaptureParitySurfaces_ProducesGridAndDialogPngs()
     {
         var outputDirectory = Path.Combine(
@@ -73,16 +118,14 @@ public sealed class ParityCaptureTests
                     .ToList();
                 capturedDialogs.Should().NotBeEmpty("at least one dialog should open and render headlessly");
                 foreach (var dialog in capturedDialogs)
-                    File.Exists(Path.Combine(outputDirectory, dialog.PngFileName))
-                        .Should().BeTrue($"{dialog.PngFileName} should be written for captured dialog {dialog.Id}");
+                    AssertCapturedPng(outputDirectory, dialog);
 
                 var backstageSurfaces = results
                     .Where(r => r.Id.StartsWith("backstage.", StringComparison.Ordinal))
                     .ToList();
                 backstageSurfaces.Should().OnlyContain(r => r.Captured, "File surfaces should render as full-window Backstage captures");
                 foreach (var backstage in backstageSurfaces)
-                    File.Exists(Path.Combine(outputDirectory, backstage.PngFileName))
-                        .Should().BeTrue($"{backstage.PngFileName} should be written for captured backstage pane {backstage.Id}");
+                    AssertCapturedPng(outputDirectory, backstage);
 
                 window.Close();
             }, CancellationToken.None);
@@ -91,6 +134,17 @@ public sealed class ParityCaptureTests
         {
             TryDeleteDirectory(outputDirectory);
         }
+    }
+
+    private static void AssertCapturedPng(string outputDirectory, ParitySurfaceResult result)
+    {
+        var pngPath = Path.Combine(outputDirectory, result.PngFileName);
+        File.Exists(pngPath)
+            .Should().BeTrue($"{result.PngFileName} should be written for captured surface {result.Id}");
+        new FileInfo(pngPath).Length
+            .Should().BeGreaterThan(0, $"{result.PngFileName} should not be empty for captured surface {result.Id}");
+        ParityCaptureOutputGuard.ValidatePngOutput(pngPath)
+            .Should().BeNull($"{result.PngFileName} should be valid PNG evidence for captured surface {result.Id}");
     }
 
     private static void TryDeleteDirectory(string path)
