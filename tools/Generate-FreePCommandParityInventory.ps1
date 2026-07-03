@@ -130,7 +130,7 @@ internal static class FreePCommandInventory
             SchemaVersion: 1,
             GeneratedBy: "tools/Generate-FreePCommandParityInventory.ps1",
             Source: "freep/FreeP.Ribbon.Definitions FreePRibbon.Build(FreePRibbonCapabilities.Wpf/Avalonia)",
-            Notes: "Raw missing counts preserve one-sided generated profile surface counts. Actionable missing counts exclude platform-only commands so Avalonia shell commands are not reported as WPF or Avalonia implementation gaps.",
+            Notes: "Raw missing counts preserve one-sided generated profile surface counts. Actionable missing counts exclude platform-only commands so Avalonia shell and backed profile commands are not reported as WPF or Avalonia implementation gaps.",
             Summary: new InventorySummary(
                 TotalCommands: commands.Length,
                 Both: commands.Count(command => command.Surface == "both"),
@@ -272,8 +272,8 @@ internal static class FreePCommandInventory
         if (wpfPresent && avaloniaPresent)
             return new Classification("shared", "Available in both generated FreeP ribbon profiles.");
 
-        if (avaloniaPresent && IsAvaloniaShellCommand(commandId))
-            return new Classification("platform-only", "Avalonia shell/file command exposed by its generated profile.");
+        if (avaloniaPresent && IsAvaloniaPlatformCommand(commandId))
+            return new Classification("platform-only", "Avalonia shell or backed profile command exposed by its generated profile.");
 
         if (wpfPresent && IsKnownDeferredWpfSlice(wpfLocations ?? Array.Empty<CommandLocation>()))
             return new Classification("known-deferred", "WPF-only profile slice not yet present in the generated Avalonia profile.");
@@ -284,10 +284,12 @@ internal static class FreePCommandInventory
         return new Classification("platform-only", "Command is present only in one generated platform profile.");
     }
 
-    private static bool IsAvaloniaShellCommand(string commandId) =>
+    private static bool IsAvaloniaPlatformCommand(string commandId) =>
         commandId.StartsWith("freep.file.", StringComparison.Ordinal) ||
         string.Equals(commandId, "freep.undo", StringComparison.Ordinal) ||
-        string.Equals(commandId, "freep.redo", StringComparison.Ordinal);
+        string.Equals(commandId, "freep.redo", StringComparison.Ordinal) ||
+        string.Equals(commandId, "freep.font-size", StringComparison.Ordinal) ||
+        string.Equals(commandId, "freep.font-color", StringComparison.Ordinal);
 
     private static bool IsKnownDeferredWpfSlice(IReadOnlyList<CommandLocation> locations) =>
         locations.Any(location => location.TabId is "design" or "transitions" or "animations");

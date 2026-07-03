@@ -42,6 +42,18 @@ internal static class FreePAvaloniaRibbonDefinition
                         Icon = new RibbonCommandIcon(RibbonCommandIconKind.Font),
                         Width = 140
                     });
+                    g.ComboBox("freep.font-size", FreePRibbonText.FontSizeLabel, c => c with
+                    {
+                        Items = FreePRibbonDefinitionData.FontSizes,
+                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.Size),
+                        Width = 64
+                    });
+                    g.ComboBox("freep.font-color", FreePRibbonText.FontColorLabel, c => c with
+                    {
+                        Items = FreePRibbonDefinitionData.FontColors,
+                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.FontColor, RibbonCommandIconAccent.Color),
+                        Width = 96
+                    });
                     g.IconToggle("freep.bold", FreePRibbonText.BoldLabel, RibbonCommandIconKind.Bold, FreePRibbonText.BoldKeyTip);
                     g.IconToggle("freep.italic", FreePRibbonText.ItalicLabel, RibbonCommandIconKind.Italic, FreePRibbonText.ItalicKeyTip);
                     g.IconToggle("freep.underline", FreePRibbonText.UnderlineLabel, RibbonCommandIconKind.Underline, FreePRibbonText.UnderlineKeyTip);

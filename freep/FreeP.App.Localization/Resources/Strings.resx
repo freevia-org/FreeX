@@ -247,6 +247,12 @@
   <data name="Ribbon_Command_FontFamily_Label" xml:space="preserve">
     <value>Font</value>
   </data>
+  <data name="Ribbon_Command_FontSize_Label" xml:space="preserve">
+    <value>Size</value>
+  </data>
+  <data name="Ribbon_Command_FontColor_Label" xml:space="preserve">
+    <value>Font Color</value>
+  </data>
   <data name="Ribbon_Command_Bold_Label" xml:space="preserve">
     <value>Bold</value>
   </data>
