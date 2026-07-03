@@ -1228,6 +1228,7 @@ public static class PptxPackageReader
             var chartPath = ResolveRelativeZipPath(GetDirectoryName(partPath), chartTarget);
             var chartShape = PptxChartReader.ReadChartPart(archive, chartPath, scheme);
             if (chartShape is null) return null;
+            chartShape.SourcePartPath = chartPath;
 
             return new SlideShape
             {

@@ -103,6 +103,8 @@ public sealed class PptxPackageRetentionTests
         "http://example.com/freep/relationships/slideMirror";
     private const string PackageRelType =
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/package";
+    private const string ChartContentType =
+        "application/vnd.openxmlformats-officedocument.drawingml.chart+xml";
     private const string SpreadsheetWorkbookContentType =
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
@@ -668,6 +670,87 @@ public sealed class PptxPackageRetentionTests
     }
 
     [Fact]
+    public void ReadWriteRead_NonSequentialChartParts_PreservesSourceWorkbookMappingWhenOneChartChanges()
+    {
+        using var source = BuildPptxWithNonSequentialChartWorkbookParts();
+        var loaded = PptxPackageReader.Read(source);
+        loaded.PackageSnapshot.Should().NotBeNull();
+        var chartShapes = loaded.Slides[0].Shapes.Where(shape => shape.Kind == SlideShapeKind.Chart).ToArray();
+        chartShapes.Should().HaveCount(2);
+        chartShapes[0].Chart!.SourcePartPath.Should().Be("ppt/charts/chart7.xml");
+        chartShapes[1].Chart!.SourcePartPath.Should().Be("ppt/charts/chart3.xml");
+
+        new ReplaceChartDataCommand(
+            slideIndex: 0,
+            shapeId: chartShapes[1].Id,
+            categories: ["Edited Q1", "Edited Q2"],
+            seriesNames: ["Edited Revenue"],
+            values: [new double?[] { 321, 654 }]).Apply(loaded);
+
+        using var saved = new MemoryStream();
+        PptxPackageWriter.Write(loaded, saved);
+        var savedBytes = saved.ToArray();
+
+        using (var archive = new ZipArchive(new MemoryStream(savedBytes), ZipArchiveMode.Read))
+        {
+            ReadText(archive, "ppt/embeddings/sourceWorkbookFirst.xlsx")
+                .Should()
+                .Be("first workbook bytes");
+            archive.GetEntry("ppt/embeddings/sourceWorkbookSecond.xlsx").Should().BeNull(
+                "the edited chart should drop its authored workbook even when the source chart part was not chart2.xml");
+            archive.GetEntry("ppt/embeddings/chartWorkbook2.xlsx").Should().NotBeNull();
+            archive.GetEntry("ppt/charts/chart7.xml").Should().BeNull("source chart part names are remapped to writer-owned chart indexes");
+            archive.GetEntry("ppt/charts/chart3.xml").Should().BeNull("source chart part names are remapped to writer-owned chart indexes");
+
+            var chart1Xml = LoadXml(archive, "ppt/charts/chart1.xml");
+            chart1Xml.Root!.Element(ChartNs + "externalData")!.Attribute(RelsDocNs + "id")!.Value
+                .Should().Be("rIdSourceWorkbookFirst");
+            var chart1Rels = LoadXml(archive, "ppt/charts/_rels/chart1.xml.rels");
+            Relationship(chart1Rels, PackageRelType, "../embeddings/sourceWorkbookFirst.xlsx").Should().NotBeNull();
+
+            var chart2Xml = LoadXml(archive, "ppt/charts/chart2.xml");
+            var chart2Text = chart2Xml.ToString(SaveOptions.DisableFormatting);
+            chart2Text.Should().Contain("Edited Q1");
+            chart2Text.Should().Contain("ChartData!$A$2:$A$3");
+            chart2Text.Should().Contain("ChartData!$B$1");
+            chart2Text.Should().Contain("ChartData!$B$2:$B$3");
+            chart2Xml.Root!.Element(ChartNs + "externalData")!.Attribute(RelsDocNs + "id")!.Value
+                .Should().Be("rIdWorkbook1");
+            var chart2Rels = LoadXml(archive, "ppt/charts/_rels/chart2.xml.rels");
+            Relationship(chart2Rels, PackageRelType, "../embeddings/chartWorkbook2.xlsx").Should().NotBeNull();
+
+            var contentTypes = LoadXml(archive, "[Content_Types].xml");
+            Override(contentTypes, "/ppt/embeddings/sourceWorkbookFirst.xlsx", SpreadsheetWorkbookContentType)
+                .Should().NotBeNull();
+            Override(contentTypes, "/ppt/embeddings/sourceWorkbookSecond.xlsx", SpreadsheetWorkbookContentType)
+                .Should().BeNull();
+            Override(contentTypes, "/ppt/embeddings/chartWorkbook2.xlsx", SpreadsheetWorkbookContentType)
+                .Should().NotBeNull();
+
+            using var workbookArchive = new ZipArchive(
+                new MemoryStream(ReadBytes(archive, "ppt/embeddings/chartWorkbook2.xlsx")),
+                ZipArchiveMode.Read);
+            var sheetXml = LoadXml(workbookArchive, "xl/worksheets/sheet1.xml")
+                .ToString(SaveOptions.DisableFormatting);
+            sheetXml.Should().Contain("Edited Revenue");
+            sheetXml.Should().Contain("Edited Q1");
+            sheetXml.Should().Contain("321");
+            sheetXml.Should().Contain("654");
+        }
+
+        using var savedRead = new MemoryStream(savedBytes);
+        var reloaded = PptxPackageReader.Read(savedRead);
+        var reloadedCharts = reloaded.Slides[0].Shapes
+            .Where(shape => shape.Kind == SlideShapeKind.Chart)
+            .Select(shape => shape.Chart!)
+            .ToArray();
+        reloadedCharts[0].Categories.Should().Equal("First Old Q1", "First Old Q2");
+        reloadedCharts[0].Series[0].Values.Should().Equal(11, 22);
+        reloadedCharts[1].Categories.Should().Equal("Edited Q1", "Edited Q2");
+        reloadedCharts[1].Series[0].Values.Should().Equal(321, 654);
+    }
+
+    [Fact]
     public void ReadWriteRead_ChartDataTableSettings_RetainsModeledChartPackageSemantics()
     {
         using var source = BuildPptxWithChartWorkbookAndUnrelatedPackageData();
@@ -1220,6 +1303,57 @@ public sealed class PptxPackageRetentionTests
         return package;
     }
 
+    private static MemoryStream BuildPptxWithNonSequentialChartWorkbookParts()
+    {
+        var presentation = new Presentation();
+        var slide = new Slide();
+        slide.Shapes.Add(CreateWorkbookChartShape(201, "First", 11, 22, 914400));
+        slide.Shapes.Add(CreateWorkbookChartShape(202, "Second", 33, 44, 4572000));
+        presentation.Slides.Add(slide);
+
+        using var basePackage = new MemoryStream();
+        PptxPackageWriter.Write(presentation, basePackage);
+
+        var package = new MemoryStream();
+        package.Write(basePackage.ToArray());
+        package.Position = 0;
+        using (var archive = new ZipArchive(package, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            MoveEntry(archive, "ppt/charts/chart1.xml", "ppt/charts/chart7.xml");
+            MoveEntry(archive, "ppt/charts/chart2.xml", "ppt/charts/chart3.xml");
+
+            var slideRels = LoadXml(archive, "ppt/slides/_rels/slide1.xml.rels");
+            SetRelationshipTarget(slideRels, "rIdChart1", "../charts/chart7.xml");
+            SetRelationshipTarget(slideRels, "rIdChart2", "../charts/chart3.xml");
+            WriteXml(archive, "ppt/slides/_rels/slide1.xml.rels", slideRels);
+
+            AddSourceWorkbookSidecar(
+                archive,
+                chartPath: "ppt/charts/chart7.xml",
+                workbookName: "sourceWorkbookFirst.xlsx",
+                relId: "rIdSourceWorkbookFirst",
+                workbookPayload: "first workbook bytes");
+            AddSourceWorkbookSidecar(
+                archive,
+                chartPath: "ppt/charts/chart3.xml",
+                workbookName: "sourceWorkbookSecond.xlsx",
+                relId: "rIdSourceWorkbookSecond",
+                workbookPayload: "second workbook bytes");
+
+            var contentTypes = LoadXml(archive, "[Content_Types].xml");
+            RemoveOverride(contentTypes, "/ppt/charts/chart1.xml");
+            RemoveOverride(contentTypes, "/ppt/charts/chart2.xml");
+            AddOverride(contentTypes, "/ppt/charts/chart7.xml", ChartContentType);
+            AddOverride(contentTypes, "/ppt/charts/chart3.xml", ChartContentType);
+            AddOverride(contentTypes, "/ppt/embeddings/sourceWorkbookFirst.xlsx", SpreadsheetWorkbookContentType);
+            AddOverride(contentTypes, "/ppt/embeddings/sourceWorkbookSecond.xlsx", SpreadsheetWorkbookContentType);
+            WriteXml(archive, "[Content_Types].xml", contentTypes);
+        }
+
+        package.Position = 0;
+        return package;
+    }
+
     private static SlideShape CreateWorkbookChartShape(
         uint shapeId,
         string name,
@@ -1265,6 +1399,28 @@ public sealed class PptxPackageRetentionTests
             new XElement(RelsNs + "Relationships"));
         AddRelationship(chartRels, relId, PackageRelType, $"../embeddings/{workbookName}");
         WriteXml(archive, $"ppt/charts/_rels/chart{chartIndex}.xml.rels", chartRels);
+        WriteBytes(archive, $"ppt/embeddings/{workbookName}", Encoding.UTF8.GetBytes(workbookPayload));
+    }
+
+    private static void AddSourceWorkbookSidecar(
+        ZipArchive archive,
+        string chartPath,
+        string workbookName,
+        string relId,
+        string workbookPayload)
+    {
+        var chartXml = LoadXml(archive, chartPath);
+        chartXml.Root!.Element(ChartNs + "externalData")?.Remove();
+        chartXml.Root.Add(new XElement(ChartNs + "externalData",
+            new XAttribute(RelsDocNs + "id", relId),
+            new XElement(ChartNs + "autoUpdate", new XAttribute("val", "0"))));
+        WriteXml(archive, chartPath, chartXml);
+
+        var chartRels = new XDocument(
+            new XDeclaration("1.0", "UTF-8", "yes"),
+            new XElement(RelsNs + "Relationships"));
+        AddRelationship(chartRels, relId, PackageRelType, $"../embeddings/{workbookName}");
+        WriteXml(archive, OpcPathHelper.GetRelationshipPartPath(chartPath), chartRels);
         WriteBytes(archive, $"ppt/embeddings/{workbookName}", Encoding.UTF8.GetBytes(workbookPayload));
     }
 
@@ -1825,6 +1981,25 @@ public sealed class PptxPackageRetentionTests
             new XAttribute("ContentType", contentType)));
     }
 
+    private static void RemoveOverride(XDocument doc, string partName)
+    {
+        doc.Root!
+            .Elements(ContentTypesNs + "Override")
+            .Where(element => string.Equals(
+                element.Attribute("PartName")?.Value,
+                partName,
+                StringComparison.OrdinalIgnoreCase))
+            .Remove();
+    }
+
+    private static void SetRelationshipTarget(XDocument doc, string id, string target)
+    {
+        var relationship = doc.Root!
+            .Elements(RelsNs + "Relationship")
+            .Single(element => element.Attribute("Id")?.Value == id);
+        relationship.SetAttributeValue("Target", target);
+    }
+
     private static void AddDefault(XDocument doc, string extension, string contentType)
     {
         doc.Root!.Add(new XElement(ContentTypesNs + "Default",
@@ -1870,5 +2045,12 @@ public sealed class PptxPackageRetentionTests
         entry = archive.CreateEntry(path, CompressionLevel.Optimal);
         using var stream = entry.Open();
         stream.Write(bytes, 0, bytes.Length);
+    }
+
+    private static void MoveEntry(ZipArchive archive, string sourcePath, string destinationPath)
+    {
+        var bytes = ReadBytes(archive, sourcePath);
+        archive.GetEntry(sourcePath)!.Delete();
+        WriteBytes(archive, destinationPath, bytes);
     }
 }
