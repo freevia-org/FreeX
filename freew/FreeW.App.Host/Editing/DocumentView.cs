@@ -2269,10 +2269,14 @@ public sealed class DocumentView : RichTextBox
     public void ToggleSelectedChartLegend()
     {
         CommitToModel();
-        var chart = SelectedChartLocation().Chart;
+        var location = SelectedChartLocation();
+        var chart = location.Chart;
         if (chart is null)
             return;
-        chart.ShowLegend = !chart.ShowLegend;
+        var state = ChartSmartArtVisualPlanner.BuildChartElementCommandState(chart);
+        if (!state.CanToggleLegend)
+            return;
+        _commands.Execute(new SetChartLegendCommand(location.BlockIndex, location.RunIndex, !state.IsLegendVisible));
         Render();
     }
 

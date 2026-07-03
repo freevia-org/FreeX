@@ -999,6 +999,10 @@ internal static class FreeWAvaloniaRibbonDefinition
                         g.Dropdown("freew.chart-style",  "Chart Styles",  BuildChartStyleMenu());
                         g.Dropdown("freew.chart-colors", "Change Colors", BuildChartColorsMenu());
                     });
+                    tab.Group("chart-elements", "Chart Elements", null, 80, g =>
+                    {
+                        g.Toggle("freew.chart-toggle-legend", "Legend");
+                    });
                 })
             // ── AV-CHARTTAB: Chart Format contextual tab — shared Arrange/Size (reuse shape commands) ──
             .ContextualTab("chart-format", "Chart Format",

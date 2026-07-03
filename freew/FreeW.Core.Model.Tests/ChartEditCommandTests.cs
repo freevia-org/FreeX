@@ -1,0 +1,66 @@
+namespace FreeW.Core.Model.Tests;
+
+public sealed class ChartEditCommandTests
+{
+    private sealed class Context(TextDocument document) : IDocumentCommandContext
+    {
+        public TextDocument Document => document;
+    }
+
+    private static (TextDocument Doc, DocumentCommandBus Bus, Chart Chart) NewChartDoc(bool showLegend = false, int quickLayoutId = 0)
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var chart = Chart.Create(ChartKind.Column, ["Q1", "Q2"], [1.0, 2.0], seriesName: "Sales");
+        chart.ShowLegend = showLegend;
+        chart.QuickLayoutId = quickLayoutId;
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromChart(chart));
+        doc.Blocks.Add(paragraph);
+        return (doc, new DocumentCommandBus(new Context(doc)), chart);
+    }
+
+    [Fact]
+    public void SetChartLegendCommand_AppliesAndRevertsLegendState()
+    {
+        var (_, bus, chart) = NewChartDoc();
+
+        bus.Execute(new SetChartLegendCommand(0, 0, showLegend: true));
+
+        chart.ShowLegend.Should().BeTrue();
+
+        bus.Undo().Should().BeTrue();
+        chart.ShowLegend.Should().BeFalse();
+
+        bus.Redo().Should().BeTrue();
+        chart.ShowLegend.Should().BeTrue();
+    }
+
+    [Fact]
+    public void SetChartLegendCommand_ClearsQuickLayoutOverrideAndRestoresItOnUndo()
+    {
+        var (_, bus, chart) = NewChartDoc(showLegend: false, quickLayoutId: 3);
+
+        bus.Execute(new SetChartLegendCommand(0, 0, showLegend: false));
+
+        chart.ShowLegend.Should().BeFalse();
+        chart.QuickLayoutId.Should().Be(0);
+
+        bus.Undo().Should().BeTrue();
+        chart.ShowLegend.Should().BeFalse();
+        chart.QuickLayoutId.Should().Be(3);
+    }
+
+    [Fact]
+    public void SetChartLegendCommand_NoopsWhenRunHasNoChart()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("plain"));
+        var bus = new DocumentCommandBus(new Context(doc));
+
+        bus.Execute(new SetChartLegendCommand(0, 0, showLegend: true));
+
+        ((Paragraph)doc.Blocks[0]).Runs[0].Chart.Should().BeNull();
+    }
+}

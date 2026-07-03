@@ -46,6 +46,34 @@ public sealed class ChartSmartArtVisualPlannerTests
     }
 
     [Fact]
+    public void ChartPlan_MultiSeriesLegendFollowsExplicitModelFlag()
+    {
+        var chart = Chart.Create(ChartKind.Column, ["A", "B"], [1.0, 2.0], seriesName: "Series 1");
+        chart.Series.Add(new ChartSeries("Series 2", [3.0, 4.0]));
+
+        ChartSmartArtVisualPlanner.BuildChartPlan(chart).ShowLegend.Should().BeFalse();
+
+        chart.ShowLegend = true;
+
+        ChartSmartArtVisualPlanner.BuildChartPlan(chart).ShowLegend.Should().BeTrue();
+    }
+
+    [Fact]
+    public void ChartElementCommandState_ReportsLegendVisibilityAndToggleAvailability()
+    {
+        var chart = Chart.Create(ChartKind.Column, ["A"], [1.0], seriesName: "Series 1");
+        chart.ShowLegend = true;
+
+        var state = ChartSmartArtVisualPlanner.BuildChartElementCommandState(chart);
+
+        state.CanToggleLegend.Should().BeTrue();
+        state.IsLegendVisible.Should().BeTrue();
+        state.CanEditAxisTitles.Should().BeTrue();
+        state.HasChartTitle.Should().BeFalse();
+        state.HasAxisTitles.Should().BeFalse();
+    }
+
+    [Fact]
     public void ChartPlan_ScatterUsesMarkerOnlyGeometry()
     {
         var chart = Chart.Create(ChartKind.Scatter, ["155", "160"], [52.0, 58.0]);
