@@ -1671,6 +1671,8 @@ public sealed class VisualEvidencePlannerTests
             var triageItem = doc.RootElement.GetProperty("wordBaselineTriage")[0];
             triageItem.GetProperty("status").GetString()
                 .Should().Be("word-baseline-unavailable");
+            triageItem.GetProperty("triageStatus").GetString()
+                .Should().Be("word-unavailable");
             triageItem.GetProperty("note").GetString()
                 .Should().Contain("Word.Application");
             var baselineComparison = doc.RootElement.GetProperty("baselineComparisons")[0];
@@ -1683,6 +1685,7 @@ public sealed class VisualEvidencePlannerTests
             markdown.Should().Contain("## Word Baseline Triage");
             markdown.Should().Contain("Word baseline unavailable: 1 row(s). Trust remains passed for unavailable rows.");
             markdown.Should().Contain("Unavailable reason(s): COM ProgID 'Word.Application' is not registered");
+            markdown.Should().Contain("Triage counts: word-unavailable=1");
             markdown.Should().Contain("Status counts: word-baseline-unavailable=1");
             markdown.Should().Contain("COM ProgID 'Word.Application' is not registered");
             markdown.Should().Contain("f2-hf-basic/f2-hf-basic_p1.png");
@@ -1809,12 +1812,23 @@ public sealed class VisualEvidencePlannerTests
                     FreeWVisualBaselineComparisonPlanner.DecodeFailedStatus,
                     FreeWVisualBaselineComparisonPlanner.MissingBaselineStatus
                 ]);
+            withBaseline.WordBaselineTriage.Select(item => item.TriageStatus).Take(3)
+                .Should().Equal([
+                    "needs-render-review",
+                    "needs-baseline",
+                    "needs-decode-fix"
+                ]);
             withBaseline.WordBaselineTriage.Last().Status.Should().Be(
                 FreeWVisualBaselineComparisonPlanner.SkippedStatus);
 
             var markdown = FreeWVisualEvidenceManifestNormalizer.ToMarkdown(withBaseline);
+            markdown.Should().Contain("Triage counts:");
+            markdown.Should().Contain("needs-render-review=1");
+            markdown.Should().Contain("needs-decode-fix=1");
+            markdown.Should().Contain("needs-baseline=1");
+            markdown.Should().Contain("not-in-scope=1");
             markdown.Should().Contain("Skipped rows hidden from triage table: 1.");
-            markdown.Should().NotContain("| avalonia-page-layout-shot | page-composition-web-layout | p1/freew_web_layout.png | skipped |");
+            markdown.Should().NotContain("| avalonia-page-layout-shot | page-composition-web-layout | p1/freew_web_layout.png | not-in-scope | skipped |");
         }
         finally
         {
@@ -1926,10 +1940,18 @@ public sealed class VisualEvidencePlannerTests
                 0.75,
                 0.25
             ]);
+            withBaseline.WordBaselineTriage.Select(item => item.ChangedPixels).Should().Equal([
+                3,
+                1
+            ]);
+            withBaseline.WordBaselineTriage.Select(item => item.ComparedPixels).Should().Equal([
+                4,
+                4
+            ]);
 
             var markdown = FreeWVisualEvidenceManifestNormalizer.ToMarkdown(withBaseline);
-            markdown.Should().Contain("| avalonia-page-layout-shot | table-layout-complex | p1/table-layout-complex_p1.png | passed | 75.000 % |");
-            markdown.Should().Contain("| wpf-fidelity-render | table-layout-complex | p1/table-layout-complex_p1.png | passed | 25.000 % |");
+            markdown.Should().Contain("| avalonia-page-layout-shot | table-layout-complex | p1/table-layout-complex_p1.png | within-tolerance | passed | 3/4 (75.000 %) |");
+            markdown.Should().Contain("| wpf-fidelity-render | table-layout-complex | p1/table-layout-complex_p1.png | within-tolerance | passed | 1/4 (25.000 %) |");
             markdown.IndexOf("## Word Baseline Triage", StringComparison.Ordinal)
                 .Should().BeLessThan(markdown.IndexOf("## Word Baseline Comparison", StringComparison.Ordinal));
         }
@@ -1993,14 +2015,19 @@ public sealed class VisualEvidencePlannerTests
 
             var json = FreeWVisualEvidenceManifestNormalizer.ToJson(withBaseline);
             using var doc = JsonDocument.Parse(json);
-            doc.RootElement.GetProperty("schemaVersion").GetInt32().Should().Be(10);
+            doc.RootElement.GetProperty("schemaVersion").GetInt32().Should().Be(11);
             var triageItem = doc.RootElement.GetProperty("wordBaselineTriage")[0];
             triageItem.GetProperty("status").GetString().Should().Be("passed");
+            triageItem.GetProperty("triageStatus").GetString().Should().Be("within-tolerance");
             triageItem.GetProperty("baselineId").GetString()
                 .Should().Be("f2-hf-basic/p1/f2-hf-basic_p1.png");
             triageItem.GetProperty("baselinePathSummary").GetString()
                 .Should().Be("f2-hf-basic/f2-hf-basic_p1.png");
+            triageItem.GetProperty("changedPixels").GetInt64().Should().Be(0);
+            triageItem.GetProperty("comparedPixels").GetInt64().Should().Be(4);
             triageItem.GetProperty("changedPixelRatio").GetDouble().Should().Be(0);
+            triageItem.GetProperty("toleranceSummary").GetString()
+                .Should().Contain("word-png-default");
             var baselineComparison = doc.RootElement.GetProperty("baselineComparisons")[0];
             baselineComparison.GetProperty("status").GetString().Should().Be("passed");
             baselineComparison.GetProperty("baselineId").GetString()
@@ -2017,8 +2044,9 @@ public sealed class VisualEvidencePlannerTests
             var markdown = FreeWVisualEvidenceManifestNormalizer.ToMarkdown(withBaseline);
             markdown.IndexOf("## Word Baseline Triage", StringComparison.Ordinal)
                 .Should().BeLessThan(markdown.IndexOf("## Word Baseline Comparison", StringComparison.Ordinal));
-            markdown.Should().Contain("| wpf-fidelity-render | f2-hf-basic | p1/f2-hf-basic_p1.png | passed | 0.000 % | 0/0 | f2-hf-basic/f2-hf-basic_p1.png | - |");
+            markdown.Should().Contain("| wpf-fidelity-render | f2-hf-basic | p1/f2-hf-basic_p1.png | within-tolerance | passed | 0/4 (0.000 %) | 0/0 | word-png-default: changed <= 2.000 %, mean <= 3/3, pixel delta > 8, dimensions must match | f2-hf-basic/f2-hf-basic_p1.png | - |");
             markdown.Should().Contain("Word Baseline Comparison");
+            markdown.Should().Contain("Triage counts: within-tolerance=1");
             markdown.Should().Contain("Status counts: passed=1");
             markdown.Should().Contain("f2-hf-basic/p1/f2-hf-basic_p1.png");
             markdown.Should().Contain("word-png-default");
