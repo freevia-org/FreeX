@@ -203,7 +203,7 @@ public sealed class SlideSizeDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             return;
         }
 
-        _editor.SetSlideSize(result.CxEmu, result.CyEmu);
+        SlideSizeDialogPlanner.TryApplyResult(_editor, result);
         DialogResult = true;
         Close();
     }

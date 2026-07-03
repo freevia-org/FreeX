@@ -1,5 +1,6 @@
 using System.Globalization;
 using FreeP.App.Compositor;
+using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor.Tests;
 
@@ -272,5 +273,41 @@ public sealed class SlideSizeDialogPlannerTests
         result.Validation!.Caption.Should().Be(SlideSizeDialogPlanner.InvalidSizeCaption);
         result.Validation.Message.Should().Be(SlideSizeDialogPlanner.MinimumSizeMessage);
         result.Validation.FocusField.Should().Be(SlideSizeDialogField.Width);
+    }
+
+    [Fact]
+    public void TryApplyResult_ValidResult_UpdatesEditorSlideSize()
+    {
+        var pres = Presentation.CreateEmpty();
+        var editor = new EditingSession(pres, new PresentationCommandBus(pres));
+        var result = SlideSizeDialogPlanner.BuildOkResult(
+            "11",
+            "6.25",
+            SlideSizeDialogUnit.Inches,
+            Invariant);
+
+        SlideSizeDialogPlanner.TryApplyResult(editor, result).Should().BeTrue();
+
+        pres.SlideSizeCxEmu.Should().Be(10_058_400L);
+        pres.SlideSizeCyEmu.Should().Be(5_715_000L);
+    }
+
+    [Fact]
+    public void TryApplyResult_InvalidResult_DoesNotUpdateEditorSlideSize()
+    {
+        var pres = Presentation.CreateEmpty();
+        var editor = new EditingSession(pres, new PresentationCommandBus(pres));
+        var originalCx = pres.SlideSizeCxEmu;
+        var originalCy = pres.SlideSizeCyEmu;
+        var result = SlideSizeDialogPlanner.BuildOkResult(
+            "0.25",
+            "6.25",
+            SlideSizeDialogUnit.Inches,
+            Invariant);
+
+        SlideSizeDialogPlanner.TryApplyResult(editor, result).Should().BeFalse();
+
+        pres.SlideSizeCxEmu.Should().Be(originalCx);
+        pres.SlideSizeCyEmu.Should().Be(originalCy);
     }
 }

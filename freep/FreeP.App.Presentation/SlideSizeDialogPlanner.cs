@@ -211,6 +211,21 @@ public static class SlideSizeDialogPlanner
         return new(true, parse.CxEmu, parse.CyEmu, null);
     }
 
+    public static bool TryApplyResult(
+        EditingSession editor,
+        SlideSizeDialogResultPlan result)
+    {
+        ArgumentNullException.ThrowIfNull(editor);
+
+        if (!result.ShouldApply)
+        {
+            return false;
+        }
+
+        editor.SetSlideSize(result.CxEmu, result.CyEmu);
+        return true;
+    }
+
     public static SlideSizeDialogDisplayState FormatSize(
         long cxEmu,
         long cyEmu,

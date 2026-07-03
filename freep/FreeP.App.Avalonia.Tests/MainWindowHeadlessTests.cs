@@ -992,6 +992,8 @@ public sealed class MainWindowHeadlessTests
         var foundTheme = false;
         var foundSlideSize = false;
         var foundCustom = false;
+        PresentationDesignCommandPlan? customPlan = null;
+        SlideSizeDialogInitialState? customInitialState = null;
         string? themeName = null;
         long slideWidth = 0;
         long slideHeight = 0;
@@ -1011,6 +1013,8 @@ public sealed class MainWindowHeadlessTests
             themeName = window.Editor.Presentation.Theme.Name;
             slideWidth = window.Editor.Presentation.SlideSizeCxEmu;
             slideHeight = window.Editor.Presentation.SlideSizeCyEmu;
+            customPlan = window.LastCustomSlideSizeRequestPlan;
+            customInitialState = window.LastCustomSlideSizeInitialState;
         });
 
         if (!ran) return;
@@ -1020,6 +1024,69 @@ public sealed class MainWindowHeadlessTests
         themeName.Should().Be("Berlin");
         slideWidth.Should().Be(PresentationDesignCommandPlanner.SlideSizeStandard4x3CxEmu);
         slideHeight.Should().Be(PresentationDesignCommandPlanner.SlideSizeStandardCyEmu);
+        customPlan.Should().NotBeNull();
+        customPlan!.Intent.Should().Be(PresentationDesignCommandIntentKind.RequestCustomSlideSize);
+        customInitialState.Should().NotBeNull();
+        customInitialState!.Preset.Should().Be(SlideSizeDialogPreset.Standard43);
+    }
+
+    [Fact]
+    public async Task Ribbon_CustomSlideSize_opens_visible_pane_and_applies_shared_result()
+    {
+        var found = false;
+        var opened = false;
+        var initialPreset = SlideSizeDialogPreset.Custom;
+        string? initialWidth = null;
+        string? initialHeight = null;
+        var invalidApplied = true;
+        string? validation = null;
+        var visibleAfterInvalid = false;
+        var validApplied = false;
+        var visibleAfterApply = true;
+        long slideWidth = 0;
+        long slideHeight = 0;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var registry = window.BuildCommandRegistry();
+            found = registry.TryGet("freep.slide-size-custom", out var customSlideSize);
+
+            customSlideSize!.Execute(RibbonCommandContext.Empty);
+            opened = window.IsCustomSlideSizePaneVisible;
+            initialPreset = window.LastCustomSlideSizeInitialState!.Preset;
+            initialWidth = window.CustomSlideSizeWidthText;
+            initialHeight = window.CustomSlideSizeHeightText;
+
+            invalidApplied = window.ApplyCustomSlideSizeForTests(
+                "0.25",
+                "7.5",
+                SlideSizeDialogUnit.Inches);
+            validation = window.CustomSlideSizeValidationText;
+            visibleAfterInvalid = window.IsCustomSlideSizePaneVisible;
+
+            validApplied = window.ApplyCustomSlideSizeForTests(
+                "11",
+                "6.25",
+                SlideSizeDialogUnit.Inches);
+            visibleAfterApply = window.IsCustomSlideSizePaneVisible;
+            slideWidth = window.Editor.Presentation.SlideSizeCxEmu;
+            slideHeight = window.Editor.Presentation.SlideSizeCyEmu;
+        });
+
+        if (!ran) return;
+        found.Should().BeTrue("custom slide-size must be registered through the Avalonia registry");
+        opened.Should().BeTrue("the custom command should open a visible Avalonia slide-size state");
+        initialPreset.Should().Be(SlideSizeDialogPreset.Widescreen169);
+        initialWidth.Should().Be("13.333");
+        initialHeight.Should().Be("7.500");
+        invalidApplied.Should().BeFalse("shared planner validation should block invalid sizes");
+        validation.Should().Be(SlideSizeDialogPlanner.MinimumSizeMessage);
+        visibleAfterInvalid.Should().BeTrue("invalid apply should keep the pane open for correction");
+        validApplied.Should().BeTrue();
+        visibleAfterApply.Should().BeFalse();
+        slideWidth.Should().Be(10_058_400L);
+        slideHeight.Should().Be(5_715_000L);
     }
 
     [Fact]

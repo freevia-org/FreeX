@@ -101,6 +101,16 @@ public sealed class MainWindow : Window
     private StackPanel _layoutPickerPanel = null!;
     private Border _tablePickerHost = null!;
     private WrapPanel _tablePickerPanel = null!;
+    private Border _slideSizePaneHost = null!;
+    private ComboBox _slideSizePresetCombo = null!;
+    private ComboBox _slideSizeUnitCombo = null!;
+    private TextBox _slideSizeWidthBox = null!;
+    private TextBox _slideSizeHeightBox = null!;
+    private TextBlock _slideSizeWidthUnitLabel = null!;
+    private TextBlock _slideSizeHeightUnitLabel = null!;
+    private TextBlock _slideSizeValidationText = null!;
+    private bool _slideSizePaneRefreshing;
+    private SlideSizeDialogUnit _slideSizeUnit = SlideSizeDialogUnit.Inches;
     private Border _reviewCommentsPaneHost = null!;
     private StackPanel _reviewCommentsPanePanel = null!;
     private int? _selectedCommentIndex;
@@ -191,6 +201,9 @@ public sealed class MainWindow : Window
     internal PresentationProofingExecutionPlan? LastProofingExecutionPlan { get; private set; }
     internal PresentationProofingPanePlan? LastProofingPanePlan { get; private set; }
     internal AnimationPaneTimelinePlan? LastAnimationPaneTimelinePlan { get; private set; }
+    internal PresentationDesignCommandPlan? LastCustomSlideSizeRequestPlan { get; private set; }
+    internal SlideSizeDialogInitialState? LastCustomSlideSizeInitialState { get; private set; }
+    internal SlideSizeDialogResultPlan? LastCustomSlideSizeResultPlan { get; private set; }
     internal PresentationDesignCommandPlan? LastLayoutRequestPlan { get; private set; }
     internal PresentationHandoutLayoutPlan? LastHandoutLayoutPlan { get; private set; }
     internal PresentationNotesPagePreviewPlan? LastNotesPagePreviewPlan { get; private set; }
@@ -203,6 +216,10 @@ public sealed class MainWindow : Window
     internal TableInsertionPickerPlan? LastTablePickerPlan { get; private set; }
     internal bool IsLayoutPickerVisible => _layoutPickerHost?.IsVisible == true;
     internal bool IsTablePickerVisible => _tablePickerHost?.IsVisible == true;
+    internal bool IsCustomSlideSizePaneVisible => _slideSizePaneHost?.IsVisible == true;
+    internal string CustomSlideSizeWidthText => _slideSizeWidthBox?.Text ?? string.Empty;
+    internal string CustomSlideSizeHeightText => _slideSizeHeightBox?.Text ?? string.Empty;
+    internal string CustomSlideSizeValidationText => _slideSizeValidationText?.Text ?? string.Empty;
     internal int TablePickerChoiceButtonCount => LastTablePickerPlan?.Choices.Count ?? 0;
     internal int TablePickerDefaultChoiceCount => LastTablePickerPlan?.Choices.Count(choice => choice.IsDefault) ?? 0;
     internal int LayoutPickerChoiceButtonCount => LastLayoutPickerPlan?.Choices.Count ?? 0;
@@ -506,6 +523,7 @@ public sealed class MainWindow : Window
         _readingOrderPaneHost = BuildReadingOrderPaneHost();
         _proofingPaneHost = BuildProofingPaneHost();
         _animationPaneHost = BuildAnimationPaneHost();
+        _slideSizePaneHost = BuildSlideSizePaneHost();
         Grid.SetRow(canvasHost, 0);
         Grid.SetRow(_layoutPickerHost, 1);
         Grid.SetRow(_tablePickerHost, 2);
@@ -545,15 +563,18 @@ public sealed class MainWindow : Window
         body.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         body.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         body.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        body.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         Grid.SetColumn(slidePaneHost, 0);
         Grid.SetColumn(rightGrid,      1);
-        Grid.SetColumn(_accessibilityCheckerPaneHost, 2);
-        Grid.SetColumn(_altTextPaneHost, 3);
-        Grid.SetColumn(_readingOrderPaneHost, 4);
-        Grid.SetColumn(_proofingPaneHost, 5);
-        Grid.SetColumn(_animationPaneHost, 6);
+        Grid.SetColumn(_slideSizePaneHost, 2);
+        Grid.SetColumn(_accessibilityCheckerPaneHost, 3);
+        Grid.SetColumn(_altTextPaneHost, 4);
+        Grid.SetColumn(_readingOrderPaneHost, 5);
+        Grid.SetColumn(_proofingPaneHost, 6);
+        Grid.SetColumn(_animationPaneHost, 7);
         body.Children.Add(slidePaneHost);
         body.Children.Add(rightGrid);
+        body.Children.Add(_slideSizePaneHost);
         body.Children.Add(_accessibilityCheckerPaneHost);
         body.Children.Add(_altTextPaneHost);
         body.Children.Add(_readingOrderPaneHost);
@@ -647,6 +668,123 @@ public sealed class MainWindow : Window
             Child = panel,
         };
     }
+
+    private Border BuildSlideSizePaneHost()
+    {
+        _slideSizePresetCombo = new ComboBox
+        {
+            Margin = new Thickness(12, 4, 12, 8),
+            Items =
+            {
+                "Standard (4:3)",
+                "Widescreen (16:9)",
+                "Custom",
+            },
+        };
+        _slideSizePresetCombo.SelectionChanged += OnSlideSizePresetChanged;
+
+        _slideSizeUnitCombo = new ComboBox
+        {
+            Margin = new Thickness(12, 4, 12, 8),
+            Items =
+            {
+                "Inches",
+                "Centimeters",
+            },
+        };
+        _slideSizeUnitCombo.SelectionChanged += OnSlideSizeUnitChanged;
+
+        _slideSizeWidthBox = BuildSlideSizeTextBox();
+        _slideSizeHeightBox = BuildSlideSizeTextBox();
+        _slideSizeWidthUnitLabel = BuildSlideSizeUnitLabel();
+        _slideSizeHeightUnitLabel = BuildSlideSizeUnitLabel();
+        _slideSizeValidationText = new TextBlock
+        {
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = new SolidColorBrush(Color.FromRgb(0x9B, 0x1C, 0x1C)),
+            Margin = new Thickness(12, 2, 12, 8),
+        };
+
+        var apply = new Button
+        {
+            Content = "Apply",
+            MinWidth = 78,
+            Margin = new Thickness(0, 0, 8, 0),
+        };
+        apply.Click += (_, _) => ApplyCustomSlideSize();
+
+        var close = new Button
+        {
+            Content = "Close",
+            MinWidth = 78,
+        };
+        close.Click += (_, _) => HideCustomSlideSizePane();
+
+        return new Border
+        {
+            Width = 260,
+            Background = Brushes.White,
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0xC8, 0xC8, 0xC8)),
+            BorderThickness = new Thickness(1, 0, 0, 0),
+            IsVisible = false,
+            Child = new StackPanel
+            {
+                Orientation = Orientation.Vertical,
+                Children =
+                {
+                    new TextBlock
+                    {
+                        Text = "Slide Size",
+                        FontSize = 15,
+                        FontWeight = FontWeight.SemiBold,
+                        Margin = new Thickness(12, 12, 12, 4),
+                    },
+                    BuildSlideSizeLabel("Preset"),
+                    _slideSizePresetCombo,
+                    BuildSlideSizeLabel("Unit"),
+                    _slideSizeUnitCombo,
+                    BuildSlideSizeLabel("Width"),
+                    BuildSlideSizeFieldRow(_slideSizeWidthBox, _slideSizeWidthUnitLabel),
+                    BuildSlideSizeLabel("Height"),
+                    BuildSlideSizeFieldRow(_slideSizeHeightBox, _slideSizeHeightUnitLabel),
+                    _slideSizeValidationText,
+                    new StackPanel
+                    {
+                        Orientation = Orientation.Horizontal,
+                        HorizontalAlignment = HorizontalAlignment.Right,
+                        Margin = new Thickness(12, 4, 12, 12),
+                        Children = { apply, close },
+                    },
+                },
+            },
+        };
+    }
+
+    private static TextBlock BuildSlideSizeLabel(string text) => new()
+    {
+        Text = text,
+        Margin = new Thickness(12, 6, 12, 0),
+        FontSize = 11,
+        Foreground = new SolidColorBrush(Color.FromRgb(0x44, 0x44, 0x44)),
+    };
+
+    private static TextBox BuildSlideSizeTextBox() => new()
+    {
+        Margin = new Thickness(12, 3, 6, 3),
+        MinWidth = 120,
+    };
+
+    private static TextBlock BuildSlideSizeUnitLabel() => new()
+    {
+        Width = 28,
+        VerticalAlignment = VerticalAlignment.Center,
+    };
+
+    private static StackPanel BuildSlideSizeFieldRow(TextBox box, TextBlock unitLabel) => new()
+    {
+        Orientation = Orientation.Horizontal,
+        Children = { box, unitLabel },
+    };
 
     private static TextBlock BuildAltTextPaneLabel()
         => new()
@@ -1132,11 +1270,13 @@ public sealed class MainWindow : Window
 
     private void OnCustomSlideSizeRequested(PresentationDesignCommandPlan plan)
     {
-        _ = plan;
-        _ = SlideSizeDialogPlanner.BuildInitialState(
+        LastCustomSlideSizeRequestPlan = plan;
+        LastCustomSlideSizeInitialState = SlideSizeDialogPlanner.BuildInitialState(
             _presentation.SlideSizeCxEmu,
             _presentation.SlideSizeCyEmu,
             SlideSizeDialogUnit.Inches);
+        ShowCustomSlideSizePane(LastCustomSlideSizeInitialState);
+        _statusText.Text = "Slide Size";
     }
 
     private void OnLayoutPickerRequested(PresentationDesignCommandPlan plan)
@@ -1219,6 +1359,7 @@ public sealed class MainWindow : Window
         }
 
         HideLayoutPicker();
+        HideCustomSlideSizePane();
         _tablePickerHost.IsVisible = true;
     }
 
@@ -1274,6 +1415,7 @@ public sealed class MainWindow : Window
         }
 
         HideTablePicker();
+        HideCustomSlideSizePane();
         _layoutPickerHost.IsVisible = true;
     }
 
@@ -1282,6 +1424,135 @@ public sealed class MainWindow : Window
         if (_layoutPickerHost is not null)
             _layoutPickerHost.IsVisible = false;
     }
+
+    private void ShowCustomSlideSizePane(SlideSizeDialogInitialState state)
+    {
+        if (_slideSizePaneHost is null)
+            return;
+
+        HideLayoutPicker();
+        HideTablePicker();
+
+        _slideSizePaneRefreshing = true;
+        try
+        {
+            _slideSizeUnit = SlideSizeDialogUnit.Inches;
+            _slideSizePresetCombo.SelectedIndex = ToSlideSizePresetIndex(state.Preset);
+            _slideSizeUnitCombo.SelectedIndex = 0;
+            ApplySlideSizeDisplay(state.Display);
+            _slideSizeValidationText.Text = string.Empty;
+        }
+        finally
+        {
+            _slideSizePaneRefreshing = false;
+        }
+
+        _slideSizePaneHost.IsVisible = true;
+    }
+
+    private void HideCustomSlideSizePane()
+    {
+        if (_slideSizePaneHost is not null)
+            _slideSizePaneHost.IsVisible = false;
+    }
+
+    private void OnSlideSizePresetChanged(object? sender, SelectionChangedEventArgs e)
+    {
+        if (_slideSizePaneRefreshing)
+            return;
+
+        var display = SlideSizeDialogPlanner.BuildPresetSelectionDisplay(
+            SlideSizePresetFromIndex(_slideSizePresetCombo.SelectedIndex),
+            _slideSizeUnit);
+        if (display is not null)
+            ApplySlideSizeDisplay(display);
+    }
+
+    private void OnSlideSizeUnitChanged(object? sender, SelectionChangedEventArgs e)
+    {
+        if (_slideSizePaneRefreshing)
+            return;
+
+        var newUnit = _slideSizeUnitCombo.SelectedIndex == 1
+            ? SlideSizeDialogUnit.Centimeters
+            : SlideSizeDialogUnit.Inches;
+        if (newUnit == _slideSizeUnit)
+            return;
+
+        var display = SlideSizeDialogPlanner.BuildUnitChangeDisplay(
+            _slideSizeWidthBox.Text ?? string.Empty,
+            _slideSizeHeightBox.Text ?? string.Empty,
+            _slideSizeUnit,
+            newUnit);
+        _slideSizeUnit = newUnit;
+        ApplySlideSizeDisplay(display);
+    }
+
+    internal bool ApplyCustomSlideSizeForTests(
+        string widthText,
+        string heightText,
+        SlideSizeDialogUnit unit)
+    {
+        _slideSizePaneRefreshing = true;
+        try
+        {
+            _slideSizeUnit = unit;
+            _slideSizeUnitCombo.SelectedIndex = unit == SlideSizeDialogUnit.Centimeters ? 1 : 0;
+            _slideSizeWidthBox.Text = widthText;
+            _slideSizeHeightBox.Text = heightText;
+            _slideSizeWidthUnitLabel.Text = unit == SlideSizeDialogUnit.Centimeters ? "cm" : "in";
+            _slideSizeHeightUnitLabel.Text = unit == SlideSizeDialogUnit.Centimeters ? "cm" : "in";
+        }
+        finally
+        {
+            _slideSizePaneRefreshing = false;
+        }
+
+        return ApplyCustomSlideSize();
+    }
+
+    internal bool ApplyCustomSlideSize()
+    {
+        LastCustomSlideSizeResultPlan = SlideSizeDialogPlanner.BuildOkResult(
+            _slideSizeWidthBox.Text ?? string.Empty,
+            _slideSizeHeightBox.Text ?? string.Empty,
+            _slideSizeUnit);
+        if (!SlideSizeDialogPlanner.TryApplyResult(Editor, LastCustomSlideSizeResultPlan))
+        {
+            _slideSizeValidationText.Text = LastCustomSlideSizeResultPlan.Validation?.Message ?? string.Empty;
+            return false;
+        }
+
+        _slideSizeValidationText.Text = string.Empty;
+        RefreshCanvas();
+        UpdateStatus();
+        HideCustomSlideSizePane();
+        return true;
+    }
+
+    private void ApplySlideSizeDisplay(SlideSizeDialogDisplayState display)
+    {
+        _slideSizeWidthBox.Text = display.WidthText;
+        _slideSizeHeightBox.Text = display.HeightText;
+        _slideSizeWidthUnitLabel.Text = display.UnitLabel;
+        _slideSizeHeightUnitLabel.Text = display.UnitLabel;
+    }
+
+    private static int ToSlideSizePresetIndex(SlideSizeDialogPreset preset)
+        => preset switch
+        {
+            SlideSizeDialogPreset.Widescreen169 => 1,
+            SlideSizeDialogPreset.Custom => 2,
+            _ => 0,
+        };
+
+    private static SlideSizeDialogPreset SlideSizePresetFromIndex(int selectedIndex)
+        => selectedIndex switch
+        {
+            1 => SlideSizeDialogPreset.Widescreen169,
+            2 => SlideSizeDialogPreset.Custom,
+            _ => SlideSizeDialogPreset.Standard43,
+        };
 
     private static string BuildLayoutChoiceLabel(PresentationLayoutChoice choice)
     {
