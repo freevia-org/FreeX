@@ -902,26 +902,34 @@ public sealed class DocumentViewReviewTests
     {
         int count = -1;
         IReadOnlyList<string> kinds = [];
+        IReadOnlyList<string> metadata = [];
         var ran = await OnUiThread(() =>
         {
             var doc = DocWithInsertion();
             var p = (Paragraph)doc.Blocks[0];
             p.Runs[0].CommentId = 1;
             p.Runs.Insert(1, Run.CommentReference(1));
-            doc.Comments[1] = new Comment(1, "check intro", "Casey", "C");
+            var comment = new Comment(1, "check intro", "Casey", "C")
+            {
+                DateXml = "2026-07-02T11:00:00Z",
+                Resolved = true
+            };
+            comment.AddReply(2, "fixed", "Ann", "A");
+            doc.Comments[1] = comment;
 
             var view = Build(doc);
             var pane = new ReviewBalloonsPane(view);
             pane.Refresh();
             count = pane.BalloonItemCount;
-            kinds = ReviewBalloonsPane.EnumerateBalloons(view.Document, view.CurrentReviewDisplayPolicy)
-                .Select(item => item.KindLabel)
-                .ToArray();
+            var sources = ReviewBalloonsPane.EnumerateBalloons(view.Document, view.CurrentReviewDisplayPolicy);
+            kinds = sources.Select(item => item.KindLabel).ToArray();
+            metadata = sources.Select(item => item.MetadataText).ToArray();
         });
         if (!ran) return;
 
         count.Should().Be(2, "the strip renders one tracked revision and one comment balloon");
-        kinds.Should().Equal("Comment", "Inserted");
+        kinds.Should().Equal("Resolved comment", "Inserted");
+        metadata.Should().Equal("Resolved - 1 reply - 2026-07-02", "Tracked change - 2024-01-01");
     }
 
     [Fact]

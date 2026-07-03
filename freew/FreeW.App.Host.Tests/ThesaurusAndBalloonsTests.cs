@@ -120,6 +120,28 @@ public sealed class ThesaurusAndBalloonsTests
     }
 
     [StaFact]
+    public void BalloonOverlay_Enable_RendersSharedCardMetadata()
+    {
+        var editor = MakeEditorWithRevisions();
+        var comment = editor.Model.Comments[0];
+        comment.DateXml = "2026-07-02T11:00:00Z";
+        comment.Resolved = true;
+        comment.AddReply(10, "fixed", "Alice", "A");
+        var overlay = new BalloonOverlay(editor);
+
+        overlay.Enable();
+
+        var canvas = (Canvas)overlay.Visual;
+        var texts = canvas.Children.OfType<TextBlock>().Select(block => block.Text).ToArray();
+        texts.Should().Contain("Resolved - 1 reply - 2026-07-02",
+            "WPF should render the shared resolved/reply/date metadata line");
+        texts.Should().Contain(text => text.Contains("Carol") && text.Contains("Resolved comment"),
+            "the card header should use the shared comment kind label");
+        texts.Should().Contain("Tracked change",
+            "revision cards should expose their shared metadata line too");
+    }
+
+    [StaFact]
     public void BalloonOverlay_Enable_UsesSharedViewportAnchoredCollisionLayout()
     {
         var editor = MakeEditorWithRevisions();
