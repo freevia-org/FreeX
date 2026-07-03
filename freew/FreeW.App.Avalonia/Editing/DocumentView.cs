@@ -10778,8 +10778,11 @@ public sealed class DocumentView : Control
     public void InsertTableOfAuthorities(ToaOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
-        TableOfAuthorities.EnsureStyles(_doc);
-        InsertGeneratedReferenceBlocks(TableOfAuthorities.Build(_doc, options), "Insert Table of Authorities", Math.Clamp(_caret.Block, 0, _doc.Blocks.Count));
+        var plan = TableOfAuthoritiesRegionPlanner.BuildInsertPlan(
+            _doc,
+            Math.Clamp(_caret.Block, 0, _doc.Blocks.Count),
+            options);
+        ApplyGeneratedReferencePlan(plan, "Insert Table of Authorities", adjustCaretForInsert: true);
     }
 
     public void RefreshTableOfAuthorities() => RefreshTableOfAuthorities(ToaOptions.Default);
@@ -10787,8 +10790,8 @@ public sealed class DocumentView : Control
     public void RefreshTableOfAuthorities(ToaOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
-        TableOfAuthorities.EnsureStyles(_doc);
-        RefreshGeneratedReferenceBlocks(TableOfAuthorities.IsTableOfAuthoritiesParagraph, () => TableOfAuthorities.Build(_doc, options), "Update Table of Authorities");
+        var plan = TableOfAuthoritiesRegionPlanner.BuildRefreshPlan(_doc, options);
+        ApplyGeneratedReferencePlan(plan, "Update Table of Authorities", adjustCaretForInsert: false);
     }
 
     public void ShowNotes()
@@ -10818,6 +10821,29 @@ public sealed class DocumentView : Control
         if (paragraphs.Count > 0 && appliedIndex <= originalCaret.Block)
         {
             _caret = originalCaret with { Block = originalCaret.Block + paragraphs.Count };
+            _selectionAnchor = _caret;
+        }
+    }
+
+    private void ApplyGeneratedReferencePlan(
+        TableOfAuthoritiesRegionPlan plan,
+        string label,
+        bool adjustCaretForInsert)
+    {
+        var originalCaret = _caret;
+        _bus.BeginUndoGroup();
+        foreach (var deleteIndex in plan.DeleteIndicesDescending)
+            _bus.Execute(new DeleteParagraphCommand(deleteIndex));
+
+        var index = Math.Clamp(plan.InsertIndex, 0, _doc.Blocks.Count);
+        var appliedIndex = index;
+        foreach (var paragraph in plan.Paragraphs)
+            _bus.Execute(new InsertParagraphCommand(index++, paragraph));
+        _bus.CommitUndoGroup(label);
+
+        if (adjustCaretForInsert && plan.Paragraphs.Count > 0 && appliedIndex <= originalCaret.Block)
+        {
+            _caret = originalCaret with { Block = originalCaret.Block + plan.Paragraphs.Count };
             _selectionAnchor = _caret;
         }
     }

@@ -433,6 +433,24 @@ public sealed class ReferencesTabTests
     }
 
     [Fact]
+    public void Table_of_authorities_refresh_without_existing_region_appends_at_document_end()
+    {
+        var view = ViewWith(new Paragraph("Intro"), new Paragraph("Brown v. Board"));
+
+        view.MarkCitation("Brown v. Board");
+        view.RefreshTableOfAuthorities();
+
+        view.Document.Blocks.OfType<Paragraph>()
+            .Select(paragraph => paragraph.PlainText)
+            .Should().Equal(
+                "Intro",
+                "Brown v. Board",
+                "Table of Authorities",
+                "Cases",
+                "Brown v. Board");
+    }
+
+    [Fact]
     public void Table_of_authorities_insert_accepts_shared_options_in_avalonia_host()
     {
         var mark = Run.CitationMark(new Citation("17 U.S.C. 107", CitationCategory.Statutes));

@@ -132,4 +132,21 @@ public sealed class MarkCitationEditorTests
         entries.Should().Contain("First Case");
         entries.Should().Contain("Second Statute");
     }
+
+    [StaFact]
+    public void RefreshTableOfAuthorities_WithoutExistingRegion_AppendsAtDocumentEnd()
+    {
+        var view = LoadedView(out _);
+        view.MarkCitation(new Citation("Late Case", CitationCategory.Cases));
+
+        view.RefreshTableOfAuthorities();
+        view.CommitToModel();
+
+        view.Model.Blocks.OfType<Paragraph>().Select(p => p.PlainText)
+            .Should().Equal(
+                "Body text",
+                "Table of Authorities",
+                "Cases",
+                "Late Case");
+    }
 }
