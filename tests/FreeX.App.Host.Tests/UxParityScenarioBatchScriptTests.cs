@@ -87,6 +87,7 @@ public sealed class UxParityScenarioBatchScriptTests
         root.GetProperty("suite").GetString().Should().Be("native-output");
         root.GetProperty("scenarioCount").GetInt32().Should().Be(7);
         root.GetProperty("missingEvidenceCount").GetInt32().Should().Be(7);
+        root.GetProperty("missingArtifactCount").GetInt32().Should().Be(4);
 
         var records = root.GetProperty("records").EnumerateArray().ToArray();
         records.Should().Contain(record =>
@@ -94,16 +95,57 @@ public sealed class UxParityScenarioBatchScriptTests
             record.GetProperty("comparisonMode").GetString() == "paired" &&
             record.GetProperty("excelScenario").GetString() == "excel-open-dialog" &&
             record.GetProperty("freexWpfScenario").GetString() == "freex-open-dialog" &&
-            record.GetProperty("avaloniaEvidenceStatus").GetString() == "pending-avalonia-native-dialog-baseline");
+            record.GetProperty("avaloniaEvidenceStatus").GetString() == "pending-avalonia-native-dialog-baseline" &&
+            record.GetProperty("nextMissingArtifact").GetString() == "avalonia-foreground-capture");
 
         records.Should().Contain(record =>
             record.GetProperty("id").GetString() == "export-xps-accept" &&
             record.GetProperty("comparisonMode").GetString() == "freex-only" &&
             record.GetProperty("freexWpfScenario").GetString() == "freex-export-xps-accept" &&
-            record.GetProperty("requiredArtifacts").EnumerateArray().Any(artifact => artifact.GetString() == "native-output-file"));
+            record.GetProperty("requiredArtifacts").EnumerateArray().Any(artifact => artifact.GetString() == "native-output-file") &&
+            record.GetProperty("nextMissingArtifact").GetString() == "freex-wpf-screenshot" &&
+            record.GetProperty("missingArtifacts").EnumerateArray().Any(artifact => artifact.GetString() == "native-output-file"));
 
         records.Should().OnlyContain(record =>
             record.GetProperty("missingEvidence").EnumerateArray().Any(missing => missing.GetString() == "avaloniaForegroundCapture"));
+    }
+
+    [Fact]
+    public void NativeOutputSuite_ListScenariosReportsMissingRetainedArtifactsBeforeTrustingCatalogRows()
+    {
+        var repoRoot = WorkspaceFileLocator.FindWorkspaceRoot();
+        var result = PowerShellScriptRunner.RunToolScript(
+            "Run-UxParityScenarioBatch.ps1",
+            repoRoot,
+            "-Suite native-output -ListScenarios -RunId native-output-artifacts-test");
+
+        result.ExitCode.Should().Be(0, result.CombinedOutput);
+
+        using var document = JsonDocument.Parse(result.Output);
+        var records = document.RootElement.GetProperty("records").EnumerateArray().ToArray();
+
+        var openDialog = records.Single(record => record.GetProperty("id").GetString() == "open-dialog");
+        openDialog.GetProperty("artifactStatuses").EnumerateArray()
+            .Single(status => status.GetProperty("subject").GetString() == "excel")
+            .GetProperty("missingArtifacts")
+            .EnumerateArray()
+            .Should()
+            .BeEmpty("the retained Excel Open screenshot is resolved beside the manifest even when the manifest has an older absolute path");
+
+        var saveAsDialog = records.Single(record => record.GetProperty("id").GetString() == "save-as-dialog");
+        saveAsDialog.GetProperty("nextMissingArtifact").GetString().Should().Be("excel-screenshot");
+        saveAsDialog.GetProperty("missingEvidence").EnumerateArray()
+            .Should()
+            .Contain(missing => missing.GetString() == "excelForegroundCapture");
+
+        var xpsAccept = records.Single(record => record.GetProperty("id").GetString() == "export-xps-accept");
+        xpsAccept.GetProperty("missingArtifacts").EnumerateArray()
+            .Select(artifact => artifact.GetString())
+            .Should()
+            .Contain(new[] { "freex-wpf-screenshot", "native-output-file", "avalonia-foreground-capture" });
+
+        var nativePrint = records.Single(record => record.GetProperty("id").GetString() == "native-print-dialog");
+        nativePrint.GetProperty("nextMissingArtifact").GetString().Should().Be("freex-wpf-screenshot");
     }
 
     [Fact]
