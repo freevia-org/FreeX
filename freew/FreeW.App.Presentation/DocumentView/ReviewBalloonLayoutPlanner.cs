@@ -97,12 +97,27 @@ public static class ReviewBalloonLayoutPlanner
         var layoutOptions = options ?? new ReviewBalloonLayoutOptions();
         var canvasHeight = viewportHeight > 0 ? viewportHeight : 800;
         var totalSlots = Math.Max(sources.Count, 1);
+        var leaderStartYs = new double[sources.Count];
+        var desiredBalloonYs = new double[sources.Count];
+
+        for (var i = 0; i < sources.Count; i++)
+        {
+            var leaderStartY = canvasHeight * (i + 0.5) / totalSlots;
+            leaderStartYs[i] = leaderStartY;
+            desiredBalloonYs[i] = leaderStartY - layoutOptions.BalloonHeight / 2;
+        }
+
+        var balloonYs = ResolveBalloonTops(
+            desiredBalloonYs,
+            canvasHeight,
+            layoutOptions.BalloonHeight,
+            layoutOptions.BalloonGap);
         var layouts = new List<ReviewBalloonLayout>(sources.Count);
 
         for (var i = 0; i < sources.Count; i++)
         {
-            var balloonY = layoutOptions.BalloonGap + i * (layoutOptions.BalloonHeight + layoutOptions.BalloonGap);
-            var leaderStartY = canvasHeight * (i + 0.5) / totalSlots;
+            var balloonY = balloonYs[i];
+            var leaderStartY = leaderStartYs[i];
             var leaderEndY = balloonY + layoutOptions.BalloonHeight / 2;
 
             layouts.Add(new ReviewBalloonLayout(
@@ -119,6 +134,47 @@ public static class ReviewBalloonLayoutPlanner
         }
 
         return layouts;
+    }
+
+    private static double[] ResolveBalloonTops(
+        IReadOnlyList<double> desiredBalloonYs,
+        double viewportHeight,
+        double balloonHeight,
+        double balloonGap)
+    {
+        var count = desiredBalloonYs.Count;
+        if (count == 0)
+            return [];
+
+        var minimumY = balloonGap;
+        var maximumY = Math.Max(minimumY, viewportHeight - balloonHeight - balloonGap);
+        var stride = balloonHeight + balloonGap;
+        var resolved = new double[count];
+
+        resolved[0] = Math.Clamp(desiredBalloonYs[0], minimumY, maximumY);
+        for (var i = 1; i < count; i++)
+        {
+            var desired = Math.Clamp(desiredBalloonYs[i], minimumY, maximumY);
+            resolved[i] = Math.Max(desired, resolved[i - 1] + stride);
+        }
+
+        var totalStackSpan = (count - 1) * stride;
+        var visibleStackSpan = maximumY - minimumY;
+        if (totalStackSpan <= visibleStackSpan && resolved[^1] > maximumY)
+        {
+            resolved[^1] = maximumY;
+            for (var i = count - 2; i >= 0; i--)
+                resolved[i] = Math.Min(resolved[i], resolved[i + 1] - stride);
+        }
+
+        if (resolved[0] < minimumY)
+        {
+            resolved[0] = minimumY;
+            for (var i = 1; i < count; i++)
+                resolved[i] = resolved[i - 1] + stride;
+        }
+
+        return resolved;
     }
 
     public static string TruncatePreview(string text, int maxLength)
