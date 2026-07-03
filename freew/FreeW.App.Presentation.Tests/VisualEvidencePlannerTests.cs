@@ -1410,6 +1410,56 @@ public sealed class VisualEvidencePlannerTests
     }
 
     [Fact]
+    public void BuildNormalizedSummaryFromFiles_RejectsBackstageRowsWithoutRealCaptureSource()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var wpfDir = Path.Combine(root, "wpf");
+            var row = BuildFileBackedRow(
+                root,
+                FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                "backstage-print-preview-fidelity",
+                pageNumber: 1,
+                pageCount: 2);
+            var metadataOnlyRow = row with
+            {
+                HostMetadata = new Dictionary<string, string>
+                {
+                    ["renderer"] = "FreeW.FidelityRender"
+                }
+            };
+            FreeWVisualEvidencePlanner.WriteManifest(
+                wpfDir,
+                [metadataOnlyRow],
+                new DateTimeOffset(2026, 7, 1, 12, 0, 0, TimeSpan.Zero));
+
+            var summary = FreeWVisualEvidenceManifestNormalizer.BuildNormalizedSummaryFromFiles(
+                [Path.Combine(wpfDir, FreeWVisualEvidencePlanner.ManifestFileName)],
+                root,
+                [
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        "backstage-print-preview-fidelity",
+                        1)
+                ]);
+
+            summary.Trust.Passed.Should().BeFalse();
+            summary.Evidence.Single().Trust.Passed.Should().BeFalse();
+            summary.Trust.Failures.Should().Contain(f =>
+                f.Contains("backstage renderer evidence must declare real captureSource metadata", StringComparison.Ordinal));
+            summary.Trust.Failures.Should().Contain(f =>
+                f.Contains("wpf-fidelity-render/backstage-print-preview-fidelity", StringComparison.Ordinal)
+                && f.Contains("expected at least 1 trusted output", StringComparison.Ordinal)
+                && f.Contains("found 0", StringComparison.Ordinal));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public void BuildNormalizedSummaryFromFiles_ReportsMissingRequiredBackstageRendererPages()
     {
         var root = CreateTempRoot();
@@ -2322,9 +2372,24 @@ public sealed class VisualEvidencePlannerTests
             ByteLength: bytes.LongLength,
             PixelStats: stats,
             PageExpectation: expectation,
-            HostMetadata: new Dictionary<string, string> { ["renderer"] = hostId });
+            HostMetadata: BuildFileBackedHostMetadata(hostId, scenarioId));
 
         return FreeWVisualEvidencePlanner.BuildEvidenceRow(capture);
+    }
+
+    private static Dictionary<string, string> BuildFileBackedHostMetadata(string hostId, string scenarioId)
+    {
+        var metadata = new Dictionary<string, string> { ["renderer"] = hostId };
+        if (!FreeWVisualEvidenceManifestNormalizer.BackstageRendererScenarioIds
+            .Contains(scenarioId, StringComparer.OrdinalIgnoreCase))
+        {
+            return metadata;
+        }
+
+        metadata["captureSource"] = hostId == FreeWVisualEvidenceManifestNormalizer.WpfHostId
+            ? "software-renderer"
+            : "avalonia-render-target";
+        return metadata;
     }
 
     private static TextDocument? DocumentForScenario(string scenarioId) =>

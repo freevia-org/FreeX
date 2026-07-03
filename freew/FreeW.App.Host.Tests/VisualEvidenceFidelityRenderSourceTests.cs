@@ -49,10 +49,12 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
         source.Should().Contain("BuildVisualEvidenceOutputPath(outDir, name, i + 1)");
         source.Should().Contain("FreeWVisualEvidencePlanner.ExpectedOutputName(scenarioId, pageNumber)");
         source.Should().Contain("hostId: \"wpf-fidelity-render\"");
+        source.Should().Contain("[\"captureSource\"] = \"wpf-composite-renderer\"");
         source.Should().Contain("\"--software-fallback\"");
         source.Should().Contain("RenderDocumentSoftwareFallback(");
         source.Should().Contain("Software evidence renderer requested by --software-fallback");
         source.Should().Contain("[\"renderPath\"] = \"software-fallback\"");
+        source.Should().Contain("[\"captureSource\"] = \"software-renderer\"");
         source.Should().Contain("[\"wpfRenderTargetBitmapReason\"] = wpfRenderTargetFailure");
         project.Should().Contain("FreeW.App.Presentation");
         project.Should().Contain("PackageReference Include=\"SkiaSharp\"");

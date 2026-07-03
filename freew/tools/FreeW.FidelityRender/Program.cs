@@ -501,6 +501,7 @@ static void RenderDocumentComposite(
             {
                 ["renderer"] = "FreeW.FidelityRender",
                 ["renderPath"] = "composite",
+                ["captureSource"] = "wpf-composite-renderer",
                 ["documentName"] = name,
                 ["pageIndex"] = i.ToString(System.Globalization.CultureInfo.InvariantCulture)
             },
@@ -572,6 +573,7 @@ static void RenderDocumentComposite(
                 {
                     ["renderer"] = "FreeW.FidelityRender",
                     ["renderPath"] = "composite",
+                    ["captureSource"] = "wpf-composite-renderer",
                     ["documentName"] = name,
                     ["pageIndex"] = pageCount.ToString(System.Globalization.CultureInfo.InvariantCulture),
                     ["syntheticPage"] = "endnotes"
