@@ -24,6 +24,10 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
         source.Should().Contain("f2-border-watermark.docx");
         source.Should().Contain("f2-section-landscape.docx");
         source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildSectionGeometryDocument");
+        source.Should().Contain("f2-tracked-changes.docx");
+        source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildTrackedChangesReviewDocument");
+        source.Should().Contain("f2-comments.docx");
+        source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildCommentsReviewDocument");
         source.Should().Contain("table-layout-complex.docx");
         source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildComplexTableLayoutDocument");
         source.Should().Contain("drawing-objects-complex.docx");
