@@ -46,24 +46,9 @@ public sealed class AvaloniaInCanvasTextEditor
 
     public bool TryApplyActiveTableCellTextFormat(TableCellTextFormatKind kind)
     {
-        // The overlay TextBox's Text uses the same '\n'-joined paragraph convention as
-        // InCanvasTextEditPlanner.ExtractPlainText, so its SelectionStart/SelectionEnd map
-        // directly onto the character-offset range PlanTextFormat expects. A collapsed caret
-        // (SelectionStart == SelectionEnd) is passed through as null, which falls back to the
-        // existing whole-cell behavior.
-        (int Start, int End)? selection = null;
-        bool isWholeCellSelection = true;
-        if (_cellEditActive && _cellTextBox is not null)
-        {
-            int selStart = Math.Min(_cellTextBox.SelectionStart, _cellTextBox.SelectionEnd);
-            int selEnd = Math.Max(_cellTextBox.SelectionStart, _cellTextBox.SelectionEnd);
-            int textLength = _cellTextBox.Text?.Length ?? 0;
-            isWholeCellSelection = selStart == selEnd || (selStart == 0 && selEnd >= textLength);
-            if (selStart != selEnd)
-                selection = (selStart, selEnd);
-        }
+        var overlaySelection = GetActiveCellOverlaySelection();
 
-        var plan = _editor.PlanActiveTableCellTextFormat(kind, selection);
+        var plan = _editor.PlanActiveTableCellTextFormat(kind, overlaySelection.Selection);
         if (plan.Command is null)
             return false;
 
@@ -82,9 +67,54 @@ public sealed class AvaloniaInCanvasTextEditor
             // convention), mirror the format onto the overlay control. For a genuine partial
             // sub-range selection, skip mirroring — the overlay can't show "half bold" — the
             // underlying rich model (committed on close) is authoritative regardless.
-            if (isWholeCellSelection)
+            if (overlaySelection.IsWholeCell)
                 ApplyCellOverlayFormat(kind, value);
         }
+
+        return true;
+    }
+
+    public bool TryApplyActiveTableCellFontFamily(string? fontFamily)
+    {
+        var overlaySelection = GetActiveCellOverlaySelection();
+        var plan = _editor.PlanActiveTableCellFontFamily(fontFamily, overlaySelection.Selection);
+        if (plan.Command is null)
+            return false;
+
+        _editor.Bus.Execute(plan.Command);
+
+        if (IsCurrentCellPlan(plan) && overlaySelection.IsWholeCell)
+            ApplyCellOverlayFontFamily(fontFamily);
+
+        return true;
+    }
+
+    public bool TryApplyActiveTableCellFontSize(double? sizePt)
+    {
+        var overlaySelection = GetActiveCellOverlaySelection();
+        var plan = _editor.PlanActiveTableCellFontSize(sizePt, overlaySelection.Selection);
+        if (plan.Command is null)
+            return false;
+
+        _editor.Bus.Execute(plan.Command);
+
+        if (IsCurrentCellPlan(plan) && overlaySelection.IsWholeCell)
+            ApplyCellOverlayFontSize(sizePt);
+
+        return true;
+    }
+
+    public bool TryApplyActiveTableCellColor(ThemeAwareColor? color)
+    {
+        var overlaySelection = GetActiveCellOverlaySelection();
+        var plan = _editor.PlanActiveTableCellColor(color, overlaySelection.Selection);
+        if (plan.Command is null)
+            return false;
+
+        _editor.Bus.Execute(plan.Command);
+
+        if (IsCurrentCellPlan(plan) && overlaySelection.IsWholeCell)
+            ApplyCellOverlayColor(color);
 
         return true;
     }
@@ -534,5 +564,54 @@ public sealed class AvaloniaInCanvasTextEditor
             default:
                 throw new ArgumentOutOfRangeException(nameof(kind), kind, null);
         }
+    }
+
+    private (bool IsWholeCell, (int Start, int End)? Selection) GetActiveCellOverlaySelection()
+    {
+        if (!_cellEditActive || _cellTextBox is null)
+            return (true, null);
+
+        int selStart = Math.Min(_cellTextBox.SelectionStart, _cellTextBox.SelectionEnd);
+        int selEnd = Math.Max(_cellTextBox.SelectionStart, _cellTextBox.SelectionEnd);
+        int textLength = _cellTextBox.Text?.Length ?? 0;
+
+        return (
+            selStart == selEnd || (selStart == 0 && selEnd >= textLength),
+            selStart != selEnd ? (selStart, selEnd) : null);
+    }
+
+    private bool IsCurrentCellPlan(TableCellTextValueFormatPlan plan) =>
+        _cellEditActive &&
+        _cellTextBox is not null &&
+        plan.ShapeId == _editingTableShapeId &&
+        plan.Row == _editingCellRow &&
+        plan.Col == _editingCellCol;
+
+    private void ApplyCellOverlayFontFamily(string? fontFamily)
+    {
+        if (_cellTextBox is null)
+            return;
+
+        _cellTextBox.FontFamily = string.IsNullOrWhiteSpace(fontFamily)
+            ? FontFamily.Default
+            : new FontFamily(fontFamily);
+    }
+
+    private void ApplyCellOverlayFontSize(double? sizePt)
+    {
+        if (_cellTextBox is null || sizePt is null)
+            return;
+
+        _cellTextBox.FontSize = sizePt.Value;
+    }
+
+    private void ApplyCellOverlayColor(ThemeAwareColor? color)
+    {
+        if (_cellTextBox is null)
+            return;
+
+        _cellTextBox.Foreground = color is null
+            ? null
+            : new SolidColorBrush(Color.FromRgb(color.Resolved.R, color.Resolved.G, color.Resolved.B));
     }
 }

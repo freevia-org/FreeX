@@ -1189,6 +1189,75 @@ public sealed class EditingSession
         return true;
     }
 
+    public TableCellTextValueFormatPlan PlanActiveTableCellFontFamily(
+        string? fontFamily,
+        (int Start, int End)? selection = null) =>
+        TableCellEditPlanner.PlanFontFamily(
+            _currentSlideIndex,
+            CurrentSlide,
+            _selectedShapeIds,
+            ActiveTableCell,
+            fontFamily,
+            selection);
+
+    public TableCellTextValueFormatPlan PlanActiveTableCellFontSize(
+        double? sizePt,
+        (int Start, int End)? selection = null) =>
+        TableCellEditPlanner.PlanFontSize(
+            _currentSlideIndex,
+            CurrentSlide,
+            _selectedShapeIds,
+            ActiveTableCell,
+            sizePt,
+            selection);
+
+    public TableCellTextValueFormatPlan PlanActiveTableCellColor(
+        ThemeAwareColor? color,
+        (int Start, int End)? selection = null) =>
+        TableCellEditPlanner.PlanColor(
+            _currentSlideIndex,
+            CurrentSlide,
+            _selectedShapeIds,
+            ActiveTableCell,
+            color,
+            selection);
+
+    public bool TryApplyActiveTableCellFontFamily(
+        string? fontFamily,
+        (int Start, int End)? selection = null)
+    {
+        var plan = PlanActiveTableCellFontFamily(fontFamily, selection);
+        if (plan.Command is null)
+            return false;
+
+        Bus.Execute(plan.Command);
+        return true;
+    }
+
+    public bool TryApplyActiveTableCellFontSize(
+        double? sizePt,
+        (int Start, int End)? selection = null)
+    {
+        var plan = PlanActiveTableCellFontSize(sizePt, selection);
+        if (plan.Command is null)
+            return false;
+
+        Bus.Execute(plan.Command);
+        return true;
+    }
+
+    public bool TryApplyActiveTableCellColor(
+        ThemeAwareColor? color,
+        (int Start, int End)? selection = null)
+    {
+        var plan = PlanActiveTableCellColor(color, selection);
+        if (plan.Command is null)
+            return false;
+
+        Bus.Execute(plan.Command);
+        return true;
+    }
+
     public bool ToggleBoldOnActiveTableCell() =>
         TryApplyActiveTableCellTextFormat(TableCellTextFormatKind.Bold);
 

@@ -20,6 +20,13 @@ public enum TableCellTextFormatKind
     Underline,
 }
 
+public enum TableCellTextValueFormatKind
+{
+    FontFamily,
+    FontSize,
+    Color,
+}
+
 public enum TableCellTextFormatStatus
 {
     Ready,
@@ -86,6 +93,18 @@ public sealed record TableCellTextFormatPlan(
     int? Col,
     TableCellTextFormatKind Kind,
     bool? TargetValue,
+    IPresentationCommand? Command)
+{
+    public bool IsReady => Status == TableCellTextFormatStatus.Ready && Command is not null;
+}
+
+public sealed record TableCellTextValueFormatPlan(
+    TableCellTextFormatStatus Status,
+    uint? ShapeId,
+    int? Row,
+    int? Col,
+    TableCellTextValueFormatKind Kind,
+    object? Value,
     IPresentationCommand? Command)
 {
     public bool IsReady => Status == TableCellTextFormatStatus.Ready && Command is not null;
@@ -290,6 +309,113 @@ public static class TableCellEditPlanner
             new SetTableCellTextCommand(slideIndex, shape.Id, row, col, editedBody));
     }
 
+    public static TableCellTextValueFormatPlan PlanFontFamily(
+        int slideIndex,
+        Slide? slide,
+        IReadOnlyList<uint> selectedShapeIds,
+        (int Row, int Col)? activeCell,
+        string? fontFamily,
+        (int Start, int End)? selection = null) =>
+        PlanTextValueFormat(
+            slideIndex,
+            slide,
+            selectedShapeIds,
+            activeCell,
+            TableCellTextValueFormatKind.FontFamily,
+            fontFamily,
+            selection);
+
+    public static TableCellTextValueFormatPlan PlanFontSize(
+        int slideIndex,
+        Slide? slide,
+        IReadOnlyList<uint> selectedShapeIds,
+        (int Row, int Col)? activeCell,
+        double? sizePt,
+        (int Start, int End)? selection = null) =>
+        PlanTextValueFormat(
+            slideIndex,
+            slide,
+            selectedShapeIds,
+            activeCell,
+            TableCellTextValueFormatKind.FontSize,
+            sizePt,
+            selection);
+
+    public static TableCellTextValueFormatPlan PlanColor(
+        int slideIndex,
+        Slide? slide,
+        IReadOnlyList<uint> selectedShapeIds,
+        (int Row, int Col)? activeCell,
+        ThemeAwareColor? color,
+        (int Start, int End)? selection = null) =>
+        PlanTextValueFormat(
+            slideIndex,
+            slide,
+            selectedShapeIds,
+            activeCell,
+            TableCellTextValueFormatKind.Color,
+            color,
+            selection);
+
+    private static TableCellTextValueFormatPlan PlanTextValueFormat(
+        int slideIndex,
+        Slide? slide,
+        IReadOnlyList<uint> selectedShapeIds,
+        (int Row, int Col)? activeCell,
+        TableCellTextValueFormatKind kind,
+        object? value,
+        (int Start, int End)? selection)
+    {
+        ArgumentNullException.ThrowIfNull(selectedShapeIds);
+
+        if (slide is null)
+            return DisabledValueFormat(TableCellTextFormatStatus.MissingSlide, kind, value);
+        if (selectedShapeIds.Count == 0)
+            return DisabledValueFormat(TableCellTextFormatStatus.ShapeNotFound, kind, value);
+
+        var shape = slide.Shapes.FirstOrDefault(s => s.Id == selectedShapeIds[0]);
+        if (shape is null)
+            return DisabledValueFormat(TableCellTextFormatStatus.ShapeNotFound, kind, value);
+        if (shape.Kind != SlideShapeKind.Table || shape.Table is null)
+            return DisabledValueFormat(TableCellTextFormatStatus.NotTable, kind, value, shape.Id);
+        if (activeCell is not { } requested)
+            return DisabledValueFormat(TableCellTextFormatStatus.MissingActiveCell, kind, value, shape.Id);
+
+        var normalized = NormalizeCell(shape.Table, requested.Row, requested.Col);
+        if (normalized is null)
+            return DisabledValueFormat(TableCellTextFormatStatus.CellOutOfRange, kind, value, shape.Id);
+
+        var (row, col, cell) = normalized.Value;
+        if (cell.TextBody is null)
+            return DisabledValueFormat(TableCellTextFormatStatus.MissingTextBody, kind, value, shape.Id, row, col);
+
+        var runs = cell.TextBody.Paragraphs.SelectMany(p => p.Runs).ToList();
+        if (runs.Count == 0)
+            return DisabledValueFormat(TableCellTextFormatStatus.NoTextRuns, kind, value, shape.Id, row, col);
+
+        int textLength = runs.Sum(r => r.Text.Length) + Math.Max(0, cell.TextBody.Paragraphs.Count - 1);
+        (int Start, int End)? range = NormalizeSelection(selection, textLength);
+
+        var editedBody = TextBodyModelCloner.CloneTextBody(cell.TextBody)!;
+        var targetRuns = range is { } r
+            ? SplitRunsAtSelection(editedBody, r.Start, r.End)
+            : editedBody.Paragraphs.SelectMany(p => p.Runs).ToList();
+
+        foreach (var run in targetRuns)
+            SetRunValueFormat(run, kind, value);
+
+        MergeAdjacentRunsWithSameFormat(editedBody);
+
+        return new TableCellTextValueFormatPlan(
+            TableCellTextFormatStatus.Ready,
+            shape.Id,
+            row,
+            col,
+            kind,
+            value,
+            new SetTableCellTextCommand(slideIndex, shape.Id, row, col, editedBody));
+    }
+
     private static (int Start, int End)? NormalizeSelection((int Start, int End)? selection, int textLength)
     {
         if (selection is not { } s)
@@ -434,6 +560,15 @@ public static class TableCellEditPlanner
         int? col = null) =>
         new(status, shapeId, row, col, kind, null, null);
 
+    private static TableCellTextValueFormatPlan DisabledValueFormat(
+        TableCellTextFormatStatus status,
+        TableCellTextValueFormatKind kind,
+        object? value,
+        uint? shapeId = null,
+        int? row = null,
+        int? col = null) =>
+        new(status, shapeId, row, col, kind, value, null);
+
     private static bool GetRunFormat(Run run, TableCellTextFormatKind kind) => kind switch
     {
         TableCellTextFormatKind.Bold => run.Bold,
@@ -456,6 +591,24 @@ public static class TableCellEditPlanner
                 break;
             case TableCellTextFormatKind.Underline:
                 run.Underline = value;
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(kind), kind, null);
+        }
+    }
+
+    private static void SetRunValueFormat(Run run, TableCellTextValueFormatKind kind, object? value)
+    {
+        switch (kind)
+        {
+            case TableCellTextValueFormatKind.FontFamily:
+                run.FontFamily = (string?)value;
+                break;
+            case TableCellTextValueFormatKind.FontSize:
+                run.FontSizePt = (double?)value;
+                break;
+            case TableCellTextValueFormatKind.Color:
+                run.Color = (ThemeAwareColor?)value;
                 break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(kind), kind, null);

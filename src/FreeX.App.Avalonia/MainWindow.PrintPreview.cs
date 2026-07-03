@@ -35,8 +35,9 @@ namespace FreeX.App.Avalonia;
 /// the unit-tested <see cref="PrintPreviewInstructionBuilder"/>; this file only turns each primitive
 /// into an Avalonia control.
 ///
-/// Deferred: the OS print dialog (no system print is invoked yet — this is a preview/export surface),
-/// and drawing objects / charts on the page (the page-content model omits them by design).
+/// Deferred: the OS print dialog (no system print is invoked yet — this is a preview/export surface)
+/// and richer drawing-object families. The shared page-content model supplies visible text boxes and
+/// embedded chart object blocks, including selectable chart-text overlay primitives.
 /// </summary>
 public sealed partial class MainWindow
 {

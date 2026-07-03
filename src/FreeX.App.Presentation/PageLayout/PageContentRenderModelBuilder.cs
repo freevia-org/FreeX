@@ -20,9 +20,9 @@ namespace FreeX.App.Presentation.PageLayout;
 /// page when requested; and header/footer text is split into three bands with token substitution.
 ///
 /// Out of scope for this single-page content model (deferred to the renderers / later extraction):
-/// drawing objects, charts, comments, hyperlinks, header/footer pictures, and rich text
-/// wrapping/trimming — only the cell grid, gridlines, headings, text boxes, and header/footer text
-/// are produced.
+/// drawing shapes, pictures, comments, hyperlinks, header/footer pictures, and rich text
+/// wrapping/trimming. The cell grid, gridlines, headings, text boxes, chart object blocks, and
+/// header/footer text are produced.
 /// </summary>
 public static class PageContentRenderModelBuilder
 {
@@ -142,6 +142,19 @@ public static class PageContentRenderModelBuilder
             colWidth,
             rowHeight);
 
+        var charts = BuildCharts(
+            workbook,
+            sheet,
+            rowSegment,
+            colSegment,
+            pageRows,
+            pageColumns,
+            gridLeft,
+            gridTop,
+            colWidth,
+            rowHeight,
+            textMeasurer);
+
         var (header, footer) = ResolveHeaderFooterForPage(sheet, pageNumber);
         var resolvedNow = now ?? DateTime.Now;
         var (headerRuns, footerRuns) = BuildHeaderFooterRuns(
@@ -171,6 +184,7 @@ public static class PageContentRenderModelBuilder
             gridLines,
             columnHeadings,
             rowHeadings,
+            charts,
             textBoxes,
             headerRuns,
             footerRuns);
@@ -371,6 +385,181 @@ public static class PageContentRenderModelBuilder
 
         return (columnHeadings, rowHeadings);
     }
+
+    private static IReadOnlyList<PageChartBlock> BuildCharts(
+        Workbook workbook,
+        Sheet sheet,
+        PageAxisSegment rowSegment,
+        PageAxisSegment colSegment,
+        IReadOnlyList<uint> pageRows,
+        IReadOnlyList<uint> pageColumns,
+        double gridLeft,
+        double gridTop,
+        double colWidth,
+        double rowHeight,
+        ITextMeasurer textMeasurer)
+    {
+        if (sheet.Charts.Count == 0 || rowSegment.End < rowSegment.Start || colSegment.End < colSegment.Start)
+            return [];
+
+        var bodyRows = BuildSegmentIndexes(rowSegment);
+        var bodyColumns = BuildSegmentIndexes(colSegment);
+        if (bodyRows.Count == 0 || bodyColumns.Count == 0)
+            return [];
+
+        var titleRowCount = Math.Max(0, pageRows.Count - bodyRows.Count);
+        var titleColumnCount = Math.Max(0, pageColumns.Count - bodyColumns.Count);
+        var bodyGridLeft = gridLeft + titleColumnCount * colWidth;
+        var bodyGridTop = gridTop + titleRowCount * rowHeight;
+        var bodyGridRect = new LayoutRect(
+            bodyGridLeft,
+            bodyGridTop,
+            bodyColumns.Count * colWidth,
+            bodyRows.Count * rowHeight);
+
+        var pageGridLeft = (bodyColumns[0] - 1) * colWidth;
+        var pageGridTop = (bodyRows[0] - 1) * rowHeight;
+        var pageGridRect = new LayoutRect(
+            pageGridLeft,
+            pageGridTop,
+            bodyGridRect.Width,
+            bodyGridRect.Height);
+
+        var cellLookup = BuildChartCellLookup(workbook, sheet, pageRows, pageColumns);
+        var blocks = new List<PageChartBlock>();
+        foreach (var chart in sheet.Charts)
+        {
+            if (!ShouldPrintChart(chart, pageGridRect))
+                continue;
+
+            var bounds = new LayoutRect(
+                bodyGridLeft + chart.Left - pageGridLeft,
+                bodyGridTop + chart.Top - pageGridTop,
+                chart.Width,
+                chart.Height);
+            var overlays = Contains(bodyGridRect, bounds)
+                ? PrintChartTextOverlayPlanner.Build(
+                    chart,
+                    workbook.Theme,
+                    bounds,
+                    chartDataCells: null,
+                    cellLookup,
+                    (text, fontSize) => MeasureChartOverlayText(textMeasurer, text, fontSize))
+                : [];
+
+            blocks.Add(new PageChartBlock(
+                chart.Id,
+                bounds,
+                ResolveChartFill(chart, workbook.Theme),
+                ResolveChartOutline(chart, workbook.Theme),
+                ResolveChartOutlineThickness(chart),
+                overlays));
+        }
+
+        return blocks;
+    }
+
+    private static IReadOnlyList<uint> BuildSegmentIndexes(PageAxisSegment segment)
+    {
+        var indexes = new List<uint>((int)Math.Min(segment.End - segment.Start + 1, int.MaxValue));
+        for (var index = segment.Start; index <= segment.End; index++)
+            indexes.Add(index);
+        return indexes;
+    }
+
+    private static bool ShouldPrintChart(ChartModel chart, LayoutRect pageGridRect)
+    {
+        if (!chart.IsVisible ||
+            !double.IsFinite(chart.Left) ||
+            !double.IsFinite(chart.Top) ||
+            !double.IsFinite(chart.Width) ||
+            !double.IsFinite(chart.Height) ||
+            chart.Width <= 0 ||
+            chart.Height <= 0)
+        {
+            return false;
+        }
+
+        return Intersects(new LayoutRect(chart.Left, chart.Top, chart.Width, chart.Height), pageGridRect);
+    }
+
+    private static bool Intersects(LayoutRect a, LayoutRect b) =>
+        a.Left < b.Right &&
+        a.Right > b.Left &&
+        a.Top < b.Bottom &&
+        a.Bottom > b.Top;
+
+    private static bool Contains(LayoutRect outer, LayoutRect inner) =>
+        inner.Left >= outer.Left &&
+        inner.Top >= outer.Top &&
+        inner.Right <= outer.Right &&
+        inner.Bottom <= outer.Bottom;
+
+    private static Dictionary<(uint Row, uint Col), DisplayCell> BuildChartCellLookup(
+        Workbook workbook,
+        Sheet sheet,
+        IReadOnlyList<uint> pageRows,
+        IReadOnlyList<uint> pageColumns)
+    {
+        var lookup = new Dictionary<(uint Row, uint Col), DisplayCell>();
+        foreach (var row in pageRows)
+            foreach (var column in pageColumns)
+                AddDisplayCell(lookup, workbook, sheet, row, column);
+
+        foreach (var chart in sheet.Charts)
+        {
+            var range = chart.DataRange;
+            if (range.Start.Sheet != sheet.Id || range.End.Sheet != sheet.Id)
+                continue;
+
+            for (var row = range.Start.Row; row <= range.End.Row; row++)
+                for (var column = range.Start.Col; column <= range.End.Col; column++)
+                    AddDisplayCell(lookup, workbook, sheet, row, column);
+        }
+
+        return lookup;
+    }
+
+    private static void AddDisplayCell(
+        IDictionary<(uint Row, uint Col), DisplayCell> lookup,
+        Workbook workbook,
+        Sheet sheet,
+        uint row,
+        uint column)
+    {
+        var address = new CellAddress(sheet.Id, row, column);
+        var cell = sheet.GetCell(address);
+        var styleId = cell?.StyleId ?? sheet.GetStyleOnly(row, column) ?? StyleId.Default;
+        lookup[(row, column)] = new DisplayCell(
+            row,
+            column,
+            cell?.Value,
+            cell is null ? "" : FormatCellText(workbook, sheet, cell, workbook.GetStyle(styleId)),
+            cell?.FormulaText,
+            styleId,
+            Error: null,
+            workbook.GetStyle(styleId));
+    }
+
+    private static PrintChartOverlayTextMetrics MeasureChartOverlayText(
+        ITextMeasurer textMeasurer,
+        string text,
+        double fontSize)
+    {
+        var size = textMeasurer.Measure(text, PrintChartTextOverlayPlanner.FontFamily, fontSize, bold: false, italic: false);
+        return new PrintChartOverlayTextMetrics(size.Width, size.Width);
+    }
+
+    private static PresentationRgb ResolveChartFill(ChartModel chart, WorkbookTheme theme) =>
+        PresentationRgb.FromCellColor(chart.ResolveChartAreaFillColor(theme) ?? CellColor.White);
+
+    private static PresentationRgb ResolveChartOutline(ChartModel chart, WorkbookTheme theme) =>
+        PresentationRgb.FromCellColor(chart.ResolveChartAreaBorderColor(theme) ?? new CellColor(217, 217, 217));
+
+    private static double ResolveChartOutlineThickness(ChartModel chart) =>
+        chart.ChartAreaBorderThickness is { } thickness && double.IsFinite(thickness) && thickness > 0
+            ? thickness
+            : 1.0;
 
     private static PageHeadingCell BuildHeadingCell(LayoutRect rect, string label, ITextMeasurer textMeasurer)
     {

@@ -130,10 +130,24 @@ public sealed record PageTextBoxBlock(
     PageTextFont Font);
 
 /// <summary>
+/// One printed worksheet chart resolved into page-space geometry. This first portable object-layer
+/// slice carries the chart object's page rectangle plus resolved chart-area colors and selectable text
+/// overlays; platform renderers can paint a chart visual or a bounded placeholder without consulting
+/// the worksheet for filtering or overlay placement.
+/// </summary>
+public sealed record PageChartBlock(
+    Guid Id,
+    LayoutRect Bounds,
+    PresentationRgb Fill,
+    PresentationRgb Outline,
+    double OutlineThickness,
+    IReadOnlyList<PrintChartTextOverlayPlan> TextOverlays);
+
+/// <summary>
 /// The complete, backend-agnostic content of one printed page: the page rectangle, the printable
 /// area inset by margins, and ordered render instructions a renderer paints in list order (fills,
-/// gridlines, the outer grid border, headings, cell text/borders, text boxes, and the header/footer
-/// bands). All geometry is in device-independent units (96 dpi) with origin top-left, y growing
+/// gridlines, the outer grid border, headings, cell text/borders, charts, text boxes, and the
+/// header/footer bands). All geometry is in device-independent units (96 dpi) with origin top-left, y growing
 /// downward.
 /// </summary>
 public sealed record PageContentLayout(
@@ -145,6 +159,7 @@ public sealed record PageContentLayout(
     IReadOnlyList<PageGridLine> GridLines,
     IReadOnlyList<PageHeadingCell> ColumnHeadings,
     IReadOnlyList<PageHeadingCell> RowHeadings,
+    IReadOnlyList<PageChartBlock> Charts,
     IReadOnlyList<PageTextBoxBlock> TextBoxes,
     IReadOnlyList<PageHeaderFooterRun> HeaderRuns,
     IReadOnlyList<PageHeaderFooterRun> FooterRuns)

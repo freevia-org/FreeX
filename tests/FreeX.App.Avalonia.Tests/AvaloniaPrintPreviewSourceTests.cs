@@ -28,6 +28,7 @@ public sealed class AvaloniaPrintPreviewSourceTests
         source.Should().Contain("CreatePreviewChoiceComboBox(plan.ChoiceComboWidth, plan.Settings.MarginOptions, plan.Settings.MarginsSelectedIndex)");
         source.Should().Contain("CreatePreviewChoiceComboBox(plan.ChoiceComboWidth, plan.Settings.ScalingOptions, plan.Settings.ScalingSelectedIndex)");
         source.Should().Contain("RenderPreviewInstructions(canvas, painting.Instructions)");
+        source.Should().Contain("embedded chart object blocks");
         source.Should().Contain("IsChecked = plan.Settings.PrintGridlines");
         source.Should().Contain("Content = plan.PrintHeadingsText");
         source.Should().Contain("IsChecked = plan.Settings.PrintHeadings");
@@ -45,6 +46,7 @@ public sealed class AvaloniaPrintPreviewSourceTests
         source.Should().NotContain("CreatePreviewComboBox(183, \"Narrow\")");
         source.Should().NotContain("CreatePreviewComboBox(82, \"100%\")");
         source.Should().NotContain("AlignCellTextLeft");
+        source.Should().NotContain("drawing objects / charts on the page (the page-content model omits them by design)");
     }
 
     private static string RepoFile(params string[] parts)
