@@ -1418,7 +1418,10 @@ public sealed class SlideShowWindow : Window
 
         _isTornDown = true;
         FinalizePresenterTiming(nowUtc ?? DateTimeOffset.UtcNow);
-        _inkExecutionState = SlideShowInkExecutionPlanner.ApplyRetentionOnExit(_inkExecutionState).State;
+        _inkExecutionState = SlideShowInkPersistencePlanner.ApplyRetentionOnExit(
+            _presentation,
+            _inkExecutionState,
+            _playbackRoute.GetSourceSlideIndex).State;
         _autoAdvanceTimer.Stop();
         // DA3: stop ALL per-frame animation/transition timers so they don't keep
         // ticking against the closed window's canvas.  A running DispatcherTimer is

@@ -27,7 +27,7 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("SlideShowInkExecutionPlanner.Append(");
         source.Should().Contain("SlideShowInkExecutionPlanner.End(");
         source.Should().Contain("SlideShowInkExecutionPlanner.ClearCurrentSlide(");
-        source.Should().Contain("SlideShowInkExecutionPlanner.ApplyRetentionOnExit(");
+        source.Should().Contain("SlideShowInkPersistencePlanner.ApplyRetentionOnExit(");
         source.Should().Contain("SlideShowInkExecutionPlanner.BuildOverlayRenderPlan(");
         source.Should().Contain("SlideShowHostPlanner.MapCanvasPointToSlide(");
         source.Should().Contain("SlideShowHostPlanner.HitTestHyperlink(");
