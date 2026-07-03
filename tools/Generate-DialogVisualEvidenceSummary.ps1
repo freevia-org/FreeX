@@ -24,6 +24,10 @@ public sealed class DialogPngMetrics
     public long FileBytes { get; set; }
     public int Width { get; set; }
     public int Height { get; set; }
+    public double DpiX { get; set; }
+    public double DpiY { get; set; }
+    public double LogicalWidth { get; set; }
+    public double LogicalHeight { get; set; }
     public long Pixels { get; set; }
     public int DistinctColors { get; set; }
     public double OpaqueRatio { get; set; }
@@ -53,6 +57,8 @@ public static class DialogPngAnalyzer
             var fileInfo = new FileInfo(fullPath);
             int width = bitmap.Width;
             int height = bitmap.Height;
+            double dpiX = source.HorizontalResolution > 0 ? source.HorizontalResolution : 96.0;
+            double dpiY = source.VerticalResolution > 0 ? source.VerticalResolution : 96.0;
             long pixels = (long)width * height;
             var rect = new Rectangle(0, 0, width, height);
             var data = bitmap.LockBits(rect, ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
@@ -142,6 +148,10 @@ public static class DialogPngAnalyzer
                     FileBytes = fileInfo.Length,
                     Width = width,
                     Height = height,
+                    DpiX = dpiX,
+                    DpiY = dpiY,
+                    LogicalWidth = width * 96.0 / dpiX,
+                    LogicalHeight = height * 96.0 / dpiY,
                     Pixels = pixels,
                     DistinctColors = distinctColors.Count,
                     OpaqueRatio = opaqueRatio,
@@ -228,6 +238,32 @@ function Format-ReportNumber {
     )
 
     $Value.ToString($Format, $invariantCulture)
+}
+
+function Format-DisplayNumber {
+    param(
+        [Parameter(Mandatory = $true)][double]$Value,
+        [double]$IntegerTolerance = 0.25
+    )
+
+    $rounded = [math]::Round($Value)
+    if ([math]::Abs($Value - $rounded) -le $IntegerTolerance) {
+        return ([int]$rounded).ToString($invariantCulture)
+    }
+
+    Format-ReportNumber $Value "0.###"
+}
+
+function Format-LogicalSize {
+    param([Parameter(Mandatory = $true)]$Metric)
+
+    "$(Format-DisplayNumber $Metric.LogicalWidth)x$(Format-DisplayNumber $Metric.LogicalHeight)"
+}
+
+function Format-PhysicalSize {
+    param([Parameter(Mandatory = $true)]$Metric)
+
+    "$($Metric.Width)x$($Metric.Height) px @ $(Format-DisplayNumber $Metric.DpiX 0.05) DPI"
 }
 
 function Read-JsonFile {
@@ -458,6 +494,10 @@ function ConvertTo-JsonMetric {
         fileBytes = $Metric.FileBytes
         width = $Metric.Width
         height = $Metric.Height
+        dpiX = [math]::Round($Metric.DpiX, 6)
+        dpiY = [math]::Round($Metric.DpiY, 6)
+        logicalWidth = [math]::Round($Metric.LogicalWidth, 3)
+        logicalHeight = [math]::Round($Metric.LogicalHeight, 3)
         pixels = $Metric.Pixels
         distinctColors = $Metric.DistinctColors
         opaqueRatio = [math]::Round($Metric.OpaqueRatio, 6)
@@ -486,14 +526,19 @@ function Compare-PngMetrics {
     )
 
     $sampleMeanDelta = [DialogPngAnalyzer]::SignatureDelta($WpfMetric.Signature, $AvaloniaMetric.Signature)
-    $widthDelta = [math]::Abs([int]$WpfMetric.Width - [int]$AvaloniaMetric.Width)
-    $heightDelta = [math]::Abs([int]$WpfMetric.Height - [int]$AvaloniaMetric.Height)
-    $dimensionDeltaRatio = if ($WpfMetric.Width -le 0 -or $WpfMetric.Height -le 0) {
+    $rawPixelWidthDelta = [math]::Abs([int]$WpfMetric.Width - [int]$AvaloniaMetric.Width)
+    $rawPixelHeightDelta = [math]::Abs([int]$WpfMetric.Height - [int]$AvaloniaMetric.Height)
+    $logicalWidthDelta = [math]::Abs([double]$WpfMetric.LogicalWidth - [double]$AvaloniaMetric.LogicalWidth)
+    $logicalHeightDelta = [math]::Abs([double]$WpfMetric.LogicalHeight - [double]$AvaloniaMetric.LogicalHeight)
+    $logicalDimensionTolerance = 0.5
+    $logicalDimensionMatch = ($logicalWidthDelta -le $logicalDimensionTolerance -and $logicalHeightDelta -le $logicalDimensionTolerance)
+    $rawPixelDimensionMatch = ($rawPixelWidthDelta -eq 0 -and $rawPixelHeightDelta -eq 0)
+    $dimensionDeltaRatio = if ($WpfMetric.LogicalWidth -le 0 -or $WpfMetric.LogicalHeight -le 0) {
         1.0
     }
     else {
-        ([math]::Abs([double]$AvaloniaMetric.Width - [double]$WpfMetric.Width) / [double]$WpfMetric.Width) +
-            ([math]::Abs([double]$AvaloniaMetric.Height - [double]$WpfMetric.Height) / [double]$WpfMetric.Height)
+        ([math]::Abs([double]$AvaloniaMetric.LogicalWidth - [double]$WpfMetric.LogicalWidth) / [double]$WpfMetric.LogicalWidth) +
+            ([math]::Abs([double]$AvaloniaMetric.LogicalHeight - [double]$WpfMetric.LogicalHeight) / [double]$WpfMetric.LogicalHeight)
     }
 
     $lumaDelta = [math]::Abs([double]$WpfMetric.MeanLuma - [double]$AvaloniaMetric.MeanLuma) / 255.0
@@ -505,11 +550,11 @@ function Compare-PngMetrics {
     $avaloniaExpectedMatch = $true
     $expectedSizeSource = $null
     if ($null -ne $wpfExpectedSize) {
-        $wpfExpectedMatch = ([int]$WpfMetric.Width -eq [int]$wpfExpectedSize.width -and [int]$WpfMetric.Height -eq [int]$wpfExpectedSize.height)
+        $wpfExpectedMatch = ([math]::Abs([double]$WpfMetric.LogicalWidth - [double]$wpfExpectedSize.width) -le $logicalDimensionTolerance -and [math]::Abs([double]$WpfMetric.LogicalHeight - [double]$wpfExpectedSize.height) -le $logicalDimensionTolerance)
         $expectedSizeSource = [string]$wpfExpectedSize.source
     }
     if ($null -ne $avaloniaExpectedSize) {
-        $avaloniaExpectedMatch = ([int]$AvaloniaMetric.Width -eq [int]$avaloniaExpectedSize.width -and [int]$AvaloniaMetric.Height -eq [int]$avaloniaExpectedSize.height)
+        $avaloniaExpectedMatch = ([math]::Abs([double]$AvaloniaMetric.LogicalWidth - [double]$avaloniaExpectedSize.width) -le $logicalDimensionTolerance -and [math]::Abs([double]$AvaloniaMetric.LogicalHeight - [double]$avaloniaExpectedSize.height) -le $logicalDimensionTolerance)
         if ($null -eq $expectedSizeSource) {
             $expectedSizeSource = [string]$avaloniaExpectedSize.source
         }
@@ -519,9 +564,17 @@ function Compare-PngMetrics {
     $expectedHeight = if ($null -ne $wpfExpectedSize) { [int]$wpfExpectedSize.height } elseif ($null -ne $avaloniaExpectedSize) { [int]$avaloniaExpectedSize.height } else { $null }
 
     [pscustomobject]@{
-        widthDelta = [int]$widthDelta
-        heightDelta = [int]$heightDelta
-        dimensionMatch = ($widthDelta -eq 0 -and $heightDelta -eq 0)
+        widthDelta = $logicalWidthDelta
+        heightDelta = $logicalHeightDelta
+        dimensionMatch = $logicalDimensionMatch
+        logicalDimensionMatch = $logicalDimensionMatch
+        logicalWidthDelta = $logicalWidthDelta
+        logicalHeightDelta = $logicalHeightDelta
+        logicalDimensionTolerance = $logicalDimensionTolerance
+        rawPixelDimensionMatch = $rawPixelDimensionMatch
+        rawPixelWidthDelta = [int]$rawPixelWidthDelta
+        rawPixelHeightDelta = [int]$rawPixelHeightDelta
+        captureScaleNormalizedDimensionMatch = (-not $rawPixelDimensionMatch -and $logicalDimensionMatch)
         dimensionDeltaRatio = $dimensionDeltaRatio
         sampleMeanDelta = $sampleMeanDelta
         lumaDelta = $lumaDelta
@@ -619,6 +672,8 @@ $additionalGroups = @(
 $allPngRows = @($pairedRows | ForEach-Object { $_.wpf; $_.avalonia }) + @($avaloniaOnlyRows | ForEach-Object { $_.avalonia })
 $blankEvidenceRows = @($allPngRows | Where-Object { -not $_.metrics.IsNonBlank } | Sort-Object -Property id)
 $dimensionMismatchRows = @($pairedRows | Where-Object { -not $_.comparison.dimensionMatch } | Sort-Object -Property id)
+$rawPixelDimensionMismatchRows = @($pairedRows | Where-Object { -not $_.comparison.rawPixelDimensionMatch } | Sort-Object -Property id)
+$captureScaleNormalizedDimensionRows = @($pairedRows | Where-Object { $_.comparison.captureScaleNormalizedDimensionMatch } | Sort-Object -Property id)
 $expectedSizeMismatchRows = @($pairedRows | Where-Object { $_.comparison.expectedSizeMismatch } | Sort-Object -Property id)
 $stalePromotedExpectedSizeRows = @($expectedSizeMismatchRows | Where-Object { Test-StalePromotedExpectedSizeEvidence -Row $_ } | Sort-Object -Property id)
 $topOutlierRows = @($pairedRows | Sort-Object @{ Expression = { $_.comparison.triageScore }; Descending = $true }, @{ Expression = { $_.id }; Ascending = $true } | Select-Object -First 10)
@@ -651,6 +706,8 @@ $jsonModel = [ordered]@{
         additionalAvaloniaCapturedSurfaceIds = [int]$avaloniaOnlyIds.Count
         nonBlankPngFailures = [int]$blankEvidenceRows.Count
         pairedDimensionMismatches = [int]$dimensionMismatchRows.Count
+        pairedRawPixelDimensionMismatches = [int]$rawPixelDimensionMismatchRows.Count
+        pairedCaptureScaleNormalizedDimensionMatches = [int]$captureScaleNormalizedDimensionRows.Count
         pairedExpectedSizeMismatches = [int]$expectedSizeMismatchRows.Count
         stalePromotedExpectedSizeEvidence = [int]$stalePromotedExpectedSizeRows.Count
     }
@@ -663,8 +720,16 @@ $jsonModel = [ordered]@{
                 avalonia = ConvertTo-JsonMetric -Metric $row.avalonia.metrics -Provenance $row.avalonia.provenance
                 comparison = [ordered]@{
                     dimensionMatch = $row.comparison.dimensionMatch
-                    widthDelta = $row.comparison.widthDelta
-                    heightDelta = $row.comparison.heightDelta
+                    widthDelta = [math]::Round($row.comparison.widthDelta, 3)
+                    heightDelta = [math]::Round($row.comparison.heightDelta, 3)
+                    logicalDimensionMatch = $row.comparison.logicalDimensionMatch
+                    logicalWidthDelta = [math]::Round($row.comparison.logicalWidthDelta, 3)
+                    logicalHeightDelta = [math]::Round($row.comparison.logicalHeightDelta, 3)
+                    logicalDimensionTolerance = [math]::Round($row.comparison.logicalDimensionTolerance, 3)
+                    rawPixelDimensionMatch = $row.comparison.rawPixelDimensionMatch
+                    rawPixelWidthDelta = $row.comparison.rawPixelWidthDelta
+                    rawPixelHeightDelta = $row.comparison.rawPixelHeightDelta
+                    captureScaleNormalizedDimensionMatch = $row.comparison.captureScaleNormalizedDimensionMatch
                     dimensionDeltaRatio = [math]::Round($row.comparison.dimensionDeltaRatio, 6)
                     sampleMeanDelta = [math]::Round($row.comparison.sampleMeanDelta, 6)
                     lumaDelta = [math]::Round($row.comparison.lumaDelta, 6)
@@ -686,7 +751,7 @@ $jsonModel = [ordered]@{
                 id = $row.id
                 triageScore = [math]::Round($row.comparison.triageScore, 6)
                 sampleMeanDelta = [math]::Round($row.comparison.sampleMeanDelta, 6)
-                dimension = "$($row.wpf.metrics.Width)x$($row.wpf.metrics.Height) vs $($row.avalonia.metrics.Width)x$($row.avalonia.metrics.Height)"
+                dimension = "$([math]::Round($row.wpf.metrics.LogicalWidth, 3))x$([math]::Round($row.wpf.metrics.LogicalHeight, 3)) vs $([math]::Round($row.avalonia.metrics.LogicalWidth, 3))x$([math]::Round($row.avalonia.metrics.LogicalHeight, 3)) logical; $($row.wpf.metrics.Width)x$($row.wpf.metrics.Height) vs $($row.avalonia.metrics.Width)x$($row.avalonia.metrics.Height) px"
                 nonBackgroundDelta = [math]::Round($row.comparison.nonBackgroundDelta, 6)
             }
         }
@@ -718,7 +783,7 @@ $md = New-Object System.Text.StringBuilder
 [void]$md.AppendLine()
 [void]$md.AppendLine("Generated by tools/Generate-DialogVisualEvidenceSummary.ps1 from committed dialog capture manifests, PNG evidence, and the generated dialog parity inventory.")
 [void]$md.AppendLine()
-[void]$md.AppendLine("This deterministic triage report compares checked-in WPF and Avalonia capture PNGs. It is not a full visual-parity claim; it flags stale or suspect evidence, ranks paired screenshot outliers by simple image metrics, and names Avalonia-manifest-only screenshot surface ids that still need an exact WPF manifest PNG id pair.")
+[void]$md.AppendLine("This deterministic triage report compares checked-in WPF and Avalonia capture PNGs. It is not a full visual-parity claim; it flags stale or suspect evidence, ranks paired screenshot outliers by simple image metrics, and names Avalonia-manifest-only screenshot surface ids that still need an exact WPF manifest PNG id pair. Dimension comparisons are DPI-normalized to 96-DPI logical units so high-DPI WPF captures are compared like-for-like with Avalonia logical captures; raw PNG pixel dimensions remain reported as capture metadata.")
 [void]$md.AppendLine()
 [void]$md.AppendLine("Sources:")
 [void]$md.AppendLine()
@@ -747,7 +812,9 @@ $md = New-Object System.Text.StringBuilder
 [void]$md.AppendLine("| WPF manifest ids without Avalonia pair | $($wpfOnlyIds.Count) |")
 [void]$md.AppendLine("| Avalonia-manifest-only screenshot surface ids needing WPF manifest pair | $($avaloniaOnlyIds.Count) |")
 [void]$md.AppendLine("| Nonblank PNG check failures | $($blankEvidenceRows.Count) |")
-[void]$md.AppendLine("| Paired dimension mismatches | $($dimensionMismatchRows.Count) |")
+[void]$md.AppendLine("| Paired dimension mismatches (scale-aware logical units) | $($dimensionMismatchRows.Count) |")
+[void]$md.AppendLine("| Raw PNG pixel dimension mismatches | $($rawPixelDimensionMismatchRows.Count) |")
+[void]$md.AppendLine("| Raw PNG mismatches normalized by capture DPI | $($captureScaleNormalizedDimensionRows.Count) |")
 [void]$md.AppendLine("| Paired expected-size evidence mismatches | $($expectedSizeMismatchRows.Count) |")
 [void]$md.AppendLine("| Stale promoted expected-size evidence | $($stalePromotedExpectedSizeRows.Count) |")
 [void]$md.AppendLine()
@@ -764,38 +831,39 @@ if ($wpfOnlyIds.Count -gt 0) {
 
 [void]$md.AppendLine("## Top paired visual outliers")
 [void]$md.AppendLine()
-[void]$md.AppendLine("Outliers are ranked by a deterministic triage score: normalized 32x32 ARGB sample delta, mean-luma delta, non-background coverage delta, and normalized dimension delta. Higher scores deserve earlier human review. Rows with expected-size evidence mismatches are stale or suspect capture evidence, not an Avalonia product layout verdict.")
+[void]$md.AppendLine("Outliers are ranked by a deterministic triage score: normalized 32x32 ARGB sample delta, mean-luma delta, non-background coverage delta, and DPI-normalized logical dimension delta. Higher scores deserve earlier human review. Rows with expected-size evidence mismatches are stale or suspect capture evidence, not an Avalonia product layout verdict.")
 [void]$md.AppendLine()
-[void]$md.AppendLine("| Surface id | WPF size | Avalonia size | Evidence flag | Score | Sample delta | Luma delta | Non-bg delta |")
-[void]$md.AppendLine("| --- | ---: | ---: | --- | ---: | ---: | ---: | ---: |")
+[void]$md.AppendLine("| Surface id | WPF logical size | Avalonia logical size | Raw PNG sizes | Evidence flag | Score | Sample delta | Luma delta | Non-bg delta |")
+[void]$md.AppendLine("| --- | ---: | ---: | --- | --- | ---: | ---: | ---: | ---: |")
 foreach ($row in $topOutlierRows) {
     $evidenceFlag = if ($row.comparison.expectedSizeMismatch) { "Expected $($row.comparison.expectedWidth)x$($row.comparison.expectedHeight) via $($row.comparison.expectedSizeSource)" } else { "" }
-    [void]$md.AppendLine("| $(Escape-MarkdownCell $row.id) | $($row.wpf.metrics.Width)x$($row.wpf.metrics.Height) | $($row.avalonia.metrics.Width)x$($row.avalonia.metrics.Height) | $(Escape-MarkdownCell $evidenceFlag) | $(Format-ReportNumber $row.comparison.triageScore) | $(Format-ReportNumber $row.comparison.sampleMeanDelta) | $(Format-ReportNumber $row.comparison.lumaDelta) | $(Format-ReportNumber $row.comparison.nonBackgroundDelta) |")
+    $rawSizes = "$(Format-PhysicalSize $row.wpf.metrics) vs $(Format-PhysicalSize $row.avalonia.metrics)"
+    [void]$md.AppendLine("| $(Escape-MarkdownCell $row.id) | $(Format-LogicalSize $row.wpf.metrics) | $(Format-LogicalSize $row.avalonia.metrics) | $(Escape-MarkdownCell $rawSizes) | $(Escape-MarkdownCell $evidenceFlag) | $(Format-ReportNumber $row.comparison.triageScore) | $(Format-ReportNumber $row.comparison.sampleMeanDelta) | $(Format-ReportNumber $row.comparison.lumaDelta) | $(Format-ReportNumber $row.comparison.nonBackgroundDelta) |")
 }
 
 [void]$md.AppendLine()
 [void]$md.AppendLine("## Expected-Size Evidence Mismatches")
 [void]$md.AppendLine()
-[void]$md.AppendLine("These rows have a checked-in PNG size that disagrees with the dialog planner's expected capture size. Treat their raw paired dimension delta as stale or suspect evidence until that shell can be recaptured nonblank at the expected size.")
+[void]$md.AppendLine("These rows have a DPI-normalized checked-in PNG size that disagrees with the dialog planner's expected capture size. Treat their paired dimension delta as stale or suspect evidence until that shell can be recaptured nonblank at the expected size.")
 [void]$md.AppendLine()
-[void]$md.AppendLine("| Surface id | Expected size | Source | WPF size | WPF matches | Avalonia size | Avalonia matches |")
-[void]$md.AppendLine("| --- | ---: | --- | ---: | --- | ---: | --- |")
+[void]$md.AppendLine("| Surface id | Expected logical size | Source | WPF logical size | WPF raw PNG | WPF matches | Avalonia logical size | Avalonia raw PNG | Avalonia matches |")
+[void]$md.AppendLine("| --- | ---: | --- | ---: | ---: | --- | ---: | ---: | --- |")
 foreach ($row in $expectedSizeMismatchRows) {
-    [void]$md.AppendLine("| $(Escape-MarkdownCell $row.id) | $($row.comparison.expectedWidth)x$($row.comparison.expectedHeight) | $(Escape-MarkdownCell $row.comparison.expectedSizeSource) | $($row.wpf.metrics.Width)x$($row.wpf.metrics.Height) | $($row.comparison.wpfExpectedSizeMatch) | $($row.avalonia.metrics.Width)x$($row.avalonia.metrics.Height) | $($row.comparison.avaloniaExpectedSizeMatch) |")
+    [void]$md.AppendLine("| $(Escape-MarkdownCell $row.id) | $($row.comparison.expectedWidth)x$($row.comparison.expectedHeight) | $(Escape-MarkdownCell $row.comparison.expectedSizeSource) | $(Format-LogicalSize $row.wpf.metrics) | $(Escape-MarkdownCell (Format-PhysicalSize $row.wpf.metrics)) | $($row.comparison.wpfExpectedSizeMatch) | $(Format-LogicalSize $row.avalonia.metrics) | $(Escape-MarkdownCell (Format-PhysicalSize $row.avalonia.metrics)) | $($row.comparison.avaloniaExpectedSizeMatch) |")
 }
 
 if ($stalePromotedExpectedSizeRows.Count -gt 0) {
     [void]$md.AppendLine()
     [void]$md.AppendLine("## Stale Promoted Expected-Size Evidence")
     [void]$md.AppendLine()
-    [void]$md.AppendLine("These expected-size mismatches are known promoted fallback screenshots, not direct same-harness parity captures. Recapture or replace only with a nonblank WPF parity-capture PNG at the planner size; do not compare their raw dimension delta as product layout evidence.")
+    [void]$md.AppendLine("These expected-size mismatches are known promoted fallback screenshots, not direct same-harness parity captures. Recapture or replace only with a nonblank WPF parity-capture PNG at the planner size; do not compare their dimension delta as product layout evidence.")
     [void]$md.AppendLine()
     [void]$md.AppendLine("| Surface id | Stale shell | Current PNG size | Expected size | Promoted source PNG | Recapture status | Next action |")
     [void]$md.AppendLine("| --- | --- | ---: | ---: | --- | --- | --- |")
     foreach ($row in $stalePromotedExpectedSizeRows) {
         $staleShell = if (-not $row.comparison.wpfExpectedSizeMatch) { "WPF" } elseif (-not $row.comparison.avaloniaExpectedSizeMatch) { "Avalonia" } else { "Both" }
         $staleEvidence = if ($staleShell -eq "Avalonia") { $row.avalonia } else { $row.wpf }
-        $currentSize = if ($staleShell -eq "Avalonia") { "$($row.avalonia.metrics.Width)x$($row.avalonia.metrics.Height)" } else { "$($row.wpf.metrics.Width)x$($row.wpf.metrics.Height)" }
+        $currentSize = if ($staleShell -eq "Avalonia") { "$(Format-LogicalSize $row.avalonia.metrics) logical ($(Format-PhysicalSize $row.avalonia.metrics))" } else { "$(Format-LogicalSize $row.wpf.metrics) logical ($(Format-PhysicalSize $row.wpf.metrics))" }
         $sourcePng = if ([string]::IsNullOrWhiteSpace([string]$staleEvidence.provenance.sourcePng)) { "" } else { [string]$staleEvidence.provenance.sourcePng }
         $recaptureStatus = if ([string]::IsNullOrWhiteSpace([string]$staleEvidence.provenance.recaptureStatus)) { "" } else { [string]$staleEvidence.provenance.recaptureStatus }
         $nextAction = Get-StalePromotedExpectedSizeNextAction -SurfaceId $row.id -RecaptureStatus $recaptureStatus
@@ -806,10 +874,10 @@ if ($stalePromotedExpectedSizeRows.Count -gt 0) {
 [void]$md.AppendLine()
 [void]$md.AppendLine("## Paired manifest surfaces")
 [void]$md.AppendLine()
-[void]$md.AppendLine("| Surface id | WPF PNG | WPF size | WPF nonblank | Avalonia PNG | Avalonia size | Avalonia nonblank | Score |")
-[void]$md.AppendLine("| --- | --- | ---: | --- | --- | ---: | --- | ---: |")
+[void]$md.AppendLine("| Surface id | WPF PNG | WPF logical size | WPF raw PNG | WPF nonblank | Avalonia PNG | Avalonia logical size | Avalonia raw PNG | Avalonia nonblank | Dimension match | Score |")
+[void]$md.AppendLine("| --- | --- | ---: | ---: | --- | --- | ---: | ---: | --- | --- | ---: |")
 foreach ($row in $pairedRows) {
-    [void]$md.AppendLine("| $(Escape-MarkdownCell $row.id) | $(Escape-MarkdownCell $row.wpf.png) | $($row.wpf.metrics.Width)x$($row.wpf.metrics.Height) | $($row.wpf.metrics.IsNonBlank) | $(Escape-MarkdownCell $row.avalonia.png) | $($row.avalonia.metrics.Width)x$($row.avalonia.metrics.Height) | $($row.avalonia.metrics.IsNonBlank) | $(Format-ReportNumber $row.comparison.triageScore) |")
+    [void]$md.AppendLine("| $(Escape-MarkdownCell $row.id) | $(Escape-MarkdownCell $row.wpf.png) | $(Format-LogicalSize $row.wpf.metrics) | $(Escape-MarkdownCell (Format-PhysicalSize $row.wpf.metrics)) | $($row.wpf.metrics.IsNonBlank) | $(Escape-MarkdownCell $row.avalonia.png) | $(Format-LogicalSize $row.avalonia.metrics) | $(Escape-MarkdownCell (Format-PhysicalSize $row.avalonia.metrics)) | $($row.avalonia.metrics.IsNonBlank) | $($row.comparison.dimensionMatch) | $(Format-ReportNumber $row.comparison.triageScore) |")
 }
 
 [void]$md.AppendLine()
@@ -859,6 +927,8 @@ Write-Host "WPF-only manifest surface ids: $($wpfOnlyIds.Count)"
 Write-Host "Avalonia-manifest-only screenshot surface ids needing WPF manifest pair: $($avaloniaOnlyIds.Count)"
 Write-Host "Nonblank PNG check failures: $($blankEvidenceRows.Count)"
 Write-Host "Paired dimension mismatches: $($dimensionMismatchRows.Count)"
+Write-Host "Raw PNG pixel dimension mismatches: $($rawPixelDimensionMismatchRows.Count)"
+Write-Host "Raw PNG mismatches normalized by capture DPI: $($captureScaleNormalizedDimensionRows.Count)"
 Write-Host "Paired expected-size evidence mismatches: $($expectedSizeMismatchRows.Count)"
 Write-Host "Stale promoted expected-size evidence: $($stalePromotedExpectedSizeRows.Count)"
 Write-Host "Wrote $(ConvertTo-RepoRelativePath $resolvedMarkdownPath)"
