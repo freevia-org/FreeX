@@ -8586,10 +8586,13 @@ public sealed partial class MainWindow : Window
         var dialog = new Window
         {
             Title = UiText.Get("UnhideSheet_UnhideSheet"),
-            Width = 360,
-            Height = 220,
+            Width = 340,
+            Height = 160,
             MinWidth = 340,
-            MinHeight = 200,
+            MinHeight = 160,
+            MaxWidth = 340,
+            MaxHeight = 160,
+            CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
@@ -8610,8 +8613,8 @@ public sealed partial class MainWindow : Window
 
         var okButton = new Button { Content = "OK" };
         var cancelButton = new Button { Content = "Cancel" };
-        ApplyDialogButtonChrome(okButton, width: 84, isDefault: true);
-        ApplyDialogButtonChrome(cancelButton, width: 84);
+        ApplyDialogButtonChrome(okButton, width: 72, isDefault: true);
+        ApplyDialogButtonChrome(cancelButton, width: 72);
         AutomationProperties.SetAutomationId(okButton, "UnhideSheetOkButton");
         AutomationProperties.SetAutomationId(cancelButton, "UnhideSheetCancelButton");
 
@@ -8675,10 +8678,13 @@ public sealed partial class MainWindow : Window
         var dialog = new Window
         {
             Title = "Rename Sheet",
-            Width = 380,
-            Height = 190,
+            Width = 340,
+            Height = 150,
             MinWidth = 340,
-            MinHeight = 180,
+            MinHeight = 150,
+            MaxWidth = 340,
+            MaxHeight = 150,
+            CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
@@ -8702,13 +8708,13 @@ public sealed partial class MainWindow : Window
         var okButton = new Button
         {
             Content = "OK",
-            MinWidth = 84,
+            MinWidth = 72,
             Padding = new Thickness(10, 4),
         };
         var cancelButton = new Button
         {
             Content = "Cancel",
-            MinWidth = 84,
+            MinWidth = 72,
             Padding = new Thickness(10, 4),
         };
 
