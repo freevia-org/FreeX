@@ -14,6 +14,9 @@ public sealed record PresentationPrintOutputPackagePlan(
     PresentationPrintOutputPackageRoute Route,
     string ContentType,
     string DefaultExtensionWithDot,
+    int PageCount,
+    string LayoutSummary,
+    string SlideRangeSummary,
     bool CanBuildPackage,
     bool NativePrinterDialogDeferred,
     string? DisabledReason);
@@ -44,6 +47,9 @@ public static class PresentationPrintOutputPackageExecutor
             ResolveRoute(printPlan.Layout.Layout),
             PdfContentType,
             PresentationExportPlanner.PdfExportExtension,
+            CalculatePageCount(printPlan),
+            BuildLayoutSummary(printPlan),
+            printPlan.SlideRange.DisplayName,
             canBuild,
             NativePrinterDialogDeferred: true,
             canBuild ? null : "Print output requires at least one slide.");
@@ -94,6 +100,25 @@ public static class PresentationPrintOutputPackageExecutor
             PresentationPrintLayoutKind.Handouts => PresentationPrintOutputPackageRoute.HandoutPdf,
             _ => throw new ArgumentOutOfRangeException(nameof(layout), layout, "Unsupported print layout."),
         };
+
+    private static int CalculatePageCount(PresentationPrintPlan plan)
+    {
+        var slideCount = plan.SlideRange.SlideNumbers.Count;
+        if (slideCount == 0)
+            return 0;
+
+        return plan.Layout.IsHandout
+            ? (int)Math.Ceiling(slideCount / (double)plan.Layout.SlidesPerPage)
+            : slideCount;
+    }
+
+    private static string BuildLayoutSummary(PresentationPrintPlan plan)
+    {
+        var pageCount = CalculatePageCount(plan);
+        var pageText = pageCount == 1 ? "1 page" : $"{pageCount} pages";
+        var hiddenText = plan.PrintHiddenSlides ? " including hidden slides" : string.Empty;
+        return $"{plan.Layout.DisplayName} - {plan.SlideRange.DisplayName}, {pageText}{hiddenText}";
+    }
 
     private static PresentationPrintRequest ToPrintRequest(PresentationPrintPlan plan) =>
         new(
