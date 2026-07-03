@@ -407,10 +407,18 @@ public sealed class RendererNeutralDedupPlannerTests
             source.Should().Contain("ChartDataTablePrimitivePlan plan");
             source.Should().Contain("cell.CellBounds");
             source.Should().Contain("cell.LegendKeyBounds");
+            source.Should().Contain("cell.LegendKeyFill");
             source.Should().Contain("plan.HorizontalBorders");
             source.Should().Contain("plan.VerticalBorders");
             source.Should().Contain("plan.OutlineBorders");
+            source.Should().Contain("ToPen(plan.BorderStroke)");
+            source.Should().Contain("stroke.Dash");
+            source.Should().Contain("cell.IsItalic");
+            source.Should().Contain("cell.TextColor");
+            source.Should().Contain("cell.FontFamily");
             source.Should().NotContain("chart.DataTable?.ShowLegendKeys");
+            source.Should().NotContain("chart.DataTable?.TextStyle");
+            source.Should().NotContain("chart.DataTable?.BorderOutline");
             source.Should().NotContain("DataTableHeaderHeight + chart.Series.Count");
         }
     }

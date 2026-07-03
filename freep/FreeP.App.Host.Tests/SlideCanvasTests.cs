@@ -215,7 +215,8 @@ public sealed class SlideCanvasTests
             new ChartStrokePlan(
                 new SrgbColor(0x12, 0x34, 0x56),
                 Alpha: 0x7F,
-                Thickness: 1.25));
+                Thickness: 1.25,
+                Dash: OutlineDash.DashDot));
 
         var pen = SlideCanvas.CreateChartGridLinePen(plan);
 
@@ -224,6 +225,7 @@ public sealed class SlideCanvasTests
             .BeOfType<System.Windows.Media.SolidColorBrush>()
             .Subject;
         brush.Color.Should().Be(System.Windows.Media.Color.FromArgb(0x7F, 0x12, 0x34, 0x56));
+        pen.DashStyle.Should().Be(System.Windows.Media.DashStyles.DashDot);
         pen.IsFrozen.Should().BeTrue();
     }
 

@@ -421,7 +421,24 @@ public sealed class SlideCanvas : Control
     private static Pen ToPen(ChartStrokePlan stroke) =>
         new(
             ToBrush(new ChartFillPlan(stroke.Color, stroke.Alpha)),
-            stroke.Thickness);
+            stroke.Thickness)
+        {
+            DashStyle = MapDashStyleAvalonia(stroke.Dash)
+        };
+
+    private static IDashStyle? MapDashStyleAvalonia(OutlineDash dash) => dash switch
+    {
+        OutlineDash.Dash           => DashStyle.Dash,
+        OutlineDash.Dot            => DashStyle.Dot,
+        OutlineDash.DashDot        => DashStyle.DashDot,
+        OutlineDash.LongDash       => new DashStyle([8.0, 3.0], 0),
+        OutlineDash.LongDashDot    => new DashStyle([8.0, 3.0, 1.0, 3.0], 0),
+        OutlineDash.LongDashDotDot => new DashStyle([8.0, 3.0, 1.0, 3.0, 1.0, 3.0], 0),
+        OutlineDash.SystemDash     => DashStyle.Dash,
+        OutlineDash.SystemDot      => DashStyle.Dot,
+        OutlineDash.SystemDashDot  => DashStyle.DashDot,
+        _                          => null
+    };
 
     private static void DrawChartMarker(DrawingContext dc, ChartCirclePrimitive marker)
     {

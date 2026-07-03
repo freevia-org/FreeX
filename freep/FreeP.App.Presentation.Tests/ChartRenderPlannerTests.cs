@@ -401,7 +401,10 @@ public sealed class ChartRenderPlannerTests
         var chart = MakeTwoSeriesChart(ChartType.ColumnClustered);
         chart.DataTable = new ChartDataTableSettings
         {
-            BorderOutline = new ShapeOutline.Visible(new SrgbColor(0x12, 0x34, 0x56), widthPt: 1.25)
+            BorderOutline = new ShapeOutline.Visible(
+                new SrgbColor(0x12, 0x34, 0x56),
+                widthPt: 1.25,
+                dash: OutlineDash.DashDot)
         };
         var frame = ChartRenderPlanner.BuildFramePlan(chart, new ChartPlanRect(0, 0, 400, 300));
 
@@ -410,7 +413,8 @@ public sealed class ChartRenderPlannerTests
         plan.BorderStroke.Should().Be(new ChartStrokePlan(
             new SrgbColor(0x12, 0x34, 0x56),
             Alpha: 255,
-            Thickness: 1.25));
+            Thickness: 1.25,
+            Dash: OutlineDash.DashDot));
     }
 
     [Fact]
