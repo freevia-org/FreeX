@@ -8611,6 +8611,29 @@ public sealed class DocumentView : Control
     public string? CurrentProofingWord =>
         NormalizeProofingWord(SelectedText) ?? WordAtCaret();
 
+    public bool ReplaceCurrentProofingWord(string replacement)
+    {
+        if (string.IsNullOrWhiteSpace(replacement) || IsEditingLocked || _hfCaret is not null || _cellCaret is not null)
+            return false;
+
+        if (NormalizedSelection() is { } selection
+            && selection.Start.Block == selection.End.Block
+            && selection.Start.Offset != selection.End.Offset
+            && NormalizeProofingWord(SelectedText) is not null)
+        {
+            InsertText(replacement);
+            return true;
+        }
+
+        if (ProofingWordRangeAtCaret() is not { } range)
+            return false;
+
+        _selectionAnchor = new DocPosition(range.Block, range.Start);
+        _caret = new DocPosition(range.Block, range.End);
+        InsertText(replacement);
+        return true;
+    }
+
     public ProofingDiagnostic? CurrentProofingDiagnostic => CurrentProofingDiagnosticAtCaret();
 
     private IReadOnlyList<ProofingDiagnostic> BuildProofingDiagnostics() =>
@@ -11791,6 +11814,15 @@ public sealed class DocumentView : Control
     /// <summary>Cycles text case: lower → Title Case → UPPER → lower.</summary>
     private string? WordAtCaret()
     {
+        if (ProofingWordRangeAtCaret() is not { } range || _doc.Blocks[range.Block] is not Paragraph paragraph)
+            return null;
+
+        var cells = ParaCells(paragraph);
+        return NormalizeProofingWord(new string(cells.Skip(range.Start).Take(range.End - range.Start).Select(c => c.Ch).ToArray()));
+    }
+
+    private (int Block, int Start, int End)? ProofingWordRangeAtCaret()
+    {
         if (CurrentParagraph() is not { } paragraph || !IsEditable(paragraph))
             return null;
 
@@ -11811,7 +11843,8 @@ public sealed class DocumentView : Control
         while (end < cells.Count && IsProofingWordChar(cells[end].Ch))
             end++;
 
-        return NormalizeProofingWord(new string(cells.Skip(start).Take(end - start).Select(c => c.Ch).ToArray()));
+        var word = new string(cells.Skip(start).Take(end - start).Select(c => c.Ch).ToArray());
+        return NormalizeProofingWord(word) is null ? null : (_caret.Block, start, end);
     }
 
     private static string? NormalizeProofingWord(string? word)

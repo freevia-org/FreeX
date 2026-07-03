@@ -56,4 +56,37 @@ public sealed class ProofingPresentationPlannerTests
         entry.Should().NotBeNull();
         entry!.Senses.SelectMany(sense => sense.Synonyms).Should().NotBeEmpty();
     }
+
+    [Fact]
+    public void Thesaurus_presentation_planner_builds_display_and_action_rows()
+    {
+        var entry = new ThesaurusEntry(
+            "happy",
+            [new ThesaurusSense("adj", ["glad_of", "cheerful"])]);
+
+        var plan = ThesaurusPresentationPlanner.Build("Happy", entry);
+
+        plan.SourceWord.Should().Be("Happy");
+        plan.HeadingText.Should().Be("Happy");
+        plan.StatusText.Should().BeEmpty();
+        plan.Senses.Should().ContainSingle();
+        plan.Senses[0].DisplayLabel.Should().Be("adjective");
+        plan.Senses[0].Actions.Select(action => action.DisplayText)
+            .Should().Equal("glad of", "cheerful");
+        plan.Senses[0].Actions[0].ReplaceToolTip.Should().Be("Replace \"Happy\" with \"glad of\"");
+        plan.Senses[0].Actions[0].CopyToolTip.Should().Be("Copy \"glad of\" to clipboard");
+    }
+
+    [Fact]
+    public void Thesaurus_presentation_planner_reports_empty_and_missing_results()
+    {
+        ThesaurusPresentationPlanner.Build("", null).StatusText
+            .Should().Be(ThesaurusPresentationPlanner.EmptyWordStatus);
+
+        var plan = ThesaurusPresentationPlanner.Build("unknown", null);
+
+        plan.HeadingText.Should().Be("unknown");
+        plan.StatusText.Should().Be(ThesaurusPresentationPlanner.NoSynonymsStatus);
+        plan.Senses.Should().BeEmpty();
+    }
 }

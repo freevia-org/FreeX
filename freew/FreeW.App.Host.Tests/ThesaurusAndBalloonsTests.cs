@@ -80,6 +80,27 @@ public sealed class ThesaurusAndBalloonsTests
         entry!.Senses.SelectMany(s => s.Synonyms).Should().NotBeEmpty();
     }
 
+    [StaFact]
+    public void ReplaceCaretWord_ReplacesRenderedWordAndCommitsModel()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("A happy day"));
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        var paragraph = view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>().Single();
+        view.CaretPosition = PositionAtTextOffset(paragraph, 4);
+
+        view.ReplaceCaretWord("cheerful");
+
+        var rendered = new System.Windows.Documents.TextRange(
+            view.Document.ContentStart,
+            view.Document.ContentEnd).Text;
+        rendered.Should().Contain("A cheerful day");
+        ((Paragraph)view.Model.Blocks[0]).PlainText.Should().Be("A cheerful day");
+    }
+
     // ── BalloonOverlay ───────────────────────────────────────────────────────────────────────────────
 
     /// <summary>
@@ -233,5 +254,31 @@ public sealed class ThesaurusAndBalloonsTests
         var view = new DocumentView();
         view.LoadModel(doc);
         return view;
+    }
+
+    private static System.Windows.Documents.TextPointer PositionAtTextOffset(
+        System.Windows.Documents.Paragraph paragraph,
+        int offset)
+    {
+        var remaining = Math.Max(0, offset);
+        var pointer = paragraph.ContentStart;
+        while (pointer is not null && pointer.CompareTo(paragraph.ContentEnd) < 0)
+        {
+            if (pointer.GetPointerContext(System.Windows.Documents.LogicalDirection.Forward) == System.Windows.Documents.TextPointerContext.Text)
+            {
+                var text = pointer.GetTextInRun(System.Windows.Documents.LogicalDirection.Forward);
+                if (remaining <= text.Length)
+                    return pointer.GetPositionAtOffset(remaining, System.Windows.Documents.LogicalDirection.Forward) ?? pointer;
+
+                remaining -= text.Length;
+                pointer = pointer.GetPositionAtOffset(text.Length, System.Windows.Documents.LogicalDirection.Forward);
+            }
+            else
+            {
+                pointer = pointer.GetNextContextPosition(System.Windows.Documents.LogicalDirection.Forward);
+            }
+        }
+
+        return paragraph.ContentEnd;
     }
 }
