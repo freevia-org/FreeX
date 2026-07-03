@@ -112,6 +112,44 @@ internal sealed record ParitySurfaceResult(
     };
 }
 
+internal static class ParityCaptureOutputGuard
+{
+    private static readonly byte[] PngSignature = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+
+    public static ParitySurfaceResult ResultForPng(
+        string id,
+        ParitySurfaceKind kind,
+        string outputDirectory,
+        string pngFileName)
+    {
+        var pngPath = Path.Combine(outputDirectory, pngFileName);
+        var note = ValidatePngOutput(pngPath);
+        return note is null
+            ? new ParitySurfaceResult(id, kind, pngFileName, Captured: true, "")
+            : new ParitySurfaceResult(id, kind, pngFileName, Captured: false, note);
+    }
+
+    internal static string? ValidatePngOutput(string pngPath)
+    {
+        if (!File.Exists(pngPath))
+            return $"PNG output was not written: {pngPath}";
+
+        var length = new FileInfo(pngPath).Length;
+        if (length == 0)
+            return $"PNG output is empty: {pngPath}";
+        if (length < PngSignature.Length)
+            return $"PNG output is too short to be a valid PNG: {pngPath}";
+
+        using var stream = File.OpenRead(pngPath);
+        Span<byte> header = stackalloc byte[PngSignature.Length];
+        var read = stream.Read(header);
+        if (read != PngSignature.Length || !header.SequenceEqual(PngSignature))
+            return $"PNG output does not have a valid PNG signature: {pngPath}";
+
+        return null;
+    }
+}
+
 /// <summary>
 /// Drives the headless surface capture: hooks <see cref="MainWindow.Opened"/>, waits for shell readiness, then
 /// asks the window to render each surface to <c>&lt;outDir&gt;/&lt;surfaceId&gt;.png</c>, writes the manifest,
