@@ -10737,7 +10737,13 @@ public sealed class DocumentView : Control
             : longCitation.Trim();
         if (string.IsNullOrWhiteSpace(resolved))
             resolved = CurrentParagraph()?.PlainText.Trim() ?? string.Empty;
-        if (resolved.Length == 0)
+        MarkCitation(new Citation(resolved));
+    }
+
+    public void MarkCitation(Citation citation)
+    {
+        ArgumentNullException.ThrowIfNull(citation);
+        if (citation.LongCitation.Length == 0)
             return;
 
         var hostIndex = ResolveReferenceHostBlock();
@@ -10745,7 +10751,6 @@ public sealed class DocumentView : Control
             return;
 
         var offset = ReferenceInsertionOffset(hostIndex);
-        var citation = new Citation(resolved);
         _bus.Execute(new ReplaceParagraphRunsCommand(hostIndex, paragraph =>
             InsertRunAtOffset(paragraph, offset, Run.CitationMark(citation))));
 

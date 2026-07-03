@@ -448,6 +448,16 @@ public sealed class MainWindow : Window
         _editor.Focus();
     }
 
+    private async Task OpenMarkCitationDialogAsync()
+    {
+        var seed = _editor.SelectedText.Trim();
+        var dialog = new MarkCitationDialog(seed);
+        await dialog.ShowDialog(this);
+        if (dialog.Citation is { } citation)
+            _editor.MarkCitation(citation);
+        _editor.Focus();
+    }
+
     private static MasterSourceStore CreateMasterSourceStore(IReadOnlyList<Source> sources) =>
         new()
         {
@@ -1131,6 +1141,7 @@ public sealed class MainWindow : Window
             OpenCrossReferenceDialog: () => _ = OpenCrossReferenceDialogAsync(),
             OpenCitationDialog: () => _ = OpenCitationDialogAsync(),
             OpenManageSourcesDialog: () => _ = OpenManageSourcesDialogAsync(),
+            OpenMarkCitationDialog: () => _ = OpenMarkCitationDialogAsync(),
             ApplyZoom: (absolute, delta) =>
             {
                 var newScale = absolute.HasValue ? absolute.Value : _zoomScale + delta;

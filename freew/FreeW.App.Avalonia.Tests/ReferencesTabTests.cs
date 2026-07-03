@@ -293,6 +293,35 @@ public sealed class ReferencesTabTests
     }
 
     [Fact]
+    public void MarkCitation_accepts_full_citation_dialog_result()
+    {
+        var view = ViewWith(new Paragraph("17 U.S.C. 107"));
+
+        view.MarkCitation(new Citation("17 U.S.C. 107", CitationCategory.Statutes, "fair use"));
+
+        var mark = view.Document.Blocks.OfType<Paragraph>()
+            .SelectMany(paragraph => paragraph.Runs)
+            .Single(run => run.Citation is not null);
+        mark.Citation!.Category.Should().Be(CitationCategory.Statutes);
+        mark.Citation.LongCitation.Should().Be("17 U.S.C. 107");
+        mark.Citation.ShortCitation.Should().Be("fair use");
+    }
+
+    [Fact]
+    public Task MarkCitation_dialog_builds_full_citation_from_category_long_and_short_fields() => RunOnUiThread(() =>
+    {
+        var dialog = new MarkCitationDialog("Brown v. Board");
+
+        dialog.SetForTests(CitationCategory.Statutes, "  17 U.S.C. 107  ", "  fair use  ");
+        dialog.AcceptForTests().Should().BeTrue();
+
+        dialog.Citation.Should().NotBeNull();
+        dialog.Citation!.Category.Should().Be(CitationCategory.Statutes);
+        dialog.Citation.LongCitation.Should().Be("17 U.S.C. 107");
+        dialog.Citation.ShortCitation.Should().Be("fair use");
+    });
+
+    [Fact]
     public void MarkCitation_survives_plain_text_edit_rebuild()
     {
         var view = ViewWith(new Paragraph("Brown v. Board"));
@@ -632,7 +661,11 @@ public sealed class ReferencesTabTests
             .Contain("Alpha");
 
         var authoritiesView = ViewWith(new Paragraph("Brown v. Board"));
-        var authoritiesRegistry = FreeWRibbon.BuildRegistry(authoritiesView, NoopCallbacks());
+        var authoritiesRegistry = FreeWRibbon.BuildRegistry(authoritiesView, NoopCallbacks() with
+        {
+            OpenMarkCitationDialog = () => authoritiesView.MarkCitation(
+                new Citation("Brown v. Board", CitationCategory.Cases, "Brown"))
+        });
         Execute(authoritiesRegistry, "freew.mark-citation");
         Execute(authoritiesRegistry, "freew.table-of-authorities");
         authoritiesView.Document.Blocks.OfType<Paragraph>()
@@ -702,6 +735,7 @@ public sealed class ReferencesTabTests
         Execute(registry, "freew.cross-reference");
         Execute(registry, "freew.citation");
         Execute(registry, "freew.manage-sources");
+        Execute(registry, "freew.mark-citation");
 
         view.Document.Blocks.OfType<Paragraph>()
             .SelectMany(paragraph => paragraph.Runs)
@@ -712,6 +746,10 @@ public sealed class ReferencesTabTests
             .Should().NotContain(text => text.Contains("Smith", StringComparison.Ordinal),
                 "dialog-backed citation must not silently choose the first source");
         view.Document.Sources.Should().ContainSingle().Which.Tag.Should().Be("Sm24");
+        view.Document.Blocks.OfType<Paragraph>()
+            .SelectMany(paragraph => paragraph.Runs)
+            .Any(run => run.Citation is not null)
+            .Should().BeFalse("dialog-backed mark citation must not silently mark the current paragraph");
     }
 
     [Fact]
@@ -745,13 +783,16 @@ public sealed class ReferencesTabTests
                     new SourceManagementSourceEntry("Ng26", "Ng", "Planner Work", "2026", string.Empty));
                 var result = SourceManagementDialogPlanner.BuildResult(plan.State);
                 view.ReplaceSources(result.CurrentSources);
-            }
+            },
+            OpenMarkCitationDialog = () => view.MarkCitation(
+                new Citation("17 U.S.C. 107", CitationCategory.Statutes, "fair use"))
         };
         var registry = FreeWRibbon.BuildRegistry(view, callbacks);
 
         Execute(registry, "freew.cross-reference");
         Execute(registry, "freew.citation");
         Execute(registry, "freew.manage-sources");
+        Execute(registry, "freew.mark-citation");
 
         var headings = view.Document.Blocks.OfType<Paragraph>().Take(2).ToList();
         headings[0].BookmarkName.Should().BeNullOrEmpty();
@@ -761,6 +802,13 @@ public sealed class ReferencesTabTests
             .Should().Contain(text => text.Contains("Jones", StringComparison.Ordinal))
             .And.NotContain(text => text.Contains("Smith", StringComparison.Ordinal));
         view.Document.Sources.Select(source => source.Tag).Should().Equal("Sm24", "Jo25", "Ng26");
+        view.Document.Blocks.OfType<Paragraph>()
+            .SelectMany(paragraph => paragraph.Runs)
+            .Single(run => run.Citation is not null)
+            .Citation.Should().Match<Citation>(citation =>
+                citation.Category == CitationCategory.Statutes
+                && citation.LongCitation == "17 U.S.C. 107"
+                && citation.ShortCitation == "fair use");
     }
 
     [Fact]
@@ -769,6 +817,8 @@ public sealed class ReferencesTabTests
         var view = ViewWith(new Paragraph("Brown v. Board"));
         var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks() with
         {
+            OpenMarkCitationDialog = () => view.MarkCitation(
+                new Citation("Brown v. Board", CitationCategory.Cases, "Brown")),
             OpenTableOfAuthoritiesDialog = () => new ToaOptions
             {
                 CategoryFilter = CitationCategory.Cases,
