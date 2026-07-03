@@ -1224,6 +1224,67 @@ public sealed class PresentationReviewWorkflowPlannerTests
     }
 
     [Fact]
+    public void BuildAccessibilitySummaryPlan_FlagsBlankTableHeaderCells()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Title = "Quarterly review";
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 14,
+            Name = "Forecast table",
+            Kind = SlideShapeKind.Table,
+            Table = new TableShape
+            {
+                Flags = new TableStyleFlags { FirstRow = true },
+                Rows =
+                {
+                    new TableRow
+                    {
+                        Cells =
+                        {
+                            new TableCell { TextBody = TextBody("Region") },
+                            new TableCell { TextBody = TextBody(" ") },
+                            new TableCell()
+                        }
+                    },
+                    new TableRow
+                    {
+                        Cells =
+                        {
+                            new TableCell { TextBody = TextBody("North") },
+                            new TableCell { TextBody = TextBody("$42K") },
+                            new TableCell { TextBody = TextBody("Green") }
+                        }
+                    }
+                }
+            }
+        });
+
+        var summary = PresentationReviewWorkflowPlanner.BuildAccessibilitySummaryPlan(presentation);
+        var pane = PresentationReviewWorkflowPlanner.BuildAccessibilityCheckerPanePlan(presentation, summary);
+
+        summary.Issues.Should().ContainSingle().Which.Should().Be(new PresentationAccessibilityIssueDescriptor(
+            PresentationAccessibilityIssueSeverity.Warning,
+            0,
+            14,
+            "Blank table header cells",
+            "Forecast table has 2 blank header cells.",
+            new PresentationAccessibilityIssueActionSummary(
+                PresentationReviewWorkflowPlanner.BlankTableHeaderCellsActionSummary,
+                null,
+                true)));
+        summary.Issues.Should().NotContain(issue => issue.Title == "Table header row missing");
+        pane.Rows.Should().ContainSingle().Which.Should().Match<PresentationAccessibilityCheckerRowPlan>(row =>
+            row.Category == "Table" &&
+            row.ShapeId == 14 &&
+            row.ShapeName == "Forecast table" &&
+            row.ActionLabel == "Select Object" &&
+            row.ShouldNavigateToSlide &&
+            row.ShouldSelectShape);
+    }
+
+    [Fact]
     public void BuildAccessibilityCheckerPanePlan_ProjectsOrderedIssuesIntoSelectableRows()
     {
         var presentation = Presentation.CreateEmpty();
