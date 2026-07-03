@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Free.Shared.Shell.Avalonia;
+using FreeW.App.Presentation.Ribbon;
 
 namespace FreeW.App.Avalonia;
 
@@ -150,5 +151,209 @@ internal static class MailMergeDialogs
 
         await dialog.ShowDialog(owner);
         return result;
+    }
+
+    public static async Task<MailMergeRuleIfDialogResult?> AskMergeRuleIfAsync(
+        Window owner,
+        IReadOnlyList<string> fieldNames)
+    {
+        var dialog = CreateDialog("If...Then...Else", 380, 300);
+        var fieldBox = CreateTextBox(fieldNames.FirstOrDefault() ?? string.Empty, "Field name");
+        var opCombo = CreateOperatorCombo();
+        var valueBox = CreateTextBox(string.Empty, "Comparison value");
+        var trueBox = CreateTextBox(string.Empty, "Text if true");
+        var falseBox = CreateTextBox(string.Empty, "Text if false");
+
+        void RefreshValueEnabled()
+        {
+            var op = MailMergeRuleDialogPlanner.GetConditionOperator(opCombo.SelectedIndex);
+            valueBox.IsEnabled = MailMergeRuleDialogPlanner.IsComparisonValueEnabled(op);
+        }
+
+        opCombo.SelectionChanged += (_, _) => RefreshValueEnabled();
+        RefreshValueEnabled();
+
+        MailMergeRuleIfDialogResult? result = null;
+        var content = CreateForm(
+            ("Field name:", (Control)fieldBox),
+            ("Comparison:", opCombo),
+            ("Compare to:", valueBox),
+            ("Then insert:", trueBox),
+            ("Otherwise insert:", falseBox));
+        AddActions(dialog, content, () =>
+        {
+            result = MailMergeRuleDialogPlanner.CreateIfResult(
+                fieldBox.Text,
+                opCombo.SelectedIndex,
+                valueBox.Text,
+                trueBox.Text,
+                falseBox.Text);
+        });
+
+        await dialog.ShowDialog(owner);
+        return result;
+    }
+
+    public static async Task<MailMergeRuleConditionDialogResult?> AskMergeRuleConditionAsync(
+        Window owner,
+        IReadOnlyList<string> fieldNames,
+        string title)
+    {
+        var dialog = CreateDialog(title, 360, 230);
+        var fieldBox = CreateTextBox(fieldNames.FirstOrDefault() ?? string.Empty, "Field name");
+        var opCombo = CreateOperatorCombo();
+        var valueBox = CreateTextBox(string.Empty, "Comparison value");
+
+        void RefreshValueEnabled()
+        {
+            var op = MailMergeRuleDialogPlanner.GetConditionOperator(opCombo.SelectedIndex);
+            valueBox.IsEnabled = MailMergeRuleDialogPlanner.IsComparisonValueEnabled(op);
+        }
+
+        opCombo.SelectionChanged += (_, _) => RefreshValueEnabled();
+        RefreshValueEnabled();
+
+        MailMergeRuleConditionDialogResult? result = null;
+        var content = CreateForm(
+            ("Field name:", (Control)fieldBox),
+            ("Comparison:", opCombo),
+            ("Compare to:", valueBox));
+        AddActions(dialog, content, () =>
+        {
+            result = MailMergeRuleDialogPlanner.CreateConditionResult(
+                fieldBox.Text,
+                opCombo.SelectedIndex,
+                valueBox.Text);
+        });
+
+        await dialog.ShowDialog(owner);
+        return result;
+    }
+
+    public static async Task<string?> AskMergeRulePromptAsync(Window owner, string title, string prompt)
+    {
+        var dialog = CreateDialog(title, 340, 165);
+        var valueBox = CreateTextBox(string.Empty, prompt);
+        string? result = null;
+        var content = CreateForm((prompt, (Control)valueBox));
+        AddActions(dialog, content, () =>
+        {
+            result = string.IsNullOrWhiteSpace(valueBox.Text) ? null : valueBox.Text.Trim();
+        });
+
+        await dialog.ShowDialog(owner);
+        return result;
+    }
+
+    public static async Task<MailMergeRuleNameValueDialogResult?> AskMergeRuleNameValueAsync(
+        Window owner,
+        string title,
+        string valueLabel)
+    {
+        var dialog = CreateDialog(title, 360, 210);
+        var nameBox = CreateTextBox(string.Empty, "Bookmark name");
+        var valueBox = CreateTextBox(string.Empty, valueLabel);
+        MailMergeRuleNameValueDialogResult? result = null;
+        var content = CreateForm(
+            ("Bookmark name:", (Control)nameBox),
+            (valueLabel, (Control)valueBox));
+        AddActions(dialog, content, () =>
+        {
+            result = string.IsNullOrWhiteSpace(nameBox.Text)
+                ? null
+                : MailMergeRuleDialogPlanner.CreateNameValueResult(nameBox.Text.Trim(), valueBox.Text);
+        });
+
+        await dialog.ShowDialog(owner);
+        return result;
+    }
+
+    private static Window CreateDialog(string title, double width, double height) =>
+        new()
+        {
+            Title = title,
+            Width = width,
+            Height = height,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            CanResize = false,
+        };
+
+    private static TextBox CreateTextBox(string text, string placeholder)
+    {
+        var box = new TextBox
+        {
+            Text = text,
+            PlaceholderText = placeholder,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+        };
+        AvaloniaCompactDialogChrome.ApplyTextBox(box, DialogChromeStyle);
+        return box;
+    }
+
+    private static ComboBox CreateOperatorCombo()
+    {
+        var combo = new ComboBox
+        {
+            ItemsSource = MailMergeRuleDialogPlanner.GetConditionOperators()
+                .Select(choice => choice.Label)
+                .ToArray(),
+            SelectedIndex = 0,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+        };
+        AvaloniaCompactDialogChrome.ApplyComboBox(combo, DialogChromeStyle);
+        return combo;
+    }
+
+    private static Grid CreateForm(params (string Label, Control Control)[] rows)
+    {
+        var grid = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("112,*"),
+            RowDefinitions = new RowDefinitions(string.Join(",", rows.Select(_ => "Auto"))),
+            Margin = new Thickness(16, 16, 16, 0),
+        };
+
+        for (var i = 0; i < rows.Length; i++)
+        {
+            var label = new TextBlock
+            {
+                Text = rows[i].Label,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 10, 8),
+            };
+            var control = rows[i].Control;
+            control.Margin = new Thickness(0, 0, 0, 8);
+
+            Grid.SetRow(label, i);
+            Grid.SetColumn(label, 0);
+            Grid.SetRow(control, i);
+            Grid.SetColumn(control, 1);
+            grid.Children.Add(label);
+            grid.Children.Add(control);
+        }
+
+        return grid;
+    }
+
+    private static void AddActions(Window dialog, Control content, Action onOk)
+    {
+        var ok = new Button { Content = "OK", IsDefault = true, MinWidth = 72 };
+        AvaloniaCompactDialogChrome.ApplyButton(ok, DialogChromeStyle, minWidth: 72, isDefault: true);
+        ok.Click += (_, _) =>
+        {
+            onOk();
+            dialog.Close();
+        };
+        var cancel = new Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
+        AvaloniaCompactDialogChrome.ApplyButton(cancel, DialogChromeStyle, minWidth: 72);
+        cancel.Click += (_, _) => dialog.Close();
+
+        var buttons = AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(16, 10, 16, 14));
+        var grid = new Grid { RowDefinitions = new RowDefinitions("*,Auto") };
+        Grid.SetRow(content, 0);
+        Grid.SetRow(buttons, 1);
+        grid.Children.Add(content);
+        grid.Children.Add(buttons);
+        dialog.Content = grid;
     }
 }

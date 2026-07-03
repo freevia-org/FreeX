@@ -1249,6 +1249,10 @@ internal static class FreeWAvaloniaRibbonCommands
     {
         r.Register("freew.merge-envelopes", new ActionRibbonCommand(engine.ApplyDefaultEnvelope));
         r.Register("freew.merge-labels", new ActionRibbonCommand(engine.ApplyDefaultLabels));
+        r.Register("freew.start-mail-merge", new ActionRibbonCommand(engine.StartMailMergeLetters));
+        r.Register("freew.start-mail-merge-letters", new ActionRibbonCommand(engine.StartMailMergeLetters));
+        r.Register("freew.start-mail-merge-directory", new ActionRibbonCommand(engine.StartMailMergeDirectory));
+        r.Register("freew.start-mail-merge-normal", new ActionRibbonCommand(engine.ClearMergeSession));
         RegisterMailingsAlias(r, "freew.merge-data", new ActionRibbonCommand(engine.SelectRecipients),
             "freew.select-recipients");
         r.Register("freew.merge-edit-recipients", new ActionRibbonCommand(engine.SelectRecipients));
@@ -1259,6 +1263,17 @@ internal static class FreeWAvaloniaRibbonCommands
             "freew.greeting-line");
         r.Register("freew.merge-match-fields", new ActionRibbonCommand(engine.MatchFields));
         r.Register("freew.merge-filter-sort", new ActionRibbonCommand(engine.FilterSortRecipients));
+        r.Register("freew.merge-rules", EmptyRibbonCommand.Instance);
+        r.Register("freew.merge-rule-if", new ActionRibbonCommand(engine.InsertIfRule));
+        r.Register("freew.merge-rule-skip-record-if", new ActionRibbonCommand(engine.InsertSkipRecordIfRule));
+        r.Register("freew.merge-rule-next-record-if", new ActionRibbonCommand(engine.InsertNextRecordIfRule));
+        r.Register("freew.merge-next-record", new ActionRibbonCommand(engine.InsertNextRecordField));
+        r.Register("freew.merge-record-number", new ActionRibbonCommand(engine.InsertMergeRecordNumberField));
+        r.Register("freew.merge-sequence-number", new ActionRibbonCommand(engine.InsertMergeSequenceNumberField));
+        r.Register("freew.merge-rule-fill-in", new ActionRibbonCommand(engine.InsertFillInRule));
+        r.Register("freew.merge-rule-ask", new ActionRibbonCommand(engine.InsertAskRule));
+        r.Register("freew.merge-rule-set", new ActionRibbonCommand(engine.InsertSetRule));
+        r.Register("freew.merge-rule-ref", new ActionRibbonCommand(engine.InsertRefRule));
         RegisterMailingsAlias(r, "freew.merge-preview", new ActionRibbonCommand(engine.TogglePreview),
             "freew.preview-results");
         r.Register("freew.merge-preview-first", new ActionRibbonCommand(engine.FirstRecord));

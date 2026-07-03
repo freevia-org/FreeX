@@ -79,4 +79,13 @@ public sealed class MailMergeRuleDialogPlannerTests
         result.Operator.Should().Be(MergeConditionOperator.NotEqual);
         result.Value.Should().Be("Paris");
     }
+
+    [Fact]
+    public void CreateNameValueResult_NormalizesNullText()
+    {
+        var result = MailMergeRuleDialogPlanner.CreateNameValueResult(null, "CustomerName");
+
+        result.Name.Should().BeEmpty();
+        result.Value.Should().Be("CustomerName");
+    }
 }

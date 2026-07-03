@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using FreeW.App.Avalonia.Editing;
 using FreeW.App.Avalonia.Ribbon;
+using FreeW.App.Presentation.Ribbon;
 using FreeW.Core.Model;
 using Free.Shared.Ribbon;
 
@@ -23,7 +24,11 @@ public sealed class MailingsTabTests
     private static RibbonHostCallbacks Callbacks(
         string? recipientCsv = null,
         string? mergeFieldName = null,
-        List<string>? infoSink = null) =>
+        List<string>? infoSink = null,
+        MailMergeRuleIfDialogResult? ruleIf = null,
+        MailMergeRuleConditionDialogResult? ruleCondition = null,
+        string? rulePrompt = null,
+        MailMergeRuleNameValueDialogResult? ruleNameValue = null) =>
         new(
             Open: () => { }, Save: () => { }, Cut: () => { }, Copy: () => { }, Paste: () => { },
             Backstage: () => { }, NewDocument: () => { }, ToggleNavigationPane: () => { },
@@ -34,7 +39,11 @@ public sealed class MailingsTabTests
             InsertPicture: () => { }, ApplyZoom: (_, _) => { },
             AskRecipientCsv: _ => recipientCsv,
             AskMergeFieldName: _ => mergeFieldName,
-            ShowMailMergeInfo: m => infoSink?.Add(m));
+            ShowMailMergeInfo: m => infoSink?.Add(m),
+            AskMergeRuleIf: _ => ruleIf,
+            AskMergeRuleCondition: (_, _) => ruleCondition,
+            AskMergeRulePrompt: (_, _) => rulePrompt,
+            AskMergeRuleNameValue: (_, _) => ruleNameValue);
 
     private static DocumentView ViewWith(params Block[] blocks)
     {
@@ -296,6 +305,10 @@ public sealed class MailingsTabTests
         {
             "freew.merge-envelopes",
             "freew.merge-labels",
+            "freew.start-mail-merge",
+            "freew.start-mail-merge-letters",
+            "freew.start-mail-merge-directory",
+            "freew.start-mail-merge-normal",
             "freew.merge-data",
             "freew.merge-edit-recipients",
             "freew.merge-filter-sort",
@@ -303,6 +316,17 @@ public sealed class MailingsTabTests
             "freew.merge-greeting-line",
             "freew.merge-field",
             "freew.merge-match-fields",
+            "freew.merge-rules",
+            "freew.merge-rule-if",
+            "freew.merge-rule-skip-record-if",
+            "freew.merge-rule-next-record-if",
+            "freew.merge-next-record",
+            "freew.merge-record-number",
+            "freew.merge-sequence-number",
+            "freew.merge-rule-fill-in",
+            "freew.merge-rule-ask",
+            "freew.merge-rule-set",
+            "freew.merge-rule-ref",
             "freew.merge-preview",
             "freew.merge-preview-first",
             "freew.merge-preview-previous",
@@ -377,6 +401,10 @@ public sealed class MailingsTabTests
         {
             "freew.merge-envelopes",
             "freew.merge-labels",
+            "freew.start-mail-merge",
+            "freew.start-mail-merge-letters",
+            "freew.start-mail-merge-directory",
+            "freew.start-mail-merge-normal",
             "freew.merge-data",
             "freew.merge-edit-recipients",
             "freew.merge-filter-sort",
@@ -384,6 +412,17 @@ public sealed class MailingsTabTests
             "freew.merge-greeting-line",
             "freew.merge-field",
             "freew.merge-match-fields",
+            "freew.merge-rules",
+            "freew.merge-rule-if",
+            "freew.merge-rule-skip-record-if",
+            "freew.merge-rule-next-record-if",
+            "freew.merge-next-record",
+            "freew.merge-record-number",
+            "freew.merge-sequence-number",
+            "freew.merge-rule-fill-in",
+            "freew.merge-rule-ask",
+            "freew.merge-rule-set",
+            "freew.merge-rule-ref",
             "freew.merge-preview",
             "freew.merge-preview-first",
             "freew.merge-preview-previous",
@@ -402,6 +441,127 @@ public sealed class MailingsTabTests
             "freew.next-record",
             "freew.finish-merge",
         });
+    }
+
+    [Fact]
+    public void Mailings_tab_definition_exposes_start_merge_and_rules_dropdown_depth()
+    {
+        var definition = FreeWRibbon.BuildDefinition();
+        var mailings = definition.FindTab("mailings");
+        mailings.Should().NotBeNull();
+
+        mailings!.Groups.Select(group => group.Id).Should()
+            .Equal("create", "merge-data", "merge-write", "merge-preview", "merge-finish");
+
+        var startMailMerge = mailings.Groups.Single(g => g.Id == "merge-data").Controls
+            .OfType<RibbonDropdown>()
+            .Single(c => c.CommandId.Value == "freew.start-mail-merge");
+        startMailMerge.Menu.Items
+            .Where(item => item.Kind == RibbonMenuItemKind.Command)
+            .Select(item => (item.CommandId!.Value, item.Header))
+            .Should()
+            .Equal(
+                ("freew.start-mail-merge-letters", "Letters"),
+                ("freew.start-mail-merge-directory", "Directory"),
+                ("freew.start-mail-merge-normal", "Normal Word Document"));
+
+        var rules = mailings.Groups.Single(g => g.Id == "merge-write").Controls
+            .OfType<RibbonDropdown>()
+            .Single(c => c.CommandId.Value == "freew.merge-rules");
+        rules.Menu.Items
+            .Where(item => item.Kind == RibbonMenuItemKind.Command)
+            .Select(item => item.CommandId!.Value)
+            .Should()
+            .Equal(
+                "freew.merge-rule-if",
+                "freew.merge-rule-skip-record-if",
+                "freew.merge-rule-next-record-if",
+                "freew.merge-next-record",
+                "freew.merge-record-number",
+                "freew.merge-sequence-number",
+                "freew.merge-rule-fill-in",
+                "freew.merge-rule-ask",
+                "freew.merge-rule-set",
+                "freew.merge-rule-ref");
+    }
+
+    [Fact]
+    public void Start_mail_merge_commands_set_output_mode_and_clear_session()
+    {
+        var view = ViewWith(new Paragraph("Dear Â«FirstNameÂ»"));
+        var registry = FreeWRibbon.BuildRegistry(view, Callbacks(), out var engine);
+        engine.LoadRecipientsCsv(SampleCsv);
+
+        Execute(registry, "freew.start-mail-merge-directory");
+        engine.Session.Mode.Should().Be(MailMergeOutputMode.Directory);
+
+        Execute(registry, "freew.start-mail-merge");
+        engine.Session.Mode.Should().Be(MailMergeOutputMode.Letters);
+
+        Execute(registry, "freew.start-mail-merge-normal");
+        engine.Session.Data.Should().BeNull();
+        engine.Session.Mode.Should().Be(MailMergeOutputMode.Letters);
+        engine.Session.IsPreviewing.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Rules_commands_insert_shared_rule_instructions_via_registry()
+    {
+        var ifResult = MailMergeRuleDialogPlanner.CreateIfResult(
+            "City",
+            selectedOperatorIndex: 0,
+            value: "London",
+            trueText: "Local",
+            falseText: "Remote");
+        var condition = MailMergeRuleDialogPlanner.CreateConditionResult(
+            "City",
+            selectedOperatorIndex: 0,
+            value: "New York");
+        var nameValue = MailMergeRuleDialogPlanner.CreateNameValueResult("CustomerCode", "Enter code");
+
+        var view = ViewWith(new Paragraph(""));
+        var registry = FreeWRibbon.BuildRegistry(
+            view,
+            Callbacks(
+                ruleIf: ifResult,
+                ruleCondition: condition,
+                rulePrompt: "CustomerCode",
+                ruleNameValue: nameValue),
+            out _);
+
+        Execute(registry, "freew.merge-rule-if");
+        Execute(registry, "freew.merge-rule-skip-record-if");
+        Execute(registry, "freew.merge-rule-next-record-if");
+        Execute(registry, "freew.merge-next-record");
+        Execute(registry, "freew.merge-record-number");
+        Execute(registry, "freew.merge-sequence-number");
+        Execute(registry, "freew.merge-rule-fill-in");
+        Execute(registry, "freew.merge-rule-ask");
+        Execute(registry, "freew.merge-rule-set");
+        Execute(registry, "freew.merge-rule-ref");
+
+        var text = PlainText(view.Document);
+        text.Should().Contain(Wrap(MergeRuleEvaluator.BuildIfInstruction(
+            ifResult.FieldName,
+            ifResult.Operator,
+            ifResult.Value,
+            ifResult.TrueText,
+            ifResult.FalseText)));
+        text.Should().Contain(Wrap(MergeRuleEvaluator.BuildSkipRecordIfInstruction(
+            condition.FieldName,
+            condition.Operator,
+            condition.Value)));
+        text.Should().Contain(Wrap(MergeRuleEvaluator.BuildNextRecordIfInstruction(
+            condition.FieldName,
+            condition.Operator,
+            condition.Value)));
+        text.Should().Contain(Wrap(MailMerge.NextRecordField));
+        text.Should().Contain(Wrap(MailMerge.MergeRecordNumberField));
+        text.Should().Contain(Wrap(MailMerge.MergeSequenceNumberField));
+        text.Should().Contain(Wrap(MergeRuleEvaluator.BuildFillInInstruction("CustomerCode")));
+        text.Should().Contain(Wrap(MergeRuleEvaluator.BuildAskInstruction("CustomerCode", "Enter code")));
+        text.Should().Contain(Wrap(MergeRuleEvaluator.BuildSetInstruction("CustomerCode", "Enter code")));
+        text.Should().Contain(Wrap(MergeRuleEvaluator.BuildRefInstruction("CustomerCode")));
     }
 
     [Fact]
@@ -452,6 +612,9 @@ public sealed class MailingsTabTests
         registry.TryGet(new RibbonCommandId(commandId), out var command).Should().BeTrue();
         command!.Execute(RibbonCommandContext.Empty);
     }
+
+    private static string Wrap(string instruction) =>
+        $"{MailMerge.FieldOpen}{instruction}{MailMerge.FieldClose}";
 
     private static IEnumerable<string> CommandIds(RibbonControl control)
     {
