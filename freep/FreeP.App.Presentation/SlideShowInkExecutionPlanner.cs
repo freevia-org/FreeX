@@ -30,6 +30,35 @@ public sealed record SlideShowInkOverlayPlan(
         CommittedStrokes.Count > 0 || ActiveStroke is not null || LaserOverlayPoint is not null;
 }
 
+public enum SlideShowInkOverlayPrimitiveKind
+{
+    StrokePath,
+    LaserDot
+}
+
+public sealed record SlideShowInkOverlayPrimitive(
+    SlideShowInkOverlayPrimitiveKind Kind,
+    string? StrokeId,
+    SlideShowPresenterPointerMode PointerMode,
+    SlideShowInkState InkState,
+    IReadOnlyList<SlideShowPoint> Points,
+    SlideShowPoint? CenterPoint,
+    double StrokeThicknessDip,
+    double RadiusDip,
+    bool UseRoundLineCaps,
+    bool UseRoundLineJoin,
+    string? OutlineColorHex,
+    double OutlineThicknessDip);
+
+public sealed record SlideShowInkOverlayRenderPlan(
+    int SlideIndex,
+    double CanvasWidthDip,
+    double CanvasHeightDip,
+    IReadOnlyList<SlideShowInkOverlayPrimitive> Primitives)
+{
+    public bool HasVisibleInk => Primitives.Count > 0;
+}
+
 public enum SlideShowInkExecutionMutationKind
 {
     None,
@@ -124,6 +153,55 @@ public static class SlideShowInkExecutionPlanner
                 .ToArray(),
             state.ActiveStroke?.SlideIndex == state.SlideIndex ? state.ActiveStroke : null,
             state.LaserOverlayPoint);
+    }
+
+    public static SlideShowInkOverlayRenderPlan BuildOverlayRenderPlan(
+        SlideShowInkExecutionState state,
+        double canvasWidthDip,
+        double canvasHeightDip,
+        SlideShowSlideMetrics metrics)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+        ArgumentNullException.ThrowIfNull(metrics);
+
+        var width = canvasWidthDip > 0 ? canvasWidthDip : metrics.WidthDip;
+        var height = canvasHeightDip > 0 ? canvasHeightDip : metrics.HeightDip;
+        var scale = InkScale(width, height, metrics);
+        var primitives = new List<SlideShowInkOverlayPrimitive>();
+        var overlay = BuildOverlayPlan(state);
+
+        foreach (var stroke in overlay.CommittedStrokes)
+        {
+            AddStrokePrimitive(primitives, stroke, width, height, metrics, scale);
+        }
+
+        if (overlay.ActiveStroke is not null)
+        {
+            AddStrokePrimitive(primitives, overlay.ActiveStroke, width, height, metrics, scale);
+        }
+
+        if (overlay.LaserOverlayPoint is not null)
+        {
+            primitives.Add(new SlideShowInkOverlayPrimitive(
+                SlideShowInkOverlayPrimitiveKind.LaserDot,
+                StrokeId: null,
+                state.ActivePointerMode,
+                state.ActiveInkState,
+                Points: Array.Empty<SlideShowPoint>(),
+                CenterPoint: ProjectPoint(overlay.LaserOverlayPoint, width, height, metrics),
+                StrokeThicknessDip: 0,
+                RadiusDip: Math.Max(3, state.ActiveInkState.ThicknessDip * scale),
+                UseRoundLineCaps: false,
+                UseRoundLineJoin: false,
+                OutlineColorHex: "#FFFFFF",
+                OutlineThicknessDip: 1));
+        }
+
+        return new SlideShowInkOverlayRenderPlan(
+            overlay.SlideIndex,
+            width,
+            height,
+            primitives);
     }
 
     public static SlideShowInkExecutionResult Begin(
@@ -407,6 +485,55 @@ public static class SlideShowInkExecutionPlanner
                     "No presenter ink execution")
             },
             IsHandled: false);
+
+    private static void AddStrokePrimitive(
+        List<SlideShowInkOverlayPrimitive> primitives,
+        SlideShowInkStroke stroke,
+        double canvasWidthDip,
+        double canvasHeightDip,
+        SlideShowSlideMetrics metrics,
+        double scale)
+    {
+        if (stroke.Points.Count == 0)
+        {
+            return;
+        }
+
+        primitives.Add(new SlideShowInkOverlayPrimitive(
+            SlideShowInkOverlayPrimitiveKind.StrokePath,
+            stroke.StrokeId,
+            stroke.PointerMode,
+            stroke.InkState,
+            stroke.Points
+                .Select(point => ProjectPoint(point, canvasWidthDip, canvasHeightDip, metrics))
+                .ToArray(),
+            CenterPoint: null,
+            StrokeThicknessDip: Math.Max(1, stroke.InkState.ThicknessDip * scale),
+            RadiusDip: 0,
+            UseRoundLineCaps: true,
+            UseRoundLineJoin: true,
+            OutlineColorHex: null,
+            OutlineThicknessDip: 0));
+    }
+
+    private static SlideShowPoint ProjectPoint(
+        SlideShowInkPoint point,
+        double canvasWidthDip,
+        double canvasHeightDip,
+        SlideShowSlideMetrics metrics)
+    {
+        var scaleX = canvasWidthDip / Math.Max(1, metrics.WidthDip);
+        var scaleY = canvasHeightDip / Math.Max(1, metrics.HeightDip);
+        return new SlideShowPoint(point.X * scaleX, point.Y * scaleY);
+    }
+
+    private static double InkScale(
+        double canvasWidthDip,
+        double canvasHeightDip,
+        SlideShowSlideMetrics metrics) =>
+        Math.Min(
+            canvasWidthDip / Math.Max(1, metrics.WidthDip),
+            canvasHeightDip / Math.Max(1, metrics.HeightDip));
 
     private static bool StrokeIntersectsPoint(
         SlideShowInkStroke stroke,

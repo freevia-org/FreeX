@@ -28,6 +28,7 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("SlideShowInkExecutionPlanner.End(");
         source.Should().Contain("SlideShowInkExecutionPlanner.ClearCurrentSlide(");
         source.Should().Contain("SlideShowInkExecutionPlanner.ApplyRetentionOnExit(");
+        source.Should().Contain("SlideShowInkExecutionPlanner.BuildOverlayRenderPlan(");
         source.Should().Contain("SlideShowHostPlanner.MapCanvasPointToSlide(");
         source.Should().Contain("SlideShowHostPlanner.HitTestHyperlink(");
         source.Should().Contain("SlideShowHostPlanner.HitTestTriggerShape(");
@@ -47,6 +48,8 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().NotContain("var result = _controller.Back();");
         source.Should().NotContain("_controller.AdvanceTrigger(");
         source.Should().NotContain("new SlideShowPresenterToolPlan(");
+        source.Should().NotContain("BuildOverlayPlan(_inkExecutionState)");
+        source.Should().NotContain("stroke.InkState.ThicknessDip * scale");
     }
 
     private static string FindRepositoryRoot()
