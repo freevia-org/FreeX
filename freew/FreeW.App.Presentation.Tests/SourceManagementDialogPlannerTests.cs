@@ -29,7 +29,7 @@ public sealed class SourceManagementDialogPlannerTests
             "Author:",
             "Title:",
             "Year:",
-            "Publisher (optional):");
+            "Publisher / Site name (optional):");
         plans.Select(plan => plan.Text).Should().Equal(
             "Knuth1997",
             "Knuth",
@@ -39,18 +39,73 @@ public sealed class SourceManagementDialogPlannerTests
     }
 
     [Fact]
+    public void BuildSourceTypeChoices_ExposesTheModeledWordSourceTypes()
+    {
+        var choices = SourceManagementDialogPlanner.BuildSourceTypeChoices();
+
+        choices.Select(choice => choice.Type).Should().Equal(
+            SourceType.Book,
+            SourceType.JournalArticle,
+            SourceType.WebSite);
+        choices.Select(choice => choice.Label).Should().Equal(
+            "Book",
+            "Journal Article",
+            "Web Site");
+        SourceManagementDialogPlanner.SourceTypeSelectedIndex(SourceType.JournalArticle).Should().Be(1);
+    }
+
+    [Fact]
+    public void BuildEntryFieldPlans_UsesTypeSpecificFields()
+    {
+        var journalPlans = SourceManagementDialogPlanner.BuildEntryFieldPlans(SourceType.JournalArticle);
+        journalPlans.Select(plan => plan.Field).Should().Equal(
+            SourceManagementSourceField.Tag,
+            SourceManagementSourceField.Author,
+            SourceManagementSourceField.Title,
+            SourceManagementSourceField.Year,
+            SourceManagementSourceField.Journal,
+            SourceManagementSourceField.Volume,
+            SourceManagementSourceField.Issue,
+            SourceManagementSourceField.Pages);
+
+        var webPlans = SourceManagementDialogPlanner.BuildEntryFieldPlans(SourceType.WebSite);
+        webPlans.Select(plan => plan.Field).Should().Equal(
+            SourceManagementSourceField.Tag,
+            SourceManagementSourceField.Author,
+            SourceManagementSourceField.Title,
+            SourceManagementSourceField.Year,
+            SourceManagementSourceField.Publisher,
+            SourceManagementSourceField.Url,
+            SourceManagementSourceField.Accessed);
+    }
+
+    [Fact]
     public void CreateEntry_TrimsDialogTextAndDefaultsMissingFields()
     {
         var entry = SourceManagementDialogPlanner.CreateEntry(
+            SourceType.WebSite,
             new Dictionary<SourceManagementSourceField, string?>
             {
                 [SourceManagementSourceField.Tag] = "  K97  ",
                 [SourceManagementSourceField.Author] = " Knuth ",
                 [SourceManagementSourceField.Title] = null,
-                [SourceManagementSourceField.Year] = " 1997 "
+                [SourceManagementSourceField.Year] = " 1997 ",
+                [SourceManagementSourceField.Url] = " https://example.test "
             });
 
-        entry.Should().Be(new SourceManagementSourceEntry("K97", "Knuth", string.Empty, "1997", string.Empty));
+        entry.Should().Be(new SourceManagementSourceEntry(
+            SourceType.WebSite,
+            "K97",
+            "Knuth",
+            string.Empty,
+            "1997",
+            string.Empty,
+            string.Empty,
+            string.Empty,
+            string.Empty,
+            string.Empty,
+            "https://example.test",
+            string.Empty));
     }
 
     [Fact]
@@ -72,10 +127,10 @@ public sealed class SourceManagementDialogPlannerTests
     }
 
     [Fact]
-    public void TryBuildCitationSource_RequiresAuthorTitleOrYearAndNormalizesPublisher()
+    public void TryBuildCitationSource_RequiresDetailsBeyondTagAndBuildsTypedSource()
     {
         SourceManagementDialogPlanner.TryBuildCitationSource(
-                new SourceManagementSourceEntry("TagOnly", string.Empty, string.Empty, string.Empty, "PublisherOnly"),
+                new SourceManagementSourceEntry("TagOnly", string.Empty, string.Empty, string.Empty, string.Empty),
                 out var rejected,
                 out var validation)
             .Should().BeFalse();
@@ -86,7 +141,19 @@ public sealed class SourceManagementDialogPlannerTests
             SourceManagementDialogPlanner.MissingCitationSourceDataMessage));
 
         SourceManagementDialogPlanner.TryBuildCitationSource(
-                new SourceManagementSourceEntry("K97", "Knuth", "TAOCP", "1997", "  "),
+                new SourceManagementSourceEntry(
+                    SourceType.WebSite,
+                    "K97",
+                    "Knuth",
+                    "TAOCP",
+                    "1997",
+                    "  Site ",
+                    string.Empty,
+                    string.Empty,
+                    string.Empty,
+                    string.Empty,
+                    " https://example.test ",
+                    " 3 May 2024 "),
                 out var source,
                 out validation)
             .Should().BeTrue();
@@ -94,11 +161,14 @@ public sealed class SourceManagementDialogPlannerTests
         validation.Should().BeNull();
         source.Should().NotBeNull();
         source!.Tag.Should().Be("K97");
-        source.Publisher.Should().BeNull();
+        source.Type.Should().Be(SourceType.WebSite);
+        source.Publisher.Should().Be("Site");
+        source.Url.Should().Be("https://example.test");
+        source.Accessed.Should().Be("3 May 2024");
     }
 
     [Fact]
-    public void TryBuildManagedSource_AcceptsAnySourceFieldAndPreservesTypeSpecificFieldsWhenEditing()
+    public void TryBuildManagedSource_AcceptsAnySourceFieldAndBuildsSelectedType()
     {
         var existing = new Source
         {
@@ -112,8 +182,9 @@ public sealed class SourceManagementDialogPlannerTests
             Accessed = "2024-01-02"
         };
 
+        var entry = SourceManagementDialogPlanner.ProjectEntry(existing) with { Tag = "New" };
         SourceManagementDialogPlanner.TryBuildManagedSource(
-                new SourceManagementSourceEntry("New", string.Empty, string.Empty, string.Empty, string.Empty),
+                entry,
                 existing,
                 out var source,
                 out var validation)
@@ -127,8 +198,36 @@ public sealed class SourceManagementDialogPlannerTests
         source.Volume.Should().Be("10");
         source.Issue.Should().Be("2");
         source.Pages.Should().Be("12-20");
-        source.Url.Should().Be("https://example.test");
-        source.Accessed.Should().Be("2024-01-02");
+        source.Url.Should().BeNull();
+        source.Accessed.Should().BeNull();
+    }
+
+    [Fact]
+    public void BuildSource_ClearsFieldsThatDoNotApplyToSelectedType()
+    {
+        var source = SourceManagementDialogPlanner.BuildSource(
+            new SourceManagementSourceEntry(
+                SourceType.Book,
+                "B",
+                "Author",
+                "Title",
+                "2026",
+                "Publisher",
+                "Journal",
+                "10",
+                "2",
+                "12-20",
+                "https://example.test",
+                "3 May 2024"));
+
+        source.Type.Should().Be(SourceType.Book);
+        source.Publisher.Should().Be("Publisher");
+        source.Journal.Should().BeNull();
+        source.Volume.Should().BeNull();
+        source.Issue.Should().BeNull();
+        source.Pages.Should().BeNull();
+        source.Url.Should().BeNull();
+        source.Accessed.Should().BeNull();
     }
 
     [Fact]

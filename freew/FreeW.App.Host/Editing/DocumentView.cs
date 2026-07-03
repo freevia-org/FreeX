@@ -11192,19 +11192,27 @@ public sealed class DocumentView : RichTextBox
     /// Appends a new bibliographic source to the model and returns it, so a caller can immediately insert
     /// its in-text citation (see <see cref="InsertCitation(Source)"/>). Does not touch the visible flow.
     /// </summary>
-    public Source AddSource(string tag, string author, string title, string year, string? publisher)
-    {
-        CommitToModel();
-        var source = new Source
+    public Source AddSource(string tag, string author, string title, string year, string? publisher) =>
+        AddSource(new Source
         {
             Tag = tag?.Trim() ?? string.Empty,
             Author = author?.Trim() ?? string.Empty,
             Title = title?.Trim() ?? string.Empty,
             Year = year?.Trim() ?? string.Empty,
             Publisher = string.IsNullOrWhiteSpace(publisher) ? null : publisher.Trim()
-        };
-        _model.Sources.Add(source);
-        return source;
+        });
+
+    /// <summary>
+    /// Appends a complete bibliographic source to the model and returns the stored clone, so callers can
+    /// keep Word-style source types and type-specific fields intact when immediately inserting a citation.
+    /// </summary>
+    public Source AddSource(Source source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        CommitToModel();
+        var stored = SourceManagementDialogPlanner.CloneSource(source);
+        _model.Sources.Add(stored);
+        return stored;
     }
 
     /// <summary>
