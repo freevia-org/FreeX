@@ -1,23 +1,34 @@
 using Avalonia;
+using Avalonia.Collections;
 using Avalonia.Controls;
+using Avalonia.Controls.Shapes;
 using Avalonia.Layout;
 using Avalonia.Media;
 using FreeW.App.Avalonia.Editing;
 using FreeW.App.Presentation.DocumentView;
-using FreeW.App.Presentation.Ribbon;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Avalonia;
 
 /// <summary>
-/// First Avalonia Review > Show Markup > Show Revisions in Balloons surface. This is a compact
-/// right-side strip backed by the existing revision and comment models; it intentionally does not
-/// claim Word-perfect leader-line anchoring yet.
+/// Avalonia Review > Show Markup > Show Revisions in Balloons surface. The pane shares the same
+/// source enumeration and right-margin leader-line layout contract as the WPF balloon overlay.
 /// </summary>
 public sealed class ReviewBalloonsPane : SidePaneBase
 {
+    private static readonly ReviewBalloonLayoutOptions LayoutOptions = new(
+        StripWidth: 260,
+        BalloonWidth: 218,
+        BalloonX: 22);
+
+    private static readonly IBrush PaneBackground = new SolidColorBrush(Color.FromRgb(0xF5, 0xF5, 0xF8));
+    private static readonly IBrush LeaderBrush = new SolidColorBrush(Color.FromRgb(0xA0, 0xA0, 0xA0));
+    private static readonly IBrush AuthorBrush = new SolidColorBrush(Color.FromRgb(0x17, 0x32, 0x4D));
+    private static readonly IBrush TextBrush = new SolidColorBrush(Color.FromRgb(0x30, 0x30, 0x30));
+
     private readonly TextBlock _countLabel;
-    private readonly ListBox _balloonList;
+    private readonly Canvas _balloonCanvas;
+    private IReadOnlyList<ReviewBalloonLayout> _layouts = [];
 
     public ReviewBalloonsPane(DocumentView editor)
         : base(editor, "Review Balloons", width: 260, chromeBorderThickness: new Thickness(1, 0, 0, 0), includeSeparator: true)
@@ -29,117 +40,108 @@ public sealed class ReviewBalloonsPane : SidePaneBase
             Foreground = new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66)),
         };
 
-        _balloonList = new ListBox
+        _balloonCanvas = new Canvas
         {
-            BorderThickness = new Thickness(0),
-            Background = Brushes.Transparent,
+            Width = LayoutOptions.StripWidth,
+            Background = PaneBackground,
+            ClipToBounds = true,
         };
 
         DockPanel.SetDock(_countLabel, Dock.Top);
         InnerLayout.Children.Add(_countLabel);
-        InnerLayout.Children.Add(_balloonList);
+        InnerLayout.Children.Add(_balloonCanvas);
     }
 
     public override void Refresh()
     {
-        var items = EnumerateBalloons(_editor.Document, _editor.CurrentReviewDisplayPolicy);
-        _countLabel.Text = items.Count == 0
+        var viewportHeight = Bounds.Height > 0 ? Bounds.Height : 800;
+        _layouts = ReviewBalloonLayoutPlanner.BuildLayout(
+            _editor.Document,
+            _editor.CurrentReviewDisplayPolicy,
+            viewportHeight,
+            LayoutOptions);
+
+        _countLabel.Text = _layouts.Count == 0
             ? "No review balloons"
-            : $"{items.Count} review balloon{(items.Count == 1 ? "" : "s")}";
-        _balloonList.ItemsSource = items.Select(item => new BalloonItemView(item)).ToArray();
+            : $"{_layouts.Count} review balloon{(_layouts.Count == 1 ? "" : "s")}";
+
+        _balloonCanvas.Height = Math.Max(
+            viewportHeight,
+            _layouts.Count == 0
+                ? 0
+                : _layouts[^1].BalloonY + _layouts[^1].BalloonHeight + LayoutOptions.BalloonGap);
+        _balloonCanvas.Children.Clear();
+
+        foreach (var layout in _layouts)
+            DrawBalloon(layout);
     }
 
-    internal int BalloonItemCount => (_balloonList.ItemsSource as BalloonItemView[])?.Length ?? 0;
+    internal int BalloonItemCount => _layouts.Count;
+    internal IReadOnlyList<ReviewBalloonLayout> LayoutsForTest => _layouts;
+    internal int VisualChildCountForTest => _balloonCanvas.Children.Count;
 
-    internal static IReadOnlyList<ReviewBalloonItem> EnumerateBalloons(
+    internal static IReadOnlyList<ReviewBalloonSource> EnumerateBalloons(
         TextDocument document,
-        ReviewDisplayPolicy policy)
+        ReviewDisplayPolicy policy) =>
+        ReviewBalloonLayoutPlanner.BuildSources(document, policy);
+
+    private void DrawBalloon(ReviewBalloonLayout layout)
     {
-        ArgumentNullException.ThrowIfNull(document);
+        var item = layout.Source;
+        var leader = new Line
+        {
+            StartPoint = new Point(layout.LeaderStartX, layout.LeaderStartY),
+            EndPoint = new Point(layout.LeaderEndX, layout.LeaderEndY),
+            Stroke = LeaderBrush,
+            StrokeThickness = LayoutOptions.LeaderThickness,
+            StrokeDashArray = new AvaloniaList<double> { 3, 2 },
+        };
+        _balloonCanvas.Children.Add(leader);
 
-        var revisions = RevisionList.Enumerate(document)
-            .Where(entry => ShouldShowRevision(entry, policy))
-            .Select(ReviewBalloonItem.FromRevision);
-
-        var comments = policy.ShowComments
-            ? CommentListPlanner.Build(document).Select(ReviewBalloonItem.FromComment)
-            : Enumerable.Empty<ReviewBalloonItem>();
-
-        return revisions.Concat(comments)
-            .OrderBy(item => item.BlockIndex)
-            .ThenBy(item => item.Offset)
-            .ThenBy(item => item.SortKind)
-            .ToList();
+        var balloon = new Border
+        {
+            Width = layout.BalloonWidth,
+            Height = layout.BalloonHeight,
+            Background = FillFor(item.Kind, item.Resolved),
+            BorderBrush = StrokeFor(item.Kind, item.Resolved),
+            BorderThickness = new Thickness(1.2),
+            CornerRadius = new CornerRadius(LayoutOptions.BalloonCornerRadius),
+            Child = new BalloonItemView(item),
+        };
+        Canvas.SetLeft(balloon, layout.BalloonX);
+        Canvas.SetTop(balloon, layout.BalloonY);
+        _balloonCanvas.Children.Add(balloon);
     }
 
-    private static bool ShouldShowRevision(RevisionEntry entry, ReviewDisplayPolicy policy) =>
-        entry.Kind switch
-        {
-            RevisionEntryKind.Formatting => policy.ShowFormatting,
-            RevisionEntryKind.Insertion or RevisionEntryKind.Deletion => policy.ShowInsertionsAndDeletions,
-            _ => true,
-        };
-
-    internal sealed record ReviewBalloonItem(
-        string Kind,
-        string Author,
-        string Text,
-        int BlockIndex,
-        int Offset,
-        int SortKind,
-        bool Resolved = false)
-    {
-        public static ReviewBalloonItem FromRevision(RevisionEntry entry)
-        {
-            var kind = entry.Kind switch
+    private static IBrush FillFor(ReviewBalloonKind kind, bool resolved) =>
+        resolved
+            ? new SolidColorBrush(Color.FromRgb(0xE5, 0xE7, 0xEB))
+            : kind switch
             {
-                RevisionEntryKind.Insertion => "Inserted",
-                RevisionEntryKind.Deletion => "Deleted",
-                RevisionEntryKind.Formatting => "Formatting",
-                _ => entry.Kind.ToString(),
+                ReviewBalloonKind.Insertion => new SolidColorBrush(Color.FromRgb(0xD9, 0xF0, 0xE0)),
+                ReviewBalloonKind.Deletion => new SolidColorBrush(Color.FromRgb(0xFD, 0xDE, 0xDE)),
+                ReviewBalloonKind.Formatting => new SolidColorBrush(Color.FromRgb(0xE8, 0xE8, 0xF8)),
+                _ => new SolidColorBrush(Color.FromRgb(0xFF, 0xF4, 0xCE)),
             };
 
-            return new ReviewBalloonItem(
-                kind,
-                string.IsNullOrWhiteSpace(entry.Author) ? "Unknown" : entry.Author,
-                string.IsNullOrWhiteSpace(entry.Text) ? "(formatting change)" : entry.Text,
-                entry.BlockIndex,
-                RevisionOffset(entry),
-                SortKind: 0);
-        }
-
-        public static ReviewBalloonItem FromComment(CommentListItem item) =>
-            new(
-                item.Resolved ? "Resolved comment" : "Comment",
-                string.IsNullOrWhiteSpace(item.Author) ? "Unknown" : item.Author,
-                item.ReplyCount > 0 ? $"{item.Text} ({item.ReplyCount} repl{(item.ReplyCount == 1 ? "y" : "ies")})" : item.Text,
-                item.BlockIndex,
-                item.Anchor.Offset,
-                SortKind: 1,
-                item.Resolved);
-
-        private static int RevisionOffset(RevisionEntry entry)
-        {
-            var offset = 0;
-            foreach (var run in entry.Paragraph.Runs)
+    private static IBrush StrokeFor(ReviewBalloonKind kind, bool resolved) =>
+        resolved
+            ? new SolidColorBrush(Color.FromRgb(0x9C, 0xA3, 0xAF))
+            : kind switch
             {
-                if (ReferenceEquals(run, entry.Run))
-                    return offset;
-
-                offset += run.Text.Length;
-            }
-
-            return 0;
-        }
-    }
+                ReviewBalloonKind.Insertion => new SolidColorBrush(Color.FromRgb(0x60, 0xA9, 0x70)),
+                ReviewBalloonKind.Deletion => new SolidColorBrush(Color.FromRgb(0xC5, 0x50, 0x50)),
+                ReviewBalloonKind.Formatting => new SolidColorBrush(Color.FromRgb(0x80, 0x80, 0xC8)),
+                _ => new SolidColorBrush(Color.FromRgb(0xE5, 0xC3, 0x65)),
+            };
 
     private sealed class BalloonItemView : UserControl
     {
-        public BalloonItemView(ReviewBalloonItem item)
+        public BalloonItemView(ReviewBalloonSource item)
         {
             var kind = new TextBlock
             {
-                Text = item.Kind,
+                Text = item.KindLabel,
                 FontSize = 10,
                 FontWeight = FontWeight.SemiBold,
                 Foreground = Brushes.White,
@@ -160,6 +162,7 @@ public sealed class ReviewBalloonsPane : SidePaneBase
                 Text = item.Author,
                 FontWeight = FontWeight.SemiBold,
                 FontSize = 11,
+                Foreground = AuthorBrush,
                 VerticalAlignment = VerticalAlignment.Center,
                 Margin = new Thickness(6, 0, 0, 0),
             };
@@ -174,25 +177,17 @@ public sealed class ReviewBalloonsPane : SidePaneBase
 
             var text = new TextBlock
             {
-                Text = Trim(item.Text),
+                Text = ReviewBalloonLayoutPlanner.TruncatePreview(item.Text, 120),
                 FontSize = 11,
                 TextWrapping = TextWrapping.Wrap,
-                Foreground = new SolidColorBrush(Color.FromRgb(0x33, 0x33, 0x33)),
+                Foreground = TextBrush,
             };
 
             var stack = new StackPanel { Margin = new Thickness(6, 5) };
             stack.Children.Add(topRow);
             stack.Children.Add(text);
 
-            Content = new Border
-            {
-                BorderBrush = new SolidColorBrush(Color.FromRgb(0xDD, 0xDD, 0xDD)),
-                BorderThickness = new Thickness(0, 0, 0, 1),
-                Child = stack,
-            };
+            Content = stack;
         }
-
-        private static string Trim(string text) =>
-            text.Length <= 120 ? text : string.Concat(text.AsSpan(0, 117), "...");
     }
 }
