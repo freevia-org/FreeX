@@ -260,6 +260,62 @@ public sealed class PresentationExportPlannerTests
     }
 
     [Fact]
+    public void NotesPagePreviewPlan_ExposesHeaderFooterPlaceholderMetadata()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides.Clear();
+        var slide = new Slide
+        {
+            Title = "Roadmap",
+            HfVisibility = new HfFlags
+            {
+                ShowDate = true,
+                ShowFooter = false,
+                ShowSlideNum = true,
+                ShowHeader = false
+            }
+        };
+        slide.Notes = MakeTextBody("Talk track");
+        slide.Shapes.Add(MakeHeaderFooterPlaceholder(
+            PlaceholderType.DateTime,
+            "July 3, 2026",
+            "datetime1",
+            "July 3, 2026"));
+        slide.Shapes.Add(MakeHeaderFooterPlaceholder(
+            PlaceholderType.Footer,
+            "Confidential",
+            "footer",
+            "Confidential"));
+        presentation.Slides.Add(slide);
+
+        var plan = PresentationNotesPagePreviewPlanner.Build(presentation, currentSlideIndex: 0);
+
+        plan.HeaderFooterPlaceholders.Select(placeholder => placeholder.Kind)
+            .Should()
+            .Equal(
+                PresentationNotesPagePlaceholderKind.DateTime,
+                PresentationNotesPagePlaceholderKind.Footer,
+                PresentationNotesPagePlaceholderKind.SlideNumber);
+        plan.HeaderFooterPlaceholders
+            .Single(placeholder => placeholder.Kind == PresentationNotesPagePlaceholderKind.DateTime)
+            .Should()
+            .Match<PresentationNotesPagePlaceholder>(placeholder =>
+                placeholder.Text == "July 3, 2026" &&
+                placeholder.IsVisible &&
+                placeholder.Bounds.Top < plan.SlideBounds.Top);
+        plan.HeaderFooterPlaceholders
+            .Single(placeholder => placeholder.Kind == PresentationNotesPagePlaceholderKind.Footer)
+            .Should()
+            .Match<PresentationNotesPagePlaceholder>(placeholder =>
+                placeholder.Text == "Confidential" &&
+                !placeholder.IsVisible &&
+                placeholder.Bounds.Bottom <= plan.PageBounds.Bottom);
+        plan.HeaderFooterPlaceholders
+            .Single(placeholder => placeholder.Kind == PresentationNotesPagePlaceholderKind.SlideNumber)
+            .Text.Should().Be("1", "visible slide-number intent gets deterministic metadata even before notes-master IO is modeled");
+    }
+
+    [Fact]
     public void NotesPagePreviewPlan_UsesModeledSlideAspectRatio()
     {
         var presentation = Presentation.CreateEmpty();
@@ -609,6 +665,46 @@ public sealed class PresentationExportPlannerTests
         secondPageText.Should().Contain(["Slide 3", "First closing note.", "Second closing note."]);
         secondPageText.Should().NotContain("Slide 1");
         plan.Pages[1].Ops.OfType<PdfStrokeRect>().Should().HaveCount(2);
+    }
+
+    [Fact]
+    public void NotesPagePdfRenderPlan_RendersVisibleHeaderFooterPlaceholdersFromSharedPlan()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides.Clear();
+        var slide = new Slide
+        {
+            Title = "Roadmap",
+            HfVisibility = new HfFlags
+            {
+                ShowDate = true,
+                ShowFooter = false,
+                ShowSlideNum = true
+            }
+        };
+        slide.Notes = MakeTextBody("Talk track");
+        slide.Shapes.Add(MakeHeaderFooterPlaceholder(
+            PlaceholderType.DateTime,
+            "July 3, 2026",
+            "datetime1",
+            "July 3, 2026"));
+        slide.Shapes.Add(MakeHeaderFooterPlaceholder(
+            PlaceholderType.Footer,
+            "Confidential",
+            "footer",
+            "Confidential"));
+        presentation.Slides.Add(slide);
+
+        var renderPlan = PresentationNotesPagePdfExporter.BuildRenderPlan(presentation);
+
+        renderPlan.PreviewPlans.Should().ContainSingle();
+        renderPlan.PreviewPlans[0].HeaderFooterPlaceholders
+            .Single(placeholder => placeholder.Kind == PresentationNotesPagePlaceholderKind.Footer)
+            .IsVisible.Should().BeFalse();
+        var pdfText = renderPlan.Pages[0].Ops.OfType<PdfText>().Select(text => text.Text).ToArray();
+        pdfText.Should().Contain("July 3, 2026");
+        pdfText.Should().Contain("1");
+        pdfText.Should().NotContain("Confidential");
     }
 
     [Fact]
@@ -1212,6 +1308,34 @@ public sealed class PresentationExportPlannerTests
             if (Directory.Exists(outputDirectory))
                 Directory.Delete(outputDirectory, recursive: true);
         }
+    }
+
+    private static SlideShape MakeHeaderFooterPlaceholder(
+        PlaceholderType type,
+        string text,
+        string? fieldType = null,
+        string? cachedText = null)
+    {
+        var body = new TextBody();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run
+        {
+            Text = text,
+            Field = fieldType is null
+                ? null
+                : new FieldRun
+                {
+                    FieldType = fieldType,
+                    CachedText = cachedText ?? text
+                }
+        });
+        body.Paragraphs.Add(paragraph);
+
+        return new SlideShape
+        {
+            Placeholder = new Placeholder { Type = type },
+            TextBody = body
+        };
     }
 
     private static TextBody MakeTextBody(params string[] paragraphs)

@@ -1,7 +1,23 @@
+using System.Globalization;
 using Free.Shared.Drawing;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor;
+
+public enum PresentationNotesPagePlaceholderKind
+{
+    Header,
+    DateTime,
+    Footer,
+    SlideNumber
+}
+
+public sealed record PresentationNotesPagePlaceholder(
+    PresentationNotesPagePlaceholderKind Kind,
+    PlaceholderType SourcePlaceholderType,
+    string Text,
+    LayoutRect Bounds,
+    bool IsVisible);
 
 public sealed record PresentationNotesPagePreviewPlan(
     PresentationPrintPlan PrintPlan,
@@ -13,6 +29,7 @@ public sealed record PresentationNotesPagePreviewPlan(
     LayoutRect PageBounds,
     LayoutRect SlideBounds,
     LayoutRect NotesBounds,
+    IReadOnlyList<PresentationNotesPagePlaceholder> HeaderFooterPlaceholders,
     IReadOnlyList<string> NoteLines)
 {
     public bool HasSlide => SlideIndex is not null;
@@ -61,6 +78,7 @@ public static class PresentationNotesPagePreviewPlanner
                 pageBounds,
                 slideBounds,
                 notesBounds,
+                HeaderFooterPlaceholders: [],
                 NoteLines: []);
         }
 
@@ -84,6 +102,7 @@ public static class PresentationNotesPagePreviewPlanner
             pageBounds,
             slideBounds,
             notesBounds,
+            BuildHeaderFooterPlaceholders(slide, normalizedIndex + 1, pageBounds),
             SplitNoteLines(slide.Notes, notesBounds.Width));
     }
 
@@ -145,6 +164,154 @@ public static class PresentationNotesPagePreviewPlanner
             top,
             Math.Max(1, pageBounds.Width - (margin * 2)),
             Math.Max(1, pageBounds.Bottom - top - margin));
+    }
+
+    private static IReadOnlyList<PresentationNotesPagePlaceholder> BuildHeaderFooterPlaceholders(
+        Slide slide,
+        int slideNumber,
+        LayoutRect pageBounds)
+    {
+        var header = FindPlaceholderShape(slide, PlaceholderType.Header);
+        var dateTime = FindPlaceholderShape(slide, PlaceholderType.DateTime);
+        var footer = FindPlaceholderShape(slide, PlaceholderType.Footer);
+        var slideNumberShape = FindPlaceholderShape(slide, PlaceholderType.SlideNumber);
+        var flags = slide.HfVisibility;
+
+        var result = new List<PresentationNotesPagePlaceholder>(4);
+        AddIfPresent(
+            result,
+            PresentationNotesPagePlaceholderKind.Header,
+            PlaceholderType.Header,
+            header,
+            ResolveHeaderFooterVisibility(flags?.ShowHeader, header),
+            pageBounds,
+            slideNumber);
+        AddIfPresent(
+            result,
+            PresentationNotesPagePlaceholderKind.DateTime,
+            PlaceholderType.DateTime,
+            dateTime,
+            ResolveHeaderFooterVisibility(flags?.ShowDate, dateTime),
+            pageBounds,
+            slideNumber);
+        AddIfPresent(
+            result,
+            PresentationNotesPagePlaceholderKind.Footer,
+            PlaceholderType.Footer,
+            footer,
+            ResolveHeaderFooterVisibility(flags?.ShowFooter, footer),
+            pageBounds,
+            slideNumber);
+        AddIfPresent(
+            result,
+            PresentationNotesPagePlaceholderKind.SlideNumber,
+            PlaceholderType.SlideNumber,
+            slideNumberShape,
+            ResolveHeaderFooterVisibility(flags?.ShowSlideNum, slideNumberShape),
+            pageBounds,
+            slideNumber);
+
+        return result;
+    }
+
+    private static void AddIfPresent(
+        List<PresentationNotesPagePlaceholder> result,
+        PresentationNotesPagePlaceholderKind kind,
+        PlaceholderType sourceType,
+        SlideShape? shape,
+        bool isVisible,
+        LayoutRect pageBounds,
+        int slideNumber)
+    {
+        if (shape is null && !isVisible)
+            return;
+
+        result.Add(new PresentationNotesPagePlaceholder(
+            kind,
+            sourceType,
+            ResolveHeaderFooterText(kind, shape, slideNumber),
+            BuildHeaderFooterBounds(kind, pageBounds),
+            isVisible));
+    }
+
+    private static bool ResolveHeaderFooterVisibility(bool? flag, SlideShape? shape) =>
+        flag ?? shape is not null;
+
+    private static LayoutRect BuildHeaderFooterBounds(
+        PresentationNotesPagePlaceholderKind kind,
+        LayoutRect pageBounds)
+    {
+        const double height = 18;
+        var margin = Math.Min(36, pageBounds.Width / 8);
+        var width = Math.Max(1, (pageBounds.Width - (margin * 2)) * 0.34);
+        var top = pageBounds.Top + margin / 2;
+        var bottom = pageBounds.Bottom - margin / 2 - height;
+
+        return kind switch
+        {
+            PresentationNotesPagePlaceholderKind.Header => new LayoutRect(
+                pageBounds.Left + margin,
+                top,
+                width,
+                height),
+            PresentationNotesPagePlaceholderKind.DateTime => new LayoutRect(
+                pageBounds.Right - margin - width,
+                top,
+                width,
+                height),
+            PresentationNotesPagePlaceholderKind.Footer => new LayoutRect(
+                pageBounds.Left + margin,
+                bottom,
+                width,
+                height),
+            PresentationNotesPagePlaceholderKind.SlideNumber => new LayoutRect(
+                pageBounds.Right - margin - width,
+                bottom,
+                width,
+                height),
+            _ => new LayoutRect(pageBounds.Left + margin, bottom, width, height),
+        };
+    }
+
+    private static string ResolveHeaderFooterText(
+        PresentationNotesPagePlaceholderKind kind,
+        SlideShape? shape,
+        int slideNumber)
+    {
+        var text = shape is null ? string.Empty : ExtractHeaderFooterText(shape);
+        if (!string.IsNullOrWhiteSpace(text))
+            return text.Trim();
+
+        return kind == PresentationNotesPagePlaceholderKind.SlideNumber
+            ? slideNumber.ToString(CultureInfo.InvariantCulture)
+            : string.Empty;
+    }
+
+    private static string ExtractHeaderFooterText(SlideShape shape)
+    {
+        if (shape.TextBody is null)
+            return string.Empty;
+
+        return string.Join(
+            Environment.NewLine,
+            shape.TextBody.Paragraphs.Select(paragraph => string.Concat(paragraph.Runs.Select(run =>
+                run.Field is { } field && !string.IsNullOrEmpty(field.CachedText)
+                    ? field.CachedText
+                    : run.Text))));
+    }
+
+    private static SlideShape? FindPlaceholderShape(Slide slide, PlaceholderType placeholderType) =>
+        Flatten(slide.Shapes)
+            .FirstOrDefault(shape => shape.Placeholder?.Type == placeholderType);
+
+    private static IEnumerable<SlideShape> Flatten(IEnumerable<SlideShape> shapes)
+    {
+        foreach (var shape in shapes)
+        {
+            yield return shape;
+            foreach (var child in Flatten(shape.Children))
+                yield return child;
+        }
     }
 
     private static string NormalizeTitle(string? title) =>
