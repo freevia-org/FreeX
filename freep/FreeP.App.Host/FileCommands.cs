@@ -2,6 +2,7 @@ using System.IO;
 using System.Windows;
 using Free.Shared.AppServices;
 using Free.Shared.IO;
+using Free.Shared.Pdf.Wpf;
 using Free.Shared.Shell;
 using Free.Shared.Shell.Wpf;
 using FreeP.App.Compositor;
@@ -119,8 +120,8 @@ internal sealed class FileCommands
     }
 
     /// <summary>
-    /// File &gt; Export to PDF. Prompts for a target and writes a fixed-layout PDF (one page per slide) via the
-    /// shared portable PDF tier. Does not change the dirty/saved state (the presentation document is the source of record).
+    /// File &gt; Export to PDF. Prompts for a target and writes a fixed-layout PDF (one raster page per slide)
+    /// through the shared raster export route. Does not change the dirty/saved state (the presentation document is the source of record).
     /// </summary>
     public bool ExportPdf()
     {
@@ -131,7 +132,11 @@ internal sealed class FileCommands
 
         try
         {
-            var bytes = PresentationPdfExporter.ExportToBytes(_getModel());
+            var bytes = PresentationRasterPdfExporter.ExportToBytes(
+                _getModel(),
+                request: null,
+                WpfPresentationSlideImageRenderer.RenderSlideToPng,
+                WpfRasterPdfWriter.WriteToBytes);
             ExportAtomicWriter.WriteAllBytes(result.FileName!, bytes);
             return true;
         }

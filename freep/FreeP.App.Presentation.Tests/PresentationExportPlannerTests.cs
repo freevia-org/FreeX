@@ -1,11 +1,25 @@
 using System.Text;
 using Free.Shared.Pdf;
 using FreeP.App.Compositor;
+using FreeP.Core.IO;
 
 namespace FreeP.App.Compositor.Tests;
 
 public sealed class PresentationExportPlannerTests
 {
+    private static readonly byte[] TinyPng =
+    [
+        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
+        0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
+        0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+        0x08, 0x02, 0x00, 0x00, 0x00, 0x90, 0x77, 0x53,
+        0xDE, 0x00, 0x00, 0x00, 0x0C, 0x49, 0x44, 0x41,
+        0x54, 0x08, 0xD7, 0x63, 0xF8, 0xFF, 0xFF, 0x3F,
+        0x00, 0x05, 0xFE, 0x02, 0xFE, 0xDC, 0xCC, 0x59,
+        0xE7, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E,
+        0x44, 0xAE, 0x42, 0x60, 0x82,
+    ];
+
     private static Presentation BuildHandoutDeck(int slideCount)
     {
         var presentation = Presentation.CreateEmpty();
@@ -305,6 +319,107 @@ public sealed class PresentationExportPlannerTests
         doc.Properties!.Creator.Should().Be("FreeP");
         doc.Properties.Title.Should().Be("Handout Deck");
         doc.Properties.Author.Should().Be("Parity");
+    }
+
+    [Fact]
+    public void RasterPdfRenderPlan_CustomRange_CallsRendererPerSlideInOrder()
+    {
+        var calls = new List<(int SlideIndex, int WidthPx, int HeightPx)>();
+        var request = new PresentationRasterPdfExportRequest(
+            new PresentationSlideRangeRequest(
+                PresentationSlideRangeKind.CustomRange,
+                StartSlideNumber: 2,
+                EndSlideNumber: 3),
+            WidthPx: 960);
+
+        var plan = PresentationRasterPdfExporter.BuildRenderPlan(
+            BuildHandoutDeck(4),
+            request,
+            (_, slideIndex, widthPx, heightPx) =>
+            {
+                calls.Add((slideIndex, widthPx, heightPx));
+                return [(byte)(slideIndex + 1)];
+            });
+
+        plan.SlideRange.SlideNumbers.Should().Equal(2, 3);
+        calls.Should().Equal((1, 960, 540), (2, 960, 540));
+        plan.Pages.Should().HaveCount(2);
+        plan.Pages.Select(page => page.ImageBytes[0]).Should().Equal(2, 3);
+        plan.Pages.Should().OnlyContain(page => page.WidthPoints == 960 && page.HeightPoints == 540);
+    }
+
+    [Fact]
+    public void RasterPdfRenderPlan_SelectedSlides_UsesExistingRangePolicyAndModeledSlideSize()
+    {
+        var deck = BuildHandoutDeck(5);
+        deck.SlideSizeCxEmu = DrawingMlCoordinateUnits.PointsToEmu(576);
+        deck.SlideSizeCyEmu = DrawingMlCoordinateUnits.PointsToEmu(432);
+        var calls = new List<int>();
+
+        var plan = PresentationRasterPdfExporter.BuildRenderPlan(
+            deck,
+            new PresentationRasterPdfExportRequest(
+                new PresentationSlideRangeRequest(
+                    PresentationSlideRangeKind.SelectedSlides,
+                    SelectedSlideNumbers: [5, 2, 5, 99]),
+                WidthPx: 1024),
+            (_, slideIndex, _, _) =>
+            {
+                calls.Add(slideIndex);
+                return TinyPng;
+            });
+
+        plan.SlideRange.SlideNumbers.Should().Equal(2, 5);
+        calls.Should().Equal(1, 4);
+        plan.WidthPx.Should().Be(1024);
+        plan.HeightPx.Should().Be(768);
+        plan.Pages.Should().HaveCount(2);
+        plan.Pages.Should().OnlyContain(page => page.WidthPoints == 576 && page.HeightPoints == 432);
+    }
+
+    [Fact]
+    public void RasterPdfExporter_ProducesPdfBytesThroughWriterPlan()
+    {
+        PdfRasterDocument? captured = null;
+
+        var bytes = PresentationRasterPdfExporter.ExportToBytes(
+            BuildHandoutDeck(2),
+            request: null,
+            (_, slideIndex, _, _) => [(byte)(0xA0 + slideIndex)],
+            document =>
+            {
+                captured = document;
+                return Encoding.ASCII.GetBytes("%PDF-1.7\n1 0 obj\n<<>>\nendobj\n%%EOF");
+            });
+
+        Encoding.ASCII.GetString(bytes, 0, 5).Should().Be("%PDF-");
+        Encoding.ASCII.GetString(bytes).Should().Contain("%%EOF");
+        captured.Should().NotBeNull();
+        captured!.Pages.Should().HaveCount(2);
+        captured.Properties!.Creator.Should().Be("FreeP");
+        captured.Properties.Title.Should().Be("Handout Deck");
+    }
+
+    [Fact]
+    public void RasterPdfExporter_RichSlide_UsesRenderedRasterInsteadOfPortablePlaceholders()
+    {
+        var deck = Presentation.CreateEmpty();
+        deck.Slides.Clear();
+        var slide = new Slide { Title = "Rich slide" };
+        slide.Shapes.Add(new SlideShape { Kind = SlideShapeKind.Picture });
+        deck.Slides.Add(slide);
+
+        var bytes = PresentationRasterPdfExporter.ExportToBytes(
+            deck,
+            request: null,
+            (_, _, _, _) => Encoding.ASCII.GetBytes("rendered-rich-slide"),
+            document => document.Pages.Single().ImageBytes);
+
+        var text = Encoding.ASCII.GetString(bytes);
+        text.Should().Be("rendered-rich-slide");
+        text.Should().NotContain("[Picture]");
+        PresentationPdfExporter.BuildDocument(deck).Pages[0].Ops.OfType<PdfText>().Select(op => op.Text)
+            .Should().Contain("[Picture]");
     }
 
     [Fact]

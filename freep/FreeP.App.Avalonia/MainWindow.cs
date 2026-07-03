@@ -8,6 +8,7 @@ using Avalonia.Platform.Storage;
 using AvaloniaRectangle = Avalonia.Controls.Shapes.Rectangle;
 using Free.Shared.AppServices;
 using Free.Shared.IO;
+using Free.Shared.Pdf.Skia;
 using Free.Shared.Ribbon;
 using Free.Shared.Ribbon.Avalonia;
 using Free.Shared.Shell;
@@ -1554,7 +1555,12 @@ public sealed class MainWindow : Window
 
         try
         {
-            ExportAtomicWriter.WriteAllBytes(path, PresentationPdfExporter.ExportToBytes(_presentation));
+            var bytes = PresentationRasterPdfExporter.ExportToBytes(
+                _presentation,
+                request: null,
+                SlideRenderer.RenderToBytes,
+                SkiaRasterPdfWriter.WriteToBytes);
+            ExportAtomicWriter.WriteAllBytes(path, bytes);
             _statusText.Text = $"Exported {Path.GetFileName(path)}";
             return true;
         }
