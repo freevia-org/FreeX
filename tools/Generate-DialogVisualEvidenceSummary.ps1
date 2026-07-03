@@ -54,12 +54,47 @@ function Read-JsonFile {
     Get-Content -LiteralPath $resolvedPath -Raw | ConvertFrom-Json
 }
 
-function Get-CapturedSurfaces {
-    param([Parameter(Mandatory = $true)]$Manifest)
+function Test-ManifestPngExists {
+    param(
+        [Parameter(Mandatory = $true)]$Surface,
+        [Parameter(Mandatory = $true)][string]$ManifestPath
+    )
 
-    @($Manifest.surfaces) |
-        Where-Object { $_.captured -eq $true } |
-        Sort-Object -Property id
+    $png = [string]$Surface.png
+    if ([string]::IsNullOrWhiteSpace($png)) {
+        return $false
+    }
+
+    $resolvedPngPath = if ([System.IO.Path]::IsPathRooted($png)) {
+        $png
+    }
+    else {
+        Join-Path (Split-Path -Parent (Resolve-RepoPath $ManifestPath)) $png
+    }
+
+    Test-Path -LiteralPath $resolvedPngPath -PathType Leaf
+}
+
+function Get-CapturedSurfaces {
+    param(
+        [Parameter(Mandatory = $true)]$Manifest,
+        [string]$ManifestPath,
+        [switch]$RequirePng
+    )
+
+    $capturedSurfaces = @($Manifest.surfaces) |
+        Where-Object { $_.captured -eq $true }
+
+    if ($RequirePng) {
+        if ([string]::IsNullOrWhiteSpace($ManifestPath)) {
+            throw "ManifestPath is required when RequirePng is set."
+        }
+
+        $capturedSurfaces = @($capturedSurfaces |
+            Where-Object { Test-ManifestPngExists -Surface $_ -ManifestPath $ManifestPath })
+    }
+
+    $capturedSurfaces | Sort-Object -Property id
 }
 
 function Get-RouteFamily {
@@ -91,7 +126,7 @@ $avaloniaManifest = Read-JsonFile $AvaloniaManifestPath
 $inventoryRows = @($inventory.rows)
 $routeIds = @($inventoryRows | ForEach-Object { [string]$_.routeId })
 
-$wpfSurfaces = @(Get-CapturedSurfaces $wpfManifest)
+$wpfSurfaces = @(Get-CapturedSurfaces -Manifest $wpfManifest -ManifestPath $WpfManifestPath -RequirePng)
 $avaloniaSurfaces = @(Get-CapturedSurfaces $avaloniaManifest)
 
 $wpfById = @{}
