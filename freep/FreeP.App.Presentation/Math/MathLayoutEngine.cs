@@ -60,6 +60,7 @@ public static class MathLayoutEngine
             MathNode.Bar     b  => LayoutBar(b, fontFamily, fontSizePt),
             MathNode.GroupChr g => LayoutGroupChr(g, fontFamily, fontSizePt),
             MathNode.Matrix  m  => LayoutMatrix(m, fontFamily, fontSizePt),
+            MathNode.EqArray e  => LayoutEqArray(e, fontFamily, fontSizePt),
             MathNode.Row     rw => LayoutRow(rw.Children, fontFamily, fontSizePt),
             MathNode.Unknown u  => LayoutFallback(u.FallbackText, fontFamily, fontSizePt),
             _                   => LayoutFallback("?", fontFamily, fontSizePt)
@@ -859,6 +860,49 @@ public static class MathLayoutEngine
     }
 
     // ── Matrix layout ─────────────────────────────────────────────────────
+
+    private static MathBox LayoutEqArray(MathNode.EqArray eqArray, string fontFamily, double fontSizePt)
+    {
+        double em = Em(fontSizePt);
+        double rowGap = em * 0.20;
+
+        if (eqArray.Rows.Count == 0)
+            return MakeGlyph("", fontFamily, fontSizePt, false);
+
+        var rows = new List<MathBox>(eqArray.Rows.Count);
+        double totalW = 0;
+        double totalH = 0;
+
+        foreach (var row in eqArray.Rows)
+        {
+            var rowBox = LayoutNode(row, fontFamily, fontSizePt);
+            rows.Add(rowBox);
+            totalW = Math.Max(totalW, rowBox.Metrics.Width);
+            totalH += rowBox.Metrics.Height;
+        }
+
+        totalH += rowGap * Math.Max(0, rows.Count - 1);
+
+        // Like matrices, equation arrays are centered on the math axis. Clamp the
+        // ascent to the container height so descent remains non-negative for short arrays.
+        double ascent = Math.Min(totalH, totalH / 2.0 + em * 0.45);
+
+        var container = new MathBox.Container();
+        container.Metrics.Width = totalW;
+        container.Metrics.Height = totalH;
+        container.Metrics.Ascent = ascent;
+
+        double y = 0;
+        foreach (var rowBox in rows)
+        {
+            rowBox.X = (totalW - rowBox.Metrics.Width) / 2.0;
+            rowBox.Y = y;
+            container.Children.Add(rowBox);
+            y += rowBox.Metrics.Height + rowGap;
+        }
+
+        return container;
+    }
 
     private static MathBox LayoutMatrix(MathNode.Matrix matrix, string fontFamily, double fontSizePt)
     {

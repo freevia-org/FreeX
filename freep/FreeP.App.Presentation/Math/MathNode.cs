@@ -265,6 +265,19 @@ public abstract class MathNode
         public Matrix(IReadOnlyList<IReadOnlyList<MathNode>> rows) { Rows = rows; }
     }
 
+    // ── Equation array ───────────────────────────────────────────────────────
+
+    /// <summary>
+    /// <c>m:eqArr</c> — equation array with each <c>m:e</c> rendered as a stacked row.
+    /// Alignment-point semantics are intentionally left for a future slice.
+    /// </summary>
+    public sealed class EqArray : MathNode
+    {
+        /// <summary>The ordered row expressions from direct m:e children.</summary>
+        public IReadOnlyList<MathNode> Rows { get; }
+        public EqArray(IReadOnlyList<MathNode> rows) { Rows = rows; }
+    }
+
     // ── Row (horizontal sequence) ────────────────────────────────────────────
 
     /// <summary>
