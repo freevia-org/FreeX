@@ -75,6 +75,82 @@ public static class FreeWVisualEvidenceDocumentFactory
         return doc;
     }
 
+    public static TextDocument BuildFieldPageNumberVariantsDocument()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Properties.Title = "Field Page Number Evidence";
+        doc.Properties.Author = "FreeW Visual Evidence";
+        doc.Properties.Subject = "Visual parity field scenario";
+        doc.Properties.Keywords = "PAGE, NUMPAGES, DOCPROPERTY";
+        doc.Properties.Comments = "Exercises shared field rendering evidence.";
+        doc.Page.DifferentFirstPage = true;
+        doc.Page.DifferentOddEvenPages = true;
+
+        doc.FinalSectionHeadersFooters.FirstHeader = FieldHeaderFooter(
+            new Run("First header page "),
+            Run.PageNumberField(),
+            new Run(" of "),
+            Run.NumPagesField("3"));
+        doc.FinalSectionHeadersFooters.FirstFooter = FieldHeaderFooter(
+            new Run("First footer complex page "),
+            Run.ComplexFieldRun(" PAGE ", "1"),
+            new Run(" / "),
+            Run.ComplexFieldRun(" NUMPAGES ", "3"));
+        doc.FinalSectionHeadersFooters.EvenHeader = FieldHeaderFooter(
+            new Run("Even header page "),
+            Run.PageNumberField(),
+            new Run(" of "),
+            Run.NumPagesField("3"));
+        doc.FinalSectionHeadersFooters.EvenFooter = FieldHeaderFooter(
+            new Run("Even footer title: "),
+            Run.TitleField("Field Page Number Evidence"));
+        doc.FinalSectionHeadersFooters.Header = FieldHeaderFooter(
+            new Run("Default header page "),
+            Run.PageNumberField(),
+            new Run(" of "),
+            Run.NumPagesField("3"));
+        doc.FinalSectionHeadersFooters.Footer = FieldHeaderFooter(
+            new Run("Default footer author: "),
+            Run.AuthorField("FreeW Visual Evidence"),
+            new Run(" | page "),
+            Run.PageNumberField());
+
+        doc.Blocks.Add(StyledParagraph("Field/Page Number Variants", "Heading1"));
+        doc.Blocks.Add(new Paragraph(
+            "This shared fixture exercises PAGE and NUMPAGES fields across first, even, and default " +
+            "header/footer slots, plus document-property fields in the body."));
+
+        var propertyParagraph = new Paragraph();
+        propertyParagraph.Runs.Add(new Run("Properties: title="));
+        propertyParagraph.Runs.Add(Run.TitleField("Field Page Number Evidence"));
+        propertyParagraph.Runs.Add(new Run("; author="));
+        propertyParagraph.Runs.Add(Run.AuthorField("FreeW Visual Evidence"));
+        propertyParagraph.Runs.Add(new Run("; subject="));
+        propertyParagraph.Runs.Add(Run.SubjectField("Visual parity field scenario"));
+        propertyParagraph.Runs.Add(new Run("; keywords="));
+        propertyParagraph.Runs.Add(Run.KeywordsField("PAGE, NUMPAGES, DOCPROPERTY"));
+        propertyParagraph.Runs.Add(new Run("; comments="));
+        propertyParagraph.Runs.Add(Run.DocCommentsField("Exercises shared field rendering evidence."));
+        doc.Blocks.Add(propertyParagraph);
+
+        var complexParagraph = new Paragraph();
+        complexParagraph.Runs.Add(new Run("Complex result fields: "));
+        complexParagraph.Runs.Add(Run.ComplexFieldRun(" TITLE \\* MERGEFORMAT ", "Field Page Number Evidence"));
+        complexParagraph.Runs.Add(new Run(" by "));
+        complexParagraph.Runs.Add(Run.ComplexFieldRun(" AUTHOR ", "FreeW Visual Evidence"));
+        doc.Blocks.Add(complexParagraph);
+
+        for (var i = 1; i <= 58; i++)
+        {
+            doc.Blocks.Add(new Paragraph(
+                $"Field evidence body paragraph {i}: enough text to force multiple pages while " +
+                "keeping the same PAGE and NUMPAGES header/footer variants visible."));
+        }
+
+        return doc;
+    }
+
     public static TextDocument BuildSectionGeometryDocument()
     {
         var doc = TextDocument.CreateEmpty();
@@ -457,6 +533,15 @@ public static class FreeWVisualEvidenceDocumentFactory
 
     private static Paragraph StyledParagraph(string text, string styleId) =>
         new(text) { StyleId = styleId };
+
+    private static HeaderFooter FieldHeaderFooter(params Run[] runs)
+    {
+        var headerFooter = new HeaderFooter();
+        var paragraph = new Paragraph();
+        paragraph.Runs.AddRange(runs);
+        headerFooter.Paragraphs.Add(paragraph);
+        return headerFooter;
+    }
 
     private static Table BuildComplexTable()
     {

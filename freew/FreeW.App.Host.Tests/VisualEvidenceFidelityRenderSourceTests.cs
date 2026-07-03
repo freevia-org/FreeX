@@ -28,6 +28,8 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
         source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildTrackedChangesReviewDocument");
         source.Should().Contain("f2-comments.docx");
         source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildCommentsReviewDocument");
+        source.Should().Contain("field-page-number-variants.docx");
+        source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildFieldPageNumberVariantsDocument");
         source.Should().Contain("table-layout-complex.docx");
         source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildComplexTableLayoutDocument");
         source.Should().Contain("table-pagination-repeat-header.docx");

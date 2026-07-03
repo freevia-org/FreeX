@@ -15,6 +15,7 @@ public sealed class VisualEvidencePlannerTests
             "f2-hf-basic",
             "f2-hf-firstpage",
             "f2-hf-oddeven",
+            "field-page-number-variants",
             "f2-footnotes",
             "f2-endnotes",
             "f2-columns",
@@ -50,6 +51,18 @@ public sealed class VisualEvidencePlannerTests
         commentsScenario.ExpectedFeatureTags.Should().Contain(["f2", "comments", "comment-anchors"]);
         commentsScenario.ExpectedOutputNamePattern.Should().Be("f2-comments_p{page}.png");
         commentsScenario.Composition.ExpectsComments.Should().BeTrue();
+
+        var fieldScenario = FreeWVisualEvidencePlanner.ResolveScenario("field-page-number-variants");
+        fieldScenario.ExpectedFeatureTags.Should().Contain([
+            "fields",
+            "page-number-fields",
+            "numpages-fields",
+            "document-property-fields",
+            "complex-fields",
+            "header-footer-fields"]);
+        fieldScenario.ExpectedOutputNamePattern.Should().Be("field-page-number-variants_p{page}.png");
+        fieldScenario.MinimumExpectedOutputs.Should().Be(3);
+        fieldScenario.Composition.ExpectsHeadersFooters.Should().BeTrue();
 
         var floatingScenario = FreeWVisualEvidencePlanner.ResolveScenario("page-composition-floating-image");
         floatingScenario.Composition.ExpectsFloatingObjects.Should().BeTrue();
@@ -223,6 +236,56 @@ public sealed class VisualEvidencePlannerTests
     }
 
     [Fact]
+    public void SharedFieldPageNumberFactory_BuildsFieldVariantContracts()
+    {
+        var document = FreeWVisualEvidenceDocumentFactory.BuildFieldPageNumberVariantsDocument();
+
+        document.Page.DifferentFirstPage.Should().BeTrue();
+        document.Page.DifferentOddEvenPages.Should().BeTrue();
+        document.FinalSectionHeadersFooters.FirstHeader.Should().NotBeNull();
+        document.FinalSectionHeadersFooters.FirstFooter.Should().NotBeNull();
+        document.FinalSectionHeadersFooters.EvenHeader.Should().NotBeNull();
+        document.FinalSectionHeadersFooters.EvenFooter.Should().NotBeNull();
+        document.FinalSectionHeadersFooters.Header.Should().NotBeNull();
+        document.FinalSectionHeadersFooters.Footer.Should().NotBeNull();
+        document.Properties.Title.Should().Be("Field Page Number Evidence");
+        document.Properties.Author.Should().Be("FreeW Visual Evidence");
+
+        var fields = FreeWVisualEvidencePlanner.BuildFieldExpectation(document);
+        fields.SimpleFieldCount.Should().Be(14);
+        fields.ComplexFieldCount.Should().Be(4);
+        fields.BodyFieldCount.Should().Be(7);
+        fields.HeaderFooterFieldCount.Should().Be(11);
+        fields.PageFieldCount.Should().Be(5);
+        fields.NumPagesFieldCount.Should().Be(4);
+        fields.DocumentPropertyFieldCount.Should().Be(9);
+        fields.HasPageFields.Should().BeTrue();
+        fields.HasNumPagesFields.Should().BeTrue();
+        fields.HasDocumentPropertyFields.Should().BeTrue();
+        fields.HasComplexFields.Should().BeTrue();
+        fields.HasComplexResultFields.Should().BeTrue();
+        fields.HeaderFooterSlotNames.Should().BeEquivalentTo([
+            "first-header",
+            "first-footer",
+            "even-header",
+            "even-footer",
+            "header",
+            "footer"]);
+        fields.FieldKinds.Should().Contain([
+            nameof(RunFieldKind.PageNumber),
+            nameof(RunFieldKind.NumPages),
+            nameof(RunFieldKind.Title),
+            nameof(RunFieldKind.Author),
+            nameof(RunFieldKind.Subject),
+            nameof(RunFieldKind.Keywords),
+            nameof(RunFieldKind.DocComments),
+            "Complex:PAGE",
+            "Complex:NUMPAGES",
+            "Complex:TITLE",
+            "Complex:AUTHOR"]);
+    }
+
+    [Fact]
     public void SharedSectionGeometryFactory_BuildsMixedPortraitLandscapeContract()
     {
         var document = FreeWVisualEvidenceDocumentFactory.BuildSectionGeometryDocument();
@@ -376,6 +439,24 @@ public sealed class VisualEvidencePlannerTests
         var expected = FreeWVisualEvidenceManifestNormalizer.DefaultExpectedScenarios;
 
         foreach (var scenarioId in FreeWVisualEvidenceManifestNormalizer.ReviewRendererScenarioIds)
+        {
+            expected.Should().Contain(e =>
+                e.HostId == FreeWVisualEvidenceManifestNormalizer.WpfHostId &&
+                e.ScenarioId == scenarioId &&
+                e.MinimumExpectedOutputs == FreeWVisualEvidencePlanner.ResolveScenario(scenarioId).MinimumExpectedOutputs);
+            expected.Should().Contain(e =>
+                e.HostId == FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId &&
+                e.ScenarioId == scenarioId &&
+                e.MinimumExpectedOutputs == FreeWVisualEvidencePlanner.ResolveScenario(scenarioId).MinimumExpectedOutputs);
+        }
+    }
+
+    [Fact]
+    public void DefaultExpectedScenarios_RequiresPairedFieldRendererEvidence()
+    {
+        var expected = FreeWVisualEvidenceManifestNormalizer.DefaultExpectedScenarios;
+
+        foreach (var scenarioId in FreeWVisualEvidenceManifestNormalizer.FieldRendererScenarioIds)
         {
             expected.Should().Contain(e =>
                 e.HostId == FreeWVisualEvidenceManifestNormalizer.WpfHostId &&
@@ -620,6 +701,34 @@ public sealed class VisualEvidencePlannerTests
         expectation.Features.Watermark.Present.Should().BeTrue();
         expectation.Features.Watermark.Text.Should().Be("DRAFT");
         expectation.Features.Watermark.Layout.Should().Be(nameof(WatermarkLayout.Diagonal));
+    }
+
+    [Fact]
+    public void BuildPageExpectation_RecordsSharedFieldPageNumberVariants()
+    {
+        var document = FreeWVisualEvidenceDocumentFactory.BuildFieldPageNumberVariantsDocument();
+        var expectation = FreeWVisualEvidencePlanner.BuildPageExpectation(
+            "field-page-number-variants",
+            document.Page,
+            pageNumber: 2,
+            pageCount: 3,
+            outputName: "field-page-number-variants_p2.png",
+            headerSlotName: "even-header",
+            footerSlotName: "even-footer",
+            document: document);
+
+        expectation.ExpectedOutputName.Should().Be("field-page-number-variants_p2.png");
+        expectation.Composition.ExpectsHeadersFooters.Should().BeTrue();
+        expectation.HeaderSlotName.Should().Be("even-header");
+        expectation.FooterSlotName.Should().Be("even-footer");
+        expectation.Fields.SimpleFieldCount.Should().Be(14);
+        expectation.Fields.ComplexFieldCount.Should().Be(4);
+        expectation.Fields.HasPageFields.Should().BeTrue();
+        expectation.Fields.HasNumPagesFields.Should().BeTrue();
+        expectation.Fields.HasDocumentPropertyFields.Should().BeTrue();
+        expectation.Fields.HasComplexFields.Should().BeTrue();
+        expectation.Fields.HasHeaderFooterFields.Should().BeTrue();
+        expectation.Fields.ComplexFieldKeywords.Should().Contain(["PAGE", "NUMPAGES", "TITLE", "AUTHOR"]);
     }
 
     [Fact]
@@ -914,7 +1023,7 @@ public sealed class VisualEvidencePlannerTests
         using var doc = JsonDocument.Parse(json);
         var root = doc.RootElement;
         root.GetProperty("schemaId").GetString().Should().Be("freew.visual-evidence.v1");
-        root.GetProperty("schemaVersion").GetInt32().Should().Be(6);
+        root.GetProperty("schemaVersion").GetInt32().Should().Be(7);
         root.GetProperty("product").GetString().Should().Be("FreeW");
         root.GetProperty("scenarios").GetArrayLength().Should().Be(1);
         var evidence = root.GetProperty("evidence")[0];
@@ -923,6 +1032,8 @@ public sealed class VisualEvidencePlannerTests
         evidence.GetProperty("pageExpectation").GetProperty("features").GetProperty("section").GetProperty("ownerId")
             .GetString().Should().Be("section-1");
         evidence.GetProperty("pageExpectation").GetProperty("drawingObjects").GetProperty("floatingObjectCount")
+            .GetInt32().Should().Be(0);
+        evidence.GetProperty("pageExpectation").GetProperty("fields").GetProperty("simpleFieldCount")
             .GetInt32().Should().Be(0);
     }
 
@@ -2015,7 +2126,7 @@ public sealed class VisualEvidencePlannerTests
 
             var json = FreeWVisualEvidenceManifestNormalizer.ToJson(withBaseline);
             using var doc = JsonDocument.Parse(json);
-            doc.RootElement.GetProperty("schemaVersion").GetInt32().Should().Be(11);
+            doc.RootElement.GetProperty("schemaVersion").GetInt32().Should().Be(12);
             var triageItem = doc.RootElement.GetProperty("wordBaselineTriage")[0];
             triageItem.GetProperty("status").GetString().Should().Be("passed");
             triageItem.GetProperty("triageStatus").GetString().Should().Be("within-tolerance");
@@ -2144,6 +2255,7 @@ public sealed class VisualEvidencePlannerTests
         {
             "f2-footnotes" => FreeWVisualEvidenceDocumentFactory.BuildFootnotePlacementDocument(),
             "f2-endnotes" => FreeWVisualEvidenceDocumentFactory.BuildEndnotePlacementDocument(),
+            "field-page-number-variants" => FreeWVisualEvidenceDocumentFactory.BuildFieldPageNumberVariantsDocument(),
             "f2-tracked-changes" => FreeWVisualEvidenceDocumentFactory.BuildTrackedChangesReviewDocument(),
             "f2-comments" => FreeWVisualEvidenceDocumentFactory.BuildCommentsReviewDocument(),
             "table-layout-complex" => FreeWVisualEvidenceDocumentFactory.BuildComplexTableLayoutDocument(),

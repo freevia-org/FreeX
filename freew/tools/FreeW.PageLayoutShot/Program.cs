@@ -73,6 +73,9 @@ static int RenderAll(string outDir)
     var endnotesP1Path = VisualEvidenceOutputPath(outDir, "f2-endnotes", 1);
     var endnotesP2Path = VisualEvidenceOutputPath(outDir, "f2-endnotes", 2);
     var endnotesP3Path = VisualEvidenceOutputPath(outDir, "f2-endnotes", 3);
+    var fieldPageNumberP1Path = VisualEvidenceOutputPath(outDir, "field-page-number-variants", 1);
+    var fieldPageNumberP2Path = VisualEvidenceOutputPath(outDir, "field-page-number-variants", 2);
+    var fieldPageNumberP3Path = VisualEvidenceOutputPath(outDir, "field-page-number-variants", 3);
     var sectionLandscapeP1Path = VisualEvidenceOutputPath(outDir, "f2-section-landscape", 1);
     var sectionLandscapeP2Path = VisualEvidenceOutputPath(outDir, "f2-section-landscape", 2);
     var trackedChangesPath = VisualEvidenceOutputPath(outDir, "f2-tracked-changes", 1);
@@ -182,6 +185,38 @@ static int RenderAll(string outDir)
         viewportOffsetY: 2200,
         hasEndnotes: true,
         isSyntheticPage: true);
+    if (rc != 0) return rc;
+
+    rc = RenderMode(DocumentViewMode.PrintLayout, fieldPageNumberP1Path,
+        width: 960, height: 1200,
+        label: "Field Page Number p1",
+        scenarioId: "field-page-number-variants",
+        evidence: evidence,
+        documentFactory: FreeWVisualEvidenceDocumentFactory.BuildFieldPageNumberVariantsDocument,
+        pageNumber: 1,
+        pageCount: 3);
+    if (rc != 0) return rc;
+
+    rc = RenderMode(DocumentViewMode.PrintLayout, fieldPageNumberP2Path,
+        width: 960, height: 1200,
+        label: "Field Page Number p2",
+        scenarioId: "field-page-number-variants",
+        evidence: evidence,
+        documentFactory: FreeWVisualEvidenceDocumentFactory.BuildFieldPageNumberVariantsDocument,
+        pageNumber: 2,
+        pageCount: 3,
+        viewportOffsetY: 1100);
+    if (rc != 0) return rc;
+
+    rc = RenderMode(DocumentViewMode.PrintLayout, fieldPageNumberP3Path,
+        width: 960, height: 1200,
+        label: "Field Page Number p3",
+        scenarioId: "field-page-number-variants",
+        evidence: evidence,
+        documentFactory: FreeWVisualEvidenceDocumentFactory.BuildFieldPageNumberVariantsDocument,
+        pageNumber: 3,
+        pageCount: 3,
+        viewportOffsetY: 2200);
     if (rc != 0) return rc;
 
     rc = RenderMode(DocumentViewMode.PrintLayout, sectionLandscapeP1Path,
@@ -794,6 +829,8 @@ static void AddAvaloniaEvidence(
         pageCount: pageCount,
         layoutKind: layoutKind,
         availableWidthDip: pixelWidth,
+        headerSlotName: ResolveAvaloniaHeaderSlotName(document, pageNumber),
+        footerSlotName: ResolveAvaloniaFooterSlotName(document, pageNumber),
         hasFootnotes: hasFootnotes,
         hasEndnotes: hasEndnotes,
         isSyntheticPage: isSyntheticPage,
@@ -804,6 +841,39 @@ static void AddAvaloniaEvidence(
         document: document);
     FreeWVisualEvidencePlanner.EnsureTrusted(row);
     evidence.Add(row);
+}
+
+static string? ResolveAvaloniaHeaderSlotName(TextDocument? document, int pageNumber) =>
+    document is null ? null : ResolveAvaloniaHeaderFooterSlot(document, pageNumber, header: true)?.Name;
+
+static string? ResolveAvaloniaFooterSlotName(TextDocument? document, int pageNumber) =>
+    document is null ? null : ResolveAvaloniaHeaderFooterSlot(document, pageNumber, header: false)?.Name;
+
+static (string Name, HeaderFooter Value)? ResolveAvaloniaHeaderFooterSlot(
+    TextDocument document,
+    int pageNumber,
+    bool header)
+{
+    var hf = document.FinalSectionHeadersFooters;
+    if (pageNumber == 1 && document.Page.DifferentFirstPage)
+    {
+        var first = header ? hf.FirstHeader : hf.FirstFooter;
+        if (first is not null && !first.IsEmpty)
+            return (header ? "first-header" : "first-footer", first);
+    }
+
+    if (document.Page.DifferentOddEvenPages && pageNumber % 2 == 0)
+    {
+        var even = header ? hf.EvenHeader : hf.EvenFooter;
+        if (even is not null && !even.IsEmpty)
+            return (header ? "even-header" : "even-footer", even);
+    }
+
+    var normal = header ? hf.Header : hf.Footer;
+    if (normal is not null && !normal.IsEmpty)
+        return (header ? "header" : "footer", normal);
+
+    return null;
 }
 
 static FreeWVisualSectionGeometryPagePlan? ResolveSectionGeometryPage(

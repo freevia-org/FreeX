@@ -97,6 +97,7 @@ public static class FreeWVisualBaselineComparisonPlanner
             "chart-smartart-complex",
             "wordart-watermark-stress",
             "wordart-picture-watermark-layout",
+            "field-page-number-variants",
             "backstage-print-preview-fidelity",
             "backstage-pdf-export-fidelity"
         };

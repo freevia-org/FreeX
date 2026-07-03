@@ -1734,6 +1734,12 @@ static void GenerateF2FlowCorpus(string outDir)
         Console.WriteLine("  wrote f2-hf-oddeven.docx");
     }
 
+    {
+        var doc = FreeWVisualEvidenceDocumentFactory.BuildFieldPageNumberVariantsDocument();
+        DocxWriter.Write(doc, Path.Combine(outDir, "field-page-number-variants.docx"));
+        Console.WriteLine("  wrote field-page-number-variants.docx");
+    }
+
     // ─── 4. Footnotes ────────────────────────────────────────────────────────────────────────────
     {
         var doc = FreeWVisualEvidenceDocumentFactory.BuildFootnotePlacementDocument();
@@ -1860,7 +1866,7 @@ static void GenerateF2FlowCorpus(string outDir)
         Console.WriteLine("  wrote backstage-pdf-export-fidelity.docx");
     }
 
-    Console.WriteLine($"\nDone - 16 corpus files written to {outDir}");
+    Console.WriteLine($"\nDone - 17 corpus files written to {outDir}");
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════════════════════════
