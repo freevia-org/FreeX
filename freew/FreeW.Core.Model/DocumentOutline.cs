@@ -31,6 +31,9 @@ public static class DocumentOutline
     private const string TitleStyleId = "Title";
     private const string HeadingPrefix = "Heading";
 
+    /// <summary>The deepest heading level exposed by Word's navigation and outline surfaces.</summary>
+    public const int MaxOutlineLevel = 9;
+
     /// <summary>
     /// Builds the heading outline for <paramref name="document"/>: body paragraphs whose style is a
     /// title or heading, in document order, with their derived level, text, and style id. Returns an
@@ -74,7 +77,7 @@ public static class DocumentOutline
                 out var headingNumber)
             && headingNumber > 0)
         {
-            level = headingNumber;
+            level = Math.Min(headingNumber, MaxOutlineLevel);
             return true;
         }
 

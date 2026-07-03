@@ -91,4 +91,18 @@ public class OutlineViewModelTests
         rows[1].Level.Should().Be(1, "the table is indented under its owning heading");
         rows[1].Text.Should().Contain("cell text");
     }
+
+    [Fact]
+    public void Build_OverDeepHeading_UsesWordOutlineDepthCap()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Deep custom heading") { StyleId = "Heading10" });
+        doc.Blocks.Add(new Paragraph("body under deep heading"));
+
+        var rows = OutlineViewModel.Build(doc);
+
+        rows.Should().Equal(
+            new OutlineRow(0, DocumentOutline.MaxOutlineLevel, "Deep custom heading", true),
+            new OutlineRow(1, DocumentOutline.MaxOutlineLevel, "body under deep heading", false));
+    }
 }
