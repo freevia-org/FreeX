@@ -102,7 +102,19 @@ public sealed class VisualEvidencePlannerTests
         tablePaginationScenario.Composition.ExpectsTables.Should().BeTrue();
 
         var drawingScenario = FreeWVisualEvidencePlanner.ResolveScenario("drawing-objects-complex");
-        drawingScenario.ExpectedFeatureTags.Should().Contain(["drawing-objects", "charts", "smartart", "wordart"]);
+        drawingScenario.ExpectedFeatureTags.Should().Contain([
+            "drawing-objects",
+            "charts",
+            "smartart",
+            "wordart",
+            "drawing-effects",
+            "image-effects",
+            "shape-effects",
+            "wordart-effects",
+            "shadow",
+            "glow",
+            "reflection",
+            "artistic-effect"]);
         drawingScenario.ExpectedOutputNamePattern.Should().Be("drawing-objects-complex_p{page}.png");
         drawingScenario.Composition.ExpectsFloatingObjects.Should().BeTrue();
 
@@ -112,7 +124,16 @@ public sealed class VisualEvidencePlannerTests
         chartSmartArtScenario.MinimumExpectedOutputs.Should().Be(1);
 
         var wordArtWatermarkScenario = FreeWVisualEvidencePlanner.ResolveScenario("wordart-watermark-stress");
-        wordArtWatermarkScenario.ExpectedFeatureTags.Should().Contain(["drawing-objects", "wordart", "watermark", "page-border"]);
+        wordArtWatermarkScenario.ExpectedFeatureTags.Should().Contain([
+            "drawing-objects",
+            "wordart",
+            "watermark",
+            "page-border",
+            "drawing-effects",
+            "shape-effects",
+            "wordart-effects",
+            "shadow",
+            "glow"]);
         wordArtWatermarkScenario.ExpectedOutputNamePattern.Should().Be("wordart-watermark-stress_p{page}.png");
         wordArtWatermarkScenario.Composition.ExpectsFloatingObjects.Should().BeTrue();
         wordArtWatermarkScenario.Composition.ExpectsWatermark.Should().BeTrue();
@@ -849,9 +870,10 @@ public sealed class VisualEvidencePlannerTests
             document: document);
 
         expectation.Composition.ExpectsFloatingObjects.Should().BeTrue();
-        expectation.DrawingObjects.FloatingObjectCount.Should().Be(5);
+        expectation.DrawingObjects.FloatingObjectCount.Should().Be(6);
         expectation.DrawingObjects.BehindTextCount.Should().Be(1);
-        expectation.DrawingObjects.InFrontCount.Should().Be(4);
+        expectation.DrawingObjects.InFrontCount.Should().Be(5);
+        expectation.DrawingObjects.HasImages.Should().BeTrue();
         expectation.DrawingObjects.HasShapes.Should().BeTrue();
         expectation.DrawingObjects.HasCharts.Should().BeTrue();
         expectation.DrawingObjects.HasSmartArt.Should().BeTrue();
@@ -861,11 +883,24 @@ public sealed class VisualEvidencePlannerTests
         expectation.DrawingObjects.HasTopAndBottomWrap.Should().BeTrue();
         expectation.DrawingObjects.HasZOrder.Should().BeTrue();
         expectation.DrawingObjects.Objects.Select(o => o.TypeTag).Should().Contain([
+            "Image",
             "Shape",
             "Chart",
             "SmartArt",
             "WordArt",
             "Group"]);
+        expectation.DrawingObjects.Effects.EffectObjectCount.Should().Be(3);
+        expectation.DrawingObjects.Effects.ShapeEffectObjectCount.Should().Be(1);
+        expectation.DrawingObjects.Effects.ImageEffectObjectCount.Should().Be(1);
+        expectation.DrawingObjects.Effects.WordArtEffectObjectCount.Should().Be(1);
+        expectation.DrawingObjects.Effects.HasShadow.Should().BeTrue();
+        expectation.DrawingObjects.Effects.HasGlow.Should().BeTrue();
+        expectation.DrawingObjects.Effects.HasReflection.Should().BeTrue();
+        expectation.DrawingObjects.Effects.HasArtisticEffect.Should().BeTrue();
+        expectation.DrawingObjects.Effects.EffectSummaries.Should().Contain([
+            "Shape:shadow",
+            "Image:shadow+glow+reflection+artistic:GlowDiffused",
+            "WordArt:glow"]);
     }
 
     [Fact]
@@ -929,6 +964,11 @@ public sealed class VisualEvidencePlannerTests
         expectation.DrawingObjects.HasSquareWrap.Should().BeTrue();
         expectation.DrawingObjects.HasZOrder.Should().BeTrue();
         expectation.DrawingObjects.Objects.Count(o => o.TypeTag == "WordArt").Should().Be(2);
+        expectation.DrawingObjects.Effects.ShapeEffectObjectCount.Should().Be(1);
+        expectation.DrawingObjects.Effects.WordArtEffectObjectCount.Should().Be(1);
+        expectation.DrawingObjects.Effects.HasShadow.Should().BeTrue();
+        expectation.DrawingObjects.Effects.HasGlow.Should().BeTrue();
+        expectation.DrawingObjects.Effects.EffectSummaries.Should().Contain(["Shape:shadow", "WordArt:glow"]);
     }
 
     [Fact]

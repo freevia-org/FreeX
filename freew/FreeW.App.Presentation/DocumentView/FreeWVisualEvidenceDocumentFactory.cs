@@ -401,6 +401,7 @@ public static class FreeWVisualEvidenceDocumentFactory
             "The drawing objects in this paragraph should retain their shared placement metadata while " +
             "WPF and Avalonia renderers emit a common visual-evidence manifest. "));
         anchor.Runs.Add(Run.FromShape(BuildFloatingShape()));
+        anchor.Runs.Add(Run.FromImage(BuildFloatingEffectImage()));
         anchor.Runs.Add(Run.FromChart(BuildFloatingChart()));
         anchor.Runs.Add(Run.FromSmartArt(BuildFloatingSmartArt()));
         anchor.Runs.Add(Run.FromWordArt(BuildFloatingWordArt()));
@@ -637,6 +638,21 @@ public static class FreeWVisualEvidenceDocumentFactory
         shape.Effects = new ShapeEffectLst { HasShadow = true, ShadowAlpha = 35000 };
         return shape;
     }
+
+    private static InlineImage BuildFloatingEffectImage() =>
+        new(BuildGeneratedWatermarkPngBytes(), widthPt: 126, heightPt: 72)
+        {
+            AltText = "Floating image with shadow glow reflection and artistic effect",
+            Wrapping = ImageWrapping.Square,
+            HorizontalOffsetPt = 150,
+            VerticalOffsetPt = 34,
+            ZOrderIndex = 5,
+            ShadowPreset = 2,
+            GlowSizePt = 5,
+            GlowColorHex = "5B9BD5",
+            ReflectionPreset = 1,
+            ArtisticEffect = ImageArtisticEffect.GlowDiffused
+        };
 
     private static Chart BuildFloatingChart()
     {
