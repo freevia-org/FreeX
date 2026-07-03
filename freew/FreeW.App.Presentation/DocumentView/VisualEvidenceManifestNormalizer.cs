@@ -833,6 +833,31 @@ public static class FreeWVisualEvidenceManifestNormalizer
             rowFailures.Add(
                 $"backstage renderer evidence cannot use fallback capture source '{captureSource}'");
         }
+
+        if (!row.HostMetadata.TryGetValue("captureSource", out captureSource)
+            || string.IsNullOrWhiteSpace(captureSource))
+        {
+            rowFailures.Add("backstage renderer evidence must declare real captureSource metadata");
+            return;
+        }
+
+        var expectedCaptureSources = row.HostId switch
+        {
+            WpfHostId => new[] { "software-renderer", "wpf-composite-renderer" },
+            AvaloniaHostId => new[] { "avalonia-render-target" },
+            _ => null
+        };
+        if (expectedCaptureSources is null)
+        {
+            rowFailures.Add($"backstage renderer evidence has unsupported host id '{row.HostId}'");
+            return;
+        }
+
+        if (!expectedCaptureSources.Contains(captureSource, StringComparer.OrdinalIgnoreCase))
+        {
+            rowFailures.Add(
+                $"backstage renderer evidence for host '{row.HostId}' must use capture source '{string.Join("' or '", expectedCaptureSources)}', found '{captureSource}'");
+        }
     }
 
     private static IReadOnlyList<FreeWVisualEvidenceNormalizedScenario> BuildScenarioSummaries(
