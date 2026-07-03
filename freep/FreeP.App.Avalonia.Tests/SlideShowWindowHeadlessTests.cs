@@ -343,6 +343,43 @@ public sealed class SlideShowWindowHeadlessTests
     }
 
     [Fact]
+    public async Task SlideShowWindow_navigation_commits_active_presenter_ink_through_shared_planner()
+    {
+        SlideShowInkExecutionState? inkState = null;
+        var overlayVisualCount = -1;
+        var currentSlideIndex = -1;
+        var ran = await OnUiThread(() =>
+        {
+            var pres = MakePresentation(2);
+            var window = new SlideShowWindow(pres, 0);
+            window.ApplyPresenterToolIntent(
+                pointerMode: SlideShowPresenterPointerMode.Pen,
+                inkColorHex: "#336699",
+                inkThicknessDip: 5);
+
+            window.BeginPresenterInkStroke(10, 20);
+            window.AppendPresenterInkStroke(30, 40);
+            window.ExecuteAdvance();
+
+            inkState = window.InkExecutionState;
+            overlayVisualCount = window.PresenterInkOverlayVisualCount;
+            currentSlideIndex = window.Controller.CurrentSlideIndex;
+        });
+
+        if (!ran) return;
+        currentSlideIndex.Should().Be(1);
+        inkState.Should().NotBeNull();
+        inkState!.ActiveStroke.Should().BeNull();
+        inkState.CommittedStrokes.Should().ContainSingle();
+        var stroke = inkState.CommittedStrokes.Single();
+        stroke.SlideIndex.Should().Be(0);
+        stroke.Points.Should().Equal(
+            new SlideShowInkPoint(10, 20),
+            new SlideShowInkPoint(30, 40));
+        overlayVisualCount.Should().Be(0);
+    }
+
+    [Fact]
     public async Task SlideShowWindow_advance_past_last_slide_returns_AtEnd()
     {
         AdvanceResult? result = null;

@@ -144,6 +144,42 @@ public sealed class SlideShowInkExecutionPlannerTests
     }
 
     [Fact]
+    public void MoveToSlide_CommitsActiveStrokeAndClearsTransientLaserOverlay()
+    {
+        var drawing = SlideShowInkExecutionPlanner.Append(
+            SlideShowInkExecutionPlanner.Begin(
+                CreateState(SlideShowPresenterPointerMode.Pen, "#AA0000", 4),
+                new SlideShowInkPoint(10, 10)).State,
+            new SlideShowInkPoint(60, 10)).State;
+
+        var moved = SlideShowInkExecutionPlanner.MoveToSlide(drawing, slideIndex: 1);
+
+        moved.SlideIndex.Should().Be(1);
+        moved.ActiveStroke.Should().BeNull();
+        moved.CommittedStrokes.Should().ContainSingle();
+        moved.CommittedStrokes.Single().SlideIndex.Should().Be(0);
+        moved.CommittedStrokes.Single().Points.Should().Equal(
+            new SlideShowInkPoint(10, 10),
+            new SlideShowInkPoint(60, 10));
+        SlideShowInkExecutionPlanner.BuildOverlayPlan(moved).HasVisibleInk.Should().BeFalse();
+
+        var laser = SlideShowInkExecutionPlanner.Begin(
+            SlideShowInkExecutionPlanner.SelectPointerInk(
+                moved,
+                SlideShowPresenterToolPlanner.PlanPointerInk(
+                    SlideShowPresenterPointerMode.LaserPointer,
+                    "#FF0000",
+                    6,
+                    SlideShowInkRetentionDecision.KeepInk)),
+            new SlideShowInkPoint(20, 20)).State;
+
+        var laserMoved = SlideShowInkExecutionPlanner.MoveToSlide(laser, slideIndex: 0);
+
+        laserMoved.LaserOverlayPoint.Should().BeNull();
+        laserMoved.CommittedStrokes.Should().ContainSingle();
+    }
+
+    [Fact]
     public void ClearAndRetentionClear_RemoveCommittedInk()
     {
         var state = CreateState(

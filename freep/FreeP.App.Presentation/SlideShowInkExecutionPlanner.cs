@@ -80,10 +80,18 @@ public static class SlideShowInkExecutionPlanner
     {
         ArgumentNullException.ThrowIfNull(state);
 
+        var committedStrokes = state.CommittedStrokes;
+        if (state.ActiveStroke is not null)
+        {
+            var stroke = state.ActiveStroke with { Points = state.ActiveStroke.Points.ToArray() };
+            committedStrokes = committedStrokes.Concat(new[] { stroke }).ToArray();
+        }
+
         return state with
         {
             SlideIndex = slideIndex,
             ActiveStroke = null,
+            CommittedStrokes = committedStrokes,
             LaserOverlayPoint = null,
         };
     }
