@@ -1449,6 +1449,84 @@ public sealed class PresentationReviewWorkflowPlannerTests
     }
 
     [Fact]
+    public void BuildProofingPanePlan_ModelsIssueRowsSelectionAndCorrectionAction()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Title = "Intro eror";
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 4,
+            Name = "Caption",
+            Text = "Teh caption"
+        });
+
+        var execution = PresentationReviewWorkflowPlanner.BuildProofingExecutionPlan(presentation);
+        var plan = PresentationReviewWorkflowPlanner.BuildProofingPanePlan(execution, selectedRowIndex: 1);
+
+        plan.CanRun.Should().BeTrue();
+        plan.IssueCount.Should().Be(2);
+        plan.Rows.Select(row => row.Text).Should().Equal("eror", "Teh");
+        plan.SelectedRowIndex.Should().Be(1);
+        plan.SelectedRow.Should().BeSameAs(plan.Rows[1]);
+        plan.Rows.Select(row => row.IsSelected).Should().Equal(false, true);
+        plan.Rows[0].CorrectionAction.IsEnabled.Should().BeFalse();
+        plan.Rows[0].CorrectionAction.DisabledReason.Should().Be(PresentationReviewWorkflowPlanner.ProofingMissingIssueMessage);
+        plan.Rows[1].Should().Match<PresentationProofingIssueRowPlan>(row =>
+            row.SourceName == "Caption" &&
+            row.SlideDisplay == "Slide 1" &&
+            row.SuggestedReplacement == "The" &&
+            row.CorrectionAction.CommandId == PresentationReviewWorkflowPlanner.ProofingApplyCorrectionCommandId &&
+            row.CorrectionAction.IsEnabled);
+        plan.Actions.Single(action => action.CommandId == PresentationReviewWorkflowPlanner.ProofingApplyCorrectionCommandId)
+            .IsEnabled.Should().BeTrue();
+    }
+
+    [Fact]
+    public void BuildProofingPanePlan_AppliesCorrectionAndNormalizesSelectionAfterRefresh()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Title = "Intro eror";
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 4,
+            Name = "Caption",
+            Text = "Body eror"
+        });
+        var initial = PresentationReviewWorkflowPlanner.BuildProofingPanePlan(
+            PresentationReviewWorkflowPlanner.BuildProofingExecutionPlan(presentation),
+            selectedRowIndex: 1);
+        var selected = initial.SelectedRow!;
+
+        var mutation = PresentationReviewWorkflowPlanner.TryApplyProofingCorrection(
+            presentation,
+            selected.Scope,
+            selected.Start,
+            selected.Length,
+            selected.SuggestedReplacement);
+        var refreshed = PresentationReviewWorkflowPlanner.BuildProofingPanePlan(
+            PresentationReviewWorkflowPlanner.BuildProofingExecutionPlan(presentation),
+            PresentationReviewWorkflowPlanner.NormalizeProofingSelectionAfterCorrection(
+                initial.SelectedRowIndex,
+                PresentationReviewWorkflowPlanner.BuildProofingPanePlan(
+                    PresentationReviewWorkflowPlanner.BuildProofingExecutionPlan(presentation))));
+
+        mutation.Should().Be(new PresentationProofingCorrectionMutationPlan(
+            true,
+            selected.Scope,
+            selected.Start,
+            selected.Length,
+            "error",
+            "Body error",
+            null));
+        refreshed.IssueCount.Should().Be(1);
+        refreshed.SelectedRowIndex.Should().Be(0);
+        refreshed.SelectedRow!.Text.Should().Be("eror");
+        slide.Shapes.Single(shape => shape.Id == 4).Text.Should().Be("Body error");
+    }
+
+    [Fact]
     public void BuildProofingExecutionPlan_NoContentDisablesProofingAction()
     {
         var presentation = new Presentation();

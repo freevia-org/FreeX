@@ -23,7 +23,9 @@ public enum PresentationReviewWorkflowIntentKind
     MoveReadingOrderEarlier,
     MoveReadingOrderLater,
     SelectReadingOrderItem,
-    RunProofing
+    RunProofing,
+    SelectProofingIssue,
+    ApplyProofingCorrection
 }
 
 public enum PresentationWorkflowCapabilityStatus
@@ -299,6 +301,36 @@ public sealed record PresentationProofingExecutionPlan(
     IReadOnlyList<PresentationReviewWorkflowActionPlan> Actions,
     string Message);
 
+public sealed record PresentationProofingIssueRowPlan(
+    int RowIndex,
+    PresentationProofingScopeDescriptor Scope,
+    int Start,
+    int Length,
+    string Text,
+    string Message,
+    string SourceName,
+    string SlideDisplay,
+    string Snippet,
+    string SuggestedReplacement,
+    bool IsSelected,
+    PresentationReviewWorkflowActionPlan CorrectionAction);
+
+public sealed record PresentationProofingPanePlan(
+    bool CanRun,
+    PresentationWorkflowCapabilityStatus Status,
+    int ScopeCount,
+    int IssueCount,
+    int SelectedRowIndex,
+    IReadOnlyList<PresentationProofingIssueRowPlan> Rows,
+    IReadOnlyList<PresentationReviewWorkflowActionPlan> Actions,
+    string Message)
+{
+    public PresentationProofingIssueRowPlan? SelectedRow =>
+        SelectedRowIndex >= 0 && SelectedRowIndex < Rows.Count
+            ? Rows[SelectedRowIndex]
+            : null;
+}
+
 public sealed record PresentationProofingCorrectionMutationPlan(
     bool ShouldApply,
     PresentationProofingScopeDescriptor Scope,
@@ -336,6 +368,7 @@ public static class PresentationReviewWorkflowPlanner
     public const string ReadingOrderMoveLaterCommandId = "freep.review.reading-order.move-later";
     public const string ReadingOrderSelectItemCommandId = "freep.review.reading-order.select";
     public const string ProofingCommandId = "freep.review.proofing.spelling";
+    public const string ProofingApplyCorrectionCommandId = "freep.review.proofing.apply-correction";
     public const string InsertLinkCommandId = "freep.insert-link";
 
     public const string MissingSlideMessage = "Select a slide before adding a comment.";
@@ -377,6 +410,12 @@ public static class PresentationReviewWorkflowPlanner
         "Proofing correction range is outside the target text.";
     public const string ProofingCorrectionEmptyReplacementMessage =
         "Enter a replacement before applying the proofing correction.";
+    public const string ProofingNoIssuesMessage =
+        "No proofing issues found in slide text, notes, or comments.";
+    public const string ProofingMissingIssueMessage =
+        "Select a proofing issue before applying a correction.";
+    public const string ProofingNoSuggestionMessage =
+        "No replacement suggestion is available for the selected proofing issue.";
     public const string MissingSlideTitleActionSummary =
         "Add a concise slide title so screen-reader users can navigate the deck.";
     public const string MissingAltTextActionSummary =
@@ -1146,20 +1185,18 @@ public static class PresentationReviewWorkflowPlanner
         ArgumentNullException.ThrowIfNull(presentation);
 
         var scopes = EnumerateProofingScopes(presentation).ToArray();
+        scanner ??= ScanBuiltInProofingIssues;
         var issues = new List<PresentationProofingIssueDescriptor>();
-        if (scanner is not null)
+        foreach (var scope in scopes)
         {
-            foreach (var scope in scopes)
+            foreach (var match in scanner(scope))
             {
-                foreach (var match in scanner(scope))
-                {
-                    issues.Add(new PresentationProofingIssueDescriptor(
-                        scope,
-                        Math.Clamp(match.Start, 0, scope.Text.Length),
-                        Math.Clamp(match.Length, 0, Math.Max(0, scope.Text.Length - Math.Clamp(match.Start, 0, scope.Text.Length))),
-                        match.Text,
-                        match.Message));
-                }
+                issues.Add(new PresentationProofingIssueDescriptor(
+                    scope,
+                    Math.Clamp(match.Start, 0, scope.Text.Length),
+                    Math.Clamp(match.Length, 0, Math.Max(0, scope.Text.Length - Math.Clamp(match.Start, 0, scope.Text.Length))),
+                    match.Text,
+                    match.Message));
             }
         }
 
@@ -1173,6 +1210,80 @@ public static class PresentationReviewWorkflowPlanner
             issues,
             BuildProofingActions(canRun),
             canRun ? ProofingReadyMessage : ProofingNoTextMessage);
+    }
+
+    public static PresentationProofingPanePlan BuildProofingPanePlan(
+        PresentationProofingExecutionPlan executionPlan,
+        int? selectedRowIndex = null)
+    {
+        ArgumentNullException.ThrowIfNull(executionPlan);
+
+        var normalizedSelection = NormalizeProofingIssueSelection(
+            executionPlan.Issues.Count,
+            selectedRowIndex);
+        var rows = executionPlan.Issues
+            .Select((issue, index) =>
+            {
+                var suggestion = SuggestProofingReplacement(issue.Text);
+                var canApply = normalizedSelection == index &&
+                    !string.IsNullOrWhiteSpace(suggestion) &&
+                    !string.Equals(issue.Text, suggestion, StringComparison.Ordinal);
+                var disabledReason = normalizedSelection == index
+                    ? canApply ? null : ProofingNoSuggestionMessage
+                    : ProofingMissingIssueMessage;
+
+                return new PresentationProofingIssueRowPlan(
+                    index,
+                    issue.Scope,
+                    issue.Start,
+                    issue.Length,
+                    issue.Text,
+                    issue.Message,
+                    issue.Scope.SourceName,
+                    $"Slide {issue.Scope.SlideIndex + 1}",
+                    issue.Scope.Snippet,
+                    suggestion,
+                    normalizedSelection == index,
+                    new PresentationReviewWorkflowActionPlan(
+                        ProofingApplyCorrectionCommandId,
+                        "Change",
+                        PresentationReviewWorkflowIntentKind.ApplyProofingCorrection,
+                        canApply,
+                        executionPlan.Status,
+                        disabledReason));
+            })
+            .ToArray();
+
+        var selectedAction = rows.FirstOrDefault(row => row.IsSelected)?.CorrectionAction;
+        var applyAction = selectedAction ?? new PresentationReviewWorkflowActionPlan(
+            ProofingApplyCorrectionCommandId,
+            "Change",
+            PresentationReviewWorkflowIntentKind.ApplyProofingCorrection,
+            false,
+            executionPlan.Status,
+            executionPlan.IssueCount == 0 ? ProofingNoIssuesMessage : ProofingMissingIssueMessage);
+
+        return new PresentationProofingPanePlan(
+            executionPlan.CanRun,
+            executionPlan.Status,
+            executionPlan.ScopeCount,
+            executionPlan.IssueCount,
+            normalizedSelection,
+            rows,
+            [.. executionPlan.Actions, applyAction],
+            executionPlan.IssueCount == 0 ? ProofingNoIssuesMessage : executionPlan.Message);
+    }
+
+    public static int NormalizeProofingSelectionAfterCorrection(
+        int previousSelectedRowIndex,
+        PresentationProofingPanePlan refreshedPlan)
+    {
+        ArgumentNullException.ThrowIfNull(refreshedPlan);
+
+        if (refreshedPlan.Rows.Count == 0)
+            return -1;
+
+        return Math.Clamp(previousSelectedRowIndex, 0, refreshedPlan.Rows.Count - 1);
     }
 
     public static PresentationProofingCorrectionMutationPlan TryApplyProofingCorrection(
@@ -1363,6 +1474,63 @@ public static class PresentationReviewWorkflowPlanner
                 canRun ? PresentationWorkflowCapabilityStatus.Available : PresentationWorkflowCapabilityStatus.Deferred,
                 canRun ? null : ProofingNoTextMessage),
         ];
+
+    private static int NormalizeProofingIssueSelection(int issueCount, int? selectedRowIndex)
+    {
+        if (issueCount <= 0)
+            return -1;
+
+        return selectedRowIndex is { } index && index >= 0 && index < issueCount
+            ? index
+            : 0;
+    }
+
+    private static IEnumerable<PresentationProofingIssueMatch> ScanBuiltInProofingIssues(
+        PresentationProofingScopeDescriptor scope)
+    {
+        foreach (var typo in BuiltInProofingCorrections)
+        {
+            var start = 0;
+            while (start < scope.Text.Length)
+            {
+                var index = scope.Text.IndexOf(typo.Key, start, StringComparison.OrdinalIgnoreCase);
+                if (index < 0)
+                    break;
+
+                yield return new PresentationProofingIssueMatch(
+                    index,
+                    typo.Key.Length,
+                    scope.Text.Substring(index, typo.Key.Length),
+                    "Possible misspelling.");
+                start = index + typo.Key.Length;
+            }
+        }
+    }
+
+    private static string SuggestProofingReplacement(string text)
+        => BuiltInProofingCorrections.TryGetValue(text, out var replacement)
+            ? MatchReplacementCasing(text, replacement)
+            : string.Empty;
+
+    private static string MatchReplacementCasing(string source, string replacement)
+    {
+        if (source.Length == 0 || replacement.Length == 0)
+            return replacement;
+
+        return char.IsUpper(source[0])
+            ? char.ToUpperInvariant(replacement[0]) + replacement[1..]
+            : replacement;
+    }
+
+    private static readonly IReadOnlyDictionary<string, string> BuiltInProofingCorrections =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["eror"] = "error",
+            ["teh"] = "the",
+            ["recieve"] = "receive",
+            ["adress"] = "address",
+            ["occured"] = "occurred",
+        };
 
     private static IReadOnlyList<PresentationReviewWorkflowActionPlan> BuildReadingOrderActions(
         bool hasItems,

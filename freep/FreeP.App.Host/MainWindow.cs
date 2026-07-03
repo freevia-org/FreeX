@@ -146,6 +146,11 @@ public sealed class MainWindow : Window
     private StackPanel _readingOrderPaneItemsPanel = null!;
     private Button _readingOrderMoveEarlierButton = null!;
     private Button _readingOrderMoveLaterButton = null!;
+    private Border _proofingPaneHost = null!;
+    private TextBlock _proofingPaneHeading = null!;
+    private TextBlock _proofingPaneMessage = null!;
+    private StackPanel _proofingPaneRowsPanel = null!;
+    private int? _selectedProofingIssueRowIndex;
 
     internal PresentationCommentPanePlan? LastCommentPanePlan { get; private set; }
     internal PresentationCommentNavigationPlan? LastCommentNavigationPlan { get; private set; }
@@ -156,6 +161,7 @@ public sealed class MainWindow : Window
     internal PresentationReadingOrderPlan? LastReadingOrderPlan { get; private set; }
     internal PresentationProofingRequestPlan? LastProofingRequestPlan { get; private set; }
     internal PresentationProofingExecutionPlan? LastProofingExecutionPlan { get; private set; }
+    internal PresentationProofingPanePlan? LastProofingPanePlan { get; private set; }
     internal PresentationDesignCommandPlan? LastLayoutRequestPlan { get; private set; }
     internal PresentationNotesPagePreviewPlan? LastNotesPagePreviewPlan { get; private set; }
     internal PresentationNotesPagePdfRenderPlan? LastNotesPagePdfRenderPlan { get; private set; }
@@ -197,6 +203,14 @@ public sealed class MainWindow : Window
     internal string ReadingOrderPaneMessage => _readingOrderPaneMessage?.Text ?? string.Empty;
     internal bool IsReadingOrderMoveEarlierEnabled => _readingOrderMoveEarlierButton?.IsEnabled == true;
     internal bool IsReadingOrderMoveLaterEnabled => _readingOrderMoveLaterButton?.IsEnabled == true;
+    internal bool IsProofingPaneVisible => _proofingPaneHost?.Visibility == Visibility.Visible;
+    internal int ProofingPaneIssueRowCount => LastProofingPanePlan?.Rows.Count ?? 0;
+    internal int ProofingPaneSelectedIssueCount => LastProofingPanePlan?.Rows.Count(row => row.IsSelected) ?? 0;
+    internal bool IsProofingPaneCorrectionEnabled =>
+        LastProofingPanePlan?.Actions.SingleOrDefault(action =>
+            action.CommandId == PresentationReviewWorkflowPlanner.ProofingApplyCorrectionCommandId)?.IsEnabled == true;
+    internal string ProofingPaneHeading => _proofingPaneHeading?.Text ?? string.Empty;
+    internal string ProofingPaneMessage => _proofingPaneMessage?.Text ?? string.Empty;
     internal string? ReadingOrderMoveEarlierDisabledReason =>
         LastReadingOrderPlan?.Actions.SingleOrDefault(action =>
             action.CommandId == PresentationReviewWorkflowPlanner.ReadingOrderMoveEarlierCommandId)?.DisabledReason;
@@ -287,7 +301,7 @@ public sealed class MainWindow : Window
             onReviewAccessibility: () => ShowAccessibilityCheckerPane(),
             onReviewAltText: () => ShowAltTextPane(),
             onReviewReadingOrder: () => ShowReadingOrderPane(),
-            onReviewProofing: () => RefreshProofingRequestPlan(),
+            onReviewProofing: () => ShowProofingPane(),
             onAddComment: () => AddComment("New comment"),
             onEditComment: () => EditSelectedComment(GetSelectedCommentText()),
             onDeleteComment: () => DeleteSelectedComment(),
@@ -593,10 +607,12 @@ public sealed class MainWindow : Window
         // END 16B SEAM
 
         _readingOrderPaneHost = BuildReadingOrderPaneHost();
+        _proofingPaneHost = BuildProofingPaneHost();
 
         var splitter = new Grid();
         splitter.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         splitter.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        splitter.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         splitter.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         splitter.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         splitter.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -606,12 +622,14 @@ public sealed class MainWindow : Window
         Grid.SetColumn(_accessibilityCheckerPaneHost, 2);
         Grid.SetColumn(_altTextPaneHost, 3);
         Grid.SetColumn(_readingOrderPaneHost, 4);
-        Grid.SetColumn(_animPaneHost,  5); // 16B
+        Grid.SetColumn(_proofingPaneHost, 5);
+        Grid.SetColumn(_animPaneHost,  6); // 16B
         splitter.Children.Add(SlidePaneHost);
         splitter.Children.Add(rightPanel);
         splitter.Children.Add(_accessibilityCheckerPaneHost);
         splitter.Children.Add(_altTextPaneHost);
         splitter.Children.Add(_readingOrderPaneHost);
+        splitter.Children.Add(_proofingPaneHost);
         splitter.Children.Add(_animPaneHost); // 16B
 
         return splitter;
@@ -822,6 +840,50 @@ public sealed class MainWindow : Window
     }
 
     // ── Canvas refresh ────────────────────────────────────────────────────────────
+
+    private Border BuildProofingPaneHost()
+    {
+        _proofingPaneHeading = new TextBlock
+        {
+            Text = "Spelling",
+            FontSize = 15,
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(12, 12, 12, 4),
+        };
+        _proofingPaneMessage = new TextBlock
+        {
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)),
+            Margin = new Thickness(12, 0, 12, 8),
+        };
+        _proofingPaneRowsPanel = new StackPanel
+        {
+            Orientation = Orientation.Vertical,
+        };
+
+        var panel = new DockPanel();
+        var header = new StackPanel { Orientation = Orientation.Vertical };
+        header.Children.Add(_proofingPaneHeading);
+        header.Children.Add(_proofingPaneMessage);
+        DockPanel.SetDock(header, Dock.Top);
+        panel.Children.Add(header);
+        panel.Children.Add(new ScrollViewer
+        {
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            Content = _proofingPaneRowsPanel,
+        });
+
+        return new Border
+        {
+            Width = 320,
+            Visibility = Visibility.Collapsed,
+            Background = Brushes.White,
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0xC0, 0xC0, 0xC0)),
+            BorderThickness = new Thickness(1, 0, 0, 0),
+            Child = panel,
+        };
+    }
 
     private void RefreshCanvas()
     {
@@ -1912,6 +1974,176 @@ public sealed class MainWindow : Window
             PresentationReviewWorkflowPlanner.BuildProofingExecutionPlan(_presentation);
         LastProofingRequestPlan =
             PresentationReviewWorkflowPlanner.BuildProofingRequestPlan(_presentation);
+        LastProofingPanePlan =
+            PresentationReviewWorkflowPlanner.BuildProofingPanePlan(
+                LastProofingExecutionPlan,
+                _selectedProofingIssueRowIndex);
+        _selectedProofingIssueRowIndex = LastProofingPanePlan.SelectedRowIndex >= 0
+            ? LastProofingPanePlan.SelectedRowIndex
+            : null;
+        if (IsProofingPaneVisible)
+            RenderProofingPane(LastProofingPanePlan);
+    }
+
+    internal PresentationProofingPanePlan ShowProofingPane()
+    {
+        RefreshProofingRequestPlan();
+        RenderProofingPane(LastProofingPanePlan!);
+        _proofingPaneHost.Visibility = Visibility.Visible;
+        return LastProofingPanePlan!;
+    }
+
+    internal PresentationProofingPanePlan SelectProofingIssueRow(int rowIndex)
+    {
+        RefreshProofingRequestPlan();
+        var normalized = LastProofingPanePlan!.Rows.Any(row => row.RowIndex == rowIndex)
+            ? rowIndex
+            : LastProofingPanePlan.SelectedRowIndex;
+        _selectedProofingIssueRowIndex = normalized >= 0 ? normalized : null;
+        LastProofingPanePlan = PresentationReviewWorkflowPlanner.BuildProofingPanePlan(
+            LastProofingExecutionPlan!,
+            _selectedProofingIssueRowIndex);
+        RenderProofingPane(LastProofingPanePlan);
+        _proofingPaneHost.Visibility = Visibility.Visible;
+        return LastProofingPanePlan;
+    }
+
+    internal PresentationProofingCorrectionMutationPlan ApplySelectedProofingCorrection()
+    {
+        if (LastProofingPanePlan is null)
+            ShowProofingPane();
+
+        var selectedRow = LastProofingPanePlan!.SelectedRow;
+        if (selectedRow is null)
+        {
+            return new PresentationProofingCorrectionMutationPlan(
+                false,
+                new PresentationProofingScopeDescriptor(
+                    PresentationProofingScopeKind.SlideTitle,
+                    -1,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    string.Empty,
+                    string.Empty,
+                    string.Empty),
+                0,
+                0,
+                string.Empty,
+                null,
+                PresentationReviewWorkflowPlanner.ProofingMissingIssueMessage);
+        }
+
+        var previousSelection = LastProofingPanePlan.SelectedRowIndex;
+        var mutation = ApplyProofingCorrection(
+            selectedRow.Scope,
+            selectedRow.Start,
+            selectedRow.Length,
+            selectedRow.SuggestedReplacement);
+        if (mutation.ShouldApply)
+        {
+            var refreshed = PresentationReviewWorkflowPlanner.BuildProofingPanePlan(LastProofingExecutionPlan!);
+            LastProofingPanePlan = PresentationReviewWorkflowPlanner.BuildProofingPanePlan(
+                LastProofingExecutionPlan!,
+                PresentationReviewWorkflowPlanner.NormalizeProofingSelectionAfterCorrection(
+                    previousSelection,
+                    refreshed));
+            _selectedProofingIssueRowIndex = LastProofingPanePlan.SelectedRowIndex >= 0
+                ? LastProofingPanePlan.SelectedRowIndex
+                : null;
+            if (IsProofingPaneVisible)
+                RenderProofingPane(LastProofingPanePlan);
+        }
+
+        return mutation;
+    }
+
+    private void RenderProofingPane(PresentationProofingPanePlan plan)
+    {
+        _proofingPaneHeading.Text = $"Spelling - {plan.IssueCount} issues";
+        _proofingPaneMessage.Text = plan.SelectedRow is { } selected
+            ? $"{selected.SlideDisplay}: change \"{selected.Text}\" to \"{selected.SuggestedReplacement}\""
+            : plan.Message;
+
+        _proofingPaneRowsPanel.Children.Clear();
+        if (plan.Rows.Count == 0)
+        {
+            _proofingPaneRowsPanel.Children.Add(new TextBlock
+            {
+                Text = plan.Message,
+                Foreground = new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66)),
+                Margin = new Thickness(12, 0, 12, 10),
+                TextWrapping = TextWrapping.Wrap,
+            });
+            return;
+        }
+
+        foreach (var row in plan.Rows)
+            _proofingPaneRowsPanel.Children.Add(BuildProofingIssueRowCard(row));
+    }
+
+    private UIElement BuildProofingIssueRowCard(PresentationProofingIssueRowPlan row)
+    {
+        var action = new Button
+        {
+            Content = row.CorrectionAction.Label,
+            Tag = row.RowIndex,
+            MinWidth = 72,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Margin = new Thickness(0, 8, 0, 0),
+            IsEnabled = row.CorrectionAction.IsEnabled,
+            ToolTip = row.CorrectionAction.DisabledReason,
+        };
+        action.Click += (_, _) =>
+        {
+            SelectProofingIssueRow(row.RowIndex);
+            ApplySelectedProofingCorrection();
+        };
+
+        var select = new Button
+        {
+            Content = "Select",
+            Tag = row.RowIndex,
+            MinWidth = 72,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Margin = new Thickness(8, 8, 0, 0),
+        };
+        select.Click += (_, _) => SelectProofingIssueRow(row.RowIndex);
+
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal };
+        buttons.Children.Add(action);
+        buttons.Children.Add(select);
+
+        var panel = new StackPanel { Orientation = Orientation.Vertical };
+        panel.Children.Add(new TextBlock
+        {
+            Text = $"{row.SlideDisplay} - {row.SourceName}",
+            FontWeight = FontWeights.SemiBold,
+            TextWrapping = TextWrapping.Wrap,
+        });
+        panel.Children.Add(new TextBlock
+        {
+            Text = $"{row.Text} -> {row.SuggestedReplacement}",
+            Foreground = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)),
+            TextWrapping = TextWrapping.Wrap,
+        });
+        panel.Children.Add(new TextBlock
+        {
+            Text = row.Message,
+            TextWrapping = TextWrapping.Wrap,
+        });
+        panel.Children.Add(buttons);
+
+        return new Border
+        {
+            Background = row.IsSelected ? new SolidColorBrush(Color.FromRgb(0xE8, 0xF1, 0xFF)) : Brushes.Transparent,
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0xDD, 0xDD, 0xDD)),
+            BorderThickness = new Thickness(0, 0, 0, 1),
+            Padding = new Thickness(12, 8, 12, 8),
+            Child = panel,
+        };
     }
 
     // ── Wave 16B: Animation pane show/hide ───────────────────────────────────────
