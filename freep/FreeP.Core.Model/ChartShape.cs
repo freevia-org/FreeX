@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace FreeP.Core.Model;
 
 /// <summary>High-level chart type, covering the most common OOXML chart variants.</summary>
@@ -369,4 +371,11 @@ public sealed class ChartShape
     /// fresh cached data/workbook sidecar instead of preserving the source chart workbook.
     /// </summary>
     public bool RegenerateWorkbookOnSave { get; set; }
+
+    /// <summary>
+    /// Original chart part path from the loaded PPTX package. Used only by PPTX IO so
+    /// preserved workbook sidecars follow the source slide relationship, not chart count.
+    /// </summary>
+    [JsonIgnore]
+    public string? SourcePartPath { get; set; }
 }

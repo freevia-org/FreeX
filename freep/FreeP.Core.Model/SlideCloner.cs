@@ -119,6 +119,7 @@ public static class SlideCloner
             ValueAxis    = CloneChartAxis(src.ValueAxis),
             DataTable    = src.DataTable is null ? null : CloneChartDataTableSettings(src.DataTable),
             RegenerateWorkbookOnSave = src.RegenerateWorkbookOnSave,
+            SourcePartPath = src.SourcePartPath,
         };
 
         foreach (var c in src.Categories)

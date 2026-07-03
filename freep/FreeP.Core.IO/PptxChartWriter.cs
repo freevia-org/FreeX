@@ -63,9 +63,10 @@ internal static class PptxChartWriter
             return chartPath;
         }
 
-        MergePreservedExternalData(chartDoc, packageSnapshot, chartPath);
+        var sourceChartPath = PptxPackageWriter.SourceChartPath(chart, chartIndex);
+        MergePreservedExternalData(chartDoc, packageSnapshot, sourceChartPath);
         WriteEntry(archive, chartPath, chartDoc);
-        WritePreservedWorkbookRelationships(archive, packageSnapshot, chartPath);
+        WritePreservedWorkbookRelationships(archive, packageSnapshot, sourceChartPath, chartPath);
 
         return chartPath;
     }
@@ -1346,16 +1347,18 @@ internal static class PptxChartWriter
     private static void WritePreservedWorkbookRelationships(
         ZipArchive archive,
         PptxPackageSnapshot? packageSnapshot,
-        string chartPath)
+        string sourceChartPath,
+        string outputChartPath)
     {
-        var relsPath = OpcPathHelper.GetRelationshipPartPath(chartPath);
-        var sourceRels = TryReadSnapshotXml(packageSnapshot, relsPath);
+        var sourceRelsPath = OpcPathHelper.GetRelationshipPartPath(sourceChartPath);
+        var outputRelsPath = OpcPathHelper.GetRelationshipPartPath(outputChartPath);
+        var sourceRels = TryReadSnapshotXml(packageSnapshot, sourceRelsPath);
         if (sourceRels is null)
             return;
 
         var workbookRelationships = OpcRelationships.Load(sourceRels)
             .Where(relationship =>
-                PptxPackageWriter.TryResolveChartWorkbookPath(chartPath, relationship, out var workbookPath) &&
+                PptxPackageWriter.TryResolveChartWorkbookPath(sourceChartPath, relationship, out var workbookPath) &&
                 packageSnapshot?.TryGetEntry(workbookPath, out _) == true)
             .ToArray();
         if (workbookRelationships.Length == 0)
@@ -1363,7 +1366,7 @@ internal static class PptxChartWriter
 
         WriteEntry(
             archive,
-            relsPath,
+            outputRelsPath,
             OpcRelationships.CreateDocument(workbookRelationships.Select(relationship =>
                 OpcRelationships.CreateRelationship(
                     relationship.Id,

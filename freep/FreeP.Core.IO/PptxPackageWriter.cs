@@ -4331,7 +4331,7 @@ public static class PptxPackageWriter
 
                 if (!shape.Chart.RegenerateWorkbookOnSave)
                 {
-                    var chartPath = $"ppt/charts/chart{chartIndex}.xml";
+                    var chartPath = SourceChartPath(shape.Chart, chartIndex);
                     var relsPath = GetRelationshipPartPath(chartPath);
                     if (packageSnapshot.TryGetEntry(relsPath, out var relsBytes))
                     {
@@ -4356,6 +4356,11 @@ public static class PptxPackageWriter
 
         return paths;
     }
+
+    internal static string SourceChartPath(ChartShape chart, int chartIndex) =>
+        string.IsNullOrWhiteSpace(chart.SourcePartPath)
+            ? $"ppt/charts/chart{chartIndex}.xml"
+            : ToZipEntryPath(chart.SourcePartPath);
 
     internal static bool TryResolveChartWorkbookPath(
         string chartPath,
