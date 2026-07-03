@@ -990,14 +990,14 @@ public sealed class MainWindow : Window
                     Margin          = new Thickness(0, 0, 6, 0),
                     Child           = new TextBlock
                     {
-                        Text       = string.IsNullOrWhiteSpace(cm.Initials) ? "?" : cm.Initials,
+                        Text       = cm.InitialsBadgeText,
                         FontSize   = 10,
                         Foreground = System.Windows.Media.Brushes.White,
                     }
                 };
                 var authorText = new TextBlock
                 {
-                    Text       = string.IsNullOrWhiteSpace(cm.Author) ? "(unknown)" : cm.Author,
+                    Text       = cm.AuthorDisplayName,
                     FontSize   = 11,
                     FontWeight = FontWeights.SemiBold,
                     Foreground = new SolidColorBrush(Color.FromRgb(0x33, 0x33, 0x33)),
@@ -1007,7 +1007,7 @@ public sealed class MainWindow : Window
                 headerPanel.Children.Add(authorText);
                 headerPanel.Children.Add(new TextBlock
                 {
-                    Text       = cm.ThreadStatus == PresentationCommentThreadStatus.Resolved ? "Resolved" : "Open",
+                    Text       = cm.ThreadStatusLabel,
                     FontSize   = 10,
                     Foreground = new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66)),
                     Margin     = new Thickness(6, 0, 0, 0),
@@ -1110,7 +1110,7 @@ public sealed class MainWindow : Window
         {
             var row = new TextBlock
             {
-                Text = $"{(string.IsNullOrWhiteSpace(reply.Author) ? "Unknown reviewer" : reply.Author)}: {reply.TextPreview}",
+                Text = $"{reply.AuthorDisplayName}: {reply.TextPreview}",
                 FontSize = 10,
                 TextWrapping = TextWrapping.Wrap,
                 Foreground = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)),

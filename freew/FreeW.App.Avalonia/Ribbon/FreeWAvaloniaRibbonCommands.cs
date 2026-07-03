@@ -978,6 +978,7 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.citation", citation);
         r.Register("freew.insert-citation", citation);
         r.Register("freew.manage-sources", new ActionRibbonCommand(callbacks.OpenManageSourcesDialog ?? (() => { })));
+        r.Register("freew.citation-style", new CitationStyleCommand(editor));
         r.Register("freew.bibliography", new ActionRibbonCommand(editor.InsertBibliography));
 
         r.Register("freew.tof", new ActionRibbonCommand(() => editor.InsertTableOfFigures()));
@@ -988,6 +989,20 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.mark-citation", new ActionRibbonCommand(() => editor.MarkCitation()));
         r.Register("freew.table-of-authorities", new ActionRibbonCommand(editor.InsertTableOfAuthorities));
         r.Register("freew.table-of-authorities-refresh", new ActionRibbonCommand(editor.RefreshTableOfAuthorities));
+    }
+
+    private sealed class CitationStyleCommand(DocumentView editor) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            if (context.SelectedValue is not { Length: > 0 } value)
+                return;
+
+            editor.Document.BibliographyStyle = Citations.ParseStyle(value, editor.Document.BibliographyStyle);
+        }
+
+        public RibbonCommandState GetState() =>
+            new(Value: Citations.StyleName(editor.Document.BibliographyStyle));
     }
 
     /// <summary>

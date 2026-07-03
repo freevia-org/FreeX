@@ -755,6 +755,11 @@ internal static class FreeWAvaloniaRibbonDefinition
                 {
                     g.Button("freew.citation",     "Insert Citation");
                     g.Button("freew.manage-sources", "Manage Sources");
+                    g.ComboBox("freew.citation-style", "Style", c => c with
+                    {
+                        Items = new[] { "APA", "MLA", "Chicago", "IEEE" },
+                        Width = 90
+                    });
                     g.Button("freew.bibliography", "Bibliography");
                 });
                 tab.Group("captions", "Captions", null, 80, g =>
