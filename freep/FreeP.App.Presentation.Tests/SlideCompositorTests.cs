@@ -2503,6 +2503,78 @@ public sealed class SlideCompositorTests
     }
 
     [Fact]
+    public void Compose_ChartPatternFills_BuildsResolvedFillPlansForSeriesPointAndMarker()
+    {
+        var p = MakePresentation();
+        p.Slides[0].Shapes.Clear();
+
+        var chart = new ChartShape { ChartType = ChartType.LineMarkers };
+        chart.Categories.AddRange(new[] { "Q1", "Q2" });
+        var series = new ChartSeries
+        {
+            Name = "Sales",
+            Fill = new ShapeFill.Pattern(
+                "diagStripe",
+                new ThemeAwareColor(new SrgbColor(0x10, 0x20, 0x30)),
+                new ThemeAwareColor(new SrgbColor(0xF0, 0xF1, 0xF2))),
+            MarkerStyle = new ChartMarkerStyle
+            {
+                Symbol = ChartMarkerSymbol.Circle,
+                Fill = new ShapeFill.Pattern(
+                    "pct50",
+                    new ThemeAwareColor(new SrgbColor(0x44, 0x55, 0x66)),
+                    new ThemeAwareColor(new SrgbColor(0xAA, 0xBB, 0xCC)))
+            }
+        };
+        series.Values.AddRange(new double?[] { 10, 20 });
+        series.PointStyles[1] = new ChartPointStyle
+        {
+            Fill = new ShapeFill.Pattern(
+                "cross",
+                new ThemeAwareColor(new SrgbColor(0x20, 0x40, 0x60)),
+                new ThemeAwareColor(new SrgbColor(0xE0, 0xD0, 0xC0)))
+        };
+        chart.Series.Add(series);
+        p.Slides[0].Shapes.Add(new SlideShape
+        {
+            Id = 11,
+            Kind = SlideShapeKind.Chart,
+            OffsetXEmu = 0,
+            OffsetYEmu = 0,
+            ExtentCxEmu = 4572000,
+            ExtentCyEmu = 3429000,
+            Chart = chart
+        });
+
+        var chartOp = SlideCompositor.Compose(p, FirstSlide(p)).OfType<DrawOp.Chart>().Single();
+
+        var seriesPattern = chartOp.FillPlans.SeriesFills[0].Fill.Should().BeOfType<ResolvedFill.PatternFill>().Subject;
+        seriesPattern.Preset.Should().Be("diagStripe");
+        seriesPattern.ForegroundColor.Should().Be(new SrgbColor(0x10, 0x20, 0x30));
+        seriesPattern.BackgroundColor.Should().Be(new SrgbColor(0xF0, 0xF1, 0xF2));
+
+        var pointPattern = chartOp.FillPlans.PointFills[new ChartFillKey(0, 1)].Fill
+            .Should()
+            .BeOfType<ResolvedFill.PatternFill>()
+            .Subject;
+        pointPattern.Preset.Should().Be("cross");
+
+        var markerPattern = chartOp.FillPlans.MarkerFills[new ChartFillKey(0, 1)].Fill
+            .Should()
+            .BeOfType<ResolvedFill.PatternFill>()
+            .Subject;
+        markerPattern.Preset.Should().Be("pct50");
+
+        var primitive = ChartRenderPlanner.BuildLineSeriesPrimitives(
+            chart,
+            new ChartPlanRect(0, 0, 200, 100),
+            withMarkers: true,
+            chartOp.SeriesColors,
+            chartOp.FillPlans).Single();
+        primitive.Markers[1].Fill!.Value.Fill.Should().BeOfType<ResolvedFill.PatternFill>();
+    }
+
+    [Fact]
     public void Compose_TextPlaceholder_InheritsLayoutPlaceholderTextInsets()
     {
         var p = new PresentationModel { Theme = PresentationTheme.CreateDefault() };

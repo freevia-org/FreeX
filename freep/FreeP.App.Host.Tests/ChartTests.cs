@@ -294,6 +294,54 @@ public sealed class ChartTests : IDisposable
     }
 
     [Fact]
+    public void RoundTrip_Chart_PatternFills_PreservedForSeriesPointAndMarker()
+    {
+        var chart = BuildColumnChart();
+        var series = chart.Series[0];
+        series.Fill = MakePattern("diagStripe", 0x10, 0x20, 0x30, 0xF0, 0xF1, 0xF2);
+        series.PointStyles[1] = new ChartPointStyle
+        {
+            Fill = MakePattern("cross", 0x20, 0x40, 0x60, 0xE0, 0xD0, 0xC0)
+        };
+        series.MarkerStyle = new ChartMarkerStyle
+        {
+            Symbol = ChartMarkerSymbol.Circle,
+            Fill = MakePattern("pct50", 0x44, 0x55, 0x66, 0xAA, 0xBB, 0xCC)
+        };
+
+        var path = WriteToPptx(BuildPresWithChart(chart));
+        using (var archive = ZipFile.OpenRead(path))
+        {
+            var chartDoc = LoadChartXml(archive, chartIndex: 1);
+            chartDoc.Descendants(DrawingNs + "pattFill").Should().HaveCountGreaterThanOrEqualTo(3);
+            chartDoc.Descendants(DrawingNs + "pattFill")
+                .Select(e => e.Attribute("prst")?.Value)
+                .Should()
+                .Contain(new[] { "diagStripe", "cross", "pct50" });
+        }
+
+        var reloaded = PptxPackageReader.Read(path);
+        var rt = reloaded.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.Chart).Chart!;
+        var rtSeries = rt.Series[0];
+
+        var seriesPattern = rtSeries.Fill.Should().BeOfType<ShapeFill.Pattern>().Subject;
+        seriesPattern.Preset.Should().Be("diagStripe");
+        seriesPattern.ForegroundColor.Resolved.Should().Be(new SrgbColor(0x10, 0x20, 0x30));
+        seriesPattern.BackgroundColor.Resolved.Should().Be(new SrgbColor(0xF0, 0xF1, 0xF2));
+
+        var pointPattern = rtSeries.PointStyles[1].Fill.Should().BeOfType<ShapeFill.Pattern>().Subject;
+        pointPattern.Preset.Should().Be("cross");
+        pointPattern.ForegroundColor.Resolved.Should().Be(new SrgbColor(0x20, 0x40, 0x60));
+        pointPattern.BackgroundColor.Resolved.Should().Be(new SrgbColor(0xE0, 0xD0, 0xC0));
+
+        rtSeries.MarkerStyle.Should().NotBeNull();
+        var markerPattern = rtSeries.MarkerStyle!.Fill.Should().BeOfType<ShapeFill.Pattern>().Subject;
+        markerPattern.Preset.Should().Be("pct50");
+        markerPattern.ForegroundColor.Resolved.Should().Be(new SrgbColor(0x44, 0x55, 0x66));
+        markerPattern.BackgroundColor.Resolved.Should().Be(new SrgbColor(0xAA, 0xBB, 0xCC));
+    }
+
+    [Fact]
     public void RoundTrip_TwoCharts_SameSlide()
     {
         var pres = new Presentation();
@@ -1075,6 +1123,19 @@ public sealed class ChartTests : IDisposable
             },
             GradientKind.Linear,
             angleDegrees);
+
+    private static ShapeFill.Pattern MakePattern(
+        string preset,
+        byte fgR,
+        byte fgG,
+        byte fgB,
+        byte bgR,
+        byte bgG,
+        byte bgB) =>
+        new(
+            preset,
+            new ThemeAwareColor(new SrgbColor(fgR, fgG, fgB)),
+            new ThemeAwareColor(new SrgbColor(bgR, bgG, bgB)));
 
     private static Presentation BuildPresWithChart(ChartShape chart)
     {

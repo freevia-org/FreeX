@@ -916,10 +916,17 @@ internal static class PptxChartWriter
         fill switch
         {
             ShapeFill.Gradient gradient => BuildGradFillEl(gradient),
+            ShapeFill.Pattern pattern => BuildPattFillEl(pattern),
             ShapeFill.Solid solid => new XElement(A + "solidFill", BuildColorEl(solid.Color)),
             _ when solidFallback is not null => new XElement(A + "solidFill", BuildColorEl(solidFallback)),
             _ => null
         };
+
+    private static XElement BuildPattFillEl(ShapeFill.Pattern pattern) =>
+        new XElement(A + "pattFill",
+            new XAttribute("prst", pattern.Preset),
+            new XElement(A + "fgClr", BuildColorEl(pattern.ForegroundColor)),
+            new XElement(A + "bgClr", BuildColorEl(pattern.BackgroundColor)));
 
     private static string ToMarkerSymbolValue(ChartMarkerSymbol symbol) =>
         symbol switch
