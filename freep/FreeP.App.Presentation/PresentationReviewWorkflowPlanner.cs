@@ -576,6 +576,8 @@ public static class PresentationReviewWorkflowPlanner
         "Enter a slide title before applying the accessibility fix.";
     public const string MissingSlideTitleActionSummary =
         "Add a concise slide title so screen-reader users can navigate the deck.";
+    public const string DuplicateSlideTitleActionSummary =
+        "Give this slide a unique title so screen-reader users can distinguish it in the deck outline.";
     public const string MissingAltTextActionSummary =
         "Select the object and add alt text that describes the informative content.";
     public const string MissingHyperlinkScreenTipActionSummary =
@@ -1119,6 +1121,15 @@ public static class PresentationReviewWorkflowPlanner
     {
         ArgumentNullException.ThrowIfNull(presentation);
 
+        var duplicateSlideTitles = presentation.Slides
+            .Select((slide, index) => (Title: NormalizeText(slide.Title), SlideIndex: index))
+            .Where(entry => entry.Title is not null)
+            .GroupBy(entry => entry.Title!, StringComparer.OrdinalIgnoreCase)
+            .Where(group => group.Count() > 1)
+            .ToDictionary(
+                group => group.Key,
+                group => (DisplayTitle: group.Key, Count: group.Count()),
+                StringComparer.OrdinalIgnoreCase);
         var issues = new List<PresentationAccessibilityIssueDescriptor>();
         int shapeCount = 0;
         int commentCount = 0;
@@ -1143,6 +1154,20 @@ public static class PresentationReviewWorkflowPlanner
                     "PowerPoint accessibility checks expect each slide to have a meaningful title.",
                     new PresentationAccessibilityIssueActionSummary(
                         MissingSlideTitleActionSummary,
+                        SetSlideTitleCommandId,
+                        false)));
+            }
+            else if (NormalizeText(slide.Title) is { } slideTitle
+                && duplicateSlideTitles.TryGetValue(slideTitle, out var duplicate))
+            {
+                issues.Add(new PresentationAccessibilityIssueDescriptor(
+                    PresentationAccessibilityIssueSeverity.Warning,
+                    slideIndex,
+                    null,
+                    "Duplicate slide title",
+                    $"Slide title \"{duplicate.DisplayTitle}\" is reused by {duplicate.Count} slides.",
+                    new PresentationAccessibilityIssueActionSummary(
+                        DuplicateSlideTitleActionSummary,
                         SetSlideTitleCommandId,
                         false)));
             }
@@ -1755,7 +1780,7 @@ public static class PresentationReviewWorkflowPlanner
 
     private static string ClassifyAccessibilityIssue(PresentationAccessibilityIssueDescriptor issue)
     {
-        if (issue.Title == "Missing slide title")
+        if (issue.Title is "Missing slide title" or "Duplicate slide title")
         {
             return "Slide title";
         }

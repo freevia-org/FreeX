@@ -985,6 +985,42 @@ public sealed class PresentationReviewWorkflowPlannerTests
     }
 
     [Fact]
+    public void BuildAccessibilitySummaryPlan_FlagsDuplicateSlideTitles()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Title = "Quarterly update";
+        presentation.Slides.Add(new Slide { Title = "Launch plan" });
+        presentation.Slides.Add(new Slide { Title = "  quarterly update  " });
+
+        var summary = PresentationReviewWorkflowPlanner.BuildAccessibilitySummaryPlan(presentation);
+        var pane = PresentationReviewWorkflowPlanner.BuildAccessibilityCheckerPanePlan(
+            presentation,
+            summary,
+            selectedRowIndex: 1);
+
+        var duplicateIssues = summary.Issues
+            .Where(issue => issue.Title == "Duplicate slide title")
+            .ToArray();
+        duplicateIssues.Select(issue => issue.SlideIndex).Should().Equal(0, 2);
+        duplicateIssues.Should().AllSatisfy(issue =>
+        {
+            issue.Severity.Should().Be(PresentationAccessibilityIssueSeverity.Warning);
+            issue.ShapeId.Should().BeNull();
+            issue.Detail.Should().Be("Slide title \"Quarterly update\" is reused by 2 slides.");
+            issue.Action.Should().Be(new PresentationAccessibilityIssueActionSummary(
+                PresentationReviewWorkflowPlanner.DuplicateSlideTitleActionSummary,
+                PresentationReviewWorkflowPlanner.SetSlideTitleCommandId,
+                false));
+        });
+
+        pane.Rows.Select(row => row.Category).Should().Equal("Slide title", "Slide title");
+        pane.Rows.Select(row => row.ActionLabel).Should().Equal("Set Slide Title", "Set Slide Title");
+        pane.Rows.Should().OnlyContain(row => row.ShapeId == null);
+        pane.Rows.Select(row => row.ShouldSelectShape).Should().Equal(false, false);
+        pane.SelectedRow.Should().BeSameAs(pane.Rows[1]);
+    }
+
+    [Fact]
     public void BuildAccessibilitySummaryPlan_FlagsTextRunHyperlinksWithoutScreenTips()
     {
         var presentation = Presentation.CreateEmpty();
