@@ -2455,7 +2455,7 @@ public sealed class SlideCanvas : FrameworkElement
     private static Pen ToPen(ChartStrokePlan stroke)
     {
         var pen = new Pen(
-            ToBrush(new ChartFillPlan(stroke.Color, stroke.Alpha)),
+            ToBrush(new ChartFillPlan(stroke.Color, stroke.Alpha) { Fill = stroke.Fill }),
             stroke.Thickness);
         pen.DashStyle = MapDashStyleWpf(stroke.Dash);
         if (pen.CanFreeze) pen.Freeze();
