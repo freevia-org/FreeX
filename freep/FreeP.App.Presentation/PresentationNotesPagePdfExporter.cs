@@ -36,6 +36,7 @@ public static class PresentationNotesPagePdfExporter
     private const double HeaderFooterFontSize = 9;
     internal const double NotesInset = 10;
     internal const double NotesLeading = 16;
+    private const double AverageGlyphWidthPerFontSize = 0.55;
 
     public static byte[] ExportToBytes(
         Presentation presentation,
@@ -138,7 +139,11 @@ public static class PresentationNotesPagePdfExporter
                 .Skip(renderedPage.FirstNoteLineIndex)
                 .Take(renderedPage.NoteLineCount)
                 .ToArray();
-            AppendNotesText(ops, plan, pageLines, renderedPage.ShowsPlaceholder);
+            var styledPageLines = plan.StyledNoteLines
+                .Skip(renderedPage.FirstNoteLineIndex)
+                .Take(renderedPage.NoteLineCount)
+                .ToArray();
+            AppendNotesText(ops, plan, pageLines, styledPageLines, renderedPage.ShowsPlaceholder);
 
             yield return new PdfContentPage(plan.PageBounds.Width, plan.PageBounds.Height, ops);
         }
@@ -153,6 +158,7 @@ public static class PresentationNotesPagePdfExporter
         List<PdfDrawOp> ops,
         PresentationNotesPagePreviewPlan plan,
         IReadOnlyList<string> lines,
+        IReadOnlyList<PresentationNotesPageNoteLine> styledLines,
         bool showPlaceholder)
     {
         var top = plan.PageBounds.Height - plan.NotesBounds.Top - NotesInset - NotesFontSize;
@@ -179,18 +185,63 @@ public static class PresentationNotesPagePdfExporter
                 return lines.Skip(index).ToArray();
 
             var line = lines[index];
-            ops.Add(new PdfText(
-                plan.NotesBounds.Left + NotesInset,
-                y,
-                NotesFontSize,
-                PdfFontFace.Regular,
-                NotesText,
-                string.IsNullOrWhiteSpace(line) ? " " : line));
+            if (index < styledLines.Count)
+                AppendStyledLine(ops, plan, y, styledLines[index]);
+            else
+                AppendPlainLine(ops, plan, y, line);
             y -= NotesLeading;
         }
 
         return [];
     }
+
+    private static void AppendPlainLine(
+        List<PdfDrawOp> ops,
+        PresentationNotesPagePreviewPlan plan,
+        double y,
+        string line) =>
+        ops.Add(new PdfText(
+            plan.NotesBounds.Left + NotesInset,
+            y,
+            NotesFontSize,
+            PdfFontFace.Regular,
+            NotesText,
+            string.IsNullOrWhiteSpace(line) ? " " : line));
+
+    private static void AppendStyledLine(
+        List<PdfDrawOp> ops,
+        PresentationNotesPagePreviewPlan plan,
+        double y,
+        PresentationNotesPageNoteLine line)
+    {
+        if (line.Runs.Count == 0)
+        {
+            AppendPlainLine(ops, plan, y, line.Text);
+            return;
+        }
+
+        var x = plan.NotesBounds.Left + NotesInset;
+        foreach (var run in line.Runs)
+        {
+            if (run.Text.Length == 0)
+                continue;
+
+            ops.Add(new PdfText(
+                x,
+                y,
+                NotesFontSize,
+                run.Bold ? PdfFontFace.Bold : PdfFontFace.Regular,
+                ToPdfColor(run.Color, NotesText),
+                string.IsNullOrWhiteSpace(run.Text) ? " " : run.Text));
+            x += EstimateTextWidth(run.Text, NotesFontSize);
+        }
+    }
+
+    private static double EstimateTextWidth(string text, double fontSize) =>
+        text.Length * fontSize * AverageGlyphWidthPerFontSize;
+
+    private static PdfColor ToPdfColor(SrgbColor? color, PdfColor fallback) =>
+        color is { } value ? new PdfColor(value.R, value.G, value.B) : fallback;
 
     private static void AppendHeaderFooterPlaceholders(
         List<PdfDrawOp> ops,

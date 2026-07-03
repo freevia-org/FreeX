@@ -40,6 +40,16 @@ public sealed record PresentationNotesPageRenderedPagePlan(
     string ThumbnailLabel,
     string Detail);
 
+public sealed record PresentationNotesPageNoteTextRun(
+    string Text,
+    bool Bold,
+    bool Italic,
+    SrgbColor? Color);
+
+public sealed record PresentationNotesPageNoteLine(
+    string Text,
+    IReadOnlyList<PresentationNotesPageNoteTextRun> Runs);
+
 public sealed record PresentationNotesPagePreviewPlan(
     PresentationPrintPlan PrintPlan,
     int? SlideIndex,
@@ -53,6 +63,7 @@ public sealed record PresentationNotesPagePreviewPlan(
     PresentationNotesPageNotesPlaceholder NotesPlaceholder,
     IReadOnlyList<PresentationNotesPagePlaceholder> HeaderFooterPlaceholders,
     IReadOnlyList<string> NoteLines,
+    IReadOnlyList<PresentationNotesPageNoteLine> StyledNoteLines,
     int LinesPerRenderedPage,
     IReadOnlyList<PresentationNotesPageRenderedPagePlan> RenderPages)
 {
@@ -109,6 +120,7 @@ public static class PresentationNotesPagePreviewPlanner
                 emptyNotesPlaceholder,
                 HeaderFooterPlaceholders: [],
                 emptyNoteLines,
+                StyledNoteLines: [],
                 emptyLinesPerRenderedPage,
                 BuildRenderedPages(null, emptyNoteLines, emptyNotesPlaceholder, emptyLinesPerRenderedPage));
         }
@@ -117,7 +129,8 @@ public static class PresentationNotesPagePreviewPlanner
         var slide = presentation.Slides[normalizedIndex];
         var notesText = ExtractPlainText(slide.Notes);
         var notesPlaceholder = BuildNotesPlaceholder(notesText, notesBounds);
-        var noteLines = SplitNoteLines(slide.Notes, notesBounds.Width);
+        var styledNoteLines = SplitStyledNoteLines(slide.Notes, notesBounds.Width);
+        var noteLines = styledNoteLines.Select(line => line.Text).ToArray();
         var linesPerPage = CountLinesPerRenderedPage(pageBounds, notesBounds);
 
         return new PresentationNotesPagePreviewPlan(
@@ -139,6 +152,7 @@ public static class PresentationNotesPagePreviewPlanner
             notesPlaceholder,
             BuildHeaderFooterPlaceholders(slide, normalizedIndex + 1, pageBounds),
             noteLines,
+            styledNoteLines,
             linesPerPage,
             BuildRenderedPages(normalizedIndex + 1, noteLines, notesPlaceholder, linesPerPage));
     }
@@ -378,7 +392,15 @@ public static class PresentationNotesPagePreviewPlanner
             body.Paragraphs.Select(paragraph => string.Concat(paragraph.Runs.Select(run => run.Text))));
     }
 
-    private sealed record NoteParagraph(string Text, string Prefix, string ContinuationPrefix);
+    private sealed record NoteTextSegment(string Text, bool Bold, bool Italic, SrgbColor? Color);
+
+    private sealed record NoteParagraph(
+        IReadOnlyList<NoteTextSegment> Segments,
+        string Prefix,
+        string ContinuationPrefix)
+    {
+        public string Text => string.Concat(Segments.Select(segment => segment.Text));
+    }
 
     private static IReadOnlyList<NoteParagraph> ExtractNoteParagraphs(TextBody? body)
     {
@@ -390,12 +412,33 @@ public static class PresentationNotesPagePreviewPlanner
         foreach (var paragraph in body.Paragraphs)
         {
             var prefix = BuildParagraphPrefix(paragraph, counters);
-            var text = string.Concat(paragraph.Runs.Select(run => run.Text));
+            var textSegments = ExtractTextSegments(paragraph.Runs);
             var levelIndent = new string(' ', Math.Clamp(paragraph.Level, 0, 8) * 2);
             result.Add(new NoteParagraph(
-                text,
+                textSegments,
                 levelIndent + prefix,
                 new string(' ', levelIndent.Length + prefix.Length)));
+        }
+
+        return result;
+    }
+
+    private static IReadOnlyList<NoteTextSegment> ExtractTextSegments(IEnumerable<Run> runs)
+    {
+        var result = new List<NoteTextSegment>();
+        foreach (var run in runs)
+        {
+            var text = run.Field is { } field && !string.IsNullOrEmpty(field.CachedText)
+                ? field.CachedText
+                : run.Text;
+            if (text.Length == 0)
+                continue;
+
+            result.Add(new NoteTextSegment(
+                text,
+                run.Field?.Bold ?? run.Bold,
+                run.Field?.Italic ?? run.Italic,
+                run.Field?.Color ?? run.Color?.Resolved));
         }
 
         return result;
@@ -485,7 +528,7 @@ public static class PresentationNotesPagePreviewPlanner
     /// </summary>
     private const double AverageGlyphWidthPerFontSize = 0.55;
 
-    private static IReadOnlyList<string> SplitNoteLines(
+    private static IReadOnlyList<PresentationNotesPageNoteLine> SplitStyledNoteLines(
         TextBody? notes,
         double notesBoxWidth,
         double fontSize = PresentationNotesPagePdfExporter.NotesFontSize,
@@ -498,27 +541,88 @@ public static class PresentationNotesPagePreviewPlanner
         var maxWidth = Math.Max(1, notesBoxWidth - (2 * inset));
         var maxChars = Math.Max(1, (int)(maxWidth / Math.Max(0.01, fontSize * AverageGlyphWidthPerFontSize)));
 
-        var lines = new List<string>();
+        var lines = new List<PresentationNotesPageNoteLine>();
         foreach (var paragraph in paragraphs)
         {
-            var logicalLines = paragraph.Text
-                .Replace("\r\n", "\n", StringComparison.Ordinal)
-                .Replace('\r', '\n')
-                .Split('\n')
-                .Select(line => line.TrimEnd())
-                .ToArray();
+            var logicalLines = SplitSegmentsIntoLogicalLines(paragraph.Segments);
 
             for (var index = 0; index < logicalLines.Length; index++)
             {
                 var prefix = index == 0 ? paragraph.Prefix : paragraph.ContinuationPrefix;
-                lines.AddRange(WrapParagraph(
-                    prefix + logicalLines[index],
+                var prefixedLine = PrefixLine(logicalLines[index], prefix);
+                lines.AddRange(WrapStyledParagraph(
+                    prefixedLine,
                     maxChars,
                     paragraph.ContinuationPrefix));
             }
         }
 
         return lines;
+    }
+
+    private static IReadOnlyList<NoteTextSegment>[] SplitSegmentsIntoLogicalLines(
+        IReadOnlyList<NoteTextSegment> segments)
+    {
+        var lines = new List<IReadOnlyList<NoteTextSegment>>();
+        var current = new List<NoteTextSegment>();
+        foreach (var segment in segments)
+        {
+            var normalized = segment.Text
+                .Replace("\r\n", "\n", StringComparison.Ordinal)
+                .Replace('\r', '\n');
+            var parts = normalized.Split('\n');
+            for (var index = 0; index < parts.Length; index++)
+            {
+                if (index > 0)
+                {
+                    TrimTrailingWhitespace(current);
+                    lines.Add(current.ToArray());
+                    current = [];
+                }
+
+                if (parts[index].Length > 0)
+                    current.Add(segment with { Text = parts[index] });
+            }
+        }
+
+        TrimTrailingWhitespace(current);
+        lines.Add(current.ToArray());
+        return lines.ToArray();
+    }
+
+    private static void TrimTrailingWhitespace(List<NoteTextSegment> segments)
+    {
+        while (segments.Count > 0)
+        {
+            var last = segments[^1];
+            var trimmed = last.Text.TrimEnd();
+            if (trimmed.Length == last.Text.Length)
+                return;
+
+            if (trimmed.Length == 0)
+            {
+                segments.RemoveAt(segments.Count - 1);
+                continue;
+            }
+
+            segments[^1] = last with { Text = trimmed };
+            return;
+        }
+    }
+
+    private static IReadOnlyList<NoteTextSegment> PrefixLine(
+        IReadOnlyList<NoteTextSegment> line,
+        string prefix)
+    {
+        if (prefix.Length == 0)
+            return line;
+
+        var result = new List<NoteTextSegment>(line.Count + 1)
+        {
+            new(prefix, Bold: false, Italic: false, Color: null)
+        };
+        result.AddRange(line);
+        return result;
     }
 
     /// <summary>
@@ -581,6 +685,123 @@ public static class PresentationNotesPagePreviewPlanner
             lines.Add(current.ToString());
 
         return lines.Count == 0 ? [string.Empty] : lines;
+    }
+
+    private static IReadOnlyList<PresentationNotesPageNoteLine> WrapStyledParagraph(
+        IReadOnlyList<NoteTextSegment> segments,
+        int maxChars,
+        string continuationPrefix)
+    {
+        var paragraph = string.Concat(segments.Select(segment => segment.Text));
+        var wrappedLines = WrapParagraph(paragraph, maxChars, continuationPrefix);
+        var result = new List<PresentationNotesPageNoteLine>(wrappedLines.Count);
+        var cursor = 0;
+        for (var lineIndex = 0; lineIndex < wrappedLines.Count; lineIndex++)
+        {
+            var line = wrappedLines[lineIndex];
+            var outputRuns = new List<PresentationNotesPageNoteTextRun>();
+            var mappedText = line;
+            if (lineIndex > 0 &&
+                continuationPrefix.Length > 0 &&
+                mappedText.StartsWith(continuationPrefix, StringComparison.Ordinal))
+            {
+                outputRuns.Add(new PresentationNotesPageNoteTextRun(
+                    continuationPrefix,
+                    Bold: false,
+                    Italic: false,
+                    Color: null));
+                mappedText = mappedText[continuationPrefix.Length..];
+            }
+
+            while (cursor < paragraph.Length &&
+                   char.IsWhiteSpace(paragraph[cursor]) &&
+                   (mappedText.Length == 0 || !char.IsWhiteSpace(mappedText[0])))
+            {
+                cursor++;
+            }
+
+            if (mappedText.Length > 0)
+            {
+                outputRuns.AddRange(MapStyledRuns(segments, cursor, mappedText.Length));
+                cursor = Math.Min(paragraph.Length, cursor + mappedText.Length);
+            }
+
+            result.Add(new PresentationNotesPageNoteLine(line, MergeRuns(outputRuns)));
+        }
+
+        return result;
+    }
+
+    private static IReadOnlyList<PresentationNotesPageNoteTextRun> MapStyledRuns(
+        IReadOnlyList<NoteTextSegment> segments,
+        int start,
+        int length)
+    {
+        if (length <= 0)
+            return [];
+
+        var result = new List<PresentationNotesPageNoteTextRun>();
+        var absolute = 0;
+        var remainingStart = start;
+        var remainingLength = length;
+        foreach (var segment in segments)
+        {
+            var segmentStart = absolute;
+            var segmentEnd = absolute + segment.Text.Length;
+            absolute = segmentEnd;
+
+            if (segmentEnd <= remainingStart)
+                continue;
+
+            if (segmentStart >= remainingStart + remainingLength)
+                break;
+
+            var localStart = Math.Max(0, remainingStart - segmentStart);
+            var available = segment.Text.Length - localStart;
+            var take = Math.Min(available, remainingLength);
+            if (take <= 0)
+                continue;
+
+            result.Add(new PresentationNotesPageNoteTextRun(
+                segment.Text.Substring(localStart, take),
+                segment.Bold,
+                segment.Italic,
+                segment.Color));
+            remainingStart += take;
+            remainingLength -= take;
+            if (remainingLength == 0)
+                break;
+        }
+
+        return result.Count == 0 ? [] : MergeRuns(result);
+    }
+
+    private static IReadOnlyList<PresentationNotesPageNoteTextRun> MergeRuns(
+        IReadOnlyList<PresentationNotesPageNoteTextRun> runs)
+    {
+        if (runs.Count <= 1)
+            return runs;
+
+        var merged = new List<PresentationNotesPageNoteTextRun>();
+        foreach (var run in runs)
+        {
+            if (run.Text.Length == 0)
+                continue;
+
+            if (merged.Count > 0 &&
+                merged[^1].Bold == run.Bold &&
+                merged[^1].Italic == run.Italic &&
+                merged[^1].Color == run.Color)
+            {
+                merged[^1] = merged[^1] with { Text = merged[^1].Text + run.Text };
+            }
+            else
+            {
+                merged.Add(run);
+            }
+        }
+
+        return merged;
     }
 
     private static int CountLinesPerRenderedPage(
