@@ -13,8 +13,18 @@ public interface IDocumentCommand
 {
     string Label { get; }
     int EstimatedBytes => 256;
+    DocumentCommandMutationKind MutationKind => DocumentCommandMutationKind.BodyText;
     void Apply(IDocumentCommandContext context);
     void Revert(IDocumentCommandContext context);
+}
+
+public enum DocumentCommandMutationKind
+{
+    BodyText,
+    BodyFormatting,
+    Comment,
+    FormField,
+    Mixed
 }
 
 /// <summary>
@@ -27,6 +37,8 @@ public sealed class CompositeDocumentCommand(string label, IReadOnlyList<IDocume
     : IDocumentCommand
 {
     public string Label => label;
+
+    public DocumentCommandMutationKind MutationKind => Classify(commands);
 
     public int EstimatedBytes =>
         commands.Count == 0 ? 0 : commands.Sum(c => c.EstimatedBytes);
@@ -41,6 +53,21 @@ public sealed class CompositeDocumentCommand(string label, IReadOnlyList<IDocume
     {
         for (var i = commands.Count - 1; i >= 0; i--)
             commands[i].Revert(context);
+    }
+
+    private static DocumentCommandMutationKind Classify(IReadOnlyList<IDocumentCommand> commands)
+    {
+        if (commands.Count == 0)
+            return DocumentCommandMutationKind.Mixed;
+
+        var first = commands[0].MutationKind;
+        for (var i = 1; i < commands.Count; i++)
+        {
+            if (commands[i].MutationKind != first)
+                return DocumentCommandMutationKind.Mixed;
+        }
+
+        return first;
     }
 }
 
@@ -66,6 +93,12 @@ public sealed class DocumentCommandBus(IDocumentCommandContext context)
 
     public bool CanUndo => _stack.CanUndo;
     public bool CanRedo => _stack.CanRedo;
+
+    public DocumentCommandMutationKind? NextUndoMutationKind =>
+        _stack.TryPeekUndo(out var entry) ? entry.Command.MutationKind : null;
+
+    public DocumentCommandMutationKind? NextRedoMutationKind =>
+        _stack.TryPeekRedo(out var entry) ? entry.Command.MutationKind : null;
 
     public void Execute(IDocumentCommand command)
     {

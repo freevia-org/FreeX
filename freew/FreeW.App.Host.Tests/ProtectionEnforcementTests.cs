@@ -12,6 +12,29 @@ namespace FreeW.App.Host.Tests;
 /// </summary>
 public sealed class ProtectionEnforcementTests
 {
+    private sealed class CommentHistoryCommand : IDocumentCommand
+    {
+        public string Label => "Insert Comment";
+        public DocumentCommandMutationKind MutationKind => DocumentCommandMutationKind.Comment;
+
+        public void Apply(IDocumentCommandContext context) =>
+            context.Document.Comments[0] = new Comment(0, "note", "A", "A");
+
+        public void Revert(IDocumentCommandContext context) =>
+            context.Document.Comments.Remove(0);
+    }
+
+    private sealed class BodyHistoryCommand : IDocumentCommand
+    {
+        public string Label => "Insert Body Paragraph";
+
+        public void Apply(IDocumentCommandContext context) =>
+            context.Document.Blocks.Add(new Paragraph("Body history"));
+
+        public void Revert(IDocumentCommandContext context) =>
+            context.Document.Blocks.RemoveAt(context.Document.Blocks.Count - 1);
+    }
+
     private static DocumentView Load()
     {
         var doc = TextDocument.CreateEmpty();
@@ -76,6 +99,33 @@ public sealed class ProtectionEnforcementTests
             .RequiresTrackedChanges.Should().BeTrue();
         view.GetRestrictEditingDecision(RestrictEditingOperationKind.HistoryRedo)
             .IsAllowed.Should().BeTrue();
+    }
+
+    [StaFact]
+    public void CommentsOnlyProtection_AllowsClassifiedCommentHistory_ButBlocksBodyHistory()
+    {
+        var view = Load();
+        view.Commands.Execute(new CommentHistoryCommand());
+        view.Model.Comments.Should().HaveCount(1);
+
+        view.SetProtection(ProtectionMode.CommentsOnly);
+
+        view.CanUndo.Should().BeTrue();
+        view.Undo();
+        view.Model.Comments.Should().BeEmpty();
+
+        view.CanRedo.Should().BeTrue();
+        view.Redo();
+        view.Model.Comments.Should().HaveCount(1);
+
+        var bodyView = Load();
+        bodyView.Commands.Execute(new BodyHistoryCommand());
+        bodyView.Model.Blocks.Should().HaveCount(2);
+        bodyView.SetProtection(ProtectionMode.CommentsOnly);
+
+        bodyView.CanUndo.Should().BeFalse();
+        bodyView.Undo();
+        bodyView.Model.Blocks.Should().HaveCount(2);
     }
 
     [StaFact]

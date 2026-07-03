@@ -115,6 +115,35 @@ public sealed class RestrictEditingEnforcementPolicyTests
     }
 
     [Fact]
+    public void Comments_only_allows_comment_history_entries_but_blocks_body_history_entries()
+    {
+        var policy = Policy(ProtectionMode.CommentsOnly);
+
+        policy.DecisionForHistory(RestrictEditingOperationKind.HistoryUndo, DocumentCommandMutationKind.Comment)
+            .IsAllowed.Should().BeTrue();
+        policy.DecisionForHistory(RestrictEditingOperationKind.HistoryRedo, DocumentCommandMutationKind.Comment)
+            .IsAllowed.Should().BeTrue();
+        policy.DecisionForHistory(RestrictEditingOperationKind.HistoryUndo, DocumentCommandMutationKind.BodyText)
+            .BlockReason.Should().Be(RestrictEditingBlockReason.CommentsOnly);
+        policy.DecisionForHistory(RestrictEditingOperationKind.HistoryRedo, DocumentCommandMutationKind.BodyFormatting)
+            .BlockReason.Should().Be(RestrictEditingBlockReason.CommentsOnly);
+        policy.DecisionForHistory(RestrictEditingOperationKind.HistoryUndo, DocumentCommandMutationKind.Mixed)
+            .BlockReason.Should().Be(RestrictEditingBlockReason.CommentsOnly);
+    }
+
+    [Fact]
+    public void Read_only_and_marked_final_still_block_comment_history_entries()
+    {
+        Policy(ProtectionMode.ReadOnly)
+            .DecisionForHistory(RestrictEditingOperationKind.HistoryUndo, DocumentCommandMutationKind.Comment)
+            .BlockReason.Should().Be(RestrictEditingBlockReason.ReadOnly);
+
+        RestrictEditingEnforcementPolicy.From(ProtectionSettings.Unprotected, isMarkedAsFinal: true)
+            .DecisionForHistory(RestrictEditingOperationKind.HistoryRedo, DocumentCommandMutationKind.Comment)
+            .BlockReason.Should().Be(RestrictEditingBlockReason.MarkedAsFinal);
+    }
+
+    [Fact]
     public void Filling_forms_allows_only_form_field_edits()
     {
         var policy = Policy(ProtectionMode.FillingForms);
