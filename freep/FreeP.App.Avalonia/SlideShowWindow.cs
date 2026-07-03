@@ -55,6 +55,7 @@ public sealed class SlideShowWindow : Window
     // ── State ─────────────────────────────────────────────────────────────────────
 
     private readonly Presentation    _presentation;
+    private readonly SlideShowPlaybackRoute _playbackRoute;
     private readonly SlideShowController _controller;
     private readonly DateTimeOffset _presenterStartedAtUtc;
     private readonly DispatcherTimer  _autoAdvanceTimer;
@@ -100,12 +101,22 @@ public sealed class SlideShowWindow : Window
     /// <param name="presentation">The presentation to play.</param>
     /// <param name="startIndex">Zero-based slide index to start from.</param>
     public SlideShowWindow(Presentation presentation, int startIndex = 0)
+        : this(
+            presentation,
+            SlideShowCustomShowPlanner.BuildFullPresentationRoute(presentation, startIndex))
+    {
+    }
+
+    /// <param name="presentation">The presentation that owns slide size, theme, and timing state.</param>
+    /// <param name="playbackRoute">The ordered slide route to play.</param>
+    public SlideShowWindow(Presentation presentation, SlideShowPlaybackRoute playbackRoute)
     {
         _presentation = presentation ?? throw new ArgumentNullException(nameof(presentation));
-        _controller   = new SlideShowController(presentation.Slides, startIndex);
+        _playbackRoute = playbackRoute ?? throw new ArgumentNullException(nameof(playbackRoute));
+        _controller   = new SlideShowController(_playbackRoute.Slides, _playbackRoute.StartIndex);
         _presenterStartedAtUtc = DateTimeOffset.UtcNow;
         _timingRecorderState = SlideShowTimingRecorderPlanner.CreateState(
-            _controller.CurrentSlideIndex,
+            CurrentPresentationSlideIndex,
             _presenterStartedAtUtc);
         _inkExecutionState = SlideShowInkExecutionPlanner.CreateState(
             _controller.CurrentSlideIndex,
@@ -228,6 +239,8 @@ public sealed class SlideShowWindow : Window
 
     public SlideShowInkExecutionState InkExecutionState => _inkExecutionState;
     internal int PresenterInkOverlayVisualCount => _inkOverlay.Children.Count;
+    internal SlideShowPlaybackRoute PlaybackRoute => _playbackRoute;
+    internal int CurrentPresentationSlideIndex => _playbackRoute.GetSourceSlideIndex(_controller.CurrentSlideIndex);
 
     public SlideShowPresenterState CreatePresenterState(
         DateTimeOffset nowUtc,
@@ -235,6 +248,7 @@ public sealed class SlideShowWindow : Window
         SlideShowHostPlanner.BuildPresenterState(
             _presentation,
             _controller,
+            _playbackRoute.Slides,
             _presenterStartedAtUtc,
             nowUtc,
             displayIntent,
@@ -270,7 +284,7 @@ public sealed class SlideShowWindow : Window
         {
             _timingRecorderState = SlideShowTimingRecorderPlanner.EnterSlide(
                 _timingRecorderState,
-                _controller.CurrentSlideIndex,
+                CurrentPresentationSlideIndex,
                 now).State;
         }
 
@@ -303,7 +317,7 @@ public sealed class SlideShowWindow : Window
 
     private void OnKeyDown(object? sender, KeyEventArgs e)
     {
-        var command = SlideShowHostPlanner.PlanKey(e.Key.ToString(), _controller, _presentation.Slides);
+        var command = SlideShowHostPlanner.PlanKey(e.Key.ToString(), _controller, _playbackRoute.Slides);
         ApplyHostCommand(command);
         e.Handled = command.IsHandled;
     }
@@ -410,7 +424,7 @@ public sealed class SlideShowWindow : Window
         {
             ApplyHostCommand(SlideShowHostPlanner.PlanInternalSlideJump(
                 _controller,
-                _presentation.Slides,
+                _playbackRoute.Slides,
                 hlink.TargetSlideId));
         }
     }
@@ -619,7 +633,7 @@ public sealed class SlideShowWindow : Window
         FinalizePresenterTiming(nowUtc);
         _timingRecorderState = SlideShowTimingRecorderPlanner.EnterSlide(
             _timingRecorderState,
-            slideIndex,
+            _playbackRoute.GetSourceSlideIndex(slideIndex),
             nowUtc).State;
     }
 

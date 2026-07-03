@@ -354,14 +354,36 @@ public static class SlideShowHostPlanner
         SlideShowPresenterToolPlan? toolPlan = null)
     {
         ArgumentNullException.ThrowIfNull(presentation);
-        ArgumentNullException.ThrowIfNull(controller);
 
-        var hostState = BuildState(controller, presentation.Slides.Count);
+        return BuildPresenterState(
+            presentation,
+            controller,
+            presentation.Slides,
+            startedAtUtc,
+            nowUtc,
+            displayIntent,
+            toolPlan);
+    }
+
+    public static SlideShowPresenterState BuildPresenterState(
+        Presentation presentation,
+        SlideShowController controller,
+        IReadOnlyList<Slide> slides,
+        DateTimeOffset startedAtUtc,
+        DateTimeOffset nowUtc,
+        SlideShowPresenterDisplayIntent? displayIntent = null,
+        SlideShowPresenterToolPlan? toolPlan = null)
+    {
+        ArgumentNullException.ThrowIfNull(presentation);
+        ArgumentNullException.ThrowIfNull(controller);
+        ArgumentNullException.ThrowIfNull(slides);
+
+        var hostState = BuildState(controller, slides.Count);
         var currentSlide = hostState.HasSlides
-            ? BuildPresenterSlideState(presentation.Slides, hostState.CurrentSlideIndex)
+            ? BuildPresenterSlideState(slides, hostState.CurrentSlideIndex)
             : null;
         var nextSlide = hostState.HasSlides
-            ? BuildPresenterSlideState(presentation.Slides, hostState.CurrentSlideIndex + 1)
+            ? BuildPresenterSlideState(slides, hostState.CurrentSlideIndex + 1)
             : null;
         var elapsed = nowUtc >= startedAtUtc
             ? nowUtc - startedAtUtc
