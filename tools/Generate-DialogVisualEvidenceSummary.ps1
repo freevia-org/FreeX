@@ -323,6 +323,24 @@ function Get-PngMetrics {
     [DialogPngAnalyzer]::Analyze($Path)
 }
 
+function Get-ExpectedEvidenceSize {
+    param(
+        [Parameter(Mandatory = $true)][string]$SurfaceId,
+        [Parameter(Mandatory = $true)][string]$Shell
+    )
+
+    if (($SurfaceId -eq "dialog.OpenWorkbook" -or $SurfaceId -eq "dialog.SaveAsWorkbook") -and
+        ($Shell -eq "wpf" -or $Shell -eq "avalonia")) {
+        return [pscustomobject]@{
+            width = 640
+            height = 420
+            source = "WorkbookFileDialogSurfacePlanner.Width/Height"
+        }
+    }
+
+    return $null
+}
+
 function ConvertTo-JsonMetric {
     param([Parameter(Mandatory = $true)]$Metric)
 
@@ -343,7 +361,8 @@ function ConvertTo-JsonMetric {
 function Compare-PngMetrics {
     param(
         [Parameter(Mandatory = $true)]$WpfMetric,
-        [Parameter(Mandatory = $true)]$AvaloniaMetric
+        [Parameter(Mandatory = $true)]$AvaloniaMetric,
+        [Parameter(Mandatory = $true)][string]$SurfaceId
     )
 
     $sampleMeanDelta = [DialogPngAnalyzer]::SignatureDelta($WpfMetric.Signature, $AvaloniaMetric.Signature)
@@ -360,6 +379,24 @@ function Compare-PngMetrics {
     $lumaDelta = [math]::Abs([double]$WpfMetric.MeanLuma - [double]$AvaloniaMetric.MeanLuma) / 255.0
     $nonBackgroundDelta = [math]::Abs([double]$WpfMetric.NonBackgroundRatio - [double]$AvaloniaMetric.NonBackgroundRatio)
     $triageScore = $sampleMeanDelta + $lumaDelta + $nonBackgroundDelta + [math]::Min($dimensionDeltaRatio, 2.0)
+    $wpfExpectedSize = Get-ExpectedEvidenceSize -SurfaceId $SurfaceId -Shell "wpf"
+    $avaloniaExpectedSize = Get-ExpectedEvidenceSize -SurfaceId $SurfaceId -Shell "avalonia"
+    $wpfExpectedMatch = $true
+    $avaloniaExpectedMatch = $true
+    $expectedSizeSource = $null
+    if ($null -ne $wpfExpectedSize) {
+        $wpfExpectedMatch = ([int]$WpfMetric.Width -eq [int]$wpfExpectedSize.width -and [int]$WpfMetric.Height -eq [int]$wpfExpectedSize.height)
+        $expectedSizeSource = [string]$wpfExpectedSize.source
+    }
+    if ($null -ne $avaloniaExpectedSize) {
+        $avaloniaExpectedMatch = ([int]$AvaloniaMetric.Width -eq [int]$avaloniaExpectedSize.width -and [int]$AvaloniaMetric.Height -eq [int]$avaloniaExpectedSize.height)
+        if ($null -eq $expectedSizeSource) {
+            $expectedSizeSource = [string]$avaloniaExpectedSize.source
+        }
+    }
+    $hasExpectedSize = $null -ne $wpfExpectedSize -or $null -ne $avaloniaExpectedSize
+    $expectedWidth = if ($null -ne $wpfExpectedSize) { [int]$wpfExpectedSize.width } elseif ($null -ne $avaloniaExpectedSize) { [int]$avaloniaExpectedSize.width } else { $null }
+    $expectedHeight = if ($null -ne $wpfExpectedSize) { [int]$wpfExpectedSize.height } elseif ($null -ne $avaloniaExpectedSize) { [int]$avaloniaExpectedSize.height } else { $null }
 
     [pscustomobject]@{
         widthDelta = [int]$widthDelta
@@ -370,6 +407,13 @@ function Compare-PngMetrics {
         lumaDelta = $lumaDelta
         nonBackgroundDelta = $nonBackgroundDelta
         triageScore = $triageScore
+        hasExpectedSize = $hasExpectedSize
+        expectedWidth = $expectedWidth
+        expectedHeight = $expectedHeight
+        expectedSizeSource = $expectedSizeSource
+        wpfExpectedSizeMatch = $wpfExpectedMatch
+        avaloniaExpectedSizeMatch = $avaloniaExpectedMatch
+        expectedSizeMismatch = $hasExpectedSize -and (-not $wpfExpectedMatch -or -not $avaloniaExpectedMatch)
     }
 }
 
@@ -422,7 +466,7 @@ $pairedRows = @(
     foreach ($id in $pairedIds) {
         $wpfEvidence = $wpfById[$id]
         $avaloniaEvidence = $avaloniaById[$id]
-        $comparison = Compare-PngMetrics -WpfMetric $wpfEvidence.metrics -AvaloniaMetric $avaloniaEvidence.metrics
+        $comparison = Compare-PngMetrics -WpfMetric $wpfEvidence.metrics -AvaloniaMetric $avaloniaEvidence.metrics -SurfaceId $id
 
         [pscustomobject]@{
             id = $id
@@ -454,6 +498,7 @@ $additionalGroups = @(
 $allPngRows = @($pairedRows | ForEach-Object { $_.wpf; $_.avalonia }) + @($avaloniaOnlyRows | ForEach-Object { $_.avalonia })
 $blankEvidenceRows = @($allPngRows | Where-Object { -not $_.metrics.IsNonBlank } | Sort-Object -Property id)
 $dimensionMismatchRows = @($pairedRows | Where-Object { -not $_.comparison.dimensionMatch } | Sort-Object -Property id)
+$expectedSizeMismatchRows = @($pairedRows | Where-Object { $_.comparison.expectedSizeMismatch } | Sort-Object -Property id)
 $topOutlierRows = @($pairedRows | Sort-Object @{ Expression = { $_.comparison.triageScore }; Descending = $true }, @{ Expression = { $_.id }; Ascending = $true } | Select-Object -First 10)
 
 $wpfManifestRelativePath = ConvertTo-RepoRelativePath (Resolve-RepoPath $WpfManifestPath)
@@ -484,6 +529,7 @@ $jsonModel = [ordered]@{
         additionalAvaloniaCapturedSurfaceIds = [int]$avaloniaOnlyIds.Count
         nonBlankPngFailures = [int]$blankEvidenceRows.Count
         pairedDimensionMismatches = [int]$dimensionMismatchRows.Count
+        pairedExpectedSizeMismatches = [int]$expectedSizeMismatchRows.Count
     }
     pairedSurfaces = @(
         foreach ($row in $pairedRows) {
@@ -501,6 +547,12 @@ $jsonModel = [ordered]@{
                     lumaDelta = [math]::Round($row.comparison.lumaDelta, 6)
                     nonBackgroundDelta = [math]::Round($row.comparison.nonBackgroundDelta, 6)
                     triageScore = [math]::Round($row.comparison.triageScore, 6)
+                    expectedSizeMismatch = $row.comparison.expectedSizeMismatch
+                    expectedWidth = $row.comparison.expectedWidth
+                    expectedHeight = $row.comparison.expectedHeight
+                    expectedSizeSource = $row.comparison.expectedSizeSource
+                    wpfExpectedSizeMatch = $row.comparison.wpfExpectedSizeMatch
+                    avaloniaExpectedSizeMatch = $row.comparison.avaloniaExpectedSizeMatch
                 }
             }
         }
@@ -573,6 +625,7 @@ $md = New-Object System.Text.StringBuilder
 [void]$md.AppendLine("| Avalonia-manifest-only screenshot surface ids needing WPF manifest pair | $($avaloniaOnlyIds.Count) |")
 [void]$md.AppendLine("| Nonblank PNG check failures | $($blankEvidenceRows.Count) |")
 [void]$md.AppendLine("| Paired dimension mismatches | $($dimensionMismatchRows.Count) |")
+[void]$md.AppendLine("| Paired expected-size evidence mismatches | $($expectedSizeMismatchRows.Count) |")
 [void]$md.AppendLine()
 
 if ($blankEvidenceRows.Count -gt 0) {
@@ -587,12 +640,24 @@ if ($wpfOnlyIds.Count -gt 0) {
 
 [void]$md.AppendLine("## Top paired visual outliers")
 [void]$md.AppendLine()
-[void]$md.AppendLine("Outliers are ranked by a deterministic triage score: normalized 32x32 ARGB sample delta, mean-luma delta, non-background coverage delta, and normalized dimension delta. Higher scores deserve earlier human review.")
+[void]$md.AppendLine("Outliers are ranked by a deterministic triage score: normalized 32x32 ARGB sample delta, mean-luma delta, non-background coverage delta, and normalized dimension delta. Higher scores deserve earlier human review. Rows with expected-size evidence mismatches are stale or suspect capture evidence, not an Avalonia product layout verdict.")
 [void]$md.AppendLine()
-[void]$md.AppendLine("| Surface id | WPF size | Avalonia size | Score | Sample delta | Luma delta | Non-bg delta |")
-[void]$md.AppendLine("| --- | ---: | ---: | ---: | ---: | ---: | ---: |")
+[void]$md.AppendLine("| Surface id | WPF size | Avalonia size | Evidence flag | Score | Sample delta | Luma delta | Non-bg delta |")
+[void]$md.AppendLine("| --- | ---: | ---: | --- | ---: | ---: | ---: | ---: |")
 foreach ($row in $topOutlierRows) {
-    [void]$md.AppendLine("| $(Escape-MarkdownCell $row.id) | $($row.wpf.metrics.Width)x$($row.wpf.metrics.Height) | $($row.avalonia.metrics.Width)x$($row.avalonia.metrics.Height) | $(Format-ReportNumber $row.comparison.triageScore) | $(Format-ReportNumber $row.comparison.sampleMeanDelta) | $(Format-ReportNumber $row.comparison.lumaDelta) | $(Format-ReportNumber $row.comparison.nonBackgroundDelta) |")
+    $evidenceFlag = if ($row.comparison.expectedSizeMismatch) { "Expected $($row.comparison.expectedWidth)x$($row.comparison.expectedHeight) via $($row.comparison.expectedSizeSource)" } else { "" }
+    [void]$md.AppendLine("| $(Escape-MarkdownCell $row.id) | $($row.wpf.metrics.Width)x$($row.wpf.metrics.Height) | $($row.avalonia.metrics.Width)x$($row.avalonia.metrics.Height) | $(Escape-MarkdownCell $evidenceFlag) | $(Format-ReportNumber $row.comparison.triageScore) | $(Format-ReportNumber $row.comparison.sampleMeanDelta) | $(Format-ReportNumber $row.comparison.lumaDelta) | $(Format-ReportNumber $row.comparison.nonBackgroundDelta) |")
+}
+
+[void]$md.AppendLine()
+[void]$md.AppendLine("## Expected-Size Evidence Mismatches")
+[void]$md.AppendLine()
+[void]$md.AppendLine("These rows have a checked-in PNG size that disagrees with the dialog planner's expected capture size. Treat their raw paired dimension delta as stale or suspect evidence until that shell can be recaptured nonblank at the expected size.")
+[void]$md.AppendLine()
+[void]$md.AppendLine("| Surface id | Expected size | Source | WPF size | WPF matches | Avalonia size | Avalonia matches |")
+[void]$md.AppendLine("| --- | ---: | --- | ---: | --- | ---: | --- |")
+foreach ($row in $expectedSizeMismatchRows) {
+    [void]$md.AppendLine("| $(Escape-MarkdownCell $row.id) | $($row.comparison.expectedWidth)x$($row.comparison.expectedHeight) | $(Escape-MarkdownCell $row.comparison.expectedSizeSource) | $($row.wpf.metrics.Width)x$($row.wpf.metrics.Height) | $($row.comparison.wpfExpectedSizeMatch) | $($row.avalonia.metrics.Width)x$($row.avalonia.metrics.Height) | $($row.comparison.avaloniaExpectedSizeMatch) |")
 }
 
 [void]$md.AppendLine()
@@ -651,5 +716,6 @@ Write-Host "WPF-only manifest surface ids: $($wpfOnlyIds.Count)"
 Write-Host "Avalonia-manifest-only screenshot surface ids needing WPF manifest pair: $($avaloniaOnlyIds.Count)"
 Write-Host "Nonblank PNG check failures: $($blankEvidenceRows.Count)"
 Write-Host "Paired dimension mismatches: $($dimensionMismatchRows.Count)"
+Write-Host "Paired expected-size evidence mismatches: $($expectedSizeMismatchRows.Count)"
 Write-Host "Wrote $(ConvertTo-RepoRelativePath $resolvedMarkdownPath)"
 Write-Host "Wrote $(ConvertTo-RepoRelativePath $resolvedJsonPath)"
