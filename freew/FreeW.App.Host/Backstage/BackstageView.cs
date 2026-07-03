@@ -204,9 +204,12 @@ internal sealed class BackstageView : UserControl
             var scenarios = row.FixtureScenarioIds.Count == 0
                 ? BackstageViewTextResources.NoEvidenceFixtureScenario
                 : string.Join(", ", row.FixtureScenarioIds);
+            var requirements = row.Requirements.Count == 0
+                ? BackstageViewTextResources.NoEvidenceRequirement
+                : string.Join(", ", row.Requirements.Select(FormatPrintEvidenceRequirement));
             var text = new TextBlock
             {
-                Text = $"{PrintEvidenceKindLabel(row.Kind)} - {PrintEvidenceStatusLabel(row.Status)}\n{row.Description}\n{BackstageViewTextResources.EvidenceScenariosLabel}: {scenarios}",
+                Text = $"{PrintEvidenceKindLabel(row.Kind)} - {PrintEvidenceStatusLabel(row.Status)}\n{row.Description}\n{BackstageViewTextResources.EvidenceScenariosLabel}: {scenarios}\n{BackstageViewTextResources.EvidenceRequirementsLabel}: {requirements}",
                 Foreground = Kit.Muted,
                 TextWrapping = TextWrapping.Wrap,
                 Margin = new Thickness(0, 0, 0, 8)
@@ -217,6 +220,9 @@ internal sealed class BackstageView : UserControl
 
         return panel;
     }
+
+    private static string FormatPrintEvidenceRequirement(BackstagePrintEvidenceRequirement requirement) =>
+        $"{requirement.HostId}/{requirement.ScenarioId} >= {requirement.MinimumExpectedOutputs}";
 
     private UIElement BuildOpenPane()
     {

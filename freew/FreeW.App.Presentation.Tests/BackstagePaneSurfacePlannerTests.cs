@@ -39,10 +39,16 @@ public sealed class BackstagePaneSurfacePlannerTests
         surface.Groups.Select(group => group.Heading).Should().Equal("Print", "Settings");
         surface.Evidence.Should().Contain(row =>
             row.Kind == BackstagePrintEvidenceKind.PrintPreviewFidelity &&
-            row.FixtureScenarioIds.Contains("backstage-print-preview-fidelity"));
+            row.FixtureScenarioIds.Contains("backstage-print-preview-fidelity") &&
+            row.Requirements.Count == 2);
+        surface.Evidence.Should().Contain(row =>
+            row.Kind == BackstagePrintEvidenceKind.PdfExportFidelity &&
+            row.FixtureScenarioIds.Contains("backstage-pdf-export-fidelity") &&
+            row.Requirements.Count == 2);
         surface.Evidence.Should().Contain(row =>
             row.Kind == BackstagePrintEvidenceKind.NativePrint &&
-            row.Status == BackstagePrintEvidenceStatus.HostBacked);
+            row.Status == BackstagePrintEvidenceStatus.HostBacked &&
+            row.Requirements.Count == 0);
 
         var print = surface.Groups.SelectMany(group => group.Actions)
             .Single(action => action.AutomationId == "PrintAction_Print");

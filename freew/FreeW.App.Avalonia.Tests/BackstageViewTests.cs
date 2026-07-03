@@ -111,6 +111,8 @@ public class BackstageViewTests
         source.Should().Contain("BuildPrintEvidenceSection(surface.Evidence)");
         source.Should().Contain("PrintEvidence_");
         source.Should().Contain("BackstageViewTextResources.EvidenceSection");
+        source.Should().Contain("BackstageViewTextResources.EvidenceRequirementsLabel");
+        source.Should().Contain("FormatPrintEvidenceRequirement");
         source.Should().Contain("var printCapability = _callbacks.DirectPrintCapability");
         source.Should().Contain("print: _callbacks.Print");
         source.Should().Contain("directPrintCapability: printCapability");

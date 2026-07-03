@@ -1,5 +1,6 @@
 using System.Globalization;
 using Free.Shared.Shell;
+using FreeW.App.Presentation.DocumentView;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Presentation.Backstage;
@@ -29,7 +30,13 @@ public sealed record BackstagePrintEvidenceRow(
     BackstagePrintEvidenceKind Kind,
     BackstagePrintEvidenceStatus Status,
     string Description,
-    IReadOnlyList<string> FixtureScenarioIds);
+    IReadOnlyList<string> FixtureScenarioIds,
+    IReadOnlyList<BackstagePrintEvidenceRequirement> Requirements);
+
+public sealed record BackstagePrintEvidenceRequirement(
+    string HostId,
+    string ScenarioId,
+    int MinimumExpectedOutputs);
 
 public enum BackstagePrintEvidenceKind
 {
@@ -89,6 +96,24 @@ public sealed record BackstageDirectPrintCapability(
 
 public static class BackstagePrintPanePlanner
 {
+    private static readonly string[] PrintPreviewFixtureScenarioIds =
+    [
+        "backstage-print-preview-fidelity",
+        "page-composition-print-layout",
+        "f2-hf-basic",
+        "f2-footnotes",
+        "f2-section-landscape",
+    ];
+
+    private static readonly string[] PdfExportFixtureScenarioIds =
+    [
+        "backstage-pdf-export-fidelity",
+        "page-composition-print-layout",
+        "f2-hf-basic",
+        "f2-footnotes",
+        "f2-section-landscape",
+    ];
+
     public static BackstagePrintPanePlan Build(
         string displayName,
         PageSettings page,
@@ -123,31 +148,46 @@ public static class BackstagePrintPanePlanner
                 new(
                     BackstagePrintEvidenceKind.PrintPreviewFidelity,
                     BackstagePrintEvidenceStatus.FixtureReady,
-                    "Print Preview uses the paginated print-layout renderer; retained evidence must include paired WPF/Avalonia visual summary rows for the named scenarios.",
-                    [
-                        "backstage-print-preview-fidelity",
-                        "page-composition-print-layout",
-                        "f2-hf-basic",
-                        "f2-footnotes",
-                        "f2-section-landscape",
-                    ]),
+                    "Print Preview uses the paginated print-layout renderer; retained evidence must satisfy the host/scenario rows required by the visual summary contract.",
+                    PrintPreviewFixtureScenarioIds,
+                    BuildEvidenceRequirements(BackstagePrintEvidenceKind.PrintPreviewFidelity)),
                 new(
                     BackstagePrintEvidenceKind.PdfExportFidelity,
                     BackstagePrintEvidenceStatus.FixtureReady,
-                    "PDF export evidence is anchored by rasterized fixed-layout output scenarios; missing paired WPF/Avalonia rows fail the visual summary contract.",
-                    [
-                        "backstage-pdf-export-fidelity",
-                        "page-composition-print-layout",
-                        "f2-hf-basic",
-                        "f2-footnotes",
-                        "f2-section-landscape",
-                    ]),
+                    "PDF export evidence is anchored by rasterized fixed-layout output scenarios; retained evidence must satisfy the host/scenario rows required by the visual summary contract.",
+                    PdfExportFixtureScenarioIds,
+                    BuildEvidenceRequirements(BackstagePrintEvidenceKind.PdfExportFidelity)),
                 new(
                     BackstagePrintEvidenceKind.NativePrint,
                     directPrint.EvidenceStatus,
                     directPrint.EvidenceDescription,
+                    [],
                     []),
             ]);
+    }
+
+    public static IReadOnlyList<BackstagePrintEvidenceRequirement> BuildEvidenceRequirements(
+        BackstagePrintEvidenceKind kind)
+    {
+        IReadOnlyList<string> scenarioIds = kind switch
+        {
+            BackstagePrintEvidenceKind.PrintPreviewFidelity => [PrintPreviewFixtureScenarioIds[0]],
+            BackstagePrintEvidenceKind.PdfExportFidelity => [PdfExportFixtureScenarioIds[0]],
+            _ => []
+        };
+
+        if (scenarioIds.Count == 0)
+            return [];
+
+        return FreeWVisualEvidenceManifestNormalizer.DefaultExpectedScenarios
+            .Where(expected => scenarioIds.Contains(expected.ScenarioId, StringComparer.OrdinalIgnoreCase))
+            .OrderBy(expected => expected.HostId, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(expected => expected.ScenarioId, StringComparer.OrdinalIgnoreCase)
+            .Select(expected => new BackstagePrintEvidenceRequirement(
+                expected.HostId,
+                expected.ScenarioId,
+                expected.MinimumExpectedOutputs))
+            .ToArray();
     }
 
     private static string Normalize(string? value, string fallback) =>
