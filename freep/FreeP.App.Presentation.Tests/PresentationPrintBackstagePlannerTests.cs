@@ -45,6 +45,26 @@ public sealed class PresentationPrintBackstagePlannerTests
             "Print hidden slides",
             "Frame slides",
             "Print comments and ink markup");
+        plan.OutputOptionChoices.Where(choice => choice.IsSelected).Select(choice => choice.DisplayName)
+            .Should()
+            .Equal(
+                "3 copies",
+                "Uncollated",
+                "Pure Black and White",
+                "Print hidden slides",
+                "Frame slides",
+                "Print comments and ink markup");
+        plan.OutputOptionChoices.Select(choice => choice.Group).Should().Contain([
+            "Copies",
+            "Collation",
+            "Color",
+            "Content",
+            "Output",
+        ]);
+        plan.OutputOptionChoices.Single(choice => choice.OptionId == "collated")
+            .Description.Should().Contain("complete copy sets");
+        plan.OutputOptionChoices.Single(choice => choice.OptionId == "skip-hidden-slides")
+            .IsSelected.Should().BeFalse();
         plan.PageCount.Should().Be(1);
         plan.LayoutSummary.Should().Be("Handouts (3 slides per page) - Slides 2, 4, 1 page including hidden slides");
         plan.SlideRangeSummary.Should().Be("Slides 2, 4");
