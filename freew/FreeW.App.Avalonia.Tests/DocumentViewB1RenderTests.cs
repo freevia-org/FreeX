@@ -7,6 +7,7 @@ using Avalonia;
 using Avalonia.Headless;
 using FreeW.App.Avalonia.Editing;
 using FreeW.App.Avalonia.Ribbon;
+using FreeW.App.Presentation.DocumentView;
 using FreeW.Core.Model;
 using Free.Shared.Ribbon;
 
@@ -244,6 +245,92 @@ public sealed class DocumentViewB1RenderTests
 
         if (!ran) return;
         glyphs.Should().BeGreaterThan(0, "highlighted runs must still produce placed glyphs");
+    }
+
+    [Fact]
+    public async Task Character_shading_takes_precedence_over_highlight_in_resolved_render_plan()
+    {
+        RunDecorationVisualPlan? plan = null;
+        var ran = await OnUiThread(() =>
+        {
+            var fmt = RunFormatting.Default with
+            {
+                HighlightColorHex = "#FFFF00",
+                CharacterShadingHex = "#92D050",
+                CharacterShadingPattern = ShadingPattern.Pct25,
+            };
+            var view = new DocumentView();
+            view.LoadDocument(DocWithRun("Shaded", fmt));
+            view.Measure(new Size(800, 2000));
+            plan = view.GetGlyphRunDecorationStyle(0, 0);
+        });
+
+        if (!ran) return;
+        plan.Should().NotBeNull();
+        plan!.BackgroundColorHex.Should().Be("#92D050");
+        plan.BackgroundIsCharacterShading.Should().BeTrue();
+        plan.CharacterShadingPattern.Should().Be(ShadingPattern.Pct25);
+    }
+
+    [Fact]
+    public async Task Character_border_run_produces_resolved_border_render_plan()
+    {
+        RunDecorationVisualPlan? plan = null;
+        var ran = await OnUiThread(() =>
+        {
+            var border = new ParagraphBorder("#0070C0", 0.75, BottomOnly: true)
+            {
+                LineStyle = BorderLineStyle.Dashed,
+            };
+            var view = new DocumentView();
+            view.LoadDocument(DocWithRun("Bordered", RunFormatting.Default with { CharacterBorder = border }));
+            view.Measure(new Size(800, 2000));
+            plan = view.GetGlyphRunDecorationStyle(0, 0);
+        });
+
+        if (!ran) return;
+        plan.Should().NotBeNull();
+        plan!.HasBorder.Should().BeTrue();
+        plan.Border!.ColorHex.Should().Be("#0070C0");
+        plan.DrawTopBorder.Should().BeFalse();
+        plan.DrawBottomBorder.Should().BeTrue();
+        plan.BorderWidthDip.Should().BeGreaterThan(0);
+    }
+
+    [Fact]
+    public async Task Character_border_and_shading_from_style_resolve_for_rendering()
+    {
+        RunDecorationVisualPlan? plan = null;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            doc.Styles["DecoratedRun"] = new DocumentStyle
+            {
+                Id = "DecoratedRun",
+                Name = "Decorated Run",
+                Run = RunFormatting.Default with
+                {
+                    CharacterBorder = new ParagraphBorder("#C00000", 1.0),
+                    CharacterShadingHex = "#D9EAD3",
+                    CharacterShadingPattern = ShadingPattern.Pct10,
+                },
+            };
+            var p = new Paragraph { StyleId = "DecoratedRun" };
+            p.Runs.Add(new Run("Styled", RunFormatting.Default));
+            doc.Blocks.Add(p);
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 2000));
+            plan = view.GetGlyphRunDecorationStyle(0, 0);
+        });
+
+        if (!ran) return;
+        plan.Should().NotBeNull();
+        plan!.BackgroundColorHex.Should().Be("#D9EAD3");
+        plan.CharacterShadingPattern.Should().Be(ShadingPattern.Pct10);
+        plan.Border!.ColorHex.Should().Be("#C00000");
     }
 
     // ── Justify alignment ────────────────────────────────────────────────────────
