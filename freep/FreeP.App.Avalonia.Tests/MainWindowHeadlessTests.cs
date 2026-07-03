@@ -1725,13 +1725,23 @@ public sealed class MainWindowHeadlessTests
         commentPlan!.TotalCommentCount.Should().Be(1);
         commentPlan.Comments.Single().Should().Match<PresentationCommentDescriptor>(comment =>
             comment.ThreadStatus == PresentationCommentThreadStatus.Resolved &&
+            comment.ThreadStatusLabel == "Resolved" &&
+            comment.ThreadStatusSummary == "Resolved by Reviewer" &&
+            comment.ResolvedByDisplayName == "Reviewer" &&
+            comment.InitialsBadgeText == "RV" &&
+            comment.AuthorIdentityKey == "REVIEWER|RV" &&
             comment.IsSelected &&
             !comment.CanResolve &&
             comment.CanReopen &&
             !comment.CanReply &&
             comment.ReplyCount == 1 &&
+            comment.ReplySummary == "1 reply" &&
             comment.MentionCount == 1);
-        commentPlan.Comments.Single().Replies.Single().TextPreview.Should().Be("@Reviewer confirmed.");
+        commentPlan.Comments.Single().Replies.Single().Should().Match<PresentationCommentReplyDescriptor>(reply =>
+            reply.TextPreview == "@Reviewer confirmed." &&
+            reply.AuthorDisplayName == "Nora" &&
+            reply.InitialsBadgeText == "NO" &&
+            reply.AuthorIdentityKey == "NORA|NO");
         commentPlan.SelectedComment.Should().BeSameAs(commentPlan.Comments[0]);
         commentPlan.Actions.Single(action => action.CommandId == PresentationReviewWorkflowPlanner.ReopenCommentCommandId)
             .IsEnabled.Should().BeTrue("the comments command selects the first current-slide thread through the shared plan");
@@ -2145,6 +2155,10 @@ public sealed class MainWindowHeadlessTests
             reply.Text == "New reply");
         replyPanePlan.Should().NotBeNull();
         replyPanePlan!.SelectedComment!.Replies.Single().TextPreview.Should().Be("New reply");
+        replyPanePlan.SelectedComment.ThreadStatusSummary.Should().Be("Open - 1 reply");
+        replyPanePlan.SelectedComment.Replies.Single().AuthorDisplayName.Should().Be("FreeP User");
+        replyPanePlan.SelectedComment.Replies.Single().InitialsBadgeText.Should().Be("FU");
+        replyPanePlan.SelectedComment.Replies.Single().AuthorIdentityKey.Should().Be("FREEP USER|FU");
         replyPanePlan.SelectedComment.ReplyCount.Should().Be(1);
         dirtyAfterReply.Should().BeTrue();
     }

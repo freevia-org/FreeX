@@ -16,6 +16,7 @@ using Free.Shared.Ribbon.Wpf;
 using Free.Shared.Shell.Wpf;
 using FreeW.App.Host.Backstage;
 using FreeW.App.Host.Editing;
+using FreeW.App.Presentation.DocumentView;
 using FreeW.App.Presentation.Options;
 using FreeW.App.Presentation.Shell;
 using FreeW.Core.Model;
@@ -2201,6 +2202,7 @@ public sealed class MainWindow : Window
         }
 
         _viewDepthPlan = plan;
+        _editor.ApplyViewDepthLayout(plan.Layout);
 
         switch (plan.SurfaceKind)
         {
@@ -2235,7 +2237,7 @@ public sealed class MainWindow : Window
             Document = source
         };
 
-        var pagesAcross = plan.PagesAcross > 1 ? plan.PagesAcross : 0;
+        var pagesAcross = plan.Layout.PagesAcross > 1 ? plan.Layout.PagesAcross : 0;
 
         // For two-page-fit preview modes: apply a zoom factor that fits 2 pages side-by-side in the current viewport.
         // DocumentViewer exposes no explicit "pages across" property — we approximate it by halving the
@@ -2243,7 +2245,9 @@ public sealed class MainWindow : Window
         if (pagesAcross == 2)
         {
             var (pageWidthFactor, _, _) = ComputeZoomFitFactors();
-            viewer.Zoom = Math.Max(10, pageWidthFactor * 50); // half of page-width so 2 pages fit
+            viewer.Zoom = DocumentViewDepthLayoutPlanner.BuildDocumentViewerZoomPercent(
+                plan.Layout,
+                pageWidthFactor);
         }
 
         // Save the current workspace child so ExitPaginatedView can restore it.
@@ -2264,7 +2268,10 @@ public sealed class MainWindow : Window
         _paginatedViewer = null;
         _workspaceGridChild = null;
         if (resetPlan)
+        {
             _viewDepthPlan = FreeWViewDepthPlanner.Build(FreeWViewDepthMode.LiveEditor);
+            _editor.ApplyViewDepthLayout(_viewDepthPlan.Layout);
+        }
         SyncViewDepthRibbonState();
     }
 
@@ -2424,7 +2431,10 @@ public sealed class MainWindow : Window
         if (_splitGrid is null)
         {
             if (resetPlan)
+            {
                 _viewDepthPlan = FreeWViewDepthPlanner.Build(FreeWViewDepthMode.LiveEditor);
+                _editor.ApplyViewDepthLayout(_viewDepthPlan.Layout);
+            }
             SyncViewDepthRibbonState();
             return;
         }
@@ -2441,7 +2451,10 @@ public sealed class MainWindow : Window
         _splitDebounceTimer = null;
 
         if (resetPlan)
+        {
             _viewDepthPlan = FreeWViewDepthPlanner.Build(FreeWViewDepthMode.LiveEditor);
+            _editor.ApplyViewDepthLayout(_viewDepthPlan.Layout);
+        }
         SyncViewDepthRibbonState();
     }
 

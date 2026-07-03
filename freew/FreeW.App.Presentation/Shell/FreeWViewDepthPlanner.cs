@@ -1,3 +1,5 @@
+using FreeW.App.Presentation.DocumentView;
+
 namespace FreeW.App.Presentation.Shell;
 
 public enum FreeWViewDepthMode
@@ -38,6 +40,7 @@ public sealed record FreeWViewDepthPlan(
     bool IsSideToSideActive,
     bool UsesReadOnlySnapshot,
     int PagesAcross,
+    DocumentViewDepthLayoutPlan Layout,
     string StatusText,
     string? Limitation);
 
@@ -73,6 +76,7 @@ public static class FreeWViewDepthPlanner
             IsSideToSideActive: false,
             UsesReadOnlySnapshot: true,
             PagesAcross: 1,
+            Layout: DocumentViewDepthLayoutPlanner.Build(mode),
             StatusText: "Split view active: live editor above, read-only paginated snapshot below.",
             Limitation: "The Avalonia split preview is read-only in the secondary pane; dual live editing remains deferred."),
         FreeWViewDepthMode.MultiplePagesPreview => new FreeWViewDepthPlan(
@@ -83,8 +87,9 @@ public static class FreeWViewDepthPlanner
             IsSideToSideActive: false,
             UsesReadOnlySnapshot: true,
             PagesAcross: 2,
-            StatusText: "Multiple Pages view active: read-only multi-page-fit preview.",
-            Limitation: "Editing is disabled while the Multiple Pages preview is active; responsive editable page grids remain deferred."),
+            Layout: DocumentViewDepthLayoutPlanner.Build(mode),
+            StatusText: "Multiple Pages view active: read-only 2-by-2 page-grid preview.",
+            Limitation: "Editing is disabled while the Multiple Pages preview is active; editable page grids remain deferred."),
         FreeWViewDepthMode.SideToSidePreview => new FreeWViewDepthPlan(
             mode,
             FreeWViewDepthSurfaceKind.ReadOnlyPagePreview,
@@ -93,8 +98,9 @@ public static class FreeWViewDepthPlanner
             IsSideToSideActive: true,
             UsesReadOnlySnapshot: true,
             PagesAcross: 2,
-            StatusText: "Side to Side view active: read-only two-page-fit preview.",
-            Limitation: "The Avalonia surface uses the existing vertical paginated renderer at two-page fit; horizontal page turning remains deferred."),
+            Layout: DocumentViewDepthLayoutPlanner.Build(mode),
+            StatusText: "Side to Side view active: read-only two-page horizontal-flow preview.",
+            Limitation: "Animated horizontal page turning remains deferred; the shared state now carries Side-to-Side page flow."),
         _ => new FreeWViewDepthPlan(
             FreeWViewDepthMode.LiveEditor,
             FreeWViewDepthSurfaceKind.LiveEditor,
@@ -103,6 +109,7 @@ public static class FreeWViewDepthPlanner
             IsSideToSideActive: false,
             UsesReadOnlySnapshot: false,
             PagesAcross: 1,
+            Layout: DocumentViewDepthLayoutPlanner.Build(FreeWViewDepthMode.LiveEditor),
             StatusText: "Live editor active.",
             Limitation: null)
     };
@@ -122,18 +129,11 @@ public static class FreeWViewDepthPlanner
             return 1.0;
         }
 
-        var pagesAcross = Build(mode).PagesAcross;
-        var interPageGap = pagesAcross > 1 ? 24 * (pagesAcross - 1) : 0;
-        var horizontalChrome = mode == FreeWViewDepthMode.SplitPreview ? 48 : 96;
-        var verticalChrome = mode == FreeWViewDepthMode.SplitPreview ? 32 : 72;
-
-        var fitWidth = (viewportWidthDip - horizontalChrome) / (pageWidthDip * pagesAcross + interPageGap);
-        var fitHeight = (viewportHeightDip - verticalChrome) / pageHeightDip;
-        var fit = Math.Min(fitWidth, fitHeight);
-
-        if (!double.IsFinite(fit) || fit <= 0)
-            return 1.0;
-
-        return Math.Clamp(Math.Round(fit, 2), 0.25, 1.25);
+        return DocumentViewDepthLayoutPlanner.BuildPreviewScale(
+            Build(mode).Layout,
+            viewportWidthDip,
+            viewportHeightDip,
+            pageWidthDip,
+            pageHeightDip);
     }
 }

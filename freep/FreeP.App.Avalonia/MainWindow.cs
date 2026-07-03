@@ -1929,20 +1929,20 @@ public sealed class MainWindow : Window
             Padding      = new Thickness(5, 1, 5, 1),
             Child        = new TextBlock
             {
-                Text       = string.IsNullOrWhiteSpace(comment.Initials) ? "?" : comment.Initials,
+                Text       = comment.InitialsBadgeText,
                 FontSize   = 11,
                 Foreground = Brushes.White,
             },
         });
         header.Children.Add(new TextBlock
         {
-            Text              = string.IsNullOrWhiteSpace(comment.Author) ? "Unknown reviewer" : comment.Author,
+            Text              = comment.AuthorDisplayName,
             FontWeight        = FontWeight.SemiBold,
             VerticalAlignment = VerticalAlignment.Center,
         });
         header.Children.Add(new TextBlock
         {
-            Text              = comment.ThreadStatus == PresentationCommentThreadStatus.Resolved ? "Resolved" : "Open",
+            Text              = comment.ThreadStatusLabel,
             FontSize          = 11,
             Foreground        = new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66)),
             VerticalAlignment = VerticalAlignment.Center,
@@ -1988,7 +1988,7 @@ public sealed class MainWindow : Window
         {
             card.Children.Add(new TextBlock
             {
-                Text         = $"{(string.IsNullOrWhiteSpace(reply.Author) ? "Unknown reviewer" : reply.Author)}: {reply.TextPreview}",
+                Text         = $"{reply.AuthorDisplayName}: {reply.TextPreview}",
                 TextWrapping = TextWrapping.Wrap,
                 FontSize     = 12,
                 Margin       = new Thickness(18, 0, 0, 0),
