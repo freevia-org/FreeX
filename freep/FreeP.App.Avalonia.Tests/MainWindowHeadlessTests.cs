@@ -2325,6 +2325,8 @@ public sealed class MainWindowHeadlessTests
             initialPlan = window.LastNotesPagePreviewPlan;
 
             window.Editor.CurrentSlide!.Title = "Roadmap";
+            window.Editor.Presentation.NotesPageSizeCxEmu = DrawingMlCoordinateUnits.PointsToEmu(360);
+            window.Editor.Presentation.NotesPageSizeCyEmu = DrawingMlCoordinateUnits.PointsToEmu(720);
             window.Editor.SetCurrentSlideNotesText("Mention preview workflow.");
             editedPlan = window.LastNotesPagePreviewPlan;
         });
@@ -2336,6 +2338,8 @@ public sealed class MainWindowHeadlessTests
         editedPlan!.SlideNumber.Should().Be(1);
         editedPlan.SlideTitle.Should().Be("Roadmap");
         editedPlan.NotesText.Should().Be("Mention preview workflow.");
+        editedPlan.PageBounds.Width.Should().Be(360);
+        editedPlan.PageBounds.Height.Should().Be(720);
         editedPlan.HasNotes.Should().BeTrue();
         editedPlan.PrintPlan.SlideRange.DisplayName.Should().Be("Slide 1");
     }

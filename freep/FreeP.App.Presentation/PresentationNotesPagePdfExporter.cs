@@ -7,8 +7,8 @@ namespace FreeP.App.Compositor;
 
 public sealed record PresentationNotesPagePdfExportRequest(
     PresentationPrintRequest? PrintRequest = null,
-    double PageWidth = PresentationExportPlanner.DefaultPrintPageWidth,
-    double PageHeight = PresentationExportPlanner.DefaultPrintPageHeight);
+    double? PageWidth = null,
+    double? PageHeight = null);
 
 public sealed record PresentationNotesPagePdfRenderPlan(
     PresentationPrintPlan PrintPlan,
@@ -61,8 +61,8 @@ public static class PresentationNotesPagePdfExporter
         ArgumentNullException.ThrowIfNull(presentation);
         request ??= new PresentationNotesPagePdfExportRequest();
 
-        var pageWidth = Math.Max(1, request.PageWidth);
-        var pageHeight = Math.Max(1, request.PageHeight);
+        var pageWidth = PresentationNotesPagePreviewPlanner.ResolveNotesPageWidthPoints(presentation, request.PageWidth);
+        var pageHeight = PresentationNotesPagePreviewPlanner.ResolveNotesPageHeightPoints(presentation, request.PageHeight);
         var notesRequest = (request.PrintRequest ?? new PresentationPrintRequest(PresentationPrintLayoutKind.NotesPages)) with
         {
             Layout = PresentationPrintLayoutKind.NotesPages,

@@ -1,5 +1,6 @@
 using System.IO;
 using System.Windows;
+using Free.Shared.Drawing;
 using FreeP.App.Compositor;
 using FreeP.App.Host;
 using FreeP.Core.IO;
@@ -301,6 +302,8 @@ public sealed class NotesSlideTests : IDisposable
                 .Should().Be(PresentationPrintLayoutKind.NotesPages);
 
             window.Editor.CurrentSlide!.Title = "Q3 review";
+            window.Editor.Presentation.NotesPageSizeCxEmu = DrawingMlCoordinateUnits.PointsToEmu(360);
+            window.Editor.Presentation.NotesPageSizeCyEmu = DrawingMlCoordinateUnits.PointsToEmu(720);
             window.Editor.SetCurrentSlideNotesText("Call out the launch date.");
 
             var plan = window.LastNotesPagePreviewPlan;
@@ -308,6 +311,8 @@ public sealed class NotesSlideTests : IDisposable
             plan!.SlideNumber.Should().Be(1);
             plan.SlideTitle.Should().Be("Q3 review");
             plan.NotesText.Should().Be("Call out the launch date.");
+            plan.PageBounds.Width.Should().Be(360);
+            plan.PageBounds.Height.Should().Be(720);
             plan.HasNotes.Should().BeTrue();
             plan.PrintPlan.SlideRange.DisplayName.Should().Be("Slide 1");
         }

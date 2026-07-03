@@ -1,4 +1,6 @@
+using System.IO.Compression;
 using System.Text;
+using System.Xml.Linq;
 using Free.Shared.Pdf;
 using FreeP.App.Compositor;
 using FreeP.Core.IO;
@@ -168,6 +170,55 @@ public sealed class PresentationExportPlannerTests
             .BeApproximately(4d / 3d, 0.001, "notes-page thumbnails must match the deck slide size, not always 16:9");
         plan.NotesBounds.Top.Should().BeGreaterThan(plan.SlideBounds.Bottom);
         plan.NotesText.Should().Be("Speaker note");
+    }
+
+    [Fact]
+    public void NotesPagePreviewPlan_UsesModeledNotesPageSize()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.NotesPageSizeCxEmu = DrawingMlCoordinateUnits.PointsToEmu(360);
+        presentation.NotesPageSizeCyEmu = DrawingMlCoordinateUnits.PointsToEmu(720);
+        presentation.Slides[0].Notes = MakeTextBody("Custom paper note");
+
+        var preview = PresentationNotesPagePreviewPlanner.Build(presentation, currentSlideIndex: 0);
+        var renderPlan = PresentationNotesPagePdfExporter.BuildRenderPlan(presentation);
+
+        preview.PageBounds.Width.Should().Be(360);
+        preview.PageBounds.Height.Should().Be(720);
+        preview.NotesBounds.Bottom.Should().BeLessThanOrEqualTo(720);
+        renderPlan.Pages.Should().ContainSingle();
+        renderPlan.Pages[0].WidthPoints.Should().Be(360);
+        renderPlan.Pages[0].HeightPoints.Should().Be(720);
+        renderPlan.PreviewPlans[0].PageBounds.Should().Be(preview.PageBounds);
+    }
+
+    [Fact]
+    public void NotesPageSize_RoundTripsThroughPptxPresentationXml()
+    {
+        var presentation = BuildNotesDeck();
+        presentation.NotesPageSizeCxEmu = 5_486_400;
+        presentation.NotesPageSizeCyEmu = 7_315_200;
+
+        using var stream = new MemoryStream();
+        PptxPackageWriter.Write(presentation, stream);
+
+        stream.Position = 0;
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            using var entryStream = archive.GetEntry("ppt/presentation.xml")!.Open();
+            var xml = XDocument.Load(entryStream);
+            var p = XNamespace.Get("http://schemas.openxmlformats.org/presentationml/2006/main");
+            var notesSz = xml.Root!.Element(p + "notesSz")!;
+
+            notesSz.Attribute("cx")!.Value.Should().Be("5486400");
+            notesSz.Attribute("cy")!.Value.Should().Be("7315200");
+        }
+
+        stream.Position = 0;
+        var reloaded = PptxPackageReader.Read(stream);
+
+        reloaded.NotesPageSizeCxEmu.Should().Be(5_486_400);
+        reloaded.NotesPageSizeCyEmu.Should().Be(7_315_200);
     }
 
     [Fact]
@@ -431,8 +482,9 @@ public sealed class PresentationExportPlannerTests
                 PresentationSlideRangeKind.SelectedSlides,
                 SelectedSlideNumbers: [3, 1, 3]));
 
+        var deck = BuildNotesDeck();
         var plan = PresentationNotesPagePdfExporter.BuildRenderPlan(
-            BuildNotesDeck(),
+            deck,
             new PresentationNotesPagePdfExportRequest(request));
 
         plan.PrintPlan.Layout.Layout.Should().Be(PresentationPrintLayoutKind.NotesPages);
@@ -440,8 +492,8 @@ public sealed class PresentationExportPlannerTests
         plan.PreviewPlans.Select(preview => preview.SlideNumber).Should().Equal(1, 3);
         plan.Pages.Should().HaveCount(2);
         plan.Pages.Should().OnlyContain(page =>
-            page.WidthPoints == PresentationExportPlanner.DefaultPrintPageWidth &&
-            page.HeightPoints == PresentationExportPlanner.DefaultPrintPageHeight);
+            page.WidthPoints == PresentationNotesPagePreviewPlanner.ResolveNotesPageWidthPoints(deck) &&
+            page.HeightPoints == PresentationNotesPagePreviewPlanner.ResolveNotesPageHeightPoints(deck));
 
         var firstPageText = plan.Pages[0].Ops.OfType<PdfText>().Select(text => text.Text).ToList();
         firstPageText.Should().Contain(["Slide 1", "Body 1", "Opening note."]);

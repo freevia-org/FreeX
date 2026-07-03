@@ -21,6 +21,19 @@ public sealed class Presentation
     /// </summary>
     public long SlideSizeCyEmu { get; set; } = 6858000;
 
+    public const long DefaultNotesPageSizeCxEmu = 6858000;
+    public const long DefaultNotesPageSizeCyEmu = 9144000;
+
+    /// <summary>
+    /// Notes-page canvas width in EMU, from presentation.xml p:notesSz.
+    /// </summary>
+    public long NotesPageSizeCxEmu { get; set; } = DefaultNotesPageSizeCxEmu;
+
+    /// <summary>
+    /// Notes-page canvas height in EMU, from presentation.xml p:notesSz.
+    /// </summary>
+    public long NotesPageSizeCyEmu { get; set; } = DefaultNotesPageSizeCyEmu;
+
     // ── Content ───────────────────────────────────────────────────────────────────
 
     /// <summary>Slides, in presentation order.</summary>
