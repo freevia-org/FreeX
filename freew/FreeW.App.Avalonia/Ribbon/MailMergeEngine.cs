@@ -436,11 +436,17 @@ internal sealed class MailMergeEngine
         }
 
         var template = Session.IsPreviewing ? Session.Template! : _editor.Document;
+        var finishPlan = MailMergeFinishPlanner.PlanNewDocumentAllRecords(data.Count);
+        if (!finishPlan.Success)
+        {
+            ShowInfo("Select recipients first (Mailings > Select Recipients), then Finish & Merge.");
+            return null;
+        }
 
         // Augment every row with the composed «AddressBlock» / «GreetingLine» values so those composite
         // placeholders resolve across every record, then run the rules-aware merge (records flagged by a
         // «Skip Record If» rule are excluded).
-        var augmentedData = BuildAugmentedData(data);
+        var augmentedData = BuildAugmentedData(data, finishPlan.RowIndexes);
         var state = new MergeState();
         var merged = MailMerge.MergeAllWithRules(template, augmentedData, state);
         var combined = MailMerge.CombineMergedRecords(merged, Session.Mode);
@@ -523,15 +529,16 @@ internal sealed class MailMergeEngine
     /// «GreetingLine» columns (in addition to the original columns), so the substitution path resolves the
     /// composite placeholders per record.
     /// </summary>
-    private MergeData BuildAugmentedData(MergeData data)
+    private MergeData BuildAugmentedData(MergeData data, IReadOnlyList<int> rowIndexes)
     {
         var header = data.Header.ToList();
         if (!header.Contains("AddressBlock", StringComparer.OrdinalIgnoreCase)) header.Add("AddressBlock");
         if (!header.Contains("GreetingLine", StringComparer.OrdinalIgnoreCase)) header.Add("GreetingLine");
 
-        var rows = new List<IReadOnlyList<string>>(data.Count);
-        foreach (var row in data.Rows)
+        var rows = new List<IReadOnlyList<string>>(rowIndexes.Count);
+        foreach (var rowIndex in rowIndexes)
         {
+            var row = data.Rows[rowIndex];
             var augmented = Session.AugmentRow(row);
             rows.Add(header.Select(h => augmented.TryGetValue(h, out var v) ? v : string.Empty).ToList());
         }

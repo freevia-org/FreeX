@@ -1,5 +1,6 @@
 using Free.Shared.AppServices;
 using FreeP.App.Compositor;
+using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor.Tests;
 
@@ -87,5 +88,63 @@ public sealed class FindReplaceDialogPlannerTests
 
         status.StatusText.Should().Be(expectedStatus);
         status.StatusKind.Should().Be(expectedKind);
+    }
+
+    [Fact]
+    public void BuildWorkflowPlan_ProjectsRendererStateWithoutFrameworkDependencies()
+    {
+        var matches = new[]
+        {
+            new TextSearchMatch { SlideIndex = 0, ShapeId = 7, MatchedText = "needle" },
+            new TextSearchMatch { SlideIndex = 1, ShapeId = 8, MatchedText = "needle" },
+        };
+
+        var plan = FindReplaceDialogPlanner.BuildWorkflowPlan(
+            showReplace: true,
+            query: "needle",
+            replacement: "thread",
+            matchCase: true,
+            wholeWord: false,
+            matches,
+            currentMatchIndex: 1,
+            statusText: "Match 2 of 2",
+            statusKind: FindReplacePolicyStatusKind.Match);
+
+        plan.Title.Should().Be(FindReplaceDialogPlanner.FindAndReplaceTitle);
+        plan.ShowReplace.Should().BeTrue();
+        plan.Query.Should().Be("needle");
+        plan.Replacement.Should().Be("thread");
+        plan.MatchCase.Should().BeTrue();
+        plan.WholeWord.Should().BeFalse();
+        plan.MatchCount.Should().Be(2);
+        plan.CurrentMatchIndex.Should().Be(1);
+        plan.StatusText.Should().Be("Match 2 of 2");
+        plan.StatusKind.Should().Be(FindReplacePolicyStatusKind.Match);
+        plan.CanSearch.Should().BeTrue();
+        plan.CanNavigate.Should().BeTrue();
+        plan.CanReplace.Should().BeTrue();
+        plan.CanReplaceAll.Should().BeTrue();
+    }
+
+    [Fact]
+    public void BuildWorkflowPlan_DisablesReplaceActionsWhenFindModeOrQueryMissing()
+    {
+        var plan = FindReplaceDialogPlanner.BuildWorkflowPlan(
+            showReplace: false,
+            query: "",
+            replacement: null,
+            matchCase: false,
+            wholeWord: true,
+            matches: Array.Empty<TextSearchMatch>(),
+            currentMatchIndex: 4);
+
+        plan.Title.Should().Be(FindReplaceDialogPlanner.FindTitle);
+        plan.CurrentMatchIndex.Should().Be(-1);
+        plan.MatchCount.Should().Be(0);
+        plan.CanSearch.Should().BeFalse();
+        plan.CanNavigate.Should().BeFalse();
+        plan.CanReplace.Should().BeFalse();
+        plan.CanReplaceAll.Should().BeFalse();
+        plan.WholeWord.Should().BeTrue();
     }
 }

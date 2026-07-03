@@ -43,6 +43,7 @@ public sealed class PresentationReviewWorkflowPlannerTests
             new DateTime(2026, 7, 1, 9, 30, 0, DateTimeKind.Utc),
             100,
             200,
+            "",
             true,
             true,
             true,
@@ -59,6 +60,7 @@ public sealed class PresentationReviewWorkflowPlannerTests
         plan.SelectedComment.AuthorIdentityKey.Should().Be("ALICE|AL");
         plan.SelectedComment.ThreadStatusLabel.Should().Be("Open");
         plan.SelectedComment.ThreadStatusSummary.Should().Be("Open");
+        plan.SelectedComment.AnchorSummary.Should().Be("Legacy comment anchor at 100,200 EMU");
         plan.SelectedComment.ReplySummary.Should().Be("0 replies");
         plan.SelectedComment.MentionSummary.Should().Be("0 mentions");
 
@@ -431,6 +433,11 @@ public sealed class PresentationReviewWorkflowPlannerTests
             Author = "Alice",
             Initials = "AL",
             Text = "Please ask @Nora to review.",
+            UsesModernCommentSchema = true,
+            ModernAnchorKind = "unknownAnchor",
+            ModernAnchorXml = """<p188:unknownAnchor xmlns:p188="http://schemas.microsoft.com/office/powerpoint/2018/8/main" />""",
+            Xemu = 1200,
+            Yemu = 2400,
             Idx = 1,
             Replies =
             {
@@ -453,6 +460,8 @@ public sealed class PresentationReviewWorkflowPlannerTests
         var plan = PresentationReviewWorkflowPlanner.BuildCommentPanePlan(slides, 0, selectedCommentIndex: 0);
 
         var comment = plan.Comments.Single();
+        comment.ModernAnchorKind.Should().Be("unknownAnchor");
+        comment.AnchorSummary.Should().Be("unknown anchor at 1200,2400 EMU");
         comment.CanReply.Should().BeTrue();
         comment.ReplyCount.Should().Be(2);
         comment.MentionCount.Should().Be(2);

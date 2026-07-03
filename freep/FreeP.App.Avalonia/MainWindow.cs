@@ -159,6 +159,21 @@ public sealed class MainWindow : Window
     private int _animationPaneTriggerControlCount;
     private int _animationPaneDurationControlCount;
     private int _animationPaneDelayControlCount;
+    private Border _findReplacePaneHost = null!;
+    private TextBlock _findReplacePaneHeading = null!;
+    private TextBlock _findReplaceStatusText = null!;
+    private TextBox _findReplaceFindBox = null!;
+    private TextBlock _findReplaceReplaceLabel = null!;
+    private TextBox _findReplaceReplaceBox = null!;
+    private CheckBox _findReplaceMatchCaseCheck = null!;
+    private CheckBox _findReplaceWholeWordCheck = null!;
+    private Button _findReplaceButton = null!;
+    private Button _findReplacePreviousButton = null!;
+    private Button _findReplaceReplaceButton = null!;
+    private Button _findReplaceReplaceAllButton = null!;
+    private readonly List<TextSearchMatch> _findReplaceMatches = new();
+    private int _findReplaceCurrentMatchIndex = -1;
+    private bool _findReplaceShowReplace;
 
     // ── Interaction layer (Theme 15) ────────────────────────────────────────────
 
@@ -220,6 +235,7 @@ public sealed class MainWindow : Window
     internal PresentationProofingExecutionPlan? LastProofingExecutionPlan { get; private set; }
     internal PresentationProofingPanePlan? LastProofingPanePlan { get; private set; }
     internal AnimationPaneTimelinePlan? LastAnimationPaneTimelinePlan { get; private set; }
+    internal FindReplaceWorkflowPlan? LastFindReplaceWorkflowPlan { get; private set; }
     internal PresentationDesignCommandPlan? LastCustomSlideSizeRequestPlan { get; private set; }
     internal SlideSizeDialogInitialState? LastCustomSlideSizeInitialState { get; private set; }
     internal SlideSizeDialogResultPlan? LastCustomSlideSizeResultPlan { get; private set; }
@@ -305,6 +321,10 @@ public sealed class MainWindow : Window
     internal int AnimationPaneTriggerControlCount => _animationPaneTriggerControlCount;
     internal int AnimationPaneDurationControlCount => _animationPaneDurationControlCount;
     internal int AnimationPaneDelayControlCount => _animationPaneDelayControlCount;
+    internal bool IsFindReplacePaneVisible => _findReplacePaneHost?.IsVisible == true;
+    internal string FindReplacePaneTitle => _findReplacePaneHeading?.Text ?? string.Empty;
+    internal string FindReplacePaneStatus => _findReplaceStatusText?.Text ?? string.Empty;
+    internal bool IsFindReplaceReplaceInputVisible => _findReplaceReplaceBox?.IsVisible == true;
 
     // ── Constructors ───────────────────────────────────────────────────────────
 
@@ -549,6 +569,7 @@ public sealed class MainWindow : Window
         _readingOrderPaneHost = BuildReadingOrderPaneHost();
         _proofingPaneHost = BuildProofingPaneHost();
         _animationPaneHost = BuildAnimationPaneHost();
+        _findReplacePaneHost = BuildFindReplacePaneHost();
         _slideSizePaneHost = BuildSlideSizePaneHost();
         _headerFooterPaneHost = BuildHeaderFooterPaneHost();
         Grid.SetRow(canvasHost, 0);
@@ -592,6 +613,7 @@ public sealed class MainWindow : Window
         body.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         body.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         body.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        body.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         Grid.SetColumn(slidePaneHost, 0);
         Grid.SetColumn(rightGrid,      1);
         Grid.SetColumn(_slideSizePaneHost, 2);
@@ -601,6 +623,7 @@ public sealed class MainWindow : Window
         Grid.SetColumn(_readingOrderPaneHost, 6);
         Grid.SetColumn(_proofingPaneHost, 7);
         Grid.SetColumn(_animationPaneHost, 8);
+        Grid.SetColumn(_findReplacePaneHost, 9);
         body.Children.Add(slidePaneHost);
         body.Children.Add(rightGrid);
         body.Children.Add(_slideSizePaneHost);
@@ -610,8 +633,145 @@ public sealed class MainWindow : Window
         body.Children.Add(_readingOrderPaneHost);
         body.Children.Add(_proofingPaneHost);
         body.Children.Add(_animationPaneHost);
+        body.Children.Add(_findReplacePaneHost);
 
         return body;
+    }
+
+    private Border BuildFindReplacePaneHost()
+    {
+        _findReplacePaneHeading = new TextBlock
+        {
+            Text = FindReplaceDialogPlanner.FindTitle,
+            FontSize = 15,
+            FontWeight = FontWeight.SemiBold,
+            Margin = new Thickness(12, 12, 12, 4),
+        };
+        _findReplaceFindBox = new TextBox
+        {
+            Margin = new Thickness(12, 2, 12, 8),
+            PlaceholderText = "Find what",
+        };
+        _findReplaceFindBox.TextChanged += (_, _) => InvalidateFindReplaceSearch();
+
+        _findReplaceReplaceLabel = new TextBlock
+        {
+            Text = "Replace with",
+            FontWeight = FontWeight.SemiBold,
+            Margin = new Thickness(12, 4, 12, 2),
+        };
+        _findReplaceReplaceBox = new TextBox
+        {
+            Margin = new Thickness(12, 2, 12, 8),
+            PlaceholderText = "Replacement text",
+        };
+        _findReplaceReplaceBox.TextChanged += (_, _) => RefreshFindReplaceWorkflowPlan();
+
+        _findReplaceMatchCaseCheck = new CheckBox
+        {
+            Content = "Match case",
+            Margin = new Thickness(12, 2, 12, 2),
+        };
+        _findReplaceMatchCaseCheck.IsCheckedChanged += (_, _) => InvalidateFindReplaceSearch();
+
+        _findReplaceWholeWordCheck = new CheckBox
+        {
+            Content = "Whole word",
+            Margin = new Thickness(12, 0, 12, 8),
+        };
+        _findReplaceWholeWordCheck.IsCheckedChanged += (_, _) => InvalidateFindReplaceSearch();
+
+        _findReplacePreviousButton = new Button
+        {
+            Content = "Previous",
+            MinWidth = 80,
+            Margin = new Thickness(0, 0, 6, 0),
+        };
+        _findReplacePreviousButton.Click += (_, _) => NavigateFindReplace(-1);
+
+        _findReplaceButton = new Button
+        {
+            Content = "Find Next",
+            MinWidth = 80,
+            Margin = new Thickness(0, 0, 6, 0),
+        };
+        _findReplaceButton.Click += (_, _) => NavigateFindReplace(+1);
+
+        _findReplaceReplaceButton = new Button
+        {
+            Content = "Replace",
+            MinWidth = 80,
+            Margin = new Thickness(0, 0, 6, 0),
+        };
+        _findReplaceReplaceButton.Click += (_, _) => ReplaceCurrentFindReplaceMatch();
+
+        _findReplaceReplaceAllButton = new Button
+        {
+            Content = "Replace All",
+            MinWidth = 96,
+        };
+        _findReplaceReplaceAllButton.Click += (_, _) => ReplaceAllFindReplaceMatches();
+
+        _findReplaceStatusText = new TextBlock
+        {
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)),
+            Margin = new Thickness(12, 8, 12, 12),
+        };
+
+        return new Border
+        {
+            Width = 300,
+            Background = Brushes.White,
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0xC8, 0xC8, 0xC8)),
+            BorderThickness = new Thickness(1, 0, 0, 0),
+            IsVisible = false,
+            Child = new ScrollViewer
+            {
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                Content = new StackPanel
+                {
+                    Orientation = Orientation.Vertical,
+                    Children =
+                    {
+                        _findReplacePaneHeading,
+                        new TextBlock
+                        {
+                            Text = "Find what",
+                            FontWeight = FontWeight.SemiBold,
+                            Margin = new Thickness(12, 4, 12, 2),
+                        },
+                        _findReplaceFindBox,
+                        _findReplaceReplaceLabel,
+                        _findReplaceReplaceBox,
+                        _findReplaceMatchCaseCheck,
+                        _findReplaceWholeWordCheck,
+                        new StackPanel
+                        {
+                            Orientation = Orientation.Horizontal,
+                            Margin = new Thickness(12, 4, 12, 4),
+                            Children =
+                            {
+                                _findReplaceButton,
+                                _findReplacePreviousButton,
+                            },
+                        },
+                        new StackPanel
+                        {
+                            Orientation = Orientation.Horizontal,
+                            Margin = new Thickness(12, 4, 12, 4),
+                            Children =
+                            {
+                                _findReplaceReplaceButton,
+                                _findReplaceReplaceAllButton,
+                            },
+                        },
+                        _findReplaceStatusText,
+                    },
+                },
+            },
+        };
     }
 
     private Border BuildAltTextPaneHost()
@@ -2073,8 +2233,146 @@ public sealed class MainWindow : Window
 
     private void OpenFindReplaceDialog(bool showReplace)
     {
-        _ = FindReplaceDialogPlanner.TitleForMode(showReplace);
+        ShowFindReplacePane(showReplace);
     }
+
+    internal FindReplaceWorkflowPlan SetFindReplacePaneInputForTests(
+        string? query,
+        string? replacement = null,
+        bool matchCase = false,
+        bool wholeWord = false)
+    {
+        _findReplaceFindBox.Text = query ?? string.Empty;
+        _findReplaceReplaceBox.Text = replacement ?? string.Empty;
+        _findReplaceMatchCaseCheck.IsChecked = matchCase;
+        _findReplaceWholeWordCheck.IsChecked = wholeWord;
+        InvalidateFindReplaceSearch();
+        return LastFindReplaceWorkflowPlan!;
+    }
+
+    internal FindReplaceWorkflowPlan NavigateFindReplacePaneForTests(int direction) =>
+        NavigateFindReplace(direction);
+
+    internal FindReplaceWorkflowPlan ReplaceAllFindReplacePaneForTests() =>
+        ReplaceAllFindReplaceMatches();
+
+    private FindReplaceWorkflowPlan ShowFindReplacePane(bool showReplace)
+    {
+        _findReplaceShowReplace = showReplace;
+        _findReplacePaneHost.IsVisible = true;
+        _findReplaceReplaceLabel.IsVisible = showReplace;
+        _findReplaceReplaceBox.IsVisible = showReplace;
+        _findReplaceReplaceButton.IsVisible = showReplace;
+        _findReplaceReplaceAllButton.IsVisible = showReplace;
+        return RefreshFindReplaceWorkflowPlan();
+    }
+
+    private FindReplaceWorkflowPlan RefreshFindReplaceWorkflowPlan(
+        string? statusText = null,
+        FindReplacePolicyStatusKind statusKind = FindReplacePolicyStatusKind.None)
+    {
+        LastFindReplaceWorkflowPlan = FindReplaceDialogPlanner.BuildWorkflowPlan(
+            _findReplaceShowReplace,
+            _findReplaceFindBox.Text,
+            _findReplaceReplaceBox.Text,
+            _findReplaceMatchCaseCheck.IsChecked == true,
+            _findReplaceWholeWordCheck.IsChecked == true,
+            _findReplaceMatches,
+            _findReplaceCurrentMatchIndex,
+            statusText,
+            statusKind);
+
+        RenderFindReplaceWorkflowPlan(LastFindReplaceWorkflowPlan);
+        return LastFindReplaceWorkflowPlan;
+    }
+
+    private void RenderFindReplaceWorkflowPlan(FindReplaceWorkflowPlan plan)
+    {
+        _findReplacePaneHeading.Text = plan.Title;
+        _findReplaceStatusText.Text = plan.StatusText;
+        _findReplaceStatusText.Foreground = plan.StatusKind switch
+        {
+            FindReplacePolicyStatusKind.NoMatches or FindReplacePolicyStatusKind.NoReplacements =>
+                new SolidColorBrush(Color.FromRgb(0xC6, 0x28, 0x28)),
+            FindReplacePolicyStatusKind.Match or FindReplacePolicyStatusKind.Replacements =>
+                new SolidColorBrush(Color.FromRgb(0x1B, 0x7E, 0x30)),
+            _ => new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)),
+        };
+        _findReplaceButton.IsEnabled = plan.CanSearch;
+        _findReplacePreviousButton.IsEnabled = plan.CanSearch;
+        _findReplaceReplaceButton.IsEnabled = plan.CanReplace;
+        _findReplaceReplaceAllButton.IsEnabled = plan.CanReplaceAll;
+    }
+
+    private void InvalidateFindReplaceSearch()
+    {
+        _findReplaceMatches.Clear();
+        _findReplaceCurrentMatchIndex = -1;
+        RefreshFindReplaceWorkflowPlan();
+    }
+
+    private void EnsureFindReplaceMatches()
+    {
+        if (_findReplaceMatches.Count > 0)
+            return;
+
+        _findReplaceMatches.AddRange(Editor.FindAll(_findReplaceFindBox.Text, BuildFindReplaceOptions()));
+    }
+
+    private FindReplaceWorkflowPlan NavigateFindReplace(int direction)
+    {
+        EnsureFindReplaceMatches();
+
+        var plan = FindReplaceDialogPlanner.Navigate(
+            _findReplaceCurrentMatchIndex,
+            _findReplaceMatches.Count,
+            direction);
+        if (plan.HasMatch)
+        {
+            _findReplaceCurrentMatchIndex = plan.MatchIndex;
+            Editor.NavigateTo(_findReplaceMatches[_findReplaceCurrentMatchIndex]);
+            RefreshCanvas();
+            RefreshSlidePane();
+        }
+
+        return RefreshFindReplaceWorkflowPlan(plan.StatusText, plan.StatusKind);
+    }
+
+    private FindReplaceWorkflowPlan ReplaceCurrentFindReplaceMatch()
+    {
+        EnsureFindReplaceMatches();
+        var index = FindReplaceDialogPlanner.ReplacementTargetIndex(
+            _findReplaceCurrentMatchIndex,
+            _findReplaceMatches.Count);
+        if (index < 0)
+            return RefreshFindReplaceWorkflowPlan(
+                FindReplaceDialogPolicy.NoMatchesStatus,
+                FindReplacePolicyStatusKind.NoMatches);
+
+        Editor.ReplaceOne(_findReplaceMatches[index], _findReplaceReplaceBox.Text ?? string.Empty);
+        _findReplaceMatches.Clear();
+        _findReplaceCurrentMatchIndex = -1;
+        return NavigateFindReplace(+1);
+    }
+
+    private FindReplaceWorkflowPlan ReplaceAllFindReplaceMatches()
+    {
+        var query = _findReplaceFindBox.Text;
+        if (!FindReplaceDialogPlanner.CanReplaceAll(query))
+            return RefreshFindReplaceWorkflowPlan(
+                FindReplaceDialogPolicy.SearchTermRequiredMessage,
+                FindReplacePolicyStatusKind.None);
+
+        var count = Editor.ReplaceAll(query, _findReplaceReplaceBox.Text ?? string.Empty, BuildFindReplaceOptions());
+        _findReplaceMatches.Clear();
+        _findReplaceCurrentMatchIndex = -1;
+        var status = FindReplaceDialogPlanner.ReplacementStatus(count);
+        return RefreshFindReplaceWorkflowPlan(status.StatusText, status.StatusKind);
+    }
+
+    private TextSearchOptions BuildFindReplaceOptions() => FindReplaceDialogPlanner.BuildOptions(
+        _findReplaceMatchCaseCheck.IsChecked == true,
+        _findReplaceWholeWordCheck.IsChecked == true);
 
     private void FileNew()
     {
