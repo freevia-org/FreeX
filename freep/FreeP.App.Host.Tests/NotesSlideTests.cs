@@ -59,6 +59,49 @@ public sealed class NotesSlideTests : IDisposable
     // ── Model ─────────────────────────────────────────────────────────────────────
 
     [Fact]
+    public void NotesPagePreviewPlan_SegmentsOverflowIntoContinuationPages()
+    {
+        var pres = new Presentation();
+        pres.NotesPageSizeCxEmu = DrawingMlCoordinateUnits.PointsToEmu(360);
+        pres.NotesPageSizeCyEmu = DrawingMlCoordinateUnits.PointsToEmu(360);
+        var slide = new Slide { Title = "Overflow notes" };
+        var notes = new TextBody();
+        for (var i = 1; i <= 7; i++)
+        {
+            var paragraph = new Paragraph();
+            paragraph.Runs.Add(new Run { Text = $"Presenter note {i}." });
+            notes.Paragraphs.Add(paragraph);
+        }
+
+        slide.Notes = notes;
+        pres.Slides.Add(slide);
+
+        var plan = PresentationNotesPagePreviewPlanner.Build(pres, 0, pageWidth: 360, pageHeight: 360);
+        var packagePlan = PresentationPrintOutputPackageExecutor.BuildPackagePlan(
+            new PresentationPrintRequest(PresentationPrintLayoutKind.NotesPages),
+            pres);
+
+        plan.NoteLines.Should().HaveCount(7);
+        plan.LinesPerRenderedPage.Should().BeGreaterThan(0);
+        plan.RenderPages.Should().HaveCountGreaterThan(1);
+        plan.RenderPages[0].Should().Match<PresentationNotesPageRenderedPagePlan>(page =>
+            !page.IsContinuation &&
+            page.FirstNoteLineIndex == 0 &&
+            page.ThumbnailLabel == "Slide 1 notes" &&
+            page.Detail == "Notes page for slide 1");
+        plan.RenderPages.Skip(1).Should().OnlyContain(page =>
+            page.IsContinuation &&
+            page.ThumbnailLabel == "Slide 1 notes continued" &&
+            page.Detail == "Notes continuation page for slide 1");
+        plan.RenderPages.Sum(page => page.NoteLineCount).Should().Be(plan.NoteLines.Count);
+        plan.RenderedPageCount.Should().Be(plan.RenderPages.Count);
+
+        packagePlan.PageCount.Should().Be(plan.RenderedPageCount);
+        packagePlan.PreviewPlan.Pages.Select(page => page.ThumbnailLabel)
+            .Should().Equal(plan.RenderPages.Select(page => page.ThumbnailLabel));
+    }
+
+    [Fact]
     public void Slide_Notes_DefaultIsNull()
     {
         var slide = new Slide();
@@ -318,6 +361,11 @@ public sealed class NotesSlideTests : IDisposable
             plan.NotesPlaceholder.HasContent.Should().BeTrue();
             plan.NotesPlaceholder.ShouldShowPlaceholder.Should().BeFalse();
             plan.PrintPlan.SlideRange.DisplayName.Should().Be("Slide 1");
+            plan.RenderPages.Should().ContainSingle()
+                .Which.Should().Match<PresentationNotesPageRenderedPagePlan>(page =>
+                    page.ThumbnailLabel == "Slide 1 notes" &&
+                    page.Detail == "Notes page for slide 1" &&
+                    page.NoteLineCount == 1);
         }
         finally
         {

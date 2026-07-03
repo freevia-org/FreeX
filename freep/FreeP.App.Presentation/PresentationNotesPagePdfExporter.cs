@@ -35,7 +35,7 @@ public static class PresentationNotesPagePdfExporter
     private const double PlaceholderFontSize = 12;
     private const double HeaderFooterFontSize = 9;
     internal const double NotesInset = 10;
-    private const double NotesLeading = 16;
+    internal const double NotesLeading = 16;
 
     public static byte[] ExportToBytes(
         Presentation presentation,
@@ -94,16 +94,8 @@ public static class PresentationNotesPagePdfExporter
 
     internal static int CountRenderedPages(PresentationNotesPagePreviewPlan plan)
     {
-        var top = plan.PageBounds.Height - plan.NotesBounds.Top - NotesInset - NotesFontSize;
-        var bottom = plan.PageBounds.Height - plan.NotesBounds.Bottom + NotesInset;
-        if (top < bottom || plan.NoteLines.Count == 0)
-            return 1;
-
-        var linesPerPage = 0;
-        for (var y = top; y >= bottom; y -= NotesLeading)
-            linesPerPage++;
-
-        return Math.Max(1, (int)Math.Ceiling(plan.NoteLines.Count / (double)Math.Max(1, linesPerPage)));
+        ArgumentNullException.ThrowIfNull(plan);
+        return Math.Max(1, plan.RenderedPageCount);
     }
 
     /// <summary>
@@ -117,10 +109,7 @@ public static class PresentationNotesPagePdfExporter
         Presentation presentation,
         PresentationNotesPagePreviewPlan plan)
     {
-        var remainingLines = plan.NoteLines;
-        var isFirstPage = true;
-
-        do
+        foreach (var renderedPage in plan.RenderPages)
         {
             var ops = new List<PdfDrawOp>
             {
@@ -145,15 +134,14 @@ public static class PresentationNotesPagePdfExporter
             ops.Add(ToPdfStrokeRect(plan.NotesBounds, plan.PageBounds.Height, NotesBorder, NotesBorderWidth));
             AppendHeaderFooterPlaceholders(ops, plan);
 
-            var showPlaceholder = isFirstPage &&
-                remainingLines.Count == 0 &&
-                plan.NotesPlaceholder.ShouldShowPlaceholder;
-            remainingLines = AppendNotesText(ops, plan, remainingLines, showPlaceholder);
+            var pageLines = plan.NoteLines
+                .Skip(renderedPage.FirstNoteLineIndex)
+                .Take(renderedPage.NoteLineCount)
+                .ToArray();
+            AppendNotesText(ops, plan, pageLines, renderedPage.ShowsPlaceholder);
 
             yield return new PdfContentPage(plan.PageBounds.Width, plan.PageBounds.Height, ops);
-            isFirstPage = false;
         }
-        while (remainingLines.Count > 0);
     }
 
     /// <summary>

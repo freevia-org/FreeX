@@ -30,6 +30,16 @@ public sealed record PresentationNotesPageNotesPlaceholder(
     public bool ShouldShowPlaceholder => IsVisible && !HasContent;
 }
 
+public sealed record PresentationNotesPageRenderedPagePlan(
+    int PageIndex,
+    int PageNumber,
+    bool IsContinuation,
+    int FirstNoteLineIndex,
+    int NoteLineCount,
+    bool ShowsPlaceholder,
+    string ThumbnailLabel,
+    string Detail);
+
 public sealed record PresentationNotesPagePreviewPlan(
     PresentationPrintPlan PrintPlan,
     int? SlideIndex,
@@ -42,10 +52,13 @@ public sealed record PresentationNotesPagePreviewPlan(
     LayoutRect NotesBounds,
     PresentationNotesPageNotesPlaceholder NotesPlaceholder,
     IReadOnlyList<PresentationNotesPagePlaceholder> HeaderFooterPlaceholders,
-    IReadOnlyList<string> NoteLines)
+    IReadOnlyList<string> NoteLines,
+    int LinesPerRenderedPage,
+    IReadOnlyList<PresentationNotesPageRenderedPagePlan> RenderPages)
 {
     public bool HasSlide => SlideIndex is not null;
     public bool HasNotes => !string.IsNullOrWhiteSpace(NotesText);
+    public int RenderedPageCount => RenderPages.Count;
 }
 
 /// <summary>
@@ -78,6 +91,9 @@ public static class PresentationNotesPagePreviewPlanner
 
         if (slideCount == 0)
         {
+            var emptyNotesPlaceholder = BuildNotesPlaceholder(string.Empty, notesBounds);
+            var emptyNoteLines = Array.Empty<string>();
+            var emptyLinesPerRenderedPage = CountLinesPerRenderedPage(pageBounds, notesBounds);
             return new PresentationNotesPagePreviewPlan(
                 PresentationExportPlanner.BuildPrintPlan(
                     new PresentationPrintRequest(PresentationPrintLayoutKind.NotesPages),
@@ -90,14 +106,19 @@ public static class PresentationNotesPagePreviewPlanner
                 pageBounds,
                 slideBounds,
                 notesBounds,
-                BuildNotesPlaceholder(string.Empty, notesBounds),
+                emptyNotesPlaceholder,
                 HeaderFooterPlaceholders: [],
-                NoteLines: []);
+                emptyNoteLines,
+                emptyLinesPerRenderedPage,
+                BuildRenderedPages(null, emptyNoteLines, emptyNotesPlaceholder, emptyLinesPerRenderedPage));
         }
 
         var normalizedIndex = Math.Clamp(currentSlideIndex, 0, slideCount - 1);
         var slide = presentation.Slides[normalizedIndex];
         var notesText = ExtractPlainText(slide.Notes);
+        var notesPlaceholder = BuildNotesPlaceholder(notesText, notesBounds);
+        var noteLines = SplitNoteLines(slide.Notes, notesBounds.Width);
+        var linesPerPage = CountLinesPerRenderedPage(pageBounds, notesBounds);
 
         return new PresentationNotesPagePreviewPlan(
             PresentationExportPlanner.BuildPrintPlan(
@@ -115,9 +136,11 @@ public static class PresentationNotesPagePreviewPlanner
             pageBounds,
             slideBounds,
             notesBounds,
-            BuildNotesPlaceholder(notesText, notesBounds),
+            notesPlaceholder,
             BuildHeaderFooterPlaceholders(slide, normalizedIndex + 1, pageBounds),
-            SplitNoteLines(slide.Notes, notesBounds.Width));
+            noteLines,
+            linesPerPage,
+            BuildRenderedPages(normalizedIndex + 1, noteLines, notesPlaceholder, linesPerPage));
     }
 
     public static double ResolveNotesPageWidthPoints(Presentation presentation, double? pageWidth = null)
@@ -558,5 +581,72 @@ public static class PresentationNotesPagePreviewPlanner
             lines.Add(current.ToString());
 
         return lines.Count == 0 ? [string.Empty] : lines;
+    }
+
+    private static int CountLinesPerRenderedPage(
+        LayoutRect pageBounds,
+        LayoutRect notesBounds)
+    {
+        var top = pageBounds.Height - notesBounds.Top -
+            PresentationNotesPagePdfExporter.NotesInset -
+            PresentationNotesPagePdfExporter.NotesFontSize;
+        var bottom = pageBounds.Height - notesBounds.Bottom + PresentationNotesPagePdfExporter.NotesInset;
+        if (top < bottom)
+            return 0;
+
+        var linesPerPage = 0;
+        for (var y = top; y >= bottom; y -= PresentationNotesPagePdfExporter.NotesLeading)
+            linesPerPage++;
+
+        return Math.Max(1, linesPerPage);
+    }
+
+    private static IReadOnlyList<PresentationNotesPageRenderedPagePlan> BuildRenderedPages(
+        int? slideNumber,
+        IReadOnlyList<string> noteLines,
+        PresentationNotesPageNotesPlaceholder notesPlaceholder,
+        int linesPerRenderedPage)
+    {
+        var pageCount = noteLines.Count == 0
+            ? 1
+            : (int)Math.Ceiling(noteLines.Count / (double)Math.Max(1, linesPerRenderedPage));
+        var result = new List<PresentationNotesPageRenderedPagePlan>(pageCount);
+        for (var index = 0; index < pageCount; index++)
+        {
+            var firstLine = noteLines.Count == 0 ? 0 : index * Math.Max(1, linesPerRenderedPage);
+            var lineCount = noteLines.Count == 0
+                ? 0
+                : Math.Min(Math.Max(1, linesPerRenderedPage), noteLines.Count - firstLine);
+            var isContinuation = index > 0;
+            result.Add(new PresentationNotesPageRenderedPagePlan(
+                index,
+                index + 1,
+                isContinuation,
+                firstLine,
+                lineCount,
+                ShowsPlaceholder: index == 0 && noteLines.Count == 0 && notesPlaceholder.ShouldShowPlaceholder,
+                BuildThumbnailLabel(slideNumber, isContinuation),
+                BuildDetail(slideNumber, isContinuation)));
+        }
+
+        return result;
+    }
+
+    private static string BuildThumbnailLabel(int? slideNumber, bool isContinuation)
+    {
+        if (slideNumber is not { } value || value <= 0)
+            return isContinuation ? "No slide notes continued" : "No slide notes";
+
+        return isContinuation ? $"Slide {value} notes continued" : $"Slide {value} notes";
+    }
+
+    private static string BuildDetail(int? slideNumber, bool isContinuation)
+    {
+        if (slideNumber is not { } value || value <= 0)
+            return isContinuation ? "Notes continuation page without a slide" : "Notes page without a slide";
+
+        return isContinuation
+            ? $"Notes continuation page for slide {value}"
+            : $"Notes page for slide {value}";
     }
 }

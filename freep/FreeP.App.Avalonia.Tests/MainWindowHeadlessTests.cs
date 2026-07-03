@@ -2838,6 +2838,11 @@ public sealed class MainWindowHeadlessTests
         editedPlan.NotesPlaceholder.HasContent.Should().BeTrue();
         editedPlan.NotesPlaceholder.ShouldShowPlaceholder.Should().BeFalse();
         editedPlan.PrintPlan.SlideRange.DisplayName.Should().Be("Slide 1");
+        editedPlan.RenderPages.Should().ContainSingle()
+            .Which.Should().Match<PresentationNotesPageRenderedPagePlan>(page =>
+                page.ThumbnailLabel == "Slide 1 notes" &&
+                page.Detail == "Notes page for slide 1" &&
+                page.NoteLineCount == 1);
     }
 
     [Theory]
