@@ -5,7 +5,7 @@ namespace Free.Shared.Pdf;
 
 /// <summary>
 /// Dependency-free WinAnsi (Helvetica) PDF writer. Serializes an app-agnostic
-/// <see cref="PdfContentDocument"/> (draw-op pages) to PDF 1.7 bytes using only the two built-in
+/// <see cref="PdfContentDocument"/> (draw-op pages) to PDF 1.7 bytes using only built-in
 /// Type1 Helvetica faces — no font files, no native dependencies — so it runs anywhere including
 /// fully headless environments.
 ///
@@ -46,10 +46,11 @@ public static class PortablePdfWriter
             stream.SetLength(0);
         }
 
+        var fontResources = BuildFontResources(document);
         var pages = document.Pages
             .Select(page => (Content: RenderContentStream(page.Ops), page.WidthPoints, page.HeightPoints))
             .ToArray();
-        WritePdf(stream, pages, headerComment);
+        WritePdf(stream, pages, fontResources, headerComment);
     }
 
     /// <summary>Serializes <paramref name="document"/> to an in-memory byte array.</summary>
@@ -85,29 +86,41 @@ public static class PortablePdfWriter
         return content.ToString();
     }
 
-    private static string FontResource(PdfFontFace face) => face == PdfFontFace.Bold ? "F2" : "F1";
+    private static string FontResource(PdfFontFace face) => face switch
+    {
+        PdfFontFace.Bold => "F2",
+        PdfFontFace.Italic => "F3",
+        PdfFontFace.BoldItalic => "F4",
+        _ => "F1",
+    };
 
     private static void WritePdf(
         Stream stream,
         IReadOnlyList<(string Content, double Width, double Height)> pages,
+        IReadOnlyList<(string ResourceName, string BaseFont)> fontResources,
         string headerComment)
     {
         var objects = new List<string>();
+        var firstPageObjectId = 3 + fontResources.Count;
         var pageObjectIds = Enumerable.Range(0, pages.Count)
-            .Select(index => 5 + (index * 2))
+            .Select(index => firstPageObjectId + (index * 2))
             .ToArray();
 
         objects.Add("<< /Type /Catalog /Pages 2 0 R >>");
         objects.Add($"<< /Type /Pages /Kids [{string.Join(" ", pageObjectIds.Select(id => $"{id} 0 R"))}] /Count {pages.Count} >>");
-        objects.Add("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>");
-        objects.Add("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>");
+        foreach (var font in fontResources)
+            objects.Add($"<< /Type /Font /Subtype /Type1 /BaseFont /{font.BaseFont} /Encoding /WinAnsiEncoding >>");
+
+        var fontResourceDictionary = string.Join(
+            " ",
+            fontResources.Select((font, index) => $"/{font.ResourceName} {index + 3} 0 R"));
 
         for (var index = 0; index < pages.Count; index++)
         {
             var pageObjectId = pageObjectIds[index];
             var contentObjectId = pageObjectId + 1;
             objects.Add(
-                $"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {FormatNumber(pages[index].Width)} {FormatNumber(pages[index].Height)}] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents {contentObjectId} 0 R >>");
+                $"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {FormatNumber(pages[index].Width)} {FormatNumber(pages[index].Height)}] /Resources << /Font << {fontResourceDictionary} >> >> /Contents {contentObjectId} 0 R >>");
 
             var pageStream = pages[index].Content.EndsWith("\n", StringComparison.Ordinal)
                 ? pages[index].Content
@@ -132,6 +145,26 @@ public static class PortablePdfWriter
         WriteAscii(
             stream,
             $"trailer\n<< /Size {objects.Count + 1} /Root 1 0 R >>\nstartxref\n{xrefOffset.ToString(CultureInfo.InvariantCulture)}\n%%EOF\n");
+    }
+
+    private static IReadOnlyList<(string ResourceName, string BaseFont)> BuildFontResources(PdfContentDocument document)
+    {
+        var hasItalicText = document.Pages
+            .SelectMany(page => page.Ops)
+            .OfType<PdfText>()
+            .Any(text => text.Face is PdfFontFace.Italic or PdfFontFace.BoldItalic);
+
+        return hasItalicText
+            ? [
+                ("F1", "Helvetica"),
+                ("F2", "Helvetica-Bold"),
+                ("F3", "Helvetica-Oblique"),
+                ("F4", "Helvetica-BoldOblique"),
+            ]
+            : [
+                ("F1", "Helvetica"),
+                ("F2", "Helvetica-Bold"),
+            ];
     }
 
     private static void AppendFilledRectangle(
