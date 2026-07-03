@@ -815,6 +815,7 @@ public sealed class DocumentViewReviewTests
             "freew.show-markup-insertions-deletions",
             "freew.show-markup-comments",
             "freew.show-markup-formatting",
+            "freew.show-markup-balloons",
             "freew.reviewing-pane",
             "freew.reviewingpane",
             "freew.statistics",
@@ -857,9 +858,11 @@ public sealed class DocumentViewReviewTests
 
         Execute(registry, "freew.display-for-review-no-markup");
         Execute(registry, "freew.show-markup-comments");
+        Execute(registry, "freew.show-markup-balloons");
 
         view.DisplayForReview.Should().Be(ReviewDisplayMode.NoMarkup);
         view.ShowMarkupComments.Should().BeFalse();
+        view.ShowMarkupBalloons.Should().BeTrue();
 
         registry.TryGet(new RibbonCommandId("freew.display-for-review-no-markup"), out var displayCommand)
             .Should().BeTrue();
@@ -868,6 +871,57 @@ public sealed class DocumentViewReviewTests
         registry.TryGet(new RibbonCommandId("freew.show-markup-comments"), out var commentsCommand)
             .Should().BeTrue();
         (commentsCommand as IRibbonStatefulCommand)!.GetState().IsChecked.Should().BeFalse();
+
+        registry.TryGet(new RibbonCommandId("freew.show-markup-balloons"), out var balloonsCommand)
+            .Should().BeTrue();
+        (balloonsCommand as IRibbonStatefulCommand)!.GetState().IsChecked.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Review_balloons_command_can_route_toggle_state_through_host_callback()
+    {
+        var active = false;
+        var callbacks = NoopCallbacks() with
+        {
+            ToggleReviewBalloons = () => active = !active,
+            IsReviewBalloonsActive = () => active,
+        };
+        var registry = FreeWAvaloniaRibbonCommands.Build(new DocumentView(), callbacks);
+
+        registry.TryGet(new RibbonCommandId("freew.show-markup-balloons"), out var command)
+            .Should().BeTrue();
+        var stateful = command.Should().BeAssignableTo<IRibbonStatefulCommand>().Subject;
+
+        stateful.GetState().IsChecked.Should().BeFalse();
+        Execute(registry, "freew.show-markup-balloons");
+        stateful.GetState().IsChecked.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Review_balloons_pane_renders_revisions_and_comments_from_model_data()
+    {
+        int count = -1;
+        IReadOnlyList<string> kinds = [];
+        var ran = await OnUiThread(() =>
+        {
+            var doc = DocWithInsertion();
+            var p = (Paragraph)doc.Blocks[0];
+            p.Runs[0].CommentId = 1;
+            p.Runs.Insert(1, Run.CommentReference(1));
+            doc.Comments[1] = new Comment(1, "check intro", "Casey", "C");
+
+            var view = Build(doc);
+            var pane = new ReviewBalloonsPane(view);
+            pane.Refresh();
+            count = pane.BalloonItemCount;
+            kinds = ReviewBalloonsPane.EnumerateBalloons(view.Document, view.CurrentReviewDisplayPolicy)
+                .Select(item => item.Kind)
+                .ToArray();
+        });
+        if (!ran) return;
+
+        count.Should().Be(2, "the strip renders one tracked revision and one comment balloon");
+        kinds.Should().Equal("Comment", "Inserted");
     }
 
     [Fact]
@@ -877,15 +931,14 @@ public sealed class DocumentViewReviewTests
         var ids = definition.Tabs
             .SelectMany(t => t.Groups)
             .SelectMany(g => g.Controls)
-            .Select(GetCommandId)
-            .Where(id => id is not null)
-            .Select(id => id!.Value.Value)
+            .SelectMany(CommandIdsIncludingMenus)
+            .Select(id => id.Value)
             .ToHashSet();
 
         foreach (var id in new[]
         {
             "freew.track-changes", "freew.reviewing-pane", "freew.statistics",
-            "freew.display-for-review", "freew.show-markup",
+            "freew.display-for-review", "freew.show-markup", "freew.show-markup-balloons",
             "freew.spellcheck-toggle", "freew.add-to-dictionary",
             "freew.thesaurus", "freew.set-proofing-language",
             "freew.check-accessibility", "freew.accept-this", "freew.reject-this",
@@ -1017,4 +1070,32 @@ public sealed class DocumentViewReviewTests
         RibbonGallery g => g.CommandId,
         _ => (RibbonCommandId?)null,
     };
+
+    private static IEnumerable<RibbonCommandId> CommandIdsIncludingMenus(RibbonControl control)
+    {
+        if (GetCommandId(control) is { } id && !string.IsNullOrEmpty(id.Value))
+            yield return id;
+
+        var menuIds = control switch
+        {
+            RibbonSplitButton splitButton => MenuCommandIds(splitButton.Menu.Items),
+            RibbonDropdown dropdown => MenuCommandIds(dropdown.Menu.Items),
+            _ => Enumerable.Empty<RibbonCommandId>(),
+        };
+
+        foreach (var menuId in menuIds)
+            yield return menuId;
+    }
+
+    private static IEnumerable<RibbonCommandId> MenuCommandIds(IEnumerable<RibbonMenuItem> items)
+    {
+        foreach (var item in items)
+        {
+            if (item.CommandId is { } id && !string.IsNullOrEmpty(id.Value))
+                yield return id;
+
+            foreach (var childId in MenuCommandIds(item.Children))
+                yield return childId;
+        }
+    }
 }
