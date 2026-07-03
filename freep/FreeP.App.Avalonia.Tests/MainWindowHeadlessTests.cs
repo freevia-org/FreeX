@@ -963,6 +963,85 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task Ribbon_font_size_and_color_commands_route_to_editor()
+    {
+        var foundSize = false;
+        var foundColor = false;
+        double? fontSize = null;
+        ThemeAwareColor? fontColor = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var registry = window.BuildCommandRegistry();
+            foundSize = registry.TryGet("freep.font-size", out var sizeCommand);
+            foundColor = registry.TryGet("freep.font-color", out var colorCommand);
+            foundSize.Should().BeTrue("Font Size must be registered");
+            foundColor.Should().BeTrue("Font Color must be registered");
+
+            var shape = window.Editor.InsertTextBox("Text");
+            window.Editor.Select(shape.Id);
+
+            sizeCommand!.Execute(RibbonCommandContext.ForSelectedValue("26pt"));
+            colorCommand!.Execute(RibbonCommandContext.ForSelectedValue("#336699"));
+
+            var run = window.Editor.CurrentSlide!.Shapes
+                .Single(s => s.Id == shape.Id)
+                .TextBody!.Paragraphs[0].Runs[0];
+            fontSize = run.FontSizePt;
+            fontColor = run.Color;
+        });
+
+        if (!ran) return;
+        foundSize.Should().BeTrue("Font Size must be registered");
+        foundColor.Should().BeTrue("Font Color must be registered");
+        fontSize.Should().Be(26, "the Avalonia registry should forward font size to selected text shapes");
+        fontColor.Should().NotBeNull("the Avalonia registry should forward font color to selected text shapes");
+        fontColor!.Resolved.Should().Be(SrgbColor.FromRgb(0x336699));
+    }
+
+    [Fact]
+    public async Task Ribbon_font_size_and_color_commands_route_to_active_table_cell()
+    {
+        var foundSize = false;
+        var foundColor = false;
+        IReadOnlyList<Run> runs = Array.Empty<Run>();
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var registry = window.BuildCommandRegistry();
+            foundSize = registry.TryGet("freep.font-size", out var sizeCommand);
+            foundColor = registry.TryGet("freep.font-color", out var colorCommand);
+            foundSize.Should().BeTrue("Font Size must be registered");
+            foundColor.Should().BeTrue("Font Color must be registered");
+
+            var shape = window.Editor.InsertTable(1, 1);
+            var body = new TextBody { Wrap = true };
+            var paragraph = new Paragraph();
+            paragraph.Runs.Add(new Run { Text = "Cell", FontSizePt = 10 });
+            paragraph.Runs.Add(new Run { Text = " text", FontSizePt = 14, Bold = true });
+            body.Paragraphs.Add(paragraph);
+            shape.Table!.Rows[0].Cells[0].TextBody = body;
+            window.Editor.Select(shape.Id);
+            window.Editor.SetActiveTableCell(0, 0);
+
+            sizeCommand!.Execute(RibbonCommandContext.ForSelectedValue("22"));
+            colorCommand!.Execute(RibbonCommandContext.ForSelectedValue("#8844CC"));
+
+            runs = shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs[0].Runs.ToArray();
+        });
+
+        if (!ran) return;
+        foundSize.Should().BeTrue("Font Size must be registered");
+        foundColor.Should().BeTrue("Font Color must be registered");
+        runs.Should().OnlyContain(run => run.FontSizePt == 22);
+        runs.Should().OnlyContain(run => run.Color != null && run.Color.Resolved == SrgbColor.FromRgb(0x8844CC));
+        runs.Select(run => run.Text).Should().Equal("Cell", " text");
+        runs[1].Bold.Should().BeTrue("table-cell value formatting should preserve unrelated mixed-run formatting");
+    }
+
+    [Fact]
     public async Task Ribbon_chart_edit_data_command_is_registered_and_noops_without_selected_chart()
     {
         var found = false;

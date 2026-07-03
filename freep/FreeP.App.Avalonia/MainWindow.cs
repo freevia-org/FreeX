@@ -17,6 +17,7 @@ using FreeP.App.Compositor;
 using FreeP.App.Rendering.Avalonia;
 using FreeP.Core.IO;
 using FreeP.Core.Model;
+using System.Globalization;
 using System.Linq;
 
 namespace FreeP.App.Avalonia;
@@ -1170,6 +1171,24 @@ public sealed class MainWindow : Window
             if (Editor.TryApplyActiveTableCellFontFamily(ctx.SelectedValue)) return;
             Editor.SetFontFamilyOnSelection(ctx.SelectedValue);
         }));
+        r.Register("freep.font-size", new ContextRibbonCommand(ctx =>
+        {
+            if (!TryGetRibbonFontSize(ctx, out double sizePt))
+                return;
+
+            if (_textEditor?.TryApplyActiveTableCellFontSize(sizePt) == true) return;
+            if (Editor.TryApplyActiveTableCellFontSize(sizePt)) return;
+            Editor.SetFontSizeOnSelection(sizePt);
+        }));
+        r.Register("freep.font-color", new ContextRibbonCommand(ctx =>
+        {
+            if (!TryGetRibbonFontColor(ctx, out var color))
+                return;
+
+            if (_textEditor?.TryApplyActiveTableCellColor(color) == true) return;
+            if (Editor.TryApplyActiveTableCellColor(color)) return;
+            Editor.SetColorOnSelection(color);
+        }));
         r.Register("freep.bold", new ActionRibbonCommand(() =>
         {
             if (_textEditor?.TryApplyActiveTableCellTextFormat(TableCellTextFormatKind.Bold) == true) return;
@@ -1253,6 +1272,99 @@ public sealed class MainWindow : Window
             new ActionRibbonCommand(() => StartSlideShow(fromStart: false)));
 
         return r;
+    }
+
+    private static bool TryGetRibbonFontSize(RibbonCommandContext ctx, out double sizePt)
+    {
+        sizePt = 0;
+        if (!ctx.Parameters.TryGetValue(RibbonCommandContext.SelectedValueKey, out var value))
+            return false;
+
+        switch (value)
+        {
+            case double d:
+                sizePt = d;
+                break;
+            case float f:
+                sizePt = f;
+                break;
+            case int i:
+                sizePt = i;
+                break;
+            case decimal m:
+                sizePt = (double)m;
+                break;
+            case string s:
+                var text = s.Trim();
+                if (text.EndsWith("pt", StringComparison.OrdinalIgnoreCase))
+                    text = text[..^2].Trim();
+                if (!double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out sizePt))
+                    return false;
+                break;
+            default:
+                return false;
+        }
+
+        return sizePt > 0 && !double.IsNaN(sizePt) && !double.IsInfinity(sizePt);
+    }
+
+    private static bool TryGetRibbonFontColor(RibbonCommandContext ctx, out ThemeAwareColor? color)
+    {
+        color = null;
+        if (!ctx.Parameters.TryGetValue(RibbonCommandContext.SelectedValueKey, out var value))
+            return false;
+
+        switch (value)
+        {
+            case ThemeAwareColor themeColor:
+                color = themeColor;
+                return true;
+            case SrgbColor srgb:
+                color = new ThemeAwareColor(srgb);
+                return true;
+            case string s:
+                return TryParseRibbonFontColor(s, out color);
+            default:
+                return false;
+        }
+    }
+
+    private static bool TryParseRibbonFontColor(string? value, out ThemeAwareColor? color)
+    {
+        color = null;
+        if (string.IsNullOrWhiteSpace(value))
+            return false;
+
+        var text = value.Trim();
+        if (text.Equals("automatic", StringComparison.OrdinalIgnoreCase) ||
+            text.Equals("auto", StringComparison.OrdinalIgnoreCase) ||
+            text.Equals("default", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        var hex = text.StartsWith("#", StringComparison.Ordinal) ? text[1..] : text;
+        if (hex.Length == 6 &&
+            int.TryParse(hex, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out int rgb))
+        {
+            color = new ThemeAwareColor(SrgbColor.FromRgb(rgb));
+            return true;
+        }
+
+        color = text.ToLowerInvariant() switch
+        {
+            "black" => ThemeAwareColor.Black,
+            "white" => ThemeAwareColor.White,
+            "red" => new ThemeAwareColor(SrgbColor.FromRgb(0xC00000)),
+            "green" => new ThemeAwareColor(SrgbColor.FromRgb(0x008000)),
+            "blue" => new ThemeAwareColor(SrgbColor.FromRgb(0x0000FF)),
+            "yellow" => new ThemeAwareColor(SrgbColor.FromRgb(0xFFFF00)),
+            "orange" => new ThemeAwareColor(SrgbColor.FromRgb(0xF4B183)),
+            "purple" => new ThemeAwareColor(SrgbColor.FromRgb(0x7030A0)),
+            "dark-red" or "dark red" => new ThemeAwareColor(SrgbColor.FromRgb(0x800000)),
+            "dark-blue" or "dark blue" => new ThemeAwareColor(SrgbColor.FromRgb(0x1F4E79)),
+            _ => null,
+        };
+
+        return color is not null;
     }
 
     private void OnDesignHostRequest(PresentationDesignCommandPlan plan)
