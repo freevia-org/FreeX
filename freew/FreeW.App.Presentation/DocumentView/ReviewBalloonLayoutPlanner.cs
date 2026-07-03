@@ -18,7 +18,9 @@ public sealed record ReviewBalloonSource(
     int BlockIndex,
     int Offset,
     int SortKind,
-    bool Resolved = false)
+    bool Resolved = false,
+    int ReplyCount = 0,
+    string? DateXml = null)
 {
     public string KindLabel => Kind switch
     {
@@ -28,6 +30,45 @@ public sealed record ReviewBalloonSource(
         ReviewBalloonKind.Formatting => "Formatting",
         _ => Kind.ToString()
     };
+
+    public string HeaderText => Author;
+
+    public string BodyText => Text;
+
+    public string MetadataText => BuildMetadataText(Kind, Resolved, ReplyCount, DateXml);
+
+    private static string BuildMetadataText(
+        ReviewBalloonKind kind,
+        bool resolved,
+        int replyCount,
+        string? dateXml)
+    {
+        var parts = new List<string>();
+
+        if (kind == ReviewBalloonKind.Comment)
+        {
+            parts.Add(resolved ? "Resolved" : "Open thread");
+            if (replyCount > 0)
+                parts.Add($"{replyCount} repl{(replyCount == 1 ? "y" : "ies")}");
+        }
+        else
+        {
+            parts.Add("Tracked change");
+        }
+
+        if (!string.IsNullOrWhiteSpace(dateXml))
+            parts.Add(FormatDateLabel(dateXml));
+
+        return string.Join(" - ", parts);
+    }
+
+    private static string FormatDateLabel(string dateXml)
+    {
+        var trimmed = dateXml.Trim();
+        return trimmed.Length >= 10 && trimmed[4] == '-' && trimmed[7] == '-'
+            ? trimmed[..10]
+            : trimmed;
+    }
 }
 
 public sealed record ReviewBalloonLayoutOptions(
@@ -206,20 +247,21 @@ public static class ReviewBalloonLayoutPlanner
             string.IsNullOrWhiteSpace(entry.Text) ? "(formatting change)" : NormalizePreview(entry.Text),
             entry.BlockIndex,
             RevisionOffset(entry),
-            SortKind: 0);
+            SortKind: 0,
+            DateXml: entry.DateXml);
     }
 
     private static ReviewBalloonSource FromComment(CommentListItem item) =>
         new(
             ReviewBalloonKind.Comment,
             string.IsNullOrWhiteSpace(item.Author) ? "Unknown" : item.Author,
-            item.ReplyCount > 0
-                ? $"{item.Text} ({item.ReplyCount} repl{(item.ReplyCount == 1 ? "y" : "ies")})"
-                : item.Text,
+            NormalizePreview(item.Text),
             item.BlockIndex,
             item.Anchor.Offset,
             SortKind: 1,
-            item.Resolved);
+            item.Resolved,
+            item.ReplyCount,
+            item.DateXml);
 
     private static int RevisionOffset(RevisionEntry entry)
     {

@@ -49,9 +49,12 @@ internal sealed class BalloonOverlay
     private static readonly Brush DeleteStroke   = Freeze(new SolidColorBrush(Color.FromRgb(0xC5, 0x50, 0x50)));
     private static readonly Brush FormatFill     = Freeze(new SolidColorBrush(Color.FromRgb(0xE8, 0xE8, 0xF8)));
     private static readonly Brush FormatStroke   = Freeze(new SolidColorBrush(Color.FromRgb(0x80, 0x80, 0xC8)));
+    private static readonly Brush ResolvedFill   = Freeze(new SolidColorBrush(Color.FromRgb(0xE5, 0xE7, 0xEB)));
+    private static readonly Brush ResolvedStroke = Freeze(new SolidColorBrush(Color.FromRgb(0x9C, 0xA3, 0xAF)));
     private static readonly Brush LeaderBrush    = Freeze(new SolidColorBrush(Color.FromRgb(0xA0, 0xA0, 0xA0)));
     private static readonly Brush AuthorBrush    = Freeze(new SolidColorBrush(Color.FromRgb(0x17, 0x32, 0x4D)));
     private static readonly Brush TextBrush      = Freeze(new SolidColorBrush(Color.FromRgb(0x30, 0x30, 0x30)));
+    private static readonly Brush MetadataBrush  = Freeze(new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66)));
 
     private static Brush Freeze(SolidColorBrush b) { b.Freeze(); return b; }
 
@@ -111,8 +114,11 @@ internal sealed class BalloonOverlay
         {
             var item = new BalloonItem(
                 OverlayKind(layout.Source.Kind),
-                layout.Source.Author,
-                TruncatePreview(layout.Source.Text, 60),
+                layout.Source.KindLabel,
+                layout.Source.HeaderText,
+                layout.Source.MetadataText,
+                TruncatePreview(layout.Source.BodyText, 68),
+                layout.Source.Resolved,
                 layout.Ordinal);
             DrawBalloon(item, layout.BalloonX, layout.BalloonY, layout.LeaderStartY);
         }
@@ -120,8 +126,11 @@ internal sealed class BalloonOverlay
 
     private sealed record BalloonItem(
         string Kind,          // "comment" | "insert" | "delete" | "format"
+        string KindLabel,
         string Author,
+        string Metadata,
         string Preview,
+        bool Resolved,
         int    Ordinal);
 
     private static string TruncatePreview(string text, int maxLen) =>
@@ -140,13 +149,15 @@ internal sealed class BalloonOverlay
     private void DrawBalloon(BalloonItem item, double x, double y, double anchorY)
     {
         // Choose colours by kind.
-        var (fill, stroke) = item.Kind switch
-        {
-            "insert" => (InsertFill, InsertStroke),
-            "delete" => (DeleteFill, DeleteStroke),
-            "format" => (FormatFill, FormatStroke),
-            _        => (CommentFill, CommentStroke)   // "comment" default
-        };
+        var (fill, stroke) = item.Resolved
+            ? (ResolvedFill, ResolvedStroke)
+            : item.Kind switch
+            {
+                "insert" => (InsertFill, InsertStroke),
+                "delete" => (DeleteFill, DeleteStroke),
+                "format" => (FormatFill, FormatStroke),
+                _        => (CommentFill, CommentStroke)   // "comment" default
+            };
 
         // Leader line: from left edge of balloon midpoint to the edge of the strip.
         var balloonMidY = y + BalloonHeight / 2;
@@ -175,14 +186,8 @@ internal sealed class BalloonOverlay
         Canvas.SetTop(rect,  y);
         _canvas.Children.Add(rect);
 
-        // Kind badge (small coloured dot).
-        var kindLabel = item.Kind switch
-        {
-            "insert" => "Inserted",
-            "delete" => "Deleted",
-            "format" => "Formatted",
-            _        => "Comment"
-        };
+        // Shared kind label used by both WPF and Avalonia review cards.
+        var kindLabel = item.KindLabel;
 
         // Author + kind header.
         var header = new TextBlock
@@ -199,6 +204,19 @@ internal sealed class BalloonOverlay
         Canvas.SetTop(header,  y + 4);
         _canvas.Children.Add(header);
 
+        var metadata = new TextBlock
+        {
+            Text            = item.Metadata,
+            Foreground      = MetadataBrush,
+            FontSize        = 9,
+            Width           = BalloonWidth - 8,
+            TextTrimming    = TextTrimming.CharacterEllipsis,
+            Margin          = new Thickness(0)
+        };
+        Canvas.SetLeft(metadata, x + 4);
+        Canvas.SetTop(metadata, y + 17);
+        _canvas.Children.Add(metadata);
+
         // Preview text.
         if (!string.IsNullOrEmpty(item.Preview))
         {
@@ -209,12 +227,12 @@ internal sealed class BalloonOverlay
                 FontSize     = 10,
                 Width        = BalloonWidth - 8,
                 TextWrapping = TextWrapping.Wrap,
-                MaxHeight    = BalloonHeight - 22,
+                MaxHeight    = BalloonHeight - 32,
                 TextTrimming = TextTrimming.CharacterEllipsis,
                 Margin       = new Thickness(0)
             };
             Canvas.SetLeft(preview, x + 4);
-            Canvas.SetTop(preview,  y + 18);
+            Canvas.SetTop(preview,  y + 29);
             _canvas.Children.Add(preview);
         }
     }

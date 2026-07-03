@@ -25,6 +25,7 @@ public sealed class ReviewBalloonsPane : SidePaneBase
     private static readonly IBrush LeaderBrush = new SolidColorBrush(Color.FromRgb(0xA0, 0xA0, 0xA0));
     private static readonly IBrush AuthorBrush = new SolidColorBrush(Color.FromRgb(0x17, 0x32, 0x4D));
     private static readonly IBrush TextBrush = new SolidColorBrush(Color.FromRgb(0x30, 0x30, 0x30));
+    private static readonly IBrush MetadataBrush = new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66));
 
     private readonly TextBlock _countLabel;
     private readonly Canvas _balloonCanvas;
@@ -167,7 +168,7 @@ public sealed class ReviewBalloonsPane : SidePaneBase
 
             var author = new TextBlock
             {
-                Text = item.Author,
+                Text = item.HeaderText,
                 FontWeight = FontWeight.SemiBold,
                 FontSize = 11,
                 Foreground = AuthorBrush,
@@ -183,9 +184,17 @@ public sealed class ReviewBalloonsPane : SidePaneBase
             topRow.Children.Add(badge);
             topRow.Children.Add(author);
 
+            var metadata = new TextBlock
+            {
+                Text = item.MetadataText,
+                FontSize = 10,
+                Foreground = MetadataBrush,
+                Margin = new Thickness(0, 0, 0, 2),
+            };
+
             var text = new TextBlock
             {
-                Text = ReviewBalloonLayoutPlanner.TruncatePreview(item.Text, 120),
+                Text = ReviewBalloonLayoutPlanner.TruncatePreview(item.BodyText, 120),
                 FontSize = 11,
                 TextWrapping = TextWrapping.Wrap,
                 Foreground = TextBrush,
@@ -193,6 +202,7 @@ public sealed class ReviewBalloonsPane : SidePaneBase
 
             var stack = new StackPanel { Margin = new Thickness(6, 5) };
             stack.Children.Add(topRow);
+            stack.Children.Add(metadata);
             stack.Children.Add(text);
 
             Content = stack;
