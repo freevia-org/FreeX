@@ -397,6 +397,72 @@ public sealed class SlideCanvas : Control
             ToBrush(new ChartFillPlan(stroke.Color, stroke.Alpha)),
             stroke.Thickness);
 
+    private static void DrawChartMarker(DrawingContext dc, ChartCirclePrimitive marker)
+    {
+        var center = ToPoint(marker.Center);
+        var fill = marker.Fill.HasValue ? ToBrush(marker.Fill.Value) : null;
+        var stroke = marker.Stroke.HasValue ? ToPen(marker.Stroke.Value) : null;
+        var linePen = stroke ?? (marker.Fill.HasValue
+            ? ToPen(new ChartStrokePlan(marker.Fill.Value.Color, marker.Fill.Value.Alpha, Math.Max(0.75, marker.Radius / 3.0)))
+            : null);
+
+        switch (marker.Symbol)
+        {
+            case ChartMarkerPrimitiveSymbol.Square:
+                dc.DrawRectangle(fill, stroke, new Rect(center.X - marker.Radius, center.Y - marker.Radius, marker.Radius * 2, marker.Radius * 2));
+                break;
+            case ChartMarkerPrimitiveSymbol.Diamond:
+                dc.DrawGeometry(fill, stroke, MarkerPolygonGeometry(
+                    new Point(center.X, center.Y - marker.Radius),
+                    new Point(center.X + marker.Radius, center.Y),
+                    new Point(center.X, center.Y + marker.Radius),
+                    new Point(center.X - marker.Radius, center.Y)));
+                break;
+            case ChartMarkerPrimitiveSymbol.Triangle:
+                dc.DrawGeometry(fill, stroke, MarkerPolygonGeometry(
+                    new Point(center.X, center.Y - marker.Radius),
+                    new Point(center.X + marker.Radius, center.Y + marker.Radius),
+                    new Point(center.X - marker.Radius, center.Y + marker.Radius)));
+                break;
+            case ChartMarkerPrimitiveSymbol.Dash:
+                if (linePen is not null)
+                    dc.DrawLine(linePen, new Point(center.X - marker.Radius, center.Y), new Point(center.X + marker.Radius, center.Y));
+                break;
+            case ChartMarkerPrimitiveSymbol.Plus:
+            case ChartMarkerPrimitiveSymbol.Star:
+                if (linePen is not null)
+                {
+                    dc.DrawLine(linePen, new Point(center.X - marker.Radius, center.Y), new Point(center.X + marker.Radius, center.Y));
+                    dc.DrawLine(linePen, new Point(center.X, center.Y - marker.Radius), new Point(center.X, center.Y + marker.Radius));
+                }
+                break;
+            case ChartMarkerPrimitiveSymbol.X:
+                if (linePen is not null)
+                {
+                    dc.DrawLine(linePen, new Point(center.X - marker.Radius, center.Y - marker.Radius), new Point(center.X + marker.Radius, center.Y + marker.Radius));
+                    dc.DrawLine(linePen, new Point(center.X + marker.Radius, center.Y - marker.Radius), new Point(center.X - marker.Radius, center.Y + marker.Radius));
+                }
+                break;
+            default:
+                dc.DrawEllipse(fill, stroke, center, marker.Radius, marker.Radius);
+                break;
+        }
+    }
+
+    private static StreamGeometry MarkerPolygonGeometry(params Point[] points)
+    {
+        var geometry = new StreamGeometry();
+        using (var ctx = geometry.Open())
+        {
+            ctx.BeginFigure(points[0], isFilled: true);
+            for (int index = 1; index < points.Length; index++)
+                ctx.LineTo(points[index]);
+            ctx.EndFigure(isClosed: true);
+        }
+
+        return geometry;
+    }
+
     private static StreamGeometry ToGeometry(ChartPathPrimitive path)
     {
         var geometry = new StreamGeometry();
@@ -939,14 +1005,7 @@ public sealed class SlideCanvas : Control
             dc.DrawLine(ToPen(segment.Stroke), ToPoint(segment.Start), ToPoint(segment.End));
 
         foreach (var marker in primitive.Markers)
-        {
-            dc.DrawEllipse(
-                marker.Fill.HasValue ? ToBrush(marker.Fill.Value) : null,
-                marker.Stroke.HasValue ? ToPen(marker.Stroke.Value) : null,
-                ToPoint(marker.Center),
-                marker.Radius,
-                marker.Radius);
-        }
+            DrawChartMarker(dc, marker);
     }
 
     private static void RenderPieChart(
@@ -1070,12 +1129,7 @@ public sealed class SlideCanvas : Control
                 dc.DrawLine(ToPen(segment.Stroke), ToPoint(segment.Start), ToPoint(segment.End));
 
             foreach (var marker in primitive.Markers)
-                dc.DrawEllipse(
-                    marker.Fill.HasValue ? ToBrush(marker.Fill.Value) : null,
-                    marker.Stroke.HasValue ? ToPen(marker.Stroke.Value) : null,
-                    ToPoint(marker.Center),
-                    marker.Radius,
-                    marker.Radius);
+                DrawChartMarker(dc, marker);
         }
 
         foreach (var label in plan.XAxisLabels)
@@ -1147,12 +1201,7 @@ public sealed class SlideCanvas : Control
                 ToGeometry(primitive.Path));
 
             foreach (var marker in primitive.Markers)
-                dc.DrawEllipse(
-                    marker.Fill.HasValue ? ToBrush(marker.Fill.Value) : null,
-                    marker.Stroke.HasValue ? ToPen(marker.Stroke.Value) : null,
-                    ToPoint(marker.Center),
-                    marker.Radius,
-                    marker.Radius);
+                DrawChartMarker(dc, marker);
         }
     }
 

@@ -186,6 +186,60 @@ public sealed class ChartTests : IDisposable
     }
 
     [Fact]
+    public void RoundTrip_LineChart_PreservesAuthoredSeriesAndPointStyle()
+    {
+        var chart = BuildLineChart();
+        chart.ChartType = ChartType.LineMarkers;
+        var series = chart.Series[0];
+        series.LineStyle = new ChartLineStyle
+        {
+            Color = new ThemeAwareColor(new SrgbColor(0x11, 0x22, 0x33)),
+            WidthPt = 2.25
+        };
+        series.MarkerStyle = new ChartMarkerStyle
+        {
+            Symbol = ChartMarkerSymbol.Diamond,
+            SizePt = 9,
+            FillColor = new ThemeAwareColor(new SrgbColor(0xAA, 0xBB, 0xCC)),
+            StrokeColor = new ThemeAwareColor(new SrgbColor(0x44, 0x55, 0x66)),
+            StrokeWidthPt = 1.5
+        };
+        series.PointStyles[1] = new ChartPointStyle
+        {
+            FillColor = new ThemeAwareColor(new SrgbColor(0xEE, 0xDD, 0xCC)),
+            StrokeColor = new ThemeAwareColor(new SrgbColor(0x77, 0x88, 0x99)),
+            StrokeWidthPt = 3,
+            Marker = new ChartMarkerStyle
+            {
+                Symbol = ChartMarkerSymbol.Square,
+                SizePt = 12
+            }
+        };
+
+        var pres = BuildPresWithChart(chart);
+        var path = WriteToPptx(pres);
+        var reloaded = PptxPackageReader.Read(path);
+
+        var rt = reloaded.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.Chart).Chart!;
+        var styled = rt.Series[0];
+        styled.LineStyle.Should().NotBeNull();
+        styled.LineStyle!.Color!.Resolved.Should().Be(new SrgbColor(0x11, 0x22, 0x33));
+        styled.LineStyle.WidthPt.Should().BeApproximately(2.25, 0.001);
+        styled.MarkerStyle.Should().NotBeNull();
+        styled.MarkerStyle!.Symbol.Should().Be(ChartMarkerSymbol.Diamond);
+        styled.MarkerStyle.SizePt.Should().Be(9);
+        styled.MarkerStyle.FillColor!.Resolved.Should().Be(new SrgbColor(0xAA, 0xBB, 0xCC));
+        styled.MarkerStyle.StrokeColor!.Resolved.Should().Be(new SrgbColor(0x44, 0x55, 0x66));
+        styled.MarkerStyle.StrokeWidthPt.Should().BeApproximately(1.5, 0.001);
+        styled.PointStyles.Should().ContainKey(1);
+        styled.PointStyles[1].FillColor!.Resolved.Should().Be(new SrgbColor(0xEE, 0xDD, 0xCC));
+        styled.PointStyles[1].StrokeColor!.Resolved.Should().Be(new SrgbColor(0x77, 0x88, 0x99));
+        styled.PointStyles[1].StrokeWidthPt.Should().BeApproximately(3, 0.001);
+        styled.PointStyles[1].Marker!.Symbol.Should().Be(ChartMarkerSymbol.Square);
+        styled.PointStyles[1].Marker!.SizePt.Should().Be(12);
+    }
+
+    [Fact]
     public void RoundTrip_TwoCharts_SameSlide()
     {
         var pres = new Presentation();

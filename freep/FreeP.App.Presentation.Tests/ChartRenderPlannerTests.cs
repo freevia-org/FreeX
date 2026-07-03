@@ -711,6 +711,62 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void BuildLineSeriesPrimitives_UsesAuthoredSeriesAndPointMarkerStyle()
+    {
+        var series = new ChartSeries
+        {
+            Name = "Styled",
+            FillColor = new ThemeAwareColor(new SrgbColor(0x22, 0x44, 0x66)),
+            LineStyle = new ChartLineStyle
+            {
+                Color = new ThemeAwareColor(new SrgbColor(0x11, 0x22, 0x33)),
+                WidthPt = 2.25
+            },
+            MarkerStyle = new ChartMarkerStyle
+            {
+                Symbol = ChartMarkerSymbol.Diamond,
+                SizePt = 9,
+                FillColor = new ThemeAwareColor(new SrgbColor(0xAA, 0xBB, 0xCC)),
+                StrokeColor = new ThemeAwareColor(new SrgbColor(0x01, 0x02, 0x03)),
+                StrokeWidthPt = 1.5
+            }
+        };
+        series.Values.AddRange(new double?[] { 10, 20 });
+        series.PointStyles[1] = new ChartPointStyle
+        {
+            FillColor = new ThemeAwareColor(new SrgbColor(0xEE, 0xDD, 0xCC)),
+            StrokeColor = new ThemeAwareColor(new SrgbColor(0x44, 0x55, 0x66)),
+            StrokeWidthPt = 3,
+            Marker = new ChartMarkerStyle
+            {
+                Symbol = ChartMarkerSymbol.Square,
+                SizePt = 12
+            }
+        };
+        var chart = new ChartShape { ChartType = ChartType.LineMarkers };
+        chart.Categories.AddRange(new[] { "Q1", "Q2" });
+        chart.Series.Add(series);
+
+        var primitive = ChartRenderPlanner.BuildLineSeriesPrimitives(
+            chart,
+            new ChartPlanRect(0, 0, 100, 100),
+            withMarkers: true).Single();
+
+        primitive.Stroke.Should().Be(new ChartStrokePlan(new SrgbColor(0x11, 0x22, 0x33), Alpha: 255, Thickness: 3.0));
+        primitive.LineSegments[0].Stroke.Should().Be(primitive.Stroke);
+        primitive.MarkerRadius.Should().BeApproximately(6.0, 0.0001);
+        primitive.MarkerFill.Should().Be(new ChartFillPlan(new SrgbColor(0xAA, 0xBB, 0xCC), Alpha: 255));
+        primitive.MarkerStroke.Should().Be(new ChartStrokePlan(new SrgbColor(0x01, 0x02, 0x03), Alpha: 255, Thickness: 2.0));
+        primitive.Markers[0].Symbol.Should().Be(ChartMarkerPrimitiveSymbol.Diamond);
+        primitive.Markers[0].Radius.Should().BeApproximately(6.0, 0.0001);
+        primitive.Markers[0].Fill.Should().Be(new ChartFillPlan(new SrgbColor(0xAA, 0xBB, 0xCC), Alpha: 255));
+        primitive.Markers[1].Symbol.Should().Be(ChartMarkerPrimitiveSymbol.Square);
+        primitive.Markers[1].Radius.Should().BeApproximately(8.0, 0.0001);
+        primitive.Markers[1].Fill.Should().Be(new ChartFillPlan(new SrgbColor(0xEE, 0xDD, 0xCC), Alpha: 255));
+        primitive.Markers[1].Stroke.Should().Be(new ChartStrokePlan(new SrgbColor(0x44, 0x55, 0x66), Alpha: 255, Thickness: 4.0));
+    }
+
+    [Fact]
     public void BuildAreaSeriesPrimitives_PlansBackToFrontFilledPolygons()
     {
         var chart = new ChartShape { ChartType = ChartType.Area };

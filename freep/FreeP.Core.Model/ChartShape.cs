@@ -30,6 +30,23 @@ public enum ScatterStyle { Marker, LineMarker, Line, Smooth, SmoothMarker }
 /// <summary>Radar style read from c:radarStyle.</summary>
 public enum RadarStyle { Standard, Marker, Filled }
 
+/// <summary>Authored chart marker symbol, matching the common OOXML <c>c:marker/c:symbol</c> values.</summary>
+public enum ChartMarkerSymbol
+{
+    Auto,
+    Circle,
+    Dash,
+    Diamond,
+    Dot,
+    None,
+    Picture,
+    Plus,
+    Square,
+    Star,
+    Triangle,
+    X
+}
+
 /// <summary>Position of the chart legend relative to the plot area.</summary>
 public enum LegendPosition { Right, Left, Top, Bottom }
 
@@ -128,6 +145,60 @@ public sealed class ChartTextStyle
     public string? FontFamily { get; set; }
 }
 
+/// <summary>Authored chart line stroke style shared by IO and renderer-neutral chart planning.</summary>
+public sealed class ChartLineStyle
+{
+    /// <summary>Stroke color. Null means use the chart's series color fallback.</summary>
+    public ThemeAwareColor? Color { get; set; }
+
+    /// <summary>Stroke width in points. Null means use the chart planner default.</summary>
+    public double? WidthPt { get; set; }
+
+    /// <summary>True when the authored chart explicitly suppresses the line.</summary>
+    public bool NoFill { get; set; }
+}
+
+/// <summary>Authored chart marker style shared by IO and renderer-neutral chart planning.</summary>
+public sealed class ChartMarkerStyle
+{
+    /// <summary>Marker symbol. Null means use the chart type default.</summary>
+    public ChartMarkerSymbol? Symbol { get; set; }
+
+    /// <summary>Marker size in points. Null means use the chart planner default.</summary>
+    public double? SizePt { get; set; }
+
+    /// <summary>Marker fill color. Null means use the series fill/color fallback.</summary>
+    public ThemeAwareColor? FillColor { get; set; }
+
+    /// <summary>Marker stroke color. Null means use the series stroke/color fallback.</summary>
+    public ThemeAwareColor? StrokeColor { get; set; }
+
+    /// <summary>Marker stroke width in points. Null means use the chart planner default.</summary>
+    public double? StrokeWidthPt { get; set; }
+
+    /// <summary>True when the marker fill was authored as noFill.</summary>
+    public bool NoFill { get; set; }
+
+    /// <summary>True when the marker stroke was authored as noFill.</summary>
+    public bool NoStroke { get; set; }
+}
+
+/// <summary>Point-level authored chart style override, keyed by zero-based point index.</summary>
+public sealed class ChartPointStyle
+{
+    /// <summary>Point fill color. Null means inherit from the series marker/series fill.</summary>
+    public ThemeAwareColor? FillColor { get; set; }
+
+    /// <summary>Point stroke color. Null means inherit from the series marker/series line.</summary>
+    public ThemeAwareColor? StrokeColor { get; set; }
+
+    /// <summary>Point stroke width in points. Null means inherit from the marker/series stroke width.</summary>
+    public double? StrokeWidthPt { get; set; }
+
+    /// <summary>Point marker override. Null means inherit from the series marker style.</summary>
+    public ChartMarkerStyle? Marker { get; set; }
+}
+
 /// <summary>A single data series within a <see cref="ChartShape"/>.</summary>
 public sealed class ChartSeries
 {
@@ -137,11 +208,20 @@ public sealed class ChartSeries
     /// <summary>Default series fill color. Null means use the theme accent cycle.</summary>
     public ThemeAwareColor? FillColor { get; set; }
 
+    /// <summary>Authored line stroke style for line/scatter/radar series.</summary>
+    public ChartLineStyle? LineStyle { get; set; }
+
+    /// <summary>Authored marker style for line/scatter/radar series.</summary>
+    public ChartMarkerStyle? MarkerStyle { get; set; }
+
     /// <summary>Data point values, one per category. Null entries represent missing/gap points.</summary>
     public List<double?> Values { get; } = new();
 
     /// <summary>Per-point fill color overrides (keyed by zero-based point index). Used primarily for pie charts.</summary>
     public Dictionary<int, ThemeAwareColor> PointColors { get; } = new();
+
+    /// <summary>Per-point style overrides (keyed by zero-based point index).</summary>
+    public Dictionary<int, ChartPointStyle> PointStyles { get; } = new();
 
     // ── Scatter / Bubble extension fields ────────────────────────────────────────
 

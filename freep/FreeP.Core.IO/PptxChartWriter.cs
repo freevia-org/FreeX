@@ -613,10 +613,15 @@ internal static class PptxChartWriter
                         new XAttribute("idx", "0"),
                         new XElement(C + "v", series.Name))))));
 
-        // Fill color
-        if (series.FillColor is not null)
-            el.Add(new XElement(C + "spPr",
-                new XElement(A + "solidFill", BuildColorEl(series.FillColor))));
+        var spPr = BuildSeriesShapePropertiesEl(series);
+        if (spPr is not null)
+            el.Add(spPr);
+
+        var marker = BuildMarkerStyleEl(series.MarkerStyle);
+        if (marker is not null)
+            el.Add(marker);
+
+        AddPointStyleElements(el, series);
 
         // Per-series data labels
         var serDlblsEl2 = BuildDataLabelsEl(series.DataLabels, chart.ChartType);
@@ -707,23 +712,15 @@ internal static class PptxChartWriter
                         new XAttribute("idx", "0"),
                         new XElement(C + "v", series.Name))))));
 
-        // Series fill color (spPr/solidFill)
-        if (series.FillColor is not null)
-        {
-            el.Add(new XElement(C + "spPr",
-                new XElement(A + "solidFill",
-                    BuildColorEl(series.FillColor))));
-        }
+        var spPr = BuildSeriesShapePropertiesEl(series);
+        if (spPr is not null)
+            el.Add(spPr);
 
-        // Per-point colors (dPt)
-        foreach (var (ptIdx, color) in series.PointColors)
-        {
-            el.Add(new XElement(C + "dPt",
-                new XElement(C + "idx", new XAttribute("val", ptIdx)),
-                new XElement(C + "spPr",
-                    new XElement(A + "solidFill",
-                        BuildColorEl(color)))));
-        }
+        var marker = BuildMarkerStyleEl(series.MarkerStyle);
+        if (marker is not null)
+            el.Add(marker);
+
+        AddPointStyleElements(el, series);
 
         // Per-series data labels
         var serDlblsEl = BuildDataLabelsEl(series.DataLabels, chart.ChartType);
@@ -769,6 +766,145 @@ internal static class PptxChartWriter
 
         return el;
     }
+
+    private static XElement? BuildSeriesShapePropertiesEl(ChartSeries series)
+    {
+        var children = new List<object>();
+        if (series.FillColor is not null)
+            children.Add(new XElement(A + "solidFill", BuildColorEl(series.FillColor)));
+
+        var line = BuildLineStyleEl(series.LineStyle);
+        if (line is not null)
+            children.Add(line);
+
+        return children.Count == 0 ? null : new XElement(C + "spPr", children);
+    }
+
+    private static XElement? BuildLineStyleEl(ChartLineStyle? style)
+    {
+        if (style is null)
+            return null;
+
+        var line = new XElement(A + "ln");
+        if (style.WidthPt.HasValue)
+            line.Add(new XAttribute("w", DrawingMlUnits.PointsToEmu(style.WidthPt.Value)));
+
+        if (style.NoFill)
+            line.Add(new XElement(A + "noFill"));
+        else if (style.Color is not null)
+            line.Add(new XElement(A + "solidFill", BuildColorEl(style.Color)));
+
+        return line;
+    }
+
+    private static XElement? BuildMarkerStyleEl(ChartMarkerStyle? style)
+    {
+        if (style is null)
+            return null;
+
+        var marker = new XElement(C + "marker");
+        if (style.Symbol.HasValue)
+            marker.Add(new XElement(C + "symbol", new XAttribute("val", ToMarkerSymbolValue(style.Symbol.Value))));
+
+        if (style.SizePt.HasValue)
+            marker.Add(new XElement(C + "size", new XAttribute("val", Math.Clamp((int)Math.Round(style.SizePt.Value), 2, 72))));
+
+        var spPr = BuildMarkerShapePropertiesEl(style);
+        if (spPr is not null)
+            marker.Add(spPr);
+
+        return marker.HasElements ? marker : null;
+    }
+
+    private static XElement? BuildMarkerShapePropertiesEl(ChartMarkerStyle style)
+    {
+        var children = new List<object>();
+        if (style.NoFill)
+            children.Add(new XElement(A + "noFill"));
+        else if (style.FillColor is not null)
+            children.Add(new XElement(A + "solidFill", BuildColorEl(style.FillColor)));
+
+        ChartLineStyle? lineStyle = null;
+        if (style.NoStroke || style.StrokeColor is not null || style.StrokeWidthPt.HasValue)
+        {
+            lineStyle = new ChartLineStyle
+            {
+                Color = style.StrokeColor,
+                WidthPt = style.StrokeWidthPt,
+                NoFill = style.NoStroke
+            };
+        }
+
+        var line = BuildLineStyleEl(lineStyle);
+        if (line is not null)
+            children.Add(line);
+
+        return children.Count == 0 ? null : new XElement(C + "spPr", children);
+    }
+
+    private static void AddPointStyleElements(XElement seriesEl, ChartSeries series)
+    {
+        foreach (var pointIndex in series.PointColors.Keys.Concat(series.PointStyles.Keys).Distinct().OrderBy(static index => index))
+        {
+            series.PointStyles.TryGetValue(pointIndex, out var style);
+            series.PointColors.TryGetValue(pointIndex, out var pointColor);
+            var dPt = new XElement(C + "dPt",
+                new XElement(C + "idx", new XAttribute("val", pointIndex)));
+
+            var spPr = BuildPointShapePropertiesEl(pointColor, style);
+            if (spPr is not null)
+                dPt.Add(spPr);
+
+            var marker = BuildMarkerStyleEl(style?.Marker);
+            if (marker is not null)
+                dPt.Add(marker);
+
+            if (dPt.Elements().Skip(1).Any())
+                seriesEl.Add(dPt);
+        }
+    }
+
+    private static XElement? BuildPointShapePropertiesEl(ThemeAwareColor? pointColor, ChartPointStyle? style)
+    {
+        var children = new List<object>();
+        var fill = style?.FillColor ?? pointColor;
+        if (fill is not null)
+            children.Add(new XElement(A + "solidFill", BuildColorEl(fill)));
+
+        ChartLineStyle? lineStyle = null;
+        if (style?.StrokeColor is not null || style?.StrokeWidthPt is not null)
+        {
+            lineStyle = new ChartLineStyle
+            {
+                Color = style.StrokeColor,
+                WidthPt = style.StrokeWidthPt
+            };
+        }
+
+        var line = BuildLineStyleEl(lineStyle);
+        if (line is not null)
+            children.Add(line);
+
+        return children.Count == 0 ? null : new XElement(C + "spPr", children);
+    }
+
+    private static string ToMarkerSymbolValue(ChartMarkerSymbol symbol) =>
+        symbol switch
+        {
+            ChartMarkerSymbol.Auto => "auto",
+            ChartMarkerSymbol.Circle => "circle",
+            ChartMarkerSymbol.Dash => "dash",
+            ChartMarkerSymbol.Diamond => "diamond",
+            ChartMarkerSymbol.Dot => "dot",
+            ChartMarkerSymbol.None => "none",
+            ChartMarkerSymbol.Picture => "picture",
+            ChartMarkerSymbol.Plus => "plus",
+            ChartMarkerSymbol.Square => "square",
+            ChartMarkerSymbol.Star => "star",
+            ChartMarkerSymbol.Triangle => "triangle",
+            ChartMarkerSymbol.X => "x",
+            _ => "auto"
+        };
 
     // ── c:f formula-range helpers (ID2) ──────────────────────────────────────────
 

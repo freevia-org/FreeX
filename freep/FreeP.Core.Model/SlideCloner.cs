@@ -130,14 +130,22 @@ public static class SlideCloner
             {
                 Name              = s.Name,
                 FillColor         = s.FillColor,
+                LineStyle         = CloneChartLineStyle(s.LineStyle),
+                MarkerStyle       = CloneChartMarkerStyle(s.MarkerStyle),
                 OnSecondaryAxis   = s.OnSecondaryAxis,
                 DataLabels        = s.DataLabels,
                 OverrideChartType = s.OverrideChartType,
             };
             foreach (var v in s.Values)
                 sc.Values.Add(v);
+            foreach (var v in s.XValues)
+                sc.XValues.Add(v);
+            foreach (var v in s.BubbleSizes)
+                sc.BubbleSizes.Add(v);
             foreach (var kv in s.PointColors)
                 sc.PointColors[kv.Key] = kv.Value;
+            foreach (var kv in s.PointStyles)
+                sc.PointStyles[kv.Key] = CloneChartPointStyle(kv.Value);
             copy.Series.Add(sc);
         }
 
@@ -165,6 +173,39 @@ public static class SlideCloner
                 Color      = style.Color,
                 FontFamily = style.FontFamily,
             };
+
+    private static ChartLineStyle? CloneChartLineStyle(ChartLineStyle? style) =>
+        style is null
+            ? null
+            : new ChartLineStyle
+            {
+                Color   = style.Color,
+                WidthPt = style.WidthPt,
+                NoFill  = style.NoFill,
+            };
+
+    private static ChartMarkerStyle? CloneChartMarkerStyle(ChartMarkerStyle? style) =>
+        style is null
+            ? null
+            : new ChartMarkerStyle
+            {
+                Symbol        = style.Symbol,
+                SizePt        = style.SizePt,
+                FillColor     = style.FillColor,
+                StrokeColor   = style.StrokeColor,
+                StrokeWidthPt = style.StrokeWidthPt,
+                NoFill        = style.NoFill,
+                NoStroke      = style.NoStroke,
+            };
+
+    private static ChartPointStyle CloneChartPointStyle(ChartPointStyle style) =>
+        new()
+        {
+            FillColor     = style.FillColor,
+            StrokeColor   = style.StrokeColor,
+            StrokeWidthPt = style.StrokeWidthPt,
+            Marker        = CloneChartMarkerStyle(style.Marker),
+        };
 
     private static ShapeOutline? CloneShapeOutline(ShapeOutline? outline) => outline;
 

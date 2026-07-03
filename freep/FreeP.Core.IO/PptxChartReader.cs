@@ -439,6 +439,8 @@ internal static class PptxChartReader
             if (yValEl is not null)
                 ReadValues(yValEl, series.Values);
 
+            ReadPointStyles(serEl, scheme, series);
+
             // If categories are empty but we have X values, build string labels from them
             if (shape.Categories.Count == 0 && series.XValues.Count > 0)
             {
@@ -490,6 +492,8 @@ internal static class PptxChartReader
             if (sizeEl is not null)
                 ReadValues(sizeEl, series.BubbleSizes);
 
+            ReadPointStyles(serEl, scheme, series);
+
             // Per-series data labels override
             series.DataLabels = ReadDataLabels(serEl.Element(C + "dLbls"));
 
@@ -532,11 +536,9 @@ internal static class PptxChartReader
         // Series fill color from c:spPr/a:solidFill
         var spPr = serEl.Element(C + "spPr");
         if (spPr is not null)
-        {
-            var solidFill = spPr.Element(A + "solidFill");
-            if (solidFill is not null)
-                series.FillColor = PptxColorReader.TryReadColor(solidFill, scheme);
-        }
+            ReadSeriesShapeProperties(spPr, scheme, series);
+
+        series.MarkerStyle = ReadMarkerStyle(serEl.Element(C + "marker"), scheme);
 
         // Fall back to theme accent cycle
         if (series.FillColor is null)
@@ -581,11 +583,9 @@ internal static class PptxChartReader
             // Series fill color from c:spPr/a:solidFill
             var spPr = serEl.Element(C + "spPr");
             if (spPr is not null)
-            {
-                var solidFill = spPr.Element(A + "solidFill");
-                if (solidFill is not null)
-                    series.FillColor = PptxColorReader.TryReadColor(solidFill, scheme);
-            }
+                ReadSeriesShapeProperties(spPr, scheme, series);
+
+            series.MarkerStyle = ReadMarkerStyle(serEl.Element(C + "marker"), scheme);
 
             // Fall back to theme accent cycle if no explicit color
             if (series.FillColor is null)
@@ -613,13 +613,18 @@ internal static class PptxChartReader
             foreach (var dptEl in serEl.Elements(C + "dPt"))
             {
                 var idx = ParseInt(dptEl.Element(C + "idx")?.Attribute("val")?.Value);
-                var dptSolid = dptEl.Element(C + "spPr")?.Element(A + "solidFill");
+                var dptSpPr = dptEl.Element(C + "spPr");
+                var dptSolid = dptSpPr?.Element(A + "solidFill");
                 if (dptSolid is not null)
                 {
                     var color = PptxColorReader.TryReadColor(dptSolid, scheme);
                     if (color is not null)
                         series.PointColors[idx] = color;
                 }
+
+                var pointStyle = ReadPointStyle(dptSpPr, dptEl.Element(C + "marker"), scheme);
+                if (pointStyle is not null)
+                    series.PointStyles[idx] = pointStyle;
             }
 
             // Per-series data labels override
@@ -636,6 +641,150 @@ internal static class PptxChartReader
             seriesIndex++;
         }
     }
+
+    private static void ReadSeriesShapeProperties(
+        XElement spPr,
+        PresentationColorScheme scheme,
+        ChartSeries series)
+    {
+        var solidFill = spPr.Element(A + "solidFill");
+        if (solidFill is not null)
+            series.FillColor = PptxColorReader.TryReadColor(solidFill, scheme);
+
+        series.LineStyle = ReadLineStyle(spPr.Element(A + "ln"), scheme);
+    }
+
+    private static void ReadPointStyles(
+        XElement serEl,
+        PresentationColorScheme scheme,
+        ChartSeries series)
+    {
+        foreach (var dptEl in serEl.Elements(C + "dPt"))
+        {
+            var idx = ParseInt(dptEl.Element(C + "idx")?.Attribute("val")?.Value);
+            var dptSpPr = dptEl.Element(C + "spPr");
+            var dptSolid = dptSpPr?.Element(A + "solidFill");
+            if (dptSolid is not null)
+            {
+                var color = PptxColorReader.TryReadColor(dptSolid, scheme);
+                if (color is not null)
+                    series.PointColors[idx] = color;
+            }
+
+            var pointStyle = ReadPointStyle(dptSpPr, dptEl.Element(C + "marker"), scheme);
+            if (pointStyle is not null)
+                series.PointStyles[idx] = pointStyle;
+        }
+    }
+
+    private static ChartLineStyle? ReadLineStyle(XElement? lnEl, PresentationColorScheme scheme)
+    {
+        if (lnEl is null)
+            return null;
+
+        var style = new ChartLineStyle();
+        if (lnEl.Element(A + "noFill") is not null)
+            style.NoFill = true;
+
+        var solidFill = lnEl.Element(A + "solidFill");
+        if (solidFill is not null)
+            style.Color = PptxColorReader.TryReadColor(solidFill, scheme);
+
+        if (long.TryParse(lnEl.Attribute("w")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var widthEmu) && widthEmu > 0)
+            style.WidthPt = DrawingMlUnits.EmuToPoints(widthEmu);
+
+        return style;
+    }
+
+    private static ChartMarkerStyle? ReadMarkerStyle(XElement? markerEl, PresentationColorScheme scheme)
+    {
+        if (markerEl is null)
+            return null;
+
+        var style = new ChartMarkerStyle();
+        var symbol = ReadMarkerSymbol(markerEl.Element(C + "symbol")?.Attribute("val")?.Value);
+        if (symbol.HasValue)
+            style.Symbol = symbol.Value;
+
+        if (double.TryParse(markerEl.Element(C + "size")?.Attribute("val")?.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var sizePt))
+            style.SizePt = sizePt;
+
+        var spPr = markerEl.Element(C + "spPr");
+        if (spPr is not null)
+            ApplyMarkerShapeProperties(spPr, scheme, style);
+
+        return style;
+    }
+
+    private static ChartPointStyle? ReadPointStyle(
+        XElement? spPr,
+        XElement? markerEl,
+        PresentationColorScheme scheme)
+    {
+        ChartPointStyle? pointStyle = null;
+        if (spPr is not null)
+        {
+            pointStyle = new ChartPointStyle();
+            var solidFill = spPr.Element(A + "solidFill");
+            if (solidFill is not null)
+                pointStyle.FillColor = PptxColorReader.TryReadColor(solidFill, scheme);
+
+            var lineStyle = ReadLineStyle(spPr.Element(A + "ln"), scheme);
+            if (lineStyle is not null)
+            {
+                pointStyle.StrokeColor = lineStyle.Color;
+                pointStyle.StrokeWidthPt = lineStyle.WidthPt;
+            }
+        }
+
+        var markerStyle = ReadMarkerStyle(markerEl, scheme);
+        if (markerStyle is not null)
+        {
+            pointStyle ??= new ChartPointStyle();
+            pointStyle.Marker = markerStyle;
+        }
+
+        return pointStyle;
+    }
+
+    private static void ApplyMarkerShapeProperties(
+        XElement spPr,
+        PresentationColorScheme scheme,
+        ChartMarkerStyle style)
+    {
+        if (spPr.Element(A + "noFill") is not null)
+            style.NoFill = true;
+
+        var fill = spPr.Element(A + "solidFill");
+        if (fill is not null)
+            style.FillColor = PptxColorReader.TryReadColor(fill, scheme);
+
+        var line = ReadLineStyle(spPr.Element(A + "ln"), scheme);
+        if (line is not null)
+        {
+            style.NoStroke = line.NoFill;
+            style.StrokeColor = line.Color;
+            style.StrokeWidthPt = line.WidthPt;
+        }
+    }
+
+    private static ChartMarkerSymbol? ReadMarkerSymbol(string? value) =>
+        value switch
+        {
+            "auto" => ChartMarkerSymbol.Auto,
+            "circle" => ChartMarkerSymbol.Circle,
+            "dash" => ChartMarkerSymbol.Dash,
+            "diamond" => ChartMarkerSymbol.Diamond,
+            "dot" => ChartMarkerSymbol.Dot,
+            "none" => ChartMarkerSymbol.None,
+            "picture" => ChartMarkerSymbol.Picture,
+            "plus" => ChartMarkerSymbol.Plus,
+            "square" => ChartMarkerSymbol.Square,
+            "star" => ChartMarkerSymbol.Star,
+            "triangle" => ChartMarkerSymbol.Triangle,
+            "x" => ChartMarkerSymbol.X,
+            _ => null
+        };
 
     private static void ReadCategories(XElement catEl, List<string> categories)
     {

@@ -343,6 +343,8 @@ public sealed class RendererNeutralDedupPlannerTests
             source.Should().Contain("primitive.Stroke");
             source.Should().Contain("primitive.LineSegments");
             source.Should().Contain("primitive.Markers");
+            source.Should().Contain("DrawChartMarker(dc, marker)");
+            source.Should().Contain("marker.Symbol");
             source.Should().NotContain("BuildColumnPrimitives(chart, plot)");
             source.Should().NotContain("BuildBarPrimitives(chart, plot)");
             source.Should().NotContain("BuildLineSeriesPrimitives(chart, plot, withMarkers)");

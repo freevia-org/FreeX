@@ -36,6 +36,19 @@ public enum ChartAxisTitleOrientation
     VerticalClockwise
 }
 
+public enum ChartMarkerPrimitiveSymbol
+{
+    Circle,
+    Dash,
+    Diamond,
+    Dot,
+    Plus,
+    Square,
+    Star,
+    Triangle,
+    X
+}
+
 public readonly record struct ChartFillPlan(SrgbColor Color, byte Alpha);
 
 public readonly record struct ChartStrokePlan(SrgbColor Color, byte Alpha, double Thickness);
@@ -58,6 +71,7 @@ public readonly record struct ChartCirclePrimitive(
     int PointIndex,
     ChartPlanPoint Center,
     double Radius,
+    ChartMarkerPrimitiveSymbol Symbol,
     ChartFillPlan? Fill,
     ChartStrokePlan? Stroke);
 
@@ -144,7 +158,7 @@ public readonly record struct ChartLineSeriesPrimitive(
     bool WithMarkers,
     IReadOnlyList<ChartPlanPoint?> Points,
     ChartStrokePlan Stroke,
-    ChartFillPlan MarkerFill,
+    ChartFillPlan? MarkerFill,
     ChartStrokePlan? MarkerStroke,
     double MarkerRadius,
     IReadOnlyList<ChartLineSegmentPrimitive> LineSegments,
@@ -285,6 +299,7 @@ public static partial class ChartRenderPlanner
     public const byte RadarFillAlpha = 80;
     public const double RadarSeriesStrokeThickness = 1.5;
     public const double RadarMarkerRadius = 3.0;
+    private const double DipPerPoint = 96.0 / 72.0;
 
     private static readonly SrgbColor[] FallbackSeriesColors =
     [
@@ -319,6 +334,104 @@ public static partial class ChartRenderPlanner
         double thickness = LineSeriesStrokeThickness,
         byte alpha = 255) =>
         new(ResolveSeriesColor(seriesIndex, seriesColors), alpha, thickness);
+
+    private static ChartStrokePlan? ResolveAuthoredSeriesStroke(
+        ChartSeries series,
+        int seriesIndex,
+        IReadOnlyList<SrgbColor>? seriesColors,
+        double defaultThickness)
+    {
+        if (series.LineStyle?.NoFill == true)
+            return null;
+
+        var color = series.LineStyle?.Color?.Resolved
+            ?? series.FillColor?.Resolved
+            ?? ResolveSeriesColor(seriesIndex, seriesColors);
+        var thickness = PointsToDip(series.LineStyle?.WidthPt) ?? defaultThickness;
+        return new ChartStrokePlan(color, Alpha: 255, thickness);
+    }
+
+    private static ChartMarkerStyle? ResolvePointMarkerStyle(ChartSeries series, int pointIndex) =>
+        series.PointStyles.TryGetValue(pointIndex, out var pointStyle) && pointStyle.Marker is not null
+            ? pointStyle.Marker
+            : series.MarkerStyle;
+
+    private static ChartMarkerPrimitiveSymbol ResolveMarkerSymbol(ChartMarkerStyle? markerStyle)
+    {
+        return markerStyle?.Symbol switch
+        {
+            ChartMarkerSymbol.Dash => ChartMarkerPrimitiveSymbol.Dash,
+            ChartMarkerSymbol.Diamond => ChartMarkerPrimitiveSymbol.Diamond,
+            ChartMarkerSymbol.Dot => ChartMarkerPrimitiveSymbol.Dot,
+            ChartMarkerSymbol.Plus => ChartMarkerPrimitiveSymbol.Plus,
+            ChartMarkerSymbol.Square => ChartMarkerPrimitiveSymbol.Square,
+            ChartMarkerSymbol.Star => ChartMarkerPrimitiveSymbol.Star,
+            ChartMarkerSymbol.Triangle => ChartMarkerPrimitiveSymbol.Triangle,
+            ChartMarkerSymbol.X => ChartMarkerPrimitiveSymbol.X,
+            _ => ChartMarkerPrimitiveSymbol.Circle
+        };
+    }
+
+    private static bool SuppressesMarker(ChartMarkerStyle? markerStyle) =>
+        markerStyle?.Symbol == ChartMarkerSymbol.None;
+
+    private static double ResolveMarkerRadius(
+        ChartMarkerStyle? markerStyle,
+        double defaultRadius) =>
+        PointsToDip(markerStyle?.SizePt) is { } sizeDip
+            ? Math.Max(0.5, sizeDip / 2.0)
+            : defaultRadius;
+
+    private static ChartFillPlan? ResolveMarkerFill(
+        ChartSeries series,
+        int seriesIndex,
+        int pointIndex,
+        ChartMarkerStyle? markerStyle,
+        IReadOnlyList<SrgbColor>? seriesColors,
+        byte defaultAlpha)
+    {
+        if (markerStyle?.NoFill == true)
+            return null;
+
+        var pointStyleColor = series.PointStyles.TryGetValue(pointIndex, out var pointStyle)
+            ? pointStyle.FillColor?.Resolved
+            : (SrgbColor?)null;
+        var pointColorOverride = series.PointColors.TryGetValue(pointIndex, out var pointColor)
+            ? pointColor.Resolved
+            : (SrgbColor?)null;
+        var color = markerStyle?.FillColor?.Resolved
+            ?? pointStyleColor
+            ?? pointColorOverride
+            ?? series.FillColor?.Resolved
+            ?? ResolveSeriesColor(seriesIndex, seriesColors);
+        return new ChartFillPlan(color, defaultAlpha);
+    }
+
+    private static ChartStrokePlan? ResolveMarkerStroke(
+        ChartSeries series,
+        int seriesIndex,
+        int pointIndex,
+        ChartMarkerStyle? markerStyle,
+        IReadOnlyList<SrgbColor>? seriesColors,
+        double defaultThickness)
+    {
+        if (markerStyle?.NoStroke == true)
+            return null;
+
+        ChartPointStyle? pointStyle = series.PointStyles.TryGetValue(pointIndex, out var ps) ? ps : null;
+        var color = markerStyle?.StrokeColor?.Resolved
+            ?? pointStyle?.StrokeColor?.Resolved
+            ?? series.LineStyle?.Color?.Resolved
+            ?? series.FillColor?.Resolved
+            ?? ResolveSeriesColor(seriesIndex, seriesColors);
+        var thickness = PointsToDip(pointStyle?.StrokeWidthPt)
+            ?? PointsToDip(markerStyle?.StrokeWidthPt)
+            ?? defaultThickness;
+        return new ChartStrokePlan(color, Alpha: 255, thickness);
+    }
+
+    private static double? PointsToDip(double? points) =>
+        points.HasValue ? points.Value * DipPerPoint : null;
 
     public static ChartFramePlan BuildFramePlan(ChartShape chart, ChartPlanRect bounds)
     {
@@ -1195,6 +1308,7 @@ public static partial class ChartRenderPlanner
                 seriesIndex,
                 withMarkers,
                 points,
+                chart.Series[seriesIndex],
                 seriesColors));
         }
 
@@ -1249,6 +1363,7 @@ public static partial class ChartRenderPlanner
                 seriesIndex,
                 overrideType == ChartType.LineMarkers,
                 points,
+                series,
                 seriesColors));
         }
 
@@ -1259,14 +1374,29 @@ public static partial class ChartRenderPlanner
         int seriesIndex,
         bool withMarkers,
         IReadOnlyList<ChartPlanPoint?> points,
+        ChartSeries? series = null,
         IReadOnlyList<SrgbColor>? seriesColors = null)
     {
-        var stroke = ResolveSeriesStroke(seriesIndex, seriesColors);
-        var markerFill = ResolveSeriesFill(seriesIndex, seriesColors);
-        var markerStroke = new ChartStrokePlan(
-            ResolveSeriesColor(seriesIndex, seriesColors),
-            Alpha: 255,
-            Thickness: LineMarkerStrokeThickness);
+        series ??= new ChartSeries();
+        bool suppressLine = series.LineStyle?.NoFill == true;
+        var stroke = ResolveAuthoredSeriesStroke(series, seriesIndex, seriesColors, LineSeriesStrokeThickness)
+            ?? ResolveSeriesStroke(seriesIndex, seriesColors);
+        var defaultMarkerStyle = series.MarkerStyle;
+        var markerFill = ResolveMarkerFill(
+            series,
+            seriesIndex,
+            pointIndex: 0,
+            defaultMarkerStyle,
+            seriesColors,
+            RectSeriesFillAlpha);
+        var markerStroke = ResolveMarkerStroke(
+            series,
+            seriesIndex,
+            pointIndex: 0,
+            defaultMarkerStyle,
+            seriesColors,
+            LineMarkerStrokeThickness);
+        var markerRadius = ResolveMarkerRadius(defaultMarkerStyle, LineMarkerRadius);
         var lineSegments = new List<ChartLineSegmentPrimitive>();
         var markers = new List<ChartCirclePrimitive>();
         int? previousPointIndex = null;
@@ -1282,7 +1412,7 @@ public static partial class ChartRenderPlanner
                 continue;
             }
 
-            if (previousPoint.HasValue && previousPointIndex.HasValue)
+            if (!suppressLine && previousPoint.HasValue && previousPointIndex.HasValue)
             {
                 lineSegments.Add(new ChartLineSegmentPrimitive(
                     seriesIndex,
@@ -1293,15 +1423,17 @@ public static partial class ChartRenderPlanner
                     stroke));
             }
 
-            if (withMarkers)
+            var markerStyle = ResolvePointMarkerStyle(series, pointIndex);
+            if (withMarkers && !SuppressesMarker(markerStyle))
             {
                 markers.Add(new ChartCirclePrimitive(
                     seriesIndex,
                     pointIndex,
                     point.Value,
-                    LineMarkerRadius,
-                    markerFill,
-                    markerStroke));
+                    ResolveMarkerRadius(markerStyle, LineMarkerRadius),
+                    ResolveMarkerSymbol(markerStyle),
+                    ResolveMarkerFill(series, seriesIndex, pointIndex, markerStyle, seriesColors, RectSeriesFillAlpha),
+                    ResolveMarkerStroke(series, seriesIndex, pointIndex, markerStyle, seriesColors, LineMarkerStrokeThickness)));
             }
 
             previousPointIndex = pointIndex;
@@ -1315,7 +1447,7 @@ public static partial class ChartRenderPlanner
             stroke,
             markerFill,
             markerStroke,
-            LineMarkerRadius,
+            markerRadius,
             lineSegments,
             markers);
     }
@@ -1426,9 +1558,9 @@ public static partial class ChartRenderPlanner
             var points = new ChartPlanPoint?[pointCount];
             var lineSegments = new List<ChartLineSegmentPrimitive>();
             var markers = new List<ChartCirclePrimitive>();
-            var color = ResolveSeriesColor(seriesIndex, seriesColors);
-            var stroke = new ChartStrokePlan(color, Alpha: 255, Thickness: ScatterLineThickness);
-            var markerFill = new ChartFillPlan(color, Alpha: 255);
+            var stroke = ResolveAuthoredSeriesStroke(series, seriesIndex, seriesColors, ScatterLineThickness)
+                ?? ResolveSeriesStroke(seriesIndex, seriesColors, ScatterLineThickness);
+            bool suppressLine = series.LineStyle?.NoFill == true;
             for (int pointIndex = 0; pointIndex < pointCount; pointIndex++)
             {
                 double? xValue = pointIndex < series.XValues.Count ? series.XValues[pointIndex] : null;
@@ -1453,7 +1585,7 @@ public static partial class ChartRenderPlanner
                     continue;
                 }
 
-                if (drawLines && previousPoint.HasValue && previousPointIndex.HasValue)
+                if (drawLines && !suppressLine && previousPoint.HasValue && previousPointIndex.HasValue)
                 {
                     lineSegments.Add(new ChartLineSegmentPrimitive(
                         seriesIndex,
@@ -1464,15 +1596,20 @@ public static partial class ChartRenderPlanner
                         stroke));
                 }
 
-                if (drawMarkers)
+                var markerStyle = ResolvePointMarkerStyle(series, pointIndex);
+                bool hasAuthoredPointStyle = series.PointStyles.ContainsKey(pointIndex);
+                if (drawMarkers && !SuppressesMarker(markerStyle))
                 {
                     markers.Add(new ChartCirclePrimitive(
                         seriesIndex,
                         pointIndex,
                         point.Value,
-                        ScatterMarkerRadius,
-                        markerFill,
-                        Stroke: null));
+                        ResolveMarkerRadius(markerStyle, ScatterMarkerRadius),
+                        ResolveMarkerSymbol(markerStyle),
+                        ResolveMarkerFill(series, seriesIndex, pointIndex, markerStyle, seriesColors, defaultAlpha: 255),
+                        markerStyle is not null || hasAuthoredPointStyle
+                            ? ResolveMarkerStroke(series, seriesIndex, pointIndex, markerStyle, seriesColors, LineMarkerStrokeThickness)
+                            : null));
                 }
 
                 previousPointIndex = pointIndex;
@@ -1670,20 +1807,28 @@ public static partial class ChartRenderPlanner
 
             var color = ResolveSeriesColor(seriesIndex, seriesColors);
             var fill = filled ? new ChartFillPlan(color, RadarFillAlpha) : (ChartFillPlan?)null;
-            var stroke = new ChartStrokePlan(color, Alpha: 255, Thickness: RadarSeriesStrokeThickness);
+            var stroke = ResolveAuthoredSeriesStroke(series, seriesIndex, seriesColors, RadarSeriesStrokeThickness)
+                ?? new ChartStrokePlan(color, Alpha: 255, Thickness: RadarSeriesStrokeThickness);
             var markers = new List<ChartCirclePrimitive>();
             if (withMarkers)
             {
-                var markerFill = new ChartFillPlan(color, Alpha: 255);
                 for (int pointIndex = 0; pointIndex < points.Length; pointIndex++)
                 {
+                    var markerStyle = ResolvePointMarkerStyle(series, pointIndex);
+                    bool hasAuthoredPointStyle = series.PointStyles.ContainsKey(pointIndex);
+                    if (SuppressesMarker(markerStyle))
+                        continue;
+
                     markers.Add(new ChartCirclePrimitive(
                         seriesIndex,
                         pointIndex,
                         points[pointIndex],
-                        RadarMarkerRadius,
-                        markerFill,
-                        Stroke: null));
+                        ResolveMarkerRadius(markerStyle, RadarMarkerRadius),
+                        ResolveMarkerSymbol(markerStyle),
+                        ResolveMarkerFill(series, seriesIndex, pointIndex, markerStyle, seriesColors, defaultAlpha: 255),
+                        markerStyle is not null || hasAuthoredPointStyle
+                            ? ResolveMarkerStroke(series, seriesIndex, pointIndex, markerStyle, seriesColors, LineMarkerStrokeThickness)
+                            : null));
                 }
             }
 
