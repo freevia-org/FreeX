@@ -24,6 +24,7 @@ public enum PresentationReviewWorkflowIntentKind
     MoveReadingOrderEarlier,
     MoveReadingOrderLater,
     SelectReadingOrderItem,
+    SetTableHeaderRow,
     RunProofing,
     SelectProofingIssue,
     ApplyProofingCorrection
@@ -244,6 +245,12 @@ public sealed record PresentationSlideTitleMutationPlan(
     int SlideIndex,
     string Title,
     string SuggestedTitle,
+    string? ValidationMessage);
+
+public sealed record PresentationTableHeaderRowMutationPlan(
+    bool ShouldApply,
+    int SlideIndex,
+    uint? ShapeId,
     string? ValidationMessage);
 
 public sealed record PresentationAccessibilityIssueDescriptor(
@@ -517,6 +524,7 @@ public static class PresentationReviewWorkflowPlanner
     public const string ReadingOrderMoveEarlierCommandId = "freep.review.reading-order.move-earlier";
     public const string ReadingOrderMoveLaterCommandId = "freep.review.reading-order.move-later";
     public const string ReadingOrderSelectItemCommandId = "freep.review.reading-order.select";
+    public const string SetTableHeaderRowCommandId = "freep.review.accessibility.set-table-header-row";
     public const string ProofingCommandId = "freep.review.proofing.spelling";
     public const string ProofingApplyCorrectionCommandId = "freep.review.proofing.apply-correction";
     public const string InsertLinkCommandId = "freep.insert-link";
@@ -574,6 +582,12 @@ public static class PresentationReviewWorkflowPlanner
         "Slide title target slide was not found.";
     public const string SlideTitleEmptyMessage =
         "Enter a slide title before applying the accessibility fix.";
+    public const string TableHeaderRowMissingSlideMessage =
+        "Table header-row target slide was not found.";
+    public const string TableHeaderRowMissingShapeMessage =
+        "Table header-row target table was not found.";
+    public const string TableHeaderRowAlreadySetMessage =
+        "The selected table already marks its first row as a header row.";
     public const string MissingSlideTitleActionSummary =
         "Add a concise slide title so screen-reader users can navigate the deck.";
     public const string DuplicateSlideTitleActionSummary =
@@ -1305,6 +1319,65 @@ public static class PresentationReviewWorkflowPlanner
         return plan;
     }
 
+    public static PresentationTableHeaderRowMutationPlan BuildTableHeaderRowMutationPlan(
+        Presentation presentation,
+        int slideIndex,
+        uint? shapeId)
+    {
+        ArgumentNullException.ThrowIfNull(presentation);
+
+        var slide = GetSlide(presentation.Slides, slideIndex);
+        if (slide is null)
+        {
+            return new PresentationTableHeaderRowMutationPlan(
+                false,
+                slideIndex,
+                shapeId,
+                TableHeaderRowMissingSlideMessage);
+        }
+
+        var shape = shapeId is { } id ? FindShape(slide.Shapes, id) : null;
+        if (shape?.Table is null)
+        {
+            return new PresentationTableHeaderRowMutationPlan(
+                false,
+                slideIndex,
+                shapeId,
+                TableHeaderRowMissingShapeMessage);
+        }
+
+        if (shape.Table.Flags.FirstRow)
+        {
+            return new PresentationTableHeaderRowMutationPlan(
+                false,
+                slideIndex,
+                shape.Id,
+                TableHeaderRowAlreadySetMessage);
+        }
+
+        return new PresentationTableHeaderRowMutationPlan(
+            true,
+            slideIndex,
+            shape.Id,
+            null);
+    }
+
+    public static PresentationTableHeaderRowMutationPlan TryApplyTableHeaderRowMutation(
+        EditingSession editor,
+        int slideIndex,
+        uint? shapeId)
+    {
+        ArgumentNullException.ThrowIfNull(editor);
+
+        var plan = BuildTableHeaderRowMutationPlan(editor.Presentation, slideIndex, shapeId);
+        if (plan is { ShouldApply: true, ShapeId: { } targetShapeId })
+        {
+            editor.SetTableHeaderRow(slideIndex, targetShapeId, isHeaderRow: true);
+        }
+
+        return plan;
+    }
+
     public static PresentationAccessibilityCheckerPanePlan BuildAccessibilityCheckerPanePlan(
         Presentation presentation,
         PresentationAccessibilitySummaryPlan summaryPlan,
@@ -1734,6 +1807,7 @@ public static class PresentationReviewWorkflowPlanner
             new(AccessibilityCommandId, "Check Accessibility", PresentationReviewWorkflowIntentKind.CheckAccessibility, true, PresentationWorkflowCapabilityStatus.RequiresHost),
             new(AltTextCommandId, "Alt Text", PresentationReviewWorkflowIntentKind.OpenAltText, true, PresentationWorkflowCapabilityStatus.Available),
             new(ReadingOrderPaneCommandId, "Reading Order", PresentationReviewWorkflowIntentKind.OpenReadingOrderPane, true, PresentationWorkflowCapabilityStatus.Available),
+            new(SetTableHeaderRowCommandId, "Set Header Row", PresentationReviewWorkflowIntentKind.SetTableHeaderRow, true, PresentationWorkflowCapabilityStatus.Available),
             new(ProofingCommandId, "Spelling", PresentationReviewWorkflowIntentKind.RunProofing, true, PresentationWorkflowCapabilityStatus.Available),
         ];
 
@@ -1813,6 +1887,7 @@ public static class PresentationReviewWorkflowPlanner
             AltTextCommandId => "Open Alt Text",
             InsertLinkCommandId => "Edit Hyperlink",
             SetSlideTitleCommandId => "Set Slide Title",
+            SetTableHeaderRowCommandId => "Set Header Row",
             _ when issue.ShapeId is null => "Go to Slide",
             _ => "Select Object"
         };
@@ -2809,7 +2884,7 @@ public static class PresentationReviewWorkflowPlanner
                 $"{DescribeShape(shape)} does not mark the first row as a header row.",
                 new PresentationAccessibilityIssueActionSummary(
                     MissingTableHeaderRowActionSummary,
-                    null,
+                    SetTableHeaderRowCommandId,
                     true)));
         }
         else if (CountBlankHeaderCells(table) is var blankHeaderCellCount && blankHeaderCellCount > 0)
