@@ -419,6 +419,42 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void BuildDataTablePrimitivePlan_UsesModeledPowerPointGradientBorderStroke()
+    {
+        var chart = MakeTwoSeriesChart(ChartType.ColumnClustered);
+        chart.DataTable = new ChartDataTableSettings
+        {
+            BorderOutline = new ShapeOutline.GradientVisible(
+                new ShapeFill.Gradient(
+                    new[]
+                    {
+                        new GradientStop(0.0, new ThemeAwareColor(new SrgbColor(0x10, 0x20, 0x30))),
+                        new GradientStop(0.5, new ThemeAwareColor(new SrgbColor(0x44, 0x55, 0x66))),
+                        new GradientStop(1.0, new ThemeAwareColor(new SrgbColor(0xD0, 0xE0, 0xF0)))
+                    },
+                    GradientKind.Linear,
+                    angleDegrees: 35.0),
+                widthPt: 1.75,
+                dash: OutlineDash.LongDashDot)
+        };
+        var frame = ChartRenderPlanner.BuildFramePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+
+        var plan = ChartRenderPlanner.BuildDataTablePrimitivePlan(chart, frame);
+
+        plan.BorderStroke.Color.Should().Be(new SrgbColor(0x10, 0x20, 0x30));
+        plan.BorderStroke.Alpha.Should().Be(255);
+        plan.BorderStroke.Thickness.Should().Be(1.75);
+        plan.BorderStroke.Dash.Should().Be(OutlineDash.LongDashDot);
+        var gradient = plan.BorderStroke.Fill.Should().BeOfType<ResolvedFill.Gradient>().Subject;
+        gradient.Kind.Should().Be(GradientKind.Linear);
+        gradient.AngleDegrees.Should().Be(35.0);
+        gradient.Stops.Select(stop => (stop.Position, stop.Color)).Should().Equal(
+            (0.0, new SrgbColor(0x10, 0x20, 0x30)),
+            (0.5, new SrgbColor(0x44, 0x55, 0x66)),
+            (1.0, new SrgbColor(0xD0, 0xE0, 0xF0)));
+    }
+
+    [Fact]
     public void BuildDataTablePrimitivePlan_UsesModeledPowerPointBackgroundFill()
     {
         var chart = MakeTwoSeriesChart(ChartType.ColumnClustered);

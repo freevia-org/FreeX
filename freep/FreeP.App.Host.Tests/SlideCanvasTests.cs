@@ -229,6 +229,41 @@ public sealed class SlideCanvasTests
         pen.IsFrozen.Should().BeTrue();
     }
 
+    [StaFact]
+    public void SlideCanvas_ChartGridLinePen_UsesSharedStrokeGradientFill()
+    {
+        var gradient = new ResolvedFill.Gradient(
+            new[]
+            {
+                new ResolvedFill.ResolvedGradientStop(0.0, new SrgbColor(0x10, 0x20, 0x30)),
+                new ResolvedFill.ResolvedGradientStop(1.0, new SrgbColor(0xD0, 0xE0, 0xF0))
+            },
+            GradientKind.Linear,
+            angleDegrees: 45.0);
+        var plan = new ChartMajorGridLinePrimitivePlan(
+            Array.Empty<ChartGridLinePlan>(),
+            new ChartStrokePlan(
+                new SrgbColor(0x12, 0x34, 0x56),
+                Alpha: 0x7F,
+                Thickness: 1.75,
+                Dash: OutlineDash.LongDash)
+            {
+                Fill = gradient
+            });
+
+        var pen = SlideCanvas.CreateChartGridLinePen(plan);
+
+        pen.Thickness.Should().Be(1.75);
+        var brush = pen.Brush.Should()
+            .BeOfType<System.Windows.Media.LinearGradientBrush>()
+            .Subject;
+        brush.GradientStops.Select(stop => (stop.Offset, stop.Color)).Should().Equal(
+            (0.0, System.Windows.Media.Color.FromRgb(0x10, 0x20, 0x30)),
+            (1.0, System.Windows.Media.Color.FromRgb(0xD0, 0xE0, 0xF0)));
+        pen.DashStyle.Dashes.Should().Equal(8.0, 3.0);
+        pen.IsFrozen.Should().BeTrue();
+    }
+
     // ── BA2: WordArt / text-effects double-draw regression tests ─────────────
 
     /// <summary>

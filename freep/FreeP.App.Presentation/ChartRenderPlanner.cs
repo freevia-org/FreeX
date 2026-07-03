@@ -107,7 +107,10 @@ public readonly record struct ChartStrokePlan(
     SrgbColor Color,
     byte Alpha,
     double Thickness,
-    OutlineDash Dash = OutlineDash.Solid);
+    OutlineDash Dash = OutlineDash.Solid)
+{
+    public ResolvedFill? Fill { get; init; }
+}
 
 public readonly record struct ChartPathPrimitive(
     IReadOnlyList<ChartPlanPoint> Points,
@@ -2456,8 +2459,29 @@ public static partial class ChartRenderPlanner
                 Alpha: 255,
                 Thickness: visible.WidthPt,
                 Dash: visible.Dash),
+            ShapeOutline.GradientVisible gradient => new ChartStrokePlan(
+                ResolveGradientFallbackColor(gradient.Gradient),
+                Alpha: 255,
+                Thickness: gradient.WidthPt,
+                Dash: gradient.Dash)
+            {
+                Fill = ResolveDataTableBorderGradientFill(gradient.Gradient)
+            },
             _ => DefaultDataTableBorderStroke()
         };
+
+    private static ResolvedFill.Gradient ResolveDataTableBorderGradientFill(ShapeFill.Gradient gradient) =>
+        new(
+            gradient.Stops.Select(stop => new ResolvedFill.ResolvedGradientStop(
+                stop.Position,
+                stop.Color.Resolved)).ToArray(),
+            gradient.Kind,
+            gradient.AngleDegrees);
+
+    private static SrgbColor ResolveGradientFallbackColor(ShapeFill.Gradient gradient) =>
+        gradient.Stops.Count > 0
+            ? gradient.Stops[0].Color.Resolved
+            : new SrgbColor(0xB7, 0xB7, 0xB7);
 
     private static ChartFillPlan? ResolveDataTableBackgroundFill(ChartDataTableSettings settings) =>
         settings.BackgroundFill switch

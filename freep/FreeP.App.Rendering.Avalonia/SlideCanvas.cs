@@ -431,7 +431,7 @@ public sealed class SlideCanvas : Control
 
     private static Pen ToPen(ChartStrokePlan stroke) =>
         new(
-            ToBrush(new ChartFillPlan(stroke.Color, stroke.Alpha)),
+            ToBrush(new ChartFillPlan(stroke.Color, stroke.Alpha) { Fill = stroke.Fill }),
             stroke.Thickness)
         {
             DashStyle = MapDashStyleAvalonia(stroke.Dash)
