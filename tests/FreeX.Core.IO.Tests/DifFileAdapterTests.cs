@@ -69,6 +69,25 @@ public sealed class DifFileAdapterTests
         got.GetValue(new CellAddress(got.Id, 1, 1)).Should().BeOfType<ErrorValue>();
     }
 
+    // F27 regression: the DIF writer used to collapse every ErrorValue to the generic "ERROR"
+    // indicator, so a specific error like #N/A came back as #VALUE! after a save/reload round
+    // trip. The specific error code must now round-trip.
+    [Theory]
+    [InlineData("#N/A")]
+    [InlineData("#REF!")]
+    [InlineData("#DIV/0!")]
+    [InlineData("#NAME?")]
+    [InlineData("#NULL!")]
+    [InlineData("#NUM!")]
+    public void RoundTrips_SpecificErrorCodesRatherThanDegradingToValueError(string code)
+    {
+        var wb = NewWorkbook(out var sheet);
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new ErrorValue(code));
+
+        var (_, got) = RoundTrip(wb);
+        got.GetValue(new CellAddress(got.Id, 1, 1)).Should().Be(new ErrorValue(code));
+    }
+
     [Fact]
     public void RoundTrips_QuotedTextWithEmbeddedQuotes()
     {

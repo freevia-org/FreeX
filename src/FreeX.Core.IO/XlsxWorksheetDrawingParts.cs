@@ -202,7 +202,7 @@ internal static partial class XlsxWorksheetDrawingPartReader
         return charts;
     }
 
-    private static IReadOnlyList<XlsxPicturePackagePart> ReadPictureParts(
+    internal static IReadOnlyList<XlsxPicturePackagePart> ReadPictureParts(
         ZipArchive archive,
         string drawingPath,
         XDocument drawingXml,

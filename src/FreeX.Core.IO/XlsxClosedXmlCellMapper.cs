@@ -11,11 +11,21 @@ internal static class XlsxClosedXmlCellMapper
     private static readonly FieldInfo? XlCellValueNumberField =
         typeof(XLCellValue).GetField("_value", BindingFlags.Instance | BindingFlags.NonPublic);
 
-    public static ScalarValue MapValue(IXLCell xlCell)
+    // OADate (1900-epoch) serial for 1904-01-01 — the day-count offset between Excel's two date
+    // systems. ClosedXML always exposes/consumes true calendar DateTimes (it resolves the
+    // workbook's date1904 flag internally), but our formula layer's 1904-aware functions
+    // (YEAR/MONTH/DAY/EDATE/DATEDIF/... — see BuiltInFunctions.DateTime.cs / ExcelDateSystem)
+    // interpret a stored serial as day-count-since-1904-01-01 when Workbook.Uses1904DateSystem is
+    // true. So a cell's stored serial must agree with that convention: for a 1904-system workbook,
+    // convert the true DateTime to a 1904-epoch-relative serial here (not the default 1900-epoch
+    // OADate), and do the mirror-image conversion in MapValueInverse.
+    private const double Date1904EpochOADate = 1462;
+
+    public static ScalarValue MapValue(IXLCell xlCell, bool uses1904DateSystem = false)
     {
         if (xlCell.Value.IsDateTime)
         {
-            try { return DateTimeValue.FromDateTime(xlCell.GetDateTime()); }
+            try { return MapDateTimeValue(xlCell.GetDateTime(), uses1904DateSystem); }
             catch (ArgumentException)
             {
                 return TryGetUnifiedNumber(xlCell.Value, out var serial)
@@ -24,19 +34,19 @@ internal static class XlsxClosedXmlCellMapper
             }
         }
 
-        return MapValue(xlCell.Value);
+        return MapValue(xlCell.Value, uses1904DateSystem);
     }
 
-    public static ScalarValue MapFormulaValue(IXLCell xlCell)
+    public static ScalarValue MapFormulaValue(IXLCell xlCell, bool uses1904DateSystem = false)
     {
         ScalarValue value;
         try
         {
-            value = MapValue(xlCell);
+            value = MapValue(xlCell, uses1904DateSystem);
         }
         catch (NotImplementedException ex) when (ShouldUseCachedExternalFormulaValue(xlCell, ex))
         {
-            value = MapValue(xlCell.CachedValue);
+            value = MapValue(xlCell.CachedValue, uses1904DateSystem);
         }
 
         // ClosedXML resolves the OOXML _xHHHH_ escaping when reading shared strings, but NOT when reading
@@ -65,7 +75,7 @@ internal static class XlsxClosedXmlCellMapper
         xlCell.FormulaA1.Contains('[', StringComparison.Ordinal) ||
         ex.Message.Contains("References from other files", StringComparison.OrdinalIgnoreCase);
 
-    public static ScalarValue MapValue(XLCellValue xlValue)
+    public static ScalarValue MapValue(XLCellValue xlValue, bool uses1904DateSystem = false)
     {
         if (xlValue.IsBlank) return BlankValue.Instance;
         if (xlValue.IsNumber) return new NumberValue(xlValue.GetNumber());
@@ -73,7 +83,7 @@ internal static class XlsxClosedXmlCellMapper
         if (xlValue.IsBoolean) return new BoolValue(xlValue.GetBoolean());
         if (xlValue.IsDateTime)
         {
-            try { return DateTimeValue.FromDateTime(xlValue.GetDateTime()); }
+            try { return MapDateTimeValue(xlValue.GetDateTime(), uses1904DateSystem); }
             catch (ArgumentException)
             {
                 try { return new NumberValue(xlValue.GetNumber()); }
@@ -112,19 +122,26 @@ internal static class XlsxClosedXmlCellMapper
             static match => ((char)Convert.ToInt32(match.Groups[1].Value, 16)).ToString());
     }
 
-    public static XLCellValue MapValueInverse(ScalarValue value) => value switch
+    public static XLCellValue MapValueInverse(ScalarValue value, bool uses1904DateSystem = false) => value switch
     {
         NumberValue n when double.IsFinite(n.Value) => n.Value,
         NumberValue n => n.Value.ToString("R", System.Globalization.CultureInfo.InvariantCulture),
         TextValue t => t.Value,
         BoolValue b => b.Value,
-        DateTimeValue dt when TryMapDateTimeValue(dt, out var dateTime) => dateTime,
+        DateTimeValue dt when TryMapDateTimeValue(dt, uses1904DateSystem, out var dateTime) => dateTime,
         DateTimeValue dt => dt.Value.ToString("R", System.Globalization.CultureInfo.InvariantCulture),
         ErrorValue e => MapErrorValueInverse(e),
         _ => Blank.Value
     };
 
-    private static bool TryMapDateTimeValue(DateTimeValue value, out DateTime dateTime)
+    // Converts a true calendar DateTime (as ClosedXML surfaces it, already correcting for the
+    // workbook's date1904 flag) into the internal ScalarValue serial. The internal convention must
+    // match how the 1904-aware date functions interpret a stored serial: 1900-epoch OADate when
+    // Uses1904DateSystem is false, 1904-epoch-relative (day-count since 1904-01-01) when true.
+    private static ScalarValue MapDateTimeValue(DateTime dateTime, bool uses1904DateSystem) =>
+        new DateTimeValue(uses1904DateSystem ? dateTime.ToOADate() - Date1904EpochOADate : dateTime.ToOADate());
+
+    private static bool TryMapDateTimeValue(DateTimeValue value, bool uses1904DateSystem, out DateTime dateTime)
     {
         dateTime = default;
         if (!double.IsFinite(value.Value))
@@ -132,7 +149,7 @@ internal static class XlsxClosedXmlCellMapper
 
         try
         {
-            dateTime = DateTime.FromOADate(value.Value);
+            dateTime = DateTime.FromOADate(uses1904DateSystem ? value.Value + Date1904EpochOADate : value.Value);
             return true;
         }
         catch (ArgumentException)

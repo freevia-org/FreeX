@@ -91,6 +91,12 @@ public sealed partial class XlsxFileAdapter
             : patchDiagnostics;
 
         using var xlWorkbook = new XLWorkbook();
+        // F4: put ClosedXML into the workbook's date system so it writes the correct on-disk serial
+        // for date cells (1904-relative when date1904="1"). Without this, ClosedXML always emits a
+        // 1900-epoch serial while post-processing stamps date1904="1", so a reload (ClosedXML honors
+        // date1904 on read) shifts every date by the 1462-day epoch difference. MapValueInverse hands
+        // ClosedXML a true calendar DateTime, so ClosedXML now serializes it 1904-consistently.
+        xlWorkbook.Use1904DateSystem = workbook.Uses1904DateSystem;
         XlsxClosedXmlCellMapper.ApplyStyle(xlWorkbook.Style, workbook.GetStyle(StyleId.Default));
         xlWorkbook.CalculateMode = workbook.CalculationMode == WorkbookCalculationMode.Manual
             ? XLCalculateMode.Manual
@@ -153,7 +159,7 @@ public sealed partial class XlsxFileAdapter
                 }
                 else if (cell.Value is not BlankValue)
                 {
-                    xlCell.Value = XlsxClosedXmlCellMapper.MapValueInverse(cell.Value);
+                    xlCell.Value = XlsxClosedXmlCellMapper.MapValueInverse(cell.Value, workbook.Uses1904DateSystem);
                 }
 
                 if (cell.StyleId != StyleId.Default)

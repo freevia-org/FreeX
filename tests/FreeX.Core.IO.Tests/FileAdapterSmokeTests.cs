@@ -4810,6 +4810,46 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_RoundTrip_AboveAverageConditionalFormat_PreservesEqualAverageAndStdDev()
+    {
+        var workbook = new Workbook("AboveAverageStdDevXlsxTest");
+        var sheet = workbook.AddSheet("Sheet1");
+        for (uint row = 1; row <= 5; row++)
+            sheet.SetCell(new CellAddress(sheet.Id, row, 1), new NumberValue(row));
+
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 5, 1)),
+            RuleType = CfRuleType.AboveAverage,
+            Priority = 1,
+            AboveAverage = true,
+            EqualAverage = true,
+            StdDevCount = 1
+        });
+
+        var ms = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, ms);
+        ms.Position = 0;
+
+        using (var archive = new ZipArchive(ms, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!)
+                .ToString(System.Xml.Linq.SaveOptions.DisableFormatting);
+            worksheetXml.Should().Contain("equalAverage=\"1\"");
+            worksheetXml.Should().Contain("stdDev=\"1\"");
+        }
+
+        ms.Position = 0;
+        var loaded = adapter.Load(ms);
+        var loadedRule = loaded.GetSheetAt(0).ConditionalFormats.Should().ContainSingle().Subject;
+        loadedRule.RuleType.Should().Be(CfRuleType.AboveAverage);
+        loadedRule.AboveAverage.Should().BeTrue();
+        loadedRule.EqualAverage.Should().BeTrue();
+        loadedRule.StdDevCount.Should().Be(1);
+    }
+
+    [Fact]
     public void XlsxAdapter_Save_DateOccurringConditionalFormat_TrimsTimePeriod()
     {
         var workbook = new Workbook("DateCfTrimXlsxTest");

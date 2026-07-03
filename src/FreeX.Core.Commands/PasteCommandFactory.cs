@@ -124,6 +124,7 @@ public static class PasteCommandFactory
 
         var targetSheet = workbook.GetSheet(targetSheetId);
         var activeSheetName = targetSheet?.Name ?? "";
+        var sourceSheet = workbook.GetSheet(sourceRange.Start.Sheet);
 
         var shouldTileDestinationRange =
             (targetRows > pasteRows || targetCols > pasteCols) &&
@@ -135,6 +136,7 @@ public static class PasteCommandFactory
                 workbook,
                 targetSheetId,
                 targetSheet,
+                sourceSheet,
                 activeSheetName,
                 sourceRange,
                 sourceCells,
@@ -228,12 +230,18 @@ public static class PasteCommandFactory
                 specialCells.Add((source, pastedCell));
             }
 
+            var specialRichTextRuns =
+                options.Operation == PasteSpecialOperation.None && ContentKindCarriesRichTextRuns(options.ContentKind)
+                    ? sourceSheet?.RichTextRuns
+                    : null;
+
             return new PasteSpecialCellsCommand(
                 targetSheetId,
                 sourceRange,
                 specialCells,
                 destination,
-                options);
+                options,
+                specialRichTextRuns);
         }
 
         var rowDelta = (int)destination.Row - (int)sourceRange.Start.Row;
@@ -251,6 +259,8 @@ public static class PasteCommandFactory
         }
 
         var edits = new List<(CellAddress Address, Cell Cell)>(sourceCells.Count);
+        Dictionary<CellAddress, IReadOnlyList<CellTextRun>>? richTextRuns =
+            mode == PasteCellsMode.All && ContentKindCarriesRichTextRuns(options.ContentKind) ? [] : null;
         foreach (var (source, sourceCell) in sourceCells)
         {
             if (options.SkipBlanks && IsBlank(sourceCell))
@@ -269,20 +279,45 @@ public static class PasteCommandFactory
                 colDelta,
                 destinationStyle);
             edits.Add((destinationAddress, pastedCell));
+
+            if (richTextRuns is not null &&
+                sourceSheet is not null &&
+                sourceSheet.RichTextRuns.TryGetValue(source, out var sourceRuns))
+            {
+                richTextRuns[destinationAddress] = sourceRuns;
+            }
         }
 
         return mode == PasteCellsMode.All
-            ? new PasteCellsCommand(targetSheetId, edits)
+            ? new PasteCellsCommand(targetSheetId, edits, richTextRuns)
             : new EditCellsCommand(targetSheetId, edits);
     }
 
     private static bool IsBlank(Cell cell) =>
         cell.FormulaText is null && cell.Value is BlankValue;
 
+    /// <summary>
+    /// Whether a Paste Special content kind copies full cell formatting (and therefore should
+    /// also carry per-run rich-text formatting), as opposed to a "values only" / number-format-only
+    /// variant that intentionally drops the source's rich-text runs.
+    /// </summary>
+    private static bool ContentKindCarriesRichTextRuns(PasteSpecialContentKind contentKind) => contentKind switch
+    {
+        PasteSpecialContentKind.Default => true,
+        PasteSpecialContentKind.AllUsingSourceTheme => true,
+        PasteSpecialContentKind.AllExceptBorders => true,
+        PasteSpecialContentKind.ValuesAndSourceFormatting => true,
+        PasteSpecialContentKind.ValuesAndNumberFormats => false,
+        PasteSpecialContentKind.FormulasAndNumberFormats => false,
+        PasteSpecialContentKind.AllMergingConditionalFormats => true,
+        _ => false
+    };
+
     private static IWorkbookCommand CreateTiledInternalPasteCommand(
         Workbook workbook,
         SheetId targetSheetId,
         Sheet? targetSheet,
+        Sheet? sourceSheet,
         string activeSheetName,
         GridRange sourceRange,
         IReadOnlyList<(CellAddress Source, Cell Cell)> sourceCells,
@@ -318,6 +353,8 @@ public static class PasteCommandFactory
         }
 
         var edits = new List<(CellAddress Address, Cell Cell)>((int)Math.Min(int.MaxValue, (long)targetRows * targetCols));
+        Dictionary<CellAddress, IReadOnlyList<CellTextRun>>? richTextRuns =
+            mode == PasteCellsMode.All && ContentKindCarriesRichTextRuns(options.ContentKind) ? [] : null;
         foreach (var (sourceAddress, destinationAddress) in EnumerateTiledAddresses(
             sourceRange,
             targetSheetId,
@@ -347,10 +384,17 @@ public static class PasteCommandFactory
                 pastedColDelta,
                 destinationStyle);
             edits.Add((destinationAddress, pastedCell));
+
+            if (richTextRuns is not null &&
+                sourceSheet is not null &&
+                sourceSheet.RichTextRuns.TryGetValue(sourceAddress, out var sourceRuns))
+            {
+                richTextRuns[destinationAddress] = sourceRuns;
+            }
         }
 
         return mode == PasteCellsMode.All
-            ? new PasteCellsCommand(targetSheetId, edits)
+            ? new PasteCellsCommand(targetSheetId, edits, richTextRuns)
             : new EditCellsCommand(targetSheetId, edits);
     }
 

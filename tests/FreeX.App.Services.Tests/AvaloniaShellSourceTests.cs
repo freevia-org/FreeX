@@ -4595,7 +4595,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("CreateSheetTabContextMenuItem(tab, \"Ungroup Sheets\", UngroupSheets, isIdle && _session.IsWorkbookGrouped)");
         source.Should().Contain("CreateSheetTabContextMenuItem(tab, \"Move Left\", MoveActiveSheetLeft, isIdle && sheetTabIndex > 0)");
         source.Should().Contain("\"Move Right\"");
-        source.Should().Contain("private bool SelectSheetForContextCommand(SheetId sheetId)");
+        source.Should().Contain("internal bool SelectSheetForContextCommand(SheetId sheetId)");
         source.Should().Contain("private async Task RenameSheetFromTabAsync(SheetId sheetId, TappedEventArgs args)");
         source.Should().Contain("await RenameActiveSheetAsync();");
         source.Should().Contain("private void HandleSheetTabKeyDown(SheetId sheetId, Button button, KeyEventArgs args)");

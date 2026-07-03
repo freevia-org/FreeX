@@ -440,6 +440,20 @@ internal static partial class DelimitedTextWorkbookReader
             return new NumberValue(percentage);
         if (TryParseCurrency(trimmed, out var currency))
             return new NumberValue(currency);
+        // ISO-8601 datetimes (…T…Z / offset) must use the canonical UTC-normalized parse; handle
+        // them here so the current-culture date check below never intercepts them and mis-normalizes
+        // the time zone (DateTime.TryParse would adjust "Z" to local time). ISO datetimes never look
+        // like a plain number, so taking them before the number parse changes nothing else.
+        if (TryParseIsoDateTimeOffset(trimmed, out var isoDateTime))
+            return DateTimeValue.FromDateTime(isoDateTime);
+        // On locales where "." (or another number-group separator) doubles as the date separator
+        // (e.g. de-DE, it-IT: group='.', date separator='.'), a dotted date like "31.12.2024" is
+        // also a syntactically valid grouped number ("31,122,024") under NumberStyles.Any. Excel
+        // treats such text as a date, so check for a genuine current-culture date first — the
+        // digit-group heuristic plus a real DateTime.TryParse keeps unambiguous grouped numbers
+        // (e.g. "1.234.567", "1.234,56") from being misparsed as dates.
+        if (TryParseCurrentCultureDateTime(trimmed, out var cultureDateTime))
+            return DateTimeValue.FromDateTime(cultureDateTime);
         if (TryParseFiniteNumber(trimmed, NumberStyles.Any, out var number))
         {
             return new NumberValue(number);

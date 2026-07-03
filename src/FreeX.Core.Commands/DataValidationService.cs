@@ -51,6 +51,11 @@ public static partial class DataValidationService
         return dv.Type switch
         {
             DvType.List => ValidateList(dv, value, sheet, workbook),
+            DvType.WholeNumber => ValidateNumeric(dv, value, sheet, address, workbook, requireInteger: true),
+            DvType.Decimal => ValidateNumeric(dv, value, sheet, address, workbook),
+            DvType.TextLength => ValidateTextLength(dv, value, sheet, address, workbook),
+            DvType.Date => ValidateDate(dv, value, sheet, address, workbook),
+            DvType.Time => ValidateTime(dv, value, sheet, address, workbook),
             DvType.Custom => ValidateCustom(dv, value, sheet, address, workbook),
             _ => Validate(dv, value)
         };
@@ -275,7 +280,19 @@ public static partial class DataValidationService
     private static string FormatAbsoluteCell(CellAddress address) =>
         $"${CellAddress.NumberToColumnName(address.Col)}${address.Row}";
 
-    private static string? ValidateNumeric(DataValidation dv, ScalarValue value, bool requireInteger = false)
+    private static string? ValidateNumeric(
+        DataValidation dv,
+        ScalarValue value,
+        bool requireInteger = false) =>
+        ValidateNumeric(dv, value, sheet: null, address: null, workbook: null, requireInteger);
+
+    private static string? ValidateNumeric(
+        DataValidation dv,
+        ScalarValue value,
+        Sheet? sheet,
+        CellAddress? address,
+        Workbook? workbook,
+        bool requireInteger = false)
     {
         double numericValue;
         if (value is NumberValue nv)
@@ -288,13 +305,13 @@ public static partial class DataValidationService
         if (requireInteger && Math.Abs(numericValue - Math.Round(numericValue)) > double.Epsilon)
             return dv.ErrorMessage ?? "Value must be a whole number.";
 
-        if (!DataValidationBoundsParser.TryParseNumberBound(dv.Formula1, out var v1))
+        if (!DataValidationBoundsParser.TryParseNumberBound(dv.Formula1, sheet, address, workbook, out var v1))
             return null; // can't evaluate — treat as valid
 
         double v2 = 0;
         if (dv.Operator is DvOperator.Between or DvOperator.NotBetween)
         {
-            if (!DataValidationBoundsParser.TryParseNumberBound(dv.Formula2, out v2))
+            if (!DataValidationBoundsParser.TryParseNumberBound(dv.Formula2, sheet, address, workbook, out v2))
                 return null;
         }
 
@@ -314,20 +331,28 @@ public static partial class DataValidationService
         return passes ? null : dv.ErrorMessage ?? DataValidationErrorMessages.BuildNumericErrorMessage(dv, v1, v2);
     }
 
-    private static string? ValidateTextLength(DataValidation dv, ScalarValue value)
+    private static string? ValidateTextLength(DataValidation dv, ScalarValue value) =>
+        ValidateTextLength(dv, value, sheet: null, address: null, workbook: null);
+
+    private static string? ValidateTextLength(
+        DataValidation dv,
+        ScalarValue value,
+        Sheet? sheet,
+        CellAddress? address,
+        Workbook? workbook)
     {
         if (value is not TextValue tv)
             return dv.ErrorMessage ?? "Value must be text.";
 
         double length = tv.Value.Length;
 
-        if (!DataValidationBoundsParser.TryParseNumberBound(dv.Formula1, out var v1))
+        if (!DataValidationBoundsParser.TryParseNumberBound(dv.Formula1, sheet, address, workbook, out var v1))
             return null;
 
         double v2 = 0;
         if (dv.Operator is DvOperator.Between or DvOperator.NotBetween)
         {
-            if (!DataValidationBoundsParser.TryParseNumberBound(dv.Formula2, out v2))
+            if (!DataValidationBoundsParser.TryParseNumberBound(dv.Formula2, sheet, address, workbook, out v2))
                 return null;
         }
 
@@ -347,7 +372,15 @@ public static partial class DataValidationService
         return passes ? null : dv.ErrorMessage ?? $"Text length must satisfy the rule (length {(int)length}).";
     }
 
-    private static string? ValidateDate(DataValidation dv, ScalarValue value)
+    private static string? ValidateDate(DataValidation dv, ScalarValue value) =>
+        ValidateDate(dv, value, sheet: null, address: null, workbook: null);
+
+    private static string? ValidateDate(
+        DataValidation dv,
+        ScalarValue value,
+        Sheet? sheet,
+        CellAddress? address,
+        Workbook? workbook)
     {
         // Dates are stored as OADate numbers or DateTimeValue
         double oaDate;
@@ -358,13 +391,13 @@ public static partial class DataValidationService
         else
             return dv.ErrorMessage ?? "Value must be a date.";
 
-        if (!DataValidationBoundsParser.TryParseDateBound(dv.Formula1, out var v1))
+        if (!DataValidationBoundsParser.TryParseDateBound(dv.Formula1, sheet, address, workbook, out var v1))
             return null;
 
         string? formula2 = null;
         if (dv.Operator is DvOperator.Between or DvOperator.NotBetween)
         {
-            if (!DataValidationBoundsParser.TryParseDateBound(dv.Formula2, out var v2))
+            if (!DataValidationBoundsParser.TryParseDateBound(dv.Formula2, sheet, address, workbook, out var v2))
                 return null;
 
             formula2 = v2.ToString(System.Globalization.CultureInfo.InvariantCulture);
@@ -383,7 +416,15 @@ public static partial class DataValidationService
         return ValidateNumeric(numericDv, new NumberValue(oaDate));
     }
 
-    private static string? ValidateTime(DataValidation dv, ScalarValue value)
+    private static string? ValidateTime(DataValidation dv, ScalarValue value) =>
+        ValidateTime(dv, value, sheet: null, address: null, workbook: null);
+
+    private static string? ValidateTime(
+        DataValidation dv,
+        ScalarValue value,
+        Sheet? sheet,
+        CellAddress? address,
+        Workbook? workbook)
     {
         double timeValue;
         if (value is NumberValue nv)
@@ -393,13 +434,13 @@ public static partial class DataValidationService
         else
             return dv.ErrorMessage ?? "Value must be a time.";
 
-        if (!DataValidationBoundsParser.TryParseTimeBound(dv.Formula1, out var v1))
+        if (!DataValidationBoundsParser.TryParseTimeBound(dv.Formula1, sheet, address, workbook, out var v1))
             return null;
 
         string? formula2 = null;
         if (dv.Operator is DvOperator.Between or DvOperator.NotBetween)
         {
-            if (!DataValidationBoundsParser.TryParseTimeBound(dv.Formula2, out var v2))
+            if (!DataValidationBoundsParser.TryParseTimeBound(dv.Formula2, sheet, address, workbook, out var v2))
                 return null;
 
             formula2 = v2.ToString(System.Globalization.CultureInfo.InvariantCulture);

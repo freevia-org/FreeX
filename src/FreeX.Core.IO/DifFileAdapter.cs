@@ -175,11 +175,13 @@ public sealed class DifFileAdapter : IFileAdapter
                 writer.WriteLine("0,0");
                 writer.WriteLine(b.Value ? "TRUE" : "FALSE");
                 break;
-            case ErrorValue:
+            case ErrorValue error:
                 // A single numeric chunk with the ERROR indicator (one chunk = one cell; emitting a
                 // second string chunk here would be read back as an extra cell and shift the row).
+                // DIF stores the specific error code as a quoted string alongside the ERROR flag so
+                // it round-trips instead of degrading to the generic #VALUE! on reload.
                 writer.WriteLine("0,0");
-                writer.WriteLine("ERROR");
+                writer.WriteLine($"ERROR:\"{Escape(error.Code)}\"");
                 break;
             case TextValue t:
                 writer.WriteLine("1,0");
@@ -215,6 +217,13 @@ public sealed class DifFileAdapter : IFileAdapter
 
     private static ScalarValue? ParseNumericChunk(double number, string indicator)
     {
+        // "ERROR:<quoted code>" (our own extension for round-tripping the specific error) has a
+        // quoted string tail that Trim('"') below would mangle (it only strips leading/trailing
+        // quotes, not the pair surrounding the embedded code), so check for it against the raw,
+        // whitespace-trimmed indicator before the generic '"'-trim token below.
+        if (indicator.StartsWith("ERROR:", StringComparison.OrdinalIgnoreCase))
+            return ParseErrorCode(Unquote(indicator[6..]));
+
         // The indicator line qualifies the "0,<number>" pair.
         var token = indicator.Trim('"');
         if (token.Equals("V", StringComparison.OrdinalIgnoreCase))
@@ -230,6 +239,23 @@ public sealed class DifFileAdapter : IFileAdapter
         // Unknown indicator → treat as a plain numeric if finite.
         return double.IsFinite(number) ? new NumberValue(number) : null;
     }
+
+    private static readonly Dictionary<string, ErrorValue> KnownErrorCodes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        [ErrorValue.DivByZero.Code] = ErrorValue.DivByZero,
+        [ErrorValue.Value.Code] = ErrorValue.Value,
+        [ErrorValue.Ref.Code] = ErrorValue.Ref,
+        [ErrorValue.Name.Code] = ErrorValue.Name,
+        [ErrorValue.Null.Code] = ErrorValue.Null,
+        [ErrorValue.NA.Code] = ErrorValue.NA,
+        [ErrorValue.Num.Code] = ErrorValue.Num,
+        [ErrorValue.Circular.Code] = ErrorValue.Circular,
+        [ErrorValue.Spill.Code] = ErrorValue.Spill,
+        [ErrorValue.Calc.Code] = ErrorValue.Calc,
+    };
+
+    private static ErrorValue ParseErrorCode(string code) =>
+        KnownErrorCodes.TryGetValue(code, out var known) ? known : new ErrorValue(code);
 
     private static bool TryParsePair(string line, out int typeId, out double number)
     {

@@ -190,6 +190,10 @@ public static class FormulaRewriter
             return RewriteRangeDeleteRows(rr, endRef, delRows, hostSheetName, ref changed);
         if (op is DeleteColsOp delCols)
             return RewriteRangeDeleteCols(rr, endRef, delCols, hostSheetName, ref changed);
+        if (op is DeleteCellsShiftUpOp delCellsUp)
+            return RewriteRangeDeleteCellsShiftUp(rr, endRef, delCellsUp, hostSheetName, ref changed);
+        if (op is DeleteCellsShiftLeftOp delCellsLeft)
+            return RewriteRangeDeleteCellsShiftLeft(rr, endRef, delCellsLeft, hostSheetName, ref changed);
 
         var start = RewriteCellRef(rr.Start, op, hostSheetName, ref changed);
         var end   = RewriteCellRef(endRef,   op, hostSheetName, ref changed);
@@ -266,6 +270,117 @@ public static class FormulaRewriter
             Start = rr.Start with { ColumnName = CellAddress.NumberToColumnName(newStart) },
             End = endRef with { ColumnName = CellAddress.NumberToColumnName(newEnd) },
         };
+    }
+
+    /// <summary>
+    /// Delete Cells / Shift Up: a range ref that lies within the column band
+    /// [<see cref="DeleteCellsShiftUpOp.RangeStartCol"/>..<see cref="DeleteCellsShiftUpOp.RangeEndCol"/>]
+    /// and straddles the deleted row band must SHRINK to the surviving rows, not collapse to #REF!
+    /// just because one endpoint fell inside the deleted band (mirrors <see cref="RewriteRangeDeleteRows"/>).
+    /// Ranges outside the column band, or spanning columns only partially inside it, fall back to the
+    /// generic per-endpoint rewrite (same as any other cell-ref op).
+    /// </summary>
+    private static FormulaNode RewriteRangeDeleteCellsShiftUp(
+        RangeRefNode rr, CellRefNode endRef, DeleteCellsShiftUpOp op, string hostSheetName, ref bool changed)
+    {
+        if (!Matches(rr.SheetName, op, hostSheetName))
+            return rr;
+
+        uint colStart = rr.Start.ColumnNumber, colEnd = endRef.ColumnNumber;
+        if (colStart < op.RangeStartCol || colStart > op.RangeEndCol ||
+            colEnd < op.RangeStartCol || colEnd > op.RangeEndCol)
+        {
+            // Range's columns aren't fully inside the deleted band's column scope: fall back to
+            // rewriting each endpoint independently, same as any other op.
+            return RewriteRangeGenericEndpoints(rr, endRef, op, hostSheetName, ref changed);
+        }
+
+        uint s = rr.Start.Row, e = endRef.Row;
+        uint bandStart = op.DeletedStartRow, bandEnd = op.DeletedEndRow;
+
+        // Whole range inside the deleted band → the reference is gone.
+        if (bandStart <= s && e <= bandEnd)
+        {
+            changed = true;
+            return new ErrorNode(ErrorValue.Ref);
+        }
+
+        var newStart = ShiftOrClampForDelete(s, bandStart, bandEnd, op.Count, isRangeStart: true);
+        var newEnd = ShiftOrClampForDelete(e, bandStart, bandEnd, op.Count, isRangeStart: false);
+        if (newStart == s && newEnd == e)
+            return rr; // band entirely below the range: no change
+
+        changed = true;
+        return rr with
+        {
+            Start = rr.Start with { Row = newStart },
+            End = endRef with { Row = newEnd },
+        };
+    }
+
+    /// <summary>
+    /// Delete Cells / Shift Left: a range ref that lies within the row band
+    /// [<see cref="DeleteCellsShiftLeftOp.BandStartRow"/>..<see cref="DeleteCellsShiftLeftOp.BandEndRow"/>]
+    /// and straddles the deleted column band must SHRINK to the surviving columns, not collapse to
+    /// #REF! just because one endpoint fell inside the deleted band (mirrors <see cref="RewriteRangeDeleteCols"/>).
+    /// Ranges outside the row band, or spanning rows only partially inside it, fall back to the
+    /// generic per-endpoint rewrite (same as any other cell-ref op).
+    /// </summary>
+    private static FormulaNode RewriteRangeDeleteCellsShiftLeft(
+        RangeRefNode rr, CellRefNode endRef, DeleteCellsShiftLeftOp op, string hostSheetName, ref bool changed)
+    {
+        if (!Matches(rr.SheetName, op, hostSheetName))
+            return rr;
+
+        uint rowStart = rr.Start.Row, rowEnd = endRef.Row;
+        if (rowStart < op.BandStartRow || rowStart > op.BandEndRow ||
+            rowEnd < op.BandStartRow || rowEnd > op.BandEndRow)
+        {
+            // Range's rows aren't fully inside the deleted band's row scope: fall back to
+            // rewriting each endpoint independently, same as any other op.
+            return RewriteRangeGenericEndpoints(rr, endRef, op, hostSheetName, ref changed);
+        }
+
+        uint s = rr.Start.ColumnNumber, e = endRef.ColumnNumber;
+        uint bandStart = op.DeletedStartCol, bandEnd = op.DeletedEndCol;
+
+        if (bandStart <= s && e <= bandEnd)
+        {
+            changed = true;
+            return new ErrorNode(ErrorValue.Ref);
+        }
+
+        var newStart = ShiftOrClampForDelete(s, bandStart, bandEnd, op.Count, isRangeStart: true);
+        var newEnd = ShiftOrClampForDelete(e, bandStart, bandEnd, op.Count, isRangeStart: false);
+        if (newStart == s && newEnd == e)
+            return rr;
+
+        changed = true;
+        return rr with
+        {
+            Start = rr.Start with { ColumnName = CellAddress.NumberToColumnName(newStart) },
+            End = endRef with { ColumnName = CellAddress.NumberToColumnName(newEnd) },
+        };
+    }
+
+    /// <summary>
+    /// Generic fallback used when a delete-cells range op doesn't apply its shrink logic (the range's
+    /// perpendicular axis isn't fully inside the op's band scope): rewrite Start/End independently,
+    /// same as the default path in <see cref="RewriteRange"/>.
+    /// </summary>
+    private static FormulaNode RewriteRangeGenericEndpoints(
+        RangeRefNode rr, CellRefNode endRef, RewriteOperation op, string hostSheetName, ref bool changed)
+    {
+        var start = RewriteCellRef(rr.Start, op, hostSheetName, ref changed);
+        var end = RewriteCellRef(endRef, op, hostSheetName, ref changed);
+
+        if (start is ErrorNode || end is ErrorNode)
+        {
+            changed = true;
+            return new ErrorNode(ErrorValue.Ref);
+        }
+
+        return rr with { Start = (CellRefNode)start, End = (CellRefNode)end };
     }
 
     /// <summary>

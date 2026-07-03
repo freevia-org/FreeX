@@ -431,7 +431,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                         cell.ArrayMode = FormulaArrayMode.Implicit;
                     // Preserve the cached formula result so callers see the last-calculated value
                     // without needing to recalculate immediately.
-                    var cached = XlsxClosedXmlCellMapper.MapFormulaValue(xlCell);
+                    var cached = XlsxClosedXmlCellMapper.MapFormulaValue(xlCell, workbook.Uses1904DateSystem);
                     if (cached is not BlankValue)
                         cell.Value = cached;
                     else if (xmlLayout?.CachedFormulaErrors.TryGetValue(((uint)xlCell.Address.RowNumber, (uint)xlCell.Address.ColumnNumber), out var cachedFormulaError) == true)
@@ -442,8 +442,8 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                     // Plain value cell (or provisional spill cell that ClosedXML exposes as HasArrayFormula
                     // — those have a cached <v> value accessible via MapFormulaValue).
                     var v = xlCell.HasFormula
-                        ? XlsxClosedXmlCellMapper.MapFormulaValue(xlCell)
-                        : XlsxClosedXmlCellMapper.MapValue(xlCell);
+                        ? XlsxClosedXmlCellMapper.MapFormulaValue(xlCell, workbook.Uses1904DateSystem)
+                        : XlsxClosedXmlCellMapper.MapValue(xlCell, workbook.Uses1904DateSystem);
                     cell = Cell.FromValue(v);
                 }
 

@@ -41,36 +41,62 @@ public sealed class FilterCommand : IWorkbookCommand
             return protectedOutcome;
 
         _undoSnapshot.Reset();
+        _undoSnapshot.CaptureIfNeeded(sheet);
 
         uint filterCol  = _range.Start.Col + _filterColOffset;
-        uint startRow   = _range.Start.Row;
-        uint endRow     = _range.End.Row;
 
+        // F8: a plain flat FilterHiddenRows set cannot represent "AND across columns" — hiding a row
+        // for column A and then evaluating column B in isolation would un-hide rows that column A
+        // hid but column B doesn't care about. Excel hides a row if it fails ANY active column's
+        // filter (hidden set = union of every column's exclusions), so we track each column's
+        // allowed-values set separately in sheet.ActiveValueFilterColumns and always recompute
+        // FilterHiddenRows over the range from that full set of active columns, rather than mutating
+        // the flat set from a single column's perspective.
         if (_allowedValues.Count == 0)
-        {
-            if (!FilterHiddenRowUpdater.ContainsAnyInRange(sheet.FilterHiddenRows, _range))
-                return new CommandOutcome(true);
+            sheet.ActiveValueFilterColumns.Remove(filterCol);
+        else
+            sheet.ActiveValueFilterColumns[filterCol] = _allowedValues;
 
-            _undoSnapshot.CaptureIfNeeded(sheet);
-            FilterHiddenRowUpdater.ClearRange(sheet.FilterHiddenRows, _range);
-            return new CommandOutcome(true);
+        RecomputeHiddenRows(sheet, _range);
+
+        return new CommandOutcome(true);
+    }
+
+    private static void RecomputeHiddenRows(Sheet sheet, GridRange range)
+    {
+        uint startRow = range.Start.Row;
+        uint endRow   = range.End.Row;
+
+        if (sheet.ActiveValueFilterColumns.Count == 0)
+        {
+            FilterHiddenRowUpdater.ClearRange(sheet.FilterHiddenRows, range);
+            return;
         }
 
-        var allowed = FilterAllowedValueMatcher.Create(_allowedValues);
+        // Pre-build a matcher per active column so we don't rebuild one per row.
+        var matchers = new (uint Col, FilterAllowedValueMatcher Matcher)[sheet.ActiveValueFilterColumns.Count];
+        var i = 0;
+        foreach (var (col, allowedValues) in sheet.ActiveValueFilterColumns)
+        {
+            matchers[i++] = (col, FilterAllowedValueMatcher.Create(allowedValues));
+        }
 
         for (uint row = startRow + 1; row <= endRow; row++)
         {
-            var value = sheet.GetValue(row, filterCol);
-            var text  = FilterValueFormatter.ToText(value);
-            var shouldHide = !allowed.Contains(text);
-            if (sheet.FilterHiddenRows.Contains(row) == shouldHide)
-                continue;
+            var shouldHide = false;
+            foreach (var (col, matcher) in matchers)
+            {
+                var value = sheet.GetValue(row, col);
+                var text  = FilterValueFormatter.ToText(value);
+                if (!matcher.Contains(text))
+                {
+                    shouldHide = true;
+                    break;
+                }
+            }
 
-            _undoSnapshot.CaptureIfNeeded(sheet);
             FilterHiddenRowUpdater.SetHidden(sheet.FilterHiddenRows, row, shouldHide);
         }
-
-        return new CommandOutcome(true);
     }
 
     public void Revert(ICommandContext ctx)
@@ -247,6 +273,10 @@ internal struct FilterUndoSnapshot
 {
     private uint[]? _hiddenRows;
     private uint[]? _filterHiddenRows;
+    // F8: per-column value-filter state (sheet.ActiveValueFilterColumns) must roll back alongside
+    // FilterHiddenRows, otherwise undoing a FilterCommand would leave a stale column entry behind
+    // that corrupts the next recompute's AND-across-columns union.
+    private Dictionary<uint, IReadOnlyList<string>>? _activeValueFilterColumns;
 
     public bool HasSnapshot => _hiddenRows is not null;
 
@@ -254,12 +284,18 @@ internal struct FilterUndoSnapshot
     {
         _hiddenRows = null;
         _filterHiddenRows = null;
+        _activeValueFilterColumns = null;
     }
 
     public void Capture(Sheet sheet)
     {
         _hiddenRows = [.. sheet.HiddenRows];
         _filterHiddenRows = [.. sheet.FilterHiddenRows];
+        _activeValueFilterColumns = sheet.ActiveValueFilterColumns.Count == 0
+            ? null
+            : sheet.ActiveValueFilterColumns.ToDictionary(
+                kvp => kvp.Key,
+                IReadOnlyList<string> (kvp) => [.. kvp.Value]);
     }
 
     public void CaptureIfNeeded(Sheet sheet)
@@ -280,6 +316,13 @@ internal struct FilterUndoSnapshot
         sheet.FilterHiddenRows.Clear();
         if (_filterHiddenRows is not null)
             sheet.FilterHiddenRows.UnionWith(_filterHiddenRows);
+
+        sheet.ActiveValueFilterColumns.Clear();
+        if (_activeValueFilterColumns is not null)
+        {
+            foreach (var (col, allowedValues) in _activeValueFilterColumns)
+                sheet.ActiveValueFilterColumns[col] = allowedValues;
+        }
     }
 }
 
