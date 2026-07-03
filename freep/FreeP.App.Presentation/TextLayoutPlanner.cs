@@ -58,6 +58,16 @@ public readonly record struct TextColumnLayout(
     double ColumnWidthDip,
     double LineSpacingScale);
 
+public readonly record struct TextOrientationPlan(
+    TextVerticalType VerticalType,
+    LayoutRect TextBounds,
+    double RotationAngleDegrees,
+    double RotationCenterX,
+    double RotationCenterY)
+{
+    public bool IsRotated => Math.Abs(RotationAngleDegrees) > 0.001;
+}
+
 public enum TextAutoFitOverflowMode
 {
     NoAutoFit,
@@ -105,6 +115,38 @@ public static class TextLayoutPlanner
     public const double RuntimeAutoFitMaximumLineSpacingReduction = 0.20;
 
     public static double PointsToDip(double points) => points * DipPerPoint;
+
+    public static TextOrientationPlan PlanTextOrientation(
+        ResolvedTextLayout text,
+        LayoutRect bounds)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+
+        double angleDegrees = text.VerticalType switch
+        {
+            TextVerticalType.Vertical270 => -90.0,
+            TextVerticalType.Vertical
+                or TextVerticalType.EastAsianVertical
+                or TextVerticalType.WordArtVertical
+                or TextVerticalType.WordArtVerticalRtl => 90.0,
+            _ => 0.0
+        };
+
+        var textBounds = angleDegrees == 0.0
+            ? bounds
+            : new LayoutRect(
+                bounds.X + (bounds.Width - bounds.Height) * 0.5,
+                bounds.Y + (bounds.Height - bounds.Width) * 0.5,
+                bounds.Height,
+                bounds.Width);
+
+        return new TextOrientationPlan(
+            text.VerticalType,
+            textBounds,
+            angleDegrees,
+            bounds.X + bounds.Width * 0.5,
+            bounds.Y + bounds.Height * 0.5);
+    }
 
     public static TextLayoutArea GetTextArea(ResolvedTextLayout text, LayoutRect bounds)
     {

@@ -1366,31 +1366,19 @@ public sealed class SlideCanvas : Control
     private static void RenderText(DrawingContext dc, ResolvedTextLayout text, LayoutRect bounds)
     {
         // Wave 18B: vertical text — rotate the text block around the shape center.
-        bool isVertical = text.VerticalType is TextVerticalType.Vertical
-                                            or TextVerticalType.EastAsianVertical
-                                            or TextVerticalType.WordArtVertical
-                                            or TextVerticalType.WordArtVerticalRtl;
-        bool isVert270  = text.VerticalType == TextVerticalType.Vertical270;
-
-        if (isVertical || isVert270)
+        var orientation = TextLayoutPlanner.PlanTextOrientation(text, bounds);
+        if (orientation.IsRotated)
         {
-            double cx = bounds.X + bounds.Width  * 0.5;
-            double cy = bounds.Y + bounds.Height * 0.5;
-            double rad = isVert270 ? -Math.PI / 2.0 : Math.PI / 2.0;
+            double rad = orientation.RotationAngleDegrees * Math.PI / 180.0;
             using var rotScope = dc.PushTransform(
-                Matrix.CreateTranslation(-cx, -cy)
+                Matrix.CreateTranslation(-orientation.RotationCenterX, -orientation.RotationCenterY)
                 * Matrix.CreateRotation(rad)
-                * Matrix.CreateTranslation(cx, cy));
-            var rotatedBounds = new LayoutRect(
-                bounds.X + (bounds.Width - bounds.Height) * 0.5,
-                bounds.Y + (bounds.Height - bounds.Width) * 0.5,
-                bounds.Height,
-                bounds.Width);
-            RenderTextCore(dc, text, rotatedBounds);
+                * Matrix.CreateTranslation(orientation.RotationCenterX, orientation.RotationCenterY));
+            RenderTextCore(dc, text, orientation.TextBounds);
             return;
         }
 
-        RenderTextCore(dc, text, bounds);
+        RenderTextCore(dc, text, orientation.TextBounds);
     }
 
     // Wave 22B: multi-column text layout helper for Avalonia.

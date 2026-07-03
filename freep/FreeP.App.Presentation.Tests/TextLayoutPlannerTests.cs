@@ -209,6 +209,33 @@ public sealed class TextLayoutPlannerTests
         measure.Should().Be(new TextParagraphMeasure(4, 12, 4, 2));
     }
 
+    [Theory]
+    [InlineData(TextVerticalType.Horizontal, 0.0, false)]
+    [InlineData(TextVerticalType.Vertical, 90.0, true)]
+    [InlineData(TextVerticalType.Vertical270, -90.0, true)]
+    [InlineData(TextVerticalType.EastAsianVertical, 90.0, true)]
+    [InlineData(TextVerticalType.WordArtVertical, 90.0, true)]
+    [InlineData(TextVerticalType.WordArtVerticalRtl, 90.0, true)]
+    public void PlanTextOrientation_MapsPowerPointVerticalTypesToSharedBoundsAndAngle(
+        TextVerticalType verticalType,
+        double expectedAngle,
+        bool isRotated)
+    {
+        var text = new ResolvedTextLayout { VerticalType = verticalType };
+        var bounds = new LayoutRect(10, 20, 200, 100);
+
+        var plan = TextLayoutPlanner.PlanTextOrientation(text, bounds);
+
+        plan.VerticalType.Should().Be(verticalType);
+        plan.RotationAngleDegrees.Should().Be(expectedAngle);
+        plan.RotationCenterX.Should().Be(110);
+        plan.RotationCenterY.Should().Be(70);
+        plan.IsRotated.Should().Be(isRotated);
+        plan.TextBounds.Should().Be(isRotated
+            ? new LayoutRect(60, -30, 100, 200)
+            : bounds);
+    }
+
     [Fact]
     public void PlanNormalAutoFitOverflow_AutoFitFalse_DoesNotShrink()
     {
@@ -569,7 +596,10 @@ public sealed class TextLayoutPlannerTests
         wpf.Should().Contain("TextLayoutPlanner.ApplyAutoFitPlan");
         wpf.Should().Contain("TextLayoutPlanner.GetAutoFitCapacityHeight");
         wpf.Should().Contain("TextLayoutPlanner.PlanTabStops");
+        wpf.Should().Contain("TextLayoutPlanner.PlanTextOrientation");
         wpf.Should().Contain("placement.Bullet");
+        wpf.Should().NotContain("bool isVertical = text.VerticalType");
+        wpf.Should().NotContain("bool isVert270");
         wpf.Should().NotContain("FontScalePPT");
         wpf.Should().NotContain("placement.X - para.HangingDip");
         wpf.Should().NotContain("const double DefaultSpacingDip");
@@ -587,7 +617,10 @@ public sealed class TextLayoutPlannerTests
         avalonia.Should().Contain("TextLayoutPlanner.ApplyAutoFitPlan");
         avalonia.Should().Contain("TextLayoutPlanner.GetAutoFitCapacityHeight");
         avalonia.Should().Contain("TextLayoutPlanner.PlanTabStops");
+        avalonia.Should().Contain("TextLayoutPlanner.PlanTextOrientation");
         avalonia.Should().Contain("placement.Bullet");
+        avalonia.Should().NotContain("bool isVertical = text.VerticalType");
+        avalonia.Should().NotContain("bool isVert270");
         avalonia.Should().NotContain("FontScalePPT");
         avalonia.Should().NotContain("placement.X - para.HangingDip");
         avalonia.Should().NotContain("const double DefaultSpacingDip");
