@@ -295,6 +295,149 @@ function Get-ScenarioPairs {
     }
 }
 
+function Get-JsonPropertyValue {
+    param(
+        [object]$Object,
+        [string]$Name
+    )
+
+    if ($null -eq $Object) {
+        return $null
+    }
+
+    $property = $Object.PSObject.Properties[$Name]
+    if ($null -eq $property) {
+        return $null
+    }
+
+    return $property.Value
+}
+
+function Resolve-RetainedEvidencePath {
+    param(
+        [string]$RepoRoot,
+        [string]$Scenario,
+        [object]$Manifest,
+        [string]$PropertyName,
+        [System.Collections.Generic.List[string]]$StaleArtifactPaths
+    )
+
+    $path = [string](Get-JsonPropertyValue $Manifest $PropertyName)
+    if ([string]::IsNullOrWhiteSpace($path)) {
+        return $null
+    }
+
+    if (Test-Path $path) {
+        return (Resolve-Path $path).Path
+    }
+
+    $scenarioDirectory = Join-Path $RepoRoot (Join-Path "tools/foreground-captures" $Scenario)
+    $candidates = New-Object System.Collections.Generic.List[string]
+
+    if (-not [System.IO.Path]::IsPathRooted($path)) {
+        $candidates.Add((Join-Path $RepoRoot $path))
+    }
+
+    $leaf = Split-Path $path -Leaf
+    if (-not [string]::IsNullOrWhiteSpace($leaf)) {
+        $candidates.Add((Join-Path $scenarioDirectory $leaf))
+    }
+
+    foreach ($candidate in $candidates) {
+        if (Test-Path $candidate) {
+            $StaleArtifactPaths.Add("$PropertyName=$path")
+            return (Resolve-Path $candidate).Path
+        }
+    }
+
+    return $null
+}
+
+function Test-RetainedForegroundEvidence {
+    param(
+        [string]$RepoRoot,
+        [string]$Scenario,
+        [string]$Subject,
+        [switch]$RequireNativeDialogValidation,
+        [switch]$RequireNativeOutputFile
+    )
+
+    $missingArtifacts = New-Object System.Collections.Generic.List[string]
+    $staleArtifactPaths = New-Object System.Collections.Generic.List[string]
+    $scenarioDirectory = Join-Path $RepoRoot (Join-Path "tools/foreground-captures" $Scenario)
+    $manifestPath = Join-Path $scenarioDirectory "$($Scenario)_manifest.json"
+
+    if (-not (Test-Path $manifestPath)) {
+        $missingArtifacts.Add("$Subject-manifest")
+        return [ordered]@{
+            subject = $Subject
+            scenario = $Scenario
+            captureStatus = "missing-manifest"
+            manifestPath = $manifestPath
+            screenshotPath = $null
+            continuationScreenshotPath = $null
+            outputPath = $null
+            resultValidation = $null
+            missingArtifacts = $missingArtifacts.ToArray()
+            staleArtifactPaths = @()
+        }
+    }
+
+    try {
+        $manifest = Get-Content -Raw $manifestPath | ConvertFrom-Json
+    }
+    catch {
+        $missingArtifacts.Add("$Subject-manifest-json")
+        return [ordered]@{
+            subject = $Subject
+            scenario = $Scenario
+            captureStatus = "invalid-manifest"
+            manifestPath = $manifestPath
+            screenshotPath = $null
+            continuationScreenshotPath = $null
+            outputPath = $null
+            resultValidation = $null
+            missingArtifacts = $missingArtifacts.ToArray()
+            staleArtifactPaths = @()
+        }
+    }
+
+    $captureStatus = [string](Get-JsonPropertyValue $manifest "CaptureStatus")
+    if ($captureStatus -ne "complete") {
+        $missingArtifacts.Add("$Subject-complete-manifest")
+    }
+
+    $screenshotPath = Resolve-RetainedEvidencePath $RepoRoot $Scenario $manifest "ScreenshotPath" $staleArtifactPaths
+    if ([string]::IsNullOrWhiteSpace($screenshotPath)) {
+        $missingArtifacts.Add("$Subject-screenshot")
+    }
+
+    $continuationScreenshotPath = Resolve-RetainedEvidencePath $RepoRoot $Scenario $manifest "ContinuationScreenshotPath" $staleArtifactPaths
+    $outputPath = Resolve-RetainedEvidencePath $RepoRoot $Scenario $manifest "OutputPath" $staleArtifactPaths
+    $resultValidation = [string](Get-JsonPropertyValue $manifest "ResultValidation")
+
+    if ($RequireNativeDialogValidation -and [string]::IsNullOrWhiteSpace($resultValidation)) {
+        $missingArtifacts.Add("native-dialog-validation")
+    }
+
+    if ($RequireNativeOutputFile -and [string]::IsNullOrWhiteSpace($outputPath)) {
+        $missingArtifacts.Add("native-output-file")
+    }
+
+    return [ordered]@{
+        subject = $Subject
+        scenario = $Scenario
+        captureStatus = $captureStatus
+        manifestPath = (Resolve-Path $manifestPath).Path
+        screenshotPath = $screenshotPath
+        continuationScreenshotPath = $continuationScreenshotPath
+        outputPath = $outputPath
+        resultValidation = $resultValidation
+        missingArtifacts = $missingArtifacts.ToArray()
+        staleArtifactPaths = $staleArtifactPaths.ToArray()
+    }
+}
+
 function New-ScenarioCatalog {
     param(
         [string]$RepoRoot,
@@ -307,25 +450,81 @@ function New-ScenarioCatalog {
     foreach ($pair in $Pairs) {
         $comparisonMode = if ($pair.Contains("comparisonMode")) { [string]$pair["comparisonMode"] } else { "paired" }
         $missingEvidence = New-Object System.Collections.Generic.List[string]
+        $missingArtifacts = New-Object System.Collections.Generic.List[string]
+        $artifactStatuses = New-Object System.Collections.Generic.List[object]
+        $requiredArtifacts = if ($pair.Contains("requiredArtifacts")) { @($pair["requiredArtifacts"]) } else { @() }
 
         if ($comparisonMode -eq "paired") {
             if (-not $pair.Contains("excelScenario")) {
                 $missingEvidence.Add("excelForegroundCapture")
+                $missingArtifacts.Add("excel-manifest")
+            }
+            else {
+                $excelStatus = Test-RetainedForegroundEvidence $RepoRoot $pair["excelScenario"] "excel"
+                $artifactStatuses.Add($excelStatus)
+                foreach ($artifact in @($excelStatus["missingArtifacts"])) {
+                    $missingEvidence.Add("excelForegroundCapture")
+                    $missingArtifacts.Add($artifact)
+                }
             }
 
             if (-not $pair.Contains("freexScenario")) {
                 $missingEvidence.Add("freexWpfForegroundCapture")
+                $missingArtifacts.Add("freex-wpf-manifest")
+            }
+            else {
+                $freexStatus = Test-RetainedForegroundEvidence `
+                    $RepoRoot `
+                    $pair["freexScenario"] `
+                    "freex-wpf" `
+                    -RequireNativeDialogValidation:($requiredArtifacts -contains "native-dialog-validation") `
+                    -RequireNativeOutputFile:($requiredArtifacts -contains "native-output-file")
+                $artifactStatuses.Add($freexStatus)
+                foreach ($artifact in @($freexStatus["missingArtifacts"])) {
+                    $missingEvidence.Add("freexWpfForegroundCapture")
+                    $missingArtifacts.Add($artifact)
+                }
             }
         }
         elseif ($comparisonMode -eq "freex-only") {
             if (-not $pair.Contains("freexScenario")) {
                 $missingEvidence.Add("freexWpfForegroundCapture")
+                $missingArtifacts.Add("freex-wpf-manifest")
+            }
+            else {
+                $freexStatus = Test-RetainedForegroundEvidence `
+                    $RepoRoot `
+                    $pair["freexScenario"] `
+                    "freex-wpf" `
+                    -RequireNativeDialogValidation:($requiredArtifacts -contains "native-dialog-validation") `
+                    -RequireNativeOutputFile:($requiredArtifacts -contains "native-output-file")
+                $artifactStatuses.Add($freexStatus)
+                foreach ($artifact in @($freexStatus["missingArtifacts"])) {
+                    $missingEvidence.Add("freexWpfForegroundCapture")
+                    $missingArtifacts.Add($artifact)
+                }
             }
         }
 
         if ($pair.Contains("avaloniaEvidenceStatus") -and ([string]$pair["avaloniaEvidenceStatus"]).StartsWith("pending-", [StringComparison]::OrdinalIgnoreCase)) {
             $missingEvidence.Add("avaloniaForegroundCapture")
+            $missingArtifacts.Add("avalonia-foreground-capture")
+            $artifactStatuses.Add([ordered]@{
+                subject = "avalonia"
+                scenario = if ($pair.Contains("avaloniaScenario")) { $pair["avaloniaScenario"] } else { $null }
+                captureStatus = "pending-baseline"
+                manifestPath = $null
+                screenshotPath = $null
+                continuationScreenshotPath = $null
+                outputPath = $null
+                resultValidation = [string]$pair["avaloniaEvidenceStatus"]
+                missingArtifacts = @("avalonia-foreground-capture")
+                staleArtifactPaths = @()
+            })
         }
+
+        $missingEvidenceArray = @($missingEvidence.ToArray() | Select-Object -Unique)
+        $missingArtifactArray = @($missingArtifacts.ToArray() | Select-Object -Unique)
 
         $records.Add([ordered]@{
             id = $pair["id"]
@@ -333,14 +532,19 @@ function New-ScenarioCatalog {
             comparisonMode = $comparisonMode
             evidenceScope = if ($pair.Contains("evidenceScope")) { $pair["evidenceScope"] } else { $null }
             avaloniaEvidenceStatus = if ($pair.Contains("avaloniaEvidenceStatus")) { $pair["avaloniaEvidenceStatus"] } else { $null }
-            requiredArtifacts = if ($pair.Contains("requiredArtifacts")) { @($pair["requiredArtifacts"]) } else { @() }
+            requiredArtifacts = $requiredArtifacts
             excelScenario = if ($pair.Contains("excelScenario")) { $pair["excelScenario"] } else { $null }
             freexWpfScenario = if ($pair.Contains("freexScenario")) { $pair["freexScenario"] } else { $null }
             avaloniaScenario = if ($pair.Contains("avaloniaScenario")) { $pair["avaloniaScenario"] } else { $null }
-            missingEvidence = $missingEvidence.ToArray()
+            evidenceStatus = if ($missingArtifactArray.Count -eq 0) { "retained-artifacts-complete" } else { "missing-artifacts" }
+            nextMissingArtifact = if ($missingArtifactArray.Count -gt 0) { $missingArtifactArray[0] } else { $null }
+            missingEvidence = $missingEvidenceArray
+            missingArtifacts = $missingArtifactArray
+            artifactStatuses = $artifactStatuses.ToArray()
         })
     }
 
+    $recordArray = @($records.ToArray())
     return [ordered]@{
         schemaVersion = 1
         suite = $Suite
@@ -352,9 +556,10 @@ function New-ScenarioCatalog {
             branch = Get-GitValue $RepoRoot @("rev-parse", "--abbrev-ref", "HEAD")
             commit = Get-GitValue $RepoRoot @("rev-parse", "HEAD")
         }
-        scenarioCount = $records.Count
-        missingEvidenceCount = @($records | Where-Object { @($_["missingEvidence"]).Count -gt 0 }).Count
-        records = $records.ToArray()
+        scenarioCount = $recordArray.Count
+        missingEvidenceCount = @($recordArray | Where-Object { @($_["missingEvidence"]).Count -gt 0 }).Count
+        missingArtifactCount = @($recordArray | ForEach-Object { @($_["missingArtifacts"]) } | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) } | Select-Object -Unique).Count
+        records = $recordArray
     }
 }
 
