@@ -185,8 +185,12 @@ internal static class FreeWAvaloniaRibbonDefinition
     private static RibbonMenu BuildMultilevelListMenu() =>
         new(new RibbonMenuItem[]
         {
-            new("Decrease List Level", new RibbonCommandId("freew.multilevel-promote")),
-            new("Increase List Level", new RibbonCommandId("freew.multilevel-demote")),
+            new(FreeWRibbonText.MultilevelPromoteCommand.Label, new RibbonCommandId("freew.multilevel-promote")),
+            new(FreeWRibbonText.MultilevelDemoteCommand.Label, new RibbonCommandId("freew.multilevel-demote")),
+            new(FreeWRibbonDefinitionData.MultilevelListPresetNames[0], new RibbonCommandId("freew.multilevel-preset-0")),
+            new(FreeWRibbonDefinitionData.MultilevelListPresetNames[1], new RibbonCommandId("freew.multilevel-preset-1")),
+            new(FreeWRibbonDefinitionData.MultilevelListPresetNames[2], new RibbonCommandId("freew.multilevel-preset-2")),
+            new(FreeWRibbonText.MultilevelDefineCommand.Label, new RibbonCommandId("freew.multilevel-define")),
         });
 
     /// <summary>

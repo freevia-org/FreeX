@@ -128,6 +128,10 @@ public sealed class CommandRegistryTests
             "freew.multilevel-list",
             "freew.multilevel-promote",
             "freew.multilevel-demote",
+            "freew.multilevel-preset-0",
+            "freew.multilevel-preset-1",
+            "freew.multilevel-preset-2",
+            "freew.multilevel-define",
             "freew.style-heading3",
             "freew.new",
             "freew.zoom-in",
@@ -180,6 +184,10 @@ public sealed class CommandRegistryTests
             "freew.multilevel-list",
             "freew.multilevel-promote",
             "freew.multilevel-demote",
+            "freew.multilevel-preset-0",
+            "freew.multilevel-preset-1",
+            "freew.multilevel-preset-2",
+            "freew.multilevel-define",
         });
 
         ids.Should().NotContain(new[]
@@ -433,6 +441,31 @@ public sealed class CommandRegistryTests
 
         Execute(registry, "freew.multilevel-promote");
         paragraph.Formatting.ListLevel.Should().Be(0);
+    }
+
+    [Fact]
+    public void Multilevel_dropdown_presets_match_wpf_backed_behavior()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("Heading")
+        {
+            Formatting = new ParagraphFormatting { ListKind = ListKind.Number, ListLevel = 2 }
+        });
+        var view = new DocumentView();
+        view.LoadDocument(doc);
+        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+        var paragraph = (Paragraph)view.Document.Blocks[0];
+
+        Execute(registry, "freew.multilevel-preset-0");
+        paragraph.Formatting.ListKind.Should().Be(ListKind.MultiLevel);
+        paragraph.Formatting.ListLevel.Should().Be(2, "presets preserve the selected outline depth");
+
+        Execute(registry, "freew.multilevel-define");
+        paragraph.Formatting.ListStartOverride.Should().BeNull("the backed define slice only sets level 0/1 start-at overrides");
+
+        Execute(registry, "freew.multilevel-preset-2");
+        paragraph.StyleId.Should().Be("Heading3", "the heading preset mirrors WPF's linked heading style hint");
     }
 
     [Fact]
