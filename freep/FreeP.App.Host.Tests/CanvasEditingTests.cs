@@ -95,6 +95,10 @@ public sealed class CanvasEditingTests
         var source = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "InCanvasTableCellEditor.cs");
 
         source.Should().Contain("TableCellEditPlanner.BeginEdit");
+        source.Should().Contain("_cellEditPlan = editStart.EditPlanner");
+        source.Should().Contain("TextBodyFlowDocumentConverter.ToFlowDocument");
+        source.Should().Contain("TextBodyFlowDocumentConverter.FromFlowDocument");
+        source.Should().Contain("TableCellEditPlanner.CommitRichText");
         source.Should().Contain("ApplyInitialSelection(_cellTextBox, editStart.InitialSelection)");
         source.Should().Contain("RichTextBox");
     }
