@@ -200,6 +200,8 @@ public sealed class ReviewWorkflowAdapterTests
             opened.Rows[0].CommandHint.Should().Be(PresentationReviewWorkflowPlanner.AltTextCommandId);
             opened.Rows[1].Should().Match<PresentationAccessibilityCheckerRowPlan>(row =>
                 row.Category == "Slide title" &&
+                row.ActionLabel == "Set Slide Title" &&
+                row.CommandHint == PresentationReviewWorkflowPlanner.SetSlideTitleCommandId &&
                 row.ShouldNavigateToSlide &&
                 !row.ShouldSelectShape);
 
@@ -209,6 +211,21 @@ public sealed class ReviewWorkflowAdapterTests
             window.Editor.SelectedShapeIds.Should().BeEmpty();
             selectedTitle.SelectedRow.Should().NotBeNull();
             selectedTitle.SelectedRow!.Title.Should().Be("Missing slide title");
+
+            var actionedTitle = window.ApplyAccessibilityCheckerRowAction(1);
+
+            window.Editor.CurrentSlideIndex.Should().Be(1);
+            window.Editor.CurrentSlide!.Title.Should().Be("Slide 2");
+            window.LastSlideTitleMutationPlan.Should().Be(new PresentationSlideTitleMutationPlan(
+                true,
+                1,
+                "Slide 2",
+                "Slide 2",
+                null));
+            actionedTitle.Rows.Select(row => row.Title).Should().Equal("Alt text missing");
+            window.LastAccessibilitySummaryPlan!.Issues.Should().NotContain(issue =>
+                issue.Title == "Missing slide title");
+            window.IsDirty.Should().BeTrue();
 
             var actionedAltText = window.ApplyAccessibilityCheckerRowAction(0);
 

@@ -361,6 +361,78 @@ public sealed class SlideShowWindowTests
     }
 
     [StaFact]
+    public void SlideShowWindow_CustomPlaybackRoute_PlaysOrderedSlides()
+    {
+        var pres = MakePresentation("Intro", "Deep dive", "Appendix");
+        var route = SlideShowCustomShowPlanner.BuildCustomShowRoute(
+            pres,
+            new SlideShowCustomSlideSequence(
+                "Executive review",
+                new[] { pres.Slides[2].Id, pres.Slides[0].Id }),
+            startIndex: 0);
+
+        var window = new SlideShowWindow(pres, route);
+        try
+        {
+            window.PlaybackRoute.CustomShowName.Should().Be("Executive review");
+            window.Controller.CurrentSlide!.Title.Should().Be("Appendix");
+            window.Controller.CurrentSlideIndex.Should().Be(0);
+            window.CurrentPresentationSlideIndex.Should().Be(2);
+
+            var state = window.CreatePresenterState(window.PresenterStartedAtUtc);
+            state.HostState.SlideCount.Should().Be(2);
+            state.HostState.StatusText.Should().Be("Slide 1 of 2");
+            state.CurrentSlide!.Title.Should().Be("Appendix");
+            state.NextSlide!.Title.Should().Be("Intro");
+
+            var advance = window.ExecuteAdvance();
+            advance.Should().BeOfType<AdvanceResult.NavigateToSlide>()
+                .Which.Slide.Title.Should().Be("Intro");
+            window.Controller.CurrentSlideIndex.Should().Be(1);
+            window.CurrentPresentationSlideIndex.Should().Be(0);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [StaFact]
+    public void SlideShowWindow_CustomPlaybackRoute_RecordTimings_MapToSourceSlides()
+    {
+        var pres = MakePresentation("Intro", "Deep dive", "Appendix");
+        var route = SlideShowCustomShowPlanner.BuildCustomShowRoute(
+            pres,
+            new SlideShowCustomSlideSequence(
+                "Executive review",
+                new[] { pres.Slides[2].Id, pres.Slides[0].Id }),
+            startIndex: 0);
+        var started = new DateTimeOffset(2026, 7, 3, 10, 0, 0, TimeSpan.Zero);
+
+        var window = new SlideShowWindow(pres, route);
+        try
+        {
+            window.ApplyPresenterToolIntent(
+                timingIntent: SlideShowTimingIntent.RecordTimings,
+                nowUtc: started);
+
+            window.ExecuteAdvance(started.AddMilliseconds(2500));
+            window.ExecuteAdvance(started.AddMilliseconds(6000));
+
+            pres.Slides[2].Transition!.AdvanceAfterMs.Should().Be(2500);
+            pres.Slides[0].Transition!.AdvanceAfterMs.Should().Be(3500);
+            pres.Slides[1].Transition.Should().BeNull();
+        }
+        finally
+        {
+            if (!window.IsPresenterSessionClosed)
+            {
+                window.Close();
+            }
+        }
+    }
+
+    [StaFact]
     public void SlideShowWindow_Advance_PastLastSlide_DoesNotThrow()
     {
         var pres = Presentation.CreateEmpty();
@@ -701,6 +773,19 @@ public sealed class SlideShowWindowTests
         paragraph.Runs.Add(new Run { Text = text });
         body.Paragraphs.Add(paragraph);
         return body;
+    }
+
+    private static Presentation MakePresentation(params string[] titles)
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides.Clear();
+
+        foreach (var title in titles)
+        {
+            presentation.Slides.Add(new Slide { Title = title });
+        }
+
+        return presentation;
     }
 }
 

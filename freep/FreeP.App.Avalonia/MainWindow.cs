@@ -183,6 +183,7 @@ public sealed class MainWindow : Window
     internal PresentationCommentNavigationPlan? LastCommentNavigationPlan { get; private set; }
     internal PresentationAccessibilitySummaryPlan? LastAccessibilitySummaryPlan { get; private set; }
     internal PresentationAccessibilityCheckerPanePlan? LastAccessibilityCheckerPanePlan { get; private set; }
+    internal PresentationSlideTitleMutationPlan? LastSlideTitleMutationPlan { get; private set; }
     internal PresentationAltTextRequestPlan? LastAltTextRequestPlan { get; private set; }
     internal PresentationAltTextPanePlan? LastAltTextPanePlan { get; private set; }
     internal PresentationReadingOrderPlan? LastReadingOrderPlan { get; private set; }
@@ -2711,6 +2712,11 @@ public sealed class MainWindow : Window
         if (row?.CommandHint == PresentationReviewWorkflowPlanner.AltTextCommandId)
         {
             ShowAltTextPane();
+        }
+        else if (row?.CommandHint == PresentationReviewWorkflowPlanner.SetSlideTitleCommandId)
+        {
+            LastSlideTitleMutationPlan =
+                PresentationReviewWorkflowPlanner.TryApplySlideTitleMutation(Editor, row.SlideIndex);
         }
         else if (row?.CommandHint == PresentationReviewWorkflowPlanner.InsertLinkCommandId)
         {

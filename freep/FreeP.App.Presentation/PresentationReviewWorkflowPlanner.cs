@@ -15,6 +15,7 @@ public enum PresentationReviewWorkflowIntentKind
     ResolveComment,
     ReopenComment,
     CheckAccessibility,
+    SetSlideTitle,
     OpenAltText,
     ApplyAltText,
     ToggleAltTextDecorative,
@@ -170,6 +171,13 @@ public sealed record PresentationAltTextMutationPlan(
     string Title,
     string Description,
     bool IsDecorative,
+    string? ValidationMessage);
+
+public sealed record PresentationSlideTitleMutationPlan(
+    bool ShouldApply,
+    int SlideIndex,
+    string Title,
+    string SuggestedTitle,
     string? ValidationMessage);
 
 public sealed record PresentationAccessibilityIssueDescriptor(
@@ -366,6 +374,7 @@ public static class PresentationReviewWorkflowPlanner
     public const string ResolveCommentCommandId = "freep.review.comments.resolve";
     public const string ReopenCommentCommandId = "freep.review.comments.reopen";
     public const string AccessibilityCommandId = "freep.review.accessibility.check";
+    public const string SetSlideTitleCommandId = "freep.review.accessibility.set-slide-title";
     public const string AltTextCommandId = "freep.review.alt-text";
     public const string AltTextPaneApplyCommandId = "freep.review.alt-text.apply";
     public const string AltTextPaneDecorativeCommandId = "freep.review.alt-text.decorative";
@@ -429,6 +438,10 @@ public static class PresentationReviewWorkflowPlanner
         "Select a proofing issue before applying a correction.";
     public const string ProofingNoSuggestionMessage =
         "No replacement suggestion is available for the selected proofing issue.";
+    public const string SlideTitleMissingSlideMessage =
+        "Slide title target slide was not found.";
+    public const string SlideTitleEmptyMessage =
+        "Enter a slide title before applying the accessibility fix.";
     public const string MissingSlideTitleActionSummary =
         "Add a concise slide title so screen-reader users can navigate the deck.";
     public const string MissingAltTextActionSummary =
@@ -986,7 +999,7 @@ public static class PresentationReviewWorkflowPlanner
                     "PowerPoint accessibility checks expect each slide to have a meaningful title.",
                     new PresentationAccessibilityIssueActionSummary(
                         MissingSlideTitleActionSummary,
-                        null,
+                        SetSlideTitleCommandId,
                         false)));
             }
 
@@ -1035,6 +1048,89 @@ public static class PresentationReviewWorkflowPlanner
             notesCount,
             issues,
             BuildAccessibilityActions());
+    }
+
+    public static string BuildSuggestedSlideTitle(Presentation presentation, int slideIndex)
+    {
+        ArgumentNullException.ThrowIfNull(presentation);
+
+        var slide = GetSlide(presentation.Slides, slideIndex);
+        if (slide is null)
+        {
+            return $"Slide {Math.Max(0, slideIndex) + 1}";
+        }
+
+        if (NormalizeText(slide.Title) is { } existingTitle)
+        {
+            return existingTitle;
+        }
+
+        var titlePlaceholderText = EnumerateShapes(slide.Shapes)
+            .Where(shape => shape.Placeholder?.Type is PlaceholderType.Title or PlaceholderType.CenteredTitle)
+            .Select(shape => NormalizeText(shape.PlainText))
+            .FirstOrDefault(text => text is not null);
+        if (titlePlaceholderText is not null)
+        {
+            return BuildPreview(titlePlaceholderText);
+        }
+
+        var firstText = EnumerateShapes(slide.Shapes)
+            .Select(shape => NormalizeText(shape.PlainText))
+            .FirstOrDefault(text => text is not null);
+        return firstText is null ? $"Slide {slideIndex + 1}" : BuildPreview(firstText);
+    }
+
+    public static PresentationSlideTitleMutationPlan BuildSlideTitleMutationPlan(
+        Presentation presentation,
+        int slideIndex,
+        string? title = null)
+    {
+        ArgumentNullException.ThrowIfNull(presentation);
+
+        var suggestedTitle = BuildSuggestedSlideTitle(presentation, slideIndex);
+        var normalizedTitle = title is null ? suggestedTitle : NormalizeText(title) ?? string.Empty;
+        if (GetSlide(presentation.Slides, slideIndex) is null)
+        {
+            return new PresentationSlideTitleMutationPlan(
+                false,
+                slideIndex,
+                normalizedTitle,
+                suggestedTitle,
+                SlideTitleMissingSlideMessage);
+        }
+
+        if (string.IsNullOrWhiteSpace(normalizedTitle))
+        {
+            return new PresentationSlideTitleMutationPlan(
+                false,
+                slideIndex,
+                string.Empty,
+                suggestedTitle,
+                SlideTitleEmptyMessage);
+        }
+
+        return new PresentationSlideTitleMutationPlan(
+            true,
+            slideIndex,
+            normalizedTitle,
+            suggestedTitle,
+            null);
+    }
+
+    public static PresentationSlideTitleMutationPlan TryApplySlideTitleMutation(
+        EditingSession editor,
+        int slideIndex,
+        string? title = null)
+    {
+        ArgumentNullException.ThrowIfNull(editor);
+
+        var plan = BuildSlideTitleMutationPlan(editor.Presentation, slideIndex, title);
+        if (plan.ShouldApply)
+        {
+            editor.SetSlideTitle(plan.SlideIndex, plan.Title);
+        }
+
+        return plan;
     }
 
     public static PresentationAccessibilityCheckerPanePlan BuildAccessibilityCheckerPanePlan(
@@ -1543,6 +1639,7 @@ public static class PresentationReviewWorkflowPlanner
         {
             AltTextCommandId => "Open Alt Text",
             InsertLinkCommandId => "Edit Hyperlink",
+            SetSlideTitleCommandId => "Set Slide Title",
             _ when issue.ShapeId is null => "Go to Slide",
             _ => "Select Object"
         };

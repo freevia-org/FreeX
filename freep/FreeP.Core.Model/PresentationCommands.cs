@@ -205,6 +205,51 @@ public sealed class MoveSlideCommand : IPresentationCommand
 // ════════════════════════════════════════════════════════════════════════════════
 
 /// <summary>
+/// Sets the title metadata for a slide. Revert restores the previous title.
+/// </summary>
+public sealed class SetSlideTitleCommand : IPresentationCommand
+{
+    private readonly int _slideIndex;
+    private readonly string _newTitle;
+    private string? _oldTitle;
+
+    public SetSlideTitleCommand(int slideIndex, string title)
+    {
+        _slideIndex = slideIndex;
+        _newTitle = title;
+    }
+
+    public string Label => "Set Slide Title";
+
+    public bool HasEffect(Presentation p) =>
+        _slideIndex >= 0 &&
+        _slideIndex < p.Slides.Count &&
+        !StringComparer.Ordinal.Equals(p.Slides[_slideIndex].Title, _newTitle);
+
+    public void Apply(Presentation p)
+    {
+        if (_slideIndex < 0 || _slideIndex >= p.Slides.Count)
+        {
+            return;
+        }
+
+        var slide = p.Slides[_slideIndex];
+        _oldTitle = slide.Title;
+        slide.Title = _newTitle;
+    }
+
+    public void Revert(Presentation p)
+    {
+        if (_slideIndex < 0 || _slideIndex >= p.Slides.Count)
+        {
+            return;
+        }
+
+        p.Slides[_slideIndex].Title = _oldTitle ?? string.Empty;
+    }
+}
+
+/// <summary>
 /// Assigns a slide to an existing presentation layout. Revert restores the prior layout id.
 /// </summary>
 public sealed class SetSlideLayoutCommand : IPresentationCommand

@@ -85,6 +85,48 @@ public sealed class SlideShowWindowHeadlessTests
     }
 
     [Fact]
+    public async Task SlideShowWindow_custom_playback_route_uses_ordered_slides()
+    {
+        string? currentTitle = null;
+        string? nextTitle = null;
+        int routeCount = -1;
+        int presentationSlideIndex = -1;
+        int controllerIndexAfterAdvance = -1;
+        var ran = await OnUiThread(() =>
+        {
+            var pres = MakePresentation(3);
+            pres.Slides[0].Title = "Intro";
+            pres.Slides[1].Title = "Deep dive";
+            pres.Slides[2].Title = "Appendix";
+
+            var route = SlideShowCustomShowPlanner.BuildCustomShowRoute(
+                pres,
+                new SlideShowCustomSlideSequence(
+                    "Executive review",
+                    new[] { pres.Slides[2].Id, pres.Slides[0].Id }),
+                startIndex: 0);
+            var window = new SlideShowWindow(pres, route);
+
+            var state = window.CreatePresenterState(window.PresenterStartedAtUtc);
+            currentTitle = state.CurrentSlide!.Title;
+            nextTitle = state.NextSlide!.Title;
+            routeCount = state.HostState.SlideCount;
+            presentationSlideIndex = window.CurrentPresentationSlideIndex;
+
+            window.ExecuteAdvance();
+            controllerIndexAfterAdvance = window.Controller.CurrentSlideIndex;
+            window.Close();
+        });
+
+        if (!ran) return;
+        currentTitle.Should().Be("Appendix");
+        nextTitle.Should().Be("Intro");
+        routeCount.Should().Be(2);
+        presentationSlideIndex.Should().Be(2);
+        controllerIndexAfterAdvance.Should().Be(1);
+    }
+
+    [Fact]
     public async Task SlideShowWindow_create_presenter_state_uses_shared_planner_state()
     {
         SlideShowPresenterState? state = null;

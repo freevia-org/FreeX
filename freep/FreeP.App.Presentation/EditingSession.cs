@@ -205,6 +205,17 @@ public sealed class EditingSession
         return StringComparer.Ordinal.Equals(CurrentSlide.LayoutId, layoutId);
     }
 
+    public bool SetSlideTitle(int slideIndex, string title)
+    {
+        if (slideIndex < 0 || slideIndex >= Presentation.Slides.Count || string.IsNullOrWhiteSpace(title))
+        {
+            return false;
+        }
+
+        Bus.Execute(new SetSlideTitleCommand(slideIndex, title));
+        return StringComparer.Ordinal.Equals(Presentation.Slides[slideIndex].Title, title);
+    }
+
     /// <summary>Deletes the current slide. Adjusts CurrentSlideIndex after deletion.</summary>
     public void DeleteCurrentSlide()
     {
