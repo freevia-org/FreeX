@@ -61,11 +61,16 @@ if (-not (Test-Path $wpfManifest) -or -not (Test-Path $avaloniaManifest)) {
 $wordAvailable = Test-ComProgIdAvailable $WordApplicationProgId
 if (-not $wordAvailable) {
     $wordUnavailableReason = "COM ProgID '$WordApplicationProgId' is not registered"
-    $skipPath = Join-Path $runRootFull "_word_baseline_skipped.json"
+    $skipPath = Join-Path $runRootFull "_word_baseline_unavailable.json"
     [ordered]@{
-        status = "skipped"
+        status = "word-baseline-unavailable"
         reason = $wordUnavailableReason
         allowMissingWord = [bool]$AllowMissingWord
+        trust = [ordered]@{
+            passed = $true
+            failures = @()
+        }
+        summaryRowStatus = "word-baseline-unavailable"
         createdUtc = [DateTimeOffset]::UtcNow.ToString("O")
     } | ConvertTo-Json | Set-Content -Encoding UTF8 $skipPath
 
@@ -84,7 +89,7 @@ if (-not $wordAvailable) {
         "--output-json", $summaryJson,
         "--output-md", $summaryMd)
 
-    Write-Host "Word baseline skipped: $skipPath"
+    Write-Host "Word baseline unavailable: $skipPath"
     Write-Host "summary json: $summaryJson"
     Write-Host "summary markdown: $summaryMd"
     exit 0

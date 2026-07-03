@@ -534,6 +534,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
         if (!string.Equals(row.OutputName, row.PageExpectation.ExpectedOutputName, StringComparison.OrdinalIgnoreCase))
             rowFailures.Add($"output name '{row.OutputName}' does not match expected '{row.PageExpectation.ExpectedOutputName}'");
         ValidateFeatureExpectations(row, rowFailures);
+        ValidateBackstageCaptureSource(row, rowFailures);
 
         var outputPath = ResolveOutputPath(row.OutputPath, manifestDirectory);
         var relativeOutputPath = NormalizeRelativePath(runRoot, outputPath);
@@ -733,6 +734,33 @@ public static class FreeWVisualEvidenceManifestNormalizer
             rowFailures.Add("chart/SmartArt evidence includes SmartArt but records no nodes");
     }
 
+    private static void ValidateBackstageCaptureSource(
+        FreeWVisualEvidenceRow row,
+        List<string> rowFailures)
+    {
+        if (!BackstageRendererScenarioIds.Contains(row.ScenarioId, StringComparer.OrdinalIgnoreCase))
+            return;
+
+        foreach (var (key, value) in row.HostMetadata)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                continue;
+
+            if (value.Contains("placeholder", StringComparison.OrdinalIgnoreCase))
+            {
+                rowFailures.Add(
+                    $"backstage renderer evidence cannot use placeholder capture metadata '{key}={value}'");
+            }
+        }
+
+        if (row.HostMetadata.TryGetValue("captureSource", out var captureSource)
+            && captureSource.Contains("fallback", StringComparison.OrdinalIgnoreCase))
+        {
+            rowFailures.Add(
+                $"backstage renderer evidence cannot use fallback capture source '{captureSource}'");
+        }
+    }
+
     private static IReadOnlyList<FreeWVisualEvidenceNormalizedScenario> BuildScenarioSummaries(
         IReadOnlyList<FreeWVisualEvidenceNormalizedRow> rows,
         IReadOnlyList<FreeWVisualEvidenceExpectedScenario> expected,
@@ -795,7 +823,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
         {
             var wpfRows = TrustedRowsForHostScenario(rows, WpfHostId, scenarioId);
             var avaloniaRows = TrustedRowsForHostScenario(rows, AvaloniaHostId, scenarioId);
-            if (wpfRows.Count == 0 || avaloniaRows.Count == 0)
+            if (wpfRows.Count == 0 && avaloniaRows.Count == 0)
                 continue;
 
             ValidateUniquePages(scenarioId, WpfHostId, wpfRows, failures);

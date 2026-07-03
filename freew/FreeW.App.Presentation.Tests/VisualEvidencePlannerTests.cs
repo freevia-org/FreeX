@@ -552,7 +552,10 @@ public sealed class VisualEvidencePlannerTests
         source.Should().Contain("--word-baseline-scope");
         source.Should().Contain("generated-corpus");
         source.Should().Contain("--word-baseline-unavailable-reason");
-        source.Should().Contain("_word_baseline_skipped.json");
+        source.Should().Contain("_word_baseline_unavailable.json");
+        source.Should().Contain("status = \"word-baseline-unavailable\"");
+        source.Should().Contain("summaryRowStatus = \"word-baseline-unavailable\"");
+        source.Should().Contain("passed = $true");
         source.Should().Contain("FreeW.VisualEvidenceSummary.csproj");
     }
 
@@ -1082,6 +1085,98 @@ public sealed class VisualEvidencePlannerTests
                 f.Contains("avalonia-page-layout-shot/backstage-print-preview-fidelity", StringComparison.Ordinal)
                 && f.Contains("expected at least 2 trusted output", StringComparison.Ordinal)
                 && f.Contains("found 0", StringComparison.Ordinal));
+            summary.Trust.Failures.Should().Contain(f =>
+                f.Contains("backstage renderer pair 'backstage-print-preview-fidelity'", StringComparison.Ordinal)
+                && f.Contains("missing Avalonia page(s): p1, p2", StringComparison.Ordinal));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void BuildNormalizedSummaryFromFiles_RejectsBackstagePlaceholderFallbackRows()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var wpfDir = Path.Combine(root, "wpf");
+            var avaloniaDir = Path.Combine(root, "avalonia");
+            var scenarioId = "backstage-pdf-export-fidelity";
+            FreeWVisualEvidencePlanner.WriteManifest(
+                wpfDir,
+                [
+                    BuildFileBackedRow(
+                        root,
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        scenarioId,
+                        pageNumber: 1,
+                        pageCount: 2),
+                    BuildFileBackedRow(
+                        root,
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        scenarioId,
+                        pageNumber: 2,
+                        pageCount: 2)
+                ],
+                new DateTimeOffset(2026, 7, 1, 12, 0, 0, TimeSpan.Zero));
+
+            var avaloniaP1 = BuildFileBackedRow(
+                root,
+                FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                scenarioId,
+                pageNumber: 1,
+                pageCount: 2);
+            var placeholderFallback = avaloniaP1 with
+            {
+                HostMetadata = new Dictionary<string, string>
+                {
+                    ["renderer"] = "FreeW.PageLayoutShot",
+                    ["captureSource"] = "skia-fallback-placeholder",
+                    ["viewMode"] = "PrintLayout"
+                }
+            };
+            var avaloniaP2 = BuildFileBackedRow(
+                root,
+                FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                scenarioId,
+                pageNumber: 2,
+                pageCount: 2);
+            FreeWVisualEvidencePlanner.WriteManifest(
+                avaloniaDir,
+                [placeholderFallback, avaloniaP2],
+                new DateTimeOffset(2026, 7, 1, 12, 0, 0, TimeSpan.Zero));
+
+            var summary = FreeWVisualEvidenceManifestNormalizer.BuildNormalizedSummaryFromFiles(
+                [
+                    Path.Combine(wpfDir, FreeWVisualEvidencePlanner.ManifestFileName),
+                    Path.Combine(avaloniaDir, FreeWVisualEvidencePlanner.ManifestFileName)
+                ],
+                root,
+                [
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        scenarioId,
+                        2),
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                        scenarioId,
+                        2)
+                ]);
+
+            summary.Trust.Passed.Should().BeFalse();
+            summary.Evidence.Single(row =>
+                row.HostId == FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId &&
+                row.ScenarioId == scenarioId &&
+                row.PageNumber == 1)
+                .Trust.Passed.Should().BeFalse();
+            summary.Trust.Failures.Should().Contain(f =>
+                f.Contains("backstage renderer evidence cannot use placeholder capture metadata", StringComparison.Ordinal)
+                && f.Contains("skia-fallback-placeholder", StringComparison.Ordinal));
+            summary.Trust.Failures.Should().Contain(f =>
+                f.Contains("backstage renderer pair 'backstage-pdf-export-fidelity'", StringComparison.Ordinal)
+                && f.Contains("missing Avalonia page(s): p1", StringComparison.Ordinal));
         }
         finally
         {
