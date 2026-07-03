@@ -84,6 +84,8 @@ public sealed partial class PivotWorkflowDialogTests
     {
         var source = ReadPivotWorkflowSource();
 
+        source.Should().Contain("Width = PivotSlicerTimelineDialogContract.Width");
+        source.Should().Contain("Height = PivotSlicerTimelineDialogContract.Height");
         source.Should().Contain("UiText.Get(\"PivotSlicerTimeline_ChooseFieldsGroup\")");
         source.Should().Contain("UiText.Get(\"PivotSlicerTimeline_FieldToConnectLabel\")");
         source.Should().Contain("UiText.Get(\"PivotSlicerTimeline_SlicerCaptionLabel\")");

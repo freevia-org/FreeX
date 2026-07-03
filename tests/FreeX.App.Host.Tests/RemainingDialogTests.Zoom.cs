@@ -28,6 +28,8 @@ public sealed partial class RemainingDialogTests
     {
         var source = ReadRemainingDialogSources();
 
+        source.Should().Contain("Width = ZoomDialogPlanner.Width");
+        source.Should().Contain("Height = ZoomDialogPlanner.Height");
         source.Should().Contain("ZoomDialogPlanner.Presets");
         source.Should().Contain("ZoomDialogPlanner.IsPreset(currentZoomPercent)");
         source.Should().Contain("_fitSelectionButton");

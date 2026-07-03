@@ -22,6 +22,7 @@ using FreeX.App.Presentation.DrawingUI;
 using FreeX.App.Presentation.Filtering;
 using FreeX.App.Presentation.PageLayout;
 using FreeX.App.Presentation.PivotUI;
+using FreeX.App.Presentation.SlicerTimeline;
 using FreeX.App.Services;
 using FreeX.Core.Calc;
 using FreeX.Core.Commands;
@@ -1041,8 +1042,9 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = title,
-            Width = 410,
-            SizeToContent = SizeToContent.Height,
+            Width = PivotSlicerTimelineDialogContract.Width,
+            Height = PivotSlicerTimelineDialogContract.Height,
+            SizeToContent = SizeToContent.Manual,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             CanResize = false,
             ShowInTaskbar = false,

@@ -12,6 +12,13 @@ public sealed class ZoomDialogPlannerTests
     }
 
     [Fact]
+    public void SizeContract_MatchesWpfVisualEvidenceTarget()
+    {
+        ZoomDialogPlanner.Width.Should().Be(300);
+        ZoomDialogPlanner.Height.Should().Be(240);
+    }
+
+    [Fact]
     public void TryCreateResult_AcceptsWholePercentWithinRange()
     {
         ZoomDialogPlanner.TryCreateResult("125%", out var result, out var error).Should().BeTrue();

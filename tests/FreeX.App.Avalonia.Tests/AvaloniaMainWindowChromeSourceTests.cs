@@ -348,6 +348,17 @@ public sealed class AvaloniaMainWindowChromeSourceTests
     }
 
     [Fact]
+    public void ParityCapture_PivotControlPickerUsesSharedDialogSizeContract()
+    {
+        var captureSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
+
+        captureSource.Should().Contain("using FreeX.App.Presentation.SlicerTimeline;");
+        captureSource.Should().Contain("Width = PivotSlicerTimelineDialogContract.Width");
+        captureSource.Should().Contain("Height = PivotSlicerTimelineDialogContract.Height");
+        captureSource.Should().Contain("SizeToContent = SizeToContent.Manual");
+    }
+
+    [Fact]
     public void NativeFileMenu_InstallsForMacOsDockAndMirrorsBackstageCommandGroups()
     {
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));

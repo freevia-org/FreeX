@@ -22,8 +22,8 @@ public sealed class ZoomDialog : Window
     {
         Result = new ZoomDialogResult(currentZoomPercent);
         Title = UiText.Get("Zoom_Zoom");
-        Width = 300;
-        Height = 240;
+        Width = ZoomDialogPlanner.Width;
+        Height = ZoomDialogPlanner.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
