@@ -314,6 +314,9 @@ public sealed class NotesSlideTests : IDisposable
             plan.PageBounds.Width.Should().Be(360);
             plan.PageBounds.Height.Should().Be(720);
             plan.HasNotes.Should().BeTrue();
+            plan.NotesPlaceholder.SourcePlaceholderType.Should().Be(PlaceholderType.Body);
+            plan.NotesPlaceholder.HasContent.Should().BeTrue();
+            plan.NotesPlaceholder.ShouldShowPlaceholder.Should().BeFalse();
             plan.PrintPlan.SlideRange.DisplayName.Should().Be("Slide 1");
         }
         finally

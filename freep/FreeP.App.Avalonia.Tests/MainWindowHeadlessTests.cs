@@ -2629,6 +2629,9 @@ public sealed class MainWindowHeadlessTests
         editedPlan.PageBounds.Width.Should().Be(360);
         editedPlan.PageBounds.Height.Should().Be(720);
         editedPlan.HasNotes.Should().BeTrue();
+        editedPlan.NotesPlaceholder.SourcePlaceholderType.Should().Be(PlaceholderType.Body);
+        editedPlan.NotesPlaceholder.HasContent.Should().BeTrue();
+        editedPlan.NotesPlaceholder.ShouldShowPlaceholder.Should().BeFalse();
         editedPlan.PrintPlan.SlideRange.DisplayName.Should().Be("Slide 1");
     }
 
