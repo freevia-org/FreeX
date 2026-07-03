@@ -6,6 +6,7 @@ using Avalonia;
 using Avalonia.Headless;
 using FreeW.App.Avalonia.Editing;
 using FreeW.App.Avalonia.Ribbon;
+using FreeW.App.Presentation.DocumentView;
 using FreeW.Core.Model;
 using Free.Shared.Ribbon;
 using Xunit;
@@ -95,6 +96,11 @@ public sealed class ChartSmartArtContextualTabTests
         var cd = def.FindTab("chart-design")!;
         cd.Context!.ActivationKey.Should().Be(FloatingRibbonContextSource.ChartContextKey);
         cd.Context.Color.Should().Be(RibbonContextColor.Green);
+        cd.Groups.Select(g => g.Id).Should().Contain("chart-elements");
+        cd.Groups.Single(g => g.Id == "chart-elements").Controls
+            .OfType<RibbonToggleButton>()
+            .Single()
+            .CommandId.Value.Should().Be("freew.chart-toggle-legend");
 
         var cf = def.FindTab("chart-format")!;
         cf.Context!.ActivationKey.Should().Be(FloatingRibbonContextSource.ChartContextKey);
@@ -115,6 +121,7 @@ public sealed class ChartSmartArtContextualTabTests
             "freew.chart-type", "freew.chart-type-column", "freew.chart-type-bar", "freew.chart-type-line",
             "freew.chart-type-pie", "freew.chart-type-scatter", "freew.chart-type-area", "freew.chart-type-doughnut",
             "freew.chart-style", "freew.chart-style-1", "freew.chart-colors", "freew.chart-colors-colorful1",
+            "freew.chart-toggle-legend",
             // SmartArt Design
             "freew.smartart-layout", "freew.smartart-layout-list", "freew.smartart-layout-process",
             "freew.smartart-layout-cycle", "freew.smartart-layout-hierarchy",
@@ -299,6 +306,42 @@ public sealed class ChartSmartArtContextualTabTests
     }
 
     [Fact]
+    public async Task ToggleChartLegend_command_clears_layout_override_and_reverts_on_undo()
+    {
+        bool? visibleBefore = null, visibleAfter = null, visibleUndone = null;
+        int? quickLayoutAfter = null, quickLayoutUndone = null;
+        var ran = await OnUi(() =>
+        {
+            var (doc, bi, ri) = DocWithFloatingChart();
+            var chart = ((Paragraph)doc.Blocks[0]).Runs[ri].Chart!;
+            chart.ShowLegend = false;
+            chart.QuickLayoutId = 3;
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 2000));
+            view.SelectFloating(bi, ri);
+            visibleBefore = ChartSmartArtVisualPlanner.BuildChartPlan(chart).ShowLegend;
+
+            var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
+            registry.TryGet(new RibbonCommandId("freew.chart-toggle-legend"), out var cmd);
+            cmd!.Execute(RibbonCommandContext.Empty);
+            visibleAfter = ChartSmartArtVisualPlanner.BuildChartPlan(chart).ShowLegend;
+            quickLayoutAfter = chart.QuickLayoutId;
+
+            view.Undo();
+            visibleUndone = ChartSmartArtVisualPlanner.BuildChartPlan(chart).ShowLegend;
+            quickLayoutUndone = chart.QuickLayoutId;
+        });
+        if (!ran) return;
+        visibleBefore.Should().BeTrue("quick layout 3 shows the legend before the explicit command");
+        visibleAfter.Should().BeFalse("the Legend command must be able to hide a layout-supplied legend");
+        quickLayoutAfter.Should().Be(0, "explicit chart element commands clear quick-layout overrides");
+        visibleUndone.Should().BeTrue("undo restores the layout-driven legend");
+        quickLayoutUndone.Should().Be(3);
+    }
+
+    [Fact]
     public async Task SetSmartArtLayout_command_changes_kind_and_reverts_on_undo()
     {
         SmartArtKind? before = null, after = null, undone = null;
@@ -395,6 +438,7 @@ public sealed class ChartSmartArtContextualTabTests
             foreach (var id in new[]
             {
                 "freew.chart-type-bar", "freew.chart-style-3", "freew.chart-colors-colorful2",
+                "freew.chart-toggle-legend",
                 "freew.smartart-layout-cycle", "freew.smartart-colors-mono-blue",
             })
             {
