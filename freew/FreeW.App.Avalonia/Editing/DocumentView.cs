@@ -374,8 +374,11 @@ public sealed class DocumentView : Control
 
     public TextDocument Document => _doc;
     public string? CurrentParagraphStyleId => CurrentParagraph()?.StyleId;
-    public bool CanUndo => _bus.CanUndo;
-    public bool CanRedo => _bus.CanRedo;
+    public bool CanUndo =>
+        _bus.CanUndo && AllowsRestrictEditingOperation(RestrictEditingOperationKind.HistoryUndo);
+
+    public bool CanRedo =>
+        _bus.CanRedo && AllowsRestrictEditingOperation(RestrictEditingOperationKind.HistoryRedo);
     public bool SpellCheckEnabled { get; private set; } = true;
     public IReadOnlyList<string> CustomDictionaryWords => _customDictionary.Words;
 
@@ -429,12 +432,18 @@ public sealed class DocumentView : Control
 
     public void Undo()
     {
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.HistoryUndo))
+            return;
+
         if (_bus.Undo())
             ClampCaret();
     }
 
     public void Redo()
     {
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.HistoryRedo))
+            return;
+
         if (_bus.Redo())
             ClampCaret();
     }

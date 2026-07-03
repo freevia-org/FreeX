@@ -14,7 +14,9 @@ public enum RestrictEditingOperationKind
     CommentReply,
     CommentResolve,
     CommentDelete,
-    FormFieldEdit
+    FormFieldEdit,
+    HistoryUndo,
+    HistoryRedo
 }
 
 public enum RestrictEditingBlockReason
@@ -67,6 +69,10 @@ public readonly record struct RestrictEditingEnforcementPolicy(
         && DecisionFor(RestrictEditingOperationKind.BodyTextEdit).IsBlocked
         && DecisionFor(RestrictEditingOperationKind.BodyFormatting).IsBlocked;
 
+    public bool IsHistoryLocked =>
+        DecisionFor(RestrictEditingOperationKind.HistoryUndo).IsBlocked
+        || DecisionFor(RestrictEditingOperationKind.HistoryRedo).IsBlocked;
+
     public RestrictEditingEnforcementDecision DecisionFor(RestrictEditingOperationKind operation)
     {
         if (IsMarkedAsFinal)
@@ -89,7 +95,9 @@ public readonly record struct RestrictEditingEnforcementPolicy(
     {
         var requiresTracking = operation is RestrictEditingOperationKind.BodyTextEdit
             or RestrictEditingOperationKind.BodyTextDelete
-            or RestrictEditingOperationKind.BodyFormatting;
+            or RestrictEditingOperationKind.BodyFormatting
+            or RestrictEditingOperationKind.HistoryUndo
+            or RestrictEditingOperationKind.HistoryRedo;
         return Allow(operation, requiresTracking);
     }
 

@@ -97,6 +97,58 @@ public sealed class DocumentViewProtectionTests
     }
 
     [Fact]
+    public async Task ReadOnlyProtection_blocks_undo_redo_history_until_protection_is_cleared()
+    {
+        var canUndoWhileReadOnly = true;
+        var textAfterBlockedUndo = "";
+        var canUndoAfterCleared = false;
+        var textAfterAllowedUndo = "";
+        var canRedoWhileFinal = true;
+        var textAfterBlockedRedo = "";
+        var canRedoAfterCleared = false;
+        var textAfterAllowedRedo = "";
+
+        var ran = await OnUiThread(() =>
+        {
+            var view = BuildView("Hello");
+
+            view.InsertText("X");
+            view.SetProtection(ProtectionMode.ReadOnly);
+
+            canUndoWhileReadOnly = view.CanUndo;
+            view.Undo();
+            textAfterBlockedUndo = view.PlainText;
+
+            view.SetProtection(ProtectionMode.None);
+            canUndoAfterCleared = view.CanUndo;
+            view.Undo();
+            textAfterAllowedUndo = view.PlainText;
+
+            view.SetMarkedAsFinal(true);
+            canRedoWhileFinal = view.CanRedo;
+            view.Redo();
+            textAfterBlockedRedo = view.PlainText;
+
+            view.SetMarkedAsFinal(false);
+            canRedoAfterCleared = view.CanRedo;
+            view.Redo();
+            textAfterAllowedRedo = view.PlainText;
+        });
+
+        if (!ran)
+            return;
+
+        canUndoWhileReadOnly.Should().BeFalse();
+        textAfterBlockedUndo.Should().Be("XHello");
+        canUndoAfterCleared.Should().BeTrue();
+        textAfterAllowedUndo.Should().Be("Hello");
+        canRedoWhileFinal.Should().BeFalse();
+        textAfterBlockedRedo.Should().Be("Hello");
+        canRedoAfterCleared.Should().BeTrue();
+        textAfterAllowedRedo.Should().Be("XHello");
+    }
+
+    [Fact]
     public async Task TrackChangesOnly_keeps_text_and_formatting_unlocked_under_tracking_policy()
     {
         var editingLocked = true;
