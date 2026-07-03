@@ -57,6 +57,23 @@ public sealed class ViewTabDepthTests
         return doc;
     }
 
+    private static TextDocument MakeMultiPageDoc()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Page.WidthPt = 300;
+        doc.Page.HeightPt = 220;
+        doc.Page.MarginTopPt = 18;
+        doc.Page.MarginBottomPt = 18;
+        doc.Page.MarginLeftPt = 18;
+        doc.Page.MarginRightPt = 18;
+        doc.Blocks.Clear();
+
+        for (var i = 0; i < 80; i++)
+            doc.Blocks.Add(new Paragraph($"Side-to-side navigation paragraph {i + 1}."));
+
+        return doc;
+    }
+
     // ── Command resolution ───────────────────────────────────────────────────
 
     [Fact]
@@ -257,8 +274,50 @@ public sealed class ViewTabDepthTests
         afterSideToSide.Should().Be(FreeWViewDepthMode.SideToSidePreview);
         multipleActiveAfterSideToSide.Should().BeFalse();
         sideToSideActive.Should().BeTrue();
-        sideToSideLimitation.Should().Contain("Animated horizontal page turning remains deferred");
+        sideToSideLimitation.Should().Contain("editable horizontal page view remains deferred");
         liveAfterSecondToggle.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task MainWindow_side_to_side_navigation_steps_page_pairs()
+    {
+        bool hasNavigation = false;
+        FreeWViewDepthPagePairNavigationState? initial = null;
+        FreeWViewDepthPagePairNavigationState? next = null;
+        FreeWViewDepthPagePairNavigationState? previous = null;
+        Vector initialOffset = default;
+        Vector nextOffset = default;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            window.Editor.LoadDocument(MakeMultiPageDoc());
+
+            window.ToggleSideToSide();
+
+            hasNavigation = window.HasSideToSidePagePairNavigationForTests;
+            initial = window.SideToSideNavigationForTests;
+            initialOffset = window.SideToSidePreviewOffsetForTests;
+
+            window.NavigateSideToSideNextPairForTests();
+            next = window.SideToSideNavigationForTests;
+            nextOffset = window.SideToSidePreviewOffsetForTests;
+
+            window.NavigateSideToSidePreviousPairForTests();
+            previous = window.SideToSideNavigationForTests;
+        });
+
+        if (!ran) return;
+        hasNavigation.Should().BeTrue();
+        initial!.TotalPages.Should().BeGreaterThan(2);
+        initial.FirstVisiblePageNumber.Should().Be(1);
+        initial.CanGoToPreviousPair.Should().BeFalse();
+        initial.CanGoToNextPair.Should().BeTrue();
+        next!.FirstVisiblePageNumber.Should().Be(3);
+        next.LastVisiblePageNumber.Should().Be(4);
+        next.CanGoToPreviousPair.Should().BeTrue();
+        nextOffset.X.Should().BeGreaterThan(initialOffset.X);
+        previous!.FirstVisiblePageNumber.Should().Be(1);
     }
 
     [Fact]
