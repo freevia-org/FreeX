@@ -49,7 +49,59 @@ public enum ChartMarkerPrimitiveSymbol
     X
 }
 
-public readonly record struct ChartFillPlan(SrgbColor Color, byte Alpha);
+public readonly record struct ChartFillPlan(SrgbColor Color, byte Alpha)
+{
+    public ResolvedFill? Fill { get; init; }
+
+    public ChartFillPlan WithAlpha(byte alpha) => this with { Alpha = alpha };
+}
+
+public readonly record struct ChartFillKey(int SeriesIndex, int PointIndex);
+
+public sealed class ChartFillPlanSet
+{
+    public IReadOnlyList<ChartFillPlan> SeriesFills { get; init; } = Array.Empty<ChartFillPlan>();
+    public IReadOnlyDictionary<ChartFillKey, ChartFillPlan> PointFills { get; init; } =
+        new Dictionary<ChartFillKey, ChartFillPlan>();
+    public IReadOnlyDictionary<ChartFillKey, ChartFillPlan> MarkerFills { get; init; } =
+        new Dictionary<ChartFillKey, ChartFillPlan>();
+
+    public bool TryGetSeriesFill(int seriesIndex, byte alpha, out ChartFillPlan fill)
+    {
+        if (seriesIndex >= 0 && seriesIndex < SeriesFills.Count)
+        {
+            fill = SeriesFills[seriesIndex].WithAlpha(alpha);
+            return true;
+        }
+
+        fill = default;
+        return false;
+    }
+
+    public bool TryGetPointFill(int seriesIndex, int pointIndex, byte alpha, out ChartFillPlan fill)
+    {
+        if (PointFills.TryGetValue(new ChartFillKey(seriesIndex, pointIndex), out fill))
+        {
+            fill = fill.WithAlpha(alpha);
+            return true;
+        }
+
+        fill = default;
+        return false;
+    }
+
+    public bool TryGetMarkerFill(int seriesIndex, int pointIndex, byte alpha, out ChartFillPlan fill)
+    {
+        if (MarkerFills.TryGetValue(new ChartFillKey(seriesIndex, pointIndex), out fill))
+        {
+            fill = fill.WithAlpha(alpha);
+            return true;
+        }
+
+        fill = default;
+        return false;
+    }
+}
 
 public readonly record struct ChartStrokePlan(
     SrgbColor Color,
@@ -237,7 +289,8 @@ public readonly record struct ChartPieSlicePrimitive(
     double InnerRadius,
     double OuterRadius,
     double StartAngle,
-    double EndAngle)
+    double EndAngle,
+    ChartFillPlan? Fill)
 {
     public double SweepAngle => EndAngle - StartAngle;
     public bool IsLargeArc => SweepAngle > Math.PI;
@@ -331,8 +384,14 @@ public static partial class ChartRenderPlanner
     public static ChartFillPlan ResolveSeriesFill(
         int seriesIndex,
         IReadOnlyList<SrgbColor>? seriesColors,
-        byte alpha = RectSeriesFillAlpha) =>
-        new(ResolveSeriesColor(seriesIndex, seriesColors), alpha);
+        byte alpha = RectSeriesFillAlpha,
+        ChartFillPlanSet? fillPlans = null)
+    {
+        if (fillPlans?.TryGetSeriesFill(seriesIndex, alpha, out var fill) == true)
+            return fill;
+
+        return new ChartFillPlan(ResolveSeriesColor(seriesIndex, seriesColors), alpha);
+    }
 
     public static ChartStrokePlan ResolveSeriesStroke(
         int seriesIndex,
@@ -395,10 +454,14 @@ public static partial class ChartRenderPlanner
         int pointIndex,
         ChartMarkerStyle? markerStyle,
         IReadOnlyList<SrgbColor>? seriesColors,
-        byte defaultAlpha)
+        byte defaultAlpha,
+        ChartFillPlanSet? fillPlans = null)
     {
         if (markerStyle?.NoFill == true)
             return null;
+
+        if (fillPlans?.TryGetMarkerFill(seriesIndex, pointIndex, defaultAlpha, out var markerFill) == true)
+            return markerFill;
 
         var pointStyleColor = series.PointStyles.TryGetValue(pointIndex, out var pointStyle)
             ? pointStyle.FillColor?.Resolved
@@ -412,6 +475,33 @@ public static partial class ChartRenderPlanner
             ?? series.FillColor?.Resolved
             ?? ResolveSeriesColor(seriesIndex, seriesColors);
         return new ChartFillPlan(color, defaultAlpha);
+    }
+
+    private static ChartFillPlan ResolvePointFill(
+        ChartSeries series,
+        int seriesIndex,
+        int pointIndex,
+        IReadOnlyList<SrgbColor>? seriesColors,
+        byte alpha,
+        ChartFillPlanSet? fillPlans = null)
+    {
+        if (fillPlans?.TryGetPointFill(seriesIndex, pointIndex, alpha, out var pointFill) == true)
+            return pointFill;
+
+        var pointStyleColor = series.PointStyles.TryGetValue(pointIndex, out var pointStyle)
+            ? pointStyle.FillColor?.Resolved
+            : (SrgbColor?)null;
+        var pointColorOverride = series.PointColors.TryGetValue(pointIndex, out var pointColor)
+            ? pointColor.Resolved
+            : (SrgbColor?)null;
+
+        if (pointStyleColor is not null)
+            return new ChartFillPlan(pointStyleColor.Value, alpha);
+
+        if (pointColorOverride is not null)
+            return new ChartFillPlan(pointColorOverride.Value, alpha);
+
+        return ResolveSeriesFill(seriesIndex, seriesColors, alpha, fillPlans);
     }
 
     private static ChartStrokePlan? ResolveMarkerStroke(
@@ -531,7 +621,8 @@ public static partial class ChartRenderPlanner
     public static IReadOnlyList<ChartLegendItemPlan> BuildLegendItemPlans(
         ChartShape chart,
         ChartFramePlan frame,
-        IReadOnlyList<SrgbColor>? seriesColors)
+        IReadOnlyList<SrgbColor>? seriesColors,
+        ChartFillPlanSet? fillPlans = null)
     {
         if (!frame.HasLegend || !frame.HasPlot || chart.Series.Count == 0)
             return Array.Empty<ChartLegendItemPlan>();
@@ -588,7 +679,9 @@ public static partial class ChartRenderPlanner
                     IsBold: false,
                     FontSize: 7.0,
                     Alignment: ChartPlanTextAlignment.Left),
-                new ChartFillPlan(color, Alpha: 255)));
+                fillPlans is not null
+                    ? ResolveSeriesFill(itemIndex, seriesColors, alpha: 255, fillPlans)
+                    : new ChartFillPlan(color, Alpha: 255)));
         }
 
         return items;
@@ -908,7 +1001,8 @@ public static partial class ChartRenderPlanner
     public static ChartDataTablePrimitivePlan BuildDataTablePrimitivePlan(
         ChartShape chart,
         ChartFramePlan frame,
-        IReadOnlyList<SrgbColor>? seriesColors = null)
+        IReadOnlyList<SrgbColor>? seriesColors = null,
+        ChartFillPlanSet? fillPlans = null)
     {
         if (!ShouldPlanDataTable(chart, frame))
             return EmptyDataTablePrimitivePlan();
@@ -961,7 +1055,7 @@ public static partial class ChartRenderPlanner
             var series = chart.Series[seriesIndex];
             double rowY = bounds.Y + DataTableHeaderHeight + seriesIndex * DataTableRowHeight;
             var keyFill = settings.ShowLegendKeys
-                ? ResolveSeriesFill(seriesIndex, seriesColors)
+                ? ResolveSeriesFill(seriesIndex, seriesColors, RectSeriesFillAlpha, fillPlans)
                 : (ChartFillPlan?)null;
             var seriesCellBounds = new ChartPlanRect(bounds.X, rowY, firstColumnWidth, DataTableRowHeight);
             ChartPlanRect? keyBounds = keyFill.HasValue
@@ -1127,7 +1221,8 @@ public static partial class ChartRenderPlanner
     public static IReadOnlyList<ChartRectPrimitive> BuildColumnPrimitives(
         ChartShape chart,
         ChartPlanRect plot,
-        IReadOnlyList<SrgbColor>? seriesColors = null)
+        IReadOnlyList<SrgbColor>? seriesColors = null,
+        ChartFillPlanSet? fillPlans = null)
     {
         int categoryCount = Math.Max(1, chart.Categories.Count);
         if (chart.Series.Count == 0 || !plot.HasPositiveArea)
@@ -1186,7 +1281,7 @@ public static partial class ChartRenderPlanner
                         seriesIndex,
                         categoryIndex,
                         new ChartPlanRect(x, stackedY - height, drawWidth, height),
-                        ResolveSeriesFill(seriesIndex, seriesColors),
+                        ResolvePointFill(series, seriesIndex, categoryIndex, seriesColors, RectSeriesFillAlpha, fillPlans),
                         Stroke: null));
                     stackedY -= height;
                 }
@@ -1198,7 +1293,7 @@ public static partial class ChartRenderPlanner
                         seriesIndex,
                         categoryIndex,
                         new ChartPlanRect(x, y, drawWidth, height),
-                        ResolveSeriesFill(seriesIndex, seriesColors),
+                        ResolvePointFill(series, seriesIndex, categoryIndex, seriesColors, RectSeriesFillAlpha, fillPlans),
                         Stroke: null));
                 }
             }
@@ -1210,7 +1305,8 @@ public static partial class ChartRenderPlanner
     public static IReadOnlyList<ChartRectPrimitive> BuildBarPrimitives(
         ChartShape chart,
         ChartPlanRect plot,
-        IReadOnlyList<SrgbColor>? seriesColors = null)
+        IReadOnlyList<SrgbColor>? seriesColors = null,
+        ChartFillPlanSet? fillPlans = null)
     {
         int categoryCount = Math.Max(1, chart.Categories.Count);
         if (chart.Series.Count == 0 || !plot.HasPositiveArea)
@@ -1262,7 +1358,7 @@ public static partial class ChartRenderPlanner
                     seriesIndex,
                     categoryIndex,
                     new ChartPlanRect(x, y, width, height),
-                    ResolveSeriesFill(seriesIndex, seriesColors),
+                    ResolvePointFill(series, seriesIndex, categoryIndex, seriesColors, RectSeriesFillAlpha, fillPlans),
                     Stroke: null));
 
                 if (stacked)
@@ -1277,7 +1373,8 @@ public static partial class ChartRenderPlanner
         ChartShape chart,
         ChartPlanRect plot,
         bool withMarkers,
-        IReadOnlyList<SrgbColor>? seriesColors = null)
+        IReadOnlyList<SrgbColor>? seriesColors = null,
+        ChartFillPlanSet? fillPlans = null)
     {
         int categoryCount = Math.Max(1, chart.Categories.Count);
         if (chart.Series.Count == 0 || !plot.HasPositiveArea)
@@ -1320,7 +1417,8 @@ public static partial class ChartRenderPlanner
                 withMarkers,
                 points,
                 chart.Series[seriesIndex],
-                seriesColors));
+                seriesColors,
+                fillPlans));
         }
 
         return primitives;
@@ -1329,7 +1427,8 @@ public static partial class ChartRenderPlanner
     public static IReadOnlyList<ChartLineSeriesPrimitive> BuildComboOverrideLineSeriesPrimitives(
         ChartShape chart,
         ChartPlanRect plot,
-        IReadOnlyList<SrgbColor>? seriesColors = null)
+        IReadOnlyList<SrgbColor>? seriesColors = null,
+        ChartFillPlanSet? fillPlans = null)
     {
         int categoryCount = Math.Max(1, chart.Categories.Count);
         if (chart.Series.Count == 0 || !plot.HasPositiveArea)
@@ -1375,7 +1474,8 @@ public static partial class ChartRenderPlanner
                 overrideType == ChartType.LineMarkers,
                 points,
                 series,
-                seriesColors));
+                seriesColors,
+                fillPlans));
         }
 
         return primitives;
@@ -1386,7 +1486,8 @@ public static partial class ChartRenderPlanner
         bool withMarkers,
         IReadOnlyList<ChartPlanPoint?> points,
         ChartSeries? series = null,
-        IReadOnlyList<SrgbColor>? seriesColors = null)
+        IReadOnlyList<SrgbColor>? seriesColors = null,
+        ChartFillPlanSet? fillPlans = null)
     {
         series ??= new ChartSeries();
         bool suppressLine = series.LineStyle?.NoFill == true;
@@ -1399,7 +1500,8 @@ public static partial class ChartRenderPlanner
             pointIndex: 0,
             defaultMarkerStyle,
             seriesColors,
-            RectSeriesFillAlpha);
+            RectSeriesFillAlpha,
+            fillPlans);
         var markerStroke = ResolveMarkerStroke(
             series,
             seriesIndex,
@@ -1443,7 +1545,7 @@ public static partial class ChartRenderPlanner
                     point.Value,
                     ResolveMarkerRadius(markerStyle, LineMarkerRadius),
                     ResolveMarkerSymbol(markerStyle),
-                    ResolveMarkerFill(series, seriesIndex, pointIndex, markerStyle, seriesColors, RectSeriesFillAlpha),
+                    ResolveMarkerFill(series, seriesIndex, pointIndex, markerStyle, seriesColors, RectSeriesFillAlpha, fillPlans),
                     ResolveMarkerStroke(series, seriesIndex, pointIndex, markerStyle, seriesColors, LineMarkerStrokeThickness)));
             }
 
@@ -1466,7 +1568,8 @@ public static partial class ChartRenderPlanner
     public static IReadOnlyList<ChartAreaSeriesPrimitive> BuildAreaSeriesPrimitives(
         ChartShape chart,
         ChartPlanRect plot,
-        IReadOnlyList<SrgbColor>? seriesColors = null)
+        IReadOnlyList<SrgbColor>? seriesColors = null,
+        ChartFillPlanSet? fillPlans = null)
     {
         int categoryCount = Math.Max(1, chart.Categories.Count);
         if (chart.Series.Count == 0 || !plot.HasPositiveArea)
@@ -1499,9 +1602,7 @@ public static partial class ChartRenderPlanner
                 points[categoryIndex] = new ChartPlanPoint(x, y);
             }
 
-            var fill = new ChartFillPlan(
-                ResolveSeriesColor(seriesIndex, seriesColors),
-                AreaFillAlpha);
+            var fill = ResolveSeriesFill(seriesIndex, seriesColors, AreaFillAlpha, fillPlans);
             var pathPoints = new ChartPlanPoint[categoryCount + 2];
             pathPoints[0] = baselineStart;
             for (int pointIndex = 0; pointIndex < points.Length; pointIndex++)
@@ -1526,7 +1627,8 @@ public static partial class ChartRenderPlanner
     public static ChartScatterPrimitivePlan BuildScatterPrimitivePlan(
         ChartShape chart,
         ChartPlanRect plot,
-        IReadOnlyList<SrgbColor>? seriesColors = null)
+        IReadOnlyList<SrgbColor>? seriesColors = null,
+        ChartFillPlanSet? fillPlans = null)
     {
         if (chart.Series.Count == 0 || !plot.HasPositiveArea)
             return EmptyScatterPrimitivePlan();
@@ -1617,7 +1719,7 @@ public static partial class ChartRenderPlanner
                         point.Value,
                         ResolveMarkerRadius(markerStyle, ScatterMarkerRadius),
                         ResolveMarkerSymbol(markerStyle),
-                        ResolveMarkerFill(series, seriesIndex, pointIndex, markerStyle, seriesColors, defaultAlpha: 255),
+                        ResolveMarkerFill(series, seriesIndex, pointIndex, markerStyle, seriesColors, defaultAlpha: 255, fillPlans),
                         markerStyle is not null || hasAuthoredPointStyle
                             ? ResolveMarkerStroke(series, seriesIndex, pointIndex, markerStyle, seriesColors, LineMarkerStrokeThickness)
                             : null));
@@ -1650,7 +1752,8 @@ public static partial class ChartRenderPlanner
     public static ChartBubblePrimitivePlan BuildBubblePrimitivePlan(
         ChartShape chart,
         ChartPlanRect plot,
-        IReadOnlyList<SrgbColor>? seriesColors = null)
+        IReadOnlyList<SrgbColor>? seriesColors = null,
+        ChartFillPlanSet? fillPlans = null)
     {
         if (chart.Series.Count == 0 || !plot.HasPositiveArea)
             return EmptyBubblePrimitivePlan();
@@ -1681,7 +1784,6 @@ public static partial class ChartRenderPlanner
         {
             var series = chart.Series[seriesIndex];
             var color = ResolveSeriesColor(seriesIndex, seriesColors);
-            var fill = new ChartFillPlan(color, BubbleFillAlpha);
             var stroke = new ChartStrokePlan(color, Alpha: 255, Thickness: BubbleStrokeThickness);
             int pointCount = Math.Max(series.XValues.Count, series.Values.Count);
             for (int pointIndex = 0; pointIndex < pointCount; pointIndex++)
@@ -1704,7 +1806,7 @@ public static partial class ChartRenderPlanner
                         plot.X + (xValue.Value - xMin) / xRange * plot.Width,
                         plot.Bottom - (yValue.Value - yMin) / yRange * plot.Height),
                     radius,
-                    fill,
+                    ResolvePointFill(series, seriesIndex, pointIndex, seriesColors, BubbleFillAlpha, fillPlans),
                     stroke));
             }
         }
@@ -1729,7 +1831,8 @@ public static partial class ChartRenderPlanner
     public static ChartRadarPrimitivePlan BuildRadarPrimitivePlan(
         ChartShape chart,
         ChartPlanRect plot,
-        IReadOnlyList<SrgbColor>? seriesColors = null)
+        IReadOnlyList<SrgbColor>? seriesColors = null,
+        ChartFillPlanSet? fillPlans = null)
     {
         if (chart.Series.Count == 0 || !plot.HasPositiveArea)
             return EmptyRadarPrimitivePlan();
@@ -1817,7 +1920,7 @@ public static partial class ChartRenderPlanner
             }
 
             var color = ResolveSeriesColor(seriesIndex, seriesColors);
-            var fill = filled ? new ChartFillPlan(color, RadarFillAlpha) : (ChartFillPlan?)null;
+            var fill = filled ? ResolveSeriesFill(seriesIndex, seriesColors, RadarFillAlpha, fillPlans) : (ChartFillPlan?)null;
             var stroke = ResolveAuthoredSeriesStroke(series, seriesIndex, seriesColors, RadarSeriesStrokeThickness)
                 ?? new ChartStrokePlan(color, Alpha: 255, Thickness: RadarSeriesStrokeThickness);
             var markers = new List<ChartCirclePrimitive>();
@@ -1836,7 +1939,7 @@ public static partial class ChartRenderPlanner
                         points[pointIndex],
                         ResolveMarkerRadius(markerStyle, RadarMarkerRadius),
                         ResolveMarkerSymbol(markerStyle),
-                        ResolveMarkerFill(series, seriesIndex, pointIndex, markerStyle, seriesColors, defaultAlpha: 255),
+                        ResolveMarkerFill(series, seriesIndex, pointIndex, markerStyle, seriesColors, defaultAlpha: 255, fillPlans),
                         markerStyle is not null || hasAuthoredPointStyle
                             ? ResolveMarkerStroke(series, seriesIndex, pointIndex, markerStyle, seriesColors, LineMarkerStrokeThickness)
                             : null));
@@ -1863,7 +1966,9 @@ public static partial class ChartRenderPlanner
 
     public static IReadOnlyList<ChartPieSlicePrimitive> BuildPieSlicePrimitives(
         ChartShape chart,
-        ChartPlanRect plot)
+        ChartPlanRect plot,
+        IReadOnlyList<SrgbColor>? seriesColors = null,
+        ChartFillPlanSet? fillPlans = null)
     {
         if (chart.Series.Count == 0 || !plot.HasPositiveArea)
             return Array.Empty<ChartPieSlicePrimitive>();
@@ -1873,12 +1978,16 @@ public static partial class ChartRenderPlanner
             seriesIndex: 0,
             plot,
             innerRadius: 0,
-            outerRadius: Math.Min(plot.Width, plot.Height) / 2 * 0.85);
+            outerRadius: Math.Min(plot.Width, plot.Height) / 2 * 0.85,
+            seriesColors,
+            fillPlans);
     }
 
     public static IReadOnlyList<ChartPieSlicePrimitive> BuildDoughnutSlicePrimitives(
         ChartShape chart,
-        ChartPlanRect plot)
+        ChartPlanRect plot,
+        IReadOnlyList<SrgbColor>? seriesColors = null,
+        ChartFillPlanSet? fillPlans = null)
     {
         if (chart.Series.Count == 0 || !plot.HasPositiveArea)
             return Array.Empty<ChartPieSlicePrimitive>();
@@ -1904,7 +2013,9 @@ public static partial class ChartRenderPlanner
                 seriesIndex,
                 plot,
                 innerRadius,
-                seriesOuterRadius));
+                seriesOuterRadius,
+                seriesColors,
+                fillPlans));
         }
 
         return primitives;
@@ -2079,7 +2190,9 @@ public static partial class ChartRenderPlanner
         int seriesIndex,
         ChartPlanRect plot,
         double innerRadius,
-        double outerRadius)
+        double outerRadius,
+        IReadOnlyList<SrgbColor>? seriesColors,
+        ChartFillPlanSet? fillPlans)
     {
         var values = series.Values
             .Where(value => value.HasValue && value.Value > 0)
@@ -2108,7 +2221,8 @@ public static partial class ChartRenderPlanner
                 innerRadius,
                 outerRadius,
                 startAngle,
-                endAngle));
+                endAngle,
+                ResolvePointFill(series, seriesIndex, pointIndex, seriesColors, RectSeriesFillAlpha, fillPlans)));
             startAngle = endAngle;
         }
 

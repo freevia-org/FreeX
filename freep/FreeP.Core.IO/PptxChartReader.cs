@@ -637,13 +637,7 @@ internal static class PptxChartReader
             {
                 var idx = ParseInt(dptEl.Element(C + "idx")?.Attribute("val")?.Value);
                 var dptSpPr = dptEl.Element(C + "spPr");
-                var dptSolid = dptSpPr?.Element(A + "solidFill");
-                if (dptSolid is not null)
-                {
-                    var color = PptxColorReader.TryReadColor(dptSolid, scheme);
-                    if (color is not null)
-                        series.PointColors[idx] = color;
-                }
+                ReadPointColorCompatibility(dptSpPr, scheme, series, idx);
 
                 var pointStyle = ReadPointStyle(dptSpPr, dptEl.Element(C + "marker"), scheme);
                 if (pointStyle is not null)
@@ -670,9 +664,16 @@ internal static class PptxChartReader
         PresentationColorScheme scheme,
         ChartSeries series)
     {
-        var solidFill = spPr.Element(A + "solidFill");
-        if (solidFill is not null)
-            series.FillColor = PptxColorReader.TryReadColor(solidFill, scheme);
+        var fill = PptxColorReader.TryReadFill(spPr, scheme);
+        switch (fill)
+        {
+            case ShapeFill.Solid solid:
+                series.FillColor = solid.Color;
+                break;
+            case ShapeFill.Gradient gradient:
+                series.Fill = gradient;
+                break;
+        }
 
         series.LineStyle = ReadLineStyle(spPr.Element(A + "ln"), scheme);
     }
@@ -686,13 +687,7 @@ internal static class PptxChartReader
         {
             var idx = ParseInt(dptEl.Element(C + "idx")?.Attribute("val")?.Value);
             var dptSpPr = dptEl.Element(C + "spPr");
-            var dptSolid = dptSpPr?.Element(A + "solidFill");
-            if (dptSolid is not null)
-            {
-                var color = PptxColorReader.TryReadColor(dptSolid, scheme);
-                if (color is not null)
-                    series.PointColors[idx] = color;
-            }
+            ReadPointColorCompatibility(dptSpPr, scheme, series, idx);
 
             var pointStyle = ReadPointStyle(dptSpPr, dptEl.Element(C + "marker"), scheme);
             if (pointStyle is not null)
@@ -765,9 +760,16 @@ internal static class PptxChartReader
         if (spPr is not null)
         {
             pointStyle = new ChartPointStyle();
-            var solidFill = spPr.Element(A + "solidFill");
-            if (solidFill is not null)
-                pointStyle.FillColor = PptxColorReader.TryReadColor(solidFill, scheme);
+            var fill = PptxColorReader.TryReadFill(spPr, scheme);
+            switch (fill)
+            {
+                case ShapeFill.Solid solid:
+                    pointStyle.FillColor = solid.Color;
+                    break;
+                case ShapeFill.Gradient gradient:
+                    pointStyle.Fill = gradient;
+                    break;
+            }
 
             var lineStyle = ReadLineStyle(spPr.Element(A + "ln"), scheme);
             if (lineStyle is not null)
@@ -795,9 +797,16 @@ internal static class PptxChartReader
         if (spPr.Element(A + "noFill") is not null)
             style.NoFill = true;
 
-        var fill = spPr.Element(A + "solidFill");
-        if (fill is not null)
-            style.FillColor = PptxColorReader.TryReadColor(fill, scheme);
+        var fill = PptxColorReader.TryReadFill(spPr, scheme);
+        switch (fill)
+        {
+            case ShapeFill.Solid solid:
+                style.FillColor = solid.Color;
+                break;
+            case ShapeFill.Gradient gradient:
+                style.Fill = gradient;
+                break;
+        }
 
         var line = ReadLineStyle(spPr.Element(A + "ln"), scheme);
         if (line is not null)
@@ -806,6 +815,21 @@ internal static class PptxChartReader
             style.StrokeColor = line.Color;
             style.StrokeWidthPt = line.WidthPt;
         }
+    }
+
+    private static void ReadPointColorCompatibility(
+        XElement? spPr,
+        PresentationColorScheme scheme,
+        ChartSeries series,
+        int pointIndex)
+    {
+        var dptSolid = spPr?.Element(A + "solidFill");
+        if (dptSolid is null)
+            return;
+
+        var color = PptxColorReader.TryReadColor(dptSolid, scheme);
+        if (color is not null)
+            series.PointColors[pointIndex] = color;
     }
 
     private static ChartMarkerSymbol? ReadMarkerSymbol(string? value) =>

@@ -731,12 +731,15 @@ public static class SlideCompositor
             }
         }
 
+        var fillPlans = BuildChartFillPlans(chart, theme, effectiveClrMap, seriesColors);
+
         ops.Add(new DrawOp.Chart
         {
             ShapeId      = shape.Id,
             BoundsDip    = frameBounds,
             ChartShape   = chart,
-            SeriesColors = seriesColors
+            SeriesColors = seriesColors,
+            FillPlans    = fillPlans
         });
     }
 
@@ -751,6 +754,129 @@ public static class SlideCompositor
     ///   2. If <see cref="SmartArtShape.FallbackShapes"/> is non-empty → cached drawing path.
     ///   3. Fallback: grey placeholder rectangle.
     /// </summary>
+    private static ChartFillPlanSet BuildChartFillPlans(
+        ChartShape chart,
+        PresentationTheme theme,
+        IReadOnlyDictionary<string, string>? effectiveClrMap,
+        IReadOnlyList<SrgbColor> seriesColors)
+    {
+        var seriesFills = new List<ChartFillPlan>();
+        var pointFills = new Dictionary<ChartFillKey, ChartFillPlan>();
+        var markerFills = new Dictionary<ChartFillKey, ChartFillPlan>();
+        bool pieLike = chart.ChartType is ChartType.Pie or ChartType.Doughnut;
+
+        if (pieLike && chart.Series.Count > 0)
+        {
+            var firstSeries = chart.Series[0];
+            for (int pointIndex = 0; pointIndex < seriesColors.Count; pointIndex++)
+            {
+                seriesFills.Add(ResolveChartFillPlan(
+                    GetPointFill(firstSeries, pointIndex),
+                    GetPointFillColor(firstSeries, pointIndex),
+                    seriesColors[pointIndex],
+                    theme,
+                    effectiveClrMap));
+            }
+        }
+        else
+        {
+            for (int seriesIndex = 0; seriesIndex < chart.Series.Count; seriesIndex++)
+            {
+                var fallback = seriesIndex < seriesColors.Count
+                    ? seriesColors[seriesIndex]
+                    : DefaultAccentColor(seriesIndex, theme);
+                seriesFills.Add(ResolveChartFillPlan(
+                    chart.Series[seriesIndex].Fill,
+                    chart.Series[seriesIndex].FillColor,
+                    fallback,
+                    theme,
+                    effectiveClrMap));
+            }
+        }
+
+        for (int seriesIndex = 0; seriesIndex < chart.Series.Count; seriesIndex++)
+        {
+            var series = chart.Series[seriesIndex];
+            int pointCount = Math.Max(series.Values.Count, Math.Max(series.XValues.Count, series.BubbleSizes.Count));
+            for (int pointIndex = 0; pointIndex < pointCount; pointIndex++)
+            {
+                var pointFill = GetPointFill(series, pointIndex);
+                var pointColor = GetPointFillColor(series, pointIndex);
+                if (pointFill is not null || pointColor is not null)
+                {
+                    var fallback = pieLike && seriesIndex == 0 && pointIndex < seriesColors.Count
+                        ? seriesColors[pointIndex]
+                        : seriesIndex < seriesColors.Count
+                            ? seriesColors[seriesIndex]
+                            : DefaultAccentColor(seriesIndex, theme);
+                    pointFills[new ChartFillKey(seriesIndex, pointIndex)] = ResolveChartFillPlan(
+                        pointFill,
+                        pointColor,
+                        fallback,
+                        theme,
+                        effectiveClrMap);
+                }
+
+                var marker = series.PointStyles.TryGetValue(pointIndex, out var pointStyle) && pointStyle.Marker is not null
+                    ? pointStyle.Marker
+                    : series.MarkerStyle;
+                if (marker?.Fill is not null || marker?.FillColor is not null)
+                {
+                    var fallback = seriesIndex < seriesColors.Count
+                        ? seriesColors[seriesIndex]
+                        : DefaultAccentColor(seriesIndex, theme);
+                    markerFills[new ChartFillKey(seriesIndex, pointIndex)] = ResolveChartFillPlan(
+                        marker.Fill,
+                        marker.FillColor,
+                        fallback,
+                        theme,
+                        effectiveClrMap);
+                }
+            }
+        }
+
+        return new ChartFillPlanSet
+        {
+            SeriesFills = seriesFills,
+            PointFills = pointFills,
+            MarkerFills = markerFills
+        };
+    }
+
+    private static ShapeFill? GetPointFill(ChartSeries series, int pointIndex) =>
+        series.PointStyles.TryGetValue(pointIndex, out var pointStyle) ? pointStyle.Fill : null;
+
+    private static ThemeAwareColor? GetPointFillColor(ChartSeries series, int pointIndex)
+    {
+        if (series.PointStyles.TryGetValue(pointIndex, out var pointStyle) && pointStyle.FillColor is not null)
+            return pointStyle.FillColor;
+
+        return series.PointColors.TryGetValue(pointIndex, out var pointColor) ? pointColor : null;
+    }
+
+    private static ChartFillPlan ResolveChartFillPlan(
+        ShapeFill? fill,
+        ThemeAwareColor? color,
+        SrgbColor fallback,
+        PresentationTheme theme,
+        IReadOnlyDictionary<string, string>? effectiveClrMap)
+    {
+        return fill switch
+        {
+            ShapeFill.Gradient gradient => new ChartFillPlan(fallback, ChartRenderPlanner.RectSeriesFillAlpha)
+            {
+                Fill = ResolveFill(gradient, theme, effectiveClrMap)
+            },
+            ShapeFill.Solid solid => new ChartFillPlan(
+                ThemeColorResolver.Resolve(solid.Color, theme, effectiveClrMap),
+                ChartRenderPlanner.RectSeriesFillAlpha),
+            _ when color is not null => new ChartFillPlan(
+                ThemeColorResolver.Resolve(color, theme, effectiveClrMap),
+                ChartRenderPlanner.RectSeriesFillAlpha),
+            _ => new ChartFillPlan(fallback, ChartRenderPlanner.RectSeriesFillAlpha)
+        };
+    }
+
     private static void ComposeSmartArt(
         SlideShape shape,
         Slide slide,

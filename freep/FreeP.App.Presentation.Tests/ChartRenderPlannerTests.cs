@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Linq;
 using FreeP.App.Compositor;
 using FreeP.Core.Model;
@@ -638,6 +639,40 @@ public sealed class ChartRenderPlannerTests
             Bounds: new ChartPlanRect(50, 40, 19, 60),
             Fill: new ChartFillPlan(new SrgbColor(0xC0, 0x50, 0x4D), ChartRenderPlanner.RectSeriesFillAlpha),
             Stroke: null));
+    }
+
+    [Fact]
+    public void BuildColumnPrimitives_UsesPointGradientFillPlan()
+    {
+        var chart = new ChartShape { ChartType = ChartType.ColumnClustered };
+        chart.Categories.AddRange(new[] { "Q1", "Q2" });
+        var series = new ChartSeries { Name = "Sales" };
+        series.Values.AddRange(new double?[] { 10, 20 });
+        chart.Series.Add(series);
+
+        var gradient = new ResolvedFill.Gradient(
+            new SrgbColor(0x10, 0x20, 0x30),
+            new SrgbColor(0xD0, 0xE0, 0xF0),
+            angleDegrees: 45);
+        var fillPlans = new ChartFillPlanSet
+        {
+            PointFills = new Dictionary<ChartFillKey, ChartFillPlan>
+            {
+                [new ChartFillKey(0, 1)] = new ChartFillPlan(new SrgbColor(0x10, 0x20, 0x30), 255)
+                {
+                    Fill = gradient
+                }
+            }
+        };
+
+        var primitives = ChartRenderPlanner.BuildColumnPrimitives(
+            chart,
+            new ChartPlanRect(0, 0, 200, 100),
+            new[] { new SrgbColor(0x40, 0x50, 0x60) },
+            fillPlans);
+
+        var q2 = primitives.Single(p => p.SeriesIndex == 0 && p.CategoryIndex == 1);
+        q2.Fill.Fill.Should().BeSameAs(gradient);
     }
 
     [Fact]

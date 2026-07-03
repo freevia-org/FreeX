@@ -178,6 +178,9 @@ public sealed class ChartMarkerStyle
     /// <summary>Marker fill color. Null means use the series fill/color fallback.</summary>
     public ThemeAwareColor? FillColor { get; set; }
 
+    /// <summary>Rich marker fill metadata. Used for gradient fills; solid compatibility remains in <see cref="FillColor"/>.</summary>
+    public ShapeFill? Fill { get; set; }
+
     /// <summary>Marker stroke color. Null means use the series stroke/color fallback.</summary>
     public ThemeAwareColor? StrokeColor { get; set; }
 
@@ -196,6 +199,9 @@ public sealed class ChartPointStyle
 {
     /// <summary>Point fill color. Null means inherit from the series marker/series fill.</summary>
     public ThemeAwareColor? FillColor { get; set; }
+
+    /// <summary>Rich point fill metadata. Used for gradient fills; solid compatibility remains in <see cref="FillColor"/>.</summary>
+    public ShapeFill? Fill { get; set; }
 
     /// <summary>Point stroke color. Null means inherit from the series marker/series line.</summary>
     public ThemeAwareColor? StrokeColor { get; set; }
@@ -245,6 +251,9 @@ public sealed class ChartSeries
 
     /// <summary>Default series fill color. Null means use the theme accent cycle.</summary>
     public ThemeAwareColor? FillColor { get; set; }
+
+    /// <summary>Rich series fill metadata. Used for gradient fills; solid compatibility remains in <see cref="FillColor"/>.</summary>
+    public ShapeFill? Fill { get; set; }
 
     /// <summary>Authored line stroke style for line/scatter/radar series.</summary>
     public ChartLineStyle? LineStyle { get; set; }
