@@ -125,6 +125,46 @@ public sealed class SlideShowPresenterToolPlannerTests
     }
 
     [Fact]
+    public void BuildPlan_EmitsSharedCommandStatesForPresenterRecordingPointerAndInkChoices()
+    {
+        var plan = SlideShowPresenterToolPlanner.BuildPlan(
+            SlideShowTimingIntent.RecordTimings,
+            SlideShowRecordingMediaIntent.NarrationAndMedia,
+            SlideShowPresenterPointerMode.Highlighter,
+            "#ffee00",
+            8,
+            SlideShowInkRetentionDecision.ClearInk);
+
+        plan.CommandStates.Select(command => command.CommandId).Should().Equal(
+            SlideShowPresenterToolPlanner.RehearseTimingsCommandId,
+            SlideShowPresenterToolPlanner.RecordTimingsCommandId,
+            SlideShowPresenterToolPlanner.NarrationCommandId,
+            SlideShowPresenterToolPlanner.NarrationAndMediaCommandId,
+            SlideShowPresenterToolPlanner.ArrowPointerCommandId,
+            SlideShowPresenterToolPlanner.LaserPointerCommandId,
+            SlideShowPresenterToolPlanner.PenPointerCommandId,
+            SlideShowPresenterToolPlanner.HighlighterPointerCommandId,
+            SlideShowPresenterToolPlanner.EraserPointerCommandId,
+            SlideShowPresenterToolPlanner.KeepInkCommandId,
+            SlideShowPresenterToolPlanner.ClearInkCommandId);
+        plan.CommandStates.Where(command => command.IsChecked).Select(command => command.CommandId)
+            .Should().Equal(
+                SlideShowPresenterToolPlanner.RecordTimingsCommandId,
+                SlideShowPresenterToolPlanner.NarrationAndMediaCommandId,
+                SlideShowPresenterToolPlanner.HighlighterPointerCommandId,
+                SlideShowPresenterToolPlanner.ClearInkCommandId);
+        plan.CommandStates.Single(command =>
+                command.CommandId == SlideShowPresenterToolPlanner.NarrationAndMediaCommandId)
+            .Should().Match<SlideShowPresenterCommandState>(command =>
+                command.IsEnabled &&
+                command.IsDeferred &&
+                command.StatusText == SlideShowPresenterToolPlanner.DeferredCaptureReason);
+        plan.CommandStates.Single(command =>
+                command.CommandId == SlideShowPresenterToolPlanner.HighlighterPointerCommandId)
+            .StatusText.Should().Be("Highlighter; clear ink on exit");
+    }
+
+    [Fact]
     public void TimingRecorder_RecordTimings_PersistsAdvanceAfterAndPreservesTransitionFields()
     {
         var started = new DateTimeOffset(2026, 7, 3, 10, 0, 0, TimeSpan.Zero);

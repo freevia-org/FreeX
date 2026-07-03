@@ -90,10 +90,19 @@ public sealed record SlideShowPresenterWorkflowAction(
     bool IsDeferred,
     string StatusText);
 
+public sealed record SlideShowPresenterCommandState(
+    string CommandId,
+    string Label,
+    bool IsEnabled,
+    bool IsChecked,
+    bool IsDeferred,
+    string StatusText);
+
 public sealed record SlideShowPresenterToolPlan(
     SlideShowRecordingTimingPlan Recording,
     SlideShowPointerInkPlan PointerInk,
-    IReadOnlyList<SlideShowPresenterWorkflowAction> WorkflowActions);
+    IReadOnlyList<SlideShowPresenterWorkflowAction> WorkflowActions,
+    IReadOnlyList<SlideShowPresenterCommandState> CommandStates);
 
 public static class SlideShowPresenterToolPlanner
 {
@@ -101,6 +110,17 @@ public static class SlideShowPresenterToolPlanner
     public const double MaxInkThicknessDip = 64;
     public const string DeferredCaptureReason =
         "Audio, video, and PowerPoint-authored recording capture are deferred adapter capabilities.";
+    public const string RehearseTimingsCommandId = "freep.presenter.timing.rehearse";
+    public const string RecordTimingsCommandId = "freep.presenter.timing.record";
+    public const string NarrationCommandId = "freep.presenter.recording.narration";
+    public const string NarrationAndMediaCommandId = "freep.presenter.recording.narration-media";
+    public const string ArrowPointerCommandId = "freep.presenter.pointer.arrow";
+    public const string LaserPointerCommandId = "freep.presenter.pointer.laser";
+    public const string PenPointerCommandId = "freep.presenter.pointer.pen";
+    public const string HighlighterPointerCommandId = "freep.presenter.pointer.highlighter";
+    public const string EraserPointerCommandId = "freep.presenter.pointer.eraser";
+    public const string KeepInkCommandId = "freep.presenter.ink.keep";
+    public const string ClearInkCommandId = "freep.presenter.ink.clear";
 
     public static SlideShowPresenterToolPlan BuildPlan(
         SlideShowTimingIntent timingIntent = SlideShowTimingIntent.None,
@@ -116,7 +136,8 @@ public static class SlideShowPresenterToolPlanner
         return new(
             recording,
             pointerInk,
-            PlanWorkflowActions(recording, pointerInk));
+            PlanWorkflowActions(recording, pointerInk),
+            PlanCommandStates(recording, pointerInk));
     }
 
     public static SlideShowRecordingTimingPlan PlanRecordingTiming(
@@ -250,6 +271,103 @@ public static class SlideShowPresenterToolPlanner
 
         return actions;
     }
+
+    public static IReadOnlyList<SlideShowPresenterCommandState> PlanCommandStates(
+        SlideShowRecordingTimingPlan recording,
+        SlideShowPointerInkPlan pointerInk)
+    {
+        ArgumentNullException.ThrowIfNull(recording);
+        ArgumentNullException.ThrowIfNull(pointerInk);
+
+        return new[]
+        {
+            Command(
+                RehearseTimingsCommandId,
+                "Rehearse Timings",
+                recording.TimingIntent == SlideShowTimingIntent.RehearseTimings,
+                isDeferred: false,
+                "Track per-slide timings without saving them"),
+            Command(
+                RecordTimingsCommandId,
+                "Record Timings",
+                recording.TimingIntent == SlideShowTimingIntent.RecordTimings,
+                isDeferred: false,
+                "Track and save per-slide timings"),
+            Command(
+                NarrationCommandId,
+                "Narration",
+                recording.MediaIntent == SlideShowRecordingMediaIntent.Narration,
+                recording.NarrationCapture.IsDeferred,
+                recording.NarrationCapture.IsDeferred
+                    ? recording.NarrationCapture.Reason
+                    : "Narration capture not requested"),
+            Command(
+                NarrationAndMediaCommandId,
+                "Narration and Camera",
+                recording.MediaIntent == SlideShowRecordingMediaIntent.NarrationAndMedia,
+                recording.MediaCapture.IsDeferred,
+                recording.MediaCapture.IsDeferred
+                    ? recording.MediaCapture.Reason
+                    : "Camera and media capture not requested"),
+            PointerCommand(
+                ArrowPointerCommandId,
+                "Arrow",
+                pointerInk,
+                SlideShowPresenterPointerMode.Arrow),
+            PointerCommand(
+                LaserPointerCommandId,
+                "Laser Pointer",
+                pointerInk,
+                SlideShowPresenterPointerMode.LaserPointer),
+            PointerCommand(
+                PenPointerCommandId,
+                "Pen",
+                pointerInk,
+                SlideShowPresenterPointerMode.Pen),
+            PointerCommand(
+                HighlighterPointerCommandId,
+                "Highlighter",
+                pointerInk,
+                SlideShowPresenterPointerMode.Highlighter),
+            PointerCommand(
+                EraserPointerCommandId,
+                "Eraser",
+                pointerInk,
+                SlideShowPresenterPointerMode.Eraser),
+            Command(
+                KeepInkCommandId,
+                "Keep Ink",
+                pointerInk.InkRetentionDecision == SlideShowInkRetentionDecision.KeepInk,
+                isDeferred: false,
+                "Keep presenter ink after slideshow exit"),
+            Command(
+                ClearInkCommandId,
+                "Clear Ink",
+                pointerInk.InkRetentionDecision == SlideShowInkRetentionDecision.ClearInk,
+                isDeferred: false,
+                "Clear presenter ink after slideshow exit")
+        };
+    }
+
+    private static SlideShowPresenterCommandState PointerCommand(
+        string commandId,
+        string label,
+        SlideShowPointerInkPlan pointerInk,
+        SlideShowPresenterPointerMode pointerMode) =>
+        Command(
+            commandId,
+            label,
+            pointerInk.PointerMode == pointerMode,
+            isDeferred: false,
+            pointerInk.PointerMode == pointerMode ? pointerInk.StatusText : $"Switch to {label}");
+
+    private static SlideShowPresenterCommandState Command(
+        string commandId,
+        string label,
+        bool isChecked,
+        bool isDeferred,
+        string statusText) =>
+        new(commandId, label, IsEnabled: true, isChecked, isDeferred, statusText);
 
     private static SlideShowInkState DefaultInkFor(SlideShowPresenterPointerMode pointerMode) =>
         pointerMode switch
