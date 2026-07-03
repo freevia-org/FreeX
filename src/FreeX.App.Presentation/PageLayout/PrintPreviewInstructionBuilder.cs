@@ -8,7 +8,7 @@ namespace FreeX.App.Presentation.PageLayout;
 /// <summary>
 /// Non-UI glue between the portable <see cref="PageContentLayout"/> and a print-preview
 /// canvas. It flattens one page's ordered render instructions (page background, cell fills, gridlines,
-/// per-edge cell borders, cell/heading/header-footer text) into a renderer-agnostic, ordered list of
+/// per-edge cell borders, cell/chart/heading/header-footer text) into a renderer-agnostic, ordered list of
 /// paint primitives (filled rectangles, line segments, positioned text runs). Renderer code only
 /// turns each primitive into platform controls, so all of the layout-to-primitive math is unit-tested
 /// directly without a running UI.
@@ -150,7 +150,7 @@ public static class PrintPreviewInstructionBuilder
     /// <summary>
     /// Flattens one page's <see cref="PageContentLayout"/> into an ordered list of paint primitives.
     /// Paint order mirrors the source print renderer: page background, heading band fills, cell fills,
-    /// gridlines, cell border edges, cell text, text boxes, then header/footer bands on top.
+    /// gridlines, cell border edges, cell text, charts, text boxes, then header/footer bands on top.
     /// </summary>
     public static PrintPreviewPagePainting Build(PageContentLayout layout)
     {
@@ -199,7 +199,36 @@ public static class PrintPreviewInstructionBuilder
                     cell.TextOrigin, cell.Bounds.Width, cell.Text, cell.Font, PageTextAlignment.Left));
         }
 
-        // 8. Text boxes over the grid/cell text.
+        // 8. Charts over the grid/cell text.
+        foreach (var chart in layout.Charts)
+        {
+            instructions.Add(PrintPreviewPaintInstruction.Rectangle(
+                chart.Bounds,
+                chart.Fill,
+                chart.Outline,
+                chart.OutlineThickness));
+        }
+
+        foreach (var chart in layout.Charts)
+        {
+            foreach (var overlay in chart.TextOverlays)
+            {
+                if (!string.IsNullOrEmpty(overlay.Text))
+                    instructions.Add(PrintPreviewPaintInstruction.TextRun(
+                        new LayoutPoint(overlay.X, overlay.Y),
+                        chart.Bounds.Width,
+                        overlay.Text,
+                        new PageTextFont(
+                            PrintChartTextOverlayPlanner.FontFamily,
+                            overlay.FontSize,
+                            Bold: false,
+                            Italic: false,
+                            overlay.Color),
+                        PageTextAlignment.Left));
+            }
+        }
+
+        // 9. Text boxes over the grid/cell text and chart layer.
         foreach (var textBox in layout.TextBoxes)
         {
             instructions.Add(PrintPreviewPaintInstruction.Rectangle(
@@ -220,7 +249,7 @@ public static class PrintPreviewInstructionBuilder
                     PageTextAlignment.Left));
         }
 
-        // 9. Header / footer bands.
+        // 10. Header / footer bands.
         foreach (var run in layout.HeaderRuns)
             instructions.Add(PrintPreviewPaintInstruction.TextRun(
                 run.TextOrigin, run.Bounds.Width, run.Text, BandFont, run.Alignment));

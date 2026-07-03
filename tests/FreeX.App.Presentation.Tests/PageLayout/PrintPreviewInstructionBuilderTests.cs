@@ -27,6 +27,7 @@ public sealed class PrintPreviewInstructionBuilderTests
             GridLines: [],
             ColumnHeadings: [],
             RowHeadings: [],
+            Charts: [],
             TextBoxes: [],
             HeaderRuns: [],
             FooterRuns: []);
@@ -291,6 +292,54 @@ public sealed class PrintPreviewInstructionBuilderTests
         boxText.Top.Should().Be(74);
         boxText.Width.Should().Be(88);
         boxText.Font.Should().Be(textBoxFont);
+    }
+
+    [Fact]
+    public void Build_ChartsEmitRectangleAndOverlayTextBeforeTextBoxes()
+    {
+        var chart = new PageChartBlock(
+            Guid.NewGuid(),
+            new LayoutRect(70, 80, 220, 140),
+            new PresentationRgb(250, 252, 255),
+            new PresentationRgb(40, 50, 60),
+            OutlineThickness: 1,
+            TextOverlays:
+            [
+                new PrintChartTextOverlayPlan(
+                    "Chart title",
+                    90,
+                    92,
+                    16,
+                    new PresentationRgb(20, 30, 40),
+                    RotationDegrees: 0),
+            ]);
+        var textBox = new PageTextBoxBlock(
+            Guid.NewGuid(),
+            new LayoutRect(100, 120, 96, 42),
+            new LayoutRect(104, 124, 88, 34),
+            "Box",
+            Fill: new PresentationRgb(200, 220, 240),
+            FillAlpha: 242,
+            Outline: new PresentationRgb(20, 70, 120),
+            OutlineThickness: 1,
+            SampleFont);
+
+        var painting = PrintPreviewInstructionBuilder.Build(EmptyLayout() with
+        {
+            Charts = [chart],
+            TextBoxes = [textBox],
+        });
+
+        var chartRect = painting.Instructions.Single(i =>
+            i.Kind == PrintPreviewPaintKind.Rectangle &&
+            i.Left == 70 &&
+            i.Top == 80);
+        chartRect.Fill.Should().Be(new PresentationRgb(250, 252, 255));
+        chartRect.Stroke.Should().Be(new PresentationRgb(40, 50, 60));
+
+        var texts = painting.Instructions.Where(i => i.Kind == PrintPreviewPaintKind.Text).ToList();
+        texts.Select(i => i.Text).Should().ContainInOrder("Chart title", "Box");
+        texts.Single(i => i.Text == "Chart title").Font.FontFamily.Should().Be(PrintChartTextOverlayPlanner.FontFamily);
     }
 
     [Fact]

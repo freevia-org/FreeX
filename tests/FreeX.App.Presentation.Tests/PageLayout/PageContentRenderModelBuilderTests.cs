@@ -334,6 +334,65 @@ public sealed class PageContentRenderModelBuilderTests
     }
 
     [Fact]
+    public void Build_IncludesVisibleChartBlocksWithSelectableTextOverlays()
+    {
+        var (workbook, sheet) = CreateWorkbook();
+        PopulateChartSource(sheet);
+        sheet.PrintArea = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 20, 8));
+        var chart = CreatePrintedChart(sheet, "Printable chart title", left: 24, top: 24);
+        chart.XAxisTitle = "Printable month axis";
+        chart.YAxisTitle = "Printable sales axis";
+        chart.ChartAreaFillColor = new CellColor(245, 250, 255);
+        chart.ChartAreaBorderColor = new CellColor(20, 70, 120);
+        sheet.Charts.Add(chart);
+
+        var layout = BuildFirstPage(workbook, sheet)!;
+
+        var block = layout.Charts.Should().ContainSingle().Subject;
+        block.Id.Should().Be(chart.Id);
+        block.Fill.Should().Be(new PresentationRgb(245, 250, 255));
+        block.Outline.Should().Be(new PresentationRgb(20, 70, 120));
+        block.Bounds.Left.Should().BeApproximately(layout.GridBounds.Left + 24, 0.001);
+        block.Bounds.Top.Should().BeApproximately(layout.GridBounds.Top + 24, 0.001);
+        block.TextOverlays.Select(overlay => overlay.Text).Should().Contain(
+            ["Printable chart title", "Printable month axis", "Printable sales axis"]);
+        block.TextOverlays.Single(overlay => overlay.Text == "Printable sales axis")
+            .RotationDegrees.Should().Be(-90);
+    }
+
+    [Fact]
+    public void Build_FiltersHiddenAndOffPageChartsAndSuppressesClippedChartTextOverlays()
+    {
+        var (workbook, sheet) = CreateWorkbook();
+        PopulateChartSource(sheet);
+        sheet.PrintArea = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 20, 8));
+
+        var visible = CreatePrintedChart(sheet, "Visible chart", left: 24, top: 24);
+        var hidden = CreatePrintedChart(sheet, "Hidden chart", left: 24, top: 24);
+        hidden.IsVisible = false;
+        var offPage = CreatePrintedChart(sheet, "Off-page chart", left: 10000, top: 10000);
+        var clipped = CreatePrintedChart(sheet, "Clipped chart", left: 650, top: 24);
+        sheet.Charts.Add(visible);
+        sheet.Charts.Add(hidden);
+        sheet.Charts.Add(offPage);
+        sheet.Charts.Add(clipped);
+
+        var layout = BuildFirstPage(workbook, sheet)!;
+
+        layout.Charts.Select(chart => chart.Id).Should().Contain(visible.Id);
+        layout.Charts.Select(chart => chart.Id).Should().Contain(clipped.Id);
+        layout.Charts.Select(chart => chart.Id).Should().NotContain(hidden.Id);
+        layout.Charts.Select(chart => chart.Id).Should().NotContain(offPage.Id);
+        layout.Charts.Single(chart => chart.Id == visible.Id).TextOverlays
+            .Select(overlay => overlay.Text).Should().Contain("Visible chart");
+        layout.Charts.Single(chart => chart.Id == clipped.Id).TextOverlays.Should().BeEmpty();
+    }
+
+    [Fact]
     public void Build_OutOfRangePageReturnsNull()
     {
         var (workbook, sheet) = CreateWorkbook();
@@ -442,4 +501,30 @@ public sealed class PageContentRenderModelBuilderTests
         var sheet = workbook.AddSheet("Sheet1");
         return (workbook, sheet);
     }
+
+    private static void PopulateChartSource(Sheet sheet)
+    {
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Month"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Sales"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Jan"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(8));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("Feb"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(14));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new TextValue("Mar"));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(11));
+    }
+
+    private static ChartModel CreatePrintedChart(Sheet sheet, string title, double left, double top) =>
+        new()
+        {
+            Type = ChartType.Column,
+            DataRange = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 4, 2)),
+            Title = title,
+            Left = left,
+            Top = top,
+            Width = 260,
+            Height = 180,
+        };
 }
