@@ -154,6 +154,24 @@ public abstract class MathNode
 
     // ── Function apply ───────────────────────────────────────────────────────
 
+    /// <summary>
+    /// <c>m:limLow</c> / <c>m:limUpp</c> — a base expression with a centered
+    /// lower or upper limit.
+    /// </summary>
+    public sealed class Limit : MathNode
+    {
+        public MathNode Base { get; }
+        public MathNode LimitValue { get; }
+        public bool IsUpper { get; }
+
+        public Limit(MathNode @base, MathNode limitValue, bool isUpper)
+        {
+            Base = @base;
+            LimitValue = limitValue;
+            IsUpper = isUpper;
+        }
+    }
+
     /// <summary><c>m:func</c> — function name applied to argument (e.g. sin x).</summary>
     public sealed class Func : MathNode
     {

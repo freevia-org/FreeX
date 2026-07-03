@@ -111,6 +111,8 @@ public static class OmmlParser
             "sSubSup"  => ParseSubSup(el),
             "rad"      => ParseRad(el),
             "nary"     => ParseNary(el),
+            "limLow"   => ParseLimit(el, isUpper: false),
+            "limUpp"   => ParseLimit(el, isUpper: true),
             "func"     => ParseFunc(el),
             "d"        => ParseDelim(el),
             "acc"      => ParseAcc(el),
@@ -260,6 +262,17 @@ public static class OmmlParser
     }
 
     // ── m:func ────────────────────────────────────────────────────────────
+
+    private static MathNode ParseLimit(XElement el, bool isUpper)
+    {
+        var eEl = el.Element(M + "e");
+        var limEl = el.Element(M + "lim");
+
+        return new MathNode.Limit(
+            eEl is null ? new MathNode.Unknown(FlattenText(el)) : ParseRow(eEl),
+            limEl is null ? new MathNode.Unknown(string.Empty) : ParseRow(limEl),
+            isUpper);
+    }
 
     private static MathNode ParseFunc(XElement el)
     {

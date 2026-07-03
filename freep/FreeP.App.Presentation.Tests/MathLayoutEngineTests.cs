@@ -292,4 +292,57 @@ public sealed class MathLayoutEngineTests
         container.Children.Should().NotContain(b => b is MathBox.HRule,
             "skw must never render as a bar fraction");
     }
+
+    [Fact]
+    public void LimitLow_CentersLimitBelowBase_AndGrowsDescent()
+    {
+        var node = new MathNode.Limit(Run("lim"), Run("0"), isUpper: false);
+        var box = MathLayoutEngine.Layout(node, "Cambria Math", FontSizePt);
+
+        var container = (MathBox.Container)box.Children[0];
+        var baseBox = container.Children[0];
+        var limitBox = container.Children[1];
+
+        limitBox.Y.Should().BeGreaterThan(baseBox.Y + baseBox.Metrics.Height,
+            "m:limLow places the limit below the base expression");
+        box.Metrics.Ascent.Should().BeApproximately(baseBox.Metrics.Ascent, 0.01,
+            "a lower limit keeps the base baseline fixed and grows the descent");
+        (limitBox.X + limitBox.Metrics.Width / 2.0)
+            .Should().BeApproximately(baseBox.X + baseBox.Metrics.Width / 2.0, 0.01,
+                "PowerPoint centers lower limits under their base expression");
+    }
+
+    [Fact]
+    public void LimitUpp_CentersLimitAboveBase_AndGrowsAscent()
+    {
+        var node = new MathNode.Limit(Run("max"), Run("S"), isUpper: true);
+        var box = MathLayoutEngine.Layout(node, "Cambria Math", FontSizePt);
+
+        var container = (MathBox.Container)box.Children[0];
+        var limitBox = container.Children[0];
+        var baseBox = container.Children[1];
+
+        baseBox.Y.Should().BeGreaterThan(limitBox.Y + limitBox.Metrics.Height,
+            "m:limUpp places the limit above the base expression");
+        box.Metrics.Ascent.Should().BeGreaterThan(baseBox.Metrics.Ascent,
+            "an upper limit must grow ascent so the raised limit is not clipped");
+        (baseBox.Y + baseBox.Metrics.Ascent).Should().BeApproximately(box.Metrics.Ascent, 0.01,
+            "the base expression baseline must remain the reported container baseline");
+        (limitBox.X + limitBox.Metrics.Width / 2.0)
+            .Should().BeApproximately(baseBox.X + baseBox.Metrics.Width / 2.0, 0.01,
+                "PowerPoint centers upper limits over their base expression");
+    }
+
+    [Fact]
+    public void LimitLow_RenderPlanner_EmitsBaseAndLimitGlyphs()
+    {
+        var node = new MathNode.Limit(Run("lim"), Run("x->0"), isUpper: false);
+        var layout = MathLayoutEngine.Layout(node, "Cambria Math", FontSizePt);
+
+        var ops = MathBoxRenderPlanner.Plan(layout, 10, 20, SrgbColor.Black, "Cambria Math");
+        var glyphTexts = ops.OfType<MathDrawOp.DrawGlyph>().Select(g => g.Text).ToList();
+
+        glyphTexts.Should().Contain("lim");
+        glyphTexts.Should().Contain("x->0");
+    }
 }
