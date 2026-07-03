@@ -277,17 +277,17 @@ public sealed class ReviewWorkflowAdapterTests
         var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
         try
         {
-            window.Editor.CurrentSlide!.Title = "Intro eror deck";
+            window.Editor.CurrentSlide!.Title = "intro deck";
             window.Editor.CurrentSlide.Shapes.Add(new SlideShape
             {
                 Id = 904,
                 Name = "Caption",
-                Text = "Teh caption"
+                Text = "caption text"
             });
             window.RefreshReviewWorkflowPlans();
             var scope = window.LastProofingExecutionPlan!.Scopes.Single(s =>
                 s.Kind == PresentationProofingScopeKind.SlideTitle);
-            var start = scope.Text.IndexOf("eror", StringComparison.Ordinal);
+            var start = scope.Text.IndexOf('i');
 
             var pane = window.ShowProofingPane();
 
@@ -296,9 +296,9 @@ public sealed class ReviewWorkflowAdapterTests
             window.ProofingPaneSelectedIssueCount.Should().Be(1);
             window.IsProofingPaneCorrectionEnabled.Should().BeTrue();
             window.ProofingPaneHeading.Should().Be("Spelling - 2 issues");
-            pane.SelectedRow!.SuggestedReplacement.Should().Be("error");
+            pane.SelectedRow!.SuggestedReplacement.Should().Be("I");
 
-            var mutation = window.ApplyProofingCorrection(scope, start, 4, "error");
+            var mutation = window.ApplyProofingCorrection(scope, start, 1, "I");
             var selectedCaption = window.SelectProofingIssueRow(0);
             var paneMutation = window.ApplySelectedProofingCorrection();
 
@@ -306,25 +306,25 @@ public sealed class ReviewWorkflowAdapterTests
                 true,
                 scope,
                 start,
-                4,
-                "error",
-                "Intro error deck",
+                1,
+                "I",
+                "Intro deck",
                 null));
             paneMutation.Should().Be(new PresentationProofingCorrectionMutationPlan(
                 true,
                 selectedCaption.SelectedRow!.Scope,
                 selectedCaption.SelectedRow.Start,
                 selectedCaption.SelectedRow.Length,
-                "The",
-                "The caption",
+                "C",
+                "Caption text",
                 null));
-            window.Editor.CurrentSlide.Title.Should().Be("Intro error deck");
-            window.Editor.CurrentSlide.Shapes.Single(shape => shape.Id == 904).Text.Should().Be("The caption");
+            window.Editor.CurrentSlide.Title.Should().Be("Intro deck");
+            window.Editor.CurrentSlide.Shapes.Single(shape => shape.Id == 904).Text.Should().Be("Caption text");
             window.LastProofingRequestPlan.Should().NotBeNull();
             window.LastProofingExecutionPlan.Should().NotBeNull();
             window.LastProofingExecutionPlan!.Scopes.Single(s =>
                     s.Kind == PresentationProofingScopeKind.SlideTitle)
-                .Text.Should().Be("Intro error deck");
+                .Text.Should().Be("Intro deck");
             window.LastProofingPanePlan.Should().NotBeNull();
             window.LastProofingPanePlan!.IssueCount.Should().Be(0);
             window.IsProofingPaneCorrectionEnabled.Should().BeFalse();

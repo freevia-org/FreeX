@@ -1862,6 +1862,9 @@ public static class PresentationReviewWorkflowPlanner
 
         foreach (var repeatedWord in ScanRepeatedWords(scope.Text))
             yield return repeatedWord;
+
+        foreach (var sentenceStart in ScanSentenceStartCapitalization(scope.Text))
+            yield return sentenceStart;
     }
 
     private static string SuggestProofingReplacement(string text)
@@ -1869,9 +1872,64 @@ public static class PresentationReviewWorkflowPlanner
         if (BuiltInProofingCorrections.TryGetValue(text, out var replacement))
             return MatchReplacementCasing(text, replacement);
 
+        if (text.Length == 1 && char.IsLower(text[0]))
+            return char.ToUpperInvariant(text[0]).ToString();
+
         return TryBuildRepeatedWordReplacement(text, out var repeatedWordReplacement)
             ? repeatedWordReplacement
             : string.Empty;
+    }
+
+    private static IEnumerable<PresentationProofingIssueMatch> ScanSentenceStartCapitalization(string text)
+    {
+        var expectsSentenceStart = true;
+        var index = 0;
+        while (index < text.Length)
+        {
+            var ch = text[index];
+            if (expectsSentenceStart)
+            {
+                if (char.IsWhiteSpace(ch) || IsSentenceOpeningPunctuation(ch))
+                {
+                    index++;
+                    continue;
+                }
+
+                if (char.IsLetter(ch))
+                {
+                    if (TryGetUrlOrEmailCoreEnd(text, index, out var tokenCoreEnd))
+                    {
+                        expectsSentenceStart = false;
+                        index = tokenCoreEnd;
+                        continue;
+                    }
+
+                    if (char.IsLower(ch))
+                    {
+                        yield return new PresentationProofingIssueMatch(
+                            index,
+                            1,
+                            text[index].ToString(),
+                            "Sentence should start with a capital letter.");
+                    }
+
+                    expectsSentenceStart = false;
+                    index++;
+                    continue;
+                }
+
+                expectsSentenceStart = IsSentenceTerminator(ch) && HasSentenceBoundaryAfter(text, index);
+                index++;
+                continue;
+            }
+
+            if (IsSentenceTerminator(ch) && HasSentenceBoundaryAfter(text, index))
+            {
+                expectsSentenceStart = true;
+            }
+
+            index++;
+        }
     }
 
     private static IEnumerable<PresentationProofingIssueMatch> ScanRepeatedWords(string text)
@@ -1937,6 +1995,55 @@ public static class PresentationReviewWorkflowPlanner
         => char.IsLetterOrDigit(value) || value == '\'';
 
     private readonly record struct ProofingWordSpan(int Start, int Length, string Text);
+
+    private static bool IsSentenceTerminator(char value)
+        => value is '.' or '!' or '?';
+
+    private static bool IsSentenceOpeningPunctuation(char value)
+        => value is '"' or '\'' or '(' or '[' or '{';
+
+    private static bool IsSentenceClosingPunctuation(char value)
+        => value is '"' or '\'' or ')' or ']' or '}';
+
+    private static bool HasSentenceBoundaryAfter(string text, int terminatorIndex)
+    {
+        var index = terminatorIndex + 1;
+        while (index < text.Length && IsSentenceClosingPunctuation(text[index]))
+            index++;
+
+        return index >= text.Length || char.IsWhiteSpace(text[index]);
+    }
+
+    private static bool TryGetUrlOrEmailCoreEnd(string text, int index, out int coreEnd)
+    {
+        var tokenStart = index;
+        while (tokenStart > 0 && !char.IsWhiteSpace(text[tokenStart - 1]))
+            tokenStart--;
+
+        var tokenEnd = index;
+        while (tokenEnd < text.Length && !char.IsWhiteSpace(text[tokenEnd]))
+            tokenEnd++;
+
+        var coreStart = tokenStart;
+        while (coreStart < tokenEnd && IsSentenceOpeningPunctuation(text[coreStart]))
+            coreStart++;
+
+        coreEnd = tokenEnd;
+        while (coreEnd > coreStart && IsSentenceClosingPunctuation(text[coreEnd - 1]))
+            coreEnd--;
+
+        if (coreEnd > coreStart && IsSentenceTerminator(text[coreEnd - 1]))
+            coreEnd--;
+
+        if (index < coreStart || index >= coreEnd)
+            return false;
+
+        var token = text.Substring(coreStart, coreEnd - coreStart);
+        return token.Contains("://", StringComparison.Ordinal) ||
+            token.StartsWith("www.", StringComparison.OrdinalIgnoreCase) ||
+            token.StartsWith("mailto:", StringComparison.OrdinalIgnoreCase) ||
+            token.Contains('@', StringComparison.Ordinal);
+    }
 
     private static string MatchReplacementCasing(string source, string replacement)
     {
