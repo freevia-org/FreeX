@@ -4076,7 +4076,7 @@ public sealed class DocumentView : Control
         var measured = new double[cells.Count];
         var heights = new double[cells.Count];
         // AV-TAB: default tab interval from page settings (points → DIP).
-        var defaultTabPx = Math.Max(1, _doc.Page.DefaultTabStopPt) * PxPerPoint;
+        var defaultTabStopPt = Math.Max(1, _doc.Page.DefaultTabStopPt);
 
         for (var c = 0; c < cells.Count; c++)
         {
@@ -4147,7 +4147,7 @@ public sealed class DocumentView : Control
             // BP1 fix: pass pen position from the MARGIN (lineWidth + full indent) so tab stops
             // compare against OOXML positions (margin-relative), not the indented text origin.
             if (cells[i].Ch == '\t' && reviewPolicy.IsRevisionTextVisible(cells[i].Revision))
-                measured[i] = ComputeTabMeasuredWidth(lineWidth + paraLeftInset + lineExtraInset, pf, defaultTabPx);
+                measured[i] = ComputeTabMeasuredWidth(lineWidth + paraLeftInset + lineExtraInset, pf, defaultTabStopPt);
 
             if (cells[i].Ch == ' ')
                 lastBreak = i;
@@ -4181,7 +4181,7 @@ public sealed class DocumentView : Control
                 for (var k = lineStart; k < i; k++)
                 {
                     if (cells[k].Ch == '\t' && reviewPolicy.IsRevisionTextVisible(cells[k].Revision))
-                        measured[k] = ComputeTabMeasuredWidth(lineWidth + paraLeftInset + newLineExtraInset, pf, defaultTabPx);
+                        measured[k] = ComputeTabMeasuredWidth(lineWidth + paraLeftInset + newLineExtraInset, pf, defaultTabStopPt);
                     lineWidth += measured[k];
                 }
             }
@@ -4336,7 +4336,7 @@ public sealed class DocumentView : Control
         }
 
         // AV-TAB: default tab interval for this line (from document page settings).
-        var lineDefaultTabPx = Math.Max(1.0, _doc.Page.DefaultTabStopPt) * PxPerPoint;
+        var lineDefaultTabStopPt = Math.Max(1.0, _doc.Page.DefaultTabStopPt);
 
         // AV-TAB: pre-tab alignment offset for lines with tabs — applied to the pre-tab prefix.
         // We compute the pre-tab segment width and centre/right-align it, then the first tab snaps x.
@@ -4371,41 +4371,37 @@ public sealed class DocumentView : Control
                 // AV-TAB / BP1 fix: pen position and tab stops are relative to the margin origin
                 // (tabOriginX = colLeft + wrapLeftDelta), NOT the indented content origin.
                 var penPosInLine = x - tabOriginX;
-                var (stopDip, stopAlign, leader) = ResolveBodyTabStop(penPosInLine, pf, lineDefaultTabPx);
 
-                // Compute the advance: for left tabs this is straightforward.
-                // For center/right tabs we need to know the following segment's width.
+                // Compute the advance: for left tabs this is straightforward. For center/right tabs the
+                // shared planner needs the following segment's measured width.
                 var segmentWidth = 0.0;
-                if (stopAlign is TabStopAlignment.Center or TabStopAlignment.Right or TabStopAlignment.Decimal)
+                double? decimalAlignmentOffset = null;
+                for (var k = c + 1; k < to; k++)
                 {
-                    // Scan forward to find the end of the segment (next tab or end-of-line).
-                    for (var k = c + 1; k < to; k++)
-                    {
-                        if (cells[k].Ch == '\t') break;
-                        segmentWidth += measured[k];
-                    }
+                    if (cells[k].Ch == '\t') break;
+                    if (decimalAlignmentOffset is null && IsDecimalTabSeparator(cells[k].Ch))
+                        decimalAlignmentOffset = segmentWidth;
+                    segmentWidth += measured[k];
                 }
 
                 // Target X in page space where the segment should land.
                 // BP1 fix: use tabOriginX (margin-relative) not contentOriginX (indent-relative).
-                var stopPageX = tabOriginX + stopDip;
-                double segmentStartX = stopAlign switch
-                {
-                    TabStopAlignment.Center  => stopPageX - segmentWidth / 2,
-                    TabStopAlignment.Right   => stopPageX - segmentWidth,
-                    TabStopAlignment.Decimal => stopPageX - segmentWidth, // approximate as right
-                    _                        => stopPageX,                // Left
-                };
-                // Clamp: never move backward past current pen (tab must advance forward).
-                segmentStartX = Math.Max(x + 1, segmentStartX);
+                var plan = ParagraphTabStopLayoutPlanner.BuildPlacementPlan(
+                    penPosInLine,
+                    segmentWidth,
+                    pf.TabStops,
+                    lineDefaultTabStopPt,
+                    PxPerPoint,
+                    decimalAlignmentOffset);
+                var segmentStartX = tabOriginX + plan.SegmentStartDip;
 
                 // Tab glyph occupies the gap from current x to the segment start.
-                var tabAdvance = segmentStartX - x;
+                var tabAdvance = plan.AdvanceDip;
                 var tabX = x; // where the '\t' PlacedChar starts
 
                 // Emit leader span if the tab stop has one.
-                if (leader != TabLeader.None)
-                    _tabLeaderSpans.Add((tabX, segmentStartX, pageSpaceY, lineHeight, leader, cells[c].Fmt));
+                if (plan.HasLeader)
+                    _tabLeaderSpans.Add((tabX, segmentStartX, pageSpaceY, lineHeight, plan.Leader, cells[c].Fmt));
 
                 // Place the tab character with its computed advance width (for caret hit-testing).
                 _placed.Add(new PlacedChar(blockIndex, c, tabX, pageSpaceY, tabAdvance, lineHeight, cells[c].Fmt, '\t', Sentinel: false, CommentId: cells[c].CommentId, Revision: cells[c].Revision, Link: cells[c].Link, HasFormatRevision: cells[c].FormatRevision is not null));
@@ -4482,51 +4478,20 @@ public sealed class DocumentView : Control
     // ── AV-TAB: tab-stop resolution helpers ───────────────────────────────────────────────────────
 
     /// <summary>
-    /// Resolves the next tab stop for a body paragraph given the pen's current X position
-    /// <paramref name="penPosInLine"/> measured from the <em>left margin / column left</em>
-    /// (i.e. tabOriginX = colLeft + wrapLeftDelta, NOT the indented paragraph origin).
-    /// This matches the OOXML <c>w:tab/@w:pos</c> coordinate system (positions measured from
-    /// the page margin) and the WPF Ruler which places tab markers at
-    /// <c>contentStart + PointsToDip(tab.PositionPt)</c> where contentStart excludes IndentLeftPt.
-    /// <list type="bullet">
-    ///   <item>Scans explicit <see cref="ParagraphFormatting.TabStops"/> (sorted by position) for
-    ///     the first stop whose position (in DIP) is strictly greater than <paramref name="penPosInLine"/>.</item>
-    ///   <item>If no explicit stop qualifies, falls back to the document's default tab-stop interval
-    ///     (<see cref="TextDocument.Page"/>/<see cref="PageSettings.DefaultTabStopPt"/>, default 36pt /
-    ///     0.5").</item>
-    /// </list>
-    /// Returns the resolved stop position <em>in DIPs from the margin/column left</em>,
-    /// the stop alignment, and the leader fill kind.
-    /// </summary>
-    private static (double StopPosDip, TabStopAlignment Alignment, TabLeader Leader)
-        ResolveBodyTabStop(double penPosInLine, ParagraphFormatting pf, double defaultTabIntervalPx)
-    {
-        // Scan explicit stops — already in points; convert each to DIP.
-        foreach (var stop in pf.TabStops.OrderBy(s => s.PositionPt))
-        {
-            var stopDip = stop.PositionPt * PxPerPoint;
-            if (stopDip > penPosInLine + 0.5) // 0.5 px tolerance so we never land on the same stop
-                return (stopDip, stop.Alignment, stop.Leader);
-        }
-
-        // Default interval: next multiple of defaultTabIntervalPx strictly beyond penPosInLine.
-        var interval = Math.Max(1, defaultTabIntervalPx);
-        var next = (Math.Floor(penPosInLine / interval) + 1) * interval;
-        return (next, TabStopAlignment.Left, TabLeader.None);
-    }
-
-    /// <summary>
     /// Computes the measured width to assign to a <c>\t</c> cell in <see cref="LayoutParagraphPaged"/>'s
     /// wrapping loop.  <paramref name="penPosInLine"/> must be the pen distance from the
     /// <em>left margin / column left</em> (i.e. lineWidth + paraLeftInset + lineExtraInset),
-    /// matching the coordinate system of <see cref="ResolveBodyTabStop"/>.
+    /// matching the coordinate system of <see cref="ParagraphTabStopLayoutPlanner.ResolveNextStop"/>.
     /// The advance is from the current pen to the resolved stop, clamped to at least 1 px.
     /// </summary>
-    private static double ComputeTabMeasuredWidth(double penPosInLine, ParagraphFormatting pf, double defaultTabIntervalPx)
-    {
-        var (stopDip, _, _) = ResolveBodyTabStop(penPosInLine, pf, defaultTabIntervalPx);
-        return Math.Max(1.0, stopDip - penPosInLine);
-    }
+    private static double ComputeTabMeasuredWidth(double penPosInLine, ParagraphFormatting pf, double defaultTabStopPt) =>
+        ParagraphTabStopLayoutPlanner.ComputeTabAdvance(
+            penPosInLine,
+            pf.TabStops,
+            defaultTabStopPt,
+            PxPerPoint);
+
+    private static bool IsDecimalTabSeparator(char ch) => ch is '.' or ',';
 
     private void LayoutReadOnlyBlockPaged(int blockIndex, Block block, double textWidth)
     {

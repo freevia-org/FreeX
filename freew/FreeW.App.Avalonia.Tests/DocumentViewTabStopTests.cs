@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Headless;
+using FreeW.App.Presentation.DocumentView;
 using FreeW.App.Avalonia.Editing;
 using FreeW.Core.Model;
 
@@ -204,6 +205,38 @@ public sealed class DocumentViewTabStopTests
     // "Name\tValue" with Center tab at 216pt → segment "Value" is centred on the stop.
 
     [Fact]
+    public async Task TAB_4b_right_tab_uses_shared_tab_stop_planner()
+    {
+        IReadOnlyList<(char Ch, double X, double W)>? placed = null;
+        var stop = new TabStop(288.0, TabStopAlignment.Right, TabLeader.Dashes);
+        var ran = await OnUiThread(() =>
+        {
+            var doc = DocWithTabStop("Name\tValue", stop);
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 4000));
+            placed = view.GetBodyTabPlaced(0);
+        });
+        if (!ran) return;
+        placed.Should().NotBeNull();
+
+        var glyphs = placed!;
+        var tab = glyphs.Single(g => g.Ch == '\t');
+        var afterTab = glyphs.SkipWhile(g => g.Ch != '\t').Skip(1).ToList();
+        var followingWidth = afterTab.Sum(g => g.W);
+        var plan = ParagraphTabStopLayoutPlanner.BuildPlacementPlan(
+            penPositionDip: tab.X - ContentLeft,
+            followingSegmentWidthDip: followingWidth,
+            tabStops: [stop],
+            defaultTabStopPt: 36,
+            dipPerPoint: PxPerPoint);
+
+        tab.W.Should().BeApproximately(plan.AdvanceDip, Tol);
+        afterTab.First().X.Should().BeApproximately(ContentLeft + plan.SegmentStartDip, Tol);
+        plan.Leader.Should().Be(TabLeader.Dashes);
+    }
+
+    [Fact]
     public async Task TAB_5_center_tab_centres_segment_at_stop()
     {
         IReadOnlyList<(char Ch, double X, double W)>? placed = null;
@@ -233,6 +266,29 @@ public sealed class DocumentViewTabStopTests
     }
 
     // ── TAB-6: dot-leader produces a tab leader span ─────────────────────────────────────────────
+
+    [Fact]
+    public async Task TAB_5b_decimal_tab_aligns_separator_at_stop()
+    {
+        IReadOnlyList<(char Ch, double X, double W)>? placed = null;
+        var stopPositionPt = 216.0;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = DocWithTabStop("Total\t123.45", new TabStop(stopPositionPt, TabStopAlignment.Decimal));
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 4000));
+            placed = view.GetBodyTabPlaced(0);
+        });
+        if (!ran) return;
+        placed.Should().NotBeNull();
+
+        var afterTab = placed!.SkipWhile(p => p.Ch != '\t').Skip(1).ToList();
+        var separator = afterTab.Single(p => p.Ch == '.');
+        var stopX = ContentLeft + stopPositionPt * PxPerPoint;
+        separator.X.Should().BeApproximately(stopX, Tol,
+            "decimal-tab: separator starts at the tab stop");
+    }
 
     [Fact]
     public async Task TAB_6_dot_leader_tab_produces_leader_span()

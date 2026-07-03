@@ -5848,6 +5848,49 @@ public sealed class DocumentView : RichTextBox
     /// </para>
     private sealed record ParagraphTag(IReadOnlyList<TabStop> TabStops, string? BookmarkName, bool PageBreakBefore = false, bool WidowControl = false, string? StyleId = null, int ListLevel = 0, ParagraphBorder? Border = null, ShadingPattern ShadingPattern = ShadingPattern.Clear, bool SuppressAutoHyphens = false, FreeW.Core.Model.Section? SectionBreak = null);
 
+    private sealed record RenderedTabStopSpan(
+        ParagraphTabStopPlacementPlan Plan,
+        RunFormatting Formatting,
+        int? CommentId,
+        ModelContentControl? Control,
+        RevisionKind Revision,
+        string? RevisionAuthor,
+        string? RevisionDateXml,
+        ModelFormatRevision? FormatRevision);
+
+    private sealed record TabFollowingSegmentMetrics(double WidthDip, double? DecimalAlignmentOffsetDip);
+
+    internal static IReadOnlyList<(double StopPositionDip, double SegmentStartDip, double AdvanceDip, TabStopAlignment Alignment, TabLeader Leader, bool IsExplicit)> GetRenderedTabStopPlans(WpfParagraph paragraph)
+    {
+        var plans = new List<(double, double, double, TabStopAlignment, TabLeader, bool)>();
+        CollectRenderedTabStopPlans(paragraph.Inlines, plans);
+        return plans;
+    }
+
+    private static void CollectRenderedTabStopPlans(
+        InlineCollection inlines,
+        ICollection<(double StopPositionDip, double SegmentStartDip, double AdvanceDip, TabStopAlignment Alignment, TabLeader Leader, bool IsExplicit)> plans)
+    {
+        foreach (var inline in inlines)
+        {
+            switch (inline)
+            {
+                case InlineUIContainer { Child: FrameworkElement { Tag: RenderedTabStopSpan marker } }:
+                    plans.Add((
+                        marker.Plan.StopPositionDip,
+                        marker.Plan.SegmentStartDip,
+                        marker.Plan.AdvanceDip,
+                        marker.Plan.Alignment,
+                        marker.Plan.Leader,
+                        marker.Plan.IsExplicit));
+                    break;
+                case Span span:
+                    CollectRenderedTabStopPlans(span.Inlines, plans);
+                    break;
+            }
+        }
+    }
+
     /// <summary>
     /// Reads the blocks of an arbitrary <paramref name="flowDoc"/> — which must have been produced
     /// by a <see cref="Render"/>/<see cref="LoadModel"/> call on this or a same-model scratch editor
@@ -6040,6 +6083,20 @@ public sealed class DocumentView : RichTextBox
                 var tooltip = info?.Tooltip ?? hyperlinkTooltip;
                 foreach (var child in link.Inlines)
                     ReadInline(modelParagraph, child, url, anchor, tooltip);
+                break;
+            case InlineUIContainer { Child: FrameworkElement { Tag: RenderedTabStopSpan marker } }:
+                modelParagraph.Runs.Add(new ModelRun("\t", marker.Formatting)
+                {
+                    HyperlinkUrl = hyperlinkUrl,
+                    HyperlinkAnchor = hyperlinkAnchor,
+                    HyperlinkTooltip = hyperlinkTooltip,
+                    CommentId = marker.CommentId,
+                    Control = marker.Control,
+                    Revision = marker.Revision,
+                    RevisionAuthor = marker.RevisionAuthor,
+                    RevisionDateXml = marker.RevisionDateXml,
+                    FormatRevision = marker.FormatRevision
+                });
                 break;
             case InlineUIContainer { Child: Image { Tag: InlineImage modelImage } }:
                 modelParagraph.Runs.Add(new ModelRun(string.Empty) { Image = modelImage, HyperlinkUrl = hyperlinkUrl, HyperlinkAnchor = hyperlinkAnchor, HyperlinkTooltip = hyperlinkTooltip });
@@ -6773,11 +6830,11 @@ public sealed class DocumentView : RichTextBox
                 wpf.Margin = new Thickness(wpf.Margin.Left, 6 * PxPerPoint, wpf.Margin.Right, wpf.Margin.Bottom);
         }
 
-        // WPF's FlowDocument Paragraph has no tab-stop API, so tab stops cannot be rendered with
-        // custom positions/alignments (default tab rendering applies visually). A bookmark name is an
-        // invisible marker with no FlowDocument representation either, and page-break-before has no
-        // native slot. To avoid losing any of them on an edit/commit cycle, we carry them on the
-        // paragraph's Tag (a ParagraphTag) and read them back verbatim on commit; the round-trip is exact.
+        // WPF's FlowDocument Paragraph has no tab-stop API, so the renderer emits planned inline spacer
+        // elements for ordinary text tabs below. A bookmark name is an invisible marker with no FlowDocument
+        // representation, and page-break-before has no native slot. To avoid losing any of them on an
+        // edit/commit cycle, we carry them on the paragraph's Tag (a ParagraphTag) and read them back
+        // verbatim on commit; the round-trip is exact.
         // WidowControl has no FlowDocument property either, so it joins the Tag alongside tab stops,
         // bookmark name and page-break-before; carried verbatim and recovered on commit.
         // The list nesting depth is carried on the Tag too: the editor flattens a list run into one WPF
@@ -6835,11 +6892,246 @@ public sealed class DocumentView : RichTextBox
         }
         else
         {
-            foreach (var run in runs)
-                wpf.Inlines.Add(BuildRun(run, paragraph, document));
+            AppendRunsWithTabPlans(wpf, runs, paragraph, document, paraFmt);
         }
 
         return wpf;
+    }
+
+    private static void AppendRunsWithTabPlans(
+        WpfParagraph wpf,
+        IReadOnlyList<ModelRun> runs,
+        ModelParagraph paragraph,
+        TextDocument document,
+        ParagraphFormatting paraFmt)
+    {
+        var penPositionDip = (paraFmt.IndentLeftPt + paraFmt.FirstLineIndentPt) * PxPerPoint;
+        for (var runIndex = 0; runIndex < runs.Count; runIndex++)
+        {
+            var run = runs[runIndex];
+            if (!IsPlainTextRun(run) || !run.Text.Contains('\t', StringComparison.Ordinal))
+            {
+                wpf.Inlines.Add(BuildRun(run, paragraph, document));
+                penPositionDip += MeasureRunText(run.Text, run, paragraph, document);
+                continue;
+            }
+
+            var text = run.Text;
+            var start = 0;
+            while (start < text.Length)
+            {
+                var tabIndex = text.IndexOf('\t', start);
+                if (tabIndex < 0)
+                    break;
+
+                if (tabIndex > start)
+                {
+                    var segment = text.Substring(start, tabIndex - start);
+                    var segmentRun = CloneTextRun(run, segment);
+                    wpf.Inlines.Add(BuildRun(segmentRun, paragraph, document));
+                    penPositionDip += MeasureRunText(segment, segmentRun, paragraph, document);
+                }
+
+                var following = MeasureFollowingTabSegment(runs, runIndex, tabIndex, paragraph, document);
+                var plan = ParagraphTabStopLayoutPlanner.BuildPlacementPlan(
+                    penPositionDip,
+                    following.WidthDip,
+                    paraFmt.TabStops,
+                    document.Page.DefaultTabStopPt,
+                    PxPerPoint,
+                    following.DecimalAlignmentOffsetDip);
+
+                var tabInline = BuildRenderedTabStopInline(plan, run, paragraph, document);
+                wpf.Inlines.Add(WrapHyperlinkIfNeeded(run, tabInline));
+                penPositionDip += plan.AdvanceDip;
+                start = tabIndex + 1;
+            }
+
+            if (start < text.Length)
+            {
+                var remainder = text[start..];
+                var remainderRun = CloneTextRun(run, remainder);
+                wpf.Inlines.Add(BuildRun(remainderRun, paragraph, document));
+                penPositionDip += MeasureRunText(remainder, remainderRun, paragraph, document);
+            }
+        }
+    }
+
+    private static bool IsPlainTextRun(ModelRun run) =>
+        run.Image is null
+        && run.Shape is null
+        && run.Chart is null
+        && run.WordArt is null
+        && run.Equation is null
+        && run.SmartArt is null
+        && run.EmbeddedObject is null
+        && run.PreservedDrawing is null
+        && run.DrawingGroup is null
+        && run.FootnoteId is null
+        && run.EndnoteId is null
+        && run.TableFormula is null
+        && run.CrossReference is null
+        && run.ComplexField is null
+        && run.Citation is null
+        && run.FieldKind == RunFieldKind.None
+        && !run.IsCommentReference
+        && !run.IsPageBreak;
+
+    private static ModelRun CloneTextRun(ModelRun source, string text) => new(text, source.Formatting)
+    {
+        HyperlinkUrl = source.HyperlinkUrl,
+        HyperlinkAnchor = source.HyperlinkAnchor,
+        HyperlinkTooltip = source.HyperlinkTooltip,
+        CommentId = source.CommentId,
+        Control = source.Control,
+        Revision = source.Revision,
+        RevisionAuthor = source.RevisionAuthor,
+        RevisionDateXml = source.RevisionDateXml,
+        FormatRevision = source.FormatRevision
+    };
+
+    private static TabFollowingSegmentMetrics MeasureFollowingTabSegment(
+        IReadOnlyList<ModelRun> runs,
+        int runIndex,
+        int tabIndex,
+        ModelParagraph paragraph,
+        TextDocument document)
+    {
+        var width = 0.0;
+        double? decimalAlignmentOffset = null;
+
+        for (var i = runIndex; i < runs.Count; i++)
+        {
+            var run = runs[i];
+            if (!IsPlainTextRun(run))
+                break;
+
+            var text = run.Text;
+            var start = i == runIndex ? tabIndex + 1 : 0;
+            if (start >= text.Length)
+                continue;
+
+            var nextTabIndex = text.IndexOf('\t', start);
+            var segment = nextTabIndex >= 0
+                ? text.Substring(start, nextTabIndex - start)
+                : text[start..];
+            if (segment.Length > 0)
+            {
+                var separatorIndex = decimalAlignmentOffset is null
+                    ? IndexOfDecimalTabSeparator(segment)
+                    : -1;
+                if (separatorIndex >= 0)
+                    decimalAlignmentOffset = width + MeasureRunText(segment[..separatorIndex], run, paragraph, document);
+
+                width += MeasureRunText(segment, run, paragraph, document);
+            }
+
+            if (nextTabIndex >= 0)
+                break;
+        }
+
+        return new TabFollowingSegmentMetrics(width, decimalAlignmentOffset);
+    }
+
+    private static int IndexOfDecimalTabSeparator(string text)
+    {
+        var dot = text.IndexOf('.');
+        var comma = text.IndexOf(',');
+        if (dot < 0)
+            return comma;
+        if (comma < 0)
+            return dot;
+        return Math.Min(dot, comma);
+    }
+
+    private static Inline BuildRenderedTabStopInline(
+        ParagraphTabStopPlacementPlan plan,
+        ModelRun run,
+        ModelParagraph paragraph,
+        TextDocument document)
+    {
+        var fmt = Resolve(run, paragraph, document);
+        var marker = new RenderedTabStopSpan(
+            plan,
+            fmt,
+            run.CommentId,
+            run.Control,
+            run.Revision,
+            run.RevisionAuthor,
+            run.RevisionDateXml,
+            run.FormatRevision);
+        var brush = TryParseColor(fmt.ColorHex, out var color)
+            ? new SolidColorBrush(color)
+            : Brushes.Black;
+        var element = new TabStopLeaderElement(plan, brush)
+        {
+            Tag = marker,
+            Width = Math.Max(ParagraphTabStopLayoutPlanner.MinimumAdvanceDip, plan.AdvanceDip),
+            Height = 1,
+            IsHitTestVisible = false
+        };
+        return new InlineUIContainer(element) { BaselineAlignment = BaselineAlignment.Baseline };
+    }
+
+    private static double MeasureRunText(string text, ModelRun run, ModelParagraph paragraph, TextDocument document)
+    {
+        if (string.IsNullOrEmpty(text))
+            return 0;
+
+        var fmt = Resolve(run, paragraph, document);
+        var displayText = text;
+        if (document.Page.AutoHyphenation && !paragraph.Formatting.SuppressAutoHyphens)
+            displayText = HyphenateForDisplay(displayText, document.Page.DoNotHyphenateCaps);
+        if (fmt.AllCaps)
+            displayText = displayText.ToUpperInvariant();
+
+        var fontFamily = fmt.FontFamily is { Length: > 0 } family
+            ? new FontFamily(family)
+            : new FontFamily("Calibri");
+        var typeface = new Typeface(
+            fontFamily,
+            fmt.Italic ? FontStyles.Italic : FontStyles.Normal,
+            fmt.Bold ? FontWeights.Bold : FontWeights.Normal,
+            FontStretches.Normal);
+        var fontSizePx = (fmt.FontSizePt ?? DefaultFontSizePt) * PxPerPoint;
+        if (fmt.VerticalAlign is VerticalAlign.Superscript or VerticalAlign.Subscript)
+            fontSizePx *= SuperSubScale;
+
+        var formatted = new FormattedText(
+            displayText,
+            System.Globalization.CultureInfo.CurrentCulture,
+            fmt.Rtl ? System.Windows.FlowDirection.RightToLeft : System.Windows.FlowDirection.LeftToRight,
+            typeface,
+            fontSizePx,
+            Brushes.Black,
+            1.0);
+        return formatted.WidthIncludingTrailingWhitespace;
+    }
+
+    private sealed class TabStopLeaderElement(ParagraphTabStopPlacementPlan plan, Brush brush) : FrameworkElement
+    {
+        protected override void OnRender(DrawingContext drawingContext)
+        {
+            base.OnRender(drawingContext);
+            if (!plan.HasLeader || ActualWidth <= 1)
+                return;
+
+            var pen = new System.Windows.Media.Pen(brush, 1);
+            switch (plan.Leader)
+            {
+                case TabLeader.Underline:
+                    drawingContext.DrawLine(pen, new Point(0, 0.5), new Point(ActualWidth, 0.5));
+                    break;
+                case TabLeader.Dots:
+                    for (var x = 2.0; x < ActualWidth - 1; x += 5)
+                        drawingContext.DrawEllipse(brush, null, new Point(x, 0.5), 1, 1);
+                    break;
+                case TabLeader.Dashes:
+                    for (var x = 1.0; x < ActualWidth - 1; x += 7)
+                        drawingContext.DrawLine(pen, new Point(x, 0.5), new Point(Math.Min(x + 4, ActualWidth), 0.5));
+                    break;
+            }
+        }
     }
 
     // Insert soft hyphens into a run's display text via the pure Hyphenator. When doNotHyphenateCaps is on,
