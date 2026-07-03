@@ -41,6 +41,32 @@ public sealed class TrackingDisplayControlTests
         view.CurrentReviewDisplayPolicy.Should().Be(ReviewDisplayPolicy.Default);
     }
 
+    [StaFact]
+    public void CurrentReviewWorkflowStatus_UsesSharedReviewPlanner()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var para = new Paragraph();
+        para.Runs.Add(new Run("added") { Revision = RevisionKind.Inserted, RevisionAuthor = "Alice" });
+        para.Runs.Add(new Run(" note") { CommentId = 1 });
+        doc.Blocks.Add(para);
+        doc.Comments[1] = new Comment(1, "Comment", "Bob");
+
+        var view = new DocumentView { TrackChangesEnabled = true };
+        view.LoadModel(doc);
+        view.ApplyShowMarkupComments(false);
+
+        var status = view.CurrentReviewWorkflowStatus;
+
+        status.TrackChangesEnabled.Should().BeTrue();
+        status.RevisionCount.Should().Be(1);
+        status.CommentThreadCount.Should().Be(1);
+        status.VisibleReviewItemCount.Should().Be(1);
+        status.HasHiddenMarkup.Should().BeTrue();
+        status.MarkupDescriptors.Single(descriptor => descriptor.Id == "comments")
+            .StatusText.Should().Be("Hidden - 1 item");
+    }
+
     // ── Round-trip safety — revisions ─────────────────────────────────────────────────────────
 
     [StaFact]

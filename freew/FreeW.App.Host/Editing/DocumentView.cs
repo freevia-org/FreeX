@@ -11341,6 +11341,15 @@ public sealed class DocumentView : RichTextBox
     public ReviewDisplayPolicy CurrentReviewDisplayPolicy =>
         new(DisplayForReview, ShowMarkupInsertionsAndDeletions, ShowMarkupComments, ShowMarkupFormatting);
 
+    public ReviewWorkflowStatus CurrentReviewWorkflowStatus
+    {
+        get
+        {
+            CommitToModel();
+            return ReviewWorkflowStatusPlanner.Build(_model, CurrentReviewDisplayPolicy, TrackChangesEnabled);
+        }
+    }
+
     // [ThreadStatic] fields used by the static BuildRun family to read the above policy during a render
     // pass — same pattern as _renderFileName (set in Render(), read in static helpers, never escapes
     // the render call).
