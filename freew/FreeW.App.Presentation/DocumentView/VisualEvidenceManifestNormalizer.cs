@@ -79,6 +79,11 @@ public static class FreeWVisualEvidenceManifestNormalizer
     [
         "f2-section-landscape"
     ];
+    public static IReadOnlyList<string> ReviewRendererScenarioIds { get; } =
+    [
+        "f2-tracked-changes",
+        "f2-comments"
+    ];
     public static IReadOnlyList<string> TableRendererScenarioIds { get; } =
     [
         "table-layout-complex"
@@ -171,6 +176,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
         var scenarios = BuildScenarioSummaries(rows, expected, expectedByKey, failures);
         ValidateBackstageRendererPairs(rows, failures);
         ValidateSectionGeometryRendererPairs(rows, failures);
+        ValidateReviewRendererPairs(rows, failures);
         var summaryTrust = new FreeWVisualEvidenceTrust(failures.Count == 0, failures);
         return new FreeWVisualEvidenceNormalizedSummary(
             SummarySchemaId,
@@ -355,6 +361,17 @@ public static class FreeWVisualEvidenceManifestNormalizer
                     scenario.MinimumExpectedOutputs));
             }
             else if (SectionGeometryRendererScenarioIds.Contains(scenario.ScenarioId, StringComparer.OrdinalIgnoreCase))
+            {
+                expected.Add(new FreeWVisualEvidenceExpectedScenario(
+                    WpfHostId,
+                    scenario.ScenarioId,
+                    scenario.MinimumExpectedOutputs));
+                expected.Add(new FreeWVisualEvidenceExpectedScenario(
+                    AvaloniaHostId,
+                    scenario.ScenarioId,
+                    scenario.MinimumExpectedOutputs));
+            }
+            else if (ReviewRendererScenarioIds.Contains(scenario.ScenarioId, StringComparer.OrdinalIgnoreCase))
             {
                 expected.Add(new FreeWVisualEvidenceExpectedScenario(
                     WpfHostId,
@@ -812,6 +829,49 @@ public static class FreeWVisualEvidenceManifestNormalizer
 
                 ValidateRendererPairRow("section-geometry renderer pair", scenarioId, pageNumber, wpf, avalonia, failures);
                 ValidateSectionPairRow(scenarioId, pageNumber, wpf, avalonia, failures);
+            }
+        }
+    }
+
+    private static void ValidateReviewRendererPairs(
+        IReadOnlyList<FreeWVisualEvidenceNormalizedRow> rows,
+        List<string> failures)
+    {
+        foreach (var scenarioId in ReviewRendererScenarioIds)
+        {
+            var wpfRows = TrustedRowsForHostScenario(rows, WpfHostId, scenarioId);
+            var avaloniaRows = TrustedRowsForHostScenario(rows, AvaloniaHostId, scenarioId);
+            if (wpfRows.Count == 0 || avaloniaRows.Count == 0)
+                continue;
+
+            ValidateUniquePages(scenarioId, WpfHostId, wpfRows, failures);
+            ValidateUniquePages(scenarioId, AvaloniaHostId, avaloniaRows, failures);
+
+            var wpfPages = wpfRows.Select(r => r.PageNumber).Distinct().Order().ToList();
+            var avaloniaPages = avaloniaRows.Select(r => r.PageNumber).Distinct().Order().ToList();
+            var requiredPages = RequiredScenarioPages(scenarioId);
+            var missingAvaloniaPages = requiredPages.Except(avaloniaPages).ToList();
+            var missingWpfPages = requiredPages.Except(wpfPages).ToList();
+            if (missingAvaloniaPages.Count > 0)
+            {
+                failures.Add(
+                    $"review renderer pair '{scenarioId}' is missing Avalonia page(s): {FormatPages(missingAvaloniaPages)}");
+            }
+
+            if (missingWpfPages.Count > 0)
+            {
+                failures.Add(
+                    $"review renderer pair '{scenarioId}' is missing WPF page(s): {FormatPages(missingWpfPages)}");
+            }
+
+            foreach (var pageNumber in wpfPages.Intersect(avaloniaPages))
+            {
+                var wpf = wpfRows.SingleOrDefault(r => r.PageNumber == pageNumber);
+                var avalonia = avaloniaRows.SingleOrDefault(r => r.PageNumber == pageNumber);
+                if (wpf is null || avalonia is null)
+                    continue;
+
+                ValidateRendererPairRow("review renderer pair", scenarioId, pageNumber, wpf, avalonia, failures);
             }
         }
     }

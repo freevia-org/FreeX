@@ -75,6 +75,8 @@ static int RenderAll(string outDir)
     var endnotesP3Path = VisualEvidenceOutputPath(outDir, "f2-endnotes", 3);
     var sectionLandscapeP1Path = VisualEvidenceOutputPath(outDir, "f2-section-landscape", 1);
     var sectionLandscapeP2Path = VisualEvidenceOutputPath(outDir, "f2-section-landscape", 2);
+    var trackedChangesPath = VisualEvidenceOutputPath(outDir, "f2-tracked-changes", 1);
+    var commentsPath = VisualEvidenceOutputPath(outDir, "f2-comments", 1);
     var tableLayoutPath = VisualEvidenceOutputPath(outDir, "table-layout-complex", 1);
     var drawingObjectsPath = VisualEvidenceOutputPath(outDir, "drawing-objects-complex", 1);
     var chartSmartArtPath = VisualEvidenceOutputPath(outDir, "chart-smartart-complex", 1);
@@ -199,6 +201,26 @@ static int RenderAll(string outDir)
         pageNumber: 2,
         pageCount: 2,
         viewportOffsetY: 300);
+    if (rc != 0) return rc;
+
+    rc = RenderMode(DocumentViewMode.PrintLayout, trackedChangesPath,
+        width: 960, height: 1200,
+        label: "F2 Tracked Changes",
+        scenarioId: "f2-tracked-changes",
+        evidence: evidence,
+        documentFactory: FreeWVisualEvidenceDocumentFactory.BuildTrackedChangesReviewDocument,
+        pageNumber: 1,
+        pageCount: 1);
+    if (rc != 0) return rc;
+
+    rc = RenderMode(DocumentViewMode.PrintLayout, commentsPath,
+        width: 960, height: 1200,
+        label: "F2 Comments",
+        scenarioId: "f2-comments",
+        evidence: evidence,
+        documentFactory: FreeWVisualEvidenceDocumentFactory.BuildCommentsReviewDocument,
+        pageNumber: 1,
+        pageCount: 1);
     if (rc != 0) return rc;
 
     rc = RenderMode(DocumentViewMode.PrintLayout, tableLayoutPath,
@@ -610,6 +632,12 @@ static int RenderMode(
         return 2;
     }
 
+    if (IsReviewRendererScenario(scenarioId))
+    {
+        Console.Error.WriteLine($"[PageLayoutShot] {label}: Avalonia RenderTargetBitmap produced 0 bytes; refusing placeholder fallback for review renderer evidence.");
+        return 2;
+    }
+
     // Fallback: encode via SkiaSharp if the Avalonia encoder produced nothing.
     var pngBytes = TryEncodeViaSkia(renderTarget, width, height, label);
     if (pngBytes is { Length: > 0 })
@@ -659,6 +687,11 @@ static string VisualEvidenceOutputPath(string outDir, string scenarioId, int pag
 
 static bool IsBackstageRendererScenario(string scenarioId) =>
     FreeWVisualEvidenceManifestNormalizer.BackstageRendererScenarioIds.Contains(
+        scenarioId,
+        StringComparer.OrdinalIgnoreCase);
+
+static bool IsReviewRendererScenario(string scenarioId) =>
+    FreeWVisualEvidenceManifestNormalizer.ReviewRendererScenarioIds.Contains(
         scenarioId,
         StringComparer.OrdinalIgnoreCase);
 

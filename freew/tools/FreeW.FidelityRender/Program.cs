@@ -1257,105 +1257,14 @@ static void GenerateF2FlowCorpus(string outDir)
 
     // ─── 7. Tracked insertions and deletions ─────────────────────────────────────────────────────
     {
-        var doc = TextDocument.CreateEmpty();
-        doc.Blocks.Clear();
-        doc.Blocks.Add(MP("Tracked Changes Test", "Heading1"));
-        doc.Blocks.Add(MP("Insertions should be underlined; deletions should be struck-through."));
-
-        var p1 = new FreeW.Core.Model.Paragraph();
-        p1.Runs.Add(new FreeW.Core.Model.Run("Normal text before. "));
-        p1.Runs.Add(new FreeW.Core.Model.Run("INSERTED text by Alice.")
-        {
-            Revision = RevisionKind.Inserted,
-            RevisionAuthor = "Alice",
-            RevisionDateXml = "2026-06-26T09:00:00Z"
-        });
-        p1.Runs.Add(new FreeW.Core.Model.Run(" Normal text between. "));
-        p1.Runs.Add(new FreeW.Core.Model.Run("DELETED text by Bob.")
-        {
-            Revision = RevisionKind.Deleted,
-            RevisionAuthor = "Bob",
-            RevisionDateXml = "2026-06-26T09:30:00Z"
-        });
-        p1.Runs.Add(new FreeW.Core.Model.Run(" Normal text after."));
-        doc.Blocks.Add(p1);
-
-        var p2 = new FreeW.Core.Model.Paragraph();
-        p2.Runs.Add(new FreeW.Core.Model.Run("This entire paragraph is a tracked insertion by Carol.")
-        {
-            Revision = RevisionKind.Inserted,
-            RevisionAuthor = "Carol",
-            RevisionDateXml = "2026-06-26T10:00:00Z"
-        });
-        doc.Blocks.Add(p2);
-
-        var p3 = new FreeW.Core.Model.Paragraph();
-        p3.Runs.Add(new FreeW.Core.Model.Run("Alice: "));
-        p3.Runs.Add(new FreeW.Core.Model.Run("inserted-by-alice ")
-        {
-            Revision = RevisionKind.Inserted,
-            RevisionAuthor = "Alice",
-            RevisionDateXml = "2026-06-26T09:00:00Z"
-        });
-        p3.Runs.Add(new FreeW.Core.Model.Run("Bob: "));
-        p3.Runs.Add(new FreeW.Core.Model.Run("deleted-by-bob ")
-        {
-            Revision = RevisionKind.Deleted,
-            RevisionAuthor = "Bob",
-            RevisionDateXml = "2026-06-26T09:30:00Z"
-        });
-        p3.Runs.Add(new FreeW.Core.Model.Run("Carol: "));
-        p3.Runs.Add(new FreeW.Core.Model.Run("inserted-by-carol")
-        {
-            Revision = RevisionKind.Inserted,
-            RevisionAuthor = "Carol",
-            RevisionDateXml = "2026-06-26T10:00:00Z"
-        });
-        doc.Blocks.Add(p3);
-
-        for (int i = 1; i <= 40; i++)
-            doc.Blocks.Add(MP($"Normal paragraph {i}: No tracked changes here."));
-
+        var doc = FreeWVisualEvidenceDocumentFactory.BuildTrackedChangesReviewDocument();
         DocxWriter.Write(doc, Path.Combine(outDir, "f2-tracked-changes.docx"));
         Console.WriteLine("  wrote f2-tracked-changes.docx");
     }
 
     // ─── 8. Anchored comments ─────────────────────────────────────────────────────────────────────
     {
-        var doc = TextDocument.CreateEmpty();
-        doc.Blocks.Clear();
-        doc.Blocks.Add(MP("Comments Test", "Heading1"));
-        doc.Blocks.Add(MP("Comment anchors should be highlighted. Comment content should appear as balloons or in a reviewing pane."));
-
-        var p1 = new FreeW.Core.Model.Paragraph();
-        p1.Runs.Add(new FreeW.Core.Model.Run("Text before the first comment anchor. "));
-        p1.Runs.Add(FreeW.Core.Model.Run.CommentReference(1));
-        p1.Runs.Add(new FreeW.Core.Model.Run("The first commented span.") { CommentId = 1 });
-        p1.Runs.Add(new FreeW.Core.Model.Run(" Text after the first comment anchor."));
-        doc.Blocks.Add(p1);
-        doc.Comments[1] = new Comment(1, "Comment 1 by Alice: This is the comment text. Should appear as a balloon in the right margin.")
-        {
-            Author   = "Alice",
-            Initials = "A",
-            DateXml  = "2026-06-26T09:00:00Z"
-        };
-
-        var p2 = new FreeW.Core.Model.Paragraph();
-        p2.Runs.Add(new FreeW.Core.Model.Run("Second paragraph before comment. "));
-        p2.Runs.Add(FreeW.Core.Model.Run.CommentReference(2));
-        p2.Runs.Add(new FreeW.Core.Model.Run("Second commented phrase.") { CommentId = 2 });
-        p2.Runs.Add(new FreeW.Core.Model.Run(" End of second paragraph."));
-        doc.Blocks.Add(p2);
-        doc.Comments[2] = new Comment(2, "Comment 2 by Bob: Different author, distinct comment. Both should be visible.")
-        {
-            Author   = "Bob",
-            Initials = "B",
-            DateXml  = "2026-06-26T09:30:00Z"
-        };
-
-        for (int i = 1; i <= 35; i++)
-            doc.Blocks.Add(MP($"Normal paragraph {i}: No comments here."));
-
+        var doc = FreeWVisualEvidenceDocumentFactory.BuildCommentsReviewDocument();
         DocxWriter.Write(doc, Path.Combine(outDir, "f2-comments.docx"));
         Console.WriteLine("  wrote f2-comments.docx");
     }

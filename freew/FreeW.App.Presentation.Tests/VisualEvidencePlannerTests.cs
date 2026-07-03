@@ -40,6 +40,16 @@ public sealed class VisualEvidencePlannerTests
         sectionScenario.ExpectedFeatureTags.Should().Contain(["f2", "section-geometry", "portrait-landscape"]);
         sectionScenario.Composition.ExpectsSectionGeometryChange.Should().BeTrue();
 
+        var trackedScenario = FreeWVisualEvidencePlanner.ResolveScenario("f2-tracked-changes");
+        trackedScenario.ExpectedFeatureTags.Should().Contain(["f2", "tracked-changes", "revision-marks"]);
+        trackedScenario.ExpectedOutputNamePattern.Should().Be("f2-tracked-changes_p{page}.png");
+        trackedScenario.Composition.ExpectsTrackedChanges.Should().BeTrue();
+
+        var commentsScenario = FreeWVisualEvidencePlanner.ResolveScenario("f2-comments");
+        commentsScenario.ExpectedFeatureTags.Should().Contain(["f2", "comments", "comment-anchors"]);
+        commentsScenario.ExpectedOutputNamePattern.Should().Be("f2-comments_p{page}.png");
+        commentsScenario.Composition.ExpectsComments.Should().BeTrue();
+
         var floatingScenario = FreeWVisualEvidencePlanner.ResolveScenario("page-composition-floating-image");
         floatingScenario.Composition.ExpectsFloatingObjects.Should().BeTrue();
 
@@ -153,6 +163,56 @@ public sealed class VisualEvidencePlannerTests
         endnoteExpectation.HasEndnotes.Should().BeTrue();
         endnoteExpectation.IsSyntheticPage.Should().BeTrue();
         endnoteExpectation.Composition.ExpectsEndnotes.Should().BeTrue();
+    }
+
+    [Fact]
+    public void SharedReviewFactories_BuildF2ReviewContracts()
+    {
+        var tracked = FreeWVisualEvidenceDocumentFactory.BuildTrackedChangesReviewDocument();
+        var comments = FreeWVisualEvidenceDocumentFactory.BuildCommentsReviewDocument();
+
+        var revisions = tracked.Blocks
+            .OfType<Paragraph>()
+            .SelectMany(p => p.Runs)
+            .Where(r => r.Revision != RevisionKind.None)
+            .ToList();
+        revisions.Where(r => r.Revision == RevisionKind.Inserted).Should().HaveCount(4);
+        revisions.Where(r => r.Revision == RevisionKind.Deleted).Should().HaveCount(2);
+        revisions.Select(r => r.RevisionAuthor).Should().Contain(["Alice", "Bob", "Carol"]);
+
+        comments.Comments.Keys.Should().BeEquivalentTo([1, 2]);
+        comments.Blocks
+            .OfType<Paragraph>()
+            .SelectMany(p => p.Runs)
+            .Where(r => r.IsCommentReference)
+            .Select(r => r.CommentId!.Value)
+            .Should().ContainInOrder(1, 2);
+        comments.Blocks
+            .OfType<Paragraph>()
+            .SelectMany(p => p.Runs)
+            .Where(r => r.CommentId is not null && !r.IsCommentReference)
+            .Select(r => r.CommentId!.Value)
+            .Should().Contain([1, 2]);
+
+        var trackedExpectation = FreeWVisualEvidencePlanner.BuildPageExpectation(
+            "f2-tracked-changes",
+            tracked.Page,
+            pageNumber: 1,
+            pageCount: 1,
+            outputName: "f2-tracked-changes_p1.png",
+            document: tracked);
+        trackedExpectation.ExpectedOutputName.Should().Be("f2-tracked-changes_p1.png");
+        trackedExpectation.Composition.ExpectsTrackedChanges.Should().BeTrue();
+
+        var commentsExpectation = FreeWVisualEvidencePlanner.BuildPageExpectation(
+            "f2-comments",
+            comments.Page,
+            pageNumber: 1,
+            pageCount: 1,
+            outputName: "f2-comments_p1.png",
+            document: comments);
+        commentsExpectation.ExpectedOutputName.Should().Be("f2-comments_p1.png");
+        commentsExpectation.Composition.ExpectsComments.Should().BeTrue();
     }
 
     [Fact]
@@ -291,6 +351,24 @@ public sealed class VisualEvidencePlannerTests
         var expected = FreeWVisualEvidenceManifestNormalizer.DefaultExpectedScenarios;
 
         foreach (var scenarioId in FreeWVisualEvidenceManifestNormalizer.SectionGeometryRendererScenarioIds)
+        {
+            expected.Should().Contain(e =>
+                e.HostId == FreeWVisualEvidenceManifestNormalizer.WpfHostId &&
+                e.ScenarioId == scenarioId &&
+                e.MinimumExpectedOutputs == FreeWVisualEvidencePlanner.ResolveScenario(scenarioId).MinimumExpectedOutputs);
+            expected.Should().Contain(e =>
+                e.HostId == FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId &&
+                e.ScenarioId == scenarioId &&
+                e.MinimumExpectedOutputs == FreeWVisualEvidencePlanner.ResolveScenario(scenarioId).MinimumExpectedOutputs);
+        }
+    }
+
+    [Fact]
+    public void DefaultExpectedScenarios_RequiresPairedReviewRendererEvidence()
+    {
+        var expected = FreeWVisualEvidenceManifestNormalizer.DefaultExpectedScenarios;
+
+        foreach (var scenarioId in FreeWVisualEvidenceManifestNormalizer.ReviewRendererScenarioIds)
         {
             expected.Should().Contain(e =>
                 e.HostId == FreeWVisualEvidenceManifestNormalizer.WpfHostId &&
@@ -1085,6 +1163,65 @@ public sealed class VisualEvidencePlannerTests
     }
 
     [Fact]
+    public void BuildNormalizedSummaryFromFiles_ReportsMissingRequiredReviewRendererPages()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var wpfDir = Path.Combine(root, "wpf");
+            var avaloniaDir = Path.Combine(root, "avalonia");
+            FreeWVisualEvidencePlanner.WriteManifest(
+                wpfDir,
+                [
+                    BuildFileBackedRow(
+                        root,
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        "f2-comments",
+                        pageNumber: 1,
+                        pageCount: 2)
+                ],
+                new DateTimeOffset(2026, 7, 1, 12, 0, 0, TimeSpan.Zero));
+            FreeWVisualEvidencePlanner.WriteManifest(
+                avaloniaDir,
+                [
+                    BuildFileBackedRow(
+                        root,
+                        FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                        "f2-comments",
+                        pageNumber: 2,
+                        pageCount: 2)
+                ],
+                new DateTimeOffset(2026, 7, 1, 12, 0, 0, TimeSpan.Zero));
+
+            var summary = FreeWVisualEvidenceManifestNormalizer.BuildNormalizedSummaryFromFiles(
+                [
+                    Path.Combine(wpfDir, FreeWVisualEvidencePlanner.ManifestFileName),
+                    Path.Combine(avaloniaDir, FreeWVisualEvidencePlanner.ManifestFileName)
+                ],
+                root,
+                [
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        "f2-comments",
+                        1),
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                        "f2-comments",
+                        1)
+                ]);
+
+            summary.Trust.Passed.Should().BeFalse();
+            summary.Trust.Failures.Should().Contain(f =>
+                f.Contains("review renderer pair 'f2-comments'", StringComparison.Ordinal)
+                && f.Contains("missing Avalonia page(s): p1", StringComparison.Ordinal));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public void BuildNormalizedSummaryFromFiles_ValidatesPairedSectionGeometryMetadata()
     {
         var root = CreateTempRoot();
@@ -1583,6 +1720,8 @@ public sealed class VisualEvidencePlannerTests
         {
             "f2-footnotes" => FreeWVisualEvidenceDocumentFactory.BuildFootnotePlacementDocument(),
             "f2-endnotes" => FreeWVisualEvidenceDocumentFactory.BuildEndnotePlacementDocument(),
+            "f2-tracked-changes" => FreeWVisualEvidenceDocumentFactory.BuildTrackedChangesReviewDocument(),
+            "f2-comments" => FreeWVisualEvidenceDocumentFactory.BuildCommentsReviewDocument(),
             "table-layout-complex" => FreeWVisualEvidenceDocumentFactory.BuildComplexTableLayoutDocument(),
             "drawing-objects-complex" => FreeWVisualEvidenceDocumentFactory.BuildDrawingObjectsCompositionDocument(),
             "chart-smartart-complex" => FreeWVisualEvidenceDocumentFactory.BuildChartSmartArtCompositionDocument(),
