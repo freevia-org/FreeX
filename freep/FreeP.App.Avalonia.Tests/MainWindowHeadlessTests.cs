@@ -2503,6 +2503,55 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task Review_comments_pane_renders_shared_action_button_states()
+    {
+        string[] renderedActionStates = [];
+        string[] sharedActionStates = [];
+        PresentationCommentPanePlan? panePlan = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            window.Editor.CurrentSlide!.Comments.Add(new SlideComment
+            {
+                Author = "Reviewer",
+                Initials = "RV",
+                Text = "Resolved thread.",
+                Idx = 1,
+                IsResolved = true,
+                ResolvedBy = "Reviewer",
+                Replies =
+                {
+                    new SlideCommentReply
+                    {
+                        Author = "FreeP User",
+                        Initials = "FU",
+                        Text = "Closing reply."
+                    }
+                }
+            });
+
+            panePlan = window.SetSelectedReviewCommentIndexForTests(0);
+            renderedActionStates = window.ReviewCommentsPaneRenderedActionStates.ToArray();
+            sharedActionStates = panePlan.Actions
+                .Where(action => action.CommandId != PresentationReviewWorkflowPlanner.ReplyCommentCommandId)
+                .Select(action => $"{action.CommandId}|{action.Label}|{action.IsEnabled}")
+                .ToArray();
+        });
+
+        if (!ran) return;
+        panePlan.Should().NotBeNull();
+        panePlan!.SelectedComment!.CanReply.Should().BeFalse("resolved PowerPoint comment threads must be reopened before replying");
+        renderedActionStates.Should().Equal(sharedActionStates);
+        renderedActionStates.Should().Contain(
+            $"{PresentationReviewWorkflowPlanner.ResolveCommentCommandId}|Resolve Comment|False");
+        renderedActionStates.Should().Contain(
+            $"{PresentationReviewWorkflowPlanner.ReopenCommentCommandId}|Reopen Comment|True");
+        renderedActionStates.Should().NotContain(state =>
+            state.StartsWith(PresentationReviewWorkflowPlanner.ReplyCommentCommandId, StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task Review_comment_reply_ribbon_command_routes_through_shared_mutation_plan()
     {
         SlideComment? repliedComment = null;

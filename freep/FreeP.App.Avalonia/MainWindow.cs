@@ -288,6 +288,12 @@ public sealed class MainWindow : Window
     internal int ReviewCommentsPaneActionButtonCount => LastCommentPanePlan?.Actions.Count ?? 0;
     internal int ReviewCommentsPaneSelectedCommentCount => LastCommentPanePlan?.Comments.Count(comment => comment.IsSelected) ?? 0;
     internal string ReviewCommentsPaneSummary => LastCommentPanePlan?.DeckSummaryLabel ?? string.Empty;
+    internal IReadOnlyList<string> ReviewCommentsPaneRenderedActionStates =>
+        EnumerateReviewPaneButtons(_reviewCommentsPanePanel)
+            .Where(button => button.Tag is string commandId &&
+                commandId.StartsWith("freep.review.comments.", StringComparison.Ordinal))
+            .Select(button => $"{button.Tag}|{button.Content}|{button.IsEnabled}")
+            .ToArray();
     internal bool IsAltTextPaneVisible => _altTextPaneHost?.IsVisible == true;
     internal bool IsAltTextPaneApplyEnabled => _altTextApplyButton?.IsEnabled == true;
     internal string AltTextPaneTitleLabel => _altTextTitleLabel?.Text ?? string.Empty;
@@ -3080,6 +3086,37 @@ public sealed class MainWindow : Window
         }
 
         return panel;
+    }
+
+    private static IEnumerable<Button> EnumerateReviewPaneButtons(Control? control)
+    {
+        if (control is null)
+        {
+            yield break;
+        }
+
+        if (control is Button button)
+        {
+            yield return button;
+        }
+
+        if (control is Panel panel)
+        {
+            foreach (var child in panel.Children)
+            {
+                foreach (var descendant in EnumerateReviewPaneButtons(child))
+                {
+                    yield return descendant;
+                }
+            }
+        }
+        else if (control is ContentControl { Content: Control content })
+        {
+            foreach (var descendant in EnumerateReviewPaneButtons(content))
+            {
+                yield return descendant;
+            }
+        }
     }
 
     private Control BuildAddCommentInput()
