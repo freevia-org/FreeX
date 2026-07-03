@@ -145,6 +145,45 @@ public sealed class SlidePanePlannerTests
     {
         SlidePanePlanner.DefaultThumbnailWidth.Should().Be(150.0);
         SlidePanePlanner.DefaultThumbnailHeight.Should().BeApproximately(84.375, 0.0001);
+        SlidePanePlanner.DefaultSlideItemHeight.Should().BeApproximately(128.375, 0.0001);
+    }
+
+    [Fact]
+    public void BuildThumbnailVisualPlan_ProjectsSharedMetricsSelectionAndMetadata()
+    {
+        var slide = new Slide { Id = "slide2" };
+        slide.Title = "Quarterly Plan";
+        slide.Shapes.Add(new SlideShape { Id = 99, Name = "Chart 1" });
+        var entry = new SlidePaneEntry(SlidePaneEntryKind.Slide, 1, "2");
+
+        var plan = SlidePanePlanner.BuildThumbnailVisualPlan(entry, slide, currentSlideIndex: 1);
+
+        plan.SlideIndex.Should().Be(1);
+        plan.LabelText.Should().Be("2");
+        plan.TitleText.Should().Be("Quarterly Plan");
+        plan.ShapeCount.Should().Be(2);
+        plan.IsSelected.Should().BeTrue();
+        plan.ThumbnailWidth.Should().Be(SlidePanePlanner.DefaultThumbnailWidth);
+        plan.ThumbnailHeight.Should().Be(SlidePanePlanner.DefaultThumbnailHeight);
+        plan.ItemPadding.Should().Be(SlidePanePlanner.DefaultItemPadding);
+        plan.LabelHeight.Should().Be(SlidePanePlanner.DefaultLabelHeight);
+        plan.ItemHeight.Should().Be(SlidePanePlanner.DefaultSlideItemHeight);
+        plan.AccessibleName.Should().Be("Slide 2: Quarterly Plan, 2 objects");
+        plan.ToolTipText.Should().Be(plan.AccessibleName);
+    }
+
+    [Fact]
+    public void BuildThumbnailVisualPlan_BlankTitleUsesUntitledFallback()
+    {
+        var slide = new Slide { Id = "slide1" };
+        var entry = new SlidePaneEntry(SlidePaneEntryKind.Slide, 0, "1");
+
+        var plan = SlidePanePlanner.BuildThumbnailVisualPlan(entry, slide, currentSlideIndex: 2);
+
+        plan.IsSelected.Should().BeFalse();
+        plan.TitleText.Should().Be("Untitled slide");
+        plan.ShapeCount.Should().Be(0);
+        plan.AccessibleName.Should().Be("Slide 1: Untitled slide, 0 objects");
     }
 
     [Fact]

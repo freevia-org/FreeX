@@ -366,7 +366,7 @@ public class CitationsTests
 
         Citations.BuildBibliography(doc, CitationStyle.Ieee).Select(p => p.PlainText).Should().Equal(
             "References",
-            "Adams, \"Guide,\" Pan, 1979.");
+            "[1] Adams, \"Guide,\" Pan, 1979.");
     }
 
     // --- IEEE in-text (numeric) -----------------------------------------------------------------------
@@ -381,13 +381,75 @@ public class CitationsTests
     }
 
     [Fact]
-    public void FormatInText_Numbered_OnlyIeeeProducesBracketedNumber()
+    public void FormatInText_Numbered_NumericStylesProduceBracketedNumber()
     {
         Citations.FormatInText(3, CitationStyle.Ieee).Should().Be("[3]");
+        Citations.FormatInText(3, CitationStyle.Vancouver).Should().Be("[3]");
         // Author–date styles do not number their in-text citations -> empty so callers fall back.
         Citations.FormatInText(3, CitationStyle.Apa).Should().BeEmpty();
         Citations.FormatInText(3, CitationStyle.Mla).Should().BeEmpty();
         Citations.FormatInText(3, CitationStyle.Chicago).Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData(CitationStyle.Ieee)]
+    [InlineData(CitationStyle.Vancouver)]
+    public void FormatInText_DocumentAwareNumericStyles_UseSourceOrderNumber(CitationStyle style)
+    {
+        var first = new Source { Tag = "Ada1843", Author = "Ada Lovelace", Title = "Notes", Year = "1843" };
+        var second = new Source { Tag = "Tur1936", Author = "Alan Turing", Title = "Computable Numbers", Year = "1936" };
+        var doc = new TextDocument();
+        doc.Sources.Add(first);
+        doc.Sources.Add(second);
+
+        Citations.FormatInText(doc, first, style).Should().Be("[1]");
+        Citations.FormatInText(doc, second, style).Should().Be("[2]");
+    }
+
+    [Fact]
+    public void FormatInText_DocumentAwareNumericStyle_ReusesTaggedSourceNumber()
+    {
+        var first = new Source { Tag = "Ada1843", Author = "Ada Lovelace", Title = "Notes", Year = "1843" };
+        var second = new Source { Tag = "Tur1936", Author = "Alan Turing", Title = "Computable Numbers", Year = "1936" };
+        var repeated = new Source { Tag = "Tur1936", Author = "Alan M. Turing", Title = "Computable Numbers" };
+        var doc = new TextDocument();
+        doc.Sources.Add(first);
+        doc.Sources.Add(second);
+
+        Citations.FormatInText(doc, second, CitationStyle.Ieee).Should().Be("[2]");
+        Citations.FormatInText(doc, repeated, CitationStyle.Ieee).Should().Be("[2]");
+    }
+
+    [Fact]
+    public void FormatInText_DocumentAwareNumericStyle_MissingSourceFallsBackToPlaceholder()
+    {
+        var doc = new TextDocument();
+        doc.Sources.Add(new Source { Tag = "Ada1843", Author = "Ada Lovelace", Title = "Notes", Year = "1843" });
+
+        var missing = new Source { Tag = "Tur1936", Author = "Alan Turing", Title = "Computable Numbers", Year = "1936" };
+
+        Citations.FormatInText(doc, missing, CitationStyle.Ieee).Should().Be("[Turing]");
+    }
+
+    [Fact]
+    public void BuildBibliography_NumericStyles_UseSourceOrderAndNumberedEntries()
+    {
+        var doc = new TextDocument();
+        doc.Sources.Add(new Source { Tag = "Z", Author = "Zimmerman", Year = "2001", Title = "Zed" });
+        doc.Sources.Add(new Source { Tag = "A", Author = "Adams", Year = "1979", Title = "Guide" });
+        doc.Sources.Add(new Source { Tag = "M", Author = "Knuth", Year = "1997", Title = "TAOCP" });
+
+        Citations.BuildBibliography(doc, CitationStyle.Ieee).Select(p => p.PlainText).Should().Equal(
+            "References",
+            "[1] Zimmerman, \"Zed,\" 2001.",
+            "[2] Adams, \"Guide,\" 1979.",
+            "[3] Knuth, \"TAOCP,\" 1997.");
+
+        Citations.BuildBibliography(doc, CitationStyle.Vancouver).Select(p => p.PlainText).Should().Equal(
+            "References",
+            "1. Zimmerman. Zed. 2001.",
+            "2. Adams. Guide. 1979.",
+            "3. Knuth. TAOCP. 1997.");
     }
 
     [Fact]

@@ -18,6 +18,20 @@ public sealed record SlidePaneEntry(
     string SectionId = "",
     bool IsSectionCollapsed = false);
 
+public sealed record SlidePaneThumbnailVisualPlan(
+    int SlideIndex,
+    string LabelText,
+    string TitleText,
+    int ShapeCount,
+    bool IsSelected,
+    double ThumbnailWidth,
+    double ThumbnailHeight,
+    double LabelHeight,
+    double ItemPadding,
+    double ItemHeight,
+    string AccessibleName,
+    string ToolTipText);
+
 public enum SlidePaneActionKind
 {
     InsertAfterSlide,
@@ -41,6 +55,9 @@ public static class SlidePanePlanner
     public const string DeleteSlideMenuText = "Delete Slide";
     public const double DefaultThumbnailWidth = 150.0;
     public const double DefaultThumbnailHeight = DefaultThumbnailWidth * 9.0 / 16.0;
+    public const double DefaultItemPadding = 8.0;
+    public const double DefaultLabelHeight = 16.0;
+    public const double DefaultSlideItemHeight = 4 + DefaultItemPadding + DefaultLabelHeight + 4 + DefaultThumbnailHeight + DefaultItemPadding + 4;
     public const double DefaultSectionHeaderHeight = 30.0;
 
     public static IReadOnlyList<SlidePaneEntry> BuildEntries(
@@ -74,6 +91,36 @@ public static class SlidePanePlanner
 
     public static string FormatSlideNumber(int slideIndex) =>
         (slideIndex + 1).ToString(CultureInfo.InvariantCulture);
+
+    public static SlidePaneThumbnailVisualPlan BuildThumbnailVisualPlan(
+        SlidePaneEntry entry,
+        Slide slide,
+        int currentSlideIndex)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+        ArgumentNullException.ThrowIfNull(slide);
+
+        if (entry.Kind != SlidePaneEntryKind.Slide)
+            throw new ArgumentException("Only slide entries can be projected as thumbnail visual plans.", nameof(entry));
+
+        var title = FormatSlideTitle(slide);
+        var objectText = FormatShapeCount(slide.Shapes.Count);
+        var accessibleName = $"Slide {entry.Text}: {title}, {objectText}";
+
+        return new SlidePaneThumbnailVisualPlan(
+            entry.SlideIndex,
+            entry.Text,
+            title,
+            slide.Shapes.Count,
+            entry.SlideIndex == currentSlideIndex,
+            DefaultThumbnailWidth,
+            DefaultThumbnailHeight,
+            DefaultLabelHeight,
+            DefaultItemPadding,
+            DefaultSlideItemHeight,
+            accessibleName,
+            accessibleName);
+    }
 
     public static IReadOnlyList<SlidePaneActionPlan> BuildContextActions(
         int slideCount,
@@ -328,4 +375,15 @@ public static class SlidePanePlanner
 
     private static bool IsValidSlideIndex(int slideCount, int slideIndex) =>
         slideCount > 0 && slideIndex >= 0 && slideIndex < slideCount;
+
+    private static string FormatSlideTitle(Slide slide)
+    {
+        var title = slide.Title.Trim();
+        return title.Length == 0 ? "Untitled slide" : title;
+    }
+
+    private static string FormatShapeCount(int shapeCount) =>
+        shapeCount == 1
+            ? "1 object"
+            : shapeCount.ToString(CultureInfo.InvariantCulture) + " objects";
 }

@@ -1566,6 +1566,101 @@ public sealed class VisualEvidencePlannerTests
     }
 
     [Fact]
+    public void BuildNormalizedSummaryFromFiles_RequiresBackstageWorkflowMetadata()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var wpfDir = Path.Combine(root, "wpf");
+            var row = BuildFileBackedRow(
+                root,
+                FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                "backstage-print-preview-fidelity",
+                pageNumber: 1,
+                pageCount: 1);
+            var missingWorkflow = row with
+            {
+                HostMetadata = new Dictionary<string, string>
+                {
+                    ["renderer"] = "FreeW.FidelityRender",
+                    ["captureSource"] = "software-renderer"
+                }
+            };
+            FreeWVisualEvidencePlanner.WriteManifest(
+                wpfDir,
+                [missingWorkflow],
+                new DateTimeOffset(2026, 7, 1, 12, 0, 0, TimeSpan.Zero));
+
+            var summary = FreeWVisualEvidenceManifestNormalizer.BuildNormalizedSummaryFromFiles(
+                [Path.Combine(wpfDir, FreeWVisualEvidencePlanner.ManifestFileName)],
+                root,
+                [
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        "backstage-print-preview-fidelity",
+                        1)
+                ]);
+
+            summary.Trust.Passed.Should().BeFalse();
+            summary.Evidence.Single().Trust.Passed.Should().BeFalse();
+            summary.Trust.Failures.Should().Contain(f =>
+                f.Contains("must declare backstageWorkflow 'print-preview'", StringComparison.Ordinal));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void BuildNormalizedSummaryFromFiles_RejectsCrossWiredBackstageWorkflowMetadata()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var avaloniaDir = Path.Combine(root, "avalonia");
+            var row = BuildFileBackedRow(
+                root,
+                FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                "backstage-pdf-export-fidelity",
+                pageNumber: 1,
+                pageCount: 1);
+            var crossWired = row with
+            {
+                HostMetadata = new Dictionary<string, string>
+                {
+                    ["renderer"] = "FreeW.PageLayoutShot",
+                    ["captureSource"] = "avalonia-render-target",
+                    ["backstageWorkflow"] = "print-preview"
+                }
+            };
+            FreeWVisualEvidencePlanner.WriteManifest(
+                avaloniaDir,
+                [crossWired],
+                new DateTimeOffset(2026, 7, 1, 12, 0, 0, TimeSpan.Zero));
+
+            var summary = FreeWVisualEvidenceManifestNormalizer.BuildNormalizedSummaryFromFiles(
+                [Path.Combine(avaloniaDir, FreeWVisualEvidencePlanner.ManifestFileName)],
+                root,
+                [
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                        "backstage-pdf-export-fidelity",
+                        1)
+                ]);
+
+            summary.Trust.Passed.Should().BeFalse();
+            summary.Evidence.Single().Trust.Passed.Should().BeFalse();
+            summary.Trust.Failures.Should().Contain(f =>
+                f.Contains("must use backstageWorkflow 'pdf-export', found 'print-preview'", StringComparison.Ordinal));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public void BuildNormalizedSummaryFromFiles_ReportsMissingRequiredBackstageRendererPages()
     {
         var root = CreateTempRoot();
@@ -2581,6 +2676,12 @@ public sealed class VisualEvidencePlannerTests
         metadata["captureSource"] = hostId == FreeWVisualEvidenceManifestNormalizer.WpfHostId
             ? "software-renderer"
             : "avalonia-render-target";
+        metadata["backstageWorkflow"] = scenarioId switch
+        {
+            "backstage-print-preview-fidelity" => "print-preview",
+            "backstage-pdf-export-fidelity" => "pdf-export",
+            _ => throw new InvalidOperationException($"Unsupported backstage visual evidence scenario: {scenarioId}")
+        };
         return metadata;
     }
 

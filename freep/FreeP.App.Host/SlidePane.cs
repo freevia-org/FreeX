@@ -46,13 +46,7 @@ public sealed class SlidePane : Border
     private static readonly Brush SectionHeaderBg   = Freeze(new SolidColorBrush(Color.FromRgb(0xC8, 0xC8, 0xC8)));
     private static readonly Brush SectionHeaderFg   = Freeze(new SolidColorBrush(Color.FromRgb(0x33, 0x33, 0x33)));
 
-    // Thumbnail dimensions
-    private const double ThumbWidth  = 150.0;
-    private const double ThumbHeight = ThumbWidth * 9.0 / 16.0; // ~84.4 px
-    private const double ItemPadding = 8.0;
-    private const double LabelHeight = 16.0;
-    // Total item height (top margin 4 + padding + label + padding + thumb + padding + bottom margin 4)
-    private const double ItemHeight  = 4 + ItemPadding + LabelHeight + 4 + ThumbHeight + ItemPadding + 4;
+    private const double ItemHeight = SlidePanePlanner.DefaultSlideItemHeight;
 
     // ── Fields ────────────────────────────────────────────────────────────────────
 
@@ -140,7 +134,11 @@ public sealed class SlidePane : Border
                 continue;
             }
 
-            var item = BuildSlideItem(entry.SlideIndex, slides[entry.SlideIndex], entry.Text);
+            var plan = SlidePanePlanner.BuildThumbnailVisualPlan(
+                entry,
+                slides[entry.SlideIndex],
+                _editor.CurrentSlideIndex);
+            var item = BuildSlideItem(plan, slides[entry.SlideIndex]);
             _stack.Children.Add(item);
         }
 
@@ -226,18 +224,16 @@ public sealed class SlidePane : Border
 
     // ── Item construction ─────────────────────────────────────────────────────────
 
-    private Border BuildSlideItem(int index, Slide slide, string labelText)
+    private Border BuildSlideItem(SlidePaneThumbnailVisualPlan plan, Slide slide)
     {
-        bool selected = index == _editor.CurrentSlideIndex;
-
         // Slide-number label.
         var label = new TextBlock
         {
-            Text                = labelText,
+            Text                = plan.LabelText,
             FontSize            = 11,
             Foreground          = LabelBrush,
             HorizontalAlignment = HorizontalAlignment.Center,
-            Height              = LabelHeight,
+            Height              = plan.LabelHeight,
             VerticalAlignment   = VerticalAlignment.Center,
             Margin              = new Thickness(0, 0, 0, 4)
         };
@@ -245,8 +241,8 @@ public sealed class SlidePane : Border
         // Thumbnail canvas (display-only, non-interactive).
         var thumb = new SlideCanvas
         {
-            Width            = ThumbWidth,
-            Height           = ThumbHeight,
+            Width            = plan.ThumbnailWidth,
+            Height           = plan.ThumbnailHeight,
             Presentation     = _editor.Presentation,
             Slide            = slide,
             IsHitTestVisible = false,
@@ -270,15 +266,16 @@ public sealed class SlidePane : Border
 
         var item = new Border
         {
-            Tag             = index,
-            Background      = selected ? ItemSelectedBg     : ItemNormalBg,
-            BorderBrush     = selected ? ItemSelectedBorder : ItemNormalBorder,
-            BorderThickness = selected ? new Thickness(2)   : new Thickness(1),
+            Tag             = plan.SlideIndex,
+            Background      = plan.IsSelected ? ItemSelectedBg     : ItemNormalBg,
+            BorderBrush     = plan.IsSelected ? ItemSelectedBorder : ItemNormalBorder,
+            BorderThickness = plan.IsSelected ? new Thickness(2)   : new Thickness(1),
             CornerRadius    = new CornerRadius(3),
             Margin          = new Thickness(6, 4, 6, 4),
-            Padding         = new Thickness(ItemPadding),
+            Padding         = new Thickness(plan.ItemPadding),
             Child           = panel,
-            Cursor          = Cursors.Hand
+            Cursor          = Cursors.Hand,
+            ToolTip         = plan.ToolTipText
         };
 
         // Click -> SelectSlide.
@@ -309,7 +306,7 @@ public sealed class SlidePane : Border
         item.MouseLeftButtonUp += OnItemMouseLeftButtonUp;
 
         // Context menu.
-        item.ContextMenu = BuildContextMenu(index);
+        item.ContextMenu = BuildContextMenu(plan.SlideIndex);
 
         return item;
     }

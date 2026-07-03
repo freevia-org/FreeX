@@ -153,6 +153,25 @@ public static class Citations
     public static string FormatInText(Source source) => FormatInText(source, CitationStyle.Apa);
 
     /// <summary>
+    /// Formats <paramref name="source"/> as an in-text citation using the source's 1-based order in
+    /// <paramref name="document"/> for numeric styles (<see cref="CitationStyle.Ieee"/> and
+    /// <see cref="CitationStyle.Vancouver"/>). When the source is not present in the document, numeric
+    /// styles fall back to the placeholder form from <see cref="FormatInText(Source, CitationStyle)"/>.
+    /// Author-date styles keep their existing source-only formatting.
+    /// </summary>
+    public static string FormatInText(TextDocument document, Source source, CitationStyle style)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        ArgumentNullException.ThrowIfNull(source);
+
+        if (!IsNumericStyle(style))
+            return FormatInText(source, style);
+
+        var number = ReferenceNumberFor(document, source);
+        return number > 0 ? FormatInText(number, style) : FormatInText(source, style);
+    }
+
+    /// <summary>
     /// Formats a source as an in-text citation in the given <paramref name="style"/>:
     /// <list type="bullet">
     /// <item><b>APA</b>: <c>(Author, Year)</c> (author and year separated by a comma).</item>
@@ -177,7 +196,7 @@ public static class Citations
 
         // Numeric styles — IEEE and Vancouver — use bracketed reference numbers when cited by position;
         // without a known position, bracket the author or tag as a placeholder.
-        if (style is CitationStyle.Ieee or CitationStyle.Vancouver)
+        if (IsNumericStyle(style))
         {
             if (author.Length > 0)
                 inner = author;
@@ -448,7 +467,44 @@ public static class Citations
     /// fall back to <see cref="FormatInText(Source, CitationStyle)"/>. <paramref name="number"/> is 1-based.
     /// </summary>
     public static string FormatInText(int number, CitationStyle style) =>
-        style is CitationStyle.Ieee or CitationStyle.Vancouver ? $"[{number}]" : string.Empty;
+        IsNumericStyle(style) ? $"[{number}]" : string.Empty;
+
+    /// <summary>
+    /// Returns the 1-based numeric reference number for <paramref name="source"/> in
+    /// <paramref name="document"/>'s source list, or <c>0</c> when the source is not present. Identity is
+    /// preferred, then the Word-facing tag, then exact trimmed field equality for cloned untagged sources.
+    /// </summary>
+    public static int ReferenceNumberFor(TextDocument document, Source source)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        ArgumentNullException.ThrowIfNull(source);
+
+        for (var i = 0; i < document.Sources.Count; i++)
+        {
+            if (ReferenceEquals(document.Sources[i], source))
+                return i + 1;
+        }
+
+        var tag = source.Tag?.Trim() ?? string.Empty;
+        if (tag.Length > 0)
+        {
+            for (var i = 0; i < document.Sources.Count; i++)
+            {
+                if (string.Equals(document.Sources[i].Tag?.Trim(), tag, StringComparison.Ordinal))
+                    return i + 1;
+            }
+
+            return 0;
+        }
+
+        for (var i = 0; i < document.Sources.Count; i++)
+        {
+            if (SourceFieldsEqual(document.Sources[i], source))
+                return i + 1;
+        }
+
+        return 0;
+    }
 
     /// <summary>
     /// Formats a source as a bibliography entry using the default <see cref="CitationStyle.Apa"/> style:
@@ -486,6 +542,22 @@ public static class Citations
             // Turabian author–date bibliography is identical to Chicago's ordering.
             _ => FormatAuthorTitlePublisherYearEntry(source),
         };
+    }
+
+    /// <summary>
+    /// Formats a numeric-style bibliography/reference-list entry by prefixing the source's assigned
+    /// 1-based reference number. Non-numeric styles return the ordinary unnumbered entry.
+    /// </summary>
+    public static string FormatBibliographyEntry(Source source, CitationStyle style, int number)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+
+        var entry = FormatBibliographyEntry(source, style);
+        if (!IsNumericStyle(style))
+            return entry;
+
+        var prefix = ReferenceListNumber(number, style);
+        return entry.Length == 0 ? prefix : $"{prefix} {entry}";
     }
 
     // The type-specific "source detail" common to several styles, comma-joined:
@@ -808,7 +880,8 @@ public static class Citations
     /// <paramref name="style"/>: a heading (<see cref="HeadingStyleId"/>) whose text is the
     /// style-specific <see cref="HeadingTextFor(CitationStyle)"/> (<c>References</c>/<c>Works Cited</c>/
     /// <c>Bibliography</c>), followed by one paragraph per source (<see cref="EntryStyleId"/>) formatted in
-    /// <paramref name="style"/>, sorted by author (case-insensitive, ordinal), then by title and tag as
+    /// <paramref name="style"/>. Numeric styles keep source-list order and prefix entries with the assigned
+    /// reference number; other styles sort by author (case-insensitive, ordinal), then by title and tag as
     /// stable tie-breakers. A document with no sources yields just the heading paragraph. Deterministic and
     /// side-effect free — it never mutates <paramref name="document"/>.
     /// </summary>
@@ -821,6 +894,20 @@ public static class Citations
             new(HeadingTextFor(style)) { StyleId = HeadingStyleId }
         };
 
+        if (IsNumericStyle(style))
+        {
+            for (var i = 0; i < document.Sources.Count; i++)
+            {
+                paragraphs.Add(
+                    new Paragraph(FormatBibliographyEntry(document.Sources[i], style, i + 1))
+                    {
+                        StyleId = EntryStyleId
+                    });
+            }
+
+            return paragraphs;
+        }
+
         var ordered = document.Sources
             .OrderBy(s => s.Author?.Trim() ?? string.Empty, StringComparer.OrdinalIgnoreCase)
             .ThenBy(s => s.Title?.Trim() ?? string.Empty, StringComparer.OrdinalIgnoreCase)
@@ -831,6 +918,28 @@ public static class Citations
 
         return paragraphs;
     }
+
+    private static bool IsNumericStyle(CitationStyle style) =>
+        style is CitationStyle.Ieee or CitationStyle.Vancouver;
+
+    private static string ReferenceListNumber(int number, CitationStyle style) =>
+        style == CitationStyle.Vancouver ? $"{number}." : FormatInText(number, style);
+
+    private static bool SourceFieldsEqual(Source left, Source right) =>
+        left.Type == right.Type
+        && Same(left.Author, right.Author)
+        && Same(left.Title, right.Title)
+        && Same(left.Year, right.Year)
+        && Same(left.Publisher, right.Publisher)
+        && Same(left.Journal, right.Journal)
+        && Same(left.Volume, right.Volume)
+        && Same(left.Issue, right.Issue)
+        && Same(left.Pages, right.Pages)
+        && Same(left.Url, right.Url)
+        && Same(left.Accessed, right.Accessed);
+
+    private static bool Same(string? left, string? right) =>
+        string.Equals(left?.Trim() ?? string.Empty, right?.Trim() ?? string.Empty, StringComparison.Ordinal);
 
     /// <summary>
     /// True when <paramref name="styleId"/> is one of the bibliography styles produced by

@@ -54,7 +54,6 @@ public sealed class MainWindow : Window
 {
     private const string DefaultTitle = "FreeP";
     private const int DefaultRecentFilesCap = ApplicationOptionsNormalizer.DefaultRecentFilesCap;
-    private const double SlidePaneAvaloniaSlideItemHeight = 108.0;
     private static readonly SisterAppFileTextSpec FileText = SisterAppFileTextPlanner.Presentation;
 
     private static readonly FilePickerFileType PictureFileType =
@@ -4811,41 +4810,48 @@ public sealed class MainWindow : Window
                     continue;
                 }
 
-                var slideIdx = entry.SlideIndex;
-                var slide    = _presentation.Slides[entry.SlideIndex];
+                var slide = _presentation.Slides[entry.SlideIndex];
+                var plan = SlidePanePlanner.BuildThumbnailVisualPlan(
+                    entry,
+                    slide,
+                    Editor.CurrentSlideIndex);
 
                 // Small SlideCanvas thumbnail using the shared slide pane metrics.
                 var thumb = new SlideCanvas
                 {
                     Presentation = _presentation,
                     Slide        = slide,
-                    SlideIndex   = slideIdx,
-                    Width        = SlidePanePlanner.DefaultThumbnailWidth,
-                    Height       = SlidePanePlanner.DefaultThumbnailHeight,
+                    SlideIndex   = plan.SlideIndex,
+                    Width        = plan.ThumbnailWidth,
+                    Height       = plan.ThumbnailHeight,
                 };
 
                 // Slide number label beneath thumbnail.
                 var label = new TextBlock
                 {
-                    Text                = entry.Text,
+                    Text                = plan.LabelText,
                     HorizontalAlignment = HorizontalAlignment.Center,
                     FontSize            = 10,
+                    MinHeight           = plan.LabelHeight,
                     Margin              = new Thickness(0, 2, 0, 0),
                 };
 
                 var panel = new StackPanel
                 {
-                    Margin   = new Thickness(4),
+                    Margin   = new Thickness(plan.ItemPadding * 0.5),
                     Children = { thumb, label },
                 };
 
                 var item = new ListBoxItem
                 {
-                    Tag         = entry.SlideIndex,
+                    Tag         = plan.SlideIndex,
                     Content     = panel,
                     Padding     = new Thickness(2),
-                    ContextMenu = BuildSlidePaneContextMenu(entry.SlideIndex),
+                    MinHeight   = plan.ItemHeight,
+                    IsSelected  = plan.IsSelected,
+                    ContextMenu = BuildSlidePaneContextMenu(plan.SlideIndex),
                 };
+                ToolTip.SetTip(item, plan.ToolTipText);
                 WireSlidePaneDragHandlers(item);
                 _slidePaneList.Items.Add(item);
             }
@@ -5136,7 +5142,7 @@ public sealed class MainWindow : Window
         _slidePaneDragTargetIndex = SlidePanePlanner.HitTestInsertionPoint(
             GetSlidePaneItemKinds(),
             panePosition.Y,
-            SlidePaneAvaloniaSlideItemHeight);
+            SlidePanePlanner.DefaultSlideItemHeight);
         ShowSlidePaneInsertionIndicator();
         e.Handled = true;
     }
@@ -5215,7 +5221,7 @@ public sealed class MainWindow : Window
         var indicatorY = SlidePanePlanner.ComputeInsertionIndicatorOffset(
             GetSlidePaneItemKinds(),
             _slidePaneDragTargetIndex,
-            SlidePaneAvaloniaSlideItemHeight);
+            SlidePanePlanner.DefaultSlideItemHeight);
 
         _slidePaneInsertionIndicator.Margin = new Thickness(0, indicatorY - 1, 0, 0);
         _slidePaneInsertionIndicator.IsVisible = true;
