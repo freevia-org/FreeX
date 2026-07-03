@@ -400,8 +400,8 @@ public sealed class MainWindow : Window
 
         _slidePaneInsertionIndicator = new Border
         {
-            Height              = 2,
-            Background          = new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A)),
+            Height              = SlidePanePlanner.DefaultDropIndicatorThickness,
+            Background          = new SolidColorBrush(Color.Parse(SlidePanePlanner.DefaultDropIndicatorAccentHex)),
             HorizontalAlignment = HorizontalAlignment.Stretch,
             VerticalAlignment   = VerticalAlignment.Top,
             IsHitTestVisible    = false,
@@ -5129,7 +5129,8 @@ public sealed class MainWindow : Window
             return;
 
         var itemPosition = e.GetPosition(item);
-        if (!_slidePaneIsDragging && Math.Abs(itemPosition.Y - _slidePaneDragStartPoint.Y) < 5)
+        if (!_slidePaneIsDragging &&
+            Math.Abs(itemPosition.Y - _slidePaneDragStartPoint.Y) < SlidePanePlanner.DefaultDragStartThreshold)
             return;
 
         if (!_slidePaneIsDragging)
@@ -5218,12 +5219,24 @@ public sealed class MainWindow : Window
 
     private void ShowSlidePaneInsertionIndicator()
     {
-        var indicatorY = SlidePanePlanner.ComputeInsertionIndicatorOffset(
+        var plan = SlidePanePlanner.BuildDropVisualPlan(
             GetSlidePaneItemKinds(),
+            _slidePaneDragSourceIndex,
             _slidePaneDragTargetIndex,
             SlidePanePlanner.DefaultSlideItemHeight);
 
-        _slidePaneInsertionIndicator.Margin = new Thickness(0, indicatorY - 1, 0, 0);
+        if (!plan.IsVisible)
+        {
+            HideSlidePaneInsertionIndicator();
+            return;
+        }
+
+        _slidePaneInsertionIndicator.Height = plan.IndicatorThickness;
+        _slidePaneInsertionIndicator.Margin = new Thickness(
+            plan.HorizontalInset,
+            plan.IndicatorTopMargin,
+            plan.HorizontalInset,
+            0);
         _slidePaneInsertionIndicator.IsVisible = true;
     }
 

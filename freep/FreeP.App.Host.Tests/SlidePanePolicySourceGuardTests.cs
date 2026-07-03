@@ -14,7 +14,10 @@ public sealed class SlidePanePolicySourceGuardTests
         source.Should().Contain("_collapsedSectionIds");
         source.Should().Contain("ToggleSection(entry.SectionId)");
         source.Should().Contain("SlidePanePlanner.HitTestInsertionPoint(");
-        source.Should().Contain("SlidePanePlanner.ComputeInsertionIndicatorOffset(");
+        source.Should().Contain("SlidePanePlanner.BuildDropVisualPlan(");
+        source.Should().Contain("SlidePanePlanner.DefaultDragStartThreshold");
+        source.Should().Contain("SlidePanePlanner.DefaultDropIndicatorThickness");
+        source.Should().Contain("SlidePanePlanner.DefaultDropIndicatorAccentHex");
         source.Should().Contain("SlidePanePlanner.BuildContextActions(");
         source.Should().Contain("SlidePanePlanner.PlanMoveAction(");
         source.Should().Contain("SlidePanePlanner.TryApplyAction(");
@@ -34,6 +37,8 @@ public sealed class SlidePanePolicySourceGuardTests
         source.Should().NotContain("sectionHeaderBefore");
         source.Should().NotContain("const double SectionHeaderHeight");
         source.Should().NotContain("runningY + ItemHeight * 0.5");
+        source.Should().NotContain("Math.Abs(pos.Y - _dragStartPoint.Y) < 5");
+        source.Should().NotContain("new Thickness(0, indicatorY - 1, 0, 0)");
         source.Should().NotContain("\"+ New Slide\"");
         source.Should().NotContain("\"Duplicate Slide\"");
         source.Should().NotContain("_editor.DuplicateCurrentSlide();");

@@ -207,6 +207,56 @@ public sealed class SlidePanePlannerTests
     }
 
     [Fact]
+    public void BuildDropVisualPlan_ProjectsSharedIndicatorVisualState()
+    {
+        var layout = new[] { false, true, true, false, true };
+
+        var plan = SlidePanePlanner.BuildDropVisualPlan(
+            layout,
+            sourceSlideIndex: 0,
+            targetSlideIndex: 2,
+            slideItemHeight: 100);
+
+        plan.SourceSlideIndex.Should().Be(0);
+        plan.TargetSlideIndex.Should().Be(2);
+        plan.IsTargetValid.Should().BeTrue();
+        plan.IsMoveEnabled.Should().BeTrue();
+        plan.IsVisible.Should().BeTrue();
+        plan.IndicatorOffset.Should().Be(230);
+        plan.IndicatorTopMargin.Should().Be(229);
+        plan.IndicatorThickness.Should().Be(SlidePanePlanner.DefaultDropIndicatorThickness);
+        plan.HorizontalInset.Should().Be(SlidePanePlanner.DefaultDropIndicatorHorizontalInset);
+        plan.AccentColorHex.Should().Be(SlidePanePlanner.DefaultDropIndicatorAccentHex);
+        plan.AutomationDescription.Should().Be("Move slide 1 to position 3");
+    }
+
+    [Theory]
+    [InlineData(0, -1, false, false, false)]
+    [InlineData(0, 0, true, false, true)]
+    [InlineData(0, 1, true, false, true)]
+    [InlineData(0, 2, true, true, true)]
+    [InlineData(5, 1, true, false, false)]
+    public void BuildDropVisualPlan_SeparatesTargetValidityFromMoveEnablement(
+        int sourceSlideIndex,
+        int targetSlideIndex,
+        bool expectedTargetValid,
+        bool expectedMoveEnabled,
+        bool expectedVisible)
+    {
+        var layout = new[] { true, true, true };
+
+        var plan = SlidePanePlanner.BuildDropVisualPlan(
+            layout,
+            sourceSlideIndex,
+            targetSlideIndex,
+            slideItemHeight: 100);
+
+        plan.IsTargetValid.Should().Be(expectedTargetValid);
+        plan.IsMoveEnabled.Should().Be(expectedMoveEnabled);
+        plan.IsVisible.Should().Be(expectedVisible);
+    }
+
+    [Fact]
     public void BuildContextActions_ForValidSlide_ReturnsSharedMenuOrderAndTargets()
     {
         var actions = SlidePanePlanner.BuildContextActions(slideCount: 3, slideIndex: 1);
