@@ -230,6 +230,7 @@ public static class SlideCloner
             IsResolved       = c.IsResolved,
             ResolvedDateTime = c.ResolvedDateTime,
             ResolvedBy       = c.ResolvedBy,
+            UsesModernCommentSchema = c.UsesModernCommentSchema,
             Xemu     = c.Xemu,
             Yemu     = c.Yemu,
             Idx      = c.Idx,
