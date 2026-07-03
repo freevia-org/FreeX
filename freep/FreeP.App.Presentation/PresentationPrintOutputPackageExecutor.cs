@@ -17,6 +17,7 @@ public sealed record PresentationPrintOutputPackagePlan(
     int PageCount,
     string LayoutSummary,
     string SlideRangeSummary,
+    PresentationPrintOptionsPlan Options,
     bool CanBuildPackage,
     bool NativePrinterDialogDeferred,
     string? DisabledReason);
@@ -50,6 +51,7 @@ public static class PresentationPrintOutputPackageExecutor
             CalculatePageCount(printPlan),
             BuildLayoutSummary(printPlan),
             printPlan.SlideRange.DisplayName,
+            printPlan.Options,
             canBuild,
             NativePrinterDialogDeferred: true,
             canBuild ? null : "Print output requires at least one slide.");
@@ -127,5 +129,10 @@ public static class PresentationPrintOutputPackageExecutor
                 PresentationSlideRangeKind.SelectedSlides,
                 SelectedSlideNumbers: plan.SlideRange.SlideNumbers),
             plan.Layout.IsHandout ? plan.Layout.SlidesPerPage : null,
-            plan.PrintHiddenSlides);
+            plan.PrintHiddenSlides,
+            plan.Options.Copies,
+            plan.Options.Collate,
+            plan.Options.ColorMode,
+            plan.Options.FrameSlides,
+            plan.Options.IncludeCommentsAndInkMarkup);
 }

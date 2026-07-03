@@ -94,6 +94,7 @@ internal sealed class BackstageView : UserControl
         panel.Children.Add(Kit.Field("Slides", plan.SlideRangeSummary));
         panel.Children.Add(Kit.Field("Pages", plan.PageCount.ToString()));
         panel.Children.Add(Kit.Field("Hidden slides", plan.PrintHiddenSlides ? "Included" : "Not included"));
+        panel.Children.Add(Kit.Field("Options", plan.Options.DisplaySummary));
         panel.Children.Add(Kit.Field("Native printer dialog", plan.NativePrinterDialogDeferred ? "Deferred" : "Available"));
 
         panel.Children.Add(Kit.SubHeading("Layouts"));

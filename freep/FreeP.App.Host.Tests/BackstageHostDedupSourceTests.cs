@@ -28,6 +28,7 @@ public sealed class BackstageHostDedupSourceTests
         source.Should().Contain("PresentationExportPlanner.ImageExportCommandId => _actions.ExportImages");
         source.Should().Contain("PresentationExportPlanner.VideoExportCommandId => _actions.ExportVideo");
         source.Should().Contain("ExportNotesPagePdf");
+        source.Should().Contain("plan.Options.DisplaySummary");
         source.Should().Contain("plan.DeferredActions.Where(action => action.IsEnabled)");
         source.Should().Contain("_backstage.ShowPane(\"Options\")");
         source.Should().NotContain("new BackstageViewShell(");

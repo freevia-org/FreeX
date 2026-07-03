@@ -28,6 +28,13 @@ public enum PresentationSlideRangeKind
     CustomRange,
 }
 
+public enum PresentationPrintColorMode
+{
+    Color,
+    Grayscale,
+    PureBlackAndWhite,
+}
+
 public enum PresentationVideoQualityKind
 {
     UltraHd,
@@ -76,7 +83,12 @@ public sealed record PresentationPrintRequest(
     PresentationPrintLayoutKind Layout,
     PresentationSlideRangeRequest? SlideRange = null,
     int? HandoutSlidesPerPage = null,
-    bool PrintHiddenSlides = false);
+    bool PrintHiddenSlides = false,
+    int Copies = 1,
+    bool Collate = true,
+    PresentationPrintColorMode ColorMode = PresentationPrintColorMode.Color,
+    bool FrameSlides = false,
+    bool IncludeCommentsAndInkMarkup = false);
 
 public sealed record PresentationSlideRangePlan(
     PresentationSlideRangeKind Kind,
@@ -88,7 +100,18 @@ public sealed record PresentationPrintPlan(
     PresentationPrintLayoutDescriptor Layout,
     PresentationSlideRangePlan SlideRange,
     bool PrintHiddenSlides,
-    bool IsImplemented);
+    bool IsImplemented,
+    PresentationPrintOptionsPlan Options);
+
+public sealed record PresentationPrintOptionsPlan(
+    int Copies,
+    bool Collate,
+    PresentationPrintColorMode ColorMode,
+    bool PrintHiddenSlides,
+    bool FrameSlides,
+    bool IncludeCommentsAndInkMarkup,
+    string DisplaySummary,
+    IReadOnlyList<string> SummaryLines);
 
 public sealed record PresentationHandoutSlideSlot(
     int PageIndex,
@@ -320,7 +343,8 @@ public static class PresentationExportPlanner
             layout,
             range,
             request.PrintHiddenSlides,
-            IsImplemented: false);
+            IsImplemented: false,
+            BuildPrintOptionsPlan(request));
     }
 
     public static PresentationHandoutLayoutPlan BuildHandoutLayoutPlan(
@@ -677,6 +701,46 @@ public static class PresentationExportPlanner
             .ThenBy(option => option)
             .First();
     }
+
+    private static PresentationPrintOptionsPlan BuildPrintOptionsPlan(PresentationPrintRequest request)
+    {
+        var copies = Math.Clamp(request.Copies, 1, 999);
+        var colorMode = NormalizePrintColorMode(request.ColorMode);
+        var lines = new List<string>
+        {
+            copies == 1 ? "1 copy" : $"{copies} copies",
+            request.Collate ? "Collated" : "Uncollated",
+            GetPrintColorModeDisplayName(colorMode),
+        };
+
+        if (request.PrintHiddenSlides)
+            lines.Add("Print hidden slides");
+        if (request.FrameSlides)
+            lines.Add("Frame slides");
+        if (request.IncludeCommentsAndInkMarkup)
+            lines.Add("Print comments and ink markup");
+
+        return new PresentationPrintOptionsPlan(
+            copies,
+            request.Collate,
+            colorMode,
+            request.PrintHiddenSlides,
+            request.FrameSlides,
+            request.IncludeCommentsAndInkMarkup,
+            string.Join(", ", lines),
+            lines);
+    }
+
+    private static PresentationPrintColorMode NormalizePrintColorMode(PresentationPrintColorMode colorMode) =>
+        Enum.IsDefined(colorMode) ? colorMode : PresentationPrintColorMode.Color;
+
+    private static string GetPrintColorModeDisplayName(PresentationPrintColorMode colorMode) =>
+        colorMode switch
+        {
+            PresentationPrintColorMode.Grayscale => "Grayscale",
+            PresentationPrintColorMode.PureBlackAndWhite => "Pure Black and White",
+            _ => "Color",
+        };
 
     private static IReadOnlyList<PresentationHandoutPagePlan> BuildHandoutPages(
         IReadOnlyList<int> slideNumbers,
