@@ -9594,6 +9594,60 @@ public sealed class DocumentView : Control
     public void ToggleDifferentFirstPage() =>
         ApplyPageSettings(settings => settings.DifferentFirstPage = !settings.DifferentFirstPage);
 
+    public void ToggleDifferentOddEvenPages() =>
+        ApplyPageSettings(settings => settings.DifferentOddEvenPages = !settings.DifferentOddEvenPages);
+
+    public void SetHeaderDistance(double valuePt) =>
+        ApplyPageSettings(settings => settings.HeaderDistancePt = Math.Max(0, valuePt));
+
+    public void SetFooterDistance(double valuePt) =>
+        ApplyPageSettings(settings => settings.FooterDistancePt = Math.Max(0, valuePt));
+
+    public void EditHeaderFooterSlot(string slotName)
+    {
+        var slot = HeaderFooterDialogPlanner.ParseSlot(slotName);
+        var plan = HeaderFooterDialogPlanner.PlanSlotActivation(slotName, _doc.Page);
+        if (plan.Kind != HeaderFooterSlotActivationKind.Active)
+            return;
+
+        var store = _doc.FinalSectionHeadersFooters;
+        var current = HeaderFooterDialogPlanner.GetSlot(store, slot);
+        if (current is null)
+        {
+            current = new HeaderFooter();
+            current.Paragraphs.Add(new Paragraph());
+            HeaderFooterDialogPlanner.SetSlot(store, slot, current);
+        }
+        else if (current.Paragraphs.Count == 0)
+        {
+            current.Paragraphs.Add(new Paragraph());
+        }
+
+        PlaceCaretInHeaderFooter(new HfTarget(SectionIndex: -1, UseFinalSectionStore: true, Slot: ToHfSlot(slot), ParaIdx: 0), 0);
+        Focus();
+    }
+
+    public void CloseHeaderFooterEditing()
+    {
+        ExitHeaderFooterCaret();
+        Focus();
+    }
+
+    public void InsertHeaderFooterPageNumber(bool footer) =>
+        MutateDefaultHeaderFooterSlot(
+            footer,
+            current => HeaderFooterDialogPlanner.AddPageNumberToSlot(current));
+
+    public void InsertHeaderFooterDateTime() =>
+        MutateDefaultHeaderFooterSlot(
+            footer: false,
+            current => HeaderFooterDialogPlanner.AppendFieldDateTimeToSlot(current, "DATE"));
+
+    public void InsertHeaderFooterDocumentInfo() =>
+        MutateDefaultHeaderFooterSlot(
+            footer: false,
+            current => HeaderFooterDialogPlanner.AppendComplexFieldToSlot(current, "FILENAME"));
+
     public void CyclePageVerticalAlignment() =>
         ApplyPageSettings(settings => settings.VerticalAlignment = settings.VerticalAlignment switch
         {
@@ -9602,6 +9656,16 @@ public sealed class DocumentView : Control
             PageVerticalAlignment.Bottom => PageVerticalAlignment.Justified,
             _ => PageVerticalAlignment.Top,
         });
+
+    private void MutateDefaultHeaderFooterSlot(bool footer, Func<HeaderFooter?, HeaderFooter> mutate)
+    {
+        var store = _doc.FinalSectionHeadersFooters;
+        var slot = footer ? HeaderFooterSlotKind.Footer : HeaderFooterSlotKind.Header;
+        var next = mutate(HeaderFooterDialogPlanner.GetSlot(store, slot));
+        HeaderFooterDialogPlanner.SetSlot(store, slot, next);
+        InvalidateVisual();
+        Focus();
+    }
 
     /// <summary>Insert a bordered table (with a header row) after the current block. Cells edit on double-click.</summary>
     public void InsertTable(int rows, int columns)

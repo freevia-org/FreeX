@@ -1,0 +1,139 @@
+using System.Linq;
+using FreeW.App.Avalonia.Editing;
+using FreeW.App.Avalonia.Ribbon;
+using FreeW.Core.Model;
+using Free.Shared.Ribbon;
+
+namespace FreeW.App.Avalonia.Tests;
+
+public sealed class HeaderFooterContextualTabTests
+{
+    private static RibbonHostCallbacks NoopCallbacks() =>
+        new(
+            Open: () => { },
+            Save: () => { },
+            Cut: () => { },
+            Copy: () => { },
+            Paste: () => { },
+            Backstage: () => { },
+            NewDocument: () => { },
+            ToggleNavigationPane: () => { },
+            ToggleReviewingPane: () => { },
+            ToggleRevealFormatting: () => { },
+            OpenFindReplaceDialog: () => { },
+            SetPrintLayout: () => { },
+            SetWebLayout: () => { },
+            SetDraftView: () => { },
+            OpenFontDialog: () => { },
+            OpenParagraphDialog: () => { },
+            OpenPageSetupDialog: () => { },
+            ToggleOrientation: () => { },
+            ApplyMarginPreset: _ => { },
+            ApplyPaperSize: _ => { },
+            InsertPicture: () => { },
+            OpenWordCountDialog: () => { },
+            ApplyZoom: (_, _) => { });
+
+    [Fact]
+    public void Avalonia_definition_exposes_header_footer_design_contextual_tab()
+    {
+        var definition = FreeWRibbon.BuildDefinition();
+
+        var tab = definition.FindTab("header-footer-design");
+
+        tab.Should().NotBeNull("Avalonia has editable header/footer regions and should expose the Word-like contextual surface");
+        tab!.Context!.ActivationKey.Should().Be(HeaderFooterRibbonContextSource.HeaderFooterContextKey);
+        tab.Groups.Select(g => g.Id).Should()
+            .Equal("hf-header-footer", "hf-insert", "hf-navigation", "hf-options", "hf-position", "hf-close");
+    }
+
+    [Fact]
+    public void Header_footer_contextual_commands_are_registered()
+    {
+        var registry = FreeWRibbon.BuildRegistry(new DocumentView(), NoopCallbacks());
+
+        var expected = new[]
+        {
+            "freew.hf-edit-header",
+            "freew.hf-edit-footer",
+            "freew.hf-edit-first-header",
+            "freew.hf-edit-first-footer",
+            "freew.hf-edit-even-header",
+            "freew.hf-edit-even-footer",
+            "freew.hf-go-to-header",
+            "freew.hf-go-to-footer",
+            "freew.hf-close",
+            "freew.hf-different-first-page",
+            "freew.hf-different-odd-even",
+            "freew.hf-header-from-top",
+            "freew.hf-footer-from-bottom",
+            "freew.hf-insert-page-number",
+            "freew.hf-insert-page-number-footer",
+            "freew.hf-insert-datetime",
+            "freew.hf-insert-field",
+        };
+
+        foreach (var id in expected)
+            registry.TryGet(new RibbonCommandId(id), out _).Should().BeTrue($"{id} should be backed in Avalonia");
+    }
+
+    [Fact]
+    public void Header_footer_context_source_tracks_header_footer_caret()
+    {
+        var view = new DocumentView();
+        var source = new HeaderFooterRibbonContextSource(view);
+
+        source.Current.IsActive(HeaderFooterRibbonContextSource.HeaderFooterContextKey).Should().BeFalse();
+
+        view.PlaceCaretInHeaderFooter(footer: false);
+
+        source.Current.IsActive(HeaderFooterRibbonContextSource.HeaderFooterContextKey).Should().BeTrue();
+
+        view.ExitHeaderFooterCaret();
+
+        source.Current.IsActive(HeaderFooterRibbonContextSource.HeaderFooterContextKey).Should().BeFalse();
+    }
+
+    [Fact]
+    public void Header_footer_contextual_commands_mutate_existing_model_state()
+    {
+        var view = new DocumentView();
+        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+
+        Execute(registry, "freew.hf-edit-header");
+        view.IsHeaderFooterCaretActive.Should().BeTrue("Edit Header should enter the editable header region");
+
+        Execute(registry, "freew.hf-insert-page-number-footer");
+        view.Document.Footer.Should().NotBeNull();
+        view.Document.Footer!.Paragraphs.SelectMany(p => p.Runs)
+            .Should().Contain(r => r.FieldKind == RunFieldKind.PageNumber);
+
+        Execute(registry, "freew.hf-different-odd-even");
+        view.Document.Page.DifferentOddEvenPages.Should().BeTrue();
+
+        Execute(registry, "freew.hf-close");
+        view.IsHeaderFooterCaretActive.Should().BeFalse("Close Header and Footer should exit the header/footer caret");
+    }
+
+    [Fact]
+    public void Header_footer_distance_combo_commands_update_page_settings()
+    {
+        var view = new DocumentView();
+        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+
+        Execute(registry, "freew.hf-header-from-top", RibbonCommandContext.ForSelectedValue("54"));
+        Execute(registry, "freew.hf-footer-from-bottom", RibbonCommandContext.ForSelectedValue("72"));
+
+        view.Document.Page.HeaderDistancePt.Should().Be(54);
+        view.Document.Page.FooterDistancePt.Should().Be(72);
+    }
+
+    private static void Execute(RibbonCommandRegistry registry, string id) =>
+        Execute(registry, id, RibbonCommandContext.Empty);
+
+    private static void Execute(RibbonCommandRegistry registry, string id, RibbonCommandContext context)
+    {
+        registry.TryGet(new RibbonCommandId(id), out var command).Should().BeTrue();
+        command!.Execute(context);
+    }
+}

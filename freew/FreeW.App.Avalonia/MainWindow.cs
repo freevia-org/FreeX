@@ -1076,6 +1076,7 @@ public sealed class MainWindow : Window
         // contextual triggers so both sets of contextual tabs can surface from one source.
         var contextSource = new CompositeRibbonContextSource(
             new TableRibbonContextSource(_editor),
+            new HeaderFooterRibbonContextSource(_editor),
             new FloatingRibbonContextSource(_editor));
         var ribbon = AvaloniaRibbonRenderer.BuildRibbon(
             FreeWRibbon.BuildDefinition(),
