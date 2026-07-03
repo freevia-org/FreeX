@@ -8864,6 +8864,9 @@ public sealed class DocumentView : Control
     public ReviewDisplayPolicy CurrentReviewDisplayPolicy =>
         new(DisplayForReview, ShowMarkupInsertionsAndDeletions, ShowMarkupComments, ShowMarkupFormatting);
 
+    public ReviewWorkflowStatus CurrentReviewWorkflowStatus =>
+        ReviewWorkflowStatusPlanner.Build(_doc, CurrentReviewDisplayPolicy, TrackChangesEnabled);
+
     public void ApplyDisplayForReview(ReviewDisplayMode mode)
     {
         DisplayForReview = mode;
