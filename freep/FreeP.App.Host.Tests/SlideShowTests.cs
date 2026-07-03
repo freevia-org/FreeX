@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Text;
 using FreeP.App.Compositor;
 using FreeP.App.Host;
 using Xunit;
@@ -728,6 +729,66 @@ public sealed class SlideShowWindowTests
         finally
         {
             window.Close();
+        }
+    }
+
+    [StaFact]
+    public void SlideShowWindow_CloseWithKeepInk_PersistsInkThroughSharedPlanner()
+    {
+        var pres = Presentation.CreateEmpty();
+        var window = new SlideShowWindow(pres, 0);
+        try
+        {
+            window.ApplyPresenterToolIntent(
+                pointerMode: SlideShowPresenterPointerMode.Pen,
+                inkColorHex: "#336699",
+                inkThicknessDip: 5,
+                inkRetentionDecision: SlideShowInkRetentionDecision.KeepInk);
+            window.BeginPresenterInkStroke(10, 20);
+            window.EndPresenterInkStroke(30, 40);
+
+            window.ExecuteAdvance();
+
+            window.IsPresenterSessionClosed.Should().BeTrue();
+            var ink = pres.Slides[0].Shapes.Single(shape => shape.Kind == SlideShapeKind.Ink);
+            ink.PreservedObject.Should().NotBeNull();
+            ink.PreservedObject!.ObjectKind.Should().Be(PreservedObjectKind.Ink);
+            Encoding.UTF8.GetString(ink.PreservedObject.Parts.Values.Single())
+                .Should().Contain("10,20 30,40");
+        }
+        finally
+        {
+            if (!window.IsPresenterSessionClosed)
+            {
+                window.Close();
+            }
+        }
+    }
+
+    [StaFact]
+    public void SlideShowWindow_CloseWithClearInk_DoesNotPersistGeneratedInk()
+    {
+        var pres = Presentation.CreateEmpty();
+        var window = new SlideShowWindow(pres, 0);
+        try
+        {
+            window.ApplyPresenterToolIntent(
+                pointerMode: SlideShowPresenterPointerMode.Pen,
+                inkRetentionDecision: SlideShowInkRetentionDecision.ClearInk);
+            window.BeginPresenterInkStroke(10, 20);
+            window.EndPresenterInkStroke(30, 40);
+
+            window.ExecuteAdvance();
+
+            window.IsPresenterSessionClosed.Should().BeTrue();
+            pres.Slides[0].Shapes.Should().NotContain(shape => shape.Kind == SlideShapeKind.Ink);
+        }
+        finally
+        {
+            if (!window.IsPresenterSessionClosed)
+            {
+                window.Close();
+            }
         }
     }
 

@@ -1378,7 +1378,10 @@ public sealed class SlideShowWindow : Window
         _recordingExecutionState = SlideShowRecordingExecutionPlanner.EndSession(
             _recordingExecutionState,
             now);
-        _inkExecutionState = SlideShowInkExecutionPlanner.ApplyRetentionOnExit(_inkExecutionState).State;
+        _inkExecutionState = SlideShowInkPersistencePlanner.ApplyRetentionOnExit(
+            _presentation,
+            _inkExecutionState,
+            _playbackRoute.GetSourceSlideIndex).State;
         _autoAdvanceTimer.Stop();
         foreach (var sb in _pendingStoryboards)
         {
