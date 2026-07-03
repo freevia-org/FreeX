@@ -44,6 +44,8 @@ internal static class FreePRibbonText
     public static string FontGroupLabel => Get("Ribbon_Group_Font_Label");
     public static string FontGroupKeyTip => Get("Ribbon_Group_Font_KeyTip");
     public static string FontFamilyLabel => Get("Ribbon_Command_FontFamily_Label");
+    public static string FontSizeLabel => Get("Ribbon_Command_FontSize_Label");
+    public static string FontColorLabel => Get("Ribbon_Command_FontColor_Label");
     public static string BoldLabel => Get("Ribbon_Command_Bold_Label");
     public static string BoldKeyTip => Get("Ribbon_Command_Bold_KeyTip");
     public static string ItalicLabel => Get("Ribbon_Command_Italic_Label");

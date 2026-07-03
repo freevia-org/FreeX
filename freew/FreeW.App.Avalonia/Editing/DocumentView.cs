@@ -2317,6 +2317,19 @@ public sealed class DocumentView : Control
 
     // ── FO3 introspection properties ────────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Test-facing snapshot of shared drawing-object effect intent carried by the Avalonia renderer.
+    /// The renderer owns platform brush/pen conversion, but not the capability truth.
+    /// </summary>
+    public IReadOnlyList<string> FloatingShapeEffectSummaries
+    {
+        get
+        {
+            if (_laidOutWidth < 0) Relayout(FallbackWidth);
+            return _floatingShapes.Select(sd => sd.Effects.Summary).ToList();
+        }
+    }
+
     /// <summary>Number of floating charts collected during the last layout pass.</summary>
     public int FloatingChartCount
     {
@@ -5145,6 +5158,7 @@ public sealed class DocumentView : Control
             RotationAngle = plan.RotationAngle,
             FlipH = plan.FlipH,
             FlipV = plan.FlipV,
+            Effects = plan.Effects,
         };
     }
 
@@ -6150,6 +6164,8 @@ public sealed class DocumentView : Control
 
         try
         {
+            DrawFloatingShapeEffects(context, sd, rect);
+
             // ── Draw geometry ──────────────────────────────────────────────────────
             if (sd.CustomGeo is { } cg && cg.Segments.Count > 0)
             {
@@ -6244,6 +6260,138 @@ public sealed class DocumentView : Control
         {
             xformState?.Dispose();
         }
+    }
+
+    private static void DrawFloatingShapeEffects(DrawingContext context, FloatingShapeData sd, Rect rect)
+    {
+        var effects = sd.Effects;
+        if (!effects.HasAny)
+            return;
+
+        if (effects.HasShadow)
+        {
+            var shadowColor = TryParseAvaloniaColor(effects.ShadowColorHex, out var parsed)
+                ? parsed
+                : Colors.Black;
+            var radians = effects.ShadowDirectionDegrees * Math.PI / 180.0;
+            var distance = effects.ShadowDistanceDip > 0 ? effects.ShadowDistanceDip : 3.0;
+            var offsetX = Math.Cos(radians) * distance;
+            var offsetY = Math.Sin(radians) * distance;
+            var spread = Math.Max(0, effects.ShadowBlurDip * 0.12);
+            DrawFloatingShapeEffectGeometry(
+                context,
+                sd,
+                OffsetAndInflate(rect, offsetX, offsetY, spread),
+                EffectBrush(shadowColor, effects.ShadowOpacity));
+        }
+
+        if (effects.HasGlow)
+        {
+            var glowColor = TryParseAvaloniaColor(effects.GlowColorHex, out var parsed)
+                ? parsed
+                : Color.FromRgb(0x44, 0x72, 0xC4);
+            var radius = Math.Max(2.0, effects.GlowRadiusDip);
+            DrawFloatingShapeEffectGeometry(
+                context,
+                sd,
+                OffsetAndInflate(rect, 0, 0, radius * 0.55),
+                EffectBrush(glowColor, effects.GlowOpacity * 0.24));
+            DrawFloatingShapeEffectGeometry(
+                context,
+                sd,
+                OffsetAndInflate(rect, 0, 0, radius * 0.25),
+                EffectBrush(glowColor, effects.GlowOpacity * 0.36));
+        }
+    }
+
+    private static void DrawFloatingShapeEffectGeometry(
+        DrawingContext context,
+        FloatingShapeData sd,
+        Rect rect,
+        IBrush brush)
+    {
+        if (sd.CustomGeo is { } cg && cg.Segments.Count > 0)
+        {
+            var geo = new StreamGeometry();
+            using (var ctx = geo.Open())
+            {
+                var inFigure = false;
+                var closeFigure = false;
+                Point startPoint = default;
+                var linePoints = new System.Collections.Generic.List<Point>();
+
+                void FlushFigure()
+                {
+                    if (!inFigure)
+                        return;
+
+                    ctx.BeginFigure(startPoint, isFilled: true);
+                    foreach (var point in linePoints)
+                        ctx.LineTo(point);
+                    if (closeFigure)
+                        ctx.EndFigure(true);
+                    linePoints.Clear();
+                    inFigure = false;
+                    closeFigure = false;
+                }
+
+                foreach (var segment in cg.Segments)
+                {
+                    if (segment.Kind == CustomSegmentKind.MoveTo && segment.Point is not null)
+                    {
+                        FlushFigure();
+                        startPoint = new Point(
+                            rect.X + segment.Point.X / (double)cg.Width * rect.Width,
+                            rect.Y + segment.Point.Y / (double)cg.Height * rect.Height);
+                        inFigure = true;
+                    }
+                    else if (segment.Kind == CustomSegmentKind.LineTo && segment.Point is not null && inFigure)
+                    {
+                        linePoints.Add(new Point(
+                            rect.X + segment.Point.X / (double)cg.Width * rect.Width,
+                            rect.Y + segment.Point.Y / (double)cg.Height * rect.Height));
+                    }
+                    else if (segment.Kind == CustomSegmentKind.Close && inFigure)
+                    {
+                        closeFigure = true;
+                    }
+                }
+
+                FlushFigure();
+            }
+
+            context.DrawGeometry(brush, null, geo);
+            return;
+        }
+
+        switch (sd.Kind)
+        {
+            case ShapeKind.Ellipse:
+                context.DrawEllipse(brush, null, rect.Center, rect.Width / 2, rect.Height / 2);
+                break;
+
+            case ShapeKind.RoundedRectangle:
+                var cornerRadius = Math.Min(6 * PxPerPoint, Math.Min(rect.Width, rect.Height) / 4);
+                context.DrawGeometry(brush, null, BuildRoundedRectGeometry(rect, cornerRadius));
+                break;
+
+            default:
+                context.DrawRectangle(brush, null, rect);
+                break;
+        }
+    }
+
+    private static Rect OffsetAndInflate(Rect rect, double offsetX, double offsetY, double inflate) =>
+        new(
+            rect.X + offsetX - inflate,
+            rect.Y + offsetY - inflate,
+            Math.Max(1, rect.Width + 2 * inflate),
+            Math.Max(1, rect.Height + 2 * inflate));
+
+    private static IBrush EffectBrush(Color color, double opacity)
+    {
+        var alpha = (byte)Math.Clamp((int)Math.Round(255 * Math.Clamp(opacity, 0, 1)), 0, 255);
+        return new SolidColorBrush(Color.FromArgb(alpha, color.R, color.G, color.B));
     }
 
     /// <summary>
@@ -12777,6 +12925,8 @@ public sealed class DocumentView : Control
         public double RotationAngle;
         public bool FlipH;
         public bool FlipV;
+
+        public DrawingObjectEffectsPlan Effects = DrawingObjectEffectsPlan.None;
     }
 
     // ── FO3: data classes for floating charts, WordArt, SmartArt, and drawing groups ───────────────

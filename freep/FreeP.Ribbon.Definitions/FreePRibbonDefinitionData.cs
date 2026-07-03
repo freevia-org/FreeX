@@ -5,6 +5,12 @@ public static class FreePRibbonDefinitionData
     public static readonly string[] FontFamilies =
         ["Calibri", "Arial", "Segoe UI", "Georgia", "Verdana"];
 
+    public static readonly string[] FontSizes =
+        ["8", "9", "10", "11", "12", "14", "16", "18", "20", "24", "28", "32", "36", "44", "54", "66", "80", "96"];
+
+    public static readonly string[] FontColors =
+        ["Automatic", "Black", "White", "Red", "Green", "Blue", "Yellow", "Orange", "Purple", "Dark Red", "Dark Blue"];
+
     public static readonly string[] TransitionDurations =
         ["0.50s", "0.75s", "1.00s", "1.50s", "2.00s"];
 

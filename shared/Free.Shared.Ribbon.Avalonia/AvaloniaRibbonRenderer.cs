@@ -1111,7 +1111,19 @@ public static class AvaloniaRibbonRenderer
         };
         foreach (var item in combo.Items)
             box.Items.Add(item);
-        if (combo.Items.Count > 0)
+        RibbonCommandState? state = null;
+        if (registry is not null
+            && registry.TryGet(combo.CommandId, out var command)
+            && command is IRibbonStatefulCommand stateful)
+        {
+            state = stateful.GetState();
+        }
+        var stateIndex = state?.Value is { Length: > 0 } value
+            ? combo.Items.ToList().FindIndex(item => string.Equals(item, value, StringComparison.Ordinal))
+            : -1;
+        if (stateIndex >= 0)
+            box.SelectedIndex = stateIndex;
+        else if (combo.Items.Count > 0)
             box.SelectedIndex = 0;
 
         // A user pick executes the control's command, passing the chosen value so the host applies it

@@ -757,7 +757,7 @@ internal static class FreeWAvaloniaRibbonDefinition
                     g.Button("freew.manage-sources", "Manage Sources");
                     g.ComboBox("freew.citation-style", "Style", c => c with
                     {
-                        Items = new[] { "APA", "MLA", "Chicago", "IEEE" },
+                        Items = FreeWRibbonDefinitionData.CitationStyleNames,
                         Width = 90
                     });
                     g.Button("freew.bibliography", "Bibliography");

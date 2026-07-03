@@ -15,6 +15,12 @@ public sealed class FreePRibbonDefinitionProfileTests
         "freep.redo",
     ];
 
+    private static readonly string[] AvaloniaOnlyBackedCommands =
+    [
+        "freep.font-size",
+        "freep.font-color",
+    ];
+
     [Fact]
     public void Shared_factory_builds_valid_wpf_and_avalonia_profiles()
     {
@@ -104,6 +110,8 @@ public sealed class FreePRibbonDefinitionProfileTests
                 RequiredGroup(avalonia, "home", "font").Header,
                 RequiredGroup(avalonia, "home", "font").KeyTip!,
                 RequiredControl(avalonia, "freep.font-family").Label,
+                RequiredControl(avalonia, "freep.font-size").Label,
+                RequiredControl(avalonia, "freep.font-color").Label,
                 RequiredControl(avalonia, "freep.bold").Label,
                 RequiredControl(avalonia, "freep.bold").KeyTip!,
                 RequiredControl(avalonia, "freep.italic").Label,
@@ -342,11 +350,34 @@ public sealed class FreePRibbonDefinitionProfileTests
             .ToHashSet(StringComparer.Ordinal);
         var unexpectedAvaloniaOnly = CommandIds(FreePRibbon.Build(FreePRibbonCapabilities.Avalonia))
             .Where(commandId => !wpfIds.Contains(commandId))
-            .Where(commandId => !IsAllowedAvaloniaShellCommand(commandId))
+            .Where(commandId => !IsAllowedAvaloniaProfileCommand(commandId))
             .ToArray();
 
         unexpectedAvaloniaOnly.Should().BeEmpty(
             "cross-platform content commands should come from the shared FreeP command surface");
+    }
+
+    [Fact]
+    public void Avalonia_profile_exposes_font_size_and_color_controls_as_backed_combos()
+    {
+        var avalonia = FreePRibbon.Build(FreePRibbonCapabilities.Avalonia);
+        var fontGroup = RequiredGroup(avalonia, "home", "font");
+        var commandIds = fontGroup.Controls
+            .Select(control => control.CommandId.Value)
+            .Where(commandId => !string.IsNullOrEmpty(commandId))
+            .ToArray();
+        var size = RequiredCombo(avalonia, "freep.font-size");
+        var color = RequiredCombo(avalonia, "freep.font-color");
+
+        commandIds.Should().ContainInOrder(
+            "freep.font-family",
+            "freep.font-size",
+            "freep.font-color",
+            "freep.bold",
+            "freep.italic",
+            "freep.underline");
+        size.Items.Should().Equal(FreePRibbonDefinitionData.FontSizes);
+        color.Items.Should().Equal(FreePRibbonDefinitionData.FontColors);
     }
 
     [Fact]
@@ -646,9 +677,10 @@ public sealed class FreePRibbonDefinitionProfileTests
         markdownCommandIds.Should().Equal(expectedCommandIds);
     }
 
-    private static bool IsAllowedAvaloniaShellCommand(string commandId) =>
+    private static bool IsAllowedAvaloniaProfileCommand(string commandId) =>
         commandId.StartsWith("freep.file.", StringComparison.Ordinal) ||
-        AvaloniaOnlyShellCommands.Contains(commandId, StringComparer.Ordinal);
+        AvaloniaOnlyShellCommands.Contains(commandId, StringComparer.Ordinal) ||
+        AvaloniaOnlyBackedCommands.Contains(commandId, StringComparer.Ordinal);
 
     private static Dictionary<string, string> ExpectedCommandSurfaces()
     {
