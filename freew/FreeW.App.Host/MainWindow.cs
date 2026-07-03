@@ -198,10 +198,18 @@ public sealed class MainWindow : Window
     private ToggleButton _draftSwitch = null!;
 
     // Multiple Pages / Side to Side / Split share the same host-neutral view-depth policy as Avalonia.
-    // The WPF realization remains host-thin: DocumentViewer for paginated previews and GridSplitter plus
-    // FlowDocumentScrollViewer for the split snapshot.
+    // The WPF realization remains host-thin: FlowDocumentPageViewer for paginated previews and
+    // GridSplitter plus FlowDocumentScrollViewer for the split snapshot.
     private FreeWViewDepthPlan _viewDepthPlan = FreeWViewDepthPlanner.Build(FreeWViewDepthMode.LiveEditor);
-    private DocumentViewer? _paginatedViewer;     // the overlay DocumentViewer (non-null while active)
+    private FlowDocumentPageViewer? _paginatedViewer; // the overlay page viewer (non-null while active)
+    private FreeWViewDepthPagePairNavigationState _sideToSideNavigation =
+        FreeWViewDepthPlanner.BuildPagePairNavigation(
+            FreeWViewDepthPlanner.Build(FreeWViewDepthMode.LiveEditor),
+            requestedFirstVisiblePageNumber: 1,
+            totalPages: 1);
+    private Button? _sideToSidePreviousPairButton;
+    private Button? _sideToSideNextPairButton;
+    private TextBlock? _sideToSidePairStatusText;
     private UIElement? _workspaceGridChild;        // saved workspace child so restore is reversible
 
     // Split Window: a GridSplitter divides the workspace into a top live-editor pane and a bottom
@@ -2092,7 +2100,7 @@ public sealed class MainWindow : Window
         if (_outlineMode)
             ToggleOutlineView();
 
-        // Multiple Pages / Side to Side overlay the workspace child with a read-only DocumentViewer;
+        // Multiple Pages / Side to Side overlay the workspace child with a read-only page viewer;
         // switching back to any live editor mode must restore the workspaceGrid first.
         if (_viewDepthPlan.IsMultiplePagesActive || _viewDepthPlan.IsSideToSideActive)
             ExitPaginatedView();
@@ -2162,22 +2170,34 @@ public sealed class MainWindow : Window
     }
 
     // ── Multiple Pages / Side to Side ────────────────────────────────────────────────────────────
-    // Both modes build a read-only DocumentViewer fed by PrintLayout.BuildPaginatedSource and swap
+    // Both modes build a read-only FlowDocumentPageViewer fed by PrintLayout.BuildPaginatedDocument and swap
     // the workspace child from the live workspaceGrid to that viewer. Re-entering any print-family
     // view mode (Print Layout / Web Layout / Draft) restores the live editor via ExitPaginatedView.
     // The two modes are mutually exclusive with each other and with any live-editor overlay mode.
 
+    internal FreeWViewDepthPagePairNavigationState SideToSideNavigationForTests => _sideToSideNavigation;
+    internal bool HasSideToSidePagePairNavigationForTests =>
+        _sideToSidePreviousPairButton is not null &&
+        _sideToSideNextPairButton is not null &&
+        _sideToSidePairStatusText is not null;
+
+    internal void NavigateSideToSideNextPairForTests() =>
+        NavigateSideToSidePagePair(FreeWViewDepthPagePairNavigationCommand.NextPair);
+
+    internal void NavigateSideToSidePreviousPairForTests() =>
+        NavigateSideToSidePagePair(FreeWViewDepthPagePairNavigationCommand.PreviousPair);
+
     /// <summary>
     /// Enters (or exits) the Multiple Pages paginated overlay. Commits the editor to the model first so
     /// the viewer reflects the latest content, then swaps the workspace child from the workspaceGrid to
-    /// a full-window <see cref="DocumentViewer"/> backed by <see cref="PrintLayout.BuildPaginatedSource"/>.
+    /// a full-window <see cref="FlowDocumentPageViewer"/> backed by <see cref="PrintLayout.BuildPaginatedDocument"/>.
     /// </summary>
     private void ToggleMultiplePages() =>
         ApplyViewDepthPlan(FreeWViewDepthPlanner.Plan(CurrentViewDepthState(), FreeWViewDepthCommand.ToggleMultiplePages));
 
     /// <summary>
     /// Enters (or exits) the Side to Side paginated overlay — same as Multiple Pages but the viewer
-    /// is zoomed to fit two pages. True horizontal page-turn navigation remains a renderer follow-up.
+    /// is zoomed to fit two pages and exposes shared pair-wise page navigation.
     /// </summary>
     private void ToggleSideToSide() =>
         ApplyViewDepthPlan(FreeWViewDepthPlanner.Plan(CurrentViewDepthState(), FreeWViewDepthCommand.ToggleSideToSide));
@@ -2220,27 +2240,29 @@ public sealed class MainWindow : Window
     }
 
     /// <summary>
-    /// Builds a <see cref="DocumentViewer"/> backed by <see cref="PrintLayout.BuildPaginatedSource"/>
+    /// Builds a <see cref="FlowDocumentPageViewer"/> backed by <see cref="PrintLayout.BuildPaginatedDocument"/>
     /// and swaps it in as the workspace child, hiding the live workspaceGrid. The editor is committed to
     /// the model first so the view reflects the latest content. Side-to-Side applies the shared plan's
-    /// two-page fit intent; other preview modes leave DocumentViewer at its default page flow.
+    /// two-page fit intent; other preview modes leave the page viewer at its default page flow.
     /// </summary>
     private void EnterPaginatedView(FreeWViewDepthPlan plan)
     {
         // Commit so the paginated view reflects the latest edits.
         _editor.CommitToModel();
 
-        var source = PrintLayout.BuildPaginatedSource(_editor);
+        var document = PrintLayout.BuildPaginatedDocument(_editor);
+        var paginator = ((System.Windows.Documents.IDocumentPaginatorSource)document).DocumentPaginator;
+        paginator.ComputePageCount();
 
-        var viewer = new DocumentViewer
+        var viewer = new FlowDocumentPageViewer
         {
-            Document = source
+            Document = document
         };
 
         var pagesAcross = plan.Layout.PagesAcross > 1 ? plan.Layout.PagesAcross : 0;
 
         // For two-page-fit preview modes: apply a zoom factor that fits 2 pages side-by-side in the current viewport.
-        // DocumentViewer exposes no explicit "pages across" property — we approximate it by halving the
+        // FlowDocumentPageViewer exposes no explicit "pages across" property, so we approximate it by halving the
         // page-width zoom factor so both pages are simultaneously visible in the viewport.
         if (pagesAcross == 2)
         {
@@ -2250,10 +2272,120 @@ public sealed class MainWindow : Window
                 pageWidthFactor);
         }
 
+        UIElement preview = viewer;
+        if (plan.IsSideToSideActive)
+        {
+            _sideToSideNavigation = FreeWViewDepthPlanner.BuildPagePairNavigation(
+                plan,
+                requestedFirstVisiblePageNumber: 1,
+                totalPages: paginator.PageCount);
+            preview = BuildSideToSideNavigationHost(viewer);
+        }
+        else
+        {
+            ResetSideToSideNavigation();
+        }
+
         // Save the current workspace child so ExitPaginatedView can restore it.
         _workspaceGridChild = _workspace.Child;
-        _workspace.Child = viewer;
+        _workspace.Child = preview;
         _paginatedViewer = viewer;
+        ApplySideToSideNavigationToViewer();
+    }
+
+    private UIElement BuildSideToSideNavigationHost(FlowDocumentPageViewer viewer)
+    {
+        var host = new DockPanel { LastChildFill = true };
+        var toolbar = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            Margin = new Thickness(0, 8, 0, 4)
+        };
+
+        _sideToSidePreviousPairButton = MakeSideToSideNavigationButton(
+            "Previous pair",
+            "Previous Side-to-Side page pair",
+            () => NavigateSideToSidePagePair(FreeWViewDepthPagePairNavigationCommand.PreviousPair));
+        _sideToSidePairStatusText = new TextBlock
+        {
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(12, 0, 12, 0)
+        };
+        AutomationProperties.SetAutomationId(_sideToSidePairStatusText, "FreeW.SideToSidePagePairStatus");
+        _sideToSideNextPairButton = MakeSideToSideNavigationButton(
+            "Next pair",
+            "Next Side-to-Side page pair",
+            () => NavigateSideToSidePagePair(FreeWViewDepthPagePairNavigationCommand.NextPair));
+
+        toolbar.Children.Add(_sideToSidePreviousPairButton);
+        toolbar.Children.Add(_sideToSidePairStatusText);
+        toolbar.Children.Add(_sideToSideNextPairButton);
+
+        DockPanel.SetDock(toolbar, Dock.Top);
+        host.Children.Add(toolbar);
+        host.Children.Add(viewer);
+        SyncSideToSideNavigationControls();
+        return host;
+    }
+
+    private static Button MakeSideToSideNavigationButton(string text, string automationName, Action action)
+    {
+        var button = new Button
+        {
+            Content = text,
+            Padding = new Thickness(10, 4, 10, 4),
+            MinWidth = 96,
+            ToolTip = automationName
+        };
+        button.Click += (_, _) => action();
+        AutomationProperties.SetAutomationId(button, $"FreeW.SideToSide.{text.Replace(" ", string.Empty)}");
+        AutomationProperties.SetName(button, automationName);
+        return button;
+    }
+
+    private void NavigateSideToSidePagePair(FreeWViewDepthPagePairNavigationCommand command)
+    {
+        if (!_viewDepthPlan.IsSideToSideActive || _paginatedViewer is null)
+            return;
+
+        _sideToSideNavigation = FreeWViewDepthPlanner.NavigatePagePair(
+            _viewDepthPlan,
+            _sideToSideNavigation,
+            command);
+        ApplySideToSideNavigationToViewer();
+        SyncSideToSideNavigationControls();
+    }
+
+    private void ApplySideToSideNavigationToViewer()
+    {
+        if (!_viewDepthPlan.IsSideToSideActive || _paginatedViewer is null)
+            return;
+
+        var firstPage = _sideToSideNavigation.FirstVisiblePageNumber;
+        if (_paginatedViewer.CanGoToPage(firstPage))
+            _paginatedViewer.GoToPage(firstPage);
+    }
+
+    private void SyncSideToSideNavigationControls()
+    {
+        if (_sideToSidePreviousPairButton is not null)
+            _sideToSidePreviousPairButton.IsEnabled = _sideToSideNavigation.CanGoToPreviousPair;
+        if (_sideToSideNextPairButton is not null)
+            _sideToSideNextPairButton.IsEnabled = _sideToSideNavigation.CanGoToNextPair;
+        if (_sideToSidePairStatusText is not null)
+            _sideToSidePairStatusText.Text = _sideToSideNavigation.StatusText;
+    }
+
+    private void ResetSideToSideNavigation()
+    {
+        _sideToSideNavigation = FreeWViewDepthPlanner.BuildPagePairNavigation(
+            FreeWViewDepthPlanner.Build(FreeWViewDepthMode.LiveEditor),
+            requestedFirstVisiblePageNumber: 1,
+            totalPages: 1);
+        _sideToSidePreviousPairButton = null;
+        _sideToSideNextPairButton = null;
+        _sideToSidePairStatusText = null;
     }
 
     /// <summary>
@@ -2267,6 +2399,7 @@ public sealed class MainWindow : Window
 
         _paginatedViewer = null;
         _workspaceGridChild = null;
+        ResetSideToSideNavigation();
         if (resetPlan)
         {
             _viewDepthPlan = FreeWViewDepthPlanner.Build(FreeWViewDepthMode.LiveEditor);

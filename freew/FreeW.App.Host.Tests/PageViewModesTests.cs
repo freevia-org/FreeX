@@ -1,10 +1,12 @@
 using System.IO;
 using System.Windows.Controls;
 using System.Windows.Documents;
+using Free.Shared.AppServices;
 using Free.Shared.Ribbon;
 using FreeW.App.Host;
 using FreeW.App.Host.Editing;
 using FreeW.App.Presentation.DocumentView;
+using FreeW.App.Presentation.Options;
 using FreeW.App.Presentation.Shell;
 using FreeW.Core.Model;
 using Xunit;
@@ -207,6 +209,38 @@ public sealed class PageViewModesTests
     // ── Split Window mode ────────────────────────────────────────────────────────────────────────
 
     [StaFact]
+    public void WpfHost_SideToSideNavigationControlsStepPagePairs()
+    {
+        var window = new MainWindow(new FreeWOptions(), messageService: new NoUiMessageService());
+        try
+        {
+            GetEditor(window).LoadModel(NewMultiPageDocument());
+
+            InvokePrivate(window, "ToggleSideToSide");
+
+            window.HasSideToSidePagePairNavigationForTests.Should().BeTrue();
+            var initial = window.SideToSideNavigationForTests;
+            initial.TotalPages.Should().BeGreaterThan(2);
+            initial.FirstVisiblePageNumber.Should().Be(1);
+            initial.CanGoToPreviousPair.Should().BeFalse();
+            initial.CanGoToNextPair.Should().BeTrue();
+
+            window.NavigateSideToSideNextPairForTests();
+            var next = window.SideToSideNavigationForTests;
+            next.FirstVisiblePageNumber.Should().Be(3);
+            next.LastVisiblePageNumber.Should().Be(4);
+            next.CanGoToPreviousPair.Should().BeTrue();
+
+            window.NavigateSideToSidePreviousPairForTests();
+            window.SideToSideNavigationForTests.FirstVisiblePageNumber.Should().Be(1);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [StaFact]
     public void SplitWindow_CommandRegistered_WhenHostProvidesCallbacks()
     {
         var view = new DocumentView();
@@ -374,6 +408,53 @@ public sealed class PageViewModesTests
 
     private static string FindRepoFile(params string[] parts) =>
         Path.Combine(FindRepoRoot(), Path.Combine(parts));
+
+    private static TextDocument NewMultiPageDocument()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Page.WidthPt = 300;
+        doc.Page.HeightPt = 220;
+        doc.Page.MarginTopPt = 18;
+        doc.Page.MarginBottomPt = 18;
+        doc.Page.MarginLeftPt = 18;
+        doc.Page.MarginRightPt = 18;
+        doc.Blocks.Clear();
+
+        for (var i = 0; i < 80; i++)
+            doc.Blocks.Add(new Paragraph($"Side-to-side navigation paragraph {i + 1}."));
+
+        return doc;
+    }
+
+    private static DocumentView GetEditor(MainWindow window)
+    {
+        var field = typeof(MainWindow).GetField(
+            "_editor",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        return (DocumentView)field!.GetValue(window)!;
+    }
+
+    private static void InvokePrivate(MainWindow window, string methodName)
+    {
+        var method = typeof(MainWindow).GetMethod(
+            methodName,
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        method!.Invoke(window, null);
+    }
+
+    private sealed class NoUiMessageService : IUserMessageService
+    {
+        public void ShowError(string message, string title = "Error") { }
+        public void ShowWarning(string message, string title = "Warning") { }
+        public void ShowInfo(string message, string title = "Information") { }
+        public bool AskYesNo(string message, string title = "Confirm") => false;
+        public UserMessageResult ShowMessage(
+            string message,
+            string title,
+            UserMessageButtons buttons,
+            UserMessageIcon icon) =>
+            UserMessageResult.No;
+    }
 
     private static string FindRepoRoot()
     {

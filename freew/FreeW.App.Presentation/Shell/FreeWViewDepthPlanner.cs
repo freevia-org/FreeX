@@ -18,6 +18,12 @@ public enum FreeWViewDepthCommand
     ToggleSideToSide
 }
 
+public enum FreeWViewDepthPagePairNavigationCommand
+{
+    PreviousPair,
+    NextPair
+}
+
 public enum FreeWViewDepthSurfaceKind
 {
     LiveEditor,
@@ -43,6 +49,19 @@ public sealed record FreeWViewDepthPlan(
     DocumentViewDepthLayoutPlan Layout,
     string StatusText,
     string? Limitation);
+
+public sealed record FreeWViewDepthPagePairNavigationState(
+    FreeWViewDepthMode Mode,
+    int FirstVisiblePageNumber,
+    int LastVisiblePageNumber,
+    int TotalPages,
+    int PagesPerPair,
+    bool CanGoToPreviousPair,
+    bool CanGoToNextPair,
+    string StatusText)
+{
+    public bool IsSideToSideNavigationActive => Mode == FreeWViewDepthMode.SideToSidePreview;
+}
 
 public static class FreeWViewDepthPlanner
 {
@@ -99,8 +118,8 @@ public static class FreeWViewDepthPlanner
             UsesReadOnlySnapshot: true,
             PagesAcross: 2,
             Layout: DocumentViewDepthLayoutPlanner.Build(mode),
-            StatusText: "Side to Side view active: read-only two-page horizontal-flow preview.",
-            Limitation: "Animated horizontal page turning remains deferred; the shared state now carries Side-to-Side page flow."),
+            StatusText: "Side to Side view active: read-only two-page horizontal-flow preview with pair navigation.",
+            Limitation: "Editing is disabled while the Side-to-Side preview is active; editable horizontal page view remains deferred."),
         _ => new FreeWViewDepthPlan(
             FreeWViewDepthMode.LiveEditor,
             FreeWViewDepthSurfaceKind.LiveEditor,
@@ -136,4 +155,73 @@ public static class FreeWViewDepthPlanner
             pageWidthDip,
             pageHeightDip);
     }
+
+    public static FreeWViewDepthPagePairNavigationState BuildPagePairNavigation(
+        FreeWViewDepthPlan plan,
+        int requestedFirstVisiblePageNumber,
+        int totalPages)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+
+        var safeTotalPages = Math.Max(1, totalPages);
+        var pagesPerPair = Math.Max(1, plan.Layout.PagesAcross);
+        if (!plan.IsSideToSideActive)
+        {
+            return new FreeWViewDepthPagePairNavigationState(
+                plan.Mode,
+                FirstVisiblePageNumber: 1,
+                LastVisiblePageNumber: 1,
+                TotalPages: safeTotalPages,
+                PagesPerPair: pagesPerPair,
+                CanGoToPreviousPair: false,
+                CanGoToNextPair: false,
+                StatusText: plan.StatusText);
+        }
+
+        var first = NormalizePairStart(requestedFirstVisiblePageNumber, safeTotalPages, pagesPerPair);
+        var last = Math.Min(safeTotalPages, first + pagesPerPair - 1);
+        var maxStart = NormalizePairStart(safeTotalPages, safeTotalPages, pagesPerPair);
+
+        return new FreeWViewDepthPagePairNavigationState(
+            plan.Mode,
+            first,
+            last,
+            safeTotalPages,
+            pagesPerPair,
+            CanGoToPreviousPair: first > 1,
+            CanGoToNextPair: first < maxStart,
+            FormatSideToSidePagePairStatus(first, last, safeTotalPages));
+    }
+
+    public static FreeWViewDepthPagePairNavigationState NavigatePagePair(
+        FreeWViewDepthPlan plan,
+        FreeWViewDepthPagePairNavigationState current,
+        FreeWViewDepthPagePairNavigationCommand command)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        ArgumentNullException.ThrowIfNull(current);
+
+        var step = Math.Max(1, current.PagesPerPair);
+        var requested = command switch
+        {
+            FreeWViewDepthPagePairNavigationCommand.PreviousPair => current.FirstVisiblePageNumber - step,
+            FreeWViewDepthPagePairNavigationCommand.NextPair => current.FirstVisiblePageNumber + step,
+            _ => current.FirstVisiblePageNumber
+        };
+
+        return BuildPagePairNavigation(plan, requested, current.TotalPages);
+    }
+
+    private static int NormalizePairStart(int requestedFirstVisiblePageNumber, int totalPages, int pagesPerPair)
+    {
+        var safeTotalPages = Math.Max(1, totalPages);
+        var safePagesPerPair = Math.Max(1, pagesPerPair);
+        var clamped = Math.Clamp(requestedFirstVisiblePageNumber, 1, safeTotalPages);
+        return ((clamped - 1) / safePagesPerPair) * safePagesPerPair + 1;
+    }
+
+    private static string FormatSideToSidePagePairStatus(int first, int last, int totalPages) =>
+        first == last
+            ? $"Side to Side page {first} of {totalPages}."
+            : $"Side to Side pages {first}-{last} of {totalPages}.";
 }

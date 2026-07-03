@@ -73,6 +73,17 @@ public sealed class MainWindow : Window
     private Grid? _splitPreviewGrid;
     private Control? _splitPreviewSnapshot;
     private FreeWViewDepthPlan _viewDepthPlan = FreeWViewDepthPlanner.Build(FreeWViewDepthMode.LiveEditor);
+    private FreeWViewDepthPagePairNavigationState _sideToSideNavigation =
+        FreeWViewDepthPlanner.BuildPagePairNavigation(
+            FreeWViewDepthPlanner.Build(FreeWViewDepthMode.LiveEditor),
+            requestedFirstVisiblePageNumber: 1,
+            totalPages: 1);
+    private ScrollViewer? _sideToSidePreviewScrollViewer;
+    private Button? _sideToSidePreviousPairButton;
+    private Button? _sideToSideNextPairButton;
+    private TextBlock? _sideToSidePairStatusText;
+    private double _sideToSidePairScrollStrideDip;
+    private double _sideToSidePlannedHorizontalOffsetDip;
     private double _zoomScale = 1.0;
     private bool _suppressEditorDirty;
     private bool _closingConfirmed;
@@ -228,6 +239,13 @@ public sealed class MainWindow : Window
     internal bool IsMultiplePagesPreviewActive => _viewDepthPlan.IsMultiplePagesActive;
     internal bool IsSideToSidePreviewActive => _viewDepthPlan.IsSideToSideActive;
     internal string? ViewDepthLimitation => _viewDepthPlan.Limitation;
+    internal FreeWViewDepthPagePairNavigationState SideToSideNavigationForTests => _sideToSideNavigation;
+    internal bool HasSideToSidePagePairNavigationForTests =>
+        _sideToSidePreviewScrollViewer is not null &&
+        _sideToSidePreviousPairButton is not null &&
+        _sideToSideNextPairButton is not null &&
+        _sideToSidePairStatusText is not null;
+    internal Vector SideToSidePreviewOffsetForTests => new(_sideToSidePlannedHorizontalOffsetDip, 0);
     internal Control? WorkspaceContentForTests => _workspace.Child as Control;
     internal bool IsWorkspaceShowingLiveEditor => ReferenceEquals(_workspace.Child, _liveWorkspaceContent);
 
@@ -706,6 +724,12 @@ public sealed class MainWindow : Window
     internal void ToggleSideToSide() =>
         ApplyViewDepthPlan(FreeWViewDepthPlanner.Plan(CurrentViewDepthState(), FreeWViewDepthCommand.ToggleSideToSide));
 
+    internal void NavigateSideToSideNextPairForTests() =>
+        NavigateSideToSidePagePair(FreeWViewDepthPagePairNavigationCommand.NextPair);
+
+    internal void NavigateSideToSidePreviousPairForTests() =>
+        NavigateSideToSidePagePair(FreeWViewDepthPagePairNavigationCommand.PreviousPair);
+
     private FreeWViewDepthState CurrentViewDepthState() => new(_viewDepthPlan.Mode);
 
     private void ApplyViewDepthPlan(FreeWViewDepthPlan plan, bool updateStatus = true)
@@ -726,7 +750,9 @@ public sealed class MainWindow : Window
         _viewDepthPlan = plan;
         _editor.ApplyViewDepthLayout(plan.Layout);
         if (updateStatus)
-            _status.Text = plan.StatusText;
+            _status.Text = plan.IsSideToSideActive
+                ? _sideToSideNavigation.StatusText
+                : plan.StatusText;
     }
 
     private void RestoreLiveWorkspace()
@@ -739,6 +765,7 @@ public sealed class MainWindow : Window
 
         _splitPreviewGrid = null;
         _splitPreviewSnapshot = null;
+        ResetSideToSideNavigation();
 
         if (_liveWorkspaceContent is not null && !ReferenceEquals(_workspace.Child, _liveWorkspaceContent))
             _workspace.Child = _liveWorkspaceContent;
@@ -788,6 +815,7 @@ public sealed class MainWindow : Window
     {
         RestoreLiveWorkspace();
         _workspace.Child = BuildReadOnlyPagePreviewSurface(plan, compact: false);
+        ApplySideToSideNavigationToScrollViewer(plan);
     }
 
     private void RefreshSplitPreviewSnapshot()
@@ -829,7 +857,7 @@ public sealed class MainWindow : Window
             pageWidthDip,
             pageHeightDip);
 
-        return new ScrollViewer
+        var scroller = new ScrollViewer
         {
             HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
@@ -840,6 +868,116 @@ public sealed class MainWindow : Window
                 Child = snapshot,
             },
         };
+
+        if (!compact && plan.IsSideToSideActive)
+        {
+            _sideToSideNavigation = FreeWViewDepthPlanner.BuildPagePairNavigation(
+                plan,
+                requestedFirstVisiblePageNumber: 1,
+                totalPages: snapshot.PageCount);
+            _sideToSidePreviewScrollViewer = scroller;
+            _sideToSidePairScrollStrideDip = viewport.RequiredPageSpanWidthDip * viewport.Scale;
+            return BuildSideToSideNavigationHost(scroller);
+        }
+
+        ResetSideToSideNavigation();
+        return scroller;
+    }
+
+    private Control BuildSideToSideNavigationHost(ScrollViewer scroller)
+    {
+        var host = new DockPanel { LastChildFill = true };
+        var toolbar = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            Margin = new Thickness(0, 8, 0, 4)
+        };
+
+        _sideToSidePreviousPairButton = MakeSideToSideNavigationButton(
+            "Previous pair",
+            () => NavigateSideToSidePagePair(FreeWViewDepthPagePairNavigationCommand.PreviousPair));
+        _sideToSidePairStatusText = new TextBlock
+        {
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(12, 0, 12, 0)
+        };
+        _sideToSideNextPairButton = MakeSideToSideNavigationButton(
+            "Next pair",
+            () => NavigateSideToSidePagePair(FreeWViewDepthPagePairNavigationCommand.NextPair));
+
+        toolbar.Children.Add(_sideToSidePreviousPairButton);
+        toolbar.Children.Add(_sideToSidePairStatusText);
+        toolbar.Children.Add(_sideToSideNextPairButton);
+
+        DockPanel.SetDock(toolbar, Dock.Top);
+        host.Children.Add(toolbar);
+        host.Children.Add(scroller);
+        SyncSideToSideNavigationControls();
+        return host;
+    }
+
+    private static Button MakeSideToSideNavigationButton(string text, Action action)
+    {
+        var button = new Button
+        {
+            Content = text,
+            Padding = new Thickness(10, 4),
+            MinWidth = 96
+        };
+        ToolTip.SetTip(button, text);
+        button.Click += (_, _) => action();
+        return button;
+    }
+
+    private void NavigateSideToSidePagePair(FreeWViewDepthPagePairNavigationCommand command)
+    {
+        if (!_viewDepthPlan.IsSideToSideActive || _sideToSidePreviewScrollViewer is null)
+            return;
+
+        _sideToSideNavigation = FreeWViewDepthPlanner.NavigatePagePair(
+            _viewDepthPlan,
+            _sideToSideNavigation,
+            command);
+        ApplySideToSideNavigationToScrollViewer(_viewDepthPlan);
+        SyncSideToSideNavigationControls();
+        _status.Text = _sideToSideNavigation.StatusText;
+    }
+
+    private void ApplySideToSideNavigationToScrollViewer(FreeWViewDepthPlan plan)
+    {
+        if (!plan.IsSideToSideActive || _sideToSidePreviewScrollViewer is null)
+            return;
+
+        var pairIndex = (_sideToSideNavigation.FirstVisiblePageNumber - 1) /
+            Math.Max(1, _sideToSideNavigation.PagesPerPair);
+        var horizontalOffset = Math.Max(0, pairIndex * _sideToSidePairScrollStrideDip);
+        _sideToSidePlannedHorizontalOffsetDip = horizontalOffset;
+        _sideToSidePreviewScrollViewer.Offset = new Vector(horizontalOffset, 0);
+    }
+
+    private void SyncSideToSideNavigationControls()
+    {
+        if (_sideToSidePreviousPairButton is not null)
+            _sideToSidePreviousPairButton.IsEnabled = _sideToSideNavigation.CanGoToPreviousPair;
+        if (_sideToSideNextPairButton is not null)
+            _sideToSideNextPairButton.IsEnabled = _sideToSideNavigation.CanGoToNextPair;
+        if (_sideToSidePairStatusText is not null)
+            _sideToSidePairStatusText.Text = _sideToSideNavigation.StatusText;
+    }
+
+    private void ResetSideToSideNavigation()
+    {
+        _sideToSideNavigation = FreeWViewDepthPlanner.BuildPagePairNavigation(
+            FreeWViewDepthPlanner.Build(FreeWViewDepthMode.LiveEditor),
+            requestedFirstVisiblePageNumber: 1,
+            totalPages: 1);
+        _sideToSidePreviewScrollViewer = null;
+        _sideToSidePreviousPairButton = null;
+        _sideToSideNextPairButton = null;
+        _sideToSidePairStatusText = null;
+        _sideToSidePairScrollStrideDip = 0;
+        _sideToSidePlannedHorizontalOffsetDip = 0;
     }
 
     private (double Width, double Height) GetWorkspaceViewportSize(bool compact)

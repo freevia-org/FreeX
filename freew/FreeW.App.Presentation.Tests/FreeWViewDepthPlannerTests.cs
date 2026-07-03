@@ -82,7 +82,90 @@ public sealed class FreeWViewDepthPlannerTests
         sideToSide.UsesReadOnlySnapshot.Should().BeTrue();
         split.Limitation.Should().Contain("read-only");
         multiple.Limitation.Should().Contain("Editing is disabled");
-        sideToSide.Limitation.Should().Contain("Animated horizontal page turning remains deferred");
+        sideToSide.Limitation.Should().Contain("editable horizontal page view remains deferred");
+    }
+
+    [Theory]
+    [InlineData(1, 1, 1, 1, false, false, "Side to Side page 1 of 1.")]
+    [InlineData(2, 5, 1, 2, false, true, "Side to Side pages 1-2 of 5.")]
+    [InlineData(3, 5, 3, 4, true, true, "Side to Side pages 3-4 of 5.")]
+    [InlineData(5, 5, 5, 5, true, false, "Side to Side page 5 of 5.")]
+    [InlineData(99, 6, 5, 6, true, false, "Side to Side pages 5-6 of 6.")]
+    public void Side_to_side_page_pair_navigation_normalizes_and_clamps(
+        int requestedFirstPage,
+        int totalPages,
+        int expectedFirstPage,
+        int expectedLastPage,
+        bool expectedPrevious,
+        bool expectedNext,
+        string expectedStatus)
+    {
+        var plan = FreeWViewDepthPlanner.Build(FreeWViewDepthMode.SideToSidePreview);
+
+        var state = FreeWViewDepthPlanner.BuildPagePairNavigation(
+            plan,
+            requestedFirstPage,
+            totalPages);
+
+        state.IsSideToSideNavigationActive.Should().BeTrue();
+        state.FirstVisiblePageNumber.Should().Be(expectedFirstPage);
+        state.LastVisiblePageNumber.Should().Be(expectedLastPage);
+        state.TotalPages.Should().Be(Math.Max(1, totalPages));
+        state.PagesPerPair.Should().Be(2);
+        state.CanGoToPreviousPair.Should().Be(expectedPrevious);
+        state.CanGoToNextPair.Should().Be(expectedNext);
+        state.StatusText.Should().Be(expectedStatus);
+    }
+
+    [Fact]
+    public void Side_to_side_navigation_steps_by_pair_and_clamps_at_document_edges()
+    {
+        var plan = FreeWViewDepthPlanner.Build(FreeWViewDepthMode.SideToSidePreview);
+        var first = FreeWViewDepthPlanner.BuildPagePairNavigation(plan, 1, totalPages: 5);
+
+        var second = FreeWViewDepthPlanner.NavigatePagePair(
+            plan,
+            first,
+            FreeWViewDepthPagePairNavigationCommand.NextPair);
+        var third = FreeWViewDepthPlanner.NavigatePagePair(
+            plan,
+            second,
+            FreeWViewDepthPagePairNavigationCommand.NextPair);
+        var stillThird = FreeWViewDepthPlanner.NavigatePagePair(
+            plan,
+            third,
+            FreeWViewDepthPagePairNavigationCommand.NextPair);
+        var backToSecond = FreeWViewDepthPlanner.NavigatePagePair(
+            plan,
+            third,
+            FreeWViewDepthPagePairNavigationCommand.PreviousPair);
+
+        second.FirstVisiblePageNumber.Should().Be(3);
+        second.LastVisiblePageNumber.Should().Be(4);
+        third.FirstVisiblePageNumber.Should().Be(5);
+        third.LastVisiblePageNumber.Should().Be(5);
+        stillThird.FirstVisiblePageNumber.Should().Be(5);
+        stillThird.CanGoToNextPair.Should().BeFalse();
+        backToSecond.FirstVisiblePageNumber.Should().Be(3);
+    }
+
+    [Fact]
+    public void Page_pair_navigation_is_disabled_for_non_side_to_side_modes()
+    {
+        var multiplePages = FreeWViewDepthPlanner.Build(FreeWViewDepthMode.MultiplePagesPreview);
+
+        var state = FreeWViewDepthPlanner.BuildPagePairNavigation(
+            multiplePages,
+            requestedFirstVisiblePageNumber: 3,
+            totalPages: 8);
+
+        state.IsSideToSideNavigationActive.Should().BeFalse();
+        state.FirstVisiblePageNumber.Should().Be(1);
+        state.LastVisiblePageNumber.Should().Be(1);
+        state.TotalPages.Should().Be(8);
+        state.CanGoToPreviousPair.Should().BeFalse();
+        state.CanGoToNextPair.Should().BeFalse();
+        state.StatusText.Should().Be(multiplePages.StatusText);
     }
 
     [Fact]
