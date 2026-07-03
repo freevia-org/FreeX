@@ -47,11 +47,23 @@ public sealed class TextStyleLevel
     /// <summary>Bullet color at this level (null = inherit).</summary>
     public ThemeAwareColor? BulletColor { get; set; }
 
+    /// <summary>True when this level uses <c>a:buClrTx</c> to follow run text color.</summary>
+    public bool BulletColorFollowsText { get; set; }
+
     /// <summary>Bullet size percent at this level in 1000ths-of-a-percent (null = inherit).</summary>
     public int? BulletSizePct { get; set; }
 
+    /// <summary>Absolute bullet size in points from <c>a:buSzPts</c> (null = inherit).</summary>
+    public double? BulletSizePt { get; set; }
+
+    /// <summary>True when this level uses <c>a:buSzTx</c> to follow run text size.</summary>
+    public bool BulletSizeFollowsText { get; set; }
+
     /// <summary>Bullet font family override at this level (null = inherit).</summary>
     public string? BulletFontFamily { get; set; }
+
+    /// <summary>True when this level uses <c>a:buFontTx</c> to follow run text font.</summary>
+    public bool BulletFontFollowsText { get; set; }
 }
 
 /// <summary>

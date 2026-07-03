@@ -1239,9 +1239,54 @@ public static class SlideCompositor
             var effectiveBulletKind = para.BulletKind;
             string? effectiveBulletChar = para.BulletChar;
             AutoNumType effectiveAutoNumType = para.AutoNumType;
-            ThemeAwareColor? effectiveBulletColor = para.BulletColor ?? inheritedStyle?.BulletColor;
-            int? effectiveBulletSizePct = para.BulletSizePct ?? inheritedStyle?.BulletSizePct;
-            string? effectiveBulletFont = para.BulletFontFamily ?? inheritedStyle?.BulletFontFamily;
+            ThemeAwareColor? effectiveBulletColor = null;
+            if (para.BulletColorFollowsText)
+                effectiveBulletColor = null;
+            else if (para.BulletColor is not null)
+                effectiveBulletColor = para.BulletColor;
+            else if (inheritedStyle?.BulletColorFollowsText == true)
+                effectiveBulletColor = null;
+            else
+                effectiveBulletColor = inheritedStyle?.BulletColor;
+
+            double? effectiveBulletSizePt = null;
+            int? effectiveBulletSizePct = null;
+            if (para.BulletSizeFollowsText)
+            {
+                effectiveBulletSizePt = null;
+                effectiveBulletSizePct = null;
+            }
+            else if (para.BulletSizePt.HasValue)
+            {
+                effectiveBulletSizePt = para.BulletSizePt;
+            }
+            else if (para.BulletSizePct.HasValue)
+            {
+                effectiveBulletSizePct = para.BulletSizePct;
+            }
+            else if (inheritedStyle?.BulletSizeFollowsText == true)
+            {
+                effectiveBulletSizePt = null;
+                effectiveBulletSizePct = null;
+            }
+            else if (inheritedStyle?.BulletSizePt.HasValue == true)
+            {
+                effectiveBulletSizePt = inheritedStyle.BulletSizePt;
+            }
+            else
+            {
+                effectiveBulletSizePct = inheritedStyle?.BulletSizePct;
+            }
+
+            string? effectiveBulletFont = null;
+            if (para.BulletFontFollowsText)
+                effectiveBulletFont = null;
+            else if (!string.IsNullOrEmpty(para.BulletFontFamily))
+                effectiveBulletFont = para.BulletFontFamily;
+            else if (inheritedStyle?.BulletFontFollowsText == true)
+                effectiveBulletFont = null;
+            else
+                effectiveBulletFont = inheritedStyle?.BulletFontFamily;
 
             // BU1: When paragraph has an explicit <a:buNone/>, BulletSuppressed is true — do NOT
             // re-inherit the style bullet; the paragraph actively opts out of any inherited bullet.
@@ -1280,8 +1325,10 @@ public static class SlideCompositor
             if (!string.IsNullOrEmpty(effectiveBulletFont))
                 bulletFontFamily = ResolveLatinFont(effectiveBulletFont, theme);
 
-            // Scale bullet font size by buSzPct (1000ths-of-a-percent; 100000 = 100%).
-            if (effectiveBulletSizePct.HasValue && effectiveBulletSizePct.Value > 0)
+            // Resolve bullet size from buSzPts or buSzPct after run/theme fallback.
+            if (effectiveBulletSizePt.HasValue && effectiveBulletSizePt.Value > 0)
+                bulletFontSizePt = effectiveBulletSizePt.Value * fontScale;
+            else if (effectiveBulletSizePct.HasValue && effectiveBulletSizePct.Value > 0)
                 bulletFontSizePt = bulletFontSizePt * effectiveBulletSizePct.Value / 100000.0;
 
             switch (effectiveBulletKind)

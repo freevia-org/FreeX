@@ -838,8 +838,12 @@ internal static class TextBodyModelCloner
             MarginLeftEmu = source.MarginLeftEmu,
             IndentEmu = source.IndentEmu,
             BulletColor = source.BulletColor,
+            BulletColorFollowsText = source.BulletColorFollowsText,
             BulletSizePct = source.BulletSizePct,
+            BulletSizePt = source.BulletSizePt,
+            BulletSizeFollowsText = source.BulletSizeFollowsText,
             BulletFontFamily = source.BulletFontFamily,
+            BulletFontFollowsText = source.BulletFontFollowsText,
             SpaceBeforePt = source.SpaceBeforePt,
             SpaceAfterPt = source.SpaceAfterPt,
         };
@@ -964,8 +968,12 @@ internal static class TextBodyModelCloner
                 BulletChar = source.BulletChar,
                 AutoNumType = source.AutoNumType,
                 BulletColor = source.BulletColor,
+                BulletColorFollowsText = source.BulletColorFollowsText,
                 BulletSizePct = source.BulletSizePct,
+                BulletSizePt = source.BulletSizePt,
+                BulletSizeFollowsText = source.BulletSizeFollowsText,
                 BulletFontFamily = source.BulletFontFamily,
+                BulletFontFollowsText = source.BulletFontFollowsText,
             };
 
     private static bool SchemeColorRefsEqual(SchemeColorRef? a, SchemeColorRef? b)
