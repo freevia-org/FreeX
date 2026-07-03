@@ -10698,7 +10698,7 @@ public sealed class DocumentView : Control
     public void InsertCitation(Source source)
     {
         ArgumentNullException.ThrowIfNull(source);
-        InsertText(Citations.FormatInText(source, _doc.BibliographyStyle));
+        InsertText(Citations.FormatInText(_doc, source, _doc.BibliographyStyle));
     }
 
     /// <summary>
