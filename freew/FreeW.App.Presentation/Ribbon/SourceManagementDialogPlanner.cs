@@ -8,7 +8,13 @@ public enum SourceManagementSourceField
     Author,
     Title,
     Year,
-    Publisher
+    Publisher,
+    Journal,
+    Volume,
+    Issue,
+    Pages,
+    Url,
+    Accessed
 }
 
 public enum SourceManagementValidationTarget
@@ -17,11 +23,43 @@ public enum SourceManagementValidationTarget
 }
 
 public sealed record SourceManagementSourceEntry(
+    SourceType Type,
     string Tag,
     string Author,
     string Title,
     string Year,
-    string Publisher);
+    string Publisher,
+    string Journal,
+    string Volume,
+    string Issue,
+    string Pages,
+    string Url,
+    string Accessed)
+{
+    public SourceManagementSourceEntry(
+        string Tag,
+        string Author,
+        string Title,
+        string Year,
+        string Publisher)
+        : this(
+            SourceType.Book,
+            Tag,
+            Author,
+            Title,
+            Year,
+            Publisher,
+            string.Empty,
+            string.Empty,
+            string.Empty,
+            string.Empty,
+            string.Empty,
+            string.Empty)
+    {
+    }
+}
+
+public sealed record SourceManagementSourceTypeChoice(SourceType Type, string Label);
 
 public sealed record SourceManagementSourceFieldPlan(
     SourceManagementSourceField Field,
@@ -51,23 +89,56 @@ public static class SourceManagementDialogPlanner
 {
     public const string SourcePickerTitle = "Insert Citation";
     public const string SourcePickerLabel = "Source:";
-    public const string AddNewSourceButtonLabel = "Add New Source…";
+    public const string AddNewSourceButtonLabel = "Add New Source...";
     public const string AddNewSourceTitle = "Add New Source";
     public const string EditSourceTitle = "Edit Source";
+    public const string SourceTypeLabel = "Type of Source:";
     public const string MasterListLabel = "Master List:";
     public const string CurrentDocumentListLabel = "Current Document:";
-    public const string MissingCitationSourceDataMessage = "Enter an author, title, or year before inserting a citation.";
+    public const string MissingCitationSourceDataMessage = "Enter source details beyond the tag before inserting a citation.";
     public const string MissingManagedSourceDataMessage = "Enter at least one source field.";
     public const string UntitledSourceLabel = "(untitled source)";
 
-    private static readonly IReadOnlyList<SourceManagementSourceField> SourceFieldOrder =
+    private static readonly IReadOnlyList<SourceManagementSourceTypeChoice> SourceTypeChoices =
     [
-        SourceManagementSourceField.Tag,
-        SourceManagementSourceField.Author,
-        SourceManagementSourceField.Title,
-        SourceManagementSourceField.Year,
-        SourceManagementSourceField.Publisher
+        new(SourceType.Book, "Book"),
+        new(SourceType.JournalArticle, "Journal Article"),
+        new(SourceType.WebSite, "Web Site")
     ];
+
+    private static readonly IReadOnlyDictionary<SourceType, IReadOnlyList<SourceManagementSourceField>> SourceFieldOrders =
+        new Dictionary<SourceType, IReadOnlyList<SourceManagementSourceField>>
+        {
+            [SourceType.Book] =
+            [
+                SourceManagementSourceField.Tag,
+                SourceManagementSourceField.Author,
+                SourceManagementSourceField.Title,
+                SourceManagementSourceField.Year,
+                SourceManagementSourceField.Publisher
+            ],
+            [SourceType.JournalArticle] =
+            [
+                SourceManagementSourceField.Tag,
+                SourceManagementSourceField.Author,
+                SourceManagementSourceField.Title,
+                SourceManagementSourceField.Year,
+                SourceManagementSourceField.Journal,
+                SourceManagementSourceField.Volume,
+                SourceManagementSourceField.Issue,
+                SourceManagementSourceField.Pages
+            ],
+            [SourceType.WebSite] =
+            [
+                SourceManagementSourceField.Tag,
+                SourceManagementSourceField.Author,
+                SourceManagementSourceField.Title,
+                SourceManagementSourceField.Year,
+                SourceManagementSourceField.Publisher,
+                SourceManagementSourceField.Url,
+                SourceManagementSourceField.Accessed
+            ]
+        };
 
     private static readonly IReadOnlyDictionary<SourceManagementSourceField, string> SourceFieldLabels =
         new Dictionary<SourceManagementSourceField, string>
@@ -76,13 +147,41 @@ public static class SourceManagementDialogPlanner
             [SourceManagementSourceField.Author] = "Author:",
             [SourceManagementSourceField.Title] = "Title:",
             [SourceManagementSourceField.Year] = "Year:",
-            [SourceManagementSourceField.Publisher] = "Publisher (optional):"
+            [SourceManagementSourceField.Publisher] = "Publisher / Site name (optional):",
+            [SourceManagementSourceField.Journal] = "Journal:",
+            [SourceManagementSourceField.Volume] = "Volume:",
+            [SourceManagementSourceField.Issue] = "Issue:",
+            [SourceManagementSourceField.Pages] = "Pages:",
+            [SourceManagementSourceField.Url] = "URL:",
+            [SourceManagementSourceField.Accessed] = "Accessed:"
         };
+
+    public static IReadOnlyList<SourceManagementSourceTypeChoice> BuildSourceTypeChoices() =>
+        SourceTypeChoices.ToArray();
+
+    public static int SourceTypeSelectedIndex(SourceType type)
+    {
+        var index = SourceTypeChoices.ToList().FindIndex(choice => choice.Type == type);
+        return index < 0 ? 0 : index;
+    }
 
     public static IReadOnlyList<SourceManagementSourceFieldPlan> BuildEntryFieldPlans(Source? source)
     {
         var entry = ProjectEntry(source);
-        return SourceFieldOrder
+        return BuildEntryFieldPlans(entry);
+    }
+
+    public static IReadOnlyList<SourceManagementSourceFieldPlan> BuildEntryFieldPlans(SourceType type, Source? source = null)
+    {
+        var entry = ProjectEntry(source) with { Type = NormalizeSourceType(type) };
+        return BuildEntryFieldPlans(entry);
+    }
+
+    public static IReadOnlyList<SourceManagementSourceFieldPlan> BuildEntryFieldPlans(SourceManagementSourceEntry entry)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+
+        return SourceFieldOrders[NormalizeSourceType(entry.Type)]
             .Select(field => new SourceManagementSourceFieldPlan(
                 field,
                 SourceFieldLabels[field],
@@ -92,23 +191,42 @@ public static class SourceManagementDialogPlanner
 
     public static SourceManagementSourceEntry ProjectEntry(Source? source) =>
         new(
+            NormalizeSourceType(source?.Type ?? SourceType.Book),
             source?.Tag ?? string.Empty,
             source?.Author ?? string.Empty,
             source?.Title ?? string.Empty,
             source?.Year ?? string.Empty,
-            source?.Publisher ?? string.Empty);
+            source?.Publisher ?? string.Empty,
+            source?.Journal ?? string.Empty,
+            source?.Volume ?? string.Empty,
+            source?.Issue ?? string.Empty,
+            source?.Pages ?? string.Empty,
+            source?.Url ?? string.Empty,
+            source?.Accessed ?? string.Empty);
 
     public static SourceManagementSourceEntry CreateEntry(
+        IReadOnlyDictionary<SourceManagementSourceField, string?> values) =>
+        CreateEntry(SourceType.Book, values);
+
+    public static SourceManagementSourceEntry CreateEntry(
+        SourceType type,
         IReadOnlyDictionary<SourceManagementSourceField, string?> values)
     {
         ArgumentNullException.ThrowIfNull(values);
 
         return new SourceManagementSourceEntry(
+            NormalizeSourceType(type),
             TrimmedValue(values, SourceManagementSourceField.Tag),
             TrimmedValue(values, SourceManagementSourceField.Author),
             TrimmedValue(values, SourceManagementSourceField.Title),
             TrimmedValue(values, SourceManagementSourceField.Year),
-            TrimmedValue(values, SourceManagementSourceField.Publisher));
+            TrimmedValue(values, SourceManagementSourceField.Publisher),
+            TrimmedValue(values, SourceManagementSourceField.Journal),
+            TrimmedValue(values, SourceManagementSourceField.Volume),
+            TrimmedValue(values, SourceManagementSourceField.Issue),
+            TrimmedValue(values, SourceManagementSourceField.Pages),
+            TrimmedValue(values, SourceManagementSourceField.Url),
+            TrimmedValue(values, SourceManagementSourceField.Accessed));
     }
 
     public static IReadOnlyList<string> BuildPickerItems(IReadOnlyList<Source> sources)
@@ -184,20 +302,23 @@ public static class SourceManagementDialogPlanner
     {
         ArgumentNullException.ThrowIfNull(entry);
 
+        var type = NormalizeSourceType(entry.Type);
         return new Source
         {
-            Tag = entry.Tag,
-            Type = existing?.Type ?? SourceType.Book,
-            Author = entry.Author,
-            Title = entry.Title,
-            Year = entry.Year,
-            Publisher = string.IsNullOrWhiteSpace(entry.Publisher) ? null : entry.Publisher,
-            Journal = existing?.Journal,
-            Volume = existing?.Volume,
-            Issue = existing?.Issue,
-            Pages = existing?.Pages,
-            Url = existing?.Url,
-            Accessed = existing?.Accessed
+            Tag = entry.Tag.Trim(),
+            Type = type,
+            Author = entry.Author.Trim(),
+            Title = entry.Title.Trim(),
+            Year = entry.Year.Trim(),
+            Publisher = type is SourceType.Book or SourceType.WebSite
+                ? NullIfWhiteSpace(entry.Publisher)
+                : null,
+            Journal = type == SourceType.JournalArticle ? NullIfWhiteSpace(entry.Journal) : null,
+            Volume = type == SourceType.JournalArticle ? NullIfWhiteSpace(entry.Volume) : null,
+            Issue = type == SourceType.JournalArticle ? NullIfWhiteSpace(entry.Issue) : null,
+            Pages = type == SourceType.JournalArticle ? NullIfWhiteSpace(entry.Pages) : null,
+            Url = type == SourceType.WebSite ? NullIfWhiteSpace(entry.Url) : null,
+            Accessed = type == SourceType.WebSite ? NullIfWhiteSpace(entry.Accessed) : null
         };
     }
 
@@ -376,14 +497,19 @@ public static class SourceManagementDialogPlanner
         sources.Select(CloneSource).ToArray();
 
     private static bool HasCitationSourceData(SourceManagementSourceEntry entry) =>
-        entry.Author.Length > 0 || entry.Title.Length > 0 || entry.Year.Length > 0;
-
-    private static bool HasManagedSourceData(SourceManagementSourceEntry entry) =>
-        entry.Tag.Length > 0
-        || entry.Author.Length > 0
+        entry.Author.Length > 0
         || entry.Title.Length > 0
         || entry.Year.Length > 0
-        || entry.Publisher.Length > 0;
+        || entry.Publisher.Length > 0
+        || entry.Journal.Length > 0
+        || entry.Volume.Length > 0
+        || entry.Issue.Length > 0
+        || entry.Pages.Length > 0
+        || entry.Url.Length > 0
+        || entry.Accessed.Length > 0;
+
+    private static bool HasManagedSourceData(SourceManagementSourceEntry entry) =>
+        entry.Tag.Length > 0 || HasCitationSourceData(entry);
 
     private static string FieldValue(SourceManagementSourceEntry entry, SourceManagementSourceField field) =>
         field switch
@@ -393,6 +519,12 @@ public static class SourceManagementDialogPlanner
             SourceManagementSourceField.Title => entry.Title,
             SourceManagementSourceField.Year => entry.Year,
             SourceManagementSourceField.Publisher => entry.Publisher,
+            SourceManagementSourceField.Journal => entry.Journal,
+            SourceManagementSourceField.Volume => entry.Volume,
+            SourceManagementSourceField.Issue => entry.Issue,
+            SourceManagementSourceField.Pages => entry.Pages,
+            SourceManagementSourceField.Url => entry.Url,
+            SourceManagementSourceField.Accessed => entry.Accessed,
             _ => string.Empty
         };
 
@@ -400,6 +532,15 @@ public static class SourceManagementDialogPlanner
         IReadOnlyDictionary<SourceManagementSourceField, string?> values,
         SourceManagementSourceField field) =>
         values.TryGetValue(field, out var value) ? (value ?? string.Empty).Trim() : string.Empty;
+
+    private static SourceType NormalizeSourceType(SourceType type) =>
+        SourceFieldOrders.ContainsKey(type) ? type : SourceType.Book;
+
+    private static string? NullIfWhiteSpace(string value)
+    {
+        var trimmed = value.Trim();
+        return trimmed.Length == 0 ? null : trimmed;
+    }
 
     private static bool IsValidIndex(int index, int count) =>
         index >= 0 && index < count;

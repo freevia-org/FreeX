@@ -234,6 +234,9 @@ internal sealed class SourceEntryDialog : Window
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
 
+    private readonly IReadOnlyList<SourceManagementSourceTypeChoice> _typeChoices;
+    private readonly ComboBox _typeBox = new() { MinWidth = 260 };
+    private readonly Grid _grid = new() { Margin = new Thickness(16, 12, 16, 0) };
     private readonly Dictionary<SourceManagementSourceField, TextBox> _fields;
 
     public SourceManagementSourceEntry? Entry { get; private set; }
@@ -249,8 +252,9 @@ internal sealed class SourceEntryDialog : Window
         CanResize = false;
         ShowInTaskbar = false;
 
-        var fieldPlans = SourceManagementDialogPlanner.BuildEntryFieldPlans(source);
-        _fields = fieldPlans.ToDictionary(plan => plan.Field, plan =>
+        _typeChoices = SourceManagementDialogPlanner.BuildSourceTypeChoices();
+        var entry = SourceManagementDialogPlanner.ProjectEntry(source);
+        _fields = SourceManagementDialogPlanner.BuildEntryFieldPlans(entry).ToDictionary(plan => plan.Field, plan =>
         {
             var box = new TextBox
             {
@@ -262,30 +266,64 @@ internal sealed class SourceEntryDialog : Window
             return box;
         });
 
-        var grid = new Grid { Margin = new Thickness(16, 12, 16, 0) };
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        for (var i = 0; i < fieldPlans.Count; i++)
-        {
-            var plan = fieldPlans[i];
-            AddLabeledRow(grid, i, plan.Label, _fields[plan.Field]);
-        }
+        _typeBox.ItemsSource = _typeChoices.Select(choice => choice.Label).ToArray();
+        _typeBox.SelectedIndex = SourceManagementDialogPlanner.SourceTypeSelectedIndex(entry.Type);
+        _typeBox.SelectionChanged += (_, _) => RefreshFields();
+        AvaloniaCompactDialogChrome.ApplyComboBox(_typeBox, DialogChromeStyle);
+
+        _grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        _grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        RefreshFields();
 
         var ok = Button("OK", Accept, isDefault: true);
         var cancel = Button("Cancel", () => Close(), isCancel: true);
         var buttons = AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(16, 12, 16, 14));
 
         var body = new StackPanel();
-        body.Children.Add(grid);
+        body.Children.Add(_grid);
         body.Children.Add(buttons);
         Content = body;
     }
 
     private void Accept()
     {
-        Entry = SourceManagementDialogPlanner.CreateEntry(
-            _fields.ToDictionary(pair => pair.Key, pair => (string?)pair.Value.Text));
+        Entry = CurrentEntry();
         Close();
+    }
+
+    private SourceType SelectedType =>
+        _typeBox.SelectedIndex >= 0 && _typeBox.SelectedIndex < _typeChoices.Count
+            ? _typeChoices[_typeBox.SelectedIndex].Type
+            : SourceType.Book;
+
+    private SourceManagementSourceEntry CurrentEntry() =>
+        SourceManagementDialogPlanner.CreateEntry(
+            SelectedType,
+            _fields.ToDictionary(pair => pair.Key, pair => (string?)pair.Value.Text));
+
+    private void RefreshFields()
+    {
+        _grid.RowDefinitions.Clear();
+        _grid.Children.Clear();
+        AddLabeledRow(_grid, 0, SourceManagementDialogPlanner.SourceTypeLabel, _typeBox);
+
+        var row = 1;
+        foreach (var plan in SourceManagementDialogPlanner.BuildEntryFieldPlans(CurrentEntry()))
+        {
+            if (!_fields.TryGetValue(plan.Field, out var field))
+            {
+                field = new TextBox
+                {
+                    Text = plan.Text,
+                    MinWidth = 260,
+                    Margin = new Thickness(0, 6, 0, 0),
+                };
+                AvaloniaCompactDialogChrome.ApplyTextBox(field, DialogChromeStyle);
+                _fields[plan.Field] = field;
+            }
+
+            AddLabeledRow(_grid, row++, plan.Label, field);
+        }
     }
 
     private static void AddLabeledRow(Grid grid, int row, string label, Control field)
