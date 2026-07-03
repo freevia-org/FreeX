@@ -59,7 +59,9 @@ public sealed class SlideShowWindow : Window
     private readonly DateTimeOffset _presenterStartedAtUtc;
     private readonly DispatcherTimer  _autoAdvanceTimer;
     private SlideShowPresenterToolPlan _presenterToolPlan = SlideShowPresenterToolPlanner.BuildPlan();
+    private SlideShowTimingRecorderState _timingRecorderState;
     private SlideShowInkExecutionState _inkExecutionState;
+    private bool _isTornDown;
 
     // DA2 + DA3: all per-frame DispatcherTimers created by animation/transition helpers
     // (AnimateOpacity, AnimateTranslate, AnimateRectClip, AnimateScale, AnimateRotate,
@@ -102,6 +104,9 @@ public sealed class SlideShowWindow : Window
         _presentation = presentation ?? throw new ArgumentNullException(nameof(presentation));
         _controller   = new SlideShowController(presentation.Slides, startIndex);
         _presenterStartedAtUtc = DateTimeOffset.UtcNow;
+        _timingRecorderState = SlideShowTimingRecorderPlanner.CreateState(
+            _controller.CurrentSlideIndex,
+            _presenterStartedAtUtc);
         _inkExecutionState = SlideShowInkExecutionPlanner.CreateState(
             _controller.CurrentSlideIndex,
             _presenterToolPlan.PointerInk);
@@ -192,18 +197,18 @@ public sealed class SlideShowWindow : Window
     /// <summary>
     /// Execute a single logical advance step and return what happened.
     /// </summary>
-    public AdvanceResult ExecuteAdvance()
+    public AdvanceResult ExecuteAdvance(DateTimeOffset? nowUtc = null)
     {
         var command = SlideShowHostPlanner.PlanAdvance(_controller);
-        ApplyHostCommand(command);
+        ApplyHostCommand(command, nowUtc);
         return command.AdvanceResult!;
     }
 
     /// <summary>Execute a logical back step and return what happened.</summary>
-    public BackResult ExecuteBack()
+    public BackResult ExecuteBack(DateTimeOffset? nowUtc = null)
     {
         var command = SlideShowHostPlanner.PlanBack(_controller);
-        ApplyHostCommand(command);
+        ApplyHostCommand(command, nowUtc);
         return command.BackResult!;
     }
 
@@ -216,6 +221,10 @@ public sealed class SlideShowWindow : Window
 
     public IReadOnlyList<SlideShowPresenterWorkflowAction> PresenterWorkflowActions =>
         _presenterToolPlan.WorkflowActions;
+
+    public SlideShowTimingRecorderState TimingRecorderState => _timingRecorderState;
+
+    public bool IsPresenterSessionClosed => _isTornDown;
 
     public SlideShowInkExecutionState InkExecutionState => _inkExecutionState;
     internal int PresenterInkOverlayVisualCount => _inkOverlay.Children.Count;
@@ -237,8 +246,16 @@ public sealed class SlideShowWindow : Window
         SlideShowPresenterPointerMode pointerMode = SlideShowPresenterPointerMode.Arrow,
         string? inkColorHex = null,
         double inkThicknessDip = 0,
-        SlideShowInkRetentionDecision inkRetentionDecision = SlideShowInkRetentionDecision.KeepInk)
+        SlideShowInkRetentionDecision inkRetentionDecision = SlideShowInkRetentionDecision.KeepInk,
+        DateTimeOffset? nowUtc = null)
     {
+        var now = nowUtc ?? DateTimeOffset.UtcNow;
+        var timingIntentChanged = _presenterToolPlan.Recording.TimingIntent != timingIntent;
+        if (timingIntentChanged)
+        {
+            FinalizePresenterTiming(now);
+        }
+
         _presenterToolPlan = SlideShowPresenterToolPlanner.BuildPlan(
             timingIntent,
             mediaIntent,
@@ -249,6 +266,14 @@ public sealed class SlideShowWindow : Window
         _inkExecutionState = SlideShowInkExecutionPlanner.SelectPointerInk(
             _inkExecutionState,
             _presenterToolPlan.PointerInk);
+        if (timingIntentChanged)
+        {
+            _timingRecorderState = SlideShowTimingRecorderPlanner.EnterSlide(
+                _timingRecorderState,
+                _controller.CurrentSlideIndex,
+                now).State;
+        }
+
         RefreshInkOverlay();
         return _presenterToolPlan;
     }
@@ -555,9 +580,9 @@ public sealed class SlideShowWindow : Window
         ApplyHostCommand(SlideShowHostPlanner.PlanBack(_controller, stopAutoAdvance: true));
     }
 
-    private void CloseSlideShow()
+    private void CloseSlideShow(DateTimeOffset nowUtc)
     {
-        Teardown();
+        Teardown(nowUtc);
         Close();
     }
 
@@ -568,23 +593,44 @@ public sealed class SlideShowWindow : Window
         DisplayCurrentSlide(animated);
     }
 
-    private void ApplyHostCommand(SlideShowHostCommand command)
+    private void ApplyHostCommand(SlideShowHostCommand command, DateTimeOffset? nowUtc = null)
     {
+        var now = nowUtc ?? DateTimeOffset.UtcNow;
         if (command.StopAutoAdvance)
             _autoAdvanceTimer.Stop();
 
         switch (command.Kind)
         {
             case SlideShowHostCommandKind.Close:
-                CloseSlideShow();
+                CloseSlideShow(now);
                 break;
             case SlideShowHostCommandKind.PlayAnimationStep when command.Step is not null:
                 PlayAnimationStep(command.Step);
                 break;
             case SlideShowHostCommandKind.NavigateToSlide when command.Slide is not null:
+                MovePresenterTimingToSlide(command.SlideIndex, now);
                 NavigateToSlide(command.Slide, command.SlideIndex, command.AnimateSlide);
                 break;
         }
+    }
+
+    private void MovePresenterTimingToSlide(int slideIndex, DateTimeOffset nowUtc)
+    {
+        FinalizePresenterTiming(nowUtc);
+        _timingRecorderState = SlideShowTimingRecorderPlanner.EnterSlide(
+            _timingRecorderState,
+            slideIndex,
+            nowUtc).State;
+    }
+
+    private void FinalizePresenterTiming(DateTimeOffset nowUtc)
+    {
+        var result = SlideShowTimingRecorderPlanner.LeaveCurrentSlide(
+            _timingRecorderState,
+            _presenterToolPlan,
+            nowUtc);
+        _timingRecorderState = result.State;
+        SlideShowTimingRecorderPlanner.ApplyTimings(_presentation, result.Mutations);
     }
 
     // ── Slide display + transitions ───────────────────────────────────────────────
@@ -1341,8 +1387,15 @@ public sealed class SlideShowWindow : Window
 
     // ── Teardown ──────────────────────────────────────────────────────────────────
 
-    private void Teardown()
+    private void Teardown(DateTimeOffset? nowUtc = null)
     {
+        if (_isTornDown)
+        {
+            return;
+        }
+
+        _isTornDown = true;
+        FinalizePresenterTiming(nowUtc ?? DateTimeOffset.UtcNow);
         _inkExecutionState = SlideShowInkExecutionPlanner.ApplyRetentionOnExit(_inkExecutionState).State;
         _autoAdvanceTimer.Stop();
         // DA3: stop ALL per-frame animation/transition timers so they don't keep

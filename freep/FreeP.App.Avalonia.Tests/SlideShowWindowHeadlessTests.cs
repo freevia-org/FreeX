@@ -156,6 +156,71 @@ public sealed class SlideShowWindowHeadlessTests
     }
 
     [Fact]
+    public async Task SlideShowWindow_RecordTimings_persists_advance_after_on_navigation_and_close()
+    {
+        int? firstTiming = null;
+        int? secondTiming = null;
+        TransitionKind? firstKind = null;
+        int? firstDuration = null;
+        bool sessionClosed = false;
+        var started = new DateTimeOffset(2026, 7, 3, 10, 0, 0, TimeSpan.Zero);
+        var ran = await OnUiThread(() =>
+        {
+            var pres = MakePresentation(2);
+            pres.Slides[0].Transition = new SlideTransition { Kind = TransitionKind.Fade, DurationMs = 700 };
+            var window = new SlideShowWindow(pres, 0);
+            window.ApplyPresenterToolIntent(
+                timingIntent: SlideShowTimingIntent.RecordTimings,
+                nowUtc: started);
+
+            window.ExecuteAdvance(started.AddMilliseconds(2500));
+            window.ExecuteAdvance(started.AddMilliseconds(6000));
+
+            firstTiming = pres.Slides[0].Transition?.AdvanceAfterMs;
+            secondTiming = pres.Slides[1].Transition?.AdvanceAfterMs;
+            firstKind = pres.Slides[0].Transition?.Kind;
+            firstDuration = pres.Slides[0].Transition?.DurationMs;
+            sessionClosed = window.IsPresenterSessionClosed;
+        });
+
+        if (!ran) return;
+        sessionClosed.Should().BeTrue();
+        firstTiming.Should().Be(2500);
+        secondTiming.Should().Be(3500);
+        firstKind.Should().Be(TransitionKind.Fade);
+        firstDuration.Should().Be(700);
+    }
+
+    [Fact]
+    public async Task SlideShowWindow_RehearseTimings_tracks_without_persisting_transition_timing()
+    {
+        int? trackedTiming = null;
+        bool? trackedPersistDecision = null;
+        bool transitionWasCreated = true;
+        var started = new DateTimeOffset(2026, 7, 3, 10, 0, 0, TimeSpan.Zero);
+        var ran = await OnUiThread(() =>
+        {
+            var pres = MakePresentation(2);
+            var window = new SlideShowWindow(pres, 0);
+            window.ApplyPresenterToolIntent(
+                timingIntent: SlideShowTimingIntent.RehearseTimings,
+                nowUtc: started);
+
+            window.ExecuteAdvance(started.AddMilliseconds(1800));
+
+            var timing = window.TimingRecorderState.RecordedTimings.Single();
+            trackedTiming = timing.AdvanceAfterMs;
+            trackedPersistDecision = timing.ShouldPersist;
+            transitionWasCreated = pres.Slides[0].Transition is not null;
+        });
+
+        if (!ran) return;
+        trackedTiming.Should().Be(1800);
+        trackedPersistDecision.Should().BeFalse();
+        transitionWasCreated.Should().BeFalse();
+    }
+
+    [Fact]
     public async Task SlideShowWindow_InkExecution_delegates_stroke_lifecycle_to_shared_planner()
     {
         SlideShowInkExecutionState? inkState = null;
