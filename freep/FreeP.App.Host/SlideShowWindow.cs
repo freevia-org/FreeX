@@ -55,6 +55,7 @@ public sealed class SlideShowWindow : Window
     private readonly DispatcherTimer  _autoAdvanceTimer;
     private SlideShowPresenterToolPlan _presenterToolPlan = SlideShowPresenterToolPlanner.BuildPlan();
     private SlideShowTimingRecorderState _timingRecorderState;
+    private SlideShowRecordingExecutionState _recordingExecutionState;
     private SlideShowInkExecutionState _inkExecutionState;
     private bool _isTornDown;
 
@@ -113,6 +114,11 @@ public sealed class SlideShowWindow : Window
         _timingRecorderState = SlideShowTimingRecorderPlanner.CreateState(
             CurrentPresentationSlideIndex,
             _presenterStartedAtUtc);
+        _recordingExecutionState = SlideShowRecordingExecutionPlanner.CreateState(
+            _presenterToolPlan,
+            CurrentPresentationSlideIndex,
+            _presenterStartedAtUtc,
+            SlideShowRecordingHostCapabilities.Deferred("WPF slideshow"));
         _inkExecutionState = SlideShowInkExecutionPlanner.CreateState(
             _controller.CurrentSlideIndex,
             _presenterToolPlan.PointerInk);
@@ -244,6 +250,11 @@ public sealed class SlideShowWindow : Window
 
     public SlideShowTimingRecorderState TimingRecorderState => _timingRecorderState;
 
+    public SlideShowRecordingExecutionState RecordingExecutionState => _recordingExecutionState;
+
+    public IReadOnlyList<SlideShowRecordingExecutionAction> RecordingExecutionActions =>
+        _recordingExecutionState.LastActions;
+
     public bool IsPresenterSessionClosed => _isTornDown;
 
     public SlideShowInkExecutionState InkExecutionState => _inkExecutionState;
@@ -286,6 +297,11 @@ public sealed class SlideShowWindow : Window
             inkColorHex,
             inkThicknessDip,
             inkRetentionDecision);
+        _recordingExecutionState = SlideShowRecordingExecutionPlanner.ApplyToolPlan(
+            _recordingExecutionState,
+            _presenterToolPlan,
+            CurrentPresentationSlideIndex,
+            now);
         _inkExecutionState = SlideShowInkExecutionPlanner.SelectPointerInk(
             _inkExecutionState,
             _presenterToolPlan.PointerInk);
@@ -666,6 +682,10 @@ public sealed class SlideShowWindow : Window
             _timingRecorderState,
             _playbackRoute.GetSourceSlideIndex(slideIndex),
             nowUtc).State;
+        _recordingExecutionState = SlideShowRecordingExecutionPlanner.MoveToSlide(
+            _recordingExecutionState,
+            _playbackRoute.GetSourceSlideIndex(slideIndex),
+            nowUtc);
     }
 
     private void FinalizePresenterTiming(DateTimeOffset nowUtc)
@@ -1353,7 +1373,11 @@ public sealed class SlideShowWindow : Window
         }
 
         _isTornDown = true;
-        FinalizePresenterTiming(nowUtc ?? DateTimeOffset.UtcNow);
+        var now = nowUtc ?? DateTimeOffset.UtcNow;
+        FinalizePresenterTiming(now);
+        _recordingExecutionState = SlideShowRecordingExecutionPlanner.EndSession(
+            _recordingExecutionState,
+            now);
         _inkExecutionState = SlideShowInkExecutionPlanner.ApplyRetentionOnExit(_inkExecutionState).State;
         _autoAdvanceTimer.Stop();
         foreach (var sb in _pendingStoryboards)
