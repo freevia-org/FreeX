@@ -99,7 +99,7 @@ public sealed class DialogVisualEvidenceSummaryTests
             """);
 
         WritePng(Path.Combine(wpfManifestDirectory, "dialog.Sample.Valid.png"), width: 3, height: 2, nonBlank: true);
-        WritePng(Path.Combine(avaloniaManifestDirectory, "dialog.Sample.Valid.png"), width: 4, height: 2, nonBlank: true);
+        WritePng(Path.Combine(avaloniaManifestDirectory, "dialog.Sample.Valid.png"), width: 5, height: 2, nonBlank: true);
         WritePng(Path.Combine(avaloniaManifestDirectory, "dialog.Sample.Extra.png"), width: 2, height: 3, nonBlank: true);
 
         var result = PowerShellScriptRunner.RunToolScript(
@@ -117,6 +117,7 @@ public sealed class DialogVisualEvidenceSummaryTests
         result.Output.Should().Contain("Raw PNG mismatches normalized by capture DPI: 0");
         result.Output.Should().Contain("Paired expected-size evidence mismatches: 0");
         result.Output.Should().Contain("Stale promoted expected-size evidence: 0");
+        result.Output.Should().Contain("Dimension mismatch bucket 'real logical-size mismatch': 1");
 
         var markdown = File.ReadAllText(markdownPath);
         markdown.Should().Contain("| WPF captured manifest surfaces with committed PNGs | 1 |");
@@ -126,7 +127,9 @@ public sealed class DialogVisualEvidenceSummaryTests
         markdown.Should().Contain("| Raw PNG mismatches normalized by capture DPI | 0 |");
         markdown.Should().Contain("| Paired expected-size evidence mismatches | 0 |");
         markdown.Should().Contain("| Stale promoted expected-size evidence | 0 |");
-        markdown.Should().Contain("| dialog.Sample.Valid | dialog.Sample.Valid.png | 3x2 | 3x2 px @ 96 DPI | True | dialog.Sample.Valid.png | 4x2 | 4x2 px @ 96 DPI | True | False |");
+        markdown.Should().Contain("## Scale-Aware Dimension Mismatch Classification");
+        markdown.Should().Contain("| real logical-size mismatch | 1 | dialog.Sample.Valid |");
+        markdown.Should().Contain("| dialog.Sample.Valid | dialog.Sample.Valid.png | 3x2 | 3x2 px @ 96 DPI | True | dialog.Sample.Valid.png | 5x2 | 5x2 px @ 96 DPI | True | False |");
         markdown.Should().Contain("| dialog.Sample | 1 | dialog.Sample.Extra |");
         markdown.Should().Contain("dialog.Sample.Valid");
         markdown.Should().NotContain("dialog.Sample.Missing |");
@@ -143,6 +146,7 @@ public sealed class DialogVisualEvidenceSummaryTests
         summary.GetProperty("pairedCaptureScaleNormalizedDimensionMatches").GetInt32().Should().Be(0);
         summary.GetProperty("pairedExpectedSizeMismatches").GetInt32().Should().Be(0);
         summary.GetProperty("stalePromotedExpectedSizeEvidence").GetInt32().Should().Be(0);
+        summary.GetProperty("dimensionMismatchBuckets").GetProperty("real logical-size mismatch").GetInt32().Should().Be(1);
 
         var paired = json.RootElement.GetProperty("pairedSurfaces")[0];
         paired.GetProperty("wpf").GetProperty("width").GetInt32().Should().Be(3);
@@ -152,6 +156,8 @@ public sealed class DialogVisualEvidenceSummaryTests
         paired.GetProperty("comparison").GetProperty("rawPixelDimensionMatch").GetBoolean().Should().BeFalse();
         paired.GetProperty("comparison").GetProperty("captureScaleNormalizedDimensionMatch").GetBoolean().Should().BeFalse();
         paired.GetProperty("comparison").GetProperty("expectedSizeMismatch").GetBoolean().Should().BeFalse();
+        paired.GetProperty("comparison").GetProperty("dimensionMismatchBucket").GetString().Should().Be("real logical-size mismatch");
+        paired.GetProperty("comparison").GetProperty("dimensionMismatchNextAction").GetString().Should().Contain("layout target");
 
         var checkResult = PowerShellScriptRunner.RunToolScript(
             "Generate-DialogVisualEvidenceSummary.ps1",
@@ -160,6 +166,111 @@ public sealed class DialogVisualEvidenceSummaryTests
 
         checkResult.ExitCode.Should().Be(0, checkResult.CombinedOutput);
         checkResult.Output.Should().Contain("Dialog visual evidence summary is up to date.");
+    }
+
+    [Fact]
+    public void DialogVisualEvidenceSummary_ClassifiesKnownDimensionMismatchBuckets()
+    {
+        using var temp = new TestTemporaryDirectory();
+
+        var inventoryPath = Path.Combine(temp.Path, "dialog-parity-inventory.json");
+        var wpfManifestDirectory = Path.Combine(temp.Path, "wpf-capture");
+        var avaloniaManifestDirectory = Path.Combine(temp.Path, "avalonia-capture");
+        Directory.CreateDirectory(wpfManifestDirectory);
+        Directory.CreateDirectory(avaloniaManifestDirectory);
+
+        var wpfManifestPath = Path.Combine(wpfManifestDirectory, "manifest.json");
+        var avaloniaManifestPath = Path.Combine(avaloniaManifestDirectory, "manifest.json");
+        var markdownPath = Path.Combine(temp.Path, "summary.md");
+        var jsonPath = Path.Combine(temp.Path, "summary.json");
+
+        File.WriteAllText(
+            inventoryPath,
+            """
+            {
+              "summary": {
+                "totalRoutes": 4,
+                "wpfCaptures": 4,
+                "avaloniaCaptures": 4,
+                "avaloniaHarnessRoutes": 4,
+                "sharedOrPresentationBacked": 4
+              },
+              "rows": [
+                { "routeId": "dialog.ScenarioManager" },
+                { "routeId": "dialog.GoalSeekStatus" },
+                { "routeId": "dialog.FindReplace" },
+                { "routeId": "dialog.Generic" }
+              ]
+            }
+            """);
+
+        File.WriteAllText(
+            wpfManifestPath,
+            """
+            {
+              "platform": "windows",
+              "shell": "wpf",
+              "surfaces": [
+                { "id": "dialog.ScenarioManager", "kind": "dialog", "png": "dialog.ScenarioManager.png", "captured": true, "note": "" },
+                { "id": "dialog.GoalSeekStatus", "kind": "dialog", "png": "dialog.GoalSeekStatus.png", "captured": true, "note": "" },
+                { "id": "dialog.FindReplace", "kind": "dialog", "png": "dialog.FindReplace.png", "captured": true, "note": "" },
+                { "id": "dialog.Generic", "kind": "dialog", "png": "dialog.Generic.png", "captured": true, "note": "" }
+              ]
+            }
+            """);
+
+        File.WriteAllText(
+            avaloniaManifestPath,
+            """
+            {
+              "platform": "windows",
+              "shell": "avalonia",
+              "surfaces": [
+                { "id": "dialog.ScenarioManager", "kind": "dialog", "png": "dialog.ScenarioManager.png", "captured": true, "note": "" },
+                { "id": "dialog.GoalSeekStatus", "kind": "dialog", "png": "dialog.GoalSeekStatus.png", "captured": true, "note": "" },
+                { "id": "dialog.FindReplace", "kind": "dialog", "png": "dialog.FindReplace.png", "captured": true, "note": "" },
+                { "id": "dialog.Generic", "kind": "dialog", "png": "dialog.Generic.png", "captured": true, "note": "" }
+              ]
+            }
+            """);
+
+        WritePng(Path.Combine(wpfManifestDirectory, "dialog.ScenarioManager.png"), width: 3, height: 2, nonBlank: true);
+        WritePng(Path.Combine(avaloniaManifestDirectory, "dialog.ScenarioManager.png"), width: 5, height: 4, nonBlank: true);
+        WritePng(Path.Combine(wpfManifestDirectory, "dialog.GoalSeekStatus.png"), width: 3, height: 2, nonBlank: true);
+        WritePng(Path.Combine(avaloniaManifestDirectory, "dialog.GoalSeekStatus.png"), width: 3, height: 4, nonBlank: true);
+        WritePng(Path.Combine(wpfManifestDirectory, "dialog.FindReplace.png"), width: 4, height: 4, nonBlank: true);
+        WritePng(Path.Combine(avaloniaManifestDirectory, "dialog.FindReplace.png"), width: 4, height: 5, nonBlank: true);
+        WritePng(Path.Combine(wpfManifestDirectory, "dialog.Generic.png"), width: 3, height: 2, nonBlank: true);
+        WritePng(Path.Combine(avaloniaManifestDirectory, "dialog.Generic.png"), width: 5, height: 2, nonBlank: true);
+
+        var result = PowerShellScriptRunner.RunToolScript(
+            "Generate-DialogVisualEvidenceSummary.ps1",
+            WorkspaceFileLocator.FindWorkspaceRoot(),
+            $"-MarkdownPath \"{markdownPath}\" -JsonPath \"{jsonPath}\" -InventoryPath \"{inventoryPath}\" -WpfManifestPath \"{wpfManifestPath}\" -AvaloniaManifestPath \"{avaloniaManifestPath}\"");
+
+        result.ExitCode.Should().Be(0, result.CombinedOutput);
+        result.Output.Should().Contain("Dimension mismatch bucket 'content/visual mismatch': 1");
+        result.Output.Should().Contain("Dimension mismatch bucket 'evidence limitation': 1");
+        result.Output.Should().Contain("Dimension mismatch bucket 'expected platform/native difference': 1");
+        result.Output.Should().Contain("Dimension mismatch bucket 'real logical-size mismatch': 1");
+
+        var markdown = File.ReadAllText(markdownPath);
+        markdown.Should().Contain("| content/visual mismatch | 1 | dialog.ScenarioManager |");
+        markdown.Should().Contain("| evidence limitation | 1 | dialog.GoalSeekStatus |");
+        markdown.Should().Contain("| expected platform/native difference | 1 | dialog.FindReplace |");
+        markdown.Should().Contain("| real logical-size mismatch | 1 | dialog.Generic |");
+        markdown.Should().Contain("| dialog.ScenarioManager | content/visual mismatch |");
+        markdown.Should().Contain("| dialog.GoalSeekStatus | evidence limitation |");
+
+        using var json = JsonDocument.Parse(File.ReadAllText(jsonPath));
+        var buckets = json.RootElement.GetProperty("summary").GetProperty("dimensionMismatchBuckets");
+        buckets.GetProperty("content/visual mismatch").GetInt32().Should().Be(1);
+        buckets.GetProperty("evidence limitation").GetInt32().Should().Be(1);
+        buckets.GetProperty("expected platform/native difference").GetInt32().Should().Be(1);
+        buckets.GetProperty("real logical-size mismatch").GetInt32().Should().Be(1);
+
+        json.RootElement.GetProperty("dimensionMismatchClassification").GetArrayLength().Should().Be(4);
+        json.RootElement.GetProperty("dimensionMismatchDetails").GetArrayLength().Should().Be(4);
     }
 
     [Fact]
