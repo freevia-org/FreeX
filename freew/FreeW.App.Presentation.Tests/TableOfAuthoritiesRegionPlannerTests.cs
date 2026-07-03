@@ -79,4 +79,60 @@ public sealed class TableOfAuthoritiesRegionPlannerTests
             .Formatting.TabStops.Should().ContainSingle()
             .Which.Leader.Should().Be(TabLeader.None);
     }
+
+    [Fact]
+    public void BuildRefreshPlan_ProducesWordLikeRenderedEntryMetadata()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Page.WidthPt = 700;
+        document.Page.MarginLeftPt = 80;
+        document.Page.MarginRightPt = 90;
+
+        for (var i = 0; i < 5; i++)
+        {
+            var mark = Run.CitationMark(new Citation("Roe v. Wade", CitationCategory.Cases));
+            if (i == 0)
+                mark.Formatting = new RunFormatting { Bold = true, Underline = true, ColorHex = "#C00000" };
+            document.Blocks.Add(new Paragraph { Runs = { mark } });
+        }
+
+        document.Blocks.AddRange(TableOfAuthorities.Build(
+            new[] { new Citation("Old Case", CitationCategory.Cases) }));
+
+        var plan = TableOfAuthoritiesRegionPlanner.BuildRefreshPlan(
+            document,
+            new ToaOptions
+            {
+                CategoryFilter = CitationCategory.Cases,
+                KeepOriginalFormatting = true,
+                UsePassim = true,
+                TabLeader = ToaTabLeader.Dashes
+            });
+
+        plan.DeleteIndicesDescending.Should().Equal(7, 6, 5);
+        plan.InsertIndex.Should().Be(5);
+        plan.Paragraphs.Select(paragraph => paragraph.StyleId)
+            .Should().Equal(
+                TableOfAuthorities.HeadingStyleId,
+                TableOfAuthorities.CategoryStyleId,
+                TableOfAuthorities.EntryStyleId);
+        plan.Paragraphs.Select(paragraph => paragraph.PlainText)
+            .Should().Equal("Table of Authorities", "Cases", "Roe v. Wade passim");
+
+        var entry = plan.Paragraphs.Single(paragraph => paragraph.StyleId == TableOfAuthorities.EntryStyleId);
+        entry.Formatting.TabStops.Should().Equal(
+            new TabStop(530, TabStopAlignment.Right, TabLeader.Dashes));
+        entry.Runs.Single().Formatting.Should().Be(new RunFormatting
+        {
+            Bold = true,
+            Underline = true,
+            ColorHex = "#C00000"
+        });
+
+        document.Styles.Should().ContainKeys(
+            TableOfAuthorities.HeadingStyleId,
+            TableOfAuthorities.CategoryStyleId,
+            TableOfAuthorities.EntryStyleId);
+    }
 }

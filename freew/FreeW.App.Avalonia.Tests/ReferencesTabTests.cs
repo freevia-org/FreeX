@@ -476,6 +476,51 @@ public sealed class ReferencesTabTests
         entry.Runs.Single().Formatting.Italic.Should().BeTrue();
     }
 
+    [Fact]
+    public void Table_of_authorities_refresh_consumes_shared_render_plan_metadata()
+    {
+        var oldRegion = TableOfAuthorities.Build(new[] { new Citation("Old Case", CitationCategory.Cases) });
+        var view = ViewWith(
+            new Paragraph("Before"),
+            CitationMarkParagraph("Roe v. Wade", formatted: true),
+            CitationMarkParagraph("Roe v. Wade", formatted: false),
+            CitationMarkParagraph("Roe v. Wade", formatted: false),
+            CitationMarkParagraph("Roe v. Wade", formatted: false),
+            CitationMarkParagraph("Roe v. Wade", formatted: false),
+            oldRegion[0],
+            oldRegion[1],
+            oldRegion[2],
+            new Paragraph("After"));
+        view.Document.Page.WidthPt = 700;
+        view.Document.Page.MarginLeftPt = 80;
+        view.Document.Page.MarginRightPt = 90;
+
+        view.RefreshTableOfAuthorities(new ToaOptions
+        {
+            CategoryFilter = CitationCategory.Cases,
+            KeepOriginalFormatting = true,
+            UsePassim = true,
+            TabLeader = ToaTabLeader.Dashes
+        });
+
+        view.Document.Blocks.OfType<Paragraph>()
+            .Where(TableOfAuthorities.IsTableOfAuthoritiesParagraph)
+            .Select(paragraph => paragraph.PlainText)
+            .Should().Equal("Table of Authorities", "Cases", "Roe v. Wade passim");
+        view.Document.Blocks.OfType<Paragraph>().Select(paragraph => paragraph.PlainText)
+            .Should().NotContain("Old Case")
+            .And.EndWith("After");
+
+        var entry = view.Document.Blocks.OfType<Paragraph>()
+            .Single(paragraph => paragraph.StyleId == TableOfAuthorities.EntryStyleId);
+        entry.Formatting.TabStops.Should().Equal(
+            new TabStop(530, TabStopAlignment.Right, TabLeader.Dashes));
+        var entryFormatting = entry.Runs.Single().Formatting;
+        entryFormatting.Bold.Should().BeTrue();
+        entryFormatting.Underline.Should().BeTrue();
+        entryFormatting.ColorHex.Should().Be("#C00000");
+    }
+
     // ── Registry wiring ─────────────────────────────────────────────────────────────
 
     [Fact]
@@ -919,5 +964,13 @@ public sealed class ReferencesTabTests
             .OfType<RibbonComboBox>()
             .Single(combo => combo.CommandId.Value == "freew.citation-style")
             .Items;
+    }
+
+    private static Paragraph CitationMarkParagraph(string longCitation, bool formatted)
+    {
+        var mark = Run.CitationMark(new Citation(longCitation, CitationCategory.Cases));
+        if (formatted)
+            mark.Formatting = new RunFormatting { Bold = true, Underline = true, ColorHex = "#C00000" };
+        return new Paragraph { Runs = { mark } };
     }
 }
