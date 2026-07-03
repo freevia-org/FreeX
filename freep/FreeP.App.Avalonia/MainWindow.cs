@@ -2795,16 +2795,15 @@ public sealed class MainWindow : Window
 
         AddPrintOptionsPaneSection("Output options");
 
-        foreach (var line in plan.Options.SummaryLines)
+        foreach (var choice in plan.OutputOptionChoices)
         {
-            _printOptionsPaneRenderedOptionLines.Add(line);
-            _printOptionsPaneRowsPanel.Children.Add(new TextBlock
-            {
-                Text = line,
-                TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(20, 1, 12, 1),
-                Foreground = new SolidColorBrush(Color.FromRgb(0x33, 0x33, 0x33)),
-            });
+            var row = BuildPrintOptionsPaneChoiceSummary(
+                $"{choice.Group}: {choice.DisplayName}",
+                choice.Description,
+                choice.IsSelected,
+                choice.IsAvailable);
+            _printOptionsPaneRenderedOptionLines.Add(row);
+            AddPrintOptionsPaneChoice(row, choice.IsAvailable);
         }
 
         AddPrintOptionsPaneSection("Preview");

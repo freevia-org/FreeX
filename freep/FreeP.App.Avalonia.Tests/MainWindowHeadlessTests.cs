@@ -1468,14 +1468,16 @@ public sealed class MainWindowHeadlessTests
         printPlan.Should().NotBeNull();
         heading.Should().Be(printPlan!.Heading);
         message.Should().Be(printPlan.Description);
-        renderedOptionLines.Should().Equal(printPlan.Options.SummaryLines);
-        renderedOptionLines.Should().Equal(
-            "3 copies",
-            "Uncollated",
-            "Pure Black and White",
-            "Print hidden slides",
-            "Frame slides",
-            "Print comments and ink markup");
+        renderedOptionLines.Should().Equal(printPlan.OutputOptionChoices.Select(FormatPrintOptionChoice));
+        renderedOptionLines.Where(line => line.StartsWith("Selected:", StringComparison.Ordinal))
+            .Should()
+            .Equal(
+                "Selected: Copies: 3 copies: Set the number of copies from 1 to 999 before handing the package to the native printer dialog.",
+                "Selected: Collation: Uncollated: Print all copies of each page before moving to the next page.",
+                "Selected: Color: Pure Black and White: Use a high-contrast black-and-white print intent.",
+                "Selected: Content: Print hidden slides: Include hidden slides in the normalized print range.",
+                "Selected: Output: Frame slides: Draw a frame around each slide thumbnail/page.",
+                "Selected: Output: Print comments and ink markup: Reserve print intent for comments and ink markup.");
         renderedPreviewRows.Should().ContainSingle()
             .Which.Should().Be("Selected: Handout page 1: Handout with slides 1, 3");
         renderedLayoutRows.Should().HaveCount(printPlan.LayoutChoices.Count);
@@ -1549,7 +1551,7 @@ public sealed class MainWindowHeadlessTests
         printPlan.SelectedLayout.PackagePlan.PageCount.Should().Be(renderPlan.Pages.Count);
         printPlan.PreviewPlan.PageCount.Should().Be(renderPlan.Pages.Count);
         printPlan.PreviewPlan.Pages.Should().HaveCount(renderPlan.Pages.Count);
-        renderedOptionLines.Should().Equal(printPlan.Options.SummaryLines);
+        renderedOptionLines.Should().Equal(printPlan.OutputOptionChoices.Select(FormatPrintOptionChoice));
     }
 
     [Fact]
@@ -3396,6 +3398,13 @@ public sealed class MainWindowHeadlessTests
         }
 
         return body;
+    }
+
+    private static string FormatPrintOptionChoice(PresentationPrintBackstageOptionChoice choice)
+    {
+        var prefix = choice.IsSelected ? "Selected: " : string.Empty;
+        var availability = choice.IsAvailable ? string.Empty : " (unavailable)";
+        return $"{prefix}{choice.Group}: {choice.DisplayName}{availability}: {choice.Description}";
     }
 
     private static TextBody MakeLinkedTextBody(string text, Hyperlink hyperlink)

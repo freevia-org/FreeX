@@ -14,11 +14,20 @@ public sealed record PresentationPrintBackstageRangeChoice(
     bool IsAvailable,
     PresentationSlideRangeRequest? Request);
 
+public sealed record PresentationPrintBackstageOptionChoice(
+    string OptionId,
+    string Group,
+    string DisplayName,
+    string Description,
+    bool IsSelected,
+    bool IsAvailable);
+
 public sealed record PresentationPrintBackstagePlan(
     string Heading,
     string Description,
     IReadOnlyList<PresentationPrintBackstageLayoutChoice> LayoutChoices,
     IReadOnlyList<PresentationPrintBackstageRangeChoice> RangeChoices,
+    IReadOnlyList<PresentationPrintBackstageOptionChoice> OutputOptionChoices,
     PresentationPrintBackstageLayoutChoice SelectedLayout,
     PresentationPrintBackstageRangeChoice SelectedRange,
     bool PrintHiddenSlides,
@@ -89,6 +98,7 @@ public static class PresentationPrintBackstagePlanner
             "Choose a PowerPoint-style print layout and slide range. Native printer selection remains a host handoff after a printable package is built.",
             layouts,
             ranges,
+            BuildOutputOptionChoices(printPlan.Options),
             selectedLayout,
             selectedRange,
             printPlan.PrintHiddenSlides,
@@ -125,6 +135,85 @@ public static class PresentationPrintBackstagePlanner
             packagePlan,
             layout.Layout == selectedPrintPlan.Layout.Layout &&
                 layout.SlidesPerPage == selectedPrintPlan.Layout.SlidesPerPage);
+    }
+
+    private static IReadOnlyList<PresentationPrintBackstageOptionChoice> BuildOutputOptionChoices(
+        PresentationPrintOptionsPlan options)
+    {
+        var copiesLabel = options.Copies == 1 ? "1 copy" : $"{options.Copies} copies";
+        return
+        [
+            new(
+                "copies",
+                "Copies",
+                copiesLabel,
+                "Set the number of copies from 1 to 999 before handing the package to the native printer dialog.",
+                IsSelected: true,
+                IsAvailable: true),
+            new(
+                "collated",
+                "Collation",
+                "Collated",
+                "Print complete copy sets in page order.",
+                options.Collate,
+                IsAvailable: true),
+            new(
+                "uncollated",
+                "Collation",
+                "Uncollated",
+                "Print all copies of each page before moving to the next page.",
+                !options.Collate,
+                IsAvailable: true),
+            new(
+                "color",
+                "Color",
+                "Color",
+                "Preserve slide colors in the printable output.",
+                options.ColorMode == PresentationPrintColorMode.Color,
+                IsAvailable: true),
+            new(
+                "grayscale",
+                "Color",
+                "Grayscale",
+                "Convert slide content to grayscale for print output.",
+                options.ColorMode == PresentationPrintColorMode.Grayscale,
+                IsAvailable: true),
+            new(
+                "pure-black-and-white",
+                "Color",
+                "Pure Black and White",
+                "Use a high-contrast black-and-white print intent.",
+                options.ColorMode == PresentationPrintColorMode.PureBlackAndWhite,
+                IsAvailable: true),
+            new(
+                "include-hidden-slides",
+                "Content",
+                "Print hidden slides",
+                "Include hidden slides in the normalized print range.",
+                options.PrintHiddenSlides,
+                IsAvailable: true),
+            new(
+                "skip-hidden-slides",
+                "Content",
+                "Do not print hidden slides",
+                "Keep hidden slides out of the printable package.",
+                !options.PrintHiddenSlides,
+                IsAvailable: true),
+            new(
+                "frame-slides",
+                "Output",
+                "Frame slides",
+                "Draw a frame around each slide thumbnail/page.",
+                options.FrameSlides,
+                IsAvailable: true),
+            new(
+                "comments-and-ink",
+                "Output",
+                "Print comments and ink markup",
+                "Reserve print intent for comments and ink markup.",
+                options.IncludeCommentsAndInkMarkup,
+                IsAvailable: true),
+        ];
     }
 
     private static IReadOnlyList<PresentationPrintBackstageRangeChoice> BuildRangeChoices(
