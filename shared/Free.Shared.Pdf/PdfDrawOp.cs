@@ -1,14 +1,16 @@
 namespace Free.Shared.Pdf;
 
 /// <summary>
-/// Which of the two built-in WinAnsi Helvetica faces a text op draws with. The portable WinAnsi
-/// writer maps these to the standard <c>/Helvetica</c> and <c>/Helvetica-Bold</c> Type1 fonts;
-/// the Skia writer maps them to a normal / bold system typeface (with per-codepoint fallback).
+/// Which built-in WinAnsi Helvetica face a text op draws with. The portable WinAnsi writer maps
+/// these to the standard <c>/Helvetica</c>, <c>/Helvetica-Bold</c>,
+/// <c>/Helvetica-Oblique</c>, and <c>/Helvetica-BoldOblique</c> Type1 fonts.
 /// </summary>
 public enum PdfFontFace
 {
     Regular,
     Bold,
+    Italic,
+    BoldItalic,
 }
 
 /// <summary>

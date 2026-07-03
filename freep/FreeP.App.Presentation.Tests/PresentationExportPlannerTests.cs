@@ -1017,7 +1017,7 @@ public sealed class PresentationExportPlannerTests
     }
 
     [Fact]
-    public void NotesPagePdfRenderPlan_RichSpeakerNoteRuns_PreserveBoldFaceAndColor()
+    public void NotesPagePdfRenderPlan_RichSpeakerNoteRuns_PreserveStyledFacesAndColor()
     {
         var presentation = Presentation.CreateEmpty();
         presentation.Slides.Clear();
@@ -1031,6 +1031,8 @@ public sealed class PresentationExportPlannerTests
             Bold = true,
             Color = new ThemeAwareColor(new SrgbColor(0xC0, 0x00, 0x00))
         });
+        paragraph.Runs.Add(new Run { Text = " review", Italic = true });
+        paragraph.Runs.Add(new Run { Text = " decision", Bold = true, Italic = true });
         paragraph.Runs.Add(new Run { Text = " closeout" });
         notes.Paragraphs.Add(paragraph);
         presentation.Slides[0].Notes = notes;
@@ -1038,8 +1040,8 @@ public sealed class PresentationExportPlannerTests
         var preview = PresentationNotesPagePreviewPlanner.Build(presentation, currentSlideIndex: 0);
         var renderPlan = PresentationNotesPagePdfExporter.BuildRenderPlan(presentation);
 
-        preview.NotesText.Should().Be("Normal critical closeout");
-        preview.NoteLines.Should().Equal("Normal critical closeout");
+        preview.NotesText.Should().Be("Normal critical review decision closeout");
+        preview.NoteLines.Should().Equal("Normal critical review decision closeout");
         preview.StyledNoteLines.Should().ContainSingle();
         preview.StyledNoteLines[0].Runs.Should().Equal(
             new PresentationNotesPageNoteTextRun("Normal ", Bold: false, Italic: false, Color: null),
@@ -1048,24 +1050,58 @@ public sealed class PresentationExportPlannerTests
                 Bold: true,
                 Italic: false,
                 Color: new SrgbColor(0xC0, 0x00, 0x00)),
+            new PresentationNotesPageNoteTextRun(" review", Bold: false, Italic: true, Color: null),
+            new PresentationNotesPageNoteTextRun(" decision", Bold: true, Italic: true, Color: null),
             new PresentationNotesPageNoteTextRun(" closeout", Bold: false, Italic: false, Color: null));
 
         var noteTextOps = renderPlan.Pages[0].Ops
             .OfType<PdfText>()
-            .Where(text => text.Text is "Normal " or "critical" or " closeout")
+            .Where(text => text.Text is "Normal " or "critical" or " review" or " decision" or " closeout")
             .ToArray();
 
-        noteTextOps.Should().HaveCount(3);
-        noteTextOps.Select(text => text.Text).Should().Equal("Normal ", "critical", " closeout");
+        noteTextOps.Should().HaveCount(5);
+        noteTextOps.Select(text => text.Text).Should().Equal("Normal ", "critical", " review", " decision", " closeout");
         noteTextOps[0].Face.Should().Be(PdfFontFace.Regular);
         noteTextOps[0].Color.Should().Be(new PdfColor(0x20, 0x20, 0x20));
         noteTextOps[1].Face.Should().Be(PdfFontFace.Bold);
         noteTextOps[1].Color.Should().Be(new PdfColor(0xC0, 0x00, 0x00));
-        noteTextOps[2].Face.Should().Be(PdfFontFace.Regular);
+        noteTextOps[2].Face.Should().Be(PdfFontFace.Italic);
         noteTextOps[2].Color.Should().Be(new PdfColor(0x20, 0x20, 0x20));
+        noteTextOps[3].Face.Should().Be(PdfFontFace.BoldItalic);
+        noteTextOps[3].Color.Should().Be(new PdfColor(0x20, 0x20, 0x20));
+        noteTextOps[4].Face.Should().Be(PdfFontFace.Regular);
+        noteTextOps[4].Color.Should().Be(new PdfColor(0x20, 0x20, 0x20));
         noteTextOps.Select(text => text.Y).Should().OnlyContain(y => y == noteTextOps[0].Y);
         noteTextOps[1].X.Should().BeGreaterThan(noteTextOps[0].X);
         noteTextOps[2].X.Should().BeGreaterThan(noteTextOps[1].X);
+        noteTextOps[3].X.Should().BeGreaterThan(noteTextOps[2].X);
+        noteTextOps[4].X.Should().BeGreaterThan(noteTextOps[3].X);
+    }
+
+    [Fact]
+    public void NotesPagePdfExporter_RichSpeakerNoteItalicRuns_EmitPortablePdfFacesAndOperators()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides.Clear();
+        presentation.Slides.Add(new Slide { Title = "Italic notes" });
+        var notes = new TextBody();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run { Text = "italic", Italic = true });
+        paragraph.Runs.Add(new Run { Text = " bolditalic", Bold = true, Italic = true });
+        notes.Paragraphs.Add(paragraph);
+        presentation.Slides[0].Notes = notes;
+
+        var bytes = PresentationNotesPagePdfExporter.ExportToBytes(presentation);
+        var pdf = Encoding.ASCII.GetString(bytes);
+
+        pdf.Should().Contain("/F3 5 0 R");
+        pdf.Should().Contain("/F4 6 0 R");
+        pdf.Should().Contain("/BaseFont /Helvetica-Oblique");
+        pdf.Should().Contain("/BaseFont /Helvetica-BoldOblique");
+        pdf.Should().Contain("/F3 12 Tf");
+        pdf.Should().Contain("(italic) Tj");
+        pdf.Should().Contain("/F4 12 Tf");
+        pdf.Should().Contain("( bolditalic) Tj");
     }
 
     [Fact]

@@ -230,12 +230,21 @@ public static class PresentationNotesPagePdfExporter
                 x,
                 y,
                 NotesFontSize,
-                run.Bold ? PdfFontFace.Bold : PdfFontFace.Regular,
+                ResolveNoteRunFace(run),
                 ToPdfColor(run.Color, NotesText),
                 string.IsNullOrWhiteSpace(run.Text) ? " " : run.Text));
             x += EstimateTextWidth(run.Text, NotesFontSize);
         }
     }
+
+    private static PdfFontFace ResolveNoteRunFace(PresentationNotesPageNoteTextRun run) =>
+        (run.Bold, run.Italic) switch
+        {
+            (true, true) => PdfFontFace.BoldItalic,
+            (true, false) => PdfFontFace.Bold,
+            (false, true) => PdfFontFace.Italic,
+            _ => PdfFontFace.Regular,
+        };
 
     private static double EstimateTextWidth(string text, double fontSize) =>
         text.Length * fontSize * AverageGlyphWidthPerFontSize;
