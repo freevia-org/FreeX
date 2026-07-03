@@ -10,6 +10,8 @@ public sealed class SlidePanePolicySourceGuardTests
         var source = ReadHostSource("SlidePane.cs");
 
         source.Should().Contain("SlidePanePlanner.BuildEntries(");
+        source.Should().Contain("_collapsedSectionIds");
+        source.Should().Contain("ToggleSection(entry.SectionId)");
         source.Should().Contain("SlidePanePlanner.HitTestInsertionPoint(");
         source.Should().Contain("SlidePanePlanner.ComputeInsertionIndicatorOffset(");
         source.Should().Contain("SlidePanePlanner.BuildContextActions(");

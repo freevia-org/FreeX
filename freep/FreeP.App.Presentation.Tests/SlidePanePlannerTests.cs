@@ -30,18 +30,18 @@ public sealed class SlidePanePlannerTests
             new Slide { Id = "rId3" },
             new Slide { Id = "rId4" }
         };
-        var intro = new PresentationSection { Name = "Intro" };
+        var intro = new PresentationSection { Id = "intro-section", Name = "Intro" };
         intro.SlideIds.Add("rId2");
-        var body = new PresentationSection { Name = "Body" };
+        var body = new PresentationSection { Id = "body-section", Name = "Body" };
         body.SlideIds.Add("rId3");
         body.SlideIds.Add("rId4");
 
         var entries = SlidePanePlanner.BuildEntries(slides, new[] { intro, body });
 
         entries.Should().Equal(
-            new SlidePaneEntry(SlidePaneEntryKind.SectionHeader, 0, "Intro  (1)", 1, 0),
+            new SlidePaneEntry(SlidePaneEntryKind.SectionHeader, 0, "Intro  (1)", 1, 0, "intro-section"),
             new SlidePaneEntry(SlidePaneEntryKind.Slide, 0, "1"),
-            new SlidePaneEntry(SlidePaneEntryKind.SectionHeader, 1, "Body  (2)", 2, 1),
+            new SlidePaneEntry(SlidePaneEntryKind.SectionHeader, 1, "Body  (2)", 2, 1, "body-section"),
             new SlidePaneEntry(SlidePaneEntryKind.Slide, 1, "2"),
             new SlidePaneEntry(SlidePaneEntryKind.Slide, 2, "3"));
     }
@@ -55,7 +55,7 @@ public sealed class SlidePanePlannerTests
             new Slide { Id = "rId3" },
             new Slide { Id = "rId4" }
         };
-        var section = new PresentationSection { Name = "Mixed" };
+        var section = new PresentationSection { Id = "mixed-section", Name = "Mixed" };
         section.SlideIds.Add("missing");
         section.SlideIds.Add("rId4");
         section.SlideIds.Add("rId3");
@@ -64,7 +64,7 @@ public sealed class SlidePanePlannerTests
 
         entries.Should().Equal(
             new SlidePaneEntry(SlidePaneEntryKind.Slide, 0, "1"),
-            new SlidePaneEntry(SlidePaneEntryKind.SectionHeader, 1, "Mixed  (2)", 2, 0),
+            new SlidePaneEntry(SlidePaneEntryKind.SectionHeader, 1, "Mixed  (2)", 2, 0, "mixed-section"),
             new SlidePaneEntry(SlidePaneEntryKind.Slide, 1, "2"),
             new SlidePaneEntry(SlidePaneEntryKind.Slide, 2, "3"));
     }
@@ -77,13 +77,67 @@ public sealed class SlidePanePlannerTests
             new Slide { Id = "rId2" },
             new Slide { Id = "rId3" },
         };
-        var section = new PresentationSection { Name = "Intro" };
+        var section = new PresentationSection { Id = "intro-section", Name = "Intro" };
         section.SlideIds.Add("rId2");
 
         var entries = SlidePanePlanner.BuildEntries(slides, new[] { section });
 
         entries[0].Kind.Should().Be(SlidePaneEntryKind.SectionHeader);
         entries[0].SectionIndex.Should().Be(0);
+        entries[0].SectionId.Should().Be("intro-section");
+    }
+
+    [Fact]
+    public void BuildEntries_CollapsedSection_OmitsMemberSlidesAndMarksHeaderCollapsed()
+    {
+        var slides = new[]
+        {
+            new Slide { Id = "rId2" },
+            new Slide { Id = "rId3" },
+            new Slide { Id = "rId4" },
+            new Slide { Id = "rId5" }
+        };
+        var intro = new PresentationSection { Id = "intro-section", Name = "Intro" };
+        intro.SlideIds.Add("rId2");
+        var body = new PresentationSection { Id = "body-section", Name = "Body" };
+        body.SlideIds.Add("rId3");
+        body.SlideIds.Add("rId4");
+
+        var entries = SlidePanePlanner.BuildEntries(
+            slides,
+            new[] { intro, body },
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "body-section" });
+
+        entries.Should().Equal(
+            new SlidePaneEntry(SlidePaneEntryKind.SectionHeader, 0, "Intro  (1)", 1, 0, "intro-section"),
+            new SlidePaneEntry(SlidePaneEntryKind.Slide, 0, "1"),
+            new SlidePaneEntry(SlidePaneEntryKind.SectionHeader, 1, "Body  (2)", 2, 1, "body-section", true),
+            new SlidePaneEntry(SlidePaneEntryKind.Slide, 3, "4"));
+    }
+
+    [Fact]
+    public void BuildEntries_CollapsedSection_KeepsHeaderSlideCountAndIdentity()
+    {
+        var slides = new[]
+        {
+            new Slide { Id = "rId2" },
+            new Slide { Id = "rId3" }
+        };
+        var section = new PresentationSection { Id = "section-1", Name = "Deck" };
+        section.SlideIds.Add("rId2");
+        section.SlideIds.Add("rId3");
+
+        var entries = SlidePanePlanner.BuildEntries(
+            slides,
+            new[] { section },
+            new HashSet<string> { "section-1" });
+
+        entries.Should().ContainSingle();
+        var header = entries[0];
+        header.Kind.Should().Be(SlidePaneEntryKind.SectionHeader);
+        header.SectionId.Should().Be("section-1");
+        header.SectionSlideCount.Should().Be(2);
+        header.IsSectionCollapsed.Should().BeTrue();
     }
 
     [Fact]
