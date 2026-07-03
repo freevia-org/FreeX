@@ -131,6 +131,110 @@ public sealed class PresentationExportPlannerTests
     }
 
     [Fact]
+    public void PrintOutputPackagePlan_SelectsSharedRoutesAndKeepsNativeDialogDeferred()
+    {
+        var fullPage = PresentationPrintOutputPackageExecutor.BuildPackagePlan(
+            new PresentationPrintRequest(
+                PresentationPrintLayoutKind.FullPageSlides,
+                new PresentationSlideRangeRequest(
+                    PresentationSlideRangeKind.CurrentSlide,
+                    CurrentSlideNumber: 2)),
+            slideCount: 3);
+        var notes = PresentationPrintOutputPackageExecutor.BuildPackagePlan(
+            new PresentationPrintRequest(PresentationPrintLayoutKind.NotesPages),
+            slideCount: 3);
+        var handouts = PresentationPrintOutputPackageExecutor.BuildPackagePlan(
+            new PresentationPrintRequest(
+                PresentationPrintLayoutKind.Handouts,
+                HandoutSlidesPerPage: 3),
+            slideCount: 3);
+
+        fullPage.Route.Should().Be(PresentationPrintOutputPackageRoute.FullPageSlidesRasterPdf);
+        fullPage.PrintPlan.SlideRange.SlideNumbers.Should().Equal(2);
+        fullPage.CanBuildPackage.Should().BeTrue();
+        fullPage.NativePrinterDialogDeferred.Should().BeTrue();
+        fullPage.DisabledReason.Should().BeNull();
+        fullPage.PrintPlan.IsImplemented.Should().BeFalse("native printer dialog handoff is still deferred");
+        notes.Route.Should().Be(PresentationPrintOutputPackageRoute.NotesPagePdf);
+        handouts.Route.Should().Be(PresentationPrintOutputPackageRoute.HandoutPdf);
+    }
+
+    [Fact]
+    public void PrintOutputPackage_FullPageSlides_UsesRasterRendererCallbackAndWriter()
+    {
+        var calls = new List<(int SlideIndex, int WidthPx, int HeightPx)>();
+        PdfRasterDocument? capturedDocument = null;
+        var deck = BuildHandoutDeck(4);
+
+        var package = PresentationPrintOutputPackageExecutor.BuildPackage(
+            deck,
+            new PresentationPrintRequest(
+                PresentationPrintLayoutKind.FullPageSlides,
+                new PresentationSlideRangeRequest(
+                    PresentationSlideRangeKind.CustomRange,
+                    StartSlideNumber: 2,
+                    EndSlideNumber: 3)),
+            (_, slideIndex, widthPx, heightPx) =>
+            {
+                calls.Add((slideIndex, widthPx, heightPx));
+                return TinyPng;
+            },
+            document =>
+            {
+                capturedDocument = document;
+                return Encoding.ASCII.GetBytes("%PDF-1.7\n1 0 obj\n<<>>\nendobj\n%%EOF");
+            });
+
+        package.Plan.Route.Should().Be(PresentationPrintOutputPackageRoute.FullPageSlidesRasterPdf);
+        package.Plan.ContentType.Should().Be(PresentationPrintOutputPackageExecutor.PdfContentType);
+        package.Bytes.Length.Should().BeGreaterThan(20);
+        Encoding.ASCII.GetString(package.Bytes, 0, 5).Should().Be("%PDF-");
+        calls.Should().Equal((1, 1280, 720), (2, 1280, 720));
+        capturedDocument.Should().NotBeNull();
+        capturedDocument!.Pages.Should().HaveCount(2);
+        capturedDocument.Pages.Should().OnlyContain(page => page.ImageBytes.SequenceEqual(TinyPng));
+    }
+
+    [Fact]
+    public void PrintOutputPackage_NotesAndHandouts_RouteThroughSharedPdfExporters()
+    {
+        var notesPackage = PresentationPrintOutputPackageExecutor.BuildPackage(
+            BuildNotesDeck(),
+            new PresentationPrintRequest(
+                PresentationPrintLayoutKind.NotesPages,
+                new PresentationSlideRangeRequest(
+                    PresentationSlideRangeKind.SelectedSlides,
+                    SelectedSlideNumbers: [1, 3])),
+            (_, _, _, _) => throw new InvalidOperationException("Notes route must not rasterize slides through the host."),
+            _ => throw new InvalidOperationException("Notes route must not use the host raster PDF writer."));
+
+        var handoutPackage = PresentationPrintOutputPackageExecutor.BuildPackage(
+            BuildHandoutDeck(4),
+            new PresentationPrintRequest(
+                PresentationPrintLayoutKind.Handouts,
+                new PresentationSlideRangeRequest(
+                    PresentationSlideRangeKind.CustomRange,
+                    StartSlideNumber: 2,
+                    EndSlideNumber: 4),
+                HandoutSlidesPerPage: 3),
+            (_, _, _, _) => throw new InvalidOperationException("Handout route must not rasterize slides through the host."),
+            _ => throw new InvalidOperationException("Handout route must not use the host raster PDF writer."));
+
+        notesPackage.Plan.Route.Should().Be(PresentationPrintOutputPackageRoute.NotesPagePdf);
+        notesPackage.Plan.PrintPlan.SlideRange.SlideNumbers.Should().Equal(1, 3);
+        notesPackage.Bytes.Length.Should().BeGreaterThan(100);
+        Encoding.ASCII.GetString(notesPackage.Bytes, 0, 5).Should().Be("%PDF-");
+        Encoding.Latin1.GetString(notesPackage.Bytes).Should().Contain("%%EOF");
+
+        handoutPackage.Plan.Route.Should().Be(PresentationPrintOutputPackageRoute.HandoutPdf);
+        handoutPackage.Plan.PrintPlan.Layout.SlidesPerPage.Should().Be(3);
+        handoutPackage.Plan.PrintPlan.SlideRange.SlideNumbers.Should().Equal(2, 3, 4);
+        handoutPackage.Bytes.Length.Should().BeGreaterThan(100);
+        Encoding.ASCII.GetString(handoutPackage.Bytes, 0, 5).Should().Be("%PDF-");
+        Encoding.Latin1.GetString(handoutPackage.Bytes).Should().Contain("%%EOF");
+    }
+
+    [Fact]
     public void NotesPagePreviewPlan_UsesCurrentSlideNotesPageRangeAndGeometry()
     {
         var presentation = Presentation.CreateEmpty();

@@ -165,6 +165,7 @@ public sealed class MainWindow : Window
     internal PresentationDesignCommandPlan? LastLayoutRequestPlan { get; private set; }
     internal PresentationNotesPagePreviewPlan? LastNotesPagePreviewPlan { get; private set; }
     internal PresentationNotesPagePdfRenderPlan? LastNotesPagePdfRenderPlan { get; private set; }
+    internal PresentationPrintOutputPackage? LastPrintOutputPackage { get; private set; }
     internal PresentationVideoExportPlan? LastVideoExportPlan { get; private set; }
     internal PresentationLayoutPickerPlan? LastLayoutPickerPlan { get; private set; }
     internal PresentationLayoutChoice? LastAppliedLayoutChoice { get; private set; }
@@ -330,6 +331,7 @@ public sealed class MainWindow : Window
         CommandBindings.Add(new CommandBinding(ApplicationCommands.Open,   (_, _) => _file.Open()));
         CommandBindings.Add(new CommandBinding(ApplicationCommands.Save,   (_, _) => _file.Save()));
         CommandBindings.Add(new CommandBinding(ApplicationCommands.SaveAs, (_, _) => _file.SaveAs()));
+        CommandBindings.Add(new CommandBinding(ApplicationCommands.Print,  (_, _) => RefreshPrintOutputPackage()));
 
         // Editing keyboard shortcuts (Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z / Delete / Ctrl+D).
         AddEditingKeyBindings();
@@ -1215,6 +1217,12 @@ public sealed class MainWindow : Window
     {
         LastNotesPagePdfRenderPlan = _file.BuildNotesPagePdfRenderPlan(range);
         return LastNotesPagePdfRenderPlan;
+    }
+
+    internal PresentationPrintOutputPackage RefreshPrintOutputPackage(PresentationPrintRequest? request = null)
+    {
+        LastPrintOutputPackage = _file.BuildPrintOutputPackage(request);
+        return LastPrintOutputPackage;
     }
 
     internal void RefreshReviewWorkflowPlans()
