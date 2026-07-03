@@ -1017,6 +1017,58 @@ public sealed class PresentationExportPlannerTests
     }
 
     [Fact]
+    public void NotesPagePdfRenderPlan_RichSpeakerNoteRuns_PreserveBoldFaceAndColor()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides.Clear();
+        presentation.Slides.Add(new Slide { Title = "Styled notes" });
+        var notes = new TextBody();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run { Text = "Normal " });
+        paragraph.Runs.Add(new Run
+        {
+            Text = "critical",
+            Bold = true,
+            Color = new ThemeAwareColor(new SrgbColor(0xC0, 0x00, 0x00))
+        });
+        paragraph.Runs.Add(new Run { Text = " closeout" });
+        notes.Paragraphs.Add(paragraph);
+        presentation.Slides[0].Notes = notes;
+
+        var preview = PresentationNotesPagePreviewPlanner.Build(presentation, currentSlideIndex: 0);
+        var renderPlan = PresentationNotesPagePdfExporter.BuildRenderPlan(presentation);
+
+        preview.NotesText.Should().Be("Normal critical closeout");
+        preview.NoteLines.Should().Equal("Normal critical closeout");
+        preview.StyledNoteLines.Should().ContainSingle();
+        preview.StyledNoteLines[0].Runs.Should().Equal(
+            new PresentationNotesPageNoteTextRun("Normal ", Bold: false, Italic: false, Color: null),
+            new PresentationNotesPageNoteTextRun(
+                "critical",
+                Bold: true,
+                Italic: false,
+                Color: new SrgbColor(0xC0, 0x00, 0x00)),
+            new PresentationNotesPageNoteTextRun(" closeout", Bold: false, Italic: false, Color: null));
+
+        var noteTextOps = renderPlan.Pages[0].Ops
+            .OfType<PdfText>()
+            .Where(text => text.Text is "Normal " or "critical" or " closeout")
+            .ToArray();
+
+        noteTextOps.Should().HaveCount(3);
+        noteTextOps.Select(text => text.Text).Should().Equal("Normal ", "critical", " closeout");
+        noteTextOps[0].Face.Should().Be(PdfFontFace.Regular);
+        noteTextOps[0].Color.Should().Be(new PdfColor(0x20, 0x20, 0x20));
+        noteTextOps[1].Face.Should().Be(PdfFontFace.Bold);
+        noteTextOps[1].Color.Should().Be(new PdfColor(0xC0, 0x00, 0x00));
+        noteTextOps[2].Face.Should().Be(PdfFontFace.Regular);
+        noteTextOps[2].Color.Should().Be(new PdfColor(0x20, 0x20, 0x20));
+        noteTextOps.Select(text => text.Y).Should().OnlyContain(y => y == noteTextOps[0].Y);
+        noteTextOps[1].X.Should().BeGreaterThan(noteTextOps[0].X);
+        noteTextOps[2].X.Should().BeGreaterThan(noteTextOps[1].X);
+    }
+
+    [Fact]
     public void NotesPagePdfRenderPlan_VeryLongNotes_ContinuesOverflowOntoASubsequentPage()
     {
         var presentation = Presentation.CreateEmpty();
