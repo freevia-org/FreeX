@@ -64,11 +64,48 @@ public sealed class ReviewBalloonLayoutPlannerTests
 
         var layouts = ReviewBalloonLayoutPlanner.BuildLayout(sources, viewportHeight: 600);
 
-        layouts.Select(layout => layout.BalloonY).Should().Equal(8, 72, 136);
+        layouts.Select(layout => layout.BalloonY).Should().Equal(72, 272, 472);
         layouts.Select(layout => layout.LeaderStartY).Should().Equal(100, 300, 500);
         layouts.Should().OnlyContain(layout => layout.BalloonX == 12);
         layouts.Should().OnlyContain(layout => layout.LeaderStartX == 0);
         layouts.Should().OnlyContain(layout => layout.LeaderEndX == layout.BalloonX);
+        layouts.Should().OnlyContain(layout => layout.LeaderEndY == layout.BalloonMidY);
+    }
+
+    [Fact]
+    public void BuildLayout_keeps_balloons_close_to_viewport_anchors_when_space_allows()
+    {
+        var sources = new[]
+        {
+            new ReviewBalloonSource(ReviewBalloonKind.Comment, "A", "one", 0, 0, 1),
+            new ReviewBalloonSource(ReviewBalloonKind.Insertion, "B", "two", 1, 0, 0),
+        };
+
+        var layouts = ReviewBalloonLayoutPlanner.BuildLayout(sources, viewportHeight: 420);
+
+        layouts.Select(layout => layout.LeaderStartY).Should().Equal(105, 315);
+        layouts.Should().OnlyContain(layout => layout.BalloonMidY == layout.LeaderStartY);
+        layouts.Select(layout => layout.BalloonY).Should().Equal(77, 287);
+    }
+
+    [Fact]
+    public void BuildLayout_avoids_balloon_collisions_when_viewport_is_short()
+    {
+        var sources = Enumerable.Range(0, 4)
+            .Select(index => new ReviewBalloonSource(
+                ReviewBalloonKind.Comment,
+                $"Author {index}",
+                $"note {index}",
+                index,
+                0,
+                1))
+            .ToArray();
+
+        var layouts = ReviewBalloonLayoutPlanner.BuildLayout(sources, viewportHeight: 180);
+
+        layouts[0].BalloonY.Should().Be(8);
+        layouts.Zip(layouts.Skip(1), (previous, next) => next.BalloonY - previous.BalloonY)
+            .Should().OnlyContain(delta => delta >= 64);
         layouts.Should().OnlyContain(layout => layout.LeaderEndY == layout.BalloonMidY);
     }
 }

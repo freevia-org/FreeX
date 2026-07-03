@@ -54,7 +54,7 @@ public sealed class ReviewBalloonsPane : SidePaneBase
 
     public override void Refresh()
     {
-        var viewportHeight = Bounds.Height > 0 ? Bounds.Height : 800;
+        var viewportHeight = ResolveViewportHeight();
         _layouts = ReviewBalloonLayoutPlanner.BuildLayout(
             _editor.Document,
             _editor.CurrentReviewDisplayPolicy,
@@ -74,6 +74,14 @@ public sealed class ReviewBalloonsPane : SidePaneBase
 
         foreach (var layout in _layouts)
             DrawBalloon(layout);
+    }
+
+    private double ResolveViewportHeight()
+    {
+        if (Bounds.Height > 0)
+            return Bounds.Height;
+
+        return Height > 0 ? Height : 800;
     }
 
     internal int BalloonItemCount => _layouts.Count;
