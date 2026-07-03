@@ -468,7 +468,9 @@ public sealed class MainWindow : Window
             return;
         }
 
-        await ThesaurusDialog.ShowAsync(this, word, ThesaurusLookup.Instance.Lookup(word));
+        var replacement = await ThesaurusDialog.ShowAsync(this, word, ThesaurusLookup.Instance.Lookup(word));
+        if (!string.IsNullOrWhiteSpace(replacement) && _editor.ReplaceCurrentProofingWord(replacement))
+            _status.Text = $"Replaced '{word}' with '{replacement}'.";
         _editor.Focus();
     }
 

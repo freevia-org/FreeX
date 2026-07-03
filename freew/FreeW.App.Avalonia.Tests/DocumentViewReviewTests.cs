@@ -723,6 +723,32 @@ public sealed class DocumentViewReviewTests
     }
 
     [Fact]
+    public async Task Thesaurus_replace_current_proofing_word_replaces_caret_word()
+    {
+        bool replaced = false;
+        string? text = null;
+        string? proofingWord = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            doc.Blocks.Add(new Paragraph("A happy day"));
+            var view = Build(doc);
+            view.MoveCaretToBlock(0, 4);
+
+            replaced = view.ReplaceCurrentProofingWord("cheerful");
+            text = ((Paragraph)view.Document.Blocks[0]).PlainText;
+            proofingWord = view.CurrentProofingWord;
+        });
+        if (!ran) return;
+
+        replaced.Should().BeTrue();
+        text.Should().Be("A cheerful day");
+        proofingWord.Should().Be("cheerful");
+    }
+
+    [Fact]
     public async Task Proofing_diagnostics_detect_typo_and_map_to_render_glyphs()
     {
         IReadOnlyList<ProofingDiagnostic> diagnostics = [];

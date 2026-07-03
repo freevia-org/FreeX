@@ -117,29 +117,26 @@ internal sealed class ThesaurusPane
             return;
         }
 
-        var entry = ThesaurusLookup.Instance.Lookup(word);
-        _headingText.Text = word;
+        var plan = ThesaurusPresentationPlanner.Lookup(word);
+        _headingText.Text = plan.HeadingText;
+        _statusText.Text = plan.StatusText;
 
-        if (entry is null)
-        {
-            _statusText.Text = "No synonyms found for this word.";
+        if (!plan.HasSynonyms)
             return;
-        }
 
-        _statusText.Text = string.Empty;
-        PopulateSenses(entry, word);
+        PopulateSenses(plan);
     }
 
     // ── Rendering ────────────────────────────────────────────────────────────────────────────────
 
-    private void PopulateSenses(ThesaurusEntry entry, string originalWord)
+    private void PopulateSenses(ThesaurusDisplayPlan plan)
     {
-        foreach (var sense in entry.Senses)
+        foreach (var sense in plan.Senses)
         {
             // Sense header (part-of-speech / sense label)
             var senseLabel = new TextBlock
             {
-                Text = FormatSenseLabel(sense.Label),
+                Text = sense.DisplayLabel,
                 FontWeight = FontWeights.SemiBold,
                 Foreground = new SolidColorBrush(Color.FromRgb(0x17, 0x32, 0x4D)),
                 Margin = new Thickness(10, 8, 10, 2)
@@ -152,9 +149,9 @@ internal sealed class ThesaurusPane
                 Orientation = Orientation.Horizontal,
                 Margin = new Thickness(10, 0, 10, 4)
             };
-            foreach (var syn in sense.Synonyms)
+            foreach (var action in sense.Actions)
             {
-                var btn = BuildSynonymButton(syn, originalWord);
+                var btn = BuildSynonymButton(action);
                 wrapPanel.Children.Add(btn);
             }
             _sensesPanel.Children.Add(wrapPanel);
@@ -168,23 +165,14 @@ internal sealed class ThesaurusPane
         }
     }
 
-    private Button BuildSynonymButton(string synonym, string originalWord)
+    private Button BuildSynonymButton(ThesaurusActionRow action)
     {
         // Display synonym with underscores replaced by spaces (storage format)
-        var display = synonym.Replace('_', ' ');
-
-        var panel = new StackPanel { Orientation = Orientation.Horizontal };
-        panel.Children.Add(new TextBlock
-        {
-            Text = display,
-            VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(0, 0, 4, 0)
-        });
-
+        var display = action.DisplayText;
         var insertBtn = new Button
         {
             Content = "↵",
-            ToolTip = $"Replace \"{originalWord}\" with \"{display}\"",
+            ToolTip = action.ReplaceToolTip,
             Padding = new Thickness(3, 1, 3, 1),
             Margin = new Thickness(0, 0, 2, 0),
             FontSize = 10,
@@ -199,7 +187,7 @@ internal sealed class ThesaurusPane
         var copyBtn = new Button
         {
             Content = "⎘",
-            ToolTip = $"Copy \"{display}\" to clipboard",
+            ToolTip = action.CopyToolTip,
             Padding = new Thickness(3, 1, 3, 1),
             FontSize = 10,
             Cursor = System.Windows.Input.Cursors.Hand
@@ -248,19 +236,5 @@ internal sealed class ThesaurusPane
             _borderlessStyle.Setters.Add(new Setter(Control.BorderThicknessProperty, new Thickness(0)));
         }
         return _borderlessStyle;
-    }
-
-    private static string FormatSenseLabel(string raw)
-    {
-        return raw.Trim() switch
-        {
-            "adj"  => "adjective",
-            "adv"  => "adverb",
-            "noun" => "noun",
-            "verb" => "verb",
-            "prep" => "preposition",
-            "pron" => "pronoun",
-            var s  => s.Replace('_', ' ')
-        };
     }
 }

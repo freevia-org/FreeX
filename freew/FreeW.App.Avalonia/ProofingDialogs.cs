@@ -68,7 +68,14 @@ internal sealed class ProofingLanguageDialog : Window
 
 internal sealed class ThesaurusDialog : Window
 {
+    public string? SelectedReplacement { get; private set; }
+
     public ThesaurusDialog(string word, ThesaurusEntry? entry)
+        : this(ThesaurusPresentationPlanner.Build(word, entry))
+    {
+    }
+
+    public ThesaurusDialog(ThesaurusDisplayPlan plan)
     {
         Title = "Thesaurus";
         Width = 440;
@@ -80,23 +87,23 @@ internal sealed class ThesaurusDialog : Window
         var body = new StackPanel { Margin = new Thickness(16), Spacing = 8 };
         body.Children.Add(new TextBlock
         {
-            Text = word,
+            Text = plan.HeadingText,
             FontWeight = FontWeight.SemiBold,
             FontSize = 16,
             TextWrapping = TextWrapping.Wrap,
         });
 
-        if (entry is null)
+        if (!plan.HasSynonyms)
         {
             body.Children.Add(new TextBlock
             {
-                Text = "No synonyms found for this word.",
+                Text = plan.StatusText,
                 TextWrapping = TextWrapping.Wrap,
             });
         }
         else
         {
-            foreach (var sense in entry.Senses)
+            foreach (var sense in plan.Senses)
                 body.Children.Add(BuildSense(sense));
         }
 
@@ -132,29 +139,61 @@ internal sealed class ThesaurusDialog : Window
         };
     }
 
-    public static Task ShowAsync(Window owner, string word, ThesaurusEntry? entry) =>
-        new ThesaurusDialog(word, entry).ShowDialog(owner);
+    public static async Task<string?> ShowAsync(Window owner, string word, ThesaurusEntry? entry) =>
+        await ShowAsync(owner, ThesaurusPresentationPlanner.Build(word, entry));
 
-    private static Control BuildSense(ThesaurusSense sense)
+    public static async Task<string?> ShowAsync(Window owner, ThesaurusDisplayPlan plan)
+    {
+        var dialog = new ThesaurusDialog(plan);
+        await dialog.ShowDialog(owner);
+        return dialog.SelectedReplacement;
+    }
+
+    private Control BuildSense(ThesaurusSenseRow sense)
     {
         var panel = new StackPanel { Spacing = 4 };
         panel.Children.Add(new TextBlock
         {
-            Text = FormatSenseLabel(sense.Label),
+            Text = sense.DisplayLabel,
             FontWeight = FontWeight.SemiBold,
             Foreground = new SolidColorBrush(Color.FromRgb(0x17, 0x32, 0x4D)),
         });
 
-        var synonyms = string.Join(", ", sense.Synonyms.Select(s => s.Replace('_', ' ')));
-        panel.Children.Add(new TextBlock
-        {
-            Text = synonyms,
-            TextWrapping = TextWrapping.Wrap,
-        });
+        foreach (var action in sense.Actions)
+            panel.Children.Add(BuildActionRow(action));
 
         return panel;
     }
 
-    private static string FormatSenseLabel(string label) =>
-        label.Replace('_', ' ');
+    private Control BuildActionRow(ThesaurusActionRow action)
+    {
+        var grid = new Grid { ColumnSpacing = 10 };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var synonym = new TextBlock
+        {
+            Text = action.DisplayText,
+            VerticalAlignment = VerticalAlignment.Center,
+            TextWrapping = TextWrapping.Wrap,
+        };
+        Grid.SetColumn(synonym, 0);
+
+        var replace = new Button
+        {
+            Content = "Replace",
+            MinWidth = 78,
+            HorizontalContentAlignment = HorizontalAlignment.Center,
+        };
+        replace.Click += (_, _) =>
+        {
+            SelectedReplacement = action.DisplayText;
+            Close();
+        };
+        Grid.SetColumn(replace, 1);
+
+        grid.Children.Add(synonym);
+        grid.Children.Add(replace);
+        return grid;
+    }
 }
