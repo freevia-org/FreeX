@@ -565,13 +565,13 @@ public sealed class DocumentView : RichTextBox
     protected override void OnPreviewKeyDown(KeyEventArgs e)
     {
         var isCtrl = (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control;
-        if (isCtrl && e.Key == Key.Z && !AllowsRestrictEditingOperation(RestrictEditingOperationKind.HistoryUndo))
+        if (isCtrl && e.Key == Key.Z && !AllowsCurrentUndoHistory())
         {
             e.Handled = true;
             return;
         }
 
-        if (isCtrl && e.Key == Key.Y && !AllowsRestrictEditingOperation(RestrictEditingOperationKind.HistoryRedo))
+        if (isCtrl && e.Key == Key.Y && !AllowsCurrentRedoHistory())
         {
             e.Handled = true;
             return;
@@ -737,25 +737,51 @@ public sealed class DocumentView : RichTextBox
     public DocumentCommandBus Commands => _commands;
 
     public new bool CanUndo =>
-        base.CanUndo && AllowsRestrictEditingOperation(RestrictEditingOperationKind.HistoryUndo);
+        (base.CanUndo && AllowsRestrictEditingHistoryOperation(RestrictEditingOperationKind.HistoryUndo, mutationKind: null))
+        || (_commands.CanUndo && AllowsRestrictEditingHistoryOperation(
+            RestrictEditingOperationKind.HistoryUndo,
+            _commands.NextUndoMutationKind));
 
     public new bool CanRedo =>
-        base.CanRedo && AllowsRestrictEditingOperation(RestrictEditingOperationKind.HistoryRedo);
+        (base.CanRedo && AllowsRestrictEditingHistoryOperation(RestrictEditingOperationKind.HistoryRedo, mutationKind: null))
+        || (_commands.CanRedo && AllowsRestrictEditingHistoryOperation(
+            RestrictEditingOperationKind.HistoryRedo,
+            _commands.NextRedoMutationKind));
 
     public new void Undo()
     {
-        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.HistoryUndo))
+        if (base.CanUndo
+            && AllowsRestrictEditingHistoryOperation(RestrictEditingOperationKind.HistoryUndo, mutationKind: null))
+        {
+            base.Undo();
             return;
+        }
 
-        base.Undo();
+        if (_commands.CanUndo
+            && AllowsRestrictEditingHistoryOperation(
+                RestrictEditingOperationKind.HistoryUndo,
+                _commands.NextUndoMutationKind))
+        {
+            _commands.Undo();
+        }
     }
 
     public new void Redo()
     {
-        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.HistoryRedo))
+        if (base.CanRedo
+            && AllowsRestrictEditingHistoryOperation(RestrictEditingOperationKind.HistoryRedo, mutationKind: null))
+        {
+            base.Redo();
             return;
+        }
 
-        base.Redo();
+        if (_commands.CanRedo
+            && AllowsRestrictEditingHistoryOperation(
+                RestrictEditingOperationKind.HistoryRedo,
+                _commands.NextRedoMutationKind))
+        {
+            _commands.Redo();
+        }
     }
 
     /// <summary>Render a model document into the editable surface.</summary>
@@ -4522,6 +4548,23 @@ public sealed class DocumentView : RichTextBox
 
     private bool AllowsRestrictEditingOperation(RestrictEditingOperationKind operation) =>
         RestrictEditingPolicy.Allows(operation);
+
+    private bool AllowsRestrictEditingHistoryOperation(
+        RestrictEditingOperationKind operation,
+        DocumentCommandMutationKind? mutationKind) =>
+        RestrictEditingPolicy.AllowsHistory(operation, mutationKind);
+
+    private bool AllowsCurrentUndoHistory() =>
+        AllowsRestrictEditingHistoryOperation(RestrictEditingOperationKind.HistoryUndo, mutationKind: null)
+        || (_commands.CanUndo && AllowsRestrictEditingHistoryOperation(
+            RestrictEditingOperationKind.HistoryUndo,
+            _commands.NextUndoMutationKind));
+
+    private bool AllowsCurrentRedoHistory() =>
+        AllowsRestrictEditingHistoryOperation(RestrictEditingOperationKind.HistoryRedo, mutationKind: null)
+        || (_commands.CanRedo && AllowsRestrictEditingHistoryOperation(
+            RestrictEditingOperationKind.HistoryRedo,
+            _commands.NextRedoMutationKind));
 
     /// <summary>
     /// Set the document's protection (restrict-editing) mode, committing pending edits first (only while

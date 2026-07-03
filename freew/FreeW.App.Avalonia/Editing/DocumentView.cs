@@ -375,10 +375,14 @@ public sealed class DocumentView : Control
     public TextDocument Document => _doc;
     public string? CurrentParagraphStyleId => CurrentParagraph()?.StyleId;
     public bool CanUndo =>
-        _bus.CanUndo && AllowsRestrictEditingOperation(RestrictEditingOperationKind.HistoryUndo);
+        _bus.CanUndo && AllowsRestrictEditingHistoryOperation(
+            RestrictEditingOperationKind.HistoryUndo,
+            _bus.NextUndoMutationKind);
 
     public bool CanRedo =>
-        _bus.CanRedo && AllowsRestrictEditingOperation(RestrictEditingOperationKind.HistoryRedo);
+        _bus.CanRedo && AllowsRestrictEditingHistoryOperation(
+            RestrictEditingOperationKind.HistoryRedo,
+            _bus.NextRedoMutationKind);
     public bool SpellCheckEnabled { get; private set; } = true;
     public IReadOnlyList<string> CustomDictionaryWords => _customDictionary.Words;
 
@@ -409,6 +413,11 @@ public sealed class DocumentView : Control
     private bool AllowsRestrictEditingOperation(RestrictEditingOperationKind operation) =>
         RestrictEditingPolicy.Allows(operation);
 
+    private bool AllowsRestrictEditingHistoryOperation(
+        RestrictEditingOperationKind operation,
+        DocumentCommandMutationKind? mutationKind) =>
+        RestrictEditingPolicy.AllowsHistory(operation, mutationKind);
+
     public void LoadDocument(TextDocument document)
     {
         _doc = document ?? throw new ArgumentNullException(nameof(document));
@@ -432,7 +441,9 @@ public sealed class DocumentView : Control
 
     public void Undo()
     {
-        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.HistoryUndo))
+        if (!AllowsRestrictEditingHistoryOperation(
+                RestrictEditingOperationKind.HistoryUndo,
+                _bus.NextUndoMutationKind))
             return;
 
         if (_bus.Undo())
@@ -441,7 +452,9 @@ public sealed class DocumentView : Control
 
     public void Redo()
     {
-        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.HistoryRedo))
+        if (!AllowsRestrictEditingHistoryOperation(
+                RestrictEditingOperationKind.HistoryRedo,
+                _bus.NextRedoMutationKind))
             return;
 
         if (_bus.Redo())

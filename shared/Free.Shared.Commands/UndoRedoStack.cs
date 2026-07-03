@@ -93,7 +93,31 @@ public class UndoRedoStack<TCommand, TPayload>
         return entry;
     }
 
+    public bool TryPeekUndo(out UndoRedoStackEntry<TCommand, TPayload> entry)
+    {
+        if (_undoStack.Last is { } last)
+        {
+            entry = last.Value;
+            return true;
+        }
+
+        entry = default;
+        return false;
+    }
+
     public UndoRedoStackEntry<TCommand, TPayload> PopRedo() => _redoStack.Pop();
+
+    public bool TryPeekRedo(out UndoRedoStackEntry<TCommand, TPayload> entry)
+    {
+        if (_redoStack.Count > 0)
+        {
+            entry = _redoStack.Peek();
+            return true;
+        }
+
+        entry = default;
+        return false;
+    }
 
     public void PushRedo(UndoRedoStackEntry<TCommand, TPayload> entry) => _redoStack.Push(entry);
 

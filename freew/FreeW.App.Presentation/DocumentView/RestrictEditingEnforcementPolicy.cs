@@ -91,6 +91,38 @@ public readonly record struct RestrictEditingEnforcementPolicy(
 
     public bool Allows(RestrictEditingOperationKind operation) => DecisionFor(operation).IsAllowed;
 
+    public RestrictEditingEnforcementDecision DecisionForHistory(
+        RestrictEditingOperationKind historyOperation,
+        DocumentCommandMutationKind? mutationKind)
+    {
+        if (historyOperation is not RestrictEditingOperationKind.HistoryUndo
+            and not RestrictEditingOperationKind.HistoryRedo)
+            throw new ArgumentOutOfRangeException(nameof(historyOperation), historyOperation, "Expected an undo/redo history operation.");
+
+        if (mutationKind is null)
+            return DecisionFor(historyOperation);
+
+        if (mutationKind == DocumentCommandMutationKind.Mixed)
+            return DecisionFor(historyOperation);
+
+        var effectiveOperation = mutationKind switch
+        {
+            DocumentCommandMutationKind.BodyText => RestrictEditingOperationKind.BodyTextEdit,
+            DocumentCommandMutationKind.BodyFormatting => RestrictEditingOperationKind.BodyFormatting,
+            DocumentCommandMutationKind.Comment => RestrictEditingOperationKind.CommentInsert,
+            DocumentCommandMutationKind.FormField => RestrictEditingOperationKind.FormFieldEdit,
+            _ => historyOperation
+        };
+
+        var decision = DecisionFor(effectiveOperation);
+        return decision with { Operation = historyOperation };
+    }
+
+    public bool AllowsHistory(
+        RestrictEditingOperationKind historyOperation,
+        DocumentCommandMutationKind? mutationKind) =>
+        DecisionForHistory(historyOperation, mutationKind).IsAllowed;
+
     private RestrictEditingEnforcementDecision TrackChangesDecision(RestrictEditingOperationKind operation)
     {
         var requiresTracking = operation is RestrictEditingOperationKind.BodyTextEdit
