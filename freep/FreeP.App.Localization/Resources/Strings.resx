@@ -871,6 +871,30 @@
   <data name="Ribbon_Option_AnimationTriggerAfterPrevious_Label" xml:space="preserve">
     <value>After Previous</value>
   </data>
+  <data name="Ribbon_Tab_View_Label" xml:space="preserve">
+    <value>View</value>
+  </data>
+  <data name="Ribbon_Tab_View_KeyTip" xml:space="preserve">
+    <value>W</value>
+  </data>
+  <data name="Ribbon_Group_ViewShow_Label" xml:space="preserve">
+    <value>Show</value>
+  </data>
+  <data name="Ribbon_Group_ViewShow_KeyTip" xml:space="preserve">
+    <value>S</value>
+  </data>
+  <data name="Ribbon_Command_ViewGridlines_Label" xml:space="preserve">
+    <value>Gridlines</value>
+  </data>
+  <data name="Ribbon_Command_ViewGridlines_KeyTip" xml:space="preserve">
+    <value>G</value>
+  </data>
+  <data name="Ribbon_Command_ViewGuides_Label" xml:space="preserve">
+    <value>Guides</value>
+  </data>
+  <data name="Ribbon_Command_ViewGuides_KeyTip" xml:space="preserve">
+    <value>U</value>
+  </data>
   <data name="File_OpenPresentationPickerTitle" xml:space="preserve">
     <value>Open Presentation</value>
   </data>

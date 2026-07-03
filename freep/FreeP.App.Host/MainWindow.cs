@@ -110,6 +110,7 @@ public sealed class MainWindow : Window
     private Border _canvasHost = null!;
     private Canvas _textOverlay = null!;
     private TextBlock _slideCountText = null!;
+    private PresentationViewShowState _viewShowState = PresentationViewShowState.Default;
 
     // Notes pane (Wave 7B)
     private TextBox _notesBox = null!;
@@ -316,7 +317,9 @@ public sealed class MainWindow : Window
             // Wave 16B: Animation pane toggle.
             onAnimPane:         () => ToggleAnimationPane(),
             onTablePicker:      () => OpenTablePicker(),
-            onHeaderFooter:     focus => OpenHeaderFooterDialog(focus));
+            onHeaderFooter:     focus => OpenHeaderFooterDialog(focus),
+            getViewShowState:   () => _viewShowState,
+            applyViewShowState: ApplyPresentationViewShowState);
         var ribbon = BuildRibbon(FreePRibbon.Build(), commands, stateStore);
 
         // Body: slide pane + stage.
@@ -411,9 +414,17 @@ public sealed class MainWindow : Window
         // the field is assigned; BuildBody itself calls this after assigning it.
         if (_textOverlay is null) return;
         SlideCanvas.AttachEditing(Editor, _textOverlay);
+        SlideCanvas.ApplyViewShowState(_viewShowState);
     }
 
     // ── File load ─────────────────────────────────────────────────────────────────
+
+    private void ApplyPresentationViewShowState(PresentationViewShowState state)
+    {
+        _viewShowState = state;
+        if (SlideCanvas is not null)
+            SlideCanvas.ApplyViewShowState(state);
+    }
 
     private void LoadModel(Presentation presentation)
     {
