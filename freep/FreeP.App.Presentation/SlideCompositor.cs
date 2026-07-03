@@ -121,6 +121,11 @@ public static class SlideCompositor
         int slideIndex = 0,
         IReadOnlyDictionary<string, string>? effectiveClrMap = null)
     {
+        if (!HeaderFooterCommandPlanner.IsVisibleByHeaderFooterFlags(shape, slide))
+        {
+            return;
+        }
+
         switch (shape.Kind)
         {
             case SlideShapeKind.Picture:

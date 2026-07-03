@@ -81,6 +81,12 @@ internal static class FreePRibbonText
     public static string TextGroupKeyTip => Get("Ribbon_Group_Text_KeyTip");
     public static string TextBoxLabel => Get("Ribbon_Command_TextBox_Label");
     public static string TextBoxKeyTip => Get("Ribbon_Command_TextBox_KeyTip");
+    public static string HeaderFooterLabel => Get("Ribbon_Command_HeaderFooter_Label");
+    public static string HeaderFooterKeyTip => Get("Ribbon_Command_HeaderFooter_KeyTip");
+    public static string DateTimeLabel => Get("Ribbon_Command_DateTime_Label");
+    public static string DateTimeKeyTip => Get("Ribbon_Command_DateTime_KeyTip");
+    public static string SlideNumberLabel => Get("Ribbon_Command_SlideNumber_Label");
+    public static string SlideNumberKeyTip => Get("Ribbon_Command_SlideNumber_KeyTip");
 
     public static string TablesGroupLabel => Get("Ribbon_Group_Tables_Label");
     public static string TablesGroupKeyTip => Get("Ribbon_Group_Tables_KeyTip");

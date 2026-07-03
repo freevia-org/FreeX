@@ -130,6 +130,18 @@ public class RibbonEditorCompleteness5BTests
         Assert.Contains("freep.insert-chart-pie",    ids);
     }
 
+    [Fact]
+    public void TextGroup_ContainsHeaderFooterCommandIds()
+    {
+        var def = FreePRibbon.Build();
+        var tab = def.Tabs.Single(t => t.Id == "insert");
+        var group = tab.Groups.Single(g => g.Id == "text");
+        var ids = group.Controls.Select(c => c.CommandId.Value).ToHashSet();
+        Assert.Contains(HeaderFooterCommandPlanner.HeaderFooterCommandId, ids);
+        Assert.Contains(HeaderFooterCommandPlanner.DateTimeCommandId, ids);
+        Assert.Contains(HeaderFooterCommandPlanner.SlideNumberCommandId, ids);
+    }
+
     // ── Ribbon definition: Home tab clipboard additions ──────────────────────────
 
     [Fact]
@@ -288,6 +300,32 @@ public class RibbonEditorCompleteness5BTests
         Exec(reg, SlideObjectInsertionPlanner.Table3x3CommandId);
 
         Assert.True(invoked);
+    }
+
+    [Fact]
+    public void Cmd_HeaderFooter_InvokesHostCallbackWhenProvided()
+    {
+        var (ed, _) = MakeSession();
+        HeaderFooterCommandFocus? focus = null;
+        var reg = FreePRibbonCommands.Build(
+            new RibbonStateStore(),
+            ed,
+            onHeaderFooter: value => focus = value);
+
+        Exec(reg, HeaderFooterCommandPlanner.DateTimeCommandId);
+
+        Assert.Equal(HeaderFooterCommandFocus.DateTime, focus);
+    }
+
+    [Fact]
+    public void Cmd_SlideNumber_WithoutHostCallback_AppliesSharedPlannerDefault()
+    {
+        var (ed, pres) = MakeSession();
+        var reg = MakeRegistry(ed);
+
+        Exec(reg, HeaderFooterCommandPlanner.SlideNumberCommandId);
+
+        Assert.True(pres.Slides[0].HfVisibility!.ShowSlideNum);
     }
 
     // ── Command: insert table ─────────────────────────────────────────────────────
@@ -516,6 +554,9 @@ public class RibbonEditorCompleteness5BTests
     [InlineData("freep.insert-chart-bar")]
     [InlineData("freep.insert-chart-line")]
     [InlineData("freep.insert-chart-pie")]
+    [InlineData("freep.header-footer")]
+    [InlineData("freep.date-time")]
+    [InlineData("freep.slide-number")]
     public void AllWave5BCommandIds_AreRegistered(string commandId)
     {
         var (ed, _) = MakeSession();

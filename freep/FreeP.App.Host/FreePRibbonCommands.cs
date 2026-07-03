@@ -89,7 +89,8 @@ internal static class FreePRibbonCommands
         // Wave 16B: Animation pane toggle.
         Action?             onAnimPane         = null,
         Action?             onLayoutPicker     = null,
-        Action?             onTablePicker      = null)
+        Action?             onTablePicker      = null,
+        Action<HeaderFooterCommandFocus>? onHeaderFooter = null)
     {
         var registry = new RibbonCommandRegistry();
 
@@ -107,6 +108,7 @@ internal static class FreePRibbonCommands
         // ── Insert shapes ────────────────────────────────────────────────────────
 
         RegisterSlideObjectInsertionCommands(registry, editor, includePictureCommand: true, onTablePicker);
+        RegisterHeaderFooterCommands(registry, editor, onHeaderFooter);
 
         // ── Format toggles (stateful) ────────────────────────────────────────────
         //
@@ -382,6 +384,49 @@ internal static class FreePRibbonCommands
     }
 
     // ── Transition helpers ────────────────────────────────────────────────────────
+
+    private static void RegisterHeaderFooterCommands(
+        RibbonCommandRegistry registry,
+        EditingSession editor,
+        Action<HeaderFooterCommandFocus>? onHeaderFooter)
+    {
+        registry.Register(
+            HeaderFooterCommandPlanner.HeaderFooterCommandId,
+            new ActionRibbonCommand(() => ExecuteHeaderFooterCommand(
+                editor,
+                HeaderFooterCommandFocus.HeaderFooter,
+                onHeaderFooter)));
+        registry.Register(
+            HeaderFooterCommandPlanner.DateTimeCommandId,
+            new ActionRibbonCommand(() => ExecuteHeaderFooterCommand(
+                editor,
+                HeaderFooterCommandFocus.DateTime,
+                onHeaderFooter)));
+        registry.Register(
+            HeaderFooterCommandPlanner.SlideNumberCommandId,
+            new ActionRibbonCommand(() => ExecuteHeaderFooterCommand(
+                editor,
+                HeaderFooterCommandFocus.SlideNumber,
+                onHeaderFooter)));
+    }
+
+    private static void ExecuteHeaderFooterCommand(
+        EditingSession editor,
+        HeaderFooterCommandFocus focus,
+        Action<HeaderFooterCommandFocus>? onHeaderFooter)
+    {
+        if (onHeaderFooter is not null)
+        {
+            onHeaderFooter(focus);
+            return;
+        }
+
+        var state = HeaderFooterCommandPlanner.BuildState(editor);
+        HeaderFooterCommandPlanner.TryApply(
+            editor,
+            HeaderFooterCommandPlanner.BuildDefaultOptions(state, focus),
+            out _);
+    }
 
     private static void RegisterTransitionCommands(
         RibbonCommandRegistry registry,
