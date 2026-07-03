@@ -101,6 +101,19 @@ public static class SlideShowCustomShowPlanner
             startIndex);
     }
 
+    public static SlideShowPlaybackRoute BuildCustomShowRoute(
+        Presentation presentation,
+        PresentationCustomShow customShow,
+        int startIndex = 0)
+    {
+        ArgumentNullException.ThrowIfNull(customShow);
+
+        return BuildCustomShowRoute(
+            presentation,
+            new SlideShowCustomSlideSequence(customShow.Name, customShow.SlideIds),
+            startIndex);
+    }
+
     public static bool TryBuildNamedCustomShowRoute(
         Presentation presentation,
         IEnumerable<SlideShowCustomSlideSequence> customShows,
@@ -118,6 +131,31 @@ public static class SlideShowCustomShowPlanner
         }
 
         var customShow = customShows.FirstOrDefault(show =>
+            string.Equals(show.Name, customShowName.Trim(), StringComparison.OrdinalIgnoreCase));
+        if (customShow is null)
+        {
+            return false;
+        }
+
+        route = BuildCustomShowRoute(presentation, customShow, startIndex);
+        return true;
+    }
+
+    public static bool TryBuildNamedCustomShowRoute(
+        Presentation presentation,
+        string? customShowName,
+        int startIndex,
+        out SlideShowPlaybackRoute route)
+    {
+        ArgumentNullException.ThrowIfNull(presentation);
+
+        route = BuildFullPresentationRoute(presentation, startIndex);
+        if (string.IsNullOrWhiteSpace(customShowName))
+        {
+            return false;
+        }
+
+        var customShow = presentation.CustomShows.FirstOrDefault(show =>
             string.Equals(show.Name, customShowName.Trim(), StringComparison.OrdinalIgnoreCase));
         if (customShow is null)
         {

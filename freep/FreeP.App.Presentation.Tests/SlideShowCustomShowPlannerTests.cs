@@ -57,6 +57,45 @@ public sealed class SlideShowCustomShowPlannerTests
     }
 
     [Fact]
+    public void TryBuildNamedCustomShowRoute_SelectsStoredPresentationCustomShow()
+    {
+        var presentation = MakePresentation("Intro", "Deep dive", "Appendix");
+        var customShow = new PresentationCustomShow { Name = "Board review" };
+        customShow.SlideIds.Add(presentation.Slides[2].Id);
+        customShow.SlideIds.Add("missing-slide");
+        customShow.SlideIds.Add(presentation.Slides[0].Id);
+        presentation.CustomShows.Add(customShow);
+
+        var found = SlideShowCustomShowPlanner.TryBuildNamedCustomShowRoute(
+            presentation,
+            "board REVIEW",
+            startIndex: 4,
+            out var route);
+
+        found.Should().BeTrue();
+        route.CustomShowName.Should().Be("Board review");
+        route.Slides.Select(slide => slide.Title).Should().Equal("Appendix", "Intro");
+        route.SourceSlideIndices.Should().Equal(2, 0);
+        route.StartIndex.Should().Be(1);
+    }
+
+    [Fact]
+    public void BuildCustomShowRoute_AcceptsStoredPresentationCustomShow()
+    {
+        var presentation = MakePresentation("Intro", "Deep dive", "Appendix");
+        var customShow = new PresentationCustomShow { Name = "Training" };
+        customShow.SlideIds.Add(presentation.Slides[1].Id);
+
+        var route = SlideShowCustomShowPlanner.BuildCustomShowRoute(
+            presentation,
+            customShow);
+
+        route.CustomShowName.Should().Be("Training");
+        route.Slides.Select(slide => slide.Title).Should().Equal("Deep dive");
+        route.SourceSlideIndices.Should().Equal(1);
+    }
+
+    [Fact]
     public void TryBuildNamedCustomShowRoute_FallsBackToFullDeckWhenNameIsMissing()
     {
         var presentation = MakePresentation("Intro", "Deep dive", "Appendix");

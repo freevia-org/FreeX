@@ -883,6 +883,42 @@ public sealed class SlideShowMainWindowTests
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+public sealed partial class SlideShowMainWindowCustomShowTests
+{
+    [StaFact]
+    public void MainWindow_TryBuildCustomSlideShowRoute_SelectsStoredCustomShow()
+    {
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
+        try
+        {
+            var presentation = window.Editor.Presentation;
+            presentation.Slides.Clear();
+            presentation.Slides.Add(new Slide { Title = "Intro" });
+            presentation.Slides.Add(new Slide { Title = "Deep dive" });
+            presentation.Slides.Add(new Slide { Title = "Appendix" });
+
+            var customShow = new PresentationCustomShow { Name = "Executive review" };
+            customShow.SlideIds.Add(presentation.Slides[2].Id);
+            customShow.SlideIds.Add(presentation.Slides[0].Id);
+            presentation.CustomShows.Add(customShow);
+
+            var found = window.TryBuildCustomSlideShowRoute(
+                "executive REVIEW",
+                startIndex: 0,
+                out var route);
+
+            found.Should().BeTrue();
+            route.CustomShowName.Should().Be("Executive review");
+            route.Slides.Select(slide => slide.Title).Should().Equal("Appendix", "Intro");
+            route.SourceSlideIndices.Should().Equal(2, 0);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+}
+
 // Wave 16C: SlideShowMediaController tests
 // ─────────────────────────────────────────────────────────────────────────────
 

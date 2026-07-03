@@ -772,11 +772,134 @@ public sealed class PptxRoundTripTests : IDisposable
     // Helpers
     // ─────────────────────────────────────────────────────────────────────────────
 
+    [Fact]
+    public void RoundTrip_CustomShows_PreservedAndDanglingMembersOmitted()
+    {
+        var pres = new Presentation();
+        pres.Slides.Add(new Slide { Id = "slide-a", Title = "Intro" });
+        pres.Slides.Add(new Slide { Id = "slide-b", Title = "Deep dive" });
+        pres.Slides.Add(new Slide { Id = "slide-c", Title = "Appendix" });
+
+        var customShow = new PresentationCustomShow { Id = 7, Name = "Executive review" };
+        customShow.SlideIds.Add("slide-c");
+        customShow.SlideIds.Add("missing-slide");
+        customShow.SlideIds.Add("slide-a");
+        pres.CustomShows.Add(customShow);
+
+        var path = WriteToPptx(pres);
+
+        using (var zip = System.IO.Compression.ZipFile.OpenRead(path))
+        using (var presStream = zip.GetEntry("ppt/presentation.xml")!.Open())
+        {
+            var presXml = System.Xml.Linq.XDocument.Load(presStream);
+            var P = System.Xml.Linq.XNamespace.Get("http://schemas.openxmlformats.org/presentationml/2006/main");
+            var R = System.Xml.Linq.XNamespace.Get("http://schemas.openxmlformats.org/officeDocument/2006/relationships");
+
+            var assignedRelIds = presXml.Descendants(P + "sldId")
+                .Select(el => el.Attribute(R + "id")?.Value)
+                .Where(value => value is not null)
+                .ToHashSet();
+
+            var customShowEl = presXml.Descendants(P + "custShow").Single();
+            customShowEl.Attribute("name")?.Value.Should().Be("Executive review");
+            customShowEl.Attribute("id")?.Value.Should().Be("7");
+
+            var customShowSlideRelIds = customShowEl.Descendants(P + "sld")
+                .Select(el => el.Attribute(R + "id")?.Value)
+                .Where(value => value is not null)
+                .ToList();
+
+            customShowSlideRelIds.Should().HaveCount(2, "dangling custom-show slide members must be skipped");
+            customShowSlideRelIds.Should().OnlyContain(relId => assignedRelIds.Contains(relId));
+        }
+
+        var reloaded = PptxPackageReader.Read(path);
+        reloaded.CustomShows.Should().ContainSingle();
+        reloaded.CustomShows[0].Name.Should().Be("Executive review");
+        reloaded.CustomShows[0].Id.Should().Be(7);
+        reloaded.CustomShows[0].SlideIds.Should().HaveCount(2);
+
+        var reloadedTitlesById = reloaded.Slides.ToDictionary(slide => slide.Id, slide => slide.Title);
+        reloaded.CustomShows[0].SlideIds.Select(id => reloadedTitlesById[id])
+            .Should().Equal("Appendix", "Intro");
+    }
+
+    [Fact]
+    public void Read_CustomShows_TranslatesNumericSlideIdsToSlideIds()
+    {
+        var pres = new Presentation();
+        pres.Slides.Add(new Slide { Title = "Intro" });
+        pres.Slides.Add(new Slide { Title = "Deep dive" });
+        pres.Slides.Add(new Slide { Title = "Appendix" });
+        var path = WriteToPptx(pres);
+
+        using var patched = RewritePresentationXml(path, presXml =>
+        {
+            var P = System.Xml.Linq.XNamespace.Get("http://schemas.openxmlformats.org/presentationml/2006/main");
+            var notesSz = presXml.Root!.Element(P + "notesSz");
+            notesSz!.AddAfterSelf(
+                new System.Xml.Linq.XElement(P + "custShowLst",
+                    new System.Xml.Linq.XElement(P + "custShow",
+                        new System.Xml.Linq.XAttribute("name", "Numeric route"),
+                        new System.Xml.Linq.XAttribute("id", "3"),
+                        new System.Xml.Linq.XElement(P + "sldLst",
+                            new System.Xml.Linq.XElement(P + "sld", new System.Xml.Linq.XAttribute("id", "258")),
+                            new System.Xml.Linq.XElement(P + "sld", new System.Xml.Linq.XAttribute("id", "256")),
+                            new System.Xml.Linq.XElement(P + "sld", new System.Xml.Linq.XAttribute("id", "999"))))));
+            return presXml;
+        });
+
+        var reloaded = PptxPackageReader.Read(patched);
+
+        reloaded.CustomShows.Should().ContainSingle();
+        reloaded.CustomShows[0].Name.Should().Be("Numeric route");
+        reloaded.CustomShows[0].Id.Should().Be(3);
+        reloaded.CustomShows[0].SlideIds.Should().Equal(
+            reloaded.Slides[2].Id,
+            reloaded.Slides[0].Id);
+    }
+
     private string WriteToPptx(Presentation pres)
     {
         var path = Path.Combine(_tempDir, Guid.NewGuid().ToString("N") + ".pptx");
         PptxPackageWriter.Write(pres, path);
         return path;
+    }
+
+    private static MemoryStream RewritePresentationXml(
+        string path,
+        Func<System.Xml.Linq.XDocument, System.Xml.Linq.XDocument> rewrite)
+    {
+        var destination = new MemoryStream();
+        using (var sourceZip = System.IO.Compression.ZipFile.OpenRead(path))
+        using (var destinationZip = new System.IO.Compression.ZipArchive(
+            destination,
+            System.IO.Compression.ZipArchiveMode.Create,
+            leaveOpen: true))
+        {
+            foreach (var entry in sourceZip.Entries)
+            {
+                var destinationEntry = destinationZip.CreateEntry(
+                    entry.FullName,
+                    System.IO.Compression.CompressionLevel.Fastest);
+                using var source = entry.Open();
+                using var target = destinationEntry.Open();
+
+                if (entry.FullName == "ppt/presentation.xml")
+                {
+                    var presXml = System.Xml.Linq.XDocument.Load(source);
+                    var rewritten = rewrite(presXml);
+                    rewritten.Save(target, System.Xml.Linq.SaveOptions.DisableFormatting);
+                }
+                else
+                {
+                    source.CopyTo(target);
+                }
+            }
+        }
+
+        destination.Position = 0;
+        return destination;
     }
 
     private static Presentation BuildTestPresentation()

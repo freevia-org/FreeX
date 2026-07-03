@@ -2375,6 +2375,34 @@ public sealed class MainWindow : Window
     // ── Chart data editing (Wave 9B) ──────────────────────────────────────────────
 
     /// <summary>
+    /// Builds the playback route for a stored custom show without opening a window.
+    /// </summary>
+    internal bool TryBuildCustomSlideShowRoute(
+        string? customShowName,
+        int startIndex,
+        out SlideShowPlaybackRoute route) =>
+        SlideShowCustomShowPlanner.TryBuildNamedCustomShowRoute(
+            _presentation,
+            customShowName,
+            startIndex,
+            out route);
+
+    internal bool TryStartCustomSlideShow(string? customShowName, int startIndex = 0)
+    {
+        if (!TryBuildCustomSlideShowRoute(customShowName, startIndex, out var route) ||
+            route.SlideCount == 0)
+        {
+            return false;
+        }
+
+        var window = new SlideShowWindow(_presentation, route);
+        if (IsVisible)
+            window.Owner = this;
+        window.Show();
+        return true;
+    }
+
+    /// <summary>
     /// Opens the <see cref="ChartDataDialog"/> for the currently selected chart.
     /// If the selection is empty or the selected shape is not a chart, does nothing.
     /// </summary>
