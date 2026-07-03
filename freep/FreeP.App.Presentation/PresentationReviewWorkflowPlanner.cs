@@ -584,6 +584,8 @@ public static class PresentationReviewWorkflowPlanner
         "Edit the hyperlink and add ScreenTip text that explains the destination.";
     public const string MissingTableHeaderRowActionSummary =
         "Select the table and enable the header row option so assistive technology can identify column headings.";
+    public const string BlankTableHeaderCellsActionSummary =
+        "Add concise text to blank header cells so assistive technology can announce each column heading.";
     public const string MergedTableCellsActionSummary =
         "Review merged or split cells and simplify the table structure or add clear text cues.";
 
@@ -1796,6 +1798,7 @@ public static class PresentationReviewWorkflowPlanner
         }
 
         if (issue.Title == "Table header row missing"
+            || issue.Title == "Blank table header cells"
             || issue.Title == "Merged or split table cells")
         {
             return "Table";
@@ -2702,6 +2705,20 @@ public static class PresentationReviewWorkflowPlanner
                     null,
                     true)));
         }
+        else if (CountBlankHeaderCells(table) is var blankHeaderCellCount && blankHeaderCellCount > 0)
+        {
+            var noun = blankHeaderCellCount == 1 ? "cell" : "cells";
+            issues.Add(new PresentationAccessibilityIssueDescriptor(
+                PresentationAccessibilityIssueSeverity.Warning,
+                slideIndex,
+                shape.Id,
+                "Blank table header cells",
+                $"{DescribeShape(shape)} has {blankHeaderCellCount} blank header {noun}.",
+                new PresentationAccessibilityIssueActionSummary(
+                    BlankTableHeaderCellsActionSummary,
+                    null,
+                    true)));
+        }
 
         if (HasMergedTableCells(table))
         {
@@ -2720,6 +2737,19 @@ public static class PresentationReviewWorkflowPlanner
 
     private static bool HasTableCells(TableShape table)
         => table.Rows.Any(row => row.Cells.Count > 0);
+
+    private static int CountBlankHeaderCells(TableShape table)
+    {
+        if (table.Rows.Count == 0)
+        {
+            return 0;
+        }
+
+        return table.Rows[0].Cells.Count(cell =>
+            !cell.HMerge &&
+            !cell.VMerge &&
+            NormalizeText(GetPlainText(cell.TextBody)) is null);
+    }
 
     private static bool HasMergedTableCells(TableShape table)
         => table.Rows
