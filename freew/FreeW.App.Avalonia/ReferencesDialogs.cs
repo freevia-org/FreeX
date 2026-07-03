@@ -230,6 +230,126 @@ internal sealed class CitationSourcePickerDialog : Window
     }
 }
 
+internal sealed class MarkCitationDialog : Window
+{
+    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
+
+    private readonly IReadOnlyList<MarkCitationCategoryChoice> _categoryChoices;
+    private readonly ComboBox _categoryBox = new() { MinWidth = 300 };
+    private readonly TextBox _longCitationBox = new() { MinWidth = 300 };
+    private readonly TextBox _shortCitationBox = new() { MinWidth = 300 };
+    private readonly TextBlock _status = new()
+    {
+        Foreground = Brushes.DarkRed,
+        Margin = new Thickness(16, 6, 16, 0),
+        IsVisible = false,
+    };
+
+    public Citation? Citation { get; private set; }
+
+    public MarkCitationDialog(string? seedLongCitation = null)
+    {
+        Title = MarkCitationDialogPlanner.Title;
+        Width = 420;
+        SizeToContent = SizeToContent.Height;
+        WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        CanResize = false;
+        ShowInTaskbar = false;
+
+        _categoryChoices = MarkCitationDialogPlanner.BuildCategoryChoices();
+        var state = MarkCitationDialogPlanner.BuildInitialState(seedLongCitation);
+
+        _categoryBox.ItemsSource = _categoryChoices;
+        _categoryBox.SelectedIndex = MarkCitationDialogPlanner.SelectCategoryIndex(_categoryChoices, state.Category);
+        _longCitationBox.Text = state.LongCitation;
+        _shortCitationBox.Text = state.ShortCitation;
+
+        AvaloniaCompactDialogChrome.ApplyComboBox(_categoryBox, DialogChromeStyle);
+        AvaloniaCompactDialogChrome.ApplyTextBox(_longCitationBox, DialogChromeStyle);
+        AvaloniaCompactDialogChrome.ApplyTextBox(_shortCitationBox, DialogChromeStyle);
+
+        var grid = new Grid { Margin = new Thickness(16, 12, 16, 0) };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        AddLabeledRow(grid, 0, MarkCitationDialogPlanner.CategoryLabel, _categoryBox);
+        AddLabeledRow(grid, 1, MarkCitationDialogPlanner.LongCitationLabel, _longCitationBox);
+        AddLabeledRow(grid, 2, MarkCitationDialogPlanner.ShortCitationLabel, _shortCitationBox);
+
+        var mark = Button(MarkCitationDialogPlanner.MarkButtonLabel, () => Accept(), isDefault: true);
+        var cancel = Button("Cancel", () => Close(), isCancel: true);
+        var buttons = AvaloniaCompactDialogChrome.CreateActionRow([mark, cancel], new Thickness(16, 12, 16, 14));
+
+        var body = new StackPanel();
+        body.Children.Add(grid);
+        body.Children.Add(_status);
+        body.Children.Add(buttons);
+        Content = body;
+    }
+
+    internal void SetForTests(CitationCategory category, string? longCitation, string? shortCitation)
+    {
+        _categoryBox.SelectedIndex = MarkCitationDialogPlanner.SelectCategoryIndex(_categoryChoices, category);
+        _longCitationBox.Text = longCitation;
+        _shortCitationBox.Text = shortCitation;
+    }
+
+    internal bool AcceptForTests() => Accept(closeOnSuccess: false);
+
+    private MarkCitationDialogState CurrentState()
+    {
+        var category = _categoryBox.SelectedIndex >= 0 && _categoryBox.SelectedIndex < _categoryChoices.Count
+            ? _categoryChoices[_categoryBox.SelectedIndex].Category
+            : CitationCategory.Cases;
+        return new MarkCitationDialogState(
+            category,
+            _longCitationBox.Text ?? string.Empty,
+            _shortCitationBox.Text ?? string.Empty);
+    }
+
+    private bool Accept(bool closeOnSuccess = true)
+    {
+        if (!MarkCitationDialogPlanner.TryBuildCitation(CurrentState(), out var citation, out var validation))
+        {
+            _status.Text = validation?.Message ?? MarkCitationDialogPlanner.MissingLongCitationMessage;
+            _status.IsVisible = true;
+            return false;
+        }
+
+        _status.IsVisible = false;
+        Citation = citation;
+        if (closeOnSuccess)
+            Close();
+        return true;
+    }
+
+    private static void AddLabeledRow(Grid grid, int row, string label, Control field)
+    {
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+        var text = new TextBlock
+        {
+            Text = label,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 6, 8, 0),
+        };
+        Grid.SetRow(text, row);
+        Grid.SetColumn(text, 0);
+        grid.Children.Add(text);
+
+        Grid.SetRow(field, row);
+        Grid.SetColumn(field, 1);
+        grid.Children.Add(field);
+    }
+
+    private static Button Button(string label, Action click, bool isDefault = false, bool isCancel = false)
+    {
+        var button = new Button { Content = label, IsDefault = isDefault, IsCancel = isCancel };
+        AvaloniaCompactDialogChrome.ApplyButton(button, DialogChromeStyle, minWidth: 84, isDefault: isDefault);
+        button.Click += (_, _) => click();
+        return button;
+    }
+}
+
 internal sealed class SourceEntryDialog : Window
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);

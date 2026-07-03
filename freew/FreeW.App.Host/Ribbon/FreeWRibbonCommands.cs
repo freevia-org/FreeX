@@ -5302,78 +5302,12 @@ internal static class FreeWRibbonCommands
         {
             editor.Focus();
             var seed = editor.Selection.Text?.Trim() ?? string.Empty;
-            var citation = MarkCitationDialog.Ask(Window.GetWindow(editor), seed);
-            if (citation is null)
+            var result = FreeW.App.Host.MarkCitationDialog.Prompt(
+                Window.GetWindow(editor),
+                MarkCitationDialogPlanner.BuildInitialState(seed));
+            if (result is null)
                 return; // cancelled or empty — nothing to mark
-            editor.MarkCitation(citation);
-        }
-    }
-
-    // A small modal form capturing a citation's category, long form and short form. Returns the citation,
-    // or null if cancelled (or if the long form is left blank).
-    private static class MarkCitationDialog
-    {
-        public static Citation? Ask(Window? owner, string seedLong)
-        {
-            var category = new System.Windows.Controls.ComboBox { MinWidth = 320, Margin = new Thickness(0, 0, 0, 10) };
-            foreach (var value in System.Enum.GetValues<CitationCategory>())
-                category.Items.Add(new CategoryItem(value));
-            category.SelectedIndex = 0;
-
-            var longForm = new System.Windows.Controls.TextBox { MinWidth = 320, Margin = new Thickness(0, 0, 0, 10), Text = seedLong };
-            var shortForm = new System.Windows.Controls.TextBox { MinWidth = 320, Margin = new Thickness(0, 0, 0, 10) };
-
-            Citation? result = null;
-            var dialog = new Window
-            {
-                Title = "Mark Citation",
-                SizeToContent = SizeToContent.WidthAndHeight,
-                ResizeMode = ResizeMode.NoResize,
-                WindowStartupLocation = WindowStartupLocation.CenterOwner,
-                Owner = owner,
-                ShowInTaskbar = false
-            };
-
-            var ok = new System.Windows.Controls.Button { Content = "Mark", IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
-            var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
-            ok.Click += (_, _) =>
-            {
-                var longText = longForm.Text.Trim();
-                if (longText.Length == 0)
-                    return; // nothing to mark — keep the dialog open
-                var chosen = (category.SelectedItem as CategoryItem)?.Value ?? CitationCategory.Cases;
-                result = new Citation(longText, chosen, shortForm.Text.Trim());
-                dialog.DialogResult = true;
-            };
-
-            var buttons = new System.Windows.Controls.StackPanel
-            {
-                Orientation = System.Windows.Controls.Orientation.Horizontal,
-                HorizontalAlignment = HorizontalAlignment.Right,
-                Margin = new Thickness(0, 4, 0, 0)
-            };
-            buttons.Children.Add(ok);
-            buttons.Children.Add(cancel);
-
-            var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(16) };
-            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = "Category:", Margin = new Thickness(0, 0, 0, 4) });
-            panel.Children.Add(category);
-            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = "Selected text (long citation):", Margin = new Thickness(0, 0, 0, 4) });
-            panel.Children.Add(longForm);
-            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = "Short citation (optional):", Margin = new Thickness(0, 0, 0, 4) });
-            panel.Children.Add(shortForm);
-            panel.Children.Add(buttons);
-            dialog.Content = panel;
-
-            longForm.Focus();
-            longForm.SelectAll();
-            return dialog.ShowDialog() == true ? result : null;
-        }
-
-        // Wraps a CitationCategory so the combo shows Word's friendly heading text (e.g. "Other Authorities").
-        private sealed record CategoryItem(CitationCategory Value)
-        {
-            public override string ToString() => TableOfAuthorities.CategoryHeading(Value);
+            editor.MarkCitation(result.Citation);
         }
     }
 
