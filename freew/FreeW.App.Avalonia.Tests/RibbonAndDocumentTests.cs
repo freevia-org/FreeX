@@ -166,6 +166,16 @@ public class RibbonAndDocumentTests
     }
 
     [Fact]
+    public void Avalonia_proofing_language_dialog_uses_shared_dialog_planner()
+    {
+        var source = File.ReadAllText(FindRepoFile("freew", "FreeW.App.Avalonia", "ProofingDialogs.cs"));
+
+        source.Should().Contain("ProofingLanguageDialogPlanner.Build(currentTag)");
+        source.Should().Contain("choice.DisplayText");
+        source.Should().NotContain("ProofingLanguageCatalog.CommonLanguages.Select");
+    }
+
+    [Fact]
     public void Sample_document_contains_title_lists_and_a_table()
     {
         var doc = SampleDocument.Create();

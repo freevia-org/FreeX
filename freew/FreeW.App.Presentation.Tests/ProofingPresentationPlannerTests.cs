@@ -19,6 +19,25 @@ public sealed class ProofingPresentationPlannerTests
     }
 
     [Fact]
+    public void Proofing_language_dialog_planner_builds_shared_choices_and_selection()
+    {
+        var plan = ProofingLanguageDialogPlanner.Build(" fr-fr ");
+
+        plan.Choices[0].Should().Be(new ProofingLanguageDialogChoice(
+            string.Empty,
+            ProofingLanguageDialogPlanner.ClearLanguageLabel));
+        plan.SelectedChoice.Tag.Should().Be("fr-FR");
+        plan.SelectedChoice.DisplayText.Should().Be("French (France) (fr-FR)");
+    }
+
+    [Fact]
+    public void Proofing_language_dialog_planner_falls_back_to_clear_for_unknown_or_blank_tag()
+    {
+        ProofingLanguageDialogPlanner.Build("zz-ZZ").SelectedIndex.Should().Be(0);
+        ProofingLanguageDialogPlanner.Build("").SelectedChoice.Tag.Should().BeEmpty();
+    }
+
+    [Fact]
     public void Proofing_language_apply_planner_normalizes_tag_and_single_range()
     {
         var plan = ProofingLanguageApplyPlanner.Build(" fr-FR ", [2], 3, 8);
