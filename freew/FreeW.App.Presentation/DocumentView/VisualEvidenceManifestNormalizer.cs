@@ -55,9 +55,18 @@ public sealed record FreeWVisualEvidenceNormalizedSummary(
     IReadOnlyList<FreeWVisualEvidenceExpectedScenario> ExpectedScenarios,
     IReadOnlyList<FreeWVisualEvidenceNormalizedScenario> Scenarios,
     IReadOnlyList<FreeWVisualEvidenceNormalizedRow> Evidence,
+    IReadOnlyList<FreeWVisualEvidenceBackstagePrintReadiness> BackstagePrintEvidenceReadiness,
     IReadOnlyList<FreeWVisualBaselineComparison> BaselineComparisons,
     IReadOnlyList<FreeWVisualBaselineTriageItem> WordBaselineTriage,
     FreeWVisualEvidenceTrust Trust);
+
+public sealed record FreeWVisualEvidenceBackstagePrintReadiness(
+    string ScenarioId,
+    string HostId,
+    int PageNumber,
+    string Status,
+    string OutputSummary,
+    string Notes);
 
 public sealed record FreeWVisualBaselineTriageItem(
     string HostId,
@@ -79,7 +88,7 @@ public sealed record FreeWVisualBaselineTriageItem(
 public static class FreeWVisualEvidenceManifestNormalizer
 {
     public const string SummarySchemaId = "freew.visual-evidence-summary.v1";
-    public const int SummarySchemaVersion = 13;
+    public const int SummarySchemaVersion = 14;
     public const string SummaryJsonFileName = "freew_visual_evidence_summary.json";
     public const string SummaryMarkdownFileName = "freew_visual_evidence_summary.md";
     public const string WpfHostId = "wpf-fidelity-render";
@@ -201,6 +210,12 @@ public static class FreeWVisualEvidenceManifestNormalizer
         ValidateBackstageRendererPairs(rows, failures);
         ValidateSectionGeometryRendererPairs(rows, failures);
         ValidateReviewRendererPairs(rows, failures);
+        var orderedRows = rows
+            .OrderBy(r => r.HostId, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(r => r.ScenarioId, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(r => r.PageNumber)
+            .ThenBy(r => r.OutputName, StringComparer.OrdinalIgnoreCase)
+            .ToList();
         var summaryTrust = new FreeWVisualEvidenceTrust(failures.Count == 0, failures);
         return new FreeWVisualEvidenceNormalizedSummary(
             SummarySchemaId,
@@ -210,12 +225,8 @@ public static class FreeWVisualEvidenceManifestNormalizer
                 .ToList(),
             expected,
             scenarios,
-            rows
-                .OrderBy(r => r.HostId, StringComparer.OrdinalIgnoreCase)
-                .ThenBy(r => r.ScenarioId, StringComparer.OrdinalIgnoreCase)
-                .ThenBy(r => r.PageNumber)
-                .ThenBy(r => r.OutputName, StringComparer.OrdinalIgnoreCase)
-                .ToList(),
+            orderedRows,
+            BuildBackstagePrintEvidenceReadinessRows(expected, orderedRows),
             [],
             [],
             summaryTrust);
@@ -262,6 +273,8 @@ public static class FreeWVisualEvidenceManifestNormalizer
                 $"{scenario.MinimumExpectedOutputs.ToString(CultureInfo.InvariantCulture)} | " +
                 $"{(scenario.Trust.Passed ? "passed" : "failed")} |");
         }
+
+        AppendBackstagePrintEvidenceReadiness(sb, summary);
 
         sb.AppendLine();
         sb.AppendLine("## Evidence");
@@ -320,6 +333,117 @@ public static class FreeWVisualEvidenceManifestNormalizer
         }
 
         return sb.ToString();
+    }
+
+    private static void AppendBackstagePrintEvidenceReadiness(
+        StringBuilder sb,
+        FreeWVisualEvidenceNormalizedSummary summary)
+    {
+        if (summary.BackstagePrintEvidenceReadiness.Count == 0)
+            return;
+
+        sb.AppendLine();
+        sb.AppendLine("## Backstage Print Evidence Readiness");
+        sb.AppendLine();
+        sb.AppendLine("| Scenario | Host | Page | Status | Output | Notes |");
+        sb.AppendLine("| --- | --- | ---: | --- | --- | --- |");
+        foreach (var row in summary.BackstagePrintEvidenceReadiness)
+        {
+            sb.AppendLine(
+                $"| {EscapeMarkdown(row.ScenarioId)} | {EscapeMarkdown(row.HostId)} | " +
+                $"{row.PageNumber.ToString(CultureInfo.InvariantCulture)} | " +
+                $"{EscapeMarkdown(row.Status)} | " +
+                $"{EscapeMarkdown(row.OutputSummary)} | " +
+                $"{EscapeMarkdown(row.Notes)} |");
+        }
+    }
+
+    private static IReadOnlyList<FreeWVisualEvidenceBackstagePrintReadiness> BuildBackstagePrintEvidenceReadinessRows(
+        IReadOnlyList<FreeWVisualEvidenceExpectedScenario> expectedScenarios,
+        IReadOnlyList<FreeWVisualEvidenceNormalizedRow> evidence)
+    {
+        var rows = new List<FreeWVisualEvidenceBackstagePrintReadiness>();
+        var hosts = new[] { WpfHostId, AvaloniaHostId };
+        foreach (var scenarioId in BackstageRendererScenarioIds.OrderBy(id => id, StringComparer.OrdinalIgnoreCase))
+        {
+            var expectedHosts = expectedScenarios
+                .Where(expected => string.Equals(expected.ScenarioId, scenarioId, StringComparison.OrdinalIgnoreCase))
+                .Select(expected => expected.HostId)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(hostId => Array.IndexOf(hosts, hostId) < 0 ? int.MaxValue : Array.IndexOf(hosts, hostId))
+                .ThenBy(hostId => hostId, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            var evidenceHosts = evidence
+                .Where(row => string.Equals(row.ScenarioId, scenarioId, StringComparison.OrdinalIgnoreCase))
+                .Select(row => row.HostId)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(hostId => Array.IndexOf(hosts, hostId) < 0 ? int.MaxValue : Array.IndexOf(hosts, hostId))
+                .ThenBy(hostId => hostId, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            if (expectedHosts.Count == 0)
+            {
+                if (evidenceHosts.Count == 0)
+                    continue;
+
+                expectedHosts.AddRange(evidenceHosts);
+            }
+
+            var pages = RequiredScenarioPages(scenarioId);
+            foreach (var hostId in expectedHosts)
+            {
+                foreach (var pageNumber in pages)
+                {
+                    var pageRows = evidence
+                        .Where(row =>
+                            string.Equals(row.HostId, hostId, StringComparison.OrdinalIgnoreCase) &&
+                            string.Equals(row.ScenarioId, scenarioId, StringComparison.OrdinalIgnoreCase) &&
+                            row.PageNumber == pageNumber)
+                        .OrderBy(row => row.OutputName, StringComparer.OrdinalIgnoreCase)
+                        .ToList();
+
+                    if (pageRows.Count == 0)
+                    {
+                        rows.Add(new FreeWVisualEvidenceBackstagePrintReadiness(
+                            scenarioId,
+                            hostId,
+                            pageNumber,
+                            "missing",
+                            "-",
+                            "no normalized row"));
+                        continue;
+                    }
+
+                    var trusted = pageRows.Where(row => row.Trust.Passed).ToList();
+                    var outputSummary = string.Join(", ", pageRows.Select(row => row.OutputPath));
+                    if (trusted.Count > 0)
+                    {
+                        rows.Add(new FreeWVisualEvidenceBackstagePrintReadiness(
+                            scenarioId,
+                            hostId,
+                            pageNumber,
+                            "trusted",
+                            outputSummary,
+                            trusted.Count == pageRows.Count ? "ready" : "trusted row present; failing duplicate also present"));
+                        continue;
+                    }
+
+                    var notes = string.Join(
+                        "; ",
+                        pageRows
+                            .SelectMany(row => row.Trust.Failures)
+                            .Distinct(StringComparer.OrdinalIgnoreCase));
+                    rows.Add(new FreeWVisualEvidenceBackstagePrintReadiness(
+                        scenarioId,
+                        hostId,
+                        pageNumber,
+                        "failed",
+                        outputSummary,
+                        string.IsNullOrWhiteSpace(notes) ? "row is not trusted" : notes));
+                }
+            }
+        }
+
+        return rows;
     }
 
     public static FreeWVisualEvidenceNormalizedSummary WithBaselineComparisons(

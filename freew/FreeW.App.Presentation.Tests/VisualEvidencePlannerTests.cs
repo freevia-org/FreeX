@@ -1558,6 +1558,91 @@ public sealed class VisualEvidencePlannerTests
     }
 
     [Fact]
+    public void ToMarkdown_IncludesDeterministicBackstagePrintEvidenceReadiness()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var wpfDir = Path.Combine(root, "wpf");
+            var avaloniaDir = Path.Combine(root, "avalonia");
+            var scenarioId = "backstage-print-preview-fidelity";
+            FreeWVisualEvidencePlanner.WriteManifest(
+                wpfDir,
+                [
+                    BuildFileBackedRow(
+                        root,
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        scenarioId,
+                        pageNumber: 1,
+                        pageCount: 2),
+                    BuildFileBackedRow(
+                        root,
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        scenarioId,
+                        pageNumber: 2,
+                        pageCount: 2)
+                ],
+                new DateTimeOffset(2026, 7, 1, 12, 0, 0, TimeSpan.Zero));
+
+            var avaloniaP1 = BuildFileBackedRow(
+                root,
+                FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                scenarioId,
+                pageNumber: 1,
+                pageCount: 2);
+            File.Delete(Path.Combine(avaloniaDir, avaloniaP1.OutputName));
+            FreeWVisualEvidencePlanner.WriteManifest(
+                avaloniaDir,
+                [avaloniaP1],
+                new DateTimeOffset(2026, 7, 1, 12, 0, 0, TimeSpan.Zero));
+
+            var summary = FreeWVisualEvidenceManifestNormalizer.BuildNormalizedSummaryFromFiles(
+                [
+                    Path.Combine(wpfDir, FreeWVisualEvidencePlanner.ManifestFileName),
+                    Path.Combine(avaloniaDir, FreeWVisualEvidencePlanner.ManifestFileName)
+                ],
+                root,
+                [
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        scenarioId,
+                        2),
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                        scenarioId,
+                        2)
+                ]);
+
+            var markdown = FreeWVisualEvidenceManifestNormalizer.ToMarkdown(summary);
+
+            markdown.Should().Contain("## Backstage Print Evidence Readiness");
+            markdown.Should().Contain(
+                "| backstage-print-preview-fidelity | wpf-fidelity-render | 1 | trusted | wpf/backstage-print-preview_p1.png | ready |");
+            markdown.Should().Contain(
+                "| backstage-print-preview-fidelity | avalonia-page-layout-shot | 1 | failed | avalonia/backstage-print-preview_p1.png | output file 'avalonia/backstage-print-preview_p1.png' does not exist |");
+            markdown.Should().Contain(
+                "| backstage-print-preview-fidelity | avalonia-page-layout-shot | 2 | missing | - | no normalized row |");
+            markdown.Should().NotContain("| backstage-pdf-export-fidelity |");
+
+            var json = FreeWVisualEvidenceManifestNormalizer.ToJson(summary);
+            using var doc = JsonDocument.Parse(json);
+            var readiness = doc.RootElement
+                .GetProperty("backstagePrintEvidenceReadiness")
+                .EnumerateArray()
+                .ToArray();
+            readiness.Should().Contain(row =>
+                row.GetProperty("hostId").GetString() == FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId &&
+                row.GetProperty("pageNumber").GetInt32() == 1 &&
+                row.GetProperty("status").GetString() == "failed" &&
+                row.GetProperty("notes").GetString() == "output file 'avalonia/backstage-print-preview_p1.png' does not exist");
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public void BuildNormalizedSummaryFromFiles_ReportsMissingRequiredReviewRendererPages()
     {
         var root = CreateTempRoot();
@@ -2278,7 +2363,8 @@ public sealed class VisualEvidencePlannerTests
 
             var json = FreeWVisualEvidenceManifestNormalizer.ToJson(withBaseline);
             using var doc = JsonDocument.Parse(json);
-            doc.RootElement.GetProperty("schemaVersion").GetInt32().Should().Be(13);
+            doc.RootElement.GetProperty("schemaVersion").GetInt32().Should().Be(
+                FreeWVisualEvidenceManifestNormalizer.SummarySchemaVersion);
             var triageItem = doc.RootElement.GetProperty("wordBaselineTriage")[0];
             triageItem.GetProperty("status").GetString().Should().Be("passed");
             triageItem.GetProperty("triageStatus").GetString().Should().Be("within-tolerance");
