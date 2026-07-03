@@ -611,6 +611,56 @@ public sealed class InsertDeleteCellsCommandTests
         outcome.ErrorMessage.Should().Contain("merged");
     }
 
+    [Fact]
+    public void DeleteCellsShiftLeft_StartEdgeStraddleMergeShrinksNotDropped()
+    {
+        // Merge B2:C2. Delete only C2 shift-left: the merge STARTS before the deleted range
+        // (col B) and ENDS inside it (col C). Column B survives, so the merge must shrink to
+        // B2:B2 rather than being silently dropped.
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+
+        sheet.AddMergedRegion(new GridRange(
+            new CellAddress(sheet.Id, 2, 2),
+            new CellAddress(sheet.Id, 2, 3)));
+
+        var range = new GridRange(new CellAddress(sheet.Id, 2, 3), new CellAddress(sheet.Id, 2, 3));
+        var outcome = new DeleteCellsCommand(sheet.Id, range, DeleteCellsShiftDirection.Left).Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        sheet.MergedRegions.Should().ContainSingle();
+        sheet.MergedRegions[0].Start.Row.Should().Be(2u);
+        sheet.MergedRegions[0].End.Row.Should().Be(2u);
+        sheet.MergedRegions[0].Start.Col.Should().Be(2u);
+        sheet.MergedRegions[0].End.Col.Should().Be(2u);
+    }
+
+    [Fact]
+    public void DeleteCellsShiftUp_StartEdgeStraddleMergeShrinksNotDropped()
+    {
+        // Merge A2:A3. Delete only A3 shift-up: the merge STARTS before the deleted range
+        // (row 2) and ENDS inside it (row 3). Row 2 survives, so the merge must shrink to
+        // A2:A2 rather than being silently dropped.
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+
+        sheet.AddMergedRegion(new GridRange(
+            new CellAddress(sheet.Id, 2, 1),
+            new CellAddress(sheet.Id, 3, 1)));
+
+        var range = new GridRange(new CellAddress(sheet.Id, 3, 1), new CellAddress(sheet.Id, 3, 1));
+        var outcome = new DeleteCellsCommand(sheet.Id, range, DeleteCellsShiftDirection.Up).Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        sheet.MergedRegions.Should().ContainSingle();
+        sheet.MergedRegions[0].Start.Row.Should().Be(2u);
+        sheet.MergedRegions[0].End.Row.Should().Be(2u);
+        sheet.MergedRegions[0].Start.Col.Should().Be(1u);
+        sheet.MergedRegions[0].End.Col.Should().Be(1u);
+    }
+
     // ── Comments/hyperlinks move with cells ───────────────────────────────────
 
     [Fact]
@@ -729,21 +779,25 @@ public sealed class InsertDeleteCellsCommandTests
     }
 
     [Fact]
-    public void FormulaRewriter_DeleteCellsShiftUp_RangeEndpointDeletedBecomesRefError()
+    public void FormulaRewriter_DeleteCellsShiftUp_RangeStartEndpointDeletedShrinksRange()
     {
-        // Delete A2:A2 shift-up. Formula =A2:A3 has A2 in deleted range → #REF!
+        // Delete A2:A2 shift-up. Formula =A2:A3 has its START (A2) in the deleted band but its
+        // END (A3) survives, so Excel SHRINKS the range (old A3 slides up to A2) rather than
+        // collapsing it to #REF! — only a fully-deleted range becomes #REF!.
         var op = new DeleteCellsShiftUpOp("Sheet1", 2, 2, CellAddress.MaxRow, 1, 1, 1);
         var result = FormulaRewriter.Rewrite("A2:A3", op, "Sheet1");
-        result.Should().Be("#REF!");
+        result.Should().Be("A2:A2");
     }
 
     [Fact]
-    public void FormulaRewriter_DeleteCellsShiftLeft_RangeEndpointDeletedBecomesRefError()
+    public void FormulaRewriter_DeleteCellsShiftLeft_RangeStartEndpointDeletedShrinksRange()
     {
-        // Delete B1:B1 shift-left. Formula =B1:C1 has B1 in deleted range → #REF!
+        // Delete B1:B1 shift-left. Formula =B1:C1 has its START (B1) in the deleted band but its
+        // END (C1) survives, so Excel SHRINKS the range (old C1 slides left to B1) rather than
+        // collapsing it to #REF! — only a fully-deleted range becomes #REF!.
         var op = new DeleteCellsShiftLeftOp("Sheet1", 1, 1, 2, 2, CellAddress.MaxCol, 1);
         var result = FormulaRewriter.Rewrite("B1:C1", op, "Sheet1");
-        result.Should().Be("#REF!");
+        result.Should().Be("B1:B1");
     }
 
     // ── CF / DV rule range adjustment on Insert/Delete Cells ─────────────────

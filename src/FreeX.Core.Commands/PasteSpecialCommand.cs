@@ -35,7 +35,8 @@ public sealed class PasteSpecialCellsCommand : IWorkbookCommand
     private readonly IReadOnlyList<(CellAddress Address, Cell Cell)> _sourceCells;
     private readonly CellAddress _destination;
     private readonly PasteSpecialOptions _options;
-    private List<(CellAddress Address, Cell? OldCell, StyleId? OldStyleOnly)>? _snapshot;
+    private readonly IReadOnlyDictionary<CellAddress, IReadOnlyList<CellTextRun>>? _sourceRichTextRuns;
+    private List<(CellAddress Address, Cell? OldCell, StyleId? OldStyleOnly, bool HadRichTextRuns, IReadOnlyList<CellTextRun>? OldRichTextRuns)>? _snapshot;
 
     public string Label => "Paste Special";
 
@@ -44,13 +45,15 @@ public sealed class PasteSpecialCellsCommand : IWorkbookCommand
         GridRange sourceRange,
         IReadOnlyList<(CellAddress Address, Cell Cell)> sourceCells,
         CellAddress destination,
-        PasteSpecialOptions options)
+        PasteSpecialOptions options,
+        IReadOnlyDictionary<CellAddress, IReadOnlyList<CellTextRun>>? sourceRichTextRuns = null)
     {
         _sheetId = sheetId;
         _sourceRange = sourceRange;
         _sourceCells = sourceCells;
         _destination = destination;
         _options = options;
+        _sourceRichTextRuns = sourceRichTextRuns;
     }
 
     public CommandOutcome Apply(ICommandContext ctx)
@@ -73,16 +76,22 @@ public sealed class PasteSpecialCellsCommand : IWorkbookCommand
         var cells = BuildDestinationCells(ctx.Workbook, sheet).ToList();
         if (sheet.IsProtected)
         {
-            foreach (var (address, _) in cells)
+            foreach (var (address, _, _) in cells)
                 if (!CommandGuards.CanEditCell(ctx.Workbook, sheet, address))
                     return CommandGuards.RejectSheetProtected();
         }
 
         _snapshot = [];
-        foreach (var (address, cell) in cells)
+        foreach (var (address, cell, sourceAddress) in cells)
         {
-            _snapshot.Add((address, sheet.GetCell(address)?.Clone(), sheet.GetStyleOnly(address.Row, address.Col)));
+            var hadRichTextRuns = sheet.RichTextRuns.TryGetValue(address, out var oldRuns);
+            _snapshot.Add((address, sheet.GetCell(address)?.Clone(), sheet.GetStyleOnly(address.Row, address.Col), hadRichTextRuns, oldRuns));
             sheet.SetCell(address, cell);
+
+            if (_sourceRichTextRuns is not null && _sourceRichTextRuns.TryGetValue(sourceAddress, out var newRuns))
+                sheet.RichTextRuns[address] = newRuns;
+            else
+                sheet.RichTextRuns.Remove(address);
         }
 
         return new CommandOutcome(true, AffectedCells: cells.Select(c => c.Address).ToList());
@@ -94,7 +103,7 @@ public sealed class PasteSpecialCellsCommand : IWorkbookCommand
             return;
 
         var sheet = ctx.GetSheet(_sheetId);
-        foreach (var (address, oldCell, oldStyleOnly) in _snapshot)
+        foreach (var (address, oldCell, oldStyleOnly, hadRichTextRuns, oldRichTextRuns) in _snapshot)
         {
             if (oldCell is null)
             {
@@ -108,10 +117,15 @@ public sealed class PasteSpecialCellsCommand : IWorkbookCommand
             {
                 sheet.SetCell(address, oldCell.Clone());
             }
+
+            if (hadRichTextRuns && oldRichTextRuns is not null)
+                sheet.RichTextRuns[address] = oldRichTextRuns;
+            else
+                sheet.RichTextRuns.Remove(address);
         }
     }
 
-    private IEnumerable<(CellAddress Address, Cell Cell)> BuildDestinationCells(Workbook workbook, Sheet sheet)
+    private IEnumerable<(CellAddress Address, Cell Cell, CellAddress SourceAddress)> BuildDestinationCells(Workbook workbook, Sheet sheet)
     {
         foreach (var (sourceAddress, sourceCell) in _sourceCells)
         {
@@ -138,7 +152,7 @@ public sealed class PasteSpecialCellsCommand : IWorkbookCommand
                     cell.StyleId = MergeNumberFormat(workbook, existing.StyleId, sourceCell.StyleId);
             }
 
-            yield return (destination, cell);
+            yield return (destination, cell, sourceAddress);
         }
     }
 

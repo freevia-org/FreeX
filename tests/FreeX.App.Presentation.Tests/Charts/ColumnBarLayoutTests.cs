@@ -142,6 +142,54 @@ public sealed class ColumnBarLayoutTests
         bar.Right.Should().BeApproximately(catScale.Transform(0.35), 1e-6);
     }
 
+    [Fact]
+    public void Stacked_column_honors_a_non_default_BarGapWidth_F17()
+    {
+        // F17: stacked column/bar hardcoded a 0.35 half-width and ignored BarGapWidth, mismatching
+        // WPF's ColumnBarHalfWidth (which applies the user's Gap Width to stacked types too, since
+        // ChartTypeSupport.SupportsBarGapWidth includes StackedColumn/StackedBar). gapWidth=0 should
+        // widen the stacked bar to the full [-0.5, 0.5] slot (touching bars, Excel's "no gap" look).
+        var plot = new PlotRect(0, 0, 300, 200);
+        var defaultRequest = Request(Chart(ChartType.StackedColumn), ["A", "B"], [Series(0, "S1", 10, 20)], plot);
+        var gapZeroRequest = Request(Chart(ChartType.StackedColumn, c => c.BarGapWidth = 0), ["A", "B"], [Series(0, "S1", 10, 20)], plot);
+
+        var defaultLayout = ChartLayoutEngine.Layout(defaultRequest);
+        var gapZeroLayout = ChartLayoutEngine.Layout(gapZeroRequest);
+
+        var catScale = defaultLayout.CategoryAxis!.Scale;
+        var defaultBar = defaultLayout.Series[0].Bars[0].Rect;
+        var gapZeroBar = gapZeroLayout.Series[0].Bars[0].Rect;
+
+        // Default (no explicit gap width) still matches the 0.35 half-width baseline.
+        defaultBar.Left.Should().BeApproximately(catScale.Transform(-0.35), 1e-6);
+        defaultBar.Right.Should().BeApproximately(catScale.Transform(0.35), 1e-6);
+
+        // gapWidth=0 must widen the bar to the full slot [-0.5, 0.5] (touching bars).
+        gapZeroBar.Left.Should().BeApproximately(catScale.Transform(-0.5), 1e-6);
+        gapZeroBar.Right.Should().BeApproximately(catScale.Transform(0.5), 1e-6);
+
+        // The gap-width-driven bar must be strictly wider than the default-width bar.
+        gapZeroBar.Width.Should().BeGreaterThan(defaultBar.Width);
+    }
+
+    [Fact]
+    public void Stacked_bar_honors_a_non_default_BarGapWidth_F17()
+    {
+        // Same fix, mirrored for the horizontal StackedBar family.
+        var plot = new PlotRect(0, 0, 300, 200);
+        var defaultRequest = Request(Chart(ChartType.StackedBar), ["A", "B"], [Series(0, "S1", 10, 20)], plot);
+        var gapZeroRequest = Request(Chart(ChartType.StackedBar, c => c.BarGapWidth = 0), ["A", "B"], [Series(0, "S1", 10, 20)], plot);
+
+        var defaultLayout = ChartLayoutEngine.Layout(defaultRequest);
+        var gapZeroLayout = ChartLayoutEngine.Layout(gapZeroRequest);
+
+        var defaultBar = defaultLayout.Series[0].Bars[0].Rect;
+        var gapZeroBar = gapZeroLayout.Series[0].Bars[0].Rect;
+
+        // Bars are horizontal for StackedBar, so the category slot is the Height, not the Width.
+        gapZeroBar.Height.Should().BeGreaterThan(defaultBar.Height);
+    }
+
     // ── 3-D column / 3-D bar flat-render tests ───────────────────────────────
 
     [Fact]

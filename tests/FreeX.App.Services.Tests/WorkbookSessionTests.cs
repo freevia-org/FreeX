@@ -2177,10 +2177,14 @@ public sealed class WorkbookSessionTests
         paste.Success.Should().BeTrue();
         paste.AffectedCells.Should().Contain([d3, e3, a1, b1]);
         session.SelectedRange.Should().Be(new GridRange(d3, e3));
-        sheet.GetCell(a1)!.Value.Should().Be(BlankValue.Instance);
-        sheet.GetCell(b1)!.FormulaText.Should().BeNull();
-        sheet.GetCell(b1)!.Value.Should().Be(BlankValue.Instance);
+        // The source cells are moved away entirely (contents and formatting), not left behind as
+        // blank-but-present cells the way a plain Clear Contents would.
+        sheet.GetCell(a1).Should().BeNull();
+        sheet.GetCell(b1).Should().BeNull();
         sheet.GetCell(d3)!.Value.Should().Be(new NumberValue(10));
+        // A1 moved together with B1 as part of the same cut range, so the reference between them
+        // (which is INSIDE the moved range) follows the move like Excel does: A1's new location is
+        // D3, so the formula becomes D3+1.
         sheet.GetCell(e3)!.FormulaText.Should().Be("D3+1");
 
         var undo = session.UndoLastEdit();
@@ -2193,7 +2197,72 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
-    public void PasteClipboardTextAtActiveCell_DoesNotClearCutSourceWhenPasteOverlaps()
+    public void PasteClipboardTextAtActiveCell_CutPasteMovesRangeAndUpdatesReferencingFormulasNotOwnRefs()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+        var d1 = new CellAddress(sheet.Id, 1, 4);
+        sheet.SetCell(a1, new NumberValue(5));
+        sheet.SetFormula(b1, "A1");
+        // A different cell that points AT the cell being cut (B1) - Excel updates this reference
+        // to follow the move.
+        var otherRefCell = new CellAddress(sheet.Id, 2, 1);
+        sheet.SetFormula(otherRefCell, "B1");
+
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(b1);
+        var clipboardText = session.CutSelectedRangeText();
+        session.SelectCell(d1);
+
+        var paste = session.PasteClipboardTextAtActiveCell(clipboardText);
+
+        paste.Success.Should().BeTrue();
+        // Moved cell's own formula reference is unchanged.
+        sheet.GetCell(d1)!.FormulaText.Should().Be("A1");
+        sheet.GetCell(d1)!.Value.Should().Be(new NumberValue(5));
+        // Source cell is now empty (moved away).
+        sheet.GetCell(b1).Should().BeNull();
+        // A formula elsewhere that referenced the cut cell now follows the move.
+        sheet.GetCell(otherRefCell)!.FormulaText.Should().Be("D1");
+    }
+
+    [Fact]
+    public void PasteClipboardTextAtActiveCell_CopyPasteStillOffsetsOwnFormulaReferences()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+        var d1 = new CellAddress(sheet.Id, 1, 4);
+        sheet.SetCell(a1, new NumberValue(5));
+        sheet.SetFormula(b1, "A1");
+
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(b1);
+        var clipboardText = session.CopySelectedRangeText();
+        session.SelectCell(d1);
+
+        var paste = session.PasteClipboardTextAtActiveCell(clipboardText);
+
+        paste.Success.Should().BeTrue();
+        // A plain copy still offsets the formula's own reference by the paste offset.
+        sheet.GetCell(d1)!.FormulaText.Should().Be("C1");
+        // Source cell is left untouched by a copy.
+        sheet.GetCell(b1)!.FormulaText.Should().Be("A1");
+    }
+
+    [Fact]
+    public void PasteClipboardTextAtActiveCell_MovesCutSourceWhenPasteOverlaps()
     {
         var workbook = CreateWorkbook();
         var sheet = workbook.Sheets.Single();
@@ -2214,8 +2283,11 @@ public sealed class WorkbookSessionTests
         var result = session.PasteClipboardTextAtActiveCell(clipboardText);
 
         result.Success.Should().BeTrue();
-        result.AffectedCells.Should().Equal(b1, c1);
-        sheet.GetValue(a1).Should().Be(new TextValue("left"));
+        // Cut+paste is a MOVE of the whole A1:B1 source range to B1:C1 (not a copy+clear of the
+        // destination): A1 slides into B1 and B1 into C1, so the vacated A1 is emptied and no data
+        // is lost. The affected set therefore includes the source cells too.
+        result.AffectedCells.Should().Contain([a1, b1, c1]);
+        sheet.GetValue(a1).Should().Be(BlankValue.Instance);
         sheet.GetValue(b1).Should().Be(new TextValue("left"));
         sheet.GetValue(c1).Should().Be(new TextValue("right"));
     }
@@ -7828,6 +7900,112 @@ public sealed class WorkbookSessionTests
             new WorkbookSheetTab(summary.Id, "Sheet1", IsActive: false),
             new WorkbookSheetTab(details.Id, "Details", IsActive: false, TabColor: null, IsGrouped: true),
             new WorkbookSheetTab(charts.Id, "Charts", IsActive: true, TabColor: null, IsGrouped: true));
+    }
+
+    // ── F21: sheet-tab context-menu commands must preserve an active multi-sheet GROUP
+    // selection when the right-clicked tab is already part of it, mirroring the WPF host's
+    // SheetTab_MouseRightButtonDown (only collapse to a single tab when the clicked tab is
+    // outside the current selection). ──────────────────────────────────────────────────────
+
+    [Fact]
+    public void IsSheetInActiveGroupSelection_TrueForTabAlreadyInMultiSheetGroup()
+    {
+        var workbook = CreateWorkbook();
+        var summary = workbook.Sheets.Single();
+        var details = workbook.AddSheet("Details");
+        workbook.AddSheet("Charts");
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectSheet(details.Id);
+        session.SelectAllVisibleSheets();
+
+        session.IsSheetInActiveGroupSelection(summary.Id).Should().BeTrue();
+        session.IsSheetInActiveGroupSelection(details.Id).Should().BeTrue();
+    }
+
+    [Fact]
+    public void IsSheetInActiveGroupSelection_FalseWhenNotGroupedOrTabOutsideGroup()
+    {
+        var workbook = CreateWorkbook();
+        var summary = workbook.Sheets.Single();
+        var details = workbook.AddSheet("Details");
+        var charts = workbook.AddSheet("Charts");
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+
+        // No active group yet (single-sheet selection): never "in a group".
+        session.IsSheetInActiveGroupSelection(summary.Id).Should().BeFalse();
+
+        // Group Sheet1+Details, but Charts sits outside that group.
+        session.SelectSheetFromTab(details.Id, selectRange: false, toggle: true);
+        session.IsWorkbookGrouped.Should().BeTrue();
+        session.IsSheetInActiveGroupSelection(charts.Id).Should().BeFalse();
+    }
+
+    [Fact]
+    public void SelectSheetPreservingGroup_KeepsGroupWhenClickedTabIsAlreadyInIt()
+    {
+        var workbook = CreateWorkbook();
+        var summary = workbook.Sheets.Single();
+        var details = workbook.AddSheet("Details");
+        var charts = workbook.AddSheet("Charts");
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectSheet(details.Id);
+        session.SelectAllVisibleSheets();
+        session.IsWorkbookGrouped.Should().BeTrue();
+
+        // Right-clicking "Details" (already part of the grouped selection) must keep the group -
+        // not collapse it to just "Details" (the F10-analog data-loss bug for sheet grouping).
+        var changed = session.SelectSheetPreservingGroup(details.Id);
+
+        changed.Should().BeFalse("Details was already the active sheet");
+        session.ActiveSheet.Should().BeSameAs(details);
+        session.IsWorkbookGrouped.Should().BeTrue("the group must survive a right-click on a tab already inside it");
+        session.SheetTabs.Should().Equal(
+            new WorkbookSheetTab(summary.Id, "Sheet1", IsActive: false, TabColor: null, IsGrouped: true),
+            new WorkbookSheetTab(details.Id, "Details", IsActive: true, TabColor: null, IsGrouped: true),
+            new WorkbookSheetTab(charts.Id, "Charts", IsActive: false, TabColor: null, IsGrouped: true));
+    }
+
+    [Fact]
+    public void SelectSheet_CollapsesGroupWhenClickedTabIsOutsideIt()
+    {
+        var workbook = CreateWorkbook();
+        var summary = workbook.Sheets.Single();
+        var details = workbook.AddSheet("Details");
+        var charts = workbook.AddSheet("Charts");
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        // Group only {Sheet1, Details} via a Ctrl-click toggle so "Charts" stays OUTSIDE the group
+        // (SelectAllVisibleSheets would have grouped Charts too, defeating the "outside" premise).
+        session.SelectSheetFromTab(details.Id, selectRange: false, toggle: true);
+        session.IsWorkbookGrouped.Should().BeTrue();
+
+        // "Charts" is NOT part of the grouped selection, so selecting it must collapse the group
+        // to just "Charts" - this is the normal (non-preserving) path.
+        session.IsSheetInActiveGroupSelection(charts.Id).Should().BeFalse();
+        var changed = session.SelectSheet(charts.Id);
+
+        changed.Should().BeTrue();
+        session.ActiveSheet.Should().BeSameAs(charts);
+        session.IsWorkbookGrouped.Should().BeFalse();
+        session.SheetTabs.Should().Equal(
+            new WorkbookSheetTab(summary.Id, "Sheet1", IsActive: false),
+            new WorkbookSheetTab(details.Id, "Details", IsActive: false),
+            new WorkbookSheetTab(charts.Id, "Charts", IsActive: true));
     }
 
     [Fact]

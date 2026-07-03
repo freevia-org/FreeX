@@ -208,4 +208,117 @@ public partial class DataValidationTests
         DataValidationService.Validate(dv, new NumberValue(new TimeSpan(18, 0, 0).TotalDays))
             .Should().NotBeNull("18:00 is outside the workday validation window");
     }
+
+    // ─── WholeNumber bounds resolved from cell references (F11) ───────────────
+    //
+    // Excel allows Formula1/Formula2 to be cell references (or arbitrary formulas)
+    // rather than literal numbers. The rule must be evaluated against the current
+    // value of the referenced cells, not silently treated as "always valid".
+
+    [Fact]
+    public void Validate_WholeNumber_Between_WithCellReferenceBounds_RejectsBelowRange()
+    {
+        var (workbook, sheet) = MakeWorkbook();
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), Cell.FromValue(new NumberValue(1)));  // A1 = 1
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), Cell.FromValue(new NumberValue(10))); // A2 = 10
+        var target = new CellAddress(sheet.Id, 3, 1); // A3 — the cell being validated
+
+        var dv = new DataValidation
+        {
+            Type = DvType.WholeNumber,
+            Operator = DvOperator.Between,
+            Formula1 = "=A1",
+            Formula2 = "=A2",
+            AllowBlank = true,
+        };
+
+        DataValidationService.Validate(dv, new NumberValue(0), sheet, target, workbook)
+            .Should().NotBeNull("0 is below the referenced lower bound A1=1");
+    }
+
+    [Fact]
+    public void Validate_WholeNumber_Between_WithCellReferenceBounds_RejectsAboveRange()
+    {
+        var (workbook, sheet) = MakeWorkbook();
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), Cell.FromValue(new NumberValue(1)));  // A1 = 1
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), Cell.FromValue(new NumberValue(10))); // A2 = 10
+        var target = new CellAddress(sheet.Id, 3, 1); // A3
+
+        var dv = new DataValidation
+        {
+            Type = DvType.WholeNumber,
+            Operator = DvOperator.Between,
+            Formula1 = "=A1",
+            Formula2 = "=A2",
+            AllowBlank = true,
+        };
+
+        DataValidationService.Validate(dv, new NumberValue(11), sheet, target, workbook)
+            .Should().NotBeNull("11 is above the referenced upper bound A2=10");
+    }
+
+    [Fact]
+    public void Validate_WholeNumber_Between_WithCellReferenceBounds_AcceptsInRange()
+    {
+        var (workbook, sheet) = MakeWorkbook();
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), Cell.FromValue(new NumberValue(1)));  // A1 = 1
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), Cell.FromValue(new NumberValue(10))); // A2 = 10
+        var target = new CellAddress(sheet.Id, 3, 1); // A3
+
+        var dv = new DataValidation
+        {
+            Type = DvType.WholeNumber,
+            Operator = DvOperator.Between,
+            Formula1 = "=A1",
+            Formula2 = "=A2",
+            AllowBlank = true,
+        };
+
+        DataValidationService.Validate(dv, new NumberValue(5), sheet, target, workbook)
+            .Should().BeNull("5 is between the referenced bounds A1=1 and A2=10");
+    }
+
+    [Fact]
+    public void Validate_WholeNumber_Between_WithLiteralBounds_StillWorks_WhenSheetContextSupplied()
+    {
+        // Guards against regressing the existing literal-bound path when the new
+        // sheet-context overload is used (as all real callers now do).
+        var (workbook, sheet) = MakeWorkbook();
+        var target = new CellAddress(sheet.Id, 3, 1);
+
+        var dv = new DataValidation
+        {
+            Type = DvType.WholeNumber,
+            Operator = DvOperator.Between,
+            Formula1 = "1",
+            Formula2 = "10",
+            AllowBlank = true,
+        };
+
+        DataValidationService.Validate(dv, new NumberValue(5), sheet, target, workbook)
+            .Should().BeNull("5 is between the literal bounds 1 and 10");
+        DataValidationService.Validate(dv, new NumberValue(0), sheet, target, workbook)
+            .Should().NotBeNull("0 is below the literal lower bound 1");
+        DataValidationService.Validate(dv, new NumberValue(11), sheet, target, workbook)
+            .Should().NotBeNull("11 is above the literal upper bound 10");
+    }
+
+    [Fact]
+    public void Validate_WholeNumber_Between_WithCellReferenceBounds_NoContextOverload_TreatsAsValid()
+    {
+        // Without sheet context there is no way to resolve the reference; the parser
+        // must not throw, and the rule should be treated as unenforceable (valid),
+        // matching the existing "can't evaluate — treat as valid" contract.
+        var dv = new DataValidation
+        {
+            Type = DvType.WholeNumber,
+            Operator = DvOperator.Between,
+            Formula1 = "=A1",
+            Formula2 = "=A2",
+            AllowBlank = true,
+        };
+
+        DataValidationService.Validate(dv, new NumberValue(999))
+            .Should().BeNull("without sheet context the reference bound cannot be resolved");
+    }
 }

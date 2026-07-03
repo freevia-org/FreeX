@@ -1135,6 +1135,50 @@ public sealed class WorkbookSession
     public bool SelectSheetFromTab(SheetId sheetId, bool selectRange, bool toggle)
         => SelectSheet(sheetId, selectRange, toggle);
 
+    /// <summary>
+    /// True when <paramref name="sheetId"/> is already part of the active multi-sheet group
+    /// selection (i.e. right-clicking it should keep the group rather than collapse it to a
+    /// single tab). Mirrors the WPF host's <c>_groupedSheetIds.Count &gt; 1 &amp;&amp;
+    /// _groupedSheetIds.Contains(tab.Id)</c> check.
+    /// </summary>
+    public bool IsSheetInActiveGroupSelection(SheetId sheetId) =>
+        _groupedSheetIds.Count > 1 && _groupedSheetIds.Contains(sheetId);
+
+    /// <summary>
+    /// Activates <paramref name="sheetId"/> as the current sheet WITHOUT touching the current
+    /// multi-sheet group selection - used by sheet-tab context-menu commands so right-clicking a
+    /// tab that is already part of an active group preserves the group instead of collapsing it
+    /// to just the clicked tab (see F21). Callers must first confirm
+    /// <see cref="IsSheetInActiveGroupSelection"/> for <paramref name="sheetId"/>.
+    /// </summary>
+    public bool SelectSheetPreservingGroup(SheetId sheetId)
+    {
+        var previousSheetId = ActiveSheet.Id;
+        if (!previousSheetId.Equals(sheetId))
+            RememberActiveWorksheetSelection();
+
+        var selection = _sheetSelectionService.SelectSheet(Workbook, sheetId, _groupedSheetIds);
+        var sheetChanged = previousSheetId != selection.Sheet.Id;
+
+        ActiveSheet = selection.Sheet;
+        _sheetGroupAnchor = sheetId;
+        RefreshSheetTabsForActiveSheet();
+        FormulaEditAddress = null;
+
+        if (sheetChanged)
+        {
+            if (!TryRestoreActiveWorksheetSelection())
+            {
+                ActiveCell = GetInitialActiveCell(ActiveSheet);
+                SetSingleSelectedRange(new GridRange(ActiveCell, ActiveCell));
+            }
+
+            RefreshViewport();
+        }
+
+        return sheetChanged;
+    }
+
     private bool SelectSheet(SheetId sheetId, bool selectRange, bool toggle)
     {
         var previousSheetId = ActiveSheet.Id;
@@ -4211,21 +4255,35 @@ public sealed class WorkbookSession
         var destinationRange = expandPasteToSelectedRange
             ? GetSinglePasteDestinationRange(destination)
             : new GridRange(destination, destination);
-        var command = CreateInternalPasteCommand(
-            clipboard,
-            destinationRange,
-            mode,
-            options,
-            keepSourceColumnWidths);
 
-        if (ShouldClearCutSourceAfterPaste(clipboard, destination, mode, options, keepSourceColumnWidths))
+        IWorkbookCommand command;
+        if (TryCreateCutMoveCommand(clipboard, destination, mode, options, keepSourceColumnWidths, out var moveCommand))
         {
-            command = new CompositeWorkbookCommand(
-                "Cut and Paste",
-                [
-                    command,
-                    new ClearContentsCommand(clipboard.SourceRange.Start.Sheet, clipboard.SourceRange)
-                ]);
+            // Excel cut+paste is a MOVE: the moved formulas keep their own references unchanged,
+            // while OTHER formulas that pointed at the cut cells are rewritten to follow the move.
+            // That is exactly MoveRangeCommand/MoveRangeOp semantics, so route cut+paste through it
+            // instead of the copy-paste-and-clear combo (which would incorrectly rewrite the moved
+            // formulas' own references and never fix up references from other cells).
+            command = moveCommand;
+        }
+        else
+        {
+            command = CreateInternalPasteCommand(
+                clipboard,
+                destinationRange,
+                mode,
+                options,
+                keepSourceColumnWidths);
+
+            if (ShouldClearCutSourceAfterPaste(clipboard, destination, mode, options, keepSourceColumnWidths))
+            {
+                command = new CompositeWorkbookCommand(
+                    "Cut and Paste",
+                    [
+                        command,
+                        new ClearContentsCommand(clipboard.SourceRange.Start.Sheet, clipboard.SourceRange)
+                    ]);
+            }
         }
 
         var result = _cellEditService.ExecuteEditCommand(Workbook, command);
@@ -4443,6 +4501,36 @@ public sealed class WorkbookSession
 
     private static string CreateMultiRangeClipboardError(string operation) =>
         operation + MultiRangeClipboardErrorSuffix;
+
+    private bool TryCreateCutMoveCommand(
+        InternalClipboard clipboard,
+        CellAddress destination,
+        PasteCellsMode mode,
+        PasteSpecialOptions options,
+        bool keepSourceColumnWidths,
+        out IWorkbookCommand command)
+    {
+        command = null!;
+        if (!clipboard.IsCut || keepSourceColumnWidths)
+            return false;
+
+        // Only the plain "Paste" gesture (no Paste Special mode/options) is a straight move in
+        // Excel; Paste Special after a cut falls back to the legacy copy+clear behaviour below.
+        if (mode != PasteCellsMode.All || options != default)
+            return false;
+
+        // MoveRangeCommand only supports a same-sheet move; grouped multi-sheet editing or a
+        // cross-sheet paste destination cannot be expressed as a single move, so fall back.
+        var targetSheetIds = CurrentGroupedEditSheetIds();
+        if (targetSheetIds.Count != 1 || !targetSheetIds[0].Equals(clipboard.SourceRange.Start.Sheet))
+            return false;
+
+        if (!destination.Sheet.Equals(clipboard.SourceRange.Start.Sheet))
+            return false;
+
+        command = new MoveRangeCommand(clipboard.SourceRange.Start.Sheet, clipboard.SourceRange, destination);
+        return true;
+    }
 
     private static bool ShouldClearCutSourceAfterPaste(
         InternalClipboard clipboard,

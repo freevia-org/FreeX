@@ -246,7 +246,7 @@ public sealed partial class MainWindow : Window
     {
         public override string ToString() => Label;
     }
-    private sealed record FormatCellsDialogResult(
+    internal sealed record FormatCellsDialogResult(
         FormatCellsCompactRequest Request,
         CellBorderPreset? BorderPreset,
         BorderStyle BorderStyle,
@@ -256,7 +256,7 @@ public sealed partial class MainWindow : Window
     {
         public override string ToString() => Label;
     }
-    private sealed record FormatCellsDialogSmokeProbe(
+    internal sealed record FormatCellsDialogSmokeProbe(
         Window Dialog,
         TabControl TabStrip,
         TabItem NumberTab,
@@ -679,6 +679,13 @@ public sealed partial class MainWindow : Window
     private readonly NativeMenuItem _quitMenuItem = new();
     private NativeMenu? _nativeMenu;
     private WorkbookSession _session;
+
+    /// <summary>
+    /// Test-only accessor for the active <see cref="WorkbookSession"/> so headless regression tests
+    /// (e.g. Format Cells number-format seeding) can set up cell state before driving dialog methods
+    /// directly. Not used by production code paths.
+    /// </summary>
+    internal WorkbookSession Session => _session;
     private readonly RecentColorsStore _recentColors = new();
     private MacOsLaunchSmokeDialogSnapshot _launchSmokeDialogEvidence = MacOsLaunchSmokeDialogSnapshot.Empty;
     private ComboBox? _activeDataValidationDropdown;
@@ -7839,12 +7846,21 @@ public sealed partial class MainWindow : Window
     private void SelectSheet(SheetId sheetId)
         => SelectSheet(sheetId, selectRange: false, toggle: false);
 
-    private bool SelectSheetForContextCommand(SheetId sheetId)
+    // internal (not private) so headless regression tests can drive the sheet-tab context-menu
+    // group-preservation behavior directly (see F21 in FormatCellsDialogNumberFormatSeedTests-
+    // adjacent test suite: SheetTabContextCommandGroupPreservationTests).
+    internal bool SelectSheetForContextCommand(SheetId sheetId)
     {
         if (!TryCommitPendingFormulaEdit())
             return false;
 
-        if (_session.SelectSheet(sheetId))
+        // F21: when the right-clicked tab is already part of the active multi-sheet GROUP
+        // selection, keep the group (mirrors the WPF host's SheetTab_MouseRightButtonDown);
+        // only collapse to a single tab when the clicked tab is outside the current selection.
+        var changed = _session.IsSheetInActiveGroupSelection(sheetId)
+            ? _session.SelectSheetPreservingGroup(sheetId)
+            : _session.SelectSheet(sheetId);
+        if (changed)
         {
             ClearSelectedDrawingObject();
             RefreshShell(UiText.Format("MainLoc_SelectedX", _session.ActiveSheet.Name));
@@ -10926,7 +10942,7 @@ public sealed partial class MainWindow : Window
         RefreshShell(UiText.Format("MainLoc_FormattedX", rangeReference));
     }
 
-    private async Task<FormatCellsDialogResult?> ShowFormatCellsInputDialogAsync(
+    internal async Task<FormatCellsDialogResult?> ShowFormatCellsInputDialogAsync(
         Action<FormatCellsDialogSmokeProbe>? launchSmokeProbe = null)
     {
         FormatCellsDialogResult? result = null;
@@ -11073,11 +11089,26 @@ public sealed partial class MainWindow : Window
         {
             var category = numberCategoryList.SelectedItem as string ?? currentNumberCategory;
             var labels = FormatCellsNumberFormatPlanner.LabelsForCategory(category);
+            // Seed with the cell's ACTUAL current format code even when it isn't one of the
+            // fixed presets (e.g. a custom code like "0.0000"), so a no-edit open+OK round-trips
+            // it unchanged instead of silently coercing it to the first preset in the category
+            // (data loss - see F10).
+            if (string.Equals(category, currentNumberCategory, StringComparison.Ordinal)
+                && currentNumberOption is null
+                && !string.IsNullOrWhiteSpace(currentNumberFormat)
+                && !labels.Contains(currentNumberFormat))
+            {
+                labels = labels.Append(currentNumberFormat).ToArray();
+            }
             var previous = numberFormatBox.SelectedItem as string;
             numberFormatBox.ItemsSource = labels;
             numberFormatBox.SelectedItem = previous is not null && labels.Contains(previous)
                 ? previous
-                : (labels.Count > 0 ? labels[0] : null);
+                : (string.Equals(category, currentNumberCategory, StringComparison.Ordinal)
+                    && currentNumberOption is null
+                    && labels.Contains(currentNumberFormat)
+                        ? currentNumberFormat
+                        : (labels.Count > 0 ? labels[0] : null));
         }
 
         void SyncDecimalPlacesFromType()

@@ -172,6 +172,18 @@ public partial class MainWindow
                         ? currentRange
                         : new GridRange(currentRange.Start, currentRange.Start);
 
+                    if (TryCreateCutMoveCommand(clip, mode, options, keepColumnWidths, currentRange.Start, out var moveCommand))
+                    {
+                        // Excel cut+paste is a MOVE: the moved formulas keep their own references
+                        // unchanged, while OTHER formulas that pointed at the cut cells are rewritten
+                        // to follow the move. That is exactly MoveRangeCommand/MoveRangeOp semantics
+                        // (already used for the grid drag-and-drop move gesture), so route plain
+                        // cut+paste through it instead of the copy-paste-and-clear combo, which would
+                        // incorrectly rewrite the moved formulas' own references and never fix up
+                        // references from other cells.
+                        return moveCommand;
+                    }
+
                     var pasteCommand = PasteCommandFactory.CreateInternalPasteCommand(
                         _workbook,
                         _currentSheetId,
@@ -377,6 +389,31 @@ public partial class MainWindow
         }
 
         ClearClipboardVisualState();
+    }
+
+    private bool TryCreateCutMoveCommand(
+        InternalClipboard clip,
+        PasteMode mode,
+        PasteSpecialOptions options,
+        bool keepColumnWidths,
+        CellAddress destination,
+        out IWorkbookCommand command)
+    {
+        command = null!;
+        if (!clip.IsCut || keepColumnWidths)
+            return false;
+
+        // Only the plain "Paste" gesture (no Paste Special mode/options) is a straight move in
+        // Excel; Paste Special after a cut falls back to the legacy copy+clear behaviour below.
+        if (mode != PasteMode.All || options != default)
+            return false;
+
+        // MoveRangeCommand only supports a same-sheet move.
+        if (clip.SourceRange.Start.Sheet != _currentSheetId || destination.Sheet != _currentSheetId)
+            return false;
+
+        command = new MoveRangeCommand(_currentSheetId, clip.SourceRange, destination);
+        return true;
     }
 
     private void CompleteExternalPasteSelection(

@@ -54,6 +54,31 @@ public class AutofillCommandTests
     }
 
     [Fact]
+    public void FillNumberSeries_Down_NonConstantStep_UsesLinearFitAcrossAllValues()
+    {
+        // Excel's fill handle fits a least-squares trend line across ALL selected source
+        // values (not just the last two) when the step is non-constant. For 1, 2, 4 the
+        // best-fit slope is 1.5 (not the naive last-pair step of 2), so the continuation
+        // is 5.5, 7 rather than 6, 8.
+        var (_, sheet, ctx) = Setup();
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(1));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(2));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new NumberValue(4));
+
+        var sourceRange = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 3, 1));
+        var fillRange = new GridRange(
+            new CellAddress(sheet.Id, 4, 1),
+            new CellAddress(sheet.Id, 5, 1));
+
+        new AutofillCommand(sheet.Id, sourceRange, fillRange).Apply(ctx);
+
+        sheet.GetValue(4, 1).Should().Be(new NumberValue(5.5));
+        sheet.GetValue(5, 1).Should().Be(new NumberValue(7));
+    }
+
+    [Fact]
     public void FillNumberSeries_Right_ContinuesStepFromSourceRange()
     {
         var (_, sheet, ctx) = Setup();

@@ -97,4 +97,64 @@ public sealed class LineAreaScatterLayoutTests
         // Both series map category 0 to the same X.
         layout.Series[0].Points[0].Position.X.Should().BeApproximately(layout.Series[1].Points[0].Position.X, 1e-9);
     }
+
+    // ---- Logarithmic Y axis (F5) ------------------------------------------------------------
+
+    [Fact]
+    public void YAxisLogScale_produces_a_logarithmic_value_axis_with_decade_ticks()
+    {
+        // F5: the portable engine used to ignore ChartModel.YAxisLogScale entirely and always
+        // build a linear axis. A Line chart supports Y log scale (ChartTypeSupport.SupportsYAxisLogScale).
+        var request = Request(Chart(ChartType.Line, c => c.YAxisLogScale = true),
+            ["A", "B", "C"], [Series(0, "S1", 1, 10, 100)]);
+        var layout = ChartLayoutEngine.Layout(request);
+
+        layout.ValueAxis!.Scale.IsLogarithmic.Should().BeTrue();
+        // Ticks land on decades (powers of 10), not a linear step.
+        layout.ValueAxis.Ticks.Select(t => t.Value).Should().Contain([1, 10, 100]);
+    }
+
+    [Fact]
+    public void YAxisLogScale_spaces_equal_ratio_points_equally_not_linearly()
+    {
+        var plot = new PlotRect(0, 0, 300, 200);
+        var request = Request(Chart(ChartType.Line, c => c.YAxisLogScale = true),
+            ["A", "B", "C"], [Series(0, "S1", 1, 10, 100)], plot);
+        var layout = ChartLayoutEngine.Layout(request);
+
+        var points = layout.Series[0].Points;
+        var y1 = points[0].Position.Y;
+        var y10 = points[1].Position.Y;
+        var y100 = points[2].Position.Y;
+
+        // Equal ratios (1->10, 10->100) must produce equal pixel spacing on a log axis.
+        (y1 - y10).Should().BeApproximately(y10 - y100, 1e-6, "each decade is spaced equally on a log Y axis");
+    }
+
+    [Fact]
+    public void YAxisLogScale_ignored_when_the_flag_is_off()
+    {
+        var request = Request(Chart(ChartType.Line), ["A", "B", "C"], [Series(0, "S1", 1, 10, 100)]);
+        var layout = ChartLayoutEngine.Layout(request);
+
+        layout.ValueAxis!.Scale.IsLogarithmic.Should().BeFalse();
+    }
+
+    [Fact]
+    public void XAxisLogScale_produces_a_logarithmic_axis_for_scatter()
+    {
+        // Scatter supports both X and Y log scale (ChartTypeSupport.SupportsXAxisLogScale).
+        var request = Request(Chart(ChartType.Scatter, c => c.XAxisLogScale = true),
+            [],
+            [new ChartSeriesData
+            {
+                SeriesIndex = 0,
+                Name = "S1",
+                Values = [1, 2, 3],
+                XValues = [1, 10, 100],
+            }]);
+        var layout = ChartLayoutEngine.Layout(request);
+
+        layout.CategoryAxis!.Scale.IsLogarithmic.Should().BeTrue();
+    }
 }

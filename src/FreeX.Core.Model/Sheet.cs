@@ -461,6 +461,17 @@ public sealed partial class Sheet
     /// <summary>Set of row numbers hidden by the active filter (1-based). Empty when no filter is active.</summary>
     public HashSet<uint> FilterHiddenRows { get; } = [];
 
+    /// <summary>
+    /// Runtime (non-serialized) per-column value-filter state, keyed by absolute 1-based column index.
+    /// Each entry is the set of allowed cell-text values for that column's active AutoFilter criteria.
+    /// Excel ANDs AutoFilter criteria across columns: a row is hidden if it fails ANY active column's
+    /// filter. <see cref="FilterHiddenRows"/> is kept as the recomputed union of every column's
+    /// exclusions (see FreeX.Core.Commands.FilterCommand, finding F8) so applying/clearing one column's
+    /// filter never disturbs another column's hidden rows. This is separate from the heavyweight
+    /// XLSX-serialization AutoFilter model — it exists purely to drive that recompute.
+    /// </summary>
+    public Dictionary<uint, IReadOnlyList<string>> ActiveValueFilterColumns { get; } = [];
+
     /// <summary>Set of column numbers that are hidden (1-based).</summary>
     public HashSet<uint> HiddenCols { get; } = [];
 

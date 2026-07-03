@@ -363,6 +363,113 @@ public class DependencyGraphTests
         plan.CyclicCells.Should().NotBeEmpty();
     }
 
+    /// <summary>
+    /// Regression for the circular-dependency over-marking bug: cells that merely DEPEND ON a
+    /// cyclic cell (but are not themselves part of the cycle) must not be classified as circular.
+    /// A1 = B1 + 1, B1 = A1 (a genuine 2-cycle); C1 = A1 (downstream of the cycle);
+    /// D1 = C1 (further downstream). Only A1 and B1 are true cycle members — C1 and D1 must still
+    /// appear in the evaluation order so they evaluate (and naturally inherit the propagated
+    /// #CIRCULAR! value from A1), rather than being marked cyclic themselves.
+    /// </summary>
+    [Fact]
+    public void RecalcOrder_DownstreamOfCycle_IsNotClassifiedCircular()
+    {
+        var graph = new DependencyGraph();
+        var sheet = SheetId.New();
+        var a1 = new CellAddress(sheet, 1, 1);
+        var b1 = new CellAddress(sheet, 1, 2);
+        var c1 = new CellAddress(sheet, 1, 3);
+        var d1 = new CellAddress(sheet, 1, 4);
+
+        // A1 -> B1 -> A1 (circular); C1 depends on A1; D1 depends on C1 (both downstream only).
+        graph.SetDependencies(a1, [b1]);
+        graph.SetDependencies(b1, [a1]);
+        graph.SetDependencies(c1, [a1]);
+        graph.SetDependencies(d1, [c1]);
+
+        var plan = graph.GetRecalcOrder([a1]);
+
+        plan.CyclicCells.Should().Contain(a1);
+        plan.CyclicCells.Should().Contain(b1);
+        plan.CyclicCells.Should().NotContain(c1, "C1 merely depends on a cyclic cell but is not itself part of the cycle");
+        plan.CyclicCells.Should().NotContain(d1, "D1 is even further downstream of the cycle and must not be classified circular");
+
+        plan.OrderedCells.Should().Contain(c1, "C1 must still be evaluated so it receives A1's propagated error");
+        plan.OrderedCells.Should().Contain(d1, "D1 must still be evaluated so it receives C1's propagated error");
+
+        var c1Index = plan.OrderedCells.ToList().IndexOf(c1);
+        var d1Index = plan.OrderedCells.ToList().IndexOf(d1);
+        c1Index.Should().BeLessThan(d1Index, "C1 must evaluate before D1 since D1 reads C1");
+    }
+
+    /// <summary>
+    /// Same scenario as <see cref="RecalcOrder_DownstreamOfCycle_IsNotClassifiedCircular"/> but
+    /// exercised through <see cref="DependencyGraph.GetEvaluationOrder"/>, which RecalcEngine also
+    /// uses to build its combined dirty-cell plan.
+    /// </summary>
+    [Fact]
+    public void EvaluationOrder_DownstreamOfCycle_IsNotClassifiedCircular()
+    {
+        var graph = new DependencyGraph();
+        var sheet = SheetId.New();
+        var a1 = new CellAddress(sheet, 1, 1);
+        var b1 = new CellAddress(sheet, 1, 2);
+        var c1 = new CellAddress(sheet, 1, 3);
+        var d1 = new CellAddress(sheet, 1, 4);
+
+        graph.SetDependencies(a1, [b1]);
+        graph.SetDependencies(b1, [a1]);
+        graph.SetDependencies(c1, [a1]);
+        graph.SetDependencies(d1, [c1]);
+
+        var plan = graph.GetEvaluationOrder([a1, b1, c1, d1]);
+
+        plan.CyclicCells.Should().Contain(a1);
+        plan.CyclicCells.Should().Contain(b1);
+        plan.CyclicCells.Should().NotContain(c1);
+        plan.CyclicCells.Should().NotContain(d1);
+        plan.OrderedCells.Should().Contain(c1);
+        plan.OrderedCells.Should().Contain(d1);
+    }
+
+    /// <summary>
+    /// End-to-end regression through RecalcEngine: A1/B1 form a real cycle and must be stamped
+    /// #CIRCULAR!, but C1 (=A1) and D1 (=C1) are only downstream of the cycle and must evaluate
+    /// normally, receiving the propagated #CIRCULAR! error value from A1 rather than being
+    /// classified as circular themselves.
+    /// </summary>
+    [Fact]
+    public void RecalcEngine_DownstreamOfCircularReference_EvaluatesInsteadOfBeingMarkedCircular()
+    {
+        var workbook = new Workbook("Test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var engine = new RecalcEngine(new DependencyGraph(), new FormulaEvaluator());
+
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+        var c1 = new CellAddress(sheet.Id, 1, 3);
+        var d1 = new CellAddress(sheet.Id, 1, 4);
+
+        sheet.SetFormula(a1, "B1+1");
+        sheet.SetFormula(b1, "A1");
+        sheet.SetFormula(c1, "A1");
+        sheet.SetFormula(d1, "C1");
+
+        var report = engine.RecalculateAllFormulas(workbook);
+
+        report.CyclicCells.Should().Contain(a1);
+        report.CyclicCells.Should().Contain(b1);
+        report.CyclicCells.Should().NotContain(c1, "C1 only depends on the cyclic A1/B1 pair; it is not itself circular");
+        report.CyclicCells.Should().NotContain(d1, "D1 is further downstream and must not be classified circular either");
+
+        sheet.GetValue(a1).Should().Be(ErrorValue.Circular);
+        sheet.GetValue(b1).Should().Be(ErrorValue.Circular);
+        // C1 = A1 evaluates normally and inherits A1's propagated error value.
+        sheet.GetValue(c1).Should().Be(ErrorValue.Circular);
+        // D1 = C1 evaluates normally and inherits C1's propagated error value in turn.
+        sheet.GetValue(d1).Should().Be(ErrorValue.Circular);
+    }
+
     [Fact]
     public void LargeRangeDependency_RecalculatesOnlyWhenChangedCellIsInsideRange()
     {

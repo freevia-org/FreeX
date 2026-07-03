@@ -128,7 +128,7 @@ public sealed partial class XlsxFileAdapterPerformanceTests
 
         var drawingPartsSource = TestWorkspaceFiles.ReadCoreIoRepoSource("XlsxWorksheetDrawingParts.cs");
         var readPictureParts = drawingPartsSource[
-            drawingPartsSource.IndexOf("private static IReadOnlyList<XlsxPicturePackagePart> ReadPictureParts", StringComparison.Ordinal)..
+            drawingPartsSource.IndexOf("internal static IReadOnlyList<XlsxPicturePackagePart> ReadPictureParts", StringComparison.Ordinal)..
             drawingPartsSource.IndexOf("private static Dictionary<string, string> ReadRelationshipTargetsById", StringComparison.Ordinal)];
 
         readPictureParts.Should().Contain("ReadEntryBytes(imageEntry)");

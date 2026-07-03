@@ -97,6 +97,11 @@ public sealed partial class XlsxFileAdapter
                         AboveAverage = mappedType == CfRuleType.Top10
                             ? !IsTruthy(rule.Attribute("bottom")?.Value)
                             : !IsFalse(rule.Attribute("aboveAverage")?.Value),
+                        EqualAverage = mappedType == CfRuleType.AboveAverage &&
+                            IsTruthy(rule.Attribute("equalAverage")?.Value),
+                        StdDevCount = mappedType == CfRuleType.AboveAverage
+                            ? XlsxXmlAttributeReader.ReadIntAttribute(rule, "stdDev")
+                            : null,
                         TopBottomRank = XlsxXmlAttributeReader.ReadIntAttribute(rule, "rank") ?? 10,
                         TopBottomPercent = IsTruthy(rule.Attribute("percent")?.Value),
                         TextRuleText = rule.Attribute("text")?.Value,
@@ -562,6 +567,8 @@ public sealed partial class XlsxFileAdapter
             DataBarNegativeFillColor = source.DataBarNegativeFillColor,
             DataBarNegativeBorderColor = source.DataBarNegativeBorderColor,
             AboveAverage = source.AboveAverage,
+            EqualAverage = source.EqualAverage,
+            StdDevCount = source.StdDevCount,
             FormulaText = source.FormulaText,
             IconSetStyle = source.IconSetStyle,
             IconSetShowValue = source.IconSetShowValue,

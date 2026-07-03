@@ -30,6 +30,7 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
     private Dictionary<CellAddress, ThreadedComment>? _threadedCommentSnapshot;
     private Dictionary<uint, double>? _rowHeightSnapshot;
     private HashSet<uint>? _hiddenRowsSnapshot;
+    private HashSet<uint>? _filterHiddenRowsSnapshot;
     private IReadOnlyList<CellAddress> _affectedCells = [];
 
     private sealed record SortPayloadCapture(
@@ -117,20 +118,22 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
         // so the snapshot must describe the current pre-sort state each time.
         _rowHeightSnapshot = CaptureRowHeights(sheet, startRow, rowCount);
         _hiddenRowsSnapshot = CaptureHiddenRows(sheet, startRow, rowCount);
+        _filterHiddenRowsSnapshot = CaptureFilterHiddenRows(sheet, startRow, rowCount);
         var payloadCapture = CapturePayloads(sheet, _sheetId, startRow, startCol, rowCount, colCount);
         _snapshot = payloadCapture.CellSnapshot;
         _commentSnapshot = payloadCapture.CommentSnapshot;
         _threadedCommentSnapshot = payloadCapture.ThreadedCommentSnapshot;
 
-        var rows = new List<(SortCellPayload[] Payloads, bool HasRowHeight, double RowHeight, bool IsHidden, int OriginalIndex)>(rowCount);
+        var rows = new List<(SortCellPayload[] Payloads, bool HasRowHeight, double RowHeight, bool IsHidden, bool IsFilterHidden, int OriginalIndex)>(rowCount);
 
         for (int ri = 0; ri < rowCount; ri++)
         {
             uint row = startRow + (uint)ri;
             var hasRowHeight = sheet.RowHeights.TryGetValue(row, out var rowHeight);
             var isHidden = sheet.HiddenRows.Contains(row);
+            var isFilterHidden = sheet.FilterHiddenRows.Contains(row);
 
-            rows.Add((payloadCapture.Rows[ri], hasRowHeight, rowHeight, isHidden, ri));
+            rows.Add((payloadCapture.Rows[ri], hasRowHeight, rowHeight, isHidden, isFilterHidden, ri));
         }
 
         rows.Sort((a, b) =>
@@ -169,6 +172,9 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
             sheet.HiddenRows.Remove(row);
             if (rows[ri].IsHidden)
                 sheet.HiddenRows.Add(row);
+            sheet.FilterHiddenRows.Remove(row);
+            if (rows[ri].IsFilterHidden)
+                sheet.FilterHiddenRows.Add(row);
 
             for (int ci = 0; ci < colCount; ci++)
             {
@@ -196,6 +202,7 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
     {
         _rowHeightSnapshot = null;
         _hiddenRowsSnapshot = null;
+        _filterHiddenRowsSnapshot = null;
         var payloadCapture = CapturePayloads(sheet, _sheetId, startRow, startCol, rowCount, colCount);
         _snapshot = payloadCapture.CellSnapshot;
         _commentSnapshot = payloadCapture.CommentSnapshot;
@@ -246,6 +253,7 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
         RestoreCommentSnapshots(sheet);
         RestoreRowHeights(sheet);
         RestoreHiddenRows(sheet);
+        RestoreFilterHiddenRows(sheet);
     }
 
     private static SortPayloadCapture CapturePayloads(
@@ -307,6 +315,19 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
         {
             var row = startRow + (uint)ri;
             if (sheet.HiddenRows.Contains(row))
+                snapshot.Add(row);
+        }
+
+        return snapshot;
+    }
+
+    private static HashSet<uint> CaptureFilterHiddenRows(Sheet sheet, uint startRow, int rowCount)
+    {
+        var snapshot = new HashSet<uint>();
+        for (int ri = 0; ri < rowCount; ri++)
+        {
+            var row = startRow + (uint)ri;
+            if (sheet.FilterHiddenRows.Contains(row))
                 snapshot.Add(row);
         }
 
@@ -455,6 +476,18 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
 
         foreach (var row in _hiddenRowsSnapshot)
             sheet.HiddenRows.Add(row);
+    }
+
+    private void RestoreFilterHiddenRows(Sheet sheet)
+    {
+        if (_filterHiddenRowsSnapshot is null)
+            return;
+
+        for (var row = _range.Start.Row; row <= _range.End.Row; row++)
+            sheet.FilterHiddenRows.Remove(row);
+
+        foreach (var row in _filterHiddenRowsSnapshot)
+            sheet.FilterHiddenRows.Add(row);
     }
 
     private static int CompareKey(Workbook workbook, Cell? a, Cell? b, SortOn sortOn, CellColor? targetColor, CustomSortOrder? customOrder, bool caseSensitive)

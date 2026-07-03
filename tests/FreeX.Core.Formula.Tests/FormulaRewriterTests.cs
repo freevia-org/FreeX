@@ -177,6 +177,98 @@ public class FormulaRewriterTests
         result.Should().Be("SUM(#REF!)");
     }
 
+    // ── DeleteCellsShiftUpOp ──────────────────────────────────────────────────
+
+    [Fact]
+    public void DeleteCellsShiftUp_RangeRef_StartInDeletedBand_Shrinks()
+    {
+        // Delete A10:A12 shift-up (column band A..A). SUM(A11:A20)'s start (row 11) falls
+        // inside the deleted band [10..12] but the end (row 20) survives. Excel SHRINKS the
+        // range to the surviving rows rather than collapsing it to #REF!: A11:A20 → A10:A17
+        // (surviving rows 13-20 slide up to 10-17).
+        var op = new DeleteCellsShiftUpOp("Sheet1", DeletedStartRow: 10, DeletedEndRow: 12, BandEndRow: 1048576,
+            RangeStartCol: 1, RangeEndCol: 1, Count: 3);
+        var result = FormulaRewriter.Rewrite("SUM(A11:A20)", op, "Sheet1");
+        result.Should().Be("SUM(A10:A17)");
+    }
+
+    [Fact]
+    public void DeleteCellsShiftUp_RangeRef_EndInDeletedBand_Shrinks()
+    {
+        // Delete A15:A17 shift-up. SUM(A10:A16)'s end (row 16) falls inside the deleted band
+        // [15..17] but the start (row 10) survives above it. Shrinks to A10:A14 (last
+        // surviving row before the band is 14).
+        var op = new DeleteCellsShiftUpOp("Sheet1", DeletedStartRow: 15, DeletedEndRow: 17, BandEndRow: 1048576,
+            RangeStartCol: 1, RangeEndCol: 1, Count: 3);
+        var result = FormulaRewriter.Rewrite("SUM(A10:A16)", op, "Sheet1");
+        result.Should().Be("SUM(A10:A14)");
+    }
+
+    [Fact]
+    public void DeleteCellsShiftUp_RangeRef_EntireRangeInDeletedBand_BecomesRef()
+    {
+        var op = new DeleteCellsShiftUpOp("Sheet1", DeletedStartRow: 10, DeletedEndRow: 20, BandEndRow: 1048576,
+            RangeStartCol: 1, RangeEndCol: 1, Count: 11);
+        var result = FormulaRewriter.Rewrite("SUM(A11:A15)", op, "Sheet1");
+        result.Should().Be("SUM(#REF!)");
+    }
+
+    [Fact]
+    public void DeleteCellsShiftUp_RangeRef_OutsideColumnBand_Unchanged()
+    {
+        // Delete band is column A only (RangeStartCol=RangeEndCol=1). A range in column B is
+        // untouched even though its rows overlap the deleted row band.
+        var op = new DeleteCellsShiftUpOp("Sheet1", DeletedStartRow: 10, DeletedEndRow: 12, BandEndRow: 1048576,
+            RangeStartCol: 1, RangeEndCol: 1, Count: 3);
+        var result = FormulaRewriter.Rewrite("SUM(B11:B20)", op, "Sheet1");
+        result.Should().BeNull();
+    }
+
+    // ── DeleteCellsShiftLeftOp ────────────────────────────────────────────────
+
+    [Fact]
+    public void DeleteCellsShiftLeft_RangeRef_StartInDeletedBand_Shrinks()
+    {
+        // Delete J1:L1 shift-left (row band 1..1). SUM(K1:T1)'s start (col K=11) falls inside
+        // the deleted band [10..12] but the end (col T=20) survives. Shrinks to J1:Q1
+        // (surviving cols M-T slide left to J-Q).
+        var op = new DeleteCellsShiftLeftOp("Sheet1", BandStartRow: 1, BandEndRow: 1,
+            DeletedStartCol: 10, DeletedEndCol: 12, BandEndCol: 16384, Count: 3);
+        var result = FormulaRewriter.Rewrite("SUM(K1:T1)", op, "Sheet1");
+        result.Should().Be("SUM(J1:Q1)");
+    }
+
+    [Fact]
+    public void DeleteCellsShiftLeft_RangeRef_EndInDeletedBand_Shrinks()
+    {
+        // Delete O1:Q1 shift-left. SUM(J1:P1)'s end (col P=16) falls inside the deleted band
+        // [15..17] but the start (col J=10) survives to the left of it. Shrinks to J1:N1.
+        var op = new DeleteCellsShiftLeftOp("Sheet1", BandStartRow: 1, BandEndRow: 1,
+            DeletedStartCol: 15, DeletedEndCol: 17, BandEndCol: 16384, Count: 3);
+        var result = FormulaRewriter.Rewrite("SUM(J1:P1)", op, "Sheet1");
+        result.Should().Be("SUM(J1:N1)");
+    }
+
+    [Fact]
+    public void DeleteCellsShiftLeft_RangeRef_EntireRangeInDeletedBand_BecomesRef()
+    {
+        var op = new DeleteCellsShiftLeftOp("Sheet1", BandStartRow: 1, BandEndRow: 1,
+            DeletedStartCol: 10, DeletedEndCol: 20, BandEndCol: 16384, Count: 11);
+        var result = FormulaRewriter.Rewrite("SUM(K1:O1)", op, "Sheet1");
+        result.Should().Be("SUM(#REF!)");
+    }
+
+    [Fact]
+    public void DeleteCellsShiftLeft_RangeRef_OutsideRowBand_Unchanged()
+    {
+        // Delete band is row 1 only (BandStartRow=BandEndRow=1). A range on row 2 is
+        // untouched even though its columns overlap the deleted column band.
+        var op = new DeleteCellsShiftLeftOp("Sheet1", BandStartRow: 1, BandEndRow: 1,
+            DeletedStartCol: 10, DeletedEndCol: 12, BandEndCol: 16384, Count: 3);
+        var result = FormulaRewriter.Rewrite("SUM(K2:T2)", op, "Sheet1");
+        result.Should().BeNull();
+    }
+
     // ── InsertColsOp ─────────────────────────────────────────────────────────
 
     [Fact]

@@ -36,6 +36,11 @@ public sealed class AvaloniaChartRenderer
     private const double TickLength = 4;
     private const double AxisTitleFontSize = 11;
 
+    // F19: fallback stroke thickness for Line/Radar series when the series has no explicit
+    // ChartSeriesFormat.StrokeThickness override — matches the renderer's prior hardcoded value.
+    private const double DefaultSeriesStrokeThickness = 2;
+    private const double TrendlineAnnotationFontSize = 10;
+
     // Title reserve: when a chart title is present we shift the plot area down by this many points.
     private const double TitleAreaHeight = 28;
 
@@ -326,7 +331,9 @@ public sealed class AvaloniaChartRenderer
         var dashStyle = format?.DashStyle;
         // Fix 5: Marker shapes.
         var markerStyle = format?.MarkerStyle ?? ChartMarkerStyle.Circle;
-        AddPolyline(canvas, series.Points, stroke, dashStyle);
+        // F19: honor the series' persisted StrokeThickness, falling back to 2 only when unset.
+        var strokeThickness = format?.StrokeThickness ?? DefaultSeriesStrokeThickness;
+        AddPolyline(canvas, series.Points, stroke, dashStyle, strokeThickness);
         AddMarkers(canvas, series.Points, SeriesFill(series.SeriesIndex), stroke, markerStyle);
     }
 
@@ -339,12 +346,14 @@ public sealed class AvaloniaChartRenderer
         var fill = SeriesFill(series.SeriesIndex, alpha: 0xA0);
         var stroke = SeriesStroke(series.SeriesIndex);
         var dashStyle = format?.DashStyle;
+        // F19: honor the series' persisted StrokeThickness, falling back to the existing default (1) when unset.
+        var strokeThickness = format?.StrokeThickness ?? 1;
 
         var polygon = new AvaloniaPolygon
         {
             Fill = fill,
             Stroke = stroke,
-            StrokeThickness = 1,
+            StrokeThickness = strokeThickness,
             Points = BuildAreaPoints(series),
         };
         canvas.Children.Add(polygon);
@@ -408,8 +417,11 @@ public sealed class AvaloniaChartRenderer
         if (series.Points.Count == 0)
             return;
 
+        var format = FindSeriesFormat(series.SeriesIndex);
         var fill = SeriesFill(series.SeriesIndex, alpha: 0x40);
         var stroke = SeriesStroke(series.SeriesIndex);
+        // F19: honor the series' persisted StrokeThickness, falling back to 2 only when unset.
+        var strokeThickness = format?.StrokeThickness ?? DefaultSeriesStrokeThickness;
 
         // Closed polygon connecting the category points back to the first point, with a light fill.
         var points = new Points();
@@ -420,12 +432,11 @@ public sealed class AvaloniaChartRenderer
         {
             Fill = fill,
             Stroke = stroke,
-            StrokeThickness = 2,
+            StrokeThickness = strokeThickness,
             StrokeJoin = PenLineJoin.Round,
             Points = points,
         });
 
-        var format = FindSeriesFormat(series.SeriesIndex);
         AddMarkers(canvas, series.Points, SeriesFill(series.SeriesIndex), stroke, format?.MarkerStyle ?? ChartMarkerStyle.Circle);
     }
 
@@ -630,6 +641,49 @@ public sealed class AvaloniaChartRenderer
             polyline.StrokeDashArray = dashArray;
 
         canvas.Children.Add(polyline);
+
+        // F18: equation / R-squared annotation text, mirroring the WPF TextAnnotation placed at the
+        // trendline's data anchor (top-left = source data's min X, max Y) with a light background box.
+        if (tl.AnnotationLines.Count > 0)
+            RenderTrendlineAnnotation(canvas, tl);
+    }
+
+    // F18: draws the trendline equation / R² text lines as a small background box with border,
+    // mirroring the WPF renderer's TextAnnotation (light background, gray border, dark text,
+    // left/top-anchored at the annotation's data-space anchor point).
+    private void RenderTrendlineAnnotation(Canvas canvas, TrendlineLayout tl)
+    {
+        var text = string.Join(Environment.NewLine, tl.AnnotationLines);
+        if (string.IsNullOrEmpty(text))
+            return;
+
+        var textBlock = new TextBlock
+        {
+            Text = text,
+            FontSize = TrendlineAnnotationFontSize,
+            Foreground = AxisLabelBrush,
+        };
+
+        const double padding = 4;
+        textBlock.Measure(Size.Infinity);
+        var width = (textBlock.DesiredSize.Width > 0 ? textBlock.DesiredSize.Width : 40) + (padding * 2);
+        var height = (textBlock.DesiredSize.Height > 0 ? textBlock.DesiredSize.Height : TrendlineAnnotationFontSize + 4) + (padding * 2);
+
+        var background = new AvaloniaRectangle
+        {
+            Width = width,
+            Height = height,
+            Fill = SolidBrush(0xFF, 0xFF, 0xFF, 0xDC),
+            Stroke = GridlineBrush,
+            StrokeThickness = 1,
+        };
+        Canvas.SetLeft(background, tl.AnnotationAnchor.X);
+        Canvas.SetTop(background, tl.AnnotationAnchor.Y);
+        canvas.Children.Add(background);
+
+        Canvas.SetLeft(textBlock, tl.AnnotationAnchor.X + padding);
+        Canvas.SetTop(textBlock, tl.AnnotationAnchor.Y + padding);
+        canvas.Children.Add(textBlock);
     }
 
     private static Points BuildAreaPoints(SeriesLayout series)
@@ -647,7 +701,14 @@ public sealed class AvaloniaChartRenderer
     }
 
     // Fix 6: dash style parameter for polyline stroke.
-    private static void AddPolyline(Canvas canvas, IReadOnlyList<SeriesPoint> seriesPoints, IBrush stroke, ChartLineDashStyle? dashStyle = null)
+    // F19: strokeThickness parameter — callers pass the series' persisted StrokeThickness, falling
+    // back to DefaultSeriesStrokeThickness (2) only when the series has no explicit override.
+    private static void AddPolyline(
+        Canvas canvas,
+        IReadOnlyList<SeriesPoint> seriesPoints,
+        IBrush stroke,
+        ChartLineDashStyle? dashStyle = null,
+        double strokeThickness = DefaultSeriesStrokeThickness)
     {
         if (seriesPoints.Count < 2)
             return;
@@ -659,7 +720,7 @@ public sealed class AvaloniaChartRenderer
         var polyline = new AvaloniaPolyline
         {
             Stroke = stroke,
-            StrokeThickness = 2,
+            StrokeThickness = strokeThickness,
             StrokeJoin = PenLineJoin.Round,
             Points = points,
         };

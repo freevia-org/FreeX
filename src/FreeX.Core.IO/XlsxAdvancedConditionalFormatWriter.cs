@@ -205,6 +205,10 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
             }
             case CfRuleType.AboveAverage:
                 rule.SetAttributeValue("aboveAverage", cf.AboveAverage ? "1" : "0");
+                if (cf.EqualAverage)
+                    rule.SetAttributeValue("equalAverage", "1");
+                if (cf.StdDevCount.HasValue)
+                    rule.SetAttributeValue("stdDev", Math.Max(1, cf.StdDevCount.Value).ToString(CultureInfo.InvariantCulture));
                 break;
             case CfRuleType.Top10:
                 rule.SetAttributeValue("rank", Math.Clamp(cf.TopBottomRank, 1, 1000).ToString(CultureInfo.InvariantCulture));

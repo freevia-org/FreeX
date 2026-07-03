@@ -278,16 +278,7 @@ public sealed class DependencyGraph
             DecrementDependentInDegrees(cell, inDegree, ready);
         }
 
-        // Any remaining cells with in-degree > 0 are part of cycles
-        List<CellAddress>? cycles = null;
-        foreach (var (cell, degree) in inDegree)
-        {
-            if (degree > 0)
-            {
-                cycles ??= [];
-                cycles.Add(cell);
-            }
-        }
+        ResolveResidualAfterKahn(inDegree, toRecalc, candidateIndex, sorted, out var cycles);
 
         return new RecalcPlan(sorted, cycles ?? []);
     }
@@ -461,17 +452,283 @@ public sealed class DependencyGraph
             DecrementDependentInDegrees(cell, inDegree, ready);
         }
 
-        List<CellAddress>? cycles = null;
+        ResolveResidualAfterKahn(inDegree, candidates, candidateIndex, sorted, out var cycles);
+
+        return new RecalcPlan(sorted, cycles ?? []);
+    }
+
+    /// <summary>
+    /// After Kahn's algorithm stalls, every cell left with in-degree &gt; 0 is "residual" — but
+    /// residual does not mean "circular". A genuine cycle only exists among cells that are
+    /// mutually reachable from one another (a strongly-connected component of size &gt; 1, or a
+    /// self-reference). Cells that merely depend on a cyclic cell, directly or transitively, are
+    /// stuck in the residual set too (their in-degree never reaches zero because one of their
+    /// precedents is itself stuck) but are NOT part of any cycle — they must still evaluate (and
+    /// naturally inherit the propagated error from their cyclic input) rather than being stamped
+    /// #CIRCULAR! themselves.
+    ///
+    /// This runs Tarjan's SCC algorithm over the residual subgraph (edges restricted to
+    /// <paramref name="candidates"/>) to separate true cycle members from their downstream
+    /// dependents, then topologically appends the downstream dependents to <paramref name="sorted"/>
+    /// so they still get evaluated.
+    /// </summary>
+    private void ResolveResidualAfterKahn(
+        Dictionary<CellAddress, int> inDegree,
+        HashSet<CellAddress> candidates,
+        CandidateIndex candidateIndex,
+        List<CellAddress> sorted,
+        out List<CellAddress>? cycles)
+    {
+        cycles = null;
+
+        List<CellAddress>? residual = null;
         foreach (var (cell, degree) in inDegree)
         {
             if (degree > 0)
             {
-                cycles ??= [];
-                cycles.Add(cell);
+                residual ??= [];
+                residual.Add(cell);
             }
         }
 
-        return new RecalcPlan(sorted, cycles ?? []);
+        if (residual is null)
+            return;
+
+        var cyclicMembers = FindCyclicMembers(residual, candidates, candidateIndex);
+        if (cyclicMembers.Count == 0)
+        {
+            // Defensive: Kahn only stalls when a cycle exists, so this should not happen. If it
+            // somehow does, fall back to the previous behaviour rather than silently dropping cells.
+            cycles = residual;
+            return;
+        }
+
+        cycles = new List<CellAddress>(cyclicMembers.Count);
+        foreach (var cell in residual)
+        {
+            if (cyclicMembers.Contains(cell))
+                cycles.Add(cell);
+        }
+
+        // The downstream (non-cyclic) residual cells still need a valid evaluation order. Re-run
+        // Kahn over just those cells, treating cyclic members as already "satisfied" precedents
+        // (their edges are excluded, matching how RecalcEngine will feed them the propagated error
+        // from the cyclic input rather than waiting on it).
+        var downstream = new List<CellAddress>();
+        foreach (var cell in residual)
+        {
+            if (!cyclicMembers.Contains(cell))
+                downstream.Add(cell);
+        }
+
+        if (downstream.Count == 0)
+            return;
+
+        AppendTopologicalOrder(downstream, cyclicMembers, candidates, candidateIndex, sorted);
+    }
+
+    /// <summary>
+    /// Find the cells within <paramref name="residual"/> that are members of an actual cycle:
+    /// a strongly-connected component of size &gt; 1, or a single cell that depends on itself
+    /// (directly or via a compact range that includes its own address). Uses Tarjan's algorithm,
+    /// with precedent edges restricted to <paramref name="candidates"/> (mirroring the in-degree
+    /// computation Kahn's algorithm used).
+    /// </summary>
+    private HashSet<CellAddress> FindCyclicMembers(
+        List<CellAddress> residual,
+        HashSet<CellAddress> candidates,
+        CandidateIndex candidateIndex)
+    {
+        var residualSet = new HashSet<CellAddress>(residual);
+        var index = new Dictionary<CellAddress, int>(residual.Count);
+        var lowLink = new Dictionary<CellAddress, int>(residual.Count);
+        var onStack = new HashSet<CellAddress>();
+        var stack = new Stack<CellAddress>();
+        var nextIndex = 0;
+        var cyclicMembers = new HashSet<CellAddress>();
+
+        // Iterative Tarjan to avoid stack-overflow risk on long dependency chains.
+        foreach (var start in residual)
+        {
+            if (index.ContainsKey(start))
+                continue;
+
+            var work = new Stack<TarjanFrame>();
+            work.Push(new TarjanFrame(start, GetPrecedentsWithin(start, residualSet, candidateIndex).GetEnumerator()));
+            index[start] = nextIndex;
+            lowLink[start] = nextIndex;
+            nextIndex++;
+            stack.Push(start);
+            onStack.Add(start);
+
+            while (work.Count > 0)
+            {
+                var frame = work.Peek();
+                var cell = frame.Cell;
+
+                if (frame.Precedents.MoveNext())
+                {
+                    var prec = frame.Precedents.Current;
+                    if (!index.ContainsKey(prec))
+                    {
+                        index[prec] = nextIndex;
+                        lowLink[prec] = nextIndex;
+                        nextIndex++;
+                        stack.Push(prec);
+                        onStack.Add(prec);
+                        work.Push(new TarjanFrame(prec, GetPrecedentsWithin(prec, residualSet, candidateIndex).GetEnumerator()));
+                    }
+                    else if (onStack.Contains(prec))
+                    {
+                        lowLink[cell] = Math.Min(lowLink[cell], index[prec]);
+                    }
+                }
+                else
+                {
+                    work.Pop();
+
+                    if (work.Count > 0)
+                    {
+                        var parent = work.Peek().Cell;
+                        lowLink[parent] = Math.Min(lowLink[parent], lowLink[cell]);
+                    }
+
+                    if (lowLink[cell] == index[cell])
+                    {
+                        // Pop the SCC rooted at `cell`.
+                        var members = new List<CellAddress>();
+                        CellAddress popped;
+                        do
+                        {
+                            popped = stack.Pop();
+                            onStack.Remove(popped);
+                            members.Add(popped);
+                        } while (!popped.Equals(cell));
+
+                        if (members.Count > 1)
+                        {
+                            foreach (var member in members)
+                                cyclicMembers.Add(member);
+                        }
+                        else
+                        {
+                            // Single-cell SCC: only a true cycle if the cell references itself
+                            // (directly, or via a compact range spanning its own address).
+                            var only = members[0];
+                            foreach (var prec in GetPrecedentsWithin(only, residualSet, candidateIndex))
+                            {
+                                if (prec.Equals(only))
+                                {
+                                    cyclicMembers.Add(only);
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        return cyclicMembers;
+    }
+
+    private readonly record struct TarjanFrame(CellAddress Cell, IEnumerator<CellAddress> Precedents);
+
+    /// <summary>
+    /// Re-run Kahn's algorithm restricted to <paramref name="downstream"/> cells, whose precedent
+    /// edges into <paramref name="cyclicMembers"/> are treated as already satisfied (those inputs
+    /// will hold the propagated cyclic error value, not block evaluation). Appends the resulting
+    /// order to <paramref name="sorted"/>.
+    /// </summary>
+    private void AppendTopologicalOrder(
+        List<CellAddress> downstream,
+        HashSet<CellAddress> cyclicMembers,
+        HashSet<CellAddress> candidates,
+        CandidateIndex candidateIndex,
+        List<CellAddress> sorted)
+    {
+        var downstreamSet = new HashSet<CellAddress>(downstream);
+        var inDegree = new Dictionary<CellAddress, int>(downstream.Count);
+        foreach (var cell in downstream)
+        {
+            var degree = 0;
+            foreach (var prec in GetPrecedentsWithin(cell, candidates, candidateIndex))
+            {
+                if (downstreamSet.Contains(prec) && !cyclicMembers.Contains(prec))
+                    degree++;
+            }
+            inDegree[cell] = degree;
+        }
+
+        var ready = new Queue<CellAddress>();
+        foreach (var (cell, degree) in inDegree)
+        {
+            if (degree == 0)
+                ready.Enqueue(cell);
+        }
+
+        var appended = 0;
+        while (ready.Count > 0)
+        {
+            var cell = ready.Dequeue();
+            sorted.Add(cell);
+            appended++;
+
+            DecrementDependentInDegrees(cell, inDegree, ready);
+        }
+
+        // Should not happen (downstream cells are, by construction, acyclic once cyclic members
+        // are excluded), but guard against silently dropping cells if it ever does.
+        if (appended < downstream.Count)
+        {
+            foreach (var cell in downstream)
+            {
+                if (!sorted.Contains(cell))
+                    sorted.Add(cell);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Get the precedents of <paramref name="cell"/> that fall within <paramref name="candidates"/>,
+    /// counting both exact and compact-range precedents. Mirrors <see cref="CountPrecedentsWithin"/>
+    /// but yields the actual precedent addresses instead of just a count.
+    /// </summary>
+    private IEnumerable<CellAddress> GetPrecedentsWithin(
+        CellAddress cell,
+        HashSet<CellAddress> candidates,
+        CandidateIndex candidateIndex)
+    {
+        HashSet<CellAddress>? seen = null;
+
+        if (_precedents.TryGetValue(cell, out var exactPrecs))
+        {
+            foreach (var prec in exactPrecs)
+            {
+                if (!candidates.Contains(prec))
+                    continue;
+
+                seen ??= [];
+                if (seen.Add(prec))
+                    yield return prec;
+            }
+        }
+
+        if (!_rangePrecedents.TryGetValue(cell, out var ranges))
+            yield break;
+
+        foreach (var range in ranges)
+        {
+            foreach (var candidate in candidateIndex.GetCandidatesInRange(range))
+            {
+                if (!candidates.Contains(candidate))
+                    continue;
+
+                seen ??= [];
+                if (seen.Add(candidate))
+                    yield return candidate;
+            }
+        }
     }
 
     private bool HasAnyDependents(IReadOnlyList<CellAddress> cells)

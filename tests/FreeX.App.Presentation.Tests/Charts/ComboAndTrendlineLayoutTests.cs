@@ -168,4 +168,244 @@ public sealed class ComboAndTrendlineLayoutTests
         var layout = ChartLayoutEngine.Layout(Request(chart, ["A", "B"], [Series(0, "S1", 10, 20)]));
         layout.Series.Should().OnlyContain(s => s.Trendline == null);
     }
+
+    // ---- F7: Bar (horizontal) trendline overlay ---------------------------------------------
+
+    [Fact]
+    public void F7_Bar_chart_with_ShowLinearTrendline_attaches_a_trendline()
+    {
+        // Regression for F7: before the fix, LayoutBar never called AttachTrendline (unlike
+        // LayoutColumnLineArea), so a horizontal Bar chart with ShowLinearTrendline=true produced
+        // no Trendline overlay at all, even though WPF renders one (swapTrendlineAxes: true).
+        var chart = Chart(ChartType.Bar, c =>
+        {
+            c.ShowLinearTrendline = true;
+            c.TrendlineType = ChartTrendlineType.Linear;
+        });
+        var layout = ChartLayoutEngine.Layout(Request(chart, ["A", "B", "C"], [Series(0, "S1", 10, 20, 30)]));
+
+        var trend = layout.Series[0].Trendline;
+        trend.Should().NotBeNull("Bar charts must honor ShowLinearTrendline just like WPF does");
+        trend!.Fit.Should().Be(TrendlineFitKind.Linear);
+        trend.Points.Should().HaveCount(2);
+    }
+
+    [Fact]
+    public void F7_Bar_chart_trendline_is_mapped_into_the_horizontal_bar_geometry()
+    {
+        // The category axis for Bar is vertical (Left) and the value axis is horizontal (Bottom) —
+        // the mirror image of Column/Line. The trendline's pixel points must be mapped through the
+        // SAME swapped axes as the bars themselves, not the Column/Line convention.
+        var plot = new PlotRect(0, 0, 300, 200);
+        var chart = Chart(ChartType.Bar, c =>
+        {
+            c.ShowLinearTrendline = true;
+            c.TrendlineType = ChartTrendlineType.Linear;
+        });
+        var request = Request(chart, ["A", "B", "C"], [Series(0, "S1", 10, 20, 30)], plot);
+        var layout = ChartLayoutEngine.Layout(request);
+
+        var trend = layout.Series[0].Trendline!;
+        var categoryScale = layout.CategoryAxis!.Scale;
+        var valueScale = layout.ValueAxis!.Scale;
+
+        // Trend point 0 is category index 0 (value 10); trend point 1 is category index 2 (value 30).
+        trend.Points[0].Y.Should().BeApproximately(categoryScale.Transform(0), 1e-6);
+        trend.Points[0].X.Should().BeApproximately(valueScale.Transform(10), 1e-6);
+        trend.Points[^1].Y.Should().BeApproximately(categoryScale.Transform(2), 1e-6);
+        trend.Points[^1].X.Should().BeApproximately(valueScale.Transform(30), 1e-6);
+    }
+
+    [Fact]
+    public void F7_StackedBar_does_not_attach_a_trendline()
+    {
+        // Mirrors WPF: SupportsTrendlines(ChartType) excludes StackedBar/PercentStackedBar/ThreeDBar —
+        // only plain Bar honors ShowLinearTrendline. This guards against over-broadening the F7 fix.
+        var chart = Chart(ChartType.StackedBar, c => c.ShowLinearTrendline = true);
+        var layout = ChartLayoutEngine.Layout(Request(chart, ["A", "B"],
+            [Series(0, "S1", 10, 20), Series(1, "S2", 5, 8)]));
+
+        layout.Series.Should().OnlyContain(s => s.Trendline == null);
+    }
+
+    // ---- F18: trendline equation / R-squared annotation --------------------------------------
+
+    [Fact]
+    public void F18_No_annotation_lines_when_neither_equation_nor_rsquared_requested()
+    {
+        var chart = Chart(ChartType.Line, c =>
+        {
+            c.ShowLinearTrendline = true;
+            c.TrendlineType = ChartTrendlineType.Linear;
+        });
+        var layout = ChartLayoutEngine.Layout(Request(chart, ["A", "B", "C"], [Series(0, "S1", 1, 2, 3)]));
+
+        layout.Series[0].Trendline!.AnnotationLines.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void F18_ShowTrendlineEquation_produces_an_equation_annotation_line()
+    {
+        // Regression for F18: before the fix, TrendlineLayout carried no annotation text at all, so
+        // neither host could draw the equation Excel shows when "Display Equation on chart" is set.
+        var chart = Chart(ChartType.Line, c =>
+        {
+            c.ShowLinearTrendline = true;
+            c.TrendlineType = ChartTrendlineType.Linear;
+            c.ShowTrendlineEquation = true;
+        });
+        var layout = ChartLayoutEngine.Layout(Request(chart, ["A", "B", "C", "D"],
+            [Series(0, "S1", 1, 2, 3, 4)]));
+
+        var trend = layout.Series[0].Trendline!;
+        trend.AnnotationLines.Should().ContainSingle();
+        trend.AnnotationLines[0].Should().StartWith("y = ", "linear equation text mirrors the WPF format");
+    }
+
+    [Fact]
+    public void F18_ShowTrendlineRSquared_produces_an_rsquared_annotation_line()
+    {
+        var chart = Chart(ChartType.Line, c =>
+        {
+            c.ShowLinearTrendline = true;
+            c.TrendlineType = ChartTrendlineType.Linear;
+            c.ShowTrendlineRSquared = true;
+        });
+        var layout = ChartLayoutEngine.Layout(Request(chart, ["A", "B", "C", "D"],
+            [Series(0, "S1", 1, 2, 3, 4)]));
+
+        var trend = layout.Series[0].Trendline!;
+        trend.AnnotationLines.Should().ContainSingle();
+        trend.AnnotationLines[0].Should().StartWith("R² = ");
+    }
+
+    [Fact]
+    public void F18_Both_equation_and_rsquared_produce_two_annotation_lines_in_order()
+    {
+        var chart = Chart(ChartType.Line, c =>
+        {
+            c.ShowLinearTrendline = true;
+            c.TrendlineType = ChartTrendlineType.Linear;
+            c.ShowTrendlineEquation = true;
+            c.ShowTrendlineRSquared = true;
+        });
+        var layout = ChartLayoutEngine.Layout(Request(chart, ["A", "B", "C", "D"],
+            [Series(0, "S1", 1, 2, 3, 4)]));
+
+        var trend = layout.Series[0].Trendline!;
+        trend.AnnotationLines.Should().HaveCount(2);
+        trend.AnnotationLines[0].Should().StartWith("y = ");
+        trend.AnnotationLines[1].Should().StartWith("R² = ");
+    }
+
+    [Fact]
+    public void F18_Bar_chart_trendline_annotation_anchor_uses_the_swapped_bar_axes()
+    {
+        // The annotation anchor for a Bar chart must be mapped through the same swapped axes as the
+        // trendline polyline (valueScale → X, categoryScale → Y), not the Column/Line convention.
+        var plot = new PlotRect(0, 0, 300, 200);
+        var chart = Chart(ChartType.Bar, c =>
+        {
+            c.ShowLinearTrendline = true;
+            c.TrendlineType = ChartTrendlineType.Linear;
+            c.ShowTrendlineEquation = true;
+        });
+        var layout = ChartLayoutEngine.Layout(Request(chart, ["A", "B", "C"], [Series(0, "S1", 10, 20, 30)], plot));
+
+        var trend = layout.Series[0].Trendline!;
+        trend.AnnotationLines.Should().ContainSingle();
+
+        var categoryScale = layout.CategoryAxis!.Scale;
+        var valueScale = layout.ValueAxis!.Scale;
+        // Source anchor is (min category index = 0, max value = 30).
+        trend.AnnotationAnchor.Y.Should().BeApproximately(categoryScale.Transform(0), 1e-6);
+        trend.AnnotationAnchor.X.Should().BeApproximately(valueScale.Transform(30), 1e-6);
+    }
+
+    // ---- Combo line/scatter overlay (F6) ---------------------------------------------------
+
+    [Fact]
+    public void Combo_line_series_index_lays_out_as_a_line_not_a_column()
+    {
+        // F6: a real Excel combo chart (bar+line) must draw the designated series as a LINE
+        // overlay, not another set of columns. Series 1 is marked as the combo line series.
+        var chart = Chart(ChartType.Column, c =>
+        {
+            c.UseComboLineForSecondarySeries = true;
+            c.ComboLineSeriesIndexes = [1];
+        });
+        var layout = ChartLayoutEngine.Layout(Request(chart, ["A", "B"],
+            [Series(0, "Bars", 10, 20), Series(1, "Line", 5, 8)]));
+
+        layout.Series.Should().HaveCount(2);
+        layout.Series[0].Kind.Should().Be(SeriesGeometryKind.Columns, "series 0 is not promoted to combo line");
+        layout.Series[0].Bars.Should().HaveCount(2);
+
+        layout.Series[1].Kind.Should().Be(SeriesGeometryKind.Line, "series 1 is designated as the combo line overlay");
+        layout.Series[1].Points.Should().HaveCount(2);
+        layout.Series[1].Bars.Should().BeEmpty("the combo line series must not also produce column bars");
+    }
+
+    [Fact]
+    public void Combo_line_series_is_excluded_from_the_clustered_column_slot_count()
+    {
+        // The combo line series must not consume a clustered sub-slot: with 1 bar series + 1 combo
+        // line series, the bar series should fill the FULL category slot (as if it were alone),
+        // not a half-slot as it would if the line series were still counted as clustered.
+        var plot = new PlotRect(0, 0, 300, 200);
+        var chart = Chart(ChartType.Column, c =>
+        {
+            c.UseComboLineForSecondarySeries = true;
+            c.ComboLineSeriesIndexes = [1];
+        });
+        var layout = ChartLayoutEngine.Layout(Request(chart, ["A", "B"],
+            [Series(0, "Bars", 10, 20), Series(1, "Line", 5, 8)], plot));
+
+        var catScale = layout.CategoryAxis!.Scale;
+        var bar = layout.Series[0].Bars[0].Rect;
+        // Full default half-width (0.4), same as a lone clustered series — not narrowed to a
+        // 2-series sub-slot.
+        bar.Left.Should().BeApproximately(catScale.Transform(-0.4), 1e-6);
+        bar.Right.Should().BeApproximately(catScale.Transform(0.4), 1e-6);
+    }
+
+    [Fact]
+    public void Combo_scatter_series_index_lays_out_as_scatter_points()
+    {
+        var chart = Chart(ChartType.Column, c => c.ComboScatterSeriesIndexes = [1]);
+        var layout = ChartLayoutEngine.Layout(Request(chart, ["A", "B"],
+            [Series(0, "Bars", 10, 20), Series(1, "Scatter", 5, 8)]));
+
+        layout.Series[1].Kind.Should().Be(SeriesGeometryKind.ScatterPoints);
+        layout.Series[1].Points.Should().HaveCount(2);
+    }
+
+    [Fact]
+    public void No_combo_line_series_by_default_all_series_render_as_columns()
+    {
+        // Regression: an empty ComboLineSeriesIndexes list (the default) must not affect a plain
+        // clustered column chart — every series still renders as columns.
+        var chart = Chart(ChartType.Column);
+        var layout = ChartLayoutEngine.Layout(Request(chart, ["A", "B"],
+            [Series(0, "S1", 10, 20), Series(1, "S2", 5, 8)]));
+
+        layout.Series.Should().OnlyContain(s => s.Kind == SeriesGeometryKind.Columns);
+    }
+
+    [Fact]
+    public void Combo_line_series_in_a_stacked_column_chart_overlays_instead_of_stacking()
+    {
+        // SupportsComboLineOverlay also covers StackedColumn/PercentStackedColumn: the combo line
+        // series must be drawn as a line over the stack, not folded into the running stack totals.
+        var chart = Chart(ChartType.StackedColumn, c =>
+        {
+            c.UseComboLineForSecondarySeries = true;
+            c.ComboLineSeriesIndexes = [1];
+        });
+        var layout = ChartLayoutEngine.Layout(Request(chart, ["A", "B"],
+            [Series(0, "Stack", 10, 20), Series(1, "Line", 5, 8)]));
+
+        layout.Series[0].Kind.Should().Be(SeriesGeometryKind.Columns);
+        layout.Series[1].Kind.Should().Be(SeriesGeometryKind.Line);
+    }
 }

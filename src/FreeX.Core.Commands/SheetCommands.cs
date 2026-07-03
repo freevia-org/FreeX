@@ -245,6 +245,9 @@ public sealed class RemoveSheetCommand : IWorkbookCommand
     // X3: CF/DV formula rewrites across surviving sheets for the deleted-sheet #REF! pass
     private List<(Guid RuleId, string? OldValue, SheetId Sheet)>? _cfFormulaDeleteSnapshot;
     private List<(Guid RuleId, int Slot, string? OldValue, SheetId Sheet)>? _dvFormulaDeleteSnapshot;
+    // Charts (on surviving sheets) whose DataRange pointed at the deleted sheet — remapped onto
+    // their own host sheet so no dangling deleted-sheet reference remains.
+    private List<(ChartModel Chart, GridRange OldValue)>? _chartDataRangeDeleteSnapshot;
 
     public string Label => "Delete Sheet";
 
@@ -324,6 +327,25 @@ public sealed class RemoveSheetCommand : IWorkbookCommand
             }
         }
 
+        // Charts on surviving sheets whose DataRange sources from the deleted sheet: GridRange
+        // cannot express a sheetless/"cleared" reference (unlike the nullable string refs on
+        // PivotCacheModel.SourceSheetName / SlicerModel.SourceSheetName / PictureModel
+        // LinkedSourceSheetName), so remap the dangling DataRange onto the chart's own host sheet
+        // — mirroring the same "no dangling deleted-sheet ref" outcome as those string refs.
+        _chartDataRangeDeleteSnapshot = [];
+        foreach (var s in ctx.Workbook.Sheets)
+        {
+            foreach (var chart in s.Charts)
+            {
+                if (chart.DataRange.Start.Sheet == _sheetId)
+                {
+                    _chartDataRangeDeleteSnapshot.Add((chart, chart.DataRange));
+                    var anchor = new CellAddress(s.Id, 1, 1);
+                    chart.DataRange = new GridRange(anchor, anchor);
+                }
+            }
+        }
+
         return new CommandOutcome(true);
     }
 
@@ -364,6 +386,10 @@ public sealed class RemoveSheetCommand : IWorkbookCommand
                     }
                 }
             }
+
+            if (_chartDataRangeDeleteSnapshot is not null)
+                foreach (var (chart, oldValue) in _chartDataRangeDeleteSnapshot)
+                    chart.DataRange = oldValue;
         }
     }
 

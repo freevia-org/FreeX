@@ -277,6 +277,47 @@ public class SheetTabCommandTests
         wb.Sheets.Should().ContainSingle().Which.Id.Should().Be(sheet.Id);
     }
 
+    // ── F14/F23 regression: Sheet.Clone must copy comment authors/shown-comments and the
+    // ignored-errors/cell-watches metadata dictionaries, not just the plain Comments dictionary. ──
+    [Fact]
+    public void DuplicateSheetCommand_CopiesCommentAuthorsShownCommentsIgnoredErrorsAndCellWatches()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+
+        sheet.Comments[a1] = "note";
+        sheet.CommentAuthors[a1] = "Jane Doe";
+        sheet.ShownComments.Add(a1);
+        sheet.CellWatchesMetadata = new WorksheetCellWatchesMetadataModel();
+        sheet.CellWatchesMetadata.WatchNativeAttributes["C5"] = new Dictionary<string, string> { ["xr:uid"] = "C5" };
+        sheet.IgnoredErrorsMetadata = new WorksheetIgnoredErrorsMetadataModel();
+        sheet.IgnoredErrorsMetadata.ErrorNativeAttributes["B5:C6"] = new Dictionary<string, string> { ["numberStoredAsText"] = "1" };
+
+        var command = new DuplicateSheetCommand(sheet.Id);
+        command.Apply(ctx).Success.Should().BeTrue();
+        var copy = wb.Sheets[1];
+        var copiedA1 = new CellAddress(copy.Id, 1, 1);
+
+        copy.Comments[copiedA1].Should().Be("note");
+        copy.CommentAuthors[copiedA1].Should().Be("Jane Doe");
+        copy.ShownComments.Should().Contain(copiedA1);
+
+        copy.CellWatchesMetadata.Should().NotBeNull();
+        copy.CellWatchesMetadata!.WatchNativeAttributes.Should().ContainKey("C5");
+        copy.CellWatchesMetadata.WatchNativeAttributes["C5"]["xr:uid"].Should().Be("C5");
+        // Mutating the clone must not affect the original (deep copy, not a shared reference).
+        copy.CellWatchesMetadata.WatchNativeAttributes["C5"]["xr:uid"] = "changed";
+        sheet.CellWatchesMetadata!.WatchNativeAttributes["C5"]["xr:uid"].Should().Be("C5");
+
+        copy.IgnoredErrorsMetadata.Should().NotBeNull();
+        copy.IgnoredErrorsMetadata!.ErrorNativeAttributes.Should().ContainKey("B5:C6");
+        copy.IgnoredErrorsMetadata.ErrorNativeAttributes["B5:C6"]["numberStoredAsText"].Should().Be("1");
+        copy.IgnoredErrorsMetadata.ErrorNativeAttributes["B5:C6"]["numberStoredAsText"] = "changed";
+        sheet.IgnoredErrorsMetadata!.ErrorNativeAttributes["B5:C6"]["numberStoredAsText"].Should().Be("1");
+    }
+
     [Fact]
     public void DuplicateSheetCommand_CopiesChartDataTableFormatting()
     {
@@ -486,5 +527,38 @@ public class SheetTabCommandTests
         cmd.Revert(ctx);
         cfRule.FormulaText.Should().Be("Sheet1!A1>0", "undo restores CF formula after sheet delete");
         dvRule.Formula1.Should().Be("Sheet1!A1<>\"\"", "undo restores DV formula after sheet delete");
+    }
+
+    // ── F24 regression: Delete Sheet must clear/rewrite chart DataRange refs on OTHER sheets
+    // that source from the deleted sheet, mirroring the existing pivot/slicer/picture handling. ──
+
+    [Fact]
+    public void RemoveSheetCommand_ClearsChartDataRangeReferencingDeletedSheetAndUndoRestores()
+    {
+        // Sheet2 hosts a chart whose DataRange sources data from Sheet1. Deleting Sheet1 must not
+        // leave the chart pointing at the now-nonexistent sheet.
+        var wb = new Workbook("test");
+        var sheet1 = wb.AddSheet("Sheet1");
+        var sheet2 = wb.AddSheet("Sheet2");
+        var ctx = new TestCommandContext(wb);
+
+        var originalRange = new GridRange(new CellAddress(sheet1.Id, 1, 1), new CellAddress(sheet1.Id, 5, 2));
+        var chart = new ChartModel
+        {
+            Name = "Cross-Sheet Chart",
+            Type = ChartType.Line,
+            DataRange = originalRange
+        };
+        sheet2.Charts.Add(chart);
+
+        var cmd = new RemoveSheetCommand(sheet1.Id);
+        cmd.Apply(ctx).Success.Should().BeTrue();
+
+        chart.DataRange.Start.Sheet.Should().Be(sheet2.Id, "chart DataRange must no longer reference the deleted sheet");
+        chart.DataRange.End.Sheet.Should().Be(sheet2.Id);
+
+        // Undo must restore the original cross-sheet DataRange.
+        cmd.Revert(ctx);
+        chart.DataRange.Should().Be(originalRange, "undo restores the chart's original DataRange after sheet delete");
     }
 }
