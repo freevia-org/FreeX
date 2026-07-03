@@ -630,6 +630,53 @@ public sealed class DocumentView : Control
 
     internal IReadOnlyList<ProofingDiagnostic> ProofingDiagnosticsForTest => BuildProofingDiagnostics();
 
+    internal IReadOnlyList<(int Block, int Offset, char Ch, RevisionKind Revision, bool IsRevisionStyled, bool IsFormatRevisionHighlighted, Rect Rect)>
+        ReviewGlyphsForTest
+    {
+        get
+        {
+            if (_laidOutWidth < 0)
+                Relayout(FallbackWidth);
+
+            var policy = CurrentReviewDisplayPolicy;
+            return _placed
+                .Where(pc => !pc.Sentinel && !pc.IsCell)
+                .Select(pc => (Placed: pc, Decision: policy.RevisionDecision(pc.Revision)))
+                .Where(item => item.Decision.IsTextVisible)
+                .Select(item => (
+                    item.Placed.Block,
+                    item.Placed.Offset,
+                    item.Placed.Ch,
+                    item.Placed.Revision,
+                    item.Decision.IsRevisionStylingApplied,
+                    item.Placed.HasFormatRevision && policy.ShouldHighlightFormattingChanges,
+                    new Rect(item.Placed.X, item.Placed.Y, Math.Max(1, item.Placed.W), item.Placed.LineHeight)))
+                .ToList();
+        }
+    }
+
+    internal IReadOnlyList<(int CommentId, Rect Rect)> CommentHighlightGlyphsForTest
+    {
+        get
+        {
+            if (_laidOutWidth < 0)
+                Relayout(FallbackWidth);
+
+            return CommentAnchorGlyphSnapshot(highlightedOnly: true);
+        }
+    }
+
+    internal IReadOnlyList<(int Block, Rect Rect)> SimpleMarkupChangeBarsForTest
+    {
+        get
+        {
+            if (_laidOutWidth < 0)
+                Relayout(FallbackWidth);
+
+            return SimpleMarkupChangeBarSnapshot();
+        }
+    }
+
     internal IReadOnlyList<(int Block, int Offset, Rect Rect)> ProofingSquiggleGlyphsForTest
     {
         get
@@ -3926,6 +3973,7 @@ public sealed class DocumentView : Control
         var cells = paragraph.StyleId is null
             ? rawCells
             : rawCells.Select(c => c with { Fmt = ResolveRunFmt(c.Fmt, paragraph) }).ToList();
+        var reviewPolicy = CurrentReviewDisplayPolicy;
         var pf = ResolveParagraphFmt(paragraph);
         var alignment = pf.Alignment;
         var spaceAfter = pf.SpaceAfterPt * PxPerPoint;
@@ -4007,9 +4055,13 @@ public sealed class DocumentView : Control
             }
             else
             {
-                var ft = Build(cells[c].Ch.ToString(), cells[c].Fmt);
-                measured[c] = ft.WidthIncludingTrailingWhitespace;
-                heights[c] = ft.Height;
+                var decision = reviewPolicy.RevisionDecision(cells[c].Revision);
+                if (decision.IsTextVisible)
+                {
+                    var ft = Build(cells[c].Ch.ToString(), cells[c].Fmt);
+                    measured[c] = ft.WidthIncludingTrailingWhitespace;
+                    heights[c] = ft.Height;
+                }
             }
         }
 
@@ -4060,7 +4112,7 @@ public sealed class DocumentView : Control
             // actual pen position at the time each tab is encountered on its line.
             // BP1 fix: pass pen position from the MARGIN (lineWidth + full indent) so tab stops
             // compare against OOXML positions (margin-relative), not the indented text origin.
-            if (cells[i].Ch == '\t')
+            if (cells[i].Ch == '\t' && reviewPolicy.IsRevisionTextVisible(cells[i].Revision))
                 measured[i] = ComputeTabMeasuredWidth(lineWidth + paraLeftInset + lineExtraInset, pf, defaultTabPx);
 
             if (cells[i].Ch == ' ')
@@ -4094,7 +4146,7 @@ public sealed class DocumentView : Control
                                        (lineIndex  > 0 && indentFirst < 0) ? -indentFirst : 0.0;
                 for (var k = lineStart; k < i; k++)
                 {
-                    if (cells[k].Ch == '\t')
+                    if (cells[k].Ch == '\t' && reviewPolicy.IsRevisionTextVisible(cells[k].Revision))
                         measured[k] = ComputeTabMeasuredWidth(lineWidth + paraLeftInset + newLineExtraInset, pf, defaultTabPx);
                     lineWidth += measured[k];
                 }
@@ -4271,8 +4323,15 @@ public sealed class DocumentView : Control
             };
         }
 
+        var reviewPolicy = CurrentReviewDisplayPolicy;
         for (var c = from; c < to; c++)
         {
+            if (!reviewPolicy.IsRevisionTextVisible(cells[c].Revision))
+            {
+                _placed.Add(new PlacedChar(blockIndex, c, x, pageSpaceY, 0, lineHeight, cells[c].Fmt, cells[c].Ch, Sentinel: false, CommentId: cells[c].CommentId, Revision: cells[c].Revision, Link: cells[c].Link, HasFormatRevision: cells[c].FormatRevision is not null));
+                continue;
+            }
+
             if (cells[c].Ch == '\t')
             {
                 // AV-TAB / BP1 fix: pen position and tab stops are relative to the margin origin
@@ -4315,12 +4374,12 @@ public sealed class DocumentView : Control
                     _tabLeaderSpans.Add((tabX, segmentStartX, pageSpaceY, lineHeight, leader, cells[c].Fmt));
 
                 // Place the tab character with its computed advance width (for caret hit-testing).
-                _placed.Add(new PlacedChar(blockIndex, c, tabX, pageSpaceY, tabAdvance, lineHeight, cells[c].Fmt, '\t', Sentinel: false, CommentId: cells[c].CommentId, Revision: cells[c].Revision, Link: cells[c].Link));
+                _placed.Add(new PlacedChar(blockIndex, c, tabX, pageSpaceY, tabAdvance, lineHeight, cells[c].Fmt, '\t', Sentinel: false, CommentId: cells[c].CommentId, Revision: cells[c].Revision, Link: cells[c].Link, HasFormatRevision: cells[c].FormatRevision is not null));
                 x = segmentStartX;
                 continue;
             }
 
-            _placed.Add(new PlacedChar(blockIndex, c, x, pageSpaceY, measured[c], lineHeight, cells[c].Fmt, cells[c].Ch, Sentinel: false, CommentId: cells[c].CommentId, Revision: cells[c].Revision, Link: cells[c].Link));
+            _placed.Add(new PlacedChar(blockIndex, c, x, pageSpaceY, measured[c], lineHeight, cells[c].Fmt, cells[c].Ch, Sentinel: false, CommentId: cells[c].CommentId, Revision: cells[c].Revision, Link: cells[c].Link, HasFormatRevision: cells[c].FormatRevision is not null));
             x += measured[c];
             // Extra inter-word gap for justify alignment: only for spaces before the last non-space cell.
             if (wordGap > 0 && cells[c].Ch == ' ' && c < lastNonSpaceIdx)
@@ -5708,9 +5767,13 @@ public sealed class DocumentView : Control
 
         var selection = NormalizedSelection();
         var proofingOffsets = BuildProofingOffsetSet();
+        var reviewPolicy = CurrentReviewDisplayPolicy;
         foreach (var pc in _placed)
         {
             if (pc.Sentinel)
+                continue;
+            var revisionDecision = reviewPolicy.RevisionDecision(pc.Revision);
+            if (!revisionDecision.IsTextVisible)
                 continue;
 
             if (selection is { } sel && IsWithin(sel, pc.Block, pc.Offset))
@@ -5726,7 +5789,7 @@ public sealed class DocumentView : Control
             // AV-COMMENT: a subtle amber background tint behind glyphs anchored by a review comment, so
             // the commented range reads as one region (the underline + margin marker are drawn after the
             // glyph loop). Resolved threads tint muted/grey to match Word's de-emphasised resolved state.
-            if (pc.CommentId is { } commentTintId)
+            if (pc.CommentId is { } commentTintId && reviewPolicy.ShouldHighlightComments)
             {
                 var tint = IsCommentResolved(commentTintId) ? ResolvedCommentTintBrush : CommentTintBrush;
                 context.FillRectangle(tint, new Rect(pc.X, pc.Y, Math.Max(1, pc.W), pc.LineHeight));
@@ -5764,7 +5827,10 @@ public sealed class DocumentView : Control
 
             // AV-TRACKEDIT: tracked insertions/deletions draw in the revision colour; insertions are also
             // underlined and deletions struck through (the marks layered on top of any run decorations below).
-            if (pc.Revision != RevisionKind.None)
+            if (revisionDecision.IsRevisionStylingApplied)
+                drawFmt = drawFmt with { ColorHex = RevisionColorHex };
+            var formatRevisionHighlighted = pc.HasFormatRevision && reviewPolicy.ShouldHighlightFormattingChanges;
+            if (formatRevisionHighlighted && string.IsNullOrWhiteSpace(drawFmt.ColorHex))
                 drawFmt = drawFmt with { ColorHex = RevisionColorHex };
 
             // AV-TAB: tab characters have no glyph — skip text drawing (leader was drawn separately).
@@ -5775,7 +5841,9 @@ public sealed class DocumentView : Control
                     DrawDecoration(context, pc, pc.Y + pc.LineHeight * 0.82, drawFmt);
                 if (drawFmt.Strikethrough)
                     DrawDecoration(context, pc, pc.Y + pc.LineHeight * 0.5, drawFmt);
-                DrawRevisionDecoration(context, pc);
+                DrawRevisionDecoration(context, pc, revisionDecision);
+                if (formatRevisionHighlighted)
+                    DrawFormatRevisionDecoration(context, pc);
                 continue;
             }
 
@@ -5786,7 +5854,9 @@ public sealed class DocumentView : Control
                 DrawDecoration(context, pc, pc.Y + pc.LineHeight * 0.82, drawFmt);
             if (drawFmt.Strikethrough)
                 DrawDecoration(context, pc, pc.Y + pc.LineHeight * 0.5, drawFmt);
-            DrawRevisionDecoration(context, pc);
+            DrawRevisionDecoration(context, pc, revisionDecision);
+            if (formatRevisionHighlighted)
+                DrawFormatRevisionDecoration(context, pc);
             if (!pc.IsCell && proofingOffsets.Contains((pc.Block, pc.Offset)))
                 DrawProofingSquiggle(context, pc);
         }
@@ -5798,6 +5868,7 @@ public sealed class DocumentView : Control
         // every commented glyph (the in-text anchor mark) plus, for each anchor line, a minimal marker in
         // the right margin (a balloon glyph + the author's initial) aligned to that line.
         DrawCommentAnchors(context);
+        DrawSimpleMarkupChangeBars(context);
 
         // Paragraph marks (¶) rendered faintly at the end-sentinel of each block when enabled.
         if (_showParagraphMarks)
@@ -6545,7 +6616,8 @@ public sealed class DocumentView : Control
     /// </summary>
     private void DrawCommentAnchors(DrawingContext context)
     {
-        if (_doc.Comments.Count == 0)
+        var anchors = CommentAnchorGlyphSnapshot(highlightedOnly: true);
+        if (anchors.Count == 0)
             return;
 
         // Right-margin x: just right of the content column. Available when the page extends past content
@@ -6558,26 +6630,32 @@ public sealed class DocumentView : Control
         // (one marker per anchor line, not one per glyph).
         var markedLines = new HashSet<(int Id, long Y)>();
 
-        foreach (var pc in _placed)
+        foreach (var (id, rect) in anchors)
         {
-            if (pc.Sentinel || pc.CommentId is not { } id)
-                continue;
-
             var resolved = IsCommentResolved(id);
 
             // In-text anchor mark: amber underline just below the glyph baseline band.
-            var underlineY = pc.Y + pc.LineHeight * 0.90;
+            var underlineY = rect.Y + rect.Height * 0.90;
             var pen = resolved ? ResolvedCommentUnderlinePen : CommentUnderlinePen;
-            context.DrawLine(pen, new Point(pc.X, underlineY), new Point(pc.X + Math.Max(1, pc.W), underlineY));
+            context.DrawLine(pen, new Point(rect.X, underlineY), new Point(rect.Right, underlineY));
 
             // Right-margin marker: one per anchor line.
             if (!hasMargin)
                 continue;
-            var lineKey = (id, (long)Math.Round(pc.Y));
+            var lineKey = (id, (long)Math.Round(rect.Y));
             if (!markedLines.Add(lineKey))
                 continue;
 
-            DrawCommentMarginMarker(context, marginX, pc.Y, pc.LineHeight, id, resolved);
+            DrawCommentMarginMarker(context, marginX, rect.Y, rect.Height, id, resolved);
+        }
+    }
+
+    private void DrawSimpleMarkupChangeBars(DrawingContext context)
+    {
+        foreach (var (_, rect) in SimpleMarkupChangeBarSnapshot())
+        {
+            var x = rect.X + rect.Width / 2;
+            context.DrawLine(SimpleMarkupChangeBarPen, new Point(x, rect.Y), new Point(x, rect.Bottom));
         }
     }
 
@@ -7074,20 +7152,32 @@ public sealed class DocumentView : Control
     /// insertion (Word's w:ins decoration) or a revision-coloured strikethrough across a tracked deletion
     /// (w:del). A no-op for ordinary (un-tracked) glyphs.
     /// </summary>
-    private static void DrawRevisionDecoration(DrawingContext context, PlacedChar pc)
+    private static void DrawRevisionDecoration(
+        DrawingContext context,
+        PlacedChar pc,
+        ReviewRevisionDisplayDecision decision)
     {
-        if (pc.W <= 0)
+        if (pc.W <= 0 || !decision.IsRevisionStylingApplied)
             return;
-        if (pc.IsInsertedRevision)
+        if (decision.IsInsertionDecorationApplied)
         {
             var y = pc.Y + pc.LineHeight * 0.86;
             context.DrawLine(RevisionInsertUnderlinePen, new Point(pc.X, y), new Point(pc.X + pc.W, y));
         }
-        else if (pc.IsDeletedRevision)
+        else if (decision.IsDeletionDecorationApplied)
         {
             var y = pc.Y + pc.LineHeight * 0.5;
             context.DrawLine(RevisionDeleteStrikePen, new Point(pc.X, y), new Point(pc.X + pc.W, y));
         }
+    }
+
+    private static void DrawFormatRevisionDecoration(DrawingContext context, PlacedChar pc)
+    {
+        if (pc.W <= 0)
+            return;
+
+        var y = pc.Y + pc.LineHeight * 0.92;
+        context.DrawLine(FormatRevisionUnderlinePen, new Point(pc.X, y), new Point(pc.X + pc.W, y));
     }
 
     private static void DrawProofingSquiggle(DrawingContext context, PlacedChar pc)
@@ -8512,10 +8602,40 @@ public sealed class DocumentView : Control
     {
         // Force a fresh layout so the result always reflects the current model (introspection/test hook).
         Relayout(_laidOutWidth > 0 ? _laidOutWidth : FallbackWidth);
+        return CommentAnchorGlyphSnapshot(highlightedOnly: false);
+    }
+
+    private IReadOnlyList<(int CommentId, Rect Rect)> CommentAnchorGlyphSnapshot(bool highlightedOnly)
+    {
+        var policy = CurrentReviewDisplayPolicy;
+        if (highlightedOnly && !policy.ShouldHighlightComments)
+            return [];
+
         return _placed
-            .Where(p => !p.Sentinel && p.CommentId is not null)
+            .Where(p => !p.Sentinel
+                && p.CommentId is not null
+                && policy.IsRevisionTextVisible(p.Revision))
             .Select(p => (DeleteCommentCommand.ResolveTopLevel(_doc, p.CommentId!.Value),
                           new Rect(p.X, p.Y, Math.Max(1, p.W), p.LineHeight)))
+            .ToList();
+    }
+
+    private IReadOnlyList<(int Block, Rect Rect)> SimpleMarkupChangeBarSnapshot()
+    {
+        var policy = CurrentReviewDisplayPolicy;
+        if (!policy.ShouldShowSimpleMarkupChangeBar)
+            return [];
+
+        return _placed
+            .Where(p => !p.Sentinel && p.Revision != RevisionKind.None)
+            .GroupBy(p => p.Block)
+            .Select(g =>
+            {
+                var top = g.Min(p => p.Y);
+                var bottom = g.Max(p => p.Y + Math.Max(1, p.LineHeight));
+                var x = Math.Max(0, _contentLeft - 9);
+                return (g.Key, new Rect(x, top, 2, Math.Max(6, bottom - top)));
+            })
             .ToList();
     }
 
@@ -8535,6 +8655,41 @@ public sealed class DocumentView : Control
 
     /// <summary>The default revision author stamped on tracked changes this editor records.</summary>
     public string RevisionAuthor { get; set; } = "FreeW User";
+
+    public ReviewDisplayMode DisplayForReview { get; private set; } = ReviewDisplayMode.AllMarkup;
+
+    public bool ShowMarkupInsertionsAndDeletions { get; private set; } = true;
+
+    public bool ShowMarkupComments { get; private set; } = true;
+
+    public bool ShowMarkupFormatting { get; private set; } = true;
+
+    public ReviewDisplayPolicy CurrentReviewDisplayPolicy =>
+        new(DisplayForReview, ShowMarkupInsertionsAndDeletions, ShowMarkupComments, ShowMarkupFormatting);
+
+    public void ApplyDisplayForReview(ReviewDisplayMode mode)
+    {
+        DisplayForReview = mode;
+        InvalidateLayoutAndVisual();
+    }
+
+    public void ApplyShowMarkupInsertionsAndDeletions(bool show)
+    {
+        ShowMarkupInsertionsAndDeletions = show;
+        InvalidateLayoutAndVisual();
+    }
+
+    public void ApplyShowMarkupComments(bool show)
+    {
+        ShowMarkupComments = show;
+        InvalidateLayoutAndVisual();
+    }
+
+    public void ApplyShowMarkupFormatting(bool show)
+    {
+        ShowMarkupFormatting = show;
+        InvalidateLayoutAndVisual();
+    }
 
     /// <summary>The W3CDTF (UTC) timestamp stamped on revisions recorded right now.</summary>
     private static string CurrentRevisionDateXml() =>
@@ -12002,7 +12157,7 @@ public sealed class DocumentView : Control
                 // (layout + edit). Textless comment-reference runs contribute no cells, as before.
                 // AV-TRACKEDIT: also carry the run's tracked-change mark so recorded revisions survive the
                 // round-trip (and SetRuns can re-segment runs on a revision boundary).
-                cells.Add(new Cell(ch, run.Formatting, run.CommentId, run.Revision, run.RevisionAuthor, run.RevisionDateXml, link));
+                cells.Add(new Cell(ch, run.Formatting, run.CommentId, run.Revision, run.RevisionAuthor, run.RevisionDateXml, link, run.FormatRevision));
         }
         return cells;
     }
@@ -12116,6 +12271,7 @@ public sealed class DocumentView : Control
             // AV-LINK: a run is also one contiguous span of equal hyperlink target, so an inserted/edited
             // hyperlink survives the cell round-trip and re-emits as a w:hyperlink-wrapped run on save.
             var link = cells[i].Link;
+            var formatRevision = cells[i].FormatRevision;
             var start = i;
             while (i < cells.Count
                    && cells[i].Fmt.Equals(fmt)
@@ -12123,7 +12279,8 @@ public sealed class DocumentView : Control
                    && cells[i].Revision == revision
                    && cells[i].RevisionAuthor == revisionAuthor
                    && cells[i].RevisionDateXml == revisionDateXml
-                   && cells[i].Link == link)
+                   && cells[i].Link == link
+                   && cells[i].FormatRevision == formatRevision)
                 i++;
             var text = new string(cells.Skip(start).Take(i - start).Select(c => c.Ch).ToArray());
             paragraph.Runs.Add(new Run(text, fmt)
@@ -12135,6 +12292,7 @@ public sealed class DocumentView : Control
                 HyperlinkUrl = link?.Url,
                 HyperlinkAnchor = link?.Anchor,
                 HyperlinkTooltip = link?.Tooltip,
+                FormatRevision = formatRevision,
             });
             if (commentId is { } cid)
                 lastAnchorIndexFor[cid] = paragraph.Runs.Count - 1;
@@ -12350,6 +12508,8 @@ public sealed class DocumentView : Control
     private static IBrush RevisionBrush { get; } = new SolidColorBrush(RevisionColor);
     private static readonly Pen RevisionInsertUnderlinePen = new(RevisionBrush, 1.0);
     private static readonly Pen RevisionDeleteStrikePen = new(RevisionBrush, 1.0);
+    private static readonly Pen FormatRevisionUnderlinePen = new(RevisionBrush, 1.0, new DashStyle([1, 2], 0));
+    private static readonly Pen SimpleMarkupChangeBarPen = new(RevisionBrush, 2.0);
     private static readonly Pen ProofingSquigglePen = new(new SolidColorBrush(Color.FromRgb(0xD1, 0x34, 0x38)), 1.15);
 
     // ── AV-LINK: hyperlink render colour ──────────────────────────────────────────────────────────
@@ -12372,7 +12532,8 @@ public sealed class DocumentView : Control
         // AV-LINK: the run's hyperlink target (external URL / internal bookmark anchor) + ScreenTip, carried
         // per-character so a hyperlink span survives the cell round-trip (ParaCells → edit → SetRuns) and so
         // SetRuns re-segments runs on a hyperlink boundary. null = this glyph is not inside a hyperlink.
-        LinkInfo? Link = null);
+        LinkInfo? Link = null,
+        FormatRevision? FormatRevision = null);
 
     /// <summary>
     /// AV-LINK: a hyperlink target carried alongside a glyph/run. Exactly one of <see cref="Url"/> (external)
@@ -12410,7 +12571,8 @@ public sealed class DocumentView : Control
         RevisionKind Revision = RevisionKind.None,
         // AV-LINK: the hyperlink target this glyph belongs to (null = not a hyperlink), so the render can
         // style it (blue + underline) and the pointer hit-test can follow it on Ctrl+Click.
-        LinkInfo? Link = null)
+        LinkInfo? Link = null,
+        bool HasFormatRevision = false)
     {
         /// <summary>True when this glyph is inside a table cell (as opposed to a body paragraph).</summary>
         public bool IsCell => CellRow >= 0;
