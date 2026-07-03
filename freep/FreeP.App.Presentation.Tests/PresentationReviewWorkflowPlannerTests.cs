@@ -790,12 +790,40 @@ public sealed class PresentationReviewWorkflowPlannerTests
             Table = new TableShape
             {
                 ColumnWidthsEmu = { 100, 100 },
+                Flags = new TableStyleFlags { FirstRow = true },
                 Rows =
                 {
-                    new TableRow { Cells = { new TableCell(), new TableCell() } },
-                    new TableRow { Cells = { new TableCell(), new TableCell() } }
+                    new TableRow
+                    {
+                        Cells =
+                        {
+                            new TableCell { TextBody = TextBody("Region") },
+                            new TableCell { TextBody = TextBody("Revenue") }
+                        }
+                    },
+                    new TableRow
+                    {
+                        Cells =
+                        {
+                            new TableCell { TextBody = TextBody("North") },
+                            new TableCell { TextBody = TextBody("$42K") }
+                        }
+                    }
                 }
             }
+        };
+        var picture = new SlideShape
+        {
+            Id = 23,
+            Name = "Product image",
+            Kind = SlideShapeKind.Picture,
+            Picture = new ImagePart { ContentType = "image/jpeg" },
+            PictureFormat = new PictureFormat
+            {
+                CropLeft = 0.1,
+                Grayscale = true
+            },
+            PictureFrameGeometry = "roundRect"
         };
         var text = new SlideShape
         {
@@ -806,17 +834,21 @@ public sealed class PresentationReviewWorkflowPlannerTests
         };
         slide.Shapes.Add(chart);
         slide.Shapes.Add(table);
+        slide.Shapes.Add(picture);
         slide.Shapes.Add(text);
 
         var chartPlan = PresentationReviewWorkflowPlanner.BuildAltTextRequestPlan(slide, chart.Id, null);
         var tablePlan = PresentationReviewWorkflowPlanner.BuildAltTextRequestPlan(slide, table.Id, null);
+        var picturePlan = PresentationReviewWorkflowPlanner.BuildAltTextRequestPlan(slide, picture.Id, null);
         var textPlan = PresentationReviewWorkflowPlanner.BuildAltTextRequestPlan(slide, text.Id, null);
 
         chartPlan.SuggestedDescription.Should().Be(
             "Chart \"Revenue by region\" on slide \"Quarterly review\". Summarize the main trend, comparison, or takeaway.");
         chartPlan.ProposedDescription.Should().BeEmpty();
         tablePlan.SuggestedDescription.Should().Be(
-            "Table \"Results table\" with 2 rows and 2 columns on slide \"Quarterly review\". Summarize the key headers, values, and takeaway.");
+            "Table \"Results table\" with 2 rows and 2 columns, headers \"Region\" and \"Revenue\", sample row \"North\" and \"$42K\" on slide \"Quarterly review\". Summarize the key headers, values, and takeaway.");
+        picturePlan.SuggestedDescription.Should().Be(
+            "Picture \"Product image\" (JPEG image, cropped, grayscale effect, rounded-rectangle frame) on slide \"Quarterly review\". Describe the important visual details and context.");
         textPlan.SuggestedDescription.Should().Be(
             "Text shape \"Launch window moves to July.\" on slide \"Quarterly review\". Describe the visible text or the shape's purpose.");
     }

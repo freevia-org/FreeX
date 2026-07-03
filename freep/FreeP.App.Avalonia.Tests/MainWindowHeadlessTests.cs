@@ -2672,7 +2672,7 @@ public sealed class MainWindowHeadlessTests
         titleText.Should().Be("Packaging photo");
         titlePlaceholder.Should().Be("Packaging photo");
         descriptionPlaceholder.Should().Be(
-            "Picture \"Product image\" on slide \"Slide 1\". Describe the important visual details and context.");
+            "Picture \"Product image\" (PNG image) on slide \"Slide 1\". Describe the important visual details and context.");
         missingDescriptionApplyEnabled.Should().BeFalse();
         validApplyEnabled.Should().BeTrue();
         metadataMutation.Should().Be(new PresentationAltTextMutationPlan(
