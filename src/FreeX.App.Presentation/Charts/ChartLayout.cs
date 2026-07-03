@@ -124,6 +124,21 @@ public sealed class TrendlineLayout
 {
     public required TrendlineFitKind Fit { get; init; }
     public required IReadOnlyList<LayoutPoint> Points { get; init; }
+
+    /// <summary>
+    /// The equation and/or R-squared annotation text lines, when
+    /// <see cref="ChartModel.ShowTrendlineEquation"/> or <see cref="ChartModel.ShowTrendlineRSquared"/>
+    /// is set; otherwise empty. Consumers join these with a newline and draw them near
+    /// <see cref="AnnotationAnchor"/>.
+    /// </summary>
+    public IReadOnlyList<string> AnnotationLines { get; init; } = [];
+
+    /// <summary>
+    /// The plot-space anchor point for the annotation text box (top-left corner), already mapped
+    /// through the same scales as <see cref="Points"/>. Mirrors the source renderer's placement at
+    /// the source data's (min X, max Y). Meaningless when <see cref="AnnotationLines"/> is empty.
+    /// </summary>
+    public LayoutPoint AnnotationAnchor { get; init; }
 }
 
 /// <summary>

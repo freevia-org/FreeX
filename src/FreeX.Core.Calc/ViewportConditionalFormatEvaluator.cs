@@ -10,7 +10,8 @@ internal sealed record CfAggregateCache(
     double Max,
     IReadOnlyList<double>? SortedValues = null,
     IReadOnlySet<CellAddress>? TopBottomMatches = null,
-    IReadOnlyDictionary<string, int>? ValueCounts = null);
+    IReadOnlyDictionary<string, int>? ValueCounts = null,
+    double StdDev = 0);
 
 internal sealed record CfEvaluationContext(
     IReadOnlyList<ConditionalFormat> RulesByPriority,

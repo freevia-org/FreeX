@@ -808,6 +808,15 @@ public sealed class DeleteCellsCommand : IWorkbookCommand
                     new CellAddress(merge.Start.Sheet, merge.Start.Row, merge.Start.Col - count),
                     new CellAddress(merge.End.Sheet, merge.End.Row, merge.End.Col - count)));
             }
+            else if (merge.Start.Col < deletedStartCol)
+            {
+                // Start-edge straddle: merge begins before the deleted range and ends inside it
+                // (e.g. merge B2:C2, delete C2). The surviving columns [Start.Col..deletedStartCol-1]
+                // are left in place — shrink the merge instead of dropping it.
+                result.Add(new GridRange(
+                    merge.Start,
+                    new CellAddress(merge.End.Sheet, merge.End.Row, deletedStartCol - 1)));
+            }
             // else: merge is entirely within the deleted range → drop it
         }
 
@@ -841,6 +850,15 @@ public sealed class DeleteCellsCommand : IWorkbookCommand
                 result.Add(new GridRange(
                     new CellAddress(merge.Start.Sheet, merge.Start.Row - count, merge.Start.Col),
                     new CellAddress(merge.End.Sheet, merge.End.Row - count, merge.End.Col)));
+            }
+            else if (merge.Start.Row < deletedStartRow)
+            {
+                // Start-edge straddle: merge begins before the deleted range and ends inside it
+                // (e.g. merge A2:A3, delete A3). The surviving rows [Start.Row..deletedStartRow-1]
+                // are left in place — shrink the merge instead of dropping it.
+                result.Add(new GridRange(
+                    merge.Start,
+                    new CellAddress(merge.End.Sheet, deletedStartRow - 1, merge.End.Col)));
             }
             // else: merge is entirely within the deleted range → drop it
         }

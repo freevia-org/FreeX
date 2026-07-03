@@ -269,4 +269,38 @@ public sealed partial class DelimitedTextFileAdapterTests
         sheet.GetValue(new CellAddress(sheet.Id, 1, 2)).Should().Be(new DateTimeValue(new TimeSpan(21, 0, 0).TotalDays));
     }
 
+    // F16 regression: on locales where "." is both the date separator and the number group
+    // separator (de-DE, it-IT, ...), a dotted dd.mm.yyyy date like "31.12.2024" is also a
+    // syntactically valid grouped number under NumberStyles.Any ("31,122,024"). Excel treats such
+    // text as a date; the greedy grouped-number parse must not swallow it into a nonsense number.
+    [Fact]
+    public void Load_CoercesDottedDateOverGroupedNumberOnDeDeCulture()
+    {
+        using var cultureScope = TestCultureScope.CurrentCulture("de-DE");
+        var adapter = new DelimitedTextFileAdapter(".csv", "Comma-separated values", ',');
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("31.12.2024\r\n"));
+
+        var workbook = adapter.Load(stream);
+        var sheet = workbook.Sheets.Single();
+
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 1))
+            .Should().Be(DateTimeValue.FromDateTime(new DateTime(2024, 12, 31)));
+    }
+
+    // A genuine grouped number sharing the same "." separator must still parse as a number, not
+    // be misread as a date, once the dotted-date fix is in place.
+    [Fact]
+    public void Load_StillCoercesUnambiguousGroupedNumbersOnDeDeCulture()
+    {
+        using var cultureScope = TestCultureScope.CurrentCulture("de-DE");
+        var adapter = new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t');
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("1.234.567\t1.234,56\r\n"));
+
+        var workbook = adapter.Load(stream);
+        var sheet = workbook.Sheets.Single();
+
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 1)).Should().Be(new NumberValue(1234567));
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 2)).Should().Be(new NumberValue(1234.56));
+    }
+
 }

@@ -203,13 +203,38 @@ public sealed class AutofillCommand : IWorkbookCommand
             _ => 0
         }).ToList();
         var lastValue = plan.Direction is FillDirection.Up or FillDirection.Left ? numbers[0] : numbers[^1];
-        var step = plan.Direction switch
-        {
-            FillDirection.Up or FillDirection.Left => numbers[0] - numbers[1],
-            _ => numbers[^1] - numbers[^2]
-        };
+        var naturalSlope = ComputeLinearFitSlope(numbers);
+        var step = plan.Direction is FillDirection.Up or FillDirection.Left ? -naturalSlope : naturalSlope;
 
         return new ScalarSeries(lastValue, step, plan.Axis, createValue);
+    }
+
+    /// <summary>
+    /// Fits a straight line (least-squares) through <paramref name="numbers"/> (treated as
+    /// y-values at evenly spaced x = 0, 1, 2, ...) and returns its slope, matching Excel's
+    /// fill-handle behavior for a linear numeric/date trend. For exactly two values this
+    /// reduces to the plain two-point slope (numbers[1] - numbers[0]).
+    /// </summary>
+    private static double ComputeLinearFitSlope(IReadOnlyList<double> numbers)
+    {
+        var n = numbers.Count;
+        if (n < 2)
+            return 0;
+
+        double sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
+        for (var i = 0; i < n; i++)
+        {
+            sumX += i;
+            sumY += numbers[i];
+            sumXY += i * numbers[i];
+            sumXX += (double)i * i;
+        }
+
+        var denominator = n * sumXX - sumX * sumX;
+        if (denominator == 0)
+            return 0;
+
+        return (n * sumXY - sumX * sumY) / denominator;
     }
 
     private sealed record ScalarSeries(

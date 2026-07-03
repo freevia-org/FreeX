@@ -36,6 +36,18 @@ public static class ChartLayoutEngine
             : DefaultColumnHalfWidth;
 
     /// <summary>
+    /// Returns the half-width of a stacked column/bar segment, mirroring WPF's ColumnBarHalfWidth
+    /// (which — unlike the clustered path — defaults to 0.35 rather than 0.4, but applies the exact
+    /// same <see cref="ChartModel.BarGapWidth"/> formula when the user sets a gap width). Stacked
+    /// types are included in <see cref="ChartTypeSupport.SupportsBarGapWidth"/>, so a stacked chart's
+    /// Gap Width setting must narrow/widen the stack just like a clustered chart's.
+    /// </summary>
+    private static double StackedBarHalfWidth(ChartModel chart) =>
+        chart.BarGapWidth is int gapWidth
+            ? Math.Clamp(0.5 * 100.0 / (100.0 + gapWidth), 0.05, 0.5)
+            : StackedColumnHalfWidth;
+
+    /// <summary>
     /// Returns the left/right offsets (relative to the category centre) for the bar of the
     /// <paramref name="clusterOrdinal"/>-th clustered series, given the full category half-width
     /// and the total clustered-series count. Mirrors WPF ClusteredBarOffsets exactly:
@@ -117,6 +129,42 @@ public static class ChartLayoutEngine
             ChartType.Surface or ChartType.ThreeDSurface => LayoutSurface(request),
             _ => LayoutColumnLineArea(request),
         };
+    }
+
+    /// <summary>
+    /// Builds the value axis that runs along the bottom (X, for Bar/Scatter/Bubble) using a
+    /// logarithmic scale when the chart requests it (<see cref="ChartModel.XAxisLogScale"/>) and the
+    /// chart type supports a log X axis (<see cref="ChartTypeSupport.SupportsXAxisLogScale"/>);
+    /// otherwise falls back to the normal linear axis.
+    /// </summary>
+    private static AxisScale CreateXValueAxis(ChartModel chart, double dataMin, double dataMax, PlotRect plot, AxisSide side)
+    {
+        if (chart.XAxisLogScale && ChartTypeSupport.SupportsXAxisLogScale(chart.Type))
+        {
+            return AxisScale.CreateLogValueAxis(dataMin, dataMax, plot, side,
+                chart.XAxisMinimum, chart.XAxisMaximum, chart.XAxisLogBase);
+        }
+
+        return AxisScale.CreateValueAxis(dataMin, dataMax, plot, side,
+            chart.XAxisMinimum, chart.XAxisMaximum, chart.XAxisMajorUnit);
+    }
+
+    /// <summary>
+    /// Builds the value axis that runs along the left (Y, for Column/Line/Area/Scatter/Bubble) using
+    /// a logarithmic scale when the chart requests it (<see cref="ChartModel.YAxisLogScale"/>) and the
+    /// chart type supports a log Y axis (<see cref="ChartTypeSupport.SupportsYAxisLogScale"/>);
+    /// otherwise falls back to the normal linear axis.
+    /// </summary>
+    private static AxisScale CreateYValueAxis(ChartModel chart, double dataMin, double dataMax, PlotRect plot, AxisSide side)
+    {
+        if (chart.YAxisLogScale && ChartTypeSupport.SupportsYAxisLogScale(chart.Type))
+        {
+            return AxisScale.CreateLogValueAxis(dataMin, dataMax, plot, side,
+                chart.YAxisMinimum, chart.YAxisMaximum, chart.YAxisLogBase);
+        }
+
+        return AxisScale.CreateValueAxis(dataMin, dataMax, plot, side,
+            chart.YAxisMinimum, chart.YAxisMaximum, chart.YAxisMajorUnit);
     }
 
     // ---- Pie / Doughnut -------------------------------------------------------------------
@@ -237,9 +285,7 @@ public static class ChartLayoutEngine
             ? StackedValueRange(request, categoryCount, isPercent)
             : PlainValueRange(request);
 
-        var valueScale = AxisScale.CreateValueAxis(
-            dataMin, dataMax, plot, AxisSide.Left,
-            chart.YAxisMinimum, chart.YAxisMaximum, chart.YAxisMajorUnit);
+        var valueScale = CreateYValueAxis(chart, dataMin, dataMax, plot, AxisSide.Left);
 
         // Combo charts: a secondary value axis on the right carries the assigned series. Stacked
         // charts do not split across axes (matching the source renderer).
@@ -254,7 +300,7 @@ public static class ChartLayoutEngine
 
         if (isStacked)
         {
-            LayoutStackedColumns(request, categoryCount, isPercent, categoryScale, valueScale, seriesLayouts);
+            LayoutStackedColumns(request, categoryCount, isPercent, categoryScale, valueScale, seriesLayouts, dataLabels);
         }
         else
         {
@@ -262,8 +308,14 @@ public static class ChartLayoutEngine
             // sub-slot within the category so the bars sit side by side rather than overdrawing
             // each other (mirroring WPF ClusteredBarOffsets). The cluster count is the number of
             // series that will be laid out as columns; the ordinal increments for each such series.
+            // Series promoted to a combo line/scatter overlay (ComboLineSeriesIndexes /
+            // ComboScatterSeriesIndexes) are drawn as a line/scatter instead and excluded from both
+            // the clustered slot count and the clustered ordinal, mirroring the source renderer's
+            // CountClusteredBarSeries.
             var isClusteredColumn = chart.Type is ChartType.Column or ChartType.ThreeDColumn;
-            var clusteredColumnCount = isClusteredColumn ? request.Series.Count : 0;
+            var clusteredColumnCount = isClusteredColumn
+                ? request.Series.Count(s => !IsComboLineSeries(chart, s.SeriesIndex) && !IsComboScatterSeries(chart, s.SeriesIndex))
+                : 0;
             var clusteredColumnOrdinal = 0;
 
             foreach (var series in request.Series)
@@ -272,7 +324,15 @@ public static class ChartLayoutEngine
                 var yScale = onSecondary ? secondaryScale! : valueScale;
                 var baseY = yScale.Transform(Clamp0(yScale));
                 SeriesLayout laid;
-                if (isClusteredColumn)
+                if (IsComboScatterSeries(chart, series.SeriesIndex))
+                {
+                    laid = LayoutComboScatterSeries(request, series, categoryScale, yScale, dataLabels);
+                }
+                else if (IsComboLineSeries(chart, series.SeriesIndex))
+                {
+                    laid = LayoutLineSeries(request, series, categoryScale, yScale, dataLabels);
+                }
+                else if (isClusteredColumn)
                 {
                     laid = LayoutColumnSeries(request, series, categoryScale, yScale, baseY, dataLabels,
                         clusteredColumnOrdinal, clusteredColumnCount);
@@ -363,15 +423,26 @@ public static class ChartLayoutEngine
         bool isPercent,
         AxisScale categoryScale,
         AxisScale valueScale,
-        List<SeriesLayout> seriesLayouts)
+        List<SeriesLayout> seriesLayouts,
+        List<DataLabelBox> dataLabels)
     {
+        var chart = request.Chart;
         var (posTotals, negTotals) = StackedTotals(request, categoryCount);
         var posBases = new double[categoryCount];
         var negBases = new double[categoryCount];
-        var half = StackedColumnHalfWidth;
+        var half = StackedBarHalfWidth(chart);
 
         foreach (var series in request.Series)
         {
+            // A series promoted to a combo line overlay is drawn as a line over the stack instead
+            // of a stacked segment, and does not participate in the running stack totals (mirrors
+            // WPF BuildStackedColumnModel, which `continue`s before touching positiveBases/negativeBases).
+            if (IsComboLineSeries(chart, series.SeriesIndex))
+            {
+                seriesLayouts.Add(LayoutLineSeries(request, series, categoryScale, valueScale, dataLabels));
+                continue;
+            }
+
             var bars = new List<SeriesBar>();
             for (var i = 0; i < series.Values.Count && i < categoryCount; i++)
             {
@@ -434,6 +505,26 @@ public static class ChartLayoutEngine
         };
     }
 
+    // Combo scatter overlay: same category-index x positions as the line overlay, but rendered as
+    // unconnected markers (ScatterPoints), mirroring the source renderer's IsComboScatterSeries path
+    // (a ScatterSeries with circle markers, no connecting line).
+    private static SeriesLayout LayoutComboScatterSeries(
+        ChartLayoutRequest request,
+        ChartSeriesData series,
+        AxisScale categoryScale,
+        AxisScale valueScale,
+        List<DataLabelBox> dataLabels)
+    {
+        var line = LayoutLineSeries(request, series, categoryScale, valueScale, dataLabels);
+        return new SeriesLayout
+        {
+            SeriesIndex = series.SeriesIndex,
+            Name = series.Name,
+            Kind = SeriesGeometryKind.ScatterPoints,
+            Points = line.Points,
+        };
+    }
+
     private static SeriesLayout LayoutAreaSeries(
         ChartLayoutRequest request,
         ChartSeriesData series,
@@ -469,9 +560,7 @@ public static class ChartLayoutEngine
         var (dataMin, dataMax) = isStacked
             ? StackedValueRange(request, categoryCount, isPercent)
             : PlainValueRange(request);
-        var valueScale = AxisScale.CreateValueAxis(
-            dataMin, dataMax, plot, AxisSide.Bottom,
-            chart.XAxisMinimum, chart.XAxisMaximum, chart.XAxisMajorUnit);
+        var valueScale = CreateXValueAxis(chart, dataMin, dataMax, plot, AxisSide.Bottom);
 
         var seriesLayouts = new List<SeriesLayout>(request.Series.Count);
         var dataLabels = new List<DataLabelBox>();
@@ -482,9 +571,11 @@ public static class ChartLayoutEngine
 
         // For clustered (non-stacked) Bar/ThreeDBar each series gets a disjoint sub-slot within
         // the category so the bars sit side by side rather than overdrawing each other, mirroring
-        // WPF ClusteredBarOffsets. Stacked bars keep the full slot (half=StackedColumnHalfWidth).
+        // WPF ClusteredBarOffsets. Stacked bars keep the full slot (half=StackedBarHalfWidth, which
+        // also honors the chart's Gap Width setting like the clustered path does).
         var clusteredBarCount = isStacked ? 0 : request.Series.Count;
         var clusteredBarOrdinal = 0;
+        var stackedHalfWidth = isStacked ? StackedBarHalfWidth(chart) : 0;
 
         foreach (var series in request.Series)
         {
@@ -494,8 +585,8 @@ public static class ChartLayoutEngine
             double ySlotLeft, ySlotRight;
             if (isStacked)
             {
-                ySlotLeft  = -StackedColumnHalfWidth;
-                ySlotRight =  StackedColumnHalfWidth;
+                ySlotLeft  = -stackedHalfWidth;
+                ySlotRight =  stackedHalfWidth;
             }
             else
             {
@@ -550,6 +641,11 @@ public static class ChartLayoutEngine
             });
         }
 
+        // F7: the WPF renderer honors ShowLinearTrendline for horizontal Bar charts too
+        // (swapTrendlineAxes: true); attach the trendline here so every renderer draws it for
+        // Bar/StackedBar/PercentStackedBar/ThreeDBar.
+        AttachBarTrendline(request, seriesLayouts, categoryScale, valueScale);
+
         return new ChartLayout
         {
             Type = chart.Type,
@@ -572,10 +668,8 @@ public static class ChartLayoutEngine
         var (xMin, xMax) = ScatterRange(request, useX: true);
         var (yMin, yMax) = ScatterRange(request, useX: false);
 
-        var xScale = AxisScale.CreateValueAxis(xMin, xMax, plot, AxisSide.Bottom,
-            chart.XAxisMinimum, chart.XAxisMaximum, chart.XAxisMajorUnit);
-        var yScale = AxisScale.CreateValueAxis(yMin, yMax, plot, AxisSide.Left,
-            chart.YAxisMinimum, chart.YAxisMaximum, chart.YAxisMajorUnit);
+        var xScale = CreateXValueAxis(chart, xMin, xMax, plot, AxisSide.Bottom);
+        var yScale = CreateYValueAxis(chart, yMin, yMax, plot, AxisSide.Left);
 
         var seriesLayouts = new List<SeriesLayout>(request.Series.Count);
         var dataLabels = new List<DataLabelBox>();
@@ -630,10 +724,8 @@ public static class ChartLayoutEngine
         var (xMin, xMax) = ScatterRange(request, useX: true);
         var (yMin, yMax) = ScatterRange(request, useX: false);
 
-        var xScale = AxisScale.CreateValueAxis(xMin, xMax, plot, AxisSide.Bottom,
-            chart.XAxisMinimum, chart.XAxisMaximum, chart.XAxisMajorUnit);
-        var yScale = AxisScale.CreateValueAxis(yMin, yMax, plot, AxisSide.Left,
-            chart.YAxisMinimum, chart.YAxisMaximum, chart.YAxisMajorUnit);
+        var xScale = CreateXValueAxis(chart, xMin, xMax, plot, AxisSide.Bottom);
+        var yScale = CreateYValueAxis(chart, yMin, yMax, plot, AxisSide.Left);
 
         var maxSize = MaxBubbleSize(request);
         var scale = Math.Max(0, chart.BubbleScale) / 100.0;
@@ -1046,6 +1138,29 @@ public static class ChartLayoutEngine
             || chart.SecondaryAxisSeriesIndexes.Contains(seriesIndex);
     }
 
+    // Mirrors the source renderer's IsComboLineSeries: membership in ComboLineSeriesIndexes is
+    // authoritative (populated from the chart XML's <c:lineChart> plot group), so a real Excel combo
+    // chart (e.g. bar-plus-line) draws the designated series as a line overlay instead of a
+    // column/area, even at series index 0 (Excel commonly draws the line series first over bar
+    // helper series). An empty list means "no combo lines" so a plain chart is unaffected.
+    private static bool IsComboLineSeries(ChartModel chart, int seriesIndex)
+    {
+        if (!ChartTypeSupport.SupportsComboLineOverlay(chart.Type) || !chart.UseComboLineForSecondarySeries || seriesIndex < 0)
+            return false;
+
+        return chart.ComboLineSeriesIndexes.Contains(seriesIndex);
+    }
+
+    // Mirrors the source renderer's IsComboScatterSeries: a series in ComboScatterSeriesIndexes is
+    // drawn as a scatter overlay (markers only, no connecting line) instead of column/area.
+    private static bool IsComboScatterSeries(ChartModel chart, int seriesIndex)
+    {
+        if (!ChartTypeSupport.SupportsComboLineOverlay(chart.Type) || seriesIndex < 0)
+            return false;
+
+        return chart.ComboScatterSeriesIndexes.Contains(seriesIndex);
+    }
+
     private static (double Min, double Max) SecondaryValueRange(ChartLayoutRequest request)
     {
         var chart = request.Chart;
@@ -1110,7 +1225,53 @@ public static class ChartLayoutEngine
 
         seriesLayouts[0] = seriesLayouts[0] with
         {
-            Trendline = new TrendlineLayout { Fit = ToFitKind(chart.TrendlineType), Points = pixelPoints },
+            Trendline = BuildTrendlineLayout(chart, sourcePoints, trend, pixelPoints,
+                point => new LayoutPoint(xToPixel(point.X), yScale.Transform(point.Y))),
+        };
+    }
+
+    // Trendline overlay for horizontal Bar/StackedBar/PercentStackedBar/ThreeDBar charts: the category
+    // axis is vertical (Y) and the value axis is horizontal (X) — the mirror image of the
+    // column/line/area layout. Source points are (category index, value) exactly as in
+    // <see cref="AttachTrendline"/>, but pixel mapping swaps which scale drives which screen axis
+    // (mirroring the source renderer's swapTrendlineAxes: true for ChartType.Bar).
+    private static void AttachBarTrendline(
+        ChartLayoutRequest request,
+        List<SeriesLayout> seriesLayouts,
+        AxisScale categoryScale,
+        AxisScale valueScale)
+    {
+        var chart = request.Chart;
+        if (!chart.ShowLinearTrendline || !ChartTypeSupport.SupportsTrendlines(chart.Type))
+            return;
+        if (request.Series.Count == 0 || seriesLayouts.Count == 0)
+            return;
+
+        var first = request.Series[0];
+        var sourcePoints = new List<TrendPoint>(first.Values.Count);
+        for (var i = 0; i < first.Values.Count; i++)
+        {
+            if (first.Values[i] is { } v && !double.IsNaN(v))
+                sourcePoints.Add(new TrendPoint(i, v));
+        }
+
+        if (sourcePoints.Count < 2)
+            return;
+
+        var trend = TrendlineCalculator.Calculate(chart.TrendlineType, sourcePoints, chart.TrendlinePeriod, chart.TrendlineOrder);
+        if (trend.Count < 2)
+            return;
+
+        // TrendPoint.X is the category index (→ categoryScale, vertical); TrendPoint.Y is the value
+        // (→ valueScale, horizontal).
+        var pixelPoints = new List<LayoutPoint>(trend.Count);
+        foreach (var point in trend)
+            pixelPoints.Add(new LayoutPoint(valueScale.Transform(point.Y), categoryScale.Transform(point.X)));
+
+        seriesLayouts[0] = seriesLayouts[0] with
+        {
+            Trendline = BuildTrendlineLayout(chart, sourcePoints, trend, pixelPoints,
+                point => new LayoutPoint(valueScale.Transform(point.Y), categoryScale.Transform(point.X))),
         };
     }
 
@@ -1151,7 +1312,43 @@ public static class ChartLayoutEngine
 
         seriesLayouts[0] = seriesLayouts[0] with
         {
-            Trendline = new TrendlineLayout { Fit = ToFitKind(chart.TrendlineType), Points = pixelPoints },
+            Trendline = BuildTrendlineLayout(chart, sourcePoints, trend, pixelPoints,
+                point => new LayoutPoint(xScale.Transform(point.X), yScale.Transform(point.Y))),
+        };
+    }
+
+    // Builds the TrendlineLayout including the optional equation/R-squared annotation (F18): the
+    // annotation anchor mirrors the source renderer's TextAnnotation placement at the source data's
+    // (min X, max Y), mapped into pixel space through the same per-point mapping used for the
+    // trendline polyline itself (so it lands correctly whether axes are swapped, as for Bar charts).
+    private static TrendlineLayout BuildTrendlineLayout(
+        ChartModel chart,
+        IReadOnlyList<TrendPoint> sourcePoints,
+        IReadOnlyList<TrendPoint> trend,
+        IReadOnlyList<LayoutPoint> pixelPoints,
+        Func<TrendPoint, LayoutPoint> toPixel)
+    {
+        var annotationLines = TrendlineAnnotationFormatter.BuildAnnotationLines(chart, sourcePoints, trend);
+        var anchor = default(LayoutPoint);
+        if (annotationLines.Count > 0)
+        {
+            var minX = sourcePoints[0].X;
+            var maxY = sourcePoints[0].Y;
+            foreach (var point in sourcePoints)
+            {
+                minX = Math.Min(minX, point.X);
+                maxY = Math.Max(maxY, point.Y);
+            }
+
+            anchor = toPixel(new TrendPoint(minX, maxY));
+        }
+
+        return new TrendlineLayout
+        {
+            Fit = ToFitKind(chart.TrendlineType),
+            Points = pixelPoints,
+            AnnotationLines = annotationLines,
+            AnnotationAnchor = anchor,
         };
     }
 

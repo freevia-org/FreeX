@@ -3189,11 +3189,24 @@ public sealed partial class XlsxFileAdapter
                 .ToList();
             var pictureElements = drawingXml.Descendants(spreadsheetDrawingNs + "pic").ToList();
             var (sourceTextBoxes, sourceShapes) = XlsxWorksheetDrawingPartReader.ReadShapeParts(drawingXml);
+
+            // Loaded here (rather than alongside the relationship-graph walk further below) so the picture
+            // anchors/geometry can be compared against the in-memory sheet before any drawing part is
+            // deemed patch-safe: a resized/moved picture must force a rewrite just like a resized shape.
+            var drawingRelsPath = XlsxPackagePath.GetRelationshipPartPath(drawingPath);
+            var drawingRelsEntry = archive.GetEntry(drawingRelsPath);
+            var drawingRelsXmlForPictures = drawingRelsEntry is not null
+                ? XlsxPackageXmlEditor.LoadXml(drawingRelsEntry)
+                : null;
+            var sourcePictures = XlsxWorksheetDrawingPartReader.ReadPictureParts(archive, drawingPath, drawingXml, drawingRelsXmlForPictures);
+
             if (chartElements.Count != sheet.Charts.Count ||
                 pictureElements.Count < sheet.Pictures.Count ||
+                sourcePictures.Count != sheet.Pictures.Count ||
                 sourceTextBoxes.Count != sheet.TextBoxes.Count ||
                 sourceShapes.Count != sheet.DrawingShapes.Count ||
                 sheet.Pictures.Any(picture => !IsPatchSafeSourcePicture(picture)) ||
+                !SourcePicturesMatchSheet(sourcePictures, sheet) ||
                 !SourceTextBoxesMatchSheet(sourceTextBoxes, sheet) ||
                 !SourceDrawingShapesMatchSheet(sourceShapes, sheet))
             {
@@ -3236,8 +3249,6 @@ public sealed partial class XlsxFileAdapter
                 }
             }
 
-            var drawingRelsPath = XlsxPackagePath.GetRelationshipPartPath(drawingPath);
-            var drawingRelsEntry = archive.GetEntry(drawingRelsPath);
             if ((chartElements.Count > 0 || pictureElements.Count > 0) && drawingRelsEntry is null)
                 return false;
 
@@ -3245,7 +3256,7 @@ public sealed partial class XlsxFileAdapter
             var relationshipElements = Array.Empty<XElement>();
             if (drawingRelsEntry is not null)
             {
-                var drawingRelsXml = XlsxPackageXmlEditor.LoadXml(drawingRelsEntry);
+                var drawingRelsXml = drawingRelsXmlForPictures!;
                 if (drawingRelsXml.Root is null)
                     return false;
 
@@ -3949,6 +3960,38 @@ public sealed partial class XlsxFileAdapter
         private static bool IsPatchSafeSourceDrawingShape(DrawingShapeModel shape) =>
             shape.IsSourceLoaded;
 
+        private static bool SourcePicturesMatchSheet(
+            IReadOnlyList<XlsxPicturePackagePart> sourcePictures,
+            Sheet sheet)
+        {
+            if (sourcePictures.Count != sheet.Pictures.Count)
+                return false;
+
+            for (var index = 0; index < sourcePictures.Count; index++)
+            {
+                var source = sourcePictures[index];
+                var current = sheet.Pictures[index];
+                if (!IsPatchSafeSourcePicture(current) ||
+                    !StringEquals(source.Name, current.Name) ||
+                    !StringEquals(source.Title, current.Title) ||
+                    !StringEquals(source.AltText, current.AltText) ||
+                    !ApproximatelyEquals(source.RotationDegrees, current.RotationDegrees) ||
+                    !DrawingAnchorMatchesGeometry(
+                        source.Anchor,
+                        sheet,
+                        current.Anchor,
+                        current.Width,
+                        current.Height,
+                        current.AnchorOffsetX,
+                        current.AnchorOffsetY))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
         private static bool SourceTextBoxesMatchSheet(
             IReadOnlyList<XlsxTextBoxPackagePart> sourceTextBoxes,
             Sheet sheet)
@@ -3965,7 +4008,14 @@ public sealed partial class XlsxFileAdapter
                     !StringEquals(source.Text, current.Text) ||
                     !StringEquals(source.Title, current.Title) ||
                     !StringEquals(source.AltText, current.AltText) ||
-                    !DrawingAnchorMatchesCell(source.Anchor, current.Anchor) ||
+                    !DrawingAnchorMatchesGeometry(
+                        source.Anchor,
+                        sheet,
+                        current.Anchor,
+                        current.Width,
+                        current.Height,
+                        current.AnchorOffsetX,
+                        current.AnchorOffsetY) ||
                     !ApproximatelyEquals(source.RotationDegrees, current.RotationDegrees) ||
                     source.HasFill != current.HasFill ||
                     source.FillColor != current.FillColor ||
@@ -3996,7 +4046,17 @@ public sealed partial class XlsxFileAdapter
                     !StringEquals(source.Name, current.Name) ||
                     !StringEquals(source.Title, current.Title) ||
                     !StringEquals(source.AltText, current.AltText) ||
-                    !DrawingAnchorMatchesCell(source.Anchor, current.Anchor) ||
+                    !DrawingAnchorMatchesGeometry(
+                        source.Anchor,
+                        sheet,
+                        current.Anchor,
+                        current.Width,
+                        current.Height,
+                        current.AnchorOffsetX,
+                        current.AnchorOffsetY,
+                        source.XfrmWidthPixels,
+                        source.XfrmHeightPixels,
+                        current.Kind) ||
                     !ApproximatelyEquals(source.RotationDegrees, current.RotationDegrees) ||
                     source.HasFill != current.HasFill ||
                     source.FillColor != current.FillColor ||
@@ -4017,13 +4077,72 @@ public sealed partial class XlsxFileAdapter
             return true;
         }
 
-        private static bool DrawingAnchorMatchesCell(XlsxDrawingAnchor? sourceAnchor, CellAddress currentAnchor)
+        /// <summary>
+        /// Patch-safe equality for a drawing object's anchor: the source anchor's from-cell must match the
+        /// in-memory <paramref name="currentAnchor"/> cell AND the geometry it carries (rendered width/height,
+        /// plus the from-cell sub-cell offset) must match the current model's <see cref="PictureModel.Width"/>/
+        /// <see cref="TextBoxModel.Width"/>/<see cref="DrawingShapeModel.Width"/> etc. A pure resize or
+        /// reposition (no XML anchor rewrite) must never be treated as "no drawing change" — otherwise the
+        /// cell-patch fast-save path keeps the stale source drawing XML and silently discards the resize/move.
+        /// </summary>
+        private static bool DrawingAnchorMatchesGeometry(
+            XlsxDrawingAnchor? sourceAnchor,
+            Sheet sheet,
+            CellAddress currentAnchor,
+            double currentWidth,
+            double currentHeight,
+            double currentAnchorOffsetX,
+            double currentAnchorOffsetY,
+            double? xfrmWidthPixels = null,
+            double? xfrmHeightPixels = null,
+            DrawingShapeKind? shapeKind = null)
         {
             if (sourceAnchor is null)
                 return currentAnchor.Row == 1 && currentAnchor.Col == 1;
 
-            return sourceAnchor.FromRowZeroBased + 1 == currentAnchor.Row &&
-                   sourceAnchor.FromColumnZeroBased + 1 == currentAnchor.Col;
+            if (sourceAnchor.FromRowZeroBased + 1 != currentAnchor.Row ||
+                sourceAnchor.FromColumnZeroBased + 1 != currentAnchor.Col)
+            {
+                return false;
+            }
+
+            if (!ApproximatelyEquals(sourceAnchor.FromColumnOffset, currentAnchorOffsetX) ||
+                !ApproximatelyEquals(sourceAnchor.FromRowOffset, currentAnchorOffsetY))
+            {
+                return false;
+            }
+
+            double sourceWidth, sourceHeight;
+            var isLineLike = shapeKind is { } kind && DrawingShapeKindSupport.IsLineLike(kind);
+            if (xfrmWidthPixels.HasValue && xfrmHeightPixels.HasValue &&
+                (xfrmWidthPixels is > 0 || isLineLike) &&
+                (xfrmHeightPixels is > 0 || isLineLike))
+            {
+                sourceWidth = xfrmWidthPixels.Value;
+                sourceHeight = xfrmHeightPixels.Value;
+            }
+            else
+            {
+                (sourceWidth, sourceHeight) = XlsxDrawingAnchorApplier.GetAnchorSize(sourceAnchor, sheet);
+            }
+
+            // Mirror XlsxDrawingAnchorApplier's "only apply a positive measurement" rule: an anchor that
+            // resolves to a non-positive width/height (e.g. a degenerate twoCellAnchor) leaves the current
+            // model's dimension untouched on load, so it must not be compared here either.
+            if (sourceWidth > 0 && !ApproximatelyEquals(sourceWidth, currentWidth))
+                return false;
+
+            if (isLineLike)
+            {
+                if (sourceHeight >= 0 && !ApproximatelyEquals(Math.Max(0, sourceHeight), currentHeight))
+                    return false;
+            }
+            else if (sourceHeight > 0 && !ApproximatelyEquals(sourceHeight, currentHeight))
+            {
+                return false;
+            }
+
+            return true;
         }
 
         private static bool StringEquals(string? source, string? current) =>

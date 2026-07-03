@@ -95,7 +95,14 @@ internal static class XlsxDrawingAnchorApplier
         shape.AnchorOffsetY = anchor.FromRowOffset;
     }
 
-    private static (double Width, double Height) GetAnchorSize(XlsxDrawingAnchor anchor, Sheet sheet)
+    /// <summary>
+    /// Computes the effective rendered width/height (in DIP pixels) for a drawing anchor, preferring the
+    /// anchor's own explicit extent (oneCellAnchor/absoluteAnchor <c>ext</c>, or precomputed EMU->pixel width/
+    /// height) and otherwise deriving it from the twoCellAnchor's to/from cell span. Shared by both the
+    /// load-time anchor applier and the patch-safe source-vs-current geometry comparison, so a resize is
+    /// measured identically whichever path is exercised.
+    /// </summary>
+    internal static (double Width, double Height) GetAnchorSize(XlsxDrawingAnchor anchor, Sheet sheet)
     {
         var width = anchor.Width ?? (
             SumColumnPixels(sheet, anchor.FromColumnZeroBased + 1, anchor.ToColumnZeroBased!.Value - anchor.FromColumnZeroBased)

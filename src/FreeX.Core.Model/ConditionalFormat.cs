@@ -184,6 +184,21 @@ public sealed class ConditionalFormat
     /// <summary>True = highlight cells above the range average; false = below.</summary>
     public bool AboveAverage { get; set; } = true;
 
+    /// <summary>
+    /// True = the comparison is inclusive of the average/stdDev band boundary itself
+    /// (Excel's "Above or equal to Average" / "Below or equal to Average" and the
+    /// std-dev variants). Maps to the OOXML <c>equalAverage</c> cfRule attribute.
+    /// </summary>
+    public bool EqualAverage { get; set; }
+
+    /// <summary>
+    /// When set, this is an "N standard deviations above/below average" rule instead of a
+    /// plain above/below-average rule: the threshold band is <c>mean ± StdDevCount * stdDev</c>
+    /// over the applied range. Maps to the OOXML <c>stdDev</c> cfRule attribute. Null means
+    /// the rule is a plain above/below-average comparison against the mean.
+    /// </summary>
+    public int? StdDevCount { get; set; }
+
     // ── Formula rule ────────────────────────────────────────────────────────
 
     /// <summary>Formula text (without leading =) evaluated per cell; truthy result triggers the format.</summary>
@@ -285,6 +300,8 @@ public sealed class ConditionalFormat
             DataBarNegativeFillColor = DataBarNegativeFillColor,
             DataBarNegativeBorderColor = DataBarNegativeBorderColor,
             AboveAverage = AboveAverage,
+            EqualAverage = EqualAverage,
+            StdDevCount = StdDevCount,
             FormulaText = FormulaText,
             IconSetStyle = IconSetStyle,
             IconSetShowValue = IconSetShowValue,

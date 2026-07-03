@@ -61,6 +61,49 @@ public sealed partial class XlsxNonChartSchemaValidationTests
     }
 
     [Fact]
+    public void LoadedWorkbookPatchSave_WithResizedWorksheetPicture_DoesNotDiscardNewGeometry()
+    {
+        // F15 regression: resizing/moving a source-loaded picture must not be silently discarded by the
+        // cell-patch fast-save path. Before the fix, pictures had no anchor/geometry comparison at all in the
+        // patch-safe check, so any resize or reposition of an existing picture looked like "no drawing change"
+        // and the stale source drawing XML (with the ORIGINAL geometry) was kept on save.
+        using var source = Save(CreateWorksheetPictureSourceWorkbook());
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        var picture = sheet.Pictures.Should().ContainSingle().Subject;
+        var newWidth = picture.Width + 200;
+        var newHeight = picture.Height + 90;
+        var newOffsetX = picture.AnchorOffsetX + 25;
+        var newOffsetY = picture.AnchorOffsetY + 10;
+        picture.Width = newWidth;
+        picture.Height = newHeight;
+        picture.AnchorOffsetX = newOffsetX;
+        picture.AnchorOffsetY = newOffsetY;
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 4), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        // The geometry change makes the source drawing part unsafe to keep as-is, so the whole package must
+        // fall back to a full save (never a source patch that would silently retain the old drawing XML).
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+
+        saved.Position = 0;
+        var reloadedPicture = adapter.Load(saved).GetSheetAt(0).Pictures.Should().ContainSingle().Subject;
+        reloadedPicture.Width.Should().BeApproximately(newWidth, 1.0);
+        reloadedPicture.Height.Should().BeApproximately(newHeight, 1.0);
+        reloadedPicture.AnchorOffsetX.Should().BeApproximately(newOffsetX, 1.0);
+        reloadedPicture.AnchorOffsetY.Should().BeApproximately(newOffsetY, 1.0);
+    }
+
+    [Fact]
     public void LoadedWorkbookFullSave_RebindsWorksheetPictureRelationshipWhenAuthoredDrawingUsesSourceId()
     {
         var workbook = new Workbook("WorksheetPictureRelationshipCollision");

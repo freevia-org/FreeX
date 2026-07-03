@@ -1590,6 +1590,55 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
     }
 
     [Fact]
+    public void Save_LoadedWorkbookWithResizedDrawingShape_DoesNotDiscardNewGeometry()
+    {
+        // F15 regression: resizing a source-loaded shape (or moving it via anchor sub-cell offset) must not
+        // be silently dropped by the cell-patch fast-save path. Before the fix, the patch-safe comparison only
+        // checked the shape's anchor *cell*, so a pure geometry change looked like "no drawing change" and the
+        // stale source drawing XML was kept — the resize/move was lost even though the save "succeeded".
+        var sourceBytes = CreateDrawingShapeSourcePackage();
+        var adapter = new XlsxFileAdapter();
+        Workbook workbook;
+        using (var source = new MemoryStream(sourceBytes, writable: false))
+            workbook = adapter.Load(source);
+        PrepareLoadedWorkbookForEdit(workbook);
+
+        var sheet = workbook.GetSheetAt(0);
+        var shape = sheet.DrawingShapes.Should().ContainSingle().Which;
+        var originalWidth = shape.Width;
+        var originalHeight = shape.Height;
+        var originalOffsetX = shape.AnchorOffsetX;
+        var originalOffsetY = shape.AnchorOffsetY;
+
+        var newWidth = originalWidth + 250;
+        var newHeight = originalHeight + 120;
+        var newOffsetX = originalOffsetX + 30;
+        var newOffsetY = originalOffsetY + 15;
+        shape.Width = newWidth;
+        shape.Height = newHeight;
+        shape.AnchorOffsetX = newOffsetX;
+        shape.AnchorOffsetY = newOffsetY;
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 4), new TextValue("shape-resized"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        var savedBytes = saved.ToArray();
+
+        // The geometry change makes the source drawing part unsafe to keep as-is, so the whole package must
+        // fall back to a full save (never a source patch that silently retains the old drawing XML).
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave, adapter.LastSaveDiagnostics.Reason);
+
+        using var reloadStream = new MemoryStream(savedBytes, writable: false);
+        var reloadedSheet = adapter.Load(reloadStream).GetSheetAt(0);
+        reloadedSheet.GetCell(4, 4)!.Value.Should().Be(new TextValue("shape-resized"));
+        var reloadedShape = reloadedSheet.DrawingShapes.Should().ContainSingle().Which;
+        reloadedShape.Width.Should().BeApproximately(newWidth, 1.0);
+        reloadedShape.Height.Should().BeApproximately(newHeight, 1.0);
+        reloadedShape.AnchorOffsetX.Should().BeApproximately(newOffsetX, 1.0);
+        reloadedShape.AnchorOffsetY.Should().BeApproximately(newOffsetY, 1.0);
+    }
+
+    [Fact]
     public void Save_LoadedWorkbookWithOpaqueDrawingShapeAndUnrelatedCellEdit_PatchesSourcePackage()
     {
         var sourceBytes = CreateOpaqueDrawingShapeSourcePackage();

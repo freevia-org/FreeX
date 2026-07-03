@@ -6,7 +6,8 @@ public sealed partial class Sheet
     /// Creates a deep copy of this sheet with a new <paramref name="newId"/> and <paramref name="newName"/>.
     /// All model-layer properties are copied, including the previously missed fields:
     /// <c>BackgroundImage</c>, <c>RowOutlineLevels</c>, <c>ColOutlineLevels</c>,
-    /// <c>GroupHiddenRows</c>, and <c>GroupHiddenCols</c>.
+    /// <c>GroupHiddenRows</c>, <c>GroupHiddenCols</c>, <c>CommentAuthors</c>, <c>ShownComments</c>,
+    /// <c>CellWatchesMetadata</c>, and <c>IgnoredErrorsMetadata</c>.
     /// Drawing collections (Charts, TextBoxes, DrawingShapes, Pictures, Sparklines) are intentionally
     /// left empty; the caller (e.g. <c>DuplicateSheetCommand</c>) is responsible for copying those.
     /// </summary>
@@ -105,6 +106,8 @@ public sealed partial class Sheet
             BackgroundImage               = BackgroundImage,
             RowPageBreaksMetadata         = ClonePageBreaksMetadata(RowPageBreaksMetadata),
             ColumnPageBreaksMetadata      = ClonePageBreaksMetadata(ColumnPageBreaksMetadata),
+            CellWatchesMetadata           = CloneCellWatchesMetadata(CellWatchesMetadata),
+            IgnoredErrorsMetadata         = CloneIgnoredErrorsMetadata(IgnoredErrorsMetadata),
         };
 
         // Multi-area print areas: remap all areas to the new sheet id.
@@ -117,6 +120,10 @@ public sealed partial class Sheet
         // Comments and hyperlinks
         foreach (var (address, comment) in Comments)
             copy.Comments[RemapAddress(address, newId)] = comment;
+        foreach (var (address, author) in CommentAuthors)
+            copy.CommentAuthors[RemapAddress(address, newId)] = author;
+        foreach (var address in ShownComments)
+            copy.ShownComments.Add(RemapAddress(address, newId));
         foreach (var (address, comment) in ThreadedComments)
             copy.ThreadedComments[RemapAddress(address, newId)] = comment;
         foreach (var (address, hyperlink) in Hyperlinks)
@@ -370,6 +377,8 @@ public sealed partial class Sheet
             DataBarNegativeFillColor = cf.DataBarNegativeFillColor,
             DataBarNegativeBorderColor = cf.DataBarNegativeBorderColor,
             AboveAverage         = cf.AboveAverage,
+            EqualAverage         = cf.EqualAverage,
+            StdDevCount          = cf.StdDevCount,
             FormulaText          = cf.FormulaText,
             IconSetStyle         = cf.IconSetStyle,
             IconSetShowValue     = cf.IconSetShowValue,
@@ -429,6 +438,8 @@ public sealed partial class Sheet
             copy.HiddenRows.Add(row);
         foreach (var row in FilterHiddenRows)
             copy.FilterHiddenRows.Add(row);
+        foreach (var (col, allowedValues) in ActiveValueFilterColumns)
+            copy.ActiveValueFilterColumns[col] = [.. allowedValues];
         foreach (var col in HiddenCols)
             copy.HiddenCols.Add(col);
 
@@ -458,6 +469,36 @@ public sealed partial class Sheet
             BreakNativeAttributes = metadata.BreakNativeAttributes.ToDictionary(
                 pair => pair.Key,
                 pair => new Dictionary<string, string>(pair.Value, StringComparer.Ordinal))
+        };
+    }
+
+    private static WorksheetCellWatchesMetadataModel? CloneCellWatchesMetadata(WorksheetCellWatchesMetadataModel? metadata)
+    {
+        if (metadata is null)
+            return null;
+
+        return new WorksheetCellWatchesMetadataModel
+        {
+            NativeAttributes = new Dictionary<string, string>(metadata.NativeAttributes, StringComparer.Ordinal),
+            WatchNativeAttributes = metadata.WatchNativeAttributes.ToDictionary(
+                pair => pair.Key,
+                pair => new Dictionary<string, string>(pair.Value, StringComparer.Ordinal),
+                StringComparer.OrdinalIgnoreCase)
+        };
+    }
+
+    private static WorksheetIgnoredErrorsMetadataModel? CloneIgnoredErrorsMetadata(WorksheetIgnoredErrorsMetadataModel? metadata)
+    {
+        if (metadata is null)
+            return null;
+
+        return new WorksheetIgnoredErrorsMetadataModel
+        {
+            NativeAttributes = new Dictionary<string, string>(metadata.NativeAttributes, StringComparer.Ordinal),
+            ErrorNativeAttributes = metadata.ErrorNativeAttributes.ToDictionary(
+                pair => pair.Key,
+                pair => new Dictionary<string, string>(pair.Value, StringComparer.Ordinal),
+                StringComparer.OrdinalIgnoreCase)
         };
     }
 

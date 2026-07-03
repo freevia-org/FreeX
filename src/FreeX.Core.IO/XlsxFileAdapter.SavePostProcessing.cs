@@ -319,6 +319,19 @@ public sealed partial class XlsxFileAdapter
             XlsxWorksheetFormulaCachedValueWriter.Save(packageStream, workbook, GetWorksheetPathMap());
         }
 
+        // F15: source-loaded drawing objects (pictures/shapes/text boxes originally loaded from the
+        // .xlsx) are never emitted by XlsxWorksheetDrawingObjectWriter — it gates every object behind
+        // !IsSourceLoaded — so their drawing part above was just PRESERVED verbatim (copied from the
+        // source package), replaying the ORIGINAL anchor geometry. Rewrite that copied part's anchors
+        // in place so a resize/move applied to the in-memory model (Width/Height/AnchorOffsetX/Y) is
+        // not silently discarded. Must run after PreserveSourcePackageParts (the part must already be
+        // at its final path) and is a no-op when no sheet has a source-loaded drawing object.
+        if (featurePlan.HasSourceLoadedDrawingObjects)
+        {
+            packageStream.Position = 0;
+            XlsxSourceDrawingGeometryRewriter.Save(packageStream, workbook, GetWorksheetPathMap());
+        }
+
         if (sourceParts.HasDrawings)
         {
             packageStream.Position = 0;
@@ -677,6 +690,12 @@ public sealed partial class XlsxFileAdapter
         public bool HasWorksheetElementMetadata;
         public bool HasSupportedCharts;
         public bool HasSupportedDrawingObjects;
+        /// <summary>
+        /// True when any sheet has at least one source-loaded picture/text box/shape. Gates the F15
+        /// anchor-geometry rewrite (<see cref="XlsxSourceDrawingGeometryRewriter"/>) that keeps a
+        /// resize/move of a source-loaded drawing object from being discarded on save.
+        /// </summary>
+        public bool HasSourceLoadedDrawingObjects;
         public bool HasStructuredTables;
         public bool HasPivotTables;
         public bool HasPivotCustomNumberFormats;
@@ -730,6 +749,7 @@ public sealed partial class XlsxFileAdapter
             if (!HasSupportedCharts)
                 HasSupportedCharts = HasSupportedXlsxCharts(sheet);
             HasSupportedDrawingObjects |= XlsxWorksheetDrawingObjectWriter.HasSupportedObjects(sheet);
+            HasSourceLoadedDrawingObjects |= XlsxSourceDrawingGeometryRewriter.HasSourceLoadedDrawingObjects(sheet);
             HasStructuredTables |= sheet.StructuredTables.Count > 0;
             HasPivotTables |= sheet.PivotTables.Count > 0;
             if (!HasPivotCustomNumberFormats)

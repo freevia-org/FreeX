@@ -89,6 +89,91 @@ public sealed partial class PasteCellsCommandTests
     }
 
     [Fact]
+    public void PasteCommandFactory_AllModeCopiesRichTextRunsAndClearsPriorDestinationRuns()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+        var source = new CellAddress(sheet.Id, 1, 1);
+        var destination = new CellAddress(sheet.Id, 2, 1);
+
+        var sourceCell = Cell.FromValue(new TextValue("BoldItalic"));
+        sheet.SetCell(source, sourceCell);
+        var sourceRuns = new List<CellTextRun>
+        {
+            new("Bold", Bold: true, Italic: null, Underline: null, Strikethrough: null, FontName: null, FontSize: null, FontColor: null),
+            new("Italic", Bold: null, Italic: true, Underline: null, Strikethrough: null, FontName: null, FontSize: null, FontColor: null)
+        };
+        sheet.RichTextRuns[source] = sourceRuns;
+
+        // Destination already has its own (different) rich-text runs that must be replaced,
+        // not merged with the pasted-in runs.
+        var destinationCell = Cell.FromValue(new TextValue("old"));
+        sheet.SetCell(destination, destinationCell);
+        sheet.RichTextRuns[destination] =
+        [
+            new CellTextRun("old", Bold: null, Italic: null, Underline: true, Strikethrough: null, FontName: null, FontSize: null, FontColor: null)
+        ];
+
+        var command = PasteCommandFactory.CreateInternalPasteCommand(
+            wb,
+            sheet.Id,
+            new GridRange(source, source),
+            [(source, sourceCell.Clone())],
+            destination,
+            PasteCellsMode.All,
+            default);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        sheet.RichTextRuns.Should().ContainKey(destination);
+        var pastedRuns = sheet.RichTextRuns[destination];
+        pastedRuns.Should().HaveCount(2);
+        pastedRuns[0].Text.Should().Be("Bold");
+        pastedRuns[0].Bold.Should().BeTrue();
+        pastedRuns[1].Text.Should().Be("Italic");
+        pastedRuns[1].Italic.Should().BeTrue();
+
+        command.Revert(ctx);
+
+        sheet.RichTextRuns.Should().ContainKey(destination);
+        var revertedRuns = sheet.RichTextRuns[destination];
+        revertedRuns.Should().HaveCount(1);
+        revertedRuns[0].Text.Should().Be("old");
+        revertedRuns[0].Underline.Should().BeTrue();
+    }
+
+    [Fact]
+    public void PasteCommandFactory_ValuesAndNumberFormatsDoesNotCopyRichTextRuns()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+        var source = new CellAddress(sheet.Id, 1, 1);
+        var destination = new CellAddress(sheet.Id, 2, 1);
+
+        var sourceCell = Cell.FromValue(new TextValue("BoldText"));
+        sheet.SetCell(source, sourceCell);
+        sheet.RichTextRuns[source] =
+        [
+            new CellTextRun("BoldText", Bold: true, Italic: null, Underline: null, Strikethrough: null, FontName: null, FontSize: null, FontColor: null)
+        ];
+
+        var command = PasteCommandFactory.CreateInternalPasteCommand(
+            wb,
+            sheet.Id,
+            new GridRange(source, source),
+            [(source, sourceCell.Clone())],
+            destination,
+            PasteCellsMode.All,
+            new PasteSpecialOptions(ContentKind: PasteSpecialContentKind.ValuesAndNumberFormats));
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        sheet.RichTextRuns.Should().NotContainKey(destination);
+    }
+
+    [Fact]
     public void PasteCommandFactory_SkipBlanksLeavesDestinationCellsUnchanged()
     {
         var wb = new Workbook("test");

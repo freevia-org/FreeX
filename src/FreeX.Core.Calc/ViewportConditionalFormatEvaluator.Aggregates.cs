@@ -13,7 +13,7 @@ internal static partial class ViewportConditionalFormatEvaluator
             if (!RequiresAggregateCache(cf))
                 continue;
 
-            double sum = 0, min = double.MaxValue, max = double.MinValue;
+            double sum = 0, sumSq = 0, min = double.MaxValue, max = double.MinValue;
             int count = 0;
             List<(CellAddress Address, double Value, int Index)>? rankedValues =
                 cf.RuleType == CfRuleType.Top10 ? [] : null;
@@ -26,13 +26,14 @@ internal static partial class ViewportConditionalFormatEvaluator
             {
                 if (valueCounts is not null && !IsBlankValue(v))
                 {
-                    var key = NormalizeDisplayValue(v);
+                    var key = GetDuplicateValueKey(v);
                     valueCounts[key] = valueCounts.GetValueOrDefault(key) + 1;
                 }
 
                 if (TryGetDouble(v, out double x))
                 {
                     sum += x;
+                    sumSq += x * x;
                     if (x < min) min = x;
                     if (x > max) max = x;
                     rankedValues?.Add((a, x, count));
@@ -44,13 +45,23 @@ internal static partial class ViewportConditionalFormatEvaluator
             var topBottomMatches = ResolveTopBottomMatches(cf, rankedValues);
             numericValues?.Sort();
             if (count > 0 || valueCounts?.Count > 0 || topBottomMatches is not null)
+            {
+                var average = count > 0 ? sum / count : 0;
+                // Sample standard deviation (STDEV semantics), matching Excel's "N standard
+                // deviations above/below average" conditional format rule. Needs at least 2
+                // points; otherwise there is no variance to speak of.
+                var stdDev = count > 1
+                    ? Math.Sqrt(Math.Max(0, (sumSq - count * average * average) / (count - 1)))
+                    : 0;
                 (result ??= new Dictionary<ConditionalFormat, CfAggregateCache>(ReferenceEqualityComparer.Instance))[cf] = new CfAggregateCache(
-                    count > 0 ? sum / count : 0,
+                    average,
                     count > 0 ? min : 0,
                     count > 0 ? max : 0,
                     numericValues,
                     topBottomMatches,
-                    valueCounts?.Count > 0 ? valueCounts : null);
+                    valueCounts?.Count > 0 ? valueCounts : null,
+                    stdDev);
+            }
         }
         return result ?? EmptyAggregates;
     }
@@ -322,7 +333,19 @@ internal static partial class ViewportConditionalFormatEvaluator
     {
         if (!TryGetDouble(value, out double cellVal)) return false;
         if (!cfCache.TryGetValue(cf, out var cache)) return false;
-        return cf.AboveAverage ? cellVal > cache.Average : cellVal < cache.Average;
+
+        // "N standard deviations above/below average" band: threshold is mean ± N*stdDev
+        // instead of the plain mean. Falls back to the plain average when stdDev is
+        // unavailable (e.g. fewer than 2 numeric points in the range).
+        var threshold = cache.Average;
+        if (cf.StdDevCount is { } n && n > 0)
+            threshold = cf.AboveAverage
+                ? cache.Average + n * cache.StdDev
+                : cache.Average - n * cache.StdDev;
+
+        return cf.AboveAverage
+            ? (cf.EqualAverage ? cellVal >= threshold : cellVal > threshold)
+            : (cf.EqualAverage ? cellVal <= threshold : cellVal < threshold);
     }
 
     private static bool MatchesTopBottom(
@@ -345,7 +368,7 @@ internal static partial class ViewportConditionalFormatEvaluator
         if (!cfCache.TryGetValue(cf, out var cache) || cache.ValueCounts is null)
             return false;
 
-        var occurrences = cache.ValueCounts.GetValueOrDefault(NormalizeDisplayValue(value));
+        var occurrences = cache.ValueCounts.GetValueOrDefault(GetDuplicateValueKey(value));
         return duplicate ? occurrences > 1 : occurrences == 1;
     }
 
@@ -418,4 +441,27 @@ internal static partial class ViewportConditionalFormatEvaluator
 
     private static string NormalizeDisplayValue(ScalarValue value) =>
         GetString(value).Trim();
+
+    /// <summary>
+    /// Key used to bucket cell values for Duplicate/Unique Values occurrence counting.
+    /// Excel keys duplicate detection by the underlying value AND type: a numeric 1 and the
+    /// text "1" are different values, and a boolean TRUE is different from the text "TRUE" -
+    /// even though they render the same display string. Dates and numbers share a bucket
+    /// (Excel stores dates as numeric serials internally, so a date and the equal-valued
+    /// number ARE the same value), but everything else is tagged by its value kind so a
+    /// type-erased display string can never collide across kinds.
+    /// </summary>
+    private static string GetDuplicateValueKey(ScalarValue value) => value switch
+    {
+        // Numbers and dates share the "N" bucket keyed by the raw serial value (Excel stores
+        // dates as numeric serials internally, so a date and the equal-valued number ARE the
+        // same value) rather than by GetString's formatted display text, which differs between
+        // the two (a plain number vs. "yyyy-MM-dd") even for the same underlying value.
+        NumberValue n => "N:" + n.Value.ToString("R", System.Globalization.CultureInfo.InvariantCulture),
+        DateTimeValue d => "N:" + d.Value.ToString("R", System.Globalization.CultureInfo.InvariantCulture),
+        BoolValue => "B:" + NormalizeDisplayValue(value),
+        TextValue => "T:" + NormalizeDisplayValue(value),
+        ErrorValue => "E:" + NormalizeDisplayValue(value),
+        _ => "?:" + NormalizeDisplayValue(value)
+    };
 }

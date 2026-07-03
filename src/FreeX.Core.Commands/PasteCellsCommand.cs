@@ -9,14 +9,19 @@ public sealed class PasteCellsCommand : IWorkbookCommand
 {
     private readonly SheetId _sheetId;
     private readonly IReadOnlyList<(CellAddress Address, Cell Cell)> _cells;
-    private List<(CellAddress Address, Cell? OldCell, StyleId? OldStyleOnly)>? _snapshot;
+    private readonly IReadOnlyDictionary<CellAddress, IReadOnlyList<CellTextRun>>? _richTextRuns;
+    private List<(CellAddress Address, Cell? OldCell, StyleId? OldStyleOnly, bool HadRichTextRuns, IReadOnlyList<CellTextRun>? OldRichTextRuns)>? _snapshot;
 
     public string Label => _cells.Count == 1 ? "Paste Cell" : $"Paste {_cells.Count} Cells";
 
-    public PasteCellsCommand(SheetId sheetId, IReadOnlyList<(CellAddress Address, Cell Cell)> cells)
+    public PasteCellsCommand(
+        SheetId sheetId,
+        IReadOnlyList<(CellAddress Address, Cell Cell)> cells,
+        IReadOnlyDictionary<CellAddress, IReadOnlyList<CellTextRun>>? richTextRuns = null)
     {
         _sheetId = sheetId;
         _cells = cells;
+        _richTextRuns = richTextRuns;
     }
 
     public CommandOutcome Apply(ICommandContext ctx)
@@ -36,8 +41,15 @@ public sealed class PasteCellsCommand : IWorkbookCommand
 
         foreach (var (addr, cell) in _cells)
         {
-            _snapshot.Add((addr, sheet.GetCell(addr)?.Clone(), sheet.GetStyleOnly(addr.Row, addr.Col)));
+            var hadRichTextRuns = sheet.RichTextRuns.TryGetValue(addr, out var oldRuns);
+            _snapshot.Add((addr, sheet.GetCell(addr)?.Clone(), sheet.GetStyleOnly(addr.Row, addr.Col), hadRichTextRuns, oldRuns));
             sheet.SetCell(addr, cell.Clone());
+
+            if (_richTextRuns is not null && _richTextRuns.TryGetValue(addr, out var newRuns))
+                sheet.RichTextRuns[addr] = newRuns;
+            else
+                sheet.RichTextRuns.Remove(addr);
+
             affected.Add(addr);
         }
 
@@ -50,7 +62,7 @@ public sealed class PasteCellsCommand : IWorkbookCommand
             return;
 
         var sheet = ctx.GetSheet(_sheetId);
-        foreach (var (addr, oldCell, oldStyleOnly) in _snapshot)
+        foreach (var (addr, oldCell, oldStyleOnly, hadRichTextRuns, oldRichTextRuns) in _snapshot)
         {
             if (oldCell is null)
             {
@@ -61,6 +73,11 @@ public sealed class PasteCellsCommand : IWorkbookCommand
             {
                 sheet.SetCell(addr, oldCell.Clone());
             }
+
+            if (hadRichTextRuns && oldRichTextRuns is not null)
+                sheet.RichTextRuns[addr] = oldRichTextRuns;
+            else
+                sheet.RichTextRuns.Remove(addr);
         }
     }
 

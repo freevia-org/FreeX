@@ -196,6 +196,54 @@ public sealed class SortCommandTests
     }
 
     [Fact]
+    public void SortCommand_WithActiveAutoFilter_FilterHiddenRowFollowsItsDataAfterSortAndUndo()
+    {
+        // Regression: FilterHiddenRows must move with the row data during a sort. Before the fix,
+        // the hidden set stayed pinned to the original row numbers, so after reordering the wrong
+        // row ended up hidden under the still-active AutoFilter (Excel re-evaluates the filter on
+        // sort; moving each row's hidden flag along with its data produces the same net result).
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(workbook);
+
+        // Header + 3 data rows; filter column keeps "Keep" and hides "Drop".
+        // "Drop" starts at row 2 (numeric key 3, the largest) so an ascending sort must move it down.
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Status"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new NumberValue(0));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Drop"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(3));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("Keep"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(1));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new TextValue("Keep"));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(2));
+
+        var filterRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 4, 1));
+        new FilterCommand(sheet.Id, filterRange, 0, ["Keep"]).Apply(ctx).Success.Should().BeTrue();
+        sheet.FilterHiddenRows.Should().BeEquivalentTo([2u]); // row 2 ("Drop") is hidden
+
+        // Sort ascending by the numeric column: row3(Keep,1) -> row2, row4(Keep,2) -> row3, row2(Drop,3) -> row4.
+        var sortRange = new GridRange(new CellAddress(sheet.Id, 2, 1), new CellAddress(sheet.Id, 4, 2));
+        var sortCommand = new SortCommand(sheet.Id, sortRange, [new SortKey(1, true)]);
+        sortCommand.Apply(ctx).Success.Should().BeTrue();
+
+        sheet.GetValue(2, 1).Should().Be(new TextValue("Keep"));
+        sheet.GetValue(3, 1).Should().Be(new TextValue("Keep"));
+        sheet.GetValue(4, 1).Should().Be(new TextValue("Drop"));
+
+        // The hidden flag must have moved from row 2 to row 4 along with the "Drop" data —
+        // NOT stayed pinned to row 2, which would now wrongly hide a "Keep" row.
+        sheet.FilterHiddenRows.Should().BeEquivalentTo([4u]);
+
+        sortCommand.Revert(ctx);
+
+        // After undo, the original arrangement (and its filter-hidden row) must be restored.
+        sheet.GetValue(2, 1).Should().Be(new TextValue("Drop"));
+        sheet.GetValue(3, 1).Should().Be(new TextValue("Keep"));
+        sheet.GetValue(4, 1).Should().Be(new TextValue("Keep"));
+        sheet.FilterHiddenRows.Should().BeEquivalentTo([2u]);
+    }
+
+    [Fact]
     public void SortCommand_CanSortRowsByCellFillColor()
     {
         var workbook = new Workbook("test");
