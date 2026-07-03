@@ -61,6 +61,23 @@ public sealed class SlideCanvasAvaloniaTests
         return body;
     }
 
+    private static TextBody MakeMixedRunTextBody()
+    {
+        var body = new TextBody { Wrap = true };
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run { Text = "Hello", FontFamily = "Aptos", FontSizePt = 18 });
+        paragraph.Runs.Add(new Run
+        {
+            Text = " world",
+            FontFamily = "Aptos",
+            FontSizePt = 18,
+            Italic = true,
+            ItalicSet = true,
+        });
+        body.Paragraphs.Add(paragraph);
+        return body;
+    }
+
     private static SlideShape MakeTableShape(uint id, string text)
     {
         var table = new TableShape();
@@ -168,6 +185,61 @@ public sealed class SlideCanvasAvaloniaTests
 
         editor.Undo();
         shape.TextBody!.Paragraphs[0].Runs[0].Text.Should().Be("Original");
+    }
+
+    [Fact]
+    public async Task InCanvasTextEditor_FormatActiveShapeOverlay_UsesSharedPlanAndPreservesMixedRunsOnCommit()
+    {
+        SlideShape? shape = null;
+        EditingSession? editor = null;
+        var overlayBold = false;
+
+        await Run(() =>
+        {
+            var presentation = MakePresentation(pres =>
+            {
+                pres.Slides[0].Shapes.Clear();
+                shape = new SlideShape
+                {
+                    Id = 2,
+                    OffsetXEmu = 0,
+                    OffsetYEmu = 0,
+                    ExtentCxEmu = 2743200L,
+                    ExtentCyEmu = 1371600L,
+                    TextBody = MakeMixedRunTextBody(),
+                };
+                pres.Slides[0].Shapes.Add(shape);
+            });
+
+            var bus = new PresentationCommandBus(presentation);
+            editor = new EditingSession(presentation, bus);
+            var canvas = new SlideCanvas { Presentation = presentation, Slide = presentation.Slides[0] };
+            var overlay = new global::Avalonia.Controls.Canvas();
+            var textEditor = new AvaloniaInCanvasTextEditor(canvas, editor, overlay);
+
+            textEditor.Activate(shape!.Id);
+            var box = overlay.Children.OfType<global::Avalonia.Controls.TextBox>().Single();
+            box.Text.Should().Be("Hello world");
+
+            textEditor.TryApplyActiveShapeTextFormat(TableCellTextFormatKind.Bold).Should().BeTrue();
+            overlayBold = box.FontWeight == FontWeight.Bold;
+
+            textEditor.Commit();
+        });
+
+        overlayBold.Should().BeTrue("whole-shape overlay formatting should mirror on the plain TextBox");
+        editor!.CanUndo.Should().BeTrue("the shared shape planner should issue the formatting command");
+
+        var runs = shape!.TextBody!.Paragraphs[0].Runs;
+        runs.Should().HaveCount(2, "unchanged-text commit must not flatten the original mixed runs");
+        runs[0].Text.Should().Be("Hello");
+        runs[1].Text.Should().Be(" world");
+        runs.Should().OnlyContain(r => r.Bold);
+        runs[1].Italic.Should().BeTrue();
+
+        editor.Undo();
+        shape.TextBody!.Paragraphs[0].Runs.Should().OnlyContain(r => !r.Bold);
+        shape.TextBody.Paragraphs[0].Runs[1].Italic.Should().BeTrue();
     }
 
     [Fact]
@@ -603,6 +675,22 @@ public sealed class SlideCanvasAvaloniaTests
     }
 
     [Fact]
+    public void InCanvasTextEditAdapter_DelegatesToSharedShapePlanner()
+    {
+        var root = FindRepositoryRoot();
+        var adapter = File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "FreeP.App.Rendering.Avalonia",
+            "AvaloniaInCanvasTextEditAdapter.cs"));
+
+        adapter.Should().Contain("InCanvasTextEditPlanner.PlanTextFormat");
+        adapter.Should().Contain("InCanvasTextEditPlanner.PlanFontFamily");
+        adapter.Should().Contain("InCanvasTextEditPlanner.PlanFontSize");
+        adapter.Should().Contain("InCanvasTextEditPlanner.PlanColor");
+    }
+
+    [Fact]
     public void TableCellTextEditor_UsesAvaloniaAdapterForSharedPlannerDecisions()
     {
         var root = FindRepositoryRoot();
@@ -624,6 +712,23 @@ public sealed class SlideCanvasAvaloniaTests
     }
 
     // ── 1. Geometry factory round-trip ────────────────────────────────────────
+
+    [Fact]
+    public void InCanvasTextEditor_UsesAvaloniaAdapterForSharedShapePlannerDecisions()
+    {
+        var root = FindRepositoryRoot();
+        var source = File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "FreeP.App.Rendering.Avalonia",
+            "AvaloniaInCanvasTextEditor.cs"));
+
+        source.Should().Contain("AvaloniaInCanvasTextEditAdapter.PlanTextFormat");
+        source.Should().Contain("AvaloniaInCanvasTextEditAdapter.PlanFontFamily");
+        source.Should().Contain("AvaloniaInCanvasTextEditAdapter.PlanFontSize");
+        source.Should().Contain("AvaloniaInCanvasTextEditAdapter.PlanColor");
+        source.Should().Contain("TryApplyActiveShapeTextFormat");
+    }
 
     [Fact]
     public async Task GeometryFactory_Rectangle_ReturnsNonNullGeometry()

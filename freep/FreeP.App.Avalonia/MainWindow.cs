@@ -1540,6 +1540,7 @@ public sealed class MainWindow : Window
             if (string.IsNullOrEmpty(ctx.SelectedValue))
                 return;
 
+            if (_textEditor?.TryApplyActiveShapeFontFamily(ctx.SelectedValue) == true) return;
             if (_textEditor?.TryApplyActiveTableCellFontFamily(ctx.SelectedValue) == true) return;
             if (Editor.TryApplyActiveTableCellFontFamily(ctx.SelectedValue)) return;
             Editor.SetFontFamilyOnSelection(ctx.SelectedValue);
@@ -1549,6 +1550,7 @@ public sealed class MainWindow : Window
             if (!TryGetRibbonFontSize(ctx, out double sizePt))
                 return;
 
+            if (_textEditor?.TryApplyActiveShapeFontSize(sizePt) == true) return;
             if (_textEditor?.TryApplyActiveTableCellFontSize(sizePt) == true) return;
             if (Editor.TryApplyActiveTableCellFontSize(sizePt)) return;
             Editor.SetFontSizeOnSelection(sizePt);
@@ -1558,24 +1560,28 @@ public sealed class MainWindow : Window
             if (!TryGetRibbonFontColor(ctx, out var color))
                 return;
 
+            if (_textEditor?.TryApplyActiveShapeColor(color) == true) return;
             if (_textEditor?.TryApplyActiveTableCellColor(color) == true) return;
             if (Editor.TryApplyActiveTableCellColor(color)) return;
             Editor.SetColorOnSelection(color);
         }));
         r.Register("freep.bold", new ActionRibbonCommand(() =>
         {
+            if (_textEditor?.TryApplyActiveShapeTextFormat(TableCellTextFormatKind.Bold) == true) return;
             if (_textEditor?.TryApplyActiveTableCellTextFormat(TableCellTextFormatKind.Bold) == true) return;
             if (Editor.ToggleBoldOnActiveTableCell()) return;
             Editor.ToggleBoldOnSelection();
         }));
         r.Register("freep.italic", new ActionRibbonCommand(() =>
         {
+            if (_textEditor?.TryApplyActiveShapeTextFormat(TableCellTextFormatKind.Italic) == true) return;
             if (_textEditor?.TryApplyActiveTableCellTextFormat(TableCellTextFormatKind.Italic) == true) return;
             if (Editor.ToggleItalicOnActiveTableCell()) return;
             Editor.ToggleItalicOnSelection();
         }));
         r.Register("freep.underline", new ActionRibbonCommand(() =>
         {
+            if (_textEditor?.TryApplyActiveShapeTextFormat(TableCellTextFormatKind.Underline) == true) return;
             if (_textEditor?.TryApplyActiveTableCellTextFormat(TableCellTextFormatKind.Underline) == true) return;
             if (Editor.ToggleUnderlineOnActiveTableCell()) return;
             Editor.ToggleUnderlineOnSelection();

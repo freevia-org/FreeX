@@ -24,9 +24,38 @@ public enum InCanvasTextEditStartStatus
     MissingTextBody,
 }
 
+public enum InCanvasShapeTextFormatStatus
+{
+    Ready,
+    MissingSlide,
+    ShapeNotFound,
+    MissingTextBody,
+    NoTextRuns,
+}
+
 public readonly record struct InCanvasTextEditDecision(
     InCanvasTextEditOutcome Outcome,
     IPresentationCommand? Command);
+
+public sealed record InCanvasShapeTextFormatPlan(
+    InCanvasShapeTextFormatStatus Status,
+    uint ShapeId,
+    TableCellTextFormatKind Kind,
+    bool? TargetValue,
+    IPresentationCommand? Command)
+{
+    public bool IsReady => Status == InCanvasShapeTextFormatStatus.Ready && Command is not null;
+}
+
+public sealed record InCanvasShapeTextValueFormatPlan(
+    InCanvasShapeTextFormatStatus Status,
+    uint ShapeId,
+    TableCellTextValueFormatKind Kind,
+    object? Value,
+    IPresentationCommand? Command)
+{
+    public bool IsReady => Status == InCanvasShapeTextFormatStatus.Ready && Command is not null;
+}
 
 public sealed record InCanvasTextEditStartPlan(
     InCanvasTextEditStartStatus Status,
@@ -148,6 +177,134 @@ public sealed class InCanvasTextEditPlanner
 
     private static string LabelForKind(InCanvasTextEditKind kind) =>
         kind == InCanvasTextEditKind.RichText ? "Edit Rich Text" : "Edit Text";
+
+    public static InCanvasShapeTextFormatPlan PlanTextFormat(
+        int slideIndex,
+        Slide? slide,
+        uint shapeId,
+        TableCellTextFormatKind kind,
+        (int Start, int End)? selection = null)
+    {
+        var shapePlan = TryGetShapeTextBody(slide, shapeId);
+        if (shapePlan.Status != InCanvasShapeTextFormatStatus.Ready || shapePlan.Body is null)
+            return DisabledFormat(shapePlan.Status, shapeId, kind);
+
+        if (!TextBodyRunMutationPlanner.HasTextRuns(shapePlan.Body))
+            return DisabledFormat(InCanvasShapeTextFormatStatus.NoTextRuns, shapeId, kind);
+
+        var editedBody = TextBodyRunMutationPlanner.ToggleTextFormat(
+            shapePlan.Body,
+            kind,
+            selection,
+            out var targetValue);
+
+        return new InCanvasShapeTextFormatPlan(
+            InCanvasShapeTextFormatStatus.Ready,
+            shapeId,
+            kind,
+            targetValue,
+            new SetShapeTextBodyCommand(slideIndex, shapeId, editedBody, "Edit Rich Text"));
+    }
+
+    public static InCanvasShapeTextValueFormatPlan PlanFontFamily(
+        int slideIndex,
+        Slide? slide,
+        uint shapeId,
+        string? fontFamily,
+        (int Start, int End)? selection = null) =>
+        PlanTextValueFormat(
+            slideIndex,
+            slide,
+            shapeId,
+            TableCellTextValueFormatKind.FontFamily,
+            fontFamily,
+            selection);
+
+    public static InCanvasShapeTextValueFormatPlan PlanFontSize(
+        int slideIndex,
+        Slide? slide,
+        uint shapeId,
+        double? sizePt,
+        (int Start, int End)? selection = null) =>
+        PlanTextValueFormat(
+            slideIndex,
+            slide,
+            shapeId,
+            TableCellTextValueFormatKind.FontSize,
+            sizePt,
+            selection);
+
+    public static InCanvasShapeTextValueFormatPlan PlanColor(
+        int slideIndex,
+        Slide? slide,
+        uint shapeId,
+        ThemeAwareColor? color,
+        (int Start, int End)? selection = null) =>
+        PlanTextValueFormat(
+            slideIndex,
+            slide,
+            shapeId,
+            TableCellTextValueFormatKind.Color,
+            color,
+            selection);
+
+    private static InCanvasShapeTextValueFormatPlan PlanTextValueFormat(
+        int slideIndex,
+        Slide? slide,
+        uint shapeId,
+        TableCellTextValueFormatKind kind,
+        object? value,
+        (int Start, int End)? selection)
+    {
+        var shapePlan = TryGetShapeTextBody(slide, shapeId);
+        if (shapePlan.Status != InCanvasShapeTextFormatStatus.Ready || shapePlan.Body is null)
+            return DisabledValueFormat(shapePlan.Status, shapeId, kind, value);
+
+        if (!TextBodyRunMutationPlanner.HasTextRuns(shapePlan.Body))
+            return DisabledValueFormat(InCanvasShapeTextFormatStatus.NoTextRuns, shapeId, kind, value);
+
+        var editedBody = TextBodyRunMutationPlanner.ApplyValueFormat(
+            shapePlan.Body,
+            kind,
+            value,
+            selection);
+
+        return new InCanvasShapeTextValueFormatPlan(
+            InCanvasShapeTextFormatStatus.Ready,
+            shapeId,
+            kind,
+            value,
+            new SetShapeTextBodyCommand(slideIndex, shapeId, editedBody, "Edit Rich Text"));
+    }
+
+    private static (InCanvasShapeTextFormatStatus Status, TextBody? Body) TryGetShapeTextBody(
+        Slide? slide,
+        uint shapeId)
+    {
+        if (slide is null)
+            return (InCanvasShapeTextFormatStatus.MissingSlide, null);
+
+        var shape = slide.Shapes.FirstOrDefault(s => s.Id == shapeId);
+        if (shape is null)
+            return (InCanvasShapeTextFormatStatus.ShapeNotFound, null);
+        if (shape.TextBody is null)
+            return (InCanvasShapeTextFormatStatus.MissingTextBody, null);
+
+        return (InCanvasShapeTextFormatStatus.Ready, shape.TextBody);
+    }
+
+    private static InCanvasShapeTextFormatPlan DisabledFormat(
+        InCanvasShapeTextFormatStatus status,
+        uint shapeId,
+        TableCellTextFormatKind kind) =>
+        new(status, shapeId, kind, null, null);
+
+    private static InCanvasShapeTextValueFormatPlan DisabledValueFormat(
+        InCanvasShapeTextFormatStatus status,
+        uint shapeId,
+        TableCellTextValueFormatKind kind,
+        object? value) =>
+        new(status, shapeId, kind, value, null);
 
     private static InCanvasTextEditStartPlan NotReady(
         InCanvasTextEditStartStatus status,
@@ -277,6 +434,232 @@ public sealed class InCanvasTextEditPlanner
         }
 
         return true;
+    }
+}
+
+internal static class TextBodyRunMutationPlanner
+{
+    internal static bool HasTextRuns(TextBody body) =>
+        body.Paragraphs.SelectMany(p => p.Runs).Any();
+
+    internal static TextBody ToggleTextFormat(
+        TextBody source,
+        TableCellTextFormatKind kind,
+        (int Start, int End)? selection,
+        out bool targetValue)
+    {
+        var sourceRuns = source.Paragraphs.SelectMany(p => p.Runs).ToList();
+        int textLength = GetPlainTextLength(source);
+        var range = NormalizeSelection(selection, textLength);
+
+        var editedBody = TextBodyModelCloner.CloneTextBody(source)!;
+        if (range is { } r)
+        {
+            var selectedRuns = SplitRunsAtSelection(editedBody, r.Start, r.End);
+            targetValue = selectedRuns.Count == 0 || !selectedRuns.All(run => GetRunFormat(run, kind));
+            foreach (var run in selectedRuns)
+                SetRunFormat(run, kind, targetValue);
+        }
+        else
+        {
+            targetValue = !sourceRuns.All(run => GetRunFormat(run, kind));
+            foreach (var run in editedBody.Paragraphs.SelectMany(p => p.Runs))
+                SetRunFormat(run, kind, targetValue);
+        }
+
+        MergeAdjacentRunsWithSameFormat(editedBody);
+        return editedBody;
+    }
+
+    internal static TextBody ApplyValueFormat(
+        TextBody source,
+        TableCellTextValueFormatKind kind,
+        object? value,
+        (int Start, int End)? selection)
+    {
+        int textLength = GetPlainTextLength(source);
+        var range = NormalizeSelection(selection, textLength);
+
+        var editedBody = TextBodyModelCloner.CloneTextBody(source)!;
+        var targetRuns = range is { } r
+            ? SplitRunsAtSelection(editedBody, r.Start, r.End)
+            : editedBody.Paragraphs.SelectMany(p => p.Runs).ToList();
+
+        foreach (var run in targetRuns)
+            SetRunValueFormat(run, kind, value);
+
+        MergeAdjacentRunsWithSameFormat(editedBody);
+        return editedBody;
+    }
+
+    private static int GetPlainTextLength(TextBody body) =>
+        body.Paragraphs.SelectMany(p => p.Runs).Sum(r => r.Text.Length)
+        + Math.Max(0, body.Paragraphs.Count - 1);
+
+    private static (int Start, int End)? NormalizeSelection((int Start, int End)? selection, int textLength)
+    {
+        if (selection is not { } s)
+            return null;
+
+        int start = Math.Min(s.Start, s.End);
+        int end = Math.Max(s.Start, s.End);
+        start = Math.Clamp(start, 0, textLength);
+        end = Math.Clamp(end, 0, textLength);
+        return end > start ? (start, end) : null;
+    }
+
+    private static List<Run> SplitRunsAtSelection(TextBody body, int start, int end)
+    {
+        var selected = new List<Run>();
+        int cursor = 0;
+
+        for (int pi = 0; pi < body.Paragraphs.Count; pi++)
+        {
+            if (pi > 0)
+                cursor += 1;
+
+            var paragraph = body.Paragraphs[pi];
+            var newRuns = new List<Run>();
+
+            foreach (var run in paragraph.Runs)
+            {
+                int runStart = cursor;
+                int runLen = run.Text.Length;
+                int runEnd = runStart + runLen;
+                cursor = runEnd;
+
+                int overlapStart = Math.Max(runStart, start);
+                int overlapEnd = Math.Min(runEnd, end);
+
+                if (overlapEnd <= overlapStart)
+                {
+                    newRuns.Add(run);
+                    continue;
+                }
+
+                int beforeLen = overlapStart - runStart;
+                int selectedLen = overlapEnd - overlapStart;
+                int afterLen = runEnd - overlapEnd;
+
+                if (beforeLen > 0)
+                    newRuns.Add(CloneRunWithText(run, run.Text.Substring(0, beforeLen)));
+
+                var middle = CloneRunWithText(run, run.Text.Substring(beforeLen, selectedLen));
+                newRuns.Add(middle);
+                selected.Add(middle);
+
+                if (afterLen > 0)
+                    newRuns.Add(CloneRunWithText(run, run.Text.Substring(beforeLen + selectedLen, afterLen)));
+            }
+
+            paragraph.Runs.Clear();
+            paragraph.Runs.AddRange(newRuns);
+        }
+
+        return selected;
+    }
+
+    private static Run CloneRunWithText(Run source, string text) => new()
+    {
+        Text = text,
+        FontFamily = source.FontFamily,
+        FontSizePt = source.FontSizePt,
+        Bold = source.Bold,
+        Italic = source.Italic,
+        BoldSet = source.BoldSet,
+        ItalicSet = source.ItalicSet,
+        Underline = source.Underline,
+        Strikethrough = source.Strikethrough,
+        Color = source.Color,
+        Hyperlink = source.Hyperlink,
+        Field = source.Field,
+        TextFill = source.TextFill,
+        TextOutline = source.TextOutline,
+        TextShadow = source.TextShadow,
+        TextReflection = source.TextReflection,
+        Math = source.Math,
+    };
+
+    private static bool RunFormatEquals(Run a, Run b) =>
+        a.FontFamily == b.FontFamily
+        && a.FontSizePt == b.FontSizePt
+        && a.Bold == b.Bold
+        && a.Italic == b.Italic
+        && a.BoldSet == b.BoldSet
+        && a.ItalicSet == b.ItalicSet
+        && a.Underline == b.Underline
+        && a.Strikethrough == b.Strikethrough
+        && TextBodyModelCloner.ColorsEqual(a.Color, b.Color)
+        && a.Hyperlink == b.Hyperlink
+        && a.Field == b.Field
+        && a.TextFill == b.TextFill
+        && a.TextOutline == b.TextOutline
+        && a.TextShadow == b.TextShadow
+        && a.TextReflection == b.TextReflection
+        && a.Math == b.Math;
+
+    private static void MergeAdjacentRunsWithSameFormat(TextBody body)
+    {
+        foreach (var paragraph in body.Paragraphs)
+        {
+            var merged = new List<Run>();
+            foreach (var run in paragraph.Runs)
+            {
+                if (merged.Count > 0 && RunFormatEquals(merged[^1], run))
+                    merged[^1].Text += run.Text;
+                else
+                    merged.Add(run);
+            }
+
+            paragraph.Runs.Clear();
+            paragraph.Runs.AddRange(merged);
+        }
+    }
+
+    private static bool GetRunFormat(Run run, TableCellTextFormatKind kind) => kind switch
+    {
+        TableCellTextFormatKind.Bold => run.Bold,
+        TableCellTextFormatKind.Italic => run.Italic,
+        TableCellTextFormatKind.Underline => run.Underline,
+        _ => false,
+    };
+
+    private static void SetRunFormat(Run run, TableCellTextFormatKind kind, bool value)
+    {
+        switch (kind)
+        {
+            case TableCellTextFormatKind.Bold:
+                run.Bold = value;
+                run.BoldSet = true;
+                break;
+            case TableCellTextFormatKind.Italic:
+                run.Italic = value;
+                run.ItalicSet = true;
+                break;
+            case TableCellTextFormatKind.Underline:
+                run.Underline = value;
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(kind), kind, null);
+        }
+    }
+
+    private static void SetRunValueFormat(Run run, TableCellTextValueFormatKind kind, object? value)
+    {
+        switch (kind)
+        {
+            case TableCellTextValueFormatKind.FontFamily:
+                run.FontFamily = (string?)value;
+                break;
+            case TableCellTextValueFormatKind.FontSize:
+                run.FontSizePt = (double?)value;
+                break;
+            case TableCellTextValueFormatKind.Color:
+                run.Color = (ThemeAwareColor?)value;
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(kind), kind, null);
+        }
     }
 }
 

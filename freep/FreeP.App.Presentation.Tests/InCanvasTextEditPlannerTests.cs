@@ -114,6 +114,45 @@ public sealed class InCanvasTextEditPlannerTests
     }
 
     [Fact]
+    public void PlanTextFormat_ShapeSubRangeSelection_SplitsRunsAndFormatsOnlySelection()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Shapes.Clear();
+        var shape = new SlideShape
+        {
+            Id = 1,
+            TextBody = MakeBody("one two three"),
+        };
+        shape.TextBody!.Paragraphs[0].Runs[0].Bold = false;
+        shape.TextBody.Paragraphs[0].Runs[0].BoldSet = false;
+        slide.Shapes.Add(shape);
+
+        var plan = InCanvasTextEditPlanner.PlanTextFormat(
+            0,
+            slide,
+            shape.Id,
+            TableCellTextFormatKind.Bold,
+            selection: (4, 7));
+
+        plan.Status.Should().Be(InCanvasShapeTextFormatStatus.Ready);
+        plan.TargetValue.Should().BeTrue();
+        plan.Command.Should().NotBeNull();
+        plan.Command!.Label.Should().Be("Edit Rich Text");
+
+        var bus = new PresentationCommandBus(presentation);
+        bus.Execute(plan.Command);
+
+        var runs = shape.TextBody!.Paragraphs[0].Runs;
+        string.Concat(runs.Select(r => r.Text)).Should().Be("one two three");
+        runs.Should().Contain(r => r.Text == "two" && r.Bold && r.BoldSet);
+        runs.Where(r => r.Text != "two").Should().OnlyContain(r => !r.Bold);
+
+        bus.Undo();
+        shape.TextBody!.Paragraphs[0].Runs.Should().OnlyContain(r => !r.Bold);
+    }
+
+    [Fact]
     public void CommitRichText_ColorOnlyChange_ReturnsCommand()
     {
         var original = MakeBody("Hello", new ThemeAwareColor(new SrgbColor(0xFF, 0x00, 0x00)));
