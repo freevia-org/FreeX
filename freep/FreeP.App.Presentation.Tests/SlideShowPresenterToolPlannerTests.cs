@@ -123,4 +123,81 @@ public sealed class SlideShowPresenterToolPlannerTests
                 action.Kind == SlideShowPresenterWorkflowActionKind.ConfigureInkStroke)
             .StatusText.Should().Contain("#FFEE00");
     }
+
+    [Fact]
+    public void TimingRecorder_RecordTimings_PersistsAdvanceAfterAndPreservesTransitionFields()
+    {
+        var started = new DateTimeOffset(2026, 7, 3, 10, 0, 0, TimeSpan.Zero);
+        var state = SlideShowTimingRecorderPlanner.CreateState(0, started);
+        var plan = SlideShowPresenterToolPlanner.BuildPlan(SlideShowTimingIntent.RecordTimings);
+        var pres = Presentation.CreateEmpty();
+        pres.Slides[0].Transition = new SlideTransition
+        {
+            Kind = TransitionKind.Fade,
+            Direction = TransitionDirection.Left,
+            DurationMs = 700,
+            AdvanceOnClick = false,
+        };
+
+        var result = SlideShowTimingRecorderPlanner.LeaveCurrentSlide(
+            state,
+            plan,
+            started.AddMilliseconds(2500));
+        SlideShowTimingRecorderPlanner.ApplyTimings(pres, result.Mutations);
+
+        result.Mutations.Should().ContainSingle();
+        result.Mutations[0].Should().Be(new SlideShowSlideTimingMutation(
+            0,
+            2500,
+            ShouldPersist: true,
+            SlideShowTimingIntent.RecordTimings));
+        result.State.CurrentSlideIndex.Should().BeNull();
+        result.State.RecordedTimings.Should().ContainSingle();
+        var transition = pres.Slides[0].Transition;
+        transition.Should().NotBeNull();
+        transition!.Kind.Should().Be(TransitionKind.Fade);
+        transition.Direction.Should().Be(TransitionDirection.Left);
+        transition.DurationMs.Should().Be(700);
+        transition.AdvanceOnClick.Should().BeFalse();
+        transition.AdvanceAfterMs.Should().Be(2500);
+    }
+
+    [Fact]
+    public void TimingRecorder_RehearseTimings_TracksButDoesNotPersistAdvanceAfter()
+    {
+        var started = new DateTimeOffset(2026, 7, 3, 10, 0, 0, TimeSpan.Zero);
+        var state = SlideShowTimingRecorderPlanner.CreateState(0, started);
+        var plan = SlideShowPresenterToolPlanner.BuildPlan(SlideShowTimingIntent.RehearseTimings);
+        var pres = Presentation.CreateEmpty();
+
+        var result = SlideShowTimingRecorderPlanner.LeaveCurrentSlide(
+            state,
+            plan,
+            started.AddMilliseconds(1750));
+        SlideShowTimingRecorderPlanner.ApplyTimings(pres, result.Mutations);
+
+        result.Mutations.Should().ContainSingle();
+        result.Mutations[0].AdvanceAfterMs.Should().Be(1750);
+        result.Mutations[0].ShouldPersist.Should().BeFalse();
+        pres.Slides[0].Transition.Should().BeNull();
+    }
+
+    [Fact]
+    public void TimingRecorder_ClampsElapsedMillisecondsBeforeMutation()
+    {
+        var started = new DateTimeOffset(2026, 7, 3, 10, 0, 0, TimeSpan.Zero);
+        var plan = SlideShowPresenterToolPlanner.BuildPlan(SlideShowTimingIntent.RecordTimings);
+
+        var negative = SlideShowTimingRecorderPlanner.LeaveCurrentSlide(
+            SlideShowTimingRecorderPlanner.CreateState(0, started),
+            plan,
+            started.AddMilliseconds(-100));
+        var tooLarge = SlideShowTimingRecorderPlanner.LeaveCurrentSlide(
+            SlideShowTimingRecorderPlanner.CreateState(0, started),
+            plan,
+            started.AddDays(2));
+
+        negative.Mutations[0].AdvanceAfterMs.Should().Be(SlideShowTimingRecorderPlanner.MinRecordedTimingMs);
+        tooLarge.Mutations[0].AdvanceAfterMs.Should().Be(SlideShowTimingRecorderPlanner.MaxRecordedTimingMs);
+    }
 }

@@ -481,6 +481,73 @@ public sealed class SlideShowWindowTests
     }
 
     [StaFact]
+    public void SlideShowWindow_RecordTimings_PersistsAdvanceAfterOnNavigationAndClose()
+    {
+        var pres = Presentation.CreateEmpty();
+        pres.Slides[0].Transition = new SlideTransition { Kind = TransitionKind.Fade, DurationMs = 700 };
+        pres.Slides.Add(new Slide { Title = "Second" });
+        var started = new DateTimeOffset(2026, 7, 3, 10, 0, 0, TimeSpan.Zero);
+        var window = new SlideShowWindow(pres, 0);
+        try
+        {
+            window.ApplyPresenterToolIntent(
+                timingIntent: SlideShowTimingIntent.RecordTimings,
+                nowUtc: started);
+
+            var navigate = window.ExecuteAdvance(started.AddMilliseconds(2500));
+            var close = window.ExecuteAdvance(started.AddMilliseconds(6000));
+
+            navigate.Should().BeOfType<AdvanceResult.NavigateToSlide>();
+            close.Should().BeOfType<AdvanceResult.AtEnd>();
+            window.IsPresenterSessionClosed.Should().BeTrue();
+            var firstTransition = pres.Slides[0].Transition;
+            var secondTransition = pres.Slides[1].Transition;
+            firstTransition.Should().NotBeNull();
+            secondTransition.Should().NotBeNull();
+            firstTransition!.Kind.Should().Be(TransitionKind.Fade);
+            firstTransition.DurationMs.Should().Be(700);
+            firstTransition.AdvanceAfterMs.Should().Be(2500);
+            secondTransition!.AdvanceAfterMs.Should().Be(3500);
+        }
+        finally
+        {
+            if (!window.IsPresenterSessionClosed)
+            {
+                window.Close();
+            }
+        }
+    }
+
+    [StaFact]
+    public void SlideShowWindow_RehearseTimings_TracksWithoutPersistingTransitionTiming()
+    {
+        var pres = Presentation.CreateEmpty();
+        pres.Slides.Add(new Slide { Title = "Second" });
+        var started = new DateTimeOffset(2026, 7, 3, 10, 0, 0, TimeSpan.Zero);
+        var window = new SlideShowWindow(pres, 0);
+        try
+        {
+            window.ApplyPresenterToolIntent(
+                timingIntent: SlideShowTimingIntent.RehearseTimings,
+                nowUtc: started);
+
+            window.ExecuteAdvance(started.AddMilliseconds(1800));
+
+            window.TimingRecorderState.RecordedTimings.Should().ContainSingle();
+            window.TimingRecorderState.RecordedTimings[0].AdvanceAfterMs.Should().Be(1800);
+            window.TimingRecorderState.RecordedTimings[0].ShouldPersist.Should().BeFalse();
+            pres.Slides[0].Transition.Should().BeNull();
+        }
+        finally
+        {
+            if (!window.IsPresenterSessionClosed)
+            {
+                window.Close();
+            }
+        }
+    }
+
+    [StaFact]
     public void SlideShowWindow_InkExecution_DelegatesStrokeLifecycleToSharedPlanner()
     {
         var pres = Presentation.CreateEmpty();
