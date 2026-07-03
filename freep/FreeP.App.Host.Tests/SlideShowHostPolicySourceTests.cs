@@ -52,6 +52,40 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().NotContain("stroke.InkState.ThicknessDip * scale");
     }
 
+    [Fact]
+    public void WpfSlideShowWindow_ExecutesAnimationStepsThroughSharedPlaybackPlans()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            FindRepositoryRoot(),
+            "freep",
+            "FreeP.App.Host",
+            "SlideShowWindow.cs"));
+
+        source.Should().Contain("case SlideShowHostCommandKind.PlayAnimationStep when command.Step is not null:");
+        source.Should().Contain("PlayAnimationStep(command.Step);");
+        source.Should().Contain("private void PlayAnimationStep(AnimationStep step)");
+        source.Should().Contain("foreach (var plan in SlideShowPlaybackPlanner.PlanAnimationStep(step))");
+        source.Should().Contain("PlayShapeAnimation(element, plan);");
+        source.Should().Contain("PlayFallbackAnimation(SlideShowPlaybackPlanner.PlanFallbackAnimation(anim, plan.DelayMs));");
+
+        source.Should().Contain("case SlideShowShapeAnimationEffectKind.Appear:");
+        source.Should().Contain("AppearEffect(sb, element, plan.DelayMs);");
+        source.Should().Contain("case SlideShowShapeAnimationEffectKind.Fade:");
+        source.Should().Contain("FadeEffect(sb, element, plan);");
+        source.Should().Contain("case SlideShowShapeAnimationEffectKind.FlyIn:");
+        source.Should().Contain("FlyInEffect(sb, element, plan);");
+        source.Should().Contain("case SlideShowShapeAnimationEffectKind.Wipe:");
+        source.Should().Contain("WipeEffect(sb, element, plan);");
+        source.Should().Contain("case SlideShowShapeAnimationEffectKind.Zoom:");
+        source.Should().Contain("ZoomEffect(sb, element, plan);");
+        source.Should().Contain("case SlideShowShapeAnimationEffectKind.Pulse:");
+        source.Should().Contain("PulseEffect(sb, element, plan);");
+        source.Should().Contain("case SlideShowShapeAnimationEffectKind.Spin:");
+        source.Should().Contain("SpinEffect(sb, element, plan);");
+        source.Should().Contain("MotionPathEffect(sb, element, plan);");
+        source.Should().Contain("Storyboard.SetTarget(flashAnim, _slideCanvas);");
+    }
+
     private static string FindRepositoryRoot()
     {
         for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
