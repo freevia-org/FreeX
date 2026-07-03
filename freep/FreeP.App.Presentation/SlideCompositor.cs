@@ -872,6 +872,10 @@ public static class SlideCompositor
             {
                 Fill = ResolveFill(gradient, theme, effectiveClrMap)
             },
+            ShapeFill.Pattern pattern => new ChartFillPlan(fallback, ChartRenderPlanner.RectSeriesFillAlpha)
+            {
+                Fill = ResolveFill(pattern, theme, effectiveClrMap)
+            },
             ShapeFill.Solid solid => new ChartFillPlan(
                 ThemeColorResolver.Resolve(solid.Color, theme, effectiveClrMap),
                 ChartRenderPlanner.RectSeriesFillAlpha),
