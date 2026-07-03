@@ -423,35 +423,19 @@ public sealed class SlidePane : Border
 
     private void ApplySectionAction(SlideSectionActionPlan action)
     {
-        if (!action.IsEnabled)
+        var execution = SlideSectionPlanner.BuildExecutionPlan(action);
+        if (!execution.IsEnabled)
             return;
 
-        switch (action.Kind)
+        string? promptedName = null;
+        if (execution.RequiresNamePrompt)
         {
-            case SlideSectionActionKind.AddSection:
-            {
-                var name = PromptSectionName("Add Section", action.SuggestedName);
-                if (name is not null)
-                    _editor.AddSectionAtSlide(action.SlideIndex, name);
-                break;
-            }
-
-            case SlideSectionActionKind.RenameSection:
-            {
-                var name = PromptSectionName("Rename Section", action.SuggestedName);
-                if (name is not null)
-                    _editor.RenameSection(action.SectionIndex, name);
-                break;
-            }
-
-            case SlideSectionActionKind.RemoveSection:
-                _editor.RemoveSection(action.SectionIndex);
-                break;
-
-            case SlideSectionActionKind.RemoveAllSections:
-                _editor.RemoveAllSections();
-                break;
+            promptedName = PromptSectionName(execution.PromptTitle, execution.SuggestedName);
+            if (promptedName is null)
+                return;
         }
+
+        SlideSectionPlanner.TryApplyAction(_editor, execution, promptedName);
     }
 
     private string? PromptSectionName(string title, string initialName)

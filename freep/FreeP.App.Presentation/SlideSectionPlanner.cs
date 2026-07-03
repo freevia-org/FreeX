@@ -18,6 +18,15 @@ public sealed record SlideSectionActionPlan(
     bool IsEnabled,
     string SuggestedName = "");
 
+public sealed record SlideSectionActionExecutionPlan(
+    SlideSectionActionKind Kind,
+    int SlideIndex,
+    int SectionIndex,
+    bool IsEnabled,
+    bool RequiresNamePrompt,
+    string PromptTitle = "",
+    string SuggestedName = "");
+
 public static class SlideSectionPlanner
 {
     public const string AddSectionMenuText = "Add Section";
@@ -78,6 +87,81 @@ public static class SlideSectionPlanner
                 sectionIndex,
                 sections.Count > 0),
         ];
+    }
+
+    public static SlideSectionActionExecutionPlan BuildExecutionPlan(SlideSectionActionPlan action)
+    {
+        ArgumentNullException.ThrowIfNull(action);
+
+        return action.Kind switch
+        {
+            SlideSectionActionKind.AddSection => new SlideSectionActionExecutionPlan(
+                action.Kind,
+                action.SlideIndex,
+                action.SectionIndex,
+                action.IsEnabled,
+                RequiresNamePrompt: action.IsEnabled,
+                PromptTitle: AddSectionMenuText,
+                SuggestedName: action.SuggestedName),
+
+            SlideSectionActionKind.RenameSection => new SlideSectionActionExecutionPlan(
+                action.Kind,
+                action.SlideIndex,
+                action.SectionIndex,
+                action.IsEnabled,
+                RequiresNamePrompt: action.IsEnabled,
+                PromptTitle: RenameSectionMenuText,
+                SuggestedName: action.SuggestedName),
+
+            SlideSectionActionKind.RemoveSection => new SlideSectionActionExecutionPlan(
+                action.Kind,
+                action.SlideIndex,
+                action.SectionIndex,
+                action.IsEnabled,
+                RequiresNamePrompt: false),
+
+            SlideSectionActionKind.RemoveAllSections => new SlideSectionActionExecutionPlan(
+                action.Kind,
+                action.SlideIndex,
+                action.SectionIndex,
+                action.IsEnabled,
+                RequiresNamePrompt: false),
+
+            _ => new SlideSectionActionExecutionPlan(
+                action.Kind,
+                action.SlideIndex,
+                action.SectionIndex,
+                IsEnabled: false,
+                RequiresNamePrompt: false),
+        };
+    }
+
+    public static bool TryApplyAction(
+        EditingSession editor,
+        SlideSectionActionExecutionPlan execution,
+        string? promptedName = null)
+    {
+        ArgumentNullException.ThrowIfNull(editor);
+        ArgumentNullException.ThrowIfNull(execution);
+
+        if (!execution.IsEnabled)
+            return false;
+
+        if (execution.RequiresNamePrompt && promptedName is null)
+            return false;
+
+        return execution.Kind switch
+        {
+            SlideSectionActionKind.AddSection =>
+                editor.AddSectionAtSlide(execution.SlideIndex, promptedName),
+            SlideSectionActionKind.RenameSection =>
+                editor.RenameSection(execution.SectionIndex, promptedName),
+            SlideSectionActionKind.RemoveSection =>
+                editor.RemoveSection(execution.SectionIndex),
+            SlideSectionActionKind.RemoveAllSections =>
+                editor.RemoveAllSections(),
+            _ => false,
+        };
     }
 
     public static string NormalizeSectionName(string? name, string fallback = DefaultSectionName)

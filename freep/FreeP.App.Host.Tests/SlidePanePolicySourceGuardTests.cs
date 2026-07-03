@@ -20,10 +20,8 @@ public sealed class SlidePanePolicySourceGuardTests
         source.Should().Contain("SlidePanePlanner.NewSlideButtonText");
         source.Should().Contain("SlideSectionPlanner.BuildSlideContextActions(");
         source.Should().Contain("SlideSectionPlanner.BuildSectionHeaderActions(");
-        source.Should().Contain("_editor.AddSectionAtSlide(action.SlideIndex, name)");
-        source.Should().Contain("_editor.RenameSection(action.SectionIndex, name)");
-        source.Should().Contain("_editor.RemoveSection(action.SectionIndex)");
-        source.Should().Contain("_editor.RemoveAllSections()");
+        source.Should().Contain("SlideSectionPlanner.BuildExecutionPlan(action)");
+        source.Should().Contain("SlideSectionPlanner.TryApplyAction(_editor, execution, promptedName)");
         source.Should().NotContain("new Dictionary<int, PresentationSection>");
         source.Should().NotContain("sectionHeaderBefore");
         source.Should().NotContain("const double SectionHeaderHeight");
@@ -33,6 +31,10 @@ public sealed class SlidePanePolicySourceGuardTests
         source.Should().NotContain("_editor.DuplicateCurrentSlide();");
         source.Should().NotContain("_editor.DeleteCurrentSlide();");
         source.Should().NotContain("_editor.MoveSlide(from, to);");
+        source.Should().NotContain("_editor.AddSectionAtSlide(action.SlideIndex");
+        source.Should().NotContain("_editor.RenameSection(action.SectionIndex");
+        source.Should().NotContain("_editor.RemoveSection(action.SectionIndex)");
+        source.Should().NotContain("_editor.RemoveAllSections()");
     }
 
     private static string ReadHostSource(string fileName)
