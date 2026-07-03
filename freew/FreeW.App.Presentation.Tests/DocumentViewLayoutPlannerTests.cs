@@ -163,6 +163,37 @@ public sealed class DocumentViewLayoutPlannerTests
         pagination.Pages[1].IncludesRepeatedHeader.Should().BeTrue();
         pagination.Pages[1].RepeatedHeaderRowIndexes.Should().Equal(0);
         pagination.Pages[1].KeepTogetherRowIndexes.Should().Contain(7);
+        pagination.Pages[1].RenderRows[0].Should().Match<DocumentTablePaginationRenderRowPlan>(row =>
+            row.SourceRowIndex == 0
+            && row.IsRepeatedHeader
+            && row.StartsPlannedPage
+            && row.PageNumber == 2
+            && row.PageOffsetYDip == 0);
+        pagination.Pages[1].RenderRows[1].Should().Match<DocumentTablePaginationRenderRowPlan>(row =>
+            row.SourceRowIndex == pagination.Pages[1].SourceRowIndexes[0]
+            && !row.IsRepeatedHeader
+            && !row.StartsPlannedPage
+            && row.PageOffsetYDip == pagination.HeaderHeightDip);
+    }
+
+    [Fact]
+    public void BuildTablePaginationPlan_MarksPlannedPageStartsWithoutRepeatedHeaders()
+    {
+        var document = FreeWVisualEvidenceDocumentFactory.BuildTablePaginationRepeatHeaderDocument();
+        var table = document.Blocks.OfType<Table>().Single();
+        table.Formatting = table.Formatting with { RepeatHeaderRow = false };
+
+        var pagination = DocumentViewLayoutPlanner.BuildTablePaginationPlan(table, document.Page);
+
+        pagination.EstimatedPageCount.Should().Be(2);
+        pagination.RepeatsHeaderRows.Should().BeFalse();
+        pagination.Pages[1].RepeatedHeaderRowIndexes.Should().BeEmpty();
+        pagination.Pages[1].RenderRows[0].Should().Match<DocumentTablePaginationRenderRowPlan>(row =>
+            row.SourceRowIndex == pagination.Pages[1].SourceRowIndexes[0]
+            && !row.IsRepeatedHeader
+            && row.StartsPlannedPage
+            && row.PageNumber == 2
+            && row.PageOffsetYDip == 0);
     }
 
     [Fact]

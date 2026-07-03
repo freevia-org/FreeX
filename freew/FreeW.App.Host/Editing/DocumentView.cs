@@ -4110,7 +4110,9 @@ public sealed class DocumentView : RichTextBox
             || group.Parent is not WpfTable wpfTable)
             return (-1, -1, -1);
 
-        var blockIndex = new List<System.Windows.Documents.Block>(Document.Blocks).IndexOf(wpfTable);
+        var blockIndex = wpfTable.Tag is WpfTableTag { SourceBlockIndex: >= 0 } tag
+            ? tag.SourceBlockIndex
+            : new List<System.Windows.Documents.Block>(Document.Blocks).IndexOf(wpfTable);
         var rowIndex = ModelRowIndexOfRenderedRow(group, wpfRow);
         var columnIndex = new List<WpfTableCell>(wpfRow.Cells).IndexOf(cell);
         return (blockIndex, rowIndex, columnIndex);
@@ -4118,6 +4120,8 @@ public sealed class DocumentView : RichTextBox
 
     private static int ModelRowIndexOfRenderedRow(TableRowGroup group, WpfTableRow renderedRow)
     {
+        if (renderedRow.Tag is WpfTableRowTag { SourceRowIndex: >= 0 } tag)
+            return tag.SourceRowIndex;
         if (renderedRow.Tag is WpfTableRowTag { IsRepeatedHeader: true, SourceRowIndex: var sourceRowIndex })
             return sourceRowIndex;
 
@@ -4330,7 +4334,8 @@ public sealed class DocumentView : RichTextBox
             }
             else
             {
-                flow.Blocks.Add(BuildBlock(blocks[i], _model));
+                foreach (var block in BuildBlocks(blocks[i], _model, i))
+                    flow.Blocks.Add(block);
                 visibleCount++;
                 i++;
             }
@@ -5960,21 +5965,7 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     internal void ReadBlocksInto(FlowDocument flowDoc, IList<ModelBlock> target)
     {
-        foreach (var block in flowDoc.Blocks)
-        {
-            switch (block)
-            {
-                case WpfList wpfList:
-                    ReadList(target, wpfList, _model);
-                    break;
-                case WpfParagraph wpfParagraph:
-                    target.Add(ReadParagraph(wpfParagraph, _model));
-                    break;
-                case WpfTable wpfTable:
-                    target.Add(ReadTable(wpfTable, _model));
-                    break;
-            }
-        }
+        ReadRenderedBlocksInto(flowDoc.Blocks, target, _model);
     }
 
     /// <summary>Read the edited FlowDocument back into the model (paragraphs + tables).</summary>
@@ -5984,21 +5975,7 @@ public sealed class DocumentView : RichTextBox
         // active the view only holds the visible blocks, so the hidden model blocks are spliced back in
         // afterwards (see MergeHiddenBlocks) to keep the model document complete.
         var visible = new List<ModelBlock>();
-        foreach (var block in Document.Blocks)
-        {
-            switch (block)
-            {
-                case WpfList wpfList:
-                    ReadList(visible, wpfList, _model);
-                    break;
-                case WpfParagraph wpfParagraph:
-                    visible.Add(ReadParagraph(wpfParagraph, _model));
-                    break;
-                case WpfTable wpfTable:
-                    visible.Add(ReadTable(wpfTable, _model));
-                    break;
-            }
-        }
+        ReadRenderedBlocksInto(Document.Blocks, visible, _model);
 
         _model.Blocks.Clear();
         if (_hiddenBlocks.Count == 0)
@@ -6013,6 +5990,75 @@ public sealed class DocumentView : RichTextBox
 
         if (_model.Blocks.Count == 0)
             _model.Blocks.Add(new ModelParagraph());
+    }
+
+    private static void ReadRenderedBlocksInto(
+        BlockCollection blocks,
+        IList<ModelBlock> target,
+        TextDocument document)
+    {
+        ModelTable? pendingSegmentTable = null;
+        WpfTableTag? pendingSegmentTag = null;
+
+        void FlushPendingSegment()
+        {
+            if (pendingSegmentTable is null)
+                return;
+
+            target.Add(pendingSegmentTable);
+            pendingSegmentTable = null;
+            pendingSegmentTag = null;
+        }
+
+        foreach (var block in blocks)
+        {
+            switch (block)
+            {
+                case WpfList wpfList:
+                    FlushPendingSegment();
+                    ReadList(target, wpfList, document);
+                    break;
+                case WpfParagraph wpfParagraph:
+                    FlushPendingSegment();
+                    target.Add(ReadParagraph(wpfParagraph, document));
+                    break;
+                case WpfTable wpfTable:
+                    var table = ReadTable(wpfTable, document);
+                    if (wpfTable.Tag is WpfTableTag { IsPaginationSegment: true, SegmentCount: > 1 } tag)
+                    {
+                        if (pendingSegmentTable is not null
+                            && pendingSegmentTag is not null
+                            && pendingSegmentTag.SourceBlockIndex == tag.SourceBlockIndex
+                            && pendingSegmentTag.SegmentCount == tag.SegmentCount
+                            && tag.SegmentIndex == pendingSegmentTag.SegmentIndex + 1)
+                        {
+                            foreach (var row in table.Rows)
+                                pendingSegmentTable.Rows.Add(row);
+                            pendingSegmentTag = tag;
+                        }
+                        else
+                        {
+                            FlushPendingSegment();
+                            pendingSegmentTable = table;
+                            pendingSegmentTag = tag;
+                        }
+
+                        if (tag.SegmentIndex >= tag.SegmentCount - 1)
+                            FlushPendingSegment();
+                    }
+                    else
+                    {
+                        FlushPendingSegment();
+                        target.Add(table);
+                    }
+                    break;
+                default:
+                    FlushPendingSegment();
+                    break;
+            }
+        }
+
+        FlushPendingSegment();
     }
 
     // Reconstruct the full model from the committed visible blocks plus the blocks that Render hid for
@@ -6364,10 +6410,13 @@ public sealed class DocumentView : RichTextBox
             {
                 if (IsRepeatedHeaderRenderRow(wpfRow))
                     continue;
-                var isHeaderRow = headerRow && rowIndex == 0;
+                var sourceRowIndex = wpfRow.Tag is WpfTableRowTag { SourceRowIndex: >= 0 } rowTag
+                    ? rowTag.SourceRowIndex
+                    : rowIndex;
+                var isHeaderRow = headerRow && sourceRowIndex == 0;
                 var isBandedRow = bandedRows
                     && !isHeaderRow
-                    && TableBanding.IsBandedBodyRow(rowIndex, headerRow);
+                    && TableBanding.IsBandedBodyRow(sourceRowIndex, headerRow);
                 var row = modelRows[rowIndex];
                 foreach (var wpfCell in wpfRow.Cells)
                 {
@@ -6477,11 +6526,14 @@ public sealed class DocumentView : RichTextBox
 
     // --- model -> view ---
 
-    private static System.Windows.Documents.Block BuildBlock(ModelBlock block, TextDocument document) => block switch
+    private static IReadOnlyList<System.Windows.Documents.Block> BuildBlocks(
+        ModelBlock block,
+        TextDocument document,
+        int sourceBlockIndex) => block switch
     {
-        ModelTable table => BuildTable(table, document),
-        ModelParagraph paragraph => BuildParagraph(paragraph, document),
-        _ => BuildParagraph(new ModelParagraph(), document)
+        ModelTable table => BuildTableBlocks(table, document, sourceBlockIndex),
+        ModelParagraph paragraph => [BuildParagraph(paragraph, document)],
+        _ => [BuildParagraph(new ModelParagraph(), document)]
     };
 
     // The legacy light fills used to render the table-style toggles when no named TableStyleId is set.
@@ -6507,16 +6559,69 @@ public sealed class DocumentView : RichTextBox
     /// <see cref="TableStyleId"/> (the named catalog style). Both are stashed on <see cref="BuildTable"/>
     /// and recovered on commit so they survive the view→model round-trip unmodified.
     /// </summary>
-    private sealed record WpfTableTag(TableFormatting Formatting, string? TableStyleId);
+    private sealed record WpfTableTag(
+        TableFormatting Formatting,
+        string? TableStyleId,
+        int SourceBlockIndex = -1,
+        int SegmentIndex = 0,
+        int SegmentCount = 1,
+        int PageNumber = 1,
+        bool IsPaginationSegment = false);
 
     private sealed record WpfTableRowTag(int SourceRowIndex, bool IsRepeatedHeader);
 
-    private static WpfTable BuildTable(ModelTable table, TextDocument document)
+    private static IReadOnlyList<System.Windows.Documents.Block> BuildTableBlocks(
+        ModelTable table,
+        TextDocument document,
+        int sourceBlockIndex)
+    {
+        var paginationPlan = DocumentViewLayoutPlanner.BuildTablePaginationPlan(table, document.Page);
+        if (ShouldRenderPlannedTablePages(table, paginationPlan))
+        {
+            return paginationPlan.Pages
+                .Select((page, segmentIndex) => (System.Windows.Documents.Block)BuildTable(
+                    table,
+                    document,
+                    sourceBlockIndex,
+                    page,
+                    segmentIndex,
+                    paginationPlan.Pages.Count))
+                .ToList();
+        }
+
+        return [BuildTable(table, document, sourceBlockIndex)];
+    }
+
+    private static bool ShouldRenderPlannedTablePages(ModelTable table, DocumentTablePaginationPlan paginationPlan) =>
+        paginationPlan.Pages.Count > 1 && !TableHasVerticalMerges(table);
+
+    private static bool TableHasVerticalMerges(ModelTable table) =>
+        table.Rows.SelectMany(row => row.Cells).Any(cell => cell.VerticalMerge != VerticalMergeState.None);
+
+    private static WpfTable BuildTable(
+        ModelTable table,
+        TextDocument document,
+        int sourceBlockIndex = -1,
+        DocumentTablePaginationPagePlan? paginationPage = null,
+        int segmentIndex = 0,
+        int segmentCount = 1)
     {
         // Stash the model's table formatting AND the catalog style id on the WPF table Tag so both survive
         // the view→model round-trip (CommitToModel's ReadTable reconstructs Borders from the view but
         // recovers the toggles and style id from this tag, which WPF FlowDocument tables can't express).
-        var wpf = new WpfTable { Tag = new WpfTableTag(table.Formatting, table.TableStyleId) };
+        var isPaginationSegment = paginationPage is not null && segmentCount > 1;
+        var wpf = new WpfTable
+        {
+            BreakPageBefore = isPaginationSegment && segmentIndex > 0,
+            Tag = new WpfTableTag(
+                table.Formatting,
+                table.TableStyleId,
+                sourceBlockIndex,
+                segmentIndex,
+                segmentCount,
+                paginationPage?.PageNumber ?? 1,
+                isPaginationSegment)
+        };
         var columns = table.ColumnCount;
         for (var c = 0; c < columns; c++)
         {
@@ -6549,10 +6654,6 @@ public sealed class DocumentView : RichTextBox
 
         var fmt = table.Formatting;
         var totalRows = table.Rows.Count;
-        var paginationPlan = DocumentViewLayoutPlanner.BuildTablePaginationPlan(table, document.Page);
-        var repeatedHeaderRowsByFirstSourceRow = paginationPlan.Pages
-            .Where(page => page.IncludesRepeatedHeader && page.SourceRowIndexes.Count > 0)
-            .ToDictionary(page => page.SourceRowIndexes[0], page => page.RepeatedHeaderRowIndexes);
         var group = new TableRowGroup();
         void AppendRenderedRow(int rowIndex, bool isRepeatedHeader)
         {
@@ -6756,18 +6857,18 @@ public sealed class DocumentView : RichTextBox
             group.Rows.Add(wpfRow);
         }
 
-        for (var rowIndex = 0; rowIndex < totalRows; rowIndex++)
+        if (paginationPage is not null && paginationPage.RenderRows.Count > 0)
         {
-            if (repeatedHeaderRowsByFirstSourceRow.TryGetValue(rowIndex, out var repeatedHeaderRowIndexes))
+            foreach (var renderRow in paginationPage.RenderRows)
             {
-                foreach (var repeatedHeaderRowIndex in repeatedHeaderRowIndexes)
-                {
-                    if (repeatedHeaderRowIndex >= 0 && repeatedHeaderRowIndex < totalRows)
-                        AppendRenderedRow(repeatedHeaderRowIndex, isRepeatedHeader: true);
-                }
+                if (renderRow.SourceRowIndex >= 0 && renderRow.SourceRowIndex < totalRows)
+                    AppendRenderedRow(renderRow.SourceRowIndex, renderRow.IsRepeatedHeader);
             }
-
-            AppendRenderedRow(rowIndex, isRepeatedHeader: false);
+        }
+        else
+        {
+            for (var rowIndex = 0; rowIndex < totalRows; rowIndex++)
+                AppendRenderedRow(rowIndex, isRepeatedHeader: false);
         }
         wpf.RowGroups.Add(group);
         return wpf;

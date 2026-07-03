@@ -680,7 +680,13 @@ public sealed class VisualEvidencePlannerTests
         expectation.Tables.HasMultiPageTables.Should().BeTrue();
         expectation.Tables.HasRepeatedHeaderPages.Should().BeTrue();
         expectation.Tables.HasKeepTogetherRows.Should().BeTrue();
-        expectation.Tables.PaginationPlans.Single().Pages[1].RepeatedHeaderRowIndexes.Should().Equal(0);
+        var page2 = expectation.Tables.PaginationPlans.Single().Pages[1];
+        page2.RepeatedHeaderRowIndexes.Should().Equal(0);
+        page2.RenderRows[0].Should().Match<DocumentTablePaginationRenderRowPlan>(row =>
+            row.SourceRowIndex == 0
+            && row.IsRepeatedHeader
+            && row.StartsPlannedPage
+            && row.PageNumber == 2);
     }
 
     [Fact]

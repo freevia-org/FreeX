@@ -81,13 +81,23 @@ public sealed record DocumentTablePaginationRowPlan(
     double EstimatedHeightDip,
     int AssignedPageNumber);
 
+public sealed record DocumentTablePaginationRenderRowPlan(
+    int SourceRowIndex,
+    int PageNumber,
+    int VisualRowIndexOnPage,
+    bool IsRepeatedHeader,
+    bool StartsPlannedPage,
+    double PageOffsetYDip,
+    double EstimatedHeightDip);
+
 public sealed record DocumentTablePaginationPagePlan(
     int PageNumber,
     IReadOnlyList<int> SourceRowIndexes,
     IReadOnlyList<int> RepeatedHeaderRowIndexes,
     IReadOnlyList<int> KeepTogetherRowIndexes,
     double UsedHeightDip,
-    double AvailableHeightDip)
+    double AvailableHeightDip,
+    IReadOnlyList<DocumentTablePaginationRenderRowPlan> RenderRows)
 {
     public bool IncludesRepeatedHeader => RepeatedHeaderRowIndexes.Count > 0;
     public int SourceStartRowIndex => SourceRowIndexes.Count == 0 ? -1 : SourceRowIndexes.Min();
@@ -546,13 +556,37 @@ public static class DocumentViewLayoutPlanner
             if (currentRows.Count == 0)
                 return;
 
+            var renderRows = new List<DocumentTablePaginationRenderRowPlan>();
+            var pageOffset = 0.0;
+            void AddRenderRow(int rowIndex, bool isRepeatedHeader)
+            {
+                if (rowIndex < 0 || rowIndex >= estimatedHeights.Length)
+                    return;
+
+                renderRows.Add(new DocumentTablePaginationRenderRowPlan(
+                    rowIndex,
+                    currentPageNumber,
+                    renderRows.Count,
+                    isRepeatedHeader,
+                    currentPageNumber > 1 && renderRows.Count == 0,
+                    RoundDip(pageOffset),
+                    estimatedHeights[rowIndex]));
+                pageOffset += estimatedHeights[rowIndex];
+            }
+
+            foreach (var headerRowIndex in repeatedHeaderRows)
+                AddRenderRow(headerRowIndex, isRepeatedHeader: true);
+            foreach (var sourceRowIndex in currentRows)
+                AddRenderRow(sourceRowIndex, isRepeatedHeader: false);
+
             pageRows.Add(new DocumentTablePaginationPagePlan(
                 currentPageNumber,
                 currentRows.ToList(),
                 repeatedHeaderRows.ToList(),
                 currentKeepRows.ToList(),
                 RoundDip(currentUsed),
-                pageAvailable));
+                pageAvailable,
+                renderRows));
         }
 
         StartPage(1);

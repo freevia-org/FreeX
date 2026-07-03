@@ -615,12 +615,19 @@ public sealed class DocumentViewRoundTripTests
         var view = new DocumentView();
         view.LoadModel(doc);
 
-        var wpfTable = view.Document.Blocks.OfType<System.Windows.Documents.Table>().Single();
-        var renderedRows = wpfTable.RowGroups.SelectMany(group => group.Rows).ToList();
+        var wpfTables = view.Document.Blocks.OfType<System.Windows.Documents.Table>().ToList();
+        wpfTables.Should().HaveCount(pagination.Pages.Count);
+        wpfTables[0].BreakPageBefore.Should().BeFalse();
+        wpfTables[1].BreakPageBefore.Should().BeTrue();
+        wpfTables[0].RowGroups.SelectMany(group => group.Rows).Should().HaveCount(pagination.Pages[0].RenderRows.Count);
+        wpfTables[1].RowGroups.SelectMany(group => group.Rows).Should().HaveCount(pagination.Pages[1].RenderRows.Count);
+
+        var renderedRows = wpfTables.SelectMany(table => table.RowGroups.SelectMany(group => group.Rows)).ToList();
         renderedRows.Should().HaveCount(modelTable.Rows.Count + repeatedPage.RepeatedHeaderRowIndexes.Count);
-        RenderedRowText(renderedRows[firstPageRowIndex]).Should().Contain("Step");
-        RenderedRowText(renderedRows[firstPageRowIndex]).Should().Contain("Pagination evidence");
-        RenderedRowText(renderedRows[firstPageRowIndex + 1]).Should().Contain($"Row {firstPageRowIndex}");
+        var secondPageRows = wpfTables[1].RowGroups.SelectMany(group => group.Rows).ToList();
+        RenderedRowText(secondPageRows[0]).Should().Contain("Step");
+        RenderedRowText(secondPageRows[0]).Should().Contain("Pagination evidence");
+        RenderedRowText(secondPageRows[1]).Should().Contain($"Row {firstPageRowIndex}");
 
         view.CommitToModel();
 
@@ -628,6 +635,32 @@ public sealed class DocumentViewRoundTripTests
         committedTable.Rows.Should().HaveCount(modelTable.Rows.Count);
         committedTable.Rows[0].Cells.Select(cell => cell.PlainText)
             .Should().Equal(modelTable.Rows[0].Cells.Select(cell => cell.PlainText));
+    }
+
+    [StaFact]
+    public void TablePagination_WithoutRepeatHeader_RendersPlannedPageBreakSegments()
+    {
+        var doc = FreeWVisualEvidenceDocumentFactory.BuildTablePaginationRepeatHeaderDocument();
+        var modelTable = doc.Blocks.OfType<Table>().Single();
+        modelTable.Formatting = modelTable.Formatting with { RepeatHeaderRow = false };
+        var pagination = DocumentViewLayoutPlanner.BuildTablePaginationPlan(modelTable, doc.Page);
+        var secondPageFirstRow = pagination.Pages[1].SourceRowIndexes[0];
+
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        var wpfTables = view.Document.Blocks.OfType<System.Windows.Documents.Table>().ToList();
+        wpfTables.Should().HaveCount(pagination.Pages.Count);
+        wpfTables[1].BreakPageBefore.Should().BeTrue();
+        var secondPageRows = wpfTables[1].RowGroups.SelectMany(group => group.Rows).ToList();
+        RenderedRowText(secondPageRows[0]).Should().Contain($"Row {secondPageFirstRow}");
+        RenderedRowText(secondPageRows[0]).Should().NotContain("Pagination evidence");
+
+        view.CommitToModel();
+
+        var committedTable = view.Model.Blocks.OfType<Table>().Single();
+        committedTable.Rows.Should().HaveCount(modelTable.Rows.Count);
+        committedTable.Formatting.RepeatHeaderRow.Should().BeFalse();
     }
 
     private static string RenderedRowText(System.Windows.Documents.TableRow row)
