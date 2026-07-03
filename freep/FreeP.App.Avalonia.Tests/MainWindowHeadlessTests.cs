@@ -563,6 +563,69 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task SlidePane_context_duplicate_routes_through_shared_planner()
+    {
+        var duplicated = false;
+        var before = -1;
+        var after = -1;
+        var currentSlideIndex = -1;
+        string[] titles = [];
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            window.Editor.CurrentSlide!.Title = "Agenda";
+            window.Editor.InsertSlide();
+            window.Editor.CurrentSlide!.Title = "Roadmap";
+            window.Editor.SelectSlide(0);
+
+            before = window.SlideCount;
+            duplicated = window.TryApplySlidePaneContextAction(0, SlidePaneActionKind.DuplicateSlide);
+            after = window.SlideCount;
+            currentSlideIndex = window.CurrentSlideIndex;
+            titles = window.Editor.Presentation.Slides.Select(slide => slide.Title).ToArray();
+        });
+
+        if (!ran) return;
+        duplicated.Should().BeTrue("the Avalonia slide-pane context menu should use the shared duplicate action plan");
+        after.Should().Be(before + 1);
+        currentSlideIndex.Should().Be(1, "duplicating from the slide pane should select the clone like WPF");
+        titles.Should().Equal("Agenda", "Agenda", "Roadmap");
+    }
+
+    [Fact]
+    public async Task SlidePane_context_delete_respects_shared_delete_enablement()
+    {
+        var deletedSingleSlide = true;
+        var deletedSecondSlide = false;
+        var singleSlideCount = -1;
+        var finalSlideCount = -1;
+        string[] titles = [];
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            window.Editor.CurrentSlide!.Title = "Keep";
+
+            deletedSingleSlide = window.TryApplySlidePaneContextAction(0, SlidePaneActionKind.DeleteSlide);
+            singleSlideCount = window.SlideCount;
+
+            window.Editor.InsertSlide();
+            window.Editor.CurrentSlide!.Title = "Remove";
+            deletedSecondSlide = window.TryApplySlidePaneContextAction(1, SlidePaneActionKind.DeleteSlide);
+            finalSlideCount = window.SlideCount;
+            titles = window.Editor.Presentation.Slides.Select(slide => slide.Title).ToArray();
+        });
+
+        if (!ran) return;
+        deletedSingleSlide.Should().BeFalse("the shared slide-pane planner disables deleting the last slide");
+        singleSlideCount.Should().Be(1);
+        deletedSecondSlide.Should().BeTrue("the same planner-backed menu route should delete when another slide remains");
+        finalSlideCount.Should().Be(1);
+        titles.Should().Equal("Keep");
+    }
+
+    [Fact]
     public async Task DeleteCurrentSlide_decreases_slide_count()
     {
         var before = -1;

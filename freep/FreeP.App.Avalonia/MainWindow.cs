@@ -4943,11 +4943,19 @@ public sealed class MainWindow : Window
                 Header = action.Text,
                 IsEnabled = action.IsEnabled,
             };
-            item.Click += (_, _) => SlidePanePlanner.TryApplyAction(Editor, action);
+            item.Click += (_, _) => TryApplySlidePaneContextAction(slideIndex, action.Kind);
             menu.Items.Add(item);
         }
 
         return menu;
+    }
+
+    internal bool TryApplySlidePaneContextAction(int slideIndex, SlidePaneActionKind kind)
+    {
+        var action = SlidePanePlanner.BuildContextActions(_presentation.Slides.Count, slideIndex)
+            .FirstOrDefault(candidate => candidate.Kind == kind);
+
+        return action is not null && SlidePanePlanner.TryApplyAction(Editor, action);
     }
 
     private ContextMenu BuildSlidePaneSectionContextMenu(SlidePaneEntry entry)
