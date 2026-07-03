@@ -483,6 +483,126 @@ function Get-ExpectedEvidenceSize {
     return $null
 }
 
+function New-DimensionMismatchClassification {
+    param(
+        [Parameter(Mandatory = $true)][string]$Bucket,
+        [Parameter(Mandatory = $true)][string]$Reason,
+        [Parameter(Mandatory = $true)][string]$NextAction
+    )
+
+    [pscustomobject]@{
+        bucket = $Bucket
+        reason = $Reason
+        nextAction = $NextAction
+    }
+}
+
+function Get-DimensionMismatchClassification {
+    param(
+        [Parameter(Mandatory = $true)][string]$SurfaceId,
+        [Parameter(Mandatory = $true)][bool]$LogicalDimensionMatch,
+        [Parameter(Mandatory = $true)][bool]$ExpectedSizeMismatch,
+        [Parameter(Mandatory = $true)][double]$LogicalWidthDelta,
+        [Parameter(Mandatory = $true)][double]$LogicalHeightDelta
+    )
+
+    if ($LogicalDimensionMatch) {
+        return $null
+    }
+
+    if ($ExpectedSizeMismatch) {
+        return New-DimensionMismatchClassification `
+            -Bucket "evidence limitation" `
+            -Reason "The checked-in PNG disagrees with an explicit expected capture size, so the dimension delta is suspect evidence." `
+            -NextAction "Recapture or replace the stale evidence before treating this as a product layout mismatch."
+    }
+
+    switch ($SurfaceId) {
+        "dialog.ScenarioManager" {
+            return New-DimensionMismatchClassification `
+                -Bucket "content/visual mismatch" `
+                -Reason "The committed WPF PNG shows a selected seeded scenario while the Avalonia PNG shows an empty/no-scenario state." `
+                -NextAction "Align the seeded harness state before judging the remaining Scenario Manager dimensions."
+        }
+        "dialog.SelectionPane" {
+            return New-DimensionMismatchClassification `
+                -Bucket "content/visual mismatch" `
+                -Reason "The committed PNGs use different sample objects and selected rows." `
+                -NextAction "Align the sample worksheet objects and selection state, then re-rank the surface."
+        }
+        "dialog.AccessibilityChecker" {
+            return New-DimensionMismatchClassification `
+                -Bucket "content/visual mismatch" `
+                -Reason "The committed PNGs show different issue models: a compact WPF list versus an Avalonia grouped inspection tree." `
+                -NextAction "Compare the Accessibility Checker data model and decide whether the grouped Avalonia presentation is intentional."
+        }
+        "dialog.SymbolPicker" {
+            return New-DimensionMismatchClassification `
+                -Bucket "content/visual mismatch" `
+                -Reason "The committed PNGs show different symbol-picker presentations, including Avalonia search/detail content absent from WPF." `
+                -NextAction "Decide the target symbol-picker contract, then align either WPF evidence state or Avalonia layout."
+        }
+        "dialog.Options.Formulas" {
+            return New-DimensionMismatchClassification `
+                -Bucket "content/visual mismatch" `
+                -Reason "The WPF capture exposes a much taller Formulas options page than the fixed-height Avalonia Options frame." `
+                -NextAction "Review the Formulas page content height and scrolling contract before changing dialog dimensions."
+        }
+        "dialog.GoalSeekStatus" {
+            return New-DimensionMismatchClassification `
+                -Bucket "evidence limitation" `
+                -Reason "The semantic status content matches, but the WPF PNG includes extra bottom capture area." `
+                -NextAction "Recapture or tighten the WPF status crop before treating the height delta as a product bug."
+        }
+        "dialog.PivotTableOptions.Display" {
+            return New-DimensionMismatchClassification `
+                -Bucket "evidence limitation" `
+                -Reason "Only a near-one-DIP height delta remains, consistent with border or capture rounding." `
+                -NextAction "Leave below the product-action threshold unless a future recapture widens the delta."
+        }
+    }
+
+    if ($SurfaceId.StartsWith("dialog.FormatCells", [System.StringComparison]::Ordinal)) {
+        return New-DimensionMismatchClassification `
+            -Bucket "content/visual mismatch" `
+            -Reason "The Format Cells captures differ in tab/control presentation and content density in addition to size." `
+            -NextAction "Review the Format Cells tab model, tab order, and target frame size together."
+    }
+
+    if ($SurfaceId -eq "dialog.AutoFilter" -or $SurfaceId -eq "dialog.SelectDataSource") {
+        return New-DimensionMismatchClassification `
+            -Bucket "content/visual mismatch" `
+            -Reason "The committed PNGs show different dialog content/state, so the size delta is not isolated layout evidence." `
+            -NextAction "Align the harness data/state first, then reclassify any residual logical-size delta."
+    }
+
+    if ($SurfaceId.StartsWith("dialog.Options.", [System.StringComparison]::Ordinal) -or
+        $SurfaceId -eq "dialog.Options" -or
+        $SurfaceId.StartsWith("dialog.FindReplace", [System.StringComparison]::Ordinal) -or
+        $SurfaceId -eq "dialog.ChangeChartType" -or
+        $SurfaceId -eq "dialog.ExportOptions" -or
+        $SurfaceId -eq "dialog.ProtectWorkbook" -or
+        $SurfaceId -eq "dialog.Sparkline") {
+        return New-DimensionMismatchClassification `
+            -Bucket "expected platform/native difference" `
+            -Reason "The PNGs show the same paired surface with small WPF/Avalonia control, chrome, or default-spacing differences." `
+            -NextAction "Keep as expected platform/native variance unless parity policy later requires exact control metrics."
+    }
+
+    $largestDelta = [math]::Max([math]::Abs($LogicalWidthDelta), [math]::Abs($LogicalHeightDelta))
+    if ($largestDelta -le 1.25) {
+        return New-DimensionMismatchClassification `
+            -Bucket "evidence limitation" `
+            -Reason "The remaining logical-size delta is within capture rounding noise." `
+            -NextAction "Treat as low-priority evidence noise unless a future capture increases the delta."
+    }
+
+    New-DimensionMismatchClassification `
+        -Bucket "real logical-size mismatch" `
+        -Reason "The paired surface has a DPI-normalized logical size delta above tolerance with no known evidence-only exemption." `
+        -NextAction "Review the WPF/Avalonia planner or layout target, then align the size or document an intentional size contract."
+}
+
 function ConvertTo-JsonMetric {
     param(
         [Parameter(Mandatory = $true)]$Metric,
@@ -562,6 +682,13 @@ function Compare-PngMetrics {
     $hasExpectedSize = $null -ne $wpfExpectedSize -or $null -ne $avaloniaExpectedSize
     $expectedWidth = if ($null -ne $wpfExpectedSize) { [int]$wpfExpectedSize.width } elseif ($null -ne $avaloniaExpectedSize) { [int]$avaloniaExpectedSize.width } else { $null }
     $expectedHeight = if ($null -ne $wpfExpectedSize) { [int]$wpfExpectedSize.height } elseif ($null -ne $avaloniaExpectedSize) { [int]$avaloniaExpectedSize.height } else { $null }
+    $expectedSizeMismatch = $hasExpectedSize -and (-not $wpfExpectedMatch -or -not $avaloniaExpectedMatch)
+    $dimensionMismatchClassification = Get-DimensionMismatchClassification `
+        -SurfaceId $SurfaceId `
+        -LogicalDimensionMatch $logicalDimensionMatch `
+        -ExpectedSizeMismatch $expectedSizeMismatch `
+        -LogicalWidthDelta $logicalWidthDelta `
+        -LogicalHeightDelta $logicalHeightDelta
 
     [pscustomobject]@{
         widthDelta = $logicalWidthDelta
@@ -586,7 +713,10 @@ function Compare-PngMetrics {
         expectedSizeSource = $expectedSizeSource
         wpfExpectedSizeMatch = $wpfExpectedMatch
         avaloniaExpectedSizeMatch = $avaloniaExpectedMatch
-        expectedSizeMismatch = $hasExpectedSize -and (-not $wpfExpectedMatch -or -not $avaloniaExpectedMatch)
+        expectedSizeMismatch = $expectedSizeMismatch
+        dimensionMismatchBucket = if ($null -eq $dimensionMismatchClassification) { $null } else { [string]$dimensionMismatchClassification.bucket }
+        dimensionMismatchReason = if ($null -eq $dimensionMismatchClassification) { $null } else { [string]$dimensionMismatchClassification.reason }
+        dimensionMismatchNextAction = if ($null -eq $dimensionMismatchClassification) { $null } else { [string]$dimensionMismatchClassification.nextAction }
     }
 }
 
@@ -677,6 +807,11 @@ $captureScaleNormalizedDimensionRows = @($pairedRows | Where-Object { $_.compari
 $expectedSizeMismatchRows = @($pairedRows | Where-Object { $_.comparison.expectedSizeMismatch } | Sort-Object -Property id)
 $stalePromotedExpectedSizeRows = @($expectedSizeMismatchRows | Where-Object { Test-StalePromotedExpectedSizeEvidence -Row $_ } | Sort-Object -Property id)
 $topOutlierRows = @($pairedRows | Sort-Object @{ Expression = { $_.comparison.triageScore }; Descending = $true }, @{ Expression = { $_.id }; Ascending = $true } | Select-Object -First 10)
+$dimensionMismatchBucketGroups = @(
+    $dimensionMismatchRows |
+        Group-Object -Property { $_.comparison.dimensionMismatchBucket } |
+        Sort-Object -Property Name
+)
 
 $wpfManifestRelativePath = ConvertTo-RepoRelativePath (Resolve-RepoPath $WpfManifestPath)
 $avaloniaManifestRelativePath = ConvertTo-RepoRelativePath (Resolve-RepoPath $AvaloniaManifestPath)
@@ -710,6 +845,7 @@ $jsonModel = [ordered]@{
         pairedCaptureScaleNormalizedDimensionMatches = [int]$captureScaleNormalizedDimensionRows.Count
         pairedExpectedSizeMismatches = [int]$expectedSizeMismatchRows.Count
         stalePromotedExpectedSizeEvidence = [int]$stalePromotedExpectedSizeRows.Count
+        dimensionMismatchBuckets = [ordered]@{}
     }
     pairedSurfaces = @(
         foreach ($row in $pairedRows) {
@@ -741,6 +877,9 @@ $jsonModel = [ordered]@{
                     expectedSizeSource = $row.comparison.expectedSizeSource
                     wpfExpectedSizeMatch = $row.comparison.wpfExpectedSizeMatch
                     avaloniaExpectedSizeMatch = $row.comparison.avaloniaExpectedSizeMatch
+                    dimensionMismatchBucket = $row.comparison.dimensionMismatchBucket
+                    dimensionMismatchReason = $row.comparison.dimensionMismatchReason
+                    dimensionMismatchNextAction = $row.comparison.dimensionMismatchNextAction
                 }
             }
         }
@@ -752,7 +891,34 @@ $jsonModel = [ordered]@{
                 triageScore = [math]::Round($row.comparison.triageScore, 6)
                 sampleMeanDelta = [math]::Round($row.comparison.sampleMeanDelta, 6)
                 dimension = "$([math]::Round($row.wpf.metrics.LogicalWidth, 3))x$([math]::Round($row.wpf.metrics.LogicalHeight, 3)) vs $([math]::Round($row.avalonia.metrics.LogicalWidth, 3))x$([math]::Round($row.avalonia.metrics.LogicalHeight, 3)) logical; $($row.wpf.metrics.Width)x$($row.wpf.metrics.Height) vs $($row.avalonia.metrics.Width)x$($row.avalonia.metrics.Height) px"
+                dimensionMismatchBucket = $row.comparison.dimensionMismatchBucket
                 nonBackgroundDelta = [math]::Round($row.comparison.nonBackgroundDelta, 6)
+            }
+        }
+    )
+    dimensionMismatchClassification = @(
+        foreach ($group in $dimensionMismatchBucketGroups) {
+            $groupRows = @($group.Group | Sort-Object @{ Expression = { $_.comparison.triageScore }; Descending = $true }, @{ Expression = { $_.id }; Ascending = $true })
+            [ordered]@{
+                bucket = [string]$group.Name
+                count = [int]$group.Count
+                topSurfaceIds = @($groupRows | Select-Object -First 5 | ForEach-Object { $_.id })
+                nextAction = [string]$groupRows[0].comparison.dimensionMismatchNextAction
+            }
+        }
+    )
+    dimensionMismatchDetails = @(
+        foreach ($row in $dimensionMismatchRows) {
+            [ordered]@{
+                id = $row.id
+                bucket = $row.comparison.dimensionMismatchBucket
+                reason = $row.comparison.dimensionMismatchReason
+                nextAction = $row.comparison.dimensionMismatchNextAction
+                wpfLogicalSize = "$(Format-LogicalSize $row.wpf.metrics)"
+                avaloniaLogicalSize = "$(Format-LogicalSize $row.avalonia.metrics)"
+                logicalWidthDelta = [math]::Round($row.comparison.logicalWidthDelta, 3)
+                logicalHeightDelta = [math]::Round($row.comparison.logicalHeightDelta, 3)
+                triageScore = [math]::Round($row.comparison.triageScore, 6)
             }
         }
     )
@@ -774,6 +940,10 @@ $jsonModel = [ordered]@{
             }
         }
     )
+}
+
+foreach ($group in $dimensionMismatchBucketGroups) {
+    $jsonModel.summary.dimensionMismatchBuckets[[string]$group.Name] = [int]$group.Count
 }
 
 $json = ($jsonModel | ConvertTo-Json -Depth 12) + [Environment]::NewLine
@@ -819,6 +989,20 @@ $md = New-Object System.Text.StringBuilder
 [void]$md.AppendLine("| Stale promoted expected-size evidence | $($stalePromotedExpectedSizeRows.Count) |")
 [void]$md.AppendLine()
 
+[void]$md.AppendLine("## Scale-Aware Dimension Mismatch Classification")
+[void]$md.AppendLine()
+[void]$md.AppendLine("The $($dimensionMismatchRows.Count) scale-aware logical dimension mismatches are bucketed from committed PNG evidence and deterministic surface-id rules. Buckets describe the next review posture: align real layout sizes, fix content/state drift before comparing, accept expected platform/native control differences, or refresh limited evidence.")
+[void]$md.AppendLine()
+[void]$md.AppendLine("| Bucket | Count | Top surface ids | Top next action |")
+[void]$md.AppendLine("| --- | ---: | --- | --- |")
+foreach ($group in $dimensionMismatchBucketGroups) {
+    $groupRows = @($group.Group | Sort-Object @{ Expression = { $_.comparison.triageScore }; Descending = $true }, @{ Expression = { $_.id }; Ascending = $true })
+    $topIds = @($groupRows | Select-Object -First 5 | ForEach-Object { $_.id })
+    $nextAction = if ($groupRows.Count -eq 0) { "" } else { [string]$groupRows[0].comparison.dimensionMismatchNextAction }
+    [void]$md.AppendLine("| $(Escape-MarkdownCell ([string]$group.Name)) | $($group.Count) | $(Escape-MarkdownCell ($topIds -join '<br>')) | $(Escape-MarkdownCell $nextAction) |")
+}
+[void]$md.AppendLine()
+
 if ($blankEvidenceRows.Count -gt 0) {
     [void]$md.AppendLine("Nonblank check failures: $((@($blankEvidenceRows | ForEach-Object { $_.id }) | Sort-Object) -join ', ').")
     [void]$md.AppendLine()
@@ -833,12 +1017,23 @@ if ($wpfOnlyIds.Count -gt 0) {
 [void]$md.AppendLine()
 [void]$md.AppendLine("Outliers are ranked by a deterministic triage score: normalized 32x32 ARGB sample delta, mean-luma delta, non-background coverage delta, and DPI-normalized logical dimension delta. Higher scores deserve earlier human review. Rows with expected-size evidence mismatches are stale or suspect capture evidence, not an Avalonia product layout verdict.")
 [void]$md.AppendLine()
-[void]$md.AppendLine("| Surface id | WPF logical size | Avalonia logical size | Raw PNG sizes | Evidence flag | Score | Sample delta | Luma delta | Non-bg delta |")
-[void]$md.AppendLine("| --- | ---: | ---: | --- | --- | ---: | ---: | ---: | ---: |")
+[void]$md.AppendLine("| Surface id | WPF logical size | Avalonia logical size | Raw PNG sizes | Bucket | Evidence flag | Score | Sample delta | Luma delta | Non-bg delta |")
+[void]$md.AppendLine("| --- | ---: | ---: | --- | --- | --- | ---: | ---: | ---: | ---: |")
 foreach ($row in $topOutlierRows) {
     $evidenceFlag = if ($row.comparison.expectedSizeMismatch) { "Expected $($row.comparison.expectedWidth)x$($row.comparison.expectedHeight) via $($row.comparison.expectedSizeSource)" } else { "" }
     $rawSizes = "$(Format-PhysicalSize $row.wpf.metrics) vs $(Format-PhysicalSize $row.avalonia.metrics)"
-    [void]$md.AppendLine("| $(Escape-MarkdownCell $row.id) | $(Format-LogicalSize $row.wpf.metrics) | $(Format-LogicalSize $row.avalonia.metrics) | $(Escape-MarkdownCell $rawSizes) | $(Escape-MarkdownCell $evidenceFlag) | $(Format-ReportNumber $row.comparison.triageScore) | $(Format-ReportNumber $row.comparison.sampleMeanDelta) | $(Format-ReportNumber $row.comparison.lumaDelta) | $(Format-ReportNumber $row.comparison.nonBackgroundDelta) |")
+    $bucket = if ([string]::IsNullOrWhiteSpace([string]$row.comparison.dimensionMismatchBucket)) { "" } else { [string]$row.comparison.dimensionMismatchBucket }
+    [void]$md.AppendLine("| $(Escape-MarkdownCell $row.id) | $(Format-LogicalSize $row.wpf.metrics) | $(Format-LogicalSize $row.avalonia.metrics) | $(Escape-MarkdownCell $rawSizes) | $(Escape-MarkdownCell $bucket) | $(Escape-MarkdownCell $evidenceFlag) | $(Format-ReportNumber $row.comparison.triageScore) | $(Format-ReportNumber $row.comparison.sampleMeanDelta) | $(Format-ReportNumber $row.comparison.lumaDelta) | $(Format-ReportNumber $row.comparison.nonBackgroundDelta) |")
+}
+
+[void]$md.AppendLine()
+[void]$md.AppendLine("## Scale-Aware Dimension Mismatch Details")
+[void]$md.AppendLine()
+[void]$md.AppendLine("| Surface id | Bucket | WPF logical size | Avalonia logical size | Logical delta | Reason | Next action |")
+[void]$md.AppendLine("| --- | --- | ---: | ---: | ---: | --- | --- |")
+foreach ($row in $dimensionMismatchRows) {
+    $logicalDelta = "$(Format-DisplayNumber $row.comparison.logicalWidthDelta)x$(Format-DisplayNumber $row.comparison.logicalHeightDelta)"
+    [void]$md.AppendLine("| $(Escape-MarkdownCell $row.id) | $(Escape-MarkdownCell $row.comparison.dimensionMismatchBucket) | $(Format-LogicalSize $row.wpf.metrics) | $(Format-LogicalSize $row.avalonia.metrics) | $logicalDelta | $(Escape-MarkdownCell $row.comparison.dimensionMismatchReason) | $(Escape-MarkdownCell $row.comparison.dimensionMismatchNextAction) |")
 }
 
 [void]$md.AppendLine()
@@ -931,5 +1126,8 @@ Write-Host "Raw PNG pixel dimension mismatches: $($rawPixelDimensionMismatchRows
 Write-Host "Raw PNG mismatches normalized by capture DPI: $($captureScaleNormalizedDimensionRows.Count)"
 Write-Host "Paired expected-size evidence mismatches: $($expectedSizeMismatchRows.Count)"
 Write-Host "Stale promoted expected-size evidence: $($stalePromotedExpectedSizeRows.Count)"
+foreach ($group in $dimensionMismatchBucketGroups) {
+    Write-Host "Dimension mismatch bucket '$($group.Name)': $($group.Count)"
+}
 Write-Host "Wrote $(ConvertTo-RepoRelativePath $resolvedMarkdownPath)"
 Write-Host "Wrote $(ConvertTo-RepoRelativePath $resolvedJsonPath)"
