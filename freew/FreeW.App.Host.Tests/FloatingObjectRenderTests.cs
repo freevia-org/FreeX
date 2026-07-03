@@ -1,4 +1,6 @@
 using FreeW.App.Host.Editing;
+using System.Windows.Media;
+using System.Windows.Media.Effects;
 
 namespace FreeW.App.Host.Tests;
 
@@ -111,5 +113,47 @@ public sealed class FloatingObjectRenderTests
             .Select(child => child.Tag)
             .Should()
             .Equal(behindShape, frontShape);
+    }
+
+    [StaFact]
+    public void FloatingOverlay_RendersShapeFromSharedPlanWithActualGeometryFillOutlineAndEffect()
+    {
+        var shape = new Shape(ShapeKind.Ellipse, 72, 36, "#FF0000")
+        {
+            OutlineColorHex = "#00AA11",
+            OutlineWidthPt = 2,
+            Effects = new ShapeEffectLst
+            {
+                HasShadow = true,
+                ShadowColorHex = "112233",
+                ShadowAlpha = 50000
+            },
+            Placement = new FloatingPlacement
+            {
+                Wrapping = ImageWrapping.InFront,
+                HorizontalOffsetPt = 36,
+                VerticalOffsetPt = 18,
+                ZOrderIndex = 3
+            }
+        };
+        var doc = new TextDocument();
+        var para = new Paragraph();
+        para.Runs.Add(Run.FromShape(shape));
+        doc.Blocks.Add(para);
+
+        var view = new DocumentView();
+        var canvas = new System.Windows.Controls.Canvas();
+        view.LoadModel(doc);
+        view.SetFloatingCanvas(canvas);
+
+        var ellipse = canvas.Children.OfType<System.Windows.Shapes.Ellipse>().Single();
+        ellipse.Tag.Should().BeSameAs(shape);
+        ellipse.Fill.Should().BeOfType<SolidColorBrush>()
+            .Which.Color.Should().Be(Color.FromRgb(0xFF, 0x00, 0x00));
+        ellipse.Stroke.Should().BeOfType<SolidColorBrush>()
+            .Which.Color.Should().Be(Color.FromRgb(0x00, 0xAA, 0x11));
+        ellipse.StrokeThickness.Should().BeApproximately(2 * 96.0 / 72.0, 0.01);
+        ellipse.Effect.Should().BeOfType<DropShadowEffect>()
+            .Which.Color.Should().Be(Color.FromRgb(0x11, 0x22, 0x33));
     }
 }

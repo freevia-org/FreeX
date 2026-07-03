@@ -59,6 +59,54 @@ public sealed class DrawingObjectVisualPlannerTests
     }
 
     [Fact]
+    public void ShapePlan_NormalizesEffectIntentForThinHostRenderers()
+    {
+        var shape = new Shape(ShapeKind.Ellipse, widthPt: 90, heightPt: 45, fillColorHex: "#00AA11")
+        {
+            Effects = new ShapeEffectLst
+            {
+                HasShadow = true,
+                ShadowBlurRad = 25400,
+                ShadowDist = 12700,
+                ShadowDir = 5400000,
+                ShadowColorHex = "112233",
+                ShadowAlpha = 50000,
+                HasGlow = true,
+                GlowRad = 63500,
+                GlowColorHex = "#00FFFF",
+                GlowAlpha = 25000,
+                HasSoftEdge = true,
+                HasReflection = true,
+                HasBevel = true
+            }
+        };
+
+        var plan = DrawingObjectVisualPlanner.BuildVisualPlan(
+            shape,
+            new DocumentFloatingObjectSnapshot(
+                DocumentFloatingObjectKind.Shape,
+                BlockIndex: 0,
+                RunIndex: 0,
+                new DocumentFloatRect(0, 0, 120, 60),
+                BehindText: false,
+                ZOrderIndex: 1,
+                ImageWrapping.InFront));
+
+        plan.Effects.ShadowColorHex.Should().Be("#112233");
+        plan.Effects.ShadowBlurDip.Should().BeApproximately(2.67, 0.01);
+        plan.Effects.ShadowDistanceDip.Should().BeApproximately(1.33, 0.01);
+        plan.Effects.ShadowDirectionDegrees.Should().Be(90);
+        plan.Effects.ShadowOpacity.Should().Be(0.5);
+        plan.Effects.GlowColorHex.Should().Be("#00FFFF");
+        plan.Effects.GlowRadiusDip.Should().BeApproximately(6.67, 0.01);
+        plan.Effects.GlowOpacity.Should().Be(0.25);
+        plan.Effects.HasSoftEdge.Should().BeTrue();
+        plan.Effects.HasReflection.Should().BeTrue();
+        plan.Effects.HasBevel.Should().BeTrue();
+        plan.Effects.Summary.Should().Be("shadow, glow, soft-edge, reflection, bevel");
+    }
+
+    [Fact]
     public void WordArtPlan_RecordsTextStyleWarpAndPlacementMetadata()
     {
         var wordArt = new WordArt("Shared WordArt", WordArtStyle.GlowBlue, fontSizePt: 30)
