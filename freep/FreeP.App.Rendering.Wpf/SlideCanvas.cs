@@ -1341,30 +1341,19 @@ public sealed class SlideCanvas : FrameworkElement
     {
         // Wave 18B: vertical text — rotate the text block around the shape center and swap
         // the effective text-area dimensions so layout uses the rotated extent.
-        bool isVertical = text.VerticalType is TextVerticalType.Vertical
-                                            or TextVerticalType.EastAsianVertical
-                                            or TextVerticalType.WordArtVertical
-                                            or TextVerticalType.WordArtVerticalRtl;
-        bool isVert270  = text.VerticalType == TextVerticalType.Vertical270;
-
-        if (isVertical || isVert270)
+        var orientation = TextLayoutPlanner.PlanTextOrientation(text, bounds);
+        if (orientation.IsRotated)
         {
-            double cx = bounds.X + bounds.Width  * 0.5;
-            double cy = bounds.Y + bounds.Height * 0.5;
-            double angleDeg = isVert270 ? -90.0 : 90.0;
-            dc.PushTransform(new RotateTransform(angleDeg, cx, cy));
-            // Swap width/height so text flows along the rotated axis.
-            var rotatedBounds = new LayoutRect(
-                bounds.X + (bounds.Width - bounds.Height) * 0.5,
-                bounds.Y + (bounds.Height - bounds.Width) * 0.5,
-                bounds.Height,
-                bounds.Width);
-            RenderTextCore(dc, text, rotatedBounds);
+            dc.PushTransform(new RotateTransform(
+                orientation.RotationAngleDegrees,
+                orientation.RotationCenterX,
+                orientation.RotationCenterY));
+            RenderTextCore(dc, text, orientation.TextBounds);
             dc.Pop();
             return;
         }
 
-        RenderTextCore(dc, text, bounds);
+        RenderTextCore(dc, text, orientation.TextBounds);
     }
 
     // Wave 22B: multi-column text layout helper.
