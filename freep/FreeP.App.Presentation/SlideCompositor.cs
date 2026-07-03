@@ -770,12 +770,17 @@ public static class SlideCompositor
             var firstSeries = chart.Series[0];
             for (int pointIndex = 0; pointIndex < seriesColors.Count; pointIndex++)
             {
-                seriesFills.Add(ResolveChartFillPlan(
-                    GetPointFill(firstSeries, pointIndex),
-                    GetPointFillColor(firstSeries, pointIndex),
+                var pointFill = GetPointFill(firstSeries, pointIndex);
+                var pointColor = GetPointFillColor(firstSeries, pointIndex);
+                var fill = ResolveChartFillPlan(
+                    pointFill ?? firstSeries.Fill,
+                    pointColor ?? firstSeries.FillColor,
                     seriesColors[pointIndex],
                     theme,
-                    effectiveClrMap));
+                    effectiveClrMap);
+
+                seriesFills.Add(fill);
+                pointFills[new ChartFillKey(0, pointIndex)] = fill;
             }
         }
         else
@@ -802,13 +807,11 @@ public static class SlideCompositor
             {
                 var pointFill = GetPointFill(series, pointIndex);
                 var pointColor = GetPointFillColor(series, pointIndex);
-                if (pointFill is not null || pointColor is not null)
+                if (!pieLike && (pointFill is not null || pointColor is not null))
                 {
-                    var fallback = pieLike && seriesIndex == 0 && pointIndex < seriesColors.Count
-                        ? seriesColors[pointIndex]
-                        : seriesIndex < seriesColors.Count
-                            ? seriesColors[seriesIndex]
-                            : DefaultAccentColor(seriesIndex, theme);
+                    var fallback = seriesIndex < seriesColors.Count
+                        ? seriesColors[seriesIndex]
+                        : DefaultAccentColor(seriesIndex, theme);
                     pointFills[new ChartFillKey(seriesIndex, pointIndex)] = ResolveChartFillPlan(
                         pointFill,
                         pointColor,
@@ -822,9 +825,11 @@ public static class SlideCompositor
                     : series.MarkerStyle;
                 if (marker?.Fill is not null || marker?.FillColor is not null)
                 {
-                    var fallback = seriesIndex < seriesColors.Count
-                        ? seriesColors[seriesIndex]
-                        : DefaultAccentColor(seriesIndex, theme);
+                    var fallback = pieLike && seriesIndex == 0 && pointIndex < seriesColors.Count
+                        ? seriesColors[pointIndex]
+                        : seriesIndex < seriesColors.Count
+                            ? seriesColors[seriesIndex]
+                            : DefaultAccentColor(seriesIndex, theme);
                     markerFills[new ChartFillKey(seriesIndex, pointIndex)] = ResolveChartFillPlan(
                         marker.Fill,
                         marker.FillColor,
