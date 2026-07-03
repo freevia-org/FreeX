@@ -1681,6 +1681,50 @@ public sealed class PresentationReviewWorkflowPlannerTests
     }
 
     [Fact]
+    public void BuildProofingPanePlan_FlagsRepeatedWordsWithSingleWordCorrection()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 4,
+            Name = "Caption",
+            Text = "Revenue rose rose again"
+        });
+
+        var execution = PresentationReviewWorkflowPlanner.BuildProofingExecutionPlan(presentation);
+        var plan = PresentationReviewWorkflowPlanner.BuildProofingPanePlan(execution);
+        var row = plan.SelectedRow!;
+
+        execution.Issues.Should().ContainSingle().Which.Should().Match<PresentationProofingIssueDescriptor>(issue =>
+            issue.Scope.Kind == PresentationProofingScopeKind.ShapeText &&
+            issue.Start == 8 &&
+            issue.Length == 9 &&
+            issue.Text == "rose rose" &&
+            issue.Message == "Repeated word.");
+        row.Text.Should().Be("rose rose");
+        row.SuggestedReplacement.Should().Be("rose");
+        row.CorrectionAction.IsEnabled.Should().BeTrue();
+
+        var mutation = PresentationReviewWorkflowPlanner.TryApplyProofingCorrection(
+            presentation,
+            row.Scope,
+            row.Start,
+            row.Length,
+            row.SuggestedReplacement);
+
+        mutation.Should().Be(new PresentationProofingCorrectionMutationPlan(
+            true,
+            row.Scope,
+            row.Start,
+            row.Length,
+            "rose",
+            "Revenue rose again",
+            null));
+        slide.Shapes.Single(shape => shape.Id == 4).Text.Should().Be("Revenue rose again");
+    }
+
+    [Fact]
     public void BuildProofingPanePlan_AppliesCorrectionAndNormalizesSelectionAfterRefresh()
     {
         var presentation = Presentation.CreateEmpty();
