@@ -98,6 +98,14 @@ internal sealed class BackstageView : UserControl
         panel.Children.Add(Kit.Field("Options", plan.Options.DisplaySummary));
         panel.Children.Add(Kit.Field("Native printer dialog", plan.NativePrinterDialogDeferred ? "Deferred" : "Available"));
 
+        panel.Children.Add(Kit.SubHeading("Output Options"));
+        foreach (var choice in plan.OutputOptionChoices)
+            panel.Children.Add(PrintChoiceRow(
+                $"{choice.Group}: {choice.DisplayName}",
+                choice.Description,
+                choice.IsSelected,
+                choice.IsAvailable));
+
         panel.Children.Add(Kit.SubHeading("Preview"));
         foreach (var page in plan.PreviewPlan.Pages)
             panel.Children.Add(PrintChoiceRow(
