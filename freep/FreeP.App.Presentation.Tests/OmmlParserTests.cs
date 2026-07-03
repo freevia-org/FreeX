@@ -209,6 +209,20 @@ public sealed class OmmlParserTests
     }
 
     [Fact]
+    public void Parse_EqArray_ReturnsOrderedRows()
+    {
+        var node = Parse("<m:eqArr><m:e><m:r><m:t>x</m:t></m:r><m:r><m:t>+1</m:t></m:r></m:e><m:e><m:r><m:t>y</m:t></m:r></m:e></m:eqArr>");
+
+        var eqArray = Assert.IsType<MathNode.EqArray>(node);
+        Assert.Equal(2, eqArray.Rows.Count);
+
+        var firstRow = Assert.IsType<MathNode.Row>(eqArray.Rows[0]);
+        Assert.Equal("x", Assert.IsType<MathNode.Run>(firstRow.Children[0]).Text);
+        Assert.Equal("+1", Assert.IsType<MathNode.Run>(firstRow.Children[1]).Text);
+        Assert.Equal("y", Assert.IsType<MathNode.Run>(eqArray.Rows[1]).Text);
+    }
+
+    [Fact]
     public void Frac_WithNoFPr_DefaultsToBar()
     {
         var node = Parse("<m:f><m:num><m:r><m:t>1</m:t></m:r></m:num><m:den><m:r><m:t>2</m:t></m:r></m:den></m:f>");

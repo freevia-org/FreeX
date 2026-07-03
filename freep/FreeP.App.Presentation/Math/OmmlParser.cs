@@ -119,6 +119,7 @@ public static class OmmlParser
             "bar"      => ParseBar(el),
             "groupChr" => ParseGroupChr(el),
             "m"        => ParseMatrix(el),
+            "eqArr"    => ParseEqArray(el),
             "oMathPara"=> ParseRow(el),
             _          => ParseUnknown(el)
         };
@@ -371,6 +372,15 @@ public static class OmmlParser
     }
 
     // ── Unknown / fallback ────────────────────────────────────────────────
+
+    private static MathNode ParseEqArray(XElement el)
+    {
+        var rows = new List<MathNode>();
+        foreach (var eEl in el.Elements(M + "e"))
+            rows.Add(ParseRow(eEl));
+
+        return new MathNode.EqArray(rows);
+    }
 
     private static MathNode ParseUnknown(XElement el)
     {

@@ -244,6 +244,44 @@ public sealed class MathLayoutEngineTests
     // ── HA6: m:f fPr/type — fraction bar style ──────────────────────────────
 
     [Fact]
+    public void EqArray_StacksRowsAndReportsFullHeight()
+    {
+        var eqArray = new MathNode.EqArray(new MathNode[]
+        {
+            Run("x"),
+            TallFraction(),
+            Run("mmmm")
+        });
+
+        var box = MathLayoutEngine.Layout(eqArray, "Cambria Math", FontSizePt);
+        var container = (MathBox.Container)box.Children[0];
+
+        container.Children.Should().HaveCount(3);
+
+        var firstRow = container.Children[0];
+        var secondRow = container.Children[1];
+        var thirdRow = container.Children[2];
+
+        secondRow.Y.Should().BeGreaterThan(firstRow.Y + firstRow.Metrics.Height,
+            "equation arrays stack direct m:e rows vertically with a row gap");
+        thirdRow.Y.Should().BeGreaterThan(secondRow.Y + secondRow.Metrics.Height);
+
+        container.Metrics.Width.Should().BeApproximately(
+            container.Children.Max(child => child.Metrics.Width),
+            0.01,
+            "the equation array reports the max row width");
+
+        var lastBottom = thirdRow.Y + thirdRow.Metrics.Height;
+        container.Metrics.Height.Should().BeApproximately(lastBottom, 0.01,
+            "the equation array height must include every stacked row and gap");
+        container.Metrics.Ascent.Should().BeGreaterThan(0);
+        container.Metrics.Descent.Should().BeGreaterThanOrEqualTo(0,
+            "reported baseline/descent must not imply clipping below the box");
+        container.Children.Should().OnlyContain(child =>
+            child.Y >= 0 && child.Y + child.Metrics.Height <= container.Metrics.Height + 0.01);
+    }
+
+    [Fact]
     public void Frac_DefaultBarType_RendersHRule_Unchanged()
     {
         var frac = new MathNode.Frac(Run("1"), Run("2")); // default FracType.Bar
