@@ -187,6 +187,28 @@ public sealed class OmmlParserTests
     // ── HA6: m:f fPr/type (fraction bar style) ─────────────────────────────
 
     [Fact]
+    public void LimLow_ParsesBaseAndLowerLimit()
+    {
+        var node = Parse("<m:limLow><m:e><m:r><m:t>lim</m:t></m:r></m:e><m:lim><m:r><m:t>x->0</m:t></m:r></m:lim></m:limLow>");
+
+        var limit = Assert.IsType<MathNode.Limit>(node);
+        Assert.False(limit.IsUpper);
+        Assert.Equal("lim", Assert.IsType<MathNode.Run>(limit.Base).Text);
+        Assert.Equal("x->0", Assert.IsType<MathNode.Run>(limit.LimitValue).Text);
+    }
+
+    [Fact]
+    public void LimUpp_ParsesBaseAndUpperLimit()
+    {
+        var node = Parse("<m:limUpp><m:e><m:r><m:t>max</m:t></m:r></m:e><m:lim><m:r><m:t>S</m:t></m:r></m:lim></m:limUpp>");
+
+        var limit = Assert.IsType<MathNode.Limit>(node);
+        Assert.True(limit.IsUpper);
+        Assert.Equal("max", Assert.IsType<MathNode.Run>(limit.Base).Text);
+        Assert.Equal("S", Assert.IsType<MathNode.Run>(limit.LimitValue).Text);
+    }
+
+    [Fact]
     public void Frac_WithNoFPr_DefaultsToBar()
     {
         var node = Parse("<m:f><m:num><m:r><m:t>1</m:t></m:r></m:num><m:den><m:r><m:t>2</m:t></m:r></m:den></m:f>");

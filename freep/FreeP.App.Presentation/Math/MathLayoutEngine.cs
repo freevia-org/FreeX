@@ -53,6 +53,7 @@ public static class MathLayoutEngine
             MathNode.SubSup  ss => LayoutSubSup(ss, fontFamily, fontSizePt),
             MathNode.Rad     r  => LayoutRad(r, fontFamily, fontSizePt),
             MathNode.Nary    n  => LayoutNary(n, fontFamily, fontSizePt),
+            MathNode.Limit   l  => LayoutLimit(l, fontFamily, fontSizePt),
             MathNode.Func    fn => LayoutFunc(fn, fontFamily, fontSizePt),
             MathNode.Delim   d  => LayoutDelim(d, fontFamily, fontSizePt),
             MathNode.Acc     a  => LayoutAcc(a, fontFamily, fontSizePt),
@@ -573,6 +574,47 @@ public static class MathLayoutEngine
     }
 
     // ── Function layout ───────────────────────────────────────────────────
+
+    private static MathBox LayoutLimit(MathNode.Limit limit, string fontFamily, double fontSizePt)
+    {
+        double em = Em(fontSizePt);
+        double limitSizePt = fontSizePt * 0.70;
+        double gap = em * 0.06;
+
+        var baseBox = LayoutNode(limit.Base, fontFamily, fontSizePt);
+        var limitBox = LayoutNode(limit.LimitValue, fontFamily, limitSizePt);
+
+        double totalW = Math.Max(baseBox.Metrics.Width, limitBox.Metrics.Width);
+        double totalH = baseBox.Metrics.Height + gap + limitBox.Metrics.Height;
+        double ascent = limit.IsUpper
+            ? limitBox.Metrics.Height + gap + baseBox.Metrics.Ascent
+            : baseBox.Metrics.Ascent;
+
+        var c = new MathBox.Container();
+        c.Metrics.Width = totalW;
+        c.Metrics.Height = totalH;
+        c.Metrics.Ascent = ascent;
+
+        baseBox.X = (totalW - baseBox.Metrics.Width) / 2.0;
+        limitBox.X = (totalW - limitBox.Metrics.Width) / 2.0;
+
+        if (limit.IsUpper)
+        {
+            limitBox.Y = 0;
+            baseBox.Y = limitBox.Metrics.Height + gap;
+            c.Children.Add(limitBox);
+            c.Children.Add(baseBox);
+        }
+        else
+        {
+            baseBox.Y = 0;
+            limitBox.Y = baseBox.Metrics.Height + gap;
+            c.Children.Add(baseBox);
+            c.Children.Add(limitBox);
+        }
+
+        return c;
+    }
 
     private static MathBox LayoutFunc(MathNode.Func func, string fontFamily, double fontSizePt)
     {
