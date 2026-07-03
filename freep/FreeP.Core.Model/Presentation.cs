@@ -66,6 +66,12 @@ public sealed class Presentation
     /// </summary>
     public List<PresentationSection> Sections { get; } = new();
 
+    /// <summary>
+    /// Named custom slide shows in presentation order. Each show stores an ordered list of
+    /// <see cref="Slide.Id"/> values and is serialized as p:custShowLst in ppt/presentation.xml.
+    /// </summary>
+    public List<PresentationCustomShow> CustomShows { get; } = new();
+
     // ── Factory ───────────────────────────────────────────────────────────────────
 
     /// <summary>

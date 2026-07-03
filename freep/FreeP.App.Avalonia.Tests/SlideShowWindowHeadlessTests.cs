@@ -568,6 +568,37 @@ public sealed class SlideShowWindowHeadlessTests
     // ── Ribbon definition ───────────────────────────────────────────────────────
 
     [Fact]
+    public async Task MainWindow_TryBuildCustomSlideShowRoute_selects_stored_custom_show()
+    {
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var presentation = window.Editor.Presentation;
+            presentation.Slides.Clear();
+            presentation.Slides.Add(new Slide { Title = "Intro" });
+            presentation.Slides.Add(new Slide { Title = "Deep dive" });
+            presentation.Slides.Add(new Slide { Title = "Appendix" });
+
+            var customShow = new PresentationCustomShow { Name = "Executive review" };
+            customShow.SlideIds.Add(presentation.Slides[2].Id);
+            customShow.SlideIds.Add(presentation.Slides[0].Id);
+            presentation.CustomShows.Add(customShow);
+
+            var found = window.TryBuildCustomSlideShowRoute(
+                "executive REVIEW",
+                startIndex: 0,
+                out var route);
+
+            found.Should().BeTrue();
+            route.CustomShowName.Should().Be("Executive review");
+            route.Slides.Select(slide => slide.Title).Should().Equal("Appendix", "Intro");
+            route.SourceSlideIndices.Should().Equal(2, 0);
+        });
+
+        if (!ran) return;
+    }
+
+    [Fact]
     public void RibbonDefinition_has_slideshow_group()
     {
         var definition = FreePRibbonAvalonia.Build();

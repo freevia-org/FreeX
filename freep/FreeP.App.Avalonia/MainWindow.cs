@@ -4068,4 +4068,35 @@ public sealed class MainWindow : Window
 
         slideShow.Show();
     }
+
+    internal bool TryBuildCustomSlideShowRoute(
+        string? customShowName,
+        int startIndex,
+        out SlideShowPlaybackRoute route) =>
+        SlideShowCustomShowPlanner.TryBuildNamedCustomShowRoute(
+            _presentation,
+            customShowName,
+            startIndex,
+            out route);
+
+    internal bool TryStartCustomSlideShow(string? customShowName, int startIndex = 0)
+    {
+        if (!TryBuildCustomSlideShowRoute(customShowName, startIndex, out var route) ||
+            route.SlideCount == 0)
+        {
+            return false;
+        }
+
+        var slideShow = new SlideShowWindow(_presentation, route);
+        slideShow.Closed += (_, _) =>
+        {
+            int exitIdx = slideShow.Controller.CurrentSlideIndex;
+            int sourceIdx = route.GetSourceSlideIndex(exitIdx);
+            if (sourceIdx >= 0 && sourceIdx < _presentation.Slides.Count)
+                Editor.SelectSlide(sourceIdx);
+        };
+
+        slideShow.Show();
+        return true;
+    }
 }

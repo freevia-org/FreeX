@@ -215,6 +215,7 @@ public static class PptxPackageReader
 
         // Sections from p:extLst / p:ext[@uri="{521415D9-…}"] / p14:sectionLst
         ReadSections(presRoot, sldIdToRId, presentation);
+        ReadCustomShows(presRoot, sldIdToRId, presentation);
 
         // Comment authors live in a single ppt/commentAuthors.xml part referenced from presRels.
         var cmAuthorsTarget = OpcRelationships.FirstTargetByType(presRels, CommentAuthorsRelType);
@@ -326,6 +327,69 @@ public static class PptxPackageReader
     /// <summary>
     /// Reads ppt/commentAuthors.xml and returns a map of authorId → (name, initials).
     /// </summary>
+    private static void ReadCustomShows(
+        XElement presRoot,
+        Dictionary<string, string> sldIdToRId,
+        Presentation presentation)
+    {
+        var customShowList = presRoot.Element(P + "custShowLst");
+        if (customShowList is null)
+        {
+            return;
+        }
+
+        var validSlideIds = sldIdToRId.Values.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (var customShowEl in customShowList.Elements(P + "custShow"))
+        {
+            var customShow = new PresentationCustomShow
+            {
+                Name = customShowEl.Attribute("name")?.Value ?? string.Empty,
+                Id = uint.TryParse(
+                    customShowEl.Attribute("id")?.Value,
+                    NumberStyles.Integer,
+                    CultureInfo.InvariantCulture,
+                    out var parsedId)
+                    ? parsedId
+                    : (uint)presentation.CustomShows.Count,
+            };
+
+            var slideListEl = customShowEl.Element(P + "sldLst");
+            if (slideListEl is not null)
+            {
+                foreach (var slideEl in slideListEl.Elements(P + "sld"))
+                {
+                    var resolvedSlideId = ResolveCustomShowSlideId(slideEl, sldIdToRId, validSlideIds);
+                    if (resolvedSlideId is not null)
+                    {
+                        customShow.SlideIds.Add(resolvedSlideId);
+                    }
+                }
+            }
+
+            presentation.CustomShows.Add(customShow);
+        }
+    }
+
+    private static string? ResolveCustomShowSlideId(
+        XElement slideEl,
+        Dictionary<string, string> sldIdToRId,
+        HashSet<string> validSlideIds)
+    {
+        var relId = slideEl.Attribute(R + "id")?.Value;
+        if (!string.IsNullOrWhiteSpace(relId) && validSlideIds.Contains(relId))
+        {
+            return relId;
+        }
+
+        var numericId = slideEl.Attribute("id")?.Value;
+        if (!string.IsNullOrWhiteSpace(numericId) && sldIdToRId.TryGetValue(numericId, out var mappedRelId))
+        {
+            return mappedRelId;
+        }
+
+        return null;
+    }
+
     private static Dictionary<int, (string name, string initials)> ReadCommentAuthors(
         ZipArchive archive, string path)
     {

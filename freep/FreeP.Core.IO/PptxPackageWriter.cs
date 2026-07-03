@@ -825,6 +825,22 @@ public static class PptxPackageWriter
                 new XAttribute("cx", p.NotesPageSizeCxEmu),
                 new XAttribute("cy", p.NotesPageSizeCyEmu)));
 
+        var slideIdToRelId = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        for (int i = 0; i < p.Slides.Count && i < sldIdElements.Count; i++)
+        {
+            var relId = sldIdElements[i].Attribute(R + "id")?.Value;
+            if (!string.IsNullOrWhiteSpace(relId))
+            {
+                slideIdToRelId[p.Slides[i].Id] = relId;
+            }
+        }
+
+        var customShowElements = BuildCustomShowElements(p.CustomShows, slideIdToRelId).ToList();
+        if (customShowElements.Count > 0)
+        {
+            presEl.Add(new XElement(P + "custShowLst", customShowElements));
+        }
+
         // Emit p14:sectionLst inside p:extLst when sections are present.
         if (p.Sections.Count > 0)
         {
@@ -900,6 +916,37 @@ public static class PptxPackageWriter
     }
 
     // ── slide.xml ────────────────────────────────────────────────────────────────
+
+    private static IEnumerable<XElement> BuildCustomShowElements(
+        IReadOnlyList<PresentationCustomShow> customShows,
+        IReadOnlyDictionary<string, string> slideIdToRelId)
+    {
+        var usedIds = new HashSet<uint>();
+        foreach (var customShow in customShows)
+        {
+            var translatedSlideRelIds = customShow.SlideIds
+                .Where(slideIdToRelId.ContainsKey)
+                .Select(slideId => slideIdToRelId[slideId])
+                .ToArray();
+            if (translatedSlideRelIds.Length == 0)
+            {
+                continue;
+            }
+
+            var customShowId = customShow.Id;
+            while (!usedIds.Add(customShowId))
+            {
+                customShowId++;
+            }
+
+            yield return new XElement(P + "custShow",
+                new XAttribute("name", customShow.Name),
+                new XAttribute("id", customShowId.ToString(CultureInfo.InvariantCulture)),
+                new XElement(P + "sldLst",
+                    translatedSlideRelIds.Select(relId => new XElement(P + "sld",
+                        new XAttribute(R + "id", relId)))));
+        }
+    }
 
     private static XDocument BuildSlideXml(
         Slide slide, PresentationColorScheme scheme,
