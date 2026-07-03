@@ -42,8 +42,11 @@ public sealed class SlidePanePolicySourceGuardTests
         source.Should().Contain("PointerMoved += OnSlidePaneItemPointerMoved");
         source.Should().Contain("PointerReleased += OnSlidePaneItemPointerReleased");
         source.Should().Contain("SlidePanePlanner.HitTestInsertionPoint(");
-        source.Should().Contain("SlidePanePlanner.ComputeInsertionIndicatorOffset(");
+        source.Should().Contain("SlidePanePlanner.BuildDropVisualPlan(");
+        source.Should().Contain("SlidePanePlanner.DefaultDragStartThreshold");
         source.Should().Contain("SlidePanePlanner.DefaultSlideItemHeight");
+        source.Should().Contain("SlidePanePlanner.DefaultDropIndicatorThickness");
+        source.Should().Contain("SlidePanePlanner.DefaultDropIndicatorAccentHex");
         source.Should().Contain("SlidePanePlanner.PlanMoveAction(");
         source.Should().Contain("private void InsertSlideFromSlidePaneAffordance()");
         source.Should().Contain("SelectSlidePaneItem(Editor.CurrentSlideIndex)");
@@ -52,6 +55,8 @@ public sealed class SlidePanePolicySourceGuardTests
         source.Should().NotContain("Text                = $\"{slideIdx + 1}\"");
         source.Should().NotContain("Width        = 148");
         source.Should().NotContain("Height       = 84");
+        source.Should().NotContain("Math.Abs(itemPosition.Y - _slidePaneDragStartPoint.Y) < 5");
+        source.Should().NotContain("new Thickness(0, indicatorY - 1, 0, 0)");
         source.Should().NotContain("_slidePaneList.SelectedIndex = Editor.CurrentSlideIndex");
         source.Should().NotContain("Editor.DuplicateCurrentSlide();");
         source.Should().NotContain("Editor.DeleteCurrentSlide();");

@@ -40,7 +40,8 @@ public sealed class SlidePane : Border
     private static readonly Brush ItemSelectedBorder = Freeze(new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A)));
     private static readonly Brush ItemNormalBorder   = Freeze(new SolidColorBrush(Color.FromRgb(0xCC, 0xCC, 0xCC)));
     private static readonly Brush LabelBrush         = Freeze(new SolidColorBrush(Color.FromRgb(0x44, 0x44, 0x44)));
-    private static readonly Brush InsertLineBrush    = Freeze(new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A)));
+    private static readonly Brush InsertLineBrush    = Freeze(new SolidColorBrush(
+        (Color)ColorConverter.ConvertFromString(SlidePanePlanner.DefaultDropIndicatorAccentHex)!));
 
     // Section header row colors (Wave 11B)
     private static readonly Brush SectionHeaderBg   = Freeze(new SolidColorBrush(Color.FromRgb(0xC8, 0xC8, 0xC8)));
@@ -86,7 +87,7 @@ public sealed class SlidePane : Border
         // Insertion-indicator line (hidden by default).
         _insertIndicator = new Border
         {
-            Height              = 2,
+            Height              = SlidePanePlanner.DefaultDropIndicatorThickness,
             Background          = InsertLineBrush,
             Visibility          = Visibility.Collapsed,
             IsHitTestVisible    = false,
@@ -506,7 +507,7 @@ public sealed class SlidePane : Border
         {
             // Start drag only after a minimum Y distance.
             var pos = e.GetPosition(item);
-            if (Math.Abs(pos.Y - _dragStartPoint.Y) < 5) return;
+            if (Math.Abs(pos.Y - _dragStartPoint.Y) < SlidePanePlanner.DefaultDragStartThreshold) return;
 
             _isDragging      = true;
             _dragSourceIndex = sourceIdx;
@@ -552,12 +553,24 @@ public sealed class SlidePane : Border
 
     private void ShowInsertIndicator()
     {
-        var indicatorY = SlidePanePlanner.ComputeInsertionIndicatorOffset(
+        var plan = SlidePanePlanner.BuildDropVisualPlan(
             GetPaneItemKinds(),
+            _dragSourceIndex,
             _dragTargetIndex,
             ItemHeight);
 
-        _insertIndicator.Margin     = new Thickness(0, indicatorY - 1, 0, 0);
+        if (!plan.IsVisible)
+        {
+            HideInsertIndicator();
+            return;
+        }
+
+        _insertIndicator.Height     = plan.IndicatorThickness;
+        _insertIndicator.Margin     = new Thickness(
+            plan.HorizontalInset,
+            plan.IndicatorTopMargin,
+            plan.HorizontalInset,
+            0);
         _insertIndicator.Visibility = Visibility.Visible;
     }
 

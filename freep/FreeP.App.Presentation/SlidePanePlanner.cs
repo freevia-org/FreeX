@@ -32,6 +32,19 @@ public sealed record SlidePaneThumbnailVisualPlan(
     string AccessibleName,
     string ToolTipText);
 
+public sealed record SlidePaneDropVisualPlan(
+    int SourceSlideIndex,
+    int TargetSlideIndex,
+    bool IsTargetValid,
+    bool IsMoveEnabled,
+    bool IsVisible,
+    double IndicatorOffset,
+    double IndicatorTopMargin,
+    double IndicatorThickness,
+    double HorizontalInset,
+    string AccentColorHex,
+    string AutomationDescription);
+
 public enum SlidePaneActionKind
 {
     InsertAfterSlide,
@@ -59,6 +72,10 @@ public static class SlidePanePlanner
     public const double DefaultLabelHeight = 16.0;
     public const double DefaultSlideItemHeight = 4 + DefaultItemPadding + DefaultLabelHeight + 4 + DefaultThumbnailHeight + DefaultItemPadding + 4;
     public const double DefaultSectionHeaderHeight = 30.0;
+    public const double DefaultDragStartThreshold = 5.0;
+    public const double DefaultDropIndicatorThickness = 2.0;
+    public const double DefaultDropIndicatorHorizontalInset = 0.0;
+    public const string DefaultDropIndicatorAccentHex = "#B7472A";
 
     public static IReadOnlyList<SlidePaneEntry> BuildEntries(
         IReadOnlyList<Slide> slides,
@@ -277,6 +294,44 @@ public static class SlidePanePlanner
         }
 
         return offset;
+    }
+
+    public static SlidePaneDropVisualPlan BuildDropVisualPlan(
+        IReadOnlyList<bool> paneItemIsSlide,
+        int sourceSlideIndex,
+        int targetSlideIndex,
+        double slideItemHeight,
+        double nonSlideItemHeight = DefaultSectionHeaderHeight)
+    {
+        ArgumentNullException.ThrowIfNull(paneItemIsSlide);
+
+        var slideCount = paneItemIsSlide.Count(isSlide => isSlide);
+        var isSourceValid = IsValidSlideIndex(slideCount, sourceSlideIndex);
+        var isTargetValid = targetSlideIndex >= 0 && targetSlideIndex <= slideCount;
+        var offset = isTargetValid
+            ? ComputeInsertionIndicatorOffset(
+                paneItemIsSlide,
+                targetSlideIndex,
+                slideItemHeight,
+                nonSlideItemHeight)
+            : 0.0;
+        var moveAction = PlanMoveAction(slideCount, sourceSlideIndex, targetSlideIndex);
+        var description = isTargetValid
+            ? $"Move slide {sourceSlideIndex + 1} to position {targetSlideIndex + 1}"
+            : "No slide drop target";
+
+        return new SlidePaneDropVisualPlan(
+            sourceSlideIndex,
+            targetSlideIndex,
+            isTargetValid,
+            moveAction.IsEnabled,
+            isSourceValid && isTargetValid,
+            offset,
+            offset - DefaultDropIndicatorThickness * 0.5,
+            DefaultDropIndicatorThickness,
+            DefaultDropIndicatorHorizontalInset,
+            DefaultDropIndicatorAccentHex,
+            description);
     }
 
     private static Dictionary<int, SlidePaneEntry> BuildSectionHeaders(
