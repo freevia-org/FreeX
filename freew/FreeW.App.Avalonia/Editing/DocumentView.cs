@@ -112,10 +112,10 @@ public sealed class DocumentView : Control
     // AV-TAB: leader spans emitted during body tab layout; drawn in Render before glyph text.
     // Each entry: (X1=tab start, X2=segment start, Y=page-space top, LineHeight, Leader kind, RunFmt for color/size).
     private readonly List<(double X1, double X2, double Y, double LineHeight, TabLeader Leader, RunFormatting Fmt)> _tabLeaderSpans = new();
-    // AV-TBL4: extended to carry per-cell shading brush and per-edge CellBorders.
+    // AV-TBL4: extended to carry per-cell shading brush and shared per-edge border plans.
     // Fill: IBrush? combines table-style fills (header/band) with per-cell ShadingColorHex.
-    // Border: bool = table-level outer border; CellBorder: per-edge override from CellBorders model.
-    private readonly List<(Rect Rect, IBrush? Fill, bool Border, CellBorders? CellBorder)> _rects = new();
+    // Border: bool = table-level outer border; CellBorderPlan: per-edge override planned from the model.
+    private readonly List<(Rect Rect, IBrush? Fill, bool Border, TableCellBorderVisualPlan? CellBorderPlan)> _rects = new();
     private readonly List<(Rect Rect, string? ShadingHex, ParagraphBorder? Border)> _paragraphDecorations = new();
     private readonly List<(Rect Rect, Bitmap? Image)> _images = new();
     // Floating images collected during layout; rendered separately from inline images with z-order.
@@ -4668,7 +4668,8 @@ public sealed class DocumentView : Control
                 var rect = new Rect(cellX, rowPageSpaceY, cellWidth, rowHeight);
                 // AV-TBL4: per-cell ShadingColorHex overrides table-style fills; header/band still apply as fallback.
                 IBrush? fill = ResolveCellFill(cellModel, isHeader, isBand);
-                _rects.Add((rect, fill, borders, cellModel.Borders));
+                var cellBorderPlan = TableCellBorderVisualPlanner.Build(cellModel.Borders, PxPerPoint);
+                _rects.Add((rect, fill, borders, cellBorderPlan.HasVisibleEdges ? cellBorderPlan : null));
                 _cellHits.Add((rect, blockIndex, r, startCol));
 
                 // AV-TBL5-VRENDER: per-cell vertical alignment offset within the row.
@@ -5441,13 +5442,11 @@ public sealed class DocumentView : Control
         return null;
     }
 
-    // AV-TBL4: draw per-edge cell borders using CellBorderEdge style/color/width data.
-    private void DrawCellBorderEdges(DrawingContext context, Rect rect, CellBorders borders)
+    // AV-TBL4: draw per-edge cell borders using the shared host-neutral border plan.
+    private void DrawCellBorderEdges(DrawingContext context, Rect rect, TableCellBorderVisualPlan plan)
     {
-        DrawCellEdgeLine(context, borders.Top,    new Point(rect.Left, rect.Top),    new Point(rect.Right, rect.Top));
-        DrawCellEdgeLine(context, borders.Bottom, new Point(rect.Left, rect.Bottom), new Point(rect.Right, rect.Bottom));
-        DrawCellEdgeLine(context, borders.Left,   new Point(rect.Left, rect.Top),    new Point(rect.Left, rect.Bottom));
-        DrawCellEdgeLine(context, borders.Right,  new Point(rect.Right, rect.Top),   new Point(rect.Right, rect.Bottom));
+        foreach (var edge in plan.Edges)
+            DrawCellEdgeLine(context, edge, rect);
     }
 
     private void DrawParagraphDecoration(DrawingContext context, Rect rect, string? shadingHex, ParagraphBorder? border)
@@ -5543,9 +5542,12 @@ public sealed class DocumentView : Control
             : new Pen(BrushFor(border.ColorHex), plan.BorderWidthDip, dashStyle);
     }
 
-    private void DrawCellEdgeLine(DrawingContext context, CellBorderEdge? edge, Point p1, Point p2)
+    private void DrawCellEdgeLine(DrawingContext context, TableCellBorderEdgeVisualPlan edge, Rect rect)
     {
-        if (edge is null) return;
+        if (!edge.IsVisible)
+            return;
+
+        var (p1, p2) = CellBorderPoints(edge.Edge, rect, 0);
         DashStyle? dashStyle = edge.Style switch
         {
             BorderLineStyle.Dashed => new DashStyle([4, 3], 0),
@@ -5553,10 +5555,39 @@ public sealed class DocumentView : Control
             _ => null,
         };
         var pen = dashStyle is not null
-            ? new Pen(BrushFor(edge.ColorHex), edge.WidthPt * PxPerPoint, dashStyle)
-            : new Pen(BrushFor(edge.ColorHex), edge.WidthPt * PxPerPoint);
+            ? new Pen(BrushFor(edge.ColorHex), edge.WidthDip, dashStyle)
+            : new Pen(BrushFor(edge.ColorHex), edge.WidthDip);
+
+        if (edge.Style == BorderLineStyle.Double)
+        {
+            var offset = Math.Max(1.0, edge.WidthDip * 1.5);
+            var (outer1, outer2) = CellBorderPoints(edge.Edge, rect, -offset / 2);
+            var (inner1, inner2) = CellBorderPoints(edge.Edge, rect, offset / 2);
+            context.DrawLine(pen, outer1, outer2);
+            context.DrawLine(pen, inner1, inner2);
+            return;
+        }
+
         context.DrawLine(pen, p1, p2);
     }
+
+    private static (Point Start, Point End) CellBorderPoints(TableCellBorderVisualEdge edge, Rect rect, double inwardOffset) =>
+        edge switch
+        {
+            TableCellBorderVisualEdge.Top => (
+                new Point(rect.Left, rect.Top + inwardOffset),
+                new Point(rect.Right, rect.Top + inwardOffset)),
+            TableCellBorderVisualEdge.Bottom => (
+                new Point(rect.Left, rect.Bottom - inwardOffset),
+                new Point(rect.Right, rect.Bottom - inwardOffset)),
+            TableCellBorderVisualEdge.Left => (
+                new Point(rect.Left + inwardOffset, rect.Top),
+                new Point(rect.Left + inwardOffset, rect.Bottom)),
+            TableCellBorderVisualEdge.Right => (
+                new Point(rect.Right - inwardOffset, rect.Top),
+                new Point(rect.Right - inwardOffset, rect.Bottom)),
+            _ => (new Point(rect.Left, rect.Top), new Point(rect.Right, rect.Top)),
+        };
 
     /// <summary>
     /// AV-VIEW: Draw the ruler strips for the first page in Print Layout — a horizontal strip along the
@@ -5806,15 +5837,15 @@ public sealed class DocumentView : Control
             DrawParagraphDecoration(context, rect, shadingHex, border);
 
         // Table fills + borders sit beneath the text.
-        foreach (var (rect, fill, border, cellBorder) in _rects)
+        foreach (var (rect, fill, border, cellBorderPlan) in _rects)
         {
             if (fill is not null)
                 context.FillRectangle(fill, rect);
             if (border)
                 context.DrawRectangle(null, TableBorderPen, rect);
             // AV-TBL4: per-edge cell borders drawn on top of the table-level border.
-            if (cellBorder is not null)
-                DrawCellBorderEdges(context, rect, cellBorder);
+            if (cellBorderPlan is not null)
+                DrawCellBorderEdges(context, rect, cellBorderPlan);
         }
 
         // AV-COL: draw column rules (vertical divider lines in each inter-column gap) when enabled.

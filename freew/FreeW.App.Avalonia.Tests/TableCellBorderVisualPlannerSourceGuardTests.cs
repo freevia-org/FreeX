@@ -1,0 +1,26 @@
+namespace FreeW.App.Avalonia.Tests;
+
+public sealed class TableCellBorderVisualPlannerSourceGuardTests
+{
+    [Fact]
+    public void AvaloniaDocumentView_UsesSharedCellBorderPlannerForPerEdgeDrawing()
+    {
+        var source = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs"));
+
+        source.Should().Contain("TableCellBorderVisualPlanner.Build(cellModel.Borders, PxPerPoint)");
+        source.Should().Contain("TableCellBorderVisualPlan? CellBorderPlan");
+        source.Should().Contain("DrawCellEdgeLine(DrawingContext context, TableCellBorderEdgeVisualPlan edge, Rect rect)");
+        source.Should().Contain("BorderLineStyle.Double");
+        source.Should().NotContain("DrawCellEdgeLine(DrawingContext context, CellBorderEdge? edge");
+    }
+
+    private static string RepositoryFile(params string[] parts)
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "FreeW.slnx")))
+            dir = dir.Parent;
+
+        dir.Should().NotBeNull("tests run from inside the repository tree");
+        return Path.Combine(new[] { dir!.FullName }.Concat(parts).ToArray());
+    }
+}

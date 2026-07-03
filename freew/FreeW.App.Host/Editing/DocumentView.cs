@@ -6472,10 +6472,7 @@ public sealed class DocumentView : RichTextBox
                         VerticalAlignment = cellTag?.VerticalAlignment ?? TableCellVerticalAlignment.Top
                     };
                     foreach (var cellBlock in wpfCell.Blocks)
-                    {
-                        if (cellBlock is WpfParagraph cellParagraph)
-                            cell.Paragraphs.Add(ReadParagraph(cellParagraph, document));
-                    }
+                        AddCellBlockParagraphs(cell, cellBlock, document);
                     if (cell.Paragraphs.Count == 0)
                         cell.Paragraphs.Add(new ModelParagraph());
 
@@ -6731,21 +6728,11 @@ public sealed class DocumentView : RichTextBox
                 wpfCell.Tag = new TableCellTag(modelCell.ShadingColorHex, modelCell.Borders,
                     modelCell.TextDirection, modelCell.VerticalAlignment);
 
-                // Per-cell border override: when the cell carries its own explicit borders, apply them to
-                // the WPF cell individually so they override the table-level border brush. The WPF
-                // TableCell only supports uniform BorderThickness; per-edge widths are averaged for
-                // visual fidelity while the exact values survive through the stashed Tag.
-                if (modelCell.Borders is { IsEmpty: false } cellBorders)
+                var cellBorderPlan = TableCellBorderVisualPlanner.Build(modelCell.Borders, PxPerPoint);
+                if (cellBorderPlan.HasVisibleEdges)
                 {
-                    var topPt = cellBorders.Top?.WidthPt ?? 0.5;
-                    var bottomPt = cellBorders.Bottom?.WidthPt ?? 0.5;
-                    var leftPt = cellBorders.Left?.WidthPt ?? 0.5;
-                    var rightPt = cellBorders.Right?.WidthPt ?? 0.5;
-                    // Use the first non-null edge colour as the cell border colour.
-                    var edgeHex = (cellBorders.Top ?? cellBorders.Left ?? cellBorders.Bottom ?? cellBorders.Right)!.ColorHex;
-                    wpfCell.BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(edgeHex));
-                    wpfCell.BorderThickness = new Thickness(leftPt * PxPerPoint, topPt * PxPerPoint,
-                        rightPt * PxPerPoint, bottomPt * PxPerPoint);
+                    wpfCell.BorderBrush = null;
+                    wpfCell.BorderThickness = new Thickness(0);
                 }
 
                 // Resolve cell appearance: explicit shading always wins; then catalog style; then legacy flags.
@@ -6779,7 +6766,17 @@ public sealed class DocumentView : RichTextBox
                 // Bottom use a Grid+StackPanel wrapper. Exact-height clamping is not enforceable in WPF
                 // FlowDocument (content may overflow the MinHeight), which is a known residual WPF limit.
                 var vAlign = modelCell.VerticalAlignment;
-                if (modelCell.TextDirection != CellTextDirection.Horizontal)
+                var hasPlannedCellBorders = cellBorderPlan.HasVisibleEdges;
+                if (hasPlannedCellBorders)
+                {
+                    wpfCell.Blocks.Add(new BlockUIContainer(BuildCellContentHost(
+                        modelCell,
+                        document,
+                        vAlign,
+                        rowHeightPx,
+                        cellBorderPlan)));
+                }
+                else if (modelCell.TextDirection != CellTextDirection.Horizontal)
                 {
                     // Rotated cell: wrap all paragraphs in a StackPanel with a LayoutTransform so the
                     // text rotates inside the cell, mirroring how shapes apply LayoutTransform to their
@@ -6862,7 +6859,7 @@ public sealed class DocumentView : RichTextBox
                 // Placing the spacer in every cell in the row ensures the tallest-cell measurement
                 // (which drives the row) respects the minimum. The Border has zero Padding and is
                 // not visible; it simply prevents the row from collapsing below the authored height.
-                if (rowHeightPx is { } minH && modelCell.VerticalMerge != VerticalMergeState.Continue)
+                if (!hasPlannedCellBorders && rowHeightPx is { } minH && modelCell.VerticalMerge != VerticalMergeState.Continue)
                 {
                     var spacer = new System.Windows.Controls.Border { MinHeight = minH };
                     wpfCell.Blocks.Add(new BlockUIContainer(spacer));
@@ -6889,6 +6886,134 @@ public sealed class DocumentView : RichTextBox
         }
         wpf.RowGroups.Add(group);
         return wpf;
+    }
+
+    private static System.Windows.Controls.Grid BuildCellContentHost(
+        ModelTableCell modelCell,
+        TextDocument document,
+        TableCellVerticalAlignment verticalAlignment,
+        double? minHeightPx,
+        TableCellBorderVisualPlan borderPlan)
+    {
+        var grid = new System.Windows.Controls.Grid();
+        if (minHeightPx is { } minHeight)
+            grid.MinHeight = minHeight;
+
+        var stack = new System.Windows.Controls.StackPanel
+        {
+            VerticalAlignment = verticalAlignment switch
+            {
+                TableCellVerticalAlignment.Center => VerticalAlignment.Center,
+                TableCellVerticalAlignment.Bottom => VerticalAlignment.Bottom,
+                _ => VerticalAlignment.Top
+            }
+        };
+
+        if (modelCell.TextDirection != CellTextDirection.Horizontal)
+        {
+            var angle = modelCell.TextDirection == CellTextDirection.Rotate90 ? 90.0 : 270.0;
+            stack.LayoutTransform = new RotateTransform(angle);
+        }
+
+        var paragraphs = modelCell.Paragraphs.Count > 0
+            ? modelCell.Paragraphs
+            : (IEnumerable<ModelParagraph>)[new ModelParagraph()];
+
+        foreach (var cellParagraph in paragraphs)
+        {
+            var paraBlock = BuildParagraph(cellParagraph, document, inTableCell: true);
+            stack.Children.Add(new System.Windows.Controls.RichTextBox
+            {
+                Document = new System.Windows.Documents.FlowDocument(paraBlock),
+                IsReadOnly = true,
+                BorderThickness = new Thickness(0),
+                Padding = new Thickness(0),
+                Background = System.Windows.Media.Brushes.Transparent
+            });
+        }
+
+        grid.Children.Add(stack);
+
+        var borderChrome = new TableCellBorderChrome(borderPlan)
+        {
+            IsHitTestVisible = false,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Stretch
+        };
+        System.Windows.Controls.Panel.SetZIndex(borderChrome, 1);
+        grid.Children.Add(borderChrome);
+
+        return grid;
+    }
+
+    private sealed class TableCellBorderChrome(TableCellBorderVisualPlan plan) : FrameworkElement
+    {
+        protected override void OnRender(DrawingContext drawingContext)
+        {
+            base.OnRender(drawingContext);
+
+            var rect = new Rect(0, 0, ActualWidth, ActualHeight);
+            if (rect.Width <= 0 || rect.Height <= 0)
+                return;
+
+            foreach (var edge in plan.Edges)
+                DrawEdge(drawingContext, rect, edge);
+        }
+
+        private static void DrawEdge(DrawingContext drawingContext, Rect rect, TableCellBorderEdgeVisualPlan edge)
+        {
+            if (!edge.IsVisible)
+                return;
+
+            var (p1, p2) = CellBorderPoints(edge.Edge, rect, 0);
+            var pen = CreatePen(edge);
+
+            if (edge.Style == BorderLineStyle.Double)
+            {
+                var offset = Math.Max(1.0, edge.WidthDip * 1.5);
+                var (outer1, outer2) = CellBorderPoints(edge.Edge, rect, -offset / 2);
+                var (inner1, inner2) = CellBorderPoints(edge.Edge, rect, offset / 2);
+                drawingContext.DrawLine(pen, outer1, outer2);
+                drawingContext.DrawLine(pen, inner1, inner2);
+                return;
+            }
+
+            drawingContext.DrawLine(pen, p1, p2);
+        }
+
+        private static Pen CreatePen(TableCellBorderEdgeVisualPlan edge)
+        {
+            var pen = new Pen(
+                new SolidColorBrush(ParseColor(edge.ColorHex, Colors.Black)),
+                edge.WidthDip);
+
+            pen.DashStyle = edge.Style switch
+            {
+                BorderLineStyle.Dashed => DashStyles.Dash,
+                BorderLineStyle.Dotted => DashStyles.Dot,
+                _ => null
+            };
+
+            return pen;
+        }
+
+        private static (Point Start, Point End) CellBorderPoints(TableCellBorderVisualEdge edge, Rect rect, double inwardOffset) =>
+            edge switch
+            {
+                TableCellBorderVisualEdge.Top => (
+                    new Point(rect.Left, rect.Top + inwardOffset),
+                    new Point(rect.Right, rect.Top + inwardOffset)),
+                TableCellBorderVisualEdge.Bottom => (
+                    new Point(rect.Left, rect.Bottom - inwardOffset),
+                    new Point(rect.Right, rect.Bottom - inwardOffset)),
+                TableCellBorderVisualEdge.Left => (
+                    new Point(rect.Left + inwardOffset, rect.Top),
+                    new Point(rect.Left + inwardOffset, rect.Bottom)),
+                TableCellBorderVisualEdge.Right => (
+                    new Point(rect.Right - inwardOffset, rect.Top),
+                    new Point(rect.Right - inwardOffset, rect.Bottom)),
+                _ => (new Point(rect.Left, rect.Top), new Point(rect.Right, rect.Top)),
+            };
     }
 
     // Counts the height (in rows) of a vertical-merge run that starts at (restartRow, gridColumn):
@@ -6921,6 +7046,36 @@ public sealed class DocumentView : RichTextBox
             column += span;
         }
         return null;
+    }
+
+    private static void AddCellBlockParagraphs(ModelTableCell cell, System.Windows.Documents.Block cellBlock, TextDocument document)
+    {
+        if (cellBlock is WpfParagraph cellParagraph)
+        {
+            cell.Paragraphs.Add(ReadParagraph(cellParagraph, document));
+            return;
+        }
+
+        if (cellBlock is not BlockUIContainer { Child: DependencyObject child })
+            return;
+
+        foreach (var richTextBox in DescendantRichTextBoxes(child))
+        {
+            foreach (var paragraph in richTextBox.Document.Blocks.OfType<WpfParagraph>())
+                cell.Paragraphs.Add(ReadParagraph(paragraph, document));
+        }
+    }
+
+    private static IEnumerable<System.Windows.Controls.RichTextBox> DescendantRichTextBoxes(DependencyObject root)
+    {
+        if (root is System.Windows.Controls.RichTextBox richTextBox)
+            yield return richTextBox;
+
+        foreach (var child in LogicalTreeHelper.GetChildren(root).OfType<DependencyObject>())
+        {
+            foreach (var nested in DescendantRichTextBoxes(child))
+                yield return nested;
+        }
     }
 
     private static WpfParagraph BuildParagraph(ModelParagraph paragraph, TextDocument document, bool inTableCell = false)

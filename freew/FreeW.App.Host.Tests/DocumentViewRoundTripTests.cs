@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Windows.Documents;
@@ -665,10 +666,39 @@ public sealed class DocumentViewRoundTripTests
 
     private static string RenderedRowText(System.Windows.Documents.TableRow row)
     {
-        var text = row.Cells
-            .SelectMany(cell => cell.Blocks.OfType<System.Windows.Documents.Paragraph>())
+        var text = row.Cells.SelectMany(RenderedCellParagraphs)
             .Select(paragraph => new TextRange(paragraph.ContentStart, paragraph.ContentEnd).Text.Trim());
         return string.Join(" ", text);
+    }
+
+    private static IEnumerable<System.Windows.Documents.Paragraph> RenderedCellParagraphs(System.Windows.Documents.TableCell cell)
+    {
+        foreach (var paragraph in cell.Blocks.OfType<System.Windows.Documents.Paragraph>())
+            yield return paragraph;
+
+        foreach (var blockUi in cell.Blocks.OfType<BlockUIContainer>())
+        {
+            if (blockUi.Child is null)
+                continue;
+
+            foreach (var richTextBox in RichTextBoxes(blockUi.Child))
+            {
+                foreach (var paragraph in richTextBox.Document.Blocks.OfType<System.Windows.Documents.Paragraph>())
+                    yield return paragraph;
+            }
+        }
+    }
+
+    private static IEnumerable<System.Windows.Controls.RichTextBox> RichTextBoxes(System.Windows.DependencyObject root)
+    {
+        if (root is System.Windows.Controls.RichTextBox richTextBox)
+            yield return richTextBox;
+
+        foreach (var child in System.Windows.LogicalTreeHelper.GetChildren(root).OfType<System.Windows.DependencyObject>())
+        {
+            foreach (var nested in RichTextBoxes(child))
+                yield return nested;
+        }
     }
 
     // A valid 1x1 PNG so the WPF image decoder in BuildImageRun succeeds under test.
