@@ -130,11 +130,20 @@ function Assert-BackstageEvidenceReadiness {
     }
 
     $summary = Get-Content -LiteralPath $SummaryJsonPath -Raw | ConvertFrom-Json
+    if ([int]$summary.schemaVersion -ne 15) {
+        throw "Backstage evidence readiness requires FreeW visual evidence summary schema v15, found v$($summary.schemaVersion)"
+    }
+
     $readinessRows = @($summary.backstagePrintEvidenceReadiness)
+    $evidenceRows = @($summary.evidence)
     $requiredScenarios = @(
         'backstage-print-preview-fidelity',
         'backstage-pdf-export-fidelity'
     )
+    $requiredWorkflowByScenario = @{
+        'backstage-print-preview-fidelity' = 'print-preview'
+        'backstage-pdf-export-fidelity' = 'pdf-export'
+    }
     $requiredHosts = @(
         'wpf-fidelity-render',
         'avalonia-page-layout-shot'
@@ -166,6 +175,23 @@ function Assert-BackstageEvidenceReadiness {
                 }
 
                 $trustedCount++
+
+                $expectedWorkflow = $requiredWorkflowByScenario[$scenarioId]
+                $evidenceMatch = @($evidenceRows | Where-Object {
+                    $_.scenarioId -eq $scenarioId -and
+                    $_.hostId -eq $hostId -and
+                    [int]$_.pageNumber -eq $pageNumber
+                })
+                if ($evidenceMatch.Count -eq 0) {
+                    $failures.Add("$scenarioId/$hostId/p${pageNumber}: missing normalized evidence row for backstage workflow metadata")
+                    continue
+                }
+
+                $workflow = [string]$evidenceMatch[0].hostMetadata.backstageWorkflow
+                if ($workflow -ne $expectedWorkflow) {
+                    $failures.Add("$scenarioId/$hostId/p${pageNumber}: backstageWorkflow '$workflow' expected '$expectedWorkflow'")
+                    continue
+                }
             }
         }
     }
@@ -175,6 +201,7 @@ function Assert-BackstageEvidenceReadiness {
     }
 
     Write-Host "Backstage evidence readiness: trusted required rows=$trustedCount"
+    Write-Host "Backstage workflow metadata: verified rows=$trustedCount schema=v$($summary.schemaVersion)"
 }
 
 New-Item -ItemType Directory -Force $fixtureDir | Out-Null
