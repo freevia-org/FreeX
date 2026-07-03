@@ -151,6 +151,9 @@ public sealed class SectionsCommentsTests : IDisposable
             IsResolved = true,
             ResolvedDateTime = dt.AddMinutes(5),
             ResolvedBy = "Reviewer",
+            UsesModernCommentSchema = true,
+            ModernAnchorKind = "unknownAnchor",
+            ModernAnchorXml = """<p188:unknownAnchor xmlns:p188="http://schemas.microsoft.com/office/powerpoint/2018/8/main" />""",
             Xemu     = 914400,
             Yemu     = 457200,
             Idx      = 1,
@@ -163,6 +166,9 @@ public sealed class SectionsCommentsTests : IDisposable
         cm.IsResolved.Should().BeTrue();
         cm.ResolvedDateTime.Should().Be(dt.AddMinutes(5));
         cm.ResolvedBy.Should().Be("Reviewer");
+        cm.UsesModernCommentSchema.Should().BeTrue();
+        cm.ModernAnchorKind.Should().Be("unknownAnchor");
+        cm.ModernAnchorXml.Should().Contain("unknownAnchor");
         cm.Xemu.Should().Be(914400);
         cm.Yemu.Should().Be(457200);
         cm.Idx.Should().Be(1);
@@ -247,6 +253,8 @@ public sealed class SectionsCommentsTests : IDisposable
         comment.DateTime.Should().Be(new DateTime(2026, 7, 3, 10, 15, 30, DateTimeKind.Utc));
         comment.IsResolved.Should().BeTrue();
         comment.UsesModernCommentSchema.Should().BeTrue();
+        comment.ModernAnchorKind.Should().Be("unknownAnchor");
+        comment.ModernAnchorXml.Should().Contain("unknownAnchor");
         comment.Xemu.Should().Be(1200);
         comment.Yemu.Should().Be(2400);
         comment.Replies.Should().ContainSingle().Which.Should().Match<SlideCommentReply>(reply =>
@@ -259,6 +267,8 @@ public sealed class SectionsCommentsTests : IDisposable
         pane.SelectedComment.Should().NotBeNull();
         pane.SelectedComment!.ThreadStatus.Should().Be(PresentationCommentThreadStatus.Resolved);
         pane.SelectedComment.AuthorDisplayName.Should().Be("Alice Reviewer");
+        pane.SelectedComment.ModernAnchorKind.Should().Be("unknownAnchor");
+        pane.SelectedComment.AnchorSummary.Should().Be("unknown anchor at 1200,2400 EMU");
         pane.SelectedComment.Replies.Should().ContainSingle().Which.AuthorDisplayName.Should().Be("Bob Reviewer");
     }
 
@@ -274,6 +284,8 @@ public sealed class SectionsCommentsTests : IDisposable
             Text = "Resolve after chart update.",
             DateTime = new DateTime(2026, 7, 3, 11, 0, 0, DateTimeKind.Utc),
             IsResolved = true,
+            ModernAnchorKind = "unknownAnchor",
+            ModernAnchorXml = """<p188:unknownAnchor xmlns:p188="http://schemas.microsoft.com/office/powerpoint/2018/8/main" />""",
             Xemu = 3600,
             Yemu = 7200,
             Replies =
@@ -299,6 +311,8 @@ public sealed class SectionsCommentsTests : IDisposable
         comment.DateTime.Should().Be(new DateTime(2026, 7, 3, 11, 0, 0, DateTimeKind.Utc));
         comment.IsResolved.Should().BeTrue();
         comment.UsesModernCommentSchema.Should().BeTrue();
+        comment.ModernAnchorKind.Should().Be("unknownAnchor");
+        comment.ModernAnchorXml.Should().Contain("unknownAnchor");
         comment.Replies.Should().ContainSingle().Which.Should().Match<SlideCommentReply>(reply =>
             reply.Author == "Bob Reviewer" &&
             reply.Initials == "BR" &&
@@ -321,6 +335,17 @@ public sealed class SectionsCommentsTests : IDisposable
             .Should().NotBeNull();
         Override(contentTypes, "/ppt/authors/author1.xml", "application/vnd.ms-powerpoint.authors+xml")
             .Should().NotBeNull();
+
+        var commentXml = LoadXml(zip, "ppt/comments/comment1.xml");
+        commentXml.Descendants()
+            .Should().Contain(element => element.Name.LocalName == "unknownAnchor");
+        commentXml.Descendants()
+            .Should().Contain(element =>
+                element.Name.LocalName == "pos" &&
+                element.Attribute("x") != null &&
+                element.Attribute("x")!.Value == "3600" &&
+                element.Attribute("y") != null &&
+                element.Attribute("y")!.Value == "7200");
     }
 
     [Fact]
@@ -385,6 +410,9 @@ public sealed class SectionsCommentsTests : IDisposable
             Author   = "Alice",
             Initials = "AL",
             Text     = "Remember to update.",
+            UsesModernCommentSchema = true,
+            ModernAnchorKind = "unknownAnchor",
+            ModernAnchorXml = """<p188:unknownAnchor xmlns:p188="http://schemas.microsoft.com/office/powerpoint/2018/8/main" />""",
             Xemu     = 500000,
             Yemu     = 250000,
             Idx      = 1,
@@ -396,6 +424,8 @@ public sealed class SectionsCommentsTests : IDisposable
         var cm = clone.Comments[0];
         cm.Author.Should().Be("Alice");
         cm.Text.Should().Be("Remember to update.");
+        cm.ModernAnchorKind.Should().Be("unknownAnchor");
+        cm.ModernAnchorXml.Should().Contain("unknownAnchor");
         cm.Xemu.Should().Be(500000);
 
         // Deep copy: mutating the clone should not affect the original.

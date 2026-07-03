@@ -95,6 +95,7 @@ public sealed record PresentationCommentDescriptor(
     DateTime? Timestamp,
     long Xemu,
     long Yemu,
+    string ModernAnchorKind,
     bool CanEdit,
     bool CanReply,
     bool CanDelete,
@@ -124,6 +125,11 @@ public sealed record PresentationCommentDescriptor(
     public string ReplySummary => PresentationCommentMetadataPolicy.BuildCountSummary(ReplyCount, "reply");
 
     public string MentionSummary => PresentationCommentMetadataPolicy.BuildCountSummary(MentionCount, "mention");
+
+    public string AnchorSummary =>
+        string.IsNullOrWhiteSpace(ModernAnchorKind)
+            ? $"Legacy comment anchor at {Xemu},{Yemu} EMU"
+            : $"{PresentationCommentMetadataPolicy.BuildAnchorDisplayName(ModernAnchorKind)} at {Xemu},{Yemu} EMU";
 
     public string ThreadStatusSummary =>
         ThreadStatus == PresentationCommentThreadStatus.Resolved
@@ -433,6 +439,29 @@ internal static class PresentationCommentMetadataPolicy
                 ? $"{Math.Max(0, count)} {singularNoun[..^1]}ies"
                 : $"{Math.Max(0, count)} {singularNoun}s";
 
+    public static string BuildAnchorDisplayName(string? anchorKind)
+    {
+        var normalized = NormalizeText(anchorKind);
+        if (normalized is null)
+        {
+            return "Legacy comment anchor";
+        }
+
+        var words = normalized.EndsWith("Anchor", StringComparison.Ordinal)
+            ? normalized[..^"Anchor".Length]
+            : normalized;
+        if (string.IsNullOrWhiteSpace(words))
+        {
+            return "Modern comment anchor";
+        }
+
+        return string.Concat(
+            words.SelectMany((ch, index) =>
+                index > 0 && char.IsUpper(ch)
+                    ? new[] { ' ', char.ToLowerInvariant(ch) }
+                    : new[] { char.ToLowerInvariant(ch) })) + " anchor";
+    }
+
     private static string? NormalizeText(string? value)
     {
         var normalized = value?.Trim();
@@ -639,6 +668,8 @@ public static class PresentationReviewWorkflowPlanner
             IsResolved = current.IsResolved,
             ResolvedDateTime = current.ResolvedDateTime,
             ResolvedBy = current.ResolvedBy,
+            ModernAnchorKind = current.ModernAnchorKind,
+            ModernAnchorXml = current.ModernAnchorXml,
             Xemu = current.Xemu,
             Yemu = current.Yemu,
             Idx = current.Idx,
@@ -1990,6 +2021,7 @@ public static class PresentationReviewWorkflowPlanner
             comment.DateTime,
             comment.Xemu,
             comment.Yemu,
+            comment.ModernAnchorKind,
             true,
             !comment.IsResolved,
             true,
@@ -2026,6 +2058,8 @@ public static class PresentationReviewWorkflowPlanner
             IsResolved = comment.IsResolved,
             ResolvedDateTime = comment.ResolvedDateTime,
             ResolvedBy = comment.ResolvedBy,
+            ModernAnchorKind = comment.ModernAnchorKind,
+            ModernAnchorXml = comment.ModernAnchorXml,
             Xemu = comment.Xemu,
             Yemu = comment.Yemu,
             Idx = comment.Idx,

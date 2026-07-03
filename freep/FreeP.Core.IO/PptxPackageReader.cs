@@ -514,6 +514,7 @@ public static class PptxPackageReader
             var authorId = cmEl.Attribute("authorId")?.Value ?? string.Empty;
             var author = ResolveModernAuthor(authorMap, authorId);
             var created = ParseDateTime(cmEl.Attribute("created")?.Value);
+            var anchorEl = ReadModernAnchorElement(cmEl);
             var posEl = cmEl.Element(P188 + "pos");
             var comment = new SlideComment
             {
@@ -526,6 +527,8 @@ public static class PptxPackageReader
                 Yemu = ParseLong(posEl?.Attribute("y")?.Value),
                 Idx = comments.Count + 1,
                 UsesModernCommentSchema = true,
+                ModernAnchorKind = anchorEl?.Name.LocalName ?? string.Empty,
+                ModernAnchorXml = anchorEl?.ToString(SaveOptions.DisableFormatting) ?? string.Empty,
             };
 
             foreach (var replyEl in cmEl.Element(P188 + "replyLst")?.Elements(P188 + "reply") ?? [])
@@ -544,6 +547,17 @@ public static class PptxPackageReader
             comments.Add(comment);
         }
     }
+
+    private static XElement? ReadModernAnchorElement(XElement commentEl)
+        => commentEl.Elements()
+            .FirstOrDefault(IsModernCommentAnchorElement);
+
+    private static bool IsModernCommentAnchorElement(XElement element)
+        => element.Name.LocalName is
+            "unknownAnchor" or
+            "sldMkLst" or
+            "deMkLst" or
+            "txMkLst";
 
     private static (string name, string initials) ResolveModernAuthor(
         Dictionary<string, (string name, string initials)> authorMap,

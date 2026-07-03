@@ -231,6 +231,8 @@ public static class SlideCloner
             ResolvedDateTime = c.ResolvedDateTime,
             ResolvedBy       = c.ResolvedBy,
             UsesModernCommentSchema = c.UsesModernCommentSchema,
+            ModernAnchorKind = c.ModernAnchorKind,
+            ModernAnchorXml = c.ModernAnchorXml,
             Xemu     = c.Xemu,
             Yemu     = c.Yemu,
             Idx      = c.Idx,

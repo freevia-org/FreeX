@@ -1289,7 +1289,7 @@ public static class PptxPackageWriter
             var authorId = ModernAuthorId(modernAuthorMap, comment.Author, comment.Initials);
             var children = new List<object>
             {
-                new XElement(P188 + "unknownAnchor"),
+                BuildModernAnchorElement(comment),
                 new XElement(P188 + "pos",
                     new XAttribute("x", comment.Xemu),
                     new XAttribute("y", comment.Yemu)),
@@ -1328,6 +1328,36 @@ public static class PptxPackageWriter
                 NsAttr("p188", P188),
                 NsAttr("a", A),
                 cmElements));
+    }
+
+    private static XElement BuildModernAnchorElement(SlideComment comment)
+    {
+        if (!string.IsNullOrWhiteSpace(comment.ModernAnchorXml))
+        {
+            try
+            {
+                var anchor = XElement.Parse(comment.ModernAnchorXml);
+                if (IsModernCommentAnchorElement(anchor))
+                {
+                    return new XElement(anchor);
+                }
+            }
+            catch (XmlException)
+            {
+                // Fall through to PowerPoint's generic modern comment anchor below.
+            }
+        }
+
+        return new XElement(P188 + "unknownAnchor");
+    }
+
+    private static bool IsModernCommentAnchorElement(XElement element)
+    {
+        return element.Name.LocalName is
+            "unknownAnchor" or
+            "sldMkLst" or
+            "deMkLst" or
+            "txMkLst";
     }
 
     private static XElement BuildModernTextBody(string text)

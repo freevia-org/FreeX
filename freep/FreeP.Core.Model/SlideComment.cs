@@ -45,6 +45,15 @@ public sealed class SlideComment
     /// <summary>True when this comment came from or should be saved as a modern PowerPoint comment part.</summary>
     public bool UsesModernCommentSchema { get; set; }
 
+    /// <summary>
+    /// Local element name for the modern PowerPoint comment anchor, such as
+    /// <c>unknownAnchor</c>. Empty for legacy comments.
+    /// </summary>
+    public string ModernAnchorKind { get; set; } = string.Empty;
+
+    /// <summary>Raw modern PowerPoint comment anchor XML for lossless package round-trip.</summary>
+    public string ModernAnchorXml { get; set; } = string.Empty;
+
     /// <summary>Modern-comment style replies attached to this thread.</summary>
     public List<SlideCommentReply> Replies { get; } = new();
 
