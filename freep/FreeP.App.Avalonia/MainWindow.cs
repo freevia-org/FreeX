@@ -194,6 +194,7 @@ public sealed class MainWindow : Window
     internal PresentationHandoutLayoutPlan? LastHandoutLayoutPlan { get; private set; }
     internal PresentationNotesPagePreviewPlan? LastNotesPagePreviewPlan { get; private set; }
     internal PresentationNotesPagePdfRenderPlan? LastNotesPagePdfRenderPlan { get; private set; }
+    internal PresentationPrintOutputPackage? LastPrintOutputPackage { get; private set; }
     internal PresentationVideoExportPlan? LastVideoExportPlan { get; private set; }
     internal PresentationLayoutPickerPlan? LastLayoutPickerPlan { get; private set; }
     internal PresentationLayoutChoice? LastAppliedLayoutChoice { get; private set; }
@@ -996,7 +997,7 @@ public sealed class MainWindow : Window
         r.Register(PresentationExportPlanner.PdfExportCommandId, new ActionRibbonCommand(() => _ = FileExportPdfAsync()));
         r.Register(PresentationExportPlanner.NotesPagePdfExportCommandId, new ActionRibbonCommand(() => _ = FileExportNotesPagePdfAsync()));
         r.Register(PresentationExportPlanner.ImageExportCommandId, new ActionRibbonCommand(() => _ = FileExportImagesAsync()));
-        r.Register(PresentationExportPlanner.PrintCommandId, new ActionRibbonCommand(() => RefreshHandoutLayoutPlan()));
+        r.Register(PresentationExportPlanner.PrintCommandId, new ActionRibbonCommand(() => RefreshPrintOutputPackage()));
         r.Register(PresentationExportPlanner.VideoExportCommandId, new ActionRibbonCommand(() => RefreshVideoExportPlan()));
 
         // Slide navigation/management
@@ -1720,6 +1721,18 @@ public sealed class MainWindow : Window
                 range)));
         _statusText.Text = "Notes page PDF planned";
         return LastNotesPagePdfRenderPlan;
+    }
+
+    internal PresentationPrintOutputPackage RefreshPrintOutputPackage(PresentationPrintRequest? request = null)
+    {
+        LastPrintOutputPackage = PresentationPrintOutputPackageExecutor.BuildPackage(
+            _presentation,
+            request,
+            SlideRenderer.RenderToBytes,
+            SkiaRasterPdfWriter.WriteToBytes);
+        _statusText.Text = LastPrintOutputPackage.Plan.DisabledReason ??
+            PresentationPrintOutputPackageExecutor.NativePrinterDialogDeferredReason;
+        return LastPrintOutputPackage;
     }
 
     internal PresentationVideoExportPlan RefreshVideoExportPlan(PresentationVideoExportRequest? request = null)

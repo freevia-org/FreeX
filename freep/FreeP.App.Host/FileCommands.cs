@@ -73,6 +73,8 @@ internal sealed class FileCommands
 
     public string DisplayName => _workflow.DisplayName;
 
+    public PresentationPrintOutputPackage? LastPrintOutputPackage { get; private set; }
+
     public void MarkDirty()
     {
         _workflow.MarkDirty();
@@ -243,6 +245,19 @@ internal sealed class FileCommands
             new PresentationNotesPagePdfExportRequest(new PresentationPrintRequest(
                 PresentationPrintLayoutKind.NotesPages,
                 range)));
+    }
+
+    /// <summary>
+    /// Builds the shared printable PDF package. WPF native print dialog handoff remains a later host shell step.
+    /// </summary>
+    public PresentationPrintOutputPackage BuildPrintOutputPackage(PresentationPrintRequest? request = null)
+    {
+        LastPrintOutputPackage = PresentationPrintOutputPackageExecutor.BuildPackage(
+            _getModel(),
+            request,
+            WpfPresentationSlideImageRenderer.RenderSlideToPng,
+            WpfRasterPdfWriter.WriteToBytes);
+        return LastPrintOutputPackage;
     }
 
     /// <summary>

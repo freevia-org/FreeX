@@ -172,6 +172,29 @@ public sealed class FileLifecycleTests : IDisposable
     }
 
     [StaFact]
+    public void BuildPrintOutputPackage_UsesSharedExecutorForWpfAdapter()
+    {
+        var (_, file, getModel, _, _) = CreateHarness();
+        getModel().Slides[0].Title = "Opening";
+        getModel().Slides[0].Notes = MakeTextBody("Welcome speaker note.");
+        getModel().Slides.Add(new Slide { Title = "Appendix" });
+
+        var package = file.BuildPrintOutputPackage(new PresentationPrintRequest(
+            PresentationPrintLayoutKind.NotesPages,
+            new PresentationSlideRangeRequest(
+                PresentationSlideRangeKind.CurrentSlide,
+                CurrentSlideNumber: 1)));
+
+        file.LastPrintOutputPackage.Should().BeSameAs(package);
+        package.Plan.Route.Should().Be(PresentationPrintOutputPackageRoute.NotesPagePdf);
+        package.Plan.PrintPlan.CommandId.Should().Be(PresentationExportPlanner.PrintCommandId);
+        package.Plan.PrintPlan.SlideRange.SlideNumbers.Should().Equal(1);
+        package.Plan.NativePrinterDialogDeferred.Should().BeTrue();
+        package.Bytes.Length.Should().BeGreaterThan(100);
+        System.Text.Encoding.ASCII.GetString(package.Bytes, 0, 5).Should().Be("%PDF-");
+    }
+
+    [StaFact]
     public void BuildVideoExportPlan_UsesSharedPlannerForWpfAdapter()
     {
         var (_, file, getModel, _, _) = CreateHarness();

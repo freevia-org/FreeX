@@ -1141,10 +1141,10 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
-    public async Task Print_command_refreshes_shared_handout_layout_plan()
+    public async Task Print_command_records_shared_print_output_package()
     {
         var found = false;
-        PresentationHandoutLayoutPlan? handoutPlan = null;
+        PresentationPrintOutputPackage? printPackage = null;
 
         var ran = await OnUiThread(() =>
         {
@@ -1157,17 +1157,18 @@ public sealed class MainWindowHeadlessTests
             found = registry.TryGet(PresentationExportPlanner.PrintCommandId, out var print);
 
             print!.Execute(RibbonCommandContext.Empty);
-            handoutPlan = window.LastHandoutLayoutPlan;
+            printPackage = window.LastPrintOutputPackage;
         });
 
         if (!ran) return;
-        found.Should().BeTrue("the Avalonia registry should expose the shared print plan seam");
-        handoutPlan.Should().NotBeNull();
-        handoutPlan!.PrintPlan.CommandId.Should().Be(PresentationExportPlanner.PrintCommandId);
-        handoutPlan.PrintPlan.Layout.Layout.Should().Be(PresentationPrintLayoutKind.Handouts);
-        handoutPlan.PrintPlan.Layout.SlidesPerPage.Should().Be(6);
-        handoutPlan.Pages.Should().ContainSingle();
-        handoutPlan.Pages[0].Slots.Select(slot => slot.SlideNumber).Should().Equal(1, 2, 3, 4);
+        found.Should().BeTrue("the Avalonia registry should expose the shared print package seam");
+        printPackage.Should().NotBeNull();
+        printPackage!.Plan.PrintPlan.CommandId.Should().Be(PresentationExportPlanner.PrintCommandId);
+        printPackage.Plan.PrintPlan.Layout.Layout.Should().Be(PresentationPrintLayoutKind.FullPageSlides);
+        printPackage.Plan.Route.Should().Be(PresentationPrintOutputPackageRoute.FullPageSlidesRasterPdf);
+        printPackage.Plan.NativePrinterDialogDeferred.Should().BeTrue();
+        printPackage.Bytes.Length.Should().BeGreaterThan(100);
+        System.Text.Encoding.ASCII.GetString(printPackage.Bytes, 0, 5).Should().Be("%PDF-");
     }
 
     [Fact]

@@ -38,15 +38,18 @@ public sealed class FilePickerPlannerSourceTests
         source.Should().Contain("PresentationNotesPagePdfExporter.BuildRenderPlan(");
         source.Should().Contain("PresentationNotesPagePdfExporter.ExportToBytes(_presentation, request)");
         source.Should().Contain("PresentationExportPlanner.BuildVideoExportPlan(");
+        source.Should().Contain("PresentationPrintOutputPackageExecutor.BuildPackage(");
         source.Should().Contain("PresentationRasterPdfExporter.ExportToBytes(");
         source.Should().Contain("SlideRenderer.RenderToBytes");
         source.Should().Contain("SkiaRasterPdfWriter.WriteToBytes");
         source.Should().Contain("PresentationImageExportExecutor.Export(");
         source.Should().Contain("internal PresentationHandoutLayoutPlan RefreshHandoutLayoutPlan(");
         source.Should().Contain("internal PresentationNotesPagePdfRenderPlan RefreshNotesPagePdfRenderPlan(");
+        source.Should().Contain("internal PresentationPrintOutputPackage RefreshPrintOutputPackage(");
         source.Should().Contain("internal PresentationVideoExportPlan RefreshVideoExportPlan(");
         source.Should().Contain("LastHandoutLayoutPlan");
         source.Should().Contain("LastNotesPagePdfRenderPlan");
+        source.Should().Contain("LastPrintOutputPackage");
         source.Should().Contain("LastVideoExportPlan");
         source.Should().Contain("PresentationExportPlanner.ImageExportPickerTitle");
         source.Should().Contain("StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions");
