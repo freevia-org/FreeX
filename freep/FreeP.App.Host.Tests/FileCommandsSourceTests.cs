@@ -25,8 +25,11 @@ public sealed class FileCommandsSourceTests
         source.Should().Contain("PresentationNotesPagePdfExporter.BuildRenderPlan(");
         source.Should().Contain("PresentationNotesPagePdfExporter.ExportToBytes(");
         source.Should().Contain("PresentationPrintOutputPackageExecutor.BuildPackage(");
+        source.Should().Contain("PresentationPrintBackstagePlanner.Build(");
         source.Should().Contain("public PresentationPrintOutputPackage BuildPrintOutputPackage(");
+        source.Should().Contain("public PresentationPrintBackstagePlan BuildPrintBackstagePlan(");
         source.Should().Contain("LastPrintOutputPackage");
+        source.Should().Contain("LastPrintBackstagePlan");
         source.Should().Contain("PresentationVideoFramePackageExecutor.BuildPackage(");
         source.Should().Contain("public PresentationVideoFramePackage BuildVideoFramePackage(");
         source.Should().Contain("LastVideoFramePackage");
