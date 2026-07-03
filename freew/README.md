@@ -149,7 +149,7 @@ docx reader/writer; unsupported renderings are noted under [Known limitations](#
 - **Footnotes** (`word/footnotes.xml`, `w:footnoteReference`) and **endnotes** (`word/endnotes.xml`) — they coexist.
 - **Table of Contents** (built from the heading outline; Insert + Update).
 - **Index** (mark entry → build sorted/deduped index, `IndexHeading`/`IndexEntry` styles).
-- **Citations & bibliography** in **APA / MLA / Chicago / IEEE** (style- and source-type-aware: Book / Journal Article / Web Site each format per the chosen style, in-text + a sorted bibliography under the right heading: References / Works Cited / Bibliography). The selected style and the source data persist to `word/bibliography/sources.xml` and round-trip.
+- **Citations & bibliography** in **APA / MLA / Chicago / IEEE / Turabian / Harvard / Vancouver / GOST / ISO 690** (style- and source-type-aware: Book / Journal Article / Web Site each format per the chosen style, in-text + bibliography/reference-list output under the right heading: References / Works Cited / Bibliography). Numeric IEEE/Vancouver insertions use source-order visible numbers like `[1]`, `[2]`, and generated numeric reference lists keep source-order numbered entries. The selected style and the source data persist to `word/bibliography/sources.xml` and round-trip.
 - **Captions** ("Figure/Table N: …") with automatic figure/table numbering, plus a **Table of Figures**.
 - **Cross-references** to headings / bookmarks / captions / footnotes (clickable internal link when anchored).
 - **Bookmarks** + internal hyperlinks (`w:bookmarkStart/End`, `w:hyperlink w:anchor`) with a Bookmark Manager + Go To.
@@ -270,7 +270,9 @@ A few shipped features are **data-faithful but visually simplified**: charts emb
 caches rather than an editable companion xlsx (Word's "Edit Data" is unavailable); SmartArt round-trips its
 node text/structure but no rendered `dsp` geometry (Word re-lays-out on open); `wp:wrapTight` carries no wrap
 polygon; theme `a:fmtScheme` effect-set selection round-trips, while deeper DrawingML effect consumption by
-every object type remains incremental. Each is noted in code at its site.
+every object type remains incremental. Citation inserts and generated bibliographies are ordinary visible
+text/paragraphs rather than live Word `CITATION` / `BIBLIOGRAPHY` field runs. Real Word visual/reference
+baselines still require Word COM on the validation machine. Each is noted in code at its site.
 
 ---
 
