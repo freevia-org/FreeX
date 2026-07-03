@@ -159,6 +159,9 @@ public sealed class ChartLineStyle
     /// <summary>Stroke width in points. Null means use the chart planner default.</summary>
     public double? WidthPt { get; set; }
 
+    /// <summary>Stroke dash preset from <c>a:prstDash</c>.</summary>
+    public OutlineDash Dash { get; set; } = OutlineDash.Solid;
+
     /// <summary>True when the authored chart explicitly suppresses the line.</summary>
     public bool NoFill { get; set; }
 }

@@ -194,7 +194,8 @@ public sealed class ChartTests : IDisposable
         series.LineStyle = new ChartLineStyle
         {
             Color = new ThemeAwareColor(new SrgbColor(0x11, 0x22, 0x33)),
-            WidthPt = 2.25
+            WidthPt = 2.25,
+            Dash = OutlineDash.DashDot
         };
         series.MarkerStyle = new ChartMarkerStyle
         {
@@ -218,6 +219,20 @@ public sealed class ChartTests : IDisposable
 
         var pres = BuildPresWithChart(chart);
         var path = WriteToPptx(pres);
+        using (var archive = ZipFile.OpenRead(path))
+        {
+            var chartDoc = LoadChartXml(archive, chartIndex: 1);
+            var lineDash = chartDoc
+                .Descendants(ChartNs + "ser")
+                .First()
+                .Element(ChartNs + "spPr")
+                ?.Element(DrawingNs + "ln")
+                ?.Element(DrawingNs + "prstDash")
+                ?.Attribute("val")
+                ?.Value;
+            lineDash.Should().Be("dashDot", "authored series line dashes must be emitted in c:ser/c:spPr");
+        }
+
         var reloaded = PptxPackageReader.Read(path);
 
         var rt = reloaded.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.Chart).Chart!;
@@ -225,6 +240,7 @@ public sealed class ChartTests : IDisposable
         styled.LineStyle.Should().NotBeNull();
         styled.LineStyle!.Color!.Resolved.Should().Be(new SrgbColor(0x11, 0x22, 0x33));
         styled.LineStyle.WidthPt.Should().BeApproximately(2.25, 0.001);
+        styled.LineStyle.Dash.Should().Be(OutlineDash.DashDot);
         styled.MarkerStyle.Should().NotBeNull();
         styled.MarkerStyle!.Symbol.Should().Be(ChartMarkerSymbol.Diamond);
         styled.MarkerStyle.SizePt.Should().Be(9);
@@ -832,6 +848,8 @@ public sealed class ChartTests : IDisposable
 
     private static readonly XNamespace ChartNs =
         "http://schemas.openxmlformats.org/drawingml/2006/chart";
+    private static readonly XNamespace DrawingNs =
+        "http://schemas.openxmlformats.org/drawingml/2006/main";
     private static readonly XNamespace SheetNs =
         "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 

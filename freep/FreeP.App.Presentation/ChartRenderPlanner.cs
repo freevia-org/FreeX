@@ -354,7 +354,8 @@ public static partial class ChartRenderPlanner
             ?? series.FillColor?.Resolved
             ?? ResolveSeriesColor(seriesIndex, seriesColors);
         var thickness = PointsToDip(series.LineStyle?.WidthPt) ?? defaultThickness;
-        return new ChartStrokePlan(color, Alpha: 255, thickness);
+        var dash = series.LineStyle?.Dash ?? OutlineDash.Solid;
+        return new ChartStrokePlan(color, Alpha: 255, thickness, dash);
     }
 
     private static ChartMarkerStyle? ResolvePointMarkerStyle(ChartSeries series, int pointIndex) =>
