@@ -1163,6 +1163,7 @@ public static class SlideCompositor
                 ResolvedFill?   resolvedTextFill    = null;
                 ResolvedOutline? resolvedTextOutline = null;
                 ResolvedRunShadow? resolvedTextShadow = null;
+                ResolvedRunReflection? resolvedTextReflection = null;
 
                 if (run.TextFill is not null)
                     resolvedTextFill = ResolveFill(run.TextFill, theme, effectiveClrMap);
@@ -1181,6 +1182,19 @@ public static class SlideCompositor
                         BlurDip = PointsToDip(ts.BlurPt),
                         DistDip = PointsToDip(ts.DistPt),
                         DirDeg  = ts.DirDeg,
+                    };
+                }
+
+                if (run.TextReflection is not null)
+                {
+                    var reflection = run.TextReflection;
+                    resolvedTextReflection = new ResolvedRunReflection
+                    {
+                        Alpha = reflection.Alpha,
+                        BlurDip = PointsToDip(reflection.BlurPt),
+                        DistDip = PointsToDip(reflection.DistPt),
+                        DirDeg = reflection.DirDeg,
+                        ScaleY = reflection.ScaleY,
                     };
                 }
 
@@ -1206,6 +1220,7 @@ public static class SlideCompositor
                     TextFill      = resolvedTextFill,
                     TextOutline   = resolvedTextOutline,
                     TextShadow    = resolvedTextShadow,
+                    TextReflection = resolvedTextReflection,
                     MathLayout    = mathLayout,
                 });
             }

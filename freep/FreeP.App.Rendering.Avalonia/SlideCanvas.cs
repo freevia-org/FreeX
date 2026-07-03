@@ -1886,6 +1886,10 @@ public sealed class SlideCanvas : Control
             var geo = runFt.BuildGeometry(new Point(plan.GlyphBoundsDip.X, plan.GlyphBoundsDip.Y));
             if (geo is null) { pos += run.Text.Length; continue; }
 
+            using IDisposable? warpScope = plan.WarpTransform is { HasAffineTransform: true } warp
+                ? dc.PushTransform(BuildWordArtWarpMatrix(warp, plan.GlyphBoundsDip))
+                : null;
+
             foreach (var pass in plan.Passes)
             {
                 switch (pass)
@@ -1896,6 +1900,13 @@ public sealed class SlideCanvas : Control
                             Color.FromArgb(shadow.Alpha, shadow.Color.R, shadow.Color.G, shadow.Color.B));
                         using var sScope = dc.PushTransform(Matrix.CreateTranslation(shadow.OffsetX, shadow.OffsetY));
                         dc.DrawGeometry(shadowBrush, null, geo);
+                        break;
+                    }
+                    case TextRunEffectPass.Reflection reflection:
+                    {
+                        using var transformScope = dc.PushTransform(BuildTextReflectionMatrix(reflection, plan.GlyphBoundsDip));
+                        using var opacityScope = dc.PushOpacity(reflection.Alpha / 255.0);
+                        dc.DrawGeometry(MakeFillBrushForText(reflection.FillBrush), null, geo);
                         break;
                     }
                     case TextRunEffectPass.Fill fill:
@@ -1912,6 +1923,29 @@ public sealed class SlideCanvas : Control
     }
 
     // ── Brush / Pen factories ─────────────────────────────────────────────────
+
+    private static Matrix BuildWordArtWarpMatrix(
+        WordArtWarpTransform warp,
+        LayoutRect glyphBounds)
+    {
+        double cx = glyphBounds.X + glyphBounds.Width / 2.0;
+        double cy = glyphBounds.Y + glyphBounds.Height / 2.0;
+        return Matrix.CreateTranslation(-cx, -cy)
+            * Matrix.CreateScale(1.0, warp.ScaleY)
+            * Matrix.CreateRotation(warp.RotationDeg * Math.PI / 180.0)
+            * Matrix.CreateTranslation(cx, cy);
+    }
+
+    private static Matrix BuildTextReflectionMatrix(
+        TextRunEffectPass.Reflection reflection,
+        LayoutRect glyphBounds)
+    {
+        double cx = glyphBounds.X + glyphBounds.Width / 2.0;
+        double pivotY = glyphBounds.Y + glyphBounds.Height;
+        return Matrix.CreateTranslation(-cx, -pivotY)
+            * Matrix.CreateScale(1.0, reflection.ScaleY)
+            * Matrix.CreateTranslation(cx + reflection.OffsetX, pivotY + reflection.OffsetY);
+    }
 
     private static IBrush? MakeBrush(ResolvedFill fill, LayoutRect bounds) => fill switch
     {
