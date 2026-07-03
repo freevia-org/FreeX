@@ -186,6 +186,43 @@ public sealed class VisualEvidencePlannerTests
     }
 
     [Fact]
+    public void SharedNoteRegionPlanner_BuildsFootnoteAndSyntheticEndnoteRows()
+    {
+        var footnotes = FreeWVisualEvidenceDocumentFactory.BuildFootnotePlacementDocument();
+        var endnotes = FreeWVisualEvidenceDocumentFactory.BuildEndnotePlacementDocument();
+        var (contentWidth, _) = PageLayout.ContentAreaDip(footnotes.Page);
+
+        var footnotePlan = DocumentNoteRegionPlanner.BuildFootnoteRegion(
+            footnotes,
+            [1],
+            pageNumber: 1,
+            contentWidth);
+
+        footnotePlan.Kind.Should().Be(DocumentNoteRegionKind.Footnotes);
+        footnotePlan.IsSyntheticPage.Should().BeFalse();
+        footnotePlan.Heading.Should().BeNull();
+        footnotePlan.SeparatorWidthDip.Should().Be(DocumentNoteRegionPlanner.FootnoteSeparatorWidthDip);
+        footnotePlan.Rows.Should().ContainSingle();
+        footnotePlan.Rows[0].Label.Should().Be("1");
+        footnotePlan.Rows[0].Text.Should().Contain("bottom of page 1");
+        footnotePlan.EstimatedHeightDip.Should().BeGreaterThan(0);
+
+        var endnotePlan = DocumentNoteRegionPlanner.BuildEndnoteRegion(
+            endnotes,
+            DocumentNoteRegionPlanner.EndnoteIdsForSyntheticPage(endnotes),
+            pageNumber: 3,
+            contentWidth,
+            isSyntheticPage: true);
+
+        endnotePlan.Kind.Should().Be(DocumentNoteRegionKind.Endnotes);
+        endnotePlan.IsSyntheticPage.Should().BeTrue();
+        endnotePlan.Heading.Should().Be("Endnotes");
+        endnotePlan.SeparatorWidthDip.Should().Be(contentWidth);
+        endnotePlan.Rows.Select(r => r.Label).Should().ContainInOrder("1", "2");
+        endnotePlan.Rows.Select(r => r.Text).Should().Contain(t => t.Contains("very end of the document"));
+    }
+
+    [Fact]
     public void SharedReviewFactories_BuildF2ReviewContracts()
     {
         var tracked = FreeWVisualEvidenceDocumentFactory.BuildTrackedChangesReviewDocument();

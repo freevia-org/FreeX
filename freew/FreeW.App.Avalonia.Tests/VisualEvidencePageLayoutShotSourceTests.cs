@@ -31,6 +31,11 @@ public sealed class VisualEvidencePageLayoutShotSourceTests
         source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildEndnotePlacementDocument");
         source.Should().Contain("hasEndnotes: true");
         source.Should().Contain("isSyntheticPage: true");
+        source.Should().Contain("AddNoteRegionOverlayIfNeeded(");
+        source.Should().Contain("BuildEvidenceNoteRegionPlan(");
+        source.Should().Contain("DocumentNoteRegionPlanner.BuildFootnoteRegion");
+        source.Should().Contain("DocumentNoteRegionPlanner.BuildEndnoteRegion");
+        source.Should().Contain("[\"noteRegionRenderStatus\"] = \"shared-plan-overlay\"");
         source.Should().Contain("f2-section-landscape");
         source.Should().Contain("VisualEvidenceOutputPath(outDir, \"f2-section-landscape\", 1)");
         source.Should().Contain("VisualEvidenceOutputPath(outDir, \"f2-section-landscape\", 2)");

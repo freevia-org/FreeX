@@ -3,6 +3,7 @@ using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
+using FreeW.App.Presentation.DocumentView;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Host.Editing;
@@ -604,45 +605,44 @@ internal sealed class PageBox : Border
     {
         var panel = new StackPanel { Orientation = Orientation.Vertical };
         double textSizePx = FootnoteTextSizePt * (96.0 / 72.0);
-        double noteSeparatorWidth = 60; // ~1/3 of column width (Word default separator length)
+        var (contentWidth, _) = PageLayout.ContentAreaDip(model.Page);
+        var plan = footnoteIds.Count > 0
+            ? DocumentNoteRegionPlanner.BuildFootnoteRegion(model, footnoteIds, pageNumber: 1, contentWidth)
+            : DocumentNoteRegionPlanner.BuildEndnoteRegion(model, endnoteIds, pageNumber: 1, contentWidth, isEndnotePage);
 
-        if (footnoteIds.Count > 0)
+        if (plan.Kind == DocumentNoteRegionKind.Footnotes && plan.Rows.Count > 0)
         {
             // ── Footnote separator rule ────────────────────────────────────────────────────────────
             // Word renders a ~50mm (about 1/3 of the text column) horizontal rule.
             panel.Children.Add(new Border
             {
                 Height = FootnoteSeparatorHeight,
-                Width = noteSeparatorWidth,
+                Width = plan.SeparatorWidthDip,
                 HorizontalAlignment = HorizontalAlignment.Left,
                 Margin = new Thickness(marginLeft, 4, 0, 2),
                 Background = Brushes.Black
             });
 
             // ── Footnote text entries ──────────────────────────────────────────────────────────────
-            foreach (var id in footnoteIds)
+            foreach (var row in plan.Rows)
             {
-                if (!model.Footnotes.TryGetValue(id, out var footnote))
-                    continue;
-
-                var noteText = footnote.PlainText;
-                if (string.IsNullOrEmpty(noteText))
-                    continue;
-
-                panel.Children.Add(BuildNoteTextBlock(id.ToString(
-                    System.Globalization.CultureInfo.InvariantCulture),
-                    noteText, marginLeft, marginRight, textSizePx));
+                panel.Children.Add(BuildNoteTextBlock(
+                    row.Label,
+                    row.Text,
+                    marginLeft,
+                    marginRight,
+                    textSizePx));
             }
         }
 
-        if (endnoteIds.Count > 0)
+        if (plan.Kind == DocumentNoteRegionKind.Endnotes && plan.Rows.Count > 0)
         {
             // ── Endnotes page heading + separator ─────────────────────────────────────────────────
             if (isEndnotePage)
             {
                 panel.Children.Add(new TextBlock
                 {
-                    Text = "Endnotes",
+                    Text = plan.Heading ?? "Endnotes",
                     FontSize = textSizePx + 2,
                     FontWeight = FontWeights.Bold,
                     Margin = new Thickness(marginLeft, 8, marginRight, 2)
@@ -657,18 +657,14 @@ internal sealed class PageBox : Border
             });
 
             // ── Endnote text entries ───────────────────────────────────────────────────────────────
-            foreach (var id in endnoteIds)
+            foreach (var row in plan.Rows)
             {
-                if (!model.Endnotes.TryGetValue(id, out var endnote))
-                    continue;
-
-                var noteText = endnote.PlainText;
-                if (string.IsNullOrEmpty(noteText))
-                    continue;
-
-                panel.Children.Add(BuildNoteTextBlock(id.ToString(
-                    System.Globalization.CultureInfo.InvariantCulture),
-                    noteText, marginLeft, marginRight, textSizePx));
+                panel.Children.Add(BuildNoteTextBlock(
+                    row.Label,
+                    row.Text,
+                    marginLeft,
+                    marginRight,
+                    textSizePx));
             }
         }
 

@@ -1259,7 +1259,10 @@ static RenderTargetBitmap? RenderNoteRegion(
     bool isEndnotePage)
 {
     double textSizePx = 9.0 * (96.0 / 72.0);   // 9 pt footnote text
-    double sepWidth   = isEndnotePage ? pageWDip - marginLeft - marginRight : 60.0;
+    var contentWidth = Math.Max(0, pageWDip - marginLeft - marginRight);
+    var notePlan = footnoteIds.Count > 0
+        ? DocumentNoteRegionPlanner.BuildFootnoteRegion(doc, footnoteIds, pageNumber: 1, contentWidth)
+        : DocumentNoteRegionPlanner.BuildEndnoteRegion(doc, endnoteIds, pageNumber: 1, contentWidth, isEndnotePage);
 
     // Build a StackPanel mirroring PageBox.BuildNoteRegion and measure it.
     var panel = new System.Windows.Controls.StackPanel
@@ -1270,48 +1273,44 @@ static RenderTargetBitmap? RenderNoteRegion(
 
     bool hasContent = false;
 
-    if (footnoteIds.Count > 0)
+    if (notePlan.Kind == DocumentNoteRegionKind.Footnotes && notePlan.Rows.Count > 0)
     {
         // Separator line
         panel.Children.Add(new System.Windows.Controls.Border
         {
             Height                  = 1,
-            Width                   = sepWidth,
+            Width                   = notePlan.SeparatorWidthDip,
             HorizontalAlignment     = System.Windows.HorizontalAlignment.Left,
             Margin                  = new System.Windows.Thickness(marginLeft, 4, 0, 2),
             Background              = System.Windows.Media.Brushes.Black
         });
 
-        foreach (var id in footnoteIds)
+        foreach (var row in notePlan.Rows)
         {
-            if (!doc.Footnotes.TryGetValue(id, out var footnote)) continue;
-            var text = footnote.PlainText;
-            if (string.IsNullOrEmpty(text)) continue;
-
             var tb = new System.Windows.Controls.TextBlock
             {
                 TextWrapping = System.Windows.TextWrapping.Wrap,
                 Margin       = new System.Windows.Thickness(marginLeft, 1, marginRight, 1),
                 FontSize     = textSizePx
             };
-            tb.Inlines.Add(new System.Windows.Documents.Run(id.ToString(System.Globalization.CultureInfo.InvariantCulture))
+            tb.Inlines.Add(new System.Windows.Documents.Run(row.Label)
             {
                 BaselineAlignment = System.Windows.BaselineAlignment.Superscript,
                 FontSize          = textSizePx * 0.75
             });
-            tb.Inlines.Add(new System.Windows.Documents.Run(" " + text));
+            tb.Inlines.Add(new System.Windows.Documents.Run(" " + row.Text));
             panel.Children.Add(tb);
             hasContent = true;
         }
     }
 
-    if (endnoteIds.Count > 0)
+    if (notePlan.Kind == DocumentNoteRegionKind.Endnotes && notePlan.Rows.Count > 0)
     {
         if (isEndnotePage)
         {
             panel.Children.Add(new System.Windows.Controls.TextBlock
             {
-                Text    = "Endnotes",
+                Text    = notePlan.Heading ?? "Endnotes",
                 FontSize = textSizePx + 2,
                 FontWeight = System.Windows.FontWeights.Bold,
                 Margin  = new System.Windows.Thickness(marginLeft, 8, marginRight, 2)
@@ -1325,24 +1324,20 @@ static RenderTargetBitmap? RenderNoteRegion(
             Background = System.Windows.Media.Brushes.Black
         });
 
-        foreach (var id in endnoteIds)
+        foreach (var row in notePlan.Rows)
         {
-            if (!doc.Endnotes.TryGetValue(id, out var endnote)) continue;
-            var text = endnote.PlainText;
-            if (string.IsNullOrEmpty(text)) continue;
-
             var tb = new System.Windows.Controls.TextBlock
             {
                 TextWrapping = System.Windows.TextWrapping.Wrap,
                 Margin       = new System.Windows.Thickness(marginLeft, 1, marginRight, 1),
                 FontSize     = textSizePx
             };
-            tb.Inlines.Add(new System.Windows.Documents.Run(id.ToString(System.Globalization.CultureInfo.InvariantCulture))
+            tb.Inlines.Add(new System.Windows.Documents.Run(row.Label)
             {
                 BaselineAlignment = System.Windows.BaselineAlignment.Superscript,
                 FontSize          = textSizePx * 0.75
             });
-            tb.Inlines.Add(new System.Windows.Documents.Run(" " + text));
+            tb.Inlines.Add(new System.Windows.Documents.Run(" " + row.Text));
             panel.Children.Add(tb);
             hasContent = true;
         }
