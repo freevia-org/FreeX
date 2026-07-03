@@ -343,6 +343,31 @@ public class RibbonEditorCompleteness5BTests
     }
 
     [Fact]
+    public void Cmd_ViewZoom_AppliesSharedZoomStateThroughHostCallback()
+    {
+        var (ed, _) = MakeSession();
+        var state = PresentationViewZoomState.FitToWindow;
+        var reg = FreePRibbonCommands.Build(
+            new RibbonStateStore(),
+            ed,
+            getViewZoomState: () => state,
+            applyViewZoomState: next => state = next);
+
+        Exec(
+            reg,
+            PresentationViewZoomPlanner.ZoomCommandId,
+            RibbonCommandContext.ForSelectedValue("150%"));
+
+        Assert.Equal(PresentationViewZoomMode.Percent, state.Mode);
+        Assert.Equal(150, state.ZoomPercent);
+
+        Exec(reg, PresentationViewZoomPlanner.FitToWindowCommandId);
+
+        Assert.Equal(PresentationViewZoomMode.FitToWindow, state.Mode);
+        Assert.Equal(150, state.ZoomPercent);
+    }
+
+    [Fact]
     public void Cmd_SlideNumber_WithoutHostCallback_AppliesSharedPlannerDefault()
     {
         var (ed, pres) = MakeSession();
@@ -582,6 +607,8 @@ public class RibbonEditorCompleteness5BTests
     [InlineData("freep.header-footer")]
     [InlineData("freep.date-time")]
     [InlineData("freep.slide-number")]
+    [InlineData("freep.view.zoom")]
+    [InlineData("freep.view.fit-to-window")]
     public void AllWave5BCommandIds_AreRegistered(string commandId)
     {
         var (ed, _) = MakeSession();

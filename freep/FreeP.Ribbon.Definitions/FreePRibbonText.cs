@@ -206,6 +206,9 @@ internal static class FreePRibbonText
     public static RibbonText ViewShowGroup { get; } = new("Ribbon_Group_ViewShow_Label", "Ribbon_Group_ViewShow_KeyTip");
     public static RibbonText ViewGridlinesCommand { get; } = new("Ribbon_Command_ViewGridlines_Label", "Ribbon_Command_ViewGridlines_KeyTip");
     public static RibbonText ViewGuidesCommand { get; } = new("Ribbon_Command_ViewGuides_Label", "Ribbon_Command_ViewGuides_KeyTip");
+    public static RibbonText ViewZoomGroup { get; } = new("Ribbon_Group_ViewZoom_Label", "Ribbon_Group_ViewZoom_KeyTip");
+    public static RibbonText ViewZoomCommand { get; } = new("Ribbon_Command_ViewZoom_Label", "Ribbon_Command_ViewZoom_KeyTip");
+    public static RibbonText ViewFitToWindowCommand { get; } = new("Ribbon_Command_ViewFitToWindow_Label", "Ribbon_Command_ViewFitToWindow_KeyTip");
 
     private static string Get(string key) => Loc.Get(key);
 }

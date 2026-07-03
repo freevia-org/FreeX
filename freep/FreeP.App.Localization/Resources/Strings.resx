@@ -895,6 +895,24 @@
   <data name="Ribbon_Command_ViewGuides_KeyTip" xml:space="preserve">
     <value>U</value>
   </data>
+  <data name="Ribbon_Group_ViewZoom_Label" xml:space="preserve">
+    <value>Zoom</value>
+  </data>
+  <data name="Ribbon_Group_ViewZoom_KeyTip" xml:space="preserve">
+    <value>Z</value>
+  </data>
+  <data name="Ribbon_Command_ViewZoom_Label" xml:space="preserve">
+    <value>Zoom...</value>
+  </data>
+  <data name="Ribbon_Command_ViewZoom_KeyTip" xml:space="preserve">
+    <value>Q</value>
+  </data>
+  <data name="Ribbon_Command_ViewFitToWindow_Label" xml:space="preserve">
+    <value>Fit to Window</value>
+  </data>
+  <data name="Ribbon_Command_ViewFitToWindow_KeyTip" xml:space="preserve">
+    <value>F</value>
+  </data>
   <data name="File_OpenPresentationPickerTitle" xml:space="preserve">
     <value>Open Presentation</value>
   </data>

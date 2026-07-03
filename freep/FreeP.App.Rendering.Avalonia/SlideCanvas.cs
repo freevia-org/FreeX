@@ -86,6 +86,15 @@ public sealed class SlideCanvas : Control
     private IReadOnlyList<DrawOp>? _cachedOps;
     private double _slideWidthDip;
     private double _slideHeightDip;
+    private PresentationViewZoomState _viewZoomState = PresentationViewZoomState.FitToWindow;
+
+    public PresentationViewZoomState ViewZoomState => _viewZoomState;
+
+    public void ApplyViewZoomState(PresentationViewZoomState state)
+    {
+        _viewZoomState = state;
+        InvalidateVisual();
+    }
 
     // ── Slideshow entrance-animation suppression ──────────────────────────────
 
@@ -138,7 +147,7 @@ public sealed class SlideCanvas : Control
         if (renderW <= 0 || renderH <= 0) return;
 
         // Expose the slide→screen transform so the editing layer can use it.
-        CurrentTransform = SlideTransformCore.Compute(renderW, renderH, _slideWidthDip, _slideHeightDip);
+        CurrentTransform = ComputeViewTransform(renderW, renderH, _slideWidthDip, _slideHeightDip);
 
         var matrix = Matrix.CreateScale(CurrentTransform.Scale, CurrentTransform.Scale)
             * Matrix.CreateTranslation(CurrentTransform.OffsetX, CurrentTransform.OffsetY);
@@ -146,6 +155,23 @@ public sealed class SlideCanvas : Control
 
         foreach (var op in _cachedOps)
             RenderOp(context, op);
+    }
+
+    private SlideTransformCore ComputeViewTransform(
+        double renderW,
+        double renderH,
+        double slideWidthDip,
+        double slideHeightDip)
+    {
+        var fit = SlideTransformCore.Compute(renderW, renderH, slideWidthDip, slideHeightDip);
+        var multiplier = PresentationViewZoomPlanner.StageScaleMultiplierFor(_viewZoomState);
+        if (Math.Abs(multiplier - 1.0) < 0.0001)
+            return fit;
+
+        var scale = fit.Scale * multiplier;
+        var offsetX = (renderW - slideWidthDip * scale) / 2.0;
+        var offsetY = (renderH - slideHeightDip * scale) / 2.0;
+        return new SlideTransformCore(scale, offsetX, offsetY, slideWidthDip, slideHeightDip);
     }
 
     private void RenderOp(DrawingContext dc, DrawOp op)

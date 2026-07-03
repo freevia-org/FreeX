@@ -92,7 +92,9 @@ internal static class FreePRibbonCommands
         Action?             onTablePicker      = null,
         Action<HeaderFooterCommandFocus>? onHeaderFooter = null,
         Func<PresentationViewShowState>? getViewShowState = null,
-        Action<PresentationViewShowState>? applyViewShowState = null)
+        Action<PresentationViewShowState>? applyViewShowState = null,
+        Func<PresentationViewZoomState>? getViewZoomState = null,
+        Action<PresentationViewZoomState>? applyViewZoomState = null)
     {
         var registry = new RibbonCommandRegistry();
 
@@ -322,6 +324,7 @@ internal static class FreePRibbonCommands
             onResolveComment,
             onReopenComment);
         RegisterViewShowCommands(registry, stateStore, getViewShowState, applyViewShowState);
+        RegisterViewZoomCommands(registry, getViewZoomState, applyViewZoomState);
 
         return registry;
     }
@@ -528,6 +531,30 @@ internal static class FreePRibbonCommands
                     plan,
                     getViewShowState,
                     applyViewShowState));
+        }
+    }
+
+    private static void RegisterViewZoomCommands(
+        RibbonCommandRegistry registry,
+        Func<PresentationViewZoomState>? getViewZoomState,
+        Action<PresentationViewZoomState>? applyViewZoomState)
+    {
+        var localState = PresentationViewZoomState.FitToWindow;
+        PresentationViewZoomState CurrentState() => getViewZoomState?.Invoke() ?? localState;
+
+        foreach (var plan in PresentationViewZoomPlanner.BuiltInPlans)
+        {
+            registry.Register(
+                plan.CommandId,
+                new ContextRibbonCommand(ctx =>
+                {
+                    var result = PresentationViewZoomPlanner.Execute(
+                        CurrentState(),
+                        plan,
+                        ctx.SelectedValue);
+                    localState = result.State;
+                    applyViewZoomState?.Invoke(result.State);
+                }));
         }
     }
 
