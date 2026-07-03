@@ -29,6 +29,20 @@ function Invoke-DotNetRun([string]$ProjectPath, [string[]]$ToolArgs) {
     }
 }
 
+function Invoke-DotNetBuild([string]$ProjectPath) {
+    & dotnet build $ProjectPath --configuration $Configuration
+    if ($LASTEXITCODE -ne 0) {
+        throw "dotnet build failed for $ProjectPath with exit code $LASTEXITCODE"
+    }
+}
+
+function Invoke-DotNetRunNoBuild([string]$ProjectPath, [string[]]$ToolArgs) {
+    & dotnet run --no-restore --no-build --project $ProjectPath --configuration $Configuration -- @ToolArgs
+    if ($LASTEXITCODE -ne 0) {
+        throw "dotnet run --no-build failed for $ProjectPath with exit code $LASTEXITCODE"
+    }
+}
+
 $repoRoot = Resolve-FullPath (Join-Path $PSScriptRoot "..")
 $runRootFull = Resolve-FullPath $RunRoot
 $fixtureDir = Join-Path $runRootFull "fixtures"
@@ -47,8 +61,9 @@ $wordExportScript = Join-Path $repoRoot "tools\FreeW.RenderCompare\Export-WordPd
 New-Item -ItemType Directory -Force -Path $runRootFull, $fixtureDir, $wpfDir, $avaloniaDir, $wordPdfDir, $wordBaselineDir | Out-Null
 
 if (-not $SkipEvidenceRender) {
-    Invoke-DotNetRun $fidelityRenderProject @("--generate-f2-corpus", $fixtureDir)
-    Invoke-DotNetRun $fidelityRenderProject @($fixtureDir, $wpfDir, $MaxPagesPerDocument.ToString([Globalization.CultureInfo]::InvariantCulture), "--composite")
+    Invoke-DotNetBuild $fidelityRenderProject
+    Invoke-DotNetRunNoBuild $fidelityRenderProject @("--generate-f2-corpus", $fixtureDir)
+    Invoke-DotNetRunNoBuild $fidelityRenderProject @($fixtureDir, $wpfDir, $MaxPagesPerDocument.ToString([Globalization.CultureInfo]::InvariantCulture), "--composite", "--software-fallback")
     Invoke-DotNetRun $pageLayoutShotProject @($avaloniaDir)
 }
 

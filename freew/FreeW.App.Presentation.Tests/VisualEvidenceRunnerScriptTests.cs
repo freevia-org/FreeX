@@ -5,6 +5,20 @@ namespace FreeW.App.Presentation.Tests;
 public sealed class VisualEvidenceRunnerScriptTests
 {
     [Fact]
+    public void WordBaselineEvidenceRunner_UsesSoftwareFallbackForWpfEvidenceRender()
+    {
+        var source = File.ReadAllText(RepositoryFile(
+            "tools",
+            "Run-FreeWWordBaselineEvidence.ps1"));
+
+        source.Should().Contain("FreeW.FidelityRender");
+        source.Should().Contain("\"--composite\", \"--software-fallback\"");
+        source.Should().Contain("-AllowMissingWord");
+        source.Should().Contain("--word-baseline-unavailable-reason");
+        source.Should().Contain("FreeW.VisualEvidenceSummary");
+    }
+
+    [Fact]
     public void CombinedVisualEvidenceRunner_ForwardsOptionalWordBaselineComparison()
     {
         var source = File.ReadAllText(RepositoryFile(
