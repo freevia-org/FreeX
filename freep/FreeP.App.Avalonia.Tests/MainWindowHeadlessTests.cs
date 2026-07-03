@@ -2243,7 +2243,14 @@ public sealed class MainWindowHeadlessTests
                 Kind = SlideShapeKind.Picture,
                 Picture = new ImagePart(),
             };
+            var linkedText = new SlideShape
+            {
+                Id = 909,
+                Name = "Reference text",
+                TextBody = MakeLinkedTextBody("Project notes", new Hyperlink { Url = "https://example.test/notes" })
+            };
             firstSlide.Shapes.Add(shape);
+            firstSlide.Shapes.Add(linkedText);
             window.Editor.InsertSlide();
             window.Editor.CurrentSlide!.Title = string.Empty;
             window.Editor.SelectSlide(0);
@@ -2254,11 +2261,11 @@ public sealed class MainWindowHeadlessTests
             selectedRowCount = window.AccessibilityCheckerPaneSelectedRowCount;
             heading = window.AccessibilityCheckerPaneHeading;
 
-            selectedTitle = window.SelectAccessibilityCheckerRow(1);
+            selectedTitle = window.SelectAccessibilityCheckerRow(2);
             titleSlideIndex = window.Editor.CurrentSlideIndex;
             titleSelectionCount = window.Editor.SelectedShapeIds.Count;
 
-            actionedTitle = window.ApplyAccessibilityCheckerRowAction(1);
+            actionedTitle = window.ApplyAccessibilityCheckerRowAction(2);
             titleAfterAction = window.Editor.CurrentSlide?.Title ?? string.Empty;
             titleMutation = window.LastSlideTitleMutationPlan;
             dirtyAfterTitle = window.IsDirty;
@@ -2272,13 +2279,23 @@ public sealed class MainWindowHeadlessTests
 
         if (!ran) return;
         paneVisible.Should().BeTrue();
-        rowCount.Should().Be(2);
+        rowCount.Should().Be(3);
         selectedRowCount.Should().Be(1);
-        heading.Should().Be("Accessibility - 2 issues");
+        heading.Should().Be("Accessibility - 3 issues");
         opened.Should().NotBeNull();
-        opened!.Rows.Select(row => row.Title).Should().Equal("Alt text missing", "Missing slide title");
+        opened!.Rows.Select(row => row.Title).Should().Equal(
+            "Alt text missing",
+            "Hyperlink ScreenTip missing",
+            "Missing slide title");
         opened.Rows[0].CommandHint.Should().Be(PresentationReviewWorkflowPlanner.AltTextCommandId);
         opened.Rows[1].Should().Match<PresentationAccessibilityCheckerRowPlan>(row =>
+            row.Category == "Hyperlink" &&
+            row.ShapeId == 909 &&
+            row.ActionLabel == "Edit Hyperlink" &&
+            row.CommandHint == PresentationReviewWorkflowPlanner.InsertLinkCommandId &&
+            row.ShouldNavigateToSlide &&
+            row.ShouldSelectShape);
+        opened.Rows[2].Should().Match<PresentationAccessibilityCheckerRowPlan>(row =>
             row.Category == "Slide title" &&
             row.ActionLabel == "Set Slide Title" &&
             row.CommandHint == PresentationReviewWorkflowPlanner.SetSlideTitleCommandId &&
@@ -2289,7 +2306,9 @@ public sealed class MainWindowHeadlessTests
         titleSlideIndex.Should().Be(1);
         titleSelectionCount.Should().Be(0);
         actionedTitle.Should().NotBeNull();
-        actionedTitle!.Rows.Select(row => row.Title).Should().Equal("Alt text missing");
+        actionedTitle!.Rows.Select(row => row.Title).Should().Equal(
+            "Alt text missing",
+            "Hyperlink ScreenTip missing");
         titleAfterAction.Should().Be("Slide 2");
         titleMutation.Should().Be(new PresentationSlideTitleMutationPlan(
             true,
@@ -3155,6 +3174,15 @@ public sealed class MainWindowHeadlessTests
             body.Paragraphs.Add(paragraph);
         }
 
+        return body;
+    }
+
+    private static TextBody MakeLinkedTextBody(string text, Hyperlink hyperlink)
+    {
+        var body = new TextBody();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run { Text = text, Hyperlink = hyperlink });
+        body.Paragraphs.Add(paragraph);
         return body;
     }
 }
