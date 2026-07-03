@@ -272,6 +272,71 @@ public sealed class ReviewWorkflowAdapterTests
     }
 
     [StaFact]
+    public void MainWindow_AccessibilityCheckerTableHeaderAction_UsesSharedMutationAndRefreshesPane()
+    {
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
+        try
+        {
+            var table = new SlideShape
+            {
+                Id = 601,
+                Name = "Results table",
+                Kind = SlideShapeKind.Table,
+                Table = new TableShape
+                {
+                    Rows =
+                    {
+                        new TableRow
+                        {
+                            Cells =
+                            {
+                                new TableCell { TextBody = MakeTextBody("Region") },
+                                new TableCell { TextBody = MakeTextBody("Revenue") }
+                            }
+                        },
+                        new TableRow
+                        {
+                            Cells =
+                            {
+                                new TableCell { TextBody = MakeTextBody("North") },
+                                new TableCell { TextBody = MakeTextBody("$42K") }
+                            }
+                        }
+                    }
+                }
+            };
+            window.Editor.CurrentSlide!.Shapes.Add(table);
+
+            var opened = window.ShowAccessibilityCheckerPane();
+            var tableRow = opened.Rows.Single(row => row.Title == "Table header row missing");
+
+            tableRow.ActionLabel.Should().Be("Set Header Row");
+            tableRow.CommandHint.Should().Be(PresentationReviewWorkflowPlanner.SetTableHeaderRowCommandId);
+
+            var actioned = window.ApplyAccessibilityCheckerRowAction(tableRow.RowIndex);
+
+            window.LastTableHeaderRowMutationPlan.Should().Be(new PresentationTableHeaderRowMutationPlan(
+                true,
+                0,
+                table.Id,
+                null));
+            table.Table!.Flags.FirstRow.Should().BeTrue();
+            actioned.Rows.Should().NotContain(row => row.Title == "Table header row missing");
+            window.LastAccessibilitySummaryPlan!.Issues.Should().NotContain(issue =>
+                issue.Title == "Table header row missing");
+            window.Editor.SelectedShapeIds.Should().Equal(table.Id);
+            window.IsDirty.Should().BeTrue();
+
+            window.Editor.Undo();
+            table.Table.Flags.FirstRow.Should().BeFalse();
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [StaFact]
     public void MainWindow_ApplyProofingCorrection_UsesSharedMutationAndRefreshesPlans()
     {
         var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);

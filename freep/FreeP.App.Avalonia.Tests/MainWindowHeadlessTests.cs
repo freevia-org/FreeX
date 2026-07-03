@@ -2495,6 +2495,78 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task Accessibility_checker_table_header_action_uses_shared_mutation_and_refreshes_pane()
+    {
+        PresentationAccessibilityCheckerPanePlan? actioned = null;
+        PresentationTableHeaderRowMutationPlan? mutation = null;
+        var actionLabel = string.Empty;
+        var commandHint = string.Empty;
+        var headerAfterAction = false;
+        var headerAfterUndo = true;
+        uint[] selection = [];
+        var dirty = false;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var table = new SlideShape
+            {
+                Id = 778,
+                Name = "Results table",
+                Kind = SlideShapeKind.Table,
+                Table = new TableShape
+                {
+                    Rows =
+                    {
+                        new TableRow
+                        {
+                            Cells =
+                            {
+                                new TableCell { TextBody = MakeTextBody("Region") },
+                                new TableCell { TextBody = MakeTextBody("Revenue") }
+                            }
+                        },
+                        new TableRow
+                        {
+                            Cells =
+                            {
+                                new TableCell { TextBody = MakeTextBody("North") },
+                                new TableCell { TextBody = MakeTextBody("$42K") }
+                            }
+                        }
+                    }
+                }
+            };
+            window.Editor.CurrentSlide!.Shapes.Add(table);
+
+            var opened = window.ShowAccessibilityCheckerPane();
+            var tableRow = opened.Rows.Single(row => row.Title == "Table header row missing");
+            actionLabel = tableRow.ActionLabel;
+            commandHint = tableRow.CommandHint ?? string.Empty;
+
+            actioned = window.ApplyAccessibilityCheckerRowAction(tableRow.RowIndex);
+            mutation = window.LastTableHeaderRowMutationPlan;
+            headerAfterAction = table.Table!.Flags.FirstRow;
+            selection = window.Editor.SelectedShapeIds.ToArray();
+            dirty = window.IsDirty;
+
+            window.Editor.Undo();
+            headerAfterUndo = table.Table.Flags.FirstRow;
+        });
+
+        if (!ran) return;
+        actionLabel.Should().Be("Set Header Row");
+        commandHint.Should().Be(PresentationReviewWorkflowPlanner.SetTableHeaderRowCommandId);
+        mutation.Should().Be(new PresentationTableHeaderRowMutationPlan(true, 0, 778, null));
+        headerAfterAction.Should().BeTrue();
+        actioned.Should().NotBeNull();
+        actioned!.Rows.Should().NotContain(row => row.Title == "Table header row missing");
+        selection.Should().Equal(778u);
+        dirty.Should().BeTrue();
+        headerAfterUndo.Should().BeFalse();
+    }
+
+    [Fact]
     public async Task Review_comment_add_edit_routes_through_shared_mutation_plan()
     {
         SlideComment? addedComment = null;

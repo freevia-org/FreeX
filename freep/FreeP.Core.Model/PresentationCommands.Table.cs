@@ -24,6 +24,44 @@ namespace FreeP.Core.Model;
 
 // Shared table clone/grid helpers live in PresentationModelCloneHelper.
 
+public sealed class SetTableHeaderRowCommand : IPresentationCommand
+{
+    private readonly int _slideIndex;
+    private readonly uint _shapeId;
+    private readonly bool _newValue;
+    private bool _oldValue;
+
+    public SetTableHeaderRowCommand(int slideIndex, uint shapeId, bool newValue)
+    {
+        _slideIndex = slideIndex;
+        _shapeId = shapeId;
+        _newValue = newValue;
+    }
+
+    public string Label => _newValue ? "Set Header Row" : "Clear Header Row";
+
+    public bool HasEffect(Presentation presentation)
+    {
+        var table = PresentationModelCloneHelper.FindTable(presentation, _slideIndex, _shapeId);
+        return table is not null && table.Flags.FirstRow != _newValue;
+    }
+
+    public void Apply(Presentation presentation)
+    {
+        var table = PresentationModelCloneHelper.FindTable(presentation, _slideIndex, _shapeId);
+        if (table is null) return;
+        _oldValue = table.Flags.FirstRow;
+        table.Flags.FirstRow = _newValue;
+    }
+
+    public void Revert(Presentation presentation)
+    {
+        var table = PresentationModelCloneHelper.FindTable(presentation, _slideIndex, _shapeId);
+        if (table is null) return;
+        table.Flags.FirstRow = _oldValue;
+    }
+}
+
 // ════════════════════════════════════════════════════════════════════════════════
 // 1. SetTableCellTextCommand
 // ════════════════════════════════════════════════════════════════════════════════

@@ -234,6 +234,21 @@ public sealed class TableEditCommandTests
     }
 
     [Fact]
+    public void SetTableHeaderRowCommand_ApplyAndUndo_TogglesFirstRowFlag()
+    {
+        var (p, bus, shape) = MakeTable();
+
+        bus.Execute(new SetTableHeaderRowCommand(0, shape.Id, true));
+
+        shape.Table!.Flags.FirstRow.Should().BeTrue();
+        bus.CanUndo.Should().BeTrue();
+
+        bus.Undo();
+
+        shape.Table.Flags.FirstRow.Should().BeFalse();
+    }
+
+    [Fact]
     public void SetTableCellText_Revert_RestoresPreviousText()
     {
         var (p, bus, shape) = MakeTableWithText();
