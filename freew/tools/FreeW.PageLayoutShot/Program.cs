@@ -78,6 +78,8 @@ static int RenderAll(string outDir)
     var trackedChangesPath = VisualEvidenceOutputPath(outDir, "f2-tracked-changes", 1);
     var commentsPath = VisualEvidenceOutputPath(outDir, "f2-comments", 1);
     var tableLayoutPath = VisualEvidenceOutputPath(outDir, "table-layout-complex", 1);
+    var tablePaginationP1Path = VisualEvidenceOutputPath(outDir, "table-pagination-repeat-header", 1);
+    var tablePaginationP2Path = VisualEvidenceOutputPath(outDir, "table-pagination-repeat-header", 2);
     var drawingObjectsPath = VisualEvidenceOutputPath(outDir, "drawing-objects-complex", 1);
     var chartSmartArtPath = VisualEvidenceOutputPath(outDir, "chart-smartart-complex", 1);
     var wordArtWatermarkPath = VisualEvidenceOutputPath(outDir, "wordart-watermark-stress", 1);
@@ -229,6 +231,27 @@ static int RenderAll(string outDir)
         scenarioId: "table-layout-complex",
         evidence: evidence,
         documentFactory: FreeWVisualEvidenceDocumentFactory.BuildComplexTableLayoutDocument);
+    if (rc != 0) return rc;
+
+    rc = RenderMode(DocumentViewMode.PrintLayout, tablePaginationP1Path,
+        width: 960, height: 900,
+        label: "Table Pagination p1",
+        scenarioId: "table-pagination-repeat-header",
+        evidence: evidence,
+        documentFactory: FreeWVisualEvidenceDocumentFactory.BuildTablePaginationRepeatHeaderDocument,
+        pageNumber: 1,
+        pageCount: 2);
+    if (rc != 0) return rc;
+
+    rc = RenderMode(DocumentViewMode.PrintLayout, tablePaginationP2Path,
+        width: 960, height: 900,
+        label: "Table Pagination p2",
+        scenarioId: "table-pagination-repeat-header",
+        evidence: evidence,
+        documentFactory: FreeWVisualEvidenceDocumentFactory.BuildTablePaginationRepeatHeaderDocument,
+        pageNumber: 2,
+        pageCount: 2,
+        viewportOffsetY: 550);
     if (rc != 0) return rc;
 
     rc = RenderMode(DocumentViewMode.PrintLayout, drawingObjectsPath,

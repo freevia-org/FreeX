@@ -30,6 +30,8 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
         source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildCommentsReviewDocument");
         source.Should().Contain("table-layout-complex.docx");
         source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildComplexTableLayoutDocument");
+        source.Should().Contain("table-pagination-repeat-header.docx");
+        source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildTablePaginationRepeatHeaderDocument");
         source.Should().Contain("drawing-objects-complex.docx");
         source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildDrawingObjectsCompositionDocument");
         source.Should().Contain("chart-smartart-complex.docx");
