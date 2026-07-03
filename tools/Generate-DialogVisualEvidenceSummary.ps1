@@ -447,8 +447,10 @@ function Test-StalePromotedExpectedSizeEvidence {
 
     $wpfClassification = [string]$Row.wpf.provenance.classification
     $avaloniaClassification = [string]$Row.avalonia.provenance.classification
-    return $wpfClassification.StartsWith("promoted", [System.StringComparison]::OrdinalIgnoreCase) -or
-        $avaloniaClassification.StartsWith("promoted", [System.StringComparison]::OrdinalIgnoreCase)
+    $wpfMismatch = -not $Row.comparison.wpfExpectedSizeMatch
+    $avaloniaMismatch = -not $Row.comparison.avaloniaExpectedSizeMatch
+    return ($wpfMismatch -and $wpfClassification.StartsWith("promoted", [System.StringComparison]::OrdinalIgnoreCase)) -or
+        ($avaloniaMismatch -and $avaloniaClassification.StartsWith("promoted", [System.StringComparison]::OrdinalIgnoreCase))
 }
 
 function Get-StalePromotedExpectedSizeNextAction {
@@ -477,6 +479,32 @@ function Get-ExpectedEvidenceSize {
             width = 640
             height = 420
             source = "WorkbookFileDialogSurfacePlanner.Width/Height"
+        }
+    }
+
+    if ($Shell -eq "wpf" -or $Shell -eq "avalonia") {
+        switch ($SurfaceId) {
+            "dialog.GoToSpecial" {
+                return [pscustomobject]@{
+                    width = 430
+                    height = 438
+                    source = "GoToSpecialDialogPlanner.Width/Height"
+                }
+            }
+            "dialog.InsertHyperlink" {
+                return [pscustomobject]@{
+                    width = 560
+                    height = 300
+                    source = "HyperlinkDialogPlanner.Width/Height"
+                }
+            }
+            "dialog.ProtectSheet" {
+                return [pscustomobject]@{
+                    width = 430
+                    height = 540
+                    source = "ProtectionDialogPlanner.ProtectSheetWidth/Height"
+                }
+            }
         }
     }
 
