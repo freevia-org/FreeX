@@ -1,5 +1,6 @@
 using Free.Shared.IO;
 using Free.Shared.Drawing;
+using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor;
 
@@ -33,6 +34,12 @@ public enum PresentationVideoQualityKind
     FullHd,
     Hd,
     Standard,
+}
+
+public enum PresentationVideoTimingSource
+{
+    DefaultDuration,
+    RecordedTransitionAdvance,
 }
 
 public sealed record PresentationExportFormatDescriptor(
@@ -119,6 +126,26 @@ public sealed record PresentationVideoQualityDescriptor(
     int HeightPx,
     int PixelsPerSecondHint);
 
+public sealed record PresentationVideoStoryboardSlideSegment(
+    int SlideIndex,
+    int SlideNumber,
+    string SlideTitle,
+    TimeSpan StartTime,
+    TimeSpan Duration,
+    PresentationVideoTimingSource TimingSource);
+
+public sealed record PresentationVideoStoryboardPlan(
+    PresentationSlideRangePlan SlideRange,
+    IReadOnlyList<PresentationVideoStoryboardSlideSegment> Segments,
+    PresentationVideoQualityDescriptor Quality,
+    int OutputWidthPx,
+    int OutputHeightPx,
+    int PixelsPerSecondHint,
+    double FrameRateHint,
+    bool UseRecordedTimings,
+    bool IncludeNarration,
+    TimeSpan TotalDuration);
+
 public sealed record PresentationVideoExportRequest(
     PresentationSlideRangeRequest? SlideRange = null,
     PresentationVideoQualityKind Quality = PresentationVideoQualityKind.FullHd,
@@ -138,6 +165,7 @@ public sealed record PresentationVideoExportPlan(
     bool UseRecordedTimings,
     bool IncludeNarration,
     TimeSpan EstimatedDuration,
+    PresentationVideoStoryboardPlan Storyboard,
     IReadOnlyList<PresentationVideoQualityDescriptor> QualityOptions,
     bool IsImplemented,
     bool CanExecute,
@@ -382,14 +410,54 @@ public static class PresentationExportPlanner
         PresentationVideoExportRequest? request,
         int slideCount)
     {
+        return BuildVideoExportPlanCore(request, Math.Max(0, slideCount), slides: null);
+    }
+
+    public static PresentationVideoExportPlan BuildVideoExportPlan(
+        PresentationVideoExportRequest? request,
+        Presentation presentation)
+    {
+        ArgumentNullException.ThrowIfNull(presentation);
+        return BuildVideoExportPlanCore(request, presentation.Slides.Count, presentation.Slides);
+    }
+
+    public static PresentationVideoStoryboardPlan BuildVideoStoryboardPlan(
+        PresentationVideoExportRequest? request,
+        int slideCount)
+    {
+        request ??= new PresentationVideoExportRequest();
+        var range = BuildSlideRangePlan(request.SlideRange, slideCount);
+        var quality = ResolveVideoQuality(request.Quality);
+        var secondsPerSlide = NormalizeSecondsPerSlide(request.SecondsPerSlide);
+
+        return BuildVideoStoryboardPlan(request, range, quality, secondsPerSlide, slides: null);
+    }
+
+    public static PresentationVideoStoryboardPlan BuildVideoStoryboardPlan(
+        PresentationVideoExportRequest? request,
+        Presentation presentation)
+    {
+        ArgumentNullException.ThrowIfNull(presentation);
+        request ??= new PresentationVideoExportRequest();
+        var range = BuildSlideRangePlan(request.SlideRange, presentation.Slides.Count);
+        var quality = ResolveVideoQuality(request.Quality);
+        var secondsPerSlide = NormalizeSecondsPerSlide(request.SecondsPerSlide);
+
+        return BuildVideoStoryboardPlan(request, range, quality, secondsPerSlide, presentation.Slides);
+    }
+
+    private static PresentationVideoExportPlan BuildVideoExportPlanCore(
+        PresentationVideoExportRequest? request,
+        int slideCount,
+        IReadOnlyList<Slide>? slides)
+    {
         request ??= new PresentationVideoExportRequest();
         var descriptor = BuildFormatDescriptors().Single(d => d.Format == PresentationExportFormat.Video);
         var range = BuildSlideRangePlan(request.SlideRange, slideCount);
         var qualityOptions = BuildVideoQualityDescriptors();
-        var quality = qualityOptions.SingleOrDefault(option => option.Quality == request.Quality)
-            ?? qualityOptions.Single(option => option.Quality == PresentationVideoQualityKind.FullHd);
+        var quality = ResolveVideoQuality(request.Quality, qualityOptions);
         var secondsPerSlide = NormalizeSecondsPerSlide(request.SecondsPerSlide);
-        var estimatedDuration = TimeSpan.FromSeconds(range.SlideNumbers.Count * secondsPerSlide);
+        var storyboard = BuildVideoStoryboardPlan(request, range, quality, secondsPerSlide, slides);
         var disabledReason = range.SlideNumbers.Count == 0
             ? "Video export requires at least one slide."
             : VideoExportDeferredMessage;
@@ -405,7 +473,8 @@ public static class PresentationExportPlanner
             secondsPerSlide,
             request.UseRecordedTimings,
             request.IncludeNarration,
-            estimatedDuration,
+            storyboard.TotalDuration,
+            storyboard,
             qualityOptions,
             descriptor.IsImplemented,
             CanExecute: descriptor.IsImplemented && range.SlideNumbers.Count > 0,
@@ -419,6 +488,83 @@ public static class PresentationExportPlanner
         new(PresentationVideoQualityKind.Hd, "HD (720p)", 1280, 720, 30),
         new(PresentationVideoQualityKind.Standard, "Standard (480p)", 852, 480, 24),
     ];
+
+    private static PresentationVideoQualityDescriptor ResolveVideoQuality(
+        PresentationVideoQualityKind requestedQuality,
+        IReadOnlyList<PresentationVideoQualityDescriptor>? qualityOptions = null)
+    {
+        qualityOptions ??= BuildVideoQualityDescriptors();
+        return qualityOptions.SingleOrDefault(option => option.Quality == requestedQuality)
+            ?? qualityOptions.Single(option => option.Quality == PresentationVideoQualityKind.FullHd);
+    }
+
+    private static PresentationVideoStoryboardPlan BuildVideoStoryboardPlan(
+        PresentationVideoExportRequest request,
+        PresentationSlideRangePlan range,
+        PresentationVideoQualityDescriptor quality,
+        double secondsPerSlide,
+        IReadOnlyList<Slide>? slides)
+    {
+        var segments = new List<PresentationVideoStoryboardSlideSegment>(range.SlideNumbers.Count);
+        var cursor = TimeSpan.Zero;
+        foreach (var slideNumber in range.SlideNumbers)
+        {
+            var slideIndex = slideNumber - 1;
+            var slide = slides is not null && slideIndex >= 0 && slideIndex < slides.Count
+                ? slides[slideIndex]
+                : null;
+            var (duration, timingSource) = ResolveVideoSegmentDuration(
+                slide,
+                request.UseRecordedTimings,
+                secondsPerSlide);
+
+            segments.Add(new PresentationVideoStoryboardSlideSegment(
+                slideIndex,
+                slideNumber,
+                NormalizeSlideTitle(slide, slideNumber),
+                cursor,
+                duration,
+                timingSource));
+            cursor += duration;
+        }
+
+        return new PresentationVideoStoryboardPlan(
+            range,
+            segments,
+            quality,
+            quality.WidthPx,
+            quality.HeightPx,
+            quality.PixelsPerSecondHint,
+            quality.PixelsPerSecondHint,
+            request.UseRecordedTimings,
+            request.IncludeNarration,
+            cursor);
+    }
+
+    private static (TimeSpan Duration, PresentationVideoTimingSource TimingSource) ResolveVideoSegmentDuration(
+        Slide? slide,
+        bool useRecordedTimings,
+        double secondsPerSlide)
+    {
+        if (useRecordedTimings &&
+            slide?.Transition?.AdvanceAfterMs is int recordedAdvanceMs &&
+            recordedAdvanceMs > 0)
+        {
+            return (
+                TimeSpan.FromMilliseconds(recordedAdvanceMs),
+                PresentationVideoTimingSource.RecordedTransitionAdvance);
+        }
+
+        return (
+            TimeSpan.FromSeconds(secondsPerSlide),
+            PresentationVideoTimingSource.DefaultDuration);
+    }
+
+    private static string NormalizeSlideTitle(Slide? slide, int slideNumber)
+    {
+        var title = slide?.Title?.Trim();
+        return string.IsNullOrEmpty(title) ? $"Slide {slideNumber}" : title;
+    }
 
     public static PresentationSlideRangePlan BuildSlideRangePlan(
         PresentationSlideRangeRequest? request,

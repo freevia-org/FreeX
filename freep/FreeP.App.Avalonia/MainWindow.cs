@@ -1718,7 +1718,7 @@ public sealed class MainWindow : Window
 
     internal PresentationVideoExportPlan RefreshVideoExportPlan(PresentationVideoExportRequest? request = null)
     {
-        LastVideoExportPlan = PresentationExportPlanner.BuildVideoExportPlan(request, _presentation.Slides.Count);
+        LastVideoExportPlan = PresentationExportPlanner.BuildVideoExportPlan(request, _presentation);
         _statusText.Text = LastVideoExportPlan.DisabledReason ?? "Video export planned";
         return LastVideoExportPlan;
     }

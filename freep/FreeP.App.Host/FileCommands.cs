@@ -247,7 +247,7 @@ internal sealed class FileCommands
     public PresentationVideoExportPlan BuildVideoExportPlan(PresentationVideoExportRequest? request = null)
     {
         var presentation = _getModel();
-        return PresentationExportPlanner.BuildVideoExportPlan(request, presentation.Slides.Count);
+        return PresentationExportPlanner.BuildVideoExportPlan(request, presentation);
     }
 
     /// <summary>Save-before-close gate, called from the window's Closing handler.</summary>

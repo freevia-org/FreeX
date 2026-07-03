@@ -909,6 +909,15 @@ public sealed class ReviewWorkflowAdapterTests
             plan.Quality.Quality.Should().Be(PresentationVideoQualityKind.Standard);
             plan.Quality.WidthPx.Should().Be(852);
             plan.EstimatedDuration.Should().Be(TimeSpan.FromSeconds(16));
+            plan.Storyboard.SlideRange.SlideNumbers.Should().Equal(1, 2);
+            plan.Storyboard.Segments.Select(segment => segment.SlideNumber).Should().Equal(1, 2);
+            plan.Storyboard.Segments.Should().OnlyContain(segment =>
+                segment.Duration == TimeSpan.FromSeconds(8) &&
+                segment.TimingSource == PresentationVideoTimingSource.DefaultDuration);
+            plan.Storyboard.OutputWidthPx.Should().Be(852);
+            plan.Storyboard.OutputHeightPx.Should().Be(480);
+            plan.Storyboard.FrameRateHint.Should().Be(24);
+            plan.Storyboard.TotalDuration.Should().Be(plan.EstimatedDuration);
             plan.CanExecute.Should().BeFalse();
             plan.DisabledReason.Should().Be(PresentationExportPlanner.VideoExportDeferredMessage);
         }

@@ -561,6 +561,18 @@ public sealed class PresentationExportPlannerTests
         video.UseRecordedTimings.Should().BeTrue();
         video.IncludeNarration.Should().BeTrue();
         video.EstimatedDuration.Should().Be(TimeSpan.FromSeconds(15));
+        video.Storyboard.SlideRange.SlideNumbers.Should().Equal(image.SlideRange.SlideNumbers);
+        video.Storyboard.Segments.Select(segment => segment.SlideNumber).Should().Equal(2, 3, 4);
+        video.Storyboard.Segments.Select(segment => segment.StartTime)
+            .Should()
+            .Equal(TimeSpan.Zero, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(10));
+        video.Storyboard.Segments.Should().OnlyContain(segment =>
+            segment.Duration == TimeSpan.FromSeconds(5) &&
+            segment.TimingSource == PresentationVideoTimingSource.DefaultDuration);
+        video.Storyboard.OutputWidthPx.Should().Be(1920);
+        video.Storyboard.OutputHeightPx.Should().Be(1080);
+        video.Storyboard.FrameRateHint.Should().Be(30);
+        video.Storyboard.TotalDuration.Should().Be(video.EstimatedDuration);
         video.SlideRange.SlideNumbers.Should().Equal(image.SlideRange.SlideNumbers);
     }
 
@@ -598,13 +610,89 @@ public sealed class PresentationExportPlannerTests
         plan.SlideRange.SlideNumbers.Should().Equal(1, 2, 5);
         plan.SlideRange.DisplayName.Should().Be("Slides 1, 2, 5");
         plan.EstimatedDuration.Should().Be(TimeSpan.FromSeconds(3));
+        plan.Storyboard.OutputWidthPx.Should().Be(3840);
+        plan.Storyboard.OutputHeightPx.Should().Be(2160);
+        plan.Storyboard.PixelsPerSecondHint.Should().Be(60);
+        plan.Storyboard.FrameRateHint.Should().Be(60);
+        plan.Storyboard.UseRecordedTimings.Should().BeFalse();
+        plan.Storyboard.IncludeNarration.Should().BeFalse();
+        plan.Storyboard.Segments.Select(segment => segment.SlideNumber).Should().Equal(1, 2, 5);
+        plan.Storyboard.Segments.Select(segment => segment.StartTime)
+            .Should()
+            .Equal(TimeSpan.Zero, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(2));
+        plan.Storyboard.Segments.Should().OnlyContain(segment =>
+            segment.Duration == TimeSpan.FromSeconds(1) &&
+            segment.TimingSource == PresentationVideoTimingSource.DefaultDuration);
         plan.IsImplemented.Should().BeFalse();
         plan.CanExecute.Should().BeFalse();
         plan.DisabledReason.Should().Be(PresentationExportPlanner.VideoExportDeferredMessage);
 
         empty.SlideRange.DisplayName.Should().Be("No slides");
         empty.EstimatedDuration.Should().Be(TimeSpan.Zero);
+        empty.Storyboard.Segments.Should().BeEmpty();
+        empty.Storyboard.TotalDuration.Should().Be(TimeSpan.Zero);
         empty.DisabledReason.Should().Be("Video export requires at least one slide.");
+    }
+
+    [Fact]
+    public void VideoStoryboardPlan_UsesRecordedTransitionAdvanceWhenAvailableAndDefaultsMissingTimings()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides.Clear();
+        presentation.Slides.Add(new Slide
+        {
+            Title = "Opening",
+            Transition = new SlideTransition { AdvanceAfterMs = 2500 },
+        });
+        presentation.Slides.Add(new Slide { Title = "Agenda" });
+        presentation.Slides.Add(new Slide
+        {
+            Title = "Decision",
+            Transition = new SlideTransition { AdvanceAfterMs = 7000 },
+        });
+
+        var plan = PresentationExportPlanner.BuildVideoExportPlan(
+            new PresentationVideoExportRequest(SecondsPerSlide: 4, UseRecordedTimings: true),
+            presentation);
+
+        plan.Storyboard.Segments.Select(segment => segment.SlideTitle)
+            .Should()
+            .Equal("Opening", "Agenda", "Decision");
+        plan.Storyboard.Segments.Select(segment => segment.Duration)
+            .Should()
+            .Equal(TimeSpan.FromMilliseconds(2500), TimeSpan.FromSeconds(4), TimeSpan.FromSeconds(7));
+        plan.Storyboard.Segments.Select(segment => segment.TimingSource)
+            .Should()
+            .Equal(
+                PresentationVideoTimingSource.RecordedTransitionAdvance,
+                PresentationVideoTimingSource.DefaultDuration,
+                PresentationVideoTimingSource.RecordedTransitionAdvance);
+        plan.Storyboard.Segments.Select(segment => segment.StartTime)
+            .Should()
+            .Equal(TimeSpan.Zero, TimeSpan.FromMilliseconds(2500), TimeSpan.FromMilliseconds(6500));
+        plan.EstimatedDuration.Should().Be(TimeSpan.FromMilliseconds(13500));
+        plan.Storyboard.TotalDuration.Should().Be(plan.EstimatedDuration);
+    }
+
+    [Fact]
+    public void VideoStoryboardPlan_IgnoresRecordedTransitionAdvanceWhenRecordedTimingsAreDisabled()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides.Clear();
+        presentation.Slides.Add(new Slide
+        {
+            Title = "Timed",
+            Transition = new SlideTransition { AdvanceAfterMs = 9000 },
+        });
+
+        var plan = PresentationExportPlanner.BuildVideoExportPlan(
+            new PresentationVideoExportRequest(SecondsPerSlide: 3, UseRecordedTimings: false),
+            presentation);
+
+        plan.Storyboard.Segments.Should().ContainSingle();
+        plan.Storyboard.Segments[0].Duration.Should().Be(TimeSpan.FromSeconds(3));
+        plan.Storyboard.Segments[0].TimingSource.Should().Be(PresentationVideoTimingSource.DefaultDuration);
+        plan.EstimatedDuration.Should().Be(TimeSpan.FromSeconds(3));
     }
 
     [Fact]
