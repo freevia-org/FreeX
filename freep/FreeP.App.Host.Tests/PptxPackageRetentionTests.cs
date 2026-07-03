@@ -563,6 +563,111 @@ public sealed class PptxPackageRetentionTests
     }
 
     [Fact]
+    public void ReadWriteRead_MultiChartSemanticEdit_RegeneratesOnlyEditedChartWorkbookAndPreservesChartWorkbookMapping()
+    {
+        using var source = BuildPptxWithMultipleChartWorkbooksAndUnrelatedPackageData();
+        var loaded = PptxPackageReader.Read(source);
+        loaded.PackageSnapshot.Should().NotBeNull();
+        var chartShapes = loaded.Slides[0].Shapes.Where(shape => shape.Kind == SlideShapeKind.Chart).ToArray();
+        chartShapes.Should().HaveCount(3);
+        chartShapes[0].Chart!.RegenerateWorkbookOnSave.Should().BeFalse();
+        chartShapes[1].Chart!.RegenerateWorkbookOnSave.Should().BeFalse();
+        chartShapes[2].Chart!.RegenerateWorkbookOnSave.Should().BeFalse();
+
+        new ReplaceChartDataCommand(
+            slideIndex: 0,
+            shapeId: chartShapes[1].Id,
+            categories: ["Edited Q1", "Edited Q2"],
+            seriesNames: ["Edited Revenue"],
+            values: [new double?[] { 123, 456 }]).Apply(loaded);
+
+        chartShapes[0].Chart!.RegenerateWorkbookOnSave.Should().BeFalse();
+        chartShapes[1].Chart!.RegenerateWorkbookOnSave.Should().BeTrue();
+        chartShapes[2].Chart!.RegenerateWorkbookOnSave.Should().BeFalse();
+
+        using var saved = new MemoryStream();
+        PptxPackageWriter.Write(loaded, saved);
+        var savedBytes = saved.ToArray();
+
+        using (var archive = new ZipArchive(new MemoryStream(savedBytes), ZipArchiveMode.Read))
+        {
+            ReadText(archive, "customXml/multiChartWorkbookPayload.xml")
+                .Should()
+                .Contain("multi-chart-retain-me");
+
+            ReadText(archive, "ppt/embeddings/sourceWorkbookAlpha.xlsx")
+                .Should()
+                .Be("alpha workbook bytes");
+            archive.GetEntry("ppt/embeddings/sourceWorkbookBeta.xlsx").Should().BeNull(
+                "only the semantically edited chart should drop its stale source workbook sidecar");
+            ReadText(archive, "ppt/embeddings/sourceWorkbookGamma.xlsx")
+                .Should()
+                .Be("gamma workbook bytes");
+            archive.GetEntry("ppt/embeddings/chartWorkbook2.xlsx").Should().NotBeNull(
+                "the edited second chart should regenerate its own workbook path without overwriting neighbors");
+
+            var chart1Xml = LoadXml(archive, "ppt/charts/chart1.xml");
+            chart1Xml.Root!.Element(ChartNs + "externalData")!.Attribute(RelsDocNs + "id")!.Value
+                .Should().Be("rIdSourceWorkbookAlpha");
+            var chart1Rels = LoadXml(archive, "ppt/charts/_rels/chart1.xml.rels");
+            Relationship(chart1Rels, PackageRelType, "../embeddings/sourceWorkbookAlpha.xlsx").Should().NotBeNull();
+
+            var chart2Xml = LoadXml(archive, "ppt/charts/chart2.xml");
+            chart2Xml.ToString(SaveOptions.DisableFormatting).Should().Contain("Edited Q1");
+            chart2Xml.Root!.Element(ChartNs + "externalData")!.Attribute(RelsDocNs + "id")!.Value
+                .Should().Be("rIdWorkbook1");
+            var chart2Rels = LoadXml(archive, "ppt/charts/_rels/chart2.xml.rels");
+            Relationship(chart2Rels, PackageRelType, "../embeddings/chartWorkbook2.xlsx").Should().NotBeNull();
+
+            var chart3Xml = LoadXml(archive, "ppt/charts/chart3.xml");
+            chart3Xml.Root!.Element(ChartNs + "externalData")!.Attribute(RelsDocNs + "id")!.Value
+                .Should().Be("rIdSourceWorkbookGamma");
+            var chart3Rels = LoadXml(archive, "ppt/charts/_rels/chart3.xml.rels");
+            Relationship(chart3Rels, PackageRelType, "../embeddings/sourceWorkbookGamma.xlsx").Should().NotBeNull();
+
+            var contentTypes = LoadXml(archive, "[Content_Types].xml");
+            Override(contentTypes, "/ppt/embeddings/sourceWorkbookAlpha.xlsx", SpreadsheetWorkbookContentType)
+                .Should().NotBeNull();
+            Override(contentTypes, "/ppt/embeddings/sourceWorkbookBeta.xlsx", SpreadsheetWorkbookContentType)
+                .Should().BeNull("the stale workbook override for the edited chart should not survive");
+            Override(contentTypes, "/ppt/embeddings/chartWorkbook2.xlsx", SpreadsheetWorkbookContentType)
+                .Should().NotBeNull();
+            Override(contentTypes, "/ppt/embeddings/sourceWorkbookGamma.xlsx", SpreadsheetWorkbookContentType)
+                .Should().NotBeNull();
+            Override(
+                contentTypes,
+                "/customXml/multiChartWorkbookPayload.xml",
+                "application/vnd.example.freep.multi-chart-workbook-payload+xml").Should().NotBeNull();
+
+            using var workbookArchive = new ZipArchive(
+                new MemoryStream(ReadBytes(archive, "ppt/embeddings/chartWorkbook2.xlsx")),
+                ZipArchiveMode.Read);
+            var sheetXml = LoadXml(workbookArchive, "xl/worksheets/sheet1.xml")
+                .ToString(SaveOptions.DisableFormatting);
+            sheetXml.Should().Contain("Edited Revenue");
+            sheetXml.Should().Contain("Edited Q1");
+            sheetXml.Should().Contain("123");
+            sheetXml.Should().Contain("456");
+        }
+
+        using var savedRead = new MemoryStream(savedBytes);
+        var reloaded = PptxPackageReader.Read(savedRead);
+        var reloadedCharts = reloaded.Slides[0].Shapes
+            .Where(shape => shape.Kind == SlideShapeKind.Chart)
+            .Select(shape => shape.Chart!)
+            .ToArray();
+        reloadedCharts[0].Categories.Should().Equal("Alpha Old Q1", "Alpha Old Q2");
+        reloadedCharts[0].Series[0].Name.Should().Be("Alpha Old Revenue");
+        reloadedCharts[0].Series[0].Values.Should().Equal(10, 20);
+        reloadedCharts[1].Categories.Should().Equal("Edited Q1", "Edited Q2");
+        reloadedCharts[1].Series[0].Name.Should().Be("Edited Revenue");
+        reloadedCharts[1].Series[0].Values.Should().Equal(123, 456);
+        reloadedCharts[2].Categories.Should().Equal("Gamma Old Q1", "Gamma Old Q2");
+        reloadedCharts[2].Series[0].Name.Should().Be("Gamma Old Revenue");
+        reloadedCharts[2].Series[0].Values.Should().Equal(70, 80);
+    }
+
+    [Fact]
     public void ReadWriteRead_ChartDataTableSettings_RetainsModeledChartPackageSemantics()
     {
         using var source = BuildPptxWithChartWorkbookAndUnrelatedPackageData();
@@ -1052,6 +1157,115 @@ public sealed class PptxPackageRetentionTests
 
         package.Position = 0;
         return package;
+    }
+
+    private static MemoryStream BuildPptxWithMultipleChartWorkbooksAndUnrelatedPackageData()
+    {
+        var presentation = new Presentation();
+        var slide = new Slide();
+        slide.Shapes.Add(CreateWorkbookChartShape(101, "Alpha", 10, 20, 914400));
+        slide.Shapes.Add(CreateWorkbookChartShape(102, "Beta", 30, 40, 4572000));
+        slide.Shapes.Add(CreateWorkbookChartShape(103, "Gamma", 70, 80, 8229600));
+        presentation.Slides.Add(slide);
+
+        using var basePackage = new MemoryStream();
+        PptxPackageWriter.Write(presentation, basePackage);
+
+        var package = new MemoryStream();
+        package.Write(basePackage.ToArray());
+        package.Position = 0;
+        using (var archive = new ZipArchive(package, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            AddSourceWorkbookSidecar(
+                archive,
+                chartIndex: 1,
+                workbookName: "sourceWorkbookAlpha.xlsx",
+                relId: "rIdSourceWorkbookAlpha",
+                workbookPayload: "alpha workbook bytes");
+            AddSourceWorkbookSidecar(
+                archive,
+                chartIndex: 2,
+                workbookName: "sourceWorkbookBeta.xlsx",
+                relId: "rIdSourceWorkbookBeta",
+                workbookPayload: "beta workbook bytes");
+            AddSourceWorkbookSidecar(
+                archive,
+                chartIndex: 3,
+                workbookName: "sourceWorkbookGamma.xlsx",
+                relId: "rIdSourceWorkbookGamma",
+                workbookPayload: "gamma workbook bytes");
+
+            WriteText(
+                archive,
+                "customXml/multiChartWorkbookPayload.xml",
+                """<payload xmlns="urn:freep:test">multi-chart-retain-me</payload>""");
+            var presRels = LoadXml(archive, "ppt/_rels/presentation.xml.rels");
+            AddRelationship(
+                presRels,
+                "rIdMultiChartWorkbookPayload",
+                CustomXmlRelType,
+                "../customXml/multiChartWorkbookPayload.xml");
+            WriteXml(archive, "ppt/_rels/presentation.xml.rels", presRels);
+
+            var contentTypes = LoadXml(archive, "[Content_Types].xml");
+            AddOverride(contentTypes, "/ppt/embeddings/sourceWorkbookAlpha.xlsx", SpreadsheetWorkbookContentType);
+            AddOverride(contentTypes, "/ppt/embeddings/sourceWorkbookBeta.xlsx", SpreadsheetWorkbookContentType);
+            AddOverride(contentTypes, "/ppt/embeddings/sourceWorkbookGamma.xlsx", SpreadsheetWorkbookContentType);
+            AddOverride(contentTypes, "/customXml/multiChartWorkbookPayload.xml",
+                "application/vnd.example.freep.multi-chart-workbook-payload+xml");
+            WriteXml(archive, "[Content_Types].xml", contentTypes);
+        }
+
+        package.Position = 0;
+        return package;
+    }
+
+    private static SlideShape CreateWorkbookChartShape(
+        uint shapeId,
+        string name,
+        double firstValue,
+        double secondValue,
+        long offsetXEmu)
+    {
+        var chart = new ChartShape { ChartType = ChartType.ColumnClustered };
+        chart.Categories.AddRange([$"{name} Old Q1", $"{name} Old Q2"]);
+        var series = new ChartSeries { Name = $"{name} Old Revenue" };
+        series.Values.AddRange([firstValue, secondValue]);
+        chart.Series.Add(series);
+        return new SlideShape
+        {
+            Id = shapeId,
+            Name = $"{name} workbook chart",
+            Kind = SlideShapeKind.Chart,
+            OffsetXEmu = offsetXEmu,
+            OffsetYEmu = 914400,
+            ExtentCxEmu = 3200400,
+            ExtentCyEmu = 2743200,
+            Chart = chart,
+        };
+    }
+
+    private static void AddSourceWorkbookSidecar(
+        ZipArchive archive,
+        int chartIndex,
+        string workbookName,
+        string relId,
+        string workbookPayload)
+    {
+        var chartPath = $"ppt/charts/chart{chartIndex}.xml";
+        var chartXml = LoadXml(archive, chartPath);
+        chartXml.Root!.Element(ChartNs + "externalData")?.Remove();
+        chartXml.Root.Add(new XElement(ChartNs + "externalData",
+            new XAttribute(RelsDocNs + "id", relId),
+            new XElement(ChartNs + "autoUpdate", new XAttribute("val", "0"))));
+        WriteXml(archive, chartPath, chartXml);
+
+        var chartRels = new XDocument(
+            new XDeclaration("1.0", "UTF-8", "yes"),
+            new XElement(RelsNs + "Relationships"));
+        AddRelationship(chartRels, relId, PackageRelType, $"../embeddings/{workbookName}");
+        WriteXml(archive, $"ppt/charts/_rels/chart{chartIndex}.xml.rels", chartRels);
+        WriteBytes(archive, $"ppt/embeddings/{workbookName}", Encoding.UTF8.GetBytes(workbookPayload));
     }
 
     private static MemoryStream BuildPptxWithPresentationScopedCustomXml()
