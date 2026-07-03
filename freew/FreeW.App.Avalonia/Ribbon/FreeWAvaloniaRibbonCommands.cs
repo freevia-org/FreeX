@@ -477,10 +477,12 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.combine", new ActionRibbonCommand(callbacks.CombineDocuments ?? (() => { })));
         r.Register("freew.mark-as-final", new ToggleActionCommand(
             callbacks.MarkAsFinal ?? (() => editor.SetMarkedAsFinal(!editor.IsMarkedAsFinal)),
-            () => editor.IsMarkedAsFinal));
+            () => ReviewProtectionStatePlanner.Build(editor.Document.Protection, editor.IsMarkedAsFinal)
+                .MarkAsFinal.IsChecked));
         r.Register("freew.restrict-editing", new ToggleActionCommand(
             callbacks.RestrictEditing ?? (() => { }),
-            () => editor.IsProtected));
+            () => ReviewProtectionStatePlanner.Build(editor.Document.Protection, editor.IsMarkedAsFinal)
+                .RestrictEditing.IsChecked));
 
         // ── References (AV-REF) ──────────────────────────────────────────────
         RegisterReferencesCommands(r, editor, callbacks);

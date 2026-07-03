@@ -20,6 +20,18 @@ public sealed class RestrictEditingDialogPolicySourceGuardTests
         source.Should().NotContain("ProtectionPasswordHelper.VerifyPassword");
     }
 
+    [Fact]
+    public void MainWindow_ProjectsProtectGroupToggleStateThroughSharedPlanner()
+    {
+        var source = ReadHostSource("MainWindow.cs");
+
+        source.Should().Contain("ReviewProtectionStatePlanner.Build(_editor.Model.Protection, _editor.IsMarkedAsFinal)");
+        source.Should().Contain("foreach (var commandState in protectionStatePlan.Commands)");
+        source.Should().Contain("_stateStore.SetChecked(commandState.CommandId, commandState.IsChecked)");
+        source.Should().NotContain("_stateStore.SetChecked(\"freew.mark-as-final\", _editor.IsMarkedAsFinal)");
+        source.Should().NotContain("_stateStore.SetChecked(\"freew.restrict-editing\", _editor.IsProtected)");
+    }
+
     private static string ReadHostSource(string fileName)
     {
         var path = Path.Combine(AppContext.BaseDirectory);

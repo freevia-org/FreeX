@@ -5,6 +5,31 @@ namespace FreeW.App.Presentation.Tests;
 public sealed class RestrictEditingEnforcementPolicyTests
 {
     [Theory]
+    [InlineData(false, ProtectionMode.None, false, false)]
+    [InlineData(true, ProtectionMode.None, true, false)]
+    [InlineData(false, ProtectionMode.ReadOnly, false, true)]
+    [InlineData(true, ProtectionMode.CommentsOnly, true, true)]
+    public void Review_protection_state_plan_projects_shared_ribbon_toggle_state(
+        bool isMarkedAsFinal,
+        ProtectionMode mode,
+        bool expectedFinalChecked,
+        bool expectedRestrictEditingChecked)
+    {
+        var protection = new ProtectionSettings(mode);
+
+        var plan = ReviewProtectionStatePlanner.Build(protection, isMarkedAsFinal);
+
+        plan.MarkAsFinal.CommandId.Should().Be(ReviewProtectionStatePlanner.MarkAsFinalCommandId);
+        plan.MarkAsFinal.IsChecked.Should().Be(expectedFinalChecked);
+        plan.RestrictEditing.CommandId.Should().Be(ReviewProtectionStatePlanner.RestrictEditingCommandId);
+        plan.RestrictEditing.IsChecked.Should().Be(expectedRestrictEditingChecked);
+        plan.Commands.Select(state => state.CommandId)
+            .Should().Equal(
+                ReviewProtectionStatePlanner.MarkAsFinalCommandId,
+                ReviewProtectionStatePlanner.RestrictEditingCommandId);
+    }
+
+    [Theory]
     [InlineData(RestrictEditingOperationKind.BodyTextEdit)]
     [InlineData(RestrictEditingOperationKind.BodyTextDelete)]
     [InlineData(RestrictEditingOperationKind.BodyFormatting)]

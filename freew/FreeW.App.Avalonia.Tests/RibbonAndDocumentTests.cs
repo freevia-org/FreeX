@@ -137,6 +137,35 @@ public class RibbonAndDocumentTests
     }
 
     [Fact]
+    public void Avalonia_protect_toggles_read_state_from_shared_protection_state_planner()
+    {
+        var editor = new Editing.DocumentView();
+        var registry = FreeWRibbon.BuildRegistry(editor, NoopCallbacks());
+
+        registry.TryGet(new RibbonCommandId("freew.mark-as-final"), out var markAsFinal).Should().BeTrue();
+        registry.TryGet(new RibbonCommandId("freew.restrict-editing"), out var restrictEditing).Should().BeTrue();
+
+        markAsFinal.Should().BeAssignableTo<IRibbonStatefulCommand>();
+        restrictEditing.Should().BeAssignableTo<IRibbonStatefulCommand>();
+        ((IRibbonStatefulCommand)markAsFinal!).GetState().IsChecked.Should().BeFalse();
+        ((IRibbonStatefulCommand)restrictEditing!).GetState().IsChecked.Should().BeFalse();
+
+        editor.SetMarkedAsFinal(true);
+        editor.SetProtection(ProtectionMode.CommentsOnly);
+
+        ((IRibbonStatefulCommand)markAsFinal!).GetState().IsChecked.Should().BeTrue();
+        ((IRibbonStatefulCommand)restrictEditing!).GetState().IsChecked.Should().BeTrue();
+
+        var commandSource = File.ReadAllText(FindRepoFile(
+            "freew",
+            "FreeW.App.Avalonia",
+            "Ribbon",
+            "FreeWAvaloniaRibbonCommands.cs"));
+        commandSource.Should().Contain("ReviewProtectionStatePlanner.Build(");
+        commandSource.Should().NotContain("() => editor.IsProtected));");
+    }
+
+    [Fact]
     public void Sample_document_contains_title_lists_and_a_table()
     {
         var doc = SampleDocument.Create();

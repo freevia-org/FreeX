@@ -521,8 +521,9 @@ public sealed class MainWindow : Window
         editor.ProtectionStateChanged += (_, _) =>
         {
             RefreshMarkedAsFinalBanner();
-            _stateStore.SetChecked("freew.mark-as-final", _editor.IsMarkedAsFinal);
-            _stateStore.SetChecked("freew.restrict-editing", _editor.IsProtected);
+            var protectionStatePlan = ReviewProtectionStatePlanner.Build(_editor.Model.Protection, _editor.IsMarkedAsFinal);
+            foreach (var commandState in protectionStatePlan.Commands)
+                _stateStore.SetChecked(commandState.CommandId, commandState.IsChecked);
         };
 
         // Keep the indent/tab markers on the horizontal ruler following the caret/selection.
