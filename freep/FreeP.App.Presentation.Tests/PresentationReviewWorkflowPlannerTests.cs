@@ -847,7 +847,7 @@ public sealed class PresentationReviewWorkflowPlannerTests
         var missingScreenTip = plan.Issues.Single(issue => issue.Title == "Hyperlink ScreenTip missing" && issue.ShapeId == 9);
         missingTitle.Action.Should().Be(new PresentationAccessibilityIssueActionSummary(
             PresentationReviewWorkflowPlanner.MissingSlideTitleActionSummary,
-            null,
+            PresentationReviewWorkflowPlanner.SetSlideTitleCommandId,
             false));
         missingAltText.Action.Should().Be(new PresentationAccessibilityIssueActionSummary(
             PresentationReviewWorkflowPlanner.MissingAltTextActionSummary,
@@ -863,6 +863,36 @@ public sealed class PresentationReviewWorkflowPlannerTests
             PresentationReviewWorkflowPlanner.AltTextCommandId,
             PresentationReviewWorkflowPlanner.ProofingCommandId
         });
+    }
+
+    [Fact]
+    public void SlideTitleMutationPlan_SuggestsPlaceholderTextAndAppliesThroughEditingSession()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Title = string.Empty;
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 21,
+            Placeholder = new Placeholder { Type = PlaceholderType.Title },
+            Text = "  Quarterly launch plan  "
+        });
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+
+        PresentationReviewWorkflowPlanner.BuildSuggestedSlideTitle(presentation, 0)
+            .Should().Be("Quarterly launch plan");
+
+        var plan = PresentationReviewWorkflowPlanner.TryApplySlideTitleMutation(editor, 0);
+
+        plan.Should().Be(new PresentationSlideTitleMutationPlan(
+            true,
+            0,
+            "Quarterly launch plan",
+            "Quarterly launch plan",
+            null));
+        slide.Title.Should().Be("Quarterly launch plan");
+        PresentationReviewWorkflowPlanner.BuildAccessibilitySummaryPlan(presentation)
+            .Issues.Should().NotContain(issue => issue.Title == "Missing slide title");
     }
 
     [Fact]
@@ -1008,8 +1038,8 @@ public sealed class PresentationReviewWorkflowPlannerTests
             "Missing slide title",
             "PowerPoint accessibility checks expect each slide to have a meaningful title.",
             false,
-            "Go to Slide",
-            null,
+            "Set Slide Title",
+            PresentationReviewWorkflowPlanner.SetSlideTitleCommandId,
             true,
             false));
         plan.Rows[1].Should().Be(new PresentationAccessibilityCheckerRowPlan(
