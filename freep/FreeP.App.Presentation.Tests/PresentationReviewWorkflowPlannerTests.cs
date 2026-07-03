@@ -1339,6 +1339,121 @@ public sealed class PresentationReviewWorkflowPlannerTests
     }
 
     [Fact]
+    public void BuildAccessibilitySummaryPlan_FlagsBlankTableBodyCells()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Title = "Quarterly review";
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 15,
+            Name = "Variance table",
+            Kind = SlideShapeKind.Table,
+            Table = new TableShape
+            {
+                Flags = new TableStyleFlags { FirstRow = true },
+                Rows =
+                {
+                    new TableRow
+                    {
+                        Cells =
+                        {
+                            new TableCell { TextBody = TextBody("Region") },
+                            new TableCell { TextBody = TextBody("Plan") },
+                            new TableCell { TextBody = TextBody("Actual") }
+                        }
+                    },
+                    new TableRow
+                    {
+                        Cells =
+                        {
+                            new TableCell { TextBody = TextBody("North") },
+                            new TableCell { TextBody = TextBody(" ") },
+                            new TableCell()
+                        }
+                    },
+                    new TableRow
+                    {
+                        Cells =
+                        {
+                            new TableCell { TextBody = TextBody("South") },
+                            new TableCell { TextBody = TextBody("$39K") },
+                            new TableCell { TextBody = TextBody("$41K") }
+                        }
+                    }
+                }
+            }
+        });
+
+        var summary = PresentationReviewWorkflowPlanner.BuildAccessibilitySummaryPlan(presentation);
+        var pane = PresentationReviewWorkflowPlanner.BuildAccessibilityCheckerPanePlan(presentation, summary);
+
+        summary.Issues.Should().ContainSingle().Which.Should().Be(new PresentationAccessibilityIssueDescriptor(
+            PresentationAccessibilityIssueSeverity.Warning,
+            0,
+            15,
+            "Blank table body cells",
+            "Variance table has 2 blank body cells.",
+            new PresentationAccessibilityIssueActionSummary(
+                PresentationReviewWorkflowPlanner.BlankTableBodyCellsActionSummary,
+                null,
+                true)));
+        summary.Issues.Should().NotContain(issue => issue.Title == "Blank table header cells");
+        pane.Rows.Should().ContainSingle().Which.Should().Match<PresentationAccessibilityCheckerRowPlan>(row =>
+            row.Category == "Table" &&
+            row.ShapeId == 15 &&
+            row.ShapeName == "Variance table" &&
+            row.ActionLabel == "Select Object" &&
+            row.CommandHint == null &&
+            row.ShouldNavigateToSlide &&
+            row.ShouldSelectShape);
+    }
+
+    [Fact]
+    public void BuildAccessibilitySummaryPlan_DoesNotDoubleReportBlankHeaderCellsAsBodyCells()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Title = "Quarterly review";
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 16,
+            Name = "Staffing table",
+            Kind = SlideShapeKind.Table,
+            Table = new TableShape
+            {
+                Flags = new TableStyleFlags { FirstRow = true },
+                Rows =
+                {
+                    new TableRow
+                    {
+                        Cells =
+                        {
+                            new TableCell { TextBody = TextBody("Team") },
+                            new TableCell(),
+                            new TableCell { TextBody = TextBody("Notes") }
+                        }
+                    },
+                    new TableRow
+                    {
+                        Cells =
+                        {
+                            new TableCell { TextBody = TextBody("Support") },
+                            new TableCell { TextBody = TextBody("5") },
+                            new TableCell { TextBody = TextBody("Covered") }
+                        }
+                    }
+                }
+            }
+        });
+
+        var summary = PresentationReviewWorkflowPlanner.BuildAccessibilitySummaryPlan(presentation);
+
+        summary.Issues.Select(issue => issue.Title).Should().Equal("Blank table header cells");
+        summary.Issues.Should().NotContain(issue => issue.Title == "Blank table body cells");
+    }
+
+    [Fact]
     public void BuildAccessibilityCheckerPanePlan_ProjectsOrderedIssuesIntoSelectableRows()
     {
         var presentation = Presentation.CreateEmpty();
