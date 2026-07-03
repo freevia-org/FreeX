@@ -217,6 +217,68 @@ public sealed class TableCellEditPlannerTests
     }
 
     [Fact]
+    public void PlanColor_SubRangeSelectionAcrossMixedRuns_PreservesUnselectedFormatting()
+    {
+        var shape = MakeMergedTableShape();
+        var body = shape.Table!.Rows[0].Cells[0].TextBody!;
+        body.Paragraphs[0].Runs.Clear();
+        body.Paragraphs[0].Runs.Add(new Run { Text = "one ", FontFamily = "Aptos", FontSizePt = 14 });
+        body.Paragraphs[0].Runs.Add(new Run
+        {
+            Text = "two",
+            FontFamily = "Aptos",
+            FontSizePt = 16,
+            Italic = true,
+            ItalicSet = true,
+        });
+        body.Paragraphs[0].Runs.Add(new Run
+        {
+            Text = " three",
+            FontFamily = "Consolas",
+            FontSizePt = 18,
+            Bold = true,
+            BoldSet = true,
+        });
+        var slide = new Slide { Shapes = { shape } };
+        var color = new ThemeAwareColor(new SrgbColor(0x10, 0x20, 0x30));
+
+        // Select "e two t" across the original three mixed-format runs.
+        var plan = TableCellEditPlanner.PlanColor(
+            0,
+            slide,
+            [shape.Id],
+            (0, 0),
+            color,
+            selection: (2, 9));
+
+        plan.Status.Should().Be(TableCellTextFormatStatus.Ready);
+
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Clear();
+        presentation.Slides[0].Shapes.Add(shape);
+        var bus = new PresentationCommandBus(presentation);
+        bus.Execute(plan.Command!);
+
+        var runs = shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs[0].Runs;
+        runs.Select(r => r.Text).Should().Equal("on", "e ", "two", " t", "hree");
+        string.Concat(runs.Select(r => r.Text)).Should().Be("one two three");
+
+        runs[0].Color.Should().BeNull();
+        runs[0].FontFamily.Should().Be("Aptos");
+        runs[1].Color!.Resolved.Should().Be(color.Resolved);
+        runs[2].Color!.Resolved.Should().Be(color.Resolved);
+        runs[2].Italic.Should().BeTrue("selected middle run keeps existing italic");
+        runs[3].Color!.Resolved.Should().Be(color.Resolved);
+        runs[3].Bold.Should().BeTrue("selected slice keeps existing bold");
+        runs[4].Color.Should().BeNull();
+        runs[4].Bold.Should().BeTrue("unselected suffix keeps existing bold");
+
+        bus.Undo();
+        shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs[0].Runs.Select(r => r.Text)
+            .Should().Equal("one ", "two", " three");
+    }
+
+    [Fact]
     public void PlanFontSizeAndColor_WholeCellSelection_FormatsAllRunsAndPreservesUndo()
     {
         var shape = MakeMergedTableShape();

@@ -48,7 +48,7 @@ public sealed class AvaloniaInCanvasTextEditor
     {
         var overlaySelection = GetActiveCellOverlaySelection();
 
-        var plan = _editor.PlanActiveTableCellTextFormat(kind, overlaySelection.Selection);
+        var plan = AvaloniaTableCellEditAdapter.PlanTextFormat(_editor, kind, overlaySelection.Selection);
         if (plan.Command is null)
             return false;
 
@@ -77,7 +77,7 @@ public sealed class AvaloniaInCanvasTextEditor
     public bool TryApplyActiveTableCellFontFamily(string? fontFamily)
     {
         var overlaySelection = GetActiveCellOverlaySelection();
-        var plan = _editor.PlanActiveTableCellFontFamily(fontFamily, overlaySelection.Selection);
+        var plan = AvaloniaTableCellEditAdapter.PlanFontFamily(_editor, fontFamily, overlaySelection.Selection);
         if (plan.Command is null)
             return false;
 
@@ -92,7 +92,7 @@ public sealed class AvaloniaInCanvasTextEditor
     public bool TryApplyActiveTableCellFontSize(double? sizePt)
     {
         var overlaySelection = GetActiveCellOverlaySelection();
-        var plan = _editor.PlanActiveTableCellFontSize(sizePt, overlaySelection.Selection);
+        var plan = AvaloniaTableCellEditAdapter.PlanFontSize(_editor, sizePt, overlaySelection.Selection);
         if (plan.Command is null)
             return false;
 
@@ -107,7 +107,7 @@ public sealed class AvaloniaInCanvasTextEditor
     public bool TryApplyActiveTableCellColor(ThemeAwareColor? color)
     {
         var overlaySelection = GetActiveCellOverlaySelection();
-        var plan = _editor.PlanActiveTableCellColor(color, overlaySelection.Selection);
+        var plan = AvaloniaTableCellEditAdapter.PlanColor(_editor, color, overlaySelection.Selection);
         if (plan.Command is null)
             return false;
 
