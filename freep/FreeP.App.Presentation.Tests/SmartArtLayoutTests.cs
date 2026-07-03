@@ -300,6 +300,18 @@ public sealed class SmartArtLayoutTests
         result.Should().BeNull("unknown family must return null so compositor uses cached drawing");
     }
 
+    [Fact]
+    public void UnsupportedKnownLayout_ReturnsNull()
+    {
+        var data = MakeData(SmartArtFamily.Process, "A", "B");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/continuousBlockProcess";
+        data.IsLiveLayoutSupported = false;
+
+        var result = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        result.Should().BeNull("known-family layouts outside the bounded live planner should use cached drawing");
+    }
+
     // BI2: when nodes parse to zero, Layout returns null so compositor uses cached-drawing fallback.
     [Fact]
     public void EmptyNodes_SupportedFamily_ReturnsNull_SoCompositorUsesFallback()
@@ -435,6 +447,57 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
+    public void Compositor_FallsBackToCachedDrawing_WhenKnownFamilyLayoutIsUnsupported()
+    {
+        var data = MakeData(SmartArtFamily.Process, "Live A", "Live B");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/continuousBlockProcess";
+        data.IsLiveLayoutSupported = false;
+
+        var smart = new SmartArtShape { Data = data };
+        smart.FallbackShapes.Add(new SlideShape
+        {
+            Id            = 10,
+            Kind          = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            OffsetXEmu    = FrameX,
+            OffsetYEmu    = FrameY,
+            ExtentCxEmu   = FrameCx / 2,
+            ExtentCyEmu   = FrameCy / 2,
+            TextBody      = new TextBody
+            {
+                Paragraphs =
+                {
+                    new Paragraph
+                    {
+                        Runs = { new Run { Text = "Cached fallback" } }
+                    }
+                }
+            }
+        });
+
+        var container = new SlideShape
+        {
+            Id          = 61,
+            Kind        = SlideShapeKind.SmartArt,
+            OffsetXEmu  = FrameX,
+            OffsetYEmu  = FrameY,
+            ExtentCxEmu = FrameCx,
+            ExtentCyEmu = FrameCy,
+            SmartArt    = smart
+        };
+
+        var pres = PresentationModel.CreateEmpty();
+        pres.Slides[0].Shapes.Clear();
+        pres.Slides[0].Shapes.Add(container);
+
+        var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
+
+        var shapeOps = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
+        shapeOps.Should().ContainSingle("the unsupported process variant should render the cached shape, not live boxes");
+        shapeOps[0].Text?.Paragraphs[0].Runs[0].Text.Should().Be("Cached fallback");
+    }
+
+    [Fact]
     public void Compositor_FallsBackToPlaceholderRect_WhenNoDataAndNoFallback()
     {
         // SmartArt with neither Data nor FallbackShapes
@@ -483,6 +546,7 @@ public sealed class SmartArtLayoutTests
         d.Family.Should().Be(SmartArtFamily.Unknown);
         d.Nodes.Should().BeEmpty();
         d.LayoutUniqueId.Should().BeEmpty();
+        d.IsLiveLayoutSupported.Should().BeTrue("manually constructed test data remains live-capable unless the reader disables it");
     }
 
     // ── BI1: unbalanced-tree no-overlap ──────────────────────────────────────────

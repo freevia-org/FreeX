@@ -64,6 +64,7 @@ public static class SmartArtLayoutEngine
         ArgumentNullException.ThrowIfNull(theme);
 
         if (data.Family == SmartArtFamily.Unknown) return null;
+        if (!data.IsLiveLayoutSupported) return null;
 
         // Flatten all visible nodes in display order
         var nodes = FlattenNodes(data);

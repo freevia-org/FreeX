@@ -55,6 +55,13 @@ public sealed class SmartArtData
     public string LayoutUniqueId { get; set; } = string.Empty;
 
     /// <summary>
+    /// True when the parsed layout ID is covered by FreeP's bounded live layout planner.
+    /// False keeps the cached dsp:drawing fallback as the render source while still
+    /// preserving the parsed family and raw diagram parts for future slices.
+    /// </summary>
+    public bool IsLiveLayoutSupported { get; set; } = true;
+
+    /// <summary>
     /// Root-level nodes of the diagram tree.  For flat families (List, Process, Cycle)
     /// all visible nodes sit at Level 0 here.  For Hierarchy the root is Nodes[0] with
     /// its children nested inside it.
