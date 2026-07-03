@@ -522,6 +522,137 @@ public sealed class AnimationPanePlannerTests
         editor.CurrentSlideAnimations[0].Direction.Should().Be(AnimationDirection.FromBottom);
     }
 
+    [Fact]
+    public void BuildTimelinePlan_RunningPlaybackEnablesStopAndDisablesStartControls()
+    {
+        var timeline = AnimationPanePlanner.BuildTimelinePlan(
+            CreateSlideWithTimelineAnimations(),
+            selectedAnimationIndex: 1,
+            displayCulture: Invariant,
+            isPlaybackRunning: true);
+
+        timeline.PlaybackControls.Should().ContainSingle(control =>
+            control.Kind == AnimationPanePlaybackControlKind.Stop
+            && control.IsEnabled
+            && control.DisabledReason == null);
+        timeline.PlaybackControls.Should().Contain(control =>
+            control.Kind == AnimationPanePlaybackControlKind.PreviewCurrentSlide
+            && !control.IsEnabled
+            && control.DisabledReason == "Stop the running animation preview before starting another");
+        timeline.PlaybackControls.Should().Contain(control =>
+            control.Kind == AnimationPanePlaybackControlKind.PlayFromSelected
+            && !control.IsEnabled
+            && control.StartAnimationIndex == 1);
+        timeline.PreviewIntent.CanExecute.Should().BeFalse();
+        timeline.PreviewIntent.Description.Should().Be("Stop the running animation preview before starting another");
+    }
+
+    [Fact]
+    public void BuildPlaybackSessionPlan_PlayFromSelectedCreatesRelativeTimeline()
+    {
+        var timeline = AnimationPanePlanner.BuildTimelinePlan(
+            CreateSlideWithTimelineAnimations(),
+            selectedAnimationIndex: 1,
+            displayCulture: Invariant);
+
+        var session = AnimationPanePlanner.BuildPlaybackSessionPlan(
+            timeline,
+            AnimationPanePlaybackControlKind.PlayFromSelected,
+            elapsedMs: 250);
+
+        session.State.Should().Be(AnimationPanePlaybackSessionState.Running);
+        session.IsRunning.Should().BeTrue();
+        session.CommandKind.Should().Be(AnimationPanePlaybackControlKind.PlayFromSelected);
+        session.StartAnimationIndex.Should().Be(1);
+        session.ElapsedMs.Should().Be(250);
+        session.TotalDurationMs.Should().Be(1600);
+        session.RemainingDurationMs.Should().Be(1350);
+        session.StatusText.Should().Be("Playing from animation 2");
+        session.Segments.Should().Equal(
+            new AnimationPanePlaybackSegmentPlan(
+                1,
+                20u,
+                "Content Box",
+                "Em: Pulse",
+                AnimationTrigger.WithPrevious,
+                250,
+                0,
+                1000,
+                1250,
+                1000),
+            new AnimationPanePlaybackSegmentPlan(
+                2,
+                30u,
+                "Shape 30",
+                "Out: Fade",
+                AnimationTrigger.AfterPrevious,
+                1350,
+                1100,
+                500,
+                1850,
+                1600));
+        session.PlaybackControls.Should().ContainSingle(control =>
+            control.Kind == AnimationPanePlaybackControlKind.Stop && control.IsEnabled);
+        session.PlaybackControls.Should().Contain(control =>
+            control.Kind == AnimationPanePlaybackControlKind.PlayCurrentSlide && !control.IsEnabled);
+    }
+
+    [Theory]
+    [InlineData(AnimationPanePlaybackControlKind.PreviewCurrentSlide)]
+    [InlineData(AnimationPanePlaybackControlKind.PlayCurrentSlide)]
+    public void BuildPlaybackSessionPlan_PreviewAndPlayAllQueueWholeSlide(
+        AnimationPanePlaybackControlKind commandKind)
+    {
+        var timeline = AnimationPanePlanner.BuildTimelinePlan(
+            CreateSlideWithTimelineAnimations(),
+            selectedAnimationIndex: 1,
+            displayCulture: Invariant);
+
+        var session = AnimationPanePlanner.BuildPlaybackSessionPlan(
+            timeline,
+            commandKind,
+            elapsedMs: 5000);
+
+        session.State.Should().Be(AnimationPanePlaybackSessionState.Running);
+        session.StartAnimationIndex.Should().Be(0);
+        session.ElapsedMs.Should().Be(1850);
+        session.TotalDurationMs.Should().Be(1850);
+        session.RemainingDurationMs.Should().Be(0);
+        session.Segments.Select(segment => segment.RelativeStartMs)
+            .Should()
+            .Equal(0, 250, 1350);
+        session.Segments.Select(segment => segment.RelativeEndMs)
+            .Should()
+            .Equal(500, 1250, 1850);
+        session.StatusText.Should().Be("Playing all current slide animations");
+    }
+
+    [Fact]
+    public void BuildPlaybackSessionPlan_StopReturnsIdleControls()
+    {
+        var timeline = AnimationPanePlanner.BuildTimelinePlan(
+            CreateSlideWithTimelineAnimations(),
+            selectedAnimationIndex: 1,
+            displayCulture: Invariant,
+            isPlaybackRunning: true);
+
+        var session = AnimationPanePlanner.BuildPlaybackSessionPlan(
+            timeline,
+            AnimationPanePlaybackControlKind.Stop);
+
+        session.State.Should().Be(AnimationPanePlaybackSessionState.Stopped);
+        session.IsRunning.Should().BeFalse();
+        session.Segments.Should().BeEmpty();
+        session.StatusText.Should().Be("Animation preview stopped");
+        session.PlaybackControls.Should().Contain(control =>
+            control.Kind == AnimationPanePlaybackControlKind.PlayFromSelected
+            && control.IsEnabled
+            && control.StartAnimationIndex == 1);
+        session.PlaybackControls.Should().Contain(control =>
+            control.Kind == AnimationPanePlaybackControlKind.Stop
+            && !control.IsEnabled);
+    }
+
     private static Slide CreateSlideWithTimelineAnimations()
     {
         var slide = new Slide();

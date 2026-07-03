@@ -307,6 +307,7 @@ public sealed class MainWindowHeadlessTests
         source.Should().Contain("PresentationAnimationCommandPlanner.TryApply(");
         source.Should().Contain("OnAnimationPaneRequested");
         source.Should().Contain("AnimationPanePlanner.BuildTimelinePlan(");
+        source.Should().Contain("AnimationPanePlanner.BuildPlaybackSessionPlan(");
         source.Should().Contain("plan.PlaybackControls");
         source.Should().Contain("AnimationPanePlaybackControlKind.PlayFromSelected");
         source.Should().Contain("ShowAnimationPane()");
@@ -1739,6 +1740,64 @@ public sealed class MainWindowHeadlessTests
             .And.Contain("delay 0.5s")
             .And.Contain("move earlier available")
             .And.Contain("move later unavailable");
+    }
+
+    [Fact]
+    public async Task Animation_pane_projects_shared_playback_session_state()
+    {
+        AnimationPanePlaybackSessionPlan? playSession = null;
+        AnimationPanePlaybackSessionPlan? stopSession = null;
+        IReadOnlyList<string> runningControls = [];
+        IReadOnlyList<string> stoppedControls = [];
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var registry = window.BuildCommandRegistry();
+            registry.TryGet("freep.anim.entrance.fade", out var fade).Should().BeTrue();
+            registry.TryGet("freep.anim.trigger", out var trigger).Should().BeTrue();
+            registry.TryGet("freep.anim.pane", out var pane).Should().BeTrue();
+
+            var hero = window.Editor.InsertDefaultRectangle();
+            hero.Name = "Hero box";
+            window.Editor.Select(hero.Id);
+            fade!.Execute(RibbonCommandContext.Empty);
+
+            var caption = window.Editor.InsertDefaultRectangle();
+            caption.Name = "Caption box";
+            window.Editor.Select(caption.Id);
+            fade.Execute(RibbonCommandContext.Empty);
+            trigger!.Execute(RibbonCommandContext.ForSelectedValue("After Previous"));
+
+            pane!.Execute(RibbonCommandContext.Empty);
+
+            playSession = window.ExecuteAnimationPanePlaybackControlForTests(
+                AnimationPanePlaybackControlKind.PlayFromSelected);
+            runningControls = window.AnimationPanePlaybackControls.ToArray();
+
+            stopSession = window.ExecuteAnimationPanePlaybackControlForTests(
+                AnimationPanePlaybackControlKind.Stop);
+            stoppedControls = window.AnimationPanePlaybackControls.ToArray();
+        });
+
+        if (!ran) return;
+        playSession.Should().NotBeNull();
+        playSession!.State.Should().Be(AnimationPanePlaybackSessionState.Running);
+        playSession.StartAnimationIndex.Should().Be(1);
+        playSession.Segments.Should().ContainSingle(segment =>
+            segment.AnimationIndex == 1
+            && segment.ShapeName == "Caption box"
+            && segment.RelativeStartMs == 0);
+        runningControls.Should().Equal(
+            "Preview: unavailable",
+            "Play From Selected: unavailable",
+            "Play All: unavailable",
+            "Stop: available");
+        stopSession.Should().NotBeNull();
+        stopSession!.State.Should().Be(AnimationPanePlaybackSessionState.Stopped);
+        stopSession.Segments.Should().BeEmpty();
+        stoppedControls.Should().Contain("Play From Selected: available");
+        stoppedControls.Should().Contain("Stop: unavailable");
     }
 
     [Fact]

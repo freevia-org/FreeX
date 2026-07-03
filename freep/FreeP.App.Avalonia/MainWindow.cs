@@ -155,6 +155,7 @@ public sealed class MainWindow : Window
     private StackPanel _animationPaneItemsPanel = null!;
     private Button _animationPanePreviewButton = null!;
     private int _selectedAnimationIndex = -1;
+    private AnimationPanePlaybackSessionPlan? _animationPanePlaybackSessionPlan;
     private readonly List<string> _animationPaneRenderedRows = new();
     private readonly List<string> _animationPaneRenderedPlaybackControls = new();
     private int _animationPaneEffectOptionControlCount;
@@ -244,6 +245,7 @@ public sealed class MainWindow : Window
     internal PresentationProofingExecutionPlan? LastProofingExecutionPlan { get; private set; }
     internal PresentationProofingPanePlan? LastProofingPanePlan { get; private set; }
     internal AnimationPaneTimelinePlan? LastAnimationPaneTimelinePlan { get; private set; }
+    internal AnimationPanePlaybackSessionPlan? LastAnimationPanePlaybackSessionPlan => _animationPanePlaybackSessionPlan;
     internal FindReplaceWorkflowPlan? LastFindReplaceWorkflowPlan { get; private set; }
     internal PresentationDesignCommandPlan? LastCustomSlideSizeRequestPlan { get; private set; }
     internal SlideSizeDialogInitialState? LastCustomSlideSizeInitialState { get; private set; }
@@ -3463,7 +3465,8 @@ public sealed class MainWindow : Window
         LastAnimationPaneTimelinePlan = AnimationPanePlanner.BuildTimelinePlan(
             Editor.CurrentSlide,
             Editor.SelectedShapeIds,
-            selectedAnimationIndex);
+            selectedAnimationIndex,
+            isPlaybackRunning: _animationPanePlaybackSessionPlan?.IsRunning == true);
         return LastAnimationPaneTimelinePlan;
     }
 
@@ -3554,18 +3557,39 @@ public sealed class MainWindow : Window
     }
 
     private void ExecuteAnimationPanePlaybackControl(AnimationPanePlaybackControlDescriptor control)
+        => ExecuteAnimationPanePlaybackControl(control, startPreview: true);
+
+    internal AnimationPanePlaybackSessionPlan ExecuteAnimationPanePlaybackControlForTests(
+        AnimationPanePlaybackControlKind controlKind)
     {
+        var control = RefreshAnimationPaneTimelinePlan(_selectedAnimationIndex)
+            .PlaybackControls
+            .First(candidate => candidate.Kind == controlKind);
+        return ExecuteAnimationPanePlaybackControl(control, startPreview: false);
+    }
+
+    private AnimationPanePlaybackSessionPlan ExecuteAnimationPanePlaybackControl(
+        AnimationPanePlaybackControlDescriptor control,
+        bool startPreview)
+    {
+        var timeline = LastAnimationPaneTimelinePlan ?? RefreshAnimationPaneTimelinePlan(_selectedAnimationIndex);
+        _animationPanePlaybackSessionPlan = AnimationPanePlanner.BuildPlaybackSessionPlan(timeline, control.Kind);
+        RefreshVisibleAnimationPane(_selectedAnimationIndex);
+
         if (!control.IsEnabled)
-            return;
+            return _animationPanePlaybackSessionPlan;
 
         switch (control.Kind)
         {
             case AnimationPanePlaybackControlKind.PreviewCurrentSlide:
             case AnimationPanePlaybackControlKind.PlayFromSelected:
             case AnimationPanePlaybackControlKind.PlayCurrentSlide:
-                StartSlideShow(fromStart: false);
+                if (startPreview)
+                    StartSlideShow(fromStart: false);
                 break;
         }
+
+        return _animationPanePlaybackSessionPlan;
     }
 
     private Control BuildAnimationPaneItemCard(AnimationPaneTimelineItemPlan item)

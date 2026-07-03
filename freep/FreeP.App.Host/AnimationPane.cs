@@ -57,8 +57,10 @@ public sealed class AnimationPane : Border
     private readonly StackPanel _listPanel;
     private readonly StackPanel _playbackControlsPanel;
     private int _selectedRowIndex = -1;   // -1 = none
+    private AnimationPanePlaybackSessionPlan? _playbackSessionPlan;
 
     internal AnimationPaneTimelinePlan CurrentTimelinePlanForTest => BuildTimelinePlan();
+    internal AnimationPanePlaybackSessionPlan? CurrentPlaybackSessionPlanForTest => _playbackSessionPlan;
     internal IReadOnlyList<AnimationPanePlaybackControlDescriptor> CurrentPlaybackControlsForTest =>
         BuildTimelinePlan().PlaybackControls;
 
@@ -194,18 +196,39 @@ public sealed class AnimationPane : Border
     }
 
     private void ExecutePlaybackControl(AnimationPanePlaybackControlDescriptor control)
+        => ExecutePlaybackControl(control, invokePreview: true);
+
+    internal AnimationPanePlaybackSessionPlan ExecutePlaybackControlForTest(
+        AnimationPanePlaybackControlKind controlKind)
     {
+        var control = BuildTimelinePlan()
+            .PlaybackControls
+            .First(candidate => candidate.Kind == controlKind);
+        return ExecutePlaybackControl(control, invokePreview: false);
+    }
+
+    private AnimationPanePlaybackSessionPlan ExecutePlaybackControl(
+        AnimationPanePlaybackControlDescriptor control,
+        bool invokePreview)
+    {
+        var timeline = BuildTimelinePlan();
+        _playbackSessionPlan = AnimationPanePlanner.BuildPlaybackSessionPlan(timeline, control.Kind);
+        Rebuild();
+
         if (!control.IsEnabled)
-            return;
+            return _playbackSessionPlan;
 
         switch (control.Kind)
         {
             case AnimationPanePlaybackControlKind.PreviewCurrentSlide:
             case AnimationPanePlaybackControlKind.PlayFromSelected:
             case AnimationPanePlaybackControlKind.PlayCurrentSlide:
-                _onPreview?.Invoke();
+                if (invokePreview)
+                    _onPreview?.Invoke();
                 break;
         }
+
+        return _playbackSessionPlan;
     }
 
     // ── Row construction ──────────────────────────────────────────────────────────
@@ -514,7 +537,8 @@ public sealed class AnimationPane : Border
         => AnimationPanePlanner.BuildTimelinePlan(
             _editor.CurrentSlide,
             _editor.SelectedShapeIds,
-            _selectedRowIndex);
+            _selectedRowIndex,
+            isPlaybackRunning: _playbackSessionPlan?.IsRunning == true);
 
     // ── Static freeze helper ──────────────────────────────────────────────────────
 

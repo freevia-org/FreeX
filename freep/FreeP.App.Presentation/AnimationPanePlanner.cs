@@ -94,6 +94,13 @@ public enum AnimationPanePlaybackControlKind
     Stop,
 }
 
+public enum AnimationPanePlaybackSessionState
+{
+    Idle,
+    Running,
+    Stopped,
+}
+
 public sealed record AnimationPanePlaybackIntent(
     AnimationPanePlaybackIntentKind Kind,
     bool CanExecute,
@@ -110,6 +117,32 @@ public sealed record AnimationPanePlaybackControlDescriptor(
     int TotalDurationMs,
     string ToolTip,
     string? DisabledReason);
+
+public sealed record AnimationPanePlaybackSegmentPlan(
+    int AnimationIndex,
+    uint ShapeId,
+    string ShapeName,
+    string EffectText,
+    AnimationTrigger Trigger,
+    int AbsoluteStartMs,
+    int RelativeStartMs,
+    int DurationMs,
+    int AbsoluteEndMs,
+    int RelativeEndMs);
+
+public sealed record AnimationPanePlaybackSessionPlan(
+    AnimationPanePlaybackSessionState State,
+    AnimationPanePlaybackControlKind CommandKind,
+    int? StartAnimationIndex,
+    int ElapsedMs,
+    int TotalDurationMs,
+    int RemainingDurationMs,
+    IReadOnlyList<AnimationPanePlaybackSegmentPlan> Segments,
+    IReadOnlyList<AnimationPanePlaybackControlDescriptor> PlaybackControls,
+    string StatusText)
+{
+    public bool IsRunning => State == AnimationPanePlaybackSessionState.Running;
+}
 
 public sealed record AnimationPaneReorderIntent(
     bool CanMove,
@@ -139,13 +172,14 @@ public static class AnimationPanePlanner
         Slide? slide,
         IReadOnlyList<uint>? selectedShapeIds = null,
         int selectedAnimationIndex = -1,
-        CultureInfo? displayCulture = null)
+        CultureInfo? displayCulture = null,
+        bool isPlaybackRunning = false)
     {
         displayCulture ??= CultureInfo.CurrentCulture;
         var animations = slide?.Animations;
         if (animations is null || animations.Count == 0)
         {
-            var controls = BuildPlaybackControls(-1, 0, 0);
+            var controls = BuildPlaybackControls(-1, 0, 0, isPlaybackRunning);
             return new AnimationPaneTimelinePlan(
                 Array.Empty<AnimationPaneTimelineItemPlan>(),
                 -1,
@@ -208,7 +242,11 @@ public static class AnimationPanePlanner
                 effectOptions));
         }
 
-        var playbackControls = BuildPlaybackControls(selectedIndex, animations.Count, totalDurationMs);
+        var playbackControls = BuildPlaybackControls(
+            selectedIndex,
+            animations.Count,
+            totalDurationMs,
+            isPlaybackRunning);
         var previewControl = playbackControls.First(control =>
             control.Kind == AnimationPanePlaybackControlKind.PreviewCurrentSlide);
         return new AnimationPaneTimelinePlan(
@@ -226,11 +264,14 @@ public static class AnimationPanePlanner
     public static IReadOnlyList<AnimationPanePlaybackControlDescriptor> BuildPlaybackControls(
         int selectedAnimationIndex,
         int animationCount,
-        int totalDurationMs)
+        int totalDurationMs,
+        bool isPlaybackRunning = false)
     {
         var hasAnimations = animationCount > 0;
         var hasSelectedAnimation = selectedAnimationIndex >= 0 && selectedAnimationIndex < animationCount;
         var safeDurationMs = Math.Max(0, totalDurationMs);
+        var canStartPlayback = hasAnimations && !isPlaybackRunning;
+        const string RunningDisabledReason = "Stop the running animation preview before starting another";
 
         return
         [
@@ -238,45 +279,178 @@ public static class AnimationPanePlanner
                 "freep.anim.pane.preview",
                 AnimationPanePlaybackControlKind.PreviewCurrentSlide,
                 "Preview",
-                hasAnimations,
+                canStartPlayback,
                 null,
                 safeDurationMs,
-                hasAnimations
+                canStartPlayback
                     ? "Preview current slide animations"
-                    : "No animations to preview",
-                hasAnimations ? null : "No animations to preview"),
+                    : isPlaybackRunning
+                        ? RunningDisabledReason
+                        : "No animations to preview",
+                canStartPlayback
+                    ? null
+                    : isPlaybackRunning
+                        ? RunningDisabledReason
+                        : "No animations to preview"),
             new AnimationPanePlaybackControlDescriptor(
                 "freep.anim.pane.play-selected",
                 AnimationPanePlaybackControlKind.PlayFromSelected,
                 "Play From Selected",
-                hasSelectedAnimation,
+                hasSelectedAnimation && !isPlaybackRunning,
                 hasSelectedAnimation ? selectedAnimationIndex : null,
                 safeDurationMs,
-                hasSelectedAnimation
+                hasSelectedAnimation && !isPlaybackRunning
                     ? "Play animation preview from the selected row"
-                    : "Select an animation row to play from it",
-                hasSelectedAnimation ? null : "Select an animation row to play from it"),
+                    : isPlaybackRunning
+                        ? RunningDisabledReason
+                        : "Select an animation row to play from it",
+                hasSelectedAnimation && !isPlaybackRunning
+                    ? null
+                    : isPlaybackRunning
+                        ? RunningDisabledReason
+                        : "Select an animation row to play from it"),
             new AnimationPanePlaybackControlDescriptor(
                 "freep.anim.pane.play-slide",
                 AnimationPanePlaybackControlKind.PlayCurrentSlide,
                 "Play All",
-                hasAnimations,
+                canStartPlayback,
                 null,
                 safeDurationMs,
-                hasAnimations
+                canStartPlayback
                     ? "Play all animations on the current slide"
-                    : "No animations to play",
-                hasAnimations ? null : "No animations to play"),
+                    : isPlaybackRunning
+                        ? RunningDisabledReason
+                        : "No animations to play",
+                canStartPlayback
+                    ? null
+                    : isPlaybackRunning
+                        ? RunningDisabledReason
+                        : "No animations to play"),
             new AnimationPanePlaybackControlDescriptor(
                 "freep.anim.pane.stop",
                 AnimationPanePlaybackControlKind.Stop,
                 "Stop",
-                false,
+                isPlaybackRunning,
                 null,
                 safeDurationMs,
-                "No animation preview is currently running",
-                "No animation preview is currently running"),
+                isPlaybackRunning
+                    ? "Stop the running animation preview"
+                    : "No animation preview is currently running",
+                isPlaybackRunning ? null : "No animation preview is currently running"),
         ];
+    }
+
+    public static AnimationPanePlaybackSessionPlan BuildPlaybackSessionPlan(
+        AnimationPaneTimelinePlan timelinePlan,
+        AnimationPanePlaybackControlKind commandKind,
+        int elapsedMs = 0)
+    {
+        ArgumentNullException.ThrowIfNull(timelinePlan);
+
+        if (commandKind == AnimationPanePlaybackControlKind.Stop)
+        {
+            return BuildStoppedPlaybackSessionPlan(timelinePlan);
+        }
+
+        if (!timelinePlan.HasAnimations)
+        {
+            return BuildIdlePlaybackSessionPlan(
+                timelinePlan,
+                commandKind,
+                "No animations to preview");
+        }
+
+        var startIndex = commandKind switch
+        {
+            AnimationPanePlaybackControlKind.PreviewCurrentSlide => 0,
+            AnimationPanePlaybackControlKind.PlayCurrentSlide => 0,
+            AnimationPanePlaybackControlKind.PlayFromSelected => timelinePlan.SelectedIndex,
+            _ => -1
+        };
+
+        if (startIndex < 0 || startIndex >= timelinePlan.Items.Count)
+        {
+            return BuildIdlePlaybackSessionPlan(
+                timelinePlan,
+                commandKind,
+                "Select an animation row to play from it");
+        }
+
+        var anchorStartMs = timelinePlan.Items[startIndex].StartMs;
+        var segments = timelinePlan.Items
+            .Skip(startIndex)
+            .Select(item =>
+            {
+                var relativeStartMs = Math.Max(0, item.StartMs - anchorStartMs);
+                var relativeEndMs = Math.Max(relativeStartMs, item.EndMs - anchorStartMs);
+                return new AnimationPanePlaybackSegmentPlan(
+                    item.Index,
+                    item.ShapeId,
+                    item.ShapeName,
+                    item.EffectText,
+                    item.Trigger,
+                    item.StartMs,
+                    relativeStartMs,
+                    Math.Max(0, item.DurationMs),
+                    item.EndMs,
+                    relativeEndMs);
+            })
+            .ToArray();
+        var totalDurationMs = segments.Length == 0 ? 0 : segments.Max(segment => segment.RelativeEndMs);
+        var safeElapsedMs = Math.Clamp(elapsedMs, 0, totalDurationMs);
+        var sourceTotalDurationMs = timelinePlan.Items.Count == 0 ? 0 : timelinePlan.Items.Max(item => item.EndMs);
+        var runningControls = BuildPlaybackControls(
+            timelinePlan.SelectedIndex,
+            timelinePlan.Items.Count,
+            sourceTotalDurationMs,
+            isPlaybackRunning: true);
+
+        return new AnimationPanePlaybackSessionPlan(
+            AnimationPanePlaybackSessionState.Running,
+            commandKind,
+            startIndex,
+            safeElapsedMs,
+            totalDurationMs,
+            Math.Max(0, totalDurationMs - safeElapsedMs),
+            segments,
+            runningControls,
+            commandKind == AnimationPanePlaybackControlKind.PlayFromSelected
+                ? $"Playing from animation {startIndex + 1}"
+                : "Playing all current slide animations");
+    }
+
+    private static AnimationPanePlaybackSessionPlan BuildIdlePlaybackSessionPlan(
+        AnimationPaneTimelinePlan timelinePlan,
+        AnimationPanePlaybackControlKind commandKind,
+        string statusText)
+    {
+        var sourceTotalDurationMs = timelinePlan.Items.Count == 0 ? 0 : timelinePlan.Items.Max(item => item.EndMs);
+        return new AnimationPanePlaybackSessionPlan(
+            AnimationPanePlaybackSessionState.Idle,
+            commandKind,
+            null,
+            0,
+            0,
+            0,
+            Array.Empty<AnimationPanePlaybackSegmentPlan>(),
+            BuildPlaybackControls(timelinePlan.SelectedIndex, timelinePlan.Items.Count, sourceTotalDurationMs),
+            statusText);
+    }
+
+    private static AnimationPanePlaybackSessionPlan BuildStoppedPlaybackSessionPlan(
+        AnimationPaneTimelinePlan timelinePlan)
+    {
+        var sourceTotalDurationMs = timelinePlan.Items.Count == 0 ? 0 : timelinePlan.Items.Max(item => item.EndMs);
+        return new AnimationPanePlaybackSessionPlan(
+            AnimationPanePlaybackSessionState.Stopped,
+            AnimationPanePlaybackControlKind.Stop,
+            null,
+            0,
+            0,
+            0,
+            Array.Empty<AnimationPanePlaybackSegmentPlan>(),
+            BuildPlaybackControls(timelinePlan.SelectedIndex, timelinePlan.Items.Count, sourceTotalDurationMs),
+            "Animation preview stopped");
     }
 
     public static AnimationPaneReorderIntent BuildReorderIntent(

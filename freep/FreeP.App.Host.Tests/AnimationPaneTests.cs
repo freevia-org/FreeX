@@ -334,12 +334,42 @@ public sealed class AnimationPaneTests
             && !control.IsEnabled);
     }
 
+    [StaFact]
+    public void AnimationPane_ProjectsSharedPlaybackSessionState()
+    {
+        var editor = MakeSessionWithAnimations();
+        editor.Select(20u);
+        var pane = new AnimationPane(editor);
+
+        var playSession = pane.ExecutePlaybackControlForTest(AnimationPanePlaybackControlKind.PlayFromSelected);
+
+        playSession.State.Should().Be(AnimationPanePlaybackSessionState.Running);
+        playSession.StartAnimationIndex.Should().Be(1);
+        playSession.Segments.Should().ContainSingle(segment =>
+            segment.AnimationIndex == 1
+            && segment.ShapeId == 20u
+            && segment.RelativeStartMs == 0);
+        pane.CurrentPlaybackSessionPlanForTest.Should().BeSameAs(playSession);
+        pane.CurrentPlaybackControlsForTest.Should().Contain(control =>
+            control.Kind == AnimationPanePlaybackControlKind.Stop && control.IsEnabled);
+        pane.CurrentPlaybackControlsForTest.Should().Contain(control =>
+            control.Kind == AnimationPanePlaybackControlKind.PlayFromSelected && !control.IsEnabled);
+
+        var stopSession = pane.ExecutePlaybackControlForTest(AnimationPanePlaybackControlKind.Stop);
+
+        stopSession.State.Should().Be(AnimationPanePlaybackSessionState.Stopped);
+        stopSession.Segments.Should().BeEmpty();
+        pane.CurrentPlaybackControlsForTest.Should().Contain(control =>
+            control.Kind == AnimationPanePlaybackControlKind.Stop && !control.IsEnabled);
+    }
+
     [Fact]
     public void AnimationPane_UsesSharedPlannerForPolicy()
     {
         var source = ReadWorkspaceFile("freep", "FreeP.App.Host", "AnimationPane.cs");
 
         source.Should().Contain("AnimationPanePlanner.BuildTimelinePlan(");
+        source.Should().Contain("AnimationPanePlanner.BuildPlaybackSessionPlan(");
         source.Should().Contain("plan.PlaybackControls");
         source.Should().Contain("AnimationPanePlaybackControlKind.PlayFromSelected");
         source.Should().Contain("var effectText = item.EffectText");
