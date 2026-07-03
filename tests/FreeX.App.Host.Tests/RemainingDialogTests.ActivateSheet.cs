@@ -28,11 +28,14 @@ public sealed partial class RemainingDialogTests
         source.Should().Contain("SystemColors.InactiveSelectionHighlightTextBrushKey");
         source.Should().Contain("new Setter(Control.PaddingProperty, new Thickness(2, 0, 2, 0))");
         source.Should().Contain("new Setter(Control.FontSizeProperty, 10.5)");
+        source.Should().Contain("new Setter(Control.BorderBrushProperty, System.Windows.Media.Brushes.Transparent)");
+        source.Should().Contain("new Setter(Control.BorderThicknessProperty, new Thickness(1))");
         source.Should().Contain("new Setter(FrameworkElement.HeightProperty, 13.0)");
         source.Should().Contain("new Setter(Control.FocusVisualStyleProperty, null)");
         source.Should().Contain("new Trigger { Property = ListBoxItem.IsSelectedProperty, Value = true }");
         source.Should().Contain("new Setter(Control.BackgroundProperty, SystemColors.HighlightBrush)");
         source.Should().Contain("new Setter(Control.ForegroundProperty, SystemColors.HighlightTextBrush)");
+        source.Should().Contain("new Setter(Control.BorderBrushProperty, SystemColors.ControlTextBrush)");
         source.Should().Contain("new Thickness(10, 8, 10, 10)");
         source.Should().Contain("_sheetList.Margin = new Thickness(0, 0, 0, 16);");
         source.Should().Contain("DialogButtonRowFactory.Create(_okButton, _cancelButton)");
