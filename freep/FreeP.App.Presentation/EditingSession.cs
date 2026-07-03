@@ -1278,6 +1278,16 @@ public sealed class EditingSession
     public bool ToggleUnderlineOnActiveTableCell() =>
         TryApplyActiveTableCellTextFormat(TableCellTextFormatKind.Underline);
 
+    public bool SetTableHeaderRow(int slideIndex, uint shapeId, bool isHeaderRow)
+    {
+        var command = new SetTableHeaderRowCommand(slideIndex, shapeId, isHeaderRow);
+        if (!command.HasEffect(Presentation))
+            return false;
+
+        Bus.Execute(command);
+        return true;
+    }
+
     // ── Row / column insert and delete ────────────────────────────────────────────
 
     /// <summary>Inserts a row above the active cell's row. Undoable.</summary>

@@ -1128,6 +1128,60 @@ public sealed class PresentationReviewWorkflowPlannerTests
     }
 
     [Fact]
+    public void TableHeaderRowMutationPlan_AppliesThroughEditingSessionAndClearsAccessibilityIssue()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Title = "Quarterly review";
+        var table = new SlideShape
+        {
+            Id = 44,
+            Name = "Results table",
+            Kind = SlideShapeKind.Table,
+            Table = new TableShape
+            {
+                Rows =
+                {
+                    new TableRow
+                    {
+                        Cells =
+                        {
+                            new TableCell { TextBody = TextBody("Region") },
+                            new TableCell { TextBody = TextBody("Revenue") }
+                        }
+                    },
+                    new TableRow
+                    {
+                        Cells =
+                        {
+                            new TableCell { TextBody = TextBody("North") },
+                            new TableCell { TextBody = TextBody("$42K") }
+                        }
+                    }
+                }
+            }
+        };
+        slide.Shapes.Add(table);
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+
+        var issue = PresentationReviewWorkflowPlanner.BuildAccessibilitySummaryPlan(presentation)
+            .Issues.Single(issue => issue.Title == "Table header row missing");
+
+        issue.Action.CommandId.Should().Be(PresentationReviewWorkflowPlanner.SetTableHeaderRowCommandId);
+        var plan = PresentationReviewWorkflowPlanner.TryApplyTableHeaderRowMutation(
+            editor,
+            issue.SlideIndex,
+            issue.ShapeId);
+
+        plan.Should().Be(new PresentationTableHeaderRowMutationPlan(true, 0, 44, null));
+        table.Table!.Flags.FirstRow.Should().BeTrue();
+        PresentationReviewWorkflowPlanner.BuildAccessibilitySummaryPlan(presentation)
+            .Issues.Should().NotContain(issue => issue.Title == "Table header row missing");
+        editor.Undo();
+        table.Table.Flags.FirstRow.Should().BeFalse();
+    }
+
+    [Fact]
     public void BuildAccessibilitySummaryPlan_FlagsTableDiagnosticsWithSharedActionSummaries()
     {
         var presentation = Presentation.CreateEmpty();
@@ -1209,7 +1263,7 @@ public sealed class PresentationReviewWorkflowPlannerTests
             "Results table does not mark the first row as a header row.",
             new PresentationAccessibilityIssueActionSummary(
                 PresentationReviewWorkflowPlanner.MissingTableHeaderRowActionSummary,
-                null,
+                PresentationReviewWorkflowPlanner.SetTableHeaderRowCommandId,
                 true)));
         mergedCells.Should().Be(new PresentationAccessibilityIssueDescriptor(
             PresentationAccessibilityIssueSeverity.Warning,
@@ -1419,11 +1473,13 @@ public sealed class PresentationReviewWorkflowPlannerTests
             row.SlideDisplay.Should().Be("Slide 1");
             row.ShapeId.Should().Be(12);
             row.ShapeName.Should().Be("Milestone table");
-            row.ActionLabel.Should().Be("Select Object");
-            row.CommandHint.Should().BeNull();
             row.ShouldNavigateToSlide.Should().BeTrue();
             row.ShouldSelectShape.Should().BeTrue();
         });
+        plan.Rows[0].ActionLabel.Should().Be("Set Header Row");
+        plan.Rows[0].CommandHint.Should().Be(PresentationReviewWorkflowPlanner.SetTableHeaderRowCommandId);
+        plan.Rows[1].ActionLabel.Should().Be("Select Object");
+        plan.Rows[1].CommandHint.Should().BeNull();
         plan.SelectedRowIndex.Should().Be(1);
         plan.SelectedRow.Should().BeSameAs(plan.Rows[1]);
     }
