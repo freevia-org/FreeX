@@ -751,6 +751,130 @@ public sealed class PptxPackageRetentionTests
     }
 
     [Fact]
+    public void ReadWriteRead_AuthoredChartWorkbookFormulas_SemanticEditRewritesOnlyEditedChartRanges()
+    {
+        using var source = BuildPptxWithRichFormulaChartWorkbooksAndUnrelatedPackageData();
+        var sourceBytes = source.ToArray();
+        byte[] sourceFirstWorkbook;
+        byte[] sourceSecondWorkbook;
+        using (var sourceArchive = new ZipArchive(new MemoryStream(sourceBytes), ZipArchiveMode.Read))
+        {
+            sourceFirstWorkbook = ReadBytes(sourceArchive, "ppt/embeddings/authoredWorkbookFirst.xlsx");
+            sourceSecondWorkbook = ReadBytes(sourceArchive, "ppt/embeddings/authoredWorkbookSecond.xlsx");
+        }
+
+        var loaded = PptxPackageReader.Read(new MemoryStream(sourceBytes));
+        loaded.PackageSnapshot.Should().NotBeNull();
+        var chartShapes = loaded.Slides[0].Shapes.Where(shape => shape.Kind == SlideShapeKind.Chart).ToArray();
+        chartShapes.Should().HaveCount(2);
+
+        var preservedChart = chartShapes[0].Chart!;
+        preservedChart.RegenerateWorkbookOnSave.Should().BeFalse();
+        preservedChart.Series[0].FormulaReferences.SeriesName.Should().Be("'Forecast Model'!$C$1");
+        preservedChart.Series[0].FormulaReferences.Category.Should().Be("'Forecast Model'!$A$2:$A$4");
+        preservedChart.Series[0].FormulaReferences.Values.Should().Be("'Forecast Model'!Revenue_Actual");
+
+        var editedChart = chartShapes[1].Chart!;
+        editedChart.RegenerateWorkbookOnSave.Should().BeFalse();
+        editedChart.Series[0].FormulaReferences.SeriesName.Should().Be("Input!$D$1");
+        editedChart.Series[0].FormulaReferences.Category.Should().Be("Input!$A$2:$A$4");
+        editedChart.Series[0].FormulaReferences.Values.Should().Be("Input!$D$2:$D$4");
+
+        new ReplaceChartDataCommand(
+            slideIndex: 0,
+            shapeId: chartShapes[1].Id,
+            categories: ["Edited Jan", "Edited Feb", "Edited Mar"],
+            seriesNames: ["Edited Scenario"],
+            values: [new double?[] { 111, 222, 333 }]).Apply(loaded);
+
+        preservedChart.RegenerateWorkbookOnSave.Should().BeFalse();
+        editedChart.RegenerateWorkbookOnSave.Should().BeTrue();
+
+        using var saved = new MemoryStream();
+        PptxPackageWriter.Write(loaded, saved);
+        var savedBytes = saved.ToArray();
+
+        using (var archive = new ZipArchive(new MemoryStream(savedBytes), ZipArchiveMode.Read))
+        {
+            ReadText(archive, "customXml/richFormulaPayload.xml")
+                .Should()
+                .Contain("rich-formula-retain-me");
+
+            ReadBytes(archive, "ppt/embeddings/authoredWorkbookFirst.xlsx")
+                .Should()
+                .Equal(sourceFirstWorkbook, "the unedited chart should keep its PowerPoint-authored formula workbook byte-for-byte");
+            archive.GetEntry("ppt/embeddings/authoredWorkbookSecond.xlsx").Should().BeNull(
+                "the semantically edited chart should drop its stale authored formula workbook");
+            archive.GetEntry("ppt/embeddings/chartWorkbook2.xlsx").Should().NotBeNull(
+                "the edited chart should receive a regenerated workbook at its writer-owned chart index");
+
+            var chart1Xml = LoadXml(archive, "ppt/charts/chart1.xml");
+            var chart1Text = chart1Xml.ToString(SaveOptions.DisableFormatting);
+            chart1Text.Should().Contain("'Forecast Model'!$C$1");
+            chart1Text.Should().Contain("'Forecast Model'!$A$2:$A$4");
+            chart1Text.Should().Contain("'Forecast Model'!Revenue_Actual");
+            chart1Xml.Root!.Element(ChartNs + "externalData")!.Attribute(RelsDocNs + "id")!.Value
+                .Should().Be("rIdAuthoredWorkbookFirst");
+            var chart1Rels = LoadXml(archive, "ppt/charts/_rels/chart1.xml.rels");
+            Relationship(chart1Rels, PackageRelType, "../embeddings/authoredWorkbookFirst.xlsx").Should().NotBeNull();
+
+            var chart2Xml = LoadXml(archive, "ppt/charts/chart2.xml");
+            var chart2Text = chart2Xml.ToString(SaveOptions.DisableFormatting);
+            chart2Text.Should().Contain("Edited Jan");
+            chart2Text.Should().Contain("Edited Scenario");
+            chart2Text.Should().Contain("ChartData!$A$2:$A$4");
+            chart2Text.Should().Contain("ChartData!$B$1");
+            chart2Text.Should().Contain("ChartData!$B$2:$B$4");
+            chart2Text.Should().NotContain("Input!$D$2:$D$4",
+                "edited charts should replace authored formulas with ranges into the regenerated workbook");
+            chart2Xml.Root!.Element(ChartNs + "externalData")!.Attribute(RelsDocNs + "id")!.Value
+                .Should().Be("rIdWorkbook1");
+            var chart2Rels = LoadXml(archive, "ppt/charts/_rels/chart2.xml.rels");
+            Relationship(chart2Rels, PackageRelType, "../embeddings/chartWorkbook2.xlsx").Should().NotBeNull();
+
+            var contentTypes = LoadXml(archive, "[Content_Types].xml");
+            Override(contentTypes, "/ppt/embeddings/authoredWorkbookFirst.xlsx", SpreadsheetWorkbookContentType)
+                .Should().NotBeNull();
+            Override(contentTypes, "/ppt/embeddings/authoredWorkbookSecond.xlsx", SpreadsheetWorkbookContentType)
+                .Should().BeNull("the stale workbook override for the edited chart should not survive");
+            Override(contentTypes, "/ppt/embeddings/chartWorkbook2.xlsx", SpreadsheetWorkbookContentType)
+                .Should().NotBeNull();
+            Override(
+                contentTypes,
+                "/customXml/richFormulaPayload.xml",
+                "application/vnd.example.freep.rich-formula-payload+xml").Should().NotBeNull();
+
+            using var regeneratedWorkbook = new ZipArchive(
+                new MemoryStream(ReadBytes(archive, "ppt/embeddings/chartWorkbook2.xlsx")),
+                ZipArchiveMode.Read);
+            var regeneratedSheet = LoadXml(regeneratedWorkbook, "xl/worksheets/sheet1.xml")
+                .ToString(SaveOptions.DisableFormatting);
+            regeneratedSheet.Should().Contain("Edited Scenario");
+            regeneratedSheet.Should().Contain("Edited Jan");
+            regeneratedSheet.Should().Contain("111");
+            regeneratedSheet.Should().Contain("222");
+            regeneratedSheet.Should().Contain("333");
+        }
+
+        sourceSecondWorkbook.Should().NotBeEmpty("the source fixture should carry a real authored workbook for the edited chart");
+
+        var reloaded = PptxPackageReader.Read(new MemoryStream(savedBytes));
+        var reloadedCharts = reloaded.Slides[0].Shapes
+            .Where(shape => shape.Kind == SlideShapeKind.Chart)
+            .Select(shape => shape.Chart!)
+            .ToArray();
+        reloadedCharts[0].Series[0].FormulaReferences.SeriesName.Should().Be("'Forecast Model'!$C$1");
+        reloadedCharts[0].Series[0].FormulaReferences.Category.Should().Be("'Forecast Model'!$A$2:$A$4");
+        reloadedCharts[0].Series[0].FormulaReferences.Values.Should().Be("'Forecast Model'!Revenue_Actual");
+        reloadedCharts[1].Series[0].FormulaReferences.SeriesName.Should().Be("ChartData!$B$1");
+        reloadedCharts[1].Series[0].FormulaReferences.Category.Should().Be("ChartData!$A$2:$A$4");
+        reloadedCharts[1].Series[0].FormulaReferences.Values.Should().Be("ChartData!$B$2:$B$4");
+        reloadedCharts[1].Categories.Should().Equal("Edited Jan", "Edited Feb", "Edited Mar");
+        reloadedCharts[1].Series[0].Name.Should().Be("Edited Scenario");
+        reloadedCharts[1].Series[0].Values.Should().Equal(111, 222, 333);
+    }
+
+    [Fact]
     public void ReadWriteRead_ChartDataTableSettings_RetainsModeledChartPackageSemantics()
     {
         using var source = BuildPptxWithChartWorkbookAndUnrelatedPackageData();
@@ -1365,6 +1489,84 @@ public sealed class PptxPackageRetentionTests
         return package;
     }
 
+    private static MemoryStream BuildPptxWithRichFormulaChartWorkbooksAndUnrelatedPackageData()
+    {
+        var presentation = new Presentation();
+        var slide = new Slide();
+        slide.Shapes.Add(CreateWorkbookChartShape(301, "Formula first", 11, 22, 914400));
+        slide.Shapes.Add(CreateWorkbookChartShape(302, "Formula second", 33, 44, 4572000));
+        presentation.Slides.Add(slide);
+
+        using var basePackage = new MemoryStream();
+        PptxPackageWriter.Write(presentation, basePackage);
+
+        var package = new MemoryStream();
+        package.Write(basePackage.ToArray());
+        package.Position = 0;
+        using (var archive = new ZipArchive(package, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            AddSourceWorkbookSidecar(
+                archive,
+                chartIndex: 1,
+                workbookName: "authoredWorkbookFirst.xlsx",
+                relId: "rIdAuthoredWorkbookFirst",
+                workbookBytes: BuildRichWorkbookBytes(
+                    "Forecast Model",
+                    "first-rich-formula-workbook",
+                    "Revenue_Actual",
+                    "B2*1.10",
+                    "B3*1.10",
+                    "B4*1.10"));
+            SetChartFormulaReferences(
+                archive,
+                "ppt/charts/chart1.xml",
+                "'Forecast Model'!$C$1",
+                "'Forecast Model'!$A$2:$A$4",
+                "'Forecast Model'!Revenue_Actual");
+
+            AddSourceWorkbookSidecar(
+                archive,
+                chartIndex: 2,
+                workbookName: "authoredWorkbookSecond.xlsx",
+                relId: "rIdAuthoredWorkbookSecond",
+                workbookBytes: BuildRichWorkbookBytes(
+                    "Input",
+                    "second-rich-formula-workbook",
+                    "Scenario_Source",
+                    "B2+C2",
+                    "B3+C3",
+                    "B4+C4"));
+            SetChartFormulaReferences(
+                archive,
+                "ppt/charts/chart2.xml",
+                "Input!$D$1",
+                "Input!$A$2:$A$4",
+                "Input!$D$2:$D$4");
+
+            WriteText(
+                archive,
+                "customXml/richFormulaPayload.xml",
+                """<payload xmlns="urn:freep:test">rich-formula-retain-me</payload>""");
+            var presRels = LoadXml(archive, "ppt/_rels/presentation.xml.rels");
+            AddRelationship(
+                presRels,
+                "rIdRichFormulaPayload",
+                CustomXmlRelType,
+                "../customXml/richFormulaPayload.xml");
+            WriteXml(archive, "ppt/_rels/presentation.xml.rels", presRels);
+
+            var contentTypes = LoadXml(archive, "[Content_Types].xml");
+            AddOverride(contentTypes, "/ppt/embeddings/authoredWorkbookFirst.xlsx", SpreadsheetWorkbookContentType);
+            AddOverride(contentTypes, "/ppt/embeddings/authoredWorkbookSecond.xlsx", SpreadsheetWorkbookContentType);
+            AddOverride(contentTypes, "/customXml/richFormulaPayload.xml",
+                "application/vnd.example.freep.rich-formula-payload+xml");
+            WriteXml(archive, "[Content_Types].xml", contentTypes);
+        }
+
+        package.Position = 0;
+        return package;
+    }
+
     private static SlideShape CreateWorkbookChartShape(
         uint shapeId,
         string name,
@@ -1415,6 +1617,29 @@ public sealed class PptxPackageRetentionTests
 
     private static void AddSourceWorkbookSidecar(
         ZipArchive archive,
+        int chartIndex,
+        string workbookName,
+        string relId,
+        byte[] workbookBytes)
+    {
+        var chartPath = $"ppt/charts/chart{chartIndex}.xml";
+        var chartXml = LoadXml(archive, chartPath);
+        chartXml.Root!.Element(ChartNs + "externalData")?.Remove();
+        chartXml.Root.Add(new XElement(ChartNs + "externalData",
+            new XAttribute(RelsDocNs + "id", relId),
+            new XElement(ChartNs + "autoUpdate", new XAttribute("val", "0"))));
+        WriteXml(archive, chartPath, chartXml);
+
+        var chartRels = new XDocument(
+            new XDeclaration("1.0", "UTF-8", "yes"),
+            new XElement(RelsNs + "Relationships"));
+        AddRelationship(chartRels, relId, PackageRelType, $"../embeddings/{workbookName}");
+        WriteXml(archive, $"ppt/charts/_rels/chart{chartIndex}.xml.rels", chartRels);
+        WriteBytes(archive, $"ppt/embeddings/{workbookName}", workbookBytes);
+    }
+
+    private static void AddSourceWorkbookSidecar(
+        ZipArchive archive,
         string chartPath,
         string workbookName,
         string relId,
@@ -1434,6 +1659,192 @@ public sealed class PptxPackageRetentionTests
         WriteXml(archive, OpcPathHelper.GetRelationshipPartPath(chartPath), chartRels);
         WriteBytes(archive, $"ppt/embeddings/{workbookName}", Encoding.UTF8.GetBytes(workbookPayload));
     }
+
+    private static void SetChartFormulaReferences(
+        ZipArchive archive,
+        string chartPath,
+        string seriesNameFormula,
+        string categoryFormula,
+        string valuesFormula)
+    {
+        var chartXml = LoadXml(archive, chartPath);
+        var series = chartXml.Descendants(ChartNs + "ser").First();
+        SetFormula(series.Element(ChartNs + "tx")!.Element(ChartNs + "strRef")!, seriesNameFormula);
+        SetFormula(series.Element(ChartNs + "cat")!.Element(ChartNs + "strRef")!, categoryFormula);
+        SetFormula(series.Element(ChartNs + "val")!.Element(ChartNs + "numRef")!, valuesFormula);
+        WriteXml(archive, chartPath, chartXml);
+    }
+
+    private static void SetFormula(XElement referenceElement, string formula)
+    {
+        var formulaElement = referenceElement.Element(ChartNs + "f");
+        if (formulaElement is null)
+            referenceElement.AddFirst(new XElement(ChartNs + "f", formula));
+        else
+            formulaElement.Value = formula;
+    }
+
+    private static byte[] BuildRichWorkbookBytes(
+        string sheetName,
+        string marker,
+        string definedName,
+        string formula1,
+        string formula2,
+        string formula3)
+    {
+        using var workbook = new MemoryStream();
+        using (var archive = new ZipArchive(workbook, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            WriteXml(archive, "[Content_Types].xml", new XDocument(
+                new XDeclaration("1.0", "UTF-8", "yes"),
+                new XElement(ContentTypesNs + "Types",
+                    new XElement(ContentTypesNs + "Default",
+                        new XAttribute("Extension", "rels"),
+                        new XAttribute("ContentType", "application/vnd.openxmlformats-package.relationships+xml")),
+                    new XElement(ContentTypesNs + "Default",
+                        new XAttribute("Extension", "xml"),
+                        new XAttribute("ContentType", "application/xml")),
+                    new XElement(ContentTypesNs + "Override",
+                        new XAttribute("PartName", "/xl/workbook.xml"),
+                        new XAttribute("ContentType", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml")),
+                    new XElement(ContentTypesNs + "Override",
+                        new XAttribute("PartName", "/xl/worksheets/sheet1.xml"),
+                        new XAttribute("ContentType", "application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml")),
+                    new XElement(ContentTypesNs + "Override",
+                        new XAttribute("PartName", "/xl/styles.xml"),
+                        new XAttribute("ContentType", "application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml")),
+                    new XElement(ContentTypesNs + "Override",
+                        new XAttribute("PartName", "/xl/calcChain.xml"),
+                        new XAttribute("ContentType", "application/vnd.openxmlformats-officedocument.spreadsheetml.calcChain+xml")))));
+
+            WriteXml(archive, "_rels/.rels", new XDocument(
+                new XDeclaration("1.0", "UTF-8", "yes"),
+                new XElement(RelsNs + "Relationships",
+                    new XElement(RelsNs + "Relationship",
+                        new XAttribute("Id", "rId1"),
+                        new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument"),
+                        new XAttribute("Target", "xl/workbook.xml")))));
+
+            var spreadsheetNs = XNamespace.Get("http://schemas.openxmlformats.org/spreadsheetml/2006/main");
+            WriteXml(archive, "xl/workbook.xml", new XDocument(
+                new XDeclaration("1.0", "UTF-8", "yes"),
+                new XElement(spreadsheetNs + "workbook",
+                    new XAttribute(XNamespace.Xmlns + "r", RelsDocNs.NamespaceName),
+                    new XElement(spreadsheetNs + "sheets",
+                        new XElement(spreadsheetNs + "sheet",
+                            new XAttribute("name", sheetName),
+                            new XAttribute("sheetId", "1"),
+                            new XAttribute(RelsDocNs + "id", "rId1"))),
+                    new XElement(spreadsheetNs + "definedNames",
+                        new XElement(spreadsheetNs + "definedName",
+                            new XAttribute("name", definedName),
+                            $"'{sheetName}'!$C$2:$C$4")),
+                    new XElement(spreadsheetNs + "calcPr",
+                        new XAttribute("calcId", "191029"),
+                        new XAttribute("fullCalcOnLoad", "1")))));
+
+            WriteXml(archive, "xl/_rels/workbook.xml.rels", new XDocument(
+                new XDeclaration("1.0", "UTF-8", "yes"),
+                new XElement(RelsNs + "Relationships",
+                    new XElement(RelsNs + "Relationship",
+                        new XAttribute("Id", "rId1"),
+                        new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet"),
+                        new XAttribute("Target", "worksheets/sheet1.xml")),
+                    new XElement(RelsNs + "Relationship",
+                        new XAttribute("Id", "rId2"),
+                        new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles"),
+                        new XAttribute("Target", "styles.xml")),
+                    new XElement(RelsNs + "Relationship",
+                        new XAttribute("Id", "rId3"),
+                        new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/calcChain"),
+                        new XAttribute("Target", "calcChain.xml")))));
+
+            WriteXml(archive, "xl/styles.xml", new XDocument(
+                new XDeclaration("1.0", "UTF-8", "yes"),
+                new XElement(spreadsheetNs + "styleSheet",
+                    new XElement(spreadsheetNs + "fonts",
+                        new XAttribute("count", "1"),
+                        new XElement(spreadsheetNs + "font")),
+                    new XElement(spreadsheetNs + "fills",
+                        new XAttribute("count", "1"),
+                        new XElement(spreadsheetNs + "fill")),
+                    new XElement(spreadsheetNs + "borders",
+                        new XAttribute("count", "1"),
+                        new XElement(spreadsheetNs + "border")),
+                    new XElement(spreadsheetNs + "cellStyleXfs",
+                        new XAttribute("count", "1"),
+                        new XElement(spreadsheetNs + "xf",
+                            new XAttribute("numFmtId", "0"),
+                            new XAttribute("fontId", "0"),
+                            new XAttribute("fillId", "0"),
+                            new XAttribute("borderId", "0"))),
+                    new XElement(spreadsheetNs + "cellXfs",
+                        new XAttribute("count", "1"),
+                        new XElement(spreadsheetNs + "xf",
+                            new XAttribute("numFmtId", "0"),
+                            new XAttribute("fontId", "0"),
+                            new XAttribute("fillId", "0"),
+                            new XAttribute("borderId", "0"),
+                            new XAttribute("xfId", "0"))))));
+
+            WriteXml(archive, "xl/worksheets/sheet1.xml", new XDocument(
+                new XDeclaration("1.0", "UTF-8", "yes"),
+                new XElement(spreadsheetNs + "worksheet",
+                    new XElement(spreadsheetNs + "sheetData",
+                        new XElement(spreadsheetNs + "row",
+                            new XAttribute("r", "1"),
+                            InlineStringCell(spreadsheetNs, "A1", "Quarter"),
+                            InlineStringCell(spreadsheetNs, "B1", "Base"),
+                            InlineStringCell(spreadsheetNs, "C1", "Actual")),
+                        RichWorkbookRow(spreadsheetNs, 2, "Jan", 10, formula1, 11),
+                        RichWorkbookRow(spreadsheetNs, 3, "Feb", 20, formula2, 22),
+                        RichWorkbookRow(spreadsheetNs, 4, "Mar", 30, formula3, 33)),
+                    new XElement(spreadsheetNs + "customProperties",
+                        new XElement(spreadsheetNs + "customPr",
+                            new XAttribute("name", "FreePMarker"),
+                            new XAttribute("val", marker))))));
+
+            WriteXml(archive, "xl/calcChain.xml", new XDocument(
+                new XDeclaration("1.0", "UTF-8", "yes"),
+                new XElement(spreadsheetNs + "calcChain",
+                    new XElement(spreadsheetNs + "c", new XAttribute("r", "C2"), new XAttribute("i", "1")),
+                    new XElement(spreadsheetNs + "c", new XAttribute("r", "C3"), new XAttribute("i", "1")),
+                    new XElement(spreadsheetNs + "c", new XAttribute("r", "C4"), new XAttribute("i", "1")))));
+        }
+
+        return workbook.ToArray();
+    }
+
+    private static XElement RichWorkbookRow(
+        XNamespace spreadsheetNs,
+        int row,
+        string quarter,
+        int baseValue,
+        string formula,
+        int cachedValue) =>
+        new(spreadsheetNs + "row",
+            new XAttribute("r", row.ToString()),
+            InlineStringCell(spreadsheetNs, $"A{row}", quarter),
+            NumberCell(spreadsheetNs, $"B{row}", baseValue),
+            FormulaCell(spreadsheetNs, $"C{row}", formula, cachedValue));
+
+    private static XElement InlineStringCell(XNamespace spreadsheetNs, string reference, string value) =>
+        new(spreadsheetNs + "c",
+            new XAttribute("r", reference),
+            new XAttribute("t", "inlineStr"),
+            new XElement(spreadsheetNs + "is",
+                new XElement(spreadsheetNs + "t", value)));
+
+    private static XElement NumberCell(XNamespace spreadsheetNs, string reference, int value) =>
+        new(spreadsheetNs + "c",
+            new XAttribute("r", reference),
+            new XElement(spreadsheetNs + "v", value.ToString()));
+
+    private static XElement FormulaCell(XNamespace spreadsheetNs, string reference, string formula, int cachedValue) =>
+        new(spreadsheetNs + "c",
+            new XAttribute("r", reference),
+            new XElement(spreadsheetNs + "f", formula),
+            new XElement(spreadsheetNs + "v", cachedValue.ToString()));
 
     private static MemoryStream BuildPptxWithPresentationScopedCustomXml()
     {
