@@ -2875,6 +2875,15 @@ public sealed class MainWindow : Window
     internal PresentationReadingOrderMutationPlan ApplyReadingOrderMoveLater()
         => ApplyReadingOrderMove(PresentationReviewWorkflowIntentKind.MoveReadingOrderLater);
 
+    internal PresentationReadingOrderSelectionPlan ApplyReadingOrderSelectItem(uint shapeId)
+    {
+        var plan = PresentationReviewWorkflowPlanner.TryApplyReadingOrderSelection(Editor, shapeId);
+        RefreshReadingOrderPlan();
+        if (IsReadingOrderPaneVisible && LastReadingOrderPlan is not null)
+            RenderReadingOrderPane(LastReadingOrderPlan);
+        return plan;
+    }
+
     private PresentationReadingOrderMutationPlan ApplyReadingOrderMove(
         PresentationReviewWorkflowIntentKind intent)
     {
@@ -3041,7 +3050,7 @@ public sealed class MainWindow : Window
         ToolTip.SetTip(button, action.DisabledReason);
     }
 
-    private static Control BuildReadingOrderItemCard(PresentationReadingOrderItemPlan item)
+    private Control BuildReadingOrderItemCard(PresentationReadingOrderItemPlan item)
     {
         var panel = new StackPanel
         {
@@ -3086,7 +3095,7 @@ public sealed class MainWindow : Window
             });
         }
 
-        return new Border
+        var card = new Border
         {
             Background = item.IsSelected
                 ? new SolidColorBrush(Color.FromRgb(0xFF, 0xF6, 0xF2))
@@ -3100,6 +3109,19 @@ public sealed class MainWindow : Window
             Margin = new Thickness(12, 0, 12, 10),
             Child = panel,
         };
+
+        var button = new Button
+        {
+            Content = card,
+            Tag = PresentationReviewWorkflowPlanner.ReadingOrderSelectItemCommandId,
+            Padding = new Thickness(0),
+            BorderThickness = new Thickness(0),
+            Background = Brushes.Transparent,
+            Cursor = new Cursor(StandardCursorType.Hand),
+        };
+        ToolTip.SetTip(button, $"Select {item.ShapeName}");
+        button.Click += (_, _) => ApplyReadingOrderSelectItem(item.ShapeId);
+        return button;
     }
 
     private static string BuildReadingOrderAltTextLine(PresentationReadingOrderItemPlan item)

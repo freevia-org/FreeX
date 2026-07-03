@@ -259,6 +259,14 @@ public sealed record PresentationReadingOrderMutationPlan(
     int TargetIndex,
     string? ValidationMessage);
 
+public sealed record PresentationReadingOrderSelectionPlan(
+    PresentationReviewWorkflowIntentKind Intent,
+    bool ShouldSelect,
+    int SlideIndex,
+    uint? ShapeId,
+    int ItemIndex,
+    string? ValidationMessage);
+
 public sealed record PresentationProofingRequestPlan(
     bool CanStart,
     PresentationWorkflowCapabilityStatus Status,
@@ -399,6 +407,8 @@ public static class PresentationReviewWorkflowPlanner
         "Selected shape is already earliest in the reading order.";
     public const string ReadingOrderAlreadyLatestMessage =
         "Selected shape is already latest in the reading order.";
+    public const string ReadingOrderItemNotFoundMessage =
+        "Reading order item is no longer available.";
     public const string ProofingRequiresHostMessage =
         "Proofing needs a host spelling engine; this shared plan owns the searchable FreeP scopes.";
     public const string ProofingReadyMessage =
@@ -1157,6 +1167,69 @@ public static class PresentationReviewWorkflowPlanner
         if (plan.ShouldApply)
         {
             editor.MoveSelectedShapeInReadingOrder(plan.TargetIndex - plan.SourceIndex);
+        }
+
+        return plan;
+    }
+
+    public static PresentationReadingOrderSelectionPlan BuildReadingOrderSelectionPlan(
+        Slide? slide,
+        int slideIndex,
+        uint? shapeId)
+    {
+        if (shapeId is null)
+        {
+            return new PresentationReadingOrderSelectionPlan(
+                PresentationReviewWorkflowIntentKind.SelectReadingOrderItem,
+                false,
+                slideIndex,
+                null,
+                -1,
+                MissingReadingOrderSelectionMessage);
+        }
+
+        var plan = BuildReadingOrderPlan(slide, slideIndex, [shapeId.Value]);
+        if (!plan.HasSlide || plan.Items.Count == 0)
+        {
+            return new PresentationReadingOrderSelectionPlan(
+                PresentationReviewWorkflowIntentKind.SelectReadingOrderItem,
+                false,
+                slideIndex,
+                shapeId,
+                -1,
+                EmptyReadingOrderMessage);
+        }
+
+        if (plan.SelectedItemIndex < 0)
+        {
+            return new PresentationReadingOrderSelectionPlan(
+                PresentationReviewWorkflowIntentKind.SelectReadingOrderItem,
+                false,
+                slideIndex,
+                shapeId,
+                -1,
+                ReadingOrderItemNotFoundMessage);
+        }
+
+        return new PresentationReadingOrderSelectionPlan(
+            PresentationReviewWorkflowIntentKind.SelectReadingOrderItem,
+            true,
+            slideIndex,
+            shapeId,
+            plan.SelectedItemIndex,
+            null);
+    }
+
+    public static PresentationReadingOrderSelectionPlan TryApplyReadingOrderSelection(
+        EditingSession editor,
+        uint? shapeId)
+    {
+        ArgumentNullException.ThrowIfNull(editor);
+
+        var plan = BuildReadingOrderSelectionPlan(editor.CurrentSlide, editor.CurrentSlideIndex, shapeId);
+        if (plan.ShouldSelect && plan.ShapeId is { } selectedShapeId)
+        {
+            editor.Select(selectedShapeId);
         }
 
         return plan;
