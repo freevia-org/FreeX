@@ -53,8 +53,8 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = state.IsProtected ? UiText.Get("ShellLoc_UnprotectSheetTitle") : UiText.Get("ShellLoc_ProtectSheetTitle"),
-            Width = state.IsProtected ? 380 : 430,
-            Height = state.IsProtected ? 240 : 580,
+            Width = state.IsProtected ? ProtectionDialogPlanner.UnprotectSheetWidth : ProtectionDialogPlanner.ProtectSheetWidth,
+            Height = state.IsProtected ? ProtectionDialogPlanner.UnprotectSheetHeight : ProtectionDialogPlanner.ProtectSheetHeight,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };

@@ -33,10 +33,8 @@ public sealed class SlidePanePolicySourceGuardTests
         source.Should().Contain("SlidePanePlanner.TryApplyAction(Editor, action)");
         source.Should().Contain("SlideSectionPlanner.BuildSlideContextActions(");
         source.Should().Contain("SlideSectionPlanner.BuildSectionHeaderActions(");
-        source.Should().Contain("Editor.AddSectionAtSlide(action.SlideIndex, name)");
-        source.Should().Contain("Editor.RenameSection(action.SectionIndex, name)");
-        source.Should().Contain("Editor.RemoveSection(action.SectionIndex)");
-        source.Should().Contain("Editor.RemoveAllSections()");
+        source.Should().Contain("SlideSectionPlanner.BuildExecutionPlan(action)");
+        source.Should().Contain("SlideSectionPlanner.TryApplyAction(Editor, execution, promptedName)");
         source.Should().Contain("PointerPressed += OnSlidePaneItemPointerPressed");
         source.Should().Contain("PointerMoved += OnSlidePaneItemPointerMoved");
         source.Should().Contain("PointerReleased += OnSlidePaneItemPointerReleased");
@@ -53,6 +51,10 @@ public sealed class SlidePanePolicySourceGuardTests
         source.Should().NotContain("Editor.DuplicateCurrentSlide();");
         source.Should().NotContain("Editor.DeleteCurrentSlide();");
         source.Should().NotContain("Editor.MoveSlide(");
+        source.Should().NotContain("Editor.AddSectionAtSlide(action.SlideIndex");
+        source.Should().NotContain("Editor.RenameSection(action.SectionIndex");
+        source.Should().NotContain("Editor.RemoveSection(action.SectionIndex)");
+        source.Should().NotContain("Editor.RemoveAllSections()");
     }
 
     private static string FindRepositoryRoot()

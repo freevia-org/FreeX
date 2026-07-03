@@ -5094,7 +5094,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("HasLaunchSmokeCompactDialog(probe.Dialog, width: 420, height: 430, minWidth: 360, minHeight: 390)");
         source.Should().Contain("HasLaunchSmokeCompactDialog(probe.Dialog, width: 420, height: 520, minWidth: 360, minHeight: 480)");
         source.Should().Contain("HasLaunchSmokeCompactDialog(probe.Dialog, width: 420, height: 320, minWidth: 420, minHeight: 320)");
-        source.Should().Contain("HasLaunchSmokeCompactDialog(probe.Dialog, width: 430, height: 520, minWidth: 430, minHeight: 520)");
+        source.Should().Contain("height: GoToSpecialDialogPlanner.Height");
+        source.Should().Contain("minHeight: GoToSpecialDialogPlanner.Height");
         source.Should().Contain("HasLaunchSmokeButton(probe.ChooseFormatButton, \"FindChooseFormatFromCellButton\", \"Choose From Cell\")");
         source.Should().Contain("HasLaunchSmokeButton(probe.ChooseFindFormatButton, \"ReplaceFindChooseFormatFromCellButton\", \"Choose From Cell\")");
         source.Should().Contain("ShowGoToInputDialogAsync(");

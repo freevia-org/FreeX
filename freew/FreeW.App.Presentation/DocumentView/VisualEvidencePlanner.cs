@@ -158,6 +158,9 @@ public sealed record FreeWVisualDrawingObjectEffectExpectation(
     int ShapeEffectObjectCount,
     int ImageEffectObjectCount,
     int WordArtEffectObjectCount,
+    int RenderedGroupChildEffectObjectCount,
+    int RenderedGroupChildShapeEffectObjectCount,
+    int RenderedGroupChildWordArtEffectObjectCount,
     int PlannedGroupChildEffectObjectCount,
     int PlannedGroupChildShapeEffectObjectCount,
     int PlannedGroupChildWordArtEffectObjectCount,
@@ -168,9 +171,11 @@ public sealed record FreeWVisualDrawingObjectEffectExpectation(
     bool HasBevel,
     bool HasArtisticEffect,
     IReadOnlyList<string> EffectSummaries,
+    IReadOnlyList<string> RenderedGroupChildEffectSummaries,
     IReadOnlyList<string> PlannedGroupChildEffectSummaries)
 {
-    public bool HasAny => EffectObjectCount > 0;
+    public bool HasAny => EffectObjectCount > 0 || RenderedGroupChildEffectObjectCount > 0;
+    public bool HasRenderedGroupChildEffects => RenderedGroupChildEffectObjectCount > 0;
     public bool HasPlannedGroupChildEffects => PlannedGroupChildEffectObjectCount > 0;
 }
 
@@ -296,7 +301,7 @@ public static class FreeWVisualEvidencePlanner
 {
     public const string ManifestFileName = "freew_visual_evidence_manifest.json";
     public const string SchemaId = "freew.visual-evidence.v1";
-    public const int SchemaVersion = 8;
+    public const int SchemaVersion = 9;
     public const string SectionGeometryPageSurfaceRenderStatus = "section-page-surface";
 
     private const int MaxTrackedColorCount = 4096;
@@ -509,6 +514,8 @@ public static class FreeWVisualEvidencePlanner
                 "shape-effects",
                 "image-effects",
                 "wordart-effects",
+                "grouped-child-effects",
+                "grouped-child-shape-effects",
                 "shadow",
                 "glow",
                 "reflection",
@@ -1111,10 +1118,13 @@ public static class FreeWVisualEvidencePlanner
         IReadOnlyList<DocumentFloatingObjectSnapshot> objects)
     {
         var summaries = new List<string>();
-        var groupChildSummaries = new List<string>();
+        var renderedGroupChildSummaries = new List<string>();
+        var plannedGroupChildSummaries = new List<string>();
         var shapeEffectObjects = 0;
         var imageEffectObjects = 0;
         var wordArtEffectObjects = 0;
+        var renderedGroupChildShapeEffectObjects = 0;
+        var renderedGroupChildWordArtEffectObjects = 0;
         var plannedGroupChildShapeEffectObjects = 0;
         var plannedGroupChildWordArtEffectObjects = 0;
         var hasShadow = false;
@@ -1164,11 +1174,16 @@ public static class FreeWVisualEvidencePlanner
                         wordArtEffectObjects: ref wordArtEffectObjects);
                     break;
                 case DocumentFloatingObjectKind.Group when run.DrawingGroup is { } group:
-                    AddPlannedGroupChildEffects(
+                    AddGroupChildEffects(
                         DrawingObjectVisualPlanner.BuildVisualPlan(group, snapshot),
-                        groupChildSummaries,
+                        renderedGroupChildSummaries,
+                        plannedGroupChildSummaries,
+                        ref renderedGroupChildShapeEffectObjects,
+                        ref renderedGroupChildWordArtEffectObjects,
                         ref plannedGroupChildShapeEffectObjects,
-                        ref plannedGroupChildWordArtEffectObjects);
+                        ref plannedGroupChildWordArtEffectObjects,
+                        ref hasShadow,
+                        ref hasGlow);
                     break;
             }
         }
@@ -1178,6 +1193,9 @@ public static class FreeWVisualEvidencePlanner
             shapeEffectObjects,
             imageEffectObjects,
             wordArtEffectObjects,
+            renderedGroupChildShapeEffectObjects + renderedGroupChildWordArtEffectObjects,
+            renderedGroupChildShapeEffectObjects,
+            renderedGroupChildWordArtEffectObjects,
             plannedGroupChildShapeEffectObjects + plannedGroupChildWordArtEffectObjects,
             plannedGroupChildShapeEffectObjects,
             plannedGroupChildWordArtEffectObjects,
@@ -1188,7 +1206,8 @@ public static class FreeWVisualEvidencePlanner
             hasBevel,
             hasArtisticEffect,
             summaries,
-            groupChildSummaries);
+            renderedGroupChildSummaries,
+            plannedGroupChildSummaries);
     }
 
     private static void AddImageEffects(
@@ -1252,31 +1271,57 @@ public static class FreeWVisualEvidencePlanner
         summaries.Add(source + ":" + visual.Effects.Summary.Replace(", ", "+", StringComparison.Ordinal));
     }
 
-    private static void AddPlannedGroupChildEffects(
+    private static void AddGroupChildEffects(
         DrawingObjectVisualPlan groupPlan,
-        List<string> groupChildSummaries,
+        List<string> renderedGroupChildSummaries,
+        List<string> plannedGroupChildSummaries,
+        ref int renderedGroupChildShapeEffectObjects,
+        ref int renderedGroupChildWordArtEffectObjects,
         ref int plannedGroupChildShapeEffectObjects,
-        ref int plannedGroupChildWordArtEffectObjects)
+        ref int plannedGroupChildWordArtEffectObjects,
+        ref bool hasShadow,
+        ref bool hasGlow)
     {
         foreach (var child in groupPlan.GroupChildren)
         {
             if (!child.Visual.Effects.HasAny)
                 continue;
 
-            if (child.Visual.Kind == DrawingObjectVisualKind.WordArt)
-                plannedGroupChildWordArtEffectObjects++;
-            else
-                plannedGroupChildShapeEffectObjects++;
+            var summary = BuildGroupChildEffectSummary(child);
+            if (IsRenderedGroupChildEffect(child.Visual))
+            {
+                if (child.Visual.Kind == DrawingObjectVisualKind.WordArt)
+                    renderedGroupChildWordArtEffectObjects++;
+                else
+                    renderedGroupChildShapeEffectObjects++;
 
-            groupChildSummaries.Add(
-                "GroupChild"
-                + child.ChildIndex.ToString(CultureInfo.InvariantCulture)
-                + ":"
-                + child.Visual.Kind
-                + ":"
-                + child.Visual.Effects.Summary.Replace(", ", "+", StringComparison.Ordinal));
+                hasShadow |= child.Visual.Effects.HasShadow;
+                hasGlow |= child.Visual.Effects.HasGlow;
+                renderedGroupChildSummaries.Add(summary);
+            }
+            else
+            {
+                if (child.Visual.Kind == DrawingObjectVisualKind.WordArt)
+                    plannedGroupChildWordArtEffectObjects++;
+                else
+                    plannedGroupChildShapeEffectObjects++;
+
+                plannedGroupChildSummaries.Add(summary);
+            }
         }
     }
+
+    private static bool IsRenderedGroupChildEffect(DrawingObjectVisualPlan visual) =>
+        visual.Kind == DrawingObjectVisualKind.Shape
+        && (visual.Effects.HasGlow || visual.Effects.HasShadow);
+
+    private static string BuildGroupChildEffectSummary(DrawingObjectGroupChildVisualPlan child) =>
+        "GroupChild"
+        + child.ChildIndex.ToString(CultureInfo.InvariantCulture)
+        + ":"
+        + child.Visual.Kind
+        + ":"
+        + child.Visual.Effects.Summary.Replace(", ", "+", StringComparison.Ordinal);
 
     private static bool TryGetRun(
         TextDocument document,
@@ -1609,6 +1654,9 @@ public static class FreeWVisualEvidencePlanner
             ShapeEffectObjectCount: 0,
             ImageEffectObjectCount: 0,
             WordArtEffectObjectCount: 0,
+            RenderedGroupChildEffectObjectCount: 0,
+            RenderedGroupChildShapeEffectObjectCount: 0,
+            RenderedGroupChildWordArtEffectObjectCount: 0,
             PlannedGroupChildEffectObjectCount: 0,
             PlannedGroupChildShapeEffectObjectCount: 0,
             PlannedGroupChildWordArtEffectObjectCount: 0,
@@ -1619,6 +1667,7 @@ public static class FreeWVisualEvidencePlanner
             HasBevel: false,
             HasArtisticEffect: false,
             EffectSummaries: [],
+            RenderedGroupChildEffectSummaries: [],
             PlannedGroupChildEffectSummaries: []),
         Objects: []);
 

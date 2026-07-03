@@ -71,6 +71,11 @@ public sealed record HyperlinkDialogPrefill(
 
 public static class HyperlinkDialogPlanner
 {
+    public const double Width = 560;
+    public const double Height = 300;
+    public const double MinWidth = 520;
+    public const double MinHeight = 300;
+
     public static HyperlinkDialogPlan Plan(
         string target,
         string? displayText,

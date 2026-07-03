@@ -587,6 +587,54 @@ public sealed class DocumentViewFloatingFO3Tests
     }
 
     [Fact]
+    public async Task Floating_group_child_shape_effect_summary_is_preserved()
+    {
+        string[] summaries = [];
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            var para = new Paragraph();
+            para.Runs.Add(new Run("Anchor text.", RunFormatting.Default));
+            var group = new DrawingGroup
+            {
+                WidthPt = 160,
+                HeightPt = 80,
+                Placement = new FloatingPlacement
+                {
+                    Wrapping = ImageWrapping.Square,
+                    HorizontalOffsetPt = 36,
+                    VerticalOffsetPt = 36,
+                    HorizontalAnchor = HorizontalAnchor.Column,
+                    VerticalAnchor = VerticalAnchor.Paragraph,
+                    ZOrderIndex = 9
+                }
+            };
+            group.Children.Add(new Shape(ShapeKind.Ellipse, 80, 48, "#CFE2F3")
+            {
+                OutlineColorHex = "#1155CC",
+                Effects = new ShapeEffectLst
+                {
+                    HasGlow = true,
+                    GlowColorHex = "4472C4",
+                    GlowRad = 63500
+                }
+            });
+            group.ChildOffsets.Add((0, 12));
+            para.Runs.Add(new Run(string.Empty, RunFormatting.Default) { DrawingGroup = group });
+            doc.Blocks.Add(para);
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 2000));
+            summaries = view.FloatingGroupChildEffectSummaries.ToArray();
+        });
+
+        if (!ran) return;
+        summaries.Should().ContainSingle().Which.Should().Be("GroupChild0:Shape:glow");
+    }
+
+    [Fact]
     public async Task Floating_group_behind_text_flag()
     {
         bool? behind = null;

@@ -78,6 +78,9 @@ public static class GoToDialogPlanner
 
 public static class GoToSpecialDialogPlanner
 {
+    public const double Width = 430;
+    public const double Height = 438;
+
     public static IReadOnlyList<GoToSpecialKind> ChoiceOrder { get; } =
     [
         GoToSpecialKind.Blanks,

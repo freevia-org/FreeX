@@ -4993,35 +4993,19 @@ public sealed class MainWindow : Window
 
     private async Task ApplySlideSectionActionAsync(SlideSectionActionPlan action)
     {
-        if (!action.IsEnabled)
+        var execution = SlideSectionPlanner.BuildExecutionPlan(action);
+        if (!execution.IsEnabled)
             return;
 
-        switch (action.Kind)
+        string? promptedName = null;
+        if (execution.RequiresNamePrompt)
         {
-            case SlideSectionActionKind.AddSection:
-            {
-                var name = await PromptSectionNameAsync("Add Section", action.SuggestedName);
-                if (name is not null)
-                    Editor.AddSectionAtSlide(action.SlideIndex, name);
-                break;
-            }
-
-            case SlideSectionActionKind.RenameSection:
-            {
-                var name = await PromptSectionNameAsync("Rename Section", action.SuggestedName);
-                if (name is not null)
-                    Editor.RenameSection(action.SectionIndex, name);
-                break;
-            }
-
-            case SlideSectionActionKind.RemoveSection:
-                Editor.RemoveSection(action.SectionIndex);
-                break;
-
-            case SlideSectionActionKind.RemoveAllSections:
-                Editor.RemoveAllSections();
-                break;
+            promptedName = await PromptSectionNameAsync(execution.PromptTitle, execution.SuggestedName);
+            if (promptedName is null)
+                return;
         }
+
+        SlideSectionPlanner.TryApplyAction(Editor, execution, promptedName);
     }
 
     private void ToggleSlidePaneSection(string sectionId)

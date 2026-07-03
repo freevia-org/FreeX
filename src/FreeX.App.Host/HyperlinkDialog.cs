@@ -39,8 +39,8 @@ public sealed class HyperlinkDialog : Window
     {
         Result = CreateResult(target, displayText);
         Title = UiText.Get("Hyperlink_InsertHyperlink");
-        Width = 560;
-        Height = 300;
+        Width = HyperlinkDialogPlanner.Width;
+        Height = HyperlinkDialogPlanner.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
