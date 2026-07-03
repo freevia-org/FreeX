@@ -72,7 +72,18 @@ public sealed record PresentationCommentReplyDescriptor(
     string Initials,
     string TextPreview,
     DateTime? Timestamp,
-    int MentionCount);
+    int MentionCount)
+{
+    public string AuthorDisplayName => PresentationCommentMetadataPolicy.NormalizeAuthorDisplayName(Author);
+
+    public string InitialsBadgeText => PresentationCommentMetadataPolicy.NormalizeInitialsBadge(Initials, AuthorDisplayName);
+
+    public string AuthorIdentityKey => PresentationCommentMetadataPolicy.BuildAuthorIdentityKey(AuthorDisplayName, InitialsBadgeText);
+
+    public string ReplyLabel => $"Reply {ReplyIndex + 1}";
+
+    public string MentionSummary => PresentationCommentMetadataPolicy.BuildCountSummary(MentionCount, "mention");
+}
 
 public sealed record PresentationCommentDescriptor(
     int SlideIndex,
@@ -93,7 +104,36 @@ public sealed record PresentationCommentDescriptor(
     int MentionCount,
     IReadOnlyList<PresentationCommentReplyDescriptor> Replies,
     PresentationCommentThreadStatus ThreadStatus,
-    bool IsSelected);
+    bool IsSelected,
+    string ResolvedBy = "",
+    DateTime? ResolvedTimestamp = null)
+{
+    public string AuthorDisplayName => PresentationCommentMetadataPolicy.NormalizeAuthorDisplayName(Author);
+
+    public string InitialsBadgeText => PresentationCommentMetadataPolicy.NormalizeInitialsBadge(Initials, AuthorDisplayName);
+
+    public string AuthorIdentityKey => PresentationCommentMetadataPolicy.BuildAuthorIdentityKey(AuthorDisplayName, InitialsBadgeText);
+
+    public string ThreadStatusLabel => ThreadStatus == PresentationCommentThreadStatus.Resolved ? "Resolved" : "Open";
+
+    public string ResolvedByDisplayName =>
+        ThreadStatus == PresentationCommentThreadStatus.Resolved
+            ? PresentationCommentMetadataPolicy.NormalizeAuthorDisplayName(ResolvedBy)
+            : string.Empty;
+
+    public string ReplySummary => PresentationCommentMetadataPolicy.BuildCountSummary(ReplyCount, "reply");
+
+    public string MentionSummary => PresentationCommentMetadataPolicy.BuildCountSummary(MentionCount, "mention");
+
+    public string ThreadStatusSummary =>
+        ThreadStatus == PresentationCommentThreadStatus.Resolved
+            ? string.IsNullOrWhiteSpace(ResolvedByDisplayName)
+                ? "Resolved"
+                : $"Resolved by {ResolvedByDisplayName}"
+            : ReplyCount == 0
+                ? "Open"
+                : $"Open - {ReplySummary}";
+}
 
 public sealed record PresentationCommentPanePlan(
     int SlideIndex,
@@ -356,6 +396,49 @@ public sealed record PresentationProofingCorrectionMutationPlan(
     string Replacement,
     string? UpdatedText,
     string? ValidationMessage);
+
+internal static class PresentationCommentMetadataPolicy
+{
+    private const string UnknownReviewerDisplayName = "Unknown reviewer";
+
+    public static string NormalizeAuthorDisplayName(string? author)
+        => NormalizeText(author) ?? UnknownReviewerDisplayName;
+
+    public static string NormalizeInitialsBadge(string? initials, string authorDisplayName)
+    {
+        if (NormalizeText(initials) is { } normalizedInitials)
+        {
+            return normalizedInitials.ToUpperInvariant();
+        }
+
+        var letters = NormalizeText(authorDisplayName)?
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(token => token.FirstOrDefault(char.IsLetterOrDigit))
+            .Where(ch => ch != default)
+            .Take(3)
+            .ToArray();
+
+        return letters is { Length: > 0 }
+            ? new string(letters).ToUpperInvariant()
+            : "?";
+    }
+
+    public static string BuildAuthorIdentityKey(string authorDisplayName, string initialsBadgeText)
+        => $"{NormalizeAuthorDisplayName(authorDisplayName).ToUpperInvariant()}|{NormalizeInitialsBadge(initialsBadgeText, authorDisplayName)}";
+
+    public static string BuildCountSummary(int count, string singularNoun)
+        => count == 1
+            ? $"1 {singularNoun}"
+            : singularNoun.EndsWith('y')
+                ? $"{Math.Max(0, count)} {singularNoun[..^1]}ies"
+                : $"{Math.Max(0, count)} {singularNoun}s";
+
+    private static string? NormalizeText(string? value)
+    {
+        var normalized = value?.Trim();
+        return string.IsNullOrWhiteSpace(normalized) ? null : normalized;
+    }
+}
 
 public static class PresentationReviewWorkflowPlanner
 {
@@ -1916,7 +1999,9 @@ public static class PresentationReviewWorkflowPlanner
             CountMentions(comment.Text) + replies.Sum(reply => reply.MentionCount),
             replies,
             comment.IsResolved ? PresentationCommentThreadStatus.Resolved : PresentationCommentThreadStatus.Open,
-            isSelected);
+            isSelected,
+            comment.ResolvedBy,
+            comment.ResolvedDateTime);
     }
 
     private static PresentationCommentReplyDescriptor DescribeCommentReply(
