@@ -1288,6 +1288,8 @@ public sealed class SlideCanvas : FrameworkElement
 
         foreach (var cell in plan.Cells)
         {
+            dc.PushClip(new RectangleGeometry(ToRect(cell.CellBounds)));
+
             if (cell.LegendKeyFill.HasValue && cell.LegendKeyBounds.HasValue)
             {
                 dc.DrawRectangle(
@@ -1306,6 +1308,8 @@ public sealed class SlideCanvas : FrameworkElement
                 cell.IsItalic,
                 cell.TextColor,
                 cell.FontFamily);
+
+            dc.Pop();
         }
     }
 
