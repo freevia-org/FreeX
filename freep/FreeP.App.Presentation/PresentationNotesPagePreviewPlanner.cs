@@ -19,6 +19,17 @@ public sealed record PresentationNotesPagePlaceholder(
     LayoutRect Bounds,
     bool IsVisible);
 
+public sealed record PresentationNotesPageNotesPlaceholder(
+    PlaceholderType SourcePlaceholderType,
+    string PlaceholderText,
+    string DisplayText,
+    LayoutRect Bounds,
+    bool IsVisible,
+    bool HasContent)
+{
+    public bool ShouldShowPlaceholder => IsVisible && !HasContent;
+}
+
 public sealed record PresentationNotesPagePreviewPlan(
     PresentationPrintPlan PrintPlan,
     int? SlideIndex,
@@ -29,6 +40,7 @@ public sealed record PresentationNotesPagePreviewPlan(
     LayoutRect PageBounds,
     LayoutRect SlideBounds,
     LayoutRect NotesBounds,
+    PresentationNotesPageNotesPlaceholder NotesPlaceholder,
     IReadOnlyList<PresentationNotesPagePlaceholder> HeaderFooterPlaceholders,
     IReadOnlyList<string> NoteLines)
 {
@@ -78,6 +90,7 @@ public static class PresentationNotesPagePreviewPlanner
                 pageBounds,
                 slideBounds,
                 notesBounds,
+                BuildNotesPlaceholder(string.Empty, notesBounds),
                 HeaderFooterPlaceholders: [],
                 NoteLines: []);
         }
@@ -102,6 +115,7 @@ public static class PresentationNotesPagePreviewPlanner
             pageBounds,
             slideBounds,
             notesBounds,
+            BuildNotesPlaceholder(notesText, notesBounds),
             BuildHeaderFooterPlaceholders(slide, normalizedIndex + 1, pageBounds),
             SplitNoteLines(slide.Notes, notesBounds.Width));
     }
@@ -164,6 +178,20 @@ public static class PresentationNotesPagePreviewPlanner
             top,
             Math.Max(1, pageBounds.Width - (margin * 2)),
             Math.Max(1, pageBounds.Bottom - top - margin));
+    }
+
+    private static PresentationNotesPageNotesPlaceholder BuildNotesPlaceholder(
+        string notesText,
+        LayoutRect notesBounds)
+    {
+        var hasContent = !string.IsNullOrWhiteSpace(notesText);
+        return new PresentationNotesPageNotesPlaceholder(
+            PlaceholderType.Body,
+            EmptyNotesPlaceholder,
+            hasContent ? notesText : EmptyNotesPlaceholder,
+            notesBounds,
+            IsVisible: true,
+            hasContent);
     }
 
     private static IReadOnlyList<PresentationNotesPagePlaceholder> BuildHeaderFooterPlaceholders(

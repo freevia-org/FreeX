@@ -254,9 +254,36 @@ public sealed class PresentationExportPlannerTests
         plan.HasNotes.Should().BeTrue();
         plan.NotesText.Should().Be($"Mention revenue growth.{Environment.NewLine}Pause for questions.");
         plan.NoteLines.Should().Equal("Mention revenue growth.", "Pause for questions.");
+        plan.NotesPlaceholder.Should().Be(new PresentationNotesPageNotesPlaceholder(
+            PlaceholderType.Body,
+            PresentationNotesPagePreviewPlanner.EmptyNotesPlaceholder,
+            plan.NotesText,
+            plan.NotesBounds,
+            IsVisible: true,
+            HasContent: true));
+        plan.NotesPlaceholder.ShouldShowPlaceholder.Should().BeFalse();
         plan.SlideBounds.Top.Should().BeGreaterThan(plan.PageBounds.Top);
         plan.NotesBounds.Top.Should().BeGreaterThan(plan.SlideBounds.Bottom);
         plan.NotesBounds.Bottom.Should().BeLessThanOrEqualTo(plan.PageBounds.Bottom);
+    }
+
+    [Fact]
+    public void NotesPagePreviewPlan_ExposesNotesPlaceholderStateForEmptyNotes()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Title = "Status";
+
+        var plan = PresentationNotesPagePreviewPlanner.Build(presentation, currentSlideIndex: 0);
+
+        plan.HasNotes.Should().BeFalse();
+        plan.NotesPlaceholder.Should().Be(new PresentationNotesPageNotesPlaceholder(
+            PlaceholderType.Body,
+            PresentationNotesPagePreviewPlanner.EmptyNotesPlaceholder,
+            PresentationNotesPagePreviewPlanner.EmptyNotesPlaceholder,
+            plan.NotesBounds,
+            IsVisible: true,
+            HasContent: false));
+        plan.NotesPlaceholder.ShouldShowPlaceholder.Should().BeTrue();
     }
 
     [Fact]
@@ -394,6 +421,8 @@ public sealed class PresentationExportPlannerTests
         plan.HasNotes.Should().BeFalse();
         plan.SlideTitle.Should().Be(PresentationNotesPagePreviewPlanner.EmptyDeckTitle);
         plan.PrintPlan.SlideRange.DisplayName.Should().Be("No slides");
+        plan.NotesPlaceholder.ShouldShowPlaceholder.Should().BeTrue();
+        plan.NotesPlaceholder.Bounds.Should().Be(plan.NotesBounds);
         plan.NoteLines.Should().BeEmpty();
     }
 

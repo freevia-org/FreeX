@@ -131,7 +131,9 @@ public static class PresentationNotesPagePdfExporter
             ops.Add(ToPdfStrokeRect(plan.NotesBounds, plan.PageBounds.Height, NotesBorder, NotesBorderWidth));
             AppendHeaderFooterPlaceholders(ops, plan);
 
-            var showPlaceholder = isFirstPage && remainingLines.Count == 0;
+            var showPlaceholder = isFirstPage &&
+                remainingLines.Count == 0 &&
+                plan.NotesPlaceholder.ShouldShowPlaceholder;
             remainingLines = AppendNotesText(ops, plan, remainingLines, showPlaceholder);
 
             yield return new PdfContentPage(plan.PageBounds.Width, plan.PageBounds.Height, ops);
@@ -159,12 +161,12 @@ public static class PresentationNotesPagePdfExporter
         if (showPlaceholder)
         {
             ops.Add(new PdfText(
-                plan.NotesBounds.Left + NotesInset,
+                plan.NotesPlaceholder.Bounds.Left + NotesInset,
                 top,
                 PlaceholderFontSize,
                 PdfFontFace.Regular,
                 PlaceholderText,
-                plan.PlaceholderText));
+                plan.NotesPlaceholder.PlaceholderText));
             return [];
         }
 
