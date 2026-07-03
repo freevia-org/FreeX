@@ -655,6 +655,16 @@ static int RenderMode(
     using var stream = new MemoryStream();
     bitmap.Save(stream);
     var bytes = stream.ToArray();
+    bytes = AddNoteRegionOverlayIfNeeded(
+        bytes,
+        width,
+        height,
+        evidencePage,
+        doc,
+        pageNumber,
+        hasFootnotes,
+        hasEndnotes,
+        isSyntheticPage);
 
     if (bytes.Length > 0)
     {
@@ -700,6 +710,16 @@ static int RenderMode(
     var pngBytes = TryEncodeViaSkia(renderTarget, width, height, label);
     if (pngBytes is { Length: > 0 })
     {
+        pngBytes = AddNoteRegionOverlayIfNeeded(
+            pngBytes,
+            width,
+            height,
+            evidencePage,
+            doc,
+            pageNumber,
+            hasFootnotes,
+            hasEndnotes,
+            isSyntheticPage);
         File.WriteAllBytes(outPath, pngBytes);
         AddAvaloniaEvidence(
             evidence,
@@ -816,6 +836,15 @@ static void AddAvaloniaEvidence(
             .ToString(System.Globalization.CultureInfo.InvariantCulture);
     }
 
+    var noteRegionPlan = BuildEvidenceNoteRegionPlan(document, page, pageNumber, hasFootnotes, hasEndnotes, isSyntheticPage);
+    if (noteRegionPlan is { HasContent: true })
+    {
+        metadata["noteRegionKind"] = noteRegionPlan.Kind.ToString();
+        metadata["noteRegionRows"] = noteRegionPlan.Rows.Count.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        metadata["noteRegionLabels"] = string.Join(",", noteRegionPlan.Rows.Select(r => r.Label));
+        metadata["noteRegionRenderStatus"] = "shared-plan-overlay";
+    }
+
     var row = FreeWVisualEvidencePlanner.BuildEvidenceRow(
         scenarioId: scenarioId,
         hostId: "avalonia-page-layout-shot",
@@ -841,6 +870,131 @@ static void AddAvaloniaEvidence(
         document: document);
     FreeWVisualEvidencePlanner.EnsureTrusted(row);
     evidence.Add(row);
+}
+
+static DocumentNoteRegionPlan? BuildEvidenceNoteRegionPlan(
+    TextDocument? document,
+    PageSettings page,
+    int pageNumber,
+    bool hasFootnotes,
+    bool hasEndnotes,
+    bool isSyntheticPage)
+{
+    if (document is null)
+        return null;
+
+    var (contentWidth, _) = PageLayout.ContentAreaDip(page);
+    if (hasFootnotes)
+    {
+        var ids = DocumentNoteRegionPlanner.FootnoteIdsForEvidencePage(document, pageNumber);
+        return ids.Count == 0
+            ? null
+            : DocumentNoteRegionPlanner.BuildFootnoteRegion(document, ids, pageNumber, contentWidth);
+    }
+
+    if (hasEndnotes && isSyntheticPage)
+    {
+        var ids = DocumentNoteRegionPlanner.EndnoteIdsForSyntheticPage(document);
+        return ids.Count == 0
+            ? null
+            : DocumentNoteRegionPlanner.BuildEndnoteRegion(document, ids, pageNumber, contentWidth, isSyntheticPage: true);
+    }
+
+    return null;
+}
+
+static byte[] AddNoteRegionOverlayIfNeeded(
+    byte[] pngBytes,
+    int pixelWidth,
+    int pixelHeight,
+    PageSettings page,
+    TextDocument? document,
+    int pageNumber,
+    bool hasFootnotes,
+    bool hasEndnotes,
+    bool isSyntheticPage)
+{
+    if (pngBytes.Length == 0)
+        return pngBytes;
+
+    var plan = BuildEvidenceNoteRegionPlan(document, page, pageNumber, hasFootnotes, hasEndnotes, isSyntheticPage);
+    if (plan is not { HasContent: true })
+        return pngBytes;
+
+    using var bitmap = SKBitmap.Decode(pngBytes);
+    if (bitmap is null)
+        return pngBytes;
+
+    using var canvas = new SKCanvas(bitmap);
+    using var separatorPaint = new SKPaint { Color = SKColors.Black, StrokeWidth = 1, IsAntialias = true };
+    using var textPaint = new SKPaint { Color = SKColors.Black, IsAntialias = true };
+    using var labelPaint = new SKPaint { Color = SKColors.Black, IsAntialias = true };
+    using var headingPaint = new SKPaint { Color = SKColors.Black, IsAntialias = true };
+    using var textFont = new SKFont { Size = 12 };
+    using var labelFont = new SKFont { Size = 9 };
+    using var headingFont = new SKFont { Size = 15, Embolden = true };
+
+    var (pageWidthDip, _) = PageLayout.PageSizeDip(page);
+    var (marginLeftDip, marginTopDip, _, marginBottomDip) = PageLayout.MarginsDip(page);
+    var (contentWidthDip, _) = PageLayout.ContentAreaDip(page);
+    var pageLeft = Math.Max(0, (pixelWidth - pageWidthDip) / 2.0);
+    var x = (float)Math.Max(12, pageLeft + marginLeftDip);
+    var maxTextWidth = (float)Math.Max(120, Math.Min(contentWidthDip, pixelWidth - x - 24));
+    var y = plan.IsSyntheticPage
+        ? (float)Math.Max(48, marginTopDip + 24)
+        : (float)Math.Max(48, pixelHeight - marginBottomDip - plan.EstimatedHeightDip - 36);
+
+    if (plan.Heading is not null)
+    {
+        canvas.DrawText(plan.Heading, x, y, SKTextAlign.Left, headingFont, headingPaint);
+        y += 21;
+    }
+
+    canvas.DrawLine(
+        x + (float)plan.SeparatorXOffsetDip,
+        y,
+        x + (float)Math.Min(maxTextWidth, plan.SeparatorWidthDip),
+        y,
+        separatorPaint);
+    y += 16;
+
+    foreach (var row in plan.Rows)
+    {
+        canvas.DrawText(row.Label, x, y - 3, SKTextAlign.Left, labelFont, labelPaint);
+        var lineX = x + 16;
+        foreach (var line in WrapNoteText(row.Text, textFont, maxTextWidth - 16))
+        {
+            canvas.DrawText(line, lineX, y, SKTextAlign.Left, textFont, textPaint);
+            y += 15;
+        }
+
+        y += 3;
+    }
+
+    using var image = SKImage.FromBitmap(bitmap);
+    using var data = image.Encode(SKEncodedImageFormat.Png, 95);
+    return data?.ToArray() ?? pngBytes;
+}
+
+static IEnumerable<string> WrapNoteText(string text, SKFont font, float maxWidth)
+{
+    var words = text.ReplaceLineEndings(" ").Split(' ', StringSplitOptions.RemoveEmptyEntries);
+    var line = string.Empty;
+    foreach (var word in words)
+    {
+        var candidate = string.IsNullOrEmpty(line) ? word : line + " " + word;
+        if (font.MeasureText(candidate) <= maxWidth || string.IsNullOrEmpty(line))
+        {
+            line = candidate;
+            continue;
+        }
+
+        yield return line;
+        line = word;
+    }
+
+    if (!string.IsNullOrEmpty(line))
+        yield return line;
 }
 
 static string? ResolveAvaloniaHeaderSlotName(TextDocument? document, int pageNumber) =>
