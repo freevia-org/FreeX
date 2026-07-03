@@ -1561,6 +1561,7 @@ public sealed class MainWindowHeadlessTests
         PresentationReadingOrderPlan? readingOrderPlan = null;
         PresentationProofingRequestPlan? proofingPlan = null;
         PresentationProofingExecutionPlan? proofingExecutionPlan = null;
+        PresentationProofingPanePlan? proofingPanePlan = null;
         PresentationProofingCorrectionMutationPlan? proofingMutation = null;
         string? correctedShapeText = null;
         string? correctedProofingScopeText = null;
@@ -1578,6 +1579,11 @@ public sealed class MainWindowHeadlessTests
         string? readingOrderMoveEarlierDisabledReason = null;
         var readingOrderMoveLaterEnabled = false;
         string? readingOrderMoveLaterDisabledReason = null;
+        var proofingPaneVisible = false;
+        var proofingPaneRowCount = 0;
+        var proofingPaneSelectedCount = 0;
+        var proofingPaneCorrectionEnabled = false;
+        var proofingPaneHeading = string.Empty;
         PresentationReadingOrderMutationPlan? readingOrderMove = null;
         uint[] readingOrderShapeOrderAfterMove = [];
         uint[] readingOrderPaneOrderAfterMove = [];
@@ -1616,7 +1622,7 @@ public sealed class MainWindowHeadlessTests
                 Id = 329,
                 Name = "Caption",
                 Kind = SlideShapeKind.AutoShape,
-                Text = "Caption",
+                Text = "Caption eror",
             };
             window.Editor.CurrentSlide.Shapes.Clear();
             window.Editor.CurrentSlide.Shapes.Add(shape);
@@ -1666,13 +1672,13 @@ public sealed class MainWindowHeadlessTests
                 .ToArray();
             proofingPlan = window.LastProofingRequestPlan;
             proofingExecutionPlan = window.LastProofingExecutionPlan;
-            var proofingScope = proofingExecutionPlan!.Scopes.Single(scope =>
-                scope.Kind == PresentationProofingScopeKind.ShapeText);
-            proofingMutation = window.ApplyProofingCorrection(
-                proofingScope,
-                0,
-                "Caption".Length,
-                "Caption corrected");
+            proofingPanePlan = window.LastProofingPanePlan;
+            proofingPaneVisible = window.IsProofingPaneVisible;
+            proofingPaneRowCount = window.ProofingPaneIssueRowCount;
+            proofingPaneSelectedCount = window.ProofingPaneSelectedIssueCount;
+            proofingPaneCorrectionEnabled = window.IsProofingPaneCorrectionEnabled;
+            proofingPaneHeading = window.ProofingPaneHeading;
+            proofingMutation = window.ApplySelectedProofingCorrection();
             correctedShapeText = caption.Text;
             correctedProofingScopeText = window.LastProofingExecutionPlan!.Scopes.Single(scope =>
                     scope.Kind == PresentationProofingScopeKind.ShapeText)
@@ -1763,19 +1769,26 @@ public sealed class MainWindowHeadlessTests
             PresentationProofingScopeKind.Comment,
             PresentationProofingScopeKind.CommentReply);
         proofingExecutionPlan.Scopes.Select(scope => scope.Text).Should().Equal(
-            "Caption",
+            "Caption eror",
             "Use shared review state.",
             "@Reviewer confirmed.");
+        proofingPanePlan.Should().NotBeNull();
+        proofingPaneVisible.Should().BeTrue("the Avalonia proofing command should render a shared-plan-backed corrections pane");
+        proofingPaneRowCount.Should().Be(1);
+        proofingPaneSelectedCount.Should().Be(1);
+        proofingPaneCorrectionEnabled.Should().BeTrue();
+        proofingPaneHeading.Should().Be("Spelling - 1 issues");
+        proofingPanePlan!.SelectedRow!.SuggestedReplacement.Should().Be("error");
         proofingMutation.Should().Be(new PresentationProofingCorrectionMutationPlan(
             true,
             proofingExecutionPlan.Scopes.Single(scope => scope.Kind == PresentationProofingScopeKind.ShapeText),
-            0,
-            "Caption".Length,
-            "Caption corrected",
-            "Caption corrected",
+            "Caption eror".IndexOf("eror", StringComparison.Ordinal),
+            "eror".Length,
+            "error",
+            "Caption error",
             null));
-        correctedShapeText.Should().Be("Caption corrected");
-        correctedProofingScopeText.Should().Be("Caption corrected");
+        correctedShapeText.Should().Be("Caption error");
+        correctedProofingScopeText.Should().Be("Caption error");
         commentsPaneVisible.Should().BeTrue("the Avalonia comments command should render a shared-plan-backed pane");
         commentsPaneCommentCount.Should().Be(1);
         commentsPaneActionCount.Should().BeGreaterThanOrEqualTo(6);
