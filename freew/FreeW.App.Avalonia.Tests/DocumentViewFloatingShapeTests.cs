@@ -327,6 +327,41 @@ public sealed class DocumentViewFloatingShapeTests
     // ── Test 11: shape text is captured ──────────────────────────────────────────────────────────
 
     [Fact]
+    public async Task Floating_shape_effect_intent_is_captured_from_shared_plan()
+    {
+        IReadOnlyList<string> summaries = [];
+        var ran = await OnUiThread(() =>
+        {
+            var doc = DocWithFloatingShape(ShapeKind.Ellipse, ImageWrapping.InFront,
+                hOffsetPt: 0, vOffsetPt: 0,
+                fillColorHex: "#00AA11",
+                outlineColorHex: "#112233",
+                outlineWidthPt: 1.5);
+            var shape = ((Paragraph)doc.Blocks[0]).Runs[1].Shape!;
+            shape.Effects = new ShapeEffectLst
+            {
+                HasShadow = true,
+                ShadowColorHex = "112233",
+                ShadowAlpha = 50000,
+                HasGlow = true,
+                GlowColorHex = "00FFFF",
+                GlowAlpha = 25000
+            };
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 2000));
+
+            summaries = view.FloatingShapeEffectSummaries;
+        });
+
+        if (!ran) return;
+        var summary = summaries.Should().ContainSingle().Which;
+        summary.Should().Contain("shadow");
+        summary.Should().Contain("glow");
+    }
+
+    [Fact]
     public async Task Floating_shape_text_is_captured()
     {
         string? capturedText = null;
