@@ -1040,16 +1040,36 @@ public sealed class MainWindow : Window
             ToggleReviewBalloons: ToggleReviewBalloons,
             IsReviewBalloonsActive: () => _reviewBalloonsPane.IsVisible);
 
-        // AV-MAIL: capture the Mailings engine so the shell can drive its two dialog-bound commands
-        // (Select Recipients / Insert Merge Field) with async Avalonia dialogs over the same session the
-        // ribbon commands share. The remaining Mailings commands (address-block / greeting / preview /
-        // next / prev / finish) are wired directly by the registry and need no shell glue.
+        // AV-MAIL: capture the Mailings engine so the shell can drive dialog-bound commands with async
+        // Avalonia dialogs over the same session the ribbon commands share.
         var registry = FreeWRibbon.BuildRegistry(_editor, callbacks, out var mailMerge);
         _mailMerge = mailMerge;
+        registry.Register(new RibbonCommandId("freew.merge-data"),
+            new ActionRibbonCommand(() => _ = SelectRecipientsAsync()));
+        registry.Register(new RibbonCommandId("freew.merge-edit-recipients"),
+            new ActionRibbonCommand(() => _ = SelectRecipientsAsync()));
         registry.Register(new RibbonCommandId("freew.select-recipients"),
             new ActionRibbonCommand(() => _ = SelectRecipientsAsync()));
         registry.Register(new RibbonCommandId("freew.merge-field"),
             new ActionRibbonCommand(() => _ = InsertMergeFieldAsync()));
+        registry.Register(new RibbonCommandId("freew.merge-rule-if"),
+            new ActionRibbonCommand(() => _ = InsertMergeRuleIfAsync()));
+        registry.Register(new RibbonCommandId("freew.merge-rule-skip-record-if"),
+            new ActionRibbonCommand(() => _ = InsertMergeRuleConditionAsync(skipRecord: true)));
+        registry.Register(new RibbonCommandId("freew.merge-rule-next-record-if"),
+            new ActionRibbonCommand(() => _ = InsertMergeRuleConditionAsync(skipRecord: false)));
+        registry.Register(new RibbonCommandId("freew.merge-rule-fill-in"),
+            new ActionRibbonCommand(() => _ = InsertMergeRulePromptAsync("Fill-in", "Enter the prompt text for this Fill-in field:",
+                prompt => _mailMerge?.InsertFillInRule(prompt))));
+        registry.Register(new RibbonCommandId("freew.merge-rule-ask"),
+            new ActionRibbonCommand(() => _ = InsertMergeRuleNameValueAsync("Ask", "Prompt text:",
+                result => _mailMerge?.InsertAskRule(result.Name, result.Value))));
+        registry.Register(new RibbonCommandId("freew.merge-rule-set"),
+            new ActionRibbonCommand(() => _ = InsertMergeRuleNameValueAsync("Set Bookmark", "Value:",
+                result => _mailMerge?.InsertSetRule(result.Name, result.Value))));
+        registry.Register(new RibbonCommandId("freew.merge-rule-ref"),
+            new ActionRibbonCommand(() => _ = InsertMergeRulePromptAsync("Ref Bookmark", "Enter the bookmark name to reference:",
+                prompt => _mailMerge?.InsertRefRule(prompt))));
         // AV-PICTAB: merge the Table (caret-in-cell) and Floating (picture/drawing selected)
         // contextual triggers so both sets of contextual tabs can surface from one source.
         var contextSource = new CompositeRibbonContextSource(
@@ -1098,6 +1118,59 @@ public sealed class MainWindow : Window
         if (string.IsNullOrWhiteSpace(name))
             return;
         _mailMerge.InsertMergeFieldNamed(name);
+        _editor.Focus();
+    }
+
+    private async Task InsertMergeRuleIfAsync()
+    {
+        if (_mailMerge is null)
+            return;
+
+        var result = await MailMergeDialogs.AskMergeRuleIfAsync(this, _mailMerge.AvailableFieldNames);
+        if (result is null)
+            return;
+
+        _mailMerge.InsertIfRule(result);
+        _editor.Focus();
+    }
+
+    private async Task InsertMergeRuleConditionAsync(bool skipRecord)
+    {
+        if (_mailMerge is null)
+            return;
+
+        var title = skipRecord ? "Skip Record If" : "Next Record If";
+        var result = await MailMergeDialogs.AskMergeRuleConditionAsync(this, _mailMerge.AvailableFieldNames, title);
+        if (result is null)
+            return;
+
+        if (skipRecord)
+            _mailMerge.InsertSkipRecordIfRule(result);
+        else
+            _mailMerge.InsertNextRecordIfRule(result);
+        _editor.Focus();
+    }
+
+    private async Task InsertMergeRulePromptAsync(string title, string prompt, Action<string> apply)
+    {
+        var result = await MailMergeDialogs.AskMergeRulePromptAsync(this, title, prompt);
+        if (result is null)
+            return;
+
+        apply(result);
+        _editor.Focus();
+    }
+
+    private async Task InsertMergeRuleNameValueAsync(
+        string title,
+        string valueLabel,
+        Action<MailMergeRuleNameValueDialogResult> apply)
+    {
+        var result = await MailMergeDialogs.AskMergeRuleNameValueAsync(this, title, valueLabel);
+        if (result is null)
+            return;
+
+        apply(result.Value);
         _editor.Focus();
     }
 

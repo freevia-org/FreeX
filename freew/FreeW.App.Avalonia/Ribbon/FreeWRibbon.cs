@@ -243,5 +243,13 @@ internal sealed record RibbonHostCallbacks(
     /// <summary>AV-REVIEW: Review &gt; Show Markup &gt; Show Revisions in Balloons. Optional; registry toggles editor state when null.</summary>
     Action? ToggleReviewBalloons = null,
     /// <summary>AV-REVIEW: Whether the Review Balloons strip is visible.</summary>
-    Func<bool>? IsReviewBalloonsActive = null);
+    Func<bool>? IsReviewBalloonsActive = null,
+    /// <summary>AV-MAIL: Rules &gt; If...Then...Else. Optional; registry no-ops when null.</summary>
+    Func<IReadOnlyList<string>, MailMergeRuleIfDialogResult?>? AskMergeRuleIf = null,
+    /// <summary>AV-MAIL: Rules &gt; Skip/Next Record If. Optional; registry no-ops when null.</summary>
+    Func<IReadOnlyList<string>, string, MailMergeRuleConditionDialogResult?>? AskMergeRuleCondition = null,
+    /// <summary>AV-MAIL: Rules &gt; Fill-in / Ref Bookmark prompt. Optional; registry no-ops when null.</summary>
+    Func<string, string, string?>? AskMergeRulePrompt = null,
+    /// <summary>AV-MAIL: Rules &gt; Ask / Set Bookmark name-value prompt. Optional; registry no-ops when null.</summary>
+    Func<string, string, MailMergeRuleNameValueDialogResult?>? AskMergeRuleNameValue = null);
 

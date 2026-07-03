@@ -82,6 +82,26 @@ internal sealed class MailMergeEngine
     public IReadOnlyList<string> AvailableFieldNames =>
         Session.Data?.Header ?? [];
 
+    public void StartMailMergeLetters() =>
+        SetMergeMode(MailMergeOutputMode.Letters, "Mail merge output set to Letters.");
+
+    public void StartMailMergeDirectory() =>
+        SetMergeMode(MailMergeOutputMode.Directory, "Mail merge output set to Directory.");
+
+    public void ClearMergeSession()
+    {
+        Session.Clear();
+        ShowInfo("Mail merge reset to a normal document.");
+    }
+
+    private void SetMergeMode(MailMergeOutputMode mode, string message)
+    {
+        Session.Mode = mode;
+        Session.Template = null;
+        Session.CurrentIndex = 0;
+        ShowInfo(message);
+    }
+
     public void MatchFields()
     {
         if (!RequireRecipients("Select recipients first (Mailings > Select Recipients), then match fields."))
@@ -110,11 +130,151 @@ internal sealed class MailMergeEngine
             : $"Recipient list sorted by {sortColumn}.");
     }
 
+    // ── Rules ──────────────────────────────────────────────────────────────────────
+
+    // Rules commands are inserted through the same shared field-instruction builders as WPF.
+    public void InsertIfRule()
+    {
+        if (_callbacks.AskMergeRuleIf is not { } ask)
+            return;
+        var result = ask(AvailableFieldNames);
+        if (result is null)
+            return;
+        InsertIfRule(result);
+    }
+
+    public void InsertIfRule(MailMergeRuleIfDialogResult result)
+    {
+        var instruction = MergeRuleEvaluator.BuildIfInstruction(
+            result.FieldName,
+            result.Operator,
+            result.Value,
+            result.TrueText,
+            result.FalseText);
+        InsertRuleInstruction(instruction);
+    }
+
+    public void InsertSkipRecordIfRule()
+    {
+        if (_callbacks.AskMergeRuleCondition is not { } ask)
+            return;
+        var result = ask(AvailableFieldNames, "Skip Record If");
+        if (result is null)
+            return;
+        InsertSkipRecordIfRule(result);
+    }
+
+    public void InsertSkipRecordIfRule(MailMergeRuleConditionDialogResult result)
+    {
+        InsertRuleInstruction(MergeRuleEvaluator.BuildSkipRecordIfInstruction(
+            result.FieldName,
+            result.Operator,
+            result.Value));
+    }
+
+    public void InsertNextRecordIfRule()
+    {
+        if (_callbacks.AskMergeRuleCondition is not { } ask)
+            return;
+        var result = ask(AvailableFieldNames, "Next Record If");
+        if (result is null)
+            return;
+        InsertNextRecordIfRule(result);
+    }
+
+    public void InsertNextRecordIfRule(MailMergeRuleConditionDialogResult result)
+    {
+        InsertRuleInstruction(MergeRuleEvaluator.BuildNextRecordIfInstruction(
+            result.FieldName,
+            result.Operator,
+            result.Value));
+    }
+
+    public void InsertNextRecordField() =>
+        InsertRuleInstruction(MailMerge.NextRecordField);
+
+    public void InsertMergeRecordNumberField() =>
+        InsertRuleInstruction(MailMerge.MergeRecordNumberField);
+
+    public void InsertMergeSequenceNumberField() =>
+        InsertRuleInstruction(MailMerge.MergeSequenceNumberField);
+
+    public void InsertFillInRule()
+    {
+        if (_callbacks.AskMergeRulePrompt is not { } ask)
+            return;
+        var prompt = ask("Fill-in", "Enter the prompt text for this Fill-in field:");
+        if (prompt is null)
+            return;
+        InsertFillInRule(prompt);
+    }
+
+    public void InsertFillInRule(string prompt)
+    {
+        InsertRuleInstruction(MergeRuleEvaluator.BuildFillInInstruction(prompt));
+    }
+
+    public void InsertAskRule()
+    {
+        if (_callbacks.AskMergeRuleNameValue is not { } ask)
+            return;
+        var result = ask("Ask", "Prompt text:");
+        if (result is null)
+            return;
+        InsertAskRule(result.Value.Name, result.Value.Value);
+    }
+
+    public void InsertAskRule(string bookmarkName, string prompt)
+    {
+        if (string.IsNullOrWhiteSpace(bookmarkName))
+            return;
+        InsertRuleInstruction(MergeRuleEvaluator.BuildAskInstruction(bookmarkName.Trim(), prompt));
+    }
+
+    public void InsertSetRule()
+    {
+        if (_callbacks.AskMergeRuleNameValue is not { } ask)
+            return;
+        var result = ask("Set Bookmark", "Value:");
+        if (result is null)
+            return;
+        InsertSetRule(result.Value.Name, result.Value.Value);
+    }
+
+    public void InsertSetRule(string bookmarkName, string value)
+    {
+        if (string.IsNullOrWhiteSpace(bookmarkName))
+            return;
+        InsertRuleInstruction(MergeRuleEvaluator.BuildSetInstruction(bookmarkName.Trim(), value));
+    }
+
+    public void InsertRefRule()
+    {
+        if (_callbacks.AskMergeRulePrompt is not { } ask)
+            return;
+        var name = ask("Ref Bookmark", "Enter the bookmark name to reference:");
+        if (name is null)
+            return;
+        InsertRefRule(name);
+    }
+
+    public void InsertRefRule(string bookmarkName)
+    {
+        if (string.IsNullOrWhiteSpace(bookmarkName))
+            return;
+        InsertRuleInstruction(MergeRuleEvaluator.BuildRefInstruction(bookmarkName.Trim()));
+    }
+
+    private void InsertRuleInstruction(string instruction)
+    {
+        _editor.InsertText($"{MailMerge.FieldOpen}{instruction}{MailMerge.FieldClose}");
+    }
+
     // ── Insert Merge Field ─────────────────────────────────────────────────────────
 
     /// <summary>
     /// Mailings &gt; Insert Merge Field. Asks the host to pick / type a field name from the loaded
-    /// recipient list and inserts the «Field» placeholder at the caret (undoable). When no field-name
+    /// recipient list and inserts the merge-field placeholder at the caret (undoable). When no field-name
     /// callback was supplied this is a safe no-op; <see cref="InsertMergeFieldNamed"/> performs the actual
     /// insertion and is also usable directly (tests / programmatic callers).
     /// </summary>

@@ -16,6 +16,8 @@ public sealed record MailMergeRuleConditionDialogResult(
     MergeConditionOperator Operator,
     string Value);
 
+public readonly record struct MailMergeRuleNameValueDialogResult(string Name, string Value);
+
 public static class MailMergeRuleDialogPlanner
 {
     private static readonly MailMergeConditionOperatorChoice[] ConditionOperators =
@@ -61,6 +63,11 @@ public static class MailMergeRuleDialogPlanner
             fieldName ?? string.Empty,
             GetConditionOperator(selectedOperatorIndex),
             value ?? string.Empty);
+
+    public static MailMergeRuleNameValueDialogResult CreateNameValueResult(
+        string? name,
+        string? value) =>
+        new(name ?? string.Empty, value ?? string.Empty);
 
     private static int NormalizeIndex(int index) =>
         index >= 0 && index < ConditionOperators.Length ? index : 0;

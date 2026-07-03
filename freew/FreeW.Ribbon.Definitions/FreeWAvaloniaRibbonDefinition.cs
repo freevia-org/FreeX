@@ -56,6 +56,34 @@ internal static class FreeWAvaloniaRibbonDefinition
             new("Show Revisions in Balloons", new RibbonCommandId("freew.show-markup-balloons")),
         });
 
+    private static RibbonMenu BuildStartMailMergeMenu() =>
+        new(new RibbonMenuItem[]
+        {
+            new("Letters", new RibbonCommandId("freew.start-mail-merge-letters")),
+            new("Directory", new RibbonCommandId("freew.start-mail-merge-directory")),
+            RibbonMenuItem.Separator(),
+            new("Normal Word Document", new RibbonCommandId("freew.start-mail-merge-normal")),
+        });
+
+    private static RibbonMenu BuildMergeRulesMenu() =>
+        new(new RibbonMenuItem[]
+        {
+            new("If…Then…Else", new RibbonCommandId("freew.merge-rule-if")),
+            RibbonMenuItem.Separator(),
+            new("Skip Record If", new RibbonCommandId("freew.merge-rule-skip-record-if")),
+            new("Next Record If", new RibbonCommandId("freew.merge-rule-next-record-if")),
+            RibbonMenuItem.Separator(),
+            new("Next Record", new RibbonCommandId("freew.merge-next-record")),
+            new("Merge Record #", new RibbonCommandId("freew.merge-record-number")),
+            new("Merge Sequence #", new RibbonCommandId("freew.merge-sequence-number")),
+            RibbonMenuItem.Separator(),
+            new("Fill-in", new RibbonCommandId("freew.merge-rule-fill-in")),
+            new("Ask", new RibbonCommandId("freew.merge-rule-ask")),
+            RibbonMenuItem.Separator(),
+            new("Set Bookmark", new RibbonCommandId("freew.merge-rule-set")),
+            new("Ref Bookmark", new RibbonCommandId("freew.merge-rule-ref")),
+        });
+
     // AV-PICTAB: wrap-mode menu shared by the Picture / Drawing Format "Wrap Text" dropdown.
     // <paramref name="prefix"/> is "image" or "shape" so the command ids match the WPF host
     // (freew.image-wrap-* / freew.shape-wrap-*).
@@ -791,20 +819,28 @@ internal static class FreeWAvaloniaRibbonDefinition
                     g.Button("freew.merge-envelopes", "Envelopes");
                     g.Button("freew.merge-labels", "Labels");
                 });
-                tab.Group("start-merge", "Start Mail Merge", null, 100, g =>
+                tab.Group("merge-data", "Start Mail Merge", null, 120, g =>
                 {
+                    g.Dropdown("freew.start-mail-merge", "Start Mail Merge", BuildStartMailMergeMenu(), d => d with
+                    {
+                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.Envelope)
+                    });
                     g.Button("freew.merge-data", "Select Recipients");
                     g.Button("freew.merge-edit-recipients", "Edit Recipient List");
                     g.Button("freew.merge-filter-sort", "Filter & Sort Recipients");
                 });
-                tab.Group("write-insert", "Write & Insert Fields", null, 90, g =>
+                tab.Group("merge-write", "Write & Insert Fields", null, 100, g =>
                 {
                     g.Button("freew.merge-address-block", "Address Block");
                     g.Button("freew.merge-greeting-line", "Greeting Line");
                     g.Button("freew.merge-field",   "Insert Merge Field");
                     g.Button("freew.merge-match-fields", "Match Fields");
+                    g.Dropdown("freew.merge-rules", "Rules", BuildMergeRulesMenu(), d => d with
+                    {
+                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.Field)
+                    });
                 });
-                tab.Group("preview-results", "Preview Results", null, 80, g =>
+                tab.Group("merge-preview", "Preview Results", null, 80, g =>
                 {
                     g.Button("freew.merge-preview",          "Preview Results");
                     g.Button("freew.merge-preview-first",    "First Record");
@@ -812,7 +848,7 @@ internal static class FreeWAvaloniaRibbonDefinition
                     g.Button("freew.merge-preview-next",     "Next ▶");
                     g.Button("freew.merge-preview-last",     "Last Record");
                 });
-                tab.Group("finish", "Finish", null, 70, g =>
+                tab.Group("merge-finish", "Finish", null, 70, g =>
                 {
                     g.Button("freew.merge-finish", "Finish & Merge");
                 });
