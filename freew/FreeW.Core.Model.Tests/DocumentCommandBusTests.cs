@@ -13,6 +13,14 @@ public class DocumentCommandBusTests
         return (doc, new DocumentCommandBus(new Context(doc)));
     }
 
+    private sealed class ClassifiedCommand(DocumentCommandMutationKind mutationKind) : IDocumentCommand
+    {
+        public string Label => mutationKind.ToString();
+        public DocumentCommandMutationKind MutationKind => mutationKind;
+        public void Apply(IDocumentCommandContext context) { }
+        public void Revert(IDocumentCommandContext context) { }
+    }
+
     [Fact]
     public void InsertParagraph_Execute_Undo_Redo()
     {
@@ -42,6 +50,25 @@ public class DocumentCommandBusTests
 
         bus.CanRedo.Should().BeFalse();
         doc.PlainText.Should().Be("B");
+    }
+
+    [Fact]
+    public void Next_history_mutation_kind_tracks_undo_and_redo_tops()
+    {
+        var (_, bus) = New();
+
+        bus.NextUndoMutationKind.Should().BeNull();
+        bus.NextRedoMutationKind.Should().BeNull();
+
+        bus.Execute(new ClassifiedCommand(DocumentCommandMutationKind.BodyText));
+        bus.Execute(new ClassifiedCommand(DocumentCommandMutationKind.Comment));
+
+        bus.NextUndoMutationKind.Should().Be(DocumentCommandMutationKind.Comment);
+
+        bus.Undo().Should().BeTrue();
+
+        bus.NextUndoMutationKind.Should().Be(DocumentCommandMutationKind.BodyText);
+        bus.NextRedoMutationKind.Should().Be(DocumentCommandMutationKind.Comment);
     }
 
     [Fact]
