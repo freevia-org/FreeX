@@ -8473,107 +8473,94 @@ public sealed class DocumentView : Control
         });
 
     /// <summary>
-    /// Set the proofing (spelling/grammar) language on the SELECTED text only — Word applies a proofing
-    /// language change to the selected runs/characters, not the whole paragraph. Mirrors the
-    /// selected-sub-range run-mutation pattern used for character styles (see <see cref="ApplyNamedStyle"/>'s
-    /// multi-paragraph character-style branch and <see cref="ApplyRunFormatting"/>): a single-block
-    /// selection tags just its Start.Offset..End.Offset range; a multi-paragraph selection tags the first
-    /// block from Start.Offset to its end, middle blocks in full, and the last block from its start to
-    /// End.Offset. A collapsed caret (no selection) has no existing text to retag, so — mirroring
-    /// <see cref="ApplyRunFormatting"/>'s BZ5 convention — it stages a pending format for the next typed
-    /// character instead of touching the paragraph.
+    /// Set the proofing (spelling/grammar) language on the selected text range, or on the current
+    /// proofing word when the caret is collapsed inside one.
     /// </summary>
     public void SetProofingLanguage(string? languageTag)
     {
-        var normalizedTag = ProofingLanguageCatalog.NormalizeTag(languageTag);
         var sel = NormalizedSelection();
+        int[] selectedBlocks;
+        int startOffset;
+        int endOffset;
+        ProofingLanguageCaretContext? caretContext = null;
 
         if (sel is { } s)
         {
-            var selectedBlocks = Enumerable.Range(s.Start.Block, s.End.Block - s.Start.Block + 1).ToArray();
-            var plan = ProofingLanguageApplyPlanner.Build(languageTag, selectedBlocks, s.Start.Offset, s.End.Offset);
-            if (!plan.HasSelectedText)
-                return;
-
-            if (plan.Ranges.Count != 1)
+            selectedBlocks = Enumerable.Range(s.Start.Block, s.End.Block - s.Start.Block + 1).ToArray();
+            startOffset = s.Start.Offset;
+            endOffset = s.End.Offset;
+        }
+        else
+        {
+            selectedBlocks = [_caret.Block];
+            startOffset = _caret.Offset;
+            endOffset = _caret.Offset;
+            if (CurrentParagraph() is { } paragraph && IsEditable(paragraph))
             {
-                _bus.BeginUndoGroup();
-                foreach (var plannedRange in plan.Ranges)
-                {
-                    if (plannedRange.BlockIndex >= _doc.Blocks.Count || _doc.Blocks[plannedRange.BlockIndex] is not Paragraph plannedParagraph || !IsEditable(plannedParagraph))
-                        continue;
-
-                    var capturedBlock = plannedRange.BlockIndex;
-                    var capturedA = plannedRange.StartOffset;
-                    var capturedB = plannedRange.EndOffset;
-                    _bus.Execute(new ReplaceParagraphRunsCommand(capturedBlock, p =>
-                    {
-                        var live = ParaCells(p);
-                        var lo = Math.Clamp(capturedA, 0, live.Count);
-                        var hi = Math.Clamp(capturedB, 0, live.Count);
-                        for (var i = lo; i < hi; i++)
-                            live[i] = live[i] with { Fmt = live[i].Fmt with { LanguageTag = normalizedTag } };
-                        SetRuns(p, live);
-                    }));
-                }
-                _bus.CommitUndoGroup("Proofing Language");
-                return;
+                caretContext = new ProofingLanguageCaretContext(
+                    _caret.Block,
+                    _caret.Offset,
+                    paragraph.PlainText);
             }
+        }
 
-            // Single-block selection: tag only the selected character range.
-            var range = plan.Ranges[0];
-            var block = range.BlockIndex;
-            if (_doc.Blocks[block] is not Paragraph p0 || !IsEditable(p0))
-                return;
-            var a = range.StartOffset;
-            var b = range.EndOffset;
-            _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
-            {
-                var live = ParaCells(p);
-                for (var i = Math.Clamp(a, 0, live.Count); i < Math.Clamp(b, 0, live.Count); i++)
-                    live[i] = live[i] with { Fmt = live[i].Fmt with { LanguageTag = normalizedTag } };
-                SetRuns(p, live);
-            }));
+        var plan = ProofingLanguageApplyPlanner.BuildForSelectionOrCaretWord(
+            languageTag,
+            selectedBlocks,
+            startOffset,
+            endOffset,
+            caretContext);
+
+        ApplyProofingLanguagePlan(plan);
+    }
+
+    private void ApplyProofingLanguagePlan(ProofingLanguageApplyPlan plan)
+    {
+        var ranges = plan.Ranges
+            .Where(range => range.BlockIndex >= 0
+                && range.BlockIndex < _doc.Blocks.Count
+                && _doc.Blocks[range.BlockIndex] is Paragraph paragraph
+                && IsEditable(paragraph)
+                && TextRangeCoversParagraphText(paragraph, range.StartOffset, range.EndOffset))
+            .ToList();
+        if (ranges.Count == 0)
+            return;
+
+        if (ranges.Count == 1)
+        {
+            ExecuteProofingLanguageRange(ranges[0], plan.LanguageTag);
             return;
         }
 
-        else if (sel is { } multi && multi.Start.Block != multi.End.Block)
+        _bus.BeginUndoGroup();
+        foreach (var range in ranges)
+            ExecuteProofingLanguageRange(range, plan.LanguageTag);
+        _bus.CommitUndoGroup("Proofing Language");
+    }
+
+    private void ExecuteProofingLanguageRange(ProofingLanguageTextRange range, string? languageTag)
+    {
+        var capturedBlock = range.BlockIndex;
+        var capturedA = range.StartOffset;
+        var capturedB = range.EndOffset;
+
+        _bus.Execute(new ReplaceParagraphRunsCommand(capturedBlock, p =>
         {
-            // Multi-paragraph selection: first block from Start.Offset to its end, middle blocks in
-            // full, last block from its start to End.Offset — only the selected ranges are retagged.
-            _bus.BeginUndoGroup();
-            for (var blockIdx = multi.Start.Block; blockIdx <= multi.End.Block && blockIdx < _doc.Blocks.Count; blockIdx++)
-            {
-                if (_doc.Blocks[blockIdx] is not Paragraph bp || !IsEditable(bp))
-                    continue;
+            var live = ParaCells(p);
+            var lo = Math.Clamp(capturedA, 0, live.Count);
+            var hi = Math.Clamp(capturedB, 0, live.Count);
+            for (var i = lo; i < hi; i++)
+                live[i] = live[i] with { Fmt = live[i].Fmt with { LanguageTag = languageTag } };
+            SetRuns(p, live);
+        }));
+    }
 
-                var a = blockIdx == multi.Start.Block ? multi.Start.Offset : 0;
-                var b = blockIdx == multi.End.Block ? multi.End.Offset : int.MaxValue;
-                var capturedBlock = blockIdx;
-                var capturedA = a;
-                var capturedB = b;
-
-                _bus.Execute(new ReplaceParagraphRunsCommand(capturedBlock, p =>
-                {
-                    var live = ParaCells(p);
-                    var lo = Math.Clamp(capturedA, 0, live.Count);
-                    var hi = Math.Clamp(capturedB, 0, live.Count);
-                    for (var i = lo; i < hi; i++)
-                        live[i] = live[i] with { Fmt = live[i].Fmt with { LanguageTag = normalizedTag } };
-                    SetRuns(p, live);
-                }));
-            }
-            _bus.CommitUndoGroup("Proofing Language");
-            return;
-        }
-
-        // Collapsed caret: no selected text to retag. Stage a pending format for the next typed
-        // character (BZ5 convention), so the proofing language does not spill onto existing text.
-        if (CurrentParagraph() is { } paragraph && IsEditable(paragraph))
-        {
-            var caretFmt = _pendingRunFmt ?? ActiveFormatting(paragraph, _caret.Offset);
-            _pendingRunFmt = caretFmt with { LanguageTag = normalizedTag };
-        }
+    private static bool TextRangeCoversParagraphText(Paragraph paragraph, int startOffset, int endOffset)
+    {
+        var textLength = paragraph.PlainText.Length;
+        var start = Math.Clamp(startOffset, 0, textLength);
+        var end = Math.Clamp(endOffset, 0, textLength);
+        return end > start;
     }
 
     public bool ToggleSpellCheck()
