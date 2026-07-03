@@ -7503,29 +7503,29 @@ public sealed class DocumentView : RichTextBox
         }
         if (TryParseColor(fmt.ColorHex, out var color))
             wpf.Foreground = new SolidColorBrush(color);
+        var decorationPlan = RunDecorationVisualPlanner.Build(fmt, PxPerPoint);
         // Character shading (pattern-aware) takes precedence over plain highlight for the background.
         // Both map to wpf.Background since WPF Run has no separate shading slot; the CharacterFormatMarker
         // tag carries the full model data so ReadRunFormatting(WpfRun) can recover it on commit.
-        if (TryParseColor(fmt.CharacterShadingHex, out var charShading))
-            wpf.Background = new SolidColorBrush(charShading);
-        else if (TryParseColor(fmt.HighlightColorHex, out var highlight))
-            wpf.Background = new SolidColorBrush(highlight);
+        if (TryParseColor(decorationPlan.BackgroundColorHex, out var runBackground))
+            wpf.Background = new SolidColorBrush(runBackground);
 
         // Character border: stored in RunMarkers so it survives commit; also add a thick TextDecoration
         // underline+overline as a visual approximation (WPF Run cannot draw a real box border inline).
-        if (fmt.CharacterBorder is { } charBdr)
+        if (decorationPlan.Border is { } charBdr && decorationPlan.HasBorder)
         {
             AddMarker(wpf, m => m with { CharacterFormat = (m.CharacterFormat ?? new CharacterFormatMarker(null, null, ShadingPattern.Clear, null)) with { Border = charBdr } });
             // Visual hint: underline + overline in the border colour, thickness proportional to width.
             if (TryParseColor(charBdr.ColorHex, out var bdrColor))
             {
-                var bdrPen = new System.Windows.Media.Pen(new SolidColorBrush(bdrColor), Math.Max(1, charBdr.WidthPt * 0.5));
+                var bdrPen = new System.Windows.Media.Pen(new SolidColorBrush(bdrColor), decorationPlan.BorderWidthDip);
                 var bdrDecorations = wpf.TextDecorations is { } existing
                     ? new TextDecorationCollection(existing)
                     : new TextDecorationCollection();
-                if (!charBdr.BottomOnly)
+                if (decorationPlan.DrawTopBorder)
                     bdrDecorations.Add(new TextDecoration { Location = TextDecorationLocation.OverLine, Pen = bdrPen, PenThicknessUnit = TextDecorationUnit.Pixel });
-                bdrDecorations.Add(new TextDecoration { Location = TextDecorationLocation.Underline, Pen = bdrPen, PenThicknessUnit = TextDecorationUnit.Pixel });
+                if (decorationPlan.DrawBottomBorder)
+                    bdrDecorations.Add(new TextDecoration { Location = TextDecorationLocation.Underline, Pen = bdrPen, PenThicknessUnit = TextDecorationUnit.Pixel });
                 wpf.TextDecorations = bdrDecorations;
             }
         }
@@ -7551,7 +7551,9 @@ public sealed class DocumentView : RichTextBox
         else if (fmt.SmallCaps)
             Typography.SetCapitals(wpf, FontCapitals.SmallCaps);
 
-        var decorations = new TextDecorationCollection();
+        var decorations = wpf.TextDecorations is { } existingDecorations
+            ? new TextDecorationCollection(existingDecorations)
+            : new TextDecorationCollection();
         if (fmt.Underline)
             decorations.Add(TextDecorations.Underline);
         if (fmt.Strikethrough)
@@ -12541,10 +12543,12 @@ public sealed class DocumentView : RichTextBox
             FontSizePt = r.FontSizePt ?? style.FontSizePt ?? d.FontSizePt,
             ColorHex = r.ColorHex ?? style.ColorHex ?? d.ColorHex,
             HighlightColorHex = r.HighlightColorHex ?? style.HighlightColorHex ?? d.HighlightColorHex,
-            // Model-only fields that do not inherit from styles or document defaults — pass through verbatim.
-            CharacterBorder = r.CharacterBorder,
-            CharacterShadingHex = r.CharacterShadingHex,
-            CharacterShadingPattern = r.CharacterShadingPattern,
+            CharacterBorder = r.CharacterBorder ?? style.CharacterBorder ?? d.CharacterBorder,
+            CharacterShadingHex = r.CharacterShadingHex ?? style.CharacterShadingHex ?? d.CharacterShadingHex,
+            CharacterShadingPattern = r.CharacterShadingHex is not null ? r.CharacterShadingPattern
+                : style.CharacterShadingHex is not null ? style.CharacterShadingPattern
+                : d.CharacterShadingPattern,
+            // Language is direct-only until FreeW gains explicit style/default language inheritance tracking.
             LanguageTag = r.LanguageTag,
         };
     }

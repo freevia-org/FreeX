@@ -145,6 +145,66 @@ public class DocumentCommandBusTests
     }
 
     [Fact]
+    public void SetRunFormattingCommand_AppliesCharacterBorderAndShading_AndReverts()
+    {
+        var (doc, bus) = New();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("decorated"));
+        doc.Blocks.Add(paragraph);
+        var border = new ParagraphBorder("#0070C0", 1.5)
+        {
+            LineStyle = BorderLineStyle.Dashed,
+        };
+        var formatted = RunFormatting.Default with
+        {
+            CharacterBorder = border,
+            CharacterShadingHex = "#FFF2CC",
+            CharacterShadingPattern = ShadingPattern.Pct25,
+        };
+
+        bus.Execute(new SetRunFormattingCommand(0, 0, formatted));
+
+        paragraph.Runs[0].Formatting.CharacterBorder.Should().Be(border);
+        paragraph.Runs[0].Formatting.CharacterShadingHex.Should().Be("#FFF2CC");
+        paragraph.Runs[0].Formatting.CharacterShadingPattern.Should().Be(ShadingPattern.Pct25);
+
+        bus.Undo().Should().BeTrue();
+        paragraph.Runs[0].Formatting.CharacterBorder.Should().BeNull();
+        paragraph.Runs[0].Formatting.CharacterShadingHex.Should().BeNull();
+        paragraph.Runs[0].Formatting.CharacterShadingPattern.Should().Be(ShadingPattern.Clear);
+
+        bus.Redo().Should().BeTrue();
+        paragraph.Runs[0].Formatting.CharacterBorder.Should().Be(border);
+        paragraph.Runs[0].Formatting.CharacterShadingHex.Should().Be("#FFF2CC");
+    }
+
+    [Fact]
+    public void FormatParagraphRunsCommand_AppliesCharacterBorderAndShadingToEveryRun()
+    {
+        var (doc, bus) = New();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("one"));
+        paragraph.Runs.Add(new Run("two"));
+        doc.Blocks.Add(paragraph);
+        var border = new ParagraphBorder("#C00000", 0.75, BottomOnly: true);
+
+        bus.Execute(new FormatParagraphRunsCommand(0, f => f with
+        {
+            CharacterBorder = border,
+            CharacterShadingHex = "#D9EAD3",
+            CharacterShadingPattern = ShadingPattern.Pct10,
+        }));
+
+        paragraph.Runs.Should().OnlyContain(run => run.Formatting.CharacterBorder == border);
+        paragraph.Runs.Should().OnlyContain(run => run.Formatting.CharacterShadingHex == "#D9EAD3");
+        paragraph.Runs.Should().OnlyContain(run => run.Formatting.CharacterShadingPattern == ShadingPattern.Pct10);
+
+        bus.Undo().Should().BeTrue();
+        paragraph.Runs.Should().OnlyContain(run => run.Formatting.CharacterBorder == null);
+        paragraph.Runs.Should().OnlyContain(run => run.Formatting.CharacterShadingHex == null);
+    }
+
+    [Fact]
     public void StyleCatalogCommand_CapturesCatalogSnapshot_ForUndoRedo()
     {
         var doc = TextDocument.CreateEmpty();

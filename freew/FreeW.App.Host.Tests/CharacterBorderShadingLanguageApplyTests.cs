@@ -1,4 +1,5 @@
 using System.Linq;
+using System.Windows.Media;
 using Free.Shared.Ribbon;
 using FreeW.App.Host;
 using FreeW.App.Host.Editing;
@@ -133,6 +134,97 @@ public sealed class CharacterBorderShadingLanguageApplyTests
         run.Formatting.CharacterBorder.Should().NotBeNull();
         run.Formatting.CharacterBorder!.ColorHex.Should().Be("#FF0000");
         run.Formatting.CharacterBorder.LineStyle.Should().Be(BorderLineStyle.Dashed);
+    }
+
+    [StaFact]
+    public void CharacterBorderAndShading_RenderToFlowRunStructure()
+    {
+        var border = new ParagraphBorder("#0070C0", 1.5)
+        {
+            LineStyle = BorderLineStyle.Single,
+        };
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                new Run("visible", RunFormatting.Default with
+                {
+                    CharacterBorder = border,
+                    CharacterShadingHex = "#92D050",
+                    CharacterShadingPattern = ShadingPattern.Pct25,
+                }),
+            },
+        });
+        var view = new DocumentView();
+
+        view.LoadModel(doc);
+
+        var wpfParagraph = view.Document.Blocks
+            .OfType<System.Windows.Documents.Paragraph>()
+            .Single();
+        var wpfRun = wpfParagraph.Inlines
+            .OfType<System.Windows.Documents.Run>()
+            .Single();
+        var background = wpfRun.Background.Should().BeOfType<SolidColorBrush>().Subject.Color;
+        background.R.Should().Be(0x92);
+        background.G.Should().Be(0xD0);
+        background.B.Should().Be(0x50);
+        wpfRun.TextDecorations.Should().NotBeNull();
+        wpfRun.TextDecorations!.Should()
+            .Contain(decoration => decoration.Location == System.Windows.TextDecorationLocation.OverLine);
+        wpfRun.TextDecorations!.Should()
+            .Contain(decoration => decoration.Location == System.Windows.TextDecorationLocation.Underline);
+    }
+
+    [StaFact]
+    public void CharacterBorderAndShading_FromParagraphStyle_RenderToFlowRunStructure()
+    {
+        var border = new ParagraphBorder("#C00000", 1.0)
+        {
+            LineStyle = BorderLineStyle.Single,
+        };
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Styles["DecoratedRun"] = new DocumentStyle
+        {
+            Id = "DecoratedRun",
+            Name = "Decorated Run",
+            Run = RunFormatting.Default with
+            {
+                CharacterBorder = border,
+                CharacterShadingHex = "#D9EAD3",
+                CharacterShadingPattern = ShadingPattern.Pct10,
+            },
+        };
+        doc.Blocks.Add(new Paragraph
+        {
+            StyleId = "DecoratedRun",
+            Runs =
+            {
+                new Run("styled", RunFormatting.Default),
+            },
+        });
+        var view = new DocumentView();
+
+        view.LoadModel(doc);
+
+        var wpfRun = view.Document.Blocks
+            .OfType<System.Windows.Documents.Paragraph>()
+            .Single()
+            .Inlines
+            .OfType<System.Windows.Documents.Run>()
+            .Single();
+        var background = wpfRun.Background.Should().BeOfType<SolidColorBrush>().Subject.Color;
+        background.R.Should().Be(0xD9);
+        background.G.Should().Be(0xEA);
+        background.B.Should().Be(0xD3);
+        wpfRun.TextDecorations.Should().NotBeNull();
+        wpfRun.TextDecorations!.Should()
+            .Contain(decoration => decoration.Location == System.Windows.TextDecorationLocation.OverLine);
+        wpfRun.TextDecorations!.Should()
+            .Contain(decoration => decoration.Location == System.Windows.TextDecorationLocation.Underline);
     }
 
     // ---- SetCharacterShading ----
