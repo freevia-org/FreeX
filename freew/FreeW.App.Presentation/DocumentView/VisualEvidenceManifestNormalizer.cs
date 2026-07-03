@@ -122,6 +122,10 @@ public static class FreeWVisualEvidenceManifestNormalizer
         "drawing-objects-complex",
         "wordart-watermark-stress"
     ];
+    public static IReadOnlyList<string> GroupedChildEffectRendererScenarioIds { get; } =
+    [
+        "drawing-objects-complex"
+    ];
     public static IReadOnlyList<string> WordArtWatermarkRendererScenarioIds { get; } =
     [
         "wordart-picture-watermark-layout"
@@ -210,6 +214,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
         ValidateBackstageRendererPairs(rows, failures);
         ValidateSectionGeometryRendererPairs(rows, failures);
         ValidateReviewRendererPairs(rows, failures);
+        ValidateDrawingObjectRendererPairs(rows, failures);
         var orderedRows = rows
             .OrderBy(r => r.HostId, StringComparer.OrdinalIgnoreCase)
             .ThenBy(r => r.ScenarioId, StringComparer.OrdinalIgnoreCase)
@@ -854,6 +859,10 @@ public static class FreeWVisualEvidenceManifestNormalizer
             rowFailures.Add("drawing-object evidence expects image effects but the object plan records none");
         if (tags.Contains("wordart-effects", StringComparer.OrdinalIgnoreCase) && objects.Effects.WordArtEffectObjectCount <= 0)
             rowFailures.Add("drawing-object evidence expects WordArt effects but the object plan records none");
+        if (tags.Contains("grouped-child-effects", StringComparer.OrdinalIgnoreCase) && objects.Effects.RenderedGroupChildEffectObjectCount <= 0)
+            rowFailures.Add("drawing-object evidence expects rendered grouped child effects but the object plan records none");
+        if (tags.Contains("grouped-child-shape-effects", StringComparer.OrdinalIgnoreCase) && objects.Effects.RenderedGroupChildShapeEffectObjectCount <= 0)
+            rowFailures.Add("drawing-object evidence expects rendered grouped child shape effects but the object plan records none");
         if (tags.Contains("shadow", StringComparer.OrdinalIgnoreCase) && !objects.Effects.HasShadow)
             rowFailures.Add("drawing-object evidence expects shadow effects but the object plan records none");
         if (tags.Contains("glow", StringComparer.OrdinalIgnoreCase) && !objects.Effects.HasGlow)
@@ -1168,6 +1177,50 @@ public static class FreeWVisualEvidenceManifestNormalizer
         }
     }
 
+    private static void ValidateDrawingObjectRendererPairs(
+        IReadOnlyList<FreeWVisualEvidenceNormalizedRow> rows,
+        List<string> failures)
+    {
+        foreach (var scenarioId in GroupedChildEffectRendererScenarioIds)
+        {
+            var wpfRows = TrustedRowsForHostScenario(rows, WpfHostId, scenarioId);
+            var avaloniaRows = TrustedRowsForHostScenario(rows, AvaloniaHostId, scenarioId);
+            if (wpfRows.Count == 0 || avaloniaRows.Count == 0)
+                continue;
+
+            ValidateUniquePages(scenarioId, WpfHostId, wpfRows, failures);
+            ValidateUniquePages(scenarioId, AvaloniaHostId, avaloniaRows, failures);
+
+            var wpfPages = wpfRows.Select(r => r.PageNumber).Distinct().Order().ToList();
+            var avaloniaPages = avaloniaRows.Select(r => r.PageNumber).Distinct().Order().ToList();
+            var requiredPages = RequiredScenarioPages(scenarioId);
+            var missingAvaloniaPages = requiredPages.Except(avaloniaPages).ToList();
+            var missingWpfPages = requiredPages.Except(wpfPages).ToList();
+            if (missingAvaloniaPages.Count > 0)
+            {
+                failures.Add(
+                    $"drawing-object renderer pair '{scenarioId}' is missing Avalonia page(s): {FormatPages(missingAvaloniaPages)}");
+            }
+
+            if (missingWpfPages.Count > 0)
+            {
+                failures.Add(
+                    $"drawing-object renderer pair '{scenarioId}' is missing WPF page(s): {FormatPages(missingWpfPages)}");
+            }
+
+            foreach (var pageNumber in wpfPages.Intersect(avaloniaPages))
+            {
+                var wpf = wpfRows.SingleOrDefault(r => r.PageNumber == pageNumber);
+                var avalonia = avaloniaRows.SingleOrDefault(r => r.PageNumber == pageNumber);
+                if (wpf is null || avalonia is null)
+                    continue;
+
+                ValidateRendererPairRow("drawing-object renderer pair", scenarioId, pageNumber, wpf, avalonia, failures);
+                ValidateGroupedChildEffectPairRow(scenarioId, pageNumber, wpf, avalonia, failures);
+            }
+        }
+    }
+
     private static IReadOnlyList<int> RequiredScenarioPages(string scenarioId)
     {
         var minimumOutputs = Math.Max(1, FreeWVisualEvidencePlanner.ResolveScenario(scenarioId).MinimumExpectedOutputs);
@@ -1247,6 +1300,45 @@ public static class FreeWVisualEvidenceManifestNormalizer
         }
     }
 
+    private static void ValidateGroupedChildEffectPairRow(
+        string scenarioId,
+        int pageNumber,
+        FreeWVisualEvidenceNormalizedRow wpf,
+        FreeWVisualEvidenceNormalizedRow avalonia,
+        List<string> failures)
+    {
+        var pairName = $"drawing-object renderer pair '{scenarioId}' page {pageNumber.ToString(CultureInfo.InvariantCulture)}";
+        var wpfEffects = wpf.DrawingObjects.Effects;
+        var avaloniaEffects = avalonia.DrawingObjects.Effects;
+        if (wpfEffects.RenderedGroupChildEffectObjectCount <= 0)
+        {
+            failures.Add($"{pairName} is missing WPF rendered grouped child effect evidence");
+        }
+
+        if (avaloniaEffects.RenderedGroupChildEffectObjectCount <= 0)
+        {
+            failures.Add($"{pairName} is missing Avalonia rendered grouped child effect evidence");
+        }
+
+        var wpfSummaries = OrderedSummaries(wpfEffects.RenderedGroupChildEffectSummaries);
+        var avaloniaSummaries = OrderedSummaries(avaloniaEffects.RenderedGroupChildEffectSummaries);
+        if (!wpfSummaries.SequenceEqual(avaloniaSummaries, StringComparer.Ordinal))
+        {
+            failures.Add(
+                $"{pairName} rendered grouped child effect summaries differ: WPF '{FormatSummaries(wpfSummaries)}', Avalonia '{FormatSummaries(avaloniaSummaries)}'");
+        }
+    }
+
+    private static List<string> OrderedSummaries(IEnumerable<string> summaries) =>
+        summaries
+            .Where(summary => !string.IsNullOrWhiteSpace(summary))
+            .OrderBy(summary => summary, StringComparer.Ordinal)
+            .ToList();
+
+    private static string FormatSummaries(IReadOnlyList<string> summaries) =>
+        summaries.Count == 0 ? "none" : string.Join("/", summaries);
+
+
     private static string FormatPages(IEnumerable<int> pageNumbers) =>
         string.Join(
             ", ",
@@ -1314,11 +1406,17 @@ public static class FreeWVisualEvidenceManifestNormalizer
             parts.Add(
                 $"{row.DrawingObjects.FloatingObjectCount.ToString(CultureInfo.InvariantCulture)} drawing object(s), " +
                 $"{row.DrawingObjects.BehindTextCount.ToString(CultureInfo.InvariantCulture)} behind text");
-            if (row.DrawingObjects.Effects.HasAny)
+            if (row.DrawingObjects.Effects.EffectObjectCount > 0)
             {
                 parts.Add(
                     $"{row.DrawingObjects.Effects.EffectObjectCount.ToString(CultureInfo.InvariantCulture)} drawing effect object(s): " +
                     string.Join("/", row.DrawingObjects.Effects.EffectSummaries));
+            }
+            if (row.DrawingObjects.Effects.HasRenderedGroupChildEffects)
+            {
+                parts.Add(
+                    $"{row.DrawingObjects.Effects.RenderedGroupChildEffectObjectCount.ToString(CultureInfo.InvariantCulture)} rendered grouped child effect object(s): " +
+                    string.Join("/", row.DrawingObjects.Effects.RenderedGroupChildEffectSummaries));
             }
             if (row.DrawingObjects.Effects.HasPlannedGroupChildEffects)
             {

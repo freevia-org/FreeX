@@ -111,6 +111,8 @@ public sealed class VisualEvidencePlannerTests
             "image-effects",
             "shape-effects",
             "wordart-effects",
+            "grouped-child-effects",
+            "grouped-child-shape-effects",
             "shadow",
             "glow",
             "reflection",
@@ -912,8 +914,11 @@ public sealed class VisualEvidencePlannerTests
         expectation.DrawingObjects.Effects.ShapeEffectObjectCount.Should().Be(1);
         expectation.DrawingObjects.Effects.ImageEffectObjectCount.Should().Be(1);
         expectation.DrawingObjects.Effects.WordArtEffectObjectCount.Should().Be(1);
-        expectation.DrawingObjects.Effects.PlannedGroupChildEffectObjectCount.Should().Be(1);
-        expectation.DrawingObjects.Effects.PlannedGroupChildShapeEffectObjectCount.Should().Be(1);
+        expectation.DrawingObjects.Effects.RenderedGroupChildEffectObjectCount.Should().Be(1);
+        expectation.DrawingObjects.Effects.RenderedGroupChildShapeEffectObjectCount.Should().Be(1);
+        expectation.DrawingObjects.Effects.RenderedGroupChildWordArtEffectObjectCount.Should().Be(0);
+        expectation.DrawingObjects.Effects.PlannedGroupChildEffectObjectCount.Should().Be(0);
+        expectation.DrawingObjects.Effects.PlannedGroupChildShapeEffectObjectCount.Should().Be(0);
         expectation.DrawingObjects.Effects.PlannedGroupChildWordArtEffectObjectCount.Should().Be(0);
         expectation.DrawingObjects.Effects.HasShadow.Should().BeTrue();
         expectation.DrawingObjects.Effects.HasGlow.Should().BeTrue();
@@ -923,8 +928,9 @@ public sealed class VisualEvidencePlannerTests
             "Shape:shadow",
             "Image:shadow+glow+reflection+artistic:GlowDiffused",
             "WordArt:glow"]);
-        expectation.DrawingObjects.Effects.PlannedGroupChildEffectSummaries.Should().Contain(
+        expectation.DrawingObjects.Effects.RenderedGroupChildEffectSummaries.Should().Contain(
             "GroupChild0:Shape:glow");
+        expectation.DrawingObjects.Effects.PlannedGroupChildEffectSummaries.Should().BeEmpty();
     }
 
     [Fact]
@@ -1124,7 +1130,7 @@ public sealed class VisualEvidencePlannerTests
         using var doc = JsonDocument.Parse(json);
         var root = doc.RootElement;
         root.GetProperty("schemaId").GetString().Should().Be("freew.visual-evidence.v1");
-        root.GetProperty("schemaVersion").GetInt32().Should().Be(8);
+        root.GetProperty("schemaVersion").GetInt32().Should().Be(9);
         root.GetProperty("product").GetString().Should().Be("FreeW");
         root.GetProperty("scenarios").GetArrayLength().Should().Be(1);
         var evidence = root.GetProperty("evidence")[0];
@@ -1195,7 +1201,82 @@ public sealed class VisualEvidencePlannerTests
             var markdown = FreeWVisualEvidenceManifestNormalizer.ToMarkdown(summary);
             markdown.Should().Contain("Scenario Coverage");
             markdown.Should().Contain("avalonia-page-layout-shot");
-            markdown.Should().Contain("1 planned grouped child effect object(s): GroupChild0:Shape:glow");
+            markdown.Should().Contain("1 rendered grouped child effect object(s): GroupChild0:Shape:glow");
+            markdown.Should().NotContain("planned grouped child effect object(s)");
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void BuildNormalizedSummaryFromFiles_RequiresMatchingRenderedGroupedChildEffectEvidence()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var wpfDir = Path.Combine(root, "wpf");
+            var avaloniaDir = Path.Combine(root, "avalonia");
+            var scenarioId = "drawing-objects-complex";
+            var wpfRow = BuildFileBackedRow(
+                root,
+                FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                scenarioId,
+                pageNumber: 1,
+                pageCount: 1);
+            var avaloniaRow = BuildFileBackedRow(
+                root,
+                FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                scenarioId,
+                pageNumber: 1,
+                pageCount: 1);
+            var avaloniaWithDifferentGroupChildEffect = avaloniaRow with
+            {
+                PageExpectation = avaloniaRow.PageExpectation with
+                {
+                    DrawingObjects = avaloniaRow.PageExpectation.DrawingObjects with
+                    {
+                        Effects = avaloniaRow.PageExpectation.DrawingObjects.Effects with
+                        {
+                            RenderedGroupChildEffectSummaries = ["GroupChild0:Shape:shadow"]
+                        }
+                    }
+                }
+            };
+
+            FreeWVisualEvidencePlanner.WriteManifest(
+                wpfDir,
+                [wpfRow],
+                new DateTimeOffset(2026, 7, 1, 12, 0, 0, TimeSpan.Zero));
+            FreeWVisualEvidencePlanner.WriteManifest(
+                avaloniaDir,
+                [avaloniaWithDifferentGroupChildEffect],
+                new DateTimeOffset(2026, 7, 1, 12, 0, 0, TimeSpan.Zero));
+
+            var summary = FreeWVisualEvidenceManifestNormalizer.BuildNormalizedSummaryFromFiles(
+                [
+                    Path.Combine(wpfDir, FreeWVisualEvidencePlanner.ManifestFileName),
+                    Path.Combine(avaloniaDir, FreeWVisualEvidencePlanner.ManifestFileName)
+                ],
+                root,
+                [
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        scenarioId,
+                        1),
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                        scenarioId,
+                        1)
+                ]);
+
+            summary.Trust.Passed.Should().BeFalse();
+            summary.Trust.Failures.Should().Contain(f =>
+                f.Contains("drawing-object renderer pair 'drawing-objects-complex' page 1", StringComparison.Ordinal)
+                && f.Contains("rendered grouped child effect summaries differ", StringComparison.Ordinal)
+                && f.Contains("WPF 'GroupChild0:Shape:glow'", StringComparison.Ordinal)
+                && f.Contains("Avalonia 'GroupChild0:Shape:shadow'", StringComparison.Ordinal));
         }
         finally
         {
