@@ -1863,7 +1863,8 @@ static void GenerateF2FlowCorpus(string outDir)
         Console.WriteLine("  wrote backstage-pdf-export-fidelity.docx");
     }
 
-    Console.WriteLine($"\nDone - 17 corpus files written to {outDir}");
+    var corpusFileCount = Directory.GetFiles(outDir, "*.docx").Length;
+    Console.WriteLine($"\nDone - {corpusFileCount.ToString(CultureInfo.InvariantCulture)} corpus files written to {outDir}");
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════════════════════════

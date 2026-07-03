@@ -93,6 +93,7 @@ public static class FreeWVisualBaselineComparisonPlanner
         new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
             "table-layout-complex",
+            "table-pagination-repeat-header",
             "drawing-objects-complex",
             "chart-smartart-complex",
             "wordart-watermark-stress",
