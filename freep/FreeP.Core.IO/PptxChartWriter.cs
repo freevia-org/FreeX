@@ -786,8 +786,9 @@ internal static class PptxChartWriter
     private static XElement? BuildSeriesShapePropertiesEl(ChartSeries series)
     {
         var children = new List<object>();
-        if (series.FillColor is not null)
-            children.Add(new XElement(A + "solidFill", BuildColorEl(series.FillColor)));
+        var fill = BuildChartFillEl(series.Fill, series.FillColor);
+        if (fill is not null)
+            children.Add(fill);
 
         var line = BuildLineStyleEl(series.LineStyle);
         if (line is not null)
@@ -840,8 +841,12 @@ internal static class PptxChartWriter
         var children = new List<object>();
         if (style.NoFill)
             children.Add(new XElement(A + "noFill"));
-        else if (style.FillColor is not null)
-            children.Add(new XElement(A + "solidFill", BuildColorEl(style.FillColor)));
+        else
+        {
+            var fill = BuildChartFillEl(style.Fill, style.FillColor);
+            if (fill is not null)
+                children.Add(fill);
+        }
 
         ChartLineStyle? lineStyle = null;
         if (style.NoStroke || style.StrokeColor is not null || style.StrokeWidthPt.HasValue)
@@ -886,9 +891,9 @@ internal static class PptxChartWriter
     private static XElement? BuildPointShapePropertiesEl(ThemeAwareColor? pointColor, ChartPointStyle? style)
     {
         var children = new List<object>();
-        var fill = style?.FillColor ?? pointColor;
+        var fill = BuildChartFillEl(style?.Fill, style?.FillColor ?? pointColor);
         if (fill is not null)
-            children.Add(new XElement(A + "solidFill", BuildColorEl(fill)));
+            children.Add(fill);
 
         ChartLineStyle? lineStyle = null;
         if (style?.StrokeColor is not null || style?.StrokeWidthPt is not null)
@@ -906,6 +911,15 @@ internal static class PptxChartWriter
 
         return children.Count == 0 ? null : new XElement(C + "spPr", children);
     }
+
+    private static XElement? BuildChartFillEl(ShapeFill? fill, ThemeAwareColor? solidFallback) =>
+        fill switch
+        {
+            ShapeFill.Gradient gradient => BuildGradFillEl(gradient),
+            ShapeFill.Solid solid => new XElement(A + "solidFill", BuildColorEl(solid.Color)),
+            _ when solidFallback is not null => new XElement(A + "solidFill", BuildColorEl(solidFallback)),
+            _ => null
+        };
 
     private static string ToMarkerSymbolValue(ChartMarkerSymbol symbol) =>
         symbol switch

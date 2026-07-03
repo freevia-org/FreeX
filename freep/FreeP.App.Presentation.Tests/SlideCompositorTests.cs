@@ -2458,6 +2458,51 @@ public sealed class SlideCompositorTests
     }
 
     [Fact]
+    public void Compose_ChartGradientFill_BuildsResolvedFillPlan()
+    {
+        var p = MakePresentation();
+        p.Slides[0].Shapes.Clear();
+
+        var chart = new ChartShape { ChartType = ChartType.ColumnClustered };
+        chart.Categories.AddRange(new[] { "Q1", "Q2" });
+        var series = new ChartSeries
+        {
+            Name = "Sales",
+            Fill = new ShapeFill.Gradient(
+                new[]
+                {
+                    new GradientStop(0.0, new ThemeAwareColor(new SrgbColor(0x10, 0x20, 0x30))),
+                    new GradientStop(1.0, new ThemeAwareColor(new SrgbColor(0xD0, 0xE0, 0xF0)))
+                },
+                GradientKind.Linear,
+                angleDegrees: 45)
+        };
+        series.Values.AddRange(new double?[] { 10, 20 });
+        chart.Series.Add(series);
+        p.Slides[0].Shapes.Add(new SlideShape
+        {
+            Id = 11,
+            Kind = SlideShapeKind.Chart,
+            OffsetXEmu = 0,
+            OffsetYEmu = 0,
+            ExtentCxEmu = 4572000,
+            ExtentCyEmu = 3429000,
+            Chart = chart
+        });
+
+        var chartOp = SlideCompositor.Compose(p, FirstSlide(p)).OfType<DrawOp.Chart>().Single();
+
+        chartOp.FillPlans.SeriesFills.Should().HaveCount(1);
+        chartOp.FillPlans.SeriesFills[0].Fill.Should().BeOfType<ResolvedFill.Gradient>();
+        var primitive = ChartRenderPlanner.BuildColumnPrimitives(
+            chart,
+            new ChartPlanRect(0, 0, 200, 100),
+            chartOp.SeriesColors,
+            chartOp.FillPlans).First();
+        primitive.Fill.Fill.Should().BeOfType<ResolvedFill.Gradient>();
+    }
+
+    [Fact]
     public void Compose_TextPlaceholder_InheritsLayoutPlaceholderTextInsets()
     {
         var p = new PresentationModel { Theme = PresentationTheme.CreateDefault() };

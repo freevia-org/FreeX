@@ -642,6 +642,9 @@ public abstract class DrawOp
         /// already resolved from PointColors[pointIndex] or the default accent palette.
         /// </summary>
         public IReadOnlyList<SrgbColor> SeriesColors { get; init; } = Array.Empty<SrgbColor>();
+
+        /// <summary>Resolved rich chart fills for series, points, and markers.</summary>
+        public ChartFillPlanSet FillPlans { get; init; } = new();
     }
 
     // ── Math draw op (Theme 27) ───────────────────────────────────────────────────────────────────────────────────────

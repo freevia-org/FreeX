@@ -256,6 +256,44 @@ public sealed class ChartTests : IDisposable
     }
 
     [Fact]
+    public void RoundTrip_Chart_GradientFills_PreservedForSeriesPointAndMarker()
+    {
+        var chart = BuildColumnChart();
+        var series = chart.Series[0];
+        series.Fill = MakeGradient(0x10, 0x20, 0x30, 0xD0, 0xE0, 0xF0, 35);
+        series.PointStyles[1] = new ChartPointStyle
+        {
+            Fill = MakeGradient(0x20, 0x40, 0x60, 0xF0, 0xA0, 0x40, 90)
+        };
+        series.MarkerStyle = new ChartMarkerStyle
+        {
+            Symbol = ChartMarkerSymbol.Circle,
+            Fill = MakeGradient(0x40, 0x10, 0x80, 0xEE, 0xDD, 0xCC, 120)
+        };
+
+        var path = WriteToPptx(BuildPresWithChart(chart));
+        using (var archive = ZipFile.OpenRead(path))
+        {
+            var chartDoc = LoadChartXml(archive, chartIndex: 1);
+            chartDoc.Descendants(DrawingNs + "gradFill").Should().HaveCountGreaterThanOrEqualTo(3);
+        }
+
+        var reloaded = PptxPackageReader.Read(path);
+        var rt = reloaded.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.Chart).Chart!;
+        var rtSeries = rt.Series[0];
+
+        rtSeries.Fill.Should().BeOfType<ShapeFill.Gradient>();
+        ((ShapeFill.Gradient)rtSeries.Fill!).AngleDegrees.Should().BeApproximately(35, 0.01);
+
+        rtSeries.PointStyles[1].Fill.Should().BeOfType<ShapeFill.Gradient>();
+        ((ShapeFill.Gradient)rtSeries.PointStyles[1].Fill!).AngleDegrees.Should().BeApproximately(90, 0.01);
+
+        rtSeries.MarkerStyle.Should().NotBeNull();
+        rtSeries.MarkerStyle!.Fill.Should().BeOfType<ShapeFill.Gradient>();
+        ((ShapeFill.Gradient)rtSeries.MarkerStyle.Fill!).AngleDegrees.Should().BeApproximately(120, 0.01);
+    }
+
+    [Fact]
     public void RoundTrip_TwoCharts_SameSlide()
     {
         var pres = new Presentation();
@@ -1020,6 +1058,23 @@ public sealed class ChartTests : IDisposable
 
         return chart;
     }
+
+    private static ShapeFill.Gradient MakeGradient(
+        byte startR,
+        byte startG,
+        byte startB,
+        byte endR,
+        byte endG,
+        byte endB,
+        double angleDegrees) =>
+        new(
+            new[]
+            {
+                new GradientStop(0.0, new ThemeAwareColor(new SrgbColor(startR, startG, startB))),
+                new GradientStop(1.0, new ThemeAwareColor(new SrgbColor(endR, endG, endB)))
+            },
+            GradientKind.Linear,
+            angleDegrees);
 
     private static Presentation BuildPresWithChart(ChartShape chart)
     {

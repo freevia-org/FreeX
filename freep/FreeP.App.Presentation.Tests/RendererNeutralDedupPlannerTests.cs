@@ -298,12 +298,12 @@ public sealed class RendererNeutralDedupPlannerTests
         {
             source.Should().Contain("ChartRenderPlanner.BuildAreaSeriesPrimitives");
             source.Should().Contain("ChartRenderPlanner.BuildScatterPrimitivePlan");
-            source.Should().Contain("ChartRenderPlanner.BuildScatterPrimitivePlan(chart, plot, seriesColors)");
+            source.Should().Contain("ChartRenderPlanner.BuildScatterPrimitivePlan(chart, plot, seriesColors, fillPlans)");
             source.Should().Contain("primitive.LineSegments");
             source.Should().Contain("primitive.Markers");
             source.Should().Contain("plan.DataLabels");
-            source.Should().Contain("ChartRenderPlanner.BuildBubblePrimitivePlan(chart, plot, seriesColors)");
-            source.Should().Contain("ChartRenderPlanner.BuildRadarPrimitivePlan(chart, plot, seriesColors)");
+            source.Should().Contain("ChartRenderPlanner.BuildBubblePrimitivePlan(chart, plot, seriesColors, fillPlans)");
+            source.Should().Contain("ChartRenderPlanner.BuildRadarPrimitivePlan(chart, plot, seriesColors, fillPlans)");
             source.Should().Contain("plan.GridLineStroke");
             source.Should().Contain("plan.SpokeStroke");
             source.Should().Contain("ToGeometry(ring.Path)");
@@ -335,10 +335,10 @@ public sealed class RendererNeutralDedupPlannerTests
 
         foreach (var source in new[] { wpf, avalonia })
         {
-            source.Should().Contain("ChartRenderPlanner.BuildColumnPrimitives(chart, plot, seriesColors)");
-            source.Should().Contain("ChartRenderPlanner.BuildBarPrimitives(chart, plot, seriesColors)");
-            source.Should().Contain("ChartRenderPlanner.BuildLineSeriesPrimitives(chart, plot, withMarkers, seriesColors)");
-            source.Should().Contain("ChartRenderPlanner.BuildComboOverrideLineSeriesPrimitives(chart, plot, seriesColors)");
+            source.Should().Contain("ChartRenderPlanner.BuildColumnPrimitives(chart, plot, seriesColors, fillPlans)");
+            source.Should().Contain("ChartRenderPlanner.BuildBarPrimitives(chart, plot, seriesColors, fillPlans)");
+            source.Should().Contain("ChartRenderPlanner.BuildLineSeriesPrimitives(chart, plot, withMarkers, seriesColors, fillPlans)");
+            source.Should().Contain("ChartRenderPlanner.BuildComboOverrideLineSeriesPrimitives(chart, plot, seriesColors, fillPlans)");
             source.Should().Contain("primitive.Fill");
             source.Should().Contain("primitive.Stroke");
             source.Should().Contain("primitive.LineSegments");
@@ -365,7 +365,7 @@ public sealed class RendererNeutralDedupPlannerTests
 
         foreach (var source in new[] { wpf, avalonia })
         {
-            source.Should().Contain("ChartRenderPlanner.BuildLegendItemPlans(chart, frame, chartOp.SeriesColors)");
+            source.Should().Contain("ChartRenderPlanner.BuildLegendItemPlans(chart, frame, chartOp.SeriesColors, chartOp.FillPlans)");
             source.Should().Contain("item.SwatchBounds");
             source.Should().Contain("item.Label.Bounds");
             source.Should().NotContain("legendAreaH");
@@ -402,7 +402,7 @@ public sealed class RendererNeutralDedupPlannerTests
 
         foreach (var source in new[] { wpf, avalonia })
         {
-            source.Should().Contain("ChartRenderPlanner.BuildDataTablePrimitivePlan(chart, frame, chartOp.SeriesColors)");
+            source.Should().Contain("ChartRenderPlanner.BuildDataTablePrimitivePlan(chart, frame, chartOp.SeriesColors, chartOp.FillPlans)");
             source.Should().Contain("RenderChartDataTable(dc, dataTablePlan)");
             source.Should().Contain("ChartDataTablePrimitivePlan plan");
             source.Should().Contain("cell.CellBounds");
