@@ -81,10 +81,54 @@ public sealed record TableCellEditStartPlan(
     CellRectDip? CellRect,
     InCanvasEditorPlacement? Placement,
     InCanvasEditorTextSelection InitialSelection,
+    InCanvasTableCellRichTextEditPlan? RichTextPlan,
     TextBody? OriginalBody,
     InCanvasTableCellTextEditPlanner? EditPlanner)
 {
     public bool IsReady => Status == TableCellEditStartStatus.Ready;
+}
+
+public sealed record InCanvasEditorRunStyle(
+    int ParagraphIndex,
+    int RunIndex,
+    int Start,
+    int End,
+    string Text,
+    string? FontFamily,
+    double? FontSizePt,
+    bool Bold,
+    bool Italic,
+    bool Underline,
+    bool Strikethrough,
+    ThemeAwareColor? Color);
+
+public sealed record InCanvasEditorTextStyleState(
+    string? FontFamily,
+    double? FontSizePt,
+    bool? Bold,
+    bool? Italic,
+    bool? Underline,
+    bool? Strikethrough,
+    ThemeAwareColor? Color)
+{
+    public bool IsMixed =>
+        FontFamily is null ||
+        FontSizePt is null ||
+        Bold is null ||
+        Italic is null ||
+        Underline is null ||
+        Strikethrough is null ||
+        Color is null;
+}
+
+public sealed record InCanvasTableCellRichTextEditPlan(
+    string PlainText,
+    IReadOnlyList<InCanvasEditorRunStyle> Runs,
+    InCanvasEditorTextStyleState SuggestedEditorStyle,
+    InCanvasEditorTextStyleState InitialSelectionStyle,
+    bool HasMixedFormatting)
+{
+    public bool HasRichFormatting => Runs.Count > 1 || HasMixedFormatting;
 }
 
 public sealed record TableCellTextFormatPlan(
@@ -220,6 +264,7 @@ public static class TableCellEditPlanner
             cellRect.Value,
             placement,
             PlanInitialSelection(originalBody),
+            PlanRichTextEdit(originalBody, PlanInitialSelection(originalBody)),
             originalBody,
             InCanvasTableCellTextEditPlanner.BeginRichText(
                 slideIndex,
@@ -249,6 +294,26 @@ public static class TableCellEditPlanner
         return textLength > 0
             ? new InCanvasEditorTextSelection(0, textLength)
             : new InCanvasEditorTextSelection(0, 0);
+    }
+
+    public static InCanvasTableCellRichTextEditPlan PlanRichTextEdit(
+        TextBody? body,
+        InCanvasEditorTextSelection initialSelection)
+    {
+        var runs = BuildRunStyles(body);
+        string plainText = InCanvasTextEditPlanner.ExtractPlainText(body);
+        var suggestedStyle = BuildStyleState(runs.Count > 0 ? [runs[0]] : []);
+        var selectionRuns = runs
+            .Where(run => OverlapsSelection(run, initialSelection))
+            .ToList();
+        var selectionStyle = BuildStyleState(selectionRuns.Count > 0 ? selectionRuns : runs);
+
+        return new InCanvasTableCellRichTextEditPlan(
+            plainText,
+            runs,
+            suggestedStyle,
+            selectionStyle,
+            HasMixedFormatting(runs));
     }
 
     public static TableCellTextFormatPlan PlanTextFormat(
@@ -538,7 +603,104 @@ public static class TableCellEditPlanner
         uint shapeId,
         int row,
         int col) =>
-        new(status, shapeId, row, col, null, null, null, default, null, null);
+        new(status, shapeId, row, col, null, null, null, default, null, null, null);
+
+    private static List<InCanvasEditorRunStyle> BuildRunStyles(TextBody? body)
+    {
+        var runs = new List<InCanvasEditorRunStyle>();
+        if (body is null)
+            return runs;
+
+        int cursor = 0;
+        for (int pi = 0; pi < body.Paragraphs.Count; pi++)
+        {
+            if (pi > 0)
+                cursor += 1;
+
+            var paragraph = body.Paragraphs[pi];
+            for (int ri = 0; ri < paragraph.Runs.Count; ri++)
+            {
+                var run = paragraph.Runs[ri];
+                int start = cursor;
+                int end = start + run.Text.Length;
+                runs.Add(new InCanvasEditorRunStyle(
+                    pi,
+                    ri,
+                    start,
+                    end,
+                    run.Text,
+                    run.FontFamily,
+                    run.FontSizePt,
+                    run.Bold,
+                    run.Italic,
+                    run.Underline,
+                    run.Strikethrough,
+                    run.Color));
+                cursor = end;
+            }
+        }
+
+        return runs;
+    }
+
+    private static bool OverlapsSelection(
+        InCanvasEditorRunStyle run,
+        InCanvasEditorTextSelection selection)
+    {
+        if (selection.IsCollapsed)
+            return false;
+
+        int start = Math.Min(selection.Start, selection.End);
+        int end = Math.Max(selection.Start, selection.End);
+        return run.End > start && run.Start < end;
+    }
+
+    private static InCanvasEditorTextStyleState BuildStyleState(
+        IReadOnlyList<InCanvasEditorRunStyle> runs)
+    {
+        if (runs.Count == 0)
+            return new InCanvasEditorTextStyleState(null, null, null, null, null, null, null);
+
+        var first = runs[0];
+        return new InCanvasEditorTextStyleState(
+            AllEqual(runs, first.FontFamily, static (run, value) => run.FontFamily == value) ? first.FontFamily : null,
+            AllEqual(runs, first.FontSizePt, static (run, value) => run.FontSizePt == value) ? first.FontSizePt : null,
+            AllEqual(runs, first.Bold, static (run, value) => run.Bold == value) ? first.Bold : null,
+            AllEqual(runs, first.Italic, static (run, value) => run.Italic == value) ? first.Italic : null,
+            AllEqual(runs, first.Underline, static (run, value) => run.Underline == value) ? first.Underline : null,
+            AllEqual(runs, first.Strikethrough, static (run, value) => run.Strikethrough == value) ? first.Strikethrough : null,
+            AllEqual(runs, first.Color, static (run, value) => TextBodyModelCloner.ColorsEqual(run.Color, value)) ? first.Color : null);
+    }
+
+    private static bool AllEqual<T>(
+        IReadOnlyList<InCanvasEditorRunStyle> runs,
+        T value,
+        Func<InCanvasEditorRunStyle, T, bool> comparer)
+    {
+        foreach (var run in runs)
+        {
+            if (!comparer(run, value))
+                return false;
+        }
+
+        return true;
+    }
+
+    private static bool HasMixedFormatting(IReadOnlyList<InCanvasEditorRunStyle> runs)
+    {
+        if (runs.Count <= 1)
+            return false;
+
+        var first = runs[0];
+        return runs.Any(run =>
+            run.FontFamily != first.FontFamily ||
+            run.FontSizePt != first.FontSizePt ||
+            run.Bold != first.Bold ||
+            run.Italic != first.Italic ||
+            run.Underline != first.Underline ||
+            run.Strikethrough != first.Strikethrough ||
+            !TextBodyModelCloner.ColorsEqual(run.Color, first.Color));
+    }
 
     private static TableCellTextFormatPlan DisabledFormat(
         TableCellTextFormatStatus status,
