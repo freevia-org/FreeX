@@ -305,6 +305,7 @@ public sealed class MainWindow : Window
             onReviewProofing: () => ShowProofingPane(),
             onAddComment: () => AddComment("New comment"),
             onEditComment: () => EditSelectedComment(GetSelectedCommentText()),
+            onReplyComment: () => ReplyToSelectedComment("New reply"),
             onDeleteComment: () => DeleteSelectedComment(),
             onPreviousComment: () => NavigateReviewComment(PresentationReviewWorkflowIntentKind.PreviousComment),
             onNextComment: () => NavigateReviewComment(PresentationReviewWorkflowIntentKind.NextComment),

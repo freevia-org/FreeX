@@ -971,6 +971,7 @@ public sealed class ReviewWorkflowAdapterTests
         var proofingInvoked = false;
         var addInvoked = false;
         var editInvoked = false;
+        var replyInvoked = false;
         var deleteInvoked = false;
         var previousInvoked = false;
         var nextInvoked = false;
@@ -984,6 +985,7 @@ public sealed class ReviewWorkflowAdapterTests
             onReviewProofing: () => proofingInvoked = true,
             onAddComment: () => addInvoked = true,
             onEditComment: () => editInvoked = true,
+            onReplyComment: () => replyInvoked = true,
             onDeleteComment: () => deleteInvoked = true,
             onPreviousComment: () => previousInvoked = true,
             onNextComment: () => nextInvoked = true);
@@ -1008,7 +1010,9 @@ public sealed class ReviewWorkflowAdapterTests
         registry.TryGet(PresentationReviewWorkflowPlanner.EditCommentCommandId, out var editCommand).Should().BeTrue();
         editCommand!.Execute(RibbonCommandContext.Empty);
         editInvoked.Should().BeTrue();
-        registry.TryGet(PresentationReviewWorkflowPlanner.ReplyCommentCommandId, out _).Should().BeTrue();
+        registry.TryGet(PresentationReviewWorkflowPlanner.ReplyCommentCommandId, out var replyCommand).Should().BeTrue();
+        replyCommand!.Execute(RibbonCommandContext.Empty);
+        replyInvoked.Should().BeTrue();
         registry.TryGet(PresentationReviewWorkflowPlanner.DeleteCommentCommandId, out var deleteCommand).Should().BeTrue();
         deleteCommand!.Execute(RibbonCommandContext.Empty);
         deleteInvoked.Should().BeTrue();
