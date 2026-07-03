@@ -740,7 +740,7 @@ public sealed class PresentationReviewWorkflowPlannerTests
             PresentationReviewWorkflowPlanner.AltTextDescriptionFieldId,
             "Description",
             string.Empty,
-            "Chart \"Sales chart\" on slide \"Intro\". Summarize the main trend, comparison, or takeaway.",
+            "Chart \"Sales chart\" (clustered column chart) on slide \"Intro\". Summarize the main trend, comparison, or takeaway.",
             true,
             true,
             PresentationReviewWorkflowPlanner.MissingAltTextDescriptionMessage));
@@ -780,7 +780,19 @@ public sealed class PresentationReviewWorkflowPlannerTests
             Id = 20,
             Name = "Chart 4",
             Kind = SlideShapeKind.Chart,
-            Chart = new ChartShape { Title = "Revenue by region" }
+            Chart = new ChartShape
+            {
+                Title = "Revenue by region",
+                ChartType = ChartType.BarStacked,
+                Categories = { "Q1", "Q2", "Q3", "Q4" },
+                Series =
+                {
+                    new ChartSeries { Name = "North", Values = { 42, 48, 51, 57 } },
+                    new ChartSeries { Name = "South", Values = { 39, 41, 45, 49 } },
+                    new ChartSeries { Name = "West", Values = { 35, 40, 43, 46 } },
+                    new ChartSeries { Name = "East", Values = { 31, 36, 38, 44 } }
+                }
+            }
         };
         var table = new SlideShape
         {
@@ -843,7 +855,7 @@ public sealed class PresentationReviewWorkflowPlannerTests
         var textPlan = PresentationReviewWorkflowPlanner.BuildAltTextRequestPlan(slide, text.Id, null);
 
         chartPlan.SuggestedDescription.Should().Be(
-            "Chart \"Revenue by region\" on slide \"Quarterly review\". Summarize the main trend, comparison, or takeaway.");
+            "Chart \"Revenue by region\" (stacked bar chart, series \"North\", \"South\", and \"West\", 4 categories including \"Q1\", \"Q2\", and \"Q3\", 16 values) on slide \"Quarterly review\". Summarize the main trend, comparison, or takeaway.");
         chartPlan.ProposedDescription.Should().BeEmpty();
         tablePlan.SuggestedDescription.Should().Be(
             "Table \"Results table\" with 2 rows and 2 columns, headers \"Region\" and \"Revenue\", sample row \"North\" and \"$42K\" on slide \"Quarterly review\". Summarize the key headers, values, and takeaway.");
