@@ -323,6 +323,98 @@ function Get-PngMetrics {
     [DialogPngAnalyzer]::Analyze($Path)
 }
 
+function Get-OptionalStringProperty {
+    param(
+        [Parameter(Mandatory = $true)]$Object,
+        [Parameter(Mandatory = $true)][string]$Name
+    )
+
+    if ($null -eq $Object) {
+        return $null
+    }
+
+    $property = $Object.PSObject.Properties[$Name]
+    if ($null -eq $property -or $null -eq $property.Value) {
+        return $null
+    }
+
+    $value = [string]$property.Value
+    if ([string]::IsNullOrWhiteSpace($value)) {
+        return $null
+    }
+
+    return $value
+}
+
+function Get-OptionalIntProperty {
+    param(
+        [Parameter(Mandatory = $true)]$Object,
+        [Parameter(Mandatory = $true)][string]$Name
+    )
+
+    if ($null -eq $Object) {
+        return $null
+    }
+
+    $property = $Object.PSObject.Properties[$Name]
+    if ($null -eq $property -or $null -eq $property.Value) {
+        return $null
+    }
+
+    return [int]$property.Value
+}
+
+function Get-EvidenceProvenance {
+    param([Parameter(Mandatory = $true)]$Surface)
+
+    $classification = Get-OptionalStringProperty -Object $Surface -Name "evidenceSource"
+    $sourcePng = Get-OptionalStringProperty -Object $Surface -Name "sourcePng"
+    $recaptureStatus = Get-OptionalStringProperty -Object $Surface -Name "recaptureStatus"
+    $expectedWidth = Get-OptionalIntProperty -Object $Surface -Name "expectedWidth"
+    $expectedHeight = Get-OptionalIntProperty -Object $Surface -Name "expectedHeight"
+    $hasStructuredProvenance = -not [string]::IsNullOrWhiteSpace($classification) -or
+        -not [string]::IsNullOrWhiteSpace($sourcePng) -or
+        -not [string]::IsNullOrWhiteSpace($recaptureStatus) -or
+        $null -ne $expectedWidth -or
+        $null -ne $expectedHeight
+    $note = [string]$Surface.note
+
+    if ([string]::IsNullOrWhiteSpace($classification)) {
+        $classification = if ($note -match "Promoted from") { "promoted-fallback" } else { "direct-parity-capture" }
+    }
+
+    if ([string]::IsNullOrWhiteSpace($recaptureStatus) -and $note -match "parity-capture emitted a transparent") {
+        $recaptureStatus = "blocked-transparent-direct-parity-capture"
+    }
+
+    if ([string]::IsNullOrWhiteSpace($sourcePng) -and $note -match "\(([^)]*\.png)\)") {
+        $sourcePng = $Matches[1]
+    }
+
+    [pscustomobject]@{
+        classification = $classification
+        sourcePng = $sourcePng
+        recaptureStatus = $recaptureStatus
+        expectedWidth = $expectedWidth
+        expectedHeight = $expectedHeight
+        manifestNote = $note
+        hasStructuredProvenance = $hasStructuredProvenance
+    }
+}
+
+function Test-StalePromotedExpectedSizeEvidence {
+    param([Parameter(Mandatory = $true)]$Row)
+
+    if (-not $Row.comparison.expectedSizeMismatch) {
+        return $false
+    }
+
+    $wpfClassification = [string]$Row.wpf.provenance.classification
+    $avaloniaClassification = [string]$Row.avalonia.provenance.classification
+    return $wpfClassification.StartsWith("promoted", [System.StringComparison]::OrdinalIgnoreCase) -or
+        $avaloniaClassification.StartsWith("promoted", [System.StringComparison]::OrdinalIgnoreCase)
+}
+
 function Get-ExpectedEvidenceSize {
     param(
         [Parameter(Mandatory = $true)][string]$SurfaceId,
@@ -342,9 +434,12 @@ function Get-ExpectedEvidenceSize {
 }
 
 function ConvertTo-JsonMetric {
-    param([Parameter(Mandatory = $true)]$Metric)
+    param(
+        [Parameter(Mandatory = $true)]$Metric,
+        $Provenance = $null
+    )
 
-    [ordered]@{
+    $model = [ordered]@{
         relativePath = ConvertTo-RepoRelativePath $Metric.Path
         fileBytes = $Metric.FileBytes
         width = $Metric.Width
@@ -356,6 +451,17 @@ function ConvertTo-JsonMetric {
         isNonBlank = $Metric.IsNonBlank
         meanLuma = [math]::Round($Metric.MeanLuma, 6)
     }
+
+    if ($null -ne $Provenance -and $Provenance.hasStructuredProvenance) {
+        $model.manifestNote = [string]$Provenance.manifestNote
+        $model.evidenceSource = [string]$Provenance.classification
+        $model.sourcePng = $Provenance.sourcePng
+        $model.recaptureStatus = $Provenance.recaptureStatus
+        $model.expectedWidth = $Provenance.expectedWidth
+        $model.expectedHeight = $Provenance.expectedHeight
+    }
+
+    $model
 }
 
 function Compare-PngMetrics {
@@ -434,6 +540,7 @@ function New-PngEvidence {
         id = [string]$Surface.id
         png = [string]$Surface.png
         note = [string]$Surface.note
+        provenance = Get-EvidenceProvenance -Surface $Surface
         metrics = $metrics
     }
 }
@@ -499,6 +606,7 @@ $allPngRows = @($pairedRows | ForEach-Object { $_.wpf; $_.avalonia }) + @($avalo
 $blankEvidenceRows = @($allPngRows | Where-Object { -not $_.metrics.IsNonBlank } | Sort-Object -Property id)
 $dimensionMismatchRows = @($pairedRows | Where-Object { -not $_.comparison.dimensionMatch } | Sort-Object -Property id)
 $expectedSizeMismatchRows = @($pairedRows | Where-Object { $_.comparison.expectedSizeMismatch } | Sort-Object -Property id)
+$stalePromotedExpectedSizeRows = @($expectedSizeMismatchRows | Where-Object { Test-StalePromotedExpectedSizeEvidence -Row $_ } | Sort-Object -Property id)
 $topOutlierRows = @($pairedRows | Sort-Object @{ Expression = { $_.comparison.triageScore }; Descending = $true }, @{ Expression = { $_.id }; Ascending = $true } | Select-Object -First 10)
 
 $wpfManifestRelativePath = ConvertTo-RepoRelativePath (Resolve-RepoPath $WpfManifestPath)
@@ -530,14 +638,15 @@ $jsonModel = [ordered]@{
         nonBlankPngFailures = [int]$blankEvidenceRows.Count
         pairedDimensionMismatches = [int]$dimensionMismatchRows.Count
         pairedExpectedSizeMismatches = [int]$expectedSizeMismatchRows.Count
+        stalePromotedExpectedSizeEvidence = [int]$stalePromotedExpectedSizeRows.Count
     }
     pairedSurfaces = @(
         foreach ($row in $pairedRows) {
             [ordered]@{
                 id = $row.id
                 routeFamily = $row.routeFamily
-                wpf = ConvertTo-JsonMetric $row.wpf.metrics
-                avalonia = ConvertTo-JsonMetric $row.avalonia.metrics
+                wpf = ConvertTo-JsonMetric -Metric $row.wpf.metrics -Provenance $row.wpf.provenance
+                avalonia = ConvertTo-JsonMetric -Metric $row.avalonia.metrics -Provenance $row.avalonia.provenance
                 comparison = [ordered]@{
                     dimensionMatch = $row.comparison.dimensionMatch
                     widthDelta = $row.comparison.widthDelta
@@ -573,7 +682,7 @@ $jsonModel = [ordered]@{
             [ordered]@{
                 id = $row.id
                 routeFamily = $row.routeFamily
-                avalonia = ConvertTo-JsonMetric $row.avalonia.metrics
+                avalonia = ConvertTo-JsonMetric -Metric $row.avalonia.metrics -Provenance $row.avalonia.provenance
             }
         }
     )
@@ -626,6 +735,7 @@ $md = New-Object System.Text.StringBuilder
 [void]$md.AppendLine("| Nonblank PNG check failures | $($blankEvidenceRows.Count) |")
 [void]$md.AppendLine("| Paired dimension mismatches | $($dimensionMismatchRows.Count) |")
 [void]$md.AppendLine("| Paired expected-size evidence mismatches | $($expectedSizeMismatchRows.Count) |")
+[void]$md.AppendLine("| Stale promoted expected-size evidence | $($stalePromotedExpectedSizeRows.Count) |")
 [void]$md.AppendLine()
 
 if ($blankEvidenceRows.Count -gt 0) {
@@ -658,6 +768,24 @@ foreach ($row in $topOutlierRows) {
 [void]$md.AppendLine("| --- | ---: | --- | ---: | --- | ---: | --- |")
 foreach ($row in $expectedSizeMismatchRows) {
     [void]$md.AppendLine("| $(Escape-MarkdownCell $row.id) | $($row.comparison.expectedWidth)x$($row.comparison.expectedHeight) | $(Escape-MarkdownCell $row.comparison.expectedSizeSource) | $($row.wpf.metrics.Width)x$($row.wpf.metrics.Height) | $($row.comparison.wpfExpectedSizeMatch) | $($row.avalonia.metrics.Width)x$($row.avalonia.metrics.Height) | $($row.comparison.avaloniaExpectedSizeMatch) |")
+}
+
+if ($stalePromotedExpectedSizeRows.Count -gt 0) {
+    [void]$md.AppendLine()
+    [void]$md.AppendLine("## Stale Promoted Expected-Size Evidence")
+    [void]$md.AppendLine()
+    [void]$md.AppendLine("These expected-size mismatches are known promoted fallback screenshots, not direct same-harness parity captures. Recapture or replace only with a nonblank WPF parity-capture PNG at the planner size; do not compare their raw dimension delta as product layout evidence.")
+    [void]$md.AppendLine()
+    [void]$md.AppendLine("| Surface id | Stale shell | Current PNG size | Expected size | Promoted source PNG | Recapture status | Next action |")
+    [void]$md.AppendLine("| --- | --- | ---: | ---: | --- | --- | --- |")
+    foreach ($row in $stalePromotedExpectedSizeRows) {
+        $staleShell = if (-not $row.comparison.wpfExpectedSizeMatch) { "WPF" } elseif (-not $row.comparison.avaloniaExpectedSizeMatch) { "Avalonia" } else { "Both" }
+        $staleEvidence = if ($staleShell -eq "Avalonia") { $row.avalonia } else { $row.wpf }
+        $currentSize = if ($staleShell -eq "Avalonia") { "$($row.avalonia.metrics.Width)x$($row.avalonia.metrics.Height)" } else { "$($row.wpf.metrics.Width)x$($row.wpf.metrics.Height)" }
+        $sourcePng = if ([string]::IsNullOrWhiteSpace([string]$staleEvidence.provenance.sourcePng)) { "" } else { [string]$staleEvidence.provenance.sourcePng }
+        $recaptureStatus = if ([string]::IsNullOrWhiteSpace([string]$staleEvidence.provenance.recaptureStatus)) { "" } else { [string]$staleEvidence.provenance.recaptureStatus }
+        [void]$md.AppendLine("| $(Escape-MarkdownCell $row.id) | $staleShell | $currentSize | $($row.comparison.expectedWidth)x$($row.comparison.expectedHeight) | $(Escape-MarkdownCell $sourcePng) | $(Escape-MarkdownCell $recaptureStatus) | Recapture WPF direct parity evidence at planner size after transparent offscreen capture is fixed. |")
+    }
 }
 
 [void]$md.AppendLine()
@@ -717,5 +845,6 @@ Write-Host "Avalonia-manifest-only screenshot surface ids needing WPF manifest p
 Write-Host "Nonblank PNG check failures: $($blankEvidenceRows.Count)"
 Write-Host "Paired dimension mismatches: $($dimensionMismatchRows.Count)"
 Write-Host "Paired expected-size evidence mismatches: $($expectedSizeMismatchRows.Count)"
+Write-Host "Stale promoted expected-size evidence: $($stalePromotedExpectedSizeRows.Count)"
 Write-Host "Wrote $(ConvertTo-RepoRelativePath $resolvedMarkdownPath)"
 Write-Host "Wrote $(ConvertTo-RepoRelativePath $resolvedJsonPath)"

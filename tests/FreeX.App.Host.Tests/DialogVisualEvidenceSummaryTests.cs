@@ -114,12 +114,14 @@ public sealed class DialogVisualEvidenceSummaryTests
         result.Output.Should().Contain("Nonblank PNG check failures: 0");
         result.Output.Should().Contain("Paired dimension mismatches: 1");
         result.Output.Should().Contain("Paired expected-size evidence mismatches: 0");
+        result.Output.Should().Contain("Stale promoted expected-size evidence: 0");
 
         var markdown = File.ReadAllText(markdownPath);
         markdown.Should().Contain("| WPF captured manifest surfaces with committed PNGs | 1 |");
         markdown.Should().Contain("| Paired captured surface ids | 1 |");
         markdown.Should().Contain("| Paired dimension mismatches | 1 |");
         markdown.Should().Contain("| Paired expected-size evidence mismatches | 0 |");
+        markdown.Should().Contain("| Stale promoted expected-size evidence | 0 |");
         markdown.Should().Contain("| dialog.Sample.Valid | dialog.Sample.Valid.png | 3x2 | True | dialog.Sample.Valid.png | 4x2 | True |");
         markdown.Should().Contain("| dialog.Sample | 1 | dialog.Sample.Extra |");
         markdown.Should().Contain("dialog.Sample.Valid");
@@ -134,6 +136,7 @@ public sealed class DialogVisualEvidenceSummaryTests
         summary.GetProperty("nonBlankPngFailures").GetInt32().Should().Be(0);
         summary.GetProperty("pairedDimensionMismatches").GetInt32().Should().Be(1);
         summary.GetProperty("pairedExpectedSizeMismatches").GetInt32().Should().Be(0);
+        summary.GetProperty("stalePromotedExpectedSizeEvidence").GetInt32().Should().Be(0);
 
         var paired = json.RootElement.GetProperty("pairedSurfaces")[0];
         paired.GetProperty("wpf").GetProperty("width").GetInt32().Should().Be(3);
@@ -195,6 +198,11 @@ public sealed class DialogVisualEvidenceSummaryTests
                   "kind": "dialog",
                   "png": "dialog.OpenWorkbook.png",
                   "captured": true,
+                  "evidenceSource": "promoted-foreground-tour",
+                  "sourcePng": "screenshots\\open-workbook-dialog-tour\\freex_open_workbook_dialog_opened.png",
+                  "recaptureStatus": "blocked-transparent-direct-parity-capture",
+                  "expectedWidth": 640,
+                  "expectedHeight": 420,
                   "note": ""
                 }
               ]
@@ -229,17 +237,30 @@ public sealed class DialogVisualEvidenceSummaryTests
 
         result.ExitCode.Should().Be(0, result.CombinedOutput);
         result.Output.Should().Contain("Paired expected-size evidence mismatches: 1");
+        result.Output.Should().Contain("Stale promoted expected-size evidence: 1");
 
         var markdown = File.ReadAllText(markdownPath);
         markdown.Should().Contain("| Paired expected-size evidence mismatches | 1 |");
+        markdown.Should().Contain("| Stale promoted expected-size evidence | 1 |");
         markdown.Should().Contain("## Expected-Size Evidence Mismatches");
         markdown.Should().Contain("| dialog.OpenWorkbook | 640x420 | WorkbookFileDialogSurfacePlanner.Width/Height | 1280x800 | False | 640x420 | True |");
+        markdown.Should().Contain("## Stale Promoted Expected-Size Evidence");
+        markdown.Should().Contain("| dialog.OpenWorkbook | WPF | 1280x800 | 640x420 | screenshots\\open-workbook-dialog-tour\\freex_open_workbook_dialog_opened.png | blocked-transparent-direct-parity-capture |");
 
         using var json = JsonDocument.Parse(File.ReadAllText(jsonPath));
         var summary = json.RootElement.GetProperty("summary");
         summary.GetProperty("pairedExpectedSizeMismatches").GetInt32().Should().Be(1);
+        summary.GetProperty("stalePromotedExpectedSizeEvidence").GetInt32().Should().Be(1);
 
-        var comparison = json.RootElement.GetProperty("pairedSurfaces")[0].GetProperty("comparison");
+        var pairedSurface = json.RootElement.GetProperty("pairedSurfaces")[0];
+        var wpf = pairedSurface.GetProperty("wpf");
+        wpf.GetProperty("evidenceSource").GetString().Should().Be("promoted-foreground-tour");
+        wpf.GetProperty("sourcePng").GetString().Should().Be(@"screenshots\open-workbook-dialog-tour\freex_open_workbook_dialog_opened.png");
+        wpf.GetProperty("recaptureStatus").GetString().Should().Be("blocked-transparent-direct-parity-capture");
+        wpf.GetProperty("expectedWidth").GetInt32().Should().Be(640);
+        wpf.GetProperty("expectedHeight").GetInt32().Should().Be(420);
+
+        var comparison = pairedSurface.GetProperty("comparison");
         comparison.GetProperty("expectedSizeMismatch").GetBoolean().Should().BeTrue();
         comparison.GetProperty("expectedWidth").GetInt32().Should().Be(640);
         comparison.GetProperty("expectedHeight").GetInt32().Should().Be(420);
