@@ -604,11 +604,10 @@ internal static class ParityCapture
                 new PrintSettingsPlan([UiText.Get("PrintPreview_DefaultScopeActiveSheet")]),
                 fixturePrinterName: PrintPreviewSurfacePlanner.ParityPrinterName));
 
-        CaptureDialog(results, "dialog.OpenWorkbook", outDir, () =>
-            CreateWorkbookFileDialogSurface(CreateOpenWorkbookDialogSurfacePlan()));
+        CaptureWorkbookFileDialogSurface(results, "dialog.OpenWorkbook", outDir, CreateOpenWorkbookDialogSurfacePlan);
 
-        CaptureDialog(results, "dialog.SaveAsWorkbook", outDir, () =>
-            CreateWorkbookFileDialogSurface(CreateSaveAsWorkbookDialogSurfacePlan(workbook.Name)));
+        CaptureWorkbookFileDialogSurface(results, "dialog.SaveAsWorkbook", outDir, () =>
+            CreateSaveAsWorkbookDialogSurfacePlan(workbook.Name));
 
         CaptureDialog(results, "dialog.ExportOptions", outDir, () =>
             new ExportOptionsDialog(hasSelection: true, initialPdfLanguage: ExportPlanner.DefaultPdfLanguage, ExportFormat.Pdf));
@@ -724,6 +723,12 @@ internal static class ParityCapture
         };
         AutomationProperties.SetAutomationId(dialog, plan.DialogAutomationId);
 
+        dialog.Content = CreateWorkbookFileDialogSurfaceContent(plan);
+        return dialog;
+    }
+
+    private static FrameworkElement CreateWorkbookFileDialogSurfaceContent(WorkbookFileDialogSurfacePlan plan)
+    {
         var places = new StackPanel
         {
             Width = 128,
@@ -789,8 +794,7 @@ internal static class ParityCapture
         root.Children.Add(places);
         root.Children.Add(right);
 
-        dialog.Content = root;
-        return dialog;
+        return root;
     }
 
     private static void AddWorkbookFileDialogField(Grid form, int row, string label, Control control)
@@ -1062,6 +1066,42 @@ internal static class ParityCapture
                 PumpDispatcher();
             }
         });
+    }
+
+    private static void CaptureWorkbookFileDialogSurface(
+        List<SurfaceResult> results,
+        string surfaceId,
+        string outDir,
+        Func<WorkbookFileDialogSurfacePlan> planFactory)
+    {
+        CaptureSurface(
+            results,
+            surfaceId,
+            "dialog",
+            outDir,
+            () => RenderWorkbookFileDialogSurface(planFactory()),
+            "Captured from FreeX.App.Host --parity-capture WorkbookFileDialogSurfacePlanner direct surface at 640x420");
+    }
+
+    private static BitmapSource RenderWorkbookFileDialogSurface(WorkbookFileDialogSurfacePlan plan)
+    {
+        var content = CreateWorkbookFileDialogSurfaceContent(plan);
+        return RenderWorkbookFileDialogContent(content);
+    }
+
+    private static BitmapSource RenderWorkbookFileDialogContent(FrameworkElement content)
+    {
+        var width = WorkbookFileDialogSurfacePlanner.Width;
+        var height = WorkbookFileDialogSurfacePlanner.Height;
+        var frame = new Border
+        {
+            Background = Brushes.White,
+            Width = width,
+            Height = height,
+            Child = content,
+        };
+
+        return RenderElement(frame, width, height);
     }
 
     /// <summary>
