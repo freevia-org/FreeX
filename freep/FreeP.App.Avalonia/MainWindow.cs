@@ -176,6 +176,13 @@ public sealed class MainWindow : Window
     private readonly List<TextSearchMatch> _findReplaceMatches = new();
     private int _findReplaceCurrentMatchIndex = -1;
     private bool _findReplaceShowReplace;
+    private Border _printOptionsPaneHost = null!;
+    private TextBlock _printOptionsPaneHeading = null!;
+    private TextBlock _printOptionsPaneMessage = null!;
+    private StackPanel _printOptionsPaneRowsPanel = null!;
+    private readonly List<string> _printOptionsPaneRenderedOptionLines = new();
+    private readonly List<string> _printOptionsPaneRenderedLayoutRows = new();
+    private readonly List<string> _printOptionsPaneRenderedRangeRows = new();
 
     // ── Interaction layer (Theme 15) ────────────────────────────────────────────
 
@@ -329,6 +336,13 @@ public sealed class MainWindow : Window
     internal string FindReplacePaneTitle => _findReplacePaneHeading?.Text ?? string.Empty;
     internal string FindReplacePaneStatus => _findReplaceStatusText?.Text ?? string.Empty;
     internal bool IsFindReplaceReplaceInputVisible => _findReplaceReplaceBox?.IsVisible == true;
+    internal bool IsPrintOptionsPaneVisible => _printOptionsPaneHost?.IsVisible == true;
+    internal string PrintOptionsPaneHeading => _printOptionsPaneHeading?.Text ?? string.Empty;
+    internal string PrintOptionsPaneMessage => _printOptionsPaneMessage?.Text ?? string.Empty;
+    internal int PrintOptionsPaneRenderedRowCount => _printOptionsPaneRowsPanel?.Children.Count ?? 0;
+    internal IReadOnlyList<string> PrintOptionsPaneRenderedOptionLines => _printOptionsPaneRenderedOptionLines;
+    internal IReadOnlyList<string> PrintOptionsPaneRenderedLayoutRows => _printOptionsPaneRenderedLayoutRows;
+    internal IReadOnlyList<string> PrintOptionsPaneRenderedRangeRows => _printOptionsPaneRenderedRangeRows;
 
     // ── Constructors ───────────────────────────────────────────────────────────
 
@@ -574,6 +588,7 @@ public sealed class MainWindow : Window
         _proofingPaneHost = BuildProofingPaneHost();
         _animationPaneHost = BuildAnimationPaneHost();
         _findReplacePaneHost = BuildFindReplacePaneHost();
+        _printOptionsPaneHost = BuildPrintOptionsPaneHost();
         _slideSizePaneHost = BuildSlideSizePaneHost();
         _headerFooterPaneHost = BuildHeaderFooterPaneHost();
         Grid.SetRow(canvasHost, 0);
@@ -618,6 +633,7 @@ public sealed class MainWindow : Window
         body.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         body.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         body.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        body.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         Grid.SetColumn(slidePaneHost, 0);
         Grid.SetColumn(rightGrid,      1);
         Grid.SetColumn(_slideSizePaneHost, 2);
@@ -628,6 +644,7 @@ public sealed class MainWindow : Window
         Grid.SetColumn(_proofingPaneHost, 7);
         Grid.SetColumn(_animationPaneHost, 8);
         Grid.SetColumn(_findReplacePaneHost, 9);
+        Grid.SetColumn(_printOptionsPaneHost, 10);
         body.Children.Add(slidePaneHost);
         body.Children.Add(rightGrid);
         body.Children.Add(_slideSizePaneHost);
@@ -638,6 +655,7 @@ public sealed class MainWindow : Window
         body.Children.Add(_proofingPaneHost);
         body.Children.Add(_animationPaneHost);
         body.Children.Add(_findReplacePaneHost);
+        body.Children.Add(_printOptionsPaneHost);
 
         return body;
     }
@@ -772,6 +790,60 @@ public sealed class MainWindow : Window
                             },
                         },
                         _findReplaceStatusText,
+                    },
+                },
+            },
+        };
+    }
+
+    private Border BuildPrintOptionsPaneHost()
+    {
+        _printOptionsPaneHeading = new TextBlock
+        {
+            Text = "Print",
+            FontSize = 15,
+            FontWeight = FontWeight.SemiBold,
+            Margin = new Thickness(12, 12, 12, 4),
+        };
+        _printOptionsPaneMessage = new TextBlock
+        {
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)),
+            Margin = new Thickness(12, 0, 12, 8),
+        };
+        _printOptionsPaneRowsPanel = new StackPanel
+        {
+            Orientation = Orientation.Vertical,
+        };
+
+        var header = new StackPanel
+        {
+            Orientation = Orientation.Vertical,
+            Children =
+            {
+                _printOptionsPaneHeading,
+                _printOptionsPaneMessage,
+            },
+        };
+        DockPanel.SetDock(header, Dock.Top);
+
+        return new Border
+        {
+            Width = 320,
+            IsVisible = false,
+            Background = Brushes.White,
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0xC0, 0xC0, 0xC0)),
+            BorderThickness = new Thickness(1, 0, 0, 0),
+            Child = new DockPanel
+            {
+                Children =
+                {
+                    header,
+                    new ScrollViewer
+                    {
+                        VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                        HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                        Content = _printOptionsPaneRowsPanel,
                     },
                 },
             },
@@ -1436,7 +1508,7 @@ public sealed class MainWindow : Window
         r.Register(PresentationExportPlanner.PdfExportCommandId, new ActionRibbonCommand(() => _ = FileExportPdfAsync()));
         r.Register(PresentationExportPlanner.NotesPagePdfExportCommandId, new ActionRibbonCommand(() => _ = FileExportNotesPagePdfAsync()));
         r.Register(PresentationExportPlanner.ImageExportCommandId, new ActionRibbonCommand(() => _ = FileExportImagesAsync()));
-        r.Register(PresentationExportPlanner.PrintCommandId, new ActionRibbonCommand(() => RefreshPrintBackstagePlan()));
+        r.Register(PresentationExportPlanner.PrintCommandId, new ActionRibbonCommand(() => ShowPrintOptionsPane()));
         r.Register(PresentationExportPlanner.VideoExportCommandId, new ActionRibbonCommand(() => RefreshVideoFramePackage()));
 
         // Slide navigation/management
@@ -2664,10 +2736,147 @@ public sealed class MainWindow : Window
         LastPrintBackstagePlan = PresentationPrintBackstagePlanner.Build(
             request,
             _presentation.Slides.Count,
-            Editor.CurrentSlideIndex + 1);
+            Editor.CurrentSlideIndex + 1,
+            request?.SlideRange?.SelectedSlideNumbers);
         _statusText.Text = LastPrintBackstagePlan.DisabledReason ??
             LastPrintBackstagePlan.NativePrinterDialogDeferredMessage;
         return LastPrintBackstagePlan;
+    }
+
+    internal PresentationPrintBackstagePlan ShowPrintOptionsPane(PresentationPrintRequest? request = null)
+    {
+        var plan = RefreshPrintBackstagePlan(request);
+        RenderPrintOptionsPane(plan);
+        _printOptionsPaneHost.IsVisible = true;
+        return plan;
+    }
+
+    internal void HidePrintOptionsPane()
+    {
+        if (_printOptionsPaneHost is not null)
+            _printOptionsPaneHost.IsVisible = false;
+    }
+
+    private void RenderPrintOptionsPane(PresentationPrintBackstagePlan plan)
+    {
+        _printOptionsPaneHeading.Text = plan.Heading;
+        _printOptionsPaneMessage.Text = plan.Description;
+        _printOptionsPaneRenderedOptionLines.Clear();
+        _printOptionsPaneRenderedLayoutRows.Clear();
+        _printOptionsPaneRenderedRangeRows.Clear();
+        _printOptionsPaneRowsPanel.Children.Clear();
+
+        AddPrintOptionsPaneSection("Settings");
+        AddPrintOptionsPaneField("Layout", plan.SelectedLayout.Layout.DisplayName);
+        AddPrintOptionsPaneField("Slides", plan.SlideRangeSummary);
+        AddPrintOptionsPaneField("Pages", plan.PageCount.ToString(CultureInfo.InvariantCulture));
+        AddPrintOptionsPaneField("Hidden slides", plan.PrintHiddenSlides ? "Included" : "Not included");
+        AddPrintOptionsPaneField("Options", plan.Options.DisplaySummary);
+        AddPrintOptionsPaneField("Native printer dialog", plan.NativePrinterDialogDeferred ? "Deferred" : "Available");
+
+        AddPrintOptionsPaneSection("Output options");
+
+        foreach (var line in plan.Options.SummaryLines)
+        {
+            _printOptionsPaneRenderedOptionLines.Add(line);
+            _printOptionsPaneRowsPanel.Children.Add(new TextBlock
+            {
+                Text = line,
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(20, 1, 12, 1),
+                Foreground = new SolidColorBrush(Color.FromRgb(0x33, 0x33, 0x33)),
+            });
+        }
+
+        AddPrintOptionsPaneSection("Layouts");
+        foreach (var choice in plan.LayoutChoices)
+        {
+            var row = BuildPrintOptionsPaneChoiceSummary(
+                choice.Layout.DisplayName,
+                choice.PackagePlan.LayoutSummary,
+                choice.IsSelected);
+            _printOptionsPaneRenderedLayoutRows.Add(row);
+            AddPrintOptionsPaneChoice(row, isAvailable: true);
+        }
+
+        AddPrintOptionsPaneSection("Slide range");
+        foreach (var choice in plan.RangeChoices)
+        {
+            var row = BuildPrintOptionsPaneChoiceSummary(
+                choice.DisplayName,
+                choice.Description,
+                choice.Kind == plan.SelectedRange.Kind,
+                choice.IsAvailable);
+            _printOptionsPaneRenderedRangeRows.Add(row);
+            AddPrintOptionsPaneChoice(row, choice.IsAvailable);
+        }
+
+        _printOptionsPaneRowsPanel.Children.Add(new TextBlock
+        {
+            Text = plan.DisabledReason ?? plan.NativePrinterDialogDeferredMessage,
+            TextWrapping = TextWrapping.Wrap,
+            FontStyle = FontStyle.Italic,
+            Foreground = new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66)),
+            Margin = new Thickness(12, 10, 12, 12),
+        });
+    }
+
+    private void AddPrintOptionsPaneSection(string text)
+    {
+        _printOptionsPaneRowsPanel.Children.Add(new TextBlock
+        {
+            Text = text,
+            FontWeight = FontWeight.SemiBold,
+            Margin = new Thickness(12, 10, 12, 4),
+        });
+    }
+
+    private void AddPrintOptionsPaneField(string label, string value)
+    {
+        _printOptionsPaneRowsPanel.Children.Add(new StackPanel
+        {
+            Orientation = Orientation.Vertical,
+            Margin = new Thickness(12, 3, 12, 5),
+            Children =
+            {
+                new TextBlock
+                {
+                    Text = label,
+                    FontWeight = FontWeight.SemiBold,
+                    Foreground = new SolidColorBrush(Color.FromRgb(0x44, 0x44, 0x44)),
+                },
+                new TextBlock
+                {
+                    Text = value,
+                    TextWrapping = TextWrapping.Wrap,
+                    Foreground = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)),
+                },
+            },
+        });
+    }
+
+    private void AddPrintOptionsPaneChoice(string row, bool isAvailable)
+    {
+        _printOptionsPaneRowsPanel.Children.Add(new TextBlock
+        {
+            Text = row,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(20, 1, 12, 7),
+            Foreground = isAvailable
+                ? new SolidColorBrush(Color.FromRgb(0x33, 0x33, 0x33))
+                : new SolidColorBrush(Color.FromRgb(0x88, 0x88, 0x88)),
+        });
+    }
+
+    private static string BuildPrintOptionsPaneChoiceSummary(
+        string label,
+        string description,
+        bool isSelected,
+        bool isAvailable = true)
+    {
+        var prefix = isSelected ? "Selected: " : string.Empty;
+        var availability = isAvailable ? string.Empty : " (unavailable)";
+        return $"{prefix}{label}{availability}: {description}";
     }
 
     internal PresentationVideoExportPlan RefreshVideoExportPlan(PresentationVideoExportRequest? request = null)
