@@ -8668,15 +8668,10 @@ internal static class FreeWRibbonCommands
             };
 
             var listBox = new System.Windows.Controls.ListBox { Margin = new Thickness(0, 0, 0, 8) };
-            // "(None)" entry clears the language.
-            listBox.Items.Add(new System.Windows.Controls.ListBoxItem { Content = "(None — clear language)", Tag = string.Empty });
-            foreach (var choice in ProofingLanguageCatalog.CommonLanguages)
-                listBox.Items.Add(new System.Windows.Controls.ListBoxItem { Content = $"{choice.Label} [{choice.Tag}]", Tag = choice.Tag });
-
-            // Pre-select the current tag if present.
-            foreach (System.Windows.Controls.ListBoxItem item in listBox.Items)
-                if ((string?)item.Tag == current) { listBox.SelectedItem = item; break; }
-
+            var plan = ProofingLanguageDialogPlanner.Build(current);
+            foreach (var choice in plan.Choices)
+                listBox.Items.Add(new System.Windows.Controls.ListBoxItem { Content = choice.DisplayText, Tag = choice.Tag });
+            listBox.SelectedIndex = plan.SelectedIndex;
             var ok = new Button { Content = "OK", Width = 80, IsDefault = true, Margin = new Thickness(0, 0, 8, 0) };
             var cancel = new Button { Content = "Cancel", Width = 80, IsCancel = true };
             ok.Click += (_, _) =>

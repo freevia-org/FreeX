@@ -24,19 +24,15 @@ internal sealed class ProofingLanguageDialog : Window
         CanResize = false;
         ShowInTaskbar = false;
 
-        var items = new List<ComboBoxItem>
+        var plan = ProofingLanguageDialogPlanner.Build(currentTag);
+        var items = plan.Choices.Select(choice => new ComboBoxItem
         {
-            new() { Content = "(None - clear language)", Tag = string.Empty },
-        };
-        items.AddRange(ProofingLanguageCatalog.CommonLanguages.Select(choice => new ComboBoxItem
-        {
-            Content = $"{choice.Label} ({choice.Tag})",
+            Content = choice.DisplayText,
             Tag = choice.Tag,
-        }));
+        }).ToList();
 
         _languages.ItemsSource = items;
-        _languages.SelectedItem = items.FirstOrDefault(item =>
-            string.Equals(item.Tag as string, currentTag ?? string.Empty, StringComparison.OrdinalIgnoreCase)) ?? items[0];
+        _languages.SelectedItem = items[plan.SelectedIndex];
         AvaloniaCompactDialogChrome.ApplyComboBox(_languages, ChromeStyle);
 
         var grid = new Grid { Margin = new Thickness(14, 12, 14, 0) };
