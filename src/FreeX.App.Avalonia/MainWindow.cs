@@ -8267,10 +8267,13 @@ public sealed partial class MainWindow : Window
         var dialog = new Window
         {
             Title = "Zoom",
-            Width = 300,
-            MinWidth = 300,
-            MaxWidth = 300,
-            SizeToContent = SizeToContent.Height,
+            Width = ZoomDialogPlanner.Width,
+            Height = ZoomDialogPlanner.Height,
+            MinWidth = ZoomDialogPlanner.Width,
+            MaxWidth = ZoomDialogPlanner.Width,
+            MinHeight = ZoomDialogPlanner.Height,
+            MaxHeight = ZoomDialogPlanner.Height,
+            SizeToContent = SizeToContent.Manual,
             CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,

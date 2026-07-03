@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using FreeX.App.Presentation.SlicerTimeline;
 
 namespace FreeX.App.Host;
 
@@ -19,8 +20,8 @@ public sealed class InsertSlicerDialog : Window
         var field = PivotSlicerTimelineFieldLookup.FindFieldByNameOrFirst(fields, selectedField);
         Result = CreateResult(field, UiText.Format("PivotSlicerTimeline_DefaultSlicerName", field));
         Title = UiText.Get("PivotSlicerTimeline_InsertSlicer");
-        Width = 410;
-        Height = 270;
+        Width = PivotSlicerTimelineDialogContract.Width;
+        Height = PivotSlicerTimelineDialogContract.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
@@ -109,8 +110,8 @@ public sealed class InsertTimelineDialog : Window
         var field = PivotSlicerTimelineFieldLookup.FindFieldByNameOrFirst(fields, selectedField);
         Result = CreateResult(field, UiText.Format("PivotSlicerTimeline_DefaultTimelineName", field));
         Title = UiText.Get("PivotSlicerTimeline_InsertTimeline");
-        Width = 410;
-        Height = 270;
+        Width = PivotSlicerTimelineDialogContract.Width;
+        Height = PivotSlicerTimelineDialogContract.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;

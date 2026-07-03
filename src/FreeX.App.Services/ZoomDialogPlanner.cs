@@ -6,6 +6,9 @@ public sealed record ZoomDialogValidationError(string ResourceKey, string Fallba
 
 public static class ZoomDialogPlanner
 {
+    public const double Width = 300;
+    public const double Height = 240;
+
     private static readonly int[] PresetValues = [400, 200, 100, 75, 50, 25];
 
     public static IReadOnlyList<int> Presets => PresetValues;
