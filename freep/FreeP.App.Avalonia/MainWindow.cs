@@ -2735,7 +2735,7 @@ public sealed class MainWindow : Window
     {
         LastPrintBackstagePlan = PresentationPrintBackstagePlanner.Build(
             request,
-            _presentation.Slides.Count,
+            _presentation,
             Editor.CurrentSlideIndex + 1,
             request?.SlideRange?.SelectedSlideNumbers);
         _statusText.Text = LastPrintBackstagePlan.DisabledReason ??

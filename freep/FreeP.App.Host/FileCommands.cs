@@ -275,9 +275,10 @@ internal sealed class FileCommands
     /// </summary>
     public PresentationPrintBackstagePlan BuildPrintBackstagePlan(PresentationPrintRequest? request = null)
     {
+        var presentation = _getModel();
         LastPrintBackstagePlan = PresentationPrintBackstagePlanner.Build(
             request,
-            _getModel().Slides.Count,
+            presentation,
             _getPrintCurrentSlideNumber(),
             _getPrintSelectedSlideNumbers());
         return LastPrintBackstagePlan;

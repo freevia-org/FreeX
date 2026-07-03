@@ -195,6 +195,26 @@ public sealed class FileLifecycleTests : IDisposable
     }
 
     [StaFact]
+    public void BuildPrintBackstagePlan_UsesSharedNotesRenderPageCountForWpfAdapter()
+    {
+        var (_, file, getModel, _, _) = CreateHarness();
+        getModel().Slides[0].Title = "Overflow notes";
+        getModel().Slides[0].Notes = MakeTextBody(
+            Enumerable.Range(1, 60)
+                .Select(i => $"Speaker note line number {i} with enough words to be realistic.")
+                .ToArray());
+
+        var renderPlan = file.BuildNotesPagePdfRenderPlan();
+        var backstagePlan = file.BuildPrintBackstagePlan(
+            new PresentationPrintRequest(PresentationPrintLayoutKind.NotesPages));
+
+        renderPlan.Pages.Count.Should().BeGreaterThan(1);
+        backstagePlan.PageCount.Should().Be(renderPlan.Pages.Count);
+        backstagePlan.LayoutSummary.Should().Be($"Notes Pages - All slides, {renderPlan.Pages.Count} pages");
+        backstagePlan.SelectedLayout.PackagePlan.PageCount.Should().Be(renderPlan.Pages.Count);
+    }
+
+    [StaFact]
     public void BuildVideoExportPlan_UsesSharedPlannerForWpfAdapter()
     {
         var (_, file, getModel, _, _) = CreateHarness();

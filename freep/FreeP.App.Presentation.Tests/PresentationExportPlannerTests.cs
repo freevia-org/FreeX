@@ -188,6 +188,33 @@ public sealed class PresentationExportPlannerTests
     }
 
     [Fact]
+    public void PrintOutputPackagePlan_WithPresentationCountsNotesOverflowContinuationPages()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides.Clear();
+        presentation.Slides.Add(new Slide { Title = "Overflow notes" });
+        presentation.Slides[0].Notes = MakeTextBody(
+            Enumerable.Range(1, 60)
+                .Select(i => $"Speaker note line number {i} with enough words to be realistic.")
+                .ToArray());
+
+        var renderPlan = PresentationNotesPagePdfExporter.BuildRenderPlan(presentation);
+        var packagePlan = PresentationPrintOutputPackageExecutor.BuildPackagePlan(
+            new PresentationPrintRequest(PresentationPrintLayoutKind.NotesPages),
+            presentation);
+        var backstagePlan = PresentationPrintBackstagePlanner.Build(
+            new PresentationPrintRequest(PresentationPrintLayoutKind.NotesPages),
+            presentation,
+            currentSlideNumber: 1);
+
+        renderPlan.Pages.Count.Should().BeGreaterThan(1);
+        packagePlan.PageCount.Should().Be(renderPlan.Pages.Count);
+        packagePlan.LayoutSummary.Should().Be($"Notes Pages - All slides, {renderPlan.Pages.Count} pages");
+        backstagePlan.PageCount.Should().Be(renderPlan.Pages.Count);
+        backstagePlan.SelectedLayout.PackagePlan.PageCount.Should().Be(renderPlan.Pages.Count);
+    }
+
+    [Fact]
     public void PrintOutputPackagePlan_ExposesPreviewMetadataForHandoutRangesAndEmptyDecks()
     {
         var handouts = PresentationPrintOutputPackageExecutor.BuildPackagePlan(
