@@ -2211,6 +2211,110 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task ReadingOrderPane_moves_nested_group_child_through_shared_plan()
+    {
+        PresentationReadingOrderPlan? initialPlan = null;
+        PresentationReadingOrderMutationPlan? nestedMove = null;
+        PresentationReadingOrderMutationPlan? boundaryMove = null;
+        uint[] childOrderAfterMove = [];
+        uint[] paneOrderAfterMove = [];
+        var moveEarlierEnabled = true;
+        string? moveEarlierDisabledReason = null;
+        var moveLaterEnabled = false;
+        string? moveLaterDisabledReason = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            try
+            {
+                var group = new SlideShape
+                {
+                    Id = 701,
+                    Name = "Grouped layout",
+                    Kind = SlideShapeKind.Group,
+                    Children =
+                    {
+                        new SlideShape
+                        {
+                            Id = 702,
+                            Name = "Grouped caption",
+                            Kind = SlideShapeKind.AutoShape,
+                            Text = "Grouped caption"
+                        },
+                        new SlideShape
+                        {
+                            Id = 703,
+                            Name = "Grouped flourish",
+                            Kind = SlideShapeKind.Picture,
+                            Picture = new ImagePart(),
+                            IsDecorative = true
+                        }
+                    }
+                };
+
+                window.Editor.CurrentSlide!.Shapes.Clear();
+                window.Editor.CurrentSlide.Shapes.Add(new SlideShape { Id = 700, Name = "Title placeholder" });
+                window.Editor.CurrentSlide.Shapes.Add(group);
+                window.Editor.Select(702);
+
+                var registry = window.BuildCommandRegistry();
+                registry.TryGet(PresentationReviewWorkflowPlanner.ReadingOrderPaneCommandId, out var readingOrder)
+                    .Should().BeTrue();
+
+                readingOrder!.Execute(RibbonCommandContext.Empty);
+
+                initialPlan = window.LastReadingOrderPlan;
+                moveEarlierEnabled = window.IsReadingOrderMoveEarlierEnabled;
+                moveEarlierDisabledReason = window.ReadingOrderMoveEarlierDisabledReason;
+                moveLaterEnabled = window.IsReadingOrderMoveLaterEnabled;
+                moveLaterDisabledReason = window.ReadingOrderMoveLaterDisabledReason;
+
+                nestedMove = window.ApplyReadingOrderMoveLater();
+                boundaryMove = window.ApplyReadingOrderMoveLater();
+                childOrderAfterMove = group.Children.Select(shape => shape.Id).ToArray();
+                paneOrderAfterMove = window.LastReadingOrderPlan!.Items
+                    .Select(item => item.ShapeId)
+                    .ToArray();
+            }
+            finally
+            {
+                window.Close();
+            }
+        });
+
+        if (!ran) return;
+
+        initialPlan.Should().NotBeNull();
+        initialPlan!.Items.Select(item => item.ShapeId).Should().Equal(700u, 701u, 702u, 703u);
+        initialPlan.SelectedItem.Should().NotBeNull();
+        initialPlan.SelectedItem!.ShapeId.Should().Be(702);
+        initialPlan.SelectedItem.NestingDepth.Should().Be(1);
+        moveEarlierEnabled.Should().BeFalse();
+        moveEarlierDisabledReason.Should().Be(PresentationReviewWorkflowPlanner.ReadingOrderAlreadyEarliestMessage);
+        moveLaterEnabled.Should().BeTrue();
+        moveLaterDisabledReason.Should().BeNull();
+        nestedMove.Should().Be(new PresentationReadingOrderMutationPlan(
+            PresentationReviewWorkflowIntentKind.MoveReadingOrderLater,
+            true,
+            0,
+            702,
+            0,
+            1,
+            null));
+        childOrderAfterMove.Should().Equal(703u, 702u);
+        paneOrderAfterMove.Should().Equal(700u, 701u, 703u, 702u);
+        boundaryMove.Should().Be(new PresentationReadingOrderMutationPlan(
+            PresentationReviewWorkflowIntentKind.MoveReadingOrderLater,
+            false,
+            0,
+            702,
+            -1,
+            -1,
+            PresentationReviewWorkflowPlanner.ReadingOrderAlreadyLatestMessage));
+    }
+
+    [Fact]
     public async Task Accessibility_checker_pane_routes_rows_through_shared_plan()
     {
         PresentationAccessibilityCheckerPanePlan? opened = null;
