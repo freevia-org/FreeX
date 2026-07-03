@@ -28,17 +28,22 @@ public static class PresentationNotesPagePreviewPlanner
     public const string EmptyDeckTitle = "No slide";
     public const string UntitledSlideTitle = "Untitled slide";
     public const string EmptyNotesPlaceholder = "Click to add speaker notes";
+    private const double EmuPerPoint = 12700.0;
 
     public static PresentationNotesPagePreviewPlan Build(
         Presentation presentation,
         int currentSlideIndex,
-        double pageWidth = PresentationExportPlanner.DefaultPrintPageWidth,
-        double pageHeight = PresentationExportPlanner.DefaultPrintPageHeight)
+        double? pageWidth = null,
+        double? pageHeight = null)
     {
         ArgumentNullException.ThrowIfNull(presentation);
 
         var slideCount = presentation.Slides.Count;
-        var pageBounds = new LayoutRect(0, 0, Math.Max(1, pageWidth), Math.Max(1, pageHeight));
+        var pageBounds = new LayoutRect(
+            0,
+            0,
+            ResolveNotesPageWidthPoints(presentation, pageWidth),
+            ResolveNotesPageHeightPoints(presentation, pageHeight));
         var slideBounds = BuildSlideBounds(pageBounds, presentation.SlideSizeCxEmu, presentation.SlideSizeCyEmu);
         var notesBounds = BuildNotesBounds(pageBounds, slideBounds);
 
@@ -80,6 +85,27 @@ public static class PresentationNotesPagePreviewPlanner
             slideBounds,
             notesBounds,
             SplitNoteLines(notesText, notesBounds.Width));
+    }
+
+    public static double ResolveNotesPageWidthPoints(Presentation presentation, double? pageWidth = null)
+    {
+        ArgumentNullException.ThrowIfNull(presentation);
+        return ResolvePageDimension(pageWidth, presentation.NotesPageSizeCxEmu, Presentation.DefaultNotesPageSizeCxEmu);
+    }
+
+    public static double ResolveNotesPageHeightPoints(Presentation presentation, double? pageHeight = null)
+    {
+        ArgumentNullException.ThrowIfNull(presentation);
+        return ResolvePageDimension(pageHeight, presentation.NotesPageSizeCyEmu, Presentation.DefaultNotesPageSizeCyEmu);
+    }
+
+    private static double ResolvePageDimension(double? explicitValue, long modeledEmu, long fallbackEmu)
+    {
+        if (explicitValue is > 0)
+            return explicitValue.Value;
+
+        var emu = modeledEmu > 0 ? modeledEmu : fallbackEmu;
+        return Math.Max(1, emu / EmuPerPoint);
     }
 
     private static LayoutRect BuildSlideBounds(LayoutRect pageBounds, long slideWidthEmu, long slideHeightEmu)

@@ -110,6 +110,15 @@ public static class PptxPackageReader
                 presentation.SlideSizeCyEmu = cy;
         }
 
+        var notesSz = presRoot.Element(P + "notesSz");
+        if (notesSz is not null)
+        {
+            if (long.TryParse(notesSz.Attribute("cx")?.Value, out var cx) && cx > 0)
+                presentation.NotesPageSizeCxEmu = cx;
+            if (long.TryParse(notesSz.Attribute("cy")?.Value, out var cy) && cy > 0)
+                presentation.NotesPageSizeCyEmu = cy;
+        }
+
         // Rels for presentation.xml
         var presRels = OpcRelationships.LoadTargets(archive, GetRelationshipPartPath(presPath));
 
