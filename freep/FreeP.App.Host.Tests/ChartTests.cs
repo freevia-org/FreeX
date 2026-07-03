@@ -762,6 +762,72 @@ public sealed class ChartTests : IDisposable
             "no workbook should be written when RegenerateWorkbookOnSave is false and there's no source snapshot");
     }
 
+    [Fact]
+    public void PreservedChart_WritesModeledSourceFormulaRanges()
+    {
+        var chart = BuildColumnChart();
+        chart.RegenerateWorkbookOnSave.Should().BeFalse();
+        chart.Series[0].FormulaReferences.SeriesName = "Sheet1!$B$1";
+        chart.Series[0].FormulaReferences.Category = "Sheet1!$A$2:$A$4";
+        chart.Series[0].FormulaReferences.Values = "Sheet1!$B$2:$B$4";
+        chart.Series[1].FormulaReferences.SeriesName = "Sheet1!$C$1";
+        chart.Series[1].FormulaReferences.Category = "Sheet1!$A$2:$A$4";
+        chart.Series[1].FormulaReferences.Values = "Sheet1!$C$2:$C$4";
+        var pres = BuildPresWithChart(chart);
+        var path = WriteToPptx(pres);
+
+        using var archive = ZipFile.OpenRead(path);
+        var chartDoc = LoadChartXml(archive, chartIndex: 1);
+        var series = chartDoc.Descendants(ChartNs + "ser").ToList();
+
+        series[0].Element(ChartNs + "tx")!.Element(ChartNs + "strRef")!.Element(ChartNs + "f")!.Value
+            .Should().Be("Sheet1!$B$1");
+        series[0].Element(ChartNs + "cat")!.Element(ChartNs + "strRef")!.Element(ChartNs + "f")!.Value
+            .Should().Be("Sheet1!$A$2:$A$4");
+        series[0].Element(ChartNs + "val")!.Element(ChartNs + "numRef")!.Element(ChartNs + "f")!.Value
+            .Should().Be("Sheet1!$B$2:$B$4");
+        series[1].Element(ChartNs + "tx")!.Element(ChartNs + "strRef")!.Element(ChartNs + "f")!.Value
+            .Should().Be("Sheet1!$C$1");
+        series[1].Element(ChartNs + "val")!.Element(ChartNs + "numRef")!.Element(ChartNs + "f")!.Value
+            .Should().Be("Sheet1!$C$2:$C$4");
+
+        archive.Entries.Should().NotContain(e => e.FullName.StartsWith("ppt/embeddings/chartWorkbook"),
+            "preserved formula references alone must not trigger workbook regeneration");
+    }
+
+    [Theory]
+    [InlineData("06-charts.pptx")]
+    [InlineData("18-chart-types.pptx")]
+    [InlineData("19-chart-labels.pptx")]
+    public void RenderCompareChartCorpus_ImportsWorkbookFormulaReferences(string deckName)
+    {
+        var deckPath = Path.Combine(FindCorpusDirectory(), deckName);
+        var sourceFormulaCount = CountNonEmptyChartFormulas(deckPath);
+        var presentation = PptxPackageReader.Read(deckPath);
+        var chartFormulaReferences = presentation.Slides
+            .SelectMany(slide => slide.Shapes)
+            .Where(shape => shape.Kind == SlideShapeKind.Chart)
+            .SelectMany(shape => shape.Chart!.Series)
+            .Select(series => series.FormulaReferences)
+            .ToArray();
+
+        chartFormulaReferences.Should().NotBeEmpty($"{deckName} should contain chart series");
+        if (sourceFormulaCount == 0)
+        {
+            chartFormulaReferences.Should().OnlyContain(reference => !reference.HasAny,
+                $"{deckName} only contains blank c:f placeholders and should not fabricate formulas");
+            return;
+        }
+
+        chartFormulaReferences.Should().Contain(reference => reference.SeriesName != null,
+            $"{deckName} should expose authored workbook formulas for series names");
+        chartFormulaReferences.Should().Contain(reference =>
+                reference.Values != null ||
+                reference.YValues != null ||
+                reference.BubbleSizes != null,
+            $"{deckName} should expose authored workbook formulas for chart values");
+    }
+
     // ── ID1/ID2 helpers ───────────────────────────────────────────────────────
 
     private static readonly XNamespace ChartNs =
@@ -798,6 +864,42 @@ public sealed class ChartTests : IDisposable
 
     private static List<string> ExtractCellValues(XDocument sheetDoc) =>
         sheetDoc.Descendants(SheetNs + "v").Select(v => v.Value).ToList();
+
+    private static string FindCorpusDirectory()
+    {
+        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
+             directory is not null;
+             directory = directory.Parent)
+        {
+            var candidate = Path.Combine(directory.FullName, "tools", "FreeP.RenderCompare", "corpus");
+            if (File.Exists(Path.Combine(candidate, "06-charts.pptx")) &&
+                File.Exists(Path.Combine(candidate, "18-chart-types.pptx")) &&
+                File.Exists(Path.Combine(candidate, "19-chart-labels.pptx")))
+            {
+                return candidate;
+            }
+        }
+
+        throw new DirectoryNotFoundException("Could not locate tools/FreeP.RenderCompare/corpus chart decks.");
+    }
+
+    private static int CountNonEmptyChartFormulas(string deckPath)
+    {
+        using var archive = ZipFile.OpenRead(deckPath);
+        return archive.Entries
+            .Where(entry => entry.FullName.StartsWith("ppt/charts/chart", StringComparison.OrdinalIgnoreCase) &&
+                            entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
+            .SelectMany(entry =>
+            {
+                using var stream = entry.Open();
+                return XDocument.Load(stream)
+                    .Descendants(ChartNs + "f")
+                    .Select(formula => formula.Value)
+                    .Where(value => !string.IsNullOrWhiteSpace(value))
+                    .ToArray();
+            })
+            .Count();
+    }
 
     // ── Helpers for new chart types ──────────────────────────────────────────
 
