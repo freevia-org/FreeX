@@ -1,7 +1,9 @@
+using System.IO;
 using System.Linq;
 using FreeW.App.Avalonia.Editing;
 using FreeW.App.Avalonia.Ribbon;
 using FreeW.App.Presentation.Ribbon;
+using FreeW.Core.IO;
 using FreeW.Core.Model;
 using Free.Shared.Ribbon;
 
@@ -230,6 +232,76 @@ public sealed class ReferencesTabTests
         view.Document.Sources.Should().ContainSingle().Which.Tag.Should().Be("New");
         view.Undo();
         view.Document.Sources.Should().ContainSingle().Which.Tag.Should().Be("Old");
+    }
+
+    [Fact]
+    public void MarkCitation_drops_hidden_citation_mark_into_body_and_undo_reverts()
+    {
+        var view = ViewWith(new Paragraph("Brown v. Board"));
+
+        view.MarkCitation("Brown v. Board, 347 U.S. 483 (1954)");
+
+        var mark = view.Document.Blocks.OfType<Paragraph>()
+            .SelectMany(paragraph => paragraph.Runs)
+            .Single(run => run.Citation is not null);
+        mark.Text.Should().BeEmpty("a Word TA mark is a hidden, textless field run");
+        mark.Citation!.LongCitation.Should().Be("Brown v. Board, 347 U.S. 483 (1954)");
+        mark.Citation.Category.Should().Be(CitationCategory.Cases);
+        view.Document.Citations.Should().BeEmpty("Avalonia now persists the durable body mark instead of only the transient side-store");
+
+        view.Undo();
+
+        view.Document.Blocks.OfType<Paragraph>()
+            .SelectMany(paragraph => paragraph.Runs)
+            .Should().NotContain(run => run.Citation != null);
+    }
+
+    [Fact]
+    public void MarkCitation_survives_plain_text_edit_rebuild()
+    {
+        var view = ViewWith(new Paragraph("Brown v. Board"));
+
+        view.MarkCitation("Brown v. Board, 347 U.S. 483 (1954)");
+        view.InsertText("See ");
+
+        var paragraph = view.Document.Blocks.OfType<Paragraph>().Single();
+        paragraph.PlainText.Should().Be("See Brown v. Board");
+        paragraph.Runs.Should().ContainSingle(run => run.Citation != null)
+            .Which.Citation!.LongCitation.Should().Be("Brown v. Board, 347 U.S. 483 (1954)");
+    }
+
+    [Fact]
+    public void MarkCitation_body_mark_builds_table_and_survives_docx_roundtrip()
+    {
+        var view = ViewWith(new Paragraph("Brown v. Board"));
+
+        view.MarkCitation("Brown v. Board, 347 U.S. 483 (1954)");
+        view.InsertTableOfAuthorities();
+
+        view.Document.Blocks.OfType<Paragraph>()
+            .Where(TableOfAuthorities.IsTableOfAuthoritiesParagraph)
+            .Select(paragraph => paragraph.PlainText)
+            .Should()
+            .ContainInOrder("Table of Authorities", "Cases", "Brown v. Board, 347 U.S. 483 (1954)");
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(view.Document, stream);
+        stream.Position = 0;
+        var reopened = DocxReader.Read(stream);
+
+        reopened.Citations.Should().BeEmpty("the durable Word-facing TA field lives in the body");
+        reopened.Blocks.OfType<Paragraph>()
+            .SelectMany(paragraph => paragraph.Runs)
+            .Should().ContainSingle(run => run.Citation != null)
+            .Which.Citation!.LongCitation.Should().Be("Brown v. Board, 347 U.S. 483 (1954)");
+
+        reopened.Blocks.RemoveAll(TableOfAuthorities.IsTableOfAuthoritiesParagraph);
+        reopened.Blocks.AddRange(TableOfAuthorities.Build(reopened));
+        reopened.Blocks.OfType<Paragraph>()
+            .Where(TableOfAuthorities.IsTableOfAuthoritiesParagraph)
+            .Select(paragraph => paragraph.PlainText)
+            .Should()
+            .ContainInOrder("Table of Authorities", "Cases", "Brown v. Board, 347 U.S. 483 (1954)");
     }
 
     [Fact]

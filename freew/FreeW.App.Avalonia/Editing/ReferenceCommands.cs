@@ -99,28 +99,3 @@ internal sealed class AddIndexEntryCommand(string term) : IDocumentCommand
         _index = -1;
     }
 }
-
-internal sealed class AddCitationCommand(Citation citation) : IDocumentCommand
-{
-    private int _index = -1;
-
-    public string Label => "Mark Citation";
-
-    public void Apply(IDocumentCommandContext context)
-    {
-        if (citation.LongCitation.Length == 0)
-            return;
-
-        _index = context.Document.Citations.Count;
-        context.Document.Citations.Add(citation);
-    }
-
-    public void Revert(IDocumentCommandContext context)
-    {
-        if (_index < 0 || _index >= context.Document.Citations.Count)
-            return;
-
-        context.Document.Citations.RemoveAt(_index);
-        _index = -1;
-    }
-}

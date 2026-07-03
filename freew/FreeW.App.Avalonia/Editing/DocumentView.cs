@@ -10137,7 +10137,18 @@ public sealed class DocumentView : Control
         if (resolved.Length == 0)
             return;
 
-        _bus.Execute(new AddCitationCommand(new Citation(resolved)));
+        var hostIndex = ResolveReferenceHostBlock();
+        if (hostIndex < 0)
+            return;
+
+        var offset = ReferenceInsertionOffset(hostIndex);
+        var citation = new Citation(resolved);
+        _bus.Execute(new ReplaceParagraphRunsCommand(hostIndex, paragraph =>
+            InsertRunAtOffset(paragraph, offset, Run.CitationMark(citation))));
+
+        _cellCaret = null;
+        _caret = new DocPosition(hostIndex, Math.Clamp(offset, 0, BlockLength(hostIndex)));
+        _selectionAnchor = _caret;
         Focus();
     }
 
@@ -10169,11 +10180,19 @@ public sealed class DocumentView : Control
     {
         ArgumentNullException.ThrowIfNull(paragraphs);
 
+        var originalCaret = _caret;
         _bus.BeginUndoGroup();
         var index = Math.Clamp(insertAt, 0, _doc.Blocks.Count);
+        var appliedIndex = index;
         foreach (var paragraph in paragraphs)
             _bus.Execute(new InsertParagraphCommand(index++, paragraph));
         _bus.CommitUndoGroup(label);
+
+        if (paragraphs.Count > 0 && appliedIndex <= originalCaret.Block)
+        {
+            _caret = originalCaret with { Block = originalCaret.Block + paragraphs.Count };
+            _selectionAnchor = _caret;
+        }
     }
 
     private void RefreshGeneratedReferenceBlocks(Func<Block, bool> isGeneratedBlock, Func<IReadOnlyList<Paragraph>> build, string label)
@@ -10430,6 +10449,19 @@ public sealed class DocumentView : Control
         index = _doc.Blocks.Count;
         _bus.Execute(new InsertBlockCommand(index, new Paragraph()));
         return index;
+    }
+
+    private int ReferenceInsertionOffset(int hostIndex)
+    {
+        if (hostIndex != _caret.Block)
+            return BlockLength(hostIndex);
+
+        if (NormalizedSelection() is { } selection
+            && selection.Start.Block == hostIndex
+            && selection.End.Block == hostIndex)
+            return selection.End.Offset;
+
+        return _caret.Offset;
     }
 
     /// <summary>
@@ -12054,6 +12086,10 @@ public sealed class DocumentView : Control
 
     private static void SetRuns(Paragraph paragraph, IReadOnlyList<Cell> cells)
     {
+        var citationMarks = TextlessRunPositions(paragraph)
+            .Where(item => item.Run.Citation is not null)
+            .ToList();
+
         // AV-COMMENT: preserve which comment ids had a textless reference run (they carry no cells, so the
         // cell round-trip would otherwise drop them). Re-emitted after the run is last anchored below so the
         // w:commentReference survives an edit inside a commented paragraph.
@@ -12113,6 +12149,24 @@ public sealed class DocumentView : Control
         {
             paragraph.Runs.Insert(lastAnchorIndexFor[cid] + 1, Run.CommentReference(cid));
         }
+
+        foreach (var (offset, run) in citationMarks.OrderBy(item => item.Offset))
+            InsertRunAtOffset(paragraph, offset, CloneRunWithText(run, string.Empty));
+    }
+
+    private static List<(int Offset, Run Run)> TextlessRunPositions(Paragraph paragraph)
+    {
+        var positions = new List<(int Offset, Run Run)>();
+        var offset = 0;
+        foreach (var run in paragraph.Runs)
+        {
+            if (run.Text.Length == 0)
+                positions.Add((offset, run));
+            else
+                offset += run.Text.Length;
+        }
+
+        return positions;
     }
 
     /// <summary>
