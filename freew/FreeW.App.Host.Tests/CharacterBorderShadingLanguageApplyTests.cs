@@ -343,7 +343,7 @@ public sealed class CharacterBorderShadingLanguageApplyTests
     }
 
     [StaFact]
-    public void SetProofingLanguage_CollapsedCaret_DoesNotRetagExistingText()
+    public void SetProofingLanguage_CollapsedCaret_TagsCurrentProofingWord()
     {
         var view = ViewWith("caret text");
         var paragraph = view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>().Single();
@@ -352,7 +352,21 @@ public sealed class CharacterBorderShadingLanguageApplyTests
         view.SetProofingLanguage("fr-FR");
 
         var modelParagraph = view.Model.Blocks.OfType<Paragraph>().Single();
-        DumpLanguageTags(modelParagraph).Should().Be("caret text:");
+        DumpLanguageTags(modelParagraph).Should().Be("caret:fr-FR| text:");
+        view.Commands.CanUndo.Should().BeTrue();
+    }
+
+    [StaFact]
+    public void SetProofingLanguage_CollapsedCaretWithoutCurrentWord_DoesNotStageOrRetag()
+    {
+        var view = ViewWith("caret  text");
+        var paragraph = view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>().Single();
+        view.CaretPosition = PositionAtTextOffset(paragraph, 6);
+
+        view.SetProofingLanguage("fr-FR");
+
+        var modelParagraph = view.Model.Blocks.OfType<Paragraph>().Single();
+        DumpLanguageTags(modelParagraph).Should().Be("caret  text:");
         view.Commands.CanUndo.Should().BeFalse();
     }
 
