@@ -2430,6 +2430,7 @@ public sealed class SlideCanvas : FrameworkElement
         {
             ResolvedFill.Gradient gradient when gradient.Kind == GradientKind.Radial => MakeRadialGradientBrush(gradient),
             ResolvedFill.Gradient gradient => MakeLinearGradientBrush(gradient),
+            ResolvedFill.PatternFill pattern => MakePatternBrush(pattern),
             ResolvedFill.Solid solid => FreezeBrush(new SolidColorBrush(Color.FromArgb(
                 fill.Alpha,
                 solid.Color.R,

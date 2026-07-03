@@ -676,6 +676,40 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void BuildColumnPrimitives_UsesPointPatternFillPlan()
+    {
+        var chart = new ChartShape { ChartType = ChartType.ColumnClustered };
+        chart.Categories.AddRange(new[] { "Q1", "Q2" });
+        var series = new ChartSeries { Name = "Sales" };
+        series.Values.AddRange(new double?[] { 10, 20 });
+        chart.Series.Add(series);
+
+        var pattern = new ResolvedFill.PatternFill(
+            "diagStripe",
+            new SrgbColor(0x10, 0x20, 0x30),
+            new SrgbColor(0xE0, 0xE1, 0xE2));
+        var fillPlans = new ChartFillPlanSet
+        {
+            PointFills = new Dictionary<ChartFillKey, ChartFillPlan>
+            {
+                [new ChartFillKey(0, 1)] = new ChartFillPlan(new SrgbColor(0x10, 0x20, 0x30), 255)
+                {
+                    Fill = pattern
+                }
+            }
+        };
+
+        var primitives = ChartRenderPlanner.BuildColumnPrimitives(
+            chart,
+            new ChartPlanRect(0, 0, 200, 100),
+            new[] { new SrgbColor(0x40, 0x50, 0x60) },
+            fillPlans);
+
+        var q2 = primitives.Single(p => p.SeriesIndex == 0 && p.CategoryIndex == 1);
+        q2.Fill.Fill.Should().BeSameAs(pattern);
+    }
+
+    [Fact]
     public void BuildBarPrimitives_ReversesCategoryAndClusterSeriesOrder()
     {
         var chart = MakeTwoSeriesChart(ChartType.BarClustered);

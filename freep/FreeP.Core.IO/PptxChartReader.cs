@@ -673,6 +673,9 @@ internal static class PptxChartReader
             case ShapeFill.Gradient gradient:
                 series.Fill = gradient;
                 break;
+            case ShapeFill.Pattern pattern:
+                series.Fill = pattern;
+                break;
         }
 
         series.LineStyle = ReadLineStyle(spPr.Element(A + "ln"), scheme);
@@ -769,6 +772,9 @@ internal static class PptxChartReader
                 case ShapeFill.Gradient gradient:
                     pointStyle.Fill = gradient;
                     break;
+                case ShapeFill.Pattern pattern:
+                    pointStyle.Fill = pattern;
+                    break;
             }
 
             var lineStyle = ReadLineStyle(spPr.Element(A + "ln"), scheme);
@@ -805,6 +811,9 @@ internal static class PptxChartReader
                 break;
             case ShapeFill.Gradient gradient:
                 style.Fill = gradient;
+                break;
+            case ShapeFill.Pattern pattern:
+                style.Fill = pattern;
                 break;
         }
 
