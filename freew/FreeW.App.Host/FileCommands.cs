@@ -32,9 +32,6 @@ namespace FreeW.App.Host;
 /// </summary>
 internal sealed class FileCommands
 {
-    private static readonly IReadOnlyList<IDocumentFileAdapter> PdfImportAdapters =
-        DocumentFileAdapterCatalog.CreatePdfImportAdapters();
-
     private readonly Window _window;
     private readonly DocumentView _editor;
     private readonly SisterWpfFileCommandWorkflow _workflow;
@@ -153,23 +150,18 @@ internal sealed class FileCommands
     /// </summary>
     public bool ImportPdfTextPath(string path)
     {
-        var extension = Path.GetExtension(path);
-        var adapter = DocumentFileFormatResolver.FindOpenAdapter(PdfImportAdapters, extension, out _);
-        if (adapter is null)
-        {
-            ShowError(
-                "Unrecognized PDF import file",
-                new InvalidOperationException($"FreeW can import text only from \".pdf\" files, not \"{extension}\"."));
-            return false;
-        }
-
         try
         {
-            using (var fs = File.OpenRead(path))
-                _editor.LoadModel(adapter.Load(fs));
+            var result = _persistence.ImportPdfText(path);
+            _editor.LoadModel(result.Document);
 
             _workflow.MarkDirtyWithPath(null, () => _editor.CurrentFileName = null);
             return true;
+        }
+        catch (InvalidOperationException ex)
+        {
+            ShowError("Unrecognized PDF import file", ex);
+            return false;
         }
         catch (Exception ex)
         {
@@ -327,7 +319,7 @@ internal sealed class FileCommands
 
     private string? PromptPdfImportPath()
     {
-        var plan = DocumentFileDialogRequestPlanner.BuildOpenDialogPlan(PdfImportAdapters, "PDF documents");
+        var plan = _persistence.BuildPdfImportDialogPlan();
         var result = WpfFileDialogService.ShowOpenDialog(
             _window,
             plan,

@@ -186,16 +186,18 @@ public class BackstageViewTests
     }
 
     [Fact]
-    public void SaveAs_planner_produces_three_format_groups()
+    public void SaveAs_planner_produces_capability_format_groups()
     {
         var adapters = DocumentFileAdapterCatalog.CreateDefaultAdapters();
         var formats = adapters.SelectMany(a => a.Formats);
         var groups = BackstageSaveAsFileTypePlanner.Build(formats, saveAsExtension: _ => { });
 
-        groups.Should().HaveCount(3, "Save As has Word Documents, Web Pages, Other Formats");
+        groups.Should().HaveCount(4, "Save As has Word, Web, Other, and explicit compatibility formats");
         groups[0].Heading.Should().Be("Word Documents");
         groups[1].Heading.Should().Be("Web Pages");
         groups[2].Heading.Should().Be("Other Formats");
+        groups[3].Heading.Should().Be("Compatibility Formats");
+        groups[3].Actions.Select(action => action.Label).Should().Contain("Word 97-2003 Document (*.doc)");
     }
 
     [Fact]

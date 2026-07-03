@@ -1,6 +1,7 @@
 using Free.Shared.AppServices;
 using Free.Shared.Localization;
 using Free.Shared.Shell;
+using FreeW.App.Presentation.Shell;
 using FreeW.Core.IO;
 using FreeW.Core.Model;
 
@@ -239,12 +240,16 @@ public static class BackstagePaneSurfacePlanner
         ArgumentNullException.ThrowIfNull(saveAsFormat);
 
         text ??= BackstageExportPaneSurfaceText.FreeW;
+        var fixedLayoutCapabilities = DocumentFormatCapabilityPlanner
+            .BuildFixedLayoutExportRows(DocumentFormatCapabilityPlanner.BuildFixedLayoutExportFormats(exportXps is not null));
+        var pdfCapability = fixedLayoutCapabilities.Single(row =>
+            string.Equals(row.PrimaryExtension, ".pdf", StringComparison.OrdinalIgnoreCase));
 
         var fixedLayoutRows = new List<BackstageActionRow>
         {
             new(
                 exportXps is null ? text.PdfOnlyActionLabel : text.PdfActionLabel,
-                text.PdfActionDescription,
+                pdfCapability.Description,
                 exportPdf),
         };
 
@@ -252,9 +257,11 @@ public static class BackstagePaneSurfacePlanner
             !string.IsNullOrWhiteSpace(text.XpsActionLabel) &&
             !string.IsNullOrWhiteSpace(text.XpsActionDescription))
         {
+            var xpsCapability = fixedLayoutCapabilities.Single(row =>
+                string.Equals(row.PrimaryExtension, ".xps", StringComparison.OrdinalIgnoreCase));
             fixedLayoutRows.Add(new BackstageActionRow(
                 text.XpsActionLabel,
-                text.XpsActionDescription,
+                xpsCapability.Description,
                 exportXps));
         }
 

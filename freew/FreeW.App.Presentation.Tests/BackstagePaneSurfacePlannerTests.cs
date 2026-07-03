@@ -262,8 +262,11 @@ public sealed class BackstagePaneSurfacePlannerTests
         surface.InlinePlan.SelectedExtension.Should().Be(".rtf");
 
         surface.Groups.Select(group => group.Heading)
-            .Should().Equal("Places", "Word Documents", "Web Pages", "Other Formats");
+            .Should().Equal("Places", "Word Documents", "Web Pages", "Other Formats", "Compatibility Formats");
         surface.Groups[0].Actions.Select(action => action.Label).Should().Equal("This PC", "Browse");
+        surface.Groups.Single(group => group.Heading == "Compatibility Formats")
+            .Actions.Single(action => action.Label == "Word 97-2003 Document (*.doc)")
+            .Description.Should().Contain("Compatibility format");
 
         surface.Groups[0].Actions[1].Invoke();
         surface.Groups.Single(group => group.Heading == "Other Formats")
@@ -321,6 +324,8 @@ public sealed class BackstagePaneSurfacePlannerTests
         surface.Description.Should().Be("Localized export surface.");
         surface.Groups.Select(group => group.Heading).Should().Equal("Create PDF/XPS Document", "Change File Type");
         surface.Groups[0].Actions.Select(action => action.Label).Should().Equal("Create PDF or XPS", "Export to XPS");
+        surface.Groups[0].Actions[0].Description.Should().Contain("Export-only fixed-layout PDF copy");
+        surface.Groups[0].Actions[1].Description.Should().Contain("Export-only fixed-layout XPS copy");
 
         surface.Groups[0].Actions[0].Invoke();
         surface.Groups[0].Actions[1].Invoke();
@@ -337,6 +342,7 @@ public sealed class BackstagePaneSurfacePlannerTests
             saveAsExtension: static _ => { });
 
         pdfOnly.Groups[0].Actions.Select(action => action.Label).Should().Equal("Create PDF");
+        pdfOnly.Groups[0].Actions[0].Description.Should().Contain("not editable round-trip support");
     }
 
     [Fact]

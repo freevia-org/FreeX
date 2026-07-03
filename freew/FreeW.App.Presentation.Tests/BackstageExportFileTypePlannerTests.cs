@@ -29,11 +29,19 @@ public sealed class BackstageExportFileTypePlannerTests
             "Web Page, Filtered (*.htm, *.html)",
             "Web Page (*.htm, *.html)",
             "Single File Web Page (*.mht, *.mhtml)",
+            "OpenDocument Text (*.odt)",
+            "OpenDocument Text Template (*.ott)",
             "Rich Text Format (*.rtf)",
             "Plain Text (*.txt, *.text)",
-            "Log File (*.log)");
+            "Log File (*.log)",
+            "Word 97-2003 Document (*.doc)",
+            "Word 97-2003 Template (*.dot)");
         labels.Should().NotContain(label => label.Contains("PDF", StringComparison.OrdinalIgnoreCase));
-        labels.Should().NotContain(label => label.Contains("97-2003", StringComparison.OrdinalIgnoreCase));
+
+        group.Actions.Single(action => action.Label == "Word 97-2003 Document (*.doc)")
+            .Description.Should().Contain("Compatibility format");
+        group.Actions.Single(action => action.Label == "OpenDocument Text (*.odt)")
+            .Description.Should().Contain("Unsupported ODF constructs");
 
         group.Actions.Single(action => action.Label == "Plain Text (*.txt, *.text)").Invoke();
 

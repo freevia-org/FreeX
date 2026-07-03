@@ -33,6 +33,63 @@ public sealed class DocumentPersistenceWorkflowTests : IDisposable
     }
 
     [Fact]
+    public void BuildFormatCapabilityRows_ReportsTemplateCompatibilityImportAndExportTruth()
+    {
+        var workflow = new DocumentPersistenceWorkflow();
+
+        var rows = workflow.BuildFormatCapabilityRows(includeXpsExport: true);
+
+        rows.Single(row => row.FormatName == "Word Document" && row.PrimaryExtension == ".docx")
+            .Kind.Should().Be(DocumentFormatCapabilityKind.OpenSave);
+        rows.Single(row => row.FormatName == "OpenDocument Text" && row.PrimaryExtension == ".odt")
+            .Description.Should().Contain("Unsupported ODF constructs");
+        rows.Single(row => row.FormatName == "Word Template" && row.PrimaryExtension == ".dotx")
+            .Should()
+            .Match<DocumentFormatCapabilityRow>(row =>
+                row.Kind == DocumentFormatCapabilityKind.Template &&
+                row.OpensAsTemplate &&
+                row.Description.Contains("new unsaved document", StringComparison.Ordinal));
+        rows.Single(row => row.FormatName == "Word 97-2003 Document" && row.PrimaryExtension == ".doc")
+            .Should()
+            .Match<DocumentFormatCapabilityRow>(row =>
+                row.Kind == DocumentFormatCapabilityKind.LegacyCompatibility &&
+                row.IsLegacy &&
+                row.Description.Contains("Compatibility format", StringComparison.Ordinal));
+
+        var pdfImport = rows.Single(row =>
+            row.FormatName == "PDF Document" &&
+            row.PrimaryExtension == ".pdf" &&
+            row.Kind == DocumentFormatCapabilityKind.ImportOnly);
+        pdfImport.CanOpen.Should().BeTrue();
+        pdfImport.CanSave.Should().BeFalse();
+        pdfImport.CanExport.Should().BeFalse();
+        pdfImport.Description.Should().Contain("import-only");
+
+        var fixedLayout = rows.Where(row => row.Kind == DocumentFormatCapabilityKind.ExportOnly).ToArray();
+        fixedLayout.Select(row => row.PrimaryExtension).Should().Equal(".pdf", ".xps");
+        fixedLayout.Should().OnlyContain(row => row.CanExport && !row.CanOpen && !row.CanSave);
+    }
+
+    [Fact]
+    public void ImportPdfText_UsesExplicitImportAdaptersOutsideNormalOpenSaveCatalog()
+    {
+        var documentAdapter = new FakeDocumentAdapter(
+            [new FileFormatDescriptor(".docx", "Word Document")]);
+        var pdfAdapter = new FakeDocumentAdapter(
+            [new FileFormatDescriptor(".pdf", "PDF Document", CanOpen: true, CanSave: false)]);
+        var workflow = new DocumentPersistenceWorkflow([documentAdapter], [pdfAdapter]);
+        var path = WriteText("Imported.pdf", "PDF body text");
+
+        var result = workflow.ImportPdfText(path);
+
+        result.Document.PlainText.Should().Be("PDF body text");
+        result.Adapter.Should().BeSameAs(pdfAdapter);
+        result.Format!.CanSave.Should().BeFalse();
+        workflow.CanOpenPath(path).Should().BeFalse("PDF import is not a normal editable Open path");
+        workflow.BuildPdfImportDialogPlan().Filter.Should().Contain("PDF Document (*.pdf)|*.pdf");
+    }
+
+    [Fact]
     public void BuildSavePickerPlan_UsesPreferredExtensionBeforeCurrentPath()
     {
         var adapter = new FakeDocumentAdapter(
