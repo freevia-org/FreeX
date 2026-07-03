@@ -1181,6 +1181,7 @@ public static class PresentationReviewWorkflowPlanner
                             true)));
                 }
 
+                AddTextHyperlinkAccessibilityIssues(issues, slideIndex, shape);
                 AddTableAccessibilityIssues(issues, slideIndex, shape);
             }
         }
@@ -2605,6 +2606,55 @@ public static class PresentationReviewWorkflowPlanner
         => table.Rows
             .SelectMany(row => row.Cells)
             .Any(cell => cell.GridSpan > 1 || cell.RowSpan > 1 || cell.HMerge || cell.VMerge);
+
+    private static void AddTextHyperlinkAccessibilityIssues(
+        List<PresentationAccessibilityIssueDescriptor> issues,
+        int slideIndex,
+        SlideShape shape)
+    {
+        if (!HasTextRunHyperlinkWithoutScreenTip(shape))
+        {
+            return;
+        }
+
+        issues.Add(new PresentationAccessibilityIssueDescriptor(
+            PresentationAccessibilityIssueSeverity.Info,
+            slideIndex,
+            shape.Id,
+            "Hyperlink ScreenTip missing",
+            $"Text link in {DescribeShape(shape)} is missing hover/help text.",
+            new PresentationAccessibilityIssueActionSummary(
+                MissingHyperlinkScreenTipActionSummary,
+                InsertLinkCommandId,
+                true)));
+    }
+
+    private static bool HasTextRunHyperlinkWithoutScreenTip(SlideShape shape)
+        => EnumerateShapeTextBodies(shape)
+            .SelectMany(body => body.Paragraphs)
+            .SelectMany(paragraph => paragraph.Runs)
+            .Any(run => run.Hyperlink is not null && string.IsNullOrWhiteSpace(run.Hyperlink.Tooltip));
+
+    private static IEnumerable<TextBody> EnumerateShapeTextBodies(SlideShape shape)
+    {
+        if (shape.TextBody is not null)
+        {
+            yield return shape.TextBody;
+        }
+
+        if (shape.Table is null)
+        {
+            yield break;
+        }
+
+        foreach (var cell in shape.Table.Rows.SelectMany(row => row.Cells))
+        {
+            if (cell.TextBody is not null)
+            {
+                yield return cell.TextBody;
+            }
+        }
+    }
 
     private static string DescribeShape(SlideShape shape)
         => string.IsNullOrWhiteSpace(shape.Name)
