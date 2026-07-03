@@ -808,6 +808,19 @@ public static class PptxPackageWriter
         List<XElement> sldIdElements,
         List<(string relId, string masterPath)> masterRelIds)
     {
+        var slideWidthEmu = p.SlideSizeCxEmu > 0
+            ? p.SlideSizeCxEmu
+            : DrawingMlUnits.EmuPerInch * 40 / 3;
+        var slideHeightEmu = p.SlideSizeCyEmu > 0
+            ? p.SlideSizeCyEmu
+            : DrawingMlUnits.EmuPerInch * 15 / 2;
+        var notesPageWidthEmu = p.NotesPageSizeCxEmu > 0
+            ? p.NotesPageSizeCxEmu
+            : DrawingMlUnits.EmuPerInch * 15 / 2;
+        var notesPageHeightEmu = p.NotesPageSizeCyEmu > 0
+            ? p.NotesPageSizeCyEmu
+            : DrawingMlUnits.EmuPerInch * 10;
+
         var presEl = new XElement(P + "presentation",
             NsAttr("p", P), NsAttr("a", A), NsAttr("r", R),
             new XAttribute("saveSubsetFonts", "1"),
@@ -818,12 +831,12 @@ public static class PptxPackageWriter
                         new XAttribute(R + "id", mr.relId)))),
             new XElement(P + "sldIdLst", sldIdElements),
             new XElement(P + "sldSz",
-                new XAttribute("cx", p.SlideSizeCxEmu),
-                new XAttribute("cy", p.SlideSizeCyEmu),
+                new XAttribute("cx", slideWidthEmu),
+                new XAttribute("cy", slideHeightEmu),
                 new XAttribute("type", "screen16x9")),
             new XElement(P + "notesSz",
-                new XAttribute("cx", p.NotesPageSizeCxEmu),
-                new XAttribute("cy", p.NotesPageSizeCyEmu)));
+                new XAttribute("cx", notesPageWidthEmu),
+                new XAttribute("cy", notesPageHeightEmu)));
 
         var slideIdToRelId = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         for (int i = 0; i < p.Slides.Count && i < sldIdElements.Count; i++)

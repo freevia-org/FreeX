@@ -735,6 +735,55 @@ public sealed class PresentationExportPlannerTests
     }
 
     [Fact]
+    public void NotesPagePdfRenderPlan_BulletedAndNumberedNotes_PreserveListPrefixes()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides.Clear();
+        presentation.Slides.Add(new Slide { Title = "Launch review" });
+        var notes = new TextBody();
+        notes.Paragraphs.Add(MakeParagraph("Launch checklist", paragraph =>
+        {
+            paragraph.BulletKind = BulletKind.Char;
+            paragraph.BulletChar = "\u2022";
+        }));
+        notes.Paragraphs.Add(MakeParagraph("Nested risk", paragraph =>
+        {
+            paragraph.Level = 1;
+            paragraph.BulletKind = BulletKind.Char;
+            paragraph.BulletChar = "-";
+        }));
+        notes.Paragraphs.Add(MakeParagraph("Confirm owner", paragraph =>
+        {
+            paragraph.BulletKind = BulletKind.Auto;
+            paragraph.AutoNumType = AutoNumType.AlphaUcParenR;
+            paragraph.AutoNumStartAt = 3;
+        }));
+        notes.Paragraphs.Add(MakeParagraph("Publish recap", paragraph =>
+        {
+            paragraph.BulletKind = BulletKind.Auto;
+            paragraph.AutoNumType = AutoNumType.AlphaUcParenR;
+        }));
+        presentation.Slides[0].Notes = notes;
+
+        var preview = PresentationNotesPagePreviewPlanner.Build(presentation, currentSlideIndex: 0);
+        var renderPlan = PresentationNotesPagePdfExporter.BuildRenderPlan(presentation);
+
+        preview.NotesText
+            .Should()
+            .Be($"Launch checklist{Environment.NewLine}Nested risk{Environment.NewLine}Confirm owner{Environment.NewLine}Publish recap",
+                "the editable notes text remains plain while the preview lines carry render prefixes");
+        preview.NoteLines.Should().Equal(
+            "\u2022 Launch checklist",
+            "  - Nested risk",
+            "C) Confirm owner",
+            "D) Publish recap");
+
+        renderPlan.PreviewPlans[0].NoteLines.Should().Equal(preview.NoteLines);
+        var pdfText = renderPlan.Pages[0].Ops.OfType<PdfText>().Select(text => text.Text).ToArray();
+        pdfText.Should().Contain(preview.NoteLines);
+    }
+
+    [Fact]
     public void NotesPagePdfRenderPlan_VeryLongNotes_ContinuesOverflowOntoASubsequentPage()
     {
         var presentation = Presentation.CreateEmpty();
@@ -1176,6 +1225,14 @@ public sealed class PresentationExportPlannerTests
         }
 
         return body;
+    }
+
+    private static Paragraph MakeParagraph(string text, Action<Paragraph>? configure = null)
+    {
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run { Text = text });
+        configure?.Invoke(paragraph);
+        return paragraph;
     }
 
     private static string ReadZipText(ZipArchive archive, string path)
