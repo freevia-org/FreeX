@@ -66,6 +66,7 @@ public sealed class SlideCanvas : FrameworkElement
     private InCanvasTableCellEditor?   _tableCellEditor;   // Wave 9A
     private Canvas?                    _textOverlay;   // WPF Canvas layered above SlideCanvas for text-edit overlay
     private PresentationViewShowState  _viewShowState = PresentationViewShowState.Default;
+    private PresentationViewZoomState  _viewZoomState = PresentationViewZoomState.FitToWindow;
 
     /// <summary>
     /// The current slide→screen transform (updated on every render pass).
@@ -91,6 +92,7 @@ public sealed class SlideCanvas : FrameworkElement
     }
 
     public PresentationViewShowState ViewShowState => _viewShowState;
+    public PresentationViewZoomState ViewZoomState => _viewZoomState;
 
     public void ApplyViewShowState(PresentationViewShowState state)
     {
@@ -100,6 +102,12 @@ public sealed class SlideCanvas : FrameworkElement
 
         _gestureHandler.SnapToGrid = state.ShowGridlines;
         _gestureHandler.SnapToShapes = state.ShowGuides;
+    }
+
+    public void ApplyViewZoomState(PresentationViewZoomState state)
+    {
+        _viewZoomState = state;
+        InvalidateVisual();
     }
 
     // ── Wave 10A: active editor access for ribbon routing ──────────────────────
@@ -173,7 +181,7 @@ public sealed class SlideCanvas : FrameworkElement
         if (renderW <= 0 || renderH <= 0) return;
 
         // Scale slide DIP coordinates → actual render pixels (uniform fit).
-        CurrentTransform = SlideTransform.Compute(renderW, renderH, _slideWidthDip, _slideHeightDip);
+        CurrentTransform = ComputeViewTransform(renderW, renderH, _slideWidthDip, _slideHeightDip);
         double scale = CurrentTransform.Scale;
         double offsetX = CurrentTransform.OffsetX;
         double offsetY = CurrentTransform.OffsetY;
@@ -188,6 +196,23 @@ public sealed class SlideCanvas : FrameworkElement
             RenderOp(dc, op);
 
         dc.Pop();
+    }
+
+    private SlideTransform ComputeViewTransform(
+        double renderW,
+        double renderH,
+        double slideWidthDip,
+        double slideHeightDip)
+    {
+        var fit = SlideTransform.Compute(renderW, renderH, slideWidthDip, slideHeightDip);
+        var multiplier = PresentationViewZoomPlanner.StageScaleMultiplierFor(_viewZoomState);
+        if (Math.Abs(multiplier - 1.0) < 0.0001)
+            return fit;
+
+        var scale = fit.Scale * multiplier;
+        var offsetX = (renderW - slideWidthDip * scale) / 2.0;
+        var offsetY = (renderH - slideHeightDip * scale) / 2.0;
+        return new SlideTransform(scale, offsetX, offsetY, slideWidthDip, slideHeightDip);
     }
 
     private void RenderOp(DrawingContext dc, DrawOp op)
