@@ -29,10 +29,10 @@ public sealed class FreePRibbonDefinitionProfileTests
 
         wpf.Tabs.Select(tab => tab.Id)
             .Should()
-            .Equal("home", "insert", "design", "transitions", "animations");
+            .Equal("home", "insert", "design", "transitions", "animations", "view");
         avalonia.Tabs.Select(tab => tab.Id)
             .Should()
-            .Equal("home", "insert", "design", "transitions", "animations");
+            .Equal("home", "insert", "design", "transitions", "animations", "view");
 
         RibbonDefinitionValidator.Validate(wpf).HasErrors.Should().BeFalse();
         RibbonDefinitionValidator.Validate(avalonia).HasErrors.Should().BeFalse();
@@ -330,6 +330,40 @@ public sealed class FreePRibbonDefinitionProfileTests
     }
 
     [Fact]
+    public void View_ribbon_text_resolves_from_freep_localization_resources()
+    {
+        var text = WithUiCulture(Loc.PseudoLocalizationCultureName, () =>
+        {
+            var wpf = FreePRibbon.Build(FreePRibbonCapabilities.Wpf);
+            var avalonia = FreePRibbon.Build(FreePRibbonCapabilities.Avalonia);
+
+            return new[]
+            {
+                wpf.FindTab("view")!.Header,
+                wpf.FindTab("view")!.KeyTip!,
+                RequiredGroup(wpf, "view", "show").Header,
+                RequiredGroup(wpf, "view", "show").KeyTip!,
+                RequiredControl(wpf, "freep.view.show.gridlines").Label,
+                RequiredControl(wpf, "freep.view.show.gridlines").KeyTip!,
+                RequiredControl(wpf, "freep.view.show.guides").Label,
+                RequiredControl(wpf, "freep.view.show.guides").KeyTip!,
+                avalonia.FindTab("view")!.Header,
+                avalonia.FindTab("view")!.KeyTip!,
+                RequiredGroup(avalonia, "view", "show").Header,
+                RequiredGroup(avalonia, "view", "show").KeyTip!,
+                RequiredControl(avalonia, "freep.view.show.gridlines").Label,
+                RequiredControl(avalonia, "freep.view.show.gridlines").KeyTip!,
+                RequiredControl(avalonia, "freep.view.show.guides").Label,
+                RequiredControl(avalonia, "freep.view.show.guides").KeyTip!,
+            };
+        });
+
+        text.Should().OnlyContain(value =>
+            value.StartsWith("[[", StringComparison.Ordinal) &&
+            value.EndsWith("]]", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void Profile_tab_ids_match_except_named_capability_deltas()
     {
         var wpfTabIds = FreePRibbon.Build(FreePRibbonCapabilities.Wpf).Tabs.Select(tab => tab.Id).ToArray();
@@ -491,10 +525,18 @@ public sealed class FreePRibbonDefinitionProfileTests
         source.Should().Contain("FreePRibbonText.DesignTab");
         source.Should().Contain("FreePRibbonText.TransitionsTab");
         source.Should().Contain("FreePRibbonText.AnimationsTab");
+        source.Should().Contain("FreePRibbonText.ViewTab");
+        source.Should().Contain("FreePRibbonText.ViewShowGroup");
+        source.Should().Contain("FreePRibbonText.ViewGridlinesCommand");
+        source.Should().Contain("FreePRibbonText.ViewGuidesCommand");
         source.Should().NotContain("tab.Group(\"arrange\", \"Arrange\"");
         source.Should().NotContain(".Tab(\"design\", \"Design\"");
         source.Should().NotContain(".Tab(\"transitions\", \"Transitions\"");
         source.Should().NotContain(".Tab(\"animations\", \"Animations\"");
+        source.Should().NotContain(".Tab(\"view\", \"View\"");
+        source.Should().NotContain("tab.Group(\"show\", \"Show\"");
+        source.Should().NotContain("g.MediumToggle(\"freep.view.show.gridlines\", \"Gridlines\"");
+        source.Should().NotContain("g.MediumToggle(\"freep.view.show.guides\", \"Guides\"");
         source.Should().NotContain("g.Medium(\"freep.transition.fade\",     \"Fade\"");
         source.Should().NotContain("g.Medium(\"freep.anim.none\", \"No Animation\"");
         foreach (var literal in new[]
@@ -536,7 +578,11 @@ public sealed class FreePRibbonDefinitionProfileTests
                      "\"Illustrations\"",
                      "\"Picture\"",
                      "\"Rectangle\"",
-                     "\"Ellipse\""
+                     "\"Ellipse\"",
+                     "\"View\"",
+                     "\"Show\"",
+                     "\"Gridlines\"",
+                     "\"Guides\""
                  })
         {
             source.Should().NotContain(literal);

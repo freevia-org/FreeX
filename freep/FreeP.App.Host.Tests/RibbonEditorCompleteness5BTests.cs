@@ -318,6 +318,31 @@ public class RibbonEditorCompleteness5BTests
     }
 
     [Fact]
+    public void Cmd_ViewShow_TogglesSharedViewStateThroughHostCallback()
+    {
+        var (ed, _) = MakeSession();
+        var stateStore = new RibbonStateStore();
+        var state = PresentationViewShowState.Default;
+        var reg = FreePRibbonCommands.Build(
+            stateStore,
+            ed,
+            getViewShowState: () => state,
+            applyViewShowState: next => state = next);
+
+        Exec(reg, PresentationViewShowPlanner.GridlinesCommandId);
+
+        Assert.False(state.ShowGridlines);
+        Assert.True(state.ShowGuides);
+        Assert.False(stateStore.GetState(PresentationViewShowPlanner.GridlinesCommandId).IsChecked);
+
+        Exec(reg, PresentationViewShowPlanner.GuidesCommandId);
+
+        Assert.False(state.ShowGridlines);
+        Assert.False(state.ShowGuides);
+        Assert.False(stateStore.GetState(PresentationViewShowPlanner.GuidesCommandId).IsChecked);
+    }
+
+    [Fact]
     public void Cmd_SlideNumber_WithoutHostCallback_AppliesSharedPlannerDefault()
     {
         var (ed, pres) = MakeSession();

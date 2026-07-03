@@ -247,6 +247,16 @@ public static class FreePRibbon
                     g.MediumToggle("freep.anim.pane", FreePRibbonText.AnimationPaneCommand.Label, RibbonCommandIconKind.List, FreePRibbonText.AnimationPaneCommand.KeyTip);
                 });
             })
+            .Tab("view", FreePRibbonText.ViewTab.Label, FreePRibbonText.ViewTab.KeyTip, tab =>
+            {
+                tab.Group("show", FreePRibbonText.ViewShowGroup.Label, FreePRibbonText.ViewShowGroup.KeyTip, 100, g =>
+                {
+                    g.MediumToggle("freep.view.show.gridlines", FreePRibbonText.ViewGridlinesCommand.Label,
+                        RibbonCommandIconKind.Grid, FreePRibbonText.ViewGridlinesCommand.KeyTip);
+                    g.MediumToggle("freep.view.show.guides", FreePRibbonText.ViewGuidesCommand.Label,
+                        RibbonCommandIconKind.Align, FreePRibbonText.ViewGuidesCommand.KeyTip);
+                });
+            })
             .Build();
     }
 }
