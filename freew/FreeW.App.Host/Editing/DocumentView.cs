@@ -9,6 +9,7 @@ using System.Windows.Media.Imaging;
 using FreeW.App.Presentation.Dialogs;
 using FreeW.App.Presentation.DocumentView;
 using FreeW.App.Presentation.Ribbon;
+using FreeW.App.Presentation.Shell;
 using FreeW.Core.Model;
 using FreeW.App.Host;
 using System.Diagnostics;
@@ -79,6 +80,8 @@ public sealed class DocumentView : RichTextBox
     private const double SuperSubScale = 0.65;
 
     private TextDocument _model = TextDocument.CreateEmpty();
+    private DocumentViewDepthLayoutPlan _viewDepthLayout =
+        DocumentViewDepthLayoutPlanner.Build(FreeWViewDepthMode.LiveEditor);
 
     /// <summary>
     /// The file name a FILENAME field resolves to during the current <see cref="Render"/> pass. Set from
@@ -215,6 +218,16 @@ public sealed class DocumentView : RichTextBox
 
     public TextDocument Model => _model;
 
+    internal DocumentViewDepthLayoutPlan ViewDepthLayout => _viewDepthLayout;
+
+    internal void ApplyViewDepthLayout(DocumentViewDepthLayoutPlan layout)
+    {
+        ArgumentNullException.ThrowIfNull(layout);
+
+        _viewDepthLayout = layout;
+        LayoutChanged?.Invoke(this, EventArgs.Empty);
+    }
+
     /// <summary>
     /// Whether the editor presents a Word-style "Print Layout" page view: the editable surface is sized to
     /// the model page width, the page margins (<see cref="PageSettings"/>) become the editor padding, the
@@ -246,6 +259,7 @@ public sealed class DocumentView : RichTextBox
         if (ViewMode == mode)
             return;
         ViewMode = mode;
+        _viewDepthLayout = DocumentViewDepthLayoutPlanner.Build(FreeWViewDepthMode.LiveEditor);
         ApplyPageChrome();
         SyncPageBreakAdorner();
         SyncLineNumberAdorner();

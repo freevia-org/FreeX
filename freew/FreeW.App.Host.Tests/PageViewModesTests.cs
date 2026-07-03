@@ -4,6 +4,8 @@ using System.Windows.Documents;
 using Free.Shared.Ribbon;
 using FreeW.App.Host;
 using FreeW.App.Host.Editing;
+using FreeW.App.Presentation.DocumentView;
+using FreeW.App.Presentation.Shell;
 using FreeW.Core.Model;
 using Xunit;
 
@@ -188,6 +190,20 @@ public sealed class PageViewModesTests
         stateful.GetState().IsChecked.Should().BeFalse();
     }
 
+    [StaFact]
+    public void WpfDocumentView_RecordsSharedSideToSideLayoutState()
+    {
+        var view = NewEditor();
+        var plan = FreeWViewDepthPlanner.Build(FreeWViewDepthMode.SideToSidePreview);
+
+        view.ApplyViewDepthLayout(plan.Layout);
+
+        view.ViewDepthLayout.PageFlow.Should().Be(DocumentViewDepthPageFlow.SideToSideHorizontal);
+        view.ViewDepthLayout.PagesAcross.Should().Be(2);
+        view.ViewDepthLayout.UsesHorizontalPageFlow.Should().BeTrue();
+        view.ViewDepthLayout.UsesReadOnlySnapshot.Should().BeTrue();
+    }
+
     // ── Split Window mode ────────────────────────────────────────────────────────────────────────
 
     [StaFact]
@@ -310,7 +326,9 @@ public sealed class PageViewModesTests
         source.Should().Contain("FreeWViewDepthPlanner.Plan(CurrentViewDepthState(), FreeWViewDepthCommand.ToggleMultiplePages)");
         source.Should().Contain("FreeWViewDepthPlanner.Plan(CurrentViewDepthState(), FreeWViewDepthCommand.ToggleSideToSide)");
         source.Should().Contain("FreeWViewDepthPlanner.Plan(CurrentViewDepthState(), FreeWViewDepthCommand.ToggleSplit)");
-        source.Should().Contain("var pagesAcross = plan.PagesAcross > 1 ? plan.PagesAcross : 0;");
+        source.Should().Contain("_editor.ApplyViewDepthLayout(plan.Layout);");
+        source.Should().Contain("var pagesAcross = plan.Layout.PagesAcross > 1 ? plan.Layout.PagesAcross : 0;");
+        source.Should().Contain("DocumentViewDepthLayoutPlanner.BuildDocumentViewerZoomPercent(");
         source.Should().Contain("SyncViewDepthRibbonState()");
         source.Should().Contain("isMultiplePagesActive: () => _viewDepthPlan.IsMultiplePagesActive");
         source.Should().Contain("isSideToSideActive: () => _viewDepthPlan.IsSideToSideActive");

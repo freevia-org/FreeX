@@ -17,6 +17,7 @@ using FreeW.App.Avalonia.Pdf;
 using FreeW.App.Avalonia.Ribbon;
 using FreeW.App.Presentation.Backstage;
 using FreeW.App.Presentation.Dialogs;
+using FreeW.App.Presentation.DocumentView;
 using FreeW.App.Presentation.Options;
 using FreeW.App.Presentation.Ribbon;
 using FreeW.App.Presentation.Shell;
@@ -721,6 +722,7 @@ public sealed class MainWindow : Window
         }
 
         _viewDepthPlan = plan;
+        _editor.ApplyViewDepthLayout(plan.Layout);
         if (updateStatus)
             _status.Text = plan.StatusText;
     }
@@ -814,11 +816,12 @@ public sealed class MainWindow : Window
             ShowRuler = _editor.ShowRuler && !compact,
         };
         snapshot.LoadDocument(CloneDocument(_editor.Document));
+        snapshot.ApplyViewDepthLayout(plan.Layout);
 
         var (pageWidthDip, pageHeightDip) = PageLayout.PageSizeDip(_editor.Document.Page);
         var (viewportWidth, viewportHeight) = GetWorkspaceViewportSize(compact);
-        var scale = FreeWViewDepthPlanner.BuildPreviewScale(
-            plan.Mode,
+        var viewport = DocumentViewDepthLayoutPlanner.BuildViewportPlan(
+            plan.Layout,
             viewportWidth,
             viewportHeight,
             pageWidthDip,
@@ -831,7 +834,7 @@ public sealed class MainWindow : Window
             Padding = compact ? new Thickness(24, 12) : new Thickness(48, 24),
             Content = new LayoutTransformControl
             {
-                LayoutTransform = new ScaleTransform(scale, scale),
+                LayoutTransform = new ScaleTransform(viewport.Scale, viewport.Scale),
                 Child = snapshot,
             },
         };

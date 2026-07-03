@@ -8,6 +8,7 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using FreeW.App.Avalonia.Editing;
 using FreeW.App.Avalonia.Ribbon;
+using FreeW.App.Presentation.DocumentView;
 using FreeW.App.Presentation.Shell;
 using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
@@ -256,8 +257,35 @@ public sealed class ViewTabDepthTests
         afterSideToSide.Should().Be(FreeWViewDepthMode.SideToSidePreview);
         multipleActiveAfterSideToSide.Should().BeFalse();
         sideToSideActive.Should().BeTrue();
-        sideToSideLimitation.Should().Contain("horizontal page turning remains deferred");
+        sideToSideLimitation.Should().Contain("Animated horizontal page turning remains deferred");
         liveAfterSecondToggle.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task AvaloniaDocumentView_records_shared_multiple_pages_layout_state()
+    {
+        DocumentViewDepthPageFlow? pageFlow = null;
+        int pagesAcross = 0;
+        int pageRows = 0;
+        bool usesSnapshot = false;
+        var ran = await OnUiThread(() =>
+        {
+            var view = new DocumentView();
+            var plan = FreeWViewDepthPlanner.Build(FreeWViewDepthMode.MultiplePagesPreview);
+
+            view.ApplyViewDepthLayout(plan.Layout);
+
+            pageFlow = view.ViewDepthLayout.PageFlow;
+            pagesAcross = view.ViewDepthLayout.PagesAcross;
+            pageRows = view.ViewDepthLayout.PageRows;
+            usesSnapshot = view.ViewDepthLayout.UsesReadOnlySnapshot;
+        });
+
+        if (!ran) return;
+        pageFlow.Should().Be(DocumentViewDepthPageFlow.MultiplePagesGrid);
+        pagesAcross.Should().Be(2);
+        pageRows.Should().Be(2);
+        usesSnapshot.Should().BeTrue();
     }
 
     [Fact]
