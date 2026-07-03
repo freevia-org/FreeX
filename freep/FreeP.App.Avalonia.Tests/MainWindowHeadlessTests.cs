@@ -1244,6 +1244,15 @@ public sealed class MainWindowHeadlessTests
         videoPlan.SlideRange.SlideNumbers.Should().Equal(1, 2, 3);
         videoPlan.Quality.Quality.Should().Be(PresentationVideoQualityKind.FullHd);
         videoPlan.EstimatedDuration.Should().Be(TimeSpan.FromSeconds(15));
+        videoPlan.Storyboard.SlideRange.SlideNumbers.Should().Equal(1, 2, 3);
+        videoPlan.Storyboard.Segments.Select(segment => segment.SlideNumber).Should().Equal(1, 2, 3);
+        videoPlan.Storyboard.Segments.Select(segment => segment.StartTime)
+            .Should()
+            .Equal(TimeSpan.Zero, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(10));
+        videoPlan.Storyboard.OutputWidthPx.Should().Be(1920);
+        videoPlan.Storyboard.OutputHeightPx.Should().Be(1080);
+        videoPlan.Storyboard.FrameRateHint.Should().Be(30);
+        videoPlan.Storyboard.TotalDuration.Should().Be(videoPlan.EstimatedDuration);
         videoPlan.CanExecute.Should().BeFalse();
         videoPlan.DisabledReason.Should().Be(PresentationExportPlanner.VideoExportDeferredMessage);
     }
