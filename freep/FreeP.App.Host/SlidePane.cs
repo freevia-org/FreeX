@@ -59,6 +59,7 @@ public sealed class SlidePane : Border
     private readonly EditingSession _editor;
     private readonly ScrollViewer   _scroll;
     private readonly StackPanel     _stack;
+    private readonly HashSet<string> _collapsedSectionIds = new(StringComparer.OrdinalIgnoreCase);
 
     // Insertion indicator: a thin horizontal line drawn over the scroll area.
     private readonly Border _insertIndicator;
@@ -68,6 +69,8 @@ public sealed class SlidePane : Border
     private int    _dragSourceIndex = -1;
     private int    _dragTargetIndex = -1;  // insertion point (0 = before slide 0)
     private Point  _dragStartPoint;
+
+    private sealed record SectionHeaderTag(string SectionId, int SectionIndex);
 
     // ── Construction ──────────────────────────────────────────────────────────────
 
@@ -127,7 +130,7 @@ public sealed class SlidePane : Border
         _stack.Children.Clear();
 
         var slides = _editor.Presentation.Slides;
-        var entries = SlidePanePlanner.BuildEntries(slides, _editor.Presentation.Sections);
+        var entries = SlidePanePlanner.BuildEntries(slides, _editor.Presentation.Sections, _collapsedSectionIds);
 
         foreach (var entry in entries)
         {
@@ -146,11 +149,21 @@ public sealed class SlidePane : Border
     }
 
     /// <summary>
-    /// Builds a non-interactive section-header row showing the section name and slide count.
+    /// Builds an interactive section-header row showing the section name and slide count.
     /// Wave 11B.
     /// </summary>
     private Border BuildSectionHeader(SlidePaneEntry entry)
     {
+        var disclosure = new TextBlock
+        {
+            Text              = entry.IsSectionCollapsed ? ">" : "v",
+            FontSize          = 11,
+            FontWeight        = FontWeights.Bold,
+            Foreground        = SectionHeaderFg,
+            Width             = 14,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+
         var label = new TextBlock
         {
             Text                = entry.Text,
@@ -161,15 +174,38 @@ public sealed class SlidePane : Border
             TextTrimming        = TextTrimming.CharacterEllipsis,
         };
 
-        return new Border
+        var panel = new DockPanel();
+        DockPanel.SetDock(disclosure, Dock.Left);
+        panel.Children.Add(disclosure);
+        panel.Children.Add(label);
+
+        var header = new Border
         {
             Background      = SectionHeaderBg,
             Padding         = new Thickness(10, 4, 10, 4),
             Margin          = new Thickness(0, 6, 0, 2),
-            Tag             = entry.SectionIndex,
+            Tag             = new SectionHeaderTag(entry.SectionId, entry.SectionIndex),
             ContextMenu     = BuildSectionContextMenu(entry),
-            Child           = label,
+            Child           = panel,
+            Cursor          = Cursors.Hand,
+            Focusable       = true,
+            ToolTip         = entry.IsSectionCollapsed ? "Expand section" : "Collapse section",
         };
+        header.MouseLeftButtonDown += (_, e) =>
+        {
+            ToggleSection(entry.SectionId);
+            e.Handled = true;
+        };
+        header.KeyDown += (_, e) =>
+        {
+            if (e.Key is Key.Enter or Key.Space)
+            {
+                ToggleSection(entry.SectionId);
+                e.Handled = true;
+            }
+        };
+
+        return header;
     }
 
     /// <summary>Updates only the highlight (selected border/background) on existing items.
@@ -355,6 +391,34 @@ public sealed class SlidePane : Border
         }
 
         return menu;
+    }
+
+    private void ToggleSection(string sectionId)
+    {
+        if (string.IsNullOrWhiteSpace(sectionId))
+            return;
+
+        if (!_collapsedSectionIds.Add(sectionId))
+            _collapsedSectionIds.Remove(sectionId);
+
+        RebuildList();
+    }
+
+    internal int SlidePaneSlideItemCount => _stack.Children
+        .OfType<Border>()
+        .Count(child => child.Tag is int);
+
+    internal int SlidePaneSectionHeaderCount => _stack.Children
+        .OfType<Border>()
+        .Count(child => child.Tag is SectionHeaderTag);
+
+    internal bool ToggleSectionForTests(int sectionIndex)
+    {
+        if (sectionIndex < 0 || sectionIndex >= _editor.Presentation.Sections.Count)
+            return false;
+
+        ToggleSection(SlidePanePlanner.GetSectionIdentity(_editor.Presentation.Sections[sectionIndex], sectionIndex));
+        return true;
     }
 
     private void ApplySectionAction(SlideSectionActionPlan action)

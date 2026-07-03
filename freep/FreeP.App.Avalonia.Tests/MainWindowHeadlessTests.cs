@@ -525,6 +525,41 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task SlidePane_section_header_toggle_collapses_member_slides()
+    {
+        var headersBefore = -1;
+        var slidesBefore = -1;
+        var slidesCollapsed = -1;
+        var slidesExpanded = -1;
+        var collapsed = false;
+        var expanded = false;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            window.Editor.InsertSlide();
+            window.Editor.InsertSlide();
+            window.Editor.AddSectionAtSlide(0, "Intro");
+            window.Editor.AddSectionAtSlide(1, "Body");
+
+            headersBefore = window.SlidePaneSectionHeaderCount;
+            slidesBefore = window.SlidePaneSlideItemCount;
+            collapsed = window.ToggleSlidePaneSectionForTests(1);
+            slidesCollapsed = window.SlidePaneSlideItemCount;
+            expanded = window.ToggleSlidePaneSectionForTests(1);
+            slidesExpanded = window.SlidePaneSlideItemCount;
+        });
+
+        if (!ran) return;
+        headersBefore.Should().Be(2, "the Avalonia slide pane should expose one header per section");
+        slidesBefore.Should().Be(3);
+        collapsed.Should().BeTrue();
+        slidesCollapsed.Should().Be(1, "collapsing the second section should omit only its two member slides");
+        expanded.Should().BeTrue();
+        slidesExpanded.Should().Be(3);
+    }
+
+    [Fact]
     public async Task DeleteCurrentSlide_decreases_slide_count()
     {
         var before = -1;
