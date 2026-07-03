@@ -2367,7 +2367,7 @@ public static class PresentationReviewWorkflowPlanner
         return shape.Kind switch
         {
             SlideShapeKind.Chart => BuildAltTextSentence(
-                BuildAltTextReference("Chart", NormalizeText(shape.Chart?.Title) ?? NormalizeText(shape.Name)),
+                BuildChartAltTextReference(shape),
                 slideContext,
                 "Summarize the main trend, comparison, or takeaway."),
             SlideShapeKind.Table => BuildAltTextSentence(
@@ -2435,6 +2435,100 @@ public static class PresentationReviewWorkflowPlanner
 
     private static string BuildAltTextReference(string kind, string? name)
         => name is null ? kind : $"{kind} \"{name}\"";
+
+    private static string BuildChartAltTextReference(SlideShape shape)
+    {
+        var chart = shape.Chart;
+        var reference = BuildAltTextReference("Chart", NormalizeText(chart?.Title) ?? NormalizeText(shape.Name));
+        if (chart is null)
+        {
+            return reference;
+        }
+
+        var details = BuildChartAltTextDetails(chart).ToArray();
+        return details.Length == 0 ? reference : $"{reference} ({string.Join(", ", details)})";
+    }
+
+    private static IEnumerable<string> BuildChartAltTextDetails(ChartShape chart)
+    {
+        if (FormatChartType(chart.ChartType) is { } chartType)
+        {
+            yield return chartType;
+        }
+
+        var seriesNames = chart.Series
+            .Select(series => NormalizeText(series.Name))
+            .Where(name => name is not null)
+            .Select(name => BuildPreview(name!))
+            .Distinct(StringComparer.Ordinal)
+            .Take(3)
+            .ToArray();
+        if (seriesNames.Length > 0)
+        {
+            yield return $"series {FormatAltTextInlineList(seriesNames)}";
+        }
+        else if (chart.Series.Count > 0)
+        {
+            yield return $"{chart.Series.Count} {Pluralize(chart.Series.Count, "series", "series")}";
+        }
+
+        var categoryLabels = chart.Categories
+            .Select(NormalizeText)
+            .Where(category => category is not null)
+            .Select(category => BuildPreview(category!))
+            .Take(3)
+            .ToArray();
+        if (chart.Categories.Count > 0 && categoryLabels.Length > 0)
+        {
+            yield return $"{chart.Categories.Count} {Pluralize(chart.Categories.Count, "category", "categories")} including {FormatAltTextInlineList(categoryLabels)}";
+        }
+        else if (chart.Categories.Count > 0)
+        {
+            yield return $"{chart.Categories.Count} {Pluralize(chart.Categories.Count, "category", "categories")}";
+        }
+
+        var valueCount = chart.Series.Sum(series => series.Values.Count(value => value.HasValue));
+        if (valueCount > 0)
+        {
+            yield return $"{valueCount} {Pluralize(valueCount, "value", "values")}";
+        }
+
+        var xValueCount = chart.Series.Sum(series => series.XValues.Count(value => value.HasValue));
+        if (xValueCount > 0)
+        {
+            yield return $"{xValueCount} X {Pluralize(xValueCount, "value", "values")}";
+        }
+
+        var bubbleSizeCount = chart.Series.Sum(series => series.BubbleSizes.Count(value => value.HasValue));
+        if (bubbleSizeCount > 0)
+        {
+            yield return $"{bubbleSizeCount} bubble {Pluralize(bubbleSizeCount, "size", "sizes")}";
+        }
+    }
+
+    private static string? FormatChartType(ChartType chartType)
+        => chartType switch
+        {
+            ChartType.ColumnClustered => "clustered column chart",
+            ChartType.ColumnStacked => "stacked column chart",
+            ChartType.ColumnStacked100 => "100% stacked column chart",
+            ChartType.BarClustered => "clustered bar chart",
+            ChartType.BarStacked => "stacked bar chart",
+            ChartType.BarStacked100 => "100% stacked bar chart",
+            ChartType.Line => "line chart",
+            ChartType.LineMarkers => "line chart with markers",
+            ChartType.Pie => "pie chart",
+            ChartType.Area => "area chart",
+            ChartType.AreaStacked => "stacked area chart",
+            ChartType.Scatter => "scatter chart",
+            ChartType.Doughnut => "doughnut chart",
+            ChartType.Radar => "radar chart",
+            ChartType.Bubble => "bubble chart",
+            _ => null
+        };
+
+    private static string Pluralize(int count, string singular, string plural)
+        => count == 1 ? singular : plural;
 
     private static string BuildPictureAltTextReference(SlideShape shape)
     {
