@@ -64,8 +64,30 @@ public sealed class TableCellEditPlannerTests
         plan.Cell.Should().BeSameAs(shape.Table!.Rows[0].Cells[0]);
         plan.CellRect.Should().NotBeNull();
         plan.Placement.Should().Be(new InCanvasEditorPlacement(10, 20, 384, 96));
+        plan.InitialSelection.Should().Be(new InCanvasEditorTextSelection(0, "Anchor".Length));
         plan.OriginalBody!.Paragraphs[0].Runs[0].Text.Should().Be("Anchor");
         plan.EditPlanner.Should().NotBeNull();
+    }
+
+    [Fact]
+    public void PlanInitialSelection_SelectsAllPlainCellTextAcrossParagraphs()
+    {
+        var body = MakeBody("First");
+        var second = new Paragraph();
+        second.Runs.Add(new Run { Text = "Second" });
+        body.Paragraphs.Add(second);
+
+        var selection = TableCellEditPlanner.PlanInitialSelection(body);
+
+        selection.Should().Be(new InCanvasEditorTextSelection(0, "First\nSecond".Length));
+    }
+
+    [Fact]
+    public void PlanInitialSelection_EmptyBody_ReturnsCollapsedCaretAtStart()
+    {
+        TableCellEditPlanner.PlanInitialSelection(new TextBody())
+            .Should()
+            .Be(new InCanvasEditorTextSelection(0, 0));
     }
 
     [Fact]

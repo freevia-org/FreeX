@@ -80,6 +80,7 @@ public sealed record TableCellEditStartPlan(
     TableCell? Cell,
     CellRectDip? CellRect,
     InCanvasEditorPlacement? Placement,
+    InCanvasEditorTextSelection InitialSelection,
     TextBody? OriginalBody,
     InCanvasTableCellTextEditPlanner? EditPlanner)
 {
@@ -218,6 +219,7 @@ public static class TableCellEditPlanner
             normalized.Value.Cell,
             cellRect.Value,
             placement,
+            PlanInitialSelection(originalBody),
             originalBody,
             InCanvasTableCellTextEditPlanner.BeginRichText(
                 slideIndex,
@@ -240,6 +242,14 @@ public static class TableCellEditPlanner
     public static InCanvasTextEditDecision Cancel(InCanvasTableCellTextEditPlanner? editPlanner) =>
         editPlanner?.Cancel()
         ?? new InCanvasTextEditDecision(InCanvasTextEditOutcome.Canceled, null);
+
+    public static InCanvasEditorTextSelection PlanInitialSelection(TextBody? body)
+    {
+        int textLength = InCanvasTextEditPlanner.ExtractPlainText(body).Length;
+        return textLength > 0
+            ? new InCanvasEditorTextSelection(0, textLength)
+            : new InCanvasEditorTextSelection(0, 0);
+    }
 
     public static TableCellTextFormatPlan PlanTextFormat(
         int slideIndex,
@@ -528,7 +538,7 @@ public static class TableCellEditPlanner
         uint shapeId,
         int row,
         int col) =>
-        new(status, shapeId, row, col, null, null, null, null, null);
+        new(status, shapeId, row, col, null, null, null, default, null, null);
 
     private static TableCellTextFormatPlan DisabledFormat(
         TableCellTextFormatStatus status,

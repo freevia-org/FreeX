@@ -130,6 +130,7 @@ public sealed class SlideCanvasGeometryPlannerTests
         wpfTable.Should().NotContain("* xf.Scale + xf.OffsetX");
         wpfTable.Should().Contain("TableCellEditPlanner.BeginEdit");
         wpfTable.Should().Contain("TableCellEditPlanner.PlanSelectedCell");
+        wpfTable.Should().Contain("ApplyInitialSelection(_cellTextBox, editStart.InitialSelection)");
         wpfTable.Should().Contain("RichTextBox");
         wpfTable.Should().Contain("EditingCommands.ToggleBold.Execute");
         wpfTable.Should().Contain("Selection.ApplyPropertyValue");
