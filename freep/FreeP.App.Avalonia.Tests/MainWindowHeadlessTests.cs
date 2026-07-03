@@ -1362,6 +1362,8 @@ public sealed class MainWindowHeadlessTests
         string heading = string.Empty;
         string message = string.Empty;
         IReadOnlyList<string> renderedOptionLines = [];
+        IReadOnlyList<string> renderedLayoutRows = [];
+        IReadOnlyList<string> renderedRangeRows = [];
         var renderedRowCount = 0;
 
         var ran = await OnUiThread(() =>
@@ -1386,6 +1388,8 @@ public sealed class MainWindowHeadlessTests
             heading = window.PrintOptionsPaneHeading;
             message = window.PrintOptionsPaneMessage;
             renderedOptionLines = window.PrintOptionsPaneRenderedOptionLines.ToArray();
+            renderedLayoutRows = window.PrintOptionsPaneRenderedLayoutRows.ToArray();
+            renderedRangeRows = window.PrintOptionsPaneRenderedRangeRows.ToArray();
             renderedRowCount = window.PrintOptionsPaneRenderedRowCount;
         });
 
@@ -1401,6 +1405,11 @@ public sealed class MainWindowHeadlessTests
             "Print hidden slides",
             "Frame slides",
             "Print comments and ink markup");
+        renderedLayoutRows.Should().HaveCount(printPlan.LayoutChoices.Count);
+        renderedLayoutRows.Should().Contain(row => row.StartsWith("Selected: 3 Slides", StringComparison.Ordinal));
+        renderedRangeRows.Should().HaveCount(printPlan.RangeChoices.Count);
+        renderedRangeRows.Should().Contain(row => row.StartsWith("Selected Slides", StringComparison.Ordinal));
+        renderedRangeRows.Should().Contain(row => row.Contains("Custom Range", StringComparison.Ordinal));
         renderedRowCount.Should().BeGreaterThan(renderedOptionLines.Count);
         printPlan.NativePrinterDialogDeferred.Should().BeTrue();
     }

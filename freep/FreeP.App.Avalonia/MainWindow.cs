@@ -179,6 +179,8 @@ public sealed class MainWindow : Window
     private TextBlock _printOptionsPaneMessage = null!;
     private StackPanel _printOptionsPaneRowsPanel = null!;
     private readonly List<string> _printOptionsPaneRenderedOptionLines = new();
+    private readonly List<string> _printOptionsPaneRenderedLayoutRows = new();
+    private readonly List<string> _printOptionsPaneRenderedRangeRows = new();
 
     // ── Interaction layer (Theme 15) ────────────────────────────────────────────
 
@@ -336,6 +338,8 @@ public sealed class MainWindow : Window
     internal string PrintOptionsPaneMessage => _printOptionsPaneMessage?.Text ?? string.Empty;
     internal int PrintOptionsPaneRenderedRowCount => _printOptionsPaneRowsPanel?.Children.Count ?? 0;
     internal IReadOnlyList<string> PrintOptionsPaneRenderedOptionLines => _printOptionsPaneRenderedOptionLines;
+    internal IReadOnlyList<string> PrintOptionsPaneRenderedLayoutRows => _printOptionsPaneRenderedLayoutRows;
+    internal IReadOnlyList<string> PrintOptionsPaneRenderedRangeRows => _printOptionsPaneRenderedRangeRows;
 
     // ── Constructors ───────────────────────────────────────────────────────────
 
@@ -2725,7 +2729,8 @@ public sealed class MainWindow : Window
         LastPrintBackstagePlan = PresentationPrintBackstagePlanner.Build(
             request,
             _presentation.Slides.Count,
-            Editor.CurrentSlideIndex + 1);
+            Editor.CurrentSlideIndex + 1,
+            request?.SlideRange?.SelectedSlideNumbers);
         _statusText.Text = LastPrintBackstagePlan.DisabledReason ??
             LastPrintBackstagePlan.NativePrinterDialogDeferredMessage;
         return LastPrintBackstagePlan;
@@ -2750,20 +2755,19 @@ public sealed class MainWindow : Window
         _printOptionsPaneHeading.Text = plan.Heading;
         _printOptionsPaneMessage.Text = plan.Description;
         _printOptionsPaneRenderedOptionLines.Clear();
+        _printOptionsPaneRenderedLayoutRows.Clear();
+        _printOptionsPaneRenderedRangeRows.Clear();
         _printOptionsPaneRowsPanel.Children.Clear();
 
+        AddPrintOptionsPaneSection("Settings");
         AddPrintOptionsPaneField("Layout", plan.SelectedLayout.Layout.DisplayName);
         AddPrintOptionsPaneField("Slides", plan.SlideRangeSummary);
         AddPrintOptionsPaneField("Pages", plan.PageCount.ToString(CultureInfo.InvariantCulture));
         AddPrintOptionsPaneField("Hidden slides", plan.PrintHiddenSlides ? "Included" : "Not included");
+        AddPrintOptionsPaneField("Options", plan.Options.DisplaySummary);
         AddPrintOptionsPaneField("Native printer dialog", plan.NativePrinterDialogDeferred ? "Deferred" : "Available");
 
-        _printOptionsPaneRowsPanel.Children.Add(new TextBlock
-        {
-            Text = "Output options",
-            FontWeight = FontWeight.SemiBold,
-            Margin = new Thickness(12, 10, 12, 4),
-        });
+        AddPrintOptionsPaneSection("Output options");
 
         foreach (var line in plan.Options.SummaryLines)
         {
@@ -2777,6 +2781,29 @@ public sealed class MainWindow : Window
             });
         }
 
+        AddPrintOptionsPaneSection("Layouts");
+        foreach (var choice in plan.LayoutChoices)
+        {
+            var row = BuildPrintOptionsPaneChoiceSummary(
+                choice.Layout.DisplayName,
+                choice.PackagePlan.LayoutSummary,
+                choice.IsSelected);
+            _printOptionsPaneRenderedLayoutRows.Add(row);
+            AddPrintOptionsPaneChoice(row, isAvailable: true);
+        }
+
+        AddPrintOptionsPaneSection("Slide range");
+        foreach (var choice in plan.RangeChoices)
+        {
+            var row = BuildPrintOptionsPaneChoiceSummary(
+                choice.DisplayName,
+                choice.Description,
+                choice.Kind == plan.SelectedRange.Kind,
+                choice.IsAvailable);
+            _printOptionsPaneRenderedRangeRows.Add(row);
+            AddPrintOptionsPaneChoice(row, choice.IsAvailable);
+        }
+
         _printOptionsPaneRowsPanel.Children.Add(new TextBlock
         {
             Text = plan.DisabledReason ?? plan.NativePrinterDialogDeferredMessage,
@@ -2784,6 +2811,16 @@ public sealed class MainWindow : Window
             FontStyle = FontStyle.Italic,
             Foreground = new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66)),
             Margin = new Thickness(12, 10, 12, 12),
+        });
+    }
+
+    private void AddPrintOptionsPaneSection(string text)
+    {
+        _printOptionsPaneRowsPanel.Children.Add(new TextBlock
+        {
+            Text = text,
+            FontWeight = FontWeight.SemiBold,
+            Margin = new Thickness(12, 10, 12, 4),
         });
     }
 
@@ -2809,6 +2846,30 @@ public sealed class MainWindow : Window
                 },
             },
         });
+    }
+
+    private void AddPrintOptionsPaneChoice(string row, bool isAvailable)
+    {
+        _printOptionsPaneRowsPanel.Children.Add(new TextBlock
+        {
+            Text = row,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(20, 1, 12, 7),
+            Foreground = isAvailable
+                ? new SolidColorBrush(Color.FromRgb(0x33, 0x33, 0x33))
+                : new SolidColorBrush(Color.FromRgb(0x88, 0x88, 0x88)),
+        });
+    }
+
+    private static string BuildPrintOptionsPaneChoiceSummary(
+        string label,
+        string description,
+        bool isSelected,
+        bool isAvailable = true)
+    {
+        var prefix = isSelected ? "Selected: " : string.Empty;
+        var availability = isAvailable ? string.Empty : " (unavailable)";
+        return $"{prefix}{label}{availability}: {description}";
     }
 
     internal PresentationVideoExportPlan RefreshVideoExportPlan(PresentationVideoExportRequest? request = null)
