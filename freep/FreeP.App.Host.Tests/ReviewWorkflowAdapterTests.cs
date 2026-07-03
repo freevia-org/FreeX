@@ -1012,6 +1012,14 @@ public sealed class ReviewWorkflowAdapterTests
             plan.RangeChoices.Single(choice => choice.Kind == PresentationSlideRangeKind.CurrentSlide)
                 .DisplayName.Should().Be("Current Slide (Slide 2)");
             plan.PageCount.Should().Be(1);
+            plan.PreviewPlan.Pages.Should().ContainSingle()
+                .Which.Should().Match<PresentationPrintPreviewPage>(page =>
+                    page.PageIndex == 0 &&
+                    page.PageNumber == 1 &&
+                    page.Kind == PresentationPrintPreviewPageKind.NotesPage &&
+                    page.SlideNumbers.SequenceEqual(new[] { 2 }) &&
+                    page.ThumbnailLabel == "Slide 2 notes" &&
+                    page.Detail == "Notes page for slide 2");
             plan.NativePrinterDialogDeferred.Should().BeTrue();
             plan.NativePrinterDialogDeferredMessage.Should().Be(
                 PresentationPrintOutputPackageExecutor.NativePrinterDialogDeferredReason);

@@ -182,6 +182,7 @@ public sealed class MainWindow : Window
     private TextBlock _printOptionsPaneMessage = null!;
     private StackPanel _printOptionsPaneRowsPanel = null!;
     private readonly List<string> _printOptionsPaneRenderedOptionLines = new();
+    private readonly List<string> _printOptionsPaneRenderedPreviewRows = new();
     private readonly List<string> _printOptionsPaneRenderedLayoutRows = new();
     private readonly List<string> _printOptionsPaneRenderedRangeRows = new();
 
@@ -344,6 +345,7 @@ public sealed class MainWindow : Window
     internal string PrintOptionsPaneMessage => _printOptionsPaneMessage?.Text ?? string.Empty;
     internal int PrintOptionsPaneRenderedRowCount => _printOptionsPaneRowsPanel?.Children.Count ?? 0;
     internal IReadOnlyList<string> PrintOptionsPaneRenderedOptionLines => _printOptionsPaneRenderedOptionLines;
+    internal IReadOnlyList<string> PrintOptionsPaneRenderedPreviewRows => _printOptionsPaneRenderedPreviewRows;
     internal IReadOnlyList<string> PrintOptionsPaneRenderedLayoutRows => _printOptionsPaneRenderedLayoutRows;
     internal IReadOnlyList<string> PrintOptionsPaneRenderedRangeRows => _printOptionsPaneRenderedRangeRows;
 
@@ -2771,6 +2773,7 @@ public sealed class MainWindow : Window
         _printOptionsPaneHeading.Text = plan.Heading;
         _printOptionsPaneMessage.Text = plan.Description;
         _printOptionsPaneRenderedOptionLines.Clear();
+        _printOptionsPaneRenderedPreviewRows.Clear();
         _printOptionsPaneRenderedLayoutRows.Clear();
         _printOptionsPaneRenderedRangeRows.Clear();
         _printOptionsPaneRowsPanel.Children.Clear();
@@ -2779,6 +2782,7 @@ public sealed class MainWindow : Window
         AddPrintOptionsPaneField("Layout", plan.SelectedLayout.Layout.DisplayName);
         AddPrintOptionsPaneField("Slides", plan.SlideRangeSummary);
         AddPrintOptionsPaneField("Pages", plan.PageCount.ToString(CultureInfo.InvariantCulture));
+        AddPrintOptionsPaneField("Preview", plan.PreviewPlan.PageCountText);
         AddPrintOptionsPaneField("Hidden slides", plan.PrintHiddenSlides ? "Included" : "Not included");
         AddPrintOptionsPaneField("Options", plan.Options.DisplaySummary);
         AddPrintOptionsPaneField("Native printer dialog", plan.NativePrinterDialogDeferred ? "Deferred" : "Available");
@@ -2795,6 +2799,17 @@ public sealed class MainWindow : Window
                 Margin = new Thickness(20, 1, 12, 1),
                 Foreground = new SolidColorBrush(Color.FromRgb(0x33, 0x33, 0x33)),
             });
+        }
+
+        AddPrintOptionsPaneSection("Preview");
+        foreach (var page in plan.PreviewPlan.Pages)
+        {
+            var row = BuildPrintOptionsPaneChoiceSummary(
+                page.ThumbnailLabel,
+                page.Detail,
+                page.PageNumber == 1);
+            _printOptionsPaneRenderedPreviewRows.Add(row);
+            AddPrintOptionsPaneChoice(row, isAvailable: true);
         }
 
         AddPrintOptionsPaneSection("Layouts");

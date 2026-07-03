@@ -175,6 +175,16 @@ public sealed class PresentationExportPlannerTests
         fullPage.SlideRangeSummary.Should().Be("Slide 2");
         fullPage.LayoutSummary.Should().Be("Full Page Slides - Slide 2, 1 page");
         fullPage.Options.DisplaySummary.Should().Be("1 copy, Collated, Color");
+        fullPage.PreviewPlan.PageCount.Should().Be(1);
+        fullPage.PreviewPlan.PageCountText.Should().Be("1 printable page");
+        fullPage.PreviewPlan.Pages.Should().ContainSingle()
+            .Which.Should().Match<PresentationPrintPreviewPage>(page =>
+                page.PageIndex == 0 &&
+                page.PageNumber == 1 &&
+                page.Kind == PresentationPrintPreviewPageKind.FullPageSlide &&
+                page.SlideNumbers.SequenceEqual(new[] { 2 }) &&
+                page.ThumbnailLabel == "Slide 2" &&
+                page.Detail == "Full-page slide 2");
         fullPage.CanBuildPackage.Should().BeTrue();
         fullPage.NativePrinterDialogDeferred.Should().BeTrue();
         fullPage.DisabledReason.Should().BeNull();
@@ -235,12 +245,25 @@ public sealed class PresentationExportPlannerTests
         handouts.PageCount.Should().Be(3);
         handouts.SlideRangeSummary.Should().Be("Slides 2-8");
         handouts.LayoutSummary.Should().Be("Handouts (3 slides per page) - Slides 2-8, 3 pages including hidden slides");
+        handouts.PreviewPlan.PageCountText.Should().Be("3 printable pages");
+        handouts.PreviewPlan.Pages.Select(page => string.Join(",", page.SlideNumbers))
+            .Should()
+            .Equal("2,3,4", "5,6,7", "8");
+        handouts.PreviewPlan.Pages.Select(page => page.Detail)
+            .Should()
+            .Equal(
+                "Handout with slides 2, 3, 4",
+                "Handout with slides 5, 6, 7",
+                "Handout with slide 8");
         handouts.CanBuildPackage.Should().BeTrue();
         handouts.DisabledReason.Should().BeNull();
 
         empty.PageCount.Should().Be(0);
         empty.SlideRangeSummary.Should().Be("No slides");
         empty.LayoutSummary.Should().Be("Handouts (6 slides per page) - No slides, 0 pages");
+        empty.PreviewPlan.CanPreview.Should().BeFalse();
+        empty.PreviewPlan.DisabledReason.Should().Be("Print output requires at least one slide.");
+        empty.PreviewPlan.Pages.Should().BeEmpty();
         empty.CanBuildPackage.Should().BeFalse();
         empty.DisabledReason.Should().Be("Print output requires at least one slide.");
     }
@@ -1027,6 +1050,16 @@ public sealed class PresentationExportPlannerTests
 
         // Every page for this slide's notes repeats the slide thumbnail/border for context.
         renderPlan.Pages.Should().OnlyContain(page => page.Ops.OfType<PdfStrokeRect>().Count() == 2);
+
+        var packagePlan = PresentationPrintOutputPackageExecutor.BuildPackagePlan(
+            new PresentationPrintRequest(PresentationPrintLayoutKind.NotesPages),
+            presentation);
+
+        packagePlan.PreviewPlan.Pages.Should().HaveCount(renderPlan.Pages.Count);
+        packagePlan.PreviewPlan.Pages[0].ThumbnailLabel.Should().Be("Slide 1 notes");
+        packagePlan.PreviewPlan.Pages.Skip(1).Should().OnlyContain(page =>
+            page.ThumbnailLabel == "Slide 1 notes continued" &&
+            page.Detail == "Notes continuation page for slide 1");
     }
 
     [Fact]
