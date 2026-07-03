@@ -177,6 +177,51 @@ public sealed class FloatingObjectRenderTests
     }
 
     [StaFact]
+    public void FloatingOverlay_RendersGroupedChildShapeGlowFromSharedPlan()
+    {
+        var group = new FreeW.Core.Model.DrawingGroup
+        {
+            WidthPt = 140,
+            HeightPt = 70,
+            Placement = new FloatingPlacement
+            {
+                Wrapping = ImageWrapping.Square,
+                HorizontalOffsetPt = 36,
+                VerticalOffsetPt = 18,
+                ZOrderIndex = 6
+            }
+        };
+        group.Children.Add(new Shape(ShapeKind.Ellipse, 70, 42, "#CFE2F3")
+        {
+            OutlineColorHex = "#1155CC",
+            Effects = new ShapeEffectLst
+            {
+                HasGlow = true,
+                GlowColorHex = "4472C4",
+                GlowRad = 63500
+            }
+        });
+        group.ChildOffsets.Add((0, 10));
+
+        var doc = new TextDocument();
+        var para = new Paragraph();
+        para.Runs.Add(Run.FromDrawingGroup(group));
+        doc.Blocks.Add(para);
+
+        var view = new DocumentView();
+        var canvas = new Canvas();
+        view.LoadModel(doc);
+        view.SetFloatingCanvas(canvas);
+
+        var groupRoot = canvas.Children.OfType<Border>().Single(border => ReferenceEquals(border.Tag, group));
+        var child = LogicalDescendants<System.Windows.Shapes.Ellipse>(groupRoot).Single();
+        var effect = child.Effect.Should().BeOfType<DropShadowEffect>().Subject;
+        effect.Color.Should().Be(Color.FromRgb(0x44, 0x72, 0xC4));
+        effect.ShadowDepth.Should().Be(0);
+        effect.BlurRadius.Should().BeApproximately(63500 / 12700.0 * 96.0 / 72.0, 0.01);
+    }
+
+    [StaFact]
     public void FloatingOverlay_RendersChartFromSharedPlanWithActualGeometryTextAndStyle()
     {
         var chart = Chart.Create(

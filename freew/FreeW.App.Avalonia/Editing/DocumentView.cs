@@ -2363,6 +2363,27 @@ public sealed class DocumentView : Control
         }
     }
 
+    /// <summary>
+    /// Test-facing snapshot of grouped child drawing-object effect intent carried by the Avalonia renderer.
+    /// </summary>
+    public IReadOnlyList<string> FloatingGroupChildEffectSummaries
+    {
+        get
+        {
+            if (_laidOutWidth < 0) Relayout(FallbackWidth);
+            return _floatingGroups
+                .SelectMany(group => group.Children)
+                .Where(child => child.Kind == FloatingGroupChildData.ChildKind.Shape
+                    && child.Shape?.Effects.HasAny == true)
+                .Select(child =>
+                    "GroupChild"
+                    + child.ChildIndex.ToString(CultureInfo.InvariantCulture)
+                    + ":Shape:"
+                    + child.Shape!.Effects.Summary.Replace(", ", "+", StringComparison.Ordinal))
+                .ToList();
+        }
+    }
+
     /// <summary>Number of floating charts collected during the last layout pass.</summary>
     public int FloatingChartCount
     {
@@ -13300,6 +13321,7 @@ public sealed class DocumentView : Control
     {
         // Resolved page-space sub-rect for this child (group origin + child offset).
         public Rect Rect;
+        public int ChildIndex;
         // What kind of child: Image, Shape, Chart, WordArt, SmartArt.
         public enum ChildKind { Image, Shape, Chart, WordArt, SmartArt }
         public ChildKind Kind;
@@ -13384,7 +13406,11 @@ public sealed class DocumentView : Control
             var childRect = planChildren.TryGetValue(childSnapshot.ChildIndex, out var planChild)
                 ? ToAvaloniaRect(planChild.Visual.Rect)
                 : ToAvaloniaRect(childSnapshot.Rect);
-            var childData = new FloatingGroupChildData { Rect = childRect };
+            var childData = new FloatingGroupChildData
+            {
+                Rect = childRect,
+                ChildIndex = childSnapshot.ChildIndex
+            };
 
             switch (childSnapshot.Kind)
             {
