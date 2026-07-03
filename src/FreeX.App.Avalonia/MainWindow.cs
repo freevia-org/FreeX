@@ -15205,10 +15205,10 @@ public sealed partial class MainWindow : Window
         var dialog = new Window
         {
             Title = "Subtotal",
-            Width = 460,
-            Height = 480,
-            MinWidth = 400,
-            MinHeight = 380,
+            Width = SubtotalParityDialogWidth,
+            Height = SubtotalParityDialogHeight,
+            MinWidth = SubtotalParityDialogWidth,
+            MinHeight = SubtotalParityDialogHeight,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
@@ -16591,12 +16591,12 @@ public sealed partial class MainWindow : Window
         var dialog = new Window
         {
             Title = "Forecast Sheet",
-            Width = 360,
-            Height = 220,
-            MinWidth = 360,
-            MinHeight = 220,
-            MaxWidth = 360,
-            MaxHeight = 220,
+            Width = ForecastSheetParityDialogWidth,
+            Height = ForecastSheetParityDialogHeight,
+            MinWidth = ForecastSheetParityDialogWidth,
+            MinHeight = ForecastSheetParityDialogHeight,
+            MaxWidth = ForecastSheetParityDialogWidth,
+            MaxHeight = ForecastSheetParityDialogHeight,
             CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
