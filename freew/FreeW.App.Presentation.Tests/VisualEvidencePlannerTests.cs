@@ -1536,6 +1536,11 @@ public sealed class VisualEvidencePlannerTests
 
             var json = FreeWVisualEvidenceManifestNormalizer.ToJson(withBaseline);
             using var doc = JsonDocument.Parse(json);
+            var triageItem = doc.RootElement.GetProperty("wordBaselineTriage")[0];
+            triageItem.GetProperty("status").GetString()
+                .Should().Be("word-baseline-unavailable");
+            triageItem.GetProperty("note").GetString()
+                .Should().Contain("Word.Application");
             var baselineComparison = doc.RootElement.GetProperty("baselineComparisons")[0];
             baselineComparison.GetProperty("status").GetString()
                 .Should().Be("word-baseline-unavailable");
@@ -1543,9 +1548,258 @@ public sealed class VisualEvidencePlannerTests
                 .Should().Contain("Word.Application");
 
             var markdown = FreeWVisualEvidenceManifestNormalizer.ToMarkdown(withBaseline);
+            markdown.Should().Contain("## Word Baseline Triage");
+            markdown.Should().Contain("Word baseline unavailable: 1 row(s). Trust remains passed for unavailable rows.");
+            markdown.Should().Contain("Unavailable reason(s): COM ProgID 'Word.Application' is not registered");
             markdown.Should().Contain("Status counts: word-baseline-unavailable=1");
             markdown.Should().Contain("COM ProgID 'Word.Application' is not registered");
             markdown.Should().Contain("f2-hf-basic/f2-hf-basic_p1.png");
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void WordBaselineTriage_SurfacesFailedMissingAndDecodeRowsAheadOfSkippedRows()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var wpfDir = Path.Combine(root, "wpf");
+            var avaloniaDir = Path.Combine(root, "avalonia");
+            FreeWVisualEvidencePlanner.WriteManifest(
+                wpfDir,
+                [
+                    BuildFileBackedRow(
+                        root,
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        "f2-hf-basic",
+                        pageNumber: 1,
+                        pageCount: 1),
+                    BuildFileBackedRow(
+                        root,
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        "table-layout-complex",
+                        pageNumber: 1,
+                        pageCount: 1)
+                ],
+                new DateTimeOffset(2026, 7, 1, 12, 0, 0, TimeSpan.Zero));
+            FreeWVisualEvidencePlanner.WriteManifest(
+                avaloniaDir,
+                [
+                    BuildFileBackedRow(
+                        root,
+                        FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                        "page-composition-columns",
+                        pageNumber: 1,
+                        pageCount: 1),
+                    BuildFileBackedRow(
+                        root,
+                        FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                        "page-composition-web-layout",
+                        pageNumber: 1,
+                        pageCount: 1)
+                ],
+                new DateTimeOffset(2026, 7, 1, 12, 0, 0, TimeSpan.Zero));
+            var summary = FreeWVisualEvidenceManifestNormalizer.BuildNormalizedSummaryFromFiles(
+                [
+                    Path.Combine(wpfDir, FreeWVisualEvidencePlanner.ManifestFileName),
+                    Path.Combine(avaloniaDir, FreeWVisualEvidencePlanner.ManifestFileName)
+                ],
+                root,
+                [
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        "f2-hf-basic",
+                        1),
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        "table-layout-complex",
+                        1),
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                        "page-composition-columns",
+                        1),
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                        "page-composition-web-layout",
+                        1)
+                ]);
+
+            var failedRow = summary.Evidence.Single(row =>
+                row.HostId == FreeWVisualEvidenceManifestNormalizer.WpfHostId
+                && row.ScenarioId == "f2-hf-basic");
+            var decodeRow = summary.Evidence.Single(row =>
+                row.HostId == FreeWVisualEvidenceManifestNormalizer.WpfHostId
+                && row.ScenarioId == "table-layout-complex");
+            var missingRow = summary.Evidence.Single(row =>
+                row.HostId == FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId
+                && row.ScenarioId == "page-composition-columns");
+            var skippedRow = summary.Evidence.Single(row =>
+                row.HostId == FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId
+                && row.ScenarioId == "page-composition-web-layout");
+            var baseline = BuildBgraPixels(2, 2, (10, 10, 10));
+            var actual = baseline.ToArray();
+            actual[2] = 80;
+            var failed = FreeWVisualBaselineComparisonPlanner.BuildBaselineComparison(
+                failedRow,
+                "f2-hf-basic/f2-hf-basic_p1.png",
+                FreeWVisualBaselineComparisonPlanner.BuildBaselineCandidateRelativePaths(failedRow),
+                FreeWVisualBaselineComparisonTolerance.WordPngDefault,
+                actual,
+                actualWidth: 2,
+                actualHeight: 2,
+                actualStride: 8,
+                FreeWVisualEvidencePixelFormat.Bgra32,
+                baseline,
+                baselineWidth: 2,
+                baselineHeight: 2,
+                baselineStride: 8,
+                FreeWVisualEvidencePixelFormat.Bgra32);
+            var decode = FreeWVisualBaselineComparisonPlanner.BuildDecodeFailure(
+                decodeRow,
+                "table-layout-complex/table-layout-complex_p1.png",
+                FreeWVisualBaselineComparisonPlanner.BuildBaselineCandidateRelativePaths(decodeRow),
+                FreeWVisualBaselineComparisonTolerance.WordPngDefault,
+                "could not decode visual evidence or Word baseline PNG");
+            var missing = FreeWVisualBaselineComparisonPlanner.BuildMissingBaselineComparison(missingRow);
+            var skipped = FreeWVisualBaselineComparisonPlanner.BuildSkippedBaselineComparison(skippedRow);
+
+            var withBaseline = FreeWVisualEvidenceManifestNormalizer.WithBaselineComparisons(
+                summary,
+                [skipped, missing, decode, failed]);
+
+            withBaseline.WordBaselineTriage.Select(item => item.Status).Take(3)
+                .Should().BeEquivalentTo([
+                    FreeWVisualBaselineComparisonPlanner.FailedStatus,
+                    FreeWVisualBaselineComparisonPlanner.DecodeFailedStatus,
+                    FreeWVisualBaselineComparisonPlanner.MissingBaselineStatus
+                ]);
+            withBaseline.WordBaselineTriage.Last().Status.Should().Be(
+                FreeWVisualBaselineComparisonPlanner.SkippedStatus);
+
+            var markdown = FreeWVisualEvidenceManifestNormalizer.ToMarkdown(withBaseline);
+            markdown.Should().Contain("Skipped rows hidden from triage table: 1.");
+            markdown.Should().NotContain("| avalonia-page-layout-shot | page-composition-web-layout | p1/freew_web_layout.png | skipped |");
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void WordBaselineTriage_SortsComparedRowsByChangedPixelRatioAcrossWpfAndAvalonia()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var wpfDir = Path.Combine(root, "wpf");
+            var avaloniaDir = Path.Combine(root, "avalonia");
+            FreeWVisualEvidencePlanner.WriteManifest(
+                wpfDir,
+                [
+                    BuildFileBackedRow(
+                        root,
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        "table-layout-complex",
+                        pageNumber: 1,
+                        pageCount: 1)
+                ],
+                new DateTimeOffset(2026, 7, 1, 12, 0, 0, TimeSpan.Zero));
+            FreeWVisualEvidencePlanner.WriteManifest(
+                avaloniaDir,
+                [
+                    BuildFileBackedRow(
+                        root,
+                        FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                        "table-layout-complex",
+                        pageNumber: 1,
+                        pageCount: 1)
+                ],
+                new DateTimeOffset(2026, 7, 1, 12, 0, 0, TimeSpan.Zero));
+            var summary = FreeWVisualEvidenceManifestNormalizer.BuildNormalizedSummaryFromFiles(
+                [
+                    Path.Combine(wpfDir, FreeWVisualEvidencePlanner.ManifestFileName),
+                    Path.Combine(avaloniaDir, FreeWVisualEvidencePlanner.ManifestFileName)
+                ],
+                root,
+                [
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        "table-layout-complex",
+                        1),
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                        "table-layout-complex",
+                        1)
+                ]);
+
+            var tolerance = new FreeWVisualBaselineComparisonTolerance(
+                "unit-wide",
+                ChangedPixelDeltaThreshold: 8,
+                MaxMeanAbsoluteChannelDelta: 255,
+                MaxMeanAbsoluteGrayscaleDelta: 255,
+                MaxChangedPixelRatio: 1,
+                RequireDimensionMatch: true);
+            var baseline = BuildBgraPixels(2, 2, (10, 10, 10));
+            var wpfActual = BuildChangedBgraPixels(changedPixels: 1);
+            var avaloniaActual = BuildChangedBgraPixels(changedPixels: 3);
+            var wpfRow = summary.Evidence.Single(row =>
+                row.HostId == FreeWVisualEvidenceManifestNormalizer.WpfHostId);
+            var avaloniaRow = summary.Evidence.Single(row =>
+                row.HostId == FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId);
+            var wpfComparison = FreeWVisualBaselineComparisonPlanner.BuildBaselineComparison(
+                wpfRow,
+                "table-layout-complex/table-layout-complex_p1.png",
+                FreeWVisualBaselineComparisonPlanner.BuildBaselineCandidateRelativePaths(wpfRow),
+                tolerance,
+                wpfActual,
+                actualWidth: 2,
+                actualHeight: 2,
+                actualStride: 8,
+                FreeWVisualEvidencePixelFormat.Bgra32,
+                baseline,
+                baselineWidth: 2,
+                baselineHeight: 2,
+                baselineStride: 8,
+                FreeWVisualEvidencePixelFormat.Bgra32);
+            var avaloniaComparison = FreeWVisualBaselineComparisonPlanner.BuildBaselineComparison(
+                avaloniaRow,
+                "table-layout-complex/table-layout-complex_p1.png",
+                FreeWVisualBaselineComparisonPlanner.BuildBaselineCandidateRelativePaths(avaloniaRow),
+                tolerance,
+                avaloniaActual,
+                actualWidth: 2,
+                actualHeight: 2,
+                actualStride: 8,
+                FreeWVisualEvidencePixelFormat.Bgra32,
+                baseline,
+                baselineWidth: 2,
+                baselineHeight: 2,
+                baselineStride: 8,
+                FreeWVisualEvidencePixelFormat.Bgra32);
+
+            var withBaseline = FreeWVisualEvidenceManifestNormalizer.WithBaselineComparisons(
+                summary,
+                [wpfComparison, avaloniaComparison]);
+
+            withBaseline.WordBaselineTriage.Select(item => item.HostId).Should().Equal([
+                FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                FreeWVisualEvidenceManifestNormalizer.WpfHostId
+            ]);
+            withBaseline.WordBaselineTriage.Select(item => item.ChangedPixelRatio).Should().Equal([
+                0.75,
+                0.25
+            ]);
+
+            var markdown = FreeWVisualEvidenceManifestNormalizer.ToMarkdown(withBaseline);
+            markdown.Should().Contain("| avalonia-page-layout-shot | table-layout-complex | p1/table-layout-complex_p1.png | passed | 75.000 % |");
+            markdown.Should().Contain("| wpf-fidelity-render | table-layout-complex | p1/table-layout-complex_p1.png | passed | 25.000 % |");
+            markdown.IndexOf("## Word Baseline Triage", StringComparison.Ordinal)
+                .Should().BeLessThan(markdown.IndexOf("## Word Baseline Comparison", StringComparison.Ordinal));
         }
         finally
         {
@@ -1607,7 +1861,14 @@ public sealed class VisualEvidencePlannerTests
 
             var json = FreeWVisualEvidenceManifestNormalizer.ToJson(withBaseline);
             using var doc = JsonDocument.Parse(json);
-            doc.RootElement.GetProperty("schemaVersion").GetInt32().Should().Be(8);
+            doc.RootElement.GetProperty("schemaVersion").GetInt32().Should().Be(9);
+            var triageItem = doc.RootElement.GetProperty("wordBaselineTriage")[0];
+            triageItem.GetProperty("status").GetString().Should().Be("passed");
+            triageItem.GetProperty("baselineId").GetString()
+                .Should().Be("f2-hf-basic/p1/f2-hf-basic_p1.png");
+            triageItem.GetProperty("baselinePathSummary").GetString()
+                .Should().Be("f2-hf-basic/f2-hf-basic_p1.png");
+            triageItem.GetProperty("changedPixelRatio").GetDouble().Should().Be(0);
             var baselineComparison = doc.RootElement.GetProperty("baselineComparisons")[0];
             baselineComparison.GetProperty("status").GetString().Should().Be("passed");
             baselineComparison.GetProperty("baselineId").GetString()
@@ -1622,6 +1883,9 @@ public sealed class VisualEvidencePlannerTests
                 .GetDouble().Should().Be(0);
 
             var markdown = FreeWVisualEvidenceManifestNormalizer.ToMarkdown(withBaseline);
+            markdown.IndexOf("## Word Baseline Triage", StringComparison.Ordinal)
+                .Should().BeLessThan(markdown.IndexOf("## Word Baseline Comparison", StringComparison.Ordinal));
+            markdown.Should().Contain("| wpf-fidelity-render | f2-hf-basic | p1/f2-hf-basic_p1.png | passed | 0.000 % | 0/0 | f2-hf-basic/f2-hf-basic_p1.png | - |");
             markdown.Should().Contain("Word Baseline Comparison");
             markdown.Should().Contain("Status counts: passed=1");
             markdown.Should().Contain("f2-hf-basic/p1/f2-hf-basic_p1.png");
@@ -1818,6 +2082,15 @@ public sealed class VisualEvidencePlannerTests
             pixels[i + 2] = color.R;
             pixels[i + 3] = 255;
         }
+
+        return pixels;
+    }
+
+    private static byte[] BuildChangedBgraPixels(int changedPixels)
+    {
+        var pixels = BuildBgraPixels(2, 2, (10, 10, 10));
+        for (var pixel = 0; pixel < Math.Min(changedPixels, 4); pixel++)
+            pixels[(pixel * 4) + 2] = 80;
 
         return pixels;
     }

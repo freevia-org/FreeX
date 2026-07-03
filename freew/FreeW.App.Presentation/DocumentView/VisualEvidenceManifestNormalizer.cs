@@ -55,12 +55,26 @@ public sealed record FreeWVisualEvidenceNormalizedSummary(
     IReadOnlyList<FreeWVisualEvidenceNormalizedScenario> Scenarios,
     IReadOnlyList<FreeWVisualEvidenceNormalizedRow> Evidence,
     IReadOnlyList<FreeWVisualBaselineComparison> BaselineComparisons,
+    IReadOnlyList<FreeWVisualBaselineTriageItem> WordBaselineTriage,
     FreeWVisualEvidenceTrust Trust);
+
+public sealed record FreeWVisualBaselineTriageItem(
+    string HostId,
+    string ScenarioId,
+    int PageNumber,
+    string OutputName,
+    string Status,
+    string BaselineId,
+    string BaselinePathSummary,
+    double? ChangedPixelRatio,
+    double? MeanAbsoluteChannelDelta,
+    double? MeanAbsoluteGrayscaleDelta,
+    string Note);
 
 public static class FreeWVisualEvidenceManifestNormalizer
 {
     public const string SummarySchemaId = "freew.visual-evidence-summary.v1";
-    public const int SummarySchemaVersion = 8;
+    public const int SummarySchemaVersion = 9;
     public const string SummaryJsonFileName = "freew_visual_evidence_summary.json";
     public const string SummaryMarkdownFileName = "freew_visual_evidence_summary.md";
     public const string WpfHostId = "wpf-fidelity-render";
@@ -193,6 +207,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
                 .ThenBy(r => r.OutputName, StringComparer.OrdinalIgnoreCase)
                 .ToList(),
             [],
+            [],
             summaryTrust);
     }
 
@@ -257,6 +272,15 @@ public static class FreeWVisualEvidenceManifestNormalizer
         if (summary.BaselineComparisons.Count > 0)
         {
             sb.AppendLine();
+            sb.AppendLine("## Word Baseline Triage");
+            sb.AppendLine();
+            AppendWordBaselineTriage(
+                sb,
+                summary.WordBaselineTriage.Count > 0
+                    ? summary.WordBaselineTriage
+                    : BuildWordBaselineTriage(summary.BaselineComparisons));
+
+            sb.AppendLine();
             sb.AppendLine("## Word Baseline Comparison");
             sb.AppendLine();
             sb.AppendLine($"Status counts: {EscapeMarkdown(FormatBaselineStatusCounts(summary.BaselineComparisons))}");
@@ -314,8 +338,25 @@ public static class FreeWVisualEvidenceManifestNormalizer
         return summary with
         {
             BaselineComparisons = ordered,
+            WordBaselineTriage = BuildWordBaselineTriage(ordered),
             Trust = new FreeWVisualEvidenceTrust(failures.Count == 0, failures)
         };
+    }
+
+    public static IReadOnlyList<FreeWVisualBaselineTriageItem> BuildWordBaselineTriage(
+        IReadOnlyList<FreeWVisualBaselineComparison> comparisons)
+    {
+        ArgumentNullException.ThrowIfNull(comparisons);
+
+        return comparisons
+            .Select(BuildWordBaselineTriageItem)
+            .OrderBy(item => WordBaselineTriageStatusPriority(item.Status))
+            .ThenByDescending(item => item.ChangedPixelRatio ?? -1)
+            .ThenBy(item => item.HostId, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(item => item.ScenarioId, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(item => item.PageNumber)
+            .ThenBy(item => item.OutputName, StringComparer.OrdinalIgnoreCase)
+            .ToList();
     }
 
     public static void WriteSummaryFiles(
@@ -1033,6 +1074,113 @@ public static class FreeWVisualEvidenceManifestNormalizer
         return string.Join(", ", parts);
     }
 
+    private static void AppendWordBaselineTriage(
+        StringBuilder sb,
+        IReadOnlyList<FreeWVisualBaselineTriageItem> triage)
+    {
+        var unavailableRows = triage
+            .Where(item => string.Equals(
+                item.Status,
+                FreeWVisualBaselineComparisonPlanner.WordBaselineUnavailableStatus,
+                StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        if (unavailableRows.Count > 0)
+        {
+            sb.AppendLine(
+                $"Word baseline unavailable: {unavailableRows.Count.ToString(CultureInfo.InvariantCulture)} row(s). Trust remains passed for unavailable rows.");
+            var unavailableReasons = unavailableRows
+                .Select(item => item.Note)
+                .Where(note => !string.IsNullOrWhiteSpace(note) && note != "-")
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(note => note, StringComparer.OrdinalIgnoreCase)
+                .Take(3)
+                .ToList();
+            if (unavailableReasons.Count > 0)
+                sb.AppendLine($"Unavailable reason(s): {EscapeMarkdown(string.Join("; ", unavailableReasons))}");
+
+            sb.AppendLine();
+        }
+
+        var skippedRows = triage
+            .Count(item => string.Equals(
+                item.Status,
+                FreeWVisualBaselineComparisonPlanner.SkippedStatus,
+                StringComparison.OrdinalIgnoreCase));
+        var tableRows = triage
+            .Where(item => !IsHiddenFromTriageTable(item))
+            .ToList();
+
+        if (skippedRows > 0)
+        {
+            sb.AppendLine(
+                $"Skipped rows hidden from triage table: {skippedRows.ToString(CultureInfo.InvariantCulture)}. Raw skipped rows remain in the Word Baseline Comparison table below.");
+            sb.AppendLine();
+        }
+
+        if (tableRows.Count == 0)
+        {
+            sb.AppendLine("No actionable Word-baseline rows to show.");
+            return;
+        }
+
+        sb.AppendLine("| Host | Scenario | Output | Status | Changed Pixel Ratio | Mean Delta (channel/gray) | Baseline | Note |");
+        sb.AppendLine("| --- | --- | --- | --- | ---: | ---: | --- | --- |");
+        foreach (var item in tableRows)
+        {
+            sb.AppendLine(
+                $"| {EscapeMarkdown(item.HostId)} | {EscapeMarkdown(item.ScenarioId)} | " +
+                $"{EscapeMarkdown(FormatTriageOutput(item))} | " +
+                $"{EscapeMarkdown(item.Status)} | " +
+                $"{FormatNullablePercent(item.ChangedPixelRatio)} | " +
+                $"{FormatNullableMetricPair(item.MeanAbsoluteChannelDelta, item.MeanAbsoluteGrayscaleDelta)} | " +
+                $"{EscapeMarkdown(item.BaselinePathSummary)} | " +
+                $"{EscapeMarkdown(item.Note)} |");
+        }
+    }
+
+    private static FreeWVisualBaselineTriageItem BuildWordBaselineTriageItem(
+        FreeWVisualBaselineComparison comparison)
+    {
+        var metrics = comparison.Metrics;
+        return new FreeWVisualBaselineTriageItem(
+            comparison.HostId,
+            comparison.ScenarioId,
+            Math.Max(1, comparison.PageNumber),
+            comparison.OutputName,
+            comparison.Status,
+            comparison.BaselineId,
+            FormatTriageBaselinePath(comparison),
+            metrics?.ChangedPixelRatio,
+            metrics?.MeanAbsoluteChannelDelta,
+            metrics?.MeanAbsoluteGrayscaleDelta,
+            FormatComparisonNotes(comparison));
+    }
+
+    private static bool IsHiddenFromTriageTable(FreeWVisualBaselineTriageItem item) =>
+        string.Equals(item.Status, FreeWVisualBaselineComparisonPlanner.SkippedStatus, StringComparison.OrdinalIgnoreCase)
+        || string.Equals(item.Status, FreeWVisualBaselineComparisonPlanner.WordBaselineUnavailableStatus, StringComparison.OrdinalIgnoreCase);
+
+    private static int WordBaselineTriageStatusPriority(string status)
+    {
+        if (string.Equals(status, FreeWVisualBaselineComparisonPlanner.FailedStatus, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(status, FreeWVisualBaselineComparisonPlanner.DecodeFailedStatus, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(status, FreeWVisualBaselineComparisonPlanner.MissingBaselineStatus, StringComparison.OrdinalIgnoreCase))
+        {
+            return 0;
+        }
+
+        if (string.Equals(status, FreeWVisualBaselineComparisonPlanner.PassedStatus, StringComparison.OrdinalIgnoreCase))
+            return 1;
+
+        if (string.Equals(status, FreeWVisualBaselineComparisonPlanner.WordBaselineUnavailableStatus, StringComparison.OrdinalIgnoreCase))
+            return 2;
+
+        if (string.Equals(status, FreeWVisualBaselineComparisonPlanner.SkippedStatus, StringComparison.OrdinalIgnoreCase))
+            return 3;
+
+        return 4;
+    }
+
     private static string FormatBaselineStatusCounts(
         IReadOnlyList<FreeWVisualBaselineComparison> comparisons) =>
         string.Join(
@@ -1051,6 +1199,47 @@ public static class FreeWVisualEvidenceManifestNormalizer
             return string.Join(", ", comparison.CandidateBaselinePaths);
 
         return "-";
+    }
+
+    private static string FormatTriageBaselinePath(FreeWVisualBaselineComparison comparison)
+    {
+        if (!string.IsNullOrWhiteSpace(comparison.BaselinePath))
+            return comparison.BaselinePath;
+
+        if (comparison.CandidateBaselinePaths.Count == 0)
+            return "-";
+
+        if (comparison.CandidateBaselinePaths.Count <= 2)
+            return "candidates: " + string.Join(", ", comparison.CandidateBaselinePaths);
+
+        return "candidates: "
+            + string.Join(", ", comparison.CandidateBaselinePaths.Take(2))
+            + ", +"
+            + (comparison.CandidateBaselinePaths.Count - 2).ToString(CultureInfo.InvariantCulture)
+            + " more";
+    }
+
+    private static string FormatTriageOutput(FreeWVisualBaselineTriageItem item) =>
+        string.Concat(
+            "p",
+            item.PageNumber.ToString(CultureInfo.InvariantCulture),
+            "/",
+            item.OutputName);
+
+    private static string FormatNullablePercent(double? value) =>
+        value.HasValue
+            ? value.Value.ToString("P3", CultureInfo.InvariantCulture)
+            : "-";
+
+    private static string FormatNullableMetricPair(double? channel, double? grayscale)
+    {
+        if (!channel.HasValue || !grayscale.HasValue)
+            return "-";
+
+        return string.Concat(
+            channel.Value.ToString("0.####", CultureInfo.InvariantCulture),
+            "/",
+            grayscale.Value.ToString("0.####", CultureInfo.InvariantCulture));
     }
 
     private static string FormatChangedPixels(FreeWVisualBaselineComparisonMetrics? metrics)
