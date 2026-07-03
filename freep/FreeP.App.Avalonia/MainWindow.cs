@@ -1027,6 +1027,8 @@ public sealed class MainWindow : Window
             if (string.IsNullOrEmpty(ctx.SelectedValue))
                 return;
 
+            if (_textEditor?.TryApplyActiveTableCellFontFamily(ctx.SelectedValue) == true) return;
+            if (Editor.TryApplyActiveTableCellFontFamily(ctx.SelectedValue)) return;
             Editor.SetFontFamilyOnSelection(ctx.SelectedValue);
         }));
         r.Register("freep.bold", new ActionRibbonCommand(() =>

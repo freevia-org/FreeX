@@ -392,6 +392,105 @@ public sealed class SlideCanvasAvaloniaTests
     }
 
     [Fact]
+    public async Task TableCellTextEditor_ValueFormatsWholeCell_MirrorsOverlayAndPreservesMixedRunsOnCommit()
+    {
+        SlideShape? shape = null;
+        var overlayFontFamily = string.Empty;
+        var overlayFontSize = 0.0;
+        Color overlayColor = default;
+
+        await Run(() =>
+        {
+            var presentation = MakePresentation(pres =>
+            {
+                pres.Slides[0].Shapes.Clear();
+                shape = MakeTableShape(23, "Hello");
+                var body = shape!.Table!.Rows[0].Cells[0].TextBody!;
+                body.Paragraphs[0].Runs.Add(new Run { Text = "World", Italic = true, ItalicSet = true });
+                pres.Slides[0].Shapes.Add(shape);
+            });
+
+            var bus = new PresentationCommandBus(presentation);
+            var editor = new EditingSession(presentation, bus);
+            var canvas = new SlideCanvas { Presentation = presentation, Slide = presentation.Slides[0] };
+            var overlay = new global::Avalonia.Controls.Canvas();
+            var textEditor = new AvaloniaInCanvasTextEditor(canvas, editor, overlay);
+            var color = new ThemeAwareColor(new SrgbColor(0x22, 0x44, 0x66));
+
+            textEditor.ActivateCellEdit(shape!.Id, 0, 0);
+            var box = overlay.Children.OfType<global::Avalonia.Controls.TextBox>().Single();
+            box.Text.Should().Be("HelloWorld");
+
+            textEditor.TryApplyActiveTableCellFontFamily("Consolas").Should().BeTrue();
+            textEditor.TryApplyActiveTableCellFontSize(24).Should().BeTrue();
+            textEditor.TryApplyActiveTableCellColor(color).Should().BeTrue();
+
+            overlayFontFamily = box.FontFamily.ToString();
+            overlayFontSize = box.FontSize;
+            overlayColor = box.Foreground.Should().BeOfType<SolidColorBrush>().Subject.Color;
+
+            textEditor.CommitCellEdit();
+        });
+
+        overlayFontFamily.Should().Contain("Consolas");
+        overlayFontSize.Should().Be(24);
+        overlayColor.Should().Be(Color.FromRgb(0x22, 0x44, 0x66));
+
+        var runs = shape!.Table!.Rows[0].Cells[0].TextBody!.Paragraphs[0].Runs;
+        runs.Should().HaveCount(2, "the italic second run should remain distinct after unchanged-text commit");
+        runs.Should().OnlyContain(r => r.FontFamily == "Consolas");
+        runs.Should().OnlyContain(r => r.FontSizePt == 24);
+        runs.Should().OnlyContain(r => r.Color != null && r.Color.Resolved == new SrgbColor(0x22, 0x44, 0x66));
+        runs[1].Italic.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task TableCellTextEditor_ValueFormatSubRangeSelection_OnlyFormatsSelectedRunRange()
+    {
+        SlideShape? shape = null;
+
+        await Run(() =>
+        {
+            var presentation = MakePresentation(pres =>
+            {
+                pres.Slides[0].Shapes.Clear();
+                shape = MakeTableShape(24, "one two three");
+                pres.Slides[0].Shapes.Add(shape);
+            });
+
+            var bus = new PresentationCommandBus(presentation);
+            var editor = new EditingSession(presentation, bus);
+            var canvas = new SlideCanvas { Presentation = presentation, Slide = presentation.Slides[0] };
+            var overlay = new global::Avalonia.Controls.Canvas();
+            var textEditor = new AvaloniaInCanvasTextEditor(canvas, editor, overlay);
+            var color = new ThemeAwareColor(new SrgbColor(0xAA, 0x33, 0x11));
+
+            textEditor.ActivateCellEdit(shape!.Id, 0, 0);
+            var box = overlay.Children.OfType<global::Avalonia.Controls.TextBox>().Single();
+            box.Text.Should().Be("one two three");
+            box.SelectionStart = 4;
+            box.SelectionEnd = 7;
+
+            textEditor.TryApplyActiveTableCellFontFamily("Consolas").Should().BeTrue();
+            textEditor.TryApplyActiveTableCellFontSize(28).Should().BeTrue();
+            textEditor.TryApplyActiveTableCellColor(color).Should().BeTrue();
+        });
+
+        var runs = shape!.Table!.Rows[0].Cells[0].TextBody!.Paragraphs[0].Runs;
+        string.Concat(runs.Select(r => r.Text)).Should().Be("one two three");
+        runs.Should().Contain(r =>
+            r.Text == "two" &&
+            r.FontFamily == "Consolas" &&
+            r.FontSizePt == 28 &&
+            r.Color != null &&
+            r.Color.Resolved == new SrgbColor(0xAA, 0x33, 0x11));
+        runs.Where(r => r.Text != "two").Should().OnlyContain(r =>
+            r.FontFamily == "Aptos" &&
+            r.FontSizePt == 18 &&
+            r.Color == null);
+    }
+
+    [Fact]
     public void PlanTextFormat_WholeCellSelection_BoldsAllRuns()
     {
         // A selection spanning the entire cell text behaves like the whole-cell fallback.

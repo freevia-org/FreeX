@@ -181,6 +181,87 @@ public sealed class TableCellEditPlannerTests
     }
 
     [Fact]
+    public void PlanFontFamily_SubRangeSelection_SplitsRunsAndFormatsOnlySelection()
+    {
+        var shape = MakeMergedTableShape();
+        var body = shape.Table!.Rows[0].Cells[0].TextBody!;
+        body.Paragraphs[0].Runs.Clear();
+        body.Paragraphs[0].Runs.Add(new Run { Text = "one two three", FontFamily = "Aptos" });
+        var slide = new Slide { Shapes = { shape } };
+
+        var plan = TableCellEditPlanner.PlanFontFamily(
+            0,
+            slide,
+            [shape.Id],
+            (0, 0),
+            "Consolas",
+            selection: (4, 7));
+
+        plan.Status.Should().Be(TableCellTextFormatStatus.Ready);
+        plan.Value.Should().Be("Consolas");
+
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Clear();
+        presentation.Slides[0].Shapes.Add(shape);
+        var bus = new PresentationCommandBus(presentation);
+        bus.Execute(plan.Command!);
+
+        var runs = shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs[0].Runs;
+        string.Concat(runs.Select(r => r.Text)).Should().Be("one two three");
+        runs.Should().Contain(r => r.Text == "two" && r.FontFamily == "Consolas");
+        runs.Where(r => r.Text != "two").Should().OnlyContain(r => r.FontFamily == "Aptos");
+
+        bus.Undo();
+        shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs[0].Runs
+            .Should().OnlyContain(r => r.FontFamily == "Aptos");
+    }
+
+    [Fact]
+    public void PlanFontSizeAndColor_WholeCellSelection_FormatsAllRunsAndPreservesUndo()
+    {
+        var shape = MakeMergedTableShape();
+        var body = shape.Table!.Rows[0].Cells[0].TextBody!;
+        body.Paragraphs[0].Runs.Add(new Run
+        {
+            Text = " suffix",
+            FontFamily = "Aptos",
+            FontSizePt = 10,
+            Color = new ThemeAwareColor(new SrgbColor(1, 2, 3)),
+            Italic = true,
+            ItalicSet = true,
+        });
+        var color = new ThemeAwareColor(new SrgbColor(0x22, 0x44, 0x66));
+        var slide = new Slide { Shapes = { shape } };
+
+        var sizePlan = TableCellEditPlanner.PlanFontSize(0, slide, [shape.Id], (0, 0), 21, selection: (0, 13));
+
+        sizePlan.Status.Should().Be(TableCellTextFormatStatus.Ready);
+
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Clear();
+        presentation.Slides[0].Shapes.Add(shape);
+        var bus = new PresentationCommandBus(presentation);
+        bus.Execute(sizePlan.Command!);
+
+        var colorPlan = TableCellEditPlanner.PlanColor(0, slide, [shape.Id], (0, 0), color, selection: (0, 13));
+        colorPlan.Status.Should().Be(TableCellTextFormatStatus.Ready);
+        bus.Execute(colorPlan.Command!);
+
+        var runs = shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs[0].Runs;
+        runs.Should().OnlyContain(r => r.FontSizePt == 21);
+        runs.Should().OnlyContain(r => r.Color != null && r.Color.Resolved == color.Resolved);
+        runs.Should().Contain(r => r.Italic, "existing mixed formatting should survive value formatting");
+
+        bus.Undo();
+        shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs[0].Runs
+            .Should().OnlyContain(r => r.FontSizePt == 21);
+
+        bus.Undo();
+        shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs[0].Runs
+            .Should().Contain(r => r.FontSizePt == 10);
+    }
+
+    [Fact]
     public void PlanTextFormat_CollapsedSelection_FallsBackToWholeCell()
     {
         var shape = MakeMergedTableShape();
