@@ -49,6 +49,13 @@ public sealed class VisualEvidencePageLayoutShotSourceTests
         source.Should().Contain("VisualEvidenceOutputPath(outDir, \"f2-comments\", 1)");
         source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildCommentsReviewDocument");
         source.Should().Contain("ReviewRendererScenarioIds");
+        source.Should().Contain("field-page-number-variants");
+        source.Should().Contain("VisualEvidenceOutputPath(outDir, \"field-page-number-variants\", 1)");
+        source.Should().Contain("VisualEvidenceOutputPath(outDir, \"field-page-number-variants\", 2)");
+        source.Should().Contain("VisualEvidenceOutputPath(outDir, \"field-page-number-variants\", 3)");
+        source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildFieldPageNumberVariantsDocument");
+        source.Should().Contain("ResolveAvaloniaHeaderSlotName(document, pageNumber)");
+        source.Should().Contain("ResolveAvaloniaFooterSlotName(document, pageNumber)");
         source.Should().Contain("table-layout-complex");
         source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildComplexTableLayoutDocument");
         source.Should().Contain("table-pagination-repeat-header");

@@ -171,6 +171,24 @@ public sealed record FreeWVisualChartSmartArtExpectation(
     IReadOnlyList<ChartVisualPlan> Charts,
     IReadOnlyList<SmartArtVisualPlan> SmartArts);
 
+public sealed record FreeWVisualFieldExpectation(
+    int SimpleFieldCount,
+    int ComplexFieldCount,
+    int BodyFieldCount,
+    int HeaderFooterFieldCount,
+    int PageFieldCount,
+    int NumPagesFieldCount,
+    int DocumentPropertyFieldCount,
+    bool HasPageFields,
+    bool HasNumPagesFields,
+    bool HasDocumentPropertyFields,
+    bool HasComplexFields,
+    bool HasComplexResultFields,
+    bool HasHeaderFooterFields,
+    IReadOnlyList<string> FieldKinds,
+    IReadOnlyList<string> ComplexFieldKeywords,
+    IReadOnlyList<string> HeaderFooterSlotNames);
+
 public sealed record FreeWVisualPageExpectation(
     int PageNumber,
     int PageCount,
@@ -182,6 +200,7 @@ public sealed record FreeWVisualPageExpectation(
     FreeWVisualTableExpectation Tables,
     FreeWVisualDrawingObjectExpectation DrawingObjects,
     FreeWVisualChartSmartArtExpectation ChartSmartArt,
+    FreeWVisualFieldExpectation Fields,
     string? HeaderSlotName,
     string? FooterSlotName,
     bool HasFootnotes,
@@ -255,10 +274,19 @@ public static class FreeWVisualEvidencePlanner
 {
     public const string ManifestFileName = "freew_visual_evidence_manifest.json";
     public const string SchemaId = "freew.visual-evidence.v1";
-    public const int SchemaVersion = 6;
+    public const int SchemaVersion = 7;
     public const string SectionGeometryPageSurfaceRenderStatus = "section-page-surface";
 
     private const int MaxTrackedColorCount = 4096;
+
+    private static readonly RunFieldKind[] DocumentPropertyFieldKinds =
+    [
+        RunFieldKind.Author,
+        RunFieldKind.Title,
+        RunFieldKind.Subject,
+        RunFieldKind.Keywords,
+        RunFieldKind.DocComments
+    ];
 
     private static readonly FreeWVisualCompositionExpectation BodyPrintComposition = new(
         ExpectsPageChrome: true,
@@ -299,6 +327,26 @@ public static class FreeWVisualEvidencePlanner
             ["f2", "page-composition", "print-layout", "header-footer", "odd-even-pages", "multi-page", "body-text"],
             "f2-hf-oddeven_p{page}.png",
             2,
+            DocumentViewLayoutKind.PrintLayout,
+            BodyPrintComposition with { ExpectsHeadersFooters = true }),
+        new(
+            "field-page-number-variants",
+            "PAGE, NUMPAGES, document-property, and complex field visual composition.",
+            [
+                "fields",
+                "page-number-fields",
+                "numpages-fields",
+                "document-property-fields",
+                "complex-fields",
+                "header-footer-fields",
+                "page-composition",
+                "print-layout",
+                "header-footer",
+                "multi-page",
+                "body-text"
+            ],
+            "field-page-number-variants_p{page}.png",
+            3,
             DocumentViewLayoutKind.PrintLayout,
             BodyPrintComposition with { ExpectsHeadersFooters = true }),
         new(
@@ -652,6 +700,7 @@ public static class FreeWVisualEvidencePlanner
         var tables = BuildTableExpectation(document);
         var drawingObjects = BuildDrawingObjectExpectation(document, surface, features.Columns.Count);
         var chartSmartArt = BuildChartSmartArtExpectation(document);
+        var fields = BuildFieldExpectation(document);
 
         var expectedOutputName = ExpectedOutputName(scenario.ScenarioId, pageNumber, outputName);
         return new FreeWVisualPageExpectation(
@@ -665,6 +714,7 @@ public static class FreeWVisualEvidencePlanner
             tables,
             drawingObjects,
             chartSmartArt,
+            fields,
             headerSlotName,
             footerSlotName,
             hasFootnotes,
@@ -1069,6 +1119,65 @@ public static class FreeWVisualEvidencePlanner
             SmartArts: smartArts);
     }
 
+    public static FreeWVisualFieldExpectation BuildFieldExpectation(TextDocument? document)
+    {
+        if (document is null)
+            return EmptyFieldExpectation;
+
+        var fieldRuns = EnumerateFieldRunSnapshots(document).ToList();
+        if (fieldRuns.Count == 0)
+            return EmptyFieldExpectation;
+
+        var simpleRuns = fieldRuns
+            .Where(item => item.Run.FieldKind != RunFieldKind.None)
+            .ToList();
+        var complexRuns = fieldRuns
+            .Where(item => item.Run.ComplexField is not null)
+            .ToList();
+        var complexKeywords = complexRuns
+            .Select(item => item.Run.ComplexField!.Keyword)
+            .Where(keyword => !string.IsNullOrWhiteSpace(keyword))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(keyword => keyword, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var fieldKinds = simpleRuns
+            .Select(item => item.Run.FieldKind.ToString())
+            .Concat(complexKeywords.Select(keyword => "Complex:" + keyword))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(kind => kind, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var pageFieldCount = simpleRuns.Count(item => item.Run.FieldKind == RunFieldKind.PageNumber)
+            + complexRuns.Count(item => string.Equals(item.Run.ComplexField!.Keyword, "PAGE", StringComparison.OrdinalIgnoreCase));
+        var numPagesFieldCount = simpleRuns.Count(item => item.Run.FieldKind == RunFieldKind.NumPages)
+            + complexRuns.Count(item => string.Equals(item.Run.ComplexField!.Keyword, "NUMPAGES", StringComparison.OrdinalIgnoreCase));
+        var documentPropertyFieldCount = simpleRuns.Count(item => DocumentPropertyFieldKinds.Contains(item.Run.FieldKind))
+            + complexRuns.Count(item => IsDocumentPropertyFieldKeyword(item.Run.ComplexField!.Keyword));
+
+        return new FreeWVisualFieldExpectation(
+            SimpleFieldCount: simpleRuns.Count,
+            ComplexFieldCount: complexRuns.Count,
+            BodyFieldCount: fieldRuns.Count(item => !item.HeaderFooter),
+            HeaderFooterFieldCount: fieldRuns.Count(item => item.HeaderFooter),
+            PageFieldCount: pageFieldCount,
+            NumPagesFieldCount: numPagesFieldCount,
+            DocumentPropertyFieldCount: documentPropertyFieldCount,
+            HasPageFields: pageFieldCount > 0,
+            HasNumPagesFields: numPagesFieldCount > 0,
+            HasDocumentPropertyFields: documentPropertyFieldCount > 0,
+            HasComplexFields: complexRuns.Count > 0,
+            HasComplexResultFields: complexRuns.Any(item => !string.IsNullOrWhiteSpace(item.Run.Text)),
+            HasHeaderFooterFields: fieldRuns.Any(item => item.HeaderFooter),
+            FieldKinds: fieldKinds,
+            ComplexFieldKeywords: complexKeywords,
+            HeaderFooterSlotNames: fieldRuns
+                .Where(item => item.HeaderFooter && !string.IsNullOrWhiteSpace(item.HeaderFooterSlotName))
+                .Select(item => item.HeaderFooterSlotName!)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(slot => slot, StringComparer.OrdinalIgnoreCase)
+                .ToList());
+    }
+
     public static void EnsureTrusted(FreeWVisualEvidenceRow row)
     {
         ArgumentNullException.ThrowIfNull(row);
@@ -1289,6 +1398,87 @@ public static class FreeWVisualEvidencePlanner
         DistinctSmartArtFillCount: 0,
         Charts: [],
         SmartArts: []);
+
+    private static FreeWVisualFieldExpectation EmptyFieldExpectation { get; } = new(
+        SimpleFieldCount: 0,
+        ComplexFieldCount: 0,
+        BodyFieldCount: 0,
+        HeaderFooterFieldCount: 0,
+        PageFieldCount: 0,
+        NumPagesFieldCount: 0,
+        DocumentPropertyFieldCount: 0,
+        HasPageFields: false,
+        HasNumPagesFields: false,
+        HasDocumentPropertyFields: false,
+        HasComplexFields: false,
+        HasComplexResultFields: false,
+        HasHeaderFooterFields: false,
+        FieldKinds: [],
+        ComplexFieldKeywords: [],
+        HeaderFooterSlotNames: []);
+
+    private static IEnumerable<(Run Run, bool HeaderFooter, string? HeaderFooterSlotName)> EnumerateFieldRunSnapshots(
+        TextDocument document)
+    {
+        foreach (var run in EnumerateRuns(document))
+        {
+            if (IsFieldRun(run))
+                yield return (run, false, null);
+        }
+
+        foreach (var (slotName, headerFooter) in EnumerateHeaderFooterSlots(document))
+        {
+            foreach (var paragraph in headerFooter.Paragraphs)
+            {
+                foreach (var run in paragraph.Runs)
+                {
+                    if (IsFieldRun(run))
+                        yield return (run, true, slotName);
+                }
+            }
+        }
+    }
+
+    private static IEnumerable<(string SlotName, HeaderFooter HeaderFooter)> EnumerateHeaderFooterSlots(
+        TextDocument document)
+    {
+        var seen = new HashSet<SectionHeadersFooters>();
+        foreach (var section in document.Sections)
+        {
+            if (!seen.Add(section.HeadersFooters))
+                continue;
+
+            foreach (var item in EnumerateHeaderFooterSlots(section.HeadersFooters))
+                yield return item;
+        }
+    }
+
+    private static IEnumerable<(string SlotName, HeaderFooter HeaderFooter)> EnumerateHeaderFooterSlots(
+        SectionHeadersFooters headersFooters)
+    {
+        if (headersFooters.Header is { IsEmpty: false } header)
+            yield return ("header", header);
+        if (headersFooters.Footer is { IsEmpty: false } footer)
+            yield return ("footer", footer);
+        if (headersFooters.FirstHeader is { IsEmpty: false } firstHeader)
+            yield return ("first-header", firstHeader);
+        if (headersFooters.FirstFooter is { IsEmpty: false } firstFooter)
+            yield return ("first-footer", firstFooter);
+        if (headersFooters.EvenHeader is { IsEmpty: false } evenHeader)
+            yield return ("even-header", evenHeader);
+        if (headersFooters.EvenFooter is { IsEmpty: false } evenFooter)
+            yield return ("even-footer", evenFooter);
+    }
+
+    private static bool IsFieldRun(Run run) =>
+        run.FieldKind != RunFieldKind.None || run.ComplexField is not null;
+
+    private static bool IsDocumentPropertyFieldKeyword(string keyword) =>
+        keyword.Equals("AUTHOR", StringComparison.OrdinalIgnoreCase)
+        || keyword.Equals("TITLE", StringComparison.OrdinalIgnoreCase)
+        || keyword.Equals("SUBJECT", StringComparison.OrdinalIgnoreCase)
+        || keyword.Equals("KEYWORDS", StringComparison.OrdinalIgnoreCase)
+        || keyword.Equals("COMMENTS", StringComparison.OrdinalIgnoreCase);
 
     private static IEnumerable<Run> EnumerateRuns(TextDocument document)
     {

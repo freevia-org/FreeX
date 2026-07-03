@@ -45,6 +45,7 @@ public sealed record FreeWVisualEvidenceNormalizedRow(
     FreeWVisualTableExpectation Tables,
     FreeWVisualDrawingObjectExpectation DrawingObjects,
     FreeWVisualChartSmartArtExpectation ChartSmartArt,
+    FreeWVisualFieldExpectation Fields,
     FreeWVisualEvidenceTrust Trust);
 
 public sealed record FreeWVisualEvidenceNormalizedSummary(
@@ -78,7 +79,7 @@ public sealed record FreeWVisualBaselineTriageItem(
 public static class FreeWVisualEvidenceManifestNormalizer
 {
     public const string SummarySchemaId = "freew.visual-evidence-summary.v1";
-    public const int SummarySchemaVersion = 11;
+    public const int SummarySchemaVersion = 12;
     public const string SummaryJsonFileName = "freew_visual_evidence_summary.json";
     public const string SummaryMarkdownFileName = "freew_visual_evidence_summary.md";
     public const string WpfHostId = "wpf-fidelity-render";
@@ -119,6 +120,10 @@ public static class FreeWVisualEvidenceManifestNormalizer
     public static IReadOnlyList<string> ChartSmartArtRendererScenarioIds { get; } =
     [
         "chart-smartart-complex"
+    ];
+    public static IReadOnlyList<string> FieldRendererScenarioIds { get; } =
+    [
+        "field-page-number-variants"
     ];
 
     public static IReadOnlyList<FreeWVisualEvidenceExpectedScenario> DefaultExpectedScenarios { get; } =
@@ -428,6 +433,17 @@ public static class FreeWVisualEvidenceManifestNormalizer
                     scenario.ScenarioId,
                     scenario.MinimumExpectedOutputs));
             }
+            else if (FieldRendererScenarioIds.Contains(scenario.ScenarioId, StringComparer.OrdinalIgnoreCase))
+            {
+                expected.Add(new FreeWVisualEvidenceExpectedScenario(
+                    WpfHostId,
+                    scenario.ScenarioId,
+                    scenario.MinimumExpectedOutputs));
+                expected.Add(new FreeWVisualEvidenceExpectedScenario(
+                    AvaloniaHostId,
+                    scenario.ScenarioId,
+                    scenario.MinimumExpectedOutputs));
+            }
             else if (scenario.ScenarioId.StartsWith("f2-", StringComparison.OrdinalIgnoreCase))
             {
                 expected.Add(new FreeWVisualEvidenceExpectedScenario(
@@ -595,6 +611,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
             row.PageExpectation.Tables,
             row.PageExpectation.DrawingObjects,
             row.PageExpectation.ChartSmartArt,
+            row.PageExpectation.Fields,
             trust);
     }
 
@@ -618,6 +635,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
         ValidateWatermarkFeatureTags(row, rowFailures);
         ValidateDrawingObjectFeatureTags(row, rowFailures);
         ValidateChartSmartArtFeatureTags(row, rowFailures);
+        ValidateFieldFeatureTags(row, rowFailures);
         if (features.Section.SectionOrdinal <= 0)
             rowFailures.Add("section ordinal must be positive");
         if (features.Section.SectionRelativePageNumber <= 0)
@@ -743,6 +761,31 @@ public static class FreeWVisualEvidenceManifestNormalizer
             rowFailures.Add("chart/SmartArt evidence expects SmartArt style metadata but the SmartArt plan records none");
         if (chartSmartArt.SmartArtCount > 0 && chartSmartArt.SmartArtNodeCount <= 0)
             rowFailures.Add("chart/SmartArt evidence includes SmartArt but records no nodes");
+    }
+
+    private static void ValidateFieldFeatureTags(
+        FreeWVisualEvidenceRow row,
+        List<string> rowFailures)
+    {
+        var tags = row.ExpectedFeatureTags;
+        var fields = row.PageExpectation.Fields;
+        if (!tags.Contains("fields", StringComparer.OrdinalIgnoreCase))
+            return;
+
+        if (fields.SimpleFieldCount + fields.ComplexFieldCount <= 0)
+            rowFailures.Add("field evidence must include at least one field run");
+        if (tags.Contains("page-number-fields", StringComparer.OrdinalIgnoreCase) && !fields.HasPageFields)
+            rowFailures.Add("field evidence expects PAGE fields but the field expectation records none");
+        if (tags.Contains("numpages-fields", StringComparer.OrdinalIgnoreCase) && !fields.HasNumPagesFields)
+            rowFailures.Add("field evidence expects NUMPAGES fields but the field expectation records none");
+        if (tags.Contains("document-property-fields", StringComparer.OrdinalIgnoreCase) && !fields.HasDocumentPropertyFields)
+            rowFailures.Add("field evidence expects document-property fields but the field expectation records none");
+        if (tags.Contains("complex-fields", StringComparer.OrdinalIgnoreCase) && !fields.HasComplexFields)
+            rowFailures.Add("field evidence expects complex fields but the field expectation records none");
+        if (tags.Contains("complex-fields", StringComparer.OrdinalIgnoreCase) && !fields.HasComplexResultFields)
+            rowFailures.Add("field evidence expects cached complex field results but the field expectation records none");
+        if (tags.Contains("header-footer-fields", StringComparer.OrdinalIgnoreCase) && !fields.HasHeaderFooterFields)
+            rowFailures.Add("field evidence expects header/footer fields but the field expectation records none");
     }
 
     private static void ValidateBackstageCaptureSource(

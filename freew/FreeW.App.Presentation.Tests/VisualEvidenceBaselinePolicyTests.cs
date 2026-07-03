@@ -130,6 +130,7 @@ public sealed class VisualEvidenceBaselinePolicyTests
             Tables: expectation.Tables,
             DrawingObjects: expectation.DrawingObjects,
             ChartSmartArt: expectation.ChartSmartArt,
+            Fields: expectation.Fields,
             Trust: new FreeWVisualEvidenceTrust(true, []));
     }
 }
