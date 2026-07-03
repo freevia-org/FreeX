@@ -2689,6 +2689,20 @@ public sealed class AvaloniaShellSourceTests
     }
 
     [Fact]
+    public void AvaloniaAutoFilterFlyout_InitialFocusMatchesWpfFirstCommand()
+    {
+        var avaloniaSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.AutoFilter.cs"));
+        var wpfSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Host", "AutoFilterDialog.Controls.cs"));
+
+        wpfSource.Should().Contain("FocusInitialKeyboardTarget()");
+        wpfSource.Should().Contain("_sortAscendingButton.Focus();");
+        avaloniaSource.Should().Contain("Control? initialFocusTarget = null;");
+        avaloniaSource.Should().Contain("item.FocusRole == AutoFilterMenuEntryFocusRole.Command");
+        avaloniaSource.Should().Contain("(initialFocusTarget ?? searchBox).Focus();");
+        avaloniaSource.Should().NotContain("flyout.ShowAt(anchor);\r\n        searchBox.Focus();");
+    }
+
+    [Fact]
     public void MainWindow_WiresNativeDataTableThroughSharedPlannerSessionAndCompactDialog()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
