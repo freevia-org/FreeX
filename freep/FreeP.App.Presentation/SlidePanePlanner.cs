@@ -14,7 +14,9 @@ public sealed record SlidePaneEntry(
     int SlideIndex,
     string Text,
     int SectionSlideCount = 0,
-    int SectionIndex = -1);
+    int SectionIndex = -1,
+    string SectionId = "",
+    bool IsSectionCollapsed = false);
 
 public enum SlidePaneActionKind
 {
@@ -43,18 +45,23 @@ public static class SlidePanePlanner
 
     public static IReadOnlyList<SlidePaneEntry> BuildEntries(
         IReadOnlyList<Slide> slides,
-        IReadOnlyList<PresentationSection> sections)
+        IReadOnlyList<PresentationSection> sections,
+        IReadOnlySet<string>? collapsedSectionIds = null)
     {
         ArgumentNullException.ThrowIfNull(slides);
         ArgumentNullException.ThrowIfNull(sections);
 
-        var sectionHeaders = BuildSectionHeaders(slides, sections);
+        var sectionHeaders = BuildSectionHeaders(slides, sections, collapsedSectionIds);
+        var collapsedSlideIds = BuildCollapsedSlideIds(sections, collapsedSectionIds);
         var entries = new List<SlidePaneEntry>(slides.Count + sectionHeaders.Count);
 
         for (var i = 0; i < slides.Count; i++)
         {
             if (sectionHeaders.TryGetValue(i, out var header))
                 entries.Add(header);
+
+            if (collapsedSlideIds.Contains(slides[i].Id))
+                continue;
 
             entries.Add(new SlidePaneEntry(
                 SlidePaneEntryKind.Slide,
@@ -153,6 +160,19 @@ public static class SlidePanePlanner
     public static string FormatSectionHeader(string name, int slideCount) =>
         slideCount > 0 ? $"{name}  ({slideCount})" : name;
 
+    public static string GetSectionIdentity(PresentationSection section, int sectionIndex)
+    {
+        ArgumentNullException.ThrowIfNull(section);
+
+        if (!string.IsNullOrWhiteSpace(section.Id))
+            return section.Id.Trim();
+
+        if (!string.IsNullOrWhiteSpace(section.Name))
+            return section.Name.Trim();
+
+        return sectionIndex.ToString(CultureInfo.InvariantCulture);
+    }
+
     public static int HitTestInsertionPoint(
         IReadOnlyList<bool> paneItemIsSlide,
         double y,
@@ -214,7 +234,8 @@ public static class SlidePanePlanner
 
     private static Dictionary<int, SlidePaneEntry> BuildSectionHeaders(
         IReadOnlyList<Slide> slides,
-        IReadOnlyList<PresentationSection> sections)
+        IReadOnlyList<PresentationSection> sections,
+        IReadOnlySet<string>? collapsedSectionIds)
     {
         var headers = new Dictionary<int, SlidePaneEntry>();
         if (sections.Count == 0)
@@ -227,21 +248,52 @@ public static class SlidePanePlanner
         for (var sectionIndex = 0; sectionIndex < sections.Count; sectionIndex++)
         {
             var section = sections[sectionIndex];
+            var sectionId = GetSectionIdentity(section, sectionIndex);
             var firstIndex = FindFirstSectionSlideIndex(section, slideIndexById);
             if (firstIndex < 0 || headers.ContainsKey(firstIndex))
                 continue;
 
             var count = CountKnownSectionSlides(section, slideIndexById);
+            var isCollapsed = IsSectionCollapsed(sectionId, collapsedSectionIds);
             headers[firstIndex] = new SlidePaneEntry(
                 SlidePaneEntryKind.SectionHeader,
                 SlideIndex: firstIndex,
                 Text: FormatSectionHeader(section.Name, count),
                 SectionSlideCount: count,
-                SectionIndex: sectionIndex);
+                SectionIndex: sectionIndex,
+                SectionId: sectionId,
+                IsSectionCollapsed: isCollapsed);
         }
 
         return headers;
     }
+
+    private static HashSet<string> BuildCollapsedSlideIds(
+        IReadOnlyList<PresentationSection> sections,
+        IReadOnlySet<string>? collapsedSectionIds)
+    {
+        var slideIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (collapsedSectionIds is null || collapsedSectionIds.Count == 0)
+            return slideIds;
+
+        for (var sectionIndex = 0; sectionIndex < sections.Count; sectionIndex++)
+        {
+            var section = sections[sectionIndex];
+            if (!IsSectionCollapsed(GetSectionIdentity(section, sectionIndex), collapsedSectionIds))
+                continue;
+
+            foreach (var slideId in section.SlideIds)
+                slideIds.Add(slideId);
+        }
+
+        return slideIds;
+    }
+
+    private static bool IsSectionCollapsed(
+        string sectionId,
+        IReadOnlySet<string>? collapsedSectionIds) =>
+        collapsedSectionIds is not null &&
+        collapsedSectionIds.Any(id => string.Equals(id, sectionId, StringComparison.OrdinalIgnoreCase));
 
     private static int FindFirstSectionSlideIndex(
         PresentationSection section,

@@ -96,6 +96,7 @@ public sealed class MainWindow : Window
     private readonly ListBox _slidePaneList;
     private readonly Border _slidePaneInsertionIndicator;
     private readonly Button _slidePaneNewSlideButton;
+    private readonly HashSet<string> _slidePaneCollapsedSectionIds = new(StringComparer.OrdinalIgnoreCase);
     private readonly TextBox _notesBox;
     private readonly TextBlock _statusText;
     private Border _layoutPickerHost = null!;
@@ -172,6 +173,8 @@ public sealed class MainWindow : Window
     private int _slidePaneDragTargetIndex = -1;
     private Point _slidePaneDragStartPoint;
 
+    private sealed record SlidePaneSectionHeaderTag(string SectionId, int SectionIndex);
+
     // ── Smoke surface ──────────────────────────────────────────────────────────
 
     /// <summary>True once the ribbon has been built. Read by the launch-smoke coordinator.</summary>
@@ -185,6 +188,9 @@ public sealed class MainWindow : Window
     internal int SlidePaneSlideItemCount => _slidePaneList.Items
         .OfType<ListBoxItem>()
         .Count(item => item.Tag is int);
+    internal int SlidePaneSectionHeaderCount => _slidePaneList.Items
+        .OfType<ListBoxItem>()
+        .Count(item => item.Tag is SlidePaneSectionHeaderTag);
     internal bool IsSlidePaneInsertionIndicatorVisible => _slidePaneInsertionIndicator.IsVisible;
     internal bool IsSlidePaneNewSlideButtonVisible => _slidePaneNewSlideButton.IsVisible;
     internal string? SlidePaneNewSlideButtonText => _slidePaneNewSlideButton.Content?.ToString();
@@ -4045,7 +4051,10 @@ public sealed class MainWindow : Window
         {
             _slidePaneList.Items.Clear();
 
-            var entries = SlidePanePlanner.BuildEntries(_presentation.Slides, _presentation.Sections);
+            var entries = SlidePanePlanner.BuildEntries(
+                _presentation.Slides,
+                _presentation.Sections,
+                _slidePaneCollapsedSectionIds);
             foreach (var entry in entries)
             {
                 if (entry.Kind == SlidePaneEntryKind.SectionHeader)
@@ -4103,6 +4112,16 @@ public sealed class MainWindow : Window
 
     private ListBoxItem BuildSlidePaneSectionHeader(SlidePaneEntry entry)
     {
+        var disclosure = new TextBlock
+        {
+            Text              = entry.IsSectionCollapsed ? ">" : "v",
+            FontSize          = 11,
+            FontWeight        = FontWeight.Bold,
+            Foreground        = new SolidColorBrush(Color.FromRgb(0x33, 0x33, 0x33)),
+            Width             = 14,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+
         var label = new TextBlock
         {
             Text              = entry.Text,
@@ -4113,19 +4132,46 @@ public sealed class MainWindow : Window
             TextTrimming      = TextTrimming.CharacterEllipsis,
         };
 
-        return new ListBoxItem
+        var row = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Children = { disclosure, label },
+        };
+
+        var item = new ListBoxItem
         {
             Content = new Border
             {
                 Background = new SolidColorBrush(Color.FromRgb(0xC8, 0xC8, 0xC8)),
                 Padding    = new Thickness(10, 4),
-                Child      = label,
+                Child      = row,
             },
             Padding     = new Thickness(0),
             Margin      = new Thickness(0, 6, 0, 2),
-            Focusable   = false,
+            Focusable   = true,
+            Tag         = new SlidePaneSectionHeaderTag(entry.SectionId, entry.SectionIndex),
+            Cursor      = new Cursor(StandardCursorType.Hand),
             ContextMenu = BuildSlidePaneSectionContextMenu(entry),
         };
+        item.PointerPressed += (_, e) =>
+        {
+            var point = e.GetCurrentPoint(item);
+            if (!point.Properties.IsLeftButtonPressed)
+                return;
+
+            ToggleSlidePaneSection(entry.SectionId);
+            e.Handled = true;
+        };
+        item.KeyDown += (_, e) =>
+        {
+            if (e.Key is Key.Enter or Key.Space)
+            {
+                ToggleSlidePaneSection(entry.SectionId);
+                e.Handled = true;
+            }
+        };
+
+        return item;
     }
 
     private ContextMenu BuildSlidePaneContextMenu(int slideIndex)
@@ -4220,6 +4266,26 @@ public sealed class MainWindow : Window
                 Editor.RemoveAllSections();
                 break;
         }
+    }
+
+    private void ToggleSlidePaneSection(string sectionId)
+    {
+        if (string.IsNullOrWhiteSpace(sectionId))
+            return;
+
+        if (!_slidePaneCollapsedSectionIds.Add(sectionId))
+            _slidePaneCollapsedSectionIds.Remove(sectionId);
+
+        RefreshSlidePane();
+    }
+
+    internal bool ToggleSlidePaneSectionForTests(int sectionIndex)
+    {
+        if (sectionIndex < 0 || sectionIndex >= _presentation.Sections.Count)
+            return false;
+
+        ToggleSlidePaneSection(SlidePanePlanner.GetSectionIdentity(_presentation.Sections[sectionIndex], sectionIndex));
+        return true;
     }
 
     private async Task<string?> PromptSectionNameAsync(string title, string initialName)

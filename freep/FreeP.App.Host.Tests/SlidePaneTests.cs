@@ -189,6 +189,37 @@ public sealed class SlidePaneTests
     // ── Undo ─────────────────────────────────────────────────────────────────────
 
     [StaFact]
+    public void SectionHeader_ToggleCollapsesMemberSlidesAndKeepsContextMenu()
+    {
+        var presentation = new Presentation();
+        presentation.Slides.Add(new Slide { Id = "slide1", Title = "Slide 1" });
+        presentation.Slides.Add(new Slide { Id = "slide2", Title = "Slide 2" });
+        presentation.Slides.Add(new Slide { Id = "slide3", Title = "Slide 3" });
+        var intro = new PresentationSection { Id = "intro-section", Name = "Intro" };
+        intro.SlideIds.Add("slide1");
+        var body = new PresentationSection { Id = "body-section", Name = "Body" };
+        body.SlideIds.Add("slide2");
+        body.SlideIds.Add("slide3");
+        presentation.Sections.Add(intro);
+        presentation.Sections.Add(body);
+
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var pane = new SlidePane(editor);
+
+        pane.SlidePaneSectionHeaderCount.Should().Be(2);
+        pane.SlidePaneSlideItemCount.Should().Be(3);
+        GetItem(pane, 2).ContextMenu.Should().NotBeNull("section header context actions must stay available");
+
+        pane.ToggleSectionForTests(1).Should().BeTrue();
+
+        pane.SlidePaneSectionHeaderCount.Should().Be(2);
+        pane.SlidePaneSlideItemCount.Should().Be(1);
+
+        pane.ToggleSectionForTests(1).Should().BeTrue();
+        pane.SlidePaneSlideItemCount.Should().Be(3);
+    }
+
+    [StaFact]
     public void Undo_AfterInsert_PaneRestoresOriginalCount()
     {
         var (pane, editor) = MakePaneWithSlides(2);

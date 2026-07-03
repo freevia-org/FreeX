@@ -13,10 +13,12 @@ public sealed class SlidePanePolicySourceGuardTests
             "FreeP.App.Avalonia",
             "MainWindow.cs"));
 
-        source.Should().Contain("SlidePanePlanner.BuildEntries(_presentation.Slides, _presentation.Sections)");
+        source.Should().Contain("SlidePanePlanner.BuildEntries(");
+        source.Should().Contain("_slidePaneCollapsedSectionIds");
         source.Should().Contain("SlidePaneEntryKind.SectionHeader");
         source.Should().Contain("BuildSlidePaneSectionHeader(entry)");
-        source.Should().Contain("Text                = entry.Text");
+        source.Should().Contain("Text              = entry.Text");
+        source.Should().Contain("ToggleSlidePaneSection(entry.SectionId)");
         source.Should().Contain("ContextMenu = BuildSlidePaneSectionContextMenu(entry)");
         source.Should().Contain("Width        = SlidePanePlanner.DefaultThumbnailWidth");
         source.Should().Contain("Height       = SlidePanePlanner.DefaultThumbnailHeight");
