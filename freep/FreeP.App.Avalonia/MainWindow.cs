@@ -250,6 +250,7 @@ public sealed class MainWindow : Window
     internal PresentationNotesPagePreviewPlan? LastNotesPagePreviewPlan { get; private set; }
     internal PresentationNotesPagePdfRenderPlan? LastNotesPagePdfRenderPlan { get; private set; }
     internal PresentationPrintOutputPackage? LastPrintOutputPackage { get; private set; }
+    internal PresentationPrintBackstagePlan? LastPrintBackstagePlan { get; private set; }
     internal PresentationVideoExportPlan? LastVideoExportPlan { get; private set; }
     internal PresentationVideoFramePackage? LastVideoFramePackage { get; private set; }
     internal PresentationLayoutPickerPlan? LastLayoutPickerPlan { get; private set; }
@@ -1428,7 +1429,7 @@ public sealed class MainWindow : Window
         r.Register(PresentationExportPlanner.PdfExportCommandId, new ActionRibbonCommand(() => _ = FileExportPdfAsync()));
         r.Register(PresentationExportPlanner.NotesPagePdfExportCommandId, new ActionRibbonCommand(() => _ = FileExportNotesPagePdfAsync()));
         r.Register(PresentationExportPlanner.ImageExportCommandId, new ActionRibbonCommand(() => _ = FileExportImagesAsync()));
-        r.Register(PresentationExportPlanner.PrintCommandId, new ActionRibbonCommand(() => RefreshPrintOutputPackage()));
+        r.Register(PresentationExportPlanner.PrintCommandId, new ActionRibbonCommand(() => RefreshPrintBackstagePlan()));
         r.Register(PresentationExportPlanner.VideoExportCommandId, new ActionRibbonCommand(() => RefreshVideoFramePackage()));
 
         // Slide navigation/management
@@ -2649,6 +2650,17 @@ public sealed class MainWindow : Window
         _statusText.Text = LastPrintOutputPackage.Plan.DisabledReason ??
             PresentationPrintOutputPackageExecutor.NativePrinterDialogDeferredReason;
         return LastPrintOutputPackage;
+    }
+
+    internal PresentationPrintBackstagePlan RefreshPrintBackstagePlan(PresentationPrintRequest? request = null)
+    {
+        LastPrintBackstagePlan = PresentationPrintBackstagePlanner.Build(
+            request,
+            _presentation.Slides.Count,
+            Editor.CurrentSlideIndex + 1);
+        _statusText.Text = LastPrintBackstagePlan.DisabledReason ??
+            LastPrintBackstagePlan.NativePrinterDialogDeferredMessage;
+        return LastPrintBackstagePlan;
     }
 
     internal PresentationVideoExportPlan RefreshVideoExportPlan(PresentationVideoExportRequest? request = null)

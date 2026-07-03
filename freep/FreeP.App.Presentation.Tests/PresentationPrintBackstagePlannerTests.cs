@@ -1,0 +1,94 @@
+namespace FreeP.App.Compositor.Tests;
+
+public sealed class PresentationPrintBackstagePlannerTests
+{
+    [Fact]
+    public void Build_CoversPowerPointLayoutChoicesAndSelectedHandoutSummary()
+    {
+        var plan = PresentationPrintBackstagePlanner.Build(
+            new PresentationPrintRequest(
+                PresentationPrintLayoutKind.Handouts,
+                new PresentationSlideRangeRequest(
+                    PresentationSlideRangeKind.SelectedSlides,
+                    SelectedSlideNumbers: [4, 2, 2, 99]),
+                HandoutSlidesPerPage: 3,
+                PrintHiddenSlides: true),
+            slideCount: 6,
+            currentSlideNumber: 5,
+            selectedSlideNumbers: [2, 4]);
+
+        plan.Heading.Should().Be("Print");
+        plan.LayoutChoices.Select(choice => choice.Layout.DisplayName).Should().Equal(
+            "Full Page Slides",
+            "Notes Pages",
+            "Handouts (1 slide per page)",
+            "Handouts (2 slides per page)",
+            "Handouts (3 slides per page)",
+            "Handouts (4 slides per page)",
+            "Handouts (6 slides per page)",
+            "Handouts (9 slides per page)");
+        plan.SelectedLayout.Layout.Layout.Should().Be(PresentationPrintLayoutKind.Handouts);
+        plan.SelectedLayout.Layout.SlidesPerPage.Should().Be(3);
+        plan.LayoutChoices.Single(choice => choice.IsSelected).Should().BeSameAs(plan.SelectedLayout);
+        plan.PrintHiddenSlides.Should().BeTrue();
+        plan.PageCount.Should().Be(1);
+        plan.LayoutSummary.Should().Be("Handouts (3 slides per page) - Slides 2, 4, 1 page including hidden slides");
+        plan.SlideRangeSummary.Should().Be("Slides 2, 4");
+        plan.CanBuildPackage.Should().BeTrue();
+        plan.NativePrinterDialogDeferred.Should().BeTrue();
+        plan.NativePrinterDialogDeferredMessage.Should().Be(
+            PresentationPrintOutputPackageExecutor.NativePrinterDialogDeferredReason);
+        plan.DisabledReason.Should().BeNull();
+        plan.PackagePlan.Route.Should().Be(PresentationPrintOutputPackageRoute.HandoutPdf);
+    }
+
+    [Fact]
+    public void Build_ExposesRangeChoicesWithCustomDescriptorOnly()
+    {
+        var plan = PresentationPrintBackstagePlanner.Build(
+            new PresentationPrintRequest(
+                PresentationPrintLayoutKind.FullPageSlides,
+                new PresentationSlideRangeRequest(
+                    PresentationSlideRangeKind.CurrentSlide,
+                    CurrentSlideNumber: 3)),
+            slideCount: 5,
+            currentSlideNumber: 3,
+            selectedSlideNumbers: [5, 1, 1]);
+
+        plan.RangeChoices.Select(choice => choice.Kind).Should().Equal(
+            PresentationSlideRangeKind.AllSlides,
+            PresentationSlideRangeKind.CurrentSlide,
+            PresentationSlideRangeKind.SelectedSlides,
+            PresentationSlideRangeKind.CustomRange);
+        plan.SelectedRange.Kind.Should().Be(PresentationSlideRangeKind.CurrentSlide);
+        plan.RangeChoices.Single(choice => choice.Kind == PresentationSlideRangeKind.AllSlides)
+            .DisplayName.Should().Be("All Slides");
+        plan.RangeChoices.Single(choice => choice.Kind == PresentationSlideRangeKind.CurrentSlide)
+            .DisplayName.Should().Be("Current Slide (Slide 3)");
+        plan.RangeChoices.Single(choice => choice.Kind == PresentationSlideRangeKind.SelectedSlides)
+            .DisplayName.Should().Be("Selected Slides (Slides 1, 5)");
+        var custom = plan.RangeChoices.Single(choice => choice.Kind == PresentationSlideRangeKind.CustomRange);
+        custom.IsAvailable.Should().BeTrue();
+        custom.Request.Should().BeNull("the Backstage pane records the descriptor but does not own a parser-heavy input UI");
+    }
+
+    [Fact]
+    public void Build_OmitsSelectedSlidesWhenHostDoesNotProvideThemAndDisablesEmptyDeckPackage()
+    {
+        var plan = PresentationPrintBackstagePlanner.Build(
+            request: null,
+            slideCount: 0,
+            currentSlideNumber: null,
+            selectedSlideNumbers: null);
+
+        plan.RangeChoices.Select(choice => choice.Kind).Should().Equal(
+            PresentationSlideRangeKind.AllSlides,
+            PresentationSlideRangeKind.CurrentSlide,
+            PresentationSlideRangeKind.CustomRange);
+        plan.PageCount.Should().Be(0);
+        plan.SlideRangeSummary.Should().Be("No slides");
+        plan.CanBuildPackage.Should().BeFalse();
+        plan.DisabledReason.Should().Be("Print output requires at least one slide.");
+        plan.LayoutChoices.Should().OnlyContain(choice => !choice.PackagePlan.CanBuildPackage);
+    }
+}

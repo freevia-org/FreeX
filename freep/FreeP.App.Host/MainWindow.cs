@@ -169,6 +169,7 @@ public sealed class MainWindow : Window
     internal PresentationNotesPagePreviewPlan? LastNotesPagePreviewPlan { get; private set; }
     internal PresentationNotesPagePdfRenderPlan? LastNotesPagePdfRenderPlan { get; private set; }
     internal PresentationPrintOutputPackage? LastPrintOutputPackage { get; private set; }
+    internal PresentationPrintBackstagePlan? LastPrintBackstagePlan { get; private set; }
     internal PresentationVideoExportPlan? LastVideoExportPlan { get; private set; }
     internal PresentationVideoFramePackage? LastVideoFramePackage { get; private set; }
     internal PresentationLayoutPickerPlan? LastLayoutPickerPlan { get; private set; }
@@ -270,7 +271,8 @@ public sealed class MainWindow : Window
             UpdateTitle,
             _options,
             messageService: _messageService,
-            getImageExportRange: BuildCurrentSlideImageExportRange);
+            getImageExportRange: BuildCurrentSlideImageExportRange,
+            getPrintCurrentSlideNumber: () => Editor.CurrentSlideIndex + 1);
 
         // Title bar.
         var titleBar = ShellChrome.BuildTitleBar(this, chromeOptions);
@@ -341,7 +343,7 @@ public sealed class MainWindow : Window
         CommandBindings.Add(new CommandBinding(ApplicationCommands.Open,   (_, _) => _file.Open()));
         CommandBindings.Add(new CommandBinding(ApplicationCommands.Save,   (_, _) => _file.Save()));
         CommandBindings.Add(new CommandBinding(ApplicationCommands.SaveAs, (_, _) => _file.SaveAs()));
-        CommandBindings.Add(new CommandBinding(ApplicationCommands.Print,  (_, _) => RefreshPrintOutputPackage()));
+        CommandBindings.Add(new CommandBinding(ApplicationCommands.Print,  (_, _) => RefreshPrintBackstagePlan()));
 
         // Editing keyboard shortcuts (Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z / Delete / Ctrl+D).
         AddEditingKeyBindings();
@@ -362,6 +364,7 @@ public sealed class MainWindow : Window
             ExportPdf: () => _file.ExportPdf(),
             ExportNotesPagePdf: () => _file.ExportNotesPagePdf(),
             ExportImages: () => _file.ExportImages(),
+            PlanPrint: () => RefreshPrintBackstagePlan(),
             ExportVideo: () => RefreshVideoFramePackage(),
             CurrentOptions: () => _options,
             OnClosed: () => { },
@@ -1255,6 +1258,12 @@ public sealed class MainWindow : Window
     {
         LastPrintOutputPackage = _file.BuildPrintOutputPackage(request);
         return LastPrintOutputPackage;
+    }
+
+    internal PresentationPrintBackstagePlan RefreshPrintBackstagePlan(PresentationPrintRequest? request = null)
+    {
+        LastPrintBackstagePlan = _file.BuildPrintBackstagePlan(request);
+        return LastPrintBackstagePlan;
     }
 
     internal void RefreshReviewWorkflowPlans()

@@ -984,6 +984,39 @@ public sealed class ReviewWorkflowAdapterTests
     }
 
     [StaFact]
+    public void MainWindow_PrintBackstageRequest_RecordsSharedPlanWithoutPackageExecution()
+    {
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
+        try
+        {
+            window.Editor.InsertSlide();
+            window.Editor.InsertSlide();
+            window.Editor.SelectSlide(1);
+
+            var plan = window.RefreshPrintBackstagePlan(new PresentationPrintRequest(
+                PresentationPrintLayoutKind.NotesPages,
+                new PresentationSlideRangeRequest(
+                    PresentationSlideRangeKind.CurrentSlide,
+                    CurrentSlideNumber: 2)));
+
+            window.LastPrintBackstagePlan.Should().BeSameAs(plan);
+            window.LastPrintOutputPackage.Should().BeNull("Backstage Print planning must not render a printable package");
+            plan.SelectedLayout.Layout.Layout.Should().Be(PresentationPrintLayoutKind.NotesPages);
+            plan.SelectedRange.Kind.Should().Be(PresentationSlideRangeKind.CurrentSlide);
+            plan.RangeChoices.Single(choice => choice.Kind == PresentationSlideRangeKind.CurrentSlide)
+                .DisplayName.Should().Be("Current Slide (Slide 2)");
+            plan.PageCount.Should().Be(1);
+            plan.NativePrinterDialogDeferred.Should().BeTrue();
+            plan.NativePrinterDialogDeferredMessage.Should().Be(
+                PresentationPrintOutputPackageExecutor.NativePrinterDialogDeferredReason);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [StaFact]
     public void MainWindow_NotesPagePdfRequest_RecordsSharedRenderPlan()
     {
         var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);

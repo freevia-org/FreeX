@@ -39,6 +39,8 @@ internal sealed class FileCommands
     private readonly SisterWpfFileCommandWorkflow _workflow;
     private readonly FreePOptions _options;
     private readonly Func<PresentationSlideRangeRequest?> _getImageExportRange;
+    private readonly Func<int?> _getPrintCurrentSlideNumber;
+    private readonly Func<IReadOnlyList<int>?> _getPrintSelectedSlideNumbers;
 
     private static readonly FileOpenDialogPlan OpenDialogPlan =
         PresentationFileDialogPlanner.BuildOpenDialogPlan();
@@ -51,13 +53,17 @@ internal sealed class FileCommands
         FreePOptions? options = null,
         Func<RecentFilesStore>? loadRecentFilesStore = null,
         IUserMessageService? messageService = null,
-        Func<PresentationSlideRangeRequest?>? getImageExportRange = null)
+        Func<PresentationSlideRangeRequest?>? getImageExportRange = null,
+        Func<int?>? getPrintCurrentSlideNumber = null,
+        Func<IReadOnlyList<int>?>? getPrintSelectedSlideNumbers = null)
     {
         _window = window;
         _getModel = getModel;
         _loadModel = loadModel;
         _options = options ?? new FreePOptions();
         _getImageExportRange = getImageExportRange ?? (() => null);
+        _getPrintCurrentSlideNumber = getPrintCurrentSlideNumber ?? (() => null);
+        _getPrintSelectedSlideNumbers = getPrintSelectedSlideNumbers ?? (() => null);
         _workflow = new SisterWpfFileCommandWorkflow(
             "FreeP",
             () => _options.RecentFilesCap,
@@ -74,6 +80,8 @@ internal sealed class FileCommands
     public string DisplayName => _workflow.DisplayName;
 
     public PresentationPrintOutputPackage? LastPrintOutputPackage { get; private set; }
+
+    public PresentationPrintBackstagePlan? LastPrintBackstagePlan { get; private set; }
 
     public PresentationVideoFramePackage? LastVideoFramePackage { get; private set; }
 
@@ -260,6 +268,19 @@ internal sealed class FileCommands
             WpfPresentationSlideImageRenderer.RenderSlideToPng,
             WpfRasterPdfWriter.WriteToBytes);
         return LastPrintOutputPackage;
+    }
+
+    /// <summary>
+    /// Builds the shared PowerPoint-style Backstage Print pane model without opening a native print dialog.
+    /// </summary>
+    public PresentationPrintBackstagePlan BuildPrintBackstagePlan(PresentationPrintRequest? request = null)
+    {
+        LastPrintBackstagePlan = PresentationPrintBackstagePlanner.Build(
+            request,
+            _getModel().Slides.Count,
+            _getPrintCurrentSlideNumber(),
+            _getPrintSelectedSlideNumbers());
+        return LastPrintBackstagePlan;
     }
 
     /// <summary>

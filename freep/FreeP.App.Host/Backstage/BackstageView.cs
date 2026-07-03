@@ -1,6 +1,7 @@
 using System;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
 using Free.Shared.AppServices;
 using Free.Shared.Ribbon.Wpf;
 using Free.Shared.Shell;
@@ -26,6 +27,7 @@ internal sealed class BackstageView : UserControl
         Theme.TileWidth,
         Theme.TileHeight,
         BackstageStrings.Current.Get);
+    private static BackstageVisualKit Kit => BackstageResources.Kit;
     private static BackstagePaneComposer Panes => BackstageResources.Panes;
     private static SisterBackstagePaneSpecPlanner PaneSpecs => BackstageResources.PaneSpecs;
 
@@ -67,8 +69,74 @@ internal sealed class BackstageView : UserControl
             BuildNewPane,
             BuildOptionsPane)
         {
+            Print = backstage.FrameCommand(_actions.PlanPrint),
+            BuildPrintPane = BuildPrintPane,
             BuildExportPane = BuildExportPane,
             BuildAccountPane = BuildAccountPane,
+        };
+    }
+
+    private UIElement BuildPrintPane()
+    {
+        var plan = _file.BuildPrintBackstagePlan();
+        var panel = new StackPanel { MaxWidth = 760, HorizontalAlignment = HorizontalAlignment.Left };
+        panel.Children.Add(Kit.HeadingText(plan.Heading));
+        panel.Children.Add(new TextBlock
+        {
+            Text = plan.Description,
+            Foreground = Kit.Muted,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 16)
+        });
+
+        panel.Children.Add(Kit.SubHeading("Settings"));
+        panel.Children.Add(Kit.Field("Layout", plan.SelectedLayout.Layout.DisplayName));
+        panel.Children.Add(Kit.Field("Slides", plan.SlideRangeSummary));
+        panel.Children.Add(Kit.Field("Pages", plan.PageCount.ToString()));
+        panel.Children.Add(Kit.Field("Hidden slides", plan.PrintHiddenSlides ? "Included" : "Not included"));
+        panel.Children.Add(Kit.Field("Native printer dialog", plan.NativePrinterDialogDeferred ? "Deferred" : "Available"));
+
+        panel.Children.Add(Kit.SubHeading("Layouts"));
+        foreach (var choice in plan.LayoutChoices)
+            panel.Children.Add(PrintChoiceRow(
+                choice.Layout.DisplayName,
+                choice.PackagePlan.LayoutSummary,
+                choice.IsSelected));
+
+        panel.Children.Add(Kit.SubHeading("Slide Range"));
+        foreach (var choice in plan.RangeChoices)
+            panel.Children.Add(PrintChoiceRow(
+                choice.DisplayName,
+                choice.Description,
+                choice.Kind == plan.SelectedRange.Kind,
+                choice.IsAvailable));
+
+        panel.Children.Add(new TextBlock
+        {
+            Text = plan.DisabledReason ?? plan.NativePrinterDialogDeferredMessage,
+            Foreground = Kit.Muted,
+            FontStyle = FontStyles.Italic,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 8, 0, 0)
+        });
+
+        return Kit.Scroll(panel);
+    }
+
+    private static UIElement PrintChoiceRow(
+        string label,
+        string description,
+        bool isSelected,
+        bool isAvailable = true)
+    {
+        var prefix = isSelected ? "Selected: " : string.Empty;
+        var availability = isAvailable ? string.Empty : " (unavailable)";
+        return new TextBlock
+        {
+            Text = $"{prefix}{label}{availability}\n{description}",
+            Foreground = isAvailable ? Kit.Muted : Brushes.Gray,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 8)
         };
     }
 
@@ -172,6 +240,7 @@ internal sealed record BackstageActions(
     Action ExportPdf,
     Action ExportNotesPagePdf,
     Action ExportImages,
+    Action PlanPrint,
     Action ExportVideo,
     Func<FreePOptions> CurrentOptions,
     Action OnClosed,
