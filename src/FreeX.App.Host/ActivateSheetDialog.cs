@@ -100,11 +100,14 @@ public sealed class ActivateSheetDialog : DialogWindow
         style.Resources.Add(SystemColors.InactiveSelectionHighlightTextBrushKey, SystemColors.HighlightTextBrush);
         style.Setters.Add(new Setter(Control.PaddingProperty, new Thickness(2, 0, 2, 0)));
         style.Setters.Add(new Setter(Control.FontSizeProperty, 10.5));
+        style.Setters.Add(new Setter(Control.BorderBrushProperty, System.Windows.Media.Brushes.Transparent));
+        style.Setters.Add(new Setter(Control.BorderThicknessProperty, new Thickness(1)));
         style.Setters.Add(new Setter(FrameworkElement.HeightProperty, 13.0));
         style.Setters.Add(new Setter(Control.FocusVisualStyleProperty, null));
         var selectedTrigger = new Trigger { Property = ListBoxItem.IsSelectedProperty, Value = true };
         selectedTrigger.Setters.Add(new Setter(Control.BackgroundProperty, SystemColors.HighlightBrush));
         selectedTrigger.Setters.Add(new Setter(Control.ForegroundProperty, SystemColors.HighlightTextBrush));
+        selectedTrigger.Setters.Add(new Setter(Control.BorderBrushProperty, SystemColors.ControlTextBrush));
         style.Triggers.Add(selectedTrigger);
         return style;
     }
