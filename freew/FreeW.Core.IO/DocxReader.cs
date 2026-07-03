@@ -260,8 +260,8 @@ public static class DocxReader
 
     /// <summary>
     /// Captures the package parts FreeW does not model but preserves verbatim (preserve-and-re-emit):
-    /// <c>word/webSettings.xml</c> and every <c>customXml/*</c> part (each item, its props, and the item's own
-    /// <c>_rels</c>). Each captured part records its raw bytes plus — when it has them — its
+    /// <c>word/webSettings.xml</c>, every <c>customXml/*</c> part (each item, its props, and the item's own
+    /// <c>_rels</c>), and <c>word/glossary/*</c> building-block parts. Each captured part records its raw bytes plus — when it has them — its
     /// <c>[Content_Types].xml</c> Override and the document→part relationship type, so the writer can re-emit
     /// the part, its content type and its relationship unchanged. A document with none of these parts (authored
     /// from scratch) captures nothing, so it round-trips byte-equivalently to before.
@@ -271,6 +271,7 @@ public static class DocxReader
         // Map each part name → its content-type Override (so a re-emitted part keeps its declared type), and
         // each document-relationship Target → its Type (so a re-emitted part keeps its document relationship).
         var overrides = ReadContentTypeOverrides(archive);
+        var contentTypeDefaults = ReadContentTypeDefaults(archive);
         var docRelTypesByTarget = ReadDocumentRelationshipTypesByTarget(archive);
 
         void Capture(string partName, string? relationshipType)
@@ -287,6 +288,38 @@ public static class DocxReader
         if (archive.GetEntry("word/webSettings.xml") is not null)
             Capture("/word/webSettings.xml",
                 docRelTypesByTarget.GetValueOrDefault("webSettings.xml") ?? WebSettingsRelType);
+
+        // word/glossary/*: Word building blocks / AutoText live in a glossary document part plus optional
+        // glossary-local rels, styles, media and other satellites. Preserve the glossary subtree as package
+        // inventory and only mark the glossary document itself as document-referenced.
+        var glossaryDocumentParts = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var rel in ReadDocumentRelationships(archive).Values)
+        {
+            if (rel.Type != GlossaryDocumentRelType)
+                continue;
+            var partName = OpcPathHelper.ResolveAbsolutePartName("/word", rel.Target);
+            if (partName is not null)
+                glossaryDocumentParts[partName] = rel.Type;
+        }
+        if (archive.GetEntry(GlossaryDocumentPartName.TrimStart('/')) is not null)
+            glossaryDocumentParts.TryAdd(
+                GlossaryDocumentPartName,
+                docRelTypesByTarget.GetValueOrDefault("glossary/document.xml") ?? GlossaryDocumentRelType);
+
+        foreach (var entry in archive.Entries)
+        {
+            var name = entry.FullName;
+            if (!name.StartsWith("word/glossary/", StringComparison.Ordinal) || name.EndsWith("/", StringComparison.Ordinal))
+                continue;
+            var partName = "/" + name;
+            CapturePreservedPart(
+                archive,
+                document,
+                partName,
+                overrides,
+                contentTypeDefaults,
+                glossaryDocumentParts.GetValueOrDefault(partName));
+        }
 
         // Package-level extended properties (docProps/app.xml) are not modelled by FreeW, but Word-authored
         // documents commonly use them for application/company/template metadata.

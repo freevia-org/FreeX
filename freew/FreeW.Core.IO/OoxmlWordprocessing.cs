@@ -234,6 +234,11 @@ internal static class Ooxml
     public const string WebSettingsContentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.webSettings+xml";
     public const string WebSettingsRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/webSettings";
 
+    // word/glossary/document.xml carries Word building blocks / AutoText FreeW does not model; preserved verbatim.
+    public const string GlossaryDocumentContentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document.glossary+xml";
+    public const string GlossaryDocumentRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/glossaryDocument";
+    public const string GlossaryDocumentPartName = "/word/glossary/document.xml";
+
     // customXml/itemN.xml stores arbitrary custom XML data parts FreeW does not model; preserved verbatim.
     // Each item references its own customXml/itemPropsN.xml (the data-store item id/schema) via the item's
     // own customXml/_rels/itemN.xml.rels. The document→item relationship uses the customXml rel type.
