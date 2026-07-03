@@ -3931,6 +3931,9 @@ public static class PptxPackageReader
             }
         }
 
+        if (TryReadBehaviorDelay(buildPar, out var behaviorDelayMs))
+            delayMs = behaviorDelayMs;
+
         // Check for motion path: look for p:animMotion anywhere in descendants.
         var animMotion = buildPar.Descendants(P + "animMotion").FirstOrDefault();
         if (animMotion is not null)
@@ -4001,6 +4004,9 @@ public static class PptxPackageReader
             }
         }
 
+        if (TryReadBehaviorDelay(animMotion, out var behaviorDelayMs))
+            delayMs = behaviorDelayMs;
+
         var motion = ParseMotionPath(pathStr, origin, ptsTypes);
 
         return new ShapeAnimation
@@ -4014,6 +4020,28 @@ public static class PptxPackageReader
             Motion         = motion,
             TriggerShapeId = triggerShapeId,
         };
+    }
+
+    private static bool TryReadBehaviorDelay(XElement timingRoot, out int delayMs)
+    {
+        delayMs = 0;
+
+        var behaviorCTn = timingRoot
+            .Descendants(P + "cBhvr")
+            .Where(cBhvr => !cBhvr.Ancestors(P + "set").Any())
+            .Select(cBhvr => cBhvr.Element(P + "cTn"))
+            .FirstOrDefault(cTn => cTn is not null);
+
+        var delay = behaviorCTn?
+            .Element(P + "stCondLst")?
+            .Element(P + "cond")?
+            .Attribute("delay")?
+            .Value;
+
+        return delay is not null
+            && delay != "indefinite"
+            && int.TryParse(delay, NumberStyles.Integer, CultureInfo.InvariantCulture, out delayMs)
+            && delayMs >= 0;
     }
 
     /// <summary>
