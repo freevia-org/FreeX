@@ -4577,11 +4577,11 @@ public sealed class DocumentView : Control
             rowHeights[pr] = prRowHeight;
         }
 
-        var repeatedHeaderRowsByFirstSourceRow = _viewMode == DocumentViewMode.PrintLayout
+        var plannedPagesByFirstSourceRow = _viewMode == DocumentViewMode.PrintLayout
             ? DocumentViewLayoutPlanner.BuildTablePaginationPlan(table, _doc.Page).Pages
-                .Where(page => page.IncludesRepeatedHeader && page.SourceRowIndexes.Count > 0)
-                .ToDictionary(page => page.SourceRowIndexes[0], page => page.RepeatedHeaderRowIndexes)
-            : new Dictionary<int, IReadOnlyList<int>>();
+                .Where(page => page.PageNumber > 1 && page.SourceRowIndexes.Count > 0)
+                .ToDictionary(page => page.SourceRowIndexes[0])
+            : new Dictionary<int, DocumentTablePaginationPagePlan>();
 
         double NextPhysicalPageStartContentY()
         {
@@ -4748,22 +4748,25 @@ public sealed class DocumentView : Control
 
         for (var r = 0; r < table.Rows.Count; r++)
         {
-            if (repeatedHeaderRowsByFirstSourceRow.TryGetValue(r, out var repeatedHeaderRowIndexes))
+            if (plannedPagesByFirstSourceRow.TryGetValue(r, out var plannedPage))
             {
                 var nextPageStart = NextPhysicalPageStartContentY();
                 if (nextPageStart > _layoutContentY)
                     _layoutContentY = nextPageStart;
 
-                var firstBodyRowHeight = r >= 0 && r < rowHeights.Length ? rowHeights[r] : 0;
-                var repeatedHeaderHeight = repeatedHeaderRowIndexes
-                    .Where(index => index >= 0 && index < rowHeights.Length)
-                    .Sum(index => rowHeights[index]);
-                _layoutContentY = ReserveContentY(repeatedHeaderHeight + firstBodyRowHeight);
+                var openingRows = plannedPage.RenderRows
+                    .TakeWhile(row => row.IsRepeatedHeader || row.SourceRowIndex == r)
+                    .ToList();
+                var openingRowsHeight = openingRows.Sum(row =>
+                    row.SourceRowIndex >= 0 && row.SourceRowIndex < rowHeights.Length
+                        ? rowHeights[row.SourceRowIndex]
+                        : Math.Max(0, row.EstimatedHeightDip));
+                _layoutContentY = ReserveContentY(openingRowsHeight);
 
-                foreach (var repeatedHeaderRowIndex in repeatedHeaderRowIndexes)
+                foreach (var repeatedHeaderRow in openingRows.Where(row => row.IsRepeatedHeader))
                 {
-                    if (repeatedHeaderRowIndex >= 0 && repeatedHeaderRowIndex < table.Rows.Count)
-                        RenderTableRow(repeatedHeaderRowIndex, _layoutContentY);
+                    if (repeatedHeaderRow.SourceRowIndex >= 0 && repeatedHeaderRow.SourceRowIndex < table.Rows.Count)
+                        RenderTableRow(repeatedHeaderRow.SourceRowIndex, _layoutContentY);
                 }
             }
 

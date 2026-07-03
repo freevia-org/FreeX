@@ -115,6 +115,44 @@ public sealed class DocumentViewTableStructureTests
             "the repeated row 0 header cells should land on a later page");
     }
 
+    [Fact]
+    public async Task TablePagination_without_repeat_header_starts_body_row_on_planned_second_page()
+    {
+        int headerCellCount = -1;
+        int headerPageCount = -1;
+        int secondPageBodyPageIndex = -1;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = FreeWVisualEvidenceDocumentFactory.BuildTablePaginationRepeatHeaderDocument();
+            var table = doc.Blocks.OfType<Table>().Single();
+            table.Formatting = table.Formatting with { RepeatHeaderRow = false };
+            var plan = DocumentViewLayoutPlanner.BuildTablePaginationPlan(table, doc.Page);
+            var secondPageFirstRow = plan.Pages[1].SourceRowIndexes[0];
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(900, 2000));
+
+            var hits = GetTableCellHits(view);
+            var headerHits = hits.Where(hit => hit.Row == 0).ToList();
+            headerCellCount = headerHits.Count;
+            headerPageCount = headerHits
+                .Select(hit => PageIndexFromPageSpaceY(doc, hit.Rect.Y))
+                .Distinct()
+                .Count();
+            secondPageBodyPageIndex = hits
+                .Where(hit => hit.Row == secondPageFirstRow)
+                .Select(hit => PageIndexFromPageSpaceY(doc, hit.Rect.Y))
+                .DefaultIfEmpty(-1)
+                .Min();
+        });
+        if (!ran) return;
+
+        headerCellCount.Should().Be(3, "row 0 should render only once when RepeatHeaderRow is false");
+        headerPageCount.Should().Be(1);
+        secondPageBodyPageIndex.Should().BeGreaterThanOrEqualTo(1,
+            "the first shared-plan page-2 body row should start on a later physical page");
+    }
+
     // ── row insert below ──────────────────────────────────────────────────────────────────────
 
     [Fact]
