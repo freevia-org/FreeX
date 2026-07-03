@@ -11,8 +11,10 @@ namespace FreeW.Core.IO.Tests;
 /// </summary>
 public sealed class DrawingGroupRoundTripTests
 {
+    private static readonly XNamespace A   = "http://schemas.openxmlformats.org/drawingml/2006/main";
     private static readonly XNamespace Wp  = "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing";
     private static readonly XNamespace Wpg = "http://schemas.microsoft.com/office/word/2010/wordprocessingGroup";
+    private static readonly XNamespace Wps = "http://schemas.microsoft.com/office/word/2010/wordprocessingShape";
 
     private static byte[] Png() => [0x89, 0x50, 0x4E, 0x47];
 
@@ -78,6 +80,39 @@ public sealed class DrawingGroupRoundTripTests
         return grp;
     }
 
+    private static DrawingGroup RichShapeAndWordArtGroup()
+    {
+        var grp = new DrawingGroup { WidthPt = 220, HeightPt = 120 };
+        grp.Placement.Wrapping = ImageWrapping.Square;
+
+        var shape = Shape.TextBoxWith("Grouped child", 90, 42, "#CFE2F3");
+        shape.OutlineColorHex = "#1155CC";
+        shape.OutlineWidthPt = 1.5;
+        shape.OutlineDash = "dash";
+        shape.Effects = new ShapeEffectLst
+        {
+            HasShadow = true,
+            ShadowColorHex = "222222",
+            ShadowAlpha = 32000,
+            HasGlow = true,
+            GlowColorHex = "70AD47",
+            GlowRad = 63500,
+            HasReflection = true
+        };
+
+        grp.Children.Add(shape);
+        grp.ChildOffsets.Add((12, 8));
+
+        var wordArt = new WordArt("Group FX", WordArtStyle.GlowGold, 24)
+        {
+            Warp = WordArtWarp.Wave1
+        };
+        grp.Children.Add(wordArt);
+        grp.ChildOffsets.Add((118, 22));
+
+        return grp;
+    }
+
     private static TextDocument DocumentWith(DrawingGroup grp)
     {
         var doc = new TextDocument();
@@ -104,6 +139,23 @@ public sealed class DrawingGroupRoundTripTests
         var xml = DocXml(DocumentWith(TwoMemberGroup()));
         var wgp = xml.Descendants(Wpg + "wgp").Single();
         wgp.Element(Wpg + "grpSpPr").Should().NotBeNull("wpg:grpSpPr must be present inside wpg:wgp");
+    }
+
+    [Fact]
+    public void DrawingGroup_EmitsRichShapeAndWordArtChildEffects()
+    {
+        var xml = DocXml(DocumentWith(RichShapeAndWordArtGroup()));
+        var children = xml.Descendants(Wpg + "wgp").Single().Elements(Wps + "wsp").ToList();
+
+        children.Should().HaveCount(2);
+        children[0].Descendants(A + "solidFill").Should().NotBeEmpty();
+        children[0].Descendants(A + "ln").Should().NotBeEmpty();
+        children[0].Descendants(A + "effectLst").Single().Elements().Select(e => e.Name.LocalName)
+            .Should().Contain(["outerShdw", "glow", "reflection"]);
+        children[0].Descendants(Wps + "txbx").Should().NotBeEmpty();
+
+        children[1].Descendants(A + "glow").Should().NotBeEmpty();
+        children[1].Descendants(A + "prstTxWarp").Single().Attribute("prst")?.Value.Should().Be("textWave1");
     }
 
     // ── Two-member round-trip ────────────────────────────────────────────────────────────────────
@@ -169,6 +221,38 @@ public sealed class DrawingGroupRoundTripTests
         grp.Children.Should().HaveCount(3);
         grp.Placement.ZOrderIndex.Should().Be(3);
         grp.Placement.HorizontalOffsetPt.Should().BeApproximately(72, 0.5);
+    }
+
+    [Fact]
+    public void DrawingGroup_ShapeAndWordArtChildren_RoundTripRichFormattingAndEffects()
+    {
+        var recovered = RoundTrip(DocumentWith(RichShapeAndWordArtGroup()));
+        var grp = ((Paragraph)recovered.Blocks[0]).Runs.Single(r => r.DrawingGroup is not null).DrawingGroup!;
+
+        grp.Children.Should().HaveCount(2);
+        grp.ChildOffsets[0].X.Should().BeApproximately(12, 1.0);
+        grp.ChildOffsets[1].Y.Should().BeApproximately(22, 1.0);
+
+        var shape = grp.Children[0].Should().BeOfType<Shape>().Subject;
+        shape.Kind.Should().Be(ShapeKind.TextBox);
+        shape.WidthPt.Should().BeApproximately(90, 1.0);
+        shape.HeightPt.Should().BeApproximately(42, 1.0);
+        shape.FillColorHex.Should().Be("#CFE2F3");
+        shape.OutlineColorHex.Should().Be("#1155CC");
+        shape.OutlineWidthPt.Should().BeApproximately(1.5, 0.1);
+        shape.OutlineDash.Should().Be("dash");
+        shape.PlainText.Should().Be("Grouped child");
+        shape.Effects.Should().NotBeNull();
+        shape.Effects!.HasShadow.Should().BeTrue();
+        shape.Effects.HasGlow.Should().BeTrue();
+        shape.Effects.HasReflection.Should().BeTrue();
+        shape.Effects.GlowColorHex.Should().Be("70AD47");
+
+        var wordArt = grp.Children[1].Should().BeOfType<WordArt>().Subject;
+        wordArt.Text.Should().Be("Group FX");
+        wordArt.Style.Should().Be(WordArtStyle.GlowGold);
+        wordArt.FontSizePt.Should().BeApproximately(24, 0.1);
+        wordArt.Warp.Should().Be(WordArtWarp.Wave1);
     }
 
     // ── Existing floating objects are unaffected ─────────────────────────────────────────────────

@@ -146,9 +146,17 @@ public sealed class DrawingObjectVisualPlannerTests
             WidthPt = 180,
             HeightPt = 90
         };
-        group.Children.Add(new Shape(ShapeKind.Ellipse, widthPt: 72, heightPt: 36, fillColorHex: "#CFE2F3"));
+        group.Children.Add(new Shape(ShapeKind.Ellipse, widthPt: 72, heightPt: 36, fillColorHex: "#CFE2F3")
+        {
+            Effects = new ShapeEffectLst
+            {
+                HasGlow = true,
+                GlowColorHex = "70AD47",
+                GlowRad = 63500
+            }
+        });
         group.ChildOffsets.Add((9, 6));
-        group.Children.Add(new WordArt("Group", WordArtStyle.FillGold, fontSizePt: 20));
+        group.Children.Add(new WordArt("Group", WordArtStyle.GlowGold, fontSizePt: 20));
         group.ChildOffsets.Add((72, 12));
 
         var plan = DrawingObjectVisualPlanner.BuildVisualPlan(
@@ -169,8 +177,12 @@ public sealed class DrawingObjectVisualPlannerTests
         plan.GroupChildren[0].Visual.Kind.Should().Be(DrawingObjectVisualKind.Shape);
         plan.GroupChildren[0].Visual.GeometryKind.Should().Be(DrawingObjectGeometryKind.Ellipse);
         plan.GroupChildren[0].Visual.Rect.XDip.Should().BeApproximately(112, 0.01);
+        plan.GroupChildren[0].Visual.Effects.HasGlow.Should().BeTrue();
+        plan.GroupChildren[0].Visual.Effects.GlowColorHex.Should().Be("#70AD47");
         plan.GroupChildren[1].OffsetXDip.Should().BeApproximately(96, 0.01);
         plan.GroupChildren[1].Visual.Kind.Should().Be(DrawingObjectVisualKind.WordArt);
         plan.GroupChildren[1].Visual.WordArt!.Text.Should().Be("Group");
+        plan.GroupChildren[1].Visual.Effects.HasGlow.Should().BeTrue();
+        plan.GroupChildren[1].Visual.Effects.GlowColorHex.Should().Be("#FFC000");
     }
 }
