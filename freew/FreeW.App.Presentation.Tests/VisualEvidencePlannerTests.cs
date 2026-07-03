@@ -611,11 +611,13 @@ public sealed class VisualEvidencePlannerTests
 
             plan.WordApplicationProgId.Should().Be("Word.Application");
             plan.MaxPagesPerDocument.Should().Be(3);
-            plan.ExpectedFixtureCount.Should().Be(17);
-            plan.ExpectedBaselinePngCount.Should().Be(51);
+            plan.ExpectedFixtureCount.Should().Be(19);
+            plan.ExpectedBaselinePngCount.Should().Be(57);
             plan.Fixtures.Select(f => f.DocumentName).Should().Contain([
                 "f2-hf-basic.docx",
+                "field-page-number-variants.docx",
                 "table-layout-complex.docx",
+                "table-pagination-repeat-header.docx",
                 "drawing-objects-complex.docx",
                 "chart-smartart-complex.docx",
                 "wordart-watermark-stress.docx",
@@ -626,6 +628,10 @@ public sealed class VisualEvidencePlannerTests
                 .ExpectedBaselinePaths.Should().Contain("backstage-print-preview-fidelity/backstage-print-preview_p1.png");
             plan.Fixtures.Single(f => f.ScenarioId == "backstage-pdf-export-fidelity")
                 .ExpectedBaselinePaths.Should().Contain("backstage-pdf-export-fidelity/backstage-pdf-export_p1.png");
+            plan.Fixtures.Single(f => f.ScenarioId == "table-pagination-repeat-header")
+                .ExpectedBaselinePaths.Should().Contain("table-pagination-repeat-header/table-pagination-repeat-header_p2.png");
+            plan.Fixtures.Single(f => f.ScenarioId == "field-page-number-variants")
+                .ExpectedBaselinePaths.Should().Contain("field-page-number-variants/field-page-number-variants_p1.png");
         }
         finally
         {
@@ -645,6 +651,12 @@ public sealed class VisualEvidencePlannerTests
                 "f2-hf-basic",
                 pageNumber: 1,
                 pageCount: 1);
+            var repeatHeaderRow = BuildFileBackedRow(
+                root,
+                FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                "table-pagination-repeat-header",
+                pageNumber: 2,
+                pageCount: 2);
             var avaloniaOnlyRow = BuildFileBackedRow(
                 root,
                 FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
@@ -654,7 +666,7 @@ public sealed class VisualEvidencePlannerTests
             var manifestDir = Path.Combine(root, "manifest");
             FreeWVisualEvidencePlanner.WriteManifest(
                 manifestDir,
-                [generatedCorpusRow, avaloniaOnlyRow],
+                [generatedCorpusRow, repeatHeaderRow, avaloniaOnlyRow],
                 new DateTimeOffset(2026, 7, 1, 12, 0, 0, TimeSpan.Zero));
             var summary = FreeWVisualEvidenceManifestNormalizer.BuildNormalizedSummaryFromFiles(
                 [Path.Combine(manifestDir, FreeWVisualEvidencePlanner.ManifestFileName)],
@@ -666,6 +678,10 @@ public sealed class VisualEvidencePlannerTests
                         1),
                     new FreeWVisualEvidenceExpectedScenario(
                         FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                        "table-pagination-repeat-header",
+                        1),
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
                         "page-composition-print-layout",
                         1)
                 ]);
@@ -673,6 +689,9 @@ public sealed class VisualEvidencePlannerTests
             var rows = summary.Evidence;
             FreeWWordBaselineEvidencePlanner.ShouldCompareToWordBaseline(
                 rows.Single(r => r.ScenarioId == "f2-hf-basic"),
+                FreeWWordBaselineEvidencePlanner.BaselineScopeGeneratedCorpus).Should().BeTrue();
+            FreeWWordBaselineEvidencePlanner.ShouldCompareToWordBaseline(
+                rows.Single(r => r.ScenarioId == "table-pagination-repeat-header"),
                 FreeWWordBaselineEvidencePlanner.BaselineScopeGeneratedCorpus).Should().BeTrue();
             FreeWWordBaselineEvidencePlanner.ShouldCompareToWordBaseline(
                 rows.Single(r => r.ScenarioId == "page-composition-print-layout"),

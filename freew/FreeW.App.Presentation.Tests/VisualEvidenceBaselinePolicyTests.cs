@@ -64,6 +64,28 @@ public sealed class VisualEvidenceBaselinePolicyTests
     }
 
     [Fact]
+    public void WordBaselinePolicy_KeepsTablePaginationRepeatHeaderDirectlyComparable()
+    {
+        var row = BuildRow(
+            "table-pagination-repeat-header",
+            FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+            "table-pagination-repeat-header_p2.png",
+            pageNumber: 2,
+            pageCount: 2);
+
+        var policy = FreeWVisualBaselineComparisonPlanner.ResolveWordBaselinePolicy(row);
+        var candidates = FreeWVisualBaselineComparisonPlanner.BuildBaselineCandidateRelativePaths(row);
+
+        policy.IsComparable.Should().BeTrue();
+        policy.BaselineScenarioId.Should().Be("table-pagination-repeat-header");
+        FreeWVisualBaselineComparisonPlanner.BuildBaselineMatchKey(row)
+            .Should().Be("table-pagination-repeat-header/p2/table-pagination-repeat-header_p2.png");
+        candidates.Should().Contain([
+            "table-pagination-repeat-header/table-pagination-repeat-header_p2.png",
+            "table-pagination-repeat-header_p2.png"]);
+    }
+
+    [Fact]
     public void WordBaselineUnavailableComparison_ReportsCandidatesAndReasonWithoutFailingTrust()
     {
         var row = BuildRow(
@@ -90,14 +112,16 @@ public sealed class VisualEvidenceBaselinePolicyTests
     private static FreeWVisualEvidenceNormalizedRow BuildRow(
         string scenarioId,
         string hostId,
-        string outputName)
+        string outputName,
+        int pageNumber = 1,
+        int pageCount = 1)
     {
         var scenario = FreeWVisualEvidencePlanner.ResolveScenario(scenarioId);
         var expectation = FreeWVisualEvidencePlanner.BuildPageExpectation(
             scenarioId,
             new PageSettings(),
-            pageNumber: 1,
-            pageCount: 1,
+            pageNumber: pageNumber,
+            pageCount: pageCount,
             outputName: outputName);
 
         return new FreeWVisualEvidenceNormalizedRow(
@@ -122,8 +146,8 @@ public sealed class VisualEvidenceBaselinePolicyTests
                 BackgroundColorHex: "#FFFFFF",
                 NonBackgroundSampledPixels: 200,
                 NonBackgroundRatio: 0.5),
-            PageNumber: 1,
-            PageCount: 1,
+            PageNumber: pageNumber,
+            PageCount: pageCount,
             LayoutKind: expectation.LayoutKind,
             ExpectedOutputName: expectation.ExpectedOutputName,
             PageFeatures: expectation.Features,
