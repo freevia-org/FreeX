@@ -2,6 +2,7 @@ using System.IO;
 using System.Linq;
 using System.Windows.Documents;
 using FreeW.App.Host.Editing;
+using FreeW.App.Presentation.DocumentView;
 using Xunit;
 
 namespace FreeW.App.Host.Tests;
@@ -600,6 +601,41 @@ public sealed class DocumentViewRoundTripTests
         resultTable.Rows[0].Cells[0].VerticalAlignment.Should().Be(TableCellVerticalAlignment.Top);
         resultTable.Rows[0].Cells[1].VerticalAlignment.Should().Be(TableCellVerticalAlignment.Center);
         resultTable.Rows[0].Cells[2].VerticalAlignment.Should().Be(TableCellVerticalAlignment.Bottom);
+    }
+
+    [StaFact]
+    public void TableRepeatHeader_RenderedRows_DoNotRoundTripIntoModel()
+    {
+        var doc = FreeWVisualEvidenceDocumentFactory.BuildTablePaginationRepeatHeaderDocument();
+        var modelTable = doc.Blocks.OfType<Table>().Single();
+        var pagination = DocumentViewLayoutPlanner.BuildTablePaginationPlan(modelTable, doc.Page);
+        var repeatedPage = pagination.Pages.Single(page => page.IncludesRepeatedHeader);
+        var firstPageRowIndex = repeatedPage.SourceRowIndexes[0];
+
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        var wpfTable = view.Document.Blocks.OfType<System.Windows.Documents.Table>().Single();
+        var renderedRows = wpfTable.RowGroups.SelectMany(group => group.Rows).ToList();
+        renderedRows.Should().HaveCount(modelTable.Rows.Count + repeatedPage.RepeatedHeaderRowIndexes.Count);
+        RenderedRowText(renderedRows[firstPageRowIndex]).Should().Contain("Step");
+        RenderedRowText(renderedRows[firstPageRowIndex]).Should().Contain("Pagination evidence");
+        RenderedRowText(renderedRows[firstPageRowIndex + 1]).Should().Contain($"Row {firstPageRowIndex}");
+
+        view.CommitToModel();
+
+        var committedTable = view.Model.Blocks.OfType<Table>().Single();
+        committedTable.Rows.Should().HaveCount(modelTable.Rows.Count);
+        committedTable.Rows[0].Cells.Select(cell => cell.PlainText)
+            .Should().Equal(modelTable.Rows[0].Cells.Select(cell => cell.PlainText));
+    }
+
+    private static string RenderedRowText(System.Windows.Documents.TableRow row)
+    {
+        var text = row.Cells
+            .SelectMany(cell => cell.Blocks.OfType<System.Windows.Documents.Paragraph>())
+            .Select(paragraph => new TextRange(paragraph.ContentStart, paragraph.ContentEnd).Text.Trim());
+        return string.Join(" ", text);
     }
 
     // A valid 1x1 PNG so the WPF image decoder in BuildImageRun succeeds under test.

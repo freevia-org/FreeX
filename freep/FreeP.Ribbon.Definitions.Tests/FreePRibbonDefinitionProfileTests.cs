@@ -347,6 +347,12 @@ public sealed class FreePRibbonDefinitionProfileTests
                 RequiredControl(wpf, "freep.view.show.gridlines").KeyTip!,
                 RequiredControl(wpf, "freep.view.show.guides").Label,
                 RequiredControl(wpf, "freep.view.show.guides").KeyTip!,
+                RequiredGroup(wpf, "view", "zoom").Header,
+                RequiredGroup(wpf, "view", "zoom").KeyTip!,
+                RequiredControl(wpf, "freep.view.zoom").Label,
+                RequiredControl(wpf, "freep.view.zoom").KeyTip!,
+                RequiredControl(wpf, "freep.view.fit-to-window").Label,
+                RequiredControl(wpf, "freep.view.fit-to-window").KeyTip!,
                 avalonia.FindTab("view")!.Header,
                 avalonia.FindTab("view")!.KeyTip!,
                 RequiredGroup(avalonia, "view", "show").Header,
@@ -355,6 +361,12 @@ public sealed class FreePRibbonDefinitionProfileTests
                 RequiredControl(avalonia, "freep.view.show.gridlines").KeyTip!,
                 RequiredControl(avalonia, "freep.view.show.guides").Label,
                 RequiredControl(avalonia, "freep.view.show.guides").KeyTip!,
+                RequiredGroup(avalonia, "view", "zoom").Header,
+                RequiredGroup(avalonia, "view", "zoom").KeyTip!,
+                RequiredControl(avalonia, "freep.view.zoom").Label,
+                RequiredControl(avalonia, "freep.view.zoom").KeyTip!,
+                RequiredControl(avalonia, "freep.view.fit-to-window").Label,
+                RequiredControl(avalonia, "freep.view.fit-to-window").KeyTip!,
             };
         });
 
@@ -529,6 +541,9 @@ public sealed class FreePRibbonDefinitionProfileTests
         source.Should().Contain("FreePRibbonText.ViewShowGroup");
         source.Should().Contain("FreePRibbonText.ViewGridlinesCommand");
         source.Should().Contain("FreePRibbonText.ViewGuidesCommand");
+        source.Should().Contain("FreePRibbonText.ViewZoomGroup");
+        source.Should().Contain("FreePRibbonText.ViewZoomCommand");
+        source.Should().Contain("FreePRibbonText.ViewFitToWindowCommand");
         source.Should().NotContain("tab.Group(\"arrange\", \"Arrange\"");
         source.Should().NotContain(".Tab(\"design\", \"Design\"");
         source.Should().NotContain(".Tab(\"transitions\", \"Transitions\"");
@@ -537,6 +552,9 @@ public sealed class FreePRibbonDefinitionProfileTests
         source.Should().NotContain("tab.Group(\"show\", \"Show\"");
         source.Should().NotContain("g.MediumToggle(\"freep.view.show.gridlines\", \"Gridlines\"");
         source.Should().NotContain("g.MediumToggle(\"freep.view.show.guides\", \"Guides\"");
+        source.Should().NotContain("tab.Group(\"zoom\", \"Zoom\"");
+        source.Should().NotContain("g.Large(\"freep.view.zoom\", \"Zoom...\"");
+        source.Should().NotContain("g.Medium(\"freep.view.fit-to-window\", \"Fit to Window\"");
         source.Should().NotContain("g.Medium(\"freep.transition.fade\",     \"Fade\"");
         source.Should().NotContain("g.Medium(\"freep.anim.none\", \"No Animation\"");
         foreach (var literal in new[]
@@ -581,6 +599,9 @@ public sealed class FreePRibbonDefinitionProfileTests
                      "\"Ellipse\"",
                      "\"View\"",
                      "\"Show\"",
+                     "\"Zoom\"",
+                     "\"Zoom...\"",
+                     "\"Fit to Window\"",
                      "\"Gridlines\"",
                      "\"Guides\""
                  })

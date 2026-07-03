@@ -4111,10 +4111,31 @@ public sealed class DocumentView : RichTextBox
             return (-1, -1, -1);
 
         var blockIndex = new List<System.Windows.Documents.Block>(Document.Blocks).IndexOf(wpfTable);
-        var rowIndex = new List<WpfTableRow>(group.Rows).IndexOf(wpfRow);
+        var rowIndex = ModelRowIndexOfRenderedRow(group, wpfRow);
         var columnIndex = new List<WpfTableCell>(wpfRow.Cells).IndexOf(cell);
         return (blockIndex, rowIndex, columnIndex);
     }
+
+    private static int ModelRowIndexOfRenderedRow(TableRowGroup group, WpfTableRow renderedRow)
+    {
+        if (renderedRow.Tag is WpfTableRowTag { IsRepeatedHeader: true, SourceRowIndex: var sourceRowIndex })
+            return sourceRowIndex;
+
+        var modelRowIndex = 0;
+        foreach (var row in group.Rows)
+        {
+            if (row.Tag is WpfTableRowTag { IsRepeatedHeader: true })
+                continue;
+            if (ReferenceEquals(row, renderedRow))
+                return modelRowIndex;
+            modelRowIndex++;
+        }
+
+        return -1;
+    }
+
+    private static bool IsRepeatedHeaderRenderRow(WpfTableRow row) =>
+        row.Tag is WpfTableRowTag { IsRepeatedHeader: true };
 
     // Locate the model paragraph/run index of the inline image under the selection (or a floating
     // image clicked on the overlay canvas), plus the image itself.
@@ -6292,8 +6313,10 @@ public sealed class DocumentView : RichTextBox
         var pendingContinues = new List<List<(int Column, int Span)>>();
         foreach (var rowGroup in wpfTable.RowGroups)
         {
-            foreach (var _ in rowGroup.Rows)
+            foreach (var wpfRow in rowGroup.Rows)
             {
+                if (IsRepeatedHeaderRenderRow(wpfRow))
+                    continue;
                 modelRows.Add(new ModelTableRow());
                 pendingContinues.Add([]);
             }
@@ -6304,6 +6327,8 @@ public sealed class DocumentView : RichTextBox
         {
             foreach (var wpfRow in rowGroup.Rows)
             {
+                if (IsRepeatedHeaderRenderRow(wpfRow))
+                    continue;
                 var isHeaderRow = headerRow && rowIndex == 0;
                 var isBandedRow = bandedRows
                     && !isHeaderRow
@@ -6449,6 +6474,8 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     private sealed record WpfTableTag(TableFormatting Formatting, string? TableStyleId);
 
+    private sealed record WpfTableRowTag(int SourceRowIndex, bool IsRepeatedHeader);
+
     private static WpfTable BuildTable(ModelTable table, TextDocument document)
     {
         // Stash the model's table formatting AND the catalog style id on the WPF table Tag so both survive
@@ -6487,15 +6514,19 @@ public sealed class DocumentView : RichTextBox
 
         var fmt = table.Formatting;
         var totalRows = table.Rows.Count;
+        var paginationPlan = DocumentViewLayoutPlanner.BuildTablePaginationPlan(table, document.Page);
+        var repeatedHeaderRowsByFirstSourceRow = paginationPlan.Pages
+            .Where(page => page.IncludesRepeatedHeader && page.SourceRowIndexes.Count > 0)
+            .ToDictionary(page => page.SourceRowIndexes[0], page => page.RepeatedHeaderRowIndexes);
         var group = new TableRowGroup();
-        for (var rowIndex = 0; rowIndex < totalRows; rowIndex++)
+        void AppendRenderedRow(int rowIndex, bool isRepeatedHeader)
         {
             var modelRow = table.Rows[rowIndex];
             var isHeaderRow = fmt.HeaderRow && rowIndex == 0;
             var isBandedRow = fmt.BandedRows
                 && !isHeaderRow
                 && TableBanding.IsBandedBodyRow(rowIndex, fmt.HeaderRow);
-            var wpfRow = new WpfTableRow();
+            var wpfRow = new WpfTableRow { Tag = new WpfTableRowTag(rowIndex, isRepeatedHeader) };
             // WPF System.Windows.Documents.TableRow is a TextElement (not FrameworkElement), so it has
             // no MinHeight / Height property. To enforce a minimum row height we inject a zero-width
             // height-enforcer into every non-Continue cell: a BlockUIContainer holding a Border whose
@@ -6688,6 +6719,20 @@ public sealed class DocumentView : RichTextBox
                 cellIndex++;
             }
             group.Rows.Add(wpfRow);
+        }
+
+        for (var rowIndex = 0; rowIndex < totalRows; rowIndex++)
+        {
+            if (repeatedHeaderRowsByFirstSourceRow.TryGetValue(rowIndex, out var repeatedHeaderRowIndexes))
+            {
+                foreach (var repeatedHeaderRowIndex in repeatedHeaderRowIndexes)
+                {
+                    if (repeatedHeaderRowIndex >= 0 && repeatedHeaderRowIndex < totalRows)
+                        AppendRenderedRow(repeatedHeaderRowIndex, isRepeatedHeader: true);
+                }
+            }
+
+            AppendRenderedRow(rowIndex, isRepeatedHeader: false);
         }
         wpf.RowGroups.Add(group);
         return wpf;

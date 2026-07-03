@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.IO.Compression;
+using System.Security.Cryptography;
 using System.Xml;
 using System.Xml.Linq;
 using Free.Shared.Drawing;
@@ -21,6 +22,7 @@ public static class PptxPackageWriter
     private static readonly XNamespace A       = PptxColorReader.A;
     private static readonly XNamespace R       = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
     private static readonly XNamespace Adec    = "http://schemas.microsoft.com/office/drawing/2017/decorative";
+    private static readonly XNamespace P188    = "http://schemas.microsoft.com/office/powerpoint/2018/8/main";
     private const string DecorativeExtUri = "{C183D7F6-B498-43B3-948B-1728B52AA6E4}";
 
     // ── Relationship types ────────────────────────────────────────────────────────
@@ -40,6 +42,8 @@ public static class PptxPackageWriter
     private const string HyperlinkRelType   = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink";
     private const string CommentsRelType    = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments";
     private const string CommentAuthorsRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/commentAuthors";
+    private const string ModernCommentsRelType = "http://schemas.microsoft.com/office/2018/10/relationships/comments";
+    private const string ModernAuthorsRelType = "http://schemas.microsoft.com/office/2018/10/relationships/authors";
     private const string VideoRelType       = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/video";
     private const string AudioRelType       = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/audio";
 
@@ -74,6 +78,8 @@ public static class PptxPackageWriter
         HyperlinkRelType,
         CommentsRelType,
         CommentAuthorsRelType,
+        ModernCommentsRelType,
+        ModernAuthorsRelType,
         VideoRelType,
         AudioRelType,
         OleObjectRelType,
@@ -96,6 +102,7 @@ public static class PptxPackageWriter
         "ppt/viewProps.xml",
         "ppt/tableStyles.xml",
         "ppt/commentAuthors.xml",
+        "ppt/authors/author1.xml",
     ];
 
     private static readonly string[] WriterOwnedPackagePartPrefixes =
@@ -107,6 +114,7 @@ public static class PptxPackageWriter
         "ppt/charts/",
         "ppt/media/",
         "ppt/comments/",
+        "ppt/authors/",
         "ppt/notesSlides/",
         "ppt/notesMasters/",
         "ppt/embeddings/",
@@ -133,6 +141,8 @@ public static class PptxPackageWriter
     private const string NotesMasterCT   = "application/vnd.openxmlformats-officedocument.presentationml.notesMaster+xml";
     private const string CommentsCT      = "application/vnd.openxmlformats-officedocument.presentationml.comments+xml";
     private const string CommentAuthorsCT = "application/vnd.openxmlformats-officedocument.presentationml.commentAuthors+xml";
+    private const string ModernCommentsCT = "application/vnd.ms-powerpoint.comments+xml";
+    private const string ModernAuthorsCT = "application/vnd.ms-powerpoint.authors+xml";
 
     // p14 section extension + mc:AlternateContent
     private static readonly XNamespace P14  = "http://schemas.microsoft.com/office/powerpoint/2010/main";
@@ -408,6 +418,7 @@ public static class PptxPackageWriter
         // Keys are (author-name, initials); ids are 0-based in first-encounter order across
         // all slides (same order BuildCommentAuthorsXml would produce).
         var globalAuthorMap = BuildGlobalAuthorMap(presentation.Slides);
+        var modernAuthorMap = BuildModernAuthorMap(presentation.Slides);
 
         // Emit a single minimal notesMaster if any slide has notes.
         bool hasSomeNotes = presentation.Slides.Any(s => s.Notes is not null);
@@ -561,8 +572,16 @@ public static class PptxPackageWriter
             {
                 var cmPath  = $"ppt/comments/comment{si + 1}.xml";
                 var cmRelId = $"rIdCm{si + 1}";
-                WriteEntry(archive, cmPath, BuildCommentsXml(slide.Comments, globalAuthorMap));
-                slideRels.Add(cmRelId, CommentsRelType, $"../comments/comment{si + 1}.xml");
+                if (ShouldUseModernComments(slide))
+                {
+                    WriteEntry(archive, cmPath, BuildModernCommentsXml(slide.Comments, si, modernAuthorMap));
+                    slideRels.Add(cmRelId, ModernCommentsRelType, $"../comments/comment{si + 1}.xml");
+                }
+                else
+                {
+                    WriteEntry(archive, cmPath, BuildCommentsXml(slide.Comments, globalAuthorMap));
+                    slideRels.Add(cmRelId, CommentsRelType, $"../comments/comment{si + 1}.xml");
+                }
             }
 
             WriteRels(archive, slidePath, slideRels, packageSnapshot);
@@ -574,9 +593,12 @@ public static class PptxPackageWriter
         }
 
         // --- 8b. commentAuthors.xml (if any slides have comments) ---
-        bool hasSomeComments = presentation.Slides.Any(s => s.Comments.Count > 0);
-        if (hasSomeComments)
+        bool hasLegacyComments = presentation.Slides.Any(s => s.Comments.Count > 0 && !ShouldUseModernComments(s));
+        bool hasModernComments = presentation.Slides.Any(ShouldUseModernComments);
+        if (hasLegacyComments)
             WriteEntry(archive, "ppt/commentAuthors.xml", BuildCommentAuthorsXml(presentation.Slides));
+        if (hasModernComments)
+            WriteEntry(archive, "ppt/authors/author1.xml", BuildModernAuthorsXml(modernAuthorMap));
 
         // --- 9. Presentation rels ---
         presRels.Add("rId1", PresPropsRelType, "presProps.xml");
@@ -594,8 +616,13 @@ public static class PptxPackageWriter
             presRels.Add($"rId{masterRelIdStart + masters.Count + extraPresRelOffset}", NotesMasterRelType, "notesMasters/notesMaster1.xml");
             extraPresRelOffset++;
         }
-        if (hasSomeComments)
+        if (hasLegacyComments)
+        {
             presRels.Add($"rId{masterRelIdStart + masters.Count + extraPresRelOffset}", CommentAuthorsRelType, "commentAuthors.xml");
+            extraPresRelOffset++;
+        }
+        if (hasModernComments)
+            presRels.Add($"rId{masterRelIdStart + masters.Count + extraPresRelOffset}", ModernAuthorsRelType, "authors/author1.xml");
 
         WriteRels(archive, "ppt/presentation.xml", presRels, packageSnapshot);
 
@@ -693,14 +720,24 @@ public static class PptxPackageWriter
         }
 
         // Comments content types
-        bool hasSomeComments = p.Slides.Any(s => s.Comments.Count > 0);
-        if (hasSomeComments)
+        bool hasLegacyComments = p.Slides.Any(s => s.Comments.Count > 0 && !ShouldUseModernComments(s));
+        bool hasModernComments = p.Slides.Any(ShouldUseModernComments);
+        if (hasLegacyComments || hasModernComments)
         {
-            overrides.Add(Override(CT, "/ppt/commentAuthors.xml", CommentAuthorsCT));
+            if (hasLegacyComments)
+                overrides.Add(Override(CT, "/ppt/commentAuthors.xml", CommentAuthorsCT));
+            if (hasModernComments)
+                overrides.Add(Override(CT, "/ppt/authors/author1.xml", ModernAuthorsCT));
+
             for (int si = 0; si < p.Slides.Count; si++)
             {
                 if (p.Slides[si].Comments.Count > 0)
-                    overrides.Add(Override(CT, $"/ppt/comments/comment{si + 1}.xml", CommentsCT));
+                {
+                    var contentType = ShouldUseModernComments(p.Slides[si])
+                        ? ModernCommentsCT
+                        : CommentsCT;
+                    overrides.Add(Override(CT, $"/ppt/comments/comment{si + 1}.xml", contentType));
+                }
             }
         }
 
@@ -1196,6 +1233,141 @@ public static class PptxPackageWriter
             new XElement(P + "cmLst",
                 NsAttr("p", P), NsAttr("a", A), NsAttr("r", R),
                 cmElements));
+    }
+
+    private static bool ShouldUseModernComments(Slide slide)
+        => slide.Comments.Any(comment =>
+            comment.UsesModernCommentSchema ||
+            comment.IsResolved ||
+            comment.Replies.Count > 0);
+
+    private static Dictionary<(string name, string initials), string> BuildModernAuthorMap(List<Slide> slides)
+    {
+        var map = new Dictionary<(string name, string initials), string>();
+        foreach (var comment in slides.SelectMany(slide => slide.Comments))
+        {
+            AddModernAuthor(comment.Author, comment.Initials);
+            foreach (var reply in comment.Replies)
+                AddModernAuthor(reply.Author, reply.Initials);
+        }
+
+        return map;
+
+        void AddModernAuthor(string name, string initials)
+        {
+            var key = (name, initials);
+            if (!map.ContainsKey(key))
+                map[key] = DeterministicGuidString($"freep-modern-comment-author|{name}|{initials}");
+        }
+    }
+
+    private static XDocument BuildModernAuthorsXml(
+        Dictionary<(string name, string initials), string> modernAuthorMap)
+    {
+        var authorElements = modernAuthorMap.Select(kv =>
+            new XElement(P188 + "author",
+                new XAttribute("id", kv.Value),
+                new XAttribute("name", kv.Key.name),
+                new XAttribute("initials", kv.Key.initials),
+                new XAttribute("userId", $"{NormalizeModernUserId(kv.Key.name)}::freep"),
+                new XAttribute("providerId", string.Empty)));
+
+        return new XDocument(
+            new XDeclaration("1.0", "UTF-8", "yes"),
+            new XElement(P188 + "authorLst",
+                NsAttr("p188", P188),
+                authorElements));
+    }
+
+    private static XDocument BuildModernCommentsXml(
+        List<SlideComment> comments,
+        int slideIndex,
+        Dictionary<(string name, string initials), string> modernAuthorMap)
+    {
+        var cmElements = comments.Select((comment, commentIndex) =>
+        {
+            var authorId = ModernAuthorId(modernAuthorMap, comment.Author, comment.Initials);
+            var children = new List<object>
+            {
+                new XElement(P188 + "unknownAnchor"),
+                new XElement(P188 + "pos",
+                    new XAttribute("x", comment.Xemu),
+                    new XAttribute("y", comment.Yemu)),
+            };
+
+            if (comment.Replies.Count > 0)
+            {
+                children.Add(new XElement(P188 + "replyLst",
+                    comment.Replies.Select((reply, replyIndex) =>
+                    {
+                        var replyAuthorId = ModernAuthorId(modernAuthorMap, reply.Author, reply.Initials);
+                        return new XElement(P188 + "reply",
+                            new XAttribute("id", DeterministicGuidString(
+                                $"freep-modern-comment-reply|{slideIndex}|{commentIndex}|{replyIndex}|{replyAuthorId}|{reply.Text}|{FormatModernDate(reply.DateTime)}")),
+                            new XAttribute("authorId", replyAuthorId),
+                            new XAttribute("status", "active"),
+                            new XAttribute("created", FormatModernDate(reply.DateTime)),
+                            BuildModernTextBody(reply.Text));
+                    })));
+            }
+
+            children.Add(BuildModernTextBody(comment.Text));
+
+            return new XElement(P188 + "cm",
+                new XAttribute("id", DeterministicGuidString(
+                    $"freep-modern-comment|{slideIndex}|{commentIndex}|{authorId}|{comment.Text}|{FormatModernDate(comment.DateTime)}")),
+                new XAttribute("authorId", authorId),
+                new XAttribute("status", comment.IsResolved ? "resolved" : "active"),
+                new XAttribute("created", FormatModernDate(comment.DateTime)),
+                children);
+        });
+
+        return new XDocument(
+            new XDeclaration("1.0", "UTF-8", "yes"),
+            new XElement(P188 + "cmLst",
+                NsAttr("p188", P188),
+                NsAttr("a", A),
+                cmElements));
+    }
+
+    private static XElement BuildModernTextBody(string text)
+        => new(P188 + "txBody",
+            new XElement(A + "bodyPr"),
+            new XElement(A + "lstStyle"),
+            new XElement(A + "p",
+                new XElement(A + "r",
+                    new XElement(A + "t", text))));
+
+    private static string ModernAuthorId(
+        Dictionary<(string name, string initials), string> modernAuthorMap,
+        string name,
+        string initials)
+        => modernAuthorMap.TryGetValue((name, initials), out var authorId)
+            ? authorId
+            : DeterministicGuidString($"freep-modern-comment-author|{name}|{initials}");
+
+    private static string FormatModernDate(DateTime? value)
+        => (value ?? DateTime.UtcNow).ToString("O", CultureInfo.InvariantCulture);
+
+    private static string DeterministicGuidString(string value)
+    {
+        var bytes = MD5.HashData(System.Text.Encoding.UTF8.GetBytes(value));
+        bytes[6] = (byte)((bytes[6] & 0x0F) | 0x30);
+        bytes[8] = (byte)((bytes[8] & 0x3F) | 0x80);
+        return $"{{{new Guid(bytes):D}}}";
+    }
+
+    private static string NormalizeModernUserId(string name)
+    {
+        var normalized = new string((name ?? string.Empty)
+            .Trim()
+            .Select(ch => char.IsLetterOrDigit(ch) ? char.ToLowerInvariant(ch) : '.')
+            .ToArray())
+            .Trim('.');
+
+        return string.IsNullOrWhiteSpace(normalized)
+            ? "reviewer@freep.local"
+            : $"{normalized}@freep.local";
     }
 
     // ── p:transition ─────────────────────────────────────────────────────────────

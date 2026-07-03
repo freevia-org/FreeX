@@ -166,6 +166,7 @@ public sealed class MainWindow : Window
     private AvaloniaCanvasGestureHandler? _gestureHandler;
     private AvaloniaInCanvasTextEditor?  _textEditor;
     private PresentationViewShowState _viewShowState = PresentationViewShowState.Default;
+    private PresentationViewZoomState _viewZoomState = PresentationViewZoomState.FitToWindow;
 
     private bool _notesRefreshing;
     private bool _slidePaneRefreshing;
@@ -198,6 +199,8 @@ public sealed class MainWindow : Window
 
     internal bool IsDirty => _fileWorkflow.IsDirty;
     internal PresentationViewShowState ViewShowStateForTests => _viewShowState;
+    internal PresentationViewZoomState ViewZoomStateForTests => _viewZoomState;
+    internal PresentationViewZoomState SlideCanvasViewZoomStateForTests => _slideCanvas.ViewZoomState;
     internal bool? GestureSnapToGridForTests => _gestureHandler?.SnapToGrid;
     internal bool? GestureSnapToShapesForTests => _gestureHandler?.SnapToShapes;
 
@@ -1225,6 +1228,12 @@ public sealed class MainWindow : Window
         _gestureHandler.SnapToShapes = state.ShowGuides;
     }
 
+    private void ApplyPresentationViewZoomState(PresentationViewZoomState state)
+    {
+        _viewZoomState = state;
+        _slideCanvas.ApplyViewZoomState(state);
+    }
+
     private Control BuildRibbon()
     {
         var registry = BuildCommandRegistry();
@@ -1367,6 +1376,7 @@ public sealed class MainWindow : Window
         r.Register("freep.replace", new ActionRibbonCommand(OpenFindReplaceDialog));
         RegisterReviewWorkflowCommands(r);
         RegisterViewShowCommands(r);
+        RegisterViewZoomCommands(r);
 
         foreach (var plan in PresentationTransitionCommandPlanner.BuiltInPlans)
         {
@@ -2382,6 +2392,23 @@ public sealed class MainWindow : Window
                     plan,
                     () => _viewShowState,
                     ApplyPresentationViewShowState));
+        }
+    }
+
+    private void RegisterViewZoomCommands(RibbonCommandRegistry registry)
+    {
+        foreach (var plan in PresentationViewZoomPlanner.BuiltInPlans)
+        {
+            registry.Register(
+                plan.CommandId,
+                new ContextRibbonCommand(ctx =>
+                {
+                    var result = PresentationViewZoomPlanner.Execute(
+                        _viewZoomState,
+                        plan,
+                        ctx.SelectedValue);
+                    ApplyPresentationViewZoomState(result.State);
+                }));
         }
     }
 

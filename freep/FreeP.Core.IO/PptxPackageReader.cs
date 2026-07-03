@@ -35,6 +35,8 @@ public static class PptxPackageReader
     private const string SlideHlinkRelType    = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide";
     private const string CommentsRelType      = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments";
     private const string CommentAuthorsRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/commentAuthors";
+    private const string ModernCommentsRelType = "http://schemas.microsoft.com/office/2018/10/relationships/comments";
+    private const string ModernAuthorsRelType = "http://schemas.microsoft.com/office/2018/10/relationships/authors";
     private const string VideoRelType         = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/video";
     private const string AudioRelType         = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/audio";
     // Microsoft proprietary media rel type used by newer PowerPoint
@@ -44,6 +46,7 @@ public static class PptxPackageReader
     private static readonly XNamespace P14  = "http://schemas.microsoft.com/office/powerpoint/2010/main";
     private static readonly XNamespace P15  = "http://schemas.microsoft.com/office/powerpoint/2012/main";
     private static readonly XNamespace P159 = "http://schemas.microsoft.com/office/powerpoint/2015/09/main";
+    private static readonly XNamespace P188 = "http://schemas.microsoft.com/office/powerpoint/2018/8/main";
     private static readonly XNamespace MC   = "http://schemas.openxmlformats.org/markup-compatibility/2006";
     private const string SectionExtUri = "{521415D9-36F7-43E2-AB2F-B90AF26B5E84}";
 
@@ -226,6 +229,14 @@ public static class PptxPackageReader
             authorMap = ReadCommentAuthors(archive, cmAuthorsPath);
         }
 
+        var modernAuthorsTarget = OpcRelationships.FirstTargetByType(presRels, ModernAuthorsRelType);
+        var modernAuthorMap = new Dictionary<string, (string name, string initials)>(StringComparer.OrdinalIgnoreCase);
+        if (modernAuthorsTarget is not null)
+        {
+            var modernAuthorsPath = ResolveRelativeZipPath(presDir, modernAuthorsTarget);
+            modernAuthorMap = ReadModernCommentAuthors(archive, modernAuthorsPath);
+        }
+
         // Re-process each slide's comments now that we have the author map.
         // (Comments were NOT parsed in ReadSlide yet — we do it here so authorMap is available.)
         for (int si = 0; si < presentation.Slides.Count; si++)
@@ -237,9 +248,18 @@ public static class PptxPackageReader
             var slidePath2 = ResolveRelativeZipPath(presDir, sr.Target);
             var slideRels2 = OpcRelationships.LoadTargets(archive, GetRelationshipPartPath(slidePath2));
             var cmTarget = OpcRelationships.FirstTargetByType(slideRels2, CommentsRelType);
-            if (cmTarget is null) continue;
-            var cmPath = ResolveRelativeZipPath(GetDirectoryName(slidePath2), cmTarget);
-            ReadSlideComments(archive, cmPath, authorMap, slide.Comments);
+            if (cmTarget is not null)
+            {
+                var cmPath = ResolveRelativeZipPath(GetDirectoryName(slidePath2), cmTarget);
+                ReadSlideComments(archive, cmPath, authorMap, slide.Comments);
+            }
+
+            var modernCmTarget = OpcRelationships.FirstTargetByType(slideRels2, ModernCommentsRelType);
+            if (modernCmTarget is not null)
+            {
+                var modernCmPath = ResolveRelativeZipPath(GetDirectoryName(slidePath2), modernCmTarget);
+                ReadModernSlideComments(archive, modernCmPath, modernAuthorMap, slide.Comments);
+            }
         }
 
         return presentation;
@@ -408,6 +428,26 @@ public static class PptxPackageReader
         return result;
     }
 
+    private static Dictionary<string, (string name, string initials)> ReadModernCommentAuthors(
+        ZipArchive archive, string path)
+    {
+        var result = new Dictionary<string, (string name, string initials)>(StringComparer.OrdinalIgnoreCase);
+        var xml = OpcXml.TryLoadXml(archive, path);
+        if (xml?.Root is null) return result;
+
+        foreach (var authorEl in xml.Root.Elements(P188 + "author"))
+        {
+            var id = authorEl.Attribute("id")?.Value;
+            if (string.IsNullOrWhiteSpace(id)) continue;
+
+            var name = authorEl.Attribute("name")?.Value ?? string.Empty;
+            var initials = authorEl.Attribute("initials")?.Value ?? string.Empty;
+            result[id] = (name, initials);
+        }
+
+        return result;
+    }
+
     // ── Slide comments ───────────────────────────────────────────────────────────
 
     /// <summary>
@@ -458,6 +498,82 @@ public static class PptxPackageReader
                 Idx      = idx,
             });
         }
+    }
+
+    private static void ReadModernSlideComments(
+        ZipArchive archive,
+        string path,
+        Dictionary<string, (string name, string initials)> authorMap,
+        List<SlideComment> comments)
+    {
+        var xml = OpcXml.TryLoadXml(archive, path);
+        if (xml?.Root is null) return;
+
+        foreach (var cmEl in xml.Root.Elements(P188 + "cm"))
+        {
+            var authorId = cmEl.Attribute("authorId")?.Value ?? string.Empty;
+            var author = ResolveModernAuthor(authorMap, authorId);
+            var created = ParseDateTime(cmEl.Attribute("created")?.Value);
+            var posEl = cmEl.Element(P188 + "pos");
+            var comment = new SlideComment
+            {
+                Author = author.name,
+                Initials = author.initials,
+                Text = ReadModernCommentText(cmEl),
+                DateTime = created,
+                IsResolved = string.Equals(cmEl.Attribute("status")?.Value, "resolved", StringComparison.OrdinalIgnoreCase),
+                Xemu = ParseLong(posEl?.Attribute("x")?.Value),
+                Yemu = ParseLong(posEl?.Attribute("y")?.Value),
+                Idx = comments.Count + 1,
+                UsesModernCommentSchema = true,
+            };
+
+            foreach (var replyEl in cmEl.Element(P188 + "replyLst")?.Elements(P188 + "reply") ?? [])
+            {
+                var replyAuthorId = replyEl.Attribute("authorId")?.Value ?? string.Empty;
+                var replyAuthor = ResolveModernAuthor(authorMap, replyAuthorId);
+                comment.Replies.Add(new SlideCommentReply
+                {
+                    Author = replyAuthor.name,
+                    Initials = replyAuthor.initials,
+                    Text = ReadModernCommentText(replyEl),
+                    DateTime = ParseDateTime(replyEl.Attribute("created")?.Value),
+                });
+            }
+
+            comments.Add(comment);
+        }
+    }
+
+    private static (string name, string initials) ResolveModernAuthor(
+        Dictionary<string, (string name, string initials)> authorMap,
+        string authorId)
+    {
+        if (!string.IsNullOrWhiteSpace(authorId) && authorMap.TryGetValue(authorId, out var author))
+            return author;
+
+        var suffix = string.IsNullOrWhiteSpace(authorId) ? "unknown" : authorId.Trim('{', '}');
+        return ($"Author {suffix}", "A");
+    }
+
+    private static string ReadModernCommentText(XElement commentEl)
+        => string.Concat(commentEl
+            .Element(P188 + "txBody")?
+            .Descendants(A + "t")
+            .Select(text => text.Value) ?? []);
+
+    private static DateTime? ParseDateTime(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return null;
+
+        return DateTime.TryParse(
+            value,
+            null,
+            DateTimeStyles.RoundtripKind,
+            out var parsed)
+            ? parsed
+            : null;
     }
 
     // ── Theme ────────────────────────────────────────────────────────────────────

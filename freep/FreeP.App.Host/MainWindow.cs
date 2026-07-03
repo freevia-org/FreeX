@@ -111,6 +111,7 @@ public sealed class MainWindow : Window
     private Canvas _textOverlay = null!;
     private TextBlock _slideCountText = null!;
     private PresentationViewShowState _viewShowState = PresentationViewShowState.Default;
+    private PresentationViewZoomState _viewZoomState = PresentationViewZoomState.FitToWindow;
 
     // Notes pane (Wave 7B)
     private TextBox _notesBox = null!;
@@ -319,7 +320,9 @@ public sealed class MainWindow : Window
             onTablePicker:      () => OpenTablePicker(),
             onHeaderFooter:     focus => OpenHeaderFooterDialog(focus),
             getViewShowState:   () => _viewShowState,
-            applyViewShowState: ApplyPresentationViewShowState);
+            applyViewShowState: ApplyPresentationViewShowState,
+            getViewZoomState:   () => _viewZoomState,
+            applyViewZoomState: ApplyPresentationViewZoomState);
         var ribbon = BuildRibbon(FreePRibbon.Build(), commands, stateStore);
 
         // Body: slide pane + stage.
@@ -424,6 +427,13 @@ public sealed class MainWindow : Window
         _viewShowState = state;
         if (SlideCanvas is not null)
             SlideCanvas.ApplyViewShowState(state);
+    }
+
+    private void ApplyPresentationViewZoomState(PresentationViewZoomState state)
+    {
+        _viewZoomState = state;
+        if (SlideCanvas is not null)
+            SlideCanvas.ApplyViewZoomState(state);
     }
 
     private void LoadModel(Presentation presentation)

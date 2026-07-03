@@ -1,8 +1,10 @@
 using System.Threading;
 using System.Threading.Tasks;
+using System.Reflection;
 using Avalonia;
 using Avalonia.Headless;
 using FreeW.App.Avalonia.Editing;
+using FreeW.App.Presentation.DocumentView;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Avalonia.Tests;
@@ -56,6 +58,61 @@ public sealed class DocumentViewTableStructureTests
         view.Measure(new Size(900, 6000));
         var idx = doc.Blocks.IndexOf(tbl);
         return (view, idx, tbl);
+    }
+
+    private static IReadOnlyList<(Rect Rect, int Row)> GetTableCellHits(DocumentView view)
+    {
+        var field = typeof(DocumentView).GetField("_cellHits", BindingFlags.Instance | BindingFlags.NonPublic)
+            ?? throw new MissingFieldException("_cellHits");
+        var hits = ((System.Collections.IEnumerable)field.GetValue(view)!).Cast<object>();
+        var result = new List<(Rect Rect, int Row)>();
+
+        foreach (var hit in hits)
+        {
+            var type = hit.GetType();
+            var rect = (Rect)type.GetField("Item1")!.GetValue(hit)!;
+            var row = (int)type.GetField("Item3")!.GetValue(hit)!;
+            result.Add((rect, row));
+        }
+
+        return result;
+    }
+
+    private static int PageIndexFromPageSpaceY(TextDocument document, double y)
+    {
+        var pageHeight = (document.Page.HeightPt > 0 ? document.Page.HeightPt : 792) * 96.0 / 72.0;
+        const double deskPadding = 24.0;
+        const double pageGap = 20.0;
+        return Math.Max(0, (int)((y - deskPadding) / (pageHeight + pageGap)));
+    }
+
+    [Fact]
+    public async Task RepeatHeaderRow_renders_header_cells_on_second_planned_page()
+    {
+        int repeatedHeaderCellCount = -1;
+        int headerPageCount = -1;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = FreeWVisualEvidenceDocumentFactory.BuildTablePaginationRepeatHeaderDocument();
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(900, 2000));
+
+            var headerHits = GetTableCellHits(view)
+                .Where(hit => hit.Row == 0)
+                .ToList();
+            repeatedHeaderCellCount = headerHits.Count;
+            headerPageCount = headerHits
+                .Select(hit => PageIndexFromPageSpaceY(doc, hit.Rect.Y))
+                .Distinct()
+                .Count();
+        });
+        if (!ran) return;
+
+        repeatedHeaderCellCount.Should().BeGreaterThan(3,
+            "row 0 should render once at the original table start and again as the repeated header");
+        headerPageCount.Should().BeGreaterThanOrEqualTo(2,
+            "the repeated row 0 header cells should land on a later page");
     }
 
     // ── row insert below ──────────────────────────────────────────────────────────────────────

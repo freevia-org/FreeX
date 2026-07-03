@@ -42,6 +42,9 @@ public sealed class SlideComment
     /// <summary>Reviewer display name for the latest resolve action. Empty when not supplied.</summary>
     public string ResolvedBy { get; set; } = string.Empty;
 
+    /// <summary>True when this comment came from or should be saved as a modern PowerPoint comment part.</summary>
+    public bool UsesModernCommentSchema { get; set; }
+
     /// <summary>Modern-comment style replies attached to this thread.</summary>
     public List<SlideCommentReply> Replies { get; } = new();
 

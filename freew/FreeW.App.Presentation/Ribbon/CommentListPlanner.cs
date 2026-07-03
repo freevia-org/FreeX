@@ -21,7 +21,8 @@ public sealed record CommentListItem(
     string Author,
     string Text,
     int ReplyCount,
-    bool Resolved)
+    bool Resolved,
+    string? DateXml = null)
 {
     public int BlockIndex => Anchor.BlockIndex;
 }
@@ -65,7 +66,8 @@ public static class CommentListPlanner
                         string.IsNullOrWhiteSpace(comment.Author) ? "Unknown" : comment.Author,
                         comment.PlainText,
                         comment.Replies.Count,
-                        comment.Resolved));
+                        comment.Resolved,
+                        comment.DateXml));
 
                     offset += run.Text.Length;
                 }

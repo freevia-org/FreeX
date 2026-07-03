@@ -53,6 +53,47 @@ public sealed class ReviewBalloonLayoutPlannerTests
     }
 
     [Fact]
+    public void BuildSources_exposes_review_card_metadata_without_mixing_it_into_body_text()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("note") { CommentId = 4 });
+        paragraph.Runs.Add(Run.CommentReference(4));
+        paragraph.Runs.Add(new Run("added")
+        {
+            Revision = RevisionKind.Inserted,
+            RevisionAuthor = "Riley",
+            RevisionDateXml = "2026-07-03T09:30:00Z"
+        });
+        document.Blocks.Add(paragraph);
+
+        var comment = new Comment(4, "Please clarify.\nSecond line.", "Casey", "C")
+        {
+            DateXml = "2026-07-02T11:00:00Z",
+            Resolved = true
+        };
+        comment.AddReply(5, "Done.", "Riley", "R");
+        comment.AddReply(6, "Thanks.", "Casey", "C");
+        document.Comments[4] = comment;
+
+        var sources = ReviewBalloonLayoutPlanner.BuildSources(document, ReviewDisplayPolicy.Default);
+
+        var commentSource = sources[0];
+        commentSource.KindLabel.Should().Be("Resolved comment");
+        commentSource.HeaderText.Should().Be("Casey");
+        commentSource.BodyText.Should().Be("Please clarify. Second line.");
+        commentSource.ReplyCount.Should().Be(2);
+        commentSource.MetadataText.Should().Be("Resolved - 2 replies - 2026-07-02");
+        commentSource.BodyText.Should().NotContain("replies");
+
+        var revisionSource = sources[1];
+        revisionSource.KindLabel.Should().Be("Inserted");
+        revisionSource.HeaderText.Should().Be("Riley");
+        revisionSource.MetadataText.Should().Be("Tracked change - 2026-07-03");
+    }
+
+    [Fact]
     public void BuildLayout_matches_wpf_balloon_anchor_and_leader_geometry()
     {
         var sources = new[]
