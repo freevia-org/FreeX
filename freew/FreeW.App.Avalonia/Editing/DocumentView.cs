@@ -9444,6 +9444,38 @@ public sealed class DocumentView : Control
         _bus.Execute(new SetParagraphFormattingCommand(_caret.Block, paragraph.Formatting with { Alignment = alignment }));
     }
 
+    public void ApplyMultiLevelListToSelection()
+    {
+        FormatSelectedParagraphs(formatting => formatting with
+        {
+            ListKind = ListKind.MultiLevel,
+            ListLevel = formatting.ListLevel
+        });
+    }
+
+    public void ApplyMultiLevelListStartOverrides(int? level0StartAt, int? level1StartAt)
+    {
+        FormatSelectedParagraphs(formatting =>
+            formatting.ListKind != ListKind.MultiLevel ? formatting :
+            formatting.ListLevel == 0 && level0StartAt.HasValue ? formatting with { ListStartOverride = level0StartAt } :
+            formatting.ListLevel == 1 && level1StartAt.HasValue ? formatting with { ListStartOverride = level1StartAt } :
+            formatting);
+    }
+
+    public void ApplyMultiLevelHeadingPreset()
+    {
+        ApplyMultiLevelListToSelection();
+
+        var styleId = GetCaretFormatting().Paragraph.ListLevel switch
+        {
+            0 => "Heading1",
+            1 => "Heading2",
+            _ => "Heading3",
+        };
+
+        ApplyNamedStyle(styleId);
+    }
+
     /// <summary>
     /// Enumerate every paragraph block index spanned by the current selection (start block to end
     /// block inclusive). When there is no selection the result is just the caret's block (if it is

@@ -196,7 +196,14 @@ public sealed class ReviewWorkflowAdapterTests
                 Kind = SlideShapeKind.Picture,
                 Picture = new ImagePart()
             };
+            var linkedText = new SlideShape
+            {
+                Id = 809,
+                Name = "Reference text",
+                TextBody = MakeLinkedTextBody("Project notes", new Hyperlink { Url = "https://example.test/notes" })
+            };
             firstSlide.Shapes.Add(shape);
+            firstSlide.Shapes.Add(linkedText);
             window.Editor.InsertSlide();
             window.Editor.CurrentSlide!.Title = string.Empty;
             window.Editor.SelectSlide(0);
@@ -204,26 +211,36 @@ public sealed class ReviewWorkflowAdapterTests
             var opened = window.ShowAccessibilityCheckerPane();
 
             window.IsAccessibilityCheckerPaneVisible.Should().BeTrue();
-            window.AccessibilityCheckerPaneRowCount.Should().Be(2);
+            window.AccessibilityCheckerPaneRowCount.Should().Be(3);
             window.AccessibilityCheckerPaneSelectedRowCount.Should().Be(1);
-            window.AccessibilityCheckerPaneHeading.Should().Be("Accessibility - 2 issues");
-            opened.Rows.Select(row => row.Title).Should().Equal("Alt text missing", "Missing slide title");
+            window.AccessibilityCheckerPaneHeading.Should().Be("Accessibility - 3 issues");
+            opened.Rows.Select(row => row.Title).Should().Equal(
+                "Alt text missing",
+                "Hyperlink ScreenTip missing",
+                "Missing slide title");
             opened.Rows[0].CommandHint.Should().Be(PresentationReviewWorkflowPlanner.AltTextCommandId);
             opened.Rows[1].Should().Match<PresentationAccessibilityCheckerRowPlan>(row =>
+                row.Category == "Hyperlink" &&
+                row.ShapeId == linkedText.Id &&
+                row.ActionLabel == "Edit Hyperlink" &&
+                row.CommandHint == PresentationReviewWorkflowPlanner.InsertLinkCommandId &&
+                row.ShouldNavigateToSlide &&
+                row.ShouldSelectShape);
+            opened.Rows[2].Should().Match<PresentationAccessibilityCheckerRowPlan>(row =>
                 row.Category == "Slide title" &&
                 row.ActionLabel == "Set Slide Title" &&
                 row.CommandHint == PresentationReviewWorkflowPlanner.SetSlideTitleCommandId &&
                 row.ShouldNavigateToSlide &&
                 !row.ShouldSelectShape);
 
-            var selectedTitle = window.SelectAccessibilityCheckerRow(1);
+            var selectedTitle = window.SelectAccessibilityCheckerRow(2);
 
             window.Editor.CurrentSlideIndex.Should().Be(1);
             window.Editor.SelectedShapeIds.Should().BeEmpty();
             selectedTitle.SelectedRow.Should().NotBeNull();
             selectedTitle.SelectedRow!.Title.Should().Be("Missing slide title");
 
-            var actionedTitle = window.ApplyAccessibilityCheckerRowAction(1);
+            var actionedTitle = window.ApplyAccessibilityCheckerRowAction(2);
 
             window.Editor.CurrentSlideIndex.Should().Be(1);
             window.Editor.CurrentSlide!.Title.Should().Be("Slide 2");
@@ -233,7 +250,9 @@ public sealed class ReviewWorkflowAdapterTests
                 "Slide 2",
                 "Slide 2",
                 null));
-            actionedTitle.Rows.Select(row => row.Title).Should().Equal("Alt text missing");
+            actionedTitle.Rows.Select(row => row.Title).Should().Equal(
+                "Alt text missing",
+                "Hyperlink ScreenTip missing");
             window.LastAccessibilitySummaryPlan!.Issues.Should().NotContain(issue =>
                 issue.Title == "Missing slide title");
             window.IsDirty.Should().BeTrue();
@@ -1141,6 +1160,15 @@ public sealed class ReviewWorkflowAdapterTests
             body.Paragraphs.Add(paragraph);
         }
 
+        return body;
+    }
+
+    private static TextBody MakeLinkedTextBody(string text, Hyperlink hyperlink)
+    {
+        var body = new TextBody();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run { Text = text, Hyperlink = hyperlink });
+        body.Paragraphs.Add(paragraph);
         return body;
     }
 

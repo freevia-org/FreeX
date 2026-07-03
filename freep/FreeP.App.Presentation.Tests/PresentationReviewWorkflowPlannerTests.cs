@@ -985,6 +985,71 @@ public sealed class PresentationReviewWorkflowPlannerTests
     }
 
     [Fact]
+    public void BuildAccessibilitySummaryPlan_FlagsTextRunHyperlinksWithoutScreenTips()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Title = "Linked references";
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 11,
+            Name = "Reference text",
+            TextBody = TextBody("Project notes", new Hyperlink { Url = "https://example.test/notes" })
+        });
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 12,
+            Name = "Comparison table",
+            Kind = SlideShapeKind.Table,
+            Table = new TableShape
+            {
+                Flags = { FirstRow = true },
+                ColumnWidthsEmu = { 100, 100 },
+                Rows =
+                {
+                    new TableRow
+                    {
+                        Cells =
+                        {
+                            new TableCell { TextBody = TextBody("Deck", new Hyperlink { TargetSlideId = "256" }) },
+                            new TableCell { TextBody = TextBody("Status") }
+                        }
+                    }
+                }
+            }
+        });
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 13,
+            Name = "Documented link",
+            TextBody = TextBody("Docs", new Hyperlink
+            {
+                Url = "https://example.test/docs",
+                Tooltip = "Open project documentation"
+            })
+        });
+
+        var plan = PresentationReviewWorkflowPlanner.BuildAccessibilitySummaryPlan(presentation);
+
+        var linkIssues = plan.Issues
+            .Where(issue => issue.Title == "Hyperlink ScreenTip missing")
+            .ToArray();
+        linkIssues.Select(issue => issue.ShapeId).Should().Equal(11u, 12u);
+        linkIssues.Select(issue => issue.Detail).Should().Equal(
+            "Text link in Reference text is missing hover/help text.",
+            "Text link in Comparison table is missing hover/help text.");
+        linkIssues.Should().AllSatisfy(issue =>
+        {
+            issue.Severity.Should().Be(PresentationAccessibilityIssueSeverity.Info);
+            issue.Action.Should().Be(new PresentationAccessibilityIssueActionSummary(
+                PresentationReviewWorkflowPlanner.MissingHyperlinkScreenTipActionSummary,
+                PresentationReviewWorkflowPlanner.InsertLinkCommandId,
+                true));
+        });
+        plan.Issues.Should().NotContain(issue => issue.ShapeId == 13);
+    }
+
+    [Fact]
     public void SlideTitleMutationPlan_SuggestsPlaceholderTextAndAppliesThroughEditingSession()
     {
         var presentation = Presentation.CreateEmpty();
@@ -1999,11 +2064,11 @@ public sealed class PresentationReviewWorkflowPlannerTests
         return plan;
     }
 
-    private static TextBody TextBody(string text)
+    private static TextBody TextBody(string text, Hyperlink? hyperlink = null)
     {
         var body = new TextBody();
         var paragraph = new Paragraph();
-        paragraph.Runs.Add(new Run { Text = text });
+        paragraph.Runs.Add(new Run { Text = text, Hyperlink = hyperlink });
         body.Paragraphs.Add(paragraph);
         return body;
     }
