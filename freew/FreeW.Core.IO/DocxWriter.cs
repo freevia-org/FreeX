@@ -1504,9 +1504,10 @@ public static class DocxWriter
         {
             var row = table.Rows[rowIndex];
             var isHeaderRow = fmt.HeaderRow && rowIndex == 0;
-            // Banded rows shade alternate body rows. With a header, body banding starts below the header,
-            // so we band every other body row (the second body row, fourth, ...).
-            var bandedShade = fmt.BandedRows && !isHeaderRow && IsBandedBodyRow(rowIndex, fmt.HeaderRow);
+            // Banded rows shade alternate body rows. Word's band 1 starts on the first body row.
+            var bandedShade = fmt.BandedRows
+                && !isHeaderRow
+                && TableBanding.IsBandedBodyRow(rowIndex, fmt.HeaderRow);
 
             var tr = new XElement(W + "tr");
             // Row properties (w:trPr): cantSplit / trHeight / tblHeader, in CT_TrPr schema order. Emitted
@@ -1556,12 +1557,6 @@ public static class DocxWriter
     /// counted from the first non-header row; every other body row (the 2nd, 4th, ...) is shaded, so the
     /// header (or first row) stays unshaded and banding alternates beneath it.
     /// </summary>
-    private static bool IsBandedBodyRow(int rowIndex, bool hasHeader)
-    {
-        var bodyIndex = hasHeader ? rowIndex - 1 : rowIndex;
-        return bodyIndex >= 0 && bodyIndex % 2 == 1;
-    }
-
     /// <summary>
     /// Returns a copy of <paramref name="paragraph"/> with every run forced bold, used to render a
     /// header-row cell's text bold without mutating the model. Non-text runs (images/fields) are copied

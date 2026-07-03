@@ -4581,7 +4581,9 @@ public sealed class DocumentView : Control
         {
             var row = table.Rows[r];
             var isHeader = table.Formatting.HeaderRow && r == 0;
-            var isBand = table.Formatting.BandedRows && !isHeader && (r - headerOffset) % 2 == 1;
+            var isBand = table.Formatting.BandedRows
+                && !isHeader
+                && TableBanding.IsBandedBodyRow(r, table.Formatting.HeaderRow);
 
             // AV-TBL: carry the TableCell model reference and actual column index so we can emit
             // per-paragraph, per-character cell-aware PlacedChars for caret routing.

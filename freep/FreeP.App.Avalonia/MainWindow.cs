@@ -165,6 +165,7 @@ public sealed class MainWindow : Window
     private SelectionAdornerLayer?       _adorner;
     private AvaloniaCanvasGestureHandler? _gestureHandler;
     private AvaloniaInCanvasTextEditor?  _textEditor;
+    private PresentationViewShowState _viewShowState = PresentationViewShowState.Default;
 
     private bool _notesRefreshing;
     private bool _slidePaneRefreshing;
@@ -196,6 +197,9 @@ public sealed class MainWindow : Window
     internal string? SlidePaneNewSlideButtonText => _slidePaneNewSlideButton.Content?.ToString();
 
     internal bool IsDirty => _fileWorkflow.IsDirty;
+    internal PresentationViewShowState ViewShowStateForTests => _viewShowState;
+    internal bool? GestureSnapToGridForTests => _gestureHandler?.SnapToGrid;
+    internal bool? GestureSnapToShapesForTests => _gestureHandler?.SnapToShapes;
 
     internal string? CurrentPath => _fileWorkflow.CurrentPath;
 
@@ -1167,6 +1171,7 @@ public sealed class MainWindow : Window
 
         // Gesture handler drives selection, move, resize, rotate.
         _gestureHandler = new AvaloniaCanvasGestureHandler(_slideCanvas, Editor, _adorner);
+        ApplyPresentationViewShowState(_viewShowState);
 
         // Text editor: double-click a shape to edit its text.
         _textEditor = new AvaloniaInCanvasTextEditor(_slideCanvas, Editor, textOverlay);
@@ -1203,11 +1208,22 @@ public sealed class MainWindow : Window
         if (textOverlay is not null)
         {
             _gestureHandler = new AvaloniaCanvasGestureHandler(_slideCanvas, Editor, _adorner);
+            ApplyPresentationViewShowState(_viewShowState);
             _textEditor     = new AvaloniaInCanvasTextEditor(_slideCanvas, Editor, textOverlay);
         }
     }
 
     // ── Ribbon ─────────────────────────────────────────────────────────────────
+
+    private void ApplyPresentationViewShowState(PresentationViewShowState state)
+    {
+        _viewShowState = state;
+        if (_gestureHandler is null)
+            return;
+
+        _gestureHandler.SnapToGrid = state.ShowGridlines;
+        _gestureHandler.SnapToShapes = state.ShowGuides;
+    }
 
     private Control BuildRibbon()
     {
@@ -1350,6 +1366,7 @@ public sealed class MainWindow : Window
         r.Register("freep.find", new ActionRibbonCommand(OpenFindDialog));
         r.Register("freep.replace", new ActionRibbonCommand(OpenFindReplaceDialog));
         RegisterReviewWorkflowCommands(r);
+        RegisterViewShowCommands(r);
 
         foreach (var plan in PresentationTransitionCommandPlanner.BuiltInPlans)
         {
@@ -2353,6 +2370,19 @@ public sealed class MainWindow : Window
         registry.Register(
             PresentationReviewWorkflowPlanner.ReopenCommentCommandId,
             new ActionRibbonCommand(() => ReopenSelectedComment()));
+    }
+
+    private void RegisterViewShowCommands(RibbonCommandRegistry registry)
+    {
+        foreach (var plan in PresentationViewShowPlanner.BuildPlans(_viewShowState))
+        {
+            registry.Register(
+                plan.CommandId,
+                new ViewShowToggleCommand(
+                    plan,
+                    () => _viewShowState,
+                    ApplyPresentationViewShowState));
+        }
     }
 
     internal void RefreshReviewWorkflowPlans()
@@ -4712,5 +4742,32 @@ public sealed class MainWindow : Window
 
         slideShow.Show();
         return true;
+    }
+
+    private sealed class ViewShowToggleCommand : IRibbonStatefulCommand
+    {
+        private readonly PresentationViewShowCommandPlan _plan;
+        private readonly Func<PresentationViewShowState> _getState;
+        private readonly Action<PresentationViewShowState> _applyState;
+
+        public ViewShowToggleCommand(
+            PresentationViewShowCommandPlan plan,
+            Func<PresentationViewShowState> getState,
+            Action<PresentationViewShowState> applyState)
+        {
+            _plan = plan;
+            _getState = getState;
+            _applyState = applyState;
+        }
+
+        public void Execute(RibbonCommandContext context)
+        {
+            var result = PresentationViewShowPlanner.Toggle(_getState(), _plan);
+            _applyState(result.State);
+        }
+
+        public RibbonCommandState GetState() => new(
+            IsEnabled: true,
+            IsChecked: PresentationViewShowPlanner.IsChecked(_getState(), _plan.Kind));
     }
 }

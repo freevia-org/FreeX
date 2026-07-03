@@ -51,6 +51,10 @@ public sealed class VisualEvidencePageLayoutShotSourceTests
         source.Should().Contain("ReviewRendererScenarioIds");
         source.Should().Contain("table-layout-complex");
         source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildComplexTableLayoutDocument");
+        source.Should().Contain("table-pagination-repeat-header");
+        source.Should().Contain("VisualEvidenceOutputPath(outDir, \"table-pagination-repeat-header\", 1)");
+        source.Should().Contain("VisualEvidenceOutputPath(outDir, \"table-pagination-repeat-header\", 2)");
+        source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildTablePaginationRepeatHeaderDocument");
         source.Should().Contain("drawing-objects-complex");
         source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildDrawingObjectsCompositionDocument");
         source.Should().Contain("chart-smartart-complex");

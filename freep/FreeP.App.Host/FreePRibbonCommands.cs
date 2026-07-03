@@ -90,7 +90,9 @@ internal static class FreePRibbonCommands
         Action?             onAnimPane         = null,
         Action?             onLayoutPicker     = null,
         Action?             onTablePicker      = null,
-        Action<HeaderFooterCommandFocus>? onHeaderFooter = null)
+        Action<HeaderFooterCommandFocus>? onHeaderFooter = null,
+        Func<PresentationViewShowState>? getViewShowState = null,
+        Action<PresentationViewShowState>? applyViewShowState = null)
     {
         var registry = new RibbonCommandRegistry();
 
@@ -319,6 +321,7 @@ internal static class FreePRibbonCommands
             onNextComment,
             onResolveComment,
             onReopenComment);
+        RegisterViewShowCommands(registry, stateStore, getViewShowState, applyViewShowState);
 
         return registry;
     }
@@ -509,6 +512,25 @@ internal static class FreePRibbonCommands
     // This region is the ONLY place in this file that references SlideCanvas for 10A.
     // 10B must not add slideCanvas references outside this region.
 
+    private static void RegisterViewShowCommands(
+        RibbonCommandRegistry registry,
+        RibbonStateStore stateStore,
+        Func<PresentationViewShowState>? getViewShowState,
+        Action<PresentationViewShowState>? applyViewShowState)
+    {
+        foreach (var plan in PresentationViewShowPlanner.BuildPlans(
+                     getViewShowState?.Invoke() ?? PresentationViewShowState.Default))
+        {
+            registry.Register(
+                plan.CommandId,
+                new ViewShowToggleCommand(
+                    stateStore,
+                    plan,
+                    getViewShowState,
+                    applyViewShowState));
+        }
+    }
+
     private static void RegisterReviewWorkflowCommands(
         RibbonCommandRegistry registry,
         Action? onCommentsPane,
@@ -697,5 +719,42 @@ internal static class FreePRibbonCommands
         }
 
         public RibbonCommandState GetState() => new(IsEnabled: true, IsChecked: _checked);
+    }
+
+    private sealed class ViewShowToggleCommand : IRibbonStatefulCommand
+    {
+        private readonly RibbonStateStore _stateStore;
+        private readonly PresentationViewShowCommandPlan _plan;
+        private readonly Func<PresentationViewShowState>? _getState;
+        private readonly Action<PresentationViewShowState>? _applyState;
+        private PresentationViewShowState _localState;
+
+        public ViewShowToggleCommand(
+            RibbonStateStore stateStore,
+            PresentationViewShowCommandPlan plan,
+            Func<PresentationViewShowState>? getState,
+            Action<PresentationViewShowState>? applyState)
+        {
+            _stateStore = stateStore;
+            _plan = plan;
+            _getState = getState;
+            _applyState = applyState;
+            _localState = PresentationViewShowState.Default;
+            _stateStore.SetChecked(_plan.CommandId, GetState().IsChecked);
+        }
+
+        public void Execute(RibbonCommandContext context)
+        {
+            var result = PresentationViewShowPlanner.Toggle(CurrentState(), _plan);
+            _localState = result.State;
+            _applyState?.Invoke(result.State);
+            _stateStore.SetChecked(_plan.CommandId, result.IsChecked);
+        }
+
+        public RibbonCommandState GetState() => new(
+            IsEnabled: true,
+            IsChecked: PresentationViewShowPlanner.IsChecked(CurrentState(), _plan.Kind));
+
+        private PresentationViewShowState CurrentState() => _getState?.Invoke() ?? _localState;
     }
 }

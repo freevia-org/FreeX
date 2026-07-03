@@ -65,6 +65,7 @@ public sealed class SlideCanvas : FrameworkElement
     private InCanvasTextEditor?        _textEditor;
     private InCanvasTableCellEditor?   _tableCellEditor;   // Wave 9A
     private Canvas?                    _textOverlay;   // WPF Canvas layered above SlideCanvas for text-edit overlay
+    private PresentationViewShowState  _viewShowState = PresentationViewShowState.Default;
 
     /// <summary>
     /// The current slide→screen transform (updated on every render pass).
@@ -83,9 +84,22 @@ public sealed class SlideCanvas : FrameworkElement
         _textEditor      = null;
         _tableCellEditor = null;
         _gestureHandler  = new CanvasGestureHandler(this, editor);
+        ApplyViewShowState(_viewShowState);
         _textOverlay     = textOverlay;
         _textEditor      = new InCanvasTextEditor(this, editor, textOverlay);
         _tableCellEditor = new InCanvasTableCellEditor(this, editor, textOverlay); // Wave 9A
+    }
+
+    public PresentationViewShowState ViewShowState => _viewShowState;
+
+    public void ApplyViewShowState(PresentationViewShowState state)
+    {
+        _viewShowState = state;
+        if (_gestureHandler is null)
+            return;
+
+        _gestureHandler.SnapToGrid = state.ShowGridlines;
+        _gestureHandler.SnapToShapes = state.ShowGuides;
     }
 
     // ── Wave 10A: active editor access for ribbon routing ──────────────────────

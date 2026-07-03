@@ -80,6 +80,32 @@ public sealed class HeaderFooterCommandRoutingTests
         footer.Should().Be("Deck footer");
     }
 
+    [Fact]
+    public async Task View_show_commands_toggle_shared_state_and_gesture_snap_flags()
+    {
+        PresentationViewShowState state = default;
+        bool? snapToGrid = null;
+        bool? snapToShapes = null;
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var registry = window.BuildCommandRegistry();
+
+            Execute(registry, PresentationViewShowPlanner.GridlinesCommandId);
+            Execute(registry, PresentationViewShowPlanner.GuidesCommandId);
+
+            state = window.ViewShowStateForTests;
+            snapToGrid = window.GestureSnapToGridForTests;
+            snapToShapes = window.GestureSnapToShapesForTests;
+        });
+
+        if (!ran) return;
+        state.ShowGridlines.Should().BeFalse();
+        state.ShowGuides.Should().BeFalse();
+        snapToGrid.Should().BeFalse();
+        snapToShapes.Should().BeFalse();
+    }
+
     private static Task<bool> OnUiThread(Action action) =>
         Session.Dispatch(action, CancellationToken.None)
             .ContinueWith(task => task.Exception is null, CancellationToken.None);

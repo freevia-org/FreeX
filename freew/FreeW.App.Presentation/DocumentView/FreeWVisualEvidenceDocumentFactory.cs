@@ -247,6 +247,70 @@ public static class FreeWVisualEvidenceDocumentFactory
 
         return doc;
     }
+
+    public static TextDocument BuildTablePaginationRepeatHeaderDocument()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Page.WidthPt = 612;
+        doc.Page.HeightPt = 396;
+        doc.Page.MarginLeftPt = 36;
+        doc.Page.MarginRightPt = 36;
+        doc.Page.MarginTopPt = 36;
+        doc.Page.MarginBottomPt = 36;
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph(
+            "The table below is intentionally tall enough to paginate. Row 4 is marked keep-together, " +
+            "and the header row repeats on the second page."));
+
+        var table = new Table
+        {
+            Formatting = new TableFormatting
+            {
+                Borders = true,
+                HeaderRow = true,
+                RepeatHeaderRow = true,
+                BandedRows = true
+            },
+            TableStyleId = "GridTable1Light",
+            PreferredWidthPt = 520,
+            Alignment = TableAlignment.Center,
+            AutoFit = AutoFitMode.Fixed,
+            DefaultCellMargins = new TableCellMargins(TopPt: 3, LeftPt: 6, BottomPt: 3, RightPt: 6)
+        };
+        table.ColumnWidthsPt.AddRange([150, 170, 200]);
+        table.Rows.Add(new TableRow
+        {
+            HeightPt = 30,
+            HeightRule = TableRowHeightRule.Exact,
+            AllowBreakAcrossPages = false,
+            Cells =
+            {
+                HeaderCell("Step"),
+                HeaderCell("Owner"),
+                HeaderCell("Pagination evidence")
+            }
+        });
+
+        for (var row = 1; row <= 8; row++)
+        {
+            table.Rows.Add(new TableRow
+            {
+                HeightPt = 54,
+                HeightRule = TableRowHeightRule.Exact,
+                AllowBreakAcrossPages = row != 4 && row != 7,
+                Cells =
+                {
+                    Cell($"Row {row}"),
+                    Cell(row == 4 ? "Keep with row box" : "Flow row"),
+                    Cell($"Body row {row} should retain banding and page assignment in the shared pagination plan.")
+                }
+            });
+        }
+
+        doc.Blocks.Add(table);
+        return doc;
+    }
+
     public static TextDocument BuildDrawingObjectsCompositionDocument()
     {
         var doc = TextDocument.CreateEmpty();

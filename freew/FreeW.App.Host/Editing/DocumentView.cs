@@ -6305,7 +6305,9 @@ public sealed class DocumentView : RichTextBox
             foreach (var wpfRow in rowGroup.Rows)
             {
                 var isHeaderRow = headerRow && rowIndex == 0;
-                var isBandedRow = bandedRows && !isHeaderRow && IsBandedBodyRow(rowIndex, headerRow);
+                var isBandedRow = bandedRows
+                    && !isHeaderRow
+                    && TableBanding.IsBandedBodyRow(rowIndex, headerRow);
                 var row = modelRows[rowIndex];
                 foreach (var wpfCell in wpfRow.Cells)
                 {
@@ -6490,7 +6492,9 @@ public sealed class DocumentView : RichTextBox
         {
             var modelRow = table.Rows[rowIndex];
             var isHeaderRow = fmt.HeaderRow && rowIndex == 0;
-            var isBandedRow = fmt.BandedRows && !isHeaderRow && IsBandedBodyRow(rowIndex, fmt.HeaderRow);
+            var isBandedRow = fmt.BandedRows
+                && !isHeaderRow
+                && TableBanding.IsBandedBodyRow(rowIndex, fmt.HeaderRow);
             var wpfRow = new WpfTableRow();
             // WPF System.Windows.Documents.TableRow is a TextElement (not FrameworkElement), so it has
             // no MinHeight / Height property. To enforce a minimum row height we inject a zero-width
@@ -6719,18 +6723,6 @@ public sealed class DocumentView : RichTextBox
             column += span;
         }
         return null;
-    }
-
-    /// <summary>
-    /// Returns true for the body rows that should receive the banded fill (1st, 3rd, 5th, …).
-    /// Word's convention is that Band 1 = the FIRST data row (bodyIndex 0), so even bodyIndexes
-    /// are banded. Both <see cref="BuildTable"/> and <see cref="ReadTable"/> must use the same
-    /// rule so the colour-equality heuristic in ReadTable recognises the same rows as banded.
-    /// </summary>
-    private static bool IsBandedBodyRow(int rowIndex, bool hasHeader)
-    {
-        var bodyIndex = hasHeader ? rowIndex - 1 : rowIndex;
-        return bodyIndex >= 0 && bodyIndex % 2 == 0;
     }
 
     private static WpfParagraph BuildParagraph(ModelParagraph paragraph, TextDocument document, bool inTableCell = false)
