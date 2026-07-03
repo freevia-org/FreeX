@@ -770,22 +770,34 @@ public sealed class PptxPackageRetentionTests
 
         var preservedChart = chartShapes[0].Chart!;
         preservedChart.RegenerateWorkbookOnSave.Should().BeFalse();
-        preservedChart.Series[0].FormulaReferences.SeriesName.Should().Be("'Forecast Model'!$C$1");
-        preservedChart.Series[0].FormulaReferences.Category.Should().Be("'Forecast Model'!$A$2:$A$4");
-        preservedChart.Series[0].FormulaReferences.Values.Should().Be("'Forecast Model'!Revenue_Actual");
+        preservedChart.Series.Should().HaveCount(2);
+        preservedChart.Series[0].FormulaReferences.SeriesName.Should().Be("'Forecast Model 2026'!$C$1");
+        preservedChart.Series[0].FormulaReferences.Category.Should().Be("'Forecast Model 2026'!$A$2:$A$4");
+        preservedChart.Series[0].FormulaReferences.Values.Should().Be("'Forecast Model 2026'!Revenue_Actual");
+        preservedChart.Series[1].FormulaReferences.SeriesName.Should().Be("'Forecast Model 2026'!$D$1");
+        preservedChart.Series[1].FormulaReferences.Category.Should().Be("'Forecast Model 2026'!$A$2:$A$4");
+        preservedChart.Series[1].FormulaReferences.Values.Should().Be("'Forecast Model 2026'!Local_Projection");
 
         var editedChart = chartShapes[1].Chart!;
         editedChart.RegenerateWorkbookOnSave.Should().BeFalse();
-        editedChart.Series[0].FormulaReferences.SeriesName.Should().Be("Input!$D$1");
-        editedChart.Series[0].FormulaReferences.Category.Should().Be("Input!$A$2:$A$4");
-        editedChart.Series[0].FormulaReferences.Values.Should().Be("Input!$D$2:$D$4");
+        editedChart.Series.Should().HaveCount(2);
+        editedChart.Series[0].FormulaReferences.SeriesName.Should().Be("'Input Assumptions'!$C$1");
+        editedChart.Series[0].FormulaReferences.Category.Should().Be("'Input Assumptions'!$A$2:$A$4");
+        editedChart.Series[0].FormulaReferences.Values.Should().Be("'Input Assumptions'!Scenario_Source");
+        editedChart.Series[1].FormulaReferences.SeriesName.Should().Be("'Input Assumptions'!$D$1");
+        editedChart.Series[1].FormulaReferences.Category.Should().Be("'Input Assumptions'!$A$2:$A$4");
+        editedChart.Series[1].FormulaReferences.Values.Should().Be("'Input Assumptions'!Scenario_Local");
 
         new ReplaceChartDataCommand(
             slideIndex: 0,
             shapeId: chartShapes[1].Id,
             categories: ["Edited Jan", "Edited Feb", "Edited Mar"],
-            seriesNames: ["Edited Scenario"],
-            values: [new double?[] { 111, 222, 333 }]).Apply(loaded);
+            seriesNames: ["Edited Actual", "Edited Scenario"],
+            values:
+            [
+                new double?[] { 111, 222, 333 },
+                new double?[] { 444, 555, 666 },
+            ]).Apply(loaded);
 
         preservedChart.RegenerateWorkbookOnSave.Should().BeFalse();
         editedChart.RegenerateWorkbookOnSave.Should().BeTrue();
@@ -803,6 +815,23 @@ public sealed class PptxPackageRetentionTests
             ReadBytes(archive, "ppt/embeddings/authoredWorkbookFirst.xlsx")
                 .Should()
                 .Equal(sourceFirstWorkbook, "the unedited chart should keep its PowerPoint-authored formula workbook byte-for-byte");
+            using (var preservedWorkbook = new ZipArchive(
+                new MemoryStream(ReadBytes(archive, "ppt/embeddings/authoredWorkbookFirst.xlsx")),
+                ZipArchiveMode.Read))
+            {
+                var workbookXml = LoadXml(preservedWorkbook, "xl/workbook.xml")
+                    .ToString(SaveOptions.DisableFormatting);
+                workbookXml.Should().Contain("Revenue_Actual");
+                workbookXml.Should().Contain("Local_Projection");
+                workbookXml.Should().Contain("localSheetId=\"0\"");
+                workbookXml.Should().Contain("'Forecast Model 2026'!$D$2:$D$4");
+
+                var sheetXml = LoadXml(preservedWorkbook, "xl/worksheets/sheet1.xml")
+                    .ToString(SaveOptions.DisableFormatting);
+                sheetXml.Should().Contain("SUM(B2,Forecast_Assumption)");
+                sheetXml.Should().Contain("C2+SUM($B$2:$B$4)/10");
+            }
+
             archive.GetEntry("ppt/embeddings/authoredWorkbookSecond.xlsx").Should().BeNull(
                 "the semantically edited chart should drop its stale authored formula workbook");
             archive.GetEntry("ppt/embeddings/chartWorkbook2.xlsx").Should().NotBeNull(
@@ -810,9 +839,11 @@ public sealed class PptxPackageRetentionTests
 
             var chart1Xml = LoadXml(archive, "ppt/charts/chart1.xml");
             var chart1Text = chart1Xml.ToString(SaveOptions.DisableFormatting);
-            chart1Text.Should().Contain("'Forecast Model'!$C$1");
-            chart1Text.Should().Contain("'Forecast Model'!$A$2:$A$4");
-            chart1Text.Should().Contain("'Forecast Model'!Revenue_Actual");
+            chart1Text.Should().Contain("'Forecast Model 2026'!$C$1");
+            chart1Text.Should().Contain("'Forecast Model 2026'!$D$1");
+            chart1Text.Should().Contain("'Forecast Model 2026'!$A$2:$A$4");
+            chart1Text.Should().Contain("'Forecast Model 2026'!Revenue_Actual");
+            chart1Text.Should().Contain("'Forecast Model 2026'!Local_Projection");
             chart1Xml.Root!.Element(ChartNs + "externalData")!.Attribute(RelsDocNs + "id")!.Value
                 .Should().Be("rIdAuthoredWorkbookFirst");
             var chart1Rels = LoadXml(archive, "ppt/charts/_rels/chart1.xml.rels");
@@ -821,11 +852,16 @@ public sealed class PptxPackageRetentionTests
             var chart2Xml = LoadXml(archive, "ppt/charts/chart2.xml");
             var chart2Text = chart2Xml.ToString(SaveOptions.DisableFormatting);
             chart2Text.Should().Contain("Edited Jan");
+            chart2Text.Should().Contain("Edited Actual");
             chart2Text.Should().Contain("Edited Scenario");
             chart2Text.Should().Contain("ChartData!$A$2:$A$4");
             chart2Text.Should().Contain("ChartData!$B$1");
             chart2Text.Should().Contain("ChartData!$B$2:$B$4");
-            chart2Text.Should().NotContain("Input!$D$2:$D$4",
+            chart2Text.Should().Contain("ChartData!$C$1");
+            chart2Text.Should().Contain("ChartData!$C$2:$C$4");
+            chart2Text.Should().NotContain("'Input Assumptions'!Scenario_Source",
+                "edited charts should replace authored formulas with ranges into the regenerated workbook");
+            chart2Text.Should().NotContain("'Input Assumptions'!Scenario_Local",
                 "edited charts should replace authored formulas with ranges into the regenerated workbook");
             chart2Xml.Root!.Element(ChartNs + "externalData")!.Attribute(RelsDocNs + "id")!.Value
                 .Should().Be("rIdWorkbook1");
@@ -849,29 +885,51 @@ public sealed class PptxPackageRetentionTests
                 ZipArchiveMode.Read);
             var regeneratedSheet = LoadXml(regeneratedWorkbook, "xl/worksheets/sheet1.xml")
                 .ToString(SaveOptions.DisableFormatting);
+            regeneratedSheet.Should().Contain("Edited Actual");
             regeneratedSheet.Should().Contain("Edited Scenario");
             regeneratedSheet.Should().Contain("Edited Jan");
             regeneratedSheet.Should().Contain("111");
             regeneratedSheet.Should().Contain("222");
             regeneratedSheet.Should().Contain("333");
+            regeneratedSheet.Should().Contain("444");
+            regeneratedSheet.Should().Contain("555");
+            regeneratedSheet.Should().Contain("666");
         }
 
         sourceSecondWorkbook.Should().NotBeEmpty("the source fixture should carry a real authored workbook for the edited chart");
+        using (var staleEditedWorkbook = new ZipArchive(new MemoryStream(sourceSecondWorkbook), ZipArchiveMode.Read))
+        {
+            var workbookXml = LoadXml(staleEditedWorkbook, "xl/workbook.xml")
+                .ToString(SaveOptions.DisableFormatting);
+            workbookXml.Should().Contain("Scenario_Source");
+            workbookXml.Should().Contain("Scenario_Local");
+            workbookXml.Should().Contain("'Input Assumptions'!$D$2:$D$4");
+        }
 
         var reloaded = PptxPackageReader.Read(new MemoryStream(savedBytes));
         var reloadedCharts = reloaded.Slides[0].Shapes
             .Where(shape => shape.Kind == SlideShapeKind.Chart)
             .Select(shape => shape.Chart!)
             .ToArray();
-        reloadedCharts[0].Series[0].FormulaReferences.SeriesName.Should().Be("'Forecast Model'!$C$1");
-        reloadedCharts[0].Series[0].FormulaReferences.Category.Should().Be("'Forecast Model'!$A$2:$A$4");
-        reloadedCharts[0].Series[0].FormulaReferences.Values.Should().Be("'Forecast Model'!Revenue_Actual");
+        reloadedCharts[0].Series.Should().HaveCount(2);
+        reloadedCharts[0].Series[0].FormulaReferences.SeriesName.Should().Be("'Forecast Model 2026'!$C$1");
+        reloadedCharts[0].Series[0].FormulaReferences.Category.Should().Be("'Forecast Model 2026'!$A$2:$A$4");
+        reloadedCharts[0].Series[0].FormulaReferences.Values.Should().Be("'Forecast Model 2026'!Revenue_Actual");
+        reloadedCharts[0].Series[1].FormulaReferences.SeriesName.Should().Be("'Forecast Model 2026'!$D$1");
+        reloadedCharts[0].Series[1].FormulaReferences.Category.Should().Be("'Forecast Model 2026'!$A$2:$A$4");
+        reloadedCharts[0].Series[1].FormulaReferences.Values.Should().Be("'Forecast Model 2026'!Local_Projection");
+        reloadedCharts[1].Series.Should().HaveCount(2);
         reloadedCharts[1].Series[0].FormulaReferences.SeriesName.Should().Be("ChartData!$B$1");
         reloadedCharts[1].Series[0].FormulaReferences.Category.Should().Be("ChartData!$A$2:$A$4");
         reloadedCharts[1].Series[0].FormulaReferences.Values.Should().Be("ChartData!$B$2:$B$4");
+        reloadedCharts[1].Series[1].FormulaReferences.SeriesName.Should().Be("ChartData!$C$1");
+        reloadedCharts[1].Series[1].FormulaReferences.Category.Should().Be("ChartData!$A$2:$A$4");
+        reloadedCharts[1].Series[1].FormulaReferences.Values.Should().Be("ChartData!$C$2:$C$4");
         reloadedCharts[1].Categories.Should().Equal("Edited Jan", "Edited Feb", "Edited Mar");
-        reloadedCharts[1].Series[0].Name.Should().Be("Edited Scenario");
+        reloadedCharts[1].Series[0].Name.Should().Be("Edited Actual");
         reloadedCharts[1].Series[0].Values.Should().Equal(111, 222, 333);
+        reloadedCharts[1].Series[1].Name.Should().Be("Edited Scenario");
+        reloadedCharts[1].Series[1].Values.Should().Equal(444, 555, 666);
     }
 
     [Fact]
@@ -1497,8 +1555,21 @@ public sealed class PptxPackageRetentionTests
     {
         var presentation = new Presentation();
         var slide = new Slide();
-        slide.Shapes.Add(CreateWorkbookChartShape(301, "Formula first", 11, 22, 914400));
-        slide.Shapes.Add(CreateWorkbookChartShape(302, "Formula second", 33, 44, 4572000));
+        var firstChartShape = CreateWorkbookChartShape(301, "Formula first", 11, 22, 914400);
+        firstChartShape.Chart!.Series.Add(new ChartSeries
+        {
+            Name = "Formula first Old Projection",
+            Values = { 12, 24 },
+        });
+        slide.Shapes.Add(firstChartShape);
+
+        var secondChartShape = CreateWorkbookChartShape(302, "Formula second", 33, 44, 4572000);
+        secondChartShape.Chart!.Series.Add(new ChartSeries
+        {
+            Name = "Formula second Old Scenario",
+            Values = { 35, 47 },
+        });
+        slide.Shapes.Add(secondChartShape);
         presentation.Slides.Add(slide);
 
         using var basePackage = new MemoryStream();
@@ -1515,18 +1586,32 @@ public sealed class PptxPackageRetentionTests
                 workbookName: "authoredWorkbookFirst.xlsx",
                 relId: "rIdAuthoredWorkbookFirst",
                 workbookBytes: BuildRichWorkbookBytes(
-                    "Forecast Model",
+                    "Forecast Model 2026",
                     "first-rich-formula-workbook",
                     "Revenue_Actual",
-                    "B2*1.10",
-                    "B3*1.10",
-                    "B4*1.10"));
+                    "Local_Projection",
+                    "Actual",
+                    "Projection",
+                    "SUM(B2,Forecast_Assumption)",
+                    "SUM(B3,Forecast_Assumption)",
+                    "SUM(B4,Forecast_Assumption)",
+                    "C2+SUM($B$2:$B$4)/10",
+                    "C3+SUM($B$2:$B$4)/10",
+                    "C4+SUM($B$2:$B$4)/10"));
             SetChartFormulaReferences(
                 archive,
                 "ppt/charts/chart1.xml",
-                "'Forecast Model'!$C$1",
-                "'Forecast Model'!$A$2:$A$4",
-                "'Forecast Model'!Revenue_Actual");
+                seriesIndex: 0,
+                "'Forecast Model 2026'!$C$1",
+                "'Forecast Model 2026'!$A$2:$A$4",
+                "'Forecast Model 2026'!Revenue_Actual");
+            SetChartFormulaReferences(
+                archive,
+                "ppt/charts/chart1.xml",
+                seriesIndex: 1,
+                "'Forecast Model 2026'!$D$1",
+                "'Forecast Model 2026'!$A$2:$A$4",
+                "'Forecast Model 2026'!Local_Projection");
 
             AddSourceWorkbookSidecar(
                 archive,
@@ -1534,18 +1619,32 @@ public sealed class PptxPackageRetentionTests
                 workbookName: "authoredWorkbookSecond.xlsx",
                 relId: "rIdAuthoredWorkbookSecond",
                 workbookBytes: BuildRichWorkbookBytes(
-                    "Input",
+                    "Input Assumptions",
                     "second-rich-formula-workbook",
                     "Scenario_Source",
-                    "B2+C2",
-                    "B3+C3",
-                    "B4+C4"));
+                    "Scenario_Local",
+                    "Source",
+                    "Local",
+                    "SUM(B2:C2)",
+                    "SUM(B3:C3)",
+                    "SUM(B4:C4)",
+                    "C2*1.15+SUM($B$2:$B$4)",
+                    "C3*1.15+SUM($B$2:$B$4)",
+                    "C4*1.15+SUM($B$2:$B$4)"));
             SetChartFormulaReferences(
                 archive,
                 "ppt/charts/chart2.xml",
-                "Input!$D$1",
-                "Input!$A$2:$A$4",
-                "Input!$D$2:$D$4");
+                seriesIndex: 0,
+                "'Input Assumptions'!$C$1",
+                "'Input Assumptions'!$A$2:$A$4",
+                "'Input Assumptions'!Scenario_Source");
+            SetChartFormulaReferences(
+                archive,
+                "ppt/charts/chart2.xml",
+                seriesIndex: 1,
+                "'Input Assumptions'!$D$1",
+                "'Input Assumptions'!$A$2:$A$4",
+                "'Input Assumptions'!Scenario_Local");
 
             WriteText(
                 archive,
@@ -1667,12 +1766,13 @@ public sealed class PptxPackageRetentionTests
     private static void SetChartFormulaReferences(
         ZipArchive archive,
         string chartPath,
+        int seriesIndex,
         string seriesNameFormula,
         string categoryFormula,
         string valuesFormula)
     {
         var chartXml = LoadXml(archive, chartPath);
-        var series = chartXml.Descendants(ChartNs + "ser").First();
+        var series = chartXml.Descendants(ChartNs + "ser").ElementAt(seriesIndex);
         SetFormula(series.Element(ChartNs + "tx")!.Element(ChartNs + "strRef")!, seriesNameFormula);
         SetFormula(series.Element(ChartNs + "cat")!.Element(ChartNs + "strRef")!, categoryFormula);
         SetFormula(series.Element(ChartNs + "val")!.Element(ChartNs + "numRef")!, valuesFormula);
@@ -1691,10 +1791,16 @@ public sealed class PptxPackageRetentionTests
     private static byte[] BuildRichWorkbookBytes(
         string sheetName,
         string marker,
-        string definedName,
+        string firstDefinedName,
+        string secondDefinedName,
+        string firstSeriesHeader,
+        string secondSeriesHeader,
         string formula1,
         string formula2,
-        string formula3)
+        string formula3,
+        string formula4,
+        string formula5,
+        string formula6)
     {
         using var workbook = new MemoryStream();
         using (var archive = new ZipArchive(workbook, ZipArchiveMode.Update, leaveOpen: true))
@@ -1741,8 +1847,16 @@ public sealed class PptxPackageRetentionTests
                             new XAttribute(RelsDocNs + "id", "rId1"))),
                     new XElement(spreadsheetNs + "definedNames",
                         new XElement(spreadsheetNs + "definedName",
-                            new XAttribute("name", definedName),
-                            $"'{sheetName}'!$C$2:$C$4")),
+                            new XAttribute("name", firstDefinedName),
+                            $"'{sheetName}'!$C$2:$C$4"),
+                        new XElement(spreadsheetNs + "definedName",
+                            new XAttribute("name", "Forecast_Assumption"),
+                            new XAttribute("localSheetId", "0"),
+                            $"'{sheetName}'!$B$2"),
+                        new XElement(spreadsheetNs + "definedName",
+                            new XAttribute("name", secondDefinedName),
+                            new XAttribute("localSheetId", "0"),
+                            $"'{sheetName}'!$D$2:$D$4")),
                     new XElement(spreadsheetNs + "calcPr",
                         new XAttribute("calcId", "191029"),
                         new XAttribute("fullCalcOnLoad", "1")))));
@@ -1799,10 +1913,11 @@ public sealed class PptxPackageRetentionTests
                             new XAttribute("r", "1"),
                             InlineStringCell(spreadsheetNs, "A1", "Quarter"),
                             InlineStringCell(spreadsheetNs, "B1", "Base"),
-                            InlineStringCell(spreadsheetNs, "C1", "Actual")),
-                        RichWorkbookRow(spreadsheetNs, 2, "Jan", 10, formula1, 11),
-                        RichWorkbookRow(spreadsheetNs, 3, "Feb", 20, formula2, 22),
-                        RichWorkbookRow(spreadsheetNs, 4, "Mar", 30, formula3, 33)),
+                            InlineStringCell(spreadsheetNs, "C1", firstSeriesHeader),
+                            InlineStringCell(spreadsheetNs, "D1", secondSeriesHeader)),
+                        RichWorkbookRow(spreadsheetNs, 2, "Jan", 10, formula1, 11, formula4, 12),
+                        RichWorkbookRow(spreadsheetNs, 3, "Feb", 20, formula2, 22, formula5, 24),
+                        RichWorkbookRow(spreadsheetNs, 4, "Mar", 30, formula3, 33, formula6, 36)),
                     new XElement(spreadsheetNs + "customProperties",
                         new XElement(spreadsheetNs + "customPr",
                             new XAttribute("name", "FreePMarker"),
@@ -1812,8 +1927,11 @@ public sealed class PptxPackageRetentionTests
                 new XDeclaration("1.0", "UTF-8", "yes"),
                 new XElement(spreadsheetNs + "calcChain",
                     new XElement(spreadsheetNs + "c", new XAttribute("r", "C2"), new XAttribute("i", "1")),
+                    new XElement(spreadsheetNs + "c", new XAttribute("r", "D2"), new XAttribute("i", "1")),
                     new XElement(spreadsheetNs + "c", new XAttribute("r", "C3"), new XAttribute("i", "1")),
-                    new XElement(spreadsheetNs + "c", new XAttribute("r", "C4"), new XAttribute("i", "1")))));
+                    new XElement(spreadsheetNs + "c", new XAttribute("r", "D3"), new XAttribute("i", "1")),
+                    new XElement(spreadsheetNs + "c", new XAttribute("r", "C4"), new XAttribute("i", "1")),
+                    new XElement(spreadsheetNs + "c", new XAttribute("r", "D4"), new XAttribute("i", "1")))));
         }
 
         return workbook.ToArray();
@@ -1824,13 +1942,16 @@ public sealed class PptxPackageRetentionTests
         int row,
         string quarter,
         int baseValue,
-        string formula,
-        int cachedValue) =>
+        string firstFormula,
+        int firstCachedValue,
+        string secondFormula,
+        int secondCachedValue) =>
         new(spreadsheetNs + "row",
             new XAttribute("r", row.ToString()),
             InlineStringCell(spreadsheetNs, $"A{row}", quarter),
             NumberCell(spreadsheetNs, $"B{row}", baseValue),
-            FormulaCell(spreadsheetNs, $"C{row}", formula, cachedValue));
+            FormulaCell(spreadsheetNs, $"C{row}", firstFormula, firstCachedValue),
+            FormulaCell(spreadsheetNs, $"D{row}", secondFormula, secondCachedValue));
 
     private static XElement InlineStringCell(XNamespace spreadsheetNs, string reference, string value) =>
         new(spreadsheetNs + "c",
