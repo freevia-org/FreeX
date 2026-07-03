@@ -688,6 +688,39 @@ public sealed class SlideShowWindowTests
     }
 
     [StaFact]
+    public void SlideShowWindow_NavigationCommitsActivePresenterInkThroughSharedPlanner()
+    {
+        var pres = Presentation.CreateEmpty();
+        pres.Slides.Add(new Slide { Title = "Second" });
+        var window = new SlideShowWindow(pres, 0);
+        try
+        {
+            window.ApplyPresenterToolIntent(
+                pointerMode: SlideShowPresenterPointerMode.Pen,
+                inkColorHex: "#336699",
+                inkThicknessDip: 5);
+
+            window.BeginPresenterInkStroke(10, 20);
+            window.AppendPresenterInkStroke(30, 40);
+            window.ExecuteAdvance();
+
+            window.Controller.CurrentSlideIndex.Should().Be(1);
+            window.InkExecutionState.ActiveStroke.Should().BeNull();
+            window.InkExecutionState.CommittedStrokes.Should().ContainSingle();
+            var stroke = window.InkExecutionState.CommittedStrokes.Single();
+            stroke.SlideIndex.Should().Be(0);
+            stroke.Points.Should().Equal(
+                new SlideShowInkPoint(10, 20),
+                new SlideShowInkPoint(30, 40));
+            window.PresenterInkOverlayVisualCount.Should().Be(0);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [StaFact]
     public void SlideShowWindow_MultipleSlides_AdvanceNavigatesCorrectly()
     {
         var pres = Presentation.CreateEmpty();
