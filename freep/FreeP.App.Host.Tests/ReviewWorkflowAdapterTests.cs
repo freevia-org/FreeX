@@ -95,6 +95,7 @@ public sealed class ReviewWorkflowAdapterTests
                 shape.Id,
                 "Product image",
                 "Packaging photo",
+                "Picture \"Product image\" on slide \"Slide 1\". Describe the important visual details and context.",
                 "Packaging photo",
                 "Packaging photo",
                 string.Empty,
@@ -627,7 +628,7 @@ public sealed class ReviewWorkflowAdapterTests
             window.AltTextPaneTitleText.Should().Be("Packaging photo");
             window.AltTextPaneTitlePlaceholder.Should().Be("Packaging photo");
             window.AltTextPaneDescriptionPlaceholder.Should().Be(
-                "Describe the selected object for people who cannot see it.");
+                "Picture \"Product image\" on slide \"Slide 1\". Describe the important visual details and context.");
             window.IsAltTextPaneDecorativeChecked.Should().BeFalse();
             window.IsAltTextPaneApplyEnabled.Should().BeFalse();
             window.LastAltTextPanePlan!.Description.ValidationMessage

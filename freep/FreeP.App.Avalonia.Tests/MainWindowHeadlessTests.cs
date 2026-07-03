@@ -2197,7 +2197,8 @@ public sealed class MainWindowHeadlessTests
         descriptionLabel.Should().Be("Description");
         titleText.Should().Be("Packaging photo");
         titlePlaceholder.Should().Be("Packaging photo");
-        descriptionPlaceholder.Should().Be("Describe the selected object for people who cannot see it.");
+        descriptionPlaceholder.Should().Be(
+            "Picture \"Product image\" on slide \"Slide 1\". Describe the important visual details and context.");
         missingDescriptionApplyEnabled.Should().BeFalse();
         validApplyEnabled.Should().BeTrue();
         metadataMutation.Should().Be(new PresentationAltTextMutationPlan(

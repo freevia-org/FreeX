@@ -578,6 +578,7 @@ public sealed class PresentationReviewWorkflowPlannerTests
             7,
             "Sales chart",
             "Sales summary",
+            "Existing sales chart description.",
             "Sales summary",
             "Regional sales chart",
             "Existing sales chart description.",
@@ -608,6 +609,7 @@ public sealed class PresentationReviewWorkflowPlannerTests
             9,
             "Divider flourish",
             "Divider flourish",
+            string.Empty,
             string.Empty,
             string.Empty,
             string.Empty,
@@ -651,7 +653,7 @@ public sealed class PresentationReviewWorkflowPlannerTests
             PresentationReviewWorkflowPlanner.AltTextDescriptionFieldId,
             "Description",
             string.Empty,
-            "Describe the selected object for people who cannot see it.",
+            "Chart \"Sales chart\" on slide \"Intro\". Summarize the main trend, comparison, or takeaway.",
             true,
             true,
             PresentationReviewWorkflowPlanner.MissingAltTextDescriptionMessage));
@@ -678,7 +680,58 @@ public sealed class PresentationReviewWorkflowPlannerTests
         decorative.Title.IsEnabled.Should().BeFalse();
         decorative.Description.IsEnabled.Should().BeFalse();
         decorative.Description.IsRequired.Should().BeFalse();
+        decorative.Description.Placeholder.Should().BeEmpty();
         decorative.CanApply.Should().BeTrue();
+    }
+
+    [Fact]
+    public void BuildAltTextRequestPlan_GeneratesDeterministicDescriptionSuggestionsFromMetadata()
+    {
+        var slide = new Slide { Title = "Quarterly review" };
+        var chart = new SlideShape
+        {
+            Id = 20,
+            Name = "Chart 4",
+            Kind = SlideShapeKind.Chart,
+            Chart = new ChartShape { Title = "Revenue by region" }
+        };
+        var table = new SlideShape
+        {
+            Id = 21,
+            Name = "Results table",
+            Kind = SlideShapeKind.Table,
+            Table = new TableShape
+            {
+                ColumnWidthsEmu = { 100, 100 },
+                Rows =
+                {
+                    new TableRow { Cells = { new TableCell(), new TableCell() } },
+                    new TableRow { Cells = { new TableCell(), new TableCell() } }
+                }
+            }
+        };
+        var text = new SlideShape
+        {
+            Id = 22,
+            Name = "Callout",
+            Kind = SlideShapeKind.AutoShape,
+            Text = "Launch window moves to July."
+        };
+        slide.Shapes.Add(chart);
+        slide.Shapes.Add(table);
+        slide.Shapes.Add(text);
+
+        var chartPlan = PresentationReviewWorkflowPlanner.BuildAltTextRequestPlan(slide, chart.Id, null);
+        var tablePlan = PresentationReviewWorkflowPlanner.BuildAltTextRequestPlan(slide, table.Id, null);
+        var textPlan = PresentationReviewWorkflowPlanner.BuildAltTextRequestPlan(slide, text.Id, null);
+
+        chartPlan.SuggestedDescription.Should().Be(
+            "Chart \"Revenue by region\" on slide \"Quarterly review\". Summarize the main trend, comparison, or takeaway.");
+        chartPlan.ProposedDescription.Should().BeEmpty();
+        tablePlan.SuggestedDescription.Should().Be(
+            "Table \"Results table\" with 2 rows and 2 columns on slide \"Quarterly review\". Summarize the key headers, values, and takeaway.");
+        textPlan.SuggestedDescription.Should().Be(
+            "Text shape \"Launch window moves to July.\" on slide \"Quarterly review\". Describe the visible text or the shape's purpose.");
     }
 
     [Fact]
