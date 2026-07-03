@@ -165,6 +165,8 @@ public sealed class SlideShowWindowHeadlessTests
         SlideShowPresenterToolPlan? plan = null;
         SlideShowPresenterState? state = null;
         IReadOnlyList<SlideShowPresenterCommandState>? commandStates = null;
+        SlideShowRecordingExecutionState? recordingState = null;
+        IReadOnlyList<SlideShowRecordingExecutionAction>? recordingActions = null;
         var ran = await OnUiThread(() =>
         {
             var pres = MakePresentation(1);
@@ -178,6 +180,8 @@ public sealed class SlideShowWindowHeadlessTests
                 8,
                 SlideShowInkRetentionDecision.ClearInk);
             commandStates = window.PresenterCommandStates;
+            recordingState = window.RecordingExecutionState;
+            recordingActions = window.RecordingExecutionActions;
             state = window.CreatePresenterState(window.PresenterStartedAtUtc.AddSeconds(3));
         });
 
@@ -204,6 +208,19 @@ public sealed class SlideShowWindowHeadlessTests
                 SlideShowPresenterToolPlanner.NarrationAndMediaCommandId,
                 SlideShowPresenterToolPlanner.HighlighterPointerCommandId,
                 SlideShowPresenterToolPlanner.ClearInkCommandId);
+        recordingState.Should().NotBeNull();
+        recordingState!.IsSessionActive.Should().BeTrue();
+        recordingState.CurrentSlideIndex.Should().Be(0);
+        recordingState.IsNarrationCaptureActive.Should().BeFalse();
+        recordingState.IsCameraCaptureActive.Should().BeFalse();
+        recordingActions.Should().NotBeNull();
+        recordingActions!.Where(action => action.IsDeferred)
+            .Select(action => action.Kind)
+            .Should().Equal(
+                SlideShowRecordingExecutionActionKind.CaptureUnavailable,
+                SlideShowRecordingExecutionActionKind.CaptureUnavailable);
+        recordingActions!.Where(action => action.IsDeferred)
+            .Should().OnlyContain(action => action.StatusText.Contains("Avalonia slideshow"));
         state.ToolPlan.Should().BeSameAs(plan);
     }
 

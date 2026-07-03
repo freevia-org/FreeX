@@ -550,6 +550,17 @@ public sealed class SlideShowWindowTests
                     SlideShowPresenterToolPlanner.NarrationAndMediaCommandId,
                     SlideShowPresenterToolPlanner.PenPointerCommandId,
                     SlideShowPresenterToolPlanner.ClearInkCommandId);
+            window.RecordingExecutionState.IsSessionActive.Should().BeTrue();
+            window.RecordingExecutionState.CurrentSlideIndex.Should().Be(0);
+            window.RecordingExecutionState.IsNarrationCaptureActive.Should().BeFalse();
+            window.RecordingExecutionState.IsCameraCaptureActive.Should().BeFalse();
+            window.RecordingExecutionActions.Where(action => action.IsDeferred)
+                .Select(action => action.Kind)
+                .Should().Equal(
+                    SlideShowRecordingExecutionActionKind.CaptureUnavailable,
+                    SlideShowRecordingExecutionActionKind.CaptureUnavailable);
+            window.RecordingExecutionActions.Where(action => action.IsDeferred)
+                .Should().OnlyContain(action => action.StatusText.Contains("WPF slideshow"));
 
             var state = window.CreatePresenterState(window.PresenterStartedAtUtc.AddSeconds(3));
             state.ToolPlan.Should().BeSameAs(plan);
