@@ -7252,6 +7252,25 @@ public sealed class DocumentView : Control
     }
 
     /// <summary>
+    /// AV-CHARTTAB: Toggle the legend on the selected floating chart.
+    /// Undoable + re-renders. No-op when the selected float is not a chart.
+    /// </summary>
+    public void ToggleChartLegend()
+    {
+        if (_selectedFloating is not { Kind: "Chart" } sel) return;
+        if (_doc.Blocks[sel.BlockIndex] is not Paragraph para) return;
+        if (sel.RunIndex < 0 || sel.RunIndex >= para.Runs.Count) return;
+        if (para.Runs[sel.RunIndex].Chart is not { } chart) return;
+
+        var state = ChartSmartArtVisualPlanner.BuildChartElementCommandState(chart);
+        if (!state.CanToggleLegend) return;
+
+        _bus.Execute(new SetChartLegendCommand(sel.BlockIndex, sel.RunIndex, !state.IsLegendVisible));
+        InvalidateLayoutAndVisual();
+        RefreshSelectedFloatingRect(sel.BlockIndex, sel.RunIndex, sel.Kind);
+    }
+
+    /// <summary>
     /// AV-CHARTTAB: Change the SmartArt layout family (List/Process/Hierarchy — Cycle maps to Process)
     /// of the selected floating SmartArt. Undoable + re-renders. No-op when the float is not SmartArt.
     /// </summary>

@@ -66,6 +66,17 @@ public sealed class ChartRenderingTests
         Assert.True(lines.Count >= 5, $"expected gridlines + axis (>= 5 lines), got {lines.Count}");
     }
 
+    [StaFact]
+    public void MultiSeriesLineChart_WithLegendOff_RendersNoLegendSwatches()
+    {
+        var view = ViewWithChart(ChartKind.Line);
+
+        var rects = LogicalDescendants<System.Windows.Shapes.Rectangle>(view.Document);
+        var legendSwatches = rects.Where(r => r.Width <= 12 && r.Height <= 12).ToList();
+
+        Assert.Empty(legendSwatches);
+    }
+
     // ── Chart Design gallery render tests ─────────────────────────────────────────────────────────
 
     private static DocumentView ViewWithStyledChart(int styleId = 0, string? colorSchemeId = null, int quickLayoutId = 0)

@@ -3057,6 +3057,37 @@ public sealed class SetChartColorSchemeCommand(int paragraphIndex, int runIndex,
 }
 
 /// <summary>
+/// Set whether the chart carried by the run at (paragraphIndex, runIndex) shows a legend.
+/// Snaps the prior legend flag and quick-layout id for undo. No-op when the run carries no chart.
+/// </summary>
+public sealed class SetChartLegendCommand(int paragraphIndex, int runIndex, bool showLegend) : IDocumentCommand
+{
+    private bool _previous;
+    private int _previousQuickLayoutId;
+    private bool _applied;
+
+    public string Label => "Toggle Chart Legend";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        if (ChartSmartArtCommandHelpers.ChartAt(context, paragraphIndex, runIndex) is not { } chart) return;
+        _previous = chart.ShowLegend;
+        _previousQuickLayoutId = chart.QuickLayoutId;
+        chart.ShowLegend = showLegend;
+        chart.QuickLayoutId = 0;
+        _applied = true;
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (!_applied || ChartSmartArtCommandHelpers.ChartAt(context, paragraphIndex, runIndex) is not { } chart) return;
+        chart.ShowLegend = _previous;
+        chart.QuickLayoutId = _previousQuickLayoutId;
+        _applied = false;
+    }
+}
+
+/// <summary>
 /// Set the <see cref="SmartArt.Kind"/> (layout family) of the SmartArt carried by the run at
 /// (paragraphIndex, runIndex). Snaps the prior kind for undo. No-op when the run carries no SmartArt.
 /// </summary>

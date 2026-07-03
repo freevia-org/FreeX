@@ -1238,7 +1238,7 @@ public sealed class FreeWRibbonParityTests
         editor.ToggleSelectedChartLegend();
         chart.ShowLegend.Should().Be(!initial);
 
-        editor.ToggleSelectedChartLegend();
+        editor.Commands.Undo().Should().BeTrue();
         chart.ShowLegend.Should().Be(initial);
     }
 

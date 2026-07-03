@@ -26,6 +26,13 @@ public sealed record ChartVisualPlan(
     string? ValueAxisTitle,
     IReadOnlyList<string> PaletteHex);
 
+public sealed record ChartElementCommandState(
+    bool CanToggleLegend,
+    bool IsLegendVisible,
+    bool CanEditAxisTitles,
+    bool HasChartTitle,
+    bool HasAxisTitles);
+
 public sealed record SmartArtNodeVisualPlan(
     string Text,
     int Depth,
@@ -70,7 +77,7 @@ public static class ChartSmartArtVisualPlanner
         else
         {
             showTitle = !string.IsNullOrEmpty(chart.Title);
-            showLegend = (chart.ShowLegend || chart.Series.Count > 1) && chart.Series.Count > 0;
+            showLegend = chart.ShowLegend && chart.Series.Count > 0;
             showAxisTitles = !string.IsNullOrEmpty(chart.CategoryAxisTitle)
                           || !string.IsNullOrEmpty(chart.ValueAxisTitle);
         }
@@ -92,6 +99,21 @@ public static class ChartSmartArtVisualPlanner
             showAxisTitles ? chart.CategoryAxisTitle : null,
             showAxisTitles ? chart.ValueAxisTitle : null,
             scheme.Colors.Select(NormalizeHex).ToList());
+    }
+
+    public static ChartElementCommandState BuildChartElementCommandState(Chart chart)
+    {
+        ArgumentNullException.ThrowIfNull(chart);
+
+        var plan = BuildChartPlan(chart);
+        var isPieFamily = chart.Kind is ChartKind.Pie or ChartKind.Doughnut;
+
+        return new ChartElementCommandState(
+            CanToggleLegend: chart.Series.Count > 0,
+            IsLegendVisible: plan.ShowLegend,
+            CanEditAxisTitles: !isPieFamily,
+            HasChartTitle: plan.ShowTitle,
+            HasAxisTitles: plan.ShowAxisTitles);
     }
 
     public static SmartArtVisualPlan BuildSmartArtPlan(SmartArt smartArt)
