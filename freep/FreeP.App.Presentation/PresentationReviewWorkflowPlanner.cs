@@ -1800,12 +1800,84 @@ public static class PresentationReviewWorkflowPlanner
                 start = index + typo.Key.Length;
             }
         }
+
+        foreach (var repeatedWord in ScanRepeatedWords(scope.Text))
+            yield return repeatedWord;
     }
 
     private static string SuggestProofingReplacement(string text)
-        => BuiltInProofingCorrections.TryGetValue(text, out var replacement)
-            ? MatchReplacementCasing(text, replacement)
+    {
+        if (BuiltInProofingCorrections.TryGetValue(text, out var replacement))
+            return MatchReplacementCasing(text, replacement);
+
+        return TryBuildRepeatedWordReplacement(text, out var repeatedWordReplacement)
+            ? repeatedWordReplacement
             : string.Empty;
+    }
+
+    private static IEnumerable<PresentationProofingIssueMatch> ScanRepeatedWords(string text)
+    {
+        var previousWord = string.Empty;
+        var previousStart = -1;
+
+        foreach (var word in EnumerateProofingWords(text))
+        {
+            if (previousStart >= 0 &&
+                string.Equals(previousWord, word.Text, StringComparison.OrdinalIgnoreCase))
+            {
+                var length = word.Start + word.Length - previousStart;
+                yield return new PresentationProofingIssueMatch(
+                    previousStart,
+                    length,
+                    text.Substring(previousStart, length),
+                    "Repeated word.");
+            }
+
+            previousWord = word.Text;
+            previousStart = word.Start;
+        }
+    }
+
+    private static bool TryBuildRepeatedWordReplacement(string text, out string replacement)
+    {
+        var words = EnumerateProofingWords(text).ToArray();
+        if (words.Length == 2 &&
+            string.Equals(words[0].Text, words[1].Text, StringComparison.OrdinalIgnoreCase))
+        {
+            replacement = text.Substring(words[0].Start, words[0].Length);
+            return true;
+        }
+
+        replacement = string.Empty;
+        return false;
+    }
+
+    private static IEnumerable<ProofingWordSpan> EnumerateProofingWords(string text)
+    {
+        var index = 0;
+        while (index < text.Length)
+        {
+            while (index < text.Length && !IsProofingWordChar(text[index]))
+                index++;
+
+            var start = index;
+            while (index < text.Length && IsProofingWordChar(text[index]))
+                index++;
+
+            if (index > start)
+            {
+                yield return new ProofingWordSpan(
+                    start,
+                    index - start,
+                    text.Substring(start, index - start));
+            }
+        }
+    }
+
+    private static bool IsProofingWordChar(char value)
+        => char.IsLetterOrDigit(value) || value == '\'';
+
+    private readonly record struct ProofingWordSpan(int Start, int Length, string Text);
 
     private static string MatchReplacementCasing(string source, string replacement)
     {
