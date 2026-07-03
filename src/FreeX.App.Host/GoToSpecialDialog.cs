@@ -20,8 +20,8 @@ public sealed class GoToSpecialDialog : Window
     public GoToSpecialDialog()
     {
         Title = UiText.Get("GoToSpecial_GoToSpecial");
-        Width = 430;
-        Height = 438;
+        Width = GoToSpecialDialogPlanner.Width;
+        Height = GoToSpecialDialogPlanner.Height;
         ResizeMode = ResizeMode.NoResize;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ShowInTaskbar = false;

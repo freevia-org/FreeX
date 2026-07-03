@@ -60,7 +60,10 @@ public sealed class PasswordProtectionDialog : Window
         root.Children.Add(DialogButtonRowFactory.Create(Accept, buttonWidth: 72, rowMargin: new Thickness(0, 12, 0, 0)));
 
         Content = root;
-        DialogSizing.ApplyContentHeight(this, width: isProtectSheet ? 430 : 380, minHeight: isProtectSheet ? 540 : 280);
+        DialogSizing.ApplyContentHeight(
+            this,
+            width: isProtectSheet ? ProtectionDialogPlanner.ProtectSheetWidth : ProtectionDialogPlanner.UnprotectSheetWidth,
+            minHeight: isProtectSheet ? ProtectionDialogPlanner.ProtectSheetHeight : 280);
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 

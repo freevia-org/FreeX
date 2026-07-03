@@ -7,6 +7,15 @@ namespace FreeX.App.Services.Tests;
 public sealed class HyperlinkDialogPlannerTests
 {
     [Fact]
+    public void DialogSize_MatchesSharedWpfLogicalEvidenceTarget()
+    {
+        HyperlinkDialogPlanner.Width.Should().Be(560);
+        HyperlinkDialogPlanner.Height.Should().Be(300);
+        HyperlinkDialogPlanner.MinWidth.Should().Be(520);
+        HyperlinkDialogPlanner.MinHeight.Should().Be(300);
+    }
+
+    [Fact]
     public void Plan_UsesTargetAsDisplayTextWhenLabelIsBlank()
     {
         var plan = HyperlinkDialogPlanner.Plan("https://example.test", " ");

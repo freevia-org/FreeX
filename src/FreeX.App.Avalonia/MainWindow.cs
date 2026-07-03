@@ -9798,12 +9798,12 @@ public sealed partial class MainWindow : Window
         var dialog = new Window
         {
             Title = "Go To Special",
-            Width = 430,
-            Height = 520,
-            MinWidth = 430,
-            MinHeight = 520,
-            MaxWidth = 430,
-            MaxHeight = 520,
+            Width = GoToSpecialDialogPlanner.Width,
+            Height = GoToSpecialDialogPlanner.Height,
+            MinWidth = GoToSpecialDialogPlanner.Width,
+            MinHeight = GoToSpecialDialogPlanner.Height,
+            MaxWidth = GoToSpecialDialogPlanner.Width,
+            MaxHeight = GoToSpecialDialogPlanner.Height,
             CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
@@ -10102,10 +10102,10 @@ public sealed partial class MainWindow : Window
         var dialog = new Window
         {
             Title = UiText.Get("Hyperlink_InsertHyperlink"),
-            Width = 560,
-            Height = 360,
-            MinWidth = 520,
-            MinHeight = 320,
+            Width = HyperlinkDialogPlanner.Width,
+            Height = HyperlinkDialogPlanner.Height,
+            MinWidth = HyperlinkDialogPlanner.MinWidth,
+            MinHeight = HyperlinkDialogPlanner.MinHeight,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
@@ -18935,7 +18935,12 @@ public sealed partial class MainWindow : Window
                 HasLaunchSmokeCheckBox(probe.TextBox, "GoToSpecialTextBox", "Text") &&
                 HasLaunchSmokeCheckBox(probe.LogicalsBox, "GoToSpecialLogicalsBox", "Logicals") &&
                 HasLaunchSmokeCheckBox(probe.ErrorsBox, "GoToSpecialErrorsBox", "Errors");
-            hasGoToSpecialDialogCompactLayout = HasLaunchSmokeCompactDialog(probe.Dialog, width: 430, height: 520, minWidth: 430, minHeight: 520);
+            hasGoToSpecialDialogCompactLayout = HasLaunchSmokeCompactDialog(
+                probe.Dialog,
+                width: GoToSpecialDialogPlanner.Width,
+                height: GoToSpecialDialogPlanner.Height,
+                minWidth: GoToSpecialDialogPlanner.Width,
+                minHeight: GoToSpecialDialogPlanner.Height);
         });
 
         var hasFormatCellsDialog = false;
