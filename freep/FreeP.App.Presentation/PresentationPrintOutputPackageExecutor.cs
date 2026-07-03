@@ -41,15 +41,39 @@ public static class PresentationPrintOutputPackageExecutor
         int slideCount)
     {
         var printPlan = PresentationExportPlanner.BuildPrintPlan(request, slideCount);
-        var canBuild = printPlan.SlideRange.SlideNumbers.Count > 0;
+        return BuildPackagePlan(printPlan, notesPageCount: null);
+    }
 
+    public static PresentationPrintOutputPackagePlan BuildPackagePlan(
+        PresentationPrintRequest? request,
+        Presentation presentation)
+    {
+        ArgumentNullException.ThrowIfNull(presentation);
+
+        var printPlan = PresentationExportPlanner.BuildPrintPlan(request, presentation.Slides.Count);
+        var notesPageCount = printPlan.Layout.Layout == PresentationPrintLayoutKind.NotesPages &&
+            printPlan.SlideRange.SlideNumbers.Count > 0
+                ? PresentationNotesPagePdfExporter.BuildRenderPlan(
+                    presentation,
+                    new PresentationNotesPagePdfExportRequest(ToPrintRequest(printPlan)))
+                    .Pages.Count
+                : (int?)null;
+
+        return BuildPackagePlan(printPlan, notesPageCount);
+    }
+
+    private static PresentationPrintOutputPackagePlan BuildPackagePlan(
+        PresentationPrintPlan printPlan,
+        int? notesPageCount)
+    {
+        var canBuild = printPlan.SlideRange.SlideNumbers.Count > 0;
         return new PresentationPrintOutputPackagePlan(
             printPlan,
             ResolveRoute(printPlan.Layout.Layout),
             PdfContentType,
             PresentationExportPlanner.PdfExportExtension,
-            CalculatePageCount(printPlan),
-            BuildLayoutSummary(printPlan),
+            CalculatePageCount(printPlan, notesPageCount),
+            BuildLayoutSummary(printPlan, notesPageCount),
             printPlan.SlideRange.DisplayName,
             printPlan.Options,
             canBuild,
@@ -67,7 +91,7 @@ public static class PresentationPrintOutputPackageExecutor
         ArgumentNullException.ThrowIfNull(renderSlideToPng);
         ArgumentNullException.ThrowIfNull(writeRasterPdf);
 
-        var plan = BuildPackagePlan(request, presentation.Slides.Count);
+        var plan = BuildPackagePlan(request, presentation);
         if (!plan.CanBuildPackage)
             return new PresentationPrintOutputPackage(plan, []);
 
@@ -103,20 +127,23 @@ public static class PresentationPrintOutputPackageExecutor
             _ => throw new ArgumentOutOfRangeException(nameof(layout), layout, "Unsupported print layout."),
         };
 
-    private static int CalculatePageCount(PresentationPrintPlan plan)
+    private static int CalculatePageCount(PresentationPrintPlan plan, int? notesPageCount = null)
     {
         var slideCount = plan.SlideRange.SlideNumbers.Count;
         if (slideCount == 0)
             return 0;
+
+        if (plan.Layout.Layout == PresentationPrintLayoutKind.NotesPages && notesPageCount is { } count)
+            return count;
 
         return plan.Layout.IsHandout
             ? (int)Math.Ceiling(slideCount / (double)plan.Layout.SlidesPerPage)
             : slideCount;
     }
 
-    private static string BuildLayoutSummary(PresentationPrintPlan plan)
+    private static string BuildLayoutSummary(PresentationPrintPlan plan, int? notesPageCount = null)
     {
-        var pageCount = CalculatePageCount(plan);
+        var pageCount = CalculatePageCount(plan, notesPageCount);
         var pageText = pageCount == 1 ? "1 page" : $"{pageCount} pages";
         var hiddenText = plan.PrintHiddenSlides ? " including hidden slides" : string.Empty;
         return $"{plan.Layout.DisplayName} - {plan.SlideRange.DisplayName}, {pageText}{hiddenText}";

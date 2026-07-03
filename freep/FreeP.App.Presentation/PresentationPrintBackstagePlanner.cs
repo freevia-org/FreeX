@@ -1,3 +1,5 @@
+using FreeP.Core.Model;
+
 namespace FreeP.App.Compositor;
 
 public sealed record PresentationPrintBackstageLayoutChoice(
@@ -43,10 +45,32 @@ public static class PresentationPrintBackstagePlanner
         IReadOnlyList<int>? selectedSlideNumbers = null)
     {
         var packagePlan = PresentationPrintOutputPackageExecutor.BuildPackagePlan(request, slideCount);
+        return Build(slideCount, packagePlan, currentSlideNumber, selectedSlideNumbers);
+    }
+
+    public static PresentationPrintBackstagePlan Build(
+        PresentationPrintRequest? request,
+        Presentation presentation,
+        int? currentSlideNumber = null,
+        IReadOnlyList<int>? selectedSlideNumbers = null)
+    {
+        ArgumentNullException.ThrowIfNull(presentation);
+
+        var packagePlan = PresentationPrintOutputPackageExecutor.BuildPackagePlan(request, presentation);
+        return Build(presentation.Slides.Count, packagePlan, currentSlideNumber, selectedSlideNumbers, presentation);
+    }
+
+    private static PresentationPrintBackstagePlan Build(
+        int slideCount,
+        PresentationPrintOutputPackagePlan packagePlan,
+        int? currentSlideNumber,
+        IReadOnlyList<int>? selectedSlideNumbers,
+        Presentation? presentation = null)
+    {
         var printPlan = packagePlan.PrintPlan;
         var normalizedRequest = ToRequest(printPlan);
         var layouts = PresentationExportPlanner.BuildPrintLayoutDescriptors()
-            .Select(layout => BuildLayoutChoice(layout, normalizedRequest, slideCount, printPlan))
+            .Select(layout => BuildLayoutChoice(layout, normalizedRequest, slideCount, printPlan, presentation))
             .ToArray();
         var selectedLayout = layouts.Single(choice =>
             choice.Layout.Layout == printPlan.Layout.Layout &&
@@ -82,15 +106,17 @@ public static class PresentationPrintBackstagePlanner
         PresentationPrintLayoutDescriptor layout,
         PresentationPrintRequest normalizedRequest,
         int slideCount,
-        PresentationPrintPlan selectedPrintPlan)
+        PresentationPrintPlan selectedPrintPlan,
+        Presentation? presentation)
     {
-        var packagePlan = PresentationPrintOutputPackageExecutor.BuildPackagePlan(
-            normalizedRequest with
+        var layoutRequest = normalizedRequest with
             {
                 Layout = layout.Layout,
                 HandoutSlidesPerPage = layout.IsHandout ? layout.SlidesPerPage : null,
-            },
-            slideCount);
+            };
+        var packagePlan = presentation is null
+            ? PresentationPrintOutputPackageExecutor.BuildPackagePlan(layoutRequest, slideCount)
+            : PresentationPrintOutputPackageExecutor.BuildPackagePlan(layoutRequest, presentation);
 
         return new PresentationPrintBackstageLayoutChoice(
             layout,

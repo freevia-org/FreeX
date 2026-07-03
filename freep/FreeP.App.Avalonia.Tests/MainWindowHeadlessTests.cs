@@ -1448,6 +1448,38 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task Print_options_pane_uses_shared_notes_render_page_count()
+    {
+        PresentationNotesPagePdfRenderPlan? renderPlan = null;
+        PresentationPrintBackstagePlan? printPlan = null;
+        IReadOnlyList<string> renderedOptionLines = [];
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            window.Editor.CurrentSlide!.Title = "Overflow notes";
+            window.Editor.CurrentSlide.Notes = MakeTextBody(
+                Enumerable.Range(1, 60)
+                    .Select(i => $"Speaker note line number {i} with enough words to be realistic.")
+                    .ToArray());
+
+            renderPlan = window.RefreshNotesPagePdfRenderPlan();
+            printPlan = window.ShowPrintOptionsPane(
+                new PresentationPrintRequest(PresentationPrintLayoutKind.NotesPages));
+            renderedOptionLines = window.PrintOptionsPaneRenderedOptionLines.ToArray();
+        });
+
+        if (!ran) return;
+        renderPlan.Should().NotBeNull();
+        printPlan.Should().NotBeNull();
+        renderPlan!.Pages.Count.Should().BeGreaterThan(1);
+        printPlan!.PageCount.Should().Be(renderPlan.Pages.Count);
+        printPlan.LayoutSummary.Should().Be($"Notes Pages - All slides, {renderPlan.Pages.Count} pages");
+        printPlan.SelectedLayout.PackagePlan.PageCount.Should().Be(renderPlan.Pages.Count);
+        renderedOptionLines.Should().Equal(printPlan.Options.SummaryLines);
+    }
+
+    [Fact]
     public async Task Notes_page_pdf_export_command_is_registered_for_native_save_route()
     {
         var found = false;
