@@ -1,3 +1,6 @@
+using System.Collections.Generic;
+using System.Windows;
+using System.Windows.Controls;
 using FreeW.App.Host.Editing;
 using System.Windows.Media;
 using System.Windows.Media.Effects;
@@ -63,6 +66,22 @@ public sealed class FloatingObjectRenderTests
         para.Runs.Add(Run.FromShape(behindShape));
         doc.Blocks.Add(para);
         return doc;
+    }
+
+    private static List<T> LogicalDescendants<T>(DependencyObject root) where T : DependencyObject
+    {
+        var result = new List<T>();
+        foreach (var child in LogicalTreeHelper.GetChildren(root))
+        {
+            if (child is not DependencyObject dependencyObject)
+                continue;
+
+            if (dependencyObject is T typed)
+                result.Add(typed);
+            result.AddRange(LogicalDescendants<T>(dependencyObject));
+        }
+
+        return result;
     }
 
     [StaFact]
@@ -155,5 +174,107 @@ public sealed class FloatingObjectRenderTests
         ellipse.StrokeThickness.Should().BeApproximately(2 * 96.0 / 72.0, 0.01);
         ellipse.Effect.Should().BeOfType<DropShadowEffect>()
             .Which.Color.Should().Be(Color.FromRgb(0x11, 0x22, 0x33));
+    }
+
+    [StaFact]
+    public void FloatingOverlay_RendersChartFromSharedPlanWithActualGeometryTextAndStyle()
+    {
+        var chart = Chart.Create(
+            ChartKind.Column,
+            ["Q1", "Q2", "Q3"],
+            [4.0, 8.0, 6.0],
+            seriesName: "Revenue",
+            title: "Sales");
+        chart.WidthPt = 216;
+        chart.HeightPt = 144;
+        chart.StyleId = 2;
+        chart.ColorSchemeId = "colorful2";
+        chart.QuickLayoutId = 5;
+        chart.ShowLegend = true;
+        chart.Placement = new FloatingPlacement
+        {
+            Wrapping = ImageWrapping.InFront,
+            HorizontalOffsetPt = 24,
+            VerticalOffsetPt = 18,
+            ZOrderIndex = 4
+        };
+        var doc = new TextDocument();
+        var para = new Paragraph();
+        para.Runs.Add(Run.FromChart(chart));
+        doc.Blocks.Add(para);
+
+        var view = new DocumentView();
+        var canvas = new Canvas();
+        view.LoadModel(doc);
+        view.SetFloatingCanvas(canvas);
+
+        var root = canvas.Children.OfType<Border>().Single();
+        root.Tag.Should().BeSameAs(chart);
+        root.Child.Should().NotBeOfType<TextBlock>("floating charts should use the planned chart visual, not a label placeholder");
+
+        var texts = LogicalDescendants<TextBlock>(root)
+            .Select(textBlock => textBlock.Text)
+            .ToList();
+        texts.Should().Contain("Sales");
+        texts.Should().Contain("Q1");
+
+        var plot = LogicalDescendants<Canvas>(root).First(c => c.Width > 24 && c.Height > 24);
+        plot.Background.Should().BeOfType<SolidColorBrush>()
+            .Which.Color.Should().Be(Color.FromRgb(0xD9, 0xE2, 0xF3));
+
+        var barFills = LogicalDescendants<System.Windows.Shapes.Rectangle>(root)
+            .Where(rectangle => rectangle.Width > 12 || rectangle.Height > 12)
+            .Select(rectangle => (rectangle.Fill as SolidColorBrush)?.Color)
+            .Where(color => color is not null)
+            .ToList();
+        barFills.Should().Contain(Color.FromRgb(0xED, 0x7D, 0x31));
+    }
+
+    [StaFact]
+    public void FloatingOverlay_RendersSmartArtFromSharedPlanWithNodeTextColorsAndArrows()
+    {
+        var smartArt = SmartArt.Create(SmartArtKind.Process, ["Plan", "Build", "Verify"]);
+        smartArt.WidthPt = 300;
+        smartArt.HeightPt = 96;
+        smartArt.LayoutId = "process1";
+        smartArt.ColorSchemeId = "accent1";
+        smartArt.StyleId = "moderate1";
+        smartArt.Placement = new FloatingPlacement
+        {
+            Wrapping = ImageWrapping.InFront,
+            HorizontalOffsetPt = 30,
+            VerticalOffsetPt = 20,
+            ZOrderIndex = 5
+        };
+        var doc = new TextDocument();
+        var para = new Paragraph();
+        para.Runs.Add(Run.FromSmartArt(smartArt));
+        doc.Blocks.Add(para);
+
+        var view = new DocumentView();
+        var canvas = new Canvas();
+        view.LoadModel(doc);
+        view.SetFloatingCanvas(canvas);
+
+        var root = canvas.Children.OfType<Border>().Single();
+        root.Tag.Should().BeSameAs(smartArt);
+        root.Child.Should().NotBeOfType<TextBlock>("floating SmartArt should use the planned diagram visual, not a label placeholder");
+
+        var texts = LogicalDescendants<TextBlock>(root)
+            .Select(textBlock => textBlock.Text)
+            .ToList();
+        texts.Should().Contain(["Plan", "Build", "Verify"]);
+
+        var nodeColors = LogicalDescendants<Border>(root)
+            .Where(border => border.Background is SolidColorBrush)
+            .Select(border => ((SolidColorBrush)border.Background!).Color)
+            .Where(color => color.A > 0 && (color.R != 0xFF || color.G != 0xFF || color.B != 0xFF))
+            .ToList();
+        nodeColors.Should().Contain(Color.FromRgb(0x1F, 0x38, 0x64));
+        nodeColors.Distinct().Should().HaveCountGreaterThan(1);
+
+        LogicalDescendants<System.Windows.Shapes.Polygon>(root)
+            .Should()
+            .HaveCountGreaterThanOrEqualTo(2);
     }
 }
