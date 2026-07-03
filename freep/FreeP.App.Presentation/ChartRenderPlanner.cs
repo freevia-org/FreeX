@@ -134,6 +134,7 @@ public readonly record struct ChartDataTableCellPlan(
 
 public readonly record struct ChartDataTablePrimitivePlan(
     ChartPlanRect Bounds,
+    ChartFillPlan? BackgroundFill,
     IReadOnlyList<ChartDataTableCellPlan> Cells,
     IReadOnlyList<ChartGridLinePlan> HorizontalBorders,
     IReadOnlyList<ChartGridLinePlan> VerticalBorders,
@@ -1027,6 +1028,7 @@ public static partial class ChartRenderPlanner
 
         return new ChartDataTablePrimitivePlan(
             bounds,
+            ResolveDataTableBackgroundFill(settings),
             cells,
             horizontalBorders,
             verticalBorders,
@@ -2218,6 +2220,7 @@ public static partial class ChartRenderPlanner
     private static ChartDataTablePrimitivePlan EmptyDataTablePrimitivePlan() =>
         new(
             new ChartPlanRect(0, 0, 0, 0),
+            BackgroundFill: null,
             Array.Empty<ChartDataTableCellPlan>(),
             Array.Empty<ChartGridLinePlan>(),
             Array.Empty<ChartGridLinePlan>(),
@@ -2334,6 +2337,13 @@ public static partial class ChartRenderPlanner
                 Alpha: 255,
                 Thickness: visible.WidthPt),
             _ => DefaultDataTableBorderStroke()
+        };
+
+    private static ChartFillPlan? ResolveDataTableBackgroundFill(ChartDataTableSettings settings) =>
+        settings.BackgroundFill switch
+        {
+            ShapeFill.Solid solid => new ChartFillPlan(solid.Color.Resolved, Alpha: 255),
+            _ => null
         };
 
     private static ChartDataTableTextPlan ResolveDataTableTextStyle(

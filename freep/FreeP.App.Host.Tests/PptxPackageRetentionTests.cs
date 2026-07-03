@@ -762,6 +762,8 @@ public sealed class PptxPackageRetentionTests
         chart.DataTable.ShowVerticalBorder.Should().BeFalse();
         chart.DataTable.ShowOutlineBorder.Should().BeTrue();
         chart.DataTable.ShowLegendKeys.Should().BeTrue();
+        chart.DataTable.BackgroundFill.Should().BeOfType<ShapeFill.Solid>()
+            .Which.Color.Resolved.Should().Be(new SrgbColor(0xFA, 0xF1, 0xD2));
         chart.DataTable.BorderOutline.Should().BeOfType<ShapeOutline.Visible>()
             .Which.Color.Resolved.Should().Be(new SrgbColor(0x12, 0x34, 0x56));
         ((ShapeOutline.Visible)chart.DataTable.BorderOutline!).WidthPt.Should().BeApproximately(1.25, 0.001);
@@ -792,7 +794,12 @@ public sealed class PptxPackageRetentionTests
             savedDataTable.Element(ChartNs + "showVertBorder")!.Attribute("val")!.Value.Should().Be("0");
             savedDataTable.Element(ChartNs + "showOutline")!.Attribute("val")!.Value.Should().Be("1");
             savedDataTable.Element(ChartNs + "showKeys")!.Attribute("val")!.Value.Should().Be("1");
-            var savedLine = savedDataTable.Element(ChartNs + "spPr")!.Element(DrawingNs + "ln")!;
+            var savedSpPr = savedDataTable.Element(ChartNs + "spPr")!;
+            savedSpPr.Element(DrawingNs + "solidFill")!
+                .Element(DrawingNs + "srgbClr")!
+                .Attribute("val")!
+                .Value.Should().Be("FAF1D2");
+            var savedLine = savedSpPr.Element(DrawingNs + "ln")!;
             savedLine.Attribute("w")!.Value.Should().Be(DrawingMlUnits.PointsToEmu(1.25).ToString());
             savedLine.Element(DrawingNs + "solidFill")!
                 .Element(DrawingNs + "srgbClr")!
@@ -821,6 +828,8 @@ public sealed class PptxPackageRetentionTests
         reloadedDataTable.ShowVerticalBorder.Should().BeFalse();
         reloadedDataTable.ShowOutlineBorder.Should().BeTrue();
         reloadedDataTable.ShowLegendKeys.Should().BeTrue();
+        reloadedDataTable.BackgroundFill.Should().BeOfType<ShapeFill.Solid>()
+            .Which.Color.Resolved.Should().Be(new SrgbColor(0xFA, 0xF1, 0xD2));
         reloadedDataTable.BorderOutline.Should().BeOfType<ShapeOutline.Visible>()
             .Which.Color.Resolved.Should().Be(new SrgbColor(0x12, 0x34, 0x56));
         ((ShapeOutline.Visible)reloadedDataTable.BorderOutline!).WidthPt.Should().BeApproximately(1.25, 0.001);
@@ -1185,6 +1194,8 @@ public sealed class PptxPackageRetentionTests
                     new XElement(ChartNs + "showOutline", new XAttribute("val", "1")),
                     new XElement(ChartNs + "showKeys", new XAttribute("val", "1")),
                     new XElement(ChartNs + "spPr",
+                        new XElement(DrawingNs + "solidFill",
+                            new XElement(DrawingNs + "srgbClr", new XAttribute("val", "FAF1D2"))),
                         new XElement(DrawingNs + "ln",
                             new XAttribute("w", DrawingMlUnits.PointsToEmu(1.25)),
                             new XElement(DrawingNs + "solidFill",
