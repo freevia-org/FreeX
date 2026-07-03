@@ -131,6 +131,7 @@ public sealed record PresentationAltTextRequestPlan(
     uint? ShapeId,
     string ShapeName,
     string SuggestedTitle,
+    string SuggestedDescription,
     string CurrentTitle,
     string ProposedTitle,
     string CurrentDescription,
@@ -384,6 +385,8 @@ public static class PresentationReviewWorkflowPlanner
     public const string MissingShapeMessage = "Select a shape before editing alt text.";
     public const string MissingAltTextDescriptionMessage =
         "Alt text description is required unless the object is marked decorative.";
+    private const string GenericAltTextDescriptionPlaceholder =
+        "Describe the selected object for people who cannot see it.";
     public const string MissingReadingOrderSelectionMessage =
         "Select one shape before changing reading order.";
     public const string EmptyReadingOrderMessage =
@@ -817,6 +820,7 @@ public static class PresentationReviewWorkflowPlanner
                 string.Empty,
                 string.Empty,
                 string.Empty,
+                string.Empty,
                 NormalizeAltTextTitle(proposedTitle),
                 string.Empty,
                 missingIsDecorative ? string.Empty : NormalizeAltTextDescription(proposedDescription),
@@ -828,6 +832,7 @@ public static class PresentationReviewWorkflowPlanner
 
         var suggestedTitle = BuildAltTextSuggestedTitle(shape);
         var decorative = isDecorative ?? shape.IsDecorative;
+        var suggestedDescription = decorative ? string.Empty : BuildAltTextSuggestedDescription(slide, shape);
         var normalizedTitle = decorative
             ? string.Empty
             : (proposedTitle is null ? shape.AlternativeTextTitle : NormalizeAltTextTitle(proposedTitle));
@@ -839,6 +844,7 @@ public static class PresentationReviewWorkflowPlanner
             shape.Id,
             shape.Name,
             suggestedTitle,
+            suggestedDescription,
             shape.AlternativeTextTitle,
             normalizedTitle,
             shape.AlternativeText,
@@ -881,11 +887,16 @@ public static class PresentationReviewWorkflowPlanner
             request.HasSelection && !request.IsDecorative,
             false,
             null);
+        var descriptionPlaceholder = request.IsDecorative
+            ? string.Empty
+            : string.IsNullOrWhiteSpace(request.SuggestedDescription)
+                ? GenericAltTextDescriptionPlaceholder
+                : request.SuggestedDescription;
         var description = new PresentationAltTextPaneFieldPlan(
             AltTextDescriptionFieldId,
             "Description",
             request.ProposedDescription,
-            "Describe the selected object for people who cannot see it.",
+            descriptionPlaceholder,
             request.HasSelection && !request.IsDecorative,
             !request.IsDecorative,
             descriptionValidation);
@@ -1925,6 +1936,103 @@ public static class PresentationReviewWorkflowPlanner
 
         var name = NormalizeText(shape.Name);
         return name is not null ? name : DescribeShape(shape);
+    }
+
+    private static string BuildAltTextSuggestedDescription(Slide? slide, SlideShape shape)
+    {
+        var currentDescription = NormalizeText(shape.AlternativeText);
+        if (currentDescription is not null)
+        {
+            return currentDescription;
+        }
+
+        var slideContext = BuildAltTextSlideContext(slide);
+        return shape.Kind switch
+        {
+            SlideShapeKind.Chart => BuildAltTextSentence(
+                BuildAltTextReference("Chart", NormalizeText(shape.Chart?.Title) ?? NormalizeText(shape.Name)),
+                slideContext,
+                "Summarize the main trend, comparison, or takeaway."),
+            SlideShapeKind.Table => BuildAltTextSentence(
+                BuildTableAltTextReference(shape),
+                slideContext,
+                "Summarize the key headers, values, and takeaway."),
+            SlideShapeKind.Picture => BuildAltTextSentence(
+                BuildAltTextReference("Picture", NormalizeText(shape.Name)),
+                slideContext,
+                "Describe the important visual details and context."),
+            SlideShapeKind.Media => BuildAltTextSentence(
+                BuildAltTextReference(shape.Media?.IsVideo == false ? "Audio" : "Video", NormalizeText(shape.Name)),
+                slideContext,
+                "Describe the media purpose and the visible poster frame when relevant."),
+            SlideShapeKind.SmartArt => BuildAltTextSentence(
+                BuildAltTextReference("SmartArt graphic", NormalizeText(shape.Name)),
+                slideContext,
+                "Summarize the process, relationship, or hierarchy it communicates."),
+            SlideShapeKind.Ole => BuildAltTextSentence(
+                BuildAltTextReference("Embedded object", NormalizeText(shape.Name)),
+                slideContext,
+                "Describe the object type and the information it contributes."),
+            SlideShapeKind.Zoom => BuildAltTextSentence(
+                BuildAltTextReference("Zoom link", NormalizeText(shape.Name)),
+                slideContext,
+                "Describe the destination slide or section."),
+            SlideShapeKind.Model3d => BuildAltTextSentence(
+                BuildAltTextReference("3D model", NormalizeText(shape.Name)),
+                slideContext,
+                "Describe the model and why it is included."),
+            SlideShapeKind.PreservedObject => BuildAltTextSentence(
+                BuildAltTextReference("Preserved object", NormalizeText(shape.Name)),
+                slideContext,
+                "Describe the object and the information it contributes."),
+            SlideShapeKind.Group => BuildAltTextSentence(
+                BuildAltTextReference("Grouped object", NormalizeText(shape.Name)),
+                slideContext,
+                "Describe the combined meaning of the grouped objects."),
+            SlideShapeKind.Connector => BuildAltTextSentence(
+                BuildAltTextReference("Connector", NormalizeText(shape.Name)),
+                slideContext,
+                "Describe the relationship or flow it indicates."),
+            _ when NormalizeText(shape.PlainText) is { } text => BuildAltTextSentence(
+                BuildAltTextReference("Text shape", BuildPreview(text)),
+                slideContext,
+                "Describe the visible text or the shape's purpose."),
+            _ => BuildAltTextSentence(
+                BuildAltTextReference(shape.Kind.ToString(), NormalizeText(shape.Name)),
+                slideContext,
+                "Describe the object's purpose and important visual details.")
+        };
+    }
+
+    private static string BuildAltTextSentence(string subject, string? slideContext, string guidance)
+    {
+        var context = string.IsNullOrWhiteSpace(slideContext) ? string.Empty : $" on {slideContext}";
+        return $"{subject}{context}. {guidance}";
+    }
+
+    private static string? BuildAltTextSlideContext(Slide? slide)
+    {
+        var title = NormalizeText(slide?.Title);
+        return title is null ? null : $"slide \"{title}\"";
+    }
+
+    private static string BuildAltTextReference(string kind, string? name)
+        => name is null ? kind : $"{kind} \"{name}\"";
+
+    private static string BuildTableAltTextReference(SlideShape shape)
+    {
+        var table = shape.Table;
+        if (table is null)
+        {
+            return BuildAltTextReference("Table", NormalizeText(shape.Name));
+        }
+
+        var rowCount = table.Rows.Count;
+        var columnCount = table.ColumnWidthsEmu.Count;
+        var dimensions = rowCount > 0 && columnCount > 0
+            ? $" with {rowCount} rows and {columnCount} columns"
+            : string.Empty;
+        return $"{BuildAltTextReference("Table", NormalizeText(shape.Name))}{dimensions}";
     }
 
     private static bool NeedsAltText(SlideShape shape)
