@@ -557,6 +557,9 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     internal bool SimulateTypeCharacter(char c)
     {
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit))
+            return false;
+
         if (AutoCorrectEnabled && Selection.IsEmpty && TryAutoCorrect(c))
             return true;
         // No rule fired: insert the literal character at the caret (mirroring the RichTextBox's own insert).
@@ -3452,6 +3455,9 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     public void ClearFormatting()
     {
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyFormatting))
+            return;
+
         Focus();
         CommitToModel();
         foreach (var index in SelectedModelParagraphIndices())
@@ -3671,6 +3677,9 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     private bool TryApplyFormatPainter()
     {
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyFormatting))
+            return false;
+
         if (_formatPainter is not { } clipboard || Selection.IsEmpty)
             return false;
 
@@ -3800,6 +3809,9 @@ public sealed class DocumentView : RichTextBox
     // by the selection, one reversible SetParagraphFormattingCommand per paragraph on the undo/redo bus.
     private void FormatSelectedModelParagraphs(Func<ParagraphFormatting, ParagraphFormatting> transform)
     {
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyFormatting))
+            return;
+
         Focus();
         CommitToModel();
         var indices = SelectedModelParagraphIndices();
@@ -3826,6 +3838,9 @@ public sealed class DocumentView : RichTextBox
     // LanguageTag) that have no WPF property slot and therefore cannot be applied via ApplyPropertyValue.
     private void FormatSelectedModelRuns(Func<RunFormatting, RunFormatting> transform)
     {
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyFormatting))
+            return;
+
         Focus();
         CommitToModel();
         var indices = SelectedModelParagraphIndices();
@@ -3899,6 +3914,9 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     public void ApplyFontFormatting(RunFormatting fmt)
     {
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyFormatting))
+            return;
+
         Focus();
         // Apply the WPF-visible fields via the selection property bag (the normal path for bold/size/…).
         ApplyRunFormattingToSelection(fmt);
@@ -4361,28 +4379,17 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
-    /// Honour the model's document-protection (restrict-editing) state on the editing surface. In
-    /// <see cref="ProtectionMode.ReadOnly"/> the RichTextBox is made read-only and given a faint amber
-    /// frame so the lock is visible. <see cref="ProtectionMode.CommentsOnly"/> and
-    /// <see cref="ProtectionMode.TrackChangesOnly"/> are approximated as read-only too (live
-    /// comments-only / forced-tracking editing is out of scope for the RichTextBox), so any protected
-    /// mode locks typing; <see cref="ProtectionMode.None"/> restores normal editing. Called from
-    /// <see cref="Render"/> (and so from <see cref="LoadModel"/>) and after protection changes.
+    /// Honour the model's document-protection (restrict-editing) state on the editing surface.
+    /// Body typing is locked according to the shared Word-style enforcement policy; comments-only
+    /// protection still leaves the model-backed comment workflow available, and tracked-changes-only
+    /// keeps the surface editable while forcing Track Changes on.
     /// </summary>
     public void ApplyProtection()
     {
-        var mode = _model.Protection.Mode;
+        var policy = RestrictEditingPolicy;
+        IsReadOnly = policy.IsBodyEditingLocked;
 
-        // Typing is blocked when the document is Mark-as-Final (advisory read-only), when restrict-editing
-        // is No-changes (ReadOnly), or when it is Comments-only / Filling-forms (those permit only comment
-        // insertion / form-field fill, not free typing — approximated as a read-only typing surface; the
-        // comment command writes to the model directly and so still works). Track-changes-only leaves the
-        // surface editable but forces TrackChangesEnabled so edits become tracked revisions.
-        var typingLocked = _model.MarkedAsFinal
-            || mode is ProtectionMode.ReadOnly or ProtectionMode.CommentsOnly or ProtectionMode.FillingForms;
-        IsReadOnly = typingLocked;
-
-        if (mode == ProtectionMode.TrackChangesOnly)
+        if (policy.ShouldForceTrackChanges)
             TrackChangesEnabled = true;
 
         // A protected / final document gets a distinct amber frame so the locked state is visible. An
@@ -4411,6 +4418,15 @@ public sealed class DocumentView : RichTextBox
 
     /// <summary>True when the document is "Marked as Final" (advisory read-only).</summary>
     public bool IsMarkedAsFinal => _model.MarkedAsFinal;
+
+    public RestrictEditingEnforcementPolicy RestrictEditingPolicy =>
+        RestrictEditingEnforcementPolicy.From(_model.Protection, _model.MarkedAsFinal);
+
+    public RestrictEditingEnforcementDecision GetRestrictEditingDecision(RestrictEditingOperationKind operation) =>
+        RestrictEditingPolicy.DecisionFor(operation);
+
+    private bool AllowsRestrictEditingOperation(RestrictEditingOperationKind operation) =>
+        RestrictEditingPolicy.Allows(operation);
 
     /// <summary>
     /// Set the document's protection (restrict-editing) mode, committing pending edits first (only while
@@ -9672,6 +9688,9 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     public void InsertText(string text)
     {
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit))
+            return;
+
         if (string.IsNullOrEmpty(text))
             return;
 
@@ -10133,6 +10152,9 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     public void InsertComment(string text, string author, string initials)
     {
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.CommentInsert))
+            return;
+
         if (string.IsNullOrWhiteSpace(text))
             return;
 
@@ -10281,6 +10303,9 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     public bool ReplyToCommentAtCaret(string text, string author, string initials)
     {
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.CommentReply))
+            return false;
+
         if (string.IsNullOrWhiteSpace(text))
             return false;
         Focus();
@@ -10301,6 +10326,9 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     public bool? ToggleResolveCommentAtCaret()
     {
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.CommentResolve))
+            return null;
+
         Focus();
         if (CommentIdAtCaret() is not { } id || !_model.Comments.TryGetValue(id, out var comment))
             return null;
@@ -10316,6 +10344,9 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     public bool DeleteCommentAtCaret()
     {
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.CommentDelete))
+            return false;
+
         Focus();
         if (CommentIdAtCaret() is not { } id || !_model.Comments.Remove(id))
             return false;

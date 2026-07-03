@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Headless;
+using FreeW.App.Presentation.DocumentView;
 using FreeW.App.Avalonia.Editing;
 using FreeW.Core.Model;
 
@@ -78,7 +79,10 @@ public sealed class DocumentViewProtectionTests
             view.SetProtection(ProtectionMode.None);
             view.SetProtection(ProtectionMode.TrackChangesOnly);
             trackChangesEnabled = view.TrackChangesEnabled;
+            view.MoveCaretToBlock(0, 5);
             view.InsertText("X");
+            view.MoveCaretToBlock(0, 0);
+            view.DeleteForwardPublic();
             textAfterTrackChangesOnly = view.PlainText;
             hasRevisions = view.HasRevisions;
         });
@@ -88,8 +92,112 @@ public sealed class DocumentViewProtectionTests
 
         textWhileReadOnly.Should().Be("Hello");
         trackChangesEnabled.Should().BeTrue();
-        textAfterTrackChangesOnly.Should().Be("XHello");
+        textAfterTrackChangesOnly.Should().Be("HelloX");
         hasRevisions.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task TrackChangesOnly_keeps_text_and_formatting_unlocked_under_tracking_policy()
+    {
+        var editingLocked = true;
+        var trackChangesEnabled = false;
+        var textEditRequiresTracking = false;
+        var formattingRequiresTracking = false;
+        var ran = await OnUiThread(() =>
+        {
+            var view = BuildView("Hello");
+
+            view.SetProtection(ProtectionMode.TrackChangesOnly);
+
+            editingLocked = view.IsEditingLocked;
+            trackChangesEnabled = view.TrackChangesEnabled;
+            textEditRequiresTracking = view.GetRestrictEditingDecision(RestrictEditingOperationKind.BodyTextEdit)
+                .RequiresTrackedChanges;
+            formattingRequiresTracking = view.GetRestrictEditingDecision(RestrictEditingOperationKind.BodyFormatting)
+                .RequiresTrackedChanges;
+        });
+
+        if (!ran)
+            return;
+
+        editingLocked.Should().BeFalse();
+        trackChangesEnabled.Should().BeTrue();
+        textEditRequiresTracking.Should().BeTrue();
+        formattingRequiresTracking.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task CommentsOnly_allows_comment_workflow_but_blocks_body_typing_and_formatting()
+    {
+        var textAfterBlockedTyping = "";
+        var boldAfterBlockedFormatting = true;
+        var commentsAfterInsert = -1;
+        var replyAdded = false;
+        bool? resolved = null;
+        var commentsAfterDelete = -1;
+
+        var ran = await OnUiThread(() =>
+        {
+            var view = BuildView("Hello world");
+
+            view.SetProtection(ProtectionMode.CommentsOnly);
+            view.InsertText("X");
+            textAfterBlockedTyping = view.PlainText;
+
+            view.SelectAll();
+            view.ToggleBold();
+            boldAfterBlockedFormatting = ((Paragraph)view.Document.Blocks[0]).Runs[0].Formatting.Bold;
+
+            view.SetSelectionRangePublic(0, 0, 0, 5);
+            var id = view.NewComment("note");
+            commentsAfterInsert = view.Document.Comments.Count;
+
+            view.MoveCaretToBlock(0, 2);
+            replyAdded = view.ReplyToCommentAtCaret("reply");
+            resolved = view.ToggleResolveCommentAtCaret();
+            view.DeleteCommentAtCaret();
+            commentsAfterDelete = view.Document.Comments.Count;
+        });
+
+        if (!ran)
+            return;
+
+        textAfterBlockedTyping.Should().Be("Hello world");
+        boldAfterBlockedFormatting.Should().BeFalse();
+        commentsAfterInsert.Should().Be(1);
+        replyAdded.Should().BeTrue();
+        resolved.Should().BeTrue();
+        commentsAfterDelete.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task FillingForms_blocks_body_edits_and_reports_form_only_policy()
+    {
+        var textAfterBlockedTyping = "";
+        var formEditAllowed = false;
+        var bodyBlockReason = RestrictEditingBlockReason.None;
+        var formOnlyPolicy = false;
+
+        var ran = await OnUiThread(() =>
+        {
+            var view = BuildView("Hello");
+
+            view.SetProtection(ProtectionMode.FillingForms);
+            view.InsertText("X");
+
+            textAfterBlockedTyping = view.PlainText;
+            formEditAllowed = view.GetRestrictEditingDecision(RestrictEditingOperationKind.FormFieldEdit).IsAllowed;
+            bodyBlockReason = view.GetRestrictEditingDecision(RestrictEditingOperationKind.BodyTextEdit).BlockReason;
+            formOnlyPolicy = view.RestrictEditingPolicy.IsFormFieldEditingOnly;
+        });
+
+        if (!ran)
+            return;
+
+        textAfterBlockedTyping.Should().Be("Hello");
+        formEditAllowed.Should().BeTrue();
+        bodyBlockReason.Should().Be(RestrictEditingBlockReason.FillingForms);
+        formOnlyPolicy.Should().BeTrue();
     }
 
     private static DocumentView BuildView(string firstParagraphText)
