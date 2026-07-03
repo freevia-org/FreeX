@@ -1884,6 +1884,7 @@ public sealed class MainWindowHeadlessTests
         var commentsPaneCommentCount = 0;
         var commentsPaneActionCount = 0;
         var commentsPaneSelectedCount = 0;
+        var commentsPaneSummary = string.Empty;
         var accessibilityCheckerPaneVisible = false;
         var accessibilityCheckerPaneRowCount = 0;
         var readingOrderPaneVisible = false;
@@ -1966,6 +1967,7 @@ public sealed class MainWindowHeadlessTests
             commentsPaneCommentCount = window.ReviewCommentsPaneCommentCount;
             commentsPaneActionCount = window.ReviewCommentsPaneActionButtonCount;
             commentsPaneSelectedCount = window.ReviewCommentsPaneSelectedCommentCount;
+            commentsPaneSummary = window.ReviewCommentsPaneSummary;
             accessibilityPlan = window.LastAccessibilitySummaryPlan;
             accessibilityCheckerPlan = window.LastAccessibilityCheckerPanePlan;
             accessibilityCheckerPaneVisible = window.IsAccessibilityCheckerPaneVisible;
@@ -2015,6 +2017,11 @@ public sealed class MainWindowHeadlessTests
         foundReopenComment.Should().BeTrue();
         commentPlan.Should().NotBeNull();
         commentPlan!.TotalCommentCount.Should().Be(1);
+        commentPlan.OpenThreadCount.Should().Be(0);
+        commentPlan.ResolvedThreadCount.Should().Be(1);
+        commentPlan.TotalReplyCount.Should().Be(1);
+        commentPlan.TotalMentionCount.Should().Be(1);
+        commentsPaneSummary.Should().Be("1 thread: 0 open threads, 1 resolved thread, 1 reply, 1 mention");
         commentPlan.Comments.Single().Should().Match<PresentationCommentDescriptor>(comment =>
             comment.ThreadStatus == PresentationCommentThreadStatus.Resolved &&
             comment.ThreadStatusLabel == "Resolved" &&
