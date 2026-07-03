@@ -305,6 +305,82 @@ public class TableOfAuthoritiesTests
     }
 
     [Fact]
+    public void Build_DefaultOptions_AddsRightAlignedDottedLeaderTabStopToEntries()
+    {
+        var table = TableOfAuthorities.Build(new[] { new Citation("Case A", CitationCategory.Cases) });
+
+        var entry = table.Single(p => p.StyleId == TableOfAuthorities.EntryStyleId);
+
+        entry.Formatting.TabStops.Should().Equal(
+            new TabStop(
+                TableOfAuthorities.DefaultEntryRightTabStopPt,
+                TabStopAlignment.Right,
+                TabLeader.Dots));
+    }
+
+    [Fact]
+    public void Build_TabLeaderOption_CarriesSelectedLeaderOnEntryTabStop()
+    {
+        var table = TableOfAuthorities.Build(
+            new[] { new Citation("Case A", CitationCategory.Cases) },
+            new ToaOptions { TabLeader = ToaTabLeader.Underline });
+
+        table.Single(p => p.StyleId == TableOfAuthorities.EntryStyleId)
+            .Formatting.TabStops.Should().Equal(
+                new TabStop(
+                    TableOfAuthorities.DefaultEntryRightTabStopPt,
+                    TabStopAlignment.Right,
+                    TabLeader.Underline));
+    }
+
+    [Fact]
+    public void Build_FromDocument_UsesWritablePageWidthForEntryTabStop()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Page.WidthPt = 720;
+        doc.Page.MarginLeftPt = 90;
+        doc.Page.MarginRightPt = 54;
+        doc.Citations.Add(new Citation("Case A", CitationCategory.Cases));
+
+        var table = TableOfAuthorities.Build(doc, new ToaOptions { TabLeader = ToaTabLeader.Dashes });
+
+        table.Single(p => p.StyleId == TableOfAuthorities.EntryStyleId)
+            .Formatting.TabStops.Should().Equal(
+                new TabStop(576, TabStopAlignment.Right, TabLeader.Dashes));
+    }
+
+    [Fact]
+    public void Build_KeepOriginalFormatting_CopiesFirstBodyMarkRunFormatting()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var mark = Run.CitationMark(new Citation("Formatted Case", CitationCategory.Cases));
+        mark.Formatting = new RunFormatting { Bold = true, Italic = true, ColorHex = "#C00000" };
+        doc.Blocks.Add(new Paragraph { Runs = { mark } });
+
+        var table = TableOfAuthorities.Build(doc, new ToaOptions { KeepOriginalFormatting = true });
+
+        table.Single(p => p.StyleId == TableOfAuthorities.EntryStyleId)
+            .Runs.Single().Formatting.Should().Be(mark.Formatting);
+    }
+
+    [Fact]
+    public void Build_KeepOriginalFormatting_FalseLeavesEntryFormattingToStyle()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var mark = Run.CitationMark(new Citation("Formatted Case", CitationCategory.Cases));
+        mark.Formatting = new RunFormatting { Bold = true };
+        doc.Blocks.Add(new Paragraph { Runs = { mark } });
+
+        var table = TableOfAuthorities.Build(doc, new ToaOptions { KeepOriginalFormatting = false });
+
+        table.Single(p => p.StyleId == TableOfAuthorities.EntryStyleId)
+            .Runs.Single().Formatting.Should().Be(RunFormatting.Default);
+    }
+
+    [Fact]
     public void Build_WithCitationsAndOptions_CategoryFilter_FromEnumerableOverload()
     {
         // The IEnumerable<Citation> overload that takes ToaOptions also respects CategoryFilter.

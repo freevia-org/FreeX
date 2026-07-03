@@ -240,6 +240,8 @@ internal sealed record RibbonHostCallbacks(
     Action? OpenCitationDialog = null,
     /// <summary>References &gt; Manage Sources. Optional; registry no-ops when null.</summary>
     Action? OpenManageSourcesDialog = null,
+    /// <summary>References &gt; Table of Authorities. Optional; registry inserts with default options when null.</summary>
+    Func<ToaOptions?>? OpenTableOfAuthoritiesDialog = null,
     /// <summary>AV-REVIEW: Review &gt; Show Markup &gt; Show Revisions in Balloons. Optional; registry toggles editor state when null.</summary>
     Action? ToggleReviewBalloons = null,
     /// <summary>AV-REVIEW: Whether the Review Balloons strip is visible.</summary>

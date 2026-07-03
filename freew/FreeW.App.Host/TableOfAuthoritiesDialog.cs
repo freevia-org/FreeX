@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using FreeW.App.Presentation.Ribbon;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Host;
@@ -29,39 +30,34 @@ internal sealed class TableOfAuthoritiesDialog : Free.Shared.Ribbon.Wpf.DialogWi
     private TableOfAuthoritiesDialog(Window? owner)
     {
         Owner = owner;
-        Title = "Table of Authorities";
+        Title = TableOfAuthoritiesDialogPlanner.Title;
         Width = 380;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = owner is null ? WindowStartupLocation.CenterScreen : WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
 
-        // Category combo: "(All)" + one entry per category.
         _categoryCombo = new ComboBox { Margin = new Thickness(0, 0, 0, 8) };
-        _categoryCombo.Items.Add(new CategoryItem(null, "(All)"));
-        foreach (var cat in Enum.GetValues<CitationCategory>())
-            _categoryCombo.Items.Add(new CategoryItem(cat, TableOfAuthorities.CategoryHeading(cat)));
+        foreach (var choice in TableOfAuthoritiesDialogPlanner.BuildCategoryChoices())
+            _categoryCombo.Items.Add(choice);
         _categoryCombo.SelectedIndex = 0;
 
-        _passimBox = new CheckBox { Content = "Use passim", Margin = new Thickness(0, 0, 0, 6) };
-        _keepFormattingBox = new CheckBox { Content = "Keep original formatting", Margin = new Thickness(0, 0, 0, 8) };
+        _passimBox = new CheckBox { Content = TableOfAuthoritiesDialogPlanner.UsePassimLabel, Margin = new Thickness(0, 0, 0, 6) };
+        _keepFormattingBox = new CheckBox { Content = TableOfAuthoritiesDialogPlanner.KeepOriginalFormattingLabel, Margin = new Thickness(0, 0, 0, 8) };
 
-        // Tab leader combo.
         _leaderCombo = new ComboBox { Margin = new Thickness(0, 0, 0, 8) };
-        _leaderCombo.Items.Add(new LeaderItem(ToaTabLeader.Dots, "Dots ......"));
-        _leaderCombo.Items.Add(new LeaderItem(ToaTabLeader.Dashes, "Dashes ——————"));
-        _leaderCombo.Items.Add(new LeaderItem(ToaTabLeader.Underline, "Underline ______"));
-        _leaderCombo.Items.Add(new LeaderItem(ToaTabLeader.None, "(None)"));
+        foreach (var choice in TableOfAuthoritiesDialogPlanner.BuildTabLeaderChoices())
+            _leaderCombo.Items.Add(choice);
         _leaderCombo.SelectedIndex = 0;
 
         var buttons = DialogButtonRowFactory.Create(Accept, buttonWidth: 80, rowMargin: new Thickness(0, 12, 0, 0));
 
         var panel = new StackPanel { Margin = new Thickness(16) };
-        panel.Children.Add(MakeLabel("Category:"));
+        panel.Children.Add(MakeLabel(TableOfAuthoritiesDialogPlanner.CategoryLabel));
         panel.Children.Add(_categoryCombo);
         panel.Children.Add(_passimBox);
         panel.Children.Add(_keepFormattingBox);
-        panel.Children.Add(MakeLabel("Tab leader:"));
+        panel.Children.Add(MakeLabel(TableOfAuthoritiesDialogPlanner.TabLeaderLabel));
         panel.Children.Add(_leaderCombo);
         panel.Children.Add(buttons);
 
@@ -74,16 +70,15 @@ internal sealed class TableOfAuthoritiesDialog : Free.Shared.Ribbon.Wpf.DialogWi
 
     private void Accept()
     {
-        var categoryFilter = (_categoryCombo.SelectedItem as CategoryItem)?.Category;
-        var leader = (_leaderCombo.SelectedItem as LeaderItem)?.Leader ?? ToaTabLeader.Dots;
+        var categoryFilter = (_categoryCombo.SelectedItem as TableOfAuthoritiesCategoryChoice)?.Category;
+        var leader = (_leaderCombo.SelectedItem as TableOfAuthoritiesTabLeaderChoice)?.Leader ?? ToaTabLeader.Dots;
+        var state = new TableOfAuthoritiesDialogState(
+            _passimBox.IsChecked == true,
+            _keepFormattingBox.IsChecked == true,
+            categoryFilter,
+            leader);
 
-        _result = new Result(new ToaOptions
-        {
-            UsePassim = _passimBox.IsChecked == true,
-            KeepOriginalFormatting = _keepFormattingBox.IsChecked == true,
-            CategoryFilter = categoryFilter,
-            TabLeader = leader
-        });
+        _result = new Result(TableOfAuthoritiesDialogPlanner.BuildOptions(state));
         Close();
     }
 
@@ -105,25 +100,13 @@ internal sealed class TableOfAuthoritiesDialog : Free.Shared.Ribbon.Wpf.DialogWi
         dlg._passimBox.IsChecked = passim;
         dlg._keepFormattingBox.IsChecked = keepFormatting;
 
-        // Select the matching category item.
-        foreach (CategoryItem item in dlg._categoryCombo.Items)
-        {
-            if (item.Category == categoryFilter)
-            {
-                dlg._categoryCombo.SelectedItem = item;
-                break;
-            }
-        }
+        dlg._categoryCombo.SelectedIndex = TableOfAuthoritiesDialogPlanner.SelectCategoryIndex(
+            dlg._categoryCombo.Items.OfType<TableOfAuthoritiesCategoryChoice>().ToList(),
+            categoryFilter);
 
-        // Select the matching leader.
-        foreach (LeaderItem item in dlg._leaderCombo.Items)
-        {
-            if (item.Leader == leader)
-            {
-                dlg._leaderCombo.SelectedItem = item;
-                break;
-            }
-        }
+        dlg._leaderCombo.SelectedIndex = TableOfAuthoritiesDialogPlanner.SelectTabLeaderIndex(
+            dlg._leaderCombo.Items.OfType<TableOfAuthoritiesTabLeaderChoice>().ToList(),
+            leader);
 
         return dlg;
     }
@@ -152,17 +135,4 @@ internal sealed class TableOfAuthoritiesDialog : Free.Shared.Ribbon.Wpf.DialogWi
         return dlg._result;
     }
 
-    // -----------------------------------------------------------------------
-    // Helper items
-    // -----------------------------------------------------------------------
-
-    private sealed record CategoryItem(CitationCategory? Category, string Label)
-    {
-        public override string ToString() => Label;
-    }
-
-    private sealed record LeaderItem(ToaTabLeader Leader, string Label)
-    {
-        public override string ToString() => Label;
-    }
 }

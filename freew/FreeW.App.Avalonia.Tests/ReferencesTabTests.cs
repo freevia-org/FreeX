@@ -379,6 +379,32 @@ public sealed class ReferencesTabTests
             .Be(1);
     }
 
+    [Fact]
+    public void Table_of_authorities_insert_accepts_shared_options_in_avalonia_host()
+    {
+        var mark = Run.CitationMark(new Citation("17 U.S.C. 107", CitationCategory.Statutes));
+        mark.Formatting = new RunFormatting { Italic = true };
+        var view = ViewWith(new Paragraph { Runs = { mark } });
+
+        view.InsertTableOfAuthorities(new ToaOptions
+        {
+            CategoryFilter = CitationCategory.Statutes,
+            KeepOriginalFormatting = true,
+            TabLeader = ToaTabLeader.None
+        });
+
+        var toa = view.Document.Blocks.OfType<Paragraph>()
+            .Where(TableOfAuthorities.IsTableOfAuthoritiesParagraph)
+            .ToList();
+        toa.Select(paragraph => paragraph.PlainText)
+            .Should().Equal("Table of Authorities", "Statutes", "17 U.S.C. 107");
+
+        var entry = toa.Single(paragraph => paragraph.StyleId == TableOfAuthorities.EntryStyleId);
+        entry.Formatting.TabStops.Should().ContainSingle()
+            .Which.Leader.Should().Be(TabLeader.None);
+        entry.Runs.Single().Formatting.Italic.Should().BeTrue();
+    }
+
     // ── Registry wiring ─────────────────────────────────────────────────────────────
 
     [Fact]
@@ -711,6 +737,33 @@ public sealed class ReferencesTabTests
             .Should().Contain(text => text.Contains("Jones", StringComparison.Ordinal))
             .And.NotContain(text => text.Contains("Smith", StringComparison.Ordinal));
         view.Document.Sources.Select(source => source.Tag).Should().Equal("Sm24", "Jo25", "Ng26");
+    }
+
+    [Fact]
+    public void Table_of_authorities_command_applies_shell_callback_options()
+    {
+        var view = ViewWith(new Paragraph("Brown v. Board"));
+        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks() with
+        {
+            OpenTableOfAuthoritiesDialog = () => new ToaOptions
+            {
+                CategoryFilter = CitationCategory.Cases,
+                TabLeader = ToaTabLeader.Underline
+            }
+        });
+
+        Execute(registry, "freew.mark-citation");
+        Execute(registry, "freew.table-of-authorities");
+
+        var entry = view.Document.Blocks
+            .OfType<Paragraph>()
+            .Single(paragraph => paragraph.StyleId == TableOfAuthorities.EntryStyleId);
+        entry.PlainText.Should().Be("Brown v. Board");
+        entry.Formatting.TabStops.Should().Equal(
+            new TabStop(
+                TableOfAuthorities.DefaultEntryRightTabStopPt,
+                TabStopAlignment.Right,
+                TabLeader.Underline));
     }
 
     [Fact]
