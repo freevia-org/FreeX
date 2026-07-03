@@ -384,7 +384,7 @@ public sealed class ReferencesTabTests
             "freew.insert-caption", "freew.insert-caption.figure", "freew.insert-caption.table",
             "freew.cross-reference",
             "freew.citation",
-            "freew.insert-citation", "freew.bibliography",
+            "freew.insert-citation", "freew.citation-style", "freew.bibliography",
             "freew.show-notes", "freew.footnote-endnote-options",
             "freew.manage-sources",
             "freew.tof", "freew.tof-refresh",
@@ -456,6 +456,7 @@ public sealed class ReferencesTabTests
             "freew.footnote",
             "freew.endnote",
             "freew.citation",
+            "freew.citation-style",
             "freew.bibliography",
             "freew.caption",
             "freew.insert-caption.figure",
@@ -529,6 +530,53 @@ public sealed class ReferencesTabTests
             .Select(paragraph => paragraph.PlainText)
             .Should()
             .Contain("Brown v. Board");
+    }
+
+    [Fact]
+    public void Citation_style_command_changes_subsequent_insert_citation_output()
+    {
+        var view = ViewWith(new Paragraph("See "));
+        var source = new Source { Tag = "Sm24", Author = "Smith", Title = "A Work", Year = "2024" };
+        view.Document.Sources.Add(source);
+        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks() with
+        {
+            OpenCitationDialog = () => view.InsertCitation(source),
+        });
+
+        Execute(registry, "freew.citation-style", RibbonCommandContext.ForSelectedValue("MLA"));
+        Execute(registry, "freew.citation");
+
+        view.Document.BibliographyStyle.Should().Be(CitationStyle.Mla);
+        view.Document.Blocks.OfType<Paragraph>()
+            .Select(paragraph => paragraph.PlainText)
+            .Should().ContainSingle(text => text.Contains("(Smith)", StringComparison.Ordinal)
+                && !text.Contains("2024", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Citation_style_command_changes_subsequent_bibliography_output_and_state()
+    {
+        var view = ViewWith(new Paragraph("Body"));
+        view.Document.Sources.Add(new Source
+        {
+            Tag = "Sm24",
+            Author = "Smith",
+            Title = "A Work",
+            Year = "2024",
+            Publisher = "Press"
+        });
+        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+
+        Execute(registry, "freew.citation-style", RibbonCommandContext.ForSelectedValue("Chicago"));
+        Execute(registry, "freew.bibliography");
+
+        view.Document.BibliographyStyle.Should().Be(CitationStyle.Chicago);
+        registry.TryGet(new RibbonCommandId("freew.citation-style"), out var command).Should().BeTrue();
+        ((IRibbonStatefulCommand)command!).GetState().Value.Should().Be("Chicago");
+        view.Document.Blocks.OfType<Paragraph>()
+            .Where(Citations.IsBibliographyParagraph)
+            .Select(paragraph => paragraph.PlainText)
+            .Should().Equal("Bibliography", "Smith. A Work. Press, 2024.");
     }
 
     [Fact]
@@ -623,8 +671,13 @@ public sealed class ReferencesTabTests
 
     private static void Execute(RibbonCommandRegistry registry, string commandId)
     {
+        Execute(registry, commandId, RibbonCommandContext.Empty);
+    }
+
+    private static void Execute(RibbonCommandRegistry registry, string commandId, RibbonCommandContext context)
+    {
         registry.TryGet(new RibbonCommandId(commandId), out var command).Should().BeTrue();
-        command!.Execute(RibbonCommandContext.Empty);
+        command!.Execute(context);
     }
 
     private static IEnumerable<string> CommandIds(RibbonControl control)
