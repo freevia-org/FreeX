@@ -80,6 +80,7 @@ internal static class FreePRibbonCommands
         Action?             onReviewProofing = null,
         Action?             onAddComment = null,
         Action?             onEditComment = null,
+        Action?             onReplyComment = null,
         Action?             onDeleteComment = null,
         Action?             onPreviousComment = null,
         Action?             onNextComment = null,
@@ -310,6 +311,7 @@ internal static class FreePRibbonCommands
             onReviewProofing,
             onAddComment,
             onEditComment,
+            onReplyComment,
             onDeleteComment,
             onPreviousComment,
             onNextComment,
@@ -471,6 +473,7 @@ internal static class FreePRibbonCommands
         Action? onProofing,
         Action? onAddComment,
         Action? onEditComment,
+        Action? onReplyComment,
         Action? onDeleteComment,
         Action? onPreviousComment,
         Action? onNextComment,
@@ -498,7 +501,9 @@ internal static class FreePRibbonCommands
         registry.Register(
             PresentationReviewWorkflowPlanner.EditCommentCommandId,
             new ActionRibbonCommand(() => onEditComment?.Invoke()));
-        registry.Register(PresentationReviewWorkflowPlanner.ReplyCommentCommandId, EmptyRibbonCommand.Instance);
+        registry.Register(
+            PresentationReviewWorkflowPlanner.ReplyCommentCommandId,
+            new ActionRibbonCommand(() => onReplyComment?.Invoke()));
         registry.Register(
             PresentationReviewWorkflowPlanner.DeleteCommentCommandId,
             new ActionRibbonCommand(() => onDeleteComment?.Invoke()));

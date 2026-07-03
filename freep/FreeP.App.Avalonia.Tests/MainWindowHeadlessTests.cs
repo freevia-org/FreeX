@@ -2058,6 +2058,49 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task Review_comment_reply_ribbon_command_routes_through_shared_mutation_plan()
+    {
+        SlideComment? repliedComment = null;
+        PresentationCommentPanePlan? replyPanePlan = null;
+        var foundReply = false;
+        var dirtyAfterReply = false;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            window.Editor.CurrentSlide!.Comments.Add(new SlideComment
+            {
+                Author = "Reviewer",
+                Initials = "RV",
+                Text = "Needs a reply.",
+                Idx = 1
+            });
+            window.SetSelectedReviewCommentIndexForTests(0);
+
+            var registry = window.BuildCommandRegistry();
+            foundReply = registry.TryGet(PresentationReviewWorkflowPlanner.ReplyCommentCommandId, out var replyCommand);
+            replyCommand!.Execute(RibbonCommandContext.Empty);
+
+            repliedComment = window.Editor.CurrentSlide.Comments.Single();
+            replyPanePlan = window.LastCommentPanePlan;
+            dirtyAfterReply = window.IsDirty;
+        });
+
+        if (!ran) return;
+        foundReply.Should().BeTrue();
+        repliedComment.Should().NotBeNull();
+        repliedComment!.Replies.Should().ContainSingle();
+        repliedComment.Replies.Single().Should().Match<SlideCommentReply>(reply =>
+            reply.Author == "FreeP User" &&
+            reply.Initials == "FU" &&
+            reply.Text == "New reply");
+        replyPanePlan.Should().NotBeNull();
+        replyPanePlan!.SelectedComment!.Replies.Single().TextPreview.Should().Be("New reply");
+        replyPanePlan.SelectedComment.ReplyCount.Should().Be(1);
+        dirtyAfterReply.Should().BeTrue();
+    }
+
+    [Fact]
     public async Task Review_comment_next_previous_commands_navigate_through_shared_plan()
     {
         PresentationCommentNavigationPlan? sameSlideNext = null;

@@ -1765,7 +1765,9 @@ public sealed class MainWindow : Window
         registry.Register(
             PresentationReviewWorkflowPlanner.EditCommentCommandId,
             new ActionRibbonCommand(() => EditSelectedComment(GetSelectedCommentText())));
-        registry.Register(PresentationReviewWorkflowPlanner.ReplyCommentCommandId, EmptyRibbonCommand.Instance);
+        registry.Register(
+            PresentationReviewWorkflowPlanner.ReplyCommentCommandId,
+            new ActionRibbonCommand(() => ReplyToSelectedComment("New reply")));
         registry.Register(
             PresentationReviewWorkflowPlanner.DeleteCommentCommandId,
             new ActionRibbonCommand(() => DeleteSelectedComment()));
