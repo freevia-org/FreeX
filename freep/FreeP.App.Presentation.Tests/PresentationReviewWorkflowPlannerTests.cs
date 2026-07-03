@@ -54,6 +54,13 @@ public sealed class PresentationReviewWorkflowPlannerTests
             PresentationCommentThreadStatus.Open,
             true));
         plan.SelectedComment.Should().BeSameAs(plan.Comments[0]);
+        plan.SelectedComment!.AuthorDisplayName.Should().Be("Alice");
+        plan.SelectedComment.InitialsBadgeText.Should().Be("AL");
+        plan.SelectedComment.AuthorIdentityKey.Should().Be("ALICE|AL");
+        plan.SelectedComment.ThreadStatusLabel.Should().Be("Open");
+        plan.SelectedComment.ThreadStatusSummary.Should().Be("Open");
+        plan.SelectedComment.ReplySummary.Should().Be("0 replies");
+        plan.SelectedComment.MentionSummary.Should().Be("0 mentions");
 
         Action(PresentationReviewWorkflowPlanner.EditCommentCommandId).IsEnabled.Should().BeTrue();
         Action(PresentationReviewWorkflowPlanner.DeleteCommentCommandId).IsEnabled.Should().BeTrue();
@@ -66,6 +73,44 @@ public sealed class PresentationReviewWorkflowPlannerTests
 
         PresentationReviewWorkflowActionPlan Action(string commandId) =>
             plan.Actions.Single(action => action.CommandId == commandId);
+    }
+
+    [Fact]
+    public void BuildCommentPanePlan_AppliesSharedAuthorIdentityAndInitialsPolicy()
+    {
+        var slides = new[] { new Slide { Title = "Intro" } };
+        slides[0].Comments.Add(new SlideComment
+        {
+            Author = "  Ada Lovelace King  ",
+            Initials = "  ",
+            Text = "Check the notes.",
+            Idx = 1,
+            Replies =
+            {
+                new SlideCommentReply
+                {
+                    Author = " ",
+                    Initials = "",
+                    Text = "Reply from imported metadata."
+                }
+            }
+        });
+
+        var plan = PresentationReviewWorkflowPlanner.BuildCommentPanePlan(slides, 0, selectedCommentIndex: 0);
+
+        var comment = plan.Comments.Single();
+        comment.AuthorDisplayName.Should().Be("Ada Lovelace King");
+        comment.InitialsBadgeText.Should().Be("ALK");
+        comment.AuthorIdentityKey.Should().Be("ADA LOVELACE KING|ALK");
+        comment.ThreadStatusLabel.Should().Be("Open");
+        comment.ThreadStatusSummary.Should().Be("Open - 1 reply");
+        comment.ReplySummary.Should().Be("1 reply");
+        var reply = comment.Replies.Single();
+        reply.AuthorDisplayName.Should().Be("Unknown reviewer");
+        reply.InitialsBadgeText.Should().Be("UR");
+        reply.AuthorIdentityKey.Should().Be("UNKNOWN REVIEWER|UR");
+        reply.ReplyLabel.Should().Be("Reply 1");
+        reply.MentionSummary.Should().Be("0 mentions");
     }
 
     [Fact]
@@ -337,6 +382,10 @@ public sealed class PresentationReviewWorkflowPlannerTests
 
         plan.Comments.Should().ContainSingle().Which.Should().Match<PresentationCommentDescriptor>(comment =>
             comment.ThreadStatus == PresentationCommentThreadStatus.Resolved &&
+            comment.ThreadStatusLabel == "Resolved" &&
+            comment.ThreadStatusSummary == "Resolved by Reviewer" &&
+            comment.ResolvedByDisplayName == "Reviewer" &&
+            comment.ResolvedTimestamp == new DateTime(2026, 7, 2, 8, 15, 0, DateTimeKind.Utc) &&
             !comment.CanResolve &&
             comment.CanReopen);
         plan.Actions.Single(action => action.CommandId == PresentationReviewWorkflowPlanner.ResolveCommentCommandId)
@@ -410,6 +459,9 @@ public sealed class PresentationReviewWorkflowPlannerTests
         comment.Replies.Select(reply => reply.TextPreview).Should().Equal(
             "@Alice looks good after the chart update.",
             "Thanks.");
+        comment.ThreadStatusSummary.Should().Be("Open - 2 replies");
+        comment.ReplySummary.Should().Be("2 replies");
+        comment.MentionSummary.Should().Be("2 mentions");
         comment.Replies[0].Should().Be(new PresentationCommentReplyDescriptor(
             0,
             "Nora",
@@ -417,6 +469,11 @@ public sealed class PresentationReviewWorkflowPlannerTests
             "@Alice looks good after the chart update.",
             new DateTime(2026, 7, 2, 10, 0, 0, DateTimeKind.Utc),
             1));
+        comment.Replies[0].AuthorDisplayName.Should().Be("Nora");
+        comment.Replies[0].InitialsBadgeText.Should().Be("NO");
+        comment.Replies[0].AuthorIdentityKey.Should().Be("NORA|NO");
+        comment.Replies[0].ReplyLabel.Should().Be("Reply 1");
+        comment.Replies[0].MentionSummary.Should().Be("1 mention");
         plan.Actions.Single(action => action.CommandId == PresentationReviewWorkflowPlanner.ReplyCommentCommandId)
             .Should().Be(new PresentationReviewWorkflowActionPlan(
                 PresentationReviewWorkflowPlanner.ReplyCommentCommandId,
