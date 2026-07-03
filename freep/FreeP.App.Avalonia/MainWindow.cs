@@ -226,6 +226,9 @@ public sealed class MainWindow : Window
     internal HeaderFooterCommandFocus? LastHeaderFooterFocus { get; private set; }
     internal HeaderFooterState? LastHeaderFooterState { get; private set; }
     internal HeaderFooterApplyPlan? LastHeaderFooterApplyPlan { get; private set; }
+    internal HyperlinkDialogRequest? LastHyperlinkDialogRequest { get; private set; }
+    internal HyperlinkDialogApplyPlan? LastHyperlinkDialogApplyPlan { get; private set; }
+    internal Func<HyperlinkDialogRequest, Task<Hyperlink?>>? HyperlinkDialogResultProviderForTests { get; set; }
     internal PresentationDesignCommandPlan? LastLayoutRequestPlan { get; private set; }
     internal PresentationHandoutLayoutPlan? LastHandoutLayoutPlan { get; private set; }
     internal PresentationNotesPagePreviewPlan? LastNotesPagePreviewPlan { get; private set; }
@@ -2025,11 +2028,41 @@ public sealed class MainWindow : Window
         dialog.Show();
     }
 
-    internal void OpenHyperlinkDialog()
+    internal async void OpenHyperlinkDialog()
     {
-        _ = HyperlinkDialogPlanner.BuildDialogRequest(
+        await OpenHyperlinkDialogAsync();
+    }
+
+    internal Task<HyperlinkDialogApplyPlan> OpenHyperlinkDialogAsyncForTests() =>
+        OpenHyperlinkDialogAsync();
+
+    private async Task<HyperlinkDialogApplyPlan> OpenHyperlinkDialogAsync()
+    {
+        var request = HyperlinkDialogPlanner.BuildDialogRequest(
             Editor.Presentation.Slides,
             Editor.SelectedShapeHyperlink);
+        LastHyperlinkDialogRequest = request;
+
+        var result = HyperlinkDialogResultProviderForTests is { } provider
+            ? await provider(request)
+            : await ShowHyperlinkDialogAsync(request);
+
+        var applyPlan = HyperlinkDialogPlanner.BuildApplyPlan(result);
+        LastHyperlinkDialogApplyPlan = applyPlan;
+        if (applyPlan.ShouldApply)
+            Editor.SetShapeHyperlink(applyPlan.Url, applyPlan.TargetSlideId, applyPlan.Tooltip);
+
+        return applyPlan;
+    }
+
+    private async Task<Hyperlink?> ShowHyperlinkDialogAsync(HyperlinkDialogRequest request)
+    {
+        var dialog = new HyperlinkDialog(request);
+        if (IsVisible)
+            return await dialog.ShowDialog<Hyperlink?>(this);
+
+        dialog.Show();
+        return null;
     }
 
     internal void OpenFindDialog() =>
