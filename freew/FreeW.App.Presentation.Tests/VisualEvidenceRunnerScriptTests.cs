@@ -44,8 +44,17 @@ public sealed class VisualEvidenceRunnerScriptTests
         source.Should().Contain("backstage-pdf-export-fidelity");
         source.Should().Contain("wpf-fidelity-render");
         source.Should().Contain("avalonia-page-layout-shot");
+        source.Should().Contain("[int]$summary.schemaVersion -ne 15");
+        source.Should().Contain("Backstage evidence readiness requires FreeW visual evidence summary schema v15");
+        source.Should().Contain("$evidenceRows = @($summary.evidence)");
+        source.Should().Contain("$requiredWorkflowByScenario");
+        source.Should().Contain("'backstage-print-preview-fidelity' = 'print-preview'");
+        source.Should().Contain("'backstage-pdf-export-fidelity' = 'pdf-export'");
+        source.Should().Contain("missing normalized evidence row for backstage workflow metadata");
+        source.Should().Contain("backstageWorkflow '$workflow' expected '$expectedWorkflow'");
         source.Should().Contain("Backstage evidence readiness failed");
         source.Should().Contain("Backstage evidence readiness: trusted required rows=");
+        source.Should().Contain("Backstage workflow metadata: verified rows=");
     }
 
     private static string RepositoryFile(params string[] parts)
