@@ -1,4 +1,5 @@
 using FluentAssertions;
+using System.Text.Json;
 
 namespace FreeX.App.Host.Tests;
 
@@ -23,6 +24,20 @@ public sealed class UxParityScenarioBatchScriptTests
         source.Should().Contain("id = \"native-print-dialog\"");
         source.Should().Contain("freexScenario = \"freex-native-print-dialog\"");
         source.Should().Contain("\"native-output\" { return $pairs | Where-Object { $_[\"area\"] -in @(\"Native file dialogs\", \"Native output dialogs\") } }");
+    }
+
+    [Fact]
+    public void NativeOutputSuite_DeclaresEvidenceArtifactsAndAvaloniaBaselineDebt()
+    {
+        var source = WorkspaceFileLocator.ReadAllText("tools", "Run-UxParityScenarioBatch.ps1");
+
+        source.Should().Contain("evidenceScope = \"excel-freex-wpf-paired-native-dialog\"");
+        source.Should().Contain("evidenceScope = \"freex-wpf-native-output\"");
+        source.Should().Contain("avaloniaEvidenceStatus = \"pending-avalonia-native-dialog-baseline\"");
+        source.Should().Contain("avaloniaEvidenceStatus = \"pending-avalonia-native-output-baseline\"");
+        source.Should().Contain("requiredArtifacts = @(\"excel-manifest\", \"excel-screenshot\", \"freex-wpf-manifest\", \"freex-wpf-screenshot\")");
+        source.Should().Contain("requiredArtifacts = @(\"freex-wpf-manifest\", \"freex-wpf-screenshot\", \"native-dialog-validation\")");
+        source.Should().Contain("requiredArtifacts = @(\"freex-wpf-manifest\", \"freex-wpf-screenshot\", \"native-dialog-validation\", \"native-output-file\")");
     }
 
     [Fact]
@@ -51,5 +66,58 @@ public sealed class UxParityScenarioBatchScriptTests
             block.Should().Contain("comparisonMode = \"freex-only\"", scenarioId);
             block.Should().NotContain("excelScenario", scenarioId);
         }
+    }
+
+    [Fact]
+    public void NativeOutputSuite_CanListScenarioEvidenceContractWithoutLaunchingForegroundCapture()
+    {
+        var repoRoot = WorkspaceFileLocator.FindWorkspaceRoot();
+        var result = PowerShellScriptRunner.RunToolScript(
+            "Run-UxParityScenarioBatch.ps1",
+            repoRoot,
+            "-Suite native-output -ListScenarios -RunId native-output-list-test");
+
+        result.ExitCode.Should().Be(0, result.CombinedOutput);
+        result.CombinedOutput.Should().NotContain("FreeX host executable was not found");
+        result.CombinedOutput.Should().NotContain("Running UX parity pair");
+
+        using var document = JsonDocument.Parse(result.Output);
+        var root = document.RootElement;
+        root.GetProperty("mode").GetString().Should().Be("scenario-catalog");
+        root.GetProperty("suite").GetString().Should().Be("native-output");
+        root.GetProperty("scenarioCount").GetInt32().Should().Be(7);
+        root.GetProperty("missingEvidenceCount").GetInt32().Should().Be(7);
+
+        var records = root.GetProperty("records").EnumerateArray().ToArray();
+        records.Should().Contain(record =>
+            record.GetProperty("id").GetString() == "open-dialog" &&
+            record.GetProperty("comparisonMode").GetString() == "paired" &&
+            record.GetProperty("excelScenario").GetString() == "excel-open-dialog" &&
+            record.GetProperty("freexWpfScenario").GetString() == "freex-open-dialog" &&
+            record.GetProperty("avaloniaEvidenceStatus").GetString() == "pending-avalonia-native-dialog-baseline");
+
+        records.Should().Contain(record =>
+            record.GetProperty("id").GetString() == "export-xps-accept" &&
+            record.GetProperty("comparisonMode").GetString() == "freex-only" &&
+            record.GetProperty("freexWpfScenario").GetString() == "freex-export-xps-accept" &&
+            record.GetProperty("requiredArtifacts").EnumerateArray().Any(artifact => artifact.GetString() == "native-output-file"));
+
+        records.Should().OnlyContain(record =>
+            record.GetProperty("missingEvidence").EnumerateArray().Any(missing => missing.GetString() == "avaloniaForegroundCapture"));
+    }
+
+    [Fact]
+    public void NativeOutputSuite_CanAssertScenarioCoverageWithoutLaunchingForegroundCapture()
+    {
+        var repoRoot = WorkspaceFileLocator.FindWorkspaceRoot();
+        var result = PowerShellScriptRunner.RunToolScript(
+            "Run-UxParityScenarioBatch.ps1",
+            repoRoot,
+            "-Suite native-output -AssertScenarioCoverage -RunId native-output-assert-test");
+
+        result.ExitCode.Should().Be(0, result.CombinedOutput);
+        result.CombinedOutput.Should().Contain("Scenario coverage assertion passed for suite 'native-output' (7 scenario pair(s)).");
+        result.CombinedOutput.Should().NotContain("FreeX host executable was not found");
+        result.CombinedOutput.Should().NotContain("Running UX parity pair");
     }
 }

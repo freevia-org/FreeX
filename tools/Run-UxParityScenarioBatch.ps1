@@ -10,6 +10,10 @@ param(
 
     [switch]$SkipBuild,
 
+    [switch]$ListScenarios,
+
+    [switch]$AssertScenarioCoverage,
+
     [switch]$MinimizeForeignForeground,
 
     [ValidateRange(1, 5)]
@@ -174,12 +178,18 @@ function Get-ScenarioPairs {
         [ordered]@{
             id = "open-dialog"
             area = "Native file dialogs"
+            evidenceScope = "excel-freex-wpf-paired-native-dialog"
+            avaloniaEvidenceStatus = "pending-avalonia-native-dialog-baseline"
+            requiredArtifacts = @("excel-manifest", "excel-screenshot", "freex-wpf-manifest", "freex-wpf-screenshot")
             excelScenario = "excel-open-dialog"
             freexScenario = "freex-open-dialog"
         },
         [ordered]@{
             id = "save-as-dialog"
             area = "Native file dialogs"
+            evidenceScope = "excel-freex-wpf-paired-native-dialog"
+            avaloniaEvidenceStatus = "pending-avalonia-native-dialog-baseline"
+            requiredArtifacts = @("excel-manifest", "excel-screenshot", "freex-wpf-manifest", "freex-wpf-screenshot")
             excelScenario = "excel-save-as-dialog"
             freexScenario = "freex-save-as-dialog"
         },
@@ -187,30 +197,45 @@ function Get-ScenarioPairs {
             id = "save-as-invalid-path"
             area = "Native output dialogs"
             comparisonMode = "freex-only"
+            evidenceScope = "freex-wpf-native-output"
+            avaloniaEvidenceStatus = "pending-avalonia-native-output-baseline"
+            requiredArtifacts = @("freex-wpf-manifest", "freex-wpf-screenshot", "native-dialog-validation")
             freexScenario = "freex-save-as-invalid-path"
         },
         [ordered]@{
             id = "export-pdf-save-dialog-cancel"
             area = "Native output dialogs"
             comparisonMode = "freex-only"
+            evidenceScope = "freex-wpf-native-output"
+            avaloniaEvidenceStatus = "pending-avalonia-native-output-baseline"
+            requiredArtifacts = @("freex-wpf-manifest", "freex-wpf-screenshot", "native-dialog-validation")
             freexScenario = "freex-export-pdf-save-dialog-cancel"
         },
         [ordered]@{
             id = "export-overwrite-prompt"
             area = "Native output dialogs"
             comparisonMode = "freex-only"
+            evidenceScope = "freex-wpf-native-output"
+            avaloniaEvidenceStatus = "pending-avalonia-native-output-baseline"
+            requiredArtifacts = @("freex-wpf-manifest", "freex-wpf-screenshot", "native-dialog-validation")
             freexScenario = "freex-export-overwrite-prompt"
         },
         [ordered]@{
             id = "export-xps-accept"
             area = "Native output dialogs"
             comparisonMode = "freex-only"
+            evidenceScope = "freex-wpf-native-output"
+            avaloniaEvidenceStatus = "pending-avalonia-native-output-baseline"
+            requiredArtifacts = @("freex-wpf-manifest", "freex-wpf-screenshot", "native-dialog-validation", "native-output-file")
             freexScenario = "freex-export-xps-accept"
         },
         [ordered]@{
             id = "native-print-dialog"
             area = "Native output dialogs"
             comparisonMode = "freex-only"
+            evidenceScope = "freex-wpf-native-output"
+            avaloniaEvidenceStatus = "pending-avalonia-native-output-baseline"
+            requiredArtifacts = @("freex-wpf-manifest", "freex-wpf-screenshot", "native-dialog-validation")
             freexScenario = "freex-native-print-dialog"
         },
         [ordered]@{
@@ -268,6 +293,148 @@ function Get-ScenarioPairs {
         "native-output" { return $pairs | Where-Object { $_["area"] -in @("Native file dialogs", "Native output dialogs") } }
         default { return $pairs }
     }
+}
+
+function New-ScenarioCatalog {
+    param(
+        [string]$RepoRoot,
+        [string]$Suite,
+        [string]$RunId,
+        [object[]]$Pairs
+    )
+
+    $records = New-Object System.Collections.Generic.List[object]
+    foreach ($pair in $Pairs) {
+        $comparisonMode = if ($pair.Contains("comparisonMode")) { [string]$pair["comparisonMode"] } else { "paired" }
+        $missingEvidence = New-Object System.Collections.Generic.List[string]
+
+        if ($comparisonMode -eq "paired") {
+            if (-not $pair.Contains("excelScenario")) {
+                $missingEvidence.Add("excelForegroundCapture")
+            }
+
+            if (-not $pair.Contains("freexScenario")) {
+                $missingEvidence.Add("freexWpfForegroundCapture")
+            }
+        }
+        elseif ($comparisonMode -eq "freex-only") {
+            if (-not $pair.Contains("freexScenario")) {
+                $missingEvidence.Add("freexWpfForegroundCapture")
+            }
+        }
+
+        if ($pair.Contains("avaloniaEvidenceStatus") -and ([string]$pair["avaloniaEvidenceStatus"]).StartsWith("pending-", [StringComparison]::OrdinalIgnoreCase)) {
+            $missingEvidence.Add("avaloniaForegroundCapture")
+        }
+
+        $records.Add([ordered]@{
+            id = $pair["id"]
+            area = $pair["area"]
+            comparisonMode = $comparisonMode
+            evidenceScope = if ($pair.Contains("evidenceScope")) { $pair["evidenceScope"] } else { $null }
+            avaloniaEvidenceStatus = if ($pair.Contains("avaloniaEvidenceStatus")) { $pair["avaloniaEvidenceStatus"] } else { $null }
+            requiredArtifacts = if ($pair.Contains("requiredArtifacts")) { @($pair["requiredArtifacts"]) } else { @() }
+            excelScenario = if ($pair.Contains("excelScenario")) { $pair["excelScenario"] } else { $null }
+            freexWpfScenario = if ($pair.Contains("freexScenario")) { $pair["freexScenario"] } else { $null }
+            avaloniaScenario = if ($pair.Contains("avaloniaScenario")) { $pair["avaloniaScenario"] } else { $null }
+            missingEvidence = $missingEvidence.ToArray()
+        })
+    }
+
+    return [ordered]@{
+        schemaVersion = 1
+        suite = $Suite
+        runId = $RunId
+        mode = "scenario-catalog"
+        createdAtUtc = [DateTimeOffset]::UtcNow.ToString("o")
+        repo = [ordered]@{
+            root = $RepoRoot
+            branch = Get-GitValue $RepoRoot @("rev-parse", "--abbrev-ref", "HEAD")
+            commit = Get-GitValue $RepoRoot @("rev-parse", "HEAD")
+        }
+        scenarioCount = $records.Count
+        missingEvidenceCount = @($records | Where-Object { @($_["missingEvidence"]).Count -gt 0 }).Count
+        records = $records.ToArray()
+    }
+}
+
+function Test-ScenarioCoverage {
+    param(
+        [string]$Suite,
+        [object[]]$Pairs
+    )
+
+    $issues = New-Object System.Collections.Generic.List[string]
+    $ids = @($Pairs | ForEach-Object { [string]$_["id"] })
+    $duplicates = @($ids | Group-Object | Where-Object { $_.Count -gt 1 } | Select-Object -ExpandProperty Name)
+    foreach ($duplicate in $duplicates) {
+        $issues.Add("Duplicate scenario id '$duplicate'.")
+    }
+
+    foreach ($pair in $Pairs) {
+        $id = [string]$pair["id"]
+        $comparisonMode = if ($pair.Contains("comparisonMode")) { [string]$pair["comparisonMode"] } else { "paired" }
+
+        if (-not $pair.Contains("area") -or [string]::IsNullOrWhiteSpace([string]$pair["area"])) {
+            $issues.Add("Scenario '$id' is missing an area.")
+        }
+
+        if ($Suite -eq "native-output") {
+            if (-not $pair.Contains("evidenceScope") -or [string]::IsNullOrWhiteSpace([string]$pair["evidenceScope"])) {
+                $issues.Add("Native-output scenario '$id' is missing evidenceScope.")
+            }
+
+            if (-not $pair.Contains("avaloniaEvidenceStatus") -or [string]::IsNullOrWhiteSpace([string]$pair["avaloniaEvidenceStatus"])) {
+                $issues.Add("Native-output scenario '$id' must declare avaloniaEvidenceStatus.")
+            }
+
+            if (-not $pair.Contains("requiredArtifacts") -or @($pair["requiredArtifacts"]).Count -eq 0) {
+                $issues.Add("Native-output scenario '$id' must declare requiredArtifacts.")
+            }
+        }
+
+        if ($comparisonMode -eq "paired") {
+            if (-not $pair.Contains("excelScenario") -or [string]::IsNullOrWhiteSpace([string]$pair["excelScenario"])) {
+                $issues.Add("Paired scenario '$id' is missing excelScenario.")
+            }
+
+            if (-not $pair.Contains("freexScenario") -or [string]::IsNullOrWhiteSpace([string]$pair["freexScenario"])) {
+                $issues.Add("Paired scenario '$id' is missing freexScenario.")
+            }
+        }
+        elseif ($comparisonMode -eq "freex-only") {
+            if (-not $pair.Contains("freexScenario") -or [string]::IsNullOrWhiteSpace([string]$pair["freexScenario"])) {
+                $issues.Add("FreeX-only scenario '$id' is missing freexScenario.")
+            }
+
+            if ($pair.Contains("excelScenario")) {
+                $issues.Add("FreeX-only scenario '$id' must not declare excelScenario.")
+            }
+        }
+        else {
+            $issues.Add("Scenario '$id' has unsupported comparisonMode '$comparisonMode'.")
+        }
+    }
+
+    if ($Suite -eq "native-output") {
+        $expectedIds = @(
+            "open-dialog",
+            "save-as-dialog",
+            "save-as-invalid-path",
+            "export-pdf-save-dialog-cancel",
+            "export-overwrite-prompt",
+            "export-xps-accept",
+            "native-print-dialog"
+        )
+
+        foreach ($expectedId in $expectedIds) {
+            if ($ids -notcontains $expectedId) {
+                $issues.Add("Native-output suite is missing scenario '$expectedId'.")
+            }
+        }
+    }
+
+    return $issues.ToArray()
 }
 
 function New-NotRequiredScenarioResult {
@@ -604,11 +771,33 @@ $foregroundOutput = Join-Path $runDirectory "foreground-captures"
 $batchManifestPath = Join-Path $runDirectory "ux-scenario-batch.json"
 $batchReportPath = Join-Path $runDirectory "ux-scenario-report.html"
 $batchContactSheetPath = Join-Path $runDirectory "ux-scenario-contact-sheet.png"
+$pairs = @(Get-ScenarioPairs $Suite)
+
+if ($ListScenarios -or $AssertScenarioCoverage) {
+    $coverageIssues = @(Test-ScenarioCoverage $Suite $pairs)
+    $catalog = New-ScenarioCatalog $repoRoot $Suite $RunId $pairs
+
+    if ($ListScenarios) {
+        $catalog | ConvertTo-Json -Depth 20 | Write-Output
+    }
+
+    if ($coverageIssues.Count -gt 0) {
+        $coverageIssues | ForEach-Object { Write-Error $_ }
+        exit 1
+    }
+
+    if ($AssertScenarioCoverage) {
+        Write-Host "Scenario coverage assertion passed for suite '$Suite' ($($pairs.Count) scenario pair(s))."
+        exit 0
+    }
+
+    exit 0
+}
+
 New-Item -ItemType Directory -Force -Path $foregroundOutput | Out-Null
 
 $freeXPath = Resolve-FreeXExe $repoRoot $FreeXExe -SkipBuild:$SkipBuild
 $foregroundProject = Resolve-ForegroundCaptureProject $repoRoot -SkipBuild:$SkipBuild
-$pairs = @(Get-ScenarioPairs $Suite)
 $records = New-Object System.Collections.Generic.List[object]
 
 foreach ($pair in $pairs) {
