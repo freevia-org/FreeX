@@ -2235,7 +2235,9 @@ public static class DocxReader
             // Cells in styled rows carry the style fill (header/banded) we wrote; recognise and strip it so
             // it reads back as style-derived shading, not as an explicit per-cell colour.
             var isStyleHeader = headerRow && rowIndex == 0;
-            var isStyleBanded = bandedRows && !isStyleHeader && IsBandedBodyRow(rowIndex, headerRow);
+            var isStyleBanded = bandedRows
+                && !isStyleHeader
+                && TableBanding.IsBandedBodyRow(rowIndex, headerRow);
             foreach (var tc in tr.Elements(W + "tc"))
             {
                 var cell = new TableCell();
@@ -2339,13 +2341,6 @@ public static class DocxReader
     // they don't read back as explicit per-cell shading.
     private const string StyleHeaderFill = "D9E2F3";
     private const string StyleBandedFill = "F2F2F2";
-
-    /// <summary>Mirror of DocxWriter's banding rule: which body row (2nd, 4th, ...) carries the band fill.</summary>
-    private static bool IsBandedBodyRow(int rowIndex, bool hasHeader)
-    {
-        var bodyIndex = hasHeader ? rowIndex - 1 : rowIndex;
-        return bodyIndex >= 0 && bodyIndex % 2 == 1;
-    }
 
     // Reads a cell-margins container (w:tblCellMar or w:tcMar) into a TableCellMargins, or null when the
     // element is absent. Each edge defaults to the model's default if missing from the element.

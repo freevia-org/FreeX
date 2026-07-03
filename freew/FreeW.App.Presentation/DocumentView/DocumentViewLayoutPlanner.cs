@@ -70,6 +70,42 @@ public sealed record DocumentTableCellLayoutPlan(
     double? PreferredWidthDip,
     double? HeightDip);
 
+public sealed record DocumentTablePaginationRowPlan(
+    int RowIndex,
+    bool IsHeaderRow,
+    bool RepeatsAsHeader,
+    bool AllowBreakAcrossPages,
+    bool KeepTogether,
+    bool IsBandedBodyRow,
+    string HeightRule,
+    double EstimatedHeightDip,
+    int AssignedPageNumber);
+
+public sealed record DocumentTablePaginationPagePlan(
+    int PageNumber,
+    IReadOnlyList<int> SourceRowIndexes,
+    IReadOnlyList<int> RepeatedHeaderRowIndexes,
+    IReadOnlyList<int> KeepTogetherRowIndexes,
+    double UsedHeightDip,
+    double AvailableHeightDip)
+{
+    public bool IncludesRepeatedHeader => RepeatedHeaderRowIndexes.Count > 0;
+    public int SourceStartRowIndex => SourceRowIndexes.Count == 0 ? -1 : SourceRowIndexes.Min();
+    public int SourceEndRowIndex => SourceRowIndexes.Count == 0 ? -1 : SourceRowIndexes.Max();
+}
+
+public sealed record DocumentTablePaginationPlan(
+    int TableIndex,
+    int EstimatedPageCount,
+    double AvailableBodyHeightDip,
+    double HeaderHeightDip,
+    bool RepeatsHeaderRows,
+    bool HasKeepTogetherRows,
+    bool SplitsRowsAllowed,
+    IReadOnlyList<int> HeaderRowIndexes,
+    IReadOnlyList<DocumentTablePaginationRowPlan> Rows,
+    IReadOnlyList<DocumentTablePaginationPagePlan> Pages);
+
 public sealed record DocumentTableLayoutPlan(
     int TableIndex,
     int RowCount,
@@ -93,7 +129,8 @@ public sealed record DocumentTableLayoutPlan(
     string AutoFit,
     string? TableStyleId,
     IReadOnlyList<double> ColumnWidthsDip,
-    IReadOnlyList<DocumentTableCellLayoutPlan> Cells);
+    IReadOnlyList<DocumentTableCellLayoutPlan> Cells,
+    DocumentTablePaginationPlan Pagination);
 
 public sealed record DocumentViewSurfacePlan(
     DocumentViewLayoutKind Kind,
@@ -244,6 +281,10 @@ public static class DocumentViewLayoutPlanner
 {
     private const double DefaultWrapGapDip = 9.0;
     private const double DefaultMinimumLineWidthDip = 20.0;
+    private const double DefaultTableRowHeightDip = 24.0;
+    private const double MinimumTableRowHeightDip = 14.0;
+    private const double EstimatedTableLineHeightDip = 18.0;
+    private const double EstimatedTableVerticalPaddingDip = 8.0;
 
     public static DocumentPageMetricsPlan BuildPageMetrics(PageSettings page)
     {
@@ -364,13 +405,13 @@ public static class DocumentViewLayoutPlanner
         for (var blockIndex = 0; blockIndex < document.Blocks.Count; blockIndex++)
         {
             if (document.Blocks[blockIndex] is Table table)
-                plans.Add(BuildTableLayoutPlan(table, plans.Count));
+                plans.Add(BuildTableLayoutPlan(table, plans.Count, document.Page));
         }
 
         return plans;
     }
 
-    public static DocumentTableLayoutPlan BuildTableLayoutPlan(Table table, int tableIndex = 0)
+    public static DocumentTableLayoutPlan BuildTableLayoutPlan(Table table, int tableIndex = 0, PageSettings? page = null)
     {
         ArgumentNullException.ThrowIfNull(table);
 
@@ -456,7 +497,108 @@ public static class DocumentViewLayoutPlanner
                 .Take(Math.Max(0, gridColumnCount))
                 .Select(width => RoundDip(PageLayout.PointsToDip(Math.Max(0, width))))
                 .ToList(),
-            cells);
+            cells,
+            BuildTablePaginationPlan(table, page ?? new PageSettings(), tableIndex));
+    }
+
+    public static DocumentTablePaginationPlan BuildTablePaginationPlan(
+        Table table,
+        PageSettings page,
+        int tableIndex = 0)
+    {
+        ArgumentNullException.ThrowIfNull(table);
+        ArgumentNullException.ThrowIfNull(page);
+
+        var (_, contentHeightDip) = PageLayout.ContentAreaDip(page);
+        var availableBodyHeightDip = RoundDip(Math.Max(MinimumTableRowHeightDip, contentHeightDip));
+        var headerRowIndexes = table.Formatting.RepeatHeaderRow && table.Rows.Count > 0
+            ? new[] { 0 }
+            : [];
+        var headerRowSet = headerRowIndexes.ToHashSet();
+        var estimatedHeights = table.Rows
+            .Select(EstimateTableRowHeightDip)
+            .ToArray();
+        var headerHeightDip = RoundDip(headerRowIndexes.Sum(index => estimatedHeights[index]));
+
+        var pageRows = new List<DocumentTablePaginationPagePlan>();
+        var assignedPages = new int[table.Rows.Count];
+        var currentRows = new List<int>();
+        var currentKeepRows = new List<int>();
+        var currentUsed = 0.0;
+        var currentPageNumber = 1;
+        var repeatedHeaderRows = Array.Empty<int>();
+        var pageAvailable = availableBodyHeightDip;
+
+        void StartPage(int pageNumber)
+        {
+            currentPageNumber = pageNumber;
+            currentRows.Clear();
+            currentKeepRows.Clear();
+            repeatedHeaderRows = pageNumber > 1 && headerRowIndexes.Length > 0
+                ? headerRowIndexes
+                : [];
+            currentUsed = repeatedHeaderRows.Sum(index => estimatedHeights[index]);
+            pageAvailable = availableBodyHeightDip;
+        }
+
+        void FinishPage()
+        {
+            if (currentRows.Count == 0)
+                return;
+
+            pageRows.Add(new DocumentTablePaginationPagePlan(
+                currentPageNumber,
+                currentRows.ToList(),
+                repeatedHeaderRows.ToList(),
+                currentKeepRows.ToList(),
+                RoundDip(currentUsed),
+                pageAvailable));
+        }
+
+        StartPage(1);
+        for (var rowIndex = 0; rowIndex < table.Rows.Count; rowIndex++)
+        {
+            var row = table.Rows[rowIndex];
+            var height = estimatedHeights[rowIndex];
+            var wouldOverflow = currentRows.Count > 0 && currentUsed + height > pageAvailable;
+            if (wouldOverflow)
+            {
+                FinishPage();
+                StartPage(currentPageNumber + 1);
+            }
+
+            currentRows.Add(rowIndex);
+            assignedPages[rowIndex] = currentPageNumber;
+            currentUsed += height;
+            if (!row.AllowBreakAcrossPages)
+                currentKeepRows.Add(rowIndex);
+        }
+        FinishPage();
+
+        var rowPlans = table.Rows
+            .Select((row, rowIndex) => new DocumentTablePaginationRowPlan(
+                rowIndex,
+                table.Formatting.HeaderRow && rowIndex == 0,
+                headerRowSet.Contains(rowIndex),
+                row.AllowBreakAcrossPages,
+                !row.AllowBreakAcrossPages,
+                table.Formatting.BandedRows && TableBanding.IsBandedBodyRow(rowIndex, table.Formatting.HeaderRow),
+                row.HeightRule.ToString(),
+                estimatedHeights[rowIndex],
+                table.Rows.Count == 0 ? 1 : Math.Max(1, assignedPages[rowIndex])))
+            .ToList();
+
+        return new DocumentTablePaginationPlan(
+            Math.Max(0, tableIndex),
+            Math.Max(1, pageRows.Count),
+            availableBodyHeightDip,
+            headerHeightDip,
+            headerRowIndexes.Length > 0,
+            table.Rows.Any(row => !row.AllowBreakAcrossPages),
+            table.Rows.Any(row => row.AllowBreakAcrossPages),
+            headerRowIndexes,
+            rowPlans,
+            pageRows);
     }
 
     public static DocumentFloatingObjectPlacementPlan BuildFloatingObjectPlacement(
@@ -1280,6 +1422,43 @@ public static class DocumentViewLayoutPlanner
         };
 
         return modelObject is InlineImage or Shape or Chart or WordArt or SmartArt or DrawingGroup;
+    }
+
+    private static double EstimateTableRowHeightDip(TableRow row)
+    {
+        var authoredHeight = row.HeightPt is { } heightPt && heightPt > 0
+            ? PageLayout.PointsToDip(heightPt)
+            : 0;
+        var textHeight = EstimateTableRowTextHeightDip(row);
+
+        return row.HeightRule == TableRowHeightRule.Exact && authoredHeight > 0
+            ? RoundDip(Math.Max(MinimumTableRowHeightDip, authoredHeight))
+            : RoundDip(Math.Max(DefaultTableRowHeightDip, Math.Max(authoredHeight, textHeight)));
+    }
+
+    private static double EstimateTableRowTextHeightDip(TableRow row)
+    {
+        if (row.Cells.Count == 0)
+            return DefaultTableRowHeightDip;
+
+        var maxLines = row.Cells
+            .Select(cell => Math.Max(1, cell.Paragraphs.Sum(EstimateParagraphLineCount)))
+            .DefaultIfEmpty(1)
+            .Max();
+        return Math.Max(
+            MinimumTableRowHeightDip,
+            maxLines * EstimatedTableLineHeightDip + EstimatedTableVerticalPaddingDip);
+    }
+
+    private static int EstimateParagraphLineCount(Paragraph paragraph)
+    {
+        var text = paragraph.PlainText;
+        if (string.IsNullOrEmpty(text))
+            return 1;
+
+        var explicitLines = text.Count(ch => ch == '\n') + 1;
+        var wrappedLines = Math.Max(1, (int)Math.Ceiling(text.Length / 48.0));
+        return Math.Max(explicitLines, wrappedLines);
     }
 
     private static int CountVerticalMergeSpan(Table table, int restartRow, int gridColumn)

@@ -114,8 +114,13 @@ public sealed record FreeWVisualTableExpectation(
     int TotalRows,
     int TotalCells,
     int MaxGridColumnCount,
+    int EstimatedPageCount,
     bool HasHeaderRow,
     bool RepeatsHeaderRow,
+    bool HasPaginationPlan,
+    bool HasMultiPageTables,
+    bool HasRepeatedHeaderPages,
+    bool HasKeepTogetherRows,
     bool HasBandedRows,
     bool HasBandedColumns,
     bool HasMergedCells,
@@ -129,7 +134,8 @@ public sealed record FreeWVisualTableExpectation(
     bool HasPreferredWidths,
     bool HasNamedStyle,
     bool HasFloatingTextWrap,
-    IReadOnlyList<DocumentTableLayoutPlan> Tables);
+    IReadOnlyList<DocumentTableLayoutPlan> Tables,
+    IReadOnlyList<DocumentTablePaginationPlan> PaginationPlans);
 
 public sealed record FreeWVisualDrawingObjectExpectation(
     int FloatingObjectCount,
@@ -249,7 +255,7 @@ public static class FreeWVisualEvidencePlanner
 {
     public const string ManifestFileName = "freew_visual_evidence_manifest.json";
     public const string SchemaId = "freew.visual-evidence.v1";
-    public const int SchemaVersion = 5;
+    public const int SchemaVersion = 6;
     public const string SectionGeometryPageSurfaceRenderStatus = "section-page-surface";
 
     private const int MaxTrackedColorCount = 4096;
@@ -372,6 +378,22 @@ public static class FreeWVisualEvidencePlanner
             ],
             "table-layout-complex_p{page}.png",
             1,
+            DocumentViewLayoutKind.PrintLayout,
+            BodyPrintComposition with { ExpectsTables = true }),
+        new(
+            "table-pagination-repeat-header",
+            "Two-page table pagination with repeated header and keep-together rows.",
+            [
+                "table-layout",
+                "table-pagination",
+                "repeat-header-row",
+                "keep-rows",
+                "banded-rows",
+                "print-layout",
+                "body-text"
+            ],
+            "table-pagination-repeat-header_p{page}.png",
+            2,
             DocumentViewLayoutKind.PrintLayout,
             BodyPrintComposition with { ExpectsTables = true }),
         new(
@@ -940,8 +962,14 @@ public static class FreeWVisualEvidencePlanner
             TotalRows: tables.Sum(table => table.RowCount),
             TotalCells: tables.Sum(table => table.Cells.Count),
             MaxGridColumnCount: tables.Max(table => table.GridColumnCount),
+            EstimatedPageCount: tables.Max(table => table.Pagination.EstimatedPageCount),
             HasHeaderRow: tables.Any(table => table.HasHeaderRow),
             RepeatsHeaderRow: tables.Any(table => table.RepeatsHeaderRow),
+            HasPaginationPlan: tables.Any(table => table.Pagination.Pages.Count > 0),
+            HasMultiPageTables: tables.Any(table => table.Pagination.EstimatedPageCount > 1),
+            HasRepeatedHeaderPages: tables.Any(table =>
+                table.Pagination.Pages.Any(page => page.IncludesRepeatedHeader)),
+            HasKeepTogetherRows: tables.Any(table => table.Pagination.HasKeepTogetherRows),
             HasBandedRows: tables.Any(table => table.HasBandedRows),
             HasBandedColumns: tables.Any(table => table.HasBandedColumns),
             HasMergedCells: tables.Any(table => table.HasMergedCells),
@@ -955,7 +983,8 @@ public static class FreeWVisualEvidencePlanner
             HasPreferredWidths: tables.Any(table => table.HasPreferredWidths),
             HasNamedStyle: tables.Any(table => table.HasNamedStyle),
             HasFloatingTextWrap: tables.Any(table => table.HasFloatingTextWrap),
-            Tables: tables);
+            Tables: tables,
+            PaginationPlans: tables.Select(table => table.Pagination).ToList());
     }
 
     public static FreeWVisualDrawingObjectExpectation BuildDrawingObjectExpectation(
@@ -1204,8 +1233,13 @@ public static class FreeWVisualEvidencePlanner
         TotalRows: 0,
         TotalCells: 0,
         MaxGridColumnCount: 0,
+        EstimatedPageCount: 0,
         HasHeaderRow: false,
         RepeatsHeaderRow: false,
+        HasPaginationPlan: false,
+        HasMultiPageTables: false,
+        HasRepeatedHeaderPages: false,
+        HasKeepTogetherRows: false,
         HasBandedRows: false,
         HasBandedColumns: false,
         HasMergedCells: false,
@@ -1219,7 +1253,8 @@ public static class FreeWVisualEvidencePlanner
         HasPreferredWidths: false,
         HasNamedStyle: false,
         HasFloatingTextWrap: false,
-        Tables: []);
+        Tables: [],
+        PaginationPlans: []);
 
     private static FreeWVisualDrawingObjectExpectation EmptyDrawingObjectExpectation { get; } = new(
         FloatingObjectCount: 0,

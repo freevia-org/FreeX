@@ -23,6 +23,7 @@ public sealed class VisualEvidencePlannerTests
             "f2-tracked-changes",
             "f2-comments",
             "table-layout-complex",
+            "table-pagination-repeat-header",
             "drawing-objects-complex",
             "chart-smartart-complex",
             "wordart-watermark-stress",
@@ -80,6 +81,12 @@ public sealed class VisualEvidencePlannerTests
         tableScenario.ExpectedFeatureTags.Should().Contain(["table-layout", "merged-cells", "repeat-header-row"]);
         tableScenario.ExpectedOutputNamePattern.Should().Be("table-layout-complex_p{page}.png");
         tableScenario.Composition.ExpectsTables.Should().BeTrue();
+
+        var tablePaginationScenario = FreeWVisualEvidencePlanner.ResolveScenario("table-pagination-repeat-header");
+        tablePaginationScenario.ExpectedFeatureTags.Should().Contain(["table-pagination", "repeat-header-row", "keep-rows"]);
+        tablePaginationScenario.ExpectedOutputNamePattern.Should().Be("table-pagination-repeat-header_p{page}.png");
+        tablePaginationScenario.MinimumExpectedOutputs.Should().Be(2);
+        tablePaginationScenario.Composition.ExpectsTables.Should().BeTrue();
 
         var drawingScenario = FreeWVisualEvidencePlanner.ResolveScenario("drawing-objects-complex");
         drawingScenario.ExpectedFeatureTags.Should().Contain(["drawing-objects", "charts", "smartart", "wordart"]);
@@ -391,11 +398,11 @@ public sealed class VisualEvidencePlannerTests
             expected.Should().Contain(e =>
                 e.HostId == FreeWVisualEvidenceManifestNormalizer.WpfHostId &&
                 e.ScenarioId == scenarioId &&
-                e.MinimumExpectedOutputs == 1);
+                e.MinimumExpectedOutputs == FreeWVisualEvidencePlanner.ResolveScenario(scenarioId).MinimumExpectedOutputs);
             expected.Should().Contain(e =>
                 e.HostId == FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId &&
                 e.ScenarioId == scenarioId &&
-                e.MinimumExpectedOutputs == 1);
+                e.MinimumExpectedOutputs == FreeWVisualEvidencePlanner.ResolveScenario(scenarioId).MinimumExpectedOutputs);
         }
     }
 
@@ -631,6 +638,8 @@ public sealed class VisualEvidencePlannerTests
         expectation.Tables.TableCount.Should().Be(1);
         expectation.Tables.TotalRows.Should().Be(5);
         expectation.Tables.MaxGridColumnCount.Should().Be(4);
+        expectation.Tables.EstimatedPageCount.Should().Be(1);
+        expectation.Tables.HasPaginationPlan.Should().BeTrue();
         expectation.Tables.HasHeaderRow.Should().BeTrue();
         expectation.Tables.RepeatsHeaderRow.Should().BeTrue();
         expectation.Tables.HasBandedRows.Should().BeTrue();
@@ -650,6 +659,28 @@ public sealed class VisualEvidencePlannerTests
             cell.GridSpan == 2 && cell.RowSpan == 1);
         expectation.Tables.Tables.Single().Cells.Should().Contain(cell =>
             cell.RowSpan == 2 && cell.IsVerticalMergeContinuation == false);
+    }
+
+    [Fact]
+    public void BuildPageExpectation_RecordsSharedTablePaginationPlan()
+    {
+        var document = FreeWVisualEvidenceDocumentFactory.BuildTablePaginationRepeatHeaderDocument();
+        var expectation = FreeWVisualEvidencePlanner.BuildPageExpectation(
+            "table-pagination-repeat-header",
+            document.Page,
+            pageNumber: 2,
+            pageCount: 2,
+            outputName: "table-pagination-repeat-header_p2.png",
+            document: document);
+
+        expectation.Composition.ExpectsTables.Should().BeTrue();
+        expectation.Tables.TableCount.Should().Be(1);
+        expectation.Tables.EstimatedPageCount.Should().Be(2);
+        expectation.Tables.HasPaginationPlan.Should().BeTrue();
+        expectation.Tables.HasMultiPageTables.Should().BeTrue();
+        expectation.Tables.HasRepeatedHeaderPages.Should().BeTrue();
+        expectation.Tables.HasKeepTogetherRows.Should().BeTrue();
+        expectation.Tables.PaginationPlans.Single().Pages[1].RepeatedHeaderRowIndexes.Should().Equal(0);
     }
 
     [Fact]
@@ -877,7 +908,7 @@ public sealed class VisualEvidencePlannerTests
         using var doc = JsonDocument.Parse(json);
         var root = doc.RootElement;
         root.GetProperty("schemaId").GetString().Should().Be("freew.visual-evidence.v1");
-        root.GetProperty("schemaVersion").GetInt32().Should().Be(5);
+        root.GetProperty("schemaVersion").GetInt32().Should().Be(6);
         root.GetProperty("product").GetString().Should().Be("FreeW");
         root.GetProperty("scenarios").GetArrayLength().Should().Be(1);
         var evidence = root.GetProperty("evidence")[0];
@@ -1956,7 +1987,7 @@ public sealed class VisualEvidencePlannerTests
 
             var json = FreeWVisualEvidenceManifestNormalizer.ToJson(withBaseline);
             using var doc = JsonDocument.Parse(json);
-            doc.RootElement.GetProperty("schemaVersion").GetInt32().Should().Be(9);
+            doc.RootElement.GetProperty("schemaVersion").GetInt32().Should().Be(10);
             var triageItem = doc.RootElement.GetProperty("wordBaselineTriage")[0];
             triageItem.GetProperty("status").GetString().Should().Be("passed");
             triageItem.GetProperty("baselineId").GetString()
@@ -2082,6 +2113,7 @@ public sealed class VisualEvidencePlannerTests
             "f2-tracked-changes" => FreeWVisualEvidenceDocumentFactory.BuildTrackedChangesReviewDocument(),
             "f2-comments" => FreeWVisualEvidenceDocumentFactory.BuildCommentsReviewDocument(),
             "table-layout-complex" => FreeWVisualEvidenceDocumentFactory.BuildComplexTableLayoutDocument(),
+            "table-pagination-repeat-header" => FreeWVisualEvidenceDocumentFactory.BuildTablePaginationRepeatHeaderDocument(),
             "drawing-objects-complex" => FreeWVisualEvidenceDocumentFactory.BuildDrawingObjectsCompositionDocument(),
             "chart-smartart-complex" => FreeWVisualEvidenceDocumentFactory.BuildChartSmartArtCompositionDocument(),
             "wordart-watermark-stress" => FreeWVisualEvidenceDocumentFactory.BuildWordArtWatermarkStressDocument(),

@@ -74,7 +74,7 @@ public sealed record FreeWVisualBaselineTriageItem(
 public static class FreeWVisualEvidenceManifestNormalizer
 {
     public const string SummarySchemaId = "freew.visual-evidence-summary.v1";
-    public const int SummarySchemaVersion = 9;
+    public const int SummarySchemaVersion = 10;
     public const string SummaryJsonFileName = "freew_visual_evidence_summary.json";
     public const string SummaryMarkdownFileName = "freew_visual_evidence_summary.md";
     public const string WpfHostId = "wpf-fidelity-render";
@@ -100,7 +100,8 @@ public static class FreeWVisualEvidenceManifestNormalizer
     ];
     public static IReadOnlyList<string> TableRendererScenarioIds { get; } =
     [
-        "table-layout-complex"
+        "table-layout-complex",
+        "table-pagination-repeat-header"
     ];
     public static IReadOnlyList<string> DrawingObjectRendererScenarioIds { get; } =
     [
@@ -636,6 +637,12 @@ public static class FreeWVisualEvidenceManifestNormalizer
             rowFailures.Add("table-layout evidence expects vertical merges but the table plan records none");
         if (tags.Contains("repeat-header-row", StringComparer.OrdinalIgnoreCase) && !tables.RepeatsHeaderRow)
             rowFailures.Add("table-layout evidence expects repeated header rows but the table plan records none");
+        if (tags.Contains("table-pagination", StringComparer.OrdinalIgnoreCase) && !tables.HasMultiPageTables)
+            rowFailures.Add("table-layout evidence expects multi-page table pagination but the plan records one page");
+        if (tags.Contains("table-pagination", StringComparer.OrdinalIgnoreCase) && !tables.HasRepeatedHeaderPages)
+            rowFailures.Add("table-layout evidence expects repeated header pages but the pagination plan records none");
+        if (tags.Contains("keep-rows", StringComparer.OrdinalIgnoreCase) && !tables.HasKeepTogetherRows)
+            rowFailures.Add("table-layout evidence expects keep-together rows but the pagination plan records none");
         if (tags.Contains("banded-rows", StringComparer.OrdinalIgnoreCase) && !tables.HasBandedRows)
             rowFailures.Add("table-layout evidence expects banded rows but the table plan records none");
         if (tags.Contains("cell-shading", StringComparer.OrdinalIgnoreCase) && !tables.HasCellShading)
