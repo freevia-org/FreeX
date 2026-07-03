@@ -106,6 +106,51 @@ public sealed class MarkCitationEditorTests
     }
 
     [StaFact]
+    public void RefreshTableOfAuthorities_ConsumesSharedRenderPlanInWpfHost()
+    {
+        var model = TextDocument.CreateEmpty();
+        model.Blocks.Clear();
+        model.Page.WidthPt = 700;
+        model.Page.MarginLeftPt = 80;
+        model.Page.MarginRightPt = 90;
+        model.Blocks.Add(new Paragraph("Before"));
+        for (var i = 0; i < 5; i++)
+            model.Blocks.Add(CitationMarkParagraph("Roe v. Wade", i == 0));
+        model.Blocks.AddRange(TableOfAuthorities.Build(
+            new[] { new Citation("Old Case", CitationCategory.Cases) }));
+        model.Blocks.Add(new Paragraph("After"));
+
+        var view = new DocumentView();
+        view.LoadModel(model);
+
+        view.RefreshTableOfAuthorities(new ToaOptions
+        {
+            CategoryFilter = CitationCategory.Cases,
+            KeepOriginalFormatting = true,
+            UsePassim = true,
+            TabLeader = ToaTabLeader.Dashes
+        });
+        view.CommitToModel();
+
+        view.Model.Blocks.OfType<Paragraph>()
+            .Where(TableOfAuthorities.IsTableOfAuthoritiesParagraph)
+            .Select(paragraph => paragraph.PlainText)
+            .Should().Equal("Table of Authorities", "Cases", "Roe v. Wade passim");
+        view.Model.Blocks.OfType<Paragraph>().Select(paragraph => paragraph.PlainText)
+            .Should().NotContain("Old Case")
+            .And.EndWith("After");
+
+        var entry = view.Model.Blocks.OfType<Paragraph>()
+            .Single(paragraph => paragraph.StyleId == TableOfAuthorities.EntryStyleId);
+        entry.Formatting.TabStops.Should().Equal(
+            new TabStop(530, TabStopAlignment.Right, TabLeader.Dashes));
+        var entryFormatting = entry.Runs.Single().Formatting;
+        entryFormatting.Bold.Should().BeTrue();
+        entryFormatting.Underline.Should().BeTrue();
+        entryFormatting.ColorHex.Should().Be("#C00000");
+    }
+
+    [StaFact]
     public void RefreshTableOfAuthorities_ReplacesThePriorRegionInPlaceWithoutDuplicating()
     {
         var view = LoadedView(out _);
@@ -148,5 +193,13 @@ public sealed class MarkCitationEditorTests
                 "Table of Authorities",
                 "Cases",
                 "Late Case");
+    }
+
+    private static Paragraph CitationMarkParagraph(string longCitation, bool formatted)
+    {
+        var mark = Run.CitationMark(new Citation(longCitation, CitationCategory.Cases));
+        if (formatted)
+            mark.Formatting = new RunFormatting { Bold = true, Underline = true, ColorHex = "#C00000" };
+        return new Paragraph { Runs = { mark } };
     }
 }
