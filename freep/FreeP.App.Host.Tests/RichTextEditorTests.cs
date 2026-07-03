@@ -279,6 +279,51 @@ public sealed class RichTextEditorTests
     // ─── Y1: inherited FontFamily/FontSizePt null must NOT be baked ─────────────
 
     [StaFact]
+    public void InCanvasTextEditor_ApplyBoldToSelection_PreservesMixedRunsOnCommit()
+    {
+        var p = Presentation.CreateEmpty();
+        var slide = p.Slides[0];
+        slide.Shapes.Clear();
+
+        var body = MakeTwoRunBody();
+        body.Paragraphs[0].Runs[0].Bold = false;
+        body.Paragraphs[0].Runs[0].BoldSet = false;
+        body.Paragraphs[0].Runs[1].Italic = true;
+        body.Paragraphs[0].Runs[1].ItalicSet = true;
+
+        var shape = new SlideShape
+        {
+            Id = 1,
+            OffsetXEmu = 0,
+            OffsetYEmu = 0,
+            ExtentCxEmu = 2743200L,
+            ExtentCyEmu = 1371600L,
+            TextBody = body,
+        };
+        slide.Shapes.Add(shape);
+
+        var bus = new PresentationCommandBus(p);
+        var editor = new EditingSession(p, bus);
+        var canvas = new SlideCanvas();
+        var overlay = new System.Windows.Controls.Canvas();
+        canvas.AttachEditing(editor, overlay);
+        canvas.Presentation = p;
+        canvas.Slide = slide;
+
+        canvas.TextEditor!.Activate(shape.Id);
+        canvas.TextEditor.ApplyBold();
+        canvas.TextEditor.Commit();
+
+        editor.CanUndo.Should().BeTrue("formatting the active rich text selection should issue a command");
+        var runs = shape.TextBody!.Paragraphs[0].Runs;
+        runs.Should().HaveCount(2);
+        runs[0].Text.Should().Be("Hello");
+        runs[1].Text.Should().Be(" world");
+        runs.Should().OnlyContain(r => r.Bold);
+        runs[1].Italic.Should().BeTrue("existing mixed-run italic formatting should survive");
+    }
+
+    [StaFact]
     public void Converter_InheritedFontFamilyAndSize_RoundTrip_StillNull()
     {
         // Arrange: run with FontFamily=null and FontSizePt=null (inherit from placeholder).

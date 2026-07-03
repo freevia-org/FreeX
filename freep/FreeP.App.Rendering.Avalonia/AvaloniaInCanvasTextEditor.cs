@@ -44,6 +44,98 @@ public sealed class AvaloniaInCanvasTextEditor
     /// <summary>The id of the table shape currently being edited, or 0 if not active.</summary>
     public uint ActiveTableShapeId => _editingTableShapeId;
 
+    public bool TryApplyActiveShapeTextFormat(TableCellTextFormatKind kind)
+    {
+        if (!_active || _textBox is null)
+            return false;
+
+        var overlaySelection = GetActiveShapeOverlaySelection();
+        var plan = AvaloniaInCanvasTextEditAdapter.PlanTextFormat(
+            _editor,
+            _editingShapeId,
+            kind,
+            overlaySelection.Selection);
+        if (plan.Command is null)
+            return false;
+
+        _editor.Bus.Execute(plan.Command);
+
+        if (IsCurrentShapePlan(plan) &&
+            plan.TargetValue is { } value &&
+            overlaySelection.IsWholeText)
+        {
+            ApplyOverlayTextFormat(_textBox, kind, value);
+        }
+
+        return true;
+    }
+
+    public bool TryApplyActiveShapeFontFamily(string? fontFamily)
+    {
+        if (!_active || _textBox is null)
+            return false;
+
+        var overlaySelection = GetActiveShapeOverlaySelection();
+        var plan = AvaloniaInCanvasTextEditAdapter.PlanFontFamily(
+            _editor,
+            _editingShapeId,
+            fontFamily,
+            overlaySelection.Selection);
+        if (plan.Command is null)
+            return false;
+
+        _editor.Bus.Execute(plan.Command);
+
+        if (IsCurrentShapePlan(plan) && overlaySelection.IsWholeText)
+            ApplyOverlayFontFamily(_textBox, fontFamily);
+
+        return true;
+    }
+
+    public bool TryApplyActiveShapeFontSize(double? sizePt)
+    {
+        if (!_active || _textBox is null)
+            return false;
+
+        var overlaySelection = GetActiveShapeOverlaySelection();
+        var plan = AvaloniaInCanvasTextEditAdapter.PlanFontSize(
+            _editor,
+            _editingShapeId,
+            sizePt,
+            overlaySelection.Selection);
+        if (plan.Command is null)
+            return false;
+
+        _editor.Bus.Execute(plan.Command);
+
+        if (IsCurrentShapePlan(plan) && overlaySelection.IsWholeText)
+            ApplyOverlayFontSize(_textBox, sizePt);
+
+        return true;
+    }
+
+    public bool TryApplyActiveShapeColor(ThemeAwareColor? color)
+    {
+        if (!_active || _textBox is null)
+            return false;
+
+        var overlaySelection = GetActiveShapeOverlaySelection();
+        var plan = AvaloniaInCanvasTextEditAdapter.PlanColor(
+            _editor,
+            _editingShapeId,
+            color,
+            overlaySelection.Selection);
+        if (plan.Command is null)
+            return false;
+
+        _editor.Bus.Execute(plan.Command);
+
+        if (IsCurrentShapePlan(plan) && overlaySelection.IsWholeText)
+            ApplyOverlayColor(_textBox, color);
+
+        return true;
+    }
+
     public bool TryApplyActiveTableCellTextFormat(TableCellTextFormatKind kind)
     {
         var overlaySelection = GetActiveCellOverlaySelection();
@@ -547,23 +639,42 @@ public sealed class AvaloniaInCanvasTextEditor
         if (_cellTextBox is null)
             return;
 
+        ApplyOverlayTextFormat(_cellTextBox, kind, value);
+    }
+
+    private static void ApplyOverlayTextFormat(TextBox textBox, TableCellTextFormatKind kind, bool value)
+    {
         switch (kind)
         {
             case TableCellTextFormatKind.Bold:
-                _cellTextBox.FontWeight = value ? FontWeight.Bold : FontWeight.Normal;
+                textBox.FontWeight = value ? FontWeight.Bold : FontWeight.Normal;
                 break;
             case TableCellTextFormatKind.Italic:
-                _cellTextBox.FontStyle = value ? FontStyle.Italic : FontStyle.Normal;
+                textBox.FontStyle = value ? FontStyle.Italic : FontStyle.Normal;
                 break;
             case TableCellTextFormatKind.Underline:
-                _cellTextBox.Classes.Set("freep-table-cell-underline", value);
-                _cellTextBox.BorderThickness = value
+                textBox.Classes.Set("freep-table-cell-underline", value);
+                textBox.BorderThickness = value
                     ? new Thickness(1.5, 1.5, 1.5, 3.0)
                     : new Thickness(1.5);
                 break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(kind), kind, null);
         }
+    }
+
+    private (bool IsWholeText, (int Start, int End)? Selection) GetActiveShapeOverlaySelection()
+    {
+        if (!_active || _textBox is null)
+            return (true, null);
+
+        int selStart = Math.Min(_textBox.SelectionStart, _textBox.SelectionEnd);
+        int selEnd = Math.Max(_textBox.SelectionStart, _textBox.SelectionEnd);
+        int textLength = _textBox.Text?.Length ?? 0;
+
+        return (
+            selStart == selEnd || (selStart == 0 && selEnd >= textLength),
+            selStart != selEnd ? (selStart, selEnd) : null);
     }
 
     private (bool IsWholeCell, (int Start, int End)? Selection) GetActiveCellOverlaySelection()
@@ -579,6 +690,16 @@ public sealed class AvaloniaInCanvasTextEditor
             selStart == selEnd || (selStart == 0 && selEnd >= textLength),
             selStart != selEnd ? (selStart, selEnd) : null);
     }
+
+    private bool IsCurrentShapePlan(InCanvasShapeTextFormatPlan plan) =>
+        _active &&
+        _textBox is not null &&
+        plan.ShapeId == _editingShapeId;
+
+    private bool IsCurrentShapePlan(InCanvasShapeTextValueFormatPlan plan) =>
+        _active &&
+        _textBox is not null &&
+        plan.ShapeId == _editingShapeId;
 
     private bool IsCurrentCellPlan(TableCellTextValueFormatPlan plan) =>
         _cellEditActive &&
@@ -597,6 +718,13 @@ public sealed class AvaloniaInCanvasTextEditor
             : new FontFamily(fontFamily);
     }
 
+    private static void ApplyOverlayFontFamily(TextBox textBox, string? fontFamily)
+    {
+        textBox.FontFamily = string.IsNullOrWhiteSpace(fontFamily)
+            ? FontFamily.Default
+            : new FontFamily(fontFamily);
+    }
+
     private void ApplyCellOverlayFontSize(double? sizePt)
     {
         if (_cellTextBox is null || sizePt is null)
@@ -605,12 +733,27 @@ public sealed class AvaloniaInCanvasTextEditor
         _cellTextBox.FontSize = sizePt.Value;
     }
 
+    private static void ApplyOverlayFontSize(TextBox textBox, double? sizePt)
+    {
+        if (sizePt is null)
+            return;
+
+        textBox.FontSize = sizePt.Value;
+    }
+
     private void ApplyCellOverlayColor(ThemeAwareColor? color)
     {
         if (_cellTextBox is null)
             return;
 
         _cellTextBox.Foreground = color is null
+            ? null
+            : new SolidColorBrush(Color.FromRgb(color.Resolved.R, color.Resolved.G, color.Resolved.B));
+    }
+
+    private static void ApplyOverlayColor(TextBox textBox, ThemeAwareColor? color)
+    {
+        textBox.Foreground = color is null
             ? null
             : new SolidColorBrush(Color.FromRgb(color.Resolved.R, color.Resolved.G, color.Resolved.B));
     }

@@ -276,28 +276,11 @@ public static class TableCellEditPlanner
         if (runs.Count == 0)
             return DisabledFormat(TableCellTextFormatStatus.NoTextRuns, kind, shape.Id, row, col);
 
-        // Normalize the selection to a non-negative, ordered, non-collapsed range within the
-        // cell's plain-text length. A null/collapsed/out-of-range selection falls back to the
-        // whole-cell behavior (matches the app convention for a collapsed caret).
-        int textLength = runs.Sum(r => r.Text.Length) + Math.Max(0, cell.TextBody.Paragraphs.Count - 1);
-        (int Start, int End)? range = NormalizeSelection(selection, textLength);
-
-        var editedBody = TextBodyModelCloner.CloneTextBody(cell.TextBody)!;
-        bool targetValue;
-        if (range is { } r)
-        {
-            var selectedRuns = SplitRunsAtSelection(editedBody, r.Start, r.End);
-            targetValue = selectedRuns.Count == 0 || !selectedRuns.All(run => GetRunFormat(run, kind));
-            foreach (var run in selectedRuns)
-                SetRunFormat(run, kind, targetValue);
-            MergeAdjacentRunsWithSameFormat(editedBody);
-        }
-        else
-        {
-            targetValue = !runs.All(run => GetRunFormat(run, kind));
-            foreach (var run in editedBody.Paragraphs.SelectMany(p => p.Runs))
-                SetRunFormat(run, kind, targetValue);
-        }
+        var editedBody = TextBodyRunMutationPlanner.ToggleTextFormat(
+            cell.TextBody,
+            kind,
+            selection,
+            out var targetValue);
 
         return new TableCellTextFormatPlan(
             TableCellTextFormatStatus.Ready,
@@ -393,18 +376,11 @@ public static class TableCellEditPlanner
         if (runs.Count == 0)
             return DisabledValueFormat(TableCellTextFormatStatus.NoTextRuns, kind, value, shape.Id, row, col);
 
-        int textLength = runs.Sum(r => r.Text.Length) + Math.Max(0, cell.TextBody.Paragraphs.Count - 1);
-        (int Start, int End)? range = NormalizeSelection(selection, textLength);
-
-        var editedBody = TextBodyModelCloner.CloneTextBody(cell.TextBody)!;
-        var targetRuns = range is { } r
-            ? SplitRunsAtSelection(editedBody, r.Start, r.End)
-            : editedBody.Paragraphs.SelectMany(p => p.Runs).ToList();
-
-        foreach (var run in targetRuns)
-            SetRunValueFormat(run, kind, value);
-
-        MergeAdjacentRunsWithSameFormat(editedBody);
+        var editedBody = TextBodyRunMutationPlanner.ApplyValueFormat(
+            cell.TextBody,
+            kind,
+            value,
+            selection);
 
         return new TableCellTextValueFormatPlan(
             TableCellTextFormatStatus.Ready,
