@@ -415,6 +415,20 @@ function Test-StalePromotedExpectedSizeEvidence {
         $avaloniaClassification.StartsWith("promoted", [System.StringComparison]::OrdinalIgnoreCase)
 }
 
+function Get-StalePromotedExpectedSizeNextAction {
+    param(
+        [string]$SurfaceId,
+        [string]$RecaptureStatus
+    )
+
+    if (($SurfaceId -eq "dialog.OpenWorkbook" -or $SurfaceId -eq "dialog.SaveAsWorkbook") -and
+        $RecaptureStatus -eq "blocked-blank-wpf-direct-surface-frame-capture") {
+        return "Fix the WPF WorkbookFileDialogSurfacePlanner direct-surface frame render so the 640x420 capture produces nonblank pixels; then replace the promoted PNG."
+    }
+
+    return "Recapture WPF direct parity evidence at planner size after transparent offscreen capture is fixed."
+}
+
 function Get-ExpectedEvidenceSize {
     param(
         [Parameter(Mandatory = $true)][string]$SurfaceId,
@@ -784,7 +798,8 @@ if ($stalePromotedExpectedSizeRows.Count -gt 0) {
         $currentSize = if ($staleShell -eq "Avalonia") { "$($row.avalonia.metrics.Width)x$($row.avalonia.metrics.Height)" } else { "$($row.wpf.metrics.Width)x$($row.wpf.metrics.Height)" }
         $sourcePng = if ([string]::IsNullOrWhiteSpace([string]$staleEvidence.provenance.sourcePng)) { "" } else { [string]$staleEvidence.provenance.sourcePng }
         $recaptureStatus = if ([string]::IsNullOrWhiteSpace([string]$staleEvidence.provenance.recaptureStatus)) { "" } else { [string]$staleEvidence.provenance.recaptureStatus }
-        [void]$md.AppendLine("| $(Escape-MarkdownCell $row.id) | $staleShell | $currentSize | $($row.comparison.expectedWidth)x$($row.comparison.expectedHeight) | $(Escape-MarkdownCell $sourcePng) | $(Escape-MarkdownCell $recaptureStatus) | Recapture WPF direct parity evidence at planner size after transparent offscreen capture is fixed. |")
+        $nextAction = Get-StalePromotedExpectedSizeNextAction -SurfaceId $row.id -RecaptureStatus $recaptureStatus
+        [void]$md.AppendLine("| $(Escape-MarkdownCell $row.id) | $staleShell | $currentSize | $($row.comparison.expectedWidth)x$($row.comparison.expectedHeight) | $(Escape-MarkdownCell $sourcePng) | $(Escape-MarkdownCell $recaptureStatus) | $(Escape-MarkdownCell $nextAction) |")
     }
 }
 
