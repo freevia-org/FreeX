@@ -79,7 +79,7 @@ public sealed record FreeWVisualBaselineTriageItem(
 public static class FreeWVisualEvidenceManifestNormalizer
 {
     public const string SummarySchemaId = "freew.visual-evidence-summary.v1";
-    public const int SummarySchemaVersion = 12;
+    public const int SummarySchemaVersion = 13;
     public const string SummaryJsonFileName = "freew_visual_evidence_summary.json";
     public const string SummaryMarkdownFileName = "freew_visual_evidence_summary.md";
     public const string WpfHostId = "wpf-fidelity-render";
@@ -1195,6 +1195,12 @@ public static class FreeWVisualEvidenceManifestNormalizer
                 parts.Add(
                     $"{row.DrawingObjects.Effects.EffectObjectCount.ToString(CultureInfo.InvariantCulture)} drawing effect object(s): " +
                     string.Join("/", row.DrawingObjects.Effects.EffectSummaries));
+            }
+            if (row.DrawingObjects.Effects.HasPlannedGroupChildEffects)
+            {
+                parts.Add(
+                    $"{row.DrawingObjects.Effects.PlannedGroupChildEffectObjectCount.ToString(CultureInfo.InvariantCulture)} planned grouped child effect object(s): " +
+                    string.Join("/", row.DrawingObjects.Effects.PlannedGroupChildEffectSummaries));
             }
         }
         if (row.ChartSmartArt.ChartCount > 0 || row.ChartSmartArt.SmartArtCount > 0)
