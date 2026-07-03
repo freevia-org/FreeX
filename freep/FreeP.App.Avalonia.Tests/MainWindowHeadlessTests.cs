@@ -2653,6 +2653,101 @@ public sealed class MainWindowHeadlessTests
         found.Should().BeTrue($"{commandId} must be registered");
     }
 
+    [Theory]
+    [InlineData("freep.find", FindReplaceDialogPlanner.FindTitle, false)]
+    [InlineData("freep.replace", FindReplaceDialogPlanner.FindAndReplaceTitle, true)]
+    public async Task FindReplace_commands_open_visible_Avalonia_workflow(
+        string commandId,
+        string expectedTitle,
+        bool expectReplaceVisible)
+    {
+        var found = false;
+        var visible = false;
+        var title = string.Empty;
+        var replaceVisible = false;
+        FindReplaceWorkflowPlan? plan = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var registry = window.BuildCommandRegistry();
+            found = registry.TryGet(commandId, out var command);
+            found.Should().BeTrue($"{commandId} must be registered");
+
+            command!.Execute(RibbonCommandContext.Empty);
+            visible = window.IsFindReplacePaneVisible;
+            title = window.FindReplacePaneTitle;
+            replaceVisible = window.IsFindReplaceReplaceInputVisible;
+            plan = window.LastFindReplaceWorkflowPlan;
+        });
+
+        if (!ran) return;
+        found.Should().BeTrue();
+        visible.Should().BeTrue();
+        title.Should().Be(expectedTitle);
+        replaceVisible.Should().Be(expectReplaceVisible);
+        plan.Should().NotBeNull();
+        plan!.Title.Should().Be(expectedTitle);
+        plan.ShowReplace.Should().Be(expectReplaceVisible);
+    }
+
+    [Fact]
+    public async Task FindReplace_find_next_routes_through_shared_search_and_selects_match_shape()
+    {
+        uint shapeId = 0;
+        uint selectedShapeId = 0;
+        int currentSlideIndex = -1;
+        FindReplaceWorkflowPlan? plan = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var shape = window.Editor.InsertTextBox("Quarterly needle plan");
+            shapeId = shape.Id;
+
+            window.OpenFindDialog();
+            window.SetFindReplacePaneInputForTests("needle");
+            plan = window.NavigateFindReplacePaneForTests(+1);
+
+            selectedShapeId = window.Editor.SelectedShapeIds.Single();
+            currentSlideIndex = window.Editor.CurrentSlideIndex;
+        });
+
+        if (!ran) return;
+        plan.Should().NotBeNull();
+        plan!.MatchCount.Should().Be(1);
+        plan.CurrentMatchIndex.Should().Be(0);
+        plan.StatusText.Should().Be("Match 1 of 1");
+        plan.StatusKind.Should().Be(FindReplacePolicyStatusKind.Match);
+        selectedShapeId.Should().Be(shapeId);
+        currentSlideIndex.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task FindReplace_replace_all_routes_through_shared_editing_session()
+    {
+        string? replacedText = null;
+        FindReplaceWorkflowPlan? plan = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var shape = window.Editor.InsertTextBox("cat cat");
+
+            window.OpenFindReplaceDialog();
+            window.SetFindReplacePaneInputForTests("cat", "dog");
+            plan = window.ReplaceAllFindReplacePaneForTests();
+
+            replacedText = shape.TextBody!.Paragraphs[0].Runs[0].Text;
+        });
+
+        if (!ran) return;
+        plan.Should().NotBeNull();
+        plan!.StatusText.Should().Be("2 replacement(s) made.");
+        plan.StatusKind.Should().Be(FindReplacePolicyStatusKind.Replacements);
+        replacedText.Should().Be("dog dog");
+    }
+
     [Fact]
     public async Task Ribbon_remove_link_command_routes_to_editor()
     {
