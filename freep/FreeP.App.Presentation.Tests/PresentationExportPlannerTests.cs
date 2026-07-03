@@ -152,12 +152,50 @@ public sealed class PresentationExportPlannerTests
 
         fullPage.Route.Should().Be(PresentationPrintOutputPackageRoute.FullPageSlidesRasterPdf);
         fullPage.PrintPlan.SlideRange.SlideNumbers.Should().Equal(2);
+        fullPage.PageCount.Should().Be(1);
+        fullPage.SlideRangeSummary.Should().Be("Slide 2");
+        fullPage.LayoutSummary.Should().Be("Full Page Slides - Slide 2, 1 page");
         fullPage.CanBuildPackage.Should().BeTrue();
         fullPage.NativePrinterDialogDeferred.Should().BeTrue();
         fullPage.DisabledReason.Should().BeNull();
         fullPage.PrintPlan.IsImplemented.Should().BeFalse("native printer dialog handoff is still deferred");
         notes.Route.Should().Be(PresentationPrintOutputPackageRoute.NotesPagePdf);
+        notes.PageCount.Should().Be(3);
+        notes.LayoutSummary.Should().Be("Notes Pages - All slides, 3 pages");
         handouts.Route.Should().Be(PresentationPrintOutputPackageRoute.HandoutPdf);
+        handouts.PageCount.Should().Be(1);
+        handouts.LayoutSummary.Should().Be("Handouts (3 slides per page) - All slides, 1 page");
+    }
+
+    [Fact]
+    public void PrintOutputPackagePlan_ExposesPreviewMetadataForHandoutRangesAndEmptyDecks()
+    {
+        var handouts = PresentationPrintOutputPackageExecutor.BuildPackagePlan(
+            new PresentationPrintRequest(
+                PresentationPrintLayoutKind.Handouts,
+                new PresentationSlideRangeRequest(
+                    PresentationSlideRangeKind.CustomRange,
+                    StartSlideNumber: 2,
+                    EndSlideNumber: 8),
+                HandoutSlidesPerPage: 3,
+                PrintHiddenSlides: true),
+            slideCount: 10);
+        var empty = PresentationPrintOutputPackageExecutor.BuildPackagePlan(
+            new PresentationPrintRequest(PresentationPrintLayoutKind.Handouts, HandoutSlidesPerPage: 6),
+            slideCount: 0);
+
+        handouts.Route.Should().Be(PresentationPrintOutputPackageRoute.HandoutPdf);
+        handouts.PageCount.Should().Be(3);
+        handouts.SlideRangeSummary.Should().Be("Slides 2-8");
+        handouts.LayoutSummary.Should().Be("Handouts (3 slides per page) - Slides 2-8, 3 pages including hidden slides");
+        handouts.CanBuildPackage.Should().BeTrue();
+        handouts.DisabledReason.Should().BeNull();
+
+        empty.PageCount.Should().Be(0);
+        empty.SlideRangeSummary.Should().Be("No slides");
+        empty.LayoutSummary.Should().Be("Handouts (6 slides per page) - No slides, 0 pages");
+        empty.CanBuildPackage.Should().BeFalse();
+        empty.DisabledReason.Should().Be("Print output requires at least one slide.");
     }
 
     [Fact]
