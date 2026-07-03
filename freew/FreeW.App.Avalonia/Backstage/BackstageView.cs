@@ -390,8 +390,11 @@ internal sealed class BackstageView : Window
             var scenarios = row.FixtureScenarioIds.Count == 0
                 ? BackstageViewTextResources.NoEvidenceFixtureScenario
                 : string.Join(", ", row.FixtureScenarioIds);
+            var requirements = row.Requirements.Count == 0
+                ? BackstageViewTextResources.NoEvidenceRequirement
+                : string.Join(", ", row.Requirements.Select(FormatPrintEvidenceRequirement));
             var note = AvaloniaBackstageChrome.CreateNote(
-                $"{PrintEvidenceKindLabel(row.Kind)} - {PrintEvidenceStatusLabel(row.Status)}\n{row.Description}\n{BackstageViewTextResources.EvidenceScenariosLabel}: {scenarios}",
+                $"{PrintEvidenceKindLabel(row.Kind)} - {PrintEvidenceStatusLabel(row.Status)}\n{row.Description}\n{BackstageViewTextResources.EvidenceScenariosLabel}: {scenarios}\n{BackstageViewTextResources.EvidenceRequirementsLabel}: {requirements}",
                 BackstageChromeStyle,
                 margin: new Thickness(0, 0, 0, 4));
             AutomationProperties.SetAutomationId(note, $"PrintEvidence_{row.Kind}");
@@ -400,6 +403,9 @@ internal sealed class BackstageView : Window
 
         return panel;
     }
+
+    private static string FormatPrintEvidenceRequirement(BackstagePrintEvidenceRequirement requirement) =>
+        $"{requirement.HostId}/{requirement.ScenarioId} >= {requirement.MinimumExpectedOutputs}";
 
     private Control BuildSharePane()
     {

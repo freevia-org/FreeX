@@ -13,7 +13,9 @@ public static class BackstageViewTextResources
     public const string DocumentSettingsSection = "Document Settings";
     public const string EvidenceSection = "Evidence";
     public const string EvidenceScenariosLabel = "Scenarios";
+    public const string EvidenceRequirementsLabel = "Required rows";
     public const string NoEvidenceFixtureScenario = "No fixture scenario";
+    public const string NoEvidenceRequirement = "No required visual row";
     public const string PrintPreviewEvidenceLabel = "Print preview fidelity";
     public const string PdfExportEvidenceLabel = "PDF export fidelity";
     public const string NativePrintEvidenceLabel = "Native print";
