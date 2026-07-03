@@ -1054,7 +1054,7 @@ internal static class ParityCapture
                 var height = dialog.ActualHeight > 0 ? dialog.ActualHeight : dialog.Height;
                 if (double.IsNaN(width) || width <= 0) width = 480;
                 if (double.IsNaN(height) || height <= 0) height = 360;
-                return RenderElement(dialog, width, height);
+                return RenderDialog(dialog, width, height);
             }
             finally
             {
@@ -1146,6 +1146,14 @@ internal static class ParityCapture
         var height = dialog.ActualHeight > 0 ? dialog.ActualHeight : dialog.Height;
         if (double.IsNaN(width) || width <= 0) width = 480;
         if (double.IsNaN(height) || height <= 0) height = 360;
+        return RenderDialog(dialog, width, height);
+    }
+
+    private static BitmapSource RenderDialog(Window dialog, double width, double height)
+    {
+        if (dialog.Content is FrameworkElement content)
+            return RenderElementOnBackground(content, width, height, Brushes.White);
+
         return RenderElement(dialog, width, height);
     }
 
@@ -1176,6 +1184,27 @@ internal static class ParityCapture
         return bitmap;
     }
 
+    private static BitmapSource RenderElementOnBackground(
+        FrameworkElement element,
+        double width,
+        double height,
+        Brush background)
+    {
+        var content = RenderElement(element, width, height);
+        var visual = new DrawingVisual();
+        using (var context = visual.RenderOpen())
+        {
+            var rect = new Rect(0, 0, content.PixelWidth, content.PixelHeight);
+            context.DrawRectangle(background, null, rect);
+            context.DrawImage(content, rect);
+        }
+
+        var bitmap = new RenderTargetBitmap(content.PixelWidth, content.PixelHeight, 96, 96, PixelFormats.Pbgra32);
+        bitmap.Render(visual);
+        bitmap.Freeze();
+        return bitmap;
+    }
+
     private static void CaptureSurface(
         List<SurfaceResult> results, string surfaceId, string kind, string outDir, Func<BitmapSource> render,
         string note = "")
@@ -1184,6 +1213,9 @@ internal static class ParityCapture
         try
         {
             var bitmap = render();
+            if (!HasVisiblePixels(bitmap))
+                throw new InvalidOperationException("Rendered PNG was fully transparent or blank; refusing to record stale WPF parity-capture evidence.");
+
             var encoder = new PngBitmapEncoder();
             encoder.Frames.Add(BitmapFrame.Create(bitmap));
             using var stream = File.Create(Path.Combine(outDir, pngName));
@@ -1202,6 +1234,27 @@ internal static class ParityCapture
         if (results.Any(r => string.Equals(r.Id, surfaceId, StringComparison.Ordinal)))
             return;
         results.Add(new SurfaceResult(surfaceId, kind, surfaceId + ".png", false, note));
+    }
+
+    private static bool HasVisiblePixels(BitmapSource bitmap)
+    {
+        BitmapSource converted = bitmap.Format == PixelFormats.Pbgra32 || bitmap.Format == PixelFormats.Bgra32
+            ? bitmap
+            : new FormatConvertedBitmap(bitmap, PixelFormats.Pbgra32, null, 0);
+        var stride = converted.PixelWidth * 4;
+        var pixels = new byte[stride * converted.PixelHeight];
+        converted.CopyPixels(pixels, stride, 0);
+
+        for (var i = 0; i < pixels.Length; i += 4)
+        {
+            if (pixels[i + 3] == 0)
+                continue;
+
+            if (pixels[i] != 255 || pixels[i + 1] != 255 || pixels[i + 2] != 255)
+                return true;
+        }
+
+        return false;
     }
 
     // ----- Helpers -----
