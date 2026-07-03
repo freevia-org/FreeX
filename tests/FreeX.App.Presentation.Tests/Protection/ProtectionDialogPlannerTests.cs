@@ -6,6 +6,13 @@ namespace FreeX.App.Presentation.Tests.Protection;
 public sealed class ProtectionDialogPlannerTests
 {
     [Fact]
+    public void ProtectSheetSize_MatchesSharedWpfLogicalEvidenceTarget()
+    {
+        ProtectionDialogPlanner.ProtectSheetWidth.Should().Be(430);
+        ProtectionDialogPlanner.ProtectSheetHeight.Should().Be(540);
+    }
+
+    [Fact]
     public void CreateSheetResult_ForProtectedSheetRequestsUnprotect()
     {
         var result = ProtectionDialogPlanner.CreateSheetResult(

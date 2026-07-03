@@ -7,6 +7,13 @@ namespace FreeX.App.Services.Tests;
 public sealed class GoToDialogPlannerTests
 {
     [Fact]
+    public void GoToSpecialDialogSize_MatchesSharedWpfLogicalEvidenceTarget()
+    {
+        GoToSpecialDialogPlanner.Width.Should().Be(430);
+        GoToSpecialDialogPlanner.Height.Should().Be(438);
+    }
+
+    [Fact]
     public void BuildChoices_UsesSharedExcelOrder()
     {
         GoToSpecialDialogPlanner.BuildChoices().Select(choice => choice.Kind).Should().Equal(

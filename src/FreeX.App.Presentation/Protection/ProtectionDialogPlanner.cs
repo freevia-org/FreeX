@@ -13,6 +13,11 @@ public sealed record ProtectionDialogResult(
 
 public static class ProtectionDialogPlanner
 {
+    public const double ProtectSheetWidth = 430;
+    public const double ProtectSheetHeight = 540;
+    public const double UnprotectSheetWidth = 380;
+    public const double UnprotectSheetHeight = 240;
+
     public static ProtectionDialogResult CreateSheetResult(
         bool isProtected,
         string? password,
