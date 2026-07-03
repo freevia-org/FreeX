@@ -10,6 +10,7 @@ public sealed class SlidePanePolicySourceGuardTests
         var source = ReadHostSource("SlidePane.cs");
 
         source.Should().Contain("SlidePanePlanner.BuildEntries(");
+        source.Should().Contain("SlidePanePlanner.BuildThumbnailVisualPlan(");
         source.Should().Contain("_collapsedSectionIds");
         source.Should().Contain("ToggleSection(entry.SectionId)");
         source.Should().Contain("SlidePanePlanner.HitTestInsertionPoint(");
@@ -18,10 +19,17 @@ public sealed class SlidePanePolicySourceGuardTests
         source.Should().Contain("SlidePanePlanner.PlanMoveAction(");
         source.Should().Contain("SlidePanePlanner.TryApplyAction(");
         source.Should().Contain("SlidePanePlanner.NewSlideButtonText");
+        source.Should().Contain("Width            = plan.ThumbnailWidth");
+        source.Should().Contain("Height           = plan.ThumbnailHeight");
+        source.Should().Contain("ToolTip         = plan.ToolTipText");
         source.Should().Contain("SlideSectionPlanner.BuildSlideContextActions(");
         source.Should().Contain("SlideSectionPlanner.BuildSectionHeaderActions(");
         source.Should().Contain("SlideSectionPlanner.BuildExecutionPlan(action)");
         source.Should().Contain("SlideSectionPlanner.TryApplyAction(_editor, execution, promptedName)");
+        source.Should().NotContain("private const double ThumbWidth");
+        source.Should().NotContain("private const double ThumbHeight");
+        source.Should().NotContain("private const double ItemPadding");
+        source.Should().NotContain("private const double LabelHeight");
         source.Should().NotContain("new Dictionary<int, PresentationSection>");
         source.Should().NotContain("sectionHeaderBefore");
         source.Should().NotContain("const double SectionHeaderHeight");

@@ -14,16 +14,19 @@ public sealed class SlidePanePolicySourceGuardTests
             "MainWindow.cs"));
 
         source.Should().Contain("SlidePanePlanner.BuildEntries(");
+        source.Should().Contain("SlidePanePlanner.BuildThumbnailVisualPlan(");
         source.Should().Contain("_slidePaneCollapsedSectionIds");
         source.Should().Contain("SlidePaneEntryKind.SectionHeader");
         source.Should().Contain("BuildSlidePaneSectionHeader(entry)");
         source.Should().Contain("Text              = entry.Text");
         source.Should().Contain("ToggleSlidePaneSection(entry.SectionId)");
         source.Should().Contain("ContextMenu = BuildSlidePaneSectionContextMenu(entry)");
-        source.Should().Contain("Width        = SlidePanePlanner.DefaultThumbnailWidth");
-        source.Should().Contain("Height       = SlidePanePlanner.DefaultThumbnailHeight");
-        source.Should().Contain("Tag         = entry.SlideIndex");
-        source.Should().Contain("ContextMenu = BuildSlidePaneContextMenu(entry.SlideIndex)");
+        source.Should().Contain("Width        = plan.ThumbnailWidth");
+        source.Should().Contain("Height       = plan.ThumbnailHeight");
+        source.Should().Contain("Tag         = plan.SlideIndex");
+        source.Should().Contain("IsSelected  = plan.IsSelected");
+        source.Should().Contain("ToolTip.SetTip(item, plan.ToolTipText)");
+        source.Should().Contain("ContextMenu = BuildSlidePaneContextMenu(plan.SlideIndex)");
         source.Should().Contain("Content                    = SlidePanePlanner.NewSlideButtonText");
         source.Should().Contain("button.Click += (_, _) => InsertSlideFromSlidePaneAffordance();");
         source.Should().Contain("slidePaneHost.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });");
@@ -40,9 +43,11 @@ public sealed class SlidePanePolicySourceGuardTests
         source.Should().Contain("PointerReleased += OnSlidePaneItemPointerReleased");
         source.Should().Contain("SlidePanePlanner.HitTestInsertionPoint(");
         source.Should().Contain("SlidePanePlanner.ComputeInsertionIndicatorOffset(");
+        source.Should().Contain("SlidePanePlanner.DefaultSlideItemHeight");
         source.Should().Contain("SlidePanePlanner.PlanMoveAction(");
         source.Should().Contain("private void InsertSlideFromSlidePaneAffordance()");
         source.Should().Contain("SelectSlidePaneItem(Editor.CurrentSlideIndex)");
+        source.Should().NotContain("SlidePaneAvaloniaSlideItemHeight");
         source.Should().NotContain("for (int i = 0; i < _presentation.Slides.Count; i++)");
         source.Should().NotContain("Text                = $\"{slideIdx + 1}\"");
         source.Should().NotContain("Width        = 148");
