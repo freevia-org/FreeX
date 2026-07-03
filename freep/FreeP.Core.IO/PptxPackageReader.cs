@@ -4005,7 +4005,12 @@ public static class PptxPackageReader
             }
         }
 
-        if (TryReadBehaviorDelay(animMotion, out var behaviorDelayMs))
+        // FreeP writes the motion build delay on the outer withEffect cTn and
+        // leaves the animMotion/cBhvr condition at 0. Keep a non-zero outer
+        // delay instead of letting that inner sentinel erase it, while still
+        // honoring non-zero behavior delays used by real PowerPoint files.
+        if (TryReadBehaviorDelay(animMotion, out var behaviorDelayMs)
+            && (behaviorDelayMs != 0 || delayMs == 0))
             delayMs = behaviorDelayMs;
 
         var motion = ParseMotionPath(pathStr, origin, ptsTypes);
