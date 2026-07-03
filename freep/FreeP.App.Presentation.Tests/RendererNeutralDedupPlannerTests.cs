@@ -405,6 +405,7 @@ public sealed class RendererNeutralDedupPlannerTests
             source.Should().Contain("ChartRenderPlanner.BuildDataTablePrimitivePlan(chart, frame, chartOp.SeriesColors)");
             source.Should().Contain("RenderChartDataTable(dc, dataTablePlan)");
             source.Should().Contain("ChartDataTablePrimitivePlan plan");
+            source.Should().Contain("cell.CellBounds");
             source.Should().Contain("cell.LegendKeyBounds");
             source.Should().Contain("plan.HorizontalBorders");
             source.Should().Contain("plan.VerticalBorders");

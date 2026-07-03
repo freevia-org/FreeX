@@ -354,9 +354,9 @@ public static class TextLayoutPlanner
         TextAutoFitOverflowPlan autoFitPlan)
     {
         var area = GetTextArea(text, bounds);
-        double totalHeight = paragraphs.Sum(p => p.TotalHeightDip);
-        double currentY = ComputeStartY(area, totalHeight, text.Anchor);
         double lineSpacingScale = GetLineSpacingScale(text, autoFitPlan);
+        double totalHeight = paragraphs.Sum(p => p.TotalHeightDip * lineSpacingScale);
+        double currentY = ComputeStartY(area, totalHeight, text.Anchor);
 
         var placements = new List<TextParagraphPlacement>(paragraphs.Count);
         foreach (var paragraph in paragraphs)

@@ -646,6 +646,17 @@ public sealed class DocumentView : Control
         return null;
     }
 
+    internal RunDecorationVisualPlan? GetGlyphRunDecorationStyle(int block, int offset)
+    {
+        foreach (var pc in _placed)
+        {
+            if (pc.Sentinel || pc.Block != block || pc.Offset != offset || pc.IsCell)
+                continue;
+            return RunDecorationVisualPlanner.Build(pc.Fmt, PxPerPoint);
+        }
+        return null;
+    }
+
     /// <summary>AV-LINK: the caret's current (Block, Offset) — exposed for navigation tests.</summary>
     internal (int Block, int Offset) CaretPositionForTest => (_caret.Block, _caret.Offset);
 
@@ -5472,6 +5483,66 @@ public sealed class DocumentView : Control
             : new Pen(BrushFor(border.ColorHex), width, dashStyle);
     }
 
+    private void DrawCharacterBorder(
+        DrawingContext context,
+        int placedIndex,
+        PlacedChar pc,
+        RunDecorationVisualPlan plan)
+    {
+        if (!plan.HasBorder || plan.Border is null)
+            return;
+
+        var rect = new Rect(pc.X, pc.Y, Math.Max(1, pc.W), pc.LineHeight);
+        var pen = RunBorderPen(plan);
+        var drawLeft = plan.DrawLeftBorder && !AdjacentGlyphSharesBorder(placedIndex - 1, pc, plan);
+        var drawRight = plan.DrawRightBorder && !AdjacentGlyphSharesBorder(placedIndex + 1, pc, plan);
+
+        if (plan.DrawTopBorder)
+            context.DrawLine(pen, new Point(rect.Left, rect.Top), new Point(rect.Right, rect.Top));
+        if (plan.DrawBottomBorder)
+            context.DrawLine(pen, new Point(rect.Left, rect.Bottom), new Point(rect.Right, rect.Bottom));
+        if (drawLeft)
+            context.DrawLine(pen, new Point(rect.Left, rect.Top), new Point(rect.Left, rect.Bottom));
+        if (drawRight)
+            context.DrawLine(pen, new Point(rect.Right, rect.Top), new Point(rect.Right, rect.Bottom));
+    }
+
+    private bool AdjacentGlyphSharesBorder(int index, PlacedChar current, RunDecorationVisualPlan currentPlan)
+    {
+        if (index < 0 || index >= _placed.Count)
+            return false;
+
+        var adjacent = _placed[index];
+        if (adjacent.Sentinel
+            || adjacent.Block != current.Block
+            || adjacent.IsCell != current.IsCell
+            || Math.Abs(adjacent.Y - current.Y) > 0.5)
+            return false;
+
+        var adjacentPlan = RunDecorationVisualPlanner.Build(adjacent.Fmt, PxPerPoint);
+        return adjacentPlan.HasBorder
+            && adjacentPlan.Border == currentPlan.Border
+            && adjacentPlan.DrawTopBorder == currentPlan.DrawTopBorder
+            && adjacentPlan.DrawLeftBorder == currentPlan.DrawLeftBorder
+            && adjacentPlan.DrawBottomBorder == currentPlan.DrawBottomBorder
+            && adjacentPlan.DrawRightBorder == currentPlan.DrawRightBorder;
+    }
+
+    private Pen RunBorderPen(RunDecorationVisualPlan plan)
+    {
+        var border = plan.Border!;
+        DashStyle? dashStyle = border.LineStyle switch
+        {
+            BorderLineStyle.Dashed => new DashStyle([4, 3], 0),
+            BorderLineStyle.Dotted => new DashStyle([1, 2], 0),
+            _ => null,
+        };
+
+        return dashStyle is null
+            ? new Pen(BrushFor(border.ColorHex), plan.BorderWidthDip)
+            : new Pen(BrushFor(border.ColorHex), plan.BorderWidthDip, dashStyle);
+    }
+
     private void DrawCellEdgeLine(DrawingContext context, CellBorderEdge? edge, Point p1, Point p2)
     {
         if (edge is null) return;
@@ -5817,23 +5888,24 @@ public sealed class DocumentView : Control
         var selection = NormalizedSelection();
         var proofingOffsets = BuildProofingOffsetSet();
         var reviewPolicy = CurrentReviewDisplayPolicy;
-        foreach (var pc in _placed)
+        for (var placedIndex = 0; placedIndex < _placed.Count; placedIndex++)
         {
+            var pc = _placed[placedIndex];
             if (pc.Sentinel)
                 continue;
             var revisionDecision = reviewPolicy.RevisionDecision(pc.Revision);
             if (!revisionDecision.IsTextVisible)
                 continue;
+            var decorationPlan = RunDecorationVisualPlanner.Build(pc.Fmt, PxPerPoint);
 
             if (selection is { } sel && IsWithin(sel, pc.Block, pc.Offset))
                 context.FillRectangle(SelectionBrush, new Rect(pc.X, pc.Y, Math.Max(2, pc.W), pc.LineHeight));
 
-            // Highlight: fill a background rect behind the glyph before drawing text.
-            if (!string.IsNullOrEmpty(pc.Fmt.HighlightColorHex))
-            {
-                var hlBrush = BrushFor(pc.Fmt.HighlightColorHex);
-                context.FillRectangle(hlBrush, new Rect(pc.X, pc.Y, Math.Max(1, pc.W), pc.LineHeight));
-            }
+            // Character shading takes precedence over highlight; both fill behind glyphs.
+            if (decorationPlan.HasBackground)
+                context.FillRectangle(
+                    BrushFor(decorationPlan.BackgroundColorHex),
+                    new Rect(pc.X, pc.Y, Math.Max(1, pc.W), pc.LineHeight));
 
             // AV-COMMENT: a subtle amber background tint behind glyphs anchored by a review comment, so
             // the commented range reads as one region (the underline + margin marker are drawn after the
@@ -5885,6 +5957,7 @@ public sealed class DocumentView : Control
             // AV-TAB: tab characters have no glyph — skip text drawing (leader was drawn separately).
             if (pc.Ch == '\t')
             {
+                DrawCharacterBorder(context, placedIndex, pc, decorationPlan);
                 // Still draw underline/strikethrough across the tab gap if the run has them.
                 if (drawFmt.Underline)
                     DrawDecoration(context, pc, pc.Y + pc.LineHeight * 0.82, drawFmt);
@@ -5899,6 +5972,7 @@ public sealed class DocumentView : Control
             var ft = Build(pc.Ch.ToString(), drawFmt);
             context.DrawText(ft, new Point(pc.X, drawY));
 
+            DrawCharacterBorder(context, placedIndex, pc, decorationPlan);
             if (drawFmt.Underline)
                 DrawDecoration(context, pc, pc.Y + pc.LineHeight * 0.82, drawFmt);
             if (drawFmt.Strikethrough)
@@ -12701,6 +12775,21 @@ public sealed class DocumentView : Control
         FontSizePt = over.FontSizePt ?? baseRun.FontSizePt,
         ColorHex = over.ColorHex ?? baseRun.ColorHex,
         HighlightColorHex = over.HighlightColorHex ?? baseRun.HighlightColorHex,
+        CharacterBorder = over.CharacterBorder ?? baseRun.CharacterBorder,
+        CharacterShadingHex = over.CharacterShadingHex ?? baseRun.CharacterShadingHex,
+        CharacterShadingPattern = over.CharacterShadingHex is not null
+            ? over.CharacterShadingPattern
+            : baseRun.CharacterShadingPattern,
+        LanguageTag = over.LanguageTag ?? baseRun.LanguageTag,
+        VerticalAlign = over.VerticalAlign != VerticalAlign.Baseline ? over.VerticalAlign : baseRun.VerticalAlign,
+        Rtl = baseRun.Rtl || over.Rtl,
+        CharacterSpacingPt = over.CharacterSpacingPt != 0 ? over.CharacterSpacingPt : baseRun.CharacterSpacingPt,
+        KerningMinSizePt = over.KerningMinSizePt ?? baseRun.KerningMinSizePt,
+        PositionPt = over.PositionPt != 0 ? over.PositionPt : baseRun.PositionPt,
+        Ligatures = over.Ligatures != LigatureMode.None ? over.Ligatures : baseRun.Ligatures,
+        NumberForm = over.NumberForm != NumberForm.Default ? over.NumberForm : baseRun.NumberForm,
+        NumberSpacing = over.NumberSpacing != NumberSpacing.Default ? over.NumberSpacing : baseRun.NumberSpacing,
+        StylisticSet = over.StylisticSet ?? baseRun.StylisticSet,
         Bold = baseRun.Bold || over.Bold,
         Italic = baseRun.Italic || over.Italic,
         Underline = baseRun.Underline || over.Underline,

@@ -1311,6 +1311,8 @@ public sealed class SlideCanvas : Control
 
         foreach (var cell in plan.Cells)
         {
+            using var clipScope = dc.PushClip(ToRect(cell.CellBounds));
+
             if (cell.LegendKeyFill.HasValue && cell.LegendKeyBounds.HasValue)
             {
                 dc.FillRectangle(

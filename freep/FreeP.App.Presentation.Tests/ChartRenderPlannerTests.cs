@@ -339,13 +339,9 @@ public sealed class ChartRenderPlannerTests
         double plot = frameWithTable.Plot.X;
         double categoryStep = frameWithTable.Plot.Width / withTable.Categories.Count;
         var firstCategoryColumn = tablePlan.Cells.Single(cell => cell.RowIndex == 0 && cell.ColumnIndex == 1);
-        // Cell bounds are text-inset by DataTableTextInset on both sides; undo that to compare
-        // the raw column geometry against the plot's category band.
-        double columnLeft = firstCategoryColumn.Bounds.X - ChartRenderPlanner.DataTableTextInset;
-        double columnWidth = firstCategoryColumn.Bounds.Width + 2 * ChartRenderPlanner.DataTableTextInset;
 
-        columnLeft.Should().Be(plot);
-        columnWidth.Should().Be(categoryStep);
+        firstCategoryColumn.CellBounds.X.Should().Be(plot);
+        firstCategoryColumn.CellBounds.Width.Should().Be(categoryStep);
 
         // Without a data table, the plot layout is unchanged (no regression for the common case).
         var withoutTable = MakeTwoSeriesChart(ChartType.ColumnClustered);
@@ -373,12 +369,14 @@ public sealed class ChartRenderPlannerTests
             cell.RowIndex == 0 &&
             cell.ColumnIndex == 1 &&
             cell.Text == "Q1" &&
+            cell.CellBounds == new ChartPlanRect(120, 253, 136, 13) &&
             cell.Bounds == new ChartPlanRect(122, 253, 132, 13) &&
             cell.IsHeader);
         plan.Cells.Should().Contain(cell =>
             cell.RowIndex == 1 &&
             cell.ColumnIndex == 0 &&
             cell.Text == "Actual" &&
+            cell.CellBounds == new ChartPlanRect(48, 266, 72, 13) &&
             cell.Bounds == new ChartPlanRect(58, 266, 60, 13) &&
             cell.LegendKeyBounds == new ChartPlanRect(50, 269.5, 6, 6) &&
             cell.LegendKeyFill == new ChartFillPlan(colors[0], Alpha: 255));
@@ -386,6 +384,7 @@ public sealed class ChartRenderPlannerTests
             cell.RowIndex == 2 &&
             cell.ColumnIndex == 2 &&
             cell.Text == "40" &&
+            cell.CellBounds == new ChartPlanRect(256, 279, 136, 13) &&
             cell.Bounds == new ChartPlanRect(258, 279, 132, 13));
         plan.HorizontalBorders.Should().HaveCount(4);
         plan.VerticalBorders.Should().HaveCount(4);
