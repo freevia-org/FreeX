@@ -239,6 +239,9 @@ public sealed class SlideShowWindow : Window
     public IReadOnlyList<SlideShowPresenterWorkflowAction> PresenterWorkflowActions =>
         _presenterToolPlan.WorkflowActions;
 
+    public IReadOnlyList<SlideShowPresenterCommandState> PresenterCommandStates =>
+        _presenterToolPlan.CommandStates;
+
     public SlideShowTimingRecorderState TimingRecorderState => _timingRecorderState;
 
     public bool IsPresenterSessionClosed => _isTornDown;

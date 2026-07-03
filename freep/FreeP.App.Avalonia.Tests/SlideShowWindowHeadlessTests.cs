@@ -163,6 +163,7 @@ public sealed class SlideShowWindowHeadlessTests
     {
         SlideShowPresenterToolPlan? plan = null;
         SlideShowPresenterState? state = null;
+        IReadOnlyList<SlideShowPresenterCommandState>? commandStates = null;
         var ran = await OnUiThread(() =>
         {
             var pres = MakePresentation(1);
@@ -175,6 +176,7 @@ public sealed class SlideShowWindowHeadlessTests
                 "#ffee00",
                 8,
                 SlideShowInkRetentionDecision.ClearInk);
+            commandStates = window.PresenterCommandStates;
             state = window.CreatePresenterState(window.PresenterStartedAtUtc.AddSeconds(3));
         });
 
@@ -194,6 +196,13 @@ public sealed class SlideShowWindowHeadlessTests
             action.Kind == SlideShowPresenterWorkflowActionKind.ConfigureInkStroke);
         plan.WorkflowActions.Should().Contain(action =>
             action.Kind == SlideShowPresenterWorkflowActionKind.ClearInkOnExit);
+        commandStates.Should().BeSameAs(plan.CommandStates);
+        commandStates!.Where(command => command.IsChecked).Select(command => command.CommandId)
+            .Should().Equal(
+                SlideShowPresenterToolPlanner.RecordTimingsCommandId,
+                SlideShowPresenterToolPlanner.NarrationAndMediaCommandId,
+                SlideShowPresenterToolPlanner.HighlighterPointerCommandId,
+                SlideShowPresenterToolPlanner.ClearInkCommandId);
         state.ToolPlan.Should().BeSameAs(plan);
     }
 

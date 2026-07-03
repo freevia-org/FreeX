@@ -542,6 +542,13 @@ public sealed class SlideShowWindowTests
                 action.Kind == SlideShowPresenterWorkflowActionKind.ConfigureInkStroke);
             window.PresenterWorkflowActions.Should().Contain(action =>
                 action.Kind == SlideShowPresenterWorkflowActionKind.ClearInkOnExit);
+            window.PresenterCommandStates.Should().BeSameAs(plan.CommandStates);
+            window.PresenterCommandStates.Where(command => command.IsChecked).Select(command => command.CommandId)
+                .Should().Equal(
+                    SlideShowPresenterToolPlanner.RecordTimingsCommandId,
+                    SlideShowPresenterToolPlanner.NarrationAndMediaCommandId,
+                    SlideShowPresenterToolPlanner.PenPointerCommandId,
+                    SlideShowPresenterToolPlanner.ClearInkCommandId);
 
             var state = window.CreatePresenterState(window.PresenterStartedAtUtc.AddSeconds(3));
             state.ToolPlan.Should().BeSameAs(plan);

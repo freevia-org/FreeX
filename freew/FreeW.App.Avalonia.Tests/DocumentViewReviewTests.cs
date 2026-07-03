@@ -371,6 +371,39 @@ public sealed class DocumentViewReviewTests
     }
 
     [Fact]
+    public async Task CurrentReviewWorkflowStatus_UsesSharedReviewPlanner()
+    {
+        int revisions = 0, comments = 0, visible = 0;
+        bool hasHiddenMarkup = false;
+        string displayLabel = "";
+        var ran = await OnUiThread(() =>
+        {
+            var doc = DocWithInsertionAndDeletion();
+            var paragraph = (Paragraph)doc.Blocks[0];
+            paragraph.Runs.Add(new Run(" note") { CommentId = 5 });
+            doc.Comments[5] = new Comment(5, "Comment", "Bob");
+
+            var view = Build(doc);
+            view.ToggleTrackChanges();
+            view.ApplyShowMarkupInsertionsAndDeletions(false);
+
+            var status = view.CurrentReviewWorkflowStatus;
+            revisions = status.RevisionCount;
+            comments = status.CommentThreadCount;
+            visible = status.VisibleReviewItemCount;
+            hasHiddenMarkup = status.HasHiddenMarkup;
+            displayLabel = status.DisplayModeLabel;
+        });
+        if (!ran) return;
+
+        revisions.Should().Be(2);
+        comments.Should().Be(1);
+        visible.Should().Be(1);
+        hasHiddenMarkup.Should().BeTrue();
+        displayLabel.Should().Be("All Markup");
+    }
+
+    [Fact]
     public async Task DisplayForReview_AllMarkup_shows_and_styles_insertions_and_deletions()
     {
         bool insertedVisible = false, deletedVisible = false, insertedStyled = false, deletedStyled = false;
