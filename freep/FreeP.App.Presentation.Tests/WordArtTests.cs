@@ -151,6 +151,38 @@ public sealed class WordArtTests : IDisposable
     }
 
     [Fact]
+    public void RoundTrip_TextReflection_PreservedThroughWriteRead()
+    {
+        var reflection = new RunTextReflection
+        {
+            Alpha = 128,
+            BlurPt = 1.5,
+            DistPt = 3.0,
+            DirDeg = 90.0,
+            ScaleY = -0.75
+        };
+
+        var pres = BuildPres(slide =>
+        {
+            var shape = TextShape(tb =>
+            {
+                tb.Paragraphs[0].Runs[0].TextReflection = reflection;
+            });
+            slide.Shapes.Add(shape);
+        });
+
+        var reloaded = PptxPackageReader.Read(WriteToPptx(pres));
+        var run = reloaded.Slides[0].Shapes[0].TextBody!.Paragraphs[0].Runs[0];
+
+        run.TextReflection.Should().NotBeNull("reflection was set");
+        run.TextReflection!.Alpha.Should().BeInRange(126, 129);
+        run.TextReflection.BlurPt.Should().BeApproximately(1.5, 0.5);
+        run.TextReflection.DistPt.Should().BeApproximately(3.0, 0.5);
+        run.TextReflection.DirDeg.Should().BeApproximately(90.0, 1.0);
+        run.TextReflection.ScaleY.Should().BeApproximately(-0.75, 0.001);
+    }
+
+    [Fact]
     public void RoundTrip_WarpPreset_PreservedThroughWriteRead()
     {
         var pres = BuildPres(slide =>
@@ -241,6 +273,47 @@ public sealed class WordArtTests : IDisposable
         grad.AngleDegrees.Should().Be(45.0);
         grad.StartColor.R.Should().Be(0xFF);
         grad.EndColor.B.Should().Be(0xFF);
+    }
+
+    [Fact]
+    public void Compositor_TextReflection_ResolvedOntoResolvedRun()
+    {
+        var p = MakePres();
+        p.Slides[0].Shapes.Clear();
+
+        var tb = new TextBody();
+        var run = new Run
+        {
+            Text = "Reflect",
+            TextReflection = new RunTextReflection
+            {
+                Alpha = 144,
+                BlurPt = 1.5,
+                DistPt = 3.0,
+                DirDeg = 90.0,
+                ScaleY = -1.0
+            }
+        };
+        tb.Paragraphs.Add(new Paragraph { Runs = { run } });
+
+        p.Slides[0].Shapes.Add(new SlideShape
+        {
+            Id = 1,
+            OffsetXEmu = 100000, OffsetYEmu = 100000,
+            ExtentCxEmu = 3000000, ExtentCyEmu = 1000000,
+            TextBody = tb
+        });
+
+        var ops = SlideCompositor.Compose(p, p.Slides[0]);
+        var textOp = ops.OfType<DrawOp.Shape>().Single(s => s.Text is not null);
+        var resolvedRun = textOp.Text!.Paragraphs[0].Runs[0];
+
+        resolvedRun.TextReflection.Should().NotBeNull("reflection must be resolved");
+        resolvedRun.TextReflection!.Alpha.Should().Be(144);
+        resolvedRun.TextReflection.BlurDip.Should().BeApproximately(1.5 * 96.0 / 72.0, 0.1);
+        resolvedRun.TextReflection.DistDip.Should().BeApproximately(3.0 * 96.0 / 72.0, 0.1);
+        resolvedRun.TextReflection.DirDeg.Should().Be(90.0);
+        resolvedRun.TextReflection.ScaleY.Should().Be(-1.0);
     }
 
     [Fact]
@@ -360,7 +433,57 @@ public sealed class WordArtTests : IDisposable
     }
 
     [Fact]
-    public void TextRunEffectRenderPlanner_WarpAdjustInfluencesYOffset()
+    public void PptxReader_ReadsCorpusWordArtReflection()
+    {
+        var path = FindWorkspaceFile("tools", "FreeP.RenderCompare", "corpus", "13-wordart.pptx");
+
+        var pres = PptxPackageReader.Read(path);
+        var reflectionRun = pres.Slides
+            .SelectMany(s => s.Shapes)
+            .SelectMany(s => s.TextBody?.Paragraphs ?? Enumerable.Empty<Paragraph>())
+            .SelectMany(p => p.Runs)
+            .Single(r => r.Text == "Arch Up Text");
+
+        reflectionRun.TextReflection.Should().NotBeNull();
+        reflectionRun.TextReflection!.Alpha.Should().BeInRange(126, 128);
+        reflectionRun.TextReflection.ScaleY.Should().BeApproximately(-1.0, 0.001);
+    }
+
+    [Fact]
+    public void TextRunEffectRenderPlanner_OrdersReflectionBeforeFillAndOutline()
+    {
+        var run = new ResolvedRun
+        {
+            Text = "Reflect",
+            Color = new SrgbColor(10, 20, 30),
+            TextReflection = new ResolvedRunReflection
+            {
+                Alpha = 128,
+                DistDip = 4,
+                DirDeg = 90,
+                ScaleY = -1.0
+            },
+            TextOutline = new ResolvedOutline.Visible(
+                new SrgbColor(40, 50, 60),
+                widthDip: 2,
+                OutlineDash.Solid)
+        };
+
+        var plan = TextRunEffectRenderPlanner.Plan(
+            run,
+            new LayoutRect(10, 20, 80, 20),
+            horizontalProgress: 0.25,
+            new LayoutRect(0, 0, 200, 100),
+            new ResolvedTextLayout());
+
+        plan.Passes.Should().HaveCount(3);
+        plan.Passes[0].Should().BeOfType<TextRunEffectPass.Reflection>();
+        plan.Passes[1].Should().BeOfType<TextRunEffectPass.Fill>();
+        plan.Passes[2].Should().BeOfType<TextRunEffectPass.Outline>();
+    }
+
+    [Fact]
+    public void TextRunEffectRenderPlanner_WarpAdjustUsesRunCenterForYOffset()
     {
         var run = new ResolvedRun { Text = "Warp", Color = SrgbColor.Black };
         var bounds = new LayoutRect(0, 0, 200, 100);
@@ -377,8 +500,44 @@ public sealed class WordArtTests : IDisposable
             bounds,
             layout);
 
-        plan.WarpYOffsetDip.Should().BeApproximately(-17.5, 0.001);
-        plan.GlyphBoundsDip.Y.Should().BeApproximately(2.5, 0.001);
+        plan.WarpYOffsetDip.Should().BeApproximately(-8.925, 0.001);
+        plan.GlyphBoundsDip.Y.Should().BeApproximately(11.075, 0.001);
+        plan.WarpTransform.Should().NotBeNull();
+        plan.WarpTransform!.Family.Should().Be(WordArtWarpFamily.Arch);
+        plan.WarpTransform.SampleProgress.Should().BeApproximately(0.15, 0.001);
+        plan.WarpTransform.AmplitudeScale.Should().BeApproximately(0.5, 0.001);
+        plan.WarpTransform.RotationDeg.Should().BeLessThan(0);
+    }
+
+    [Fact]
+    public void WordArtWarpPlanner_PlansFamilyAdjustScaleAndAffineTransform()
+    {
+        var plan = WordArtWarpPlanner.Plan(
+            "textCan",
+            new LayoutRect(80, 20, 40, 24),
+            new LayoutRect(0, 0, 200, 100),
+            new[] { ("adj1", "val 75000") });
+
+        plan.Should().NotBeNull();
+        plan!.Family.Should().Be(WordArtWarpFamily.Can);
+        plan.SampleProgress.Should().BeApproximately(0.5, 0.001);
+        plan.AmplitudeScale.Should().BeApproximately(1.5, 0.001);
+        plan.OffsetYDip.Should().BeApproximately(-52.5, 0.001);
+        plan.ScaleY.Should().BeGreaterThan(1.0);
+        plan.HasAffineTransform.Should().BeTrue();
+    }
+
+    [Fact]
+    public void WordArtWarpPlanner_PreservesWave2AndUnknownPresetBehavior()
+    {
+        WordArtWarpPlanner.ComputeYOffset("textWave2", 0.125, 100)
+            .Should().BeApproximately(-10, 0.001);
+        WordArtWarpPlanner.Plan(
+                "not-a-preset",
+                new LayoutRect(0, 0, 40, 12),
+                new LayoutRect(0, 0, 200, 100),
+                Array.Empty<(string Name, string Formula)>())
+            .Should().BeNull();
     }
 
     [Fact]
@@ -394,6 +553,7 @@ public sealed class WordArtTests : IDisposable
             source.Should().NotContain("DirDeg * Math.PI");
             source.Should().NotContain("BlurDip / 1.5");
             source.Should().NotContain("WordArtWarpPlanner.ComputeYOffset(warpPreset");
+            source.Should().NotContain("TryClassifyPreset(");
         }
     }
 
@@ -408,9 +568,13 @@ public sealed class WordArtTests : IDisposable
             Alpha = 128, BlurPt = 4.0, DistPt = 3.0, DirDeg = 45.0
         };
         var fill = new ShapeFill.Solid(new ThemeAwareColor(new SrgbColor(0xFF, 0x00, 0x00)));
+        var reflection = new RunTextReflection
+        {
+            Alpha = 128, BlurPt = 1.0, DistPt = 2.0, DirDeg = 90.0, ScaleY = -1.0
+        };
 
         var tb = new TextBody { WarpPreset = "textCircle" };
-        var run = new Run { Text = "Clone", TextFill = fill, TextShadow = shadow };
+        var run = new Run { Text = "Clone", TextFill = fill, TextShadow = shadow, TextReflection = reflection };
         tb.Paragraphs.Add(new Paragraph { Runs = { run } });
 
         var shape = new SlideShape
@@ -434,10 +598,14 @@ public sealed class WordArtTests : IDisposable
         clonedRun.TextFill.Should().NotBeNull();
         clonedRun.TextShadow.Should().NotBeNull();
         clonedRun.TextShadow!.BlurPt.Should().Be(4.0);
+        clonedRun.TextReflection.Should().NotBeNull();
+        clonedRun.TextReflection!.DistPt.Should().Be(2.0);
 
         // Verify deep copy — mutating source must not affect clone
         run.TextShadow.BlurPt = 99.0;
+        run.TextReflection.DistPt = 99.0;
         clonedRun.TextShadow.BlurPt.Should().Be(4.0, "deep copy must be independent");
+        clonedRun.TextReflection.DistPt.Should().Be(2.0, "deep copy must be independent");
     }
 
     // ─── BA1: rPr child-order + OpenXmlValidator ────────────────────────────
@@ -662,6 +830,9 @@ public sealed class WordArtTests : IDisposable
     }
 
     private static string ReadWorkspaceFile(params string[] relativeParts)
+        => File.ReadAllText(FindWorkspaceFile(relativeParts));
+
+    private static string FindWorkspaceFile(params string[] relativeParts)
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
         while (directory is not null)
@@ -672,7 +843,7 @@ public sealed class WordArtTests : IDisposable
 
             var candidate = Path.Combine(parts);
             if (File.Exists(candidate))
-                return File.ReadAllText(candidate);
+                return candidate;
 
             directory = directory.Parent;
         }

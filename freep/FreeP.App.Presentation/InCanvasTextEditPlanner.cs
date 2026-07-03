@@ -484,6 +484,7 @@ internal static class TextBodyModelCloner
         TextFill = source.TextFill,
         TextOutline = source.TextOutline,
         TextShadow = CloneRunShadow(source.TextShadow),
+        TextReflection = CloneRunReflection(source.TextReflection),
         Math = CloneMath(source.Math),
     };
 
@@ -530,6 +531,18 @@ internal static class TextBodyModelCloner
                 BlurPt = source.BlurPt,
                 DistPt = source.DistPt,
                 DirDeg = source.DirDeg,
+            };
+
+    private static RunTextReflection? CloneRunReflection(RunTextReflection? source) =>
+        source is null
+            ? null
+            : new RunTextReflection
+            {
+                Alpha = source.Alpha,
+                BlurPt = source.BlurPt,
+                DistPt = source.DistPt,
+                DirDeg = source.DirDeg,
+                ScaleY = source.ScaleY,
             };
 
     private static TextStyleLevels? CloneTextStyleLevels(TextStyleLevels? source)

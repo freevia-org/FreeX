@@ -189,6 +189,28 @@ public sealed class RunTextShadow
 }
 
 /// <summary>
+/// Per-run text reflection descriptor (from <c>a:rPr/a:effectLst/a:reflection</c>).
+/// This captures the visible mirror transform used by WordArt styles.
+/// </summary>
+public sealed class RunTextReflection
+{
+    /// <summary>Reflection opacity at the glyph edge (0-255).</summary>
+    public byte Alpha { get; set; } = 128;
+
+    /// <summary>Blur radius in points (from a:reflection @blurRad in EMU / 12700).</summary>
+    public double BlurPt { get; set; }
+
+    /// <summary>Distance in points (from a:reflection @dist in EMU / 12700).</summary>
+    public double DistPt { get; set; }
+
+    /// <summary>Direction in degrees clockwise from right (from a:reflection @dir / 60000).</summary>
+    public double DirDeg { get; set; } = 90.0;
+
+    /// <summary>Vertical scale from a:reflection @sy. Negative values mirror vertically.</summary>
+    public double ScaleY { get; set; } = -1.0;
+}
+
+/// <summary>
 /// A single text run: a span of text with uniform character properties.
 /// </summary>
 public sealed class Run
@@ -255,6 +277,12 @@ public sealed class Run
     /// Null = no shadow.
     /// </summary>
     public RunTextShadow? TextShadow { get; set; }
+
+    /// <summary>
+    /// Mirrored reflection below/near glyphs. Corresponds to
+    /// <c>a:rPr/a:effectLst/a:reflection</c>. Null = no reflection.
+    /// </summary>
+    public RunTextReflection? TextReflection { get; set; }
 
     // ── OMML Math (Theme 21) ───────────────────────────────────────────────────
 

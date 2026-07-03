@@ -268,6 +268,7 @@ public static class TextLayoutPlanner
                 TextFill = run.TextFill,
                 TextOutline = run.TextOutline,
                 TextShadow = run.TextShadow,
+                TextReflection = run.TextReflection,
                 MathLayout = run.MathLayout
             }).ToArray(),
             Align = paragraph.Align,
@@ -526,7 +527,8 @@ public static class TextLayoutPlanner
         paragraph.Runs.Any(run =>
             run.TextFill is not null ||
             run.TextOutline is not null ||
-            run.TextShadow is not null);
+            run.TextShadow is not null ||
+            run.TextReflection is not null);
 
     private static bool HasTabCharacters(ResolvedParagraph paragraph) =>
         paragraph.Runs.Any(run => run.Text.Contains('\t'));

@@ -3321,21 +3321,38 @@ public static class PptxPackageWriter
         }
 
         // Wave 16A: text shadow — a:effectLst AFTER fill group
-        if (run.TextShadow is not null)
+        if (run.TextShadow is not null || run.TextReflection is not null)
         {
-            var ts = run.TextShadow;
-            var shdwColorEl = BuildColorEl(ts.Color);
-            // Embed alpha on the color element only when < fully opaque;
-            // omitting a:alpha means 100% opaque in DrawingML.
-            if (ts.Alpha < 255)
-                shdwColorEl.Add(new XElement(A + "alpha",
-                    new XAttribute("val", (long)Math.Round(ts.Alpha / 255.0 * 100000))));
-            rPr.Add(new XElement(A + "effectLst",
-                new XElement(A + "outerShdw",
+            var effectLst = new XElement(A + "effectLst");
+
+            if (run.TextShadow is not null)
+            {
+                var ts = run.TextShadow;
+                var shdwColorEl = BuildColorEl(ts.Color);
+                // Embed alpha on the color element only when < fully opaque;
+                // omitting a:alpha means 100% opaque in DrawingML.
+                if (ts.Alpha < 255)
+                    shdwColorEl.Add(new XElement(A + "alpha",
+                        new XAttribute("val", (long)Math.Round(ts.Alpha / 255.0 * 100000))));
+                effectLst.Add(new XElement(A + "outerShdw",
                     new XAttribute("blurRad", DrawingMlUnits.PointsToEmu(ts.BlurPt)),
                     new XAttribute("dist",    DrawingMlUnits.PointsToEmu(ts.DistPt)),
                     new XAttribute("dir",     (long)Math.Round(ts.DirDeg * 60000)),
-                    shdwColorEl)));
+                    shdwColorEl));
+            }
+
+            if (run.TextReflection is not null)
+            {
+                var reflection = run.TextReflection;
+                effectLst.Add(new XElement(A + "reflection",
+                    new XAttribute("blurRad", DrawingMlUnits.PointsToEmu(reflection.BlurPt)),
+                    new XAttribute("stA", (long)Math.Round(reflection.Alpha / 255.0 * 100000)),
+                    new XAttribute("dist", DrawingMlUnits.PointsToEmu(reflection.DistPt)),
+                    new XAttribute("dir", (long)Math.Round(reflection.DirDeg * 60000)),
+                    new XAttribute("sy", (long)Math.Round(reflection.ScaleY * 100000))));
+            }
+
+            rPr.Add(effectLst);
         }
 
         // a:latin AFTER a:effectLst

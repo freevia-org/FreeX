@@ -506,6 +506,7 @@ public static class TableCellEditPlanner
         TextFill = source.TextFill,
         TextOutline = source.TextOutline,
         TextShadow = source.TextShadow,
+        TextReflection = source.TextReflection,
         Math = source.Math,
     };
 
@@ -524,6 +525,7 @@ public static class TableCellEditPlanner
         && a.TextFill == b.TextFill
         && a.TextOutline == b.TextOutline
         && a.TextShadow == b.TextShadow
+        && a.TextReflection == b.TextReflection
         && a.Math == b.Math;
 
     /// <summary>Merges adjacent runs within each paragraph that share identical formatting, to avoid run proliferation after a selection split.</summary>

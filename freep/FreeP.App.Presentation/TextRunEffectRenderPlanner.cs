@@ -16,6 +16,14 @@ public abstract record TextRunEffectPass
         double SpreadDip,
         bool IsBlurPass) : TextRunEffectPass;
 
+    public sealed record Reflection(
+        double OffsetX,
+        double OffsetY,
+        double ScaleY,
+        byte Alpha,
+        double BlurDip,
+        ResolvedFill FillBrush) : TextRunEffectPass;
+
     public sealed record Fill(ResolvedFill FillBrush) : TextRunEffectPass;
 
     public sealed record Outline(ResolvedOutline OutlinePen) : TextRunEffectPass;
@@ -24,9 +32,12 @@ public abstract record TextRunEffectPass
 public sealed record TextRunEffectRenderPlan(
     LayoutRect GlyphBoundsDip,
     double WarpYOffsetDip,
+    WordArtWarpTransform? WarpTransform,
     IReadOnlyList<TextRunEffectPass> Passes)
 {
-    public bool HasWarp => Math.Abs(WarpYOffsetDip) > 0.001;
+    public bool HasWarp =>
+        WarpTransform is { } warp &&
+        (warp.HasOffset || warp.HasAffineTransform);
 }
 
 public static class TextRunEffectRenderPlanner
@@ -42,20 +53,30 @@ public static class TextRunEffectRenderPlanner
         ArgumentNullException.ThrowIfNull(textLayout);
 
         double progress = Math.Clamp(horizontalProgress, 0.0, 1.0);
-        double warpYOffset = ComputeWarpYOffset(textLayout, progress, shapeBoundsDip) ?? 0.0;
+        var warpTransform = WordArtWarpPlanner.Plan(
+            textLayout.WarpPreset,
+            runBoundsDip,
+            shapeBoundsDip,
+            textLayout.WarpAdjusts);
+        double warpYOffset = warpTransform?.OffsetYDip
+            ?? ComputeWarpYOffset(textLayout, progress, shapeBoundsDip)
+            ?? 0.0;
         var glyphBounds = runBoundsDip with { Y = runBoundsDip.Y + warpYOffset };
 
         var passes = new List<TextRunEffectPass>();
         if (run.TextShadow is { } shadow)
             AddShadowPasses(passes, shadow);
 
-        passes.Add(new TextRunEffectPass.Fill(
-            run.TextFill ?? new ResolvedFill.Solid(run.Color)));
+        var fillBrush = run.TextFill ?? new ResolvedFill.Solid(run.Color);
+        if (run.TextReflection is { } reflection)
+            AddReflectionPass(passes, reflection, fillBrush);
+
+        passes.Add(new TextRunEffectPass.Fill(fillBrush));
 
         if (run.TextOutline is not null)
             passes.Add(new TextRunEffectPass.Outline(run.TextOutline));
 
-        return new TextRunEffectRenderPlan(glyphBounds, warpYOffset, passes);
+        return new TextRunEffectRenderPlan(glyphBounds, warpYOffset, warpTransform, passes);
     }
 
     public static double? ComputeWarpYOffset(
@@ -72,7 +93,7 @@ public static class TextRunEffectRenderPlanner
         if (!baseOffset.HasValue)
             return null;
 
-        return baseOffset.Value * GetWarpAdjustAmplitudeScale(textLayout.WarpAdjusts);
+        return baseOffset.Value * WordArtWarpPlanner.GetAdjustAmplitudeScale(textLayout.WarpAdjusts);
     }
 
     private static void AddShadowPasses(List<TextRunEffectPass> passes, ResolvedRunShadow shadow)
@@ -116,32 +137,23 @@ public static class TextRunEffectRenderPlanner
             IsBlurPass: false));
     }
 
-    private static double GetWarpAdjustAmplitudeScale(
-        IReadOnlyList<(string Name, string Formula)> warpAdjusts)
+    private static void AddReflectionPass(
+        List<TextRunEffectPass> passes,
+        ResolvedRunReflection reflection,
+        ResolvedFill fillBrush)
     {
-        foreach (var adjust in warpAdjusts)
-        {
-            if (!adjust.Name.StartsWith("adj", StringComparison.OrdinalIgnoreCase))
-                continue;
+        double rad = reflection.DirDeg * Math.PI / 180.0;
+        double dx = Math.Cos(rad) * reflection.DistDip;
+        double dy = Math.Sin(rad) * reflection.DistDip;
+        double scaleY = Math.Abs(reflection.ScaleY) < 0.001 ? -1.0 : reflection.ScaleY;
 
-            if (TryReadGuideValue(adjust.Formula, out double guideValue))
-                return Math.Clamp(guideValue / 50000.0, 0.1, 2.0);
-        }
-
-        return 1.0;
+        passes.Add(new TextRunEffectPass.Reflection(
+            dx,
+            dy,
+            scaleY,
+            reflection.Alpha,
+            reflection.BlurDip,
+            fillBrush));
     }
 
-    private static bool TryReadGuideValue(string formula, out double value)
-    {
-        value = 0;
-        var parts = formula.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        if (parts.Length != 2 || !parts[0].Equals("val", StringComparison.OrdinalIgnoreCase))
-            return false;
-
-        return double.TryParse(
-            parts[1],
-            System.Globalization.NumberStyles.Float,
-            System.Globalization.CultureInfo.InvariantCulture,
-            out value);
-    }
 }

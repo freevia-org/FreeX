@@ -22,6 +22,18 @@ public sealed class ResolvedRunShadow
 }
 
 /// <summary>
+/// Resolved glyph reflection for the renderer (concrete DIP values).
+/// </summary>
+public sealed class ResolvedRunReflection
+{
+    public byte Alpha { get; init; }
+    public double BlurDip { get; init; }
+    public double DistDip { get; init; }
+    public double DirDeg { get; init; }
+    public double ScaleY { get; init; } = -1.0;
+}
+
+/// <summary>
 /// A fully-resolved text run ready for the renderer: all inherited properties have been applied
 /// so the renderer sees concrete values without any nulls.
 /// </summary>
@@ -48,6 +60,9 @@ public sealed class ResolvedRun
 
     /// <summary>Resolved glyph shadow — null means no shadow.</summary>
     public ResolvedRunShadow? TextShadow { get; init; }
+
+    /// <summary>Resolved glyph reflection - null means no reflection.</summary>
+    public ResolvedRunReflection? TextReflection { get; init; }
 
     // ── Theme 27: OMML math ────────────────────────────────────────────────
 

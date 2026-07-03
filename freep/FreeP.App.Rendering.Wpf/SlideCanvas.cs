@@ -1934,34 +1934,88 @@ public sealed class SlideCanvas : FrameworkElement
                 text);
             var geo = runFt.BuildGeometry(new Point(plan.GlyphBoundsDip.X, plan.GlyphBoundsDip.Y));
 
-            foreach (var pass in plan.Passes)
+            bool pushedWarpTransform = false;
+            if (plan.WarpTransform is { HasAffineTransform: true } warp)
             {
-                switch (pass)
+                dc.PushTransform(BuildWordArtWarpTransform(warp, plan.GlyphBoundsDip));
+                pushedWarpTransform = true;
+            }
+
+            try
+            {
+                foreach (var pass in plan.Passes)
                 {
-                    case TextRunEffectPass.Shadow shadow:
+                    switch (pass)
                     {
-                        var shadowBrush = new SolidColorBrush(Color.FromArgb(shadow.Alpha, shadow.Color.R, shadow.Color.G, shadow.Color.B));
-                        if (shadowBrush.CanFreeze) shadowBrush.Freeze();
-                        dc.PushTransform(new TranslateTransform(shadow.OffsetX, shadow.OffsetY));
-                        dc.DrawGeometry(shadowBrush, null, geo);
-                        dc.Pop();
-                        break;
+                        case TextRunEffectPass.Shadow shadow:
+                        {
+                            var shadowBrush = new SolidColorBrush(Color.FromArgb(shadow.Alpha, shadow.Color.R, shadow.Color.G, shadow.Color.B));
+                            if (shadowBrush.CanFreeze) shadowBrush.Freeze();
+                            dc.PushTransform(new TranslateTransform(shadow.OffsetX, shadow.OffsetY));
+                            dc.DrawGeometry(shadowBrush, null, geo);
+                            dc.Pop();
+                            break;
+                        }
+                        case TextRunEffectPass.Reflection reflection:
+                        {
+                            var geoRect = geo.Bounds;
+                            var r2 = new Rect(geoRect.X, geoRect.Y, Math.Max(1, geoRect.Width), Math.Max(1, geoRect.Height));
+                            dc.PushTransform(BuildTextReflectionTransform(reflection, plan.GlyphBoundsDip));
+                            dc.PushOpacity(reflection.Alpha / 255.0);
+                            dc.DrawGeometry(MakeFillBrushForText(reflection.FillBrush, r2), null, geo);
+                            dc.Pop();
+                            dc.Pop();
+                            break;
+                        }
+                        case TextRunEffectPass.Fill fill:
+                        {
+                            var geoRect = geo.Bounds;
+                            var r2 = new Rect(geoRect.X, geoRect.Y, Math.Max(1, geoRect.Width), Math.Max(1, geoRect.Height));
+                            dc.DrawGeometry(MakeFillBrushForText(fill.FillBrush, r2), null, geo);
+                            break;
+                        }
+                        case TextRunEffectPass.Outline outline:
+                            dc.DrawGeometry(null, MakePen(outline.OutlinePen), geo);
+                            break;
                     }
-                    case TextRunEffectPass.Fill fill:
-                    {
-                        var geoRect = geo.Bounds;
-                        var r2 = new Rect(geoRect.X, geoRect.Y, Math.Max(1, geoRect.Width), Math.Max(1, geoRect.Height));
-                        dc.DrawGeometry(MakeFillBrushForText(fill.FillBrush, r2), null, geo);
-                        break;
-                    }
-                    case TextRunEffectPass.Outline outline:
-                        dc.DrawGeometry(null, MakePen(outline.OutlinePen), geo);
-                        break;
                 }
+            }
+            finally
+            {
+                if (pushedWarpTransform)
+                    dc.Pop();
             }
 
             pos += len;
         }
+    }
+
+    private static Transform BuildWordArtWarpTransform(
+        WordArtWarpTransform warp,
+        LayoutRect glyphBounds)
+    {
+        double cx = glyphBounds.X + glyphBounds.Width / 2.0;
+        double cy = glyphBounds.Y + glyphBounds.Height / 2.0;
+        var group = new TransformGroup();
+        if (Math.Abs(warp.ScaleY - 1.0) > 0.001)
+            group.Children.Add(new ScaleTransform(1.0, warp.ScaleY, cx, cy));
+        if (Math.Abs(warp.RotationDeg) > 0.001)
+            group.Children.Add(new RotateTransform(warp.RotationDeg, cx, cy));
+        if (group.CanFreeze) group.Freeze();
+        return group;
+    }
+
+    private static Transform BuildTextReflectionTransform(
+        TextRunEffectPass.Reflection reflection,
+        LayoutRect glyphBounds)
+    {
+        double cx = glyphBounds.X + glyphBounds.Width / 2.0;
+        double pivotY = glyphBounds.Y + glyphBounds.Height;
+        var group = new TransformGroup();
+        group.Children.Add(new ScaleTransform(1.0, reflection.ScaleY, cx, pivotY));
+        group.Children.Add(new TranslateTransform(reflection.OffsetX, reflection.OffsetY));
+        if (group.CanFreeze) group.Freeze();
+        return group;
     }
 
     /// <summary>Compute the X offset of a run within a paragraph (sum of widths of preceding runs).</summary>
