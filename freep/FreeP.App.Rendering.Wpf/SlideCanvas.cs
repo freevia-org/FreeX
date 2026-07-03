@@ -2437,6 +2437,7 @@ public sealed class SlideCanvas : FrameworkElement
         var pen = new Pen(
             ToBrush(new ChartFillPlan(stroke.Color, stroke.Alpha)),
             stroke.Thickness);
+        pen.DashStyle = MapDashStyleWpf(stroke.Dash);
         if (pen.CanFreeze) pen.Freeze();
         return pen;
     }

@@ -1213,7 +1213,8 @@ public sealed class SlideCanvasAvaloniaTests
             new ChartStrokePlan(
                 new SrgbColor(0x12, 0x34, 0x56),
                 Alpha: 0x7F,
-                Thickness: 1.25));
+                Thickness: 1.25,
+                Dash: OutlineDash.DashDot));
 
         var pen = SlideCanvas.CreateChartGridLinePen(plan);
 
@@ -1222,6 +1223,7 @@ public sealed class SlideCanvasAvaloniaTests
             .BeOfType<SolidColorBrush>()
             .Subject;
         brush.Color.Should().Be(Color.FromArgb(0x7F, 0x12, 0x34, 0x56));
+        pen.DashStyle.Should().Be(DashStyle.DashDot);
     }
 
     [Fact]

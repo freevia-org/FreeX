@@ -51,7 +51,11 @@ public enum ChartMarkerPrimitiveSymbol
 
 public readonly record struct ChartFillPlan(SrgbColor Color, byte Alpha);
 
-public readonly record struct ChartStrokePlan(SrgbColor Color, byte Alpha, double Thickness);
+public readonly record struct ChartStrokePlan(
+    SrgbColor Color,
+    byte Alpha,
+    double Thickness,
+    OutlineDash Dash = OutlineDash.Solid);
 
 public readonly record struct ChartPathPrimitive(
     IReadOnlyList<ChartPlanPoint> Points,
@@ -2335,7 +2339,8 @@ public static partial class ChartRenderPlanner
             ShapeOutline.Visible visible => new ChartStrokePlan(
                 visible.Color.Resolved,
                 Alpha: 255,
-                Thickness: visible.WidthPt),
+                Thickness: visible.WidthPt,
+                Dash: visible.Dash),
             _ => DefaultDataTableBorderStroke()
         };
 

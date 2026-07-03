@@ -891,6 +891,7 @@ public sealed class PptxPackageRetentionTests
         chart.DataTable.BorderOutline.Should().BeOfType<ShapeOutline.Visible>()
             .Which.Color.Resolved.Should().Be(new SrgbColor(0x12, 0x34, 0x56));
         ((ShapeOutline.Visible)chart.DataTable.BorderOutline!).WidthPt.Should().BeApproximately(1.25, 0.001);
+        ((ShapeOutline.Visible)chart.DataTable.BorderOutline!).Dash.Should().Be(OutlineDash.DashDot);
         chart.DataTable.TextStyle.Should().NotBeNull();
         chart.DataTable.TextStyle!.FontSizePt.Should().Be(8.75);
         chart.DataTable.TextStyle.Bold.Should().BeTrue();
@@ -925,6 +926,7 @@ public sealed class PptxPackageRetentionTests
                 .Value.Should().Be("FAF1D2");
             var savedLine = savedSpPr.Element(DrawingNs + "ln")!;
             savedLine.Attribute("w")!.Value.Should().Be(DrawingMlUnits.PointsToEmu(1.25).ToString());
+            savedLine.Element(DrawingNs + "prstDash")!.Attribute("val")!.Value.Should().Be("dashDot");
             savedLine.Element(DrawingNs + "solidFill")!
                 .Element(DrawingNs + "srgbClr")!
                 .Attribute("val")!
@@ -957,6 +959,7 @@ public sealed class PptxPackageRetentionTests
         reloadedDataTable.BorderOutline.Should().BeOfType<ShapeOutline.Visible>()
             .Which.Color.Resolved.Should().Be(new SrgbColor(0x12, 0x34, 0x56));
         ((ShapeOutline.Visible)reloadedDataTable.BorderOutline!).WidthPt.Should().BeApproximately(1.25, 0.001);
+        ((ShapeOutline.Visible)reloadedDataTable.BorderOutline!).Dash.Should().Be(OutlineDash.DashDot);
         reloadedDataTable.TextStyle.Should().NotBeNull();
         reloadedDataTable.TextStyle!.FontSizePt.Should().Be(8.75);
         reloadedDataTable.TextStyle.Bold.Should().BeTrue();
@@ -1323,7 +1326,8 @@ public sealed class PptxPackageRetentionTests
                         new XElement(DrawingNs + "ln",
                             new XAttribute("w", DrawingMlUnits.PointsToEmu(1.25)),
                             new XElement(DrawingNs + "solidFill",
-                                new XElement(DrawingNs + "srgbClr", new XAttribute("val", "123456"))))),
+                                new XElement(DrawingNs + "srgbClr", new XAttribute("val", "123456"))),
+                            new XElement(DrawingNs + "prstDash", new XAttribute("val", "dashDot")))),
                     new XElement(ChartNs + "txPr",
                         new XElement(DrawingNs + "bodyPr"),
                         new XElement(DrawingNs + "lstStyle"),
