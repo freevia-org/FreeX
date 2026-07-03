@@ -68,6 +68,35 @@ public sealed class ProofingPresentationPlannerTests
     }
 
     [Fact]
+    public void Proofing_language_apply_planner_collapsed_caret_targets_current_proofing_word()
+    {
+        var plan = ProofingLanguageApplyPlanner.BuildForSelectionOrCaretWord(
+            "de-DE",
+            [0],
+            8,
+            8,
+            new ProofingLanguageCaretContext(0, 8, "alpha bravo"));
+
+        plan.LanguageTag.Should().Be("de-DE");
+        plan.Ranges.Should().Equal(new ProofingLanguageTextRange(0, 6, 11));
+    }
+
+    [Fact]
+    public void Proofing_language_apply_planner_collapsed_caret_without_current_word_has_no_range()
+    {
+        var plan = ProofingLanguageApplyPlanner.BuildForSelectionOrCaretWord(
+            "fr-FR",
+            [0],
+            6,
+            6,
+            new ProofingLanguageCaretContext(0, 6, "alpha  bravo"));
+
+        plan.LanguageTag.Should().Be("fr-FR");
+        plan.HasSelectedText.Should().BeFalse();
+        plan.Ranges.Should().BeEmpty();
+    }
+
+    [Fact]
     public void Shared_thesaurus_lookup_returns_known_synonyms()
     {
         var entry = ThesaurusLookup.Instance.Lookup("happy");
