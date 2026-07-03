@@ -2174,7 +2174,8 @@ public static class PptxPackageReader
         var data = new SmartArtData
         {
             Family        = family,
-            LayoutUniqueId = layoutUniqueId
+            LayoutUniqueId = layoutUniqueId,
+            IsLiveLayoutSupported = IsLiveSmartArtLayoutSupported(layoutUniqueId, family)
         };
 
         // dgm: namespace in data1.xml
@@ -2308,6 +2309,29 @@ public static class PptxPackageReader
             return SmartArtFamily.List;
 
         return SmartArtFamily.Unknown;
+    }
+
+    /// <summary>
+    /// Bounded live-layout allow-list. Broader family classification still lets the
+    /// model describe richer layouts, but rendering should use the cached
+    /// dsp:drawing until a specific layout geometry is implemented.
+    /// </summary>
+    private static bool IsLiveSmartArtLayoutSupported(string uniqueId, SmartArtFamily family)
+    {
+        if (family == SmartArtFamily.Unknown || string.IsNullOrWhiteSpace(uniqueId))
+            return false;
+
+        var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
+        var layoutId = id.Split('/').Last();
+
+        return family switch
+        {
+            SmartArtFamily.Process => layoutId is "process1",
+            SmartArtFamily.List => layoutId is "list1",
+            SmartArtFamily.Cycle => layoutId is "cycle1",
+            SmartArtFamily.Hierarchy => layoutId is "hierarchy1",
+            _ => false
+        };
     }
 
     /// <summary>
