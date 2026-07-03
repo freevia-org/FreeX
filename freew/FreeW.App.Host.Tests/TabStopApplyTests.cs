@@ -25,6 +25,33 @@ public sealed class TabStopApplyTests
         return view;
     }
 
+    private static TextDocument TabbedDocument(string text, params TabStop[] stops)
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var paragraph = new FreeW.Core.Model.Paragraph
+        {
+            Formatting = ParagraphFormatting.Default with { TabStops = stops }
+        };
+        paragraph.Runs.Add(new FreeW.Core.Model.Run(text));
+        doc.Blocks.Add(paragraph);
+        return doc;
+    }
+
+    private static TextDocument TabbedDocumentWithRuns(IEnumerable<FreeW.Core.Model.Run> runs, params TabStop[] stops)
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var paragraph = new FreeW.Core.Model.Paragraph
+        {
+            Formatting = ParagraphFormatting.Default with { TabStops = stops }
+        };
+        foreach (var run in runs)
+            paragraph.Runs.Add(run);
+        doc.Blocks.Add(paragraph);
+        return doc;
+    }
+
     private static void SelectAllParagraphs(DocumentView view)
     {
         var paragraphs = view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>().ToList();
@@ -99,5 +126,78 @@ public sealed class TabStopApplyTests
 
         view.Model.Page.DefaultTabStopPt.Should().Be(42);
         view.Model.Blocks.OfType<Paragraph>().Single().Formatting.TabStops.Should().Equal(stops);
+    }
+
+    [StaFact]
+    public void BuildParagraph_WithLeaderTab_EmitsSharedPlannedSpacer()
+    {
+        var doc = TabbedDocument("Name\tValue", new TabStop(144, TabStopAlignment.Left, TabLeader.Dots));
+        var view = new DocumentView();
+
+        view.LoadModel(doc);
+
+        var paragraph = view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>().Single();
+        var plans = DocumentView.GetRenderedTabStopPlans(paragraph);
+        plans.Should().ContainSingle();
+        var plan = plans.Single();
+        plan.StopPositionDip.Should().BeApproximately(192, 0.01);
+        plan.SegmentStartDip.Should().BeApproximately(192, 0.01);
+        plan.AdvanceDip.Should().BeGreaterThan(120);
+        plan.Alignment.Should().Be(TabStopAlignment.Left);
+        plan.Leader.Should().Be(TabLeader.Dots);
+        plan.IsExplicit.Should().BeTrue();
+    }
+
+    [StaFact]
+    public void BuildParagraph_WithRightTab_MeasuresFollowingSegmentAcrossRuns()
+    {
+        var stop = new TabStop(288, TabStopAlignment.Right);
+        var view = new DocumentView();
+        view.LoadModel(TabbedDocumentWithRuns(
+            [new FreeW.Core.Model.Run("Name\t"), new FreeW.Core.Model.Run("Value")],
+            stop));
+
+        var paragraph = view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>().Single();
+        var plan = DocumentView.GetRenderedTabStopPlans(paragraph).Single();
+
+        plan.Alignment.Should().Be(TabStopAlignment.Right);
+        plan.StopPositionDip.Should().BeApproximately(384, 0.01);
+        plan.SegmentStartDip.Should().BeLessThan(
+            plan.StopPositionDip - 10,
+            "the text after the tab can live in the next run and still participates in right-tab alignment");
+    }
+
+    [StaFact]
+    public void BuildParagraph_WithDecimalTab_AlignsSeparatorRatherThanRightEdge()
+    {
+        var decimalView = new DocumentView();
+        decimalView.LoadModel(TabbedDocument("Total\t123.45", new TabStop(216, TabStopAlignment.Decimal)));
+        var rightView = new DocumentView();
+        rightView.LoadModel(TabbedDocument("Total\t123.45", new TabStop(216, TabStopAlignment.Right)));
+
+        var decimalParagraph = decimalView.Document.Blocks.OfType<System.Windows.Documents.Paragraph>().Single();
+        var rightParagraph = rightView.Document.Blocks.OfType<System.Windows.Documents.Paragraph>().Single();
+        var decimalPlan = DocumentView.GetRenderedTabStopPlans(decimalParagraph).Single();
+        var rightPlan = DocumentView.GetRenderedTabStopPlans(rightParagraph).Single();
+
+        decimalPlan.Alignment.Should().Be(TabStopAlignment.Decimal);
+        decimalPlan.StopPositionDip.Should().BeApproximately(rightPlan.StopPositionDip, 0.01);
+        decimalPlan.SegmentStartDip.Should().BeGreaterThan(
+            rightPlan.SegmentStartDip + 5,
+            "decimal tabs align the separator, not the segment's right edge");
+    }
+
+    [StaFact]
+    public void BuildParagraph_WithRenderedTabSpacer_RoundTripsLiteralTabAndStops()
+    {
+        var stop = new TabStop(144, TabStopAlignment.Left, TabLeader.Dots);
+        var view = new DocumentView();
+        view.LoadModel(TabbedDocument("Name\tValue", stop));
+
+        view.CommitToModel();
+
+        var paragraph = view.Model.Blocks.OfType<Paragraph>().Single();
+        paragraph.PlainText.Should().Be("Name\tValue");
+        paragraph.Formatting.TabStops.Should().Equal(stop);
     }
 }
