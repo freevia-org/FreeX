@@ -11277,7 +11277,7 @@ public sealed class DocumentView : RichTextBox
     public void InsertCitation(Source source)
     {
         ArgumentNullException.ThrowIfNull(source);
-        InsertText(Citations.FormatInText(source, ActiveCitationStyle));
+        InsertText(Citations.FormatInText(_model, source, ActiveCitationStyle));
     }
 
     /// <summary>
