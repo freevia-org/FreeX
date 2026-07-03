@@ -183,6 +183,7 @@ public static class SlideCloner
             {
                 Color   = style.Color,
                 WidthPt = style.WidthPt,
+                Dash    = style.Dash,
                 NoFill  = style.NoFill,
             };
 
