@@ -59,6 +59,26 @@ public sealed class ProtectionEnforcementTests
     }
 
     [StaFact]
+    public void HistoryCommands_FollowSharedProtectionPolicy()
+    {
+        var view = Load();
+
+        view.SetProtection(ProtectionMode.ReadOnly);
+        view.GetRestrictEditingDecision(RestrictEditingOperationKind.HistoryUndo)
+            .BlockReason.Should().Be(RestrictEditingBlockReason.ReadOnly);
+        view.CanUndo.Should().BeFalse();
+        view.CanRedo.Should().BeFalse();
+
+        view.SetProtection(ProtectionMode.None);
+        view.SetProtection(ProtectionMode.TrackChangesOnly);
+
+        view.GetRestrictEditingDecision(RestrictEditingOperationKind.HistoryUndo)
+            .RequiresTrackedChanges.Should().BeTrue();
+        view.GetRestrictEditingDecision(RestrictEditingOperationKind.HistoryRedo)
+            .IsAllowed.Should().BeTrue();
+    }
+
+    [StaFact]
     public void TrackChangesProtection_LeavesEditable_ButForcesTrackChangesOn()
     {
         var view = Load();

@@ -38,6 +38,8 @@ public sealed class RestrictEditingEnforcementPolicyTests
     [InlineData(RestrictEditingOperationKind.CommentResolve)]
     [InlineData(RestrictEditingOperationKind.CommentDelete)]
     [InlineData(RestrictEditingOperationKind.FormFieldEdit)]
+    [InlineData(RestrictEditingOperationKind.HistoryUndo)]
+    [InlineData(RestrictEditingOperationKind.HistoryRedo)]
     public void Unprotected_document_allows_normal_operations(RestrictEditingOperationKind operation)
     {
         var policy = RestrictEditingEnforcementPolicy.From(ProtectionSettings.Unprotected, isMarkedAsFinal: false);
@@ -54,6 +56,7 @@ public sealed class RestrictEditingEnforcementPolicyTests
     [InlineData(RestrictEditingOperationKind.BodyFormatting)]
     [InlineData(RestrictEditingOperationKind.CommentInsert)]
     [InlineData(RestrictEditingOperationKind.FormFieldEdit)]
+    [InlineData(RestrictEditingOperationKind.HistoryUndo)]
     public void Mark_as_final_blocks_document_mutations_until_cleared(RestrictEditingOperationKind operation)
     {
         var policy = RestrictEditingEnforcementPolicy.From(ProtectionSettings.Unprotected, isMarkedAsFinal: true);
@@ -75,12 +78,15 @@ public sealed class RestrictEditingEnforcementPolicyTests
         policy.DecisionFor(RestrictEditingOperationKind.CommentInsert).IsAllowed.Should().BeFalse();
         policy.DecisionFor(RestrictEditingOperationKind.FormFieldEdit).IsAllowed.Should().BeFalse();
         policy.IsBodyEditingLocked.Should().BeTrue();
+        policy.IsHistoryLocked.Should().BeTrue();
     }
 
     [Theory]
     [InlineData(RestrictEditingOperationKind.BodyTextEdit)]
     [InlineData(RestrictEditingOperationKind.BodyTextDelete)]
     [InlineData(RestrictEditingOperationKind.BodyFormatting)]
+    [InlineData(RestrictEditingOperationKind.HistoryUndo)]
+    [InlineData(RestrictEditingOperationKind.HistoryRedo)]
     public void Track_changes_only_allows_body_edits_only_as_tracked_changes(RestrictEditingOperationKind operation)
     {
         var policy = Policy(ProtectionMode.TrackChangesOnly);
@@ -103,6 +109,9 @@ public sealed class RestrictEditingEnforcementPolicyTests
             .Should().Be(RestrictEditingBlockReason.CommentsOnly);
         policy.DecisionFor(RestrictEditingOperationKind.BodyFormatting).IsAllowed.Should().BeFalse();
         policy.DecisionFor(RestrictEditingOperationKind.FormFieldEdit).IsAllowed.Should().BeFalse();
+        policy.DecisionFor(RestrictEditingOperationKind.HistoryUndo).BlockReason
+            .Should().Be(RestrictEditingBlockReason.CommentsOnly);
+        policy.IsHistoryLocked.Should().BeTrue();
     }
 
     [Fact]
@@ -115,6 +124,7 @@ public sealed class RestrictEditingEnforcementPolicyTests
             .Should().Be(RestrictEditingBlockReason.FillingForms);
         policy.DecisionFor(RestrictEditingOperationKind.CommentInsert).IsAllowed.Should().BeFalse();
         policy.IsFormFieldEditingOnly.Should().BeTrue();
+        policy.IsHistoryLocked.Should().BeTrue();
     }
 
     private static RestrictEditingEnforcementPolicy Policy(ProtectionMode mode) =>

@@ -562,6 +562,24 @@ public sealed class DocumentView : RichTextBox
         base.OnPreviewTextInput(e);
     }
 
+    protected override void OnPreviewKeyDown(KeyEventArgs e)
+    {
+        var isCtrl = (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control;
+        if (isCtrl && e.Key == Key.Z && !AllowsRestrictEditingOperation(RestrictEditingOperationKind.HistoryUndo))
+        {
+            e.Handled = true;
+            return;
+        }
+
+        if (isCtrl && e.Key == Key.Y && !AllowsRestrictEditingOperation(RestrictEditingOperationKind.HistoryRedo))
+        {
+            e.Handled = true;
+            return;
+        }
+
+        base.OnPreviewKeyDown(e);
+    }
+
     /// <summary>
     /// Test seam: simulate typing a single character at the caret through the same AutoCorrect/AutoFormat
     /// path <see cref="OnPreviewTextInput"/> uses. When a rule fires the correction is applied and the raw
@@ -717,6 +735,28 @@ public sealed class DocumentView : RichTextBox
 
     /// <summary>Undo/redo command bus over this view's model (backed by the shared UndoRedoStack).</summary>
     public DocumentCommandBus Commands => _commands;
+
+    public new bool CanUndo =>
+        base.CanUndo && AllowsRestrictEditingOperation(RestrictEditingOperationKind.HistoryUndo);
+
+    public new bool CanRedo =>
+        base.CanRedo && AllowsRestrictEditingOperation(RestrictEditingOperationKind.HistoryRedo);
+
+    public new void Undo()
+    {
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.HistoryUndo))
+            return;
+
+        base.Undo();
+    }
+
+    public new void Redo()
+    {
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.HistoryRedo))
+            return;
+
+        base.Redo();
+    }
 
     /// <summary>Render a model document into the editable surface.</summary>
     public void LoadModel(TextDocument document)
