@@ -37,6 +37,49 @@ public sealed class AvaloniaSheetDialogSizeSourceTests
         unhideDialog.Should().Contain("ApplyDialogButtonChrome(cancelButton, width: 72);");
     }
 
+    [Fact]
+    public void RemainingDataDialogs_UseWpfLogicalCaptureSizes()
+    {
+        var paritySource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
+        paritySource.Should().Contain("private const int ForecastSheetParityDialogWidth = 320;");
+        paritySource.Should().Contain("private const int ForecastSheetParityDialogHeight = 150;");
+        paritySource.Should().Contain("private const int SubtotalParityDialogWidth = 380;");
+        paritySource.Should().Contain("private const int SubtotalParityDialogHeight = 390;");
+        paritySource.Should().Contain("private const int TextToColumnsParityDialogWidth = 500;");
+        paritySource.Should().Contain("private const int TextToColumnsParityDialogHeight = 430;");
+
+        var mainWindowSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var forecastDialog = ExtractMethodSource(
+            mainWindowSource,
+            "private async Task<ForecastSheetPlan?> ShowForecastSheetInputDialogAsync()",
+            "private static string FormatForecastSheetPlanError(ForecastSheetPlan plan)");
+        forecastDialog.Should().Contain("Width = ForecastSheetParityDialogWidth,");
+        forecastDialog.Should().Contain("Height = ForecastSheetParityDialogHeight,");
+        forecastDialog.Should().Contain("MinWidth = ForecastSheetParityDialogWidth,");
+        forecastDialog.Should().Contain("MinHeight = ForecastSheetParityDialogHeight,");
+        forecastDialog.Should().Contain("MaxWidth = ForecastSheetParityDialogWidth,");
+        forecastDialog.Should().Contain("MaxHeight = ForecastSheetParityDialogHeight,");
+
+        var subtotalDialog = ExtractMethodSource(
+            mainWindowSource,
+            "private async Task<SubtotalDialogResult?> ShowSubtotalInputDialogAsync()",
+            "private static StackPanel CreateSubtotalField(string label, Control control)");
+        subtotalDialog.Should().Contain("Width = SubtotalParityDialogWidth,");
+        subtotalDialog.Should().Contain("Height = SubtotalParityDialogHeight,");
+        subtotalDialog.Should().Contain("MinWidth = SubtotalParityDialogWidth,");
+        subtotalDialog.Should().Contain("MinHeight = SubtotalParityDialogHeight,");
+
+        var textToColumnsSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.TextToColumns.cs"));
+        var textToColumnsDialog = ExtractMethodSource(
+            textToColumnsSource,
+            "private async Task ShowTextToColumnsDialogAsync()",
+            "private static IReadOnlyList<string> ReadTextToColumnsSources(Sheet sheet, GridRange range)");
+        textToColumnsDialog.Should().Contain("Width = TextToColumnsParityDialogWidth,");
+        textToColumnsDialog.Should().Contain("Height = TextToColumnsParityDialogHeight,");
+        textToColumnsDialog.Should().Contain("MinWidth = TextToColumnsParityDialogWidth,");
+        textToColumnsDialog.Should().Contain("MinHeight = TextToColumnsParityDialogHeight,");
+    }
+
     private static string ExtractMethodSource(string source, string startMarker, string endMarker)
     {
         var start = source.IndexOf(startMarker, StringComparison.Ordinal);

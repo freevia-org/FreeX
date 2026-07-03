@@ -56,6 +56,12 @@ public sealed partial class MainWindow
     private const int ParityCaptureTitleBarHeight = 30;
     private const int ParityCaptureDialogWaitMilliseconds = 8000;
     private const int ParityCaptureDialogPollMilliseconds = 50;
+    private const int ForecastSheetParityDialogWidth = 320;
+    private const int ForecastSheetParityDialogHeight = 150;
+    private const int SubtotalParityDialogWidth = 380;
+    private const int SubtotalParityDialogHeight = 390;
+    private const int TextToColumnsParityDialogWidth = 500;
+    private const int TextToColumnsParityDialogHeight = 430;
     private static readonly FontFamily ParityNarrowUiFontFamily =
         new("Segoe UI, Arial Narrow, Aptos Narrow, Liberation Sans Narrow, Nimbus Sans Narrow, DejaVu Sans Condensed, Arial, Liberation Sans, sans-serif");
     private static readonly IBrush ParityBackstageSidebarBrush = Brush(0x10, 0x25, 0x3A);
