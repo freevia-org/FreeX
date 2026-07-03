@@ -8466,29 +8466,6 @@ internal static class FreeWRibbonCommands
     // The WPF spell checker uses the run's Language property so the correct dictionary is active.
     private sealed class SetProofingLanguageCommand(DocumentView editor) : IRibbonCommand
     {
-        private static readonly (string Tag, string Label)[] Languages =
-        [
-            ("en-US", "English (United States)"),
-            ("en-GB", "English (United Kingdom)"),
-            ("en-AU", "English (Australia)"),
-            ("fr-FR", "French (France)"),
-            ("fr-CA", "French (Canada)"),
-            ("de-DE", "German (Germany)"),
-            ("es-ES", "Spanish (Spain)"),
-            ("es-MX", "Spanish (Mexico)"),
-            ("it-IT", "Italian (Italy)"),
-            ("pt-BR", "Portuguese (Brazil)"),
-            ("pt-PT", "Portuguese (Portugal)"),
-            ("nl-NL", "Dutch (Netherlands)"),
-            ("pl-PL", "Polish (Poland)"),
-            ("ru-RU", "Russian (Russia)"),
-            ("ja-JP", "Japanese (Japan)"),
-            ("zh-CN", "Chinese Simplified (China)"),
-            ("zh-TW", "Chinese Traditional (Taiwan)"),
-            ("ko-KR", "Korean (Korea)"),
-            ("ar-SA", "Arabic (Saudi Arabia)"),
-        ];
-
         public void Execute(RibbonCommandContext context)
         {
             editor.Focus();
@@ -8517,8 +8494,8 @@ internal static class FreeWRibbonCommands
             var listBox = new System.Windows.Controls.ListBox { Margin = new Thickness(0, 0, 0, 8) };
             // "(None)" entry clears the language.
             listBox.Items.Add(new System.Windows.Controls.ListBoxItem { Content = "(None — clear language)", Tag = string.Empty });
-            foreach (var (tag, label) in Languages)
-                listBox.Items.Add(new System.Windows.Controls.ListBoxItem { Content = $"{label} [{tag}]", Tag = tag });
+            foreach (var choice in ProofingLanguageCatalog.CommonLanguages)
+                listBox.Items.Add(new System.Windows.Controls.ListBoxItem { Content = $"{choice.Label} [{choice.Tag}]", Tag = choice.Tag });
 
             // Pre-select the current tag if present.
             foreach (System.Windows.Controls.ListBoxItem item in listBox.Items)

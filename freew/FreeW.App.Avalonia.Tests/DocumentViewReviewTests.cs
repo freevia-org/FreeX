@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Headless;
 using FluentAssertions;
+using FreeW.App.Avalonia;
 using FreeW.App.Avalonia.Editing;
 using FreeW.App.Avalonia.Ribbon;
 using FreeW.Core.Model;
@@ -73,7 +74,7 @@ public sealed class DocumentViewReviewTests
 
     private static DocumentView Build(TextDocument doc)
     {
-        var view = new DocumentView();
+        var view = new DocumentView(new CustomDictionaryStore(null));
         view.LoadDocument(doc);
         view.Measure(new Size(800, 2000));
         return view;
@@ -484,10 +485,10 @@ public sealed class DocumentViewReviewTests
             };
             var registry = FreeWAvaloniaRibbonCommands.Build(view, callbacks);
 
-            Execute(registry, "freew.spellcheck-toggle");
             // Add-to-Dictionary reads the word AT THE CARET, so it must run while the caret is still
             // collapsed inside "teh" (before the selection below is made for the proofing-language check).
             Execute(registry, "freew.add-to-dictionary");
+            Execute(registry, "freew.spellcheck-toggle");
             Execute(registry, "freew.thesaurus");
 
             // GB1: SetProofingLanguage now retags only the SELECTED range (a collapsed caret stages a
@@ -506,6 +507,114 @@ public sealed class DocumentViewReviewTests
         inDictionary.Should().BeTrue();
         thesaurusOpened.Should().BeTrue();
         language.Should().Be("de-DE");
+    }
+
+    [Fact]
+    public async Task Proofing_diagnostics_detect_typo_and_map_to_render_glyphs()
+    {
+        IReadOnlyList<ProofingDiagnostic> diagnostics = [];
+        IReadOnlyList<(int Block, int Offset, Rect Rect)> glyphs = [];
+        string? activeWord = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            doc.Blocks.Add(new Paragraph("teh example"));
+            var view = Build(doc);
+            view.MoveCaretToBlock(0, 1);
+
+            diagnostics = view.ProofingDiagnosticsForTest;
+            glyphs = view.ProofingSquiggleGlyphsForTest;
+            activeWord = view.CurrentProofingDiagnostic?.Word;
+        });
+        if (!ran) return;
+
+        diagnostics.Should().ContainSingle().Which.Word.Should().Be("teh");
+        activeWord.Should().Be("teh");
+        glyphs.Select(g => g.Offset).Should().Equal(0, 1, 2);
+        glyphs.Should().OnlyContain(g => g.Rect.Width > 0 && g.Rect.Height > 0);
+    }
+
+    [Fact]
+    public async Task AddCurrentWordToDictionary_requires_active_diagnostic()
+    {
+        bool normalWordAdded = true;
+        bool typoAdded = false;
+        bool typoInDictionary = false;
+
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            doc.Blocks.Add(new Paragraph("normal teh"));
+            var view = Build(doc);
+
+            view.MoveCaretToBlock(0, 2);
+            normalWordAdded = view.AddCurrentWordToDictionary();
+
+            view.MoveCaretToBlock(0, 8);
+            typoAdded = view.AddCurrentWordToDictionary();
+            typoInDictionary = view.IsInCustomDictionary("teh");
+        });
+        if (!ran) return;
+
+        normalWordAdded.Should().BeFalse("Add to Dictionary is only enabled for a flagged spelling diagnostic");
+        typoAdded.Should().BeTrue();
+        typoInDictionary.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Custom_dictionary_suppresses_existing_diagnostic()
+    {
+        int before = -1;
+        int after = -1;
+
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            doc.Blocks.Add(new Paragraph("teh"));
+            var view = Build(doc);
+            view.MoveCaretToBlock(0, 1);
+
+            before = view.ProofingDiagnosticsForTest.Count;
+            view.AddCurrentWordToDictionary();
+            after = view.ProofingDiagnosticsForTest.Count;
+        });
+        if (!ran) return;
+
+        before.Should().Be(1);
+        after.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task Spellcheck_toggle_hides_diagnostics_and_blocks_add_to_dictionary()
+    {
+        bool enabled = true;
+        bool added = true;
+        int diagnostics = -1;
+        int glyphs = -1;
+
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            doc.Blocks.Add(new Paragraph("teh"));
+            var view = Build(doc);
+            view.MoveCaretToBlock(0, 1);
+
+            enabled = view.ToggleSpellCheck();
+            diagnostics = view.ProofingDiagnosticsForTest.Count;
+            glyphs = view.ProofingSquiggleGlyphsForTest.Count;
+            added = view.AddCurrentWordToDictionary();
+        });
+        if (!ran) return;
+
+        enabled.Should().BeFalse();
+        diagnostics.Should().Be(0);
+        glyphs.Should().Be(0);
+        added.Should().BeFalse();
     }
 
     [Fact]

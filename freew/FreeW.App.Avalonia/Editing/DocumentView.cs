@@ -201,7 +201,7 @@ public sealed class DocumentView : Control
     // location/format, so words added in either shell are available in the other) rather than a plain
     // in-memory CustomDictionary, so Add-to-Dictionary survives a restart. Loaded once at construction;
     // best-effort (a failed load/save never blocks editing — see CustomDictionaryStore).
-    private readonly CustomDictionaryStore _customDictionary = CustomDictionaryStore.Load();
+    private readonly CustomDictionaryStore _customDictionary;
     private double _laidOutWidth = -1;
     private double _contentHeight;
     private double _pageLeft;
@@ -229,7 +229,13 @@ public sealed class DocumentView : Control
     private bool   _colLineBetween = false;
 
     public DocumentView()
+        : this(null)
     {
+    }
+
+    internal DocumentView(CustomDictionaryStore? customDictionary)
+    {
+        _customDictionary = customDictionary ?? CustomDictionaryStore.Load();
         Focusable = true;
         _bus = new DocumentCommandBus(new ViewContext(this));
         _bus.Changed += OnModelChanged;
@@ -621,6 +627,23 @@ public sealed class DocumentView : Control
 
     /// <summary>AV-LINK: the caret's current (Block, Offset) — exposed for navigation tests.</summary>
     internal (int Block, int Offset) CaretPositionForTest => (_caret.Block, _caret.Offset);
+
+    internal IReadOnlyList<ProofingDiagnostic> ProofingDiagnosticsForTest => BuildProofingDiagnostics();
+
+    internal IReadOnlyList<(int Block, int Offset, Rect Rect)> ProofingSquiggleGlyphsForTest
+    {
+        get
+        {
+            if (_laidOutWidth < 0)
+                Relayout(FallbackWidth);
+
+            var offsets = BuildProofingOffsetSet();
+            return _placed
+                .Where(pc => !pc.Sentinel && !pc.IsCell && offsets.Contains((pc.Block, pc.Offset)))
+                .Select(pc => (pc.Block, pc.Offset, new Rect(pc.X, pc.Y, Math.Max(1, pc.W), pc.LineHeight)))
+                .ToList();
+        }
+    }
 
     /// <summary>Fires <see cref="HyperlinkActivated"/> with <paramref name="url"/> so tests can
     /// verify that hosts have subscribed without hitting real hyperlinks or Process.Start.</summary>
@@ -5684,6 +5707,7 @@ public sealed class DocumentView : Control
         }
 
         var selection = NormalizedSelection();
+        var proofingOffsets = BuildProofingOffsetSet();
         foreach (var pc in _placed)
         {
             if (pc.Sentinel)
@@ -5763,6 +5787,8 @@ public sealed class DocumentView : Control
             if (drawFmt.Strikethrough)
                 DrawDecoration(context, pc, pc.Y + pc.LineHeight * 0.5, drawFmt);
             DrawRevisionDecoration(context, pc);
+            if (!pc.IsCell && proofingOffsets.Contains((pc.Block, pc.Offset)))
+                DrawProofingSquiggle(context, pc);
         }
 
         foreach (var (mx, my, text, fmt) in _markers)
@@ -7064,6 +7090,28 @@ public sealed class DocumentView : Control
         }
     }
 
+    private static void DrawProofingSquiggle(DrawingContext context, PlacedChar pc)
+    {
+        if (pc.W <= 0)
+            return;
+
+        var y = pc.Y + pc.LineHeight * 0.92;
+        var x = pc.X;
+        var end = pc.X + pc.W;
+        var step = 3.0;
+        var amplitude = 1.4;
+        var high = true;
+        var current = new Point(x, y);
+        while (x < end)
+        {
+            x = Math.Min(end, x + step);
+            var next = new Point(x, y + (high ? -amplitude : amplitude));
+            context.DrawLine(ProofingSquigglePen, current, next);
+            current = next;
+            high = !high;
+        }
+    }
+
     /// <summary>
     /// AV-TAB: Draws a tab leader (dots / dashes / underline) filling the gap between
     /// <paramref name="x1"/> (tab character start) and <paramref name="x2"/> (next segment start)
@@ -8138,13 +8186,26 @@ public sealed class DocumentView : Control
         return SpellCheckEnabled;
     }
 
-    public bool AddCurrentWordToDictionary() =>
-        CurrentProofingWord is { } word && _customDictionary.Add(word);
+    public bool AddCurrentWordToDictionary()
+    {
+        if (CurrentProofingDiagnostic is not { } diagnostic)
+            return false;
+
+        if (!_customDictionary.Add(diagnostic.Word))
+            return false;
+
+        InvalidateVisual();
+        return true;
+    }
 
     public bool AddToDictionary(string? word)
     {
         var normalized = NormalizeProofingWord(word);
-        return normalized is not null && _customDictionary.Add(normalized);
+        if (normalized is null || !_customDictionary.Add(normalized))
+            return false;
+
+        InvalidateVisual();
+        return true;
     }
 
     public bool IsInCustomDictionary(string? word) =>
@@ -8152,6 +8213,35 @@ public sealed class DocumentView : Control
 
     public string? CurrentProofingWord =>
         NormalizeProofingWord(SelectedText) ?? WordAtCaret();
+
+    public ProofingDiagnostic? CurrentProofingDiagnostic => CurrentProofingDiagnosticAtCaret();
+
+    private IReadOnlyList<ProofingDiagnostic> BuildProofingDiagnostics() =>
+        ProofingDiagnosticPlanner.Build(_doc, SpellCheckEnabled, _customDictionary.Words);
+
+    private HashSet<(int Block, int Offset)> BuildProofingOffsetSet()
+    {
+        var offsets = new HashSet<(int Block, int Offset)>();
+        foreach (var diagnostic in BuildProofingDiagnostics())
+        {
+            for (var offset = diagnostic.ParagraphOffset; offset < diagnostic.ParagraphOffset + diagnostic.Length; offset++)
+                offsets.Add((diagnostic.BlockIndex, offset));
+        }
+        return offsets;
+    }
+
+    private ProofingDiagnostic? CurrentProofingDiagnosticAtCaret()
+    {
+        if (!SpellCheckEnabled || _cellCaret is not null || _hfCaret is not null)
+            return null;
+
+        var caretOffset = Math.Clamp(_caret.Offset, 0, BlockLength(_caret.Block));
+        return BuildProofingDiagnostics()
+            .FirstOrDefault(d =>
+                d.BlockIndex == _caret.Block
+                && caretOffset >= d.ParagraphOffset
+                && caretOffset <= d.ParagraphOffset + d.Length);
+    }
 
     // ── AV-COMMENT: review-comment insert / delete / resolve + introspection ──────────────────────
     // Model-backed (comments already round-trip through Core.IO). All mutations ride the shared
@@ -11136,21 +11226,7 @@ public sealed class DocumentView : Control
 
     private static string? NormalizeProofingWord(string? word)
     {
-        if (string.IsNullOrWhiteSpace(word))
-            return null;
-
-        var trimmed = word.Trim();
-        var start = 0;
-        while (start < trimmed.Length && !IsProofingWordChar(trimmed[start]))
-            start++;
-        var end = trimmed.Length - 1;
-        while (end >= start && !IsProofingWordChar(trimmed[end]))
-            end--;
-        if (end < start)
-            return null;
-
-        var normalized = trimmed[start..(end + 1)];
-        return normalized.Any(char.IsWhiteSpace) ? null : normalized;
+        return ProofingDiagnosticPlanner.NormalizeWord(word);
     }
 
     private static bool IsProofingWordChar(char ch) =>
@@ -12189,6 +12265,7 @@ public sealed class DocumentView : Control
     private static IBrush RevisionBrush { get; } = new SolidColorBrush(RevisionColor);
     private static readonly Pen RevisionInsertUnderlinePen = new(RevisionBrush, 1.0);
     private static readonly Pen RevisionDeleteStrikePen = new(RevisionBrush, 1.0);
+    private static readonly Pen ProofingSquigglePen = new(new SolidColorBrush(Color.FromRgb(0xD1, 0x34, 0x38)), 1.15);
 
     // ── AV-LINK: hyperlink render colour ──────────────────────────────────────────────────────────
     // Word's default hyperlink character-style colour (a medium blue). A hyperlinked run with no explicit
