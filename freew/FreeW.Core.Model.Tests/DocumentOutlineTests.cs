@@ -62,12 +62,24 @@ public class DocumentOutlineTests
     public void Of_DeepHeadingNumber_DerivesLevelFromStyleId()
     {
         var doc = new TextDocument();
-        doc.Blocks.Add(new Paragraph("Deep") { StyleId = "Heading6" });
+        doc.Blocks.Add(new Paragraph("Deep") { StyleId = "Heading9" });
 
         var outline = DocumentOutline.Of(doc);
 
         outline.Should().ContainSingle()
-            .Which.Level.Should().Be(6);
+            .Which.Level.Should().Be(9);
+    }
+
+    [Fact]
+    public void Of_OverDeepHeadingNumber_ClampsToWordOutlineDepth()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Too deep") { StyleId = "Heading10" });
+
+        var outline = DocumentOutline.Of(doc);
+
+        outline.Should().ContainSingle()
+            .Which.Should().Be(new OutlineEntry(0, DocumentOutline.MaxOutlineLevel, "Too deep", "Heading10"));
     }
 
     [Fact]
@@ -93,7 +105,8 @@ public class DocumentOutlineTests
     [InlineData("Heading1", true, 1)]
     [InlineData("Heading2", true, 2)]
     [InlineData("Heading3", true, 3)]
-    [InlineData("Heading10", true, 10)]
+    [InlineData("Heading9", true, 9)]
+    [InlineData("Heading10", true, 9)]
     public void TryGetLevel_ClassifiesStyleIds(string? styleId, bool expectedIsHeading, int expectedLevel)
     {
         DocumentOutline.TryGetLevel(styleId, out var level).Should().Be(expectedIsHeading);
