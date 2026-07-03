@@ -467,6 +467,74 @@ public sealed class SlideCanvasAvaloniaTests
     }
 
     [Fact]
+    public async Task TableCellTextEditor_OpenMixedRuns_ProjectsSharedRichPlanOntoOverlay()
+    {
+        SlideShape? shape = null;
+        InCanvasTableCellRichTextEditPlan? startPlan = null;
+        InCanvasTableCellRichTextEditPlan? selectedPlan = null;
+        var projectedFontFamily = string.Empty;
+        var projectedFontSize = 0.0;
+        var projectedBold = false;
+        var richClass = false;
+        var mixedClass = false;
+
+        await Run(() =>
+        {
+            var presentation = MakePresentation(pres =>
+            {
+                pres.Slides[0].Shapes.Clear();
+                shape = MakeTableShape(25, "Hello");
+                var body = shape!.Table!.Rows[0].Cells[0].TextBody!;
+                body.Paragraphs[0].Runs.Add(new Run
+                {
+                    Text = "World",
+                    FontFamily = "Consolas",
+                    FontSizePt = 22,
+                    Italic = true,
+                    ItalicSet = true,
+                });
+                pres.Slides[0].Shapes.Add(shape);
+            });
+
+            var bus = new PresentationCommandBus(presentation);
+            var editor = new EditingSession(presentation, bus);
+            var canvas = new SlideCanvas { Presentation = presentation, Slide = presentation.Slides[0] };
+            var overlay = new global::Avalonia.Controls.Canvas();
+            var textEditor = new AvaloniaInCanvasTextEditor(canvas, editor, overlay);
+
+            textEditor.ActivateCellEdit(shape!.Id, 0, 0);
+            var box = overlay.Children.OfType<global::Avalonia.Controls.TextBox>().Single();
+            startPlan = box.Tag.Should().BeOfType<InCanvasTableCellRichTextEditPlan>().Subject;
+            projectedFontFamily = box.FontFamily.ToString();
+            projectedFontSize = box.FontSize;
+            projectedBold = box.FontWeight == FontWeight.Bold;
+            richClass = box.Classes.Contains("freep-table-cell-rich-editor");
+            mixedClass = box.Classes.Contains("freep-table-cell-mixed-formatting");
+
+            box.SelectionStart = 5;
+            box.SelectionEnd = 10;
+            textEditor.TryApplyActiveTableCellTextFormat(TableCellTextFormatKind.Bold).Should().BeTrue();
+            selectedPlan = box.Tag.Should().BeOfType<InCanvasTableCellRichTextEditPlan>().Subject;
+        });
+
+        startPlan!.PlainText.Should().Be("HelloWorld");
+        startPlan.Runs.Should().HaveCount(2);
+        startPlan.Runs[0].Text.Should().Be("Hello");
+        startPlan.Runs[1].Text.Should().Be("World");
+        startPlan.HasRichFormatting.Should().BeTrue();
+        startPlan.HasMixedFormatting.Should().BeTrue();
+        projectedFontFamily.Should().Contain("Aptos");
+        projectedFontSize.Should().Be(18);
+        projectedBold.Should().BeFalse("the Avalonia editor starts from the first rich run's shared style");
+        richClass.Should().BeTrue();
+        mixedClass.Should().BeTrue();
+
+        selectedPlan!.InitialSelectionStyle.Bold.Should().BeTrue("the refreshed shared plan describes the selected subrange");
+        selectedPlan.InitialSelectionStyle.Italic.Should().BeTrue("existing selected-run style stays visible in the shared selection state");
+        shape!.Table!.Rows[0].Cells[0].TextBody!.Paragraphs[0].Runs[1].Bold.Should().BeTrue();
+    }
+
+    [Fact]
     public async Task TableCellTextEditor_ValueFormatsWholeCell_MirrorsOverlayAndPreservesMixedRunsOnCommit()
     {
         SlideShape? shape = null;

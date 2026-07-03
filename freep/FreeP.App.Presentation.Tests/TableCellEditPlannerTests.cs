@@ -66,7 +66,174 @@ public sealed class TableCellEditPlannerTests
         plan.Placement.Should().Be(new InCanvasEditorPlacement(10, 20, 384, 96));
         plan.InitialSelection.Should().Be(new InCanvasEditorTextSelection(0, "Anchor".Length));
         plan.OriginalBody!.Paragraphs[0].Runs[0].Text.Should().Be("Anchor");
+        plan.RichTextPlan.Should().NotBeNull();
+        plan.RichTextPlan!.PlainText.Should().Be("Anchor");
         plan.EditPlanner.Should().NotBeNull();
+    }
+
+    [Fact]
+    public void BeginEdit_MixedRichRuns_ReturnsRendererNeutralRichTextPlan()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Shapes.Clear();
+        var shape = MakeMergedTableShape();
+        var body = shape.Table!.Rows[0].Cells[0].TextBody!;
+        body.Paragraphs[0].Runs.Clear();
+        body.Paragraphs[0].Runs.Add(new Run
+        {
+            Text = "Hello",
+            FontFamily = "Aptos",
+            FontSizePt = 14,
+        });
+        body.Paragraphs[0].Runs.Add(new Run
+        {
+            Text = "World",
+            FontFamily = "Consolas",
+            FontSizePt = 18,
+            Bold = true,
+            BoldSet = true,
+            Italic = true,
+            ItalicSet = true,
+            Underline = true,
+            Color = new ThemeAwareColor(new SrgbColor(0x22, 0x44, 0x66)),
+        });
+        slide.Shapes.Add(shape);
+
+        var plan = TableCellEditPlanner.BeginEdit(
+            0,
+            slide,
+            shape.Id,
+            0,
+            0,
+            SlideTransformCore.Identity,
+            30,
+            18);
+
+        var rich = plan.RichTextPlan!;
+        rich.PlainText.Should().Be("HelloWorld");
+        rich.HasRichFormatting.Should().BeTrue();
+        rich.HasMixedFormatting.Should().BeTrue();
+        rich.Runs.Should().HaveCount(2);
+        rich.Runs[0].Should().Match<InCanvasEditorRunStyle>(run =>
+            run.Start == 0 &&
+            run.End == 5 &&
+            run.Text == "Hello" &&
+            run.FontFamily == "Aptos" &&
+            run.FontSizePt == 14 &&
+            !run.Bold);
+        rich.Runs[1].Should().Match<InCanvasEditorRunStyle>(run =>
+            run.Start == 5 &&
+            run.End == 10 &&
+            run.Text == "World" &&
+            run.FontFamily == "Consolas" &&
+            run.FontSizePt == 18 &&
+            run.Bold &&
+            run.Italic &&
+            run.Underline);
+        rich.SuggestedEditorStyle.FontFamily.Should().Be("Aptos");
+        rich.SuggestedEditorStyle.FontSizePt.Should().Be(14);
+        rich.SuggestedEditorStyle.Bold.Should().BeFalse();
+        rich.InitialSelectionStyle.FontFamily.Should().BeNull("whole-cell selection spans mixed run families");
+        rich.InitialSelectionStyle.Bold.Should().BeNull("whole-cell selection spans mixed bold state");
+    }
+
+    [Fact]
+    public void PlanRichTextEdit_MultiParagraphRuns_OffsetsIncludeNewlineSeparator()
+    {
+        var body = MakeBody("Alpha");
+        body.Paragraphs[0].Runs.Add(new Run
+        {
+            Text = "Beta",
+            FontFamily = "Aptos",
+            FontSizePt = 14,
+            Bold = true,
+            BoldSet = true,
+        });
+        var second = new Paragraph();
+        second.Runs.Add(new Run
+        {
+            Text = "Gamma",
+            FontFamily = "Consolas",
+            FontSizePt = 18,
+            Italic = true,
+            ItalicSet = true,
+        });
+        body.Paragraphs.Add(second);
+
+        var rich = TableCellEditPlanner.PlanRichTextEdit(
+            body,
+            new InCanvasEditorTextSelection(10, 15));
+
+        rich.PlainText.Should().Be("AlphaBeta\nGamma");
+        rich.Runs.Select(run => (run.ParagraphIndex, run.RunIndex, run.Start, run.End, run.Text))
+            .Should()
+            .Equal(
+                (0, 0, 0, 5, "Alpha"),
+                (0, 1, 5, 9, "Beta"),
+                (1, 0, 10, 15, "Gamma"));
+        rich.InitialSelectionStyle.FontFamily.Should().Be("Consolas");
+        rich.InitialSelectionStyle.FontSizePt.Should().Be(18);
+        rich.InitialSelectionStyle.Italic.Should().BeTrue();
+        rich.InitialSelectionStyle.Bold.Should().BeFalse();
+    }
+
+    [Fact]
+    public void PlanRichTextEdit_SelectionAcrossParagraphBoundary_ReportsMixedSelectionStyle()
+    {
+        var body = MakeBody("Alpha");
+        body.Paragraphs[0].Runs.Add(new Run
+        {
+            Text = "Beta",
+            FontFamily = "Aptos",
+            FontSizePt = 14,
+            Bold = true,
+            BoldSet = true,
+        });
+        var second = new Paragraph();
+        second.Runs.Add(new Run
+        {
+            Text = "Gamma",
+            FontFamily = "Consolas",
+            FontSizePt = 18,
+            Italic = true,
+            ItalicSet = true,
+        });
+        body.Paragraphs.Add(second);
+
+        var rich = TableCellEditPlanner.PlanRichTextEdit(
+            body,
+            new InCanvasEditorTextSelection(7, 12));
+
+        rich.InitialSelectionStyle.FontFamily.Should().BeNull("selection overlaps runs on both sides of the paragraph separator");
+        rich.InitialSelectionStyle.FontSizePt.Should().BeNull();
+        rich.InitialSelectionStyle.Bold.Should().BeNull();
+        rich.InitialSelectionStyle.Italic.Should().BeNull();
+    }
+
+    [Fact]
+    public void PlanRichTextEdit_CollapsedSelection_UsesWholeCellFallbackStyle()
+    {
+        var body = MakeBody("Hello");
+        body.Paragraphs[0].Runs.Add(new Run
+        {
+            Text = "World",
+            FontFamily = "Consolas",
+            FontSizePt = 18,
+            Bold = true,
+            BoldSet = true,
+        });
+
+        var rich = TableCellEditPlanner.PlanRichTextEdit(
+            body,
+            new InCanvasEditorTextSelection(7, 7));
+
+        rich.InitialSelectionStyle.FontFamily.Should().BeNull("collapsed selections currently use the whole-cell style fallback");
+        rich.InitialSelectionStyle.FontSizePt.Should().BeNull();
+        rich.InitialSelectionStyle.Bold.Should().BeNull();
+        rich.SuggestedEditorStyle.FontFamily.Should().Be("Aptos");
+        rich.SuggestedEditorStyle.FontSizePt.Should().Be(14);
+        rich.SuggestedEditorStyle.Bold.Should().BeFalse();
     }
 
     [Fact]
@@ -372,6 +539,36 @@ public sealed class TableCellEditPlannerTests
 
         shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs[0].Runs
             .Should().OnlyContain(r => r.Bold);
+    }
+
+    [Fact]
+    public void PlanFontFamily_CollapsedSelection_FallsBackToWholeCell()
+    {
+        var shape = MakeMergedTableShape();
+        var body = shape.Table!.Rows[0].Cells[0].TextBody!;
+        body.Paragraphs[0].Runs.Clear();
+        body.Paragraphs[0].Runs.Add(new Run { Text = "left", FontFamily = "Aptos" });
+        body.Paragraphs[0].Runs.Add(new Run { Text = "right", FontFamily = "Calibri" });
+        var slide = new Slide { Shapes = { shape } };
+
+        var plan = TableCellEditPlanner.PlanFontFamily(
+            0,
+            slide,
+            [shape.Id],
+            (0, 0),
+            "Consolas",
+            selection: (2, 2));
+
+        plan.Status.Should().Be(TableCellTextFormatStatus.Ready);
+
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Clear();
+        presentation.Slides[0].Shapes.Add(shape);
+        var bus = new PresentationCommandBus(presentation);
+        bus.Execute(plan.Command!);
+
+        shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs[0].Runs
+            .Should().OnlyContain(r => r.FontFamily == "Consolas");
     }
 
     [Fact]

@@ -145,6 +145,7 @@ public sealed class AvaloniaInCanvasTextEditor
             return false;
 
         _editor.Bus.Execute(plan.Command);
+        RefreshCellOverlayRichTextPlan(overlaySelection.Selection);
 
         if (_cellEditActive &&
             _cellTextBox is not null &&
@@ -174,6 +175,7 @@ public sealed class AvaloniaInCanvasTextEditor
             return false;
 
         _editor.Bus.Execute(plan.Command);
+        RefreshCellOverlayRichTextPlan(overlaySelection.Selection);
 
         if (IsCurrentCellPlan(plan) && overlaySelection.IsWholeCell)
             ApplyCellOverlayFontFamily(fontFamily);
@@ -189,6 +191,7 @@ public sealed class AvaloniaInCanvasTextEditor
             return false;
 
         _editor.Bus.Execute(plan.Command);
+        RefreshCellOverlayRichTextPlan(overlaySelection.Selection);
 
         if (IsCurrentCellPlan(plan) && overlaySelection.IsWholeCell)
             ApplyCellOverlayFontSize(sizePt);
@@ -204,6 +207,7 @@ public sealed class AvaloniaInCanvasTextEditor
             return false;
 
         _editor.Bus.Execute(plan.Command);
+        RefreshCellOverlayRichTextPlan(overlaySelection.Selection);
 
         if (IsCurrentCellPlan(plan) && overlaySelection.IsWholeCell)
             ApplyCellOverlayColor(color);
@@ -345,6 +349,7 @@ public sealed class AvaloniaInCanvasTextEditor
             BorderBrush = new SolidColorBrush(Color.FromRgb(0x21, 0x96, 0xF3)),
             BorderThickness = new Thickness(1.5),
         };
+        AvaloniaTableCellEditAdapter.ApplyRichTextEditorPlan(_cellTextBox, startPlan.RichTextPlan);
 
         Canvas.SetLeft(_cellTextBox, placement.Left);
         Canvas.SetTop(_cellTextBox, placement.Top);
@@ -763,5 +768,25 @@ public sealed class AvaloniaInCanvasTextEditor
         textBox.Foreground = color is null
             ? null
             : new SolidColorBrush(Color.FromRgb(color.Resolved.R, color.Resolved.G, color.Resolved.B));
+    }
+
+    private void RefreshCellOverlayRichTextPlan((int Start, int End)? selection)
+    {
+        if (!_cellEditActive || _cellTextBox is null)
+            return;
+
+        var cell = _editor.CurrentSlide?
+            .Shapes.FirstOrDefault(s => s.Id == _editingTableShapeId)?
+            .Table?
+            .Rows.ElementAtOrDefault(_editingCellRow)?
+            .Cells.ElementAtOrDefault(_editingCellCol);
+        if (cell is null)
+            return;
+
+        var selectionPlan = selection is { } selected
+            ? new InCanvasEditorTextSelection(selected.Start, selected.End)
+            : TableCellEditPlanner.PlanInitialSelection(cell.TextBody);
+        var richTextPlan = TableCellEditPlanner.PlanRichTextEdit(cell.TextBody, selectionPlan);
+        AvaloniaTableCellEditAdapter.ApplyRichTextEditorPlan(_cellTextBox, richTextPlan);
     }
 }
