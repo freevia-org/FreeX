@@ -151,10 +151,12 @@ public sealed class MainWindow : Window
     private Border _animationPaneHost = null!;
     private TextBlock _animationPaneHeading = null!;
     private TextBlock _animationPaneMessage = null!;
+    private StackPanel _animationPanePlaybackControlsPanel = null!;
     private StackPanel _animationPaneItemsPanel = null!;
     private Button _animationPanePreviewButton = null!;
     private int _selectedAnimationIndex = -1;
     private readonly List<string> _animationPaneRenderedRows = new();
+    private readonly List<string> _animationPaneRenderedPlaybackControls = new();
     private int _animationPaneEffectOptionControlCount;
     private int _animationPaneTriggerControlCount;
     private int _animationPaneDurationControlCount;
@@ -317,6 +319,7 @@ public sealed class MainWindow : Window
     internal string AnimationPaneHeading => _animationPaneHeading?.Text ?? string.Empty;
     internal string AnimationPaneMessage => _animationPaneMessage?.Text ?? string.Empty;
     internal bool IsAnimationPanePreviewEnabled => _animationPanePreviewButton?.IsEnabled == true;
+    internal IReadOnlyList<string> AnimationPanePlaybackControls => _animationPaneRenderedPlaybackControls;
     internal IReadOnlyList<string> AnimationPaneRenderedRows => _animationPaneRenderedRows;
     internal int AnimationPaneEffectOptionControlCount => _animationPaneEffectOptionControlCount;
     internal int AnimationPaneTriggerControlCount => _animationPaneTriggerControlCount;
@@ -1282,12 +1285,16 @@ public sealed class MainWindow : Window
             Content = "Preview",
             MinWidth = 82,
             Padding = new Thickness(10, 4),
-            Margin = new Thickness(12, 0, 12, 8),
+            Margin = new Thickness(0, 0, 8, 8),
         };
-        _animationPanePreviewButton.Click += (_, _) =>
+        _animationPanePlaybackControlsPanel = new StackPanel
         {
-            if (LastAnimationPaneTimelinePlan?.PreviewIntent.CanExecute == true)
-                StartSlideShow(fromStart: false);
+            Orientation = Orientation.Horizontal,
+            Margin = new Thickness(12, 0, 12, 0),
+            Children =
+            {
+                _animationPanePreviewButton,
+            },
         };
 
         _animationPaneItemsPanel = new StackPanel
@@ -1302,7 +1309,7 @@ public sealed class MainWindow : Window
             {
                 _animationPaneHeading,
                 _animationPaneMessage,
-                _animationPanePreviewButton,
+                _animationPanePlaybackControlsPanel,
             }
         };
         DockPanel.SetDock(header, Dock.Top);
@@ -3283,8 +3290,7 @@ public sealed class MainWindow : Window
             : plan.HasAnimations
                 ? "Select an animation row to inspect and reorder it."
                 : "No animations on this slide.";
-        _animationPanePreviewButton.IsEnabled = plan.PreviewIntent.CanExecute;
-        ToolTip.SetTip(_animationPanePreviewButton, plan.PreviewIntent.Description);
+        RenderAnimationPanePlaybackControls(plan);
 
         _animationPaneRenderedRows.Clear();
         _animationPaneItemsPanel.Children.Clear();
@@ -3308,6 +3314,47 @@ public sealed class MainWindow : Window
         {
             _animationPaneRenderedRows.Add(BuildAnimationPaneRowSummary(item));
             _animationPaneItemsPanel.Children.Add(BuildAnimationPaneItemCard(item));
+        }
+    }
+
+    private void RenderAnimationPanePlaybackControls(AnimationPaneTimelinePlan plan)
+    {
+        _animationPanePlaybackControlsPanel.Children.Clear();
+        _animationPaneRenderedPlaybackControls.Clear();
+        foreach (var control in plan.PlaybackControls)
+        {
+            var button = new Button
+            {
+                Content = control.Label,
+                IsEnabled = control.IsEnabled,
+                MinWidth = control.Kind == AnimationPanePlaybackControlKind.PlayFromSelected ? 126 : 82,
+                Padding = new Thickness(10, 4),
+                Margin = new Thickness(0, 0, 8, 8),
+                Tag = control.CommandId,
+            };
+            ToolTip.SetTip(button, control.DisabledReason ?? control.ToolTip);
+            button.Click += (_, _) => ExecuteAnimationPanePlaybackControl(control);
+            _animationPanePlaybackControlsPanel.Children.Add(button);
+            _animationPaneRenderedPlaybackControls.Add(
+                $"{control.Label}: {FormatAvailability(control.IsEnabled)}");
+
+            if (control.Kind == AnimationPanePlaybackControlKind.PreviewCurrentSlide)
+                _animationPanePreviewButton = button;
+        }
+    }
+
+    private void ExecuteAnimationPanePlaybackControl(AnimationPanePlaybackControlDescriptor control)
+    {
+        if (!control.IsEnabled)
+            return;
+
+        switch (control.Kind)
+        {
+            case AnimationPanePlaybackControlKind.PreviewCurrentSlide:
+            case AnimationPanePlaybackControlKind.PlayFromSelected:
+            case AnimationPanePlaybackControlKind.PlayCurrentSlide:
+                StartSlideShow(fromStart: false);
+                break;
         }
     }
 

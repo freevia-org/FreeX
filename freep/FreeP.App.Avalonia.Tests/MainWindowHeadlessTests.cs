@@ -307,6 +307,8 @@ public sealed class MainWindowHeadlessTests
         source.Should().Contain("PresentationAnimationCommandPlanner.TryApply(");
         source.Should().Contain("OnAnimationPaneRequested");
         source.Should().Contain("AnimationPanePlanner.BuildTimelinePlan(");
+        source.Should().Contain("plan.PlaybackControls");
+        source.Should().Contain("AnimationPanePlaybackControlKind.PlayFromSelected");
         source.Should().Contain("ShowAnimationPane()");
         source.Should().Contain("BuildAnimationPaneItemCard(");
         source.Should().Contain("AnimationPanePlanner.BuildEffectOptionMutationPlan(");
@@ -1506,6 +1508,7 @@ public sealed class MainWindowHeadlessTests
         var paneMessage = string.Empty;
         var paneRenderedCount = 0;
         var previewEnabled = false;
+        IReadOnlyList<string> playbackControls = [];
         IReadOnlyList<string> paneRows = [];
 
         var ran = await OnUiThread(() =>
@@ -1535,6 +1538,7 @@ public sealed class MainWindowHeadlessTests
             paneMessage = window.AnimationPaneMessage;
             paneRenderedCount = window.AnimationPaneRenderedItemCount;
             previewEnabled = window.IsAnimationPanePreviewEnabled;
+            playbackControls = window.AnimationPanePlaybackControls.ToArray();
             paneRows = window.AnimationPaneRenderedRows.ToArray();
         });
 
@@ -1553,11 +1557,20 @@ public sealed class MainWindowHeadlessTests
         panePlan.Items[0].DurationMs.Should().Be(1500);
         panePlan.Items[0].DelayMs.Should().Be(250);
         panePlan.PreviewIntent.CanExecute.Should().BeTrue();
+        panePlan.PlaybackControls.Should().Contain(control =>
+            control.Kind == AnimationPanePlaybackControlKind.PlayFromSelected
+            && control.IsEnabled
+            && control.StartAnimationIndex == 0);
         paneVisible.Should().BeTrue("the Avalonia animation pane command should show the in-app pane");
         paneHeading.Should().Be("Animation Pane - slide 1 (1 animations)");
         paneMessage.Should().Contain("Hero box");
         paneRenderedCount.Should().Be(1);
         previewEnabled.Should().BeTrue();
+        playbackControls.Should().Equal(
+            "Preview: available",
+            "Play From Selected: available",
+            "Play All: available",
+            "Stop: unavailable");
         paneRows.Should().ContainSingle()
             .Which.Should().Contain("Hero box - In: Fade")
             .And.Contain("duration 1.5s")
@@ -1574,6 +1587,7 @@ public sealed class MainWindowHeadlessTests
         var paneHeading = string.Empty;
         var paneMessage = string.Empty;
         var previewEnabled = false;
+        IReadOnlyList<string> playbackControls = [];
         IReadOnlyList<string> paneRows = [];
 
         var ran = await OnUiThread(() =>
@@ -1606,6 +1620,7 @@ public sealed class MainWindowHeadlessTests
             paneHeading = window.AnimationPaneHeading;
             paneMessage = window.AnimationPaneMessage;
             previewEnabled = window.IsAnimationPanePreviewEnabled;
+            playbackControls = window.AnimationPanePlaybackControls.ToArray();
             paneRows = window.AnimationPaneRenderedRows.ToArray();
         });
 
@@ -1617,6 +1632,8 @@ public sealed class MainWindowHeadlessTests
         paneHeading.Should().Be("Animation Pane - slide 1 (2 animations)");
         paneMessage.Should().Contain("Caption box - In: Fade");
         previewEnabled.Should().BeTrue();
+        playbackControls.Should().Contain("Play From Selected: available");
+        playbackControls.Should().Contain("Stop: unavailable");
         paneRows.Should().HaveCount(2);
         paneRows[0].Should().Contain("1. Hero box - In: Fade")
             .And.Contain("On Click")

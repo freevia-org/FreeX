@@ -26,6 +26,43 @@ public sealed class AnimationPanePlannerTests
             1,
             1850,
             "Preview current slide animations"));
+        plan.PlaybackControls.Should().Equal(
+            new AnimationPanePlaybackControlDescriptor(
+                "freep.anim.pane.preview",
+                AnimationPanePlaybackControlKind.PreviewCurrentSlide,
+                "Preview",
+                true,
+                null,
+                1850,
+                "Preview current slide animations",
+                null),
+            new AnimationPanePlaybackControlDescriptor(
+                "freep.anim.pane.play-selected",
+                AnimationPanePlaybackControlKind.PlayFromSelected,
+                "Play From Selected",
+                true,
+                1,
+                1850,
+                "Play animation preview from the selected row",
+                null),
+            new AnimationPanePlaybackControlDescriptor(
+                "freep.anim.pane.play-slide",
+                AnimationPanePlaybackControlKind.PlayCurrentSlide,
+                "Play All",
+                true,
+                null,
+                1850,
+                "Play all animations on the current slide",
+                null),
+            new AnimationPanePlaybackControlDescriptor(
+                "freep.anim.pane.stop",
+                AnimationPanePlaybackControlKind.Stop,
+                "Stop",
+                false,
+                null,
+                1850,
+                "No animation preview is currently running",
+                "No animation preview is currently running"));
 
         plan.Items.Should().HaveCount(3);
         plan.Items[0].Should().BeEquivalentTo(new
@@ -112,6 +149,33 @@ public sealed class AnimationPanePlannerTests
         plan.SelectedIndex.Should().Be(-1);
         plan.PreviewIntent.CanExecute.Should().BeFalse();
         plan.PreviewIntent.Kind.Should().Be(AnimationPanePlaybackIntentKind.None);
+        plan.PlaybackControls.Should().HaveCount(4);
+        plan.PlaybackControls.Should().OnlyContain(control => !control.IsEnabled);
+        plan.PlaybackControls.Single(control => control.Kind == AnimationPanePlaybackControlKind.PlayFromSelected)
+            .DisabledReason
+            .Should()
+            .Be("Select an animation row to play from it");
+    }
+
+    [Fact]
+    public void BuildPlaybackControls_EnablesSlidePlaybackButRequiresSelectedRow()
+    {
+        var controls = AnimationPanePlanner.BuildPlaybackControls(-1, 2, 900);
+
+        controls.Should().ContainSingle(control =>
+            control.Kind == AnimationPanePlaybackControlKind.PreviewCurrentSlide
+            && control.IsEnabled
+            && control.TotalDurationMs == 900);
+        controls.Should().ContainSingle(control =>
+            control.Kind == AnimationPanePlaybackControlKind.PlayCurrentSlide
+            && control.IsEnabled);
+        controls.Should().ContainSingle(control =>
+            control.Kind == AnimationPanePlaybackControlKind.PlayFromSelected
+            && !control.IsEnabled
+            && control.StartAnimationIndex == null);
+        controls.Should().ContainSingle(control =>
+            control.Kind == AnimationPanePlaybackControlKind.Stop
+            && !control.IsEnabled);
     }
 
     [Theory]
