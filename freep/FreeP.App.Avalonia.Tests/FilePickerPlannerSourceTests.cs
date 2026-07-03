@@ -43,7 +43,7 @@ public sealed class FilePickerPlannerSourceTests
         source.Should().Contain("PresentationPrintBackstagePlanner.Build(");
         source.Should().Contain("ShowPrintOptionsPane()");
         source.Should().Contain("RenderPrintOptionsPane(plan)");
-        source.Should().Contain("plan.Options.SummaryLines");
+        source.Should().Contain("plan.OutputOptionChoices");
         source.Should().Contain("plan.LayoutChoices");
         source.Should().Contain("plan.RangeChoices");
         source.Should().Contain("PresentationRasterPdfExporter.ExportToBytes(");
