@@ -414,6 +414,21 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void BuildDataTablePrimitivePlan_UsesModeledPowerPointBackgroundFill()
+    {
+        var chart = MakeTwoSeriesChart(ChartType.ColumnClustered);
+        chart.DataTable = new ChartDataTableSettings
+        {
+            BackgroundFill = new ShapeFill.Solid(new SrgbColor(0xFA, 0xF1, 0xD2))
+        };
+        var frame = ChartRenderPlanner.BuildFramePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+
+        var plan = ChartRenderPlanner.BuildDataTablePrimitivePlan(chart, frame);
+
+        plan.BackgroundFill.Should().Be(new ChartFillPlan(new SrgbColor(0xFA, 0xF1, 0xD2), Alpha: 255));
+    }
+
+    [Fact]
     public void BuildDataTablePrimitivePlan_UsesModeledPowerPointTextStyle()
     {
         var chart = MakeTwoSeriesChart(ChartType.ColumnClustered);

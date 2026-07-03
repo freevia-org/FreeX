@@ -408,15 +408,30 @@ internal static class PptxChartWriter
             new XElement(C + "showVertBorder", new XAttribute("val", BoolValue(dataTable.ShowVerticalBorder))),
             new XElement(C + "showOutline",    new XAttribute("val", BoolValue(dataTable.ShowOutlineBorder))),
             new XElement(C + "showKeys",       new XAttribute("val", BoolValue(dataTable.ShowLegendKeys))),
-            BuildDataTableShapePropertiesEl(dataTable.BorderOutline),
+            BuildDataTableShapePropertiesEl(dataTable.BackgroundFill, dataTable.BorderOutline),
             BuildDataTableTextPropertiesEl(dataTable.TextStyle));
     }
 
-    private static XElement? BuildDataTableShapePropertiesEl(ShapeOutline? outline)
+    private static XElement? BuildDataTableShapePropertiesEl(ShapeFill? fill, ShapeOutline? outline)
     {
+        var fillEl = BuildDataTableFillEl(fill);
         var line = BuildDataTableOutlineEl(outline);
-        return line is null ? null : new XElement(C + "spPr", line);
+        return fillEl is null && line is null ? null : new XElement(C + "spPr", fillEl, line);
     }
+
+    private static XElement? BuildDataTableFillEl(ShapeFill? fill) =>
+        fill switch
+        {
+            null => null,
+            ShapeFill.None => new XElement(A + "noFill"),
+            ShapeFill.Solid s => new XElement(A + "solidFill", BuildColorEl(s.Color)),
+            ShapeFill.Gradient g => BuildGradFillEl(g),
+            ShapeFill.Pattern p => new XElement(A + "pattFill",
+                new XAttribute("prst", p.Preset),
+                new XElement(A + "fgClr", BuildColorEl(p.ForegroundColor)),
+                new XElement(A + "bgClr", BuildColorEl(p.BackgroundColor))),
+            _ => null
+        };
 
     private static XElement? BuildDataTableOutlineEl(ShapeOutline? outline) =>
         outline switch

@@ -963,9 +963,16 @@ internal static class PptxChartReader
             ShowVerticalBorder   = ParseBoolAttr(dTableEl.Element(C + "showVertBorder")),
             ShowOutlineBorder    = ParseBoolAttr(dTableEl.Element(C + "showOutline")),
             ShowLegendKeys       = ParseBoolAttr(dTableEl.Element(C + "showKeys")),
+            BackgroundFill       = ReadDataTableBackgroundFill(dTableEl, scheme),
             BorderOutline        = ReadDataTableBorderOutline(dTableEl, scheme),
             TextStyle            = ReadDataTableTextStyle(dTableEl, scheme),
         };
+    }
+
+    private static ShapeFill? ReadDataTableBackgroundFill(XElement dTableEl, PresentationColorScheme scheme)
+    {
+        var spPr = dTableEl.Element(C + "spPr");
+        return spPr is null ? null : PptxColorReader.TryReadFill(spPr, scheme);
     }
 
     private static ShapeOutline? ReadDataTableBorderOutline(XElement dTableEl, PresentationColorScheme scheme)

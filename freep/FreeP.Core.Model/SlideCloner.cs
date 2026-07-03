@@ -159,6 +159,7 @@ public static class SlideCloner
         ShowVerticalBorder   = settings.ShowVerticalBorder,
         ShowOutlineBorder    = settings.ShowOutlineBorder,
         ShowLegendKeys       = settings.ShowLegendKeys,
+        BackgroundFill       = settings.BackgroundFill,
         BorderOutline        = CloneShapeOutline(settings.BorderOutline),
         TextStyle            = CloneChartTextStyle(settings.TextStyle),
     };

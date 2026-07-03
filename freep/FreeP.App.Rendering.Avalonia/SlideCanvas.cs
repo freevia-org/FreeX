@@ -1301,6 +1301,9 @@ public sealed class SlideCanvas : Control
         if (!plan.Bounds.HasPositiveArea)
             return;
 
+        if (plan.BackgroundFill.HasValue)
+            dc.FillRectangle(ToBrush(plan.BackgroundFill.Value), ToRect(plan.Bounds));
+
         var borderPen = ToPen(plan.BorderStroke);
         foreach (var border in plan.HorizontalBorders)
             dc.DrawLine(borderPen, ToPoint(border.Start), ToPoint(border.End));
