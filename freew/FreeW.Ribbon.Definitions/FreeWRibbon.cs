@@ -389,7 +389,7 @@ public static class FreeWRibbon
                     g.Medium("freew.manage-sources", "Manage Sources", RibbonCommandIconKind.Citation);
                     g.ComboBox("freew.citation-style", "Style", c => c with
                     {
-                        Items = new[] { "APA", "MLA", "Chicago", "IEEE" },
+                        Items = FreeWRibbonDefinitionData.CitationStyleNames,
                         Icon = new RibbonCommandIcon(RibbonCommandIconKind.Citation),
                         Width = 90
                     });

@@ -1,4 +1,5 @@
 using FreeW.App.Localization;
+using FreeW.Core.Model;
 
 namespace FreeW.Ribbon.Definitions;
 
@@ -12,6 +13,9 @@ public static class FreeWRibbonDefinitionData
 
     public static readonly string[] FloatSizes =
         ["36", "54", "72", "90", "108", "144", "180", "216", "288", "360", "432"];
+
+    public static readonly string[] CitationStyleNames =
+        Enum.GetValues<CitationStyle>().Select(Citations.StyleName).ToArray();
 
     public static (string CommandId, string Label)[] FontColors =>
     [

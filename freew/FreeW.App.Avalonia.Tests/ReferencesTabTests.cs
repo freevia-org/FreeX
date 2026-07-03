@@ -1,11 +1,17 @@
 using System.IO;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using Avalonia.Controls;
+using Avalonia.Headless;
+using Avalonia.LogicalTree;
 using FreeW.App.Avalonia.Editing;
 using FreeW.App.Avalonia.Ribbon;
 using FreeW.App.Presentation.Ribbon;
 using FreeW.Core.IO;
 using FreeW.Core.Model;
 using Free.Shared.Ribbon;
+using Free.Shared.Ribbon.Avalonia;
 
 namespace FreeW.App.Avalonia.Tests;
 
@@ -17,6 +23,12 @@ namespace FreeW.App.Avalonia.Tests;
 /// </summary>
 public sealed class ReferencesTabTests
 {
+    private static readonly HeadlessUnitTestSession Session =
+        HeadlessUnitTestSession.GetOrStartForAssembly(typeof(FreeWHeadlessApp).Assembly);
+
+    private static Task RunOnUiThread(Action action) =>
+        Session.Dispatch(action, CancellationToken.None);
+
     private static RibbonHostCallbacks NoopCallbacks() =>
         new(
             Open: () => { }, Save: () => { }, Cut: () => { }, Copy: () => { }, Paste: () => { },
@@ -487,6 +499,54 @@ public sealed class ReferencesTabTests
     }
 
     [Fact]
+    public void Citation_style_combo_exposes_all_model_styles_in_wpf_and_avalonia_profiles()
+    {
+        var expected = Enum.GetValues<CitationStyle>().Select(Citations.StyleName).ToArray();
+        expected.Should().Equal(FreeW.Ribbon.Definitions.FreeWRibbonDefinitionData.CitationStyleNames);
+
+        var avalonia = FreeWRibbon.BuildDefinition();
+        var wpf = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Wpf);
+
+        CitationStyleItems(avalonia).Should().Equal(expected);
+        CitationStyleItems(wpf).Should().Equal(expected);
+    }
+
+    [Theory]
+    [MemberData(nameof(CitationStyleLabels))]
+    public void Citation_style_command_accepts_every_profile_value_and_reports_selected_state(string styleName)
+    {
+        var view = ViewWith(new Paragraph("Body"));
+        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+
+        Execute(registry, "freew.citation-style", RibbonCommandContext.ForSelectedValue(styleName));
+
+        view.Document.BibliographyStyle.Should().Be(Citations.ParseStyle(styleName));
+        registry.TryGet(new RibbonCommandId("freew.citation-style"), out var command).Should().BeTrue();
+        command.Should().BeAssignableTo<IRibbonStatefulCommand>()
+            .Which.GetState().Value.Should().Be(styleName);
+    }
+
+    [Fact]
+    public Task Citation_style_combo_renders_current_state_and_applies_selected_value() => RunOnUiThread(() =>
+    {
+        var view = ViewWith(new Paragraph("Body"));
+        view.Document.BibliographyStyle = CitationStyle.Harvard;
+        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+        var references = FreeWRibbon.BuildDefinition().FindTab("references");
+
+        var content = AvaloniaRibbonRenderer.BuildTabContent(references!, registry);
+        var combo = content.GetLogicalDescendants()
+            .OfType<ComboBox>()
+            .Single(box => Equals(box.Tag, "freew.citation-style"));
+
+        combo.SelectedItem.Should().Be("Harvard");
+
+        combo.SelectedItem = "Vancouver";
+
+        view.Document.BibliographyStyle.Should().Be(CitationStyle.Vancouver);
+    });
+
+    [Fact]
     public void Canonical_references_commands_execute_via_registry()
     {
         var view = ViewWith();
@@ -699,5 +759,20 @@ public sealed class ReferencesTabTests
             if (item.CommandId is { } commandId)
                 yield return commandId.Value;
         }
+    }
+
+    public static IEnumerable<object[]> CitationStyleLabels() =>
+        FreeW.Ribbon.Definitions.FreeWRibbonDefinitionData.CitationStyleNames
+            .Select(style => new object[] { style });
+
+    private static IReadOnlyList<string> CitationStyleItems(RibbonDefinition definition)
+    {
+        var references = definition.FindTab("references");
+        references.Should().NotBeNull();
+        return references!.Groups
+            .SelectMany(group => group.Controls)
+            .OfType<RibbonComboBox>()
+            .Single(combo => combo.CommandId.Value == "freew.citation-style")
+            .Items;
     }
 }
