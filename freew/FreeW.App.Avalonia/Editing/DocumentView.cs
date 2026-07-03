@@ -10933,7 +10933,13 @@ public sealed class DocumentView : Control
             for (var r = 0; r < paragraph.Runs.Count; r++)
             {
                 var run = paragraph.Runs[r];
-                if (run.ComplexField is { } complexField)
+                if (run.CrossReference is { } crossReference)
+                {
+                    var resolved = CrossReferences.ResolveField(_doc, crossReference, run.Text, b);
+                    if (!string.IsNullOrEmpty(resolved))
+                        run.Text = resolved;
+                }
+                else if (run.ComplexField is { } complexField)
                 {
                     var resolved = ComplexFieldEngine.CanRecompute(complexField)
                         ? ComplexFieldEngine.Recompute(_doc, b, r)

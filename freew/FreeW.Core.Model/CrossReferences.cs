@@ -213,6 +213,38 @@ public static class CrossReferences
         };
     }
 
+    /// <summary>
+    /// Recomputes the cached display text for an existing <see cref="Run.CrossReference"/> field against
+    /// the current document. Dangling bookmarks/notes and unsupported combinations preserve
+    /// <paramref name="cached"/>, matching Word's field-result fallback behavior.
+    /// </summary>
+    /// <param name="doc">The document whose current bookmarks, headings, lists, and notes are inspected.</param>
+    /// <param name="field">The modeled REF/PAGEREF/NOTEREF field carried by the run.</param>
+    /// <param name="cached">The run's previous display text, returned when the target cannot resolve.</param>
+    /// <param name="sourceBlockIndex">The body block containing the field run, used by above/below.</param>
+    /// <param name="pageOf">
+    /// Optional page-number resolver mapping a target body block index to its 1-based page. Null, or a
+    /// null return, keeps the model default of page 1 because the core model has no pagination.
+    /// </param>
+    public static string ResolveField(
+        TextDocument doc,
+        CrossReferenceField field,
+        string cached,
+        int sourceBlockIndex,
+        Func<int, int?>? pageOf = null)
+    {
+        ArgumentNullException.ThrowIfNull(doc);
+        ArgumentNullException.ThrowIfNull(field);
+
+        return field.Kind switch
+        {
+            CrossRefFieldKind.Ref => ResolveBookmarkedRef(doc, field, cached, sourceBlockIndex),
+            CrossRefFieldKind.PageRef => ResolveBookmarkedPageRef(doc, field, cached, pageOf),
+            CrossRefFieldKind.NoteRef => ResolveNoteRef(doc, field, cached),
+            _ => cached
+        };
+    }
+
     private static List<CrossRefTarget> HeadingTargets(TextDocument doc)
     {
         var targets = new List<CrossRefTarget>();
@@ -315,6 +347,143 @@ public static class CrossReferences
         }
         return string.Empty;
     }
+
+    private static string ResolveBookmarkedRef(
+        TextDocument doc, CrossReferenceField field, string cached, int sourceBlockIndex)
+    {
+        if (FindBookmarkBlock(doc, field.Target) is not { } targetBlock)
+            return cached;
+
+        return field.InsertAs switch
+        {
+            CrossRefInsertAs.Text => NonEmptyOrCached(ParagraphTextAt(doc, targetBlock), cached),
+            CrossRefInsertAs.HeadingNumber => NonEmptyOrCached(HeadingNumberAt(doc, targetBlock), cached),
+            CrossRefInsertAs.ParagraphNumber => NonEmptyOrCached(ParagraphNumberAt(doc, targetBlock), cached),
+            CrossRefInsertAs.AboveBelow => AboveBelow(targetBlock, sourceBlockIndex),
+            _ => cached
+        };
+    }
+
+    private static string ResolveBookmarkedPageRef(
+        TextDocument doc, CrossReferenceField field, string cached, Func<int, int?>? pageOf)
+    {
+        if (FindBookmarkBlock(doc, field.Target) is not { } targetBlock)
+            return cached;
+
+        var page = pageOf?.Invoke(targetBlock) ?? 1;
+        return Math.Max(1, page).ToString(CultureInfo.InvariantCulture);
+    }
+
+    private static string ResolveNoteRef(TextDocument doc, CrossReferenceField field, string cached)
+    {
+        if (!int.TryParse(field.Target, NumberStyles.Integer, CultureInfo.InvariantCulture, out var id))
+            return cached;
+
+        if (doc.Footnotes.ContainsKey(id))
+            return NoteDisplayNumber(doc.Footnotes.Keys, id, doc.FootnoteNumbering, cached);
+        if (doc.Endnotes.ContainsKey(id))
+            return NoteDisplayNumber(doc.Endnotes.Keys, id, doc.EndnoteNumbering, cached);
+
+        return cached;
+    }
+
+    private static int? FindBookmarkBlock(TextDocument doc, string name)
+    {
+        if (string.IsNullOrEmpty(name))
+            return null;
+
+        foreach (var location in Bookmarks.List(doc))
+        {
+            if (string.Equals(location.Name, name, StringComparison.Ordinal)
+                && location.BlockIndex >= 0
+                && location.BlockIndex < doc.Blocks.Count
+                && doc.Blocks[location.BlockIndex] is Paragraph)
+                return location.BlockIndex;
+        }
+
+        return null;
+    }
+
+    private static string ParagraphTextAt(TextDocument doc, int blockIndex) =>
+        doc.Blocks[blockIndex] is Paragraph paragraph ? paragraph.PlainText.TrimEnd() : string.Empty;
+
+    private static string NoteDisplayNumber(
+        IEnumerable<int> ids, int targetId, NoteNumberingOptions options, string cached)
+    {
+        var sequence = Math.Max(1, options.StartAt);
+        foreach (var id in ids.OrderBy(k => k))
+        {
+            if (id == targetId)
+                return FormatNoteNumber(sequence, options.NumberFormat);
+            sequence++;
+        }
+
+        return cached;
+    }
+
+    private static string FormatNoteNumber(int value, NoteNumberFormat format)
+    {
+        var n = Math.Max(1, value);
+        return format switch
+        {
+            NoteNumberFormat.LowerRoman => ToRoman(n).ToLowerInvariant(),
+            NoteNumberFormat.UpperRoman => ToRoman(n),
+            NoteNumberFormat.LowerLetter => ToLetter(n, lower: true),
+            NoteNumberFormat.UpperLetter => ToLetter(n, lower: false),
+            NoteNumberFormat.Chicago => ToChicago(n),
+            _ => n.ToString(CultureInfo.InvariantCulture)
+        };
+    }
+
+    private static string ToRoman(int value)
+    {
+        (int Value, string Symbol)[] map =
+        [
+            (1000, "M"), (900, "CM"), (500, "D"), (400, "CD"),
+            (100, "C"), (90, "XC"), (50, "L"), (40, "XL"),
+            (10, "X"), (9, "IX"), (5, "V"), (4, "IV"), (1, "I")
+        ];
+
+        var remaining = Math.Clamp(value, 1, 3999);
+        var result = string.Empty;
+        foreach (var (number, symbol) in map)
+        {
+            while (remaining >= number)
+            {
+                result += symbol;
+                remaining -= number;
+            }
+        }
+
+        return result;
+    }
+
+    private static string ToLetter(int value, bool lower)
+    {
+        if (value <= 0)
+            return value.ToString(CultureInfo.InvariantCulture);
+
+        var chars = new List<char>();
+        while (value > 0)
+        {
+            value--;
+            chars.Insert(0, (char)((lower ? 'a' : 'A') + value % 26));
+            value /= 26;
+        }
+
+        return new string(chars.ToArray());
+    }
+
+    private static string ToChicago(int value)
+    {
+        string[] symbols = ["*", "+", "#", "S", "P"];
+        var symbol = symbols[(value - 1) % symbols.Length];
+        var repeat = (value - 1) / symbols.Length + 1;
+        return string.Concat(Enumerable.Repeat(symbol, repeat));
+    }
+
+    private static string NonEmptyOrCached(string value, string cached) =>
+        value.Length > 0 ? value : cached;
 
     private static string AboveBelow(int? targetBlockIndex, int sourceBlockIndex) =>
         targetBlockIndex is { } target && target > sourceBlockIndex ? "below" : "above";

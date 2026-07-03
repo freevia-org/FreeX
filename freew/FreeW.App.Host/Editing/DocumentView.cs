@@ -8737,7 +8737,13 @@ public sealed class DocumentView : RichTextBox
             for (var i = 0; i < paragraph.Runs.Count; i++)
             {
                 var r = paragraph.Runs[i];
-                if (r.ComplexField is { } cf)
+                if (r.CrossReference is { } crossReference)
+                {
+                    var resolved = CrossReferences.ResolveField(_model, crossReference, r.Text, b);
+                    if (resolved.Length > 0)
+                        r.Text = resolved;
+                }
+                else if (r.ComplexField is { } cf)
                 {
                     // REF/PAGEREF/SEQ re-evaluate against current bookmarks/sequences; the rest reuse the
                     // live DATE/AUTHOR/… resolver (PAGE/NUMPAGES keep their cached value here).

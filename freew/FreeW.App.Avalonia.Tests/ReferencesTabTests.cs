@@ -204,6 +204,30 @@ public sealed class ReferencesTabTests
     // ── Citation / Bibliography ─────────────────────────────────────────────────────
 
     [Fact]
+    public void UpdateFields_refreshes_cross_reference_cached_text()
+    {
+        var view = ViewWith(
+            new Paragraph("Chapter Two") { StyleId = "Heading1", BookmarkName = "_Ref1" },
+            new Paragraph
+            {
+                Runs =
+                {
+                    new Run("See "),
+                    Run.CrossReferenceFieldRun(
+                        new CrossReferenceField(CrossRefFieldKind.Ref, "_Ref1", CrossRefInsertAs.Text, Hyperlink: true),
+                        "Chapter One")
+                }
+            });
+
+        view.UpdateFields();
+
+        view.Document.Blocks.OfType<Paragraph>()
+            .SelectMany(p => p.Runs)
+            .Single(r => r.CrossReference is not null)
+            .Text.Should().Be("Chapter Two");
+    }
+
+    [Fact]
     public void InsertCitation_inserts_intext_citation_at_caret()
     {
         var view = ViewWith(new Paragraph("See here "));
