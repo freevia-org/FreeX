@@ -16,16 +16,28 @@ public sealed class DocumentPersistenceWorkflow
     public const string DefaultFallbackDisplayName = "Document";
 
     private readonly IReadOnlyList<IDocumentFileAdapter> _adapters;
+    private readonly IReadOnlyList<IDocumentFileAdapter> _pdfImportAdapters;
 
-    public DocumentPersistenceWorkflow(IReadOnlyList<IDocumentFileAdapter>? adapters = null)
+    public DocumentPersistenceWorkflow(
+        IReadOnlyList<IDocumentFileAdapter>? adapters = null,
+        IReadOnlyList<IDocumentFileAdapter>? pdfImportAdapters = null)
     {
         _adapters = adapters ?? DocumentFileAdapterCatalog.CreateDefaultAdapters();
+        _pdfImportAdapters = pdfImportAdapters ?? DocumentFileAdapterCatalog.CreatePdfImportAdapters();
     }
 
     public IReadOnlyList<IDocumentFileAdapter> Adapters => _adapters;
 
+    public IReadOnlyList<IDocumentFileAdapter> PdfImportAdapters => _pdfImportAdapters;
+
     public IReadOnlyList<FileFormatDescriptor> SaveFormats =>
         _adapters.SelectMany(adapter => adapter.Formats).Where(format => format.CanSave).ToArray();
+
+    public IReadOnlyList<DocumentFormatCapabilityRow> BuildFormatCapabilityRows(bool includeXpsExport = true) =>
+        DocumentFormatCapabilityPlanner.BuildCapabilities(
+            _adapters.SelectMany(adapter => adapter.Formats),
+            _pdfImportAdapters.SelectMany(adapter => adapter.Formats),
+            DocumentFormatCapabilityPlanner.BuildFixedLayoutExportFormats(includeXpsExport));
 
     public bool CanOpenPath(string path) =>
         DocumentFileFormatResolver.FindOpenAdapter(_adapters, Path.GetExtension(path), out _) is not null;
@@ -41,6 +53,9 @@ public sealed class DocumentPersistenceWorkflow
 
     public FileOpenDialogPlan BuildOpenDialogPlan(string allSupportedName = DocumentFileDialogRequestPlanner.AllSupportedDocumentsName) =>
         DocumentFileDialogRequestPlanner.BuildOpenDialogPlan(_adapters, allSupportedName);
+
+    public FileOpenDialogPlan BuildPdfImportDialogPlan(string allSupportedName = "PDF documents") =>
+        DocumentFileDialogRequestPlanner.BuildOpenDialogPlan(_pdfImportAdapters, allSupportedName);
 
     public FileSaveDialogPlan BuildSaveDialogPlan(
         string? currentPath,
@@ -91,6 +106,19 @@ public sealed class DocumentPersistenceWorkflow
 
         using var stream = File.OpenRead(snapshotPath);
         return new DocumentSnapshotOpenResult(DocxReader.Read(stream), originalPath);
+    }
+
+    public DocumentImportResult ImportPdfText(string path)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+
+        var extension = Path.GetExtension(path);
+        var adapter = DocumentFileFormatResolver.FindOpenAdapter(_pdfImportAdapters, extension, out var format)
+            ?? throw new InvalidOperationException(
+                $"FreeW can import text only from \".pdf\" files, not \"{extension}\".");
+
+        using var stream = File.OpenRead(path);
+        return new DocumentImportResult(adapter.Load(stream), adapter, format);
     }
 
     public bool TryResolveCurrentSaveTarget(string path, out DocumentSaveTarget target) =>
@@ -180,6 +208,11 @@ public sealed record DocumentOpenResult(
     FileFormatDescriptor? Format);
 
 public sealed record DocumentSnapshotOpenResult(TextDocument Document, string? TargetPath);
+
+public sealed record DocumentImportResult(
+    TextDocument Document,
+    IDocumentFileAdapter Adapter,
+    FileFormatDescriptor? Format);
 
 public sealed record DocumentSaveTarget(
     string Path,
