@@ -4873,9 +4873,9 @@ public sealed class DocumentView : RichTextBox
                     DrawingObjectVisualPlanner.BuildVisualPlan(shape, snapshot),
                     shape),
             DocumentFloatingObjectKind.Chart when run.Chart is { IsFloating: true } chart =>
-                BuildFloatingObjectPlaceholderVisual(chart, snapshot.Rect),
+                BuildFloatingChartVisual(chart, snapshot.Rect),
             DocumentFloatingObjectKind.SmartArt when run.SmartArt is { IsFloating: true } smartArt =>
-                BuildFloatingObjectPlaceholderVisual(smartArt, snapshot.Rect),
+                BuildFloatingSmartArtVisual(smartArt, snapshot.Rect),
             DocumentFloatingObjectKind.WordArt when run.WordArt is { IsFloating: true } wordArt =>
                 BuildFloatingDrawingObjectVisual(
                     DrawingObjectVisualPlanner.BuildVisualPlan(wordArt, snapshot),
@@ -5314,6 +5314,41 @@ public sealed class DocumentView : RichTextBox
             SelectFloatingObject(modelObject, addToMulti);
             e.Handled = true;
         };
+        return root;
+    }
+
+    private FrameworkElement BuildFloatingChartVisual(Chart chart, DocumentFloatRect rect) =>
+        BuildFloatingPlannedInlineObjectVisual(
+            chart,
+            rect,
+            BuildChartRun(chart, DocumentEffectSet.FromTheme(_model.Theme)));
+
+    private FrameworkElement BuildFloatingSmartArtVisual(SmartArt smartArt, DocumentFloatRect rect) =>
+        BuildFloatingPlannedInlineObjectVisual(
+            smartArt,
+            rect,
+            BuildSmartArtRun(smartArt, DocumentEffectSet.FromTheme(_model.Theme)));
+
+    private FrameworkElement BuildFloatingPlannedInlineObjectVisual(
+        object modelObject,
+        DocumentFloatRect rect,
+        InlineUIContainer container)
+    {
+        if (container.Child is not FrameworkElement root)
+            return BuildFloatingObjectPlaceholderVisual(modelObject, rect);
+
+        container.Child = null;
+        root.Width = rect.WidthDip;
+        root.Height = rect.HeightDip;
+        root.Tag = modelObject;
+        root.Cursor = Cursors.SizeAll;
+        root.MouseLeftButtonDown += (_, e) =>
+        {
+            var addToMulti = (Keyboard.Modifiers & (ModifierKeys.Shift | ModifierKeys.Control)) != 0;
+            SelectFloatingObject(modelObject, addToMulti);
+            e.Handled = true;
+        };
+
         return root;
     }
 
