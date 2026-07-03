@@ -8814,6 +8814,12 @@ public sealed class DocumentView : RichTextBox
             return;
         }
 
+        if (_model.Blocks.Any(Citations.IsBibliographyParagraph))
+        {
+            RefreshBibliography();
+            return;
+        }
+
         Render();
     }
 
@@ -11270,14 +11276,17 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
-    /// Inserts the in-text citation for <paramref name="source"/> (e.g. <c>(Author, Year)</c>, formatted
-    /// by <see cref="Citations.FormatInText(Source)"/>) as ordinary text at the caret, flowing through the
-    /// RichTextBox's own edit path so it joins the surrounding run and is captured by the undo stack.
+    /// Inserts the in-text citation for <paramref name="source"/>. Tagged sources are inserted as Word-like
+    /// <c>CITATION</c> complex fields so Update Fields can re-resolve style and numeric numbering changes;
+    /// untagged sources keep the plain-text fallback because Word's field has no stable tag to address.
     /// </summary>
     public void InsertCitation(Source source)
     {
         ArgumentNullException.ThrowIfNull(source);
-        InsertText(Citations.FormatInText(_model, source, ActiveCitationStyle));
+        if (Citations.TryCreateCitationFieldRun(_model, source, ActiveCitationStyle, out var run))
+            InsertInlineAtCaret(BuildComplexFieldRun(run, _model));
+        else
+            InsertText(Citations.FormatInText(_model, source, ActiveCitationStyle));
     }
 
     /// <summary>
@@ -11291,15 +11300,33 @@ public sealed class DocumentView : RichTextBox
     {
         // Capture the user's in-progress edits before mutating the model out from under the view.
         CommitToModel();
-        Citations.EnsureStyles(_model);
 
         // Insert at the caret's block (a bibliography reads as back-matter); fall back to the document end.
         var index = CaretBlockIndex();
         if (index < 0 || index > _model.Blocks.Count)
             index = _model.Blocks.Count;
 
-        var bibliography = Citations.BuildBibliography(_model, ActiveCitationStyle);
-        foreach (var paragraph in bibliography)
+        ApplyBibliographyPlan(BibliographyRegionPlanner.BuildInsertPlan(_model, index, ActiveCitationStyle));
+    }
+
+    /// <summary>
+    /// Rebuilds the generated bibliography/reference-list region from the current sources and citation
+    /// style. With no existing region, this inserts at the document end, matching the shared planner.
+    /// </summary>
+    public void RefreshBibliography()
+    {
+        CommitToModel();
+        ApplyBibliographyPlan(BibliographyRegionPlanner.BuildRefreshPlan(_model, ActiveCitationStyle));
+        Render();
+    }
+
+    private void ApplyBibliographyPlan(BibliographyRegionPlan plan)
+    {
+        foreach (var deleteIndex in plan.DeleteIndicesDescending)
+            _commands.Execute(new DeleteParagraphCommand(deleteIndex));
+
+        var index = Math.Clamp(plan.InsertIndex, 0, _model.Blocks.Count);
+        foreach (var paragraph in plan.Paragraphs)
             _commands.Execute(new InsertParagraphCommand(index++, paragraph));
     }
 

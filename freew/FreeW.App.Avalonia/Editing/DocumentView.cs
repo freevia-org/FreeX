@@ -10690,15 +10690,44 @@ public sealed class DocumentView : Control
     }
 
     /// <summary>
-    /// AV-REF: Insert an in-text citation for <paramref name="source"/> at the caret, formatted in the
-    /// document's active <see cref="TextDocument.BibliographyStyle"/> (e.g. APA "(Author, Year)"). Flows
-    /// through the ordinary text-edit/undo path (<see cref="InsertText"/>). Mirrors the WPF host's
-    /// <c>DocumentView.InsertCitation</c>.
+    /// AV-REF: Insert an in-text citation for <paramref name="source"/> at the caret. Tagged sources become
+    /// Word-like <c>CITATION</c> complex-field runs so Update Fields can recompute them; untagged sources
+    /// keep the visible plain-text fallback.
     /// </summary>
     public void InsertCitation(Source source)
     {
         ArgumentNullException.ThrowIfNull(source);
-        InsertText(Citations.FormatInText(_doc, source, _doc.BibliographyStyle));
+        if (!Citations.TryCreateCitationFieldRun(_doc, source, _doc.BibliographyStyle, out var citationRun))
+        {
+            InsertText(Citations.FormatInText(_doc, source, _doc.BibliographyStyle));
+            return;
+        }
+
+        if (IsEditingLocked || _hfCaret is not null || _cellCaret is not null)
+        {
+            InsertText(citationRun.Text);
+            return;
+        }
+
+        if (NormalizedSelection() is not null)
+            DeleteSelection();
+        if (CurrentParagraph() is not { } paragraph || !IsEditable(paragraph))
+            return;
+
+        var block = _caret.Block;
+        var bodyOffset = _caret.Offset;
+        var bodyFmt = _pendingRunFmt ?? ActiveFormatting(paragraph, bodyOffset);
+        _pendingRunFmt = null;
+
+        var formattedRun = new Run(citationRun.Text, bodyFmt)
+        {
+            ComplexField = citationRun.ComplexField
+        };
+
+        _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
+            InsertRunAtOffset(p, bodyOffset, formattedRun)));
+        _caret = new DocPosition(block, bodyOffset + formattedRun.Text.Length);
+        _selectionAnchor = _caret;
     }
 
     /// <summary>
@@ -10709,14 +10738,17 @@ public sealed class DocumentView : Control
     /// </summary>
     public void InsertBibliography()
     {
-        Citations.EnsureStyles(_doc);
-        var at = Math.Clamp(_caret.Block, 0, _doc.Blocks.Count);
+        var plan = BibliographyRegionPlanner.BuildInsertPlan(
+            _doc,
+            Math.Clamp(_caret.Block, 0, _doc.Blocks.Count),
+            _doc.BibliographyStyle);
+        ApplyGeneratedReferencePlan(plan, "Insert Bibliography", adjustCaretForInsert: true);
+    }
 
-        _bus.BeginUndoGroup();
-        var index = at;
-        foreach (var paragraph in Citations.BuildBibliography(_doc, _doc.BibliographyStyle))
-            _bus.Execute(new InsertParagraphCommand(index++, paragraph));
-        _bus.CommitUndoGroup("Insert Bibliography");
+    public void RefreshBibliography()
+    {
+        var plan = BibliographyRegionPlanner.BuildRefreshPlan(_doc, _doc.BibliographyStyle);
+        ApplyGeneratedReferencePlan(plan, "Update Bibliography", adjustCaretForInsert: false);
     }
 
     public void ReplaceSources(IReadOnlyList<Source> sources)
@@ -10848,6 +10880,29 @@ public sealed class DocumentView : Control
 
     private void ApplyGeneratedReferencePlan(
         TableOfAuthoritiesRegionPlan plan,
+        string label,
+        bool adjustCaretForInsert)
+    {
+        var originalCaret = _caret;
+        _bus.BeginUndoGroup();
+        foreach (var deleteIndex in plan.DeleteIndicesDescending)
+            _bus.Execute(new DeleteParagraphCommand(deleteIndex));
+
+        var index = Math.Clamp(plan.InsertIndex, 0, _doc.Blocks.Count);
+        var appliedIndex = index;
+        foreach (var paragraph in plan.Paragraphs)
+            _bus.Execute(new InsertParagraphCommand(index++, paragraph));
+        _bus.CommitUndoGroup(label);
+
+        if (adjustCaretForInsert && plan.Paragraphs.Count > 0 && appliedIndex <= originalCaret.Block)
+        {
+            _caret = originalCaret with { Block = originalCaret.Block + plan.Paragraphs.Count };
+            _selectionAnchor = _caret;
+        }
+    }
+
+    private void ApplyGeneratedReferencePlan(
+        BibliographyRegionPlan plan,
         string label,
         bool adjustCaretForInsert)
     {
@@ -11024,6 +11079,12 @@ public sealed class DocumentView : Control
         if (_doc.Blocks.Any(TableOfContents.IsTocParagraph))
         {
             UpdateTableOfContents();
+            return;
+        }
+
+        if (_doc.Blocks.Any(Citations.IsBibliographyParagraph))
+        {
+            RefreshBibliography();
             return;
         }
 

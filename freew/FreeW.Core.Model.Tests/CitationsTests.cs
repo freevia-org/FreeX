@@ -432,6 +432,44 @@ public class CitationsTests
     }
 
     [Fact]
+    public void TryCreateCitationFieldRun_TaggedSource_BuildsWordLikeCitationField()
+    {
+        var source = new Source { Tag = "Tur1936", Author = "Alan Turing", Title = "Computable Numbers", Year = "1936" };
+        var doc = new TextDocument { BibliographyStyle = CitationStyle.Ieee };
+        doc.Sources.Add(new Source { Tag = "Ada1843", Author = "Ada Lovelace", Title = "Notes", Year = "1843" });
+        doc.Sources.Add(source);
+
+        Citations.TryCreateCitationFieldRun(doc, source, doc.BibliographyStyle, out var run).Should().BeTrue();
+
+        run.Text.Should().Be("[2]");
+        run.ComplexField.Should().NotBeNull();
+        run.ComplexField!.Instruction.Should().Be(" CITATION Tur1936 ");
+        run.ComplexField.Keyword.Should().Be("CITATION");
+    }
+
+    [Fact]
+    public void TryCreateCitationFieldRun_UntaggedSource_ReturnsFalseForPlainTextFallback()
+    {
+        var source = new Source { Author = "Jane Q. Doe", Year = "2024" };
+        var doc = new TextDocument();
+
+        Citations.TryCreateCitationFieldRun(doc, source, CitationStyle.Apa, out var run).Should().BeFalse();
+
+        run.ComplexField.Should().BeNull();
+        run.Text.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void ResolveCitationField_DeletedSource_PreservesCachedText()
+    {
+        var doc = new TextDocument { BibliographyStyle = CitationStyle.Ieee };
+        doc.Sources.Add(new Source { Tag = "Ada1843", Author = "Ada Lovelace", Title = "Notes", Year = "1843" });
+        var field = new ComplexField(" CITATION Missing1936 ");
+
+        Citations.ResolveCitationField(doc, field, cached: "[2]").Should().Be("[2]");
+    }
+
+    [Fact]
     public void BuildBibliography_NumericStyles_UseSourceOrderAndNumberedEntries()
     {
         var doc = new TextDocument();

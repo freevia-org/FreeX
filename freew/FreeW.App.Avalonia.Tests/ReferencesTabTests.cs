@@ -237,6 +237,9 @@ public sealed class ReferencesTabTests
 
         ((Paragraph)view.Document.Blocks[0]).PlainText.Should().Contain("(Doe, 2024)",
             "the Avalonia editor should inherit shared in-text citation formatting");
+        ((Paragraph)view.Document.Blocks[0]).Runs
+            .Select(run => run.ComplexField?.Instruction)
+            .Should().Contain(" CITATION Do24 ");
     }
 
     [Fact]
