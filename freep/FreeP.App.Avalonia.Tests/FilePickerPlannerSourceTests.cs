@@ -41,6 +41,9 @@ public sealed class FilePickerPlannerSourceTests
         source.Should().Contain("PresentationVideoFramePackageExecutor.BuildPackage(");
         source.Should().Contain("PresentationPrintOutputPackageExecutor.BuildPackage(");
         source.Should().Contain("PresentationPrintBackstagePlanner.Build(");
+        source.Should().Contain("ShowPrintOptionsPane()");
+        source.Should().Contain("RenderPrintOptionsPane(plan)");
+        source.Should().Contain("plan.Options.SummaryLines");
         source.Should().Contain("PresentationRasterPdfExporter.ExportToBytes(");
         source.Should().Contain("SlideRenderer.RenderToBytes");
         source.Should().Contain("SkiaRasterPdfWriter.WriteToBytes");
@@ -92,6 +95,9 @@ public sealed class FilePickerPlannerSourceTests
         source.Should().NotContain("DefaultExtension  = \"pptx\"");
         source.Should().NotContain("SuggestedFileName = suggested");
         source.Should().NotContain("PresentationPdfExporter.ExportToBytes(_presentation)");
+        source.Should().NotContain("\"Print comments and ink markup\"");
+        source.Should().NotContain("\"Frame slides\"");
+        source.Should().NotContain("\"Pure Black and White\"");
         source.Should().NotContain("FxpFormat.");
         source.Should().NotContain("PptxPackageReader.");
         source.Should().NotContain("PptxPackageWriter.");

@@ -1326,6 +1326,7 @@ public sealed class MainWindowHeadlessTests
     {
         var found = false;
         PresentationPrintBackstagePlan? printPlan = null;
+        var isPaneVisible = false;
 
         var ran = await OnUiThread(() =>
         {
@@ -1339,10 +1340,12 @@ public sealed class MainWindowHeadlessTests
 
             print!.Execute(RibbonCommandContext.Empty);
             printPlan = window.LastPrintBackstagePlan;
+            isPaneVisible = window.IsPrintOptionsPaneVisible;
         });
 
         if (!ran) return;
         found.Should().BeTrue("the Avalonia registry should expose the shared Backstage print planner seam");
+        isPaneVisible.Should().BeTrue("the Print command should expose the Avalonia Backstage print projection");
         printPlan.Should().NotBeNull();
         printPlan!.PackagePlan.PrintPlan.CommandId.Should().Be(PresentationExportPlanner.PrintCommandId);
         printPlan.SelectedLayout.Layout.Layout.Should().Be(PresentationPrintLayoutKind.FullPageSlides);
@@ -1350,6 +1353,56 @@ public sealed class MainWindowHeadlessTests
         printPlan.NativePrinterDialogDeferred.Should().BeTrue();
         printPlan.LayoutChoices.Select(choice => choice.Layout.SlidesPerPage).Should().Equal(1, 1, 1, 2, 3, 4, 6, 9);
         printPlan.RangeChoices.Select(choice => choice.Kind).Should().Contain(PresentationSlideRangeKind.CurrentSlide);
+    }
+
+    [Fact]
+    public async Task Print_options_pane_projects_shared_summary_lines()
+    {
+        PresentationPrintBackstagePlan? printPlan = null;
+        string heading = string.Empty;
+        string message = string.Empty;
+        IReadOnlyList<string> renderedOptionLines = [];
+        var renderedRowCount = 0;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            window.Editor.InsertSlide();
+            window.Editor.InsertSlide();
+
+            printPlan = window.ShowPrintOptionsPane(new PresentationPrintRequest(
+                PresentationPrintLayoutKind.Handouts,
+                new PresentationSlideRangeRequest(
+                    PresentationSlideRangeKind.SelectedSlides,
+                    SelectedSlideNumbers: [1, 3]),
+                HandoutSlidesPerPage: 3,
+                PrintHiddenSlides: true,
+                Copies: 3,
+                Collate: false,
+                ColorMode: PresentationPrintColorMode.PureBlackAndWhite,
+                FrameSlides: true,
+                IncludeCommentsAndInkMarkup: true));
+
+            heading = window.PrintOptionsPaneHeading;
+            message = window.PrintOptionsPaneMessage;
+            renderedOptionLines = window.PrintOptionsPaneRenderedOptionLines.ToArray();
+            renderedRowCount = window.PrintOptionsPaneRenderedRowCount;
+        });
+
+        if (!ran) return;
+        printPlan.Should().NotBeNull();
+        heading.Should().Be(printPlan!.Heading);
+        message.Should().Be(printPlan.Description);
+        renderedOptionLines.Should().Equal(printPlan.Options.SummaryLines);
+        renderedOptionLines.Should().Equal(
+            "3 copies",
+            "Uncollated",
+            "Pure Black and White",
+            "Print hidden slides",
+            "Frame slides",
+            "Print comments and ink markup");
+        renderedRowCount.Should().BeGreaterThan(renderedOptionLines.Count);
+        printPlan.NativePrinterDialogDeferred.Should().BeTrue();
     }
 
     [Fact]
