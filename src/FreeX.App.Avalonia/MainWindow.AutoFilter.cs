@@ -146,6 +146,7 @@ public sealed partial class MainWindow
         var checkBoxes = new List<CheckBox>();
         var checklistPanel = new StackPanel();
         var updatingSelectAll = false;
+        Control? initialFocusTarget = null;
         var flyout = new Flyout
         {
             Placement = PlacementMode.BottomEdgeAlignedLeft,
@@ -222,6 +223,15 @@ public sealed partial class MainWindow
             addSelectionBox.IsEnabled = visibleItems.Count > 0;
         }
 
+        void AddMenuCommand(AutoFilterMenuItem item, Action onClick, bool isEnabled = true)
+        {
+            var button = CreateAutoFilterActionButton(item.Label, onClick, isEnabled);
+            if (initialFocusTarget is null && item.FocusRole == AutoFilterMenuEntryFocusRole.Command)
+                initialFocusTarget = button;
+
+            panel.Children.Add(button);
+        }
+
         void ApplySelectionToVisible(bool isSelected)
         {
             var updated = AutoFilterMenuPlanner.SetSelectionForSearch(allItems, searchBox.Text, isSelected);
@@ -235,27 +245,27 @@ public sealed partial class MainWindow
             switch (item.Kind)
             {
                 case AutoFilterMenuItemKind.SortAscending:
-                    panel.Children.Add(CreateAutoFilterActionButton(item.Label, () =>
+                    AddMenuCommand(item, () =>
                     {
                         flyout.Hide();
                         RunAutoFilterResult(range, columnOffset, new AutoFilterDialogResult(
                             AutoFilterSortDirection.Ascending, [], string.Empty, string.Empty));
-                    }));
+                    });
                     break;
                 case AutoFilterMenuItemKind.SortDescending:
-                    panel.Children.Add(CreateAutoFilterActionButton(item.Label, () =>
+                    AddMenuCommand(item, () =>
                     {
                         flyout.Hide();
                         RunAutoFilterResult(range, columnOffset, new AutoFilterDialogResult(
                             AutoFilterSortDirection.Descending, [], string.Empty, string.Empty));
-                    }));
+                    });
                     break;
                 case AutoFilterMenuItemKind.ClearFilter:
-                    panel.Children.Add(CreateAutoFilterActionButton(item.Label, () =>
+                    AddMenuCommand(item, () =>
                     {
                         flyout.Hide();
                         RunAutoFilterResult(range, columnOffset, AutoFilterDialogCriteriaPlanner.CreateClearFilterResult());
-                    }, item.IsEnabled));
+                    }, item.IsEnabled);
                     break;
                 case AutoFilterMenuItemKind.FilterByColor when model.ColorOptions.Count > 0:
                     panel.Children.Add(CreateAutoFilterColorPanel(model.ColorOptions, option =>
@@ -337,7 +347,7 @@ public sealed partial class MainWindow
         };
         flyout.Content = new Border { Padding = new Thickness(8), Child = panel };
         flyout.ShowAt(anchor);
-        searchBox.Focus();
+        (initialFocusTarget ?? searchBox).Focus();
     }
 
     private Control CreateAutoFilterCriteriaPanel(AutoFilterMenuModel model, TextBox criteriaBox)
